@@ -20,15 +20,19 @@ export function TorrentScreen({ hash }: { hash: string }) {
   const [t, setT] = useState<Torrent | null>(cached);
   const [files, setFiles] = useState<TorrentFile[]>(cached ? c.files(cached) : []);
   const [loadingInfo, setLoadingInfo] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // subscribe to progress changes
   progressVersion.value;
   serverViewed.value;
 
   useEffect(() => {
+    let dead = false;
     c.get(hash)
       .then((r) => {
+        if (dead) return;
         setT(r);
+        setLoaded(true);
         const f = c.files(r);
         if (f.length) {
           setFiles(f);
@@ -36,20 +40,28 @@ export function TorrentScreen({ hash }: { hash: string }) {
         }
         setLoadingInfo(true);
         return c.loadInfo(hash).then((info) => {
+          if (dead) return;
           setT(info);
           setFiles(c.files(info));
           setLoadingInfo(false);
         });
       })
       .catch((e) => {
+        if (dead) return;
         setLoadingInfo(false);
         setError(errorMessage(e));
       });
     refreshViewed(c);
     const timer = setInterval(() => {
-      c.get(hash).then((r) => setT(r), () => undefined);
+      c.get(hash).then((r) => {
+        if (dead) return;
+        setT(r);
+      }, () => undefined);
     }, 3000);
-    return () => clearInterval(timer);
+    return () => {
+      dead = true;
+      clearInterval(timer);
+    };
   }, [hash]);
 
   const queue = useMemo(() => (t ? buildTorrentQueue(c, t, files) : []), [t ? t.hash : '', files]);
@@ -124,6 +136,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
       </div>
       {loadingInfo && <Spinner text="Получение списка файлов…" />}
       {error && <div class="banner-error">{error}</div>}
+      {!loadingInfo && !error && loaded && files.length === 0 && <div class="empty">Файлы не найдены</div>}
       {!loadingInfo && !error && files.length > 0 && queue.length === 0 && <div class="empty">В торренте нет видео- или аудиофайлов</div>}
       <FocusGroup focusKey="TORRENT-FILES">
         {groups.map((g) => (
