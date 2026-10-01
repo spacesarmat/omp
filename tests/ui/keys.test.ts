@@ -57,4 +57,18 @@ describe('installKeyListener', () => {
     expect(back).not.toHaveBeenCalled();
     expect(e.defaultPrevented).toBe(true);
   });
+  it('left/right in text input stay native and hidden from bubble listeners', () => {
+    cleanups.push(installKeyListener(() => undefined));
+    const bubble = vi.fn();
+    window.addEventListener('keydown', bubble);
+    cleanups.push(() => window.removeEventListener('keydown', bubble));
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    const e = press(37, input);
+    expect(bubble).not.toHaveBeenCalled();
+    expect(e.defaultPrevented).toBe(false);
+    press(37, document.body);
+    expect(bubble).toHaveBeenCalledTimes(1);
+  });
 });
