@@ -48,6 +48,11 @@ export function installKeyListener(onUnhandledBack: () => void): () => void {
     if (!a) return;
     if (isTextInput(e.target)) {
       if (e.keyCode === 8) return; // Backspace edits text
+      if (a === 'left' || a === 'right') {
+        // native caret movement; keep norigin from preventDefault-ing it
+        e.stopPropagation();
+        return;
+      }
       if (a === 'back' || a === 'up' || a === 'down') e.target.blur();
       if (a === 'back') {
         e.preventDefault();

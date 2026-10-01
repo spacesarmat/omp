@@ -89,6 +89,8 @@ export function TextInput(p: TextInputProps) {
     onEnterPress: () => { if (inputRef.current) inputRef.current.focus(); },
     onFocus: () => scrollIntoViewSafe(ref.current),
   });
+  // resume() is idempotent: unmounting a focused input must not leave navigation paused
+  useEffect(() => () => resume(), []);
   return (
     <div
       ref={ref}
