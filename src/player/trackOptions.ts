@@ -25,13 +25,29 @@ function fromVideo(list: { language: string; label: string }[]): TrackOption[] {
 
 export function audioOptions(probe: FfprobeResult | null, video: HTMLVideoElement | null): TrackOption[] {
   const p = fromProbe(probe, 'audio');
-  if (p.length) return p;
+  if (p.length) {
+    if (video) {
+      const v = audioTrackList(video);
+      if (v.length > 0 && v.length !== p.length) {
+        return fromVideo(v);
+      }
+    }
+    return p;
+  }
   return video ? fromVideo(audioTrackList(video)) : [];
 }
 
 export function embeddedSubOptions(probe: FfprobeResult | null, video: HTMLVideoElement | null): TrackOption[] {
   const p = fromProbe(probe, 'subtitle');
-  if (p.length) return p;
+  if (p.length) {
+    if (video) {
+      const v = textTrackList(video);
+      if (v.length > 0 && v.length !== p.length) {
+        return fromVideo(v);
+      }
+    }
+    return p;
+  }
   return video ? fromVideo(textTrackList(video)) : [];
 }
 
