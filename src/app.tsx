@@ -4,11 +4,14 @@ import { installKeyListener } from './ui/keys';
 import { DialogHost, confirmDialog } from './ui/dialog';
 import { ToastHost } from './ui/toast';
 import { ConnectScreen } from './screens/Connect';
+import { TorrentScreen } from './screens/Torrent';
 
 function renderRoute(r: Route) {
   switch (r.name) {
     case 'connect':
       return <ConnectScreen />;
+    case 'torrent':
+      return <TorrentScreen hash={r.hash} />;
     // screens are registered here by later tasks
     default:
       return null;
