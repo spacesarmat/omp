@@ -3,9 +3,12 @@ import { routeStack, currentRoute, goBack, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { DialogHost, confirmDialog } from './ui/dialog';
 import { ToastHost } from './ui/toast';
+import { ConnectScreen } from './screens/Connect';
 
 function renderRoute(r: Route) {
   switch (r.name) {
+    case 'connect':
+      return <ConnectScreen />;
     // screens are registered here by later tasks
     default:
       return null;
