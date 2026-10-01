@@ -75,6 +75,21 @@ describe('TorrServerClient', () => {
     expect(c.videoSrc('http://192.168.1.191:5665/x')).toBe('http://192.168.1.191:5665/x');
   });
 
+  it('videoSrc does NOT inject credentials for prefix-match false positives', () => {
+    const ac = new TorrServerClient({ url: 'http://h:1', user: 'u', password: 'p' });
+    expect(ac.videoSrc('http://h:10/x')).toBe('http://h:10/x');
+    expect(ac.videoSrc('http://h:1.evil.example/x')).toBe('http://h:1.evil.example/x');
+  });
+
+  it('fetchText sends Authorization for own-server URL only', async () => {
+    const fn = mockFetch(() => ({ body: 'data' }));
+    const ac = new TorrServerClient({ url: 'http://h:1', user: 'u', password: 'p' });
+    await ac.fetchText('http://h:1/x');
+    expect(fn.mock.calls[0][1].headers.Authorization).toBe('Basic ' + btoa('u:p'));
+    await ac.fetchText('http://h:10/x');
+    expect(fn.mock.calls[1][1].headers.Authorization).toBeUndefined();
+  });
+
   it('searches with trailing slash path', async () => {
     const fn = mockFetch(() => ({ body: '[]' }));
     await c.search('matrix x', 'rutor');
