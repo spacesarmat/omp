@@ -41,4 +41,34 @@ describe('trackOptions', () => {
     expect(defaultSubChoice(emb, ext, { subtitlesOn: true, subLang: 'en' })).toBe('e0');
     expect(defaultSubChoice(emb, ext, { subtitlesOn: true, subLang: 'de' })).toBe('off');
   });
+  it('aligns audio counts: probe has 2, video has 2 → use probe labels', () => {
+    const video = {
+      audioTracks: [
+        { language: 'eng', label: 'Track 1' },
+        { language: 'rus', label: 'Track 2' },
+      ],
+    } as unknown as HTMLVideoElement;
+    expect(audioOptions(probe, video)).toEqual([
+      { label: 'EN · AC3 5.1', language: 'en', isDefault: false },
+      { label: 'RU · AAC 2.0', language: 'ru', isDefault: true },
+    ]);
+  });
+  it('aligns audio counts: probe has 2, video has 1 → use video options', () => {
+    const video = { audioTracks: [{ language: 'ru', label: 'Dub' }] } as unknown as HTMLVideoElement;
+    const probeWith2Audio: FfprobeResult = {
+      streams: [
+        { index: 0, codec_type: 'audio', codec_name: 'ac3', channels: 6, tags: { language: 'eng' } },
+        { index: 1, codec_type: 'audio', codec_name: 'aac', channels: 2, tags: { language: 'rus' } },
+      ],
+    };
+    expect(audioOptions(probeWith2Audio, video)).toEqual([
+      { label: 'Dub (ru)', language: 'ru', isDefault: false },
+    ]);
+  });
+  it('aligns subtitle counts: probe has 1, video.textTracks empty → use probe', () => {
+    const video = { textTracks: [] as any } as unknown as HTMLVideoElement;
+    expect(embeddedSubOptions(probe, video)).toEqual([
+      { label: 'EN · SUBRIP', language: 'en', isDefault: false },
+    ]);
+  });
 });
