@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { client } from '../store/servers';
 import type { SearchSource } from '../api/torrserver';
 import type { SearchResult } from '../api/types';
@@ -16,15 +16,20 @@ const SOURCES: { value: SearchSource; label: string }[] = [
 
 export function AddScreen() {
   const c = client.value!;
+  const alive = useRef(true);
   const [link, setLink] = useState('');
   const [query, setQuery] = useState('');
   const [source, setSource] = useState<SearchSource>('rutor');
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => restoreFocus('ADD'), []);
+  useEffect(() => {
+    restoreFocus('ADD');
+    return () => { alive.current = false; };
+  }, []);
 
   const add = (p: { link: string; title?: string; category?: string }) => {
+    if (busy) return;
     const l = p.link.trim();
     if (!l) {
       toast('Введите magnet-ссылку, хеш или URL .torrent', 'error');
@@ -33,10 +38,12 @@ export function AddScreen() {
     setBusy(true);
     c.add({ link: l, title: p.title, category: p.category }).then(
       (t) => {
+        if (!alive.current) return;
         toast('Добавлено: ' + (t.title || p.title || t.hash));
         replaceRoute({ name: 'torrent', hash: t.hash });
       },
       (e) => {
+        if (!alive.current) return;
         setBusy(false);
         toast(errorMessage(e), 'error');
       },
@@ -44,17 +51,20 @@ export function AddScreen() {
   };
 
   const search = () => {
+    if (busy) return;
     const q = query.trim();
     if (!q) return;
     setBusy(true);
     setResults(null);
     c.search(q, source).then(
       (r) => {
+        if (!alive.current) return;
         setBusy(false);
         setResults(r);
         if (!r.length) toast('Ничего не найдено');
       },
       (e) => {
+        if (!alive.current) return;
         setBusy(false);
         toast(errorMessage(e), 'error');
       },

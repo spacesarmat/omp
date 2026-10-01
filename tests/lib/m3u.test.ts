@@ -33,6 +33,27 @@ describe('parseM3U', () => {
     const r = parseM3U('#EXTM3U\n#EXTGRP:News\n#EXTINF:-1,A\nhttp://a\n');
     expect(r[0].group).toBe('News');
   });
+  it('detects nested playlists by type attribute', () => {
+    const r = parseM3U('#EXTM3U\n#EXTINF:0 tvg-logo="https://x.jpg" type="playlist",Star.Trek…\nhttp://192.168.1.191:5665/stream/Star.Trek….m3u?link=c4c4…&m3u&fn=file.m3u\n');
+    expect(r[0].isPlaylist).toBe(true);
+  });
+  it('detects nested playlists by .m3u extension', () => {
+    const r = parseM3U('#EXTM3U\n#EXTINF:-1,Nested\nhttp://h/a.m3u\n');
+    expect(r[0].isPlaylist).toBe(true);
+  });
+  it('does not mark HLS .m3u8 as playlist', () => {
+    const r = parseM3U('#EXTM3U\n#EXTINF:-1,HLS\nhttp://h/live.m3u8\n');
+    expect(r[0].isPlaylist).toBeUndefined();
+  });
+  it('does not mark regular TorrServer entries as playlist', () => {
+    const r = parseM3U(TS);
+    expect(r[0].isPlaylist).toBeUndefined();
+    expect(r[1].isPlaylist).toBeUndefined();
+  });
+  it('detects bare m3u parameter', () => {
+    const r = parseM3U('#EXTM3U\n#EXTINF:-1,M3U List\nhttp://h/stream?m3u&link=abc\n');
+    expect(r[0].isPlaylist).toBe(true);
+  });
 });
 
 describe('isHlsPlaylist', () => {

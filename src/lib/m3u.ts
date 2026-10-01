@@ -6,6 +6,7 @@ export interface PlaylistEntry {
   duration: number;
   logo?: string;
   group?: string;
+  isPlaylist?: true;
 }
 
 function findTitleComma(s: string): number {
@@ -44,10 +45,17 @@ function titleFromUrl(u: string): string {
   }
 }
 
+function isPlaylistUrl(url: string): boolean {
+  const path = url.split('?')[0];
+  if (/\.m3u$/i.test(path)) return true;
+  if (/[?&]m3u(?:[&=]|$)/.test(url)) return true;
+  return false;
+}
+
 export function parseM3U(text: string, baseUrl?: string): PlaylistEntry[] {
   const lines = text.replace(/^﻿/, '').split(/\r?\n/);
   const out: PlaylistEntry[] = [];
-  let pending: { title: string; duration: number; logo?: string; group?: string } | null = null;
+  let pending: { title: string; duration: number; logo?: string; group?: string; isPlaylist?: boolean } | null = null;
   let extGroup: string | undefined;
   lines.forEach((raw) => {
     const line = raw.trim();
@@ -59,7 +67,7 @@ export function parseM3U(text: string, baseUrl?: string): PlaylistEntry[] {
       const title = comma >= 0 ? body.slice(comma + 1).trim() : '';
       const dur = parseFloat(head);
       const attrs = parseAttrs(head);
-      pending = { title, duration: isNaN(dur) ? -1 : dur, logo: attrs['tvg-logo'], group: attrs['group-title'] };
+      pending = { title, duration: isNaN(dur) ? -1 : dur, logo: attrs['tvg-logo'], group: attrs['group-title'], isPlaylist: attrs['type'] === 'playlist' };
       return;
     }
     if (line.indexOf('#EXTGRP:') === 0) {
@@ -68,7 +76,7 @@ export function parseM3U(text: string, baseUrl?: string): PlaylistEntry[] {
     }
     if (line.charAt(0) === '#') return;
     const url = resolveUrl(line, baseUrl);
-    const p = pending as { title: string; duration: number; logo?: string; group?: string } | null;
+    const p = pending as { title: string; duration: number; logo?: string; group?: string; isPlaylist?: boolean } | null;
     const entry: PlaylistEntry = {
       url,
       title: (p && p.title) || titleFromUrl(url),
@@ -77,6 +85,7 @@ export function parseM3U(text: string, baseUrl?: string): PlaylistEntry[] {
     if (p && p.logo) entry.logo = p.logo;
     const group = (p && p.group) || extGroup;
     if (group) entry.group = group;
+    if (p?.isPlaylist || isPlaylistUrl(url)) entry.isPlaylist = true;
     out.push(entry);
     pending = null;
     extGroup = undefined;
