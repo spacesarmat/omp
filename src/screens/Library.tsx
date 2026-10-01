@@ -62,16 +62,17 @@ export function LibraryScreen() {
     };
   }, [c]);
 
+  const showingError = !!error && !torrents.value.length;
   useEffect(() => {
-    if (loaded) restoreFocus(torrents.value.length ? 'LIB-GRID' : 'LIB-HEADER');
-  }, [loaded]);
+    if (loaded && !showingError) restoreFocus(torrents.value.length ? 'LIB-GRID' : 'LIB-HEADER');
+  }, [loaded, showingError]);
 
   const remove = (hash: string) => {
     const t = torrents.value.find((x) => x.hash === hash);
     confirmDialog('Удалить «' + (t ? t.title : hash) + '»?', 'Удалить').then((ok) => {
       if (!ok || !c) return;
       c.remove(hash).then(
-        () => { torrents.value = torrents.value.filter((x) => x.hash !== hash); toast('Торрент удалён'); },
+        () => { torrents.value = torrents.value.filter((x) => x.hash !== hash); setFocusedHash(null); toast('Торрент удалён'); },
         (e) => toast(errorMessage(e), 'error'),
       );
     });
@@ -118,16 +119,16 @@ export function LibraryScreen() {
             focusKey={'tab-' + ct.id}
             className={'tab' + (tab === ct.id ? ' active' : '')}
             onPress={() => setTab(ct.id)}
-            onFocused={() => setTab(ct.id)}
+            onFocused={() => { setTab(ct.id); setFocusedHash(null); }}
           >
             {ct.label}
           </Focusable>
         ))}
         <div class="spacer" />
-        <Button label="＋ Добавить" onPress={() => navigate({ name: 'add' })} />
-        <Button label="Плейлист" onPress={() => navigate({ name: 'playlist' })} />
-        <Button label="Настройки" onPress={() => navigate({ name: 'settings' })} />
-        <Button label="Сервер" onPress={() => navigate({ name: 'connect' })} />
+        <Button label="＋ Добавить" onPress={() => navigate({ name: 'add' })} onFocused={() => setFocusedHash(null)} />
+        <Button label="Плейлист" onPress={() => navigate({ name: 'playlist' })} onFocused={() => setFocusedHash(null)} />
+        <Button label="Настройки" onPress={() => navigate({ name: 'settings' })} onFocused={() => setFocusedHash(null)} />
+        <Button label="Сервер" onPress={() => navigate({ name: 'connect' })} onFocused={() => setFocusedHash(null)} />
       </FocusGroup>
       {error && <div class="banner-error">{error} — показан сохранённый список</div>}
       {!loaded && <Spinner text="Загрузка…" />}
@@ -139,7 +140,7 @@ export function LibraryScreen() {
               const file = c.files(e.torrent).find((f) => f.id === e.fileIndex);
               const name = file ? episodeLabel(file.path) || baseName(file.path) : '';
               return (
-                <Focusable key={e.torrent.hash} focusKey={'cont-' + e.torrent.hash} className="wide-card" onPress={() => resume(e)}>
+                <Focusable key={e.torrent.hash} focusKey={'cont-' + e.torrent.hash} className="wide-card" onPress={() => resume(e)} onFocused={() => setFocusedHash(null)}>
                   <div class="title">{e.torrent.title}</div>
                   <div class="meta">{name} · {formatDuration(e.progress.time)} / {formatDuration(e.progress.duration)}</div>
                   <ProgressBar ratio={e.progress.time / e.progress.duration} />

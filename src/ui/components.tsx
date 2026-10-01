@@ -64,9 +64,9 @@ export function FocusGroup(p: FocusGroupProps) {
   );
 }
 
-export function Button(p: { label: string; onPress: () => void; focusKey?: string; className?: string; disabled?: boolean }) {
+export function Button(p: { label: string; onPress: () => void; focusKey?: string; className?: string; disabled?: boolean; onFocused?: () => void }) {
   return (
-    <Focusable focusKey={p.focusKey} className={'button ' + (p.className || '')} onPress={p.onPress} disabled={p.disabled}>
+    <Focusable focusKey={p.focusKey} className={'button ' + (p.className || '')} onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused}>
       {p.label}
     </Focusable>
   );
