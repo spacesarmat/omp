@@ -33,7 +33,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [index, setIndex] = useState(startIndex);
   const item = queue[index];
-  const [ready, setReady] = useState(false);
+  const [readyFor, setReadyFor] = useState(-1);
+  const ready = readyFor === index;
+  const subReq = useRef(0);
   const [reloadKey, setReloadKey] = useState(0);
   const [probe, setProbe] = useState<FfprobeResult | null>(null);
   const [controls, setControls] = useState(true);
@@ -84,7 +86,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
 
   // resume decision + ffprobe for every new item
   useEffect(() => {
-    setReady(false);
+    setSeekTarget(null);
+    seeker.cancel();
+    subReq.current++;
     setProbe(null);
     setCues(null);
     setSubChoice('off');
@@ -110,7 +114,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
         return;
       }
       startPos.current = pos;
-      setReady(true);
+      setReadyFor(index);
     });
     if (c && item.hash && item.fileIndex !== undefined) {
       c.probe(item.hash, item.fileIndex).then((p) => { if (!cancelled) setProbe(p); });
@@ -160,12 +164,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   const applySubChoice = (choice: string) => {
     const v = videoRef.current;
     if (!v) return;
+    subReq.current++;
     setSubChoice(choice);
     setCues(null);
     if (choice === 'off') {
       selectTextTrack(v, -1);
       return;
     }
+    const token = ++subReq.current;
     const n = +choice.slice(1);
     if (choice.charAt(0) === 'e') {
       selectTextTrack(v, n);
@@ -175,8 +181,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     const sub = (item.subtitles || [])[n];
     if (!sub || !c) return;
     c.fetchBytes(sub.url).then(
-      (buf) => setCues(parseSubtitles(decodeText(buf), sub.ext)),
-      (e) => toast('Не удалось загрузить субтитры: ' + errorMessage(e), 'error'),
+      (buf) => { if (subReq.current === token) setCues(parseSubtitles(decodeText(buf), sub.ext)); },
+      (e) => { if (subReq.current === token) toast('Не удалось загрузить субтитры: ' + errorMessage(e), 'error'); },
     );
   };
 
@@ -309,7 +315,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
 
   return (
     <div class="player" onMouseMove={showControls}>
-      <video key={index + ':' + reloadKey} ref={videoRef} src={src || undefined} autoplay onLoadedMetadata={onMeta} />
+      <video key={index + ':' + reloadKey} ref={videoRef} src={ready ? src : undefined} autoplay onLoadedMetadata={onMeta} />
       <SubtitleOverlay cues={cues} time={vs.time} raised={controls} />
       {ready && vs.buffering && !vs.error && <BufferingOverlay cache={cache} />}
       {statsOn && <StatsOverlay cache={cache} probe={probe} />}
