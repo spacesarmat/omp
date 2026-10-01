@@ -6,6 +6,7 @@ import { ToastHost } from './ui/toast';
 import { ConnectScreen } from './screens/Connect';
 import { LibraryScreen } from './screens/Library';
 import { TorrentScreen } from './screens/Torrent';
+import { PlayerScreen } from './screens/Player';
 
 function renderRoute(r: Route) {
   switch (r.name) {
@@ -15,6 +16,8 @@ function renderRoute(r: Route) {
       return <LibraryScreen />;
     case 'torrent':
       return <TorrentScreen hash={r.hash} />;
+    case 'player':
+      return <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />;
     // screens are registered here by later tasks
     default:
       return null;
