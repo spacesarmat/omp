@@ -1,0 +1,100 @@
+import { useEffect, useState } from 'preact/hooks';
+import { client } from '../store/servers';
+import { request, errorMessage } from '../api/http';
+import { parseM3U, isHlsPlaylist, parseStreamUrl, PlaylistEntry } from '../lib/m3u';
+import { formatDuration } from '../lib/format';
+import type { PlayItem } from '../player/types';
+import { navigate, replaceRoute } from '../ui/nav';
+import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
+import { restoreFocus } from '../ui/focus';
+
+export function PlaylistScreen(p: { url?: string; title?: string }) {
+  const c = client.value;
+  const [url, setUrl] = useState(p.url || '');
+  const [entries, setEntries] = useState<PlaylistEntry[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = (u: string) => {
+    const target = u.trim();
+    if (!target) return;
+    setBusy(true);
+    setError(null);
+    setEntries(null);
+    const text = c ? c.fetchText(target) : request<string>(target, { responseType: 'text', timeoutMs: 15000 });
+    text.then(
+      (body) => {
+        setBusy(false);
+        if (isHlsPlaylist(body)) {
+          replaceRoute({ name: 'player', queue: [{ url: target, title: p.title || target }], index: 0 });
+          return;
+        }
+        const list = parseM3U(body, target);
+        if (!list.length) setError('Плейлист пуст или имеет неизвестный формат');
+        setEntries(list);
+      },
+      (e) => {
+        setBusy(false);
+        setError(errorMessage(e));
+      },
+    );
+  };
+
+  useEffect(() => {
+    if (p.url) load(p.url);
+    else restoreFocus('PLAYLIST');
+  }, []);
+
+  useEffect(() => {
+    if (entries && entries.length) restoreFocus('PLAYLIST-ENTRIES');
+  }, [entries]);
+
+  const queue: PlayItem[] = (entries || []).map((e) => {
+    const ref = parseStreamUrl(e.url);
+    return {
+      url: e.url,
+      title: e.title,
+      poster: e.logo,
+      hash: ref ? ref.hash : undefined,
+      fileIndex: ref ? ref.fileIndex : undefined,
+    };
+  });
+
+  return (
+    <FocusGroup focusKey="PLAYLIST" className="screen playlist">
+      <h1>{p.title || 'Плейлист'}</h1>
+      {!p.url && (
+        <div class="row">
+          <TextInput focusKey="pl-url" value={url} onChange={setUrl} placeholder="URL плейлиста M3U / M3U8" type="url" onSubmit={() => load(url)} />
+          <Button label="Открыть" onPress={() => load(url)} />
+          {c && (
+            <Button
+              label="Все торренты сервера"
+              onPress={() => {
+                const u = c.allPlaylistUrl();
+                setUrl(u);
+                load(u);
+              }}
+            />
+          )}
+        </div>
+      )}
+      {busy && <Spinner text="Загрузка плейлиста…" />}
+      {error && <div class="banner-error">{error}</div>}
+      {entries && entries.length > 0 && (
+        <FocusGroup focusKey="PLAYLIST-ENTRIES">
+          <Button label={'▶ Воспроизвести всё (' + entries.length + ')'} onPress={() => navigate({ name: 'player', queue, index: 0 })} />
+          {entries.map((e, i) => (
+            <div key={i}>
+              {e.group && (i === 0 || entries[i - 1].group !== e.group) && <h2>{e.group}</h2>}
+              <Focusable focusKey={'pl-' + i} className="list-item" onPress={() => navigate({ name: 'player', queue, index: i })}>
+                <div class="title">{e.title}</div>
+                {e.duration > 0 && <div class="meta">{formatDuration(e.duration)}</div>}
+              </Focusable>
+            </div>
+          ))}
+        </FocusGroup>
+      )}
+    </FocusGroup>
+  );
+}
