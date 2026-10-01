@@ -44,8 +44,12 @@ export class TorrServerClient {
     return request<T>(this.baseUrl + path, { ...opts, auth: this.auth });
   }
 
+  private isOwnUrl(url: string): boolean {
+    return url === this.baseUrl || url.indexOf(this.baseUrl + '/') === 0 || url.indexOf(this.baseUrl + '?') === 0;
+  }
+
   private ownAuth(url: string): string | undefined {
-    return url.indexOf(this.baseUrl) === 0 ? this.auth : undefined;
+    return this.isOwnUrl(url) ? this.auth : undefined;
   }
 
   echo(): Promise<string> {
@@ -86,7 +90,7 @@ export class TorrServerClient {
 
   /** URL for <video>: media elements can't send headers, so credentials go into the URL. */
   videoSrc(url: string): string {
-    if (!this.cfg.user || url.indexOf(this.baseUrl) !== 0) return url;
+    if (!this.cfg.user || !this.isOwnUrl(url)) return url;
     const cred = encodeURIComponent(this.cfg.user) + ':' + encodeURIComponent(this.cfg.password || '') + '@';
     return url.replace(/^(https?:\/\/)/i, '$1' + cred);
   }

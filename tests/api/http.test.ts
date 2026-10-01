@@ -49,6 +49,14 @@ describe('request', () => {
     vi.advanceTimersByTime(1001);
     await expect(p).rejects.toMatchObject({ kind: 'timeout' });
   });
+  it('maps body read error to network error', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () => Promise.reject(new TypeError('body read failed')),
+    })));
+    await expect(request('http://h/x')).rejects.toMatchObject({ kind: 'network' });
+  });
 });
 
 describe('errors', () => {

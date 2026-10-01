@@ -54,9 +54,13 @@ export function request<T>(url: string, opts: HttpOptions = {}): Promise<T> {
     (res) => {
       if (!res.ok) throw apiError('http', 'HTTP ' + res.status, res.status);
       if (type === 'arraybuffer') {
-        return res.arrayBuffer().then((buf) => buf as unknown as T);
+        return res.arrayBuffer().then((buf) => buf as unknown as T).catch((e) => {
+          throw isApiError(e) ? e : apiError('network', 'Network error');
+        });
       } else if (type === 'text') {
-        return res.text().then((text) => text as unknown as T);
+        return res.text().then((text) => text as unknown as T).catch((e) => {
+          throw isApiError(e) ? e : apiError('network', 'Network error');
+        });
       } else {
         return res.text().then((text) => {
           if (!text) return null as unknown as T;
@@ -65,6 +69,8 @@ export function request<T>(url: string, opts: HttpOptions = {}): Promise<T> {
           } catch (e) {
             throw apiError('parse', 'Bad JSON');
           }
+        }).catch((e) => {
+          throw isApiError(e) ? e : apiError('network', 'Network error');
         });
       }
     },
