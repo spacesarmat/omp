@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { client } from '../store/servers';
 import { request, errorMessage } from '../api/http';
 import { parseM3U, isHlsPlaylist, parseStreamUrl, PlaylistEntry } from '../lib/m3u';
@@ -7,9 +7,12 @@ import type { PlayItem } from '../player/types';
 import { navigate, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
 import { restoreFocus } from '../ui/focus';
+import { toast } from '../ui/toast';
 
 export function PlaylistScreen(p: { url?: string; title?: string }) {
   const c = client.value;
+  const alive = useRef(true);
+  const req = useRef(0);
   const [url, setUrl] = useState(p.url || '');
   const [entries, setEntries] = useState<PlaylistEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,9 +24,11 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
     setBusy(true);
     setError(null);
     setEntries(null);
+    const currentReq = ++req.current;
     const text = c ? c.fetchText(target) : request<string>(target, { responseType: 'text', timeoutMs: 15000 });
     text.then(
       (body) => {
+        if (!alive.current || currentReq !== req.current) return;
         setBusy(false);
         if (isHlsPlaylist(body)) {
           replaceRoute({ name: 'player', queue: [{ url: target, title: p.title || target }], index: 0 });
@@ -34,6 +39,7 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
         setEntries(list);
       },
       (e) => {
+        if (!alive.current || currentReq !== req.current) return;
         setBusy(false);
         setError(errorMessage(e));
       },
@@ -43,13 +49,15 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
   useEffect(() => {
     if (p.url) load(p.url);
     else restoreFocus('PLAYLIST');
+    return () => { alive.current = false; };
   }, []);
 
   useEffect(() => {
     if (entries && entries.length) restoreFocus('PLAYLIST-ENTRIES');
   }, [entries]);
 
-  const queue: PlayItem[] = (entries || []).map((e) => {
+  const playable = (entries || []).filter((e) => !e.isPlaylist);
+  const queue: PlayItem[] = playable.map((e) => {
     const ref = parseStreamUrl(e.url);
     return {
       url: e.url,
@@ -83,16 +91,19 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
       {error && <div class="banner-error">{error}</div>}
       {entries && entries.length > 0 && (
         <FocusGroup focusKey="PLAYLIST-ENTRIES">
-          <Button label={'▶ Воспроизвести всё (' + entries.length + ')'} onPress={() => navigate({ name: 'player', queue, index: 0 })} />
-          {entries.map((e, i) => (
-            <div key={i}>
-              {e.group && (i === 0 || entries[i - 1].group !== e.group) && <h2>{e.group}</h2>}
-              <Focusable focusKey={'pl-' + i} className="list-item" onPress={() => navigate({ name: 'player', queue, index: i })}>
-                <div class="title">{e.title}</div>
-                {e.duration > 0 && <div class="meta">{formatDuration(e.duration)}</div>}
-              </Focusable>
-            </div>
-          ))}
+          {queue.length > 0 && <Button label={'▶ Воспроизвести всё (' + queue.length + ')'} onPress={() => navigate({ name: 'player', queue, index: 0 })} />}
+          {entries.map((e, i) => {
+            const playableIndex = e.isPlaylist ? -1 : playable.indexOf(e);
+            return (
+              <div key={i}>
+                {e.group && (i === 0 || entries[i - 1].group !== e.group) && <h2>{e.group}</h2>}
+                <Focusable focusKey={'pl-' + i} className="list-item" onPress={() => e.isPlaylist ? navigate({ name: 'playlist', url: e.url, title: e.title }) : navigate({ name: 'player', queue, index: playableIndex })}>
+                  <div class="title">{e.title}</div>
+                  {e.duration > 0 && <div class="meta">{formatDuration(e.duration)}</div>}
+                </Focusable>
+              </div>
+            );
+          })}
         </FocusGroup>
       )}
     </FocusGroup>

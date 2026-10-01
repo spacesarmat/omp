@@ -41,6 +41,7 @@ export function SettingsScreen() {
   const [srv, setSrv] = useState<ServerSettings | null>(null);
   const [srvError, setSrvError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const loadServer = () => {
     if (!c) return;
@@ -62,16 +63,23 @@ export function SettingsScreen() {
   };
 
   const saveServer = () => {
-    if (!c || !srv) return;
+    if (!c || !srv || saving) return;
+    setSaving(true);
     c.setSettings(srv).then(
-      () => { setDirty(false); toast('Настройки сервера сохранены'); },
-      (e) => toast(errorMessage(e), 'error'),
+      () => { setSaving(false); setDirty(false); toast('Настройки сервера сохранены'); },
+      (e) => { setSaving(false); toast(errorMessage(e), 'error'); },
     );
   };
 
   const resetServer = () => {
     confirmDialog('Сбросить настройки сервера по умолчанию?', 'Сбросить').then((ok) => {
-      if (ok && c) c.resetSettings().then(loadServer, (e) => toast(errorMessage(e), 'error'));
+      if (ok && c) {
+        setSaving(true);
+        c.resetSettings().then(
+          () => { setSaving(false); loadServer(); },
+          (e) => { setSaving(false); toast(errorMessage(e), 'error'); },
+        );
+      }
     });
   };
 
