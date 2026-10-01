@@ -34,6 +34,7 @@ export function ConnectScreen() {
   };
 
   const connect = (address = url) => {
+    if (busy) return;
     if (!address.trim()) {
       toast('Введите адрес сервера', 'error');
       return;
@@ -66,6 +67,10 @@ export function ConnectScreen() {
       .then((list) => {
         setScan(null);
         if (!list.length) toast('Серверы TorrServer не найдены', 'error');
+      })
+      .catch((e) => {
+        setScan(null);
+        toast(errorMessage(e), 'error');
       });
   };
 
