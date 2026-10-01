@@ -7,6 +7,9 @@ import { ConnectScreen } from './screens/Connect';
 import { LibraryScreen } from './screens/Library';
 import { TorrentScreen } from './screens/Torrent';
 import { PlayerScreen } from './screens/Player';
+import { AddScreen } from './screens/Add';
+import { PlaylistScreen } from './screens/Playlist';
+import { SettingsScreen } from './screens/Settings';
 
 function renderRoute(r: Route) {
   switch (r.name) {
@@ -18,7 +21,12 @@ function renderRoute(r: Route) {
       return <TorrentScreen hash={r.hash} />;
     case 'player':
       return <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />;
-    // screens are registered here by later tasks
+    case 'add':
+      return <AddScreen />;
+    case 'playlist':
+      return <PlaylistScreen url={r.url} title={r.title} />;
+    case 'settings':
+      return <SettingsScreen />;
     default:
       return null;
   }
