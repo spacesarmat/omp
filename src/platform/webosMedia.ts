@@ -5,6 +5,7 @@ interface TrackLike {
   mode?: string;
   language?: string;
   label?: string;
+  kind?: string;
 }
 
 function list(x: unknown): TrackLike[] | null {
@@ -19,6 +20,15 @@ function mediaId(video: HTMLVideoElement): string | undefined {
   return (video as any).mediaId;
 }
 
+function isSubtitleTrack(t: TrackLike): boolean {
+  const k = t.kind || '';
+  return k === 'subtitles' || k === 'captions' || k === '';
+}
+
+function filterSubtitleTracks(tracks: TrackLike[]): TrackLike[] {
+  return tracks.filter(isSubtitleTrack);
+}
+
 export function audioTrackList(video: HTMLVideoElement): { language: string; label: string }[] {
   const at = list((video as any).audioTracks) || [];
   return at.map((t, i) => ({ language: t.language || '', label: t.label || 'Дорожка ' + (i + 1) }));
@@ -26,7 +36,8 @@ export function audioTrackList(video: HTMLVideoElement): { language: string; lab
 
 export function textTrackList(video: HTMLVideoElement): { language: string; label: string }[] {
   const tt = list((video as any).textTracks) || [];
-  return tt.map((t, i) => ({ language: t.language || '', label: t.label || 'Субтитры ' + (i + 1) }));
+  const st = filterSubtitleTracks(tt);
+  return st.map((t, i) => ({ language: t.language || '', label: t.label || 'Субтитры ' + (i + 1) }));
 }
 
 export function selectAudioTrack(video: HTMLVideoElement, index: number): boolean {
@@ -46,8 +57,16 @@ export function selectAudioTrack(video: HTMLVideoElement, index: number): boolea
 export function selectTextTrack(video: HTMLVideoElement, index: number): boolean {
   const tt = list((video as any).textTracks);
   if (tt && tt.length > 0) {
-    tt.forEach((t, i) => { t.mode = i === index ? 'showing' : 'disabled'; });
-    return true;
+    const st = filterSubtitleTracks(tt);
+    if (st.length > 0) {
+      tt.forEach((t, i) => {
+        if (isSubtitleTrack(t)) {
+          const stIndex = st.indexOf(t);
+          t.mode = stIndex === index ? 'showing' : 'disabled';
+        }
+      });
+      return true;
+    }
   }
   const id = mediaId(video);
   if (id && hasLuna()) {
