@@ -36,4 +36,11 @@ describe('parseLaunchParams', () => {
     expect(parseLaunchParams({ play: 'file:///etc/passwd' })!.invalid).toBe(true);
     expect(parseLaunchParams({ play: 42 })!.invalid).toBe(true);
   });
+  it('parses torrent with file and start time', () => {
+    expect(parseLaunchParams({ torrent: HASH, file: 3, t: 1394 })!.action).toEqual({ kind: 'torrent', hash: HASH.toLowerCase(), file: 3, t: 1394 });
+    expect(parseLaunchParams({ torrent: HASH, file: '2' })!.action).toEqual({ kind: 'torrent', hash: HASH.toLowerCase(), file: 2 });
+    expect(parseLaunchParams({ torrent: HASH, file: -1 })!.invalid).toBe(true);
+    expect(parseLaunchParams({ torrent: HASH, file: 1, t: 'x' })!.invalid).toBe(true);
+    expect(parseLaunchParams({ torrent: HASH, t: 10 })!.invalid).toBe(true);
+  });
 });

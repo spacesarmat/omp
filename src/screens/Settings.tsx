@@ -92,6 +92,7 @@ export function SettingsScreen() {
           {activeServer.value ? activeServer.value.name + ' · ' + activeServer.value.url.replace(/^https?:\/\//, '') : 'Сервер не выбран'}
         </div>
         <Button focusKey="set-server" label="Сменить сервер" onPress={() => navigate({ name: 'connect' })} />
+        <Button focusKey="set-pair" label="Подключить телефон" onPress={() => navigate({ name: 'pairPhone' })} />
       </div>
 
       <h2>Воспроизведение</h2>

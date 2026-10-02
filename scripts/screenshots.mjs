@@ -6,6 +6,8 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const SCENES = ['login', 'login-history', 'library-large', 'library-list', 'history', 'search'];
+// Android client scenes: phone viewport at 2x.
+const ANDROID_SCENES = ['android-library', 'android-torrent', 'android-watch', 'android-remote'];
 
 const candidates = [
   process.env.CHROME_PATH,
@@ -19,7 +21,8 @@ const candidates = [
 const chrome = candidates.find((p) => existsSync(p));
 if (!chrome) throw new Error('Chrome not found; set CHROME_PATH');
 
-for (const scene of SCENES) {
+for (const scene of [...SCENES, ...ANDROID_SCENES]) {
+  const android = scene.startsWith('android-');
   const page = pathToFileURL(resolve('docs/screenshots/src', scene + '.html')).href;
   const out = resolve('docs/screenshots', scene + '.png');
   const profile = mkdtempSync(join(tmpdir(), 'omp-shot-'));
@@ -27,7 +30,7 @@ for (const scene of SCENES) {
     execFileSync(
       chrome,
       ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--user-data-dir=${profile}`,
-        '--window-size=1920,1080', '--virtual-time-budget=5000', `--screenshot=${out}`, page],
+        android ? '--window-size=390,844' : '--window-size=1920,1080', ...(android ? ['--force-device-scale-factor=2'] : []), '--virtual-time-budget=5000', `--screenshot=${out}`, page],
       { timeout: 60000, stdio: 'ignore' },
     );
   } finally {

@@ -23,17 +23,45 @@ jobs:
       - run: npm run build
       - run: node scripts/package.mjs
       - run: npm run check:boot
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: Build signed Android APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "::error::Нет ключа подписи Android (секреты ANDROID_*)"
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/omp.jks"
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/omp.jks"
+          VERSION=$(node -p "require('./package.json').version")
+          npm run android:sync
+          (cd android && ./gradlew assembleRelease)
+          cp android/app/build/outputs/apk/release/app-release.apk "build/omp-${VERSION}.apk"
+          rm -f "$RUNNER_TEMP/omp.jks"
       - name: Homebrew Channel files
-        run: node scripts/hb-manifest.mjs "$GITHUB_REF_NAME" "$(ls build/*.ipk)"
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          node scripts/hb-manifest.mjs "$GITHUB_REF_NAME" "$(ls build/*.ipk)" "build/omp-${VERSION}.apk"
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           IPK=$(ls build/*.ipk)
+          APK="build/omp-$(node -p "require('./package.json').version").apk"
           SUM=$(sha256sum "$IPK" | cut -d' ' -f1)
+          APKSUM=$(sha256sum "$APK" | cut -d' ' -f1)
           sed "s/{{TAG}}/${GITHUB_REF_NAME}/g" .github/release-notes.md > notes.md
           printf '\nSHA-256 `%s`: `%s`\n' "$(basename "$IPK")" "$SUM" >> notes.md
-          gh release create "$GITHUB_REF_NAME" "$IPK" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $GITHUB_REF_NAME" --notes-file notes.md --generate-notes
+          printf 'SHA-256 `%s`: `%s`\n' "$(basename "$APK")" "$APKSUM" >> notes.md
+          gh release create "$GITHUB_REF_NAME" "$IPK" "$APK" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $GITHUB_REF_NAME" --notes-file notes.md --generate-notes
       - name: Publish update feed to gh-pages
         env:
           GH_TOKEN: ${{ github.token }}

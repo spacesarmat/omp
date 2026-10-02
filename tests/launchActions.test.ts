@@ -51,4 +51,16 @@ describe('runLaunchParams', () => {
     runLaunchParams({ play: 'file:///x' });
     expect(routeStack.value).toEqual([{ name: 'connect' }]);
   });
+  it('plays a file of a torrent from a position', async () => {
+    setActiveServer(addServer({ url: 'h:1' }).id);
+    routeStack.value = [{ name: 'library' }];
+    mockFetch(() => ({ body: JSON.stringify({ hash: HASH, title: 'T', stat: 3, file_stats: [{ id: 1, path: 'S/a.S01E01.mkv', length: 10 }, { id: 3, path: 'S/a.S01E03.mkv', length: 10 }] }) }));
+    runLaunchParams({ torrent: HASH, file: 3, t: 1394 });
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    const top = routeStack.value[routeStack.value.length - 1] as any;
+    expect(top.name).toBe('player');
+    expect(top.queue[top.index].fileIndex).toBe(3);
+    expect(top.startAt).toBe(1394);
+  });
 });

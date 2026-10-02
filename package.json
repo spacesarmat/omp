@@ -1,6 +1,6 @@
 {
   "name": "omp",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "Media player for LG webOS TVs backed by TorrServer",
@@ -13,15 +13,25 @@
     "package": "npm run build && node scripts/package.mjs",
     "check:boot": "node scripts/boot-check.mjs",
     "tv:install": "node scripts/tv.mjs install",
-    "tv:launch": "node scripts/tv.mjs launch"
+    "tv:launch": "node scripts/tv.mjs launch",
+    "dev:mobile": "vite --config vite.mobile.config.ts --host",
+    "build:mobile": "tsc --noEmit && vite build --config vite.mobile.config.ts",
+    "android:sync": "npm run build:mobile && npx cap sync android",
+    "android:debug": "npm run android:sync && node scripts/gradle.mjs assembleDebug"
   },
   "dependencies": {
+    "@capacitor-mlkit/barcode-scanning": "^8.2.1",
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/clipboard": "^8.0.1",
+    "@capacitor/core": "^8.5.2",
     "@noriginmedia/norigin-spatial-navigation": "^3.3.0",
     "@preact/signals": "^2.11.3",
     "preact": "^11.0.0",
     "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@preact/preset-vite": "^2.10.6",
     "@resvg/resvg-js": "^2.6.2",
     "@vitejs/plugin-legacy": "^8.2.3",

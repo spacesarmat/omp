@@ -1,11 +1,11 @@
-// CI: node scripts/hb-manifest.mjs <tag> <path-to-ipk> → build/hb/{<id>.manifest.json, apps.json, update.json, full_description.html}
+// CI: node scripts/hb-manifest.mjs <tag> <path-to-ipk> [path-to-apk] → build/hb/{<id>.manifest.json, apps.json, update.json, full_description.html, update-android.json (with apk)}
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { APP_ID, buildHomebrew, changelogNotes } from './hb-lib.mjs';
+import { APP_ID, buildAndroidUpdate, buildHomebrew, changelogNotes } from './hb-lib.mjs';
 
-const [tag, ipk] = process.argv.slice(2);
-if (!tag || !ipk) throw new Error('usage: node scripts/hb-manifest.mjs <tag> <ipk>');
+const [tag, ipk, apk] = process.argv.slice(2);
+if (!tag || !ipk) throw new Error('usage: node scripts/hb-manifest.mjs <tag> <ipk> [apk]');
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 if (tag !== `v${version}`) throw new Error(`tag ${tag} does not match package.json version ${version}`);
 
@@ -33,4 +33,16 @@ copyFileSync(fullDescription, 'build/hb/full_description.html');
 writeFileSync(`build/hb/${APP_ID}.manifest.json`, JSON.stringify(manifest, null, 2));
 writeFileSync('build/hb/apps.json', JSON.stringify(apps, null, 2));
 writeFileSync('build/hb/update.json', JSON.stringify(update, null, 2));
+if (apk) {
+  const apkBuf = readFileSync(apk);
+  const androidUpdate = buildAndroidUpdate({
+    tag,
+    version,
+    apkName: basename(apk),
+    sha256: createHash('sha256').update(apkBuf).digest('hex'),
+    size: apkBuf.length,
+    notes,
+  });
+  writeFileSync('build/hb/update-android.json', JSON.stringify(androidUpdate, null, 2));
+}
 console.log(`build/hb ready for ${tag} (sha256 ${sha256})`);

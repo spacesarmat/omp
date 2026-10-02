@@ -36,7 +36,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx', 'mobile/tests/**/*.test.{ts,tsx}'],
     alias: {
       react: 'preact/compat',
       'react-dom': 'preact/compat',

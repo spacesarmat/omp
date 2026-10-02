@@ -21,6 +21,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: npm run build:mobile
       - run: node scripts/package.mjs
       - run: npm run check:boot
       - uses: actions/upload-artifact@v4

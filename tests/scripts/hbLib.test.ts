@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { changelogNotes, buildHomebrew, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
+import { changelogNotes, buildHomebrew, buildAndroidUpdate, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
 import { sanitizeUpdateInfo } from '../../src/lib/updateInfo';
 
 const MD = '# Изменения\n\n## 0.6.0\n\n- Окно обновления\n* Параметры запуска\n\n## 0.5.0\n\n- Новый каталог\n';
@@ -33,5 +33,14 @@ describe('hb-lib', () => {
       releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/v0.6.0',
     });
     expect(sanitizeUpdateInfo(r.update)).toEqual(r.update);
+  });
+  it('builds the Android update feed', () => {
+    const sha = 'a'.repeat(64);
+    const u = buildAndroidUpdate({ tag: 'v0.7.0', version: '0.7.0', apkName: 'omp-0.7.0.apk', sha256: sha, size: 456, notes: ['Android'] }) as any;
+    expect(u).toEqual({
+      version: '0.7.0', ipkUrl: 'https://github.com/spacesarmat/omp/releases/download/v0.7.0/omp-0.7.0.apk',
+      ipkHash: sha, ipkSize: 456, notes: ['Android'], releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/v0.7.0',
+    });
+    expect(sanitizeUpdateInfo(u)).toEqual(u);
   });
 });
