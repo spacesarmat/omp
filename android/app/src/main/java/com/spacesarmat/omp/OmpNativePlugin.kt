@@ -451,7 +451,11 @@ class OmpNativePlugin : Plugin() {
     fun localServerCache(call: PluginCall) {
         val once = Once(call)
         io.execute {
-            once.resolve(JSObject().put("usedBytes", LocalTorrServer.dirSize(LocalTorrServer.cacheDir(context))))
+            try {
+                once.resolve(JSObject().put("usedBytes", LocalTorrServer.dirSize(LocalTorrServer.cacheDir(context))))
+            } catch (_: Exception) {
+                once.reject("Не удалось узнать размер кэша")
+            }
         }
     }
 

@@ -31,7 +31,7 @@ class TorrServerService : Service() {
     private var stats: ScheduledExecutorService? = null
     private var wifiLocks: List<WifiManager.WifiLock> = emptyList()
     private var wakeLock: PowerManager.WakeLock? = null
-    private var foreground = false
+    @Volatile private var foreground = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -50,7 +50,8 @@ class TorrServerService : Service() {
                 )
                 foreground = true
             } catch (_: Exception) {
-                // not allowed from the background (sticky restart): give up quietly
+                // not allowed from the background (sticky restart): give up, a waiting start fails at once
+                LocalTorrServer.failStart("Не удалось запустить сервер")
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -67,22 +68,37 @@ class TorrServerService : Service() {
     }
 
     override fun onDestroy() {
-        stats?.shutdownNow()
+        // first, so a refresh already posted to the main thread does not notify again
+        val wasForeground = foreground
+        foreground = false
+        stats?.let {
+            it.shutdownNow()
+            try {
+                it.awaitTermination(300, TimeUnit.MILLISECONDS)
+            } catch (_: InterruptedException) {
+            }
+        }
         stats = null
         LocalTorrServer.stop()
         releaseLocks()
-        if (foreground) ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-        foreground = false
+        if (wasForeground) ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        try {
+            getSystemService(NotificationManager::class.java)?.cancel(NOTIFICATION_ID)
+        } catch (_: Exception) {
+        }
         super.onDestroy()
     }
 
     private fun refresh() {
         if (!LocalTorrServer.running) return
         val line = LocalTorrServer.statusLine(LocalTorrServer.wifiIpv4(this), LocalTorrServer.stats())
-        try {
-            val nm = getSystemService(NotificationManager::class.java)
-            if (foreground) nm?.notify(NOTIFICATION_ID, notification(line))
-        } catch (_: Exception) {
+        // on the main thread, where onDestroy clears [foreground]: never re-posts after the stop
+        main.post {
+            if (!foreground) return@post
+            try {
+                getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification(line))
+            } catch (_: Exception) {
+            }
         }
     }
 

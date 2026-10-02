@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import java.io.File
+import java.io.RandomAccessFile
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.Locale
@@ -90,6 +91,7 @@ object LocalTorrServer {
         try {
             val data = dataDir(app).apply { mkdirs() }
             cacheDir(app).mkdirs()
+            trimLog(File(data, "server.log"))
             val pidFile = File(data, "server.pid")
             killOrphan(pidFile)
             if (echo(400) != null) {
@@ -136,6 +138,28 @@ object LocalTorrServer {
             worker.schedule({ if (wanted && proc == null) launch(app) }, 3, TimeUnit.SECONDS)
         } else {
             fail(CRASHED)
+        }
+    }
+
+    /** The service could not go foreground: give up now so a waiting start does not time out. */
+    fun failStart(message: String) {
+        worker.execute { if (proc == null) fail(message) }
+    }
+
+    /** Keeps the last 512 KB of a log grown over 2 MB. */
+    private fun trimLog(log: File) {
+        try {
+            val size = log.length()
+            if (size <= 2L * 1024 * 1024) return
+            val keep = 512 * 1024
+            val tail = ByteArray(keep)
+            RandomAccessFile(log, "r").use { f ->
+                f.seek(size - keep)
+                f.readFully(tail)
+            }
+            log.writeBytes(tail)
+        } catch (_: Exception) {
+            log.delete()
         }
     }
 
@@ -269,6 +293,10 @@ object LocalTorrServer {
                 for (n in cm.allNetworks) {
                     val caps = cm.getNetworkCapabilities(n) ?: continue
                     if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) continue
+                    // a VPN over Wi-Fi also reports TRANSPORT_WIFI: its tunnel address is useless to the TV
+                    if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ||
+                        !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                    ) continue
                     val lp = cm.getLinkProperties(n) ?: continue
                     for (la in lp.linkAddresses) {
                         val a = la.address
