@@ -13,16 +13,34 @@ const tag = parseVersionFile(readFileSync(join(root, 'torrserver.version'), 'utf
 const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'omp-build' };
 if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
 
-const res = await fetch(`https://api.github.com/repos/YouROK/TorrServer/releases/tags/${tag}`, { headers });
-if (!res.ok) throw new Error(`GitHub API ${res.status} for tag ${tag}`);
-const asset = pickAsset(await res.json());
+let asset;
+try {
+  const res = await fetch(`https://api.github.com/repos/YouROK/TorrServer/releases/tags/${tag}`, {
+    headers,
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) {
+    throw new Error(`GitHub API ${res.status} for tag ${tag}${res.status === 403 ? ' (rate limit? set GITHUB_TOKEN)' : ''}`);
+  }
+  asset = pickAsset(await res.json());
+} catch (e) {
+  if (existsSync(target) && !process.env.CI) {
+    console.warn(`WARN: ${e.message}; keeping existing libtorrserver.so / оставляю имеющийся файл`);
+    process.exit(0);
+  }
+  throw e;
+}
 const want = parseDigest(asset.digest);
 
 if (existsSync(target) && sha256(readFileSync(target)) === want) {
   console.log(`libtorrserver.so up to date (${tag})`);
   process.exit(0);
 }
-const dl = await fetch(asset.browser_download_url, { redirect: 'follow', headers: { 'User-Agent': 'omp-build' } });
+const dl = await fetch(asset.browser_download_url, {
+  redirect: 'follow',
+  headers: { 'User-Agent': 'omp-build' },
+  signal: AbortSignal.timeout(300_000),
+});
 if (!dl.ok) throw new Error(`Download failed: ${dl.status}`);
 const buf = Buffer.from(await dl.arrayBuffer());
 const got = sha256(buf);
