@@ -24,6 +24,12 @@ describe('buildSnapshot', () => {
     expect(s.subs.sel).toBe('e0');
     expect(s.next).toEqual({ title: 'Show.S01E03.mkv' });
   });
+  it('builds subtitle from torrent title and episode code', () => {
+    const q = (it2: PlayItem) => buildSnapshot({ ...base, queue: [it2] })!.subtitle;
+    expect(q({ ...item, torrentTitle: 'Show' })).toBe('Show · S01E02');
+    expect(q({ ...item, title: 'Movie', torrentTitle: 'Show' })).toBe('Show');
+    expect(q({ ...item, title: 'Movie' })).toBe('');
+  });
   it('maps audioIdx -1 to default and null next on last item', () => {
     const s = buildSnapshot({ ...base, audioIdx: -1, defaultAudio: 1, index: 1 })!;
     expect(s.audio.sel).toBe(1);

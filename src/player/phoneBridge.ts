@@ -25,8 +25,7 @@ export function buildSnapshot(i: SnapshotInput): PlayerState | null {
     hash: item.hash,
     file: item.fileIndex,
     title: item.title,
-    // the torrent title is not carried by PlayItem: the episode code is all we know
-    subtitle: episodeLabel(item.title),
+    subtitle: [item.torrentTitle, episodeLabel(item.title)].filter(Boolean).join(' · '),
     time: i.time,
     duration: i.duration,
     paused: i.paused,

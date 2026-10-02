@@ -67,6 +67,7 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
       url: e.url,
       title: e.title,
       poster: e.logo,
+      torrentTitle: p.title || undefined,
       hash: ref ? ref.hash : undefined,
       fileIndex: ref ? ref.fileIndex : undefined,
     };
