@@ -268,8 +268,9 @@ export function Remote() {
         </div>
         <button
           type="button"
-          class={'m-power' + (state !== 'connected' && tv.mac ? ' on' : '')}
-          aria-label={state === 'connected' ? 'Выключить телевизор' : 'Включить телевизор'}
+          class={'m-power' + (state !== 'connected' && state !== 'pairing' && tv.mac ? ' on' : '')}
+          aria-label={state === 'connected' || state === 'pairing' ? 'Выключить телевизор' : 'Включить телевизор'}
+          disabled={state === 'pairing'}
           onClick={() => void (state === 'connected' ? off() : on())}
         >
           <Icon d={POWER} />

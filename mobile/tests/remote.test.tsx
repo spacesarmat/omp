@@ -251,6 +251,25 @@ describe('Remote with a TV', () => {
       });
     });
 
+    it('is a disabled «Выключить» while pairing', async () => {
+      saveTv({ ip: '192.168.1.5', name: 'LG OLED', mac: 'aa:bb:cc:dd:ee:ff' });
+      act(() => {
+        tvState.value = 'pairing';
+      });
+      mount();
+      const b = lbl('Выключить телевизор') as HTMLButtonElement;
+      expect(b.disabled).toBe(true);
+      expect(b.classList.contains('on')).toBe(false);
+      expect(lbl('Включить телевизор')).toBeNull();
+      click(b);
+      await flush();
+      expect(a.wakeOnLan).not.toHaveBeenCalled();
+      expect(a.confirm).not.toHaveBeenCalled();
+      act(() => {
+        tvState.value = 'idle';
+      });
+    });
+
     it('is a green «Включить» with a known MAC: sends WoL, toasts, then warms up', async () => {
       saveTv({ ip: '192.168.1.5', name: 'LG OLED', mac: 'aa:bb:cc:dd:ee:ff' });
       mount();
