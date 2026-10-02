@@ -409,11 +409,23 @@ class OmpNativePlugin : Plugin() {
             call.reject("Управление с телефона недоступно")
             return
         }
+        // the port could not be bound: a code would be useless
+        if (!r.running) {
+            call.reject("Сервер управления не запустился")
+            return
+        }
         val c = r.pairing.newCode()
         call.resolve(JSObject().put("code", c.code).put("expiresAt", c.expiresAt))
     }
 
-    /** The TV name the phone shows: { name }. */
+    /** The pairing screen closed: the code shown there stops working. */
+    @PluginMethod
+    fun clearPairingCode(call: PluginCall) {
+        remote?.pairing?.clearCode()
+        call.resolve()
+    }
+
+    /** The TV name the phone sees (the registered NSD name): { name }. */
     @PluginMethod
     fun tvName(call: PluginCall) {
         val r = remote

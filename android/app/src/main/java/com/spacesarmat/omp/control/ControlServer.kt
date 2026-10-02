@@ -81,7 +81,8 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
         try {
             client.soTimeout = READ_TIMEOUT_MS
             val out = client.getOutputStream()
-            val input = BufferedInputStream(client.getInputStream())
+            // a slow sender (one byte per read timeout) is cut at the overall deadline
+            val input = BufferedInputStream(DeadlineInput(client, System.nanoTime() + REQUEST_DEADLINE_MS * 1_000_000))
             val requestLine = readLine(input) ?: return
             val parts = requestLine.split(' ')
             if (parts.size < 3) {
@@ -92,6 +93,7 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
             val path = parts[1].substringBefore('?')
             var length = 0L
             var token: String? = null
+            var origin: String? = null
             var lines = 0
             while (true) {
                 val line = readLine(input) ?: return
@@ -108,12 +110,13 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
                     name.equals("Content-Length", ignoreCase = true) -> length = value.toLongOrNull() ?: -1L
                     name.equals("Authorization", ignoreCase = true) && value.startsWith("Bearer ", ignoreCase = true) ->
                         token = value.substring(7).trim()
+                    name.equals("Origin", ignoreCase = true) -> origin = value
                 }
             }
             when {
-                method == "OPTIONS" -> respond(out, 204, null)
-                length < 0 -> respond(out, 400, error("bad_request"))
-                length > MAX_BODY -> respond(out, 413, error("too_large"))
+                method == "OPTIONS" -> respond(out, 204, null, origin)
+                length < 0 -> respond(out, 400, error("bad_request"), origin)
+                length > MAX_BODY -> respond(out, 413, error("too_large"), origin)
                 else -> {
                     val body = readBody(input, length.toInt()) ?: return
                     val res = try {
@@ -121,7 +124,7 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
                     } catch (_: Exception) {
                         ControlResponse(500, error("internal"))
                     }
-                    respond(out, res.status, res.json)
+                    respond(out, res.status, res.json, origin)
                 }
             }
         } catch (_: Exception) {
@@ -131,15 +134,18 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
         }
     }
 
-    private fun respond(out: OutputStream, code: Int, json: String?) {
+    private fun respond(out: OutputStream, code: Int, json: String?, origin: String? = null) {
         val body = json?.toByteArray(Charsets.UTF_8)
         val head = StringBuilder()
             .append("HTTP/1.1 ").append(code).append(' ').append(reason(code)).append("\r\n")
-            // the phone app's WebView may call with fetch (origin http://localhost)
-            .append("Access-Control-Allow-Origin: *\r\n")
-            .append("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")
-            .append("Access-Control-Allow-Headers: Content-Type, Authorization\r\n")
-            .append("Access-Control-Max-Age: 600\r\n")
+        // only the phone app's WebView may call with fetch: other web pages get no CORS grant
+        if (origin != null && origin in PHONE_ORIGINS) {
+            head.append("Access-Control-Allow-Origin: ").append(origin).append("\r\n")
+                .append("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")
+                .append("Access-Control-Allow-Headers: Content-Type, Authorization\r\n")
+                .append("Access-Control-Max-Age: 600\r\n")
+        }
+        head.append("Vary: Origin\r\n")
             .append("Cache-Control: no-store\r\n")
             .append("Connection: close\r\n")
         if (body != null) head.append("Content-Type: application/json; charset=utf-8\r\n")
@@ -156,6 +162,10 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
         private const val MAX_LINE = 8_192
         private const val MAX_HEADERS = 100
         private const val READ_TIMEOUT_MS = 5_000
+        private const val REQUEST_DEADLINE_MS = 10_000L
+
+        /** Origins of the phone app's WebView (Capacitor androidScheme http/https, capacitor:// on iOS). */
+        val PHONE_ORIGINS = setOf("http://localhost", "https://localhost", "capacitor://localhost")
 
         fun error(code: String) = "{\"error\":\"$code\"}"
 
@@ -195,6 +205,27 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
                 read += n
             }
             return buf
+        }
+
+        /** Socket input whose every read waits at most until [deadline] (System.nanoTime), then fails. */
+        private class DeadlineInput(private val socket: Socket, private val deadline: Long) : InputStream() {
+            private val input = socket.getInputStream()
+
+            private fun arm() {
+                val left = (deadline - System.nanoTime()) / 1_000_000
+                if (left <= 0) throw IOException("request deadline")
+                socket.soTimeout = minOf(left, READ_TIMEOUT_MS.toLong()).toInt().coerceAtLeast(1)
+            }
+
+            override fun read(): Int {
+                arm()
+                return input.read()
+            }
+
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                arm()
+                return input.read(b, off, len)
+            }
         }
 
         private fun closeQuietly(c: Closeable) {

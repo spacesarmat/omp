@@ -15,7 +15,9 @@ export interface OmpNativeTvPlugin {
   nativePlayerCommand(o: { cmd: object }): Promise<unknown>;
   /** Phone remote: a new 4-digit pairing code (the previous one stops working), expiresAt in epoch ms. */
   pairingCode(): Promise<{ code: string; expiresAt: number }>;
-  /** Phone remote: the TV name the phone shows. */
+  /** Phone remote: the pairing screen closed, the code shown there stops working. */
+  clearPairingCode(): Promise<unknown>;
+  /** Phone remote: the TV name the phone sees (the registered NSD name). */
   tvName(): Promise<{ name: string }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
@@ -49,6 +51,7 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     nativePlayerCommand: (o) => np.call(cap, NAME, 'nativePlayerCommand', o),
     pairingCode: () => np.call(cap, NAME, 'pairingCode', {}),
     tvName: () => np.call(cap, NAME, 'tvName', {}),
+    clearPairingCode: () => np.call(cap, NAME, 'clearPairingCode', {}),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }

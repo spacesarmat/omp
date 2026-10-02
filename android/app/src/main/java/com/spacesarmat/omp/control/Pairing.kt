@@ -42,6 +42,14 @@ class Pairing(
         c
     }
 
+    /** The code on screen is gone (the pairing screen closed): no code is valid until the next [newCode]. */
+    fun clearCode() {
+        synchronized(lock) {
+            current = null
+            wrong = 0
+        }
+    }
+
     fun pair(code: String?, phone: String?): Result = synchronized(lock) {
         val c = current
         if (c == null || clock() >= c.expiresAt) {

@@ -60,15 +60,26 @@ class PrefsPhoneStore(context: Context) : PhoneStore {
 }
 
 /**
- * Phone remote on Android TV (spec «Управление с телефона»): the control server on [PORT], the NSD service
- * `_omp._tcp`, pairing, and the actions. Page events (through [emit]): remoteLaunch { params },
- * remoteAttach { report }, remoteKey { name }, remoteText { text | delete | enter }, phonePaired { phone }.
+ * Phone remote on Android TV (spec «Управление с телефона»): the control server on [PORT] ([ControlRouter] does
+ * the routes), the NSD service `_omp._tcp`, pairing, and the actions. Page events (through [emit]):
+ * remoteLaunch { params }, remoteAttach { report }, remoteKey { name }, remoteText { text | delete | enter },
+ * phonePaired { phone }.
  */
-class TvRemote(private val context: Context, private val emit: (String, JSObject, Boolean) -> Unit) {
+class TvRemote(private val context: Context, private val emit: (String, JSObject, Boolean) -> Unit) : RemoteActions {
     val pairing = Pairing(PrefsPhoneStore(context))
-    private val server = ControlServer(PORT) { route(it) }
+    private val router = ControlRouter(pairing, this)
+    private val server = ControlServer(PORT) { router.route(it) }
     private val main = Handler(Looper.getMainLooper())
     private var nsdListener: NsdManager.RegistrationListener? = null
+
+    /** The name NSD registered (it renames on a clash, e.g. «Гостиная (2)»); null until registered. */
+    @Volatile
+    private var registeredName: String? = null
+
+    /** False when the port could not be bound: pairing is impossible. */
+    @Volatile
+    var running = false
+        private set
 
     fun start() {
         try {
@@ -77,16 +88,20 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
             Log.w(TAG, "control server not started: ${e.message}")
             return
         }
+        running = true
         registerNsd()
     }
 
     fun stop() {
+        running = false
         unregisterNsd()
         server.stop()
     }
 
-    /** Name of this TV as the phone shows it (Settings → device name, else the model). */
-    fun name(): String {
+    /** Name of this TV as the phone sees it: the NSD name, else Settings → device name, else the model. */
+    fun name(): String = registeredName ?: deviceName()
+
+    private fun deviceName(): String {
         val n = try {
             Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME)
         } catch (_: RuntimeException) {
@@ -106,13 +121,15 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
     private fun registerNsd() {
         val nsd = context.getSystemService(Context.NSD_SERVICE) as? NsdManager ?: return
         val info = NsdServiceInfo().apply {
-            serviceName = name()
+            serviceName = deviceName()
             serviceType = SERVICE_TYPE
             port = PORT
             setAttribute("v", version())
         }
         val listener = object : NsdManager.RegistrationListener {
-            override fun onServiceRegistered(info: NsdServiceInfo) {}
+            override fun onServiceRegistered(info: NsdServiceInfo) {
+                info.serviceName?.takeIf { it.isNotBlank() }?.let { registeredName = it }
+            }
             override fun onRegistrationFailed(info: NsdServiceInfo, errorCode: Int) {
                 Log.w(TAG, "NSD registration failed: $errorCode")
             }
@@ -130,60 +147,28 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
     private fun unregisterNsd() {
         val listener = nsdListener ?: return
         nsdListener = null
+        registeredName = null
         try {
             (context.getSystemService(Context.NSD_SERVICE) as? NsdManager)?.unregisterService(listener)
         } catch (_: RuntimeException) {
         }
     }
 
-    // ---- routes ----
+    // ---- actions (server threads) ----
 
-    private fun route(req: ControlRequest): ControlResponse {
-        val known = req.path in ROUTES
-        if (!known) return ControlResponse(404, ControlServer.error("not_found"))
-        if (req.path == "/omp/info") {
-            if (req.method != "GET") return methodNotAllowed()
-            return ok(
-                JSONObject()
-                    .put("name", name())
-                    .put("version", version())
-                    .put("paired", pairing.isPaired(req.token))
-                    .put("foreground", AppForeground.any),
-            )
-        }
-        if (req.method != "POST") return methodNotAllowed()
-        val body = parse(req.body) ?: return badRequest()
-        if (req.path == "/omp/pair") return pair(body)
-        if (!pairing.isPaired(req.token)) return ControlResponse(401, ControlServer.error("unauthorized"))
-        return when (req.path) {
-            "/omp/launch" -> launch(body)
-            "/omp/attach" -> attach(body)
-            "/omp/key" -> key(body)
-            "/omp/text" -> text(body)
-            "/omp/volume" -> volume(body)
-            else -> ControlResponse(404, ControlServer.error("not_found"))
-        }
-    }
+    override fun info(): JSONObject =
+        JSONObject().put("name", name()).put("version", version()).put("foreground", AppForeground.any)
 
-    private fun pair(body: JSONObject): ControlResponse {
-        val code = body.opt("code")?.let { if (it is String || it is Number) it.toString() else null }
-        return when (val r = pairing.pair(code, body.optString("phone"))) {
-            is Pairing.Result.Paired -> {
-                emit("phonePaired", JSObject().put("phone", r.phone), false)
-                ok(JSONObject().put("token", r.token))
-            }
-            is Pairing.Result.Refused -> ControlResponse(403, ControlServer.error(r.error))
-        }
+    override fun paired(phone: String) {
+        emit("phonePaired", JSObject().put("phone", phone), false)
     }
 
     /**
      * The page runs runLaunchParams(params). A player that is open keeps the screen when the launch plays
      * something (playNative takes it over) or only attaches the phone; a launch that navigates (server, magnet,
-     * torrent page) closes it and brings the TV interface to the front.
+     * torrent page) closes it first and brings the TV interface to the front.
      */
-    private fun launch(body: JSONObject): ControlResponse {
-        val params = body.opt("params")
-        if (params !is JSONObject) return badRequest()
+    override fun launch(params: JSONObject) {
         val navigates = params.has("server") || params.has("magnet") || (params.has("torrent") && !params.has("file"))
         main.post {
             val player = NativePlayerBridge.player
@@ -195,19 +180,13 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
             }
             emit("remoteLaunch", JSObject().put("params", params), true)
         }
-        return okEmpty()
     }
 
-    private fun attach(body: JSONObject): ControlResponse {
-        val report = body.opt("report") as? String ?: return badRequest()
-        if (!REPORT.matches(report.trim()) || report.trim().length > 200) return badRequest()
-        emit("remoteAttach", JSObject().put("report", report.trim()), true)
-        return okEmpty()
+    override fun attach(report: String) {
+        emit("remoteAttach", JSObject().put("report", report), true)
     }
 
-    private fun key(body: JSONObject): ControlResponse {
-        val name = body.opt("name") as? String ?: return badRequest()
-        if (name !in KEYS) return badRequest()
+    override fun key(name: String) {
         main.post {
             val player = NativePlayerBridge.player
             when (name) {
@@ -221,35 +200,14 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
                 else emit("remoteKey", JSObject().put("name", name), false)
             }
         }
-        return okEmpty()
     }
 
-    private fun text(body: JSONObject): ControlResponse {
-        val data = JSObject()
-        when {
-            body.opt("text") is String -> {
-                val t = body.optString("text")
-                if (t.length > MAX_TEXT) return badRequest()
-                data.put("text", t)
-            }
-            body.opt("delete") is Number -> {
-                val n = body.optInt("delete")
-                if (n < 1 || n > MAX_TEXT) return badRequest()
-                data.put("delete", n)
-            }
-            body.opt("enter") == true -> data.put("enter", true)
-            else -> return badRequest()
-        }
-        emit("remoteText", data, false)
-        return okEmpty()
+    override fun text(data: JSONObject) {
+        emit("remoteText", JSObject.fromJSONObject(data), false)
     }
 
-    private fun volume(body: JSONObject): ControlResponse {
-        val dir = when (body.opt("dir")) {
-            "up" -> AudioManager.ADJUST_RAISE
-            "down" -> AudioManager.ADJUST_LOWER
-            else -> return badRequest()
-        }
+    override fun volume(up: Boolean) {
+        val dir = if (up) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
         main.post {
             try {
                 (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)
@@ -257,7 +215,6 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
             } catch (_: RuntimeException) {
             }
         }
-        return okEmpty()
     }
 
     /** REORDER_TO_FRONT keeps the instance (MainActivity is singleTask, PlayerActivity singleTop). */
@@ -276,20 +233,5 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         const val PORT = 8095
         const val SERVICE_TYPE = "_omp._tcp"
         private const val TAG = "OmpRemote"
-        private const val MAX_TEXT = 1000
-        private val ROUTES = setOf("/omp/info", "/omp/pair", "/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume")
-        private val KEYS = setOf("UP", "DOWN", "LEFT", "RIGHT", "ENTER", "BACK", "CATALOG", "NOWPLAYING")
-        private val REPORT = Regex("^http://.+", RegexOption.IGNORE_CASE)
-
-        private fun parse(body: String): JSONObject? = try {
-            if (body.isBlank()) JSONObject() else JSONObject(body)
-        } catch (_: JSONException) {
-            null
-        }
-
-        private fun ok(o: JSONObject) = ControlResponse(200, o.toString())
-        private fun okEmpty() = ControlResponse(200, "{\"ok\":true}")
-        private fun badRequest() = ControlResponse(400, ControlServer.error("bad_request"))
-        private fun methodNotAllowed() = ControlResponse(405, ControlServer.error("method_not_allowed"))
     }
 }

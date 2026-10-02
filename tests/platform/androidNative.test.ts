@@ -46,12 +46,15 @@ describe('nativePlugin', () => {
     const b = bridgeOnly({
       pairingCode: () => Promise.resolve({ code: '1234', expiresAt: 5 }),
       tvName: () => Promise.resolve({ name: 'Гостиная' }),
+      clearPairingCode: () => Promise.resolve(),
     });
     const p = nativePlugin()!;
     expect(await p.pairingCode()).toEqual({ code: '1234', expiresAt: 5 });
     expect(await p.tvName()).toEqual({ name: 'Гостиная' });
     expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'pairingCode', {});
     expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'tvName', {});
+    await p.clearPairingCode();
+    expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'clearPairingCode', {});
   });
   it('localIpv4: null ip or a failure → null', async () => {
     bridgeOnly({ localIpv4: () => Promise.resolve({ ip: null }) });

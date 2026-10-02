@@ -71,6 +71,7 @@ describe('PairPhoneScreen on Android TV', () => {
       localIpv4: vi.fn(() => Promise.resolve({ ip: null })),
       pairingCode: vi.fn(() => Promise.resolve(codes[Math.min(i++, codes.length - 1)])),
       tvName: vi.fn(() => Promise.resolve({ name: 'Гостиная' })),
+      clearPairingCode: vi.fn(() => Promise.resolve()),
       addListener: vi.fn((e: string, cb: (d: any) => void) => {
         (listeners[e] = listeners[e] || []).push(cb);
         return Promise.resolve({ remove: () => { listeners[e] = listeners[e].filter((x) => x !== cb); } });
@@ -150,6 +151,33 @@ describe('PairPhoneScreen on Android TV', () => {
     await act(async () => f.emit('phonePaired', { phone: 'Pixel' }));
     expect(currentRoute.value.name).toBe('library');
     expect(toasts.textContent).toContain('Телефон подключён');
+  });
+
+  it('shows why there is no code when the control server did not start', async () => {
+    const f = fakePlugin([]);
+    f.plugin.pairingCode.mockImplementation(() => Promise.reject({ message: 'Сервер управления не запустился' }));
+    const host = mountTracked(h(PairPhoneScreen, {}));
+    await settle();
+    expect(host.textContent).toContain('Сервер управления не запустился');
+    expect(host.querySelectorAll('.pair-digit').length).toBe(0);
+  });
+
+  it('a non-Russian rejection gets the generic text', async () => {
+    const f = fakePlugin([]);
+    f.plugin.pairingCode.mockImplementation(() => Promise.reject(new Error('boom')));
+    const host = mountTracked(h(PairPhoneScreen, {}));
+    await settle();
+    expect(host.textContent).toContain('Не удалось получить код');
+  });
+
+  it('leaving the screen invalidates the code', async () => {
+    const f = fakePlugin([{ code: '4821', expiresAt: Date.now() + 300000 }]);
+    const host = mountTracked(h(PairPhoneScreen, {}));
+    await settle();
+    expect(f.plugin.clearPairingCode).not.toHaveBeenCalled();
+    await act(async () => { render(null, host); });
+    await settle();
+    expect(f.plugin.clearPairingCode).toHaveBeenCalledTimes(1);
   });
 
   it('a failed code request is reported', async () => {
