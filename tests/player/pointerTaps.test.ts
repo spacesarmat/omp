@@ -37,6 +37,25 @@ describe('TapDetector', () => {
     vi.advanceTimersByTime(1000);
     expect(single).toHaveBeenCalledTimes(1);
   });
+  it('keeps seeking on rapid edge taps after a double, then falls back to single', () => {
+    vi.useFakeTimers();
+    const single = vi.fn();
+    const double = vi.fn();
+    const d = new TapDetector({ single, double }, 300);
+    d.tap('right');
+    d.tap('right');
+    expect(double).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(200);
+    d.tap('right');
+    expect(double).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(1000);
+    expect(single).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(800);
+    d.tap('right');
+    vi.advanceTimersByTime(300);
+    expect(single).toHaveBeenCalledTimes(1);
+    expect(double).toHaveBeenCalledTimes(2);
+  });
   it('cancel drops a pending single', () => {
     vi.useFakeTimers();
     const single = vi.fn();
