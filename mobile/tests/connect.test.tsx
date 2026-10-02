@@ -207,7 +207,7 @@ describe('Connect screen: TorrServer on the phone', () => {
     expect(t).toContain('В сети не нашлось TorrServer');
     expect(t).toContain('TorrServer прямо на телефоне');
     expect(t).toContain('OMP запустит встроенный сервер. Телевизор найдёт его сам, пока телефон в той же сети Wi‑Fi.');
-    expect(t).toContain('Искать в сети ещё раз');
+    expect(t).not.toContain('Искать в сети ещё раз');
     await act(async () => btn(el, 'Запустить TorrServer на телефоне').click());
     expect(currentRoute.value.name).toBe('localServer');
   });
@@ -248,7 +248,7 @@ describe('Connect screen: TorrServer on the phone', () => {
     localServer.value = { supported: true, running: false };
     const el = mount();
     await flush();
-    await act(async () => btn(el, 'Искать в сети ещё раз').click());
+    await act(async () => btn(el, 'Найти в сети').click());
     await flush();
     expect(n).toBe(2);
   });
@@ -341,6 +341,25 @@ describe('Connect screen: find in the network', () => {
     await act(async () => btn(el, 'Подключиться').click());
     await flush();
     expect(el.textContent).not.toContain(HINT);
+  });
+});
+
+describe('Connect screen: hint on timeout', () => {
+  it('shows the hint when the manual connect times out', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal('fetch', () => new Promise(() => {}));
+      const el = mount();
+      type(el.querySelector<HTMLInputElement>('#addr')!, '10.0.0.1');
+      await act(async () => btn(el, 'Подключиться').click());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(6000);
+      });
+      expect(el.querySelector('.m-error')?.textContent).toBe('Сервер не отвечает');
+      expect(el.textContent).toContain('Не находится?');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

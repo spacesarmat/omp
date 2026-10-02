@@ -133,7 +133,7 @@ export function Connect() {
       return true;
     } catch (e) {
       setError(errorMessage(e));
-      if (isApiError(e) && e.kind === 'network') setNetFail(true);
+      if (isApiError(e) && (e.kind === 'network' || e.kind === 'timeout')) setNetFail(true);
       return false;
     } finally {
       setBusy(false);
@@ -355,11 +355,6 @@ export function Connect() {
             })}
           </div>
         </>
-      )}
-      {auto && scanState === 'done' && (
-        <button type="button" class="m-btn m-btn-text" onClick={() => setScanRun(scanRun + 1)}>
-          Искать в сети ещё раз
-        </button>
       )}
       {renaming && (
         <RenameSheet
