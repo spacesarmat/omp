@@ -6,6 +6,7 @@ import { LibraryScreen } from '../../src/screens/Library';
 import { servers, activeServerId, addServer, setActiveServer } from '../../src/store/servers';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, resetLibrary } from '../../src/store/library';
 import { mockFetch } from '../helpers/fetchMock';
+import { settings, resetSettings } from '../../src/store/settings';
 
 beforeAll(() => {
   init({ debug: false, visualDebug: false });
@@ -69,5 +70,53 @@ describe('LibraryScreen view state', () => {
     expect(libraryTab.value).toBe('all');
     expect(librarySearchOpen.value).toBe(false);
     expect(libraryQuery.value).toBe('');
+  });
+});
+
+describe('LibraryScreen history with sources', () => {
+  const now = Date.now();
+  const journal = (h: object[]) => JSON.stringify({ TorrServer: { Files: [{ id: 1, path: 'Film.mkv', length: 1 }] }, omp: { v: 1, h } });
+  const list = [
+    { hash: 'a1', title: 'Alpha movie', category: 'movie', stat: 5, timestamp: 2, data: journal([{ f: 1, t: 600, d: 2900, at: now - 60000, src: 'phone', name: 'Pixel 7' }]) },
+    { hash: 'b2', title: 'Beta show', category: 'movie', stat: 5, timestamp: 1, data: journal([{ f: 1, t: 60, d: 100, at: now - 120000, src: 'tv' }]) },
+  ];
+
+  beforeEach(() => {
+    resetSettings();
+    mockFetch((_url, init) => {
+      const body = init.body ? JSON.parse(init.body) : {};
+      return { body: body.action === 'list' && _url.indexOf('/torrents') >= 0 ? JSON.stringify(list) : '[]' };
+    });
+  });
+
+  it('shows the source line and filters by source; the filter is kept in settings', async () => {
+    const host = mount();
+    await flush();
+    await flush();
+    libraryTab.value = 'history';
+    await flush();
+    expect(host.querySelectorAll('.hcard')).toHaveLength(2);
+    expect(host.querySelector('.hcard-src')!.textContent).toMatch(/^Телефон «Pixel 7» · (сегодня|вчера) /);
+    const filters = host.querySelectorAll('.hfilter');
+    expect(filters).toHaveLength(3);
+    act(() => (filters[2] as HTMLElement).click());
+    await flush();
+    expect(settings.value.historyFilter).toBe('phone');
+    expect(JSON.parse(localStorage.getItem('tsp.settings')!).historyFilter).toBe('phone');
+    expect(host.querySelectorAll('.hcard')).toHaveLength(1);
+    expect(host.querySelector('.hcard-title')!.textContent).toBe('Alpha movie');
+    act(() => (host.querySelectorAll('.hfilter')[1] as HTMLElement).click());
+    await flush();
+    expect(host.querySelectorAll('.hcard')).toHaveLength(1);
+    expect(host.querySelector('.hcard-title')!.textContent).toBe('Beta show');
+    expect(host.querySelector('.hcard-src')!.textContent).toMatch(/^Телевизор · (сегодня|вчера) /);
+  });
+
+  it('no filter row outside the history tab', async () => {
+    const host = mount();
+    await flush();
+    libraryTab.value = 'all';
+    await flush();
+    expect(host.querySelector('.hfilter')).toBeNull();
   });
 });

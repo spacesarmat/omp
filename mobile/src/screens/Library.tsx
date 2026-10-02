@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Icon, ICONS } from '../ui/Icon';
 import { Poster, qualityBadge } from '../ui/Poster';
 import { Logo } from '../../../src/ui/Logo';
@@ -8,7 +8,8 @@ import { navigate } from '../nav';
 import { filesOf, useTvLaunch } from '../watch';
 import { client } from '../../../src/store/servers';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents } from '../../../src/store/library';
-import { continueWatching, refreshViewed, progressVersion, serverViewed } from '../../../src/store/progress';
+import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
+import { buildHistory, resumeFrom, sourceLine, HISTORY_FILTERS } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
 import { LIBRARY_TABS, nextView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
@@ -17,9 +18,11 @@ import { formatBytes } from '../../../src/lib/format';
 import { episodeLabel, playableFiles } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
+import { native } from '../platform/native';
 import { localServer, startLocal, refreshLocalServer, LOCAL_URL } from '../server/localServer';
 
 const POLL_MS = 15000;
+const PULL_PX = 70;
 const titleOf = (t: Torrent) => t.title || t.name || t.hash;
 
 function episodesText(t: Torrent): string {
@@ -41,20 +44,29 @@ export function Library() {
   const list = torrents.value;
   const sort = settings.value.librarySort;
   const view = settings.value.libraryView;
+  const hfilter = settings.value.historyFilter;
   const [loaded, setLoaded] = useState(list.length > 0);
   const [error, setError] = useState('');
   const [tvError, setTvError] = useState('');
   const [reload, setReload] = useState(0);
   const [starting, setStarting] = useState(false);
+  const [phoneName, setPhoneName] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const loadRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const launch = useTvLaunch();
   progressVersion.value; // re-render when local progress changes
   serverViewed.value;
 
   useEffect(() => {
+    native.phoneName().then((n) => setPhoneName(n), () => undefined);
+  }, []);
+
+  useEffect(() => {
     if (!c) return;
     let alive = true;
     const load = () => {
-      refreshTorrents(c).then(
+      const p = refreshTorrents(c).then(
         () => {
           if (!alive) return;
           setError('');
@@ -68,7 +80,9 @@ export function Library() {
         },
       );
       void refreshViewed(c);
+      return p;
     };
+    loadRef.current = load;
     load();
     const id = setInterval(load, POLL_MS);
     return () => {
@@ -76,6 +90,68 @@ export function Library() {
       clearInterval(id);
     };
   }, [c, reload]);
+
+  // pull-to-refresh: a downward drag from the very top of the page (not from the horizontal chip rows)
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    let startY = 0;
+    let startX = 0;
+    let pulling = false;
+    let busy = false;
+    const atTop = () => (window.scrollY || document.documentElement.scrollTop || 0) <= 0;
+    const move = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      const dy = t.clientY - startY;
+      const dx = t.clientX - startX;
+      if (dy > 0 && dy > Math.abs(dx) && atTop() && e.cancelable) e.preventDefault();
+    };
+    const stop = () => {
+      pulling = false;
+      document.removeEventListener('touchmove', move);
+    };
+    const start = (e: TouchEvent) => {
+      stop();
+      if (busy || e.touches.length !== 1 || !atTop()) return;
+      const target = e.target as Element | null;
+      if (target && target.closest && target.closest('.m-tabs, .m-hfilters')) return;
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      pulling = true;
+      document.addEventListener('touchmove', move, { passive: false });
+    };
+    const end = (e: TouchEvent) => {
+      if (!pulling) return;
+      const t = e.changedTouches[0];
+      const dy = t ? t.clientY - startY : 0;
+      const dx = t ? t.clientX - startX : 0;
+      stop();
+      if (dy > PULL_PX && dy > Math.abs(dx) * 1.5 && atTop() && !busy) {
+        busy = true;
+        setRefreshing(true);
+        loadRef.current().then(
+          () => {
+            busy = false;
+            setRefreshing(false);
+          },
+          () => {
+            busy = false;
+            setRefreshing(false);
+          },
+        );
+      }
+    };
+    root.addEventListener('touchstart', start, { passive: true });
+    root.addEventListener('touchend', end, { passive: true });
+    root.addEventListener('touchcancel', stop, { passive: true });
+    return () => {
+      stop();
+      root.removeEventListener('touchstart', start);
+      root.removeEventListener('touchend', end);
+      root.removeEventListener('touchcancel', stop);
+    };
+  }, []);
 
   // the active server is the phone's own one and it is stopped: offer to start it right here
   const local = localServer.value;
@@ -97,18 +173,21 @@ export function Library() {
     const inTab = list.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
     return sortTorrents(filterTorrents(inTab, query), sort);
   }, [list, tab, query, isHistory, sort]);
-  const history = isHistory
-    ? (() => {
-        const all = continueWatching(list, 40);
-        const match = filterTorrents(all.map((e) => e.torrent), query);
-        return all.filter((e) => match.indexOf(e.torrent) >= 0);
-      })()
-    : [];
+  const pv = progressVersion.value;
+  const sv = serverViewed.value;
+  const history = useMemo(() => {
+    if (!isHistory) return [];
+    const all = buildHistory(list, hfilter, continueWatching(list, 40), getLocalProgress, 40, { src: 'phone', name: phoneName });
+    const match = filterTorrents(all.map((e) => e.torrent), query);
+    return all.filter((e) => match.indexOf(e.torrent) >= 0);
+  }, [list, isHistory, hfilter, query, pv, sv, phoneName]);
 
+  const now = Date.now();
   const count = isHistory ? history.length : shown.length;
   let empty = '';
   if (loaded && !count) {
     if (query.trim()) empty = 'Ничего не найдено';
+    else if (isHistory && hfilter !== 'all') empty = hfilter === 'phone' ? 'С телефона пока ничего не смотрели' : 'С телевизора пока ничего не смотрели';
     else if (isHistory) empty = 'История пуста. Здесь появится то, что вы начали смотреть';
     else if (!list.length) empty = 'Нет торрентов. Добавьте через «Добавить» или веб-интерфейс TorrServer.';
     else empty = 'В этой категории пока ничего нет';
@@ -125,7 +204,7 @@ export function Library() {
     });
 
   return (
-    <div class="m-screen m-library" data-route="library">
+    <div class="m-screen m-library" data-route="library" ref={rootRef}>
       <div class="m-lib-head">
         <div class="m-lib-brand">
           <Logo size={28} />
@@ -162,6 +241,14 @@ export function Library() {
           <Icon d={SEARCH} size={20} />
         </button>
       </div>
+      {refreshing && (
+        <div class="m-ptr" role="status">
+          <svg class="m-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F5B700" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 3a9 9 0 1 0 9 9" />
+          </svg>
+          Обновляю…
+        </div>
+      )}
       {searchOpen && (
         <input
           class="m-input m-lib-search"
@@ -186,6 +273,21 @@ export function Library() {
           </button>
         ))}
       </div>
+      {isHistory && (
+        <div class="m-hfilters" role="group" aria-label="Источник">
+          {HISTORY_FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              class={'m-hfilter' + (hfilter === f.id ? ' on' : '')}
+              aria-pressed={hfilter === f.id}
+              onClick={() => updateSettings({ historyFilter: f.id })}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
       {tvError && <LaunchError message={tvError} class="m-hint-warn" />}
       {error && <div class="m-hint-warn">{error} — показан сохранённый список</div>}
       {canStartLocal && (
@@ -203,6 +305,7 @@ export function Library() {
             const file = files.find((f) => f.id === e.fileIndex);
             const isMovie = t.category === 'movie' || playableFiles(files).length <= 1;
             const { time, duration } = e.progress;
+            const from = resumeFrom(e.progress, MIN_RESUME, WATCHED_RATIO);
             return (
               <div class="m-hrow" key={t.hash}>
                 <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
@@ -217,9 +320,10 @@ export function Library() {
                     <span class="m-bar-track">
                       <span class="m-bar-fill" style={{ width: (duration > 0 ? Math.min(100, (time / duration) * 100) : 0) + '%' }} />
                     </span>
+                    <span class="m-muted m-small m-hrow-src">{sourceLine(e.source, now)}</span>
                   </span>
                 </button>
-                <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, time, duration, [file ? episodeLabel(file.path) : '', t.title || t.name || t.hash].filter(Boolean).join(' · '))}>
+                <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', t.title || t.name || t.hash].filter(Boolean).join(' · '))}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M8 5l11 7-11 7z" />
                   </svg>

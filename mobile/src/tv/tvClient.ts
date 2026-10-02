@@ -10,6 +10,7 @@ import {
   buttonFrame,
   moveFrame,
   clickFrame,
+  scrollFrame,
   launchOmpPayload,
   type RemoteButton,
 } from './ssap';
@@ -580,6 +581,12 @@ export function pressAtvKey(name: 'CATALOG' | 'NOWPLAYING'): Promise<void> {
 export function moveCursor(dx: number, dy: number): Promise<void> {
   if (tvKind() === 'atv') return Promise.reject(new Error(ATV_UNSUPPORTED));
   return sendFrame(moveFrame(dx, dy), true);
+}
+
+/** LG only: two-finger scroll on the touchpad; dropped while the TV is busy, like cursor moves. */
+export function scroll(dx: number, dy: number): Promise<void> {
+  if (tvKind() === 'atv') return Promise.reject(new Error(ATV_UNSUPPORTED));
+  return sendFrame(scrollFrame(dx, dy), true);
 }
 
 export function click(): Promise<void> {

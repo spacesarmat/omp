@@ -65,3 +65,25 @@ describe('report param', () => {
     expect(parseLaunchParams({ report: u })!.report).toBe(u);
   });
 });
+
+describe('launch params: from (watch journal source)', () => {
+  const HASH40 = 'c4c4bd6a4618e1042aa89649d629f85951eff546';
+  it('keeps the phone name with a file', () => {
+    const p = parseLaunchParams({ torrent: HASH40, file: 2, t: 5, from: ' Pixel 7 ' })!;
+    expect(p.invalid).toBe(false);
+    expect(p.action).toEqual({ kind: 'torrent', hash: HASH40, file: 2, t: 5, from: 'Pixel 7' });
+  });
+  it('ignores it without a file or when it is not text, without making the plan invalid', () => {
+    expect(parseLaunchParams({ torrent: HASH40, from: 'Pixel' })!.action).toEqual({ kind: 'torrent', hash: HASH40 });
+    const p = parseLaunchParams({ torrent: HASH40, file: 1, from: 5 })!;
+    expect(p.invalid).toBe(false);
+    expect(p.action).toEqual({ kind: 'torrent', hash: HASH40, file: 1 });
+  });
+  it('cuts long names and control characters', () => {
+    const p = parseLaunchParams({ torrent: HASH40, file: 1, from: 'a\nb' + 'x'.repeat(100) })!;
+    const a = p.action as { from?: string };
+    expect(a.from!.indexOf('\n')).toBe(-1);
+    expect(a.from!.length).toBe(60);
+  });
+});
+

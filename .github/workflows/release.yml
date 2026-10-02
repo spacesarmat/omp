@@ -57,18 +57,20 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           npm run android:sync
           (cd android && ./gradlew assembleRelease)
-          cp android/app/build/outputs/apk/release/app-release.apk "build/omp-${VERSION}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "build/OMP-${VERSION}.apk"
           rm -f "$RUNNER_TEMP/omp.jks"
       - name: Homebrew Channel files
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          node scripts/hb-manifest.mjs "$TAG" "$(ls build/*.ipk)" "build/omp-${VERSION}.apk"
+          mv "$(ls build/com.spacesarmat.torrplayer_*_all.ipk)" "build/OMP-${VERSION}-webOS.ipk"
+          node scripts/hb-manifest.mjs "$TAG" "build/OMP-${VERSION}-webOS.ipk" "build/OMP-${VERSION}.apk"
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          IPK=$(ls build/*.ipk)
-          APK="build/omp-$(node -p "require('./package.json').version").apk"
+          VERSION=$(node -p "require('./package.json').version")
+          IPK="build/OMP-${VERSION}-webOS.ipk"
+          APK="build/OMP-${VERSION}.apk"
           SUM=$(sha256sum "$IPK" | cut -d' ' -f1)
           APKSUM=$(sha256sum "$APK" | cut -d' ' -f1)
           sed "s/{{TAG}}/${TAG}/g" .github/release-notes.md > notes.md

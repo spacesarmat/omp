@@ -4,7 +4,7 @@ import { act } from 'preact/test-utils';
 import { NowPlaying } from '../src/screens/NowPlaying';
 import { MiniPlayer } from '../src/ui/MiniPlayer';
 import { App } from '../src/app';
-import { currentRoute, resetTo, navigate } from '../src/nav';
+import { currentRoute, resetTo, navigate, switchTab } from '../src/nav';
 import { nowPlaying, lastSeen, launchedAt, setPlayerLinkDeps } from '../src/tv/playerLink';
 import { tvState, cancelWarmUp } from '../src/tv/tvClient';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
@@ -319,7 +319,31 @@ describe('MiniPlayer', () => {
   });
 });
 
+describe('«Дальше»', () => {
+  it('shows a cleaned file-name title in a clamped, wrapping text', () => {
+    setState(state({ next: { title: 'Show.S01E02.1080p.WEB-DL.mkv' } }));
+    mount(<NowPlaying volume={volume} />);
+    const text = el.querySelector('.m-now-next-text')!;
+    expect(text.textContent).toBe('Дальше: Show S01E02 1080p WEB-DL');
+    expect(el.querySelector('.m-now-next button')!.textContent).toBe('Включить');
+  });
+});
+
 describe('mini-player in the shell', () => {
+  it('shows only on «Каталог» and «Пульт» tabs', () => {
+    setState(state());
+    resetTo({ name: 'add' });
+    mount(<App />);
+    expect(el.querySelector('.m-mini')).toBeNull();
+    expect(el.querySelector('.m-mini-pad')).toBeNull();
+    act(() => switchTab({ name: 'settings' }));
+    expect(el.querySelector('.m-mini')).toBeNull();
+    act(() => switchTab({ name: 'remote' }));
+    expect(el.querySelector('.m-mini')).not.toBeNull();
+    act(() => switchTab({ name: 'library' }));
+    expect(el.querySelector('.m-mini')).not.toBeNull();
+  });
+
   it('shows on tab screens only', () => {
     setState(state());
     resetTo({ name: 'library' });

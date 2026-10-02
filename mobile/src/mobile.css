@@ -1,4 +1,6 @@
 :root {
+  --m-nav-h: 78px;
+  --m-mini-h: 64px;
   --bg: #0F1115;
   --panel: #181B22;
   --panel-2: #252A35;
@@ -36,6 +38,8 @@ button, .m-btn {
   right: 0;
   bottom: 0;
   display: flex;
+  box-sizing: border-box;
+  height: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
   padding: 8px 8px calc(14px + env(safe-area-inset-bottom));
   background: #14161C;
   border-top: 1px solid var(--panel-2);
@@ -198,21 +202,18 @@ button, .m-btn {
 .m-tvchip {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
   height: 44px;
-  padding: 0 14px;
+  padding: 0;
   border: none;
   border-radius: 22px;
   background: var(--panel);
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
-  min-width: 0;
-  max-width: 45%;
-  white-space: nowrap;
 }
-.m-tvchip > svg { flex-shrink: 0; }
-.m-tvchip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .m-tvchip.on { background: #1E2A1F; color: #8FE39A; }
 .m-lib-search { height: 48px; font-size: 16px; }
 .m-tabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
@@ -295,6 +296,22 @@ button, .m-btn {
 .m-hrow-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
 .m-hrow-title { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-hrow-pos { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; }
+.m-hrow-src { margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-hfilters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.m-hfilters::-webkit-scrollbar { display: none; }
+.m-hfilter {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--panel);
+  color: #C9CEDA;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.m-hfilter.on { background: #252A35; color: var(--text); box-shadow: inset 0 0 0 2px var(--accent); }
 .m-bar-track { display: block; height: 6px; border-radius: 3px; background: #2A2F3A; overflow: hidden; }
 .m-bar-track.thin { height: 4px; border-radius: 2px; }
 .m-bar-fill { display: block; height: 100%; background: var(--accent); }
@@ -392,6 +409,34 @@ button, .m-btn {
 
 /* Remote */
 .m-screen[data-route='remote'] { display: flex; flex-direction: column; gap: 16px; }
+/* Fitted remote: one screen above the tab bar, no vertical scrolling. The d-pad scales with the height. */
+.m-remote {
+  --m-used-mini: 0px;
+  --dp: min(240px, 32vh);
+  gap: 10px;
+  min-height: 0;
+  height: calc(100vh - var(--m-nav-h) - var(--m-used-mini) - env(safe-area-inset-bottom));
+  height: calc(100dvh - var(--m-nav-h) - var(--m-used-mini) - env(safe-area-inset-bottom));
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 0;
+  /* safety valve: controls are never clipped on short screens, landscape or with the soft keyboard */
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+@media (max-height: 560px) {
+  .m-remote { gap: 6px; }
+  .m-remote .m-key, .m-remote .m-media { height: 40px; }
+  .m-remote > .m-touchpad { min-height: 90px; }
+}
+.m-remote.mini { --m-used-mini: calc(var(--m-mini-h) + 8px); --dp: min(240px, 27vh); }
+.m-remote.kbd { --dp: min(240px, 24vh); }
+.m-remote.mini.kbd { --dp: min(240px, 20vh); }
+.m-remote > * { flex-shrink: 0; }
+.m-remote > .m-stage { flex: 1 1 0; min-height: var(--dp); }
+.m-remote > .m-touchpad { flex: 1 1 0; min-height: 120px; }
+.m-stage { display: flex; align-items: center; justify-content: center; }
+.m-remote .m-key, .m-remote .m-media { height: 46px; }
+.m-remote .m-seg button { min-height: 38px; }
+.m-remote .m-remote-note { padding: 8px 12px; font-size: 12px; }
 .m-remote-name { flex-grow: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .m-remote-title { font-size: 20px; font-weight: 700; }
 .m-remote-state { font-size: 13px; color: var(--muted); }
@@ -401,13 +446,13 @@ button, .m-btn {
 .m-seg { display: flex; gap: 8px; padding: 4px; border-radius: 14px; background: var(--panel); }
 .m-seg button { flex: 1 1 0; border: none; border-radius: 10px; background: none; color: var(--muted); font-size: 14px; font-weight: 600; }
 .m-seg button.on { background: var(--panel-2); color: var(--text); font-weight: 700; }
-.m-dpad-wrap { align-self: center; width: 260px; height: 260px; border-radius: 130px; background: var(--panel); position: relative; }
-.m-dpad { position: absolute; width: 70px; height: 70px; border: none; border-radius: 35px; background: none; color: var(--text); display: flex; align-items: center; justify-content: center; }
-.m-dpad-up { left: 95px; top: 8px; }
-.m-dpad-down { left: 95px; top: 182px; }
-.m-dpad-left { left: 8px; top: 95px; }
-.m-dpad-right { left: 182px; top: 95px; }
-.m-dpad-ok { position: absolute; left: 80px; top: 80px; width: 100px; height: 100px; border: none; border-radius: 50px; background: var(--accent); color: var(--bg); font-size: 20px; font-weight: 800; }
+.m-dpad-wrap { width: var(--dp, 240px); height: var(--dp, 240px); border-radius: 50%; background: var(--panel); position: relative; flex-shrink: 0; }
+.m-dpad { position: absolute; width: 27%; height: 27%; min-width: 0; min-height: 0; border: none; border-radius: 50%; background: none; color: var(--text); display: flex; align-items: center; justify-content: center; }
+.m-dpad-up { left: 36.5%; top: 3%; }
+.m-dpad-down { left: 36.5%; top: 70%; }
+.m-dpad-left { left: 3%; top: 36.5%; }
+.m-dpad-right { left: 70%; top: 36.5%; }
+.m-dpad-ok { position: absolute; left: 30.8%; top: 30.8%; width: 38.4%; height: 38.4%; min-width: 0; min-height: 0; border: none; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 20px; font-weight: 800; }
 .m-touchpad { height: 260px; border-radius: 20px; background: var(--panel); display: flex; align-items: center; justify-content: center; user-select: none; }
 .m-keyrow { display: flex; gap: 10px; }
 .m-key, .m-media {
@@ -489,8 +534,8 @@ button, .m-btn {
 .m-now-vol { padding: 0; }
 .m-now-vol button { flex: 1 1 0; height: 48px; border: none; background: none; font-size: 22px; font-weight: 700; }
 .m-now-next { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--panel); }
-.m-now-next span { flex: 1 1 0; font-size: 13px; color: var(--muted); }
-.m-now-next button { height: 44px; min-height: 44px; padding: 0 14px; border: none; border-radius: 10px; background: var(--panel-2); font-size: 13px; font-weight: 700; }
+.m-now-next span { flex: 1 1 0; min-width: 0; font-size: 13px; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; word-break: break-word; }
+.m-now-next button { flex-shrink: 0; height: 44px; min-height: 44px; padding: 0 14px; border: none; border-radius: 10px; background: var(--panel-2); font-size: 13px; font-weight: 700; }
 
 .m-track { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: none; border-radius: 12px; background: var(--panel-2); text-align: left; font-size: 15px; font-weight: 700; }
 .m-track.on { background: #2A2614; }
@@ -502,7 +547,7 @@ button, .m-btn {
 
 /* ---- mini-player ---- */
 .m-mini {
-  position: fixed; left: 8px; right: 8px; bottom: calc(76px + env(safe-area-inset-bottom)); height: 64px; z-index: 5;
+  position: fixed; left: 8px; right: 8px; bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom)); height: var(--m-mini-h); z-index: 5;
   padding: 0 8px 0 10px; border-radius: 16px; background: var(--panel-2); display: flex; align-items: center; gap: 12px; overflow: hidden;
 }
 .m-mini-pad { height: 72px; }
@@ -574,3 +619,25 @@ button, .m-btn {
 .m-vol { flex: 1 1 0; display: flex; align-items: center; border-radius: 14px; background: var(--panel); }
 .m-vol .m-key { flex: 0 0 auto; min-width: 52px; background: transparent; }
 .m-vol-label { flex-grow: 1; text-align: center; font-size: 14px; font-weight: 600; }
+
+/* ---- pull to refresh ---- */
+.m-ptr { align-self: center; display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 16px; background: var(--panel); font-size: 13px; color: var(--muted); }
+
+/* touchpad settings sheet */
+.m-tp-group { display: flex; flex-direction: column; gap: 8px; }
+.m-tp-head, .m-tp-ends, .m-tp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.m-tp-label { font-size: 16px; font-weight: 600; }
+.m-tp-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.m-tp-steps { display: flex; gap: 6px; }
+.m-tp-step { flex: 1 1 0; height: 44px; border: none; border-radius: 10px; background: var(--panel-2); }
+.m-tp-step.on { background: var(--accent); }
+
+/* FAQ accordion */
+.m-faq-list { display: flex; flex-direction: column; gap: 10px; }
+.m-faq-item { border-radius: 14px; background: var(--panel); }
+.m-faq-item.open { box-shadow: inset 0 0 0 2px var(--accent); }
+.m-faq-q { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 12px 16px; border: none; background: none; color: var(--text); font: inherit; font-size: 15px; font-weight: 600; text-align: left; }
+.m-faq-q > span { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+.m-faq-a { padding: 0 16px 14px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.m-faq-a p { margin: 0 0 8px; overflow-wrap: anywhere; }
+.m-faq-a p:last-child { margin-bottom: 0; }

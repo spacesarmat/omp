@@ -193,7 +193,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
       </div>
       {s.next && (
         <div class="m-now-next">
-          <span>Дальше: {s.next.title}</span>
+          <span class="m-now-next-text">Дальше: {displayTitle(s.next.title)}</span>
           <button type="button" disabled={off} onClick={() => sendCmd({ type: 'next' })}>
             Включить
           </button>

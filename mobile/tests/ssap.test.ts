@@ -4,6 +4,7 @@ import {
   requestMessage,
   buttonFrame,
   moveFrame,
+  scrollFrame,
   clickFrame,
   launchOmpPayload,
   OMP_TV_APP_ID,
@@ -71,6 +72,7 @@ describe('ssap messages', () => {
   it('builds pointer frames', () => {
     expect(buttonFrame('UP')).toBe('type:button\nname:UP\n\n');
     expect(buttonFrame('CHANNELDOWN')).toBe('type:button\nname:CHANNELDOWN\n\n');
+    expect(scrollFrame(0, -3.4)).toBe('type:scroll\ndx:0\ndy:-3\n\n');
     expect(moveFrame(3.6, -2)).toBe('type:move\ndx:4\ndy:-2\ndown:0\n\n');
     expect(clickFrame()).toBe('type:click\n\n');
   });

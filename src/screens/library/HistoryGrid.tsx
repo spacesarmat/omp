@@ -1,22 +1,40 @@
-import type { Torrent } from '../../api/types';
-import type { Progress } from '../../store/progress';
 import { categoryOf } from '../../lib/category';
 import { episodeLine, positionLabel, remainingLabel } from '../../lib/libraryView';
+import { HISTORY_FILTERS, sourceLine, type HistoryFilter, type HistoryItem } from '../../lib/history';
 import { FocusGroup, Focusable, ProgressBar } from '../../ui/components';
+import { Icon } from '../../ui/icons';
 import { Poster } from './Poster';
 
-export interface HistoryEntry {
-  torrent: Torrent;
-  fileIndex: number;
-  progress: Progress;
+export type HistoryEntry = HistoryItem;
+
+/** «Все / С телевизора / С телефона» above the history cards. */
+export function HistoryFilterRow(p: { value: HistoryFilter; onChange: (f: HistoryFilter) => void; onFocused?: () => void }) {
+  return (
+    <FocusGroup focusKey="LIB-HFILTER" className="history-filter">
+      {HISTORY_FILTERS.map((f) => (
+        <Focusable
+          key={f.id}
+          focusKey={'hfilter-' + f.id}
+          className={'hfilter' + (p.value === f.id ? ' active' : '')}
+          onPress={() => p.onChange(f.id)}
+          onFocused={p.onFocused}
+        >
+          {f.label}
+        </Focusable>
+      ))}
+    </FocusGroup>
+  );
 }
 
 export function HistoryGrid(p: {
   entries: HistoryEntry[];
+  /** Unix ms for «сегодня / вчера» (defaults to now). */
+  now?: number;
   filePath: (e: HistoryEntry) => string;
   onOpen: (e: HistoryEntry) => void;
   onFocused: (e: HistoryEntry) => void;
 }) {
+  const now = p.now === undefined ? Date.now() : p.now;
   return (
     <FocusGroup focusKey="LIB-GRID" className="history-grid">
       {p.entries.map((e) => {
@@ -39,6 +57,10 @@ export function HistoryGrid(p: {
                 <span class="hcard-left">{remainingLabel(pr.time, pr.duration)}</span>
               </div>
               {pr.duration > 0 && <ProgressBar ratio={pr.time / pr.duration} />}
+              <div class="hcard-src">
+                <Icon name={e.source.src === 'phone' ? 'phone' : 'tv'} size={22} />
+                <span class="hcard-src-text">{sourceLine(e.source, now)}</span>
+              </div>
             </div>
           </Focusable>
         );

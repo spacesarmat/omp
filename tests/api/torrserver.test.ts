@@ -36,6 +36,22 @@ describe('TorrServerClient', () => {
     expect(JSON.parse(fn.mock.calls[0][1].body)).toEqual({ action: 'list' });
   });
 
+  it('setData falls back to the name and skips the write without any title', async () => {
+    const fn = mockFetch(() => ({ body: '' }));
+    await c.setData({ hash: HASH, title: '', name: 'N' } as any, '{}');
+    expect(JSON.parse(fn.mock.calls[0][1].body).title).toBe('N');
+    await c.setData({ hash: HASH, title: '' }, '{}');
+    expect(fn.mock.calls).toHaveLength(1);
+  });
+
+  it('setData sends set with the current title, poster and category', async () => {
+    const fn = mockFetch(() => ({ body: '' }));
+    await c.setData({ hash: HASH, title: 'T', poster: 'http://p', category: 'tv' }, '{"omp":1}');
+    expect(JSON.parse(fn.mock.calls[0][1].body)).toEqual({ action: 'set', hash: HASH, title: 'T', poster: 'http://p', category: 'tv', data: '{"omp":1}' });
+    await c.setData({ hash: HASH, title: 'T' }, '{}');
+    expect(JSON.parse(fn.mock.calls[1][1].body)).toEqual({ action: 'set', hash: HASH, title: 'T', poster: '', category: '', data: '{}' });
+  });
+
   it('list returns [] for null', async () => {
     mockFetch(() => ({ body: 'null' }));
     expect(await c.list()).toEqual([]);

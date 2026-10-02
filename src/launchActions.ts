@@ -39,6 +39,7 @@ export function runLaunchParams(raw: unknown): void {
     const file = a.file;
     const startAt = a.t;
     const hash = a.hash;
+    const from = a.from;
     c.get(hash)
       .then((t) => (c.files(t).length ? t : c.loadInfo(hash)))
       .then(
@@ -50,7 +51,7 @@ export function runLaunchParams(raw: unknown): void {
             navigate({ name: 'torrent', hash });
             return;
           }
-          openPlayer({ name: 'player', queue, index, startAt });
+          openPlayer(from ? { name: 'player', queue, index, startAt, from } : { name: 'player', queue, index, startAt });
         },
         (e) => toast(errorMessage(e), 'error'),
       );

@@ -79,6 +79,24 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('ServerSettings', () => {
+  it('edits the server given by url without touching the active one', async () => {
+    setup('http://192.168.1.5:8090');
+    const seen: string[] = [];
+    const inner = globalThis.fetch;
+    vi.stubGlobal('fetch', (u: any, i: any) => {
+      seen.push(String(u));
+      return inner(u, i);
+    });
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<ServerSettings url="http://127.0.0.1:8090" />, el));
+    await flush();
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((u) => u.startsWith('http://127.0.0.1:8090'))).toBe(true);
+    expect(el.textContent).toContain('Этот телефон');
+    expect(btn('Размер кэша').textContent).toContain('64 МБ');
+  });
+
   it('shows the server name and current values', async () => {
     setup();
     await mount();

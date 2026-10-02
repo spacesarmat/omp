@@ -8,6 +8,7 @@ import { NavBar, type Tab } from './ui/NavBar';
 import { Toast } from './ui/toast';
 import { Connect } from './screens/Connect';
 import { Tv } from './screens/Tv';
+import { Faq } from './screens/Faq';
 import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
 import { Add } from './screens/Add';
@@ -32,7 +33,8 @@ export function handleBack(): void {
   if (sheetBackHandler.current?.()) return;
   if (goBack()) return;
   try {
-    void CapApp.exitApp();
+    // tab roots: send the app to the background instead of closing it
+    void Promise.resolve(CapApp.minimizeApp()).catch(() => {});
   } catch {
     /* not running inside Capacitor */
   }
@@ -138,13 +140,15 @@ export function App() {
   const route = currentRoute.value;
   const prompt = updatePrompt.value;
   const showNav = TABS.includes(route.name);
-  const showMini = showNav && linkStatus.value !== 'none';
+  const showMini = (route.name === 'library' || route.name === 'remote') && linkStatus.value !== 'none';
   return (
     <>
       {route.name === 'connect' ? (
         <Connect />
       ) : route.name === 'tv' ? (
         <Tv />
+      ) : route.name === 'faq' ? (
+        <Faq />
       ) : route.name === 'library' ? (
         <Library />
       ) : route.name === 'torrent' ? (
@@ -156,7 +160,7 @@ export function App() {
       ) : route.name === 'localServer' ? (
         <LocalServer />
       ) : route.name === 'serverSettings' ? (
-        <ServerSettings />
+        <ServerSettings url={route.url} />
       ) : route.name === 'remote' ? (
         <Remote />
       ) : (
@@ -164,8 +168,8 @@ export function App() {
       )}
       {prompt && showNav && <UpdateSheet info={prompt} />}
       <Toast />
-      {showMini && <div class="m-mini-pad" />}
-      {showNav && <MiniPlayer />}
+      {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
+      {showMini && <MiniPlayer />}
       {showNav && <NavBar active={route.name as Tab} />}
     </>
   );

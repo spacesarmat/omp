@@ -119,6 +119,11 @@ export function moveFrame(dx: number, dy: number): string {
   return `type:move\ndx:${Math.round(dx)}\ndy:${Math.round(dy)}\ndown:0\n\n`;
 }
 
+/** Two-finger scroll; positive dy scrolls the page down. */
+export function scrollFrame(dx: number, dy: number): string {
+  return `type:scroll\ndx:${Math.round(dx)}\ndy:${Math.round(dy)}\n\n`;
+}
+
 export function clickFrame(): string {
   return 'type:click\n\n';
 }

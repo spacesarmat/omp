@@ -6,7 +6,7 @@ import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { actions, filesOf, streamUrlFor, tvServerUrl, useTvLaunch } from '../watch';
+import { actions, filesOf, recordPhoneWatch, streamUrlFor, tvServerUrl, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { torrents, refreshTorrents } from '../../../src/store/library';
 import {
@@ -89,6 +89,7 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
   const onPhone = async () => {
     try {
       await actions.openExternal(streamUrlFor(c, torrent, file), 'video/*');
+      void recordPhoneWatch(c, torrent.hash, file.id, 0, getLocalProgress(torrent.hash, file.id)?.duration || 0);
       if (alive.v) onClose();
     } catch (e) {
       if (alive.v) setStatus({ kind: 'error', text: errorMessage(e) });
@@ -238,6 +239,7 @@ export function Torrent({ hash }: { hash: string }) {
     if (!target) return;
     try {
       await actions.openExternal(streamUrlFor(c, t, target), 'video/*');
+      void recordPhoneWatch(c, hash, target.id, 0, getLocalProgress(hash, target.id)?.duration || 0);
     } catch (e) {
       setStatus(errorMessage(e));
     }

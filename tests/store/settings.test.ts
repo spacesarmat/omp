@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { settings, updateSettings, resetSettings, DEFAULT_SETTINGS } from '../../src/store/settings';
+import { settings, updateSettings, resetSettings, DEFAULT_SETTINGS, sanitizeSettings } from '../../src/store/settings';
 
 beforeEach(() => {
   localStorage.clear();
@@ -19,3 +19,13 @@ describe('settings store', () => {
     expect(settings.value).toEqual(DEFAULT_SETTINGS);
   });
 });
+
+describe('history filter setting', () => {
+  it('defaults to all and rejects unknown values', () => {
+    expect(DEFAULT_SETTINGS.historyFilter).toBe('all');
+    expect(sanitizeSettings({ historyFilter: 'phone' }).historyFilter).toBe('phone');
+    expect(sanitizeSettings({ historyFilter: 'radio' }).historyFilter).toBe('all');
+    expect(sanitizeSettings({ historyFilter: 3 }).historyFilter).toBe('all');
+  });
+});
+

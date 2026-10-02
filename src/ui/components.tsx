@@ -161,7 +161,7 @@ export function ChoiceRow<T>(p: ChoiceRowProps<T>) {
       }}
     >
       <span class="choice-label">{p.label}</span>
-      <span class="choice-value"><Icon name="chevronLeft" size={22} /> {p.options[idx] ? p.options[idx].label : ''} <Icon name="chevronRight" size={22} /></span>
+      <span class="choice-value"><Icon name="chevronLeft" size={22} />{p.options[idx] ? p.options[idx].label : ''}<Icon name="chevronRight" size={22} /></span>
     </Focusable>
   );
 }

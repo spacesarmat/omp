@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
 import type { LibrarySort } from '../lib/librarySearch';
 import type { LibraryView } from '../lib/libraryView';
+import { isHistoryFilter, type HistoryFilter } from '../lib/history';
 
 export interface AppSettings {
   audioLang: string;
@@ -17,6 +18,7 @@ export interface AppSettings {
   libraryView: LibraryView;
   librarySort: LibrarySort;
   updateCheck: boolean;
+  historyFilter: HistoryFilter;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -33,6 +35,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   libraryView: 'large',
   librarySort: 'new',
   updateCheck: true,
+  historyFilter: 'all',
 };
 
 const KEY = 'tsp.settings';
@@ -52,6 +55,7 @@ export function sanitizeSettings(v: unknown): AppSettings {
   if ([5, 10, 15].indexOf(out.edgeSeekStep) < 0) out.edgeSeekStep = DEFAULT_SETTINGS.edgeSeekStep;
   if (['large', 'small', 'list', 'compact'].indexOf(out.libraryView) < 0) out.libraryView = DEFAULT_SETTINGS.libraryView;
   if (['new', 'title', 'size'].indexOf(out.librarySort) < 0) out.librarySort = DEFAULT_SETTINGS.librarySort;
+  if (!isHistoryFilter(out.historyFilter)) out.historyFilter = DEFAULT_SETTINGS.historyFilter;
   return out;
 }
 

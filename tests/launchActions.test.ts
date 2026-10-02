@@ -63,6 +63,18 @@ describe('runLaunchParams', () => {
     expect(top.name).toBe('player');
     expect(top.queue[top.index].fileIndex).toBe(3);
     expect(top.startAt).toBe(1394);
+    expect('from' in top).toBe(false);
+  });
+  it('passes the launching phone to the player (watch journal source)', async () => {
+    setActiveServer(addServer({ url: 'h:1' }).id);
+    routeStack.value = [{ name: 'library' }];
+    mockFetch(() => ({ body: JSON.stringify({ hash: HASH, title: 'T', stat: 3, file_stats: [{ id: 3, path: 'S/a.S01E03.mkv', length: 10 }] }) }));
+    runLaunchParams({ torrent: HASH, file: 3, t: 0, from: 'Pixel 7' });
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    const top = routeStack.value[routeStack.value.length - 1] as any;
+    expect(top.name).toBe('player');
+    expect(top.from).toBe('Pixel 7');
   });
   it('replaces a player already on top (the old player is never remounted)', async () => {
     setActiveServer(addServer({ url: 'h:1' }).id);

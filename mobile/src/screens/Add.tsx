@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
+import { Sheet } from '../ui/Sheet';
+import { ADD_CATEGORIES, addCategoryLabel, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
@@ -43,6 +45,9 @@ export function Add({ link }: { link?: string }) {
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const [picked, setPicked] = useState<string | null>(null);
+  const [rowCat, setRowCat] = useState<Record<string, string>>({});
+  const [catSheet, setCatSheet] = useState<string | null>(null);
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [alive] = useState({ v: true });
   const pendingRef = useRef<Set<string>>(new Set());
@@ -58,8 +63,23 @@ export function Add({ link }: { link?: string }) {
     [],
   );
   useEffect(() => {
-    if (link) setValue(link);
+    if (link) changeValue(link);
   }, [link]);
+
+  // replacing a link by a different one forgets the category picked for the previous one
+  // (a pick made before any link was typed stays)
+  const changeValue = (v: string) => {
+    const prev = normalizeLink(value);
+    if (prev && normalizeLink(v) !== prev) setPicked(null);
+    setValue(v);
+  };
+
+  const magnetCategory = picked !== null ? picked : guessCategory(magnetName(value));
+  const rowKey = (r: SearchResult) => r.Hash || r.Title;
+  const categoryOfRow = (r: SearchResult) => {
+    const v = rowCat[rowKey(r)];
+    return v !== undefined ? v : guessCategory(r.Title);
+  };
 
   const addLink = async (l: string): Promise<string | null> => {
     const c = client.value;
@@ -67,7 +87,7 @@ export function Add({ link }: { link?: string }) {
       setError('Сервер не выбран');
       return null;
     }
-    const t = await c.add({ link: l });
+    const t = await c.add({ link: l, category: magnetCategory });
     return t.hash;
   };
 
@@ -83,6 +103,7 @@ export function Add({ link }: { link?: string }) {
       const hash = await addLink(l);
       if (hash && alive.v) {
         showToast('Добавлено');
+        setPicked(null);
         navigate({ name: 'torrent', hash });
       }
     } catch (e) {
@@ -140,7 +161,7 @@ export function Add({ link }: { link?: string }) {
     try {
       const c = client.value;
       if (!c) throw new Error('Сервер не выбран');
-      const hash = (await c.add({ link: l })).hash;
+      const hash = (await c.add({ link: l, category: categoryOfRow(r) })).hash;
       if (!alive.v) return;
       if (!watch) {
         showToast('Добавлено на сервер');
@@ -172,11 +193,25 @@ export function Add({ link }: { link?: string }) {
           aria-label="Magnet-ссылка или хеш"
           placeholder="magnet:?xt=urn:btih:…"
           value={value}
-          onInput={(e) => setValue((e.target as HTMLInputElement).value)}
+          onInput={(e) => changeValue((e.target as HTMLInputElement).value)}
         />
         <button type="button" class="m-btn m-btn-primary m-btn-sm" disabled={busy} onClick={onAdd}>
           Добавить
         </button>
+      </div>
+      <div class="m-muted m-small">Категория</div>
+      <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+        {ADD_CATEGORIES.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            class={'m-chip' + (magnetCategory === c.id ? ' on' : '')}
+            aria-pressed={magnetCategory === c.id}
+            onClick={() => setPicked(c.id)}
+          >
+            {c.label}
+          </button>
+        ))}
       </div>
       {error && <div class="m-error">{error}</div>}
       <div class="m-muted m-small">Ссылки magnet из браузера открываются в OMP сами — через «Поделиться».</div>
@@ -218,6 +253,14 @@ export function Add({ link }: { link?: string }) {
             </div>
             <button
               type="button"
+              class="m-chip"
+              aria-label={'Категория: ' + addCategoryLabel(categoryOfRow(r))}
+              onClick={() => setCatSheet(rowKey(r))}
+            >
+              {addCategoryLabel(categoryOfRow(r)) + ' ▾'}
+            </button>
+            <button
+              type="button"
               class="m-iconbtn"
               aria-label="Добавить на сервер"
               disabled={!!pending[r.Hash || r.Title]}
@@ -237,6 +280,26 @@ export function Add({ link }: { link?: string }) {
           </div>
         ))}
       </div>
+      {catSheet !== null && (
+        <Sheet label="Категория" onClose={() => setCatSheet(null)}>
+          <div class="m-sheet-title">Категория</div>
+          <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+            {ADD_CATEGORIES.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                class={'m-chip' + ((rowCat[catSheet] !== undefined ? rowCat[catSheet] : guessCategory((results || []).filter((x) => rowKey(x) === catSheet)[0]?.Title || '')) === c.id ? ' on' : '')}
+                onClick={() => {
+                  setRowCat({ ...rowCat, [catSheet]: c.id });
+                  setCatSheet(null);
+                }}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
       {launch.sheet}
     </div>
   );

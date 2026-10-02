@@ -1,6 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
+import { installWheelScroll } from './ui/wheel';
 import { DialogHost, confirmDialog, dialogOpen } from './ui/dialog';
 import { ToastHost } from './ui/toast';
 import { ConnectScreen } from './screens/Connect';
@@ -30,8 +31,8 @@ function renderRoute(r: Route) {
       return <TorrentScreen hash={r.hash} />;
     case 'player':
       return platformKind() === 'androidtv'
-        ? <NativePlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />
-        : <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />;
+        ? <NativePlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} from={r.from} />
+        : <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} from={r.from} />;
     case 'add':
       return <AddScreen />;
     case 'playlist':
@@ -63,6 +64,7 @@ export function unhandledBack(): boolean {
 
 export function App() {
   useEffect(() => installKeyListener(unhandledBack), []);
+  useEffect(() => installWheelScroll(), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidKeyBridge() : undefined), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidRemote() : undefined), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidScale() : undefined), []);

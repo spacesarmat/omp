@@ -18,7 +18,11 @@ import type { IconName } from '../ui/icons';
 import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
 import { introChapter } from '../player/chapters';
 import { useVideoState } from '../player/useVideoState';
+import { HideTimer, canHideControls, pointerMoveCounts } from '../player/hideTimer';
 import { useProgressSync } from '../player/useProgressSync';
+import { WatchJournal, journalSource } from '../player/watchJournal';
+import { recordWatch } from '../store/journal';
+import { getLocalProgress } from '../store/progress';
 import { useNextEpisode } from '../player/useNextEpisode';
 import { useCacheStats } from '../player/useCacheStats';
 import { Controls } from '../player/Controls';
@@ -26,7 +30,7 @@ import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner
 import type { Cmd } from '../phone/protocol';
 import { goBack } from '../ui/nav';
 import { useKeys } from '../ui/keys';
-import { choose } from '../ui/dialog';
+import { choose, dialogOpen } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { setPlayerBridge, postSoon } from '../phone/link';
 import { buildSnapshot, liveTiming, runCmd } from '../player/phoneBridge';
@@ -35,9 +39,11 @@ interface Props {
   queue: PlayItem[];
   index: number;
   startAt?: number;
+  /** Name of the phone that launched the player (watch journal source). */
+  from?: string;
 }
 
-export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
+export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props) {
   const c = client.value;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [index, setIndex] = useState(startIndex);
@@ -61,13 +67,15 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   const probeRef = useRef<FfprobeResult | null>(null);
   probeRef.current = probe;
   const startUsed = useRef(false);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const src = ready ? (c ? c.videoSrc(item.url) : item.url) : '';
   const vs = useVideoState(videoRef, index + ':' + reloadKey + ':' + src);
   const posRef = useRef({ time: 0, duration: 0 });
   posRef.current = { time: vs.time, duration: vs.duration };
   useProgressSync(c, item, posRef);
+  // watch journal on TorrServer: an entry when the item starts (below) and when it is left
+  const journal = useMemo(() => new WatchJournal((h, e) => { recordWatch(c, h, e); }, journalSource(from)), []);
+  useEffect(() => () => journal.end(item, posRef.current.time, posRef.current.duration), [item]);
 
   const hasNext = index < queue.length - 1;
   const hasPrev = index > 0;
@@ -91,14 +99,25 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
 
   const cache = useCacheStats(c, item.hash, statsOn || (ready && vs.buffering));
 
+  const hideGate = useRef({ paused: true, buffering: true, seeking: false, error: false });
+  hideGate.current = { paused: vs.paused, buffering: vs.buffering, seeking: seekTarget !== null, error: !!vs.error };
+  const lastPtr = useRef<{ x: number; y: number } | null>(null);
+  const hider = useMemo(
+    () => new HideTimer(
+      () => canHideControls({ ...hideGate.current, dialogOpen: dialogOpen.value }),
+      () => setControls(false),
+    ),
+    [],
+  );
   const showControls = () => {
     setControls(true);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => {
-      const v = videoRef.current;
-      if (v && !v.paused) setControls(false);
-    }, 4000);
+    hider.arm();
   };
+  // (re)start of playback — incl. after phone commands or the end of buffering — re-arms the hide timer
+  useEffect(() => {
+    if (!vs.paused && !vs.buffering && !vs.error) hider.arm();
+    else hider.cancel();
+  }, [vs.paused, vs.buffering, vs.error, seekTarget === null, dialogOpen.value]);
 
   const [flash, setFlash] = useState<{ icon?: IconName; text?: string; side: TapZone } | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -166,6 +185,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
         return;
       }
       startPos.current = pos;
+      const saved = item.hash && item.fileIndex !== undefined ? getLocalProgress(item.hash, item.fileIndex) : null;
+      journal.start(item, pos, saved ? saved.duration : 0);
       setReadyFor(index);
     });
     if (c && item.hash && item.fileIndex !== undefined) {
@@ -185,7 +206,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     };
   }, [index + ':' + reloadKey]);
 
-  useEffect(() => () => { if (hideTimer.current) clearTimeout(hideTimer.current); }, []);
+  useEffect(() => () => hider.cancel(), []);
 
   const seeker = useMemo(
     () => new SeekAccumulator((t) => {
@@ -444,7 +465,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   if (!item) return null;
 
   return (
-    <div class="player" onMouseMove={showControls} onClick={(e) => { if (Date.now() - lastKeyAt.current < 250) return; const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); taps.tap(tapZone((e as MouseEvent).clientX - r.left, r.width)); }}>
+    <div class="player" onMouseMove={(e) => { const m = e as MouseEvent; if (pointerMoveCounts(controls, lastPtr.current, m.clientX, m.clientY)) { lastPtr.current = { x: m.clientX, y: m.clientY }; showControls(); } }} onClick={(e) => { if (Date.now() - lastKeyAt.current < 250) return; const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); taps.tap(tapZone((e as MouseEvent).clientX - r.left, r.width)); }}>
       <video key={index + ':' + reloadKey} ref={videoRef} src={ready ? src : undefined} autoplay onLoadedMetadata={onMeta} />
       <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
       {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}

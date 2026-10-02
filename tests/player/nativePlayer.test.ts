@@ -7,6 +7,7 @@ import { TorrServerClient } from '../../src/api/torrserver';
 import { getLocalProgress, reloadProgress, saveProgress } from '../../src/store/progress';
 import { decideStart } from '../../src/player/resume';
 import type { PlayItem } from '../../src/player/types';
+import { WatchJournal, journalSource } from '../../src/player/watchJournal';
 
 const H1 = 'a'.repeat(40);
 
@@ -175,6 +176,20 @@ describe('NativeSession', () => {
     expect(getLocalProgress(H1, 1)!.time).toBe(950);
     expect(s.state!.index).toBe(1);
     s.dispose();
+  });
+
+  it('watch journal: start once open, item change ends and starts, close ends; once per item', async () => {
+    const f = fakePlugin();
+    const { c } = fakeClient();
+    const rec = vi.fn();
+    const s = track(new NativeSession(f.plugin, c, queue, {}, new WatchJournal(rec, journalSource('Pixel'))));
+    await s.start(opts);
+    expect(rec.mock.calls).toEqual([[H1, { f: 1, t: 125, d: 0, src: 'phone', name: 'Pixel' }]]);
+    for (let i = 0; i < 30; i++) f.emit('nativePlayerState', state({ time: 130 + i }));
+    expect(rec).toHaveBeenCalledTimes(1);
+    f.emit('nativePlayerState', state({ index: 1, time: 3, duration: 900 }));
+    f.emit('nativePlayerClosed', { index: 1, time: 400, duration: 900 });
+    expect(rec.mock.calls.slice(1).map((x) => [x[1].f, x[1].t, x[1].d])).toEqual([[1, 159, 1000], [2, 3, 900], [2, 400, 900]]);
   });
 
   it('closed: final save, listeners removed, hook called; later events ignored', async () => {

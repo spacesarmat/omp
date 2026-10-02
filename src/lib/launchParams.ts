@@ -1,6 +1,6 @@
 export type LaunchAction =
   | { kind: 'play'; url: string; title: string }
-  | { kind: 'torrent'; hash: string; file?: number; t?: number }
+  | { kind: 'torrent'; hash: string; file?: number; t?: number; from?: string }
   | { kind: 'magnet'; link: string };
 
 export interface LaunchPlan {
@@ -60,6 +60,11 @@ export function parseLaunchParams(raw: unknown): LaunchPlan | null {
         const f = num(o.file);
         if (f === null) plan.invalid = true;
         else action.file = f;
+      }
+      // the phone that launched it (watch journal); optional, a bad value is just ignored
+      if (action.file !== undefined && typeof o.from === 'string') {
+        const from = o.from.replace(/[\x00-\x1f]+/g, ' ').trim().slice(0, 60);
+        if (from) action.from = from;
       }
       if (has('t')) {
         const t = num(o.t);
