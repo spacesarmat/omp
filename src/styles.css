@@ -107,7 +107,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .toast-error { background: var(--danger); }
 
 /* player */
-.player { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #000; overflow: hidden; }
+.player { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #000; overflow: hidden; -webkit-user-select: none; user-select: none; }
 .player video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; }
 .player-controls { position: absolute; left: 0; right: 0; bottom: 0; padding: 60px 80px 56px; background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, .85)); }
 .player-title { font-size: 36px; margin-bottom: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -143,4 +143,4 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .tap-flash { position: absolute; top: 45%; margin-top: -60px; min-width: 120px; height: 120px; padding: 0 36px; box-sizing: border-box; border-radius: 60px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 44px; font-weight: 700; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .tap-left { left: 12%; }
 .tap-right { right: 12%; }
-.tap-center { left: 50%; margin-left: -60px; }
+.tap-center { left: 50%; margin-left: -80px; }

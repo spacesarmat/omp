@@ -105,6 +105,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     if (flashTimer.current) clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setFlash(null), 700);
   };
+  const lastKeyAt = useRef(0);
   const streak = useMemo(() => new SeekStreak(), []);
   const tapActions = useRef({ single: () => undefined as void, double: (_z: TapZone) => undefined as void });
   tapActions.current = {
@@ -124,7 +125,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
       const max = vs.duration > 0 ? vs.duration - 1 : Infinity;
       const cur = v.currentTime;
       const target = dir < 0 ? Math.max(0, cur - step) : Math.max(cur, Math.min(max, cur + step));
-      if (!isFinite(target)) return;
+      if (!isFinite(target) || target === cur) return;
       seekTo(target);
       showFlash({ text: (dir < 0 ? '−' : '+') + step + ' с', side: zone });
     },
@@ -333,6 +334,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
 
   useKeys((a) => {
     if (vs.error) return false; // error view buttons use spatial navigation
+    lastKeyAt.current = Date.now();
+    taps.cancel();
     if (next.countdown !== null) {
       if (a === 'enter') { goNext(); return true; }
       if (a === 'back') { next.dismiss(); return true; }
@@ -398,7 +401,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   if (!item) return null;
 
   return (
-    <div class="player" onMouseMove={showControls} onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); taps.tap(tapZone((e as MouseEvent).clientX - r.left, r.width)); }}>
+    <div class="player" onMouseMove={showControls} onClick={(e) => { if (Date.now() - lastKeyAt.current < 250) return; const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); taps.tap(tapZone((e as MouseEvent).clientX - r.left, r.width)); }}>
       <video key={index + ':' + reloadKey} ref={videoRef} src={ready ? src : undefined} autoplay onLoadedMetadata={onMeta} />
       <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
       {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}

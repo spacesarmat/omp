@@ -40,11 +40,11 @@ Magic Remote и тачпад LG ThinQ: наведение выбирает эл�
 3. Скачайте проект: `git clone https://github.com/spacesarmat/omp.git` (или архив со страницы релиза) и в его папке выполните `npm install`.
 4. Добавьте телевизор (один раз): `npx ares-setup-device` → **add** → имя `tv`, IP телевизора (Настройки → Сеть → Дополнительно), порт `9922`, пользователь `prisoner`.
 5. Получите ключ (один раз): `npx ares-novacom --device tv --getkey`, затем укажите passphrase с экрана Developer Mode: `npx ares-setup-device --modify tv --info "passphrase=XXXXXX"`.
-6. Установите и запустите: скачайте `.ipk` со страницы [релизов](https://github.com/spacesarmat/omp/releases) и выполните `npx ares-install --device tv <файл>.ipk`, либо соберите сами: `npm run package`, `npm run tv:install`, `npm run tv:launch`.
+6. Установите и запустите: скачайте `.ipk` со страницы [релизов](https://github.com/spacesarmat/omp/releases) и выполните `npx ares-install --device tv <файл>.ipk`, либо соберите сами: `npm run package`, `npm run tv:install`, `npm run tv:launch`. Имя устройства по умолчанию — `tv`; другое можно задать переменной `WEBOS_DEVICE`.
 
 > **Windows PowerShell:** если `npx`/`npm` пишут «выполнение сценариев отключено», используйте `npx.cmd` и `npm.cmd` или обычную командную строку (cmd).
 >
-> **Режим разработчика** нужно продлевать в приложении Developer Mode (сессия длится около 50 часов), иначе приложение пропадёт с ТВ. На рутированных ТВ можно ставить `.ipk` через Homebrew Channel.
+> **Режим разработчика** нужно продлевать в приложении Developer Mode (срок сессии ограничен, остаток виден в приложении Developer Mode), иначе приложение пропадёт с ТВ. На рутированных ТВ можно ставить `.ipk` через Homebrew Channel.
 
 ## Обновление
 
