@@ -206,6 +206,12 @@ export function Settings() {
         </div>
       </section>
       <section class="m-set-group">
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'faq' })}>
+          <span>Вопросы и ответы</span>
+          <Icon d="M9 6l6 6l-6 6" size={20} />
+        </button>
+      </section>
+      <section class="m-set-group">
         <div class="m-set-label">О приложении</div>
         <div class="m-set-row">
           <span>Версия</span>

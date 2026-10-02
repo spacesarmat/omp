@@ -10,7 +10,8 @@ export type MRoute =
   | { name: 'tv' }
   | { name: 'settings' }
   | { name: 'serverSettings'; url?: string }
-  | { name: 'localServer' };
+  | { name: 'localServer' }
+  | { name: 'faq' };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);
