@@ -45,7 +45,7 @@ export function Controls(p: ControlsProps) {
         <span class="player-btn" onClick={p.onToggle}><Icon name={p.paused ? 'play' : 'pause'} size={32} /></span>
         {p.hasNext && <span class="player-btn" onClick={p.onNext}><Icon name="next" size={32} /></span>}
         <span>{formatDuration(shown)} / {formatDuration(p.duration)}</span>
-        <span class="player-btn" onClick={p.onTracks}><Icon name="tracks" size={28} /> Дорожки</span>
+        <span class="player-btn" onClick={p.onTracks}><Icon name="tracks" size={28} /> Меню</span>
         {p.chapters.length > 0 && <span class="player-btn" onClick={p.onChapters}>Главы</span>}
         <div class="spacer" />
         <span class="player-hints">Влево/вправо — перемотка · Вверх — меню · <KeyDot color="green" /> статистика · {p.chapters.length > 0 ? 'CH− · CH+ — соседняя глава' : 'CH± — серии'}</span>

@@ -120,7 +120,7 @@ describe('applyMark', () => {
     const a = applyMark('intro-start', 45.2, 2900, null, null, fmt);
     expect(a.patch).toBeUndefined();
     expect(a.pending).toBe(45);
-    expect(a.text).toBe('Отмечено: начало заставки 0:45');
+    expect(a.text).toBe('Начало заставки 0:45 · теперь отметьте конец');
     const b = applyMark('intro-end', 135.4, 2900, null, a.pending, fmt);
     expect(b.patch).toEqual({ mi: [45, 135] });
     expect(b.pending).toBeNull();

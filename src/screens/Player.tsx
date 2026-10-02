@@ -69,6 +69,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const autoIntroDone = useRef(false);
   const autoCreditsDone = useRef(false);
   const pendingIntro = useRef<number | null>(null);
+  const lastT = useRef(-1);
+  const [probed, setProbed] = useState(false);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPos = useRef(0);
   const userTracks = useRef(false);
@@ -120,6 +122,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   // skip settings of the torrent: loaded once when the player opens (and re-read for another torrent)
   useEffect(() => {
     setPrefs({ i: false, c: false });
+    pendingIntro.current = null;
     if (!c || !item.hash) return;
     let cancelled = false;
     loadSkip(c, item.hash).then((p) => { if (!cancelled) setPrefs(p); }, () => undefined);
@@ -131,6 +134,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     const v = videoRef.current;
     if (!ready || !v || vs.error || !metaLoaded.current) return;
     const t = isFinite(v.currentTime) ? v.currentTime : vs.time;
+    const prevT = lastT.current;
+    lastT.current = t;
     if (prefs.i && !autoIntroDone.current && segs.intro && inIntro(segs.intro, t)) {
       autoIntroDone.current = true;
       const start = segs.intro.start;
@@ -142,7 +147,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       undoTimer.current = setTimeout(hideUndo, SKIP_TOAST_MS);
       return;
     }
-    if (prefs.c && hasNext && !autoCreditsDone.current && segs.credits && vs.duration > 0 && t >= segs.credits.start) {
+    if (prefs.c && hasNext && !autoCreditsDone.current && segs.credits && vs.duration > 0 && !v.paused && prevT >= 0 && prevT < segs.credits.start && t >= segs.credits.start && t - prevT < 5) {
       autoCreditsDone.current = true;
       toast('Титры пропущены');
       goNext();
@@ -223,7 +228,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     hideUndo();
     autoIntroDone.current = false;
     autoCreditsDone.current = false;
-    pendingIntro.current = null;
+    lastT.current = -1;
+    setProbed(false);
     setSubChoice('off');
     setAudioIdx(-1);
     userTracks.current = false;
@@ -247,7 +253,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       setReadyFor(index);
     });
     if (c && item.hash && item.fileIndex !== undefined) {
-      c.probe(item.hash, item.fileIndex).then((p) => { if (!cancelled) setProbe(p); });
+      c.probe(item.hash, item.fileIndex).then((p) => { if (!cancelled) { setProbe(p); setProbed(true); } });
+    } else {
+      setProbed(true);
     }
     return () => { cancelled = true; };
   }, [index]);
@@ -293,7 +301,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
 
   const openChapters = () => {
     if (!chapters.length) return;
-    choose('Главы', chapters.map((ch, i) => ({ label: formatDuration(ch.start) + ' · ' + (ch.title || 'Глава ' + (i + 1)), value: i })), chapterIdx >= 0 ? chapterIdx : 0)
+    choose('Главы', chapters.map((ch, i) => ({ label: formatDuration(ch.start) + ' · ' + (ch.title || 'Глава ' + (i + 1)), value: i })), chapterIdx >= 0 ? chapterIdx : undefined)
       .then((i) => { if (i !== null) seekTo(chapters[i].start); });
   };
 
@@ -304,10 +312,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     if (t !== null) seekTo(t);
   };
 
-  const mark = (kind: MarkKind) => {
-    const v = videoRef.current;
-    if (!v) return;
-    const r = applyMark(kind, v.currentTime, vs.duration, prefs, pendingIntro.current, formatDuration);
+  const mark = (kind: MarkKind, now: number) => {
+    const r = applyMark(kind, now, vs.duration, prefs, pendingIntro.current, formatDuration);
     pendingIntro.current = r.pending;
     if (!r.patch) {
       toast(r.text, r.error ? 'error' : 'info');
@@ -414,15 +420,15 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     const now = v.currentTime;
     const credits = prefs.mc && vs.duration > prefs.mc ? formatDuration(vs.duration - prefs.mc) : '—';
     root.push(
-      { label: 'Отметить начало заставки: ' + (prefs.mi ? formatDuration(prefs.mi[0]) : '—'), value: 'mark-intro-start' },
-      { label: 'Отметить конец заставки: сейчас ' + formatDuration(now), value: 'mark-intro-end' },
+      { label: 'Отметить начало заставки: ' + (pendingIntro.current !== null ? formatDuration(pendingIntro.current) : prefs.mi ? formatDuration(prefs.mi[0]) : '—'), value: 'mark-intro-start' },
+      { label: 'Отметить конец заставки: ' + (pendingIntro.current !== null ? 'начало ' + formatDuration(pendingIntro.current) + ' · ' : '') + 'сейчас ' + formatDuration(now), value: 'mark-intro-end' },
       { label: 'Отметить начало титров: ' + credits, value: 'mark-credits' },
     );
     choose('Меню плеера', root).then((kind) => {
       if (kind === 'chapters') openChapters();
-      else if (kind === 'mark-intro-start') mark('intro-start');
-      else if (kind === 'mark-intro-end') mark('intro-end');
-      else if (kind === 'mark-credits') mark('credits');
+      else if (kind === 'mark-intro-start') mark('intro-start', now);
+      else if (kind === 'mark-intro-end') mark('intro-end', now);
+      else if (kind === 'mark-credits') mark('credits', now);
       if (kind === 'audio') {
         if (audio.length < 2) {
           toast('Других аудиодорожек нет');
@@ -559,6 +565,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       case 'chup':
       case 'chdown':
         if (chapters.length) chapterStep(a === 'chup' ? 1 : -1);
+        else if (!probed) return true; // ffprobe has not answered yet: the file may have chapters
         else if (a === 'chup') goNext();
         else goPrev();
         showControls();

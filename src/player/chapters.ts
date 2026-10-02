@@ -117,7 +117,7 @@ export function applyMark(
   const mi = cur && cur.mi;
   if (kind === 'intro-start') {
     if (mi && mi[1] > at) return { patch: { mi: [at, mi[1]] }, pending: null, text: 'Отмечено: заставка с ' + fmt(at) };
-    return { pending: at, text: 'Отмечено: начало заставки ' + fmt(at) };
+    return { pending: at, text: 'Начало заставки ' + fmt(at) + ' · теперь отметьте конец' };
   }
   const start = pending !== null ? pending : mi ? mi[0] : null;
   if (start === null || start >= at) return { pending, text: 'Сначала отметьте начало заставки', error: true };

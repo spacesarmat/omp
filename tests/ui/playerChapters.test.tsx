@@ -58,6 +58,7 @@ function drive(video: HTMLVideoElement, duration = 1000) {
   let time = 0;
   Object.defineProperty(video, 'duration', { configurable: true, get: () => duration });
   Object.defineProperty(video, 'currentTime', { configurable: true, get: () => time, set: (v: number) => { time = v; } });
+  Object.defineProperty(video, 'paused', { configurable: true, get: () => false });
   video.play = (() => Promise.resolve()) as any;
   video.pause = (() => undefined) as any;
   video.load = (() => undefined) as any;
@@ -109,6 +110,7 @@ beforeEach(async () => {
   saveSkipMock.mockReset();
 });
 afterEach(async () => {
+  if (options(document.body).length) key('back'); // an open dialog is global state
   hosts.splice(0).forEach((x) => render(null, x));
   await new Promise((r) => setTimeout(r, 60));
   document.body.innerHTML = '';
@@ -163,6 +165,7 @@ describe('player chapters (LG)', () => {
     options(host).filter((o) => (o.textContent || '').indexOf('Главы: 4') >= 0)[0].click();
     await until(() => optionTexts(host).indexOf('0:00 · Пролог') >= 0);
     expect(optionTexts(host)).toEqual(['0:00 · Пролог', '1:00 · Заставка', '2:30 · Серия', '15:00 · Титры']);
+    expect(options(host).map((o) => o.className.indexOf('current') >= 0)).toEqual([true, false, false, false]);
     options(host)[2].click();
     await until(() => video.currentTime === 150);
   });
@@ -224,7 +227,9 @@ describe('skip intro / credits (LG)', () => {
 
   it('auto skip of the credits with a next item: next episode at once and «Титры пропущены»', async () => {
     const { host, at } = await open(two, { prefs: { i: false, c: true } });
-    at(905);
+    at(899);
+    await tick();
+    at(901);
     await until(srcHas('f2.mkv'));
     expect(host.textContent).toContain('Титры пропущены');
   });
@@ -232,7 +237,9 @@ describe('skip intro / credits (LG)', () => {
   it('auto skip of the credits does nothing on the last item', async () => {
     const { host, video, at } = await open(one, { prefs: { i: false, c: true } });
     const before = host.querySelectorAll('.toast').length;
-    at(905);
+    at(899);
+    await tick();
+    at(901);
     await tick();
     expect(video.getAttribute('src')).toContain('f1.mkv');
     expect(host.querySelectorAll('.toast').length).toBe(before);
@@ -241,10 +248,51 @@ describe('skip intro / credits (LG)', () => {
   it('credits from the manual mark (last N seconds) skip too', async () => {
     const { at } = await open(two, { probe: noChapters, prefs: { i: false, c: true, mc: 100 } });
     at(850);
+    at(899);
+    await tick();
     await tick();
     expect(document.querySelector('video')!.getAttribute('src')).toContain('f1.mkv');
     at(901);
     await until(srcHas('f2.mkv'));
+  });
+
+  it('credits are skipped only when playback crosses their start, not after a seek into them', async () => {
+    const { video, at } = await open(two, { prefs: { i: false, c: true } });
+    at(950); // resume / seek into the credits
+    await tick();
+    expect(video.getAttribute('src')).toContain('f1.mkv');
+    at(951);
+    await tick();
+    expect(video.getAttribute('src')).toContain('f1.mkv');
+  });
+
+  it('credits auto skip does not need «Автопереход»', async () => {
+    updateSettings({ autoNext: false });
+    const { at } = await open(two, { prefs: { i: false, c: true } });
+    at(899);
+    await tick();
+    at(901);
+    await until(srcHas('f2.mkv'));
+  });
+
+  it('«Назад» hides the «Вернуть» message', async () => {
+    const { host, at } = await open(one, { prefs: { i: true, c: false } });
+    at(61);
+    await until(hasText(host, 'Вернуть'));
+    expect(key('back')).toBe(true);
+    await until(() => (host.textContent || '').indexOf('Вернуть') < 0);
+  });
+
+  it('«Назад» hides «Пропустить заставку» and it does not return in this intro', async () => {
+    const { host, video, at } = await open(one);
+    at(70);
+    await until(hasText(host, 'Пропустить заставку'));
+    expect(key('back')).toBe(true);
+    await until(() => (host.textContent || '').indexOf('Пропустить заставку') < 0);
+    at(80);
+    await tick();
+    expect(host.textContent).not.toContain('Пропустить заставку');
+    expect(video.currentTime).toBe(80);
   });
 
   it('the «Следующая серия» countdown starts at the credits, not 30 s before the end', async () => {
@@ -275,13 +323,62 @@ describe('skip intro / credits (LG)', () => {
   });
 });
 
+async function pick(host: HTMLElement, text: string) {
+  key('up');
+  await until(() => options(host).length > 0);
+  options(host).filter((o) => (o.textContent || '').indexOf(text) === 0)[0].click();
+  await tick();
+}
+
+describe('chapter keys before ffprobe answers', () => {
+  it('CH+ does not switch episodes until the probe has resolved', async () => {
+    let release: (r: FfprobeResult | null) => void = () => undefined;
+    const spy = vi.spyOn(TorrServerClient.prototype, 'probe').mockImplementation(() => new Promise((r) => { release = r; }));
+    try {
+      probeResult = withChapters;
+      loadSkipMock.mockImplementation(() => Promise.resolve({ i: false, c: false }));
+      const host = mount(h('div', {}, h(PlayerScreen, { queue: two, index: 0 }), h(DialogHost, {}), h(ToastHost, {})));
+      await until(() => !!host.querySelector('video') && !!host.querySelector('video')!.getAttribute('src'));
+      await new Promise((r) => setTimeout(r, 80));
+      expect(key('chup')).toBe(true);
+      await tick();
+      expect(srcHas('f1.mkv')()).toBe(true);
+      release(withChapters);
+      await tick();
+      key('chup'); // chapters now: no episode change either (no duration in this fake clock)
+      await tick();
+      expect(srcHas('f1.mkv')()).toBe(true);
+    } finally {
+      spy.mockImplementation(() => Promise.resolve(probeResult));
+    }
+  });
+});
+
 describe('marks from the menu (LG)', () => {
-  async function pick(host: HTMLElement, text: string) {
+  it('the mark is the time the menu was opened, not the time of the selection', async () => {
+    saveSkipMock.mockImplementation(() => Promise.resolve({ i: false, c: false, mi: [10, 135] }));
+    const { host, at } = await open(one, { probe: noChapters, prefs: { i: false, c: false, mi: [10, 100] } });
+    at(135);
     key('up');
     await until(() => options(host).length > 0);
-    options(host).filter((o) => (o.textContent || '').indexOf(text) === 0)[0].click();
-    await tick();
-  }
+    expect(optionTexts(host)).toContain('Отметить конец заставки: сейчас 2:15');
+    at(141); // the video keeps playing while the menu is open
+    options(host).filter((o) => (o.textContent || '').indexOf('Отметить конец заставки') === 0)[0].click();
+    await until(() => saveSkipMock.mock.calls.length === 1);
+    expect(saveSkipMock.mock.calls[0][2]).toEqual({ mi: [10, 135] });
+  });
+
+  it('a pending intro start is shown in the menu and survives reopening it', async () => {
+    const { host, at } = await open(one, { probe: noChapters });
+    at(45);
+    await pick(host, 'Отметить начало заставки');
+    expect(host.textContent).toContain('Начало заставки 0:45 · теперь отметьте конец');
+    at(60);
+    key('up');
+    await until(() => options(host).length > 0);
+    expect(optionTexts(host)).toContain('Отметить конец заставки: начало 0:45 · сейчас 1:00');
+    expect(optionTexts(host)).toContain('Отметить начало заставки: 0:45');
+  });
 
   it('intro start, then end: one write, toast, prefs updated', async () => {
     saveSkipMock.mockImplementation(() => Promise.resolve({ i: false, c: false, mi: [45, 135] }));
@@ -289,7 +386,7 @@ describe('marks from the menu (LG)', () => {
     at(45);
     await pick(host, 'Отметить начало заставки');
     expect(saveSkipMock).not.toHaveBeenCalled();
-    expect(host.textContent).toContain('Отмечено: начало заставки 0:45');
+    expect(host.textContent).toContain('Начало заставки 0:45 · теперь отметьте конец');
     at(135);
     await pick(host, 'Отметить конец заставки');
     await until(() => saveSkipMock.mock.calls.length === 1);
