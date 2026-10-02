@@ -15,6 +15,9 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import com.spacesarmat.omp.player.NativePlayerBridge
+import com.spacesarmat.omp.player.PlayRequest
+import com.spacesarmat.omp.player.PlayerActivity
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -31,7 +34,8 @@ import org.json.JSONObject
  * Every PluginCall is settled exactly once (see [Once]). Blocking work runs on [io]; socket
  * callbacks arrive on OkHttp threads. Events: tvMessage { json }, tvClosed { reason },
  * apkProgress { percent }, magnetReceived { link }, playerMessage { body },
- * localServerState { running, error? }.
+ * localServerState { running, error? }, nativePlayerState { session, index, time, duration, paused, buffering,
+ * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV).
  */
 @CapacitorPlugin(
     name = "OmpNative",
@@ -56,6 +60,7 @@ class OmpNativePlugin : Plugin() {
 
     override fun load() {
         instance = this
+        NativePlayerBridge.emitter = { event, data -> notifyListeners(event, data) }
         LocalTorrServer.addListener(serverState)
         // a magnet that arrived before the bridge was ready
         synchronized(magnetLock) { pendingMagnet }?.let { emitMagnet(it) }
@@ -63,6 +68,7 @@ class OmpNativePlugin : Plugin() {
 
     override fun handleOnDestroy() {
         if (instance === this) instance = null
+        NativePlayerBridge.emitter = null
         LocalTorrServer.removeListener(serverState)
         closeAll()
         player.stop()
@@ -353,6 +359,39 @@ class OmpNativePlugin : Plugin() {
             call.reject("Нет приложения для просмотра видео")
         } catch (_: RuntimeException) {
             call.reject("Не удалось открыть плеер")
+        }
+    }
+
+    // ---- native player (Android TV) ----
+
+    /** Opens [PlayerActivity] with the queue (an open player takes the new queue over); resolves once launched. */
+    @PluginMethod
+    fun playNative(call: PluginCall) {
+        val req = PlayRequest.parse(call.data)
+        if (req == null) {
+            call.reject("Нечего воспроизводить")
+            return
+        }
+        NativePlayerBridge.request = req
+        val intent = Intent(context, PlayerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        try {
+            val act = activity
+            if (act != null) act.startActivity(intent)
+            else context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            call.resolve()
+        } catch (_: RuntimeException) {
+            call.reject("Не удалось запустить плеер")
+        }
+    }
+
+    /** A phone command for the open native player ({ cmd: Cmd }). */
+    @PluginMethod
+    fun nativePlayerCommand(call: PluginCall) {
+        val cmd = call.getObject("cmd")
+        when {
+            cmd == null -> call.reject("Некорректная команда")
+            !NativePlayerBridge.command(cmd) -> call.reject("Плеер не открыт")
+            else -> call.resolve()
         }
     }
 

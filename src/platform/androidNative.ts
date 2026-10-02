@@ -9,6 +9,10 @@ export interface ListenerHandle {
 export interface OmpNativeTvPlugin {
   localIpv4(): Promise<{ ip?: string | null }>;
   downloadAndInstallApk(o: { url: string; sha256: string }): Promise<unknown>;
+  /** Starts the native Media3 player (PlayerActivity); resolves once it is launched. */
+  playNative(o: object): Promise<unknown>;
+  /** A phone command (src/phone/protocol.ts Cmd) for the open native player. */
+  nativePlayerCommand(o: { cmd: object }): Promise<unknown>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
@@ -37,6 +41,8 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
   return {
     localIpv4: () => np.call(cap, NAME, 'localIpv4', {}),
     downloadAndInstallApk: (o) => np.call(cap, NAME, 'downloadAndInstallApk', o),
+    playNative: (o) => np.call(cap, NAME, 'playNative', o),
+    nativePlayerCommand: (o) => np.call(cap, NAME, 'nativePlayerCommand', o),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }

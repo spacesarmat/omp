@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native player on Android TV (player/PlayerActivity.kt) -->
+<resources>
+    <string name="player_phone_badge">Управление с телефона</string>
+    <string name="player_pause">Пауза</string>
+    <string name="player_play">Воспроизвести</string>
+    <string name="player_next">Следующая серия</string>
+    <string name="player_hint">◀ ▶ перемотка · OK пауза · ▲ дорожки · Назад выход</string>
+    <string name="player_next_hint">OK — смотреть сейчас · Назад — отмена</string>
+    <string name="player_error_hint">OK — повторить · Назад — выход</string>
+
+    <style name="OmpPlayerTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="colorAccent">#F5B700</item>
+    </style>
+
+    <style name="OmpPlayerDialog" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="colorAccent">#F5B700</item>
+        <item name="android:windowBackground">@drawable/player_dialog</item>
+    </style>
+
+    <style name="OmpPlayerChip">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@drawable/player_chip</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxWidth">300dp</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="OmpPlayerChip.Accent">
+        <item name="android:background">@drawable/player_chip_accent</item>
+        <item name="android:textColor">#0F1115</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+</resources>

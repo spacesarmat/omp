@@ -7,6 +7,7 @@ import { ConnectScreen } from './screens/Connect';
 import { LibraryScreen } from './screens/Library';
 import { TorrentScreen } from './screens/Torrent';
 import { PlayerScreen } from './screens/Player';
+import { NativePlayerScreen } from './screens/NativePlayer';
 import { AddScreen } from './screens/Add';
 import { PlaylistScreen } from './screens/Playlist';
 import { SettingsScreen } from './screens/Settings';
@@ -26,7 +27,9 @@ function renderRoute(r: Route) {
     case 'torrent':
       return <TorrentScreen hash={r.hash} />;
     case 'player':
-      return <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />;
+      return platformKind() === 'androidtv'
+        ? <NativePlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />
+        : <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />;
     case 'add':
       return <AddScreen />;
     case 'playlist':
