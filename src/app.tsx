@@ -11,7 +11,7 @@ import { AddScreen } from './screens/Add';
 import { PlaylistScreen } from './screens/Playlist';
 import { SettingsScreen } from './screens/Settings';
 import { UpdateScreen } from './screens/Update';
-import { UpdateDialog } from './ui/UpdateDialog';
+import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { checkForUpdate } from './store/updates';
 
 function renderRoute(r: Route) {
@@ -53,7 +53,7 @@ export function App() {
   return (
     <div class="app">
       <div class="screen-host" key={routeStack.value.length + ':' + r.name}>{renderRoute(r)}</div>
-      {r.name !== 'player' && <UpdateDialog />}
+      {shouldShowUpdateDialog(r.name) && <UpdateDialog />}
       <DialogHost />
       <ToastHost />
     </div>

@@ -1,14 +1,31 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { render, h } from 'preact';
-import { init } from '@noriginmedia/norigin-spatial-navigation';
-import { UpdateDialog } from '../../src/ui/UpdateDialog';
+import { init, setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
+import { UpdateDialog, shouldShowUpdateDialog } from '../../src/ui/UpdateDialog';
 import { updatePrompt, reloadUpdateState } from '../../src/store/updates';
 import { routeStack } from '../../src/ui/nav';
+import { Focusable } from '../../src/ui/components';
+import { dispatchKey } from '../../src/ui/keys';
 
 const info = {
   version: '9.9.9', ipkUrl: 'https://x/a.ipk', ipkHash: 'd'.repeat(64), ipkSize: 0,
   notes: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], releaseUrl: 'https://x/r',
 };
+
+async function until(cond: () => boolean) {
+  for (let i = 0; i < 100 && !cond(); i++) await new Promise((r) => setTimeout(r, 5));
+  expect(cond()).toBe(true);
+}
+
+async function mountWithProbe() {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  render(h('div', {}, h(Focusable, { focusKey: 'probe' }, 'probe'), h(UpdateDialog, {})), host);
+  await new Promise((r) => setTimeout(r, 0));
+  setFocus('probe');
+  await until(() => getCurrentFocusKey() === 'probe');
+  return host;
+}
 
 async function mount() {
   const host = document.createElement('div');
@@ -54,5 +71,25 @@ describe('UpdateDialog', () => {
     (host.querySelectorAll('.button')[2] as HTMLElement).click();
     expect(updatePrompt.value).toBeNull();
     expect(JSON.parse(localStorage.getItem('tsp.update')!).skipped).toBe('9.9.9');
+  });
+  it('«Позже» closes and restores the previous focus', async () => {
+    const host = await mountWithProbe();
+    updatePrompt.value = info;
+    await until(() => host.querySelectorAll('.button').length === 3 && getCurrentFocusKey() !== 'probe');
+    (host.querySelectorAll('.button')[1] as HTMLElement).click();
+    expect(updatePrompt.value).toBeNull();
+    await until(() => getCurrentFocusKey() === 'probe');
+  });
+  it('Back closes the dialog and restores focus', async () => {
+    const host = await mountWithProbe();
+    updatePrompt.value = info;
+    await until(() => host.querySelectorAll('.button').length === 3 && getCurrentFocusKey() !== 'probe');
+    expect(dispatchKey('back', new KeyboardEvent('keydown'))).toBe(true);
+    expect(updatePrompt.value).toBeNull();
+    await until(() => getCurrentFocusKey() === 'probe');
+  });
+  it('is not shown over the player', () => {
+    expect(shouldShowUpdateDialog('player')).toBe(false);
+    expect(shouldShowUpdateDialog('library')).toBe(true);
   });
 });

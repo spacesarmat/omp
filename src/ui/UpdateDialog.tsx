@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useRef } from 'preact/hooks';
 import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { updatePrompt, skipVersion, dismissPrompt } from '../store/updates';
 import { APP_VERSION } from '../version';
@@ -6,19 +6,29 @@ import { FocusGroup, Button } from './components';
 import { useKeys } from './keys';
 import { navigate } from './nav';
 
+/** The prompt is never shown over the player; the signal survives, so it appears after leaving it. */
+export function shouldShowUpdateDialog(routeName: string): boolean {
+  return routeName !== 'player';
+}
+
 export function UpdateDialog() {
   const info = updatePrompt.value;
   const prevFocus = useRef<string | undefined>(undefined);
 
-  useEffect(() => {
-    if (info) {
+  // capture synchronously during render: the child FocusGroup (autoFocus) steals focus in its own mount effect,
+  // which runs before any effect of this component
+  const seen = useRef<string | null>(null);
+  const curVersion = info ? info.version : null;
+  if (curVersion !== seen.current) {
+    seen.current = curVersion;
+    if (curVersion) {
       try {
         prevFocus.current = getCurrentFocusKey() || undefined;
       } catch (e) {
         prevFocus.current = undefined;
       }
     }
-  }, [info ? info.version : null]);
+  }
 
   const restore = () => {
     const k = prevFocus.current;
