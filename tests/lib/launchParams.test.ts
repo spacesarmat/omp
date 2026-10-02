@@ -44,3 +44,24 @@ describe('parseLaunchParams', () => {
     expect(parseLaunchParams({ torrent: HASH, t: 10 })!.invalid).toBe(true);
   });
 });
+
+describe('report param', () => {
+  it('accepts an http url, trimmed', () => {
+    expect(parseLaunchParams({ report: ' http://192.168.1.5:8765/r ' })).toEqual({ invalid: false, report: 'http://192.168.1.5:8765/r' });
+  });
+  it('combines with other params', () => {
+    const p = parseLaunchParams({ report: 'http://h/r', torrent: HASH })!;
+    expect(p.report).toBe('http://h/r');
+    expect(p.action!.kind).toBe('torrent');
+  });
+  it('rejects https, long, non-string and empty', () => {
+    expect(parseLaunchParams({ report: 'https://h/r' })!.invalid).toBe(true);
+    expect(parseLaunchParams({ report: 'http://' + 'a'.repeat(200) })!.invalid).toBe(true);
+    expect(parseLaunchParams({ report: 5 })!.invalid).toBe(true);
+    expect(parseLaunchParams({ report: '' })!.invalid).toBe(true);
+  });
+  it('accepts exactly 200 chars', () => {
+    const u = 'http://' + 'a'.repeat(193);
+    expect(parseLaunchParams({ report: u })!.report).toBe(u);
+  });
+});

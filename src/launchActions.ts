@@ -4,11 +4,13 @@ import { errorMessage } from './api/http';
 import { navigate, resetTo } from './ui/nav';
 import { toast } from './ui/toast';
 import { buildTorrentQueue } from './player/queue';
+import { attachPhone } from './phone/link';
 
 /** Applies webOS launch params: {server}, {magnet}, {torrent[, file, t]}, {play, title}. */
 export function runLaunchParams(raw: unknown): void {
   const plan = parseLaunchParams(raw);
   if (!plan) return;
+  if (plan.report) attachPhone(plan.report);
   if (plan.invalid) {
     toast('Некорректные параметры запуска', 'error');
     return;
