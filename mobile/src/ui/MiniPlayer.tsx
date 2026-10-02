@@ -3,6 +3,7 @@ import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { nowPlaying, linkStatus, sendCmd } from '../tv/playerLink';
 import { formatDuration } from '../../../src/lib/format';
+import { displayTitle } from './displayTitle';
 import { playerPosterStyle } from './playerPoster';
 
 /** «S02E03» from «Show · S02E03»; empty when the subtitle has no code part. */
@@ -25,7 +26,7 @@ export function MiniPlayer() {
     <div class="m-mini">
       <div class="m-mini-poster" style={playerPosterStyle(s)} />
       <button type="button" class="m-mini-text" onClick={() => navigate({ name: 'nowPlaying' })}>
-        <span class="m-mini-title">{(code ? code + ' · ' : '') + s.title}</span>
+        <span class="m-mini-title">{(code ? code + ' · ' : '') + displayTitle(s.title)}</span>
         {live ? (
           <span class="m-mini-sub">{(tv ? 'На ' + tv.name + ' · ' : '') + time}</span>
         ) : (

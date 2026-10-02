@@ -356,3 +356,11 @@ describe('mini-player in the shell', () => {
     expect(el.querySelector('.m-mini')).toBeNull();
   });
 });
+
+describe('long file-name title', () => {
+  it('shows the cleaned title', () => {
+    setState(state({ title: 'Trudno.byt.bogom.S01.E07.2026.WEB-DL.1080p.ExKinoRay.mkv' }));
+    mount(<NowPlaying volume={volume} />);
+    expect(el.querySelector('.m-now-title')!.textContent).toBe('Trudno byt bogom S01 E07 2026 WEB-DL 1080p ExKinoRay');
+  });
+});

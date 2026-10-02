@@ -6,6 +6,7 @@ import { activeTv } from '../tv/tvStore';
 import { nowPlaying, lastSeen, linkStatus, launching, sendCmd } from '../tv/playerLink';
 import { volume as tvVolume } from '../tv/tvClient';
 import { formatDuration } from '../../../src/lib/format';
+import { displayTitle } from '../ui/displayTitle';
 import { hasPosterImage, playerPosterStyle } from '../ui/playerPoster';
 
 const HOLD_MS = 1500;
@@ -110,10 +111,10 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     <div class="m-screen m-now" data-route="nowPlaying">
       {head}
       <div class="m-now-poster" style={playerPosterStyle(s)}>
-        {!hasPosterImage(s) && s.title}
+        {!hasPosterImage(s) && displayTitle(s.title)}
       </div>
       <div class="m-now-titles">
-        <div class="m-now-title">{s.title}</div>
+        <div class="m-now-title">{displayTitle(s.title)}</div>
         <div class="m-now-sub">{s.subtitle}</div>
       </div>
       <div class="m-now-seek">
