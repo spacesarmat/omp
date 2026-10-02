@@ -101,4 +101,21 @@ class SiteCookieJarTest {
         assertEquals(list, back)
         assertTrue(CookieCodec.decode("[{\"n\":1}]").isEmpty())
     }
+
+    @Test
+    fun unreadableStoreIsNeverOverwritten() {
+        saved["site.org"] = "kept"
+        val failing = object : CookieStore {
+            override fun load(site: String): String? = throw IllegalStateException("keystore busy")
+            override fun save(site: String, data: String?) {
+                if (data == null) saved.remove(site) else saved[site] = data
+            }
+        }
+        val j = SiteCookieJar(failing) { now }
+        val url = "https://site.org/".toHttpUrl()
+        j.saveFromResponse(url, listOf(cookie(url.toString(), "a=1; Max-Age=60")))
+        // works in memory, the stored session is left alone
+        assertEquals(listOf("a"), j.loadForRequest(url).map { it.name })
+        assertEquals("kept", saved["site.org"])
+    }
 }

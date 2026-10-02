@@ -3,9 +3,12 @@ package com.spacesarmat.omp.sources
 import android.content.Context
 import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import java.security.KeyStore
+import java.security.UnrecoverableKeyException
 import java.util.Base64
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -45,20 +48,32 @@ object SecretCodec {
 class SecretStorage(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    /**
+     * null when not set. A value that can never be decrypted again (corrupt, key invalidated or replaced) is
+     * dropped and reads as null; a transient Keystore failure throws and keeps the value.
+     */
     @Synchronized
     fun get(name: String): String? {
         val packed = prefs.getString(name, null) ?: return null
+        val parts = SecretCodec.unpack(packed)
+        if (parts == null) {
+            prefs.edit().remove(name).apply()
+            return null
+        }
         return try {
-            val (iv, ct) = SecretCodec.unpack(packed) ?: throw IllegalStateException("corrupt")
             val c = Cipher.getInstance(TRANSFORMATION)
-            c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(TAG_BITS, iv))
+            c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(TAG_BITS, parts.first))
             c.updateAAD(name.toByteArray(Charsets.UTF_8))
-            String(c.doFinal(ct), Charsets.UTF_8)
+            String(c.doFinal(parts.second), Charsets.UTF_8)
         } catch (e: Exception) {
+            if (!isPermanent(e)) throw e
             prefs.edit().remove(name).apply()
             null
         }
     }
+
+    private fun isPermanent(e: Exception): Boolean =
+        e is AEADBadTagException || e is KeyPermanentlyInvalidatedException || e is UnrecoverableKeyException
 
     /** Throws when the Keystore is unavailable. */
     @Synchronized
@@ -99,14 +114,10 @@ class SecretStorage(context: Context) {
     }
 }
 
-/** Cookies of each site as an encrypted entry «cookies:<site>». Storage failures keep cookies in memory only. */
+/** Cookies of each site as an encrypted entry «cookies:<site>». Save failures keep cookies in memory only. */
 class SecretCookieStore(private val secrets: SecretStorage) : CookieStore {
-    override fun load(site: String): String? =
-        try {
-            secrets.get(PREFIX + site)
-        } catch (e: Exception) {
-            null
-        }
+    /** Throws on a transient Keystore failure ([SiteCookieJar] then keeps the site in memory only). */
+    override fun load(site: String): String? = secrets.get(PREFIX + site)
 
     override fun save(site: String, data: String?) {
         try {

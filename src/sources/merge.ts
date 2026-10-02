@@ -34,14 +34,19 @@ export function mergeResults(list: SourceResult[]): SourceResult[] {
   const groups: Item[][] = [];
   list.forEach((r) => {
     const item: Item = { r, title: normalizeTitle(r.Title) };
-    for (let i = 0; i < groups.length; i++) {
-      const conflict = !!item.r.hash && groups[i].some((g) => !!g.r.hash && g.r.hash !== item.r.hash);
-      if (!conflict && groups[i].some((g) => same(g, item))) {
-        groups[i].push(item);
-        return;
+    let target: Item[] | null = null;
+    // a known infohash wins: the group holding the same hash, before any title + size match
+    if (item.r.hash) {
+      for (let i = 0; i < groups.length && !target; i++) {
+        if (groups[i].some((g) => g.r.hash === item.r.hash)) target = groups[i];
       }
     }
-    groups.push([item]);
+    for (let i = 0; i < groups.length && !target; i++) {
+      const conflict = !!item.r.hash && groups[i].some((g) => !!g.r.hash && g.r.hash !== item.r.hash);
+      if (!conflict && groups[i].some((g) => same(g, item))) target = groups[i];
+    }
+    if (target) target.push(item);
+    else groups.push([item]);
   });
   return groups.map((g) => {
     let best = g[0].r;

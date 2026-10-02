@@ -8,6 +8,7 @@ import org.json.JSONObject
 
 /** Persistent cookies of one site (encrypted on the device, see [SecretStorage]). */
 interface CookieStore {
+    /** Throws when the storage is temporarily unreadable. */
     fun load(site: String): String?
 
     /** null removes the site. */
@@ -20,6 +21,8 @@ interface CookieStore {
  */
 class SiteCookieJar(private val store: CookieStore, private val now: () -> Long = System::currentTimeMillis) : CookieJar {
     private val sites = HashMap<String, MutableList<Cookie>>()
+    // sites whose stored cookies could not be read: kept in memory only, so the stored session is not overwritten
+    private val unreadable = HashSet<String>()
 
     @Synchronized
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
@@ -48,16 +51,24 @@ class SiteCookieJar(private val store: CookieStore, private val now: () -> Long 
     fun clear(url: HttpUrl) {
         val site = siteOf(url)
         sites[site] = mutableListOf()
+        unreadable.remove(site)
         store.save(site, null)
     }
 
     private fun cookiesOf(site: String): MutableList<Cookie> =
         sites.getOrPut(site) {
             val t = now()
-            CookieCodec.decode(store.load(site)).filter { it.expiresAt > t }.toMutableList()
+            val data = try {
+                store.load(site)
+            } catch (e: Exception) {
+                unreadable.add(site)
+                null
+            }
+            CookieCodec.decode(data).filter { it.expiresAt > t }.toMutableList()
         }
 
     private fun persist(site: String, list: List<Cookie>) {
+        if (site in unreadable) return
         store.save(site, if (list.isEmpty()) null else CookieCodec.encode(list))
     }
 

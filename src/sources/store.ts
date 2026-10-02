@@ -59,7 +59,9 @@ export function onHealthChange(cb: (id: string) => void): () => void {
   };
 }
 
-/** Forgets every health record (tests, server change). */
+/** Forgets every health record (tests, server change); listeners hear each cleared id. */
 export function resetHealth(): void {
+  const ids = Object.keys(health);
   health = {};
+  ids.forEach((id) => listeners.slice().forEach((cb) => cb(id)));
 }

@@ -15,15 +15,16 @@ class SiteHttpException(val reason: String) : IOException(reason)
 
 /**
  * HTTP for the built-in search sources: browser-like User-Agent, cookies per site ([SiteCookieJar]),
- * redirects followed, body decoded by its charset ([BodyCharset]), at most [MAX_BYTES].
+ * redirects followed per [RedirectPolicy], body decoded by its charset ([BodyCharset]), at most [MAX_BYTES].
  */
 class SiteHttp(private val jar: SiteCookieJar) {
     class Response(val status: Int, val url: String, val text: String)
 
     private val client = OkHttpClient.Builder()
         .cookieJar(jar)
-        .followRedirects(true)
-        .followSslRedirects(true)
+        // redirects are followed by hand ([RedirectPolicy]): a POST body must not leave its site
+        .followRedirects(false)
+        .followSslRedirects(false)
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
@@ -71,16 +72,29 @@ class SiteHttp(private val jar: SiteCookieJar) {
             }
             else -> throw SiteHttpException(BAD_REQUEST)
         }
-        val call = client.newBuilder().callTimeout(timeoutMs, TimeUnit.MILLISECONDS).build().newCall(b.build())
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var request = b.build()
         try {
-            call.execute().use { r ->
-                val rb = r.body ?: return Response(r.code, r.request.url.toString(), "")
-                if (rb.contentLength() > MAX_BYTES) throw SiteHttpException(TOO_LARGE)
-                val source = rb.source()
-                if (source.request(MAX_BYTES + 1)) throw SiteHttpException(TOO_LARGE)
-                val bytes = source.buffer.readByteArray()
-                return Response(r.code, r.request.url.toString(), BodyCharset.decode(bytes, r.header("Content-Type")))
+            for (hop in 0..MAX_REDIRECTS) {
+                val left = deadline - System.currentTimeMillis()
+                if (left <= 0) throw SiteHttpException(NO_ANSWER)
+                val call = client.newBuilder().callTimeout(left, TimeUnit.MILLISECONDS).build().newCall(request)
+                val next = call.execute().use { r ->
+                    val location = r.header("Location")?.let { r.request.url.resolve(it) }
+                    val action = if (location == null || hop == MAX_REDIRECTS) {
+                        RedirectPolicy.Action.STOP
+                    } else {
+                        RedirectPolicy.next(r.request.method, r.code, r.request.url, location)
+                    }
+                    when (action) {
+                        RedirectPolicy.Action.STOP -> return read(r)
+                        RedirectPolicy.Action.FOLLOW_GET -> redirected(r.request, location!!).get().removeHeader("Content-Type").build()
+                        RedirectPolicy.Action.RESEND -> redirected(r.request, location!!).build()
+                    }
+                }
+                request = next
             }
+            throw SiteHttpException(NO_ANSWER)
         } catch (e: SiteHttpException) {
             throw e
         } catch (e: IOException) {
@@ -88,8 +102,25 @@ class SiteHttp(private val jar: SiteCookieJar) {
         }
     }
 
+    /** Same request to [to]; hand-set credentials do not follow to another host (the jar handles cookies). */
+    private fun redirected(from: Request, to: HttpUrl): Request.Builder {
+        val nb = from.newBuilder().url(to)
+        if (!from.url.host.equals(to.host, ignoreCase = true)) nb.removeHeader("Cookie").removeHeader("Authorization")
+        return nb
+    }
+
+    private fun read(r: okhttp3.Response): Response {
+        val rb = r.body ?: return Response(r.code, r.request.url.toString(), "")
+        if (rb.contentLength() > MAX_BYTES) throw SiteHttpException(TOO_LARGE)
+        val source = rb.source()
+        if (source.request(MAX_BYTES + 1)) throw SiteHttpException(TOO_LARGE)
+        val bytes = source.buffer.readByteArray()
+        return Response(r.code, r.request.url.toString(), BodyCharset.decode(bytes, r.header("Content-Type")))
+    }
+
     companion object {
         const val MAX_BYTES = 5L * 1024 * 1024
+        const val MAX_REDIRECTS = 10
         const val BAD_URL = "Неверный адрес"
         const val BAD_REQUEST = "Неверный запрос"
         const val TOO_LARGE = "Слишком большой ответ сайта"

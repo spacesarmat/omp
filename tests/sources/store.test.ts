@@ -47,4 +47,14 @@ describe('health', () => {
     expect(seen).toEqual(['rutor']);
     expect(localStorage.getItem('tsp.sources')).toBeNull();
   });
+  it('resetHealth announces the cleared ids', () => {
+    setHealth('a', { state: 'ok', at: 1 });
+    setHealth('b', { state: 'error', at: 1 });
+    const seen: string[] = [];
+    const off = onHealthChange((id) => seen.push(id));
+    resetHealth();
+    off();
+    expect(seen.sort()).toEqual(['a', 'b']);
+    expect(getHealth('a')).toBeNull();
+  });
 });

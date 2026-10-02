@@ -730,12 +730,12 @@ class OmpNativePlugin : Plugin() {
         val once = Once(call)
         val key = secretKey(call) ?: return once.reject(SECRETS_FAILED)
         io.execute {
-            val v = try {
-                secrets.get(key)
+            try {
+                once.resolve(JSObject().put("value", secrets.get(key) ?: JSONObject.NULL))
             } catch (e: Exception) {
-                null
+                // transient Keystore failure: the stored value is kept
+                once.reject(SECRETS_FAILED)
             }
-            once.resolve(JSObject().put("value", v ?: JSONObject.NULL))
         }
     }
 

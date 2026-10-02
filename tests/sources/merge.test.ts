@@ -53,6 +53,15 @@ describe('mergeResults', () => {
     expect(out[0].Magnet).toBe('magnet:?xt=urn:btih:cc');
   });
 
+  it('a hash match wins over an earlier title + size match', () => {
+    const out = mergeResults([
+      r({ source: 'a', Title: 'Film', sizeBytes: 100 }),
+      r({ source: 'b', Title: 'Другое название', hash: 'h1', Seed: 1 }),
+      r({ source: 'c', Title: 'Film', sizeBytes: 100, hash: 'h1', Seed: 5 }),
+    ]);
+    expect(out.map((x) => x.source + '/' + (x.sources || []).join(','))).toEqual(['a/', 'c/b']);
+  });
+
   it('does not mutate the input', () => {
     const a = r({ source: 'rutor', Title: 'X', hash: 'cc', Seed: 9 });
     const b = r({ source: 'bitru', Title: 'X', hash: 'cc', Seed: 1 });

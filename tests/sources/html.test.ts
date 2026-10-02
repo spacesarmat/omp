@@ -29,6 +29,12 @@ describe('parseSize', () => {
     expect(parseSize('3 Мб')).toBe(3 * 1024 * 1024);
     expect(parseSize('1 234,5 MB')).toBe(Math.round(1234.5 * 1024 * 1024));
   });
+  it('tolerates trailing punctuation and English thousands', () => {
+    expect(parseSize('1.37 GB)')).toBe(Math.round(1.37 * G));
+    expect(parseSize('700 MB,')).toBe(700 * 1024 * 1024);
+    expect(parseSize('1,234.5 MB')).toBe(Math.round(1234.5 * 1024 * 1024));
+    expect(parseSize('1.234,5 MB')).toBe(Math.round(1234.5 * 1024 * 1024));
+  });
   it('null when not a size', () => {
     expect(parseSize('')).toBeNull();
     expect(parseSize('большой')).toBeNull();
@@ -57,6 +63,20 @@ describe('parseDate', () => {
     expect(parseDate('сегодня в 21:40', now)).toBe(new Date(2026, 9, 3, 21, 40).getTime());
     expect(parseDate('Вчера в 08:05', now)).toBe(new Date(2026, 9, 2, 8, 5).getTime());
     expect(parseDate('Сегодня, 01:00', now)).toBe(new Date(2026, 9, 3, 1, 0).getTime());
+  });
+  it('RFC 822 dates', () => {
+    expect(parseDate('Fri, 03 Oct 2026 10:00:00 +0300', now)).toBe(Date.UTC(2026, 9, 3, 7, 0));
+    expect(parseDate('Sat, 4 Oct 2026 10:00:00 GMT', now)).toBe(Date.UTC(2026, 9, 4, 10, 0));
+    expect(parseDate('03 Oct 2026 10:00', now)).toBe(new Date(2026, 9, 3, 10, 0).getTime());
+  });
+  it('zero and impossible dates are unknown', () => {
+    expect(parseDate('0001-01-01T00:00:00Z', now)).toBeUndefined();
+    expect(parseDate('0001-01-01 00:00:00', now)).toBeUndefined();
+    expect(parseDate('31.02.2026', now)).toBeUndefined();
+    expect(parseDate('2026-02-30', now)).toBeUndefined();
+    expect(parseDate('2026-02-30T10:00:00Z', now)).toBeUndefined();
+    expect(parseDate('31 фев 2026', now)).toBeUndefined();
+    expect(parseDate('29.02.2028', now)).toBe(new Date(2028, 1, 29).getTime());
   });
   it('undefined when unknown', () => {
     expect(parseDate('', now)).toBeUndefined();
