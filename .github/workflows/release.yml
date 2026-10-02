@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Tag must match package.json version
+        run: test "${GITHUB_REF_NAME}" = "v$(node -p "require('./package.json').version")"
+      - run: npm test
+      - run: npm run build
+      - run: node scripts/package.mjs
+      - run: npm run check:boot
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IPK=$(ls build/*.ipk)
+          SUM=$(sha256sum "$IPK" | cut -d' ' -f1)
+          gh release create "$GITHUB_REF_NAME" "$IPK" --title "$GITHUB_REF_NAME" --generate-notes --notes "SHA-256 \`$(basename "$IPK")\`: \`$SUM\`"
