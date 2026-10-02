@@ -1,5 +1,5 @@
 // Watch journal kept on TorrServer in the torrent `data` JSON under the key `omp`:
-// { "omp": { "v": 1, "h": [ { f, t, d, at, src, name? } ] } }, newest first, at most JOURNAL_MAX entries,
+// { "omp": { "v": 1, "h": [ { f, t, d, at, src, name? } ], "s"?: SkipPrefs } }, newest first, at most JOURNAL_MAX entries,
 // one entry per file + source (+ device name). Every other key of `data` belongs to other clients
 // (TorrServer's own file list, Lampa, …) and is kept as is; a `data` that is not a JSON object is never touched.
 
@@ -19,9 +19,22 @@ export interface JournalEntry {
   name?: string;
 }
 
+/** Skip settings of a torrent (key `s` of the journal object): auto-skip flags and manual marks. */
+export interface SkipPrefs {
+  /** Auto-skip the intro. */
+  i: boolean;
+  /** Auto-skip the credits. */
+  c: boolean;
+  /** Manual intro: [start, end] seconds. */
+  mi?: [number, number];
+  /** Manual credits: the last N seconds. */
+  mc?: number;
+}
+
 export interface ParsedData {
   obj: { [k: string]: unknown };
   journal: JournalEntry[];
+  skip: SkipPrefs | null;
 }
 
 export const JOURNAL_KEY = 'omp';
@@ -54,6 +67,21 @@ export function sanitizeEntry(v: unknown): JournalEntry | null {
   return e;
 }
 
+/** Stored skip settings, or null when absent or not an object; malformed parts fall back to defaults. */
+export function sanitizeSkip(v: unknown): SkipPrefs | null {
+  if (!isPlainObject(v)) return null;
+  const out: SkipPrefs = { i: v.i === true, c: v.c === true };
+  const mi = v.mi;
+  if (mi instanceof Array && mi.length === 2) {
+    const a = finiteNum(mi[0]);
+    const b = finiteNum(mi[1]);
+    if (a !== null && b !== null && a >= 0 && b > a) out.mi = [a, b];
+  }
+  const mc = finiteNum(v.mc);
+  if (mc !== null && mc > 0) out.mc = mc;
+  return out;
+}
+
 function readJournal(v: unknown): JournalEntry[] {
   if (!isPlainObject(v) || v.v !== JOURNAL_VERSION || !(v.h instanceof Array)) return [];
   const out: JournalEntry[] = [];
@@ -70,7 +98,7 @@ function readJournal(v: unknown): JournalEntry[] {
  * null when the data is not a JSON object (the journal must then never be written).
  */
 export function parseData(data: string | undefined | null): ParsedData | null {
-  if (!data || !data.trim()) return { obj: {}, journal: [] };
+  if (!data || !data.trim()) return { obj: {}, journal: [], skip: null };
   let v: unknown;
   try {
     v = JSON.parse(data);
@@ -78,7 +106,8 @@ export function parseData(data: string | undefined | null): ParsedData | null {
     return null;
   }
   if (!isPlainObject(v)) return null;
-  return { obj: v, journal: readJournal(v[JOURNAL_KEY]) };
+  const o = v[JOURNAL_KEY];
+  return { obj: v, journal: readJournal(o), skip: isPlainObject(o) ? sanitizeSkip(o.s) : null };
 }
 
 /** The journal of a torrent (empty when there is none or the data is not OMP-readable). */
@@ -105,12 +134,19 @@ export function removeFile(journal: JournalEntry[], f: number): JournalEntry[] {
   return journal.filter((e) => e.f !== f);
 }
 
-/** The data string with the journal put back under `omp`; every other key of `obj` is kept. */
-export function serializeData(obj: { [k: string]: unknown }, journal: JournalEntry[]): string {
+/**
+ * The data string with the journal put back under `omp`; every other key of `obj` is kept. `skip`: undefined keeps
+ * the skip settings already in `obj`, null removes them, a value replaces them.
+ */
+export function serializeData(obj: { [k: string]: unknown }, journal: JournalEntry[], skip?: SkipPrefs | null): string {
   const out: { [k: string]: unknown } = {};
   Object.keys(obj).forEach((k) => {
     if (k !== JOURNAL_KEY) out[k] = obj[k];
   });
-  out[JOURNAL_KEY] = { v: JOURNAL_VERSION, h: journal.slice(0, JOURNAL_MAX) };
+  const old = obj[JOURNAL_KEY];
+  const keep = skip === undefined ? (isPlainObject(old) ? sanitizeSkip(old.s) : null) : skip;
+  const omp: { [k: string]: unknown } = { v: JOURNAL_VERSION, h: journal.slice(0, JOURNAL_MAX) };
+  if (keep) omp.s = keep;
+  out[JOURNAL_KEY] = omp;
   return JSON.stringify(out);
 }

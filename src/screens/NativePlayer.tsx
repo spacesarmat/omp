@@ -4,6 +4,8 @@ import { settings } from '../store/settings';
 import { nativePlugin } from '../platform/androidNative';
 import { decideStart } from '../player/resume';
 import { NativeSession, nativeHeading, nativePlayerOpen } from '../player/nativePlayer';
+import type { ProbeLoader } from '../player/nativePlayer';
+import type { TorrServerClient } from '../api/torrserver';
 import type { PlayItem } from '../player/types';
 import { WatchJournal, journalSource } from '../player/watchJournal';
 import { recordWatch } from '../store/journal';
@@ -22,6 +24,19 @@ interface Props {
 function failText(e: unknown): string {
   const m = e && typeof e === 'object' && typeof (e as { message?: unknown }).message === 'string' ? (e as { message: string }).message : '';
   return /[А-Яа-яЁё]/.test(m) ? m : 'Не удалось открыть плеер';
+}
+
+/** ffprobe for the intro button: only when the server has ffprobe (checked once), only for torrent files. */
+function probeLoader(c: TorrServerClient | null): ProbeLoader | null {
+  if (!c) return null;
+  let available: Promise<boolean> | null = null;
+  return (item) => {
+    if (!item.hash || item.fileIndex === undefined) return Promise.resolve(null);
+    const hash = item.hash;
+    const index = item.fileIndex;
+    if (!available) available = c.ffprobeAvailable();
+    return available.then((ok) => (ok ? c.probe(hash, index) : null));
+  };
 }
 
 /** Android TV: the player route opens the native Media3 player and stays as a placeholder behind it. */
@@ -64,7 +79,7 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
           unbridge = null;
           if (!replaced) leave();
         },
-      }, journal);
+      }, journal, probeLoader(c));
       session = run;
       unbridge = setPlayerBridge({ snapshot: () => run.snapshot(), exec: (cmd) => run.exec(cmd) });
       run.start({

@@ -16,7 +16,7 @@ import type { TapZone } from '../player/pointerTaps';
 import { Icon } from '../ui/icons';
 import type { IconName } from '../ui/icons';
 import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
-import { introChapter } from '../player/chapters';
+import { introChapter, skipSegments } from '../player/chapters';
 import { useVideoState } from '../player/useVideoState';
 import { HideTimer, canHideControls, pointerMoveCounts } from '../player/hideTimer';
 import { useProgressSync } from '../player/useProgressSync';
@@ -90,6 +90,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     duration: vs.duration,
     ended: vs.ended,
     paused: vs.paused,
+    creditsAt: skipSegments(probe, null, vs.duration).credits?.start,
     onNext: goNext,
     onEnd: () => goBack(),
   });

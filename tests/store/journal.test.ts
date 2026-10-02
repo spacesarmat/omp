@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { recordWatch, forgetWatch, type JournalClient } from '../../src/store/journal';
+import { recordWatch, forgetWatch, loadSkip, saveSkip, type JournalClient } from '../../src/store/journal';
 import { torrents } from '../../src/store/library';
 import { journalOf } from '../../src/lib/journal';
 import type { Torrent } from '../../src/api/types';
@@ -108,6 +108,76 @@ describe('forgetWatch', () => {
   it('no write when the file has no entries', async () => {
     const s = fakeServer({ data: JSON.stringify({ omp: { v: 1, h: [{ f: 2, t: 1, d: 2, at: T0, src: 'tv' }] } }) });
     await forgetWatch(s.c, 'h', 1);
+    expect(s.c.setData).not.toHaveBeenCalled();
+  });
+});
+
+describe('loadSkip / saveSkip', () => {
+  it('loadSkip: defaults when nothing is stored or the torrent is unknown', async () => {
+    const s = fakeServer({ data: '{}' });
+    expect(await loadSkip(s.c, 'h')).toEqual({ i: false, c: false });
+    expect(await loadSkip(s.c, 'nope')).toEqual({ i: false, c: false });
+    const s2 = fakeServer({ data: JSON.stringify({ omp: { v: 1, h: [], s: { i: true, c: false, mi: [1, 9] } } }) });
+    expect(await loadSkip(s2.c, 'H')).toEqual({ i: true, c: false, mi: [1, 9] });
+  });
+
+  it('saveSkip writes s, keeps history, other keys, title/poster/category', async () => {
+    const entry = { f: 1, t: 30, d: 100, at: T0, src: 'tv' };
+    const s = fakeServer({ data: JSON.stringify({ lampa: 1, omp: { v: 1, h: [entry] } }) });
+    const r = await saveSkip(s.c, { hash: 'h' }, { i: true, mi: [45, 135] });
+    expect(r).toEqual({ i: true, c: false, mi: [45, 135] });
+    expect(s.sets[0]).toMatchObject({ title: 'Title', poster: 'http://p.jpg', category: 'tv' });
+    const out = JSON.parse(s.sets[0].data);
+    expect(out.lampa).toBe(1);
+    expect(out.omp).toEqual({ v: 1, h: [entry], s: { i: true, c: false, mi: [45, 135] } });
+  });
+
+  it('saveSkip merges into the stored value and null removes a mark', async () => {
+    const s = fakeServer({ data: JSON.stringify({ omp: { v: 1, h: [], s: { i: true, c: true, mi: [1, 9], mc: 60 } } }) });
+    const r = await saveSkip(s.c, { hash: 'h' }, { c: false, mi: null });
+    expect(r).toEqual({ i: true, c: false, mc: 60 });
+    expect(JSON.parse(s.t.data!).omp.s).toEqual({ i: true, c: false, mc: 60 });
+  });
+
+  it('saveSkip drops bad marks instead of writing them', async () => {
+    const s = fakeServer({ data: '{}' });
+    const r = await saveSkip(s.c, { hash: 'h' }, { i: true, mi: [90, 30], mc: NaN });
+    expect(r).toEqual({ i: true, c: false });
+    expect(JSON.parse(s.t.data!).omp.s).toEqual({ i: true, c: false });
+  });
+
+  it('writing history afterwards keeps s', async () => {
+    const s = fakeServer({ data: '{}' });
+    await saveSkip(s.c, { hash: 'h' }, { c: true });
+    await recordWatch(s.c, 'h', { f: 1, t: 5, d: 50, src: 'tv' }, T0);
+    const omp = JSON.parse(s.t.data!).omp;
+    expect(omp.s).toEqual({ i: false, c: true });
+    expect(omp.h).toHaveLength(1);
+  });
+
+  it('forgetWatch keeps s too', async () => {
+    const data = JSON.stringify({ omp: { v: 1, h: [{ f: 1, t: 1, d: 2, at: T0, src: 'tv' }], s: { i: true, c: false } } });
+    torrents.value = [{ hash: 'h', title: 'Title', stat: 5, data }];
+    const s = fakeServer({ data });
+    await forgetWatch(s.c, 'h', 1);
+    expect(JSON.parse(torrents.value[0].data!).omp.s).toEqual({ i: true, c: false });
+    expect(JSON.parse(s.t.data!).omp.s).toEqual({ i: true, c: false });
+  });
+
+  it('saveSkip rejects on non-JSON data, an unknown torrent and a failed write; later saves still work', async () => {
+    const bad = fakeServer({ data: 'not json' });
+    await expect(saveSkip(bad.c, { hash: 'h' }, { i: true })).rejects.toBeTruthy();
+    expect(bad.c.setData).not.toHaveBeenCalled();
+    await expect(saveSkip(bad.c, { hash: 'zzz' }, { i: true })).rejects.toBeTruthy();
+    const s = fakeServer({ data: '{}' });
+    s.c.setData.mockImplementationOnce(() => Promise.reject(new Error('net')));
+    await expect(saveSkip(s.c, { hash: 'h' }, { i: true })).rejects.toBeTruthy();
+    await expect(saveSkip(s.c, { hash: 'h' }, { i: true })).resolves.toEqual({ i: true, c: false });
+  });
+
+  it('no write when nothing changes', async () => {
+    const s = fakeServer({ data: JSON.stringify({ omp: { v: 1, h: [], s: { i: true, c: false } } }) });
+    await saveSkip(s.c, { hash: 'h' }, { i: true });
     expect(s.c.setData).not.toHaveBeenCalled();
   });
 });

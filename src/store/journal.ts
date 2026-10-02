@@ -2,7 +2,7 @@
 // the torrent list first (another device may have written meanwhile) and every failure is swallowed: the journal must
 // never break playback.
 import type { Torrent } from '../api/types';
-import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData } from '../lib/journal';
+import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs } from '../lib/journal';
 import { torrents } from './library';
 
 export interface JournalClient {
@@ -44,7 +44,7 @@ function baseOf(t: Torrent, parsed: ParsedData): ParsedData {
   if (t.data && t.data.trim()) return parsed;
   if (!t.file_stats || !t.file_stats.length) return parsed;
   const files = t.file_stats.map((f) => ({ id: f.id, path: f.path, length: f.length }));
-  return { obj: { TorrServer: { Files: files } }, journal: parsed.journal };
+  return { obj: { TorrServer: { Files: files } }, journal: parsed.journal, skip: parsed.skip };
 }
 
 function update(c: JournalClient, hash: string, change: (j: JournalEntry[]) => JournalEntry[]): Promise<void> {
@@ -58,7 +58,7 @@ function update(c: JournalClient, hash: string, change: (j: JournalEntry[]) => J
       const base = baseOf(t, parsed);
       const next = change(base.journal);
       if (JSON.stringify(next) === JSON.stringify(base.journal)) return undefined;
-      const data = serializeData(base.obj, next);
+      const data = serializeData(base.obj, next, base.skip);
       return c.setData(t, data).then(() => patchLibrary(t.hash, data));
     }),
   );
@@ -74,7 +74,66 @@ export function recordWatch(c: JournalClient | null, hash: string, entry: Omit<J
 export function forgetWatch(c: JournalClient | null, hash: string, f: number): Promise<void> {
   const t = torrents.value.filter((x) => x.hash === hash)[0];
   const local = t ? parseData(t.data) : null;
-  if (local && local.journal.some((e) => e.f === f)) patchLibrary(hash, serializeData(local.obj, removeFile(local.journal, f)));
+  if (local && local.journal.some((e) => e.f === f)) patchLibrary(hash, serializeData(local.obj, removeFile(local.journal, f), local.skip));
   if (!c || !hash) return Promise.resolve();
   return update(c, hash, (j) => removeFile(j, f));
+}
+
+function torrentOf(all: Torrent[] | null | undefined, hash: string): Torrent | undefined {
+  return (all || []).filter((x) => !!x && String(x.hash).toLowerCase() === hash.toLowerCase())[0];
+}
+
+/** Skip settings of a torrent; defaults (everything off) when there are none or the torrent is unknown. */
+export function loadSkip(c: Pick<JournalClient, 'list'>, hash: string): Promise<SkipPrefs> {
+  return c.list().then((all) => {
+    const t = torrentOf(all, hash);
+    const p = t ? parseData(t.data) : null;
+    return (p && p.skip) || { i: false, c: false };
+  });
+}
+
+export type SkipPatch = Partial<Omit<SkipPrefs, 'mi' | 'mc'>> & { mi?: [number, number] | null; mc?: number | null };
+
+function applyPatch(cur: SkipPrefs, patch: SkipPatch): SkipPrefs {
+  const out: SkipPrefs = { i: patch.i === undefined ? cur.i : patch.i, c: patch.c === undefined ? cur.c : patch.c };
+  const mi = patch.mi === undefined ? cur.mi : patch.mi;
+  const mc = patch.mc === undefined ? cur.mc : patch.mc;
+  if (mi) out.mi = mi;
+  if (mc) out.mc = mc;
+  // the same checks as reading: a bad mark (end before start, zero, NaN) is dropped, never written
+  return sanitizeSkip(out) || { i: out.i, c: out.c };
+}
+
+/**
+ * Merges `patch` into the skip settings of a torrent (null removes a mark) and writes them, keeping the history and every
+ * other key of `data`. Unlike the history writes it rejects on failure, so the UI can show the error.
+ */
+export function saveSkip(c: JournalClient, torrent: Pick<Torrent, 'hash'>, patch: SkipPatch): Promise<SkipPrefs> {
+  const hash = torrent.hash;
+  const prev = chains[hash] || Promise.resolve();
+  const run = prev.then(() =>
+    c.list().then((all) => {
+      const t = torrentOf(all, hash);
+      if (!t) throw new Error('torrent not found');
+      const parsed = parseData(t.data);
+      if (!parsed) throw new Error('data is not JSON');
+      const base = baseOf(t, parsed);
+      const next = applyPatch(base.skip || { i: false, c: false }, patch);
+      if (base.skip && JSON.stringify(next) === JSON.stringify(base.skip)) return next;
+      const data = serializeData(base.obj, base.journal, next);
+      return c.setData(t, data).then(() => {
+        patchLibrary(t.hash, data);
+        return next;
+      });
+    }),
+  );
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  chains[hash] = tail;
+  tail.then(() => {
+    if (chains[hash] === tail) delete chains[hash];
+  });
+  return run;
 }

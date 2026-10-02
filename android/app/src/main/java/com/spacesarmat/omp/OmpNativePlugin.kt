@@ -418,6 +418,7 @@ class OmpNativePlugin : Plugin() {
             call.reject("Нечего воспроизводить")
             return
         }
+        NativePlayerBridge.resetIntros()
         NativePlayerBridge.request = req
         // REORDER_TO_FRONT: an open player below the TV interface takes the queue over (no second instance)
         val intent = Intent(context, PlayerActivity::class.java)
@@ -475,6 +476,8 @@ class OmpNativePlugin : Plugin() {
         val cmd = call.getObject("cmd")
         when {
             cmd == null -> call.reject("Некорректная команда")
+            // the page's data for the overlay, not a remote command (the player may still be opening)
+            cmd.optString("type") == "intro" -> if (NativePlayerBridge.intro(cmd)) call.resolve() else call.reject("Некорректная команда")
             !NativePlayerBridge.command(cmd) -> call.reject("Плеер не открыт")
             else -> call.resolve()
         }

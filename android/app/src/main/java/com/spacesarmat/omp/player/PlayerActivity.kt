@@ -74,6 +74,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var nextBox: View
     private lateinit var nextCount: TextView
     private lateinit var nextTitle: TextView
+    private lateinit var btnSkip: TextView
     private lateinit var errorBox: View
     private lateinit var errorText: TextView
 
@@ -89,6 +90,7 @@ class PlayerActivity : AppCompatActivity() {
     private var error: String? = null
     private var ticks = 0
     private var dialog: AlertDialog? = null
+    private val intro = IntroSkip()
 
     private val hideControls = Runnable {
         controlsShown = false
@@ -152,6 +154,7 @@ class PlayerActivity : AppCompatActivity() {
         nextBox = findViewById(R.id.player_next_box)
         nextCount = findViewById(R.id.player_next_count)
         nextTitle = findViewById(R.id.player_next_title)
+        btnSkip = findViewById(R.id.player_skip_intro)
         errorBox = findViewById(R.id.player_error)
         errorText = findViewById(R.id.player_error_text)
 
@@ -276,6 +279,8 @@ class PlayerActivity : AppCompatActivity() {
         lastDurMs = 0L
         closedSent = false
         session = r.session
+        intro.clear()
+        applyIntros()
         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
             .clearOverrides()
             .setPreferredAudioLanguage(r.audioLang.ifEmpty { null })
@@ -419,6 +424,7 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> when {
                 countdown >= 0 -> playNext()
                 error != null -> retry()
+                skipShown() -> skipIntro()
                 else -> togglePause()
             }
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_SPACE -> togglePause()
@@ -440,7 +446,32 @@ class PlayerActivity : AppCompatActivity() {
             showControls()
             return
         }
+        if (skipShown()) {
+            intro.dismiss(index())
+            render()
+            return
+        }
         close()
+    }
+
+    // ---- skip intro (marks come from the page: NativePlayerBridge.intro) ----
+
+    /** Takes the intro marks the page sent (the first ones can arrive before the player is created). */
+    fun applyIntros() {
+        if (!::exo.isInitialized || isFinishing) return
+        NativePlayerBridge.takeIntros().forEach { intro.set(it.index, it.startMs, it.endMs) }
+        render()
+    }
+
+    /** «Пропустить заставку» is on screen: the item has an intro, the position is inside it, not dismissed. */
+    private fun skipShown(): Boolean =
+        ::exo.isInitialized && countdown < 0 && error == null && !isFinishing &&
+            intro.due(index(), exo.currentPosition)
+
+    private fun skipIntro() {
+        val t = intro.target(index()) ?: return
+        seekToMs(t)
+        changed()
     }
 
     private fun togglePause() {
@@ -612,6 +643,9 @@ class PlayerActivity : AppCompatActivity() {
             btnSubs.text = "Субтитры: " + selectedSub(subOptions()).label
             btnNext.visibility = if (hasNext()) View.VISIBLE else View.GONE
         }
+        btnSkip.visibility = if (skipShown()) View.VISIBLE else View.GONE
+        // above the controls while they are shown, near the bottom edge when they are hidden
+        btnSkip.translationY = if (visible) 0f else SKIP_HIDDEN_SHIFT_DP * resources.displayMetrics.density
         buffering.visibility = if (exo.playbackState == Player.STATE_BUFFERING && error == null) View.VISIBLE else View.GONE
         if (countdown >= 0 && hasNext()) {
             nextBox.visibility = View.VISIBLE
@@ -666,6 +700,7 @@ class PlayerActivity : AppCompatActivity() {
         private const val WATCHED_RATIO = 0.9
         private const val MIN_RESUME_MS = 10_000L
         private const val NEXT_COUNTDOWN_S = 5
+        private const val SKIP_HIDDEN_SHIFT_DP = 150f
         private const val EXTERNAL_ID = "omp-x"
         private val EXTERNAL_RE = Regex("omp-x(\\d+)")
         private val RU = Locale.forLanguageTag("ru")

@@ -4,6 +4,7 @@
     <string name="player_phone_badge">Управление с телефона</string>
     <string name="player_pause">Пауза</string>
     <string name="player_play">Воспроизвести</string>
+    <string name="player_skip_intro">Пропустить заставку</string>
     <string name="player_next">Следующая серия</string>
     <string name="player_hint">◀ ▶ перемотка · OK пауза · ▲ дорожки · Назад выход</string>
     <string name="player_next_hint">OK — смотреть сейчас · Назад — отмена</string>
