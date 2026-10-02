@@ -86,11 +86,17 @@ OMP принимает параметры при запуске приложен
 | `server` | Адрес TorrServer (`http://192.168.1.10:8090`) — подключиться к этому серверу |
 | `magnet` | magnet-ссылка — добавить торрент на сервер |
 | `torrent` | Info-hash торрента (40 символов hex) — открыть уже существующий торрент на активном сервере |
+| `file` | Номер файла в раздаче (вместе с `torrent`) — сразу начать его воспроизведение |
+| `t` | Позиция старта в секундах (вместе с `file`) |
 | `play` | Прямая ссылка на видео — сразу начать воспроизведение |
 | `title` | Название для `play` (необязательно) |
 
 ```bash
 ares-launch -d tv com.spacesarmat.torrplayer -p '{"play":"http://192.168.1.10:8090/stream/movie.mkv?link=HASH&index=1&play","title":"Фильм"}'
+```
+
+```bash
+ares-launch -d tv com.spacesarmat.torrplayer -p '{"torrent":"HASH","file":3,"t":1394}'
 ```
 
 ```bash
