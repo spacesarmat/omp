@@ -1,0 +1,225 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render } from 'preact';
+import { act } from 'preact/test-utils';
+import { NowPlaying } from '../src/screens/NowPlaying';
+import { MiniPlayer } from '../src/ui/MiniPlayer';
+import { App } from '../src/app';
+import { currentRoute, resetTo, navigate } from '../src/nav';
+import { nowPlaying, lastSeen, setPlayerLinkDeps } from '../src/tv/playerLink';
+import { reloadTvs, saveTv } from '../src/tv/tvStore';
+import type { PlayerState } from '../../src/phone/protocol';
+
+let el: HTMLElement;
+const NOW = 100000;
+const queue = vi.fn();
+const volume = vi.fn();
+
+const state = (o: Partial<PlayerState> = {}): PlayerState => ({
+  hash: 'h',
+  file: 1,
+  title: 'Тишина в эфире',
+  subtitle: 'Starbound Frontier · S02E03',
+  time: 1394,
+  duration: 2912,
+  paused: false,
+  buffering: false,
+  audio: { list: ['Русский', 'English'], sel: 0 },
+  subs: {
+    list: [
+      { label: 'Выключены', value: 'off' },
+      { label: 'Русские', value: 'ru' },
+    ],
+    sel: 'ru',
+  },
+  next: { title: 'S02E04 · Граница' },
+  ...o,
+});
+const setState = (s: PlayerState | null, seenAgo = 0) => {
+  nowPlaying.value = s;
+  lastSeen.value = NOW - seenAgo;
+};
+const mount = (ui: any) => {
+  document.body.innerHTML = '<div id="app"></div>';
+  el = document.getElementById('app')!;
+  act(() => render(ui, el));
+};
+const lbl = (l: string) => el.querySelector(`[aria-label="${l}"]`) as HTMLElement;
+const click = (n: Element) => act(() => (n as HTMLElement).click());
+const byText = (t: string) => Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').includes(t))!;
+const sent = () => queue.mock.calls.map((c) => c[0][0]);
+
+beforeEach(() => {
+  localStorage.clear();
+  reloadTvs();
+  saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+  queue.mockReset().mockResolvedValue(undefined);
+  volume.mockReset().mockResolvedValue(undefined);
+  setPlayerLinkDeps({
+    now: () => NOW,
+    native: { startPlayerServer: vi.fn(), queuePlayerCommands: queue, onPlayerMessage: () => () => {} } as any,
+  });
+  resetTo({ name: 'library' });
+  navigate({ name: 'nowPlaying' });
+});
+afterEach(() => {
+  setPlayerLinkDeps(null);
+  document.body.innerHTML = '';
+});
+
+describe('NowPlaying', () => {
+  it('renders title, subtitle, times and the TV name', () => {
+    setState(state());
+    mount(<NowPlaying volume={volume} />);
+    expect(el.textContent).toContain('Тишина в эфире');
+    expect(el.textContent).toContain('Starbound Frontier · S02E03');
+    expect(el.textContent).toContain('23:14');
+    expect(el.textContent).toContain('−25:18');
+    expect(el.textContent).toContain('СЕЙЧАС НА ТВ');
+    expect(el.textContent).toContain('LG OLED');
+    expect(el.textContent).toContain('Дальше: S02E04 · Граница');
+  });
+
+  it('shows «Телевизор не отвечает» when stale', () => {
+    setState(state(), 6000);
+    mount(<NowPlaying volume={volume} />);
+    expect(el.textContent).toContain('Телевизор не отвечает');
+  });
+
+  it('empty state offers the catalog', () => {
+    setState(null);
+    mount(<NowPlaying volume={volume} />);
+    expect(el.textContent).toContain('На телевизоре ничего не играет');
+    click(byText('Открыть каталог'));
+    expect(currentRoute.value.name).toBe('library');
+  });
+
+  it('collapse goes back, remote button opens the remote', () => {
+    setState(state());
+    mount(<NowPlaying volume={volume} />);
+    click(lbl('Пульт'));
+    expect(currentRoute.value.name).toBe('remote');
+    resetTo({ name: 'library' });
+    navigate({ name: 'nowPlaying' });
+    click(lbl('Свернуть'));
+    expect(currentRoute.value.name).toBe('library');
+  });
+
+  it('seeks on release only', () => {
+    setState(state());
+    mount(<NowPlaying volume={volume} />);
+    const r = el.querySelector('input[type="range"]') as HTMLInputElement;
+    act(() => {
+      r.value = '600';
+      r.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(queue).not.toHaveBeenCalled();
+    expect(el.textContent).toContain('10:00');
+    act(() => {
+      r.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(sent()).toEqual([expect.objectContaining({ type: 'seek', t: 600 })]);
+  });
+
+  it('transport buttons send the right commands', () => {
+    setState(state());
+    mount(<NowPlaying volume={volume} />);
+    click(lbl('Назад на 10 секунд'));
+    click(lbl('Вперёд на 10 секунд'));
+    click(lbl('Пауза'));
+    click(lbl('Предыдущая серия'));
+    click(lbl('Следующая серия'));
+    click(byText('Включить'));
+    expect(sent().map((c) => [c.type, c.d])).toEqual([
+      ['skip', -10],
+      ['skip', 10],
+      ['pause', undefined],
+      ['prev', undefined],
+      ['next', undefined],
+      ['next', undefined],
+    ]);
+  });
+
+  it('shows play when paused', () => {
+    setState(state({ paused: true }));
+    mount(<NowPlaying volume={volume} />);
+    click(lbl('Играть'));
+    expect(sent()[0].type).toBe('play');
+  });
+
+  it('volume buttons call volume', () => {
+    setState(state());
+    mount(<NowPlaying volume={volume} />);
+    click(lbl('Громкость меньше'));
+    click(lbl('Громкость больше'));
+    expect(volume.mock.calls.map((c) => c[0])).toEqual(['down', 'up']);
+  });
+
+  it('tracks sheet sends audio and subs commands and closes', () => {
+    setState(state());
+    mount(<NowPlaying volume={volume} />);
+    click(byText('Звук и субтитры'));
+    expect(el.querySelector('[role="dialog"]')).not.toBeNull();
+    click(byText('English'));
+    expect(sent()[0]).toMatchObject({ type: 'audio', i: 1 });
+    expect(el.querySelector('[role="dialog"]')).toBeNull();
+    click(byText('Звук и субтитры'));
+    click(byText('Выключены'));
+    expect(sent()[1]).toMatchObject({ type: 'subs', value: 'off' });
+    expect(el.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('marks the current track', () => {
+    setState(state());
+    mount(<NowPlaying volume={volume} />);
+    click(byText('Звук и субтитры'));
+    const on = Array.from(el.querySelectorAll('.m-track.on')).map((n) => n.textContent);
+    expect(on).toEqual(['Русский', 'Русские']);
+  });
+});
+
+describe('MiniPlayer', () => {
+  it('shows the line, the TV and progress; text opens nowPlaying', () => {
+    setState(state());
+    resetTo({ name: 'library' });
+    mount(<MiniPlayer />);
+    expect(el.textContent).toContain('S02E03 · Тишина в эфире');
+    expect(el.textContent).toContain('На LG OLED · 23:14 из 48:32');
+    click(el.querySelector('.m-mini-text')!);
+    expect(currentRoute.value.name).toBe('nowPlaying');
+  });
+
+  it('back and pause send commands', () => {
+    setState(state());
+    mount(<MiniPlayer />);
+    click(lbl('Назад на 10 секунд'));
+    click(lbl('Пауза'));
+    expect(sent().map((c) => c.type)).toEqual(['skip', 'pause']);
+  });
+
+  it('renders nothing without a link', () => {
+    setState(null);
+    mount(<MiniPlayer />);
+    expect(el.querySelector('.m-mini')).toBeNull();
+  });
+});
+
+describe('mini-player in the shell', () => {
+  it('shows on tab screens only', () => {
+    setState(state());
+    resetTo({ name: 'library' });
+    mount(<App />);
+    expect(el.querySelector('.m-mini')).not.toBeNull();
+    act(() => navigate({ name: 'nowPlaying' }));
+    expect(el.querySelector('.m-mini')).toBeNull();
+    expect(el.querySelector('.m-now')).not.toBeNull();
+    act(() => navigate({ name: 'torrent', hash: 'x' }));
+    expect(el.querySelector('.m-mini')).toBeNull();
+  });
+
+  it('hidden when the link is gone', () => {
+    setState(state(), 31000);
+    resetTo({ name: 'library' });
+    mount(<App />);
+    expect(el.querySelector('.m-mini')).toBeNull();
+  });
+});

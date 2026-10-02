@@ -91,7 +91,7 @@ export function openRemoteSoon(from: MRoute | MRoute['name'], onDone?: () => voi
   };
   const timer = setTimeout(() => {
     const here = currentRoute.value;
-    if (typeof from === 'string' ? here.name === from : sameRoute(here, from)) navigate({ name: 'remote' });
+    if (typeof from === 'string' ? here.name === from : sameRoute(here, from)) navigate({ name: 'nowPlaying' });
     finish();
   }, actions.remoteDelayMs);
   return finish;

@@ -132,7 +132,7 @@ describe('Torrent', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 5));
     });
-    expect(currentRoute.value.name).toBe('remote');
+    expect(currentRoute.value.name).toBe('nowPlaying');
   });
 
   it('shows TV errors in the sheet and stays', async () => {

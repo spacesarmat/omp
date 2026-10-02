@@ -6,6 +6,7 @@ export type MRoute =
   | { name: 'torrent'; hash: string }
   | { name: 'add'; link?: string }
   | { name: 'remote' }
+  | { name: 'nowPlaying' }
   | { name: 'tv' }
   | { name: 'settings' };
 

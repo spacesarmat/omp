@@ -12,12 +12,14 @@ import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
 import { Add } from './screens/Add';
 import { Remote } from './screens/Remote';
+import { NowPlaying } from './screens/NowPlaying';
+import { MiniPlayer } from './ui/MiniPlayer';
 import { Settings, runUpdateCheck } from './screens/Settings';
 import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
 import { updatePrompt } from '../../src/store/updates';
 import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
 import { tvState } from './tv/tvClient';
-import { startPlayerLink, attachIfOmpForeground } from './tv/playerLink';
+import { startPlayerLink, attachIfOmpForeground, linkStatus } from './tv/playerLink';
 import './mobile.css';
 
 const TABS: string[] = ['library', 'add', 'remote', 'settings'];
@@ -117,6 +119,7 @@ export function App() {
   const route = currentRoute.value;
   const prompt = updatePrompt.value;
   const showNav = TABS.includes(route.name);
+  const showMini = showNav && linkStatus.value !== 'none';
   return (
     <>
       {route.name === 'connect' ? (
@@ -129,6 +132,8 @@ export function App() {
         <Torrent hash={route.hash} />
       ) : route.name === 'add' ? (
         <Add link={route.link} />
+      ) : route.name === 'nowPlaying' ? (
+        <NowPlaying />
       ) : route.name === 'remote' ? (
         <Remote />
       ) : (
@@ -136,6 +141,8 @@ export function App() {
       )}
       {prompt && showNav && <UpdateSheet info={prompt} />}
       <Toast />
+      {showMini && <div class="m-mini-pad" />}
+      {showNav && <MiniPlayer />}
       {showNav && <NavBar active={route.name as Tab} />}
     </>
   );
