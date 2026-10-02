@@ -6,7 +6,7 @@ import { navigate } from '../nav';
 import { activeTv, ATV_PORT, type SavedTv } from '../tv/tvStore';
 import { CodeSheet } from '../ui/CodeSheet';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
-import { touchpad, cursorGain } from '../tv/touchpad';
+import { touchpad, cursorGain, scrollFactor } from '../tv/touchpad';
 import { linkStatus } from '../tv/playerLink';
 import type { FoundOmpTv } from '../platform/native';
 import {
@@ -127,6 +127,9 @@ interface Gesture {
   /** Sub-pixel rest of the scaled delta, carried to the next move. */
   rx: number;
   ry: number;
+  /** Latest finger position (also between throttled moves). */
+  cx: number;
+  cy: number;
 }
 
 interface Scroll {
@@ -144,6 +147,13 @@ function Touchpad() {
     const ys = Object.keys(s.pts).map((k) => s.pts[Number(k)].y);
     return ys.reduce((a, b) => a + b, 0) / ys.length;
   };
+  /** Sends the accumulated scroll travel (acc in px of finger movement). */
+  const flushScroll = (g: Scroll) => {
+    const dy = Math.round(g.acc * scrollFactor(touchpad.value));
+    if (!dy) return;
+    g.acc = 0;
+    run(act.scroll(0, dy));
+  };
   const release = (e: PointerEvent) => (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
   return (
     <div
@@ -158,13 +168,13 @@ function Touchpad() {
           // a second finger: the gesture becomes a scroll (and can no longer be a tap)
           s.moved = true;
           el.setPointerCapture?.(e.pointerId);
-          const g = sc.current || (sc.current = { pts: { [s.id]: { x: s.x, y: s.y } }, acc: 0, last: Date.now() });
+          const g = sc.current || (sc.current = { pts: { [s.id]: { x: s.cx, y: s.cy } }, acc: 0, last: Date.now() });
           g.pts[e.pointerId] = { x: e.clientX, y: e.clientY };
           return;
         }
         if (s) return;
         el.setPointerCapture?.(e.pointerId);
-        st.current = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: Date.now(), last: 0, moved: false, id: e.pointerId, rx: 0, ry: 0 };
+        st.current = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: Date.now(), last: 0, moved: false, id: e.pointerId, rx: 0, ry: 0, cx: e.clientX, cy: e.clientY };
       }}
       onPointerMove={(e) => {
         const s = st.current;
@@ -180,14 +190,12 @@ function Touchpad() {
           const now = Date.now();
           if (now - g.last < MOVE_THROTTLE_MS) return;
           g.last = now;
-          const dy = Math.round(-g.acc); // fingers up = page down
-          if (dy) {
-            g.acc = 0;
-            run(act.scroll(0, dy));
-          }
+          flushScroll(g);
           return;
         }
         if (s.id !== e.pointerId) return;
+        s.cx = e.clientX;
+        s.cy = e.clientY;
         if (!s.moved && Math.hypot(e.clientX - s.sx, e.clientY - s.sy) > TAP_SLOP) s.moved = true;
         if (!s.moved) return;
         const now = Date.now();
@@ -212,6 +220,7 @@ function Touchpad() {
         if (!s) return;
         const g = sc.current;
         if (g) {
+          flushScroll(g);
           delete g.pts[e.pointerId];
           release(e);
           if (!Object.keys(g.pts).length) {

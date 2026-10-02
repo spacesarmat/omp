@@ -1,4 +1,6 @@
 :root {
+  --m-nav-h: 78px;
+  --m-mini-h: 64px;
   --bg: #0F1115;
   --panel: #181B22;
   --panel-2: #252A35;
@@ -36,6 +38,8 @@ button, .m-btn {
   right: 0;
   bottom: 0;
   display: flex;
+  box-sizing: border-box;
+  height: calc(var(--m-nav-h) + env(safe-area-inset-bottom));
   padding: 8px 8px calc(14px + env(safe-area-inset-bottom));
   background: #14161C;
   border-top: 1px solid var(--panel-2);
@@ -407,22 +411,29 @@ button, .m-btn {
 .m-screen[data-route='remote'] { display: flex; flex-direction: column; gap: 16px; }
 /* Fitted remote: one screen above the tab bar, no vertical scrolling. The d-pad scales with the height. */
 .m-remote {
-  --m-nav-h: 80px;
-  --m-mini-h: 0px;
+  --m-used-mini: 0px;
   --dp: min(240px, 32vh);
   gap: 10px;
   min-height: 0;
-  height: calc(100vh - var(--m-nav-h) - var(--m-mini-h) - env(safe-area-inset-bottom));
-  height: calc(100dvh - var(--m-nav-h) - var(--m-mini-h) - env(safe-area-inset-bottom));
+  height: calc(100vh - var(--m-nav-h) - var(--m-used-mini) - env(safe-area-inset-bottom));
+  height: calc(100dvh - var(--m-nav-h) - var(--m-used-mini) - env(safe-area-inset-bottom));
   padding: calc(env(safe-area-inset-top) + 8px) 16px 0;
-  overflow: hidden;
+  /* safety valve: controls are never clipped on short screens, landscape or with the soft keyboard */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
-.m-remote.mini { --m-mini-h: 72px; --dp: min(240px, 27vh); }
+@media (max-height: 560px) {
+  .m-remote { gap: 6px; }
+  .m-remote .m-key, .m-remote .m-media { height: 40px; }
+  .m-remote > .m-touchpad { min-height: 90px; }
+}
+.m-remote.mini { --m-used-mini: calc(var(--m-mini-h) + 8px); --dp: min(240px, 27vh); }
 .m-remote.kbd { --dp: min(240px, 24vh); }
 .m-remote.mini.kbd { --dp: min(240px, 20vh); }
 .m-remote > * { flex-shrink: 0; }
-.m-remote > .m-stage, .m-remote > .m-touchpad { flex: 1 1 0; min-height: 0; }
-.m-stage { display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.m-remote > .m-stage { flex: 1 1 0; min-height: var(--dp); }
+.m-remote > .m-touchpad { flex: 1 1 0; min-height: 120px; }
+.m-stage { display: flex; align-items: center; justify-content: center; }
 .m-remote .m-key, .m-remote .m-media { height: 46px; }
 .m-remote .m-seg button { min-height: 38px; }
 .m-remote .m-remote-note { padding: 8px 12px; font-size: 12px; }
@@ -537,7 +548,7 @@ button, .m-btn {
 
 /* ---- mini-player ---- */
 .m-mini {
-  position: fixed; left: 8px; right: 8px; bottom: calc(76px + env(safe-area-inset-bottom)); height: 64px; z-index: 5;
+  position: fixed; left: 8px; right: 8px; bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom)); height: var(--m-mini-h); z-index: 5;
   padding: 0 8px 0 10px; border-radius: 16px; background: var(--panel-2); display: flex; align-items: center; gap: 12px; overflow: hidden;
 }
 .m-mini-pad { height: 72px; }

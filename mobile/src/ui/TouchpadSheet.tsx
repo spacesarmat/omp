@@ -52,6 +52,13 @@ export function TouchpadSheet({ onClose }: { onClose: () => void }) {
         </div>
         <Switch on={s.tapClick} label="Касание = щелчок" onToggle={() => updateTouchpad({ tapClick: !s.tapClick })} />
       </div>
+      <div class="m-tp-row">
+        <div class="m-tp-text">
+          <span class="m-tp-label">Обратная прокрутка</span>
+          <span class="m-muted m-small">Если страница на ТВ едет не в ту сторону</span>
+        </div>
+        <Switch on={s.invertScroll} label="Обратная прокрутка" onToggle={() => updateTouchpad({ invertScroll: !s.invertScroll })} />
+      </div>
       <button type="button" class="m-btn m-btn-primary" onClick={onClose}>
         Готово
       </button>

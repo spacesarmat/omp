@@ -6,6 +6,7 @@ import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv, setActiveTv } from '../src/tv/tvStore';
 import { tvWaking, tvState, tvError, TV_FORGOT } from '../src/tv/tvClient';
 import { toast } from '../src/ui/toast';
+import { nowPlaying, lastSeen } from '../src/tv/playerLink';
 import { reloadTouchpad, updateTouchpad, touchpad, cursorGain, sanitizeTouchpad, TOUCHPAD_DEFAULTS } from '../src/tv/touchpad';
 
 let el: HTMLElement;
@@ -394,6 +395,40 @@ describe('Remote with a TV', () => {
     expect(a.click).not.toHaveBeenCalled();
   });
 
+  it('touchpad: «Обратная прокрутка» flips the scroll and the rest is sent on release', () => {
+    vi.useFakeTimers();
+    updateTouchpad({ invertScroll: true });
+    mount();
+    click(text('Тачпад'));
+    const pad = el.querySelector('.m-touchpad')!;
+    const p = (id: number, type: string, x: number, y: number) => {
+      const e = new Event(type, { bubbles: true }) as any;
+      e.pointerId = id;
+      e.clientX = x;
+      e.clientY = y;
+      act(() => {
+        pad.dispatchEvent(e);
+      });
+    };
+    p(1, 'pointerdown', 100, 200);
+    p(2, 'pointerdown', 160, 200);
+    vi.setSystemTime(Date.now() + 40);
+    p(1, 'pointermove', 100, 180);
+    p(2, 'pointermove', 160, 180); // throttled: stays accumulated
+    p(1, 'pointerup', 100, 180); // flushed here
+    const sum = a.scroll.mock.calls.reduce((n: number, c: number[]) => n + c[1], 0);
+    expect(sum).toBe(-20);
+  });
+
+  it('adds the mini class while the player link is live', () => {
+    nowPlaying.value = { title: 'x' } as any;
+    lastSeen.value = Date.now();
+    mount();
+    expect(el.querySelector('.m-remote')!.classList.contains('mini')).toBe(true);
+    nowPlaying.value = null;
+    lastSeen.value = 0;
+  });
+
   it('fits one screen: fitted class, stage around the d-pad, mini-player modifier', () => {
     mount();
     const root = el.querySelector('.m-screen')!;
@@ -412,7 +447,9 @@ describe('Remote with a TV', () => {
     click(lbl('Скорость 5'));
     click(lbl('Ускорение'));
     click(lbl('Касание = щелчок'));
-    expect(JSON.parse(localStorage.getItem('tsp.touchpad')!)).toEqual({ speed: 5, accel: false, tapClick: false });
+    expect(JSON.parse(localStorage.getItem('tsp.touchpad')!)).toEqual({ speed: 5, accel: false, tapClick: false, invertScroll: false });
+    click(lbl('Обратная прокрутка'));
+    expect(JSON.parse(localStorage.getItem('tsp.touchpad')!).invertScroll).toBe(true);
     expect(el.textContent).toContain('5 из 5');
     click(text('Готово'));
     expect(el.querySelector('[role="dialog"]')).toBeNull();
@@ -555,12 +592,12 @@ describe('Remote for Android TV', () => {
 describe('touchpad settings maths', () => {
   it('sanitizer: defaults and clamping', () => {
     expect(sanitizeTouchpad(null)).toEqual(TOUCHPAD_DEFAULTS);
-    expect(sanitizeTouchpad({ speed: 99, accel: 'x', tapClick: false })).toEqual({ speed: 5, accel: true, tapClick: false });
+    expect(sanitizeTouchpad({ speed: 99, accel: 'x', tapClick: false, invertScroll: 1 })).toEqual({ speed: 5, accel: true, tapClick: false, invertScroll: false });
     expect(sanitizeTouchpad({ speed: -2 }).speed).toBe(1);
     expect(sanitizeTouchpad({ speed: NaN }).speed).toBe(3);
   });
   it('gain: step multipliers, acceleration capped at 2.5', () => {
-    const s = (speed: number, accel: boolean) => ({ speed, accel, tapClick: true });
+    const s = (speed: number, accel: boolean) => ({ speed, accel, tapClick: true, invertScroll: false });
     expect([1, 2, 3, 4, 5].map((n) => cursorGain(s(n, false), 5))).toEqual([0.6, 0.8, 1, 1.4, 1.9]);
     expect(cursorGain(s(3, true), 0)).toBe(1);
     expect(cursorGain(s(3, true), 1)).toBeCloseTo(1.8);

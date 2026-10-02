@@ -7,10 +7,12 @@ export interface TouchpadSettings {
   speed: number;
   accel: boolean;
   tapClick: boolean;
+  /** Flips the two-finger scroll direction (the real TV's direction is checked by the user). */
+  invertScroll: boolean;
 }
 
 export const TOUCHPAD_KEY = 'tsp.touchpad';
-export const TOUCHPAD_DEFAULTS: TouchpadSettings = { speed: 3, accel: true, tapClick: true };
+export const TOUCHPAD_DEFAULTS: TouchpadSettings = { speed: 3, accel: true, tapClick: true, invertScroll: false };
 
 /** Gain per speed step 1…5, multiplied with the base gain of 1. */
 export const SPEED_MULT = [0.6, 0.8, 1.0, 1.4, 1.9];
@@ -25,6 +27,7 @@ export function sanitizeTouchpad(v: unknown): TouchpadSettings {
     speed: Math.min(5, Math.max(1, sp)),
     accel: typeof o.accel === 'boolean' ? o.accel : TOUCHPAD_DEFAULTS.accel,
     tapClick: typeof o.tapClick === 'boolean' ? o.tapClick : TOUCHPAD_DEFAULTS.tapClick,
+    invertScroll: typeof o.invertScroll === 'boolean' ? o.invertScroll : TOUCHPAD_DEFAULTS.invertScroll,
   };
 }
 
@@ -44,4 +47,11 @@ export function cursorGain(s: TouchpadSettings, velocity: number): number {
   const base = SPEED_MULT[Math.min(5, Math.max(1, Math.round(s.speed))) - 1];
   const accel = s.accel ? Math.min(ACCEL_MAX, 1 + Math.max(0, velocity) * ACCEL_K) : 1;
   return base * accel;
+}
+
+/** Default factor from finger travel to the `dy` of a scroll frame; the sign was chosen without checking a real TV. */
+export const SCROLL_DIRECTION = -1;
+
+export function scrollFactor(s: TouchpadSettings): number {
+  return s.invertScroll ? -SCROLL_DIRECTION : SCROLL_DIRECTION;
 }
