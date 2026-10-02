@@ -81,7 +81,7 @@ describe('Add', () => {
     expect((el.querySelector('input') as HTMLInputElement).value).toBe('magnet:?xt=urn:btih:' + HASH);
     click(byText('Добавить'));
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH });
+    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, category: '' });
     expect(currentRoute.value).toEqual({ name: 'torrent', hash: HASH });
     expect(toast.value).toBe('Добавлено');
   });
@@ -116,7 +116,7 @@ describe('Add', () => {
     await flush();
     click(byLabel('Добавить и смотреть на ТВ')[0]);
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH });
+    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, category: 'tv' });
     expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: HASH });
     expect(toast.value).toBe('Запустил на LG OLED');
   });
@@ -213,6 +213,42 @@ describe('Add', () => {
     click(byLabel('Добавить и смотреть на ТВ')[0]);
     await flush();
     expect(el.textContent).toContain('Как установить OMP на телевизор');
+  });
+});
+
+describe('Add category', () => {
+  const M = 'magnet:?xt=urn:btih:' + HASH;
+  it('guesses from the magnet dn and sends it', async () => {
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount(M + '&dn=Band+-+Discography+FLAC');
+    click(byText('Добавить'));
+    await flush();
+    expect(add).toHaveBeenCalledWith({ link: M + '&dn=Band+-+Discography+FLAC', category: 'music' });
+  });
+
+  it('a user pick is not overwritten by a later guess', async () => {
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    click(byText('Прочее'));
+    type('input', M + '&dn=Show+S01E02');
+    click(byText('Добавить'));
+    await flush();
+    expect(add).toHaveBeenCalledWith({ link: M + '&dn=Show+S01E02', category: 'other' });
+  });
+
+  it('search result category can be changed through the sheet', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('x');
+    await flush();
+    expect(byLabel('Категория: Сериалы').length).toBe(2);
+    click(byLabel('Категория: Сериалы')[0]);
+    click(el.querySelector('.m-sheet')!.querySelectorAll('button')[3]);
+    expect(byLabel('Категория: Музыка').length).toBe(1);
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    expect(add).toHaveBeenCalledWith({ link: M, category: 'music' });
   });
 });
 
