@@ -68,6 +68,8 @@ beforeEach(() => {
   resetTo({ name: 'library' });
   navigate({ name: 'torrent', hash: 'abc' });
   vi.spyOn(TorrServerClient.prototype, 'viewedList').mockResolvedValue([]);
+  vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
+  vi.spyOn(TorrServerClient.prototype, 'probe').mockResolvedValue(null);
 });
 
 afterEach(() => {

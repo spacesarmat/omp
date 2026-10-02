@@ -662,3 +662,15 @@ button, .m-btn {
 .m-faq-a { padding: 0 16px 14px; font-size: 14px; line-height: 1.5; color: var(--muted); }
 .m-faq-a p { margin: 0 0 8px; overflow-wrap: anywhere; }
 .m-faq-a p:last-child { margin-bottom: 0; }
+
+/* ---- torrent card: «Пропуск» ---- */
+.m-skip { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 14px; background: var(--panel); }
+.m-skip-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.m-skip-title { font-size: 16px; font-weight: 700; }
+.m-skip-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0; border: none; background: none; color: var(--text); font-family: inherit; font-size: 15px; text-align: left; }
+.m-skip-text { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+.m-skip-open { width: 100%; }
+.m-marks-pair { display: flex; gap: 10px; }
+.m-marks-pair .m-field { flex: 1 1 0; min-width: 0; }
+.m-marks-actions { display: flex; gap: 10px; margin-top: 4px; }
+.m-marks-actions .m-btn { flex: 1 1 0; }
