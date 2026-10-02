@@ -48,9 +48,10 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 
 .header { display: flex; align-items: center; margin-bottom: 24px; }
 .header > * { margin-right: 16px; }
-.tab { padding: 12px 28px; border-radius: 30px; color: var(--muted); }
+.tab { display: flex; align-items: center; padding: 12px 24px; border-radius: 30px; color: var(--muted); font-size: 25px; font-weight: 600; }
 .tab.active { color: var(--text); background: var(--panel2); }
-.tab.focused { background: var(--accent); color: #0f1115; box-shadow: none; }
+.tab.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
+.tab-icon { margin-right: 8px; }
 
 .grid { display: flex; flex-wrap: wrap; margin-right: -24px; }
 .card { width: 256px; margin: 0 24px 32px 0; border-radius: 14px; }
@@ -147,3 +148,14 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 
 .badges { margin-top: 10px; }
 .badge { display: inline-block; padding: 2px 9px; margin-right: 8px; border-radius: 7px; background: var(--panel2); color: var(--text); font-size: 16px; font-weight: 700; }
+
+.topbar { display: flex; align-items: center; height: 92px; margin-bottom: 20px; }
+.topbar > * { margin-right: 10px; }
+.topbar > *:last-child { margin-right: 0; }
+.topbar .logo { margin-right: 14px; }
+.topbar-brand { font-size: 30px; font-weight: 800; letter-spacing: 2px; margin-right: 26px; }
+.icon-button { display: flex; align-items: center; justify-content: center; min-width: 60px; height: 60px; padding: 0 16px; border-radius: 14px; background: #1f232b; }
+.icon-button-label { display: none; margin-left: 10px; font-size: 22px; font-weight: 700; white-space: nowrap; }
+.icon-button.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
+.icon-button.focused .icon-button-label { display: inline; }
+.screen::-webkit-scrollbar { display: none; }
