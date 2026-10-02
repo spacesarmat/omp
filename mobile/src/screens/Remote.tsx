@@ -5,6 +5,9 @@ import { showToast } from '../ui/toast';
 import { navigate } from '../nav';
 import { activeTv, ATV_PORT, type SavedTv } from '../tv/tvStore';
 import { CodeSheet } from '../ui/CodeSheet';
+import { TouchpadSheet } from '../ui/TouchpadSheet';
+import { touchpad, cursorGain } from '../tv/touchpad';
+import { linkStatus } from '../tv/playerLink';
 import type { FoundOmpTv } from '../platform/native';
 import {
   tvState,
@@ -16,6 +19,7 @@ import {
   pressButton,
   moveCursor,
   click,
+  scroll,
   volume,
   typeText,
   deleteText,
@@ -30,6 +34,7 @@ export interface RemoteActions {
   pressButton: (name: RemoteButton) => Promise<void>;
   moveCursor: (dx: number, dy: number) => Promise<void>;
   click: () => Promise<void>;
+  scroll: (dx: number, dy: number) => Promise<void>;
   volume: (dir: 'up' | 'down') => Promise<void>;
   typeText: (text: string) => Promise<void>;
   deleteText: (n: number) => Promise<void>;
@@ -48,6 +53,7 @@ const defaults: RemoteActions = {
   pressButton,
   moveCursor,
   click,
+  scroll,
   volume,
   typeText,
   deleteText,
@@ -88,6 +94,7 @@ const NEXT = 'M6 6l9 6-9 6zM18 6v12';
 const FF10 = 'M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4';
 const VOL_DOWN = 'M4 10v4h4l5 4V6L8 10z';
 const VOL_UP = 'M4 10v4h4l5 4V6L8 10zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11';
+const TUNE = 'M4 7h9M17 7h3M4 17h3M11 17h9M15 4v6M9 14v6';
 const KEYBOARD = 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10';
 
 function vibrate(): void {
@@ -107,18 +114,37 @@ const STATE_TEXT: Record<string, string> = {
 };
 
 interface Gesture {
+  /** Last position sent (the cursor delta is measured from it). */
   x: number;
   y: number;
   sx: number;
   sy: number;
+  /** Time of the last sent move / the touch start, for the finger velocity. */
+  t: number;
   last: number;
   moved: boolean;
   id: number;
+  /** Sub-pixel rest of the scaled delta, carried to the next move. */
+  rx: number;
+  ry: number;
+}
+
+interface Scroll {
+  pts: Record<number, { x: number; y: number }>;
+  /** Accumulated vertical finger travel not sent yet. */
+  acc: number;
+  last: number;
 }
 
 function Touchpad() {
   const st = useRef<Gesture | null>(null);
+  const sc = useRef<Scroll | null>(null);
   const run = (p: Promise<void>) => p.catch((e) => showToast(errorMessage(e)));
+  const midY = (s: Scroll) => {
+    const ys = Object.keys(s.pts).map((k) => s.pts[Number(k)].y);
+    return ys.reduce((a, b) => a + b, 0) / ys.length;
+  };
+  const release = (e: PointerEvent) => (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
   return (
     <div
       class="m-touchpad"
@@ -126,44 +152,108 @@ function Touchpad() {
       aria-label="Тачпад"
       style={{ touchAction: 'none' }}
       onPointerDown={(e) => {
-        if (st.current) return;
-        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-        st.current = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, last: 0, moved: false, id: e.pointerId };
+        const el = e.currentTarget as HTMLElement;
+        const s = st.current;
+        if (s && s.id !== e.pointerId) {
+          // a second finger: the gesture becomes a scroll (and can no longer be a tap)
+          s.moved = true;
+          el.setPointerCapture?.(e.pointerId);
+          const g = sc.current || (sc.current = { pts: { [s.id]: { x: s.x, y: s.y } }, acc: 0, last: Date.now() });
+          g.pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+          return;
+        }
+        if (s) return;
+        el.setPointerCapture?.(e.pointerId);
+        st.current = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: Date.now(), last: 0, moved: false, id: e.pointerId, rx: 0, ry: 0 };
       }}
       onPointerMove={(e) => {
         const s = st.current;
-        if (!s || s.id !== e.pointerId) return;
+        if (!s) return;
+        const g = sc.current;
+        if (g) {
+          const p = g.pts[e.pointerId];
+          if (!p) return;
+          const before = midY(g);
+          p.x = e.clientX;
+          p.y = e.clientY;
+          g.acc += midY(g) - before;
+          const now = Date.now();
+          if (now - g.last < MOVE_THROTTLE_MS) return;
+          g.last = now;
+          const dy = Math.round(-g.acc); // fingers up = page down
+          if (dy) {
+            g.acc = 0;
+            run(act.scroll(0, dy));
+          }
+          return;
+        }
+        if (s.id !== e.pointerId) return;
         if (!s.moved && Math.hypot(e.clientX - s.sx, e.clientY - s.sy) > TAP_SLOP) s.moved = true;
         if (!s.moved) return;
         const now = Date.now();
         if (now - s.last < MOVE_THROTTLE_MS) return;
         const dx = e.clientX - s.x;
         const dy = e.clientY - s.y;
+        const gain = cursorGain(touchpad.value, Math.hypot(dx, dy) / Math.max(1, now - s.t));
         s.x = e.clientX;
         s.y = e.clientY;
         s.last = now;
-        if (dx || dy) run(act.moveCursor(dx, dy));
+        s.t = now;
+        const ox = dx * gain + s.rx;
+        const oy = dy * gain + s.ry;
+        const ix = Math.round(ox);
+        const iy = Math.round(oy);
+        s.rx = ox - ix;
+        s.ry = oy - iy;
+        if (ix || iy) run(act.moveCursor(ix, iy));
       }}
       onPointerUp={(e) => {
         const s = st.current;
-        if (!s || s.id !== e.pointerId) return;
+        if (!s) return;
+        const g = sc.current;
+        if (g) {
+          delete g.pts[e.pointerId];
+          release(e);
+          if (!Object.keys(g.pts).length) {
+            st.current = null;
+            sc.current = null;
+          }
+          return;
+        }
+        if (s.id !== e.pointerId) return;
         st.current = null;
-        if (!s.moved) {
+        if (!s.moved && touchpad.value.tapClick) {
           vibrate();
           run(act.click());
         }
-        (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+        release(e);
       }}
       onPointerCancel={(e) => {
         const s = st.current;
-        if (!s || s.id !== e.pointerId) return;
+        if (!s) return;
+        const g = sc.current;
+        if (g) {
+          delete g.pts[e.pointerId];
+          release(e);
+          if (!Object.keys(g.pts).length) {
+            st.current = null;
+            sc.current = null;
+          }
+          return;
+        }
+        if (s.id !== e.pointerId) return;
         st.current = null;
-        (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+        release(e);
       }}
     >
-      <span class="m-muted m-small">Проведите пальцем · касание — клик</span>
+      <span class="m-muted m-small">Проведите пальцем · двумя — прокрутка</span>
     </div>
   );
+}
+
+/** Remote screen class: fits the viewport; the mini-player (64 px) and the open keyboard field take room. */
+function screenClass(kbd: boolean): string {
+  return 'm-screen m-remote' + (linkStatus.value !== 'none' ? ' mini' : '') + (kbd ? ' kbd' : '');
 }
 
 const fail = (e: unknown) => showToast(errorMessage(e));
@@ -277,7 +367,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
   };
   const shown = tvWaking.value && state !== 'connected' ? 'connecting' : state;
   return (
-    <div class="m-screen" data-route="remote">
+    <div class={screenClass(kbd)} data-route="remote">
       <div class="m-lib-head">
         <div class="m-remote-name">
           <span class="m-remote-title">{name}</span>
@@ -295,7 +385,9 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           </button>
         </div>
       )}
-      <DPad press={press} />
+      <div class="m-stage">
+        <DPad press={press} />
+      </div>
       <div class="m-keyrow">
         <button type="button" class="m-key" onClick={() => press('BACK')}>
           <Icon d={BACK} size={20} /> Назад
@@ -342,6 +434,7 @@ export function Remote() {
   const [mode, setMode] = useState<'buttons' | 'touchpad'>('buttons');
   const [kbd, setKbd] = useState(false);
   const [playing, setPlaying] = useState(true);
+  const [tuning, setTuning] = useState(false);
 
   const tvIp = tv?.ip;
   useEffect(() => {
@@ -410,12 +503,15 @@ export function Remote() {
   );
 
   return (
-    <div class="m-screen" data-route="remote">
+    <div class={screenClass(kbd)} data-route="remote">
       <div class="m-lib-head">
         <div class="m-remote-name">
           <span class="m-remote-title">{tv.name}</span>
           <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{tvWaking.value && state !== 'connected' && state !== 'pairing' ? STATE_TEXT.connecting : STATE_TEXT[state] || state}</span>
         </div>
+        <button type="button" class="m-icon-btn" aria-label="Настройки тачпада" onClick={() => setTuning(true)}>
+          <Icon d={TUNE} />
+        </button>
         <button
           type="button"
           class={'m-power' + (state !== 'connected' && state !== 'pairing' && tv.mac ? ' on' : '')}
@@ -435,7 +531,9 @@ export function Remote() {
         </button>
       </div>
       {mode === 'buttons' ? (
-        <DPad press={press} />
+        <div class="m-stage">
+          <DPad press={press} />
+        </div>
       ) : (
         <Touchpad />
       )}
@@ -469,6 +567,7 @@ export function Remote() {
         </button>
       </div>
       {kbd && <TvKeyboard />}
+      {tuning && <TouchpadSheet onClose={() => setTuning(false)} />}
     </div>
   );
 }

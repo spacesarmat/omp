@@ -7,6 +7,7 @@ import {
   launchOnTv,
   pressButton,
   moveCursor,
+  scroll,
   click,
   volume,
   typeText,
@@ -435,12 +436,14 @@ describe('tvClient commands', () => {
 
     await pressButton('CHANNELUP');
     await moveCursor(2, -1);
+    await scroll(0, 3);
     await click();
     expect(fake.sent.filter((m) => m.uri !== GETINFO_URI)).toHaveLength(1);
     expect(fake.pointerUrls).toHaveLength(1);
     expect(fake.frames.slice(1)).toEqual([
       'type:button\nname:CHANNELUP\n\n',
       'type:move\ndx:2\ndy:-1\ndown:0\n\n',
+      'type:scroll\ndx:0\ndy:3\n\n',
       'type:click\n\n',
     ]);
   });

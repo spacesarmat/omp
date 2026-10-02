@@ -165,7 +165,7 @@ export function App() {
       )}
       {prompt && showNav && <UpdateSheet info={prompt} />}
       <Toast />
-      {showMini && <div class="m-mini-pad" />}
+      {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}
       {showNav && <NavBar active={route.name as Tab} />}
     </>
