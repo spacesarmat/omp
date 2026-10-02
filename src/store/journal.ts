@@ -2,7 +2,7 @@
 // the torrent list first (another device may have written meanwhile) and every failure is swallowed: the journal must
 // never break playback.
 import type { Torrent } from '../api/types';
-import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, type SkipPrefs } from '../lib/journal';
+import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs } from '../lib/journal';
 import { torrents } from './library';
 
 export interface JournalClient {
@@ -100,7 +100,8 @@ function applyPatch(cur: SkipPrefs, patch: SkipPatch): SkipPrefs {
   const mc = patch.mc === undefined ? cur.mc : patch.mc;
   if (mi) out.mi = mi;
   if (mc) out.mc = mc;
-  return out;
+  // the same checks as reading: a bad mark (end before start, zero, NaN) is dropped, never written
+  return sanitizeSkip(out) || { i: out.i, c: out.c };
 }
 
 /**
