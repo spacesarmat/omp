@@ -14,6 +14,12 @@ describe('sanitizeCmd', () => {
     expect(sanitizeCmd({ id: 3, type: 'skip', d: -10 })).toEqual({ id: 3, type: 'skip', d: -10 });
     expect(sanitizeCmd({ id: 4, type: 'audio', i: 1 })).toEqual({ id: 4, type: 'audio', i: 1 });
     expect(sanitizeCmd({ id: 5, type: 'subs', value: 'off' })).toEqual({ id: 5, type: 'subs', value: 'off' });
+    expect(sanitizeCmd({ id: 6, type: 'chapter', i: 3 })).toEqual({ id: 6, type: 'chapter', i: 3 });
+  });
+  it('rejects a malformed chapter command', () => {
+    expect(sanitizeCmd({ id: 1, type: 'chapter' })).toBeNull();
+    expect(sanitizeCmd({ id: 1, type: 'chapter', i: -1 })).toBeNull();
+    expect(sanitizeCmd({ id: 1, type: 'chapter', i: 0.5 })).toBeNull();
   });
   it('rejects malformed commands', () => {
     expect(sanitizeCmd(null)).toBeNull();
@@ -42,6 +48,18 @@ describe('sanitizeMessage', () => {
     expect(sanitizeMessage({ v: 1, app: 'x', state: { ...state(), poster: 'http://p' } })!.state!.poster).toBe('http://p');
     expect(sanitizeMessage({ v: 1, app: 'x', state: state() })!.state).not.toHaveProperty('poster');
     expect(sanitizeMessage({ v: 1, app: 'x', state: { ...state(), next: null } })!.state!.next).toBeNull();
+  });
+  it('keeps chapters and the current one, tolerates their absence, drops bad lists', () => {
+    const chapters = [{ t: 0, title: 'Пролог' }, { t: 92, title: '' }];
+    const ok = (extra: object) => sanitizeMessage({ v: 1, app: 'x', state: { ...state(), ...extra } })!.state!;
+    expect(ok({ chapters, chapter: 1 }).chapters).toEqual(chapters);
+    expect(ok({ chapters, chapter: 1 }).chapter).toBe(1);
+    expect(ok({ chapters, chapter: -1 }).chapter).toBe(-1);
+    expect(ok({ chapters, chapter: 9 }).chapter).toBe(-1);
+    expect(ok({})).not.toHaveProperty('chapters');
+    expect(ok({ chapters: [] })).not.toHaveProperty('chapters');
+    expect(ok({ chapters: [{ t: 'x', title: 'a' }], chapter: 0 })).not.toHaveProperty('chapters');
+    expect(ok({ chapters: [{ t: -1, title: 'a' }], chapter: 0 })).not.toHaveProperty('chapter');
   });
   it('rejects malformed messages', () => {
     expect(sanitizeMessage(null)).toBeNull();

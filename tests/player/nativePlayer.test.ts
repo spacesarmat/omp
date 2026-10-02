@@ -230,6 +230,27 @@ describe('NativeSession', () => {
     expect(f.plugin.nativePlayerCommand).toHaveBeenCalledTimes(1);
   });
 
+  it('chapters from the item probe go to the phone; the chapter command becomes a native seek', async () => {
+    const f = fakePlugin();
+    const probe = { streams: [], chapters: [
+      { start_time: '0', end_time: '60', tags: { title: 'Пролог' } },
+      { start_time: '60', end_time: '200', tags: { title: 'Заставка' } },
+    ] } as any;
+    const s = track(new NativeSession(f.plugin, null, queue, {}, null, () => Promise.resolve(probe)));
+    await s.start(opts);
+    f.emit('nativePlayerState', state({ time: 70 }));
+    await vi.advanceTimersByTimeAsync(0);
+    f.emit('nativePlayerState', state({ time: 70 }));
+    const snap = s.snapshot()!;
+    expect(snap.chapters).toEqual([{ t: 0, title: 'Пролог' }, { t: 60, title: 'Заставка' }]);
+    expect(snap.chapter).toBe(1);
+    s.exec({ id: 8, type: 'chapter', i: 0 });
+    expect(f.plugin.nativePlayerCommand).toHaveBeenLastCalledWith({ cmd: { id: 8, type: 'seek', t: 0 } });
+    const calls = f.plugin.nativePlayerCommand.mock.calls.length;
+    s.exec({ id: 9, type: 'chapter', i: 7 });
+    expect(f.plugin.nativePlayerCommand.mock.calls.length).toBe(calls);
+  });
+
   it('ignores events of another run; a replaced close does not navigate', async () => {
     const f = fakePlugin();
     const closed = vi.fn();

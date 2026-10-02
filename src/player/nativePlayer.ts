@@ -14,7 +14,7 @@ import type { FfprobeResult } from '../api/types';
 import type { SkipPrefs } from '../lib/journal';
 import type { SkipPatch } from '../store/journal';
 import { segmentsMessage, sanitizeNativeMark } from './nativeSkip';
-import { applyMark } from './chapters';
+import { applyMark, chapterList } from './chapters';
 import { formatDuration } from '../lib/format';
 import { errorMessage } from '../api/http';
 
@@ -123,13 +123,14 @@ export function sanitizeNativeState(v: unknown): NativeState | null {
 }
 
 /** Phone snapshot from the latest native state (same shape as the HTML5 player's buildSnapshot). */
-export function nativeSnapshot(queue: PlayItem[], s: NativeState | null): PlayerState | null {
+export function nativeSnapshot(queue: PlayItem[], s: NativeState | null, probe: FfprobeResult | null = null): PlayerState | null {
   if (!s) return null;
   return buildSnapshot({
     queue, index: s.index,
     time: s.time, duration: s.duration, paused: s.paused, buffering: s.buffering,
     audio: s.audio.list.map((label) => ({ label })), audioIdx: s.audio.sel, defaultAudio: 0,
     subs: s.subs.list, subChoice: s.subs.sel,
+    chapters: chapterList(probe),
   });
 }
 
@@ -254,12 +255,20 @@ export class NativeSession {
   }
 
   snapshot(): PlayerState | null {
-    return this.done ? null : nativeSnapshot(this.queue, this.state);
+    return this.done ? null : nativeSnapshot(this.queue, this.state, this.state ? this.probes[this.state.index] || null : null);
   }
 
   exec(cmd: Cmd): void {
     if (this.done) return;
-    this.plugin.nativePlayerCommand({ cmd }).catch(() => undefined);
+    let out: Cmd = cmd;
+    if (cmd.type === 'chapter') {
+      // the native player only seeks: the page knows the chapters
+      const list = chapterList(this.state ? this.probes[this.state.index] || null : null);
+      const ch = list[cmd.i];
+      if (!ch) return;
+      out = { id: cmd.id, type: 'seek', t: ch.start };
+    }
+    this.plugin.nativePlayerCommand({ cmd: out }).catch(() => undefined);
   }
 
   /**

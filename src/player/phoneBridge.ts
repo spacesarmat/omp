@@ -1,6 +1,7 @@
 import type { Cmd, PlayerState } from '../phone/protocol';
 import type { PlayItem } from './types';
 import { episodeLabel } from '../lib/episodes';
+import { chapterIndexAt, type Chapter } from './chapters';
 
 export interface SnapshotInput {
   queue: PlayItem[];
@@ -14,6 +15,8 @@ export interface SnapshotInput {
   defaultAudio: number;
   subs: { label: string; value: string }[];
   subChoice: string;
+  /** Chapters of the current file (absent or empty: none). */
+  chapters?: Chapter[];
 }
 
 /** Time and pause state for a snapshot: live from the video element when it exists, else the render-time values. */
@@ -45,6 +48,10 @@ export function buildSnapshot(i: SnapshotInput): PlayerState | null {
     next: nextItem ? { title: nextItem.title } : null,
   };
   if (item.poster) s.poster = item.poster;
+  if (i.chapters && i.chapters.length) {
+    s.chapters = i.chapters.map((c) => ({ t: c.start, title: c.title }));
+    s.chapter = chapterIndexAt(i.chapters, i.time);
+  }
   return s;
 }
 
@@ -54,6 +61,8 @@ export interface CmdHandlers {
   duration: number;
   subValues: string[];
   audioCount: number;
+  /** Chapter start times of the current file. */
+  chapterStarts?: number[];
   toggle(): void;
   seekTo(t: number): void;
   next(): void;
@@ -77,6 +86,11 @@ export function runCmd(cmd: Cmd, h: CmdHandlers): void {
     case 'seek':
       if (h.duration > 0) h.seekTo(clamp(cmd.t, h.duration));
       return;
+    case 'chapter': {
+      const t = h.chapterStarts && h.chapterStarts[cmd.i];
+      if (t !== undefined && h.duration > 0) h.seekTo(clamp(t, h.duration));
+      return;
+    }
     case 'skip':
       if (h.duration > 0) h.seekTo(clamp(h.time + cmd.d, h.duration));
       return;

@@ -466,6 +466,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
         time: live.time, duration: vs.duration, paused: live.paused, buffering: ready && vs.buffering,
         audio, audioIdx, defaultAudio: defaultAudioIndex(audio),
         subs: subtitleMenu(embeddedSubOptions(probe, v), item.subtitles || []), subChoice,
+        chapters,
       });
     },
     exec: (cmd: Cmd) => {
@@ -480,6 +481,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       runCmd(cmd, {
         paused: v.paused, time: v.currentTime, duration: vs.duration,
         subValues: menu.map((o) => o.value), audioCount: audio.length,
+        chapterStarts: chapterList(probeRef.current).map((c) => c.start),
         toggle: togglePause, seekTo, next: goNext, prev: goPrev,
         audio: (i) => chooseAudio(v, audio, i),
         subs: (value) => {

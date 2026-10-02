@@ -78,6 +78,12 @@ export function chapterTarget(list: Chapter[], t: number, dir: 1 | -1): number |
   return list[cur].start;
 }
 
+/** Same as chapterTarget, as a chapter index (-1: the start of the file, before the first chapter); null = nowhere to go. */
+export function chapterStepIndex(list: Chapter[], t: number, dir: 1 | -1): number | null {
+  const target = chapterTarget(list, t, dir);
+  return target === null ? null : chapterIndexAt(list, target);
+}
+
 /** True while `t` is inside the intro (not in its last second, so the button never flashes at the very end). */
 export function inIntro(seg: { start: number; end: number } | undefined, t: number): boolean {
   return !!seg && t >= seg.start && t < seg.end - 1;

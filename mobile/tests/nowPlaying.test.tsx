@@ -143,6 +143,71 @@ describe('NowPlaying', () => {
     expect(currentRoute.value.name).toBe('library');
   });
 
+  describe('chapters', () => {
+    const chapters = [
+      { t: 0, title: 'Пролог' },
+      { t: 92, title: 'Заставка' },
+      { t: 1200, title: 'Погоня' },
+      { t: 2800, title: '' },
+    ];
+    it('hidden when the TV sends none', () => {
+      setState(state());
+      mount(<NowPlaying volume={volume} />);
+      expect(lbl('Следующая глава')).toBeNull();
+      expect(el.textContent).not.toContain('Главы');
+      expect(el.querySelectorAll('.m-seek-tick').length).toBe(0);
+    });
+    it('ticks, «Глава N из M · название», list with the current highlighted', () => {
+      setState(state({ chapters, chapter: 2 }));
+      mount(<NowPlaying volume={volume} />);
+      expect(el.querySelectorAll('.m-seek-tick').length).toBe(3);
+      expect(el.querySelector('.m-now-chapter')!.textContent).toContain('Глава 3 из 4');
+      expect(el.querySelector('.m-now-chapter')!.textContent).toContain('Погоня');
+      const items = Array.from(el.querySelectorAll('.m-now-chitem'));
+      expect(items.length).toBe(4);
+      expect(items[2].classList.contains('on')).toBe(true);
+      expect(items[1].textContent).toContain('1:32');
+      expect(items[3].textContent).toContain('Глава 4');
+    });
+    it('a list item sends the chapter command', () => {
+      setState(state({ chapters, chapter: 2 }));
+      mount(<NowPlaying volume={volume} />);
+      click(el.querySelectorAll('.m-now-chitem')[1]);
+      expect(sent()).toEqual([expect.objectContaining({ type: 'chapter', i: 1 })]);
+    });
+    it('next goes to the next chapter, previous restarts the current one', () => {
+      setState(state({ chapters, chapter: 2, time: 1500 }));
+      mount(<NowPlaying volume={volume} />);
+      click(lbl('Следующая глава'));
+      expect(sent()[0]).toEqual(expect.objectContaining({ type: 'chapter', i: 3 }));
+      queue.mockClear();
+      click(lbl('Предыдущая глава'));
+      expect(sent()[0]).toEqual(expect.objectContaining({ type: 'chapter', i: 2 }));
+    });
+    it('previous within 3 s of a chapter start goes to the one before', () => {
+      setState(state({ chapters, chapter: 2, time: 1201 }));
+      mount(<NowPlaying volume={volume} />);
+      click(lbl('Предыдущая глава'));
+      expect(sent()).toEqual([expect.objectContaining({ type: 'chapter', i: 1 })]);
+    });
+    it('next is disabled in the last chapter; controls disabled when stale', () => {
+      setState(state({ chapters, chapter: 3, time: 2900 }));
+      mount(<NowPlaying volume={volume} />);
+      expect((lbl('Следующая глава') as HTMLButtonElement).disabled).toBe(true);
+      setState(state({ chapters, chapter: 3, time: 2900 }), 6000);
+      mount(<NowPlaying volume={volume} />);
+      expect((lbl('Предыдущая глава') as HTMLButtonElement).disabled).toBe(true);
+      expect((el.querySelector('.m-now-chitem') as HTMLButtonElement).disabled).toBe(true);
+    });
+    it('before the first chapter: previous seeks to the start', () => {
+      setState(state({ chapters: [{ t: 30, title: 'A' }, { t: 90, title: 'B' }], chapter: -1, time: 10 }));
+      mount(<NowPlaying volume={volume} />);
+      expect(el.querySelector('.m-now-chapter')!.textContent).toContain('Глав: 2');
+      click(lbl('Предыдущая глава'));
+      expect(sent()).toEqual([expect.objectContaining({ type: 'seek', t: 0 })]);
+    });
+  });
+
   it('seeks on release only', () => {
     setState(state());
     mount(<NowPlaying volume={volume} />);

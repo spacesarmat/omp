@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { introChapter, chapterList, skipSegments, chapterIndexAt, chapterTarget, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS, PREV_CHAPTER_WINDOW } from '../../src/player/chapters';
+import { introChapter, chapterList, skipSegments, chapterIndexAt, chapterTarget, chapterStepIndex, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS, PREV_CHAPTER_WINDOW } from '../../src/player/chapters';
 import type { FfprobeResult } from '../../src/api/types';
 
 const probe = (titles: [number, number, string][]): FfprobeResult => ({
@@ -143,5 +143,17 @@ describe('applyMark', () => {
     expect(r.text).toBe('Отмечено: титры с 46:40');
     expect(applyMark('credits', 2900, 2900, null, null, fmt).error).toBe(true);
     expect(applyMark('credits', 10, 0, null, null, fmt).error).toBe(true);
+  });
+});
+
+describe('chapterStepIndex', () => {
+  const list = chapterList(probe([[10, 90, 'A'], [90, 200, 'B'], [200, 300, 'C']]));
+  it('is chapterTarget as an index', () => {
+    expect(chapterStepIndex(list, 100, 1)).toBe(2);
+    expect(chapterStepIndex(list, 250, 1)).toBeNull();
+    expect(chapterStepIndex(list, 150, -1)).toBe(1);
+    expect(chapterStepIndex(list, 91, -1)).toBe(0);
+    expect(chapterStepIndex(list, 5, -1)).toBe(-1);
+    expect(chapterStepIndex([], 5, 1)).toBeNull();
   });
 });

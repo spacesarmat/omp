@@ -521,6 +521,19 @@ button, .m-btn {
 }
 .m-seek-input::-webkit-slider-runnable-track { height: 20px; background: transparent; }
 .m-seek-input::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 10px; background: var(--accent); border: none; }
+.m-seek-tick { position: absolute; top: 4px; width: 3px; height: 12px; margin-left: -1px; border-radius: 2px; background: #C9CEDA; pointer-events: none; }
+.m-now-chapter { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--panel); }
+.m-now-chbtn { flex-shrink: 0; width: 48px; height: 48px; border: none; border-radius: 12px; background: var(--panel-2); display: flex; align-items: center; justify-content: center; padding: 0; }
+.m-now-chbtn:disabled, .m-now-chitem:disabled { opacity: 0.4; }
+.m-now-chtext { flex: 1 1 0; min-width: 0; text-align: center; font-size: 14px; overflow-wrap: anywhere; }
+.m-now-chnum { display: block; color: var(--muted); font-size: 12px; }
+.m-now-chlist { display: flex; flex-direction: column; gap: 4px; }
+.m-now-chhead { font-size: 16px; font-weight: 700; margin: 4px 0; }
+.m-now-chitem { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border: none; border-radius: 10px; background: none; font-size: 14px; text-align: left; }
+.m-now-chitem.on { background: #3A3320; color: var(--accent); }
+.m-now-chtime { width: 48px; flex-shrink: 0; color: var(--muted); font-size: 13px; }
+.m-now-chitem.on .m-now-chtime { color: var(--accent); }
+.m-now-chname { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 .m-now-times { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
 .m-now-controls { display: flex; align-items: center; justify-content: space-between; }
 .m-now-skip {
