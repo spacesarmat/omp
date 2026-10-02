@@ -54,6 +54,7 @@ export function Connect() {
   const [auth, setAuth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [cardError, setCardError] = useState<{ id: string; text: string } | null>(null);
 
   useEffect(() => {
     checkAll(servers.value);
@@ -64,7 +65,9 @@ export function Connect() {
     setError('');
     try {
       const url = normalizeServerUrl(cfg.url);
-      await new TorrServerClient({ url, user: cfg.user, password: cfg.password }).echo();
+      const known = servers.value.find((x) => x.url === url);
+      const creds = cfg.user !== undefined ? cfg : { user: known?.user, password: known?.password };
+      await new TorrServerClient({ url, user: creds.user, password: creds.password }).echo();
       const s = addServer({ ...cfg, url });
       setActiveServer(s.id);
       resetTo({ name: 'library' });
@@ -108,12 +111,13 @@ export function Connect() {
     if (busy) return;
     setBusy(true);
     setError('');
+    setCardError(null);
     try {
       await new TorrServerClient(s).echo();
       setActiveServer(s.id);
       resetTo({ name: 'library' });
     } catch (e) {
-      setError(errorMessage(e));
+      setCardError({ id: s.id, text: errorMessage(e) });
     } finally {
       setBusy(false);
     }
@@ -198,7 +202,8 @@ export function Connect() {
               const st = statuses.value[s.id];
               const on = !!st && st !== 'pending' && st.online;
               return (
-                <button type="button" key={s.id} class="m-server" onClick={() => void open(s)}>
+                <div key={s.id} class="m-server-wrap">
+                <button type="button" class="m-server" onClick={() => void open(s)}>
                   <span class={'m-dot' + (on ? ' on' : '')} />
                   <span class="m-server-text">
                     <span class="m-server-name">{s.name}</span>
@@ -208,6 +213,12 @@ export function Connect() {
                   </span>
                   <Icon d="M9 5l7 7-7 7" size={18} />
                 </button>
+                {cardError?.id === s.id && (
+                  <div class="m-error" role="alert">
+                    {cardError.text}
+                  </div>
+                )}
+                </div>
               );
             })}
           </div>

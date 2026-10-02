@@ -63,6 +63,8 @@ interface Session {
 
 let transport: TvTransport = native;
 let seq = 0;
+/** IP of the current or connecting session; null when idle. */
+export const sessionIp = signal<string | null>(null);
 let session: Session | null = null;
 let connecting: Promise<void> | null = null;
 let pointer: Promise<void> | null = null;
@@ -93,6 +95,7 @@ export function setTransport(t: TvTransport): void {
 function endSession(s: Session, reason: string): void {
   if (session !== s) return;
   session = null;
+  sessionIp.value = null;
   connecting = null;
   pointer = null;
   for (const off of s.off) off();
@@ -199,6 +202,7 @@ export function connectTv(tv: SavedTv): Promise<void> {
     s.reg = { resolve, reject };
   });
   session = s;
+  sessionIp.value = tv.ip;
   connecting = promise;
   tvState.value = 'connecting';
   tvError.value = '';

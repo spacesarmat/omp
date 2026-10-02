@@ -4,6 +4,8 @@ import { parsePairUri, type PairData } from '../../../src/lib/pairing';
 
 export const NOT_OMP_QR = 'Это не QR OMP';
 export const SCAN_UNAVAILABLE = 'Сканер QR недоступен на этом устройстве';
+export const SCAN_PREPARE_FAILED = 'Не удалось подготовить сканер QR';
+const INSTALL_TIMEOUT_MS = 60000;
 
 export type QrScanner = () => Promise<PairData | null>;
 
@@ -19,7 +21,9 @@ async function ensureModule(): Promise<void> {
   if (available) return;
   await new Promise<void>((resolve, reject) => {
     let off: (() => void) | undefined;
+    const timer = setTimeout(() => done(new Error(SCAN_PREPARE_FAILED)), INSTALL_TIMEOUT_MS);
     const done = (err?: Error) => {
+      clearTimeout(timer);
       off?.();
       if (err) reject(err);
       else resolve();
@@ -46,7 +50,7 @@ export async function scanPairQr(): Promise<PairData | null> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/cancel/i.test(msg)) return null;
-    throw new Error(SCAN_UNAVAILABLE);
+    throw new Error(msg === SCAN_PREPARE_FAILED ? SCAN_PREPARE_FAILED : SCAN_UNAVAILABLE);
   }
   if (!barcodes.length) return null;
   const data = parsePairUri(barcodes[0].rawValue ?? '');

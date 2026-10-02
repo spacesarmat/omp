@@ -2,8 +2,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { goBack } from '../nav';
 import { native, type FoundTv } from '../platform/native';
-import { connectTv, tvState, tvError } from '../tv/tvClient';
-import { tvs, activeTvIp, forgetTv, type SavedTv } from '../tv/tvStore';
+import { connectTv, disconnectTv, sessionIp, tvState, tvError } from '../tv/tvClient';
+import { tvs, forgetTv, type SavedTv } from '../tv/tvStore';
 
 type Discoverer = (timeoutMs: number) => Promise<FoundTv[]>;
 let discoverer: Discoverer | null = null;
@@ -48,6 +48,16 @@ export function Tv() {
     rows.push({ ip: f.ip, name: f.name, meta: f.ip + (f.model ? ' · ' + f.model : '') });
   }
 
+  const state = tvState.value;
+  if (target && !rows.some((r) => r.ip === target) && (state === 'connecting' || state === 'pairing' || state === 'error')) {
+    rows.push({ ip: target, name: 'Телевизор ' + target, meta: target });
+  }
+
+  async function forget(ip: string) {
+    if (sessionIp.value === ip) await disconnectTv();
+    forgetTv(ip);
+  }
+
   function connect(r: { ip: string; name: string }) {
     setTarget(r.ip);
     setFormError('');
@@ -65,7 +75,6 @@ export function Tv() {
     connect({ ip: v, name: 'LG ' + v });
   }
 
-  const state = tvState.value;
   return (
     <div class="m-screen m-tvscreen">
       <div class="m-bar">
@@ -90,7 +99,7 @@ export function Tv() {
           const mine = target === r.ip;
           const connecting = mine && state === 'connecting';
           const pairing = mine && state === 'pairing';
-          const connected = state === 'connected' && activeTvIp.value === r.ip;
+          const connected = state === 'connected' && sessionIp.value === r.ip;
           const failed = mine && state === 'error';
           const cls = 'm-tv' + (pairing || connecting ? ' pairing' : '') + (connected ? ' connected' : '');
           return (
@@ -115,7 +124,7 @@ export function Tv() {
                   )}
                 </button>
                 {r.saved && (
-                  <button type="button" class="m-btn-text" onClick={() => forgetTv(r.ip)}>
+                  <button type="button" class="m-btn-text" aria-label={'Забыть ' + r.name} onClick={() => void forget(r.ip)}>
                     Забыть
                   </button>
                 )}

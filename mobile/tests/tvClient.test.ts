@@ -14,6 +14,7 @@ import {
   sendEnter,
   turnOffTv,
   disconnectTv,
+  sessionIp,
   type TvTransport,
 } from '../src/tv/tvClient';
 import { tvs, saveTv, reloadTvs } from '../src/tv/tvStore';
@@ -188,6 +189,14 @@ describe('tvClient connection', () => {
     fake.close();
     expect(tvState.value).toBe('idle');
     expect(fake.listeners).toBe(0);
+  });
+
+  it('exposes the IP of the live session and clears it on disconnect', async () => {
+    expect(sessionIp.value).toBeNull();
+    connectTv(TV).catch(() => {});
+    expect(sessionIp.value).toBe('192.168.1.5');
+    await disconnectTv();
+    expect(sessionIp.value).toBeNull();
   });
 
   it('disconnects without waiting for a close event', async () => {

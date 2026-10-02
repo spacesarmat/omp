@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Tv, setTvDiscoverer } from '../src/screens/Tv';
-import { setTransport, tvState, type TvTransport } from '../src/tv/tvClient';
+import { setTransport, tvState, tvError, type TvTransport } from '../src/tv/tvClient';
 import { tvs, saveTv, reloadTvs, activeTvIp } from '../src/tv/tvStore';
 import { currentRoute, resetTo, navigate } from '../src/nav';
 import { native } from '../src/platform/native';
@@ -28,7 +28,10 @@ class FakeTv implements TvTransport {
   }
   async pointerConnect() {}
   async pointerSend() {}
-  async tvDisconnect() {}
+  disconnects = 0;
+  async tvDisconnect() {
+    this.disconnects++;
+  }
 }
 
 let fake: FakeTv;
@@ -102,6 +105,7 @@ describe('Tv screen', () => {
     saveTv({ ip: '192.168.1.42', name: 'LG OLED в гостиной', clientKey: 'k' });
     const el = mount();
     await flush();
+    await act(async () => (el.querySelector('.m-tv-main') as HTMLButtonElement).click());
     await act(async () => {
       tvState.value = 'connected';
     });
@@ -127,6 +131,49 @@ describe('Tv screen', () => {
     });
     await act(async () => btn(el, 'Подключить').click());
     expect(fake.connects).toEqual(['192.168.1.99']);
+  });
+
+  async function manualConnect(el: HTMLElement) {
+    await act(async () => btn(el, 'Ввести IP-адрес телевизора').click());
+    const input = el.querySelector<HTMLInputElement>('#tv-ip')!;
+    input.value = '192.168.1.99';
+    act(() => {
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => btn(el, 'Подключить').click());
+  }
+
+  it('shows a transient card with pairing hint and error for a manual IP', async () => {
+    const el = mount();
+    await flush();
+    await manualConnect(el);
+    const card = () => Array.from(el.querySelectorAll<HTMLElement>('.m-tv')).find((c) => c.textContent!.includes('Телевизор 192.168.1.99'));
+    expect(card()?.textContent).toContain('подключение…');
+    await act(async () => {
+      tvState.value = 'pairing';
+    });
+    expect(card()?.querySelector('.m-hint-warn')).not.toBeNull();
+    await act(async () => {
+      tvError.value = 'Телевизор не отвечает';
+      tvState.value = 'error';
+    });
+    expect(card()?.querySelector('.m-error')?.textContent).toBe('Телевизор не отвечает');
+  });
+
+  it('forgetting the live TV disconnects it and clears Подключён', async () => {
+    saveTv({ ip: '192.168.1.42', name: 'LG OLED в гостиной', clientKey: 'k' });
+    const el = mount();
+    await flush();
+    await act(async () => (el.querySelector('.m-tv-main') as HTMLButtonElement).click());
+    await act(async () => {
+      tvState.value = 'connected';
+    });
+    expect(el.textContent).toContain('Подключён');
+    await act(async () => (el.querySelector('[aria-label="Забыть LG OLED в гостиной"]') as HTMLButtonElement).click());
+    await flush();
+    expect(fake.disconnects).toBeGreaterThan(0);
+    expect(el.textContent).not.toContain('Подключён');
+    expect(tvs.value).toHaveLength(0);
   });
 
   it('goes back', async () => {

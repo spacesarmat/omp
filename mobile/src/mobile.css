@@ -187,4 +187,4 @@ button, .m-btn {
 
 /* ---- toast ---- */
 .m-toast-host { position: fixed; left: 16px; right: 16px; bottom: calc(96px + env(safe-area-inset-bottom)); display: flex; justify-content: center; pointer-events: none; }
-.m-toast { padding: 12px 18px; border-radius: 12px; background: var(--panel-2); color: var(--text); font-size: 14px; font-weight: 600; }
+.m-toast { padding: 12px 18px; border-radius: 12px; background: var(--panel-2); color: var(--text); font-size: 14px; font-weight: 600; }.m-server-wrap { display: flex; flex-direction: column; gap: 6px; }
