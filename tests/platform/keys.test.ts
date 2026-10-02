@@ -11,8 +11,8 @@ describe('keyAction', () => {
     expect(keyAction({ keyCode: 413 })).toBe('stop');
     expect(keyAction({ keyCode: 417 })).toBe('ff');
     expect(keyAction({ keyCode: 412 })).toBe('rw');
-    expect(keyAction({ keyCode: 33 })).toBe('next');
-    expect(keyAction({ keyCode: 34 })).toBe('prev');
+    expect(keyAction({ keyCode: 33 })).toBe('chup');
+    expect(keyAction({ keyCode: 34 })).toBe('chdown');
     expect(keyAction({ keyCode: 403 })).toBe('red');
     expect(keyAction({ keyCode: 404 })).toBe('green');
     expect(keyAction({ keyCode: 405 })).toBe('yellow');

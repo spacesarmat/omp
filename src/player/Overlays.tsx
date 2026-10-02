@@ -56,6 +56,15 @@ export function SkipBanner(p: { onSkip: () => void }) {
   );
 }
 
+export function UndoBanner(p: { text: string; onUndo: () => void }) {
+  return (
+    <div class="next-banner" onClick={(e) => { e.stopPropagation(); p.onUndo(); }}>
+      <div>{p.text} · Вернуть</div>
+      <div class="meta">OK — вернуть</div>
+    </div>
+  );
+}
+
 export function PlayerError(p: { message: string; probe: FfprobeResult | null; onRetry: () => void; onBack: () => void }) {
   const details = statsLines(null, p.probe).join('\n');
   return (

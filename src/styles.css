@@ -104,6 +104,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .player-title { font-size: 36px; margin-bottom: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player-bar { position: relative; height: 10px; background: rgba(255, 255, 255, .25); border-radius: 5px; cursor: pointer; }
 .player-bar-fill { height: 100%; background: var(--accent); border-radius: 5px; }
+.player-bar-tick { position: absolute; top: -3px; width: 3px; height: 16px; margin-left: -1px; background: rgba(255, 255, 255, .75); }
+.player-chapter { color: var(--muted); }
 .player-bar-target { position: absolute; top: -8px; width: 4px; height: 26px; margin-left: -2px; background: #fff; }
 .player-row { display: flex; align-items: center; margin-top: 18px; font-size: 26px; }
 .player-row > * { margin-right: 24px; }
