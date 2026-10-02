@@ -24,6 +24,10 @@ describe('sanitizeSettings', () => {
     expect(sanitizeSettings(null)).toEqual(DEFAULT_SETTINGS);
     expect(sanitizeSettings([1, 2])).toEqual(DEFAULT_SETTINGS);
   });
+  it('validates edgeSeekStep', () => {
+    expect(sanitizeSettings({ edgeSeekStep: 10 }).edgeSeekStep).toBe(10);
+    expect(sanitizeSettings({ edgeSeekStep: 7 }).edgeSeekStep).toBe(5);
+  });
 });
 
 describe('sanitizeProgress', () => {

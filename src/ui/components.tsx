@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import { useFocusable, FocusContext, pause, resume } from '@noriginmedia/norigin-spatial-navigation';
 import { scrollIntoViewSafe } from './focus';
+import { Icon, IconName } from './icons';
 
 interface FocusableProps {
   focusKey?: string;
@@ -64,10 +65,10 @@ export function FocusGroup(p: FocusGroupProps) {
   );
 }
 
-export function Button(p: { label: string; onPress: () => void; focusKey?: string; className?: string; disabled?: boolean; onFocused?: () => void }) {
+export function Button(p: { label: string; icon?: IconName; onPress: () => void; focusKey?: string; className?: string; disabled?: boolean; onFocused?: () => void }) {
   return (
     <Focusable focusKey={p.focusKey} className={'button ' + (p.className || '')} onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused}>
-      {p.label}
+      {p.icon && <Icon name={p.icon} size={28} class="button-icon" />}{p.label}
     </Focusable>
   );
 }
@@ -147,7 +148,7 @@ export function ChoiceRow<T>(p: ChoiceRowProps<T>) {
       }}
     >
       <span class="choice-label">{p.label}</span>
-      <span class="choice-value">‹ {p.options[idx] ? p.options[idx].label : ''} ›</span>
+      <span class="choice-value"><Icon name="chevronLeft" size={22} /> {p.options[idx] ? p.options[idx].label : ''} <Icon name="chevronRight" size={22} /></span>
     </Focusable>
   );
 }

@@ -39,7 +39,7 @@ export function SubtitleOverlay(p: { cues: Cue[] | null; time: number; raised: b
 
 export function NextBanner(p: { seconds: number; title: string; onNext: () => void }) {
   return (
-    <div class="next-banner" onClick={p.onNext}>
+    <div class="next-banner" onClick={(e) => { e.stopPropagation(); p.onNext(); }}>
       <div>Следующая серия через {p.seconds} с</div>
       <div class="meta">{p.title}</div>
       <div class="meta">OK — сейчас · Назад — остаться</div>
@@ -49,7 +49,7 @@ export function NextBanner(p: { seconds: number; title: string; onNext: () => vo
 
 export function SkipBanner(p: { onSkip: () => void }) {
   return (
-    <div class="next-banner" onClick={p.onSkip}>
+    <div class="next-banner" onClick={(e) => { e.stopPropagation(); p.onSkip(); }}>
       <div>Пропустить заставку</div>
       <div class="meta">OK — пропустить · Назад — смотреть</div>
     </div>
@@ -59,7 +59,7 @@ export function SkipBanner(p: { onSkip: () => void }) {
 export function PlayerError(p: { message: string; probe: FfprobeResult | null; onRetry: () => void; onBack: () => void }) {
   const details = statsLines(null, p.probe).join('\n');
   return (
-    <div class="player-error">
+    <div class="player-error" onClick={(e) => e.stopPropagation()}>
       <ErrorView
         message={p.message + (details ? '\n\n' + details : '')}
         actions={[
