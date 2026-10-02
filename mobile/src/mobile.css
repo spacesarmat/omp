@@ -396,6 +396,7 @@ button, .m-btn {
 .m-remote-title { font-size: 20px; font-weight: 700; }
 .m-remote-state { font-size: 13px; color: var(--muted); }
 .m-remote-state.on { color: #8FE39A; }
+.m-power.on { background: #1F3A27; color: #3FB950; }
 .m-power { width: 44px; height: 44px; border: none; border-radius: 22px; background: #3A2224; color: #FF9EA2; display: flex; align-items: center; justify-content: center; }
 .m-seg { display: flex; gap: 8px; padding: 4px; border-radius: 14px; background: var(--panel); }
 .m-seg button { flex: 1 1 0; border: none; border-radius: 10px; background: none; color: var(--muted); font-size: 14px; font-weight: 600; }

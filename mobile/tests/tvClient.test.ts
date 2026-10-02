@@ -20,6 +20,7 @@ import {
   cancelWarmUp,
   foregroundAppId,
   ompVersionOnTv,
+  macFromInfo,
   type TvTransport,
 } from '../src/tv/tvClient';
 import { tvs, saveTv, reloadTvs, setActiveTv } from '../src/tv/tvStore';
@@ -98,6 +99,7 @@ function autoReply(fake: FakeTv) {
 }
 
 const buttonFrameOf = (n: string) => ['type:button', 'name:' + n, '', ''].join(String.fromCharCode(10));
+const GETINFO_URI = 'ssap://com.webos.service.connectionmanager/getinfo';
 const POINTER_URI = 'ssap://com.webos.service.networkinput/getPointerInputSocket';
 
 /** Connects and answers the pointer-socket prefetch the client sends right after registering. */
@@ -297,7 +299,7 @@ describe('tvClient connection', () => {
     expect(fake.connects).toHaveLength(1);
     fake.emit({ type: 'registered', id: fake.lastRegister.id, payload: { 'client-key': 'K' } });
     await expect(Promise.all([a, b])).resolves.toEqual([undefined, undefined]);
-    expect(fake.sent.map((m) => m.uri).filter((u) => u !== POINTER_URI)).toEqual([
+    expect(fake.sent.map((m) => m.uri).filter((u) => u !== POINTER_URI && u !== GETINFO_URI)).toEqual([
       'ssap://audio/volumeUp',
       'ssap://com.webos.service.ime/insertText',
     ]);
@@ -411,14 +413,14 @@ describe('tvClient commands', () => {
     await connected(fake);
     autoReply(fake);
     await pressButton('UP');
-    expect(fake.sent.map((m) => m.uri)).toEqual(['ssap://com.webos.service.networkinput/getPointerInputSocket']);
+    expect(fake.sent.map((m) => m.uri).filter((u) => u !== GETINFO_URI)).toEqual(['ssap://com.webos.service.networkinput/getPointerInputSocket']);
     expect(fake.pointerUrls).toEqual(['ws://192.168.1.5:3000/resources/abc/netinput.pointer.sock']);
     expect(fake.frames).toEqual(['type:button\nname:UP\n\n']);
 
     await pressButton('CHANNELUP');
     await moveCursor(2, -1);
     await click();
-    expect(fake.sent).toHaveLength(1);
+    expect(fake.sent.filter((m) => m.uri !== GETINFO_URI)).toHaveLength(1);
     expect(fake.pointerUrls).toHaveLength(1);
     expect(fake.frames.slice(1)).toEqual([
       'type:button\nname:CHANNELUP\n\n',
@@ -665,7 +667,7 @@ describe('tvClient early connect', () => {
     await vi.advanceTimersByTimeAsync(0);
     fake.emit(REG(fake));
     await p;
-    expect(fake.sent.map((m) => m.uri)).toEqual([POINTER_URI]);
+    expect(fake.sent.map((m) => m.uri).filter((u) => u !== GETINFO_URI)).toEqual([POINTER_URI]);
     fake.emit({
       type: 'response',
       id: fake.sent[0].id,
@@ -767,7 +769,7 @@ describe('tvClient early connect', () => {
     await vi.advanceTimersByTimeAsync(0);
     fake.emit(REG(fake));
     await p;
-    expect(fake.sent.map((m) => m.uri)).toEqual([POINTER_URI]);
+    expect(fake.sent.map((m) => m.uri).filter((u) => u !== GETINFO_URI)).toEqual([POINTER_URI]);
     await vi.advanceTimersByTimeAsync(8000);
     expect(tvState.value).toBe('connected');
     // the lazy path asks again
@@ -777,5 +779,48 @@ describe('tvClient early connect', () => {
     await press;
     expect(fake.sent.filter((m) => m.uri === POINTER_URI)).toHaveLength(2);
     expect(fake.frames).toEqual([buttonFrameOf('UP')]);
+  });
+});
+
+describe('MAC for Wake-on-LAN', () => {
+  const GETINFO = 'ssap://com.webos.service.connectionmanager/getinfo';
+
+  it('macFromInfo prefers a connected wired adapter, else Wi-Fi, and normalises', () => {
+    const ip = '192.168.1.5';
+    expect(
+      macFromInfo({ wiredInfo: { macAddress: 'AA-BB-CC-DD-EE-01', state: 'connected' }, wifiInfo: { macAddress: 'aa:bb:cc:dd:ee:02' } }, ip),
+    ).toBe('aa:bb:cc:dd:ee:01');
+    expect(
+      macFromInfo({ wiredInfo: { macAddress: 'aa:bb:cc:dd:ee:01', state: 'disconnected' }, wifiInfo: { macAddress: 'aabbccddee02' } }, ip),
+    ).toBe('aa:bb:cc:dd:ee:02');
+    expect(macFromInfo({ wiredInfo: { macAddress: 'aa:bb:cc:dd:ee:01', ipAddress: ip } }, ip)).toBe('aa:bb:cc:dd:ee:01');
+    expect(macFromInfo({ wifiInfo: { macAddress: 'junk' } }, ip)).toBeUndefined();
+    expect(macFromInfo(null, ip)).toBeUndefined();
+    expect(macFromInfo({}, ip)).toBeUndefined();
+  });
+
+  it('requests getinfo after connecting and saves the MAC', async () => {
+    fake.onRequest = (msg) => {
+      if (msg.uri !== GETINFO) return;
+      queueMicrotask(() =>
+        fake.emit({ type: 'response', id: msg.id, payload: { returnValue: true, wifiInfo: { macAddress: 'AA-BB-CC-DD-EE-FF' } } }),
+      );
+    };
+    await connected(fake);
+    await flush();
+    expect(fake.sent.some((m) => m.uri === GETINFO)).toBe(true);
+    expect(tvs.value[0].mac).toBe('aa:bb:cc:dd:ee:ff');
+    expect(tvState.value).toBe('connected');
+  });
+
+  it('ignores a getinfo error', async () => {
+    fake.onRequest = (msg) => {
+      if (msg.uri !== GETINFO) return;
+      queueMicrotask(() => fake.emit({ type: 'error', id: msg.id, error: '404 no such service', payload: {} }));
+    };
+    await connected(fake);
+    await flush();
+    expect(tvState.value).toBe('connected');
+    expect(tvs.value[0].mac).toBeUndefined();
   });
 });

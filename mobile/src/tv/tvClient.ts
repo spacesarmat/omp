@@ -1,7 +1,7 @@
 // SSAP client on top of the native transport: pairing, request/response by id, pointer socket.
 import { signal, effect } from '@preact/signals';
 import { native, type OmpNativeApi } from '../platform/native';
-import { activeTv, saveTv, setActiveTv, type SavedTv } from './tvStore';
+import { activeTv, saveTv, setActiveTv, normalizeMac, type SavedTv } from './tvStore';
 import {
   registerMessage,
   requestMessage,
@@ -32,6 +32,7 @@ const SOCKET_OPEN_TIMEOUT = 12000;
 /** The user needs time to find the remote and press «Разрешить». */
 const PAIRING_TIMEOUT = 60000;
 const POINTER_URI = 'ssap://com.webos.service.networkinput/getPointerInputSocket';
+const GETINFO_URI = 'ssap://com.webos.service.connectionmanager/getinfo';
 const PERMISSION_ERROR = /401|insufficient permissions|not permitted|denied/i;
 
 export const tvState = signal<TvState>('idle');
@@ -167,6 +168,15 @@ function onRegisterMessage(s: Session, m: any): void {
     reg.resolve();
     // Open the pointer socket now so the first press does not wait for it (errors are ignored).
     ensurePointer(true).catch(noop);
+    // Learn the MAC for Wake-on-LAN (soft: a failure never touches the session).
+    const mySession = s;
+    send(GETINFO_URI, undefined, false, true).then((info) => {
+      const mac = macFromInfo(info, mySession.tv.ip);
+      if (mac && session === mySession) {
+        mySession.tv = { ...mySession.tv, mac };
+        saveTv(mySession.tv);
+      }
+    }, noop);
   } else if (m.type === 'error') {
     const text = String(m.error ?? m.payload?.errorText ?? '');
     if (s.signed && /blacklisted certificate/i.test(text)) {
@@ -208,6 +218,19 @@ function onClosed(s: Session): void {
   }
   endSession(s, TV_NOT_CONNECTED);
   tvState.value = 'idle';
+}
+
+/** MAC from a connectionmanager/getinfo answer: wired when it is connected (or has this IP), else Wi-Fi. */
+export function macFromInfo(info: any, ip: string): string | undefined {
+  const wired = info?.wiredInfo;
+  const wifi = info?.wifiInfo;
+  const wiredMac = normalizeMac(wired?.macAddress);
+  const wifiMac = normalizeMac(wifi?.macAddress);
+  const isWired = !!wired && (wired.state === 'connected' || wired.ipAddress === ip);
+  const isWifi = !!wifi && wifi.ipAddress === ip;
+  if (isWired && wiredMac) return wiredMac;
+  if (isWifi && wifiMac) return wifiMac;
+  return wifiMac ?? wiredMac;
 }
 
 export function connectTv(tv: SavedTv): Promise<void> {

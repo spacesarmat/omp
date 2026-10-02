@@ -4,7 +4,7 @@ import { act } from 'preact/test-utils';
 import { Remote, setRemoteActions } from '../src/screens/Remote';
 import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
-import { tvWaking } from '../src/tv/tvClient';
+import { tvWaking, tvState } from '../src/tv/tvClient';
 import { toast } from '../src/ui/toast';
 
 let el: HTMLElement;
@@ -17,6 +17,7 @@ const a = {
   deleteText: vi.fn(),
   sendEnter: vi.fn(),
   turnOffTv: vi.fn(),
+  wakeOnLan: vi.fn(),
   warmUp: vi.fn(),
   confirm: vi.fn(),
 };
@@ -224,6 +225,7 @@ describe('Remote with a TV', () => {
   });
 
   it('power asks to confirm and then toasts', async () => {
+    tvState.value = 'connected';
     mount();
     a.confirm.mockReturnValueOnce(false);
     click(lbl('Выключить телевизор'));
@@ -233,6 +235,56 @@ describe('Remote with a TV', () => {
     await flush();
     expect(a.turnOffTv).toHaveBeenCalled();
     expect(toast.value).toBe('Телевизор выключается');
+    tvState.value = 'idle';
+  });
+
+  describe('power button modes', () => {
+    it('is «Выключить» while connected', () => {
+      act(() => {
+        tvState.value = 'connected';
+      });
+      mount();
+      expect(lbl('Выключить телевизор')).toBeTruthy();
+      expect(lbl('Включить телевизор')).toBeNull();
+      act(() => {
+        tvState.value = 'idle';
+      });
+    });
+
+    it('is a green «Включить» with a known MAC: sends WoL, toasts, then warms up', async () => {
+      saveTv({ ip: '192.168.1.5', name: 'LG OLED', mac: 'aa:bb:cc:dd:ee:ff' });
+      mount();
+      a.warmUp.mockClear();
+      const b = lbl('Включить телевизор');
+      expect(b.classList.contains('on')).toBe(true);
+      click(b);
+      await flush();
+      expect(a.wakeOnLan).toHaveBeenCalledWith('aa:bb:cc:dd:ee:ff', '192.168.1.5');
+      expect(toast.value).toBe('Включаю LG OLED…');
+      expect(a.warmUp).toHaveBeenCalledTimes(1);
+      expect(a.confirm).not.toHaveBeenCalled();
+    });
+
+    it('explains how to learn the MAC when it is unknown', async () => {
+      mount();
+      const b = lbl('Включить телевизор');
+      expect(b.classList.contains('on')).toBe(false);
+      click(b);
+      await flush();
+      expect(a.wakeOnLan).not.toHaveBeenCalled();
+      expect(toast.value).toContain('Подключитесь к телевизору, когда он включён');
+    });
+
+    it('shows a WoL failure and does not warm up', async () => {
+      saveTv({ ip: '192.168.1.5', name: 'LG OLED', mac: 'aa:bb:cc:dd:ee:ff' });
+      mount();
+      a.warmUp.mockClear();
+      a.wakeOnLan.mockRejectedValueOnce(new Error('нет сети'));
+      click(lbl('Включить телевизор'));
+      await flush();
+      expect(toast.value).toBe('нет сети');
+      expect(a.warmUp).not.toHaveBeenCalled();
+    });
   });
 
   it('touchpad: tap clicks, drag moves with throttle', () => {

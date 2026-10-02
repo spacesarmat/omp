@@ -26,6 +26,8 @@ export interface OmpNativeApi {
   /** 'type:button\nname:UP\n\n' etc. */
   pointerSend(frame: string): Promise<void>;
   tvDisconnect(): Promise<void>;
+  /** Wake-on-LAN magic packet (broadcast + the /24 broadcast of `ip`), repeated 3 times. */
+  wakeOnLan(mac: string, ip: string): Promise<void>;
   openExternal(url: string, mime: string): Promise<void>;
   downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void): Promise<void>;
   takePendingMagnet(): Promise<string | null>;
@@ -46,6 +48,7 @@ interface OmpNativePlugin {
   tvDisconnect(): Promise<void>;
   pointerConnect(o: { url: string }): Promise<void>;
   pointerSend(o: { frame: string }): Promise<void>;
+  wakeOnLan(o: { mac: string; ip: string }): Promise<void>;
   openExternal(o: { url: string; mime: string }): Promise<void>;
   downloadAndInstallApk(o: { url: string; sha256: string }): Promise<void>;
   takePendingMagnet(): Promise<{ link?: string | null }>;
@@ -145,6 +148,11 @@ export const native: OmpNativeApi = {
   tvDisconnect() {
     if (!plugin) return unavailable();
     return plugin.tvDisconnect();
+  },
+
+  wakeOnLan(mac, ip) {
+    if (!plugin) return unavailable();
+    return plugin.wakeOnLan({ mac, ip });
   },
 
   openExternal(url, mime) {

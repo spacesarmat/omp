@@ -288,6 +288,28 @@ class OmpNativePlugin : Plugin() {
         call.resolve()
     }
 
+    // ---- Wake-on-LAN ----
+
+    @PluginMethod
+    fun wakeOnLan(call: PluginCall) {
+        val once = Once(call)
+        val mac = call.getString("mac")?.trim().orEmpty()
+        val ip = call.getString("ip")?.trim().orEmpty()
+        val packet = WakeOnLan.magicPacket(mac)
+        if (packet == null || !IPV4.matches(ip)) {
+            once.reject("Не удалось включить телевизор")
+            return
+        }
+        io.execute {
+            try {
+                WakeOnLan.send(packet, ip)
+                once.resolve()
+            } catch (_: Exception) {
+                once.reject("Не удалось отправить сигнал включения")
+            }
+        }
+    }
+
     // ---- external player ----
 
     @PluginMethod

@@ -18,6 +18,7 @@ describe('native plugin wrapper outside Android', () => {
     await expect(native.openExternal('http://x/v.mkv', 'video/*')).rejects.toThrow(ONLY_ANDROID);
     await expect(native.tvConnect('192.168.1.5', {})).rejects.toThrow(ONLY_ANDROID);
     await expect(native.pointerSend('type:click\n\n')).rejects.toThrow(ONLY_ANDROID);
+    await expect(native.wakeOnLan('aa:bb:cc:dd:ee:ff', '192.168.1.5')).rejects.toThrow(ONLY_ANDROID);
     await expect(native.takePendingMagnet()).rejects.toThrow(ONLY_ANDROID);
     await expect(native.downloadAndInstallApk('https://x/a.apk', 'ab', () => {})).rejects.toThrow(ONLY_ANDROID);
   });
@@ -57,6 +58,7 @@ describe('native plugin wrapper on Android', () => {
       takePendingMagnet: vi.fn(async () => ({ link: null })),
       startPlayerServer: vi.fn(async () => ({ url: 'http://10.0.0.3:41234/omp/abc' })),
       stopPlayerServer: vi.fn(async () => {}),
+      wakeOnLan: vi.fn(async () => {}),
       queuePlayerCommands: vi.fn(async () => {}),
       addListener: vi.fn(async (event: string, cb: (e: any) => void) => {
         await gate;
@@ -88,6 +90,12 @@ describe('native plugin wrapper on Android', () => {
     expect(fake.tvConnect).toHaveBeenCalledWith({ ip: '10.0.0.2', register: '{"type":"register"}', preferPort: 3001 });
     await n.tvConnect('10.0.0.2', {});
     expect(fake.tvConnect).toHaveBeenLastCalledWith({ ip: '10.0.0.2', register: '{}' });
+  });
+
+  it('wakeOnLan passes mac and ip', async () => {
+    const { native: n, fake } = await load();
+    await n.wakeOnLan('aa:bb:cc:dd:ee:ff', '192.168.1.5');
+    expect(fake.wakeOnLan).toHaveBeenCalledWith({ mac: 'aa:bb:cc:dd:ee:ff', ip: '192.168.1.5' });
   });
 
   it('parses incoming TV messages', async () => {
