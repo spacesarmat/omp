@@ -23,7 +23,7 @@ import type { Torrent as TorrentT } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
 import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../../../src/lib/episodes';
 import { formatBytes, formatDuration } from '../../../src/lib/format';
-import { useSkip } from '../../../src/lib/useSkip';
+import { useSkip, firstPlayableId } from '../../../src/lib/useSkip';
 import { parseMark, skipStatus } from '../../../src/lib/skipMarks';
 import type { SkipPrefs } from '../../../src/lib/journal';
 import { posterColor, shortTitle } from '../../../src/lib/libraryView';
@@ -269,10 +269,14 @@ export function Torrent({ hash }: { hash: string }) {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const launch = useTvLaunch();
+  const [marksOpen, setMarksOpen] = useState(false);
+  const [finding, setFinding] = useState(false);
   progressVersion.value;
   serverViewed.value;
 
   const own = t ? filesOf(t) : [];
+  const allFiles = own.length ? own : loaded ? filesOf(loaded) : [];
+  const skip = useSkip(c, hash, firstPlayableId(allFiles));
   // file list comes from the list entry; load it from the server if the entry has none
   useEffect(() => {
     if (!c || !t || own.length) return;
@@ -314,10 +318,9 @@ export function Torrent({ hash }: { hash: string }) {
     );
   }
 
-  const files = playableFiles(own.length ? own : loaded ? filesOf(loaded) : []);
-  const skip = useSkip(c, hash, files.length ? files[0].id : null);
+  const files = playableFiles(allFiles);
   const toggleSkip = (key: 'i' | 'c') => {
-    skip.save(key === 'i' ? { i: !skip.prefs.i } : { c: !skip.prefs.c }, true).then(undefined, (e) => showToast(errorMessage(e)));
+    skip.save((p) => (key === 'i' ? { i: !p.i } : { c: !p.c }), true).then(undefined, (e) => showToast(errorMessage(e)));
   };
   const tv = activeTv.value;
   const title = t.title || t.name || t.hash;
@@ -369,8 +372,6 @@ export function Torrent({ hash }: { hash: string }) {
     }
   };
 
-  const [marksOpen, setMarksOpen] = useState(false);
-  const [finding, setFinding] = useState(false);
   const findPoster = () => {
     if (finding) return;
     setFinding(true);

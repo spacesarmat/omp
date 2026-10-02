@@ -106,3 +106,23 @@ describe('TV torrent card · Пропуск', () => {
     expect(row('Заставка и титры').textContent).toContain('в файле нет глав · заставка 0:45–2:15 · титры: последние 1:30');
   });
 });
+
+describe('TV torrent card · quick taps', () => {
+  it('two quick taps on one switch end up off, from the latest state', async () => {
+    saveMock.mockResolvedValue({ i: false, c: false });
+    await mount();
+    act(() => { row('Пропускать заставку').click(); row('Пропускать заставку').click(); });
+    expect(saveMock.mock.calls.map((x) => x[2])).toEqual([{ i: true }, { i: false }]);
+    await flush();
+    expect(row('Пропускать заставку').querySelector('[role=switch]')!.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('a failed first write does not undo a later tap on the other switch', async () => {
+    saveMock.mockRejectedValueOnce(new Error('сбой')).mockResolvedValueOnce({ i: false, c: true });
+    await mount();
+    act(() => { row('Пропускать заставку').click(); row('Пропускать титры').click(); });
+    await flush();
+    expect(row('Пропускать заставку').querySelector('[role=switch]')!.getAttribute('aria-checked')).toBe('false');
+    expect(row('Пропускать титры').querySelector('[role=switch]')!.getAttribute('aria-checked')).toBe('true');
+  });
+});

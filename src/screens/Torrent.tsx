@@ -15,7 +15,7 @@ import { restoreFocus } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
-import { useSkip } from '../lib/useSkip';
+import { useSkip, firstPlayableId } from '../lib/useSkip';
 import { skipStatus } from '../lib/skipMarks';
 
 export function TorrentScreen({ hash }: { hash: string }) {
@@ -71,10 +71,9 @@ export function TorrentScreen({ hash }: { hash: string }) {
   const queue = useMemo(() => (t ? buildTorrentQueue(c, t, files) : []), [t ? t.hash : '', files]);
   const groups = useMemo(() => groupBySeason(playableFiles(files)), [files]);
 
-  const firstFile = groups.length && groups[0].files.length ? groups[0].files[0].id : null;
-  const skip = useSkip(c, hash, firstFile);
+  const skip = useSkip(c, hash, firstPlayableId(files));
   const toggleSkip = (key: 'i' | 'c') => {
-    skip.save(key === 'i' ? { i: !skip.prefs.i } : { c: !skip.prefs.c }, true).then(undefined, (e) => toast(errorMessage(e), 'error'));
+    skip.save((p) => (key === 'i' ? { i: !p.i } : { c: !p.c }), true).then(undefined, (e) => toast(errorMessage(e), 'error'));
   };
 
   useEffect(() => {
@@ -165,11 +164,11 @@ export function TorrentScreen({ hash }: { hash: string }) {
           </div>
           <Focusable focusKey="skip-intro" className="skip-row" onPress={() => toggleSkip('i')}>
             <span class="skip-label">Пропускать заставку автоматически</span>
-            <span class={'skip-switch' + (skip.prefs.i ? ' on' : '')} role="switch" aria-checked={skip.prefs.i} />
+            <span class={'skip-switch' + (skip.prefs.i ? ' on' : '')} role="switch" aria-label="Пропускать заставку автоматически" aria-checked={skip.prefs.i} />
           </Focusable>
           <Focusable focusKey="skip-credits" className="skip-row" onPress={() => toggleSkip('c')}>
             <span class="skip-label">Пропускать титры — сразу следующая серия</span>
-            <span class={'skip-switch' + (skip.prefs.c ? ' on' : '')} role="switch" aria-checked={skip.prefs.c} />
+            <span class={'skip-switch' + (skip.prefs.c ? ' on' : '')} role="switch" aria-label="Пропускать титры" aria-checked={skip.prefs.c} />
           </Focusable>
           <Focusable focusKey="skip-status" className="skip-row skip-status">
             <span class="skip-label">Заставка и титры</span>
