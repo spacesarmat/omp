@@ -11,6 +11,7 @@ import { AddScreen } from './screens/Add';
 import { PlaylistScreen } from './screens/Playlist';
 import { SettingsScreen } from './screens/Settings';
 import { UpdateScreen } from './screens/Update';
+import { PairPhoneScreen } from './screens/PairPhone';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { checkForUpdate } from './store/updates';
 
@@ -30,6 +31,8 @@ function renderRoute(r: Route) {
       return <PlaylistScreen url={r.url} title={r.title} />;
     case 'settings':
       return <SettingsScreen />;
+    case 'pairPhone':
+      return <PairPhoneScreen />;
     case 'update':
       return <UpdateScreen />;
     default:

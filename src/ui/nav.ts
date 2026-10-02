@@ -10,7 +10,8 @@ export type Route =
   | { name: 'add' }
   | { name: 'playlist'; url?: string; title?: string }
   | { name: 'settings' }
-  | { name: 'update' };
+  | { name: 'update' }
+  | { name: 'pairPhone' };
 
 export const routeStack = signal<Route[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);

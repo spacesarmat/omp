@@ -237,3 +237,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .update-text { margin: 0; font-size: 22px; line-height: 1.6; color: var(--muted); }
 .update-dialog { width: 900px; }
 .update-current { margin-top: 16px; }
+
+.pair-phone .pair-row { display: flex; align-items: center; margin-top: 24px; }
+.pair-phone .qr { margin-right: 48px; border-radius: 16px; }
+.pair-steps { font-size: 26px; line-height: 1.7; }
