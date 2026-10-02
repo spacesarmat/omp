@@ -1,5 +1,5 @@
 import { request, HttpOptions } from './http';
-import type { Torrent, CacheState, ViewedEntry, SearchResult, FfprobeResult, ServerSettings } from './types';
+import type { Torrent, CacheState, ViewedEntry, SearchResult, FfprobeResult, ServerSettings, TmdbConfig } from './types';
 import type { TorrentFile } from '../lib/episodes';
 
 export interface ServerConfig {
@@ -79,6 +79,21 @@ export class TorrServerClient {
     return this.call<unknown>('/torrents', {
       body: { action: 'set', hash: t.hash, title, poster: t.poster || '', category: t.category || '', data },
     }).then(() => undefined);
+  }
+
+  /** Sets the poster; an empty `data` keeps the stored one and an empty title is filled by TorrServer. */
+  setPoster(t: Pick<Torrent, 'hash' | 'title' | 'category'> & { name?: string }, poster: string): Promise<void> {
+    return this.call<unknown>('/torrents', {
+      body: { action: 'set', hash: t.hash, title: t.title || t.name || '', poster, category: t.category || '', data: '' },
+    }).then(() => undefined);
+  }
+
+  /** TMDB settings of the server; null on servers without them. */
+  tmdbSettings(): Promise<TmdbConfig | null> {
+    return this.call<TmdbConfig | null>('/tmdb/settings', { method: 'GET' }).then(
+      (r) => (r && typeof r === 'object' ? r : null),
+      () => null,
+    );
   }
 
   remove(hash: string): Promise<void> {

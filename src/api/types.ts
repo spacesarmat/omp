@@ -77,6 +77,14 @@ export interface FfprobeResult {
   format?: { duration?: string; bit_rate?: string; format_name?: string };
 }
 
+/** TorrServer `/tmdb/settings`: an empty APIKey means posters cannot be looked up. */
+export interface TmdbConfig {
+  APIKey?: string;
+  APIURL?: string;
+  ImageURL?: string;
+  ImageURLRu?: string;
+}
+
 export interface ServerSettings {
   CacheSize: number;
   PreloadCache: number;

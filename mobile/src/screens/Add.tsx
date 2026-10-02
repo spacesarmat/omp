@@ -9,6 +9,7 @@ import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { useTvLaunch } from '../watch';
 import { client } from '../../../src/store/servers';
+import { rememberAdded } from '../../../src/store/library';
 import { errorMessage } from '../../../src/api/http';
 import type { SearchResult } from '../../../src/api/types';
 import type { SearchSource } from '../../../src/api/torrserver';
@@ -88,6 +89,7 @@ export function Add({ link }: { link?: string }) {
       return null;
     }
     const t = await c.add({ link: l, category: magnetCategory });
+    void rememberAdded(c, t, magnetName(l));
     return t.hash;
   };
 
@@ -161,7 +163,9 @@ export function Add({ link }: { link?: string }) {
     try {
       const c = client.value;
       if (!c) throw new Error('Сервер не выбран');
-      const hash = (await c.add({ link: l, category: categoryOfRow(r) })).hash;
+      const added = await c.add({ link: l, category: categoryOfRow(r) });
+      void rememberAdded(c, added, r.Title);
+      const hash = added.hash;
       if (!alive.v) return;
       if (!watch) {
         showToast('Добавлено на сервер');

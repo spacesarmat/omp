@@ -7,7 +7,7 @@ import { LOCAL_URL, LOCAL_NAME } from '../server/localServer';
 import { client, activeServer } from '../../../src/store/servers';
 import { TorrServerClient } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
-import type { ServerSettings as Sets } from '../../../src/api/types';
+import type { ServerSettings as Sets, TmdbConfig } from '../../../src/api/types';
 import { CACHE, PRELOAD, READAHEAD, CONNS, RATE, DISCONNECT, withCurrent, type NumOption } from '../../../src/lib/serverSettingsOptions';
 
 type NumField = 'CacheSize' | 'PreloadCache' | 'ReaderReadAHead' | 'ConnectionsLimit' | 'DownloadRateLimit' | 'UploadRateLimit' | 'TorrentDisconnectTimeout';
@@ -39,6 +39,8 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<NumField | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [tmdbOpen, setTmdbOpen] = useState(false);
+  const [tmdbKey, setTmdbKey] = useState('');
 
   function load() {
     if (!c) return;
@@ -79,6 +81,13 @@ export function ServerSettings({ url }: { url?: string } = {}) {
       },
       (e) => showToast(errorMessage(e)),
     );
+  }
+
+  // older TorrServer builds have no TMDB settings: the row is hidden there
+  const tmdb = srv && srv.TMDBSettings && typeof srv.TMDBSettings === 'object' ? (srv.TMDBSettings as TmdbConfig) : null;
+  function saveTmdb() {
+    setTmdbOpen(false);
+    if (tmdb && (tmdb.APIKey || '') !== tmdbKey.trim()) save({ TMDBSettings: { ...tmdb, APIKey: tmdbKey.trim() } });
   }
 
   const isLocal = !!c && c.baseUrl === LOCAL_URL;
@@ -125,6 +134,22 @@ export function ServerSettings({ url }: { url?: string } = {}) {
               </div>
             )}
           </section>
+          {tmdb && (
+            <section class="m-set-group">
+              <button
+                type="button"
+                class="m-set-row m-set-pick"
+                data-field="tmdb"
+                onClick={() => {
+                  setTmdbKey(tmdb.APIKey || '');
+                  setTmdbOpen(true);
+                }}
+              >
+                <span>Ключ TMDB для обложек</span>
+                <span class="m-muted">{tmdb.APIKey ? 'Задан' : 'Не задан'}</span>
+              </button>
+            </section>
+          )}
           <button type="button" class="m-btn m-btn-secondary m-ss-reset" onClick={() => setConfirmReset(true)}>
             Сбросить к стандартным
           </button>
@@ -139,6 +164,35 @@ export function ServerSettings({ url }: { url?: string } = {}) {
               {o.value === srv[row.field] && <Icon d="M5 12l5 5l9-10" size={20} />}
             </button>
           ))}
+        </Sheet>
+      )}
+      {tmdbOpen && (
+        <Sheet onClose={() => setTmdbOpen(false)} label="Ключ TMDB">
+          <div class="m-sheet-title">Ключ TMDB</div>
+          <div class="m-muted">
+            По нему OMP и TorrServer находят обложки для новых раздач. Ключ бесплатный: themoviedb.org → Настройки → API.
+          </div>
+          <div class="m-field">
+            <label for="tmdb-key">Ключ API</label>
+            <input
+              id="tmdb-key"
+              class="m-input"
+              type="text"
+              autoCapitalize="off"
+              autoComplete="off"
+              spellcheck={false}
+              value={tmdbKey}
+              onInput={(e) => setTmdbKey((e.target as HTMLInputElement).value)}
+            />
+          </div>
+          <div class="m-sheet-row">
+            <button type="button" class="m-btn m-btn-secondary" onClick={() => setTmdbOpen(false)}>
+              Отмена
+            </button>
+            <button type="button" class="m-btn m-btn-primary" onClick={saveTmdb}>
+              Сохранить
+            </button>
+          </div>
         </Sheet>
       )}
       {confirmReset && (

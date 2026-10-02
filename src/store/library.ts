@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
 import type { Torrent } from '../api/types';
 import type { LibraryTab } from '../lib/libraryView';
+import { attachPoster, type PosterClient } from '../lib/autoPoster';
 
 const KEY = 'tsp.torrents';
 
@@ -68,4 +69,20 @@ export function addedMessage(added: Torrent[]): string | null {
   if (!added.length) return null;
   if (added.length > 3) return 'Добавлено торрентов: ' + added.length;
   return 'Добавлено: ' + added.map((t) => t.title || t.hash).join(', ');
+}
+
+/**
+ * A torrent just added on the server: it shows up in the list at once (the library refreshes when shown),
+ * then its poster is looked up in the background and the list is refreshed when one is set.
+ */
+export function rememberAdded(c: PosterClient & { list(): Promise<Torrent[]> }, t: Torrent, hint: string): Promise<string> {
+  if (!t || !t.hash) return Promise.resolve('');
+  if (!torrents.value.some((x) => x.hash === t.hash)) torrents.value = [t].concat(torrents.value);
+  return attachPoster(c, t.hash, hint).then((poster) => {
+    if (poster) {
+      torrents.value = torrents.value.map((x) => (x.hash === t.hash ? { ...x, poster } : x));
+      refreshTorrents(c).catch(() => {});
+    }
+    return poster;
+  });
 }
