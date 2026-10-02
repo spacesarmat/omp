@@ -99,9 +99,17 @@ export function clearProgress(hash: string, idx?: number): void {
   persist();
 }
 
+let viewedGen = 0;
+
+export function resetViewed(): void {
+  viewedGen++;
+  serverViewed.value = [];
+}
+
 export function refreshViewed(c: Pick<TorrServerClient, 'viewedList'>): Promise<void> {
+  const my = viewedGen;
   return c.viewedList().then(
-    (list) => { serverViewed.value = list; },
+    (list) => { if (my === viewedGen) serverViewed.value = list; },
     () => undefined,
   );
 }
