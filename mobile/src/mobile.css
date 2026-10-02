@@ -535,8 +535,7 @@ button, .m-btn {
 .m-now-vol button { flex: 1 1 0; height: 48px; border: none; background: none; font-size: 22px; font-weight: 700; }
 .m-now-next { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--panel); }
 .m-now-next span { flex: 1 1 0; min-width: 0; font-size: 13px; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; word-break: break-word; }
-.m-now-next button { flex-shrink: 0; }
-.m-now-next button { height: 44px; min-height: 44px; padding: 0 14px; border: none; border-radius: 10px; background: var(--panel-2); font-size: 13px; font-weight: 700; }
+.m-now-next button { flex-shrink: 0; height: 44px; min-height: 44px; padding: 0 14px; border: none; border-radius: 10px; background: var(--panel-2); font-size: 13px; font-weight: 700; }
 
 .m-track { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: none; border-radius: 12px; background: var(--panel-2); text-align: left; font-size: 15px; font-weight: 700; }
 .m-track.on { background: #2A2614; }

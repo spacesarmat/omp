@@ -63,8 +63,16 @@ export function Add({ link }: { link?: string }) {
     [],
   );
   useEffect(() => {
-    if (link) setValue(link);
+    if (link) changeValue(link);
   }, [link]);
+
+  // replacing a link by a different one forgets the category picked for the previous one
+  // (a pick made before any link was typed stays)
+  const changeValue = (v: string) => {
+    const prev = normalizeLink(value);
+    if (prev && normalizeLink(v) !== prev) setPicked(null);
+    setValue(v);
+  };
 
   const magnetCategory = picked !== null ? picked : guessCategory(magnetName(value));
   const rowKey = (r: SearchResult) => r.Hash || r.Title;
@@ -95,6 +103,7 @@ export function Add({ link }: { link?: string }) {
       const hash = await addLink(l);
       if (hash && alive.v) {
         showToast('Добавлено');
+        setPicked(null);
         navigate({ name: 'torrent', hash });
       }
     } catch (e) {
@@ -184,7 +193,7 @@ export function Add({ link }: { link?: string }) {
           aria-label="Magnet-ссылка или хеш"
           placeholder="magnet:?xt=urn:btih:…"
           value={value}
-          onInput={(e) => setValue((e.target as HTMLInputElement).value)}
+          onInput={(e) => changeValue((e.target as HTMLInputElement).value)}
         />
         <button type="button" class="m-btn m-btn-primary m-btn-sm" disabled={busy} onClick={onAdd}>
           Добавить
@@ -194,6 +203,7 @@ export function Add({ link }: { link?: string }) {
       <div class="m-chips" style={{ flexWrap: 'wrap' }}>
         {ADD_CATEGORIES.map((c) => (
           <button
+            key={c.id}
             type="button"
             class={'m-chip' + (magnetCategory === c.id ? ' on' : '')}
             aria-pressed={magnetCategory === c.id}
@@ -276,6 +286,7 @@ export function Add({ link }: { link?: string }) {
           <div class="m-chips" style={{ flexWrap: 'wrap' }}>
             {ADD_CATEGORIES.map((c) => (
               <button
+                key={c.id}
                 type="button"
                 class={'m-chip' + ((rowCat[catSheet] !== undefined ? rowCat[catSheet] : guessCategory((results || []).filter((x) => rowKey(x) === catSheet)[0]?.Title || '')) === c.id ? ' on' : '')}
                 onClick={() => {

@@ -236,6 +236,17 @@ describe('Add category', () => {
     expect(add).toHaveBeenCalledWith({ link: M + '&dn=Show+S01E02', category: 'other' });
   });
 
+  it('a pick is forgotten when the link is replaced by a different one', async () => {
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    type('input', M + '&dn=Show+S01E02');
+    click(byText('Прочее'));
+    type('input', 'magnet:?xt=urn:btih:' + 'b'.repeat(40) + '&dn=Show+S01E03');
+    click(byText('Добавить'));
+    await flush();
+    expect(add.mock.calls[0][0].category).toBe('tv');
+  });
+
   it('search result category can be changed through the sheet', async () => {
     vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
     const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);

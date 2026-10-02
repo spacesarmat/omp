@@ -18,6 +18,7 @@ import { formatBytes } from '../../../src/lib/format';
 import { episodeLabel, playableFiles } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
+import { native } from '../platform/native';
 import { localServer, startLocal, refreshLocalServer, LOCAL_URL } from '../server/localServer';
 
 const POLL_MS = 15000;
@@ -49,12 +50,17 @@ export function Library() {
   const [tvError, setTvError] = useState('');
   const [reload, setReload] = useState(0);
   const [starting, setStarting] = useState(false);
+  const [phoneName, setPhoneName] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const loadRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const launch = useTvLaunch();
   progressVersion.value; // re-render when local progress changes
   serverViewed.value;
+
+  useEffect(() => {
+    native.phoneName().then((n) => setPhoneName(n), () => undefined);
+  }, []);
 
   useEffect(() => {
     if (!c) return;
@@ -167,13 +173,14 @@ export function Library() {
     const inTab = list.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
     return sortTorrents(filterTorrents(inTab, query), sort);
   }, [list, tab, query, isHistory, sort]);
-  const history = isHistory
-    ? (() => {
-        const all = buildHistory(list, hfilter, continueWatching(list, 40), getLocalProgress);
-        const match = filterTorrents(all.map((e) => e.torrent), query);
-        return all.filter((e) => match.indexOf(e.torrent) >= 0);
-      })()
-    : [];
+  const pv = progressVersion.value;
+  const sv = serverViewed.value;
+  const history = useMemo(() => {
+    if (!isHistory) return [];
+    const all = buildHistory(list, hfilter, continueWatching(list, 40), getLocalProgress, 40, { src: 'phone', name: phoneName });
+    const match = filterTorrents(all.map((e) => e.torrent), query);
+    return all.filter((e) => match.indexOf(e.torrent) >= 0);
+  }, [list, isHistory, hfilter, query, pv, sv, phoneName]);
 
   const now = Date.now();
   const count = isHistory ? history.length : shown.length;

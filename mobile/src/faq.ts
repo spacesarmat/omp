@@ -32,9 +32,11 @@ export const FAQ: FaqSection[] = [
       {
         q: 'Как установить OMP на LG вручную?',
         a: [
-          '1. На ТВ установите приложение Developer Mode из LG Content Store, войдите под аккаунтом разработчика LG и включите Dev Mode Status и Key Server.',
-          '2. Скачайте OMP-<версия>-webOS.ipk со страницы релиза на GitHub.',
-          '3. Установите его с компьютера в той же сети: npx ares-install --device tv OMP-<версия>-webOS.ipk.',
+          '1. На ТВ установите приложение Developer Mode из LG Content Store, войдите под аккаунтом разработчика LG, включите Dev Mode Status и Key Server и перезагрузите ТВ.',
+          '2. На компьютере в той же сети установите Node.js и скачайте проект (git clone https://github.com/spacesarmat/omp.git, затем npm install).',
+          '3. Добавьте ТВ: npx ares-setup-device → add → имя tv, IP телевизора, порт 9922, пользователь prisoner.',
+          '4. Получите ключ: npx ares-novacom --device tv --getkey, затем укажите passphrase с экрана Developer Mode: npx ares-setup-device --modify tv --info "passphrase=XXXXXX".',
+          '5. Скачайте OMP-<версия>-webOS.ipk со страницы релиза на GitHub и установите: npx ares-install --device tv OMP-<версия>-webOS.ipk.',
           'Режим разработчика нужно периодически продлевать в приложении Developer Mode, иначе OMP пропадёт с ТВ.',
           { text: 'Скачать релиз на GitHub', url: RELEASES_URL },
         ],
@@ -95,7 +97,7 @@ export const FAQ: FaqSection[] = [
         a: [
           '1. Откройте Настройки → «Выбрать» в разделе «Телевизор» и выберите ТВ в списке.',
           '2. Нажмите «Разрешить» на телевизоре — телефон запомнит его.',
-          'Адрес сервера можно не вводить: в OMP на ТВ откройте Настройки → «Подключить телефон» и отсканируйте QR-код.',
+          'Адрес сервера можно не вводить: в OMP на ТВ откройте Настройки → «Подключить телефон», а на телефоне нажмите «Сканировать QR с телевизора».',
         ],
       },
       {
