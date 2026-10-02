@@ -20,14 +20,14 @@ function mount(): HTMLElement {
   return el;
 }
 
-function deps(over: { echoFails?: number } = {}) {
+function deps(over: { echoFails?: number; vpn?: boolean } = {}) {
   let fails = over.echoFails ?? 0;
   let running = false;
   return {
     native: {
       async localServerInfo() {
         return running
-          ? { supported: true, running, version: 'MatriX.145.1', ip: '192.168.1.50' }
+          ? { supported: true, running, version: 'MatriX.145.1', ip: '192.168.1.50', ...(over.vpn ? { vpn: true } : {}) }
           : { supported: true, running };
       },
       async startLocalServer() {
@@ -59,6 +59,17 @@ beforeEach(() => {
 afterEach(() => setLocalServerDeps(null));
 
 describe('LocalServer screen', () => {
+  it('warns about an active VPN, and only then', async () => {
+    setLocalServerDeps(deps({ vpn: true }));
+    const el = mount();
+    await flush();
+    expect(el.textContent).toContain('Включён VPN — другие устройства могут не видеть сервер. Разрешите в VPN доступ к локальной сети или выключите его.');
+    setLocalServerDeps(deps());
+    const el2 = mount();
+    await flush();
+    expect(el2.textContent).not.toContain('Включён VPN');
+  });
+
   it('walks the steps, shows the address and opens the catalog', async () => {
     setLocalServerDeps(deps());
     const el = mount();

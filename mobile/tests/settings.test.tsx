@@ -95,13 +95,13 @@ describe('Settings', () => {
 });
 
 describe('Settings: TorrServer on the phone', () => {
-  function fake(state: { running: boolean }, cache = { bytes: 412 * 1024 * 1024 }) {
+  function fake(state: { running: boolean; vpn?: boolean }, cache = { bytes: 412 * 1024 * 1024 }) {
     const calls: string[] = [];
     setLocalServerDeps({
       native: {
         async localServerInfo() {
           return state.running
-            ? { supported: true, running: true, version: 'MatriX.145.1', ip: '192.168.1.50' }
+            ? { supported: true, running: true, version: 'MatriX.145.1', ip: '192.168.1.50', ...(state.vpn ? { vpn: true } : {}) }
             : { supported: true, running: false };
         },
         async startLocalServer() {
@@ -148,6 +148,19 @@ describe('Settings: TorrServer on the phone', () => {
     expect(t).toContain('Занято 412 МБ из 1 ГБ');
     expect(t).toContain('Новая версия сервера приходит вместе с обновлением OMP');
     expect(t).toContain('Сервер доступен всем устройствам в этой сети Wi‑Fi');
+  });
+
+  it('shows the VPN warning only while a VPN is active', async () => {
+    fake({ running: true, vpn: true });
+    localServer.value = { supported: true, running: true };
+    const el = mount();
+    await flush();
+    expect(el.textContent).toContain('Включён VPN — другие устройства могут не видеть сервер. Разрешите в VPN доступ к локальной сети или выключите его.');
+    fake({ running: true });
+    localServer.value = { supported: true, running: true };
+    const el2 = mount();
+    await flush();
+    expect(el2.textContent).not.toContain('Включён VPN');
   });
 
   it('switch starts and stops the server', async () => {

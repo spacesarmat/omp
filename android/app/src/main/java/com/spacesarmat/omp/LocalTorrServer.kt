@@ -324,18 +324,40 @@ object LocalTorrServer {
             }
         } catch (_: Exception) {
         }
-        // hotspot / Wi-Fi interfaces not exposed as a network
+        // hotspot / Wi-Fi interfaces not exposed as a network; never a VPN or mobile-data tunnel
         try {
+            var best: String? = null
+            var bestRank = 0
             for (ni in NetworkInterface.getNetworkInterfaces() ?: return null) {
                 val name = ni.name ?: continue
-                if (!ni.isUp || !(name.startsWith("wlan") || name.startsWith("ap") || name.startsWith("swlan"))) continue
+                if (!ni.isUp) continue
+                if (name.startsWith("tun") || name.startsWith("ppp") || name.startsWith("ipsec")) continue
+                if (!(name.startsWith("wlan") || name.startsWith("swlan") || name.startsWith("ap"))) continue
                 for (a in ni.inetAddresses) {
-                    if (a is Inet4Address && a.isSiteLocalAddress) return a.hostAddress
+                    if (a !is Inet4Address || !a.isSiteLocalAddress) continue
+                    // 192.168/16, 172.16/12 and 10/8 on wlan0 first
+                    val rank = if (name == "wlan0") 2 else 1
+                    if (rank > bestRank) {
+                        best = a.hostAddress
+                        bestRank = rank
+                    }
                 }
             }
+            if (best != null) return best
         } catch (_: Exception) {
         }
         return null
+    }
+
+    /** True when any network is a VPN: other devices may then not reach the phone. */
+    fun vpnActive(ctx: Context): Boolean {
+        return try {
+            val cm = ctx.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?
+            @Suppress("DEPRECATION")
+            cm?.allNetworks?.any { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true } == true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     // ---- notification text ----

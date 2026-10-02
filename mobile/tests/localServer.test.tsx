@@ -56,6 +56,13 @@ describe('local server store', () => {
     expect(localServer.value).toEqual({ supported: true, running: true, version: 'v', ip: '10.0.0.2' });
   });
 
+  it('refresh keeps the vpn flag', async () => {
+    const f = fakeNative({ info: { supported: true, running: true, ip: '10.0.0.2', vpn: true } });
+    setLocalServerDeps({ native: f.native as any });
+    await refreshLocalServer();
+    expect(localServer.value.vpn).toBe(true);
+  });
+
   it('startLocal starts and refreshes; a failure lands in the store', async () => {
     const f = fakeNative();
     setLocalServerDeps({ native: f.native as any });

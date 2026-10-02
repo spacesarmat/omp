@@ -492,6 +492,7 @@ class OmpNativePlugin : Plugin() {
             if (v != null) o.put("version", v)
         }
         LocalTorrServer.wifiIpv4(context)?.let { o.put("ip", it) }
+        o.put("vpn", LocalTorrServer.vpnActive(context))
         LocalTorrServer.error?.let { o.put("error", it) }
         return o
     }

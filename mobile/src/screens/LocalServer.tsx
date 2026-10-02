@@ -75,6 +75,7 @@ export function LocalServer() {
             ) : (
               <div class="m-error">Телефон не в сети Wi‑Fi — телевизор не увидит сервер</div>
             )}
+            {localServer.value.vpn && <div class="m-hint-warn" role="alert">Включён VPN — другие устройства могут не видеть сервер. Разрешите в VPN доступ к локальной сети или выключите его.</div>}
             <div class="m-muted m-note">
               На ТВ: Вход → «Найти в сети». Сервер работает, пока телефон включён и в этой сети Wi‑Fi.
             </div>
