@@ -9,7 +9,8 @@ export type Route =
   | { name: 'player'; queue: PlayItem[]; index: number; startAt?: number }
   | { name: 'add' }
   | { name: 'playlist'; url?: string; title?: string }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'update' };
 
 export const routeStack = signal<Route[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);

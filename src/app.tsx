@@ -10,6 +10,7 @@ import { PlayerScreen } from './screens/Player';
 import { AddScreen } from './screens/Add';
 import { PlaylistScreen } from './screens/Playlist';
 import { SettingsScreen } from './screens/Settings';
+import { UpdateScreen } from './screens/Update';
 
 function renderRoute(r: Route) {
   switch (r.name) {
@@ -27,6 +28,8 @@ function renderRoute(r: Route) {
       return <PlaylistScreen url={r.url} title={r.title} />;
     case 'settings':
       return <SettingsScreen />;
+    case 'update':
+      return <UpdateScreen />;
     default:
       return null;
   }
