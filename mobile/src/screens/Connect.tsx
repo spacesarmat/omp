@@ -11,11 +11,11 @@ import { RenameSheet } from '../ui/RenameSheet';
 import { servers, addServer, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
-import { discover, candidateSubnets, DEFAULT_PORTS, type FoundServer } from '../../../src/api/discovery';
+import { discover, candidateSubnets, subnetOf, DEFAULT_PORTS, type FoundServer } from '../../../src/api/discovery';
 import { native } from '../platform/native';
 import { localServer, refreshLocalServer } from '../server/localServer';
 
-type ServerScanner = () => Promise<FoundServer[]>;
+type ServerScanner = (isCancelled: () => boolean) => Promise<FoundServer[]>;
 let scanner: ServerScanner | null = null;
 
 /** Replaces the LAN scan for TorrServer (tests); null restores the real one. */
@@ -23,9 +23,19 @@ export function setServerScanner(fn: ServerScanner | null): void {
   scanner = fn;
 }
 
-async function scanLan(): Promise<FoundServer[]> {
-  const ip = await native.localIpv4().catch(() => null);
-  return discover({ subnets: candidateSubnets(ip, []), ports: DEFAULT_PORTS });
+export interface LanScanDeps {
+  localIp: () => Promise<string | null>;
+  discover: typeof discover;
+}
+
+/** Scans the phone's own /24 when its address is known, the common home subnets otherwise; stops once cancelled. */
+export async function scanLan(
+  isCancelled: () => boolean,
+  d: LanScanDeps = { localIp: () => native.localIpv4(), discover },
+): Promise<FoundServer[]> {
+  const ip = await d.localIp().catch(() => null);
+  const own = ip ? subnetOf(ip) : null;
+  return d.discover({ subnets: own ? [own] : candidateSubnets(null, []), ports: DEFAULT_PORTS, isCancelled });
 }
 
 const PHONE = 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2M10 7h4M10 10h4';
@@ -85,7 +95,7 @@ export function Connect() {
     let alive = true;
     setScanState('scanning');
     setFound([]);
-    (scanner ?? scanLan)().then(
+    (scanner ?? scanLan)(() => !alive).then(
       (r) => {
         if (!alive) return;
         setFound(r);

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { Connect, setServerScanner } from '../src/screens/Connect';
+import { Connect, setServerScanner, scanLan } from '../src/screens/Connect';
 import { localServer, setLocalServerDeps } from '../src/server/localServer';
 import { setQrScanner } from '../src/platform/qr';
 import { toast } from '../src/ui/toast';
@@ -251,5 +251,50 @@ describe('Connect screen: TorrServer on the phone', () => {
     await act(async () => btn(el, 'Искать в сети ещё раз').click());
     await flush();
     expect(n).toBe(2);
+  });
+
+  it('stops the scan when the screen goes away', async () => {
+    supportedDeps();
+    let cancelled: (() => boolean) | null = null;
+    setServerScanner((isCancelled) => {
+      cancelled = isCancelled;
+      return new Promise(() => {});
+    });
+    localServer.value = { supported: true, running: false };
+    const el = mount();
+    await flush();
+    expect(cancelled!()).toBe(false);
+    act(() => render(null, el));
+    expect(cancelled!()).toBe(true);
+  });
+});
+
+describe('scanLan', () => {
+  it('scans only the own /24 of the phone when its address is known', async () => {
+    const calls: any[] = [];
+    const isCancelled = () => false;
+    await scanLan(isCancelled, {
+      localIp: async () => '10.0.5.23',
+      discover: async (o) => (calls.push(o), []),
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].subnets).toEqual(['10.0.5']);
+    expect(calls[0].ports).toEqual([8090, 5665]);
+    expect(calls[0].isCancelled).toBe(isCancelled);
+  });
+
+  it('falls back to the common home subnets without an address', async () => {
+    const calls: any[] = [];
+    await scanLan(() => false, { localIp: async () => null, discover: async (o) => (calls.push(o), []) });
+    await scanLan(() => false, {
+      localIp: async () => {
+        throw new Error('no wifi');
+      },
+      discover: async (o) => (calls.push(o), []),
+    });
+    expect(calls.map((c) => c.subnets)).toEqual([
+      ['192.168.1', '192.168.0'],
+      ['192.168.1', '192.168.0'],
+    ]);
   });
 });
