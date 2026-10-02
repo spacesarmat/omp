@@ -334,6 +334,7 @@ button, .m-btn {
 .m-thead::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 17, 21, 0.1), var(--bg) 96%); }
 .m-thead-bar, .m-thead-info { position: relative; }
 .m-thead-bar { display: flex; justify-content: space-between; }
+.m-thead-actions { display: flex; gap: 8px; }
 .m-glass { background: rgba(15, 17, 21, 0.6); }
 .m-danger { color: #FF9EA2; }
 .m-thead-info { position: absolute; left: 16px; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; }

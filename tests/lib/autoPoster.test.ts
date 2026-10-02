@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { attachPoster, type PosterClient } from '../../src/lib/autoPoster';
+import { attachPoster, fillPosters, type PosterClient } from '../../src/lib/autoPoster';
 import type { Torrent, TmdbConfig } from '../../src/api/types';
 
 const HASH = 'a'.repeat(40);
@@ -75,5 +75,38 @@ describe('attachPoster', () => {
     expect(await attachPoster(failing, HASH, 'X', { fetchJson: vi.fn(() => Promise.reject(new Error('net'))), wait: noWait })).toBe('');
     expect(empty.setPoster).not.toHaveBeenCalled();
     expect(failing.setPoster).not.toHaveBeenCalled();
+  });
+});
+
+describe('fillPosters', () => {
+  const T = (hash: string, extra: Partial<Torrent> = {}) => ({ hash, title: 'Film ' + hash, stat: 0, ...extra }) as Torrent;
+
+  it('reads the TMDB settings once and fills only torrents without a poster', async () => {
+    const list = [T('a'), T('b', { poster: 'http://p/b.jpg' }), T('c'), T('d', { title: '' })];
+    const c = {
+      tmdbSettings: vi.fn(() => Promise.resolve({ APIKey: 'k' })),
+      get: vi.fn((h: string) => Promise.resolve(list.find((t) => t.hash === h)!)),
+      setPoster: vi.fn(() => Promise.resolve()),
+    };
+    const fetchJson = vi.fn((url: string) => Promise.resolve({ results: url.includes('Film%20a') ? [{ poster_path: '/a.jpg' }] : [] }));
+    const seen: string[] = [];
+    const r = await fillPosters(c, list, { fetchJson, wait: noWait, onEach: (h, p, done, total) => seen.push(h + ':' + (p ? 'y' : 'n') + ':' + done + '/' + total) });
+    expect(r).toEqual({ tried: 2, found: 1, hasKey: true });
+    expect(seen).toEqual(['a:y:1/2', 'c:n:2/2']);
+    expect(c.tmdbSettings).toHaveBeenCalledTimes(1);
+    expect(c.setPoster).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips torrents the caller says were tried, and does nothing without a key', async () => {
+    const list = [T('a'), T('b')];
+    const c = {
+      tmdbSettings: vi.fn(() => Promise.resolve({ APIKey: 'k' })),
+      get: vi.fn((h: string) => Promise.resolve(list.find((t) => t.hash === h)!)),
+      setPoster: vi.fn(() => Promise.resolve()),
+    };
+    const r = await fillPosters(c, list, { skip: (h) => h === 'a', fetchJson: vi.fn(() => Promise.resolve({ results: [] })), wait: noWait });
+    expect(r.tried).toBe(1);
+    const noKey = { ...c, tmdbSettings: vi.fn(() => Promise.resolve(null)) };
+    expect(await fillPosters(noKey, list)).toEqual({ tried: 0, found: 0, hasKey: false });
   });
 });

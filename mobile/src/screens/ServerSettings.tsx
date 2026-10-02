@@ -5,6 +5,7 @@ import { showToast } from '../ui/toast';
 import { Icon } from '../ui/Icon';
 import { LOCAL_URL, LOCAL_NAME } from '../server/localServer';
 import { client, activeServer } from '../../../src/store/servers';
+import { torrents, findPosters } from '../../../src/store/library';
 import { TorrServerClient } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
 import type { ServerSettings as Sets, TmdbConfig } from '../../../src/api/types';
@@ -41,6 +42,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [tmdbOpen, setTmdbOpen] = useState(false);
   const [tmdbKey, setTmdbKey] = useState('');
+  const [progress, setProgress] = useState<string | null>(null);
 
   function load() {
     if (!c) return;
@@ -88,6 +90,22 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   function saveTmdb() {
     setTmdbOpen(false);
     if (tmdb && (tmdb.APIKey || '') !== tmdbKey.trim()) save({ TMDBSettings: { ...tmdb, APIKey: tmdbKey.trim() } });
+  }
+
+  // the catalog belongs to the active server: posters for all only when editing that one
+  const isActive = !!c && !!active && c.baseUrl === active.baseUrl;
+  function fillAll() {
+    if (!c || progress !== null) return;
+    const missing = torrents.value.filter((t) => !t.poster);
+    if (!missing.length) {
+      showToast('У всех раздач есть обложки');
+      return;
+    }
+    setProgress('Ищу…');
+    findPosters(c, missing, (_h, _p, done, total) => setProgress('Ищу… ' + done + ' из ' + total)).then((r) => {
+      setProgress(null);
+      showToast(r.hasKey ? 'Найдено обложек: ' + r.found + ' из ' + r.tried : 'Задайте ключ TMDB');
+    });
   }
 
   const isLocal = !!c && c.baseUrl === LOCAL_URL;
@@ -148,6 +166,12 @@ export function ServerSettings({ url }: { url?: string } = {}) {
                 <span>Ключ TMDB для обложек</span>
                 <span class="m-muted">{tmdb.APIKey ? 'Задан' : 'Не задан'}</span>
               </button>
+              {tmdb.APIKey && isActive && (
+                <button type="button" class="m-set-row m-set-pick" data-field="posters" disabled={progress !== null} onClick={fillAll}>
+                  <span>Найти обложки для раздач без обложек</span>
+                  <span class="m-muted">{progress || ''}</span>
+                </button>
+              )}
             </section>
           )}
           <button type="button" class="m-btn m-btn-secondary m-ss-reset" onClick={() => setConfirmReset(true)}>

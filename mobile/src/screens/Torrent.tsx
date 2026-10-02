@@ -8,7 +8,7 @@ import { currentRoute, goBack, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { actions, filesOf, recordPhoneWatch, streamUrlFor, tvServerUrl, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
-import { torrents, refreshTorrents } from '../../../src/store/library';
+import { torrents, refreshTorrents, findPosters } from '../../../src/store/library';
 import {
   continueWatching,
   refreshViewed,
@@ -26,6 +26,7 @@ import { formatBytes, formatDuration } from '../../../src/lib/format';
 import { posterColor, shortTitle } from '../../../src/lib/libraryView';
 
 const BACK = 'M15 5l-7 7 7 7';
+const IMAGE = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 3-3L20 17M15.5 9.5h.01';
 const TRASH = 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3';
 const TV = 'M3 5h18v11H3zM8 20h8';
 const TV_PLAY = 'M3 5h18v11H3zM8 20h8M10 8.5l4 2.5-4 2.5z';
@@ -261,6 +262,22 @@ export function Torrent({ hash }: { hash: string }) {
     }
   };
 
+  const [finding, setFinding] = useState(false);
+  const findPoster = () => {
+    if (finding) return;
+    setFinding(true);
+    let found = '';
+    findPosters(c, [t], (_h, poster) => (found = poster)).then((r) => {
+      setFinding(false);
+      if (!r.hasKey) showToast('Задайте ключ TMDB в «Настройках сервера»');
+      else if (!found) showToast('Обложка не найдена');
+      else {
+        showToast('Обложка найдена');
+        if (!listed && fetched) setFetched({ ...fetched, poster: found });
+      }
+    });
+  };
+
   const remove = () => {
     if (!window.confirm('Удалить раздачу «' + shortTitle(title) + '»?')) return;
     c.remove(hash).then(
@@ -281,9 +298,16 @@ export function Torrent({ hash }: { hash: string }) {
           <button type="button" class="m-icon-btn m-glass" aria-label="Назад" onClick={() => goBack()}>
             <Icon d={BACK} size={20} />
           </button>
-          <button type="button" class="m-icon-btn m-glass m-danger" aria-label="Удалить раздачу" onClick={remove}>
-            <Icon d={TRASH} size={20} />
-          </button>
+          <div class="m-thead-actions">
+            {!t.poster && (
+              <button type="button" class="m-icon-btn m-glass" aria-label="Найти обложку" disabled={finding} onClick={findPoster}>
+                <Icon d={IMAGE} size={20} />
+              </button>
+            )}
+            <button type="button" class="m-icon-btn m-glass m-danger" aria-label="Удалить раздачу" onClick={remove}>
+              <Icon d={TRASH} size={20} />
+            </button>
+          </div>
         </div>
         <div class="m-thead-info">
           <div class="m-thead-title">{shortTitle(title)}</div>

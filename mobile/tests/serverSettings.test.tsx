@@ -8,6 +8,8 @@ import { toast } from '../src/ui/toast';
 import { addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
 import { localServer } from '../src/server/localServer';
 import { mockFetch } from '../../tests/helpers/fetchMock';
+import * as library from '../../src/store/library';
+import { torrents } from '../../src/store/library';
 
 const MB = 1024 * 1024;
 const BASE = {
@@ -208,6 +210,24 @@ describe('ServerSettings TMDB key', () => {
     expect(s[0].sets.TMDBSettings).toEqual({ APIKey: 'key123', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' });
     expect(s[0].sets.Unknown).toBe('keep');
     expect(btn('Ключ TMDB для обложек').textContent).toContain('Задан');
+  });
+
+  it('finds posters for all torrents without one, with progress', async () => {
+    setup();
+    current = { ...BASE, TMDBSettings: { APIKey: 'k' } };
+    torrents.value = [
+      { hash: 'a', title: 'Alpha', stat: 0 },
+      { hash: 'b', title: 'Beta', stat: 0, poster: 'http://p/b.jpg' },
+    ];
+    const fill = vi.spyOn(library, 'findPosters').mockImplementation(async (_c, list, onEach) => {
+      onEach!(list[0].hash, 'http://p/a.jpg', 1, list.length);
+      return { tried: list.length, found: 1, hasKey: true };
+    });
+    await mount();
+    act(() => btn('Найти обложки для раздач без обложек').click());
+    await flush();
+    expect(fill.mock.calls[0][1].map((t) => t.hash)).toEqual(['a']);
+    expect(toast.value).toBe('Найдено обложек: 1 из 1');
   });
 
   it('is hidden on servers without TMDB settings', async () => {

@@ -1,5 +1,5 @@
 import { TV_NO_OMP } from '../src/tv/tvClient';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Torrent } from '../src/screens/Torrent';
@@ -329,6 +329,44 @@ describe('Torrent', () => {
     click(el.querySelector('.m-btn-primary')!);
     await flush();
     expect(byText('Как установить OMP на телевизор')).toBeTruthy();
+  });
+});
+
+describe('Torrent poster button', () => {
+  const btn = () => el.querySelector('button[aria-label="Найти обложку"]') as HTMLButtonElement | null;
+
+  it('finds a poster on demand and the button goes away', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'k' });
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(tor);
+    const setPoster = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [{ poster_path: '/s.jpg' }] }))));
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+    mount();
+    await flush();
+    click(btn());
+    await flush();
+    await flush();
+    expect(setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: 'abc' }), 'https://imagetmdb.com/t/p/w300/s.jpg');
+    expect(toast.value).toBe('Обложка найдена');
+    expect(btn()).toBeNull();
+  });
+
+  it('asks for the TMDB key when the server has none', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: '' });
+    mount();
+    await flush();
+    click(btn());
+    await flush();
+    expect(toast.value).toBe('Задайте ключ TMDB в «Настройках сервера»');
+  });
+
+  it('is hidden when the torrent has a poster', async () => {
+    torrents.value = [{ ...tor, poster: 'http://p/x.jpg' }];
+    mount();
+    await flush();
+    expect(btn()).toBeNull();
   });
 });
 
