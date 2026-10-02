@@ -39,6 +39,8 @@ export class SeekAccumulator {
       clearTimeout(this.timer);
       this.timer = null;
     }
+    this.repeat = 0;
+    this.lastAt = -Infinity;
     if (this.target !== null) {
       const v = this.target;
       this.target = null;
@@ -50,5 +52,7 @@ export class SeekAccumulator {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.target = null;
+    this.repeat = 0;
+    this.lastAt = -Infinity;
   }
 }

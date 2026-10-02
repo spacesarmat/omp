@@ -13,6 +13,24 @@ describe('seekStep', () => {
 });
 
 describe('SeekAccumulator', () => {
+  it('resets acceleration after commit', () => {
+    vi.useFakeTimers();
+    let now = 0;
+    const s = new SeekAccumulator(vi.fn(), 700, () => now);
+    for (let i = 0; i < 5; i++) { s.press(1, 0, 10000, 10); now += 100; }
+    s.commit();
+    now += 100;
+    expect(s.press(1, 0, 10000, 10)).toBe(10);
+  });
+  it('resets acceleration after cancel', () => {
+    vi.useFakeTimers();
+    let now = 0;
+    const s = new SeekAccumulator(vi.fn(), 700, () => now);
+    for (let i = 0; i < 5; i++) { s.press(1, 0, 10000, 10); now += 100; }
+    s.cancel();
+    now += 100;
+    expect(s.press(1, 0, 10000, 10)).toBe(10);
+  });
   it('accumulates presses and applies once after delay', () => {
     vi.useFakeTimers();
     let now = 0;
