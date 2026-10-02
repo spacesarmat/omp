@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { signal } from '@preact/signals';
 import { latestUpdate, checkForUpdate, dismissPrompt } from '../store/updates';
 import { HB_REPO_URL, HB_SITE_URL, RELEASES_URL } from '../lib/updateInfo';
 import { hbPresence, hbHasRoot, openHbChannel, hbInstall, InstallStatus, HbPresence } from '../platform/hbchannel';
@@ -11,44 +12,59 @@ import { platformKind } from '../platform/env';
 import { installApk } from '../platform/androidNative';
 import type { UpdateInfo } from '../lib/updateInfo';
 
+interface ApkJob {
+  version: string;
+  running: boolean;
+  /** Progress of the running download; null until the first event. */
+  pct: number | null;
+  /** The system installer was opened. */
+  done: boolean;
+  error: string | null;
+}
+
+/** Survives leaving the screen: the native download keeps running. */
+export const apkJob = signal<ApkJob | null>(null);
+
 /** Android TV: one method — download the APK from update-android.json and open the system installer. */
 function ApkInstall({ info }: { info: UpdateInfo }) {
-  const [pct, setPct] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; }, []);
+  // a job for another version is stale unless it is still running
+  const job = apkJob.value && (apkJob.value.running || apkJob.value.version === info.version) ? apkJob.value : null;
+  const startedHere = useRef(false);
+  const running = !!job && job.running;
+
+  const patch = (version: string, p: Partial<ApkJob>) => {
+    const cur = apkJob.value;
+    if (cur && cur.version === version) apkJob.value = { ...cur, ...p };
+  };
 
   const install = () => {
-    if (busy) return;
-    setBusy(true);
-    setDone(false);
-    setError(null);
-    setPct(null);
-    installApk(info.ipkUrl, info.ipkHash, (p) => { if (alive.current) setPct(p); }).then(
-      () => {
-        if (!alive.current) return;
-        setBusy(false);
-        setDone(true);
-      },
-      (e: Error) => {
-        if (!alive.current) return;
-        setBusy(false);
-        setError(e.message);
-      },
+    if (apkJob.value && apkJob.value.running) return;
+    const version = info.version;
+    startedHere.current = true;
+    apkJob.value = { version, running: true, pct: null, done: false, error: null };
+    installApk(info.ipkUrl, info.ipkHash, (pct) => patch(version, { pct })).then(
+      () => patch(version, { running: false, done: true }),
+      (e: Error) => patch(version, { running: false, error: e.message }),
     );
   };
+
+  let statusText: string | null = null;
+  if (running) {
+    if (job!.pct !== null) statusText = 'Скачивание… ' + job!.pct + '%';
+    else statusText = startedHere.current ? 'Скачивание…' : 'Обновление уже скачивается…';
+  } else if (job && job.done) {
+    statusText = 'Подтвердите установку в открывшемся окне Android';
+  }
+  const label = job && job.error ? 'Повторить' : job && job.done ? 'Установить снова' : 'Скачать и установить';
 
   return (
     <section class="update-block">
       <h2>Установить сейчас</h2>
-      {busy && <div class="update-status">{pct === null ? 'Скачивание…' : 'Скачивание… ' + pct + '%'}</div>}
-      {busy && pct !== null && <ProgressBar ratio={pct / 100} />}
-      {done && <div class="update-status">Подтвердите установку в открывшемся окне Android</div>}
-      {error && <div class="banner-error">{error}</div>}
+      {statusText && <div class="update-status">{statusText}</div>}
+      {running && job!.pct !== null && <ProgressBar ratio={job!.pct / 100} />}
+      {job && job.error && <div class="banner-error">{job.error}</div>}
       <div class="row update-actions">
-        <Button focusKey="upd-install" label={error ? 'Повторить' : 'Скачать и установить'} className="primary" onPress={install} disabled={busy} />
+        <Button focusKey="upd-install" label={label} className="primary" onPress={install} disabled={running} />
       </div>
       <div class="muted">Настройки и сохранённые серверы не пропадут.</div>
     </section>

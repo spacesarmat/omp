@@ -3,6 +3,7 @@ package com.spacesarmat.omp
 import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
+import androidx.activity.OnBackPressedCallback
 import com.getcapacitor.BridgeActivity
 import com.getcapacitor.CapConfig
 
@@ -19,6 +20,24 @@ class MainActivity : BridgeActivity() {
         tvMode = TvMode.isTv(this)
         // BridgeActivity.onCreate passes the launch intent to onNewIntent below
         super.onCreate(savedInstanceState)
+        // Back reaches the page only through the OnBackPressed dispatcher (predictive back on Android 16+ never
+        // delivers KEYCODE_BACK to dispatchKeyEvent). Added after the bridge loaded its plugins, so it wins over
+        // @capacitor/app's callback (webView.goBack()).
+        if (tvMode) {
+            onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() = pageBack()
+            })
+        }
+    }
+
+    /** Back → keyCode 461 in the page; the Activity closes when the page did not take it (root screen). */
+    private fun pageBack() {
+        val web = bridge?.webView
+        if (web == null) {
+            finish()
+            return
+        }
+        web.evaluateJavascript(jsKey(BACK_CODE)) { handled -> if (handled != "true") finish() }
     }
 
     // Android TV starts directly on the bundled TV interface (/tv/), the phone UI never boots.
@@ -38,16 +57,7 @@ class MainActivity : BridgeActivity() {
         if (!tvMode) return super.dispatchKeyEvent(event)
         val code = WEB_KEYS[event.keyCode] ?: return super.dispatchKeyEvent(event)
         val web = bridge?.webView ?: return super.dispatchKeyEvent(event)
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            if (event.keyCode == KeyEvent.KEYCODE_BACK) {
-                // holding Back must not close the app
-                if (event.repeatCount == 0) {
-                    web.evaluateJavascript(jsKey(code)) { handled -> if (handled != "true") finish() }
-                }
-            } else {
-                web.evaluateJavascript(jsKey(code), null)
-            }
-        }
+        if (event.action == KeyEvent.ACTION_DOWN) web.evaluateJavascript(jsKey(code), null)
         return true
     }
 
@@ -62,9 +72,13 @@ class MainActivity : BridgeActivity() {
     }
 
     companion object {
-        /** Android key code → webOS key code understood by the TV interface (src/platform/keys.ts). */
+        private const val BACK_CODE = 461
+
+        /**
+         * Media key → webOS key code understood by the TV interface (src/platform/keys.ts).
+         * Back is not here: it goes through the OnBackPressed callback only.
+         */
         private val WEB_KEYS = mapOf(
-            KeyEvent.KEYCODE_BACK to 461,
             KeyEvent.KEYCODE_MEDIA_PLAY to 415,
             KeyEvent.KEYCODE_MEDIA_PAUSE to 19,
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE to 179,

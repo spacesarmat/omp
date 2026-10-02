@@ -3,6 +3,9 @@ import { installAndroidKeyBridge, sendKey } from '../../src/platform/androidKeys
 import { installKeyListener, pushKeyHandler } from '../../src/ui/keys';
 import { routeStack, resetTo, navigate } from '../../src/ui/nav';
 import { unhandledBack } from '../../src/app';
+import { render, h } from 'preact';
+import { act } from 'preact/test-utils';
+import { DialogHost, dialogOpen } from '../../src/ui/dialog';
 import type { KeyAction } from '../../src/platform/keys';
 
 const w = window as unknown as { Capacitor?: unknown; __ompKey?: (c: number) => boolean; __ompBack?: () => boolean };
@@ -65,8 +68,16 @@ describe('Android TV key bridge', () => {
     expect(routeStack.value).toHaveLength(1);
   });
 
-  it('webOS root Back is still taken by the app (exit confirmation)', () => {
+  it('webOS root Back is still taken by the app (exit confirmation)', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    act(() => { render(h(DialogHost, {}), host); }); // DialogHost registers its key handler in an effect
+    cleanups.push(() => render(null, host));
     cleanups.push(installKeyListener(unhandledBack));
+    act(() => { expect(sendKey(461)).toBe(true); });
+    expect(dialogOpen.value).toBe(true);
+    // Back closes the confirmation (DialogHost key handler)
     expect(sendKey(461)).toBe(true);
+    expect(dialogOpen.value).toBe(false);
   });
 });

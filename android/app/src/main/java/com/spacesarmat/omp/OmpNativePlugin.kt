@@ -368,7 +368,7 @@ class OmpNativePlugin : Plugin() {
                 ApkInstaller.openInstallPermissionSettings(context)
             } catch (_: RuntimeException) {
             }
-            once.reject("Разрешите установку из OMP и нажмите «Установить» ещё раз")
+            once.reject("Разрешите установку из OMP и повторите установку")
             return
         }
         if (!downloading.compareAndSet(false, true)) {
