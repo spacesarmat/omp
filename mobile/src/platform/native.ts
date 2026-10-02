@@ -11,8 +11,11 @@ export interface FoundTv {
 export interface OmpNativeApi {
   available: boolean;
   discoverTvs(timeoutMs: number): Promise<FoundTv[]>;
-  /** Opens the socket (ws:3000, then wss:3001) and sends `register`; resolves once open. */
-  tvConnect(ip: string, register: object): Promise<void>;
+  /**
+   * Opens the socket and sends `register`; resolves once open with the port that worked.
+   * Both ports (ws:3000, wss:3001) are raced; `preferPort` is tried alone first (2 s).
+   */
+  tvConnect(ip: string, register: object, preferPort?: 3000 | 3001): Promise<{ port: 3000 | 3001 }>;
   /** Any SSAP message (JSON). */
   tvSend(message: object): Promise<void>;
   /** Every incoming message of the main socket. */
@@ -23,6 +26,8 @@ export interface OmpNativeApi {
   /** 'type:button\nname:UP\n\n' etc. */
   pointerSend(frame: string): Promise<void>;
   tvDisconnect(): Promise<void>;
+  /** Wake-on-LAN magic packet (broadcast + the /24 broadcast of `ip`), repeated 3 times. */
+  wakeOnLan(mac: string, ip: string): Promise<void>;
   openExternal(url: string, mime: string): Promise<void>;
   downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void): Promise<void>;
   takePendingMagnet(): Promise<string | null>;
@@ -38,11 +43,12 @@ export interface OmpNativeApi {
 
 interface OmpNativePlugin {
   discoverTvs(o: { timeoutMs: number }): Promise<{ tvs: FoundTv[] }>;
-  tvConnect(o: { ip: string; register: string }): Promise<void>;
+  tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
   tvSend(o: { json: string }): Promise<void>;
   tvDisconnect(): Promise<void>;
   pointerConnect(o: { url: string }): Promise<void>;
   pointerSend(o: { frame: string }): Promise<void>;
+  wakeOnLan(o: { mac: string; ip: string }): Promise<void>;
   openExternal(o: { url: string; mime: string }): Promise<void>;
   downloadAndInstallApk(o: { url: string; sha256: string }): Promise<void>;
   takePendingMagnet(): Promise<{ link?: string | null }>;
@@ -102,9 +108,11 @@ export const native: OmpNativeApi = {
     return r.tvs ?? [];
   },
 
-  tvConnect(ip, register) {
+  tvConnect(ip, register, preferPort) {
     if (!plugin) return unavailable();
-    return plugin.tvConnect({ ip, register: JSON.stringify(register) });
+    const o: { ip: string; register: string; preferPort?: number } = { ip, register: JSON.stringify(register) };
+    if (preferPort) o.preferPort = preferPort;
+    return plugin.tvConnect(o);
   },
 
   tvSend(message) {
@@ -140,6 +148,11 @@ export const native: OmpNativeApi = {
   tvDisconnect() {
     if (!plugin) return unavailable();
     return plugin.tvDisconnect();
+  },
+
+  wakeOnLan(mac, ip) {
+    if (!plugin) return unavailable();
+    return plugin.wakeOnLan({ mac, ip });
   },
 
   openExternal(url, mime) {

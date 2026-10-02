@@ -8,6 +8,11 @@ export const ICONS = {
   pause: 'M8 5v14M16 5v14',
   play: 'M7 5l11 7-11 7z',
   tracks: 'M3 6h18v12H3zM7 14h4M13 14h4M7 10h10',
+  sort: 'M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3',
+  'view-large': 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  'view-small': 'M3 3h5v5H3zM9.5 3h5v5h-5zM16 3h5v5h-5zM3 10h5v5H3zM9.5 10h5v5h-5zM16 10h5v5h-5zM3 17h5v4H3zM9.5 17h5v4h-5zM16 17h5v4h-5z',
+  'view-list': 'M3 5h4v4H3zM10 6h11M10 8h7M3 15h4v4H3zM10 16h11M10 18h7',
+  'view-compact': 'M3 6h18M3 12h18M3 18h18',
   volume: 'M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7',
 };
 

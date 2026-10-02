@@ -101,7 +101,7 @@ class OmpNativePlugin : Plugin() {
                     once.reject("Не удалось отправить запрос телевизору")
                 } else {
                     synchronized(lock) { if (pendingConnect === once) pendingConnect = null }
-                    once.resolve()
+                    once.resolve(JSObject().put("port", s.port))
                 }
             },
             onFail = { _ ->
@@ -122,9 +122,13 @@ class OmpNativePlugin : Plugin() {
             tvIp = ip
             pendingConnect = once
         }
-        socket.connect(
-            listOf("ws://$ip:3000/", "wss://$ip:3001/"),
-            listOf(TvHttp.plain(), TvHttp.trustingOnly(ip)),
+        val preferPort = call.getInt("preferPort")?.takeIf { it == 3000 || it == 3001 }
+        socket.race(
+            listOf(
+                TvCandidate(3000, "ws://$ip:3000/", TvHttp.plain()),
+                TvCandidate(3001, "wss://$ip:3001/", TvHttp.trustingOnly(ip)),
+            ),
+            preferPort,
         )
     }
 
@@ -282,6 +286,28 @@ class OmpNativePlugin : Plugin() {
         }
         player.enqueue(cmds)
         call.resolve()
+    }
+
+    // ---- Wake-on-LAN ----
+
+    @PluginMethod
+    fun wakeOnLan(call: PluginCall) {
+        val once = Once(call)
+        val mac = call.getString("mac")?.trim().orEmpty()
+        val ip = call.getString("ip")?.trim().orEmpty()
+        val packet = WakeOnLan.magicPacket(mac)
+        if (packet == null || !IPV4.matches(ip)) {
+            once.reject("Не удалось включить телевизор")
+            return
+        }
+        io.execute {
+            try {
+                WakeOnLan.send(packet, ip)
+                once.resolve()
+            } catch (_: Exception) {
+                once.reject("Не удалось отправить сигнал включения")
+            }
+        }
     }
 
     // ---- external player ----

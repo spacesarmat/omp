@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs, renameTv } from '../src/tv/tvStore';
+import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs, renameTv, normalizeMac } from '../src/tv/tvStore';
 
 beforeEach(() => {
   localStorage.clear();
@@ -105,5 +105,58 @@ describe('tvStore', () => {
       { ip: '192.168.1.5', name: 'N', defaultName: 'D' },
       { ip: '192.168.1.6', name: 'N' },
     ]);
+  });
+
+  describe('port', () => {
+    it('sanitizer keeps only 3000 and 3001', () => {
+      const out = sanitizeTvs([
+        { ip: '10.0.0.1', name: 'A', port: 3001 },
+        { ip: '10.0.0.2', name: 'B', port: 3000 },
+        { ip: '10.0.0.3', name: 'C', port: 8080 },
+        { ip: '10.0.0.4', name: 'D', port: '3000' },
+      ]);
+      expect(out.map((t) => t.port)).toEqual([3001, 3000, undefined, undefined]);
+    });
+
+    it('saveTv stores the port and keeps it when a later save has none', () => {
+      saveTv({ ip: '10.0.0.1', name: 'A', port: 3001 });
+      saveTv({ ip: '10.0.0.1', name: 'A' });
+      expect(tvs.value[0].port).toBe(3001);
+      saveTv({ ip: '10.0.0.1', name: 'A', port: 3000 });
+      expect(tvs.value[0].port).toBe(3000);
+    });
+  });
+});
+
+describe('mac', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    reloadTvs();
+  });
+
+  it('normalises common MAC spellings', () => {
+    expect(normalizeMac('AA-BB-CC-DD-EE-FF')).toBe('aa:bb:cc:dd:ee:ff');
+    expect(normalizeMac('aabbccddeeff')).toBe('aa:bb:cc:dd:ee:ff');
+    expect(normalizeMac('AA:bb:CC:dd:EE:ff')).toBe('aa:bb:cc:dd:ee:ff');
+    expect(normalizeMac('aa:bb')).toBeUndefined();
+    expect(normalizeMac('zz:bb:cc:dd:ee:ff')).toBeUndefined();
+    expect(normalizeMac(5)).toBeUndefined();
+  });
+
+  it('sanitizeTvs keeps only a well-formed lower-case MAC', () => {
+    const out = sanitizeTvs([
+      { ip: '192.168.1.5', name: 'A', mac: 'aa:bb:cc:dd:ee:ff' },
+      { ip: '192.168.1.6', name: 'B', mac: 'AA:BB:CC:DD:EE:FF' },
+      { ip: '192.168.1.7', name: 'C', mac: 7 },
+    ]);
+    expect(out.map((t) => t.mac)).toEqual(['aa:bb:cc:dd:ee:ff', undefined, undefined]);
+  });
+
+  it('saveTv keeps the MAC when a later save has none', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG', mac: 'aa:bb:cc:dd:ee:ff' });
+    saveTv({ ip: '192.168.1.5', name: 'LG', clientKey: 'K' });
+    expect(tvs.value[0].mac).toBe('aa:bb:cc:dd:ee:ff');
+    saveTv({ ip: '192.168.1.5', name: 'LG', mac: '11:22:33:44:55:66' });
+    expect(tvs.value[0].mac).toBe('11:22:33:44:55:66');
   });
 });

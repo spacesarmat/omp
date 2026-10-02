@@ -6,6 +6,7 @@ import { MiniPlayer } from '../src/ui/MiniPlayer';
 import { App } from '../src/app';
 import { currentRoute, resetTo, navigate } from '../src/nav';
 import { nowPlaying, lastSeen, launchedAt, setPlayerLinkDeps } from '../src/tv/playerLink';
+import { tvState, cancelWarmUp } from '../src/tv/tvClient';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import type { PlayerState } from '../../src/phone/protocol';
 
@@ -66,6 +67,8 @@ beforeEach(() => {
   navigate({ name: 'nowPlaying' });
 });
 afterEach(() => {
+  cancelWarmUp();
+  tvState.value = 'idle';
   setPlayerLinkDeps(null);
   document.body.innerHTML = '';
 });
@@ -332,11 +335,16 @@ describe('mini-player in the shell', () => {
   it('cold start with a TV tries to attach once', async () => {
     setState(null);
     resetTo({ name: 'library' });
-    mount(<App />);
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(fgApp).toHaveBeenCalledTimes(1);
+    tvState.value = 'connected'; // the early connect (warmUp) is covered in tvClient tests
+    try {
+      mount(<App />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(fgApp).toHaveBeenCalledTimes(1);
+    } finally {
+      tvState.value = 'idle';
+    }
   });
 
   it('cold start skips the attach while the link is live', async () => {
@@ -354,5 +362,13 @@ describe('mini-player in the shell', () => {
     resetTo({ name: 'library' });
     mount(<App />);
     expect(el.querySelector('.m-mini')).toBeNull();
+  });
+});
+
+describe('long file-name title', () => {
+  it('shows the cleaned title', () => {
+    setState(state({ title: 'Trudno.byt.bogom.S01.E07.2026.WEB-DL.1080p.ExKinoRay.mkv' }));
+    mount(<NowPlaying volume={volume} />);
+    expect(el.querySelector('.m-now-title')!.textContent).toBe('Trudno byt bogom S01 E07 2026 WEB-DL 1080p ExKinoRay');
   });
 });

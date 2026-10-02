@@ -18,7 +18,7 @@ import { Settings, runUpdateCheck } from './screens/Settings';
 import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
 import { updatePrompt } from '../../src/store/updates';
 import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
-import { tvState } from './tv/tvClient';
+import { tvState, warmUp, cancelWarmUp } from './tv/tvClient';
 import { activeTv } from './tv/tvStore';
 import { startPlayerLink, attachIfOmpForeground, linkStatus } from './tv/playerLink';
 import './mobile.css';
@@ -69,7 +69,8 @@ export function App() {
   // to the foreground (attachIfOmpForeground skips a live link and a failed TV)
   useEffect(() => {
     startPlayerLink();
-    if (activeTv.value) void attachIfOmpForeground();
+    // connect early (retrying while the TV wakes); the effect below attaches once connected
+    if (activeTv.value) void warmUp();
     const stop = effect(() => {
       if (tvState.value === 'connected') void attachIfOmpForeground();
     });
@@ -77,7 +78,13 @@ export function App() {
     let cancelled = false;
     try {
       CapApp.addListener('appStateChange', (st) => {
-        if (st.isActive) void attachIfOmpForeground();
+        if (!st.isActive) {
+          cancelWarmUp();
+        } else if (tvState.value === 'connected') {
+          void attachIfOmpForeground();
+        } else if (activeTv.value) {
+          void warmUp();
+        }
       })
         .then((h) => {
           if (cancelled) void h.remove();

@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { native } from '../platform/native';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import {
   tvState,
+  tvWaking,
+  warmUp,
   pressButton,
   moveCursor,
   click,
@@ -26,6 +29,8 @@ export interface RemoteActions {
   deleteText: (n: number) => Promise<void>;
   sendEnter: () => Promise<void>;
   turnOffTv: () => Promise<void>;
+  wakeOnLan: (mac: string, ip: string) => Promise<void>;
+  warmUp: () => Promise<void>;
   confirm: (text: string) => boolean;
 }
 
@@ -38,6 +43,8 @@ const defaults: RemoteActions = {
   deleteText,
   sendEnter,
   turnOffTv,
+  wakeOnLan: (mac, ip) => native.wakeOnLan(mac, ip),
+  warmUp,
   confirm: (t) => window.confirm(t),
 };
 
@@ -81,7 +88,7 @@ function vibrate(): void {
 
 const STATE_TEXT: Record<string, string> = {
   idle: 'Не подключён',
-  connecting: 'Подключаюсь…',
+  connecting: 'Подключение…',
   pairing: 'Подтвердите на ТВ',
   connected: 'Подключён',
   error: 'Нет связи',
@@ -158,6 +165,11 @@ export function Remote() {
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const field = useRef<HTMLInputElement>(null);
 
+  const tvIp = tv?.ip;
+  useEffect(() => {
+    if (tvIp) void act.warmUp();
+  }, [tvIp]);
+
   useEffect(() => {
     sent.current = '';
     composing.current = false;
@@ -222,6 +234,20 @@ export function Remote() {
       fail(e);
     }
   };
+  const on = async () => {
+    if (!tv.mac) {
+      showToast('Подключитесь к телевизору, когда он включён, — тогда его можно будет включать с телефона');
+      return;
+    }
+    try {
+      await act.wakeOnLan(tv.mac, tv.ip);
+    } catch (e) {
+      fail(e);
+      return;
+    }
+    showToast('Включаю ' + tv.name + '…');
+    void act.warmUp();
+  };
   const dpad = (name: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT', label: string) => (
     <button type="button" class={'m-dpad m-dpad-' + name.toLowerCase()} aria-label={label} onClick={() => press(name)}>
       <Icon d={ARROW[name]} size={28} />
@@ -238,9 +264,15 @@ export function Remote() {
       <div class="m-lib-head">
         <div class="m-remote-name">
           <span class="m-remote-title">{tv.name}</span>
-          <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{STATE_TEXT[state] || state}</span>
+          <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{tvWaking.value && state !== 'connected' && state !== 'pairing' ? STATE_TEXT.connecting : STATE_TEXT[state] || state}</span>
         </div>
-        <button type="button" class="m-power" aria-label="Выключить телевизор" onClick={() => void off()}>
+        <button
+          type="button"
+          class={'m-power' + (state !== 'connected' && state !== 'pairing' && tv.mac ? ' on' : '')}
+          aria-label={state === 'connected' || state === 'pairing' ? 'Выключить телевизор' : 'Включить телевизор'}
+          disabled={state === 'pairing'}
+          onClick={() => void (state === 'connected' ? off() : on())}
+        >
           <Icon d={POWER} />
         </button>
       </div>

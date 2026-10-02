@@ -8,6 +8,21 @@ export interface SavedTv {
   /** Name from discovery / manual entry; `name` differs from it once the user renames the TV. */
   defaultName?: string;
   clientKey?: string;
+  /** SSAP port that opened last time (ws 3000 / wss 3001). */
+  port?: 3000 | 3001;
+  /** Wi-Fi/Ethernet MAC for Wake-on-LAN, lower-case colon form. */
+  mac?: string;
+}
+
+const MAC = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/;
+
+/** "AA-BB-CC-DD-EE-FF" / "aabbccddeeff" / "aa:bb:..." -> "aa:bb:cc:dd:ee:ff"; undefined when it is not a MAC. */
+export function normalizeMac(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const hex = v.trim().replace(/[:\-.]/g, '').toLowerCase();
+  if (!/^[0-9a-f]{12}$/.test(hex)) return undefined;
+  const mac = hex.match(/../g)!.join(':');
+  return MAC.test(mac) ? mac : undefined;
 }
 
 export const MAX_NAME = 40;
@@ -25,6 +40,8 @@ export function sanitizeTvs(v: unknown): SavedTv[] {
     const tv: SavedTv = { ip: t.ip, name: t.name };
     if (typeof t.defaultName === 'string' && t.defaultName) tv.defaultName = t.defaultName;
     if (typeof t.clientKey === 'string' && t.clientKey) tv.clientKey = t.clientKey;
+    if (t.port === 3000 || t.port === 3001) tv.port = t.port;
+    if (typeof t.mac === 'string' && MAC.test(t.mac)) tv.mac = t.mac;
     out.push(tv);
   }
   return out;
@@ -60,6 +77,10 @@ export function saveTv(tv: SavedTv): void {
   const name = renamed ? existing!.name : tv.name;
   const next: SavedTv = { ip: tv.ip, name, defaultName: renamed ? existing!.defaultName : tv.name };
   if (clientKey) next.clientKey = clientKey;
+  const port = tv.port ?? existing?.port;
+  if (port) next.port = port;
+  const mac = tv.mac ?? existing?.mac;
+  if (mac) next.mac = mac;
   tvs.value = existing ? tvs.value.map((t) => (t.ip === tv.ip ? next : t)) : tvs.value.concat(next);
   if (!activeTv.value) activeTvIp.value = tv.ip;
   persist();

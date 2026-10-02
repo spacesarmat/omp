@@ -1,7 +1,7 @@
 // SSAP client on top of the native transport: pairing, request/response by id, pointer socket.
-import { signal } from '@preact/signals';
+import { signal, effect } from '@preact/signals';
 import { native, type OmpNativeApi } from '../platform/native';
-import { activeTv, saveTv, setActiveTv, type SavedTv } from './tvStore';
+import { activeTv, saveTv, setActiveTv, normalizeMac, type SavedTv } from './tvStore';
 import {
   registerMessage,
   requestMessage,
@@ -27,15 +27,23 @@ export const TV_POINTER_DENIED = 'Телевизор не разрешил уп�
 const TV_LAUNCH_FAILED = 'Не удалось запустить OMP на телевизоре';
 
 const REQUEST_TIMEOUT = 8000;
-/** The native side tries ws:3000, then wss:3001, 5 s each. */
+/** The native side races ws:3000 and wss:3001 (3 s each; a saved port gets a 2 s head start). */
 const SOCKET_OPEN_TIMEOUT = 12000;
 /** The user needs time to find the remote and press «Разрешить». */
 const PAIRING_TIMEOUT = 60000;
 const POINTER_URI = 'ssap://com.webos.service.networkinput/getPointerInputSocket';
+const GETINFO_URI = 'ssap://com.webos.service.connectionmanager/getinfo';
 const PERMISSION_ERROR = /401|insufficient permissions|not permitted|denied/i;
 
 export const tvState = signal<TvState>('idle');
 export const tvError = signal('');
+/** True while a background warm-up keeps retrying the connection (the TV may be waking up). */
+export const tvWaking = signal(false);
+
+const WARM_RETRY_MS = 1500;
+const WARM_LIMIT_MS = 30000;
+const QUEUE_MAX = 10;
+const QUEUE_TTL_MS = 15000;
 
 /** Error answered by the TV; `raw` keeps its original text. */
 class TvAnswerError extends Error {
@@ -61,6 +69,8 @@ interface Session {
   reg: { resolve: () => void; reject: (e: Error) => void; timer?: ReturnType<typeof setTimeout> } | null;
 }
 
+let warmActive = false;
+let warmError = '';
 let transport: TvTransport = native;
 let seq = 0;
 /** IP of the current or connecting session; null when idle. */
@@ -84,6 +94,7 @@ function closeTransport(): Promise<void> {
 
 /** Replaces the transport (tests); drops the current session. */
 export function setTransport(t: TvTransport): void {
+  cancelWarmUp();
   if (session) {
     endSession(session, TV_NOT_CONNECTED);
     void closeTransport();
@@ -122,7 +133,9 @@ function fail(s: Session, message: string): void {
   endSession(s, message);
   void closeTransport();
   tvState.value = 'error';
-  tvError.value = message;
+  // While a warm-up retries, its failures stay silent until it gives up.
+  if (warmActive) warmError = message;
+  else tvError.value = message;
 }
 
 function armRegistration(s: Session, ms: number): void {
@@ -138,7 +151,12 @@ function onRegisterMessage(s: Session, m: any): void {
     armRegistration(s, PAIRING_TIMEOUT);
   } else if (m.type === 'registered') {
     const key = m.payload?.['client-key'];
-    s.tv = { ip: s.tv.ip, name: s.tv.name, clientKey: typeof key === 'string' && key ? key : s.tv.clientKey };
+    s.tv = {
+      ip: s.tv.ip,
+      name: s.tv.name,
+      clientKey: typeof key === 'string' && key ? key : s.tv.clientKey,
+      port: s.tv.port,
+    };
     saveTv(s.tv);
     setActiveTv(s.tv.ip);
     clearTimeout(s.reg.timer);
@@ -148,6 +166,17 @@ function onRegisterMessage(s: Session, m: any): void {
     tvState.value = 'connected';
     tvError.value = '';
     reg.resolve();
+    // Open the pointer socket now so the first press does not wait for it (errors are ignored).
+    ensurePointer(true).catch(noop);
+    // Learn the MAC for Wake-on-LAN (soft: a failure never touches the session).
+    const mySession = s;
+    send(GETINFO_URI, undefined, false, true).then((info) => {
+      const mac = macFromInfo(info, mySession.tv.ip);
+      if (mac && session === mySession) {
+        mySession.tv = { ...mySession.tv, mac };
+        saveTv(mySession.tv);
+      }
+    }, noop);
   } else if (m.type === 'error') {
     const text = String(m.error ?? m.payload?.errorText ?? '');
     if (s.signed && /blacklisted certificate/i.test(text)) {
@@ -191,6 +220,19 @@ function onClosed(s: Session): void {
   tvState.value = 'idle';
 }
 
+/** MAC from a connectionmanager/getinfo answer: wired when it is connected (or has this IP), else Wi-Fi. */
+export function macFromInfo(info: any, ip: string): string | undefined {
+  const wired = info?.wiredInfo;
+  const wifi = info?.wifiInfo;
+  const wiredMac = normalizeMac(wired?.macAddress);
+  const wifiMac = normalizeMac(wifi?.macAddress);
+  const isWired = !!wired && (wired.state === 'connected' || wired.ipAddress === ip);
+  const isWifi = !!wifi && wifi.ipAddress === ip;
+  if (isWired && wiredMac) return wiredMac;
+  if (isWifi && wifiMac) return wifiMac;
+  return wifiMac ?? wiredMac;
+}
+
 export function connectTv(tv: SavedTv): Promise<void> {
   if (session && session.tv.ip === tv.ip) {
     if (tvState.value === 'connected') return Promise.resolve();
@@ -215,9 +257,15 @@ export function connectTv(tv: SavedTv): Promise<void> {
   armRegistration(s, SOCKET_OPEN_TIMEOUT);
   const register = registerMessage(s.registerId, tv.clientKey);
   closing
-    .then(() => (session === s ? transport.tvConnect(tv.ip, register) : undefined))
+    .then(() => (session === s ? transport.tvConnect(tv.ip, register, tv.port) : undefined))
     .then(
-      () => {
+      (opened) => {
+        const port = opened?.port;
+        if (session === s && (port === 3000 || port === 3001)) {
+          s.tv = { ...s.tv, port };
+          // The TV may have answered `register` before this promise settled.
+          if (tvState.value === 'connected') saveTv(s.tv);
+        }
         // Socket open and `register` sent: now the TV has 8 s to answer (unless it already asked the user).
         if (session === s && tvState.value === 'connecting') armRegistration(s, REQUEST_TIMEOUT);
       },
@@ -234,7 +282,8 @@ async function ensureConnected(): Promise<void> {
   return connectTv(tv);
 }
 
-function send(uri: string, payload?: object, closeOk = false): Promise<any> {
+/** `soft`: a timeout rejects without dropping the session (background requests). */
+function send(uri: string, payload?: object, closeOk = false, soft = false): Promise<any> {
   if (!session || tvState.value !== 'connected') return Promise.reject(new Error(TV_NOT_CONNECTED));
   const s = session;
   const id = nextId('req');
@@ -246,6 +295,7 @@ function send(uri: string, payload?: object, closeOk = false): Promise<any> {
         return;
       }
       reject(new Error(TV_NO_ANSWER));
+      if (soft) return;
       // A dead socket may stay "open" for minutes without tvClosed; drop it so the next action reconnects.
       fail(s, TV_NO_ANSWER);
     }, REQUEST_TIMEOUT);
@@ -263,9 +313,9 @@ async function request(uri: string, payload?: object): Promise<any> {
   return send(uri, payload);
 }
 
-function ensurePointer(): Promise<void> {
+function ensurePointer(soft = false): Promise<void> {
   if (!pointer) {
-    const p: Promise<void> = send(POINTER_URI).then((r) => {
+    const p: Promise<void> = send(POINTER_URI, undefined, false, soft).then((r) => {
       if (typeof r?.socketPath !== 'string') throw new Error(TV_NO_ANSWER);
       return transport.pointerConnect(r.socketPath);
     });
@@ -277,7 +327,78 @@ function ensurePointer(): Promise<void> {
   return pointer;
 }
 
-async function sendFrame(frame: string): Promise<void> {
+interface QueuedFrame {
+  frame: string;
+  timer: ReturnType<typeof setTimeout>;
+  resolve: () => void;
+  reject: (e: Error) => void;
+}
+const outbox: QueuedFrame[] = [];
+let draining = false;
+let warming: Promise<void> | null = null;
+
+function isBusy(): boolean {
+  return tvState.value === 'connecting' || tvState.value === 'pairing' || tvWaking.value;
+}
+
+async function drainOutbox(): Promise<void> {
+  if (draining) return;
+  draining = true;
+  try {
+    while (outbox.length) {
+      try {
+        if (tvState.value !== 'connected') {
+          if (warming) await warming.catch(noop);
+          else if (connecting) await connecting.catch(noop);
+          else await ensureConnected();
+        }
+        if (tvState.value !== 'connected') throw new Error(tvError.value || TV_NO_ANSWER);
+      } catch (e) {
+        const err = new Error(tvError.value || (e instanceof Error ? e.message : TV_NO_ANSWER));
+        for (const q of outbox.splice(0)) {
+          clearTimeout(q.timer);
+          q.reject(err);
+        }
+        return;
+      }
+      const q = outbox.shift();
+      if (!q) break; // everything expired while waiting
+      clearTimeout(q.timer);
+      await sendFrameNow(q.frame).then(q.resolve, q.reject);
+    }
+  } finally {
+    draining = false;
+  }
+}
+
+function sendFrame(frame: string, droppable = false): Promise<void> {
+  if (outbox.length === 0 && !draining && !isBusy()) return sendFrameNow(frame);
+  // Pointer moves made while connecting would replay as a cursor jump later: drop them.
+  if (droppable && isBusy()) return Promise.resolve();
+  // Presses made while connecting wait here and go out in order once the TV is ready.
+  return new Promise<void>((resolve, reject) => {
+    // Overflowing and expired presses are dropped silently (no toast per press).
+    if (outbox.length >= QUEUE_MAX) {
+      const old = outbox.shift()!;
+      clearTimeout(old.timer);
+      old.resolve();
+    }
+    const q: QueuedFrame = {
+      frame,
+      resolve,
+      reject,
+      timer: setTimeout(() => {
+        const i = outbox.indexOf(q);
+        if (i >= 0) outbox.splice(i, 1);
+        resolve();
+      }, QUEUE_TTL_MS),
+    };
+    outbox.push(q);
+    void drainOutbox();
+  });
+}
+
+async function sendFrameNow(frame: string): Promise<void> {
   await ensureConnected();
   // One retry: the native pointer socket can close silently (no event reaches JS).
   for (let attempt = 0; ; attempt++) {
@@ -286,7 +407,10 @@ async function sendFrame(frame: string): Promise<void> {
       await used;
     } catch (e) {
       if (e instanceof TvAnswerError) throw new Error(PERMISSION_ERROR.test(e.raw) ? TV_POINTER_DENIED : e.message);
-      throw e;
+      // The soft prefetch may have timed out; retry once with a fresh (hard) request.
+      if (pointer === used) pointer = null;
+      if (attempt >= 1) throw e;
+      continue;
     }
     try {
       await transport.pointerSend(frame);
@@ -297,6 +421,77 @@ async function sendFrame(frame: string): Promise<void> {
       if (attempt >= 1) throw new Error(TV_NOT_CONNECTED);
     }
   }
+}
+
+/** Stops the background connect retries (app went to background, TV switched). */
+let cancelWarm: (() => void) | null = null;
+export function cancelWarmUp(): void {
+  cancelWarm?.();
+}
+
+/**
+ * Connects to the active TV in the background and keeps retrying every 1.5 s for up to 30 s while it wakes up.
+ * Stops on success, on a pairing prompt, on cancelWarmUp() and when the active TV changes. Never rejects.
+ */
+export function warmUp(): Promise<void> {
+  if (warming) return warming;
+  const tv = activeTv.value;
+  if (!tv || tvState.value === 'connected' || tvState.value === 'connecting' || tvState.value === 'pairing') {
+    return Promise.resolve();
+  }
+  let stopped = false;
+  let wake: (() => void) | null = null;
+  const stop = () => {
+    stopped = true;
+    // a later warmUp() may start a new run
+    warming = null;
+    wake?.();
+  };
+  cancelWarm = stop;
+  let pairing = false;
+  warmActive = true;
+  warmError = '';
+  const watch = effect(() => {
+    if (tvState.value === 'pairing') pairing = true;
+    if (activeTv.value?.ip !== tv.ip) stop();
+    // another session (a user connect to a different TV) took over: do not fight it
+    const ip = sessionIp.value;
+    if (ip && ip !== tv.ip) stop();
+  });
+  const started = Date.now();
+  let p!: Promise<void>;
+  p = (async () => {
+    try {
+      for (;;) {
+        try {
+          await connectTv(tv);
+          return;
+        } catch {
+          /* retry below */
+        }
+        if (stopped || pairing || Date.now() - started + WARM_RETRY_MS > WARM_LIMIT_MS) return;
+        tvWaking.value = true;
+        await new Promise<void>((r) => {
+          const t = setTimeout(r, WARM_RETRY_MS);
+          wake = () => {
+            clearTimeout(t);
+            r();
+          };
+        });
+        wake = null;
+        if (stopped || pairing) return;
+      }
+    } finally {
+      watch();
+      tvWaking.value = false;
+      if (cancelWarm === stop) warmActive = false;
+      if (!stopped && tvState.value === 'error' && !tvError.value) tvError.value = warmError;
+      if (cancelWarm === stop) cancelWarm = null;
+      if (warming === p) warming = null;
+    }
+  })();
+  warming = p;
+  return p;
 }
 
 export async function launchOnTv(params: object): Promise<void> {
@@ -340,7 +535,7 @@ export function pressButton(name: RemoteButton): Promise<void> {
 }
 
 export function moveCursor(dx: number, dy: number): Promise<void> {
-  return sendFrame(moveFrame(dx, dy));
+  return sendFrame(moveFrame(dx, dy), true);
 }
 
 export function click(): Promise<void> {
