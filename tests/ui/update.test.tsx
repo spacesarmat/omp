@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, h } from 'preact';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
+import { Qr } from '../../src/ui/Qr';
 import { UpdateScreen } from '../../src/screens/Update';
 import { latestUpdate } from '../../src/store/updates';
 
@@ -22,6 +23,49 @@ function bridge(root: boolean, hb: 'installed' | 'missing') {
       setTimeout(() => this.onservicecallback(JSON.stringify(reply)), 0);
     };
   };
+}
+
+interface Fake { emit(m: object): void; cancels: number }
+function streamBridge(opts: { root: boolean; hb: 'installed' | 'missing' | 'denied' }): Fake {
+  const fake: Fake = { emit: () => undefined, cancels: 0 };
+  (window as any).PalmServiceBridge = function (this: any) {
+    this.cancel = () => { fake.cancels++; };
+    this.call = (uri: string) => {
+      if (uri.indexOf('install') >= 0 && uri.indexOf('checkRoot') < 0) {
+        fake.emit = (m: object) => this.onservicecallback(JSON.stringify(m));
+        return;
+      }
+      let reply: object = { returnValue: true };
+      if (uri.indexOf('checkRoot') >= 0) reply = { returnValue: opts.root };
+      if (uri.indexOf('getAppInfo') >= 0) {
+        reply = opts.hb === 'installed' ? { returnValue: true, appInfo: {} }
+          : opts.hb === 'missing' ? { returnValue: false, errorText: 'app not exist' }
+          : { returnValue: false, errorText: 'Denied method call' };
+      }
+      setTimeout(() => this.onservicecallback(JSON.stringify(reply)), 0);
+    };
+  };
+  return fake;
+}
+
+async function until(cond: () => boolean, ms = 2000) {
+  const t0 = Date.now();
+  while (!cond()) {
+    if (Date.now() - t0 > ms) throw new Error('condition not met in time');
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+async function mountReady(host?: HTMLElement) {
+  const h0 = await mount();
+  void host;
+  return h0;
+}
+
+function pressInstall(host: HTMLElement) {
+  const b = Array.from(host.querySelectorAll('.button')).find((x) => /Установить$|Повторить/.test(x.textContent || '')) as HTMLElement;
+  b.click();
 }
 
 async function mount() {
@@ -69,5 +113,58 @@ describe('UpdateScreen', () => {
     const host = await mount();
     expect(host.textContent).toContain('Проверить обновления');
     expect(host.textContent).not.toContain('доступна');
+  });
+
+  it('install flow: progress, verify, done and cancel on done', async () => {
+    const fake = streamBridge({ root: true, hb: 'installed' });
+    const host = await mountReady();
+    await until(() => host.textContent!.indexOf('Установить сейчас') >= 0);
+    pressInstall(host);
+    await until(() => host.textContent!.indexOf('Скачивание…') >= 0);
+    fake.emit({ returnValue: true, progress: 42 });
+    await until(() => host.textContent!.indexOf('Скачивание… 42%') >= 0);
+    const fill = host.querySelector('.progress-fill') as HTMLElement;
+    expect(fill.style.width).toBe('42%');
+    fake.emit({ returnValue: true, statusText: 'Verifying' });
+    await until(() => host.textContent!.indexOf('Проверка…') >= 0);
+    expect(host.querySelector('.progress')).toBeNull();
+    expect(fake.cancels).toBe(0);
+    fake.emit({ returnValue: true, finished: true });
+    await until(() => host.textContent!.indexOf('Готово. OMP перезапустится') >= 0);
+    await tick();
+    expect(fake.cancels).toBe(1);
+  });
+  it('install error: Russian banner, retry label, subscription cancelled', async () => {
+    const fake = streamBridge({ root: true, hb: 'installed' });
+    const host = await mountReady();
+    await until(() => host.textContent!.indexOf('Установить сейчас') >= 0);
+    pressInstall(host);
+    await until(() => host.textContent!.indexOf('Скачивание…') >= 0);
+    fake.emit({ returnValue: false, errorText: 'Hash mismatch' });
+    await until(() => host.textContent!.indexOf('Не удалось установить: Hash mismatch') >= 0);
+    expect(host.querySelector('.banner-error')).not.toBeNull();
+    expect(Array.from(host.querySelectorAll('.button')).some((b) => b.textContent === 'Повторить')).toBe(true);
+    expect(fake.cancels).toBe(1);
+  });
+  it('unknown Homebrew presence: caveat and both buttons', async () => {
+    streamBridge({ root: false, hb: 'denied' });
+    const host = await mountReady();
+    await until(() => host.textContent!.indexOf('Если Homebrew Channel установлен:') >= 0);
+    expect(host.textContent).toContain('Открыть Homebrew Channel');
+    expect(host.textContent).toContain('Добавить репозиторий OMP');
+    expect(host.textContent).not.toContain('не установлен');
+  });
+  it('computer QR encodes info.releaseUrl', async () => {
+    latestUpdate.value = { ...info, releaseUrl: 'https://example.com/distinct/release/page' };
+    streamBridge({ root: false, hb: 'installed' });
+    const host = await mountReady();
+    await until(() => host.querySelectorAll('svg.qr').length === 1);
+    const ref = document.createElement('div');
+    render(h(Qr, { text: 'https://example.com/distinct/release/page', size: 200 }), ref);
+    const other = document.createElement('div');
+    render(h(Qr, { text: info.releaseUrl, size: 200 }), other);
+    const d = (e: HTMLElement) => e.querySelector('path:last-of-type')!.getAttribute('d');
+    expect(d(host)).toBe(d(ref));
+    expect(d(host)).not.toBe(d(other));
   });
 });

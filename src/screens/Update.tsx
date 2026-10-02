@@ -62,7 +62,7 @@ export function UpdateScreen() {
       (e) => {
         stopInstall();
         setStatus(null);
-        setError(e.message);
+        setError('Не удалось установить: ' + e.message);
       },
     );
   };
