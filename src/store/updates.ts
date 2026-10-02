@@ -43,7 +43,9 @@ export function checkForUpdate(opts: { manual: boolean; now?: number; current?: 
   if (!opts.manual && (!settings.value.updateCheck || (state.lastCheck <= now && now - state.lastCheck < CHECK_INTERVAL_MS))) {
     return Promise.resolve<CheckResult>('skipped');
   }
-  return request<unknown>(opts.url || UPDATE_URL, { timeoutMs: 10000 }).then(
+  // cache-buster: GitHub raw and the WebView keep the feed for up to 5 minutes after a release
+  const url = opts.url || UPDATE_URL;
+  return request<unknown>(url + (url.indexOf('?') < 0 ? '?' : '&') + 't=' + now, { timeoutMs: 10000 }).then(
     (raw): CheckResult => {
       state = { ...state, lastCheck: now };
       saveJson(KEY, state);
