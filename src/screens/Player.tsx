@@ -81,7 +81,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   });
 
   const intro = introChapter(probe, vs.time);
-  const showSkip = !!intro && skippedIntro !== intro.start && next.countdown === null;
+  const showSkip = ready && !vs.error && !!intro && skippedIntro !== intro.start && next.countdown === null;
 
   const cache = useCacheStats(c, item.hash, statsOn || (ready && vs.buffering));
 
@@ -276,15 +276,16 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
           if (item.hash) saveTrackPref(item.hash, { sub: subPrefFromChoice(ch, embeddedSubOptions(probe, v), item.subtitles || []) });
         });
       } else if (kind === 'size') {
-        choose('Размер субтитров', SUB_SIZE_OPTIONS, settings.value.subSize).then((v) => { if (v) updateSettings({ subSize: v }); });
+        choose('Размер субтитров', SUB_SIZE_OPTIONS, settings.value.subSize).then((size) => { if (size) updateSettings({ subSize: size }); });
       } else if (kind === 'offset') {
-        choose('Сдвиг субтитров', subtitleOffsetOptions(), subOffset).then((v) => { if (v !== null) setSubOffset(v); });
+        choose('Сдвиг субтитров', subtitleOffsetOptions(), subOffset).then((off) => { if (off !== null) setSubOffset(off); });
       }
     });
   };
 
   const retry = () => {
     startPos.current = posRef.current.time;
+    userTracks.current = false;
     setReloadKey(reloadKey + 1);
   };
 
