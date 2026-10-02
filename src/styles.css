@@ -139,3 +139,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .brand-title { margin: 0; font-size: 56px; letter-spacing: 2px; }
 .icon, .keydot { display: inline-block; vertical-align: middle; }
 .button-icon { margin-right: 10px; }
+
+.tap-flash { position: absolute; top: 45%; margin-top: -60px; min-width: 120px; height: 120px; padding: 0 36px; box-sizing: border-box; border-radius: 60px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 44px; font-weight: 700; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.tap-left { left: 12%; }
+.tap-right { right: 12%; }
+.tap-center { left: 50%; margin-left: -60px; }

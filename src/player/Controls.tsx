@@ -26,7 +26,7 @@ export function Controls(p: ControlsProps) {
     if (p.duration > 0 && rect.width > 0) p.onSeekTo(((e.clientX - rect.left) / rect.width) * p.duration);
   };
   return (
-    <div class="player-controls">
+    <div class="player-controls" onClick={(e) => e.stopPropagation()}>
       <div class="player-title">{p.title}</div>
       <div class="player-bar" onClick={barClick}>
         <div class="player-bar-fill" style={{ width: pct + '%' }} />
