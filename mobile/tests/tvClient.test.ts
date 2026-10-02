@@ -29,15 +29,18 @@ class FakeTv implements TvTransport {
   sent: any[] = [];
   frames: string[] = [];
   pointerUrls: string[] = [];
-  connects: { ip: string; register: any }[] = [];
+  connects: { ip: string; register: any; preferPort?: number }[] = [];
+  /** Port the fake TV "opened" on. */
+  openPort: number | undefined = 3001;
   disconnects = 0;
   onRequest: ((msg: any) => void) | null = null;
   private msgCbs = new Set<(m: any) => void>();
   private closeCbs = new Set<(r: string) => void>();
   failPointerSend = 0;
 
-  async tvConnect(ip: string, register: object) {
-    this.connects.push({ ip, register });
+  async tvConnect(ip: string, register: object, preferPort?: 3000 | 3001) {
+    this.connects.push({ ip, register, preferPort });
+    return { port: (this.openPort ?? 3000) as 3000 | 3001 };
   }
   async tvSend(message: object) {
     this.sent.push(message);
@@ -119,7 +122,7 @@ describe('tvClient connection', () => {
     const origMsg = fake.onTvMessage.bind(fake);
     fake.onTvMessage = (cb) => (order.push('listen'), origMsg(cb));
     const origConnect = fake.tvConnect.bind(fake);
-    fake.tvConnect = (ip, r) => (order.push('connect'), origConnect(ip, r));
+    fake.tvConnect = (ip, r, p) => (order.push('connect'), origConnect(ip, r, p));
 
     const p = connectTv(TV);
     expect(tvState.value).toBe('connecting');
@@ -136,7 +139,32 @@ describe('tvClient connection', () => {
     fake.emit({ type: 'registered', id: reg.id, payload: { 'client-key': 'K' } });
     await p;
     expect(tvState.value).toBe('connected');
-    expect(tvs.value).toEqual([{ ip: '192.168.1.5', name: 'LG', defaultName: 'LG', clientKey: 'K' }]);
+    expect(tvs.value).toEqual([{ ip: '192.168.1.5', name: 'LG', defaultName: 'LG', clientKey: 'K', port: 3001 }]);
+  });
+
+  it('passes the saved port and stores the port that opened', async () => {
+    fake.openPort = 3000;
+    const p = connectTv({ ...TV, port: 3001 });
+    await flush();
+    expect(fake.connects[0].preferPort).toBe(3001);
+    fake.emit({ type: 'registered', id: fake.lastRegister.id, payload: { 'client-key': 'K' } });
+    await p;
+    expect(tvs.value[0].port).toBe(3000);
+  });
+
+  it('stores the port even if the TV answers before tvConnect settles', async () => {
+    let open!: () => void;
+    fake.tvConnect = (ip, register) => {
+      fake.connects.push({ ip, register });
+      return new Promise<{ port: 3000 | 3001 }>((r) => (open = () => r({ port: 3001 })));
+    };
+    const p = connectTv(TV);
+    await flush();
+    fake.emit({ type: 'registered', id: fake.lastRegister.id, payload: { 'client-key': 'K' } });
+    await p;
+    open();
+    await flush();
+    expect(tvs.value[0].port).toBe(3001);
   });
 
   it('sends the saved client key', async () => {
@@ -214,7 +242,7 @@ describe('tvClient connection', () => {
     let open!: () => void;
     fake.tvConnect = (ip, register) => {
       fake.connects.push({ ip, register });
-      return new Promise<void>((r) => (open = r));
+      return new Promise<{ port: 3000 | 3001 }>((r) => (open = () => r({ port: 3000 })));
     };
     const p = connectTv(TV);
     const assertion = expect(p).rejects.toThrow('Телевизор не отвечает');
@@ -230,7 +258,7 @@ describe('tvClient connection', () => {
 
   it('fails when the socket does not open in 12 s', async () => {
     vi.useFakeTimers();
-    fake.tvConnect = () => new Promise<void>(() => {});
+    fake.tvConnect = () => new Promise<{ port: 3000 | 3001 }>(() => {});
     const p = connectTv(TV);
     const assertion = expect(p).rejects.toThrow('Телевизор не отвечает');
     await vi.advanceTimersByTimeAsync(11999);
@@ -266,7 +294,7 @@ describe('tvClient connection', () => {
   it('switches to another TV while the first one connects', async () => {
     const order: string[] = [];
     const origConnect = fake.tvConnect.bind(fake);
-    fake.tvConnect = (ip, r) => (order.push(`connect ${ip}`), origConnect(ip, r));
+    fake.tvConnect = (ip, r, p) => (order.push(`connect ${ip}`), origConnect(ip, r, p));
     fake.tvDisconnect = async () => {
       order.push('disconnect');
       fake.disconnects++;
@@ -285,7 +313,7 @@ describe('tvClient connection', () => {
     fake.emit({ type: 'registered', id: fake.lastRegister.id, payload: { 'client-key': 'K2' } });
     await second;
     expect(tvState.value).toBe('connected');
-    expect(tvs.value).toEqual([{ ip: '192.168.1.6', name: 'LG 2', defaultName: 'LG 2', clientKey: 'K2' }]);
+    expect(tvs.value).toEqual([{ ip: '192.168.1.6', name: 'LG 2', defaultName: 'LG 2', clientKey: 'K2', port: 3001 }]);
   });
 });
 

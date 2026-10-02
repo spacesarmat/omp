@@ -106,4 +106,24 @@ describe('tvStore', () => {
       { ip: '192.168.1.6', name: 'N' },
     ]);
   });
+
+  describe('port', () => {
+    it('sanitizer keeps only 3000 and 3001', () => {
+      const out = sanitizeTvs([
+        { ip: '10.0.0.1', name: 'A', port: 3001 },
+        { ip: '10.0.0.2', name: 'B', port: 3000 },
+        { ip: '10.0.0.3', name: 'C', port: 8080 },
+        { ip: '10.0.0.4', name: 'D', port: '3000' },
+      ]);
+      expect(out.map((t) => t.port)).toEqual([3001, 3000, undefined, undefined]);
+    });
+
+    it('saveTv stores the port and keeps it when a later save has none', () => {
+      saveTv({ ip: '10.0.0.1', name: 'A', port: 3001 });
+      saveTv({ ip: '10.0.0.1', name: 'A' });
+      expect(tvs.value[0].port).toBe(3001);
+      saveTv({ ip: '10.0.0.1', name: 'A', port: 3000 });
+      expect(tvs.value[0].port).toBe(3000);
+    });
+  });
 });

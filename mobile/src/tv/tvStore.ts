@@ -8,6 +8,8 @@ export interface SavedTv {
   /** Name from discovery / manual entry; `name` differs from it once the user renames the TV. */
   defaultName?: string;
   clientKey?: string;
+  /** SSAP port that opened last time (ws 3000 / wss 3001). */
+  port?: 3000 | 3001;
 }
 
 export const MAX_NAME = 40;
@@ -25,6 +27,7 @@ export function sanitizeTvs(v: unknown): SavedTv[] {
     const tv: SavedTv = { ip: t.ip, name: t.name };
     if (typeof t.defaultName === 'string' && t.defaultName) tv.defaultName = t.defaultName;
     if (typeof t.clientKey === 'string' && t.clientKey) tv.clientKey = t.clientKey;
+    if (t.port === 3000 || t.port === 3001) tv.port = t.port;
     out.push(tv);
   }
   return out;
@@ -60,6 +63,8 @@ export function saveTv(tv: SavedTv): void {
   const name = renamed ? existing!.name : tv.name;
   const next: SavedTv = { ip: tv.ip, name, defaultName: renamed ? existing!.defaultName : tv.name };
   if (clientKey) next.clientKey = clientKey;
+  const port = tv.port ?? existing?.port;
+  if (port) next.port = port;
   tvs.value = existing ? tvs.value.map((t) => (t.ip === tv.ip ? next : t)) : tvs.value.concat(next);
   if (!activeTv.value) activeTvIp.value = tv.ip;
   persist();

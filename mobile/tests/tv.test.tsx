@@ -18,6 +18,7 @@ class FakeTv implements TvTransport {
   connects: string[] = [];
   async tvConnect(ip: string) {
     this.connects.push(ip);
+    return { port: 3000 as const };
   }
   async tvSend() {}
   onTvMessage() {

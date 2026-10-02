@@ -52,6 +52,7 @@ describe('native plugin wrapper on Android', () => {
     const gate = new Promise<void>((r) => (releaseAdd = r));
     const fake = {
       tvSend: vi.fn(async () => {}),
+      tvConnect: vi.fn(async () => ({ port: 3001 })),
       discoverTvs: vi.fn(async () => ({ tvs: [{ ip: '10.0.0.2', name: 'TV' }] })),
       takePendingMagnet: vi.fn(async () => ({ link: null })),
       startPlayerServer: vi.fn(async () => ({ url: 'http://10.0.0.3:41234/omp/abc' })),
@@ -79,6 +80,14 @@ describe('native plugin wrapper on Android', () => {
     expect(fake.tvSend).toHaveBeenCalledWith({ json: '{"type":"request","id":"1"}' });
     expect(await n.discoverTvs(1000)).toEqual([{ ip: '10.0.0.2', name: 'TV' }]);
     expect(await n.takePendingMagnet()).toBeNull();
+  });
+
+  it('tvConnect passes preferPort and returns the port that opened', async () => {
+    const { native: n, fake } = await load();
+    expect(await n.tvConnect('10.0.0.2', { type: 'register' }, 3001)).toEqual({ port: 3001 });
+    expect(fake.tvConnect).toHaveBeenCalledWith({ ip: '10.0.0.2', register: '{"type":"register"}', preferPort: 3001 });
+    await n.tvConnect('10.0.0.2', {});
+    expect(fake.tvConnect).toHaveBeenLastCalledWith({ ip: '10.0.0.2', register: '{}' });
   });
 
   it('parses incoming TV messages', async () => {

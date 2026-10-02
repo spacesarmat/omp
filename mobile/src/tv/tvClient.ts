@@ -27,7 +27,7 @@ export const TV_POINTER_DENIED = 'Телевизор не разрешил уп�
 const TV_LAUNCH_FAILED = 'Не удалось запустить OMP на телевизоре';
 
 const REQUEST_TIMEOUT = 8000;
-/** The native side tries ws:3000, then wss:3001, 5 s each. */
+/** The native side races ws:3000 and wss:3001 (3 s each; a saved port gets a 2 s head start). */
 const SOCKET_OPEN_TIMEOUT = 12000;
 /** The user needs time to find the remote and press «Разрешить». */
 const PAIRING_TIMEOUT = 60000;
@@ -138,7 +138,12 @@ function onRegisterMessage(s: Session, m: any): void {
     armRegistration(s, PAIRING_TIMEOUT);
   } else if (m.type === 'registered') {
     const key = m.payload?.['client-key'];
-    s.tv = { ip: s.tv.ip, name: s.tv.name, clientKey: typeof key === 'string' && key ? key : s.tv.clientKey };
+    s.tv = {
+      ip: s.tv.ip,
+      name: s.tv.name,
+      clientKey: typeof key === 'string' && key ? key : s.tv.clientKey,
+      port: s.tv.port,
+    };
     saveTv(s.tv);
     setActiveTv(s.tv.ip);
     clearTimeout(s.reg.timer);
@@ -215,9 +220,15 @@ export function connectTv(tv: SavedTv): Promise<void> {
   armRegistration(s, SOCKET_OPEN_TIMEOUT);
   const register = registerMessage(s.registerId, tv.clientKey);
   closing
-    .then(() => (session === s ? transport.tvConnect(tv.ip, register) : undefined))
+    .then(() => (session === s ? transport.tvConnect(tv.ip, register, tv.port) : undefined))
     .then(
-      () => {
+      (opened) => {
+        const port = opened?.port;
+        if (session === s && (port === 3000 || port === 3001)) {
+          s.tv = { ...s.tv, port };
+          // The TV may have answered `register` before this promise settled.
+          if (tvState.value === 'connected') saveTv(s.tv);
+        }
         // Socket open and `register` sent: now the TV has 8 s to answer (unless it already asked the user).
         if (session === s && tvState.value === 'connecting') armRegistration(s, REQUEST_TIMEOUT);
       },

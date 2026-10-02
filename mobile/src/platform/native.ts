@@ -11,8 +11,11 @@ export interface FoundTv {
 export interface OmpNativeApi {
   available: boolean;
   discoverTvs(timeoutMs: number): Promise<FoundTv[]>;
-  /** Opens the socket (ws:3000, then wss:3001) and sends `register`; resolves once open. */
-  tvConnect(ip: string, register: object): Promise<void>;
+  /**
+   * Opens the socket and sends `register`; resolves once open with the port that worked.
+   * Both ports (ws:3000, wss:3001) are raced; `preferPort` is tried alone first (2 s).
+   */
+  tvConnect(ip: string, register: object, preferPort?: 3000 | 3001): Promise<{ port: 3000 | 3001 }>;
   /** Any SSAP message (JSON). */
   tvSend(message: object): Promise<void>;
   /** Every incoming message of the main socket. */
@@ -38,7 +41,7 @@ export interface OmpNativeApi {
 
 interface OmpNativePlugin {
   discoverTvs(o: { timeoutMs: number }): Promise<{ tvs: FoundTv[] }>;
-  tvConnect(o: { ip: string; register: string }): Promise<void>;
+  tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
   tvSend(o: { json: string }): Promise<void>;
   tvDisconnect(): Promise<void>;
   pointerConnect(o: { url: string }): Promise<void>;
@@ -102,9 +105,11 @@ export const native: OmpNativeApi = {
     return r.tvs ?? [];
   },
 
-  tvConnect(ip, register) {
+  tvConnect(ip, register, preferPort) {
     if (!plugin) return unavailable();
-    return plugin.tvConnect({ ip, register: JSON.stringify(register) });
+    const o: { ip: string; register: string; preferPort?: number } = { ip, register: JSON.stringify(register) };
+    if (preferPort) o.preferPort = preferPort;
+    return plugin.tvConnect(o);
   },
 
   tvSend(message) {
