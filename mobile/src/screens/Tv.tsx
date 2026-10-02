@@ -23,6 +23,8 @@ interface Row {
   saved?: SavedTv;
 }
 
+const PENCIL = 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4';
+
 export function Tv() {
   const [found, setFound] = useState<FoundTv[]>([]);
   const [searching, setSearching] = useState(true);
@@ -117,22 +119,22 @@ export function Tv() {
                       {r.meta}
                       {connecting || pairing ? ' · подключение…' : ''}
                     </span>
+                    {connected && (
+                      <span class="m-tv-ok">
+                        <Icon d="M5 12l5 5 9-10" size={16} />
+                        Подключён
+                      </span>
+                    )}
                   </span>
-                  {connected && (
-                    <span class="m-tv-ok">
-                      <Icon d="M5 12l5 5 9-10" size={18} />
-                      Подключён
-                    </span>
-                  )}
                 </button>
                 {r.saved && (
-                  <button type="button" class="m-btn-text" aria-label={'Переименовать ' + r.name} onClick={() => setRenaming(r.saved!)}>
-                    Переименовать
+                  <button type="button" class="m-icon-btn" aria-label={'Переименовать ' + r.name} onClick={() => setRenaming(r.saved!)}>
+                    <Icon d={PENCIL} size={20} />
                   </button>
                 )}
                 {r.saved && (
-                  <button type="button" class="m-btn-text" aria-label={'Забыть ' + r.name} onClick={() => void forget(r.ip)}>
-                    Забыть
+                  <button type="button" class="m-icon-btn" aria-label={'Забыть ' + r.name} onClick={() => void forget(r.ip)}>
+                    <Icon d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" size={20} />
                   </button>
                 )}
               </div>

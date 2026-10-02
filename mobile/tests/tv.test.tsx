@@ -44,7 +44,9 @@ function mount(): HTMLElement {
 }
 
 function btn(el: HTMLElement, text: string): HTMLButtonElement {
-  const b = Array.from(el.querySelectorAll('button')).find((x) => (x.textContent || '').trim() === text);
+  const b = Array.from(el.querySelectorAll('button')).find(
+    (x) => (x.textContent || '').trim() === text || (x.getAttribute('aria-label') || '').indexOf(text + ' ') === 0,
+  );
   if (!b) throw new Error('no button ' + text);
   return b as HTMLButtonElement;
 }

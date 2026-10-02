@@ -5,6 +5,9 @@ import { PairPhoneScreen } from '../../src/screens/PairPhone';
 import { Qr } from '../../src/ui/Qr';
 import { buildPairUri } from '../../src/lib/pairing';
 import { servers, activeServerId, addServer, setActiveServer } from '../../src/store/servers';
+import { attachPhone, detachPhone, setLinkTransport } from '../../src/phone/link';
+import { currentRoute, resetTo } from '../../src/ui/nav';
+import { act } from 'preact/test-utils';
 
 beforeAll(() => {
   init({ debug: false, visualDebug: false });
@@ -38,5 +41,21 @@ describe('PairPhoneScreen', () => {
     const host = mount(h(PairPhoneScreen, {}));
     expect(host.querySelector('svg.qr')).toBeNull();
     expect(host.textContent).toContain('Сначала подключитесь к серверу');
+  });
+  it('returns to the catalog once a phone links to the TV', async () => {
+    const s = addServer({ url: '192.168.1.191:5665' });
+    setActiveServer(s.id);
+    setLinkTransport(() => new Promise<string>(() => {}));
+    try {
+      attachPhone('http://192.168.1.50:4000/omp/a');
+      resetTo({ name: 'pairPhone' } as any);
+      mount(h(PairPhoneScreen, {}));
+      expect(currentRoute.value.name).toBe('pairPhone');
+      await act(async () => attachPhone('http://192.168.1.60:4000/omp/b'));
+      expect(currentRoute.value.name).toBe('library');
+    } finally {
+      detachPhone();
+      setLinkTransport(null);
+    }
   });
 });

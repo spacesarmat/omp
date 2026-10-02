@@ -4,7 +4,9 @@ import { act } from 'preact/test-utils';
 import { Connect } from '../src/screens/Connect';
 import { setQrScanner } from '../src/platform/qr';
 import { toast } from '../src/ui/toast';
-import { currentRoute, resetTo } from '../src/nav';
+import { currentRoute, routeStack, resetTo } from '../src/nav';
+import { saveTv, setActiveTv, reloadTvs } from '../src/tv/tvStore';
+import { setPlayerLinkDeps } from '../src/tv/playerLink';
 import { activeServer, addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
 import { mockFetch } from '../../tests/helpers/fetchMock';
 
@@ -39,6 +41,7 @@ beforeEach(() => {
   localStorage.clear();
   for (const s of servers.value.slice()) removeServer(s.id);
   setActiveServer(null);
+  reloadTvs();
   resetTo({ name: 'connect' });
   toast.value = '';
 });
@@ -99,7 +102,33 @@ describe('Connect screen', () => {
     expect(servers.value[0]).toMatchObject({ name: 'Дом', user: 'u', password: 'p' });
     expect(activeServer.value?.name).toBe('Дом');
     expect(toast.value).toBe('Сервер «Дом» добавлен');
-    expect(currentRoute.value.name).toBe('library');
+    // no TV yet: offer to pick one, the catalog stays underneath
+    expect(currentRoute.value.name).toBe('tv');
+    expect(routeStack.value.map((r) => r.name)).toEqual(['library', 'tv']);
+  });
+
+  it('after a scan with a saved TV links to it instead of opening the TV list', async () => {
+    mockFetch(() => ({ body: 'MatriX' }));
+    saveTv({ ip: '192.168.1.57', name: 'Спальня', clientKey: 'k' });
+    setActiveTv('192.168.1.57');
+    const launches: object[] = [];
+    setPlayerLinkDeps({
+      native: { startPlayerServer: async () => 'http://192.168.1.2:8123/', queuePlayerCommands: async () => {}, onPlayerMessage: () => () => {} } as any,
+      foregroundAppId: async () => 'com.spacesarmat.torrplayer',
+      launchOnTv: async (p) => void launches.push(p),
+      tvIp: () => '192.168.1.57',
+      tvFailed: () => false,
+    });
+    try {
+      setQrScanner(async () => ({ url: 'http://192.168.1.10:8090', name: 'Дом' }));
+      const el = mount();
+      await act(async () => btn(el, 'Сканировать QR').click());
+      await flush();
+      expect(currentRoute.value.name).toBe('library');
+      expect(launches).toEqual([{ report: 'http://192.168.1.2:8123/' }]);
+    } finally {
+      setPlayerLinkDeps(null);
+    }
   });
 
   it('shows a scanner error and cancel is silent', async () => {

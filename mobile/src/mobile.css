@@ -181,7 +181,7 @@ button, .m-btn {
   border-radius: 12px;
   background: var(--panel-2);
 }
-.m-tv-ok { display: flex; align-items: center; gap: 4px; color: #3FB950; font-size: 13px; font-weight: 700; }
+.m-tv-ok { display: flex; margin-top: 2px; align-items: center; gap: 4px; color: #3FB950; font-size: 13px; font-weight: 700; }
 .m-hint-warn { padding: 12px 14px; border-radius: 12px; background: #3A3320; color: var(--accent); font-size: 14px; line-height: 1.45; }
 .m-tv-tip { margin-top: auto; }
 
@@ -494,3 +494,6 @@ button, .m-btn {
 .m-server-row { display: flex; align-items: center; gap: 4px; }
 .m-server-row .m-server { flex: 1 1 auto; min-width: 0; }
 .m-server-row .m-btn-text, .m-tv-row .m-btn-text { min-height: 44px; flex-shrink: 0; }
+.m-icon-btn { width: 44px; height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 12px; background: none; color: var(--muted); }
+.m-tv-text .m-small, .m-server-text .m-small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-tv-text .m-server-name, .m-server-text .m-server-name { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }

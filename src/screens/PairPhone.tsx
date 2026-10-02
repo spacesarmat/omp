@@ -1,7 +1,9 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import { activeServer } from '../store/servers';
 import { buildPairUri } from '../lib/pairing';
-import { goBack } from '../ui/nav';
+import { goBack, resetTo } from '../ui/nav';
+import { toast } from '../ui/toast';
+import { phoneAttachCount } from '../phone/link';
 import { FocusGroup, Button } from '../ui/components';
 import { Qr } from '../ui/Qr';
 import { restoreFocus } from '../ui/focus';
@@ -11,6 +13,14 @@ export function PairPhoneScreen() {
   useEffect(() => {
     restoreFocus('pair-back');
   }, []);
+  // the phone scanned the QR and linked to this TV: back to the catalog
+  const attachesAtOpen = useRef(phoneAttachCount.value);
+  const attaches = phoneAttachCount.value;
+  useEffect(() => {
+    if (attaches === attachesAtOpen.current) return;
+    toast('Телефон подключён');
+    resetTo({ name: 'library' });
+  }, [attaches]);
   return (
     <FocusGroup focusKey="PAIR-PHONE" className="screen pair-phone">
       <h1>Подключить телефон</h1>
@@ -24,6 +34,7 @@ export function PairPhoneScreen() {
               <div>1. Установите OMP на Android-телефон (ссылка в README на GitHub).</div>
               <div>2. Откройте OMP на телефоне → «Сканировать QR с телевизора».</div>
               <div>3. Сервер, логин и пароль перенесутся автоматически.</div>
+              <div>4. Выберите этот телевизор на телефоне — OMP сам вернётся в каталог.</div>
             </div>
           </div>
           <p class="muted">QR содержит пароль сервера — не показывайте его посторонним.</p>
