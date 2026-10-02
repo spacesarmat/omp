@@ -1,11 +1,27 @@
 // Wrapper over the native Android plugin OmpNative (android/.../OmpNativePlugin.kt).
-// The plugin is transport only: SSDP, TV sockets, intents, APK install, player server. SSAP lives in src/tv.
+// The plugin is transport only: SSDP, TV sockets, intents, APK install, player server, embedded TorrServer.
+// SSAP lives in src/tv.
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 export interface FoundTv {
   ip: string;
   name: string;
   model?: string;
+}
+
+/** The embedded TorrServer (arm64 only), port 8090. */
+export interface LocalServerInfo {
+  supported: boolean;
+  running: boolean;
+  version?: string;
+  /** Wi-Fi IPv4 of the phone. */
+  ip?: string;
+  error?: string;
+}
+
+export interface LocalServerState {
+  running: boolean;
+  error?: string;
 }
 
 export interface OmpNativeApi {
@@ -39,6 +55,18 @@ export interface OmpNativeApi {
   queuePlayerCommands(cmds: object[]): Promise<void>;
   /** Raw body of every TV message. */
   onPlayerMessage(cb: (body: string) => void): () => void;
+  /** Off-device: not supported, not running. */
+  localServerInfo(): Promise<LocalServerInfo>;
+  /** Starts the foreground service; resolves once the server answers (rejects after 15 s). */
+  startLocalServer(): Promise<LocalServerInfo>;
+  stopLocalServer(): Promise<void>;
+  /** Bytes used by the server's disk cache. */
+  localServerCache(): Promise<number>;
+  /** Stops the server if running, empties the cache, starts it again. */
+  clearLocalServerCache(): Promise<void>;
+  /** Wi-Fi IPv4 of the phone; null without Wi-Fi or off-device. */
+  localIpv4(): Promise<string | null>;
+  onLocalServerState(cb: (state: LocalServerState) => void): () => void;
 }
 
 interface OmpNativePlugin {
@@ -55,11 +83,18 @@ interface OmpNativePlugin {
   startPlayerServer(o: { tvIp: string }): Promise<{ url: string }>;
   stopPlayerServer(): Promise<void>;
   queuePlayerCommands(o: { json: string }): Promise<void>;
+  localServerInfo(): Promise<Partial<LocalServerInfo>>;
+  startLocalServer(): Promise<Partial<LocalServerInfo>>;
+  stopLocalServer(): Promise<void>;
+  localServerCache(): Promise<{ usedBytes?: number }>;
+  clearLocalServerCache(): Promise<{ usedBytes?: number }>;
+  localIpv4(): Promise<{ ip?: string | null }>;
   addListener(event: 'tvMessage', cb: (e: { json: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'tvClosed', cb: (e: { reason: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'apkProgress', cb: (e: { percent: number }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'magnetReceived', cb: (e: { link: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'playerMessage', cb: (e: { body: string }) => void): Promise<PluginListenerHandle>;
+  addListener(event: 'localServerState', cb: (e: Partial<LocalServerState>) => void): Promise<PluginListenerHandle>;
 }
 
 export const ONLY_ANDROID = 'Доступно только в приложении Android';
@@ -97,6 +132,21 @@ function parse(json: string): any {
   } catch {
     return null;
   }
+}
+
+function text(v: unknown): string | undefined {
+  return typeof v === 'string' && v !== '' ? v : undefined;
+}
+
+function serverInfo(r: Partial<LocalServerInfo> | null | undefined): LocalServerInfo {
+  const info: LocalServerInfo = { supported: r?.supported === true, running: r?.running === true };
+  const version = text(r?.version);
+  const ip = text(r?.ip);
+  const error = text(r?.error);
+  if (version) info.version = version;
+  if (ip) info.ip = ip;
+  if (error) info.error = error;
+  return info;
 }
 
 export const native: OmpNativeApi = {
@@ -201,5 +251,49 @@ export const native: OmpNativeApi = {
   onPlayerMessage(cb) {
     if (!plugin) return noop;
     return listen(() => plugin.addListener('playerMessage', (e) => cb(e.body)));
+  },
+
+  async localServerInfo() {
+    if (!plugin) return { supported: false, running: false };
+    return serverInfo(await plugin.localServerInfo());
+  },
+
+  async startLocalServer() {
+    if (!plugin) return unavailable();
+    return serverInfo(await plugin.startLocalServer());
+  },
+
+  stopLocalServer() {
+    if (!plugin) return unavailable();
+    return plugin.stopLocalServer();
+  },
+
+  async localServerCache() {
+    if (!plugin) return unavailable();
+    const r = await plugin.localServerCache();
+    return typeof r.usedBytes === 'number' && r.usedBytes > 0 ? r.usedBytes : 0;
+  },
+
+  async clearLocalServerCache() {
+    if (!plugin) return unavailable();
+    await plugin.clearLocalServerCache();
+  },
+
+  async localIpv4() {
+    if (!plugin) return null;
+    const r = await plugin.localIpv4();
+    return text(r.ip) ?? null;
+  },
+
+  onLocalServerState(cb) {
+    if (!plugin) return noop;
+    return listen(() =>
+      plugin.addListener('localServerState', (e) => {
+        const state: LocalServerState = { running: e.running === true };
+        const error = text(e.error);
+        if (error) state.error = error;
+        cb(state);
+      }),
+    );
   },
 };
