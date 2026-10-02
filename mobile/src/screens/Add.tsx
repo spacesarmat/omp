@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
@@ -42,12 +42,18 @@ export function Add({ link }: { link?: string }) {
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const [pending, setPending] = useState<Record<string, boolean>>({});
   const [alive] = useState({ v: true });
+  const pendingRef = useRef<Set<string>>(new Set());
+  const searchToken = useRef(0);
+  const cancelJump = useRef<(() => void) | null>(null);
   const tv = activeTv.value;
 
   useEffect(
     () => () => {
       alive.v = false;
+      searchToken.current++;
+      cancelJump.current?.();
     },
     [],
   );
@@ -91,22 +97,34 @@ export function Add({ link }: { link?: string }) {
     const q = query.trim();
     const c = client.value;
     if (!q || !c) return;
+    const token = ++searchToken.current;
     setSearching(true);
     setSearchError('');
     try {
       const r = await c.search(q, source);
-      if (alive.v) setResults(r);
+      if (alive.v && token === searchToken.current) setResults(r);
     } catch (err) {
-      if (alive.v) {
+      if (alive.v && token === searchToken.current) {
         setResults(null);
         setSearchError(errorMessage(err));
       }
     } finally {
-      if (alive.v) setSearching(false);
+      if (alive.v && token === searchToken.current) setSearching(false);
     }
   };
 
+  const pickSource = (s: SearchSource) => {
+    if (s === source) return;
+    searchToken.current++;
+    setSource(s);
+    setResults(null);
+    setSearching(false);
+    setSearchError('');
+  };
+
   const addResult = async (r: SearchResult, watch: boolean) => {
+    const key = r.Hash || r.Title;
+    if (pendingRef.current.has(key)) return;
     const l = linkOf(r);
     if (!l) {
       showToast('У результата нет ссылки');
@@ -116,19 +134,28 @@ export function Add({ link }: { link?: string }) {
       navigate({ name: 'tv' });
       return;
     }
+    pendingRef.current.add(key);
+    setPending({ ...Object.fromEntries([...pendingRef.current].map((k) => [k, true])) });
     setSearchError('');
     try {
-      const hash = await addLink(l);
-      if (!hash || !alive.v) return;
+      const c = client.value;
+      if (!c) throw new Error('Сервер не выбран');
+      const hash = (await c.add({ link: l })).hash;
+      if (!alive.v) return;
       if (!watch) {
         showToast('Добавлено на сервер');
         return;
       }
-      await actions.launchOnTv(watchOnTvParams(client.value!.baseUrl, hash));
+      await actions.launchOnTv(watchOnTvParams(c.baseUrl, hash));
+      if (!alive.v) return;
       showToast('Запустил на ' + tv!.name);
-      openRemoteSoon('add');
+      cancelJump.current?.();
+      cancelJump.current = openRemoteSoon('add');
     } catch (err) {
       if (alive.v) setSearchError(errorMessage(err));
+    } finally {
+      pendingRef.current.delete(key);
+      if (alive.v) setPending(Object.fromEntries([...pendingRef.current].map((k) => [k, true])));
     }
   };
 
@@ -172,7 +199,7 @@ export function Add({ link }: { link?: string }) {
             type="button"
             class={'m-chip' + (source === s ? ' on' : '')}
             aria-pressed={source === s}
-            onClick={() => setSource(s)}
+            onClick={() => pickSource(s)}
           >
             {s === 'rutor' ? 'Встроенный' : 'Torznab'}
           </button>
@@ -192,6 +219,7 @@ export function Add({ link }: { link?: string }) {
               type="button"
               class="m-iconbtn"
               aria-label="Добавить на сервер"
+              disabled={!!pending[r.Hash || r.Title]}
               onClick={() => void addResult(r, false)}
             >
               <Icon d={PLUS} size={20} />
@@ -200,6 +228,7 @@ export function Add({ link }: { link?: string }) {
               type="button"
               class="m-iconbtn primary"
               aria-label="Добавить и смотреть на ТВ"
+              disabled={!!pending[r.Hash || r.Title]}
               onClick={() => void addResult(r, true)}
             >
               <Icon d={TV_PLAY} size={20} />

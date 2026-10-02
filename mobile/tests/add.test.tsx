@@ -131,4 +131,73 @@ describe('Add', () => {
     expect(launch).not.toHaveBeenCalled();
     expect(toast.value).toBe('Добавлено на сервер');
   });
+
+  it('double tap on a row adds and launches once', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
+    let resolveAdd: (v: any) => void = () => {};
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockImplementation(() => new Promise((r) => (resolveAdd = r)));
+    mount();
+    search('x');
+    await flush();
+    const b = byLabel('Добавить и смотреть на ТВ')[0];
+    click(b);
+    click(b);
+    expect((b as HTMLButtonElement).disabled).toBe(true);
+    resolveAdd({ hash: HASH });
+    await flush();
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect((b as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('add errors from a row show under the search', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
+    vi.spyOn(TorrServerClient.prototype, 'add').mockRejectedValue(new Error('сервер упал'));
+    mount();
+    search('x');
+    await flush();
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    expect(el.querySelector('.m-error')!.textContent).toContain('сервер упал');
+  });
+
+  it('drops out-of-order search responses and clears results on source change', async () => {
+    const resolvers: Array<(v: any) => void> = [];
+    vi.spyOn(TorrServerClient.prototype, 'search').mockImplementation(() => new Promise((r) => resolvers.push(r)));
+    mount();
+    search('first');
+    search('second');
+    resolvers[1]([results[1]]);
+    await flush();
+    resolvers[0]([results[0]]);
+    await flush();
+    const rows = el.querySelectorAll('.m-result');
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('S01');
+    click(byText('Torznab'));
+    expect(el.querySelectorAll('.m-result').length).toBe(0);
+    search('third');
+    click(byText('Встроенный'));
+    resolvers[2]([results[0]]);
+    await flush();
+    expect(el.querySelectorAll('.m-result').length).toBe(0);
+  });
+
+  it('does not jump to the remote after unmount', async () => {
+    vi.useFakeTimers();
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    setWatchActions({ launchOnTv: launch, remoteDelayMs: 1000 });
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
+    vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('x');
+    await flush();
+    click(byLabel('Добавить и смотреть на ТВ')[0]);
+    await flush();
+    act(() => render(null, el));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(currentRoute.value.name).toBe('add');
+    vi.useRealTimers();
+  });
 });

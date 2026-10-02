@@ -81,7 +81,7 @@ describe('Remote with a TV', () => {
     expect(a.pressButton).toHaveBeenLastCalledWith('HOME');
   });
 
-  it('media row mapping and play/pause toggle', () => {
+  it('media row mapping and play/pause toggle', async () => {
     mount();
     click(lbl('Назад на 10 с'));
     expect(a.pressButton).toHaveBeenLastCalledWith('REWIND');
@@ -93,6 +93,7 @@ describe('Remote with a TV', () => {
     expect(a.pressButton).toHaveBeenLastCalledWith('FASTFORWARD');
     click(lbl('Пауза'));
     expect(a.pressButton).toHaveBeenLastCalledWith('PAUSE');
+    await flush();
     click(lbl('Воспроизвести'));
     expect(a.pressButton).toHaveBeenLastCalledWith('PLAY');
   });
@@ -104,24 +105,85 @@ describe('Remote with a TV', () => {
     expect(a.volume.mock.calls).toEqual([['up'], ['down']]);
   });
 
-  it('keyboard: typing, deleting, Enter', () => {
-    mount();
-    click(lbl('Клавиатура'));
-    const i = el.querySelector('input[aria-label="Ввод на телевизоре"]') as HTMLInputElement;
-    act(() => {
-      i.value = 'ab';
-      i.dispatchEvent(new Event('input', { bubbles: true }));
+  describe('keyboard', () => {
+    const open = () => {
+      mount();
+      click(lbl('Клавиатура'));
+      return el.querySelector('input[aria-label="Ввод на телевизоре"]') as HTMLInputElement;
+    };
+    const edit = async (i: HTMLInputElement, v: string, init: InputEventInit = {}) => {
+      act(() => {
+        i.value = v;
+        i.dispatchEvent(new InputEvent('input', { bubbles: true, ...init }));
+      });
+      await flush();
+    };
+
+    it('types appended text and deletes at the end', async () => {
+      const i = open();
+      await edit(i, 'ab');
+      expect(a.typeText).toHaveBeenCalledWith('ab');
+      await edit(i, 'a');
+      expect(a.deleteText).toHaveBeenCalledWith(1);
+      expect(a.typeText).toHaveBeenCalledTimes(1);
     });
-    expect(a.typeText).toHaveBeenCalledWith('ab');
-    act(() => {
-      i.value = 'a';
-      i.dispatchEvent(new Event('input', { bubbles: true }));
+
+    it('mid-string insert rewrites from the common prefix', async () => {
+      const i = open();
+      await edit(i, 'abcd');
+      a.typeText.mockClear();
+      await edit(i, 'abXcd');
+      expect(a.deleteText).toHaveBeenLastCalledWith(2);
+      expect(a.typeText).toHaveBeenLastCalledWith('Xcd');
     });
-    expect(a.deleteText).toHaveBeenCalledWith(1);
-    act(() => {
-      i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    it('same-length replacement (autocorrect) is a delete plus a type', async () => {
+      const i = open();
+      await edit(i, 'teh');
+      await edit(i, 'the');
+      expect(a.deleteText).toHaveBeenLastCalledWith(2);
+      expect(a.typeText).toHaveBeenLastCalledWith('he');
     });
-    expect(a.sendEnter).toHaveBeenCalled();
+
+    it('paste over a selection', async () => {
+      const i = open();
+      await edit(i, 'hello world');
+      await edit(i, 'hello there');
+      expect(a.deleteText).toHaveBeenLastCalledWith(5);
+      expect(a.typeText).toHaveBeenLastCalledWith('there');
+    });
+
+    it('composition sends once, at the end', async () => {
+      const i = open();
+      act(() => {
+        i.dispatchEvent(new Event('compositionstart', { bubbles: true }));
+      });
+      await edit(i, 'п', { isComposing: true });
+      await edit(i, 'пр', { isComposing: true });
+      expect(a.typeText).not.toHaveBeenCalled();
+      act(() => {
+        i.value = 'привет';
+        i.dispatchEvent(new Event('compositionend', { bubbles: true }));
+      });
+      await flush();
+      expect(a.typeText).toHaveBeenCalledTimes(1);
+      expect(a.typeText).toHaveBeenCalledWith('привет');
+    });
+
+    it('Enter sends enter and clears the field and the sent text', async () => {
+      const i = open();
+      await edit(i, 'abc');
+      act(() => {
+        i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      });
+      await flush();
+      expect(a.sendEnter).toHaveBeenCalled();
+      expect(i.value).toBe('');
+      a.deleteText.mockClear();
+      await edit(i, 'x');
+      expect(a.deleteText).not.toHaveBeenCalled();
+      expect(a.typeText).toHaveBeenLastCalledWith('x');
+    });
   });
 
   it('power asks to confirm and then toasts', async () => {
@@ -158,5 +220,29 @@ describe('Remote with a TV', () => {
     expect(a.moveCursor).toHaveBeenLastCalledWith(20, 10);
     ptr(pad, 'pointerup', 140, 120);
     expect(a.click).toHaveBeenCalledTimes(1);
+  });
+
+  it('touchpad ignores a second pointer', () => {
+    mount();
+    click(text('Тачпад'));
+    const pad = el.querySelector('.m-touchpad')!;
+    ptr(pad, 'pointerdown', 100, 100);
+    const e = new Event('pointerup', { bubbles: true }) as any;
+    e.pointerId = 2;
+    act(() => {
+      pad.dispatchEvent(e);
+    });
+    expect(a.click).not.toHaveBeenCalled();
+    ptr(pad, 'pointerup', 100, 100);
+    expect(a.click).toHaveBeenCalledTimes(1);
+  });
+
+  it('play/pause label stays when the press fails', async () => {
+    mount();
+    a.pressButton.mockRejectedValueOnce(new Error('нет связи'));
+    click(lbl('Пауза'));
+    await flush();
+    expect(lbl('Пауза')).toBeTruthy();
+    expect(toast.value).toBe('нет связи');
   });
 });

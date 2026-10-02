@@ -107,6 +107,7 @@ function Touchpad() {
       aria-label="Тачпад"
       style={{ touchAction: 'none' }}
       onPointerDown={(e) => {
+        if (st.current) return;
         (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
         st.current = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, last: 0, moved: false, id: e.pointerId };
       }}
@@ -126,14 +127,20 @@ function Touchpad() {
       }}
       onPointerUp={(e) => {
         const s = st.current;
+        if (!s || s.id !== e.pointerId) return;
         st.current = null;
-        if (s && !s.moved) {
+        if (!s.moved) {
           vibrate();
           run(act.click());
         }
         (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
       }}
-      onPointerCancel={() => (st.current = null)}
+      onPointerCancel={(e) => {
+        const s = st.current;
+        if (!s || s.id !== e.pointerId) return;
+        st.current = null;
+        (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+      }}
     >
       <span class="m-muted m-small">Проведите пальцем · касание — клик</span>
     </div>
@@ -146,10 +153,14 @@ export function Remote() {
   const [mode, setMode] = useState<'buttons' | 'touchpad'>('buttons');
   const [kbd, setKbd] = useState(false);
   const [playing, setPlaying] = useState(true);
-  const [text, setText] = useState('');
+  const sent = useRef('');
+  const composing = useRef(false);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const field = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!kbd) setText('');
+    sent.current = '';
+    composing.current = false;
   }, [kbd]);
 
   if (!tv) {
@@ -174,12 +185,33 @@ export function Remote() {
   };
   const togglePlay = () => {
     vibrate();
-    act.pressButton(playing ? 'PAUSE' : 'PLAY').catch(fail);
-    setPlaying(!playing);
+    act
+      .pressButton(playing ? 'PAUSE' : 'PLAY')
+      .then(() => setPlaying(!playing))
+      .catch(fail);
   };
   const vol = (dir: 'up' | 'down') => {
     vibrate();
     act.volume(dir).catch(fail);
+  };
+  /** The TV cursor sits at the end: delete back to the common prefix, then type the rest. */
+  const syncText = (next: string) => {
+    const prev = sent.current;
+    let p = 0;
+    while (p < prev.length && p < next.length && prev[p] === next[p]) p++;
+    sent.current = next;
+    const del = prev.length - p;
+    const add = next.slice(p);
+    if (!del && !add) return;
+    // serialised so rapid edits reach the TV in order
+    queue.current = queue.current.then(async () => {
+      try {
+        if (del) await act.deleteText(del);
+        if (add) await act.typeText(add);
+      } catch (e) {
+        fail(e);
+      }
+    });
   };
   const off = async () => {
     if (!act.confirm('Выключить ' + tv.name + '?')) return;
@@ -264,23 +296,26 @@ export function Remote() {
       </div>
       {kbd && (
         <input
+          ref={field}
           class="m-input"
           aria-label="Ввод на телевизоре"
           placeholder="Печатайте — текст уйдёт на ТВ"
-          value={text}
+          onCompositionStart={() => (composing.current = true)}
+          onCompositionEnd={(e) => {
+            composing.current = false;
+            syncText((e.target as HTMLInputElement).value);
+          }}
           onInput={(e) => {
-            const next = (e.target as HTMLInputElement).value;
-            const prev = text;
-            setText(next);
-            if (next.length < prev.length) act.deleteText(prev.length - next.length).catch(fail);
-            else if (next.startsWith(prev)) act.typeText(next.slice(prev.length)).catch(fail);
-            else act.typeText(next).catch(fail);
+            if (composing.current || (e as unknown as InputEvent).isComposing) return;
+            syncText((e.target as HTMLInputElement).value);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
+              sent.current = '';
+              if (field.current) field.current.value = '';
               act.sendEnter().catch(fail);
-            } else if (e.key === 'Backspace' && !text) {
+            } else if (e.key === 'Backspace' && !sent.current) {
               act.deleteText(1).catch(fail);
             }
           }}
