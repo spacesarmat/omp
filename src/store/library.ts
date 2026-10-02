@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
 import type { Torrent } from '../api/types';
+import type { LibraryTab } from '../lib/libraryView';
 
 const KEY = 'tsp.torrents';
 
@@ -11,6 +12,11 @@ export function sanitizeTorrents(v: unknown): Torrent[] {
 
 export const torrents = signal<Torrent[]>(sanitizeTorrents(loadJson<unknown>(KEY, [], Array.isArray)));
 
+// Library view state; module-level so it survives screen remounts on navigation
+export const libraryTab = signal<LibraryTab>('all');
+export const librarySearchOpen = signal(false);
+export const libraryQuery = signal('');
+
 let inflight: Promise<Torrent[]> | null = null;
 let gen = 0;
 
@@ -19,6 +25,9 @@ export function resetLibrary(): void {
   gen++;
   inflight = null;
   torrents.value = [];
+  libraryTab.value = 'all';
+  librarySearchOpen.value = false;
+  libraryQuery.value = '';
   saveJson(KEY, []);
 }
 

@@ -30,3 +30,16 @@ describe('sortTorrents', () => {
     expect(sortLabel('title')).toBe('По названию');
   });
 });
+
+describe('sortTorrents ties', () => {
+  const mk = (hash: string): Torrent => ({ hash, title: 'Same', torrent_size: 0, timestamp: 5 } as Torrent);
+  const hashes = 'ihgfedcbaonmlkjzyx'.split('');
+  const base = hashes.map(mk);
+  (['new', 'title', 'size'] as const).forEach((mode) => {
+    it('orders ties by hash in ' + mode + ' mode regardless of input order', () => {
+      const exp = hashes.slice().sort();
+      expect(sortTorrents(base, mode).map((t) => t.hash)).toEqual(exp);
+      expect(sortTorrents(base.slice().reverse(), mode).map((t) => t.hash)).toEqual(exp);
+    });
+  });
+});
