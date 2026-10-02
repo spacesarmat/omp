@@ -13,12 +13,13 @@ import { selectAudioTrack, selectTextTrack } from '../platform/webosMedia';
 import type { PlayItem } from '../player/types';
 import { SeekAccumulator } from '../player/seek';
 import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
+import { introChapter } from '../player/chapters';
 import { useVideoState } from '../player/useVideoState';
 import { useProgressSync } from '../player/useProgressSync';
 import { useNextEpisode } from '../player/useNextEpisode';
 import { useCacheStats } from '../player/useCacheStats';
 import { Controls } from '../player/Controls';
-import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, PlayerError } from '../player/Overlays';
+import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner, PlayerError } from '../player/Overlays';
 import { goBack } from '../ui/nav';
 import { useKeys } from '../ui/keys';
 import { choose } from '../ui/dialog';
@@ -46,6 +47,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   const [audioIdx, setAudioIdx] = useState(-1);
   const [subChoice, setSubChoice] = useState('off');
   const [cues, setCues] = useState<Cue[] | null>(null);
+  const [skippedIntro, setSkippedIntro] = useState<number | null>(null);
   const [subOffset, setSubOffset] = useState(0);
   const startPos = useRef(0);
   const userTracks = useRef(false);
@@ -78,6 +80,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     onEnd: () => goBack(),
   });
 
+  const intro = introChapter(probe, vs.time);
+  const showSkip = !!intro && skippedIntro !== intro.start && next.countdown === null;
+
   const cache = useCacheStats(c, item.hash, statsOn || (ready && vs.buffering));
 
   const showControls = () => {
@@ -97,6 +102,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     setProbe(null);
     setCues(null);
     setSubOffset(0);
+    setSkippedIntro(null);
     setSubChoice('off');
     setAudioIdx(-1);
     userTracks.current = false;
@@ -288,6 +294,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
       if (a === 'enter') { goNext(); return true; }
       if (a === 'back') { next.dismiss(); return true; }
     }
+    if (showSkip && intro) {
+      if (a === 'enter') { seekTo(intro.end); setSkippedIntro(intro.start); return true; }
+      if (a === 'back') { setSkippedIntro(intro.start); return true; }
+    }
     switch (a) {
       case 'enter':
       case 'playpause':
@@ -353,6 +363,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
       {next.countdown !== null && hasNext && (
         <NextBanner seconds={next.countdown} title={queue[index + 1].title} onNext={goNext} />
       )}
+      {showSkip && intro && <SkipBanner onSkip={() => { seekTo(intro.end); setSkippedIntro(intro.start); }} />}
       {(controls || vs.paused) && !vs.error && (
         <Controls
           title={item.title}

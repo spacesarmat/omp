@@ -47,6 +47,15 @@ export function NextBanner(p: { seconds: number; title: string; onNext: () => vo
   );
 }
 
+export function SkipBanner(p: { onSkip: () => void }) {
+  return (
+    <div class="next-banner" onClick={p.onSkip}>
+      <div>Пропустить заставку</div>
+      <div class="meta">OK — пропустить · Назад — смотреть</div>
+    </div>
+  );
+}
+
 export function PlayerError(p: { message: string; probe: FfprobeResult | null; onRetry: () => void; onBack: () => void }) {
   const details = statsLines(null, p.probe).join('\n');
   return (
