@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { qualityBadge, posterStyle } from '../ui/Poster';
 import { showToast } from '../ui/toast';
-import { goBack, navigate } from '../nav';
+import { currentRoute, goBack, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { actions, filesOf, openRemoteSoon, streamUrlFor, watchOnTvParams } from '../watch';
-import { client } from '../../../src/store/servers';
+import { client, activeServer } from '../../../src/store/servers';
 import { torrents, refreshTorrents } from '../../../src/store/library';
 import {
   continueWatching,
@@ -53,9 +53,13 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [alive] = useState({ v: true });
+  const launching = useRef(false);
+  const cancelJump = useRef<(() => void) | null>(null);
+  const hasAuth = !!activeServer.value?.user;
   useEffect(
     () => () => {
       alive.v = false;
+      cancelJump.current?.();
     },
     [],
   );
@@ -69,17 +73,25 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
       navigate({ name: 'tv' });
       return;
     }
+    if (launching.current) return;
+    launching.current = true;
     setBusy(true);
     setStatus(null);
     try {
       await actions.launchOnTv(watchOnTvParams(c.baseUrl, torrent.hash, file.id, resumePosition(torrent.hash, file.id)));
       if (!alive.v) return;
       setStatus({ kind: 'ok', text: 'Запустил на ' + tv.name + ' — пульт уже открыт' });
-      openRemoteSoon('torrent');
+      // stays busy until the jump to the remote has happened
+      cancelJump.current = openRemoteSoon(currentRoute.value, () => {
+        launching.current = false;
+        if (alive.v) setBusy(false);
+      });
     } catch (e) {
-      if (alive.v) setStatus({ kind: 'error', text: errorMessage(e) });
-    } finally {
-      if (alive.v) setBusy(false);
+      launching.current = false;
+      if (alive.v) {
+        setStatus({ kind: 'error', text: errorMessage(e) });
+        setBusy(false);
+      }
     }
   };
 
@@ -92,10 +104,10 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
     }
   };
 
-  const onCopy = async () => {
+  const onCopy = async (withAuth: boolean) => {
     try {
-      await actions.copyText(streamUrlFor(c, torrent, file));
-      showToast('Ссылка скопирована');
+      await actions.copyText(streamUrlFor(c, torrent, file, withAuth));
+      showToast(withAuth && hasAuth ? 'Ссылка скопирована (с логином и паролем)' : 'Ссылка скопирована');
       if (alive.v) onClose();
     } catch (e) {
       if (alive.v) setStatus({ kind: 'error', text: errorMessage(e) });
@@ -120,13 +132,24 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
           <span class="m-opt-sub">В VLC, MX Player или другом плеере</span>
         </span>
       </button>
-      <button type="button" class="m-opt" onClick={onCopy}>
+      <button type="button" class="m-opt" onClick={() => onCopy(true)}>
         <Icon d={LINK} size={26} />
         <span class="m-opt-text">
           <span class="m-opt-name">Скопировать ссылку на поток</span>
-          <span class="m-opt-sub">Для другого устройства в этой сети</span>
+          <span class="m-opt-sub">
+            {hasAuth ? 'Ссылка содержит логин и пароль сервера' : 'Для другого устройства в этой сети'}
+          </span>
         </span>
       </button>
+      {hasAuth && (
+        <button type="button" class="m-opt" onClick={() => onCopy(false)}>
+          <Icon d={LINK} size={26} />
+          <span class="m-opt-text">
+            <span class="m-opt-name">Скопировать без пароля</span>
+            <span class="m-opt-sub">Плеер на другом устройстве спросит логин</span>
+          </span>
+        </button>
+      )}
       {status && (
         <div class={status.kind === 'ok' ? 'm-status-ok' : 'm-status-err'} role="status">
           {status.kind === 'ok' && <Icon d={CHECK} size={18} />}
@@ -144,6 +167,9 @@ export function Torrent({ hash }: { hash: string }) {
   const [sheet, setSheet] = useState<TorrentFile | null>(null);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
+  const launching = useRef(false);
+  const cancelJump = useRef<(() => void) | null>(null);
+  useEffect(() => () => cancelJump.current?.(), []);
   progressVersion.value;
   serverViewed.value;
 
@@ -206,16 +232,21 @@ export function Torrent({ hash }: { hash: string }) {
       navigate({ name: 'tv' });
       return;
     }
+    if (launching.current) return;
+    launching.current = true;
     setBusy(true);
     setStatus('');
     try {
       await actions.launchOnTv(watchOnTvParams(c.baseUrl, hash, target.id, at));
       showToast('Запустил на ' + tv.name + ' — пульт уже открыт');
-      openRemoteSoon('torrent');
+      cancelJump.current = openRemoteSoon(currentRoute.value, () => {
+        launching.current = false;
+        setBusy(false);
+      });
     } catch (e) {
-      setStatus(errorMessage(e));
-    } finally {
+      launching.current = false;
       setBusy(false);
+      setStatus(errorMessage(e));
     }
   };
 
@@ -234,7 +265,8 @@ export function Torrent({ hash }: { hash: string }) {
       () => {
         torrents.value = torrents.value.filter((x) => x.hash !== hash);
         void refreshTorrents(c).catch(() => {});
-        goBack();
+        const r = currentRoute.value;
+        if (r.name === 'torrent' && r.hash === hash) goBack();
       },
       (e) => showToast(errorMessage(e)),
     );

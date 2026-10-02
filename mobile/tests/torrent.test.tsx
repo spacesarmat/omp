@@ -199,4 +199,80 @@ describe('Torrent', () => {
     click('[aria-label="Назад"]');
     expect(currentRoute.value.name).toBe('library');
   });
+
+  it('skips the remote jump when the user left the screen', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    await flush();
+    click(el.querySelectorAll('.m-ep')[0]);
+    click(el.querySelectorAll('.m-opt')[0]);
+    await flush();
+    act(() => navigate({ name: 'settings' }));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+    expect(currentRoute.value.name).toBe('settings');
+  });
+
+  it('ignores repeated taps while a launch is in flight', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    let release!: () => void;
+    launch.mockReturnValue(new Promise<void>((r) => (release = r)));
+    mount();
+    await flush();
+    click(el.querySelectorAll('.m-ep')[0]);
+    const btn = el.querySelectorAll('.m-opt')[0];
+    click(btn);
+    click(btn);
+    expect(launch).toHaveBeenCalledTimes(1);
+    release();
+    await flush();
+  });
+
+  it('warns about credentials and offers a link without them', async () => {
+    for (const s of servers.value.slice()) removeServer(s.id);
+    setActiveServer(addServer({ url: 'http://srv:8090', user: 'u', password: 'p' }).id);
+    torrents.value = [tor];
+    mount();
+    await flush();
+    click(el.querySelectorAll('.m-ep')[1]);
+    const opts = el.querySelectorAll('.m-opt');
+    expect(opts.length).toBe(4);
+    expect(opts[2].textContent).toContain('Ссылка содержит логин и пароль сервера');
+    expect(opts[3].textContent).toContain('Скопировать без пароля');
+    click(opts[2]);
+    await flush();
+    expect(copy).toHaveBeenLastCalledWith('http://u:p@srv:8090/stream/Show.S02E02.mkv?link=abc&index=2&play');
+    expect(toast.value).toBe('Ссылка скопирована (с логином и паролем)');
+    click(el.querySelectorAll('.m-ep')[1]);
+    click(el.querySelectorAll('.m-opt')[3]);
+    await flush();
+    expect(copy).toHaveBeenLastCalledWith('http://srv:8090/stream/Show.S02E02.mkv?link=abc&index=2&play');
+  });
+
+  it('delete failure toasts and stays', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'remove').mockRejectedValue(new Error('boom'));
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    mount();
+    await flush();
+    click('[aria-label="Удалить раздачу"]');
+    await flush();
+    expect(toast.value).toContain('boom');
+    expect(currentRoute.value.name).toBe('torrent');
+    expect(torrents.value.length).toBe(1);
+  });
+
+  it('delete does not go back if the user already left', async () => {
+    let done!: () => void;
+    vi.spyOn(TorrServerClient.prototype, 'remove').mockReturnValue(new Promise<void>((r) => (done = r)));
+    vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    mount();
+    await flush();
+    click('[aria-label="Удалить раздачу"]');
+    act(() => navigate({ name: 'settings' }));
+    done();
+    await flush();
+    expect(currentRoute.value.name).toBe('settings');
+  });
 });

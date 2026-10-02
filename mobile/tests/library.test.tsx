@@ -165,4 +165,21 @@ describe('Library', () => {
     });
     expect(listSpy.mock.calls.length).toBe(n + 1);
   });
+
+  it('history play ignores repeated taps while launching', async () => {
+    saveProgress('h1', 2, 100, 3000);
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    let release!: () => void;
+    const launch = vi.fn().mockReturnValue(new Promise<void>((r) => (release = r)));
+    setWatchActions({ launchOnTv: launch, remoteDelayMs: 0 });
+    mount();
+    await flush();
+    act(() => tab('История').click());
+    const b = el.querySelector('[aria-label="Продолжить на ТВ"]') as HTMLElement;
+    act(() => b.click());
+    act(() => b.click());
+    expect(launch).toHaveBeenCalledTimes(1);
+    release();
+    await flush();
+  });
 });

@@ -18,13 +18,14 @@ export interface WatchOnTvParams {
 export function watchOnTvParams(serverUrl: string, hash: string, file?: number, t?: number): WatchOnTvParams {
   const p: WatchOnTvParams = { server: serverUrl, torrent: hash };
   if (file !== undefined) p.file = file;
-  if (t !== undefined && t >= 1) p.t = Math.floor(t);
+  if (file !== undefined && t !== undefined && t >= 1) p.t = Math.floor(t);
   return p;
 }
 
 /** Stream URL with credentials embedded: an external player cannot send headers. */
-export function streamUrlFor(c: TorrServerClient, t: Pick<Torrent, 'hash'>, file: TorrentFile): string {
-  return c.videoSrc(c.streamUrl(t.hash, file.id, baseName(file.path)));
+export function streamUrlFor(c: TorrServerClient, t: Pick<Torrent, 'hash'>, file: TorrentFile, withAuth = true): string {
+  const url = c.streamUrl(t.hash, file.id, baseName(file.path));
+  return withAuth ? c.videoSrc(url) : url;
 }
 
 export interface WatchActions {
@@ -53,9 +54,25 @@ export function filesOf(t: Torrent): TorrentFile[] {
   return t.file_stats && t.file_stats.length ? t.file_stats : parseTorrentData(t.data);
 }
 
-/** Jumps to the remote after a short pause, unless the user has already left the screen. */
-export function openRemoteSoon(from: MRoute['name']): void {
-  setTimeout(() => {
-    if (currentRoute.value.name === from) navigate({ name: 'remote' });
+const sameRoute = (a: MRoute, b: MRoute) =>
+  a.name === b.name && (a.name !== 'torrent' || (b.name === 'torrent' && a.hash === b.hash));
+
+/**
+ * Jumps to the remote after a short pause, unless the user has left `from` meanwhile.
+ * Returns a cancel function (call it on unmount); `onDone` fires when the timer ends or is cancelled.
+ */
+export function openRemoteSoon(from: MRoute | MRoute['name'], onDone?: () => void): () => void {
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    onDone?.();
+  };
+  const timer = setTimeout(() => {
+    const here = currentRoute.value;
+    if (typeof from === 'string' ? here.name === from : sameRoute(here, from)) navigate({ name: 'remote' });
+    finish();
   }, actions.remoteDelayMs);
+  return finish;
 }

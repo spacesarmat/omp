@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { Poster } from '../ui/Poster';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
-import { navigate } from '../nav';
+import { currentRoute, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { actions, filesOf, openRemoteSoon, watchOnTvParams } from '../watch';
 import { client } from '../../../src/store/servers';
@@ -27,6 +27,10 @@ export function Library() {
   const list = torrents.value;
   const [loaded, setLoaded] = useState(list.length > 0);
   const [error, setError] = useState('');
+  // launch guard: set while a launch is in flight and until the jump to the remote has happened
+  const launching = useRef(false);
+  const cancelJump = useRef<(() => void) | null>(null);
+  useEffect(() => () => cancelJump.current?.(), []);
   progressVersion.value; // re-render when local progress changes
   serverViewed.value;
 
@@ -86,11 +90,16 @@ export function Library() {
       navigate({ name: 'tv' });
       return;
     }
+    if (launching.current) return;
+    launching.current = true;
     try {
       await actions.launchOnTv(watchOnTvParams(c.baseUrl, hash, fileIndex, time));
       showToast('Запустил на ' + tv.name + ' — пульт уже открыт');
-      openRemoteSoon('library');
+      cancelJump.current = openRemoteSoon(currentRoute.value, () => {
+        launching.current = false;
+      });
     } catch (e) {
+      launching.current = false;
       showToast(errorMessage(e));
     }
   };

@@ -20,11 +20,21 @@ describe('watchOnTvParams', () => {
   });
 });
 
+describe('watchOnTvParams without file', () => {
+  it('drops t when file is undefined', () => {
+    expect(watchOnTvParams('http://h:8090', 'abc', undefined, 50)).toEqual({ server: 'http://h:8090', torrent: 'abc' });
+  });
+});
+
 describe('streamUrlFor', () => {
   it('points at the file stream', () => {
     const c = new TorrServerClient({ url: 'http://h:8090' });
     const url = streamUrlFor(c, { hash: 'abc' } as any, { id: 4, path: 'S/ep 4.mkv', length: 1 });
     expect(url).toBe('http://h:8090/stream/ep%204.mkv?link=abc&index=4&play');
+  });
+  it('can omit credentials', () => {
+    const c = new TorrServerClient({ url: 'http://h:8090', user: 'u', password: 'p' });
+    expect(streamUrlFor(c, { hash: 'abc' } as any, { id: 1, path: 'a.mkv', length: 1 }, false)).toBe('http://h:8090/stream/a.mkv?link=abc&index=1&play');
   });
   it('embeds credentials for external players', () => {
     const c = new TorrServerClient({ url: 'http://h:8090', user: 'u', password: 'p' });
