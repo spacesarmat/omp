@@ -168,6 +168,19 @@ class SkipsTest {
     }
 
     @Test
+    fun creditsCountdownHoldsOnlyWhilePlayingInsideTheCredits() {
+        val s = SkipState()
+        s.set(info())
+        assertTrue(s.countdownHolds(0, 1_310_000, 1_400_000, true))
+        // paused (OK, phone, headphones unplugged …)
+        assertFalse(s.countdownHolds(0, 1_310_000, 1_400_000, false))
+        // a seek back before the credits
+        assertFalse(s.countdownHolds(0, 1_200_000, 1_400_000, true))
+        s.dismissCountdown()
+        assertFalse(s.countdownHolds(0, 1_310_000, 1_400_000, true))
+    }
+
+    @Test
     fun markRowsLikeLg() {
         assertEquals(
             listOf("Отметить начало заставки: —", "Отметить конец заставки: сейчас 2:15", "Отметить начало титров: —"),

@@ -131,8 +131,10 @@ describe('NativePlayerScreen (Android TV)', () => {
     const st = JSON.parse(bodies.filter((b) => JSON.parse(b).state)[0]).state;
     expect(st.hash).toBe(H);
     expect(st.audio).toEqual({ list: ['Русский'], sel: 0 });
-    await until(() => f.plugin.nativePlayerCommand.mock.calls.length === 1);
-    expect(f.plugin.nativePlayerCommand.mock.calls[0][0]).toEqual({ cmd: { id: 1, type: 'pause' } });
+    // the phone command (segments of the item go the same way, without a server: no chapters)
+    const phoneCmds = () => f.plugin.nativePlayerCommand.mock.calls.map((c: any[]) => c[0].cmd).filter((c: any) => c.type !== 'segments');
+    await until(() => phoneCmds().length === 1);
+    expect(phoneCmds()[0]).toEqual({ id: 1, type: 'pause' });
     await unmount(host);
   });
 

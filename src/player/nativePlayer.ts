@@ -331,11 +331,11 @@ export class NativeSession {
   /**
    * Chapters and skips of an item go to the native player when the item becomes current: its ffprobe (once per
    * item) and the skip settings of its torrent (once per torrent); a failed probe counts as «no chapters».
-   * Without a probe loader nothing is sent (the player shows no chapters and ignores CH±).
+   * Without a probe loader (no server) the item counts as probed without chapters (CH± switch episodes, as on LG).
    */
   private loadSkips(index: number): void {
     const item = this.queue[index];
-    if (!this.probeOf || !item || this.asked[index]) return;
+    if (!item || this.asked[index]) return;
     this.asked[index] = true;
     const hash = item.hash;
     if (hash && !this.prefsAsked[hash]) {
@@ -347,7 +347,7 @@ export class NativeSession {
         this.refreshTorrent(hash);
       });
     }
-    this.probeOf(item).then((p) => p, () => null).then((probe) => {
+    (this.probeOf ? this.probeOf(item) : Promise.resolve(null)).then((p) => p, () => null).then((probe) => {
       this.probes[index] = probe;
       this.refresh(index);
     });

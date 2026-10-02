@@ -535,9 +535,13 @@ class PlayerActivity : AppCompatActivity() {
 
     // ---- chapters and skips (from the page: NativePlayerBridge.segments) ----
 
-    /** Takes the messages the page sent (the first ones can arrive before the player is created). */
+    /**
+     * Takes the messages the page sent (the first ones can arrive before the player is created). While a replacing
+     * queue is on its way (playNative set a new request, onNewIntent has not loaded it yet) they stay queued:
+     * load() takes them with the new queue.
+     */
     fun applySkips() {
-        if (!::exo.isInitialized || isFinishing) return
+        if (!::exo.isInitialized || isFinishing || NativePlayerBridge.request !== req) return
         NativePlayerBridge.takeSkips().forEach { if (it.index < req.queue.size) skips.set(it) }
         checkSkips()
         render()
@@ -575,6 +579,7 @@ class PlayerActivity : AppCompatActivity() {
         val i = index()
         val pos = exo.currentPosition
         val dur = durationMs()
+        if (creditsCountdown && !skips.countdownHolds(i, pos, dur, exo.playWhenReady)) cancelCountdown()
         val start = skips.info(i)?.intro?.startMs
         val auto = skips.autoIntro(i, pos, dur)
         if (auto != null && start != null) {
@@ -680,7 +685,11 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun onItemEnd() {
-        if (countdown >= 0 || isFinishing) return
+        if (isFinishing) return
+        // a credits countdown still running at the end (short credits) gives way to the end-of-item one
+        // (it would be cancelled anyway: the player pauses at the end)
+        if (creditsCountdown) cancelCountdown()
+        if (countdown >= 0) return
         if (hasNext() && req.autoNext) {
             countdown = NEXT_COUNTDOWN_S
             handler.removeCallbacks(countdownTick)

@@ -362,11 +362,11 @@ describe('NativeSession', () => {
       expect(sent(f)).toEqual([expect.objectContaining({ type: 'segments', index: 0, chapters: [], autoIntro: false, autoCredits: false })]);
     });
 
-    it('sends nothing without a probe loader', async () => {
+    it('without a probe loader (no server): probed without chapters, so CH± fall back to episodes', async () => {
       const f = fakePlugin();
       await track(new NativeSession(f.plugin, null, queue)).start(opts);
       await flush();
-      expect(f.plugin.nativePlayerCommand).not.toHaveBeenCalled();
+      expect(sent(f)).toEqual([expect.objectContaining({ type: 'segments', index: 0, chapters: [], autoIntro: false, autoCredits: false })]);
     });
 
     it('marks from the menu: pending intro start, then the end is saved; the player gets a message and new segments', async () => {

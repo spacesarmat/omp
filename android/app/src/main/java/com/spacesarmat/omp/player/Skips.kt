@@ -244,6 +244,13 @@ class SkipState {
         return cs in 1 until durMs && posMs >= cs
     }
 
+    /**
+     * A running credits countdown stays only while playing inside the credits (LG re-evaluates it on every render):
+     * a pause from any source or a seek out of the credits cancels it (it starts again when due).
+     */
+    fun countdownHolds(index: Int, posMs: Long, durMs: Long, playing: Boolean): Boolean =
+        playing && countdownDue(index, posMs, durMs)
+
     /** Back on the credits countdown: not shown again during this visit. */
     fun dismissCountdown() {
         countdownDismissed = true
@@ -260,5 +267,37 @@ class SkipState {
         const val END_GAP_MS = 1000L
         const val CROSS_MAX_STEP_MS = 5000L
         const val MIN_COUNTDOWN_DUR_MS = 60_000L
+    }
+}
+
+/**
+ * Segments messages of the page queued until the player takes them (the player may not exist yet, or still hold the
+ * previous queue); only messages of the current run are accepted. Thread-safe (plugin thread adds, UI thread takes).
+ */
+class SkipInbox {
+    private val items = ArrayList<ItemSkip>()
+
+    /** Queues [s] unless its session [sid] belongs to another run than [current]; true when accepted. */
+    fun add(s: ItemSkip, sid: Long?, current: Long?): Boolean {
+        if (!sameRun(sid, current)) return false
+        synchronized(items) { items.add(s) }
+        return true
+    }
+
+    /** Messages queued since the last call. */
+    fun take(): List<ItemSkip> = synchronized(items) {
+        val out = ArrayList(items)
+        items.clear()
+        out
+    }
+
+    /** A new playNative: messages of the previous run are dropped. */
+    fun reset() {
+        synchronized(items) { items.clear() }
+    }
+
+    companion object {
+        /** A message without a session, or with no run session known, is taken as the current run's. */
+        fun sameRun(sid: Long?, current: Long?): Boolean = sid == null || current == null || sid == current
     }
 }

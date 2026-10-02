@@ -92,19 +92,15 @@ object NativePlayerBridge {
         emitter?.invoke(event, data)
     }
 
-    private val pendingSkips = ArrayList<ItemSkip>()
+    private val inbox = SkipInbox()
 
     /** A new playNative: chapters and skips of the previous run are dropped. */
-    fun resetSkips() {
-        synchronized(pendingSkips) { pendingSkips.clear() }
-    }
+    fun resetSkips() = inbox.reset()
+
+    private fun sessionOf(cmd: JSONObject): Long? = if (cmd.opt("session") is Number) cmd.optLong("session") else null
 
     /** True when the page's message belongs to the current run (or carries no session). */
-    private fun current(cmd: JSONObject): Boolean {
-        val sid = if (cmd.opt("session") is Number) cmd.optLong("session") else null
-        val cur = request?.session
-        return sid == null || cur == null || sid == cur
-    }
+    private fun current(cmd: JSONObject): Boolean = SkipInbox.sameRun(sessionOf(cmd), request?.session)
 
     /**
      * { type: "segments", … } from the page (ItemSkip): chapters and skips of a queue item. Kept until the player
@@ -113,19 +109,14 @@ object NativePlayerBridge {
      */
     fun segments(cmd: JSONObject): Boolean {
         val s = ItemSkip.parse(cmd) ?: return false
-        if (!current(cmd)) return false
-        synchronized(pendingSkips) { pendingSkips.add(s) }
+        if (!inbox.add(s, sessionOf(cmd), request?.session)) return false
         val p = player
         if (p != null) p.runOnUiThread { p.applySkips() }
         return true
     }
 
     /** Messages the page sent since the last call. */
-    fun takeSkips(): List<ItemSkip> = synchronized(pendingSkips) {
-        val out = ArrayList(pendingSkips)
-        pendingSkips.clear()
-        out
-    }
+    fun takeSkips(): List<ItemSkip> = inbox.take()
 
     /** { type: "toast", text, error } from the page (the result of a mark): shown by the open player. */
     fun toast(cmd: JSONObject): Boolean {
