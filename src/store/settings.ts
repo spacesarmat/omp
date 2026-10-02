@@ -6,6 +6,7 @@ export interface AppSettings {
   subLang: string;
   subtitlesOn: boolean;
   seekStep: number;
+  edgeSeekStep: number;
   autoNext: boolean;
   subSize: 'small' | 'medium' | 'large';
   subColor: 'white' | 'yellow';
@@ -18,6 +19,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   subLang: 'ru',
   subtitlesOn: false,
   seekStep: 10,
+  edgeSeekStep: 5,
   autoNext: true,
   subSize: 'medium',
   subColor: 'white',
@@ -39,6 +41,7 @@ export function sanitizeSettings(v: unknown): AppSettings {
   });
   if (SUB_SIZES.indexOf(out.subSize) < 0) out.subSize = DEFAULT_SETTINGS.subSize;
   if (SUB_COLORS.indexOf(out.subColor) < 0) out.subColor = DEFAULT_SETTINGS.subColor;
+  if ([5, 10, 15].indexOf(out.edgeSeekStep) < 0) out.edgeSeekStep = DEFAULT_SETTINGS.edgeSeekStep;
   return out;
 }
 

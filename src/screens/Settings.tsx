@@ -88,6 +88,7 @@ export function SettingsScreen() {
       <ChoiceRow label="Субтитры при запуске" value={s.subtitlesOn} options={ON_OFF} onChange={(v) => updateSettings({ subtitlesOn: v })} />
       <ChoiceRow label="Язык субтитров" value={s.subLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ subLang: v })} />
       <ChoiceRow label="Шаг перемотки" value={s.seekStep} options={SEEK} onChange={(v) => updateSettings({ seekStep: v })} />
+      <ChoiceRow label="Шаг двойного клика" value={s.edgeSeekStep} options={[5, 10, 15].map((v) => ({ value: v, label: v + ' с' }))} onChange={(v) => updateSettings({ edgeSeekStep: v })} />
       <ChoiceRow label="Автопереход к следующей серии" value={s.autoNext} options={ON_OFF} onChange={(v) => updateSettings({ autoNext: v })} />
       <ChoiceRow label="Статистика потока при запуске" value={s.showStats} options={ON_OFF} onChange={(v) => updateSettings({ showStats: v })} />
 
@@ -117,7 +118,7 @@ export function SettingsScreen() {
       )}
 
       <h2>О приложении</h2>
-      <div class="muted">TorrServer Player {APP_VERSION}{c ? ' · ' + c.baseUrl : ''}</div>
+      <div class="muted">OMP — Open Movie Player {APP_VERSION}{c ? ' · ' + c.baseUrl : ''}</div>
       <div class="row" style={{ marginTop: '16px' }}>
         <Button
           label="Сбросить настройки приложения"
