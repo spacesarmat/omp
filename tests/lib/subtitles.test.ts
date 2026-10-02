@@ -41,6 +41,10 @@ describe('parseTime', () => {
 });
 
 describe('parseSrt', () => {
+  it('does not merge cues separated by a whitespace-only line', () => {
+    const c = parseSrt('1\n00:00:01,000 --> 00:00:02,000\nA\n  \n2\n00:00:03,000 --> 00:00:04,000\nB\n');
+    expect(c.map((x) => x.text)).toEqual(['A', 'B']);
+  });
   it('parses cues and strips tags', () => {
     const c = parseSrt(SRT);
     expect(c).toEqual([

@@ -16,7 +16,7 @@ function cleanText(t: string): string {
 }
 
 export function parseSrt(text: string): Cue[] {
-  const blocks = text.replace(/^﻿/, '').replace(/\r/g, '').split(/\n{2,}/);
+  const blocks = text.replace(/^﻿/, '').replace(/\r/g, '').split(/\n[ \t]*\n/);
   const cues: Cue[] = [];
   blocks.forEach((block) => {
     const lines = block.split('\n');

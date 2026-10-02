@@ -30,6 +30,10 @@ describe('statsLines', () => {
       'Битрейт: 25.0 Мбит/с',
     ]);
   });
+  it('clamps cache percent to 100', () => {
+    const lines = statsLines({ Capacity: 100, Filled: 150, PiecesLength: 1, PiecesCount: 1 }, null);
+    expect(lines).toEqual(['Кэш: 150 B / 100 B (100%)']);
+  });
   it('handles missing data', () => {
     expect(statsLines(null, null)).toEqual([]);
   });

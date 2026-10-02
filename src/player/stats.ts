@@ -16,7 +16,7 @@ export function statsLines(cache: CacheState | null, probe: FfprobeResult | null
     out.push('Пиры: ' + (t.active_peers || 0) + ' / ' + (t.total_peers || 0) + ' (сиды ' + (t.connected_seeders || 0) + ')');
   }
   if (cache && cache.Capacity > 0) {
-    out.push('Кэш: ' + formatBytes(cache.Filled) + ' / ' + formatBytes(cache.Capacity) + ' (' + Math.round((cache.Filled * 100) / cache.Capacity) + '%)');
+    out.push('Кэш: ' + formatBytes(cache.Filled) + ' / ' + formatBytes(cache.Capacity) + ' (' + Math.min(100, Math.round((cache.Filled * 100) / cache.Capacity)) + '%)');
   }
   const v = probe ? probe.streams.find((s) => s.codec_type === 'video') : undefined;
   if (v) {
