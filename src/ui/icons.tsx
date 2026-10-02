@@ -2,7 +2,8 @@ import type { ComponentChildren } from 'preact';
 
 export type IconName =
   | 'play' | 'pause' | 'prev' | 'next' | 'back10' | 'fwd10' | 'tracks' | 'stats' | 'history' | 'search'
-  | 'plus' | 'settings' | 'grid' | 'list' | 'check' | 'star' | 'chevronLeft' | 'chevronRight';
+  | 'plus' | 'settings' | 'grid' | 'list' | 'check' | 'star' | 'chevronLeft' | 'chevronRight'
+  | 'sort' | 'playlist' | 'pencil' | 'chevronDown' | 'chevronUp';
 
 const LINE: any = { fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
 const SOLID: any = { fill: 'currentColor', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linejoin': 'round' };
@@ -26,6 +27,11 @@ const BODIES: { [K in IconName]: () => ComponentChildren } = {
   star: () => <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" {...LINE}></path>,
   chevronLeft: () => <path d="M15 5l-7 7 7 7" {...LINE}></path>,
   chevronRight: () => <path d="M9 5l7 7-7 7" {...LINE}></path>,
+  sort: () => <path d="M4 6h16M4 12h11M4 18h6" {...LINE}></path>,
+  playlist: () => <g {...LINE}><path d="M4 6h11M4 12h11M4 18h7"></path><path d="M16 15l5 3-5 3z"></path></g>,
+  pencil: () => <path d="M4 20h4L19 9l-4-4L4 16z" {...LINE}></path>,
+  chevronDown: () => <path d="M6 9l6 6 6-6" {...LINE}></path>,
+  chevronUp: () => <path d="M6 15l6-6 6 6" {...LINE}></path>,
 };
 
 export const ICON_NAMES = Object.keys(BODIES) as IconName[];

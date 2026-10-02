@@ -28,6 +28,13 @@ describe('sanitizeSettings', () => {
     expect(sanitizeSettings({ edgeSeekStep: 10 }).edgeSeekStep).toBe(10);
     expect(sanitizeSettings({ edgeSeekStep: 7 }).edgeSeekStep).toBe(5);
   });
+  it('validates library view and sort', () => {
+    expect(sanitizeSettings({ librarySort: 'size', libraryView: 'list' }).librarySort).toBe('size');
+    expect(sanitizeSettings({ libraryView: 'list' }).libraryView).toBe('list');
+    expect(sanitizeSettings({ librarySort: 'bogus' }).librarySort).toBe('new');
+    expect(sanitizeSettings({ libraryView: 'huge' }).libraryView).toBe('large');
+    expect(sanitizeSettings({}).libraryView).toBe('large');
+  });
 });
 
 describe('sanitizeProgress', () => {

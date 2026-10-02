@@ -1,43 +1,43 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { client } from '../store/servers';
-import { torrents, refreshTorrents, addedTorrents, addedMessage } from '../store/library';
-import { continueWatching, refreshViewed, progressVersion, Progress } from '../store/progress';
+import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, addedTorrents, addedMessage } from '../store/library';
+import { continueWatching, refreshViewed, progressVersion, serverViewed, clearProgress } from '../store/progress';
+import { settings, updateSettings } from '../store/settings';
 import type { Torrent } from '../api/types';
 import { errorMessage } from '../api/http';
-import { CATEGORY_TABS, Category, categoryOf } from '../lib/category';
-import { formatBytes, formatDuration } from '../lib/format';
-import { baseName, episodeLabel } from '../lib/episodes';
+import { categoryOf } from '../lib/category';
+import { filterTorrents, sortTorrents, nextSort } from '../lib/librarySearch';
+import { LibraryTab, nextView } from '../lib/libraryView';
 import { buildTorrentQueue } from '../player/queue';
 import { navigate, resetTo } from '../ui/nav';
-import { FocusGroup, Focusable, Button, ErrorView, ProgressBar, Spinner } from '../ui/components';
+import { FocusGroup, ErrorView, Spinner, TextInput } from '../ui/components';
 import { KeyDot } from '../ui/icons';
 import { restoreFocus } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
-
-function PosterCard(p: { t: Torrent; onPress: () => void; onFocused: () => void }) {
-  const t = p.t;
-  return (
-    <Focusable focusKey={'torrent-' + t.hash} className="card" onPress={p.onPress} onFocused={p.onFocused}>
-      <div class="poster">
-        {t.poster
-          ? <img src={t.poster} alt="" onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
-          : <div class="poster-fallback">{(t.title || '?').charAt(0)}</div>}
-      </div>
-      <div class="card-title">{t.title || t.name || t.hash}</div>
-      <div class="card-meta">{formatBytes(t.torrent_size || 0)}</div>
-    </Focusable>
-  );
-}
+import { TopBar } from '../ui/TopBar';
+import { TorrentViews } from './library/TorrentViews';
+import { HistoryGrid, HistoryEntry } from './library/HistoryGrid';
 
 export function LibraryScreen() {
   const c = client.value;
-  const [tab, setTab] = useState<'all' | Category>('all');
+  const s = settings.value;
+  const tab = libraryTab.value;
+  const query = libraryQuery.value;
+  const searchOpen = librarySearchOpen.value;
+  const setTab = (t: LibraryTab) => { libraryTab.value = t; };
+  const setQuery = (q: string) => { libraryQuery.value = q; };
+  const setSearchOpen = (o: boolean) => { librarySearchOpen.value = o; };
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(torrents.value.length > 0);
-  const [focusedHash, setFocusedHash] = useState<string | null>(null);
+  // card under focus: a torrent, or a history entry when fileIndex is set
+  // (a ref: focus moves must not re-render the whole catalog)
+  const selRef = useRef<{ hash: string; fileIndex?: number } | null>(null);
+  const setSel = (v: { hash: string; fileIndex?: number } | null) => { selRef.current = v; };
   progressVersion.value; // re-render when progress changes
+  serverViewed.value;
 
   const load = (isDead?: () => boolean) => {
     if (!c) return;
@@ -72,36 +72,76 @@ export function LibraryScreen() {
 
   const showingError = !!error && !torrents.value.length;
   useEffect(() => {
-    if (loaded && !showingError) restoreFocus(torrents.value.length ? 'LIB-GRID' : 'LIB-HEADER');
+    if (loaded && !showingError) restoreFocus(torrents.value.length ? 'LIB-GRID' : 'tab-' + libraryTab.value);
   }, [loaded, showingError]);
 
-  const remove = (hash: string) => {
+  useEffect(() => {
+    if (searchOpen && doesFocusableExist('lib-search')) setFocus('lib-search');
+  }, [searchOpen]);
+
+  const closeSearch = () => {
+    setQuery('');
+    setSearchOpen(false);
+    if (doesFocusableExist('lib-btn-search')) setFocus('lib-btn-search');
+  };
+
+  const removeTorrent = (hash: string) => {
     const t = torrents.value.find((x) => x.hash === hash);
     confirmDialog('Удалить «' + (t ? t.title : hash) + '»?', 'Удалить').then((ok) => {
       if (!ok || !c) return;
       c.remove(hash).then(
-        () => { torrents.value = torrents.value.filter((x) => x.hash !== hash); setFocusedHash(null); toast('Торрент удалён'); },
+        () => { torrents.value = torrents.value.filter((x) => x.hash !== hash); setSel(null); toast('Торрент удалён'); },
         (e) => toast(errorMessage(e), 'error'),
       );
     });
   };
 
+  const removeHistory = (hash: string, fileIndex: number) => {
+    confirmDialog('Убрать из истории?', 'Убрать').then((ok) => {
+      if (!ok || !c) return;
+      clearProgress(hash, fileIndex);
+      // drop the server mark too, otherwise the entry comes back from /viewed
+      serverViewed.value = serverViewed.value.filter((e) => !(e.hash === hash && e.file_index === fileIndex));
+      c.removeViewed(hash, fileIndex).then(() => undefined, (e) => toast(errorMessage(e), 'error'));
+      setSel(null);
+    });
+  };
+
   useKeys((a) => {
-    if (a === 'red' && focusedHash) { remove(focusedHash); return true; }
+    if (a === 'back' && searchOpen) { closeSearch(); return true; }
+    const sel = selRef.current;
+    if (a === 'red' && sel) {
+      if (sel.fileIndex !== undefined) removeHistory(sel.hash, sel.fileIndex);
+      else removeTorrent(sel.hash);
+      return true;
+    }
     if (a === 'blue') { navigate({ name: 'settings' }); return true; }
     return false;
   });
 
+  const isHistory = tab === 'history';
+  const sort = s.librarySort;
+  const tv = torrents.value;
+  const { list, history } = useMemo(() => {
+    if (isHistory) {
+      const all = continueWatching(tv, 40);
+      const match = filterTorrents(all.map((e) => e.torrent), query);
+      return { list: [] as Torrent[], history: all.filter((e) => match.indexOf(e.torrent) >= 0) };
+    }
+    const inTab = tv.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
+    return { list: sortTorrents(filterTorrents(inTab, query), sort), history: [] as HistoryEntry[] };
+  }, [tv, tab, query, sort, isHistory, progressVersion.value, serverViewed.value]);
+
   if (!c) return null;
 
-  const resume = (e: { torrent: Torrent; fileIndex: number; progress: Progress }) => {
+  const resume = (e: HistoryEntry) => {
     const queue = buildTorrentQueue(c, e.torrent, c.files(e.torrent));
     const index = queue.findIndex((q) => q.fileIndex === e.fileIndex);
     if (index < 0) navigate({ name: 'torrent', hash: e.torrent.hash });
     else navigate({ name: 'player', queue, index, startAt: e.progress.time });
   };
 
-  if (error && !torrents.value.length) {
+  if (showingError) {
     return (
       <div class="screen">
         <ErrorView
@@ -115,58 +155,60 @@ export function LibraryScreen() {
     );
   }
 
-  const list = torrents.value.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
-  const cont = tab === 'all' ? continueWatching(torrents.value) : [];
+  const count = isHistory ? history.length : list.length;
+  const searching = !!query.trim();
+
+  let empty: string | null = null;
+  if (loaded && !count) {
+    if (searching) empty = 'Ничего не найдено';
+    else if (isHistory) empty = 'История пуста. Здесь появится то, что вы начали смотреть';
+    else if (!torrents.value.length) empty = 'Нет торрентов. Добавьте через «Добавить» или веб-интерфейс TorrServer на телефоне.';
+    else empty = 'В этой категории пока ничего нет';
+  }
 
   return (
     <FocusGroup focusKey="LIBRARY" className="screen library">
-      <FocusGroup focusKey="LIB-HEADER" className="header">
-        {CATEGORY_TABS.map((ct) => (
-          <Focusable
-            key={ct.id}
-            focusKey={'tab-' + ct.id}
-            className={'tab' + (tab === ct.id ? ' active' : '')}
-            onPress={() => setTab(ct.id)}
-            onFocused={() => { setTab(ct.id); setFocusedHash(null); }}
-          >
-            {ct.label}
-          </Focusable>
-        ))}
-        <div class="spacer" />
-        <Button icon="plus" label="Добавить" onPress={() => navigate({ name: 'add' })} onFocused={() => setFocusedHash(null)} />
-        <Button label="Плейлист" onPress={() => navigate({ name: 'playlist' })} onFocused={() => setFocusedHash(null)} />
-        <Button label="Настройки" onPress={() => navigate({ name: 'settings' })} onFocused={() => setFocusedHash(null)} />
-        <Button label="Сервер" onPress={() => navigate({ name: 'connect' })} onFocused={() => setFocusedHash(null)} />
-      </FocusGroup>
+      <TopBar
+        tab={tab}
+        onTab={(t) => { setTab(t); setSel(null); }}
+        view={s.libraryView}
+        sort={s.librarySort}
+        searchOpen={searchOpen}
+        onSearch={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
+        onView={() => updateSettings({ libraryView: nextView(s.libraryView) })}
+        onSort={() => updateSettings({ librarySort: nextSort(s.librarySort) })}
+        onFocused={() => setSel(null)}
+      />
+      {searchOpen && (
+        <FocusGroup focusKey="LIB-SEARCH" className="search-row">
+          <TextInput focusKey="lib-search" value={query} onChange={setQuery} placeholder="Поиск по названию" onFocused={() => setSel(null)} />
+          <div class="search-count">{searching ? 'Найдено: ' + count : 'Введите часть названия'}</div>
+        </FocusGroup>
+      )}
       {error && <div class="banner-error">{error} — показан сохранённый список</div>}
       {!loaded && <Spinner text="Загрузка…" />}
-      {cont.length > 0 && (
-        <section>
-          <h2>Продолжить просмотр</h2>
-          <FocusGroup focusKey="LIB-CONTINUE" className="hscroll">
-            {cont.map((e) => {
-              const file = c.files(e.torrent).find((f) => f.id === e.fileIndex);
-              const name = file ? episodeLabel(file.path) || baseName(file.path) : '';
-              return (
-                <Focusable key={e.torrent.hash} focusKey={'cont-' + e.torrent.hash} className="wide-card" onPress={() => resume(e)} onFocused={() => setFocusedHash(null)}>
-                  <div class="title">{e.torrent.title}</div>
-                  <div class="meta">
-                    {name} · {formatDuration(e.progress.time)}{e.progress.duration > 0 ? ' / ' + formatDuration(e.progress.duration) : ''}
-                  </div>
-                  {e.progress.duration > 0 && <ProgressBar ratio={e.progress.time / e.progress.duration} />}
-                </Focusable>
-              );
-            })}
-          </FocusGroup>
-        </section>
+      {isHistory ? (
+        <HistoryGrid
+          entries={history}
+          filePath={(e) => {
+            const f = c.files(e.torrent).find((x) => x.id === e.fileIndex);
+            return f ? f.path : '';
+          }}
+          onOpen={resume}
+          onFocused={(e) => setSel({ hash: e.torrent.hash, fileIndex: e.fileIndex })}
+        />
+      ) : (
+        <TorrentViews
+          view={s.libraryView}
+          list={list}
+          onOpen={(t) => navigate({ name: 'torrent', hash: t.hash })}
+          onFocused={(t) => setSel({ hash: t.hash })}
+        />
       )}
-      <FocusGroup focusKey="LIB-GRID" className="grid">
-        {list.map((t) => (
-          <PosterCard key={t.hash} t={t} onPress={() => navigate({ name: 'torrent', hash: t.hash })} onFocused={() => setFocusedHash(t.hash)} />
-        ))}
-      </FocusGroup>
-      {loaded && !list.length && <div class="empty">Нет торрентов. Добавьте через «Добавить» или веб-интерфейс TorrServer на телефоне.</div>}
-      <div class="hints">OK — открыть · <KeyDot color="red" /> удалить · <KeyDot color="blue" /> настройки · Назад — выход</div>
+      {empty && <div class="empty">{empty}</div>}
+      <div class="hints">
+        OK — {isHistory ? 'продолжить' : 'открыть'} · <KeyDot color="red" /> {isHistory ? 'убрать из истории' : 'удалить'} · <KeyDot color="blue" /> настройки · Назад — {searchOpen ? 'закрыть поиск' : 'выход'}
+      </div>
     </FocusGroup>
   );
 }
