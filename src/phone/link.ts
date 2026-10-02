@@ -6,6 +6,8 @@ export interface PlayerBridge { snapshot(): PlayerState | null; exec(cmd: Cmd): 
 type Transport = (url: string, body: string) => Promise<string>;
 
 export const phoneAttached = signal(false);
+/** Grows on every attach (a new phone or the same one again). */
+export const phoneAttachCount = signal(0);
 
 let bridge: PlayerBridge | null = null;
 let transportOverride: Transport | null = null;
@@ -110,6 +112,7 @@ export function attachPhone(u: string): void {
   url = u;
   lastOk = Date.now();
   phoneAttached.value = true;
+  phoneAttachCount.value = phoneAttachCount.value + 1;
   timer = setInterval(post, POST_INTERVAL_MS);
 }
 

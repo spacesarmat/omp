@@ -3,7 +3,9 @@ import { signal } from '@preact/signals';
 import { Icon } from '../ui/Icon';
 import { Logo } from '../../../src/ui/Logo';
 import { showToast } from '../ui/toast';
-import { resetTo, afterConnectRoute } from '../nav';
+import { resetTo, navigate, afterConnectRoute } from '../nav';
+import { activeTv } from '../tv/tvStore';
+import { attachIfOmpForeground } from '../tv/playerLink';
 import { scanPairQr } from '../platform/qr';
 import { RenameSheet } from '../ui/RenameSheet';
 import { servers, addServer, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
@@ -96,6 +98,9 @@ export function Connect() {
     const name = data.name || data.url.replace(/^https?:\/\//, '');
     if (await enter({ name, url: data.url, user: data.user, password: data.password })) {
       showToast('Сервер «' + name + '» добавлен');
+      // the TV shows the QR in OMP: link to it so it returns to its catalog
+      if (activeTv.value) void attachIfOmpForeground();
+      else navigate({ name: 'tv' });
     }
   }
 
@@ -206,8 +211,8 @@ export function Connect() {
                   </span>
                   <Icon d="M9 5l7 7-7 7" size={18} />
                 </button>
-                <button type="button" class="m-btn-text" aria-label={'Переименовать ' + s.name} onClick={() => setRenaming(s)}>
-                  Переименовать
+                <button type="button" class="m-icon-btn" aria-label={'Переименовать ' + s.name} onClick={() => setRenaming(s)}>
+                  <Icon d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4" size={20} />
                 </button>
                 </div>
                 {cardError?.id === s.id && (
