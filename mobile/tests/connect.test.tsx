@@ -269,6 +269,81 @@ describe('Connect screen: TorrServer on the phone', () => {
   });
 });
 
+describe('Connect screen: find in the network', () => {
+  const HINT =
+    'Не находится? Проверьте, что оба устройства в одной сети Wi‑Fi, VPN выключен или разрешает локальную сеть, а в роутере выключена изоляция клиентов (гостевая сеть).';
+
+  it('shows the button with saved servers on a phone without the embedded server and scans on tap', async () => {
+    mockFetch(() => ({ body: 'MatriX' }));
+    addServer({ url: 'http://192.168.1.5:8090', name: 'Home' });
+    let n = 0;
+    setServerScanner(async () => (n++, [{ url: 'http://192.168.1.9:8090', version: 'MatriX.1' }]));
+    const el = mount();
+    await flush();
+    expect(n).toBe(0);
+    await act(async () => btn(el, 'Найти в сети').click());
+    await flush();
+    expect(n).toBe(1);
+    expect(el.textContent).toContain('Найдено в сети');
+    expect(el.textContent).toContain('192.168.1.9:8090');
+    expect(el.textContent).not.toContain('Не находится?');
+  });
+
+  it('disables the button and says «Ищу…» while scanning', async () => {
+    mockFetch(() => ({ body: 'MatriX' }));
+    addServer({ url: 'http://192.168.1.5:8090', name: 'Home' });
+    setServerScanner(() => new Promise(() => {}));
+    const el = mount();
+    await flush();
+    await act(async () => btn(el, 'Найти в сети').click());
+    const b = btn(el, 'Ищу…');
+    expect(b.disabled).toBe(true);
+  });
+
+  it('marks found servers that are saved and opens the saved entry on tap', async () => {
+    mockFetch(() => ({ body: 'MatriX' }));
+    addServer({ url: 'http://192.168.1.9:8090', name: 'Кухня', user: 'u', password: 'p' });
+    setServerScanner(async () => [{ url: 'http://192.168.1.9:8090', version: 'MatriX.1' }]);
+    const el = mount();
+    await flush();
+    await act(async () => btn(el, 'Найти в сети').click());
+    await flush();
+    const row = Array.from(el.querySelectorAll('.m-list')).find((l) => l.previousElementSibling?.textContent === 'Найдено в сети')!;
+    expect(row.textContent).toContain('сохранён');
+    await act(async () => (row.querySelector('.m-server') as HTMLButtonElement).click());
+    await flush();
+    expect(servers.value).toHaveLength(1);
+    expect(activeServer.value?.name).toBe('Кухня');
+    expect(currentRoute.value.name).toBe('library');
+  });
+
+  it('shows the troubleshooting hint after an empty scan', async () => {
+    mockFetch(() => ({ body: 'MatriX' }));
+    addServer({ url: 'http://192.168.1.5:8090', name: 'Home' });
+    setServerScanner(async () => []);
+    const el = mount();
+    await flush();
+    expect(el.textContent).not.toContain(HINT);
+    await act(async () => btn(el, 'Найти в сети').click());
+    await flush();
+    expect(el.textContent).toContain(HINT);
+  });
+
+  it('shows the hint after a manual connect fails with a network error, not on a server error', async () => {
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('fail')));
+    const el = mount();
+    type(el.querySelector<HTMLInputElement>('#addr')!, '10.0.0.1');
+    await act(async () => btn(el, 'Подключиться').click());
+    await flush();
+    expect(el.querySelector('.m-error')?.textContent).toBe('Сервер недоступен');
+    expect(el.textContent).toContain(HINT);
+    mockFetch(() => ({ status: 500, body: 'x' }));
+    await act(async () => btn(el, 'Подключиться').click());
+    await flush();
+    expect(el.textContent).not.toContain(HINT);
+  });
+});
+
 describe('scanLan', () => {
   it('scans only the own /24 of the phone when its address is known', async () => {
     const calls: any[] = [];
