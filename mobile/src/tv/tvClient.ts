@@ -159,9 +159,11 @@ function onRegisterMessage(s: Session, m: any): void {
     armRegistration(s, PAIRING_TIMEOUT);
   } else if (m.type === 'registered') {
     const key = m.payload?.['client-key'];
+    // kind 'lg' explicitly: the IP may belong to an Android TV saved earlier (DHCP reuse)
     s.tv = {
       ip: s.tv.ip,
       name: s.tv.name,
+      kind: 'lg',
       clientKey: typeof key === 'string' && key ? key : s.tv.clientKey,
       port: s.tv.port,
     };
@@ -252,7 +254,7 @@ export function connectTv(tv: SavedTv): Promise<void> {
     endSession(session, TV_NOT_CONNECTED);
     void closeTransport();
   }
-  const s: Session = { tv, off: [], registerId: nextId('register'), signed: true, reg: null };
+  const s: Session = { tv: { ...tv, kind: 'lg' }, off: [], registerId: nextId('register'), signed: true, reg: null };
   const promise = new Promise<void>((resolve, reject) => {
     s.reg = { resolve, reject };
   });

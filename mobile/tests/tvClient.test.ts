@@ -190,6 +190,22 @@ describe('tvClient connection', () => {
     expect(tvs.value[0].port).toBe(3001);
   });
 
+  it('an LG answering on the IP of a saved Android TV is saved as LG (DHCP reuse)', async () => {
+    saveTv({ ip: TV.ip, name: 'Старый ATV', kind: 'atv', token: 'a'.repeat(32), ctlPort: 8095 });
+    const p = connectTv(TV);
+    await flush();
+    fake.emit({ type: 'registered', id: fake.lastRegister.id, payload: { 'client-key': 'K' } });
+    await p;
+    await flush();
+    expect(tvs.value).toHaveLength(1);
+    expect(tvs.value[0].kind).toBeUndefined();
+    expect(tvs.value[0].token).toBeUndefined();
+    expect(tvs.value[0].clientKey).toBe('K');
+    expect(tvs.value[0].port).toBe(3001);
+    reloadTvs();
+    expect(tvs.value[0].kind).toBeUndefined();
+  });
+
   it('sends the saved client key', async () => {
     connectTv({ ...TV, clientKey: 'OLD' }).catch(() => {});
     await flush();
