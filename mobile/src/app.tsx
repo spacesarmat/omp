@@ -17,6 +17,7 @@ import { Remote } from './screens/Remote';
 import { NowPlaying } from './screens/NowPlaying';
 import { MiniPlayer } from './ui/MiniPlayer';
 import { Settings, runUpdateCheck } from './screens/Settings';
+import { ServerSettings } from './screens/ServerSettings';
 import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
 import { updatePrompt } from '../../src/store/updates';
 import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
@@ -154,6 +155,8 @@ export function App() {
         <NowPlaying />
       ) : route.name === 'localServer' ? (
         <LocalServer />
+      ) : route.name === 'serverSettings' ? (
+        <ServerSettings />
       ) : route.name === 'remote' ? (
         <Remote />
       ) : (
