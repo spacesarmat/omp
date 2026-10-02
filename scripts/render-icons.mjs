@@ -1,5 +1,5 @@
 import { Resvg } from '@resvg/resvg-js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 
 const svg = readFileSync('assets/icon.svg', 'utf8');
 for (const [file, size] of [['webos/icon.png', 80], ['webos/largeIcon.png', 130]]) {
@@ -25,6 +25,23 @@ if (existsSync(res)) {
     writeFileSync(`${dir}/ic_launcher_round.png`, png(round, size));
     writeFileSync(`${dir}/ic_launcher_foreground.png`, png(fg, Math.round((size * 108) / 48)));
     console.log('wrote', dir, size);
+  }
+
+  // Splash: dark background + logo (no tile) at ~30% of the short side, same files/sizes as before
+  const logoInner = glyph.replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
+  for (const d of readdirSync(res).filter((n) => n.startsWith('drawable'))) {
+    const file = `${res}/${d}/splash.png`;
+    if (!existsSync(file)) continue;
+    const buf = readFileSync(file);
+    const w = buf.readUInt32BE(16);
+    const h = buf.readUInt32BE(20);
+    const L = Math.round(Math.min(w, h) * 0.3);
+    const splash =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+      `<rect width="100%" height="100%" fill="${bg}"/>` +
+      `<svg x="${Math.round((w - L) / 2)}" y="${Math.round((h - L) / 2)}" width="${L}" height="${L}" viewBox="0 0 100 100">${logoInner}</svg></svg>`;
+    writeFileSync(file, new Resvg(splash, { fitTo: { mode: 'original' } }).render().asPng());
+    console.log('wrote', file, w + 'x' + h);
   }
   writeFileSync(
     `${res}/values/ic_launcher_background.xml`,

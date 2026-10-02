@@ -81,6 +81,14 @@ describe('Library', () => {
     expect(cards[1].querySelector('.m-badge')!.textContent).toBe('4K');
   });
 
+  it('shows the logo and name in the header', async () => {
+    mount();
+    await flush();
+    const brand = el.querySelector('.m-lib-brand')!;
+    expect(brand.querySelector('svg.logo')!.getAttribute('width')).toBe('28');
+    expect(brand.textContent).toBe('OMP');
+  });
+
   it('filters by tab and search', async () => {
     mount();
     await flush();

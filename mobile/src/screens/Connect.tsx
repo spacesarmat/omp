@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { Icon } from '../ui/Icon';
+import { Logo } from '../../../src/ui/Logo';
 import { showToast } from '../ui/toast';
 import { resetTo, afterConnectRoute } from '../nav';
 import { scanPairQr } from '../platform/qr';
@@ -11,17 +12,6 @@ import { errorMessage } from '../../../src/api/http';
 type Status = { online: boolean; version: string } | 'pending';
 
 const SCAN = 'M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10';
-
-function Logo() {
-  const xs = [23, 35, 47, 59, 71];
-  return (
-    <svg width="56" height="56" viewBox="0 0 100 100" aria-hidden="true">
-      <rect x="14" y="22" width="72" height="56" rx="10" fill="none" stroke="#F5B700" stroke-width="7" />
-      {[29, 66].map((y) => xs.map((x) => <rect key={x + '-' + y} x={x} y={y} width="6" height="5" rx="1.5" fill="#F5B700" />))}
-      <path d="M44 41 L59 50 L44 59 Z" fill="#E8EAF0" stroke="#E8EAF0" stroke-width="4" stroke-linejoin="round" />
-    </svg>
-  );
-}
 
 const statuses = signal<Record<string, Status>>({});
 
@@ -127,7 +117,7 @@ export function Connect() {
   return (
     <form class="m-screen m-connect" onSubmit={submit}>
       <div class="m-brand">
-        <Logo />
+        <Logo size={56} />
         <div>
           <div class="m-brand-name">OMP</div>
           <div class="m-muted">Open Movie Player</div>

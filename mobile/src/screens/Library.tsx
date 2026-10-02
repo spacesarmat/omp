@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { Poster } from '../ui/Poster';
+import { Logo } from '../../../src/ui/Logo';
 import { TvChip } from '../ui/TvChip';
 import { LaunchError } from '../ui/LaunchError';
 import { navigate } from '../nav';
@@ -95,7 +96,10 @@ export function Library() {
   return (
     <div class="m-screen m-library" data-route="library">
       <div class="m-lib-head">
-        <span class="m-brand-name m-lib-brand">OMP</span>
+        <div class="m-lib-brand">
+          <Logo size={28} />
+          <span class="m-brand-name">OMP</span>
+        </div>
         <TvChip />
         {!isHistory && (
           <button

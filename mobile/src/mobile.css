@@ -193,7 +193,8 @@ button, .m-btn {
 /* ---- library ---- */
 .m-library, .m-torrent { display: flex; flex-direction: column; gap: 14px; padding-top: calc(env(safe-area-inset-top) + 24px); }
 .m-lib-head { display: flex; align-items: center; gap: 10px; }
-.m-lib-brand { flex-grow: 1; font-size: 22px; }
+.m-lib-brand { flex-grow: 1; display: flex; align-items: center; gap: 8px; }
+.m-lib-brand .m-brand-name { font-size: 22px; }
 .m-tvchip {
   display: flex;
   align-items: center;

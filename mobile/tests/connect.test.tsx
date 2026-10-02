@@ -49,6 +49,11 @@ afterEach(() => {
 });
 
 describe('Connect screen', () => {
+  it('shows the shared logo', () => {
+    const el = mount();
+    expect(el.querySelector('.m-brand svg.logo')).not.toBeNull();
+  });
+
   it('connects by address after a successful echo and opens the library', async () => {
     const f = mockFetch(() => ({ body: 'MatriX.145.1' }));
     const el = mount();
