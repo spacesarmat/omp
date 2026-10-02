@@ -7,7 +7,6 @@ import type { PlayItem } from '../player/types';
 import { navigate, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
 import { restoreFocus } from '../ui/focus';
-import { toast } from '../ui/toast';
 
 export function PlaylistScreen(p: { url?: string; title?: string }) {
   const c = client.value;
