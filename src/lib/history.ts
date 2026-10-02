@@ -44,7 +44,8 @@ export interface FallbackEntry {
 
 /**
  * Newest first, one item per torrent (its latest watched file). `local` gives this device's own progress,
- * which wins over a journal entry of the same file when it is newer (the journal is written at start and exit only).
+ * which wins over a journal entry of the same file when it is newer (the journal is written at start and exit only);
+ * such an item is then labelled as `self`, this device.
  */
 export function buildHistory(
   list: Torrent[],
@@ -52,16 +53,17 @@ export function buildHistory(
   fallback: FallbackEntry[],
   local: (hash: string, fileIndex: number) => HistoryProgress | null,
   limit = 40,
+  self?: { src: JournalSrc; name?: string },
 ): HistoryItem[] {
   const withJournal: { [hash: string]: boolean } = {};
   const items: HistoryItem[] = [];
   list.forEach((t) => {
     const journal = journalOf(t.data);
     if (!journal.length) return;
-    withJournal[t.hash] = true;
     // journalOf is newest first: the first match is the latest watch for this filter
     const e = journal.filter((x) => filter === 'all' || x.src === filter)[0];
     if (!e) return;
+    withJournal[t.hash] = true;
     const source: HistorySource = { src: e.src, at: e.at };
     if (e.name) source.name = e.name;
     let progress: HistoryProgress = { time: e.t, duration: e.d, updated: e.at };
@@ -69,6 +71,11 @@ export function buildHistory(
     if (own && own.updated > e.at) {
       progress = { time: own.time, duration: own.duration > 0 ? own.duration : e.d, updated: own.updated };
       source.at = own.updated;
+      if (self) {
+        source.src = self.src;
+        if (self.name) source.name = self.name;
+        else delete source.name;
+      }
     }
     items.push({ torrent: t, fileIndex: e.f, progress, source });
   });

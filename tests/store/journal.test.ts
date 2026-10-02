@@ -10,7 +10,7 @@ function fakeServer(initial: Partial<Torrent>) {
   const t: Torrent = { hash: 'h', title: 'Title', poster: 'http://p.jpg', category: 'tv', stat: 5, ...initial };
   const sets: any[] = [];
   const c = {
-    get: vi.fn((_hash: string) => Promise.resolve({ ...t })),
+    list: vi.fn(() => Promise.resolve([{ ...t }])),
     setData: vi.fn((x: Pick<Torrent, 'hash' | 'title' | 'poster' | 'category'>, data: string) => {
       sets.push({ hash: x.hash, title: x.title, poster: x.poster, category: x.category, data });
       t.data = data;
@@ -36,6 +36,20 @@ describe('recordWatch', () => {
     expect(out.omp).toEqual({ v: 1, h: [{ f: 1, t: 30, d: 100, at: T0, src: 'tv' }] });
   });
 
+  it('reads the torrent from the list, matching the hash case-insensitively', async () => {
+    const s = fakeServer({ hash: 'ABCDEF', data: '{}' });
+    await recordWatch(s.c, 'abcdef', { f: 1, t: 30, d: 100, src: 'tv' }, T0);
+    expect(s.c.list).toHaveBeenCalled();
+    expect(s.sets).toHaveLength(1);
+    expect(s.sets[0].hash).toBe('ABCDEF');
+  });
+
+  it('does nothing when the torrent is not in the list', async () => {
+    const s = fakeServer({ hash: 'other', data: '{}' });
+    await recordWatch(s.c, 'h', { f: 1, t: 30, d: 100, src: 'tv' }, T0);
+    expect(s.c.setData).not.toHaveBeenCalled();
+  });
+
   it('never touches non-JSON data', async () => {
     const s = fakeServer({ data: 'someone else' });
     await recordWatch(s.c, 'h', { f: 1, t: 30, d: 100, src: 'tv' }, T0);
@@ -57,7 +71,7 @@ describe('recordWatch', () => {
   });
 
   it('swallows read and write errors', async () => {
-    const c = { get: vi.fn(() => Promise.reject(new Error('down'))), setData: vi.fn() };
+    const c = { list: vi.fn(() => Promise.reject(new Error('down'))), setData: vi.fn() };
     await expect(recordWatch(c, 'h', { f: 1, t: 1, d: 1, src: 'tv' })).resolves.toBeUndefined();
     const s = fakeServer({ data: '{}' });
     s.c.setData.mockImplementationOnce(() => Promise.reject(new Error('403')));

@@ -1,12 +1,12 @@
 // Writes the watch journal (src/lib/journal.ts) to TorrServer. Writes of one torrent are chained, each one reads
-// the torrent first (another device may have written meanwhile) and every failure is swallowed: the journal must
+// the torrent list first (another device may have written meanwhile) and every failure is swallowed: the journal must
 // never break playback.
 import type { Torrent } from '../api/types';
 import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData } from '../lib/journal';
 import { torrents } from './library';
 
 export interface JournalClient {
-  get(hash: string): Promise<Torrent>;
+  list(): Promise<Torrent[]>;
   setData(t: Pick<Torrent, 'hash' | 'title' | 'poster' | 'category'>, data: string): Promise<void>;
 }
 
@@ -49,15 +49,17 @@ function baseOf(t: Torrent, parsed: ParsedData): ParsedData {
 
 function update(c: JournalClient, hash: string, change: (j: JournalEntry[]) => JournalEntry[]): Promise<void> {
   return enqueue(hash, () =>
-    c.get(hash).then((t) => {
-      if (!t || t.hash !== hash) return undefined;
+    c.list().then((all) => {
+      // from the list (not `get`, which activates an idle torrent and may answer from a stale copy)
+      const t = (all || []).filter((x) => !!x && String(x.hash).toLowerCase() === hash.toLowerCase())[0];
+      if (!t) return undefined;
       const parsed = parseData(t.data);
       if (!parsed) return undefined; // not JSON: someone else's data, never touched
       const base = baseOf(t, parsed);
       const next = change(base.journal);
       if (JSON.stringify(next) === JSON.stringify(base.journal)) return undefined;
       const data = serializeData(base.obj, next);
-      return c.setData(t, data).then(() => patchLibrary(hash, data));
+      return c.setData(t, data).then(() => patchLibrary(t.hash, data));
     }),
   );
 }

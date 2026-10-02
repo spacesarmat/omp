@@ -129,7 +129,7 @@ export function LibraryScreen() {
   const tv = torrents.value;
   const { list, history } = useMemo(() => {
     if (isHistory) {
-      const all = buildHistory(tv, hfilter, continueWatching(tv, 40), getLocalProgress);
+      const all = buildHistory(tv, hfilter, continueWatching(tv, 40), getLocalProgress, 40, { src: 'tv' });
       const match = filterTorrents(all.map((e) => e.torrent), query);
       return { list: [] as Torrent[], history: all.filter((e) => match.indexOf(e.torrent) >= 0) };
     }

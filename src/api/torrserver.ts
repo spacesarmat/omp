@@ -72,9 +72,12 @@ export class TorrServerClient {
   }
 
   /** Replaces `data`; `set` overwrites title/poster/category too, so the current ones are sent back. */
-  setData(t: Pick<Torrent, 'hash' | 'title' | 'poster' | 'category'>, data: string): Promise<void> {
+  setData(t: Pick<Torrent, 'hash' | 'title' | 'poster' | 'category'> & { name?: string }, data: string): Promise<void> {
+    const title = t.title || t.name || '';
+    // an empty title makes TorrServer fetch the metadata itself: nothing to write then
+    if (!title) return Promise.resolve();
     return this.call<unknown>('/torrents', {
-      body: { action: 'set', hash: t.hash, title: t.title || '', poster: t.poster || '', category: t.category || '', data },
+      body: { action: 'set', hash: t.hash, title, poster: t.poster || '', category: t.category || '', data },
     }).then(() => undefined);
   }
 

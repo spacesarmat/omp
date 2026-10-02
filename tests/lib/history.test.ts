@@ -60,6 +60,21 @@ describe('buildHistory', () => {
     expect(h[0].source).toEqual({ src: 'tv', at: at(9, 2, 22, 30) });
   });
 
+  it('a phone-only journal still shows the TV fallback under «С телевизора»', () => {
+    const p = torrent('p', [{ f: 1, t: 5, d: 9, at: at(9, 1, 20, 0), src: 'phone', name: 'Pixel' }]);
+    const fb: FallbackEntry[] = [{ torrent: p, fileIndex: 7, progress: { time: 50, duration: 100, updated: at(9, 2, 10, 0) } }];
+    expect(buildHistory([p], 'tv', fb, noLocal).map((x) => [x.fileIndex, x.source.src])).toEqual([[7, 'tv']]);
+    expect(buildHistory([p], 'all', fb, noLocal).map((x) => [x.fileIndex, x.source.src])).toEqual([[1, 'phone']]);
+  });
+
+  it('newer local progress is labelled as this device', () => {
+    const local = (): HistoryProgress => ({ time: 100, duration: 200, updated: at(9, 2, 22, 30) });
+    const h = buildHistory([a], 'all', [], local, 40, { src: 'tv' });
+    expect(h[0].source).toEqual({ src: 'tv', at: at(9, 2, 22, 30) });
+    const h2 = buildHistory([b], 'all', [], local, 40, { src: 'phone', name: 'Моя' });
+    expect(h2[0].source).toEqual({ src: 'phone', name: 'Моя', at: at(9, 2, 22, 30) });
+  });
+
   it('older local progress does not', () => {
     const local = (): HistoryProgress => ({ time: 1, duration: 2, updated: 1 });
     expect(buildHistory([b], 'all', [], local)[0].progress.time).toBe(4325);
