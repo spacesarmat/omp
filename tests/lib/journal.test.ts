@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { parseData, addEntry, serializeData, removeFile, journalOf, JOURNAL_MAX, type JournalEntry } from '../../src/lib/journal';
+import { parseData, addEntry, serializeData, removeFile, journalOf, sanitizeSkip, JOURNAL_MAX, type JournalEntry } from '../../src/lib/journal';
 
 const T0 = 1_759_400_000_000;
 
 describe('parseData', () => {
   it('empty data: an empty object and journal', () => {
-    expect(parseData('')).toEqual({ obj: {}, journal: [] });
-    expect(parseData(undefined)).toEqual({ obj: {}, journal: [] });
-    expect(parseData('  ')).toEqual({ obj: {}, journal: [] });
+    expect(parseData('')).toEqual({ obj: {}, journal: [], skip: null });
+    expect(parseData(undefined)).toEqual({ obj: {}, journal: [], skip: null });
+    expect(parseData('  ')).toEqual({ obj: {}, journal: [], skip: null });
   });
 
   it('non-JSON or non-object data is not OMP-writable', () => {
@@ -104,5 +104,34 @@ describe('removeFile', () => {
     j = addEntry(j, { f: 2, t: 1, d: 2, src: 'tv' }, T0 + 1);
     j = addEntry(j, { f: 1, t: 1, d: 2, src: 'phone', name: 'P' }, T0 + 2);
     expect(removeFile(j, 1).map((e) => e.f)).toEqual([2]);
+  });
+});
+
+describe('skip settings (key s)', () => {
+  it('sanitizeSkip: defaults, valid marks, malformed parts dropped', () => {
+    expect(sanitizeSkip(undefined)).toBeNull();
+    expect(sanitizeSkip([1])).toBeNull();
+    expect(sanitizeSkip({})).toEqual({ i: false, c: false });
+    expect(sanitizeSkip({ i: true, c: true, mi: [45, 135], mc: 90 })).toEqual({ i: true, c: true, mi: [45, 135], mc: 90 });
+    expect(sanitizeSkip({ i: 1, c: 'yes' })).toEqual({ i: false, c: false });
+    expect(sanitizeSkip({ i: true, mi: [10, 5], mc: -3 })).toEqual({ i: true, c: false });
+    expect(sanitizeSkip({ mi: [-1, 5] })).toEqual({ i: false, c: false });
+    expect(sanitizeSkip({ mi: [1], mc: 'x' })).toEqual({ i: false, c: false });
+  });
+
+  it('parseData reads s next to the history', () => {
+    const p = parseData(JSON.stringify({ omp: { v: 1, h: [], s: { i: true, c: false, mc: 60 } } }))!;
+    expect(p.skip).toEqual({ i: true, c: false, mc: 60 });
+    expect(parseData(JSON.stringify({ omp: { v: 1, h: [] } }))!.skip).toBeNull();
+  });
+
+  it('serializeData keeps s by default, replaces and removes it on request', () => {
+    const obj = { lampa: 1, omp: { v: 1, h: [], s: { i: true, c: false, mc: 60 } } };
+    const j: JournalEntry[] = [{ f: 1, t: 1, d: 2, at: T0, src: 'tv' }];
+    expect(JSON.parse(serializeData(obj, j)).omp).toEqual({ v: 1, h: j, s: { i: true, c: false, mc: 60 } });
+    expect(JSON.parse(serializeData(obj, j, { i: false, c: true })).omp.s).toEqual({ i: false, c: true });
+    expect(JSON.parse(serializeData(obj, j, null)).omp.s).toBeUndefined();
+    expect(JSON.parse(serializeData(obj, j)).lampa).toBe(1);
+    expect(JSON.parse(serializeData({}, j)).omp.s).toBeUndefined();
   });
 });
