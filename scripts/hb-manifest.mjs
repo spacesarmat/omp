@@ -1,6 +1,6 @@
-// CI: node scripts/hb-manifest.mjs <tag> <path-to-ipk> → build/hb/{<id>.manifest.json, apps.json, update.json}
+// CI: node scripts/hb-manifest.mjs <tag> <path-to-ipk> → build/hb/{<id>.manifest.json, apps.json, update.json, full_description.html}
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { APP_ID, buildHomebrew, changelogNotes } from './hb-lib.mjs';
 
@@ -25,7 +25,11 @@ const { manifest, apps, update } = buildHomebrew({
   notes,
 });
 
+const fullDescription = 'docs/homebrew/full_description.html';
+if (!existsSync(fullDescription)) throw new Error(`${fullDescription} is missing`);
+
 mkdirSync('build/hb', { recursive: true });
+copyFileSync(fullDescription, 'build/hb/full_description.html');
 writeFileSync(`build/hb/${APP_ID}.manifest.json`, JSON.stringify(manifest, null, 2));
 writeFileSync('build/hb/apps.json', JSON.stringify(apps, null, 2));
 writeFileSync('build/hb/update.json', JSON.stringify(update, null, 2));

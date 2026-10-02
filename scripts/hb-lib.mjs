@@ -47,6 +47,7 @@ export function buildHomebrew({ tag, version, ipkName, sha256, size, title, desc
         manifest,
         pool: 'main',
         shortDescription: description,
+        fullDescriptionUrl: 'full_description.html',
       },
     ],
   };
