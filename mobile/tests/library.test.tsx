@@ -165,7 +165,7 @@ describe('Library', () => {
       expect(el.querySelector('.m-ptr')).toBeNull();
     });
 
-    it('the list follows the finger and the icon arms past the threshold', async () => {
+    it('only the list follows the finger and the icon arms past the threshold', async () => {
       // jsdom has requestAnimationFrame but never paints, so frames are driven by a timer here
       vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => setTimeout(() => f(0), 0));
       vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
@@ -179,8 +179,13 @@ describe('Library', () => {
       await act(async () => {
         await new Promise((r) => setTimeout(r, 40));
       });
-      const root = el.querySelector('.m-library') as HTMLElement;
-      expect(root.style.transform).toBe('translateY(20px)');
+      // only the list moves; the header with the logo, the tabs and the screen itself stay put
+      const body = el.querySelector('.m-lib-body') as HTMLElement;
+      expect(body.style.transform).toBe('translateY(20px)');
+      expect((el.querySelector('.m-library') as HTMLElement).style.transform).toBe('');
+      expect(el.querySelector('.m-lib-pull .m-ptr')).not.toBeNull();
+      expect(el.querySelector('.m-lib-head')!.closest('.m-lib-pull')).toBeNull();
+      expect(el.querySelector('.m-tabs')!.closest('.m-lib-pull')).toBeNull();
       expect(el.querySelector('.m-ptr')).not.toBeNull();
       expect(el.querySelector('.m-ptr.armed')).toBeNull();
       touch('touchmove', 260);
