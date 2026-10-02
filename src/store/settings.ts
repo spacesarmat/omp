@@ -1,5 +1,7 @@
 import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
+import type { LibrarySort } from '../lib/librarySearch';
+import type { LibraryView } from '../lib/libraryView';
 
 export interface AppSettings {
   audioLang: string;
@@ -12,6 +14,8 @@ export interface AppSettings {
   subColor: 'white' | 'yellow';
   subBackground: boolean;
   showStats: boolean;
+  libraryView: LibraryView;
+  librarySort: LibrarySort;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -25,6 +29,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   subColor: 'white',
   subBackground: true,
   showStats: false,
+  libraryView: 'large',
+  librarySort: 'new',
 };
 
 const KEY = 'tsp.settings';
@@ -42,6 +48,8 @@ export function sanitizeSettings(v: unknown): AppSettings {
   if (SUB_SIZES.indexOf(out.subSize) < 0) out.subSize = DEFAULT_SETTINGS.subSize;
   if (SUB_COLORS.indexOf(out.subColor) < 0) out.subColor = DEFAULT_SETTINGS.subColor;
   if ([5, 10, 15].indexOf(out.edgeSeekStep) < 0) out.edgeSeekStep = DEFAULT_SETTINGS.edgeSeekStep;
+  if (['large', 'small', 'list', 'compact'].indexOf(out.libraryView) < 0) out.libraryView = DEFAULT_SETTINGS.libraryView;
+  if (['new', 'title', 'size'].indexOf(out.librarySort) < 0) out.librarySort = DEFAULT_SETTINGS.librarySort;
   return out;
 }
 

@@ -79,6 +79,7 @@ interface TextInputProps {
   onChange: (v: string) => void;
   placeholder?: string;
   onSubmit?: () => void;
+  onFocused?: () => void;
   type?: 'text' | 'password' | 'url';
 }
 
@@ -88,7 +89,10 @@ export function TextInput(p: TextInputProps) {
   const { ref, focused, focusSelf } = useFocusable({
     focusKey: p.focusKey,
     onEnterPress: () => { if (inputRef.current) inputRef.current.focus(); },
-    onFocus: () => scrollIntoViewSafe(ref.current),
+    onFocus: () => {
+      scrollIntoViewSafe(ref.current);
+      if (p.onFocused) p.onFocused();
+    },
   });
   // resume() is idempotent: unmounting a focused input must not leave navigation paused
   useEffect(() => () => resume(), []);
