@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { client } from '../store/servers';
-import { torrents, refreshTorrents } from '../store/library';
+import { torrents, refreshTorrents, addedTorrents, addedMessage } from '../store/library';
 import { continueWatching, refreshViewed, progressVersion, Progress } from '../store/progress';
 import type { Torrent } from '../api/types';
 import { errorMessage } from '../api/http';
@@ -40,8 +40,15 @@ export function LibraryScreen() {
 
   const load = (isDead?: () => boolean) => {
     if (!c) return;
+    const before = torrents.value;
     refreshTorrents(c).then(
-      () => { if (isDead?.()) return; setError(null); setLoaded(true); },
+      (list) => {
+        if (isDead?.()) return;
+        const msg = addedMessage(addedTorrents(before, list));
+        if (msg) toast(msg);
+        setError(null);
+        setLoaded(true);
+      },
       (e) => { if (isDead?.()) return; setError(errorMessage(e)); setLoaded(true); },
     );
     refreshViewed(c);
