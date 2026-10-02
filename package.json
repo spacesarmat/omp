@@ -18,7 +18,8 @@
   "dependencies": {
     "@noriginmedia/norigin-spatial-navigation": "^3.3.0",
     "@preact/signals": "^2.11.3",
-    "preact": "^11.0.0"
+    "preact": "^11.0.0",
+    "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",
