@@ -6,7 +6,7 @@ import { MiniPlayer } from '../src/ui/MiniPlayer';
 import { App } from '../src/app';
 import { currentRoute, resetTo, navigate } from '../src/nav';
 import { nowPlaying, lastSeen, launchedAt, setPlayerLinkDeps } from '../src/tv/playerLink';
-import { tvState } from '../src/tv/tvClient';
+import { tvState, cancelWarmUp } from '../src/tv/tvClient';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import type { PlayerState } from '../../src/phone/protocol';
 
@@ -67,6 +67,8 @@ beforeEach(() => {
   navigate({ name: 'nowPlaying' });
 });
 afterEach(() => {
+  cancelWarmUp();
+  tvState.value = 'idle';
   setPlayerLinkDeps(null);
   document.body.innerHTML = '';
 });

@@ -131,6 +131,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  cancelWarmUp();
   vi.useRealTimers();
   await disconnectTv();
   setTransport(native);
@@ -686,16 +687,95 @@ describe('tvClient early connect', () => {
     expect(fake.frames).toEqual(['UP', 'DOWN', 'ENTER'].map((n) => buttonFrameOf(n)));
   });
 
-  it('drops queued presses older than 15 s and keeps at most 10', async () => {
-    autoReply(fake);
-    fake.tvConnect = () => new Promise(() => {}); // never opens: the press waits
+  /** Pairing prompt shown, so the registration waits long enough for the TTL tests. */
+  const startPairing = async () => {
     void warmUp();
     await vi.advanceTimersByTimeAsync(0);
-    const all = Array.from({ length: 12 }, (_, i) => pressButton(i % 2 ? 'UP' : 'DOWN'));
-    const settled = all.map((p) => p.then(() => 'ok', (e) => e.message));
-    await vi.advanceTimersByTimeAsync(0);
-    expect(await Promise.all(settled.slice(0, 2))).toEqual(['Телевизор не подключён', 'Телевизор не подключён']);
-    await vi.advanceTimersByTimeAsync(20000); // registration times out
+    fake.emit({ type: 'response', id: fake.lastRegister.id, payload: { pairingType: 'PROMPT', returnValue: true } });
+  };
+
+  it('drops a queued press after 15 s silently, keeps a younger one', async () => {
+    autoReply(fake);
+    await startPairing();
+    const old = pressButton('UP');
+    await vi.advanceTimersByTimeAsync(14000);
+    const young = pressButton('DOWN');
+    await vi.advanceTimersByTimeAsync(2000);
+    // the old one expired at 15 s (resolved, not rejected)
+    await expect(old).resolves.toBeUndefined();
     expect(fake.frames).toEqual([]);
+    fake.emit(REG(fake));
+    await young;
+    expect(fake.frames).toEqual([buttonFrameOf('DOWN')]);
+  });
+
+  it('sends nothing when every queued press expired before the connect', async () => {
+    autoReply(fake);
+    await startPairing();
+    const a = pressButton('UP');
+    const b = pressButton('DOWN');
+    await vi.advanceTimersByTimeAsync(16000);
+    fake.emit(REG(fake));
+    await Promise.all([a, b]);
+    expect(fake.frames).toEqual([]);
+  });
+
+  it('keeps at most 10 queued presses (the oldest are dropped silently)', async () => {
+    autoReply(fake);
+    await startPairing();
+    const all = Array.from({ length: 12 }, (_, i) => pressButton(i < 2 ? 'LEFT' : 'UP'));
+    fake.emit(REG(fake));
+    await Promise.all(all);
+    expect(fake.frames).toEqual(Array.from({ length: 10 }, () => buttonFrameOf('UP')));
+  });
+
+  it('surfaces the declined message to queued presses', async () => {
+    await startPairing();
+    const p = pressButton('UP');
+    const settled = p.then(() => 'ok', (e) => e.message);
+    await vi.advanceTimersByTimeAsync(0);
+    fake.emit({ type: 'error', id: fake.lastRegister.id, error: 'denied' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await settled).toBe('Подключение отклонено на телевизоре');
+  });
+
+  it('does not leave a tvError while the warm-up retries, only after it gives up', async () => {
+    failNextConnects();
+    const p = warmUp();
+    await vi.advanceTimersByTimeAsync(3100);
+    expect(tvState.value).toBe('error');
+    expect(tvError.value).toBe('');
+    await vi.advanceTimersByTimeAsync(60000);
+    await p;
+    expect(tvError.value).toBe('Телевизор не отвечает');
+  });
+
+  it('starts a new warm-up after the previous one was cancelled', async () => {
+    failNextConnects();
+    const p = warmUp();
+    await vi.advanceTimersByTimeAsync(100);
+    cancelWarmUp();
+    void warmUp();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fake.connects).toHaveLength(2);
+    cancelWarmUp();
+    await p;
+  });
+
+  it('a pointer prefetch that never gets an answer does not drop the session', async () => {
+    const p = warmUp();
+    await vi.advanceTimersByTimeAsync(0);
+    fake.emit(REG(fake));
+    await p;
+    expect(fake.sent.map((m) => m.uri)).toEqual([POINTER_URI]);
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(tvState.value).toBe('connected');
+    // the lazy path asks again
+    autoReply(fake);
+    const press = pressButton('UP');
+    await vi.advanceTimersByTimeAsync(0);
+    await press;
+    expect(fake.sent.filter((m) => m.uri === POINTER_URI)).toHaveLength(2);
+    expect(fake.frames).toEqual([buttonFrameOf('UP')]);
   });
 });

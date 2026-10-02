@@ -68,6 +68,8 @@ interface Session {
   reg: { resolve: () => void; reject: (e: Error) => void; timer?: ReturnType<typeof setTimeout> } | null;
 }
 
+let warmActive = false;
+let warmError = '';
 let transport: TvTransport = native;
 let seq = 0;
 /** IP of the current or connecting session; null when idle. */
@@ -130,7 +132,9 @@ function fail(s: Session, message: string): void {
   endSession(s, message);
   void closeTransport();
   tvState.value = 'error';
-  tvError.value = message;
+  // While a warm-up retries, its failures stay silent until it gives up.
+  if (warmActive) warmError = message;
+  else tvError.value = message;
 }
 
 function armRegistration(s: Session, ms: number): void {
@@ -162,7 +166,7 @@ function onRegisterMessage(s: Session, m: any): void {
     tvError.value = '';
     reg.resolve();
     // Open the pointer socket now so the first press does not wait for it (errors are ignored).
-    ensurePointer().catch(noop);
+    ensurePointer(true).catch(noop);
   } else if (m.type === 'error') {
     const text = String(m.error ?? m.payload?.errorText ?? '');
     if (s.signed && /blacklisted certificate/i.test(text)) {
@@ -255,7 +259,8 @@ async function ensureConnected(): Promise<void> {
   return connectTv(tv);
 }
 
-function send(uri: string, payload?: object, closeOk = false): Promise<any> {
+/** `soft`: a timeout rejects without dropping the session (background requests). */
+function send(uri: string, payload?: object, closeOk = false, soft = false): Promise<any> {
   if (!session || tvState.value !== 'connected') return Promise.reject(new Error(TV_NOT_CONNECTED));
   const s = session;
   const id = nextId('req');
@@ -267,6 +272,7 @@ function send(uri: string, payload?: object, closeOk = false): Promise<any> {
         return;
       }
       reject(new Error(TV_NO_ANSWER));
+      if (soft) return;
       // A dead socket may stay "open" for minutes without tvClosed; drop it so the next action reconnects.
       fail(s, TV_NO_ANSWER);
     }, REQUEST_TIMEOUT);
@@ -284,9 +290,9 @@ async function request(uri: string, payload?: object): Promise<any> {
   return send(uri, payload);
 }
 
-function ensurePointer(): Promise<void> {
+function ensurePointer(soft = false): Promise<void> {
   if (!pointer) {
-    const p: Promise<void> = send(POINTER_URI).then((r) => {
+    const p: Promise<void> = send(POINTER_URI, undefined, false, soft).then((r) => {
       if (typeof r?.socketPath !== 'string') throw new Error(TV_NO_ANSWER);
       return transport.pointerConnect(r.socketPath);
     });
@@ -300,7 +306,7 @@ function ensurePointer(): Promise<void> {
 
 interface QueuedFrame {
   frame: string;
-  at: number;
+  timer: ReturnType<typeof setTimeout>;
   resolve: () => void;
   reject: (e: Error) => void;
 }
@@ -323,16 +329,18 @@ async function drainOutbox(): Promise<void> {
           else if (connecting) await connecting.catch(noop);
           else await ensureConnected();
         }
-        if (tvState.value !== 'connected') throw new Error(TV_NO_ANSWER);
+        if (tvState.value !== 'connected') throw new Error(tvError.value || TV_NO_ANSWER);
       } catch (e) {
-        for (const q of outbox.splice(0)) q.reject(e instanceof Error ? e : new Error(TV_NO_ANSWER));
+        const err = new Error(tvError.value || (e instanceof Error ? e.message : TV_NO_ANSWER));
+        for (const q of outbox.splice(0)) {
+          clearTimeout(q.timer);
+          q.reject(err);
+        }
         return;
       }
-      const q = outbox.shift()!;
-      if (Date.now() - q.at > QUEUE_TTL_MS) {
-        q.reject(new Error(TV_NO_ANSWER));
-        continue;
-      }
+      const q = outbox.shift();
+      if (!q) break; // everything expired while waiting
+      clearTimeout(q.timer);
       await sendFrameNow(q.frame).then(q.resolve, q.reject);
     }
   } finally {
@@ -344,8 +352,23 @@ function sendFrame(frame: string): Promise<void> {
   if (outbox.length === 0 && !draining && !isBusy()) return sendFrameNow(frame);
   // Presses made while connecting wait here and go out in order once the TV is ready.
   return new Promise<void>((resolve, reject) => {
-    if (outbox.length >= QUEUE_MAX) outbox.shift()!.reject(new Error(TV_NOT_CONNECTED));
-    outbox.push({ frame, at: Date.now(), resolve, reject });
+    // Overflowing and expired presses are dropped silently (no toast per press).
+    if (outbox.length >= QUEUE_MAX) {
+      const old = outbox.shift()!;
+      clearTimeout(old.timer);
+      old.resolve();
+    }
+    const q: QueuedFrame = {
+      frame,
+      resolve,
+      reject,
+      timer: setTimeout(() => {
+        const i = outbox.indexOf(q);
+        if (i >= 0) outbox.splice(i, 1);
+        resolve();
+      }, QUEUE_TTL_MS),
+    };
+    outbox.push(q);
     void drainOutbox();
   });
 }
@@ -359,7 +382,10 @@ async function sendFrameNow(frame: string): Promise<void> {
       await used;
     } catch (e) {
       if (e instanceof TvAnswerError) throw new Error(PERMISSION_ERROR.test(e.raw) ? TV_POINTER_DENIED : e.message);
-      throw e;
+      // The soft prefetch may have timed out; retry once with a fresh (hard) request.
+      if (pointer === used) pointer = null;
+      if (attempt >= 1) throw e;
+      continue;
     }
     try {
       await transport.pointerSend(frame);
@@ -392,10 +418,14 @@ export function warmUp(): Promise<void> {
   let wake: (() => void) | null = null;
   const stop = () => {
     stopped = true;
+    // a later warmUp() may start a new run
+    warming = null;
     wake?.();
   };
   cancelWarm = stop;
   let pairing = false;
+  warmActive = true;
+  warmError = '';
   const watch = effect(() => {
     if (tvState.value === 'pairing') pairing = true;
     if (activeTv.value?.ip !== tv.ip) stop();
@@ -426,6 +456,8 @@ export function warmUp(): Promise<void> {
     } finally {
       watch();
       tvWaking.value = false;
+      if (cancelWarm === stop) warmActive = false;
+      if (!stopped && tvState.value === 'error' && !tvError.value) tvError.value = warmError;
       if (cancelWarm === stop) cancelWarm = null;
       if (warming === p) warming = null;
     }
