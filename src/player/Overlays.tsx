@@ -24,10 +24,10 @@ export function BufferingOverlay(p: { cache: CacheState | null }) {
   );
 }
 
-export function SubtitleOverlay(p: { cues: Cue[] | null; time: number; raised: boolean }) {
+export function SubtitleOverlay(p: { cues: Cue[] | null; time: number; raised: boolean; offset: number }) {
   const s = settings.value;
   if (!p.cues) return null;
-  const text = cueAt(p.cues, p.time);
+  const text = cueAt(p.cues, p.time - p.offset);
   if (!text) return null;
   const cls = 'subtitles sub-' + s.subSize + ' sub-' + s.subColor + (s.subBackground ? ' sub-bg' : ' sub-nobg') + (p.raised ? ' raised' : '');
   return (
