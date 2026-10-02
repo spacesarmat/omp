@@ -1,5 +1,7 @@
 import { signal, computed } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
+import { torrents } from './library';
+import { serverViewed } from './progress';
 import { TorrServerClient, normalizeServerUrl } from '../api/torrserver';
 
 export interface SavedServer {
@@ -38,7 +40,10 @@ export function addServer(input: { name?: string; url: string; user?: string; pa
   const name = input.name || url.replace(/^https?:\/\//, '');
   const existing = servers.value.find((s) => s.url === url);
   if (existing) {
-    const updated: SavedServer = { ...existing, name: input.name || existing.name, user: input.user, password: input.password };
+    const updated: SavedServer = { ...existing, name: input.name || existing.name,
+      user: input.user !== undefined ? input.user : existing.user,
+      password: input.password !== undefined ? input.password : existing.password,
+    };
     servers.value = servers.value.map((s) => (s.id === existing.id ? updated : s));
     persist();
     return updated;
@@ -62,6 +67,12 @@ export function removeServer(id: string): void {
 }
 
 export function setActiveServer(id: string | null): void {
+  if (id !== activeServerId.value) {
+    // data from the previous server must not leak into the new one
+    serverViewed.value = [];
+    torrents.value = [];
+    saveJson('tsp.torrents', []);
+  }
   activeServerId.value = id;
   persist();
 }
