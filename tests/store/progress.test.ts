@@ -71,4 +71,19 @@ describe('progress store', () => {
     await p;
     expect(serverViewed.value).toEqual([]);
   });
+  it('adds server timecodes after local entries', () => {
+    const list = [{ hash: H, title: 'A', stat: 5 }, { hash: H2, title: 'B', stat: 5 }, { hash: 'd'.repeat(40), title: 'D', stat: 5 }] as Torrent[];
+    saveProgress(H, 1, 100, 1000);
+    serverViewed.value = [
+      { hash: H, file_index: 1, timecode: 500 },
+      { hash: H2, file_index: 3, timecode: 300 },
+      { hash: 'd'.repeat(40), file_index: 1, timecode: 5 },
+      { hash: 'e'.repeat(40), file_index: 1, timecode: 400 },
+    ];
+    const r = continueWatching(list);
+    expect(r.map((e) => [e.torrent.hash, e.fileIndex, e.progress.time, e.progress.duration])).toEqual([
+      [H, 1, 100, 1000],
+      [H2, 3, 300, 0],
+    ]);
+  });
 });
