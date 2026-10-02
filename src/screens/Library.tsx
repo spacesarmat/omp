@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { client } from '../store/servers';
-import { torrents, refreshTorrents, addedTorrents, addedMessage } from '../store/library';
+import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, addedTorrents, addedMessage } from '../store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed, clearProgress } from '../store/progress';
 import { settings, updateSettings } from '../store/settings';
 import type { Torrent } from '../api/types';
@@ -24,13 +24,18 @@ import { HistoryGrid, HistoryEntry } from './library/HistoryGrid';
 export function LibraryScreen() {
   const c = client.value;
   const s = settings.value;
-  const [tab, setTab] = useState<LibraryTab>('all');
+  const tab = libraryTab.value;
+  const query = libraryQuery.value;
+  const searchOpen = librarySearchOpen.value;
+  const setTab = (t: LibraryTab) => { libraryTab.value = t; };
+  const setQuery = (q: string) => { libraryQuery.value = q; };
+  const setSearchOpen = (o: boolean) => { librarySearchOpen.value = o; };
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(torrents.value.length > 0);
   // card under focus: a torrent, or a history entry when fileIndex is set
-  const [sel, setSel] = useState<{ hash: string; fileIndex?: number } | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  // (a ref: focus moves must not re-render the whole catalog)
+  const selRef = useRef<{ hash: string; fileIndex?: number } | null>(null);
+  const setSel = (v: { hash: string; fileIndex?: number } | null) => { selRef.current = v; };
   progressVersion.value; // re-render when progress changes
   serverViewed.value;
 
@@ -67,7 +72,7 @@ export function LibraryScreen() {
 
   const showingError = !!error && !torrents.value.length;
   useEffect(() => {
-    if (loaded && !showingError) restoreFocus(torrents.value.length ? 'LIB-GRID' : 'LIB-HEADER');
+    if (loaded && !showingError) restoreFocus(torrents.value.length ? 'LIB-GRID' : 'tab-' + libraryTab.value);
   }, [loaded, showingError]);
 
   useEffect(() => {
@@ -104,6 +109,7 @@ export function LibraryScreen() {
 
   useKeys((a) => {
     if (a === 'back' && searchOpen) { closeSearch(); return true; }
+    const sel = selRef.current;
     if (a === 'red' && sel) {
       if (sel.fileIndex !== undefined) removeHistory(sel.hash, sel.fileIndex);
       else removeTorrent(sel.hash);
@@ -112,6 +118,19 @@ export function LibraryScreen() {
     if (a === 'blue') { navigate({ name: 'settings' }); return true; }
     return false;
   });
+
+  const isHistory = tab === 'history';
+  const sort = s.librarySort;
+  const tv = torrents.value;
+  const { list, history } = useMemo(() => {
+    if (isHistory) {
+      const all = continueWatching(tv, 40);
+      const match = filterTorrents(all.map((e) => e.torrent), query);
+      return { list: [] as Torrent[], history: all.filter((e) => match.indexOf(e.torrent) >= 0) };
+    }
+    const inTab = tv.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
+    return { list: sortTorrents(filterTorrents(inTab, query), sort), history: [] as HistoryEntry[] };
+  }, [tv, tab, query, sort, isHistory, progressVersion.value, serverViewed.value]);
 
   if (!c) return null;
 
@@ -136,17 +155,6 @@ export function LibraryScreen() {
     );
   }
 
-  const isHistory = tab === 'history';
-  let list: Torrent[] = [];
-  let history: HistoryEntry[] = [];
-  if (isHistory) {
-    const all = continueWatching(torrents.value, 40);
-    const match = filterTorrents(all.map((e) => e.torrent), query);
-    history = all.filter((e) => match.indexOf(e.torrent) >= 0);
-  } else {
-    const inTab = torrents.value.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
-    list = sortTorrents(filterTorrents(inTab, query), s.librarySort);
-  }
   const count = isHistory ? history.length : list.length;
   const searching = !!query.trim();
 

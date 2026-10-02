@@ -4,7 +4,7 @@ import { servers, addServer, setActiveServer, SavedServer } from '../store/serve
 import { TorrServerClient } from '../api/torrserver';
 import { errorMessage } from '../api/http';
 import { discover, candidateSubnets, getLocalIp, FoundServer } from '../api/discovery';
-import { resetTo } from '../ui/nav';
+import { resetTo, routeStack } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
 import { Icon } from '../ui/icons';
 import { restoreFocus } from '../ui/focus';
@@ -154,7 +154,7 @@ export function ConnectScreen() {
           onClose={() => { setEditing(null); focusHistoryButton(); }}
         />
       )}
-      <div class="hints">Стрелки — перемещение · OK — выбрать · Назад — выход</div>
+      <div class="hints">Стрелки — перемещение · OK — выбрать · Назад — {routeStack.value.length > 1 ? 'назад' : 'выход'}</div>
     </FocusGroup>
   );
 }

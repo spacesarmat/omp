@@ -36,10 +36,15 @@ export function filterTorrents(list: Torrent[], query: string): Torrent[] {
   });
 }
 
+function byHash(x: Torrent, y: Torrent): number {
+  return x.hash < y.hash ? -1 : x.hash > y.hash ? 1 : 0;
+}
+
+// hash is the final tiebreak: Chromium 53 sort is unstable for >10 items
 export function sortTorrents(list: Torrent[], mode: LibrarySort): Torrent[] {
   const a = list.slice();
-  if (mode === 'title') a.sort((x, y) => naturalCompare(norm(x.title || x.name || ''), norm(y.title || y.name || '')));
-  else if (mode === 'size') a.sort((x, y) => (y.torrent_size || 0) - (x.torrent_size || 0));
-  else a.sort((x, y) => (y.timestamp || 0) - (x.timestamp || 0));
+  if (mode === 'title') a.sort((x, y) => naturalCompare(norm(x.title || x.name || ''), norm(y.title || y.name || '')) || byHash(x, y));
+  else if (mode === 'size') a.sort((x, y) => (y.torrent_size || 0) - (x.torrent_size || 0) || byHash(x, y));
+  else a.sort((x, y) => (y.timestamp || 0) - (x.timestamp || 0) || byHash(x, y));
   return a;
 }
