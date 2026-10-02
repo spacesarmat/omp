@@ -24,7 +24,7 @@ describe('checkForUpdate', () => {
   it('finds a newer version and prompts once per run', async () => {
     const f = mockFetch(() => ({ body: feed('0.6.1') }));
     expect(await checkForUpdate({ manual: false, now: NOW, current: '0.6.0' })).toBe('update');
-    expect(f.mock.calls[0][0]).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update.json');
+    expect(f.mock.calls[0][0]).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update.json?t=' + NOW);
     expect(latestUpdate.value!.version).toBe('0.6.1');
     expect(updatePrompt.value!.version).toBe('0.6.1');
     expect(JSON.parse(localStorage.getItem('tsp.update')!).lastCheck).toBe(NOW);
@@ -41,6 +41,7 @@ describe('checkForUpdate', () => {
     expect(await checkForUpdate({ manual: false, now: NOW + CHECK_INTERVAL_MS * 2, current: '0.6.0' })).toBe('skipped');
     expect(await checkForUpdate({ manual: true, now: NOW + 1, current: '0.6.0' })).toBe('update');
     expect(f).toHaveBeenCalledTimes(2);
+    expect(f.mock.calls[1][0]).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update.json?t=' + (NOW + 1));
   });
   it('checks again when lastCheck is in the future (TV clock went back)', async () => {
     const f = mockFetch(() => ({ body: feed('0.6.1') }));
@@ -81,6 +82,6 @@ describe('sanitizeUpdateState', () => {
   it('uses a custom feed url when given', async () => {
     const f = mockFetch(() => ({ body: feed('0.7.1') }));
     expect(await checkForUpdate({ manual: true, now: NOW, current: '0.7.0', url: 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update-android.json' })).toBe('update');
-    expect(f.mock.calls[0][0]).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update-android.json');
+    expect(f.mock.calls[0][0]).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update-android.json?t=' + NOW);
   });
 });
