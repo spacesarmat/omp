@@ -235,3 +235,5 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .update-row { display: flex; align-items: center; }
 .update-row .qr { flex-shrink: 0; margin-right: 32px; border-radius: 12px; }
 .update-text { margin: 0; font-size: 22px; line-height: 1.6; color: var(--muted); }
+.update-dialog { width: 900px; }
+.update-current { margin-top: 16px; }

@@ -11,6 +11,8 @@ import { AddScreen } from './screens/Add';
 import { PlaylistScreen } from './screens/Playlist';
 import { SettingsScreen } from './screens/Settings';
 import { UpdateScreen } from './screens/Update';
+import { UpdateDialog } from './ui/UpdateDialog';
+import { checkForUpdate } from './store/updates';
 
 function renderRoute(r: Route) {
   switch (r.name) {
@@ -43,10 +45,15 @@ function exitApp() {
 
 export function App() {
   useEffect(() => installKeyListener(() => { if (!goBack()) exitApp(); }), []);
+  useEffect(() => {
+    const t = setTimeout(() => { checkForUpdate({ manual: false }); }, 3000);
+    return () => clearTimeout(t);
+  }, []);
   const r = currentRoute.value;
   return (
     <div class="app">
       <div class="screen-host" key={routeStack.value.length + ':' + r.name}>{renderRoute(r)}</div>
+      {r.name !== 'player' && <UpdateDialog />}
       <DialogHost />
       <ToastHost />
     </div>

@@ -11,6 +11,9 @@ import { FocusGroup, ChoiceRow, ON_OFF, Button } from '../ui/components';
 import { restoreFocus } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
+import { latestUpdate, checkForUpdate } from '../store/updates';
+import { openHbChannel } from '../platform/hbchannel';
+import { HB_REPO_URL } from '../lib/updateInfo';
 
 const MB = 1024 * 1024;
 const SEEK = [5, 10, 15, 30, 60].map((v) => ({ value: v, label: v + ' с' }));
@@ -126,8 +129,28 @@ export function SettingsScreen() {
       )}
 
       <h2>О приложении</h2>
-      <div class="muted">OMP — Open Movie Player {APP_VERSION}{c ? ' · ' + c.baseUrl : ''}</div>
+      <div class="row">
+        <div class="grow">
+          OMP — Open Movie Player {APP_VERSION}
+          {latestUpdate.value ? ' · доступна ' + latestUpdate.value.version : ''}
+          {c ? ' · ' + c.baseUrl : ''}
+        </div>
+        <Button
+          focusKey="set-update-check"
+          label="Проверить обновления"
+          onPress={() => checkForUpdate({ manual: true }).then((r) => {
+            if (r === 'error') toast('Не удалось проверить обновления', 'error');
+            else if (r === 'latest') toast('У вас последняя версия');
+          })}
+        />
+      </div>
+      <ChoiceRow label="Проверять обновления при запуске" value={s.updateCheck} options={ON_OFF} onChange={(v) => updateSettings({ updateCheck: v })} />
       <div class="row" style={{ marginTop: '16px' }}>
+        <Button label="Обновление" onPress={() => navigate({ name: 'update' })} />
+        <Button
+          label="Добавить репозиторий OMP в Homebrew Channel"
+          onPress={() => { openHbChannel(HB_REPO_URL).catch(() => toast('Не удалось открыть Homebrew Channel', 'error')); }}
+        />
         <Button
           label="Сбросить настройки приложения"
           onPress={() => confirmDialog('Сбросить настройки приложения?', 'Сбросить').then((ok) => { if (ok) resetSettings(); })}
