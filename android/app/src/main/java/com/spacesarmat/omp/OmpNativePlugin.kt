@@ -69,6 +69,11 @@ class OmpNativePlugin : Plugin() {
         io.shutdownNow()
     }
 
+    @PluginMethod
+    fun isTv(call: PluginCall) {
+        call.resolve(JSObject().put("tv", TvMode.isTv(context)))
+    }
+
     // ---- discovery ----
 
     @PluginMethod

@@ -14,6 +14,10 @@ class MainActivity : BridgeActivity() {
         registerPlugin(OmpNativePlugin::class.java)
         // BridgeActivity.onCreate passes the launch intent to onNewIntent below
         super.onCreate(savedInstanceState)
+        // Android TV gets the TV interface bundled at /tv/ (bridge is ready after super.onCreate)
+        if (TvMode.isTv(this)) {
+            bridge.webView.post { bridge.webView.loadUrl(bridge.localUrl + "/tv/index.html") }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
