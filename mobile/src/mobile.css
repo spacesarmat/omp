@@ -397,3 +397,19 @@ button, .m-btn {
   font-weight: 600;
 }
 .m-media.primary { background: var(--accent); color: var(--bg); }
+
+/* Settings + update sheet */
+.m-screen[data-route='settings'] { display: flex; flex-direction: column; gap: 20px; }
+.m-set-group { display: flex; flex-direction: column; gap: 10px; }
+.m-set-label { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.m-set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 4px 14px; border-radius: 12px; background: var(--panel); }
+.m-set-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.m-set-row .m-btn { flex-shrink: 0; }
+.m-switch { flex-shrink: 0; width: 52px; height: 44px; padding: 0; border: none; background: none; display: flex; align-items: center; }
+.m-switch-knob { display: block; width: 52px; height: 30px; border-radius: 15px; background: #3A3F4B; position: relative; }
+.m-switch-knob::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 12px; background: var(--text); transition: left 0.15s; }
+.m-switch.on .m-switch-knob { background: var(--accent); }
+.m-switch.on .m-switch-knob::after { left: 25px; background: var(--bg); }
+.m-notes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.4; }
+.m-sheet-row { display: flex; gap: 10px; }
+.m-sheet-row .m-btn { flex: 1 1 0; }

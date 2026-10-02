@@ -10,17 +10,11 @@ import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
 import { Add } from './screens/Add';
 import { Remote } from './screens/Remote';
+import { Settings } from './screens/Settings';
+import { UpdateSheet } from './ui/UpdateSheet';
+import { checkForUpdate, updatePrompt } from '../../src/store/updates';
+import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
 import './mobile.css';
-
-const TITLES: Record<MRoute['name'], string> = {
-  connect: 'Подключение',
-  library: 'Каталог',
-  torrent: 'Торрент',
-  add: 'Добавить',
-  remote: 'Пульт',
-  tv: 'Телевизор',
-  settings: 'Настройки',
-};
 
 const TABS: string[] = ['library', 'add', 'remote', 'settings'];
 
@@ -70,7 +64,16 @@ export function App() {
     return () => off?.();
   }, []);
 
+  // background update check 3 s after start (cheap GET; honours the setting and the 6 h interval)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void checkForUpdate({ manual: false, url: ANDROID_UPDATE_URL });
+    }, 3000);
+    return () => clearTimeout(t);
+  }, []);
+
   const route = currentRoute.value;
+  const prompt = updatePrompt.value;
   const showNav = TABS.includes(route.name);
   return (
     <>
@@ -87,10 +90,9 @@ export function App() {
       ) : route.name === 'remote' ? (
         <Remote />
       ) : (
-        <div class="m-screen" data-route={route.name}>
-          <h1>{TITLES[route.name]}</h1>
-        </div>
+        <Settings />
       )}
+      {prompt && <UpdateSheet info={prompt} />}
       <Toast />
       {showNav && <NavBar active={route.name as Tab} />}
     </>
