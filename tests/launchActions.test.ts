@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { detachPhone, phoneAttached } from '../src/phone/link';
 import { mockFetch } from './helpers/fetchMock';
 import { runLaunchParams } from '../src/launchActions';
 import { servers, activeServerId, addServer, setActiveServer } from '../src/store/servers';
@@ -62,5 +63,19 @@ describe('runLaunchParams', () => {
     expect(top.name).toBe('player');
     expect(top.queue[top.index].fileIndex).toBe(3);
     expect(top.startAt).toBe(1394);
+  });
+});
+
+describe('report launch param', () => {
+  afterEach(() => detachPhone());
+  it('attaches the phone and does nothing else for a report-only plan', () => {
+    runLaunchParams({ report: 'http://192.168.1.5:8765/r' });
+    expect(phoneAttached.value).toBe(true);
+    expect(routeStack.value).toEqual([{ name: 'connect' }]);
+  });
+  it('attaches and still plays', () => {
+    runLaunchParams({ report: 'http://192.168.1.5:8765/r', play: 'https://cdn.example/a.mp4', title: 'A' });
+    expect(phoneAttached.value).toBe(true);
+    expect(top().name).toBe('player');
   });
 });

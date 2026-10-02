@@ -1,4 +1,5 @@
 import { useEffect } from 'preact/hooks';
+import { effect } from '@preact/signals';
 import { App as CapApp } from '@capacitor/app';
 import { currentRoute, goBack, switchTab, setPendingLink, type MRoute } from './nav';
 import { activeServer } from '../../src/store/servers';
@@ -11,10 +12,15 @@ import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
 import { Add } from './screens/Add';
 import { Remote } from './screens/Remote';
+import { NowPlaying } from './screens/NowPlaying';
+import { MiniPlayer } from './ui/MiniPlayer';
 import { Settings, runUpdateCheck } from './screens/Settings';
 import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
 import { updatePrompt } from '../../src/store/updates';
 import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
+import { tvState } from './tv/tvClient';
+import { activeTv } from './tv/tvStore';
+import { startPlayerLink, attachIfOmpForeground, linkStatus } from './tv/playerLink';
 import './mobile.css';
 
 const TABS: string[] = ['library', 'add', 'remote', 'settings'];
@@ -59,6 +65,35 @@ export function App() {
     };
   }, []);
 
+  // player link: listen to the TV; (re)attach on cold start, when the TV connects and when the app returns
+  // to the foreground (attachIfOmpForeground skips a live link and a failed TV)
+  useEffect(() => {
+    startPlayerLink();
+    if (activeTv.value) void attachIfOmpForeground();
+    const stop = effect(() => {
+      if (tvState.value === 'connected') void attachIfOmpForeground();
+    });
+    let remove: (() => void) | undefined;
+    let cancelled = false;
+    try {
+      CapApp.addListener('appStateChange', (st) => {
+        if (st.isActive) void attachIfOmpForeground();
+      })
+        .then((h) => {
+          if (cancelled) void h.remove();
+          else remove = () => void h.remove();
+        })
+        .catch(() => {});
+    } catch {
+      /* browser without Capacitor */
+    }
+    return () => {
+      cancelled = true;
+      stop();
+      remove?.();
+    };
+  }, []);
+
   // magnet links shared into the app (cold start and while running)
   useEffect(() => {
     let off: (() => void) | undefined;
@@ -87,6 +122,7 @@ export function App() {
   const route = currentRoute.value;
   const prompt = updatePrompt.value;
   const showNav = TABS.includes(route.name);
+  const showMini = showNav && linkStatus.value !== 'none';
   return (
     <>
       {route.name === 'connect' ? (
@@ -99,6 +135,8 @@ export function App() {
         <Torrent hash={route.hash} />
       ) : route.name === 'add' ? (
         <Add link={route.link} />
+      ) : route.name === 'nowPlaying' ? (
+        <NowPlaying />
       ) : route.name === 'remote' ? (
         <Remote />
       ) : (
@@ -106,6 +144,8 @@ export function App() {
       )}
       {prompt && showNav && <UpdateSheet info={prompt} />}
       <Toast />
+      {showMini && <div class="m-mini-pad" />}
+      {showNav && <MiniPlayer />}
       {showNav && <NavBar active={route.name as Tab} />}
     </>
   );

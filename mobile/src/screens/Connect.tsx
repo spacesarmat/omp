@@ -1,27 +1,18 @@
 import { useEffect, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { Icon } from '../ui/Icon';
+import { Logo } from '../../../src/ui/Logo';
 import { showToast } from '../ui/toast';
 import { resetTo, afterConnectRoute } from '../nav';
 import { scanPairQr } from '../platform/qr';
-import { servers, addServer, setActiveServer, type SavedServer } from '../../../src/store/servers';
+import { RenameSheet } from '../ui/RenameSheet';
+import { servers, addServer, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
 
 type Status = { online: boolean; version: string } | 'pending';
 
 const SCAN = 'M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10';
-
-function Logo() {
-  const xs = [23, 35, 47, 59, 71];
-  return (
-    <svg width="56" height="56" viewBox="0 0 100 100" aria-hidden="true">
-      <rect x="14" y="22" width="72" height="56" rx="10" fill="none" stroke="#F5B700" stroke-width="7" />
-      {[29, 66].map((y) => xs.map((x) => <rect key={x + '-' + y} x={x} y={y} width="6" height="5" rx="1.5" fill="#F5B700" />))}
-      <path d="M44 41 L59 50 L44 59 Z" fill="#E8EAF0" stroke="#E8EAF0" stroke-width="4" stroke-linejoin="round" />
-    </svg>
-  );
-}
 
 const statuses = signal<Record<string, Status>>({});
 
@@ -54,6 +45,7 @@ export function Connect() {
   const [auth, setAuth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [renaming, setRenaming] = useState<SavedServer | null>(null);
   const [cardError, setCardError] = useState<{ id: string; text: string } | null>(null);
 
   useEffect(() => {
@@ -127,7 +119,7 @@ export function Connect() {
   return (
     <form class="m-screen m-connect" onSubmit={submit}>
       <div class="m-brand">
-        <Logo />
+        <Logo size={56} />
         <div>
           <div class="m-brand-name">OMP</div>
           <div class="m-muted">Open Movie Player</div>
@@ -203,6 +195,7 @@ export function Connect() {
               const on = !!st && st !== 'pending' && st.online;
               return (
                 <div key={s.id} class="m-server-wrap">
+                <div class="m-server-row">
                 <button type="button" class="m-server" onClick={() => void open(s)}>
                   <span class={'m-dot' + (on ? ' on' : '')} />
                   <span class="m-server-text">
@@ -213,6 +206,10 @@ export function Connect() {
                   </span>
                   <Icon d="M9 5l7 7-7 7" size={18} />
                 </button>
+                <button type="button" class="m-btn-text" aria-label={'Переименовать ' + s.name} onClick={() => setRenaming(s)}>
+                  Переименовать
+                </button>
+                </div>
                 {cardError?.id === s.id && (
                   <div class="m-error" role="alert">
                     {cardError.text}
@@ -223,6 +220,17 @@ export function Connect() {
             })}
           </div>
         </>
+      )}
+      {renaming && (
+        <RenameSheet
+          title="Название сервера"
+          value={renaming.name}
+          onSave={(n) => {
+            updateServer(renaming.id, { name: n || renaming.url.replace(/^https?:\/\//, '') });
+            setRenaming(null);
+          }}
+          onCancel={() => setRenaming(null)}
+        />
       )}
     </form>
   );

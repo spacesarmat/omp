@@ -12,6 +12,7 @@ export function buildTorrentQueue(c: TorrServerClient, t: Torrent, files: Torren
     hash: t.hash,
     fileIndex: f.id,
     poster: t.poster,
+    torrentTitle: t.title || undefined,
     subtitles: matchSubtitles(f, subs).map((s) => ({
       url: c.streamUrl(t.hash, s.id, baseName(s.path)),
       label: subtitleLabel(s, f),

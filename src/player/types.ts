@@ -10,5 +10,6 @@ export interface PlayItem {
   hash?: string;
   fileIndex?: number;
   poster?: string;
+  torrentTitle?: string;
   subtitles?: ExternalSub[];
 }

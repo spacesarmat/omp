@@ -3,7 +3,8 @@ import { Icon } from '../ui/Icon';
 import { goBack } from '../nav';
 import { native, type FoundTv } from '../platform/native';
 import { connectTv, disconnectTv, sessionIp, tvState, tvError } from '../tv/tvClient';
-import { tvs, forgetTv, type SavedTv } from '../tv/tvStore';
+import { RenameSheet } from '../ui/RenameSheet';
+import { tvs, forgetTv, renameTv, type SavedTv } from '../tv/tvStore';
 
 type Discoverer = (timeoutMs: number) => Promise<FoundTv[]>;
 let discoverer: Discoverer | null = null;
@@ -29,6 +30,7 @@ export function Tv() {
   const [manual, setManual] = useState(false);
   const [ip, setIp] = useState('');
   const [formError, setFormError] = useState('');
+  const [renaming, setRenaming] = useState<SavedTv | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -124,6 +126,11 @@ export function Tv() {
                   )}
                 </button>
                 {r.saved && (
+                  <button type="button" class="m-btn-text" aria-label={'Переименовать ' + r.name} onClick={() => setRenaming(r.saved!)}>
+                    Переименовать
+                  </button>
+                )}
+                {r.saved && (
                   <button type="button" class="m-btn-text" aria-label={'Забыть ' + r.name} onClick={() => void forget(r.ip)}>
                     Забыть
                   </button>
@@ -168,6 +175,17 @@ export function Tv() {
       <p class="m-muted m-note m-tv-tip">
         Телефон запомнит телевизор: в следующий раз «Смотреть на ТВ» и пульт заработают сразу.
       </p>
+      {renaming && (
+        <RenameSheet
+          title="Название телевизора"
+          value={renaming.name}
+          onSave={(n) => {
+            renameTv(renaming.ip, n);
+            setRenaming(null);
+          }}
+          onCancel={() => setRenaming(null)}
+        />
+      )}
     </div>
   );
 }

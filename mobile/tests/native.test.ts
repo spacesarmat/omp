@@ -22,6 +22,17 @@ describe('native plugin wrapper outside Android', () => {
     await expect(native.downloadAndInstallApk('https://x/a.apk', 'ab', () => {})).rejects.toThrow(ONLY_ANDROID);
   });
 
+  it('rejects the player server actions', async () => {
+    await expect(native.startPlayerServer('192.168.1.5')).rejects.toThrow(ONLY_ANDROID);
+    await expect(native.stopPlayerServer()).rejects.toThrow(ONLY_ANDROID);
+    await expect(native.queuePlayerCommands([{ id: 1, type: 'play' }])).rejects.toThrow(ONLY_ANDROID);
+  });
+
+  it('player message listener is a no-op', () => {
+    const off = native.onPlayerMessage(() => {});
+    expect(() => off()).not.toThrow();
+  });
+
   it('listeners are no-ops', () => {
     const off = native.onTvMessage(() => {});
     expect(() => off()).not.toThrow();
@@ -43,6 +54,9 @@ describe('native plugin wrapper on Android', () => {
       tvSend: vi.fn(async () => {}),
       discoverTvs: vi.fn(async () => ({ tvs: [{ ip: '10.0.0.2', name: 'TV' }] })),
       takePendingMagnet: vi.fn(async () => ({ link: null })),
+      startPlayerServer: vi.fn(async () => ({ url: 'http://10.0.0.3:41234/omp/abc' })),
+      stopPlayerServer: vi.fn(async () => {}),
+      queuePlayerCommands: vi.fn(async () => {}),
       addListener: vi.fn(async (event: string, cb: (e: any) => void) => {
         await gate;
         listeners.set(event, cb);
@@ -84,5 +98,27 @@ describe('native plugin wrapper on Android', () => {
     off();
     releaseAdd();
     await vi.waitFor(() => expect(removed).toEqual(['magnetReceived']));
+  });
+
+  it('player server wrappers pass plain values and JSON strings', async () => {
+    const { native: n, fake } = await load();
+    expect(await n.startPlayerServer('10.0.0.2')).toBe('http://10.0.0.3:41234/omp/abc');
+    expect(fake.startPlayerServer).toHaveBeenCalledWith({ tvIp: '10.0.0.2' });
+    await n.queuePlayerCommands([{ id: 1, type: 'seek', t: 30 }]);
+    expect(fake.queuePlayerCommands).toHaveBeenCalledWith({ json: '[{"id":1,"type":"seek","t":30}]' });
+    await n.stopPlayerServer();
+    expect(fake.stopPlayerServer).toHaveBeenCalled();
+  });
+
+  it('delivers raw player message bodies', async () => {
+    const { native: n, listeners, releaseAdd } = await load();
+    const got: string[] = [];
+    const off = n.onPlayerMessage((b) => got.push(b));
+    releaseAdd();
+    await vi.waitFor(() => expect(listeners.has('playerMessage')).toBe(true));
+    listeners.get('playerMessage')!({ body: '{"v":1}' });
+    listeners.get('playerMessage')!({ body: 'raw' });
+    expect(got).toEqual(['{"v":1}', 'raw']);
+    off();
   });
 });

@@ -15,6 +15,8 @@ import {
   turnOffTv,
   disconnectTv,
   sessionIp,
+  foregroundAppId,
+  ompVersionOnTv,
   type TvTransport,
 } from '../src/tv/tvClient';
 import { tvs, saveTv, reloadTvs } from '../src/tv/tvStore';
@@ -134,7 +136,7 @@ describe('tvClient connection', () => {
     fake.emit({ type: 'registered', id: reg.id, payload: { 'client-key': 'K' } });
     await p;
     expect(tvState.value).toBe('connected');
-    expect(tvs.value).toEqual([{ ip: '192.168.1.5', name: 'LG', clientKey: 'K' }]);
+    expect(tvs.value).toEqual([{ ip: '192.168.1.5', name: 'LG', defaultName: 'LG', clientKey: 'K' }]);
   });
 
   it('sends the saved client key', async () => {
@@ -283,7 +285,7 @@ describe('tvClient connection', () => {
     fake.emit({ type: 'registered', id: fake.lastRegister.id, payload: { 'client-key': 'K2' } });
     await second;
     expect(tvState.value).toBe('connected');
-    expect(tvs.value).toEqual([{ ip: '192.168.1.6', name: 'LG 2', clientKey: 'K2' }]);
+    expect(tvs.value).toEqual([{ ip: '192.168.1.6', name: 'LG 2', defaultName: 'LG 2', clientKey: 'K2' }]);
   });
 });
 
@@ -452,5 +454,55 @@ describe('tvClient commands', () => {
     await flush();
     fake.close();
     await expect(p).rejects.toThrow('Телевизор не подключён');
+  });
+});
+
+describe('tvClient app info', () => {
+  const reply = (fn: (msg: any) => object | 'error') => {
+    fake.onRequest = (msg) =>
+      queueMicrotask(() => {
+        const r = fn(msg);
+        if (r === 'error') fake.emit({ type: 'error', id: msg.id, error: '500 boom' });
+        else fake.emit({ type: 'response', id: msg.id, payload: { returnValue: true, ...r } });
+      });
+  };
+
+  it('reads the foreground app id', async () => {
+    await connected(fake);
+    reply(() => ({ appId: 'com.spacesarmat.torrplayer' }));
+    expect(await foregroundAppId()).toBe('com.spacesarmat.torrplayer');
+    expect(fake.sent[fake.sent.length - 1].uri).toBe('ssap://com.webos.applicationManager/getForegroundAppInfo');
+    reply(() => ({}));
+    expect(await foregroundAppId()).toBeNull();
+    reply(() => 'error');
+    expect(await foregroundAppId()).toBeNull();
+  });
+
+  it('is null without a TV', async () => {
+    expect(await foregroundAppId()).toBeNull();
+    expect(await ompVersionOnTv()).toBeNull();
+  });
+
+  it('finds the OMP version in listApps and caches it per connection', async () => {
+    await connected(fake);
+    reply(() => ({ apps: [{ id: 'x', version: '1' }, { id: 'com.spacesarmat.torrplayer', version: '0.8.1' }] }));
+    expect(await ompVersionOnTv()).toBe('0.8.1');
+    expect(await ompVersionOnTv()).toBe('0.8.1');
+    expect(fake.sent.filter((m) => m.uri.endsWith('listApps'))).toHaveLength(1);
+
+    await disconnectTv();
+    await connected(fake);
+    reply(() => ({ apps: [{ id: 'com.spacesarmat.torrplayer', version: '0.9.0' }] }));
+    expect(await ompVersionOnTv()).toBe('0.9.0');
+  });
+
+  it('is null when OMP is not installed or the TV errors, and does not cache that', async () => {
+    await connected(fake);
+    reply(() => ({ apps: [{ id: 'x', version: '1' }] }));
+    expect(await ompVersionOnTv()).toBeNull();
+    reply(() => 'error');
+    expect(await ompVersionOnTv()).toBeNull();
+    reply(() => ({ apps: [{ id: 'com.spacesarmat.torrplayer', version: '0.8.0' }] }));
+    expect(await ompVersionOnTv()).toBe('0.8.0');
   });
 });

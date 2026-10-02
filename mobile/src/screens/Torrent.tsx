@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { qualityBadge, posterStyle } from '../ui/Poster';
@@ -6,7 +6,7 @@ import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { actions, filesOf, openRemoteSoon, streamUrlFor, watchOnTvParams } from '../watch';
+import { actions, filesOf, streamUrlFor, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { torrents, refreshTorrents } from '../../../src/store/library';
 import {
@@ -17,6 +17,7 @@ import {
   progressRatio,
   isWatched,
   resumePosition,
+  getLocalProgress,
 } from '../../../src/store/progress';
 import type { Torrent as TorrentT } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
@@ -54,13 +55,11 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [alive] = useState({ v: true });
-  const launching = useRef(false);
-  const cancelJump = useRef<(() => void) | null>(null);
+  const launch = useTvLaunch();
   const hasAuth = !!activeServer.value?.user;
   useEffect(
     () => () => {
       alive.v = false;
-      cancelJump.current?.();
     },
     [],
   );
@@ -74,26 +73,17 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
       navigate({ name: 'tv' });
       return;
     }
-    if (launching.current) return;
-    launching.current = true;
-    setBusy(true);
     setStatus(null);
-    try {
-      await actions.launchOnTv(watchOnTvParams(c.baseUrl, torrent.hash, file.id));
-      if (!alive.v) return;
-      setStatus({ kind: 'ok', text: 'Запустил на ' + tv.name + ' — пульт уже открыт' });
-      // stays busy until the jump to the remote has happened
-      cancelJump.current = openRemoteSoon(currentRoute.value, () => {
-        launching.current = false;
-        if (alive.v) setBusy(false);
-      });
-    } catch (e) {
-      launching.current = false;
-      if (alive.v) {
-        setStatus({ kind: 'error', text: errorMessage(e) });
-        setBusy(false);
-      }
-    }
+    await launch.start({
+      hash: torrent.hash,
+      file: file.id,
+      at: resumePosition(torrent.hash, file.id),
+      duration: getLocalProgress(torrent.hash, file.id)?.duration || undefined,
+      label: [code, fileTitle(file)].filter(Boolean).join(' · '),
+      onBusy: setBusy,
+      onError: (m) => setStatus(m ? { kind: 'error', text: m } : null),
+      onLaunched: (name) => setStatus({ kind: 'ok', text: 'Запустил на ' + name }),
+    });
   };
 
   const onPhone = async () => {
@@ -158,6 +148,7 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
           {status.text}
         </div>
       )}
+      {launch.sheet}
     </Sheet>
   );
 }
@@ -169,9 +160,7 @@ export function Torrent({ hash }: { hash: string }) {
   const [sheet, setSheet] = useState<TorrentFile | null>(null);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
-  const launching = useRef(false);
-  const cancelJump = useRef<(() => void) | null>(null);
-  useEffect(() => () => cancelJump.current?.(), []);
+  const launch = useTvLaunch();
   progressVersion.value;
   serverViewed.value;
 
@@ -234,22 +223,15 @@ export function Torrent({ hash }: { hash: string }) {
       navigate({ name: 'tv' });
       return;
     }
-    if (launching.current) return;
-    launching.current = true;
-    setBusy(true);
-    setStatus('');
-    try {
-      await actions.launchOnTv(watchOnTvParams(c.baseUrl, hash, target.id, at));
-      showToast('Запустил на ' + tv.name + ' — пульт уже открыт');
-      cancelJump.current = openRemoteSoon(currentRoute.value, () => {
-        launching.current = false;
-        setBusy(false);
-      });
-    } catch (e) {
-      launching.current = false;
-      setBusy(false);
-      setStatus(errorMessage(e));
-    }
+    await launch.start({
+      hash,
+      file: target.id,
+      at,
+      duration: getLocalProgress(hash, target.id)?.duration || undefined,
+      label: [targetCode, fileTitle(target)].filter(Boolean).join(' · '),
+      onBusy: setBusy,
+      onError: setStatus,
+    });
   };
 
   const watchPhone = async () => {
@@ -329,6 +311,7 @@ export function Torrent({ hash }: { hash: string }) {
         </div>
       </div>
       {sheet && <WatchSheet torrent={t} file={sheet} onClose={() => setSheet(null)} />}
+      {launch.sheet}
     </div>
   );
 }

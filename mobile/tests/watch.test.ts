@@ -16,8 +16,12 @@ describe('watchOnTvParams', () => {
   it('floors t', () => {
     expect(watchOnTvParams('http://h:8090', 'abc', 0, 12.9)).toMatchObject({ file: 0, t: 12 });
   });
-  it('omits a non-positive t', () => {
-    expect('t' in watchOnTvParams('http://h:8090', 'abc', 1, 0)).toBe(false);
+  it('keeps t: 0 when a file is set', () => {
+    expect(watchOnTvParams('http://h:8090', 'abc', 1, 0)).toEqual({ server: 'http://h:8090', torrent: 'abc', file: 1, t: 0 });
+  });
+  it('adds report when set', () => {
+    expect(watchOnTvParams('http://h:8090', 'abc', 1, 5, 'http://10.0.0.2:7777/p')).toMatchObject({ t: 5, report: 'http://10.0.0.2:7777/p' });
+    expect('report' in watchOnTvParams('http://h:8090', 'abc', 1, 5)).toBe(false);
   });
 });
 

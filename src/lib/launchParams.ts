@@ -6,6 +6,7 @@ export type LaunchAction =
 export interface LaunchPlan {
   server?: string;
   action?: LaunchAction;
+  report?: string;
   invalid: boolean;
 }
 
@@ -40,6 +41,11 @@ export function parseLaunchParams(raw: unknown): LaunchPlan | null {
     if (typeof o.server === 'string' && o.server.trim()) plan.server = o.server.trim();
     else plan.invalid = true;
   }
+  if (has('report')) {
+    const r = typeof o.report === 'string' ? o.report.trim() : '';
+    if (/^http:\/\//i.test(r) && r.length <= 200) plan.report = r;
+    else plan.invalid = true;
+  }
   if (has('magnet')) {
     if (typeof o.magnet === 'string' && /^magnet:/i.test(o.magnet.trim())) plan.action = { kind: 'magnet', link: o.magnet.trim() };
     else plan.invalid = true;
@@ -69,6 +75,6 @@ export function parseLaunchParams(raw: unknown): LaunchPlan | null {
       plan.action = { kind: 'play', url, title };
     } else plan.invalid = true;
   }
-  if (!plan.server && !plan.action && !plan.invalid) return null;
+  if (!plan.server && !plan.action && !plan.report && !plan.invalid) return null;
   return plan;
 }

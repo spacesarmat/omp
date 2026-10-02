@@ -88,6 +88,42 @@ describe('Tv screen', () => {
     expect(tvs.value).toHaveLength(0);
   });
 
+  it('renames a saved TV through the sheet and restores the default on empty', async () => {
+    saveTv({ ip: '192.168.1.57', name: 'LG в спальне', clientKey: 'k' });
+    const el = mount();
+    await flush();
+    await act(async () => (el.querySelector('[aria-label="Переименовать LG в спальне"]') as HTMLButtonElement).click());
+    const dlg = document.querySelector('[role="dialog"]') as HTMLElement;
+    expect(dlg.textContent).toContain('Название телевизора');
+    const input = dlg.querySelector('input') as HTMLInputElement;
+    expect(input.value).toBe('LG в спальне');
+    input.value = 'Спальня';
+    await act(async () => { input.dispatchEvent(new Event('input', { bubbles: true })); });
+    await act(async () => { btn(dlg, 'Сохранить').click(); });
+    expect(tvs.value[0].name).toBe('Спальня');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(el.textContent).toContain('Спальня');
+    await act(async () => (el.querySelector('[aria-label="Переименовать Спальня"]') as HTMLButtonElement).click());
+    const d2 = document.querySelector('[role="dialog"]') as HTMLElement;
+    const i2 = d2.querySelector('input') as HTMLInputElement;
+    i2.value = '';
+    await act(async () => { i2.dispatchEvent(new Event('input', { bubbles: true })); });
+    await act(async () => { btn(d2, 'Сохранить').click(); });
+    expect(tvs.value[0].name).toBe('LG в спальне');
+  });
+
+  it('cancel leaves the name alone and discovered TVs have no rename button', async () => {
+    saveTv({ ip: '192.168.1.57', name: 'LG в спальне', clientKey: 'k' });
+    const el = mount();
+    await flush();
+    expect(el.querySelectorAll('[aria-label^="Переименовать"]')).toHaveLength(1);
+    await act(async () => (el.querySelector('[aria-label^="Переименовать"]') as HTMLButtonElement).click());
+    const dlg = document.querySelector('[role="dialog"]') as HTMLElement;
+    await act(async () => { btn(dlg, 'Отмена').click(); });
+    expect(tvs.value[0].name).toBe('LG в спальне');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   it('shows the confirmation hint while pairing', async () => {
     const el = mount();
     await flush();

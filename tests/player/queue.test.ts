@@ -22,6 +22,7 @@ describe('buildTorrentQueue', () => {
       hash: H,
       fileIndex: 1,
       poster: 'p.jpg',
+      torrentTitle: 'Show',
       subtitles: [{ url: c.streamUrl(H, 3, 'Show.S01E01.rus.srt'), label: 'rus', ext: 'srt' }],
     });
     expect(q[1].subtitles).toEqual([]);

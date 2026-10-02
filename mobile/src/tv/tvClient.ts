@@ -68,6 +68,8 @@ export const sessionIp = signal<string | null>(null);
 let session: Session | null = null;
 let connecting: Promise<void> | null = null;
 let pointer: Promise<void> | null = null;
+/** OMP version on the TV of the current session; reset whenever the session ends. */
+let versionCache: { ip: string; version: string } | null = null;
 /** Last tvDisconnect; a new tvConnect waits for it so the old close cannot hit the new socket. */
 let closing: Promise<void> = Promise.resolve();
 const pending = new Map<string, Pending>();
@@ -98,6 +100,7 @@ function endSession(s: Session, reason: string): void {
   sessionIp.value = null;
   connecting = null;
   pointer = null;
+  versionCache = null;
   for (const off of s.off) off();
   s.off = [];
   if (s.reg) {
@@ -302,6 +305,33 @@ export async function launchOnTv(params: object): Promise<void> {
   } catch (e) {
     if (!(e instanceof TvAnswerError)) throw e;
     throw new Error(/no such app|not found|not exist|404|-101/i.test(e.raw) ? TV_NO_OMP : TV_LAUNCH_FAILED);
+  }
+}
+
+const OMP_APP_ID = 'com.spacesarmat.torrplayer';
+
+/** Id of the app in the TV foreground; null when unknown or the TV does not answer. */
+export async function foregroundAppId(): Promise<string | null> {
+  try {
+    const r = await request('ssap://com.webos.applicationManager/getForegroundAppInfo');
+    return typeof r?.appId === 'string' && r.appId ? r.appId : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Installed OMP version on the TV (cached per connection); null when unknown. */
+export async function ompVersionOnTv(): Promise<string | null> {
+  const ip = sessionIp.value;
+  if (versionCache && versionCache.ip === ip) return versionCache.version;
+  try {
+    const r = await request('ssap://com.webos.applicationManager/listApps');
+    const app = Array.isArray(r?.apps) ? r.apps.find((a: any) => a && a.id === OMP_APP_ID) : undefined;
+    if (!app || typeof app.version !== 'string' || !app.version) return null;
+    if (ip !== null && sessionIp.value === ip && tvState.value === 'connected') versionCache = { ip, version: app.version };
+    return app.version;
+  } catch {
+    return null;
   }
 }
 
