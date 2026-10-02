@@ -119,6 +119,20 @@
             android:textSize="13sp" />
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/player_skip_intro"
+        style="@style/OmpPlayerChip.Accent"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="48dp"
+        android:layout_marginBottom="200dp"
+        android:paddingStart="24dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="12dp"
+        android:text="@string/player_skip_intro"
+        android:textSize="20sp"
+        android:visibility="gone" />
+
     <LinearLayout
         android:id="@+id/player_next_box"
         android:layout_width="wrap_content"
