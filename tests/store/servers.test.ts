@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { serverViewed } from '../../src/store/progress';
 import { torrents } from '../../src/store/library';
-import { servers, activeServerId, activeServer, client, addServer, removeServer, setActiveServer, requireClient } from '../../src/store/servers';
+import { servers, activeServerId, activeServer, client, addServer, removeServer, setActiveServer, requireClient, updateServer } from '../../src/store/servers';
 
 beforeEach(() => {
   localStorage.clear();
@@ -60,5 +60,42 @@ describe('server-scoped state', () => {
     expect(torrents.value).toEqual([]);
     expect(serverViewed.value).toEqual([]);
     expect(JSON.parse(localStorage.getItem('tsp.torrents')!)).toEqual([]);
+  });
+});
+
+describe('updateServer', () => {
+  it('renames, changes url and credentials', () => {
+    const a = addServer({ url: 'h:1', user: 'u', password: 'p' });
+    expect(updateServer(a.id, { name: ' Дом ', url: 'h:2', user: '', password: 'x y' })).toBe('ok');
+    const s = servers.value[0];
+    expect(s.name).toBe('Дом');
+    expect(s.url).toBe('http://h:2');
+    expect(s.user).toBeUndefined();
+    expect(s.password).toBe('x y');
+    expect(JSON.parse(localStorage.getItem('tsp.servers')!)[0].name).toBe('Дом');
+  });
+  it('keeps the old name when the new one is blank', () => {
+    const a = addServer({ url: 'h:1', name: 'Старое' });
+    updateServer(a.id, { name: '  ' });
+    expect(servers.value[0].name).toBe('Старое');
+  });
+  it('rejects a duplicate url and unknown ids', () => {
+    const a = addServer({ url: 'h:1' });
+    addServer({ url: 'h:2' });
+    expect(updateServer(a.id, { url: 'http://h:2/' })).toBe('duplicate');
+    expect(servers.value[0].url).toBe('http://h:1');
+    expect(updateServer('nope', { name: 'x' })).toBe('missing');
+  });
+  it('clears server-scoped data when the active server moves', () => {
+    const a = addServer({ url: 'h:1' });
+    setActiveServer(a.id);
+    torrents.value = [{ hash: 'x', title: 'X', stat: 5 }];
+    serverViewed.value = [{ hash: 'x', file_index: 1 }];
+    updateServer(a.id, { name: 'Дом' });
+    expect(torrents.value).toHaveLength(1);
+    updateServer(a.id, { url: 'h:9' });
+    expect(torrents.value).toEqual([]);
+    expect(serverViewed.value).toEqual([]);
+    expect(client.value!.baseUrl).toBe('http://h:9');
   });
 });
