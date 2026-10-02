@@ -66,6 +66,29 @@ export function removeServer(id: string): void {
   persist();
 }
 
+export type UpdateServerResult = 'ok' | 'duplicate' | 'missing';
+
+export function updateServer(
+  id: string,
+  patch: { name?: string; url?: string; user?: string; password?: string },
+): UpdateServerResult {
+  const cur = servers.value.find((s) => s.id === id);
+  if (!cur) return 'missing';
+  const url = patch.url !== undefined ? normalizeServerUrl(patch.url) : cur.url;
+  if (servers.value.some((s) => s.id !== id && s.url === url)) return 'duplicate';
+  const name = patch.name !== undefined && patch.name.trim() ? patch.name.trim() : cur.name;
+  const user = patch.user === undefined ? cur.user : patch.user.trim() || undefined;
+  // passwords are kept verbatim; empty means no auth
+  const password = patch.password === undefined ? cur.password : patch.password || undefined;
+  if (url !== cur.url && activeServerId.value === id) {
+    resetViewed();
+    resetLibrary();
+  }
+  servers.value = servers.value.map((s) => (s.id === id ? { id, name, url, user, password } : s));
+  persist();
+  return 'ok';
+}
+
 export function setActiveServer(id: string | null): void {
   if (id !== activeServerId.value) {
     // data from the previous server must not leak into the new one
