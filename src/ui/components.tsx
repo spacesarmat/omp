@@ -73,6 +73,15 @@ export function Button(p: { label: string; icon?: IconName; onPress: () => void;
   );
 }
 
+export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void }) {
+  return (
+    <Focusable focusKey={p.focusKey} className="icon-button" onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused}>
+      <Icon name={p.icon} size={28} />
+      <span class="icon-button-label">{p.label}</span>
+    </Focusable>
+  );
+}
+
 interface TextInputProps {
   focusKey?: string;
   value: string;
