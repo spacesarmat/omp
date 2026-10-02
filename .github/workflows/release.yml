@@ -29,4 +29,6 @@ jobs:
         run: |
           IPK=$(ls build/*.ipk)
           SUM=$(sha256sum "$IPK" | cut -d' ' -f1)
-          gh release create "$GITHUB_REF_NAME" "$IPK" --title "$GITHUB_REF_NAME" --generate-notes --notes "SHA-256 \`$(basename "$IPK")\`: \`$SUM\`"
+          sed "s/{{TAG}}/${GITHUB_REF_NAME}/g" .github/release-notes.md > notes.md
+          printf '\nSHA-256 `%s`: `%s`\n' "$(basename "$IPK")" "$SUM" >> notes.md
+          gh release create "$GITHUB_REF_NAME" "$IPK" --title "OMP $GITHUB_REF_NAME" --notes-file notes.md --generate-notes
