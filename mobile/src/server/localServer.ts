@@ -74,6 +74,7 @@ export async function refreshLocalServer(): Promise<void> {
 export async function startLocal(): Promise<void> {
   try {
     await deps.native.startLocalServer();
+    if (!autostartKnown) setAutostart(true);
     await refreshLocalServer();
   } catch (e) {
     await refreshLocalServer();

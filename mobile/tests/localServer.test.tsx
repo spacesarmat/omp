@@ -114,6 +114,16 @@ describe('local server store', () => {
     expect(localAutostart.value).toBe(false);
   });
 
+  it('startLocal turns autostart on the first time and keeps an explicit off', async () => {
+    const f = fakeNative();
+    setLocalServerDeps({ native: f.native as any });
+    await startLocal();
+    expect(localAutostart.value).toBe(true);
+    setAutostart(false);
+    await startLocal();
+    expect(localAutostart.value).toBe(false);
+  });
+
   it('setupLocal stops at the failing step', async () => {
     const f = fakeNative();
     setLocalServerDeps({
