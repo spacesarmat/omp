@@ -14,6 +14,8 @@ import { UpdateScreen } from './screens/Update';
 import { PairPhoneScreen } from './screens/PairPhone';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { checkForUpdate } from './store/updates';
+import { platformKind } from './platform/env';
+import { installAndroidKeyBridge } from './platform/androidKeys';
 
 function renderRoute(r: Route) {
   switch (r.name) {
@@ -46,8 +48,17 @@ function exitApp() {
   });
 }
 
+/** Back that no screen took: pop the route; at the root webOS asks to exit, Android TV lets the Activity close. */
+export function unhandledBack(): boolean {
+  if (goBack()) return true;
+  if (platformKind() === 'androidtv') return false;
+  exitApp();
+  return true;
+}
+
 export function App() {
-  useEffect(() => installKeyListener(() => { if (!goBack()) exitApp(); }), []);
+  useEffect(() => installKeyListener(unhandledBack), []);
+  useEffect(() => (platformKind() === 'androidtv' ? installAndroidKeyBridge() : undefined), []);
   useEffect(() => {
     const t = setTimeout(() => { checkForUpdate({ manual: false }); }, 3000);
     return () => clearTimeout(t);

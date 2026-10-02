@@ -1,0 +1,117 @@
+// Android TV: access to the native plugin OmpNative (android/.../OmpNativePlugin.kt) WITHOUT @capacitor/core,
+// so the webOS bundle does not grow. Capacitor's injected native-bridge.js sets window.Capacitor with
+// nativePromise / addListener; when @capacitor/core is also present, Plugins.OmpNative is the registered proxy.
+
+export interface ListenerHandle {
+  remove: () => unknown;
+}
+
+export interface OmpNativeTvPlugin {
+  localIpv4(): Promise<{ ip?: string | null }>;
+  downloadAndInstallApk(o: { url: string; sha256: string }): Promise<unknown>;
+  addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
+}
+
+interface CapacitorBridge {
+  Plugins?: { [name: string]: any };
+  registerPlugin?: (name: string) => any;
+  nativePromise?: (plugin: string, method: string, options?: object) => Promise<any>;
+  addListener?: (plugin: string, event: string, cb: (data: any) => void) => ListenerHandle | Promise<ListenerHandle>;
+}
+
+const NAME = 'OmpNative';
+
+function capacitor(): CapacitorBridge | null {
+  try {
+    const cap = (window as unknown as { Capacitor?: CapacitorBridge }).Capacitor;
+    return cap && typeof cap === 'object' ? cap : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
+  const np = cap.nativePromise;
+  const al = cap.addListener;
+  if (typeof np !== 'function' || typeof al !== 'function') return null;
+  return {
+    localIpv4: () => np.call(cap, NAME, 'localIpv4', {}),
+    downloadAndInstallApk: (o) => np.call(cap, NAME, 'downloadAndInstallApk', o),
+    addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
+  };
+}
+
+/** The native plugin, or null outside the Android APK (webOS, tests, browser). */
+export function nativePlugin(): OmpNativeTvPlugin | null {
+  const cap = capacitor();
+  if (!cap) return null;
+  try {
+    const p = cap.Plugins && cap.Plugins[NAME];
+    if (p && typeof p.localIpv4 === 'function') return p as OmpNativeTvPlugin;
+    const bridged = fromBridge(cap);
+    if (bridged) return bridged;
+    if (typeof cap.registerPlugin === 'function') {
+      const r = cap.registerPlugin(NAME);
+      if (r) return r as OmpNativeTvPlugin;
+    }
+  } catch (e) {
+    /* unavailable */
+  }
+  return null;
+}
+
+/** Wi-Fi/Ethernet IPv4 of the device; null when unknown or the plugin is missing. */
+export function nativeLocalIp(): Promise<string | null> {
+  const p = nativePlugin();
+  if (!p) return Promise.resolve(null);
+  return p.localIpv4().then(
+    (r) => (r && typeof r.ip === 'string' && r.ip ? r.ip : null),
+    () => null,
+  );
+}
+
+function errorText(e: unknown): string {
+  if (typeof e === 'string') return e;
+  if (e && typeof e === 'object' && typeof (e as { message?: unknown }).message === 'string') return (e as { message: string }).message;
+  return '';
+}
+
+/** Russian message for an APK install failure (the native side already rejects in Russian). */
+export function describeApkError(e: unknown): string {
+  const msg = errorText(e);
+  if (/[А-Яа-яЁё]/.test(msg)) return msg;
+  return 'Не удалось установить обновление' + (msg ? ': ' + msg : '');
+}
+
+/**
+ * Downloads the APK, verifies sha256 and opens the system installer. onProgress gets 0..100.
+ * Rejects with an Error whose message is in Russian.
+ */
+export function installApk(url: string, sha256: string, onProgress: (percent: number) => void): Promise<void> {
+  const p = nativePlugin();
+  if (!p) return Promise.reject(new Error('Установка обновлений недоступна на этом устройстве'));
+  let handle: ListenerHandle | null = null;
+  const release = () => {
+    if (handle) {
+      try { handle.remove(); } catch (e) { /* ignore */ }
+      handle = null;
+    }
+  };
+  // the listener is registered before the call so that no early progress event is missed
+  return p
+    .addListener('apkProgress', (d: { percent?: unknown }) => {
+      const v = d && typeof d.percent === 'number' && isFinite(d.percent) ? d.percent : null;
+      if (v !== null) onProgress(Math.max(0, Math.min(100, Math.round(v))));
+    })
+    .then((h) => {
+      handle = h;
+      return p.downloadAndInstallApk({ url, sha256 });
+    })
+    .then(
+      () => { release(); },
+      (e) => {
+        release();
+        throw new Error(describeApkError(e));
+      },
+    );
+}

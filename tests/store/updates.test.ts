@@ -85,3 +85,17 @@ describe('sanitizeUpdateState', () => {
     expect(f.mock.calls[0][0]).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update-android.json?t=' + NOW);
   });
 });
+
+describe('checkForUpdate on Android TV', () => {
+  const w = window as unknown as { Capacitor?: unknown };
+  it('uses the APK feed update-android.json by default', async () => {
+    w.Capacitor = { getPlatform: () => 'android' };
+    try {
+      const f = mockFetch(() => ({ body: feed('0.7.1') }));
+      expect(await checkForUpdate({ manual: false, now: NOW, current: '0.7.0' })).toBe('update');
+      expect(f.mock.calls[0][0]).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update-android.json?t=' + NOW);
+    } finally {
+      delete w.Capacitor;
+    }
+  });
+});

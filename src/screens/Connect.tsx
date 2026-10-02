@@ -9,6 +9,7 @@ import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/compone
 import { Icon } from '../ui/icons';
 import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
+import { platformKind } from '../platform/env';
 import { Logo } from '../ui/Logo';
 import { ServerHistory } from './connect/ServerHistory';
 import { EditServerDialog } from './connect/EditServerDialog';
@@ -154,8 +155,9 @@ export function ConnectScreen() {
           </Focusable>
         ))}
         <div class="connect-hint">
-          Поиск проверяет домашнюю сеть на портах 8090 и 5665.<br />
-          Адрес удобно вводить с клавиатуры телефона в LG ThinQ.
+          Поиск проверяет домашнюю сеть на портах 8090 и 5665.
+          {platformKind() !== 'androidtv' && <br />}
+          {platformKind() !== 'androidtv' && 'Адрес удобно вводить с клавиатуры телефона в LG ThinQ.'}
         </div>
       </div>
       {editing && (

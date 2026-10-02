@@ -14,6 +14,7 @@ import { toast } from '../ui/toast';
 import { latestUpdate, checkForUpdate } from '../store/updates';
 import { openHbChannel } from '../platform/hbchannel';
 import { HB_REPO_URL } from '../lib/updateInfo';
+import { platformKind } from '../platform/env';
 import { CACHE, PRELOAD, READAHEAD, CONNS, RATE, DISCONNECT, withCurrent } from '../lib/serverSettingsOptions';
 
 const SEEK = [5, 10, 15, 30, 60].map((v) => ({ value: v, label: v + ' с' }));
@@ -136,10 +137,12 @@ export function SettingsScreen() {
       <ChoiceRow label="Проверять обновления при запуске" value={s.updateCheck} options={ON_OFF} onChange={(v) => updateSettings({ updateCheck: v })} />
       <div class="row" style={{ marginTop: '16px' }}>
         <Button label="Обновление" onPress={() => navigate({ name: 'update' })} />
-        <Button
-          label="Добавить репозиторий OMP в Homebrew Channel"
-          onPress={() => { openHbChannel(HB_REPO_URL).catch(() => toast('Не удалось открыть Homebrew Channel', 'error')); }}
-        />
+        {platformKind() !== 'androidtv' && (
+          <Button
+            label="Добавить репозиторий OMP в Homebrew Channel"
+            onPress={() => { openHbChannel(HB_REPO_URL).catch(() => toast('Не удалось открыть Homebrew Channel', 'error')); }}
+          />
+        )}
         <Button
           label="Сбросить настройки приложения"
           onPress={() => confirmDialog('Сбросить настройки приложения?', 'Сбросить').then((ok) => { if (ok) resetSettings(); })}

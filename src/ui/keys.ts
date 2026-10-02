@@ -42,7 +42,8 @@ function isTextInput(t: EventTarget | null): t is HTMLInputElement {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
 }
 
-export function installKeyListener(onUnhandledBack: () => void): () => void {
+/** onUnhandledBack returns false when the app does not take the key (Android TV root: the Activity closes). */
+export function installKeyListener(onUnhandledBack: () => boolean | void): () => void {
   const listener = (e: KeyboardEvent) => {
     const a = keyAction(e);
     if (!a) return;
@@ -68,9 +69,9 @@ export function installKeyListener(onUnhandledBack: () => void): () => void {
     }
     if (r === 'spatial') return;
     if (a === 'back') {
+      if (onUnhandledBack() === false) return;
       e.preventDefault();
       e.stopPropagation();
-      onUnhandledBack();
     }
   };
   // capture phase: runs before the spatial-navigation listener on window

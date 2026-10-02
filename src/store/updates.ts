@@ -3,7 +3,8 @@ import { loadJson, saveJson, isObject } from './storage';
 import { settings } from './settings';
 import { request } from '../api/http';
 import { compareVersions } from '../lib/version';
-import { UpdateInfo, sanitizeUpdateInfo, UPDATE_URL } from '../lib/updateInfo';
+import { UpdateInfo, sanitizeUpdateInfo, UPDATE_URL, ANDROID_UPDATE_URL } from '../lib/updateInfo';
+import { platformKind } from '../platform/env';
 import { APP_VERSION } from '../version';
 
 const KEY = 'tsp.update';
@@ -44,7 +45,8 @@ export function checkForUpdate(opts: { manual: boolean; now?: number; current?: 
     return Promise.resolve<CheckResult>('skipped');
   }
   // cache-buster: GitHub raw and the WebView keep the feed for up to 5 minutes after a release
-  const url = opts.url || UPDATE_URL;
+  // Android TV installs the APK (update-android.json), webOS the ipk (update.json)
+  const url = opts.url || (platformKind() === 'androidtv' ? ANDROID_UPDATE_URL : UPDATE_URL);
   return request<unknown>(url + (url.indexOf('?') < 0 ? '?' : '&') + 't=' + now, { timeoutMs: 10000 }).then(
     (raw): CheckResult => {
       state = { ...state, lastCheck: now };
