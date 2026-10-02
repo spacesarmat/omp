@@ -7,6 +7,7 @@ export interface NextEpisodeOptions {
   time: number;
   duration: number;
   ended: number;
+  paused: boolean;
   onNext: () => void;
   onEnd: () => void;
 }
@@ -26,7 +27,7 @@ export function useNextEpisode(o: NextEpisodeOptions): { countdown: number | nul
   }, [o.itemKey]);
 
   const remaining = o.duration - o.time;
-  const show = o.enabled && o.hasNext && !dismissed && o.duration > 60 && remaining > 0 && remaining <= 30;
+  const show = o.enabled && o.hasNext && !dismissed && o.duration > 60 && remaining > 0 && remaining <= 30 && !o.paused;
 
   useEffect(() => {
     if (!show) {

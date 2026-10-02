@@ -49,6 +49,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   const metaLoaded = useRef(false);
   const probeRef = useRef<FfprobeResult | null>(null);
   probeRef.current = probe;
+  const startUsed = useRef(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const src = ready ? (c ? c.videoSrc(item.url) : item.url) : '';
@@ -69,6 +70,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     time: vs.time,
     duration: vs.duration,
     ended: vs.ended,
+    paused: vs.paused,
     onNext: goNext,
     onEnd: () => goBack(),
   });
@@ -98,7 +100,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     showControls();
     let cancelled = false;
     const decide = (): Promise<number> => {
-      if (index === startIndex && startAt !== undefined) return Promise.resolve(startAt);
+      if (index === startIndex && startAt !== undefined && !startUsed.current) {
+        startUsed.current = true;
+        return Promise.resolve(startAt);
+      }
       if (!item.hash || item.fileIndex === undefined) return Promise.resolve(0);
       const pos = resumePosition(item.hash, item.fileIndex);
       if (pos <= 0) return Promise.resolve(0);
@@ -121,6 +126,17 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     }
     return () => { cancelled = true; };
   }, [index]);
+
+  // release the media pipeline when the <video> is re-keyed (episode change / retry) or removed
+  useEffect(() => {
+    const v = videoRef.current;
+    return () => {
+      if (!v) return;
+      v.pause();
+      v.removeAttribute('src');
+      v.load();
+    };
+  }, [index + ':' + reloadKey]);
 
   useEffect(() => () => { if (hideTimer.current) clearTimeout(hideTimer.current); }, []);
 
