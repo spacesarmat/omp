@@ -16,7 +16,7 @@ html, body {
   font-family: 'LG Smart UI', 'Museo Sans', Roboto, Arial, sans-serif; font-size: 28px;
 }
 .app, .screen-host { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
-.screen { position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 48px 80px 96px; overflow-y: auto; overflow-x: hidden; }
+.screen { position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 48px 80px 120px; overflow-y: auto; overflow-x: hidden; }
 h1 { font-size: 56px; margin: 0 0 32px; }
 h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: normal; }
 .row { display: flex; align-items: center; margin-bottom: 16px; }
@@ -71,7 +71,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .progress { height: 8px; background: rgba(255, 255, 255, .15); border-radius: 4px; overflow: hidden; margin-top: 10px; }
 .progress-fill { height: 100%; background: var(--accent); }
 
-.hints { position: absolute; bottom: 24px; left: 80px; color: var(--muted); font-size: 22px; }
+.hints { position: fixed; left: 0; right: 0; bottom: 0; padding: 20px 80px; background: var(--bg); color: var(--muted); font-size: 22px; z-index: 5; }
 .empty { color: var(--muted); padding: 60px 0; text-align: center; }
 .banner-error { background: rgba(229, 72, 77, .2); color: #ffb4b6; padding: 14px 24px; border-radius: 10px; margin-bottom: 16px; }
 

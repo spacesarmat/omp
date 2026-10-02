@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { client } from '../store/servers';
 import { torrents } from '../store/library';
-import { progressVersion, serverViewed, refreshViewed, isWatched, resumePosition, progressRatio, clearProgress } from '../store/progress';
+import { getLocalProgress, progressVersion, serverViewed, refreshViewed, isWatched, resumePosition, progressRatio, clearProgress } from '../store/progress';
 import type { Torrent } from '../api/types';
 import { errorMessage } from '../api/http';
 import { TorrentFile, baseName, groupBySeason, playableFiles, episodeLabel } from '../lib/episodes';
@@ -105,8 +105,17 @@ export function TorrentScreen({ hash }: { hash: string }) {
     return false;
   });
 
-  // first in-progress file, else first unwatched, else first
-  let target = queue.findIndex((q) => resumePosition(hash, q.fileIndex!) > 0);
+  // in-progress file with the most recent local progress (else first in-progress), else first unwatched, else first
+  let target = -1;
+  let bestUpdated = -Infinity;
+  queue.forEach((q, i) => {
+    if (resumePosition(hash, q.fileIndex!) <= 0) return;
+    const u = getLocalProgress(hash, q.fileIndex!)?.updated;
+    if (target < 0 || (u !== undefined && u > bestUpdated)) {
+      target = i;
+      bestUpdated = u !== undefined ? u : bestUpdated;
+    }
+  });
   const targetPos = target >= 0 ? resumePosition(hash, queue[target].fileIndex!) : 0;
   if (target < 0) target = queue.findIndex((q) => !isWatched(hash, q.fileIndex!));
   if (target < 0) target = 0;
