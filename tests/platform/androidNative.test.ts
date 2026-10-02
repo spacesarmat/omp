@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { nativePlugin, nativeLocalIp, installApk, describeApkError } from '../../src/platform/androidNative';
+import { nativePlugin, nativeLocalIp, installApk, describeApkError, nativeSourceHttp, nativeSecrets } from '../../src/platform/androidNative';
 
 const w = window as unknown as { Capacitor?: unknown };
 afterEach(() => { delete w.Capacitor; });
@@ -102,5 +102,39 @@ describe('installApk', () => {
     expect(describeApkError({ message: 'boom' })).toBe('Не удалось установить обновление: boom');
     expect(describeApkError(undefined)).toBe('Не удалось установить обновление');
     expect(describeApkError('Нет места')).toBe('Нет места');
+  });
+});
+
+describe('sources: http and secrets on Android TV', () => {
+  it('are null outside the APK', () => {
+    expect(nativeSourceHttp()).toBeNull();
+    expect(nativeSecrets()).toBeNull();
+  });
+  it('http goes through OmpNative.http and clearCookies through httpClearCookies', async () => {
+    const b = bridgeOnly({
+      http: () => Promise.resolve({ status: 200, url: 'https://rutor.info/x', text: 'ок' }),
+      httpClearCookies: () => Promise.resolve(),
+    });
+    const http = nativeSourceHttp()!;
+    expect(await http.get('https://rutor.info/search')).toEqual({ status: 200, url: 'https://rutor.info/x', text: 'ок' });
+    expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'http', { url: 'https://rutor.info/search', method: 'GET' });
+    await http.post('https://rutor.info/login', { a: '1' });
+    expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'http', { url: 'https://rutor.info/login', method: 'POST', form: { a: '1' } });
+    await http.clearCookies('https://rutor.info/');
+    expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'httpClearCookies', { url: 'https://rutor.info/' });
+  });
+  it('secrets go through secretGet / secretSet / secretDelete', async () => {
+    const b = bridgeOnly({
+      secretGet: () => Promise.resolve({ value: 's' }),
+      secretSet: () => Promise.resolve(),
+      secretDelete: () => Promise.resolve(),
+    });
+    const s = nativeSecrets()!;
+    expect(await s.get('k')).toBe('s');
+    await s.set('k', 'v');
+    await s.delete('k');
+    expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'secretGet', { key: 'k' });
+    expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'secretSet', { key: 'k', value: 'v' });
+    expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'secretDelete', { key: 'k' });
   });
 });

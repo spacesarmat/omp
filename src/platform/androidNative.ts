@@ -2,6 +2,10 @@
 // so the webOS bundle does not grow. Capacitor's injected native-bridge.js sets window.Capacitor with
 // nativePromise / addListener; when @capacitor/core is also present, Plugins.OmpNative is the registered proxy.
 
+import { createSecretStore, createSourceHttp } from '../sources/http';
+import type { NativeHttpRequest } from '../sources/http';
+import type { SecretStore, SourceHttp } from '../sources/types';
+
 export interface ListenerHandle {
   remove: () => unknown;
 }
@@ -19,6 +23,14 @@ export interface OmpNativeTvPlugin {
   clearPairingCode(): Promise<unknown>;
   /** Phone remote: the TV name the phone sees (the registered NSD name). */
   tvName(): Promise<{ name: string }>;
+  /** Search sources: HTTP without CORS, cookies per site, body decoded by charset. */
+  http(o: NativeHttpRequest): Promise<{ status: number; url: string; text: string }>;
+  /** Forgets the cookies of the site of url. */
+  httpClearCookies(o: { url: string }): Promise<unknown>;
+  /** Keystore-encrypted storage (tracker logins). */
+  secretGet(o: { key: string }): Promise<{ value?: string | null }>;
+  secretSet(o: { key: string; value: string }): Promise<unknown>;
+  secretDelete(o: { key: string }): Promise<unknown>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
@@ -52,6 +64,11 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     pairingCode: () => np.call(cap, NAME, 'pairingCode', {}),
     tvName: () => np.call(cap, NAME, 'tvName', {}),
     clearPairingCode: () => np.call(cap, NAME, 'clearPairingCode', {}),
+    http: (o) => np.call(cap, NAME, 'http', o),
+    httpClearCookies: (o) => np.call(cap, NAME, 'httpClearCookies', o),
+    secretGet: (o) => np.call(cap, NAME, 'secretGet', o),
+    secretSet: (o) => np.call(cap, NAME, 'secretSet', o),
+    secretDelete: (o) => np.call(cap, NAME, 'secretDelete', o),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }
@@ -83,6 +100,27 @@ export function nativeLocalIp(): Promise<string | null> {
     (r) => (r && typeof r.ip === 'string' && r.ip ? r.ip : null),
     () => null,
   );
+}
+
+/** HTTP for the built-in search sources on Android TV; null outside the APK. */
+export function nativeSourceHttp(): SourceHttp | null {
+  const p = nativePlugin();
+  if (!p) return null;
+  return createSourceHttp(
+    (req) => p.http(req),
+    (url) => p.httpClearCookies({ url }),
+  );
+}
+
+/** Keystore-encrypted storage on Android TV; null outside the APK. */
+export function nativeSecrets(): SecretStore | null {
+  const p = nativePlugin();
+  if (!p) return null;
+  return createSecretStore({
+    get: (key) => p.secretGet({ key }),
+    set: (key, value) => p.secretSet({ key, value }),
+    delete: (key) => p.secretDelete({ key }),
+  });
 }
 
 function errorText(e: unknown): string {

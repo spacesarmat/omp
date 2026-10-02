@@ -19,6 +19,11 @@ import com.spacesarmat.omp.control.TvRemote
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayRequest
 import com.spacesarmat.omp.player.PlayerActivity
+import com.spacesarmat.omp.sources.SecretCookieStore
+import com.spacesarmat.omp.sources.SecretStorage
+import com.spacesarmat.omp.sources.SiteCookieJar
+import com.spacesarmat.omp.sources.SiteHttp
+import com.spacesarmat.omp.sources.SiteHttpException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -30,6 +35,7 @@ import org.json.JSONObject
 /**
  * Transport for the phone client: SSDP and NSD discovery, TV WebSockets, external player, APK update, magnet intake,
  * local player server (TV state in, commands out), embedded TorrServer ([TorrServerService]).
+ * Search sources: site HTTP ([SiteHttp], cookies per site) and Keystore-encrypted secrets ([SecretStorage]).
  * The SSAP protocol itself (register, requests, pairing) lives in TypeScript.
  *
  * Every PluginCall is settled exactly once (see [Once]). Blocking work runs on [io]; socket
@@ -57,6 +63,9 @@ class OmpNativePlugin : Plugin() {
     private val player = PlayerServer { body -> notifyListeners("playerMessage", JSObject().put("body", body)) }
     // phone remote: only in TV mode
     private var remote: TvRemote? = null
+    // search sources: created on first use (Keystore access off the main thread)
+    private val secrets by lazy { SecretStorage(context.applicationContext) }
+    private val siteHttp by lazy { SiteHttp(SiteCookieJar(SecretCookieStore(secrets))) }
     private val serverState = LocalTorrServer.Listener { running, error ->
         val o = JSObject().put("running", running)
         if (error != null) o.put("error", error)
@@ -669,6 +678,114 @@ class OmpNativePlugin : Plugin() {
         while (LocalTorrServer.running && System.currentTimeMillis() < deadline) Thread.sleep(100)
     }
 
+    // ---- search sources: site HTTP and encrypted secrets ----
+
+    /**
+     * { url, method?: GET|POST, headers?, form?, formCharset?, body?, timeoutMs? } → { status, url, text }.
+     * Cookies per site, body decoded by its charset. Values are never logged.
+     */
+    @PluginMethod
+    fun http(call: PluginCall) {
+        val once = Once(call)
+        val url = call.getString("url")
+        val method = (call.getString("method") ?: "GET").uppercase()
+        if (url == null || url.toHttpUrlOrNull() == null) return once.reject(SiteHttp.BAD_URL)
+        if (method != "GET" && method != "POST") return once.reject(SiteHttp.BAD_REQUEST)
+        val headers = stringMap(call.getObject("headers"))
+        val form = call.getObject("form")?.let { stringMap(it) }
+        val formCharset = call.getString("formCharset")
+        val body = call.getString("body")
+        val timeout = (call.getInt("timeoutMs") ?: 20_000).coerceIn(1_000, 60_000).toLong()
+        io.execute {
+            try {
+                val r = siteHttp.request(url, method, headers, form, formCharset, body, timeout)
+                once.resolve(JSObject().put("status", r.status).put("url", r.url).put("text", r.text))
+            } catch (e: SiteHttpException) {
+                once.reject(e.reason)
+            } catch (e: Exception) {
+                once.reject(SiteHttp.NO_ANSWER)
+            }
+        }
+    }
+
+    /** Forgets the cookies of the site of { url } (logout). */
+    @PluginMethod
+    fun httpClearCookies(call: PluginCall) {
+        val once = Once(call)
+        val url = call.getString("url") ?: return once.reject(SiteHttp.BAD_URL)
+        io.execute {
+            try {
+                siteHttp.clearCookies(url)
+                once.resolve()
+            } catch (e: SiteHttpException) {
+                once.reject(e.reason)
+            } catch (e: Exception) {
+                once.reject(SECRETS_FAILED)
+            }
+        }
+    }
+
+    @PluginMethod
+    fun secretGet(call: PluginCall) {
+        val once = Once(call)
+        val key = secretKey(call) ?: return once.reject(SECRETS_FAILED)
+        io.execute {
+            val v = try {
+                secrets.get(key)
+            } catch (e: Exception) {
+                null
+            }
+            once.resolve(JSObject().put("value", v ?: JSONObject.NULL))
+        }
+    }
+
+    @PluginMethod
+    fun secretSet(call: PluginCall) {
+        val once = Once(call)
+        val key = secretKey(call) ?: return once.reject(SECRETS_FAILED)
+        val value = call.getString("value") ?: return once.reject(SECRETS_FAILED)
+        io.execute {
+            try {
+                secrets.set(key, value)
+                once.resolve()
+            } catch (e: Exception) {
+                once.reject(SECRETS_FAILED)
+            }
+        }
+    }
+
+    @PluginMethod
+    fun secretDelete(call: PluginCall) {
+        val once = Once(call)
+        val key = secretKey(call) ?: return once.reject(SECRETS_FAILED)
+        io.execute {
+            try {
+                secrets.delete(key)
+                once.resolve()
+            } catch (e: Exception) {
+                once.reject(SECRETS_FAILED)
+            }
+        }
+    }
+
+    /** JS keys live in their own namespace: page code cannot read the cookie entries. */
+    private fun secretKey(call: PluginCall): String? {
+        val k = call.getString("key")
+        return if (k.isNullOrEmpty() || k.length > 200) null else JS_SECRET_PREFIX + k
+    }
+
+    private fun stringMap(o: JSONObject?): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        if (o == null) return out
+        val keys = o.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            val v = o.opt(k)
+            if (v is String) out[k] = v
+        }
+        return out
+    }
+
     // ---- magnet ----
 
     @PluginMethod
@@ -705,6 +822,8 @@ class OmpNativePlugin : Plugin() {
     companion object {
         private const val NOT_SUPPORTED = "Встроенный сервер недоступен на этом телефоне"
         private const val START_FAILED = "Не удалось запустить сервер"
+        private const val SECRETS_FAILED = "Не удалось открыть защищённое хранилище"
+        private const val JS_SECRET_PREFIX = "js:"
         private const val PREFS = "omp-native"
         private const val CACHE_SET = "torrserverCacheConfigured"
         private val IPV4 = Regex("^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$")

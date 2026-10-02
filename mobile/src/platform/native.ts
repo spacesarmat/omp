@@ -2,6 +2,8 @@
 // The plugin is transport only: SSDP, TV sockets, intents, APK install, player server, embedded TorrServer.
 // SSAP lives in src/tv.
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
+import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
+import type { HttpResponse, SecretStore, SourceHttp } from '../../../src/sources/types';
 
 export interface FoundTv {
   ip: string;
@@ -81,6 +83,14 @@ export interface OmpNativeApi {
   /** Wi-Fi IPv4 of the phone; null without Wi-Fi or off-device. */
   localIpv4(): Promise<string | null>;
   onLocalServerState(cb: (state: LocalServerState) => void): () => void;
+  /** Search sources: HTTP without CORS, browser User-Agent, cookies per site, body decoded by charset. */
+  http(req: NativeHttpRequest): Promise<HttpResponse>;
+  /** Forgets the cookies of the site of `url`. */
+  httpClearCookies(url: string): Promise<void>;
+  /** Keystore-encrypted storage for tracker logins; null when the key is not set. */
+  secretGet(key: string): Promise<string | null>;
+  secretSet(key: string, value: string): Promise<void>;
+  secretDelete(key: string): Promise<void>;
 }
 
 interface OmpNativePlugin {
@@ -105,6 +115,11 @@ interface OmpNativePlugin {
   localServerCache(): Promise<{ usedBytes?: number }>;
   clearLocalServerCache(): Promise<{ usedBytes?: number }>;
   localIpv4(): Promise<{ ip?: string | null }>;
+  http(o: NativeHttpRequest): Promise<Partial<HttpResponse>>;
+  httpClearCookies(o: { url: string }): Promise<void>;
+  secretGet(o: { key: string }): Promise<{ value?: string | null }>;
+  secretSet(o: { key: string; value: string }): Promise<void>;
+  secretDelete(o: { key: string }): Promise<void>;
   addListener(event: 'tvMessage', cb: (e: { json: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'tvClosed', cb: (e: { reason: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'apkProgress', cb: (e: { percent: number }) => void): Promise<PluginListenerHandle>;
@@ -346,4 +361,48 @@ export const native: OmpNativeApi = {
       }),
     );
   },
+
+  async http(req) {
+    if (!plugin) return unavailable();
+    const r = await plugin.http(req);
+    return {
+      status: typeof r?.status === 'number' ? r.status : 0,
+      url: text(r?.url) ?? req.url,
+      text: typeof r?.text === 'string' ? r.text : '',
+    };
+  },
+
+  httpClearCookies(url) {
+    if (!plugin) return unavailable();
+    return plugin.httpClearCookies({ url });
+  },
+
+  async secretGet(key) {
+    if (!plugin) return unavailable();
+    const r = await plugin.secretGet({ key });
+    return typeof r?.value === 'string' ? r.value : null;
+  },
+
+  secretSet(key, value) {
+    if (!plugin) return unavailable();
+    return plugin.secretSet({ key, value });
+  },
+
+  secretDelete(key) {
+    if (!plugin) return unavailable();
+    return plugin.secretDelete({ key });
+  },
 };
+
+/** HTTP for the built-in search sources (src/sources); rejects off-device. */
+export const sourceHttp: SourceHttp = createSourceHttp(
+  (req) => native.http(req),
+  (url) => native.httpClearCookies(url),
+);
+
+/** Keystore-encrypted storage for tracker logins; rejects off-device. */
+export const secrets: SecretStore = createSecretStore({
+  get: (key) => native.secretGet(key).then((value) => ({ value })),
+  set: (key, value) => native.secretSet(key, value),
+  delete: (key) => native.secretDelete(key),
+});
