@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { goBack } from '../nav';
 import { Sheet } from '../ui/Sheet';
 import { showToast } from '../ui/toast';
 import { Icon } from '../ui/Icon';
-import { LOCAL_URL } from '../server/localServer';
+import { LOCAL_URL, LOCAL_NAME } from '../server/localServer';
 import { client, activeServer } from '../../../src/store/servers';
+import { TorrServerClient } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
 import type { ServerSettings as Sets } from '../../../src/api/types';
 import { CACHE, PRELOAD, READAHEAD, CONNS, RATE, DISCONNECT, withCurrent, type NumOption } from '../../../src/lib/serverSettingsOptions';
@@ -29,9 +30,11 @@ function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
   );
 }
 
-export function ServerSettings() {
-  const c = client.value;
-  const server = activeServer.value;
+export function ServerSettings({ url }: { url?: string } = {}) {
+  const active = client.value;
+  // an explicit url edits that server without switching the active one
+  const c = useMemo(() => (url ? new TorrServerClient({ url }) : active), [url, active ? active.baseUrl : '']);
+  const server = url ? { name: url === LOCAL_URL ? LOCAL_NAME : url } : activeServer.value;
   const [srv, setSrv] = useState<Sets | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<NumField | null>(null);
@@ -45,7 +48,7 @@ export function ServerSettings() {
       () => setError('Не удалось загрузить настройки сервера'),
     );
   }
-  useEffect(load, []);
+  useEffect(load, [c ? c.baseUrl : '']);
 
   function save(patch: Partial<Sets>) {
     if (!c || !srv) return;

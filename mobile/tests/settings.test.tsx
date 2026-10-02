@@ -150,6 +150,21 @@ describe('Settings: TorrServer on the phone', () => {
     expect(t).toContain('Сервер доступен всем устройствам в этой сети Wi‑Fi');
   });
 
+  it('«Настройки сервера» opens the local server settings, only while it runs', async () => {
+    fake({ running: false });
+    localServer.value = { supported: true, running: false };
+    const el0 = mount();
+    await flush();
+    expect(el0.querySelector('[data-section="local-server"]')!.textContent).not.toContain('Настройки сервера');
+    fake({ running: true });
+    localServer.value = { supported: true, running: true };
+    const el = mount();
+    await flush();
+    const b = Array.from(el.querySelector('[data-section="local-server"]')!.querySelectorAll('button')).find((x) => (x.textContent || '').includes('Настройки сервера'))!;
+    act(() => b.click());
+    expect(currentRoute.value).toEqual({ name: 'serverSettings', url: 'http://127.0.0.1:8090' });
+  });
+
   it('shows the VPN warning only while a VPN is active', async () => {
     fake({ running: true, vpn: true });
     localServer.value = { supported: true, running: true };

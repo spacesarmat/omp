@@ -1,4 +1,4 @@
-import { TV_NO_OMP } from '../src/tv/tvClient';
+import { TV_NO_OMP, tvState } from '../src/tv/tvClient';
 import { settings, updateSettings } from '../../src/store/settings';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
@@ -116,14 +116,83 @@ describe('Library', () => {
     expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'h1' });
   });
 
-  it('shows the TV chip: grey without a TV, green with name', async () => {
+  it('TV chip is icon-only: neutral without a TV or when offline, green when connected', async () => {
     mount();
-    expect(el.querySelector('.m-tvchip')!.textContent).toContain('Подключить ТВ');
-    expect(el.querySelector('.m-tvchip.on')).toBeNull();
+    const chip = () => el.querySelector('.m-tvchip') as HTMLElement;
+    expect(chip().getAttribute('aria-label')).toBe('Выбрать телевизор');
+    expect(chip().textContent).toBe('');
     act(() => saveTv({ ip: '192.168.1.5', name: 'LG OLED' }));
-    expect(el.querySelector('.m-tvchip.on')!.textContent).toContain('LG OLED');
-    act(() => (el.querySelector('.m-tvchip') as HTMLElement).click());
+    expect(chip().getAttribute('aria-label')).toBe('Телевизор «LG OLED» не подключён');
+    expect(el.querySelector('.m-tvchip.on')).toBeNull();
+    act(() => {
+      tvState.value = 'connected';
+    });
+    expect(chip().getAttribute('aria-label')).toBe('Телевизор «LG OLED» подключён');
+    expect(el.querySelector('.m-tvchip.on')).not.toBeNull();
+    act(() => chip().click());
     expect(currentRoute.value.name).toBe('tv');
+    act(() => {
+      tvState.value = 'idle';
+    });
+  });
+
+  describe('pull to refresh', () => {
+    const touch = (type: string, y: number, target: Element = el.querySelector('.m-lib-head')!) => {
+      const ev = new Event(type, { bubbles: true, cancelable: true }) as any;
+      const t = { clientX: 10, clientY: y };
+      ev.touches = type === 'touchend' ? [] : [t];
+      ev.changedTouches = [t];
+      act(() => {
+        target.dispatchEvent(ev);
+      });
+      return ev as Event;
+    };
+
+    it('a long drag from the top reloads the list and shows the pill', async () => {
+      mount();
+      await flush();
+      listSpy.mockClear();
+      let release!: (v: Torrent[]) => void;
+      listSpy.mockReturnValue(new Promise<Torrent[]>((r) => (release = r)));
+      touch('touchstart', 100);
+      const mv = touch('touchmove', 220);
+      expect(mv.defaultPrevented).toBe(true);
+      touch('touchend', 220);
+      expect(listSpy).toHaveBeenCalledTimes(1);
+      expect(el.querySelector('.m-ptr')!.textContent).toContain('Обновляю…');
+      release(T);
+      await flush();
+      expect(el.querySelector('.m-ptr')).toBeNull();
+    });
+
+    it('a short drag, a drag away from the top and a chip-row drag do nothing', async () => {
+      mount();
+      await flush();
+      listSpy.mockClear();
+      touch('touchstart', 100);
+      touch('touchend', 150);
+      expect(listSpy).not.toHaveBeenCalled();
+      const spy = vi.spyOn(window, 'scrollY', 'get').mockReturnValue(300);
+      touch('touchstart', 100);
+      touch('touchend', 300);
+      expect(listSpy).not.toHaveBeenCalled();
+      spy.mockRestore();
+      touch('touchstart', 100, el.querySelector('.m-tabs')!);
+      touch('touchend', 300, el.querySelector('.m-tabs')!);
+      expect(listSpy).not.toHaveBeenCalled();
+      expect(el.querySelector('.m-ptr')).toBeNull();
+    });
+
+    it('works on the history tab too', async () => {
+      mount();
+      await flush();
+      act(() => tab('История').click());
+      listSpy.mockClear();
+      touch('touchstart', 100);
+      touch('touchend', 220);
+      expect(listSpy).toHaveBeenCalledTimes(1);
+      await flush();
+    });
   });
 
   it('history tab lists started items with a continue-on-TV button', async () => {

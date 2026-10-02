@@ -140,6 +140,15 @@ function LocalServerSection() {
             Очистить
           </button>
         </div>
+        {st.running && (
+          <>
+            <div class="m-set-sep" />
+            <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'serverSettings', url: LOCAL_URL })}>
+              <span>Настройки сервера</span>
+              <Icon d="M9 6l6 6-6 6" size={18} />
+            </button>
+          </>
+        )}
       </div>
       <div class="m-hint-ok">
         <Icon d="M12 8v.01M11 12h1v5h1M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18" size={18} />
