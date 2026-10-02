@@ -142,8 +142,10 @@ export function LibraryScreen() {
               return (
                 <Focusable key={e.torrent.hash} focusKey={'cont-' + e.torrent.hash} className="wide-card" onPress={() => resume(e)} onFocused={() => setFocusedHash(null)}>
                   <div class="title">{e.torrent.title}</div>
-                  <div class="meta">{name} · {formatDuration(e.progress.time)} / {formatDuration(e.progress.duration)}</div>
-                  <ProgressBar ratio={e.progress.time / e.progress.duration} />
+                  <div class="meta">
+                    {name} · {formatDuration(e.progress.time)}{e.progress.duration > 0 ? ' / ' + formatDuration(e.progress.duration) : ''}
+                  </div>
+                  {e.progress.duration > 0 && <ProgressBar ratio={e.progress.time / e.progress.duration} />}
                 </Focusable>
               );
             })}
