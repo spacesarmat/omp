@@ -16,6 +16,8 @@ export interface LocalServerInfo {
   version?: string;
   /** Wi-Fi IPv4 of the phone. */
   ip?: string;
+  /** A VPN is active: other devices may not reach the phone. */
+  vpn?: boolean;
   error?: string;
 }
 
@@ -145,6 +147,7 @@ function serverInfo(r: Partial<LocalServerInfo> | null | undefined): LocalServer
   const error = text(r?.error);
   if (version) info.version = version;
   if (ip) info.ip = ip;
+  if (r?.vpn === true) info.vpn = true;
   if (error) info.error = error;
   return info;
 }

@@ -9,6 +9,7 @@ export type MRoute =
   | { name: 'nowPlaying' }
   | { name: 'tv' }
   | { name: 'settings' }
+  | { name: 'serverSettings' }
   | { name: 'localServer' };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);

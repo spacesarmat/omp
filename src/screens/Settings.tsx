@@ -14,25 +14,13 @@ import { toast } from '../ui/toast';
 import { latestUpdate, checkForUpdate } from '../store/updates';
 import { openHbChannel } from '../platform/hbchannel';
 import { HB_REPO_URL } from '../lib/updateInfo';
+import { CACHE, PRELOAD, READAHEAD, CONNS, RATE, DISCONNECT, withCurrent } from '../lib/serverSettingsOptions';
 
-const MB = 1024 * 1024;
 const SEEK = [5, 10, 15, 30, 60].map((v) => ({ value: v, label: v + ' с' }));
 const SUB_COLOR: { value: 'white' | 'yellow'; label: string }[] = [
   { value: 'white', label: 'Белый' },
   { value: 'yellow', label: 'Жёлтый' },
 ];
-const CACHE = [64, 128, 256, 512, 1024, 2048].map((m) => ({ value: m * MB, label: m >= 1024 ? m / 1024 + ' ГБ' : m + ' МБ' }));
-const PRELOAD = [0, 5, 10, 25, 50, 75, 95].map((v) => ({ value: v, label: v + '%' }));
-const READAHEAD = [5, 25, 50, 75, 95].map((v) => ({ value: v, label: v + '%' }));
-const CONNS = [10, 25, 50, 100, 200].map((v) => ({ value: v, label: String(v) }));
-// TorrServer rate limits are in KB/s, 0 = unlimited
-const RATE = [{ value: 0, label: 'Без ограничений' }].concat([1, 5, 10, 25, 50].map((m) => ({ value: m * 1024, label: m + ' МБ/с' })));
-const DISCONNECT = [30, 60, 120, 300].map((v) => ({ value: v, label: v + ' с' }));
-
-/** Keeps a server value visible even when it is not one of our presets. */
-function withCurrent(options: { value: number; label: string }[], value: number) {
-  return options.some((o) => o.value === value) ? options : [{ value, label: String(value) }].concat(options);
-}
 
 export function SettingsScreen() {
   const c = client.value;

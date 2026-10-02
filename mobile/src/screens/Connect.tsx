@@ -10,7 +10,7 @@ import { scanPairQr } from '../platform/qr';
 import { RenameSheet } from '../ui/RenameSheet';
 import { servers, addServer, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
-import { errorMessage } from '../../../src/api/http';
+import { errorMessage, isApiError } from '../../../src/api/http';
 import { discover, candidateSubnets, subnetOf, DEFAULT_PORTS, type FoundServer } from '../../../src/api/discovery';
 import { native } from '../platform/native';
 import { localServer, refreshLocalServer } from '../server/localServer';
@@ -37,6 +37,9 @@ export async function scanLan(
   const own = ip ? subnetOf(ip) : null;
   return d.discover({ subnets: own ? [own] : candidateSubnets(null, []), ports: DEFAULT_PORTS, isCancelled });
 }
+
+const TROUBLE =
+  'Не находится? Проверьте, что оба устройства в одной сети Wi‑Fi, VPN выключен или разрешает локальную сеть, а в роутере выключена изоляция клиентов (гостевая сеть).';
 
 const PHONE = 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2M10 7h4M10 10h4';
 const INFO = 'M12 8v5M12 16h.01M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18';
@@ -80,6 +83,7 @@ export function Connect() {
   const [cardError, setCardError] = useState<{ id: string; text: string } | null>(null);
   const [scanState, setScanState] = useState<'idle' | 'scanning' | 'done'>('idle');
   const [found, setFound] = useState<FoundServer[]>([]);
+  const [netFail, setNetFail] = useState(false);
 
   useEffect(() => {
     checkAll(servers.value);
@@ -89,9 +93,11 @@ export function Connect() {
   // the phone can host TorrServer itself: look for one in the network first (only with no saved servers)
   const supported = localServer.value.supported;
   const noSaved = servers.value.length === 0;
+  const auto = supported && noSaved;
   const [scanRun, setScanRun] = useState(0);
   useEffect(() => {
-    if (!supported || !noSaved) return;
+    // automatic on open (rules above), or by the «Найти в сети» button (scanRun > 0)
+    if (!auto && scanRun === 0) return;
     let alive = true;
     setScanState('scanning');
     setFound([]);
@@ -110,11 +116,12 @@ export function Connect() {
     return () => {
       alive = false;
     };
-  }, [supported, noSaved, scanRun]);
+  }, [auto, scanRun]);
 
   async function enter(cfg: { name?: string; url: string; user?: string; password?: string }): Promise<boolean> {
     setBusy(true);
     setError('');
+    setNetFail(false);
     try {
       const url = normalizeServerUrl(cfg.url);
       const known = servers.value.find((x) => x.url === url);
@@ -126,6 +133,7 @@ export function Connect() {
       return true;
     } catch (e) {
       setError(errorMessage(e));
+      if (isApiError(e) && (e.kind === 'network' || e.kind === 'timeout')) setNetFail(true);
       return false;
     } finally {
       setBusy(false);
@@ -179,6 +187,7 @@ export function Connect() {
   }
 
   const list = servers.value;
+  const emptyScan = scanState === 'done' && found.length === 0;
   return (
     <form class="m-screen m-connect" onSubmit={submit}>
       <div class="m-brand">
@@ -188,27 +197,36 @@ export function Connect() {
           <div class="m-muted">Open Movie Player</div>
         </div>
       </div>
-      {supported && noSaved && scanState === 'scanning' && (
+      {auto && scanState === 'scanning' && (
         <div class="m-hint-info m-muted">Ищу TorrServer в сети…</div>
       )}
-      {supported && noSaved && scanState === 'done' && found.length > 0 && (
+      {scanState === 'done' && found.length > 0 && (
         <>
           <h2 class="m-section">Найдено в сети</h2>
           <div class="m-list">
-            {found.map((f) => (
-              <button key={f.url} type="button" class="m-server" disabled={busy} onClick={() => void enter({ url: f.url })}>
-                <span class="m-dot on" />
-                <span class="m-server-text">
-                  <span class="m-server-name">{f.url.replace(/^https?:\/\//, '')}</span>
-                  <span class="m-muted m-small">{f.version}</span>
-                </span>
-                <Icon d="M9 5l7 7-7 7" size={18} />
-              </button>
-            ))}
+            {found.map((f) => {
+              const saved = list.find((x) => x.url === normalizeServerUrl(f.url));
+              return (
+                <button
+                  key={f.url}
+                  type="button"
+                  class="m-server"
+                  disabled={busy}
+                  onClick={() => (saved ? void open(saved) : void enter({ url: f.url }))}
+                >
+                  <span class="m-dot on" />
+                  <span class="m-server-text">
+                    <span class="m-server-name">{f.url.replace(/^https?:\/\//, '')}</span>
+                    <span class="m-muted m-small">{saved ? 'сохранён · ' : ''}{f.version}</span>
+                  </span>
+                  <Icon d="M9 5l7 7-7 7" size={18} />
+                </button>
+              );
+            })}
           </div>
         </>
       )}
-      {supported && noSaved && scanState === 'done' && found.length === 0 && (
+      {auto && emptyScan && (
         <>
           <div class="m-hint-info m-muted">
             <Icon d={INFO} size={18} />
@@ -230,6 +248,17 @@ export function Connect() {
           </div>
           <div class="m-muted m-small m-or">или</div>
         </>
+      )}
+      <button
+        type="button"
+        class="m-btn m-btn-secondary"
+        disabled={scanState === 'scanning'}
+        onClick={() => setScanRun(scanRun + 1)}
+      >
+        {scanState === 'scanning' ? 'Ищу…' : 'Найти в сети'}
+      </button>
+      {(emptyScan || netFail) && scanState !== 'scanning' && (
+        <div class="m-hint-info m-muted m-trouble">{TROUBLE}</div>
       )}
       <h1 class="m-title">Подключение к TorrServer</h1>
       <div class="m-field">
@@ -326,11 +355,6 @@ export function Connect() {
             })}
           </div>
         </>
-      )}
-      {supported && noSaved && scanState === 'done' && (
-        <button type="button" class="m-btn m-btn-text" onClick={() => setScanRun(scanRun + 1)}>
-          Искать в сети ещё раз
-        </button>
       )}
       {renaming && (
         <RenameSheet

@@ -146,6 +146,7 @@ function LocalServerSection() {
         <span>Новая версия сервера приходит вместе с обновлением OMP</span>
       </div>
       <div class="m-hint-warn">Сервер доступен всем устройствам в этой сети Wi‑Fi</div>
+      {st.vpn && <div class="m-hint-warn" role="alert">Включён VPN — другие устройства могут не видеть сервер. Разрешите в VPN доступ к локальной сети или выключите его.</div>}
     </section>
   );
 }
@@ -176,6 +177,12 @@ export function Settings() {
             Сменить
           </button>
         </div>
+        {server && (
+          <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'serverSettings' })}>
+            <span>Настройки сервера</span>
+            <Icon d="M9 6l6 6l-6 6" size={20} />
+          </button>
+        )}
       </section>
       <section class="m-set-group">
         <div class="m-set-label">Телевизор</div>
