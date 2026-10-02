@@ -16,6 +16,6 @@
 |---|---|
 | ![Каталог](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/android-library.png) | ![Раздача](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/android-torrent.png) |
 | ![Где смотреть](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/android-watch.png) | ![Пульт](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/android-remote.png) |
-| ![Сейчас играет](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/android-nowplaying.png) | |
+| ![Сейчас играет](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/android-nowplaying.png) | ![Сервер на телефоне](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/android-server.png) |
 
 **Установка на ТВ:** скачайте `.ipk` ниже и установите по инструкции из [README](https://github.com/spacesarmat/omp#readme).
