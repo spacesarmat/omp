@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { serverViewed } from '../../src/store/progress';
+import { torrents } from '../../src/store/library';
 import { servers, activeServerId, activeServer, client, addServer, removeServer, setActiveServer, requireClient } from '../../src/store/servers';
 
 beforeEach(() => {
@@ -32,5 +34,31 @@ describe('servers store', () => {
     removeServer(a.id);
     expect(activeServer.value).toBeNull();
     expect(() => requireClient()).toThrow();
+  });
+});
+
+describe('server-scoped state', () => {
+  it('keeps credentials when re-adding without them', () => {
+    const a = addServer({ url: 'h:1', user: 'u', password: 'p' });
+    const b = addServer({ url: 'h:1', name: 'Дом' });
+    expect(b.id).toBe(a.id);
+    expect(b.user).toBe('u');
+    expect(b.password).toBe('p');
+    const c = addServer({ url: 'h:1', user: 'v', password: 'q' });
+    expect(c.user).toBe('v');
+    expect(c.password).toBe('q');
+  });
+  it('clears viewed marks and library cache when switching servers', () => {
+    const a = addServer({ url: 'h:1' });
+    const b = addServer({ url: 'h:2' });
+    setActiveServer(a.id);
+    torrents.value = [{ hash: 'x', title: 'X', stat: 5 }];
+    serverViewed.value = [{ hash: 'x', file_index: 1 }];
+    setActiveServer(a.id);
+    expect(torrents.value).toHaveLength(1);
+    setActiveServer(b.id);
+    expect(torrents.value).toEqual([]);
+    expect(serverViewed.value).toEqual([]);
+    expect(JSON.parse(localStorage.getItem('tsp.torrents')!)).toEqual([]);
   });
 });

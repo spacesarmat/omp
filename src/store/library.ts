@@ -11,17 +11,28 @@ export function sanitizeTorrents(v: unknown): Torrent[] {
 
 export const torrents = signal<Torrent[]>(sanitizeTorrents(loadJson<unknown>(KEY, [], Array.isArray)));
 
+let inflight: Promise<Torrent[]> | null = null;
+
 export function refreshTorrents(c: { list(): Promise<Torrent[]> }): Promise<Torrent[]> {
-  return c.list().then((list) => {
-    const sorted = list.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-    torrents.value = sorted;
-    saveJson(
-      KEY,
-      sorted.map((t) => ({
-        hash: t.hash, title: t.title, category: t.category, poster: t.poster,
-        torrent_size: t.torrent_size, data: t.data, stat: t.stat, timestamp: t.timestamp,
-      })),
-    );
-    return sorted;
-  });
+  if (inflight) return inflight;
+  inflight = c.list().then(
+    (list) => {
+      inflight = null;
+      const sorted = list.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      torrents.value = sorted;
+      saveJson(
+        KEY,
+        sorted.map((t) => ({
+          hash: t.hash, title: t.title, category: t.category, poster: t.poster,
+          torrent_size: t.torrent_size, data: t.data, stat: t.stat, timestamp: t.timestamp,
+        })),
+      );
+      return sorted;
+    },
+    (e) => {
+      inflight = null;
+      throw e;
+    },
+  );
+  return inflight;
 }
