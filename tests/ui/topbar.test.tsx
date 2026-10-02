@@ -1,4 +1,3 @@
-import 'preact/compat';
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { render, h } from 'preact';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
