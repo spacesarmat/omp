@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { confirmDialog } from '../../src/ui/dialog';
 import { wheelDelta, findScrollTarget, installWheelScroll } from '../../src/ui/wheel';
 
 function scrollable(): HTMLElement {
@@ -51,5 +52,16 @@ describe('installWheelScroll', () => {
     off();
     expect(screen.scrollTop).toBe(120);
     expect(e.defaultPrevented).toBe(true);
+  });
+
+  it('does not scroll behind an open dialog', () => {
+    const screen = scrollable();
+    const off = installWheelScroll();
+    confirmDialog('x');
+    const e = new Event('wheel', { cancelable: true, bubbles: true }) as any;
+    e.deltaY = 120; e.deltaMode = 0;
+    screen.dispatchEvent(e);
+    off();
+    expect(screen.scrollTop).toBe(0);
   });
 });

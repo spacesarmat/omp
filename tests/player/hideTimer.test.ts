@@ -43,3 +43,26 @@ describe('HideTimer', () => {
     expect(hide).not.toHaveBeenCalled();
   });
 });
+
+import { canHideControls, pointerMoveCounts } from '../../src/player/hideTimer';
+
+describe('canHideControls', () => {
+  const ok = { paused: false, buffering: false, seeking: false, error: false, dialogOpen: false };
+  it('allows only when playing with nothing else open', () => {
+    expect(canHideControls(ok)).toBe(true);
+    expect(canHideControls({ ...ok, paused: true })).toBe(false);
+    expect(canHideControls({ ...ok, buffering: true })).toBe(false);
+    expect(canHideControls({ ...ok, seeking: true })).toBe(false);
+    expect(canHideControls({ ...ok, error: true })).toBe(false);
+    expect(canHideControls({ ...ok, dialogOpen: true })).toBe(false);
+  });
+});
+
+describe('pointerMoveCounts', () => {
+  it('ignores jitter while visible, counts real moves and any move when hidden', () => {
+    expect(pointerMoveCounts(true, { x: 100, y: 100 }, 104, 103)).toBe(false);
+    expect(pointerMoveCounts(true, { x: 100, y: 100 }, 120, 100)).toBe(true);
+    expect(pointerMoveCounts(false, { x: 100, y: 100 }, 101, 100)).toBe(true);
+    expect(pointerMoveCounts(true, null, 1, 1)).toBe(true);
+  });
+});

@@ -18,7 +18,7 @@ import type { IconName } from '../ui/icons';
 import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
 import { introChapter } from '../player/chapters';
 import { useVideoState } from '../player/useVideoState';
-import { HideTimer } from '../player/hideTimer';
+import { HideTimer, canHideControls, pointerMoveCounts } from '../player/hideTimer';
 import { useProgressSync } from '../player/useProgressSync';
 import { WatchJournal, journalSource } from '../player/watchJournal';
 import { recordWatch } from '../store/journal';
@@ -99,11 +99,12 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
 
   const cache = useCacheStats(c, item.hash, statsOn || (ready && vs.buffering));
 
-  const hideGate = useRef({ playing: false, seeking: false, error: false });
-  hideGate.current = { playing: !vs.paused && !vs.buffering, seeking: seekTarget !== null, error: !!vs.error };
+  const hideGate = useRef({ paused: true, buffering: true, seeking: false, error: false });
+  hideGate.current = { paused: vs.paused, buffering: vs.buffering, seeking: seekTarget !== null, error: !!vs.error };
+  const lastPtr = useRef<{ x: number; y: number } | null>(null);
   const hider = useMemo(
     () => new HideTimer(
-      () => { const g = hideGate.current; return g.playing && !g.seeking && !g.error && !dialogOpen.value; },
+      () => canHideControls({ ...hideGate.current, dialogOpen: dialogOpen.value }),
       () => setControls(false),
     ),
     [],
@@ -464,7 +465,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   if (!item) return null;
 
   return (
-    <div class="player" onMouseMove={showControls} onClick={(e) => { if (Date.now() - lastKeyAt.current < 250) return; const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); taps.tap(tapZone((e as MouseEvent).clientX - r.left, r.width)); }}>
+    <div class="player" onMouseMove={(e) => { const m = e as MouseEvent; if (pointerMoveCounts(controls, lastPtr.current, m.clientX, m.clientY)) { lastPtr.current = { x: m.clientX, y: m.clientY }; showControls(); } }} onClick={(e) => { if (Date.now() - lastKeyAt.current < 250) return; const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); taps.tap(tapZone((e as MouseEvent).clientX - r.left, r.width)); }}>
       <video key={index + ':' + reloadKey} ref={videoRef} src={ready ? src : undefined} autoplay onLoadedMetadata={onMeta} />
       <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
       {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}

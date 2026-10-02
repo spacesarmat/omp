@@ -42,10 +42,11 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .text-input.focused { transform: none; }
 .text-input input { width: 100%; font-size: 30px; padding: 16px 20px; background: transparent; color: var(--text); border: none; outline: none; }
 
-.choice-row { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; padding: 20px 28px; background: var(--panel); border-radius: 12px; margin-bottom: 10px; }
+.choice-row { line-height: 32px; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; padding: 20px 28px; background: var(--panel); border-radius: 12px; margin-bottom: 10px; }
 .choice-row.focused { background: var(--panel2); transform: none; }
 .choice-label { flex: 1; min-width: 0; margin-right: 24px; }
-.choice-value { flex: 0 0 auto; margin-left: auto; text-align: right; white-space: nowrap; color: var(--accent); }
+.choice-value .icon { flex: none; display: block; margin: 0 10px; }
+.choice-value { display: flex; align-items: center; flex: 0 0 auto; margin-left: auto; text-align: right; white-space: nowrap; color: var(--accent); }
 
 .header { display: flex; align-items: center; margin-bottom: 24px; }
 .header > * { margin-right: 16px; }

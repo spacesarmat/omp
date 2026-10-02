@@ -1,3 +1,5 @@
+import { dialogOpen } from './dialog';
+
 /** Pixels to scroll for a wheel event (deltaMode 0 = px, 1 = lines, 2 = pages). */
 export function wheelDelta(e: { deltaY: number; deltaMode?: number }, pageHeight: number): number {
   if (e.deltaMode === 1) return e.deltaY * 40;
@@ -27,7 +29,7 @@ export function findScrollTarget(from: Element | null, dy: number): HTMLElement 
 /** Magic Remote / LG pointer scrolling: scroll the container under the pointer by the wheel delta. */
 export function installWheelScroll(): () => void {
   const onWheel = (e: WheelEvent) => {
-    if (e.defaultPrevented || !e.deltaY) return;
+    if (e.defaultPrevented || !e.deltaY || dialogOpen.value) return;
     const dy = wheelDelta(e, window.innerHeight);
     const under = (document.elementFromPoint ? document.elementFromPoint(e.clientX, e.clientY) : null) || (e.target as Element | null);
     const t = findScrollTarget(under, dy);
