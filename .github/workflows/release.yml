@@ -30,6 +30,10 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
+      - name: Fetch TorrServer binary
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/fetch-torrserver.mjs
       - name: Build signed Android APK
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
