@@ -7,6 +7,8 @@ import type { PlayItem } from '../player/types';
 import { navigate, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
 import { restoreFocus } from '../ui/focus';
+import { favorites, isFavorite, toggleFavorite } from '../store/favorites';
+import { toast } from '../ui/toast';
 
 export function PlaylistScreen(p: { url?: string; title?: string }) {
   const c = client.value;
@@ -16,6 +18,7 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
   const [entries, setEntries] = useState<PlaylistEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
 
   const load = (u: string) => {
     const target = u.trim();
@@ -23,6 +26,7 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
     setBusy(true);
     setError(null);
     setEntries(null);
+    setLoadedUrl(null);
     const currentReq = ++req.current;
     const text = c ? c.fetchText(target) : request<string>(target, { responseType: 'text', timeoutMs: 15000 });
     text.then(
@@ -36,6 +40,7 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
         const list = parseM3U(body, target);
         if (!list.length) setError('Плейлист пуст или имеет неизвестный формат');
         setEntries(list);
+        setLoadedUrl(target);
       },
       (e) => {
         if (!alive.current || currentReq !== req.current) return;
@@ -86,11 +91,32 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
           )}
         </div>
       )}
+      {!p.url && !entries && favorites.value.length > 0 && (
+        <FocusGroup focusKey="PL-FAVORITES">
+          <h2>Избранное</h2>
+          {favorites.value.map((f) => (
+            <Focusable key={f.url} focusKey={'fav-' + f.url} className="list-item" onPress={() => navigate({ name: 'playlist', url: f.url, title: f.title })}>
+              <div class="title">{f.title}</div>
+              <div class="meta">{f.url}</div>
+            </Focusable>
+          ))}
+        </FocusGroup>
+      )}
       {busy && <Spinner text="Загрузка плейлиста…" />}
       {error && <div class="banner-error">{error}</div>}
       {entries && entries.length > 0 && (
         <FocusGroup focusKey="PLAYLIST-ENTRIES">
           {queue.length > 0 && <Button icon="play" label={'Воспроизвести всё (' + queue.length + ')'} onPress={() => navigate({ name: 'player', queue, index: 0 })} />}
+          {loadedUrl && (
+            <Button
+              icon="star"
+              label={isFavorite(loadedUrl) ? 'Убрать из избранного' : 'В избранное'}
+              onPress={() => {
+                const title = p.title || loadedUrl.split('?')[0].split('/').pop() || loadedUrl;
+                toast(toggleFavorite(loadedUrl, title) ? 'Добавлено в избранное' : 'Удалено из избранного');
+              }}
+            />
+          )}
           {entries.map((e, i) => {
             const playableIndex = e.isPlaylist ? -1 : playable.indexOf(e);
             return (
