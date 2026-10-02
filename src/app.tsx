@@ -1,5 +1,5 @@
 import { useEffect } from 'preact/hooks';
-import { routeStack, currentRoute, goBack, Route } from './ui/nav';
+import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { DialogHost, confirmDialog, dialogOpen } from './ui/dialog';
 import { ToastHost } from './ui/toast';
@@ -71,7 +71,7 @@ export function App() {
   const r = currentRoute.value;
   return (
     <div class="app">
-      <div class="screen-host" key={routeStack.value.length + ':' + r.name}>{renderRoute(r)}</div>
+      <div class="screen-host" key={routeKey(r)}>{renderRoute(r)}</div>
       {shouldShowUpdateDialog(r.name) && !dialogOpen.value && <UpdateDialog />}
       <DialogHost />
       <ToastHost />
