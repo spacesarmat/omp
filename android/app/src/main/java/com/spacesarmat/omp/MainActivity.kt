@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import com.getcapacitor.BridgeActivity
+import com.getcapacitor.CapConfig
 
 class MainActivity : BridgeActivity() {
     // the launch intent was already handled before the activity got recreated
@@ -15,13 +16,22 @@ class MainActivity : BridgeActivity() {
         skipLaunchIntent = savedInstanceState != null ||
             ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
         registerPlugin(OmpNativePlugin::class.java)
+        tvMode = TvMode.isTv(this)
         // BridgeActivity.onCreate passes the launch intent to onNewIntent below
         super.onCreate(savedInstanceState)
-        // Android TV gets the TV interface bundled at /tv/ (bridge is ready after super.onCreate)
-        tvMode = TvMode.isTv(this)
+    }
+
+    // Android TV starts directly on the bundled TV interface (/tv/), the phone UI never boots.
+    // Mirrors capacitor.config.ts (androidScheme http, allowMixedContent) plus the start path.
+    override fun load() {
         if (tvMode) {
-            bridge.webView.post { bridge.webView.loadUrl(bridge.localUrl + "/tv/index.html") }
+            config = CapConfig.Builder(this)
+                .setAndroidScheme("http")
+                .setAllowMixedContent(true)
+                .setStartPath("/tv/index.html")
+                .create()
         }
+        super.load()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
