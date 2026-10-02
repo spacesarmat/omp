@@ -1,6 +1,6 @@
 {
   "name": "omp",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Media player for LG webOS TVs backed by TorrServer",
@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "icons": "node scripts/render-icons.mjs",
+    "screenshots": "node scripts/screenshots.mjs",
     "package": "npm run build && node scripts/package.mjs",
     "check:boot": "node scripts/boot-check.mjs",
     "tv:install": "node scripts/tv.mjs install",
