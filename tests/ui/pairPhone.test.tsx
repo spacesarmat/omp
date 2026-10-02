@@ -87,6 +87,10 @@ describe('PairPhoneScreen on Android TV', () => {
   }
   // Preact 11 runs effects after paint (up to ~35 ms)
   const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+  // under a loaded full run the first render can take longer than one settle: wait for the code itself
+  const settleUntil = async (ready: () => boolean) => {
+    for (let i = 0; i < 40 && !ready(); i++) await settle();
+  };
   const digits = (host: HTMLElement) => Array.from(host.querySelectorAll('.pair-digit')).map((d) => d.textContent).join('');
   afterEach(() => {
     hosts.splice(0).forEach((h) => render(null, h));
@@ -98,7 +102,7 @@ describe('PairPhoneScreen on Android TV', () => {
     setActiveServer(s.id);
     fakePlugin([{ code: '4821', expiresAt: Date.now() + 300000 }]);
     const host = mountTracked(h(PairPhoneScreen, {}));
-    await settle();
+    await settleUntil(() => !!host.querySelector('svg.qr') && digits(host) === '4821');
     expect(host.querySelector('svg.qr')).not.toBeNull();
     expect(digits(host)).toBe('4821');
     const text = host.textContent!;
