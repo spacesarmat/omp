@@ -3,7 +3,7 @@ import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { nowPlaying, linkStatus, sendCmd } from '../tv/playerLink';
 import { formatDuration } from '../../../src/lib/format';
-import { playerPosterStyle } from '../screens/NowPlaying';
+import { playerPosterStyle } from './playerPoster';
 
 /** «S02E03» from «Show · S02E03»; empty when the subtitle has no code part. */
 export function subtitleCode(subtitle: string): string {

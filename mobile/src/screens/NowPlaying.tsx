@@ -1,20 +1,15 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Icon, ICONS } from '../ui/Icon';
 import { TracksSheet } from '../ui/TracksSheet';
 import { goBack, navigate, switchTab } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { nowPlaying, linkStatus, sendCmd } from '../tv/playerLink';
+import { nowPlaying, lastSeen, linkStatus, sendCmd } from '../tv/playerLink';
 import { volume as tvVolume } from '../tv/tvClient';
 import { formatDuration } from '../../../src/lib/format';
-import type { PlayerState } from '../../../src/phone/protocol';
+import { hasPosterImage, playerPosterStyle } from '../ui/playerPoster';
 
-const cssUrl = (u: string) => u.replace(/["()\\\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
-const hasImage = (s: PlayerState) => /^https?:\/\//i.test(s.poster || '');
-
-export function playerPosterStyle(s: PlayerState): string {
-  const gradient = 'linear-gradient(160deg, #2B3A55, #151A26 80%)';
-  return hasImage(s) ? `background: url("${cssUrl(s.poster || '')}") center / cover, ${gradient}` : `background: ${gradient}`;
-}
+const HOLD_MS = 1500;
+const HOLD_NEAR_S = 3;
 
 function Skip({ label, text, d, onClick }: { label: string; text: string; d: string; onClick: () => void }) {
   return (
@@ -27,9 +22,22 @@ function Skip({ label, text, d, onClick }: { label: string; text: string; d: str
 
 export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down') => Promise<void> }) {
   const [drag, setDrag] = useState<number | null>(null);
+  const [held, setHeld] = useState<{ t: number; seen: number; at: number } | null>(null);
   const [tracks, setTracks] = useState(false);
   const s = nowPlaying.value;
   const status = linkStatus.value;
+  const empty = !s || status === 'none';
+  useEffect(() => {
+    if (empty) {
+      setDrag(null);
+      setHeld(null);
+    }
+  }, [empty]);
+  useEffect(() => {
+    if (!held) return;
+    const t = setTimeout(() => setHeld(null), HOLD_MS);
+    return () => clearTimeout(t);
+  }, [held]);
   const tv = activeTv.value;
   const vol = (dir: 'up' | 'down') => void Promise.resolve(volume(dir)).catch(() => {});
 
@@ -52,7 +60,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     </div>
   );
 
-  if (!s || status === 'none') {
+  if (!s || empty) {
     return (
       <div class="m-screen m-now" data-route="nowPlaying">
         {head}
@@ -66,7 +74,12 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     );
   }
 
-  const shown = drag ?? s.time;
+  // after a release keep the target on screen until the TV reports a time near it (or the hold expires)
+  const holding =
+    held !== null &&
+    Date.now() - held.at < HOLD_MS &&
+    !(lastSeen.value > held.seen && Math.abs(s.time - held.t) <= HOLD_NEAR_S);
+  const shown = drag ?? (holding ? held!.t : s.time);
   const max = Math.max(1, s.duration);
   const pct = Math.max(0, Math.min(100, (shown / max) * 100));
   const left = s.duration > 0 ? '−' + formatDuration(Math.max(0, s.duration - shown)) : '';
@@ -74,7 +87,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     <div class="m-screen m-now" data-route="nowPlaying">
       {head}
       <div class="m-now-poster" style={playerPosterStyle(s)}>
-        {!hasImage(s) && s.title}
+        {!hasPosterImage(s) && s.title}
       </div>
       <div class="m-now-titles">
         <div class="m-now-title">{s.title}</div>
@@ -90,10 +103,13 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
             min={0}
             max={max}
             step={1}
+            disabled={s.duration <= 0}
             value={shown}
             onInput={(e) => setDrag(Number((e.currentTarget as HTMLInputElement).value))}
             onChange={(e) => {
-              sendCmd({ type: 'seek', t: Number((e.currentTarget as HTMLInputElement).value) });
+              const t = Number((e.currentTarget as HTMLInputElement).value);
+              sendCmd({ type: 'seek', t });
+              setHeld({ t, seen: lastSeen.value, at: Date.now() });
               setDrag(null);
             }}
           />

@@ -120,6 +120,59 @@ describe('NowPlaying', () => {
     expect(sent()).toEqual([expect.objectContaining({ type: 'seek', t: 600 })]);
   });
 
+  it('holds the released seek target until the TV reports near it or 1.5 s pass', () => {
+    vi.useFakeTimers();
+    try {
+      setState(state());
+      mount(<NowPlaying volume={volume} />);
+      const r = el.querySelector('input[type="range"]') as HTMLInputElement;
+      act(() => {
+        r.value = '2000';
+        r.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      act(() => {
+        r.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      expect(el.textContent).toContain('33:20');
+      // stale report from before the seek
+      act(() => {
+        nowPlaying.value = state({ time: 1400 });
+        lastSeen.value = NOW + 500;
+      });
+      expect(el.textContent).toContain('33:20');
+      // report near the target releases the hold
+      act(() => {
+        nowPlaying.value = state({ time: 2001 });
+        lastSeen.value = NOW + 1000;
+      });
+      expect(el.textContent).toContain('33:21');
+      // timeout path
+      act(() => {
+        r.value = '100';
+        r.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      act(() => {
+        r.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      act(() => {
+        nowPlaying.value = state({ time: 1400 });
+      });
+      expect(el.textContent).toContain('1:40');
+      act(() => {
+        vi.advanceTimersByTime(1600);
+      });
+      expect(el.textContent).toContain('23:20');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('disables the seek bar without a duration', () => {
+    setState(state({ duration: 0 }));
+    mount(<NowPlaying volume={volume} />);
+    expect((el.querySelector('input[type="range"]') as HTMLInputElement).disabled).toBe(true);
+  });
+
   it('transport buttons send the right commands', () => {
     setState(state());
     mount(<NowPlaying volume={volume} />);
