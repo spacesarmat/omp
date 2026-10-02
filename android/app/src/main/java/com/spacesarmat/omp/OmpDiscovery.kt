@@ -6,6 +6,7 @@ import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.util.Log
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -110,10 +111,17 @@ object OmpDiscovery {
 
     @Suppress("DEPRECATION")
     private fun toFound(info: NsdServiceInfo): FoundOmpTv? {
-        val host = info.host as? Inet4Address ?: return null
-        val ip = host.hostAddress ?: return null
+        // API 34+: `host` is deprecated and may be an IPv6 address while an IPv4 one is in `hostAddresses`
+        val all = if (android.os.Build.VERSION.SDK_INT >= 34) info.hostAddresses else null
+        val ip = pickIpv4(all, info.host) ?: return null
         val version = info.attributes?.get("v")?.let { String(it, Charsets.UTF_8) }.orEmpty()
         return FoundOmpTv(ip, info.port, cleanName(info.serviceName), version)
+    }
+
+    /** First IPv4 of [addresses] (API 34+ `hostAddresses`), else [host] when it is IPv4. */
+    fun pickIpv4(addresses: List<InetAddress>?, host: InetAddress?): String? {
+        addresses?.firstOrNull { it is Inet4Address }?.hostAddress?.let { return it }
+        return (host as? Inet4Address)?.hostAddress
     }
 
     /** NSD may hand back DNS-escaped names («Living\\032Room»); decodes `\\DDD` and `\\c`, falls back to «Android TV». */
