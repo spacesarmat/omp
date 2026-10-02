@@ -233,36 +233,7 @@ export function Library() {
     : { transition: 'transform .25s ease' };
   const armed = pull >= PULL_TRIGGER || refreshing;
   return (
-    <>
-    {(pull > 0 || refreshing) && (
-      <div
-        class={'m-ptr' + (armed ? ' armed' : '')}
-        role="status"
-        style={{
-          transform: 'translate(-50%, ' + (pull - 52) + 'px)',
-          opacity: Math.min(1, pull / PULL_TRIGGER),
-          transition: dragging ? 'none' : 'transform .25s ease, opacity .25s ease',
-        }}
-      >
-        <svg
-          class={refreshing ? 'm-spin' : ''}
-          style={refreshing ? undefined : { transform: 'rotate(' + Math.round((pull / PULL_TRIGGER) * 300) + 'deg)' }}
-          width="22"
-          height="22"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4" />
-        </svg>
-        {refreshing && <span class="m-sr">Обновляю…</span>}
-      </div>
-    )}
-    <div class="m-screen m-library" data-route="library" ref={rootRef} style={pullStyle}>
+    <div class="m-screen m-library" data-route="library" ref={rootRef}>
       <div class="m-lib-head">
         <div class="m-lib-brand">
           <Logo size={28} />
@@ -338,95 +309,127 @@ export function Library() {
           ))}
         </div>
       )}
-      {tvError && <LaunchError message={tvError} class="m-hint-warn" />}
-      {error && <div class="m-hint-warn">{error} — показан сохранённый список</div>}
-      {canStartLocal && (
-        <button type="button" class="m-btn m-btn-primary" disabled={starting} onClick={() => void startServer()}>
-          Запустить сервер
-        </button>
-      )}
-      {!loaded && !list.length && <p class="m-muted m-note">Загрузка…</p>}
-      {empty && <p class="m-muted m-note m-empty">{empty}</p>}
-      {isHistory ? (
-        <div class="m-list m-history">
-          {history.map((e) => {
-            const t = e.torrent;
-            const files = filesOf(t);
-            const file = files.find((f) => f.id === e.fileIndex);
-            const isMovie = t.category === 'movie' || playableFiles(files).length <= 1;
-            const { time, duration } = e.progress;
-            const from = resumeFrom(e.progress, MIN_RESUME, WATCHED_RATIO);
-            return (
-              <div class="m-hrow" key={t.hash}>
-                <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
-                  <Poster torrent={t} class="m-poster-mini" />
-                  <span class="m-hrow-text">
-                    <span class="m-hrow-title">{t.title || t.name || t.hash}</span>
-                    <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
-                    <span class="m-hrow-pos">
-                      <span>{positionLabel(time, duration)}</span>
-                      <span class="m-muted">{remainingLabel(time, duration)}</span>
-                    </span>
-                    <span class="m-bar-track">
-                      <span class="m-bar-fill" style={{ width: (duration > 0 ? Math.min(100, (time / duration) * 100) : 0) + '%' }} />
-                    </span>
-                    <span class="m-muted m-small m-hrow-src">{sourceLine(e.source, now)}</span>
-                  </span>
-                </button>
-                <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', t.title || t.name || t.hash].filter(Boolean).join(' · '))}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M8 5l11 7-11 7z" />
-                  </svg>
-                </button>
+      {/* only the list follows the finger: the header, tabs and filters stay put */}
+      <div class="m-lib-pull">
+        {(pull > 0 || refreshing) && (
+          <div
+            class={'m-ptr' + (armed ? ' armed' : '')}
+            role="status"
+            style={{
+              transform: 'translate(-50%, ' + (pull - 48) + 'px)',
+              opacity: Math.min(1, pull / PULL_TRIGGER),
+              transition: dragging ? 'none' : 'transform .25s ease, opacity .25s ease',
+            }}
+          >
+            <svg
+              class={refreshing ? 'm-spin' : ''}
+              style={refreshing ? undefined : { transform: 'rotate(' + Math.round((pull / PULL_TRIGGER) * 300) + 'deg)' }}
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4" />
+            </svg>
+            {refreshing && <span class="m-sr">Обновляю…</span>}
+          </div>
+        )}
+        <div class="m-lib-body" style={pullStyle}>
+          {tvError && <LaunchError message={tvError} class="m-hint-warn" />}
+          {error && <div class="m-hint-warn">{error} — показан сохранённый список</div>}
+          {canStartLocal && (
+            <button type="button" class="m-btn m-btn-primary" disabled={starting} onClick={() => void startServer()}>
+              Запустить сервер
+            </button>
+          )}
+          {!loaded && !list.length && <p class="m-muted m-note">Загрузка…</p>}
+          {empty && <p class="m-muted m-note m-empty">{empty}</p>}
+          {isHistory ? (
+            <div class="m-list m-history">
+              {history.map((e) => {
+                const t = e.torrent;
+                const files = filesOf(t);
+                const file = files.find((f) => f.id === e.fileIndex);
+                const isMovie = t.category === 'movie' || playableFiles(files).length <= 1;
+                const { time, duration } = e.progress;
+                const from = resumeFrom(e.progress, MIN_RESUME, WATCHED_RATIO);
+                return (
+                  <div class="m-hrow" key={t.hash}>
+                    <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
+                      <Poster torrent={t} class="m-poster-mini" />
+                      <span class="m-hrow-text">
+                        <span class="m-hrow-title">{t.title || t.name || t.hash}</span>
+                        <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
+                        <span class="m-hrow-pos">
+                          <span>{positionLabel(time, duration)}</span>
+                          <span class="m-muted">{remainingLabel(time, duration)}</span>
+                        </span>
+                        <span class="m-bar-track">
+                          <span class="m-bar-fill" style={{ width: (duration > 0 ? Math.min(100, (time / duration) * 100) : 0) + '%' }} />
+                        </span>
+                        <span class="m-muted m-small m-hrow-src">{sourceLine(e.source, now)}</span>
+                      </span>
+                    </button>
+                    <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', t.title || t.name || t.hash].filter(Boolean).join(' · '))}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M8 5l11 7-11 7z" />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            view === 'list' ? (
+              <div class="m-vlist">
+                {shown.map((t) => {
+                  const eps = episodesText(t);
+                  const q = qualityBadge(titleOf(t));
+                  return (
+                    <button type="button" class="m-vrow" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
+                      <Poster torrent={t} class="m-poster-row" />
+                      <span class="m-vrow-text">
+                        <span class="m-card-title">{titleOf(t)}</span>
+                        <span class="m-muted m-small m-vrow-meta">
+                          <span>{formatBytes(t.torrent_size || 0)}</span>
+                          {q && <span class="m-badge-inline">{q}</span>}
+                          {eps && <span>{eps}</span>}
+                        </span>
+                      </span>
+                      <Icon d="M9 6l6 6-6 6" size={18} />
+                    </button>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
-      ) : (
-        view === 'list' ? (
-          <div class="m-vlist">
-            {shown.map((t) => {
-              const eps = episodesText(t);
-              const q = qualityBadge(titleOf(t));
-              return (
-                <button type="button" class="m-vrow" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
-                  <Poster torrent={t} class="m-poster-row" />
-                  <span class="m-vrow-text">
+            ) : view === 'compact' ? (
+              <div class="m-vlist m-clist">
+                {shown.map((t) => (
+                  <button type="button" class="m-crow" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
+                    <span class="m-crow-title">{titleOf(t)}</span>
+                    <span class="m-muted m-small m-crow-size">{formatBytes(t.torrent_size || 0)}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div class={'m-grid m-view-' + view}>
+                {shown.map((t) => (
+                  <button type="button" class="m-card" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
+                    <Poster torrent={t} />
                     <span class="m-card-title">{titleOf(t)}</span>
-                    <span class="m-muted m-small m-vrow-meta">
-                      <span>{formatBytes(t.torrent_size || 0)}</span>
-                      {q && <span class="m-badge-inline">{q}</span>}
-                      {eps && <span>{eps}</span>}
-                    </span>
-                  </span>
-                  <Icon d="M9 6l6 6-6 6" size={18} />
-                </button>
-              );
-            })}
-          </div>
-        ) : view === 'compact' ? (
-          <div class="m-vlist m-clist">
-            {shown.map((t) => (
-              <button type="button" class="m-crow" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
-                <span class="m-crow-title">{titleOf(t)}</span>
-                <span class="m-muted m-small m-crow-size">{formatBytes(t.torrent_size || 0)}</span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div class={'m-grid m-view-' + view}>
-            {shown.map((t) => (
-              <button type="button" class="m-card" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
-                <Poster torrent={t} />
-                <span class="m-card-title">{titleOf(t)}</span>
-                {view === 'large' && <span class="m-muted m-small">{formatBytes(t.torrent_size || 0)}</span>}
-              </button>
-            ))}
-          </div>
-        )
-      )}
+                    {view === 'large' && <span class="m-muted m-small">{formatBytes(t.torrent_size || 0)}</span>}
+                  </button>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      </div>
       {launch.sheet}
     </div>
-    </>
   );
 }
