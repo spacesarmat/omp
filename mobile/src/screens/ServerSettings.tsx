@@ -102,20 +102,21 @@ export function ServerSettings() {
         <>
           <section class="m-set-group">
             {ROWS.map((r) => {
-              const cur = withCurrent(r.options, srv[r.field] as number).filter((o) => o.value === srv[r.field])[0];
+              const v = srv[r.field];
+              const cur = typeof v === 'number' ? withCurrent(r.options, v).filter((o) => o.value === v)[0] : undefined;
               return (
                 <button type="button" class="m-set-row m-set-pick" data-field={r.field} onClick={() => setOpen(r.field)}>
                   <span>{r.label}</span>
-                  <span class="m-muted">{cur.label}</span>
+                  <span class="m-muted">{cur ? cur.label : '—'}</span>
                 </button>
               );
             })}
-            <div class="m-set-row">
+            <div class="m-set-row m-ss-row">
               <span>Сохранять тайм-коды на сервере</span>
               <Switch on={!!srv.TrackTimecode} label="Сохранять тайм-коды на сервере" onToggle={() => save({ TrackTimecode: !srv.TrackTimecode })} />
             </div>
             {isLocal && (
-              <div class="m-set-row">
+              <div class="m-set-row m-ss-row">
                 <span>Кэш на диске телефона</span>
                 <Switch on={!!srv.UseDisk} label="Кэш на диске телефона" onToggle={() => save({ UseDisk: !srv.UseDisk })} />
               </div>
@@ -129,7 +130,7 @@ export function ServerSettings() {
       {srv && row && (
         <Sheet onClose={() => setOpen(null)} label={row.label}>
           <div class="m-sheet-title">{row.label}</div>
-          {withCurrent(row.options, srv[row.field] as number).map((o) => (
+          {(typeof srv[row.field] === 'number' ? withCurrent(row.options, srv[row.field] as number) : row.options).map((o) => (
             <button type="button" role="radio" aria-checked={o.value === srv[row.field]} class="m-opt" onClick={() => pick(row.field, o.value)}>
               <span class="m-opt-name">{o.label}</span>
               {o.value === srv[row.field] && <Icon d="M5 12l5 5l9-10" size={20} />}

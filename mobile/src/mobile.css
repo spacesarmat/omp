@@ -548,13 +548,13 @@ button, .m-btn {
 .m-set-card { display: flex; flex-direction: column; gap: 14px; padding: 16px; border-radius: 16px; background: var(--panel); }
 .m-set-card .m-set-row { padding: 0; min-height: 0; background: none; }
 .m-set-sep { height: 1px; background: var(--panel-2); }
-.m-status-dot { width: 10px; height: 10px; border-radius: 5px; background: #5A6070; flex-shrink: 0; }
+.m-status-dot { width: 10px; height: 10px; border-radius: 5px; background: #5A6070; flex: 0 0 10px; }
 .m-status-dot.on { background: #3FB950; }
 .m-hint-ok { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #1E2A1F; color: #8FE39A; font-size: 14px; line-height: 1.4; }
 .m-hint-ok svg { flex-shrink: 0; }
 
 .m-set-pick { width: 100%; border: none; color: var(--text); text-align: left; font: inherit; }
-.m-set-row > span:first-child { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+.m-set-pick > span:first-child, .m-ss-row > span:first-child { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 .m-set-pick > .m-muted { flex: 0 0 auto; white-space: nowrap; }
 .m-sheet [role="radio"][aria-checked="true"] { justify-content: space-between; }
 .m-ss-sub { margin: -6px 0 4px 56px; }

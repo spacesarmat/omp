@@ -170,6 +170,17 @@ describe('ServerSettings', () => {
   });
 });
 
+describe('ServerSettings missing field', () => {
+  it('shows a dash instead of undefined', async () => {
+    setup();
+    delete current.PreloadCache;
+    await mount();
+    expect(btn('Предзагрузка').textContent).toContain('—');
+    act(() => btn('Предзагрузка').click());
+    expect(el.textContent).not.toContain('undefined');
+  });
+});
+
 describe('ServerSettings header', () => {
   it('the back button goes back', async () => {
     setup();
