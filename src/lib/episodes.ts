@@ -64,7 +64,7 @@ export function episodeLabel(path: string): string {
 }
 
 export function naturalCompare(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' });
 }
 
 export interface Season {
