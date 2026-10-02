@@ -25,6 +25,7 @@ import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
 import { tvState, warmUp, cancelWarmUp } from './tv/tvClient';
 import { activeTv } from './tv/tvStore';
 import { startPlayerLink, attachIfOmpForeground, linkStatus } from './tv/playerLink';
+import { installTabSwipe } from './ui/tabSwipe';
 import './mobile.css';
 
 const TABS: string[] = ['library', 'add', 'remote', 'settings'];
@@ -140,6 +141,16 @@ export function App() {
   const route = currentRoute.value;
   const prompt = updatePrompt.value;
   const showNav = TABS.includes(route.name);
+  // swipe left / right between the bottom tabs
+  useEffect(() => {
+    if (!showNav) return;
+    return installTabSwipe({
+      tabs: TABS,
+      current: () => currentRoute.value.name,
+      screen: () => document.querySelector<HTMLElement>('.m-screen'),
+      go: (tab) => switchTab({ name: tab } as MRoute),
+    });
+  }, [showNav]);
   const showMini = (route.name === 'library' || route.name === 'remote') && linkStatus.value !== 'none';
   return (
     <>
