@@ -1,0 +1,138 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { render } from 'preact';
+import { act } from 'preact/test-utils';
+import { Tv, setTvDiscoverer } from '../src/screens/Tv';
+import { setTransport, tvState, type TvTransport } from '../src/tv/tvClient';
+import { tvs, saveTv, reloadTvs, activeTvIp } from '../src/tv/tvStore';
+import { currentRoute, resetTo, navigate } from '../src/nav';
+import { native } from '../src/platform/native';
+
+async function flush() {
+  await act(async () => {
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+class FakeTv implements TvTransport {
+  connects: string[] = [];
+  async tvConnect(ip: string) {
+    this.connects.push(ip);
+  }
+  async tvSend() {}
+  onTvMessage() {
+    return () => {};
+  }
+  onTvClosed() {
+    return () => {};
+  }
+  async pointerConnect() {}
+  async pointerSend() {}
+  async tvDisconnect() {}
+}
+
+let fake: FakeTv;
+
+function mount(): HTMLElement {
+  document.body.innerHTML = '<div id="app"></div>';
+  const el = document.getElementById('app')!;
+  act(() => render(<Tv />, el));
+  return el;
+}
+
+function btn(el: HTMLElement, text: string): HTMLButtonElement {
+  const b = Array.from(el.querySelectorAll('button')).find((x) => (x.textContent || '').trim() === text);
+  if (!b) throw new Error('no button ' + text);
+  return b as HTMLButtonElement;
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  reloadTvs();
+  fake = new FakeTv();
+  setTransport(fake);
+  setTvDiscoverer(async () => [
+    { ip: '192.168.1.42', name: 'LG OLED в гостиной', model: 'webOS 6' },
+    { ip: '192.168.1.57', name: 'LG в спальне', model: 'webOS 4' },
+  ]);
+  resetTo({ name: 'library' });
+  navigate({ name: 'tv' });
+});
+
+afterEach(() => {
+  setTvDiscoverer(null);
+  setTransport(native);
+});
+
+describe('Tv screen', () => {
+  it('renders a card per discovered TV', async () => {
+    const el = mount();
+    expect(el.textContent).toContain('Ищу телевизоры');
+    await flush();
+    expect(el.querySelectorAll('.m-tv')).toHaveLength(2);
+    expect(el.textContent).not.toContain('Ищу телевизоры');
+  });
+
+  it('puts saved TVs first with a mark and lets forget them', async () => {
+    saveTv({ ip: '192.168.1.57', name: 'LG в спальне', clientKey: 'k' });
+    const el = mount();
+    await flush();
+    const cards = el.querySelectorAll<HTMLElement>('.m-tv');
+    expect(cards).toHaveLength(2);
+    expect(cards[0].textContent).toContain('LG в спальне');
+    expect(cards[0].textContent).toContain('сохранён');
+    await act(async () => btn(cards[0], 'Забыть').click());
+    expect(tvs.value).toHaveLength(0);
+  });
+
+  it('shows the confirmation hint while pairing', async () => {
+    const el = mount();
+    await flush();
+    await act(async () => (el.querySelector('.m-tv-main') as HTMLButtonElement).click());
+    expect(fake.connects).toEqual(['192.168.1.42']);
+    expect(el.querySelector('.m-hint-warn')).toBeNull();
+    await act(async () => {
+      tvState.value = 'pairing';
+    });
+    expect(el.querySelectorAll('.m-hint-warn')).toHaveLength(1);
+    expect(el.querySelector('.m-hint-warn')?.textContent).toContain('«Разрешить»');
+  });
+
+  it('shows Подключён for the connected active TV', async () => {
+    saveTv({ ip: '192.168.1.42', name: 'LG OLED в гостиной', clientKey: 'k' });
+    const el = mount();
+    await flush();
+    await act(async () => {
+      tvState.value = 'connected';
+    });
+    expect(activeTvIp.value).toBe('192.168.1.42');
+    expect(el.querySelector('.m-tv.connected')?.textContent).toContain('Подключён');
+  });
+
+  it('connects by manually entered IP and rejects an invalid one', async () => {
+    const el = mount();
+    await flush();
+    await act(async () => btn(el, 'Ввести IP-адрес телевизора').click());
+    const input = el.querySelector<HTMLInputElement>('#tv-ip')!;
+    input.value = '300.1.1.1';
+    act(() => {
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => btn(el, 'Подключить').click());
+    expect(el.querySelector('.m-error')).not.toBeNull();
+    expect(fake.connects).toHaveLength(0);
+    input.value = '192.168.1.99';
+    act(() => {
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => btn(el, 'Подключить').click());
+    expect(fake.connects).toEqual(['192.168.1.99']);
+  });
+
+  it('goes back', async () => {
+    const el = mount();
+    await flush();
+    await act(async () => (el.querySelector('[aria-label="Назад"]') as HTMLButtonElement).click());
+    expect(currentRoute.value.name).toBe('library');
+  });
+});

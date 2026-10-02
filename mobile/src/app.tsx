@@ -2,6 +2,9 @@ import { useEffect } from 'preact/hooks';
 import { App as CapApp } from '@capacitor/app';
 import { currentRoute, goBack, type MRoute } from './nav';
 import { NavBar, type Tab } from './ui/NavBar';
+import { Toast } from './ui/toast';
+import { Connect } from './screens/Connect';
+import { Tv } from './screens/Tv';
 import './mobile.css';
 
 const TITLES: Record<MRoute['name'], string> = {
@@ -49,9 +52,16 @@ export function App() {
   const showNav = TABS.includes(route.name);
   return (
     <>
-      <div class="m-screen" data-route={route.name}>
-        <h1>{TITLES[route.name]}</h1>
-      </div>
+      {route.name === 'connect' ? (
+        <Connect />
+      ) : route.name === 'tv' ? (
+        <Tv />
+      ) : (
+        <div class="m-screen" data-route={route.name}>
+          <h1>{TITLES[route.name]}</h1>
+        </div>
+      )}
+      <Toast />
       {showNav && <NavBar active={route.name as Tab} />}
     </>
   );
