@@ -19,6 +19,9 @@ import { TORRSERVER_VERSION } from '../server/torrserverVersion';
 import { showToast } from '../ui/toast';
 import { activeServer, addServer, servers } from '../../../src/store/servers';
 import { activeTv } from '../tv/tvStore';
+import { tvState } from '../tv/tvClient';
+import { tvOmpVersions, tvNeedsUpdate, tvOpensUpdate, openUpdateOnTv, type TvOmp } from '../tv/tvUpdate';
+import { errorMessage } from '../../../src/api/http';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { checkForUpdate, type CheckResult } from '../../../src/store/updates';
 import { ANDROID_UPDATE_URL } from '../../../src/lib/updateInfo';
@@ -160,6 +163,58 @@ function LocalServerSection() {
   );
 }
 
+/** OMP version on the connected TV; an old one gets «Обновить на ТВ». */
+function TvOmpRow() {
+  const connected = tvState.value === 'connected';
+  const ip = activeTv.value ? activeTv.value.ip : '';
+  const [v, setV] = useState<TvOmp | null>(null);
+  const [hint, setHint] = useState(false);
+  useEffect(() => {
+    setV(null);
+    setHint(false);
+    if (!connected) return;
+    let alive = true;
+    tvOmpVersions().then((r) => alive && setV(r));
+    return () => {
+      alive = false;
+    };
+  }, [connected, ip]);
+  if (!connected || !v || !v.installed) return null;
+  const installed = v.installed;
+  const old = tvNeedsUpdate(v);
+  const update = () => {
+    const opens = tvOpensUpdate(installed);
+    // older TV builds only open OMP: the update is started there by hand
+    if (!opens) setHint(true);
+    openUpdateOnTv().then(
+      () => showToast(opens ? 'На телевизоре открыто обновление OMP' : 'OMP открыт на телевизоре'),
+      (e) => showToast(errorMessage(e)),
+    );
+  };
+  return (
+    <>
+      <div class="m-set-row" data-row="tv-omp">
+        <div class="m-set-text">
+          <span>OMP на телевизоре</span>
+          <span class={'m-small' + (old ? ' m-accent' : ' m-muted')}>
+            {old ? installed + ' — есть ' + v.latest : installed + (v.latest ? ' — последняя версия' : '')}
+          </span>
+        </div>
+        {old && (
+          <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={update}>
+            Обновить на ТВ
+          </button>
+        )}
+      </div>
+      {hint && (
+        <div class="m-hint-warn" role="status">
+          Эта версия OMP на ТВ не открывает обновление сама. На телевизоре: Настройки → Обновление → «Проверить обновление».
+        </div>
+      )}
+    </>
+  );
+}
+
 export function Settings() {
   const server = activeServer.value;
   const tv = activeTv.value;
@@ -204,6 +259,7 @@ export function Settings() {
             Выбрать
           </button>
         </div>
+        <TvOmpRow />
       </section>
       <section class="m-set-group">
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'faq' })}>

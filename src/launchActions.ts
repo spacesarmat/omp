@@ -5,6 +5,7 @@ import { navigate, openPlayer, resetTo } from './ui/nav';
 import { toast } from './ui/toast';
 import { buildTorrentQueue } from './player/queue';
 import { attachPhone } from './phone/link';
+import { checkForUpdate, dismissPrompt } from './store/updates';
 
 /** Applies webOS launch params: {server}, {magnet}, {torrent[, file, t]}, {play, title}. */
 export function runLaunchParams(raw: unknown): void {
@@ -18,6 +19,12 @@ export function runLaunchParams(raw: unknown): void {
   if (plan.server) {
     setActiveServer(addServer({ url: plan.server }).id);
     resetTo({ name: 'library' });
+  }
+  if (plan.open === 'update') {
+    navigate({ name: 'update' });
+    // the update screen shows the result itself, no dialog on top of it
+    checkForUpdate({ manual: true }).then(dismissPrompt, dismissPrompt);
+    return;
   }
   const a = plan.action;
   if (!a) return;

@@ -11,6 +11,9 @@ import { toast } from '../src/ui/toast';
 import { localServer, localAutostart, setLocalServerDeps, reloadLocalServerSettings } from '../src/server/localServer';
 import { TORRSERVER_VERSION } from '../src/server/torrserverVersion';
 import { activeServer } from '../../src/store/servers';
+import * as tvUpdate from '../src/tv/tvUpdate';
+import { tvState } from '../src/tv/tvClient';
+import { saveTv, reloadTvs } from '../src/tv/tvStore';
 
 function mount(): HTMLElement {
   document.body.innerHTML = '<div id="app"></div>';
@@ -32,7 +35,13 @@ beforeEach(() => {
   localServer.value = { supported: false, running: false };
 });
 
-afterEach(() => setLocalServerDeps(null));
+afterEach(() => {
+  setLocalServerDeps(null);
+  vi.restoreAllMocks();
+  tvState.value = 'idle';
+  localStorage.clear();
+  reloadTvs();
+});
 
 describe('Settings', () => {
   it('shows version, server and navigates', async () => {
@@ -290,5 +299,58 @@ describe('Settings: TorrServer on the phone', () => {
     await flush();
     expect(calls).toContain('clear');
     expect(el.textContent).toContain('Занято 0 МБ из 1 ГБ');
+  });
+});
+
+describe('Settings: OMP on the TV', () => {
+  async function flush() {
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+  }
+  const connect = () => {
+    saveTv({ ip: '10.0.0.2', name: 'LG' });
+    tvState.value = 'connected';
+  };
+
+  it('an old OMP on the TV gets «Обновить на ТВ», which opens the update there', async () => {
+    connect();
+    vi.spyOn(tvUpdate, 'tvOmpVersions').mockResolvedValue({ installed: '0.11.4', latest: '0.12.0' });
+    const open = vi.spyOn(tvUpdate, 'openUpdateOnTv').mockResolvedValue(undefined);
+    const el = mount();
+    await flush();
+    const row = el.querySelector('[data-row="tv-omp"]')!;
+    expect(row.textContent).toContain('OMP на телевизоре');
+    expect(row.textContent).toContain('0.11.4 — есть 0.12.0');
+    act(() => btn(el, 'Обновить на ТВ').click());
+    await flush();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(toast.value).toBe('На телевизоре открыто обновление OMP');
+    expect(el.querySelector('.m-hint-warn')).toBeNull();
+  });
+
+  it('a TV build that cannot open the update screen gets the manual hint', async () => {
+    connect();
+    vi.spyOn(tvUpdate, 'tvOmpVersions').mockResolvedValue({ installed: '0.10.0', latest: '0.11.4' });
+    vi.spyOn(tvUpdate, 'openUpdateOnTv').mockResolvedValue(undefined);
+    const el = mount();
+    await flush();
+    act(() => btn(el, 'Обновить на ТВ').click());
+    await flush();
+    expect(el.querySelector('.m-hint-warn')!.textContent).toContain('Настройки → Обновление');
+    expect(toast.value).toBe('OMP открыт на телевизоре');
+  });
+
+  it('the latest OMP shows no button; nothing without a connected TV', async () => {
+    connect();
+    vi.spyOn(tvUpdate, 'tvOmpVersions').mockResolvedValue({ installed: '0.11.4', latest: '0.11.4' });
+    let el = mount();
+    await flush();
+    expect(el.querySelector('[data-row="tv-omp"]')!.textContent).toContain('0.11.4 — последняя версия');
+    expect(btn(el, 'Обновить на ТВ')).toBeUndefined();
+    tvState.value = 'idle';
+    el = mount();
+    await flush();
+    expect(el.querySelector('[data-row="tv-omp"]')).toBeNull();
   });
 });

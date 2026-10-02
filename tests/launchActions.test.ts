@@ -16,6 +16,17 @@ beforeEach(() => {
 });
 
 describe('runLaunchParams', () => {
+  it('open=update opens the update screen and checks the feed', () => {
+    const seen: string[] = [];
+    mockFetch((u) => {
+      seen.push(String(u));
+      return { body: '{}' };
+    });
+    routeStack.value = [{ name: 'library' }];
+    runLaunchParams({ open: 'update' });
+    expect(top()).toEqual({ name: 'update' });
+    expect(seen.some((u) => u.indexOf('update') >= 0)).toBe(true);
+  });
   it('does nothing for empty params', () => {
     runLaunchParams(null);
     runLaunchParams('{}');
