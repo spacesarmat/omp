@@ -22,7 +22,12 @@ import { native } from '../platform/native';
 import { localServer, startLocal, refreshLocalServer, LOCAL_URL } from '../server/localServer';
 
 const POLL_MS = 15000;
-const PULL_PX = 70;
+// pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
+const PULL_DAMP = 0.5;
+const PULL_MAX = 110;
+const PULL_TRIGGER = 64;
+const PULL_HOLD = 56;
+const pullOf = (dy: number) => (dy > 0 ? Math.min(PULL_MAX, dy * PULL_DAMP) : 0);
 const titleOf = (t: Torrent) => t.title || t.name || t.hash;
 
 function episodesText(t: Torrent): string {
@@ -52,6 +57,8 @@ export function Library() {
   const [starting, setStarting] = useState(false);
   const [phoneName, setPhoneName] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [pull, setPull] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const loadRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const launch = useTvLaunch();
@@ -100,16 +107,33 @@ export function Library() {
     let pulling = false;
     let busy = false;
     const atTop = () => (window.scrollY || document.documentElement.scrollTop || 0) <= 0;
+    let frame = 0;
+    let next = 0;
+    const show = (v: number) => {
+      next = v;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        setPull(next);
+      });
+    };
     const move = (e: TouchEvent) => {
       const t = e.touches[0];
       if (!t) return;
       const dy = t.clientY - startY;
       const dx = t.clientX - startX;
-      if (dy > 0 && dy > Math.abs(dx) && atTop() && e.cancelable) e.preventDefault();
+      if (dy > 0 && dy > Math.abs(dx) && atTop()) {
+        if (e.cancelable) e.preventDefault();
+        setDragging(true);
+        show(pullOf(dy));
+      } else show(0);
     };
     const stop = () => {
       pulling = false;
       document.removeEventListener('touchmove', move);
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      setDragging(false);
     };
     const start = (e: TouchEvent) => {
       stop();
@@ -127,29 +151,30 @@ export function Library() {
       const dy = t ? t.clientY - startY : 0;
       const dx = t ? t.clientX - startX : 0;
       stop();
-      if (dy > PULL_PX && dy > Math.abs(dx) * 1.5 && atTop() && !busy) {
+      if (pullOf(dy) >= PULL_TRIGGER && dy > Math.abs(dx) * 1.5 && atTop() && !busy) {
         busy = true;
+        setPull(PULL_HOLD);
         setRefreshing(true);
-        loadRef.current().then(
-          () => {
-            busy = false;
-            setRefreshing(false);
-          },
-          () => {
-            busy = false;
-            setRefreshing(false);
-          },
-        );
-      }
+        const done = () => {
+          busy = false;
+          setRefreshing(false);
+          setPull(0);
+        };
+        loadRef.current().then(done, done);
+      } else setPull(0);
     };
     root.addEventListener('touchstart', start, { passive: true });
     root.addEventListener('touchend', end, { passive: true });
-    root.addEventListener('touchcancel', stop, { passive: true });
+    const cancel = () => {
+      stop();
+      if (!busy) setPull(0);
+    };
+    root.addEventListener('touchcancel', cancel, { passive: true });
     return () => {
       stop();
       root.removeEventListener('touchstart', start);
       root.removeEventListener('touchend', end);
-      root.removeEventListener('touchcancel', stop);
+      root.removeEventListener('touchcancel', cancel);
     };
   }, []);
 
@@ -203,8 +228,41 @@ export function Library() {
       onError: setTvError,
     });
 
+  const pullStyle = pull > 0 || dragging
+    ? { transform: 'translateY(' + pull + 'px)', transition: dragging ? 'none' : 'transform .25s ease' }
+    : { transition: 'transform .25s ease' };
+  const armed = pull >= PULL_TRIGGER || refreshing;
   return (
-    <div class="m-screen m-library" data-route="library" ref={rootRef}>
+    <>
+    {(pull > 0 || refreshing) && (
+      <div
+        class={'m-ptr' + (armed ? ' armed' : '')}
+        role="status"
+        style={{
+          transform: 'translate(-50%, ' + (pull - 52) + 'px)',
+          opacity: Math.min(1, pull / PULL_TRIGGER),
+          transition: dragging ? 'none' : 'transform .25s ease, opacity .25s ease',
+        }}
+      >
+        <svg
+          class={refreshing ? 'm-spin' : ''}
+          style={refreshing ? undefined : { transform: 'rotate(' + Math.round((pull / PULL_TRIGGER) * 300) + 'deg)' }}
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4" />
+        </svg>
+        {refreshing && <span class="m-sr">Обновляю…</span>}
+      </div>
+    )}
+    <div class="m-screen m-library" data-route="library" ref={rootRef} style={pullStyle}>
       <div class="m-lib-head">
         <div class="m-lib-brand">
           <Logo size={28} />
@@ -241,14 +299,6 @@ export function Library() {
           <Icon d={SEARCH} size={20} />
         </button>
       </div>
-      {refreshing && (
-        <div class="m-ptr" role="status">
-          <svg class="m-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F5B700" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-            <path d="M12 3a9 9 0 1 0 9 9" />
-          </svg>
-          Обновляю…
-        </div>
-      )}
       {searchOpen && (
         <input
           class="m-input m-lib-search"
@@ -377,5 +427,6 @@ export function Library() {
       )}
       {launch.sheet}
     </div>
+    </>
   );
 }
