@@ -1,4 +1,5 @@
 import { useEffect } from 'preact/hooks';
+import { effect } from '@preact/signals';
 import { App as CapApp } from '@capacitor/app';
 import { currentRoute, goBack, switchTab, setPendingLink, type MRoute } from './nav';
 import { activeServer } from '../../src/store/servers';
@@ -15,6 +16,8 @@ import { Settings, runUpdateCheck } from './screens/Settings';
 import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
 import { updatePrompt } from '../../src/store/updates';
 import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
+import { tvState } from './tv/tvClient';
+import { startPlayerLink, attachIfOmpForeground } from './tv/playerLink';
 import './mobile.css';
 
 const TABS: string[] = ['library', 'add', 'remote', 'settings'];
@@ -56,6 +59,33 @@ export function App() {
     return () => {
       cancelled = true;
       if (remove) remove();
+    };
+  }, []);
+
+  // player link: listen to the TV; (re)attach when the TV connects and when the app returns to the foreground
+  useEffect(() => {
+    startPlayerLink();
+    const stop = effect(() => {
+      if (tvState.value === 'connected') void attachIfOmpForeground();
+    });
+    let remove: (() => void) | undefined;
+    let cancelled = false;
+    try {
+      CapApp.addListener('appStateChange', (st) => {
+        if (st.isActive) void attachIfOmpForeground();
+      })
+        .then((h) => {
+          if (cancelled) void h.remove();
+          else remove = () => void h.remove();
+        })
+        .catch(() => {});
+    } catch {
+      /* browser without Capacitor */
+    }
+    return () => {
+      cancelled = true;
+      stop();
+      remove?.();
     };
   }, []);
 
