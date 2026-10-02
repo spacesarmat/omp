@@ -371,8 +371,10 @@ async function drainOutbox(): Promise<void> {
   }
 }
 
-function sendFrame(frame: string): Promise<void> {
+function sendFrame(frame: string, droppable = false): Promise<void> {
   if (outbox.length === 0 && !draining && !isBusy()) return sendFrameNow(frame);
+  // Pointer moves made while connecting would replay as a cursor jump later: drop them.
+  if (droppable && isBusy()) return Promise.resolve();
   // Presses made while connecting wait here and go out in order once the TV is ready.
   return new Promise<void>((resolve, reject) => {
     // Overflowing and expired presses are dropped silently (no toast per press).
@@ -452,6 +454,9 @@ export function warmUp(): Promise<void> {
   const watch = effect(() => {
     if (tvState.value === 'pairing') pairing = true;
     if (activeTv.value?.ip !== tv.ip) stop();
+    // another session (a user connect to a different TV) took over: do not fight it
+    const ip = sessionIp.value;
+    if (ip && ip !== tv.ip) stop();
   });
   const started = Date.now();
   let p!: Promise<void>;
@@ -474,7 +479,7 @@ export function warmUp(): Promise<void> {
           };
         });
         wake = null;
-        if (stopped) return;
+        if (stopped || pairing) return;
       }
     } finally {
       watch();
@@ -530,7 +535,7 @@ export function pressButton(name: RemoteButton): Promise<void> {
 }
 
 export function moveCursor(dx: number, dy: number): Promise<void> {
-  return sendFrame(moveFrame(dx, dy));
+  return sendFrame(moveFrame(dx, dy), true);
 }
 
 export function click(): Promise<void> {

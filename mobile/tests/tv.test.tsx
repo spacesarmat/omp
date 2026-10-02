@@ -16,8 +16,10 @@ async function flush() {
 
 class FakeTv implements TvTransport {
   connects: string[] = [];
-  async tvConnect(ip: string) {
+  ports: (number | undefined)[] = [];
+  async tvConnect(ip: string, _register?: object, preferPort?: 3000 | 3001) {
     this.connects.push(ip);
+    this.ports.push(preferPort);
     return { port: 3000 as const };
   }
   async tvSend() {}
@@ -138,6 +140,15 @@ describe('Tv screen', () => {
     });
     expect(el.querySelectorAll('.m-hint-warn')).toHaveLength(1);
     expect(el.querySelector('.m-hint-warn')?.textContent).toContain('«Разрешить»');
+  });
+
+  it('connects to a saved TV with its saved port', async () => {
+    saveTv({ ip: '192.168.1.42', name: 'LG OLED в гостиной', clientKey: 'k', port: 3001 });
+    const el = mount();
+    await flush();
+    await act(async () => (el.querySelector('.m-tv-main') as HTMLButtonElement).click());
+    await flush();
+    expect(fake.ports).toEqual([3001]);
   });
 
   it('shows Подключён for the connected active TV', async () => {

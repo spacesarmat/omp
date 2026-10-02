@@ -689,6 +689,38 @@ describe('tvClient early connect', () => {
     expect(fake.frames).toEqual(['UP', 'DOWN', 'ENTER'].map((n) => buttonFrameOf(n)));
   });
 
+  it('a warm-up on TV A does not kill a user connect to TV B', async () => {
+    saveTv({ ip: '192.168.1.9', name: 'B' });
+    failNextConnects();
+    const p = warmUp();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fake.connects.map((c) => c.ip)).toEqual(['192.168.1.5']);
+    // user taps TV B: ends A's session, B waits for pairing
+    fake.tvConnect = async (ip, register, preferPort) => {
+      fake.connects.push({ ip, register, preferPort });
+      return { port: 3000 as const };
+    };
+    void connectTv({ ip: '192.168.1.9', name: 'B' }).catch(() => {});
+    await vi.advanceTimersByTimeAsync(0);
+    fake.emit({ type: 'response', id: fake.lastRegister.id, payload: { pairingType: 'PROMPT', returnValue: true } });
+    await vi.advanceTimersByTimeAsync(3000);
+    await p;
+    expect(fake.connects.map((c) => c.ip)).toEqual(['192.168.1.5', '192.168.1.9']);
+    expect(sessionIp.value).toBe('192.168.1.9');
+    expect(tvState.value).toBe('pairing');
+  });
+
+  it('drops pointer moves made while connecting but queues buttons and clicks', async () => {
+    autoReply(fake);
+    void warmUp();
+    await vi.advanceTimersByTimeAsync(0);
+    const sent = [pressButton('UP'), moveCursor(5, 5), click()];
+    await vi.advanceTimersByTimeAsync(0);
+    fake.emit(REG(fake));
+    await Promise.all(sent);
+    expect(fake.frames).toEqual([buttonFrameOf('UP'), 'type:click\n\n']);
+  });
+
   /** Pairing prompt shown, so the registration waits long enough for the TTL tests. */
   const startPairing = async () => {
     void warmUp();

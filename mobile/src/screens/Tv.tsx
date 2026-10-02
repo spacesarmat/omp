@@ -2,9 +2,9 @@ import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { goBack } from '../nav';
 import { native, type FoundTv } from '../platform/native';
-import { connectTv, disconnectTv, sessionIp, tvState, tvError } from '../tv/tvClient';
+import { connectTv, cancelWarmUp, disconnectTv, sessionIp, tvState, tvError } from '../tv/tvClient';
 import { RenameSheet } from '../ui/RenameSheet';
-import { tvs, forgetTv, renameTv, type SavedTv } from '../tv/tvStore';
+import { tvs, activeTv, forgetTv, renameTv, type SavedTv } from '../tv/tvStore';
 
 type Discoverer = (timeoutMs: number) => Promise<FoundTv[]>;
 let discoverer: Discoverer | null = null;
@@ -66,7 +66,8 @@ export function Tv() {
     setTarget(r.ip);
     setFormError('');
     const saved = savedList.find((t) => t.ip === r.ip);
-    connectTv({ ip: r.ip, name: saved?.name ?? r.name, clientKey: saved?.clientKey }).catch(() => {});
+    if (activeTv.value?.ip !== r.ip) cancelWarmUp();
+    connectTv({ ...saved, ip: r.ip, name: saved?.name ?? r.name, clientKey: saved?.clientKey, port: saved?.port }).catch(() => {});
   }
 
   function connectManual(e: Event) {
