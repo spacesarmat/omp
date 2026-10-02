@@ -33,8 +33,8 @@ export const FAQ: FaqSection[] = [
         q: 'Как установить OMP на LG вручную?',
         a: [
           '1. На ТВ установите приложение Developer Mode из LG Content Store, войдите под аккаунтом разработчика LG и включите Dev Mode Status и Key Server.',
-          '2. Скачайте .ipk со страницы релиза на GitHub.',
-          '3. Установите его с компьютера в той же сети: npx ares-install --device tv файл.ipk.',
+          '2. Скачайте OMP-<версия>-webOS.ipk со страницы релиза на GitHub.',
+          '3. Установите его с компьютера в той же сети: npx ares-install --device tv OMP-<версия>-webOS.ipk.',
           'Режим разработчика нужно периодически продлевать в приложении Developer Mode, иначе OMP пропадёт с ТВ.',
           { text: 'Скачать релиз на GitHub', url: RELEASES_URL },
         ],

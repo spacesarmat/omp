@@ -14,10 +14,10 @@ describe('hb-lib', () => {
   it('builds manifest, repository and update feed', () => {
     const sha = 'e'.repeat(64);
     const r = buildHomebrew({
-      tag: 'v0.6.0', version: '0.6.0', ipkName: 'com.spacesarmat.torrplayer_0.6.0_all.ipk', sha256: sha, size: 123,
+      tag: 'v0.6.0', version: '0.6.0', ipkName: 'OMP-0.6.0-webOS.ipk', sha256: sha, size: 123,
       title: 'OMP', description: 'Open Movie Player', notes: ['Окно обновления'],
     }) as any;
-    const ipkUrl = 'https://github.com/spacesarmat/omp/releases/download/v0.6.0/com.spacesarmat.torrplayer_0.6.0_all.ipk';
+    const ipkUrl = 'https://github.com/spacesarmat/omp/releases/download/v0.6.0/OMP-0.6.0-webOS.ipk';
     expect(r.manifest).toEqual({
       id: APP_ID, version: '0.6.0', type: 'web', title: 'OMP', appDescription: 'Open Movie Player',
       iconUri: 'https://raw.githubusercontent.com/spacesarmat/omp/main/webos/largeIcon.png',
@@ -36,9 +36,9 @@ describe('hb-lib', () => {
   });
   it('builds the Android update feed', () => {
     const sha = 'a'.repeat(64);
-    const u = buildAndroidUpdate({ tag: 'v0.7.0', version: '0.7.0', apkName: 'omp-0.7.0.apk', sha256: sha, size: 456, notes: ['Android'] }) as any;
+    const u = buildAndroidUpdate({ tag: 'v0.7.0', version: '0.7.0', apkName: 'OMP-0.7.0.apk', sha256: sha, size: 456, notes: ['Android'] }) as any;
     expect(u).toEqual({
-      version: '0.7.0', ipkUrl: 'https://github.com/spacesarmat/omp/releases/download/v0.7.0/omp-0.7.0.apk',
+      version: '0.7.0', ipkUrl: 'https://github.com/spacesarmat/omp/releases/download/v0.7.0/OMP-0.7.0.apk',
       ipkHash: sha, ipkSize: 456, notes: ['Android'], releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/v0.7.0',
     });
     expect(sanitizeUpdateInfo(u)).toEqual(u);

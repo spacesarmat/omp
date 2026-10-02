@@ -11,7 +11,7 @@
 | ![История](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/history.png) | ![Поиск](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/search.png) |
 | ![Плеер Android TV](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/androidtv-player.png) | |
 
-**Android:** скачайте `omp-*.apk` ниже, откройте на телефоне и разрешите установку из браузера. Подробнее — в [README](https://github.com/spacesarmat/omp#omp-для-android).
+**Android:** скачайте `OMP-*.apk` ниже, откройте на телефоне и разрешите установку из браузера. Подробнее — в [README](https://github.com/spacesarmat/omp#omp-для-android).
 
 | | |
 |---|---|
@@ -20,4 +20,4 @@
 | ![Сейчас играет](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/android-nowplaying.png) | ![Сервер на телефоне](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/android-server.png) |
 | ![Выбор телевизора](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/android-tvlist.png) | |
 
-**Установка на ТВ:** скачайте `.ipk` ниже и установите по инструкции из [README](https://github.com/spacesarmat/omp#readme).
+**Установка на ТВ:** скачайте `OMP-*-webOS.ipk` ниже и установите по инструкции из [README](https://github.com/spacesarmat/omp#readme).
