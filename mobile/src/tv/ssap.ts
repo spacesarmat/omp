@@ -18,7 +18,11 @@ export type RemoteButton =
 
 export const OMP_TV_APP_ID = 'com.spacesarmat.torrplayer';
 
-/** Permissions OMP asks for: launch apps, volume, power, text input, pointer/buttons, app list. */
+/**
+ * Permissions OMP asks for: launch apps, volume, power, text input, pointer/buttons, app list,
+ * plus a few for planned features (power state, media keys, running app, toasts) so that
+ * adding them later does not force the user to pair again.
+ */
 const PERMISSIONS = [
   'LAUNCH',
   'CONTROL_AUDIO',
@@ -26,12 +30,16 @@ const PERMISSIONS = [
   'CONTROL_INPUT_TEXT',
   'CONTROL_MOUSE_AND_KEYBOARD',
   'READ_INSTALLED_APPS',
+  'READ_POWER_STATE',
+  'CONTROL_INPUT_MEDIA_PLAYBACK',
+  'READ_RUNNING_APPS',
+  'WRITE_NOTIFICATION_TOAST',
 ];
 
 // The `signed` block and its signature are copied verbatim from pairing.json of lgtv2
 // (https://github.com/hobbyquaker/lgtv2, MIT License, (c) Sebastian Raff and contributors),
-// the manifest also used by aiowebostv (Apache-2.0) and other open-source webOS clients.
-// The signature covers `signed` only, so that block must not be edited; the top-level
+// fetched from GitHub. aiowebostv (Apache-2.0) was checked as well: it sends no `signed` block,
+// only a permissions list. The signature covers `signed` only, so that block must not be edited; the top-level
 // `permissions` list is OMP's own minimal set.
 const SIGNED = {
   created: '20140509',
@@ -71,8 +79,14 @@ const SIGNATURE =
 
 function manifest(signed: boolean): object {
   if (!signed) {
-    // Fallback used by lgtv2 when the TV answers "403 blacklisted certificate detected".
-    return { manifestVersion: 1, appVersion: '1.0', permissions: PERMISSIONS.slice() };
+    // lgtv2 `unsignedPairing()`: when the TV answers "403 blacklisted certificate detected",
+    // it drops only `signed` (keeping `signatures`) and sends appVersion 1.0.
+    return {
+      manifestVersion: 1,
+      appVersion: '1.0',
+      permissions: PERMISSIONS.slice(),
+      signatures: [{ signatureVersion: 1, signature: SIGNATURE }],
+    };
   }
   return {
     manifestVersion: 1,

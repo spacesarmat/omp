@@ -27,9 +27,14 @@ describe('ssap messages', () => {
       'CONTROL_INPUT_TEXT',
       'CONTROL_MOUSE_AND_KEYBOARD',
       'READ_INSTALLED_APPS',
+      'READ_POWER_STATE',
+      'CONTROL_INPUT_MEDIA_PLAYBACK',
+      'READ_RUNNING_APPS',
+      'WRITE_NOTIFICATION_TOAST',
     ]) {
       expect(manifest.permissions).toContain(p);
     }
+    expect(manifest.permissions).toHaveLength(10);
   });
 
   it('adds the client key when known', () => {
@@ -40,7 +45,8 @@ describe('ssap messages', () => {
   it('builds an unsigned register message for TVs that reject the signed manifest', () => {
     const m = registerMessage('r3', 'KEY', false) as any;
     expect(m.payload.manifest.signed).toBeUndefined();
-    expect(m.payload.manifest.signatures).toBeUndefined();
+    expect(m.payload.manifest.appVersion).toBe('1.0');
+    expect(m.payload.manifest.signatures[0].signature).toMatch(/^eyJ/);
     expect(m.payload.manifest.permissions).toContain('CONTROL_INPUT_TEXT');
     expect(m.payload['client-key']).toBe('KEY');
   });

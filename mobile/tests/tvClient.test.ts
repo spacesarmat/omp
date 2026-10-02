@@ -197,6 +197,85 @@ describe('tvClient connection', () => {
     expect(tvState.value).toBe('idle');
     expect(fake.listeners).toBe(0);
   });
+
+  it('gives the socket up to 12 s to open, then 8 s to answer', async () => {
+    vi.useFakeTimers();
+    let open!: () => void;
+    fake.tvConnect = (ip, register) => {
+      fake.connects.push({ ip, register });
+      return new Promise<void>((r) => (open = r));
+    };
+    const p = connectTv(TV);
+    const assertion = expect(p).rejects.toThrow('Телевизор не отвечает');
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(tvState.value).toBe('connecting');
+    open();
+    await vi.advanceTimersByTimeAsync(7999);
+    expect(tvState.value).toBe('connecting');
+    await vi.advanceTimersByTimeAsync(1);
+    await assertion;
+    expect(tvState.value).toBe('error');
+  });
+
+  it('fails when the socket does not open in 12 s', async () => {
+    vi.useFakeTimers();
+    fake.tvConnect = () => new Promise<void>(() => {});
+    const p = connectTv(TV);
+    const assertion = expect(p).rejects.toThrow('Телевизор не отвечает');
+    await vi.advanceTimersByTimeAsync(11999);
+    expect(tvState.value).toBe('connecting');
+    await vi.advanceTimersByTimeAsync(1);
+    await assertion;
+  });
+
+  it('shares one connection between actions started while connecting', async () => {
+    saveTv(TV);
+    autoReply(fake);
+    const a = volume('up');
+    const b = typeText('x');
+    await flush();
+    expect(fake.connects).toHaveLength(1);
+    fake.emit({ type: 'registered', id: fake.lastRegister.id, payload: { 'client-key': 'K' } });
+    await expect(Promise.all([a, b])).resolves.toEqual([undefined, undefined]);
+    expect(fake.sent.map((m) => m.uri)).toEqual(['ssap://audio/volumeUp', 'ssap://com.webos.service.ime/insertText']);
+  });
+
+  it('cancels pairing on disconnect', async () => {
+    const p = connectTv(TV);
+    await flush();
+    fake.emit({ type: 'response', id: fake.lastRegister.id, payload: { pairingType: 'PROMPT' } });
+    expect(tvState.value).toBe('pairing');
+    await disconnectTv();
+    await expect(p).rejects.toThrow('Телевизор не подключён');
+    expect(tvState.value).toBe('idle');
+    expect(fake.listeners).toBe(0);
+    expect(fake.disconnects).toBe(1);
+  });
+
+  it('switches to another TV while the first one connects', async () => {
+    const order: string[] = [];
+    const origConnect = fake.tvConnect.bind(fake);
+    fake.tvConnect = (ip, r) => (order.push(`connect ${ip}`), origConnect(ip, r));
+    fake.tvDisconnect = async () => {
+      order.push('disconnect');
+      fake.disconnects++;
+    };
+    const first = connectTv(TV);
+    await flush();
+    const firstId = fake.lastRegister.id;
+    const second = connectTv({ ip: '192.168.1.6', name: 'LG 2' });
+    await expect(first).rejects.toThrow('Телевизор не подключён');
+    await flush();
+    expect(order).toEqual(['connect 192.168.1.5', 'disconnect', 'connect 192.168.1.6']);
+    expect(fake.listeners).toBe(2);
+
+    fake.emit({ type: 'registered', id: firstId, payload: { 'client-key': 'OLD' } });
+    expect(tvState.value).toBe('connecting');
+    fake.emit({ type: 'registered', id: fake.lastRegister.id, payload: { 'client-key': 'K2' } });
+    await second;
+    expect(tvState.value).toBe('connected');
+    expect(tvs.value).toEqual([{ ip: '192.168.1.6', name: 'LG 2', clientKey: 'K2' }]);
+  });
 });
 
 describe('tvClient commands', () => {
@@ -317,6 +396,45 @@ describe('tvClient commands', () => {
       ['ssap://audio/volumeDown', {}],
       ['ssap://system/turnOff', {}],
     ]);
+  });
+
+  it('reports a pointer permission error from the TV', async () => {
+    await connected(fake);
+    fake.onRequest = (msg) =>
+      queueMicrotask(() => fake.emit({ type: 'error', id: msg.id, error: '401 insufficient permissions', payload: {} }));
+    await expect(pressButton('UP')).rejects.toThrow('Телевизор не разрешил управление пультом');
+    expect(tvState.value).toBe('connected');
+    expect(fake.pointerUrls).toEqual([]);
+  });
+
+  it('does not drop a fresh pointer opened by a concurrent call', async () => {
+    await connected(fake);
+    autoReply(fake);
+    await pressButton('UP');
+    // Both frames fail on the old pointer; only one reopen should happen.
+    fake.failPointerSend = 2;
+    await Promise.all([pressButton('DOWN'), pressButton('LEFT')]);
+    expect(fake.pointerUrls).toHaveLength(2);
+    expect(fake.frames.slice(1).sort()).toEqual(['type:button\nname:DOWN\n\n', 'type:button\nname:LEFT\n\n']);
+  });
+
+  it('treats a close after turnOff as success', async () => {
+    await connected(fake);
+    fake.onRequest = () => queueMicrotask(() => fake.close());
+    await expect(turnOffTv()).resolves.toBeUndefined();
+    expect(tvState.value).toBe('idle');
+    expect(fake.listeners).toBe(0);
+  });
+
+  it('treats a timeout after turnOff as success', async () => {
+    await connected(fake);
+    vi.useFakeTimers();
+    const p = turnOffTv();
+    const assertion = expect(p).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(8000);
+    await assertion;
+    expect(tvState.value).toBe('idle');
+    expect(fake.disconnects).toBe(1);
   });
 
   it('rejects pending requests when the TV disconnects', async () => {

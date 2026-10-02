@@ -23,12 +23,16 @@ export const TV_NOT_CONNECTED = 'Телевизор не подключён';
 export const TV_NO_OMP = 'На телевизоре нет OMP';
 export const TV_NO_ANSWER = 'Телевизор не отвечает';
 export const TV_DECLINED = 'Подключение отклонено на телевизоре';
+export const TV_POINTER_DENIED = 'Телевизор не разрешил управление пультом';
 const TV_LAUNCH_FAILED = 'Не удалось запустить OMP на телевизоре';
 
 const REQUEST_TIMEOUT = 8000;
+/** The native side tries ws:3000, then wss:3001, 5 s each. */
+const SOCKET_OPEN_TIMEOUT = 12000;
 /** The user needs time to find the remote and press «Разрешить». */
 const PAIRING_TIMEOUT = 60000;
 const POINTER_URI = 'ssap://com.webos.service.networkinput/getPointerInputSocket';
+const PERMISSION_ERROR = /401|insufficient permissions|not permitted|denied/i;
 
 export const tvState = signal<TvState>('idle');
 export const tvError = signal('');
@@ -44,6 +48,8 @@ interface Pending {
   resolve: (payload: any) => void;
   reject: (e: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+  /** The TV is expected to drop the socket (turnOff): a close or timeout counts as success. */
+  closeOk: boolean;
 }
 
 interface Session {
@@ -60,18 +66,26 @@ let seq = 0;
 let session: Session | null = null;
 let connecting: Promise<void> | null = null;
 let pointer: Promise<void> | null = null;
+/** Last tvDisconnect; a new tvConnect waits for it so the old close cannot hit the new socket. */
+let closing: Promise<void> = Promise.resolve();
 const pending = new Map<string, Pending>();
 
 const nextId = (prefix: string) => `${prefix}_${++seq}`;
 const noop = () => {};
 
+function closeTransport(): Promise<void> {
+  closing = transport.tvDisconnect().catch(noop);
+  return closing;
+}
+
 /** Replaces the transport (tests); drops the current session. */
 export function setTransport(t: TvTransport): void {
   if (session) {
     endSession(session, TV_NOT_CONNECTED);
-    void transport.tvDisconnect().catch(noop);
+    void closeTransport();
   }
   transport = t;
+  closing = Promise.resolve();
   tvState.value = 'idle';
   tvError.value = '';
 }
@@ -92,14 +106,15 @@ function endSession(s: Session, reason: string): void {
   for (const [id, p] of pending) {
     clearTimeout(p.timer);
     pending.delete(id);
-    p.reject(new Error(TV_NOT_CONNECTED));
+    if (p.closeOk) p.resolve({});
+    else p.reject(new Error(TV_NOT_CONNECTED));
   }
 }
 
 function fail(s: Session, message: string): void {
   if (session !== s) return;
   endSession(s, message);
-  void transport.tvDisconnect().catch(noop);
+  void closeTransport();
   tvState.value = 'error';
   tvError.value = message;
 }
@@ -130,7 +145,7 @@ function onRegisterMessage(s: Session, m: any): void {
   } else if (m.type === 'error') {
     const text = String(m.error ?? m.payload?.errorText ?? '');
     if (s.signed && /blacklisted certificate/i.test(text)) {
-      // Newer firmware rejects the shared signed manifest; lgtv2 retries unsigned.
+      // Newer firmware rejects the shared signed manifest; lgtv2 retries without `signed`.
       s.signed = false;
       s.registerId = nextId('register');
       armRegistration(s, REQUEST_TIMEOUT);
@@ -177,7 +192,7 @@ export function connectTv(tv: SavedTv): Promise<void> {
   }
   if (session) {
     endSession(session, TV_NOT_CONNECTED);
-    void transport.tvDisconnect().catch(noop);
+    void closeTransport();
   }
   const s: Session = { tv, off: [], registerId: nextId('register'), signed: true, reg: null };
   const promise = new Promise<void>((resolve, reject) => {
@@ -190,8 +205,17 @@ export function connectTv(tv: SavedTv): Promise<void> {
   // Listeners must be in place before the socket opens: the TV answers `register` right away.
   s.off.push(transport.onTvMessage((m) => onMessage(s, m)));
   s.off.push(transport.onTvClosed(() => onClosed(s)));
-  armRegistration(s, REQUEST_TIMEOUT);
-  transport.tvConnect(tv.ip, registerMessage(s.registerId, tv.clientKey)).catch(() => fail(s, TV_NO_ANSWER));
+  armRegistration(s, SOCKET_OPEN_TIMEOUT);
+  const register = registerMessage(s.registerId, tv.clientKey);
+  closing
+    .then(() => (session === s ? transport.tvConnect(tv.ip, register) : undefined))
+    .then(
+      () => {
+        // Socket open and `register` sent: now the TV has 8 s to answer (unless it already asked the user).
+        if (session === s && tvState.value === 'connecting') armRegistration(s, REQUEST_TIMEOUT);
+      },
+      () => fail(s, TV_NO_ANSWER),
+    );
   return promise;
 }
 
@@ -203,18 +227,22 @@ async function ensureConnected(): Promise<void> {
   return connectTv(tv);
 }
 
-function send(uri: string, payload?: object): Promise<any> {
+function send(uri: string, payload?: object, closeOk = false): Promise<any> {
   if (!session || tvState.value !== 'connected') return Promise.reject(new Error(TV_NOT_CONNECTED));
   const s = session;
   const id = nextId('req');
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       if (!pending.delete(id)) return;
+      if (closeOk) {
+        resolve({});
+        return;
+      }
       reject(new Error(TV_NO_ANSWER));
       // A dead socket may stay "open" for minutes without tvClosed; drop it so the next action reconnects.
       fail(s, TV_NO_ANSWER);
     }, REQUEST_TIMEOUT);
-    pending.set(id, { resolve, reject, timer });
+    pending.set(id, { resolve, reject, timer, closeOk });
     transport.tvSend(requestMessage(id, uri, payload)).catch(() => {
       if (!pending.delete(id)) return;
       clearTimeout(timer);
@@ -244,18 +272,21 @@ function ensurePointer(): Promise<void> {
 
 async function sendFrame(frame: string): Promise<void> {
   await ensureConnected();
-  // One retry: the pointer socket may have been closed by the TV (e.g. after an app switch).
+  // One retry: the native pointer socket can close silently (no event reaches JS).
   for (let attempt = 0; ; attempt++) {
+    const used = ensurePointer();
     try {
-      await ensurePointer();
+      await used;
     } catch (e) {
-      throw e instanceof TvAnswerError ? new Error(TV_NO_ANSWER) : e;
+      if (e instanceof TvAnswerError) throw new Error(PERMISSION_ERROR.test(e.raw) ? TV_POINTER_DENIED : e.message);
+      throw e;
     }
     try {
       await transport.pointerSend(frame);
       return;
     } catch {
-      pointer = null;
+      // Keep a fresh pointer another call may have opened meanwhile.
+      if (pointer === used) pointer = null;
       if (attempt >= 1) throw new Error(TV_NOT_CONNECTED);
     }
   }
@@ -298,8 +329,11 @@ export async function sendEnter(): Promise<void> {
   await request('ssap://com.webos.service.ime/sendEnterKey');
 }
 
+/** The TV may drop the socket before answering: a close or timeout after sending counts as success. */
 export async function turnOffTv(): Promise<void> {
-  await request('ssap://system/turnOff');
+  await ensureConnected();
+  await send('ssap://system/turnOff', undefined, true);
+  await disconnectTv();
 }
 
 /** Closes the sockets; the plugin sends no tvClosed for this, so the state is reset here. */
@@ -308,5 +342,5 @@ export async function disconnectTv(): Promise<void> {
   if (s) endSession(s, TV_NOT_CONNECTED);
   tvState.value = 'idle';
   tvError.value = '';
-  if (s) await transport.tvDisconnect().catch(noop);
+  if (s) await closeTransport();
 }
