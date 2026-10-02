@@ -117,7 +117,7 @@ export function SettingsScreen() {
       )}
 
       <h2>О приложении</h2>
-      <div class="muted">TorrServer Player {APP_VERSION}{c ? ' · ' + c.baseUrl : ''}</div>
+      <div class="muted">OMP — Open Movie Player {APP_VERSION}{c ? ' · ' + c.baseUrl : ''}</div>
       <div class="row" style={{ marginTop: '16px' }}>
         <Button
           label="Сбросить настройки приложения"

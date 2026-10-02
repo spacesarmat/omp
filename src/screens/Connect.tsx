@@ -8,6 +8,7 @@ import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/compone
 import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
 import { confirmDialog } from '../ui/dialog';
+import { Logo } from '../ui/Logo';
 
 export function ConnectScreen() {
   const [status, setStatus] = useState<{ [id: string]: string }>({});
@@ -82,7 +83,13 @@ export function ConnectScreen() {
 
   return (
     <FocusGroup focusKey="CONNECT" className="screen connect">
-      <h1>TorrServer Player</h1>
+      <div class="brand">
+        <Logo size={96} />
+        <div>
+          <h1 class="brand-title">OMP</h1>
+          <div class="muted">Open Movie Player</div>
+        </div>
+      </div>
       {servers.value.length > 0 && (
         <section>
           <h2>Сохранённые серверы</h2>
