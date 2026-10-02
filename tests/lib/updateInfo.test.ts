@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeUpdateInfo, UPDATE_URL, HB_REPO_URL, RELEASES_URL, HB_SITE_URL } from '../../src/lib/updateInfo';
+import { sanitizeUpdateInfo, UPDATE_URL, ANDROID_UPDATE_URL, HB_REPO_URL, RELEASES_URL, HB_SITE_URL } from '../../src/lib/updateInfo';
 
 const HASH = 'a'.repeat(64);
 const good = {
@@ -28,6 +28,7 @@ describe('sanitizeUpdateInfo', () => {
     expect(sanitizeUpdateInfo({ ...good, releaseUrl: 'ftp://x' })!.releaseUrl).toBe(RELEASES_URL);
   });
   it('exposes the feed urls', () => {
+    expect(ANDROID_UPDATE_URL).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update-android.json');
     expect(UPDATE_URL).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update.json');
     expect(HB_REPO_URL).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/apps.json');
     expect(HB_SITE_URL).toBe('https://www.webosbrew.org/');

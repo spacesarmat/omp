@@ -78,4 +78,9 @@ describe('sanitizeUpdateState', () => {
     expect(sanitizeUpdateState({ lastCheck: 'x', skipped: 3 })).toEqual({ lastCheck: 0 });
     expect(sanitizeUpdateState(null)).toEqual({ lastCheck: 0 });
   });
+  it('uses a custom feed url when given', async () => {
+    const f = mockFetch(() => ({ body: feed('0.7.1') }));
+    expect(await checkForUpdate({ manual: true, now: NOW, current: '0.7.0', url: 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update-android.json' })).toBe('update');
+    expect(f.mock.calls[0][0]).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update-android.json');
+  });
 });

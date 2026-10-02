@@ -1,5 +1,6 @@
 const FEED_BASE = 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/';
 export const UPDATE_URL = FEED_BASE + 'update.json';
+export const ANDROID_UPDATE_URL = FEED_BASE + 'update-android.json';
 export const HB_REPO_URL = FEED_BASE + 'apps.json';
 export const RELEASES_URL = 'https://github.com/spacesarmat/omp/releases/latest';
 export const HB_SITE_URL = 'https://www.webosbrew.org/';
