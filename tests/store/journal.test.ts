@@ -139,6 +139,13 @@ describe('loadSkip / saveSkip', () => {
     expect(JSON.parse(s.t.data!).omp.s).toEqual({ i: true, c: false, mc: 60 });
   });
 
+  it('saveSkip drops bad marks instead of writing them', async () => {
+    const s = fakeServer({ data: '{}' });
+    const r = await saveSkip(s.c, { hash: 'h' }, { i: true, mi: [90, 30], mc: NaN });
+    expect(r).toEqual({ i: true, c: false });
+    expect(JSON.parse(s.t.data!).omp.s).toEqual({ i: true, c: false });
+  });
+
   it('writing history afterwards keeps s', async () => {
     const s = fakeServer({ data: '{}' });
     await saveSkip(s.c, { hash: 'h' }, { c: true });
