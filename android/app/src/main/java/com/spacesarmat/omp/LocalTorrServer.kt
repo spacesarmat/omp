@@ -146,6 +146,16 @@ object LocalTorrServer {
         worker.execute { if (proc == null) fail(message) }
     }
 
+    private var logCheckedAt = 0L
+
+    /** Trims server.log of a running server, at most once an hour (the server appends to it). */
+    fun trimLogHourly(ctx: Context) {
+        val now = System.currentTimeMillis()
+        if (now - logCheckedAt < 3_600_000) return
+        logCheckedAt = now
+        trimLog(File(dataDir(ctx.applicationContext), "server.log"))
+    }
+
     /** Keeps the last 512 KB of a log grown over 2 MB. */
     private fun trimLog(log: File) {
         try {
@@ -258,8 +268,13 @@ object LocalTorrServer {
         return post("/settings", JSONObject().put("action", "set").put("sets", sets)) != null
     }
 
-    /** Torrent count and summed download speed (bytes/s, null if no torrent reports one). */
-    fun stats(): Pair<Int, Double?>? {
+    /** Torrent count, summed download speed (bytes/s, null if none reports one), torrents open in the engine. */
+    data class Stats(val count: Int, val speed: Double?, val active: Int) {
+        /** Something is loading or streaming: keep the CPU and Wi-Fi awake. */
+        val busy get() = active > 0 || (speed ?: 0.0) > 0.0
+    }
+
+    fun stats(): Stats? {
         val body = post("/torrents", JSONObject().put("action", "list")) ?: return null
         val arr = try {
             JSONArray(body)
@@ -267,11 +282,14 @@ object LocalTorrServer {
             return null
         }
         var speed: Double? = null
+        var active = 0
         for (i in 0 until arr.length()) {
             val t = arr.optJSONObject(i) ?: continue
             if (t.has("download_speed")) speed = (speed ?: 0.0) + t.optDouble("download_speed", 0.0)
+            // TorrServer stat: 0 added … 3 working, 4 closed, 5 only in the database
+            if (t.optInt("stat", 0) < 4) active++
         }
-        return arr.length() to speed
+        return Stats(arr.length(), speed, active)
     }
 
     fun dirSize(f: File): Long =
@@ -343,11 +361,11 @@ object LocalTorrServer {
     }
 
     /** «192.168.1.50:8090 · 1 раздача · 4,2 МБ/с». */
-    fun statusLine(ip: String?, stats: Pair<Int, Double?>?): String {
+    fun statusLine(ip: String?, stats: Stats?): String {
         val parts = mutableListOf(if (ip != null) "$ip:$PORT" else "IP не найден")
         if (stats != null) {
-            parts.add(torrents(stats.first))
-            stats.second?.let { parts.add(speed(it)) }
+            parts.add(torrents(stats.count))
+            stats.speed?.let { parts.add(speed(it)) }
         }
         return parts.joinToString(" · ")
     }

@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -23,8 +24,9 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Foreground service (type specialUse) that keeps the embedded TorrServer ([LocalTorrServer]) running
- * with a Wi-Fi lock and a partial wake lock. Its notification shows «<IP>:8090 · N раздач · скорость»,
- * refreshed every 5 s, with «Остановить» and «Открыть OMP».
+ * with a Wi-Fi lock and a partial wake lock held only while it is busy (a torrent open or loading, and
+ * 5 minutes after). Its notification shows «<IP>:8090 · N раздач · скорость», refreshed every 5 s,
+ * with «Остановить» and «Открыть OMP».
  */
 class TorrServerService : Service() {
     private val main = Handler(Looper.getMainLooper())
@@ -32,6 +34,8 @@ class TorrServerService : Service() {
     private var wifiLocks: List<WifiManager.WifiLock> = emptyList()
     private var wakeLock: PowerManager.WakeLock? = null
     @Volatile private var foreground = false
+    // main thread: last time the server was busy (or started)
+    private var busyAt = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -56,6 +60,8 @@ class TorrServerService : Service() {
                 return START_NOT_STICKY
             }
         }
+        // a fresh start is likely followed by playback: stay awake for the idle grace period
+        busyAt = SystemClock.elapsedRealtime()
         acquireLocks()
         LocalTorrServer.start(this) { main.post { stopSelf() } }
         if (stats == null) {
@@ -91,10 +97,19 @@ class TorrServerService : Service() {
 
     private fun refresh() {
         if (!LocalTorrServer.running) return
-        val line = LocalTorrServer.statusLine(LocalTorrServer.wifiIpv4(this), LocalTorrServer.stats())
+        LocalTorrServer.trimLogHourly(this)
+        val stats = LocalTorrServer.stats()
+        val line = LocalTorrServer.statusLine(LocalTorrServer.wifiIpv4(this), stats)
         // on the main thread, where onDestroy clears [foreground]: never re-posts after the stop
         main.post {
             if (!foreground) return@post
+            val now = SystemClock.elapsedRealtime()
+            if (stats?.busy == true) {
+                busyAt = now
+                acquireLocks()
+            } else if (now - busyAt > IDLE_MS) {
+                releaseLocks()
+            }
             try {
                 getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification(line))
             } catch (_: Exception) {
@@ -187,6 +202,8 @@ class TorrServerService : Service() {
         private const val CHANNEL = "torrserver"
         private const val NOTIFICATION_ID = 8090
         private const val ACTION_STOP = "com.spacesarmat.omp.TORRSERVER_STOP"
+        /** Locks are released after this long without a busy refresh. */
+        private const val IDLE_MS = 5 * 60_000L
 
         fun start(ctx: Context) {
             ContextCompat.startForegroundService(ctx, Intent(ctx, TorrServerService::class.java))
