@@ -300,4 +300,37 @@ describe('NativeSession', () => {
     expect(f.removed.length).toBe(2);
     expect(f.plugin.playNative).not.toHaveBeenCalled();
   });
+
+  describe('intro mark', () => {
+    const withIntro = { streams: [], chapters: [{ start_time: '5', end_time: '95', tags: { title: 'Opening' } }] } as any;
+    const flush = () => Promise.resolve().then(() => Promise.resolve()).then(() => Promise.resolve());
+
+    it('sends the intro of the current item after the player opens, and of each item it advances to', async () => {
+      const f = fakePlugin();
+      const probeOf = vi.fn((item: PlayItem) => Promise.resolve(item === queue[0] ? withIntro : null));
+      const s = track(new NativeSession(f.plugin, null, queue, {}, null, probeOf));
+      await s.start(opts);
+      await flush();
+      const sid = f.plugin.playNative.mock.calls[0][0].session;
+      expect(f.plugin.nativePlayerCommand).toHaveBeenCalledTimes(1);
+      expect(f.plugin.nativePlayerCommand).toHaveBeenCalledWith({ cmd: { type: 'intro', index: 0, start: 5, end: 95, session: sid } });
+      f.emit('nativePlayerState', state({ index: 1 }));
+      f.emit('nativePlayerState', state({ index: 0 }));
+      await flush();
+      // item 1 has no intro: nothing sent; item 0 is not probed twice
+      expect(probeOf).toHaveBeenCalledTimes(2);
+      expect(f.plugin.nativePlayerCommand).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends nothing without a probe loader or when the probe fails', async () => {
+      const f = fakePlugin();
+      await track(new NativeSession(f.plugin, null, queue)).start(opts);
+      await flush();
+      expect(f.plugin.nativePlayerCommand).not.toHaveBeenCalled();
+      const g = fakePlugin();
+      await track(new NativeSession(g.plugin, null, queue, {}, null, () => Promise.reject(new Error('x')))).start(opts);
+      await flush();
+      expect(g.plugin.nativePlayerCommand).not.toHaveBeenCalled();
+    });
+  });
 });

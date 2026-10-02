@@ -73,6 +73,9 @@ data class PlayRequest(
     }
 }
 
+/** Intro of a queue item sent by the page (ms). */
+data class IntroMark(val index: Int, val startMs: Long, val endMs: Long)
+
 /**
  * Link between OmpNativePlugin (page side) and the open PlayerActivity: the request to play, the events to
  * the page (`nativePlayerState`, `nativePlayerClosed`) and the phone commands to the player.
@@ -90,6 +93,39 @@ object NativePlayerBridge {
 
     fun emit(event: String, data: JSObject) {
         emitter?.invoke(event, data)
+    }
+
+    private val pendingIntros = ArrayList<IntroMark>()
+
+    /** A new playNative: intro marks of the previous run are dropped. */
+    fun resetIntros() {
+        synchronized(pendingIntros) { pendingIntros.clear() }
+    }
+
+    /**
+     * { type: "intro", index, start, end, session } from the page (seconds): the intro of a queue item. Kept until
+     * the player takes it (the player may not be created yet, or still be loading the previous queue); marks of
+     * another run (session) are ignored. True when accepted.
+     */
+    fun intro(cmd: JSONObject): Boolean {
+        val index = cmd.optInt("index", -1)
+        val start = cmd.optDouble("start", Double.NaN)
+        val end = cmd.optDouble("end", Double.NaN)
+        if (index < 0 || start.isNaN() || end.isNaN() || start < 0 || end <= start) return false
+        val sid = if (cmd.opt("session") is Number) cmd.optLong("session") else null
+        val cur = request?.session
+        if (sid != null && cur != null && sid != cur) return false
+        synchronized(pendingIntros) { pendingIntros.add(IntroMark(index, (start * 1000).toLong(), (end * 1000).toLong())) }
+        val p = player
+        if (p != null) p.runOnUiThread { p.applyIntros() }
+        return true
+    }
+
+    /** Marks the page sent since the last call. */
+    fun takeIntros(): List<IntroMark> = synchronized(pendingIntros) {
+        val out = ArrayList(pendingIntros)
+        pendingIntros.clear()
+        out
     }
 
     /** A phone command (src/phone/protocol.ts Cmd); false when no player is open. */

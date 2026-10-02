@@ -10,6 +10,8 @@ import { saveItemProgress, LOCAL_SAVE_MS, REMOTE_SAVE_MS } from './progressSave'
 import { resumePosition } from '../store/progress';
 import type { PlayItem } from './types';
 import type { WatchJournal } from './watchJournal';
+import type { FfprobeResult } from '../api/types';
+import { introMark } from './introMark';
 
 export interface NativeQueueItem {
   url: string;
@@ -126,6 +128,9 @@ export function nativeSnapshot(queue: PlayItem[], s: NativeState | null): Player
   });
 }
 
+/** ffprobe of a queue item (null: unavailable); drives «Пропустить заставку» in the native player. */
+export type ProbeLoader = (item: PlayItem) => Promise<FfprobeResult | null>;
+
 export interface NativeSessionHooks {
   onState?(s: NativeState, prev: NativeState | null): void;
   /** `replaced`: another playNative took the open player over (this screen must not navigate). */
@@ -165,6 +170,8 @@ export class NativeSession {
   private done = false;
   private readonly sid = ++sessionSeq;
   private readonly journal: WatchJournal | null;
+  private readonly probeOf: ProbeLoader | null;
+  private readonly marked: { [index: number]: boolean } = {};
 
   constructor(
     plugin: OmpNativeTvPlugin,
@@ -172,12 +179,14 @@ export class NativeSession {
     queue: PlayItem[],
     hooks: NativeSessionHooks = {},
     journal: WatchJournal | null = null,
+    probeOf: ProbeLoader | null = null,
   ) {
     this.plugin = plugin;
     this.client = client;
     this.queue = queue;
     this.hooks = hooks;
     this.journal = journal;
+    this.probeOf = probeOf;
   }
 
   start(o: NativeStartOptions): Promise<void> {
@@ -211,6 +220,7 @@ export class NativeSession {
       .then(() => {
         // the player is open: the first item starts (later ones in track)
         if (!this.done && this.journal && this.pos && this.pos.index === o.index) this.journal.start(this.queue[o.index], o.startAt, 0);
+        if (!this.done) this.sendIntro(o.index);
       }, (e) => {
         this.stop();
         throw e;
@@ -283,6 +293,21 @@ export class NativeSession {
     }
     this.pos = { index: p.index, time: p.time, duration: p.duration };
     if (changed && this.journal) this.journal.start(this.queue[p.index], p.time, p.duration);
+    if (changed) this.sendIntro(p.index);
+  }
+
+  /**
+   * The intro of an item (from its ffprobe chapters) goes to the native player once, when the item becomes
+   * current; no probe or no intro chapter: nothing is sent and the button never shows.
+   */
+  private sendIntro(index: number): void {
+    const item = this.queue[index];
+    if (!this.probeOf || !item || this.marked[index]) return;
+    this.marked[index] = true;
+    this.probeOf(item).then((probe) => {
+      const m = introMark(probe, index, this.sid);
+      if (m && !this.done) this.plugin.nativePlayerCommand({ cmd: m }).catch(() => undefined);
+    }, () => undefined);
   }
 
   /** Watch journal: the current item is left at its last position. */
