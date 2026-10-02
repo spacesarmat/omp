@@ -13,15 +13,18 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 
 /**
- * Transport for the phone client: SSDP, TV WebSockets, external player, APK update, magnet intake.
+ * Transport for the phone client: SSDP, TV WebSockets, external player, APK update, magnet intake,
+ * local player server (TV state in, commands out).
  * The SSAP protocol itself (register, requests, pairing) lives in TypeScript.
  *
  * Every PluginCall is settled exactly once (see [Once]). Blocking work runs on [io]; socket
  * callbacks arrive on OkHttp threads. Events: tvMessage { json }, tvClosed { reason },
- * apkProgress { percent }, magnetReceived { link }.
+ * apkProgress { percent }, magnetReceived { link }, playerMessage { body }.
  */
 @CapacitorPlugin(name = "OmpNative")
 class OmpNativePlugin : Plugin() {
@@ -34,6 +37,7 @@ class OmpNativePlugin : Plugin() {
     private var pointer: TvSocket? = null
     private var pendingPointer: Once? = null
     private val downloading = AtomicBoolean(false)
+    private val player = PlayerServer { body -> notifyListeners("playerMessage", JSObject().put("body", body)) }
 
     override fun load() {
         instance = this
@@ -44,6 +48,7 @@ class OmpNativePlugin : Plugin() {
     override fun handleOnDestroy() {
         if (instance === this) instance = null
         closeAll()
+        player.stop()
         io.shutdownNow()
     }
 
@@ -238,6 +243,45 @@ class OmpNativePlugin : Plugin() {
         }
         socket?.close()
         pending?.reject("Подключение отменено")
+    }
+
+    // ---- player server (TV -> phone state, phone -> TV commands) ----
+
+    @PluginMethod
+    fun startPlayerServer(call: PluginCall) {
+        val once = Once(call)
+        val ip = call.getString("tvIp")?.trim().orEmpty()
+        io.execute {
+            try {
+                once.resolve(JSObject().put("url", player.start(ip)))
+            } catch (e: UserError) {
+                once.reject(e.message ?: "Не удалось запустить управление плеером")
+            } catch (_: Exception) {
+                once.reject("Не удалось запустить управление плеером")
+            }
+        }
+    }
+
+    @PluginMethod
+    fun stopPlayerServer(call: PluginCall) {
+        player.stop()
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun queuePlayerCommands(call: PluginCall) {
+        val json = call.getString("json")
+        val cmds = try {
+            if (json.isNullOrEmpty()) null else JSONArray(json)
+        } catch (_: JSONException) {
+            null
+        }
+        if (cmds == null) {
+            call.reject("Некорректные команды")
+            return
+        }
+        player.enqueue(cmds)
+        call.resolve()
     }
 
     // ---- external player ----

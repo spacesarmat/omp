@@ -1,5 +1,5 @@
 // Wrapper over the native Android plugin OmpNative (android/.../OmpNativePlugin.kt).
-// The plugin is transport only: SSDP, TV sockets, intents, APK install. SSAP lives in src/tv.
+// The plugin is transport only: SSDP, TV sockets, intents, APK install, player server. SSAP lives in src/tv.
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 export interface FoundTv {
@@ -27,6 +27,13 @@ export interface OmpNativeApi {
   downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void): Promise<void>;
   takePendingMagnet(): Promise<string | null>;
   onMagnet(cb: (link: string) => void): () => void;
+  /** Starts the server (idempotent) on the interface that reaches tvIp; resolves the report URL. */
+  startPlayerServer(tvIp: string): Promise<string>;
+  stopPlayerServer(): Promise<void>;
+  /** Commands the TV gets in its next response (in order, delivered once). */
+  queuePlayerCommands(cmds: object[]): Promise<void>;
+  /** Raw body of every TV message. */
+  onPlayerMessage(cb: (body: string) => void): () => void;
 }
 
 interface OmpNativePlugin {
@@ -39,10 +46,14 @@ interface OmpNativePlugin {
   openExternal(o: { url: string; mime: string }): Promise<void>;
   downloadAndInstallApk(o: { url: string; sha256: string }): Promise<void>;
   takePendingMagnet(): Promise<{ link?: string | null }>;
+  startPlayerServer(o: { tvIp: string }): Promise<{ url: string }>;
+  stopPlayerServer(): Promise<void>;
+  queuePlayerCommands(o: { json: string }): Promise<void>;
   addListener(event: 'tvMessage', cb: (e: { json: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'tvClosed', cb: (e: { reason: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'apkProgress', cb: (e: { percent: number }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'magnetReceived', cb: (e: { link: string }) => void): Promise<PluginListenerHandle>;
+  addListener(event: 'playerMessage', cb: (e: { body: string }) => void): Promise<PluginListenerHandle>;
 }
 
 export const ONLY_ANDROID = 'Доступно только в приложении Android';
@@ -156,5 +167,26 @@ export const native: OmpNativeApi = {
   onMagnet(cb) {
     if (!plugin) return noop;
     return listen(() => plugin.addListener('magnetReceived', (e) => cb(e.link)));
+  },
+
+  async startPlayerServer(tvIp) {
+    if (!plugin) return unavailable();
+    const r = await plugin.startPlayerServer({ tvIp });
+    return r.url;
+  },
+
+  stopPlayerServer() {
+    if (!plugin) return unavailable();
+    return plugin.stopPlayerServer();
+  },
+
+  queuePlayerCommands(cmds) {
+    if (!plugin) return unavailable();
+    return plugin.queuePlayerCommands({ json: JSON.stringify(cmds) });
+  },
+
+  onPlayerMessage(cb) {
+    if (!plugin) return noop;
+    return listen(() => plugin.addListener('playerMessage', (e) => cb(e.body)));
   },
 };
