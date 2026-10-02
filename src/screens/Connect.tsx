@@ -15,6 +15,7 @@ import { EditServerDialog } from './connect/EditServerDialog';
 
 export function ConnectScreen() {
   const alive = useRef(true);
+  const scanCancelled = useRef(false);
   const [url, setUrl] = useState('');
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
@@ -27,7 +28,7 @@ export function ConnectScreen() {
 
   useEffect(() => {
     restoreFocus('connect-url');
-    return () => { alive.current = false; };
+    return () => { alive.current = false; scanCancelled.current = true; };
   }, []);
 
   const focusHistoryButton = () => {
@@ -41,6 +42,7 @@ export function ConnectScreen() {
   };
 
   const open = (s: SavedServer) => {
+    scanCancelled.current = true;
     setActiveServer(s.id);
     resetTo({ name: 'library' });
   };
@@ -51,6 +53,7 @@ export function ConnectScreen() {
       toast('Введите адрес сервера', 'error');
       return;
     }
+    scanCancelled.current = true;
     const cfg = { url: address, user: user || undefined, password: password || undefined };
     setBusy(true);
     new TorrServerClient(cfg).echo().then(
@@ -68,12 +71,14 @@ export function ConnectScreen() {
   };
 
   const scanNetwork = () => {
+    scanCancelled.current = false;
     setFound([]);
     setScan({ done: 0, total: 1 });
     getLocalIp()
       .then((ip) =>
         discover({
           subnets: candidateSubnets(ip, servers.value.map((s) => s.url)),
+          isCancelled: () => scanCancelled.current,
           onProgress: (done, total) => { if (alive.current && (done % 16 === 0 || done === total)) setScan({ done, total }); },
           onFound: (s) => { if (alive.current) setFound((f) => f.concat(s)); },
         }),
@@ -81,6 +86,7 @@ export function ConnectScreen() {
       .then((list) => {
         if (!alive.current) return;
         setScan(null);
+        if (scanCancelled.current) return;
         if (!list.length) toast('Серверы TorrServer не найдены', 'error');
       })
       .catch((e) => {
