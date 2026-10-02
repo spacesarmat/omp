@@ -15,11 +15,14 @@ import {
   turnOffTv,
   disconnectTv,
   sessionIp,
+  tvWaking,
+  warmUp,
+  cancelWarmUp,
   foregroundAppId,
   ompVersionOnTv,
   type TvTransport,
 } from '../src/tv/tvClient';
-import { tvs, saveTv, reloadTvs } from '../src/tv/tvStore';
+import { tvs, saveTv, reloadTvs, setActiveTv } from '../src/tv/tvStore';
 import { native } from '../src/platform/native';
 
 const TV = { ip: '192.168.1.5', name: 'LG' };
@@ -94,11 +97,28 @@ function autoReply(fake: FakeTv) {
   };
 }
 
-async function connected(fake: FakeTv) {
+const buttonFrameOf = (n: string) => ['type:button', 'name:' + n, '', ''].join(String.fromCharCode(10));
+const POINTER_URI = 'ssap://com.webos.service.networkinput/getPointerInputSocket';
+
+/** Connects and answers the pointer-socket prefetch the client sends right after registering. */
+async function connected(fake: FakeTv, pointer: 'ok' | 'denied' = 'ok') {
   const p = connectTv(TV);
   await flush();
   fake.emit({ type: 'registered', id: fake.lastRegister.id, payload: { 'client-key': 'K' } });
   await p;
+  await flush();
+  const req = fake.sent.find((m) => m.uri === POINTER_URI);
+  if (req) {
+    if (pointer === 'denied') fake.emit({ type: 'error', id: req.id, error: '401 insufficient permissions', payload: {} });
+    else {
+      fake.emit({
+        type: 'response',
+        id: req.id,
+        payload: { returnValue: true, socketPath: 'ws://192.168.1.5:3000/resources/abc/netinput.pointer.sock' },
+      });
+    }
+    await flush();
+  }
 }
 
 let fake: FakeTv;
@@ -276,7 +296,10 @@ describe('tvClient connection', () => {
     expect(fake.connects).toHaveLength(1);
     fake.emit({ type: 'registered', id: fake.lastRegister.id, payload: { 'client-key': 'K' } });
     await expect(Promise.all([a, b])).resolves.toEqual([undefined, undefined]);
-    expect(fake.sent.map((m) => m.uri)).toEqual(['ssap://audio/volumeUp', 'ssap://com.webos.service.ime/insertText']);
+    expect(fake.sent.map((m) => m.uri).filter((u) => u !== POINTER_URI)).toEqual([
+      'ssap://audio/volumeUp',
+      'ssap://com.webos.service.ime/insertText',
+    ]);
   });
 
   it('cancels pairing on disconnect', async () => {
@@ -420,6 +443,7 @@ describe('tvClient commands', () => {
 
   it('sends text, volume and power commands', async () => {
     await connected(fake);
+    fake.sent.length = 0;
     autoReply(fake);
     await typeText('abc');
     await deleteText(2);
@@ -438,7 +462,7 @@ describe('tvClient commands', () => {
   });
 
   it('reports a pointer permission error from the TV', async () => {
-    await connected(fake);
+    await connected(fake, 'denied');
     fake.onRequest = (msg) =>
       queueMicrotask(() => fake.emit({ type: 'error', id: msg.id, error: '401 insufficient permissions', payload: {} }));
     await expect(pressButton('UP')).rejects.toThrow('Телевизор не разрешил управление пультом');
@@ -532,5 +556,146 @@ describe('tvClient app info', () => {
     expect(await ompVersionOnTv()).toBeNull();
     reply(() => ({ apps: [{ id: 'com.spacesarmat.torrplayer', version: '0.8.0' }] }));
     expect(await ompVersionOnTv()).toBe('0.8.0');
+  });
+});
+
+describe('tvClient early connect', () => {
+  const REG = (f: FakeTv) => ({ type: 'registered', id: f.lastRegister.id, payload: { 'client-key': 'K' } });
+  /** Lets the pending connect fail: the fake TV does not open the socket. */
+  const failNextConnects = () => {
+    fake.tvConnect = async (ip, register, preferPort) => {
+      fake.connects.push({ ip, register, preferPort });
+      throw new Error('no route');
+    };
+  };
+
+  beforeEach(() => {
+    saveTv({ ip: '192.168.1.5', name: 'LG' });
+    setActiveTv('192.168.1.5');
+    vi.useFakeTimers();
+  });
+
+  it('does nothing without an active TV', async () => {
+    reloadTvs();
+    localStorage.clear();
+    reloadTvs();
+    await warmUp();
+    expect(fake.connects).toHaveLength(0);
+    expect(tvState.value).toBe('idle');
+  });
+
+  it('retries every 1.5 s while the TV wakes and stops after success', async () => {
+    failNextConnects();
+    const p = warmUp();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fake.connects).toHaveLength(1);
+    expect(tvWaking.value).toBe(true);
+    await vi.advanceTimersByTimeAsync(1499);
+    expect(fake.connects).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fake.connects).toHaveLength(2);
+    // the TV is awake now
+    fake.tvConnect = FakeTv.prototype.tvConnect.bind(fake);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(fake.connects).toHaveLength(3);
+    fake.emit(REG(fake));
+    await p;
+    expect(tvState.value).toBe('connected');
+    expect(tvWaking.value).toBe(false);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(fake.connects).toHaveLength(3);
+  });
+
+  it('gives up after 30 s', async () => {
+    failNextConnects();
+    const p = warmUp();
+    await vi.advanceTimersByTimeAsync(60000);
+    await p;
+    expect(fake.connects).toHaveLength(21);
+    expect(tvWaking.value).toBe(false);
+  });
+
+  it('stops when cancelled (app went to background)', async () => {
+    failNextConnects();
+    const p = warmUp();
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(fake.connects).toHaveLength(2);
+    cancelWarmUp();
+    await p;
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(fake.connects).toHaveLength(2);
+    expect(tvWaking.value).toBe(false);
+  });
+
+  it('stops when the active TV changes', async () => {
+    saveTv({ ip: '192.168.1.9', name: 'Other' });
+    failNextConnects();
+    const p = warmUp();
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(fake.connects).toHaveLength(2);
+    setActiveTv('192.168.1.9');
+    await p;
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(fake.connects).toHaveLength(2);
+  });
+
+  it('stops retrying once the TV shows the pairing prompt', async () => {
+    const p = warmUp();
+    await vi.advanceTimersByTimeAsync(0);
+    fake.emit({ type: 'response', id: fake.lastRegister.id, payload: { pairingType: 'PROMPT', returnValue: true } });
+    expect(tvState.value).toBe('pairing');
+    // the user declines
+    fake.emit({ type: 'error', id: fake.lastRegister.id, error: 'denied' });
+    await p;
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(fake.connects).toHaveLength(1);
+  });
+
+  it('does not start a second connect while connecting or connected', async () => {
+    void warmUp();
+    await vi.advanceTimersByTimeAsync(0);
+    void warmUp();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fake.connects).toHaveLength(1);
+  });
+
+  it('opens the pointer socket right after connecting', async () => {
+    const p = warmUp();
+    await vi.advanceTimersByTimeAsync(0);
+    fake.emit(REG(fake));
+    await p;
+    expect(fake.sent.map((m) => m.uri)).toEqual([POINTER_URI]);
+    fake.emit({
+      type: 'response',
+      id: fake.sent[0].id,
+      payload: { returnValue: true, socketPath: 'ws://192.168.1.5:3000/x' },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fake.pointerUrls).toEqual(['ws://192.168.1.5:3000/x']);
+  });
+
+  it('queues presses made while connecting and sends them in order', async () => {
+    autoReply(fake);
+    void warmUp();
+    await vi.advanceTimersByTimeAsync(0);
+    const sent = [pressButton('UP'), pressButton('DOWN'), pressButton('ENTER')];
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fake.frames).toEqual([]);
+    fake.emit(REG(fake));
+    await Promise.all(sent);
+    expect(fake.frames).toEqual(['UP', 'DOWN', 'ENTER'].map((n) => buttonFrameOf(n)));
+  });
+
+  it('drops queued presses older than 15 s and keeps at most 10', async () => {
+    autoReply(fake);
+    fake.tvConnect = () => new Promise(() => {}); // never opens: the press waits
+    void warmUp();
+    await vi.advanceTimersByTimeAsync(0);
+    const all = Array.from({ length: 12 }, (_, i) => pressButton(i % 2 ? 'UP' : 'DOWN'));
+    const settled = all.map((p) => p.then(() => 'ok', (e) => e.message));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await Promise.all(settled.slice(0, 2))).toEqual(['Телевизор не подключён', 'Телевизор не подключён']);
+    await vi.advanceTimersByTimeAsync(20000); // registration times out
+    expect(fake.frames).toEqual([]);
   });
 });

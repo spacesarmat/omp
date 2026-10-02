@@ -4,6 +4,7 @@ import { act } from 'preact/test-utils';
 import { Remote, setRemoteActions } from '../src/screens/Remote';
 import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
+import { tvWaking } from '../src/tv/tvClient';
 import { toast } from '../src/ui/toast';
 
 let el: HTMLElement;
@@ -16,6 +17,7 @@ const a = {
   deleteText: vi.fn(),
   sendEnter: vi.fn(),
   turnOffTv: vi.fn(),
+  warmUp: vi.fn(),
   confirm: vi.fn(),
 };
 
@@ -69,6 +71,18 @@ describe('Remote without a TV', () => {
 
 describe('Remote with a TV', () => {
   beforeEach(() => saveTv({ ip: '192.168.1.5', name: 'LG OLED' }));
+
+  it('warms up the connection on mount and shows «Подключение…» while waking', () => {
+    mount();
+    expect(a.warmUp).toHaveBeenCalledTimes(1);
+    act(() => {
+      tvWaking.value = true;
+    });
+    expect(el.querySelector('.m-remote-state')!.textContent).toBe('Подключение…');
+    act(() => {
+      tvWaking.value = false;
+    });
+  });
 
   it('d-pad and keys map to buttons', () => {
     mount();

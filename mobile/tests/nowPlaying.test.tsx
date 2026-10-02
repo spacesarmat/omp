@@ -6,6 +6,7 @@ import { MiniPlayer } from '../src/ui/MiniPlayer';
 import { App } from '../src/app';
 import { currentRoute, resetTo, navigate } from '../src/nav';
 import { nowPlaying, lastSeen, launchedAt, setPlayerLinkDeps } from '../src/tv/playerLink';
+import { tvState } from '../src/tv/tvClient';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import type { PlayerState } from '../../src/phone/protocol';
 
@@ -332,11 +333,16 @@ describe('mini-player in the shell', () => {
   it('cold start with a TV tries to attach once', async () => {
     setState(null);
     resetTo({ name: 'library' });
-    mount(<App />);
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(fgApp).toHaveBeenCalledTimes(1);
+    tvState.value = 'connected'; // the early connect (warmUp) is covered in tvClient tests
+    try {
+      mount(<App />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(fgApp).toHaveBeenCalledTimes(1);
+    } finally {
+      tvState.value = 'idle';
+    }
   });
 
   it('cold start skips the attach while the link is live', async () => {

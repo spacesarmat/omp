@@ -5,6 +5,8 @@ import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import {
   tvState,
+  tvWaking,
+  warmUp,
   pressButton,
   moveCursor,
   click,
@@ -26,6 +28,7 @@ export interface RemoteActions {
   deleteText: (n: number) => Promise<void>;
   sendEnter: () => Promise<void>;
   turnOffTv: () => Promise<void>;
+  warmUp: () => Promise<void>;
   confirm: (text: string) => boolean;
 }
 
@@ -38,6 +41,7 @@ const defaults: RemoteActions = {
   deleteText,
   sendEnter,
   turnOffTv,
+  warmUp,
   confirm: (t) => window.confirm(t),
 };
 
@@ -81,7 +85,7 @@ function vibrate(): void {
 
 const STATE_TEXT: Record<string, string> = {
   idle: 'Не подключён',
-  connecting: 'Подключаюсь…',
+  connecting: 'Подключение…',
   pairing: 'Подтвердите на ТВ',
   connected: 'Подключён',
   error: 'Нет связи',
@@ -157,6 +161,11 @@ export function Remote() {
   const composing = useRef(false);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const field = useRef<HTMLInputElement>(null);
+
+  const tvIp = tv?.ip;
+  useEffect(() => {
+    if (tvIp) void act.warmUp();
+  }, [tvIp]);
 
   useEffect(() => {
     sent.current = '';
@@ -238,7 +247,7 @@ export function Remote() {
       <div class="m-lib-head">
         <div class="m-remote-name">
           <span class="m-remote-title">{tv.name}</span>
-          <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{STATE_TEXT[state] || state}</span>
+          <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{tvWaking.value && state !== 'connected' && state !== 'pairing' ? STATE_TEXT.connecting : STATE_TEXT[state] || state}</span>
         </div>
         <button type="button" class="m-power" aria-label="Выключить телевизор" onClick={() => void off()}>
           <Icon d={POWER} />

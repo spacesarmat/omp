@@ -1,5 +1,5 @@
 // SSAP client on top of the native transport: pairing, request/response by id, pointer socket.
-import { signal } from '@preact/signals';
+import { signal, effect } from '@preact/signals';
 import { native, type OmpNativeApi } from '../platform/native';
 import { activeTv, saveTv, setActiveTv, type SavedTv } from './tvStore';
 import {
@@ -36,6 +36,13 @@ const PERMISSION_ERROR = /401|insufficient permissions|not permitted|denied/i;
 
 export const tvState = signal<TvState>('idle');
 export const tvError = signal('');
+/** True while a background warm-up keeps retrying the connection (the TV may be waking up). */
+export const tvWaking = signal(false);
+
+const WARM_RETRY_MS = 1500;
+const WARM_LIMIT_MS = 30000;
+const QUEUE_MAX = 10;
+const QUEUE_TTL_MS = 15000;
 
 /** Error answered by the TV; `raw` keeps its original text. */
 class TvAnswerError extends Error {
@@ -84,6 +91,7 @@ function closeTransport(): Promise<void> {
 
 /** Replaces the transport (tests); drops the current session. */
 export function setTransport(t: TvTransport): void {
+  cancelWarmUp();
   if (session) {
     endSession(session, TV_NOT_CONNECTED);
     void closeTransport();
@@ -153,6 +161,8 @@ function onRegisterMessage(s: Session, m: any): void {
     tvState.value = 'connected';
     tvError.value = '';
     reg.resolve();
+    // Open the pointer socket now so the first press does not wait for it (errors are ignored).
+    ensurePointer().catch(noop);
   } else if (m.type === 'error') {
     const text = String(m.error ?? m.payload?.errorText ?? '');
     if (s.signed && /blacklisted certificate/i.test(text)) {
@@ -288,7 +298,59 @@ function ensurePointer(): Promise<void> {
   return pointer;
 }
 
-async function sendFrame(frame: string): Promise<void> {
+interface QueuedFrame {
+  frame: string;
+  at: number;
+  resolve: () => void;
+  reject: (e: Error) => void;
+}
+const outbox: QueuedFrame[] = [];
+let draining = false;
+let warming: Promise<void> | null = null;
+
+function isBusy(): boolean {
+  return tvState.value === 'connecting' || tvState.value === 'pairing' || tvWaking.value;
+}
+
+async function drainOutbox(): Promise<void> {
+  if (draining) return;
+  draining = true;
+  try {
+    while (outbox.length) {
+      try {
+        if (tvState.value !== 'connected') {
+          if (warming) await warming.catch(noop);
+          else if (connecting) await connecting.catch(noop);
+          else await ensureConnected();
+        }
+        if (tvState.value !== 'connected') throw new Error(TV_NO_ANSWER);
+      } catch (e) {
+        for (const q of outbox.splice(0)) q.reject(e instanceof Error ? e : new Error(TV_NO_ANSWER));
+        return;
+      }
+      const q = outbox.shift()!;
+      if (Date.now() - q.at > QUEUE_TTL_MS) {
+        q.reject(new Error(TV_NO_ANSWER));
+        continue;
+      }
+      await sendFrameNow(q.frame).then(q.resolve, q.reject);
+    }
+  } finally {
+    draining = false;
+  }
+}
+
+function sendFrame(frame: string): Promise<void> {
+  if (outbox.length === 0 && !draining && !isBusy()) return sendFrameNow(frame);
+  // Presses made while connecting wait here and go out in order once the TV is ready.
+  return new Promise<void>((resolve, reject) => {
+    if (outbox.length >= QUEUE_MAX) outbox.shift()!.reject(new Error(TV_NOT_CONNECTED));
+    outbox.push({ frame, at: Date.now(), resolve, reject });
+    void drainOutbox();
+  });
+}
+
+async function sendFrameNow(frame: string): Promise<void> {
   await ensureConnected();
   // One retry: the native pointer socket can close silently (no event reaches JS).
   for (let attempt = 0; ; attempt++) {
@@ -308,6 +370,68 @@ async function sendFrame(frame: string): Promise<void> {
       if (attempt >= 1) throw new Error(TV_NOT_CONNECTED);
     }
   }
+}
+
+/** Stops the background connect retries (app went to background, TV switched). */
+let cancelWarm: (() => void) | null = null;
+export function cancelWarmUp(): void {
+  cancelWarm?.();
+}
+
+/**
+ * Connects to the active TV in the background and keeps retrying every 1.5 s for up to 30 s while it wakes up.
+ * Stops on success, on a pairing prompt, on cancelWarmUp() and when the active TV changes. Never rejects.
+ */
+export function warmUp(): Promise<void> {
+  if (warming) return warming;
+  const tv = activeTv.value;
+  if (!tv || tvState.value === 'connected' || tvState.value === 'connecting' || tvState.value === 'pairing') {
+    return Promise.resolve();
+  }
+  let stopped = false;
+  let wake: (() => void) | null = null;
+  const stop = () => {
+    stopped = true;
+    wake?.();
+  };
+  cancelWarm = stop;
+  let pairing = false;
+  const watch = effect(() => {
+    if (tvState.value === 'pairing') pairing = true;
+    if (activeTv.value?.ip !== tv.ip) stop();
+  });
+  const started = Date.now();
+  let p!: Promise<void>;
+  p = (async () => {
+    try {
+      for (;;) {
+        try {
+          await connectTv(tv);
+          return;
+        } catch {
+          /* retry below */
+        }
+        if (stopped || pairing || Date.now() - started + WARM_RETRY_MS > WARM_LIMIT_MS) return;
+        tvWaking.value = true;
+        await new Promise<void>((r) => {
+          const t = setTimeout(r, WARM_RETRY_MS);
+          wake = () => {
+            clearTimeout(t);
+            r();
+          };
+        });
+        wake = null;
+        if (stopped) return;
+      }
+    } finally {
+      watch();
+      tvWaking.value = false;
+      if (cancelWarm === stop) cancelWarm = null;
+      if (warming === p) warming = null;
+    }
+  })();
+  warming = p;
+  return p;
 }
 
 export async function launchOnTv(params: object): Promise<void> {
