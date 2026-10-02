@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 const SCENES = ['login', 'login-history', 'library-large', 'library-list', 'history', 'search'];
 // Android client scenes: phone viewport at 2x.
-const ANDROID_SCENES = ['android-library', 'android-torrent', 'android-watch', 'android-remote'];
+const ANDROID_SCENES = ['android-library', 'android-torrent', 'android-watch', 'android-remote', 'android-nowplaying'];
 
 const candidates = [
   process.env.CHROME_PATH,
