@@ -1,4 +1,5 @@
 import { formatDuration } from '../lib/format';
+import { Icon, KeyDot } from '../ui/icons';
 
 interface ControlsProps {
   title: string;
@@ -32,13 +33,13 @@ export function Controls(p: ControlsProps) {
         {p.seekTarget !== null && <div class="player-bar-target" style={{ left: pct + '%' }} />}
       </div>
       <div class="player-row">
-        {p.hasPrev && <span class="player-btn" onClick={p.onPrev}>⏮</span>}
-        <span class="player-btn" onClick={p.onToggle}>{p.paused ? '▶' : '❚❚'}</span>
-        {p.hasNext && <span class="player-btn" onClick={p.onNext}>⏭</span>}
+        {p.hasPrev && <span class="player-btn" onClick={p.onPrev}><Icon name="prev" size={32} /></span>}
+        <span class="player-btn" onClick={p.onToggle}><Icon name={p.paused ? 'play' : 'pause'} size={32} /></span>
+        {p.hasNext && <span class="player-btn" onClick={p.onNext}><Icon name="next" size={32} /></span>}
         <span>{formatDuration(shown)} / {formatDuration(p.duration)}</span>
-        <span class="player-btn" onClick={p.onTracks}>Дорожки</span>
+        <span class="player-btn" onClick={p.onTracks}><Icon name="tracks" size={28} /> Дорожки</span>
         <div class="spacer" />
-        <span class="player-hints">◀ ▶ перемотка · ▲ дорожки · 🟢 статистика · CH± серии</span>
+        <span class="player-hints">Влево/вправо — перемотка · Вверх — дорожки · <KeyDot color="green" /> статистика · CH± — серии</span>
       </div>
     </div>
   );

@@ -97,7 +97,7 @@ export function AddScreen() {
             >
               <div class="title">{r.Title}</div>
               <div class="meta">
-                {r.Size} · ⬆ {r.Seed} ⬇ {r.Peer} · {r.Tracker}{r.CreateDate ? ' · ' + r.CreateDate.slice(0, 10) : ''}
+                {r.Size} · сиды {r.Seed} · пиры {r.Peer} · {r.Tracker}{r.CreateDate ? ' · ' + r.CreateDate.slice(0, 10) : ''}
               </div>
             </Focusable>
           ))}

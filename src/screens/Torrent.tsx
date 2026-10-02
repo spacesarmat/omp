@@ -9,6 +9,7 @@ import { formatBytes, formatDuration, formatSpeed } from '../lib/format';
 import { buildTorrentQueue } from '../player/queue';
 import { navigate, goBack } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
+import { Icon, KeyDot } from '../ui/icons';
 import { restoreFocus } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
@@ -165,14 +166,14 @@ export function TorrentScreen({ hash }: { hash: string }) {
                   <span class="name">{baseName(f.path)}</span>
                   {!watched && ratio > 0 && <span class="bar"><ProgressBar ratio={ratio} /></span>}
                   <span class="size">{formatBytes(f.length)}</span>
-                  <span class="check">{watched ? '✓' : ''}</span>
+                  <span class="check">{watched ? <Icon name="check" size={28} /> : null}</span>
                 </Focusable>
               );
             })}
           </section>
         ))}
       </FocusGroup>
-      <div class="hints">OK — смотреть · 🔴 удалить торрент · Назад — к библиотеке</div>
+      <div class="hints">OK — смотреть · <KeyDot color="red" /> удалить торрент · Назад — к библиотеке</div>
     </FocusGroup>
   );
 }

@@ -10,6 +10,7 @@ import { baseName, episodeLabel } from '../lib/episodes';
 import { buildTorrentQueue } from '../player/queue';
 import { navigate, resetTo } from '../ui/nav';
 import { FocusGroup, Focusable, Button, ErrorView, ProgressBar, Spinner } from '../ui/components';
+import { KeyDot } from '../ui/icons';
 import { restoreFocus } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
@@ -132,7 +133,7 @@ export function LibraryScreen() {
           </Focusable>
         ))}
         <div class="spacer" />
-        <Button label="＋ Добавить" onPress={() => navigate({ name: 'add' })} onFocused={() => setFocusedHash(null)} />
+        <Button icon="plus" label="Добавить" onPress={() => navigate({ name: 'add' })} onFocused={() => setFocusedHash(null)} />
         <Button label="Плейлист" onPress={() => navigate({ name: 'playlist' })} onFocused={() => setFocusedHash(null)} />
         <Button label="Настройки" onPress={() => navigate({ name: 'settings' })} onFocused={() => setFocusedHash(null)} />
         <Button label="Сервер" onPress={() => navigate({ name: 'connect' })} onFocused={() => setFocusedHash(null)} />
@@ -164,8 +165,8 @@ export function LibraryScreen() {
           <PosterCard key={t.hash} t={t} onPress={() => navigate({ name: 'torrent', hash: t.hash })} onFocused={() => setFocusedHash(t.hash)} />
         ))}
       </FocusGroup>
-      {loaded && !list.length && <div class="empty">Нет торрентов. Добавьте через «＋ Добавить» или веб-интерфейс TorrServer на телефоне.</div>}
-      <div class="hints">OK — открыть · 🔴 удалить · 🔵 настройки · Назад — выход</div>
+      {loaded && !list.length && <div class="empty">Нет торрентов. Добавьте через «Добавить» или веб-интерфейс TorrServer на телефоне.</div>}
+      <div class="hints">OK — открыть · <KeyDot color="red" /> удалить · <KeyDot color="blue" /> настройки · Назад — выход</div>
     </FocusGroup>
   );
 }
