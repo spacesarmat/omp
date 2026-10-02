@@ -6,6 +6,7 @@ import type { Torrent } from '../api/types';
 import { errorMessage } from '../api/http';
 import { TorrentFile, baseName, groupBySeason, playableFiles, episodeLabel } from '../lib/episodes';
 import { formatBytes, formatDuration, formatSpeed } from '../lib/format';
+import { parseReleaseInfo, releaseBadges } from '../lib/releaseInfo';
 import { buildTorrentQueue } from '../player/queue';
 import { navigate, goBack } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
@@ -136,6 +137,10 @@ export function TorrentScreen({ hash }: { hash: string }) {
             {t && t.stat_string ? t.stat_string : ''}
             {t && t.stat === 3 ? ' · ' + formatSpeed(t.download_speed || 0) + ' · пиры ' + (t.active_peers || 0) + '/' + (t.total_peers || 0) : ''}
           </div>
+          {(() => {
+            const badges = releaseBadges(parseReleaseInfo(t ? t.title || t.name || '' : ''));
+            return badges.length ? <div class="badges">{badges.map((x) => <span key={x} class="badge">{x}</span>)}</div> : null;
+          })()}
           <FocusGroup focusKey="TORRENT-ACTIONS" className="row" preferredChildFocusKey="torrent-play">
             {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onPress={() => play(target, targetPos || undefined)} />}
             {queue.length > 0 && <Button label="Плейлист" onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: t ? t.title : '' })} />}

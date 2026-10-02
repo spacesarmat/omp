@@ -144,3 +144,6 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .tap-left { left: 12%; }
 .tap-right { right: 12%; }
 .tap-center { left: 50%; margin-left: -80px; }
+
+.badges { margin-top: 10px; }
+.badge { display: inline-block; padding: 2px 9px; margin-right: 8px; border-radius: 7px; background: var(--panel2); color: var(--text); font-size: 16px; font-weight: 700; }
