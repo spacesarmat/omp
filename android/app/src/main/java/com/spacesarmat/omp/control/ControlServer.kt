@@ -13,8 +13,14 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
-/** A parsed request to the control server: method, path (no query), bearer token, body (UTF-8). */
-class ControlRequest(val method: String, val path: String, val token: String?, val body: String)
+/** A parsed request to the control server: method, path (no query), bearer token, body (UTF-8), Content-Type. */
+class ControlRequest(
+    val method: String,
+    val path: String,
+    val token: String?,
+    val body: String,
+    val contentType: String? = null,
+)
 
 /** The answer: HTTP status and a JSON body. */
 class ControlResponse(val status: Int, val json: String)
@@ -94,6 +100,7 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
             var length = 0L
             var token: String? = null
             var origin: String? = null
+            var contentType: String? = null
             var lines = 0
             while (true) {
                 val line = readLine(input) ?: return
@@ -111,6 +118,7 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
                     name.equals("Authorization", ignoreCase = true) && value.startsWith("Bearer ", ignoreCase = true) ->
                         token = value.substring(7).trim()
                     name.equals("Origin", ignoreCase = true) -> origin = value
+                    name.equals("Content-Type", ignoreCase = true) -> contentType = value
                 }
             }
             when {
@@ -120,7 +128,7 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
                 else -> {
                     val body = readBody(input, length.toInt()) ?: return
                     val res = try {
-                        handler(ControlRequest(method, path, token, String(body, Charsets.UTF_8)))
+                        handler(ControlRequest(method, path, token, String(body, Charsets.UTF_8), contentType))
                     } catch (_: Exception) {
                         ControlResponse(500, error("internal"))
                     }
@@ -179,6 +187,7 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
             405 -> "Method Not Allowed"
             409 -> "Conflict"
             413 -> "Payload Too Large"
+            415 -> "Unsupported Media Type"
             431 -> "Request Header Fields Too Large"
             else -> "Internal Server Error"
         }

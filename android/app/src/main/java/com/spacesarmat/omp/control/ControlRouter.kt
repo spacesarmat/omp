@@ -29,6 +29,8 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
             }
             "/omp/pair" -> {
                 if (req.method != "POST") return methodNotAllowed()
+                // a web page can send a «simple» cross-origin POST (text/plain) without a CORS preflight; JSON needs one
+                if (!isJson(req.contentType)) return ControlResponse(415, ControlServer.error("unsupported_media_type"))
                 return pair(parse(req.body) ?: return badRequest())
             }
             !in PROTECTED -> return ControlResponse(404, ControlServer.error("not_found"))
@@ -116,6 +118,10 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
             }
             else -> null
         }
+
+        /** `application/json`, parameters (charset) allowed. */
+        fun isJson(contentType: String?): Boolean =
+            contentType?.substringBefore(';')?.trim()?.equals("application/json", ignoreCase = true) == true
 
         private fun parse(body: String): JSONObject? = try {
             if (body.isBlank()) JSONObject() else JSONObject(body)

@@ -38,8 +38,13 @@ class ControlRouterTest {
     }
     private val router = ControlRouter(pairing, actions)
 
-    private fun req(method: String, path: String, body: String = "", token: String? = null) =
-        router.route(ControlRequest(method, path, token, body))
+    private fun req(
+        method: String,
+        path: String,
+        body: String = "",
+        token: String? = null,
+        contentType: String? = "application/json",
+    ) = router.route(ControlRequest(method, path, token, body, contentType))
 
     private fun token(): String {
         val code = pairing.newCode().code
@@ -104,6 +109,20 @@ class ControlRouterTest {
         while (c.code[0] != '0') c = pairing.newCode()
         val r = req("POST", "/omp/pair", "{\"code\":${c.code.toInt()}}")
         assertEquals(200, r.status)
+    }
+
+    @Test
+    fun pairNeedsJsonContentType() {
+        val c = pairing.newCode()
+        val body = "{\"code\":\"${c.code}\",\"phone\":\"Pixel\"}"
+        for (type in listOf(null, "text/plain", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x")) {
+            val r = req("POST", "/omp/pair", body, contentType = type)
+            assertEquals(415, r.status)
+            assertEquals("unsupported_media_type", JSONObject(r.json).getString("error"))
+        }
+        assertTrue(calls.isEmpty())
+        assertEquals(200, req("POST", "/omp/pair", body, contentType = "Application/JSON; charset=utf-8").status)
+        assertEquals(listOf("paired:Pixel"), calls)
     }
 
     @Test
