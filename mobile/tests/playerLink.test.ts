@@ -238,6 +238,17 @@ describe('playerLink', () => {
     expect(launches).toHaveLength(1);
   });
 
+  it('on Android TV attaches with /omp/attach instead of a relaunch', async () => {
+    const attached: string[] = [];
+    setPlayerLinkDeps({ tvKind: () => 'atv', attachOnTv: async (r: string) => void attached.push(r) });
+    await attachIfOmpForeground();
+    expect(attached).toEqual(['http://192.168.1.2:8123/']);
+    expect(launches).toEqual([]);
+    fg = null;
+    await attachIfOmpForeground();
+    expect(attached).toHaveLength(1);
+  });
+
   it('concurrent attaches share one launch', async () => {
     await Promise.all([attachIfOmpForeground(), attachIfOmpForeground()]);
     expect(launches).toHaveLength(1);

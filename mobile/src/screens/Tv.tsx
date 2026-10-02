@@ -1,18 +1,29 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { goBack } from '../nav';
-import { native, type FoundTv } from '../platform/native';
-import { connectTv, cancelWarmUp, disconnectTv, sessionIp, tvState, tvError } from '../tv/tvClient';
+import { native, type FoundTv, type FoundOmpTv } from '../platform/native';
+import { connectTv, cancelWarmUp, disconnectTv, pairAtv, sessionIp, tvState, tvError, TV_FORGOT } from '../tv/tvClient';
 import { RenameSheet } from '../ui/RenameSheet';
-import { tvs, activeTv, forgetTv, renameTv, type SavedTv } from '../tv/tvStore';
+import { CodeSheet } from '../ui/CodeSheet';
+import { tvs, activeTv, forgetTv, renameTv, ATV_PORT, type SavedTv, type TvKind } from '../tv/tvStore';
 
 type Discoverer = (timeoutMs: number) => Promise<FoundTv[]>;
+type AtvDiscoverer = (timeoutMs: number) => Promise<FoundOmpTv[]>;
 let discoverer: Discoverer | null = null;
+let atvDiscoverer: AtvDiscoverer | null = null;
 
-/** Replaces TV discovery (tests); null restores the native one. */
+/** Replaces LG (SSDP) discovery (tests); null restores the native one. */
 export function setTvDiscoverer(fn: Discoverer | null): void {
   discoverer = fn;
 }
+
+/** Replaces Android TV (NSD) discovery (tests); null restores the native one. */
+export function setAtvDiscoverer(fn: AtvDiscoverer | null): void {
+  atvDiscoverer = fn;
+}
+
+const SEARCH_MS = 4000;
+const KIND_LABEL: Record<TvKind, string> = { lg: 'LG webOS', atv: 'Android TV' };
 
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 
@@ -20,7 +31,10 @@ interface Row {
   ip: string;
   name: string;
   meta: string;
+  kind: TvKind;
   saved?: SavedTv;
+  /** Android TV as NSD found it. */
+  atv?: FoundOmpTv;
 }
 
 const PENCIL = 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4';
@@ -33,33 +47,79 @@ export function Tv() {
   const [ip, setIp] = useState('');
   const [formError, setFormError] = useState('');
   const [renaming, setRenaming] = useState<SavedTv | null>(null);
+  const [foundAtv, setFoundAtv] = useState<FoundOmpTv[]>([]);
+  /** Android TV waiting for its pairing code. */
+  const [coding, setCoding] = useState<FoundOmpTv | null>(null);
 
   useEffect(() => {
     let alive = true;
-    (discoverer ?? ((ms: number) => native.discoverTvs(ms)))(4000)
+    // SSDP (LG) and NSD (Android TV with OMP) in parallel; each list shows as soon as it arrives
+    const lg = (discoverer ?? ((ms: number) => native.discoverTvs(ms)))(SEARCH_MS)
       .then((r) => alive && setFound(r))
-      .catch(() => {})
-      .finally(() => alive && setSearching(false));
+      .catch(() => {});
+    const atv = (atvDiscoverer ?? ((ms: number) => native.discoverOmpTvs(ms)))(SEARCH_MS)
+      .then((r) => alive && setFoundAtv(r))
+      .catch(() => {});
+    Promise.all([lg, atv]).then(() => alive && setSearching(false));
     return () => {
       alive = false;
     };
   }, []);
 
   const savedList = tvs.value;
-  const rows: Row[] = savedList.map((t) => ({ ip: t.ip, name: t.name, meta: t.ip + ' · сохранён', saved: t }));
+  const ompMeta = (ip: string, version?: string) => ip + (version ? ' · OMP ' + version : '');
+  const rows: Row[] = savedList.map((t) => {
+    const kind: TvKind = t.kind === 'atv' ? 'atv' : 'lg';
+    const atv = kind === 'atv' ? foundAtv.find((f) => f.ip === t.ip) : undefined;
+    const meta = atv && atv.version ? ompMeta(t.ip, atv.version) : t.ip + ' · сохранён';
+    return { ip: t.ip, name: t.name, meta, kind, saved: t, atv };
+  });
+  for (const f of foundAtv) {
+    if (rows.some((r) => r.ip === f.ip)) continue;
+    rows.push({ ip: f.ip, name: f.name, meta: ompMeta(f.ip, f.version), kind: 'atv', atv: f });
+  }
   for (const f of found) {
     if (rows.some((r) => r.ip === f.ip)) continue;
-    rows.push({ ip: f.ip, name: f.name, meta: f.ip + (f.model ? ' · ' + f.model : '') });
+    rows.push({ ip: f.ip, name: f.name, meta: f.ip + (f.model ? ' · ' + f.model : ''), kind: 'lg' });
   }
 
   const state = tvState.value;
   if (target && !rows.some((r) => r.ip === target) && (state === 'connecting' || state === 'pairing' || state === 'error')) {
-    rows.push({ ip: target, name: 'Телевизор ' + target, meta: target });
+    rows.push({ ip: target, name: 'Телевизор ' + target, meta: target, kind: 'lg' });
   }
 
   async function forget(ip: string) {
     if (sessionIp.value === ip) await disconnectTv();
     forgetTv(ip);
+  }
+
+  /** LG: SSAP connect. Android TV: a paired one connects, a new (or forgetful) one asks for the code. */
+  function openRow(r: Row) {
+    if (r.kind !== 'atv') {
+      connect(r);
+      return;
+    }
+    const forgot = target === r.ip && state === 'error' && tvError.value === TV_FORGOT;
+    if (r.saved?.token && !forgot) {
+      setTarget(r.ip);
+      setFormError('');
+      if (activeTv.value?.ip !== r.ip) cancelWarmUp();
+      connectTv(r.saved).catch(() => {});
+      return;
+    }
+    setCoding({
+      ip: r.ip,
+      port: r.atv?.port ?? r.saved?.ctlPort ?? ATV_PORT,
+      name: r.atv?.name ?? r.saved?.defaultName ?? r.name,
+      version: r.atv?.version ?? '',
+    });
+  }
+
+  async function pair(found: FoundOmpTv, code: string) {
+    if (activeTv.value?.ip !== found.ip) cancelWarmUp();
+    setTarget(found.ip);
+    await pairAtv(found, code);
+    setCoding(null);
   }
 
   function connect(r: { ip: string; name: string }) {
@@ -96,7 +156,7 @@ export function Tv() {
           <svg class="m-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5B700" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
             <path d="M12 3a9 9 0 1 0 9 9" />
           </svg>
-          Ищу телевизоры LG…
+          Ищу телевизоры…
         </div>
       )}
       <div class="m-list">
@@ -110,7 +170,7 @@ export function Tv() {
           return (
             <div key={r.ip} class={cls}>
               <div class="m-tv-row">
-                <button type="button" class="m-tv-main" onClick={() => connect(r)}>
+                <button type="button" class="m-tv-main" onClick={() => openRow(r)}>
                   <span class="m-tv-icon">
                     <Icon d="M3 5h18v11H3zM8 20h8" size={26} />
                   </span>
@@ -120,6 +180,7 @@ export function Tv() {
                       {r.meta}
                       {connecting || pairing ? ' · подключение…' : ''}
                     </span>
+                    <span class={'m-tv-kind ' + r.kind}>{KIND_LABEL[r.kind]}</span>
                     {connected && (
                       <span class="m-tv-ok">
                         <Icon d="M5 12l5 5 9-10" size={16} />
@@ -179,6 +240,9 @@ export function Tv() {
         Телефон запомнит телевизор: в следующий раз «Смотреть на ТВ» и пульт заработают сразу. Чтобы включать телевизор с
         телефона, на ТВ включите: Общие → Устройства → «Включение мобильного ТВ» (или «Включение через Wi‑Fi»).
       </p>
+      {coding && (
+        <CodeSheet tvName={coding.name} onSubmit={(code) => pair(coding, code)} onCancel={() => setCoding(null)} />
+      )}
       {renaming && (
         <RenameSheet
           title="Название телевизора"

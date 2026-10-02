@@ -7,7 +7,9 @@ import { pathToFileURL } from 'node:url';
 
 const SCENES = ['login', 'login-history', 'library-large', 'library-list', 'history', 'search'];
 // Android client scenes: phone viewport at 2x.
-const ANDROID_SCENES = ['android-library', 'android-torrent', 'android-watch', 'android-remote', 'android-nowplaying', 'android-server'];
+const ANDROID_SCENES = ['android-library', 'android-torrent', 'android-watch', 'android-remote', 'android-nowplaying', 'android-server', 'android-tvlist'];
+// Android TV scene: 1280x720 like the TV UI.
+const ANDROIDTV_SCENES = ['androidtv-player'];
 
 const candidates = [
   process.env.CHROME_PATH,
@@ -21,8 +23,9 @@ const candidates = [
 const chrome = candidates.find((p) => existsSync(p));
 if (!chrome) throw new Error('Chrome not found; set CHROME_PATH');
 
-for (const scene of [...SCENES, ...ANDROID_SCENES]) {
+for (const scene of [...SCENES, ...ANDROID_SCENES, ...ANDROIDTV_SCENES]) {
   const android = scene.startsWith('android-');
+  const tv720 = ANDROIDTV_SCENES.includes(scene);
   const page = pathToFileURL(resolve('docs/screenshots/src', scene + '.html')).href;
   const out = resolve('docs/screenshots', scene + '.png');
   const profile = mkdtempSync(join(tmpdir(), 'omp-shot-'));
@@ -30,7 +33,7 @@ for (const scene of [...SCENES, ...ANDROID_SCENES]) {
     execFileSync(
       chrome,
       ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', `--user-data-dir=${profile}`,
-        android ? '--window-size=390,844' : '--window-size=1920,1080', ...(android ? ['--force-device-scale-factor=2'] : []), '--virtual-time-budget=5000', `--screenshot=${out}`, page],
+        android ? '--window-size=390,844' : tv720 ? '--window-size=1280,720' : '--window-size=1920,1080', ...(android ? ['--force-device-scale-factor=2'] : []), '--virtual-time-budget=5000', `--screenshot=${out}`, page],
       { timeout: 60000, stdio: 'ignore' },
     );
   } finally {

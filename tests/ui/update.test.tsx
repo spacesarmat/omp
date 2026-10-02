@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, h } from 'preact';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { Qr } from '../../src/ui/Qr';
-import { UpdateScreen } from '../../src/screens/Update';
+import { UpdateScreen, apkJob } from '../../src/screens/Update';
 import { latestUpdate } from '../../src/store/updates';
 
 const info = {
@@ -165,5 +165,101 @@ describe('UpdateScreen', () => {
     const d = (e: HTMLElement) => e.querySelector('path:last-of-type')!.getAttribute('d');
     expect(d(host)).toBe(d(ref));
     expect(d(host)).not.toBe(d(other));
+  });
+});
+
+describe('UpdateScreen on Android TV', () => {
+  const w = window as unknown as { Capacitor?: unknown };
+  let lunaCalls = 0;
+  let calls: { method: string; o: any }[] = [];
+  let settle: { resolve: () => void; reject: (e: unknown) => void } | null = null;
+  let progress: ((d: any) => void) | null = null;
+  let removed = 0;
+
+  beforeEach(() => {
+    lunaCalls = 0;
+    calls = [];
+    settle = null;
+    progress = null;
+    removed = 0;
+    apkJob.value = null;
+    (window as any).PalmServiceBridge = function (this: any) { this.call = () => { lunaCalls++; }; };
+    w.Capacitor = {
+      getPlatform: () => 'android',
+      Plugins: {},
+      nativePromise: (_p: string, method: string, o: any) => {
+        calls.push({ method, o });
+        return new Promise<void>((resolve, reject) => { settle = { resolve, reject }; });
+      },
+      addListener: (_p: string, _e: string, cb: (d: any) => void) => {
+        progress = cb;
+        return { remove: () => { removed++; } };
+      },
+    };
+  });
+  afterEach(() => { delete w.Capacitor; });
+
+  const installButton = (host: HTMLElement) =>
+    Array.from(host.querySelectorAll('.button')).find((x) => /Скачать и установить|Повторить|Установить снова/.test(x.textContent || '')) as HTMLElement;
+
+  it('offers only the APK download, no Homebrew/computer methods and no luna calls', async () => {
+    const host = await mount();
+    await tick();
+    expect(host.textContent).toContain('доступна 9.9.9');
+    expect(host.textContent).toContain('Скачать и установить');
+    expect(host.textContent).not.toContain('Homebrew');
+    expect(host.textContent).not.toContain('С компьютера');
+    expect(host.textContent).not.toContain('.ipk');
+    expect(host.querySelectorAll('svg.qr')).toHaveLength(0);
+    expect(lunaCalls).toBe(0);
+  });
+
+  it('download progress, then the system installer prompt', async () => {
+    const host = await mount();
+    installButton(host).click();
+    await until(() => calls.length === 1);
+    expect(calls[0]).toEqual({ method: 'downloadAndInstallApk', o: { url: info.ipkUrl, sha256: info.ipkHash } });
+    expect(host.textContent).toContain('Скачивание…');
+    progress!({ percent: 37 });
+    await until(() => host.textContent!.indexOf('Скачивание… 37%') >= 0);
+    expect((host.querySelector('.progress-fill') as HTMLElement).style.width).toBe('37%');
+    settle!.resolve();
+    await until(() => host.textContent!.indexOf('Подтвердите установку в открывшемся окне Android') >= 0);
+    expect(host.querySelector('.progress')).toBeNull();
+    expect(removed).toBe(1);
+    expect(installButton(host).textContent).toBe('Установить снова');
+    expect(installButton(host).classList.contains('disabled')).toBe(false);
+  });
+
+  it('returning to the screen during a download: «Обновление уже скачивается…», no enabled button', async () => {
+    let host = await mount();
+    installButton(host).click();
+    await until(() => calls.length === 1);
+    render(null, host);
+    document.body.innerHTML = '';
+    host = await mount();
+    await tick();
+    expect(host.textContent).toContain('Обновление уже скачивается…');
+    expect(installButton(host).classList.contains('disabled')).toBe(true);
+    installButton(host).click();
+    await tick();
+    expect(calls).toHaveLength(1);
+    progress!({ percent: 55 });
+    await until(() => host.textContent!.indexOf('Скачивание… 55%') >= 0);
+    settle!.resolve();
+    await until(() => host.textContent!.indexOf('Подтвердите установку') >= 0);
+  });
+
+  it('error: Russian banner from the native side and a retry', async () => {
+    const host = await mount();
+    installButton(host).click();
+    await until(() => calls.length === 1);
+    settle!.reject({ message: 'Разрешите установку из OMP и повторите установку' });
+    await until(() => !!host.querySelector('.banner-error'));
+    expect(host.querySelector('.banner-error')!.textContent).toBe('Разрешите установку из OMP и повторите установку');
+    expect(installButton(host).textContent).toBe('Повторить');
+    installButton(host).click();
+    await until(() => calls.length === 2);
+    expect(host.querySelector('.banner-error')).toBeNull();
   });
 });

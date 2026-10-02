@@ -15,6 +15,10 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import com.spacesarmat.omp.control.TvRemote
+import com.spacesarmat.omp.player.NativePlayerBridge
+import com.spacesarmat.omp.player.PlayRequest
+import com.spacesarmat.omp.player.PlayerActivity
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -24,14 +28,17 @@ import org.json.JSONException
 import org.json.JSONObject
 
 /**
- * Transport for the phone client: SSDP, TV WebSockets, external player, APK update, magnet intake,
+ * Transport for the phone client: SSDP and NSD discovery, TV WebSockets, external player, APK update, magnet intake,
  * local player server (TV state in, commands out), embedded TorrServer ([TorrServerService]).
  * The SSAP protocol itself (register, requests, pairing) lives in TypeScript.
  *
  * Every PluginCall is settled exactly once (see [Once]). Blocking work runs on [io]; socket
  * callbacks arrive on OkHttp threads. Events: tvMessage { json }, tvClosed { reason },
  * apkProgress { percent }, magnetReceived { link }, playerMessage { body },
- * localServerState { running, error? }.
+ * localServerState { running, error? }, nativePlayerState { session, index, time, duration, paused, buffering,
+ * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV);
+ * phone remote on Android TV ([TvRemote]): remoteLaunch { params }, remoteAttach { report }, remoteKey { name },
+ * remoteText { text | delete | enter }, phonePaired { phone }.
  */
 @CapacitorPlugin(
     name = "OmpNative",
@@ -48,6 +55,8 @@ class OmpNativePlugin : Plugin() {
     private var pendingPointer: Once? = null
     private val downloading = AtomicBoolean(false)
     private val player = PlayerServer { body -> notifyListeners("playerMessage", JSObject().put("body", body)) }
+    // phone remote: only in TV mode
+    private var remote: TvRemote? = null
     private val serverState = LocalTorrServer.Listener { running, error ->
         val o = JSObject().put("running", running)
         if (error != null) o.put("error", error)
@@ -56,17 +65,32 @@ class OmpNativePlugin : Plugin() {
 
     override fun load() {
         instance = this
+        NativePlayerBridge.emitter = { event, data -> notifyListeners(event, data) }
         LocalTorrServer.addListener(serverState)
+        if (TvMode.isTv(context)) {
+            val r = TvRemote(context.applicationContext) { event, data, retain -> notifyListeners(event, data, retain) }
+            remote = r
+            // binding a local port and NSD registration (async) are quick; synchronous so stop() never races start()
+            r.start()
+        }
         // a magnet that arrived before the bridge was ready
         synchronized(magnetLock) { pendingMagnet }?.let { emitMagnet(it) }
     }
 
     override fun handleOnDestroy() {
         if (instance === this) instance = null
+        NativePlayerBridge.emitter = null
         LocalTorrServer.removeListener(serverState)
         closeAll()
         player.stop()
+        remote?.stop()
+        remote = null
         io.shutdownNow()
+    }
+
+    @PluginMethod
+    fun isTv(call: PluginCall) {
+        call.resolve(JSObject().put("tv", TvMode.isTv(context)))
     }
 
     // ---- discovery ----
@@ -91,6 +115,39 @@ class OmpNativePlugin : Plugin() {
                 once.reject("Не удалось выполнить поиск телевизоров. Проверьте Wi-Fi")
             }
         }
+    }
+
+    /** NSD search for OMP on Android TV: { tvs: [{ ip, port, name, version }] }. */
+    @PluginMethod
+    fun discoverOmpTvs(call: PluginCall) {
+        val once = Once(call)
+        val timeout = (call.getInt("timeoutMs") ?: 3000).coerceIn(500, 15000).toLong()
+        io.execute {
+            try {
+                val arr = JSArray()
+                for (t in OmpDiscovery.discover(context, timeout)) {
+                    arr.put(
+                        JSObject().put("ip", t.ip).put("port", t.port).put("name", t.name).put("version", t.version),
+                    )
+                }
+                once.resolve(JSObject().put("tvs", arr))
+            } catch (e: Exception) {
+                once.reject("Не удалось выполнить поиск телевизоров. Проверьте Wi-Fi")
+            }
+        }
+    }
+
+    /** Phone model for the TV's list of paired phones, e.g. «Google Pixel 7». */
+    @PluginMethod
+    fun phoneName(call: PluginCall) {
+        val maker = Build.MANUFACTURER.orEmpty().trim()
+        val model = Build.MODEL.orEmpty().trim()
+        val name = when {
+            model.isEmpty() -> maker
+            maker.isEmpty() || model.startsWith(maker, ignoreCase = true) -> model
+            else -> maker.replaceFirstChar { it.uppercase() } + " " + model
+        }
+        call.resolve(JSObject().put("name", name))
     }
 
     // ---- main TV socket ----
@@ -351,6 +408,78 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
+    // ---- native player (Android TV) ----
+
+    /** Opens [PlayerActivity] with the queue (an open player takes the new queue over); resolves once launched. */
+    @PluginMethod
+    fun playNative(call: PluginCall) {
+        val req = PlayRequest.parse(call.data)
+        if (req == null) {
+            call.reject("Нечего воспроизводить")
+            return
+        }
+        NativePlayerBridge.request = req
+        // REORDER_TO_FRONT: an open player below the TV interface takes the queue over (no second instance)
+        val intent = Intent(context, PlayerActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        try {
+            val act = activity
+            if (act != null) act.startActivity(intent)
+            else context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            call.resolve()
+        } catch (_: RuntimeException) {
+            call.reject("Не удалось запустить плеер")
+        }
+    }
+
+    // ---- phone remote (Android TV) ----
+
+    /** A new 4-digit pairing code (the previous one stops working): { code, expiresAt } (epoch ms). */
+    @PluginMethod
+    fun pairingCode(call: PluginCall) {
+        val r = remote
+        if (r == null) {
+            call.reject("Управление с телефона недоступно")
+            return
+        }
+        // the port could not be bound: a code would be useless
+        if (!r.running) {
+            call.reject("Сервер управления не запустился")
+            return
+        }
+        val c = r.pairing.newCode()
+        call.resolve(JSObject().put("code", c.code).put("expiresAt", c.expiresAt))
+    }
+
+    /** The pairing screen closed: the code shown there stops working. */
+    @PluginMethod
+    fun clearPairingCode(call: PluginCall) {
+        remote?.pairing?.clearCode()
+        call.resolve()
+    }
+
+    /** The TV name the phone sees (the registered NSD name): { name }. */
+    @PluginMethod
+    fun tvName(call: PluginCall) {
+        val r = remote
+        if (r == null) {
+            call.reject("Управление с телефона недоступно")
+            return
+        }
+        call.resolve(JSObject().put("name", r.name()))
+    }
+
+    /** A phone command for the open native player ({ cmd: Cmd }). */
+    @PluginMethod
+    fun nativePlayerCommand(call: PluginCall) {
+        val cmd = call.getObject("cmd")
+        when {
+            cmd == null -> call.reject("Некорректная команда")
+            !NativePlayerBridge.command(cmd) -> call.reject("Плеер не открыт")
+            else -> call.resolve()
+        }
+    }
+
     // ---- APK update ----
 
     @PluginMethod
@@ -363,7 +492,7 @@ class OmpNativePlugin : Plugin() {
                 ApkInstaller.openInstallPermissionSettings(context)
             } catch (_: RuntimeException) {
             }
-            once.reject("Разрешите установку из OMP и нажмите «Установить» ещё раз")
+            once.reject("Разрешите установку из OMP и повторите установку")
             return
         }
         if (!downloading.compareAndSet(false, true)) {

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { subnetOf, candidateSubnets, discover, probeEcho } from '../../src/api/discovery';
+import { subnetOf, candidateSubnets, discover, probeEcho, getLocalIp } from '../../src/api/discovery';
 
 describe('subnet helpers', () => {
   it('subnetOf', () => {
@@ -161,5 +161,36 @@ describe('discover bounds and cancellation', () => {
       },
     });
     expect(found).toEqual([{ url: 'http://10.0.4.1:8090', version: 'V1' }]);
+  });
+});
+
+describe('getLocalIp', () => {
+  const w = window as unknown as { Capacitor?: unknown; PalmServiceBridge?: unknown };
+  afterEach(() => { delete w.Capacitor; delete w.PalmServiceBridge; });
+
+  it('webOS: luna connectionmanager getStatus', async () => {
+    const uris: string[] = [];
+    w.PalmServiceBridge = function (this: any) {
+      this.call = (uri: string) => {
+        uris.push(uri);
+        setTimeout(() => this.onservicecallback(JSON.stringify({ returnValue: true, wifi: { ipAddress: '192.168.7.30' } })), 0);
+      };
+    };
+    expect(await getLocalIp()).toBe('192.168.7.30');
+    expect(uris).toEqual(['luna://com.webos.service.connectionmanager/getStatus']);
+  });
+
+  it('Android TV: the native plugin localIpv4, never luna', async () => {
+    let lunaCalls = 0;
+    w.PalmServiceBridge = function (this: any) { this.call = () => { lunaCalls++; }; };
+    w.Capacitor = {
+      getPlatform: () => 'android',
+      Plugins: {},
+      nativePromise: (plugin: string, method: string) =>
+        plugin === 'OmpNative' && method === 'localIpv4' ? Promise.resolve({ ip: '10.1.2.3' }) : Promise.reject({ message: 'x' }),
+      addListener: () => ({ remove: () => undefined }),
+    };
+    expect(await getLocalIp()).toBe('10.1.2.3');
+    expect(lunaCalls).toBe(0);
   });
 });

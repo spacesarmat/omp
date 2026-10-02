@@ -43,6 +43,18 @@ if (existsSync(res)) {
     writeFileSync(file, new Resvg(splash, { fitTo: { mode: 'original' } }).render().asPng());
     console.log('wrote', file, w + 'x' + h);
   }
+  // Android TV launcher banner 320x180 (xhdpi): dark tile, logo + OMP / Open Movie Player
+  const bannerDir = `${res}/drawable-xhdpi`;
+  mkdirSync(bannerDir, { recursive: true });
+  const banner =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">` +
+    `<rect width="320" height="180" fill="${bg}"/>` +
+    `<svg x="46" y="48" width="84" height="84" viewBox="0 0 100 100"><rect x="14" y="22" width="72" height="56" rx="10" fill="none" stroke="#F5B700" stroke-width="7"/>` +
+    `<path d="M44 41 L59 50 L44 59 Z" fill="#E8EAF0" stroke="#E8EAF0" stroke-width="4" stroke-linejoin="round"/></svg>` +
+    `<text x="148" y="94" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="40" fill="#E8EAF0">OMP</text>` +
+    `<text x="149" y="116" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#9AA1B2">Open Movie Player</text></svg>`;
+  writeFileSync(`${bannerDir}/banner.png`, new Resvg(banner, { fitTo: { mode: 'original' }, font: { loadSystemFonts: true } }).render().asPng());
+  console.log('wrote', `${bannerDir}/banner.png`, '320x180');
   writeFileSync(
     `${res}/values/ic_launcher_background.xml`,
     `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">${bg}</color>\n</resources>\n`,

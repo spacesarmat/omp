@@ -8,6 +8,11 @@ describe('native plugin wrapper outside Android', () => {
 
   it('finds no TVs', async () => {
     expect(await native.discoverTvs(500)).toEqual([]);
+    expect(await native.discoverOmpTvs(500)).toEqual([]);
+  });
+
+  it('names the phone «Телефон»', async () => {
+    expect(await native.phoneName()).toBe('Телефон');
   });
 
   it('rejects tvSend with a clear message', async () => {
@@ -69,6 +74,16 @@ describe('native plugin wrapper on Android', () => {
       tvSend: vi.fn(async () => {}),
       tvConnect: vi.fn(async () => ({ port: 3001 })),
       discoverTvs: vi.fn(async () => ({ tvs: [{ ip: '10.0.0.2', name: 'TV' }] })),
+      discoverOmpTvs: vi.fn(async (): Promise<any> => ({
+        tvs: [
+          { ip: '192.168.1.40', port: 8095, name: 'Гостиная', version: '0.10.0' },
+          { ip: '192.168.1.40', port: 8095, name: 'dup', version: '0.10.0' },
+          { ip: '192.168.1.41', port: 'x', name: '', version: 5 },
+          { ip: 'fe80::1', port: 8095, name: 'v6' },
+          'junk',
+        ],
+      })),
+      phoneName: vi.fn(async (): Promise<any> => ({ name: ' Pixel 7 ' })),
       takePendingMagnet: vi.fn(async () => ({ link: null })),
       startPlayerServer: vi.fn(async () => ({ url: 'http://10.0.0.3:41234/omp/abc' })),
       stopPlayerServer: vi.fn(async () => {}),
@@ -108,6 +123,26 @@ describe('native plugin wrapper on Android', () => {
     expect(fake.tvSend).toHaveBeenCalledWith({ json: '{"type":"request","id":"1"}' });
     expect(await n.discoverTvs(1000)).toEqual([{ ip: '10.0.0.2', name: 'TV' }]);
     expect(await n.takePendingMagnet()).toBeNull();
+  });
+
+  it('discoverOmpTvs passes the timeout and keeps well-formed IPv4 entries', async () => {
+    const { native: n, fake } = await load();
+    expect(await n.discoverOmpTvs(4000)).toEqual([
+      { ip: '192.168.1.40', port: 8095, name: 'Гостиная', version: '0.10.0' },
+      { ip: '192.168.1.41', port: 8095, name: 'Android TV', version: '' },
+    ]);
+    expect(fake.discoverOmpTvs).toHaveBeenCalledWith({ timeoutMs: 4000 });
+    fake.discoverOmpTvs.mockResolvedValueOnce({});
+    expect(await n.discoverOmpTvs(4000)).toEqual([]);
+  });
+
+  it('phoneName trims the model and falls back to «Телефон»', async () => {
+    const { native: n, fake } = await load();
+    expect(await n.phoneName()).toBe('Pixel 7');
+    fake.phoneName.mockResolvedValueOnce({ name: '' });
+    expect(await n.phoneName()).toBe('Телефон');
+    fake.phoneName.mockRejectedValueOnce(new Error('x'));
+    expect(await n.phoneName()).toBe('Телефон');
   });
 
   it('tvConnect passes preferPort and returns the port that opened', async () => {

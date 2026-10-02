@@ -16,6 +16,20 @@ export type Route =
 export const routeStack = signal<Route[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);
 
+// Unique key per route object (pushed, replaced or reset): the screen host is keyed by it, so a replaced route
+// with the same name (player → player) always remounts its screen. Kept outside the objects to leave Route as is.
+const routeIds = new WeakMap<Route, number>();
+let routeSeq = 0;
+
+export function routeKey(r: Route): number {
+  let id = routeIds.get(r);
+  if (id === undefined) {
+    id = ++routeSeq;
+    routeIds.set(r, id);
+  }
+  return id;
+}
+
 // focus key that was active on each stack level when we navigated away from it
 const focusMemory: (string | undefined)[] = [];
 
@@ -35,6 +49,12 @@ export function navigate(r: Route): void {
 export function replaceRoute(r: Route): void {
   focusMemory[routeStack.value.length - 1] = undefined;
   routeStack.value = routeStack.value.slice(0, -1).concat(r);
+}
+
+/** Opens a player route; a player already on top is replaced, so closing the new one never brings the old back. */
+export function openPlayer(r: Route): void {
+  if (currentRoute.value.name === 'player') replaceRoute(r);
+  else navigate(r);
 }
 
 export function resetTo(r: Route): void {

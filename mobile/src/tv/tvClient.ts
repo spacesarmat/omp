@@ -1,7 +1,9 @@
-// SSAP client on top of the native transport: pairing, request/response by id, pointer socket.
+// TV client. LG webOS: SSAP on top of the native transport (pairing, request/response by id, pointer socket).
+// Android TV with OMP (`kind: 'atv'`): HTTP to its control server (`/omp/*`, bearer token from code pairing).
 import { signal, effect } from '@preact/signals';
-import { native, type OmpNativeApi } from '../platform/native';
-import { activeTv, saveTv, setActiveTv, normalizeMac, type SavedTv } from './tvStore';
+import { native, type OmpNativeApi, type FoundOmpTv } from '../platform/native';
+import { activeTv, saveTv, setActiveTv, clearTvToken, normalizeMac, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
+import { showToast } from '../ui/toast';
 import {
   registerMessage,
   requestMessage,
@@ -25,6 +27,15 @@ export const TV_NO_ANSWER = 'Телевизор не отвечает';
 export const TV_DECLINED = 'Подключение отклонено на телевизоре';
 export const TV_POINTER_DENIED = 'Телевизор не разрешил управление пультом';
 const TV_LAUNCH_FAILED = 'Не удалось запустить OMP на телевизоре';
+export const TV_FORGOT = 'Телевизор забыл этот телефон — подключитесь заново кодом';
+export const ATV_BACKGROUND = 'Откройте OMP на телевизоре — Android не даёт вывести его на экран из фона';
+export const ATV_UNSUPPORTED = 'Недоступно на Android TV';
+export const PAIR_BAD_CODE = 'Неверный код';
+/** OMP control server answered 4xx (bad request, unknown route, unsupported body…). */
+export const ATV_REJECTED = 'Телевизор отклонил запрос';
+/** Any other unexpected answer of the OMP control server. */
+export const ATV_ERROR = 'Телевизор ответил ошибкой';
+export const PAIR_EXPIRED = 'Код устарел — нажмите «Новый код» на телевизоре';
 
 const REQUEST_TIMEOUT = 8000;
 /** The native side races ws:3000 and wss:3001 (3 s each; a saved port gets a 2 s head start). */
@@ -99,6 +110,7 @@ export function setTransport(t: TvTransport): void {
     endSession(session, TV_NOT_CONNECTED);
     void closeTransport();
   }
+  endAtv();
   transport = t;
   closing = Promise.resolve();
   tvState.value = 'idle';
@@ -151,9 +163,11 @@ function onRegisterMessage(s: Session, m: any): void {
     armRegistration(s, PAIRING_TIMEOUT);
   } else if (m.type === 'registered') {
     const key = m.payload?.['client-key'];
+    // kind 'lg' explicitly: the IP may belong to an Android TV saved earlier (DHCP reuse)
     s.tv = {
       ip: s.tv.ip,
       name: s.tv.name,
+      kind: 'lg',
       clientKey: typeof key === 'string' && key ? key : s.tv.clientKey,
       port: s.tv.port,
     };
@@ -234,6 +248,8 @@ export function macFromInfo(info: any, ip: string): string | undefined {
 }
 
 export function connectTv(tv: SavedTv): Promise<void> {
+  if (tv.kind === 'atv') return connectAtv(tv);
+  endAtv();
   if (session && session.tv.ip === tv.ip) {
     if (tvState.value === 'connected') return Promise.resolve();
     if (connecting) return connecting;
@@ -242,7 +258,7 @@ export function connectTv(tv: SavedTv): Promise<void> {
     endSession(session, TV_NOT_CONNECTED);
     void closeTransport();
   }
-  const s: Session = { tv, off: [], registerId: nextId('register'), signed: true, reg: null };
+  const s: Session = { tv: { ...tv, kind: 'lg' }, off: [], registerId: nextId('register'), signed: true, reg: null };
   const promise = new Promise<void>((resolve, reject) => {
     s.reg = { resolve, reject };
   });
@@ -277,6 +293,8 @@ export function connectTv(tv: SavedTv): Promise<void> {
 async function ensureConnected(): Promise<void> {
   if (session && tvState.value === 'connected') return;
   if (connecting) return connecting;
+  if (atv && tvState.value === 'connected') return;
+  if (atvConnecting) return atvConnecting;
   const tv = activeTv.value;
   if (!tv) throw new Error(TV_NOT_CONNECTED);
   return connectTv(tv);
@@ -466,8 +484,9 @@ export function warmUp(): Promise<void> {
         try {
           await connectTv(tv);
           return;
-        } catch {
-          /* retry below */
+        } catch (e) {
+          // only a new pairing code helps
+          if (e instanceof Error && e.message === TV_FORGOT) return;
         }
         if (stopped || pairing || Date.now() - started + WARM_RETRY_MS > WARM_LIMIT_MS) return;
         tvWaking.value = true;
@@ -495,6 +514,11 @@ export function warmUp(): Promise<void> {
 }
 
 export async function launchOnTv(params: object): Promise<void> {
+  if (tvKind() === 'atv') {
+    await atvPost('/omp/launch', { params });
+    checkForeground();
+    return;
+  }
   try {
     await request('ssap://system.launcher/launch', launchOmpPayload(params));
   } catch (e) {
@@ -507,6 +531,10 @@ const OMP_APP_ID = 'com.spacesarmat.torrplayer';
 
 /** Id of the app in the TV foreground; null when unknown or the TV does not answer. */
 export async function foregroundAppId(): Promise<string | null> {
+  if (tvKind() === 'atv') {
+    const info = await atvInfo();
+    return info?.foreground ? OMP_APP_ID : null;
+  }
   try {
     const r = await request('ssap://com.webos.applicationManager/getForegroundAppInfo');
     return typeof r?.appId === 'string' && r.appId ? r.appId : null;
@@ -517,6 +545,11 @@ export async function foregroundAppId(): Promise<string | null> {
 
 /** Installed OMP version on the TV (cached per connection); null when unknown. */
 export async function ompVersionOnTv(): Promise<string | null> {
+  if (tvKind() === 'atv') {
+    const cached = atv && tvState.value === 'connected' ? atv.info : null;
+    const info = cached || (await atvInfo());
+    return info?.version || null;
+  }
   const ip = sessionIp.value;
   if (versionCache && versionCache.ip === ip) return versionCache.version;
   try {
@@ -531,35 +564,64 @@ export async function ompVersionOnTv(): Promise<string | null> {
 }
 
 export function pressButton(name: RemoteButton): Promise<void> {
+  if (tvKind() === 'atv') {
+    if (ATV_KEYS.indexOf(name) < 0) return Promise.reject(new Error(ATV_UNSUPPORTED));
+    return atvPost('/omp/key', { name }).then(noop);
+  }
   return sendFrame(buttonFrame(name));
 }
 
+/** Android TV only: «Каталог» / «Сейчас играет» in OMP. */
+export function pressAtvKey(name: 'CATALOG' | 'NOWPLAYING'): Promise<void> {
+  if (tvKind() !== 'atv') return Promise.reject(new Error(TV_NOT_CONNECTED));
+  return atvPost('/omp/key', { name }).then(noop);
+}
+
 export function moveCursor(dx: number, dy: number): Promise<void> {
+  if (tvKind() === 'atv') return Promise.reject(new Error(ATV_UNSUPPORTED));
   return sendFrame(moveFrame(dx, dy), true);
 }
 
 export function click(): Promise<void> {
+  if (tvKind() === 'atv') return Promise.reject(new Error(ATV_UNSUPPORTED));
   return sendFrame(clickFrame());
 }
 
 export async function volume(dir: 'up' | 'down'): Promise<void> {
+  if (tvKind() === 'atv') {
+    await atvPost('/omp/volume', { dir });
+    return;
+  }
   await request(dir === 'up' ? 'ssap://audio/volumeUp' : 'ssap://audio/volumeDown');
 }
 
 export async function typeText(text: string): Promise<void> {
+  if (tvKind() === 'atv') {
+    await atvPost('/omp/text', { text });
+    return;
+  }
   await request('ssap://com.webos.service.ime/insertText', { text, replace: 0 });
 }
 
 export async function deleteText(n: number): Promise<void> {
+  if (tvKind() === 'atv') {
+    await atvPost('/omp/text', { delete: n });
+    return;
+  }
   await request('ssap://com.webos.service.ime/deleteCharacters', { count: n });
 }
 
 export async function sendEnter(): Promise<void> {
+  if (tvKind() === 'atv') {
+    await atvPost('/omp/text', { enter: true });
+    return;
+  }
   await request('ssap://com.webos.service.ime/sendEnterKey');
 }
 
 /** The TV may drop the socket before answering: a close or timeout after sending counts as success. */
 export async function turnOffTv(): Promise<void> {
+  if (tvKind() === 'atv') throw new Error(ATV_UNSUPPORTED);
   await ensureConnected();
   await send('ssap://system/turnOff', undefined, true);
   await disconnectTv();
@@ -569,7 +631,241 @@ export async function turnOffTv(): Promise<void> {
 export async function disconnectTv(): Promise<void> {
   const s = session;
   if (s) endSession(s, TV_NOT_CONNECTED);
+  endAtv();
   tvState.value = 'idle';
   tvError.value = '';
   if (s) await closeTransport();
+}
+
+// ---- Android TV with OMP: HTTP control server ----
+
+interface AtvInfo {
+  name: string;
+  version: string;
+  paired: boolean;
+  foreground: boolean;
+}
+
+interface AtvSession {
+  tv: SavedTv;
+  info: AtvInfo | null;
+}
+
+/** Keys the OMP control server accepts from the shared remote buttons. */
+const ATV_KEYS: RemoteButton[] = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'ENTER', 'BACK'];
+const ATV_TIMEOUT = 5000;
+/** Android brings OMP to the front asynchronously (and may refuse to from the background). */
+const ATV_FOREGROUND_CHECK_MS = 2500;
+const TOKEN = /^[0-9a-f]{32}$/;
+
+let atv: AtvSession | null = null;
+let atvConnecting: Promise<void> | null = null;
+
+/** Kind of the TV the client talks to: the current session's, else the active TV's. */
+export function tvKind(): TvKind {
+  if (atv) return 'atv';
+  if (session) return 'lg';
+  return activeTv.value?.kind === 'atv' ? 'atv' : 'lg';
+}
+
+function endAtv(): void {
+  if (!atv) return;
+  atv = null;
+  atvConnecting = null;
+  sessionIp.value = null;
+}
+
+function atvFail(s: AtvSession, message: string): void {
+  if (atv !== s) return;
+  // the token is dead: the next tap on the TV asks for a code right away
+  if (message === TV_FORGOT) clearTvToken(s.tv.ip, s.tv.token);
+  endAtv();
+  tvState.value = 'error';
+  // While a warm-up retries, its failures stay silent until it gives up.
+  if (warmActive) warmError = message;
+  else tvError.value = message;
+}
+
+interface AtvAnswer {
+  status: number;
+  data: any;
+}
+
+/** Russian text for an unexpected status of the control server (never a raw code like «bad_request» or «400»). */
+export function atvErrorText(status: number): string {
+  return status >= 400 && status < 500 ? ATV_REJECTED : ATV_ERROR;
+}
+
+/** One request to the control server; a network failure or 5 s of silence -> TV_NO_ANSWER. */
+function atvFetch(tv: SavedTv, method: 'GET' | 'POST', path: string, body?: object): Promise<AtvAnswer> {
+  const headers: Record<string, string> = {};
+  if (tv.token) headers.Authorization = 'Bearer ' + tv.token;
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const ctrl = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      ctrl.abort();
+      reject(new Error(TV_NO_ANSWER));
+    }, ATV_TIMEOUT);
+  });
+  const url = 'http://' + tv.ip + ':' + (tv.ctlPort || ATV_PORT) + path;
+  const run = (async (): Promise<AtvAnswer> => {
+    let r: Response;
+    try {
+      r = await fetch(url, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+    } catch {
+      throw new Error(TV_NO_ANSWER);
+    }
+    const text = await r.text().catch(() => '');
+    let data: any = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = null;
+    }
+    return { status: r.status, data };
+  })();
+  return Promise.race([run, timeout]).finally(() => clearTimeout(timer));
+}
+
+function parseInfo(d: any): AtvInfo | null {
+  if (!d || typeof d !== 'object') return null;
+  return {
+    name: typeof d.name === 'string' ? d.name : '',
+    version: typeof d.version === 'string' ? d.version : '',
+    paired: d.paired === true,
+    foreground: d.foreground === true,
+  };
+}
+
+function connectAtv(tv: SavedTv): Promise<void> {
+  if (atv && atv.tv.ip === tv.ip && atv.tv.token === tv.token) {
+    if (tvState.value === 'connected') return Promise.resolve();
+    if (atvConnecting) return atvConnecting;
+  }
+  if (session) {
+    endSession(session, TV_NOT_CONNECTED);
+    void closeTransport();
+  }
+  endAtv();
+  const s: AtvSession = { tv, info: null };
+  atv = s;
+  sessionIp.value = tv.ip;
+  tvState.value = 'connecting';
+  tvError.value = '';
+  const p = (async () => {
+    let r: AtvAnswer;
+    try {
+      r = await atvFetch(tv, 'GET', '/omp/info');
+    } catch {
+      atvFail(s, TV_NO_ANSWER);
+      throw new Error(TV_NO_ANSWER);
+    }
+    if (atv !== s) throw new Error(TV_NOT_CONNECTED);
+    const info = r.status === 200 ? parseInfo(r.data) : null;
+    if (!info) {
+      atvFail(s, TV_NO_ANSWER);
+      throw new Error(TV_NO_ANSWER);
+    }
+    if (!info.paired) {
+      atvFail(s, TV_FORGOT);
+      throw new Error(TV_FORGOT);
+    }
+    s.info = info;
+    atvConnecting = null;
+    tvState.value = 'connected';
+    tvError.value = '';
+    saveTv(s.tv);
+    setActiveTv(s.tv.ip);
+  })();
+  atvConnecting = p;
+  return p;
+}
+
+/** Authorised POST to the Android TV (connecting first); a 401 means the TV forgot this phone. */
+async function atvPost(path: string, body: object): Promise<any> {
+  await ensureConnected();
+  const s = atv;
+  if (!s || tvState.value !== 'connected') throw new Error(TV_NOT_CONNECTED);
+  let r: AtvAnswer;
+  try {
+    r = await atvFetch(s.tv, 'POST', path, body);
+  } catch (e) {
+    // the next action reconnects
+    atvFail(s, TV_NO_ANSWER);
+    throw e;
+  }
+  if (r.status === 401) {
+    atvFail(s, TV_FORGOT);
+    throw new Error(TV_FORGOT);
+  }
+  if (r.status < 200 || r.status >= 300) {
+    throw new Error(atvErrorText(r.status));
+  }
+  return r.data;
+}
+
+/** Fresh `/omp/info` of the Android TV (connecting first); null when unknown. */
+async function atvInfo(): Promise<AtvInfo | null> {
+  try {
+    await ensureConnected();
+  } catch {
+    return null;
+  }
+  const s = atv;
+  if (!s) return null;
+  try {
+    const r = await atvFetch(s.tv, 'GET', '/omp/info');
+    const info = r.status === 200 ? parseInfo(r.data) : null;
+    if (!info) return null;
+    if (!info.paired) {
+      atvFail(s, TV_FORGOT);
+      return null;
+    }
+    if (atv === s) s.info = info;
+    return info;
+  } catch {
+    return null;
+  }
+}
+
+/** After a launch: Android may keep OMP in the background; then the user opens it with the TV remote. */
+function checkForeground(): void {
+  const s = atv;
+  setTimeout(() => {
+    if (!s || atv !== s || tvState.value !== 'connected') return;
+    atvInfo().then((info) => {
+      if (info && !info.foreground) showToast(ATV_BACKGROUND, 6000);
+    }, noop);
+  }, ATV_FOREGROUND_CHECK_MS);
+}
+
+/** Android TV: starts the «Сейчас играет» link to `report` without navigating. */
+export async function attachOnTv(report: string): Promise<void> {
+  await atvPost('/omp/attach', { report });
+}
+
+/**
+ * Pairs with an Android TV by the code on its screen, saves it with the token, makes it active and connects.
+ * Rejects only when pairing fails; a failed connect after it shows in tvState / tvError (the TV is saved).
+ */
+export async function pairAtv(found: FoundOmpTv, code: string): Promise<void> {
+  const tv: SavedTv = { ip: found.ip, name: found.name, kind: 'atv', ctlPort: found.port || ATV_PORT };
+  const phone = await native.phoneName().catch(() => 'Телефон');
+  const r = await atvFetch(tv, 'POST', '/omp/pair', { code, phone });
+  if (r.status === 403) throw new Error(r.data?.error === 'expired' ? PAIR_EXPIRED : PAIR_BAD_CODE);
+  const token = r.data?.token;
+  if (r.status !== 200 || typeof token !== 'string' || !TOKEN.test(token)) {
+    throw new Error(r.status === 200 ? ATV_ERROR : atvErrorText(r.status));
+  }
+  cancelWarmUp();
+  saveTv({ ...tv, token });
+  setActiveTv(tv.ip);
+  await connectTv(activeTv.value || { ...tv, token }).catch(noop);
 }

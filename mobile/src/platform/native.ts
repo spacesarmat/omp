@@ -9,6 +9,14 @@ export interface FoundTv {
   model?: string;
 }
 
+/** Android TV with OMP found by NSD (`_omp._tcp`): control server address, NSD name, OMP version (TXT `v`). */
+export interface FoundOmpTv {
+  ip: string;
+  port: number;
+  name: string;
+  version: string;
+}
+
 /** The embedded TorrServer (arm64 only), port 8090. */
 export interface LocalServerInfo {
   supported: boolean;
@@ -29,6 +37,10 @@ export interface LocalServerState {
 export interface OmpNativeApi {
   available: boolean;
   discoverTvs(timeoutMs: number): Promise<FoundTv[]>;
+  /** NSD search for Android TVs with OMP; stops after `timeoutMs`. */
+  discoverOmpTvs(timeoutMs: number): Promise<FoundOmpTv[]>;
+  /** Phone model for the TV's list of paired phones; «Телефон» when unknown. */
+  phoneName(): Promise<string>;
   /**
    * Opens the socket and sends `register`; resolves once open with the port that worked.
    * Both ports (ws:3000, wss:3001) are raced; `preferPort` is tried alone first (2 s).
@@ -73,6 +85,8 @@ export interface OmpNativeApi {
 
 interface OmpNativePlugin {
   discoverTvs(o: { timeoutMs: number }): Promise<{ tvs: FoundTv[] }>;
+  discoverOmpTvs(o: { timeoutMs: number }): Promise<{ tvs?: unknown }>;
+  phoneName(): Promise<{ name?: string | null }>;
   tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
   tvSend(o: { json: string }): Promise<void>;
   tvDisconnect(): Promise<void>;
@@ -152,6 +166,23 @@ function serverInfo(r: Partial<LocalServerInfo> | null | undefined): LocalServer
   return info;
 }
 
+const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+const ATV_PORT = 8095;
+const PHONE = 'Телефон';
+
+/** Well-formed entries only, one per IP. */
+function ompTvs(v: unknown): FoundOmpTv[] {
+  const out: FoundOmpTv[] = [];
+  if (!Array.isArray(v)) return out;
+  for (const t of v) {
+    if (!t || typeof t !== 'object' || typeof t.ip !== 'string' || !IPV4.test(t.ip)) continue;
+    if (out.some((o) => o.ip === t.ip)) continue;
+    const port = Number.isInteger(t.port) && t.port > 0 && t.port < 65536 ? t.port : ATV_PORT;
+    out.push({ ip: t.ip, port, name: text(t.name) ?? 'Android TV', version: text(t.version) ?? '' });
+  }
+  return out;
+}
+
 export const native: OmpNativeApi = {
   available,
 
@@ -159,6 +190,22 @@ export const native: OmpNativeApi = {
     if (!plugin) return [];
     const r = await plugin.discoverTvs({ timeoutMs });
     return r.tvs ?? [];
+  },
+
+  async discoverOmpTvs(timeoutMs) {
+    if (!plugin) return [];
+    const r = await plugin.discoverOmpTvs({ timeoutMs });
+    return ompTvs(r?.tvs);
+  },
+
+  async phoneName() {
+    if (!plugin) return PHONE;
+    try {
+      const r = await plugin.phoneName();
+      return text(r?.name?.trim()) ?? PHONE;
+    } catch {
+      return PHONE;
+    }
   },
 
   tvConnect(ip, register, preferPort) {

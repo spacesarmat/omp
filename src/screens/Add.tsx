@@ -8,6 +8,7 @@ import { replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, ChoiceRow, Spinner } from '../ui/components';
 import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
+import { platformKind } from '../platform/env';
 
 const SOURCES: { value: SearchSource; label: string }[] = [
   { value: 'rutor', label: 'Rutor' },
@@ -103,7 +104,7 @@ export function AddScreen() {
           ))}
         </FocusGroup>
       )}
-      <div class="hints">Текст удобно вводить с клавиатуры телефона в приложении LG ThinQ</div>
+      {platformKind() !== 'androidtv' && <div class="hints">Текст удобно вводить с клавиатуры телефона в приложении LG ThinQ</div>}
     </FocusGroup>
   );
 }

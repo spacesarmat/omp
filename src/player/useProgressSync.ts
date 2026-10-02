@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import type { TorrServerClient } from '../api/torrserver';
-import { saveProgress, MIN_RESUME, WATCHED_RATIO } from '../store/progress';
 import type { PlayItem } from './types';
+import { saveItemProgress, LOCAL_SAVE_MS, REMOTE_SAVE_MS } from './progressSave';
 
 /** Saves position locally every 5 s and to TorrServer /viewed every 15 s and on exit. */
 export function useProgressSync(
@@ -10,21 +10,10 @@ export function useProgressSync(
   pos: { current: { time: number; duration: number } },
 ): void {
   useEffect(() => {
-    const hash = item.hash;
-    const idx = item.fileIndex;
-    if (!hash || idx === undefined) return;
-    const save = (remote: boolean) => {
-      const p = pos.current;
-      if (p.duration <= 0 || p.time < 1) return;
-      saveProgress(hash, idx, p.time, p.duration);
-      if (remote && c && p.time >= MIN_RESUME) {
-        // server: timecode < MIN_RESUME means watched, so send 0 once the file is (nearly) finished
-        const tc = p.time / p.duration >= WATCHED_RATIO ? 0 : Math.floor(p.time);
-        c.setViewed(hash, idx, tc).catch(() => undefined);
-      }
-    };
-    const local = setInterval(() => save(false), 5000);
-    const remote = setInterval(() => save(true), 15000);
+    if (!item.hash || item.fileIndex === undefined) return;
+    const save = (remote: boolean) => saveItemProgress(c, item, pos.current.time, pos.current.duration, remote);
+    const local = setInterval(() => save(false), LOCAL_SAVE_MS);
+    const remote = setInterval(() => save(true), REMOTE_SAVE_MS);
     return () => {
       clearInterval(local);
       clearInterval(remote);

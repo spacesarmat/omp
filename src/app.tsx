@@ -1,5 +1,5 @@
 import { useEffect } from 'preact/hooks';
-import { routeStack, currentRoute, goBack, Route } from './ui/nav';
+import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { DialogHost, confirmDialog, dialogOpen } from './ui/dialog';
 import { ToastHost } from './ui/toast';
@@ -7,6 +7,7 @@ import { ConnectScreen } from './screens/Connect';
 import { LibraryScreen } from './screens/Library';
 import { TorrentScreen } from './screens/Torrent';
 import { PlayerScreen } from './screens/Player';
+import { NativePlayerScreen } from './screens/NativePlayer';
 import { AddScreen } from './screens/Add';
 import { PlaylistScreen } from './screens/Playlist';
 import { SettingsScreen } from './screens/Settings';
@@ -14,6 +15,10 @@ import { UpdateScreen } from './screens/Update';
 import { PairPhoneScreen } from './screens/PairPhone';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { checkForUpdate } from './store/updates';
+import { platformKind } from './platform/env';
+import { installAndroidKeyBridge } from './platform/androidKeys';
+import { installAndroidRemote } from './platform/androidRemote';
+import { installAndroidScale } from './platform/androidScale';
 
 function renderRoute(r: Route) {
   switch (r.name) {
@@ -24,7 +29,9 @@ function renderRoute(r: Route) {
     case 'torrent':
       return <TorrentScreen hash={r.hash} />;
     case 'player':
-      return <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />;
+      return platformKind() === 'androidtv'
+        ? <NativePlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />
+        : <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />;
     case 'add':
       return <AddScreen />;
     case 'playlist':
@@ -46,8 +53,19 @@ function exitApp() {
   });
 }
 
+/** Back that no screen took: pop the route; at the root webOS asks to exit, Android TV lets the Activity close. */
+export function unhandledBack(): boolean {
+  if (goBack()) return true;
+  if (platformKind() === 'androidtv') return false;
+  exitApp();
+  return true;
+}
+
 export function App() {
-  useEffect(() => installKeyListener(() => { if (!goBack()) exitApp(); }), []);
+  useEffect(() => installKeyListener(unhandledBack), []);
+  useEffect(() => (platformKind() === 'androidtv' ? installAndroidKeyBridge() : undefined), []);
+  useEffect(() => (platformKind() === 'androidtv' ? installAndroidRemote() : undefined), []);
+  useEffect(() => (platformKind() === 'androidtv' ? installAndroidScale() : undefined), []);
   useEffect(() => {
     const t = setTimeout(() => { checkForUpdate({ manual: false }); }, 3000);
     return () => clearTimeout(t);
@@ -55,7 +73,7 @@ export function App() {
   const r = currentRoute.value;
   return (
     <div class="app">
-      <div class="screen-host" key={routeStack.value.length + ':' + r.name}>{renderRoute(r)}</div>
+      <div class="screen-host" key={routeKey(r)}>{renderRoute(r)}</div>
       {shouldShowUpdateDialog(r.name) && !dialogOpen.value && <UpdateDialog />}
       <DialogHost />
       <ToastHost />

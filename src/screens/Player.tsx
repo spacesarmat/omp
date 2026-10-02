@@ -2,10 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { client } from '../store/servers';
 import { settings, updateSettings } from '../store/settings';
 import { SUB_SIZE_OPTIONS, formatOffset, subtitleOffsetOptions } from '../player/subtitleOffset';
-import { resumePosition } from '../store/progress';
+import { decideStart } from '../player/resume';
 import type { FfprobeResult } from '../api/types';
 import { errorMessage } from '../api/http';
-import { formatDuration } from '../lib/format';
 import { getTrackPref, saveTrackPref } from '../store/trackPrefs';
 import { pickAudio, pickSub, subPrefFromChoice } from '../player/trackPrefs';
 import { parseSubtitles, decodeText, Cue } from '../lib/subtitles';
@@ -155,20 +154,12 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     metaLoaded.current = false;
     showControls();
     let cancelled = false;
-    const decide = (): Promise<number> => {
-      if (index === startIndex && startAt !== undefined && !startUsed.current) {
-        startUsed.current = true;
-        return Promise.resolve(startAt);
-      }
-      if (!item.hash || item.fileIndex === undefined) return Promise.resolve(0);
-      const pos = resumePosition(item.hash, item.fileIndex);
-      if (pos <= 0) return Promise.resolve(0);
-      return choose('Продолжить просмотр?', [
-        { label: 'Продолжить с ' + formatDuration(pos), value: pos },
-        { label: 'Сначала', value: 0 },
-      ]).then((v) => (v === null ? -1 : v));
-    };
-    decide().then((pos) => {
+    let explicit: number | undefined;
+    if (index === startIndex && startAt !== undefined && !startUsed.current) {
+      startUsed.current = true;
+      explicit = startAt;
+    }
+    decideStart(item, explicit).then((pos) => {
       if (cancelled) return;
       if (pos < 0) {
         goBack();

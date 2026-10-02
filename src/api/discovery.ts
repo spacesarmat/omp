@@ -1,4 +1,6 @@
 import { lunaCall } from '../platform/luna';
+import { platformKind } from '../platform/env';
+import { nativeLocalIp } from '../platform/androidNative';
 
 export interface FoundServer {
   url: string;
@@ -150,7 +152,9 @@ export function discover(o: DiscoverOptions): Promise<FoundServer[]> {
   });
 }
 
+/** IPv4 of the TV: luna connectionmanager on webOS, the native plugin on Android TV. */
 export function getLocalIp(): Promise<string | null> {
+  if (platformKind() === 'androidtv') return nativeLocalIp();
   return lunaCall<any>('luna://com.webos.service.connectionmanager/getStatus', {}, 2000).then(
     (r) => (r.wired && r.wired.ipAddress) || (r.wifi && r.wifi.ipAddress) || null,
     () => null,
