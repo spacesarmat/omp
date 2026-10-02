@@ -216,8 +216,10 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
           if (choice === 'resume') t = o.at;
         }
       }
+      // first: without Wi-Fi (NO_WIFI) there is nothing to launch, so the player-state server is not started
+      const serverUrl = await tvServerUrl(c.baseUrl);
       const report = await actions.reportUrl();
-      await actions.launchOnTv(watchOnTvParams(await tvServerUrl(c.baseUrl), o.hash, o.file, t, report || undefined));
+      await actions.launchOnTv(watchOnTvParams(serverUrl, o.hash, o.file, t, report || undefined));
       if (report && landing === 'nowPlaying') markLaunched();
       if (!alive.v) return;
       if (o.onLaunched) o.onLaunched(tv.name);
