@@ -83,6 +83,14 @@ export function SettingsScreen() {
     <FocusGroup focusKey="SETTINGS" className="screen settings">
       <h1>Настройки</h1>
 
+      <h2>Сервер</h2>
+      <div class="row">
+        <div class="grow">
+          {activeServer.value ? activeServer.value.name + ' · ' + activeServer.value.url.replace(/^https?:\/\//, '') : 'Сервер не выбран'}
+        </div>
+        <Button focusKey="set-server" label="Сменить сервер" onPress={() => navigate({ name: 'connect' })} />
+      </div>
+
       <h2>Воспроизведение</h2>
       <ChoiceRow focusKey="set-audio" label="Язык аудио" value={s.audioLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ audioLang: v })} />
       <ChoiceRow label="Субтитры при запуске" value={s.subtitlesOn} options={ON_OFF} onChange={(v) => updateSettings({ subtitlesOn: v })} />
