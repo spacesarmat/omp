@@ -24,10 +24,13 @@ import { useNextEpisode } from '../player/useNextEpisode';
 import { useCacheStats } from '../player/useCacheStats';
 import { Controls } from '../player/Controls';
 import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner, PlayerError } from '../player/Overlays';
+import type { Cmd } from '../phone/protocol';
 import { goBack } from '../ui/nav';
 import { useKeys } from '../ui/keys';
 import { choose } from '../ui/dialog';
 import { toast } from '../ui/toast';
+import { setPlayerBridge, postSoon } from '../phone/link';
+import { buildSnapshot, runCmd } from '../player/phoneBridge';
 
 interface Props {
   queue: PlayItem[];
@@ -216,6 +219,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     const v = videoRef.current;
     if (v) v.currentTime = t;
     showControls();
+    postSoon();
   };
 
   const togglePause = () => {
@@ -253,6 +257,13 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
       (buf) => { if (subReq.current === token) setCues(parseSubtitles(decodeText(buf), sub.ext)); },
       (e) => { if (subReq.current === token) toast('Не удалось загрузить субтитры: ' + errorMessage(e), 'error'); },
     );
+  };
+
+  const chooseAudio = (v: HTMLVideoElement, audio: { label: string; language: string }[], i: number) => {
+    userTracks.current = true;
+    setAudioIdx(i);
+    selectAudioTrack(v, i);
+    if (item.hash) saveTrackPref(item.hash, { audioLang: audio[i].language, audioLabel: audio[i].label });
   };
 
   const applyDefaultTracks = () => {
@@ -306,10 +317,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
         }
         choose('Аудио', audio.map((a, i) => ({ label: a.label, value: i })), audioIdx).then((i) => {
           if (i === null) return;
-          userTracks.current = true;
-          setAudioIdx(i);
-          selectAudioTrack(v, i);
-          if (item.hash) saveTrackPref(item.hash, { audioLang: audio[i].language, audioLabel: audio[i].label });
+          chooseAudio(v, audio, i);
         });
       } else if (kind === 'subs') {
         choose('Субтитры', menu, subChoice).then((ch) => {
@@ -325,6 +333,49 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
       }
     });
   };
+
+  // phone bridge: refs-style, re-pointed every render so snapshot()/exec() see current values
+  const phoneToasted = useRef(false);
+  const bridgeImpl = useRef({ snapshot: (): ReturnType<typeof buildSnapshot> => null, exec: (_c: Cmd) => undefined as void });
+  bridgeImpl.current = {
+    snapshot: () => {
+      const v = videoRef.current;
+      const audio = audioOptions(probe, v);
+      return buildSnapshot({
+        queue, index,
+        time: vs.time, duration: vs.duration, paused: vs.paused, buffering: ready && vs.buffering,
+        audio, audioIdx, defaultAudio: defaultAudioIndex(audio),
+        subs: subtitleMenu(embeddedSubOptions(probe, v), item.subtitles || []), subChoice,
+      });
+    },
+    exec: (cmd: Cmd) => {
+      const v = videoRef.current;
+      if (!v || !ready) return;
+      if (!phoneToasted.current) {
+        phoneToasted.current = true;
+        toast('Управление с телефона');
+      }
+      const audio = audioOptions(probeRef.current, v);
+      const menu = subtitleMenu(embeddedSubOptions(probeRef.current, v), item.subtitles || []);
+      runCmd(cmd, {
+        paused: v.paused, time: v.currentTime, duration: vs.duration,
+        subValues: menu.map((o) => o.value), audioCount: audio.length,
+        toggle: togglePause, seekTo, next: goNext, prev: goPrev,
+        audio: (i) => chooseAudio(v, audio, i),
+        subs: (value) => {
+          userTracks.current = true;
+          applySubChoice(value);
+          if (item.hash) saveTrackPref(item.hash, { sub: subPrefFromChoice(value, embeddedSubOptions(probeRef.current, v), item.subtitles || []) });
+        },
+      });
+      postSoon();
+    },
+  };
+  useEffect(() => setPlayerBridge({
+    snapshot: () => bridgeImpl.current.snapshot(),
+    exec: (c) => bridgeImpl.current.exec(c),
+  }), []);
+  useEffect(() => { postSoon(); }, [index, vs.paused]);
 
   const retry = () => {
     startPos.current = posRef.current.time;
