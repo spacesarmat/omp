@@ -553,5 +553,9 @@ button, .m-btn {
 .m-hint-ok { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #1E2A1F; color: #8FE39A; font-size: 14px; line-height: 1.4; }
 .m-hint-ok svg { flex-shrink: 0; }
 
-.m-set-pick { width: 100%; border: none; color: var(--text); text-align: left; }
+.m-set-pick { width: 100%; border: none; color: var(--text); text-align: left; font: inherit; }
+.m-set-row > span:first-child { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+.m-set-pick > .m-muted { flex: 0 0 auto; white-space: nowrap; }
 .m-sheet [role="radio"][aria-checked="true"] { justify-content: space-between; }
+.m-ss-sub { margin: -6px 0 4px 56px; }
+.m-ss-reset { margin-top: 12px; width: 100%; }

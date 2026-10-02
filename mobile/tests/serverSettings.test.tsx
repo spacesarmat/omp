@@ -3,7 +3,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { ServerSettings } from '../src/screens/ServerSettings';
 import { Settings } from '../src/screens/Settings';
-import { currentRoute, resetTo } from '../src/nav';
+import { currentRoute, resetTo, navigate } from '../src/nav';
 import { toast } from '../src/ui/toast';
 import { addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
 import { localServer } from '../src/server/localServer';
@@ -167,6 +167,18 @@ describe('ServerSettings', () => {
     expect(sets()[0].sets.UseDisk).toBe(true);
     expect(sets()[0].sets.TorrentsSavePath).toBe('/data/x');
     expect(el.querySelectorAll('button[data-field="CacheSize"]')).toHaveLength(1);
+  });
+});
+
+describe('ServerSettings header', () => {
+  it('the back button goes back', async () => {
+    setup();
+    resetTo({ name: 'settings' });
+    navigate({ name: 'serverSettings' });
+    await mount();
+    expect(el.querySelector('[aria-label="Назад"]')).toBeTruthy();
+    act(() => (el.querySelector('[aria-label="Назад"]') as HTMLElement).click());
+    expect(currentRoute.value.name).toBe('settings');
   });
 });
 

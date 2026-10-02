@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { goBack } from '../nav';
 import { Sheet } from '../ui/Sheet';
 import { showToast } from '../ui/toast';
 import { Icon } from '../ui/Icon';
@@ -81,8 +82,13 @@ export function ServerSettings() {
   const row = ROWS.filter((r) => r.field === open)[0];
   return (
     <div class="m-screen" data-route="serverSettings">
-      <h1 class="m-title">Настройки сервера</h1>
-      {server && <div class="m-muted m-small">{server.name}</div>}
+      <div class="m-bar">
+        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+          <Icon d="M15 5l-7 7 7 7" />
+        </button>
+        <h1 class="m-bar-title">Настройки сервера</h1>
+      </div>
+      {server && <div class="m-muted m-small m-ss-sub">{server.name}</div>}
       {error && (
         <div class="m-error" role="alert">
           <span>{error}</span>{' '}
@@ -115,7 +121,7 @@ export function ServerSettings() {
               </div>
             )}
           </section>
-          <button type="button" class="m-btn m-btn-secondary" onClick={() => setConfirmReset(true)}>
+          <button type="button" class="m-btn m-btn-secondary m-ss-reset" onClick={() => setConfirmReset(true)}>
             Сбросить к стандартным
           </button>
         </>
