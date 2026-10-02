@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { torrents, refreshTorrents, resetLibrary } from '../../src/store/library';
+import { torrents, refreshTorrents, resetLibrary, addedTorrents, addedMessage } from '../../src/store/library';
 
 beforeEach(() => {
   localStorage.clear();
@@ -50,5 +50,19 @@ describe('library store', () => {
     await refreshTorrents(b);
     expect(calls).toBe(1);
     expect(torrents.value.map((t) => t.hash)).toEqual(['b']);
+  });
+});
+
+describe('added torrents', () => {
+  const t = (hash: string, title = hash) => ({ hash, title, stat: 5 });
+  it('detects new hashes only when there was a previous list', () => {
+    expect(addedTorrents([], [t('a')])).toEqual([]);
+    expect(addedTorrents([t('a')], [t('a'), t('b')]).map((x) => x.hash)).toEqual(['b']);
+    expect(addedTorrents([t('a'), t('b')], [t('a')])).toEqual([]);
+  });
+  it('formats the message', () => {
+    expect(addedMessage([])).toBeNull();
+    expect(addedMessage([t('a', 'Фильм'), t('b', 'Сериал')])).toBe('Добавлено: Фильм, Сериал');
+    expect(addedMessage([t('a'), t('b'), t('c'), t('d')])).toBe('Добавлено торрентов: 4');
   });
 });

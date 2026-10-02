@@ -124,9 +124,13 @@ export function continueWatching(list: Torrent[], limit = 10): { torrent: Torren
     })
     .filter((e) => byHash[e.hash] && e.progress.time >= MIN_RESUME && ratio(e.progress) < WATCHED_RATIO)
     .sort((a, b) => b.progress.updated - a.progress.updated);
+  const server = serverViewed.value
+    .filter((e) => byHash[e.hash] && typeof e.timecode === 'number' && e.timecode >= MIN_RESUME && !local[key(e.hash, e.file_index)])
+    .map((e) => ({ hash: e.hash, fileIndex: e.file_index, progress: { time: e.timecode as number, duration: 0, updated: 0 } }));
+  const all = entries.concat(server);
   const seen: { [h: string]: boolean } = {};
   const out: { torrent: Torrent; fileIndex: number; progress: Progress }[] = [];
-  entries.forEach((e) => {
+  all.forEach((e) => {
     if (seen[e.hash] || out.length >= limit) return;
     seen[e.hash] = true;
     out.push({ torrent: byHash[e.hash], fileIndex: e.fileIndex, progress: e.progress });

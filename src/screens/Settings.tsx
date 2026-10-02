@@ -5,6 +5,7 @@ import type { ServerSettings } from '../api/types';
 import { errorMessage } from '../api/http';
 import { LANG_OPTIONS } from '../lib/tracks';
 import { APP_VERSION } from '../version';
+import { SUB_SIZE_OPTIONS } from '../player/subtitleOffset';
 import { navigate } from '../ui/nav';
 import { FocusGroup, ChoiceRow, ON_OFF, Button } from '../ui/components';
 import { restoreFocus } from '../ui/focus';
@@ -13,11 +14,6 @@ import { toast } from '../ui/toast';
 
 const MB = 1024 * 1024;
 const SEEK = [5, 10, 15, 30, 60].map((v) => ({ value: v, label: v + ' с' }));
-const SUB_SIZE: { value: 'small' | 'medium' | 'large'; label: string }[] = [
-  { value: 'small', label: 'Маленький' },
-  { value: 'medium', label: 'Средний' },
-  { value: 'large', label: 'Крупный' },
-];
 const SUB_COLOR: { value: 'white' | 'yellow'; label: string }[] = [
   { value: 'white', label: 'Белый' },
   { value: 'yellow', label: 'Жёлтый' },
@@ -96,7 +92,7 @@ export function SettingsScreen() {
       <ChoiceRow label="Статистика потока при запуске" value={s.showStats} options={ON_OFF} onChange={(v) => updateSettings({ showStats: v })} />
 
       <h2>Субтитры</h2>
-      <ChoiceRow label="Размер" value={s.subSize} options={SUB_SIZE} onChange={(v) => updateSettings({ subSize: v })} />
+      <ChoiceRow label="Размер" value={s.subSize} options={SUB_SIZE_OPTIONS} onChange={(v) => updateSettings({ subSize: v })} />
       <ChoiceRow label="Цвет" value={s.subColor} options={SUB_COLOR} onChange={(v) => updateSettings({ subColor: v })} />
       <ChoiceRow label="Подложка" value={s.subBackground} options={ON_OFF} onChange={(v) => updateSettings({ subBackground: v })} />
 

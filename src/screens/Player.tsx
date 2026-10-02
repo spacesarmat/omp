@@ -1,22 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { client } from '../store/servers';
-import { settings } from '../store/settings';
+import { settings, updateSettings } from '../store/settings';
+import { SUB_SIZE_OPTIONS, formatOffset, subtitleOffsetOptions } from '../player/subtitleOffset';
 import { resumePosition } from '../store/progress';
 import type { FfprobeResult } from '../api/types';
 import { errorMessage } from '../api/http';
 import { formatDuration } from '../lib/format';
-import { pickTrack } from '../lib/tracks';
+import { getTrackPref, saveTrackPref } from '../store/trackPrefs';
+import { pickAudio, pickSub, subPrefFromChoice } from '../player/trackPrefs';
 import { parseSubtitles, decodeText, Cue } from '../lib/subtitles';
 import { selectAudioTrack, selectTextTrack } from '../platform/webosMedia';
 import type { PlayItem } from '../player/types';
 import { SeekAccumulator } from '../player/seek';
-import { audioOptions, embeddedSubOptions, subtitleMenu, defaultSubChoice, defaultAudioIndex } from '../player/trackOptions';
+import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
+import { introChapter } from '../player/chapters';
 import { useVideoState } from '../player/useVideoState';
 import { useProgressSync } from '../player/useProgressSync';
 import { useNextEpisode } from '../player/useNextEpisode';
 import { useCacheStats } from '../player/useCacheStats';
 import { Controls } from '../player/Controls';
-import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, PlayerError } from '../player/Overlays';
+import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner, PlayerError } from '../player/Overlays';
 import { goBack } from '../ui/nav';
 import { useKeys } from '../ui/keys';
 import { choose } from '../ui/dialog';
@@ -44,6 +47,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   const [audioIdx, setAudioIdx] = useState(-1);
   const [subChoice, setSubChoice] = useState('off');
   const [cues, setCues] = useState<Cue[] | null>(null);
+  const [skippedIntro, setSkippedIntro] = useState<number | null>(null);
+  const [subOffset, setSubOffset] = useState(0);
   const startPos = useRef(0);
   const userTracks = useRef(false);
   const metaLoaded = useRef(false);
@@ -75,6 +80,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     onEnd: () => goBack(),
   });
 
+  const intro = introChapter(probe, vs.time);
+  const showSkip = ready && !vs.error && !!intro && skippedIntro !== intro.start && next.countdown === null;
+
   const cache = useCacheStats(c, item.hash, statsOn || (ready && vs.buffering));
 
   const showControls = () => {
@@ -93,6 +101,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     subReq.current++;
     setProbe(null);
     setCues(null);
+    setSubOffset(0);
+    setSkippedIntro(null);
     setSubChoice('off');
     setAudioIdx(-1);
     userTracks.current = false;
@@ -206,13 +216,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     const v = videoRef.current;
     if (!v || userTracks.current) return;
     const s = settings.value;
+    const pref = item.hash ? getTrackPref(item.hash) : null;
     const audio = audioOptions(probeRef.current, v);
-    const ai = pickTrack(audio, s.audioLang);
+    const ai = pickAudio(audio, pref, s.audioLang);
     if (ai >= 0) {
       setAudioIdx(ai);
       if (ai !== defaultAudioIndex(audio)) selectAudioTrack(v, ai);
     }
-    applySubChoice(defaultSubChoice(embeddedSubOptions(probeRef.current, v), item.subtitles || [], s));
+    applySubChoice(pickSub(embeddedSubOptions(probeRef.current, v), item.subtitles || [], pref, s));
   };
 
   // ffprobe often arrives after metadata: re-apply language defaults
@@ -237,10 +248,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     const menu = subtitleMenu(embeddedSubOptions(probe, v), item.subtitles || []);
     const current = menu.find((o) => o.value === subChoice) || menu[0];
     const audioLabel = audio[audioIdx] ? audio[audioIdx].label : 'по умолчанию';
-    choose('Дорожки', [
+    const sizeLabel = (SUB_SIZE_OPTIONS.find((o) => o.value === settings.value.subSize) || SUB_SIZE_OPTIONS[1]).label;
+    const root: { label: string; value: string }[] = [
       { label: 'Аудио: ' + audioLabel, value: 'audio' },
       { label: 'Субтитры: ' + current.label, value: 'subs' },
-    ]).then((kind) => {
+      { label: 'Размер субтитров: ' + sizeLabel, value: 'size' },
+    ];
+    if (cues) root.push({ label: 'Сдвиг субтитров: ' + formatOffset(subOffset), value: 'offset' });
+    choose('Дорожки', root).then((kind) => {
       if (kind === 'audio') {
         if (audio.length < 2) {
           toast('Других аудиодорожек нет');
@@ -251,19 +266,26 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
           userTracks.current = true;
           setAudioIdx(i);
           selectAudioTrack(v, i);
+          if (item.hash) saveTrackPref(item.hash, { audioLang: audio[i].language, audioLabel: audio[i].label });
         });
       } else if (kind === 'subs') {
         choose('Субтитры', menu, subChoice).then((ch) => {
           if (ch === null) return;
           userTracks.current = true;
           applySubChoice(ch);
+          if (item.hash) saveTrackPref(item.hash, { sub: subPrefFromChoice(ch, embeddedSubOptions(probe, v), item.subtitles || []) });
         });
+      } else if (kind === 'size') {
+        choose('Размер субтитров', SUB_SIZE_OPTIONS, settings.value.subSize).then((size) => { if (size) updateSettings({ subSize: size }); });
+      } else if (kind === 'offset') {
+        choose('Сдвиг субтитров', subtitleOffsetOptions(), subOffset).then((off) => { if (off !== null) setSubOffset(off); });
       }
     });
   };
 
   const retry = () => {
     startPos.current = posRef.current.time;
+    userTracks.current = false;
     setReloadKey(reloadKey + 1);
   };
 
@@ -272,6 +294,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     if (next.countdown !== null) {
       if (a === 'enter') { goNext(); return true; }
       if (a === 'back') { next.dismiss(); return true; }
+    }
+    if (showSkip && intro) {
+      if (a === 'enter') { seekTo(intro.end); setSkippedIntro(intro.start); return true; }
+      if (a === 'back') { setSkippedIntro(intro.start); return true; }
     }
     switch (a) {
       case 'enter':
@@ -332,12 +358,13 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   return (
     <div class="player" onMouseMove={showControls}>
       <video key={index + ':' + reloadKey} ref={videoRef} src={ready ? src : undefined} autoplay onLoadedMetadata={onMeta} />
-      <SubtitleOverlay cues={cues} time={vs.time} raised={controls} />
+      <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
       {ready && vs.buffering && !vs.error && <BufferingOverlay cache={cache} />}
       {statsOn && <StatsOverlay cache={cache} probe={probe} />}
       {next.countdown !== null && hasNext && (
         <NextBanner seconds={next.countdown} title={queue[index + 1].title} onNext={goNext} />
       )}
+      {showSkip && intro && <SkipBanner onSkip={() => { seekTo(intro.end); setSkippedIntro(intro.start); }} />}
       {(controls || vs.paused) && !vs.error && (
         <Controls
           title={item.title}

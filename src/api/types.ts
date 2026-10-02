@@ -65,8 +65,15 @@ export interface FfprobeStream {
   tags?: { [k: string]: string };
 }
 
+export interface FfprobeChapter {
+  start_time: string;
+  end_time: string;
+  tags?: { title?: string };
+}
+
 export interface FfprobeResult {
   streams: FfprobeStream[];
+  chapters?: FfprobeChapter[];
   format?: { duration?: string; bit_rate?: string; format_name?: string };
 }
 

@@ -24,10 +24,10 @@ export function BufferingOverlay(p: { cache: CacheState | null }) {
   );
 }
 
-export function SubtitleOverlay(p: { cues: Cue[] | null; time: number; raised: boolean }) {
+export function SubtitleOverlay(p: { cues: Cue[] | null; time: number; raised: boolean; offset: number }) {
   const s = settings.value;
   if (!p.cues) return null;
-  const text = cueAt(p.cues, p.time);
+  const text = cueAt(p.cues, p.time - p.offset);
   if (!text) return null;
   const cls = 'subtitles sub-' + s.subSize + ' sub-' + s.subColor + (s.subBackground ? ' sub-bg' : ' sub-nobg') + (p.raised ? ' raised' : '');
   return (
@@ -43,6 +43,15 @@ export function NextBanner(p: { seconds: number; title: string; onNext: () => vo
       <div>Следующая серия через {p.seconds} с</div>
       <div class="meta">{p.title}</div>
       <div class="meta">OK — сейчас · Назад — остаться</div>
+    </div>
+  );
+}
+
+export function SkipBanner(p: { onSkip: () => void }) {
+  return (
+    <div class="next-banner" onClick={p.onSkip}>
+      <div>Пропустить заставку</div>
+      <div class="meta">OK — пропустить · Назад — смотреть</div>
     </div>
   );
 }
