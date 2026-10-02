@@ -15,8 +15,13 @@ const stripCrossorigin = () => ({
   },
 });
 
+const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
+
 export default defineConfig({
   base: './',
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [
     preact(),
     legacy({

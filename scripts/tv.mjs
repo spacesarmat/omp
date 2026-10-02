@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
-const { id, version } = JSON.parse(readFileSync('webos/appinfo.json', 'utf8'));
+const { id } = JSON.parse(readFileSync('webos/appinfo.json', 'utf8'));
+const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 const device = process.env.WEBOS_DEVICE || 'tv';
 const cmd = process.argv[2];
 if (cmd === 'install') execSync(`npx ares-install --device ${device} build/${id}_${version}_all.ipk`, { stdio: 'inherit' });
