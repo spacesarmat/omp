@@ -3,8 +3,8 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Remote, setRemoteActions } from '../src/screens/Remote';
 import { currentRoute, resetTo } from '../src/nav';
-import { reloadTvs, saveTv } from '../src/tv/tvStore';
-import { tvWaking, tvState } from '../src/tv/tvClient';
+import { reloadTvs, saveTv, setActiveTv } from '../src/tv/tvStore';
+import { tvWaking, tvState, tvError, TV_FORGOT } from '../src/tv/tvClient';
 import { toast } from '../src/ui/toast';
 
 let el: HTMLElement;
@@ -19,6 +19,7 @@ const a = {
   turnOffTv: vi.fn(),
   pressAtvKey: vi.fn(),
   wakeOnLan: vi.fn(),
+  pairAtv: vi.fn(),
   warmUp: vi.fn(),
   confirm: vi.fn(),
 };
@@ -413,6 +414,45 @@ describe('Remote for Android TV', () => {
     });
     await flush();
     expect(a.typeText).toHaveBeenCalledWith('Дюна');
+  });
+
+  it('no «Подключить заново» while the token works', () => {
+    mount();
+    act(() => {
+      tvState.value = 'connected';
+    });
+    expect(el.textContent).not.toContain('Подключить заново');
+  });
+
+  it('a forgetful TV offers «Подключить заново»: the code sheet pairs again', async () => {
+    mount();
+    act(() => {
+      tvError.value = TV_FORGOT;
+      tvState.value = 'error';
+    });
+    expect(el.querySelector('.m-remote-forgot')!.textContent).toContain(TV_FORGOT);
+    click(text('Подключить заново'));
+    const d = document.querySelector('[role="dialog"]') as HTMLElement;
+    expect(d.textContent).toContain('Гостиная · Android TV');
+    const cells = Array.from(d.querySelectorAll<HTMLInputElement>('input'));
+    act(() => {
+      cells[0].value = '0482';
+      cells[0].dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const submit = Array.from(d.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === 'Подключить')!;
+    await act(async () => submit.click());
+    await flush();
+    expect(a.pairAtv).toHaveBeenCalledWith({ ip: '192.168.1.40', port: 8095, name: 'Гостиная', version: '' }, '0482');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    tvError.value = '';
+  });
+
+  it('a saved Android TV without a token (dropped after «forgot») offers «Подключить заново»', () => {
+    saveTv({ ip: '192.168.1.41', name: 'Кухня', kind: 'atv', ctlPort: 8096 });
+    setActiveTv('192.168.1.41');
+    mount();
+    click(text('Подключить заново'));
+    expect(document.querySelector('[role="dialog"]')!.textContent).toContain('Кухня · Android TV');
   });
 
   it('a failed key shows a toast', async () => {

@@ -3,9 +3,14 @@ import { native } from '../platform/native';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { navigate } from '../nav';
-import { activeTv } from '../tv/tvStore';
+import { activeTv, ATV_PORT, type SavedTv } from '../tv/tvStore';
+import { CodeSheet } from '../ui/CodeSheet';
+import type { FoundOmpTv } from '../platform/native';
 import {
   tvState,
+  tvError,
+  TV_FORGOT,
+  pairAtv,
   tvWaking,
   warmUp,
   pressButton,
@@ -32,6 +37,8 @@ export interface RemoteActions {
   turnOffTv: () => Promise<void>;
   /** Android TV: «Каталог» / «Сейчас играет». */
   pressAtvKey: (name: 'CATALOG' | 'NOWPLAYING') => Promise<void>;
+  /** Android TV: pairs again by the code on the TV screen. */
+  pairAtv: (found: FoundOmpTv, code: string) => Promise<void>;
   wakeOnLan: (mac: string, ip: string) => Promise<void>;
   warmUp: () => Promise<void>;
   confirm: (text: string) => boolean;
@@ -47,6 +54,7 @@ const defaults: RemoteActions = {
   sendEnter,
   turnOffTv,
   pressAtvKey,
+  pairAtv,
   wakeOnLan: (mac, ip) => native.wakeOnLan(mac, ip),
   warmUp,
   confirm: (t) => window.confirm(t),
@@ -247,9 +255,14 @@ const ATV_STATE: Record<string, string> = {
 };
 
 /** Remote for OMP on Android TV (spec item 9): no power, touchpad or channel keys. */
-function AtvRemote({ name }: { name: string }) {
+function AtvRemote({ tv }: { tv: SavedTv }) {
+  const name = tv.name;
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
+  const [coding, setCoding] = useState(false);
+  // the TV forgot this phone (its token was dropped): pair again by the code
+  const forgot = !tv.token || (state === 'error' && tvError.value === TV_FORGOT);
+  const found: FoundOmpTv = { ip: tv.ip, port: tv.ctlPort || ATV_PORT, name: tv.defaultName ?? tv.name, version: '' };
   const press = (n: RemoteButton) => {
     vibrate();
     act.pressButton(n).catch(fail);
@@ -274,6 +287,14 @@ function AtvRemote({ name }: { name: string }) {
         </div>
       </div>
       <p class="m-remote-note">Пульт управляет OMP на телевизоре. Включение ТВ и другие приложения — пультом от телевизора.</p>
+      {forgot && (
+        <div class="m-remote-forgot">
+          <div class="m-hint-warn">{TV_FORGOT}</div>
+          <button type="button" class="m-btn m-btn-primary" onClick={() => setCoding(true)}>
+            Подключить заново
+          </button>
+        </div>
+      )}
       <DPad press={press} />
       <div class="m-keyrow">
         <button type="button" class="m-key" onClick={() => press('BACK')}>
@@ -301,6 +322,16 @@ function AtvRemote({ name }: { name: string }) {
         </div>
       </div>
       {kbd && <TvKeyboard />}
+      {coding && (
+        <CodeSheet
+          tvName={found.name}
+          onSubmit={async (code) => {
+            await act.pairAtv(found, code);
+            setCoding(false);
+          }}
+          onCancel={() => setCoding(false)}
+        />
+      )}
     </div>
   );
 }
@@ -332,7 +363,7 @@ export function Remote() {
     );
   }
 
-  if (tv.kind === 'atv') return <AtvRemote name={tv.name} />;
+  if (tv.kind === 'atv') return <AtvRemote tv={tv} />;
 
   const press = (name: RemoteButton) => {
     vibrate();
