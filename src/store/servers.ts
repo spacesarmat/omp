@@ -1,7 +1,7 @@
 import { signal, computed } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
-import { torrents } from './library';
-import { serverViewed } from './progress';
+import { resetLibrary } from './library';
+import { resetViewed } from './progress';
 import { TorrServerClient, normalizeServerUrl } from '../api/torrserver';
 
 export interface SavedServer {
@@ -69,9 +69,8 @@ export function removeServer(id: string): void {
 export function setActiveServer(id: string | null): void {
   if (id !== activeServerId.value) {
     // data from the previous server must not leak into the new one
-    serverViewed.value = [];
-    torrents.value = [];
-    saveJson('tsp.torrents', []);
+    resetViewed();
+    resetLibrary();
   }
   activeServerId.value = id;
   persist();

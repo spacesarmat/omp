@@ -12,13 +12,24 @@ export function sanitizeTorrents(v: unknown): Torrent[] {
 export const torrents = signal<Torrent[]>(sanitizeTorrents(loadJson<unknown>(KEY, [], Array.isArray)));
 
 let inflight: Promise<Torrent[]> | null = null;
+let gen = 0;
+
+// drop data of the previous server and invalidate any pending refresh
+export function resetLibrary(): void {
+  gen++;
+  inflight = null;
+  torrents.value = [];
+  saveJson(KEY, []);
+}
 
 export function refreshTorrents(c: { list(): Promise<Torrent[]> }): Promise<Torrent[]> {
   if (inflight) return inflight;
+  const my = gen;
   inflight = c.list().then(
     (list) => {
-      inflight = null;
       const sorted = list.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      if (my !== gen) return sorted;
+      inflight = null;
       torrents.value = sorted;
       saveJson(
         KEY,
@@ -30,7 +41,7 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> }): Promise<Torr
       return sorted;
     },
     (e) => {
-      inflight = null;
+      if (my === gen) inflight = null;
       throw e;
     },
   );
