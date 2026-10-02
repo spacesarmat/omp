@@ -1,5 +1,6 @@
 // Android TV: the remote's Back and media keys never reach the WebView as webOS key codes. MainActivity
-// intercepts them and calls window.__ompKey(<webOS keyCode>) (Back → 461, media → 415/19/179/417/412/33/34/413).
+// intercepts them and calls window.__ompKey(<webOS keyCode>) (Back → 461, media → 415/19/179/417/412/413,
+// ⏭ / ⏮ → 78 / 80 = next / previous episode, CH+ / CH− → 33 / 34 = Page Up / Down = next / previous chapter).
 // The key is dispatched as a keydown on the focused element, so it runs the same path as a real key press.
 
 declare global {

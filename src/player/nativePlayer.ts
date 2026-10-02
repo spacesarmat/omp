@@ -11,7 +11,12 @@ import { resumePosition } from '../store/progress';
 import type { PlayItem } from './types';
 import type { WatchJournal } from './watchJournal';
 import type { FfprobeResult } from '../api/types';
-import { introMark } from './introMark';
+import type { SkipPrefs } from '../lib/journal';
+import type { SkipPatch } from '../store/journal';
+import { segmentsMessage, sanitizeNativeMark } from './nativeSkip';
+import { applyMark } from './chapters';
+import { formatDuration } from '../lib/format';
+import { errorMessage } from '../api/http';
 
 export interface NativeQueueItem {
   url: string;
@@ -128,8 +133,16 @@ export function nativeSnapshot(queue: PlayItem[], s: NativeState | null): Player
   });
 }
 
-/** ffprobe of a queue item (null: unavailable); drives «Пропустить заставку» in the native player. */
+/** ffprobe of a queue item (null: unavailable); drives chapters and skips in the native player. */
 export type ProbeLoader = (item: PlayItem) => Promise<FfprobeResult | null>;
+
+/** Skip settings of a torrent on the server (loadSkip / saveSkip of the watch journal). */
+export interface SkipIo {
+  load(hash: string): Promise<SkipPrefs>;
+  save(hash: string, patch: SkipPatch): Promise<SkipPrefs>;
+}
+
+const NO_SKIP: SkipPrefs = { i: false, c: false };
 
 export interface NativeSessionHooks {
   onState?(s: NativeState, prev: NativeState | null): void;
@@ -171,7 +184,17 @@ export class NativeSession {
   private readonly sid = ++sessionSeq;
   private readonly journal: WatchJournal | null;
   private readonly probeOf: ProbeLoader | null;
-  private readonly marked: { [index: number]: boolean } = {};
+  private readonly skipIo: SkipIo | null;
+  /** Items whose ffprobe was asked for, and its answer once it came (null: none). */
+  private readonly asked: { [index: number]: boolean } = {};
+  private readonly probes: { [index: number]: FfprobeResult | null } = {};
+  /** Skip settings per torrent (absent while loading) and the intro start marked and waiting for its end. */
+  private readonly prefs: { [hash: string]: SkipPrefs } = {};
+  private readonly prefsAsked: { [hash: string]: boolean } = {};
+  private readonly pending: { [hash: string]: number | null } = {};
+  private readonly durations: { [index: number]: number } = {};
+  /** The last segments message sent per item (sent again only when it changes). */
+  private readonly sent: { [index: number]: string } = {};
 
   constructor(
     plugin: OmpNativeTvPlugin,
@@ -180,6 +203,7 @@ export class NativeSession {
     hooks: NativeSessionHooks = {},
     journal: WatchJournal | null = null,
     probeOf: ProbeLoader | null = null,
+    skipIo: SkipIo | null = null,
   ) {
     this.plugin = plugin;
     this.client = client;
@@ -187,6 +211,7 @@ export class NativeSession {
     this.hooks = hooks;
     this.journal = journal;
     this.probeOf = probeOf;
+    this.skipIo = skipIo;
   }
 
   start(o: NativeStartOptions): Promise<void> {
@@ -198,6 +223,7 @@ export class NativeSession {
     return Promise.all([
       this.plugin.addListener('nativePlayerState', (d) => this.onState(d)).then(keep),
       this.plugin.addListener('nativePlayerClosed', (d) => this.onClosed(d)).then(keep),
+      this.plugin.addListener('nativePlayerMark', (d) => this.onMark(d)).then(keep),
     ])
       .then(() => {
         if (this.done) return undefined;
@@ -220,7 +246,7 @@ export class NativeSession {
       .then(() => {
         // the player is open: the first item starts (later ones in track)
         if (!this.done && this.journal && this.pos && this.pos.index === o.index) this.journal.start(this.queue[o.index], o.startAt, 0);
-        if (!this.done) this.sendIntro(o.index);
+        if (!this.done) this.loadSkips(o.index);
       }, (e) => {
         this.stop();
         throw e;
@@ -293,21 +319,98 @@ export class NativeSession {
     }
     this.pos = { index: p.index, time: p.time, duration: p.duration };
     if (changed && this.journal) this.journal.start(this.queue[p.index], p.time, p.duration);
-    if (changed) this.sendIntro(p.index);
+    if (changed) this.loadSkips(p.index);
+    // the credits mark is «the last N s»: its start needs the duration, known once the item plays
+    const known = this.durations[p.index] || 0;
+    if (p.duration > 0 && Math.abs(p.duration - known) >= 1) {
+      this.durations[p.index] = p.duration;
+      this.refresh(p.index);
+    }
   }
 
   /**
-   * The intro of an item (from its ffprobe chapters) goes to the native player once, when the item becomes
-   * current; no probe or no intro chapter: nothing is sent and the button never shows.
+   * Chapters and skips of an item go to the native player when the item becomes current: its ffprobe (once per
+   * item) and the skip settings of its torrent (once per torrent); a failed probe counts as «no chapters».
+   * Without a probe loader nothing is sent (the player shows no chapters and ignores CH±).
    */
-  private sendIntro(index: number): void {
+  private loadSkips(index: number): void {
     const item = this.queue[index];
-    if (!this.probeOf || !item || this.marked[index]) return;
-    this.marked[index] = true;
-    this.probeOf(item).then((probe) => {
-      const m = introMark(probe, index, this.sid);
-      if (m && !this.done) this.plugin.nativePlayerCommand({ cmd: m }).catch(() => undefined);
-    }, () => undefined);
+    if (!this.probeOf || !item || this.asked[index]) return;
+    this.asked[index] = true;
+    const hash = item.hash;
+    if (hash && !this.prefsAsked[hash]) {
+      this.prefsAsked[hash] = true;
+      const io = this.skipIo;
+      (io ? io.load(hash) : Promise.resolve(NO_SKIP)).then((p) => p, () => NO_SKIP).then((p) => {
+        if (this.prefs[hash]) return; // a mark saved meanwhile is newer
+        this.prefs[hash] = p;
+        this.refreshTorrent(hash);
+      });
+    }
+    this.probeOf(item).then((p) => p, () => null).then((probe) => {
+      this.probes[index] = probe;
+      this.refresh(index);
+    });
+  }
+
+  /** Sends the segments message of an item when both answers are in and it differs from the last one sent. */
+  private refresh(index: number): void {
+    if (this.done || !(index in this.probes)) return;
+    const hash = this.queue[index].hash;
+    const prefs = hash ? this.prefs[hash] : NO_SKIP;
+    if (!prefs) return;
+    const pending = hash && this.pending[hash] !== undefined ? this.pending[hash] : null;
+    const m = segmentsMessage(this.probes[index], prefs, this.durations[index] || 0, index, this.sid, pending);
+    const key = JSON.stringify(m);
+    if (this.sent[index] === key) return;
+    this.sent[index] = key;
+    this.plugin.nativePlayerCommand({ cmd: m }).catch(() => undefined);
+  }
+
+  /** The settings of a torrent changed: every item of it already sent gets the new message. */
+  private refreshTorrent(hash: string): void {
+    for (let i = 0; i < this.queue.length; i++) if (this.queue[i].hash === hash) this.refresh(i);
+  }
+
+  private toast(text: string, error = false): void {
+    if (this.done) return;
+    this.plugin.nativePlayerCommand({ cmd: { type: 'toast', text, error, session: this.sid } }).catch(() => undefined);
+  }
+
+  /**
+   * «Отметить …» from the native player menu (time of the menu opening): the same rules as on LG (applyMark),
+   * written with saveSkip; the player shows the result as a message and gets the new segments.
+   */
+  private onMark(d: unknown): void {
+    if (this.done || foreign(d, this.sid)) return;
+    const m = sanitizeNativeMark(d);
+    const item = m && this.queue[m.index];
+    if (!m || !item) return;
+    const hash = item.hash;
+    const prefs = (hash && this.prefs[hash]) || NO_SKIP;
+    const pending = hash && this.pending[hash] !== undefined ? this.pending[hash] : null;
+    const r = applyMark(m.kind, m.now, m.duration, prefs, pending, formatDuration);
+    if (hash) {
+      this.pending[hash] = r.pending;
+      this.refreshTorrent(hash);
+    }
+    if (!r.patch) {
+      this.toast(r.text, !!r.error);
+      return;
+    }
+    const io = this.skipIo;
+    if (!io || !hash) {
+      this.toast('Не удалось сохранить отметку: нет связи с сервером', true);
+      return;
+    }
+    io.save(hash, r.patch).then(
+      (saved) => {
+        this.prefs[hash] = saved;
+        this.refreshTorrent(hash);
+        this.toast(r.text);
+      },
+      (e) => this.toast('Не удалось сохранить отметку: ' + errorMessage(e), true),
+    );
   }
 
   /** Watch journal: the current item is left at its last position. */

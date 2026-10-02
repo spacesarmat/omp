@@ -134,7 +134,7 @@ describe('NativeSession', () => {
     f.plugin.addListener.mockImplementation((e: string) => { order.push('listen:' + e); return Promise.resolve({ remove: () => undefined }); });
     f.plugin.playNative.mockImplementation(() => { order.push('play'); return Promise.resolve(); });
     await track(new NativeSession(f.plugin, c, queue)).start(opts);
-    expect(order).toEqual(['listen:nativePlayerState', 'listen:nativePlayerClosed', 'play']);
+    expect(order).toEqual(['listen:nativePlayerState', 'listen:nativePlayerClosed', 'listen:nativePlayerMark', 'play']);
     const arg = f.plugin.playNative.mock.calls[0][0];
     expect(typeof arg.session).toBe('number');
     expect(arg).toEqual({
@@ -203,7 +203,7 @@ describe('NativeSession', () => {
     expect(closed).toHaveBeenCalledWith({ index: 0, time: 320.4, duration: 1000 }, false);
     expect(getLocalProgress(H1, 1)!.time).toBe(320.4);
     expect(setViewed).toHaveBeenCalledWith(H1, 1, 320);
-    expect(f.removed.sort()).toEqual(['nativePlayerClosed', 'nativePlayerState']);
+    expect(f.removed.sort()).toEqual(['nativePlayerClosed', 'nativePlayerMark', 'nativePlayerState']);
     expect(s.snapshot()).toBeNull();
     setViewed.mockClear();
     await vi.advanceTimersByTimeAsync(30000);
@@ -268,7 +268,7 @@ describe('NativeSession', () => {
     expect(getLocalProgress(H1, 1)!.time).toBe(333);
     expect(setViewed).toHaveBeenCalledWith(H1, 1, 333);
     expect(closed).not.toHaveBeenCalled();
-    expect(f.removed.length).toBe(2);
+    expect(f.removed.length).toBe(3);
     expect(nativePlayerOpen()).toBe(false);
   });
 
@@ -279,7 +279,7 @@ describe('NativeSession', () => {
     s.detach();
     await p;
     expect(f.plugin.playNative).not.toHaveBeenCalled();
-    expect(f.removed.length).toBe(2);
+    expect(f.removed.length).toBe(3);
     expect(nativePlayerOpen()).toBe(false);
   });
 
@@ -288,7 +288,7 @@ describe('NativeSession', () => {
     f.plugin.playNative.mockImplementation(() => Promise.reject({ message: 'Нет плеера' }));
     const s = track(new NativeSession(f.plugin, null, queue));
     await expect(s.start(opts)).rejects.toEqual({ message: 'Нет плеера' });
-    expect(f.removed.length).toBe(2);
+    expect(f.removed.length).toBe(3);
   });
 
   it('dispose before the listeners resolve still removes them', async () => {
@@ -297,40 +297,127 @@ describe('NativeSession', () => {
     const p = s.start(opts);
     s.dispose();
     await p;
-    expect(f.removed.length).toBe(2);
+    expect(f.removed.length).toBe(3);
     expect(f.plugin.playNative).not.toHaveBeenCalled();
   });
 
-  describe('intro mark', () => {
-    const withIntro = { streams: [], chapters: [{ start_time: '5', end_time: '95', tags: { title: 'Opening' } }] } as any;
-    const flush = () => Promise.resolve().then(() => Promise.resolve()).then(() => Promise.resolve());
+  describe('chapters and skips', () => {
+    const withIntro = {
+      streams: [],
+      chapters: [
+        { start_time: '0', end_time: '5', tags: { title: 'Пролог' } },
+        { start_time: '5', end_time: '95', tags: { title: 'Opening' } },
+        { start_time: '95', end_time: '900', tags: { title: '' } },
+      ],
+    } as any;
+    const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+    const sent = (f: ReturnType<typeof fakePlugin>) => f.plugin.nativePlayerCommand.mock.calls.map((c: any[]) => c[0].cmd);
+    const io = (prefs: any = { i: true, c: false }) => ({
+      load: vi.fn((_h: string) => Promise.resolve(prefs)),
+      save: vi.fn((_h: string, patch: any) => Promise.resolve({ ...prefs, ...patch })),
+    });
 
-    it('sends the intro of the current item after the player opens, and of each item it advances to', async () => {
+    it('sends the chapters, intro and flags of the current item and of each item it advances to', async () => {
       const f = fakePlugin();
       const probeOf = vi.fn((item: PlayItem) => Promise.resolve(item === queue[0] ? withIntro : null));
-      const s = track(new NativeSession(f.plugin, null, queue, {}, null, probeOf));
+      const skip = io();
+      const s = track(new NativeSession(f.plugin, null, queue, {}, null, probeOf, skip));
       await s.start(opts);
       await flush();
       const sid = f.plugin.playNative.mock.calls[0][0].session;
-      expect(f.plugin.nativePlayerCommand).toHaveBeenCalledTimes(1);
-      expect(f.plugin.nativePlayerCommand).toHaveBeenCalledWith({ cmd: { type: 'intro', index: 0, start: 5, end: 95, session: sid } });
-      f.emit('nativePlayerState', state({ index: 1 }));
-      f.emit('nativePlayerState', state({ index: 0 }));
+      expect(sent(f)).toEqual([{
+        type: 'segments', index: 0, session: sid,
+        chapters: [{ start: 0, title: 'Пролог' }, { start: 5, title: 'Opening' }, { start: 95, title: '' }],
+        intro: { start: 5, end: 95 }, autoIntro: true, autoCredits: false,
+      }]);
+      f.emit('nativePlayerState', state({ index: 1, duration: 0 }));
+      f.emit('nativePlayerState', state({ index: 0, duration: 0 }));
       await flush();
-      // item 1 has no intro: nothing sent; item 0 is not probed twice
+      // item 1 without chapters is sent too (CH± may fall back to episodes); probes and prefs are asked once
+      expect(sent(f)[1]).toEqual({ type: 'segments', index: 1, session: sid, chapters: [], autoIntro: true, autoCredits: false });
+      expect(sent(f).length).toBe(2);
       expect(probeOf).toHaveBeenCalledTimes(2);
-      expect(f.plugin.nativePlayerCommand).toHaveBeenCalledTimes(1);
+      expect(skip.load).toHaveBeenCalledTimes(1);
+      expect(skip.load).toHaveBeenCalledWith(H1);
     });
 
-    it('sends nothing without a probe loader or when the probe fails', async () => {
+    it('credits mark: sent again once the duration is known', async () => {
+      const f = fakePlugin();
+      const s = track(new NativeSession(f.plugin, null, queue, {}, null, () => Promise.resolve(null), io({ i: false, c: true, mc: 90 })));
+      await s.start(opts);
+      await flush();
+      expect(sent(f)[0].credits).toBeUndefined();
+      f.emit('nativePlayerState', state({ duration: 1000 }));
+      f.emit('nativePlayerState', state({ duration: 1000, time: 31 }));
+      await flush();
+      expect(sent(f).length).toBe(2);
+      expect(sent(f)[1]).toMatchObject({ credits: { start: 910 }, mc: 90, autoCredits: true });
+    });
+
+    it('a failed probe or prefs load counts as «no chapters», defaults off', async () => {
+      const f = fakePlugin();
+      const skip = { load: vi.fn(() => Promise.reject(new Error('x'))), save: vi.fn() };
+      await track(new NativeSession(f.plugin, null, queue, {}, null, () => Promise.reject(new Error('x')), skip as any)).start(opts);
+      await flush();
+      expect(sent(f)).toEqual([expect.objectContaining({ type: 'segments', index: 0, chapters: [], autoIntro: false, autoCredits: false })]);
+    });
+
+    it('sends nothing without a probe loader', async () => {
       const f = fakePlugin();
       await track(new NativeSession(f.plugin, null, queue)).start(opts);
       await flush();
       expect(f.plugin.nativePlayerCommand).not.toHaveBeenCalled();
-      const g = fakePlugin();
-      await track(new NativeSession(g.plugin, null, queue, {}, null, () => Promise.reject(new Error('x')))).start(opts);
+    });
+
+    it('marks from the menu: pending intro start, then the end is saved; the player gets a message and new segments', async () => {
+      const f = fakePlugin();
+      const skip = io({ i: false, c: false });
+      const s = track(new NativeSession(f.plugin, null, queue, {}, null, () => Promise.resolve(null), skip));
+      await s.start(opts);
       await flush();
-      expect(g.plugin.nativePlayerCommand).not.toHaveBeenCalled();
+      const sid = f.plugin.playNative.mock.calls[0][0].session;
+      f.plugin.nativePlayerCommand.mockClear();
+      f.emit('nativePlayerMark', { session: sid, index: 0, kind: 'intro-start', now: 45.4, duration: 1000 });
+      await flush();
+      expect(skip.save).not.toHaveBeenCalled();
+      expect(sent(f)).toEqual([
+        expect.objectContaining({ type: 'segments', index: 0, pending: 45 }),
+        { type: 'toast', text: 'Начало заставки 0:45 · теперь отметьте конец', error: false, session: sid },
+      ]);
+      f.plugin.nativePlayerCommand.mockClear();
+      f.emit('nativePlayerMark', { session: sid, index: 0, kind: 'intro-end', now: 135, duration: 1000 });
+      await flush();
+      expect(skip.save).toHaveBeenCalledWith(H1, { mi: [45, 135] });
+      const cmds = sent(f);
+      expect(cmds[cmds.length - 1]).toEqual({ type: 'toast', text: 'Отмечено: заставка 0:45–2:15', error: false, session: sid });
+      expect(cmds[cmds.length - 2]).toMatchObject({ type: 'segments', intro: { start: 45, end: 135 }, mi: [45, 135] });
+      expect(cmds[cmds.length - 2].pending).toBeUndefined();
+      // credits: the last N whole seconds
+      f.emit('nativePlayerMark', { session: sid, index: 0, kind: 'credits', now: 910.2, duration: 1000 });
+      await flush();
+      expect(skip.save).toHaveBeenLastCalledWith(H1, { mc: 90 });
+      // marks of another run are ignored
+      f.emit('nativePlayerMark', { session: sid + 1, index: 0, kind: 'credits', now: 900, duration: 1000 });
+      await flush();
+      expect(skip.save).toHaveBeenCalledTimes(2);
+    });
+
+    it('a failed save or no server: error message', async () => {
+      const f = fakePlugin();
+      const skip = { load: vi.fn(() => Promise.resolve({ i: false, c: false })), save: vi.fn(() => Promise.reject(new Error('нет сети'))) };
+      const s = track(new NativeSession(f.plugin, null, queue, {}, null, () => Promise.resolve(null), skip as any));
+      await s.start(opts);
+      await flush();
+      f.emit('nativePlayerMark', { index: 0, kind: 'credits', now: 900, duration: 1000 });
+      await flush();
+      const last = sent(f).pop();
+      expect(last).toMatchObject({ type: 'toast', error: true });
+      expect(last.text).toMatch(/^Не удалось сохранить отметку: /);
+      const g = fakePlugin();
+      await track(new NativeSession(g.plugin, null, [{ url: 'http://x/y.mkv', title: 'y' }], {}, null, () => Promise.resolve(null))).start(opts);
+      await flush();
+      g.emit('nativePlayerMark', { index: 0, kind: 'credits', now: 900, duration: 1000 });
+      expect(sent(g).pop()).toMatchObject({ type: 'toast', text: 'Не удалось сохранить отметку: нет связи с сервером', error: true });
     });
   });
 });

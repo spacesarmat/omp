@@ -6,7 +6,11 @@
     <string name="player_play">Воспроизвести</string>
     <string name="player_skip_intro">Пропустить заставку</string>
     <string name="player_next">Следующая серия</string>
-    <string name="player_hint">◀ ▶ перемотка · OK пауза · ▲ дорожки · Назад выход</string>
+    <string name="player_hint">◀ ▶ перемотка · OK пауза · ▲ меню · Назад выход</string>
+    <string name="player_hint_chapters">◀ ▶ перемотка · OK пауза · ▲ меню · CH− · CH+ — соседняя глава · Назад выход</string>
+    <string name="player_undo_skip">Вернуть · OK</string>
+    <string name="player_intro_skipped">Заставка пропущена</string>
+    <string name="player_credits_skipped">Титры пропущены</string>
     <string name="player_next_hint">OK — смотреть сейчас · Назад — отмена</string>
     <string name="player_error_hint">OK — повторить · Назад — выход</string>
 

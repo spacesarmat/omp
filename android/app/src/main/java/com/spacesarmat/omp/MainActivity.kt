@@ -106,8 +106,11 @@ class MainActivity : BridgeActivity() {
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE to 179,
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD to 417,
             KeyEvent.KEYCODE_MEDIA_REWIND to 412,
-            KeyEvent.KEYCODE_MEDIA_NEXT to 33,
-            KeyEvent.KEYCODE_MEDIA_PREVIOUS to 34,
+            // CH+ / CH− are Page Up / Page Down (33 / 34): chapters in the player; ⏭ / ⏮ are next / previous episode
+            KeyEvent.KEYCODE_CHANNEL_UP to 33,
+            KeyEvent.KEYCODE_CHANNEL_DOWN to 34,
+            KeyEvent.KEYCODE_MEDIA_NEXT to 78,
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS to 80,
             KeyEvent.KEYCODE_MEDIA_STOP to 413,
         )
 

@@ -4,11 +4,11 @@ import { settings } from '../store/settings';
 import { nativePlugin } from '../platform/androidNative';
 import { decideStart } from '../player/resume';
 import { NativeSession, nativeHeading, nativePlayerOpen } from '../player/nativePlayer';
-import type { ProbeLoader } from '../player/nativePlayer';
+import type { ProbeLoader, SkipIo } from '../player/nativePlayer';
 import type { TorrServerClient } from '../api/torrserver';
 import type { PlayItem } from '../player/types';
 import { WatchJournal, journalSource } from '../player/watchJournal';
-import { recordWatch } from '../store/journal';
+import { recordWatch, loadSkip, saveSkip } from '../store/journal';
 import { setPlayerBridge, postSoon } from '../phone/link';
 import { goBack, currentRoute } from '../ui/nav';
 import { toast } from '../ui/toast';
@@ -26,7 +26,7 @@ function failText(e: unknown): string {
   return /[А-Яа-яЁё]/.test(m) ? m : 'Не удалось открыть плеер';
 }
 
-/** ffprobe for the intro button: only when the server has ffprobe (checked once), only for torrent files. */
+/** ffprobe for chapters and skips: only when the server has ffprobe (checked once), only for torrent files. */
 function probeLoader(c: TorrServerClient | null): ProbeLoader | null {
   if (!c) return null;
   let available: Promise<boolean> | null = null;
@@ -37,6 +37,12 @@ function probeLoader(c: TorrServerClient | null): ProbeLoader | null {
     if (!available) available = c.ffprobeAvailable();
     return available.then((ok) => (ok ? c.probe(hash, index) : null));
   };
+}
+
+/** Skip settings of a torrent (journal on TorrServer) for auto skip and the marks from the player menu. */
+function skipIo(c: TorrServerClient | null): SkipIo | null {
+  if (!c) return null;
+  return { load: (hash) => loadSkip(c, hash), save: (hash, patch) => saveSkip(c, { hash }, patch) };
 }
 
 /** Android TV: the player route opens the native Media3 player and stays as a placeholder behind it. */
@@ -79,7 +85,7 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
           unbridge = null;
           if (!replaced) leave();
         },
-      }, journal, probeLoader(c));
+      }, journal, probeLoader(c), skipIo(c));
       session = run;
       unbridge = setPlayerBridge({ snapshot: () => run.snapshot(), exec: (cmd) => run.exec(cmd) });
       run.start({

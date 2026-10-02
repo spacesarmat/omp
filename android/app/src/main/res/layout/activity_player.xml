@@ -64,14 +64,26 @@
             android:textSize="22sp"
             android:textStyle="bold" />
 
-        <ProgressBar
-            android:id="@+id/player_progress"
-            style="?android:attr/progressBarStyleHorizontal"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="8dp"
-            android:layout_marginTop="12dp"
-            android:max="1000"
-            android:progressDrawable="@drawable/player_progress" />
+            android:layout_height="16dp"
+            android:layout_marginTop="8dp">
+
+            <ProgressBar
+                android:id="@+id/player_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="8dp"
+                android:layout_gravity="center_vertical"
+                android:max="1000"
+                android:progressDrawable="@drawable/player_progress" />
+
+            <!-- chapter ticks (ChapterTicksView) -->
+            <com.spacesarmat.omp.player.ChapterTicksView
+                android:id="@+id/player_ticks"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+        </FrameLayout>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -111,12 +123,51 @@
         </LinearLayout>
 
         <TextView
+            android:id="@+id/player_hint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/player_hint"
             android:textColor="#9AA1B2"
             android:textSize="13sp" />
+    </LinearLayout>
+
+    <!-- «Заставка пропущена · Вернуть», «Титры пропущены», results of the marks (mockup TvMarks) -->
+    <LinearLayout
+        android:id="@+id/player_toast"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="48dp"
+        android:layout_marginTop="30dp"
+        android:background="@drawable/player_panel"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/player_toast_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="6dp"
+            android:maxWidth="640dp"
+            android:textColor="#E8EAF0"
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/player_toast_undo"
+            style="@style/OmpPlayerChip"
+            android:layout_marginStart="10dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:text="@string/player_undo_skip"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
     </LinearLayout>
 
     <TextView

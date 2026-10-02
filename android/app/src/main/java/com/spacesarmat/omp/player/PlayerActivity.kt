@@ -50,7 +50,11 @@ import org.json.JSONObject
  * «Аудио: …», «Субтитры: …», «Следующая серия», key hints and the «Управление с телефона» badge.
  * Keys: ◀/▶ seek by the settings step with the LG arrow rule ([SeekAccumulator]: ×(1 + repeats/4) up to ×6,
  * one seek 700 ms after the last press),
- * OK pause, ▲ tracks, Back closes. At the end of an item: «Следующая серия через N» (5 s) or close.
+ * OK pause, ▲ / Menu the player menu (tracks, «Главы», «Отметить …»), CH+ / CH− (Page Up / Down) the next /
+ * previous chapter (episode when the file has none), ⏭ / ⏮ the next / previous episode, Back closes.
+ * At the end of an item: «Следующая серия через N» (5 s) or close; with known credits the countdown starts there.
+ * Chapters and skips come from the page per item ([SkipState]): ticks, «Пропустить заставку», auto skip of the
+ * intro with «Вернуть», credits auto skip to the next item (as the LG player).
  * Moving to another item starts it from its resume point (queue `resume`, updated when an item is left).
  * Events go to the page through [NativePlayerBridge]; AC3/E-AC3/DTS use the default renderers
  * (passthrough over HDMI when the device reports support; no FFmpeg extension).
@@ -77,6 +81,11 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var btnSkip: TextView
     private lateinit var errorBox: View
     private lateinit var errorText: TextView
+    private lateinit var ticksView: ChapterTicksView
+    private lateinit var hint: TextView
+    private lateinit var toastBox: View
+    private lateinit var toastText: TextView
+    private lateinit var toastUndo: View
 
     private var session: Long? = null
     private var closedSent = false
@@ -90,15 +99,28 @@ class PlayerActivity : AppCompatActivity() {
     private var error: String? = null
     private var ticks = 0
     private var dialog: AlertDialog? = null
-    private val intro = IntroSkip()
+    private val skips = SkipState()
+    /** «Заставка пропущена · Вернуть» on screen: the intro start OK returns to. */
+    private var undoStart: Long? = null
+    /** The running countdown started at the credits (pausing hides it, Back dismisses it for this item). */
+    private var creditsCountdown = false
 
+    private var toastShown = false
+    private val hideToast = Runnable {
+        undoStart = null
+        toastShown = false
+        render()
+    }
     private val hideControls = Runnable {
         controlsShown = false
         render()
     }
     private val commitSeek = Runnable {
         val t = seeker.take()
-        if (t != null) exo.seekTo(t)
+        if (t != null) {
+            skips.seeked()
+            exo.seekTo(t)
+        }
         render()
         emitState()
     }
@@ -118,6 +140,7 @@ class PlayerActivity : AppCompatActivity() {
                 lastPosMs = exo.currentPosition
                 lastDurMs = durationMs()
             }
+            checkSkips()
             render()
             if (++ticks % 2 == 0) emitState()
             handler.postDelayed(this, 500)
@@ -157,6 +180,11 @@ class PlayerActivity : AppCompatActivity() {
         btnSkip = findViewById(R.id.player_skip_intro)
         errorBox = findViewById(R.id.player_error)
         errorText = findViewById(R.id.player_error_text)
+        ticksView = findViewById(R.id.player_ticks)
+        hint = findViewById(R.id.player_hint)
+        toastBox = findViewById(R.id.player_toast)
+        toastText = findViewById(R.id.player_toast_text)
+        toastUndo = findViewById(R.id.player_toast_undo)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = onBack()
@@ -248,6 +276,8 @@ class PlayerActivity : AppCompatActivity() {
                 cancelCountdown()
                 handler.removeCallbacks(commitSeek)
                 seeker.cancel()
+                skips.enter()
+                if (undoStart != null) hideMessage()
                 if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) resumeItem()
                 showControls()
                 changed()
@@ -279,8 +309,9 @@ class PlayerActivity : AppCompatActivity() {
         lastDurMs = 0L
         closedSent = false
         session = r.session
-        intro.clear()
-        applyIntros()
+        skips.clear()
+        hideMessage()
+        applySkips()
         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
             .clearOverrides()
             .setPreferredAudioLanguage(r.audioLang.ifEmpty { null })
@@ -374,40 +405,80 @@ class PlayerActivity : AppCompatActivity() {
         exo.trackSelectionParameters = b.build()
     }
 
-    private fun openTracks() {
+    /**
+     * «Меню плеера»: «Аудио», «Субтитры», «Главы» (when the file has chapters) and the three «Отметить …» rows
+     * (as on LG). The marks use the position at the time the menu opened.
+     */
+    private fun openMenu() {
         if (dialog?.isShowing == true) return
         showControls()
+        val i = index()
+        val now = (seeker.pending() ?: exo.currentPosition).coerceAtLeast(0L)
+        val dur = durationMs()
         val audio = audioOptions()
         val subs = subOptions()
         val aSel = selectedAudio(audio)
         val sSel = selectedSub(subs)
-        val root = arrayOf(
-            "Аудио: " + (audio.getOrNull(aSel)?.label ?: "по умолчанию"),
-            "Субтитры: " + sSel.label,
-        )
+        val chapters = skips.chapters(i)
+        val rows = ArrayList<Pair<String, () -> Unit>>()
+        rows.add(("Аудио: " + (audio.getOrNull(aSel)?.label ?: "по умолчанию")) to {
+            if (audio.size >= 2) {
+                dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
+                    .setTitle("Аудио")
+                    .setSingleChoiceItems(audio.map { it.label }.toTypedArray(), aSel) { d, n ->
+                        d.dismiss()
+                        selectAudio(n)
+                    }
+                    .show()
+            }
+        })
+        rows.add(("Субтитры: " + sSel.label) to {
+            dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
+                .setTitle("Субтитры")
+                .setSingleChoiceItems(subs.map { it.label }.toTypedArray(), subs.indexOf(sSel)) { d, n ->
+                    d.dismiss()
+                    selectSub(subs[n].value)
+                }
+                .show()
+        })
+        if (chapters.isNotEmpty()) rows.add(("Главы: " + chapters.size) to { openChapters(i, now) })
+        val marks = markRows(skips.info(i), now, dur)
+        listOf("intro-start", "intro-end", "credits").forEachIndexed { n, kind ->
+            rows.add(marks[n] to { emitMark(i, kind, now, dur) })
+        }
         dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-            .setTitle("Дорожки")
-            .setItems(root) { _, which ->
-                if (which == 0) {
-                    if (audio.size < 2) return@setItems
-                    dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-                        .setTitle("Аудио")
-                        .setSingleChoiceItems(audio.map { it.label }.toTypedArray(), aSel) { d, i ->
-                            d.dismiss()
-                            selectAudio(i)
-                        }
-                        .show()
-                } else {
-                    dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-                        .setTitle("Субтитры")
-                        .setSingleChoiceItems(subs.map { it.label }.toTypedArray(), subs.indexOf(sSel)) { d, i ->
-                            d.dismiss()
-                            selectSub(subs[i].value)
-                        }
-                        .show()
+            .setTitle("Меню плеера")
+            .setItems(rows.map { it.first }.toTypedArray()) { _, which -> rows.getOrNull(which)?.second?.invoke() }
+            .show()
+    }
+
+    /** «Главы»: «время · название», the current one checked; a choice seeks to its start. */
+    private fun openChapters(item: Int, now: Long) {
+        val list = skips.chapters(item)
+        if (list.isEmpty() || item != index()) return
+        dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
+            .setTitle("Главы")
+            .setSingleChoiceItems(Chapters.rows(list).toTypedArray(), Chapters.indexAt(list, now)) { d, n ->
+                d.dismiss()
+                if (item == index()) {
+                    seekToMs(list[n].startMs)
+                    showControls()
+                    changed()
                 }
             }
             .show()
+    }
+
+    /** «Отметить …»: the page applies the mark (applyMark), saves it and answers with a message and new segments. */
+    private fun emitMark(item: Int, kind: String, nowMs: Long, durMs: Long) {
+        if (closedSent) return
+        val o = JSObject()
+        session?.let { o.put("session", it) }
+        o.put("index", item)
+        o.put("kind", kind)
+        o.put("now", nowMs / 1000.0)
+        o.put("duration", durMs / 1000.0)
+        NativePlayerBridge.emit("nativePlayerMark", o)
     }
 
     // ---- keys ----
@@ -424,6 +495,7 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> when {
                 countdown >= 0 -> playNext()
                 error != null -> retry()
+                undoStart != null -> undoSkip()
                 skipShown() -> skipIntro()
                 else -> togglePause()
             }
@@ -432,50 +504,139 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_MEDIA_PAUSE -> if (exo.playWhenReady) togglePause()
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> seekBy(-1)
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> seekBy(1)
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MENU -> openTracks()
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MENU -> openMenu()
             KeyEvent.KEYCODE_DPAD_DOWN -> showControls()
-            KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_CHANNEL_UP -> playNext()
-            KeyEvent.KEYCODE_MEDIA_PREVIOUS, KeyEvent.KEYCODE_CHANNEL_DOWN -> playPrev()
+            KeyEvent.KEYCODE_MEDIA_NEXT -> playNext()
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> playPrev()
+            KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> chapterKey(1)
+            KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> chapterKey(-1)
             KeyEvent.KEYCODE_MEDIA_STOP -> close()
         }
     }
 
     private fun onBack() {
         if (countdown >= 0) {
+            if (creditsCountdown) skips.dismissCountdown()
             cancelCountdown()
             showControls()
             return
         }
+        if (undoStart != null) {
+            hideMessage()
+            return
+        }
         if (skipShown()) {
-            intro.dismiss(index())
+            skips.hideIntro(index())
             render()
             return
         }
         close()
     }
 
-    // ---- skip intro (marks come from the page: NativePlayerBridge.intro) ----
+    // ---- chapters and skips (from the page: NativePlayerBridge.segments) ----
 
-    /** Takes the intro marks the page sent (the first ones can arrive before the player is created). */
-    fun applyIntros() {
+    /** Takes the messages the page sent (the first ones can arrive before the player is created). */
+    fun applySkips() {
         if (!::exo.isInitialized || isFinishing) return
-        NativePlayerBridge.takeIntros().forEach { intro.set(it.index, it.startMs, it.endMs) }
+        NativePlayerBridge.takeSkips().forEach { if (it.index < req.queue.size) skips.set(it) }
+        checkSkips()
         render()
     }
 
-    /** «Пропустить заставку» is on screen: the item has an intro, the position is inside it, not dismissed. */
+    /** «Пропустить заставку» is on screen: inside the intro, not skipped or hidden, no countdown / «Вернуть». */
     private fun skipShown(): Boolean =
-        ::exo.isInitialized && countdown < 0 && error == null && !isFinishing &&
-            intro.due(index(), exo.currentPosition)
+        ::exo.isInitialized && countdown < 0 && error == null && !isFinishing && undoStart == null &&
+            skips.skipDue(index(), exo.currentPosition)
 
     private fun skipIntro() {
-        val t = intro.target(index()) ?: return
+        val i = index()
+        val t = skips.introTarget(i, durationMs()) ?: return
+        skips.hideIntro(i)
         seekToMs(t)
         changed()
     }
 
+    /** «Вернуть»: back to the start of the intro that was skipped automatically (not skipped again in this file). */
+    private fun undoSkip() {
+        val t = undoStart ?: return
+        hideMessage()
+        seekToMs(t)
+        showControls()
+        changed()
+    }
+
+    /**
+     * On every position tick: auto skip of the intro, credits auto skip to the next item («Титры пропущены»,
+     * regardless of autoNext), the «Следующая серия» countdown from the credits start (with autoNext).
+     */
+    private fun checkSkips() {
+        if (!::exo.isInitialized || isFinishing || error != null || seeker.pending() != null) return
+        if (exo.currentMediaItemIndex != lastIndex) return // the transition has not been handled yet
+        val i = index()
+        val pos = exo.currentPosition
+        val dur = durationMs()
+        val start = skips.info(i)?.intro?.startMs
+        val auto = skips.autoIntro(i, pos, dur)
+        if (auto != null && start != null) {
+            seekToMs(auto)
+            showMessage(getString(R.string.player_intro_skipped), false, undo = start)
+            emitState()
+            return
+        }
+        if (skips.creditsCrossed(i, pos, exo.playWhenReady, hasNext())) {
+            playNext()
+            showMessage(getString(R.string.player_credits_skipped), false)
+            return
+        }
+        if (countdown < 0 && req.autoNext && hasNext() && exo.playWhenReady && skips.countdownDue(i, pos, dur)) {
+            countdown = CREDITS_COUNTDOWN_S
+            creditsCountdown = true
+            handler.removeCallbacks(countdownTick)
+            handler.postDelayed(countdownTick, 1000)
+        }
+    }
+
+    /** CH+ / CH−: the next / previous chapter; without chapters the next / previous episode (once ffprobe answered). */
+    private fun chapterKey(dir: Int) {
+        showControls()
+        when (val step = skips.chapterStep(index(), seeker.pending() ?: exo.currentPosition, dir)) {
+            is ChapterStep.Seek -> {
+                seekToMs(step.ms)
+                changed()
+            }
+            ChapterStep.NextItem -> playNext()
+            ChapterStep.PrevItem -> playPrev()
+            ChapterStep.Wait, ChapterStep.None -> Unit
+        }
+    }
+
+    /** A message at the top left: «Заставка пропущена» with «Вернуть · OK» for 5 s ([undo]), others for 3 s. */
+    fun showMessage(text: String, error: Boolean, undo: Long? = null) {
+        if (!::exo.isInitialized || isFinishing) return
+        undoStart = undo
+        toastText.text = text
+        toastText.setTextColor(if (error) ERROR_COLOR else TEXT_COLOR)
+        toastShown = true
+        handler.removeCallbacks(hideToast)
+        handler.postDelayed(hideToast, if (undo != null) SKIP_TOAST_MS else MESSAGE_MS)
+        render()
+    }
+
+    private fun hideMessage() {
+        handler.removeCallbacks(hideToast)
+        undoStart = null
+        toastShown = false
+        if (::toastBox.isInitialized) render()
+    }
+
     private fun togglePause() {
-        if (exo.playWhenReady) exo.pause() else exo.play()
+        if (exo.playWhenReady) {
+            // the credits countdown waits for playback (shown again on play, as on LG)
+            if (creditsCountdown) cancelCountdown()
+            exo.pause()
+        } else {
+            exo.play()
+        }
         showControls()
         changed()
     }
@@ -491,6 +652,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun seekToMs(t: Long) {
         handler.removeCallbacks(commitSeek)
         seeker.cancel()
+        skips.seeked()
         exo.seekTo(t)
     }
 
@@ -531,6 +693,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun cancelCountdown() {
         countdown = -1
+        creditsCountdown = false
         handler.removeCallbacks(countdownTick)
         if (::nextBox.isInitialized) nextBox.visibility = View.GONE
     }
@@ -642,7 +805,16 @@ class PlayerActivity : AppCompatActivity() {
             btnAudio.text = "Аудио: " + (audio.getOrNull(selectedAudio(audio))?.label ?: "по умолчанию")
             btnSubs.text = "Субтитры: " + selectedSub(subOptions()).label
             btnNext.visibility = if (hasNext()) View.VISIBLE else View.GONE
+            val chapters = skips.chapters(i)
+            if (chapters.isNotEmpty()) {
+                val cur = Chapters.current(chapters, pos)
+                if (cur.isNotEmpty()) title.text = item.title + " · " + cur
+            }
+            ticksView.setTicks(Chapters.ticks(chapters, dur))
+            hint.setText(if (chapters.isNotEmpty()) R.string.player_hint_chapters else R.string.player_hint)
         }
+        toastBox.visibility = if (toastShown) View.VISIBLE else View.GONE
+        toastUndo.visibility = if (undoStart != null) View.VISIBLE else View.GONE
         btnSkip.visibility = if (skipShown()) View.VISIBLE else View.GONE
         // above the controls while they are shown, near the bottom edge when they are hidden
         btnSkip.translationY = if (visible) 0f else SKIP_HIDDEN_SHIFT_DP * resources.displayMetrics.density
@@ -700,7 +872,13 @@ class PlayerActivity : AppCompatActivity() {
         private const val WATCHED_RATIO = 0.9
         private const val MIN_RESUME_MS = 10_000L
         private const val NEXT_COUNTDOWN_S = 5
+        private const val CREDITS_COUNTDOWN_S = 10
         private const val SKIP_HIDDEN_SHIFT_DP = 150f
+        /** «Заставка пропущена · Вернуть» (SKIP_TOAST_MS of src/player/chapters.ts), other messages. */
+        private const val SKIP_TOAST_MS = 5000L
+        private const val MESSAGE_MS = 3000L
+        private const val TEXT_COLOR = 0xFFE8EAF0.toInt()
+        private const val ERROR_COLOR = 0xFFFF8A80.toInt()
         private const val EXTERNAL_ID = "omp-x"
         private val EXTERNAL_RE = Regex("omp-x(\\d+)")
         private val RU = Locale.forLanguageTag("ru")
@@ -712,7 +890,7 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_DPAD_UP,
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT,
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_MEDIA_PREVIOUS, KeyEvent.KEYCODE_CHANNEL_DOWN,
-            KeyEvent.KEYCODE_MEDIA_STOP,
+            KeyEvent.KEYCODE_MEDIA_STOP, KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN,
         )
 
         fun subMime(ext: String): String? = when (ext.lowercase(Locale.ROOT).trimStart('.')) {
@@ -737,14 +915,7 @@ class PlayerActivity : AppCompatActivity() {
             return spec.buildUpon().setUri(clean).setHttpRequestHeaders(headers).build()
         }
 
-        fun clock(ms: Long): String {
-            val sec = (ms.coerceAtLeast(0L) / 1000)
-            val h = sec / 3600
-            val m = sec / 60 % 60
-            val s = sec % 60
-            return if (h > 0) String.format(Locale.ROOT, "%d:%02d:%02d", h, m, s)
-            else String.format(Locale.ROOT, "%d:%02d", m, s)
-        }
+        fun clock(ms: Long): String = formatClock(ms)
 
         private fun language(code: String?): String {
             if (code.isNullOrEmpty() || code == C.LANGUAGE_UNDETERMINED) return ""
