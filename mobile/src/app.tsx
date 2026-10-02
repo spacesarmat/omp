@@ -5,6 +5,8 @@ import { NavBar, type Tab } from './ui/NavBar';
 import { Toast } from './ui/toast';
 import { Connect } from './screens/Connect';
 import { Tv } from './screens/Tv';
+import { Library } from './screens/Library';
+import { Torrent } from './screens/Torrent';
 import './mobile.css';
 
 const TITLES: Record<MRoute['name'], string> = {
@@ -56,6 +58,10 @@ export function App() {
         <Connect />
       ) : route.name === 'tv' ? (
         <Tv />
+      ) : route.name === 'library' ? (
+        <Library />
+      ) : route.name === 'torrent' ? (
+        <Torrent hash={route.hash} />
       ) : (
         <div class="m-screen" data-route={route.name}>
           <h1>{TITLES[route.name]}</h1>

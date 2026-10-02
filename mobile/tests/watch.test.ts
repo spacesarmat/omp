@@ -1,0 +1,33 @@
+import { describe, it, expect } from 'vitest';
+import { watchOnTvParams, streamUrlFor } from '../src/watch';
+import { TorrServerClient } from '../../src/api/torrserver';
+
+describe('watchOnTvParams', () => {
+  it('builds the full launch params', () => {
+    expect(watchOnTvParams('http://h:8090', 'abc', 3, 1394)).toEqual({ server: 'http://h:8090', torrent: 'abc', file: 3, t: 1394 });
+  });
+  it('omits file and t when absent', () => {
+    const p = watchOnTvParams('http://h:8090', 'abc');
+    expect(p).toEqual({ server: 'http://h:8090', torrent: 'abc' });
+    expect('file' in p).toBe(false);
+    expect('t' in p).toBe(false);
+  });
+  it('floors t', () => {
+    expect(watchOnTvParams('http://h:8090', 'abc', 0, 12.9)).toMatchObject({ file: 0, t: 12 });
+  });
+  it('omits a non-positive t', () => {
+    expect('t' in watchOnTvParams('http://h:8090', 'abc', 1, 0)).toBe(false);
+  });
+});
+
+describe('streamUrlFor', () => {
+  it('points at the file stream', () => {
+    const c = new TorrServerClient({ url: 'http://h:8090' });
+    const url = streamUrlFor(c, { hash: 'abc' } as any, { id: 4, path: 'S/ep 4.mkv', length: 1 });
+    expect(url).toBe('http://h:8090/stream/ep%204.mkv?link=abc&index=4&play');
+  });
+  it('embeds credentials for external players', () => {
+    const c = new TorrServerClient({ url: 'http://h:8090', user: 'u', password: 'p' });
+    expect(streamUrlFor(c, { hash: 'abc' } as any, { id: 1, path: 'a.mkv', length: 1 })).toContain('http://u:p@h:8090/');
+  });
+});
