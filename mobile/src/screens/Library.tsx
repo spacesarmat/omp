@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { Icon } from '../ui/Icon';
-import { Poster } from '../ui/Poster';
+import { Icon, ICONS } from '../ui/Icon';
+import { Poster, qualityBadge } from '../ui/Poster';
 import { Logo } from '../../../src/ui/Logo';
 import { TvChip } from '../ui/TvChip';
 import { LaunchError } from '../ui/LaunchError';
@@ -11,13 +11,25 @@ import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents 
 import { continueWatching, refreshViewed, progressVersion, serverViewed } from '../../../src/store/progress';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
-import { LIBRARY_TABS, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
+import { LIBRARY_TABS, nextView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { formatBytes } from '../../../src/lib/format';
 import { episodeLabel, playableFiles } from '../../../src/lib/episodes';
+import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
 
 const POLL_MS = 15000;
+const titleOf = (t: Torrent) => t.title || t.name || t.hash;
+
+function episodesText(t: Torrent): string {
+  const n = playableFiles(filesOf(t)).length;
+  if (n < 2) return '';
+  const m10 = n % 10;
+  const m100 = n % 100;
+  const word = m10 === 1 && m100 !== 11 ? 'серия' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'серии' : 'серий';
+  return n + ' ' + word;
+}
+
 const SEARCH = 'M5 11a6 6 0 1 0 12 0 6 6 0 0 0-12 0zM21 21l-5-5';
 
 export function Library() {
@@ -27,6 +39,7 @@ export function Library() {
   const searchOpen = librarySearchOpen.value;
   const list = torrents.value;
   const sort = settings.value.librarySort;
+  const view = settings.value.libraryView;
   const [loaded, setLoaded] = useState(list.length > 0);
   const [error, setError] = useState('');
   const [tvError, setTvError] = useState('');
@@ -111,6 +124,17 @@ export function Library() {
             {sortLabel(sort)}
           </button>
         )}
+        {!isHistory && (
+          <button
+            type="button"
+            class="m-chip m-view"
+            aria-label={'Вид: ' + viewLabel(view)}
+            onClick={() => updateSettings({ libraryView: nextView(view) })}
+          >
+            <Icon d={ICONS['view-' + view as keyof typeof ICONS]} size={16} />
+            <span>{viewLabel(view)}</span>
+          </button>
+        )}
         <button
           type="button"
           class="m-icon-btn"
@@ -183,15 +207,47 @@ export function Library() {
           })}
         </div>
       ) : (
-        <div class="m-grid">
-          {shown.map((t) => (
-            <button type="button" class="m-card" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
-              <Poster torrent={t} />
-              <span class="m-card-title">{t.title || t.name || t.hash}</span>
-              <span class="m-muted m-small">{formatBytes(t.torrent_size || 0)}</span>
-            </button>
-          ))}
-        </div>
+        view === 'list' ? (
+          <div class="m-vlist">
+            {shown.map((t) => {
+              const eps = episodesText(t);
+              const q = qualityBadge(titleOf(t));
+              return (
+                <button type="button" class="m-vrow" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
+                  <Poster torrent={t} class="m-poster-row" />
+                  <span class="m-vrow-text">
+                    <span class="m-card-title">{titleOf(t)}</span>
+                    <span class="m-muted m-small m-vrow-meta">
+                      <span>{formatBytes(t.torrent_size || 0)}</span>
+                      {q && <span class="m-badge-inline">{q}</span>}
+                      {eps && <span>{eps}</span>}
+                    </span>
+                  </span>
+                  <Icon d="M9 6l6 6-6 6" size={18} />
+                </button>
+              );
+            })}
+          </div>
+        ) : view === 'compact' ? (
+          <div class="m-vlist m-clist">
+            {shown.map((t) => (
+              <button type="button" class="m-crow" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
+                <span class="m-crow-title">{titleOf(t)}</span>
+                <span class="m-muted m-small m-crow-size">{formatBytes(t.torrent_size || 0)}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div class={'m-grid m-view-' + view}>
+            {shown.map((t) => (
+              <button type="button" class="m-card" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
+                <Poster torrent={t} />
+                <span class="m-card-title">{titleOf(t)}</span>
+                {view === 'large' && <span class="m-muted m-small">{formatBytes(t.torrent_size || 0)}</span>}
+              </button>
+            ))}
+          </div>
+        )
       )}
       {launch.sheet}
     </div>
