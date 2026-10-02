@@ -42,6 +42,12 @@ describe('checkForUpdate', () => {
     expect(await checkForUpdate({ manual: true, now: NOW + 1, current: '0.6.0' })).toBe('update');
     expect(f).toHaveBeenCalledTimes(2);
   });
+  it('checks again when lastCheck is in the future (TV clock went back)', async () => {
+    const f = mockFetch(() => ({ body: feed('0.6.1') }));
+    await checkForUpdate({ manual: false, now: NOW + CHECK_INTERVAL_MS * 10, current: '0.6.0' });
+    expect(await checkForUpdate({ manual: false, now: NOW, current: '0.6.0' })).toBe('update');
+    expect(f).toHaveBeenCalledTimes(2);
+  });
   it('reports latest for same/older/broken feeds', async () => {
     mockFetch(() => ({ body: feed('0.6.0') }));
     expect(await checkForUpdate({ manual: true, now: NOW, current: '0.6.0' })).toBe('latest');

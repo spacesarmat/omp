@@ -92,4 +92,21 @@ describe('UpdateDialog', () => {
     expect(shouldShowUpdateDialog('player')).toBe(false);
     expect(shouldShowUpdateDialog('library')).toBe(true);
   });
+  it('is not stacked over the update screen', () => {
+    expect(shouldShowUpdateDialog('update')).toBe(false);
+  });
+  it('dialogOpen reflects an open DialogHost dialog', async () => {
+    const { choose, dialogOpen, DialogHost } = await import('../../src/ui/dialog');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    render(h(DialogHost, {}), host);
+    expect(dialogOpen.value).toBe(false);
+    const p = choose('Выйти из приложения?', [{ label: 'Да', value: true }, { label: 'Отмена', value: false }]);
+    expect(dialogOpen.value).toBe(true);
+    await until(() => host.querySelectorAll('.dialog-option').length === 2);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(dispatchKey('back', new KeyboardEvent('keydown'))).toBe(true);
+    expect(await p).toBeNull();
+    expect(dialogOpen.value).toBe(false);
+  });
 });

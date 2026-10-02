@@ -21,4 +21,15 @@ describe('launch params', () => {
     document.dispatchEvent(new Event('webOSRelaunch'));
     expect(cb).toHaveBeenCalledTimes(1);
   });
+  it('activates the window on relaunch before calling back, tolerating a throwing activate', () => {
+    const order: string[] = [];
+    (window as any).PalmSystem = { launchParams: '{}', activate: () => order.push('activate') };
+    const off = onRelaunch(() => order.push('cb'));
+    document.dispatchEvent(new Event('webOSRelaunch'));
+    expect(order).toEqual(['activate', 'cb']);
+    (window as any).PalmSystem = { launchParams: '{}', activate: () => { throw new Error('x'); } };
+    document.dispatchEvent(new Event('webOSRelaunch'));
+    expect(order).toEqual(['activate', 'cb', 'cb']);
+    off();
+  });
 });

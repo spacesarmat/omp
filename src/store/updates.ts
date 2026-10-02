@@ -40,7 +40,7 @@ export type CheckResult = 'update' | 'latest' | 'error' | 'skipped';
 export function checkForUpdate(opts: { manual: boolean; now?: number; current?: string }): Promise<CheckResult> {
   const now = opts.now === undefined ? Date.now() : opts.now;
   const current = opts.current === undefined ? APP_VERSION : opts.current;
-  if (!opts.manual && (!settings.value.updateCheck || now - state.lastCheck < CHECK_INTERVAL_MS)) {
+  if (!opts.manual && (!settings.value.updateCheck || (state.lastCheck <= now && now - state.lastCheck < CHECK_INTERVAL_MS))) {
     return Promise.resolve<CheckResult>('skipped');
   }
   return request<unknown>(UPDATE_URL, { timeoutMs: 10000 }).then(

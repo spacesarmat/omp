@@ -16,7 +16,7 @@ export function hbPresence(): Promise<HbPresence> {
 
 /** checkRoot answers { returnValue: runningAsRoot }, so non-root arrives as a Luna error. */
 export function hbHasRoot(): Promise<boolean> {
-  return lunaCall(HB_SERVICE + 'checkRoot', {}, 3000).then(() => true, () => false);
+  return lunaCall(HB_SERVICE + 'checkRoot', {}, 8000).then(() => true, () => false);
 }
 
 export function openHbChannel(addRepositoryUrl?: string): Promise<void> {
@@ -31,7 +31,7 @@ export interface InstallStatus {
 }
 
 export function installStatus(m: { statusText?: string; progress?: number; finished?: boolean }): InstallStatus {
-  if (m.finished) return { stage: 'done', text: 'Готово. OMP перезапустится' };
+  if (m.finished) return { stage: 'done', text: 'Готово. Откройте OMP заново' };
   const t = m.statusText || '';
   if (/verif/i.test(t)) return { stage: 'verify', text: 'Проверка…' };
   if (/install|self-update/i.test(t)) return { stage: 'install', text: 'Установка…' };

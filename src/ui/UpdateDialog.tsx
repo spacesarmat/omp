@@ -6,9 +6,9 @@ import { FocusGroup, Button } from './components';
 import { useKeys } from './keys';
 import { navigate } from './nav';
 
-/** The prompt is never shown over the player; the signal survives, so it appears after leaving it. */
+/** The prompt is never shown over the player or the update screen; the signal survives, so it appears after leaving it. */
 export function shouldShowUpdateDialog(routeName: string): boolean {
-  return routeName !== 'player';
+  return routeName !== 'player' && routeName !== 'update';
 }
 
 export function UpdateDialog() {

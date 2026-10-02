@@ -57,12 +57,6 @@ async function until(cond: () => boolean, ms = 2000) {
 }
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-async function mountReady(host?: HTMLElement) {
-  const h0 = await mount();
-  void host;
-  return h0;
-}
-
 function pressInstall(host: HTMLElement) {
   const b = Array.from(host.querySelectorAll('.button')).find((x) => /Установить$|Повторить/.test(x.textContent || '')) as HTMLElement;
   b.click();
@@ -72,7 +66,6 @@ async function mount() {
   const host = document.createElement('div');
   document.body.appendChild(host);
   render(h(UpdateScreen, {}), host);
-  await new Promise((r) => setTimeout(r, 20));
   return host;
 }
 
@@ -87,6 +80,9 @@ describe('UpdateScreen', () => {
   it('without root: no one-click install, Homebrew and computer blocks with QR', async () => {
     bridge(false, 'installed');
     const host = await mount();
+    await until(() => host.textContent!.indexOf('Открыть Homebrew Channel') >= 0);
+    await tick();
+    await tick();
     expect(host.textContent).toContain('доступна 9.9.9');
     expect(host.textContent).toContain('Первое');
     expect(host.textContent).not.toContain('Установить сейчас');
@@ -97,12 +93,14 @@ describe('UpdateScreen', () => {
   it('with root: shows one-click install', async () => {
     bridge(true, 'installed');
     const host = await mount();
+    await until(() => host.textContent!.indexOf('Установить сейчас') >= 0);
     expect(host.textContent).toContain('Установить сейчас');
     expect(Array.from(host.querySelectorAll('.button')).some((b) => b.textContent === 'Установить')).toBe(true);
   });
   it('without Homebrew Channel: explains and shows a QR to webosbrew.org', async () => {
     bridge(false, 'missing');
     const host = await mount();
+    await until(() => host.textContent!.indexOf('Homebrew Channel не установлен') >= 0);
     expect(host.textContent).toContain('Homebrew Channel не установлен');
     expect(host.textContent).not.toContain('Открыть Homebrew Channel');
     expect(host.querySelectorAll('svg.qr')).toHaveLength(2);
@@ -111,13 +109,14 @@ describe('UpdateScreen', () => {
     latestUpdate.value = null;
     bridge(false, 'installed');
     const host = await mount();
+    await until(() => host.textContent!.indexOf('Проверить обновления') >= 0);
     expect(host.textContent).toContain('Проверить обновления');
     expect(host.textContent).not.toContain('доступна');
   });
 
   it('install flow: progress, verify, done and cancel on done', async () => {
     const fake = streamBridge({ root: true, hb: 'installed' });
-    const host = await mountReady();
+    const host = await mount();
     await until(() => host.textContent!.indexOf('Установить сейчас') >= 0);
     pressInstall(host);
     await until(() => host.textContent!.indexOf('Скачивание…') >= 0);
@@ -130,13 +129,13 @@ describe('UpdateScreen', () => {
     expect(host.querySelector('.progress')).toBeNull();
     expect(fake.cancels).toBe(0);
     fake.emit({ returnValue: true, finished: true });
-    await until(() => host.textContent!.indexOf('Готово. OMP перезапустится') >= 0);
+    await until(() => host.textContent!.indexOf('Готово. Откройте OMP заново') >= 0);
     await tick();
     expect(fake.cancels).toBe(1);
   });
   it('install error: Russian banner, retry label, subscription cancelled', async () => {
     const fake = streamBridge({ root: true, hb: 'installed' });
-    const host = await mountReady();
+    const host = await mount();
     await until(() => host.textContent!.indexOf('Установить сейчас') >= 0);
     pressInstall(host);
     await until(() => host.textContent!.indexOf('Скачивание…') >= 0);
@@ -148,7 +147,7 @@ describe('UpdateScreen', () => {
   });
   it('unknown Homebrew presence: caveat and both buttons', async () => {
     streamBridge({ root: false, hb: 'denied' });
-    const host = await mountReady();
+    const host = await mount();
     await until(() => host.textContent!.indexOf('Если Homebrew Channel установлен:') >= 0);
     expect(host.textContent).toContain('Открыть Homebrew Channel');
     expect(host.textContent).toContain('Добавить репозиторий OMP');
@@ -157,7 +156,7 @@ describe('UpdateScreen', () => {
   it('computer QR encodes info.releaseUrl', async () => {
     latestUpdate.value = { ...info, releaseUrl: 'https://example.com/distinct/release/page' };
     streamBridge({ root: false, hb: 'installed' });
-    const host = await mountReady();
+    const host = await mount();
     await until(() => host.querySelectorAll('svg.qr').length === 1);
     const ref = document.createElement('div');
     render(h(Qr, { text: 'https://example.com/distinct/release/page', size: 200 }), ref);

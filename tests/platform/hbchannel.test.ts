@@ -54,7 +54,7 @@ describe('hbchannel', () => {
     expect(installStatus({ statusText: 'Downloading…' })).toEqual({ stage: 'download', text: 'Скачивание…' });
     expect(installStatus({ statusText: 'Verifying…' })).toEqual({ stage: 'verify', text: 'Проверка…' });
     expect(installStatus({ statusText: 'Installing…' })).toEqual({ stage: 'install', text: 'Установка…' });
-    expect(installStatus({ statusText: 'Finished.', finished: true })).toEqual({ stage: 'done', text: 'Готово. OMP перезапустится' });
+    expect(installStatus({ statusText: 'Finished.', finished: true })).toEqual({ stage: 'done', text: 'Готово. Откройте OMP заново' });
   });
   it('streams install status and errors', async () => {
     fakeBridge(() => [

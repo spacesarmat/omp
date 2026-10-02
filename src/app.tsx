@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { routeStack, currentRoute, goBack, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
-import { DialogHost, confirmDialog } from './ui/dialog';
+import { DialogHost, confirmDialog, dialogOpen } from './ui/dialog';
 import { ToastHost } from './ui/toast';
 import { ConnectScreen } from './screens/Connect';
 import { LibraryScreen } from './screens/Library';
@@ -53,7 +53,7 @@ export function App() {
   return (
     <div class="app">
       <div class="screen-host" key={routeStack.value.length + ':' + r.name}>{renderRoute(r)}</div>
-      {shouldShowUpdateDialog(r.name) && <UpdateDialog />}
+      {shouldShowUpdateDialog(r.name) && !dialogOpen.value && <UpdateDialog />}
       <DialogHost />
       <ToastHost />
     </div>
