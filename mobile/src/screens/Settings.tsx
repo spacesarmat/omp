@@ -12,9 +12,12 @@ import {
   clearLocalCache,
   formatBytes,
   LOCAL_PORT,
+  LOCAL_NAME,
+  LOCAL_URL,
 } from '../server/localServer';
+import { TORRSERVER_VERSION } from '../server/torrserverVersion';
 import { showToast } from '../ui/toast';
-import { activeServer } from '../../../src/store/servers';
+import { activeServer, addServer, servers } from '../../../src/store/servers';
 import { activeTv } from '../tv/tvStore';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { checkForUpdate, type CheckResult } from '../../../src/store/updates';
@@ -34,8 +37,9 @@ export function runUpdateCheck(o: { manual: boolean; url?: string }): Promise<Ch
 }
 
 const PROJECT_URL = 'https://github.com/spacesarmat/omp';
+const TORRSERVER_SOURCE_URL = 'https://github.com/YouROK/TorrServer/tree/' + TORRSERVER_VERSION;
 
-function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
+function Switch(p: { on: boolean; label: string; disabled?: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
@@ -43,6 +47,7 @@ function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
       aria-checked={p.on}
       aria-label={p.label}
       class={'m-switch' + (p.on ? ' on' : '')}
+      disabled={p.disabled}
       onClick={p.onToggle}
     >
       <span class="m-switch-knob" />
@@ -54,6 +59,7 @@ function LocalServerSection() {
   const st = localServer.value;
   const [bytes, setBytes] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     void refreshLocalServer();
@@ -71,8 +77,16 @@ function LocalServerSection() {
     setBusy(true);
     try {
       if (st.running) await stopLocal();
-      else await startLocal();
+      else {
+        setStarting(true);
+        await startLocal();
+        // started here, not through the setup screen: make it a saved server too (not the active one)
+        if (localServer.value.running && !servers.value.some((s) => s.url === LOCAL_URL)) {
+          addServer({ name: LOCAL_NAME, url: LOCAL_URL });
+        }
+      }
     } finally {
+      setStarting(false);
       setBusy(false);
     }
   }
@@ -98,10 +112,10 @@ function LocalServerSection() {
         <div class="m-set-row">
           <span class={'m-status-dot' + (st.running ? ' on' : '')} />
           <div class="m-set-text" style="flex-grow: 1">
-            <span style="font-weight: 700">{st.running ? 'Работает' : 'Остановлен'}</span>
+            <span style="font-weight: 700">{starting ? 'Запускаю…' : st.running ? 'Работает' : 'Остановлен'}</span>
             {meta && <span class="m-muted m-small">{meta}</span>}
           </div>
-          <Switch on={st.running} label="TorrServer на телефоне" onToggle={() => void toggle()} />
+          <Switch on={st.running} label="TorrServer на телефоне" disabled={starting} onToggle={() => void toggle()} />
         </div>
         {st.error && (
           <div class="m-error" role="alert">
@@ -199,6 +213,9 @@ export function Settings() {
         </div>
         <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(PROJECT_URL, '_system')}>
           Страница проекта
+        </button>
+        <button type="button" class="m-link" onClick={() => window.open(TORRSERVER_SOURCE_URL, '_system')}>
+          TorrServer © YouROK, GPL-3.0
         </button>
       </section>
     </div>

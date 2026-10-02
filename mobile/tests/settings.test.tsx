@@ -9,6 +9,8 @@ import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
 import { APP_VERSION } from '../../src/version';
 import { toast } from '../src/ui/toast';
 import { localServer, localAutostart, setLocalServerDeps, reloadLocalServerSettings } from '../src/server/localServer';
+import { TORRSERVER_VERSION } from '../src/server/torrserverVersion';
+import { activeServer } from '../../src/store/servers';
 
 function mount(): HTMLElement {
   document.body.innerHTML = '<div id="app"></div>';
@@ -79,6 +81,15 @@ describe('Settings', () => {
     const el = mount();
     await act(async () => btn(el, 'Страница проекта').click());
     expect(open).toHaveBeenCalledWith('https://github.com/spacesarmat/omp', '_system');
+    open.mockRestore();
+  });
+
+  it('credits TorrServer under GPL-3.0 with a link to its sources', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const el = mount();
+    await act(async () => btn(el, 'TorrServer © YouROK, GPL-3.0').click());
+    expect(open).toHaveBeenCalledWith('https://github.com/YouROK/TorrServer/tree/' + TORRSERVER_VERSION, '_system');
+    expect(TORRSERVER_VERSION).toMatch(/^MatriX\./);
     open.mockRestore();
   });
 });
@@ -153,6 +164,83 @@ describe('Settings: TorrServer on the phone', () => {
     await flush();
     expect(calls).toEqual(['start', 'stop']);
     expect(el.textContent).toContain('Остановлен');
+  });
+
+  it('a server started from the switch joins the saved servers without becoming active', async () => {
+    fake({ running: false });
+    const home = addServer({ url: 'http://192.168.1.5:8090', name: 'Home' });
+    setActiveServer(home.id);
+    localServer.value = { supported: true, running: false };
+    const el = mount();
+    await flush();
+    await act(async () => el.querySelector<HTMLElement>('[aria-label="TorrServer на телефоне"]')!.click());
+    await flush();
+    expect(servers.value.map((s) => [s.name, s.url])).toEqual([
+      ['Home', 'http://192.168.1.5:8090'],
+      ['Этот телефон', 'http://127.0.0.1:8090'],
+    ]);
+    expect(activeServer.value?.id).toBe(home.id);
+  });
+
+  it('keeps a renamed local server as is and adds nothing when the start fails', async () => {
+    fake({ running: false });
+    const mine = addServer({ url: 'http://127.0.0.1:8090', name: 'Мой' });
+    localServer.value = { supported: true, running: false };
+    let el = mount();
+    await flush();
+    await act(async () => el.querySelector<HTMLElement>('[aria-label="TorrServer на телефоне"]')!.click());
+    await flush();
+    expect(servers.value).toEqual([mine]);
+
+    removeServer(mine.id);
+    setLocalServerDeps({
+      native: {
+        localServerInfo: async () => ({ supported: true, running: false }),
+        startLocalServer: async () => {
+          throw new Error('Не удалось запустить сервер');
+        },
+        localServerCache: async () => 0,
+        onLocalServerState: () => () => {},
+      } as any,
+    });
+    localServer.value = { supported: true, running: false };
+    el = mount();
+    await flush();
+    await act(async () => el.querySelector<HTMLElement>('[aria-label="TorrServer на телефоне"]')!.click());
+    await flush();
+    expect(servers.value).toEqual([]);
+    expect(el.textContent).toContain('Не удалось запустить сервер');
+  });
+
+  it('shows «Запускаю…» with the switch disabled while starting', async () => {
+    let finish!: () => void;
+    let running = false;
+    setLocalServerDeps({
+      native: {
+        localServerInfo: async () => ({ supported: true, running }),
+        startLocalServer: () =>
+          new Promise((res) => {
+            finish = () => {
+              running = true;
+              res({ supported: true, running: true });
+            };
+          }),
+        localServerCache: async () => 0,
+        onLocalServerState: () => () => {},
+      } as any,
+    });
+    localServer.value = { supported: true, running: false };
+    const el = mount();
+    await flush();
+    const sw = () => el.querySelector<HTMLButtonElement>('[aria-label="TorrServer на телефоне"]')!;
+    await act(async () => sw().click());
+    expect(el.textContent).toContain('Запускаю…');
+    expect(sw().disabled).toBe(true);
+    await act(async () => finish());
+    await flush();
+    expect(el.textContent).not.toContain('Запускаю…');
+    expect(el.textContent).toContain('Работает');
+    expect(sw().disabled).toBe(false);
   });
 
   it('toggles autostart', async () => {
