@@ -38,6 +38,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // one jsdom per worker instead of per file (each file still gets its own context): about twice as fast
+    pool: 'vmThreads',
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx', 'mobile/tests/**/*.test.{ts,tsx}'],
     alias: {
       react: 'preact/compat',
