@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   reloadProgress, saveProgress, getLocalProgress, isWatched, resumePosition, progressRatio,
-  markWatched, clearProgress, serverViewed, continueWatching, refreshViewed,
+  markWatched, clearProgress, serverViewed, continueWatching, refreshViewed, resetViewed,
 } from '../../src/store/progress';
 import type { Torrent } from '../../src/api/types';
 
@@ -62,5 +62,13 @@ describe('progress store', () => {
     expect(serverViewed.value).toHaveLength(1);
     await refreshViewed({ viewedList: () => Promise.reject(new Error('x')) } as any);
     expect(serverViewed.value).toHaveLength(1);
+  });
+  it('ignores a stale viewedList after resetViewed', async () => {
+    let resolve!: (v: any) => void;
+    const p = refreshViewed({ viewedList: () => new Promise<any>((r) => { resolve = r; }) } as any);
+    resetViewed();
+    resolve([{ hash: H, file_index: 1 }]);
+    await p;
+    expect(serverViewed.value).toEqual([]);
   });
 });

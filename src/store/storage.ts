@@ -1,8 +1,33 @@
-export function loadJson<T>(key: string, fallback: T): T {
+function removeKey(key: string): void {
   try {
-    const s = localStorage.getItem(key);
-    return s === null ? fallback : (JSON.parse(s) as T);
+    localStorage.removeItem(key);
   } catch (e) {
+    // storage unavailable
+  }
+}
+
+export function isObject(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+/** Reads JSON from localStorage; corrupt or invalid values are removed and replaced by the fallback. */
+export function loadJson<T>(key: string, fallback: T, isValid?: (v: unknown) => boolean): T {
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(key);
+  } catch (e) {
+    return fallback;
+  }
+  if (raw === null) return fallback;
+  try {
+    const v = JSON.parse(raw);
+    if (isValid && !isValid(v)) {
+      removeKey(key);
+      return fallback;
+    }
+    return v as T;
+  } catch (e) {
+    removeKey(key);
     return fallback;
   }
 }

@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals';
-import { loadJson, saveJson } from './storage';
+import { loadJson, saveJson, isObject } from './storage';
 import type { Torrent, ViewedEntry } from '../api/types';
 import type { TorrServerClient } from '../api/torrserver';
 
@@ -13,7 +13,20 @@ const KEY = 'tsp.progress';
 export const WATCHED_RATIO = 0.9;
 export const MIN_RESUME = 10;
 
-let local: { [k: string]: Progress } = loadJson(KEY, {});
+export function sanitizeProgress(v: unknown): { [k: string]: Progress } {
+  const out: { [k: string]: Progress } = {};
+  if (!isObject(v)) return out;
+  Object.keys(v).forEach((k) => {
+    const p = v[k];
+    if (isObject(p) && typeof p.time === 'number' && typeof p.duration === 'number' && typeof p.updated === 'number'
+      && isFinite(p.time) && isFinite(p.duration) && isFinite(p.updated)) {
+      out[k] = { time: p.time, duration: p.duration, updated: p.updated };
+    }
+  });
+  return out;
+}
+
+let local: { [k: string]: Progress } = sanitizeProgress(loadJson<unknown>(KEY, {}, isObject));
 export const progressVersion = signal(0);
 export const serverViewed = signal<ViewedEntry[]>([]);
 
@@ -33,7 +46,7 @@ function persist() {
 }
 
 export function reloadProgress(): void {
-  local = loadJson(KEY, {});
+  local = sanitizeProgress(loadJson<unknown>(KEY, {}, isObject));
   progressVersion.value++;
 }
 
@@ -86,9 +99,17 @@ export function clearProgress(hash: string, idx?: number): void {
   persist();
 }
 
+let viewedGen = 0;
+
+export function resetViewed(): void {
+  viewedGen++;
+  serverViewed.value = [];
+}
+
 export function refreshViewed(c: Pick<TorrServerClient, 'viewedList'>): Promise<void> {
+  const my = viewedGen;
   return c.viewedList().then(
-    (list) => { serverViewed.value = list; },
+    (list) => { if (my === viewedGen) serverViewed.value = list; },
     () => undefined,
   );
 }
