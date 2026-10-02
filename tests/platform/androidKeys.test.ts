@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll } from 'vitest';
+import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { installAndroidKeyBridge, sendKey } from '../../src/platform/androidKeys';
 import { installKeyListener, pushKeyHandler } from '../../src/ui/keys';
 import { routeStack, resetTo, navigate } from '../../src/ui/nav';
@@ -10,6 +11,9 @@ import type { KeyAction } from '../../src/platform/keys';
 
 const w = window as unknown as { Capacitor?: unknown; __ompKey?: (c: number) => boolean; __ompBack?: () => boolean };
 const cleanups: (() => void)[] = [];
+beforeAll(() => {
+  init({ debug: false, visualDebug: false });
+});
 afterEach(() => {
   while (cleanups.length) cleanups.pop()!();
   delete w.Capacitor;
