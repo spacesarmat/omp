@@ -7,6 +7,8 @@ export interface LaunchPlan {
   server?: string;
   action?: LaunchAction;
   report?: string;
+  /** a screen to open: `update` (sent by the phone when the TV has an old OMP) */
+  open?: 'update';
   invalid: boolean;
 }
 
@@ -80,6 +82,8 @@ export function parseLaunchParams(raw: unknown): LaunchPlan | null {
       plan.action = { kind: 'play', url, title };
     } else plan.invalid = true;
   }
-  if (!plan.server && !plan.action && !plan.report && !plan.invalid) return null;
+  // unknown screens are ignored, so a newer phone does not break an older TV
+  if (o.open === 'update') plan.open = 'update';
+  if (!plan.server && !plan.action && !plan.report && !plan.open && !plan.invalid) return null;
   return plan;
 }
