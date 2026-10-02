@@ -1,0 +1,13 @@
+{
+  "id": "com.spacesarmat.torrplayer",
+  "version": "0.1.0",
+  "vendor": "spacesarmat",
+  "type": "web",
+  "main": "index.html",
+  "title": "TorrServer Player",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgColor": "#0f1115",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true
+}
