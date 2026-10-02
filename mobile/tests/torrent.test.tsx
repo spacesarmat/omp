@@ -26,7 +26,7 @@ const tor: T = {
 
 async function flush() {
   await act(async () => {
-    for (let i = 0; i < 6; i++) await Promise.resolve();
+    for (let i = 0; i < 15; i++) await Promise.resolve();
   });
 }
 
@@ -61,7 +61,7 @@ beforeEach(() => {
   launch.mockReset().mockResolvedValue(undefined);
   open.mockReset().mockResolvedValue(undefined);
   copy.mockReset().mockResolvedValue(undefined);
-  setWatchActions({ launchOnTv: launch, openExternal: open, copyText: copy, remoteDelayMs: 0 });
+  setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, openExternal: open, copyText: copy, remoteDelayMs: 0 });
   resetTo({ name: 'library' });
   navigate({ name: 'torrent', hash: 'abc' });
   vi.spyOn(TorrServerClient.prototype, 'viewedList').mockResolvedValue([]);
@@ -93,6 +93,8 @@ describe('Torrent', () => {
     expect(main.textContent).toContain('Продолжить на ТВ · S02E03 с 23:14');
     click(main);
     await flush();
+    click(byText('Продолжить с 23:14'));
+    await flush();
     expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 3, t: 1394 });
   });
 
@@ -123,7 +125,9 @@ describe('Torrent', () => {
     click(el.querySelectorAll('.m-ep')[3]);
     click(el.querySelectorAll('.m-opt')[0]);
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4 });
+    click(byText('Продолжить с 8:20'));
+    await flush();
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500 });
     expect(el.querySelector('.m-status-ok')!.textContent).toContain('Запустил на LG OLED — пульт уже открыт');
     await act(async () => {
       await new Promise((r) => setTimeout(r, 5));
@@ -225,6 +229,7 @@ describe('Torrent', () => {
     const btn = el.querySelectorAll('.m-opt')[0];
     click(btn);
     click(btn);
+    await flush();
     expect(launch).toHaveBeenCalledTimes(1);
     release();
     await flush();
@@ -301,5 +306,89 @@ describe('Torrent', () => {
     click(el.querySelector('.m-btn-primary')!);
     await flush();
     expect(byText('Как установить OMP на телевизор')).toBeTruthy();
+  });
+});
+
+describe('TV launch flow', () => {
+  const open1 = async () => {
+    mount();
+    await flush();
+    click(el.querySelectorAll('.m-ep')[3]);
+    click(el.querySelectorAll('.m-opt')[0]);
+    await flush();
+  };
+
+  it('launches an episode without a saved position straight away with t: 0 and the report url', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    setWatchActions({ ompVersion: async () => '0.8.0', reportUrl: async () => 'http://192.168.1.9:8123/p', launchOnTv: launch, remoteDelayMs: 0 });
+    await open1();
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, report: 'http://192.168.1.9:8123/p' });
+    expect(el.textContent).not.toContain('Откуда смотреть');
+  });
+
+  it('«Сначала» launches from the start', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    saveProgress('abc', 4, 500, 3000);
+    await open1();
+    const dlg = el.querySelectorAll('[role=dialog]')[1];
+    expect(dlg.textContent).toContain('S02E04 · Show.S02E04 · на LG OLED');
+    expect(dlg.textContent).toContain('Осталось 42 мин');
+    click(byText('Сначала'));
+    await flush();
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0 });
+  });
+
+  it('omits «Осталось» when the duration is unknown', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    vi.spyOn(TorrServerClient.prototype, 'viewedList').mockResolvedValue([{ hash: 'abc', file_index: 4, timecode: 500 } as any]);
+    await open1();
+    expect(el.textContent).toContain('Продолжить с 8:20');
+    expect(el.textContent).not.toContain('Осталось');
+  });
+
+  it('«Отмена» launches nothing and frees the button', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    saveProgress('abc', 4, 500, 3000);
+    await open1();
+    click(byText('Отмена'));
+    await flush();
+    expect(launch).not.toHaveBeenCalled();
+    expect((el.querySelectorAll('.m-opt')[0] as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('an old TV shows the update dialog; «Всё равно запустить» continues', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    setWatchActions({ ompVersion: async () => '0.7.2', reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
+    await open1();
+    expect(el.textContent).toContain('Обновите OMP на телевизоре');
+    expect(el.textContent).toContain('На LG OLED стоит OMP 0.7.2.');
+    expect(launch).not.toHaveBeenCalled();
+    click(byText('Всё равно запустить'));
+    await flush();
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0 });
+  });
+
+  it('«Как обновить» opens the guide and keeps the dialog', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    setWatchActions({ ompVersion: async () => '0.7.2', reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
+    const win = vi.spyOn(window, 'open').mockReturnValue(null);
+    await open1();
+    click(byText('Как обновить'));
+    expect(win).toHaveBeenCalledWith(expect.stringContaining('github.com'), '_system');
+    expect(launch).not.toHaveBeenCalled();
+    expect(el.textContent).toContain('Обновите OMP на телевизоре');
+  });
+
+  it('an old TV then the resume choice: both steps in order', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    saveProgress('abc', 4, 500, 3000);
+    setWatchActions({ ompVersion: async () => '0.7.2', reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
+    await open1();
+    click(byText('Всё равно запустить'));
+    await flush();
+    expect(el.textContent).toContain('Откуда смотреть');
+    click(byText('Продолжить с 8:20'));
+    await flush();
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500 });
   });
 });

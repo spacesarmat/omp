@@ -5,7 +5,7 @@ import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { actions, openRemoteSoon, watchOnTvParams } from '../watch';
+import { useTvLaunch } from '../watch';
 import { client } from '../../../src/store/servers';
 import { errorMessage } from '../../../src/api/http';
 import type { SearchResult } from '../../../src/api/types';
@@ -47,14 +47,13 @@ export function Add({ link }: { link?: string }) {
   const [alive] = useState({ v: true });
   const pendingRef = useRef<Set<string>>(new Set());
   const searchToken = useRef(0);
-  const cancelJump = useRef<(() => void) | null>(null);
+  const launch = useTvLaunch();
   const tv = activeTv.value;
 
   useEffect(
     () => () => {
       alive.v = false;
       searchToken.current++;
-      cancelJump.current?.();
     },
     [],
   );
@@ -147,11 +146,12 @@ export function Add({ link }: { link?: string }) {
         showToast('Добавлено на сервер');
         return;
       }
-      await actions.launchOnTv(watchOnTvParams(c.baseUrl, hash));
-      if (!alive.v) return;
-      showToast('Запустил на ' + tv!.name);
-      cancelJump.current?.();
-      cancelJump.current = openRemoteSoon('add');
+      await launch.start({
+        hash,
+        label: r.Title,
+        onError: setSearchError,
+        onLaunched: (name) => showToast('Запустил на ' + name),
+      });
     } catch (err) {
       if (alive.v) setSearchError(errorMessage(err));
     } finally {
@@ -237,6 +237,7 @@ export function Add({ link }: { link?: string }) {
           </div>
         ))}
       </div>
+      {launch.sheet}
     </div>
   );
 }

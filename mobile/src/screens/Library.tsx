@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { Poster } from '../ui/Poster';
 import { TvChip } from '../ui/TvChip';
-import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
-import { currentRoute, navigate } from '../nav';
-import { activeTv } from '../tv/tvStore';
-import { actions, filesOf, openRemoteSoon, watchOnTvParams } from '../watch';
+import { navigate } from '../nav';
+import { filesOf, useTvLaunch } from '../watch';
 import { client } from '../../../src/store/servers';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents } from '../../../src/store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed } from '../../../src/store/progress';
@@ -15,7 +13,7 @@ import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/
 import { LIBRARY_TABS, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { formatBytes } from '../../../src/lib/format';
-import { playableFiles } from '../../../src/lib/episodes';
+import { episodeLabel, playableFiles } from '../../../src/lib/episodes';
 import { errorMessage } from '../../../src/api/http';
 
 const POLL_MS = 15000;
@@ -31,10 +29,7 @@ export function Library() {
   const [loaded, setLoaded] = useState(list.length > 0);
   const [error, setError] = useState('');
   const [tvError, setTvError] = useState('');
-  // launch guard: set while a launch is in flight and until the jump to the remote has happened
-  const launching = useRef(false);
-  const cancelJump = useRef<(() => void) | null>(null);
-  useEffect(() => () => cancelJump.current?.(), []);
+  const launch = useTvLaunch();
   progressVersion.value; // re-render when local progress changes
   serverViewed.value;
 
@@ -87,27 +82,15 @@ export function Library() {
     else empty = 'В этой категории пока ничего нет';
   }
 
-  const continueOnTv = async (hash: string, fileIndex: number, time: number) => {
-    const tv = activeTv.value;
-    if (!c) return;
-    if (!tv) {
-      navigate({ name: 'tv' });
-      return;
-    }
-    if (launching.current) return;
-    launching.current = true;
-    setTvError('');
-    try {
-      await actions.launchOnTv(watchOnTvParams(c.baseUrl, hash, fileIndex, time));
-      showToast('Запустил на ' + tv.name + ' — пульт уже открыт');
-      cancelJump.current = openRemoteSoon(currentRoute.value, () => {
-        launching.current = false;
-      });
-    } catch (e) {
-      launching.current = false;
-      setTvError(errorMessage(e));
-    }
-  };
+  const continueOnTv = (hash: string, fileIndex: number, time: number, duration: number, label: string) =>
+    launch.start({
+      hash,
+      file: fileIndex,
+      at: time,
+      duration: duration > 0 ? duration : undefined,
+      label,
+      onError: setTvError,
+    });
 
   return (
     <div class="m-screen m-library" data-route="library">
@@ -186,7 +169,7 @@ export function Library() {
                     </span>
                   </span>
                 </button>
-                <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => continueOnTv(t.hash, e.fileIndex, time)}>
+                <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, time, duration, [file ? episodeLabel(file.path) : '', t.title || t.name || t.hash].filter(Boolean).join(' · '))}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M8 5l11 7-11 7z" />
                   </svg>
@@ -206,6 +189,7 @@ export function Library() {
           ))}
         </div>
       )}
+      {launch.sheet}
     </div>
   );
 }

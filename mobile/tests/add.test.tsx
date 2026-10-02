@@ -56,7 +56,7 @@ beforeEach(() => {
   setActiveServer(addServer({ url: 'http://srv:8090' }).id);
   toast.value = '';
   launch.mockReset().mockResolvedValue(undefined);
-  setWatchActions({ launchOnTv: launch, remoteDelayMs: 0 });
+  setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
   resetTo({ name: 'add' });
 });
 
@@ -188,7 +188,7 @@ describe('Add', () => {
   it('does not jump to the remote after unmount', async () => {
     vi.useFakeTimers();
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    setWatchActions({ launchOnTv: launch, remoteDelayMs: 1000 });
+    setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 1000 });
     vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
     vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
     mount();
@@ -204,7 +204,7 @@ describe('Add', () => {
 
   it('«Добавить и смотреть на ТВ» with no OMP offers the install guide', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    setWatchActions({ launchOnTv: vi.fn().mockRejectedValue(new Error(TV_NO_OMP)), remoteDelayMs: 0 });
+    setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn().mockRejectedValue(new Error(TV_NO_OMP)), remoteDelayMs: 0 });
     vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
     vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
     mount();
@@ -213,5 +213,20 @@ describe('Add', () => {
     click(byLabel('Добавить и смотреть на ТВ')[0]);
     await flush();
     expect(el.textContent).toContain('Как установить OMP на телевизор');
+  });
+});
+
+describe('Add TV launch with report', () => {
+  it('«Добавить и смотреть на ТВ» sends the report url and no file', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    setWatchActions({ ompVersion: async () => '0.8.0', reportUrl: async () => 'http://192.168.1.9:8123/p', launchOnTv: launch, remoteDelayMs: 0 });
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
+    vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('x');
+    await flush();
+    click(byLabel('Добавить и смотреть на ТВ')[0]);
+    await flush();
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: HASH, report: 'http://192.168.1.9:8123/p' });
   });
 });

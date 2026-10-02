@@ -24,9 +24,11 @@ const T: Torrent[] = [
   { hash: 'h3', title: 'Neon Rivers', category: 'movie', stat: 3, torrent_size: 500 * 1024 ** 2, timestamp: 1 },
 ];
 
+const byText = (text: string) => Array.from(document.querySelectorAll('button')).find((b) => (b.textContent || '').includes(text));
+
 async function flush() {
   await act(async () => {
-    for (let i = 0; i < 6; i++) await Promise.resolve();
+    for (let i = 0; i < 15; i++) await Promise.resolve();
   });
 }
 
@@ -117,7 +119,7 @@ describe('Library', () => {
     saveProgress('h1', 2, 1394, 3651);
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     const launch = vi.fn().mockResolvedValue(undefined);
-    setWatchActions({ launchOnTv: launch, remoteDelayMs: 0 });
+    setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
     mount();
     await flush();
     act(() => tab('История').click());
@@ -126,6 +128,11 @@ describe('Library', () => {
     expect(rows[0].textContent).toContain('Сезон 2 · Серия 2');
     expect(rows[0].textContent).toContain('23:14');
     act(() => (el.querySelector('[aria-label="Продолжить на ТВ"]') as HTMLElement).click());
+    await flush();
+    expect(launch).not.toHaveBeenCalled();
+    expect(el.querySelector('[role=dialog]')!.textContent).toContain('Продолжить с 23:14');
+    expect(el.querySelector('[role=dialog]')!.textContent).toContain('Осталось 38 мин');
+    act(() => byText('Продолжить с 23:14')!.click());
     await flush();
     expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'h1', file: 2, t: 1394 });
     expect(toast.value).toContain('Запустил на LG OLED');
@@ -173,14 +180,18 @@ describe('Library', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     let release!: () => void;
     const launch = vi.fn().mockReturnValue(new Promise<void>((r) => (release = r)));
-    setWatchActions({ launchOnTv: launch, remoteDelayMs: 0 });
+    setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
     mount();
     await flush();
     act(() => tab('История').click());
     const b = el.querySelector('[aria-label="Продолжить на ТВ"]') as HTMLElement;
     act(() => b.click());
     act(() => b.click());
+    await flush();
+    act(() => byText('Сначала')!.click());
+    await flush();
     expect(launch).toHaveBeenCalledTimes(1);
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'h1', file: 2, t: 0 });
     release();
     await flush();
   });
@@ -188,11 +199,13 @@ describe('Library', () => {
   it('history play with no OMP on the TV offers the install guide', async () => {
     saveProgress('h1', 2, 100, 3000);
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    setWatchActions({ launchOnTv: vi.fn().mockRejectedValue(new Error(TV_NO_OMP)), remoteDelayMs: 0 });
+    setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn().mockRejectedValue(new Error(TV_NO_OMP)), remoteDelayMs: 0 });
     mount();
     await flush();
     act(() => tab('История').click());
     act(() => (el.querySelector('[aria-label="Продолжить на ТВ"]') as HTMLElement).click());
+    await flush();
+    act(() => byText('Сначала')!.click());
     await flush();
     expect(el.textContent).toContain('Как установить OMP на телевизор');
   });
