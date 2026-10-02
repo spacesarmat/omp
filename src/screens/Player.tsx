@@ -5,12 +5,13 @@ import { resumePosition } from '../store/progress';
 import type { FfprobeResult } from '../api/types';
 import { errorMessage } from '../api/http';
 import { formatDuration } from '../lib/format';
-import { pickTrack } from '../lib/tracks';
+import { getTrackPref, saveTrackPref } from '../store/trackPrefs';
+import { pickAudio, pickSub, subPrefFromChoice } from '../player/trackPrefs';
 import { parseSubtitles, decodeText, Cue } from '../lib/subtitles';
 import { selectAudioTrack, selectTextTrack } from '../platform/webosMedia';
 import type { PlayItem } from '../player/types';
 import { SeekAccumulator } from '../player/seek';
-import { audioOptions, embeddedSubOptions, subtitleMenu, defaultSubChoice, defaultAudioIndex } from '../player/trackOptions';
+import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
 import { useVideoState } from '../player/useVideoState';
 import { useProgressSync } from '../player/useProgressSync';
 import { useNextEpisode } from '../player/useNextEpisode';
@@ -206,13 +207,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     const v = videoRef.current;
     if (!v || userTracks.current) return;
     const s = settings.value;
+    const pref = item.hash ? getTrackPref(item.hash) : null;
     const audio = audioOptions(probeRef.current, v);
-    const ai = pickTrack(audio, s.audioLang);
+    const ai = pickAudio(audio, pref, s.audioLang);
     if (ai >= 0) {
       setAudioIdx(ai);
       if (ai !== defaultAudioIndex(audio)) selectAudioTrack(v, ai);
     }
-    applySubChoice(defaultSubChoice(embeddedSubOptions(probeRef.current, v), item.subtitles || [], s));
+    applySubChoice(pickSub(embeddedSubOptions(probeRef.current, v), item.subtitles || [], pref, s));
   };
 
   // ffprobe often arrives after metadata: re-apply language defaults
@@ -251,12 +253,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
           userTracks.current = true;
           setAudioIdx(i);
           selectAudioTrack(v, i);
+          if (item.hash) saveTrackPref(item.hash, { audioLang: audio[i].language, audioLabel: audio[i].label });
         });
       } else if (kind === 'subs') {
         choose('Субтитры', menu, subChoice).then((ch) => {
           if (ch === null) return;
           userTracks.current = true;
           applySubChoice(ch);
+          if (item.hash) saveTrackPref(item.hash, { sub: subPrefFromChoice(ch, embeddedSubOptions(probe, v), item.subtitles || []) });
         });
       }
     });
