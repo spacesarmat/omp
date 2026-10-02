@@ -14,7 +14,9 @@ export function subtitleCode(subtitle: string): string {
 /** Compact player above the tab bar; hidden while the TV link is gone. */
 export function MiniPlayer() {
   const s = nowPlaying.value;
-  if (!s || linkStatus.value === 'none') return null;
+  const status = linkStatus.value;
+  if (!s || status === 'none') return null;
+  const live = status === 'live';
   const code = subtitleCode(s.subtitle);
   const tv = activeTv.value;
   const pct = s.duration > 0 ? Math.max(0, Math.min(100, (s.time / s.duration) * 100)) : 0;
@@ -24,14 +26,19 @@ export function MiniPlayer() {
       <div class="m-mini-poster" style={playerPosterStyle(s)} />
       <button type="button" class="m-mini-text" onClick={() => navigate({ name: 'nowPlaying' })}>
         <span class="m-mini-title">{(code ? code + ' · ' : '') + s.title}</span>
-        <span class="m-mini-sub">{(tv ? 'На ' + tv.name + ' · ' : '') + time}</span>
+        {live ? (
+          <span class="m-mini-sub">{(tv ? 'На ' + tv.name + ' · ' : '') + time}</span>
+        ) : (
+          <span class="m-mini-sub warn">Телевизор не отвечает</span>
+        )}
       </button>
-      <button type="button" class="m-mini-btn" aria-label="Назад на 10 секунд" onClick={() => sendCmd({ type: 'skip', d: -10 })}>
+      <button type="button" class="m-mini-btn" aria-label="Назад на 10 секунд" disabled={!live} onClick={() => sendCmd({ type: 'skip', d: -10 })}>
         <Icon d={ICONS.back10} />
       </button>
       <button
         type="button"
         class="m-mini-btn play"
+        disabled={!live}
         aria-label={s.paused ? 'Играть' : 'Пауза'}
         onClick={() => sendCmd({ type: s.paused ? 'play' : 'pause' })}
       >

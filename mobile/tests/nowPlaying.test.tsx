@@ -5,7 +5,7 @@ import { NowPlaying } from '../src/screens/NowPlaying';
 import { MiniPlayer } from '../src/ui/MiniPlayer';
 import { App } from '../src/app';
 import { currentRoute, resetTo, navigate } from '../src/nav';
-import { nowPlaying, lastSeen, setPlayerLinkDeps } from '../src/tv/playerLink';
+import { nowPlaying, lastSeen, launchedAt, setPlayerLinkDeps } from '../src/tv/playerLink';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import type { PlayerState } from '../../src/phone/protocol';
 
@@ -13,6 +13,7 @@ let el: HTMLElement;
 const NOW = 100000;
 const queue = vi.fn();
 const volume = vi.fn();
+const fgApp = vi.fn();
 
 const state = (o: Partial<PlayerState> = {}): PlayerState => ({
   hash: 'h',
@@ -54,8 +55,11 @@ beforeEach(() => {
   saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
   queue.mockReset().mockResolvedValue(undefined);
   volume.mockReset().mockResolvedValue(undefined);
+  fgApp.mockReset().mockResolvedValue(null);
   setPlayerLinkDeps({
     now: () => NOW,
+    foregroundAppId: fgApp,
+    tvFailed: () => false,
     native: { startPlayerServer: vi.fn(), queuePlayerCommands: queue, onPlayerMessage: () => () => {} } as any,
   });
   resetTo({ name: 'library' });
@@ -83,6 +87,38 @@ describe('NowPlaying', () => {
     setState(state(), 6000);
     mount(<NowPlaying volume={volume} />);
     expect(el.textContent).toContain('Телевизор не отвечает');
+  });
+
+  it('stale: controls are disabled and send nothing', () => {
+    setState(state(), 6000);
+    mount(<NowPlaying volume={volume} />);
+    for (const l of ['Назад на 10 секунд', 'Вперёд на 10 секунд', 'Пауза', 'Предыдущая серия', 'Следующая серия']) {
+      expect((lbl(l) as HTMLButtonElement).disabled).toBe(true);
+    }
+    expect((el.querySelector('input[type="range"]') as HTMLInputElement).disabled).toBe(true);
+    expect((byText('Звук и субтитры') as HTMLButtonElement).disabled).toBe(true);
+    expect((byText('Включить') as HTMLButtonElement).disabled).toBe(true);
+    click(lbl('Пауза'));
+    expect(queue).not.toHaveBeenCalled();
+  });
+
+  it('«Следующая серия» is disabled without a next episode, «Предыдущая» stays enabled', () => {
+    setState(state({ next: null }));
+    mount(<NowPlaying volume={volume} />);
+    expect((lbl('Следующая серия') as HTMLButtonElement).disabled).toBe(true);
+    expect((lbl('Предыдущая серия') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('right after a launch shows «Запускаем на телевизоре…» instead of the empty state', () => {
+    setState(null);
+    launchedAt.value = NOW - 2000;
+    mount(<NowPlaying volume={volume} />);
+    expect(el.textContent).toContain('Запускаем на телевизоре…');
+    expect(el.textContent).not.toContain('На телевизоре ничего не играет');
+    act(() => {
+      launchedAt.value = NOW - 16000;
+    });
+    expect(el.textContent).toContain('На телевизоре ничего не играет');
   });
 
   it('empty state offers the catalog', () => {
@@ -221,6 +257,14 @@ describe('NowPlaying', () => {
     expect(el.querySelector('[role="dialog"]')).toBeNull();
   });
 
+  it('tracks sheet says «Нет дорожек» under an empty heading', () => {
+    setState(state({ audio: { list: [], sel: 0 }, subs: { list: [], sel: '' } }));
+    mount(<NowPlaying volume={volume} />);
+    click(byText('Звук и субтитры'));
+    expect(el.querySelectorAll('.m-track-none').length).toBe(2);
+    expect(el.textContent).toContain('Нет дорожек');
+  });
+
   it('marks the current track', () => {
     setState(state());
     mount(<NowPlaying volume={volume} />);
@@ -249,6 +293,22 @@ describe('MiniPlayer', () => {
     expect(sent().map((c) => c.type)).toEqual(['skip', 'pause']);
   });
 
+  it('stale: says «Телевизор не отвечает» and disables the buttons', () => {
+    setState(state(), 6000);
+    mount(<MiniPlayer />);
+    expect(el.querySelector('.m-mini-sub.warn')!.textContent).toBe('Телевизор не отвечает');
+    expect(el.textContent).not.toContain('На LG OLED');
+    expect((lbl('Назад на 10 секунд') as HTMLButtonElement).disabled).toBe(true);
+    expect((lbl('Пауза') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('stays hidden while launching', () => {
+    setState(null);
+    launchedAt.value = NOW - 1000;
+    mount(<MiniPlayer />);
+    expect(el.querySelector('.m-mini')).toBeNull();
+  });
+
   it('renders nothing without a link', () => {
     setState(null);
     mount(<MiniPlayer />);
@@ -267,6 +327,26 @@ describe('mini-player in the shell', () => {
     expect(el.querySelector('.m-now')).not.toBeNull();
     act(() => navigate({ name: 'torrent', hash: 'x' }));
     expect(el.querySelector('.m-mini')).toBeNull();
+  });
+
+  it('cold start with a TV tries to attach once', async () => {
+    setState(null);
+    resetTo({ name: 'library' });
+    mount(<App />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fgApp).toHaveBeenCalledTimes(1);
+  });
+
+  it('cold start skips the attach while the link is live', async () => {
+    setState(state());
+    resetTo({ name: 'library' });
+    mount(<App />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fgApp).not.toHaveBeenCalled();
   });
 
   it('hidden when the link is gone', () => {

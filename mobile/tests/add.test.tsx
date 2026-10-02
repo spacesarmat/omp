@@ -228,5 +228,10 @@ describe('Add TV launch with report', () => {
     click(byLabel('Добавить и смотреть на ТВ')[0]);
     await flush();
     expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: HASH, report: 'http://192.168.1.9:8123/p' });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+    // no file: nothing plays yet, land on the remote as in v0.7
+    expect(currentRoute.value.name).toBe('remote');
   });
 });

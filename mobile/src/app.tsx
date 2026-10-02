@@ -19,6 +19,7 @@ import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
 import { updatePrompt } from '../../src/store/updates';
 import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
 import { tvState } from './tv/tvClient';
+import { activeTv } from './tv/tvStore';
 import { startPlayerLink, attachIfOmpForeground, linkStatus } from './tv/playerLink';
 import './mobile.css';
 
@@ -64,9 +65,11 @@ export function App() {
     };
   }, []);
 
-  // player link: listen to the TV; (re)attach when the TV connects and when the app returns to the foreground
+  // player link: listen to the TV; (re)attach on cold start, when the TV connects and when the app returns
+  // to the foreground (attachIfOmpForeground skips a live link and a failed TV)
   useEffect(() => {
     startPlayerLink();
+    if (activeTv.value) void attachIfOmpForeground();
     const stop = effect(() => {
       if (tvState.value === 'connected') void attachIfOmpForeground();
     });

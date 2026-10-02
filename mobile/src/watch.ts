@@ -4,7 +4,7 @@ import { h, type VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Clipboard } from '@capacitor/clipboard';
 import { launchOnTv, ompVersionOnTv, TV_NO_OMP } from './tv/tvClient';
-import { reportUrl } from './tv/playerLink';
+import { reportUrl, markLaunched } from './tv/playerLink';
 import { activeTv } from './tv/tvStore';
 import { showToast } from './ui/toast';
 import { ResumeSheet } from './ui/ResumeSheet';
@@ -50,7 +50,7 @@ export interface WatchActions {
   ompVersion: () => Promise<string | null>;
   /** URL the TV posts player state to; null when unavailable. */
   reportUrl: () => Promise<string | null>;
-  /** Pause between «launched» and the jump to the remote. */
+  /** Pause between «launched» and the jump to the player screen (or the remote). */
   remoteDelayMs: number;
 }
 
@@ -78,10 +78,14 @@ const sameRoute = (a: MRoute, b: MRoute) =>
   a.name === b.name && (a.name !== 'torrent' || (b.name === 'torrent' && a.hash === b.hash));
 
 /**
- * Jumps to the remote after a short pause, unless the user has left `from` meanwhile.
+ * Jumps to `to` (the player screen by default) after a short pause, unless the user has left `from` meanwhile.
  * Returns a cancel function (call it on unmount); `onDone` fires when the timer ends or is cancelled.
  */
-export function openRemoteSoon(from: MRoute | MRoute['name'], onDone?: () => void): () => void {
+export function openRemoteSoon(
+  from: MRoute | MRoute['name'],
+  onDone?: () => void,
+  to: 'nowPlaying' | 'remote' = 'nowPlaying',
+): () => void {
   let done = false;
   const finish = () => {
     if (done) return;
@@ -91,7 +95,7 @@ export function openRemoteSoon(from: MRoute | MRoute['name'], onDone?: () => voi
   };
   const timer = setTimeout(() => {
     const here = currentRoute.value;
-    if (typeof from === 'string' ? here.name === from : sameRoute(here, from)) navigate({ name: 'nowPlaying' });
+    if (typeof from === 'string' ? here.name === from : sameRoute(here, from)) navigate({ name: to });
     finish();
   }, actions.remoteDelayMs);
   return finish;
@@ -122,7 +126,7 @@ export interface TvLaunchOpts {
   duration?: number;
   /** «S02E03 · Title» for the resume sheet. */
   label: string;
-  /** True while the launch is in flight and until the jump to the remote has happened. */
+  /** True while the launch is in flight and until the post-launch jump has happened. */
   onBusy?: (busy: boolean) => void;
   onError?: (message: string) => void;
   /** Replaces the default «Запустил на …» toast. */
@@ -173,10 +177,13 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
       if (alive.v) o.onBusy?.(false);
     };
     let jumping = false;
+    // no file or an old TV: nothing will report to the phone, land on the remote as in v0.7
+    let landing: 'nowPlaying' | 'remote' = o.file === undefined ? 'remote' : 'nowPlaying';
     try {
       const version = await actions.ompVersion();
       if (version && compareVersions(version, CONTROL_MIN_VERSION) < 0) {
         if ((await ask({ kind: 'oldTv', version }, o.label, tv.name)) !== 'go') return;
+        landing = 'remote';
       }
       let t: number | undefined;
       if (o.file !== undefined) {
@@ -189,11 +196,12 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
       }
       const report = await actions.reportUrl();
       await actions.launchOnTv(watchOnTvParams(c.baseUrl, o.hash, o.file, t, report || undefined));
+      if (report && landing === 'nowPlaying') markLaunched();
       if (!alive.v) return;
       if (o.onLaunched) o.onLaunched(tv.name);
-      else showToast('Запустил на ' + tv.name + ' — пульт уже открыт');
+      else showToast('Запустил на ' + tv.name);
       jumping = true;
-      cancelJump.current = openRemoteSoon(currentRoute.value, release);
+      cancelJump.current = openRemoteSoon(currentRoute.value, release, landing);
     } catch (e) {
       if (alive.v) o.onError?.(errorMessage(e));
     } finally {

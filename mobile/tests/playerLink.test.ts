@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { signal } from '@preact/signals';
 import {
+  launchedAt,
+  launching,
+  markLaunched,
   nowPlaying,
   lastSeen,
   linkStatus,
@@ -21,7 +25,8 @@ let handler: ((b: string) => void) | null;
 let queued: any[][];
 let launches: object[];
 let fg: string | null;
-let ip: string | null;
+const ip = signal<string | null>(null);
+let failed: boolean;
 let started: string[];
 
 beforeEach(() => {
@@ -31,10 +36,12 @@ beforeEach(() => {
   launches = [];
   started = [];
   fg = 'com.spacesarmat.torrplayer';
-  ip = '192.168.1.5';
+  ip.value = '192.168.1.5';
+  failed = false;
   setPlayerLinkDeps({
     now: () => clock,
-    tvIp: () => ip,
+    tvIp: () => ip.value,
+    tvFailed: () => failed,
     foregroundAppId: async () => fg,
     launchOnTv: async (p) => void launches.push(p),
     native: {
@@ -97,22 +104,105 @@ describe('playerLink', () => {
     expect(nowPlaying.value?.time).toBe(0);
     expect(queued.map((q) => q[0].id)).toEqual([1, 2, 3, 4, 5]);
     expect(queued[2][0]).toEqual({ type: 'seek', t: 50, id: 3 });
+    clock += 1000;
     handler!(body(state({ time: 12 })));
     expect(nowPlaying.value?.time).toBe(12);
   });
 
-  it('sendCmd works with no state', () => {
+  it('sendCmd is a no-op unless the link is live', () => {
     sendCmd({ type: 'next' });
-    expect(queued).toHaveLength(1);
+    expect(queued).toHaveLength(0);
     expect(nowPlaying.value).toBeNull();
+    handler!(body(state()));
+    clock += 6000;
+    sendCmd({ type: 'pause' });
+    expect(queued).toHaveLength(0);
+    expect(nowPlaying.value?.paused).toBe(false);
+    clock -= 6000;
+    sendCmd({ type: 'pause' });
+    expect(queued).toHaveLength(1);
+  });
+
+  it('keeps the optimistic overlay over the first report sent before the TV applied it', () => {
+    handler!(body(state()));
+    sendCmd({ type: 'pause' });
+    clock += 400;
+    handler!(body(state({ paused: false, time: 11 })));
+    expect(nowPlaying.value?.paused).toBe(true);
+    expect(nowPlaying.value?.time).toBe(11);
+    clock += 100;
+    handler!(body(state({ paused: false, time: 11.5 })));
+    expect(nowPlaying.value?.paused).toBe(false);
+  });
+
+  it('drops the overlay on a report received 1 s after the command', () => {
+    handler!(body(state()));
+    sendCmd({ type: 'skip', d: 30 });
+    expect(nowPlaying.value?.time).toBe(40);
+    clock += 1000;
+    handler!(body(state({ time: 13 })));
+    expect(nowPlaying.value?.time).toBe(13);
+  });
+
+  it('drops the overlay when the TV switches to another file', () => {
+    handler!(body(state()));
+    sendCmd({ type: 'pause' });
+    handler!(body(state({ file: 1, paused: false })));
+    expect(nowPlaying.value?.paused).toBe(false);
+  });
+
+  it('clears the state and stops the ticker once the link is gone', () => {
+    vi.useFakeTimers();
+    try {
+      handler!(body(state()));
+      clock += 30001;
+      vi.advanceTimersByTime(1000);
+      expect(nowPlaying.value).toBeNull();
+      expect(linkStatus.value).toBe('none');
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('launching lasts until the first report or 15 s', () => {
+    vi.useFakeTimers();
+    try {
+      expect(launching.value).toBe(false);
+      markLaunched();
+      expect(launchedAt.value).toBe(1000);
+      expect(launching.value).toBe(true);
+      clock += 15000;
+      vi.advanceTimersByTime(15100);
+      expect(launching.value).toBe(false);
+      markLaunched();
+      expect(launching.value).toBe(true);
+      handler!(body(state()));
+      expect(launching.value).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a switch to another TV clears the state', () => {
+    handler!(body(state()));
+    markLaunched();
+    ip.value = null;
+    expect(nowPlaying.value).not.toBeNull();
+    ip.value = '192.168.1.5';
+    expect(nowPlaying.value).not.toBeNull();
+    ip.value = '192.168.1.9';
+    expect(nowPlaying.value).toBeNull();
+    expect(lastSeen.value).toBe(0);
+    expect(launchedAt.value).toBe(0);
   });
 
   it('reportUrl starts the server for the TV ip, null without TV or on failure', async () => {
     expect(await reportUrl()).toBe('http://192.168.1.2:8123/');
     expect(started).toEqual(['192.168.1.5']);
-    ip = null;
+    ip.value = null;
     expect(await reportUrl()).toBeNull();
-    ip = '1.1.1.1';
+    ip.value = '1.1.1.1';
     setPlayerLinkDeps({
       native: {
         startPlayerServer: async () => {
@@ -133,6 +223,26 @@ describe('playerLink', () => {
     fg = 'com.spacesarmat.torrplayer';
     await attachIfOmpForeground();
     expect(launches).toEqual([{ report: 'http://192.168.1.2:8123/' }]);
+  });
+
+  it('skips a live link and a failed TV', async () => {
+    handler!(body(state()));
+    await attachIfOmpForeground();
+    expect(launches).toEqual([]);
+    clock += 6000;
+    failed = true;
+    await attachIfOmpForeground();
+    expect(launches).toEqual([]);
+    failed = false;
+    await attachIfOmpForeground();
+    expect(launches).toHaveLength(1);
+  });
+
+  it('concurrent attaches share one launch', async () => {
+    await Promise.all([attachIfOmpForeground(), attachIfOmpForeground()]);
+    expect(launches).toHaveLength(1);
+    await attachIfOmpForeground();
+    expect(launches).toHaveLength(2);
   });
 
   it('swallows launch errors', async () => {

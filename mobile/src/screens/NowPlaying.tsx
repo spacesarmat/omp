@@ -3,7 +3,7 @@ import { Icon, ICONS } from '../ui/Icon';
 import { TracksSheet } from '../ui/TracksSheet';
 import { goBack, navigate, switchTab } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { nowPlaying, lastSeen, linkStatus, sendCmd } from '../tv/playerLink';
+import { nowPlaying, lastSeen, linkStatus, launching, sendCmd } from '../tv/playerLink';
 import { volume as tvVolume } from '../tv/tvClient';
 import { formatDuration } from '../../../src/lib/format';
 import { hasPosterImage, playerPosterStyle } from '../ui/playerPoster';
@@ -11,9 +11,21 @@ import { hasPosterImage, playerPosterStyle } from '../ui/playerPoster';
 const HOLD_MS = 1500;
 const HOLD_NEAR_S = 3;
 
-function Skip({ label, text, d, onClick }: { label: string; text: string; d: string; onClick: () => void }) {
+function Skip({
+  label,
+  text,
+  d,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  text: string;
+  d: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
   return (
-    <button type="button" class="m-now-skip" aria-label={label} onClick={onClick}>
+    <button type="button" class="m-now-skip" aria-label={label} disabled={disabled} onClick={onClick}>
       <Icon d={d} size={26} />
       {text}
     </button>
@@ -61,6 +73,16 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
   );
 
   if (!s || empty) {
+    if (!s && launching.value) {
+      return (
+        <div class="m-screen m-now" data-route="nowPlaying">
+          {head}
+          <div class="m-now-empty">
+            <div class="m-sheet-title">Запускаем на телевизоре…</div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div class="m-screen m-now" data-route="nowPlaying">
         {head}
@@ -74,6 +96,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     );
   }
 
+  const off = status !== 'live';
   // after a release keep the target on screen until the TV reports a time near it (or the hold expires)
   const holding =
     held !== null &&
@@ -103,7 +126,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
             min={0}
             max={max}
             step={1}
-            disabled={s.duration <= 0}
+            disabled={off || s.duration <= 0}
             value={shown}
             onInput={(e) => setDrag(Number((e.currentTarget as HTMLInputElement).value))}
             onChange={(e) => {
@@ -120,21 +143,40 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
         </div>
       </div>
       <div class="m-now-controls">
-        <Skip label="Предыдущая серия" text="" d={ICONS.prev} onClick={() => sendCmd({ type: 'prev' })} />
-        <Skip label="Назад на 10 секунд" text="10" d={ICONS.back10} onClick={() => sendCmd({ type: 'skip', d: -10 })} />
+        <Skip label="Предыдущая серия" text="" d={ICONS.prev} disabled={off} onClick={() => sendCmd({ type: 'prev' })} />
+        <Skip
+          label="Назад на 10 секунд"
+          text="10"
+          d={ICONS.back10}
+          disabled={off}
+          onClick={() => sendCmd({ type: 'skip', d: -10 })}
+        />
         <button
           type="button"
           class="m-now-play"
           aria-label={s.paused ? 'Играть' : 'Пауза'}
+          disabled={off}
           onClick={() => sendCmd({ type: s.paused ? 'play' : 'pause' })}
         >
           <Icon d={s.paused ? ICONS.play : ICONS.pause} size={32} />
         </button>
-        <Skip label="Вперёд на 10 секунд" text="10" d={ICONS.fwd10} onClick={() => sendCmd({ type: 'skip', d: 10 })} />
-        <Skip label="Следующая серия" text="" d={ICONS.next} onClick={() => sendCmd({ type: 'next' })} />
+        <Skip
+          label="Вперёд на 10 секунд"
+          text="10"
+          d={ICONS.fwd10}
+          disabled={off}
+          onClick={() => sendCmd({ type: 'skip', d: 10 })}
+        />
+        <Skip
+          label="Следующая серия"
+          text=""
+          d={ICONS.next}
+          disabled={off || !s.next}
+          onClick={() => sendCmd({ type: 'next' })}
+        />
       </div>
       <div class="m-now-row">
-        <button type="button" class="m-now-wide" onClick={() => setTracks(true)}>
+        <button type="button" class="m-now-wide" disabled={off} onClick={() => setTracks(true)}>
           <Icon d={ICONS.tracks} size={20} />
           Звук и субтитры
         </button>
@@ -151,12 +193,12 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
       {s.next && (
         <div class="m-now-next">
           <span>Дальше: {s.next.title}</span>
-          <button type="button" onClick={() => sendCmd({ type: 'next' })}>
+          <button type="button" disabled={off} onClick={() => sendCmd({ type: 'next' })}>
             Включить
           </button>
         </div>
       )}
-      {tracks && (
+      {tracks && !off && (
         <TracksSheet
           state={s}
           onAudio={(i) => {

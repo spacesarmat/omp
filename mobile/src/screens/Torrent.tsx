@@ -82,7 +82,7 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
       label: [code, fileTitle(file)].filter(Boolean).join(' · '),
       onBusy: setBusy,
       onError: (m) => setStatus(m ? { kind: 'error', text: m } : null),
-      onLaunched: (name) => setStatus({ kind: 'ok', text: 'Запустил на ' + name + ' — пульт уже открыт' }),
+      onLaunched: (name) => setStatus({ kind: 'ok', text: 'Запустил на ' + name }),
     });
   };
 

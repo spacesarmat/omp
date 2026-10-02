@@ -7,6 +7,7 @@ import { setWatchActions } from '../src/watch';
 import { currentRoute, resetTo, navigate } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { toast } from '../src/ui/toast';
+import { launchedAt, launching, setPlayerLinkDeps } from '../src/tv/playerLink';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { torrents } from '../../src/store/library';
 import { saveProgress, reloadProgress, serverViewed } from '../../src/store/progress';
@@ -69,6 +70,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => render(null, el));
+  setPlayerLinkDeps(null);
   vi.restoreAllMocks();
   setWatchActions(null);
 });
@@ -128,7 +130,7 @@ describe('Torrent', () => {
     click(byText('Продолжить с 8:20'));
     await flush();
     expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500 });
-    expect(el.querySelector('.m-status-ok')!.textContent).toContain('Запустил на LG OLED — пульт уже открыт');
+    expect(el.querySelector('.m-status-ok')!.textContent).toBe('Запустил на LG OLED');
     await act(async () => {
       await new Promise((r) => setTimeout(r, 5));
     });
@@ -324,6 +326,12 @@ describe('TV launch flow', () => {
     await open1();
     expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, report: 'http://192.168.1.9:8123/p' });
     expect(el.textContent).not.toContain('Откуда смотреть');
+    expect(launchedAt.value).toBeGreaterThan(0);
+    expect(launching.value).toBe(true);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+    expect(currentRoute.value.name).toBe('nowPlaying');
   });
 
   it('«Сначала» launches from the start', async () => {
@@ -366,6 +374,11 @@ describe('TV launch flow', () => {
     click(byText('Всё равно запустить'));
     await flush();
     expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0 });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+    });
+    expect(currentRoute.value.name).toBe('remote');
+    expect(launchedAt.value).toBe(0);
   });
 
   it('«Как обновить» opens the guide and keeps the dialog', async () => {

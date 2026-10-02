@@ -27,10 +27,12 @@ export function TracksSheet({
   return (
     <Sheet onClose={onClose} label="Звук и субтитры">
       <div class="m-sheet-title">Звук</div>
+      {state.audio.list.length === 0 && <div class="m-track-none">Нет дорожек</div>}
       {state.audio.list.map((name, i) => (
         <Row key={i} name={name} on={i === state.audio.sel} onPick={() => onAudio(i)} />
       ))}
       <div class="m-sheet-title m-track-head">Субтитры</div>
+      {state.subs.list.length === 0 && <div class="m-track-none">Нет дорожек</div>}
       {state.subs.list.map((s) => (
         <Row key={s.value} name={s.label} on={s.value === state.subs.sel} onPick={() => onSubs(s.value)} />
       ))}

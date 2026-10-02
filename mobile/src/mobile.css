@@ -485,6 +485,9 @@ button, .m-btn {
 .m-mini-sub { font-size: 12px; color: var(--muted); }
 .m-mini-btn { width: 44px; height: 44px; border: none; border-radius: 22px; background: none; display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0; }
 .m-mini-btn.play { background: var(--accent); color: var(--bg); }
+.m-track-none { padding: 10px 0; font-size: 14px; color: var(--muted); }
+.m-mini-sub.warn { color: var(--accent); }
+.m-mini-btn:disabled, .m-now-skip:disabled, .m-now-play:disabled, .m-now-next button:disabled, .m-now-wide:disabled { opacity: 0.4; }
 .m-mini-line { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #2A2F3A; }
 .m-mini-line div { height: 3px; background: var(--accent); }
 
