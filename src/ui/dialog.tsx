@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals';
+import { signal, computed } from '@preact/signals';
 import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { FocusGroup, Focusable } from './components';
 import { useKeys } from './keys';
@@ -13,6 +13,8 @@ interface DialogState {
 }
 
 const dialog = signal<DialogState | null>(null);
+/** True while a DialogHost dialog is open. */
+export const dialogOpen = computed(() => dialog.value !== null);
 let dialogSeq = 0;
 
 export function choose<T>(title: string, options: { label: string; value: T }[], current?: T): Promise<T | null> {

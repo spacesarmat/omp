@@ -1,0 +1,26 @@
+declare global {
+  interface Window {
+    PalmSystem?: { launchParams?: string; activate?: () => void };
+  }
+}
+
+export function readLaunchParams(): string | null {
+  try {
+    const p = window.PalmSystem && window.PalmSystem.launchParams;
+    return typeof p === 'string' && p ? p : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** webOS fires webOSRelaunch on document when the running app is launched again (needs handlesRelaunch). */
+export function onRelaunch(cb: (raw: string | null) => void): () => void {
+  const h = () => {
+    try {
+      if (window.PalmSystem && typeof window.PalmSystem.activate === 'function') window.PalmSystem.activate();
+    } catch (e) { /* ignore */ }
+    cb(readLaunchParams());
+  };
+  document.addEventListener('webOSRelaunch', h);
+  return () => document.removeEventListener('webOSRelaunch', h);
+}

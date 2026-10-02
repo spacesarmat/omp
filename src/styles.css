@@ -226,3 +226,14 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .edit-server { width: 800px; }
 .edit-actions { margin-top: 24px; }
 .small { font-size: 19px; }
+
+.update-notes { margin: 16px 0 0; padding-left: 32px; color: var(--text); font-size: 24px; line-height: 1.5; }
+.update-block { margin-top: 28px; padding: 28px 32px; border-radius: 18px; background: var(--panel); }
+.update-block h2 { margin: 0 0 16px; color: var(--text); font-weight: 700; }
+.update-actions { margin: 16px 0; }
+.update-status { margin-bottom: 10px; font-size: 24px; }
+.update-row { display: flex; align-items: center; }
+.update-row .qr { flex-shrink: 0; margin-right: 32px; border-radius: 12px; }
+.update-text { margin: 0; font-size: 22px; line-height: 1.6; color: var(--muted); }
+.update-dialog { width: 900px; }
+.update-current { margin-top: 16px; }

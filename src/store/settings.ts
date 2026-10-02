@@ -16,6 +16,7 @@ export interface AppSettings {
   showStats: boolean;
   libraryView: LibraryView;
   librarySort: LibrarySort;
+  updateCheck: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -31,6 +32,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showStats: false,
   libraryView: 'large',
   librarySort: 'new',
+  updateCheck: true,
 };
 
 const KEY = 'tsp.settings';

@@ -23,6 +23,8 @@ jobs:
       - run: npm run build
       - run: node scripts/package.mjs
       - run: npm run check:boot
+      - name: Homebrew Channel files
+        run: node scripts/hb-manifest.mjs "$GITHUB_REF_NAME" "$(ls build/*.ipk)"
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -31,4 +33,15 @@ jobs:
           SUM=$(sha256sum "$IPK" | cut -d' ' -f1)
           sed "s/{{TAG}}/${GITHUB_REF_NAME}/g" .github/release-notes.md > notes.md
           printf '\nSHA-256 `%s`: `%s`\n' "$(basename "$IPK")" "$SUM" >> notes.md
-          gh release create "$GITHUB_REF_NAME" "$IPK" --title "OMP $GITHUB_REF_NAME" --notes-file notes.md --generate-notes
+          gh release create "$GITHUB_REF_NAME" "$IPK" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $GITHUB_REF_NAME" --notes-file notes.md --generate-notes
+      - name: Publish update feed to gh-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd build/hb
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -q -m "Update feed for ${GITHUB_REF_NAME}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

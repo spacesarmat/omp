@@ -1,0 +1,39 @@
+import { describe, it, expect } from 'vitest';
+import { parseLaunchParams } from '../../src/lib/launchParams';
+
+const HASH = '0123456789abcdef0123456789ABCDEF01234567';
+
+describe('parseLaunchParams', () => {
+  it('ignores empty and foreign params', () => {
+    expect(parseLaunchParams(null)).toBeNull();
+    expect(parseLaunchParams('')).toBeNull();
+    expect(parseLaunchParams('not json')).toBeNull();
+    expect(parseLaunchParams('{}')).toBeNull();
+    expect(parseLaunchParams({ foo: 1 })).toBeNull();
+    expect(parseLaunchParams([1, 2])).toBeNull();
+  });
+  it('parses each action from an object or a JSON string', () => {
+    expect(parseLaunchParams({ server: ' 192.168.1.10:8090 ' })).toEqual({ server: '192.168.1.10:8090', invalid: false });
+    expect(parseLaunchParams(JSON.stringify({ magnet: 'magnet:?xt=urn:btih:' + HASH }))).toEqual({
+      action: { kind: 'magnet', link: 'magnet:?xt=urn:btih:' + HASH }, invalid: false,
+    });
+    expect(parseLaunchParams({ torrent: HASH })).toEqual({ action: { kind: 'torrent', hash: HASH.toLowerCase() }, invalid: false });
+    expect(parseLaunchParams({ play: 'https://cdn.example/movie.mp4', title: ' Кино ' })).toEqual({
+      action: { kind: 'play', url: 'https://cdn.example/movie.mp4', title: 'Кино' }, invalid: false,
+    });
+    expect(parseLaunchParams({ play: 'http://10.0.0.2:8090/stream/a%20b.mkv?link=x&play' })!.action).toEqual({
+      kind: 'play', url: 'http://10.0.0.2:8090/stream/a%20b.mkv?link=x&play', title: 'a b.mkv',
+    });
+  });
+  it('combines server with an action; magnet wins over torrent and play', () => {
+    expect(parseLaunchParams({ server: 'h:1', torrent: HASH })).toEqual({ server: 'h:1', action: { kind: 'torrent', hash: HASH.toLowerCase() }, invalid: false });
+    expect(parseLaunchParams({ magnet: 'magnet:?x', torrent: HASH, play: 'https://a/b' })!.action!.kind).toBe('magnet');
+  });
+  it('flags invalid values', () => {
+    expect(parseLaunchParams({ server: '  ' })!.invalid).toBe(true);
+    expect(parseLaunchParams({ magnet: 'http://x' })!.invalid).toBe(true);
+    expect(parseLaunchParams({ torrent: 'xyz' })!.invalid).toBe(true);
+    expect(parseLaunchParams({ play: 'file:///etc/passwd' })!.invalid).toBe(true);
+    expect(parseLaunchParams({ play: 42 })!.invalid).toBe(true);
+  });
+});

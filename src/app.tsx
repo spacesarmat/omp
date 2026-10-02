@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { routeStack, currentRoute, goBack, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
-import { DialogHost, confirmDialog } from './ui/dialog';
+import { DialogHost, confirmDialog, dialogOpen } from './ui/dialog';
 import { ToastHost } from './ui/toast';
 import { ConnectScreen } from './screens/Connect';
 import { LibraryScreen } from './screens/Library';
@@ -10,6 +10,9 @@ import { PlayerScreen } from './screens/Player';
 import { AddScreen } from './screens/Add';
 import { PlaylistScreen } from './screens/Playlist';
 import { SettingsScreen } from './screens/Settings';
+import { UpdateScreen } from './screens/Update';
+import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
+import { checkForUpdate } from './store/updates';
 
 function renderRoute(r: Route) {
   switch (r.name) {
@@ -27,6 +30,8 @@ function renderRoute(r: Route) {
       return <PlaylistScreen url={r.url} title={r.title} />;
     case 'settings':
       return <SettingsScreen />;
+    case 'update':
+      return <UpdateScreen />;
     default:
       return null;
   }
@@ -40,10 +45,15 @@ function exitApp() {
 
 export function App() {
   useEffect(() => installKeyListener(() => { if (!goBack()) exitApp(); }), []);
+  useEffect(() => {
+    const t = setTimeout(() => { checkForUpdate({ manual: false }); }, 3000);
+    return () => clearTimeout(t);
+  }, []);
   const r = currentRoute.value;
   return (
     <div class="app">
       <div class="screen-host" key={routeStack.value.length + ':' + r.name}>{renderRoute(r)}</div>
+      {shouldShowUpdateDialog(r.name) && !dialogOpen.value && <UpdateDialog />}
       <DialogHost />
       <ToastHost />
     </div>

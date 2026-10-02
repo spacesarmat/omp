@@ -32,3 +32,35 @@ export function lunaCall<T = any>(uri: string, params: object = {}, timeoutMs = 
     bridge.call(uri, JSON.stringify(params));
   });
 }
+
+/** Subscription call: onMessage for every successful reply, onError once (then silent). */
+export function lunaSubscribe(uri: string, params: object, onMessage: (msg: any) => void, onError: (e: Error) => void): () => void {
+  if (!hasLuna()) {
+    onError(new Error('Luna unavailable'));
+    return () => undefined;
+  }
+  const bridge = new window.PalmServiceBridge!() as { onservicecallback: (msg: string) => void; call: (uri: string, params: string) => void; cancel?: () => void };
+  let active = true;
+  bridge.onservicecallback = (raw: string) => {
+    if (!active) return;
+    let r: any;
+    try {
+      r = JSON.parse(raw);
+    } catch (e) {
+      active = false;
+      onError(new Error('Luna: bad reply'));
+      return;
+    }
+    if (r.returnValue === false) {
+      active = false;
+      onError(new Error(r.errorText || 'Luna error'));
+      return;
+    }
+    onMessage(r);
+  };
+  bridge.call(uri, JSON.stringify({ ...params, subscribe: true }));
+  return () => {
+    active = false;
+    if (typeof bridge.cancel === 'function') bridge.cancel();
+  };
+}

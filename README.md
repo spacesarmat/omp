@@ -26,6 +26,8 @@
 - Значки качества (1080p, 4K, HEVC…) из названия раздачи
 - Избранные плейлисты
 - Настройки приложения и сервера TorrServer
+- Проверка обновлений и установка через Homebrew Channel
+- Параметры запуска (server, magnet, torrent, play)
 
 ## Управление
 
@@ -58,9 +60,42 @@ Magic Remote и тачпад LG ThinQ: наведение выбирает эл�
 >
 > **Режим разработчика** нужно продлевать в приложении Developer Mode (срок сессии ограничен, остаток виден в приложении Developer Mode), иначе приложение пропадёт с ТВ. На рутированных ТВ можно ставить `.ipk` через Homebrew Channel.
 
+## Установка через Homebrew Channel
+
+Для рутированных ТВ с [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel).
+
+- Официальный каталог: после включения OMP в каталог приложение можно будет найти и установить прямо в Homebrew Channel.
+- Репозиторий OMP: в Homebrew Channel откройте Settings → Add repository и укажите `https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/apps.json`. Либо одной кнопкой из OMP: Настройки → «Добавить репозиторий OMP в Homebrew Channel».
+
 ## Обновление
 
-Скачайте новый `.ipk` из [релизов](https://github.com/spacesarmat/omp/releases) и установите его той же командой `npx ares-install --device tv <файл>.ipk` — настройки и история просмотра сохранятся.
+OMP проверяет наличие новой версии при запуске и показывает окно «Доступна версия». Обновить можно тремя способами:
+
+1. **В один клик** — на рутированном ТВ OMP скачивает и ставит новую версию сам.
+2. **Через Homebrew Channel** — OMP открывает Homebrew Channel (стартовый экран) или его экран добавления репозитория; обновление ставится оттуда.
+3. **С компьютера** — экран «Обновление» показывает QR-код со ссылкой на релиз; скачайте `.ipk` и установите командой `npx ares-install --device tv <файл>.ipk`.
+
+Настройки и история просмотра при обновлении сохраняются.
+
+## Параметры запуска
+
+OMP принимает параметры при запуске приложения:
+
+| Ключ | Значение |
+|---|---|
+| `server` | Адрес TorrServer (`http://192.168.1.10:8090`) — подключиться к этому серверу |
+| `magnet` | magnet-ссылка — добавить торрент на сервер |
+| `torrent` | Info-hash торрента (40 символов hex) — открыть уже существующий торрент на активном сервере |
+| `play` | Прямая ссылка на видео — сразу начать воспроизведение |
+| `title` | Название для `play` (необязательно) |
+
+```bash
+ares-launch -d tv com.spacesarmat.torrplayer -p '{"play":"http://192.168.1.10:8090/stream/movie.mkv?link=HASH&index=1&play","title":"Фильм"}'
+```
+
+```bash
+luna-send -n 1 luna://com.webos.applicationManager/launch '{"id":"com.spacesarmat.torrplayer","params":{"magnet":"magnet:?xt=urn:btih:HASH"}}'
+```
 
 ## Разработка
 

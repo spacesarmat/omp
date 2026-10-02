@@ -20,8 +20,7 @@
 - ID приложения webOS: `com.spacesarmat.torrplayer`, версия `0.1.0`.
 - Реальный сервер для ручной проверки: `http://192.168.1.191:5665` (TorrServer MatriX.145.1, CORS `*`).
 - Особенности API (проверено): поиск — `GET /search/?query=` и `GET /torznab/search/?query=` (со слешем, иначе 301); у неактивного торрента нет `file_stats`, файлы — в JSON-строке `data` (`{"TorrServer":{"Files":[...]}}`); `/viewed` принимает `timecode`, но на сервере может быть `TrackTimecode=false` → прогресс дублируется в localStorage.
-- Коммиты: после каждой задачи, сообщение в стиле Conventional Commits, окончание:
-  `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`
+- Коммиты: после каждой задачи, сообщение в стиле Conventional Commits, только тема; без строк соавторства (Co-Author) и подписей ИИ.
 
 ## Карта файлов
 
