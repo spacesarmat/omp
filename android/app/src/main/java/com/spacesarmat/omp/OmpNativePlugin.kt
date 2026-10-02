@@ -15,6 +15,7 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import com.spacesarmat.omp.control.TvRemote
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayRequest
 import com.spacesarmat.omp.player.PlayerActivity
@@ -35,7 +36,9 @@ import org.json.JSONObject
  * callbacks arrive on OkHttp threads. Events: tvMessage { json }, tvClosed { reason },
  * apkProgress { percent }, magnetReceived { link }, playerMessage { body },
  * localServerState { running, error? }, nativePlayerState { session, index, time, duration, paused, buffering,
- * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV).
+ * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV);
+ * phone remote on Android TV ([TvRemote]): remoteLaunch { params }, remoteAttach { report }, remoteKey { name },
+ * remoteText { text | delete | enter }, phonePaired { phone }.
  */
 @CapacitorPlugin(
     name = "OmpNative",
@@ -52,6 +55,8 @@ class OmpNativePlugin : Plugin() {
     private var pendingPointer: Once? = null
     private val downloading = AtomicBoolean(false)
     private val player = PlayerServer { body -> notifyListeners("playerMessage", JSObject().put("body", body)) }
+    // phone remote: only in TV mode
+    private var remote: TvRemote? = null
     private val serverState = LocalTorrServer.Listener { running, error ->
         val o = JSObject().put("running", running)
         if (error != null) o.put("error", error)
@@ -62,6 +67,12 @@ class OmpNativePlugin : Plugin() {
         instance = this
         NativePlayerBridge.emitter = { event, data -> notifyListeners(event, data) }
         LocalTorrServer.addListener(serverState)
+        if (TvMode.isTv(context)) {
+            val r = TvRemote(context.applicationContext) { event, data, retain -> notifyListeners(event, data, retain) }
+            remote = r
+            // binding a local port and NSD registration (async) are quick; synchronous so stop() never races start()
+            r.start()
+        }
         // a magnet that arrived before the bridge was ready
         synchronized(magnetLock) { pendingMagnet }?.let { emitMagnet(it) }
     }
@@ -72,6 +83,8 @@ class OmpNativePlugin : Plugin() {
         LocalTorrServer.removeListener(serverState)
         closeAll()
         player.stop()
+        remote?.stop()
+        remote = null
         io.shutdownNow()
     }
 
@@ -373,7 +386,9 @@ class OmpNativePlugin : Plugin() {
             return
         }
         NativePlayerBridge.request = req
-        val intent = Intent(context, PlayerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        // REORDER_TO_FRONT: an open player below the TV interface takes the queue over (no second instance)
+        val intent = Intent(context, PlayerActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         try {
             val act = activity
             if (act != null) act.startActivity(intent)
@@ -382,6 +397,31 @@ class OmpNativePlugin : Plugin() {
         } catch (_: RuntimeException) {
             call.reject("Не удалось запустить плеер")
         }
+    }
+
+    // ---- phone remote (Android TV) ----
+
+    /** A new 4-digit pairing code (the previous one stops working): { code, expiresAt } (epoch ms). */
+    @PluginMethod
+    fun pairingCode(call: PluginCall) {
+        val r = remote
+        if (r == null) {
+            call.reject("Управление с телефона недоступно")
+            return
+        }
+        val c = r.pairing.newCode()
+        call.resolve(JSObject().put("code", c.code).put("expiresAt", c.expiresAt))
+    }
+
+    /** The TV name the phone shows: { name }. */
+    @PluginMethod
+    fun tvName(call: PluginCall) {
+        val r = remote
+        if (r == null) {
+            call.reject("Управление с телефона недоступно")
+            return
+        }
+        call.resolve(JSObject().put("name", r.name()))
     }
 
     /** A phone command for the open native player ({ cmd: Cmd }). */

@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.player
 
+import android.app.Instrumentation
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -40,6 +41,7 @@ import androidx.media3.ui.PlayerView
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.spacesarmat.omp.R
+import com.spacesarmat.omp.control.AppForeground
 import java.util.Locale
 import org.json.JSONObject
 
@@ -177,6 +179,16 @@ class PlayerActivity : AppCompatActivity() {
         emitClosed(replaced = true)
         req = r
         load(r)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AppForeground.player = true
+    }
+
+    override fun onPause() {
+        AppForeground.player = false
+        super.onPause()
     }
 
     override fun onStop() {
@@ -517,6 +529,40 @@ class PlayerActivity : AppCompatActivity() {
         if (isFinishing) return
         emitClosed(replaced = false)
         finish()
+    }
+
+    // ---- phone remote (control/TvRemote.kt), UI thread ----
+
+    /** A key from the phone remote (UP/DOWN/LEFT/RIGHT/ENTER/BACK) handled like the TV remote's key. */
+    fun remoteKey(name: String) {
+        if (isFinishing || !::exo.isInitialized) return
+        val code = when (name) {
+            "UP" -> KeyEvent.KEYCODE_DPAD_UP
+            "DOWN" -> KeyEvent.KEYCODE_DPAD_DOWN
+            "LEFT" -> KeyEvent.KEYCODE_DPAD_LEFT
+            "RIGHT" -> KeyEvent.KEYCODE_DPAD_RIGHT
+            "ENTER" -> KeyEvent.KEYCODE_DPAD_CENTER
+            "BACK" -> KeyEvent.KEYCODE_BACK
+            else -> return
+        }
+        badge.visibility = View.VISIBLE
+        if (dialog?.isShowing == true) {
+            // the track list moves its own focus: a real key event into our window (off the UI thread)
+            Thread {
+                try {
+                    Instrumentation().sendKeyDownUpSync(code)
+                } catch (_: RuntimeException) {
+                }
+            }.start()
+            return
+        }
+        if (code == KeyEvent.KEYCODE_BACK) onBack() else onKey(code)
+    }
+
+    /** «Каталог» or a navigating launch from the phone: the player closes (nativePlayerClosed first). */
+    fun closeFromRemote() {
+        if (::exo.isInitialized) commitPendingSeek()
+        close()
     }
 
     // ---- phone commands (src/phone/protocol.ts Cmd) ----

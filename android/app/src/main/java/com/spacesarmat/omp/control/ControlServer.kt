@@ -1,0 +1,207 @@
+package com.spacesarmat.omp.control
+
+import java.io.BufferedInputStream
+import java.io.Closeable
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
+import java.net.InetSocketAddress
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+
+/** A parsed request to the control server: method, path (no query), bearer token, body (UTF-8). */
+class ControlRequest(val method: String, val path: String, val token: String?, val body: String)
+
+/** The answer: HTTP status and a JSON body. */
+class ControlResponse(val status: Int, val json: String)
+
+/**
+ * Minimal HTTP/1.1 server of the phone remote on Android TV (`/omp/...`, see the spec «Управление с телефона»),
+ * bound to all interfaces on [port]. One request per connection, body ≤ [MAX_BODY], read timeout, one accept
+ * thread plus at most [WORKERS] connection threads (daemons). Routing and auth live in [handler].
+ */
+class ControlServer(private val port: Int, private val handler: (ControlRequest) -> ControlResponse) {
+    private class Running(val socket: ServerSocket, val workers: ThreadPoolExecutor)
+
+    private var running: Running? = null
+
+    @Synchronized
+    @Throws(IOException::class)
+    fun start() {
+        if (running?.socket?.isClosed == false) return
+        val server = ServerSocket()
+        try {
+            server.reuseAddress = true
+            server.bind(InetSocketAddress(port))
+        } catch (e: IOException) {
+            closeQuietly(server)
+            throw e
+        }
+        val workers = ThreadPoolExecutor(
+            WORKERS, WORKERS, 30, TimeUnit.SECONDS, ArrayBlockingQueue(BACKLOG),
+        ) { r -> Thread(r, "omp-control-conn").apply { isDaemon = true } }
+        workers.allowCoreThreadTimeOut(true)
+        val run = Running(server, workers)
+        running = run
+        Thread({ acceptLoop(run) }, "omp-control-accept").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    @Synchronized
+    fun stop() {
+        val run = running ?: return
+        running = null
+        closeQuietly(run.socket)
+        run.workers.shutdownNow()
+    }
+
+    private fun acceptLoop(run: Running) {
+        while (!run.socket.isClosed) {
+            val client = try {
+                run.socket.accept()
+            } catch (_: IOException) {
+                break
+            }
+            try {
+                run.workers.execute { handle(client) }
+            } catch (_: RejectedExecutionException) {
+                closeQuietly(client)
+            }
+        }
+        closeQuietly(run.socket)
+    }
+
+    private fun handle(client: Socket) {
+        try {
+            client.soTimeout = READ_TIMEOUT_MS
+            val out = client.getOutputStream()
+            val input = BufferedInputStream(client.getInputStream())
+            val requestLine = readLine(input) ?: return
+            val parts = requestLine.split(' ')
+            if (parts.size < 3) {
+                respond(out, 400, error("bad_request"))
+                return
+            }
+            val method = parts[0].uppercase()
+            val path = parts[1].substringBefore('?')
+            var length = 0L
+            var token: String? = null
+            var lines = 0
+            while (true) {
+                val line = readLine(input) ?: return
+                if (line.isEmpty()) break
+                if (++lines > MAX_HEADERS) {
+                    respond(out, 431, error("headers_too_large"))
+                    return
+                }
+                val colon = line.indexOf(':')
+                if (colon <= 0) continue
+                val name = line.substring(0, colon).trim()
+                val value = line.substring(colon + 1).trim()
+                when {
+                    name.equals("Content-Length", ignoreCase = true) -> length = value.toLongOrNull() ?: -1L
+                    name.equals("Authorization", ignoreCase = true) && value.startsWith("Bearer ", ignoreCase = true) ->
+                        token = value.substring(7).trim()
+                }
+            }
+            when {
+                method == "OPTIONS" -> respond(out, 204, null)
+                length < 0 -> respond(out, 400, error("bad_request"))
+                length > MAX_BODY -> respond(out, 413, error("too_large"))
+                else -> {
+                    val body = readBody(input, length.toInt()) ?: return
+                    val res = try {
+                        handler(ControlRequest(method, path, token, String(body, Charsets.UTF_8)))
+                    } catch (_: Exception) {
+                        ControlResponse(500, error("internal"))
+                    }
+                    respond(out, res.status, res.json)
+                }
+            }
+        } catch (_: Exception) {
+            // one bad connection never affects the server
+        } finally {
+            closeQuietly(client)
+        }
+    }
+
+    private fun respond(out: OutputStream, code: Int, json: String?) {
+        val body = json?.toByteArray(Charsets.UTF_8)
+        val head = StringBuilder()
+            .append("HTTP/1.1 ").append(code).append(' ').append(reason(code)).append("\r\n")
+            // the phone app's WebView may call with fetch (origin http://localhost)
+            .append("Access-Control-Allow-Origin: *\r\n")
+            .append("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")
+            .append("Access-Control-Allow-Headers: Content-Type, Authorization\r\n")
+            .append("Access-Control-Max-Age: 600\r\n")
+            .append("Cache-Control: no-store\r\n")
+            .append("Connection: close\r\n")
+        if (body != null) head.append("Content-Type: application/json; charset=utf-8\r\n")
+        head.append("Content-Length: ").append(body?.size ?: 0).append("\r\n\r\n")
+        out.write(head.toString().toByteArray(Charsets.ISO_8859_1))
+        if (body != null) out.write(body)
+        out.flush()
+    }
+
+    companion object {
+        const val MAX_BODY = 65_536L
+        private const val WORKERS = 4
+        private const val BACKLOG = 16
+        private const val MAX_LINE = 8_192
+        private const val MAX_HEADERS = 100
+        private const val READ_TIMEOUT_MS = 5_000
+
+        fun error(code: String) = "{\"error\":\"$code\"}"
+
+        private fun reason(code: Int) = when (code) {
+            200 -> "OK"
+            204 -> "No Content"
+            400 -> "Bad Request"
+            401 -> "Unauthorized"
+            403 -> "Forbidden"
+            404 -> "Not Found"
+            405 -> "Method Not Allowed"
+            409 -> "Conflict"
+            413 -> "Payload Too Large"
+            431 -> "Request Header Fields Too Large"
+            else -> "Internal Server Error"
+        }
+
+        /** ASCII line without CRLF; null at EOF; throws when longer than [MAX_LINE]. */
+        private fun readLine(input: InputStream): String? {
+            val sb = StringBuilder()
+            while (true) {
+                val b = input.read()
+                if (b < 0) return if (sb.isEmpty()) null else sb.toString()
+                if (b == '\n'.code) break
+                if (b != '\r'.code) sb.append(b.toChar())
+                if (sb.length > MAX_LINE) throw IOException("line too long")
+            }
+            return sb.toString()
+        }
+
+        private fun readBody(input: InputStream, length: Int): ByteArray? {
+            val buf = ByteArray(length)
+            var read = 0
+            while (read < length) {
+                val n = input.read(buf, read, length - read)
+                if (n < 0) return null
+                read += n
+            }
+            return buf
+        }
+
+        private fun closeQuietly(c: Closeable) {
+            try {
+                c.close()
+            } catch (_: IOException) {
+            }
+        }
+    }
+}

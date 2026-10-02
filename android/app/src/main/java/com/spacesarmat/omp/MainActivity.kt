@@ -6,6 +6,7 @@ import android.view.KeyEvent
 import androidx.activity.OnBackPressedCallback
 import com.getcapacitor.BridgeActivity
 import com.getcapacitor.CapConfig
+import com.spacesarmat.omp.control.AppForeground
 
 class MainActivity : BridgeActivity() {
     // the launch intent was already handled before the activity got recreated
@@ -51,6 +52,16 @@ class MainActivity : BridgeActivity() {
                 .create()
         }
         super.load()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AppForeground.main = true
+    }
+
+    override fun onPause() {
+        AppForeground.main = false
+        super.onPause()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

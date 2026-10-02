@@ -17,6 +17,7 @@ import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { checkForUpdate } from './store/updates';
 import { platformKind } from './platform/env';
 import { installAndroidKeyBridge } from './platform/androidKeys';
+import { installAndroidRemote } from './platform/androidRemote';
 
 function renderRoute(r: Route) {
   switch (r.name) {
@@ -62,6 +63,7 @@ export function unhandledBack(): boolean {
 export function App() {
   useEffect(() => installKeyListener(unhandledBack), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidKeyBridge() : undefined), []);
+  useEffect(() => (platformKind() === 'androidtv' ? installAndroidRemote() : undefined), []);
   useEffect(() => {
     const t = setTimeout(() => { checkForUpdate({ manual: false }); }, 3000);
     return () => clearTimeout(t);

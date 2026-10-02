@@ -42,6 +42,17 @@ describe('nativePlugin', () => {
     expect(await nativeLocalIp()).toBe('192.168.5.20');
     expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'localIpv4', {});
   });
+  it('bridges the phone remote methods', async () => {
+    const b = bridgeOnly({
+      pairingCode: () => Promise.resolve({ code: '1234', expiresAt: 5 }),
+      tvName: () => Promise.resolve({ name: 'Гостиная' }),
+    });
+    const p = nativePlugin()!;
+    expect(await p.pairingCode()).toEqual({ code: '1234', expiresAt: 5 });
+    expect(await p.tvName()).toEqual({ name: 'Гостиная' });
+    expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'pairingCode', {});
+    expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'tvName', {});
+  });
   it('localIpv4: null ip or a failure → null', async () => {
     bridgeOnly({ localIpv4: () => Promise.resolve({ ip: null }) });
     expect(await nativeLocalIp()).toBeNull();
