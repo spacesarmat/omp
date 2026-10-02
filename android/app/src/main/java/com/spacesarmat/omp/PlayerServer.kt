@@ -20,28 +20,32 @@ import org.json.JSONArray
 
 /**
  * Tiny HTTP/1.1 server the TV player posts its state to (`POST /omp/<token>`, text/plain JSON).
- * Every response carries the queued commands `{"cmds":[...]}` (each delivered once).
- * One accept thread plus at most [WORKERS] connection threads, all daemons.
+ * Every response carries the queued commands `{"cmds":[...]}` (each delivered once; commands older than
+ * [CMD_TTL_MS] are dropped so they never reach a later TV session). Only the current TV may connect;
+ * starting for another TV rotates the token (new URL). One accept thread plus at most [WORKERS] connection threads, all daemons.
  */
 class PlayerServer(private val onMessage: (String) -> Unit) {
     private class Running(
         val socket: ServerSocket,
         val workers: ThreadPoolExecutor,
         val local: InetAddress,
+        val tvIp: String,
         val url: String,
     )
 
+    private class Queued(val at: Long, val cmd: Any)
+
     private val lock = Any()
     private var running: Running? = null
-    private val queue = ArrayDeque<Any>()
+    private val queue = ArrayDeque<Queued>()
 
-    /** Starts (or reuses) the server on the interface that reaches [tvIp]; returns the report URL. */
+    /** Starts (or reuses, for the same TV) the server on the interface that reaches [tvIp]; returns the report URL. */
     @Synchronized
     @Throws(IOException::class, UserError::class)
     fun start(tvIp: String): String {
         val local = localAddressFor(tvIp)
         synchronized(lock) {
-            running?.let { if (it.local == local && !it.socket.isClosed) return it.url }
+            running?.let { if (it.local == local && it.tvIp == tvIp && !it.socket.isClosed) return it.url }
         }
         stop()
         val server = ServerSocket()
@@ -58,7 +62,7 @@ class PlayerServer(private val onMessage: (String) -> Unit) {
             WORKERS, WORKERS, 30, TimeUnit.SECONDS, ArrayBlockingQueue(BACKLOG),
         ) { r -> Thread(r, "omp-player-conn").apply { isDaemon = true } }
         workers.allowCoreThreadTimeOut(true)
-        val run = Running(server, workers, local, url)
+        val run = Running(server, workers, local, tvIp, url)
         synchronized(lock) { running = run }
         Thread({ acceptLoop(run, "/omp/$token") }, "omp-player-accept").apply {
             isDaemon = true
@@ -80,21 +84,25 @@ class PlayerServer(private val onMessage: (String) -> Unit) {
 
     /** Appends commands for the next response; the queue keeps the newest [MAX_QUEUE]. */
     fun enqueue(cmds: JSONArray) {
+        val now = nowMs()
         synchronized(lock) {
             for (i in 0 until cmds.length()) {
-                queue.addLast(cmds.get(i))
+                queue.addLast(Queued(now, cmds.get(i)))
                 while (queue.size > MAX_QUEUE) queue.removeFirst()
             }
         }
     }
 
-    private fun drain(): JSONArray =
-        synchronized(lock) {
+    /** Takes the queued commands, dropping those older than [CMD_TTL_MS]. */
+    private fun drain(): JSONArray {
+        val now = nowMs()
+        return synchronized(lock) {
             val arr = JSONArray()
-            for (c in queue) arr.put(c)
+            for (q in queue) if (now - q.at <= CMD_TTL_MS) arr.put(q.cmd)
             queue.clear()
             arr
         }
+    }
 
     private fun acceptLoop(run: Running, path: String) {
         while (!run.socket.isClosed) {
@@ -104,7 +112,7 @@ class PlayerServer(private val onMessage: (String) -> Unit) {
                 break
             }
             try {
-                run.workers.execute { handle(client, path) }
+                run.workers.execute { handle(client, run.tvIp, path) }
             } catch (_: RejectedExecutionException) {
                 closeQuietly(client)
             }
@@ -112,11 +120,15 @@ class PlayerServer(private val onMessage: (String) -> Unit) {
         closeQuietly(run.socket)
     }
 
-    private fun handle(client: Socket, path: String) {
+    private fun handle(client: Socket, tvIp: String, path: String) {
         try {
             client.soTimeout = READ_TIMEOUT_MS
-            val input = BufferedInputStream(client.getInputStream())
             val out = client.getOutputStream()
+            if (client.inetAddress?.hostAddress != tvIp) {
+                respond(out, 404, "Not Found")
+                return
+            }
+            val input = BufferedInputStream(client.getInputStream())
             val requestLine = readLine(input) ?: return
             val parts = requestLine.split(' ')
             if (parts.size < 3) {
@@ -183,6 +195,7 @@ class PlayerServer(private val onMessage: (String) -> Unit) {
         private const val MAX_LINE = 8_192
         private const val MAX_HEADERS = 100
         private const val READ_TIMEOUT_MS = 5_000
+        private const val CMD_TTL_MS = 3_000L
         private val random = SecureRandom()
 
         private val IPV4 = Regex("^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$")
@@ -200,6 +213,8 @@ class PlayerServer(private val onMessage: (String) -> Unit) {
             }
             return local
         }
+
+        private fun nowMs(): Long = System.nanoTime() / 1_000_000
 
         private fun newToken(): String {
             val bytes = ByteArray(16)
