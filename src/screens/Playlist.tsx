@@ -90,7 +90,7 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
       {error && <div class="banner-error">{error}</div>}
       {entries && entries.length > 0 && (
         <FocusGroup focusKey="PLAYLIST-ENTRIES">
-          {queue.length > 0 && <Button label={'▶ Воспроизвести всё (' + queue.length + ')'} onPress={() => navigate({ name: 'player', queue, index: 0 })} />}
+          {queue.length > 0 && <Button icon="play" label={'Воспроизвести всё (' + queue.length + ')'} onPress={() => navigate({ name: 'player', queue, index: 0 })} />}
           {entries.map((e, i) => {
             const playableIndex = e.isPlaylist ? -1 : playable.indexOf(e);
             return (

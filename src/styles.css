@@ -137,3 +137,5 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .brand { display: flex; align-items: center; margin-bottom: 32px; }
 .brand .logo { margin-right: 24px; }
 .brand-title { margin: 0; font-size: 56px; letter-spacing: 2px; }
+.icon, .keydot { display: inline-block; vertical-align: middle; }
+.button-icon { margin-right: 10px; }
