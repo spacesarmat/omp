@@ -6,7 +6,7 @@ import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { actions, filesOf, streamUrlFor, useTvLaunch } from '../watch';
+import { actions, filesOf, streamUrlFor, tvServerUrl, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { torrents, refreshTorrents } from '../../../src/store/library';
 import {
@@ -97,7 +97,7 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
 
   const onCopy = async (withAuth: boolean) => {
     try {
-      await actions.copyText(streamUrlFor(c, torrent, file, withAuth));
+      await actions.copyText(await tvServerUrl(streamUrlFor(c, torrent, file, withAuth)));
       showToast(withAuth && hasAuth ? 'Ссылка скопирована (с логином и паролем)' : 'Ссылка скопирована');
       if (alive.v) onClose();
     } catch (e) {

@@ -42,6 +42,25 @@ export function streamUrlFor(c: TorrServerClient, t: Pick<Torrent, 'hash'>, file
   return withAuth ? c.videoSrc(url) : url;
 }
 
+export const NO_WIFI = 'Телефон не в сети Wi‑Fi — телевизор не увидит сервер';
+
+/** Replaces a loopback host with the phone's LAN address; null when the host is local and there is no address. */
+export function lanServerUrl(url: string, ip: string | null): string | null {
+  const m = /^([a-z][a-z0-9+.-]*:\/\/(?:[^@\/]*@)?)(127\.0\.0\.1|localhost)(?=[:\/?#]|$)/i.exec(url);
+  if (!m) return url;
+  return ip ? ip_replace(url, m[1].length, m[2].length, ip) : null;
+}
+
+const ip_replace = (url: string, at: number, len: number, ip: string) => url.slice(0, at) + ip + url.slice(at + len);
+
+/** Server URL as the TV (or a copied link) must see it; throws NO_WIFI when only the phone can reach it. */
+export async function tvServerUrl(url: string): Promise<string> {
+  if (lanServerUrl(url, '0.0.0.0') === url) return url;
+  const r = lanServerUrl(url, await actions.localIpv4().catch(() => null));
+  if (r === null) throw new Error(NO_WIFI);
+  return r;
+}
+
 export interface WatchActions {
   launchOnTv: (params: object) => Promise<void>;
   openExternal: (url: string, mime: string) => Promise<void>;
@@ -50,6 +69,8 @@ export interface WatchActions {
   ompVersion: () => Promise<string | null>;
   /** URL the TV posts player state to; null when unavailable. */
   reportUrl: () => Promise<string | null>;
+  /** Phone Wi-Fi address; null when not on Wi-Fi. */
+  localIpv4: () => Promise<string | null>;
   /** Pause between «launched» and the jump to the player screen (or the remote). */
   remoteDelayMs: number;
 }
@@ -60,6 +81,7 @@ const defaults: WatchActions = {
   copyText: (text) => Clipboard.write({ string: text }),
   ompVersion: () => ompVersionOnTv(),
   reportUrl: () => reportUrl(),
+  localIpv4: () => native.localIpv4(),
   remoteDelayMs: 1000,
 };
 
@@ -195,7 +217,7 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
         }
       }
       const report = await actions.reportUrl();
-      await actions.launchOnTv(watchOnTvParams(c.baseUrl, o.hash, o.file, t, report || undefined));
+      await actions.launchOnTv(watchOnTvParams(await tvServerUrl(c.baseUrl), o.hash, o.file, t, report || undefined));
       if (report && landing === 'nowPlaying') markLaunched();
       if (!alive.v) return;
       if (o.onLaunched) o.onLaunched(tv.name);
