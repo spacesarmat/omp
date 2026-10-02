@@ -11,6 +11,8 @@ import { Tv } from './screens/Tv';
 import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
 import { Add } from './screens/Add';
+import { LocalServer } from './screens/LocalServer';
+import { autostartLocal, watchLocalServer } from './server/localServer';
 import { Remote } from './screens/Remote';
 import { NowPlaying } from './screens/NowPlaying';
 import { MiniPlayer } from './ui/MiniPlayer';
@@ -118,6 +120,12 @@ export function App() {
     return () => off?.();
   }, []);
 
+  // embedded TorrServer: status, silent autostart (errors only go to the store), sync with the service
+  useEffect(() => {
+    void autostartLocal().catch(() => {});
+    return watchLocalServer();
+  }, []);
+
   // background update check 3 s after start (cheap GET; honours the setting and the 6 h interval)
   useEffect(() => {
     const t = setTimeout(() => {
@@ -144,6 +152,8 @@ export function App() {
         <Add link={route.link} />
       ) : route.name === 'nowPlaying' ? (
         <NowPlaying />
+      ) : route.name === 'localServer' ? (
+        <LocalServer />
       ) : route.name === 'remote' ? (
         <Remote />
       ) : (

@@ -17,6 +17,7 @@ import { formatBytes } from '../../../src/lib/format';
 import { episodeLabel, playableFiles } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
+import { localServer, startLocal, refreshLocalServer, LOCAL_URL } from '../server/localServer';
 
 const POLL_MS = 15000;
 const titleOf = (t: Torrent) => t.title || t.name || t.hash;
@@ -43,6 +44,8 @@ export function Library() {
   const [loaded, setLoaded] = useState(list.length > 0);
   const [error, setError] = useState('');
   const [tvError, setTvError] = useState('');
+  const [reload, setReload] = useState(0);
+  const [starting, setStarting] = useState(false);
   const launch = useTvLaunch();
   progressVersion.value; // re-render when local progress changes
   serverViewed.value;
@@ -61,6 +64,7 @@ export function Library() {
           if (!alive) return;
           setError(errorMessage(e));
           setLoaded(true);
+          if (c.baseUrl === LOCAL_URL) void refreshLocalServer();
         },
       );
       void refreshViewed(c);
@@ -71,7 +75,21 @@ export function Library() {
       alive = false;
       clearInterval(id);
     };
-  }, [c]);
+  }, [c, reload]);
+
+  // the active server is the phone's own one and it is stopped: offer to start it right here
+  const local = localServer.value;
+  const canStartLocal = !!error && !!c && c.baseUrl === LOCAL_URL && local.supported && !local.running;
+  async function startServer() {
+    if (starting) return;
+    setStarting(true);
+    try {
+      await startLocal();
+    } finally {
+      setStarting(false);
+      setReload((n) => n + 1);
+    }
+  }
 
   const isHistory = tab === 'history';
   const shown = useMemo(() => {
@@ -170,6 +188,11 @@ export function Library() {
       </div>
       {tvError && <LaunchError message={tvError} class="m-hint-warn" />}
       {error && <div class="m-hint-warn">{error} — показан сохранённый список</div>}
+      {canStartLocal && (
+        <button type="button" class="m-btn m-btn-primary" disabled={starting} onClick={() => void startServer()}>
+          Запустить сервер
+        </button>
+      )}
       {!loaded && !list.length && <p class="m-muted m-note">Загрузка…</p>}
       {empty && <p class="m-muted m-note m-empty">{empty}</p>}
       {isHistory ? (

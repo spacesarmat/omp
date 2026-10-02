@@ -8,7 +8,8 @@ export type MRoute =
   | { name: 'remote' }
   | { name: 'nowPlaying' }
   | { name: 'tv' }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'localServer' };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);

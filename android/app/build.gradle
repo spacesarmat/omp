@@ -75,6 +75,8 @@ dependencies {
     implementation project(':capacitor-cordova-android-plugins')
 }
 
+android.packaging.jniLibs.useLegacyPackaging = true
+
 apply from: 'capacitor.build.gradle'
 
 try {

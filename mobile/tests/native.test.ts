@@ -38,6 +38,20 @@ describe('native plugin wrapper outside Android', () => {
     const off = native.onTvMessage(() => {});
     expect(() => off()).not.toThrow();
   });
+
+  it('reports the local server as unsupported and has no Wi-Fi IP', async () => {
+    expect(await native.localServerInfo()).toEqual({ supported: false, running: false });
+    expect(await native.localIpv4()).toBeNull();
+    const off = native.onLocalServerState(() => {});
+    expect(() => off()).not.toThrow();
+  });
+
+  it('rejects the local server actions', async () => {
+    await expect(native.startLocalServer()).rejects.toThrow(ONLY_ANDROID);
+    await expect(native.stopLocalServer()).rejects.toThrow(ONLY_ANDROID);
+    await expect(native.localServerCache()).rejects.toThrow(ONLY_ANDROID);
+    await expect(native.clearLocalServerCache()).rejects.toThrow(ONLY_ANDROID);
+  });
 });
 
 describe('native plugin wrapper on Android', () => {
@@ -60,6 +74,18 @@ describe('native plugin wrapper on Android', () => {
       stopPlayerServer: vi.fn(async () => {}),
       wakeOnLan: vi.fn(async () => {}),
       queuePlayerCommands: vi.fn(async () => {}),
+      localServerInfo: vi.fn(async (): Promise<any> => ({ supported: true, running: false, error: '' })),
+      startLocalServer: vi.fn(async (): Promise<any> => ({
+        supported: true,
+        running: true,
+        version: 'MatriX.145.1',
+        ip: '192.168.1.50',
+        extra: 1,
+      })),
+      stopLocalServer: vi.fn(async () => {}),
+      localServerCache: vi.fn(async (): Promise<any> => ({ usedBytes: 524288000 })),
+      clearLocalServerCache: vi.fn(async () => ({ usedBytes: 0 })),
+      localIpv4: vi.fn(async (): Promise<any> => ({ ip: '192.168.1.50' })),
       addListener: vi.fn(async (event: string, cb: (e: any) => void) => {
         await gate;
         listeners.set(event, cb);
@@ -136,6 +162,45 @@ describe('native plugin wrapper on Android', () => {
     listeners.get('playerMessage')!({ body: '{"v":1}' });
     listeners.get('playerMessage')!({ body: 'raw' });
     expect(got).toEqual(['{"v":1}', 'raw']);
+    off();
+  });
+
+  it('local server wrappers map plugin results', async () => {
+    const { native: n, fake } = await load();
+    expect(await n.localServerInfo()).toEqual({ supported: true, running: false });
+    expect(await n.startLocalServer()).toEqual({
+      supported: true,
+      running: true,
+      version: 'MatriX.145.1',
+      ip: '192.168.1.50',
+    });
+    await n.stopLocalServer();
+    expect(fake.stopLocalServer).toHaveBeenCalled();
+    expect(await n.localServerCache()).toBe(524288000);
+    fake.localServerCache.mockResolvedValueOnce({});
+    expect(await n.localServerCache()).toBe(0);
+    await expect(n.clearLocalServerCache()).resolves.toBeUndefined();
+    expect(fake.clearLocalServerCache).toHaveBeenCalled();
+    expect(await n.localIpv4()).toBe('192.168.1.50');
+    fake.localIpv4.mockResolvedValueOnce({ ip: null });
+    expect(await n.localIpv4()).toBeNull();
+  });
+
+  it('passes plugin rejections of the local server through', async () => {
+    const { native: n, fake } = await load();
+    fake.startLocalServer.mockRejectedValueOnce(new Error('TorrServer не ответил за 15 секунд'));
+    await expect(n.startLocalServer()).rejects.toThrow('TorrServer не ответил за 15 секунд');
+  });
+
+  it('delivers local server state events', async () => {
+    const { native: n, listeners, releaseAdd } = await load();
+    const got: any[] = [];
+    const off = n.onLocalServerState((st) => got.push(st));
+    releaseAdd();
+    await vi.waitFor(() => expect(listeners.has('localServerState')).toBe(true));
+    listeners.get('localServerState')!({ running: true });
+    listeners.get('localServerState')!({ running: false, error: 'Сервер остановился с ошибкой' });
+    expect(got).toEqual([{ running: true }, { running: false, error: 'Сервер остановился с ошибкой' }]);
     off();
   });
 });

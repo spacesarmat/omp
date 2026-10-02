@@ -1,14 +1,20 @@
 package com.spacesarmat.omp
 
+import android.Manifest
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.core.net.toUri
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
+import com.getcapacitor.PermissionState
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import com.getcapacitor.annotation.Permission
+import com.getcapacitor.annotation.PermissionCallback
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -19,14 +25,18 @@ import org.json.JSONObject
 
 /**
  * Transport for the phone client: SSDP, TV WebSockets, external player, APK update, magnet intake,
- * local player server (TV state in, commands out).
+ * local player server (TV state in, commands out), embedded TorrServer ([TorrServerService]).
  * The SSAP protocol itself (register, requests, pairing) lives in TypeScript.
  *
  * Every PluginCall is settled exactly once (see [Once]). Blocking work runs on [io]; socket
  * callbacks arrive on OkHttp threads. Events: tvMessage { json }, tvClosed { reason },
- * apkProgress { percent }, magnetReceived { link }, playerMessage { body }.
+ * apkProgress { percent }, magnetReceived { link }, playerMessage { body },
+ * localServerState { running, error? }.
  */
-@CapacitorPlugin(name = "OmpNative")
+@CapacitorPlugin(
+    name = "OmpNative",
+    permissions = [Permission(alias = "notifications", strings = [Manifest.permission.POST_NOTIFICATIONS])],
+)
 class OmpNativePlugin : Plugin() {
     private val io: ExecutorService = Executors.newCachedThreadPool()
     private val lock = Any()
@@ -38,15 +48,22 @@ class OmpNativePlugin : Plugin() {
     private var pendingPointer: Once? = null
     private val downloading = AtomicBoolean(false)
     private val player = PlayerServer { body -> notifyListeners("playerMessage", JSObject().put("body", body)) }
+    private val serverState = LocalTorrServer.Listener { running, error ->
+        val o = JSObject().put("running", running)
+        if (error != null) o.put("error", error)
+        notifyListeners("localServerState", o)
+    }
 
     override fun load() {
         instance = this
+        LocalTorrServer.addListener(serverState)
         // a magnet that arrived before the bridge was ready
         synchronized(magnetLock) { pendingMagnet }?.let { emitMagnet(it) }
     }
 
     override fun handleOnDestroy() {
         if (instance === this) instance = null
+        LocalTorrServer.removeListener(serverState)
         closeAll()
         player.stop()
         io.shutdownNow()
@@ -370,6 +387,154 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
+    // ---- embedded TorrServer ----
+
+    @PluginMethod
+    fun localServerInfo(call: PluginCall) {
+        val once = Once(call)
+        io.execute {
+            try {
+                once.resolve(localInfo())
+            } catch (_: Exception) {
+                once.reject("Не удалось узнать состояние сервера")
+            }
+        }
+    }
+
+    @PluginMethod
+    fun startLocalServer(call: PluginCall) {
+        if (!LocalTorrServer.supported(context)) {
+            call.reject(NOT_SUPPORTED)
+            return
+        }
+        // without the permission the service still runs, only its notification is hidden
+        if (Build.VERSION.SDK_INT >= 33 && getPermissionState("notifications") != PermissionState.GRANTED) {
+            requestPermissionForAlias("notifications", call, "startAfterPermission")
+            return
+        }
+        startLocal(call)
+    }
+
+    @PermissionCallback
+    private fun startAfterPermission(call: PluginCall) {
+        startLocal(call)
+    }
+
+    private fun startLocal(call: PluginCall) {
+        val once = Once(call)
+        io.execute {
+            try {
+                runLocal()
+                once.resolve(localInfo())
+            } catch (e: UserError) {
+                once.reject(e.message ?: START_FAILED)
+            } catch (_: Exception) {
+                once.reject(START_FAILED)
+            }
+        }
+    }
+
+    @PluginMethod
+    fun stopLocalServer(call: PluginCall) {
+        val once = Once(call)
+        io.execute {
+            try {
+                stopLocal()
+                once.resolve()
+            } catch (_: Exception) {
+                once.reject("Не удалось остановить сервер")
+            }
+        }
+    }
+
+    @PluginMethod
+    fun localServerCache(call: PluginCall) {
+        val once = Once(call)
+        io.execute {
+            try {
+                once.resolve(JSObject().put("usedBytes", LocalTorrServer.dirSize(LocalTorrServer.cacheDir(context))))
+            } catch (_: Exception) {
+                once.reject("Не удалось узнать размер кэша")
+            }
+        }
+    }
+
+    @PluginMethod
+    fun clearLocalServerCache(call: PluginCall) {
+        val once = Once(call)
+        io.execute {
+            try {
+                val wasRunning = LocalTorrServer.running
+                if (wasRunning) stopLocal()
+                LocalTorrServer.clearDir(LocalTorrServer.cacheDir(context))
+                if (wasRunning) runLocal()
+                once.resolve(JSObject().put("usedBytes", LocalTorrServer.dirSize(LocalTorrServer.cacheDir(context))))
+            } catch (e: UserError) {
+                once.reject(e.message ?: "Не удалось очистить кэш")
+            } catch (_: Exception) {
+                once.reject("Не удалось очистить кэш")
+            }
+        }
+    }
+
+    @PluginMethod
+    fun localIpv4(call: PluginCall) {
+        call.resolve(JSObject().put("ip", LocalTorrServer.wifiIpv4(context) ?: JSONObject.NULL))
+    }
+
+    private fun localInfo(): JSObject {
+        val o = JSObject()
+        o.put("supported", LocalTorrServer.supported(context))
+        val running = LocalTorrServer.running
+        o.put("running", running)
+        if (running) {
+            val v = LocalTorrServer.version ?: LocalTorrServer.echo(500)?.also { LocalTorrServer.version = it }
+            if (v != null) o.put("version", v)
+        }
+        LocalTorrServer.wifiIpv4(context)?.let { o.put("ip", it) }
+        LocalTorrServer.error?.let { o.put("error", it) }
+        return o
+    }
+
+    /** Starts the service and waits for `/echo` (300 ms steps, 15 s); configures the cache once. Blocking. */
+    private fun runLocal() {
+        val failures = LocalTorrServer.failures
+        try {
+            TorrServerService.start(context)
+        } catch (_: RuntimeException) {
+            throw UserError(START_FAILED)
+        }
+        val deadline = System.currentTimeMillis() + 15_000
+        var version: String? = null
+        while (System.currentTimeMillis() < deadline) {
+            // only our own process counts (another app may hold the port)
+            if (LocalTorrServer.running) {
+                version = LocalTorrServer.echo(1000)
+                if (version != null) break
+            } else if (LocalTorrServer.failures != failures) {
+                // the process gave up (port taken, crashed twice)
+                throw UserError(LocalTorrServer.error ?: START_FAILED)
+            }
+            Thread.sleep(300)
+        }
+        if (version == null) {
+            TorrServerService.stop(context)
+            throw UserError("TorrServer не ответил за 15 секунд")
+        }
+        LocalTorrServer.version = version
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(CACHE_SET, false) && LocalTorrServer.configureCache(context)) {
+            prefs.edit().putBoolean(CACHE_SET, true).apply()
+        }
+    }
+
+    /** Stops the service and waits up to 6 s for the process to end. Blocking. */
+    private fun stopLocal() {
+        TorrServerService.stop(context)
+        val deadline = System.currentTimeMillis() + 6_000
+        while (LocalTorrServer.running && System.currentTimeMillis() < deadline) Thread.sleep(100)
+    }
+
     // ---- magnet ----
 
     @PluginMethod
@@ -404,6 +569,10 @@ class OmpNativePlugin : Plugin() {
     }
 
     companion object {
+        private const val NOT_SUPPORTED = "Встроенный сервер недоступен на этом телефоне"
+        private const val START_FAILED = "Не удалось запустить сервер"
+        private const val PREFS = "omp-native"
+        private const val CACHE_SET = "torrserverCacheConfigured"
         private val IPV4 = Regex("^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$")
         private val magnetLock = Any()
         private var pendingMagnet: String? = null

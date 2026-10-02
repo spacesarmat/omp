@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { watchOnTvParams, streamUrlFor, isNoOmp, openInstallGuide, OMP_INSTALL_URL } from '../src/watch';
+import { lanServerUrl, tvServerUrl, NO_WIFI, setWatchActions, watchOnTvParams, streamUrlFor, isNoOmp, openInstallGuide, OMP_INSTALL_URL } from '../src/watch';
 import { TV_NO_OMP } from '../src/tv/tvClient';
 import { TorrServerClient } from '../../src/api/torrserver';
 
@@ -58,5 +58,32 @@ describe('install guide', () => {
     expect(open).toHaveBeenCalledWith(OMP_INSTALL_URL, '_system');
     expect(OMP_INSTALL_URL).toBe('https://github.com/spacesarmat/omp#readme');
     open.mockRestore();
+  });
+});
+
+describe('lanServerUrl', () => {
+  it('swaps the local host for the phone address, keeping scheme, port and credentials', () => {
+    expect(lanServerUrl('http://127.0.0.1:8090', '192.168.1.5')).toBe('http://192.168.1.5:8090');
+    expect(lanServerUrl('http://localhost:8090/stream/a.mkv?link=x', '10.0.0.2')).toBe('http://10.0.0.2:8090/stream/a.mkv?link=x');
+    expect(lanServerUrl('http://u:p@127.0.0.1:8090/x', '10.0.0.2')).toBe('http://u:p@10.0.0.2:8090/x');
+  });
+  it('leaves other hosts alone, even without an address', () => {
+    expect(lanServerUrl('http://192.168.1.9:8090', '10.0.0.2')).toBe('http://192.168.1.9:8090');
+    expect(lanServerUrl('http://192.168.1.9:8090', null)).toBe('http://192.168.1.9:8090');
+    expect(lanServerUrl('http://localhost.example.com:8090', '10.0.0.2')).toBe('http://localhost.example.com:8090');
+  });
+  it('returns null for a local host with no address', () => {
+    expect(lanServerUrl('http://127.0.0.1:8090', null)).toBeNull();
+  });
+});
+
+describe('tvServerUrl', () => {
+  it('uses the phone address, or throws the Wi-Fi error', async () => {
+    setWatchActions({ localIpv4: async () => '192.168.1.5' });
+    expect(await tvServerUrl('http://127.0.0.1:8090')).toBe('http://192.168.1.5:8090');
+    setWatchActions({ localIpv4: async () => null });
+    await expect(tvServerUrl('http://127.0.0.1:8090')).rejects.toThrow(NO_WIFI);
+    expect(await tvServerUrl('http://tv-side:8090')).toBe('http://tv-side:8090');
+    setWatchActions(null);
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "omp",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "description": "Media player for LG webOS TVs backed by TorrServer",
@@ -16,7 +16,8 @@
     "tv:launch": "node scripts/tv.mjs launch",
     "dev:mobile": "vite --config vite.mobile.config.ts --host",
     "build:mobile": "tsc --noEmit && vite build --config vite.mobile.config.ts",
-    "android:sync": "npm run build:mobile && npx cap sync android",
+    "fetch:torrserver": "node scripts/fetch-torrserver.mjs",
+    "android:sync": "npm run fetch:torrserver && npm run build:mobile && npx cap sync android",
     "android:debug": "npm run android:sync && node scripts/gradle.mjs assembleDebug"
   },
   "dependencies": {
