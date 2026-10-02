@@ -10,6 +10,7 @@
     "test": "vitest run",
     "icons": "node scripts/make-icons.mjs",
     "package": "npm run build && node scripts/package.mjs",
+    "check:boot": "node scripts/boot-check.mjs",
     "tv:install": "node scripts/tv.mjs install",
     "tv:launch": "node scripts/tv.mjs launch"
   },
