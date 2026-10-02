@@ -19,16 +19,34 @@ export class TapDetector {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private readonly h: { single(): void; double(zone: TapZone): void };
   private readonly delayMs: number;
+  private readonly seekWindowMs: number;
+  private readonly now: () => number;
+  private lastSeekAt = -Infinity;
 
-  constructor(h: { single(): void; double(zone: TapZone): void }, delayMs = 300) {
+  constructor(
+    h: { single(): void; double(zone: TapZone): void },
+    delayMs = 300,
+    seekWindowMs = 500,
+    now: () => number = () => Date.now(),
+  ) {
     this.h = h;
     this.delayMs = delayMs;
+    this.seekWindowMs = seekWindowMs;
+    this.now = now;
   }
 
   tap(zone: TapZone): void {
+    const t = this.now();
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
+      if (zone !== 'center') this.lastSeekAt = t;
+      this.h.double(zone);
+      return;
+    }
+    // seek mode: rapid edge taps right after a double tap keep seeking
+    if (zone !== 'center' && t - this.lastSeekAt <= this.seekWindowMs) {
+      this.lastSeekAt = t;
       this.h.double(zone);
       return;
     }
@@ -41,6 +59,7 @@ export class TapDetector {
   cancel(): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this.lastSeekAt = -Infinity;
   }
 }
 

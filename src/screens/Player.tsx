@@ -110,18 +110,22 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   tapActions.current = {
     single: () => {
       const v = videoRef.current;
-      if (!v || vs.error) return;
+      if (!v || !ready || vs.error) return;
       const willPlay = v.paused;
       togglePause();
       showFlash({ icon: willPlay ? 'play' : 'pause', side: 'center' });
     },
     double: (zone: TapZone) => {
       const v = videoRef.current;
-      if (!v || vs.error || zone === 'center') return;
+      if (!v || !ready || vs.error || zone === 'center') return;
       const dir = zone === 'left' ? -1 : 1;
-      const step = streak.next(dir, settings.value.edgeSeekStep);
+      const base = settings.value.edgeSeekStep || 5;
+      const step = streak.next(dir, base);
       const max = vs.duration > 0 ? vs.duration - 1 : Infinity;
-      seekTo(Math.max(0, Math.min(max, v.currentTime + dir * step)));
+      const cur = v.currentTime;
+      const target = dir < 0 ? Math.max(0, cur - step) : Math.max(cur, Math.min(max, cur + step));
+      if (!isFinite(target)) return;
+      seekTo(target);
       showFlash({ text: (dir < 0 ? '−' : '+') + step + ' с', side: zone });
     },
   };
