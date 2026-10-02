@@ -239,8 +239,8 @@ button, .m-btn {
 .m-vlist { display: flex; flex-direction: column; gap: 4px; }
 .m-vrow { display: flex; align-items: center; gap: 12px; padding: 6px 0; border: none; background: none; text-align: left; color: inherit; min-width: 0; }
 .m-vrow > svg { flex-shrink: 0; color: var(--muted); }
-.m-poster-row { width: 56px; aspect-ratio: auto; height: 84px; padding: 0; border-radius: 8px; flex-shrink: 0; }
-.m-poster-row .m-badge, .m-poster-row .m-poster-title { display: none; }
+.m-vrow .m-poster-row { width: 56px; min-width: 56px; aspect-ratio: auto; height: 84px; padding: 0; border-radius: 8px; flex-shrink: 0; }
+.m-vrow .m-poster-row .m-badge, .m-vrow .m-poster-row .m-poster-title { display: none; }
 .m-vrow-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .m-vrow-text .m-card-title { margin-top: 0; min-height: 38px; }
 .m-vrow-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
