@@ -11,6 +11,25 @@ import { RenameSheet } from '../ui/RenameSheet';
 import { servers, addServer, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
+import { discover, candidateSubnets, DEFAULT_PORTS, type FoundServer } from '../../../src/api/discovery';
+import { native } from '../platform/native';
+import { localServer, refreshLocalServer } from '../server/localServer';
+
+type ServerScanner = () => Promise<FoundServer[]>;
+let scanner: ServerScanner | null = null;
+
+/** Replaces the LAN scan for TorrServer (tests); null restores the real one. */
+export function setServerScanner(fn: ServerScanner | null): void {
+  scanner = fn;
+}
+
+async function scanLan(): Promise<FoundServer[]> {
+  const ip = await native.localIpv4().catch(() => null);
+  return discover({ subnets: candidateSubnets(ip, []), ports: DEFAULT_PORTS });
+}
+
+const PHONE = 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2M10 7h4M10 10h4';
+const INFO = 'M12 8v5M12 16h.01M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18';
 
 type Status = { online: boolean; version: string } | 'pending';
 
@@ -49,10 +68,39 @@ export function Connect() {
   const [error, setError] = useState('');
   const [renaming, setRenaming] = useState<SavedServer | null>(null);
   const [cardError, setCardError] = useState<{ id: string; text: string } | null>(null);
+  const [scanState, setScanState] = useState<'idle' | 'scanning' | 'done'>('idle');
+  const [found, setFound] = useState<FoundServer[]>([]);
 
   useEffect(() => {
     checkAll(servers.value);
+    void refreshLocalServer();
   }, []);
+
+  // the phone can host TorrServer itself: look for one in the network first (only with no saved servers)
+  const supported = localServer.value.supported;
+  const noSaved = servers.value.length === 0;
+  const [scanRun, setScanRun] = useState(0);
+  useEffect(() => {
+    if (!supported || !noSaved) return;
+    let alive = true;
+    setScanState('scanning');
+    setFound([]);
+    (scanner ?? scanLan)().then(
+      (r) => {
+        if (!alive) return;
+        setFound(r);
+        setScanState('done');
+      },
+      () => {
+        if (!alive) return;
+        setFound([]);
+        setScanState('done');
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [supported, noSaved, scanRun]);
 
   async function enter(cfg: { name?: string; url: string; user?: string; password?: string }): Promise<boolean> {
     setBusy(true);
@@ -130,6 +178,49 @@ export function Connect() {
           <div class="m-muted">Open Movie Player</div>
         </div>
       </div>
+      {supported && noSaved && scanState === 'scanning' && (
+        <div class="m-hint-info m-muted">Ищу TorrServer в сети…</div>
+      )}
+      {supported && noSaved && scanState === 'done' && found.length > 0 && (
+        <>
+          <h2 class="m-section">Найдено в сети</h2>
+          <div class="m-list">
+            {found.map((f) => (
+              <button key={f.url} type="button" class="m-server" disabled={busy} onClick={() => void enter({ url: f.url })}>
+                <span class="m-dot on" />
+                <span class="m-server-text">
+                  <span class="m-server-name">{f.url.replace(/^https?:\/\//, '')}</span>
+                  <span class="m-muted m-small">{f.version}</span>
+                </span>
+                <Icon d="M9 5l7 7-7 7" size={18} />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {supported && noSaved && scanState === 'done' && found.length === 0 && (
+        <>
+          <div class="m-hint-info m-muted">
+            <Icon d={INFO} size={18} />
+            В сети не нашлось TorrServer
+          </div>
+          <div class="m-local-card">
+            <div class="m-local-head">
+              <span class="m-local-icon">
+                <Icon d={PHONE} size={24} />
+              </span>
+              <div class="m-local-title">TorrServer прямо на телефоне</div>
+            </div>
+            <div class="m-local-text">
+              OMP запустит встроенный сервер. Телевизор найдёт его сам, пока телефон в той же сети Wi‑Fi.
+            </div>
+            <button type="button" class="m-btn m-btn-primary" onClick={() => navigate({ name: 'localServer' })}>
+              Запустить TorrServer на телефоне
+            </button>
+          </div>
+          <div class="m-muted m-small m-or">или</div>
+        </>
+      )}
       <h1 class="m-title">Подключение к TorrServer</h1>
       <div class="m-field">
         <label for="addr">Адрес сервера</label>
@@ -225,6 +316,11 @@ export function Connect() {
             })}
           </div>
         </>
+      )}
+      {supported && noSaved && scanState === 'done' && (
+        <button type="button" class="m-btn m-btn-text" onClick={() => setScanRun(scanRun + 1)}>
+          Искать в сети ещё раз
+        </button>
       )}
       {renaming && (
         <RenameSheet

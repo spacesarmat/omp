@@ -1,4 +1,18 @@
+import { useEffect, useState } from 'preact/hooks';
 import { navigate } from '../nav';
+import { Icon } from '../ui/Icon';
+import {
+  localServer,
+  localAutostart,
+  setAutostart,
+  startLocal,
+  stopLocal,
+  refreshLocalServer,
+  localCacheBytes,
+  clearLocalCache,
+  formatBytes,
+  LOCAL_PORT,
+} from '../server/localServer';
 import { showToast } from '../ui/toast';
 import { activeServer } from '../../../src/store/servers';
 import { activeTv } from '../tv/tvStore';
@@ -21,6 +35,107 @@ export function runUpdateCheck(o: { manual: boolean; url?: string }): Promise<Ch
 
 const PROJECT_URL = 'https://github.com/spacesarmat/omp';
 
+function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={p.on}
+      aria-label={p.label}
+      class={'m-switch' + (p.on ? ' on' : '')}
+      onClick={p.onToggle}
+    >
+      <span class="m-switch-knob" />
+    </button>
+  );
+}
+
+function LocalServerSection() {
+  const st = localServer.value;
+  const [bytes, setBytes] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void refreshLocalServer();
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    void localCacheBytes().then((b) => alive && setBytes(b));
+    return () => {
+      alive = false;
+    };
+  }, [st.running]);
+
+  async function toggle() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (st.running) await stopLocal();
+      else await startLocal();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clear() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await clearLocalCache();
+      setBytes(await localCacheBytes());
+    } catch {
+      showToast('Не удалось очистить кэш');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const meta = [st.version, st.ip ? st.ip + ':' + LOCAL_PORT : ''].filter(Boolean).join(' · ');
+  return (
+    <section class="m-set-group" data-section="local-server">
+      <div class="m-set-label">TorrServer на телефоне</div>
+      <div class="m-set-card">
+        <div class="m-set-row">
+          <span class={'m-status-dot' + (st.running ? ' on' : '')} />
+          <div class="m-set-text" style="flex-grow: 1">
+            <span style="font-weight: 700">{st.running ? 'Работает' : 'Остановлен'}</span>
+            {meta && <span class="m-muted m-small">{meta}</span>}
+          </div>
+          <Switch on={st.running} label="TorrServer на телефоне" onToggle={() => void toggle()} />
+        </div>
+        {st.error && (
+          <div class="m-error" role="alert">
+            {st.error}
+          </div>
+        )}
+        <div class="m-set-sep" />
+        <div class="m-set-row">
+          <div class="m-set-text" style="flex-grow: 1">
+            <span>Запускать вместе с OMP</span>
+            <span class="m-muted m-small">Сервер включается при открытии приложения</span>
+          </div>
+          <Switch on={localAutostart.value} label="Запускать вместе с OMP" onToggle={() => setAutostart(!localAutostart.value)} />
+        </div>
+        <div class="m-set-sep" />
+        <div class="m-set-row">
+          <div class="m-set-text" style="flex-grow: 1">
+            <span>Кэш на телефоне</span>
+            <span class="m-muted m-small">{bytes === null ? 'Считаю…' : 'Занято ' + formatBytes(bytes) + ' из 1 ГБ'}</span>
+          </div>
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={busy} onClick={() => void clear()}>
+            Очистить
+          </button>
+        </div>
+      </div>
+      <div class="m-hint-ok">
+        <Icon d="M12 8v.01M11 12h1v5h1M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18" size={18} />
+        <span>Новая версия сервера приходит вместе с обновлением OMP</span>
+      </div>
+      <div class="m-hint-warn">Сервер доступен всем устройствам в этой сети Wi‑Fi</div>
+    </section>
+  );
+}
+
 export function Settings() {
   const server = activeServer.value;
   const tv = activeTv.value;
@@ -35,6 +150,7 @@ export function Settings() {
   return (
     <div class="m-screen" data-route="settings">
       <h1>Настройки</h1>
+      {localServer.value.supported && <LocalServerSection />}
       <section class="m-set-group">
         <div class="m-set-label">Сервер</div>
         <div class="m-set-row">
