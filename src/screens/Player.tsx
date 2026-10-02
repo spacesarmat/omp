@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { client } from '../store/servers';
-import { settings } from '../store/settings';
+import { settings, updateSettings } from '../store/settings';
+import { SUB_SIZE_OPTIONS, formatOffset, subtitleOffsetOptions } from '../player/subtitleOffset';
 import { resumePosition } from '../store/progress';
 import type { FfprobeResult } from '../api/types';
 import { errorMessage } from '../api/http';
@@ -45,6 +46,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   const [audioIdx, setAudioIdx] = useState(-1);
   const [subChoice, setSubChoice] = useState('off');
   const [cues, setCues] = useState<Cue[] | null>(null);
+  const [subOffset, setSubOffset] = useState(0);
   const startPos = useRef(0);
   const userTracks = useRef(false);
   const metaLoaded = useRef(false);
@@ -94,6 +96,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     subReq.current++;
     setProbe(null);
     setCues(null);
+    setSubOffset(0);
     setSubChoice('off');
     setAudioIdx(-1);
     userTracks.current = false;
@@ -239,10 +242,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     const menu = subtitleMenu(embeddedSubOptions(probe, v), item.subtitles || []);
     const current = menu.find((o) => o.value === subChoice) || menu[0];
     const audioLabel = audio[audioIdx] ? audio[audioIdx].label : 'по умолчанию';
-    choose('Дорожки', [
+    const sizeLabel = (SUB_SIZE_OPTIONS.find((o) => o.value === settings.value.subSize) || SUB_SIZE_OPTIONS[1]).label;
+    const root: { label: string; value: string }[] = [
       { label: 'Аудио: ' + audioLabel, value: 'audio' },
       { label: 'Субтитры: ' + current.label, value: 'subs' },
-    ]).then((kind) => {
+      { label: 'Размер субтитров: ' + sizeLabel, value: 'size' },
+    ];
+    if (cues) root.push({ label: 'Сдвиг субтитров: ' + formatOffset(subOffset), value: 'offset' });
+    choose('Дорожки', root).then((kind) => {
       if (kind === 'audio') {
         if (audio.length < 2) {
           toast('Других аудиодорожек нет');
@@ -262,6 +269,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
           applySubChoice(ch);
           if (item.hash) saveTrackPref(item.hash, { sub: subPrefFromChoice(ch, embeddedSubOptions(probe, v), item.subtitles || []) });
         });
+      } else if (kind === 'size') {
+        choose('Размер субтитров', SUB_SIZE_OPTIONS, settings.value.subSize).then((v) => { if (v) updateSettings({ subSize: v }); });
+      } else if (kind === 'offset') {
+        choose('Сдвиг субтитров', subtitleOffsetOptions(), subOffset).then((v) => { if (v !== null) setSubOffset(v); });
       }
     });
   };
@@ -336,7 +347,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   return (
     <div class="player" onMouseMove={showControls}>
       <video key={index + ':' + reloadKey} ref={videoRef} src={ready ? src : undefined} autoplay onLoadedMetadata={onMeta} />
-      <SubtitleOverlay cues={cues} time={vs.time} raised={controls} />
+      <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
       {ready && vs.buffering && !vs.error && <BufferingOverlay cache={cache} />}
       {statsOn && <StatsOverlay cache={cache} probe={probe} />}
       {next.countdown !== null && hasNext && (
