@@ -1,6 +1,7 @@
 package com.spacesarmat.omp
 
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.OnBackPressedCallback
@@ -25,6 +26,11 @@ class MainActivity : BridgeActivity() {
         // delivers KEYCODE_BACK to dispatchKeyEvent). Added after the bridge loaded its plugins, so it wins over
         // @capacitor/app's callback (webView.goBack()).
         if (tvMode) {
+            // the TV layout is 1920×1080 CSS px: honour <meta name="viewport" content="width=1920"> and fit it
+            bridge?.webView?.settings?.let {
+                it.useWideViewPort = true
+                it.loadWithOverviewMode = true
+            }
             onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() = pageBack()
             })
@@ -49,10 +55,15 @@ class MainActivity : BridgeActivity() {
                 .setAndroidScheme("http")
                 .setAllowMixedContent(true)
                 .setStartPath("/tv/index.html")
+                .setInitialFocus(true)
+                .setLoggingEnabled(isDebuggable())
                 .create()
         }
         super.load()
     }
+
+    // what BuildConfig.DEBUG would say (BuildConfig is not generated); Capacitor's JSON default uses the same flag
+    private fun isDebuggable() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     override fun onResume() {
         super.onResume()

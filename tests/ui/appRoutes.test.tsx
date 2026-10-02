@@ -86,3 +86,25 @@ describe('App route host', () => {
     expect(app.querySelector('video')).not.toBe(first);
   });
 });
+
+describe('App scale safety net', () => {
+  it('androidtv: the .app root is scaled to the window width', async () => {
+    const plugin = {
+      localIpv4: vi.fn(() => Promise.resolve({ ip: null })),
+      addListener: vi.fn(() => Promise.resolve({ remove: () => {} })),
+    };
+    w.Capacitor = { getPlatform: () => 'android', Plugins: { OmpNative: plugin } };
+    routeStack.value = [{ name: 'connect' }];
+    const app = mountApp();
+    const root = app.querySelector('.app') as HTMLElement;
+    await until(() => root.style.transform !== '');
+    expect(root.style.transform).toBe('scale(' + window.innerWidth / 1920 + ')');
+  });
+
+  it('webOS: the .app root is never scaled', async () => {
+    routeStack.value = [{ name: 'connect' }];
+    const app = mountApp();
+    await new Promise((r) => setTimeout(r, 30));
+    expect((app.querySelector('.app') as HTMLElement).style.transform).toBe('');
+  });
+});
