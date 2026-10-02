@@ -2,7 +2,7 @@ import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
 import type { Torrent } from '../api/types';
 import type { LibraryTab } from '../lib/libraryView';
-import { attachPoster, type PosterClient } from '../lib/autoPoster';
+import { attachPoster, fillPosters, type FillResult, type PosterClient } from '../lib/autoPoster';
 
 const KEY = 'tsp.torrents';
 
@@ -80,9 +80,60 @@ export function rememberAdded(c: PosterClient & { list(): Promise<Torrent[]> }, 
   if (!torrents.value.some((x) => x.hash === t.hash)) torrents.value = [t].concat(torrents.value);
   return attachPoster(c, t.hash, hint).then((poster) => {
     if (poster) {
-      torrents.value = torrents.value.map((x) => (x.hash === t.hash ? { ...x, poster } : x));
+      patchPoster(t.hash, poster);
       refreshTorrents(c).catch(() => {});
     }
     return poster;
+  });
+}
+
+const TRIED_KEY = 'tsp.posterTried';
+let filling: Promise<FillResult | null> | null = null;
+
+function patchPoster(hash: string, poster: string): void {
+  torrents.value = torrents.value.map((x) => (x.hash === hash ? { ...x, poster } : x));
+}
+
+/**
+ * Background lookup for torrents without a poster, e.g. added from the TorrServer page or Lampa.
+ * Each torrent is tried once (remembered in `tsp.posterTried`); nothing happens without a TMDB key.
+ */
+export function autoFillPosters(c: PosterClient): Promise<FillResult | null> {
+  if (filling) return filling;
+  const tried = loadJson<unknown[]>(TRIED_KEY, [], Array.isArray).filter((h): h is string => typeof h === 'string');
+  const seen: { [h: string]: boolean } = {};
+  tried.forEach((h) => (seen[h] = true));
+  filling = fillPosters(c, torrents.value, {
+    skip: (h) => !!seen[h],
+    onEach: (h, poster) => {
+      if (poster) patchPoster(h, poster);
+      seen[h] = true;
+      tried.push(h);
+      saveJson(TRIED_KEY, tried.slice(-500));
+    },
+  }).then(
+    (r) => {
+      filling = null;
+      return r;
+    },
+    () => {
+      filling = null;
+      return null;
+    },
+  );
+  return filling;
+}
+
+/** Explicit lookup for one torrent or for all without a poster (also the ones tried before). */
+export function findPosters(
+  c: PosterClient,
+  list: Torrent[],
+  onEach?: (hash: string, poster: string, done: number, total: number) => void,
+): Promise<FillResult> {
+  return fillPosters(c, list, {
+    onEach: (h, poster, done, total) => {
+      if (poster) patchPoster(h, poster);
+      if (onEach) onEach(h, poster, done, total);
+    },
   });
 }

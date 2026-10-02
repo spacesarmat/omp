@@ -7,7 +7,7 @@ import { LaunchError } from '../ui/LaunchError';
 import { navigate } from '../nav';
 import { filesOf, useTvLaunch } from '../watch';
 import { client } from '../../../src/store/servers';
-import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents } from '../../../src/store/library';
+import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, autoFillPosters } from '../../../src/store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
 import { buildHistory, resumeFrom, sourceLine, HISTORY_FILTERS } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
@@ -75,6 +75,8 @@ export function Library() {
     const load = () => {
       const p = refreshTorrents(c).then(
         () => {
+          // posters for torrents added elsewhere (TorrServer page, Lampa): each one is tried once
+          void autoFillPosters(c);
           if (!alive) return;
           setError('');
           setLoaded(true);

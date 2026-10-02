@@ -62,6 +62,8 @@ beforeEach(() => {
   resetTo({ name: 'library' });
   listSpy = vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue(T);
   vi.spyOn(TorrServerClient.prototype, 'viewedList').mockResolvedValue([]);
+  // background poster lookup after a refresh: no TMDB key unless a test sets one
+  vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -71,6 +73,30 @@ afterEach(() => {
   setWatchActions(null);
   setLocalServerDeps(null);
   localServer.value = { supported: false, running: false };
+});
+
+describe('Library posters', () => {
+  it('after a refresh, looks up posters for torrents without one, each torrent once', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'k' });
+    vi.spyOn(TorrServerClient.prototype, 'get').mockImplementation(async (h: string) => T.find((t) => t.hash === h)!);
+    const setPoster = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
+    const tmdb = vi.fn(async (u: string) => new Response(JSON.stringify({ results: u.includes('Neon') ? [{ poster_path: '/n.jpg' }] : [] })));
+    vi.stubGlobal('fetch', tmdb);
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+    mount();
+    for (let i = 0; i < 6; i++) await flush();
+    expect(tmdb).toHaveBeenCalledTimes(3);
+    expect(setPoster).toHaveBeenCalledTimes(1);
+    expect(torrents.value.find((t) => t.hash === 'h3')!.poster).toBe('https://imagetmdb.com/t/p/w300/n.jpg');
+    expect(JSON.parse(localStorage.getItem('tsp.posterTried')!).sort()).toEqual(['h1', 'h2', 'h3']);
+    // the next refresh does not search again
+    act(() => render(null, el));
+    mount();
+    for (let i = 0; i < 6; i++) await flush();
+    expect(tmdb).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe('Library', () => {

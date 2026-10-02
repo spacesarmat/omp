@@ -13,6 +13,8 @@ export interface PosterDeps {
   wait?: (ms: number) => Promise<void>;
   /** how many times to ask for the title while TorrServer reads the metadata */
   tries?: number;
+  /** TMDB settings already read from the server (skips `/tmdb/settings`) */
+  cfg?: TmdbConfig | null;
 }
 
 const fetchTmdb = (url: string) => request<unknown>(url, { method: 'GET', timeoutMs: 15000 });
@@ -34,8 +36,8 @@ export function attachPoster(c: PosterClient, hash: string, hint: string, deps: 
   const fetchJson = deps.fetchJson || fetchTmdb;
   const wait = deps.wait || sleep;
   const tries = deps.tries === undefined ? 15 : deps.tries;
-  return c
-    .tmdbSettings()
+  const settings = deps.cfg !== undefined ? Promise.resolve(deps.cfg) : c.tmdbSettings();
+  return settings
     .then((cfg) => {
       if (!cfg || !cfg.APIKey) return '';
       const named = (left: number): Promise<string> =>
@@ -60,4 +62,42 @@ export function attachPoster(c: PosterClient, hash: string, hint: string, deps: 
       });
     })
     .catch(() => '');
+}
+
+export interface FillResult {
+  /** torrents without a poster that were tried */
+  tried: number;
+  /** posters found and stored */
+  found: number;
+  /** false when the server has no TMDB key */
+  hasKey: boolean;
+}
+
+/**
+ * Looks up posters, one torrent at a time, for every torrent in `list` that has none.
+ * `skip` filters out torrents already tried; `onEach` reports each torrent once it is done.
+ */
+export function fillPosters(
+  c: PosterClient,
+  list: Torrent[],
+  opts: { skip?: (hash: string) => boolean; onEach?: (hash: string, poster: string, done: number, total: number) => void } & PosterDeps = {},
+): Promise<FillResult> {
+  return c.tmdbSettings().then(
+    (cfg) => {
+      if (!cfg || !cfg.APIKey) return { tried: 0, found: 0, hasKey: false };
+      const todo = list.filter((t) => !t.poster && (t.title || t.name) && !(opts.skip && opts.skip(t.hash)));
+      let found = 0;
+      const step = (i: number): Promise<FillResult> => {
+        if (i >= todo.length) return Promise.resolve({ tried: todo.length, found, hasKey: true });
+        const t = todo[i];
+        return attachPoster(c, t.hash, t.title || t.name || '', { ...opts, cfg, tries: 1 }).then((poster) => {
+          if (poster) found++;
+          if (opts.onEach) opts.onEach(t.hash, poster, i + 1, todo.length);
+          return step(i + 1);
+        });
+      };
+      return step(0);
+    },
+    () => ({ tried: 0, found: 0, hasKey: false }),
+  );
 }
