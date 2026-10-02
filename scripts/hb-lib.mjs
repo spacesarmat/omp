@@ -61,3 +61,15 @@ export function buildHomebrew({ tag, version, ipkName, sha256, size, title, desc
   };
   return { manifest, apps, update };
 }
+
+/** Update feed for the Android client (same shape as update.json; ipkUrl/ipkHash/ipkSize point at the APK). */
+export function buildAndroidUpdate({ tag, version, apkName, sha256, size, notes }) {
+  return {
+    version,
+    ipkUrl: `https://github.com/${REPO}/releases/download/${tag}/${apkName}`,
+    ipkHash: sha256,
+    ipkSize: size,
+    notes,
+    releaseUrl: `https://github.com/${REPO}/releases/tag/${tag}`,
+  };
+}

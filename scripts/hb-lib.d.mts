@@ -12,3 +12,11 @@ export function buildHomebrew(p: {
   description: string;
   notes: string[];
 }): { manifest: object; apps: object; update: object };
+export function buildAndroidUpdate(p: {
+  tag: string;
+  version: string;
+  apkName: string;
+  sha256: string;
+  size: number;
+  notes: string[];
+}): object;
