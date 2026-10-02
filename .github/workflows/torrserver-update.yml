@@ -5,6 +5,10 @@ on:
     - cron: '17 5 * * *'
   workflow_dispatch:
 
+concurrency:
+  group: torrserver-update
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -20,7 +24,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
       - name: Bump OMP when TorrServer has a new release
         id: bump
         env:
@@ -28,10 +32,10 @@ jobs:
         run: |
           set -euo pipefail
           echo "release=false" >> "$GITHUB_OUTPUT"
-          gh api repos/YouROK/TorrServer/releases/latest > latest.json
-          LATEST=$(jq -r '.tag_name // empty' latest.json)
+          gh api repos/YouROK/TorrServer/releases/latest > "$RUNNER_TEMP/latest.json"
+          LATEST=$(jq -r '.tag_name // empty' "$RUNNER_TEMP/latest.json")
           CURRENT=$(tr -d '[:space:]' < torrserver.version)
-          DIGEST=$(jq -r '[.assets[]? | select(.name == "TorrServer-android-arm64") | .digest // empty][0] // empty' latest.json)
+          DIGEST=$(jq -r '[.assets[]? | select(.name == "TorrServer-android-arm64") | .digest // empty][0] // empty' "$RUNNER_TEMP/latest.json")
           if [ -z "$LATEST" ] || [ "$LATEST" = "$CURRENT" ]; then
             echo "TorrServer is up to date ($CURRENT)"
             exit 0
@@ -43,11 +47,10 @@ jobs:
           VERSION=$(node scripts/torrserver-bump.mjs "$LATEST")
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add torrserver.version package.json package-lock.json webos/appinfo.json CHANGELOG.md
           git commit -m "chore: TorrServer $LATEST"
-          git push origin HEAD:main
           git tag "v$VERSION"
-          git push origin "v$VERSION"
+          git push --atomic origin HEAD:main "v$VERSION"
           echo "release=true" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseVersionFile, pickAsset, parseDigest, ASSET_NAME, bumpPatch, insertChangelog, isNewerTag, setRootVersion } from '../../scripts/torrserver-lib.mjs';
+import { parseVersionFile, pickAsset, parseDigest, ASSET_NAME, bumpPatch, insertChangelog, setRootVersion } from '../../scripts/torrserver-lib.mjs';
 
 describe('torrserver-lib', () => {
   it('parses the version file', () => {
@@ -36,11 +36,6 @@ describe('torrserver-lib', () => {
     const crlf = insertChangelog(text.replace(/\n/g, '\r\n'), '0.8.3', 'T');
     expect(crlf).toContain('## 0.8.3\r\n\r\n- Встроенный TorrServer обновлён до T\r\n\r\n## 0.8.2');
     expect(crlf).not.toMatch(/[^\r]\n/);
-  });
-  it('detects a different tag', () => {
-    expect(isNewerTag('MatriX.145.1', 'MatriX.146.0')).toBe(true);
-    expect(isNewerTag('MatriX.145.1\n', 'MatriX.145.1')).toBe(false);
-    expect(isNewerTag('MatriX.145.1', '')).toBe(false);
   });
   it('replaces only the root version fields', () => {
     const lock = '{\n  "name": "omp",\n  "version": "0.8.2",\n  "packages": {\n    "": {\n      "name": "omp",\n      "version": "0.8.2",\n      "dependencies": {}\n    },\n    "node_modules/x": {\n      "version": "0.8.2"\n    }\n  }\n}\n';

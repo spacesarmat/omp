@@ -26,11 +26,6 @@ export function bumpPatch(version) {
   return `${m[1]}.${m[2]}.${Number(m[3]) + 1}`;
 }
 
-export function isNewerTag(current, latest) {
-  const l = String(latest || '').trim();
-  return l !== '' && l !== String(current || '').trim();
-}
-
 export function insertChangelog(text, version, tag) {
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
   const entry = `## ${version}${eol}${eol}- Встроенный TorrServer обновлён до ${tag}${eol}${eol}`;
