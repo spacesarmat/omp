@@ -53,22 +53,6 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .tab.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
 .tab-icon { margin-right: 8px; }
 
-.grid { display: flex; flex-wrap: wrap; margin-right: -24px; }
-.card { width: 256px; margin: 0 24px 32px 0; border-radius: 14px; }
-.card.focused { box-shadow: none; transform: scale(1.07); }
-.card .poster { width: 256px; height: 384px; border-radius: 14px; overflow: hidden; background: var(--panel2); }
-.card.focused .poster { box-shadow: 0 0 0 5px var(--focus); }
-.card .poster img { width: 100%; height: 100%; object-fit: cover; }
-.poster-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 120px; color: var(--muted); }
-.card-title { margin-top: 10px; font-size: 24px; max-height: 62px; overflow: hidden; }
-.card-meta { font-size: 22px; color: var(--muted); }
-
-.hscroll { display: flex; overflow: hidden; padding: 8px 0; }
-.wide-card { width: 440px; flex-shrink: 0; margin-right: 24px; padding: 20px 24px; background: var(--panel); border-radius: 14px; }
-.wide-card.focused { background: var(--panel2); }
-.wide-card .title { font-size: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wide-card .meta { font-size: 22px; color: var(--muted); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
 .progress { height: 8px; background: rgba(255, 255, 255, .15); border-radius: 4px; overflow: hidden; margin-top: 10px; }
 .progress-fill { height: 100%; background: var(--accent); }
 
@@ -172,3 +156,39 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .hcard-ep { font-size: 20px; color: var(--muted); margin-top: 4px; }
 .hcard-time { display: flex; justify-content: space-between; font-size: 19px; margin-top: 16px; }
 .hcard-left { color: var(--muted); }
+
+.views-tiles { display: flex; flex-wrap: wrap; margin-right: -32px; padding-top: 8px; }
+.tile { margin: 0 32px 36px 0; border-radius: 16px; }
+.tile.focused { box-shadow: none; transform: scale(1.04); }
+.tile.focused .art { box-shadow: 0 0 0 5px var(--focus); }
+.tile-large { width: 266px; }
+.tile-large .art { width: 266px; height: 399px; padding: 22px; }
+.tile-large .art-title { font-size: 30px; }
+.tile-small { width: 172px; margin: 0 26px 30px 0; }
+.tile-small .art { width: 172px; height: 258px; padding: 14px; border-radius: 12px; }
+.tile-small .art-title { font-size: 19px; }
+.art-badges { position: absolute; top: 12px; left: 12px; display: flex; }
+.art-badges .badge { background: rgba(15, 17, 21, .8); }
+/* same reserved title height on every tile keeps rows aligned (spec §3) */
+.tile-title { margin-top: 12px; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
+.tile-large .tile-title { font-size: 22px; line-height: 28px; height: 84px; -webkit-line-clamp: 3; }
+.tile-small .tile-title { margin-top: 8px; font-size: 17px; line-height: 22px; height: 44px; -webkit-line-clamp: 2; }
+.tile-meta { font-size: 18px; color: var(--muted); margin-top: 4px; }
+.views-rows { padding-top: 4px; }
+.lrow { display: flex; align-items: center; height: 92px; padding: 0 22px; margin-bottom: 10px; border-radius: 14px; background: var(--panel); }
+.lrow.focused { background: var(--panel2); transform: none; }
+.lrow .art { width: 52px; height: 78px; border-radius: 8px; margin-right: 24px; }
+.lrow-main { flex: 1; min-width: 0; }
+.lrow-title { font-size: 26px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow .badges { margin-top: 6px; }
+.lrow-cat { width: 180px; font-size: 20px; color: var(--muted); }
+.lrow-size { width: 140px; text-align: right; font-size: 22px; color: var(--muted); }
+.crow { display: flex; align-items: center; height: 58px; padding: 0 22px; margin-bottom: 6px; border-radius: 10px; background: var(--panel); }
+.crow:nth-child(even) { background: #14171d; }
+.crow.focused { background: var(--panel2); transform: none; }
+.crow-title { flex: 1; min-width: 0; margin-right: 18px; font-size: 23px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crow-badges { display: flex; }
+.crow-size { width: 120px; text-align: right; font-size: 20px; color: var(--muted); }
+.search-row { display: flex; align-items: center; margin-bottom: 24px; }
+.search-row .text-input { flex: none; width: 820px; margin: 0 24px 0 0; }
+.search-count { font-size: 22px; color: var(--muted); }
