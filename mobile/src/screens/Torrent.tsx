@@ -276,7 +276,7 @@ export function Torrent({ hash }: { hash: string }) {
 
   const own = t ? filesOf(t) : [];
   const allFiles = own.length ? own : loaded ? filesOf(loaded) : [];
-  const skip = useSkip(c, hash, firstPlayableId(allFiles));
+  const skip = useSkip(c, hash, firstPlayableId(allFiles), !!t);
   // file list comes from the list entry; load it from the server if the entry has none
   useEffect(() => {
     if (!c || !t || own.length) return;

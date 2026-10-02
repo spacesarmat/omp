@@ -26,7 +26,8 @@ export type SkipUpdate = SkipPatch | ((prev: SkipPrefs) => SkipPatch);
  * `save` applies the switches at once and puts back only the switches of that write when it fails (then rejects,
  * so the caller shows the error).
  */
-export function useSkip(c: SkipClient | null | undefined, hash: string, fileIndex: number | null) {
+/** `known`: the torrent itself is loaded (the phone card may render before it is fetched); the settings load then. */
+export function useSkip(c: SkipClient | null | undefined, hash: string, fileIndex: number | null, known = true) {
   const [prefs, setPrefs] = useState<SkipPrefs>(OFF);
   const [hasChapters, setHasChapters] = useState(false);
   const alive = useRef(true);
@@ -45,7 +46,7 @@ export function useSkip(c: SkipClient | null | undefined, hash: string, fileInde
   };
 
   useEffect(() => {
-    if (!c) return;
+    if (!c || !known) return;
     let dead = false;
     touched.current = false;
     loadSkip(c, hash).then(
@@ -56,7 +57,7 @@ export function useSkip(c: SkipClient | null | undefined, hash: string, fileInde
     return () => {
       dead = true;
     };
-  }, [!!c, hash]);
+  }, [!!c, hash, known]);
 
   useEffect(() => {
     if (!c || fileIndex === null) return;
