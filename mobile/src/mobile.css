@@ -549,7 +549,8 @@ button, .m-btn {
 
 /* ---- mini-player ---- */
 .m-mini {
-  position: fixed; left: 8px; right: 8px; bottom: calc(var(--m-nav-h) + env(safe-area-inset-bottom)); height: var(--m-mini-h); z-index: 5;
+  /* 8px above the bottom menu, like the side gaps (the remote reserves --m-mini-h + 8px for it) */
+  position: fixed; left: 8px; right: 8px; bottom: calc(var(--m-nav-h) + 8px + env(safe-area-inset-bottom)); height: var(--m-mini-h); z-index: 5;
   padding: 0 8px 0 10px; border-radius: 16px; background: var(--panel-2); display: flex; align-items: center; gap: 12px; overflow: hidden;
 }
 .m-mini-pad { height: 72px; }
