@@ -1,0 +1,20 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { sanitizeTrackPrefs, getTrackPref, saveTrackPref, reloadTrackPrefs } from '../../src/store/trackPrefs';
+
+beforeEach(() => { localStorage.clear(); reloadTrackPrefs(); });
+
+describe('trackPrefs store', () => {
+  it('saves, merges and persists per hash', () => {
+    saveTrackPref('h', { audioLang: 'en', audioLabel: 'EN · AC3 5.1' });
+    saveTrackPref('h', { sub: 'off' });
+    expect(getTrackPref('h')).toEqual({ audioLang: 'en', audioLabel: 'EN · AC3 5.1', sub: 'off' });
+    reloadTrackPrefs();
+    expect(getTrackPref('h')!.sub).toBe('off');
+    expect(getTrackPref('x')).toBeNull();
+  });
+  it('sanitizes garbage', () => {
+    expect(sanitizeTrackPrefs({ a: { audioLang: 1, sub: 'x' }, b: null, c: { sub: { lang: 'ru', label: 'rus' } } }))
+      .toEqual({ a: {}, c: { sub: { lang: 'ru', label: 'rus' } } });
+    expect(sanitizeTrackPrefs([])).toEqual({});
+  });
+});

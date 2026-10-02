@@ -47,3 +47,16 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> }): Promise<Torr
   );
   return inflight;
 }
+
+export function addedTorrents(prev: Torrent[], next: Torrent[]): Torrent[] {
+  if (!prev.length) return [];
+  const known: { [h: string]: boolean } = {};
+  prev.forEach((t) => { known[t.hash] = true; });
+  return next.filter((t) => !known[t.hash]);
+}
+
+export function addedMessage(added: Torrent[]): string | null {
+  if (!added.length) return null;
+  if (added.length > 3) return 'Добавлено торрентов: ' + added.length;
+  return 'Добавлено: ' + added.map((t) => t.title || t.hash).join(', ');
+}
