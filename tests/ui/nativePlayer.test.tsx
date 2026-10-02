@@ -136,6 +136,27 @@ describe('NativePlayerScreen (Android TV)', () => {
     await unmount(host);
   });
 
+  it('every native state event posts to the phone (page timers are throttled under the player)', async () => {
+    const f = fakeCapacitor();
+    const bodies: string[] = [];
+    setLinkTransport((_u, body) => { bodies.push(body); return Promise.resolve('{"cmds":[]}'); });
+    const host = mount(h(NativePlayerScreen, { queue, index: 0 }));
+    await until(() => f.plugin.playNative.mock.calls.length === 1);
+    attachPhone('http://phone:1/r');
+    const times = (): number[] => bodies.map((b) => JSON.parse(b).state).filter((s) => !!s).map((s) => s.time);
+    for (const t of [10, 11, 12]) {
+      // only the time moves: the interval (500 ms) has not fired yet, so each post comes from the event
+      f.emit('nativePlayerState', {
+        index: 0, time: t, duration: 1200, paused: false, buffering: false,
+        audio: { list: ['Русский'], sel: 0 }, subs: { list: [{ label: 'Выкл', value: 'off' }], sel: 'off' },
+      });
+      await new Promise((r) => setTimeout(r, 40));
+      expect(times()).toContain(t);
+    }
+    expect(bodies.length).toBe(3);
+    await unmount(host);
+  });
+
   it('Back on the placeholder while launching keeps saving until the player closes', async () => {
     const f = fakeCapacitor();
     let launched: () => void = () => undefined;

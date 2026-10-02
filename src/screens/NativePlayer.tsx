@@ -3,7 +3,7 @@ import { client } from '../store/servers';
 import { settings } from '../store/settings';
 import { nativePlugin } from '../platform/androidNative';
 import { decideStart } from '../player/resume';
-import { NativeSession, NativeState, nativeHeading, nativePlayerOpen } from '../player/nativePlayer';
+import { NativeSession, nativeHeading, nativePlayerOpen } from '../player/nativePlayer';
 import type { PlayItem } from '../player/types';
 import { setPlayerBridge, postSoon } from '../phone/link';
 import { goBack, currentRoute } from '../ui/nav';
@@ -13,12 +13,6 @@ interface Props {
   queue: PlayItem[];
   index: number;
   startAt?: number;
-}
-
-function changed(a: NativeState | null, b: NativeState): boolean {
-  return !a || a.index !== b.index || a.paused !== b.paused || a.buffering !== b.buffering
-    || a.audio.sel !== b.audio.sel || a.subs.sel !== b.subs.sel
-    || a.audio.list.length !== b.audio.list.length || a.subs.list.length !== b.subs.list.length;
 }
 
 function failText(e: unknown): string {
@@ -55,7 +49,9 @@ export function NativePlayerScreen({ queue, index, startAt }: Props) {
       const run = new NativeSession(plugin, client.value, queue, {
         onState: (st, prev) => {
           if (!prev || prev.index !== st.index) setCurrent(st.index);
-          if (changed(prev, st)) postSoon();
+          // every state event (≈1 Hz, evaluateJavascript) posts: the page timers are throttled while
+          // PlayerActivity covers the WebView, so the interval alone lets «Сейчас играет» go stale
+          postSoon();
         },
         onClosed: (_c, replaced) => {
           if (unbridge) unbridge();
