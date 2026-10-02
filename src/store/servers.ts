@@ -1,5 +1,7 @@
 import { signal, computed } from '@preact/signals';
-import { loadJson, saveJson } from './storage';
+import { loadJson, saveJson, isObject } from './storage';
+import { resetLibrary } from './library';
+import { resetViewed } from './progress';
 import { TorrServerClient, normalizeServerUrl } from '../api/torrserver';
 
 export interface SavedServer {
@@ -13,8 +15,18 @@ export interface SavedServer {
 const KEY = 'tsp.servers';
 const ACTIVE_KEY = 'tsp.activeServer';
 
-export const servers = signal<SavedServer[]>(loadJson<SavedServer[]>(KEY, []));
-export const activeServerId = signal<string | null>(loadJson<string | null>(ACTIVE_KEY, null));
+export function sanitizeServers(v: unknown): SavedServer[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter(
+    (s): s is SavedServer =>
+      isObject(s) && typeof s.id === 'string' && typeof s.name === 'string' && typeof s.url === 'string',
+  );
+}
+
+export const servers = signal<SavedServer[]>(sanitizeServers(loadJson<unknown>(KEY, [], Array.isArray)));
+export const activeServerId = signal<string | null>(
+  loadJson<string | null>(ACTIVE_KEY, null, (v) => v === null || typeof v === 'string'),
+);
 export const activeServer = computed(() => servers.value.find((s) => s.id === activeServerId.value) || null);
 export const client = computed(() => (activeServer.value ? new TorrServerClient(activeServer.value) : null));
 
@@ -28,7 +40,10 @@ export function addServer(input: { name?: string; url: string; user?: string; pa
   const name = input.name || url.replace(/^https?:\/\//, '');
   const existing = servers.value.find((s) => s.url === url);
   if (existing) {
-    const updated: SavedServer = { ...existing, name: input.name || existing.name, user: input.user, password: input.password };
+    const updated: SavedServer = { ...existing, name: input.name || existing.name,
+      user: input.user !== undefined ? input.user : existing.user,
+      password: input.password !== undefined ? input.password : existing.password,
+    };
     servers.value = servers.value.map((s) => (s.id === existing.id ? updated : s));
     persist();
     return updated;
@@ -52,6 +67,11 @@ export function removeServer(id: string): void {
 }
 
 export function setActiveServer(id: string | null): void {
+  if (id !== activeServerId.value) {
+    // data from the previous server must not leak into the new one
+    resetViewed();
+    resetLibrary();
+  }
   activeServerId.value = id;
   persist();
 }
