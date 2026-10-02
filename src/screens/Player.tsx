@@ -30,7 +30,7 @@ import { useKeys } from '../ui/keys';
 import { choose } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { setPlayerBridge, postSoon } from '../phone/link';
-import { buildSnapshot, runCmd } from '../player/phoneBridge';
+import { buildSnapshot, liveTiming, runCmd } from '../player/phoneBridge';
 
 interface Props {
   queue: PlayItem[];
@@ -341,9 +341,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     snapshot: () => {
       const v = videoRef.current;
       const audio = audioOptions(probe, v);
+      const live = liveTiming(v, { time: vs.time, paused: vs.paused });
       return buildSnapshot({
         queue, index,
-        time: vs.time, duration: vs.duration, paused: vs.paused, buffering: ready && vs.buffering,
+        time: live.time, duration: vs.duration, paused: live.paused, buffering: ready && vs.buffering,
         audio, audioIdx, defaultAudio: defaultAudioIndex(audio),
         subs: subtitleMenu(embeddedSubOptions(probe, v), item.subtitles || []), subChoice,
       });

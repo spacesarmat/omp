@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSnapshot, runCmd } from '../../src/player/phoneBridge';
+import { buildSnapshot, liveTiming, runCmd } from '../../src/player/phoneBridge';
 import type { PlayItem } from '../../src/player/types';
 
 const H = 'c4c4bd6a4618e1042aa89649d629f85951eff546';
@@ -93,5 +93,15 @@ describe('runCmd', () => {
     runCmd({ id: 5, type: 'subs', value: 'e0' }, x.h);
     runCmd({ id: 6, type: 'subs', value: 'zzz' }, x.h);
     expect(x.calls).toEqual(['next', 'prev', 'audio:1', 'subs:e0']);
+  });
+});
+
+describe('liveTiming', () => {
+  it('reads the live video values when the video exists', () => {
+    expect(liveTiming({ currentTime: 42.5, paused: true }, { time: 10, paused: false })).toEqual({ time: 42.5, paused: true });
+  });
+  it('falls back to the render-time values without a video or a finite time', () => {
+    expect(liveTiming(null, { time: 10, paused: false })).toEqual({ time: 10, paused: false });
+    expect(liveTiming({ currentTime: NaN, paused: false }, { time: 10, paused: true })).toEqual({ time: 10, paused: false });
   });
 });

@@ -16,6 +16,16 @@ export interface SnapshotInput {
   subChoice: string;
 }
 
+/** Time and pause state for a snapshot: live from the video element when it exists, else the render-time values. */
+export function liveTiming(
+  v: { currentTime: number; paused: boolean } | null,
+  fallback: { time: number; paused: boolean },
+): { time: number; paused: boolean } {
+  if (!v) return { time: fallback.time, paused: fallback.paused };
+  const t = v.currentTime;
+  return { time: typeof t === 'number' && isFinite(t) ? t : fallback.time, paused: !!v.paused };
+}
+
 /** Null when the current item has no hash/fileIndex (the phone cannot address it). */
 export function buildSnapshot(i: SnapshotInput): PlayerState | null {
   const item = i.queue[i.index];
