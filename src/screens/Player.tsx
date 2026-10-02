@@ -12,6 +12,10 @@ import { parseSubtitles, decodeText, Cue } from '../lib/subtitles';
 import { selectAudioTrack, selectTextTrack } from '../platform/webosMedia';
 import type { PlayItem } from '../player/types';
 import { SeekAccumulator } from '../player/seek';
+import { tapZone, TapDetector, SeekStreak } from '../player/pointerTaps';
+import type { TapZone } from '../player/pointerTaps';
+import { Icon } from '../ui/icons';
+import type { IconName } from '../ui/icons';
 import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
 import { introChapter } from '../player/chapters';
 import { useVideoState } from '../player/useVideoState';
@@ -94,10 +98,44 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     }, 4000);
   };
 
+  const [flash, setFlash] = useState<{ icon?: IconName; text?: string; side: TapZone } | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showFlash = (f: { icon?: IconName; text?: string; side: TapZone }) => {
+    setFlash(f);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 700);
+  };
+  const streak = useMemo(() => new SeekStreak(), []);
+  const tapActions = useRef({ single: () => undefined as void, double: (_z: TapZone) => undefined as void });
+  tapActions.current = {
+    single: () => {
+      const v = videoRef.current;
+      if (!v || vs.error) return;
+      const willPlay = v.paused;
+      togglePause();
+      showFlash({ icon: willPlay ? 'play' : 'pause', side: 'center' });
+    },
+    double: (zone: TapZone) => {
+      const v = videoRef.current;
+      if (!v || vs.error || zone === 'center') return;
+      const dir = zone === 'left' ? -1 : 1;
+      const step = streak.next(dir, settings.value.edgeSeekStep);
+      const max = vs.duration > 0 ? vs.duration - 1 : Infinity;
+      seekTo(Math.max(0, Math.min(max, v.currentTime + dir * step)));
+      showFlash({ text: (dir < 0 ? '−' : '+') + step + ' с', side: zone });
+    },
+  };
+  const taps = useMemo(() => new TapDetector({
+    single: () => tapActions.current.single(),
+    double: (z) => tapActions.current.double(z),
+  }), []);
+  useEffect(() => () => { taps.cancel(); if (flashTimer.current) clearTimeout(flashTimer.current); }, []);
+
   // resume decision + ffprobe for every new item
   useEffect(() => {
     setSeekTarget(null);
     seeker.cancel();
+    taps.cancel();
     subReq.current++;
     setProbe(null);
     setCues(null);
@@ -356,9 +394,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   if (!item) return null;
 
   return (
-    <div class="player" onMouseMove={showControls}>
+    <div class="player" onMouseMove={showControls} onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); taps.tap(tapZone((e as MouseEvent).clientX - r.left, r.width)); }}>
       <video key={index + ':' + reloadKey} ref={videoRef} src={ready ? src : undefined} autoplay onLoadedMetadata={onMeta} />
       <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
+      {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}
       {ready && vs.buffering && !vs.error && <BufferingOverlay cache={cache} />}
       {statsOn && <StatsOverlay cache={cache} probe={probe} />}
       {next.countdown !== null && hasNext && (
