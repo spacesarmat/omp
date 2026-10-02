@@ -5,7 +5,8 @@ import { Logo } from '../../../src/ui/Logo';
 import { showToast } from '../ui/toast';
 import { resetTo, afterConnectRoute } from '../nav';
 import { scanPairQr } from '../platform/qr';
-import { servers, addServer, setActiveServer, type SavedServer } from '../../../src/store/servers';
+import { RenameSheet } from '../ui/RenameSheet';
+import { servers, addServer, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
 
@@ -44,6 +45,7 @@ export function Connect() {
   const [auth, setAuth] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [renaming, setRenaming] = useState<SavedServer | null>(null);
   const [cardError, setCardError] = useState<{ id: string; text: string } | null>(null);
 
   useEffect(() => {
@@ -193,6 +195,7 @@ export function Connect() {
               const on = !!st && st !== 'pending' && st.online;
               return (
                 <div key={s.id} class="m-server-wrap">
+                <div class="m-server-row">
                 <button type="button" class="m-server" onClick={() => void open(s)}>
                   <span class={'m-dot' + (on ? ' on' : '')} />
                   <span class="m-server-text">
@@ -203,6 +206,10 @@ export function Connect() {
                   </span>
                   <Icon d="M9 5l7 7-7 7" size={18} />
                 </button>
+                <button type="button" class="m-btn-text" aria-label={'Переименовать ' + s.name} onClick={() => setRenaming(s)}>
+                  Переименовать
+                </button>
+                </div>
                 {cardError?.id === s.id && (
                   <div class="m-error" role="alert">
                     {cardError.text}
@@ -213,6 +220,17 @@ export function Connect() {
             })}
           </div>
         </>
+      )}
+      {renaming && (
+        <RenameSheet
+          title="Название сервера"
+          value={renaming.name}
+          onSave={(n) => {
+            updateServer(renaming.id, { name: n || renaming.url.replace(/^https?:\/\//, '') });
+            setRenaming(null);
+          }}
+          onCancel={() => setRenaming(null)}
+        />
       )}
     </form>
   );

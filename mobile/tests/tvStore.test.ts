@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs } from '../src/tv/tvStore';
+import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs, renameTv } from '../src/tv/tvStore';
 
 beforeEach(() => {
   localStorage.clear();
@@ -26,17 +26,17 @@ describe('tvStore', () => {
 
   it('saves a TV, makes the first one active and persists', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG' });
-    expect(tvs.value).toEqual([{ ip: '192.168.1.5', name: 'LG' }]);
+    expect(tvs.value).toEqual([{ ip: '192.168.1.5', name: 'LG', defaultName: 'LG' }]);
     expect(activeTvIp.value).toBe('192.168.1.5');
     expect(activeTv.value?.name).toBe('LG');
-    expect(JSON.parse(localStorage.getItem('tsp.tvs')!)).toEqual([{ ip: '192.168.1.5', name: 'LG' }]);
+    expect(JSON.parse(localStorage.getItem('tsp.tvs')!)).toEqual([{ ip: '192.168.1.5', name: 'LG', defaultName: 'LG' }]);
     expect(JSON.parse(localStorage.getItem('tsp.activeTv')!)).toBe('192.168.1.5');
   });
 
   it('updates an existing TV and keeps its key', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG', clientKey: 'K' });
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    expect(tvs.value).toEqual([{ ip: '192.168.1.5', name: 'LG OLED', clientKey: 'K' }]);
+    expect(tvs.value).toEqual([{ ip: '192.168.1.5', name: 'LG OLED', defaultName: 'LG OLED', clientKey: 'K' }]);
     saveTv({ ip: '192.168.1.5', name: 'LG OLED', clientKey: 'K2' });
     expect(tvs.value[0].clientKey).toBe('K2');
   });
@@ -69,5 +69,41 @@ describe('tvStore', () => {
     reloadTvs();
     expect(tvs.value).toEqual([{ ip: '192.168.1.9', name: 'Saved' }]);
     expect(activeTvIp.value).toBeNull();
+  });
+
+  it('renames a TV, keeps the default name and restores it on empty input', () => {
+    saveTv({ ip: '192.168.1.5', name: '[LG] webOS TV', clientKey: 'k' });
+    renameTv('192.168.1.5', '  Гостиная  ');
+    expect(tvs.value[0].name).toBe('Гостиная');
+    expect(tvs.value[0].defaultName).toBe('[LG] webOS TV');
+    expect(JSON.parse(localStorage.getItem('tsp.tvs')!)[0].name).toBe('Гостиная');
+    renameTv('192.168.1.5', 'x'.repeat(60));
+    expect(tvs.value[0].name).toHaveLength(40);
+    renameTv('192.168.1.5', '   ');
+    expect(tvs.value[0].name).toBe('[LG] webOS TV');
+  });
+
+  it('does not overwrite a user name when the TV is saved again', () => {
+    saveTv({ ip: '192.168.1.5', name: '[LG] webOS TV' });
+    renameTv('192.168.1.5', 'Гостиная');
+    saveTv({ ip: '192.168.1.5', name: '[LG] webOS TV OLED', clientKey: 'k2' });
+    saveTv({ ip: '192.168.1.5', name: 'Гостиная', clientKey: 'k2' });
+    expect(tvs.value[0].name).toBe('Гостиная');
+    expect(tvs.value[0].defaultName).toBe('[LG] webOS TV');
+    expect(tvs.value[0].clientKey).toBe('k2');
+  });
+
+  it('keeps following the discovered name while not renamed', () => {
+    saveTv({ ip: '192.168.1.5', name: 'A' });
+    saveTv({ ip: '192.168.1.5', name: 'B' });
+    expect(tvs.value[0].name).toBe('B');
+    expect(tvs.value[0].defaultName).toBe('B');
+  });
+
+  it('sanitizes defaultName', () => {
+    expect(sanitizeTvs([{ ip: '192.168.1.5', name: 'N', defaultName: 'D' }, { ip: '192.168.1.6', name: 'N', defaultName: 5 }])).toEqual([
+      { ip: '192.168.1.5', name: 'N', defaultName: 'D' },
+      { ip: '192.168.1.6', name: 'N' },
+    ]);
   });
 });

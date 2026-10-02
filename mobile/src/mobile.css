@@ -487,3 +487,7 @@ button, .m-btn {
 .m-mini-btn.play { background: var(--accent); color: var(--bg); }
 .m-mini-line { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #2A2F3A; }
 .m-mini-line div { height: 3px; background: var(--accent); }
+
+.m-server-row { display: flex; align-items: center; gap: 4px; }
+.m-server-row .m-server { flex: 1 1 auto; min-width: 0; }
+.m-server-row .m-btn-text, .m-tv-row .m-btn-text { min-height: 44px; flex-shrink: 0; }

@@ -132,4 +132,27 @@ describe('Connect screen', () => {
     expect(activeServer.value?.name).toBe('Дом');
     expect(currentRoute.value.name).toBe('library');
   });
+
+  it('renames a saved server; empty restores the URL without scheme', async () => {
+    mockFetch(() => ({ body: 'MatriX.145.1' }));
+    addServer({ name: 'Дом', url: '192.168.1.10:8090' });
+    const el = mount();
+    await flush();
+    const open = () => act(async () => (el.querySelector('[aria-label="Переименовать ' + servers.value[0].name + '"]') as HTMLButtonElement).click());
+    await open();
+    const dlg = document.querySelector('[role="dialog"]') as HTMLElement;
+    expect(dlg.textContent).toContain('Название сервера');
+    const input = dlg.querySelector('input') as HTMLInputElement;
+    expect(input.value).toBe('Дом');
+    type(input, '  Кухня ');
+    await act(async () => { btn(dlg, 'Сохранить').click(); });
+    expect(servers.value[0].name).toBe('Кухня');
+    expect(currentRoute.value.name).toBe('connect');
+    expect(el.textContent).toContain('Кухня');
+    await open();
+    const d2 = document.querySelector('[role="dialog"]') as HTMLElement;
+    type(d2.querySelector('input') as HTMLInputElement, '');
+    await act(async () => { btn(d2, 'Сохранить').click(); });
+    expect(servers.value[0].name).toBe('192.168.1.10:8090');
+  });
 });
