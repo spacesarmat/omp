@@ -188,6 +188,35 @@ describe('ServerSettings', () => {
   });
 });
 
+describe('ServerSettings TMDB key', () => {
+  it('saves the key into the server TMDB settings, keeping the other fields', async () => {
+    setup();
+    current = { ...BASE, TMDBSettings: { APIKey: '', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' } };
+    await mount();
+    const row = btn('Ключ TMDB для обложек');
+    expect(row.textContent).toContain('Не задан');
+    act(() => row.click());
+    const input = el.querySelector('#tmdb-key') as HTMLInputElement;
+    act(() => {
+      input.value = ' key123 ';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => btn('Сохранить').click());
+    await flush();
+    const s = sets();
+    expect(s.length).toBe(1);
+    expect(s[0].sets.TMDBSettings).toEqual({ APIKey: 'key123', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' });
+    expect(s[0].sets.Unknown).toBe('keep');
+    expect(btn('Ключ TMDB для обложек').textContent).toContain('Задан');
+  });
+
+  it('is hidden on servers without TMDB settings', async () => {
+    setup();
+    await mount();
+    expect(btn('Ключ TMDB для обложек')).toBeUndefined();
+  });
+});
+
 describe('ServerSettings missing field', () => {
   it('shows a dash instead of undefined', async () => {
     setup();

@@ -621,7 +621,9 @@ button, .m-btn {
 .m-vol-label { flex-grow: 1; text-align: center; font-size: 14px; font-weight: 600; }
 
 /* ---- pull to refresh ---- */
-.m-ptr { align-self: center; display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 16px; background: var(--panel); font-size: 13px; color: var(--muted); }
+.m-ptr { position: fixed; z-index: 6; left: 50%; top: calc(env(safe-area-inset-top) + 8px); width: 40px; height: 40px; border-radius: 20px; background: var(--panel-2); color: var(--muted); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); pointer-events: none; }
+.m-ptr.armed { color: var(--accent); }
+.m-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* touchpad settings sheet */
 .m-tp-group { display: flex; flex-direction: column; gap: 8px; }

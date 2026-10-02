@@ -1,5 +1,5 @@
 import { TV_NO_OMP } from '../src/tv/tvClient';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Add, normalizeLink } from '../src/screens/Add';
@@ -9,6 +9,7 @@ import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { toast } from '../src/ui/toast';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { TorrServerClient } from '../../src/api/torrserver';
+import { torrents } from '../../src/store/library';
 
 async function flush() {
   await act(async () => {
@@ -58,6 +59,10 @@ beforeEach(() => {
   launch.mockReset().mockResolvedValue(undefined);
   setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
   resetTo({ name: 'add' });
+  torrents.value = [];
+  // background work after an add: list refresh and poster lookup (no TMDB key by default)
+  vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
+  vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -213,6 +218,38 @@ describe('Add', () => {
     click(byLabel('Добавить и смотреть на ТВ')[0]);
     await flush();
     expect(el.textContent).toContain('Как установить OMP на телевизор');
+  });
+});
+
+describe('Add: the new torrent and its poster', () => {
+  const M = 'magnet:?xt=urn:btih:' + HASH;
+  it('the added torrent is in the list at once, so its page opens', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH, title: '', stat: 1 } as any);
+    mount(M);
+    click(byText('Добавить'));
+    await flush();
+    expect(torrents.value.map((t) => t.hash)).toEqual([HASH]);
+    expect(currentRoute.value).toEqual({ name: 'torrent', hash: HASH });
+  });
+
+  it('looks up a poster by the magnet name with the server TMDB key and stores it', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH, title: '', stat: 1 } as any);
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'k' });
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue({ hash: HASH, title: '', category: 'movie', stat: 1 } as any);
+    const setPoster = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
+    vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([{ hash: HASH, title: 'Dune', poster: 'https://imagetmdb.com/t/p/w300/d.jpg', stat: 1 }]);
+    const tmdb = vi.fn(async () => new Response(JSON.stringify({ results: [{ poster_path: '/d.jpg' }] })));
+    vi.stubGlobal('fetch', tmdb);
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+    mount(M + '&dn=Dune+(2021)+1080p');
+    click(byText('Добавить'));
+    await flush();
+    await flush();
+    expect(String((tmdb.mock.calls[0] as unknown[])[0])).toContain('query=Dune');
+    expect(setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: HASH }), 'https://imagetmdb.com/t/p/w300/d.jpg');
+    expect(torrents.value[0].poster).toBe('https://imagetmdb.com/t/p/w300/d.jpg');
   });
 });
 

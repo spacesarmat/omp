@@ -1,6 +1,6 @@
 import { TV_NO_OMP, tvState } from '../src/tv/tvClient';
 import { settings, updateSettings } from '../../src/store/settings';
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
@@ -155,13 +155,43 @@ describe('Library', () => {
       let release!: (v: Torrent[]) => void;
       listSpy.mockReturnValue(new Promise<Torrent[]>((r) => (release = r)));
       touch('touchstart', 100);
-      const mv = touch('touchmove', 220);
+      const mv = touch('touchmove', 260);
       expect(mv.defaultPrevented).toBe(true);
-      touch('touchend', 220);
+      touch('touchend', 260);
       expect(listSpy).toHaveBeenCalledTimes(1);
       expect(el.querySelector('.m-ptr')!.textContent).toContain('Обновляю…');
       release(T);
       await flush();
+      expect(el.querySelector('.m-ptr')).toBeNull();
+    });
+
+    it('the list follows the finger and the icon arms past the threshold', async () => {
+      // jsdom has requestAnimationFrame but never paints, so frames are driven by a timer here
+      vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => setTimeout(() => f(0), 0));
+      vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+      onTestFinished(() => {
+        vi.unstubAllGlobals();
+      });
+      mount();
+      await flush();
+      touch('touchstart', 100);
+      touch('touchmove', 140);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 40));
+      });
+      const root = el.querySelector('.m-library') as HTMLElement;
+      expect(root.style.transform).toBe('translateY(20px)');
+      expect(el.querySelector('.m-ptr')).not.toBeNull();
+      expect(el.querySelector('.m-ptr.armed')).toBeNull();
+      touch('touchmove', 260);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 40));
+      });
+      expect(el.querySelector('.m-ptr.armed')).not.toBeNull();
+      touch('touchcancel', 260);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 40));
+      });
       expect(el.querySelector('.m-ptr')).toBeNull();
     });
 
@@ -189,7 +219,7 @@ describe('Library', () => {
       act(() => tab('История').click());
       listSpy.mockClear();
       touch('touchstart', 100);
-      touch('touchend', 220);
+      touch('touchend', 260);
       expect(listSpy).toHaveBeenCalledTimes(1);
       await flush();
     });

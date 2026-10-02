@@ -156,7 +156,10 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
 
 export function Torrent({ hash }: { hash: string }) {
   const c = client.value;
-  const t = torrents.value.find((x) => x.hash === hash);
+  const listed = torrents.value.find((x) => x.hash === hash);
+  // a torrent just added may not be in the list yet: ask the server for it
+  const [fetched, setFetched] = useState<TorrentT | null | undefined>(undefined);
+  const t = listed || fetched || undefined;
   const [loaded, setLoaded] = useState<TorrentT | null>(null);
   const [sheet, setSheet] = useState<TorrentFile | null>(null);
   const [status, setStatus] = useState('');
@@ -183,13 +186,26 @@ export function Torrent({ hash }: { hash: string }) {
     if (c) void refreshViewed(c);
   }, [c]);
 
+  useEffect(() => {
+    if (!c || listed) return;
+    let alive = true;
+    setFetched(undefined);
+    c.get(hash).then(
+      (r) => alive && setFetched(r && r.hash ? r : null),
+      () => alive && setFetched(null),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [c, hash, !!listed]);
+
   if (!c || !t) {
     return (
       <div class="m-screen m-torrent" data-route="torrent">
         <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
           <Icon d={BACK} size={20} />
         </button>
-        <p class="m-muted m-note">Раздача не найдена</p>
+        <p class="m-muted m-note">{c && fetched === undefined ? 'Загружаю…' : 'Раздача не найдена'}</p>
       </div>
     );
   }

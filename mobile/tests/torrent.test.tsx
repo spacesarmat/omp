@@ -332,6 +332,26 @@ describe('Torrent', () => {
   });
 });
 
+describe('Torrent not in the list yet', () => {
+  it('asks the server and shows it', async () => {
+    torrents.value = [];
+    const get = vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(tor);
+    mount();
+    expect(el.textContent).toContain('Загружаю…');
+    await flush();
+    expect(get).toHaveBeenCalledWith('abc');
+    expect(el.querySelector('.m-thead-title')!.textContent).toBe('Starbound Frontier');
+  });
+
+  it('says not found only when the server has no such torrent', async () => {
+    torrents.value = [];
+    vi.spyOn(TorrServerClient.prototype, 'get').mockRejectedValue(new Error('404'));
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Раздача не найдена');
+  });
+});
+
 describe('TV launch flow', () => {
   const open1 = async () => {
     mount();
