@@ -314,9 +314,9 @@ export function Remote() {
               e.preventDefault();
               sent.current = '';
               if (field.current) field.current.value = '';
-              act.sendEnter().catch(fail);
+              queue.current = queue.current.then(() => act.sendEnter()).catch(fail);
             } else if (e.key === 'Backspace' && !sent.current) {
-              act.deleteText(1).catch(fail);
+              queue.current = queue.current.then(() => act.deleteText(1)).catch(fail);
             }
           }}
         />

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
+import { LaunchError } from '../ui/LaunchError';
 import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { actions, openRemoteSoon, watchOnTvParams } from '../watch';
@@ -206,7 +207,7 @@ export function Add({ link }: { link?: string }) {
         ))}
       </div>
       {searching && <div class="m-muted">Ищу…</div>}
-      {searchError && <div class="m-error">{searchError}</div>}
+      {searchError && <LaunchError message={searchError} />}
       {results && !searching && results.length === 0 && <div class="m-muted">Ничего не найдено</div>}
       <div class="m-results">
         {(results || []).map((r) => (

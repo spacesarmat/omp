@@ -334,6 +334,8 @@ button, .m-btn {
 .m-add-row .m-btn { flex-shrink: 0; }
 .m-add-title { margin: 4px 0 0; font-size: 16px; }
 .m-chips { display: flex; gap: 8px; }
+.m-lib-head .m-sort { height: 36px; padding: 0 12px; margin-left: auto; }
+.m-lib-head .m-sort + .m-icon-btn { margin-left: 0; }
 .m-chip {
   height: 44px;
   padding: 0 16px;

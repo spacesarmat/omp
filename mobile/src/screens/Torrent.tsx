@@ -3,6 +3,7 @@ import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { qualityBadge, posterStyle } from '../ui/Poster';
 import { showToast } from '../ui/toast';
+import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { actions, filesOf, openRemoteSoon, streamUrlFor, watchOnTvParams } from '../watch';
@@ -78,7 +79,7 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
     setBusy(true);
     setStatus(null);
     try {
-      await actions.launchOnTv(watchOnTvParams(c.baseUrl, torrent.hash, file.id, resumePosition(torrent.hash, file.id)));
+      await actions.launchOnTv(watchOnTvParams(c.baseUrl, torrent.hash, file.id));
       if (!alive.v) return;
       setStatus({ kind: 'ok', text: 'Запустил на ' + tv.name + ' — пульт уже открыт' });
       // stays busy until the jump to the remote has happened
@@ -150,9 +151,10 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
           </span>
         </button>
       )}
-      {status && (
-        <div class={status.kind === 'ok' ? 'm-status-ok' : 'm-status-err'} role="status">
-          {status.kind === 'ok' && <Icon d={CHECK} size={18} />}
+      {status && status.kind === 'error' && <LaunchError message={status.text} class="m-status-err" />}
+      {status && status.kind === 'ok' && (
+        <div class="m-status-ok" role="status">
+          <Icon d={CHECK} size={18} />
           {status.text}
         </div>
       )}
@@ -306,7 +308,7 @@ export function Torrent({ hash }: { hash: string }) {
           <Icon d={PHONE} size={18} />
           Смотреть на телефоне
         </button>
-        {status && <div class="m-error">{status}</div>}
+        {status && <LaunchError message={status} />}
         {files.length > 0 && <div class="m-section">{hasEpisodes ? 'Серии' : 'Файлы'}</div>}
         <div class="m-list m-eps">
           {files.map((f, i) => {

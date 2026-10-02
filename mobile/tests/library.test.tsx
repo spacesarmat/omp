@@ -1,3 +1,5 @@
+import { TV_NO_OMP } from '../src/tv/tvClient';
+import { settings, updateSettings } from '../../src/store/settings';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -181,5 +183,38 @@ describe('Library', () => {
     expect(launch).toHaveBeenCalledTimes(1);
     release();
     await flush();
+  });
+
+  it('history play with no OMP on the TV offers the install guide', async () => {
+    saveProgress('h1', 2, 100, 3000);
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    setWatchActions({ launchOnTv: vi.fn().mockRejectedValue(new Error(TV_NO_OMP)), remoteDelayMs: 0 });
+    mount();
+    await flush();
+    act(() => tab('История').click());
+    act(() => (el.querySelector('[aria-label="Продолжить на ТВ"]') as HTMLElement).click());
+    await flush();
+    expect(el.textContent).toContain('Как установить OMP на телевизор');
+  });
+
+  it('sort chip cycles and persists, hidden on history', async () => {
+    updateSettings({ librarySort: 'new' });
+    mount();
+    await flush();
+    const chip = () => el.querySelector('.m-sort') as HTMLElement;
+    const titles = () => Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent);
+    expect(chip().textContent).toBe('Новые');
+    expect(titles()[0]).toContain('Starbound');
+    act(() => chip().click());
+    expect(chip().textContent).toBe('По названию');
+    expect(settings.value.librarySort).toBe('title');
+    expect(titles()[0]).toBe('Neon Rivers');
+    act(() => chip().click());
+    expect(chip().textContent).toBe('По размеру');
+    expect(titles()[0]).toContain('Starbound');
+    expect(titles()[1]).toContain('Тихий');
+    act(() => tab('История').click());
+    expect(el.querySelector('.m-sort')).toBeNull();
+    updateSettings({ librarySort: 'new' });
   });
 });

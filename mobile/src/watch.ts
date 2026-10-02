@@ -1,7 +1,7 @@
 // «Watch» actions shared by the library and torrent screens: TV launch params, stream URLs,
 // and replaceable side effects (TV launch, external player, clipboard).
 import { Clipboard } from '@capacitor/clipboard';
-import { launchOnTv } from './tv/tvClient';
+import { launchOnTv, TV_NO_OMP } from './tv/tvClient';
 import { native } from './platform/native';
 import { currentRoute, navigate, type MRoute } from './nav';
 import { parseTorrentData, type TorrServerClient } from '../../src/api/torrserver';
@@ -75,4 +75,16 @@ export function openRemoteSoon(from: MRoute | MRoute['name'], onDone?: () => voi
     finish();
   }, actions.remoteDelayMs);
   return finish;
+}
+
+export const OMP_INSTALL_URL = 'https://github.com/spacesarmat/omp#readme';
+
+/** True when a TV launch failed because OMP is not installed on the TV. */
+export function isNoOmp(message: string): boolean {
+  return message === TV_NO_OMP;
+}
+
+/** Opens the TV install guide in the external browser. */
+export function openInstallGuide(): void {
+  window.open(OMP_INSTALL_URL, '_system');
 }

@@ -1,6 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { App as CapApp } from '@capacitor/app';
-import { currentRoute, goBack, switchTab, type MRoute } from './nav';
+import { currentRoute, goBack, switchTab, setPendingLink, type MRoute } from './nav';
+import { activeServer } from '../../src/store/servers';
 import { native } from './platform/native';
 import { NavBar, type Tab } from './ui/NavBar';
 import { Toast } from './ui/toast';
@@ -26,6 +27,16 @@ export function handleBack(): void {
   } catch {
     /* not running inside Capacitor */
   }
+}
+
+/** A shared magnet opens «Добавить»; with no server yet it waits for the connect. */
+function intakeMagnet(l: string): void {
+  if (activeServer.value) {
+    switchTab({ name: 'add', link: l });
+    return;
+  }
+  setPendingLink(l);
+  if (currentRoute.value.name !== 'connect') switchTab({ name: 'connect' });
 }
 
 export function App() {
@@ -55,10 +66,10 @@ export function App() {
       native
         .takePendingMagnet()
         .then((l) => {
-          if (l) switchTab({ name: 'add', link: l });
+          if (l) intakeMagnet(l);
         })
         .catch(() => {});
-      off = native.onMagnet((l) => switchTab({ name: 'add', link: l }));
+      off = native.onMagnet(intakeMagnet);
     } catch {
       /* native layer unavailable */
     }

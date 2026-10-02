@@ -30,3 +30,17 @@ export function resetTo(r: MRoute): void {
 export function switchTab(r: MRoute): void {
   resetTo(r);
 }
+
+// a magnet received before any server is connected: opened in «Добавить» after the connect
+let pendingLink: string | null = null;
+
+export function setPendingLink(l: string | null): void {
+  pendingLink = l;
+}
+
+/** Where to go after a successful connect: «Добавить» with the remembered magnet, else the library. */
+export function afterConnectRoute(): MRoute {
+  const l = pendingLink;
+  pendingLink = null;
+  return l ? { name: 'add', link: l } : { name: 'library' };
+}

@@ -184,6 +184,29 @@ describe('Remote with a TV', () => {
       expect(a.deleteText).not.toHaveBeenCalled();
       expect(a.typeText).toHaveBeenLastCalledWith('x');
     });
+
+    it('Enter and Backspace-on-empty wait for queued typing', async () => {
+      const order: string[] = [];
+      a.typeText.mockImplementation(async (t: string) => {
+        await new Promise((r) => setTimeout(r, 5));
+        order.push('type:' + t);
+      });
+      a.sendEnter.mockImplementation(async () => void order.push('enter'));
+      a.deleteText.mockImplementation(async (n: number) => void order.push('del:' + n));
+      const i = open();
+      act(() => {
+        i.value = 'a';
+        i.dispatchEvent(new InputEvent('input', { bubbles: true }));
+        i.value = 'ab';
+        i.dispatchEvent(new InputEvent('input', { bubbles: true }));
+        i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+      });
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 40));
+      });
+      expect(order).toEqual(['type:a', 'type:b', 'enter', 'del:1']);
+    });
   });
 
   it('power asks to confirm and then toasts', async () => {

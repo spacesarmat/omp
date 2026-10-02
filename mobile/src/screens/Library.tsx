@@ -3,13 +3,15 @@ import { Icon } from '../ui/Icon';
 import { Poster } from '../ui/Poster';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
+import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { actions, filesOf, openRemoteSoon, watchOnTvParams } from '../watch';
 import { client } from '../../../src/store/servers';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents } from '../../../src/store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed } from '../../../src/store/progress';
-import { filterTorrents, sortTorrents } from '../../../src/lib/librarySearch';
+import { settings, updateSettings } from '../../../src/store/settings';
+import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
 import { LIBRARY_TABS, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { formatBytes } from '../../../src/lib/format';
@@ -25,8 +27,10 @@ export function Library() {
   const query = libraryQuery.value;
   const searchOpen = librarySearchOpen.value;
   const list = torrents.value;
+  const sort = settings.value.librarySort;
   const [loaded, setLoaded] = useState(list.length > 0);
   const [error, setError] = useState('');
+  const [tvError, setTvError] = useState('');
   // launch guard: set while a launch is in flight and until the jump to the remote has happened
   const launching = useRef(false);
   const cancelJump = useRef<(() => void) | null>(null);
@@ -64,8 +68,8 @@ export function Library() {
   const shown = useMemo(() => {
     if (isHistory) return [];
     const inTab = list.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
-    return sortTorrents(filterTorrents(inTab, query), 'new');
-  }, [list, tab, query, isHistory]);
+    return sortTorrents(filterTorrents(inTab, query), sort);
+  }, [list, tab, query, isHistory, sort]);
   const history = isHistory
     ? (() => {
         const all = continueWatching(list, 40);
@@ -92,6 +96,7 @@ export function Library() {
     }
     if (launching.current) return;
     launching.current = true;
+    setTvError('');
     try {
       await actions.launchOnTv(watchOnTvParams(c.baseUrl, hash, fileIndex, time));
       showToast('Запустил на ' + tv.name + ' — пульт уже открыт');
@@ -100,7 +105,7 @@ export function Library() {
       });
     } catch (e) {
       launching.current = false;
-      showToast(errorMessage(e));
+      setTvError(errorMessage(e));
     }
   };
 
@@ -109,6 +114,16 @@ export function Library() {
       <div class="m-lib-head">
         <span class="m-brand-name m-lib-brand">OMP</span>
         <TvChip />
+        {!isHistory && (
+          <button
+            type="button"
+            class="m-chip m-sort"
+            aria-label={'Сортировка: ' + sortLabel(sort)}
+            onClick={() => updateSettings({ librarySort: nextSort(sort) })}
+          >
+            {sortLabel(sort)}
+          </button>
+        )}
         <button
           type="button"
           class="m-icon-btn"
@@ -143,6 +158,7 @@ export function Library() {
           </button>
         ))}
       </div>
+      {tvError && <LaunchError message={tvError} class="m-hint-warn" />}
       {error && <div class="m-hint-warn">{error} — показан сохранённый список</div>}
       {!loaded && !list.length && <p class="m-muted m-note">Загрузка…</p>}
       {empty && <p class="m-muted m-note m-empty">{empty}</p>}

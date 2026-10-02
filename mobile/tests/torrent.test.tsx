@@ -1,3 +1,4 @@
+import { TV_NO_OMP } from '../src/tv/tvClient';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -122,7 +123,7 @@ describe('Torrent', () => {
     click(el.querySelectorAll('.m-ep')[3]);
     click(el.querySelectorAll('.m-opt')[0]);
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500 });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4 });
     expect(el.querySelector('.m-status-ok')!.textContent).toContain('Запустил на LG OLED — пульт уже открыт');
     await act(async () => {
       await new Promise((r) => setTimeout(r, 5));
@@ -138,7 +139,7 @@ describe('Torrent', () => {
     click(el.querySelectorAll('.m-ep')[0]);
     click(el.querySelectorAll('.m-opt')[0]);
     await flush();
-    expect(el.querySelector('.m-status-err')!.textContent).toBe('На телевизоре нет OMP');
+    expect(el.querySelector('.m-status-err')!.textContent).toContain('На телевизоре нет OMP');
     expect(currentRoute.value.name).toBe('torrent');
   });
 
@@ -274,5 +275,31 @@ describe('Torrent', () => {
     done();
     await flush();
     expect(currentRoute.value.name).toBe('settings');
+  });
+
+  it('shows the install guide button when the TV has no OMP', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    launch.mockRejectedValueOnce(new Error(TV_NO_OMP));
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    mount();
+    await flush();
+    click(el.querySelectorAll('.m-ep')[3]);
+    click(el.querySelectorAll('.m-opt')[0]);
+    await flush();
+    const b = byText('Как установить OMP на телевизор')!;
+    expect(b).toBeTruthy();
+    click(b);
+    expect(open).toHaveBeenCalledWith('https://github.com/spacesarmat/omp#readme', '_system');
+    open.mockRestore();
+  });
+
+  it('main button error with no OMP offers the guide too', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    launch.mockRejectedValueOnce(new Error(TV_NO_OMP));
+    mount();
+    await flush();
+    click(el.querySelector('.m-btn-primary')!);
+    await flush();
+    expect(byText('Как установить OMP на телевизор')).toBeTruthy();
   });
 });

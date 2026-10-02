@@ -1,3 +1,4 @@
+import { TV_NO_OMP } from '../src/tv/tvClient';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -199,5 +200,18 @@ describe('Add', () => {
     await vi.advanceTimersByTimeAsync(2000);
     expect(currentRoute.value.name).toBe('add');
     vi.useRealTimers();
+  });
+
+  it('«Добавить и смотреть на ТВ» with no OMP offers the install guide', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    setWatchActions({ launchOnTv: vi.fn().mockRejectedValue(new Error(TV_NO_OMP)), remoteDelayMs: 0 });
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
+    vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('x');
+    await flush();
+    click(byLabel('Добавить и смотреть на ТВ')[0]);
+    await flush();
+    expect(el.textContent).toContain('Как установить OMP на телевизор');
   });
 });

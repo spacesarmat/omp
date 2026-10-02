@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
-import { resetTo } from '../nav';
+import { resetTo, afterConnectRoute } from '../nav';
 import { scanPairQr } from '../platform/qr';
 import { servers, addServer, setActiveServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
@@ -70,7 +70,7 @@ export function Connect() {
       await new TorrServerClient({ url, user: creds.user, password: creds.password }).echo();
       const s = addServer({ ...cfg, url });
       setActiveServer(s.id);
-      resetTo({ name: 'library' });
+      resetTo(afterConnectRoute());
       return true;
     } catch (e) {
       setError(errorMessage(e));
@@ -115,7 +115,7 @@ export function Connect() {
     try {
       await new TorrServerClient(s).echo();
       setActiveServer(s.id);
-      resetTo({ name: 'library' });
+      resetTo(afterConnectRoute());
     } catch (e) {
       setCardError({ id: s.id, text: errorMessage(e) });
     } finally {
