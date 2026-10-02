@@ -24,7 +24,7 @@ export function ConnectScreen() {
     servers.value.forEach((s) => {
       new TorrServerClient(s).echo().then(
         (v) => setStatus((p) => ({ ...p, [s.id]: 'онлайн · ' + v })),
-        (e) => setStatus((p) => ({ ...p, [s.id]: '⚠ ' + errorMessage(e) })),
+        (e) => setStatus((p) => ({ ...p, [s.id]: 'недоступен: ' + errorMessage(e) })),
       );
     });
   }, []);
