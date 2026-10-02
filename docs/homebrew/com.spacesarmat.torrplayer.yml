@@ -6,12 +6,11 @@ pool: main
 description: |
   # OMP — Open Movie Player
 
-  A remote-friendly media player for LG webOS that streams from **your own
+  A remote-friendly media player for LG webOS that plays media from **your own
   [TorrServer](https://github.com/YouROK/TorrServer)** instance on the local network.
-  OMP does not include any trackers, catalogs or content sources — it only plays
-  what you have already added to your server.
-
-  ![Library](https://raw.githubusercontent.com/spacesarmat/omp/main/docs/screenshots/library-large.png)
+  OMP does not bundle any content, catalogs or tracker lists: it shows and plays what is
+  on your server. The optional search on the «Add» screen only queries the search
+  providers that you have configured on your own TorrServer.
 
   ## Features
   - Connect to TorrServer (auto-discovery on the LAN, saved servers with credentials)
@@ -19,6 +18,20 @@ description: |
   - Native `<video>` playback: audio/subtitle tracks, external subtitles, chapters, skip intro
   - M3U playlists and favorites
   - Update check with one-click install via Homebrew Channel on rooted TVs
+  - Launch parameters for integrations (`play`, `torrent`, `magnet`, `server`)
   - Russian UI; works on webOS 4.0+ (no root required)
 
-  Source code: https://github.com/spacesarmat/omp
+  Open source under GPL-3.0. Source code and changelog: https://github.com/spacesarmat/omp
+screenshots:
+  - url: https://raw.githubusercontent.com/spacesarmat/omp/main/docs/screenshots/library-large.png
+    caption: Library
+  - url: https://raw.githubusercontent.com/spacesarmat/omp/main/docs/screenshots/library-list.png
+    caption: List view
+  - url: https://raw.githubusercontent.com/spacesarmat/omp/main/docs/screenshots/history.png
+    caption: Continue watching
+  - url: https://raw.githubusercontent.com/spacesarmat/omp/main/docs/screenshots/search.png
+    caption: Search
+  - url: https://raw.githubusercontent.com/spacesarmat/omp/main/docs/screenshots/login.png
+    caption: Connect to TorrServer
+  - url: https://raw.githubusercontent.com/spacesarmat/omp/main/docs/screenshots/login-history.png
+    caption: Saved servers
