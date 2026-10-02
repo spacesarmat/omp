@@ -1,6 +1,6 @@
 // Cross-platform runner for android/gradlew: node scripts/gradle.mjs assembleDebug
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -8,37 +8,72 @@ const win = process.platform === 'win32';
 const androidDir = join(process.cwd(), 'android');
 const env = { ...process.env };
 
+function parseMajor(out) {
+  const m = /version "(\d+)(?:\.(\d+))?/.exec(out);
+  if (!m) return 0;
+  return m[1] === '1' ? Number(m[2]) : Number(m[1]);
+}
+
 function javaMajor(home) {
   const exe = join(home, 'bin', win ? 'java.exe' : 'java');
   if (!existsSync(exe)) return 0;
   const r = spawnSync(exe, ['-version'], { encoding: 'utf8' });
-  const m = /version "(\d+)(?:\.(\d+))?/.exec((r.stderr || '') + (r.stdout || ''));
-  if (!m) return 0;
-  return m[1] === '1' ? Number(m[2]) : Number(m[1]);
+  return parseMajor((r.stderr || '') + (r.stdout || ''));
 }
 
-function currentJavaMajor() {
-  const r = spawnSync('java', ['-version'], { encoding: 'utf8', shell: win });
-  const m = /version "(\d+)(?:\.(\d+))?/.exec((r.stderr || '') + (r.stdout || ''));
-  if (!m) return 0;
-  return m[1] === '1' ? Number(m[2]) : Number(m[1]);
+// Gradle 8.14.x runs on Java 21..24 (25 is not supported); Capacitor 8 needs 21+
+const fits = (n) => n >= 21 && n <= 24;
+
+function globDirs(base, prefix) {
+  try {
+    return readdirSync(base)
+      .filter((n) => n.startsWith(prefix))
+      .map((n) => join(base, n));
+  } catch {
+    return [];
+  }
 }
 
-// Capacitor 8 / current AGP need Java 21+
-const ok = env.JAVA_HOME ? javaMajor(env.JAVA_HOME) >= 21 : currentJavaMajor() >= 21;
-if (!ok) {
-  const jbr = [
+function javaHomeFromPath() {
+  const r = spawnSync('java', ['-XshowSettings:properties', '-version'], { encoding: 'utf8', shell: win });
+  const m = /java\.home = (.+)/.exec((r.stderr || '') + (r.stdout || ''));
+  return m ? m[1].trim() : null;
+}
+
+function candidates() {
+  const list = [];
+  if (env.JAVA_HOME) list.push(env.JAVA_HOME);
+  const onPath = javaHomeFromPath();
+  if (onPath) list.push(onPath);
+  list.push(
     'C:/Program Files/Android/Android Studio/jbr',
     '/Applications/Android Studio.app/Contents/jbr/Contents/Home',
     '/opt/android-studio/jbr',
-  ].find((p) => existsSync(p));
-  if (jbr) {
-    env.JAVA_HOME = jbr;
-    console.log('[gradle] JAVA_HOME ->', jbr);
-  } else {
-    console.warn('[gradle] Java 21+ not found; set JAVA_HOME to a JDK 21 install');
+  );
+  for (const base of ['C:/Program Files/Eclipse Adoptium', 'C:/Program Files/Java', 'C:/Program Files/Microsoft']) {
+    list.push(...globDirs(base, 'jdk-21'));
+  }
+  return list;
+}
+
+let jdk = null;
+for (const c of candidates()) {
+  const n = javaMajor(c);
+  if (fits(n)) {
+    jdk = c;
+    break;
   }
 }
+if (!jdk) {
+  console.error(
+    'Нужна Java 21–24 (JDK 21 LTS). Установите Temurin 21: winget install EclipseAdoptium.Temurin.21.JDK\n' +
+      'Java 21-24 (JDK 21 LTS) is required; Gradle 8.14 cannot run on Java 25 or on 17 or older. ' +
+      'Install Temurin 21 and/or set JAVA_HOME.',
+  );
+  process.exit(1);
+}
+env.JAVA_HOME = jdk;
+console.log('[gradle] JAVA_HOME ->', jdk);
 
 if (!env.ANDROID_HOME && !env.ANDROID_SDK_ROOT) {
   const sdk = [
@@ -58,5 +93,6 @@ if (!args.length) {
   process.exit(2);
 }
 const wrapper = join(androidDir, win ? 'gradlew.bat' : 'gradlew');
-const r = spawnSync(wrapper, args, { cwd: androidDir, env, stdio: 'inherit', shell: win });
+const cmd = win ? `"${wrapper}"` : wrapper;
+const r = spawnSync(cmd, args, { cwd: androidDir, env, stdio: 'inherit', shell: win });
 process.exit(r.status ?? 1);
