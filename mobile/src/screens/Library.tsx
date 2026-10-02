@@ -117,22 +117,21 @@ export function Library() {
         {!isHistory && (
           <button
             type="button"
-            class="m-chip m-sort"
+            class="m-icon-btn m-sort"
             aria-label={'Сортировка: ' + sortLabel(sort)}
             onClick={() => updateSettings({ librarySort: nextSort(sort) })}
           >
-            {sortLabel(sort)}
+            <Icon d={ICONS.sort} size={20} />
           </button>
         )}
         {!isHistory && (
           <button
             type="button"
-            class="m-chip m-view"
+            class="m-icon-btn m-view"
             aria-label={'Вид: ' + viewLabel(view)}
             onClick={() => updateSettings({ libraryView: nextView(view) })}
           >
-            <Icon d={ICONS['view-' + view as keyof typeof ICONS]} size={16} />
-            <span>{viewLabel(view)}</span>
+            <Icon d={ICONS['view-' + view as keyof typeof ICONS]} size={20} />
           </button>
         )}
         <button

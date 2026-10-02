@@ -224,14 +224,14 @@ describe('Library', () => {
     await flush();
     const chip = () => el.querySelector('.m-sort') as HTMLElement;
     const titles = () => Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent);
-    expect(chip().textContent).toBe('Новые');
+    expect(chip().getAttribute('aria-label')).toBe('Сортировка: Новые');
     expect(titles()[0]).toContain('Starbound');
     act(() => chip().click());
-    expect(chip().textContent).toBe('По названию');
+    expect(chip().getAttribute('aria-label')).toBe('Сортировка: По названию');
     expect(settings.value.librarySort).toBe('title');
     expect(titles()[0]).toBe('Neon Rivers');
     act(() => chip().click());
-    expect(chip().textContent).toBe('По размеру');
+    expect(chip().getAttribute('aria-label')).toBe('Сортировка: По размеру');
     expect(titles()[0]).toContain('Starbound');
     expect(titles()[1]).toContain('Тихий');
     act(() => tab('История').click());

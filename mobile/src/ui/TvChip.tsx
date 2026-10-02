@@ -8,7 +8,7 @@ export function TvChip() {
   return (
     <button type="button" class={'m-tvchip' + (tv ? ' on' : '')} onClick={() => navigate({ name: 'tv' })}>
       <Icon d="M3 5h18v11H3zM8 20h8" size={16} />
-      {tv ? tv.name : 'Подключить ТВ'}
+      <span>{tv ? tv.name : 'Подключить ТВ'}</span>
     </button>
   );
 }
