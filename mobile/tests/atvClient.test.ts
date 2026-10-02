@@ -29,6 +29,8 @@ import {
   ATV_BACKGROUND,
   PAIR_BAD_CODE,
   PAIR_EXPIRED,
+  ATV_REJECTED,
+  ATV_ERROR,
   type TvTransport,
 } from '../src/tv/tvClient';
 import { tvs, activeTv, saveTv, reloadTvs, type SavedTv } from '../src/tv/tvStore';
@@ -208,6 +210,35 @@ describe('Android TV transport', () => {
     expect(tvError.value).toBe(TV_FORGOT);
   });
 
+  it('a forgetful TV drops the saved token (the next tap asks for a code)', async () => {
+    saveTv(ATV);
+    info.paired = false;
+    await expect(connectTv(activeTv.value!)).rejects.toThrow(TV_FORGOT);
+    expect(tvs.value[0].token).toBeUndefined();
+    expect(tvs.value[0].kind).toBe('atv');
+  });
+
+  it('a 401 on a command drops the saved token', async () => {
+    saveTv(ATV);
+    await connectTv(ATV);
+    route = (c) => (c.method === 'POST' ? { status: 401, body: '{"error":"unauthorized"}' } : null);
+    await expect(pressButton('UP')).rejects.toThrow(TV_FORGOT);
+    expect(activeTv.value?.token).toBeUndefined();
+  });
+
+  it('server error codes are shown in Russian', async () => {
+    saveTv(ATV);
+    await connectTv(ATV);
+    route = (c) => (c.method === 'POST' ? { status: 400, body: '{"error":"bad_request"}' } : null);
+    await expect(pressButton('UP')).rejects.toThrow(ATV_REJECTED);
+    expect(ATV_REJECTED).toBe('Телевизор отклонил запрос');
+    route = (c) => (c.method === 'POST' ? { status: 500, body: '{"error":"internal"}' } : null);
+    const e = await pressButton('UP').catch((x: Error) => x);
+    expect((e as Error).message).toBe(ATV_ERROR);
+    expect(ATV_ERROR).toBe('Телевизор ответил ошибкой');
+    expect((e as Error).message).not.toMatch(/internal|500|bad_request|400/);
+  });
+
   it('foreground app and OMP version come from /omp/info', async () => {
     saveTv(ATV);
     expect(await foregroundAppId()).toBe('com.spacesarmat.torrplayer');
@@ -283,6 +314,29 @@ describe('pairing with an Android TV', () => {
   it('an unreachable TV is «Телевизор не отвечает»', async () => {
     route = () => Promise.reject(new TypeError('x'));
     await expect(pairAtv(FOUND, '1111')).rejects.toThrow(TV_NO_ANSWER);
+  });
+
+  it('other pairing answers are Russian, never a raw code', async () => {
+    route = (c) => (c.url === BASE + '/omp/pair' ? { status: 415, body: '{"error":"unsupported_media_type"}' } : null);
+    await expect(pairAtv(FOUND, '1111')).rejects.toThrow(/^Телевизор отклонил запрос$/);
+    route = (c) => (c.url === BASE + '/omp/pair' ? { status: 500, body: '{"error":"internal"}' } : null);
+    await expect(pairAtv(FOUND, '1111')).rejects.toThrow(/^Телевизор ответил ошибкой$/);
+    route = (c) => (c.url === BASE + '/omp/pair' ? { body: '{"token":"short"}' } : null);
+    await expect(pairAtv(FOUND, '1111')).rejects.toThrow(/^Телевизор ответил ошибкой$/);
+    expect(tvs.value).toEqual([]);
+  });
+
+  it('a failed connect after pairing keeps the TV and reports the error in tvState', async () => {
+    route = (c) => {
+      if (c.url === BASE + '/omp/pair') return { body: JSON.stringify({ token: TOKEN }) };
+      if (c.url === BASE + '/omp/info') return Promise.reject(new TypeError('x'));
+      return null;
+    };
+    await pairAtv(FOUND, '0482');
+    expect(tvs.value[0]).toMatchObject({ ip: '192.168.1.40', kind: 'atv', token: TOKEN });
+    expect(activeTv.value?.ip).toBe('192.168.1.40');
+    expect(tvState.value).toBe('error');
+    expect(tvError.value).toBe(TV_NO_ANSWER);
   });
 
   it('re-pairing a forgotten TV uses the new token', async () => {

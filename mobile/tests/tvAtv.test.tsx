@@ -3,7 +3,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { mockFetch } from '../../tests/helpers/fetchMock';
 import { Tv, setTvDiscoverer, setAtvDiscoverer } from '../src/screens/Tv';
-import { setTransport, disconnectTv, tvState, type TvTransport } from '../src/tv/tvClient';
+import { setTransport, disconnectTv, connectTv, tvState, type TvTransport } from '../src/tv/tvClient';
 import { tvs, saveTv, reloadTvs, activeTv } from '../src/tv/tvStore';
 import { resetTo, navigate } from '../src/nav';
 import { native } from '../src/platform/native';
@@ -192,6 +192,31 @@ describe('Tv screen with Android TV', () => {
     expect(dialog()).toBeNull();
     expect(calls.filter((c) => c.url === BASE + '/omp/info')).toHaveLength(1);
     expect(card(el, 'Гостиная').textContent).toContain('Подключён');
+  });
+
+  it('a TV found forgetful elsewhere (remote, warm-up) asks for a code on the first tap', async () => {
+    saveTv({ ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095 });
+    paired = false;
+    await connectTv(activeTv.value!).catch(() => {});
+    const el = mount();
+    await flush();
+    const before = calls.length;
+    await act(async () => (card(el, 'Гостиная').querySelector('.m-tv-main') as HTMLButtonElement).click());
+    expect(dialog()?.textContent).toContain('Гостиная · Android TV');
+    expect(calls.length).toBe(before);
+  });
+
+  it('a paired TV that then fails to connect closes the sheet and shows the error in its row', async () => {
+    const el = mount();
+    await flush();
+    await act(async () => (card(el, 'Гостиная').querySelector('.m-tv-main') as HTMLButtonElement).click());
+    paired = false;
+    type(cells()[0], '0482');
+    await act(async () => button(dialog()!, 'Подключить').click());
+    await flush();
+    expect(dialog()).toBeNull();
+    expect(tvs.value.find((t) => t.ip === '192.168.1.40')).toMatchObject({ kind: 'atv' });
+    expect(card(el, 'Гостиная').querySelector('.m-error')?.textContent).toBe('Телевизор забыл этот телефон — подключитесь заново кодом');
   });
 
   it('a TV that forgot the phone shows the error, the next tap asks for a code', async () => {

@@ -121,6 +121,19 @@ export function saveTv(tv: SavedTv): void {
   persist();
 }
 
+/** Android TV: drops a token the TV no longer accepts (only while it is still `token`), so the next tap asks for a code. */
+export function clearTvToken(ip: string, token?: string): void {
+  const cur = tvs.value.find((t) => t.ip === ip);
+  if (!cur || !cur.token || (token !== undefined && cur.token !== token)) return;
+  tvs.value = tvs.value.map((t) => {
+    if (t.ip !== ip) return t;
+    const next = { ...t };
+    delete next.token;
+    return next;
+  });
+  persist();
+}
+
 /** Gives a saved TV a user name (trimmed, max 40); blank restores the discovered one. */
 export function renameTv(ip: string, name: string): void {
   const cur = tvs.value.find((t) => t.ip === ip);

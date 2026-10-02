@@ -2,7 +2,7 @@
 // Android TV with OMP (`kind: 'atv'`): HTTP to its control server (`/omp/*`, bearer token from code pairing).
 import { signal, effect } from '@preact/signals';
 import { native, type OmpNativeApi, type FoundOmpTv } from '../platform/native';
-import { activeTv, saveTv, setActiveTv, normalizeMac, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
+import { activeTv, saveTv, setActiveTv, clearTvToken, normalizeMac, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
 import { showToast } from '../ui/toast';
 import {
   registerMessage,
@@ -31,6 +31,10 @@ export const TV_FORGOT = 'Телевизор забыл этот телефон 
 export const ATV_BACKGROUND = 'Откройте OMP на телевизоре — Android не даёт вывести его на экран из фона';
 export const ATV_UNSUPPORTED = 'Недоступно на Android TV';
 export const PAIR_BAD_CODE = 'Неверный код';
+/** OMP control server answered 4xx (bad request, unknown route, unsupported body…). */
+export const ATV_REJECTED = 'Телевизор отклонил запрос';
+/** Any other unexpected answer of the OMP control server. */
+export const ATV_ERROR = 'Телевизор ответил ошибкой';
 export const PAIR_EXPIRED = 'Код устарел — нажмите «Новый код» на телевизоре';
 
 const REQUEST_TIMEOUT = 8000;
@@ -673,6 +677,8 @@ function endAtv(): void {
 
 function atvFail(s: AtvSession, message: string): void {
   if (atv !== s) return;
+  // the token is dead: the next tap on the TV asks for a code right away
+  if (message === TV_FORGOT) clearTvToken(s.tv.ip, s.tv.token);
   endAtv();
   tvState.value = 'error';
   // While a warm-up retries, its failures stay silent until it gives up.
@@ -683,6 +689,11 @@ function atvFail(s: AtvSession, message: string): void {
 interface AtvAnswer {
   status: number;
   data: any;
+}
+
+/** Russian text for an unexpected status of the control server (never a raw code like «bad_request» or «400»). */
+export function atvErrorText(status: number): string {
+  return status >= 400 && status < 500 ? ATV_REJECTED : ATV_ERROR;
 }
 
 /** One request to the control server; a network failure or 5 s of silence -> TV_NO_ANSWER. */
@@ -795,7 +806,7 @@ async function atvPost(path: string, body: object): Promise<any> {
     throw new Error(TV_FORGOT);
   }
   if (r.status < 200 || r.status >= 300) {
-    throw new Error('Телевизор ответил ошибкой: ' + (typeof r.data?.error === 'string' ? r.data.error : r.status));
+    throw new Error(atvErrorText(r.status));
   }
   return r.data;
 }
@@ -840,7 +851,10 @@ export async function attachOnTv(report: string): Promise<void> {
   await atvPost('/omp/attach', { report });
 }
 
-/** Pairs with an Android TV by the code on its screen, saves it with the token, makes it active and connects. */
+/**
+ * Pairs with an Android TV by the code on its screen, saves it with the token, makes it active and connects.
+ * Rejects only when pairing fails; a failed connect after it shows in tvState / tvError (the TV is saved).
+ */
 export async function pairAtv(found: FoundOmpTv, code: string): Promise<void> {
   const tv: SavedTv = { ip: found.ip, name: found.name, kind: 'atv', ctlPort: found.port || ATV_PORT };
   const phone = await native.phoneName().catch(() => 'Телефон');
@@ -848,10 +862,10 @@ export async function pairAtv(found: FoundOmpTv, code: string): Promise<void> {
   if (r.status === 403) throw new Error(r.data?.error === 'expired' ? PAIR_EXPIRED : PAIR_BAD_CODE);
   const token = r.data?.token;
   if (r.status !== 200 || typeof token !== 'string' || !TOKEN.test(token)) {
-    throw new Error('Телевизор ответил ошибкой: ' + r.status);
+    throw new Error(r.status === 200 ? ATV_ERROR : atvErrorText(r.status));
   }
   cancelWarmUp();
   saveTv({ ...tv, token });
   setActiveTv(tv.ip);
-  await connectTv(activeTv.value || { ...tv, token });
+  await connectTv(activeTv.value || { ...tv, token }).catch(noop);
 }

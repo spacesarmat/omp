@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs, renameTv, normalizeMac } from '../src/tv/tvStore';
+import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs, renameTv, normalizeMac, clearTvToken } from '../src/tv/tvStore';
 
 beforeEach(() => {
   localStorage.clear();
@@ -39,6 +39,20 @@ describe('tvStore', () => {
     expect(tvs.value).toEqual([{ ip: '192.168.1.5', name: 'LG OLED', defaultName: 'LG OLED', clientKey: 'K' }]);
     saveTv({ ip: '192.168.1.5', name: 'LG OLED', clientKey: 'K2' });
     expect(tvs.value[0].clientKey).toBe('K2');
+  });
+
+  it('clears a dead Android TV token, but not a newer one', () => {
+    const A = 'a'.repeat(32);
+    const B = 'b'.repeat(32);
+    saveTv({ ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: A, ctlPort: 8095 });
+    clearTvToken('192.168.1.40', B);
+    expect(tvs.value[0].token).toBe(A);
+    clearTvToken('192.168.1.40', A);
+    expect(tvs.value[0]).toEqual({ ip: '192.168.1.40', name: 'Гостиная', defaultName: 'Гостиная', kind: 'atv', ctlPort: 8095 });
+    reloadTvs();
+    expect(tvs.value[0].token).toBeUndefined();
+    saveTv({ ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: B });
+    expect(tvs.value[0].token).toBe(B);
   });
 
   it('selects the active TV', () => {
