@@ -17,6 +17,7 @@ const a = {
   deleteText: vi.fn(),
   sendEnter: vi.fn(),
   turnOffTv: vi.fn(),
+  pressAtvKey: vi.fn(),
   wakeOnLan: vi.fn(),
   warmUp: vi.fn(),
   confirm: vi.fn(),
@@ -352,5 +353,73 @@ describe('Remote with a TV', () => {
     await flush();
     expect(lbl('Пауза')).toBeTruthy();
     expect(toast.value).toBe('нет связи');
+  });
+});
+
+describe('Remote for Android TV', () => {
+  beforeEach(() => saveTv({ ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: '0123456789abcdef0123456789abcdef' }));
+  afterEach(() => {
+    tvState.value = 'idle';
+  });
+
+  it('shows the name, «Android TV · подключён» and the note; no power, touchpad, channels', () => {
+    mount();
+    act(() => {
+      tvState.value = 'connected';
+    });
+    expect(el.querySelector('.m-remote-title')!.textContent).toBe('Гостиная');
+    expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · подключён');
+    expect(el.querySelector('.m-remote-note')!.textContent).toBe(
+      'Пульт управляет OMP на телевизоре. Включение ТВ и другие приложения — пультом от телевизора.',
+    );
+    expect(el.querySelector('.m-power')).toBeNull();
+    expect(el.textContent).not.toContain('Тачпад');
+    expect(lbl('След. серия')).toBeNull();
+    expect(lbl('Пред. серия')).toBeNull();
+    expect(lbl('Домой')).toBeNull();
+    expect(a.warmUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the connection state for Android TV', () => {
+    mount();
+    act(() => {
+      tvState.value = 'error';
+    });
+    expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · нет связи');
+  });
+
+  it('d-pad, OK, Назад, Каталог, Сейчас играет and volume', () => {
+    mount();
+    click(lbl('Вверх'));
+    click(lbl('Влево'));
+    click(text('OK'));
+    click(text('Назад'));
+    expect(a.pressButton.mock.calls).toEqual([['UP'], ['LEFT'], ['ENTER'], ['BACK']]);
+    click(text('Каталог'));
+    click(text('Сейчас играет'));
+    expect(a.pressAtvKey.mock.calls).toEqual([['CATALOG'], ['NOWPLAYING']]);
+    click(lbl('Громче'));
+    click(lbl('Тише'));
+    expect(a.volume.mock.calls).toEqual([['up'], ['down']]);
+  });
+
+  it('keyboard types on the TV', async () => {
+    mount();
+    click(lbl('Клавиатура'));
+    const i = el.querySelector('input[aria-label="Ввод на телевизоре"]') as HTMLInputElement;
+    act(() => {
+      i.value = 'Дюна';
+      i.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    });
+    await flush();
+    expect(a.typeText).toHaveBeenCalledWith('Дюна');
+  });
+
+  it('a failed key shows a toast', async () => {
+    a.pressAtvKey.mockRejectedValue(new Error('Телевизор не отвечает'));
+    mount();
+    click(text('Каталог'));
+    await flush();
+    expect(toast.value).toBe('Телевизор не отвечает');
   });
 });

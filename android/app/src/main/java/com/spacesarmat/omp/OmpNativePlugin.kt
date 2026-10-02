@@ -28,7 +28,7 @@ import org.json.JSONException
 import org.json.JSONObject
 
 /**
- * Transport for the phone client: SSDP, TV WebSockets, external player, APK update, magnet intake,
+ * Transport for the phone client: SSDP and NSD discovery, TV WebSockets, external player, APK update, magnet intake,
  * local player server (TV state in, commands out), embedded TorrServer ([TorrServerService]).
  * The SSAP protocol itself (register, requests, pairing) lives in TypeScript.
  *
@@ -115,6 +115,39 @@ class OmpNativePlugin : Plugin() {
                 once.reject("Не удалось выполнить поиск телевизоров. Проверьте Wi-Fi")
             }
         }
+    }
+
+    /** NSD search for OMP on Android TV: { tvs: [{ ip, port, name, version }] }. */
+    @PluginMethod
+    fun discoverOmpTvs(call: PluginCall) {
+        val once = Once(call)
+        val timeout = (call.getInt("timeoutMs") ?: 3000).coerceIn(500, 15000).toLong()
+        io.execute {
+            try {
+                val arr = JSArray()
+                for (t in OmpDiscovery.discover(context, timeout)) {
+                    arr.put(
+                        JSObject().put("ip", t.ip).put("port", t.port).put("name", t.name).put("version", t.version),
+                    )
+                }
+                once.resolve(JSObject().put("tvs", arr))
+            } catch (e: Exception) {
+                once.reject("Не удалось выполнить поиск телевизоров. Проверьте Wi-Fi")
+            }
+        }
+    }
+
+    /** Phone model for the TV's list of paired phones, e.g. «Google Pixel 7». */
+    @PluginMethod
+    fun phoneName(call: PluginCall) {
+        val maker = Build.MANUFACTURER.orEmpty().trim()
+        val model = Build.MODEL.orEmpty().trim()
+        val name = when {
+            model.isEmpty() -> maker
+            maker.isEmpty() || model.startsWith(maker, ignoreCase = true) -> model
+            else -> maker.replaceFirstChar { it.uppercase() } + " " + model
+        }
+        call.resolve(JSObject().put("name", name))
     }
 
     // ---- main TV socket ----

@@ -1,7 +1,8 @@
 // Phone side of the player link: the TV posts its state to the phone's local server, the phone queues commands.
 import { signal, computed, effect, untracked, type Signal, type ReadonlySignal } from '@preact/signals';
 import { native } from '../platform/native';
-import { sessionIp, tvState, foregroundAppId, launchOnTv } from './tvClient';
+import { sessionIp, tvState, foregroundAppId, launchOnTv, attachOnTv, tvKind } from './tvClient';
+import type { TvKind } from './tvStore';
 import { sanitizeMessage, STALE_MS, GONE_MS, type PlayerState, type Cmd } from '../../../src/phone/protocol';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -11,6 +12,10 @@ export interface PlayerLinkDeps {
   now: () => number;
   foregroundAppId: () => Promise<string | null>;
   launchOnTv: (params: object) => Promise<void>;
+  /** Android TV: start reporting without navigating (`POST /omp/attach`). */
+  attachOnTv: (report: string) => Promise<void>;
+  /** Kind of the TV in use. */
+  tvKind: () => TvKind;
   /** Reactive (read inside an effect): the IP of the current TV session. */
   tvIp: () => string | null;
   /** True when the TV connection is in the error state. */
@@ -22,6 +27,8 @@ const realDeps: PlayerLinkDeps = {
   now: () => Date.now(),
   foregroundAppId,
   launchOnTv,
+  attachOnTv,
+  tvKind,
   tvIp: () => sessionIp.value,
   tvFailed: () => tvState.value === 'error',
 };
@@ -232,7 +239,8 @@ async function attach(): Promise<void> {
     if ((await deps.foregroundAppId()) !== OMP_APP_ID) return;
     const url = await reportUrl();
     if (!url) return;
-    await deps.launchOnTv({ report: url });
+    if (deps.tvKind() === 'atv') await deps.attachOnTv(url);
+    else await deps.launchOnTv({ report: url });
   } catch {
     /* TV unreachable */
   }

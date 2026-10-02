@@ -1,4 +1,4 @@
-// Saved TVs (IP, name, pairing key) and the active one.
+// Saved TVs (IP, name, pairing key or token, kind) and the active one.
 import { signal, computed } from '@preact/signals';
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
 
@@ -12,6 +12,26 @@ export interface SavedTv {
   port?: 3000 | 3001;
   /** Wi-Fi/Ethernet MAC for Wake-on-LAN, lower-case colon form. */
   mac?: string;
+  /** Absent = LG webOS (SSAP); 'atv' = Android TV with OMP (HTTP control server). */
+  kind?: TvKind;
+  /** Android TV: bearer token from pairing (32 hex). */
+  token?: string;
+  /** Android TV: control server port (default 8095); `port` stays the SSAP one. */
+  ctlPort?: number;
+}
+
+export type TvKind = 'lg' | 'atv';
+
+/** Control server port of OMP on Android TV. */
+export const ATV_PORT = 8095;
+const TOKEN = /^[0-9a-f]{32}$/;
+
+export function isAtv(tv: SavedTv | null | undefined): boolean {
+  return !!tv && tv.kind === 'atv';
+}
+
+function validPort(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v > 0 && v < 65536;
 }
 
 const MAC = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/;
@@ -39,9 +59,15 @@ export function sanitizeTvs(v: unknown): SavedTv[] {
     if (out.some((o) => o.ip === t.ip)) continue;
     const tv: SavedTv = { ip: t.ip, name: t.name };
     if (typeof t.defaultName === 'string' && t.defaultName) tv.defaultName = t.defaultName;
-    if (typeof t.clientKey === 'string' && t.clientKey) tv.clientKey = t.clientKey;
-    if (t.port === 3000 || t.port === 3001) tv.port = t.port;
-    if (typeof t.mac === 'string' && MAC.test(t.mac)) tv.mac = t.mac;
+    if (t.kind === 'atv') {
+      tv.kind = 'atv';
+      if (typeof t.token === 'string' && TOKEN.test(t.token)) tv.token = t.token;
+      if (validPort(t.ctlPort)) tv.ctlPort = t.ctlPort;
+    } else {
+      if (typeof t.clientKey === 'string' && t.clientKey) tv.clientKey = t.clientKey;
+      if (t.port === 3000 || t.port === 3001) tv.port = t.port;
+      if (typeof t.mac === 'string' && MAC.test(t.mac)) tv.mac = t.mac;
+    }
     out.push(tv);
   }
   return out;
@@ -72,15 +98,24 @@ export function reloadTvs(): void {
 /** Adds or updates a TV by IP; a known key and a user-given name are kept. The first TV becomes active. */
 export function saveTv(tv: SavedTv): void {
   const existing = tvs.value.find((t) => t.ip === tv.ip);
-  const clientKey = tv.clientKey || existing?.clientKey;
   const renamed = !!existing && existing.defaultName !== undefined && existing.name !== existing.defaultName;
   const name = renamed ? existing!.name : tv.name;
   const next: SavedTv = { ip: tv.ip, name, defaultName: renamed ? existing!.defaultName : tv.name };
-  if (clientKey) next.clientKey = clientKey;
-  const port = tv.port ?? existing?.port;
-  if (port) next.port = port;
-  const mac = tv.mac ?? existing?.mac;
-  if (mac) next.mac = mac;
+  const kind = tv.kind ?? existing?.kind;
+  if (kind === 'atv') {
+    next.kind = 'atv';
+    const token = tv.token || existing?.token;
+    if (token) next.token = token;
+    const ctlPort = tv.ctlPort ?? existing?.ctlPort;
+    if (ctlPort) next.ctlPort = ctlPort;
+  } else {
+    const clientKey = tv.clientKey || existing?.clientKey;
+    if (clientKey) next.clientKey = clientKey;
+    const port = tv.port ?? existing?.port;
+    if (port) next.port = port;
+    const mac = tv.mac ?? existing?.mac;
+    if (mac) next.mac = mac;
+  }
   tvs.value = existing ? tvs.value.map((t) => (t.ip === tv.ip ? next : t)) : tvs.value.concat(next);
   if (!activeTv.value) activeTvIp.value = tv.ip;
   persist();
