@@ -4,7 +4,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
-import { setWatchActions } from '../src/watch';
+import { setWatchActions, NO_WIFI } from '../src/watch';
+import { localServer, setLocalServerDeps } from '../src/server/localServer';
 import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { toast } from '../src/ui/toast';
@@ -68,6 +69,8 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   setWatchActions(null);
+  setLocalServerDeps(null);
+  localServer.value = { supported: false, running: false };
 });
 
 describe('Library', () => {
@@ -216,6 +219,69 @@ describe('Library', () => {
     act(() => byText('Сначала')!.click());
     await flush();
     expect(el.textContent).toContain('Как установить OMP на телевизор');
+  });
+
+  it('without Wi-Fi a local server launch fails before the player-state server starts', async () => {
+    setActiveServer(addServer({ url: 'http://127.0.0.1:8090' }).id);
+    saveProgress('h1', 2, 100, 3000);
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    const report = vi.fn().mockResolvedValue('http://192.168.1.9:8123/p');
+    const launch = vi.fn().mockResolvedValue(undefined);
+    setWatchActions({ ompVersion: async () => null, reportUrl: report, localIpv4: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
+    mount();
+    await flush();
+    act(() => tab('История').click());
+    act(() => (el.querySelector('[aria-label="Продолжить на ТВ"]') as HTMLElement).click());
+    await flush();
+    act(() => byText('Сначала')!.click());
+    await flush();
+    expect(el.textContent).toContain(NO_WIFI);
+    expect(report).not.toHaveBeenCalled();
+    expect(launch).not.toHaveBeenCalled();
+  });
+
+  it('a stopped phone server can be started from the unavailable state', async () => {
+    setActiveServer(addServer({ url: 'http://127.0.0.1:8090' }).id);
+    let running = false;
+    const start = vi.fn(async () => {
+      running = true;
+      return { supported: true, running: true };
+    });
+    setLocalServerDeps({
+      native: { localServerInfo: async () => ({ supported: true, running }), startLocalServer: start } as any,
+    });
+    localServer.value = { supported: true, running: false };
+    listSpy.mockImplementation(async () => {
+      if (!running) throw new Error('Сервер недоступен');
+      return T;
+    });
+    mount();
+    await flush();
+    expect(el.textContent).toContain('показан сохранённый список');
+    const n = listSpy.mock.calls.length;
+    await act(async () => byText('Запустить сервер')!.click());
+    await flush();
+    await flush();
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(listSpy.mock.calls.length).toBeGreaterThan(n);
+    expect(el.textContent).not.toContain('показан сохранённый список');
+    expect(byText('Запустить сервер')).toBeUndefined();
+  });
+
+  it('offers no start for a remote server or a running local one', async () => {
+    listSpy.mockRejectedValue(new Error('Сервер недоступен'));
+    localServer.value = { supported: true, running: false };
+    mount();
+    await flush();
+    expect(el.textContent).toContain('показан сохранённый список');
+    expect(byText('Запустить сервер')).toBeUndefined();
+    act(() => render(null, el));
+    setActiveServer(addServer({ url: 'http://127.0.0.1:8090' }).id);
+    localServer.value = { supported: true, running: true };
+    mount();
+    await flush();
+    expect(el.textContent).toContain('показан сохранённый список');
+    expect(byText('Запустить сервер')).toBeUndefined();
   });
 
   it('sort chip cycles and persists, hidden on history', async () => {
