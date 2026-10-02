@@ -44,6 +44,12 @@ jobs:
             sha256:*) ;;
             *) echo "::warning::$LATEST has no TorrServer-android-arm64 asset with a sha256 digest, skipping"; exit 0 ;;
           esac
+          # a merged feature waits for its manual release: do not ship it under a TorrServer bump
+          OMP_VERSION=$(jq -r '.version' package.json)
+          if ! git rev-parse -q --verify "refs/tags/v$OMP_VERSION" > /dev/null; then
+            echo "OMP $OMP_VERSION is not released yet (no tag v$OMP_VERSION), skipping the TorrServer bump"
+            exit 0
+          fi
           VERSION=$(node scripts/torrserver-bump.mjs "$LATEST")
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
