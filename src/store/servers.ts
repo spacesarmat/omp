@@ -1,5 +1,5 @@
 import { signal, computed } from '@preact/signals';
-import { loadJson, saveJson } from './storage';
+import { loadJson, saveJson, isObject } from './storage';
 import { TorrServerClient, normalizeServerUrl } from '../api/torrserver';
 
 export interface SavedServer {
@@ -13,8 +13,18 @@ export interface SavedServer {
 const KEY = 'tsp.servers';
 const ACTIVE_KEY = 'tsp.activeServer';
 
-export const servers = signal<SavedServer[]>(loadJson<SavedServer[]>(KEY, []));
-export const activeServerId = signal<string | null>(loadJson<string | null>(ACTIVE_KEY, null));
+export function sanitizeServers(v: unknown): SavedServer[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter(
+    (s): s is SavedServer =>
+      isObject(s) && typeof s.id === 'string' && typeof s.name === 'string' && typeof s.url === 'string',
+  );
+}
+
+export const servers = signal<SavedServer[]>(sanitizeServers(loadJson<unknown>(KEY, [], Array.isArray)));
+export const activeServerId = signal<string | null>(
+  loadJson<string | null>(ACTIVE_KEY, null, (v) => v === null || typeof v === 'string'),
+);
 export const activeServer = computed(() => servers.value.find((s) => s.id === activeServerId.value) || null);
 export const client = computed(() => (activeServer.value ? new TorrServerClient(activeServer.value) : null));
 

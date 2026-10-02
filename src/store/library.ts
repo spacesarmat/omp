@@ -1,10 +1,15 @@
 import { signal } from '@preact/signals';
-import { loadJson, saveJson } from './storage';
+import { loadJson, saveJson, isObject } from './storage';
 import type { Torrent } from '../api/types';
 
 const KEY = 'tsp.torrents';
 
-export const torrents = signal<Torrent[]>(loadJson<Torrent[]>(KEY, []));
+export function sanitizeTorrents(v: unknown): Torrent[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((t): t is Torrent => isObject(t) && typeof t.hash === 'string');
+}
+
+export const torrents = signal<Torrent[]>(sanitizeTorrents(loadJson<unknown>(KEY, [], Array.isArray)));
 
 export function refreshTorrents(c: { list(): Promise<Torrent[]> }): Promise<Torrent[]> {
   return c.list().then((list) => {
