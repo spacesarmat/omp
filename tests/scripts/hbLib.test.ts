@@ -25,7 +25,7 @@ describe('hb-lib', () => {
     });
     expect(r.apps.packages).toHaveLength(1);
     expect(r.apps.packages[0]).toMatchObject({
-      id: APP_ID, title: 'OMP', pool: 'main', shortDescription: 'Open Movie Player',
+      id: APP_ID, title: 'OMP', pool: 'main', shortDescription: 'Open Movie Player', fullDescriptionUrl: 'full_description.html',
       manifestUrl: FEED_BASE + APP_ID + '.manifest.json', manifest: r.manifest,
     });
     expect(r.update).toEqual({
