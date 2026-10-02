@@ -1,0 +1,62 @@
+name: TorrServer update
+
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release: ${{ steps.bump.outputs.release }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Bump OMP when TorrServer has a new release
+        id: bump
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "release=false" >> "$GITHUB_OUTPUT"
+          gh api repos/YouROK/TorrServer/releases/latest > latest.json
+          LATEST=$(jq -r '.tag_name // empty' latest.json)
+          CURRENT=$(tr -d '[:space:]' < torrserver.version)
+          DIGEST=$(jq -r '[.assets[]? | select(.name == "TorrServer-android-arm64") | .digest // empty][0] // empty' latest.json)
+          if [ -z "$LATEST" ] || [ "$LATEST" = "$CURRENT" ]; then
+            echo "TorrServer is up to date ($CURRENT)"
+            exit 0
+          fi
+          case "$DIGEST" in
+            sha256:*) ;;
+            *) echo "::warning::$LATEST has no TorrServer-android-arm64 asset with a sha256 digest, skipping"; exit 0 ;;
+          esac
+          VERSION=$(node scripts/torrserver-bump.mjs "$LATEST")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: TorrServer $LATEST"
+          git push origin HEAD:main
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: check
+    if: needs.check.outputs.release == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.check.outputs.tag }}
+    secrets: inherit
