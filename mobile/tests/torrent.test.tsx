@@ -35,6 +35,7 @@ let el: HTMLElement;
 const launch = vi.fn();
 const open = vi.fn();
 const copy = vi.fn();
+const record = vi.fn();
 
 function mount() {
   document.body.innerHTML = '<div id="app"></div>';
@@ -62,7 +63,8 @@ beforeEach(() => {
   launch.mockReset().mockResolvedValue(undefined);
   open.mockReset().mockResolvedValue(undefined);
   copy.mockReset().mockResolvedValue(undefined);
-  setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, openExternal: open, copyText: copy, remoteDelayMs: 0 });
+  record.mockReset().mockResolvedValue(undefined);
+  setWatchActions({ recordWatch: record, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, openExternal: open, copyText: copy, remoteDelayMs: 0 });
   resetTo({ name: 'library' });
   navigate({ name: 'torrent', hash: 'abc' });
   vi.spyOn(TorrServerClient.prototype, 'viewedList').mockResolvedValue([]);
@@ -97,7 +99,10 @@ describe('Torrent', () => {
     await flush();
     click(byText('Продолжить с 23:14'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 3, t: 1394 });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 3, t: 1394, from: 'Телефон' });
+    // watch journal: one entry for this phone after the launch, with the chosen position
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record.mock.calls[0][2]).toEqual({ f: 3, t: 1394, d: 3600, src: 'phone', name: 'Телефон' });
   });
 
   it('main button says «Смотреть на ТВ» with no history', async () => {
@@ -129,7 +134,7 @@ describe('Torrent', () => {
     await flush();
     click(byText('Продолжить с 8:20'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500 });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500, from: 'Телефон' });
     expect(el.querySelector('.m-status-ok')!.textContent).toBe('Запустил на LG OLED');
     await act(async () => {
       await new Promise((r) => setTimeout(r, 5));
@@ -147,6 +152,7 @@ describe('Torrent', () => {
     await flush();
     expect(el.querySelector('.m-status-err')!.textContent).toContain('На телевизоре нет OMP');
     expect(currentRoute.value.name).toBe('torrent');
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('without a TV the first option leads to the TV screen', async () => {
@@ -165,6 +171,10 @@ describe('Torrent', () => {
     click(el.querySelectorAll('.m-opt')[1]);
     await flush();
     expect(open).toHaveBeenCalledWith('http://srv:8090/stream/Show.S02E02.mkv?link=abc&index=2&play', 'video/*');
+    // watch journal: started on this phone
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record.mock.calls[0][1]).toBe('abc');
+    expect(record.mock.calls[0][2]).toEqual({ f: 2, t: 0, d: 0, src: 'phone', name: 'Телефон' });
   });
 
   it('copy option writes the stream URL to the clipboard and toasts', async () => {
@@ -183,6 +193,17 @@ describe('Torrent', () => {
     click(byText('Смотреть на телефоне'));
     await flush();
     expect(open).toHaveBeenCalledWith('http://srv:8090/stream/Show.S02E01.mkv?link=abc&index=1&play', 'video/*');
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record.mock.calls[0][2]).toMatchObject({ f: 1, src: 'phone' });
+  });
+
+  it('no journal entry when the external player fails to open', async () => {
+    open.mockRejectedValueOnce(new Error('Нет плеера'));
+    mount();
+    await flush();
+    click(byText('Смотреть на телефоне'));
+    await flush();
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('delete asks for confirmation, removes and goes back', async () => {
@@ -322,9 +343,9 @@ describe('TV launch flow', () => {
 
   it('launches an episode without a saved position straight away with t: 0 and the report url', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    setWatchActions({ ompVersion: async () => '0.8.0', reportUrl: async () => 'http://192.168.1.9:8123/p', launchOnTv: launch, remoteDelayMs: 0 });
+    setWatchActions({ recordWatch: record, ompVersion: async () => '0.8.0', reportUrl: async () => 'http://192.168.1.9:8123/p', launchOnTv: launch, remoteDelayMs: 0 });
     await open1();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, report: 'http://192.168.1.9:8123/p' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, report: 'http://192.168.1.9:8123/p', from: 'Телефон' });
     expect(el.textContent).not.toContain('Откуда смотреть');
     expect(launchedAt.value).toBeGreaterThan(0);
     expect(launching.value).toBe(true);
@@ -343,7 +364,7 @@ describe('TV launch flow', () => {
     expect(dlg.textContent).toContain('Осталось 42 мин');
     click(byText('Сначала'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0 });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, from: 'Телефон' });
   });
 
   it('omits «Осталось» when the duration is unknown', async () => {
@@ -366,14 +387,14 @@ describe('TV launch flow', () => {
 
   it('an old TV shows the update dialog; «Всё равно запустить» continues', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    setWatchActions({ ompVersion: async () => '0.7.2', reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
+    setWatchActions({ recordWatch: record, ompVersion: async () => '0.7.2', reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
     await open1();
     expect(el.textContent).toContain('Обновите OMP на телевизоре');
     expect(el.textContent).toContain('На LG OLED стоит OMP 0.7.2.');
     expect(launch).not.toHaveBeenCalled();
     click(byText('Всё равно запустить'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0 });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, from: 'Телефон' });
     await act(async () => {
       await new Promise((r) => setTimeout(r, 5));
     });
@@ -383,7 +404,7 @@ describe('TV launch flow', () => {
 
   it('«Как обновить» opens the guide and keeps the dialog', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    setWatchActions({ ompVersion: async () => '0.7.2', reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
+    setWatchActions({ recordWatch: record, ompVersion: async () => '0.7.2', reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
     const win = vi.spyOn(window, 'open').mockReturnValue(null);
     await open1();
     click(byText('Как обновить'));
@@ -395,13 +416,13 @@ describe('TV launch flow', () => {
   it('an old TV then the resume choice: both steps in order', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     saveProgress('abc', 4, 500, 3000);
-    setWatchActions({ ompVersion: async () => '0.7.2', reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
+    setWatchActions({ recordWatch: record, ompVersion: async () => '0.7.2', reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
     await open1();
     click(byText('Всё равно запустить'));
     await flush();
     expect(el.textContent).toContain('Откуда смотреть');
     click(byText('Продолжить с 8:20'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500 });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500, from: 'Телефон' });
   });
 });

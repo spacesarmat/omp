@@ -31,8 +31,8 @@ function renderRoute(r: Route) {
       return <TorrentScreen hash={r.hash} />;
     case 'player':
       return platformKind() === 'androidtv'
-        ? <NativePlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />
-        : <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} />;
+        ? <NativePlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} from={r.from} />
+        : <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} from={r.from} />;
     case 'add':
       return <AddScreen />;
     case 'playlist':

@@ -71,6 +71,13 @@ export class TorrServerClient {
     });
   }
 
+  /** Replaces `data`; `set` overwrites title/poster/category too, so the current ones are sent back. */
+  setData(t: Pick<Torrent, 'hash' | 'title' | 'poster' | 'category'>, data: string): Promise<void> {
+    return this.call<unknown>('/torrents', {
+      body: { action: 'set', hash: t.hash, title: t.title || '', poster: t.poster || '', category: t.category || '', data },
+    }).then(() => undefined);
+  }
+
   remove(hash: string): Promise<void> {
     return this.call<unknown>('/torrents', { body: { action: 'rem', hash } }).then(() => undefined);
   }

@@ -16,6 +16,7 @@ import { CONTROL_MIN_VERSION } from '../../src/phone/protocol';
 import { native } from './platform/native';
 import { currentRoute, navigate, type MRoute } from './nav';
 import { parseTorrentData, type TorrServerClient } from '../../src/api/torrserver';
+import { recordWatch } from '../../src/store/journal';
 import type { Torrent } from '../../src/api/types';
 import { baseName, type TorrentFile } from '../../src/lib/episodes';
 
@@ -25,14 +26,17 @@ export interface WatchOnTvParams {
   file?: number;
   t?: number;
   report?: string;
+  /** Phone name: the TV writes its watch journal entries as this phone's. */
+  from?: string;
 }
 
-/** `t` is kept (0 included) whenever a file is set; values below 1 become 0. */
-export function watchOnTvParams(serverUrl: string, hash: string, file?: number, t?: number, report?: string): WatchOnTvParams {
+/** `t` is kept (0 included) whenever a file is set; values below 1 become 0; `from` only with a file. */
+export function watchOnTvParams(serverUrl: string, hash: string, file?: number, t?: number, report?: string, from?: string): WatchOnTvParams {
   const p: WatchOnTvParams = { server: serverUrl, torrent: hash };
   if (file !== undefined) p.file = file;
   if (file !== undefined && t !== undefined) p.t = t >= 1 ? Math.floor(t) : 0;
   if (report) p.report = report;
+  if (file !== undefined && from) p.from = from;
   return p;
 }
 
@@ -73,6 +77,10 @@ export interface WatchActions {
   localIpv4: () => Promise<string | null>;
   /** Pause between «launched» and the jump to the player screen (or the remote). */
   remoteDelayMs: number;
+  /** Phone model for the watch journal («Телефон» when unknown). */
+  phoneName: () => Promise<string>;
+  /** Watch journal write on TorrServer (never rejects). */
+  recordWatch: (c: TorrServerClient, hash: string, entry: { f: number; t: number; d: number; src: 'phone'; name: string }) => Promise<void>;
 }
 
 const defaults: WatchActions = {
@@ -83,6 +91,8 @@ const defaults: WatchActions = {
   reportUrl: () => reportUrl(),
   localIpv4: () => native.localIpv4(),
   remoteDelayMs: 1000,
+  phoneName: () => native.phoneName(),
+  recordWatch: (c, hash, entry) => recordWatch(c, hash, entry),
 };
 
 export let actions: WatchActions = defaults;
@@ -90,6 +100,31 @@ export let actions: WatchActions = defaults;
 /** Replaces side effects (tests); null restores the real ones. */
 export function setWatchActions(a: Partial<WatchActions> | null): void {
   actions = a ? { ...defaults, ...a } : defaults;
+}
+
+const PHONE = 'Телефон';
+
+function phoneNameSafe(): Promise<string> {
+  return actions.phoneName().then(
+    (n) => (typeof n === 'string' && n.trim() ? n.trim() : PHONE),
+    () => PHONE,
+  );
+}
+
+/** Watch journal: this phone started `file` at `t` (TV launch or external player). Never rejects. */
+export function recordPhoneWatch(c: TorrServerClient | null, hash: string, file: number, t: number, duration: number, name?: string): Promise<void> {
+  if (!c) return Promise.resolve();
+  return (name ? Promise.resolve(name) : phoneNameSafe())
+    .then((n) =>
+      actions.recordWatch(c, hash, {
+        f: file,
+        t: t >= 1 ? Math.floor(t) : 0,
+        d: duration > 0 ? Math.floor(duration) : 0,
+        src: 'phone',
+        name: n,
+      }),
+    )
+    .catch(() => undefined);
 }
 
 export function filesOf(t: Torrent): TorrentFile[] {
@@ -219,8 +254,10 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
       // first: without Wi-Fi (NO_WIFI) there is nothing to launch, so the player-state server is not started
       const serverUrl = await tvServerUrl(c.baseUrl);
       const report = await actions.reportUrl();
-      await actions.launchOnTv(watchOnTvParams(serverUrl, o.hash, o.file, t, report || undefined));
+      const from = o.file !== undefined ? await phoneNameSafe() : undefined;
+      await actions.launchOnTv(watchOnTvParams(serverUrl, o.hash, o.file, t, report || undefined, from));
       if (report && landing === 'nowPlaying') markLaunched();
+      if (o.file !== undefined) void recordPhoneWatch(c, o.hash, o.file, t || 0, o.duration || 0, from);
       if (!alive.v) return;
       if (o.onLaunched) o.onLaunched(tv.name);
       else showToast('Запустил на ' + tv.name);

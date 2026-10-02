@@ -8,7 +8,8 @@ import { navigate } from '../nav';
 import { filesOf, useTvLaunch } from '../watch';
 import { client } from '../../../src/store/servers';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents } from '../../../src/store/library';
-import { continueWatching, refreshViewed, progressVersion, serverViewed } from '../../../src/store/progress';
+import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
+import { buildHistory, resumeFrom, sourceLine, HISTORY_FILTERS } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
 import { LIBRARY_TABS, nextView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
@@ -41,6 +42,7 @@ export function Library() {
   const list = torrents.value;
   const sort = settings.value.librarySort;
   const view = settings.value.libraryView;
+  const hfilter = settings.value.historyFilter;
   const [loaded, setLoaded] = useState(list.length > 0);
   const [error, setError] = useState('');
   const [tvError, setTvError] = useState('');
@@ -99,16 +101,18 @@ export function Library() {
   }, [list, tab, query, isHistory, sort]);
   const history = isHistory
     ? (() => {
-        const all = continueWatching(list, 40);
+        const all = buildHistory(list, hfilter, continueWatching(list, 40), getLocalProgress);
         const match = filterTorrents(all.map((e) => e.torrent), query);
         return all.filter((e) => match.indexOf(e.torrent) >= 0);
       })()
     : [];
 
+  const now = Date.now();
   const count = isHistory ? history.length : shown.length;
   let empty = '';
   if (loaded && !count) {
     if (query.trim()) empty = 'Ничего не найдено';
+    else if (isHistory && hfilter !== 'all') empty = hfilter === 'phone' ? 'С телефона пока ничего не смотрели' : 'С телевизора пока ничего не смотрели';
     else if (isHistory) empty = 'История пуста. Здесь появится то, что вы начали смотреть';
     else if (!list.length) empty = 'Нет торрентов. Добавьте через «Добавить» или веб-интерфейс TorrServer.';
     else empty = 'В этой категории пока ничего нет';
@@ -186,6 +190,21 @@ export function Library() {
           </button>
         ))}
       </div>
+      {isHistory && (
+        <div class="m-hfilters" role="group" aria-label="Источник">
+          {HISTORY_FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              class={'m-hfilter' + (hfilter === f.id ? ' on' : '')}
+              aria-pressed={hfilter === f.id}
+              onClick={() => updateSettings({ historyFilter: f.id })}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
       {tvError && <LaunchError message={tvError} class="m-hint-warn" />}
       {error && <div class="m-hint-warn">{error} — показан сохранённый список</div>}
       {canStartLocal && (
@@ -203,6 +222,7 @@ export function Library() {
             const file = files.find((f) => f.id === e.fileIndex);
             const isMovie = t.category === 'movie' || playableFiles(files).length <= 1;
             const { time, duration } = e.progress;
+            const from = resumeFrom(e.progress, MIN_RESUME, WATCHED_RATIO);
             return (
               <div class="m-hrow" key={t.hash}>
                 <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
@@ -217,9 +237,10 @@ export function Library() {
                     <span class="m-bar-track">
                       <span class="m-bar-fill" style={{ width: (duration > 0 ? Math.min(100, (time / duration) * 100) : 0) + '%' }} />
                     </span>
+                    <span class="m-muted m-small m-hrow-src">{sourceLine(e.source, now)}</span>
                   </span>
                 </button>
-                <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, time, duration, [file ? episodeLabel(file.path) : '', t.title || t.name || t.hash].filter(Boolean).join(' · '))}>
+                <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', t.title || t.name || t.hash].filter(Boolean).join(' · '))}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M8 5l11 7-11 7z" />
                   </svg>

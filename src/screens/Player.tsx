@@ -20,6 +20,9 @@ import { introChapter } from '../player/chapters';
 import { useVideoState } from '../player/useVideoState';
 import { HideTimer } from '../player/hideTimer';
 import { useProgressSync } from '../player/useProgressSync';
+import { WatchJournal, journalSource } from '../player/watchJournal';
+import { recordWatch } from '../store/journal';
+import { getLocalProgress } from '../store/progress';
 import { useNextEpisode } from '../player/useNextEpisode';
 import { useCacheStats } from '../player/useCacheStats';
 import { Controls } from '../player/Controls';
@@ -36,9 +39,11 @@ interface Props {
   queue: PlayItem[];
   index: number;
   startAt?: number;
+  /** Name of the phone that launched the player (watch journal source). */
+  from?: string;
 }
 
-export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
+export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props) {
   const c = client.value;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [index, setIndex] = useState(startIndex);
@@ -68,6 +73,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   const posRef = useRef({ time: 0, duration: 0 });
   posRef.current = { time: vs.time, duration: vs.duration };
   useProgressSync(c, item, posRef);
+  // watch journal on TorrServer: an entry when the item starts (below) and when it is left
+  const journal = useMemo(() => new WatchJournal((h, e) => { recordWatch(c, h, e); }, journalSource(from)), []);
+  useEffect(() => () => journal.end(item, posRef.current.time, posRef.current.duration), [item]);
 
   const hasNext = index < queue.length - 1;
   const hasPrev = index > 0;
@@ -176,6 +184,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
         return;
       }
       startPos.current = pos;
+      const saved = item.hash && item.fileIndex !== undefined ? getLocalProgress(item.hash, item.fileIndex) : null;
+      journal.start(item, pos, saved ? saved.duration : 0);
       setReadyFor(index);
     });
     if (c && item.hash && item.fileIndex !== undefined) {

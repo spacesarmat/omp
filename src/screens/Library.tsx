@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { client } from '../store/servers';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, addedTorrents, addedMessage } from '../store/library';
-import { continueWatching, refreshViewed, progressVersion, serverViewed, clearProgress } from '../store/progress';
+import { continueWatching, refreshViewed, progressVersion, serverViewed, clearProgress, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../store/progress';
+import { forgetWatch } from '../store/journal';
+import { buildHistory, resumeFrom } from '../lib/history';
 import { settings, updateSettings } from '../store/settings';
 import type { Torrent } from '../api/types';
 import { errorMessage } from '../api/http';
@@ -19,7 +21,7 @@ import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
 import { TopBar } from '../ui/TopBar';
 import { TorrentViews } from './library/TorrentViews';
-import { HistoryGrid, HistoryEntry } from './library/HistoryGrid';
+import { HistoryGrid, HistoryEntry, HistoryFilterRow } from './library/HistoryGrid';
 
 export function LibraryScreen() {
   const c = client.value;
@@ -103,6 +105,8 @@ export function LibraryScreen() {
       // drop the server mark too, otherwise the entry comes back from /viewed
       serverViewed.value = serverViewed.value.filter((e) => !(e.hash === hash && e.file_index === fileIndex));
       c.removeViewed(hash, fileIndex).then(() => undefined, (e) => toast(errorMessage(e), 'error'));
+      // and the journal entries of the file (TorrServer `data`), else it comes back from there
+      void forgetWatch(c, hash, fileIndex);
       setSel(null);
     });
   };
@@ -121,16 +125,17 @@ export function LibraryScreen() {
 
   const isHistory = tab === 'history';
   const sort = s.librarySort;
+  const hfilter = s.historyFilter;
   const tv = torrents.value;
   const { list, history } = useMemo(() => {
     if (isHistory) {
-      const all = continueWatching(tv, 40);
+      const all = buildHistory(tv, hfilter, continueWatching(tv, 40), getLocalProgress);
       const match = filterTorrents(all.map((e) => e.torrent), query);
       return { list: [] as Torrent[], history: all.filter((e) => match.indexOf(e.torrent) >= 0) };
     }
     const inTab = tv.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
     return { list: sortTorrents(filterTorrents(inTab, query), sort), history: [] as HistoryEntry[] };
-  }, [tv, tab, query, sort, isHistory, progressVersion.value, serverViewed.value]);
+  }, [tv, tab, query, sort, isHistory, hfilter, progressVersion.value, serverViewed.value]);
 
   if (!c) return null;
 
@@ -138,7 +143,7 @@ export function LibraryScreen() {
     const queue = buildTorrentQueue(c, e.torrent, c.files(e.torrent));
     const index = queue.findIndex((q) => q.fileIndex === e.fileIndex);
     if (index < 0) navigate({ name: 'torrent', hash: e.torrent.hash });
-    else navigate({ name: 'player', queue, index, startAt: e.progress.time });
+    else navigate({ name: 'player', queue, index, startAt: resumeFrom(e.progress, MIN_RESUME, WATCHED_RATIO) });
   };
 
   if (showingError) {
@@ -161,6 +166,7 @@ export function LibraryScreen() {
   let empty: string | null = null;
   if (loaded && !count) {
     if (searching) empty = 'Ничего не найдено';
+    else if (isHistory && hfilter !== 'all') empty = hfilter === 'phone' ? 'С телефона пока ничего не смотрели' : 'С телевизора пока ничего не смотрели';
     else if (isHistory) empty = 'История пуста. Здесь появится то, что вы начали смотреть';
     else if (!torrents.value.length) empty = 'Нет торрентов. Добавьте через «Добавить» или веб-интерфейс TorrServer на телефоне.';
     else empty = 'В этой категории пока ничего нет';
@@ -187,6 +193,7 @@ export function LibraryScreen() {
       )}
       {error && <div class="banner-error">{error} — показан сохранённый список</div>}
       {!loaded && <Spinner text="Загрузка…" />}
+      {isHistory && <HistoryFilterRow value={hfilter} onChange={(f) => updateSettings({ historyFilter: f })} onFocused={() => setSel(null)} />}
       {isHistory ? (
         <HistoryGrid
           entries={history}

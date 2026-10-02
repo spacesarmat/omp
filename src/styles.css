@@ -153,14 +153,21 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .art img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
 .art-title { position: relative; font-weight: 800; color: rgba(255, 255, 255, .85); line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 .history-grid { display: flex; flex-wrap: wrap; margin-right: -40px; padding-top: 8px; }
-.hcard { display: flex; width: 860px; height: 184px; margin: 0 40px 28px 0; padding: 16px; border-radius: 18px; background: var(--panel); }
+.hcard { display: flex; width: 860px; height: 200px; margin: 0 40px 28px 0; padding: 16px; border-radius: 18px; background: var(--panel); }
 .hcard.focused { background: var(--panel2); transform: none; }
-.hcard .art { width: 101px; height: 152px; border-radius: 10px; margin-right: 24px; }
+.hcard .art { width: 112px; height: 168px; border-radius: 10px; margin-right: 24px; }
 .hcard-main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
 .hcard-title { font-size: 27px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hcard-ep { font-size: 20px; color: var(--muted); margin-top: 4px; }
-.hcard-time { display: flex; justify-content: space-between; font-size: 19px; margin-top: 16px; }
+.hcard-time { display: flex; justify-content: space-between; font-size: 19px; margin-top: 12px; }
 .hcard-left { color: var(--muted); }
+.hcard-src { display: flex; align-items: center; font-size: 19px; color: var(--muted); margin-top: 10px; white-space: nowrap; overflow: hidden; }
+.hcard-src .icon { flex-shrink: 0; margin-right: 10px; }
+.hcard-src-text { overflow: hidden; text-overflow: ellipsis; }
+.history-filter { display: flex; padding-top: 8px; margin-bottom: 20px; }
+.hfilter { padding: 10px 24px; margin-right: 14px; border-radius: 12px; background: var(--panel); color: var(--muted); font-size: 22px; font-weight: 600; }
+.hfilter.active { background: var(--panel2); color: var(--text); box-shadow: inset 0 0 0 2px var(--accent); }
+.hfilter.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
 
 .views-tiles { display: flex; flex-wrap: wrap; margin-right: -32px; padding-top: 8px; }
 .tile { margin: 0 32px 36px 0; border-radius: 16px; }

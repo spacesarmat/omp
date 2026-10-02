@@ -9,6 +9,7 @@ import { buildSnapshot } from './phoneBridge';
 import { saveItemProgress, LOCAL_SAVE_MS, REMOTE_SAVE_MS } from './progressSave';
 import { resumePosition } from '../store/progress';
 import type { PlayItem } from './types';
+import type { WatchJournal } from './watchJournal';
 
 export interface NativeQueueItem {
   url: string;
@@ -163,12 +164,20 @@ export class NativeSession {
   private pos: NativeClosed | null = null;
   private done = false;
   private readonly sid = ++sessionSeq;
+  private readonly journal: WatchJournal | null;
 
-  constructor(plugin: OmpNativeTvPlugin, client: TorrServerClient | null, queue: PlayItem[], hooks: NativeSessionHooks = {}) {
+  constructor(
+    plugin: OmpNativeTvPlugin,
+    client: TorrServerClient | null,
+    queue: PlayItem[],
+    hooks: NativeSessionHooks = {},
+    journal: WatchJournal | null = null,
+  ) {
     this.plugin = plugin;
     this.client = client;
     this.queue = queue;
     this.hooks = hooks;
+    this.journal = journal;
   }
 
   start(o: NativeStartOptions): Promise<void> {
@@ -199,7 +208,10 @@ export class NativeSession {
           subtitlesOn: o.subtitlesOn,
         });
       })
-      .then(() => undefined, (e) => {
+      .then(() => {
+        // the player is open: the first item starts (later ones in track)
+        if (!this.done && this.journal && this.pos && this.pos.index === o.index) this.journal.start(this.queue[o.index], o.startAt, 0);
+      }, (e) => {
         this.stop();
         throw e;
       });
@@ -229,6 +241,7 @@ export class NativeSession {
   dispose(): void {
     if (this.done) return;
     this.save(true);
+    this.journalEnd();
     this.stop();
   }
 
@@ -255,6 +268,7 @@ export class NativeSession {
     const c = sanitizeNativeClosed(d);
     if (c && this.queue[c.index]) this.track(c);
     this.save(true);
+    this.journalEnd();
     this.stop();
     const replaced = isObj(d) && d.replaced === true;
     if (this.hooks.onClosed) this.hooks.onClosed(c || this.pos || { index: 0, time: 0, duration: 0 }, replaced);
@@ -262,8 +276,19 @@ export class NativeSession {
 
   /** New position; a change of item first saves the previous one (like useProgressSync on item change). */
   private track(p: NativeClosed): void {
-    if (this.pos && this.pos.index !== p.index) this.save(true);
+    const changed = !!this.pos && this.pos.index !== p.index;
+    if (changed) {
+      this.save(true);
+      this.journalEnd();
+    }
     this.pos = { index: p.index, time: p.time, duration: p.duration };
+    if (changed && this.journal) this.journal.start(this.queue[p.index], p.time, p.duration);
+  }
+
+  /** Watch journal: the current item is left at its last position. */
+  private journalEnd(): void {
+    const p = this.pos;
+    if (this.journal && p) this.journal.end(this.queue[p.index], p.time, p.duration);
   }
 
   private save(remote: boolean): void {

@@ -295,6 +295,22 @@ button, .m-btn {
 .m-hrow-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
 .m-hrow-title { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-hrow-pos { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; }
+.m-hrow-src { margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-hfilters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.m-hfilters::-webkit-scrollbar { display: none; }
+.m-hfilter {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--panel);
+  color: #C9CEDA;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.m-hfilter.on { background: #252A35; color: var(--text); box-shadow: inset 0 0 0 2px var(--accent); }
 .m-bar-track { display: block; height: 6px; border-radius: 3px; background: #2A2F3A; overflow: hidden; }
 .m-bar-track.thin { height: 4px; border-radius: 2px; }
 .m-bar-fill { display: block; height: 100%; background: var(--accent); }

@@ -3,7 +3,7 @@ import type { ComponentChildren } from 'preact';
 export type IconName =
   | 'play' | 'pause' | 'prev' | 'next' | 'back10' | 'fwd10' | 'tracks' | 'stats' | 'history' | 'search'
   | 'plus' | 'settings' | 'grid' | 'list' | 'check' | 'star' | 'chevronLeft' | 'chevronRight'
-  | 'sort' | 'playlist' | 'pencil' | 'chevronDown' | 'chevronUp';
+  | 'sort' | 'playlist' | 'pencil' | 'chevronDown' | 'chevronUp' | 'tv' | 'phone';
 
 const LINE: any = { fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
 const SOLID: any = { fill: 'currentColor', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linejoin': 'round' };
@@ -32,6 +32,8 @@ const BODIES: { [K in IconName]: () => ComponentChildren } = {
   pencil: () => <path d="M4 20h4L19 9l-4-4L4 16z" {...LINE}></path>,
   chevronDown: () => <path d="M6 9l6 6 6-6" {...LINE}></path>,
   chevronUp: () => <path d="M6 15l6-6 6 6" {...LINE}></path>,
+  tv: () => <path d="M3 5h18v11H3zM8 20h8" {...LINE}></path>,
+  phone: () => <path d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2" {...LINE}></path>,
 };
 
 export const ICON_NAMES = Object.keys(BODIES) as IconName[];

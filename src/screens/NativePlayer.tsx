@@ -5,6 +5,8 @@ import { nativePlugin } from '../platform/androidNative';
 import { decideStart } from '../player/resume';
 import { NativeSession, nativeHeading, nativePlayerOpen } from '../player/nativePlayer';
 import type { PlayItem } from '../player/types';
+import { WatchJournal, journalSource } from '../player/watchJournal';
+import { recordWatch } from '../store/journal';
 import { setPlayerBridge, postSoon } from '../phone/link';
 import { goBack, currentRoute } from '../ui/nav';
 import { toast } from '../ui/toast';
@@ -13,6 +15,8 @@ interface Props {
   queue: PlayItem[];
   index: number;
   startAt?: number;
+  /** Name of the phone that launched the player (watch journal source). */
+  from?: string;
 }
 
 function failText(e: unknown): string {
@@ -21,7 +25,7 @@ function failText(e: unknown): string {
 }
 
 /** Android TV: the player route opens the native Media3 player and stays as a placeholder behind it. */
-export function NativePlayerScreen({ queue, index, startAt }: Props) {
+export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
   const [current, setCurrent] = useState(index);
   const [opened, setOpened] = useState(false);
 
@@ -46,7 +50,9 @@ export function NativePlayerScreen({ queue, index, startAt }: Props) {
         return;
       }
       const s = settings.value;
-      const run = new NativeSession(plugin, client.value, queue, {
+      const c = client.value;
+      const journal = new WatchJournal((h, e) => { recordWatch(c, h, e); }, journalSource(from));
+      const run = new NativeSession(plugin, c, queue, {
         onState: (st, prev) => {
           if (!prev || prev.index !== st.index) setCurrent(st.index);
           // every state event (≈1 Hz, evaluateJavascript) posts: the page timers are throttled while
@@ -58,7 +64,7 @@ export function NativePlayerScreen({ queue, index, startAt }: Props) {
           unbridge = null;
           if (!replaced) leave();
         },
-      });
+      }, journal);
       session = run;
       unbridge = setPlayerBridge({ snapshot: () => run.snapshot(), exec: (cmd) => run.exec(cmd) });
       run.start({

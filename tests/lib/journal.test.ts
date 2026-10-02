@@ -1,0 +1,108 @@
+import { describe, it, expect } from 'vitest';
+import { parseData, addEntry, serializeData, removeFile, journalOf, JOURNAL_MAX, type JournalEntry } from '../../src/lib/journal';
+
+const T0 = 1_759_400_000_000;
+
+describe('parseData', () => {
+  it('empty data: an empty object and journal', () => {
+    expect(parseData('')).toEqual({ obj: {}, journal: [] });
+    expect(parseData(undefined)).toEqual({ obj: {}, journal: [] });
+    expect(parseData('  ')).toEqual({ obj: {}, journal: [] });
+  });
+
+  it('non-JSON or non-object data is not OMP-writable', () => {
+    expect(parseData('garbage')).toBeNull();
+    expect(parseData('[1,2]')).toBeNull();
+    expect(parseData('"text"')).toBeNull();
+    expect(parseData('42')).toBeNull();
+    expect(journalOf('garbage')).toEqual([]);
+  });
+
+  it('reads the journal, keeps the whole object, drops malformed entries', () => {
+    const data = JSON.stringify({
+      TorrServer: { Files: [{ id: 1, path: 'a.mkv', length: 5 }] },
+      lampa: { x: 1 },
+      omp: {
+        v: 1,
+        h: [
+          { f: 1, t: 10, d: 100, at: T0, src: 'tv' },
+          { f: 2, t: 20, d: 0, at: T0 + 5, src: 'phone', name: ' Pixel 7 ' },
+          { f: -1, t: 1, d: 1, at: T0, src: 'tv' },
+          { f: 3, t: 1, d: 1, at: T0, src: 'radio' },
+          'junk',
+        ],
+      },
+    });
+    const p = parseData(data)!;
+    expect(p.obj.lampa).toEqual({ x: 1 });
+    expect(p.journal).toEqual([
+      { f: 2, t: 20, d: 0, at: T0 + 5, src: 'phone', name: 'Pixel 7' },
+      { f: 1, t: 10, d: 100, at: T0, src: 'tv' },
+    ]);
+  });
+
+  it('ignores a journal of another version', () => {
+    expect(journalOf(JSON.stringify({ omp: { v: 2, h: [{ f: 1, t: 1, d: 1, at: T0, src: 'tv' }] } }))).toEqual([]);
+  });
+});
+
+describe('addEntry', () => {
+  it('puts the new entry first with the given time', () => {
+    const j = addEntry([], { f: 1, t: 12.7, d: 100, src: 'tv' }, T0);
+    expect(j).toEqual([{ f: 1, t: 12.7, d: 100, at: T0, src: 'tv' }]);
+  });
+
+  it('one entry per file + source + name, updated and moved up', () => {
+    let j: JournalEntry[] = [];
+    j = addEntry(j, { f: 1, t: 10, d: 100, src: 'tv' }, T0);
+    j = addEntry(j, { f: 1, t: 10, d: 100, src: 'phone', name: 'Pixel' }, T0 + 1);
+    j = addEntry(j, { f: 2, t: 5, d: 50, src: 'tv' }, T0 + 2);
+    j = addEntry(j, { f: 1, t: 40, d: 100, src: 'tv' }, T0 + 3);
+    j = addEntry(j, { f: 1, t: 30, d: 100, src: 'phone', name: 'Galaxy' }, T0 + 4);
+    expect(j.map((e) => [e.f, e.src, e.name || '', e.t])).toEqual([
+      [1, 'phone', 'Galaxy', 30],
+      [1, 'tv', '', 40],
+      [2, 'tv', '', 5],
+      [1, 'phone', 'Pixel', 10],
+    ]);
+  });
+
+  it(`keeps at most ${JOURNAL_MAX} entries, dropping the oldest`, () => {
+    let j: JournalEntry[] = [];
+    for (let i = 0; i < 30; i++) j = addEntry(j, { f: i, t: 1, d: 2, src: 'tv' }, T0 + i);
+    expect(j).toHaveLength(JOURNAL_MAX);
+    expect(j[0].f).toBe(29);
+    expect(j[JOURNAL_MAX - 1].f).toBe(10);
+  });
+
+  it('a malformed entry leaves the journal as is', () => {
+    const j = addEntry([], { f: 1, t: 1, d: 1, src: 'tv' }, T0);
+    expect(addEntry(j, { f: -2, t: 1, d: 1, src: 'tv' }, T0 + 1)).toEqual(j);
+  });
+});
+
+describe('serializeData', () => {
+  it('writes only the omp key and keeps every other key', () => {
+    const data = JSON.stringify({ TorrServer: { Files: [{ id: 1, path: 'a.mkv', length: 5 }] }, lampa: { time: 3 }, omp: { v: 1, h: [] } });
+    const p = parseData(data)!;
+    const out = JSON.parse(serializeData(p.obj, addEntry(p.journal, { f: 1, t: 10, d: 20, src: 'tv' }, T0)));
+    expect(out.TorrServer).toEqual({ Files: [{ id: 1, path: 'a.mkv', length: 5 }] });
+    expect(out.lampa).toEqual({ time: 3 });
+    expect(out.omp).toEqual({ v: 1, h: [{ f: 1, t: 10, d: 20, at: T0, src: 'tv' }] });
+  });
+
+  it('round-trips through parseData', () => {
+    const j = addEntry([], { f: 4, t: 1, d: 2, src: 'phone', name: 'Pixel' }, T0);
+    expect(journalOf(serializeData({}, j))).toEqual(j);
+  });
+});
+
+describe('removeFile', () => {
+  it('drops every source of a file', () => {
+    let j: JournalEntry[] = [];
+    j = addEntry(j, { f: 1, t: 1, d: 2, src: 'tv' }, T0);
+    j = addEntry(j, { f: 2, t: 1, d: 2, src: 'tv' }, T0 + 1);
+    j = addEntry(j, { f: 1, t: 1, d: 2, src: 'phone', name: 'P' }, T0 + 2);
+    expect(removeFile(j, 1).map((e) => e.f)).toEqual([2]);
+  });
+});
