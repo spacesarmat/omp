@@ -18,6 +18,7 @@ import type { IconName } from '../ui/icons';
 import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
 import { introChapter } from '../player/chapters';
 import { useVideoState } from '../player/useVideoState';
+import { HideTimer } from '../player/hideTimer';
 import { useProgressSync } from '../player/useProgressSync';
 import { useNextEpisode } from '../player/useNextEpisode';
 import { useCacheStats } from '../player/useCacheStats';
@@ -26,7 +27,7 @@ import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner
 import type { Cmd } from '../phone/protocol';
 import { goBack } from '../ui/nav';
 import { useKeys } from '../ui/keys';
-import { choose } from '../ui/dialog';
+import { choose, dialogOpen } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { setPlayerBridge, postSoon } from '../phone/link';
 import { buildSnapshot, liveTiming, runCmd } from '../player/phoneBridge';
@@ -61,7 +62,6 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
   const probeRef = useRef<FfprobeResult | null>(null);
   probeRef.current = probe;
   const startUsed = useRef(false);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const src = ready ? (c ? c.videoSrc(item.url) : item.url) : '';
   const vs = useVideoState(videoRef, index + ':' + reloadKey + ':' + src);
@@ -91,14 +91,24 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
 
   const cache = useCacheStats(c, item.hash, statsOn || (ready && vs.buffering));
 
+  const hideGate = useRef({ playing: false, seeking: false, error: false });
+  hideGate.current = { playing: !vs.paused && !vs.buffering, seeking: seekTarget !== null, error: !!vs.error };
+  const hider = useMemo(
+    () => new HideTimer(
+      () => { const g = hideGate.current; return g.playing && !g.seeking && !g.error && !dialogOpen.value; },
+      () => setControls(false),
+    ),
+    [],
+  );
   const showControls = () => {
     setControls(true);
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => {
-      const v = videoRef.current;
-      if (v && !v.paused) setControls(false);
-    }, 4000);
+    hider.arm();
   };
+  // (re)start of playback — incl. after phone commands or the end of buffering — re-arms the hide timer
+  useEffect(() => {
+    if (!vs.paused && !vs.buffering && !vs.error) hider.arm();
+    else hider.cancel();
+  }, [vs.paused, vs.buffering, vs.error, seekTarget === null, dialogOpen.value]);
 
   const [flash, setFlash] = useState<{ icon?: IconName; text?: string; side: TapZone } | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -185,7 +195,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt }: Props) {
     };
   }, [index + ':' + reloadKey]);
 
-  useEffect(() => () => { if (hideTimer.current) clearTimeout(hideTimer.current); }, []);
+  useEffect(() => () => hider.cancel(), []);
 
   const seeker = useMemo(
     () => new SeekAccumulator((t) => {
