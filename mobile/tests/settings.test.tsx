@@ -43,15 +43,17 @@ describe('Settings', () => {
 
   it('manual check uses the Android feed and toasts the result', async () => {
     const urls: (string | undefined)[] = [];
+    const manual: boolean[] = [];
     setUpdateChecker(async (o) => {
       urls.push(o.url);
-      expect(o.manual).toBe(true);
+      manual.push(o.manual);
       return 'latest';
     });
     const el = mount();
     await act(async () => btn(el, 'Проверить обновления').click());
     await act(async () => {});
     expect(urls).toEqual([ANDROID_UPDATE_URL]);
+    expect(manual).toEqual([true]);
     expect(toast.value).toBe('У вас последняя версия');
     setUpdateChecker(async () => 'error');
     await act(async () => btn(el, 'Проверить обновления').click());

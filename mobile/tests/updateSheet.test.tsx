@@ -47,13 +47,22 @@ describe('UpdateSheet', () => {
       return new Promise<void>((r) => (finish = r));
     });
     const el = mount();
-    await act(async () => btn(el, 'Установить').click());
-    await act(async () => btn(el, 'Установить')?.click());
+    await act(async () => {
+      const b = btn(el, 'Установить');
+      b.click();
+      b.click();
+    });
     expect(calls).toEqual([[info.ipkUrl, HASH]]);
+    await act(async () => report(150));
+    expect(el.textContent).toContain('Скачивание… 100%');
+    await act(async () => report(NaN));
+    expect(el.textContent).toContain('Скачивание…');
+    expect(el.textContent).not.toContain('%');
     await act(async () => report(64));
     expect(el.textContent).toContain('Скачивание… 64%');
     await act(async () => finish());
     expect(el.textContent).not.toContain('Скачивание…');
+    expect(el.textContent).toContain('Запуск установки…');
   });
 
   it('shows installer error text', async () => {
@@ -63,6 +72,14 @@ describe('UpdateSheet', () => {
     await act(async () => {});
     expect(el.querySelector('.m-error')!.textContent).toContain('Разрешите установку');
     expect(btn(el, 'Установить')).toBeTruthy();
+  });
+
+  it('wraps non-Russian errors', async () => {
+    setApkInstaller(() => Promise.reject(new Error('checksum mismatch')));
+    const el = mount();
+    await act(async () => btn(el, 'Установить').click());
+    await act(async () => {});
+    expect(el.querySelector('.m-error')!.textContent).toBe('Не удалось установить обновление: checksum mismatch');
   });
 
   it('skip writes skipped and closes the prompt', async () => {

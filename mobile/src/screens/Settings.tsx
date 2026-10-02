@@ -15,6 +15,10 @@ export function setUpdateChecker(fn: Checker | null): void {
   checker = fn;
 }
 
+export function runUpdateCheck(o: { manual: boolean; url?: string }): Promise<CheckResult> {
+  return (checker ?? checkForUpdate)(o);
+}
+
 const PROJECT_URL = 'https://github.com/spacesarmat/omp';
 
 export function Settings() {
@@ -23,7 +27,7 @@ export function Settings() {
   const on = settings.value.updateCheck;
 
   async function check() {
-    const r = await (checker ?? checkForUpdate)({ manual: true, url: ANDROID_UPDATE_URL }).catch((): CheckResult => 'error');
+    const r = await runUpdateCheck({ manual: true, url: ANDROID_UPDATE_URL }).catch((): CheckResult => 'error');
     if (r === 'error') showToast('Не удалось проверить обновления');
     else if (r === 'latest') showToast('У вас последняя версия');
   }

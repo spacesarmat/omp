@@ -10,15 +10,16 @@ import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
 import { Add } from './screens/Add';
 import { Remote } from './screens/Remote';
-import { Settings } from './screens/Settings';
-import { UpdateSheet } from './ui/UpdateSheet';
-import { checkForUpdate, updatePrompt } from '../../src/store/updates';
+import { Settings, runUpdateCheck } from './screens/Settings';
+import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
+import { updatePrompt } from '../../src/store/updates';
 import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
 import './mobile.css';
 
 const TABS: string[] = ['library', 'add', 'remote', 'settings'];
 
 export function handleBack(): void {
+  if (sheetBackHandler.current?.()) return;
   if (goBack()) return;
   try {
     void CapApp.exitApp();
@@ -67,7 +68,7 @@ export function App() {
   // background update check 3 s after start (cheap GET; honours the setting and the 6 h interval)
   useEffect(() => {
     const t = setTimeout(() => {
-      void checkForUpdate({ manual: false, url: ANDROID_UPDATE_URL });
+      void runUpdateCheck({ manual: false, url: ANDROID_UPDATE_URL }).catch(() => {});
     }, 3000);
     return () => clearTimeout(t);
   }, []);
@@ -92,7 +93,7 @@ export function App() {
       ) : (
         <Settings />
       )}
-      {prompt && <UpdateSheet info={prompt} />}
+      {prompt && showNav && <UpdateSheet info={prompt} />}
       <Toast />
       {showNav && <NavBar active={route.name as Tab} />}
     </>
