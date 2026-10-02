@@ -37,6 +37,12 @@ export function replaceRoute(r: Route): void {
   routeStack.value = routeStack.value.slice(0, -1).concat(r);
 }
 
+/** Opens a player route; a player already on top is replaced, so closing the new one never brings the old back. */
+export function openPlayer(r: Route): void {
+  if (currentRoute.value.name === 'player') replaceRoute(r);
+  else navigate(r);
+}
+
 export function resetTo(r: Route): void {
   focusMemory.length = 0;
   routeStack.value = [r];

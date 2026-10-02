@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  NativeSession, toNativeQueue, nativeHeading, sanitizeNativeState, nativeSnapshot,
+  NativeSession, toNativeQueue, nativeHeading, sanitizeNativeState, nativeSnapshot, nativePlayerOpen,
 } from '../../src/player/nativePlayer';
 import type { OmpNativeTvPlugin } from '../../src/platform/androidNative';
 import { TorrServerClient } from '../../src/api/torrserver';
-import { getLocalProgress, reloadProgress } from '../../src/store/progress';
+import { getLocalProgress, reloadProgress, saveProgress } from '../../src/store/progress';
+import { decideStart } from '../../src/player/resume';
 import type { PlayItem } from '../../src/player/types';
 
 const H1 = 'a'.repeat(40);
@@ -60,7 +61,14 @@ beforeEach(() => {
   reloadProgress();
   vi.useFakeTimers();
 });
+const sessions: NativeSession[] = [];
+function track(s: NativeSession): NativeSession {
+  sessions.push(s);
+  return s;
+}
+
 afterEach(() => {
+  sessions.splice(0).forEach((s) => s.dispose());
   vi.useRealTimers();
 });
 
@@ -79,6 +87,18 @@ describe('native queue', () => {
     expect(q[0].fileIndex).toBe(1);
     expect(q[1].subtitles).toEqual([]);
     expect(toNativeQueue(queue, null)[0].url).toBe(queue[0].url);
+  });
+  it('carries the resume point of each item (0 when none or nearly watched)', () => {
+    saveProgress(H1, 2, 400, 1000);
+    saveProgress(H1, 1, 950, 1000);
+    const q = toNativeQueue(queue.concat([{ url: 'http://x/y.mkv', title: 'y' }]), null);
+    expect(q.map((i) => i.resume)).toEqual([0, 400, 0]);
+  });
+  it('decideStart without asking uses the saved position', async () => {
+    saveProgress(H1, 2, 400, 1000);
+    expect(await decideStart(queue[1], undefined, false)).toBe(400);
+    expect(await decideStart(queue[0], undefined, false)).toBe(0);
+    expect(await decideStart(queue[1], 12, false)).toBe(12);
   });
 });
 
@@ -112,7 +132,7 @@ describe('NativeSession', () => {
     const order: string[] = [];
     f.plugin.addListener.mockImplementation((e: string) => { order.push('listen:' + e); return Promise.resolve({ remove: () => undefined }); });
     f.plugin.playNative.mockImplementation(() => { order.push('play'); return Promise.resolve(); });
-    await new NativeSession(f.plugin, c, queue).start(opts);
+    await track(new NativeSession(f.plugin, c, queue)).start(opts);
     expect(order).toEqual(['listen:nativePlayerState', 'listen:nativePlayerClosed', 'play']);
     const arg = f.plugin.playNative.mock.calls[0][0];
     expect(typeof arg.session).toBe('number');
@@ -126,7 +146,7 @@ describe('NativeSession', () => {
   it('saves locally every 5 s and to the server every 15 s (driven by state events)', async () => {
     const f = fakePlugin();
     const { c, setViewed } = fakeClient();
-    const s = new NativeSession(f.plugin, c, queue);
+    const s = track(new NativeSession(f.plugin, c, queue));
     await s.start(opts);
     f.emit('nativePlayerState', state({ time: 200 }));
     expect(getLocalProgress(H1, 1)).toBeNull();
@@ -147,7 +167,7 @@ describe('NativeSession', () => {
   it('item change saves the previous item; watched → server timecode 0', async () => {
     const f = fakePlugin();
     const { c, setViewed } = fakeClient();
-    const s = new NativeSession(f.plugin, c, queue);
+    const s = track(new NativeSession(f.plugin, c, queue));
     await s.start(opts);
     f.emit('nativePlayerState', state({ time: 950 }));
     f.emit('nativePlayerState', state({ index: 1, time: 2, duration: 900 }));
@@ -161,7 +181,7 @@ describe('NativeSession', () => {
     const f = fakePlugin();
     const { c, setViewed } = fakeClient();
     const closed = vi.fn();
-    const s = new NativeSession(f.plugin, c, queue, { onClosed: closed });
+    const s = track(new NativeSession(f.plugin, c, queue, { onClosed: closed }));
     await s.start(opts);
     f.emit('nativePlayerState', state({ time: 300 }));
     f.emit('nativePlayerClosed', { index: 0, time: 320.4, duration: 1000 });
@@ -180,7 +200,7 @@ describe('NativeSession', () => {
   it('snapshot from the latest state; phone commands go to nativePlayerCommand', async () => {
     const f = fakePlugin();
     const onState = vi.fn();
-    const s = new NativeSession(f.plugin, null, queue, { onState });
+    const s = track(new NativeSession(f.plugin, null, queue, { onState }));
     await s.start(opts);
     expect(s.snapshot()).toBeNull();
     f.emit('nativePlayerState', state({ time: 40 }));
@@ -198,7 +218,7 @@ describe('NativeSession', () => {
   it('ignores events of another run; a replaced close does not navigate', async () => {
     const f = fakePlugin();
     const closed = vi.fn();
-    const s = new NativeSession(f.plugin, null, queue, { onClosed: closed });
+    const s = track(new NativeSession(f.plugin, null, queue, { onClosed: closed }));
     await s.start(opts);
     const sid = f.plugin.playNative.mock.calls[0][0].session;
     f.emit('nativePlayerState', state({ time: 77, session: sid + 1000 }));
@@ -211,17 +231,54 @@ describe('NativeSession', () => {
     expect(closed).toHaveBeenCalledWith({ index: 0, time: 80, duration: 1000 }, true);
   });
 
+  it('nativePlayerOpen while a run is launched and not closed', async () => {
+    const f = fakePlugin();
+    const s = track(new NativeSession(f.plugin, null, queue));
+    expect(nativePlayerOpen()).toBe(false);
+    await s.start(opts);
+    expect(nativePlayerOpen()).toBe(true);
+    f.emit('nativePlayerClosed', { index: 0, time: 1, duration: 10 });
+    expect(nativePlayerOpen()).toBe(false);
+  });
+
+  it('detach after launch keeps listening until the close (progress saved, hooks not called)', async () => {
+    const f = fakePlugin();
+    const { c, setViewed } = fakeClient();
+    const closed = vi.fn();
+    const s = track(new NativeSession(f.plugin, c, queue, { onClosed: closed }));
+    await s.start(opts);
+    s.detach();
+    expect(f.removed.length).toBe(0);
+    f.emit('nativePlayerClosed', { index: 0, time: 333, duration: 1000 });
+    expect(getLocalProgress(H1, 1)!.time).toBe(333);
+    expect(setViewed).toHaveBeenCalledWith(H1, 1, 333);
+    expect(closed).not.toHaveBeenCalled();
+    expect(f.removed.length).toBe(2);
+    expect(nativePlayerOpen()).toBe(false);
+  });
+
+  it('detach before the launch stops without calling playNative', async () => {
+    const f = fakePlugin();
+    const s = track(new NativeSession(f.plugin, null, queue));
+    const p = s.start(opts);
+    s.detach();
+    await p;
+    expect(f.plugin.playNative).not.toHaveBeenCalled();
+    expect(f.removed.length).toBe(2);
+    expect(nativePlayerOpen()).toBe(false);
+  });
+
   it('a playNative failure rejects and releases the listeners', async () => {
     const f = fakePlugin();
     f.plugin.playNative.mockImplementation(() => Promise.reject({ message: 'Нет плеера' }));
-    const s = new NativeSession(f.plugin, null, queue);
+    const s = track(new NativeSession(f.plugin, null, queue));
     await expect(s.start(opts)).rejects.toEqual({ message: 'Нет плеера' });
     expect(f.removed.length).toBe(2);
   });
 
   it('dispose before the listeners resolve still removes them', async () => {
     const f = fakePlugin();
-    const s = new NativeSession(f.plugin, null, queue);
+    const s = track(new NativeSession(f.plugin, null, queue));
     const p = s.start(opts);
     s.dispose();
     await p;

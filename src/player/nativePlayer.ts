@@ -7,6 +7,7 @@ import { episodeLabel } from '../lib/episodes';
 import { guessLangFromName } from '../lib/tracks';
 import { buildSnapshot } from './phoneBridge';
 import { saveItemProgress, LOCAL_SAVE_MS, REMOTE_SAVE_MS } from './progressSave';
+import { resumePosition } from '../store/progress';
 import type { PlayItem } from './types';
 
 export interface NativeQueueItem {
@@ -14,6 +15,8 @@ export interface NativeQueueItem {
   title: string;
   hash?: string;
   fileIndex?: number;
+  /** Resume point (s) the native player seeks to when it advances to this item (0: from the start). */
+  resume: number;
   subtitles: { url: string; label: string; ext: string; lang: string }[];
 }
 
@@ -54,7 +57,9 @@ export function nativeHeading(item: PlayItem): string {
 
 /**
  * Queue for playNative: stream/subtitle URLs carry the TorrServer credentials (the native side turns them into a
- * Basic header); external subtitles get a language guessed from the file name for the preferred-language pick.
+ * Basic header); external subtitles get a language guessed from the file name for the preferred-language pick;
+ * `resume` is the saved resume point of each item (LG asks «Продолжить просмотр?» per item, the native player
+ * continues from it without a dialog).
  */
 export function toNativeQueue(queue: PlayItem[], c: TorrServerClient | null): NativeQueueItem[] {
   const src = (u: string) => (c ? c.videoSrc(u) : u);
@@ -62,6 +67,7 @@ export function toNativeQueue(queue: PlayItem[], c: TorrServerClient | null): Na
     const n: NativeQueueItem = {
       url: src(it.url),
       title: nativeHeading(it),
+      resume: it.hash && it.fileIndex !== undefined ? resumePosition(it.hash, it.fileIndex) : 0,
       subtitles: (it.subtitles || []).map((s) => ({ url: src(s.url), label: s.label, ext: s.ext, lang: guessLangFromName(s.label) })),
     };
     if (it.hash) n.hash = it.hash;
@@ -126,6 +132,12 @@ export interface NativeSessionHooks {
 }
 
 let sessionSeq = 0;
+let openRuns = 0;
+
+/** True while a native player run is launching or open (its close has not arrived yet). */
+export function nativePlayerOpen(): boolean {
+  return openRuns > 0;
+}
 
 /** Events of another run (the player was re-launched with a new queue) carry a different `session`. */
 function foreign(d: unknown, sid: number): boolean {
@@ -143,7 +155,8 @@ export class NativeSession {
   private readonly plugin: OmpNativeTvPlugin;
   private readonly client: TorrServerClient | null;
   private readonly queue: PlayItem[];
-  private readonly hooks: NativeSessionHooks;
+  private hooks: NativeSessionHooks;
+  private launched = false;
   private handles: ListenerHandle[] = [];
   private lastLocal = 0;
   private lastRemote = 0;
@@ -172,6 +185,8 @@ export class NativeSession {
         if (this.done) return undefined;
         this.lastLocal = this.lastRemote = Date.now();
         this.pos = { index: o.index, time: o.startAt, duration: 0 };
+        this.launched = true;
+        openRuns++;
         return this.plugin.playNative({
           queue: toNativeQueue(this.queue, this.client),
           index: o.index,
@@ -199,7 +214,18 @@ export class NativeSession {
     this.plugin.nativePlayerCommand({ cmd }).catch(() => undefined);
   }
 
-  /** Leaves without a close event (screen unmounted): final save, listeners released. */
+  /**
+   * The screen is gone (Back on the placeholder, route replaced): once playNative was called the run keeps
+   * listening until the player reports its close (progress is still saved), without calling the hooks;
+   * before that it simply stops.
+   */
+  detach(): void {
+    if (this.done) return;
+    this.hooks = {};
+    if (!this.launched) this.stop();
+  }
+
+  /** Leaves without a close event: final save, listeners released. */
   dispose(): void {
     if (this.done) return;
     this.save(true);
@@ -251,6 +277,10 @@ export class NativeSession {
   }
 
   private stop(): void {
+    if (this.launched) {
+      this.launched = false;
+      openRuns--;
+    }
     this.done = true;
     this.handles.forEach((h) => this.release(h));
     this.handles = [];

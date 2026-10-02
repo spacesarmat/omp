@@ -27,8 +27,11 @@ function fakeCapacitor() {
     }),
   };
   w.Capacitor = { getPlatform: () => 'android', Plugins: { OmpNative: plugin } };
-  return { plugin, emit: (e: string, d: any) => (listeners[e] || []).slice().forEach((cb) => cb(d)), listeners };
+  const fake = { plugin, emit: (e: string, d: any) => (listeners[e] || []).slice().forEach((cb) => cb(d)), listeners };
+  fakes.push(fake);
+  return fake;
 }
+const fakes: { emit: (e: string, d: any) => void }[] = [];
 
 async function until(cond: () => boolean) {
   for (let i = 0; i < 100 && !cond(); i++) await new Promise((r) => setTimeout(r, 5));
@@ -38,7 +41,7 @@ async function until(cond: () => boolean) {
 /** Unmounts and lets deferred effect cleanups (final progress save) run before the next test. */
 async function unmount(host: HTMLElement) {
   render(null, host);
-  await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => setTimeout(r, 60)); // Preact 11 runs unmount cleanups after paint (≤ 35 ms)
 }
 
 function mount(node: any) {
@@ -62,6 +65,8 @@ beforeEach(async () => {
   navigate({ name: 'player', queue, index: 0 });
 });
 afterEach(() => {
+  // the native player closes: runs still listening (detached screens) end
+  fakes.splice(0).forEach((f) => f.emit('nativePlayerClosed', { index: 0, time: 0, duration: 0 }));
   delete w.Capacitor;
   detachPhone();
   setLinkTransport(null);
@@ -129,6 +134,36 @@ describe('NativePlayerScreen (Android TV)', () => {
     await until(() => f.plugin.nativePlayerCommand.mock.calls.length === 1);
     expect(f.plugin.nativePlayerCommand.mock.calls[0][0]).toEqual({ cmd: { id: 1, type: 'pause' } });
     await unmount(host);
+  });
+
+  it('Back on the placeholder while launching keeps saving until the player closes', async () => {
+    const f = fakeCapacitor();
+    let launched: () => void = () => undefined;
+    f.plugin.playNative.mockImplementation(() => new Promise<void>((r) => { launched = r; }));
+    const host = mount(h(NativePlayerScreen, { queue, index: 0 }));
+    await until(() => f.plugin.playNative.mock.calls.length === 1);
+    await unmount(host);
+    launched();
+    const session = f.plugin.playNative.mock.calls[0][0].session;
+    f.emit('nativePlayerClosed', { session, index: 0, time: 700, duration: 1200 });
+    expect(getLocalProgress(H, 3)!.time).toBe(700);
+    expect(routeStack.value.map((r) => r.name)).toEqual(['library', 'player']);
+  });
+
+  it('a launch while the native player is open does not ask and continues from the saved position', async () => {
+    const f = fakeCapacitor();
+    const dlg = mount(h(DialogHost, {}));
+    const first = mount(h(NativePlayerScreen, { queue, index: 0, startAt: 0 }));
+    await until(() => f.plugin.playNative.mock.calls.length === 1);
+    saveProgress(H, 3, 300, 1200);
+    await unmount(first);
+    const second = mount(h(NativePlayerScreen, { queue, index: 0 }));
+    await until(() => f.plugin.playNative.mock.calls.length === 2);
+    expect(dlg.querySelectorAll('.dialog-option').length).toBe(0);
+    expect(f.plugin.playNative.mock.calls[1][0].startAt).toBe(300);
+    expect(f.plugin.playNative.mock.calls[1][0].queue[0].resume).toBe(300);
+    await unmount(second);
+    await unmount(dlg);
   });
 
   it('a launch failure shows the native message and leaves', async () => {

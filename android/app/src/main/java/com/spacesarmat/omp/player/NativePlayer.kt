@@ -13,6 +13,8 @@ data class QueueItem(
     val hash: String?,
     val fileIndex: Int?,
     val subtitles: List<SubFile>,
+    /** Saved resume point (resumePosition on the page), used when the player advances to this item. */
+    val resumeMs: Long,
 )
 
 /** playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn }). */
@@ -50,6 +52,7 @@ data class PlayRequest(
                         hash = it.optString("hash").ifEmpty { null },
                         fileIndex = if (it.has("fileIndex")) it.optInt("fileIndex") else null,
                         subtitles = subs,
+                        resumeMs = it.optDouble("resume", 0.0).let { r -> if (r.isNaN() || r < 0) 0L else (r * 1000).toLong() },
                     ),
                 )
             }
@@ -94,33 +97,5 @@ object NativePlayerBridge {
         val p = player ?: return false
         p.runOnUiThread { p.applyCommand(cmd) }
         return true
-    }
-}
-
-/** Step for repeated ◀/▶ presses, as the LG player's double press: base, 2×base (≤ 30), then 30 s. */
-fun streakStep(base: Int, streak: Int): Int = when {
-    streak <= 0 -> base
-    streak == 1 -> minOf(base * 2, 30)
-    else -> 30
-}
-
-/** Port of src/player/pointerTaps.ts SeekStreak: the streak resets after [resetMs] idle or a direction change. */
-class SeekStreak(private val resetMs: Long = 2000, private val now: () -> Long = { android.os.SystemClock.uptimeMillis() }) {
-    private var count = 0
-    private var lastAt = Long.MIN_VALUE / 2
-    private var dir = 0
-
-    fun next(direction: Int, base: Int): Int {
-        val t = now()
-        if (direction != dir || t - lastAt > resetMs) count = 0 else count++
-        dir = direction
-        lastAt = t
-        return streakStep(base, count)
-    }
-
-    fun reset() {
-        count = 0
-        dir = 0
-        lastAt = Long.MIN_VALUE / 2
     }
 }

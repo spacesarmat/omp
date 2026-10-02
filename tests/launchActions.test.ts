@@ -64,6 +64,19 @@ describe('runLaunchParams', () => {
     expect(top.queue[top.index].fileIndex).toBe(3);
     expect(top.startAt).toBe(1394);
   });
+  it('replaces a player already on top (the old player is never remounted)', async () => {
+    setActiveServer(addServer({ url: 'h:1' }).id);
+    routeStack.value = [{ name: 'library' }, { name: 'player', queue: [{ url: 'http://x/old.mkv', title: 'old' }], index: 0 }];
+    runLaunchParams({ play: 'https://cdn.example/a.mp4', title: 'A' });
+    expect(routeStack.value.map((r) => r.name)).toEqual(['library', 'player']);
+    expect((top() as any).queue[0].title).toBe('A');
+    mockFetch(() => ({ body: JSON.stringify({ hash: HASH, title: 'T', stat: 3, file_stats: [{ id: 3, path: 'S/a.S01E03.mkv', length: 10 }] }) }));
+    runLaunchParams({ torrent: HASH, file: 3, t: 5 });
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(routeStack.value.map((r) => r.name)).toEqual(['library', 'player']);
+    expect((top() as any).startAt).toBe(5);
+  });
 });
 
 describe('report launch param', () => {

@@ -1,7 +1,7 @@
 import { parseLaunchParams } from './lib/launchParams';
 import { addServer, setActiveServer, client } from './store/servers';
 import { errorMessage } from './api/http';
-import { navigate, resetTo } from './ui/nav';
+import { navigate, openPlayer, resetTo } from './ui/nav';
 import { toast } from './ui/toast';
 import { buildTorrentQueue } from './player/queue';
 import { attachPhone } from './phone/link';
@@ -22,7 +22,7 @@ export function runLaunchParams(raw: unknown): void {
   const a = plan.action;
   if (!a) return;
   if (a.kind === 'play') {
-    navigate({ name: 'player', queue: [{ url: a.url, title: a.title }], index: 0 });
+    openPlayer({ name: 'player', queue: [{ url: a.url, title: a.title }], index: 0 });
     return;
   }
   const c = client.value;
@@ -50,7 +50,7 @@ export function runLaunchParams(raw: unknown): void {
             navigate({ name: 'torrent', hash });
             return;
           }
-          navigate({ name: 'player', queue, index, startAt });
+          openPlayer({ name: 'player', queue, index, startAt });
         },
         (e) => toast(errorMessage(e), 'error'),
       );

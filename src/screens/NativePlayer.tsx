@@ -3,10 +3,10 @@ import { client } from '../store/servers';
 import { settings } from '../store/settings';
 import { nativePlugin } from '../platform/androidNative';
 import { decideStart } from '../player/resume';
-import { NativeSession, NativeState, nativeHeading } from '../player/nativePlayer';
+import { NativeSession, NativeState, nativeHeading, nativePlayerOpen } from '../player/nativePlayer';
 import type { PlayItem } from '../player/types';
 import { setPlayerBridge, postSoon } from '../phone/link';
-import { goBack } from '../ui/nav';
+import { goBack, currentRoute } from '../ui/nav';
 import { toast } from '../ui/toast';
 
 interface Props {
@@ -39,12 +39,16 @@ export function NativePlayerScreen({ queue, index, startAt }: Props) {
       return undefined;
     }
     let cancelled = false;
+    // Preact runs unmount cleanups after paint: navigate back only while this player route is still on top
+    const route = currentRoute.value;
+    const leave = () => { if (!cancelled && currentRoute.value === route) goBack(); };
     let session: NativeSession | null = null;
     let unbridge: (() => void) | null = null;
-    decideStart(queue[index], startAt).then((pos) => {
+    // a launch while the native player is open (phone) must not ask behind the player
+    decideStart(queue[index], startAt, !nativePlayerOpen()).then((pos) => {
       if (cancelled) return;
       if (pos < 0) {
-        goBack();
+        leave();
         return;
       }
       const s = settings.value;
@@ -56,7 +60,7 @@ export function NativePlayerScreen({ queue, index, startAt }: Props) {
         onClosed: (_c, replaced) => {
           if (unbridge) unbridge();
           unbridge = null;
-          if (!cancelled && !replaced) goBack();
+          if (!replaced) leave();
         },
       });
       session = run;
@@ -71,13 +75,13 @@ export function NativePlayerScreen({ queue, index, startAt }: Props) {
           unbridge = null;
           if (cancelled) return;
           toast(failText(e), 'error');
-          goBack();
+          leave();
         },
       );
     });
     return () => {
       cancelled = true;
-      if (session) session.dispose();
+      if (session) session.detach();
       if (unbridge) unbridge();
     };
   }, []);

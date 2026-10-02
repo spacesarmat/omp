@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Base64
 import android.view.KeyEvent
 import android.view.View
@@ -45,8 +46,10 @@ import org.json.JSONObject
 /**
  * Native player on Android TV (Media3 ExoPlayer) with the OMP overlay: title, progress, time, «Пауза»,
  * «Аудио: …», «Субтитры: …», «Следующая серия», key hints and the «Управление с телефона» badge.
- * Keys: ◀/▶ seek by the settings step (repeated presses within 2 s grow like on LG: step, 2×step ≤ 30, 30),
+ * Keys: ◀/▶ seek by the settings step with the LG arrow rule ([SeekAccumulator]: ×(1 + repeats/4) up to ×6,
+ * one seek 700 ms after the last press),
  * OK pause, ▲ tracks, Back closes. At the end of an item: «Следующая серия через N» (5 s) or close.
+ * Moving to another item starts it from its resume point (queue `resume`, updated when an item is left).
  * Events go to the page through [NativePlayerBridge]; AC3/E-AC3/DTS use the default renderers
  * (passthrough over HDMI when the device reports support; no FFmpeg extension).
  */
@@ -75,8 +78,11 @@ class PlayerActivity : AppCompatActivity() {
     private var session: Long? = null
     private var closedSent = false
     private var controlsShown = true
-    private var pendingSeekMs: Long? = null
-    private val streak = SeekStreak()
+    private val seeker = SeekAccumulator({ SystemClock.uptimeMillis() })
+    private var resumeMs = LongArray(0)
+    private var lastIndex = -1
+    private var lastPosMs = 0L
+    private var lastDurMs = 0L
     private var countdown = -1
     private var error: String? = null
     private var ticks = 0
@@ -87,8 +93,7 @@ class PlayerActivity : AppCompatActivity() {
         render()
     }
     private val commitSeek = Runnable {
-        val t = pendingSeekMs
-        pendingSeekMs = null
+        val t = seeker.take()
         if (t != null) exo.seekTo(t)
         render()
         emitState()
@@ -105,6 +110,10 @@ class PlayerActivity : AppCompatActivity() {
     }
     private val tick = object : Runnable {
         override fun run() {
+            if (exo.currentMediaItemIndex == lastIndex) {
+                lastPosMs = exo.currentPosition
+                lastDurMs = durationMs()
+            }
             render()
             if (++ticks % 2 == 0) emitState()
             handler.postDelayed(this, 500)
@@ -151,7 +160,12 @@ class PlayerActivity : AppCompatActivity() {
         findViewById<PlayerView>(R.id.player_view).player = exo
         NativePlayerBridge.player = this
         load(r)
-        handler.post(tick)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        handler.removeCallbacks(tick)
+        if (::exo.isInitialized) handler.post(tick)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -167,6 +181,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        handler.removeCallbacks(tick)
         if (::exo.isInitialized && !isFinishing) exo.pause()
     }
 
@@ -217,8 +232,8 @@ class PlayerActivity : AppCompatActivity() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 cancelCountdown()
                 handler.removeCallbacks(commitSeek)
-                pendingSeekMs = null
-                streak.reset()
+                seeker.cancel()
+                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) resumeItem()
                 showControls()
                 changed()
             }
@@ -241,9 +256,12 @@ class PlayerActivity : AppCompatActivity() {
     private fun load(r: PlayRequest) {
         cancelCountdown()
         handler.removeCallbacks(commitSeek)
-        pendingSeekMs = null
-        streak.reset()
+        seeker.cancel()
         error = null
+        resumeMs = LongArray(r.queue.size) { r.queue[it].resumeMs }
+        lastIndex = r.index
+        lastPosMs = r.startAtMs
+        lastDurMs = 0L
         closedSent = false
         session = r.session
         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
@@ -421,18 +439,15 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun seekBy(dir: Int) {
         val dur = durationMs()
-        val from = pendingSeekMs ?: exo.currentPosition
-        val step = streak.next(dir, req.seekStep) * 1000L
-        val max = if (dur > 0) maxOf(0L, dur - 1000) else Long.MAX_VALUE
-        pendingSeekMs = (from + dir * step).coerceIn(0L, max)
+        seeker.press(dir, exo.currentPosition, dur, req.seekStep)
         handler.removeCallbacks(commitSeek)
-        handler.postDelayed(commitSeek, SEEK_COMMIT_MS)
+        handler.postDelayed(commitSeek, SeekAccumulator.COMMIT_DELAY_MS)
         showControls()
     }
 
     private fun seekToMs(t: Long) {
         handler.removeCallbacks(commitSeek)
-        pendingSeekMs = null
+        seeker.cancel()
         exo.seekTo(t)
     }
 
@@ -477,6 +492,27 @@ class PlayerActivity : AppCompatActivity() {
         if (::nextBox.isInitialized) nextBox.visibility = View.GONE
     }
 
+    /** A seek still being collected is applied first, so that the reported position is where the user went. */
+    private fun commitPendingSeek() {
+        handler.removeCallbacks(commitSeek)
+        seeker.take()?.let { exo.seekTo(it) }
+    }
+
+    /**
+     * Item change: the item left keeps its position as the resume point (cleared when nearly finished, as
+     * resumePosition does), the new item starts from its own resume point.
+     */
+    private fun resumeItem() {
+        val i = index()
+        if (lastIndex in resumeMs.indices && lastIndex != i) {
+            val watched = lastDurMs > 0 && lastPosMs.toDouble() / lastDurMs >= WATCHED_RATIO
+            resumeMs[lastIndex] = if (watched || lastPosMs < MIN_RESUME_MS) 0L else lastPosMs
+        }
+        lastIndex = i
+        val r = resumeMs.getOrElse(i) { 0L }
+        if (r > 0 && exo.currentPosition < MIN_RESUME_MS) exo.seekTo(r)
+    }
+
     private fun close() {
         if (isFinishing) return
         emitClosed(replaced = false)
@@ -516,9 +552,9 @@ class PlayerActivity : AppCompatActivity() {
         val i = index()
         val item = req.queue[i]
         val dur = durationMs()
-        val pos = pendingSeekMs ?: exo.currentPosition
+        val pos = seeker.pending() ?: exo.currentPosition
         val paused = !exo.playWhenReady
-        val visible = controlsShown || paused || pendingSeekMs != null || error != null
+        val visible = controlsShown || paused || seeker.pending() != null || error != null
         controls.visibility = if (visible) View.VISIBLE else View.GONE
         if (visible) {
             title.text = item.title
@@ -554,7 +590,7 @@ class PlayerActivity : AppCompatActivity() {
         val sList = JSArray()
         subs.forEach { sList.put(JSObject().put("label", it.label).put("value", it.value)) }
         val o = base()
-        o.put("paused", !exo.playWhenReady)
+        o.put("paused", !exo.playWhenReady || error != null)
         o.put("buffering", exo.playbackState == Player.STATE_BUFFERING)
         o.put("audio", JSObject().put("list", aList).put("sel", selectedAudio(audio)))
         o.put("subs", JSObject().put("list", sList).put("sel", selectedSub(subs).value))
@@ -564,6 +600,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun emitClosed(replaced: Boolean) {
         if (closedSent || !::exo.isInitialized) return
         closedSent = true
+        commitPendingSeek()
         val o = base()
         if (replaced) o.put("replaced", true)
         NativePlayerBridge.emit("nativePlayerClosed", o)
@@ -580,7 +617,8 @@ class PlayerActivity : AppCompatActivity() {
 
     companion object {
         private const val HIDE_MS = 4000L
-        private const val SEEK_COMMIT_MS = 700L
+        private const val WATCHED_RATIO = 0.9
+        private const val MIN_RESUME_MS = 10_000L
         private const val NEXT_COUNTDOWN_S = 5
         private const val EXTERNAL_ID = "omp-x"
         private val EXTERNAL_RE = Regex("omp-x(\\d+)")
