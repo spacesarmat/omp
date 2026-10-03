@@ -3,6 +3,7 @@
 // requests are JSON messages { id, op, ... } and every answer is { id, ok, value | error }.
 import type { NativeHttpRequest } from '../../../src/sources/http';
 import type { MonitorSummary } from '../../../src/monitor/settings';
+import { sanitizeJournal, type JournalItem } from './journal';
 
 /** A notification button handed to the page: «Добавить» (subscription) or «Заменить» (new episodes). */
 export interface MonitorAction {
@@ -16,6 +17,8 @@ export interface StartInfo {
   action: MonitorAction | null;
   /** Unix ms when Android destroys the page. */
   deadline: number;
+  /** Dedup markers of earlier runs (journal.ts). */
+  journal: JournalItem[];
 }
 
 /** One notification; Android builds the buttons and the links into the app from `subId` / `key`. */
@@ -41,7 +44,10 @@ export interface MonitorHost {
   start(): Promise<StartInfo>;
   http(req: NativeHttpRequest): Promise<HttpReply>;
   secretGet(key: string): Promise<{ value?: string | null }>;
-  notify(n: MonitorNotification): Promise<void>;
+  /** Resolves false when Android could not show it (notifications off or not permitted). */
+  notify(n: MonitorNotification): Promise<boolean>;
+  /** Stores dedup markers outside localStorage (fsync'ed file). */
+  persist(items: JournalItem[]): Promise<void>;
   /** The run is over: Android destroys the page. */
   finish(summary: MonitorSummary): void;
 }
@@ -94,9 +100,9 @@ export function bridgeHost(port: HostPort): MonitorHost {
   return {
     start: () =>
       send('start', {}).then((v) => {
-        const o = (v && typeof v === 'object' ? v : {}) as { action?: unknown; deadline?: unknown };
+        const o = (v && typeof v === 'object' ? v : {}) as { action?: unknown; deadline?: unknown; journal?: unknown };
         const deadline = typeof o.deadline === 'number' && isFinite(o.deadline) ? o.deadline : Date.now() + 120_000;
-        return { action: parseAction(o.action), deadline };
+        return { action: parseAction(o.action), deadline, journal: sanitizeJournal(o.journal) };
       }),
     http: (req) => send('http', { request: req }).then((v) => (v && typeof v === 'object' ? (v as HttpReply) : {})),
     secretGet: (key) =>
@@ -104,7 +110,8 @@ export function bridgeHost(port: HostPort): MonitorHost {
         const o = (v && typeof v === 'object' ? v : {}) as { value?: unknown };
         return { value: typeof o.value === 'string' ? o.value : null };
       }),
-    notify: (n) => send('notify', { notification: n }).then(() => undefined),
+    notify: (n) => send('notify', { notification: n }).then((v) => !!v && typeof v === 'object' && (v as { shown?: unknown }).shown === true),
+    persist: (items) => send('persist', { items }).then(() => undefined),
     finish(summary) {
       try {
         port.postMessage(JSON.stringify({ id: next++, op: 'finish', summary }));

@@ -43,6 +43,7 @@ class MonitorHost(
     private var web: WebView? = null
     private var finished = false
     private val services by lazy { SourceServices.get(ctx) }
+    private val journal by lazy { MonitorJournalFile(ctx) }
 
     @SuppressLint("SetJavaScriptEnabled")
     fun start() {
@@ -73,7 +74,8 @@ class MonitorHost(
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url
-                if (!url.host.equals(HOST, ignoreCase = true)) return null
+                // only the page's own origin; localhost:<port> / 127.0.0.1:8090 (a local TorrServer) go to the network
+                if (!MonitorOrigin.isPage(url.scheme, url.host, url.port)) return null
                 return assets.shouldInterceptRequest(url) ?: notFound()
             }
         }
@@ -106,8 +108,11 @@ class MonitorHost(
         if (finished) return
         when (val r = BridgeProtocol.parse(message.data)) {
             is BridgeRequest.Start -> {
-                val o = JSONObject().put("deadline", deadline).put("action", action?.forPage() ?: JSONObject.NULL)
-                reply.postMessage(BridgeProtocol.ok(r.id, o))
+                background(reply, r.id) {
+                    val o = JSONObject().put("deadline", deadline).put("action", action?.forPage() ?: JSONObject.NULL)
+                        .put("journal", MonitorJournal.toJson(journal.read()))
+                    BridgeProtocol.ok(r.id, o)
+                }
             }
             is BridgeRequest.Http -> background(reply, r.id) {
                 try {
@@ -125,8 +130,16 @@ class MonitorHost(
             }
             is BridgeRequest.Notify -> {
                 // a check only: the result of a button is shown by the worker
-                if (action == null) MonitorNotifier.post(ctx, r.spec)
-                reply.postMessage(BridgeProtocol.ok(r.id, null))
+                val shown = action == null && MonitorNotifier.post(ctx, r.spec)
+                reply.postMessage(BridgeProtocol.ok(r.id, JSONObject().put("shown", shown)))
+            }
+            is BridgeRequest.Persist -> background(reply, r.id) {
+                try {
+                    journal.append(r.items)
+                    BridgeProtocol.ok(r.id, null)
+                } catch (e: Exception) {
+                    BridgeProtocol.error(r.id, JOURNAL_FAILED)
+                }
             }
             is BridgeRequest.Finish -> finish(r.summary)
             is BridgeRequest.Invalid -> r.id?.let { reply.postMessage(BridgeProtocol.error(it, r.error)) }
@@ -149,8 +162,7 @@ class MonitorHost(
         }
     }
 
-    private fun sameOrigin(origin: Uri): Boolean =
-        origin.scheme == "http" && origin.host.equals(HOST, ignoreCase = true) && origin.port == -1
+    private fun sameOrigin(origin: Uri): Boolean = MonitorOrigin.isPage(origin.scheme, origin.host, origin.port)
 
     /** Serves "public/<path>" of the APK assets (where `cap sync` puts dist-mobile). */
     private class PublicAssets(private val assets: WebViewAssetLoader.AssetsPathHandler) : WebViewAssetLoader.PathHandler {
@@ -160,11 +172,12 @@ class MonitorHost(
     private fun notFound() = WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), ByteArrayInputStream(ByteArray(0)))
 
     companion object {
-        const val HOST = "localhost"
+        const val HOST = MonitorOrigin.HOST
         /** Capacitor's origin for this app (androidScheme 'http', hostname 'localhost'). */
-        const val ORIGIN = "http://localhost"
+        const val ORIGIN = MonitorOrigin.ORIGIN
         const val PAGE = "$ORIGIN/monitor.html"
         const val BRIDGE = "OmpMonitorHost"
         private const val NO_ANSWER = "Сайт не отвечает"
+        private const val JOURNAL_FAILED = "Не удалось сохранить состояние проверки"
     }
 }

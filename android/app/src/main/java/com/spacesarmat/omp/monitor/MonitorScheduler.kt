@@ -22,6 +22,8 @@ object MonitorScheduler {
     const val CHECK = "omp-monitor-check"
     const val ACTIONS = "omp-monitor-actions"
     const val KEY_ACTION = "action"
+    /** «Проверить сейчас»: waits for a running check instead of being skipped. */
+    const val KEY_MANUAL = "manual"
     private const val PREFS = "omp-monitor"
 
     private fun prefs(ctx: Context) = ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -46,7 +48,10 @@ object MonitorScheduler {
 
     /** «Проверить сейчас»: any network; a check already queued is kept. */
     fun runNow(ctx: Context) {
-        val req = OneTimeWorkRequestBuilder<MonitorWorker>().setConstraints(network(NetworkType.CONNECTED)).build()
+        val req = OneTimeWorkRequestBuilder<MonitorWorker>()
+            .setConstraints(network(NetworkType.CONNECTED))
+            .setInputData(workDataOf(KEY_MANUAL to true))
+            .build()
         WorkManager.getInstance(ctx).enqueueUniqueWork(CHECK, ExistingWorkPolicy.KEEP, req)
     }
 

@@ -22,27 +22,30 @@ describe('monitor bridge (page side)', () => {
       if (m.op === 'start') return { id: m.id, ok: true, value: { deadline: 123, action: { kind: 'add', subId: 's', key: 'k' } } };
       if (m.op === 'http') return { id: m.id, ok: true, value: { status: 200, url: m.request.url, text: 'ok' } };
       if (m.op === 'secretGet') return { id: m.id, ok: true, value: { value: 'u' } };
-      if (m.op === 'notify') return { id: m.id, ok: false, error: 'Неверный запрос' };
+      if (m.op === 'notify') return m.notification.id === 'bad' ? { id: m.id, ok: false, error: 'Неверный запрос' } : { id: m.id, ok: true, value: { shown: false } };
+      if (m.op === 'persist') return { id: m.id, ok: true, value: null };
       return undefined;
     });
     const h = bridgeHost(p);
-    expect(await h.start()).toEqual({ deadline: 123, action: { kind: 'add', subId: 's', key: 'k' } });
+    expect(await h.start()).toEqual({ deadline: 123, action: { kind: 'add', subId: 's', key: 'k' }, journal: [] });
     const [a, b] = await Promise.all([h.http({ url: 'https://a.b/1', method: 'GET' }), h.http({ url: 'https://a.b/2', method: 'GET' })]);
     expect(a.url).toBe('https://a.b/1');
     expect(b.url).toBe('https://a.b/2');
     expect(await h.secretGet('rutracker.user')).toEqual({ value: 'u' });
-    await expect(h.notify({ channel: 'subs', id: 'x', subId: 's', key: 'k', title: 't', text: '' })).rejects.toThrow('Неверный запрос');
+    await expect(h.notify({ channel: 'subs', id: 'bad', subId: 's', key: 'k', title: 't', text: '' })).rejects.toThrow('Неверный запрос');
+    expect(await h.notify({ channel: 'subs', id: 'x', subId: 's', key: 'k', title: 't', text: '' })).toBe(false);
+    await h.persist([{ s: 's', e: 'h:1' }]);
     h.finish({ at: 1, kind: 'check', found: 0, notified: 0, answered: 0, asked: 0, subs: 0, skipped: 0, feed: false });
     expect(p.sent[p.sent.length - 1].op).toBe('finish');
-    expect(p.sent.map((m) => m.op)).toEqual(['start', 'http', 'http', 'secretGet', 'notify', 'finish']);
+    expect(p.sent.map((m) => m.op)).toEqual(['start', 'http', 'http', 'secretGet', 'notify', 'notify', 'persist', 'finish']);
   });
 
   it('ignores a malformed action and garbage messages', async () => {
-    const p = port((m) => ({ id: m.id, ok: true, value: { deadline: 5, action: { kind: 'delete', subId: 's', key: 'k' } } }));
+    const p = port((m) => ({ id: m.id, ok: true, value: { deadline: 5, action: { kind: 'delete', subId: 's', key: 'k' }, journal: [{ s: 'a', e: 'h:1' }, { s: 'b' }, 5, { s: 'c', k: 'k', a: 'add' }, { s: 'd', k: 'k', a: 'rm' }] } }));
     const h = bridgeHost(p);
     p.onmessage!({ data: 'not json' });
     p.onmessage!({ data: JSON.stringify({ id: 999, ok: true }) });
-    expect(await h.start()).toEqual({ deadline: 5, action: null });
+    expect(await h.start()).toEqual({ deadline: 5, action: null, journal: [{ s: 'a', e: 'h:1' }, { s: 'c', k: 'k', a: 'add' }] });
   });
 
   it('there is no host outside the monitor WebView', () => {

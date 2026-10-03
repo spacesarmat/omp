@@ -76,6 +76,8 @@ export interface MonitorSummary {
   skipped: number;
   /** The «Новое» feed was refreshed. */
   feed: boolean;
+  /** Some notifications could not be shown (notifications off or not permitted). */
+  notifyBlocked?: boolean;
   /** Why part of the run failed (Russian), e.g. «Сервер недоступен» for the new episodes. */
   error?: string;
   action?: MonitorActionResult;
@@ -98,6 +100,7 @@ export function sanitizeSummary(v: unknown): MonitorSummary | null {
     skipped: num(v.skipped),
     feed: v.feed === true,
   };
+  if (v.notifyBlocked === true) s.notifyBlocked = true;
   if (typeof v.error === 'string' && v.error) s.error = v.error;
   if (isObject(v.action) && typeof v.action.message === 'string') {
     s.action = { ok: v.action.ok === true, message: v.action.message };

@@ -18,6 +18,8 @@ import { EPISODES_ID, type Finding } from '../../src/monitor/types';
 import type { Torrent } from '../../src/api/types';
 import type { Source, SourceResult } from '../../src/sources/types';
 import type { NativeHttpRequest } from '../../src/sources/http';
+import type { JournalItem } from '../src/monitor/journal';
+import { SEEN_KEY } from '../../src/monitor/subs';
 
 function res(Title: string, extra?: Partial<SourceResult>): SourceResult {
   return { Title, Categories: '', Size: '41 ГБ', CreateDate: '', Tracker: 'rutor', Link: '', Magnet: 'magnet:?xt=urn:btih:' + 'a'.repeat(40), Hash: '', Peer: 0, Seed: 1200, source: 'rutor', ...extra };
@@ -25,6 +27,10 @@ function res(Title: string, extra?: Partial<SourceResult>): SourceResult {
 
 interface FakeHost extends MonitorHost {
   notes: MonitorNotification[];
+  persisted: JournalItem[];
+  /** Order of persist / notify calls. */
+  log: string[];
+  shown: boolean;
   finished: MonitorSummary[];
   httpCalls: NativeHttpRequest[];
 }
@@ -32,9 +38,12 @@ interface FakeHost extends MonitorHost {
 function fakeHost(info: Partial<StartInfo> = {}, startFails = false): FakeHost {
   const h: FakeHost = {
     notes: [],
+    persisted: [],
+    log: [],
+    shown: true,
     finished: [],
     httpCalls: [],
-    start: () => (startFails ? Promise.reject(new Error('Нет ответа от приложения')) : Promise.resolve({ action: null, deadline: Date.now() + 180_000, ...info })),
+    start: () => (startFails ? Promise.reject(new Error('Нет ответа от приложения')) : Promise.resolve({ action: null, deadline: Date.now() + 180_000, journal: [], ...info })),
     http: (req) => {
       h.httpCalls.push(req);
       return Promise.reject(new Error('no network in tests'));
@@ -42,6 +51,12 @@ function fakeHost(info: Partial<StartInfo> = {}, startFails = false): FakeHost {
     secretGet: () => Promise.resolve({ value: null }),
     notify: (n) => {
       h.notes.push(n);
+      h.log.push('notify');
+      return Promise.resolve(h.shown);
+    },
+    persist: (items) => {
+      h.persisted.push(...items);
+      h.log.push('persist');
       return Promise.resolve();
     },
     finish: (s) => {
@@ -314,5 +329,65 @@ describe('runMonitor: notification buttons', () => {
     expect(r.ok).toBe(false);
     expect(r.message).toBeTruthy();
     expect(findingsOf(EPISODES_ID)).toHaveLength(1);
+  });
+});
+
+describe('durable dedup markers (journal)', () => {
+  it('markers are stored before the notification; a lost localStorage write does not repeat it', async () => {
+    const sub = addSubscription({ query: 'Дюна', quality: '', sources: null, notify: true })!;
+    const pages: { [q: string]: SourceResult[] } = { 'Дюна': [res('Дюна (2021) 1080p')] };
+    await runMonitor(deps(fakeHost(), { check: { search: fakeSearch(pages) } }));
+    const before = localStorage.getItem(SEEN_KEY)!;
+
+    pages['Дюна'] = pages['Дюна'].concat(res(DUNE, { Magnet: 'magnet:?xt=urn:btih:' + 'd'.repeat(40) }));
+    const host = fakeHost();
+    await runMonitor(deps(host, { check: { search: fakeSearch(pages) } }));
+    expect(host.notes).toHaveLength(1);
+    expect(host.log).toEqual(['persist', 'notify']);
+    expect(host.persisted).toEqual([{ s: sub.id, e: expect.stringContaining('t:дюна часть третья') }]);
+
+    // the process died before Chromium wrote the seen keys: localStorage is back to the earlier state
+    localStorage.setItem(SEEN_KEY, before);
+    const again = fakeHost({ journal: host.persisted });
+    await runMonitor(deps(again, { check: { search: fakeSearch(pages) } }));
+    expect(again.notes).toEqual([]);
+    // without the journal it would have been notified again
+    localStorage.setItem(SEEN_KEY, before);
+    const lost = fakeHost();
+    await runMonitor(deps(lost, { check: { search: fakeSearch(pages) } }));
+    expect(lost.notes).toHaveLength(1);
+  });
+
+  it('new-episode markers and button markers merge back; deleted or reset subscriptions are left alone', async () => {
+    const { mergeJournal } = await import('../src/monitor/journal');
+    const sub = addSubscription({ query: 'Дюна', quality: '', sources: null, notify: true })!;
+    const r = res(DUNE);
+    addFindings([{ subId: sub.id, key: resultKeys(r)[0], result: r, at: 1 }]);
+    expect(mergeJournal([{ s: sub.id, e: 'h:x' }, { s: 'gone', e: 'h:y' }])).toBe(0); // never checked: next check is silent anyway
+    expect(mergeJournal([{ s: EPISODES_ID, e: 'f:1:10' }, { s: sub.id, k: resultKeys(r)[0], a: 'add' }])).toBe(1);
+    expect(seenKeys(EPISODES_ID)).toEqual(['f:1:10']);
+    expect(loadFound()[0].seen).toBe(true);
+    expect(seenKeys('gone')).toBeNull();
+    expect(mergeJournal([{ s: EPISODES_ID, e: 'f:1:10' }])).toBe(0);
+  });
+
+  it('a successful button leaves a marker; notifications Android could not show are reported', async () => {
+    const sub = addSubscription({ query: 'Дюна', quality: '', sources: null, notify: true })!;
+    const r = res(DUNE);
+    const key = resultKeys(r)[0];
+    addFindings([{ subId: sub.id, key, result: r, at: 1 }]);
+    const host = fakeHost({ action: { kind: 'add', subId: sub.id, key } });
+    await runMonitor(deps(host, { client: () => fakeClient() }));
+    expect(host.persisted).toEqual([{ s: sub.id, k: key, a: 'add' }]);
+
+    const pages: { [q: string]: SourceResult[] } = { 'Дюна': [res('Дюна (2021) 1080p')] };
+    await runMonitor(deps(fakeHost(), { check: { search: fakeSearch(pages) } }));
+    pages['Дюна'] = pages['Дюна'].concat(res('Дюна 2', { Magnet: 'magnet:?xt=urn:btih:' + '9'.repeat(40) }));
+    const blocked = fakeHost();
+    blocked.shown = false;
+    const s = await runMonitor(deps(blocked, { check: { search: fakeSearch(pages) } }));
+    expect(s.found).toBe(1);
+    expect(s.notified).toBe(0);
+    expect(s.notifyBlocked).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ package com.spacesarmat.omp.monitor
 import com.spacesarmat.omp.sources.HttpSpec
 import com.spacesarmat.omp.sources.SiteHttpException
 import com.spacesarmat.omp.sources.SourceServices
+import org.json.JSONArray
 import org.json.JSONObject
 
 /** A notification the page asks for (validated). */
@@ -27,6 +28,8 @@ sealed class BridgeRequest {
     /** [key] is already the namespaced storage key. */
     data class SecretGet(val id: Int, val key: String) : BridgeRequest()
     data class Notify(val id: Int, val spec: NotifySpec) : BridgeRequest()
+    /** Dedup markers for [MonitorJournal] (validated when stored). */
+    data class Persist(val id: Int, val items: JSONArray) : BridgeRequest()
     /** The summary as the page sent it (re-serialized, size-capped). */
     data class Finish(val summary: JSONObject?) : BridgeRequest()
     /** A malformed request; answered with [error] when it has an id. */
@@ -60,6 +63,8 @@ object BridgeProtocol {
             }
             "secretGet" -> SourceServices.jsSecretKey(o.opt("key") as? String)?.let { BridgeRequest.SecretGet(id, it) }
                 ?: BridgeRequest.Invalid(id, SourceServices.SECRETS_FAILED)
+            "persist" -> o.optJSONArray("items")?.takeIf { it.length() <= MonitorJournal.MAX_ITEMS }?.let { BridgeRequest.Persist(id, it) }
+                ?: BridgeRequest.Invalid(id, BAD_MESSAGE)
             "notify" -> notify(o.optJSONObject("notification"))?.let { BridgeRequest.Notify(id, it) }
                 ?: BridgeRequest.Invalid(id, BAD_MESSAGE)
             else -> BridgeRequest.Invalid(id, BAD_MESSAGE)

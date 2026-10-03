@@ -19,6 +19,8 @@ import { FEED_CATEGORIES, type SourceContext } from '../../../src/sources/types'
 import { resolveLink, seedsText, sortResults, sourceName } from '../../../src/sources/view';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import type { MonitorAction, MonitorHost, MonitorNotification } from './host';
+import { mergeJournal, type JournalItem } from './journal';
+import { seenEntry } from '../../../src/monitor/match';
 
 /** The TorrServer calls the page needs (TorrServerClient fits). */
 export interface MonitorClient extends ReplaceClient {
@@ -141,17 +143,24 @@ export async function runAction(deps: PageDeps, a: MonitorAction): Promise<Monit
     const r = await replaceWithResult(c, f.episodes!.torrentHash, f.result, ctx);
     if (!r.ok) return { ok: false, message: r.error, title };
     removeFindings(EPISODES_ID, f.key);
+    await persist(deps, [{ s: EPISODES_ID, k: f.key, a: 'replace' }]);
     return { ok: true, message: 'Заменено', title };
   }
   try {
     const link = await resolveLink(f.result, ctx);
     const added = await c.add({ link, category: guessCategory(title) });
     markFindingsSeen(f.subId, [f.key]);
+    await persist(deps, [{ s: f.subId, k: f.key, a: 'add' }]);
     if (deps.afterAdd) await withTimeout(deps.afterAdd(c, added, title), AFTER_ADD_MS);
     return { ok: true, message: 'Добавлено на сервер', title };
   } catch (e) {
     return { ok: false, message: errorMessage(e), title };
   }
+}
+
+/** Dedup markers to Android before anything is shown; a failure only loses the extra safety. */
+function persist(deps: PageDeps, items: JournalItem[]): Promise<void> {
+  return items.length ? deps.host.persist(items).catch(() => undefined) : Promise.resolve();
 }
 
 function cursor(): number {
@@ -169,8 +178,9 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
   const ctx = hostContext(deps.host, c);
   const notify = (n: MonitorNotification) =>
     deps.host.notify(n).then(
-      () => {
-        s.notified++;
+      (shown) => {
+        if (shown) s.notified++;
+        else s.notifyBlocked = true;
       },
       () => {},
     );
@@ -193,6 +203,7 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
       r.failed.forEach((id) => (asked[id] = true));
       if (!r.findings.length) continue;
       s.found += r.findings.length;
+      await persist(deps, r.findings.map((f) => ({ s: sub.id, e: seenEntry(f.result) })));
       if (sub.notify) await notify(subNotification(sub, r.findings));
     }
   };
@@ -218,6 +229,7 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
         const found = await checkNewEpisodes(ctx, [t], deps.check);
         for (const f of found) {
           s.found++;
+          await persist(deps, [{ s: EPISODES_ID, e: f.key }]);
           await notify(episodeNotification(f));
         }
       }
@@ -252,6 +264,8 @@ export async function runMonitor(deps: PageDeps): Promise<MonitorSummary> {
   let summary: MonitorSummary;
   try {
     const info = await deps.host.start();
+    // seen keys a killed process may have lost from localStorage
+    mergeJournal(info.journal);
     if (info.action) {
       summary = emptySummary(now(), 'action');
       summary.action = await runAction(deps, info.action);

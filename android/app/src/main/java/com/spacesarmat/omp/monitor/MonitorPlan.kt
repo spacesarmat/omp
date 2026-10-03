@@ -47,6 +47,19 @@ object MonitorIds {
     fun item(id: String): Int = BASE + (id.hashCode() and 0x3fffffff)
 }
 
+/**
+ * The page's own origin, http://localhost without a port (Capacitor's origin). Only it is served from the bundle and only
+ * it may use the bridge; http://localhost:<port> and 127.0.0.1:8090 (the embedded TorrServer) go to the network.
+ */
+object MonitorOrigin {
+    const val HOST = "localhost"
+    const val ORIGIN = "http://localhost"
+
+    /** [port] as android.net.Uri reports it: -1 when absent. */
+    fun isPage(scheme: String?, host: String?, port: Int): Boolean =
+        scheme.equals("http", ignoreCase = true) && host.equals(HOST, ignoreCase = true) && port == -1
+}
+
 /** Links handed to the app from a notification (read by the app through takeMonitorOpen / monitorOpen). */
 object MonitorLinks {
     const val ACTION_OPEN = "com.spacesarmat.omp.MONITOR_OPEN"

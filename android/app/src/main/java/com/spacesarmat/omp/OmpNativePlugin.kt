@@ -781,6 +781,8 @@ class OmpNativePlugin : Plugin() {
         io.execute {
             try {
                 MonitorScheduler.apply(context, s)
+                // the channels show up in the system settings as soon as monitoring is on
+                if (s.enabled) MonitorNotifier.ensureChannels(context)
                 once.resolve()
             } catch (e: Exception) {
                 once.reject(MONITOR_FAILED)
@@ -825,6 +827,7 @@ class OmpNativePlugin : Plugin() {
     /** Asks for POST_NOTIFICATIONS when it can still be asked; resolves with the new { state }. */
     @PluginMethod
     fun requestMonitorNotifyPermission(call: PluginCall) {
+        MonitorNotifier.ensureChannels(context)
         if (Build.VERSION.SDK_INT < 33 || getPermissionState("notifications") == PermissionState.GRANTED) {
             return call.resolve(JSObject().put("state", notifyState()))
         }

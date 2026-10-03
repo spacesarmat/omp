@@ -29,7 +29,8 @@ object MonitorNotifier {
         return NotificationManagerCompat.from(ctx).areNotificationsEnabled()
     }
 
-    private fun ensureChannels(ctx: Context) {
+    /** Called when monitoring is switched on too, so the channels can be tuned before the first notification. */
+    fun ensureChannels(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         if (nm.getNotificationChannel(MonitorIds.CHANNEL_SUBS) == null) {
             nm.createNotificationChannel(NotificationChannel(MonitorIds.CHANNEL_SUBS, "Подписки", NotificationManager.IMPORTANCE_DEFAULT))
@@ -65,9 +66,10 @@ object MonitorNotifier {
             .setGroup(group(channel))
             .setAutoCancel(true)
 
-    private fun show(ctx: Context, id: Int, channel: String, b: NotificationCompat.Builder) {
-        if (!canNotify(ctx)) return
+    /** false when notifications are off for the app or not permitted. */
+    private fun show(ctx: Context, id: Int, channel: String, b: NotificationCompat.Builder): Boolean {
         ensureChannels(ctx)
+        if (!canNotify(ctx)) return false
         val nm = NotificationManagerCompat.from(ctx)
         try {
             nm.notify(id, b.build())
@@ -81,13 +83,15 @@ object MonitorNotifier {
                 .setAutoCancel(true)
                 .build()
             nm.notify(summaryId, summary)
+            return true
         } catch (e: SecurityException) {
             // permission revoked meanwhile
+            return false
         }
     }
 
-    /** A new item from the page. */
-    fun post(ctx: Context, n: NotifySpec) {
+    /** A new item from the page; false when it could not be shown. */
+    fun post(ctx: Context, n: NotifySpec): Boolean {
         val id = n.notifId
         val b = builder(ctx, n.channel, n.title, n.text)
             .setContentIntent(openIntent(ctx, MonitorLinks.open(n.subId, n.key, false), id * 4))
@@ -96,7 +100,7 @@ object MonitorNotifier {
             b.addAction(0, if (n.action == MonitorAction.ADD) "Добавить" else "Заменить", actionIntent(ctx, a))
         }
         b.addAction(0, "Смотреть на ТВ", openIntent(ctx, MonitorLinks.open(n.subId, n.key, true), id * 4 + 2))
-        show(ctx, id, n.channel, b)
+        return show(ctx, id, n.channel, b)
     }
 
     /** The button was pressed: «Добавляю…» / «Заменяю…» without buttons (no second press). */
