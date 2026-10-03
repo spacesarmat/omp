@@ -135,3 +135,14 @@ describe('skip settings (key s)', () => {
     expect(JSON.parse(serializeData({}, j)).omp.s).toBeUndefined();
   });
 });
+
+describe('journal: keys of newer versions', () => {
+  it('serializeData keeps unknown keys inside omp', () => {
+    const data = JSON.stringify({ omp: { v: 1, h: [], s: { i: true, c: false }, future: { x: 1 } }, lampa: 2 });
+    const p = parseData(data)!;
+    const out = JSON.parse(serializeData(p.obj, p.journal));
+    expect(out.omp.future).toEqual({ x: 1 });
+    expect(out.omp.s).toEqual({ i: true, c: false });
+    expect(out.lampa).toBe(2);
+  });
+});

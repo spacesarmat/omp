@@ -145,7 +145,13 @@ export function serializeData(obj: { [k: string]: unknown }, journal: JournalEnt
   });
   const old = obj[JOURNAL_KEY];
   const keep = skip === undefined ? (isPlainObject(old) ? sanitizeSkip(old.s) : null) : skip;
-  const omp: { [k: string]: unknown } = { v: JOURNAL_VERSION, h: journal.slice(0, JOURNAL_MAX) };
+  const omp: { [k: string]: unknown } = {};
+  // keys a newer OMP may add to the journal object survive this version's writes
+  if (isPlainObject(old)) Object.keys(old).forEach((k) => {
+    if (k !== 'v' && k !== 'h' && k !== 's') omp[k] = old[k];
+  });
+  omp.v = JOURNAL_VERSION;
+  omp.h = journal.slice(0, JOURNAL_MAX);
   if (keep) omp.s = keep;
   out[JOURNAL_KEY] = omp;
   return JSON.stringify(out);
