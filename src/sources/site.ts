@@ -92,3 +92,44 @@ export function makeResult(source: string, tracker: string, f: ResultFields): So
   if (f.sizeBytes !== null) r.sizeBytes = f.sizeBytes;
   return r;
 }
+
+/**
+ * Lists of several pages loaded in parallel (a feed of two sections), newest first (stable; undated rows last).
+ * A page that fails is left out; when every page fails, rejects with the first error.
+ */
+export function mergePages(pages: Promise<SourceResult[]>[]): Promise<SourceResult[]> {
+  if (!pages.length) return Promise.resolve([]);
+  const lists: (SourceResult[] | null)[] = pages.map(() => null);
+  const errors: unknown[] = pages.map(() => null);
+  let left = pages.length;
+  return new Promise<SourceResult[]>((resolve, reject) => {
+    const settle = () => {
+      left -= 1;
+      if (left > 0) return;
+      const ok = lists.filter((l) => l !== null) as SourceResult[][];
+      if (!ok.length) {
+        reject(errors[0]);
+        return;
+      }
+      const all = ok.reduce((acc: SourceResult[], l) => acc.concat(l), []);
+      resolve(
+        all
+          .map((r, i) => ({ r, i, d: r.date || 0 }))
+          .sort((a, b) => b.d - a.d || a.i - b.i)
+          .map((x) => x.r),
+      );
+    };
+    pages.forEach((p, i) => {
+      p.then(
+        (list) => {
+          lists[i] = list;
+          settle();
+        },
+        (e) => {
+          errors[i] = e;
+          settle();
+        },
+      );
+    });
+  });
+}

@@ -53,6 +53,18 @@ function safe(fn: () => void): void {
 export function searchAll(query: string, opts: SearchAllOptions): SearchHandle {
   const from = opts.from || allSources();
   const chosen = opts.sources ? from.filter((s) => opts.sources!.indexOf(s.id) >= 0) : enabledSources(from);
+  return runSources(chosen, (source) => source.search(query, opts.ctx), opts);
+}
+
+/**
+ * The engine of searchAll and feedAll: `call` on every source in parallel, results streamed per source, a timeout per
+ * source, health recorded, results merged.
+ */
+export function runSources(
+  chosen: Source[],
+  call: (source: Source) => Promise<SourceResult[]>,
+  opts: Pick<SearchAllOptions, 'onResult' | 'onDone' | 'timeoutMs'>,
+): SearchHandle {
   const timeoutMs = opts.timeoutMs || SOURCE_TIMEOUT_MS;
   const collected: SourceResult[] = [];
   const answered: string[] = [];
@@ -88,7 +100,7 @@ export function searchAll(query: string, opts: SearchAllOptions): SearchHandle {
 
     let run: Promise<SourceResult[]>;
     try {
-      run = Promise.resolve(source.search(query, opts.ctx));
+      run = Promise.resolve(call(source));
     } catch (e) {
       run = Promise.reject(e);
     }

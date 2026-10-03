@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseData, addEntry, serializeData, removeFile, journalOf, sanitizeSkip, JOURNAL_MAX, type JournalEntry } from '../../src/lib/journal';
+import { parseData, addEntry, serializeData, removeFile, journalOf, sanitizeSkip, watchesNewEpisodes, JOURNAL_MAX, type JournalEntry } from '../../src/lib/journal';
 
 const T0 = 1_759_400_000_000;
 
@@ -133,6 +133,28 @@ describe('skip settings (key s)', () => {
     expect(JSON.parse(serializeData(obj, j, null)).omp.s).toBeUndefined();
     expect(JSON.parse(serializeData(obj, j)).lampa).toBe(1);
     expect(JSON.parse(serializeData({}, j)).omp.s).toBeUndefined();
+  });
+});
+
+describe('watch new episodes (s.w)', () => {
+  it('w is kept only when false; absent means watch', () => {
+    expect(sanitizeSkip({ i: true, w: false })).toEqual({ i: true, c: false, w: false });
+    expect(sanitizeSkip({ w: true })).toEqual({ i: false, c: false });
+    expect(sanitizeSkip({ w: 'no' })).toEqual({ i: false, c: false });
+    expect(watchesNewEpisodes(null)).toBe(true);
+    expect(watchesNewEpisodes({ i: false, c: false })).toBe(true);
+    expect(watchesNewEpisodes({ i: false, c: false, w: false })).toBe(false);
+  });
+
+  it('parseData / serializeData round-trip w with the marks and the history', () => {
+    const j: JournalEntry[] = [{ f: 1, t: 1, d: 2, at: T0, src: 'tv' }];
+    const data = JSON.stringify({ lampa: 1, omp: { v: 1, h: j, s: { i: true, c: false, mc: 60, w: false } } });
+    const p = parseData(data)!;
+    expect(p.skip).toEqual({ i: true, c: false, mc: 60, w: false });
+    const out = JSON.parse(serializeData(p.obj, p.journal));
+    expect(out.omp.s).toEqual({ i: true, c: false, mc: 60, w: false });
+    expect(out.omp.h).toEqual(j);
+    expect(out.lampa).toBe(1);
   });
 });
 

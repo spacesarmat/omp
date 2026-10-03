@@ -146,6 +146,15 @@ describe('loadSkip / saveSkip', () => {
     expect(JSON.parse(s.t.data!).omp.s).toEqual({ i: true, c: false });
   });
 
+  it('saveSkip switches watching new episodes off and on, keeping the marks', async () => {
+    const s = fakeServer({ data: JSON.stringify({ omp: { v: 1, h: [], s: { i: true, c: false, mc: 60 } } }) });
+    expect(await saveSkip(s.c, { hash: 'h' }, { w: false })).toEqual({ i: true, c: false, mc: 60, w: false });
+    expect(JSON.parse(s.t.data!).omp.s).toEqual({ i: true, c: false, mc: 60, w: false });
+    expect(await saveSkip(s.c, { hash: 'h' }, { c: true })).toEqual({ i: true, c: true, mc: 60, w: false });
+    expect(await saveSkip(s.c, { hash: 'h' }, { w: true })).toEqual({ i: true, c: true, mc: 60 });
+    expect(JSON.parse(s.t.data!).omp.s).toEqual({ i: true, c: true, mc: 60 });
+  });
+
   it('writing history afterwards keeps s', async () => {
     const s = fakeServer({ data: '{}' });
     await saveSkip(s.c, { hash: 'h' }, { c: true });

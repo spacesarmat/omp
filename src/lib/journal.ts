@@ -29,6 +29,13 @@ export interface SkipPrefs {
   mi?: [number, number];
   /** Manual credits: the last N seconds. */
   mc?: number;
+  /** Watch for new episodes (monitoring): stored only as false («Не следить»); absent = watch. */
+  w?: boolean;
+}
+
+/** New episodes of the torrent are watched: true unless «Следить за новыми сериями» was switched off (s.w false). */
+export function watchesNewEpisodes(skip: SkipPrefs | null | undefined): boolean {
+  return !skip || skip.w !== false;
 }
 
 export interface ParsedData {
@@ -79,6 +86,7 @@ export function sanitizeSkip(v: unknown): SkipPrefs | null {
   }
   const mc = finiteNum(v.mc);
   if (mc !== null && mc > 0) out.mc = mc;
+  if (v.w === false) out.w = false;
   return out;
 }
 

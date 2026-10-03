@@ -76,7 +76,14 @@ export interface Source {
   logout?(ctx: SourceContext): Promise<void>;
   /** Saved credentials exist (no network). */
   loggedIn?(ctx: SourceContext): Promise<boolean>;
+  /** Fresh releases of a category from the site's public «new» pages (no login), newest first. The «Новое» feed. */
+  latest?(ctx: SourceContext, category: FeedCategory): Promise<SourceResult[]>;
 }
+
+/** Categories of the «Новое» feed: «Фильмы / Сериалы / Аниме». */
+export type FeedCategory = 'movie' | 'tv' | 'anime';
+
+export const FEED_CATEGORIES: FeedCategory[] = ['movie', 'tv', 'anime'];
 
 export type HealthState = 'ok' | 'error' | 'login';
 

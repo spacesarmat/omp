@@ -100,6 +100,8 @@ function applyPatch(cur: SkipPrefs, patch: SkipPatch): SkipPrefs {
   const mc = patch.mc === undefined ? cur.mc : patch.mc;
   if (mi) out.mi = mi;
   if (mc) out.mc = mc;
+  const w = patch.w === undefined ? cur.w : patch.w;
+  if (w === false) out.w = false;
   // the same checks as reading: a bad mark (end before start, zero, NaN) is dropped, never written
   return sanitizeSkip(out) || { i: out.i, c: out.c };
 }
