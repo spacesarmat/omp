@@ -82,11 +82,17 @@ describe('holdStep', () => {
   it('auto-repeat is held at once', () => {
     expect(holdStep(fresh(), 1, true, 1000)).toBe(30);
   });
-  it('same direction again within the gap counts as held (remotes without repeat), another direction does not', () => {
+  it('a quick double tap stays 2 x 5 s', () => {
     const t = fresh();
     expect(holdStep(t, 1, false, 1000)).toBe(5);
-    expect(holdStep(t, 1, false, 1100)).toBe(30);
-    expect(holdStep(t, -1, false, 1150)).toBe(5);
+    expect(holdStep(t, 1, false, 1120)).toBe(5);
+  });
+  it('a third quick same-direction press counts as held (remotes without repeat), another direction does not', () => {
+    const t = fresh();
+    expect(holdStep(t, 1, false, 1000)).toBe(5);
+    expect(holdStep(t, 1, false, 1100)).toBe(5);
+    expect(holdStep(t, 1, false, 1200)).toBe(30);
+    expect(holdStep(t, -1, false, 1250)).toBe(5);
   });
   it('fast steps are limited to one per FAST_STEP_MS while the key is held', () => {
     const t = fresh();

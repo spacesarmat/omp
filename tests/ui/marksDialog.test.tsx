@@ -93,14 +93,16 @@ describe('TV marks dialog', () => {
     await focusRow('marks-to');
     key('right');
     expect(values()[1]).toBe('2:20');
+    key('right', false, 100); // a quick double tap is still 5 s
+    expect(values()[1]).toBe('2:25');
+    key('right', false, 100); // the third quick press is a hold
+    expect(values()[1]).toBe('2:55');
     key('right', false, 100);
-    expect(values()[1]).toBe('2:50');
+    expect(values()[1]).toBe('2:55');
     key('right', false, 100);
-    expect(values()[1]).toBe('2:50');
+    expect(values()[1]).toBe('2:55');
     key('right', false, 100);
-    expect(values()[1]).toBe('2:50');
-    key('right', false, 100);
-    expect(values()[1]).toBe('3:20');
+    expect(values()[1]).toBe('3:25');
   });
 
   it('two slow presses are two 5 s steps', async () => {

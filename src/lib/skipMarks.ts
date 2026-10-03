@@ -86,7 +86,7 @@ export function markText(m: TvMarks, row: MarkRow): string {
   return m.mi ? formatDuration(row === 'from' ? m.mi[0] : m.mi[1]) : '—';
 }
 
-/** A key press in the dialog counts as held: auto-repeat, or the same direction again within this many ms. */
+/** A key press in the dialog counts as held: auto-repeat, or a third same-direction press each within this many ms of the last. */
 export const HOLD_GAP_MS = 180;
 /** While held, at most one fast step per this many ms (remotes repeat at 10-30 Hz). */
 export const FAST_STEP_MS = 250;
@@ -95,11 +95,14 @@ export interface KeyTrack {
   dir: number;
   at: number;
   fastAt: number;
+  /** same-direction presses in a row, each within HOLD_GAP_MS */
+  n?: number;
 }
 
-/** Amount to step for a left/right press now (0: drop it; a held key repeats faster than a fast step is useful); updates the track). */
+/** Amount to step for a left/right press now, updating the track; 0 drops the press (a held key repeats faster than a fast step is useful). */
 export function holdStep(track: KeyTrack, dir: 1 | -1, repeat: boolean, now: number): number {
-  const held = repeat || (track.dir === dir && now - track.at < HOLD_GAP_MS);
+  track.n = track.dir === dir && now - track.at < HOLD_GAP_MS ? (track.n || 1) + 1 : 1;
+  const held = repeat || track.n >= 3;
   track.dir = dir;
   track.at = now;
   if (!held) return MARK_STEP;
