@@ -2,6 +2,7 @@ package com.spacesarmat.omp
 
 import android.Manifest
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -440,7 +441,10 @@ class OmpNativePlugin : Plugin() {
                 .setType("text/plain")
                 .putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // ClipData carries the read grant to the chooser and its preview
+            send.clipData = ClipData.newRawUri("", uri)
             val chooser = Intent.createChooser(send, "Поделиться журналом")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             val act = activity
             if (act != null) act.startActivity(chooser)
             else context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -1003,6 +1007,6 @@ internal fun shareFileName(raw: String?): String {
     val cleaned = (raw ?: "").substringAfterLast('/').substringAfterLast('\\')
         .map { if (it.isLetterOrDigit() || it == '.' || it == '-' || it == '_') it else '_' }
         .joinToString("").trim('.', '_')
-    val base = cleaned.ifEmpty { "omp-log.txt" }
+    val base = cleaned.take(100).trim('.', '_').ifEmpty { "omp-log.txt" }
     return if (base.contains('.')) base else "$base.txt"
 }

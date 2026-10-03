@@ -39,6 +39,8 @@ export interface HttpOptions {
   timeoutMs?: number;
   auth?: string;
   responseType?: 'json' | 'text' | 'arraybuffer';
+  /** The caller expects this to fail sometimes (optional endpoints, offline checks): keep it out of the log. */
+  quiet?: boolean;
 }
 
 /** Failed request -> log: kind, status and site kind only (scrub drops everything after the host). */
@@ -92,18 +94,26 @@ export function request<T>(url: string, opts: HttpOptions = {}): Promise<T> {
   const timeout = opts.timeoutMs === undefined ? 5000 : opts.timeoutMs;
   if (timeout <= 0) {
     // a side branch: the caller's promise gets no extra tick
-    p.then(undefined, (e) => logFailure(url, e));
+    if (!opts.quiet) p.then(undefined, (e) => logFailure(url, e));
     return p;
   }
   return new Promise<T>((resolve, reject) => {
+    let settled = false;
     const timer = setTimeout(() => {
+      settled = true;
       const e = apiError('timeout', 'Timeout');
-      logFailure(url, e);
+      if (!opts.quiet) logFailure(url, e);
       reject(e);
     }, timeout);
     p.then(
       (v) => { clearTimeout(timer); resolve(v); },
-      (e) => { clearTimeout(timer); logFailure(url, e); reject(e); },
+      (e) => {
+        clearTimeout(timer);
+        // after the timeout fired the failure is already logged and rejected
+        if (settled) return;
+        if (!opts.quiet) logFailure(url, e);
+        reject(e);
+      },
     );
   });
 }

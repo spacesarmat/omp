@@ -5,7 +5,7 @@ import { Log, setLogActions, filterEntries } from '../src/screens/Log';
 import { Settings } from '../src/screens/Settings';
 import { currentRoute, resetTo } from '../src/nav';
 import { toast } from '../src/ui/toast';
-import { log, clearLog, logEntries, LOG_COPIED_NOTE } from '../../src/lib/log';
+import { log, clearLog, logEntries } from '../../src/lib/log';
 import { localServer } from '../src/server/localServer';
 
 function mount(ui: preact.VNode): HTMLElement {
@@ -105,7 +105,7 @@ describe('Log screen', () => {
     await act(async () => btn(el, 'Сообщить об ошибке на GitHub').click());
     await settle();
     expect(calls.open.length).toBe(1);
-    expect(decodeURIComponent(calls.open[0])).toContain(LOG_COPIED_NOTE);
+    expect(decodeURIComponent(calls.open[0])).toContain('Не удалось скопировать журнал');
     expect(toast.value).toBe('Не удалось скопировать журнал');
   });
   it('share: a dated .txt file with the formatted log', async () => {

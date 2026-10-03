@@ -298,3 +298,10 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .catalog-off-hint { font-size: 26px; color: var(--muted); margin-top: 40px; }
 .banner-row { display: flex; align-items: center; }
 .banner-row .banner-text { flex: 1; min-width: 0; margin-right: 24px; }
+
+.log-line { font-size: 22px; line-height: 1.35; margin-bottom: 8px; color: var(--text); overflow-wrap: break-word; }
+.log-level { font-weight: bold; color: #8fe39a; }
+.log-warn .log-level { color: #f5b700; }
+.log-error .log-level { color: #ff8a80; }
+.log-empty { font-size: 22px; color: var(--muted); margin-bottom: 16px; }
+.log-brief { margin-bottom: 16px; }

@@ -269,8 +269,11 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
 /** Counts only, never titles. */
 function logSummary(s: MonitorSummary): void {
   try {
-    if (s.kind === 'action') log('info', 'monitor', 'Действие из уведомления выполнено');
-    else
+    if (s.kind === 'action') {
+      // the message is generic Russian text; the release title is never logged
+      if (s.action && !s.action.ok) log('error', 'monitor', 'Действие из уведомления не выполнено: ' + s.action.message);
+      else log('info', 'monitor', 'Действие из уведомления выполнено');
+    } else
       log(
         s.error ? 'error' : 'info',
         'monitor',

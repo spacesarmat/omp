@@ -90,7 +90,7 @@ export class TorrServerClient {
 
   /** TMDB settings of the server; null on servers without them. */
   tmdbSettings(): Promise<TmdbConfig | null> {
-    return this.call<TmdbConfig | null>('/tmdb/settings', { method: 'GET' }).then(
+    return this.call<TmdbConfig | null>('/tmdb/settings', { method: 'GET', quiet: true }).then(
       (r) => (r && typeof r === 'object' ? r : null),
       () => null,
     );
@@ -137,11 +137,11 @@ export class TorrServerClient {
   }
 
   ffprobeAvailable(): Promise<boolean> {
-    return this.call<{ available: boolean } | null>('/ffp/status').then((r) => !!(r && r.available), () => false);
+    return this.call<{ available: boolean } | null>('/ffp/status', { quiet: true }).then((r) => !!(r && r.available), () => false);
   }
 
   probe(hash: string, fileIndex: number): Promise<FfprobeResult | null> {
-    return this.call<FfprobeResult | null>('/ffp/' + hash + '/' + fileIndex, { timeoutMs: 30000 }).then(
+    return this.call<FfprobeResult | null>('/ffp/' + hash + '/' + fileIndex, { timeoutMs: 30000, quiet: true }).then(
       (r) => (r && r.streams ? r : null),
       () => null,
     );

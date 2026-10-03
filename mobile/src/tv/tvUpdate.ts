@@ -22,7 +22,7 @@ export interface TvUpdateDeps {
 /** Installed and newest OMP for the connected TV (webOS feed for LG, APK feed for Android TV). */
 export function tvOmpVersions(deps: TvUpdateDeps = {}): Promise<TvOmp> {
   const installed = deps.installed || ompVersionOnTv;
-  const fetchJson = deps.fetchJson || ((url: string) => request<unknown>(url, { timeoutMs: 10000 }));
+  const fetchJson = deps.fetchJson || ((url: string) => request<unknown>(url, { timeoutMs: 10000, quiet: true }));
   const feed = tvKind() === 'atv' ? ANDROID_UPDATE_URL : UPDATE_URL;
   // cache-buster: the feed is cached for minutes after a release
   const latest = fetchJson(feed + '?t=' + (deps.now === undefined ? Date.now() : deps.now)).then(

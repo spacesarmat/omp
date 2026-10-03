@@ -73,7 +73,7 @@ export async function reportToGithub(): Promise<void> {
   } catch {
     copied = false;
   }
-  actions.openUrl(githubIssueUrl(info));
+  actions.openUrl(githubIssueUrl(info, copied));
   showToast(copied ? 'Журнал скопирован' : 'Не удалось скопировать журнал');
 }
 
