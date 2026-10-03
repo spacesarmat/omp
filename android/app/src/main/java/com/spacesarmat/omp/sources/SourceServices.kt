@@ -1,0 +1,90 @@
+package com.spacesarmat.omp.sources
+
+import android.content.Context
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import org.json.JSONObject
+
+/**
+ * A site request of the search sources as the page sends it (OmpNative.http and the background page's bridge):
+ * { url, method?: GET|POST, headers?, form?, formCharset?, body?, timeoutMs? }. Pure: tested on the JVM.
+ */
+data class HttpSpec(
+    val url: String,
+    val method: String,
+    val headers: Map<String, String>,
+    val form: Map<String, String>?,
+    val formCharset: String?,
+    val body: String?,
+    val timeoutMs: Long,
+) {
+    companion object {
+        const val DEFAULT_TIMEOUT_MS = 20_000
+        const val MIN_TIMEOUT_MS = 1_000
+        const val MAX_TIMEOUT_MS = 60_000
+
+        /** Throws [SiteHttpException] (BAD_URL / BAD_REQUEST, Russian). Non-string header / form values are dropped. */
+        fun parse(o: JSONObject?): HttpSpec {
+            if (o == null) throw SiteHttpException(SiteHttp.BAD_REQUEST)
+            val url = o.opt("url") as? String
+            if (url == null || url.toHttpUrlOrNull() == null) throw SiteHttpException(SiteHttp.BAD_URL)
+            val method = ((o.opt("method") as? String) ?: "GET").uppercase()
+            if (method != "GET" && method != "POST") throw SiteHttpException(SiteHttp.BAD_REQUEST)
+            val timeout = (o.opt("timeoutMs") as? Number)?.toInt() ?: DEFAULT_TIMEOUT_MS
+            return HttpSpec(
+                url = url,
+                method = method,
+                headers = stringMap(o.optJSONObject("headers")),
+                form = o.optJSONObject("form")?.let { stringMap(it) },
+                formCharset = o.opt("formCharset") as? String,
+                body = o.opt("body") as? String,
+                timeoutMs = timeout.coerceIn(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS).toLong(),
+            )
+        }
+
+        fun stringMap(o: JSONObject?): Map<String, String> {
+            val out = LinkedHashMap<String, String>()
+            if (o == null) return out
+            val keys = o.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val v = o.opt(k)
+                if (v is String) out[k] = v
+            }
+            return out
+        }
+
+        /** { status, url, text } as both callers answer it. */
+        fun reply(r: SiteHttp.Response): JSONObject = JSONObject().put("status", r.status).put("url", r.url).put("text", r.text)
+    }
+}
+
+/**
+ * Site HTTP with the per-site cookie jar and the Keystore secrets, one per process: the app's plugin and the
+ * background monitor page share the same cookies (a tracker session) and never race two in-memory jars.
+ * Values are never logged.
+ */
+class SourceServices private constructor(context: Context) {
+    val secrets = SecretStorage(context)
+    val siteHttp = SiteHttp(SiteCookieJar(SecretCookieStore(secrets)))
+
+    /** Blocking. Throws [SiteHttpException]. */
+    fun request(spec: HttpSpec): SiteHttp.Response =
+        siteHttp.request(spec.url, spec.method, spec.headers, spec.form, spec.formCharset, spec.body, spec.timeoutMs)
+
+    companion object {
+        const val SECRETS_FAILED = "Не удалось открыть защищённое хранилище"
+        private const val JS_SECRET_PREFIX = "js:"
+
+        @Volatile
+        private var instance: SourceServices? = null
+
+        fun get(context: Context): SourceServices =
+            instance ?: synchronized(this) {
+                instance ?: SourceServices(context.applicationContext).also { instance = it }
+            }
+
+        /** JS keys live in their own namespace: page code cannot read the cookie entries. null when invalid. */
+        fun jsSecretKey(key: String?): String? =
+            if (key.isNullOrEmpty() || key.length > 200) null else JS_SECRET_PREFIX + key
+    }
+}

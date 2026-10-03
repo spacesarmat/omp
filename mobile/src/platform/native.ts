@@ -133,6 +133,11 @@ export const ONLY_ANDROID = 'Доступно только в приложени
 const available = Capacitor.isNativePlatform();
 const plugin = available ? registerPlugin<OmpNativePlugin>('OmpNative') : null;
 
+/** The registered plugin proxy for wrappers of other plugin methods (monitor/native.ts); null outside Android. */
+export function rawPlugin(): unknown {
+  return plugin;
+}
+
 function unavailable(): Promise<never> {
   return Promise.reject(new Error(ONLY_ANDROID));
 }

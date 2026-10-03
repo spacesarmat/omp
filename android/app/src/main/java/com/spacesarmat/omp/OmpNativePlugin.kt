@@ -16,14 +16,16 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
 import com.spacesarmat.omp.control.TvRemote
+import com.spacesarmat.omp.monitor.MonitorNotifier
+import com.spacesarmat.omp.monitor.MonitorPlan
+import com.spacesarmat.omp.monitor.MonitorScheduler
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayRequest
 import com.spacesarmat.omp.player.PlayerActivity
-import com.spacesarmat.omp.sources.SecretCookieStore
-import com.spacesarmat.omp.sources.SecretStorage
-import com.spacesarmat.omp.sources.SiteCookieJar
+import com.spacesarmat.omp.sources.HttpSpec
 import com.spacesarmat.omp.sources.SiteHttp
 import com.spacesarmat.omp.sources.SiteHttpException
+import com.spacesarmat.omp.sources.SourceServices
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -40,7 +42,7 @@ import org.json.JSONObject
  *
  * Every PluginCall is settled exactly once (see [Once]). Blocking work runs on [io]; socket
  * callbacks arrive on OkHttp threads. Events: tvMessage { json }, tvClosed { reason },
- * apkProgress { percent }, magnetReceived { link }, playerMessage { body },
+ * apkProgress { percent }, magnetReceived { link }, playerMessage { body }, monitorOpen { url }, monitorDone { summary? },
  * localServerState { running, error? }, nativePlayerState { session, index, time, duration, paused, buffering,
  * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV);
  * phone remote on Android TV ([TvRemote]): remoteLaunch { params }, remoteAttach { report }, remoteKey { name },
@@ -64,8 +66,8 @@ class OmpNativePlugin : Plugin() {
     // phone remote: only in TV mode
     private var remote: TvRemote? = null
     // search sources: created on first use (Keystore access off the main thread)
-    private val secrets by lazy { SecretStorage(context.applicationContext) }
-    private val siteHttp by lazy { SiteHttp(SiteCookieJar(SecretCookieStore(secrets))) }
+    // one per process, shared with the background monitor page ([SourceServices])
+    private val sources by lazy { SourceServices.get(context) }
     private val serverState = LocalTorrServer.Listener { running, error ->
         val o = JSObject().put("running", running)
         if (error != null) o.put("error", error)
@@ -84,6 +86,7 @@ class OmpNativePlugin : Plugin() {
         }
         // a magnet that arrived before the bridge was ready
         synchronized(magnetLock) { pendingMagnet }?.let { emitMagnet(it) }
+        synchronized(magnetLock) { pendingOpen }?.let { emitMonitorOpen(it) }
     }
 
     override fun handleOnDestroy() {
@@ -687,19 +690,15 @@ class OmpNativePlugin : Plugin() {
     @PluginMethod
     fun http(call: PluginCall) {
         val once = Once(call)
-        val url = call.getString("url")
-        val method = (call.getString("method") ?: "GET").uppercase()
-        if (url == null || url.toHttpUrlOrNull() == null) return once.reject(SiteHttp.BAD_URL)
-        if (method != "GET" && method != "POST") return once.reject(SiteHttp.BAD_REQUEST)
-        val headers = stringMap(call.getObject("headers"))
-        val form = call.getObject("form")?.let { stringMap(it) }
-        val formCharset = call.getString("formCharset")
-        val body = call.getString("body")
-        val timeout = (call.getInt("timeoutMs") ?: 20_000).coerceIn(1_000, 60_000).toLong()
+        val spec = try {
+            HttpSpec.parse(call.data)
+        } catch (e: SiteHttpException) {
+            return once.reject(e.reason)
+        }
         io.execute {
             try {
-                val r = siteHttp.request(url, method, headers, form, formCharset, body, timeout)
-                once.resolve(JSObject().put("status", r.status).put("url", r.url).put("text", r.text))
+                val r = sources.request(spec)
+                once.resolve(JSObject.fromJSONObject(HttpSpec.reply(r)))
             } catch (e: SiteHttpException) {
                 once.reject(e.reason)
             } catch (e: Exception) {
@@ -715,7 +714,7 @@ class OmpNativePlugin : Plugin() {
         val url = call.getString("url") ?: return once.reject(SiteHttp.BAD_URL)
         io.execute {
             try {
-                siteHttp.clearCookies(url)
+                sources.siteHttp.clearCookies(url)
                 once.resolve()
             } catch (e: SiteHttpException) {
                 once.reject(e.reason)
@@ -731,7 +730,7 @@ class OmpNativePlugin : Plugin() {
         val key = secretKey(call) ?: return once.reject(SECRETS_FAILED)
         io.execute {
             try {
-                once.resolve(JSObject().put("value", secrets.get(key) ?: JSONObject.NULL))
+                once.resolve(JSObject().put("value", sources.secrets.get(key) ?: JSONObject.NULL))
             } catch (e: Exception) {
                 // transient Keystore failure: the stored value is kept
                 once.reject(SECRETS_FAILED)
@@ -746,7 +745,7 @@ class OmpNativePlugin : Plugin() {
         val value = call.getString("value") ?: return once.reject(SECRETS_FAILED)
         io.execute {
             try {
-                secrets.set(key, value)
+                sources.secrets.set(key, value)
                 once.resolve()
             } catch (e: Exception) {
                 once.reject(SECRETS_FAILED)
@@ -760,7 +759,7 @@ class OmpNativePlugin : Plugin() {
         val key = secretKey(call) ?: return once.reject(SECRETS_FAILED)
         io.execute {
             try {
-                secrets.delete(key)
+                sources.secrets.delete(key)
                 once.resolve()
             } catch (e: Exception) {
                 once.reject(SECRETS_FAILED)
@@ -769,21 +768,101 @@ class OmpNativePlugin : Plugin() {
     }
 
     /** JS keys live in their own namespace: page code cannot read the cookie entries. */
-    private fun secretKey(call: PluginCall): String? {
-        val k = call.getString("key")
-        return if (k.isNullOrEmpty() || k.length > 200) null else JS_SECRET_PREFIX + k
+    private fun secretKey(call: PluginCall): String? = SourceServices.jsSecretKey(call.getString("key"))
+
+    // ---- monitoring (WorkManager, notifications); phone only ----
+
+    /** { enabled, hours: 1|3|6|12, wifiOnly }: schedules or cancels the periodic background check. */
+    @PluginMethod
+    fun monitorSchedule(call: PluginCall) {
+        if (TvMode.isTv(context)) return call.reject(MONITOR_PHONE_ONLY)
+        val s = MonitorPlan.schedule(call.getBoolean("enabled"), call.getInt("hours"), call.getBoolean("wifiOnly"))
+        val once = Once(call)
+        io.execute {
+            try {
+                MonitorScheduler.apply(context, s)
+                once.resolve()
+            } catch (e: Exception) {
+                once.reject(MONITOR_FAILED)
+            }
+        }
     }
 
-    private fun stringMap(o: JSONObject?): Map<String, String> {
-        val out = LinkedHashMap<String, String>()
-        if (o == null) return out
-        val keys = o.keys()
-        while (keys.hasNext()) {
-            val k = keys.next()
-            val v = o.opt(k)
-            if (v is String) out[k] = v
+    /** «Проверить сейчас»: a one-time check. */
+    @PluginMethod
+    fun monitorRunNow(call: PluginCall) {
+        if (TvMode.isTv(context)) return call.reject(MONITOR_PHONE_ONLY)
+        val once = Once(call)
+        io.execute {
+            try {
+                MonitorScheduler.runNow(context)
+                once.resolve()
+            } catch (e: Exception) {
+                once.reject(MONITOR_FAILED)
+            }
         }
-        return out
+    }
+
+    /** { enabled, hours, wifiOnly, running, lastRun?, lastSummary? (JSON string), lastError?, nextRun? }. */
+    @PluginMethod
+    fun monitorStatus(call: PluginCall) {
+        val once = Once(call)
+        io.execute {
+            try {
+                once.resolve(JSObject.fromJSONObject(MonitorScheduler.status(context)))
+            } catch (e: Exception) {
+                once.reject(MONITOR_FAILED)
+            }
+        }
+    }
+
+    /** { state: granted | denied | prompt } of the notifications (POST_NOTIFICATIONS on Android 13+). */
+    @PluginMethod
+    fun monitorNotifyPermission(call: PluginCall) {
+        call.resolve(JSObject().put("state", notifyState()))
+    }
+
+    /** Asks for POST_NOTIFICATIONS when it can still be asked; resolves with the new { state }. */
+    @PluginMethod
+    fun requestMonitorNotifyPermission(call: PluginCall) {
+        if (Build.VERSION.SDK_INT < 33 || getPermissionState("notifications") == PermissionState.GRANTED) {
+            return call.resolve(JSObject().put("state", notifyState()))
+        }
+        requestPermissionForAlias("notifications", call, "monitorPermissionDone")
+    }
+
+    @PermissionCallback
+    private fun monitorPermissionDone(call: PluginCall) {
+        call.resolve(JSObject().put("state", notifyState()))
+    }
+
+    private fun notifyState(): String {
+        if (Build.VERSION.SDK_INT >= 33) {
+            when (getPermissionState("notifications")) {
+                PermissionState.GRANTED -> {}
+                PermissionState.DENIED -> return "denied"
+                else -> return "prompt"
+            }
+        }
+        return if (MonitorNotifier.canNotify(context)) "granted" else "denied"
+    }
+
+    /** The link of a tapped monitoring notification not delivered yet ({ url: omp:news?... | null }). */
+    @PluginMethod
+    fun takeMonitorOpen(call: PluginCall) {
+        val url = synchronized(magnetLock) {
+            val u = pendingOpen
+            pendingOpen = null
+            u
+        }
+        call.resolve(JSObject().put("url", url ?: JSONObject.NULL))
+    }
+
+    private fun emitMonitorOpen(url: String) {
+        if (hasListeners("monitorOpen")) {
+            synchronized(magnetLock) { if (pendingOpen == url) pendingOpen = null }
+            notifyListeners("monitorOpen", JSObject().put("url", url))
+        }
     }
 
     // ---- magnet ----
@@ -822,16 +901,32 @@ class OmpNativePlugin : Plugin() {
     companion object {
         private const val NOT_SUPPORTED = "Встроенный сервер недоступен на этом телефоне"
         private const val START_FAILED = "Не удалось запустить сервер"
-        private const val SECRETS_FAILED = "Не удалось открыть защищённое хранилище"
-        private const val JS_SECRET_PREFIX = "js:"
+        private const val SECRETS_FAILED = SourceServices.SECRETS_FAILED
         private const val PREFS = "omp-native"
         private const val CACHE_SET = "torrserverCacheConfigured"
         private val IPV4 = Regex("^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$")
         private val magnetLock = Any()
         private var pendingMagnet: String? = null
+        // link of a tapped monitoring notification (omp:news?...), see takeMonitorOpen
+        private var pendingOpen: String? = null
+        private const val MONITOR_PHONE_ONLY = "Мониторинг работает только на телефоне"
+        private const val MONITOR_FAILED = "Не удалось настроить фоновую проверку"
 
         @Volatile
         private var instance: OmpNativePlugin? = null
+
+        /** Called by MainActivity for a tapped monitoring notification (MonitorLinks): pending + event monitorOpen. */
+        fun deliverMonitorOpen(url: String) {
+            synchronized(magnetLock) { pendingOpen = url }
+            instance?.emitMonitorOpen(url)
+        }
+
+        /** A background run finished: event monitorDone { summary: JSON string | absent } for an open app. */
+        fun deliverMonitorDone(summary: JSONObject?) {
+            val o = JSObject()
+            if (summary != null) o.put("summary", summary.toString())
+            instance?.notifyListeners("monitorDone", o)
+        }
 
         /** Called by MainActivity for every incoming magnet: kept as pending and sent as an event. */
         fun deliverMagnet(link: String) {
