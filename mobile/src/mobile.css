@@ -414,11 +414,13 @@ button, .m-btn {
 /* Fitted remote: one screen above the tab bar, no vertical scrolling. The d-pad scales with the height. */
 .m-remote {
   --m-used-mini: 0px;
+  --m-remote-gap: 12px;
   --dp: min(240px, 32vh);
   gap: 10px;
   min-height: 0;
-  height: calc(100vh - var(--m-nav-h) - var(--m-used-mini) - env(safe-area-inset-bottom));
-  height: calc(100dvh - var(--m-nav-h) - var(--m-used-mini) - env(safe-area-inset-bottom));
+  /* --m-remote-gap: room between the last row and the bottom menu / the mini-player */
+  height: calc(100vh - var(--m-nav-h) - var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
+  height: calc(100dvh - var(--m-nav-h) - var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
   padding: calc(env(safe-area-inset-top) + 8px) 16px 0;
   /* safety valve: controls are never clipped on short screens, landscape or with the soft keyboard */
   overflow-x: hidden;
@@ -429,6 +431,7 @@ button, .m-btn {
   .m-remote .m-key, .m-remote .m-media { height: 40px; }
   .m-remote > .m-touchpad { min-height: 90px; }
 }
+/* the mini-player sits 8px above the menu and is --m-mini-h tall */
 .m-remote.mini { --m-used-mini: calc(var(--m-mini-h) + 8px); --dp: min(240px, 27vh); }
 .m-remote.kbd { --dp: min(240px, 24vh); }
 .m-remote.mini.kbd { --dp: min(240px, 20vh); }

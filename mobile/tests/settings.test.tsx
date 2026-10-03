@@ -44,6 +44,16 @@ afterEach(() => {
 });
 
 describe('Settings', () => {
+  it('the update block comes first', () => {
+    const el = mount();
+    const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
+    expect(labels[0]).toBe('Обновление');
+    expect(labels[labels.length - 1]).toBe('О приложении');
+    const first = el.querySelector('.m-set-group')!;
+    expect(first.textContent).toContain('Проверить обновления');
+    expect(first.textContent).toContain('Проверять обновления при запуске');
+  });
+
   it('shows version, server and navigates', async () => {
     const s = addServer({ url: 'http://192.168.1.5:8090', name: 'Home' });
     setActiveServer(s.id);
