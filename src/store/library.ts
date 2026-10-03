@@ -5,6 +5,11 @@ import type { LibraryTab } from '../lib/libraryView';
 import { attachPoster, fillPosters, type FillResult, type PosterClient } from '../lib/autoPoster';
 
 const KEY = 'tsp.torrents';
+const AT_KEY = 'tsp.torrentsAt';
+
+export function sanitizeTime(v: unknown): number {
+  return typeof v === 'number' && isFinite(v) && v > 0 && v <= Date.now() + 86400000 ? Math.floor(v) : 0;
+}
 
 export function sanitizeTorrents(v: unknown): Torrent[] {
   if (!Array.isArray(v)) return [];
@@ -12,6 +17,9 @@ export function sanitizeTorrents(v: unknown): Torrent[] {
 }
 
 export const torrents = signal<Torrent[]>(sanitizeTorrents(loadJson<unknown>(KEY, [], Array.isArray)));
+
+// time of the last successful refresh (0 = unknown), kept next to the cached list
+export const torrentsAt = signal<number>(sanitizeTime(loadJson<unknown>(AT_KEY, 0, (v): v is number => typeof v === 'number')));
 
 // Library view state; module-level so it survives screen remounts on navigation
 export const libraryTab = signal<LibraryTab>('all');
@@ -26,6 +34,8 @@ export function resetLibrary(): void {
   gen++;
   inflight = null;
   torrents.value = [];
+  torrentsAt.value = 0;
+  saveJson(AT_KEY, 0);
   libraryTab.value = 'all';
   librarySearchOpen.value = false;
   libraryQuery.value = '';
@@ -41,6 +51,8 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> }): Promise<Torr
       if (my !== gen) return sorted;
       inflight = null;
       torrents.value = sorted;
+      torrentsAt.value = Date.now();
+      saveJson(AT_KEY, torrentsAt.value);
       saveJson(
         KEY,
         sorted.map((t) => ({

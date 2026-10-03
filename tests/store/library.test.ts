@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { torrents, refreshTorrents, resetLibrary, addedTorrents, addedMessage } from '../../src/store/library';
+import { torrents, torrentsAt, sanitizeTime, refreshTorrents, resetLibrary, addedTorrents, addedMessage } from '../../src/store/library';
 
 beforeEach(() => {
   localStorage.clear();
@@ -64,5 +64,34 @@ describe('added torrents', () => {
     expect(addedMessage([])).toBeNull();
     expect(addedMessage([t('a', 'Фильм'), t('b', 'Сериал')])).toBe('Добавлено: Фильм, Сериал');
     expect(addedMessage([t('a'), t('b'), t('c'), t('d')])).toBe('Добавлено торрентов: 4');
+  });
+});
+
+describe('torrentsAt', () => {
+  beforeEach(() => resetLibrary());
+  it('is set on success and persisted', async () => {
+    const before = Date.now();
+    await refreshTorrents({ list: () => Promise.resolve([]) });
+    expect(torrentsAt.value).toBeGreaterThanOrEqual(before);
+    expect(JSON.parse(localStorage.getItem('tsp.torrentsAt')!)).toBe(torrentsAt.value);
+  });
+  it('is unchanged by a failed refresh', async () => {
+    torrentsAt.value = 12345;
+    await expect(refreshTorrents({ list: () => Promise.reject(new Error('x')) })).rejects.toThrow('x');
+    expect(torrentsAt.value).toBe(12345);
+  });
+  it('is cleared by resetLibrary', async () => {
+    await refreshTorrents({ list: () => Promise.resolve([]) });
+    resetLibrary();
+    expect(torrentsAt.value).toBe(0);
+    expect(JSON.parse(localStorage.getItem('tsp.torrentsAt')!)).toBe(0);
+  });
+  it('sanitizeTime rejects junk', () => {
+    expect(sanitizeTime(NaN)).toBe(0);
+    expect(sanitizeTime(-5)).toBe(0);
+    expect(sanitizeTime(Infinity)).toBe(0);
+    expect(sanitizeTime('1')).toBe(0);
+    expect(sanitizeTime(Date.now() + 10 * 86400000)).toBe(0);
+    expect(sanitizeTime(1700000000000)).toBe(1700000000000);
   });
 });

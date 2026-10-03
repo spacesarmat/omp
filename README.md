@@ -144,7 +144,49 @@ TorrServer © YouROK, GPL-3.0 — [github.com/YouROK/TorrServer](https://github.
 
 Magic Remote и тачпад LG ThinQ: наведение выбирает элемент, клик нажимает. В плеере клик по изображению — пауза; двойной клик у левого или правого края — перемотка назад или вперёд (5 → 10 → 30 с при повторах; шаг меняется в настройках). Текст (адрес сервера, magnet, поиск) удобно вводить с клавиатуры телефона в LG ThinQ.
 
-## Установка на телевизор LG
+## Установка
+
+### LG webOS
+
+OMP нужен webOS 4.0 или новее (примерно телевизоры 2018 года и новее). Версия: Настройки → Все настройки → Общие → Об этом телевизоре (названия зависят от года).
+
+Два пути:
+
+- **С root и Homebrew Channel.** Root доступен не на всех моделях и прошивках: проверьте на [cani.rootmy.tv](https://cani.rootmy.tv) и [webosbrew.org/rooting](https://www.webosbrew.org/rooting/). Дальше: в [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel) откройте Settings → Add repository, укажите `https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/apps.json` (или одной кнопкой из OMP: Настройки → «Добавить репозиторий OMP в Homebrew Channel») и установите OMP.
+- **Без root — режим разработчика (Developer Mode).** Шаги строго по порядку:
+  1. Создайте аккаунт разработчика LG на [webostv.developer.lge.com](https://webostv.developer.lge.com) и подтвердите почту. Один аккаунт работает на одном ТВ одновременно.
+  2. На ТВ установите «Developer Mode» из LG Content Store, войдите, включите **Dev Mode Status** (ТВ перезагрузится), снова откройте приложение и включите **Key Server**. Запишите IP ТВ и passphrase с экрана.
+  3. На компьютере в той же сети установите [webOS Dev Manager](https://github.com/webosbrew/dev-manager-desktop/releases/latest) (Windows, macOS, Linux) и добавьте ТВ: IP и passphrase.
+  4. В Dev Manager установите Homebrew Channel (из списка приложений или [.ipk](https://github.com/webosbrew/webos-homebrew-channel/releases/latest)).
+  5. На ТВ в Homebrew Channel добавьте репозиторий OMP (как выше) и установите OMP. Либо установите `OMP-<версия>-webOS.ipk` со [страницы релиза](https://github.com/spacesarmat/omp/releases/latest) прямо в Dev Manager.
+
+Developer Mode действует 1000 часов (около 40 дней), потом установленные через него приложения удаляются. Сбросьте таймер в приложении Developer Mode заранее; если OMP пропал — сбросьте и установите заново. Без root Homebrew Channel работает с ограничениями (функции, которым нужен root), сам OMP работает полностью.
+
+Для продвинутых: установка из командной строки через `ares` описана в следующем разделе.
+
+### Android TV и Google TV
+
+1. Скачайте `OMP-<версия>.apk` со [страницы релиза](https://github.com/spacesarmat/omp/releases/latest).
+2. Установите на ТВ: приложение «Downloader» (введите ссылку), «Send Files to TV» с телефона, флешка с файловым менеджером или adb.
+3. Разрешите установку из неизвестных источников: на Android 8+ разрешение выдаётся приложению, из которого вы ставите (Downloader, файловый менеджер).
+
+adb по сети: Настройки → Система → Об устройстве, нажмите на «Сборка» 7 раз; в «Для разработчиков» включите «Отладку по сети»; затем `adb connect <IP>:5555` и `adb install OMP-<версия>.apk`. На Android 11+ используйте «Беспроводную отладку» с кодом сопряжения (`adb pair`).
+
+OMP работает на Android TV с Android 8+, но встроенный TorrServer запускается только на 64-битных (arm64) устройствах; на 32-битных запустите TorrServer на другом устройстве. Обновление: в OMP Настройки → «Обновление».
+
+### Телефон
+
+Скачайте APK со [страницы релиза](https://github.com/spacesarmat/omp/releases/latest), откройте и разрешите установку. Дальше OMP обновляется сам.
+
+### После установки
+
+Телефон, ТВ и TorrServer должны быть в одной сети. Подключите телефон к ТВ: Настройки → «Выбрать» (LG) или код из Настроек → «Подключить телефон» (Android TV). Эти и другие вопросы разобраны в «Вопросы и ответы» в приложении.
+
+### Samsung (Tizen)
+
+Пока не поддерживается, запланировано в одном из будущих релизов.
+
+## Установка на LG из командной строки
 
 Нужен компьютер в той же сети и телевизор в режиме разработчика.
 
@@ -159,7 +201,7 @@ Magic Remote и тачпад LG ThinQ: наведение выбирает эл�
 >
 > **Режим разработчика** нужно продлевать в приложении Developer Mode (срок сессии ограничен, остаток виден в приложении Developer Mode), иначе приложение пропадёт с ТВ. На рутированных ТВ можно ставить `.ipk` через Homebrew Channel.
 
-## Установка через Homebrew Channel
+## Homebrew Channel
 
 Для рутированных ТВ с [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel).
 

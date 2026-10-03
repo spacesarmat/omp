@@ -4,10 +4,12 @@ import { Poster, qualityBadge } from '../ui/Poster';
 import { Logo } from '../../../src/ui/Logo';
 import { TvChip } from '../ui/TvChip';
 import { LaunchError } from '../ui/LaunchError';
+import { CatalogUnavailable } from '../ui/CatalogUnavailable';
 import { navigate } from '../nav';
 import { filesOf, useTvLaunch } from '../watch';
-import { client } from '../../../src/store/servers';
-import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, autoFillPosters } from '../../../src/store/library';
+import { client, activeServer } from '../../../src/store/servers';
+import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
+import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
 import { buildHistory, resumeFrom, sourceLine, HISTORY_FILTERS } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
@@ -47,6 +49,7 @@ export function Library() {
   const query = libraryQuery.value;
   const searchOpen = librarySearchOpen.value;
   const list = torrents.value;
+  const cachedAt = torrentsAt.value;
   const sort = settings.value.librarySort;
   const view = settings.value.libraryView;
   const hfilter = settings.value.historyFilter;
@@ -209,10 +212,14 @@ export function Library() {
     return all.filter((e) => match.indexOf(e.torrent) >= 0);
   }, [list, isHistory, hfilter, query, pv, sv, phoneName]);
 
+  // nothing to show: no server, or the server failed and there is no cached list
+  const unavailable = !c || (!!error && !list.length);
+  const serverName = activeServer.value ? activeServer.value.name : null;
+  const online = typeof navigator === 'undefined' || navigator.onLine !== false || (!!c && c.baseUrl === LOCAL_URL);
   const now = Date.now();
   const count = isHistory ? history.length : shown.length;
   let empty = '';
-  if (loaded && !count) {
+  if (loaded && !count && !unavailable) {
     if (query.trim()) empty = 'Ничего не найдено';
     else if (isHistory && hfilter !== 'all') empty = hfilter === 'phone' ? 'С телефона пока ничего не смотрели' : 'С телевизора пока ничего не смотрели';
     else if (isHistory) empty = 'История пуста. Здесь появится то, что вы начали смотреть';
@@ -343,15 +350,30 @@ export function Library() {
         )}
         <div class="m-lib-body" style={pullStyle}>
           {tvError && <LaunchError message={tvError} class="m-hint-warn" />}
-          {error && <div class="m-hint-warn">{error} — показан сохранённый список</div>}
-          {canStartLocal && (
+          {error && !unavailable && (
+            <div class="m-hint-warn m-warn-row">
+              <span>{cachedBanner(cachedAt)}</span>
+              <button type="button" class="m-btn m-btn-secondary" onClick={() => void loadRef.current()}>Повторить</button>
+            </div>
+          )}
+          {unavailable && (
+            <CatalogUnavailable
+              reason={catalogReason(c ? serverName : null, online)}
+              onRetry={c ? () => void loadRef.current() : undefined}
+              onChangeServer={() => navigate({ name: 'connect' })}
+              onStart={canStartLocal ? () => void startServer() : undefined}
+              starting={starting}
+              onFaq={() => navigate({ name: 'faq' })}
+            />
+          )}
+          {canStartLocal && !unavailable && (
             <button type="button" class="m-btn m-btn-primary" disabled={starting} onClick={() => void startServer()}>
               Запустить сервер
             </button>
           )}
-          {!loaded && !list.length && <p class="m-muted m-note">Загрузка…</p>}
+          {c && !loaded && !list.length && <p class="m-muted m-note">Загрузка…</p>}
           {empty && <p class="m-muted m-note m-empty">{empty}</p>}
-          {isHistory ? (
+          {unavailable ? null : isHistory ? (
             <div class="m-list m-history">
               {history.map((e) => {
                 const t = e.torrent;

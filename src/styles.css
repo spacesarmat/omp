@@ -289,3 +289,12 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .whatsnew-ver h2 { margin: 0 0 4px; font-size: 28px; color: var(--muted); font-weight: 700; }
 .whatsnew-ver .update-notes { margin-top: 4px; }
 .whatsnew-ver.focused { background: var(--panel2); transform: none; box-shadow: none; }
+.catalog-off { padding: 120px 0; text-align: center; }
+.catalog-off-icon { color: var(--accent); margin-bottom: 16px; }
+.catalog-off-title { font-size: 44px; font-weight: 700; margin-bottom: 12px; }
+.catalog-off-reason { font-size: 32px; color: var(--muted); margin-bottom: 40px; }
+.catalog-off .actions { display: flex; justify-content: center; }
+.catalog-off .actions > * { margin: 0 12px; }
+.catalog-off-hint { font-size: 26px; color: var(--muted); margin-top: 40px; }
+.banner-row { display: flex; align-items: center; }
+.banner-row .banner-text { flex: 1; min-width: 0; margin-right: 24px; }
