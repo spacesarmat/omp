@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { checkSubscriptions, checkSubscription, type SearchFn } from '../../src/monitor/check';
-import { addSubscription, findingsOf, loadFound, seenKeys, unseenCount } from '../../src/monitor/subs';
+import { addSubscription, findingsOf, loadFound, removeSubscription, seenKeys, unseenCount, updateSubscription } from '../../src/monitor/subs';
 import { resultKeys } from '../../src/monitor/match';
 import type { Subscription } from '../../src/monitor/types';
 import type { SearchAllOptions, SearchHandle } from '../../src/sources/search';
@@ -178,5 +178,25 @@ describe('checkSubscriptions', () => {
     expect(r.findings).toEqual([]);
     expect(r.subs).toEqual([]);
     expect(calls).toEqual([]);
+  });
+
+  it('a subscription deleted or edited while the search runs gets no findings and no seen results', async () => {
+    const sub = newSub({ quality: '' });
+    const calls: Call[] = [];
+    const pages: { [q: string]: SourceResult[] } = { Дюна: [res('Дюна 1080p', { hash: 'a'.repeat(40) })] };
+    await checkSubscription(ctx, sub, { search: fakeSearch(pages, calls), now: 1 });
+    pages['Дюна'] = [res('Дюна 1080p', { hash: 'a'.repeat(40) }), res('Дюна 2160p', { hash: 'b'.repeat(40) })];
+    const edited = checkSubscription(ctx, sub, { search: fakeSearch(pages, calls), now: 2 });
+    updateSubscription(sub.id, { query: 'Дюна 2' });
+    expect((await edited).findings).toEqual([]);
+    expect(loadFound()).toEqual([]);
+    expect(seenKeys(sub.id)).toBeNull();
+    const sub2 = newSub({ quality: '' });
+    await checkSubscription(ctx, sub2, { search: fakeSearch(pages, calls), now: 1 });
+    const gone = checkSubscription(ctx, sub2, { search: fakeSearch({ Дюна: pages['Дюна'].concat([res('Дюна 3')]) }, calls), now: 2 });
+    removeSubscription(sub2.id);
+    expect((await gone).findings).toEqual([]);
+    expect(loadFound()).toEqual([]);
+    expect(unseenCount()).toBe(0);
   });
 });

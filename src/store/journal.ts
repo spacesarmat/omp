@@ -114,9 +114,9 @@ export function saveSkip(c: JournalClient, torrent: Pick<Torrent, 'hash'>, patch
   const run = prev.then(() =>
     c.list().then((all) => {
       const t = torrentOf(all, hash);
-      if (!t) throw new Error('torrent not found');
+      if (!t) throw new Error('Раздачи нет на сервере');
       const parsed = parseData(t.data);
-      if (!parsed) throw new Error('data is not JSON');
+      if (!parsed) throw new Error('Данные раздачи не в формате JSON — OMP их не меняет');
       const base = baseOf(t, parsed);
       const next = applyPatch(base.skip || { i: false, c: false }, patch);
       if (base.skip && JSON.stringify(next) === JSON.stringify(base.skip)) return next;
@@ -156,9 +156,9 @@ export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watc
   const run = prev.then(() =>
     c.list().then((all) => {
       const t = torrentOf(all, hash);
-      if (!t) throw new Error('torrent not found');
+      if (!t) throw new Error('Раздачи нет на сервере');
       const parsed = parseData(t.data);
-      if (!parsed) throw new Error('data is not JSON');
+      if (!parsed) throw new Error('Данные раздачи не в формате JSON — OMP их не меняет');
       if (watchesNewEpisodes(t.data) === watch) return watch;
       const base = baseOf(t, parsed);
       const data = serializeData(withWatch(base.obj, watch), base.journal, base.skip);

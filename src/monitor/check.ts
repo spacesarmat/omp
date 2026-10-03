@@ -4,7 +4,7 @@
 import { searchAll, type SearchAllOptions, type SearchHandle } from '../sources/search';
 import type { Source, SourceContext, SourceResult } from '../sources/types';
 import { filterForSubscription, isSeen, resultKeys, seenEntry, seenIndex } from './match';
-import { addFindings, loadSubs, rememberSeen, seenKeys, seenSources } from './subs';
+import { addFindings, getSubscription, loadSubs, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
 import type { Finding, Subscription } from './types';
 
 /** searchAll or a test double. */
@@ -82,6 +82,8 @@ export function checkSubscription(ctx: SourceContext, sub: Subscription, opts?: 
     const seen = seenKeys(sub.id);
     const base: SubCheckResult = { sub, findings: [], first: seen === null, answered: out.answered, failed: out.failed };
     if (!out.answered.length) return base;
+    // deleted or edited while the search ran: its findings and seen results would be orphans (or stale)
+    if (!sameSearch(sub, getSubscription(sub.id))) return base;
     const matched = filterForSubscription(sub, out.results);
     if (seen !== null) {
       const known = seenSources(sub.id);

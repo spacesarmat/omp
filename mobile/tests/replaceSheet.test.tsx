@@ -132,12 +132,26 @@ describe('ReplaceSheet', () => {
     expect(byText('Заменить')!.disabled).toBe(false);
   });
 
-  it('the old torrent is gone from the server: says so, nothing is replaced', async () => {
+  it('the old torrent is gone from the server: nothing is replaced, the card goes without an error', async () => {
     torrents.value = [];
     await mount();
     click(byText('Заменить'));
     await flush();
-    expect(el.querySelector('[role=alert]')!.textContent).toBe('Этой раздачи уже нет на сервере');
+    expect(el.querySelector('[role=alert]')).toBeNull();
     expect(replaceMock).not.toHaveBeenCalled();
+    expect(findingsOf('episodes')).toEqual([]);
+    expect(toast.value).toBe('Раздачи уже нет на сервере');
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('«Другая раздача» searches again once the library list loads', async () => {
+    torrents.value = [];
+    await mount();
+    expect(el.textContent).toContain('других нет');
+    await act(async () => {
+      torrents.value = [{ hash: OLD, title: finding.episodes!.torrentTitle, category: 'tv', stat: 3, torrent_size: 14.1 * 1024 ** 3 } as any];
+    });
+    await flush();
+    expect(el.textContent).toContain('ещё 1 вариант ›');
   });
 });

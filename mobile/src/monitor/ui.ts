@@ -22,9 +22,12 @@ export function reloadMonitor(): void {
 /** Bumped when a background run finishes (monitorDone): ends «Проверяю…». */
 export const monitorDoneCount = signal(0);
 
-/** A background run finished: the stores are re-read and «Проверяю…» ends. */
-export function monitorFinished(): void {
-  monitorDoneCount.value = monitorDoneCount.value + 1;
+/**
+ * A background run finished: the stores are re-read. «Проверяю…» ends only with the summary of a check (or when the
+ * run gave none): a notification-button run finishing says nothing about a check queued behind it.
+ */
+export function monitorFinished(summary?: MonitorSummary | null): void {
+  if (!summary || summary.kind === 'check') monitorDoneCount.value = monitorDoneCount.value + 1;
   reloadMonitor();
 }
 

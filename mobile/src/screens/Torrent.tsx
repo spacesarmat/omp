@@ -29,7 +29,7 @@ import type { SkipPrefs } from '../../../src/lib/journal';
 import { posterColor, shortTitle } from '../../../src/lib/libraryView';
 import { loadWatch, saveWatch } from '../../../src/store/journal';
 import { isWatchedSeries } from '../../../src/monitor/newEpisodes';
-import { findingsOf, removeFindings } from '../../../src/monitor/subs';
+import { findingsOf, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
 import { EPISODES_ID } from '../../../src/monitor/types';
 import { reloadMonitor } from '../monitor/ui';
 
@@ -429,6 +429,9 @@ export function Torrent({ hash }: { hash: string }) {
     c.remove(hash).then(
       () => {
         torrents.value = torrents.value.filter((x) => x.hash !== hash);
+        // its «Новые серии» card can't be replaced any more
+        pruneEpisodeFindings((h) => h.toLowerCase() !== hash.toLowerCase());
+        reloadMonitor();
         void refreshTorrents(c).catch(() => {});
         const r = currentRoute.value;
         if (r.name === 'torrent' && r.hash === hash) goBack();

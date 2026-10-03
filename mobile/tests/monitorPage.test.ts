@@ -235,6 +235,32 @@ describe('runMonitor: a check', () => {
     expect(again.notes).toEqual([]);
   });
 
+  it('episode cards of torrents that are no longer in the library are dropped', async () => {
+    const mk = (hash: string): Finding => ({
+      subId: EPISODES_ID,
+      key: hash + ':1:10',
+      result: res(NEWER),
+      at: 1,
+      episodes: { torrentHash: hash, torrentTitle: SERIES, season: 1, haveTo: 8, to: 10 },
+    });
+    addFindings([mk('f'.repeat(40)), mk('9'.repeat(40))]);
+    const client = fakeClient([{ hash: 'F'.repeat(40), title: 'Other', category: 'movie' } as Torrent]);
+    await runMonitor(deps(fakeHost(), { client: () => client }));
+    expect(findingsOf(EPISODES_ID).map((f) => f.episodes!.torrentHash)).toEqual(['f'.repeat(40)]);
+  });
+
+  it('a notification the bridge rejects is reported as not shown', async () => {
+    const sub = addSubscription({ query: 'Дюна', quality: '', sources: null, notify: true })!;
+    await runMonitor(deps(fakeHost(), { check: { search: fakeSearch({ Дюна: [res(DUNE)] }) } }));
+    const host = fakeHost();
+    host.notify = () => Promise.reject(new Error('Неверный запрос'));
+    const s = await runMonitor(deps(host, { check: { search: fakeSearch({ Дюна: [res(DUNE), res(DUNE + ' new', { Magnet: 'magnet:?xt=urn:btih:' + 'b'.repeat(40) })] }) } }));
+    expect(s.found).toBe(1);
+    expect(s.notified).toBe(0);
+    expect(s.notifyBlocked).toBe(true);
+    expect(findingsOf(sub.id)).toHaveLength(1);
+  });
+
   it('«Следить за новыми сериями» off: the library is not read', async () => {
     saveMonitorSettings({ episodes: false });
     let listed = false;

@@ -294,7 +294,19 @@ describe('«Новое» · Подписки', () => {
     expect(toast.value).toContain('Больше не слежу');
   });
 
+  it('«Не следить» on a card whose torrent is gone from the server just removes the card', async () => {
+    addFindings([episodesFinding()]);
+    vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
+    await mount({ seg: 'subs' });
+    click(byText('Не следить'));
+    await flush();
+    expect(saveWatchMock).not.toHaveBeenCalled();
+    expect(findingsOf('episodes')).toEqual([]);
+    expect(el.querySelector('.m-ep-card')).toBeNull();
+  });
+
   it('«Не следить» that fails keeps the card and says why', async () => {
+    torrents.value = [{ hash: OLD, title: 'Starbound Frontier / Сезон 2 / Серии 1-8 из 10 / 1080p', stat: 3 } as any];
     addFindings([episodesFinding()]);
     saveWatchMock.mockRejectedValue(new Error('Сервер недоступен'));
     await mount({ seg: 'subs' });
@@ -362,7 +374,11 @@ describe('«Новое» · Подписки', () => {
       act(() => reloadMonitor());
       await flush();
       expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Проверяю…');
-      act(() => monitorFinished());
+      // the end of a notification-button run does not end the check
+      act(() => monitorFinished({ at: 1, kind: 'action' } as any));
+      await flush();
+      expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Проверяю…');
+      act(() => monitorFinished({ at: 2, kind: 'check' } as any));
       await flush();
       expect(el.querySelector('[data-monitor-status]')!.textContent).not.toBe('Проверяю…');
       click(byText('Проверить сейчас'));

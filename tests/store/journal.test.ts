@@ -164,8 +164,8 @@ describe('loadSkip / saveSkip', () => {
     expect(await saveWatch(s.c, { hash: 'h' }, true)).toBe(true);
     expect(JSON.parse(s.t.data!).omp.w).toBeUndefined();
     expect(JSON.parse(s.t.data!).omp.s).toEqual({ i: true, c: true, mc: 60 });
-    await expect(saveWatch(s.c, { hash: 'nope' }, false)).rejects.toThrow('torrent not found');
-    await expect(saveWatch(fakeServer({ data: 'plain' }).c, { hash: 'h' }, false)).rejects.toThrow('data is not JSON');
+    await expect(saveWatch(s.c, { hash: 'nope' }, false)).rejects.toThrow('Раздачи нет на сервере');
+    await expect(saveWatch(fakeServer({ data: 'plain' }).c, { hash: 'h' }, false)).rejects.toThrow('Данные раздачи не в формате JSON');
   });
 
   it('writing history afterwards keeps s', async () => {

@@ -237,6 +237,16 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
     if (!c) return showToast('Сервер не выбран');
     const t = libraryTorrentOf(f);
     try {
+      if (!t) {
+        // not in the loaded list: when the server really has no such torrent, nothing is left to switch off
+        const all = await c.list();
+        const hash = f.episodes!.torrentHash.toLowerCase();
+        if (!all.some((x) => x.hash.toLowerCase() === hash)) {
+          removeFindings(EPISODES_ID, f.key);
+          reloadMonitor();
+          return;
+        }
+      }
       await saveWatch(c, { hash: t ? t.hash : f.episodes!.torrentHash }, false);
       removeFindings(EPISODES_ID, f.key);
       reloadMonitor();

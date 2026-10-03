@@ -70,3 +70,15 @@ describe('resultKeys / isSeen', () => {
     expect(isSeen(res('other title'), [entry])).toBe(false);
   });
 });
+
+describe('bounded keys', () => {
+  it('a long title gives a short, stable, distinct key (the Android bridge limit is 300)', () => {
+    const long = 'Очень длинное название '.repeat(30);
+    const a = resultKeys(res(long + 'один', { Size: '1 ГБ' }));
+    const b = resultKeys(res(long + 'два', { Size: '1 ГБ' }));
+    expect(a[0].length).toBeLessThan(200);
+    expect(a[0]).not.toBe(b[0]);
+    expect(resultKeys(res(long + 'один', { Size: '1 ГБ' }))[0]).toBe(a[0]);
+    expect(resultKeys(res('Дюна 1080p'))[0]).toBe('t:дюна 1080p:?');
+  });
+});

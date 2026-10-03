@@ -10,6 +10,7 @@ import {
   addSubscription,
   updateSubscription,
   removeSubscription,
+  pruneEpisodeFindings,
   sanitizeSubscription,
   sanitizeResult,
   seenKeys,
@@ -230,5 +231,16 @@ describe('findings', () => {
     expect(sanitizeResult(res('Z', { hash: 'a'.repeat(40), date: 9, detailUrl: 'https://x' }))).toEqual(
       res('Z', { hash: 'a'.repeat(40), date: 9, detailUrl: 'https://x' }),
     );
+  });
+});
+
+describe('pruneEpisodeFindings', () => {
+  it('drops only the new-episodes cards of torrents that are gone', () => {
+    const r = { Title: 'x', Categories: '', Size: '', CreateDate: '', Tracker: '', Link: '', Magnet: '', Hash: '', Peer: 0, Seed: 1, source: 'rutor' } as SourceResult;
+    const ep = (hash: string): Finding => ({ subId: EPISODES_ID, key: hash + ':1:10', at: 1, result: r, episodes: { torrentHash: hash, torrentTitle: 't', season: 1, haveTo: 8, to: 10 } });
+    addFindings([ep('a'), ep('b'), { subId: 's1', key: 'k', at: 1, result: r }]);
+    pruneEpisodeFindings((h) => h === 'a');
+    expect(findingsOf(EPISODES_ID).map((f) => f.episodes!.torrentHash)).toEqual(['a']);
+    expect(findingsOf('s1')).toHaveLength(1);
   });
 });

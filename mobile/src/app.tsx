@@ -144,7 +144,7 @@ export function App() {
     // the notification permission: once when monitoring is on, and for a run that could not notify while OMP was closed
     if (activeServer.value) void startupNotify().catch(() => {});
     const offDone = monitorNative.onDone((summary) => {
-      monitorFinished();
+      monitorFinished(summary);
       const c = client.value;
       if (c) void refreshTorrents(c).catch(() => {});
       if (summary && summary.notifyBlocked) void notifyBlocked().catch(() => {});

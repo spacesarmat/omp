@@ -11,7 +11,7 @@ import { feedFresh, storeFeedRefresh } from '../../../src/monitor/feedCache';
 import { checkNewEpisodes, isWatchedSeries, seriesQuery, type LibraryTorrent } from '../../../src/monitor/newEpisodes';
 import { replaceWithResult, type ReplaceClient } from '../../../src/monitor/replace';
 import { loadMonitorSettings, saveLastRun, type MonitorActionResult, type MonitorSummary } from '../../../src/monitor/settings';
-import { loadFound, loadSubs, markFindingsSeen, removeFindings } from '../../../src/monitor/subs';
+import { loadFound, loadSubs, markFindingsSeen, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
 import { EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
 import { feedAll, type FeedAllOptions } from '../../../src/sources/feed';
 import { createSecretStore, createSourceHttp } from '../../../src/sources/http';
@@ -182,7 +182,10 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
         if (shown) s.notified++;
         else s.notifyBlocked = true;
       },
-      () => {},
+      () => {
+        // a rejected notification (the bridge refused it) is not silent: the summary says it was not shown
+        s.notifyBlocked = true;
+      },
     );
 
   // subscriptions, two at a time
@@ -220,6 +223,12 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
         list = await c.list();
       } catch (e) {
         s.error = errorMessage(e);
+      }
+      if (list) {
+        const have: { [hash: string]: boolean } = {};
+        list.forEach((t) => (have[(t.hash || '').toLowerCase()] = true));
+        // cards of torrents deleted from the server can no longer be replaced or switched off
+        pruneEpisodeFindings((h) => have[(h || '').toLowerCase()] === true);
       }
       const watched = (list || []).filter((t) => isWatchedSeries(t as LibraryTorrent));
       const start = watched.length ? cursor() % watched.length : 0;

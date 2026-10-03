@@ -62,6 +62,8 @@ export function ReplaceSheet({
   const [alive] = useState({ v: true });
 
   useEffect(() => {
+    alive.v = true;
+    setOthers(null);
     if (old) {
       findNewEpisodes(phoneSourceContext(), old).then((n) => {
         if (!alive.v) return;
@@ -73,7 +75,7 @@ export function ReplaceSheet({
     return () => {
       alive.v = false;
     };
-  }, []);
+  }, [old ? old.hash : '']);
 
   const name = shortTitle(e.torrentTitle || (old ? old.title : ''));
   const oldTitle = old ? old.title || e.torrentTitle : e.torrentTitle;
@@ -82,7 +84,24 @@ export function ReplaceSheet({
   const replace = async () => {
     const c = client.value;
     if (!c) return setError('Сервер не выбран');
-    if (!old) return setError('Этой раздачи уже нет на сервере');
+    if (!old) {
+      // not in the loaded list: ask the server; when it is really gone there is nothing to replace, the card goes
+      setBusy(true);
+      setError('');
+      const all = await c.list().catch((): Torrent[] | null => null);
+      if (!alive.v) return;
+      setBusy(false);
+      if (!all) return setError('Не удалось получить список раздач');
+      if (all.some((t) => sameHash(t.hash, e.torrentHash))) {
+        void refreshTorrents(c).catch(() => {});
+        return setError('Список раздач ещё загружается — повторите');
+      }
+      removeFindings(EPISODES_ID, finding.key);
+      reloadMonitor();
+      showToast('Раздачи уже нет на сервере');
+      onClose();
+      return;
+    }
     setBusy(true);
     setError('');
     const r: ReplaceResult = await replaceWithResult(c, old.hash, picked, phoneSourceContext()).catch(

@@ -54,8 +54,24 @@ function bucketOf(r: SourceResult): number | null {
   return size ? Math.round(Math.log(size) / BUCKET) : null;
 }
 
+/** Titles longer than this are cut and given a hash of the whole title: keys stay within the Android bridge limit. */
+const TITLE_KEY_MAX = 120;
+
+function hashText(s: string): string {
+  let h1 = 5381;
+  let h2 = 52711;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    h1 = ((h1 * 33) ^ c) >>> 0;
+    h2 = ((h2 * 31) + c) >>> 0;
+  }
+  return h1.toString(36) + h2.toString(36);
+}
+
 function titleKey(r: SourceResult, bucket: string): string {
-  return 't:' + normalizeTitle(r.Title) + ':' + bucket;
+  const t = normalizeTitle(r.Title);
+  const part = t.length > TITLE_KEY_MAX ? t.slice(0, TITLE_KEY_MAX) + '~' + hashText(t) : t;
+  return 't:' + part + ':' + bucket;
 }
 
 /** The stored «seen» entry of one result: its keys joined by '|' (titles are normalized, they hold no '|'). */

@@ -108,6 +108,11 @@ function searchOf(s: Subscription): string {
   return JSON.stringify([s.query, s.quality, s.minSeeds || 0, s.maxSizeGb || 0, s.sources]);
 }
 
+/** The subscription still exists with the same query and filters (a check that started earlier may be outdated). */
+export function sameSearch(a: Subscription, b: Subscription | null): boolean {
+  return !!b && searchOf(a) === searchOf(b);
+}
+
 /**
  * «Изменить»: merges `patch` (an undefined minSeeds / maxSizeGb clears it); null when unknown or the query is empty.
  * A new query, quality, seeds, size or sources forgets the seen results: the next check is silent, like the first.
@@ -318,6 +323,13 @@ export function markFindingsSeen(subId?: string, keys?: string[]): void {
 export function removeFindings(subId: string, key?: string): void {
   const all = loadFound();
   const left = all.filter((f) => f.subId !== subId || (key !== undefined && f.key !== key));
+  if (left.length !== all.length) saveFound(left);
+}
+
+/** Drops the new-episodes cards of library torrents for which `keep(hash)` is false (the torrent is gone). */
+export function pruneEpisodeFindings(keep: (hash: string) => boolean): void {
+  const all = loadFound();
+  const left = all.filter((f) => f.subId !== EPISODES_ID || !f.episodes || keep(f.episodes.torrentHash));
   if (left.length !== all.length) saveFound(left);
 }
 
