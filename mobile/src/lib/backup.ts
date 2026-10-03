@@ -3,21 +3,23 @@
 // Only the ALLOWLIST below is ever written to a file or restored; anything else in a file is ignored.
 // Never in a copy: tracker passwords/cookies (Android encrypted storage, not localStorage), the error log
 // (tsp.log) and caches/derived state (see NOT_BACKED_UP).
-import { isObject } from '../store/storage';
-import { sanitizeServers } from '../store/servers';
-import { sanitizeSettings } from '../store/settings';
-import { sanitizeFavorites } from '../store/favorites';
-import { sanitizeTrackPrefs } from '../store/trackPrefs';
-import { sanitizeSourcePrefs } from '../sources/store';
-import { sanitizeSubs } from '../monitor/subs';
-import { sanitizeMonitorSettings } from '../monitor/settings';
-import { sanitizeTvs } from '../../mobile/src/tv/tvStore';
-import { sanitizeTouchpad } from '../../mobile/src/tv/touchpad';
-import { APP_VERSION } from '../version';
-import { logDate } from './log';
+import { isObject } from '../../../src/store/storage';
+import { sanitizeServers } from '../../../src/store/servers';
+import { sanitizeSettings } from '../../../src/store/settings';
+import { sanitizeFavorites } from '../../../src/store/favorites';
+import { sanitizeTrackPrefs } from '../../../src/store/trackPrefs';
+import { sanitizeSourcePrefs } from '../../../src/sources/store';
+import { sanitizeSubs } from '../../../src/monitor/subs';
+import { sanitizeMonitorSettings } from '../../../src/monitor/settings';
+import { sanitizeTvs } from '../tv/tvStore';
+import { sanitizeTouchpad } from '../tv/touchpad';
+import { APP_VERSION } from '../../../src/version';
+import { logDate } from '../../../src/lib/log';
 
 export const BACKUP_FORMAT = 'omp-backup';
 export const BACKUP_VERSION = 1;
+/** Most entries of one collection; a real copy has a handful. */
+export const BACKUP_MAX_ITEMS = 200;
 /** A copy is a few KB; anything bigger is not ours. */
 export const BACKUP_MAX_BYTES = 1024 * 1024;
 
@@ -32,6 +34,11 @@ export interface BackupFile {
 
 /** Returns the cleaned value or undefined when the value is not usable (the key is then skipped). */
 type Clean = (v: unknown) => unknown;
+
+function tooMany(v: unknown): boolean {
+  if (Array.isArray(v)) return v.length > BACKUP_MAX_ITEMS;
+  return isObject(v) && Object.keys(v).length > BACKUP_MAX_ITEMS;
+}
 
 /** A non-empty list that cleans down to nothing is garbage, not "the user has none". */
 function cleanList(raw: unknown, cleaned: unknown[]): unknown[] | undefined {
@@ -115,28 +122,44 @@ function readRaw(key: string): unknown {
   }
 }
 
-/** Active ids must point at something that is in the same copy. */
-function crossCheck(data: { [key: string]: unknown }): void {
-  const servers = data['tsp.servers'];
-  const sid = data['tsp.activeServer'];
-  if (typeof sid === 'string' && !(Array.isArray(servers) && servers.some((s) => isObject(s) && s.id === sid))) {
-    data['tsp.activeServer'] = null;
-  }
-  const tvs = data['tsp.tvs'];
-  const ip = data['tsp.activeTv'];
-  if (typeof ip === 'string' && !(Array.isArray(tvs) && tvs.some((t) => isObject(t) && t.ip === ip))) {
-    data['tsp.activeTv'] = null;
-  }
+/** Keys whose sanitizer fills defaults: a partial file is merged over the current values. */
+const MERGED = ["tsp.settings", "tsp.touchpad", "tsp.monitor"];
+
+function ids(list: unknown, field: string): string[] {
+  return Array.isArray(list) ? list.filter(isObject).map((x) => String((x as Record<string, unknown>)[field])) : [];
 }
 
-function cleanData(src: { [key: string]: unknown }): { [key: string]: unknown } {
+/** Active ids must point at something that exists afterwards: in the copy, or (when the copy brings no list) in the phone. */
+function crossCheck(data: { [key: string]: unknown }, merge: boolean): void {
+  const pairs: [string, string, string][] = [
+    ["tsp.servers", "tsp.activeServer", "id"],
+    ["tsp.tvs", "tsp.activeTv", "ip"],
+  ];
+  pairs.forEach((p) => {
+    const hasList = p[0] in data;
+    if (!hasList && !(p[1] in data)) return;
+    const list = hasList ? data[p[0]] : merge ? readRaw(p[0]) : undefined;
+    const known = ids(list, p[2]);
+    let id = p[1] in data ? data[p[1]] : merge ? readRaw(p[1]) : null;
+    if (typeof id !== "string" || known.indexOf(id) < 0) id = null;
+    if (p[1] in data || (hasList && merge)) data[p[1]] = id;
+  });
+}
+
+function cleanData(src: { [key: string]: unknown }, merge: boolean): { [key: string]: unknown } {
   const data: { [key: string]: unknown } = {};
   BACKUP_KEYS.forEach((k) => {
     if (!Object.prototype.hasOwnProperty.call(src, k.key)) return;
-    const v = k.clean(src[k.key]);
+    let raw = src[k.key];
+    if (tooMany(raw)) return;
+    if (merge && MERGED.indexOf(k.key) >= 0 && isObject(raw)) {
+      const cur = readRaw(k.key);
+      raw = Object.assign({}, isObject(cur) ? cur : {}, raw);
+    }
+    const v = k.clean(raw);
     if (v !== undefined) data[k.key] = v;
   });
-  crossCheck(data);
+  crossCheck(data, merge);
   return data;
 }
 
@@ -147,7 +170,7 @@ export function collectBackup(now: number): BackupFile {
     const v = readRaw(k.key);
     if (v !== undefined) src[k.key] = v;
   });
-  return { format: BACKUP_FORMAT, v: BACKUP_VERSION, omp: APP_VERSION, at: new Date(now).toISOString(), data: cleanData(src) };
+  return { format: BACKUP_FORMAT, v: BACKUP_VERSION, omp: APP_VERSION, at: new Date(now).toISOString(), data: cleanData(src, false) };
 }
 
 export function serializeBackup(b: BackupFile): string {
@@ -166,6 +189,7 @@ export const ERR_NOT_JSON = 'Это не копия OMP: файл не удал�
 export const ERR_FORMAT = 'Это не копия OMP';
 export const ERR_VERSION_NEW = 'Копия сделана более новой версией OMP — обновите приложение и повторите';
 export const ERR_VERSION = 'Неизвестная версия копии';
+export const ERR_TOO_MANY = 'В копии слишком много записей — это не копия OMP';
 export const ERR_EMPTY = 'В копии нет данных для восстановления';
 
 /** Validates a file's text; the returned backup holds only allowlisted, sanitized keys. */
@@ -180,7 +204,11 @@ export function parseBackup(text: string): ParseResult {
   if (!isObject(v) || v.format !== BACKUP_FORMAT || !isObject(v.data)) return { ok: false, error: ERR_FORMAT };
   if (typeof v.v !== 'number' || !Number.isInteger(v.v) || v.v < 1) return { ok: false, error: ERR_VERSION };
   if (v.v > BACKUP_VERSION) return { ok: false, error: ERR_VERSION_NEW };
-  const data = cleanData(v.data);
+  const raw = v.data as { [key: string]: unknown };
+  if (BACKUP_KEYS.some((k) => Object.prototype.hasOwnProperty.call(raw, k.key) && tooMany(raw[k.key]))) {
+    return { ok: false, error: ERR_TOO_MANY };
+  }
+  const data = cleanData(raw, true);
   if (Object.keys(data).length === 0) return { ok: false, error: ERR_EMPTY };
   return {
     ok: true,
@@ -194,12 +222,30 @@ export function parseBackup(text: string): ParseResult {
   };
 }
 
-/** Replaces the allowlisted keys that the copy has; the rest of localStorage stays. Throws when storage refuses. */
+/** Replaces the allowlisted keys that the copy has; the rest of localStorage stays. All or nothing: when a write
+ *  fails the old values are put back and the error is rethrown. */
 export function applyBackup(b: BackupFile): void {
-  const data = cleanData(b.data);
-  Object.keys(data).forEach((key) => {
-    localStorage.setItem(key, JSON.stringify(data[key]));
+  const data = cleanData(b.data, true);
+  const keys = Object.keys(data);
+  const old: { [key: string]: string | null } = {};
+  keys.forEach((key) => {
+    old[key] = localStorage.getItem(key);
   });
+  try {
+    keys.forEach((key) => {
+      localStorage.setItem(key, JSON.stringify(data[key]));
+    });
+  } catch (e) {
+    keys.forEach((key) => {
+      try {
+        if (old[key] === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, old[key] as string);
+      } catch (e2) {
+        // nothing more can be done for this key
+      }
+    });
+    throw e;
+  }
 }
 
 export interface BackupSummary {
@@ -207,6 +253,8 @@ export interface BackupSummary {
   tvs: string[];
   subs: number;
   sources: number;
+  playlists: number;
+  tracks: number;
   /** A TorrServer password is in the file. */
   hasPassword: boolean;
   /** TV pairing keys/tokens are in the file. */
@@ -226,6 +274,8 @@ export function summarizeBackup(b: BackupFile): BackupSummary {
     servers: servers.map((s) => String(s.name)),
     tvs: tvs.map((t) => String(t.name)),
     subs: arr(b.data['tsp.subs']).length,
+    playlists: arr(b.data['tsp.playlists']).length,
+    tracks: isObject(b.data['tsp.trackPrefs']) ? Object.keys(b.data['tsp.trackPrefs'] as object).length : 0,
     sources: isObject(sources) ? Object.keys(sources).length : 0,
     hasPassword: servers.some((s) => typeof s.password === 'string' && !!s.password),
     hasPairKeys: tvs.some((t) => !!t.clientKey || !!t.token),
@@ -253,6 +303,8 @@ export function summaryLines(s: BackupSummary): string[] {
   if (s.tvs.length) out.push('Телевизоров: ' + named(s.tvs.length, s.tvs));
   if (s.subs) out.push(s.subs + ' ' + plural(s.subs, 'подписка', 'подписки', 'подписок') + ' мониторинга');
   if (s.sources) out.push('Источники поиска: ' + s.sources + ' ' + plural(s.sources, 'переключатель', 'переключателя', 'переключателей'));
+  if (s.playlists) out.push('Избранных плейлистов: ' + s.playlists);
+  if (s.tracks) out.push('Выбор дорожек: ' + s.tracks + ' ' + plural(s.tracks, 'раздача', 'раздачи', 'раздач'));
   if (s.settings) out.push('Настройки приложения, мониторинга и тачпада, вид каталога');
   return out;
 }

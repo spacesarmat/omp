@@ -144,4 +144,50 @@ describe('Backup screen', () => {
     expect(read).toBe(0);
     expect(el.querySelector('[role=alert]')!.textContent).toContain('слишком большой');
   });
+
+  it("apply failure: screen leaves the review, shows the error, no reload, nothing changed", async () => {
+    localStorage.setItem("tsp.servers", JSON.stringify([{ id: "old", name: "Старый", url: "http://o:1" }]));
+    const c = fake();
+    const el = mount(<Backup />);
+    await pick(el, copy({ "tsp.servers": [SERVER], "tsp.settings": { libraryView: "list" } }));
+    const real = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (this: Storage, k: string, v: string) {
+      if (k === "tsp.settings") throw new Error("quota");
+      return real.call(this, k, v);
+    };
+    try {
+      await act(async () => btn(el, "Заменить данные").click());
+    } finally {
+      Storage.prototype.setItem = real;
+    }
+    expect(c.reloads).toBe(0);
+    expect(el.querySelector("[role=alert]")!.textContent).toContain("Не удалось записать");
+    expect(JSON.parse(localStorage.getItem("tsp.servers")!)[0].id).toBe("old");
+    expect(el.textContent).toContain("Сохранить копию");
+  });
+
+  it("a double tap on save shares once", async () => {
+    let release: () => void = () => {};
+    const c = fake({
+      shareText: (o: { name: string; text: string }) => {
+        c.share.push(o);
+        return new Promise<void>((r) => (release = r));
+      },
+    });
+    const el = mount(<Backup />);
+    await act(async () => {
+      btn(el, "Сохранить копию").click();
+      btn(el, "Сохранить копию").click();
+    });
+    release();
+    await settle();
+    expect(c.share).toHaveLength(1);
+  });
+
+  it("the picker accepts text files too", () => {
+    fake();
+    const el = mount(<Backup />);
+    expect(el.querySelector("input[type=file]")!.getAttribute("accept")).toContain(".txt");
+    expect(el.textContent).toContain("Избранные плейлисты и выбор дорожек");
+  });
 });

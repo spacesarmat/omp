@@ -80,6 +80,7 @@ class OmpNativePlugin : Plugin() {
 
     override fun load() {
         instance = this
+        purgeSharedFiles(10 * 60 * 1000L)
         NativePlayerBridge.emitter = { event, data -> notifyListeners(event, data) }
         LocalTorrServer.addListener(serverState)
         if (TvMode.isTv(context)) {
@@ -426,6 +427,7 @@ class OmpNativePlugin : Plugin() {
 
     /** Writes [text] to cache/logs/[name] and opens the system share sheet for it (FileProvider, text/plain).
      *  Older shared files are removed first (a settings copy holds secrets); [title] is the chooser title. */
+    @Synchronized
     @PluginMethod
     fun shareText(call: PluginCall) {
         val name = shareFileName(call.getString("name"))
@@ -436,6 +438,7 @@ class OmpNativePlugin : Plugin() {
         }
         try {
             val dir = File(context.cacheDir, "logs").apply { mkdirs() }
+            purgeSharedFiles(10 * 60 * 1000L)
             dir.listFiles()?.forEach { it.delete() }
             val file = File(dir, name)
             file.writeText(text, Charsets.UTF_8)
@@ -459,6 +462,13 @@ class OmpNativePlugin : Plugin() {
         } catch (_: RuntimeException) {
             call.reject("Не удалось поделиться файлом")
         }
+    }
+
+    /** Removes shared files (settings copies hold secrets) older than [maxAgeMs] from cache/logs. */
+    @Synchronized
+    private fun purgeSharedFiles(maxAgeMs: Long) {
+        val now = System.currentTimeMillis()
+        File(context.cacheDir, "logs").listFiles()?.forEach { if (now - it.lastModified() > maxAgeMs) it.delete() }
     }
 
     // ---- native player (Android TV) ----

@@ -7,6 +7,8 @@ import {
   ERR_FORMAT,
   ERR_NOT_JSON,
   ERR_TOO_BIG,
+  ERR_TOO_MANY,
+  BACKUP_MAX_ITEMS,
   ERR_VERSION,
   ERR_VERSION_NEW,
   applyBackup,
@@ -17,7 +19,7 @@ import {
   serializeBackup,
   summarizeBackup,
   summaryLines,
-} from '../../src/lib/backup';
+} from '../src/lib/backup';
 
 const NOW = new Date(2026, 9, 3, 12, 0, 0).getTime();
 const put = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v));
@@ -117,7 +119,7 @@ describe('parseBackup', () => {
 
   it('ignores unknown and excluded keys', () => {
     const r = parseBackup(file({ 'tsp.servers': [SERVER], 'tsp.log': [{ t: 1 }], 'tsp.newsFeed': {}, evil: 1 }));
-    expect(r.ok && Object.keys(r.backup.data)).toEqual(['tsp.servers']);
+    expect(r.ok && Object.keys(r.backup.data)).toEqual(['tsp.servers', 'tsp.activeServer']);
   });
 
   it('drops values the sanitizers reject, keeps the good ones', () => {
@@ -135,7 +137,7 @@ describe('parseBackup', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.backup.data['tsp.servers']).toEqual([SERVER]);
-    ['tsp.tvs', 'tsp.settings', 'tsp.sources', 'tsp.monitor', 'tsp.activeServer'].forEach((k) => expect(k in r.backup.data).toBe(false));
+    ['tsp.tvs', 'tsp.settings', 'tsp.sources', 'tsp.monitor'].forEach((k) => expect(k in r.backup.data).toBe(false));
     expect((r.backup.data['tsp.touchpad'] as { accel: boolean }).accel).toBe(true);
   });
 
@@ -150,7 +152,7 @@ describe('parseBackup', () => {
     put('tsp.subs', [SUB]);
     const b = collectBackup(NOW);
     const r = parseBackup(serializeBackup(b));
-    expect(r.ok && r.backup.data).toEqual(b.data);
+    expect(r.ok && r.backup.data).toMatchObject(b.data);
   });
 });
 
@@ -206,5 +208,84 @@ describe('summary, name, warning', () => {
   it('warns about the password and pairing keys', () => {
     expect(backupWarning()).toContain('пароль доступа к вашему TorrServer');
     expect(backupWarning()).toContain('ключи пар с телевизорами');
+  });
+});
+
+describe("hardening", () => {
+  it("rejects collections over the cap", () => {
+    const many = [];
+    for (let i = 0; i < BACKUP_MAX_ITEMS + 1; i++) many.push({ id: "s" + i, name: "n", url: "http://h" + i + ":1" });
+    const r = parseBackup(file({ "tsp.servers": many }));
+    expect(r.ok ? "" : r.error).toBe(ERR_TOO_MANY);
+  });
+
+  it("survives __proto__ and constructor keys without pollution", () => {
+    const text = "{\"format\":\"omp-backup\",\"v\":1,\"data\":{\"tsp.sources\":{\"__proto__\":{\"on\":true}},\"tsp.trackPrefs\":{\"__proto__\":{\"audioLang\":\"x\"},\"constructor\":{\"audioLang\":\"y\"}},\"tsp.touchpad\":{\"speed\":2}}}";
+    const r = parseBackup(text);
+    expect(({} as { on?: unknown }).on).toBeUndefined();
+    expect(({} as { audioLang?: unknown }).audioLang).toBeUndefined();
+    expect(r.ok).toBe(true);
+    if (r.ok) expect("tsp.sources" in r.backup.data).toBe(false);
+  });
+
+  it("restores playlists and track choices", () => {
+    const r = parseBackup(file({ "tsp.playlists": [{ url: "http://x/p.m3u", title: "P" }], "tsp.trackPrefs": { h1: { audioLang: "ru" } } }));
+    if (!r.ok) throw new Error("parse");
+    applyBackup(r.backup);
+    expect(get("tsp.playlists")).toEqual([{ url: "http://x/p.m3u", title: "P" }]);
+    expect(get("tsp.trackPrefs")).toEqual({ h1: { audioLang: "ru" } });
+    expect(summaryLines(summarizeBackup(r.backup))).toEqual(["Избранных плейлистов: 1", "Выбор дорожек: 1 раздача"]);
+  });
+
+  it("a partial settings file keeps the other current settings", () => {
+    put("tsp.settings", { autoNext: false, seekStep: 30 });
+    put("tsp.touchpad", { speed: 5, accel: false, tapClick: true, invertScroll: true });
+    const r = parseBackup(file({ "tsp.settings": { libraryView: "list" }, "tsp.touchpad": { speed: 2 } }));
+    if (!r.ok) throw new Error("parse");
+    applyBackup(r.backup);
+    expect(get("tsp.settings")).toMatchObject({ libraryView: "list", autoNext: false, seekStep: 30 });
+    expect(get("tsp.touchpad")).toEqual({ speed: 2, accel: false, tapClick: true, invertScroll: true });
+  });
+
+  it("resets active ids that no longer exist after the restore", () => {
+    put("tsp.servers", [SERVER]);
+    put("tsp.activeServer", "s1");
+    put("tsp.tvs", [TV_LG]);
+    put("tsp.activeTv", TV_LG.ip);
+    const r = parseBackup(file({ "tsp.servers": [{ id: "s9", name: "Новый", url: "http://n:1" }], "tsp.tvs": [TV_ATV] }));
+    if (!r.ok) throw new Error("parse");
+    applyBackup(r.backup);
+    expect(get("tsp.activeServer")).toBe(null);
+    expect(get("tsp.activeTv")).toBe(null);
+  });
+
+  it("keeps an active id that is still in the new list", () => {
+    put("tsp.servers", [SERVER]);
+    put("tsp.activeServer", "s1");
+    const r = parseBackup(file({ "tsp.servers": [SERVER, { id: "s2", name: "B", url: "http://b:1" }] }));
+    if (!r.ok) throw new Error("parse");
+    applyBackup(r.backup);
+    expect(get("tsp.activeServer")).toBe("s1");
+  });
+
+  it("rolls everything back when a write fails midway", () => {
+    put("tsp.servers", [{ ...SERVER, id: "old", url: "http://old:1" }]);
+    put("tsp.settings", { autoNext: false });
+    const r = parseBackup(file({ "tsp.servers": [SERVER], "tsp.settings": { libraryView: "list" }, "tsp.touchpad": { speed: 2 } }));
+    if (!r.ok) throw new Error("parse");
+    const real = Storage.prototype.setItem;
+    let writes = 0;
+    Storage.prototype.setItem = function (this: Storage, k: string, v: string) {
+      if (k === "tsp.settings" && ++writes === 1) throw new Error("quota");
+      return real.call(this, k, v);
+    };
+    try {
+      expect(() => applyBackup(r.backup)).toThrow("quota");
+    } finally {
+      Storage.prototype.setItem = real;
+    }
+    expect(get("tsp.servers")[0].id).toBe("old");
+    expect(get("tsp.settings")).toEqual({ autoNext: false });
+    expect(localStorage.getItem("tsp.touchpad")).toBe(null);
   });
 });

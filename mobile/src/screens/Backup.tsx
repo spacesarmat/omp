@@ -16,7 +16,7 @@ import {
   summarizeBackup,
   summaryLines,
   type BackupFile,
-} from '../../../src/lib/backup';
+} from '../lib/backup';
 
 export interface BackupActions {
   shareText: (o: { name: string; text: string; title?: string }) => Promise<void>;
@@ -53,16 +53,23 @@ const INCLUDED = [
   'Источники поиска (вкл./выкл.)',
   'Настройки приложения и тачпада',
   'Категории и вид каталога',
+  'Избранные плейлисты и выбор дорожек',
 ];
 const EXCLUDED = ['Пароли трекеров и cookie — их нужно ввести заново', 'История и «Пропуск» — они на TorrServer'];
 
+let saving = false;
+
 export async function saveBackup(): Promise<void> {
+  if (saving) return;
+  saving = true;
   try {
     const now = actions.now();
     await actions.shareText({ name: backupFileName(now), text: serializeBackup(collectBackup(now)), title: 'Поделиться копией' });
   } catch (e) {
     log('error', 'app', 'Не удалось поделиться копией настроек');
     showToast(e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Не удалось сохранить копию');
+  } finally {
+    saving = false;
   }
 }
 
@@ -134,6 +141,7 @@ export function Backup() {
             Копия от {review.at.slice(0, 10) || 'неизвестной даты'}
             {review.omp ? ', OMP ' + review.omp : ''}.
           </p>
+          <p class="m-note m-backup-warn">{backupWarning(summary)}</p>
           <p class="m-muted m-small">Восстановление заменит эти данные на телефоне. Остальное не изменится.</p>
           <button type="button" class="m-btn m-btn-primary" onClick={confirmRestore}>
             Заменить данные на телефоне
@@ -161,13 +169,13 @@ export function Backup() {
             Сохранить копию…
           </button>
           <p class="m-muted m-small">Файл {backupFileName(actions.now())} — отправьте его себе в Телеграм, на диск или в папку телефона.</p>
+          <p class="m-note m-backup-warn">{backupWarning()}</p>
           <button type="button" class="m-btn m-btn-secondary" onClick={() => input.current && input.current.click()}>
             Восстановить из файла…
           </button>
-          <input ref={input} type="file" accept="application/json,.json" hidden aria-label="Файл копии" onChange={(e) => void onPick(e)} />
+          <input ref={input} type="file" accept="application/json,.json,text/plain,.txt" hidden aria-label="Файл копии" onChange={(e) => void onPick(e)} />
           <p class="m-muted m-small">Восстановление заменит серверы, телевизоры, подписки и настройки на этом телефоне. Перед заменой покажу, что в файле.</p>
           {error ? <p class="m-error" role="alert">{error}</p> : null}
-          <p class="m-note m-backup-warn">{backupWarning()}</p>
         </>
       )}
     </div>
