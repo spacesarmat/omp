@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>OMP - android-backup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { width: 390px; height: 844px; overflow: hidden; background: #0F1115; }
+button { font-family: 'Manrope', sans-serif; }
+svg { flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1115; color: #E8EAF0; font-family: 'Manrope', sans-serif">
+<div style="padding: 44px 16px 0; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px">
+<button type="button" aria-label="Назад" style="width: 44px; height: 44px; border: none; border-radius: 12px; background: none; color: #E8EAF0; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>
+<span style="font-size: 20px; font-weight: 700">Резервная копия</span>
+</div>
+<div style="padding: 14px; border-radius: 14px; background: #181B22; display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 15px; font-weight: 700">Что сохраняется</div>
+<div style="display: flex; gap: 10px; font-size: 14px; color: #C9CEDA"><span style="color: #8FE39A" aria-hidden="true">✓</span>Серверы TorrServer и их имена</div>
+<div style="display: flex; gap: 10px; font-size: 14px; color: #C9CEDA"><span style="color: #8FE39A" aria-hidden="true">✓</span>Телевизоры и пары с ними</div>
+<div style="display: flex; gap: 10px; font-size: 14px; color: #C9CEDA"><span style="color: #8FE39A" aria-hidden="true">✓</span>Подписки и настройки мониторинга</div>
+<div style="display: flex; gap: 10px; font-size: 14px; color: #C9CEDA"><span style="color: #8FE39A" aria-hidden="true">✓</span>Источники поиска (вкл./выкл.)</div>
+<div style="display: flex; gap: 10px; font-size: 14px; color: #C9CEDA"><span style="color: #8FE39A" aria-hidden="true">✓</span>Настройки приложения и тачпада</div>
+<div style="display: flex; gap: 10px; font-size: 14px; color: #C9CEDA"><span style="color: #8FE39A" aria-hidden="true">✓</span>Категории и вид каталога</div>
+<div style="display: flex; gap: 10px; font-size: 14px; color: #C9CEDA"><span style="color: #8FE39A" aria-hidden="true">✓</span>Избранные плейлисты и выбор дорожек</div>
+<div style="display: flex; gap: 10px; font-size: 14px; color: #C9CEDA"><span style="color: #FF8A80" aria-hidden="true">✕</span>Пароли трекеров и cookie — их нужно ввести заново</div>
+<div style="display: flex; gap: 10px; font-size: 14px; color: #C9CEDA"><span style="color: #FF8A80" aria-hidden="true">✕</span>История и «Пропуск» — они на TorrServer</div>
+</div>
+<button type="button" style="height: 50px; border: none; border-radius: 12px; background: #F5B700; color: #0F1115; font-family: 'Manrope', sans-serif; font-size: 15px; font-weight: 700">Сохранить копию…</button>
+<div style="font-size: 12px; color: #9AA1B2; line-height: 1.45">Файл omp-копия-2026-10-03.json — отправьте его себе в Телеграм, на диск или в папку телефона.</div>
+<button type="button" style="height: 50px; border: none; border-radius: 12px; background: #252A35; color: #E8EAF0; font-family: 'Manrope', sans-serif; font-size: 15px; font-weight: 700">Восстановить из файла…</button>
+<div style="padding: 12px; border-radius: 14px; background: #3A3320; color: #F5B700; font-size: 13px; line-height: 1.45">Восстановление заменит серверы, телевизоры, подписки и настройки на этом телефоне. Перед заменой покажу, что в файле.</div>
+<div style="font-size: 12px; color: #9AA1B2; line-height: 1.45">В копии есть адреса серверов, пароль доступа к вашему TorrServer, если он задан, и ключи пар с телевизорами — храните файл как пароль.</div>
+</div>
+</div>
+</body>
+</html>
