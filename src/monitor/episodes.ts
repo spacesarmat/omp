@@ -23,11 +23,11 @@ const SXE = new RegExp('(?:^|[^a-z0-9])s(\\d{1,2})[ ._]?e(\\d{1,4})(?:\\s*' + D 
 // 02x01-04 из 10, 03х01-08 (Cyrillic х), 02x13 из 13; the episode has 2+ digits, so the studio «2x2» is not one
 const NXN = new RegExp('(?:^|[^0-9a-z])(\\d{1,2})[xх](\\d{2,4})(?:\\s*' + D + '\\s*(\\d{1,4}))?' + OF, 'i');
 // Серии: 1-8 из 12, серии 1–10, Серия 5
-const NAMED = new RegExp('(?:сери[ия]|эпизод[ыа]?|episodes?)\\s*:?\\s*(\\d{1,4})(?:\\s*' + D + '\\s*(\\d{1,4}))?' + OF, 'i');
+const NAMED = new RegExp('(?:сери[ия]|эпизод[ыа]?|episodes?)\\s*:?\\s*(\\d{1,4})(?![0-9pр])(?:\\s*' + D + '\\s*(\\d{1,4}))?' + OF, 'i');
 // 1-8 серии из 10, 1-10 серия
 const RANGE_WORD = new RegExp('(?:^|[^0-9])(\\d{1,4})\\s*' + D + '\\s*(\\d{1,4})\\s*' + EPISODE_WORD + OF, 'i');
-// 5 серия
-const ONE_WORD = new RegExp('(?:^|[^0-9\\-–—])(\\d{1,4})\\s*(?:-?я\\s*)?сери[яи]' + OF, 'i');
+// 5 серия (a count «3 серии» / «24 серии» is not an episode: the plural counts only with «из N»)
+const ONE_WORD = new RegExp('(?:^|[^0-9\\-–—])(\\d{1,4})\\s*(?:-?я\\s*)?(?:серия|сери[ий](?=\\s*(?:из|of)\\s*\\d))' + OF, 'i');
 // 1-10 из 10, [01-02 из 02]
 const BARE = new RegExp('(?:^|[^0-9])(\\d{1,4})\\s*' + D + '\\s*(\\d{1,4})\\s*(?:из|of)\\s*(\\d{1,4})', 'i');
 // E01-E08

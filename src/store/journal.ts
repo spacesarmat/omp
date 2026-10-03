@@ -40,7 +40,7 @@ function patchLibrary(hash: string, data: string): void {
 }
 
 /** Data with an empty `data` seeded by TorrServer's own file list, which it would otherwise add itself later. */
-function baseOf(t: Torrent, parsed: ParsedData): ParsedData {
+export function baseOf(t: Torrent, parsed: ParsedData): ParsedData {
   if (t.data && t.data.trim()) return parsed;
   if (!t.file_stats || !t.file_stats.length) return parsed;
   const files = t.file_stats.map((f) => ({ id: f.id, path: f.path, length: f.length }));

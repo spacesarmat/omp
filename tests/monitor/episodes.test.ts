@@ -39,6 +39,12 @@ describe('parseEpisodeRange', () => {
     ['Сериал [2024, 1080p, 1-10 серии из 10]', { from: 1, to: 10, total: 10 }],
     ['Сериал / Серии 1-8 (2024)', { from: 1, to: 8 }],
     ['Сериал (2024) 5 серия', { from: 5, to: 5 }],
+    // a count of episodes is not an episode number
+    ['Мини-сериал, 3 серии (2024) WEB-DL 1080p', {}],
+    ['Сериал / 24 серии / 1080p', {}],
+    ['Сериал / 12 серий (2024)', {}],
+    ['Сериал, 24 серии 1080p (2024)', {}],
+    ['Сериал (24 серии из 24) 1080p', { from: 24, to: 24, total: 24 }],
     // a studio name is not an episode
     ['Сериал / Show [S07] (2024) WEB-DL 1080p | 2x2', { season: 7 }],
     ['Show Season 4 Complete', { season: 4 }],
