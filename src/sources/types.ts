@@ -60,7 +60,10 @@ export interface Source {
   kind: 'torrserver' | 'builtin';
   needsLogin?: boolean;
   search(query: string, ctx: SourceContext): Promise<SourceResult[]>;
-  /** Magnet from the release page when the search result has none. */
+  /**
+   * Link to add from the release page when the search result has no magnet: a magnet, or an http(s) .torrent
+   * link (Anidub) that TorrServer downloads itself.
+   */
   magnet?(detailUrl: string, ctx: SourceContext): Promise<string>;
   /** Sources with needsLogin: sign in; the credentials go to ctx.secrets only. Rejects in Russian. */
   login?(username: string, password: string, ctx: SourceContext): Promise<void>;

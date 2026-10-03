@@ -157,6 +157,20 @@ describe('Add', () => {
     expect((b as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('a result with only a .torrent link (Anidub) is added by that link', async () => {
+    const torrentUrl = 'https://tr.anidub.com/engine/download.php?id=671';
+    const row = { Title: 'Аниме [BD (720p)]', Categories: '', Size: '2.36 GB', CreateDate: '', Tracker: 'Anidub', Link: torrentUrl, Magnet: '', Hash: '', Peer: 3, Seed: 12 };
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue([row]);
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('x');
+    await flush();
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    expect(add).toHaveBeenCalledWith({ link: torrentUrl, category: expect.any(String) });
+    expect(toast.value).toBe('Добавлено на сервер');
+  });
+
   it('add errors from a row show under the search', async () => {
     vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
     vi.spyOn(TorrServerClient.prototype, 'add').mockRejectedValue(new Error('сервер упал'));

@@ -64,6 +64,8 @@ export interface ResultFields {
   date?: number;
   magnet?: string;
   categories?: string;
+  /** What TorrServer adds when there is no magnet (default: detailUrl), e.g. an http(s) .torrent link. */
+  link?: string;
 }
 
 /** A SourceResult with the SearchResult fields filled the way the TorrServer results are. */
@@ -76,7 +78,7 @@ export function makeResult(source: string, tracker: string, f: ResultFields): So
     Size: f.size,
     CreateDate: f.date !== undefined ? new Date(f.date).toISOString() : '',
     Tracker: tracker,
-    Link: f.detailUrl,
+    Link: f.link || f.detailUrl,
     Magnet: magnet,
     Hash: hash || '',
     Peer: f.peers,
