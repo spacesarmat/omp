@@ -31,6 +31,11 @@ export interface OmpNativeTvPlugin {
   secretGet(o: { key: string }): Promise<{ value?: string | null }>;
   secretSet(o: { key: string; value: string }): Promise<unknown>;
   secretDelete(o: { key: string }): Promise<unknown>;
+  /** «Передать на телевизор»: the page applied remoteSources { id } (rutracker = the login result when one came) or failed. */
+  /** stored = false: the verified login could not be written (the TV has no new login). */
+  remoteSourcesDone(o: { id: string; rutracker?: string; failed?: boolean }): Promise<{ stored?: boolean } | undefined>;
+  /** The transfer still waiting for the page (events are not retained): { event } or { event: null }. */
+  remoteSourcesPending(): Promise<{ event?: unknown }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
@@ -69,6 +74,8 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     secretGet: (o) => np.call(cap, NAME, 'secretGet', o),
     secretSet: (o) => np.call(cap, NAME, 'secretSet', o),
     secretDelete: (o) => np.call(cap, NAME, 'secretDelete', o),
+    remoteSourcesDone: (o) => np.call(cap, NAME, 'remoteSourcesDone', o),
+    remoteSourcesPending: () => np.call(cap, NAME, 'remoteSourcesPending', {}),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }

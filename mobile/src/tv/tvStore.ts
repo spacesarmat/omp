@@ -95,8 +95,11 @@ export function reloadTvs(): void {
   activeTvIp.value = loadActive();
 }
 
-/** Adds or updates a TV by IP; a known key and a user-given name are kept. The first TV becomes active. */
-export function saveTv(tv: SavedTv): void {
+/**
+ * Adds or updates a TV by IP; a known key and a user-given name are kept. The first TV becomes active unless
+ * `keepActive` (install assistant inspecting a TV).
+ */
+export function saveTv(tv: SavedTv, opts: { keepActive?: boolean } = {}): void {
   const existing = tvs.value.find((t) => t.ip === tv.ip);
   const renamed = !!existing && existing.defaultName !== undefined && existing.name !== existing.defaultName;
   const name = renamed ? existing!.name : tv.name;
@@ -117,7 +120,7 @@ export function saveTv(tv: SavedTv): void {
     if (mac) next.mac = mac;
   }
   tvs.value = existing ? tvs.value.map((t) => (t.ip === tv.ip ? next : t)) : tvs.value.concat(next);
-  if (!activeTv.value) activeTvIp.value = tv.ip;
+  if (!activeTv.value && !opts.keepActive) activeTvIp.value = tv.ip;
   persist();
 }
 

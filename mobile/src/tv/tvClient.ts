@@ -4,6 +4,8 @@ import { signal, effect } from '@preact/signals';
 import { native, type OmpNativeApi, type FoundOmpTv } from '../platform/native';
 import { activeTv, saveTv, setActiveTv, clearTvToken, normalizeMac, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
 import { showToast } from '../ui/toast';
+import { log } from '../../../src/lib/log';
+import { isRutrackerResult, TRANSFER_PATH, type RutrackerResult, type TransferPayload } from '../../../src/sources/transfer';
 import {
   registerMessage,
   requestMessage,
@@ -77,6 +79,8 @@ interface Session {
   off: Array<() => void>;
   registerId: string;
   signed: boolean;
+  /** Install assistant: pairing saves the TV but leaves the active TV as it is. */
+  keepActive: boolean;
   /** Set while registration is in progress. */
   reg: { resolve: () => void; reject: (e: Error) => void; timer?: ReturnType<typeof setTimeout> } | null;
 }
@@ -145,6 +149,7 @@ function fail(s: Session, message: string): void {
   if (session !== s) return;
   endSession(s, message);
   void closeTransport();
+  log('warn', 'tv', 'LG: ' + message);
   tvState.value = 'error';
   // While a warm-up retries, its failures stay silent until it gives up.
   if (warmActive) warmError = message;
@@ -172,8 +177,8 @@ function onRegisterMessage(s: Session, m: any): void {
       clientKey: typeof key === 'string' && key ? key : s.tv.clientKey,
       port: s.tv.port,
     };
-    saveTv(s.tv);
-    setActiveTv(s.tv.ip);
+    saveTv(s.tv, { keepActive: s.keepActive });
+    if (!s.keepActive) setActiveTv(s.tv.ip);
     clearTimeout(s.reg.timer);
     const reg = s.reg;
     s.reg = null;
@@ -189,7 +194,7 @@ function onRegisterMessage(s: Session, m: any): void {
       const mac = macFromInfo(info, mySession.tv.ip);
       if (mac && session === mySession) {
         mySession.tv = { ...mySession.tv, mac };
-        saveTv(mySession.tv);
+        saveTv(mySession.tv, { keepActive: mySession.keepActive });
       }
     }, noop);
   } else if (m.type === 'error') {
@@ -248,8 +253,13 @@ export function macFromInfo(info: any, ip: string): string | undefined {
   return wifiMac ?? wiredMac;
 }
 
-export function connectTv(tv: SavedTv): Promise<void> {
-  if (tv.kind === 'atv') return connectAtv(tv);
+export interface ConnectOptions {
+  /** Do not make this TV the active one (install assistant inspecting another TV). */
+  keepActive?: boolean;
+}
+
+export function connectTv(tv: SavedTv, opts: ConnectOptions = {}): Promise<void> {
+  if (tv.kind === 'atv') return connectAtv(tv, opts);
   endAtv();
   if (session && session.tv.ip === tv.ip) {
     if (tvState.value === 'connected') return Promise.resolve();
@@ -259,7 +269,14 @@ export function connectTv(tv: SavedTv): Promise<void> {
     endSession(session, TV_NOT_CONNECTED);
     void closeTransport();
   }
-  const s: Session = { tv: { ...tv, kind: 'lg' }, off: [], registerId: nextId('register'), signed: true, reg: null };
+  const s: Session = {
+    tv: { ...tv, kind: 'lg' },
+    off: [],
+    registerId: nextId('register'),
+    signed: true,
+    keepActive: !!opts.keepActive,
+    reg: null,
+  };
   const promise = new Promise<void>((resolve, reject) => {
     s.reg = { resolve, reject };
   });
@@ -281,7 +298,7 @@ export function connectTv(tv: SavedTv): Promise<void> {
         if (session === s && (port === 3000 || port === 3001)) {
           s.tv = { ...s.tv, port };
           // The TV may have answered `register` before this promise settled.
-          if (tvState.value === 'connected') saveTv(s.tv);
+          if (tvState.value === 'connected') saveTv(s.tv, { keepActive: s.keepActive });
         }
         // Socket open and `register` sent: now the TV has 8 s to answer (unless it already asked the user).
         if (session === s && tvState.value === 'connecting') armRegistration(s, REQUEST_TIMEOUT);
@@ -564,6 +581,81 @@ export async function ompVersionOnTv(): Promise<string | null> {
   }
 }
 
+/** What the install assistant learns from a paired LG TV; each field is missing when the TV did not answer it. */
+export interface LgInstallInfo {
+  /** getSystemInfo `modelName`, e.g. «OLED55C1RLA». */
+  model?: string;
+  /** getCurrentSWInformation `product_name`, e.g. «webOSTV 6.0». */
+  productName?: string;
+  /** getCurrentSWInformation `model_name` (firmware code), e.g. «HE_DTV_W21O_AFABATAA». */
+  swModel?: string;
+  /** Installed apps (listApps); null when the list is unavailable. */
+  apps: Array<{ id: string; version?: string }> | null;
+}
+
+const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 80) : undefined);
+
+/**
+ * LG only, on the connected session: model, webOS version and installed apps for the install assistant. Every
+ * request is soft (a silent TV never drops the session); the TV's other fields (device id, MAC…) are not kept.
+ */
+export async function lgInstallInfo(): Promise<LgInstallInfo> {
+  if (!session || tvState.value !== 'connected') throw new Error(TV_NOT_CONNECTED);
+  const ip = sessionIp.value;
+  const soft = (uri: string) => send(uri, undefined, false, true).catch(() => null);
+  const [sys, sw, list] = await Promise.all([
+    soft('ssap://system/getSystemInfo'),
+    soft('ssap://com.webos.service.update/getCurrentSWInformation'),
+    soft('ssap://com.webos.applicationManager/listApps'),
+  ]);
+  const info: LgInstallInfo = { apps: null };
+  const model = str(sys?.modelName);
+  const productName = str(sw?.product_name);
+  const swModel = str(sw?.model_name);
+  if (model) info.model = model;
+  if (productName) info.productName = productName;
+  if (swModel) info.swModel = swModel;
+  const apps = parseApps(list);
+  if (apps) {
+    info.apps = apps;
+    const omp = apps.find((a) => a.id === OMP_APP_ID);
+    if (omp?.version && ip !== null && sessionIp.value === ip && tvState.value === 'connected') {
+      versionCache = { ip, version: omp.version };
+    }
+  }
+  return info;
+}
+
+function parseApps(list: any): Array<{ id: string; version?: string }> | null {
+  if (!Array.isArray(list?.apps)) return null;
+  const apps: Array<{ id: string; version?: string }> = [];
+  for (const a of list.apps) {
+    if (!a || typeof a.id !== 'string' || !a.id) continue;
+    const version = str(a.version);
+    apps.push(version ? { id: a.id, version } : { id: a.id });
+  }
+  return apps;
+}
+
+/** LG only, on the connected session: installed app ids (one soft listApps); null when unknown. */
+export async function lgAppIds(): Promise<string[] | null> {
+  if (!session || tvState.value !== 'connected') return null;
+  const list = await send('ssap://com.webos.applicationManager/listApps', undefined, false, true).catch(() => null);
+  const apps = parseApps(list);
+  return apps ? apps.map((a) => a.id) : null;
+}
+
+/** LG only: launches an app on the TV (e.g. Homebrew Channel with its addRepository params). */
+export async function launchLgApp(id: string, params: object = {}): Promise<void> {
+  if (tvKind() === 'atv') throw new Error(ATV_UNSUPPORTED);
+  try {
+    await request('ssap://system.launcher/launch', { id, params });
+  } catch (e) {
+    if (!(e instanceof TvAnswerError)) throw e;
+    throw new Error('Не удалось открыть приложение на телевизоре');
+  }
+}
+
 export function pressButton(name: RemoteButton): Promise<void> {
   if (tvKind() === 'atv') {
     if (ATV_KEYS.indexOf(name) < 0) return Promise.reject(new Error(ATV_UNSUPPORTED));
@@ -687,6 +779,7 @@ function atvFail(s: AtvSession, message: string): void {
   // the token is dead: the next tap on the TV asks for a code right away
   if (message === TV_FORGOT) clearTvToken(s.tv.ip, s.tv.token);
   endAtv();
+  log('warn', 'tv', 'Android TV: ' + message);
   tvState.value = 'error';
   // While a warm-up retries, its failures stay silent until it gives up.
   if (warmActive) warmError = message;
@@ -703,8 +796,19 @@ export function atvErrorText(status: number): string {
   return status >= 400 && status < 500 ? ATV_REJECTED : ATV_ERROR;
 }
 
+/** TV_NO_ANSWER after the request timed out (the TV may be alive, only slow), as opposed to a network failure. */
+function timeoutError(): Error {
+  const e = new Error(TV_NO_ANSWER);
+  (e as Error & { timeout?: boolean }).timeout = true;
+  return e;
+}
+
+function isTimeout(e: unknown): boolean {
+  return !!e && typeof e === 'object' && (e as { timeout?: unknown }).timeout === true;
+}
+
 /** One request to the control server; a network failure or 5 s of silence -> TV_NO_ANSWER. */
-function atvFetch(tv: SavedTv, method: 'GET' | 'POST', path: string, body?: object): Promise<AtvAnswer> {
+function atvFetch(tv: SavedTv, method: 'GET' | 'POST', path: string, body?: object, timeoutMs = ATV_TIMEOUT): Promise<AtvAnswer> {
   const headers: Record<string, string> = {};
   if (tv.token) headers.Authorization = 'Bearer ' + tv.token;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -713,8 +817,8 @@ function atvFetch(tv: SavedTv, method: 'GET' | 'POST', path: string, body?: obje
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       ctrl.abort();
-      reject(new Error(TV_NO_ANSWER));
-    }, ATV_TIMEOUT);
+      reject(timeoutError());
+    }, timeoutMs);
   });
   const url = 'http://' + tv.ip + ':' + (tv.ctlPort || ATV_PORT) + path;
   const run = (async (): Promise<AtvAnswer> => {
@@ -751,7 +855,7 @@ function parseInfo(d: any): AtvInfo | null {
   };
 }
 
-function connectAtv(tv: SavedTv): Promise<void> {
+function connectAtv(tv: SavedTv, opts: ConnectOptions = {}): Promise<void> {
   if (atv && atv.tv.ip === tv.ip && atv.tv.token === tv.token) {
     if (tvState.value === 'connected') return Promise.resolve();
     if (atvConnecting) return atvConnecting;
@@ -788,8 +892,8 @@ function connectAtv(tv: SavedTv): Promise<void> {
     atvConnecting = null;
     tvState.value = 'connected';
     tvError.value = '';
-    saveTv(s.tv);
-    setActiveTv(s.tv.ip);
+    saveTv(s.tv, opts);
+    if (!opts.keepActive) setActiveTv(s.tv.ip);
   })();
   atvConnecting = p;
   return p;
@@ -856,6 +960,44 @@ function checkForeground(): void {
 /** Android TV: starts the «Сейчас играет» link to `report` without navigating. */
 export async function attachOnTv(report: string): Promise<void> {
   await atvPost('/omp/attach', { report });
+}
+
+export const SOURCES_ATV_ONLY = 'Передать источники можно только на Android TV с OMP';
+export const SOURCES_BUSY = 'Телевизор ещё применяет прошлую передачу — попробуйте через минуту';
+export const SOURCES_NO_ANSWER = 'Телевизор не ответил — откройте OMP на телевизоре и попробуйте снова';
+export const SOURCES_FAILED = 'Телевизор не смог применить источники';
+export const SOURCES_SECRETS = 'Телевизор не смог сохранить вход: защищённое хранилище недоступно';
+/** The TV may sign in to rutracker before it answers (its own wait is 35 s). */
+const SOURCES_TIMEOUT = 45000;
+
+/**
+ * «Передать на телевизор»: POST /omp/sources with the switches and, when given, the rutracker login (only to the
+ * paired Android TV, over its token). Resolves the TV's rutracker result (undefined without a login); rejects in
+ * Russian. The body is never logged.
+ */
+export async function sendSourcesToTv(payload: TransferPayload): Promise<{ rutracker?: RutrackerResult }> {
+  if (tvKind() !== 'atv') throw new Error(SOURCES_ATV_ONLY);
+  await ensureConnected();
+  const s = atv;
+  if (!s || tvState.value !== 'connected') throw new Error(TV_NOT_CONNECTED);
+  let r: AtvAnswer;
+  try {
+    r = await atvFetch(s.tv, 'POST', TRANSFER_PATH, payload, SOURCES_TIMEOUT);
+  } catch (e) {
+    // a slow sign-in on the TV is not a dead TV: only a network failure ends the session
+    if (!isTimeout(e)) atvFail(s, TV_NO_ANSWER);
+    throw new Error(SOURCES_NO_ANSWER);
+  }
+  if (r.status === 401) {
+    atvFail(s, TV_FORGOT);
+    throw new Error(TV_FORGOT);
+  }
+  if (r.status === 409) throw new Error(SOURCES_BUSY);
+  if (r.status === 503) throw new Error(SOURCES_NO_ANSWER);
+  if (r.status === 500) throw new Error(r.data?.error === 'secrets' ? SOURCES_SECRETS : SOURCES_FAILED);
+  if (r.status !== 200 || !r.data || r.data.ok !== true) throw new Error(r.status === 200 ? ATV_ERROR : atvErrorText(r.status));
+  if (!payload.rutracker) return {};
+  return { rutracker: isRutrackerResult(r.data.rutracker) ? r.data.rutracker : 'error' };
 }
 
 /**

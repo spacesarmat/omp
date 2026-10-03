@@ -15,6 +15,7 @@ import { latestUpdate, checkForUpdate } from '../store/updates';
 import { openHbChannel } from '../platform/hbchannel';
 import { HB_REPO_URL } from '../lib/updateInfo';
 import { platformKind } from '../platform/env';
+import { logEntries, clearLog, logVersion, logTime, LEVEL_LABEL, AREA_LABEL } from '../lib/log';
 import { CACHE, PRELOAD, READAHEAD, CONNS, RATE, DISCONNECT, withCurrent } from '../lib/serverSettingsOptions';
 
 const SEEK = [5, 10, 15, 30, 60].map((v) => ({ value: v, label: v + ' с' }));
@@ -22,6 +23,34 @@ const SUB_COLOR: { value: 'white' | 'yellow'; label: string }[] = [
   { value: 'white', label: 'Белый' },
   { value: 'yellow', label: 'Жёлтый' },
 ];
+
+const LOG_BRIEF = 20;
+
+/** The last entries of the error log, newest first (read-only; the full log with sharing is on the phone). */
+function LogBrief() {
+  void logVersion.value; // re-render on new entries
+  const list = logEntries().reverse().slice(0, LOG_BRIEF);
+  return (
+    <div class="log-brief">
+      {list.length === 0 ? (
+        <div class="log-empty">Записей нет</div>
+      ) : (
+        list.map((e, i) => (
+          <div class={'log-line log-' + e.l} key={e.t + ':' + i}>
+            <span class="log-level">{LEVEL_LABEL[e.l]}</span> {logTime(e.t)} · {AREA_LABEL[e.a]}: {e.x}
+          </div>
+        ))
+      )}
+      <div class="row">
+        <Button
+          focusKey="set-log-clear"
+          label="Очистить журнал"
+          onPress={() => confirmDialog('Очистить журнал?', 'Очистить').then((ok) => { if (ok) clearLog(); })}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function SettingsScreen() {
   const c = client.value;
@@ -83,6 +112,12 @@ export function SettingsScreen() {
         <Button focusKey="set-server" label="Сменить сервер" onPress={() => navigate({ name: 'connect' })} />
         <Button focusKey="set-pair" label="Подключить телефон" onPress={() => navigate({ name: 'pairPhone' })} />
       </div>
+      {platformKind() === 'androidtv' && (
+        <div class="row">
+          <div class="grow muted">Сайты для поиска, вход на rutracker, передача с телефона</div>
+          <Button focusKey="set-sources" label="Источники поиска" onPress={() => navigate({ name: 'sources' })} />
+        </div>
+      )}
 
       <h2>Воспроизведение</h2>
       <ChoiceRow focusKey="set-audio" label="Язык аудио" value={s.audioLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ audioLang: v })} />
@@ -117,6 +152,9 @@ export function SettingsScreen() {
           </div>
         </div>
       )}
+
+      <h2>Журнал</h2>
+      <LogBrief />
 
       <h2>О приложении</h2>
       <div class="row">

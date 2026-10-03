@@ -10,6 +10,9 @@ import { Toast } from './ui/toast';
 import { Connect } from './screens/Connect';
 import { Tv } from './screens/Tv';
 import { Faq } from './screens/Faq';
+import { Log } from './screens/Log';
+import { Backup } from './screens/Backup';
+import { InstallAssistant } from './screens/InstallAssistant';
 import { Sources } from './screens/Sources';
 import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
@@ -36,6 +39,7 @@ import { News } from './screens/News';
 import { SubFindings } from './screens/SubFindings';
 import { Monitor } from './screens/Monitor';
 import { monitorNative } from './monitor/native';
+import { reloadLog } from '../../src/lib/log';
 import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
 import './mobile.css';
 
@@ -144,6 +148,7 @@ export function App() {
     // the notification permission: once when monitoring is on, and for a run that could not notify while OMP was closed
     if (activeServer.value) void startupNotify().catch(() => {});
     const offDone = monitorNative.onDone((summary) => {
+      reloadLog(); // the background page wrote its summary to the log
       monitorFinished(summary);
       const c = client.value;
       if (c) void refreshTorrents(c).catch(() => {});
@@ -199,7 +204,13 @@ export function App() {
       ) : route.name === 'tv' ? (
         <Tv />
       ) : route.name === 'faq' ? (
-        <Faq />
+        <Faq q={route.q} />
+      ) : route.name === 'install' ? (
+        <InstallAssistant key={route.ip ? 'steps:' + route.ip : 'find'} ip={route.ip} kind={route.kind} />
+      ) : route.name === 'log' ? (
+        <Log />
+      ) : route.name === 'backup' ? (
+        <Backup />
       ) : route.name === 'sources' ? (
         <Sources />
       ) : route.name === 'library' ? (

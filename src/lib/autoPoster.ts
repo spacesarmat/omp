@@ -17,7 +17,7 @@ export interface PosterDeps {
   cfg?: TmdbConfig | null;
 }
 
-const fetchTmdb = (url: string) => request<unknown>(url, { method: 'GET', timeoutMs: 15000 });
+const fetchTmdb = (url: string) => request<unknown>(url, { method: 'GET', timeoutMs: 15000, quiet: true });
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function getOrNull(c: PosterClient, hash: string): Promise<Torrent | null> {

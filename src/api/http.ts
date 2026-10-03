@@ -1,3 +1,5 @@
+import { log } from '../lib/log';
+
 export type ApiErrorKind = 'network' | 'timeout' | 'http' | 'parse';
 
 export interface ApiError {
@@ -37,6 +39,16 @@ export interface HttpOptions {
   timeoutMs?: number;
   auth?: string;
   responseType?: 'json' | 'text' | 'arraybuffer';
+  /** The caller expects this to fail sometimes (optional endpoints, offline checks): keep it out of the log. */
+  quiet?: boolean;
+}
+
+/** Failed request -> log: kind, status and site kind only (scrub drops everything after the host). */
+function logFailure(url: string, e: unknown): void {
+  const m = /^[a-z][a-z0-9+.-]*:\/\/[^\/?#]*/i.exec(url);
+  const k = isApiError(e) ? e.kind : 'unknown';
+  const st = isApiError(e) && e.status !== undefined ? ' ' + e.status : '';
+  log('error', 'server', 'Запрос не удался (' + k + st + '): ' + (m ? m[0] : 'адрес'));
 }
 
 export function request<T>(url: string, opts: HttpOptions = {}): Promise<T> {
@@ -80,12 +92,28 @@ export function request<T>(url: string, opts: HttpOptions = {}): Promise<T> {
   );
 
   const timeout = opts.timeoutMs === undefined ? 5000 : opts.timeoutMs;
-  if (timeout <= 0) return p;
+  if (timeout <= 0) {
+    // a side branch: the caller's promise gets no extra tick
+    if (!opts.quiet) p.then(undefined, (e) => logFailure(url, e));
+    return p;
+  }
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(apiError('timeout', 'Timeout')), timeout);
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      const e = apiError('timeout', 'Timeout');
+      if (!opts.quiet) logFailure(url, e);
+      reject(e);
+    }, timeout);
     p.then(
       (v) => { clearTimeout(timer); resolve(v); },
-      (e) => { clearTimeout(timer); reject(e); },
+      (e) => {
+        clearTimeout(timer);
+        // after the timeout fired the failure is already logged and rejected
+        if (settled) return;
+        if (!opts.quiet) logFailure(url, e);
+        reject(e);
+      },
     );
   });
 }

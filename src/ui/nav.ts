@@ -11,6 +11,7 @@ export type Route =
   | { name: 'playlist'; url?: string; title?: string }
   | { name: 'settings' }
   | { name: 'update' }
+  | { name: 'sources' }
   | { name: 'pairPhone' };
 
 export const routeStack = signal<Route[]>([{ name: 'connect' }]);

@@ -752,3 +752,66 @@ button, .m-btn {
 .m-warn-row { display: flex; align-items: center; gap: 10px; }
 .m-warn-row > span { flex: 1; min-width: 0; }
 .m-warn-row .m-btn { flex-shrink: 0; height: 38px; font-size: 14px; padding: 0 14px; }
+
+/* error log */
+.m-screen[data-route='log'] { display: flex; flex-direction: column; gap: 12px; }
+.m-log-actions { display: flex; gap: 8px; }
+.m-log-actions .m-btn { flex: 1 1 0; }
+.m-log-list { display: flex; flex-direction: column; gap: 8px; }
+.m-log-row { padding: 10px 12px; border-radius: 12px; background: var(--panel); }
+.m-log-meta { font-size: 12px; color: var(--muted); }
+.m-log-level { font-weight: 700; color: #8FE39A; }
+.m-log-row.warn .m-log-level { color: var(--accent); }
+.m-log-row.error .m-log-level { color: #FF8A80; }
+.m-log-text { margin-top: 2px; font-size: 14px; color: var(--text); overflow-wrap: anywhere; }
+
+/* «Передать на телевизор» (Android TV) */
+.m-send-card { gap: 10px; padding: 14px; }
+.m-send-head { display: flex; align-items: center; gap: 10px; color: #8FE39A; }
+.m-send-name { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 700; color: var(--text); }
+.m-send-state { font-size: 12px; color: var(--muted); }
+.m-send-state.ok { color: #8FE39A; }
+.m-send-check { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.m-send-check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.m-send-done { font-size: 12px; color: #8FE39A; }
+
+/* backup */
+.m-screen[data-route='backup'] { display: flex; flex-direction: column; gap: 12px; }
+.m-backup-review { display: flex; flex-direction: column; gap: 12px; }
+.m-backup-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.4; }
+.m-backup-list li::before { content: '•'; color: var(--muted); margin-right: 10px; }
+.m-backup-list li.yes::before { content: '✓'; color: var(--accent); }
+.m-backup-list li.no { color: var(--muted); }
+.m-backup-list li.no::before { content: '✕'; }
+.m-backup-warn { color: var(--muted); }
+
+/* install assistant */
+.m-ok { color: #8FE39A; }
+.m-tv-install { align-self: flex-start; }
+.m-tv-noomp { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.m-tv-noomp .m-btn { flex-shrink: 0; height: 40px; padding: 0 14px; }
+.m-install-list { display: flex; flex-direction: column; gap: 10px; }
+.m-install-dev { display: flex; align-items: center; gap: 12px; padding: 12px; border: none; border-radius: 14px; background: var(--panel); color: var(--text); font: inherit; text-align: left; }
+.m-install-dev-icon { display: flex; color: var(--accent); }
+.m-install-dev-icon.ok { color: #8FE39A; }
+.m-install-dev-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.m-install-dev-name { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.m-install-manual { height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
+.m-install-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.m-install-step { display: flex; gap: 12px; padding: 12px; border-radius: 14px; background: var(--panel); }
+.m-install-step.current { background: #3A3320; }
+.m-install-mark { width: 28px; height: 28px; border-radius: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; background: #252A35; color: var(--muted); }
+.m-install-step.done .m-install-mark { background: #1E2A1F; color: #8FE39A; }
+.m-install-step.current .m-install-mark { background: var(--accent); color: var(--bg); }
+.m-install-step-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.m-install-step-title { font-size: 14px; font-weight: 700; }
+.m-install-actions { display: flex; flex-direction: column; gap: 10px; }
+.m-install-actions .m-link { align-self: flex-start; }
+/* install from the phone (mockup AssistInstall) */
+.m-install-form { gap: 10px; }
+.m-install-pass { text-transform: uppercase; letter-spacing: 1px; }
+.m-install-run { display: flex; flex-direction: column; gap: 12px; }
+.m-install-run .m-link { align-self: flex-start; }
+.m-install-progress { padding: 14px; border-radius: 14px; background: var(--panel); display: flex; flex-direction: column; gap: 8px; }
+.m-install-progress-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.m-install-done { font-size: 17px; font-weight: 700; }

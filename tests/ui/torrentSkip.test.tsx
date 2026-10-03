@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
-import { init } from '@noriginmedia/norigin-spatial-navigation';
+import { init, setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { dispatchKey } from '../../src/ui/keys';
 
 vi.mock('../../src/store/journal', async (orig) => ({
   ...(await orig<typeof import('../../src/store/journal')>()),
@@ -124,5 +125,62 @@ describe('TV torrent card · quick taps', () => {
     await flush();
     expect(row('Пропускать заставку').querySelector('[role=switch]')!.getAttribute('aria-checked')).toBe('false');
     expect(row('Пропускать титры').querySelector('[role=switch]')!.getAttribute('aria-checked')).toBe('true');
+  });
+});
+
+describe('TV torrent card · marks dialog', () => {
+  const press = (a: 'left' | 'right' | 'back') => act(() => { dispatchKey(a, { repeat: false } as KeyboardEvent); });
+  const dialogButton = (label: string) => Array.prototype.filter.call(host.querySelectorAll('.marks-dialog .button'), (b: Element) => (b.textContent || '').indexOf(label) >= 0)[0] as HTMLElement;
+
+  it('status shows the chapters and the manual marks together', async () => {
+    probeResult = { streams: [], chapters: [{ start_time: '60', end_time: '150', tags: { title: 'Заставка' } }] };
+    await mount({ i: false, c: false, mc: 90 });
+    expect(row('Заставка и титры').textContent).toContain('по главам файла · вручную: титры: последние 1:30');
+  });
+
+  it('the status row is a named button without a hint appended to the status', async () => {
+    await mount();
+    const r = row('Заставка и титры');
+    expect(r.getAttribute('role')).toBe('button');
+    expect(r.getAttribute('aria-label')).toBe('Заставка и титры — задать вручную');
+    expect(r.textContent).not.toContain('ОК');
+  });
+
+  it('the status row opens the dialog with the saved marks; Back closes it without writing', async () => {
+    await mount({ i: false, c: false, mi: [45, 135], mc: 90 });
+    expect(host.querySelector('.marks-dialog')).toBeNull();
+    act(() => row('Заставка и титры').click());
+    expect(host.querySelector('.marks-dialog')).not.toBeNull();
+    expect(host.querySelector('.marks-sub')!.textContent).toContain('Starbound Frontier S02 1080p');
+    expect(Array.prototype.map.call(host.querySelectorAll('.marks-value'), (e: Element) => e.textContent)).toEqual(['0:45', '2:15', '1:30']);
+    press('back');
+    expect(host.querySelector('.marks-dialog')).toBeNull();
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
+  it('Save writes both marks to the journal and closes; the status follows', async () => {
+    saveMock.mockResolvedValue({ i: false, c: false, mi: [45, 135], mc: 95 });
+    probeResult = null;
+    await mount({ i: false, c: false, mi: [45, 135], mc: 90 });
+    act(() => row('Заставка и титры').click());
+    act(() => setFocus('marks-last'));
+    await flush();
+    press('right');
+    act(() => dialogButton('Сохранить').click());
+    await flush();
+    expect(saveMock.mock.calls[0][2]).toEqual({ mi: [45, 135], mc: 95 });
+    expect(host.querySelector('.marks-dialog')).toBeNull();
+    expect(row('Заставка и титры').textContent).toContain('титры: последние 1:35');
+  });
+
+  it('Reset clears both marks', async () => {
+    saveMock.mockResolvedValue({ i: false, c: false });
+    probeResult = null;
+    await mount({ i: false, c: false, mi: [45, 135], mc: 90 });
+    act(() => row('Заставка и титры').click());
+    act(() => dialogButton('Сбросить').click());
+    await flush();
+    expect(saveMock.mock.calls[0][2]).toEqual({ mi: null, mc: null });
+    expect(row('Заставка и титры').textContent).toContain('не заданы');
   });
 });

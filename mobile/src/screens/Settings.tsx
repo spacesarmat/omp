@@ -299,6 +299,10 @@ export function Settings() {
           </button>
         </div>
         <TvOmpRow />
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'install' })}>
+          <span>Установить OMP на телевизор</span>
+          <Icon d="M9 6l6 6l-6 6" size={20} />
+        </button>
       </section>
       <section class="m-set-group">
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'faq' })}>
@@ -308,6 +312,14 @@ export function Settings() {
       </section>
       <section class="m-set-group">
         <div class="m-set-label">О приложении</div>
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'backup' })}>
+          <span>Резервная копия</span>
+          <Icon d="M9 6l6 6l-6 6" size={20} />
+        </button>
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'log' })}>
+          <span>Журнал ошибок</span>
+          <Icon d="M9 6l6 6l-6 6" size={20} />
+        </button>
         <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(PROJECT_URL, '_system')}>
           Страница проекта
         </button>

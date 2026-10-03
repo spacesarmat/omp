@@ -2,9 +2,11 @@ package com.spacesarmat.omp
 
 import android.Manifest
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -15,7 +17,25 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import com.spacesarmat.omp.control.SourcesDone
 import com.spacesarmat.omp.control.TvRemote
+import com.spacesarmat.omp.install.AdbIdentity
+import com.spacesarmat.omp.install.AdbIdentityStore
+import com.spacesarmat.omp.install.AesGcmWrapper
+import com.spacesarmat.omp.install.AtvAdbInstaller
+import com.spacesarmat.omp.install.CancelToken
+import com.spacesarmat.omp.install.DadbConnector
+import com.spacesarmat.omp.install.DevModeReminder
+import com.spacesarmat.omp.install.HttpKeyServer
+import com.spacesarmat.omp.install.InstallCodes
+import com.spacesarmat.omp.install.InstallRequest
+import com.spacesarmat.omp.install.InstallRunner
+import com.spacesarmat.omp.install.JschConnector
+import com.spacesarmat.omp.install.LgDevModeInstaller
+import com.spacesarmat.omp.install.OkReleaseHttp
+import com.spacesarmat.omp.install.ReleaseDownloader
+import com.spacesarmat.omp.install.Releases
+import com.spacesarmat.omp.install.failureOf
 import com.spacesarmat.omp.monitor.MonitorNotifier
 import com.spacesarmat.omp.monitor.MonitorPlan
 import com.spacesarmat.omp.monitor.MonitorScheduler
@@ -26,6 +46,7 @@ import com.spacesarmat.omp.sources.HttpSpec
 import com.spacesarmat.omp.sources.SiteHttp
 import com.spacesarmat.omp.sources.SiteHttpException
 import com.spacesarmat.omp.sources.SourceServices
+import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -46,7 +67,8 @@ import org.json.JSONObject
  * localServerState { running, error? }, nativePlayerState { session, index, time, duration, paused, buffering,
  * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV);
  * phone remote on Android TV ([TvRemote]): remoteLaunch { params }, remoteAttach { report }, remoteKey { name },
- * remoteText { text | delete | enter }, phonePaired { phone }.
+ * remoteText { text | delete | enter }, phonePaired { phone }, remoteSources { id, sources, rutracker, phone }.
+ * Install assistant ([com.spacesarmat.omp.install]): installProgress { phase, item, percent?, version? }.
  */
 @CapacitorPlugin(
     name = "OmpNative",
@@ -62,6 +84,9 @@ class OmpNativePlugin : Plugin() {
     private var pointer: TvSocket? = null
     private var pendingPointer: Once? = null
     private val downloading = AtomicBoolean(false)
+    private val installing = AtomicBoolean(false)
+    @Volatile
+    private var installCancel: CancelToken? = null
     private val player = PlayerServer { body -> notifyListeners("playerMessage", JSObject().put("body", body)) }
     // phone remote: only in TV mode
     private var remote: TvRemote? = null
@@ -76,6 +101,7 @@ class OmpNativePlugin : Plugin() {
 
     override fun load() {
         instance = this
+        purgeSharedFiles(10 * 60 * 1000L)
         NativePlayerBridge.emitter = { event, data -> notifyListeners(event, data) }
         LocalTorrServer.addListener(serverState)
         if (TvMode.isTv(context)) {
@@ -97,6 +123,8 @@ class OmpNativePlugin : Plugin() {
         player.stop()
         remote?.stop()
         remote = null
+        // blocking socket I/O ignores interrupts: close the install's sockets so it ends now
+        installCancel?.cancel()
         io.shutdownNow()
     }
 
@@ -134,10 +162,11 @@ class OmpNativePlugin : Plugin() {
     fun discoverOmpTvs(call: PluginCall) {
         val once = Once(call)
         val timeout = (call.getInt("timeoutMs") ?: 3000).coerceIn(500, 15000).toLong()
+        val group = searchGroup(call)
         io.execute {
             try {
                 val arr = JSArray()
-                for (t in OmpDiscovery.discover(context, timeout)) {
+                for (t in OmpDiscovery.discover(context, timeout, group)) {
                     arr.put(
                         JSObject().put("ip", t.ip).put("port", t.port).put("name", t.name).put("version", t.version),
                     )
@@ -146,6 +175,183 @@ class OmpNativePlugin : Plugin() {
             } catch (e: Exception) {
                 once.reject("Не удалось выполнить поиск телевизоров. Проверьте Wi-Fi")
             }
+        }
+    }
+
+    /** Install assistant: NSD search for Google Cast devices: { tvs: [{ ip, name, model? }] }. */
+    @PluginMethod
+    fun discoverCastTvs(call: PluginCall) {
+        val once = Once(call)
+        val timeout = (call.getInt("timeoutMs") ?: 3000).coerceIn(500, 15000).toLong()
+        val group = searchGroup(call)
+        io.execute {
+            try {
+                val arr = JSArray()
+                for (t in CastDiscovery.discover(context, timeout, group)) {
+                    val o = JSObject().put("ip", t.ip).put("name", t.name)
+                    if (t.model != null) o.put("model", t.model)
+                    arr.put(o)
+                }
+                once.resolve(JSObject().put("tvs", arr))
+            } catch (e: Exception) {
+                once.reject("Не удалось выполнить поиск телевизоров. Проверьте Wi-Fi")
+            }
+        }
+    }
+
+    /** Optional search group of a discovery call (one per screen); at most 64 characters. */
+    private fun searchGroup(call: PluginCall): String? = call.getString("group")?.trim()?.take(64)?.takeIf { it.isNotEmpty() }
+
+    /** { group }: stops only the NSD searches started with that group (the screen has gone); they return what they found. */
+    @PluginMethod
+    fun stopDiscovery(call: PluginCall) {
+        searchGroup(call)?.let { OmpDiscovery.cancelGroup(it) }
+        call.resolve()
+    }
+
+    /** Install assistant: which of the install ports ([PortProbe.ALLOWED]) answer on a home-network IP: { open: [] }. */
+    @PluginMethod
+    fun probePorts(call: PluginCall) {
+        val once = Once(call)
+        val ip = call.getString("ip")?.trim().orEmpty()
+        val timeout = (call.getInt("timeoutMs") ?: 1500).coerceIn(200, 5000)
+        val ports = ArrayList<Int>()
+        val raw = call.getArray("ports")
+        if (raw != null) {
+            for (i in 0 until raw.length()) {
+                val p = raw.optInt(i, -1)
+                if (p > 0) ports.add(p)
+            }
+        }
+        if (!PortProbe.isPrivateIpv4(ip)) {
+            once.reject("Неверный адрес телевизора")
+            return
+        }
+        io.execute {
+            val arr = JSArray()
+            for (p in PortProbe.open(ip, ports, timeout)) arr.put(p)
+            once.resolve(JSObject().put("open", arr))
+        }
+    }
+
+    // ---- install assistant: install OMP on a TV ----
+
+    /**
+     * Installs OMP on an LG TV in Developer Mode ({ method: 'lg-devmode', ip, passphrase, withHbc }) or an Android TV
+     * over adb ({ method: 'atv-adb', ip }). Progress: events installProgress { phase, percent?, item, version? }.
+     * Resolves { version, hbcVersion?, hbcError?, sdkInt?, abi? }; rejects with an InstallCodes code as message and
+     * code. One install at a time; nothing is logged (addresses, passphrase, key).
+     */
+    @PluginMethod
+    fun installStart(call: PluginCall) {
+        val once = Once(call)
+        val method = call.getString("method").orEmpty()
+        val ip = call.getString("ip")?.trim().orEmpty()
+        val withHbc = call.getBoolean("withHbc", false) == true
+        val pass = call.getString("passphrase")?.toCharArray()
+        if (!PortProbe.isPrivateIpv4(ip) || (method != InstallRequest.LG && method != InstallRequest.ATV)) {
+            pass?.fill('\u0000')
+            once.reject(InstallCodes.BAD_TARGET, InstallCodes.BAD_TARGET)
+            return
+        }
+        if (!installing.compareAndSet(false, true)) {
+            pass?.fill('\u0000')
+            once.reject(InstallCodes.BUSY, InstallCodes.BUSY)
+            return
+        }
+        val cancel = CancelToken()
+        installCancel = cancel
+        val req = InstallRequest(method, ip, pass, withHbc)
+        io.execute {
+            try {
+                val http = OkReleaseHttp()
+                val runner = InstallRunner(
+                    Releases(http),
+                    ReleaseDownloader(http, File(context.cacheDir, "install")),
+                    LgDevModeInstaller(HttpKeyServer(), JschConnector()),
+                    AtvAdbInstaller(DadbConnector(adbIdentities())),
+                )
+                val out = runner.run(req, { phase, percent, item, version ->
+                    val o = JSObject().put("phase", phase.id).put("item", item.id)
+                    if (percent != null) o.put("percent", percent)
+                    if (version != null) o.put("version", version)
+                    notifyListeners("installProgress", o)
+                }, cancel)
+                val r = JSObject().put("version", out.version)
+                out.hbcVersion?.let { r.put("hbcVersion", it) }
+                out.hbcError?.let { r.put("hbcError", it) }
+                out.sdkInt?.let { r.put("sdkInt", it) }
+                out.abi?.let { r.put("abi", it) }
+                once.resolve(r)
+            } catch (e: Throwable) {
+                val f = failureOf(e, cancel)
+                once.reject(f.code, f.code)
+            } finally {
+                req.wipe()
+                installCancel = null
+                installing.set(false)
+            }
+        }
+    }
+
+    /** The phone's adb identity, encrypted with a Keystore key, in noBackupFilesDir (not backed up or transferred). */
+    private fun adbIdentities(): AdbIdentityStore {
+        // earlier builds kept the key in plain text here, or briefly as temporary files while generating it
+        File(context.filesDir, "adb").deleteRecursively()
+        File(context.cacheDir, "adbtmp").deleteRecursively()
+        return AdbIdentityStore(
+            File(context.noBackupFilesDir, "adb/identity.enc"),
+            AesGcmWrapper { AesGcmWrapper.keystoreKey("omp-adb-aes") },
+        ) { AdbIdentity.generate() }
+    }
+
+    /** Stops the running install (downloads and temp files are removed). */
+    @PluginMethod
+    fun installCancel(call: PluginCall) {
+        installCancel?.cancel()
+        call.resolve()
+    }
+
+    /**
+     * { tv, id?, name?, at: unix ms } schedules the Developer Mode reminder for that TV (tv = its address, id = a stable
+     * TV id when known; both stored only as hashes, an older reminder of the same TV under either key is replaced);
+     * { tv, id?, at: null } cancels it.
+     */
+    @PluginMethod
+    fun devModeReminder(call: PluginCall) {
+        val tv = call.getString("tv")?.trim().orEmpty()
+        val at = call.getLong("at")
+        if (tv.isEmpty()) {
+            call.reject("Не указан телевизор")
+        } else if (at == null) {
+            DevModeReminder.cancel(context, tv, stableId(call))
+            call.resolve()
+        } else if (DevModeReminder.schedule(context, tv, call.getString("name"), at, stableId = stableId(call))) {
+            call.resolve()
+        } else {
+            call.reject("Некорректное время напоминания")
+        }
+    }
+
+    private fun stableId(call: PluginCall): String? = call.getString("id")?.trim()?.take(128)?.takeIf { it.isNotEmpty() }
+
+    /** { tv, id? } → { at? }: when the reminder for that TV is due; absent when none is scheduled. */
+    @PluginMethod
+    fun devModeReminderState(call: PluginCall) {
+        val once = Once(call)
+        val tv = call.getString("tv")?.trim().orEmpty()
+        if (tv.isEmpty()) {
+            once.reject("Не указан телевизор")
+            return
+        }
+        val id = stableId(call)
+        io.execute {
+            val o = JSObject()
+            try {
+                DevModeReminder.scheduledAt(context, tv, id)?.let { o.put("at", it) }
+            } catch (_: Exception) {
+            }
+            once.resolve(o)
         }
     }
 
@@ -420,6 +626,51 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
+    /** Writes [text] to cache/logs/[name] and opens the system share sheet for it (FileProvider, text/plain).
+     *  Older shared files are removed first (a settings copy holds secrets); [title] is the chooser title. */
+    @Synchronized
+    @PluginMethod
+    fun shareText(call: PluginCall) {
+        val name = shareFileName(call.getString("name"))
+        val text = call.getString("text")
+        if (text == null) {
+            call.reject("Нет текста для файла")
+            return
+        }
+        try {
+            val dir = File(context.cacheDir, "logs").apply { mkdirs() }
+            dir.listFiles()?.forEach { it.delete() }
+            val file = File(dir, name)
+            file.writeText(text, Charsets.UTF_8)
+            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+            val send = Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // ClipData carries the read grant to the chooser and its preview
+            send.clipData = ClipData.newRawUri("", uri)
+            val chooser = Intent.createChooser(send, call.getString("title")?.trim().orEmpty().take(60).ifEmpty { "Поделиться файлом" })
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val act = activity
+            if (act != null) act.startActivity(chooser)
+            else context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            call.resolve()
+        } catch (_: ActivityNotFoundException) {
+            call.reject("Нет приложения для отправки файла")
+        } catch (_: java.io.IOException) {
+            call.reject("Не удалось сохранить файл")
+        } catch (_: RuntimeException) {
+            call.reject("Не удалось поделиться файлом")
+        }
+    }
+
+    /** Removes shared files (settings copies hold secrets) older than [maxAgeMs] from cache/logs. */
+    @Synchronized
+    private fun purgeSharedFiles(maxAgeMs: Long) {
+        val now = System.currentTimeMillis()
+        File(context.cacheDir, "logs").listFiles()?.forEach { if (now - it.lastModified() > maxAgeMs) it.delete() }
+    }
+
     // ---- native player (Android TV) ----
 
     /** Opens [PlayerActivity] with the queue (an open player takes the new queue over); resolves once launched. */
@@ -480,6 +731,29 @@ class OmpNativePlugin : Plugin() {
             return
         }
         call.resolve(JSObject().put("name", r.name()))
+    }
+
+    /** «Передать на телевизор»: the page applied remoteSources { id } (rutracker = login result) or { failed }. */
+    @PluginMethod
+    fun remoteSourcesDone(call: PluginCall) {
+        val r = remote
+        if (r == null) {
+            call.reject("Управление с телефона недоступно")
+            return
+        }
+        val d = r.sourcesDone(call.getString("id"), call.getString("rutracker"), call.getBoolean("failed") == true)
+        // stored = false: the verified login could not be written, the page must not claim it
+        call.resolve(JSObject().put("stored", d != SourcesDone.NOT_STORED))
+    }
+
+    /**
+     * The transfer still waiting for the page ({ event: remoteSources data } or { event: null }): the event is not
+     * retained, so a page that starts listening late asks for the one current transfer, never an old backlog.
+     */
+    @PluginMethod
+    fun remoteSourcesPending(call: PluginCall) {
+        val e = remote?.pendingSources()
+        call.resolve(JSObject().put("event", e ?: JSONObject.NULL))
     }
 
     /** A phone command for the open native player ({ cmd: Cmd }). */
@@ -899,6 +1173,9 @@ class OmpNativePlugin : Plugin() {
         fun reject(message: String) {
             if (done.compareAndSet(false, true)) call.reject(message)
         }
+        fun reject(message: String, code: String) {
+            if (done.compareAndSet(false, true)) call.reject(message, code)
+        }
     }
 
     companion object {
@@ -962,4 +1239,13 @@ class OmpNativePlugin : Plugin() {
             return length
         }
     }
+}
+
+/** A safe file name for the share cache: no directories, only letters, digits and `.-_`; `.txt` when it has no extension. */
+internal fun shareFileName(raw: String?): String {
+    val cleaned = (raw ?: "").substringAfterLast('/').substringAfterLast('\\')
+        .map { if (it.isLetterOrDigit() || it == '.' || it == '-' || it == '_') it else '_' }
+        .joinToString("").trim('.', '_')
+    val base = cleaned.take(100).trim('.', '_').ifEmpty { "omp-log.txt" }
+    return if (base.contains('.')) base else "$base.txt"
 }

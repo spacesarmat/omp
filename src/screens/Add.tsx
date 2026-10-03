@@ -9,30 +9,18 @@ import { FocusGroup, Focusable, Button, TextInput, ChoiceRow, Spinner } from '..
 import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
 import { platformKind } from '../platform/env';
-import { nativeSecrets, nativeSourceHttp } from '../platform/androidNative';
+import { tvSourceContext } from '../sources/tvContext';
 import { searchAll } from '../sources/search';
 import type { SearchHandle } from '../sources/search';
 import { getHealth } from '../sources/store';
 import { isCloudflare, JACKETT_HINT, progressText, resolveLink, resultDate, resultKey, sortResults, sourceBadge, sourceName, stableOrder } from '../sources/view';
-import type { SourceContext, SourceHttp, SourceResult } from '../sources/types';
+import type { SourceResult } from '../sources/types';
 
 const SOURCES: { value: SearchSource; label: string }[] = [
   { value: 'rutor', label: 'Rutor' },
   { value: 'torznab', label: 'Torznab (Jackett)' },
 ];
 
-const NO_NATIVE = 'Доступно только в приложении Android';
-
-const noHttp: SourceHttp = {
-  get: () => Promise.reject(new Error(NO_NATIVE)),
-  post: () => Promise.reject(new Error(NO_NATIVE)),
-  clearCookies: () => Promise.resolve(),
-};
-
-/** Android TV: TorrServer and the built-in sources through the native http of the APK. */
-function tvSourceContext(): SourceContext {
-  return { http: nativeSourceHttp() || noHttp, client: client.value, secrets: nativeSecrets() || undefined };
-}
 
 interface Prog {
   answered: number;

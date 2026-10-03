@@ -16,7 +16,7 @@ import type { TapZone } from '../player/pointerTaps';
 import { Icon } from '../ui/icons';
 import type { IconName } from '../ui/icons';
 import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
-import { chapterList, chapterIndexAt, chapterTarget, skipSegments, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS } from '../player/chapters';
+import { chapterList, chapterLabel, chapterIndexAt, chapterTarget, skipSegments, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS } from '../player/chapters';
 import type { MarkKind } from '../player/chapters';
 import type { SkipPrefs } from '../lib/journal';
 import { formatDuration } from '../lib/format';
@@ -301,7 +301,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
 
   const openChapters = () => {
     if (!chapters.length) return;
-    choose('Главы', chapters.map((ch, i) => ({ label: formatDuration(ch.start) + ' · ' + (ch.title || 'Глава ' + (i + 1)), value: i })), chapterIdx >= 0 ? chapterIdx : undefined)
+    choose('Главы', chapters.map((ch, i) => ({ label: formatDuration(ch.start) + ' · ' + chapterLabel(ch, i), value: i })), chapterIdx >= 0 ? chapterIdx : undefined)
       .then((i) => { if (i !== null) seekTo(chapters[i].start); });
   };
 

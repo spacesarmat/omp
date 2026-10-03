@@ -3,6 +3,7 @@
 // SSAP lives in src/tv.
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
+import { log } from '../../../src/lib/log';
 import type { HttpResponse, SecretStore, SourceHttp } from '../../../src/sources/types';
 
 export interface FoundTv {
@@ -17,6 +18,14 @@ export interface FoundOmpTv {
   port: number;
   name: string;
   version: string;
+}
+
+/** Google Cast device found by NSD (`_googlecast._tcp`): Android TV / Google TV boxes, also speakers and Chromecasts. */
+export interface FoundCastTv {
+  ip: string;
+  name: string;
+  /** TXT `md`, e.g. «Chromecast HD». */
+  model?: string;
 }
 
 /** The embedded TorrServer (arm64 only), port 8090. */
@@ -40,7 +49,13 @@ export interface OmpNativeApi {
   available: boolean;
   discoverTvs(timeoutMs: number): Promise<FoundTv[]>;
   /** NSD search for Android TVs with OMP; stops after `timeoutMs`. */
-  discoverOmpTvs(timeoutMs: number): Promise<FoundOmpTv[]>;
+  discoverOmpTvs(timeoutMs: number, group?: string): Promise<FoundOmpTv[]>;
+  /** Install assistant: NSD search for Google Cast devices; stops after `timeoutMs`. */
+  discoverCastTvs(timeoutMs: number, group?: string): Promise<FoundCastTv[]>;
+  /** Stops running NSD searches early (the screen that started them has gone). */
+  stopDiscovery(group?: string): Promise<void>;
+  /** Install assistant: which install ports (9922, 9991, 5555, 8095) accept TCP on a home-network IP. */
+  probePorts(ip: string, ports: number[], timeoutMs: number): Promise<number[]>;
   /** Phone model for the TV's list of paired phones; «Телефон» when unknown. */
   phoneName(): Promise<string>;
   /**
@@ -91,11 +106,16 @@ export interface OmpNativeApi {
   secretGet(key: string): Promise<string | null>;
   secretSet(key: string, value: string): Promise<void>;
   secretDelete(key: string): Promise<void>;
+  /** Writes `text` to a file `name` and opens the system «Поделиться». */
+  shareText(o: { name: string; text: string; title?: string }): Promise<void>;
 }
 
 interface OmpNativePlugin {
   discoverTvs(o: { timeoutMs: number }): Promise<{ tvs: FoundTv[] }>;
-  discoverOmpTvs(o: { timeoutMs: number }): Promise<{ tvs?: unknown }>;
+  discoverOmpTvs(o: { timeoutMs: number; group?: string }): Promise<{ tvs?: unknown }>;
+  discoverCastTvs(o: { timeoutMs: number; group?: string }): Promise<{ tvs?: unknown }>;
+  probePorts(o: { ip: string; ports: number[]; timeoutMs: number }): Promise<{ open?: unknown }>;
+  stopDiscovery(o: { group?: string }): Promise<void>;
   phoneName(): Promise<{ name?: string | null }>;
   tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
   tvSend(o: { json: string }): Promise<void>;
@@ -120,6 +140,7 @@ interface OmpNativePlugin {
   secretGet(o: { key: string }): Promise<{ value?: string | null }>;
   secretSet(o: { key: string; value: string }): Promise<void>;
   secretDelete(o: { key: string }): Promise<void>;
+  shareText(o: { name: string; text: string; title?: string }): Promise<void>;
   addListener(event: 'tvMessage', cb: (e: { json: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'tvClosed', cb: (e: { reason: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'apkProgress', cb: (e: { percent: number }) => void): Promise<PluginListenerHandle>;
@@ -162,6 +183,17 @@ function listen(add: () => Promise<PluginListenerHandle>): () => void {
 
 const noop = () => {};
 
+/** Logs a failed native call (method name and message only) and passes the rejection on. */
+function logged<T>(name: string, p: Promise<T>): Promise<T> {
+  return p.then(
+    (v) => v,
+    (e) => {
+      log('error', 'app', 'Нативный вызов ' + name + ': ' + (e && typeof e.message === 'string' ? e.message : 'ошибка'));
+      throw e;
+    },
+  );
+}
+
 function parse(json: string): any {
   try {
     return JSON.parse(json);
@@ -203,6 +235,21 @@ function ompTvs(v: unknown): FoundOmpTv[] {
   return out;
 }
 
+/** Well-formed cast entries only, one per IP. */
+function castTvs(v: unknown): FoundCastTv[] {
+  const out: FoundCastTv[] = [];
+  if (!Array.isArray(v)) return out;
+  for (const t of v) {
+    if (!t || typeof t !== 'object' || typeof t.ip !== 'string' || !IPV4.test(t.ip)) continue;
+    if (out.some((o) => o.ip === t.ip)) continue;
+    const tv: FoundCastTv = { ip: t.ip, name: text(t.name) ?? 'Android TV' };
+    const model = text(t.model);
+    if (model) tv.model = model;
+    out.push(tv);
+  }
+  return out;
+}
+
 export const native: OmpNativeApi = {
   available,
 
@@ -212,10 +259,27 @@ export const native: OmpNativeApi = {
     return r.tvs ?? [];
   },
 
-  async discoverOmpTvs(timeoutMs) {
+  async discoverOmpTvs(timeoutMs, group) {
     if (!plugin) return [];
-    const r = await plugin.discoverOmpTvs({ timeoutMs });
+    const r = await plugin.discoverOmpTvs(group ? { timeoutMs, group } : { timeoutMs });
     return ompTvs(r?.tvs);
+  },
+
+  async discoverCastTvs(timeoutMs, group) {
+    if (!plugin) return [];
+    const r = await plugin.discoverCastTvs(group ? { timeoutMs, group } : { timeoutMs });
+    return castTvs(r?.tvs);
+  },
+
+  async stopDiscovery(group) {
+    if (!plugin || !group) return;
+    await plugin.stopDiscovery({ group }).catch(() => {});
+  },
+
+  async probePorts(ip, ports, timeoutMs) {
+    if (!plugin) return [];
+    const r = await plugin.probePorts({ ip, ports, timeoutMs });
+    return Array.isArray(r?.open) ? r.open.filter((p): p is number => typeof p === 'number' && ports.indexOf(p) >= 0) : [];
   },
 
   async phoneName() {
@@ -272,12 +336,12 @@ export const native: OmpNativeApi = {
 
   wakeOnLan(mac, ip) {
     if (!plugin) return unavailable();
-    return plugin.wakeOnLan({ mac, ip });
+    return logged('wakeOnLan', plugin.wakeOnLan({ mac, ip }));
   },
 
   openExternal(url, mime) {
     if (!plugin) return unavailable();
-    return plugin.openExternal({ url, mime });
+    return logged('openExternal', plugin.openExternal({ url, mime }));
   },
 
   async downloadAndInstallApk(url, sha256, onProgress) {
@@ -285,7 +349,7 @@ export const native: OmpNativeApi = {
     // awaited so that no early progress event is missed
     const handle = await plugin.addListener('apkProgress', (e) => onProgress(e.percent));
     try {
-      await plugin.downloadAndInstallApk({ url, sha256 });
+      await logged('downloadAndInstallApk', plugin.downloadAndInstallApk({ url, sha256 }));
     } finally {
       void handle.remove();
     }
@@ -330,7 +394,7 @@ export const native: OmpNativeApi = {
 
   async startLocalServer() {
     if (!plugin) return unavailable();
-    return serverInfo(await plugin.startLocalServer());
+    return serverInfo(await logged('startLocalServer', plugin.startLocalServer()));
   },
 
   stopLocalServer() {
@@ -396,6 +460,11 @@ export const native: OmpNativeApi = {
   secretDelete(key) {
     if (!plugin) return unavailable();
     return plugin.secretDelete({ key });
+  },
+
+  shareText(o) {
+    if (!plugin) return unavailable();
+    return logged('shareText', plugin.shareText(o));
   },
 };
 

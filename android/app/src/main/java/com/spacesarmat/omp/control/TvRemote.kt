@@ -14,6 +14,7 @@ import com.getcapacitor.JSObject
 import com.spacesarmat.omp.MainActivity
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayerActivity
+import com.spacesarmat.omp.sources.SourceServices
 import java.io.IOException
 import org.json.JSONArray
 import org.json.JSONException
@@ -63,12 +64,24 @@ class PrefsPhoneStore(context: Context) : PhoneStore {
  * Phone remote on Android TV (spec «Управление с телефона»): the control server on [PORT] ([ControlRouter] does
  * the routes), the NSD service `_omp._tcp`, pairing, and the actions. Page events (through [emit]):
  * remoteLaunch { params }, remoteAttach { report }, remoteKey { name }, remoteText { text | delete | enter },
- * phonePaired { phone }.
+ * phonePaired { phone }, remoteSources { id, sources, rutracker, phone } (answered with [sourcesDone]).
  */
 class TvRemote(private val context: Context, private val emit: (String, JSObject, Boolean) -> Unit) : RemoteActions {
     val pairing = Pairing(PrefsPhoneStore(context))
     private val router = ControlRouter(pairing, this)
-    private val server = ControlServer(PORT) { router.route(it) }
+    // the login is staged in the Keystore entries of the page (js: namespace) and promoted once the page signed in
+    private val inbox = SourcesInbox(
+        store = SecretLoginStore(
+            object : SecretEntries {
+                override fun get(name: String): String? = SourceServices.get(context).secrets.get(name)
+                override fun replace(values: Map<String, String>, remove: Collection<String>) =
+                    SourceServices.get(context).secrets.replace(values, remove)
+            },
+        ) { SourceServices.jsSecretKey(it)!! },
+        // not retained: a page that was not listening asks for the one waiting transfer ([pendingSources])
+        emit = { data -> emit("remoteSources", JSObject.fromJSONObject(data), false) },
+    )
+    private val server = ControlServer(PORT, router::precheck) { router.route(it) }
     private val main = Handler(Looper.getMainLooper())
     private var nsdListener: NsdManager.RegistrationListener? = null
 
@@ -82,6 +95,8 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         private set
 
     fun start() {
+        // a staged login left by a process that died mid-transfer is never verified: drop it
+        inbox.dropStaged()
         try {
             server.start()
         } catch (e: IOException) {
@@ -216,6 +231,14 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
             }
         }
     }
+
+    override fun sources(t: SourcesTransfer): SourcesOutcome = inbox.receive(t)
+
+    /** The event of the transfer still waiting for the page (a page that started listening late), or null. */
+    fun pendingSources(): JSONObject? = inbox.pendingEvent()
+
+    /** The page's remoteSourcesDone; false when no such transfer waits. */
+    fun sourcesDone(id: String?, rutracker: String?, failed: Boolean): SourcesDone = inbox.done(id, rutracker, failed)
 
     /** REORDER_TO_FRONT keeps the instance (MainActivity is singleTask, PlayerActivity singleTop). */
     private fun bringToFront(cls: Class<*>) {

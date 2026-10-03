@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { introChapter, chapterList, skipSegments, chapterIndexAt, chapterTarget, chapterStepIndex, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS, PREV_CHAPTER_WINDOW } from '../../src/player/chapters';
+import { chapterLabel, introChapter, chapterList, skipSegments, chapterIndexAt, chapterTarget, chapterStepIndex, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS, PREV_CHAPTER_WINDOW } from '../../src/player/chapters';
 import type { FfprobeResult } from '../../src/api/types';
 
 const probe = (titles: [number, number, string][]): FfprobeResult => ({
@@ -155,5 +155,12 @@ describe('chapterStepIndex', () => {
     expect(chapterStepIndex(list, 91, -1)).toBe(0);
     expect(chapterStepIndex(list, 5, -1)).toBe(-1);
     expect(chapterStepIndex([], 5, 1)).toBeNull();
+  });
+});
+
+describe('chapterLabel', () => {
+  it('uses the title, else «Глава N» by place so untitled chapters never repeat', () => {
+    const list = chapterList(probe([[0, 60, 'Пролог'], [60, 120, ''], [120, 200, '  '], [200, 300, 'Погоня']]));
+    expect(list.map((c, i) => chapterLabel(c, i))).toEqual(['Пролог', 'Глава 2', 'Глава 3', 'Погоня']);
   });
 });

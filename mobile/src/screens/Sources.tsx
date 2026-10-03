@@ -8,7 +8,133 @@ import { errorMessage } from '../../../src/api/http';
 import { builtinSources, torrServerSources } from '../../../src/sources/registry';
 import { clearHealth, getHealth, isSourceOn, onHealthChange, setHealth, setSourceOn } from '../../../src/sources/store';
 import { healthText, isCloudflare, JACKETT_HINT, type HealthLine } from '../../../src/sources/view';
-import type { Source } from '../../../src/sources/types';
+import type { Source, SourceContext } from '../../../src/sources/types';
+import { allSources } from '../../../src/sources/registry';
+import { rutrackerSavedLogin } from '../../../src/sources/rutracker';
+import { buildTransferPayload, transferWhen, validateTransferPayload, type RutrackerResult, type TransferLogin, type TransferPayload } from '../../../src/sources/transfer';
+import { loadJson, saveJson, isObject } from '../../../src/store/storage';
+import { log } from '../../../src/lib/log';
+import { activeTv, isAtv } from '../tv/tvStore';
+import { sendSourcesToTv, sessionIp, tvState } from '../tv/tvClient';
+
+const SENT_KEY = 'tsp.sourcesSent';
+const TV_ICON = 'M3 5h18v11H3zM8 20h8';
+
+export const SEND_TEXT =
+  'Передать на телевизор включённые источники и вход на rutracker. Пароль уходит только на ваш ТВ по каналу пары и хранится там в зашифрованном виде.';
+
+/** What the phone says after a transfer, by the TV's rutracker answer. */
+export function sentText(r: RutrackerResult | undefined): string {
+  if (r === 'bad_login') return 'Источники переданы, но rutracker не принял логин или пароль';
+  if (r === 'captcha') return 'Источники переданы, но rutracker просит капчу — войдите на сайте в браузере';
+  if (r === 'error') return 'Источники переданы; вход на rutracker телевизор проверит при поиске';
+  return 'Передано';
+}
+
+export const LOGIN_NOT_SENT = 'Вход на rutracker не передан: логин или пароль слишком длинный или с недопустимыми символами';
+export const SOURCES_NOT_READY = 'Не удалось подготовить источники к передаче';
+
+/**
+ * The payload the TV accepts (same schema as its control server). A login the TV would refuse is left out so the
+ * switches still go; loginDropped says so.
+ */
+export function transferPayload(list: Source[], login: TransferLogin | null): { payload: TransferPayload; loginDropped: boolean } {
+  const full = validateTransferPayload(buildTransferPayload(list, login));
+  if (full) return { payload: full, loginDropped: false };
+  const bare = validateTransferPayload(buildTransferPayload(list, null));
+  if (!bare) throw new Error(SOURCES_NOT_READY);
+  return { payload: bare, loginDropped: !!login };
+}
+
+/** The phone's saved rutracker login, null when there is none or the storage fails. */
+function readLogin(ctx: () => SourceContext): Promise<TransferLogin | null> {
+  const s = ctx().secrets;
+  return s ? rutrackerSavedLogin(s).catch(() => null) : Promise.resolve(null);
+}
+
+function lastSent(ip: string): number | null {
+  const v = loadJson<unknown>(SENT_KEY, null, (x) => x === null || isObject(x));
+  return isObject(v) && v.ip === ip && typeof v.at === 'number' ? v.at : null;
+}
+
+/** «Передать на телевизор»: only for a paired Android TV with OMP (LG has no built-in sources). */
+function SendToTv({ hasLogin, ctx }: { hasLogin: boolean; ctx: () => SourceContext }) {
+  const tv = activeTv.value;
+  const [withLogin, setWithLogin] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [, setTick] = useState(0);
+  if (!tv || !isAtv(tv)) return null;
+  // the TV forgot this phone (401 cleared the token): keep the card with the reason and a way to pair again
+  const paired = !!tv.token;
+  const connected = tvState.value === 'connected' && sessionIp.value === tv.ip;
+  const at = lastSent(tv.ip);
+
+  const send = () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    const ip = tv.ip;
+    const login = hasLogin && withLogin ? readLogin(ctx) : Promise.resolve(null);
+    let loginDropped = false;
+    login
+      .then((l) => {
+        const p = transferPayload(allSources(), l);
+        loginDropped = p.loginDropped;
+        return sendSourcesToTv(p.payload);
+      })
+      .then(
+        (r) => {
+          saveJson(SENT_KEY, { ip, at: Date.now() });
+          log(r.rutracker && r.rutracker !== 'ok' ? 'warn' : 'info', 'tv', 'Источники переданы на Android TV' + (r.rutracker ? ', вход на rutracker: ' + r.rutracker : ''));
+          setBusy(false);
+          setTick((n) => n + 1);
+          showToast(loginDropped ? 'Источники переданы. ' + LOGIN_NOT_SENT : sentText(r.rutracker), loginDropped ? 6000 : undefined);
+        },
+        (e) => {
+          const msg = errorMessage(e);
+          log('warn', 'tv', 'Передача источников на Android TV: ' + msg);
+          setBusy(false);
+          setError(msg);
+        },
+      );
+  };
+
+  const when = at ? transferWhen(at) : null;
+  return (
+    <section class="m-set-group" data-send="tv">
+      <div class="m-set-card m-send-card">
+        <div class="m-send-head">
+          <Icon d={TV_ICON} size={22} />
+          <span class="m-send-name">{'Android TV «' + tv.name + '»'}</span>
+          <span class={'m-send-state' + (connected && paired ? ' ok' : '')}>{connected && paired ? 'подключён' : 'не подключён'}</span>
+        </div>
+        <div class="m-note m-muted">{SEND_TEXT}</div>
+        {hasLogin && (
+          <label class="m-send-check">
+            <input type="checkbox" checked={withLogin} onChange={(e) => setWithLogin((e.target as HTMLInputElement).checked)} />
+            Вместе со входом на rutracker
+          </label>
+        )}
+        {paired ? (
+          <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={send}>
+            {busy ? 'Передаю…' : 'Передать на телевизор'}
+          </button>
+        ) : (
+          <button type="button" class="m-btn m-btn-secondary" onClick={() => navigate({ name: 'tv' })}>
+            Подключить заново
+          </button>
+        )}
+        {error && (
+          <div class="m-error" role="alert">
+            {error}
+          </div>
+        )}
+        {when && !error && <div class="m-send-done">{'Передано ' + when.day + ' в ' + when.time}</div>}
+      </div>
+    </section>
+  );
+}
 
 /** Names of the TorrServer sources on this screen. */
 const TS_LABELS: Record<string, string> = {
@@ -63,7 +189,8 @@ function SourceRow({
   );
 }
 
-export function Sources() {
+/** ctx: the source context (tests pass fakes of the native http and the Keystore storage). */
+export function Sources({ ctx = phoneSourceContext }: { ctx?: () => SourceContext } = {}) {
   const [, setTick] = useState(0);
   const rerender = () => setTick((n) => n + 1);
   // sources with a login: saved credentials exist (asked once, no network)
@@ -78,7 +205,7 @@ export function Sources() {
     builtins
       .filter((s) => s.needsLogin && s.loggedIn)
       .forEach((s) => {
-        s.loggedIn!(phoneSourceContext()).then(
+        s.loggedIn!(ctx()).then(
           (v) => alive && setLogged((m) => ({ ...m, [s.id]: v })),
           () => alive && setLogged((m) => ({ ...m, [s.id]: false })),
         );
@@ -106,7 +233,7 @@ export function Sources() {
 
   const logout = (s: Source) => {
     if (!s.logout) return;
-    s.logout(phoneSourceContext()).then(
+    s.logout(ctx()).then(
       () => {
         setLogged((m) => ({ ...m, [s.id]: false }));
         setHealth(s.id, { state: 'login', at: Date.now() });
@@ -131,6 +258,7 @@ export function Sources() {
         </button>
         <h1 class="m-bar-title">Источники поиска</h1>
       </div>
+      <SendToTv ctx={ctx} hasLogin={builtins.some((s) => s.id === 'rutracker' && !!logged[s.id])} />
       <section class="m-set-group">
         <div class="m-set-label">Через TorrServer</div>
         <div class="m-set-card m-src-card">
@@ -171,7 +299,7 @@ export function Sources() {
           </button>
         </div>
       </div>
-      {loginFor && <TrackerLogin source={loginFor} ctx={phoneSourceContext} onClose={() => setLoginFor(null)} onDone={() => loggedInDone(loginFor)} />}
+      {loginFor && <TrackerLogin source={loginFor} ctx={ctx} onClose={() => setLoginFor(null)} onDone={() => loggedInDone(loginFor)} />}
     </div>
   );
 }

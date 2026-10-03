@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildSnapshot, liveTiming, runCmd } from '../../src/player/phoneBridge';
+import { MAX_PHONE_CHAPTERS, MAX_PHONE_CHAPTER_TITLE } from '../../src/player/chapters';
 import type { PlayItem } from '../../src/player/types';
 
 const H = 'c4c4bd6a4618e1042aa89649d629f85951eff546';
@@ -110,6 +111,14 @@ describe('chapters', () => {
     expect(none).not.toHaveProperty('chapters');
     expect(none).not.toHaveProperty('chapter');
     expect(buildSnapshot(base)!).not.toHaveProperty('chapters');
+  });
+  it('caps the list sent to the phone and shortens long titles', () => {
+    const many = Array.from({ length: 250 }, (_, i) => ({ start: i * 10, end: i * 10 + 10, title: i === 0 ? 'x'.repeat(200) : 'Глава', kind: null }));
+    const s = buildSnapshot({ ...base, time: 2400, chapters: many })!;
+    expect(s.chapters!.length).toBe(MAX_PHONE_CHAPTERS);
+    expect(s.chapters![0].title.length).toBe(MAX_PHONE_CHAPTER_TITLE);
+    expect(s.chapter).toBe(-1);
+    expect(buildSnapshot({ ...base, time: 50, chapters: many })!.chapter).toBe(5);
   });
   it('chapter command seeks to the start, ignores bad index and unknown duration', () => {
     const x = harness();

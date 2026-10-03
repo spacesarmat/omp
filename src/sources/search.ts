@@ -3,9 +3,17 @@ import { mergeResults } from './merge';
 import { allSources } from './registry';
 import { enabledSources, setHealth as recordHealth } from './store';
 import { isLoginRequired } from './types';
+import { log } from '../lib/log';
 import type { Source, SourceContext, SourceResult } from './types';
 
 export const SOURCE_TIMEOUT_MS = 15000;
+
+const KNOWN_IDS = ['rutor', 'rutracker', 'nnmclub', 'torrentby', 'anidub', 'bigfangroup', 'ts-rutor', 'ts-torznab'];
+
+/** Source id for the log: only the known ones (a Torznab name may be personal). */
+function logId(id: string): string {
+  return KNOWN_IDS.indexOf(id) >= 0 ? id : 'источник';
+}
 
 export interface SearchAllOptions {
   ctx: SourceContext;
@@ -97,6 +105,7 @@ export function runSources(
       over = true;
       if (cancelled) return;
       const err = new Error('Источник не отвечает');
+      log('warn', 'search', logId(source.id) + ': ' + err.message);
       failed.push(source.id);
       setHealth(source.id, { state: 'error', at: Date.now(), message: err.message });
       settle(source.id);
@@ -131,6 +140,7 @@ export function runSources(
         clearTimeout(timer);
         if (cancelled) return;
         const err = asError(e);
+        log(isLoginRequired(e) ? 'warn' : 'error', 'search', logId(source.id) + ': ' + (isLoginRequired(e) ? 'нужен вход' : err.message));
         failed.push(source.id);
         if (isLoginRequired(e)) setHealth(source.id, { state: 'login', at: Date.now() });
         else setHealth(source.id, { state: 'error', at: Date.now(), message: err.message });

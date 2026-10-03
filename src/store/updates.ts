@@ -47,7 +47,7 @@ export function checkForUpdate(opts: { manual: boolean; now?: number; current?: 
   // cache-buster: GitHub raw and the WebView keep the feed for up to 5 minutes after a release
   // Android TV installs the APK (update-android.json), webOS the ipk (update.json)
   const url = opts.url || (platformKind() === 'androidtv' ? ANDROID_UPDATE_URL : UPDATE_URL);
-  return request<unknown>(url + (url.indexOf('?') < 0 ? '?' : '&') + 't=' + now, { timeoutMs: 10000 }).then(
+  return request<unknown>(url + (url.indexOf('?') < 0 ? '?' : '&') + 't=' + now, { timeoutMs: 10000, quiet: true }).then(
     (raw): CheckResult => {
       state = { ...state, lastCheck: now };
       saveJson(KEY, state);

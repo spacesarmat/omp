@@ -78,6 +78,13 @@ class Pairing(
         return synchronized(lock) { list().any { MessageDigest.isEqual(it.token.toByteArray(), t) } }
     }
 
+    /** The name the phone with [token] gave when pairing; null when it is not paired (constant-time compare). */
+    fun phoneOf(token: String?): String? {
+        if (token.isNullOrEmpty()) return null
+        val t = token.toByteArray()
+        return synchronized(lock) { list().firstOrNull { MessageDigest.isEqual(it.token.toByteArray(), t) }?.phone }
+    }
+
     private fun list(): MutableList<PairedPhone> =
         phones ?: store.load().filter { TOKEN.matches(it.token) }.takeLast(MAX_PHONES).toMutableList().also { phones = it }
 
