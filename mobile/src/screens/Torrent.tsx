@@ -27,6 +27,11 @@ import { useSkip, firstPlayableId } from '../../../src/lib/useSkip';
 import { parseMark, skipStatus } from '../../../src/lib/skipMarks';
 import type { SkipPrefs } from '../../../src/lib/journal';
 import { posterColor, shortTitle } from '../../../src/lib/libraryView';
+import { loadWatch, saveWatch } from '../../../src/store/journal';
+import { isWatchedSeries } from '../../../src/monitor/newEpisodes';
+import { findingsOf, removeFindings } from '../../../src/monitor/subs';
+import { EPISODES_ID } from '../../../src/monitor/types';
+import { reloadMonitor } from '../monitor/ui';
 
 const BACK = 'M15 5l-7 7 7 7';
 const IMAGE = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 3-3L20 17M15.5 9.5h.01';
@@ -271,6 +276,8 @@ export function Torrent({ hash }: { hash: string }) {
   const launch = useTvLaunch();
   const [marksOpen, setMarksOpen] = useState(false);
   const [finding, setFinding] = useState(false);
+  // «Следить за новыми сериями» (omp.w in the journal); null until read from the server
+  const [watchNew, setWatchNew] = useState<boolean | null>(null);
   progressVersion.value;
   serverViewed.value;
 
@@ -293,6 +300,18 @@ export function Torrent({ hash }: { hash: string }) {
   useEffect(() => {
     if (c) void refreshViewed(c);
   }, [c]);
+
+  useEffect(() => {
+    if (!c || !t) return;
+    let alive = true;
+    loadWatch(c, hash).then(
+      (v) => alive && setWatchNew(v),
+      () => alive && setWatchNew(true),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [c, hash, !!t]);
 
   useEffect(() => {
     if (!c || listed) return;
@@ -324,6 +343,24 @@ export function Torrent({ hash }: { hash: string }) {
   };
   const tv = activeTv.value;
   const title = t.title || t.name || t.hash;
+  // a series of the catalogue with episode numbers: new episodes are looked for unless switched off here
+  const series = isWatchedSeries({ hash: t.hash, title, category: t.category, data: '', file_stats: allFiles });
+  const toggleWatchNew = () => {
+    if (watchNew === null) return;
+    const next = !watchNew;
+    setWatchNew(next);
+    saveWatch(c, t, next).then(
+      () => {
+        // switched off: its «new episodes» card goes too
+        if (!next) findingsOf(EPISODES_ID).forEach((f) => f.episodes && f.episodes.torrentHash === hash.toLowerCase() && removeFindings(EPISODES_ID, f.key));
+        reloadMonitor();
+      },
+      (e) => {
+        setWatchNew(!next);
+        showToast(errorMessage(e));
+      },
+    );
+  };
   const badges = [qualityBadge(title)].filter(Boolean);
   const first = files[0];
   const season = first ? parseEpisode(first.path).season : null;
@@ -466,6 +503,17 @@ export function Torrent({ hash }: { hash: string }) {
               </span>
               <Icon d={CHEVRON} size={20} />
             </button>
+          </div>
+        )}
+        {series && (
+          <div class="m-skip" data-block="watch-new">
+            <div class="m-skip-row">
+              <span class="m-skip-text">
+                Следить за новыми сериями
+                <span class="m-muted m-small">сообщить, когда выйдут следующие серии</span>
+              </span>
+              <SkipSwitch on={watchNew !== false} label="Следить за новыми сериями" onToggle={toggleWatchNew} />
+            </div>
           </div>
         )}
         {files.length > 0 && <div class="m-section">{hasEpisodes ? 'Серии' : 'Файлы'}</div>}

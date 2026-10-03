@@ -30,13 +30,14 @@ describe('mobile shell', () => {
     expect(el.querySelector('.m-nav')).toBeNull();
   });
 
-  it('starts on library with a server and shows 4 tabs', () => {
+  it('starts on library with a server and shows 5 tabs', () => {
     const s = addServer({ url: 'http://192.168.1.5:8090' });
     setActiveServer(s.id);
     startRoute();
     const el = mount();
     expect(currentRoute.value.name).toBe('library');
-    expect(el.querySelectorAll('.m-nav-item')).toHaveLength(4);
+    const items = Array.from(el.querySelectorAll('.m-nav-item'));
+    expect(items.map((b) => b.textContent)).toEqual(['Каталог', 'Новое', 'Добавить', 'Пульт', 'Настройки']);
   });
 
   it('switches tab on click and keeps a single-item stack', () => {

@@ -1,0 +1,278 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render } from 'preact';
+import { act } from 'preact/test-utils';
+
+vi.mock('../../src/store/journal', async (orig) => ({
+  ...(await orig<typeof import('../../src/store/journal')>()),
+  saveWatch: vi.fn(),
+}));
+
+import { News, resetNews } from '../src/screens/News';
+import { currentRoute, resetTo } from '../src/nav';
+import { toast } from '../src/ui/toast';
+import { setWatchActions } from '../src/watch';
+import { reloadTvs, saveTv } from '../src/tv/tvStore';
+import { fakeMonitor, type FakeMonitor } from './fakeMonitor';
+import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
+import { TorrServerClient } from '../../src/api/torrserver';
+import { torrents } from '../../src/store/library';
+import { saveWatch } from '../../src/store/journal';
+import { registerSource, unregisterSource } from '../../src/sources/registry';
+import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/store';
+import { saveFeed, loadFeed } from '../../src/monitor/feedCache';
+import { addFindings, addSubscription, findingsOf, loadFound, unseenCount } from '../../src/monitor/subs';
+import { saveLastRun } from '../../src/monitor/settings';
+import type { FeedCategory, Source, SourceResult } from '../../src/sources/types';
+import type { Finding } from '../../src/monitor/types';
+
+const HASH = 'a'.repeat(40);
+const OLD = 'b'.repeat(40);
+let el: HTMLElement;
+let mon: FakeMonitor;
+const launch = vi.fn();
+const saveWatchMock = saveWatch as unknown as ReturnType<typeof vi.fn>;
+
+function row(p: Partial<SourceResult>): SourceResult {
+  return { Title: 'Тихая гавань (2026) WEB-DL 2160p', Categories: '', Size: '18,2 ГБ', CreateDate: '', Tracker: '', Link: '', Magnet: 'magnet:?xt=urn:btih:' + HASH, Hash: HASH, Peer: 0, Seed: 940, source: 'feedy', ...p };
+}
+
+function feedSource(byCat: Partial<Record<FeedCategory, SourceResult[]>>, calls: string[] = []): Source {
+  return {
+    id: 'feedy',
+    name: 'Ленточный',
+    kind: 'builtin',
+    search: () => Promise.resolve([]),
+    latest: (_ctx, cat) => {
+      calls.push(cat);
+      return Promise.resolve(byCat[cat] || []);
+    },
+  };
+}
+
+const flush = () =>
+  act(async () => {
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+  });
+const byText = (t: string) => Array.from(el.querySelectorAll('button')).find((b) => b.textContent === t);
+const click = (n: Element | undefined | null) => {
+  if (!n) throw new Error('missing element');
+  act(() => (n as HTMLElement).click());
+};
+
+async function mount(p: { seg?: 'feed' | 'subs'; finding?: string; watch?: boolean } = {}) {
+  document.body.innerHTML = '<div id="app"></div>';
+  el = document.getElementById('app')!;
+  await act(async () => render(<News {...p} />, el));
+  await flush();
+}
+
+function episodesFinding(p: Partial<Finding> = {}): Finding {
+  return {
+    subId: 'episodes',
+    key: OLD + ':2:10',
+    at: 1000,
+    result: row({ Title: 'Starbound Frontier / Сезон 2 / Серии 1-10 из 10 / 1080p', Hash: HASH, source: 'feedy' }),
+    episodes: { torrentHash: OLD, torrentTitle: 'Starbound Frontier / Сезон 2 / Серии 1-8 из 10 / 1080p', season: 2, haveTo: 8, from: 1, to: 10 },
+    ...p,
+  };
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  reloadSourcePrefs();
+  resetHealth();
+  resetNews();
+  reloadTvs();
+  for (const s of servers.value.slice()) removeServer(s.id);
+  setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+  setSourceOn('ts-rutor', false);
+  setSourceOn('ts-torznab', false);
+  torrents.value = [];
+  toast.value = '';
+  launch.mockReset().mockResolvedValue(undefined);
+  setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
+  saveWatchMock.mockReset();
+  resetTo({ name: 'news' });
+  vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
+  vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue(null);
+  mon = fakeMonitor();
+});
+
+afterEach(() => {
+  act(() => render(null, el));
+  unregisterSource('feedy');
+  mon.restore();
+  vi.restoreAllMocks();
+  setWatchActions(null);
+});
+
+describe('«Новое» · Лента', () => {
+  it('asks the feed sources on open, shows the rows newest first and fills the cache', async () => {
+    const calls: string[] = [];
+    registerSource(
+      feedSource(
+        {
+          movie: [row({ Title: 'Старый фильм 1080p', date: 1000, Hash: 'c'.repeat(40), Magnet: '' }), row({ Title: 'Свежий фильм 2160p', date: 5000 })],
+        },
+        calls,
+      ),
+    );
+    await mount();
+    expect(calls).toEqual(['movie']);
+    const titles = Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+    expect(titles).toEqual(['Свежий фильм 2160p', 'Старый фильм 1080p']);
+    expect(el.querySelector('.m-news-status')!.textContent).toContain('Свежее с Ленточный · обновлено в');
+    expect(loadFeed('movie')!.results).toHaveLength(2);
+    expect(el.querySelector('[role=tab][aria-selected=true]')!.textContent).toBe('Лента');
+  });
+
+  it('a fresh cache is shown without asking again; «Обновить» asks', async () => {
+    const calls: string[] = [];
+    registerSource(feedSource({ movie: [row({ Title: 'Новый' })] }, calls));
+    saveFeed('movie', [row({ Title: 'Из кэша' })], Date.now() - 60000);
+    await mount();
+    expect(calls).toEqual([]);
+    expect(el.querySelector('.m-result-title')!.textContent).toBe('Из кэша');
+    click(byText('Обновить'));
+    await flush();
+    expect(calls).toEqual(['movie']);
+    expect(el.querySelector('.m-result-title')!.textContent).toBe('Новый');
+  });
+
+  it('category chips switch the feed; «1080p+» filters', async () => {
+    const calls: string[] = [];
+    registerSource(feedSource({ movie: [row({})], tv: [row({ Title: 'Сериал 720p', Hash: 'd'.repeat(40) }), row({ Title: 'Сериал 1080p', Hash: 'e'.repeat(40) })] }, calls));
+    await mount();
+    click(byText('Сериалы'));
+    await flush();
+    expect(calls).toEqual(['movie', 'tv']);
+    expect(el.querySelectorAll('.m-result')).toHaveLength(2);
+    click(byText('1080p+'));
+    const titles = Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+    expect(titles).toEqual(['Сериал 1080p']);
+  });
+
+  it('«Добавить» adds through the Add path with the feed category', async () => {
+    registerSource(feedSource({ movie: [row({})] }));
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    await mount();
+    click(el.querySelector('[aria-label^="Добавить на сервер:"]'));
+    await flush();
+    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, category: 'movie' });
+    expect(toast.value).toBe('Добавлено на сервер');
+  });
+
+  it('«На ТВ» adds and launches on the TV', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    registerSource(feedSource({ movie: [row({})] }));
+    vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    await mount();
+    click(el.querySelector('[aria-label^="Добавить и смотреть на ТВ:"]'));
+    await flush();
+    expect(launch).toHaveBeenCalled();
+    expect(launch.mock.calls[0][0].torrent).toBe(HASH);
+  });
+
+  it('no feed source switched on: says which sites give the feed', async () => {
+    await mount();
+    expect(el.querySelector('.m-hint-warn')!.textContent).toContain('rutor, nnmclub и torrent.by');
+  });
+});
+
+describe('«Новое» · Подписки', () => {
+  it('lists subscriptions with conditions and new counts; the tab says how many are new', async () => {
+    const s = addSubscription({ query: 'Дюна 2160p', quality: '2160', sources: null, notify: true, minSeeds: 20 })!;
+    addSubscription({ query: 'Песчаный город', quality: '', sources: null, notify: true });
+    addFindings([
+      { subId: s.id, key: 'k1', at: 2, result: row({ Title: 'Дюна 1' }) },
+      { subId: s.id, key: 'k2', at: 3, result: row({ Title: 'Дюна 2' }) },
+    ]);
+    await mount({ seg: 'subs' });
+    expect(el.querySelector('[role=tab][aria-selected=true]')!.textContent).toBe('Подписки · 2 новых');
+    const rows = Array.from(el.querySelectorAll('.m-sub-row'));
+    expect(rows[0].textContent).toContain('Дюна 2160p');
+    expect(rows[0].textContent).toContain('Все источники · 2160p · от 20 сидов');
+    expect(rows[0].querySelector('.m-fresh')!.textContent).toBe('2 новых');
+    expect(rows[1].querySelector('.m-fresh')).toBeNull();
+    click(rows[0]);
+    expect(currentRoute.value).toEqual({ name: 'subFindings', id: s.id });
+  });
+
+  it('«+ Новая подписка» opens the sheet and creates one', async () => {
+    await mount({ seg: 'subs' });
+    click(byText('+ Новая подписка'));
+    const input = el.querySelector('#m-sub-query') as HTMLInputElement;
+    act(() => {
+      input.value = 'Северный ветер';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    click(byText('Сохранить'));
+    await flush();
+    expect(el.querySelector('.m-sub-row')!.textContent).toContain('Северный ветер');
+  });
+
+  it('«Проверить сейчас» starts a check; the status line shows the last and the next check', async () => {
+    const now = Date.now();
+    saveLastRun({ at: now - 60000, kind: 'check', found: 0, notified: 0, answered: 1, asked: 1, subs: 1, skipped: 0, feed: false });
+    mon.status = { enabled: true, hours: 3, wifiOnly: true, running: false, nextRun: now + 3600000 };
+    await mount({ seg: 'subs' });
+    const line = el.querySelector('[data-monitor-status]')!.textContent!;
+    expect(line).toMatch(/^Проверено в \d\d:\d\d · следующая проверка около \d\d:\d\d$/);
+    click(byText('Проверить сейчас'));
+    await flush();
+    expect(mon.runNow).toHaveBeenCalled();
+    expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Проверяю…');
+    // the background run ends
+    mon.done(null);
+  });
+
+  it('new episodes: card with the ranges, «Не следить» switches the series off', async () => {
+    torrents.value = [{ hash: OLD, title: 'Starbound Frontier / Сезон 2 / Серии 1-8 из 10 / 1080p', stat: 3 } as any];
+    addFindings([episodesFinding()]);
+    saveWatchMock.mockResolvedValue(false);
+    await mount({ seg: 'subs' });
+    const card = el.querySelector('.m-ep-card')!;
+    expect(card.textContent).toContain('Starbound Frontier · Сезон 2');
+    expect(card.textContent).toContain('Вышли серии 9–10 · у вас 1–8');
+    // looked at
+    expect(unseenCount('episodes')).toBe(0);
+    click(byText('Не следить'));
+    await flush();
+    expect(saveWatchMock.mock.calls[0][1]).toEqual({ hash: OLD });
+    expect(saveWatchMock.mock.calls[0][2]).toBe(false);
+    expect(findingsOf('episodes')).toEqual([]);
+    expect(el.querySelector('.m-ep-card')).toBeNull();
+    expect(toast.value).toContain('Больше не слежу');
+  });
+
+  it('«Не следить» that fails keeps the card and says why', async () => {
+    addFindings([episodesFinding()]);
+    saveWatchMock.mockRejectedValue(new Error('Сервер недоступен'));
+    await mount({ seg: 'subs' });
+    click(byText('Не следить'));
+    await flush();
+    expect(loadFound()).toHaveLength(1);
+    expect(toast.value).toBe('Сервер недоступен');
+  });
+
+  it('a notification link highlights the card; «Смотреть на ТВ» waits for a tap', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    addFindings([episodesFinding()]);
+    vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    await mount({ seg: 'subs', finding: OLD + ':2:10', watch: true });
+    expect(el.querySelector('.m-ep-card.m-hl')).toBeTruthy();
+    expect(el.querySelector('.m-watch-prompt')).toBeTruthy();
+    await flush();
+    expect(launch).not.toHaveBeenCalled();
+    click(byText('Смотреть на ТВ'));
+    await flush();
+    expect(launch).toHaveBeenCalled();
+  });
+
+  it('«Заменить…» opens the replace sheet', async () => {
+    addFindings([episodesFinding()]);
+    await mount({ seg: 'subs' });
+    click(byText('Заменить…'));
+    expect(el.querySelector('[role=dialog][aria-label="Заменить раздачу"]')).toBeTruthy();
+  });
+});

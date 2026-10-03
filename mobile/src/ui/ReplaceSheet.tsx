@@ -1,0 +1,176 @@
+import { useEffect, useState } from 'preact/hooks';
+import { Sheet } from './Sheet';
+import { Icon } from './Icon';
+import { showToast } from './toast';
+import { qualityBadge } from './Poster';
+import { rangeText, plural } from '../monitor/text';
+import { reloadMonitor } from '../monitor/ui';
+import { phoneSourceContext } from '../searchContext';
+import { client } from '../../../src/store/servers';
+import { torrents, refreshTorrents } from '../../../src/store/library';
+import { formatBytes } from '../../../src/lib/format';
+import { shortTitle } from '../../../src/lib/libraryView';
+import { findNewEpisodes } from '../../../src/monitor/newEpisodes';
+import { replaceWithResult, type ReplaceResult } from '../../../src/monitor/replace';
+import { removeFindings } from '../../../src/monitor/subs';
+import { EPISODES_ID, type Finding } from '../../../src/monitor/types';
+import { resultKey, seedsText, sourceName } from '../../../src/sources/view';
+import type { SourceResult } from '../../../src/sources/types';
+import type { Torrent } from '../../../src/api/types';
+
+const CHECK = 'M5 12l5 5l9-10';
+
+function sameHash(a: string, b: string): boolean {
+  return (a || '').toLowerCase() === (b || '').toLowerCase();
+}
+
+/** «Серии 1–8 из 10 · 1080p · 14,1 ГБ». */
+function releaseLine(title: string, size: string): string {
+  return [rangeText(title), qualityBadge(title), size].filter(Boolean).join(' · ') || title;
+}
+
+/** Library torrent of a new-episodes finding, when the library list has it. */
+export function libraryTorrentOf(f: Finding): Torrent | null {
+  const hash = f.episodes ? f.episodes.torrentHash : '';
+  return torrents.value.filter((t) => sameHash(t.hash, hash))[0] || null;
+}
+
+/**
+ * «Заменить раздачу»: the library torrent against the new release, what is carried over, «Другая раздача» (other newer
+ * releases, searched when the sheet opens), then the replace (the old torrent stays when anything fails).
+ */
+export function ReplaceSheet({ finding, onClose }: { finding: Finding; onClose: () => void }) {
+  const e = finding.episodes!;
+  const old = libraryTorrentOf(finding);
+  const [picked, setPicked] = useState<SourceResult>(finding.result);
+  const [others, setOthers] = useState<SourceResult[] | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [alive] = useState({ v: true });
+
+  useEffect(() => {
+    if (old) {
+      findNewEpisodes(phoneSourceContext(), old).then((n) => {
+        if (!alive.v) return;
+        const list = n ? [n.candidate].concat(n.others) : [];
+        const key = resultKey(finding.result);
+        setOthers(list.filter((r) => resultKey(r) !== key));
+      });
+    } else setOthers([]);
+    return () => {
+      alive.v = false;
+    };
+  }, []);
+
+  const name = shortTitle(e.torrentTitle || (old ? old.title : ''));
+  const oldTitle = old ? old.title || e.torrentTitle : e.torrentTitle;
+  const oldSize = old && old.torrent_size ? formatBytes(old.torrent_size) : '';
+
+  const replace = async () => {
+    const c = client.value;
+    if (!c) return setError('Сервер не выбран');
+    if (!old) return setError('Этой раздачи уже нет на сервере');
+    setBusy(true);
+    setError('');
+    const r: ReplaceResult = await replaceWithResult(c, old.hash, picked, phoneSourceContext()).catch(
+      (): ReplaceResult => ({ ok: false, error: 'Не удалось заменить раздачу.' }),
+    );
+    if (r.ok) {
+      removeFindings(EPISODES_ID, finding.key);
+      reloadMonitor();
+      void refreshTorrents(c).catch(() => {});
+      showToast('Заменено: ' + shortTitle(picked.Title));
+      if (alive.v) onClose();
+      return;
+    }
+    if (!alive.v) return;
+    setBusy(false);
+    setError(r.error);
+  };
+
+  if (choosing) {
+    const list = [finding.result].concat((others || []).filter((r) => resultKey(r) !== resultKey(finding.result)));
+    return (
+      <Sheet label="Другая раздача" onClose={() => setChoosing(false)}>
+        <div class="m-sheet-title">Другая раздача</div>
+        <div class="m-sheet-scroll m-sub-pick">
+          {list.map((r) => {
+            const on = resultKey(r) === resultKey(picked);
+            return (
+              <button
+                key={resultKey(r)}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                class="m-opt"
+                onClick={() => {
+                  setPicked(r);
+                  setChoosing(false);
+                }}
+              >
+                <span class="m-opt-text m-grow">
+                  <span class="m-opt-name">{r.Title}</span>
+                  <span class="m-opt-sub">{[sourceName(r.source), r.Size, seedsText(r.Seed || 0)].filter(Boolean).join(' · ')}</span>
+                </span>
+                {on && <Icon d={CHECK} size={20} />}
+              </button>
+            );
+          })}
+        </div>
+      </Sheet>
+    );
+  }
+
+  const more = others === null ? 'ищу…' : others.length ? 'ещё ' + others.length + ' ' + plural(others.length, 'вариант', 'варианта', 'вариантов') + ' ›' : 'других нет';
+  return (
+    <Sheet label="Заменить раздачу" onClose={() => !busy && onClose()}>
+      <div class="m-sheet-title">Заменить раздачу</div>
+      <div class="m-muted m-small">{name + ' · Сезон ' + e.season}</div>
+      <div class="m-rep-box">
+        <div class="m-muted m-small">Сейчас</div>
+        <div class="m-rep-line">{releaseLine(oldTitle, oldSize)}</div>
+      </div>
+      <div class="m-rep-arrow m-muted" aria-hidden="true">
+        ↓
+      </div>
+      <div class="m-rep-box new">
+        <div class="m-accent m-small">{['Новая', sourceName(picked.source), seedsText(picked.Seed || 0)].join(' · ')}</div>
+        <div class="m-rep-line">{releaseLine(picked.Title, picked.Size)}</div>
+      </div>
+      <div class="m-rep-moves">
+        <div>✓ История просмотров и места остановки переносятся</div>
+        <div>✓ Настройки «Пропуск» и категория переносятся</div>
+        <div>✓ Старая раздача удаляется с сервера</div>
+      </div>
+      <button
+        type="button"
+        class="m-set-row m-set-pick"
+        aria-haspopup="dialog"
+        disabled={busy || !others || !others.length}
+        onClick={() => setChoosing(true)}
+      >
+        <span>Другая раздача</span>
+        <span class="m-muted">{more}</span>
+      </button>
+      {busy && (
+        <div class="m-muted m-small" role="status">
+          Заменяю… Это может занять до минуты.
+        </div>
+      )}
+      {error && (
+        <div class="m-error" role="alert">
+          {error}
+        </div>
+      )}
+      <div class="m-marks-actions">
+        <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={onClose}>
+          Отмена
+        </button>
+        <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={() => void replace()}>
+          Заменить
+        </button>
+      </div>
+    </Sheet>
+  );
+}

@@ -28,6 +28,8 @@ import { ANDROID_UPDATE_URL } from '../../../src/lib/updateInfo';
 import { APP_VERSION } from '../../../src/version';
 import { CHANGELOG } from '../../../src/lib/changelogData';
 import { openWhatsNew } from '../../../src/store/whatsNew';
+import { loadMonitorSettings } from '../../../src/monitor/settings';
+import { hoursText } from '../monitor/text';
 
 type Checker = (o: { manual: boolean; url?: string }) => Promise<CheckResult>;
 let checker: Checker | null = null;
@@ -221,6 +223,7 @@ export function Settings() {
   const server = activeServer.value;
   const tv = activeTv.value;
   const on = settings.value.updateCheck;
+  const monitor = loadMonitorSettings();
 
   async function check() {
     const r = await runUpdateCheck({ manual: true, url: ANDROID_UPDATE_URL }).catch((): CheckResult => 'error');
@@ -278,6 +281,10 @@ export function Settings() {
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'sources' })}>
           <span>Источники поиска</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />
+        </button>
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'monitor' })}>
+          <span>Мониторинг</span>
+          <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : 'выключен'} ›</span>
         </button>
       </section>
       <section class="m-set-group">

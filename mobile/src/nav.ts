@@ -3,6 +3,12 @@ import { signal, computed } from '@preact/signals';
 export type MRoute =
   | { name: 'connect' }
   | { name: 'library' }
+  /** «Новое»: `seg` opens a segment, `finding` highlights a new-episodes card, `watch` readies «Смотреть на ТВ» for it. */
+  | { name: 'news'; seg?: 'feed' | 'subs'; finding?: string; watch?: boolean }
+  /** Findings of one subscription. */
+  | { name: 'subFindings'; id: string; finding?: string; watch?: boolean }
+  /** «Настройки» → «Мониторинг». */
+  | { name: 'monitor' }
   | { name: 'torrent'; hash: string }
   | { name: 'add'; link?: string }
   | { name: 'remote' }
@@ -31,7 +37,7 @@ export function resetTo(r: MRoute): void {
   routeStack.value = [r];
 }
 
-// root tabs (library/add/remote/settings) replace the whole stack
+// root tabs (library/news/add/remote/settings) replace the whole stack
 export function switchTab(r: MRoute): void {
   resetTo(r);
 }

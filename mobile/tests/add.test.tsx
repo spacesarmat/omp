@@ -645,3 +645,46 @@ describe('Add unified search: stable rows', () => {
     expect(labels).toContain('Добавить и смотреть на ТВ: Two 1080p');
   });
 });
+
+describe('Add «Подписаться»', () => {
+  function fakeSource(): Source {
+    return { id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([]) };
+  }
+  beforeEach(() => {
+    setSourceOn('ts-rutor', false);
+    setSourceOn('ts-torznab', false);
+  });
+
+  it('no plate before a search', () => {
+    mount();
+    expect(el.querySelector('[data-plate="subscribe"]')).toBeNull();
+  });
+
+  it('after a search: «Подписаться» opens the subscription filled from the query and the filters', async () => {
+    registerSource(fakeSource());
+    registerSource({ ...fakeSource(), id: 'fake2', name: 'Фейк-2' });
+    mount();
+    // only «Фейк» and 1080p+
+    click(byText('Все источники · 2'));
+    click(Array.from(el.querySelectorAll('.m-sheet [role=checkbox]')).find((b) => b.textContent === 'Фейк-2')!);
+    click(el.querySelector('.m-sheet-backdrop')!);
+    click(byText('1080p+'));
+    search('  Северный ветер сезон 2 ');
+    await flush();
+    const plate = el.querySelector('[data-plate="subscribe"]')!;
+    expect(plate.textContent).toContain('Сообщить, когда появятся новые раздачи по этому запросу');
+    click(Array.from(plate.querySelectorAll('button')).find((b) => b.textContent === 'Подписаться')!);
+    expect((el.querySelector('#m-sub-query') as HTMLInputElement).value).toBe('Северный ветер сезон 2');
+    expect(el.querySelector('.m-sheet .m-chip.on')!.textContent).toBe('1080p+');
+    expect(el.querySelector('.m-sheet .m-set-pick')!.textContent).toContain('Фейк ›');
+    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === 'Сохранить')!);
+    const subs = JSON.parse(localStorage.getItem('tsp.subs') || '[]');
+    expect(subs).toHaveLength(1);
+    expect(subs[0]).toMatchObject({ query: 'Северный ветер сезон 2', quality: '1080', sources: ['fake'], notify: true });
+    // already subscribed: the plate opens it instead
+    const again = el.querySelector('[data-plate="subscribe"]')!;
+    expect(again.textContent).toContain('Вы подписаны на этот запрос');
+    click(Array.from(again.querySelectorAll('button')).find((b) => b.textContent === 'Открыть')!);
+    expect(currentRoute.value).toEqual({ name: 'subFindings', id: subs[0].id });
+  });
+});

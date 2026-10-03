@@ -1,9 +1,19 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { installTabSwipe, swipeTarget, swipeSwitches } from '../src/ui/tabSwipe';
+import { TAB_IDS } from '../src/ui/NavBar';
 
 const TABS = ['library', 'add', 'remote', 'settings'];
 
 describe('swipeTarget / swipeSwitches', () => {
+  it('five bottom tabs: «Новое» sits between «Каталог» and «Добавить»', () => {
+    expect(TAB_IDS).toEqual(['library', 'news', 'add', 'remote', 'settings']);
+    expect(swipeTarget(TAB_IDS, 'library', -100)).toBe('news');
+    expect(swipeTarget(TAB_IDS, 'news', -100)).toBe('add');
+    expect(swipeTarget(TAB_IDS, 'news', 100)).toBe('library');
+    expect(swipeTarget(TAB_IDS, 'add', 100)).toBe('news');
+    expect(swipeTarget(TAB_IDS, 'settings', -100)).toBeNull();
+    expect(swipeTarget(TAB_IDS, 'subFindings', -100)).toBeNull();
+  });
   it('left goes to the next tab, right to the previous; none past the ends', () => {
     expect(swipeTarget(TABS, 'library', -100)).toBe('add');
     expect(swipeTarget(TABS, 'add', 100)).toBe('library');
