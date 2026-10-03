@@ -62,6 +62,12 @@ export interface Source {
   search(query: string, ctx: SourceContext): Promise<SourceResult[]>;
   /** Magnet from the release page when the search result has none. */
   magnet?(detailUrl: string, ctx: SourceContext): Promise<string>;
+  /** Sources with needsLogin: sign in; the credentials go to ctx.secrets only. Rejects in Russian. */
+  login?(username: string, password: string, ctx: SourceContext): Promise<void>;
+  /** Forgets the site cookies and the saved credentials. */
+  logout?(ctx: SourceContext): Promise<void>;
+  /** Saved credentials exist (no network). */
+  loggedIn?(ctx: SourceContext): Promise<boolean>;
 }
 
 export type HealthState = 'ok' | 'error' | 'login';
