@@ -31,7 +31,8 @@ if (platformKind() === 'androidtv') {
       (m) => m.registerBuiltinSources(),
       () => log('warn', 'tv', 'Не удалось загрузить источники поиска'),
     )
-    .then(start);
+    .then(undefined, () => log('warn', 'app', 'Не удалось подключить источники поиска'))
+    .then(start, start);
 } else {
   start();
 }

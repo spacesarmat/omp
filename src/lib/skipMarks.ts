@@ -41,7 +41,7 @@ export interface TvMarks {
 
 export type MarkRow = 'from' | 'to' | 'last';
 
-/** ◀ ▶ step, and the step while the key is held (auto-repeat). */
+/** ◀ ▶ step, and the step while the key is held. */
 export const MARK_STEP = 5;
 export const MARK_FAST_STEP = 30;
 /** Marks never go past six hours. */
@@ -49,10 +49,6 @@ export const MARK_MAX = 6 * 3600;
 /** An intro that is not set yet starts from this pair on the first press, the credits from this length. */
 const DEFAULT_INTRO: [number, number] = [0, 90];
 const DEFAULT_LAST = 90;
-
-export function markStep(repeat: boolean): number {
-  return repeat ? MARK_FAST_STEP : MARK_STEP;
-}
 
 /** The marks after ◀ (dir -1) / ▶ (dir 1) on `row` by `amount` seconds; always valid (0 ≤ from < to ≤ MARK_MAX, 1 ≤ last ≤ MARK_MAX). */
 export function stepMark(m: TvMarks, row: MarkRow, dir: 1 | -1, amount: number): TvMarks {
@@ -66,6 +62,17 @@ export function stepMark(m: TvMarks, row: MarkRow, dir: 1 | -1, amount: number):
   return { mi: [base[0], Math.min(MARK_MAX, Math.max(base[0] + 1, base[1] + d))], mc: m.mc };
 }
 
+/** Marks from the journal brought into the dialog bounds (the phone does not cap them at six hours). */
+export function clampMarks(m: TvMarks): TvMarks {
+  const cl = (v: number, lo: number) => Math.min(MARK_MAX, Math.max(lo, v));
+  let mi: [number, number] | null = null;
+  if (m.mi) {
+    const a = Math.min(cl(m.mi[0], 0), MARK_MAX - 1);
+    mi = [a, Math.max(a + 1, cl(m.mi[1], 0))];
+  }
+  return { mi, mc: m.mc === null ? null : cl(m.mc, 1) };
+}
+
 /** Marks that can be written as they are: the intro ends after it starts, both inside the limit, the credits are positive. */
 export function marksValid(m: TvMarks): boolean {
   if (m.mi && !(m.mi[0] >= 0 && m.mi[1] > m.mi[0] && m.mi[1] <= MARK_MAX)) return false;
@@ -77,4 +84,26 @@ export function marksValid(m: TvMarks): boolean {
 export function markText(m: TvMarks, row: MarkRow): string {
   if (row === 'last') return m.mc === null ? '—' : formatDuration(m.mc);
   return m.mi ? formatDuration(row === 'from' ? m.mi[0] : m.mi[1]) : '—';
+}
+
+/** A key press in the dialog counts as held: auto-repeat, or the same direction again within this many ms. */
+export const HOLD_GAP_MS = 180;
+/** While held, at most one fast step per this many ms (remotes repeat at 10-30 Hz). */
+export const FAST_STEP_MS = 250;
+
+export interface KeyTrack {
+  dir: number;
+  at: number;
+  fastAt: number;
+}
+
+/** Amount to step for a left/right press now (0: drop it; a held key repeats faster than a fast step is useful); updates the track). */
+export function holdStep(track: KeyTrack, dir: 1 | -1, repeat: boolean, now: number): number {
+  const held = repeat || (track.dir === dir && now - track.at < HOLD_GAP_MS);
+  track.dir = dir;
+  track.at = now;
+  if (!held) return MARK_STEP;
+  if (now - track.fastAt < FAST_STEP_MS) return 0;
+  track.fastAt = now;
+  return MARK_FAST_STEP;
 }

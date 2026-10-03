@@ -51,7 +51,9 @@ export function buildSnapshot(i: SnapshotInput): PlayerState | null {
   if (i.chapters && i.chapters.length) {
     const list = i.chapters.slice(0, MAX_PHONE_CHAPTERS);
     s.chapters = list.map((c) => ({ t: c.start, title: c.title.slice(0, MAX_PHONE_CHAPTER_TITLE) }));
-    s.chapter = Math.min(chapterIndexAt(list, i.time), list.length - 1);
+    // past the cap the phone does not know the chapter: -1
+    const at = chapterIndexAt(i.chapters, i.time);
+    s.chapter = at < list.length ? at : -1;
   }
   return s;
 }

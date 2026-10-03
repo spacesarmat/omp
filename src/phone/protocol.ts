@@ -1,4 +1,4 @@
-import { MAX_PHONE_CHAPTERS } from '../player/chapters';
+import { MAX_PHONE_CHAPTERS, MAX_PHONE_CHAPTER_TITLE } from '../player/chapters';
 export interface TrackList { list: string[]; sel: number }
 export interface SubList { list: { label: string; value: string }[]; sel: string }
 export interface PlayerState {
@@ -102,7 +102,7 @@ function sanitizeState(v: unknown): PlayerState | null {
     for (let i = 0; i < v.chapters.length && i < MAX_PHONE_CHAPTERS; i++) {
       const c: unknown = v.chapters[i];
       if (!isObj(c) || !num(c.t) || c.t < 0 || typeof c.title !== 'string') return st;
-      list.push({ t: c.t, title: c.title });
+      list.push({ t: c.t, title: c.title.slice(0, MAX_PHONE_CHAPTER_TITLE) });
     }
     st.chapters = list;
     st.chapter = int(v.chapter) && v.chapter >= -1 && v.chapter < list.length ? v.chapter : -1;

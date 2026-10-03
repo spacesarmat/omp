@@ -138,6 +138,14 @@ describe('TV torrent card · marks dialog', () => {
     expect(row('Заставка и титры').textContent).toContain('по главам файла · вручную: титры: последние 1:30');
   });
 
+  it('the status row is a named button without a hint appended to the status', async () => {
+    await mount();
+    const r = row('Заставка и титры');
+    expect(r.getAttribute('role')).toBe('button');
+    expect(r.getAttribute('aria-label')).toBe('Заставка и титры — задать вручную');
+    expect(r.textContent).not.toContain('ОК');
+  });
+
   it('the status row opens the dialog with the saved marks; Back closes it without writing', async () => {
     await mount({ i: false, c: false, mi: [45, 135], mc: 90 });
     expect(host.querySelector('.marks-dialog')).toBeNull();

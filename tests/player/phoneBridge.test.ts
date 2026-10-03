@@ -117,7 +117,7 @@ describe('chapters', () => {
     const s = buildSnapshot({ ...base, time: 2400, chapters: many })!;
     expect(s.chapters!.length).toBe(MAX_PHONE_CHAPTERS);
     expect(s.chapters![0].title.length).toBe(MAX_PHONE_CHAPTER_TITLE);
-    expect(s.chapter).toBe(MAX_PHONE_CHAPTERS - 1);
+    expect(s.chapter).toBe(-1);
     expect(buildSnapshot({ ...base, time: 50, chapters: many })!.chapter).toBe(5);
   });
   it('chapter command seeks to the start, ignores bad index and unknown duration', () => {

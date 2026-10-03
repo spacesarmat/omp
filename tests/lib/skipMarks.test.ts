@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseMark, skipStatus, stepMark, markStep, markText, marksValid, MARK_MAX } from '../../src/lib/skipMarks';
+import { parseMark, skipStatus, stepMark, holdStep, clampMarks, HOLD_GAP_MS, FAST_STEP_MS, markText, marksValid, MARK_MAX } from '../../src/lib/skipMarks';
 
 describe('parseMark', () => {
   it('reads seconds, m:ss and h:mm:ss', () => {
@@ -33,10 +33,6 @@ describe('stepMark', () => {
     expect(stepMark(m, 'from', 1, 5)).toEqual({ mi: [50, 135], mc: 90 });
     expect(stepMark(m, 'to', -1, 30)).toEqual({ mi: [45, 105], mc: 90 });
     expect(stepMark(m, 'last', 1, 30)).toEqual({ mi: [45, 135], mc: 120 });
-  });
-  it('the step is 5 s, 30 s while held', () => {
-    expect(markStep(false)).toBe(5);
-    expect(markStep(true)).toBe(30);
   });
   it('never crosses the bounds', () => {
     expect(stepMark({ mi: [3, 10], mc: 2 }, 'from', -1, 30).mi).toEqual([0, 10]);
@@ -73,5 +69,38 @@ describe('marksValid / markText', () => {
     expect(markText({ mi: null, mc: null }, 'from')).toBe('—');
     expect(markText({ mi: [45, 135], mc: 90 }, 'to')).toBe('2:15');
     expect(markText({ mi: [45, 135], mc: 90 }, 'last')).toBe('1:30');
+  });
+});
+
+describe('holdStep', () => {
+  const fresh = () => ({ dir: 0, at: -1e9, fastAt: -1e9 });
+  it('a single press is 5 s, a slow double press is 2 x 5 s', () => {
+    const t = fresh();
+    expect(holdStep(t, 1, false, 1000)).toBe(5);
+    expect(holdStep(t, 1, false, 1000 + HOLD_GAP_MS + 100)).toBe(5);
+  });
+  it('auto-repeat is held at once', () => {
+    expect(holdStep(fresh(), 1, true, 1000)).toBe(30);
+  });
+  it('same direction again within the gap counts as held (remotes without repeat), another direction does not', () => {
+    const t = fresh();
+    expect(holdStep(t, 1, false, 1000)).toBe(5);
+    expect(holdStep(t, 1, false, 1100)).toBe(30);
+    expect(holdStep(t, -1, false, 1150)).toBe(5);
+  });
+  it('fast steps are limited to one per FAST_STEP_MS while the key is held', () => {
+    const t = fresh();
+    let sum = 0;
+    for (let ms = 0; ms <= 1000; ms += 50) sum += holdStep(t, 1, true, 10000 + ms);
+    expect(sum).toBe(30 * Math.floor(1000 / FAST_STEP_MS + 1));
+    expect(holdStep(t, 1, true, 11000 + 10)).toBe(0);
+  });
+});
+
+describe('clampMarks', () => {
+  it('brings marks over the limit into bounds and keeps valid ones', () => {
+    expect(clampMarks({ mi: [45, 135], mc: 90 })).toEqual({ mi: [45, 135], mc: 90 });
+    expect(clampMarks({ mi: [MARK_MAX + 5, MARK_MAX + 50], mc: MARK_MAX * 2 })).toEqual({ mi: [MARK_MAX - 1, MARK_MAX], mc: MARK_MAX });
+    expect(clampMarks({ mi: null, mc: null })).toEqual({ mi: null, mc: null });
   });
 });

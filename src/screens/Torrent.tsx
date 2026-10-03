@@ -178,9 +178,9 @@ export function TorrentScreen({ hash }: { hash: string }) {
             <span class="skip-label">Пропускать титры — сразу следующая серия</span>
             <span class={'skip-switch' + (skip.prefs.c ? ' on' : '')} role="switch" aria-label="Пропускать титры" aria-checked={skip.prefs.c} />
           </Focusable>
-          <Focusable focusKey="skip-status" className="skip-row skip-status" onPress={() => setMarksOpen(true)}>
+          <Focusable focusKey="skip-status" className="skip-row skip-status" role="button" ariaLabel="Заставка и титры — задать вручную" onPress={() => setMarksOpen(true)}>
             <span class="skip-label">Заставка и титры</span>
-            <span class="muted">{skipStatus(skip.hasChapters, skip.prefs)} · ОК — задать вручную</span>
+            <span class="muted">{skipStatus(skip.hasChapters, skip.prefs)}</span>
           </Focusable>
         </FocusGroup>
       )}

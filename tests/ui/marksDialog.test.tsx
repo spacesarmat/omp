@@ -18,8 +18,12 @@ beforeAll(() => {
 let host: HTMLElement;
 const flush = () => act(async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); });
 const values = () => Array.prototype.map.call(host.querySelectorAll('.marks-value'), (e: Element) => e.textContent) as string[];
-const key = (a: 'left' | 'right' | 'back', repeat = false) => {
+let clock = 0;
+// every press comes 300 ms after the previous one (slow presses), unless `gap` says otherwise
+const key = (a: 'left' | 'right' | 'back', repeat = false, gap = 300) => {
   let r: unknown;
+  clock += gap;
+  vi.setSystemTime(clock);
   act(() => { r = dispatchKey(a, { repeat } as KeyboardEvent); });
   return r;
 };
@@ -36,8 +40,14 @@ function mount(prefs: TvMarks, onSave: (m: TvMarks) => Promise<unknown> = () => 
 }
 const button = (label: string) => Array.prototype.filter.call(host.querySelectorAll('.button'), (b: Element) => (b.textContent || '').indexOf(label) >= 0)[0] as HTMLElement;
 
-beforeEach(() => clearLog());
+beforeEach(() => {
+  clearLog();
+  clock = 1_000_000;
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(clock);
+});
 afterEach(() => {
+  vi.useRealTimers();
   act(() => render(null, host));
   host.remove();
 });
@@ -68,7 +78,7 @@ describe('TV marks dialog', () => {
     expect(values()[2]).toBe('1:35');
   });
 
-  it('a held key steps by 30 s', async () => {
+  it('a held key (auto-repeat) steps by 30 s', async () => {
     mount({ mi: [45, 135], mc: 90 });
     await focusRow('marks-to');
     key('right', true);
@@ -76,6 +86,47 @@ describe('TV marks dialog', () => {
     key('left', true);
     key('left', true);
     expect(values()[1]).toBe('1:45');
+  });
+
+  it('without auto-repeat, quick presses in one direction count as a hold, at most one 30 s step per 250 ms', async () => {
+    mount({ mi: [45, 135], mc: 90 });
+    await focusRow('marks-to');
+    key('right');
+    expect(values()[1]).toBe('2:20');
+    key('right', false, 100);
+    expect(values()[1]).toBe('2:50');
+    key('right', false, 100);
+    expect(values()[1]).toBe('2:50');
+    key('right', false, 100);
+    expect(values()[1]).toBe('2:50');
+    key('right', false, 100);
+    expect(values()[1]).toBe('3:20');
+  });
+
+  it('two slow presses are two 5 s steps', async () => {
+    mount({ mi: [45, 135], mc: 90 });
+    await focusRow('marks-to');
+    key('right');
+    key('right');
+    expect(values()[1]).toBe('2:25');
+  });
+
+  it('marks over six hours from the phone are brought into bounds and can be saved untouched', async () => {
+    const onSave = vi.fn(() => Promise.resolve());
+    mount({ mi: [30000, 40000], mc: 50000 }, onSave);
+    expect(values()).toEqual(['5:59:59', '6:00:00', '6:00:00']);
+    act(() => button('Сохранить').click());
+    await flush();
+    expect(onSave).toHaveBeenCalledWith({ mi: [21599, 21600], mc: 21600 });
+  });
+
+  it('the rows and arrows are named for a screen reader', () => {
+    mount({ mi: [45, 135], mc: 90 });
+    const rows = host.querySelectorAll('.marks-row');
+    expect(rows[0].getAttribute('aria-label')).toBe('Заставка с, 0:45');
+    expect(rows[2].getAttribute('aria-label')).toBe('Титры: последние, 1:30');
+    expect(rows[1].querySelectorAll('.marks-step')[0].getAttribute('aria-label')).toBe('Заставка до: меньше на 5 секунд');
+    expect(host.querySelector('.marks-backdrop')).not.toBeNull();
   });
 
   it('the clickable arrows step too', async () => {

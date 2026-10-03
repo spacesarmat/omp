@@ -56,6 +56,10 @@ describe('sanitizeMessage', () => {
     expect(ok({ chapters, chapter: 250 }).chapters!.length).toBe(MAX_PHONE_CHAPTERS);
     expect(ok({ chapters, chapter: 250 }).chapter).toBe(-1);
   });
+  it('shortens long chapter titles from an old TV', () => {
+    const ok = (extra: object) => sanitizeMessage({ v: 1, app: 'x', state: { ...state(), ...extra } })!.state!;
+    expect(ok({ chapters: [{ t: 0, title: 'x'.repeat(300) }], chapter: 0 }).chapters![0].title.length).toBe(80);
+  });
   it('keeps chapters and the current one, tolerates their absence, drops bad lists', () => {
     const chapters = [{ t: 0, title: 'Пролог' }, { t: 92, title: '' }];
     const ok = (extra: object) => sanitizeMessage({ v: 1, app: 'x', state: { ...state(), ...extra } })!.state!;
