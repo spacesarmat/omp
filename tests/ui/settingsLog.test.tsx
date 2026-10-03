@@ -42,6 +42,8 @@ describe('TV Settings: brief log', () => {
   it('has a clear button', () => {
     log('error', 'app', 'x');
     const host = mount();
-    expect(Array.from(host.querySelectorAll('button, [role=button], .btn')).some((b) => b.textContent!.includes('Очистить журнал')) || host.textContent!.includes('Очистить журнал')).toBe(true);
+    const btn = Array.from(host.querySelectorAll('.log-brief *')).find((n) => n.children.length === 0 && n.textContent === 'Очистить журнал');
+    expect(btn).toBeTruthy();
+    expect(btn!.closest('.row')).toBeTruthy();
   });
 });

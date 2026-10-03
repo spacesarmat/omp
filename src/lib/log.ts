@@ -64,7 +64,7 @@ const SECRET_COLON = /\b(password|passwd|pass|token|api_?key|apikey|secret|bb_se
 const SECRET_EQ = /\b(login|user|username|sid|session|auth)=("[^"]*"|[^\s&"',;<>]*)/gi;
 const URL_RE = /\b([a-z][a-z0-9+.-]*):\/\/([^\s\/?#"'<>)]*)[^\s"'<>)]*/gi;
 const FILE_PATH = /(^|[\s"'(])\/(storage|sdcard|data|mnt|home|Users)\/[^"'\n)]*/g;
-const RESOLVE_HOST = /(resolve host\s*)"[^"]*"/gi;
+const RESOLVE_HOST = /(resolve host\s*)("[^"]*"|[^\s:,]+)/gi;
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
 const HASH = /\b(?:1220[0-9a-fA-F]{64}|[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?)\b/g;
 const BASE32 = /\b[A-Z2-7]{32}\b/g;
@@ -72,7 +72,9 @@ const IP6_SHORT = /\[?(?:[0-9a-fA-F]{0,4}:){1,7}:[0-9a-fA-F]{0,4}(?::[0-9a-fA-F]
 const IP6_FULL = /\[?\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b\]?(?::\d{1,5})?/g;
 const IP = /\b(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}(:\d{1,5})?\b/g;
 const LOCAL_HOST = /\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:local|lan|home|internal|localdomain)\b(?::\d{1,5})?/gi;
-const HOST_PORT = /\b[a-z0-9-]+(?:\.[a-z0-9-]+)+:\d{3,5}\b/gi;
+const HOST_PORT = /\b[a-z][a-z0-9-]*(?:(?:\.[a-z0-9-]+)+:\d{3,5}|:\d{4,5})\b/gi;
+// Java: "host/192.168.1.5"
+const HOST_SLASH_IP = /\b[a-z][a-z0-9-]*(?=\/(?:\d{1,3}\.){3}\d{1,3})/gi;
 const CODE_EXT = /\.(js|ts|tsx|jsx|kt|java|json|css|html|map)(:\d+)?$/i;
 const QUERY = /\?[^\s"'<>]*=[^\s"'<>]*/g;
 
@@ -98,6 +100,7 @@ export function scrub(text: string): string {
   s = s.replace(IP6_SHORT, 'IP');
   s = s.replace(LOCAL_HOST, (m) => hostKind(m));
   s = s.replace(HOST_PORT, (m) => (CODE_EXT.test(m) || /^[0-9.]+:/.test(m) ? m : hostKind(m)));
+  s = s.replace(HOST_SLASH_IP, 'сервер');
   s = s.replace(IP, 'IP');
   s = s.replace(QUERY, '?…');
   s = s.replace(/\s+/g, ' ').trim();
