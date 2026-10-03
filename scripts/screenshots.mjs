@@ -7,9 +7,9 @@ import { pathToFileURL } from 'node:url';
 
 const SCENES = ['login', 'login-history', 'library-large', 'library-list', 'history', 'search'];
 // Android client scenes: phone viewport at 2x.
-const ANDROID_SCENES = ['android-library', 'android-torrent', 'android-watch', 'android-remote', 'android-nowplaying', 'android-server', 'android-tvlist'];
+const ANDROID_SCENES = ['android-library', 'android-torrent', 'android-watch', 'android-remote', 'android-nowplaying', 'android-server', 'android-tvlist', 'android-skip', 'android-chapters', 'android-search', 'android-sources'];
 // Android TV scene: 1280x720 like the TV UI.
-const ANDROIDTV_SCENES = ['androidtv-player'];
+const ANDROIDTV_SCENES = ['androidtv-player', 'androidtv-chapters', 'androidtv-skip'];
 
 const candidates = [
   process.env.CHROME_PATH,
