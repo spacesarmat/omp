@@ -2,7 +2,7 @@
 // (per format tab) with .torrent links that download without a login, and no magnet links. TorrServer adds an
 // http(s) .torrent link itself, so a result carries it in Link (Magnet and hash stay empty).
 import { absUrl, parseSize, textOf } from './html';
-import { loadDoc, makeResult, PARSE_ERROR, requireHost, toInt } from './site';
+import { loadDoc, makeResult, NO_TORRENT, PARSE_ERROR, requireHost, toInt } from './site';
 import type { Source, SourceContext, SourceResult } from './types';
 
 const HOST = 'tr.anidub.com';
@@ -16,7 +16,7 @@ export const ANIDUB_MAX_RELEASES = 15;
 export const ANIDUB_PAGE_TIMEOUT_MS = 5000;
 /** From the start of a search: no new release pages after it, and the results found so far are returned. */
 export const ANIDUB_DEADLINE_MS = 12000;
-export const ANIDUB_NO_TORRENT = 'На странице раздачи нет ссылки на торрент';
+export const ANIDUB_NO_TORRENT = NO_TORRENT;
 
 interface Release {
   title: string;

@@ -165,3 +165,35 @@ export function infohashFromMagnet(magnet: string | null | undefined): string | 
   if (h.length === 32) return base32ToHex(h);
   return undefined;
 }
+
+/** Characters of windows-1251 bytes 0x80–0xBF (0x98 is unused); 0xC0–0xFF are А–я. */
+const CP1251_HIGH =
+  '\u0402\u0403\u201a\u0453\u201e\u2026\u2020\u2021\u20ac\u2030\u0409\u2039\u040a\u040c\u040b\u040f' +
+  '\u0452\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u0000\u2122\u0459\u203a\u045a\u045c\u045b\u045f' +
+  '\u00a0\u040e\u045e\u0408\u00a4\u0490\u00a6\u00a7\u0401\u00a9\u0404\u00ab\u00ac\u00ad\u00ae\u0407' +
+  '\u00b0\u00b1\u0406\u0456\u0491\u00b5\u00b6\u00b7\u0451\u2116\u0454\u00bb\u0458\u0405\u0455\u0457';
+
+function hexByte(b: number): string {
+  return '%' + (b < 16 ? '0' : '') + b.toString(16).toUpperCase();
+}
+
+/**
+ * A query percent-encoded in windows-1251 (old trackers ignore a UTF-8 one). Like encodeURIComponent for ASCII;
+ * a character windows-1251 does not have becomes a space.
+ */
+export function encodeWin1251(s: string): string {
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charAt(i);
+    const c = s.charCodeAt(i);
+    if (c < 0x80) {
+      out += encodeURIComponent(ch);
+    } else if (c >= 0x410 && c <= 0x44f) {
+      out += hexByte(c - 0x410 + 0xc0);
+    } else {
+      const k = CP1251_HIGH.indexOf(ch);
+      out += k >= 0 ? hexByte(0x80 + k) : '%20';
+    }
+  }
+  return out;
+}

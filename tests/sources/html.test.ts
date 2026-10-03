@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseHtml, textOf, absUrl, parseSize, parseDate, infohashFromMagnet } from '../../src/sources/html';
+import { parseHtml, textOf, absUrl, parseSize, parseDate, infohashFromMagnet, encodeWin1251 } from '../../src/sources/html';
 
 describe('parseHtml / textOf / absUrl', () => {
   it('parses a page and reads collapsed text', () => {
@@ -96,5 +96,18 @@ describe('infohashFromMagnet', () => {
     expect(infohashFromMagnet('')).toBeUndefined();
     expect(infohashFromMagnet('magnet:?xt=urn:btih:123')).toBeUndefined();
     expect(infohashFromMagnet('http://x/a.torrent')).toBeUndefined();
+  });
+});
+
+describe('encodeWin1251', () => {
+  it('percent-encodes a query in windows-1251 for old trackers', () => {
+    expect(encodeWin1251('матрица')).toBe('%EC%E0%F2%F0%E8%F6%E0');
+    expect(encodeWin1251('Ёлка ёж')).toBe('%A8%EB%EA%E0%20%B8%E6');
+    expect(encodeWin1251('The Matrix 1999/2 & «А»—№1')).toBe('The%20Matrix%201999%2F2%20%26%20%AB%C0%BB%97%B91');
+    expect(encodeWin1251("a-b_c.d~e!*'()")).toBe("a-b_c.d~e!*'()");
+  });
+  it('turns characters windows-1251 does not have into spaces', () => {
+    expect(encodeWin1251('進撃 x')).toBe('%20%20%20x');
+    expect(encodeWin1251('')).toBe('');
   });
 });

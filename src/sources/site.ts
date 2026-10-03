@@ -7,6 +7,7 @@ export const SITE_ERROR = 'Сайт ответил ошибкой ';
 export const CHALLENGE = 'Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже';
 export const PARSE_ERROR = 'Не удалось разобрать страницу сайта';
 export const NO_MAGNET = 'На странице раздачи нет magnet-ссылки';
+export const NO_TORRENT = 'На странице раздачи нет ссылки на торрент';
 
 /** Cloudflare «Just a moment…» / Turnstile challenge instead of the page. */
 export function isChallenge(text: string): boolean {

@@ -12,10 +12,10 @@ describe('built-in sources', () => {
     expect(builtinSources()).toEqual([]);
   });
 
-  it('registers rutor, nnmclub, Anidub and rutracker after the TorrServer sources (twice is harmless)', () => {
+  it('registers rutor, nnmclub, Anidub, BigFANGroup, torrent.by and rutracker after the TorrServer sources (twice is harmless)', () => {
     registerBuiltinSources();
     registerBuiltinSources();
-    expect(allSources().map((s) => s.id)).toEqual(['ts-rutor', 'ts-torznab', 'rutor', 'nnmclub', 'anidub', 'rutracker']);
+    expect(allSources().map((s) => s.id)).toEqual(['ts-rutor', 'ts-torznab', 'rutor', 'nnmclub', 'anidub', 'bigfangroup', 'torrentby', 'rutracker']);
     expect(builtinSources().every((s) => s.kind === 'builtin')).toBe(true);
   });
 
@@ -23,6 +23,6 @@ describe('built-in sources', () => {
     localStorage.removeItem('tsp.sources');
     reloadSourcePrefs();
     const on = builtinParsers().map((s) => s.id + ':' + isSourceOn(s));
-    expect(on).toEqual(['rutor:true', 'nnmclub:true', 'anidub:true', 'rutracker:false']);
+    expect(on).toEqual(['rutor:true', 'nnmclub:true', 'anidub:true', 'bigfangroup:true', 'torrentby:true', 'rutracker:false']);
   });
 });
