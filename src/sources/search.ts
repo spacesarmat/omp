@@ -80,7 +80,7 @@ export function searchAll(query: string, opts: SearchAllOptions): SearchHandle {
       if (cancelled) return;
       const err = new Error('Источник не отвечает');
       failed.push(source.id);
-      setHealth(source.id, { state: 'error', at: Date.now() });
+      setHealth(source.id, { state: 'error', at: Date.now(), message: err.message });
       settle(source.id);
       safe(() => opts.onDone && opts.onDone(source.id, err));
     }, timeoutMs);
@@ -114,7 +114,8 @@ export function searchAll(query: string, opts: SearchAllOptions): SearchHandle {
         if (cancelled) return;
         const err = asError(e);
         failed.push(source.id);
-        setHealth(source.id, { state: isLoginRequired(e) ? 'login' : 'error', at: Date.now() });
+        if (isLoginRequired(e)) setHealth(source.id, { state: 'login', at: Date.now() });
+        else setHealth(source.id, { state: 'error', at: Date.now(), message: err.message });
         settle(source.id);
         safe(() => opts.onDone && opts.onDone(source.id, err));
       },

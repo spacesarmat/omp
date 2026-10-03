@@ -9,6 +9,7 @@ import { Toast } from './ui/toast';
 import { Connect } from './screens/Connect';
 import { Tv } from './screens/Tv';
 import { Faq } from './screens/Faq';
+import { Sources } from './screens/Sources';
 import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
 import { Add } from './screens/Add';
@@ -160,6 +161,8 @@ export function App() {
         <Tv />
       ) : route.name === 'faq' ? (
         <Faq />
+      ) : route.name === 'sources' ? (
+        <Sources />
       ) : route.name === 'library' ? (
         <Library />
       ) : route.name === 'torrent' ? (

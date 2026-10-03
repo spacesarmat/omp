@@ -677,3 +677,19 @@ button, .m-btn {
 .m-marks-pair .m-field { flex: 1 1 0; min-width: 0; }
 .m-marks-actions { display: flex; gap: 10px; margin-top: 4px; }
 .m-marks-actions .m-btn { flex: 1 1 0; }
+
+/* ---- unified search: result cards, «Источники поиска», tracker login ---- */
+.m-grow { flex: 1 1 auto; min-width: 0; }
+.m-result-card { flex-direction: column; align-items: stretch; gap: 6px; }
+.m-result-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.m-src-badge { padding: 2px 8px; border-radius: 6px; background: #252A35; color: var(--text); font-weight: 700; }
+.m-result-actions { display: flex; align-items: center; gap: 8px; }
+.m-result-actions .m-btn { flex-shrink: 0; }
+.m-src-row { display: flex; align-items: center; gap: 10px; min-height: 52px; }
+.m-src-name { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
+.m-src-note { font-size: 12px; color: var(--muted); }
+.m-src-note.ok { color: #8FE39A; }
+.m-src-note.bad { color: #FF8A80; }
+.m-src-card { gap: 0; padding: 4px 14px; }
+.m-lock-note { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.m-lock-note svg { flex-shrink: 0; }

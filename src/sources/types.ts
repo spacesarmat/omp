@@ -81,6 +81,8 @@ export interface SourceHealth {
   ms?: number;
   /** When it was recorded, unix ms. */
   at: number;
+  /** Error text of a failed search (e.g. the Cloudflare block). */
+  message?: string;
 }
 
 const LOGIN = 'login';

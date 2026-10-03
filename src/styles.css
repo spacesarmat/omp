@@ -37,6 +37,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .list-item.focused { background: var(--panel2); transform: scale(1.01); }
 .list-item .title { font-size: 30px; }
 .list-item .meta { font-size: 24px; color: var(--muted); margin-top: 6px; }
+/* unified search (Android TV): source badge and the progress line */
+.list-item .src-badge { display: inline-block; margin-right: 12px; padding: 2px 10px; border-radius: 8px; background: var(--panel2); color: var(--text); font-weight: 700; }
+.search-progress { font-size: 24px; color: var(--muted); margin: 0 0 16px; }
 
 .text-input { flex: 1; background: var(--panel); border-radius: 12px; padding: 4px; margin-bottom: 16px; }
 .text-input.focused { transform: none; }

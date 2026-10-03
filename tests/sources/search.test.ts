@@ -79,6 +79,7 @@ describe('searchAll', () => {
     expect(SOURCE_TIMEOUT_MS).toBe(15000);
     expect(done).toEqual([{ id: 'slow', err: 'Источник не отвечает' }]);
     expect(getHealth('slow')!.state).toBe('error');
+    expect(getHealth('slow')!.message).toBe('Источник не отвечает');
     await h.done;
     slow.resolve([res('slow', 'late', 1)]);
     await vi.advanceTimersByTimeAsync(0);
@@ -101,8 +102,10 @@ describe('searchAll', () => {
     await h.done;
     expect(done.map((d) => d.id).sort()).toEqual(['broken', 'locked', 'thrower']);
     expect(getHealth('broken')!.state).toBe('error');
+    expect(getHealth('broken')!.message).toBe('boom');
     expect(getHealth('thrower')!.state).toBe('error');
     expect(getHealth('locked')!.state).toBe('login');
+    expect(getHealth('locked')!.message).toBeUndefined();
     expect(h.failed().sort()).toEqual(['broken', 'locked', 'thrower']);
     expect(h.pending()).toEqual([]);
     expect(isLoginRequired(loginRequired())).toBe(true);
