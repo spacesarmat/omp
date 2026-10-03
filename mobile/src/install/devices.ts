@@ -119,10 +119,10 @@ export function deviceFor(ip: string, kind?: InstallDeviceKind): InstallDevice {
 export const SEARCH_MS = 4000;
 
 /**
- * Runs the three searches in parallel; `onUpdate` gets the merged list each time one of them finishes. Failures are
+ * Runs the three searches in parallel (the NSD ones tagged with `group`, so that `stopDiscovery(group)` stops only them); `onUpdate` gets the merged list each time one of them finishes. Failures are
  * logged without addresses or names and count as «nothing found» for that search. Resolves when all are done.
  */
-export function searchDevices(onUpdate: (list: InstallDevice[]) => void, timeoutMs = SEARCH_MS): Promise<InstallDevice[]> {
+export function searchDevices(onUpdate: (list: InstallDevice[]) => void, timeoutMs = SEARCH_MS, group?: string): Promise<InstallDevice[]> {
   const found: Found = {};
   const n = impl;
   const emit = () => {
@@ -141,7 +141,7 @@ export function searchDevices(onUpdate: (list: InstallDevice[]) => void, timeout
     );
   return Promise.all([
     run(() => n.discoverTvs(timeoutMs), 'LG', (v) => (found.lg = v)),
-    run(() => n.discoverCastTvs(timeoutMs), 'Android TV', (v) => (found.cast = v)),
-    run(() => n.discoverOmpTvs(timeoutMs), 'OMP на Android TV', (v) => (found.omp = v)),
+    run(() => n.discoverCastTvs(timeoutMs, group), 'Android TV', (v) => (found.cast = v)),
+    run(() => n.discoverOmpTvs(timeoutMs, group), 'OMP на Android TV', (v) => (found.omp = v)),
   ]).then(emit);
 }

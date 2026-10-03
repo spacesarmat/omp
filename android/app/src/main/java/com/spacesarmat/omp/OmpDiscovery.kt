@@ -20,7 +20,7 @@ data class FoundOmpTv(val ip: String, val port: Int, val name: String, val versi
  * NSD search for OMP on Android TV (`_omp._tcp`, registered by control/TvRemote). Blocking: call from a worker
  * thread. Services are resolved one at a time process-wide, across all service types and concurrent searches (older
  * Android allows a single resolve in flight); a failed resolve is retried once. Discovery stops at the deadline or on
- * [cancelAll], and whatever has been resolved by then is returned.
+ * [cancelGroup] of the search's group, and whatever has been resolved by then is returned.
  */
 object OmpDiscovery {
     const val SERVICE_TYPE = "_omp._tcp"
@@ -32,23 +32,34 @@ object OmpDiscovery {
     /** One resolve in flight for the whole process (fair: searches take turns). */
     private val resolveLock = Semaphore(1, true)
 
-    /** Bumped by [cancelAll]; a search started under an older value stops. */
-    private val generation = AtomicInteger(0)
+    /** Cancel generation per search group (one per screen); a search started under an older value stops. */
+    private val generations = java.util.concurrent.ConcurrentHashMap<String, AtomicInteger>()
 
-    /** Stops every running search (the screen that asked has gone). */
-    fun cancelAll() {
-        generation.incrementAndGet()
+    private fun generationOf(group: String): AtomicInteger = generations.getOrPut(group) { AtomicInteger(0) }
+
+    /** Stops only the searches started with [group] (the screen that asked has gone); others keep running. */
+    fun cancelGroup(group: String) {
+        generationOf(group).incrementAndGet()
+    }
+
+    /** A check that turns true once [group] is cancelled after this call; a null group is never cancelled. */
+    fun cancelCheck(group: String?): () -> Boolean {
+        if (group == null) return { false }
+        val counter = generationOf(group)
+        val start = counter.get()
+        return { counter.get() != start }
     }
 
     /** Retry a resolve once when NSD reported a failure (e.g. FAILURE_ALREADY_ACTIVE) and time is left. */
     fun shouldRetry(attempt: Int, failed: Boolean, leftMs: Long): Boolean = failed && attempt == 0 && leftMs > RETRY_PAUSE_MS
 
-    fun discover(context: Context, timeoutMs: Long): List<FoundOmpTv> =
-        search(context, SERVICE_TYPE, timeoutMs, { toFound(it) }, { it.ip })
+    fun discover(context: Context, timeoutMs: Long, group: String? = null): List<FoundOmpTv> =
+        search(context, SERVICE_TYPE, timeoutMs, { toFound(it) }, { it.ip }, group)
 
     /**
      * Generic NSD search: discovers [serviceType] until [timeoutMs], resolves services one at a time and maps each
-     * resolved service with [map] (null = skip); the first result per [key] wins. Blocking.
+     * resolved service with [map] (null = skip); the first result per [key] wins. [group] ties the search to a screen
+     * for [cancelGroup]. Blocking.
      */
     @Suppress("DEPRECATION")
     fun <T> search(
@@ -57,6 +68,7 @@ object OmpDiscovery {
         timeoutMs: Long,
         map: (NsdServiceInfo) -> T?,
         key: (T) -> String,
+        group: String? = null,
     ): List<T> {
         val app = context.applicationContext
         val nsd = app.getSystemService(Context.NSD_SERVICE) as? NsdManager ?: return emptyList()
@@ -80,8 +92,7 @@ object OmpDiscovery {
             override fun onServiceLost(info: NsdServiceInfo) {}
         }
         val deadline = System.currentTimeMillis() + timeoutMs
-        val gen = generation.get()
-        val cancelled = { generation.get() != gen }
+        val cancelled = cancelCheck(group)
         var started = false
         try {
             lock?.acquire()

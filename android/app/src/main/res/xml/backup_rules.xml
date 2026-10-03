@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 11 and older (allowBackup is off, these rules apply if it is ever turned on): no secrets in backups. -->
+<!-- Android 11 and older (allowBackup is off, these rules apply if it is ever turned on): no secrets or TV pairing tokens in backups. -->
 <full-backup-content>
     <exclude domain="file" path="adb/" />
     <exclude domain="sharedpref" path="omp-secrets.xml" />
+    <exclude domain="sharedpref" path="omp-remote.xml" />
 </full-backup-content>

@@ -14,8 +14,8 @@ object CastDiscovery {
     const val SERVICE_TYPE = "_googlecast._tcp"
     private const val MAX_TEXT = 80
 
-    fun discover(context: Context, timeoutMs: Long): List<FoundCastTv> =
-        OmpDiscovery.search(context, SERVICE_TYPE, timeoutMs, { info -> toFound(info) }, { it.ip })
+    fun discover(context: Context, timeoutMs: Long, group: String? = null): List<FoundCastTv> =
+        OmpDiscovery.search(context, SERVICE_TYPE, timeoutMs, { info -> toFound(info) }, { it.ip }, group)
 
     private fun toFound(info: NsdServiceInfo): FoundCastTv? {
         val ip = OmpDiscovery.ipv4Of(info) ?: return null

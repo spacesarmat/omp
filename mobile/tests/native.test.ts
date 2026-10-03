@@ -144,6 +144,10 @@ describe('native plugin wrapper on Android', () => {
       { ip: '192.168.1.41', port: 8095, name: 'Android TV', version: '' },
     ]);
     expect(fake.discoverOmpTvs).toHaveBeenCalledWith({ timeoutMs: 4000 });
+    await n.discoverOmpTvs(4000, 'g1');
+    expect(fake.discoverOmpTvs).toHaveBeenLastCalledWith({ timeoutMs: 4000, group: 'g1' });
+    await n.discoverCastTvs(4000, 'g1');
+    expect(fake.discoverCastTvs).toHaveBeenLastCalledWith({ timeoutMs: 4000, group: 'g1' });
     fake.discoverOmpTvs.mockResolvedValueOnce({});
     expect(await n.discoverOmpTvs(4000)).toEqual([]);
   });

@@ -49,11 +49,11 @@ export interface OmpNativeApi {
   available: boolean;
   discoverTvs(timeoutMs: number): Promise<FoundTv[]>;
   /** NSD search for Android TVs with OMP; stops after `timeoutMs`. */
-  discoverOmpTvs(timeoutMs: number): Promise<FoundOmpTv[]>;
+  discoverOmpTvs(timeoutMs: number, group?: string): Promise<FoundOmpTv[]>;
   /** Install assistant: NSD search for Google Cast devices; stops after `timeoutMs`. */
-  discoverCastTvs(timeoutMs: number): Promise<FoundCastTv[]>;
+  discoverCastTvs(timeoutMs: number, group?: string): Promise<FoundCastTv[]>;
   /** Stops running NSD searches early (the screen that started them has gone). */
-  stopDiscovery(): Promise<void>;
+  stopDiscovery(group?: string): Promise<void>;
   /** Install assistant: which install ports (9922, 9991, 5555, 8095) accept TCP on a home-network IP. */
   probePorts(ip: string, ports: number[], timeoutMs: number): Promise<number[]>;
   /** Phone model for the TV's list of paired phones; «Телефон» when unknown. */
@@ -112,10 +112,10 @@ export interface OmpNativeApi {
 
 interface OmpNativePlugin {
   discoverTvs(o: { timeoutMs: number }): Promise<{ tvs: FoundTv[] }>;
-  discoverOmpTvs(o: { timeoutMs: number }): Promise<{ tvs?: unknown }>;
-  discoverCastTvs(o: { timeoutMs: number }): Promise<{ tvs?: unknown }>;
+  discoverOmpTvs(o: { timeoutMs: number; group?: string }): Promise<{ tvs?: unknown }>;
+  discoverCastTvs(o: { timeoutMs: number; group?: string }): Promise<{ tvs?: unknown }>;
   probePorts(o: { ip: string; ports: number[]; timeoutMs: number }): Promise<{ open?: unknown }>;
-  stopDiscovery(): Promise<void>;
+  stopDiscovery(o: { group?: string }): Promise<void>;
   phoneName(): Promise<{ name?: string | null }>;
   tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
   tvSend(o: { json: string }): Promise<void>;
@@ -259,21 +259,21 @@ export const native: OmpNativeApi = {
     return r.tvs ?? [];
   },
 
-  async discoverOmpTvs(timeoutMs) {
+  async discoverOmpTvs(timeoutMs, group) {
     if (!plugin) return [];
-    const r = await plugin.discoverOmpTvs({ timeoutMs });
+    const r = await plugin.discoverOmpTvs(group ? { timeoutMs, group } : { timeoutMs });
     return ompTvs(r?.tvs);
   },
 
-  async discoverCastTvs(timeoutMs) {
+  async discoverCastTvs(timeoutMs, group) {
     if (!plugin) return [];
-    const r = await plugin.discoverCastTvs({ timeoutMs });
+    const r = await plugin.discoverCastTvs(group ? { timeoutMs, group } : { timeoutMs });
     return castTvs(r?.tvs);
   },
 
-  async stopDiscovery() {
-    if (!plugin) return;
-    await plugin.stopDiscovery().catch(() => {});
+  async stopDiscovery(group) {
+    if (!plugin || !group) return;
+    await plugin.stopDiscovery({ group }).catch(() => {});
   },
 
   async probePorts(ip, ports, timeoutMs) {

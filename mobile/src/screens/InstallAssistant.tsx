@@ -62,18 +62,20 @@ function Find() {
   const [kind, setKind] = useState<InstallDeviceKind>('lg');
   const [formError, setFormError] = useState('');
   const [round, setRound] = useState(0);
+  // this screen's NSD searches; leaving it stops only them, not a search of another screen
+  const group = useRef('install-' + Math.random().toString(36).slice(2, 10)).current;
 
   useEffect(() => {
     let alive = true;
     setSearching(true);
-    void searchDevices((l) => alive && setList(l)).then(() => alive && setSearching(false));
+    void searchDevices((l) => alive && setList(l), undefined, group).then(() => alive && setSearching(false));
     return () => {
       alive = false;
     };
   }, [round]);
 
   // leaving the list: the native NSD searches stop too
-  useEffect(() => () => void installNative().stopDiscovery().catch(() => {}), []);
+  useEffect(() => () => void installNative().stopDiscovery(group).catch(() => {}), []);
 
   useEffect(() => {
     let alive = true;

@@ -7,6 +7,7 @@ import { log } from '../../../src/lib/log';
 import { RELEASES_URL } from '../../../src/lib/updateInfo';
 import { abiNote, isArm64, FAQ_ATV_ADB, FAQ_LG_DEVMODE, type InstallPlan, type InstallTarget } from '../../../src/lib/installPlan';
 import { monitorNative } from '../monitor/native';
+import { tvs } from '../tv/tvStore';
 import {
   createProgress,
   errorText,
@@ -196,13 +197,15 @@ function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResul
   const [remindNote, setRemindNote] = useState('');
   const installedAt = useRef(Date.now()).current;
   const touched = useRef(false);
+  // the saved TV's MAC is stable across DHCP changes; without one the reminder is keyed by the address
+  const stableId = tvs.value.find((t) => t.ip === p.tv)?.mac;
 
   // a reminder for this TV may already be scheduled (an earlier install): the box shows it
   useEffect(() => {
     if (!p.lg) return;
     let alive = true;
     void installerNative()
-      .reminderState(p.tv)
+      .reminderState(p.tv, stableId)
       .then((at) => {
         if (!alive || touched.current || at === null) return;
         setRemind(true);
@@ -219,7 +222,7 @@ function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResul
     setRemindNote('');
     try {
       if (!on) {
-        await installerNative().reminder(p.tv, null);
+        await installerNative().reminder(p.tv, null, undefined, stableId);
         return;
       }
       const perm = await monitorNative.requestNotifyPermission();
@@ -228,7 +231,7 @@ function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResul
         setRemindNote('Уведомления для OMP выключены — напоминание не придёт. Разрешите их в настройках телефона.');
         return;
       }
-      await installerNative().reminder(p.tv, reminderAt(installedAt), p.tvName);
+      await installerNative().reminder(p.tv, reminderAt(installedAt), p.tvName, stableId);
       setRemindNote('Напомню через 38 дней. Чтобы срок совпал, продлите режим сейчас в Developer Mode (кнопка Extend).');
     } catch {
       setRemind(false);

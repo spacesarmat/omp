@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12+: secrets never go to cloud backup or device-to-device transfer. Keystore keys stay on the phone
-     anyway, so these files could not be decrypted elsewhere. no_backup (adb identity) is excluded by the system. -->
+<!-- Android 12+: tracker secrets, the adb identity and the Android TV pairing tokens (omp-remote) never go to cloud
+     backup or device-to-device transfer. Keystore keys stay on the phone anyway, so the secret files could not be
+     decrypted elsewhere. no_backup (adb identity) is excluded by the system. The WebView localStorage still transfers:
+     it holds the same data as the user's own backup file (servers, saved TVs), but no tracker passwords. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="adb/" />
         <exclude domain="sharedpref" path="omp-secrets.xml" />
+        <exclude domain="sharedpref" path="omp-remote.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="adb/" />
         <exclude domain="sharedpref" path="omp-secrets.xml" />
+        <exclude domain="sharedpref" path="omp-remote.xml" />
     </device-transfer>
 </data-extraction-rules>

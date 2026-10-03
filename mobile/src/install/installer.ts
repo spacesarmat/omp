@@ -46,8 +46,8 @@ export class InstallError extends Error {
 export interface InstallerPlugin {
   installStart(o: { method: string; ip: string; passphrase?: string; withHbc?: boolean }): Promise<Record<string, unknown>>;
   installCancel(): Promise<unknown>;
-  devModeReminder(o: { tv: string; name?: string; at: number | null }): Promise<unknown>;
-  devModeReminderState(o: { tv: string }): Promise<{ at?: unknown }>;
+  devModeReminder(o: { tv: string; id?: string; name?: string; at: number | null }): Promise<unknown>;
+  devModeReminderState(o: { tv: string; id?: string }): Promise<{ at?: unknown }>;
   addListener(event: 'installProgress', cb: (e: Record<string, unknown>) => void): Promise<PluginListenerHandle>;
 }
 
@@ -55,10 +55,13 @@ export interface InstallerNative {
   available: boolean;
   start(req: InstallRequest, onEvent: (e: InstallEvent) => void): Promise<InstallResult>;
   cancel(): Promise<void>;
-  /** Schedules the Developer Mode reminder for one TV (its IP) at `at` (unix ms); null cancels it. */
-  reminder(tv: string, at: number | null, name?: string): Promise<void>;
+  /**
+   * Schedules the Developer Mode reminder for one TV (its IP, plus a stable `id` such as its MAC when known) at `at`
+   * (unix ms); null cancels it. An older reminder of the same TV under either key is replaced.
+   */
+  reminder(tv: string, at: number | null, name?: string, id?: string): Promise<void>;
   /** When the reminder for that TV is due (unix ms); null when none is scheduled or unknown. */
-  reminderState(tv: string): Promise<number | null>;
+  reminderState(tv: string, id?: string): Promise<number | null>;
 }
 
 const PHASES: InstallPhase[] = ['download', 'verify', 'connect', 'upload', 'install'];
@@ -120,15 +123,16 @@ export function createInstallerNative(plugin: InstallerPlugin | null): Installer
       cancelRequested = true;
       return plugin ? plugin.installCancel().then(() => undefined, () => undefined) : Promise.resolve();
     },
-    reminder(tv, at, name) {
+    reminder(tv, at, name, id) {
       if (!plugin) return Promise.reject(new Error(ONLY_ANDROID));
-      const o: { tv: string; name?: string; at: number | null } = { tv, at };
+      const o: { tv: string; id?: string; name?: string; at: number | null } = { tv, at };
       if (name) o.name = name;
+      if (id) o.id = id;
       return plugin.devModeReminder(o).then(() => undefined);
     },
-    reminderState(tv) {
+    reminderState(tv, id) {
       if (!plugin) return Promise.resolve(null);
-      return plugin.devModeReminderState({ tv }).then(
+      return plugin.devModeReminderState(id ? { tv, id } : { tv }).then(
         (r) => (typeof r?.at === 'number' && isFinite(r.at) && r.at > 0 ? r.at : null),
         () => null,
       );

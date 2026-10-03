@@ -167,6 +167,14 @@ class InstallRunnerTest {
         assertTrue(a != DevModeReminder.workName("192.168.1.6"))
         assertTrue(!a.contains("192"))
         assertTrue(DevModeReminder.notificationId("192.168.1.5") in 7100 until 8100)
+        // a stable id wins; the address key is still checked so an older reminder of the same TV is replaced
+        val byId = DevModeReminder.workNames("192.168.1.5", "aa:bb:cc:dd:ee:ff")
+        assertEquals(listOf(DevModeReminder.workName("id:aa:bb:cc:dd:ee:ff"), DevModeReminder.workName("192.168.1.5")), byId)
+        // same TV after a DHCP change: same preferred key
+        assertEquals(byId.first(), DevModeReminder.workNames("192.168.1.9", " aa:bb:cc:dd:ee:ff ").first())
+        assertEquals(listOf(DevModeReminder.workName("192.168.1.5")), DevModeReminder.workNames("192.168.1.5", null))
+        assertEquals(listOf(DevModeReminder.workName("192.168.1.5")), DevModeReminder.workNames("192.168.1.5", "  "))
+        assertEquals(DevModeReminder.notificationId("id:x"), DevModeReminder.notificationId("192.168.1.5", "x"))
         assertEquals("LG «Гостиная»", DevModeReminder.cleanName(" LG «Гостиная»\u0007 "))
         assertEquals(null, DevModeReminder.cleanName("  "))
     }

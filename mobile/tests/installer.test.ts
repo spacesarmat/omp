@@ -86,7 +86,11 @@ describe('installer native wrapper', () => {
     await n.reminder('192.168.1.5', null);
     expect(f.calls).toEqual(['cancel']);
     expect(f.reminders).toEqual([{ tv: '192.168.1.5', at: 123, name: 'LG' }, { tv: '192.168.1.5', at: null }]);
+    // a stable id travels along (the plugin keys the reminder by it); without one it is absent
+    await n.reminder('192.168.1.5', 456, 'LG', 'aa:bb:cc:dd:ee:ff');
+    expect(f.reminders[2]).toEqual({ tv: '192.168.1.5', at: 456, name: 'LG', id: 'aa:bb:cc:dd:ee:ff' });
     expect(await n.reminderState('192.168.1.5')).toBe(1234);
+    expect(await n.reminderState('192.168.1.5', 'aa:bb:cc:dd:ee:ff')).toBe(1234);
     expect(await n.reminderState('192.168.1.6')).toBeNull();
     const none = createInstallerNative(null);
     expect(none.available).toBe(false);

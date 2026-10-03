@@ -197,6 +197,25 @@ describe('Install assistant — device list', () => {
     expect(currentRoute.value).toEqual({ name: 'install', ip: '192.168.1.66', kind: 'atv' });
   });
 
+  it('leaving the list stops only the searches of this screen (a group id)', async () => {
+    const groups: Array<string | undefined> = [];
+    const stopped: Array<string | undefined> = [];
+    setInstallNative({
+      ...fakeNative,
+      discoverCastTvs: async (_t, g) => (groups.push(g), []),
+      discoverOmpTvs: async (_t, g) => (groups.push(g), []),
+      stopDiscovery: async (g) => void stopped.push(g),
+    });
+    const el = mount(<InstallAssistant />);
+    await flush();
+    expect(groups.length).toBe(2);
+    expect(groups[0]).toBeTruthy();
+    expect(groups[1]).toBe(groups[0]);
+    act(() => render(null, document.getElementById('app')!));
+    expect(stopped).toEqual([groups[0]]);
+    void el;
+  });
+
   it('nothing found: says so and searches again', async () => {
     let calls = 0;
     setInstallNative({ ...fakeNative, discoverTvs: async () => (calls++, []), discoverCastTvs: async () => [], discoverOmpTvs: async () => [] });
@@ -483,7 +502,8 @@ function fakeInstaller() {
   const f = {
     reqs: [] as InstallRequest[],
     cancels: 0,
-    reminders: [] as Array<{ tv: string; at: number | null; name?: string }>,
+    reminders: [] as Array<{ tv: string; at: number | null; name?: string; id?: string }>,
+    stateIds: [] as Array<string | undefined>,
     scheduled: null as number | null,
     emit: (_e: InstallEvent) => {},
     resolve: (_r: InstallResult) => {},
@@ -502,10 +522,14 @@ function fakeInstaller() {
     async cancel() {
       f.cancels++;
     },
-    async reminder(tv, at, name) {
-      f.reminders.push(name === undefined ? { tv, at } : { tv, at, name });
+    async reminder(tv, at, name, id) {
+      const r: { tv: string; at: number | null; name?: string; id?: string } = { tv, at };
+      if (name !== undefined) r.name = name;
+      if (id !== undefined) r.id = id;
+      f.reminders.push(r);
     },
-    async reminderState(tv) {
+    async reminderState(tv, id) {
+      f.stateIds.push(id);
       return tv === LG_IP ? f.scheduled : null;
     },
   };
@@ -587,6 +611,26 @@ describe('Install assistant — install from the phone', () => {
     expect(inst.reminders.length).toBe(2);
     expect(box.checked).toBe(false);
     expect(el.textContent).toContain('напоминание не придёт');
+  });
+
+  it('LG: a saved TV with a MAC keys the reminder by it (state lookup, schedule and cancel)', async () => {
+    const inst = fakeInstaller();
+    vi.spyOn(monitorNative, 'requestNotifyPermission').mockResolvedValue('granted');
+    saveTv({ ip: LG_IP, name: 'LG «Гостиная»', clientKey: 'K', mac: 'aa:bb:cc:dd:ee:ff' });
+    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
+    await flush();
+    type(el.querySelector<HTMLInputElement>('#install-pass')!, 'A1B2C3');
+    click(button(el, 'Установить OMP и Homebrew Channel'));
+    await act(async () => inst.resolve({ version: '0.14.0' }));
+    await flush();
+    expect(inst.stateIds).toEqual(['aa:bb:cc:dd:ee:ff']);
+    const box = el.querySelector<HTMLInputElement>('[data-reminder]')!;
+    await act(async () => check(box, true));
+    await flush();
+    await act(async () => check(box, false));
+    await flush();
+    expect(inst.reminders.map((r) => r.id)).toEqual(['aa:bb:cc:dd:ee:ff', 'aa:bb:cc:dd:ee:ff']);
+    expect(inst.reminders[1].at).toBeNull();
   });
 
   it('LG: a reminder already scheduled for this TV shows as checked; the Key Server hint is shown', async () => {

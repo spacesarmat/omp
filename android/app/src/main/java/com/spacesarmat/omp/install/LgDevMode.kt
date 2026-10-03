@@ -27,7 +27,8 @@ import org.json.JSONObject
  * private key, encrypted with the passphrase shown in the Developer Mode app; SSH to port 9922 as `prisoner`; the ipk
  * goes to /media/developer/temp by `cat >`; `luna-send-pub` asks com.webos.appInstallService/dev/install and its
  * subscription says «installed» or «failed»; the temp file is removed. The key and passphrase stay in memory for
- * the session only and are wiped afterwards.
+ * the session only and the native copies are wiped afterwards (the JS string that brought the passphrase over the
+ * Capacitor bridge cannot be wiped).
  */
 object LgDevModeConst {
     const val KEY_SERVER_PORT = 9991

@@ -33,6 +33,20 @@ class OmpDiscoveryTest {
     }
 
     @Test
+    fun cancelGroupStopsOnlyThatGroup() {
+        val a = OmpDiscovery.cancelCheck("screen-a")
+        val b = OmpDiscovery.cancelCheck("screen-b")
+        val none = OmpDiscovery.cancelCheck(null)
+        org.junit.Assert.assertFalse(a())
+        OmpDiscovery.cancelGroup("screen-a")
+        org.junit.Assert.assertTrue(a())
+        org.junit.Assert.assertFalse(b())
+        org.junit.Assert.assertFalse(none())
+        // a search started after the cancel is not affected
+        org.junit.Assert.assertFalse(OmpDiscovery.cancelCheck("screen-a")())
+    }
+
+    @Test
     fun retriesAFailedResolveOnceWhileTimeIsLeft() {
         org.junit.Assert.assertTrue(OmpDiscovery.shouldRetry(0, true, 2000))
         org.junit.Assert.assertFalse(OmpDiscovery.shouldRetry(1, true, 2000))

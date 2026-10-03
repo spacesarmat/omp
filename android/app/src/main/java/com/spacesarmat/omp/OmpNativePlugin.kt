@@ -162,10 +162,11 @@ class OmpNativePlugin : Plugin() {
     fun discoverOmpTvs(call: PluginCall) {
         val once = Once(call)
         val timeout = (call.getInt("timeoutMs") ?: 3000).coerceIn(500, 15000).toLong()
+        val group = searchGroup(call)
         io.execute {
             try {
                 val arr = JSArray()
-                for (t in OmpDiscovery.discover(context, timeout)) {
+                for (t in OmpDiscovery.discover(context, timeout, group)) {
                     arr.put(
                         JSObject().put("ip", t.ip).put("port", t.port).put("name", t.name).put("version", t.version),
                     )
@@ -182,10 +183,11 @@ class OmpNativePlugin : Plugin() {
     fun discoverCastTvs(call: PluginCall) {
         val once = Once(call)
         val timeout = (call.getInt("timeoutMs") ?: 3000).coerceIn(500, 15000).toLong()
+        val group = searchGroup(call)
         io.execute {
             try {
                 val arr = JSArray()
-                for (t in CastDiscovery.discover(context, timeout)) {
+                for (t in CastDiscovery.discover(context, timeout, group)) {
                     val o = JSObject().put("ip", t.ip).put("name", t.name)
                     if (t.model != null) o.put("model", t.model)
                     arr.put(o)
@@ -197,10 +199,13 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
-    /** Stops every running NSD search (the screen that started it has gone); they return what they found. */
+    /** Optional search group of a discovery call (one per screen); at most 64 characters. */
+    private fun searchGroup(call: PluginCall): String? = call.getString("group")?.trim()?.take(64)?.takeIf { it.isNotEmpty() }
+
+    /** { group }: stops only the NSD searches started with that group (the screen has gone); they return what they found. */
     @PluginMethod
     fun stopDiscovery(call: PluginCall) {
-        OmpDiscovery.cancelAll()
+        searchGroup(call)?.let { OmpDiscovery.cancelGroup(it) }
         call.resolve()
     }
 
@@ -308,8 +313,9 @@ class OmpNativePlugin : Plugin() {
     }
 
     /**
-     * { tv, name?, at: unix ms } schedules the Developer Mode reminder for that TV (tv = its address, stored only as
-     * a hash); { tv, at: null } cancels it.
+     * { tv, id?, name?, at: unix ms } schedules the Developer Mode reminder for that TV (tv = its address, id = a stable
+     * TV id when known; both stored only as hashes, an older reminder of the same TV under either key is replaced);
+     * { tv, id?, at: null } cancels it.
      */
     @PluginMethod
     fun devModeReminder(call: PluginCall) {
@@ -318,16 +324,18 @@ class OmpNativePlugin : Plugin() {
         if (tv.isEmpty()) {
             call.reject("Не указан телевизор")
         } else if (at == null) {
-            DevModeReminder.cancel(context, tv)
+            DevModeReminder.cancel(context, tv, stableId(call))
             call.resolve()
-        } else if (DevModeReminder.schedule(context, tv, call.getString("name"), at)) {
+        } else if (DevModeReminder.schedule(context, tv, call.getString("name"), at, stableId = stableId(call))) {
             call.resolve()
         } else {
             call.reject("Некорректное время напоминания")
         }
     }
 
-    /** { tv } → { at? }: when the reminder for that TV is due; absent when none is scheduled. */
+    private fun stableId(call: PluginCall): String? = call.getString("id")?.trim()?.take(128)?.takeIf { it.isNotEmpty() }
+
+    /** { tv, id? } → { at? }: when the reminder for that TV is due; absent when none is scheduled. */
     @PluginMethod
     fun devModeReminderState(call: PluginCall) {
         val once = Once(call)
@@ -336,10 +344,11 @@ class OmpNativePlugin : Plugin() {
             once.reject("Не указан телевизор")
             return
         }
+        val id = stableId(call)
         io.execute {
             val o = JSObject()
             try {
-                DevModeReminder.scheduledAt(context, tv)?.let { o.put("at", it) }
+                DevModeReminder.scheduledAt(context, tv, id)?.let { o.put("at", it) }
             } catch (_: Exception) {
             }
             once.resolve(o)

@@ -23,7 +23,9 @@ import java.util.concurrent.TimeUnit
 /**
  * «Напомнить продлить режим разработчика»: one local notification per LG TV at the time the page chose (3 days
  * before the 1000 hours of Developer Mode run out), through WorkManager (survives reboots). The work is keyed by a
- * hash of the TV address, so TVs do not replace each other's reminders. Nothing leaves the phone.
+ * hash of a stable TV id when the page knows one (else of the TV address), so TVs do not replace each other's
+ * reminders; scheduling also drops an older reminder of the same TV under the other key form (a reinstall after a
+ * DHCP change leaves no duplicate). Nothing leaves the phone.
  */
 object DevModeReminder {
     private const val WORK_PREFIX = "devmode-reminder-"
@@ -42,35 +44,60 @@ object DevModeReminder {
 
     fun workName(tv: String): String = WORK_PREFIX + tvId(tv)
 
+    /** Work names of one TV, preferred first: by stable id (when known), then by address. */
+    fun workNames(tv: String, stableId: String?): List<String> {
+        val id = stableId?.trim().orEmpty()
+        return if (id.isEmpty()) listOf(workName(tv)) else listOf(workName("id:" + id), workName(tv))
+    }
+
     /** Notification id per TV (one notification each). */
     fun notificationId(tv: String): Int = NOTIFICATION_BASE + (tvId(tv).take(4).toInt(16) % 1000)
+
+    /** Notification id of the preferred key of [tv] / [stableId]. */
+    fun notificationId(tv: String, stableId: String?): Int {
+        val id = stableId?.trim().orEmpty()
+        return notificationId(if (id.isEmpty()) tv else "id:" + id)
+    }
 
     /** At most 60 printable characters of the TV name for the notification title. */
     fun cleanName(name: String?): String? =
         name?.filter { !it.isISOControl() }?.trim()?.take(60)?.takeIf { it.isNotEmpty() }
 
-    fun schedule(ctx: Context, tv: String, name: String?, at: Long, now: Long = System.currentTimeMillis()): Boolean {
+    fun schedule(
+        ctx: Context,
+        tv: String,
+        name: String?,
+        at: Long,
+        now: Long = System.currentTimeMillis(),
+        stableId: String? = null,
+    ): Boolean {
         if (!validAt(at, now)) return false
-        val data = Data.Builder().putInt(KEY_ID, notificationId(tv))
+        val data = Data.Builder().putInt(KEY_ID, notificationId(tv, stableId))
         cleanName(name)?.let { data.putString(KEY_NAME, it) }
         val req = OneTimeWorkRequestBuilder<DevModeReminderWorker>()
             .setInitialDelay(at - now, TimeUnit.MILLISECONDS)
             .setInputData(data.build())
             .build()
-        WorkManager.getInstance(ctx).enqueueUniqueWork(workName(tv), ExistingWorkPolicy.REPLACE, req)
+        val names = workNames(tv, stableId)
+        val wm = WorkManager.getInstance(ctx)
+        for (n in names) wm.cancelUniqueWork(n)
+        wm.enqueueUniqueWork(names.first(), ExistingWorkPolicy.REPLACE, req)
         return true
     }
 
-    fun cancel(ctx: Context, tv: String) {
-        WorkManager.getInstance(ctx).cancelUniqueWork(workName(tv))
+    fun cancel(ctx: Context, tv: String, stableId: String? = null) {
+        for (n in workNames(tv, stableId)) WorkManager.getInstance(ctx).cancelUniqueWork(n)
     }
 
     /** When the reminder for [tv] is due (unix ms), or null when none is scheduled. Blocking. */
-    fun scheduledAt(ctx: Context, tv: String): Long? {
-        val infos = WorkManager.getInstance(ctx).getWorkInfosForUniqueWork(workName(tv)).get(5, TimeUnit.SECONDS)
-        val pending = infos.firstOrNull { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED } ?: return null
-        val next = pending.nextScheduleTimeMillis
-        return if (next > 0 && next != Long.MAX_VALUE) next else null
+    fun scheduledAt(ctx: Context, tv: String, stableId: String? = null): Long? {
+        for (n in workNames(tv, stableId)) {
+            val infos = WorkManager.getInstance(ctx).getWorkInfosForUniqueWork(n).get(5, TimeUnit.SECONDS)
+            val pending = infos.firstOrNull { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED } ?: continue
+            val next = pending.nextScheduleTimeMillis
+            if (next > 0 && next != Long.MAX_VALUE) return next
+        }
+        return null
     }
 
     fun show(ctx: Context, id: Int, name: String?) {

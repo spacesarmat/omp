@@ -29,7 +29,7 @@ data class InstallOutcome(
 
 /**
  * One install from start to end: the right order of steps per method, downloads in [cacheDir] removed whatever
- * happens, key and passphrase wiped. Only GitHub ([Releases]) and the TV are contacted.
+ * happens, native copies of key and passphrase wiped. Only GitHub ([Releases]) and the TV are contacted.
  *
  * LAN trust model (the home network is trusted, like ares-cli / webOS Dev Manager do):
  * - LG Key Server is plain HTTP by LG's design: anyone on the network who fetches the encrypted key while the Key
