@@ -22,6 +22,9 @@ class ControlRequest(
     val contentType: String? = null,
 )
 
+/** The request line and headers, before the body is read ([ControlServer] precheck). */
+class ControlHead(val method: String, val path: String, val token: String?, val contentType: String?, val length: Long)
+
 /** The answer: HTTP status and a JSON body. */
 class ControlResponse(val status: Int, val json: String)
 
@@ -30,7 +33,12 @@ class ControlResponse(val status: Int, val json: String)
  * bound to all interfaces on [port]. One request per connection, body ≤ [MAX_BODY], read timeout, one accept
  * thread plus at most [WORKERS] connection threads (daemons). Routing and auth live in [handler].
  */
-class ControlServer(private val port: Int, private val handler: (ControlRequest) -> ControlResponse) {
+class ControlServer(
+    private val port: Int,
+    /** Answers from the headers alone (auth, size of a route), so such a body is never read; null = go on. */
+    private val precheck: (ControlHead) -> ControlResponse? = { null },
+    private val handler: (ControlRequest) -> ControlResponse,
+) {
     private class Running(val socket: ServerSocket, val workers: ThreadPoolExecutor)
 
     private var running: Running? = null
@@ -58,6 +66,10 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
             start()
         }
     }
+
+    /** The bound port (the one asked for, or the system's choice for 0); -1 when not running. */
+    val localPort: Int
+        @Synchronized get() = running?.socket?.localPort ?: -1
 
     @Synchronized
     fun stop() {
@@ -124,21 +136,43 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
             when {
                 method == "OPTIONS" -> respond(out, 204, null, origin)
                 length < 0 -> respond(out, 400, error("bad_request"), origin)
-                length > MAX_BODY -> respond(out, 413, error("too_large"), origin)
                 else -> {
-                    val body = readBody(input, length.toInt()) ?: return
-                    val res = try {
-                        handler(ControlRequest(method, path, token, String(body, Charsets.UTF_8), contentType))
+                    val early = try {
+                        precheck(ControlHead(method, path, token, contentType, length))
                     } catch (_: Exception) {
                         ControlResponse(500, error("internal"))
                     }
-                    respond(out, res.status, res.json, origin)
+                    if (early != null) respond(out, early.status, early.json, origin) else readAndHandle(out, input, method, path, token, contentType, length, origin)
                 }
             }
         } catch (_: Exception) {
             // one bad connection never affects the server
         } finally {
             closeQuietly(client)
+        }
+    }
+
+    private fun readAndHandle(
+        out: OutputStream,
+        input: InputStream,
+        method: String,
+        path: String,
+        token: String?,
+        contentType: String?,
+        length: Long,
+        origin: String?,
+    ) {
+        when {
+            length > MAX_BODY -> respond(out, 413, error("too_large"), origin)
+            else -> {
+                val body = readBody(input, length.toInt()) ?: return
+                val res = try {
+                    handler(ControlRequest(method, path, token, String(body, Charsets.UTF_8), contentType))
+                } catch (_: Exception) {
+                    ControlResponse(500, error("internal"))
+                }
+                respond(out, res.status, res.json, origin)
+            }
         }
     }
 

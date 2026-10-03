@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { mockFetch, type MockResponse } from '../../tests/helpers/fetchMock';
-import { Sources, sentText, SEND_TEXT } from '../src/screens/Sources';
+import { Sources, sentText, SEND_TEXT, LOGIN_NOT_SENT, transferPayload } from '../src/screens/Sources';
+import { currentRoute } from '../src/nav';
 import { resetTo } from '../src/nav';
 import { cancelWarmUp, disconnectTv, sendSourcesToTv, setTransport, tvState, SOURCES_ATV_ONLY, SOURCES_BUSY, SOURCES_NO_ANSWER, SOURCES_SECRETS, TV_FORGOT, type TvTransport } from '../src/tv/tvClient';
 import { reloadTvs, saveTv, setActiveTv, type SavedTv } from '../src/tv/tvStore';
@@ -19,7 +20,7 @@ const LG: SavedTv = { ip: '192.168.1.50', name: 'LG', clientKey: 'k' };
 const BASE = 'http://192.168.1.40:8095';
 // test-only values, not a real account
 const PASSWORD = 'pa55-test-only';
-const SECRETS: { [k: string]: string } = { 'rutracker.username': 'test-user', 'rutracker.password': PASSWORD };
+let SECRETS: { [k: string]: string } = { 'rutracker.username': 'test-user', 'rutracker.password': PASSWORD };
 
 interface Call {
   url: string;
@@ -98,6 +99,7 @@ beforeEach(() => {
   reloadSourcePrefs();
   resetHealth();
   clearLog();
+  SECRETS = { 'rutracker.username': 'test-user', 'rutracker.password': PASSWORD };
   calls = [];
   answer = (c) => ({ body: JSON.stringify(c.body.rutracker ? { ok: true, rutracker: 'ok' } : { ok: true }) });
   toast.value = '';
@@ -111,6 +113,7 @@ afterEach(async () => {
   if (el) act(() => render(null, el));
   unregisterSource('nnmclub');
   unregisterSource('rutracker');
+  vi.useRealTimers();
   cancelWarmUp();
   await disconnectTv();
   setTransport(native);
@@ -228,5 +231,48 @@ describe('«Передать на телевизор» on the phone', () => {
     act(() => btn('Передать на телевизор')!.click());
     await flush();
     expect(el.querySelector('[role="alert"]')!.textContent).toBe(SOURCES_NO_ANSWER);
+  });
+
+  it('after a 401 the card stays with the reason and «Подключить заново»', async () => {
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    answer = () => ({ status: 401, body: '{"error":"unauthorized"}' });
+    await mount();
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(card()).not.toBeNull();
+    expect(el.querySelector('[role="alert"]')!.textContent).toBe(TV_FORGOT);
+    expect(btn('Передать на телевизор')).toBeUndefined();
+    act(() => btn('Подключить заново')!.click());
+    expect(currentRoute.value.name).toBe('tv');
+  });
+
+  it('a login the TV would refuse is left out and the phone says so', async () => {
+    registerSource(rutrackerFake(true));
+    SECRETS = { 'rutracker.username': 'ab', 'rutracker.password': PASSWORD };
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    await mount();
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    const post = sourcePosts()[0];
+    expect(post.body.rutracker).toBeUndefined();
+    expect(post.body.sources.nnmclub).toBe(true);
+    expect(toast.value).toBe('Источники переданы. ' + LOGIN_NOT_SENT);
+    expect(() => transferPayload([], null)).toThrow('Не удалось подготовить источники к передаче');
+    expect(transferPayload([{ id: 'rutor', name: 'rutor', kind: 'builtin', search: () => Promise.resolve([]) }], { username: 'u', password: 'p'.repeat(201) }).loginDropped).toBe(true);
+  });
+
+  it('a slow TV times out without ending the remote session', async () => {
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    await mount();
+    answer = () => new Promise<MockResponse>(() => {});
+    vi.useFakeTimers();
+    const p = sendSourcesToTv({ v: 1, sources: { rutor: true } });
+    const done = expect(p).rejects.toThrow(SOURCES_NO_ANSWER);
+    await vi.advanceTimersByTimeAsync(45000);
+    await done;
+    expect(tvState.value).toBe('connected');
   });
 });

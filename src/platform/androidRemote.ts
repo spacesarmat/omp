@@ -10,7 +10,7 @@ import { activeServer } from '../store/servers';
 import { resetTo } from '../ui/nav';
 import { log } from '../lib/log';
 import { allSources } from '../sources/registry';
-import { applyRemoteSources, parseRemoteSources } from '../sources/transfer';
+import { applyRemoteSources, notifyTransferApplied, parseRemoteSources, TRANSFER_TIMEOUT_MS } from '../sources/transfer';
 import { tvSourceContext } from '../sources/tvContext';
 import type { Source, SourceContext } from '../sources/types';
 
@@ -130,8 +130,15 @@ export function applyRemoteAttach(d: unknown): void {
   if (/^http:\/\//i.test(r) && r.length <= 200) attachPhone(r);
 }
 
+let lastSourcesId = '';
+
+/** Forgets the last applied transfer id (tests). */
+export function resetRemoteSources(): void {
+  lastSourcesId = '';
+}
+
 /**
- * remoteSources { id, sources, rutracker, phone }: «Передать на телевизор» from the phone. The switches are applied,
+ * remoteSources { id, sources, rutracker, phone, at }: «Передать на телевизор» from the phone. The switches are applied,
  * the saved login is tried, and the native side gets remoteSourcesDone { id, rutracker? } (it answers the phone).
  */
 export function applyRemoteSourcesEvent(
@@ -139,8 +146,14 @@ export function applyRemoteSourcesEvent(
   plugin: Pick<OmpNativeTvPlugin, 'remoteSourcesDone'>,
   known: () => Source[] = allSources,
   ctx: () => SourceContext = tvSourceContext,
+  now: () => number = Date.now,
 ): Promise<void> {
   const r = parseRemoteSources(d);
+  if (r && (r.id === lastSourcesId || (r.at > 0 && now() - r.at > TRANSFER_TIMEOUT_MS))) {
+    // the same transfer twice (live event and the pending one) or one the phone has already given up on
+    return Promise.resolve();
+  }
+  if (r) lastSourcesId = r.id;
   if (!r) {
     log('warn', 'tv', 'Передача источников с телефона: неверные данные');
     const id = d && typeof d === 'object' ? (d as { id?: unknown }).id : undefined;
@@ -152,7 +165,8 @@ export function applyRemoteSourcesEvent(
     const o: { id: string; rutracker?: string } = { id: r.id };
     if (rutracker) o.rutracker = rutracker;
     return plugin.remoteSourcesDone(o).then(
-      () => undefined,
+      // a verified login is promoted by the native side before this resolves: the screen reads it now
+      () => notifyTransferApplied(),
       () => {
         log('warn', 'tv', 'Передача источников с телефона: не удалось ответить');
       },
@@ -175,7 +189,7 @@ export function installAndroidRemote(plugin: OmpNativeTvPlugin | null = nativePl
   if (!plugin) return () => undefined;
   let removed = false;
   const handles: ListenerHandle[] = [];
-  const on = (event: string, cb: (d: unknown) => void) => {
+  const on = (event: string, cb: (d: unknown) => void): Promise<unknown> =>
     plugin.addListener(event, cb).then(
       (h) => {
         if (removed) {
@@ -184,12 +198,20 @@ export function installAndroidRemote(plugin: OmpNativeTvPlugin | null = nativePl
       },
       () => undefined,
     );
-  };
   on('remoteLaunch', (d) => { if (isObj(d) && d.params !== undefined) runLaunchParams(d.params); });
   on('remoteAttach', applyRemoteAttach);
   on('remoteKey', applyRemoteKey);
   on('remoteText', applyRemoteText);
-  on('remoteSources', (d) => { void applyRemoteSourcesEvent(d, plugin); });
+  // remoteSources is not retained natively: once listening, ask for the one transfer that may be waiting
+  on('remoteSources', (d) => { void applyRemoteSourcesEvent(d, plugin); }).then(() => {
+    if (removed || typeof plugin.remoteSourcesPending !== 'function') return undefined;
+    return plugin.remoteSourcesPending().then(
+      (r) => {
+        if (!removed && r && r.event) void applyRemoteSourcesEvent(r.event, plugin);
+      },
+      () => undefined,
+    );
+  });
   return () => {
     removed = true;
     handles.splice(0).forEach((h) => {

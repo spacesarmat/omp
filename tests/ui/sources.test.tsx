@@ -11,6 +11,7 @@ import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { getHealth, isSourceOn, reloadSourcePrefs, resetHealth, setHealth } from '../../src/sources/store';
 import { applyRemoteSources } from '../../src/sources/transfer';
 import { currentRoute, resetTo } from '../../src/ui/nav';
+import { dispatchKey } from '../../src/ui/keys';
 import type { Source, SourceContext } from '../../src/sources/types';
 
 const w = window as unknown as { Capacitor?: unknown };
@@ -181,11 +182,43 @@ describe('Android TV «Источники поиска»', () => {
   it('shows the last transfer from the phone, also when it arrives on screen', async () => {
     await mount();
     await act(async () => {
-      await applyRemoteSources({ id: 's1', sources: { 'fake-open': false }, rutracker: false, phone: 'Pixel 8' }, [open], offline);
+      await applyRemoteSources({ id: 's1', sources: { 'fake-open': false }, rutracker: false, phone: 'Pixel 8', at: 0 }, [open], offline);
     });
     await flush();
     expect(host.textContent).toMatch(/Последняя передача: сегодня \d\d:\d\d · «Pixel 8»/);
     expect(line('fake-open').textContent).toContain('выключен');
+  });
+});
+
+describe('login note and Back', () => {
+  it('a sign-in on the TV replaces «вход передан с телефона»', async () => {
+    localStorage.setItem('tsp.sourcesTransfer', JSON.stringify({ at: Date.now(), phone: 'Pixel', rutracker: true }));
+    logged = true;
+    await mount();
+    expect(line('fake-tracker').textContent).toContain('вход передан с телефона');
+    // sign out and in again with the remote
+    click(byText('Выйти')!);
+    click(Array.from(host.querySelectorAll('.dialog-option')).find((n) => n.textContent === 'Выйти')!);
+    await flush();
+    click(byText('Войти')!);
+    const dialog = host.querySelector('.login-dialog') as HTMLElement;
+    const [user, pass] = Array.from(dialog.querySelectorAll('input')) as HTMLInputElement[];
+    type(user, 'u');
+    type(pass, PASSWORD);
+    click(byText('Войти', dialog)!);
+    await flush();
+    expect(line('fake-tracker').textContent).toContain('вход выполнен');
+    expect(line('fake-tracker').textContent).not.toContain('передан с телефона');
+  });
+
+  it('Back closes the login dialog', async () => {
+    await mount();
+    click(byText('Войти')!);
+    expect(host.querySelector('.login-dialog')).not.toBeNull();
+    act(() => {
+      expect(dispatchKey('back', new KeyboardEvent('keydown'))).toBe(true);
+    });
+    expect(host.querySelector('.login-dialog')).toBeNull();
   });
 });
 

@@ -5,8 +5,8 @@
 // with the saved login and answers remoteSourcesDone { id, rutracker }.
 // Shared by the phone and the TV bundles: Chromium 53 rules.
 import { isObject, loadJson, saveJson } from '../store/storage';
-import { rutrackerLoginSaved, RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA } from './rutracker';
-import { clearHealth, isSourceOn, setHealth, setSourceOn } from './store';
+import { rutrackerLoginPending, RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA } from './rutracker';
+import { clearHealth, isSourceOn, setSourceOn } from './store';
 import type { Source, SourceContext } from './types';
 
 export const TRANSFER_PATH = '/omp/sources';
@@ -16,8 +16,11 @@ export const MAX_TRANSFER_SOURCES = 40;
 export const MAX_USERNAME = 100;
 export const MAX_PASSWORD = 200;
 const SOURCE_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const CONTROL = /[\u0000-\u001f\u007f]/;
-const CONTROL_ALL = /[\u0000-\u001f\u007f]/g;
+// C0, DEL and C1: the same set as Kotlin Char.isISOControl() in SourcesProtocol
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+const CONTROL_ALL = /[\u0000-\u001f\u007f-\u009f]/g;
+/** How long the phone waits for the TV's answer; an older transfer event on the TV is dropped. */
+export const TRANSFER_TIMEOUT_MS = 45000;
 
 export interface TransferLogin {
   username: string;
@@ -97,9 +100,11 @@ export function buildTransferPayload(list: Source[], login: TransferLogin | null
 export interface RemoteSources {
   id: string;
   sources: { [id: string]: boolean };
-  /** The login was sent and is already in the encrypted storage. */
+  /** The login was sent and is staged in the encrypted storage (verified here, promoted by the native side). */
   rutracker: boolean;
   phone: string;
+  /** When the TV received it (epoch ms), 0 when unknown. */
+  at: number;
 }
 
 export function parseRemoteSources(d: unknown): RemoteSources | null {
@@ -107,7 +112,8 @@ export function parseRemoteSources(d: unknown): RemoteSources | null {
   const sources = validSources(d.sources);
   if (!sources) return null;
   const phone = typeof d.phone === 'string' ? d.phone.replace(CONTROL_ALL, '').trim().slice(0, 64) : '';
-  return { id: d.id, sources, rutracker: d.rutracker === true, phone: phone || 'Телефон' };
+  const at = typeof d.at === 'number' && isFinite(d.at) ? d.at : 0;
+  return { id: d.id, sources, rutracker: d.rutracker === true, phone: phone || 'Телефон', at };
 }
 
 const LAST_KEY = 'tsp.sourcesTransfer';
@@ -120,6 +126,11 @@ export function onTransferApplied(cb: () => void): () => void {
   return () => {
     listeners = listeners.filter((x) => x !== cb);
   };
+}
+
+/** Tells the listeners again (after the native side promoted a verified login). */
+export function notifyTransferApplied(): void {
+  notify();
 }
 
 function notify(): void {
@@ -167,8 +178,8 @@ export function applyRemoteSources(r: RemoteSources, known: Source[], ctx: () =>
   notify();
   const save = (rutracker: boolean) => {
     const prev = lastTransfer();
-    // a transfer without the login keeps the note about the earlier one
-    saveJson(LAST_KEY, { at: now(), phone: r.phone, rutracker: rutracker || (!r.rutracker && !!prev && prev.rutracker) });
+    // without a verified new login the earlier one stays, and so does the note about it
+    saveJson(LAST_KEY, { at: now(), phone: r.phone, rutracker: rutracker || (!!prev && prev.rutracker) });
     notify();
   };
   if (!r.rutracker || !ids.rutracker) {
@@ -177,7 +188,7 @@ export function applyRemoteSources(r: RemoteSources, known: Source[], ctx: () =>
   }
   let p: Promise<void>;
   try {
-    p = rutrackerLoginSaved(ctx());
+    p = rutrackerLoginPending(ctx());
   } catch (e) {
     p = Promise.reject(e);
   }
@@ -188,10 +199,9 @@ export function applyRemoteSources(r: RemoteSources, known: Source[], ctx: () =>
       return 'ok' as RutrackerResult;
     },
     (e: unknown) => {
-      const res = loginResult(e);
-      if (res !== 'error') setHealth('rutracker', { state: 'login', at: now() });
+      // the phone's login was not verified: the native side drops it, the TV keeps its earlier login and state
       save(false);
-      return res;
+      return loginResult(e);
     },
   );
 }

@@ -10,7 +10,7 @@ import {
   validateTransferPayload,
   MAX_TRANSFER_SOURCES,
 } from '../../src/sources/transfer';
-import { rutracker, rutrackerLoginSaved, rutrackerSavedLogin, RUTRACKER_CAPTCHA } from '../../src/sources/rutracker';
+import { rutracker, rutrackerLoginPending, rutrackerSavedLogin, RUTRACKER_CAPTCHA } from '../../src/sources/rutracker';
 import { getHealth, isSourceOn, reloadSourcePrefs, resetHealth, setHealth, setSourceOn } from '../../src/sources/store';
 import { fakeSite, fixture, page } from './fakeSite';
 import type { HttpCall } from './fakeSite';
@@ -20,6 +20,8 @@ const LOGIN_URL = 'https://rutracker.org/forum/login.php';
 // test-only values, not a real account
 const PASSWORD = 'pa55-test-only';
 const CREDS = { 'rutracker.username': 'test-user', 'rutracker.password': PASSWORD };
+const NEW_PASSWORD = 'new-pa55-test-only';
+const PENDING = { 'rutracker.pending.username': 'new-user', 'rutracker.pending.password': NEW_PASSWORD };
 
 function src(id: string, needsLogin = false): Source {
   return { id, name: id, kind: 'builtin', needsLogin, search: () => Promise.resolve([]) };
@@ -78,6 +80,9 @@ describe('transfer payload (phone)', () => {
       { ...ok, rutracker: { username: 'u'.repeat(101), password: PASSWORD } },
       { ...ok, rutracker: { username: 'u', password: 'p'.repeat(201) } },
       { ...ok, rutracker: { username: 'a\u0007b', password: PASSWORD } },
+      // C1 too, like Kotlin isISOControl()
+      { ...ok, rutracker: { username: 'a\u0085b', password: PASSWORD } },
+      { ...ok, rutracker: { username: 'a\u009fb', password: PASSWORD } },
     ];
     bad.forEach((b) => expect(validateTransferPayload(b)).toBeNull());
   });
@@ -85,13 +90,14 @@ describe('transfer payload (phone)', () => {
 
 describe('remoteSources event (TV)', () => {
   it('parses the event and never needs a password in it', () => {
-    expect(parseRemoteSources({ id: 's1', sources: { rutor: false }, rutracker: true, phone: 'Pixel\u0007 8' })).toEqual({
+    expect(parseRemoteSources({ id: 's1', sources: { rutor: false }, rutracker: true, phone: 'Pixel\u0007\u0085 8', at: 7 })).toEqual({
       id: 's1',
       sources: { rutor: false },
       rutracker: true,
       phone: 'Pixel 8',
+      at: 7,
     });
-    expect(parseRemoteSources({ id: 's1', sources: { rutor: false } })!.phone).toBe('Телефон');
+    expect(parseRemoteSources({ id: 's1', sources: { rutor: false } })).toMatchObject({ phone: 'Телефон', at: 0 });
     expect(parseRemoteSources({ id: '', sources: { rutor: true } })).toBeNull();
     expect(parseRemoteSources({ id: 's1', sources: { rutor: 1 } })).toBeNull();
     expect(parseRemoteSources('x')).toBeNull();
@@ -102,7 +108,7 @@ describe('remoteSources event (TV)', () => {
     const off = onTransferApplied(() => heard++);
     const site = fakeSite(loginServer());
     const r = await applyRemoteSources(
-      { id: 's1', sources: { rutor: false, nnmclub: true, unknown: false }, rutracker: false, phone: 'Pixel 8' },
+      { id: 's1', sources: { rutor: false, nnmclub: true, unknown: false }, rutracker: false, phone: 'Pixel 8', at: 0 },
       KNOWN,
       () => site.ctx,
       () => 1000,
@@ -117,58 +123,63 @@ describe('remoteSources event (TV)', () => {
     expect(heard).toBeGreaterThan(0);
   });
 
-  it('signs in with the login the native side saved', async () => {
-    const site = fakeSite(loginServer(), CREDS);
+  it('signs in with the staged login and stores nothing itself', async () => {
+    const site = fakeSite(loginServer(), PENDING);
     setHealth('rutracker', { state: 'login', at: 1 });
-    const r = await applyRemoteSources({ id: 's2', sources: { rutracker: true }, rutracker: true, phone: 'Pixel' }, KNOWN, () => site.ctx, () => 5);
+    const r = await applyRemoteSources({ id: 's2', sources: { rutracker: true }, rutracker: true, phone: 'Pixel', at: 0 }, KNOWN, () => site.ctx, () => 5);
     expect(r).toBe('ok');
     expect(site.calls.map((c) => c.method + ' ' + c.url)).toEqual(['POST ' + LOGIN_URL]);
-    expect(site.calls[0].form!.login_password).toBe(PASSWORD);
+    expect(site.calls[0].form!.login_username).toBe('new-user');
+    expect(site.calls[0].form!.login_password).toBe(NEW_PASSWORD);
+    // the native side promotes it; the page never writes the live entries
+    expect(site.secrets).toEqual(PENDING);
     expect(getHealth('rutracker')).toBeNull();
     expect(lastTransfer()).toEqual({ at: 5, phone: 'Pixel', rutracker: true });
     // the record never holds the login
-    expect(localStorage.getItem('tsp.sourcesTransfer')).not.toContain(PASSWORD);
-    expect(localStorage.getItem('tsp.sourcesTransfer')).not.toContain('test-user');
+    expect(localStorage.getItem('tsp.sourcesTransfer')).not.toContain(NEW_PASSWORD);
+    expect(localStorage.getItem('tsp.sourcesTransfer')).not.toContain('new-user');
     // a later transfer without the login keeps the note
-    await applyRemoteSources({ id: 's3', sources: { rutor: true }, rutracker: false, phone: 'Pixel' }, KNOWN, () => site.ctx, () => 6);
+    await applyRemoteSources({ id: 's3', sources: { rutor: true }, rutracker: false, phone: 'Pixel', at: 0 }, KNOWN, () => site.ctx, () => 6);
     expect(lastTransfer()!.rutracker).toBe(true);
     forgetTransferredLogin();
     expect(lastTransfer()!.rutracker).toBe(false);
   });
 
-  it('a wrong login is forgotten, a captcha keeps it, a network error is «error»', async () => {
-    const wrong = fakeSite(loginServer('rutracker-login-error.html'), CREDS);
-    expect(await applyRemoteSources({ id: 'a', sources: { rutracker: true }, rutracker: true, phone: 'P' }, KNOWN, () => wrong.ctx)).toBe('bad_login');
-    expect(wrong.secrets).toEqual({});
-    expect(getHealth('rutracker')!.state).toBe('login');
-    expect(lastTransfer()!.rutracker).toBe(false);
+  it('a refused login keeps the earlier working one and its state', async () => {
+    const both = { ...CREDS, ...PENDING };
+    const cases: [string | undefined, string][] = [
+      ['rutracker-login-error.html', 'bad_login'],
+      ['rutracker-login-captcha.html', 'captcha'],
+      [undefined, 'error'],
+    ];
+    for (const [pageName, result] of cases) {
+      setHealth('rutracker', { state: 'ok', ms: 500, at: 1 });
+      const site = pageName ? fakeSite(loginServer(pageName), both) : fakeSite(() => Promise.reject(new Error('Нет ответа от сайта')), both);
+      expect(await applyRemoteSources({ id: 'x' + result, sources: { rutracker: true }, rutracker: true, phone: 'P', at: 0 }, KNOWN, () => site.ctx)).toBe(result);
+      // the page reads the staged pair only and never deletes the live login
+      expect(site.calls[0].form!.login_password).toBe(NEW_PASSWORD);
+      expect(site.secrets).toEqual(both);
+      expect(getHealth('rutracker')!.state).toBe('ok');
+    }
 
-    const captcha = fakeSite(loginServer('rutracker-login-captcha.html'), CREDS);
-    expect(await applyRemoteSources({ id: 'b', sources: { rutracker: true }, rutracker: true, phone: 'P' }, KNOWN, () => captcha.ctx)).toBe('captcha');
-    expect(captcha.secrets).toEqual(CREDS);
-
-    const down = fakeSite(() => Promise.reject(new Error('Нет ответа от сайта')), CREDS);
-    expect(await applyRemoteSources({ id: 'c', sources: { rutracker: true }, rutracker: true, phone: 'P' }, KNOWN, () => down.ctx)).toBe('error');
-    expect(down.secrets).toEqual(CREDS);
-
-    // nothing saved (storage failed on the way): «error», no request
-    const empty = fakeSite(loginServer(), {});
-    expect(await applyRemoteSources({ id: 'd', sources: { rutracker: true }, rutracker: true, phone: 'P' }, KNOWN, () => empty.ctx)).toBe('error');
+    // nothing staged (storage failed on the way): «error», no request
+    const empty = fakeSite(loginServer(), CREDS);
+    expect(await applyRemoteSources({ id: 'd', sources: { rutracker: true }, rutracker: true, phone: 'P', at: 0 }, KNOWN, () => empty.ctx)).toBe('error');
     expect(empty.calls).toHaveLength(0);
   });
 });
 
-describe('rutracker saved login', () => {
+describe('rutracker saved and staged login', () => {
   it('reads both parts or nothing', async () => {
     expect(await rutrackerSavedLogin(fakeSite(loginServer(), CREDS).ctx.secrets!)).toEqual({ username: 'test-user', password: PASSWORD });
     expect(await rutrackerSavedLogin(fakeSite(loginServer(), { 'rutracker.username': 'u' }).ctx.secrets!)).toBeNull();
   });
 
-  it('rejects without a store and keeps the login on a captcha', async () => {
-    await expect(rutrackerLoginSaved(fakeSite(loginServer(), null).ctx)).rejects.toThrow('Вход доступен только в приложении Android');
-    const c = fakeSite(loginServer('rutracker-login-captcha.html'), CREDS);
-    await expect(rutrackerLoginSaved(c.ctx)).rejects.toThrow(RUTRACKER_CAPTCHA);
-    expect(c.secrets).toEqual(CREDS);
+  it('the staged login needs a store and leaves the storage alone', async () => {
+    await expect(rutrackerLoginPending(fakeSite(loginServer(), null).ctx)).rejects.toThrow('Вход доступен только в приложении Android');
+    const c = fakeSite(loginServer('rutracker-login-captcha.html'), PENDING);
+    await expect(rutrackerLoginPending(c.ctx)).rejects.toThrow(RUTRACKER_CAPTCHA);
+    expect(c.secrets).toEqual(PENDING);
   });
 });
 

@@ -11,11 +11,12 @@ const HOST = 'rutracker.org';
 const FORUM = 'https://' + HOST + '/forum/';
 const LOGIN_URL = FORUM + 'login.php';
 const SEARCH = FORUM + 'tracker.php?nm=';
-// the Android TV control server writes the same keys when the phone sends the login (ControlRouter /omp/sources)
-export const RUTRACKER_USER_KEY = 'rutracker.username';
-export const RUTRACKER_PASS_KEY = 'rutracker.password';
-const USER_KEY = RUTRACKER_USER_KEY;
-const PASS_KEY = RUTRACKER_PASS_KEY;
+const USER_KEY = 'rutracker.username';
+const PASS_KEY = 'rutracker.password';
+// a login the phone sent to the Android TV waits here until it is verified; the native side then promotes it to
+// the keys above in one write, or drops it (SecretLoginStore in android/.../control/SourcesTransfer.kt)
+export const RUTRACKER_PENDING_USER_KEY = 'rutracker.pending.username';
+export const RUTRACKER_PENDING_PASS_KEY = 'rutracker.pending.password';
 
 export const RUTRACKER_CAPTCHA = 'rutracker просит капчу — войдите на сайте в браузере и попробуйте снова';
 export const RUTRACKER_BAD_LOGIN = 'Неверный логин или пароль';
@@ -44,9 +45,13 @@ function postLogin(username: string, password: string, ctx: SourceContext): Prom
     });
 }
 
+function pair(s: SecretStore, user: string, pass: string): Promise<{ username: string; password: string } | null> {
+  return Promise.all([s.get(user), s.get(pass)]).then((v) => (v[0] && v[1] ? { username: v[0], password: v[1] } : null));
+}
+
 /** The saved login (both parts), null when there is none. */
 export function rutrackerSavedLogin(s: SecretStore): Promise<{ username: string; password: string } | null> {
-  return Promise.all([s.get(USER_KEY), s.get(PASS_KEY)]).then((v) => (v[0] && v[1] ? { username: v[0], password: v[1] } : null));
+  return pair(s, USER_KEY, PASS_KEY);
 }
 
 function savedCredentials(ctx: SourceContext): Promise<{ username: string; password: string } | null> {
@@ -54,22 +59,16 @@ function savedCredentials(ctx: SourceContext): Promise<{ username: string; passw
 }
 
 /**
- * Signs in with the saved login (the phone sent it to the TV). A wrong login is forgotten; a captcha or a network
- * error keeps it (the next search signs in again). Rejects with the Russian messages of login().
+ * Android TV: checks the login the phone sent (staged under the pending keys) with one sign-in. Nothing is stored
+ * or deleted here: the native side promotes the pair after an «ok», else drops it and the earlier login stays.
+ * Rejects with the Russian messages of login().
  */
-export function rutrackerLoginSaved(ctx: SourceContext): Promise<void> {
+export function rutrackerLoginPending(ctx: SourceContext): Promise<void> {
   const secrets = ctx.secrets;
   if (!secrets) return Promise.reject(new Error(RUTRACKER_NO_STORE));
-  return rutrackerSavedLogin(secrets).then((c) => {
+  return pair(secrets, RUTRACKER_PENDING_USER_KEY, RUTRACKER_PENDING_PASS_KEY).then((c) => {
     if (!c) throw new Error(RUTRACKER_EMPTY);
-    return postLogin(c.username, c.password, ctx).then(undefined, (e: unknown) => {
-      const msg = e instanceof Error ? e.message : '';
-      if (msg !== RUTRACKER_BAD_LOGIN) throw e;
-      const fail = () => {
-        throw e;
-      };
-      return Promise.all([secrets.delete(USER_KEY), secrets.delete(PASS_KEY)]).then(fail, fail);
-    });
+    return postLogin(c.username, c.password, ctx);
   });
 }
 

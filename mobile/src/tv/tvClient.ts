@@ -707,6 +707,17 @@ export function atvErrorText(status: number): string {
   return status >= 400 && status < 500 ? ATV_REJECTED : ATV_ERROR;
 }
 
+/** TV_NO_ANSWER after the request timed out (the TV may be alive, only slow), as opposed to a network failure. */
+function timeoutError(): Error {
+  const e = new Error(TV_NO_ANSWER);
+  (e as Error & { timeout?: boolean }).timeout = true;
+  return e;
+}
+
+function isTimeout(e: unknown): boolean {
+  return !!e && typeof e === 'object' && (e as { timeout?: unknown }).timeout === true;
+}
+
 /** One request to the control server; a network failure or 5 s of silence -> TV_NO_ANSWER. */
 function atvFetch(tv: SavedTv, method: 'GET' | 'POST', path: string, body?: object, timeoutMs = ATV_TIMEOUT): Promise<AtvAnswer> {
   const headers: Record<string, string> = {};
@@ -717,7 +728,7 @@ function atvFetch(tv: SavedTv, method: 'GET' | 'POST', path: string, body?: obje
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       ctrl.abort();
-      reject(new Error(TV_NO_ANSWER));
+      reject(timeoutError());
     }, timeoutMs);
   });
   const url = 'http://' + tv.ip + ':' + (tv.ctlPort || ATV_PORT) + path;
@@ -883,8 +894,9 @@ export async function sendSourcesToTv(payload: TransferPayload): Promise<{ rutra
   let r: AtvAnswer;
   try {
     r = await atvFetch(s.tv, 'POST', TRANSFER_PATH, payload, SOURCES_TIMEOUT);
-  } catch {
-    atvFail(s, TV_NO_ANSWER);
+  } catch (e) {
+    // a slow sign-in on the TV is not a dead TV: only a network failure ends the session
+    if (!isTimeout(e)) atvFail(s, TV_NO_ANSWER);
     throw new Error(SOURCES_NO_ANSWER);
   }
   if (r.status === 401) {

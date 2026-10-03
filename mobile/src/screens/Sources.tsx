@@ -11,7 +11,7 @@ import { healthText, isCloudflare, JACKETT_HINT, type HealthLine } from '../../.
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { allSources } from '../../../src/sources/registry';
 import { rutrackerSavedLogin } from '../../../src/sources/rutracker';
-import { buildTransferPayload, transferWhen, type RutrackerResult, type TransferLogin } from '../../../src/sources/transfer';
+import { buildTransferPayload, transferWhen, validateTransferPayload, type RutrackerResult, type TransferLogin, type TransferPayload } from '../../../src/sources/transfer';
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
 import { log } from '../../../src/lib/log';
 import { activeTv, isAtv } from '../tv/tvStore';
@@ -29,6 +29,21 @@ export function sentText(r: RutrackerResult | undefined): string {
   if (r === 'captcha') return 'Источники переданы, но rutracker просит капчу — войдите на сайте в браузере';
   if (r === 'error') return 'Источники переданы; вход на rutracker телевизор проверит при поиске';
   return 'Передано';
+}
+
+export const LOGIN_NOT_SENT = 'Вход на rutracker не передан: логин или пароль слишком длинный или с недопустимыми символами';
+export const SOURCES_NOT_READY = 'Не удалось подготовить источники к передаче';
+
+/**
+ * The payload the TV accepts (same schema as its control server). A login the TV would refuse is left out so the
+ * switches still go; loginDropped says so.
+ */
+export function transferPayload(list: Source[], login: TransferLogin | null): { payload: TransferPayload; loginDropped: boolean } {
+  const full = validateTransferPayload(buildTransferPayload(list, login));
+  if (full) return { payload: full, loginDropped: false };
+  const bare = validateTransferPayload(buildTransferPayload(list, null));
+  if (!bare) throw new Error(SOURCES_NOT_READY);
+  return { payload: bare, loginDropped: !!login };
 }
 
 /** The phone's saved rutracker login, null when there is none or the storage fails. */
@@ -49,7 +64,9 @@ function SendToTv({ hasLogin, ctx }: { hasLogin: boolean; ctx: () => SourceConte
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [, setTick] = useState(0);
-  if (!tv || !isAtv(tv) || !tv.token) return null;
+  if (!tv || !isAtv(tv)) return null;
+  // the TV forgot this phone (401 cleared the token): keep the card with the reason and a way to pair again
+  const paired = !!tv.token;
   const connected = tvState.value === 'connected' && sessionIp.value === tv.ip;
   const at = lastSent(tv.ip);
 
@@ -59,15 +76,20 @@ function SendToTv({ hasLogin, ctx }: { hasLogin: boolean; ctx: () => SourceConte
     setError('');
     const ip = tv.ip;
     const login = hasLogin && withLogin ? readLogin(ctx) : Promise.resolve(null);
+    let loginDropped = false;
     login
-      .then((l) => sendSourcesToTv(buildTransferPayload(allSources(), l)))
+      .then((l) => {
+        const p = transferPayload(allSources(), l);
+        loginDropped = p.loginDropped;
+        return sendSourcesToTv(p.payload);
+      })
       .then(
         (r) => {
           saveJson(SENT_KEY, { ip, at: Date.now() });
           log(r.rutracker && r.rutracker !== 'ok' ? 'warn' : 'info', 'tv', 'Источники переданы на Android TV' + (r.rutracker ? ', вход на rutracker: ' + r.rutracker : ''));
           setBusy(false);
           setTick((n) => n + 1);
-          showToast(sentText(r.rutracker));
+          showToast(loginDropped ? 'Источники переданы. ' + LOGIN_NOT_SENT : sentText(r.rutracker), loginDropped ? 6000 : undefined);
         },
         (e) => {
           const msg = errorMessage(e);
@@ -85,7 +107,7 @@ function SendToTv({ hasLogin, ctx }: { hasLogin: boolean; ctx: () => SourceConte
         <div class="m-send-head">
           <Icon d={TV_ICON} size={22} />
           <span class="m-send-name">{'Android TV «' + tv.name + '»'}</span>
-          <span class={'m-send-state' + (connected ? ' ok' : '')}>{connected ? 'подключён' : 'не подключён'}</span>
+          <span class={'m-send-state' + (connected && paired ? ' ok' : '')}>{connected && paired ? 'подключён' : 'не подключён'}</span>
         </div>
         <div class="m-note m-muted">{SEND_TEXT}</div>
         {hasLogin && (
@@ -94,9 +116,15 @@ function SendToTv({ hasLogin, ctx }: { hasLogin: boolean; ctx: () => SourceConte
             Вместе со входом на rutracker
           </label>
         )}
-        <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={send}>
-          {busy ? 'Передаю…' : 'Передать на телевизор'}
-        </button>
+        {paired ? (
+          <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={send}>
+            {busy ? 'Передаю…' : 'Передать на телевизор'}
+          </button>
+        ) : (
+          <button type="button" class="m-btn m-btn-secondary" onClick={() => navigate({ name: 'tv' })}>
+            Подключить заново
+          </button>
+        )}
         {error && (
           <div class="m-error" role="alert">
             {error}

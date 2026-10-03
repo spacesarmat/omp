@@ -76,25 +76,40 @@ object SourcesProtocol {
     }
 }
 
-/** Writes the login where the page's rutracker source reads it (the Keystore storage on the device). */
+/**
+ * The phone's login on its way to the page's rutracker source (the Keystore storage on the device). It is first
+ * staged under separate entries; only a login the page verified replaces the live one ([promote]), anything else
+ * drops the staged pair and keeps the login that worked ([discard]).
+ */
 interface LoginStore {
     /** Throws when the storage is unavailable. */
-    fun save(username: String, password: String)
+    fun stage(username: String, password: String)
+    /** Staged pair → live entries in one write; throws when the storage is unavailable. */
+    fun promote()
+    /** Forgets the staged pair (never the live one). */
+    fun discard()
 }
 
 /**
  * Hands a transfer to the page and waits for its answer ([done]), at most [timeoutMs]. One transfer at a time.
- * The login is saved before the page hears of it; the page event carries only `rutracker: true`. Thread-safe.
+ * The login is staged before the page hears of it; the page event carries only `rutracker: true`. The event of
+ * the waiting transfer is also kept ([pendingEvent]): a page that starts listening late asks for it instead of
+ * getting a backlog of old ones. Thread-safe.
  */
 class SourcesInbox(
     private val store: LoginStore,
     private val emit: (JSONObject) -> Unit,
     private val timeoutMs: Long = TIMEOUT_MS,
+    private val clock: () -> Long = { System.currentTimeMillis() },
 ) {
     private class Pending(val id: String) {
         val latch = CountDownLatch(1)
         @Volatile
         var outcome: SourcesOutcome = SourcesOutcome.NoAnswer
+        @Volatile
+        var event: JSONObject? = null
+        @Volatile
+        var staged = false
     }
 
     private val lock = Any()
@@ -108,39 +123,93 @@ class SourcesInbox(
             Pending("s" + seq.incrementAndGet()).also { pending = it }
         }
         try {
-            t.login?.let {
-                try {
-                    store.save(it.username, it.password)
-                } catch (_: Exception) {
-                    return SourcesOutcome.StoreFailed
-                }
+            val login = t.login
+            if (login != null) {
+                p.staged = true
+                if (!quietly { store.stage(login.username, login.password) }) return SourcesOutcome.StoreFailed
             }
             val sources = JSONObject()
             for ((id, on) in t.sources) sources.put(id, on)
-            emit(
-                JSONObject().put("id", p.id).put("sources", sources).put("rutracker", t.login != null).put("phone", t.phone),
-            )
+            val event = JSONObject().put("id", p.id).put("sources", sources).put("rutracker", t.login != null)
+                .put("phone", t.phone).put("at", clock())
+            p.event = event
+            emit(event)
             if (!p.latch.await(timeoutMs, TimeUnit.MILLISECONDS)) return SourcesOutcome.NoAnswer
             return p.outcome
         } finally {
             synchronized(lock) { if (pending === p) pending = null }
+            // whatever is still staged was not verified (wrong, captcha, error, no answer): the live login stays;
+            // after a promotion the staged entries are already gone
+            if (p.staged) quietly { store.discard() }
         }
     }
 
-    /** The page's answer: false when [id] is not the transfer waiting (late, unknown). */
-    fun done(id: String?, rutracker: String?, failed: Boolean): Boolean {
-        val p = synchronized(lock) { pending?.takeIf { it.id == id } } ?: return false
-        p.outcome = when {
+    /** Runs a storage call; false when it threw. */
+    private inline fun quietly(f: () -> Unit): Boolean = try {
+        f()
+        true
+    } catch (_: Exception) {
+        false
+    }
+
+    /** The event of the transfer waiting for the page, null when none (answered or timed out). */
+    fun pendingEvent(): JSONObject? = synchronized(lock) { pending?.event }
+
+    /**
+     * The page's answer: false when [id] is not the transfer waiting (late, unknown). A verified login («ok») is
+     * promoted here, before the call returns, so the page reads the new login as soon as its call resolves.
+     */
+    fun done(id: String?, rutracker: String?, failed: Boolean): Boolean = synchronized(lock) {
+        val p = pending?.takeIf { it.id == id } ?: return false
+        var out: SourcesOutcome = when {
             failed -> SourcesOutcome.Failed
             rutracker == null -> SourcesOutcome.Applied(null)
             else -> SourcesOutcome.Applied(if (rutracker in SourcesProtocol.RESULTS) rutracker else "error")
         }
+        if (p.staged && out == SourcesOutcome.Applied("ok") && !quietly { store.promote() }) out = SourcesOutcome.StoreFailed
+        p.outcome = out
         p.latch.countDown()
-        return true
+        true
     }
 
     companion object {
-        /** The page may sign in to rutracker (one request, 20 s at most) before it answers. */
+        /** The page may sign in to rutracker (one request, 20 s at most) before it answers; the phone waits 45 s. */
         const val TIMEOUT_MS = 35_000L
+    }
+}
+
+/** The few calls of the encrypted storage the login transfer needs ([com.spacesarmat.omp.sources.SecretStorage]). */
+interface SecretEntries {
+    fun get(name: String): String?
+    /** All of [values] written and [remove] removed in one commit, or nothing (throws). */
+    fun replace(values: Map<String, String>, remove: Collection<String>)
+}
+
+/**
+ * [LoginStore] over the page's secret entries: staged under `rutracker.pending.*`, promoted to the live
+ * `rutracker.username` / `rutracker.password` that src/sources/rutracker.ts reads. [key] maps a page key to its
+ * storage name (the `js:` namespace on the device).
+ */
+class SecretLoginStore(private val secrets: SecretEntries, private val key: (String) -> String) : LoginStore {
+    override fun stage(username: String, password: String) {
+        secrets.replace(mapOf(key(PENDING_USER) to username, key(PENDING_PASS) to password), emptyList())
+    }
+
+    override fun promote() {
+        val user = secrets.get(key(PENDING_USER))
+        val pass = secrets.get(key(PENDING_PASS))
+        if (user == null || pass == null) throw IllegalStateException("nothing staged")
+        secrets.replace(mapOf(key(USER) to user, key(PASS) to pass), listOf(key(PENDING_USER), key(PENDING_PASS)))
+    }
+
+    override fun discard() {
+        secrets.replace(emptyMap(), listOf(key(PENDING_USER), key(PENDING_PASS)))
+    }
+
+    companion object {
+        const val USER = "rutracker.username"
+        const val PASS = "rutracker.password"
+        const val PENDING_USER = "rutracker.pending.username"
+        const val PENDING_PASS = "rutracker.pending.password"
     }
 }

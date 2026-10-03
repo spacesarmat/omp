@@ -141,6 +141,8 @@ export function SourcesScreen() {
     // signed in: the source takes part in the search; its real state comes with the next search
     setSourceOn(s.id, true);
     clearHealth(s.id);
+    // typed on the TV now: no longer «вход передан с телефона»
+    forgetTransferredLogin();
     toast('Вход выполнен');
     setTimeout(() => focusLogin(s), 0);
   };

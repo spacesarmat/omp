@@ -69,18 +69,19 @@ class PrefsPhoneStore(context: Context) : PhoneStore {
 class TvRemote(private val context: Context, private val emit: (String, JSObject, Boolean) -> Unit) : RemoteActions {
     val pairing = Pairing(PrefsPhoneStore(context))
     private val router = ControlRouter(pairing, this)
-    // the login goes to the same Keystore entries the page's rutracker source reads (src/sources/rutracker.ts keys)
+    // the login is staged in the Keystore entries of the page (js: namespace) and promoted once the page signed in
     private val inbox = SourcesInbox(
-        store = object : LoginStore {
-            override fun save(username: String, password: String) {
-                val secrets = SourceServices.get(context).secrets
-                secrets.set(SourceServices.jsSecretKey(USER_KEY)!!, username)
-                secrets.set(SourceServices.jsSecretKey(PASS_KEY)!!, password)
-            }
-        },
-        emit = { data -> emit("remoteSources", JSObject.fromJSONObject(data), true) },
+        store = SecretLoginStore(
+            object : SecretEntries {
+                override fun get(name: String): String? = SourceServices.get(context).secrets.get(name)
+                override fun replace(values: Map<String, String>, remove: Collection<String>) =
+                    SourceServices.get(context).secrets.replace(values, remove)
+            },
+        ) { SourceServices.jsSecretKey(it)!! },
+        // not retained: a page that was not listening asks for the one waiting transfer ([pendingSources])
+        emit = { data -> emit("remoteSources", JSObject.fromJSONObject(data), false) },
     )
-    private val server = ControlServer(PORT) { router.route(it) }
+    private val server = ControlServer(PORT, router::precheck) { router.route(it) }
     private val main = Handler(Looper.getMainLooper())
     private var nsdListener: NsdManager.RegistrationListener? = null
 
@@ -231,6 +232,9 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
 
     override fun sources(t: SourcesTransfer): SourcesOutcome = inbox.receive(t)
 
+    /** The event of the transfer still waiting for the page (a page that started listening late), or null. */
+    fun pendingSources(): JSONObject? = inbox.pendingEvent()
+
     /** The page's remoteSourcesDone; false when no such transfer waits. */
     fun sourcesDone(id: String?, rutracker: String?, failed: Boolean): Boolean = inbox.done(id, rutracker, failed)
 
@@ -250,7 +254,5 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         const val PORT = 8095
         const val SERVICE_TYPE = "_omp._tcp"
         private const val TAG = "OmpRemote"
-        private const val USER_KEY = "rutracker.username"
-        private const val PASS_KEY = "rutracker.password"
     }
 }

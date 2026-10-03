@@ -85,6 +85,24 @@ class SecretStorage(context: Context) {
         prefs.edit().putString(name, SecretCodec.pack(c.iv, ct)).apply()
     }
 
+    /**
+     * Writes [values] and removes [remove] in one SharedPreferences commit: readers see all of it or none of it.
+     * Throws when the Keystore is unavailable (nothing is written then) or the commit fails.
+     */
+    @Synchronized
+    fun replace(values: Map<String, String>, remove: Collection<String>) {
+        val packed = values.mapValues { (name, value) ->
+            val c = Cipher.getInstance(TRANSFORMATION)
+            c.init(Cipher.ENCRYPT_MODE, key())
+            c.updateAAD(name.toByteArray(Charsets.UTF_8))
+            SecretCodec.pack(c.iv, c.doFinal(value.toByteArray(Charsets.UTF_8)))
+        }
+        val edit = prefs.edit()
+        for (name in remove) edit.remove(name)
+        for ((name, v) in packed) edit.putString(name, v)
+        if (!edit.commit()) throw IllegalStateException("secrets not written")
+    }
+
     @Synchronized
     fun delete(name: String) {
         prefs.edit().remove(name).apply()

@@ -532,6 +532,16 @@ class OmpNativePlugin : Plugin() {
         call.resolve()
     }
 
+    /**
+     * The transfer still waiting for the page ({ event: remoteSources data } or { event: null }): the event is not
+     * retained, so a page that starts listening late asks for the one current transfer, never an old backlog.
+     */
+    @PluginMethod
+    fun remoteSourcesPending(call: PluginCall) {
+        val e = remote?.pendingSources()
+        call.resolve(JSObject().put("event", e ?: JSONObject.NULL))
+    }
+
     /** A phone command for the open native player ({ cmd: Cmd }). */
     @PluginMethod
     fun nativePlayerCommand(call: PluginCall) {
