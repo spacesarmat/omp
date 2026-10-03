@@ -45,7 +45,7 @@ export function createTakeover(): Takeover {
       const p = prev;
       prev = undefined;
       if (sessionIp.value !== ip) return;
-      if (p) await connectTv(p).catch(() => {});
+      if (p) await connectTv(p, { keepActive: true }).catch(() => {});
       else await disconnectTv();
     },
   };
