@@ -8,6 +8,7 @@ import androidx.activity.OnBackPressedCallback
 import com.getcapacitor.BridgeActivity
 import com.getcapacitor.CapConfig
 import com.spacesarmat.omp.control.AppForeground
+import com.spacesarmat.omp.monitor.MonitorLinks
 
 class MainActivity : BridgeActivity() {
     // the launch intent was already handled before the activity got recreated
@@ -91,6 +92,9 @@ class MainActivity : BridgeActivity() {
             return
         }
         OmpNativePlugin.magnetFrom(intent)?.let { OmpNativePlugin.deliverMagnet(it) }
+        MonitorLinks.fromIntent(intent.action, intent.getStringExtra(MonitorLinks.EXTRA_URL))?.let {
+            OmpNativePlugin.deliverMonitorOpen(it)
+        }
     }
 
     companion object {

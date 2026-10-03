@@ -78,6 +78,11 @@
                 android:value="Local TorrServer for streaming to TV" />
         </service>
 
+        <!-- monitoring: «Добавить» / «Заменить» buttons of the notifications (MonitorNotifier) -->
+        <receiver
+            android:name=".monitor.MonitorActionReceiver"
+            android:exported="false" />
+
         <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode_ui" />
 
         <provider

@@ -13,6 +13,7 @@ import { torrents } from '../../src/store/library';
 import { saveProgress, reloadProgress, serverViewed } from '../../src/store/progress';
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { Torrent as T } from '../../src/api/types';
+import { addFindings, findingsOf } from '../../src/monitor/subs';
 
 const EPS = ['Show.S02E01.mkv', 'Show.S02E02.mkv', 'Show.S02E03.mkv', 'Show.S02E04.mkv'];
 const tor: T = {
@@ -221,6 +222,19 @@ describe('Torrent', () => {
     expect(confirm).toHaveBeenCalledTimes(2);
     expect(rem).toHaveBeenCalledWith('abc');
     expect(currentRoute.value.name).toBe('library');
+  });
+
+  it('delete drops the «Новые серии» card of that torrent', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'remove').mockResolvedValue(undefined);
+    vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const r = { Title: 'x', Categories: '', Size: '', CreateDate: '', Tracker: '', Link: '', Magnet: '', Hash: '', Peer: 0, Seed: 1, source: 'rutor' };
+    addFindings([{ subId: 'episodes', key: 'abc:1:10', at: 1, result: r, episodes: { torrentHash: 'abc', torrentTitle: 't', season: 1, haveTo: 8, to: 10 } }]);
+    mount();
+    await flush();
+    click('[aria-label="Удалить раздачу"]');
+    await flush();
+    expect(findingsOf('episodes')).toEqual([]);
   });
 
   it('back button returns', async () => {

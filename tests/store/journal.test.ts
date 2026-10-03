@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { recordWatch, forgetWatch, loadSkip, saveSkip, type JournalClient } from '../../src/store/journal';
+import { recordWatch, forgetWatch, loadSkip, saveSkip, loadWatch, saveWatch, type JournalClient } from '../../src/store/journal';
 import { torrents } from '../../src/store/library';
 import { journalOf } from '../../src/lib/journal';
 import type { Torrent } from '../../src/api/types';
@@ -144,6 +144,28 @@ describe('loadSkip / saveSkip', () => {
     const r = await saveSkip(s.c, { hash: 'h' }, { i: true, mi: [90, 30], mc: NaN });
     expect(r).toEqual({ i: true, c: false });
     expect(JSON.parse(s.t.data!).omp.s).toEqual({ i: true, c: false });
+  });
+
+  it('loadWatch / saveWatch switch omp.w, keeping the history, the marks and other keys', async () => {
+    const entry = { f: 1, t: 30, d: 100, at: T0, src: 'tv' };
+    const s = fakeServer({ data: JSON.stringify({ lampa: 1, omp: { v: 1, h: [entry], s: { i: true, c: false, mc: 60 } } }) });
+    expect(await loadWatch(s.c, 'h')).toBe(true);
+    expect(await loadWatch(s.c, 'nope')).toBe(true);
+    expect(await saveWatch(s.c, { hash: 'h' }, false)).toBe(false);
+    expect(JSON.parse(s.t.data!)).toEqual({ lampa: 1, omp: { v: 1, h: [entry], s: { i: true, c: false, mc: 60 }, w: false } });
+    expect(await loadWatch(s.c, 'h')).toBe(false);
+    // the skip settings and the history writes keep it
+    await saveSkip(s.c, { hash: 'h' }, { c: true });
+    await recordWatch(s.c, 'h', { f: 2, t: 5, d: 50, src: 'tv' }, T0 + 1);
+    expect(JSON.parse(s.t.data!).omp.w).toBe(false);
+    const writes = s.sets.length;
+    expect(await saveWatch(s.c, { hash: 'h' }, false)).toBe(false);
+    expect(s.sets.length).toBe(writes);
+    expect(await saveWatch(s.c, { hash: 'h' }, true)).toBe(true);
+    expect(JSON.parse(s.t.data!).omp.w).toBeUndefined();
+    expect(JSON.parse(s.t.data!).omp.s).toEqual({ i: true, c: true, mc: 60 });
+    await expect(saveWatch(s.c, { hash: 'nope' }, false)).rejects.toThrow('Раздачи нет на сервере');
+    await expect(saveWatch(fakeServer({ data: 'plain' }).c, { hash: 'h' }, false)).rejects.toThrow('Данные раздачи не в формате JSON');
   });
 
   it('writing history afterwards keeps s', async () => {

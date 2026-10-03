@@ -1,9 +1,12 @@
 // rutor.info: open search page with magnets in the list (UTF-8).
 import { absUrl, parseDate, parseSize, textOf } from './html';
-import { loadDoc, makeResult, PARSE_ERROR, toInt } from './site';
-import type { Source, SourceContext, SourceResult } from './types';
+import { loadDoc, makeResult, mergePages, PARSE_ERROR, toInt } from './site';
+import type { FeedCategory, Source, SourceContext, SourceResult } from './types';
 
 const BASE = 'https://rutor.info';
+
+/** Sections of the «new» pages (/browse/0/<id>/0/0, newest first; checked live): foreign + ours. */
+const FEED: { [c: string]: number[] } = { movie: [1, 5], tv: [4, 16], anime: [10] };
 
 function parse(doc: Document, base: string): SourceResult[] {
   const index = doc.getElementById('index');
@@ -39,5 +42,9 @@ export const rutor: Source = {
   kind: 'builtin',
   search(query: string, ctx: SourceContext) {
     return loadDoc(ctx, BASE + '/search/0/0/000/0/' + encodeURIComponent(query)).then((p) => parse(p.doc, p.res.url || BASE));
+  },
+  latest(ctx: SourceContext, category: FeedCategory) {
+    const ids = FEED[category] || [];
+    return mergePages(ids.map((id) => loadDoc(ctx, BASE + '/browse/0/' + id + '/0/0').then((p) => parse(p.doc, p.res.url || BASE))));
   },
 };

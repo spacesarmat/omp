@@ -2,9 +2,10 @@ import { useEffect } from 'preact/hooks';
 import { effect } from '@preact/signals';
 import { App as CapApp } from '@capacitor/app';
 import { currentRoute, goBack, switchTab, setPendingLink, type MRoute } from './nav';
-import { activeServer } from '../../src/store/servers';
+import { activeServer, client } from '../../src/store/servers';
+import { refreshTorrents } from '../../src/store/library';
 import { native } from './platform/native';
-import { NavBar, type Tab } from './ui/NavBar';
+import { NavBar, TAB_IDS, type Tab } from './ui/NavBar';
 import { Toast } from './ui/toast';
 import { Connect } from './screens/Connect';
 import { Tv } from './screens/Tv';
@@ -31,9 +32,14 @@ import { tvState, warmUp, cancelWarmUp } from './tv/tvClient';
 import { activeTv } from './tv/tvStore';
 import { startPlayerLink, attachIfOmpForeground, linkStatus } from './tv/playerLink';
 import { installTabSwipe } from './ui/tabSwipe';
+import { News } from './screens/News';
+import { SubFindings } from './screens/SubFindings';
+import { Monitor } from './screens/Monitor';
+import { monitorNative } from './monitor/native';
+import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
 import './mobile.css';
 
-const TABS: string[] = ['library', 'add', 'remote', 'settings'];
+const TABS: string[] = TAB_IDS;
 
 export function handleBack(): void {
   if (sheetBackHandler.current?.()) return;
@@ -89,6 +95,8 @@ export function App() {
     let cancelled = false;
     try {
       CapApp.addListener('appStateChange', (st) => {
+        // the background page may have written new findings meanwhile
+        if (st.isActive) reloadMonitor();
         if (!st.isActive) {
           cancelWarmUp();
         } else if (tvState.value === 'connected') {
@@ -127,6 +135,28 @@ export function App() {
       /* native layer unavailable */
     }
     return () => off?.();
+  }, []);
+
+  // monitoring: (re)schedule the background check with the saved settings (idempotent), follow finished background
+  // runs (reload the stores and the library) and open the findings of tapped notifications
+  useEffect(() => {
+    void applySchedule();
+    // the notification permission: once when monitoring is on, and for a run that could not notify while OMP was closed
+    if (activeServer.value) void startupNotify().catch(() => {});
+    const offDone = monitorNative.onDone((summary) => {
+      monitorFinished(summary);
+      const c = client.value;
+      if (c) void refreshTorrents(c).catch(() => {});
+      if (summary && summary.notifyBlocked) void notifyBlocked().catch(() => {});
+    });
+    const offOpen = monitorNative.onOpen(openNewsLink);
+    void monitorNative.takeOpen().then((url) => {
+      if (url) openNewsLink(url);
+    });
+    return () => {
+      offDone();
+      offOpen();
+    };
   }, []);
 
   // embedded TorrServer: status, silent autostart (errors only go to the store), sync with the service
@@ -174,6 +204,12 @@ export function App() {
         <Sources />
       ) : route.name === 'library' ? (
         <Library />
+      ) : route.name === 'news' ? (
+        <News seg={route.seg} finding={route.finding} watch={route.watch} />
+      ) : route.name === 'subFindings' ? (
+        <SubFindings id={route.id} finding={route.finding} watch={route.watch} />
+      ) : route.name === 'monitor' ? (
+        <Monitor />
       ) : route.name === 'torrent' ? (
         <Torrent hash={route.hash} />
       ) : route.name === 'add' ? (

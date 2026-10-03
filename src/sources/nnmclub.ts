@@ -1,10 +1,13 @@
 // nnmclub.to: forum tracker search (windows-1251, decoded by the native http); magnet on the release page.
 import { absUrl, parseSize, textOf } from './html';
 import { loadDoc, magnetOf, makeResult, PARSE_ERROR, requireHost, toInt } from './site';
-import type { Source, SourceContext, SourceResult } from './types';
+import type { FeedCategory, Source, SourceContext, SourceResult } from './types';
 
 const HOST = 'nnmclub.to';
 const SEARCH = 'https://' + HOST + '/forum/tracker.php?nm=';
+/** The tracker list of a forum category, newest first, open to guests (checked live): «Видео. Кино…», «Сериалы», «Аниме». */
+const FEED_URL = 'https://' + HOST + '/forum/tracker.php?c=';
+const FEED: { [c: string]: number } = { movie: 14, tv: 27, anime: 24 };
 
 /** '<u>26228254998</u> 24.4 GB' → { bytes: 26228254998, text: '24.4 GB' } (the <u> holds the sort key). */
 function keyed(cell: Element | undefined): { key: string; text: string } {
@@ -52,6 +55,11 @@ export const nnmclub: Source = {
   search(query: string, ctx: SourceContext) {
     // the site reads a UTF-8 percent-encoded nm (checked live; a windows-1251 one is ignored)
     return loadDoc(ctx, SEARCH + encodeURIComponent(query)).then((p) => parse(p.doc, p.res.url || SEARCH));
+  },
+  latest(ctx: SourceContext, category: FeedCategory) {
+    const c = FEED[category];
+    if (!c) return Promise.resolve([]);
+    return loadDoc(ctx, FEED_URL + c).then((p) => parse(p.doc, p.res.url || FEED_URL + c));
   },
   magnet(detailUrl: string, ctx: SourceContext) {
     return requireHost(detailUrl, HOST)

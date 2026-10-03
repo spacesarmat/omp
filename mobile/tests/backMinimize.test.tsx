@@ -33,6 +33,16 @@ describe('Back on tab roots', () => {
     expect(hoisted.minimize).not.toHaveBeenCalled();
   });
 
+  it('«Новое» is a tab root; its nested screens go back to it', () => {
+    resetTo({ name: 'news' });
+    navigate({ name: 'subFindings', id: 's1' });
+    handleBack();
+    expect(currentRoute.value.name).toBe('news');
+    expect(hoisted.minimize).not.toHaveBeenCalled();
+    handleBack();
+    expect(hoisted.minimize).toHaveBeenCalledTimes(1);
+  });
+
   it('survives minimizeApp rejecting', async () => {
     hoisted.minimize.mockRejectedValueOnce(new Error('no'));
     resetTo({ name: 'settings' });

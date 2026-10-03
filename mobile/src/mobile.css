@@ -706,3 +706,40 @@ button, .m-btn {
 .m-whatsnew { display: flex; flex-direction: column; gap: 14px; }
 .m-whatsnew h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
 .m-set-row-btn { width: 100%; border: none; color: inherit; font: inherit; text-align: left; }
+
+/* ---- v0.13 monitoring: five tabs, «Новое», subscriptions, «Заменить», «Мониторинг» ---- */
+.m-nav-item { font-size: 11px; min-width: 0; }
+.m-nav-pill { position: relative; width: 52px; }
+.m-nav-badge {
+  position: absolute; top: 0; right: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+  background: var(--accent); color: var(--bg); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+}
+.m-screen[data-route='news'], .m-screen[data-route='subFindings'], .m-screen[data-route='monitor'] { display: flex; flex-direction: column; gap: 12px; }
+.m-screen[data-route='news'] .m-seg button { min-height: 40px; }
+.m-news-status { display: flex; align-items: center; gap: 8px; }
+.m-news-status .m-btn-text { flex-shrink: 0; min-height: 36px; color: var(--accent); }
+.m-sub-row { display: flex; align-items: center; gap: 10px; padding: 12px; border: none; border-radius: 14px; background: var(--panel); color: var(--text); font: inherit; text-align: left; }
+.m-sub-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
+.m-sub-q { font-size: 15px; font-weight: 700; }
+.m-fresh { flex-shrink: 0; padding: 4px 10px; border-radius: 10px; background: var(--accent); color: var(--bg); font-size: 12px; font-weight: 700; }
+.m-sub-new { min-height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
+.m-ep-card { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 14px; background: var(--panel); overflow-wrap: anywhere; }
+.m-ep-card-title { font-size: 14px; font-weight: 700; }
+.m-hl { box-shadow: inset 0 0 0 2px var(--accent); }
+.m-flag { padding: 2px 8px; border-radius: 6px; background: var(--accent); color: var(--bg); font-weight: 700; }
+.m-watch-prompt { display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
+.m-sub-plate { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; background: #3A3320; color: var(--accent); font-size: 13px; line-height: 1.35; }
+.m-sub-plate svg { flex-shrink: 0; }
+.m-sub-plate .m-btn { flex-shrink: 0; }
+.m-sub-form { display: flex; flex-direction: column; gap: 12px; }
+.m-sub-pick { display: flex; flex-direction: column; gap: 8px; }
+.m-danger-text { color: #FF8A80; }
+.m-rep-box { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 12px; background: var(--panel-2); overflow-wrap: anywhere; }
+.m-rep-box.new { background: #3A3320; }
+.m-rep-line { font-size: 14px; font-weight: 700; }
+.m-rep-arrow { align-self: center; }
+.m-rep-moves { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #C9CEDA; line-height: 1.4; }
+.m-monitor-last { gap: 4px; line-height: 1.45; }
+.m-monitor-last-head { font-weight: 700; }
+.m-sheet .m-set-pick { background: var(--panel-2); }
+.m-screen[data-route='news'] .m-chips .m-chip { padding: 0 12px; }

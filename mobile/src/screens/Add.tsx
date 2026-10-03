@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
-import { ADD_CATEGORIES, addCategoryLabel, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
+import { ADD_CATEGORIES, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
@@ -20,12 +20,8 @@ import {
   isCloudflare,
   JACKETT_HINT,
   progressText,
-  resolveLink,
-  resultDate,
   resultKey,
-  seedsText,
   sortResults,
-  sourceBadge,
   sourceName,
   stableOrder,
   SORT_LABELS,
@@ -33,10 +29,41 @@ import {
   type SortKey,
 } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
+import { loadSubs } from '../../../src/monitor/subs';
+import { ResultCard } from '../ui/ResultCard';
+import { SubSheet } from '../ui/SubSheet';
+import { addSearchResult, type RowBusy } from '../addResult';
+import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5';
 const CHECK = 'M5 12l5 5l9-10';
+const BELL = 'M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0';
+
+function sameQuery(a: string, b: string): boolean {
+  const n = (q: string) => q.replace(/\s+/g, ' ').trim().toLowerCase();
+  return n(a) === n(b);
+}
+
+/** Above the results of a search: «Подписаться» (with the search's filters), or «Открыть» when already subscribed. */
+function SubscribePlate({ query, onSubscribe }: { query: string; onSubscribe: () => void }) {
+  const existing = loadSubs().filter((s) => sameQuery(s.query, query))[0];
+  return (
+    <div class="m-sub-plate" data-plate="subscribe">
+      <Icon d={BELL} size={22} />
+      <span class="m-grow">{existing ? 'Вы подписаны на этот запрос' : 'Сообщить, когда появятся новые раздачи по этому запросу'}</span>
+      {existing ? (
+        <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={() => navigate({ name: 'subFindings', id: existing.id })}>
+          Открыть
+        </button>
+      ) : (
+        <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={onSubscribe}>
+          Подписаться
+        </button>
+      )}
+    </div>
+  );
+}
 
 const HASH = /^[0-9a-fA-F]{40}$/;
 
@@ -49,11 +76,6 @@ export function normalizeLink(raw: string): string | null {
   return null;
 }
 
-function meta(r: SourceResult): string {
-  const more = r.sources && r.sources.length ? 'ещё в ' + r.sources.map(sourceName).join(', ') : '';
-  return [r.Size, seedsText(r.Seed || 0), resultDate(r), more].filter(Boolean).join(' · ');
-}
-
 interface Prog {
   answered: number;
   total: number;
@@ -61,15 +83,16 @@ interface Prog {
   failed: string[];
 }
 
-/** Row state while adding: taking the link from the release page, then adding. */
-type RowBusy = 'link' | 'add';
-
 /**
  * The last search outlives the screen: going to «Источники поиска» (or another tab) and back shows the same
  * results, and a search still running keeps streaming into them.
  */
 interface SearchMemo {
   query: string;
+  /** The query of the search on screen and the filters it ran with (the «Подписаться» plate). */
+  searched: string;
+  searchedQuality: QualityFilter;
+  searchedSources: string[] | null;
   chosen: string[] | null;
   quality: QualityFilter;
   sort: SortKey;
@@ -84,7 +107,7 @@ interface SearchMemo {
 }
 
 function freshMemo(): SearchMemo {
-  return { query: '', chosen: null, quality: '', sort: 'seeds', handle: null, order: [], rowCat: {}, server: null, busy: new Map() };
+  return { query: '', searched: '', searchedQuality: '', searchedSources: null, chosen: null, quality: '', sort: 'seeds', handle: null, order: [], rowCat: {}, server: null, busy: new Map() };
 }
 
 let memo: SearchMemo = freshMemo();
@@ -119,6 +142,8 @@ export function Add({ link }: { link?: string }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [rowCat, setRowCatState] = useState<Record<string, string>>(memo.rowCat);
   const [catSheet, setCatSheet] = useState<string | null>(null);
+  const [subSheet, setSubSheet] = useState(false);
+  void monitorVersion.value;
   const [pending, setPending] = useState<Record<string, RowBusy>>(() => Object.fromEntries(memo.busy));
   const [alive] = useState({ v: true });
   const pendingRef = useRef<Map<string, RowBusy>>(memo.busy);
@@ -239,6 +264,9 @@ export function Add({ link }: { link?: string }) {
       onDone: notify,
     });
     memo.handle = h;
+    memo.searched = q;
+    memo.searchedQuality = quality;
+    memo.searchedSources = allChosen ? null : selected;
     memo.server = server;
     memo.order = [];
     sync(h);
@@ -267,17 +295,10 @@ export function Add({ link }: { link?: string }) {
       setSearchError('Сервер не выбран');
       return;
     }
-    markRow(key, 'link');
     setSearchError('');
     try {
-      // nnmclub, rutracker: the magnet is on the release page; Anidub, BigFANGroup: an http(s) .torrent link
-      const l = await resolveLink(r, phoneSourceContext());
-      if (!alive.v) return;
-      markRow(key, 'add');
-      const added = await c.add({ link: l, category: categoryOfRow(r) });
-      void rememberAdded(c, added, r.Title);
-      const hash = added.hash;
-      if (!alive.v) return;
+      const hash = await addSearchResult(r, categoryOfRow(r), { onStep: (s) => markRow(key, s), alive: () => alive.v });
+      if (!hash || !alive.v) return;
       if (!watch) {
         showToast('Добавлено на сервер');
         return;
@@ -372,6 +393,9 @@ export function Add({ link }: { link?: string }) {
           {sortLabel + ' ▾'}
         </button>
       </div>
+      {memo.handle && memo.searched && (
+        <SubscribePlate query={memo.searched} onSubscribe={() => setSubSheet(true)} />
+      )}
       {prog && prog.total === 0 && <div class="m-muted">Не выбрано ни одного источника — включите их в настройках, «Источники поиска»</div>}
       {prog && prog.total > 0 && (
         <div class="m-muted m-small" role="status" data-search-progress>
@@ -396,47 +420,15 @@ export function Add({ link }: { link?: string }) {
         {visible.map((r) => {
           const k = resultKey(r);
           return (
-            <div class="m-result m-result-card" key={k}>
-              <div class="m-result-title">{r.Title}</div>
-              <div class="m-result-meta m-small">
-                <span class="m-src-badge">{sourceBadge(r)}</span>
-                <span class="m-muted">{meta(r)}</span>
-              </div>
-              {pending[k] === 'link' && (
-                <div class="m-muted m-small" role="status">
-                  Получаю ссылку…
-                </div>
-              )}
-              <div class="m-result-actions">
-                <button
-                  type="button"
-                  class="m-chip"
-                  aria-label={'Категория: ' + addCategoryLabel(categoryOfRow(r)) + ', ' + r.Title}
-                  onClick={() => setCatSheet(k)}
-                >
-                  {addCategoryLabel(categoryOfRow(r)) + ' ▾'}
-                </button>
-                <span class="m-grow" />
-                <button
-                  type="button"
-                  class="m-btn m-btn-secondary m-btn-sm"
-                  aria-label={'Добавить на сервер: ' + r.Title}
-                  disabled={!!pending[k]}
-                  onClick={() => void addResult(r, false)}
-                >
-                  Добавить
-                </button>
-                <button
-                  type="button"
-                  class="m-btn m-btn-primary m-btn-sm"
-                  aria-label={'Добавить и смотреть на ТВ: ' + r.Title}
-                  disabled={!!pending[k]}
-                  onClick={() => void addResult(r, true)}
-                >
-                  На ТВ
-                </button>
-              </div>
-            </div>
+            <ResultCard
+              key={k}
+              r={r}
+              category={categoryOfRow(r)}
+              busy={pending[k]}
+              onCategory={() => setCatSheet(k)}
+              onAdd={() => void addResult(r, false)}
+              onWatch={() => void addResult(r, true)}
+            />
           );
         })}
       </div>
@@ -504,6 +496,12 @@ export function Add({ link }: { link?: string }) {
             ))}
           </div>
         </Sheet>
+      )}
+      {subSheet && (
+        <SubSheet
+          initial={{ query: memo.searched, quality: memo.searchedQuality, sources: memo.searchedSources, notify: true }}
+          onClose={() => setSubSheet(false)}
+        />
       )}
       {launch.sheet}
     </div>
