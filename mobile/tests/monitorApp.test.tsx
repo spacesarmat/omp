@@ -5,7 +5,7 @@ import { App } from '../src/app';
 import { native } from '../src/platform/native';
 import { currentRoute, routeStack, resetTo } from '../src/nav';
 import { toast } from '../src/ui/toast';
-import { parseNewsLink } from '../src/monitor/ui';
+import { parseNewsLink, askNotifyOnce } from '../src/monitor/ui';
 import { fakeMonitor, type FakeMonitor } from './fakeMonitor';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { TorrServerClient } from '../../src/api/torrserver';
@@ -65,6 +65,11 @@ describe('monitoring in the app shell', () => {
     act(() => render(null, el));
     mon.permission = 'prompt';
     await mount();
+    expect(mon.requestNotifyPermission).toHaveBeenCalledTimes(1);
+  });
+
+  it('two asks at the same moment show the permission request once', async () => {
+    await Promise.all([askNotifyOnce(), askNotifyOnce()]);
     expect(mon.requestNotifyPermission).toHaveBeenCalledTimes(1);
   });
 

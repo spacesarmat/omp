@@ -48,12 +48,21 @@ const isBool = (v: unknown) => typeof v === 'boolean';
  * The system notification dialog, once: when monitoring is first switched on or the first subscription is created.
  * Nothing happens when the permission is already decided.
  */
-export async function askNotifyOnce(): Promise<void> {
-  if (!monitorNative.available || loadJson<boolean>(ASKED_KEY, false, isBool)) return;
-  const st = await monitorNative.notifyPermission();
-  if (st !== 'prompt') return;
-  saveJson(ASKED_KEY, true);
-  await monitorNative.requestNotifyPermission();
+// app start and the first «Новое» visit may both ask at once: one request at a time
+let asking: Promise<void> | null = null;
+
+export function askNotifyOnce(): Promise<void> {
+  if (asking) return asking;
+  asking = (async () => {
+    if (!monitorNative.available || loadJson<boolean>(ASKED_KEY, false, isBool)) return;
+    const st = await monitorNative.notifyPermission();
+    if (st !== 'prompt') return;
+    saveJson(ASKED_KEY, true);
+    await monitorNative.requestNotifyPermission();
+  })().finally(() => {
+    asking = null;
+  });
+  return asking;
 }
 
 /** A background run could not show its notifications: ask (or hint) once. */
