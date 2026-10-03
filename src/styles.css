@@ -282,3 +282,10 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .pair-code-hint { font-size: 28px; color: #c9ceda; }
 .pair-code-error { margin-top: 16px; color: #ff9ea2; }
 .pair-steps-atv { margin-top: 32px; font-size: 30px; line-height: 1.5; color: #c9ceda; }
+
+.whatsnew-dialog { max-width: 1100px; }
+.whatsnew-list { max-height: 520px; overflow-y: auto; margin-bottom: 8px; }
+.whatsnew-ver { padding: 12px 20px; border-radius: 12px; margin-bottom: 8px; }
+.whatsnew-ver h2 { margin: 0 0 4px; font-size: 28px; color: var(--muted); font-weight: 700; }
+.whatsnew-ver .update-notes { margin-top: 4px; }
+.whatsnew-ver.focused { background: var(--panel2); transform: none; box-shadow: none; }

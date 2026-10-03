@@ -21,6 +21,10 @@ import { MiniPlayer } from './ui/MiniPlayer';
 import { Settings, runUpdateCheck } from './screens/Settings';
 import { ServerSettings } from './screens/ServerSettings';
 import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
+import { WhatsNewSheet } from './ui/WhatsNewSheet';
+import { checkWhatsNew } from '../../src/store/whatsNew';
+import { CHANGELOG } from '../../src/lib/changelogData';
+import { APP_VERSION } from '../../src/version';
 import { updatePrompt } from '../../src/store/updates';
 import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
 import { tvState, warmUp, cancelWarmUp } from './tv/tvClient';
@@ -131,6 +135,11 @@ export function App() {
     return watchLocalServer();
   }, []);
 
+  // «Что нового» once after an update
+  useEffect(() => {
+    checkWhatsNew(CHANGELOG, APP_VERSION);
+  }, []);
+
   // background update check 3 s after start (cheap GET; honours the setting and the 6 h interval)
   useEffect(() => {
     const t = setTimeout(() => {
@@ -181,6 +190,8 @@ export function App() {
         <Settings />
       )}
       {prompt && showNav && <UpdateSheet info={prompt} />}
+      {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
+      {showNav && !prompt && <WhatsNewSheet />}
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}

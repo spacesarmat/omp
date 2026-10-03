@@ -4,6 +4,8 @@ import { latestUpdate, checkForUpdate, dismissPrompt } from '../store/updates';
 import { HB_REPO_URL, HB_SITE_URL, RELEASES_URL } from '../lib/updateInfo';
 import { hbPresence, hbHasRoot, openHbChannel, hbInstall, InstallStatus, HbPresence } from '../platform/hbchannel';
 import { APP_VERSION } from '../version';
+import { CHANGELOG } from '../lib/changelogData';
+import { openWhatsNew } from '../store/whatsNew';
 import { FocusGroup, Button, ProgressBar } from '../ui/components';
 import { Qr } from '../ui/Qr';
 import { restoreFocus } from '../ui/focus';
@@ -148,6 +150,9 @@ export function UpdateScreen() {
           <Button focusKey="upd-check" label={checking ? 'Проверка…' : 'Проверить обновления'} onPress={check} disabled={checking} />
         </div>
       )}
+      <div class="row update-actions">
+        <Button focusKey="upd-whatsnew" label="Что нового" onPress={() => openWhatsNew(CHANGELOG, APP_VERSION)} />
+      </div>
       {info && info.notes.length > 0 && (
         <ul class="update-notes">{info.notes.slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>
       )}

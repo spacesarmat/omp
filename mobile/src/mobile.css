@@ -694,3 +694,7 @@ button, .m-btn {
 .m-src-hint { margin: -4px 0 10px; padding: 10px 12px; border-radius: 10px; background: #3A3320; color: var(--accent); font-size: 12px; line-height: 1.45; }
 .m-lock-note { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: var(--muted); line-height: 1.45; }
 .m-lock-note svg { flex-shrink: 0; }
+
+.m-whatsnew { display: flex; flex-direction: column; gap: 14px; max-height: 50vh; overflow-y: auto; }
+.m-whatsnew h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+.m-set-row-btn { width: 100%; border: none; color: inherit; font: inherit; text-align: left; }

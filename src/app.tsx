@@ -15,7 +15,11 @@ import { SettingsScreen } from './screens/Settings';
 import { UpdateScreen } from './screens/Update';
 import { PairPhoneScreen } from './screens/PairPhone';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
-import { checkForUpdate } from './store/updates';
+import { WhatsNewDialog, shouldShowWhatsNew } from './ui/WhatsNewDialog';
+import { checkWhatsNew, whatsNew } from './store/whatsNew';
+import { CHANGELOG } from './lib/changelogData';
+import { APP_VERSION } from './version';
+import { checkForUpdate, updatePrompt } from './store/updates';
 import { platformKind } from './platform/env';
 import { installAndroidKeyBridge } from './platform/androidKeys';
 import { installAndroidRemote } from './platform/androidRemote';
@@ -72,11 +76,16 @@ export function App() {
     const t = setTimeout(() => { checkForUpdate({ manual: false }); }, 3000);
     return () => clearTimeout(t);
   }, []);
+  useEffect(() => { checkWhatsNew(CHANGELOG, APP_VERSION); }, []);
   const r = currentRoute.value;
+  // opened by the user (Update screen) shows anywhere; the automatic one waits for the update prompt, the player and pairing
+  const wn = whatsNew.value;
+  const showWhatsNew = !!wn && !dialogOpen.value && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value));
   return (
     <div class="app">
       <div class="screen-host" key={routeKey(r)}>{renderRoute(r)}</div>
       {shouldShowUpdateDialog(r.name) && !dialogOpen.value && <UpdateDialog />}
+      {showWhatsNew && <WhatsNewDialog />}
       <DialogHost />
       <ToastHost />
     </div>
