@@ -80,7 +80,7 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
         {info.ipkSize > 0 ? ' · ' + formatMb(info.ipkSize) : ''}
       </div>
       {info.notes.length > 0 && (
-        <ul class="m-notes">
+        <ul class="m-notes m-sheet-scroll">
           {info.notes.slice(0, 8).map((n) => (
             <li key={n}>{n}</li>
           ))}

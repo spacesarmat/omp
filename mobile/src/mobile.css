@@ -360,7 +360,15 @@ button, .m-btn {
   padding: 12px 20px calc(24px + env(safe-area-inset-bottom));
   border-radius: 24px 24px 0 0;
   background: var(--panel);
+  /* never taller than the screen: the title stays below the status bar; long content scrolls */
+  max-height: calc(100vh - env(safe-area-inset-top) - 16px);
+  max-height: calc(100dvh - env(safe-area-inset-top) - 16px);
+  box-sizing: border-box;
+  overflow-y: auto;
 }
+.m-sheet > * { flex-shrink: 0; }
+/* the long part of a sheet (release notes, «Что нового») scrolls on its own; title and buttons stay */
+.m-sheet > .m-sheet-scroll { flex: 0 1 auto; min-height: 60px; overflow-y: auto; }
 .m-sheet-grip { align-self: center; width: 40px; height: 4px; border-radius: 2px; background: #3A3F4B; }
 .m-sheet-title { font-size: 20px; font-weight: 700; }
 .m-opt { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: none; border-radius: 14px; background: var(--panel-2); text-align: left; }
@@ -695,6 +703,6 @@ button, .m-btn {
 .m-lock-note { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: var(--muted); line-height: 1.45; }
 .m-lock-note svg { flex-shrink: 0; }
 
-.m-whatsnew { display: flex; flex-direction: column; gap: 14px; max-height: 50vh; overflow-y: auto; }
+.m-whatsnew { display: flex; flex-direction: column; gap: 14px; }
 .m-whatsnew h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
 .m-set-row-btn { width: 100%; border: none; color: inherit; font: inherit; text-align: left; }
