@@ -154,6 +154,51 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
+    /** Install assistant: NSD search for Google Cast devices: { tvs: [{ ip, name, model? }] }. */
+    @PluginMethod
+    fun discoverCastTvs(call: PluginCall) {
+        val once = Once(call)
+        val timeout = (call.getInt("timeoutMs") ?: 3000).coerceIn(500, 15000).toLong()
+        io.execute {
+            try {
+                val arr = JSArray()
+                for (t in CastDiscovery.discover(context, timeout)) {
+                    val o = JSObject().put("ip", t.ip).put("name", t.name)
+                    if (t.model != null) o.put("model", t.model)
+                    arr.put(o)
+                }
+                once.resolve(JSObject().put("tvs", arr))
+            } catch (e: Exception) {
+                once.reject("Не удалось выполнить поиск телевизоров. Проверьте Wi-Fi")
+            }
+        }
+    }
+
+    /** Install assistant: which of the install ports ([PortProbe.ALLOWED]) answer on a home-network IP: { open: [] }. */
+    @PluginMethod
+    fun probePorts(call: PluginCall) {
+        val once = Once(call)
+        val ip = call.getString("ip")?.trim().orEmpty()
+        val timeout = (call.getInt("timeoutMs") ?: 1500).coerceIn(200, 5000)
+        val ports = ArrayList<Int>()
+        val raw = call.getArray("ports")
+        if (raw != null) {
+            for (i in 0 until raw.length()) {
+                val p = raw.optInt(i, -1)
+                if (p > 0) ports.add(p)
+            }
+        }
+        if (!PortProbe.isPrivateIpv4(ip)) {
+            once.reject("Неверный адрес телевизора")
+            return
+        }
+        io.execute {
+            val arr = JSArray()
+            for (p in PortProbe.open(ip, ports, timeout)) arr.put(p)
+            once.resolve(JSObject().put("open", arr))
+        }
+    }
+
     /** Phone model for the TV's list of paired phones, e.g. «Google Pixel 7». */
     @PluginMethod
     fun phoneName(call: PluginCall) {

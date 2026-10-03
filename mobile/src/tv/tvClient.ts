@@ -567,6 +567,67 @@ export async function ompVersionOnTv(): Promise<string | null> {
   }
 }
 
+/** What the install assistant learns from a paired LG TV; each field is missing when the TV did not answer it. */
+export interface LgInstallInfo {
+  /** getSystemInfo `modelName`, e.g. «OLED55C1RLA». */
+  model?: string;
+  /** getCurrentSWInformation `product_name`, e.g. «webOSTV 6.0». */
+  productName?: string;
+  /** getCurrentSWInformation `model_name` (firmware code), e.g. «HE_DTV_W21O_AFABATAA». */
+  swModel?: string;
+  /** Installed apps (listApps); null when the list is unavailable. */
+  apps: Array<{ id: string; version?: string }> | null;
+}
+
+const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 80) : undefined);
+
+/**
+ * LG only, on the connected session: model, webOS version and installed apps for the install assistant. Every
+ * request is soft (a silent TV never drops the session); the TV's other fields (device id, MAC…) are not kept.
+ */
+export async function lgInstallInfo(): Promise<LgInstallInfo> {
+  if (!session || tvState.value !== 'connected') throw new Error(TV_NOT_CONNECTED);
+  const ip = sessionIp.value;
+  const soft = (uri: string) => send(uri, undefined, false, true).catch(() => null);
+  const [sys, sw, list] = await Promise.all([
+    soft('ssap://system/getSystemInfo'),
+    soft('ssap://com.webos.service.update/getCurrentSWInformation'),
+    soft('ssap://com.webos.applicationManager/listApps'),
+  ]);
+  const info: LgInstallInfo = { apps: null };
+  const model = str(sys?.modelName);
+  const productName = str(sw?.product_name);
+  const swModel = str(sw?.model_name);
+  if (model) info.model = model;
+  if (productName) info.productName = productName;
+  if (swModel) info.swModel = swModel;
+  if (Array.isArray(list?.apps)) {
+    const apps: Array<{ id: string; version?: string }> = [];
+    for (const a of list.apps) {
+      if (!a || typeof a.id !== 'string' || !a.id) continue;
+      const version = str(a.version);
+      apps.push(version ? { id: a.id, version } : { id: a.id });
+    }
+    info.apps = apps;
+    const omp = apps.find((a) => a.id === OMP_APP_ID);
+    if (omp?.version && ip !== null && sessionIp.value === ip && tvState.value === 'connected') {
+      versionCache = { ip, version: omp.version };
+    }
+  }
+  return info;
+}
+
+/** LG only: launches an app on the TV (e.g. Homebrew Channel with its addRepository params). */
+export async function launchLgApp(id: string, params: object = {}): Promise<void> {
+  if (tvKind() === 'atv') throw new Error(ATV_UNSUPPORTED);
+  try {
+    await request('ssap://system.launcher/launch', { id, params });
+  } catch (e) {
+    if (!(e instanceof TvAnswerError)) throw e;
+    throw new Error('Не удалось открыть приложение на телевизоре');
+  }
+}
+
 export function pressButton(name: RemoteButton): Promise<void> {
   if (tvKind() === 'atv') {
     if (ATV_KEYS.indexOf(name) < 0) return Promise.reject(new Error(ATV_UNSUPPORTED));

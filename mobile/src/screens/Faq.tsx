@@ -1,11 +1,21 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { goBack } from '../nav';
 import { FAQ } from '../faq';
 
-export function Faq() {
+/** `q`: a question to open and scroll to (from the install assistant). */
+export function Faq(p: { q?: string } = {}) {
   // one answer open at a time
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(() => {
+    if (!p.q) return null;
+    const sec = FAQ.find((s) => s.items.some((it) => it.q === p.q));
+    return sec ? sec.title + '/' + p.q : null;
+  });
+  useEffect(() => {
+    if (!open) return;
+    const el = document.querySelector('.m-faq-item.open');
+    if (el && typeof (el as HTMLElement).scrollIntoView === 'function') (el as HTMLElement).scrollIntoView({ block: 'start' });
+  }, []);
 
   return (
     <div class="m-screen" data-route="faq">

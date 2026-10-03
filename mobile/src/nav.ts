@@ -17,7 +17,10 @@ export type MRoute =
   | { name: 'settings' }
   | { name: 'serverSettings'; url?: string }
   | { name: 'localServer' }
-  | { name: 'faq' }
+  /** `q` opens that question. */
+  | { name: 'faq'; q?: string }
+  /** «Установить OMP на телевизор»: the device list, or the steps for the device at `ip`. */
+  | { name: 'install'; ip?: string; kind?: 'lg' | 'atv' }
   | { name: 'log' }
   | { name: 'backup' }
   | { name: 'sources' };

@@ -9,6 +9,8 @@ describe('native plugin wrapper outside Android', () => {
   it('finds no TVs', async () => {
     expect(await native.discoverTvs(500)).toEqual([]);
     expect(await native.discoverOmpTvs(500)).toEqual([]);
+    expect(await native.discoverCastTvs(500)).toEqual([]);
+    expect(await native.probePorts('192.168.1.5', [9922], 500)).toEqual([]);
   });
 
   it('names the phone «Телефон»', async () => {
@@ -83,6 +85,16 @@ describe('native plugin wrapper on Android', () => {
           'junk',
         ],
       })),
+      discoverCastTvs: vi.fn(async (): Promise<any> => ({
+        tvs: [
+          { ip: '192.168.1.9', name: 'Спальня', model: 'Chromecast HD' },
+          { ip: '192.168.1.9', name: 'dup' },
+          { ip: '192.168.1.10', name: '', model: 7 },
+          { ip: 'bad', name: 'x' },
+          null,
+        ],
+      })),
+      probePorts: vi.fn(async (): Promise<any> => ({ open: [9922, 'x', 22] })),
       phoneName: vi.fn(async (): Promise<any> => ({ name: ' Pixel 7 ' })),
       takePendingMagnet: vi.fn(async () => ({ link: null })),
       startPlayerServer: vi.fn(async () => ({ url: 'http://10.0.0.3:41234/omp/abc' })),
@@ -134,6 +146,17 @@ describe('native plugin wrapper on Android', () => {
     expect(fake.discoverOmpTvs).toHaveBeenCalledWith({ timeoutMs: 4000 });
     fake.discoverOmpTvs.mockResolvedValueOnce({});
     expect(await n.discoverOmpTvs(4000)).toEqual([]);
+  });
+
+  it('discoverCastTvs keeps well-formed entries; probePorts only asked ports', async () => {
+    const { native: n, fake } = await load();
+    expect(await n.discoverCastTvs(4000)).toEqual([
+      { ip: '192.168.1.9', name: 'Спальня', model: 'Chromecast HD' },
+      { ip: '192.168.1.10', name: 'Android TV' },
+    ]);
+    expect(fake.discoverCastTvs).toHaveBeenCalledWith({ timeoutMs: 4000 });
+    expect(await n.probePorts('192.168.1.5', [9922, 9991], 1500)).toEqual([9922]);
+    expect(fake.probePorts).toHaveBeenCalledWith({ ip: '192.168.1.5', ports: [9922, 9991], timeoutMs: 1500 });
   });
 
   it('phoneName trims the model and falls back to «Телефон»', async () => {

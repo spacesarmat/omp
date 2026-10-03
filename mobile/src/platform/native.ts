@@ -20,6 +20,14 @@ export interface FoundOmpTv {
   version: string;
 }
 
+/** Google Cast device found by NSD (`_googlecast._tcp`): Android TV / Google TV boxes, also speakers and Chromecasts. */
+export interface FoundCastTv {
+  ip: string;
+  name: string;
+  /** TXT `md`, e.g. «Chromecast HD». */
+  model?: string;
+}
+
 /** The embedded TorrServer (arm64 only), port 8090. */
 export interface LocalServerInfo {
   supported: boolean;
@@ -42,6 +50,10 @@ export interface OmpNativeApi {
   discoverTvs(timeoutMs: number): Promise<FoundTv[]>;
   /** NSD search for Android TVs with OMP; stops after `timeoutMs`. */
   discoverOmpTvs(timeoutMs: number): Promise<FoundOmpTv[]>;
+  /** Install assistant: NSD search for Google Cast devices; stops after `timeoutMs`. */
+  discoverCastTvs(timeoutMs: number): Promise<FoundCastTv[]>;
+  /** Install assistant: which install ports (9922, 9991, 5555, 8095) accept TCP on a home-network IP. */
+  probePorts(ip: string, ports: number[], timeoutMs: number): Promise<number[]>;
   /** Phone model for the TV's list of paired phones; «Телефон» when unknown. */
   phoneName(): Promise<string>;
   /**
@@ -99,6 +111,8 @@ export interface OmpNativeApi {
 interface OmpNativePlugin {
   discoverTvs(o: { timeoutMs: number }): Promise<{ tvs: FoundTv[] }>;
   discoverOmpTvs(o: { timeoutMs: number }): Promise<{ tvs?: unknown }>;
+  discoverCastTvs(o: { timeoutMs: number }): Promise<{ tvs?: unknown }>;
+  probePorts(o: { ip: string; ports: number[]; timeoutMs: number }): Promise<{ open?: unknown }>;
   phoneName(): Promise<{ name?: string | null }>;
   tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
   tvSend(o: { json: string }): Promise<void>;
@@ -218,6 +232,21 @@ function ompTvs(v: unknown): FoundOmpTv[] {
   return out;
 }
 
+/** Well-formed cast entries only, one per IP. */
+function castTvs(v: unknown): FoundCastTv[] {
+  const out: FoundCastTv[] = [];
+  if (!Array.isArray(v)) return out;
+  for (const t of v) {
+    if (!t || typeof t !== 'object' || typeof t.ip !== 'string' || !IPV4.test(t.ip)) continue;
+    if (out.some((o) => o.ip === t.ip)) continue;
+    const tv: FoundCastTv = { ip: t.ip, name: text(t.name) ?? 'Android TV' };
+    const model = text(t.model);
+    if (model) tv.model = model;
+    out.push(tv);
+  }
+  return out;
+}
+
 export const native: OmpNativeApi = {
   available,
 
@@ -231,6 +260,18 @@ export const native: OmpNativeApi = {
     if (!plugin) return [];
     const r = await plugin.discoverOmpTvs({ timeoutMs });
     return ompTvs(r?.tvs);
+  },
+
+  async discoverCastTvs(timeoutMs) {
+    if (!plugin) return [];
+    const r = await plugin.discoverCastTvs({ timeoutMs });
+    return castTvs(r?.tvs);
+  },
+
+  async probePorts(ip, ports, timeoutMs) {
+    if (!plugin) return [];
+    const r = await plugin.probePorts({ ip, ports, timeoutMs });
+    return Array.isArray(r?.open) ? r.open.filter((p): p is number => typeof p === 'number' && ports.indexOf(p) >= 0) : [];
   },
 
   async phoneName() {

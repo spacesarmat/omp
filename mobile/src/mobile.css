@@ -784,3 +784,26 @@ button, .m-btn {
 .m-backup-list li.no { color: var(--muted); }
 .m-backup-list li.no::before { content: '✕'; }
 .m-backup-warn { color: var(--muted); }
+
+/* install assistant */
+.m-ok { color: #8FE39A; }
+.m-tv-install { align-self: flex-start; }
+.m-tv-noomp { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.m-tv-noomp .m-btn { flex-shrink: 0; height: 40px; padding: 0 14px; }
+.m-install-list { display: flex; flex-direction: column; gap: 10px; }
+.m-install-dev { display: flex; align-items: center; gap: 12px; padding: 12px; border: none; border-radius: 14px; background: var(--panel); color: var(--text); font: inherit; text-align: left; }
+.m-install-dev-icon { display: flex; color: var(--accent); }
+.m-install-dev-icon.ok { color: #8FE39A; }
+.m-install-dev-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.m-install-dev-name { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.m-install-manual { height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
+.m-install-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.m-install-step { display: flex; gap: 12px; padding: 12px; border-radius: 14px; background: var(--panel); }
+.m-install-step.current { background: #3A3320; }
+.m-install-mark { width: 28px; height: 28px; border-radius: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; background: #252A35; color: var(--muted); }
+.m-install-step.done .m-install-mark { background: #1E2A1F; color: #8FE39A; }
+.m-install-step.current .m-install-mark { background: var(--accent); color: var(--bg); }
+.m-install-step-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.m-install-step-title { font-size: 14px; font-weight: 700; }
+.m-install-actions { display: flex; flex-direction: column; gap: 10px; }
+.m-install-actions .m-link { align-self: flex-start; }

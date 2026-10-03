@@ -1,8 +1,20 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
-import { goBack } from '../nav';
+import { goBack, navigate } from '../nav';
 import { native, type FoundTv, type FoundOmpTv } from '../platform/native';
-import { connectTv, cancelWarmUp, disconnectTv, pairAtv, sessionIp, tvState, tvError, TV_FORGOT } from '../tv/tvClient';
+import {
+  connectTv,
+  cancelWarmUp,
+  disconnectTv,
+  pairAtv,
+  lgInstallInfo,
+  tvKind,
+  sessionIp,
+  tvState,
+  tvError,
+  TV_FORGOT,
+} from '../tv/tvClient';
+import { LG_OMP_APP_ID } from '../../../src/lib/installPlan';
 import { RenameSheet } from '../ui/RenameSheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { tvs, activeTv, forgetTv, renameTv, ATV_PORT, type SavedTv, type TvKind } from '../tv/tvStore';
@@ -50,6 +62,25 @@ export function Tv() {
   const [foundAtv, setFoundAtv] = useState<FoundOmpTv[]>([]);
   /** Android TV waiting for its pairing code. */
   const [coding, setCoding] = useState<FoundOmpTv | null>(null);
+  /** IP of the connected LG whose app list has no OMP: offers the install assistant. */
+  const [noOmp, setNoOmp] = useState<string | null>(null);
+  const connectedIp = tvState.value === 'connected' ? sessionIp.value : null;
+
+  useEffect(() => {
+    setNoOmp(null);
+    if (!connectedIp || tvKind() !== 'lg') return;
+    let alive = true;
+    lgInstallInfo().then(
+      (info) => {
+        // an unknown app list says nothing: only a list without OMP counts
+        if (alive && info.apps && !info.apps.some((a) => a.id === LG_OMP_APP_ID)) setNoOmp(connectedIp);
+      },
+      () => {},
+    );
+    return () => {
+      alive = false;
+    };
+  }, [connectedIp]);
 
   useEffect(() => {
     let alive = true;
@@ -151,6 +182,9 @@ export function Tv() {
       <p class="m-muted m-note">
         Телефон и телевизор должны быть в одной сети Wi-Fi. На телевизоре должен быть установлен OMP.
       </p>
+      <button type="button" class="m-link m-tv-install" onClick={() => navigate({ name: 'install' })}>
+        Нет OMP на телевизоре? Помощник установки
+      </button>
       {searching && (
         <div class="m-muted m-searching">
           <svg class="m-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5B700" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
@@ -201,6 +235,14 @@ export function Tv() {
                 )}
               </div>
               {pairing && <div class="m-hint-warn">Подтвердите подключение на экране телевизора пультом: «Разрешить».</div>}
+              {connected && noOmp === r.ip && (
+                <div class="m-hint-warn m-tv-noomp" role="status">
+                  <span>На этом телевизоре нет OMP.</span>
+                  <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={() => navigate({ name: 'install', ip: r.ip, kind: 'lg' })}>
+                    Установить OMP
+                  </button>
+                </div>
+              )}
               {failed && (
                 <div class="m-error" role="alert">
                   {tvError.value}

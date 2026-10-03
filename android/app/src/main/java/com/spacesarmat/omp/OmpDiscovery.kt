@@ -24,15 +24,28 @@ object OmpDiscovery {
     private const val TAG = "OmpDiscovery"
     private const val RESOLVE_TIMEOUT_MS = 3000L
 
+    fun discover(context: Context, timeoutMs: Long): List<FoundOmpTv> =
+        search(context, SERVICE_TYPE, timeoutMs, { toFound(it) }, { it.ip })
+
+    /**
+     * Generic NSD search: discovers [serviceType] until [timeoutMs], resolves services one at a time and maps each
+     * resolved service with [map] (null = skip); the first result per [key] wins. Blocking.
+     */
     @Suppress("DEPRECATION")
-    fun discover(context: Context, timeoutMs: Long): List<FoundOmpTv> {
+    fun <T> search(
+        context: Context,
+        serviceType: String,
+        timeoutMs: Long,
+        map: (NsdServiceInfo) -> T?,
+        key: (T) -> String,
+    ): List<T> {
         val app = context.applicationContext
         val nsd = app.getSystemService(Context.NSD_SERVICE) as? NsdManager ?: return emptyList()
         val wifi = app.getSystemService(Context.WIFI_SERVICE) as WifiManager?
         val lock = wifi?.createMulticastLock("omp-nsd")?.apply { setReferenceCounted(false) }
         val services = LinkedBlockingQueue<NsdServiceInfo>()
         val seen = HashSet<String>()
-        val found = LinkedHashMap<String, FoundOmpTv>()
+        val found = LinkedHashMap<String, T>()
         val listener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(serviceType: String) {}
             override fun onDiscoveryStopped(serviceType: String) {}
@@ -51,14 +64,16 @@ object OmpDiscovery {
         var started = false
         try {
             lock?.acquire()
-            nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, listener)
+            nsd.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
             started = true
             while (true) {
                 val left = deadline - System.currentTimeMillis()
                 if (left <= 0) break
                 val service = services.poll(left, TimeUnit.MILLISECONDS) ?: break
-                val tv = resolve(nsd, service, minOf(RESOLVE_TIMEOUT_MS, deadline - System.currentTimeMillis())) ?: continue
-                if (!found.containsKey(tv.ip)) found[tv.ip] = tv
+                val info = resolve(nsd, service, minOf(RESOLVE_TIMEOUT_MS, deadline - System.currentTimeMillis())) ?: continue
+                val item = map(info) ?: continue
+                val k = key(item)
+                if (!found.containsKey(k)) found[k] = item
             }
         } catch (e: RuntimeException) {
             Log.w(TAG, "discovery error: ${e.message}")
@@ -80,16 +95,16 @@ object OmpDiscovery {
     }
 
     @Suppress("DEPRECATION")
-    private fun resolve(nsd: NsdManager, service: NsdServiceInfo, timeoutMs: Long): FoundOmpTv? {
+    private fun resolve(nsd: NsdManager, service: NsdServiceInfo, timeoutMs: Long): NsdServiceInfo? {
         if (timeoutMs <= 0) return null
         val done = CountDownLatch(1)
-        var result: FoundOmpTv? = null
+        var result: NsdServiceInfo? = null
         val listener = object : NsdManager.ResolveListener {
             override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
                 done.countDown()
             }
             override fun onServiceResolved(info: NsdServiceInfo) {
-                result = toFound(info)
+                result = info
                 done.countDown()
             }
         }
@@ -109,11 +124,15 @@ object OmpDiscovery {
         return result
     }
 
+    /** IPv4 of a resolved service (API 34+: `host` is deprecated and may be IPv6 while an IPv4 is in `hostAddresses`). */
     @Suppress("DEPRECATION")
-    private fun toFound(info: NsdServiceInfo): FoundOmpTv? {
-        // API 34+: `host` is deprecated and may be an IPv6 address while an IPv4 one is in `hostAddresses`
+    fun ipv4Of(info: NsdServiceInfo): String? {
         val all = if (android.os.Build.VERSION.SDK_INT >= 34) info.hostAddresses else null
-        val ip = pickIpv4(all, info.host) ?: return null
+        return pickIpv4(all, info.host)
+    }
+
+    private fun toFound(info: NsdServiceInfo): FoundOmpTv? {
+        val ip = ipv4Of(info) ?: return null
         val version = info.attributes?.get("v")?.let { String(it, Charsets.UTF_8) }.orEmpty()
         return FoundOmpTv(ip, info.port, cleanName(info.serviceName), version)
     }

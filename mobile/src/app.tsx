@@ -12,6 +12,7 @@ import { Tv } from './screens/Tv';
 import { Faq } from './screens/Faq';
 import { Log } from './screens/Log';
 import { Backup } from './screens/Backup';
+import { InstallAssistant } from './screens/InstallAssistant';
 import { Sources } from './screens/Sources';
 import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
@@ -203,7 +204,9 @@ export function App() {
       ) : route.name === 'tv' ? (
         <Tv />
       ) : route.name === 'faq' ? (
-        <Faq />
+        <Faq q={route.q} />
+      ) : route.name === 'install' ? (
+        <InstallAssistant key={route.ip ? 'steps:' + route.ip : 'find'} ip={route.ip} kind={route.kind} />
       ) : route.name === 'log' ? (
         <Log />
       ) : route.name === 'backup' ? (
