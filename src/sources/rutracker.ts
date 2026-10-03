@@ -5,14 +5,17 @@
 import { absUrl, parseHtml, parseSize, textOf } from './html';
 import { checkPage, magnetOf, makeResult, requireHost, toInt } from './site';
 import { loginRequired } from './types';
-import type { HttpResponse, Source, SourceContext, SourceResult } from './types';
+import type { HttpResponse, SecretStore, Source, SourceContext, SourceResult } from './types';
 
 const HOST = 'rutracker.org';
 const FORUM = 'https://' + HOST + '/forum/';
 const LOGIN_URL = FORUM + 'login.php';
 const SEARCH = FORUM + 'tracker.php?nm=';
-const USER_KEY = 'rutracker.username';
-const PASS_KEY = 'rutracker.password';
+// the Android TV control server writes the same keys when the phone sends the login (ControlRouter /omp/sources)
+export const RUTRACKER_USER_KEY = 'rutracker.username';
+export const RUTRACKER_PASS_KEY = 'rutracker.password';
+const USER_KEY = RUTRACKER_USER_KEY;
+const PASS_KEY = RUTRACKER_PASS_KEY;
 
 export const RUTRACKER_CAPTCHA = 'rutracker просит капчу — войдите на сайте в браузере и попробуйте снова';
 export const RUTRACKER_BAD_LOGIN = 'Неверный логин или пароль';
@@ -41,10 +44,33 @@ function postLogin(username: string, password: string, ctx: SourceContext): Prom
     });
 }
 
-function savedCredentials(ctx: SourceContext): Promise<{ username: string; password: string } | null> {
-  const s = ctx.secrets;
-  if (!s) return Promise.resolve(null);
+/** The saved login (both parts), null when there is none. */
+export function rutrackerSavedLogin(s: SecretStore): Promise<{ username: string; password: string } | null> {
   return Promise.all([s.get(USER_KEY), s.get(PASS_KEY)]).then((v) => (v[0] && v[1] ? { username: v[0], password: v[1] } : null));
+}
+
+function savedCredentials(ctx: SourceContext): Promise<{ username: string; password: string } | null> {
+  return ctx.secrets ? rutrackerSavedLogin(ctx.secrets) : Promise.resolve(null);
+}
+
+/**
+ * Signs in with the saved login (the phone sent it to the TV). A wrong login is forgotten; a captcha or a network
+ * error keeps it (the next search signs in again). Rejects with the Russian messages of login().
+ */
+export function rutrackerLoginSaved(ctx: SourceContext): Promise<void> {
+  const secrets = ctx.secrets;
+  if (!secrets) return Promise.reject(new Error(RUTRACKER_NO_STORE));
+  return rutrackerSavedLogin(secrets).then((c) => {
+    if (!c) throw new Error(RUTRACKER_EMPTY);
+    return postLogin(c.username, c.password, ctx).then(undefined, (e: unknown) => {
+      const msg = e instanceof Error ? e.message : '';
+      if (msg !== RUTRACKER_BAD_LOGIN) throw e;
+      const fail = () => {
+        throw e;
+      };
+      return Promise.all([secrets.delete(USER_KEY), secrets.delete(PASS_KEY)]).then(fail, fail);
+    });
+  });
 }
 
 let relogin: Promise<void> | null = null;

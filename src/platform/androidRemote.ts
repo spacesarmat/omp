@@ -8,6 +8,11 @@ import { runLaunchParams } from '../launchActions';
 import { attachPhone } from '../phone/link';
 import { activeServer } from '../store/servers';
 import { resetTo } from '../ui/nav';
+import { log } from '../lib/log';
+import { allSources } from '../sources/registry';
+import { applyRemoteSources, parseRemoteSources } from '../sources/transfer';
+import { tvSourceContext } from '../sources/tvContext';
+import type { Source, SourceContext } from '../sources/types';
 
 /** Phone key names → webOS key codes the TV interface understands. */
 const KEY_CODES: { [name: string]: number } = {
@@ -125,6 +130,46 @@ export function applyRemoteAttach(d: unknown): void {
   if (/^http:\/\//i.test(r) && r.length <= 200) attachPhone(r);
 }
 
+/**
+ * remoteSources { id, sources, rutracker, phone }: «Передать на телевизор» from the phone. The switches are applied,
+ * the saved login is tried, and the native side gets remoteSourcesDone { id, rutracker? } (it answers the phone).
+ */
+export function applyRemoteSourcesEvent(
+  d: unknown,
+  plugin: Pick<OmpNativeTvPlugin, 'remoteSourcesDone'>,
+  known: () => Source[] = allSources,
+  ctx: () => SourceContext = tvSourceContext,
+): Promise<void> {
+  const r = parseRemoteSources(d);
+  if (!r) {
+    log('warn', 'tv', 'Передача источников с телефона: неверные данные');
+    const id = d && typeof d === 'object' ? (d as { id?: unknown }).id : undefined;
+    // the native side waits for an answer: say it failed rather than let the phone wait for the timeout
+    if (typeof id !== 'string' || !id) return Promise.resolve();
+    return plugin.remoteSourcesDone({ id, failed: true }).then(() => undefined, () => undefined);
+  }
+  const done = (rutracker?: string) => {
+    const o: { id: string; rutracker?: string } = { id: r.id };
+    if (rutracker) o.rutracker = rutracker;
+    return plugin.remoteSourcesDone(o).then(
+      () => undefined,
+      () => {
+        log('warn', 'tv', 'Передача источников с телефона: не удалось ответить');
+      },
+    );
+  };
+  return applyRemoteSources(r, known(), ctx).then(
+    (res) => {
+      log(res && res !== 'ok' ? 'warn' : 'info', 'tv', 'Источники переданы с телефона' + (res ? ', вход на rutracker: ' + res : ''));
+      return done(res);
+    },
+    () => {
+      log('error', 'tv', 'Передача источников с телефона не применилась');
+      return plugin.remoteSourcesDone({ id: r.id, failed: true }).then(() => undefined, () => undefined);
+    },
+  );
+}
+
 /** Subscribes to the phone remote events; returns the uninstaller. No-op without the plugin. */
 export function installAndroidRemote(plugin: OmpNativeTvPlugin | null = nativePlugin()): () => void {
   if (!plugin) return () => undefined;
@@ -144,6 +189,7 @@ export function installAndroidRemote(plugin: OmpNativeTvPlugin | null = nativePl
   on('remoteAttach', applyRemoteAttach);
   on('remoteKey', applyRemoteKey);
   on('remoteText', applyRemoteText);
+  on('remoteSources', (d) => { void applyRemoteSourcesEvent(d, plugin); });
   return () => {
     removed = true;
     handles.splice(0).forEach((h) => {

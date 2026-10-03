@@ -1,0 +1,232 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render } from 'preact';
+import { act } from 'preact/test-utils';
+import { mockFetch, type MockResponse } from '../../tests/helpers/fetchMock';
+import { Sources, sentText, SEND_TEXT } from '../src/screens/Sources';
+import { resetTo } from '../src/nav';
+import { cancelWarmUp, disconnectTv, sendSourcesToTv, setTransport, tvState, SOURCES_ATV_ONLY, SOURCES_BUSY, SOURCES_NO_ANSWER, SOURCES_SECRETS, TV_FORGOT, type TvTransport } from '../src/tv/tvClient';
+import { reloadTvs, saveTv, setActiveTv, type SavedTv } from '../src/tv/tvStore';
+import { native } from '../src/platform/native';
+import { toast } from '../src/ui/toast';
+import { registerSource, unregisterSource } from '../../src/sources/registry';
+import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/store';
+import { logEntries, clearLog } from '../../src/lib/log';
+import type { Source, SourceContext } from '../../src/sources/types';
+
+const TOKEN = '0123456789abcdef0123456789abcdef';
+const ATV: SavedTv = { ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095 };
+const LG: SavedTv = { ip: '192.168.1.50', name: 'LG', clientKey: 'k' };
+const BASE = 'http://192.168.1.40:8095';
+// test-only values, not a real account
+const PASSWORD = 'pa55-test-only';
+const SECRETS: { [k: string]: string } = { 'rutracker.username': 'test-user', 'rutracker.password': PASSWORD };
+
+interface Call {
+  url: string;
+  method: string;
+  auth?: string;
+  body: any;
+}
+
+let calls: Call[];
+let answer: (c: Call) => MockResponse | Promise<MockResponse>;
+let el: HTMLElement;
+
+/** A fake OMP control server on the Android TV. */
+function server() {
+  return mockFetch((url, init) => {
+    const c: Call = { url, method: init.method || 'GET', auth: init.headers?.Authorization, body: init.body ? JSON.parse(init.body) : undefined };
+    calls.push(c);
+    if (url === BASE + '/omp/info') return { body: JSON.stringify({ name: 'Гостиная', version: '0.14.0', paired: true, foreground: true }) };
+    return answer(c);
+  });
+}
+
+const noSsap: TvTransport = {
+  tvConnect: () => Promise.reject(new Error('ssap used')),
+  tvSend: () => Promise.reject(new Error('ssap used')),
+  onTvMessage: () => () => {},
+  onTvClosed: () => () => {},
+  pointerConnect: () => Promise.reject(new Error('ssap used')),
+  pointerSend: () => Promise.reject(new Error('ssap used')),
+  tvDisconnect: () => Promise.resolve(),
+};
+
+function ctx(): SourceContext {
+  return {
+    http: { get: () => Promise.reject(new Error('net')), post: () => Promise.reject(new Error('net')), clearCookies: () => Promise.resolve() },
+    client: null,
+    secrets: {
+      get: (k) => Promise.resolve(Object.prototype.hasOwnProperty.call(SECRETS, k) ? SECRETS[k] : null),
+      set: () => Promise.resolve(),
+      delete: () => Promise.resolve(),
+    },
+  };
+}
+
+const rutrackerFake = (logged: boolean): Source => ({
+  id: 'rutracker',
+  name: 'rutracker',
+  kind: 'builtin',
+  needsLogin: true,
+  search: () => Promise.resolve([]),
+  login: () => Promise.resolve(),
+  logout: () => Promise.resolve(),
+  loggedIn: () => Promise.resolve(logged),
+});
+
+async function flush() {
+  await act(async () => {
+    for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+async function mount() {
+  document.body.innerHTML = '<div id="app"></div>';
+  el = document.getElementById('app')!;
+  act(() => render(<Sources ctx={ctx} />, el));
+  await flush();
+}
+
+const btn = (t: string) => Array.from(el.querySelectorAll('button')).find((b) => b.textContent === t) as HTMLButtonElement | undefined;
+const card = () => el.querySelector('[data-send="tv"]') as HTMLElement | null;
+const sourcePosts = () => calls.filter((c) => c.method === 'POST' && c.url === BASE + '/omp/sources');
+
+beforeEach(() => {
+  localStorage.clear();
+  reloadTvs();
+  reloadSourcePrefs();
+  resetHealth();
+  clearLog();
+  calls = [];
+  answer = (c) => ({ body: JSON.stringify(c.body.rutracker ? { ok: true, rutracker: 'ok' } : { ok: true }) });
+  toast.value = '';
+  setTransport(noSsap);
+  server();
+  resetTo({ name: 'sources' });
+  registerSource({ id: 'nnmclub', name: 'nnmclub', kind: 'builtin', search: () => Promise.resolve([]) });
+});
+
+afterEach(async () => {
+  if (el) act(() => render(null, el));
+  unregisterSource('nnmclub');
+  unregisterSource('rutracker');
+  cancelWarmUp();
+  await disconnectTv();
+  setTransport(native);
+  vi.unstubAllGlobals();
+});
+
+describe('sendSourcesToTv (protocol)', () => {
+  it('posts the payload with the token and reads the rutracker result', async () => {
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    const payload = { v: 1, sources: { rutor: true }, rutracker: { username: 'test-user', password: PASSWORD } };
+    expect(await sendSourcesToTv(payload)).toEqual({ rutracker: 'ok' });
+    const post = sourcePosts()[0];
+    expect(post.auth).toBe('Bearer ' + TOKEN);
+    expect(post.body).toEqual(payload);
+    expect(await sendSourcesToTv({ v: 1, sources: { rutor: false } })).toEqual({});
+    answer = () => ({ body: JSON.stringify({ ok: true, rutracker: 'weird' }) });
+    expect(await sendSourcesToTv(payload)).toEqual({ rutracker: 'error' });
+  });
+
+  it('maps the TV answers to Russian errors', async () => {
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    const payload = { v: 1, sources: { rutor: true } };
+    answer = () => ({ status: 409, body: '{"error":"busy"}' });
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_BUSY);
+    answer = () => ({ status: 503, body: '{"error":"no_answer"}' });
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_NO_ANSWER);
+    answer = () => ({ status: 500, body: '{"error":"secrets"}' });
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_SECRETS);
+    answer = () => ({ status: 401, body: '{"error":"unauthorized"}' });
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(TV_FORGOT);
+    expect(tvState.value).toBe('error');
+  });
+
+  it('is only for an Android TV', async () => {
+    saveTv(LG);
+    setActiveTv(LG.ip);
+    await expect(sendSourcesToTv({ v: 1, sources: { rutor: true } })).rejects.toThrow(SOURCES_ATV_ONLY);
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('«Передать на телевизор» on the phone', () => {
+  it('is hidden without a paired Android TV and for LG', async () => {
+    await mount();
+    expect(card()).toBeNull();
+    saveTv(LG);
+    setActiveTv(LG.ip);
+    await mount();
+    expect(card()).toBeNull();
+    expect(el.textContent).not.toContain('Передать на телевизор');
+  });
+
+  it('sends the switches and the rutracker login, then says «Передано»', async () => {
+    registerSource(rutrackerFake(true));
+    setSourceOn('nnmclub', false);
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    await mount();
+    expect(card()!.textContent).toContain('Android TV «Гостиная»');
+    expect(card()!.textContent).toContain(SEND_TEXT);
+    const box = card()!.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    const post = sourcePosts()[0];
+    expect(post.body.v).toBe(1);
+    expect(post.body.sources).toMatchObject({ 'ts-rutor': true, 'ts-torznab': true, nnmclub: false });
+    expect(post.body.rutracker).toEqual({ username: 'test-user', password: PASSWORD });
+    expect(toast.value).toBe('Передано');
+    expect(card()!.textContent).toMatch(/Передано сегодня в \d\d:\d\d/);
+    expect(card()!.textContent).toContain('подключён');
+    // nothing secret in the log or the saved state
+    expect(JSON.stringify(logEntries())).not.toContain(PASSWORD);
+    expect(JSON.stringify(localStorage)).not.toContain(PASSWORD);
+  });
+
+  it('without the checkbox the login stays on the phone', async () => {
+    registerSource(rutrackerFake(true));
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    await mount();
+    const box = card()!.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    act(() => {
+      box.checked = false;
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(sourcePosts()[0].body.rutracker).toBeUndefined();
+  });
+
+  it('no checkbox when the phone is not signed in to rutracker', async () => {
+    registerSource(rutrackerFake(false));
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    await mount();
+    expect(card()!.querySelector('input[type="checkbox"]')).toBeNull();
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(sourcePosts()[0].body.rutracker).toBeUndefined();
+  });
+
+  it('shows the TV refusal of the login and errors inline', async () => {
+    registerSource(rutrackerFake(true));
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    answer = () => ({ body: '{"ok":true,"rutracker":"bad_login"}' });
+    await mount();
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(toast.value).toBe(sentText('bad_login'));
+    answer = () => ({ status: 503, body: '{"error":"no_answer"}' });
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(el.querySelector('[role="alert"]')!.textContent).toBe(SOURCES_NO_ANSWER);
+  });
+});

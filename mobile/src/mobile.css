@@ -764,3 +764,13 @@ button, .m-btn {
 .m-log-row.warn .m-log-level { color: var(--accent); }
 .m-log-row.error .m-log-level { color: #FF8A80; }
 .m-log-text { margin-top: 2px; font-size: 14px; color: var(--text); overflow-wrap: anywhere; }
+
+/* «Передать на телевизор» (Android TV) */
+.m-send-card { gap: 10px; padding: 14px; }
+.m-send-head { display: flex; align-items: center; gap: 10px; color: #8FE39A; }
+.m-send-name { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 700; color: var(--text); }
+.m-send-state { font-size: 12px; color: var(--muted); }
+.m-send-state.ok { color: #8FE39A; }
+.m-send-check { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.m-send-check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.m-send-done { font-size: 12px; color: #8FE39A; }

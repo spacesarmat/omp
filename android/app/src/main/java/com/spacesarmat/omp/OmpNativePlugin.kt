@@ -49,7 +49,7 @@ import org.json.JSONObject
  * localServerState { running, error? }, nativePlayerState { session, index, time, duration, paused, buffering,
  * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV);
  * phone remote on Android TV ([TvRemote]): remoteLaunch { params }, remoteAttach { report }, remoteKey { name },
- * remoteText { text | delete | enter }, phonePaired { phone }.
+ * remoteText { text | delete | enter }, phonePaired { phone }, remoteSources { id, sources, rutracker, phone }.
  */
 @CapacitorPlugin(
     name = "OmpNative",
@@ -518,6 +518,18 @@ class OmpNativePlugin : Plugin() {
             return
         }
         call.resolve(JSObject().put("name", r.name()))
+    }
+
+    /** «Передать на телевизор»: the page applied remoteSources { id } (rutracker = login result) or { failed }. */
+    @PluginMethod
+    fun remoteSourcesDone(call: PluginCall) {
+        val r = remote
+        if (r == null) {
+            call.reject("Управление с телефона недоступно")
+            return
+        }
+        r.sourcesDone(call.getString("id"), call.getString("rutracker"), call.getBoolean("failed") == true)
+        call.resolve()
     }
 
     /** A phone command for the open native player ({ cmd: Cmd }). */

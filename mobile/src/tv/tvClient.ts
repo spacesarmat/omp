@@ -5,6 +5,7 @@ import { native, type OmpNativeApi, type FoundOmpTv } from '../platform/native';
 import { activeTv, saveTv, setActiveTv, clearTvToken, normalizeMac, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
 import { showToast } from '../ui/toast';
 import { log } from '../../../src/lib/log';
+import { isRutrackerResult, TRANSFER_PATH, type RutrackerResult, type TransferPayload } from '../../../src/sources/transfer';
 import {
   registerMessage,
   requestMessage,
@@ -707,7 +708,7 @@ export function atvErrorText(status: number): string {
 }
 
 /** One request to the control server; a network failure or 5 s of silence -> TV_NO_ANSWER. */
-function atvFetch(tv: SavedTv, method: 'GET' | 'POST', path: string, body?: object): Promise<AtvAnswer> {
+function atvFetch(tv: SavedTv, method: 'GET' | 'POST', path: string, body?: object, timeoutMs = ATV_TIMEOUT): Promise<AtvAnswer> {
   const headers: Record<string, string> = {};
   if (tv.token) headers.Authorization = 'Bearer ' + tv.token;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -717,7 +718,7 @@ function atvFetch(tv: SavedTv, method: 'GET' | 'POST', path: string, body?: obje
     timer = setTimeout(() => {
       ctrl.abort();
       reject(new Error(TV_NO_ANSWER));
-    }, ATV_TIMEOUT);
+    }, timeoutMs);
   });
   const url = 'http://' + tv.ip + ':' + (tv.ctlPort || ATV_PORT) + path;
   const run = (async (): Promise<AtvAnswer> => {
@@ -859,6 +860,43 @@ function checkForeground(): void {
 /** Android TV: starts the «Сейчас играет» link to `report` without navigating. */
 export async function attachOnTv(report: string): Promise<void> {
   await atvPost('/omp/attach', { report });
+}
+
+export const SOURCES_ATV_ONLY = 'Передать источники можно только на Android TV с OMP';
+export const SOURCES_BUSY = 'Телевизор ещё применяет прошлую передачу — попробуйте через минуту';
+export const SOURCES_NO_ANSWER = 'Телевизор не ответил — откройте OMP на телевизоре и попробуйте снова';
+export const SOURCES_FAILED = 'Телевизор не смог применить источники';
+export const SOURCES_SECRETS = 'Телевизор не смог сохранить вход: защищённое хранилище недоступно';
+/** The TV may sign in to rutracker before it answers (its own wait is 35 s). */
+const SOURCES_TIMEOUT = 45000;
+
+/**
+ * «Передать на телевизор»: POST /omp/sources with the switches and, when given, the rutracker login (only to the
+ * paired Android TV, over its token). Resolves the TV's rutracker result (undefined without a login); rejects in
+ * Russian. The body is never logged.
+ */
+export async function sendSourcesToTv(payload: TransferPayload): Promise<{ rutracker?: RutrackerResult }> {
+  if (tvKind() !== 'atv') throw new Error(SOURCES_ATV_ONLY);
+  await ensureConnected();
+  const s = atv;
+  if (!s || tvState.value !== 'connected') throw new Error(TV_NOT_CONNECTED);
+  let r: AtvAnswer;
+  try {
+    r = await atvFetch(s.tv, 'POST', TRANSFER_PATH, payload, SOURCES_TIMEOUT);
+  } catch {
+    atvFail(s, TV_NO_ANSWER);
+    throw new Error(SOURCES_NO_ANSWER);
+  }
+  if (r.status === 401) {
+    atvFail(s, TV_FORGOT);
+    throw new Error(TV_FORGOT);
+  }
+  if (r.status === 409) throw new Error(SOURCES_BUSY);
+  if (r.status === 503) throw new Error(SOURCES_NO_ANSWER);
+  if (r.status === 500) throw new Error(r.data?.error === 'secrets' ? SOURCES_SECRETS : SOURCES_FAILED);
+  if (r.status !== 200 || !r.data || r.data.ok !== true) throw new Error(r.status === 200 ? ATV_ERROR : atvErrorText(r.status));
+  if (!payload.rutracker) return {};
+  return { rutracker: isRutrackerResult(r.data.rutracker) ? r.data.rutracker : 'error' };
 }
 
 /**

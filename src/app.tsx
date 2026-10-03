@@ -14,6 +14,7 @@ import { PlaylistScreen } from './screens/Playlist';
 import { SettingsScreen } from './screens/Settings';
 import { UpdateScreen } from './screens/Update';
 import { PairPhoneScreen } from './screens/PairPhone';
+import { SourcesScreen } from './screens/Sources';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { WhatsNewDialog, shouldShowWhatsNew } from './ui/WhatsNewDialog';
 import { checkWhatsNew, whatsNew } from './store/whatsNew';
@@ -47,6 +48,9 @@ function renderRoute(r: Route) {
       return <PairPhoneScreen />;
     case 'update':
       return <UpdateScreen />;
+    case 'sources':
+      // built-in sites need the native http of the APK: Android TV only
+      return platformKind() === 'androidtv' ? <SourcesScreen /> : null;
     default:
       return null;
   }

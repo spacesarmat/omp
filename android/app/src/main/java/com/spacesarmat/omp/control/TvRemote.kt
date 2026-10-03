@@ -14,6 +14,7 @@ import com.getcapacitor.JSObject
 import com.spacesarmat.omp.MainActivity
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayerActivity
+import com.spacesarmat.omp.sources.SourceServices
 import java.io.IOException
 import org.json.JSONArray
 import org.json.JSONException
@@ -63,11 +64,22 @@ class PrefsPhoneStore(context: Context) : PhoneStore {
  * Phone remote on Android TV (spec «Управление с телефона»): the control server on [PORT] ([ControlRouter] does
  * the routes), the NSD service `_omp._tcp`, pairing, and the actions. Page events (through [emit]):
  * remoteLaunch { params }, remoteAttach { report }, remoteKey { name }, remoteText { text | delete | enter },
- * phonePaired { phone }.
+ * phonePaired { phone }, remoteSources { id, sources, rutracker, phone } (answered with [sourcesDone]).
  */
 class TvRemote(private val context: Context, private val emit: (String, JSObject, Boolean) -> Unit) : RemoteActions {
     val pairing = Pairing(PrefsPhoneStore(context))
     private val router = ControlRouter(pairing, this)
+    // the login goes to the same Keystore entries the page's rutracker source reads (src/sources/rutracker.ts keys)
+    private val inbox = SourcesInbox(
+        store = object : LoginStore {
+            override fun save(username: String, password: String) {
+                val secrets = SourceServices.get(context).secrets
+                secrets.set(SourceServices.jsSecretKey(USER_KEY)!!, username)
+                secrets.set(SourceServices.jsSecretKey(PASS_KEY)!!, password)
+            }
+        },
+        emit = { data -> emit("remoteSources", JSObject.fromJSONObject(data), true) },
+    )
     private val server = ControlServer(PORT) { router.route(it) }
     private val main = Handler(Looper.getMainLooper())
     private var nsdListener: NsdManager.RegistrationListener? = null
@@ -217,6 +229,11 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         }
     }
 
+    override fun sources(t: SourcesTransfer): SourcesOutcome = inbox.receive(t)
+
+    /** The page's remoteSourcesDone; false when no such transfer waits. */
+    fun sourcesDone(id: String?, rutracker: String?, failed: Boolean): Boolean = inbox.done(id, rutracker, failed)
+
     /** REORDER_TO_FRONT keeps the instance (MainActivity is singleTask, PlayerActivity singleTop). */
     private fun bringToFront(cls: Class<*>) {
         val intent = Intent(context, cls).addFlags(
@@ -233,5 +250,7 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         const val PORT = 8095
         const val SERVICE_TYPE = "_omp._tcp"
         private const val TAG = "OmpRemote"
+        private const val USER_KEY = "rutracker.username"
+        private const val PASS_KEY = "rutracker.password"
     }
 }

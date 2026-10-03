@@ -2,6 +2,8 @@ package com.spacesarmat.omp.control
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -35,7 +37,14 @@ class ControlRouterTest {
         override fun volume(up: Boolean) {
             calls.add("volume:$up")
         }
+        override fun sources(t: SourcesTransfer): SourcesOutcome {
+            calls.add("sources:${t.sources.toSortedMap()}:${t.login?.username}:${t.phone}")
+            lastTransfer = t
+            return outcome
+        }
     }
+    private var outcome: SourcesOutcome = SourcesOutcome.Applied("ok")
+    private var lastTransfer: SourcesTransfer? = null
     private val router = ControlRouter(pairing, actions)
 
     private fun req(
@@ -55,7 +64,7 @@ class ControlRouterTest {
 
     @Test
     fun protectedRoutesNeedTheTokenBeforeMethodAndBody() {
-        for (path in listOf("/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume")) {
+        for (path in listOf("/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume", "/omp/sources")) {
             assertEquals(path, 401, req("POST", path, "{\"name\":\"UP\"}").status)
             // no method/body detail leaks before auth
             assertEquals(path, 401, req("GET", path).status)
@@ -137,5 +146,101 @@ class ControlRouterTest {
         assertEquals(403, e.status)
         assertEquals("expired", JSONObject(e.json).getString("error"))
         assertEquals(400, req("POST", "/omp/pair", "{bad").status)
+    }
+
+    private val password = "pa55-secret-word"
+
+    private fun sourcesBody(extra: String = "") = """{"v":1,"sources":{"rutor":true,"ts-torznab":false}$extra}"""
+
+    private fun loginPart(user: String = "andy", pass: String = password) =
+        ""","rutracker":{"username":"$user","password":"$pass"}"""
+
+    @Test
+    fun sourcesNeedTheTokenAndJson() {
+        val body = sourcesBody(loginPart())
+        assertEquals(401, req("POST", "/omp/sources", body).status)
+        assertEquals(401, req("POST", "/omp/sources", body, "0".repeat(32)).status)
+        val t = token()
+        assertEquals(405, req("GET", "/omp/sources", "", t).status)
+        assertEquals(415, req("POST", "/omp/sources", body, t, contentType = "text/plain").status)
+        assertEquals(listOf("paired:Pixel"), calls)
+    }
+
+    @Test
+    fun sourcesAreAppliedAndTheAnswerHasNoSecrets() {
+        val t = token()
+        val r = req("POST", "/omp/sources", sourcesBody(loginPart(" andy ")), t)
+        assertEquals(200, r.status)
+        val o = JSONObject(r.json)
+        assertEquals(true, o.getBoolean("ok"))
+        assertEquals("ok", o.getString("rutracker"))
+        assertFalse(r.json.contains(password))
+        assertFalse(r.json.contains("andy"))
+        assertEquals("sources:{rutor=true, ts-torznab=false}:andy:Pixel", calls.last())
+        val got = lastTransfer!!
+        assertEquals(password, got.login!!.password)
+        assertFalse(got.toString().contains(password))
+        assertFalse(got.login.toString().contains(password))
+
+        // no login: no rutracker key in the answer
+        val plain = req("POST", "/omp/sources", sourcesBody(""","rutracker":null"""), t)
+        assertEquals(200, plain.status)
+        assertFalse(JSONObject(plain.json).has("rutracker"))
+        assertNull(lastTransfer!!.login)
+
+        outcome = SourcesOutcome.Applied("bad_login")
+        val bad = req("POST", "/omp/sources", sourcesBody(loginPart()), t)
+        assertEquals("bad_login", JSONObject(bad.json).getString("rutracker"))
+    }
+
+    @Test
+    fun sourcesOutcomesMapToStatuses() {
+        val t = token()
+        val body = sourcesBody(loginPart())
+        outcome = SourcesOutcome.Busy
+        assertEquals(409, req("POST", "/omp/sources", body, t).status)
+        outcome = SourcesOutcome.NoAnswer
+        val r = req("POST", "/omp/sources", body, t)
+        assertEquals(503, r.status)
+        assertEquals("no_answer", JSONObject(r.json).getString("error"))
+        outcome = SourcesOutcome.StoreFailed
+        val s = req("POST", "/omp/sources", body, t)
+        assertEquals(500, s.status)
+        assertFalse(s.json.contains(password))
+        outcome = SourcesOutcome.Failed
+        assertEquals(500, req("POST", "/omp/sources", body, t).status)
+    }
+
+    @Test
+    fun sourcesSchemaAndSizeAreChecked() {
+        val t = token()
+        val many = (1..41).joinToString(",") { "\"s$it\":true" }
+        val bad = listOf(
+            "not json",
+            "{}",
+            """{"v":2,"sources":{"rutor":true}}""",
+            """{"v":1,"sources":{}}""",
+            """{"v":1,"sources":[true]}""",
+            """{"v":1,"sources":{"rutor":"yes"}}""",
+            """{"v":1,"sources":{"Rutor":true}}""",
+            """{"v":1,"sources":{"../x":true}}""",
+            """{"v":1,"sources":{$many}}""",
+            sourcesBody(""","extra":1"""),
+            sourcesBody(""","rutracker":"andy""""),
+            sourcesBody(loginPart(user = "")),
+            sourcesBody(loginPart(user = "   ")),
+            sourcesBody(loginPart(pass = "")),
+            sourcesBody(loginPart(user = "a".repeat(101))),
+            sourcesBody(loginPart(pass = "p".repeat(201))),
+            sourcesBody(loginPart(user = "a\\u0007b")),
+        )
+        for (b in bad) {
+            val r = req("POST", "/omp/sources", b, t)
+            assertEquals(b, 400, r.status)
+            assertFalse(r.json.contains(password))
+        }
+        val big = sourcesBody(""","pad":"${"x".repeat(SourcesProtocol.MAX_BODY)}"""")
+        assertEquals(413, req("POST", "/omp/sources", big, t).status)
+        assertEquals(listOf("paired:Pixel"), calls)
     }
 }

@@ -305,3 +305,43 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .log-error .log-level { color: #ff8a80; }
 .log-empty { font-size: 22px; color: var(--muted); margin-bottom: 16px; }
 .log-brief { margin-bottom: 16px; }
+
+/* Android TV «Источники поиска» (no flex gap / grid: Chromium 53) */
+.src-layout { display: flex; align-items: flex-start; }
+.src-side { width: 600px; flex-shrink: 0; margin-right: 60px; }
+.src-side h1 { font-size: 48px; margin-bottom: 20px; }
+.src-intro { font-size: 27px; color: var(--muted); line-height: 1.45; }
+.src-phone { margin-top: 36px; padding: 28px; border-radius: 24px; background: var(--panel); }
+.src-phone-title { font-size: 27px; font-weight: 700; margin-bottom: 12px; }
+.src-phone-text { font-size: 24px; color: var(--muted); line-height: 1.45; margin-bottom: 12px; }
+.src-last { font-size: 23px; color: #8fe39a; }
+.src-last.muted { color: var(--muted); }
+.src-list { flex: 1; min-width: 0; }
+.src-group { font-size: 24px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 10px; }
+.src-group:first-child { margin-top: 0; }
+.src-line { display: flex; align-items: center; margin-bottom: 9px; }
+.src-row { display: flex; align-items: center; min-height: 92px; padding: 10px 27px; border-radius: 21px; background: var(--panel); margin-bottom: 9px; font-size: 30px; }
+.src-line .src-row { flex: 1; min-width: 0; margin-bottom: 0; min-height: 84px; font-size: 28px; }
+.src-row.focused { background: var(--panel2); box-shadow: inset 0 0 0 4px var(--accent); transform: none; }
+.src-name { flex: 1; min-width: 0; margin-right: 24px; }
+.src-note { display: block; font-size: 22px; margin-top: 2px; }
+.src-note-ok { color: #8fe39a; }
+.src-note-bad { color: #ff8a80; }
+.src-note-muted { color: var(--muted); }
+.src-act { font-size: 24px; color: var(--muted); }
+.src-act.on { color: var(--accent); }
+.src-switch { position: relative; flex-shrink: 0; width: 84px; height: 48px; border-radius: 24px; background: var(--panel2); }
+.src-switch.on { background: var(--accent); }
+.src-switch-knob { position: absolute; left: 6px; top: 6px; width: 36px; height: 36px; border-radius: 18px; background: var(--muted); }
+.src-switch.on .src-switch-knob { left: 42px; background: var(--bg); }
+.src-row.focused .src-switch { box-shadow: none; }
+.button.src-login { margin-left: 16px; }
+.login-dialog { width: 1050px; }
+.login-label { font-size: 25px; color: var(--muted); margin-bottom: 8px; }
+.login-dialog .text-input { display: block; background: var(--panel2); }
+.login-dialog .text-input.focused { box-shadow: inset 0 0 0 4px var(--accent); }
+.login-hint { padding: 20px 24px; border-radius: 21px; background: #3a3320; color: var(--accent); font-size: 25px; line-height: 1.45; margin-bottom: 16px; }
+.login-note { font-size: 22px; color: var(--muted); margin-bottom: 20px; }
+.login-actions { display: flex; }
+.login-actions .button { flex: 1; text-align: center; }
+.login-actions .button:first-child { margin-right: 20px; }

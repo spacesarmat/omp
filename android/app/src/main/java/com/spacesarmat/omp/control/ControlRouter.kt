@@ -14,6 +14,8 @@ interface RemoteActions {
     /** `{ text }`, `{ delete }` or `{ enter: true }`, already validated. */
     fun text(data: JSONObject)
     fun volume(up: Boolean)
+    /** «Передать на телевизор», already validated; blocks until the page applied it (see [SourcesInbox]). */
+    fun sources(t: SourcesTransfer): SourcesOutcome
 }
 
 /**
@@ -37,6 +39,7 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         }
         if (!pairing.isPaired(req.token)) return ControlResponse(401, ControlServer.error("unauthorized"))
         if (req.method != "POST") return methodNotAllowed()
+        if (req.path == "/omp/sources") return sources(req)
         val body = parse(req.body) ?: return badRequest()
         return when (req.path) {
             "/omp/launch" -> launch(body)
@@ -93,6 +96,26 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         return okEmpty()
     }
 
+    /** The answer never echoes the request: no login, no password, only the outcome. */
+    private fun sources(req: ControlRequest): ControlResponse {
+        if (!isJson(req.contentType)) return ControlResponse(415, ControlServer.error("unsupported_media_type"))
+        if (req.body.length > SourcesProtocol.MAX_BODY) return ControlResponse(413, ControlServer.error("too_large"))
+        val body = parse(req.body) ?: return badRequest()
+        val phone = pairing.phoneOf(req.token) ?: "Телефон"
+        val t = SourcesProtocol.parse(body, phone) ?: return badRequest()
+        return when (val r = actions.sources(t)) {
+            is SourcesOutcome.Applied -> {
+                val o = JSONObject().put("ok", true)
+                if (t.login != null) o.put("rutracker", r.rutracker ?: "error")
+                ok(o)
+            }
+            SourcesOutcome.Busy -> ControlResponse(409, ControlServer.error("busy"))
+            SourcesOutcome.NoAnswer -> ControlResponse(503, ControlServer.error("no_answer"))
+            SourcesOutcome.Failed -> ControlResponse(500, ControlServer.error("not_applied"))
+            SourcesOutcome.StoreFailed -> ControlResponse(500, ControlServer.error("secrets"))
+        }
+    }
+
     private fun volume(body: JSONObject): ControlResponse {
         when (body.opt("dir")) {
             "up" -> actions.volume(true)
@@ -105,7 +128,7 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
     companion object {
         private const val MAX_TEXT = 1000
         private const val MAX_REPORT = 200
-        private val PROTECTED = setOf("/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume")
+        private val PROTECTED = setOf("/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume", "/omp/sources")
         val KEYS = setOf("UP", "DOWN", "LEFT", "RIGHT", "ENTER", "BACK", "CATALOG", "NOWPLAYING")
         private val REPORT = Regex("^http://.+", RegexOption.IGNORE_CASE)
 

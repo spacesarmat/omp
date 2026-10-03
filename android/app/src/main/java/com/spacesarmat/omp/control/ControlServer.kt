@@ -189,6 +189,7 @@ class ControlServer(private val port: Int, private val handler: (ControlRequest)
             413 -> "Payload Too Large"
             415 -> "Unsupported Media Type"
             431 -> "Request Header Fields Too Large"
+            503 -> "Service Unavailable"
             else -> "Internal Server Error"
         }
 

@@ -112,6 +112,12 @@ export function SettingsScreen() {
         <Button focusKey="set-server" label="Сменить сервер" onPress={() => navigate({ name: 'connect' })} />
         <Button focusKey="set-pair" label="Подключить телефон" onPress={() => navigate({ name: 'pairPhone' })} />
       </div>
+      {platformKind() === 'androidtv' && (
+        <div class="row">
+          <div class="grow muted">Сайты для поиска, вход на rutracker, передача с телефона</div>
+          <Button focusKey="set-sources" label="Источники поиска" onPress={() => navigate({ name: 'sources' })} />
+        </div>
+      )}
 
       <h2>Воспроизведение</h2>
       <ChoiceRow focusKey="set-audio" label="Язык аудио" value={s.audioLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ audioLang: v })} />
