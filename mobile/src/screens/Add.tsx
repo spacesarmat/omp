@@ -77,10 +77,14 @@ interface SearchMemo {
   /** Row order on screen while results stream in. */
   order: string[];
   rowCat: Record<string, string>;
+  /** Server the search ran on: another active server starts from scratch. */
+  server: string | null;
+  /** Rows being added: a request still running when the screen is left keeps its row busy on return. */
+  busy: Map<string, RowBusy>;
 }
 
 function freshMemo(): SearchMemo {
-  return { query: '', chosen: null, quality: '', sort: 'seeds', handle: null, order: [], rowCat: {} };
+  return { query: '', chosen: null, quality: '', sort: 'seeds', handle: null, order: [], rowCat: {}, server: null, busy: new Map() };
 }
 
 let memo: SearchMemo = freshMemo();
@@ -97,6 +101,9 @@ function progOf(h: SearchHandle): Prog {
 }
 
 export function Add({ link }: { link?: string }) {
+  // results of another server must not be added to this one
+  const server = client.value ? client.value.baseUrl : null;
+  if (memo.handle && memo.server !== server) resetAddSearch();
   const [value, setValue] = useState(link || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -112,9 +119,9 @@ export function Add({ link }: { link?: string }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [rowCat, setRowCatState] = useState<Record<string, string>>(memo.rowCat);
   const [catSheet, setCatSheet] = useState<string | null>(null);
-  const [pending, setPending] = useState<Record<string, RowBusy>>({});
+  const [pending, setPending] = useState<Record<string, RowBusy>>(() => Object.fromEntries(memo.busy));
   const [alive] = useState({ v: true });
-  const pendingRef = useRef<Map<string, RowBusy>>(new Map());
+  const pendingRef = useRef<Map<string, RowBusy>>(memo.busy);
   const launch = useTvLaunch();
   const tv = activeTv.value;
 
@@ -232,6 +239,7 @@ export function Add({ link }: { link?: string }) {
       onDone: notify,
     });
     memo.handle = h;
+    memo.server = server;
     memo.order = [];
     sync(h);
   };

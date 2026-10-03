@@ -531,6 +531,40 @@ describe('Add unified search: stable rows', () => {
     expect(titles()).toEqual(['High', 'Low']);
   });
 
+  it('a search kept from before is dropped after switching to another server', async () => {
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([row({ Title: 'Low', detailUrl: 'https://f.example/low' })]) });
+    mount();
+    search('x');
+    await flush();
+    expect(titles()).toEqual(['Low']);
+    act(() => render(null, el));
+    mount();
+    expect(titles()).toEqual(['Low']);
+    act(() => render(null, el));
+    setActiveServer(addServer({ url: 'http://other:8090' }).id);
+    mount();
+    expect(titles()).toEqual([]);
+  });
+
+  it('a row still being added stays busy after leaving the screen and coming back', async () => {
+    registerSource({
+      id: 'fake',
+      name: 'Фейк',
+      kind: 'builtin',
+      search: () => Promise.resolve([row({ Title: 'Film 1080p', detailUrl: 'https://f.example/1' })]),
+      magnet: () => new Promise<string>(() => {}),
+    });
+    mount();
+    search('x');
+    await flush();
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    act(() => render(null, el));
+    mount();
+    expect(el.textContent).toContain('Получаю ссылку…');
+    expect((byLabel('Добавить на сервер')[0] as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('a better duplicate merging in keeps the row category and «Получаю ссылку…»', async () => {
     let give: (v: string) => void = () => {};
     registerSource({
