@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { replaceTorrent, mapFiles, mapJournal, type ReplaceClient } from '../../src/monitor/replace';
+import { replaceTorrent, replaceWithResult, mapFiles, mapJournal, type ReplaceClient } from '../../src/monitor/replace';
 import { torrents } from '../../src/store/library';
 import { parseData } from '../../src/lib/journal';
 import type { Torrent } from '../../src/api/types';
@@ -132,6 +132,11 @@ describe('mapFiles', () => {
     expect(mapFiles(o, files(['Show.S01E05.mkv', 'Show.S01E06.mkv']))).toEqual({ 1: null, 2: null });
   });
 
+  it('does not map a labelled episode to an unlabelled file by index', () => {
+    const o = files(['Show.S01E01.mkv', 'Show.S01E02.mkv']);
+    expect(mapFiles(o, files(['Extras.mkv', 'Sample.mkv']))).toEqual({ 1: null, 2: null });
+  });
+
   it('skips ambiguous matches', () => {
     const o = files(['Show.S01E01.mkv']);
     const n = files(['Show.S01E01.rus.mkv', 'Show.S01E01.eng.mkv', 'Show.S01E02.mkv']);
@@ -158,8 +163,8 @@ describe('replaceTorrent', () => {
     const r = await replaceTorrent(s.c, 'oldhash', 'magnet:?xt=urn:btih:newhash');
     expect(r).toEqual({ ok: true, hash: 'newhash' });
     expect(s.calls).toEqual(['add', 'info', 'set', 'rem:oldhash']);
-    expect((s.c.add as any).mock.calls[0][0]).toMatchObject({ link: 'magnet:?xt=urn:btih:newhash', title: '', poster: 'http://p/old.jpg', category: 'tv' });
-    expect(s.sets[0]).toMatchObject({ hash: 'newhash', title: 'Show S01 1080p', poster: 'http://p/old.jpg', category: 'tv' });
+    expect((s.c.add as any).mock.calls[0][0]).toMatchObject({ link: 'magnet:?xt=urn:btih:newhash', title: 'Show S01 720p', poster: 'http://p/old.jpg', category: 'tv' });
+    expect(s.sets[0]).toMatchObject({ hash: 'newhash', title: 'Show S01 720p', poster: 'http://p/old.jpg', category: 'tv' });
     const out = JSON.parse(s.sets[0].data);
     expect(out.TorrServer.Files).toHaveLength(4); // the new torrent own keys
     expect(out.lampa).toBeUndefined(); // another client key of the OLD torrent is not copied
@@ -198,20 +203,76 @@ describe('replaceTorrent', () => {
     torrents.value = [other, { ...s.old }, { hash: 'z', title: 'Z', stat: 0 }];
     await replaceTorrent(s.c, 'oldhash', 'magnet:x');
     expect(torrents.value.map((t) => t.hash)).toEqual(['other', 'newhash', 'z']);
-    expect(torrents.value[1].title).toBe('Show S01 1080p');
+    expect(torrents.value[1].title).toBe('Show S01 720p');
     expect(parseData(torrents.value[1].data)!.journal).toHaveLength(2);
     expect(torrents.value[1].category).toBe('tv');
   });
 
-  it('keepTitle writes the old title', async () => {
+  it('uses the title of the new release when given, never the old one with its episode range', async () => {
     const s = setup();
-    await replaceTorrent(s.c, 'oldhash', 'magnet:x', { keepTitle: true });
-    expect((s.c.add as any).mock.calls[0][0].title).toBe('Show S01 720p');
-    expect(s.sets[0].title).toBe('Show S01 720p');
+    await replaceTorrent(s.c, 'oldhash', 'magnet:x', { title: 'Show S01 Серии 1-10 из 10' });
+    expect((s.c.add as any).mock.calls[0][0].title).toBe('Show S01 Серии 1-10 из 10');
+    expect(s.sets[0].title).toBe('Show S01 Серии 1-10 из 10');
+  });
+
+  it('replaceWithResult takes the magnet and the title of the result', async () => {
+    const s = setup();
+    const r = await replaceWithResult(s.c, 'oldhash', { Title: 'Show S01 Серии 1-10', Magnet: 'magnet:?xt=urn:btih:newhash', source: 'rutor' } as any, {} as any);
+    expect(r.ok).toBe(true);
+    expect((s.c.add as any).mock.calls[0][0]).toMatchObject({ link: 'magnet:?xt=urn:btih:newhash', title: 'Show S01 Серии 1-10' });
+  });
+
+  it('fails and keeps the old one when there is no title to write (the real setData would skip the write)', async () => {
+    const s = setup({ old: { title: '' }, fresh: { title: '' } });
+    const r = await replaceTorrent(s.c, 'oldhash', 'magnet:x');
+    expect(r.ok).toBe(false);
+    expect(s.calls).toEqual(['add', 'info', 'rem:newhash']);
+    expect(Object.keys(s.server)).toEqual(['oldhash']);
+  });
+
+  it('fails when setData resolves but the journal did not reach the server', async () => {
+    const s = setup();
+    (s.c.setData as any).mockImplementation(() => {
+      s.calls.push('set');
+      return Promise.resolve();
+    });
+    const r = await replaceTorrent(s.c, 'oldhash', 'magnet:x');
+    expect(r.ok).toBe(false);
+    expect(s.calls).toEqual(['add', 'info', 'set', 'rem:newhash']);
+    expect(Object.keys(s.server)).toEqual(['oldhash']);
+  });
+
+  it('uses the journal of the old torrent as it is right before the write', async () => {
+    const s = setup();
+    const origInfo = s.c.loadInfo as any;
+    (s.c.loadInfo as any) = vi.fn((h: string) => {
+      // playback writes meanwhile
+      const d = JSON.parse(s.server.oldhash.data!);
+      d.omp.h.unshift({ f: 3, t: 50, d: 1400, at: T0 + 9000, src: 'tv' });
+      s.server.oldhash.data = JSON.stringify(d);
+      return origInfo(h);
+    });
+    await replaceTorrent(s.c, 'oldhash', 'magnet:x');
+    expect(parseData(s.sets[0].data)!.journal.map((e) => e.f)).toEqual([3, 2, 1]);
+  });
+
+  it('loads the file list of the old torrent when it is unknown, and fails when it stays unknown', async () => {
+    const foreign = JSON.stringify({ omp: { v: 1, h: [{ f: 2, t: 9, d: 99, at: T0, src: 'tv' }] } });
+    const s = setup({ old: { file_stats: undefined, data: foreign } });
+    const origInfo = s.c.loadInfo as any;
+    (s.c.loadInfo as any) = vi.fn((h: string) => (h === 'oldhash' ? Promise.resolve({ ...s.old, file_stats: OLD_FILES }) : origInfo(h)));
+    const r = await replaceTorrent(s.c, 'oldhash', 'magnet:x');
+    expect(r.ok).toBe(true);
+    expect(parseData(s.sets[0].data)!.journal.map((e) => e.f)).toEqual([2]);
+
+    const s2 = setup({ old: { file_stats: undefined, data: foreign } });
+    const r2 = await replaceTorrent(s2.c, 'oldhash', 'magnet:x');
+    expect(r2.ok).toBe(false);
+    expect(Object.keys(s2.server)).toEqual(['oldhash']);
   });
 
   it('does not write when there is nothing to carry', async () => {
-    const s = setup({ old: { data: dataOf(OLD_FILES), poster: '', category: '' } });
+    const s = setup({ old: { data: dataOf(OLD_FILES), poster: '', category: '', title: 'Show S01 1080p' } });
     const r = await replaceTorrent(s.c, 'oldhash', 'magnet:x');
     expect(r.ok).toBe(true);
     expect(s.sets).toHaveLength(0);

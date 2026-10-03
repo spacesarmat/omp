@@ -22,10 +22,10 @@ export interface ReplaceOptions {
   /** How long to wait for the file list of the new torrent, ms (default 60000). */
   timeoutMs?: number;
   /**
-   * Keep the title of the old torrent. By default the new torrent keeps the title TorrServer gave it from its metadata
-   * (OMP cannot tell a title the user typed from the one the server made), so the title follows the release.
+   * Title of the new release (the search result's Title). The old title is not carried: it holds the old episode range.
+   * Without it the old torrent's title is used; the title is never empty.
    */
-  keepTitle?: boolean;
+  title?: string;
 }
 
 export type ReplaceResult = { ok: true; hash: string } | { ok: false; error: string };
@@ -75,10 +75,8 @@ export function mapFiles(oldFiles: TorrentFile[], newFiles: TorrentFile[]): { [o
     }
     if (!hit && oldFiles.length === newFiles.length) {
       const same = newFiles.filter((n) => n.id === o.id)[0];
-      if (same && fileKind(same.path) === kind) {
-        const nl = episodeLabel(same.path);
-        if (!label || !nl || nl === label) hit = same;
-      }
+      // a labelled episode never goes to an unlabelled file (an extra, a sample) by index
+      if (same && fileKind(same.path) === kind && !label && !episodeLabel(same.path)) hit = same;
     }
     out[o.id] = hit ? hit.id : null;
   });
@@ -160,7 +158,7 @@ interface Prepared {
  */
 export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, opts?: ReplaceOptions): Promise<ReplaceResult> {
   const timeoutMs = opts && opts.timeoutMs ? opts.timeoutMs : DEFAULT_TIMEOUT;
-  const keepTitle = !!opts && !!opts.keepTitle;
+  const newTitle = ((opts && opts.title) || '').trim();
   let added: Torrent | null = null;
   let preexisting = false;
 
@@ -176,7 +174,7 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
 
   const prepare = (old: Torrent, oldParsed: NonNullable<ReturnType<typeof parseData>>, all: Torrent[]): Promise<Prepared> =>
     c
-      .add({ link, title: keepTitle ? old.title : '', poster: old.poster || '', category: old.category || '' })
+      .add({ link, title: newTitle || old.title || '', poster: old.poster || '', category: old.category || '' })
       .then(
         (t) => t,
         () => stop('Не удалось добавить новую раздачу.'),
@@ -197,34 +195,65 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
         if (!newFiles.length) return stop('В новой раздаче нет файлов. Старая раздача осталась.');
         // the list holds the torrent as the server stores it (its own `data`), the same source the journal writes read
         return c.list().then(
-          (all2) => ({ info: x.info, listed: find(all2, x.t.hash) || { ...x.t, ...x.info }, newFiles }),
-          () => ({ info: x.info, listed: { ...x.t, ...x.info } as Torrent, newFiles }),
+          (all2) => ({ info: x.info, listed: find(all2, x.t.hash) || { ...x.t, ...x.info }, newFiles, oldNow: find(all2, old.hash) || old }),
+          () => ({ info: x.info, listed: { ...x.t, ...x.info } as Torrent, newFiles, oldNow: old }),
         );
       })
       .then((x) => {
+        // the old torrent as it is now: playback may have written the journal while the new one was loading
+        const oldP = parseData(x.oldNow.data);
+        if (!oldP) return stop('Данные раздачи не удалось прочитать. Старая раздача осталась.');
+        const oldFiles = filesOf(x.oldNow).length ? filesOf(x.oldNow) : filesOf(old);
+        const needFiles = oldP.journal.length > 0 && !oldFiles.length;
+        // the file list of the old torrent is needed to map its history: ask the server, never drop the history silently
+        const files: Promise<TorrentFile[]> = needFiles
+          ? withTimeout(c.loadInfo(old.hash), timeoutMs).then(
+              (i) => filesOf(i),
+              () => [],
+            )
+          : Promise.resolve(oldFiles);
+        return files.then((of) => {
+          if (needFiles && !of.length) return stop('Не удалось получить список файлов старой раздачи, чтобы перенести историю. Старая раздача осталась.');
+          return { ...x, oldP, oldFiles: of };
+        });
+      })
+      .then((x) => {
         const listed = x.listed;
+        const oldParsed = x.oldP;
         const newParsed = parseData(listed.data || x.info.data);
         if (!newParsed) return stop('Данные новой раздачи не удалось прочитать. Старая раздача осталась.');
         const base = baseOf({ ...listed, file_stats: listed.file_stats || x.newFiles } as Torrent, newParsed);
-        const journal = mapJournal(oldParsed.journal, mapFiles(filesOf(old), x.newFiles));
+        const journal = mapJournal(oldParsed.journal, mapFiles(x.oldFiles, x.newFiles));
         // everything of the old `omp` (skip settings, omp.w, keys of newer versions) goes over; the history is rebuilt
         const oldOmp = plainObject(oldParsed.obj[JOURNAL_KEY]);
         const newOmp = plainObject(base.obj[JOURNAL_KEY]);
         const obj: { [k: string]: unknown } = { ...base.obj };
         if (oldOmp || newOmp) obj[JOURNAL_KEY] = { ...(newOmp || {}), ...(oldOmp || {}), v: JOURNAL_VERSION };
         const skip = oldParsed.skip || base.skip;
-        const title = (keepTitle ? old.title : '') || listed.title || listed.name || x.info.title || old.title;
+        const title = newTitle || old.title || listed.title || listed.name || x.info.title || '';
         const poster = old.poster || listed.poster || '';
         const category = old.category || listed.category || '';
         const data = serializeData(obj, journal, skip);
         const done: Torrent = { ...listed, title, poster, category, data };
         const carried = !!oldOmp || journal.length > 0 || !!skip;
-        const differs = (!!old.poster && listed.poster !== old.poster) || (keepTitle && listed.title !== title) || (category !== (listed.category || ''));
+        const differs = (!!old.poster && listed.poster !== old.poster) || (listed.title !== title) || (category !== (listed.category || ''));
         if (!carried && !differs) return Promise.resolve({ done });
-        return c.setData({ hash: listed.hash, title, poster, category }, data).then(
-          () => ({ done }),
-          () => stop('Не удалось перенести историю в новую раздачу. Старая раздача осталась.'),
-        );
+        const failed = (): Promise<never> => stop('Не удалось перенести историю в новую раздачу. Старая раздача осталась.');
+        // TorrServerClient.setData writes nothing for an empty title: that would lose the history
+        if (!title) return failed();
+        return c
+          .setData({ hash: listed.hash, title, poster, category }, data)
+          .then(() => c.list())
+          .then(
+            (all3) => {
+              // the write must have reached the server (the journal of the stored copy is the one built here)
+              const stored = find(all3, listed.hash);
+              const back = stored ? parseData(stored.data) : null;
+              if (!back || JSON.stringify(back.journal) !== JSON.stringify(journal)) return failed();
+              return { done };
+            },
+            () => failed(),
+          );
       });
 
   const run = (): Promise<ReplaceResult> =>
@@ -271,7 +300,7 @@ export function replaceWithResult(
   opts?: ReplaceOptions,
 ): Promise<ReplaceResult> {
   return resolveLink(result, ctx).then(
-    (link) => replaceTorrent(c, oldHash, link, opts),
+    (link) => replaceTorrent(c, oldHash, link, { ...(opts || {}), title: (opts && opts.title) || result.Title }),
     (e): ReplaceResult => ({ ok: false, error: e && typeof e.message === 'string' && e.message ? e.message : 'Не удалось получить ссылку на раздачу' }),
   );
 }
