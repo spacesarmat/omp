@@ -6,10 +6,15 @@ import android.security.keystore.KeyProperties
 import com.spacesarmat.omp.sources.SecretCodec
 import dadb.AdbKeyPair
 import java.io.File
+import java.math.BigInteger
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.security.KeyFactory
+import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.PrivateKey
 import java.security.UnrecoverableKeyException
+import java.security.interfaces.RSAPublicKey
 import java.security.spec.PKCS8EncodedKeySpec
 import java.util.Arrays
 import java.util.Base64
@@ -69,58 +74,75 @@ class AesGcmWrapper(private val key: () -> SecretKey) {
     }
 }
 
-/** The phone's adb identity: PKCS#8 PEM private key and the adb public key line («base64 user@host»). */
-class AdbIdentity(val privatePem: ByteArray, val publicLine: ByteArray) {
+/**
+ * The phone's adb identity: the RSA private key as PKCS#8 DER and the adb public key line («base64 omp@phone»).
+ * Generated in memory; the private key is written only encrypted ([AdbIdentityStore]).
+ */
+class AdbIdentity(val privateDer: ByteArray, val publicLine: ByteArray) {
     /** dadb key pair; the public key goes over the wire NUL-terminated, as dadb's own reader does. */
     fun toKeyPair(): AdbKeyPair {
-        val text = String(privatePem, Charsets.US_ASCII)
-        val body = text.lines().filter { it.isNotBlank() && !it.startsWith("-----") }.joinToString("")
-        val der = Base64.getDecoder().decode(body)
-        val key: PrivateKey = try {
-            KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(der))
-        } finally {
-            Arrays.fill(der, 0)
-        }
+        val key: PrivateKey = KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(privateDer))
         return AdbKeyPair(key, publicLine.copyOf(publicLine.size + 1))
     }
 
     fun wipe() {
-        Arrays.fill(privatePem, 0)
+        Arrays.fill(privateDer, 0)
     }
 
-    /** Stored form: «private PEM» NUL «public line». */
+    /** Stored form: «private DER» NUL-separated from «public line» (the line never contains NUL). */
     fun encode(): ByteArray {
-        val out = ByteArray(privatePem.size + 1 + publicLine.size)
-        System.arraycopy(privatePem, 0, out, 0, privatePem.size)
-        System.arraycopy(publicLine, 0, out, privatePem.size + 1, publicLine.size)
+        val out = ByteArray(privateDer.size + 1 + publicLine.size)
+        System.arraycopy(privateDer, 0, out, 0, privateDer.size)
+        System.arraycopy(publicLine, 0, out, privateDer.size + 1, publicLine.size)
         return out
     }
 
     companion object {
+        private const val USER = " omp@phone"
+
+        /** The public line is after the last NUL (DER may contain zero bytes, the base64 line never does). */
         fun decode(bytes: ByteArray): AdbIdentity? {
-            val i = bytes.indexOf(0.toByte())
+            val i = bytes.lastIndexOf(0.toByte())
             if (i <= 0 || i == bytes.size - 1) return null
-            val prv = bytes.copyOfRange(0, i)
-            val pub = bytes.copyOfRange(i + 1, bytes.size)
-            if (!String(prv, Charsets.US_ASCII).contains("PRIVATE KEY")) {
-                Arrays.fill(prv, 0)
-                return null
-            }
-            return AdbIdentity(prv, pub)
+            // PKCS#8 DER is a SEQUENCE; anything else (e.g. an earlier PEM form) means «make a new identity»
+            if (bytes[0] != 0x30.toByte()) return null
+            return AdbIdentity(bytes.copyOfRange(0, i), bytes.copyOfRange(i + 1, bytes.size))
         }
 
-        /** A new identity through dadb's generator; the temporary files are deleted right away. */
-        fun generate(tmpDir: File): AdbIdentity {
-            tmpDir.mkdirs()
-            val prv = File.createTempFile("adbkey", ".tmp", tmpDir)
-            val pub = File.createTempFile("adbkey", ".pub", tmpDir)
-            try {
-                AdbKeyPair.generate(prv, pub)
-                return AdbIdentity(prv.readBytes(), pub.readBytes())
-            } finally {
-                prv.delete()
-                pub.delete()
+        /** A new RSA 2048 identity, entirely in memory. */
+        fun generate(): AdbIdentity {
+            val kp = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.genKeyPair()
+            val pub = kp.public as RSAPublicKey
+            val line = Base64.getEncoder().encodeToString(adbPublicKey(pub)) + USER
+            return AdbIdentity(kp.private.encoded, line.toByteArray(Charsets.US_ASCII))
+        }
+
+        /**
+         * adb's RSA public key format (AOSP adb `RSA_to_RSAPublicKey`, dadb `convertRsaPublicKeyToAdbFormat`):
+         * little-endian words — word count 64, n0inv = -1/n mod 2^32, modulus, rr = 2^4096 mod n, exponent.
+         */
+        fun adbPublicKey(pub: RSAPublicKey): ByteArray {
+            val words = 64
+            val r32 = BigInteger.ZERO.setBit(32)
+            var n = pub.modulus
+            val r = BigInteger.ZERO.setBit(words * 32)
+            var rr = r.modPow(BigInteger.valueOf(2), n)
+            val n0inv = n.remainder(r32).modInverse(r32)
+            val buf = ByteBuffer.allocate(4 + 4 + words * 4 + words * 4 + 4).order(ByteOrder.LITTLE_ENDIAN)
+            buf.putInt(words)
+            buf.putInt(n0inv.negate().toInt())
+            for (i in 0 until words) {
+                val qr = n.divideAndRemainder(r32)
+                n = qr[0]
+                buf.putInt(qr[1].toInt())
             }
+            for (i in 0 until words) {
+                val qr = rr.divideAndRemainder(r32)
+                rr = qr[0]
+                buf.putInt(qr[1].toInt())
+            }
+            buf.putInt(pub.publicExponent.toInt())
+            return buf.array()
         }
     }
 }

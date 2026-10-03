@@ -291,12 +291,13 @@ class OmpNativePlugin : Plugin() {
 
     /** The phone's adb identity, encrypted with a Keystore key, in noBackupFilesDir (not backed up or transferred). */
     private fun adbIdentities(): AdbIdentityStore {
-        // an early build kept the key in plain text here
+        // earlier builds kept the key in plain text here, or briefly as temporary files while generating it
         File(context.filesDir, "adb").deleteRecursively()
+        File(context.cacheDir, "adbtmp").deleteRecursively()
         return AdbIdentityStore(
             File(context.noBackupFilesDir, "adb/identity.enc"),
             AesGcmWrapper { AesGcmWrapper.keystoreKey("omp-adb-aes") },
-        ) { AdbIdentity.generate(File(context.cacheDir, "adbtmp")) }
+        ) { AdbIdentity.generate() }
     }
 
     /** Stops the running install (downloads and temp files are removed). */
