@@ -207,6 +207,10 @@ function optimisticFields(s: PlayerState, c: DistributiveOmit<Cmd, 'id'>): { pau
       return { paused: false };
     case 'seek':
       return { time: c.t };
+    case 'chapter': {
+      const ch = s.chapters && s.chapters[c.i];
+      return ch ? { time: ch.t } : null;
+    }
     case 'skip': {
       const t = s.time + c.d;
       return { time: Math.max(0, s.duration > 0 ? Math.min(s.duration, t) : t) };

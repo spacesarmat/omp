@@ -7,6 +7,7 @@ import { nowPlaying, lastSeen, linkStatus, launching, sendCmd } from '../tv/play
 import { volume as tvVolume } from '../tv/tvClient';
 import { formatDuration } from '../../../src/lib/format';
 import { displayTitle } from '../ui/displayTitle';
+import { chapterIndexAt, chapterStepIndex, type Chapter } from '../../../src/player/chapters';
 import { hasPosterImage, playerPosterStyle } from '../ui/playerPoster';
 
 const HOLD_MS = 1500;
@@ -106,6 +107,17 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
   const shown = drag ?? (holding ? held!.t : s.time);
   const max = Math.max(1, s.duration);
   const pct = Math.max(0, Math.min(100, (shown / max) * 100));
+  const list: Chapter[] = (s.chapters || []).map((c) => ({ start: c.t, end: c.t, title: c.title, kind: null }));
+  const local = chapterIndexAt(list, shown);
+  const cur = drag !== null || holding || s.chapter === undefined ? local : s.chapter;
+  const chapterName = (i: number) => (list[i].title || 'Глава ' + (i + 1));
+  const stepChapter = (dir: 1 | -1) => {
+    const i = chapterStepIndex(list, shown, dir);
+    if (i === null) return;
+    if (i >= 0) sendCmd({ type: 'chapter', i });
+    else sendCmd({ type: 'seek', t: 0 });
+    setHeld({ t: i >= 0 ? list[i].start : 0, seen: lastSeen.value, at: Date.now() });
+  };
   const left = s.duration > 0 ? '−' + formatDuration(Math.max(0, s.duration - shown)) : '';
   return (
     <div class="m-screen m-now" data-route="nowPlaying">
@@ -120,6 +132,14 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
       <div class="m-now-seek">
         <div class="m-seek">
           <div class="m-seek-fill" style={{ width: pct + '%' }} />
+          {s.duration > 0 &&
+            list.map(
+              (c, i) =>
+                c.start > 0 &&
+                c.start < s.duration && (
+                  <span key={i} class="m-seek-tick" style={{ left: (c.start / s.duration) * 100 + '%' }} />
+                ),
+            )}
           <input
             type="range"
             class="m-seek-input"
@@ -143,6 +163,34 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
           <span>{left}</span>
         </div>
       </div>
+      {list.length > 0 && (
+        <div class="m-now-chapter">
+          <button
+            type="button"
+            class="m-now-chbtn"
+            aria-label="Предыдущая глава"
+            disabled={off}
+            onClick={() => stepChapter(-1)}
+          >
+            <Icon d={ICONS.prev} size={22} />
+          </button>
+          <span class="m-now-chtext">
+            <span class="m-now-chnum">
+              {cur >= 0 ? 'Глава ' + (cur + 1) + ' из ' + list.length : 'Глав: ' + list.length}
+            </span>
+            {cur >= 0 && chapterName(cur)}
+          </span>
+          <button
+            type="button"
+            class="m-now-chbtn"
+            aria-label="Следующая глава"
+            disabled={off || chapterStepIndex(list, shown, 1) === null}
+            onClick={() => stepChapter(1)}
+          >
+            <Icon d={ICONS.next} size={22} />
+          </button>
+        </div>
+      )}
       <div class="m-now-controls">
         <Skip label="Предыдущая серия" text="" d={ICONS.prev} disabled={off} onClick={() => sendCmd({ type: 'prev' })} />
         <Skip
@@ -191,6 +239,26 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
           </button>
         </div>
       </div>
+      {list.length > 0 && (
+        <div class="m-now-chlist">
+          <div class="m-now-chhead">Главы</div>
+          {list.map((c, i) => (
+            <button
+              key={i}
+              type="button"
+              class={'m-now-chitem' + (i === cur ? ' on' : '')}
+              disabled={off}
+              onClick={() => {
+                sendCmd({ type: 'chapter', i });
+                setHeld({ t: c.start, seen: lastSeen.value, at: Date.now() });
+              }}
+            >
+              <span class="m-now-chtime">{formatDuration(c.start)}</span>
+              <span class="m-now-chname">{chapterName(i)}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {s.next && (
         <div class="m-now-next">
           <span class="m-now-next-text">Дальше: {displayTitle(s.next.title)}</span>

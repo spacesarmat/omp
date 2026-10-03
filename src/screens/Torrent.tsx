@@ -15,6 +15,8 @@ import { restoreFocus } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
+import { useSkip, firstPlayableId } from '../lib/useSkip';
+import { skipStatus } from '../lib/skipMarks';
 
 export function TorrentScreen({ hash }: { hash: string }) {
   const c = client.value!;
@@ -68,6 +70,11 @@ export function TorrentScreen({ hash }: { hash: string }) {
 
   const queue = useMemo(() => (t ? buildTorrentQueue(c, t, files) : []), [t ? t.hash : '', files]);
   const groups = useMemo(() => groupBySeason(playableFiles(files)), [files]);
+
+  const skip = useSkip(c, hash, firstPlayableId(files));
+  const toggleSkip = (key: 'i' | 'c') => {
+    skip.save((p) => (key === 'i' ? { i: !p.i } : { c: !p.c }), true).then(undefined, (e) => toast(errorMessage(e), 'error'));
+  };
 
   useEffect(() => {
     restoreFocus('TORRENT-ACTIONS');
@@ -149,6 +156,26 @@ export function TorrentScreen({ hash }: { hash: string }) {
           </FocusGroup>
         </div>
       </div>
+      {queue.length > 0 && (
+        <FocusGroup focusKey="TORRENT-SKIP" className="skip-block">
+          <div class="skip-head">
+            <span class="skip-title">Пропуск</span>
+            <span class="muted">для всех серий · общий для ТВ и телефона</span>
+          </div>
+          <Focusable focusKey="skip-intro" className="skip-row" onPress={() => toggleSkip('i')}>
+            <span class="skip-label">Пропускать заставку автоматически</span>
+            <span class={'skip-switch' + (skip.prefs.i ? ' on' : '')} role="switch" aria-label="Пропускать заставку автоматически" aria-checked={skip.prefs.i} />
+          </Focusable>
+          <Focusable focusKey="skip-credits" className="skip-row" onPress={() => toggleSkip('c')}>
+            <span class="skip-label">Пропускать титры — сразу следующая серия</span>
+            <span class={'skip-switch' + (skip.prefs.c ? ' on' : '')} role="switch" aria-label="Пропускать титры" aria-checked={skip.prefs.c} />
+          </Focusable>
+          <Focusable focusKey="skip-status" className="skip-row skip-status">
+            <span class="skip-label">Заставка и титры</span>
+            <span class="muted">{skipStatus(skip.hasChapters, skip.prefs)}</span>
+          </Focusable>
+        </FocusGroup>
+      )}
       {loadingInfo && <Spinner text="Получение списка файлов…" />}
       {error && <div class="banner-error">{error}</div>}
       {!loadingInfo && !error && loaded && files.length === 0 && <div class="empty">Файлы не найдены</div>}

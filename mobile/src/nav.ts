@@ -11,7 +11,8 @@ export type MRoute =
   | { name: 'settings' }
   | { name: 'serverSettings'; url?: string }
   | { name: 'localServer' }
-  | { name: 'faq' };
+  | { name: 'faq' }
+  | { name: 'sources' };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);

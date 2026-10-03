@@ -16,17 +16,20 @@ import type { TapZone } from '../player/pointerTaps';
 import { Icon } from '../ui/icons';
 import type { IconName } from '../ui/icons';
 import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
-import { introChapter, skipSegments } from '../player/chapters';
+import { chapterList, chapterIndexAt, chapterTarget, skipSegments, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS } from '../player/chapters';
+import type { MarkKind } from '../player/chapters';
+import type { SkipPrefs } from '../lib/journal';
+import { formatDuration } from '../lib/format';
 import { useVideoState } from '../player/useVideoState';
 import { HideTimer, canHideControls, pointerMoveCounts } from '../player/hideTimer';
 import { useProgressSync } from '../player/useProgressSync';
 import { WatchJournal, journalSource } from '../player/watchJournal';
-import { recordWatch } from '../store/journal';
+import { recordWatch, loadSkip, saveSkip } from '../store/journal';
 import { getLocalProgress } from '../store/progress';
 import { useNextEpisode } from '../player/useNextEpisode';
 import { useCacheStats } from '../player/useCacheStats';
 import { Controls } from '../player/Controls';
-import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner, PlayerError } from '../player/Overlays';
+import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner, UndoBanner, PlayerError } from '../player/Overlays';
 import type { Cmd } from '../phone/protocol';
 import { goBack } from '../ui/nav';
 import { useKeys } from '../ui/keys';
@@ -61,6 +64,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const [cues, setCues] = useState<Cue[] | null>(null);
   const [skippedIntro, setSkippedIntro] = useState<number | null>(null);
   const [subOffset, setSubOffset] = useState(0);
+  const [prefs, setPrefs] = useState<SkipPrefs>({ i: false, c: false });
+  const [undo, setUndo] = useState<{ start: number; text: string } | null>(null);
+  const autoIntroDone = useRef(false);
+  const autoCreditsDone = useRef(false);
+  const pendingIntro = useRef<number | null>(null);
+  const lastT = useRef(-1);
+  const [probed, setProbed] = useState(false);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPos = useRef(0);
   const userTracks = useRef(false);
   const metaLoaded = useRef(false);
@@ -82,6 +93,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const goNext = () => { if (hasNext) setIndex(index + 1); };
   const goPrev = () => { if (hasPrev) setIndex(index - 1); };
 
+  const chapters = useMemo(() => chapterList(probe), [probe]);
+  const chapterIdx = chapterIndexAt(chapters, vs.time);
+  const segs = skipSegments(probe, prefs, vs.duration);
+
   const next = useNextEpisode({
     itemKey: index,
     enabled: settings.value.autoNext,
@@ -90,13 +105,55 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     duration: vs.duration,
     ended: vs.ended,
     paused: vs.paused,
-    creditsAt: skipSegments(probe, null, vs.duration).credits?.start,
+    creditsStart: segs.credits ? segs.credits.start : null,
     onNext: goNext,
     onEnd: () => goBack(),
   });
 
-  const intro = introChapter(probe, vs.time);
-  const showSkip = ready && !vs.error && !!intro && skippedIntro !== intro.start && next.countdown === null;
+  const intro = inIntro(segs.intro, vs.time) ? segs.intro! : null;
+  const showSkip = ready && !vs.error && !!intro && skippedIntro !== intro.start && next.countdown === null && !undo;
+  const hideUndo = () => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    undoTimer.current = null;
+    setUndo(null);
+  };
+  useEffect(() => () => { if (undoTimer.current) clearTimeout(undoTimer.current); }, []);
+
+  // skip settings of the torrent: loaded once when the player opens (and re-read for another torrent)
+  useEffect(() => {
+    setPrefs({ i: false, c: false });
+    pendingIntro.current = null;
+    if (!c || !item.hash) return;
+    let cancelled = false;
+    loadSkip(c, item.hash).then((p) => { if (!cancelled) setPrefs(p); }, () => undefined);
+    return () => { cancelled = true; };
+  }, [item.hash]);
+
+  // auto skip: the intro on entering it, the credits (with a next item) at their start
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!ready || !v || vs.error || !metaLoaded.current) return;
+    const t = isFinite(v.currentTime) ? v.currentTime : vs.time;
+    const prevT = lastT.current;
+    lastT.current = t;
+    if (prefs.i && !autoIntroDone.current && segs.intro && inIntro(segs.intro, t)) {
+      autoIntroDone.current = true;
+      const start = segs.intro.start;
+      v.currentTime = introSkipTarget(segs.intro, vs.duration);
+      postSoon();
+      setSkippedIntro(start);
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+      setUndo({ start, text: 'Заставка пропущена' });
+      undoTimer.current = setTimeout(hideUndo, SKIP_TOAST_MS);
+      return;
+    }
+    if (prefs.c && hasNext && !autoCreditsDone.current && segs.credits && vs.duration > 0 && !v.paused && prevT >= 0 && prevT < segs.credits.start && t >= segs.credits.start && t - prevT < 5) {
+      autoCreditsDone.current = true;
+      toast('Титры пропущены');
+      goNext();
+    }
+  }, [vs.time, ready, prefs, probe]);
+
 
   const cache = useCacheStats(c, item.hash, statsOn || (ready && vs.buffering));
 
@@ -168,6 +225,11 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     setCues(null);
     setSubOffset(0);
     setSkippedIntro(null);
+    hideUndo();
+    autoIntroDone.current = false;
+    autoCreditsDone.current = false;
+    lastT.current = -1;
+    setProbed(false);
     setSubChoice('off');
     setAudioIdx(-1);
     userTracks.current = false;
@@ -191,7 +253,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       setReadyFor(index);
     });
     if (c && item.hash && item.fileIndex !== undefined) {
-      c.probe(item.hash, item.fileIndex).then((p) => { if (!cancelled) setProbe(p); });
+      c.probe(item.hash, item.fileIndex).then((p) => { if (!cancelled) { setProbe(p); setProbed(true); } });
+    } else {
+      setProbed(true);
     }
     return () => { cancelled = true; };
   }, [index]);
@@ -233,6 +297,36 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     if (v) v.currentTime = t;
     showControls();
     postSoon();
+  };
+
+  const openChapters = () => {
+    if (!chapters.length) return;
+    choose('Главы', chapters.map((ch, i) => ({ label: formatDuration(ch.start) + ' · ' + (ch.title || 'Глава ' + (i + 1)), value: i })), chapterIdx >= 0 ? chapterIdx : undefined)
+      .then((i) => { if (i !== null) seekTo(chapters[i].start); });
+  };
+
+  const chapterStep = (dir: 1 | -1) => {
+    const v = videoRef.current;
+    if (!v) return;
+    const t = chapterTarget(chapters, v.currentTime, dir);
+    if (t !== null) seekTo(t);
+  };
+
+  const mark = (kind: MarkKind, now: number) => {
+    const r = applyMark(kind, now, vs.duration, prefs, pendingIntro.current, formatDuration);
+    pendingIntro.current = r.pending;
+    if (!r.patch) {
+      toast(r.text, r.error ? 'error' : 'info');
+      return;
+    }
+    if (!c || !item.hash) {
+      toast('Не удалось сохранить отметку: нет связи с сервером', 'error');
+      return;
+    }
+    saveSkip(c, { hash: item.hash }, r.patch).then(
+      (saved) => { setPrefs(saved); toast(r.text); },
+      (e) => toast('Не удалось сохранить отметку: ' + errorMessage(e), 'error'),
+    );
   };
 
   const togglePause = () => {
@@ -322,7 +416,19 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       { label: 'Размер субтитров: ' + sizeLabel, value: 'size' },
     ];
     if (cues) root.push({ label: 'Сдвиг субтитров: ' + formatOffset(subOffset), value: 'offset' });
-    choose('Дорожки', root).then((kind) => {
+    if (chapters.length) root.push({ label: 'Главы: ' + chapters.length, value: 'chapters' });
+    const now = v.currentTime;
+    const credits = prefs.mc && vs.duration > prefs.mc ? formatDuration(vs.duration - prefs.mc) : '—';
+    root.push(
+      { label: 'Отметить начало заставки: ' + (pendingIntro.current !== null ? formatDuration(pendingIntro.current) : prefs.mi ? formatDuration(prefs.mi[0]) : '—'), value: 'mark-intro-start' },
+      { label: 'Отметить конец заставки: ' + (pendingIntro.current !== null ? 'начало ' + formatDuration(pendingIntro.current) + ' · ' : '') + 'сейчас ' + formatDuration(now), value: 'mark-intro-end' },
+      { label: 'Отметить начало титров: ' + credits, value: 'mark-credits' },
+    );
+    choose('Меню плеера', root).then((kind) => {
+      if (kind === 'chapters') openChapters();
+      else if (kind === 'mark-intro-start') mark('intro-start', now);
+      else if (kind === 'mark-intro-end') mark('intro-end', now);
+      else if (kind === 'mark-credits') mark('credits', now);
       if (kind === 'audio') {
         if (audio.length < 2) {
           toast('Других аудиодорожек нет');
@@ -360,6 +466,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
         time: live.time, duration: vs.duration, paused: live.paused, buffering: ready && vs.buffering,
         audio, audioIdx, defaultAudio: defaultAudioIndex(audio),
         subs: subtitleMenu(embeddedSubOptions(probe, v), item.subtitles || []), subChoice,
+        chapters,
       });
     },
     exec: (cmd: Cmd) => {
@@ -374,6 +481,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       runCmd(cmd, {
         paused: v.paused, time: v.currentTime, duration: vs.duration,
         subValues: menu.map((o) => o.value), audioCount: audio.length,
+        chapterStarts: chapterList(probeRef.current).map((c) => c.start),
         toggle: togglePause, seekTo, next: goNext, prev: goPrev,
         audio: (i) => chooseAudio(v, audio, i),
         subs: (value) => {
@@ -391,6 +499,12 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   }), []);
   useEffect(() => { postSoon(); }, [index, vs.paused]);
 
+  const undoSkip = () => {
+    if (!undo) return;
+    seekTo(undo.start);
+    hideUndo();
+  };
+
   const retry = () => {
     startPos.current = posRef.current.time;
     userTracks.current = false;
@@ -405,8 +519,12 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       if (a === 'enter') { goNext(); return true; }
       if (a === 'back') { next.dismiss(); return true; }
     }
+    if (undo) {
+      if (a === 'enter') { undoSkip(); return true; }
+      if (a === 'back') { hideUndo(); return true; }
+    }
     if (showSkip && intro) {
-      if (a === 'enter') { seekTo(intro.end); setSkippedIntro(intro.start); return true; }
+      if (a === 'enter') { seekTo(introSkipTarget(intro, vs.duration)); setSkippedIntro(intro.start); return true; }
       if (a === 'back') { setSkippedIntro(intro.start); return true; }
     }
     switch (a) {
@@ -446,6 +564,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       case 'info':
         setStatsOn(!statsOn);
         return true;
+      case 'chup':
+      case 'chdown':
+        if (chapters.length) chapterStep(a === 'chup' ? 1 : -1);
+        else if (!probed) return true; // ffprobe has not answered yet: the file may have chapters
+        else if (a === 'chup') goNext();
+        else goPrev();
+        showControls();
+        return true;
       case 'next':
         goNext();
         return true;
@@ -475,7 +601,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       {next.countdown !== null && hasNext && (
         <NextBanner seconds={next.countdown} title={queue[index + 1].title} onNext={goNext} />
       )}
-      {showSkip && intro && <SkipBanner onSkip={() => { seekTo(intro.end); setSkippedIntro(intro.start); }} />}
+      {showSkip && intro && <SkipBanner onSkip={() => { seekTo(introSkipTarget(intro, vs.duration)); setSkippedIntro(intro.start); }} />}
+      {undo && next.countdown === null && <UndoBanner text={undo.text} onUndo={undoSkip} />}
       {(controls || vs.paused) && !vs.error && (
         <Controls
           title={item.title}
@@ -490,6 +617,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
           onPrev={goPrev}
           onNext={goNext}
           onTracks={openTrackMenu}
+          chapters={chapters}
+          chapterIdx={chapterIdx}
+          onChapters={openChapters}
         />
       )}
       {vs.error && <PlayerError message={vs.error} probe={probe} onRetry={retry} onBack={() => goBack()} />}

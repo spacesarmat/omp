@@ -90,6 +90,15 @@ describe('playerLink', () => {
     }
   });
 
+  it('chapter command moves the time to the chapter start optimistically', () => {
+    handler!(body(state({ chapters: [{ t: 0, title: 'a' }, { t: 90, title: 'b' }], chapter: 0 })));
+    sendCmd({ type: 'chapter', i: 1 });
+    expect(nowPlaying.value?.time).toBe(90);
+    expect(queued[0][0]).toEqual({ type: 'chapter', i: 1, id: 1 });
+    sendCmd({ type: 'chapter', i: 5 });
+    expect(nowPlaying.value?.time).toBe(90);
+  });
+
   it('queues commands with increasing ids and updates optimistically', () => {
     handler!(body(state()));
     sendCmd({ type: 'pause' });

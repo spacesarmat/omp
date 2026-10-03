@@ -23,6 +23,9 @@ import type { Torrent as TorrentT } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
 import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../../../src/lib/episodes';
 import { formatBytes, formatDuration } from '../../../src/lib/format';
+import { useSkip, firstPlayableId } from '../../../src/lib/useSkip';
+import { parseMark, skipStatus } from '../../../src/lib/skipMarks';
+import type { SkipPrefs } from '../../../src/lib/journal';
 import { posterColor, shortTitle } from '../../../src/lib/libraryView';
 
 const BACK = 'M15 5l-7 7 7 7';
@@ -33,6 +36,7 @@ const TV_PLAY = 'M3 5h18v11H3zM8 20h8M10 8.5l4 2.5-4 2.5z';
 const PHONE = 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2';
 const LINK = 'M9 15l6-6M10 6l1.5-1.5a5 5 0 0 1 7 7L17 13M14 18l-1.5 1.5a5 5 0 0 1-7-7L7 11';
 const CHECK = 'M5 12.5l4.5 4.5L19 7';
+const CHEVRON = 'M9 6l6 6-6 6';
 
 function plural(n: number, one: string, few: string, many: string): string {
   const m10 = n % 10;
@@ -155,6 +159,105 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
   );
 }
 
+function SkipSwitch({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={label} class={'m-switch' + (on ? ' on' : '')} onClick={onToggle}>
+      <span class="m-switch-knob" />
+    </button>
+  );
+}
+
+type Marks = { mi: [number, number] | null; mc: number | null };
+const BAD_TIME = 'Введите время как мин:сек, например 1:30';
+
+/** «Заставка и титры»: manual marks for the whole torrent (used when the file has no chapters). */
+function MarksSheet({ title, prefs, onSave, onClose }: { title: string; prefs: SkipPrefs; onSave: (p: Marks) => Promise<unknown>; onClose: () => void }) {
+  const [from, setFrom] = useState(prefs.mi ? formatDuration(prefs.mi[0]) : '');
+  const [to, setTo] = useState(prefs.mi ? formatDuration(prefs.mi[1]) : '');
+  const [last, setLast] = useState(prefs.mc ? formatDuration(prefs.mc) : '');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [alive] = useState({ v: true });
+  useEffect(
+    () => () => {
+      alive.v = false;
+    },
+    [],
+  );
+
+  const write = (p: Marks) => {
+    setBusy(true);
+    onSave(p).then(
+      () => onClose(),
+      (e) => {
+        if (!alive.v) return;
+        setBusy(false);
+        setError(errorMessage(e));
+        showToast(errorMessage(e));
+      },
+    );
+  };
+
+  const save = () => {
+    const f = from.trim();
+    const t = to.trim();
+    const l = last.trim();
+    let mi: [number, number] | null = null;
+    let mc: number | null = null;
+    if (f || t) {
+      const a = parseMark(f);
+      const b = parseMark(t);
+      if (a === null || b === null) return setError(BAD_TIME);
+      if (b <= a) return setError('Конец заставки должен быть позже начала');
+      mi = [a, b];
+    }
+    if (l) {
+      const m = parseMark(l);
+      if (m === null || m <= 0) return setError(BAD_TIME);
+      mc = m;
+    }
+    setError('');
+    write({ mi, mc });
+  };
+
+  return (
+    <Sheet onClose={onClose} label="Заставка и титры">
+      <div class="m-sheet-title">Заставка и титры</div>
+      <div class="m-muted m-small">Для всех серий «{title}». Если в файле есть главы «Заставка» или «Титры» — используются они.</div>
+      <div class="m-section">Заставка</div>
+      <div class="m-marks-pair">
+        <div class="m-field">
+          <label for="m-mark-from">С</label>
+          <input id="m-mark-from" class="m-input" type="text" inputMode="numeric" value={from} onInput={(e) => setFrom((e.target as HTMLInputElement).value)} />
+        </div>
+        <div class="m-field">
+          <label for="m-mark-to">До</label>
+          <input id="m-mark-to" class="m-input" type="text" inputMode="numeric" value={to} onInput={(e) => setTo((e.target as HTMLInputElement).value)} />
+        </div>
+      </div>
+      <div class="m-section">Титры</div>
+      <div class="m-field">
+        <label for="m-mark-last">Последние (мин:сек)</label>
+        <input id="m-mark-last" class="m-input" type="text" inputMode="numeric" value={last} onInput={(e) => setLast((e.target as HTMLInputElement).value)} />
+      </div>
+      <div class="m-muted m-small">Удобнее отметить прямо в плеере: меню → «Отметить начало заставки».</div>
+      {error && (
+        <div class="m-error" role="alert">
+          {error}
+        </div>
+      )}
+      <div class="m-marks-actions">
+        <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={() => write({ mi: null, mc: null })}>
+          Сбросить
+        </button>
+        <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={save}>
+          Сохранить
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 export function Torrent({ hash }: { hash: string }) {
   const c = client.value;
   const listed = torrents.value.find((x) => x.hash === hash);
@@ -166,10 +269,14 @@ export function Torrent({ hash }: { hash: string }) {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const launch = useTvLaunch();
+  const [marksOpen, setMarksOpen] = useState(false);
+  const [finding, setFinding] = useState(false);
   progressVersion.value;
   serverViewed.value;
 
   const own = t ? filesOf(t) : [];
+  const allFiles = own.length ? own : loaded ? filesOf(loaded) : [];
+  const skip = useSkip(c, hash, firstPlayableId(allFiles), !!t);
   // file list comes from the list entry; load it from the server if the entry has none
   useEffect(() => {
     if (!c || !t || own.length) return;
@@ -211,7 +318,10 @@ export function Torrent({ hash }: { hash: string }) {
     );
   }
 
-  const files = playableFiles(own.length ? own : loaded ? filesOf(loaded) : []);
+  const files = playableFiles(allFiles);
+  const toggleSkip = (key: 'i' | 'c') => {
+    skip.save((p) => (key === 'i' ? { i: !p.i } : { c: !p.c }), true).then(undefined, (e) => showToast(errorMessage(e)));
+  };
   const tv = activeTv.value;
   const title = t.title || t.name || t.hash;
   const badges = [qualityBadge(title)].filter(Boolean);
@@ -262,7 +372,6 @@ export function Torrent({ hash }: { hash: string }) {
     }
   };
 
-  const [finding, setFinding] = useState(false);
   const findPoster = () => {
     if (finding) return;
     setFinding(true);
@@ -333,6 +442,32 @@ export function Torrent({ hash }: { hash: string }) {
           Смотреть на телефоне
         </button>
         {status && <LaunchError message={status} />}
+        {files.length > 0 && (
+          <div class="m-skip">
+            <div class="m-skip-head">
+              <span class="m-skip-title">Пропуск</span>
+              <span class="m-muted m-small">для всех серий · ТВ и телефон</span>
+            </div>
+            <div class="m-skip-row">
+              <span class="m-skip-text">Пропускать заставку</span>
+              <SkipSwitch on={skip.prefs.i} label="Пропускать заставку" onToggle={() => toggleSkip('i')} />
+            </div>
+            <div class="m-skip-row">
+              <span class="m-skip-text">
+                Пропускать титры
+                <span class="m-muted m-small">сразу следующая серия</span>
+              </span>
+              <SkipSwitch on={skip.prefs.c} label="Пропускать титры" onToggle={() => toggleSkip('c')} />
+            </div>
+            <button type="button" class="m-skip-row m-skip-open" onClick={() => setMarksOpen(true)}>
+              <span class="m-skip-text">
+                Заставка и титры
+                <span class="m-muted m-small">{skipStatus(skip.hasChapters, skip.prefs)}</span>
+              </span>
+              <Icon d={CHEVRON} size={20} />
+            </button>
+          </div>
+        )}
         {files.length > 0 && <div class="m-section">{hasEpisodes ? 'Серии' : 'Файлы'}</div>}
         <div class="m-list m-eps">
           {files.map((f, i) => {
@@ -352,6 +487,7 @@ export function Torrent({ hash }: { hash: string }) {
           })}
         </div>
       </div>
+      {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
       {sheet && <WatchSheet torrent={t} file={sheet} onClose={() => setSheet(null)} />}
       {launch.sheet}
     </div>

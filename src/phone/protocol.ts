@@ -6,11 +6,15 @@ export interface PlayerState {
   time: number; duration: number; paused: boolean; buffering: boolean;
   audio: TrackList; subs: SubList;
   next: { title: string } | null;
+  /** Chapters of the file (start seconds + title) and the current one (-1 before the first); absent from old TVs. */
+  chapters?: { t: number; title: string }[];
+  chapter?: number;
 }
 export interface PhoneMessage { v: 1; app: string; state: PlayerState | null }
 export type Cmd =
   | { id: number; type: 'play' | 'pause' | 'next' | 'prev' }
   | { id: number; type: 'seek'; t: number }
+  | { id: number; type: 'chapter'; i: number }
   | { id: number; type: 'skip'; d: number }
   | { id: number; type: 'audio'; i: number }
   | { id: number; type: 'subs'; value: string };
@@ -45,6 +49,8 @@ export function sanitizeCmd(v: unknown): Cmd | null {
       return { id, type: v.type };
     case 'seek':
       return num(v.t) && v.t >= 0 ? { id, type: 'seek', t: v.t } : null;
+    case 'chapter':
+      return int(v.i) && v.i >= 0 ? { id, type: 'chapter', i: v.i } : null;
     case 'skip':
       return num(v.d) ? { id, type: 'skip', d: v.d } : null;
     case 'audio':
@@ -90,6 +96,16 @@ function sanitizeState(v: unknown): PlayerState | null {
     audio: { list: alist, sel: v.audio.sel }, subs: { list: slist, sel: v.subs.sel }, next,
   };
   if (v.poster !== undefined) st.poster = v.poster;
+  if (Array.isArray(v.chapters) && v.chapters.length) {
+    const list: { t: number; title: string }[] = [];
+    for (let i = 0; i < v.chapters.length; i++) {
+      const c: unknown = v.chapters[i];
+      if (!isObj(c) || !num(c.t) || c.t < 0 || typeof c.title !== 'string') return st;
+      list.push({ t: c.t, title: c.title });
+    }
+    st.chapters = list;
+    st.chapter = int(v.chapter) && v.chapter >= -1 && v.chapter < list.length ? v.chapter : -1;
+  }
   return st;
 }
 

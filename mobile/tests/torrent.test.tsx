@@ -68,6 +68,8 @@ beforeEach(() => {
   resetTo({ name: 'library' });
   navigate({ name: 'torrent', hash: 'abc' });
   vi.spyOn(TorrServerClient.prototype, 'viewedList').mockResolvedValue([]);
+  vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
+  vi.spyOn(TorrServerClient.prototype, 'probe').mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -379,6 +381,21 @@ describe('Torrent not in the list yet', () => {
     await flush();
     expect(get).toHaveBeenCalledWith('abc');
     expect(el.querySelector('.m-thead-title')!.textContent).toBe('Starbound Frontier');
+  });
+
+  it('loads the skip settings once the torrent is known', async () => {
+    torrents.value = [];
+    const withSkip = { ...tor, data: JSON.stringify({ omp: { v: 1, h: [], s: { i: true, c: false } } }) };
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(withSkip);
+    // the library list catches up only after the card asked the server for the torrent
+    const list = vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
+    mount();
+    expect(list).not.toHaveBeenCalled();
+    list.mockResolvedValue([withSkip]);
+    await flush();
+    await flush();
+    const sw = el.querySelector('button[role="switch"][aria-label="Пропускать заставку"]')!;
+    expect(sw.getAttribute('aria-checked')).toBe('true');
   });
 
   it('says not found only when the server has no such torrent', async () => {

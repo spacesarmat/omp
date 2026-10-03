@@ -11,12 +11,32 @@ import { useTvLaunch } from '../watch';
 import { client } from '../../../src/store/servers';
 import { rememberAdded } from '../../../src/store/library';
 import { errorMessage } from '../../../src/api/http';
-import type { SearchResult } from '../../../src/api/types';
-import type { SearchSource } from '../../../src/api/torrserver';
+import { searchAll, type SearchHandle } from '../../../src/sources/search';
+import { allSources } from '../../../src/sources/registry';
+import { enabledSources } from '../../../src/sources/store';
+import { getHealth } from '../../../src/sources/store';
+import {
+  filterQuality,
+  isCloudflare,
+  JACKETT_HINT,
+  progressText,
+  resolveLink,
+  resultDate,
+  resultKey,
+  seedsText,
+  sortResults,
+  sourceBadge,
+  sourceName,
+  stableOrder,
+  SORT_LABELS,
+  type QualityFilter,
+  type SortKey,
+} from '../../../src/sources/view';
+import type { SourceResult } from '../../../src/sources/types';
+import { phoneSourceContext } from '../searchContext';
 
-const PLUS = 'M12 5v14M5 12h14';
-const TV_PLAY = 'M3 5h18v11H3zM8 20h8M10 8.5l4 2.5-4 2.5z';
 const SEARCH = 'M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5';
+const CHECK = 'M5 12l5 5l9-10';
 
 const HASH = /^[0-9a-fA-F]{40}$/;
 
@@ -29,40 +49,121 @@ export function normalizeLink(raw: string): string | null {
   return null;
 }
 
-function linkOf(r: SearchResult): string {
-  return r.Magnet || r.Link || (r.Hash ? 'magnet:?xt=urn:btih:' + r.Hash : '');
+function meta(r: SourceResult): string {
+  const more = r.sources && r.sources.length ? 'ещё в ' + r.sources.map(sourceName).join(', ') : '';
+  return [r.Size, seedsText(r.Seed || 0), resultDate(r), more].filter(Boolean).join(' · ');
 }
 
-function meta(r: SearchResult): string {
-  return [r.Size, r.Seed + ' сид.', r.Tracker].filter(Boolean).join(' · ');
+interface Prog {
+  answered: number;
+  total: number;
+  pending: string[];
+  failed: string[];
+}
+
+/** Row state while adding: taking the link from the release page, then adding. */
+type RowBusy = 'link' | 'add';
+
+/**
+ * The last search outlives the screen: going to «Источники поиска» (or another tab) and back shows the same
+ * results, and a search still running keeps streaming into them.
+ */
+interface SearchMemo {
+  query: string;
+  chosen: string[] | null;
+  quality: QualityFilter;
+  sort: SortKey;
+  handle: SearchHandle | null;
+  /** Row order on screen while results stream in. */
+  order: string[];
+  rowCat: Record<string, string>;
+  /** Server the search ran on: another active server starts from scratch. */
+  server: string | null;
+  /** Rows being added: a request still running when the screen is left keeps its row busy on return. */
+  busy: Map<string, RowBusy>;
+}
+
+function freshMemo(): SearchMemo {
+  return { query: '', chosen: null, quality: '', sort: 'seeds', handle: null, order: [], rowCat: {}, server: null, busy: new Map() };
+}
+
+let memo: SearchMemo = freshMemo();
+let listener: ((h: SearchHandle) => void) | null = null;
+
+/** Forgets the last search (tests, server change). */
+export function resetAddSearch(): void {
+  if (memo.handle) memo.handle.cancel();
+  memo = freshMemo();
+}
+
+function progOf(h: SearchHandle): Prog {
+  return { answered: h.answered().length, total: h.sourceIds.length, pending: h.pending(), failed: h.failed() };
 }
 
 export function Add({ link }: { link?: string }) {
+  // results of another server must not be added to this one
+  const server = client.value ? client.value.baseUrl : null;
+  if (memo.handle && memo.server !== server) resetAddSearch();
   const [value, setValue] = useState(link || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [query, setQuery] = useState('');
-  const [source, setSource] = useState<SearchSource>('rutor');
-  const [results, setResults] = useState<SearchResult[] | null>(null);
-  const [searching, setSearching] = useState(false);
+  const [query, setQueryState] = useState(memo.query);
+  const [chosen, setChosenState] = useState<string[] | null>(memo.chosen);
+  const [quality, setQualityState] = useState<QualityFilter>(memo.quality);
+  const [sort, setSortState] = useState<SortKey>(memo.sort);
+  const [rows, setRows] = useState<SourceResult[] | null>(memo.handle ? memo.handle.results() : null);
+  const [prog, setProg] = useState<Prog | null>(memo.handle ? progOf(memo.handle) : null);
+  const [searching, setSearching] = useState(memo.handle ? memo.handle.pending().length > 0 : false);
   const [searchError, setSearchError] = useState('');
+  const [sheet, setSheet] = useState<'sources' | 'sort' | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  const [rowCat, setRowCat] = useState<Record<string, string>>({});
+  const [rowCat, setRowCatState] = useState<Record<string, string>>(memo.rowCat);
   const [catSheet, setCatSheet] = useState<string | null>(null);
-  const [pending, setPending] = useState<Record<string, boolean>>({});
+  const [pending, setPending] = useState<Record<string, RowBusy>>(() => Object.fromEntries(memo.busy));
   const [alive] = useState({ v: true });
-  const pendingRef = useRef<Set<string>>(new Set());
-  const searchToken = useRef(0);
+  const pendingRef = useRef<Map<string, RowBusy>>(memo.busy);
   const launch = useTvLaunch();
   const tv = activeTv.value;
 
-  useEffect(
-    () => () => {
+  const setQuery = (v: string) => {
+    memo.query = v;
+    setQueryState(v);
+  };
+  const setChosen = (v: string[] | null) => {
+    memo.chosen = v;
+    setChosenState(v);
+  };
+  // a new filter or sort re-sorts everything at once
+  const setQuality = (v: QualityFilter) => {
+    memo.quality = v;
+    memo.order = [];
+    setQualityState(v);
+  };
+  const setSort = (v: SortKey) => {
+    memo.sort = v;
+    memo.order = [];
+    setSortState(v);
+  };
+  const setRowCat = (v: Record<string, string>) => {
+    memo.rowCat = v;
+    setRowCatState(v);
+  };
+
+  const sync = (h: SearchHandle) => {
+    if (!alive.v || memo.handle !== h) return;
+    setRows(h.results());
+    setProg(progOf(h));
+    setSearching(h.pending().length > 0);
+  };
+
+  useEffect(() => {
+    listener = sync;
+    if (memo.handle) sync(memo.handle);
+    return () => {
       alive.v = false;
-      searchToken.current++;
-    },
-    [],
-  );
+      if (listener === sync) listener = null;
+    };
+  }, []);
   useEffect(() => {
     if (link) changeValue(link);
   }, [link]);
@@ -76,9 +177,8 @@ export function Add({ link }: { link?: string }) {
   };
 
   const magnetCategory = picked !== null ? picked : guessCategory(magnetName(value));
-  const rowKey = (r: SearchResult) => r.Hash || r.Title;
-  const categoryOfRow = (r: SearchResult) => {
-    const v = rowCat[rowKey(r)];
+  const categoryOfRow = (r: SourceResult) => {
+    const v = rowCat[resultKey(r)];
     return v !== undefined ? v : guessCategory(r.Title);
   };
 
@@ -115,54 +215,65 @@ export function Add({ link }: { link?: string }) {
     }
   };
 
-  const onSearch = async (e?: Event) => {
+  // sources of this search: the ones picked in the sheet, else those switched on in «Источники поиска»
+  const all = allSources();
+  const enabledIds = enabledSources(all).map((s) => s.id);
+  const selected = chosen || enabledIds;
+  const allChosen = chosen === null || (chosen.length === enabledIds.length && enabledIds.every((id) => chosen.indexOf(id) >= 0));
+  const sourcesLabel = allChosen ? 'Все источники · ' + enabledIds.length : 'Источники · ' + selected.length;
+
+  const onSearch = (e?: Event) => {
     e?.preventDefault();
     const q = query.trim();
-    const c = client.value;
-    if (!q || !c) return;
-    const token = ++searchToken.current;
-    setSearching(true);
+    if (!q) return;
+    if (memo.handle) memo.handle.cancel();
     setSearchError('');
-    try {
-      const r = await c.search(q, source);
-      if (alive.v && token === searchToken.current) setResults(r);
-    } catch (err) {
-      if (alive.v && token === searchToken.current) {
-        setResults(null);
-        setSearchError(errorMessage(err));
-      }
-    } finally {
-      if (alive.v && token === searchToken.current) setSearching(false);
-    }
+    // callbacks come asynchronously, after `h` is assigned; they reach whichever Add screen is open
+    const notify = () => {
+      if (listener) listener(h);
+    };
+    const h: SearchHandle = searchAll(q, {
+      ctx: phoneSourceContext(),
+      sources: selected,
+      onResult: notify,
+      onDone: notify,
+    });
+    memo.handle = h;
+    memo.server = server;
+    memo.order = [];
+    sync(h);
   };
 
-  const pickSource = (s: SearchSource) => {
-    if (s === source) return;
-    searchToken.current++;
-    setSource(s);
-    setResults(null);
-    setSearching(false);
-    setSearchError('');
+  const toggleChosen = (id: string) => {
+    const next = selected.indexOf(id) >= 0 ? selected.filter((x) => x !== id) : selected.concat([id]);
+    setChosen(all.map((s) => s.id).filter((x) => next.indexOf(x) >= 0));
   };
 
-  const addResult = async (r: SearchResult, watch: boolean) => {
-    const key = r.Hash || r.Title;
+  const markRow = (key: string, state: RowBusy | null) => {
+    if (state) pendingRef.current.set(key, state);
+    else pendingRef.current.delete(key);
+    if (alive.v) setPending(Object.fromEntries(pendingRef.current));
+  };
+
+  const addResult = async (r: SourceResult, watch: boolean) => {
+    const key = resultKey(r);
     if (pendingRef.current.has(key)) return;
-    const l = linkOf(r);
-    if (!l) {
-      showToast('У результата нет ссылки');
-      return;
-    }
     if (watch && !tv) {
       navigate({ name: 'tv' });
       return;
     }
-    pendingRef.current.add(key);
-    setPending({ ...Object.fromEntries([...pendingRef.current].map((k) => [k, true])) });
+    const c = client.value;
+    if (!c) {
+      setSearchError('Сервер не выбран');
+      return;
+    }
+    markRow(key, 'link');
     setSearchError('');
     try {
-      const c = client.value;
-      if (!c) throw new Error('Сервер не выбран');
+      // nnmclub, rutracker: the magnet is on the release page; Anidub, BigFANGroup: an http(s) .torrent link
+      const l = await resolveLink(r, phoneSourceContext());
+      if (!alive.v) return;
+      markRow(key, 'add');
       const added = await c.add({ link: l, category: categoryOfRow(r) });
       void rememberAdded(c, added, r.Title);
       const hash = added.hash;
@@ -180,10 +291,18 @@ export function Add({ link }: { link?: string }) {
     } catch (err) {
       if (alive.v) setSearchError(errorMessage(err));
     } finally {
-      pendingRef.current.delete(key);
-      if (alive.v) setPending(Object.fromEntries([...pendingRef.current].map((k) => [k, true])));
+      markRow(key, null);
     }
   };
+
+  // while sources still answer, rows on screen keep their places (no row moves under the finger);
+  // the full sort comes when the search ends
+  const filtered = rows ? filterQuality(rows, quality) : [];
+  const visible = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
+  memo.order = visible.map(resultKey);
+  const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
+  const sortLabel = SORT_LABELS.filter((s) => s.key === sort)[0].label;
+  const catRow = catSheet !== null ? (rows || []).filter((x) => resultKey(x) === catSheet)[0] : undefined;
 
   return (
     <div class="m-screen" data-route="add">
@@ -219,71 +338,153 @@ export function Add({ link }: { link?: string }) {
       </div>
       {error && <div class="m-error">{error}</div>}
       <div class="m-muted m-small">Ссылки magnet из браузера открываются в OMP сами — через «Поделиться».</div>
-      <h2 class="m-add-title">Поиск на сервере</h2>
+      <h2 class="m-add-title">Поиск по источникам</h2>
       <form class="m-add-row" onSubmit={onSearch}>
         <input
           class="m-input m-lib-search"
-          aria-label="Поиск на сервере"
+          type="search"
+          aria-label="Поиск по источникам"
           placeholder="Название"
           enterkeyhint="search"
           value={query}
           onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
         />
-        <button type="submit" class="m-btn m-btn-secondary m-btn-sm" aria-label="Искать" disabled={searching}>
+        <button type="submit" class="m-btn m-btn-secondary m-btn-sm" aria-label="Искать">
           <Icon d={SEARCH} size={18} />
         </button>
       </form>
-      <div class="m-chips">
-        {(['rutor', 'torznab'] as SearchSource[]).map((s) => (
+      <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+        <button type="button" class={'m-chip' + (allChosen ? ' on' : '')} aria-haspopup="dialog" onClick={() => setSheet('sources')}>
+          {sourcesLabel}
+        </button>
+        {(['1080', '2160'] as QualityFilter[]).map((q) => (
           <button
+            key={q}
             type="button"
-            class={'m-chip' + (source === s ? ' on' : '')}
-            aria-pressed={source === s}
-            onClick={() => pickSource(s)}
+            class={'m-chip' + (quality === q ? ' on' : '')}
+            aria-pressed={quality === q}
+            onClick={() => setQuality(quality === q ? '' : q)}
           >
-            {s === 'rutor' ? 'Встроенный' : 'Torznab'}
+            {q === '1080' ? '1080p+' : '2160p'}
           </button>
         ))}
+        <button type="button" class="m-chip" aria-haspopup="dialog" onClick={() => setSheet('sort')}>
+          {sortLabel + ' ▾'}
+        </button>
       </div>
-      {searching && <div class="m-muted">Ищу…</div>}
+      {prog && prog.total === 0 && <div class="m-muted">Не выбрано ни одного источника — включите их в настройках, «Источники поиска»</div>}
+      {prog && prog.total > 0 && (
+        <div class="m-muted m-small" role="status" data-search-progress>
+          {progressText({
+            found: visible.length,
+            answered: prog.answered,
+            total: prog.total,
+            pending: prog.pending.map(sourceName),
+            failed: prog.failed.map(sourceName),
+          })}
+        </div>
+      )}
+      {blocked.length > 0 && (
+        <div class="m-hint-warn" data-hint="jackett">
+          {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ')}
+          <div>{JACKETT_HINT}</div>
+        </div>
+      )}
       {searchError && <LaunchError message={searchError} />}
-      {results && !searching && results.length === 0 && <div class="m-muted">Ничего не найдено</div>}
+      {!searching && prog && prog.total > 0 && visible.length === 0 && <div class="m-muted">Ничего не найдено</div>}
       <div class="m-results">
-        {(results || []).map((r) => (
-          <div class="m-result">
-            <div class="m-result-text">
+        {visible.map((r) => {
+          const k = resultKey(r);
+          return (
+            <div class="m-result m-result-card" key={k}>
               <div class="m-result-title">{r.Title}</div>
-              <div class="m-muted m-small">{meta(r)}</div>
+              <div class="m-result-meta m-small">
+                <span class="m-src-badge">{sourceBadge(r)}</span>
+                <span class="m-muted">{meta(r)}</span>
+              </div>
+              {pending[k] === 'link' && (
+                <div class="m-muted m-small" role="status">
+                  Получаю ссылку…
+                </div>
+              )}
+              <div class="m-result-actions">
+                <button
+                  type="button"
+                  class="m-chip"
+                  aria-label={'Категория: ' + addCategoryLabel(categoryOfRow(r)) + ', ' + r.Title}
+                  onClick={() => setCatSheet(k)}
+                >
+                  {addCategoryLabel(categoryOfRow(r)) + ' ▾'}
+                </button>
+                <span class="m-grow" />
+                <button
+                  type="button"
+                  class="m-btn m-btn-secondary m-btn-sm"
+                  aria-label={'Добавить на сервер: ' + r.Title}
+                  disabled={!!pending[k]}
+                  onClick={() => void addResult(r, false)}
+                >
+                  Добавить
+                </button>
+                <button
+                  type="button"
+                  class="m-btn m-btn-primary m-btn-sm"
+                  aria-label={'Добавить и смотреть на ТВ: ' + r.Title}
+                  disabled={!!pending[k]}
+                  onClick={() => void addResult(r, true)}
+                >
+                  На ТВ
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              class="m-chip"
-              aria-label={'Категория: ' + addCategoryLabel(categoryOfRow(r))}
-              onClick={() => setCatSheet(rowKey(r))}
-            >
-              {addCategoryLabel(categoryOfRow(r)) + ' ▾'}
-            </button>
-            <button
-              type="button"
-              class="m-iconbtn"
-              aria-label="Добавить на сервер"
-              disabled={!!pending[r.Hash || r.Title]}
-              onClick={() => void addResult(r, false)}
-            >
-              <Icon d={PLUS} size={20} />
-            </button>
-            <button
-              type="button"
-              class="m-iconbtn primary"
-              aria-label="Добавить и смотреть на ТВ"
-              disabled={!!pending[r.Hash || r.Title]}
-              onClick={() => void addResult(r, true)}
-            >
-              <Icon d={TV_PLAY} size={20} />
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      {sheet === 'sources' && (
+        <Sheet label="Источники для поиска" onClose={() => setSheet(null)}>
+          <div class="m-sheet-title">Источники для поиска</div>
+          {all.map((s) => {
+            const on = selected.indexOf(s.id) >= 0;
+            return (
+              <button key={s.id} type="button" role="checkbox" aria-checked={on} class="m-opt" onClick={() => toggleChosen(s.id)}>
+                <span class="m-opt-name m-grow">{s.name}</span>
+                {on && <Icon d={CHECK} size={20} />}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            class="m-link"
+            onClick={() => {
+              setSheet(null);
+              navigate({ name: 'sources' });
+            }}
+          >
+            Источники поиска
+          </button>
+        </Sheet>
+      )}
+      {sheet === 'sort' && (
+        <Sheet label="Сортировка" onClose={() => setSheet(null)}>
+          <div class="m-sheet-title">Сортировка</div>
+          {SORT_LABELS.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              role="radio"
+              aria-checked={sort === s.key}
+              class="m-opt"
+              onClick={() => {
+                setSort(s.key);
+                setSheet(null);
+              }}
+            >
+              <span class="m-opt-name m-grow">{s.label}</span>
+              {sort === s.key && <Icon d={CHECK} size={20} />}
+            </button>
+          ))}
+        </Sheet>
+      )}
       {catSheet !== null && (
         <Sheet label="Категория" onClose={() => setCatSheet(null)}>
           <div class="m-sheet-title">Категория</div>
@@ -292,7 +493,7 @@ export function Add({ link }: { link?: string }) {
               <button
                 key={c.id}
                 type="button"
-                class={'m-chip' + ((rowCat[catSheet] !== undefined ? rowCat[catSheet] : guessCategory((results || []).filter((x) => rowKey(x) === catSheet)[0]?.Title || '')) === c.id ? ' on' : '')}
+                class={'m-chip' + ((rowCat[catSheet] !== undefined ? rowCat[catSheet] : guessCategory(catRow ? catRow.Title : '')) === c.id ? ' on' : '')}
                 onClick={() => {
                   setRowCat({ ...rowCat, [catSheet]: c.id });
                   setCatSheet(null);

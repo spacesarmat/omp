@@ -4,6 +4,7 @@ import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { Qr } from '../../src/ui/Qr';
 import { UpdateScreen, apkJob } from '../../src/screens/Update';
 import { latestUpdate } from '../../src/store/updates';
+import { whatsNew, closeWhatsNew } from '../../src/store/whatsNew';
 
 const info = {
   version: '9.9.9',
@@ -77,6 +78,16 @@ beforeEach(() => { latestUpdate.value = info; });
 afterEach(() => { delete (window as any).PalmServiceBridge; document.body.innerHTML = ''; });
 
 describe('UpdateScreen', () => {
+  it('«Что нового» button opens the changelog list', async () => {
+    bridge(false, 'installed');
+    const host = await mount();
+    const b = Array.from(host.querySelectorAll('.button')).find((x) => x.textContent === 'Что нового') as HTMLElement;
+    expect(b).toBeTruthy();
+    b.click();
+    expect(whatsNew.value!.title).toBe('Что нового');
+    expect(whatsNew.value!.entries.length).toBeGreaterThan(0);
+    closeWhatsNew();
+  });
   it('without root: no one-click install, Homebrew and computer blocks with QR', async () => {
     bridge(false, 'installed');
     const host = await mount();

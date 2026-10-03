@@ -7,6 +7,7 @@ import { settings, updateSettings } from '../../src/store/settings';
 import { addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
 import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
 import { APP_VERSION } from '../../src/version';
+import { whatsNew, closeWhatsNew } from '../../src/store/whatsNew';
 import { toast } from '../src/ui/toast';
 import { localServer, localAutostart, setLocalServerDeps, reloadLocalServerSettings } from '../src/server/localServer';
 import { TORRSERVER_VERSION } from '../src/server/torrserverVersion';
@@ -52,6 +53,18 @@ describe('Settings', () => {
     const first = el.querySelector('.m-set-group')!;
     expect(first.textContent).toContain('Проверить обновления');
     expect(first.textContent).toContain('Проверять обновления при запуске');
+  });
+
+  it('tap on «Версия» opens «Что нового» with the latest versions', async () => {
+    const el = mount();
+    const row = Array.from(el.querySelectorAll('button')).find((b) => b.textContent!.indexOf('Что нового ›') >= 0)!;
+    expect(row.textContent).toContain(APP_VERSION);
+    await act(async () => row.click());
+    expect(whatsNew.value!.title).toBe('Что нового');
+    expect(whatsNew.value!.auto).toBe(false);
+    expect(whatsNew.value!.entries.length).toBeGreaterThan(0);
+    expect(whatsNew.value!.entries.length).toBeLessThanOrEqual(6);
+    closeWhatsNew();
   });
 
   it('shows version, server and navigates', async () => {

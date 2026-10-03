@@ -96,6 +96,33 @@ describe('runCmd', () => {
   });
 });
 
+describe('chapters', () => {
+  const chapters = [
+    { start: 0, end: 60, title: 'Пролог', kind: null },
+    { start: 60, end: 200, title: 'Заставка', kind: 'intro' as const },
+  ];
+  it('snapshot carries starts, titles and the current index; none without chapters', () => {
+    const s = buildSnapshot({ ...base, time: 100, chapters })!;
+    expect(s.chapters).toEqual([{ t: 0, title: 'Пролог' }, { t: 60, title: 'Заставка' }]);
+    expect(s.chapter).toBe(1);
+    expect(buildSnapshot({ ...base, time: 0, chapters })!.chapter).toBe(0);
+    const none = buildSnapshot({ ...base, chapters: [] })!;
+    expect(none).not.toHaveProperty('chapters');
+    expect(none).not.toHaveProperty('chapter');
+    expect(buildSnapshot(base)!).not.toHaveProperty('chapters');
+  });
+  it('chapter command seeks to the start, ignores bad index and unknown duration', () => {
+    const x = harness();
+    const h = { ...x.h, chapterStarts: [0, 60, 200] };
+    runCmd({ id: 1, type: 'chapter', i: 1 }, h);
+    runCmd({ id: 2, type: 'chapter', i: 2 }, h);
+    runCmd({ id: 3, type: 'chapter', i: 5 }, h);
+    runCmd({ id: 4, type: 'chapter', i: 1 }, { ...h, duration: 0 });
+    runCmd({ id: 5, type: 'chapter', i: 1 }, x.h);
+    expect(x.calls).toEqual(['seek:60', 'seek:100']);
+  });
+});
+
 describe('liveTiming', () => {
   it('reads the live video values when the video exists', () => {
     expect(liveTiming({ currentTime: 42.5, paused: true }, { time: 10, paused: false })).toEqual({ time: 42.5, paused: true });

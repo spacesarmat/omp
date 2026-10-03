@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>OMP - android-skip</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { width: 390px; height: 844px; overflow: hidden; background: #0F1115; }
+button { font-family: 'Manrope', sans-serif; }
+svg { flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #0F1115; color: #E8EAF0; font-family: 'Manrope', sans-serif">
+<div style="height: 250px; position: relative; background: linear-gradient(0deg, rgba(15,17,21,1), rgba(15,17,21,0) 60%), linear-gradient(160deg, #2B3A55, #151A26)">
+<div style="position: absolute; left: 16px; right: 16px; top: 44px; display: flex; justify-content: space-between">
+<button type="button" aria-label="Назад" style="width: 44px; height: 44px; border: none; border-radius: 22px; background: rgba(15,17,21,0.55); color: #E8EAF0; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></button>
+<button type="button" aria-label="Удалить раздачу" style="width: 44px; height: 44px; border: none; border-radius: 22px; background: rgba(15,17,21,0.55); color: #FF8A80; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg></button>
+</div>
+<div style="position: absolute; left: 16px; right: 16px; bottom: 14px">
+<div style="font-size: 24px; font-weight: 700">Starbound Frontier</div>
+<div style="font-size: 13px; color: #C9CEDA">Сезон 2 · 8 серий · 18,0 GB · 12 пиров</div>
+</div>
+</div>
+<div style="padding: 0 16px; display: flex; flex-direction: column; gap: 12px">
+<button type="button" style="height: 50px; border: none; border-radius: 12px; background: #F5B700; color: #0F1115; font-family: 'Manrope', sans-serif; font-size: 15px; font-weight: 700">Продолжить на ТВ · S02E03 с 23:14</button>
+<div style="padding: 12px 14px; border-radius: 14px; background: #181B22; display: flex; flex-direction: column; gap: 2px">
+<div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px">
+<span style="font-size: 16px; font-weight: 700">Пропуск</span>
+<span style="font-size: 12px; color: #9AA1B2">для всех серий · ТВ и телефон</span>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; min-height: 48px">
+<span style="flex-grow: 1; font-size: 15px">Пропускать заставку</span>
+<button type="button" role="switch" aria-checked="true" aria-label="Пропускать заставку" style="width: 50px; height: 30px; border: none; border-radius: 15px; background: #F5B700; position: relative; flex-shrink: 0"><span style="position: absolute; right: 3px; top: 3px; width: 24px; height: 24px; border-radius: 12px; background: #0F1115"></span></button>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; min-height: 48px">
+<span style="flex-grow: 1; font-size: 15px">Пропускать титры<span style="display: block; font-size: 12px; color: #9AA1B2">сразу следующая серия</span></span>
+<button type="button" role="switch" aria-checked="false" aria-label="Пропускать титры" style="width: 50px; height: 30px; border: none; border-radius: 15px; background: #2A2F3A; position: relative; flex-shrink: 0"><span style="position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; border-radius: 12px; background: #9AA1B2"></span></button>
+</div>
+<button type="button" style="display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0; border: none; background: none; color: #E8EAF0; font-family: 'Manrope', sans-serif; font-size: 15px; text-align: left">
+<span style="flex-grow: 1">Заставка и титры<span style="display: block; font-size: 12px; color: #9AA1B2">в файле нет глав · заставка 0:45–2:15</span></span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9AA1B2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+</button>
+</div>
+<div style="font-size: 16px; font-weight: 700; margin-top: 4px">Серии</div>
+
+<button type="button" style="display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 12px; border: none; border-radius: 12px; background: #181B22; color: #E8EAF0; font-family: 'Manrope', sans-serif; font-size: 14px; text-align: left">
+<span style="color: #F5B700; font-weight: 700">S02E01</span>
+<span style="flex-grow: 1">Станция «Кедр»</span>
+<span style="color: #9AA1B2; font-size: 12px">47:10</span>
+</button>
+
+
+<button type="button" style="display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 12px; border: none; border-radius: 12px; background: #181B22; color: #E8EAF0; font-family: 'Manrope', sans-serif; font-size: 14px; text-align: left">
+<span style="color: #F5B700; font-weight: 700">S02E02</span>
+<span style="flex-grow: 1">Сигнал</span>
+<span style="color: #9AA1B2; font-size: 12px">46:05</span>
+</button>
+
+
+<button type="button" style="display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 12px; border: none; border-radius: 12px; background: #181B22; color: #E8EAF0; font-family: 'Manrope', sans-serif; font-size: 14px; text-align: left">
+<span style="color: #F5B700; font-weight: 700">S02E03</span>
+<span style="flex-grow: 1">Погоня</span>
+<span style="color: #9AA1B2; font-size: 12px">48:32</span>
+</button>
+
+</div>
+</div>
+</body>
+</html>

@@ -26,6 +26,8 @@ import { settings, updateSettings } from '../../../src/store/settings';
 import { checkForUpdate, type CheckResult } from '../../../src/store/updates';
 import { ANDROID_UPDATE_URL } from '../../../src/lib/updateInfo';
 import { APP_VERSION } from '../../../src/version';
+import { CHANGELOG } from '../../../src/lib/changelogData';
+import { openWhatsNew } from '../../../src/store/whatsNew';
 
 type Checker = (o: { manual: boolean; url?: string }) => Promise<CheckResult>;
 let checker: Checker | null = null;
@@ -232,10 +234,10 @@ export function Settings() {
       {/* updates first: the version and the check are what people look for most here */}
       <section class="m-set-group">
         <div class="m-set-label">Обновление</div>
-        <div class="m-set-row">
+        <button type="button" class="m-set-row m-set-row-btn" onClick={() => openWhatsNew(CHANGELOG, APP_VERSION)}>
           <span>Версия</span>
-          <span class="m-muted">{APP_VERSION}</span>
-        </div>
+          <span class="m-muted">{APP_VERSION} · Что нового ›</span>
+        </button>
         <button type="button" class="m-btn m-btn-secondary" onClick={() => void check()}>
           Проверить обновления
         </button>
@@ -271,6 +273,12 @@ export function Settings() {
             <Icon d="M9 6l6 6l-6 6" size={20} />
           </button>
         )}
+      </section>
+      <section class="m-set-group">
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'sources' })}>
+          <span>Источники поиска</span>
+          <Icon d="M9 6l6 6l-6 6" size={20} />
+        </button>
       </section>
       <section class="m-set-group">
         <div class="m-set-label">Телевизор</div>

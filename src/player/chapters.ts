@@ -55,3 +55,77 @@ export function introChapter(probe: FfprobeResult | null, t: number): { start: n
   }
   return null;
 }
+
+/** How long «Заставка пропущена · Вернуть» stays on screen (LG and Android TV). */
+export const SKIP_TOAST_MS = 5000;
+/** CH− within this many seconds of a chapter start goes to the previous chapter, later it restarts the current one. */
+export const PREV_CHAPTER_WINDOW = 3;
+
+/** Index of the chapter playing at `t` (the last one that started), -1 before the first. */
+export function chapterIndexAt(list: Chapter[], t: number): number {
+  let idx = -1;
+  for (let i = 0; i < list.length; i++) if (list[i].start <= t) idx = i;
+  return idx;
+}
+
+/** Where CH+ (dir 1) / CH− (dir -1) go from `t`: a chapter start in seconds, null when there is nowhere to go. */
+export function chapterTarget(list: Chapter[], t: number, dir: 1 | -1): number | null {
+  if (!list.length) return null;
+  const cur = chapterIndexAt(list, t);
+  if (dir > 0) return cur + 1 < list.length ? list[cur + 1].start : null;
+  if (cur < 0) return 0;
+  if (cur > 0 && t - list[cur].start < PREV_CHAPTER_WINDOW) return list[cur - 1].start;
+  return list[cur].start;
+}
+
+/** Same as chapterTarget, as a chapter index (-1: the start of the file, before the first chapter); null = nowhere to go. */
+export function chapterStepIndex(list: Chapter[], t: number, dir: 1 | -1): number | null {
+  const target = chapterTarget(list, t, dir);
+  return target === null ? null : chapterIndexAt(list, target);
+}
+
+/** True while `t` is inside the intro (not in its last second, so the button never flashes at the very end). */
+export function inIntro(seg: { start: number; end: number } | undefined, t: number): boolean {
+  return !!seg && t >= seg.start && t < seg.end - 1;
+}
+
+/** Where to seek to skip the intro: its end, but never past the last second (a manual mark may exceed the duration). */
+export function introSkipTarget(seg: { start: number; end: number }, duration: number): number {
+  return duration > 1 ? Math.min(seg.end, duration - 1) : seg.end;
+}
+
+export type MarkKind = 'intro-start' | 'intro-end' | 'credits';
+
+export interface MarkResult {
+  /** Patch for saveSkip, absent when nothing can be written yet. */
+  patch?: { mi?: [number, number]; mc?: number };
+  /** Intro start marked and waiting for its end (or null). */
+  pending: number | null;
+  text: string;
+  error?: boolean;
+}
+
+/** «Отметить …» from the player menu: what to write and what to tell the viewer. */
+export function applyMark(
+  kind: MarkKind,
+  now: number,
+  duration: number,
+  cur: { mi?: [number, number] } | null,
+  pending: number | null,
+  fmt: (sec: number) => string,
+): MarkResult {
+  const at = Math.round(now);
+  if (kind === 'credits') {
+    const mc = Math.round(duration - now);
+    if (!(duration > 0) || mc < 1) return { pending, text: 'Не удалось отметить титры', error: true };
+    return { patch: { mc }, pending, text: 'Отмечено: титры с ' + fmt(Math.round(duration - mc)) };
+  }
+  const mi = cur && cur.mi;
+  if (kind === 'intro-start') {
+    if (mi && mi[1] > at) return { patch: { mi: [at, mi[1]] }, pending: null, text: 'Отмечено: заставка с ' + fmt(at) };
+    return { pending: at, text: 'Начало заставки ' + fmt(at) + ' · теперь отметьте конец' };
+  }
+  const start = pending !== null ? pending : mi ? mi[0] : null;
+  if (start === null || start >= at) return { pending, text: 'Сначала отметьте начало заставки', error: true };
+  return { patch: { mi: [start, at] }, pending: null, text: 'Отмечено: заставка ' + fmt(start) + '–' + fmt(at) };
+}

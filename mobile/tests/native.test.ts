@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { native, ONLY_ANDROID } from '../src/platform/native';
+import { native, ONLY_ANDROID, sourceHttp, secrets } from '../src/platform/native';
 
 describe('native plugin wrapper outside Android', () => {
   it('is not available', () => {
@@ -237,5 +237,16 @@ describe('native plugin wrapper on Android', () => {
     listeners.get('localServerState')!({ running: false, error: 'Сервер остановился с ошибкой' });
     expect(got).toEqual([{ running: true }, { running: false, error: 'Сервер остановился с ошибкой' }]);
     off();
+  });
+});
+
+describe('sources http and secrets outside Android', () => {
+  it('reject with a clear message', async () => {
+    await expect(native.http({ url: 'https://rutor.info/', method: 'GET' })).rejects.toThrow(ONLY_ANDROID);
+    await expect(sourceHttp.get('https://rutor.info/')).rejects.toThrow(ONLY_ANDROID);
+    await expect(sourceHttp.clearCookies('https://rutor.info/')).rejects.toThrow(ONLY_ANDROID);
+    await expect(secrets.get('k')).rejects.toThrow(ONLY_ANDROID);
+    await expect(secrets.set('k', 'v')).rejects.toThrow(ONLY_ANDROID);
+    await expect(secrets.delete('k')).rejects.toThrow(ONLY_ANDROID);
   });
 });

@@ -8,13 +8,13 @@ export interface NextEpisodeOptions {
   duration: number;
   ended: number;
   paused: boolean;
-  /** start of the credits chapter (s), when the file has one: the countdown starts there */
-  creditsAt?: number;
+  /** Start of the credits when known: the countdown begins there instead of 30 s before the end. */
+  creditsStart?: number | null;
   onNext: () => void;
   onEnd: () => void;
 }
 
-/** Whether the «next episode» countdown is due: from the credits chapter when known, else in the last 30 s. */
+/** Whether the «next episode» countdown is due: from the credits when known, else in the last 30 s. */
 export function countdownDue(o: { time: number; duration: number; creditsAt?: number }): boolean {
   const remaining = o.duration - o.time;
   if (!(o.duration > 60) || !(remaining > 0)) return false;
@@ -22,7 +22,7 @@ export function countdownDue(o: { time: number; duration: number; creditsAt?: nu
   return remaining <= 30;
 }
 
-/** Shows a 10 s countdown from the credits (or in the last 30 s) of an episode, then switches to the next one. */
+/** Shows a 10 s countdown from the start of the credits (or in the last 30 s when they are unknown), then switches to the next one. */
 export function useNextEpisode(o: NextEpisodeOptions): { countdown: number | null; dismiss: () => void } {
   const [dismissed, setDismissed] = useState(false);
   const [left, setLeft] = useState<number | null>(null);
@@ -36,7 +36,7 @@ export function useNextEpisode(o: NextEpisodeOptions): { countdown: number | nul
     setLeft(null);
   }, [o.itemKey]);
 
-  const show = o.enabled && o.hasNext && !dismissed && !o.paused && countdownDue(o);
+  const show = o.enabled && o.hasNext && !dismissed && !o.paused && countdownDue({ time: o.time, duration: o.duration, creditsAt: o.creditsStart || undefined });
 
   useEffect(() => {
     if (!show) {

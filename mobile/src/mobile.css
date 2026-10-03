@@ -524,6 +524,19 @@ button, .m-btn {
 }
 .m-seek-input::-webkit-slider-runnable-track { height: 20px; background: transparent; }
 .m-seek-input::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 10px; background: var(--accent); border: none; }
+.m-seek-tick { position: absolute; top: 4px; width: 3px; height: 12px; margin-left: -1px; border-radius: 2px; background: #C9CEDA; pointer-events: none; }
+.m-now-chapter { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--panel); }
+.m-now-chbtn { flex-shrink: 0; width: 48px; height: 48px; border: none; border-radius: 12px; background: var(--panel-2); display: flex; align-items: center; justify-content: center; padding: 0; }
+.m-now-chbtn:disabled, .m-now-chitem:disabled { opacity: 0.4; }
+.m-now-chtext { flex: 1 1 0; min-width: 0; text-align: center; font-size: 14px; overflow-wrap: anywhere; }
+.m-now-chnum { display: block; color: var(--muted); font-size: 12px; }
+.m-now-chlist { display: flex; flex-direction: column; gap: 4px; }
+.m-now-chhead { font-size: 16px; font-weight: 700; margin: 4px 0; }
+.m-now-chitem { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border: none; border-radius: 10px; background: none; font-size: 14px; text-align: left; }
+.m-now-chitem.on { background: #3A3320; color: var(--accent); }
+.m-now-chtime { width: 48px; flex-shrink: 0; color: var(--muted); font-size: 13px; }
+.m-now-chitem.on .m-now-chtime { color: var(--accent); }
+.m-now-chname { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 .m-now-times { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
 .m-now-controls { display: flex; align-items: center; justify-content: space-between; }
 .m-now-skip {
@@ -652,3 +665,36 @@ button, .m-btn {
 .m-faq-a { padding: 0 16px 14px; font-size: 14px; line-height: 1.5; color: var(--muted); }
 .m-faq-a p { margin: 0 0 8px; overflow-wrap: anywhere; }
 .m-faq-a p:last-child { margin-bottom: 0; }
+
+/* ---- torrent card: «Пропуск» ---- */
+.m-skip { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 14px; background: var(--panel); }
+.m-skip-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.m-skip-title { font-size: 16px; font-weight: 700; }
+.m-skip-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0; border: none; background: none; color: var(--text); font-family: inherit; font-size: 15px; text-align: left; }
+.m-skip-text { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+.m-skip-open { width: 100%; }
+.m-marks-pair { display: flex; gap: 10px; }
+.m-marks-pair .m-field { flex: 1 1 0; min-width: 0; }
+.m-marks-actions { display: flex; gap: 10px; margin-top: 4px; }
+.m-marks-actions .m-btn { flex: 1 1 0; }
+
+/* ---- unified search: result cards, «Источники поиска», tracker login ---- */
+.m-grow { flex: 1 1 auto; min-width: 0; }
+.m-result-card { flex-direction: column; align-items: stretch; gap: 6px; }
+.m-result-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.m-src-badge { padding: 2px 8px; border-radius: 6px; background: #252A35; color: var(--text); font-weight: 700; }
+.m-result-actions { display: flex; align-items: center; gap: 8px; }
+.m-result-actions .m-btn { flex-shrink: 0; }
+.m-src-row { display: flex; align-items: center; gap: 10px; min-height: 52px; }
+.m-src-name { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
+.m-src-note { font-size: 12px; color: var(--muted); }
+.m-src-note.ok { color: #8FE39A; }
+.m-src-note.bad { color: #FF8A80; }
+.m-src-card { gap: 0; padding: 4px 14px; }
+.m-src-hint { margin: -4px 0 10px; padding: 10px 12px; border-radius: 10px; background: #3A3320; color: var(--accent); font-size: 12px; line-height: 1.45; }
+.m-lock-note { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.m-lock-note svg { flex-shrink: 0; }
+
+.m-whatsnew { display: flex; flex-direction: column; gap: 14px; max-height: 50vh; overflow-y: auto; }
+.m-whatsnew h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+.m-set-row-btn { width: 100%; border: none; color: inherit; font: inherit; text-align: left; }

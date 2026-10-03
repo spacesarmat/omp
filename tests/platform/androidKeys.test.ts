@@ -37,7 +37,7 @@ describe('Android TV key bridge', () => {
     const seen: KeyAction[] = [];
     cleanups.push(pushKeyHandler((a) => { seen.push(a); return true; }));
     [415, 19, 179, 417, 412, 33, 34, 413].forEach((c) => expect(w.__ompKey!(c)).toBe(true));
-    expect(seen).toEqual(['play', 'pause', 'playpause', 'ff', 'rw', 'next', 'prev', 'stop']);
+    expect(seen).toEqual(['play', 'pause', 'playpause', 'ff', 'rw', 'chup', 'chdown', 'stop']);
   });
 
   it('keydown targets the focused element', () => {

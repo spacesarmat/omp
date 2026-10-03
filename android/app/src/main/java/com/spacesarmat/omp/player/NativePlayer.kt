@@ -73,12 +73,9 @@ data class PlayRequest(
     }
 }
 
-/** Intro of a queue item sent by the page (ms). */
-data class IntroMark(val index: Int, val startMs: Long, val endMs: Long)
-
 /**
  * Link between OmpNativePlugin (page side) and the open PlayerActivity: the request to play, the events to
- * the page (`nativePlayerState`, `nativePlayerClosed`) and the phone commands to the player.
+ * the page (`nativePlayerState`, `nativePlayerClosed`, `nativePlayerMark`) and the phone commands to the player.
  */
 object NativePlayerBridge {
     @Volatile
@@ -95,37 +92,41 @@ object NativePlayerBridge {
         emitter?.invoke(event, data)
     }
 
-    private val pendingIntros = ArrayList<IntroMark>()
+    private val inbox = SkipInbox()
 
-    /** A new playNative: intro marks of the previous run are dropped. */
-    fun resetIntros() {
-        synchronized(pendingIntros) { pendingIntros.clear() }
-    }
+    /** A new playNative: chapters and skips of the previous run are dropped. */
+    fun resetSkips() = inbox.reset()
+
+    private fun sessionOf(cmd: JSONObject): Long? = if (cmd.opt("session") is Number) cmd.optLong("session") else null
+
+    /** True when the page's message belongs to the current run (or carries no session). */
+    private fun current(cmd: JSONObject): Boolean = SkipInbox.sameRun(sessionOf(cmd), request?.session)
 
     /**
-     * { type: "intro", index, start, end, session } from the page (seconds): the intro of a queue item. Kept until
-     * the player takes it (the player may not be created yet, or still be loading the previous queue); marks of
-     * another run (session) are ignored. True when accepted.
+     * { type: "segments", … } from the page (ItemSkip): chapters and skips of a queue item. Kept until the player
+     * takes it (the player may not be created yet, or still be loading the previous queue); messages of another
+     * run (session) are ignored. True when accepted.
      */
-    fun intro(cmd: JSONObject): Boolean {
-        val index = cmd.optInt("index", -1)
-        val start = cmd.optDouble("start", Double.NaN)
-        val end = cmd.optDouble("end", Double.NaN)
-        if (index < 0 || start.isNaN() || end.isNaN() || start < 0 || end <= start) return false
-        val sid = if (cmd.opt("session") is Number) cmd.optLong("session") else null
-        val cur = request?.session
-        if (sid != null && cur != null && sid != cur) return false
-        synchronized(pendingIntros) { pendingIntros.add(IntroMark(index, (start * 1000).toLong(), (end * 1000).toLong())) }
+    fun segments(cmd: JSONObject): Boolean {
+        val s = ItemSkip.parse(cmd) ?: return false
+        if (!inbox.add(s, sessionOf(cmd), request?.session)) return false
         val p = player
-        if (p != null) p.runOnUiThread { p.applyIntros() }
+        if (p != null) p.runOnUiThread { p.applySkips() }
         return true
     }
 
-    /** Marks the page sent since the last call. */
-    fun takeIntros(): List<IntroMark> = synchronized(pendingIntros) {
-        val out = ArrayList(pendingIntros)
-        pendingIntros.clear()
-        out
+    /** Messages the page sent since the last call. */
+    fun takeSkips(): List<ItemSkip> = inbox.take()
+
+    /** { type: "toast", text, error } from the page (the result of a mark): shown by the open player. */
+    fun toast(cmd: JSONObject): Boolean {
+        val text = cmd.optString("text")
+        if (text.isEmpty()) return false
+        if (!current(cmd)) return true
+        val p = player ?: return true
+        val error = cmd.optBoolean("error", false)
+        p.runOnUiThread { p.showMessage(text, error) }
+        return true
     }
 
     /** A phone command (src/phone/protocol.ts Cmd); false when no player is open. */

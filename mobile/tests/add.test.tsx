@@ -2,7 +2,7 @@ import { TV_NO_OMP } from '../src/tv/tvClient';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { Add, normalizeLink } from '../src/screens/Add';
+import { Add, normalizeLink, resetAddSearch } from '../src/screens/Add';
 import { setWatchActions } from '../src/watch';
 import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
@@ -10,6 +10,9 @@ import { toast } from '../src/ui/toast';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { torrents } from '../../src/store/library';
+import { registerSource, unregisterSource } from '../../src/sources/registry';
+import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/store';
+import type { Source, SourceResult } from '../../src/sources/types';
 
 async function flush() {
   await act(async () => {
@@ -40,11 +43,16 @@ function type(sel: string, v: string) {
   });
 }
 
-const byLabel = (l: string) => Array.from(el.querySelectorAll('button')).filter((b) => b.getAttribute('aria-label') === l);
+// row actions carry the row title: «Добавить на сервер: <title>», «Категория: Сериалы, <title>»
+const byLabel = (l: string) =>
+  Array.from(el.querySelectorAll('button')).filter((b) => {
+    const a = b.getAttribute('aria-label') || '';
+    return a === l || a.indexOf(l + ': ') === 0 || a.indexOf(l + ', ') === 0;
+  });
 const byText = (t: string) => Array.from(el.querySelectorAll('button')).find((b) => b.textContent === t)!;
 const click = (n: Element) => act(() => (n as HTMLElement).click());
 const search = (q: string) => {
-  type('input[aria-label="Поиск на сервере"]', q);
+  type('input[aria-label="Поиск по источникам"]', q);
   act(() => {
     el.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });
@@ -52,6 +60,9 @@ const search = (q: string) => {
 
 beforeEach(() => {
   localStorage.clear();
+  reloadSourcePrefs();
+  resetHealth();
+  resetAddSearch();
   reloadTvs();
   for (const s of servers.value.slice()) removeServer(s.id);
   setActiveServer(addServer({ url: 'http://srv:8090' }).id);
@@ -67,6 +78,9 @@ beforeEach(() => {
 
 afterEach(() => {
   if (el) act(() => render(null, el));
+  unregisterSource('fake');
+  unregisterSource('fake2');
+  unregisterSource('fake3');
   vi.restoreAllMocks();
   setWatchActions(null);
 });
@@ -101,15 +115,20 @@ describe('Add', () => {
     expect(el.querySelector('.m-error')).toBeTruthy();
   });
 
-  it('search renders results with the selected source', async () => {
+  it('searches every switched-on source and merges the duplicates', async () => {
     const s = vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
     mount();
-    click(byText('Torznab'));
+    expect(byText('Все источники · 2')).toBeTruthy();
     search('starbound');
     await flush();
+    expect(s).toHaveBeenCalledWith('starbound', 'rutor');
     expect(s).toHaveBeenCalledWith('starbound', 'torznab');
-    expect(el.querySelectorAll('.m-result').length).toBe(2);
-    expect(el.querySelector('.m-result')!.textContent).toContain('152 сид.');
+    const rows = el.querySelectorAll('.m-result');
+    expect(rows.length).toBe(2);
+    expect(rows[0].textContent).toContain('152 сида');
+    expect(rows[0].querySelector('.m-src-badge')!.textContent).toBe('rutor (TorrServer)');
+    expect(rows[0].textContent).toContain('ещё в Torznab');
+    expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 2 · 2 из 2 источников ответили');
   });
 
   it('«Добавить и смотреть на ТВ» adds then launches', async () => {
@@ -150,11 +169,26 @@ describe('Add', () => {
     click(b);
     click(b);
     expect((b as HTMLButtonElement).disabled).toBe(true);
+    await flush(); // the link is resolved first
     resolveAdd({ hash: HASH });
     await flush();
     expect(add).toHaveBeenCalledTimes(1);
     expect(launch).toHaveBeenCalledTimes(1);
     expect((b as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('a result with only a .torrent link (Anidub) is added by that link', async () => {
+    const torrentUrl = 'https://tr.anidub.com/engine/download.php?id=671';
+    const row = { Title: 'Аниме [BD (720p)]', Categories: '', Size: '2.36 GB', CreateDate: '', Tracker: 'Anidub', Link: torrentUrl, Magnet: '', Hash: '', Peer: 3, Seed: 12 };
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue([row]);
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('x');
+    await flush();
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    expect(add).toHaveBeenCalledWith({ link: torrentUrl, category: expect.any(String) });
+    expect(toast.value).toBe('Добавлено на сервер');
   });
 
   it('add errors from a row show under the search', async () => {
@@ -168,7 +202,8 @@ describe('Add', () => {
     expect(el.querySelector('.m-error')!.textContent).toContain('сервер упал');
   });
 
-  it('drops out-of-order search responses and clears results on source change', async () => {
+  it('a new search drops the answers of the previous one', async () => {
+    setSourceOn('ts-torznab', false);
     const resolvers: Array<(v: any) => void> = [];
     vi.spyOn(TorrServerClient.prototype, 'search').mockImplementation(() => new Promise((r) => resolvers.push(r)));
     mount();
@@ -181,13 +216,6 @@ describe('Add', () => {
     const rows = el.querySelectorAll('.m-result');
     expect(rows.length).toBe(1);
     expect(rows[0].textContent).toContain('S01');
-    click(byText('Torznab'));
-    expect(el.querySelectorAll('.m-result').length).toBe(0);
-    search('third');
-    click(byText('Встроенный'));
-    resolvers[2]([results[0]]);
-    await flush();
-    expect(el.querySelectorAll('.m-result').length).toBe(0);
   });
 
   it('does not jump to the remote after unmount', async () => {
@@ -317,5 +345,303 @@ describe('Add TV launch with report', () => {
     });
     // no file: nothing plays yet, land on the remote as in v0.7
     expect(currentRoute.value.name).toBe('remote');
+  });
+});
+
+describe('Add unified search', () => {
+  const MAG = 'magnet:?xt=urn:btih:' + 'c'.repeat(40);
+  function row(p: Partial<SourceResult>): SourceResult {
+    return { Title: 'Северный ветер 1080p', Categories: '', Size: '18 GB', CreateDate: '', Tracker: 'F', Link: '', Magnet: '', Hash: '', Peer: 0, Seed: 10, source: 'fake', ...p };
+  }
+  function fake(id: string, list: SourceResult[], magnet?: Source['magnet']): Source {
+    return { id, name: id === 'fake' ? 'Фейк' : 'Фейк-2', kind: 'builtin', search: () => Promise.resolve(list), magnet };
+  }
+  const sheetButtons = () => Array.from(el.querySelectorAll('.m-sheet button')) as HTMLButtonElement[];
+
+  beforeEach(() => {
+    setSourceOn('ts-rutor', false);
+    setSourceOn('ts-torznab', false);
+  });
+
+  it('takes the magnet from the release page, showing «Получаю ссылку…»', async () => {
+    let give: (v: string) => void = () => {};
+    const magnet = vi.fn(() => new Promise<string>((r) => (give = r)));
+    registerSource(fake('fake', [row({ detailUrl: 'https://f.example/t=1', Link: 'https://f.example/t=1' })], magnet));
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('ветер');
+    await flush();
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    expect(el.textContent).toContain('Получаю ссылку…');
+    expect(magnet).toHaveBeenCalledWith('https://f.example/t=1', expect.anything());
+    expect(add).not.toHaveBeenCalled();
+    give(MAG);
+    await flush();
+    expect(add).toHaveBeenCalledWith({ link: MAG, category: expect.any(String) });
+    expect(el.textContent).not.toContain('Получаю ссылку…');
+    expect(toast.value).toBe('Добавлено на сервер');
+  });
+
+  it('a .torrent link from the source is added as is', async () => {
+    registerSource(fake('fake', [row({ detailUrl: 'https://f.example/7' })], () => Promise.resolve('https://f.example/download.php?id=7')));
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('ветер');
+    await flush();
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    expect(add).toHaveBeenCalledWith({ link: 'https://f.example/download.php?id=7', category: expect.any(String) });
+  });
+
+  it('a failed link lookup shows the error in Russian', async () => {
+    registerSource(fake('fake', [row({ detailUrl: 'https://f.example/7' })], () => Promise.reject(new Error('На странице раздачи нет magnet-ссылки'))));
+    const add = vi.spyOn(TorrServerClient.prototype, 'add');
+    mount();
+    search('ветер');
+    await flush();
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    expect(add).not.toHaveBeenCalled();
+    expect(el.querySelector('.m-error')!.textContent).toContain('На странице раздачи нет magnet-ссылки');
+    expect((byLabel('Добавить на сервер')[0] as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('two torrents with one title are separate rows', async () => {
+    let give: (v: string) => void = () => {};
+    registerSource(
+      fake(
+        'fake',
+        [
+          row({ Title: 'Аниме [HWP]', Size: '1 GB', detailUrl: 'https://f.example/x#torrent_1_info' }),
+          row({ Title: 'Аниме [HWP]', Size: '3 GB', detailUrl: 'https://f.example/x#torrent_2_info' }),
+        ],
+        () => new Promise<string>((r) => (give = r)),
+      ),
+    );
+    vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('аниме');
+    await flush();
+    expect(el.querySelectorAll('.m-result').length).toBe(2);
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    const buttons = byLabel('Добавить на сервер') as HTMLButtonElement[];
+    expect(buttons.map((b) => b.disabled)).toEqual([true, false]);
+    give('https://f.example/dl?id=1');
+    await flush();
+  });
+
+  it('results stream in with the progress line', async () => {
+    let late: (v: SourceResult[]) => void = () => {};
+    registerSource(fake('fake', [row({ Title: 'A 1080p', detailUrl: 'https://f.example/a' })]));
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
+    mount();
+    search('ветер');
+    await flush();
+    expect(el.querySelectorAll('.m-result').length).toBe(1);
+    expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 1 · 1 из 2 источников ответил · ещё ищу в Фейк-2…');
+    late([row({ source: 'fake2', Title: 'B 720p', Size: '1 GB', detailUrl: 'https://g.example/b' })]);
+    await flush();
+    expect(el.querySelectorAll('.m-result').length).toBe(2);
+    expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 2 · 2 из 2 источников ответили');
+  });
+
+  it('quality chips and sorting', async () => {
+    registerSource(
+      fake('fake', [
+        row({ Title: 'Small 2160p', Size: '1 GB', Seed: 99, detailUrl: 'https://f.example/1' }),
+        row({ Title: 'Big 1080p', Size: '30 GB', Seed: 5, detailUrl: 'https://f.example/2' }),
+        row({ Title: 'Old 720p', Size: '2 GB', Seed: 50, detailUrl: 'https://f.example/3' }),
+      ]),
+    );
+    mount();
+    search('x');
+    await flush();
+    const titles = () => Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+    expect(titles()).toEqual(['Small 2160p', 'Old 720p', 'Big 1080p']);
+    click(byText('1080p+'));
+    expect(titles()).toEqual(['Small 2160p', 'Big 1080p']);
+    click(byText('2160p'));
+    expect(titles()).toEqual(['Small 2160p']);
+    click(byText('2160p'));
+    click(byText('По сидам ▾'));
+    click(sheetButtons().filter((b) => b.textContent === 'По размеру')[0]);
+    expect(titles()).toEqual(['Big 1080p', 'Old 720p', 'Small 2160p']);
+    expect(byText('По размеру ▾')).toBeTruthy();
+  });
+
+  it('the sources sheet picks the sources of this search', async () => {
+    const one = vi.fn(() => Promise.resolve([row({ detailUrl: 'https://f.example/1' })]));
+    const two = vi.fn(() => Promise.resolve([] as SourceResult[]));
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: one });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: two });
+    mount();
+    click(byText('Все источники · 2'));
+    const items = sheetButtons().filter((b) => b.getAttribute('role') === 'checkbox');
+    expect(items.map((b) => b.textContent)).toEqual(['rutor (TorrServer)', 'Torznab', 'Фейк', 'Фейк-2']);
+    expect(items.map((b) => b.getAttribute('aria-checked'))).toEqual(['false', 'false', 'true', 'true']);
+    click(items[3]);
+    expect(byText('Источники · 1')).toBeTruthy();
+    search('x');
+    await flush();
+    expect(one).toHaveBeenCalledTimes(1);
+    expect(two).not.toHaveBeenCalled();
+  });
+});
+
+describe('Add unified search: stable rows', () => {
+  function row(p: Partial<SourceResult>): SourceResult {
+    return { Title: 'Film 1080p', Categories: '', Size: '18 GB', CreateDate: '', Tracker: 'F', Link: '', Magnet: '', Hash: '', Peer: 0, Seed: 10, source: 'fake', ...p };
+  }
+  const titles = () => Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+  let late: (v: SourceResult[]) => void = () => {};
+
+  beforeEach(() => {
+    setSourceOn('ts-rutor', false);
+    setSourceOn('ts-torznab', false);
+  });
+
+  it('rows do not move while sources answer; the full sort comes at the end', async () => {
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([row({ Title: 'Low', Seed: 3, detailUrl: 'https://f.example/low' })]) });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
+    mount();
+    search('x');
+    await flush();
+    expect(titles()).toEqual(['Low']);
+    late([row({ source: 'fake2', Title: 'High', Size: '5 GB', Seed: 900, detailUrl: 'https://g.example/high' })]);
+    await flush();
+    // the search is over now: sorted by seeds
+    expect(titles()).toEqual(['High', 'Low']);
+  });
+
+  it('while a source is still searching, new rows go below the shown ones', async () => {
+    let mid: (v: SourceResult[]) => void = () => {};
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([row({ Title: 'Low', Seed: 3, detailUrl: 'https://f.example/low' })]) });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (mid = r)) });
+    registerSource({ id: 'fake3', name: 'Фейк-3', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
+    mount();
+    search('x');
+    await flush();
+    mid([row({ source: 'fake2', Title: 'High', Size: '5 GB', Seed: 900, detailUrl: 'https://g.example/high' })]);
+    await flush();
+    expect(titles()).toEqual(['Low', 'High']);
+    late([]);
+    await flush();
+    expect(titles()).toEqual(['High', 'Low']);
+  });
+
+  it('a search kept from before is dropped after switching to another server', async () => {
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([row({ Title: 'Low', detailUrl: 'https://f.example/low' })]) });
+    mount();
+    search('x');
+    await flush();
+    expect(titles()).toEqual(['Low']);
+    act(() => render(null, el));
+    mount();
+    expect(titles()).toEqual(['Low']);
+    act(() => render(null, el));
+    setActiveServer(addServer({ url: 'http://other:8090' }).id);
+    mount();
+    expect(titles()).toEqual([]);
+  });
+
+  it('a row still being added stays busy after leaving the screen and coming back', async () => {
+    registerSource({
+      id: 'fake',
+      name: 'Фейк',
+      kind: 'builtin',
+      search: () => Promise.resolve([row({ Title: 'Film 1080p', detailUrl: 'https://f.example/1' })]),
+      magnet: () => new Promise<string>(() => {}),
+    });
+    mount();
+    search('x');
+    await flush();
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    act(() => render(null, el));
+    mount();
+    expect(el.textContent).toContain('Получаю ссылку…');
+    expect((byLabel('Добавить на сервер')[0] as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('a better duplicate merging in keeps the row category and «Получаю ссылку…»', async () => {
+    let give: (v: string) => void = () => {};
+    registerSource({
+      id: 'fake',
+      name: 'Фейк',
+      kind: 'builtin',
+      search: () => Promise.resolve([row({ Title: 'Film 1080p', sizeBytes: 1000, Seed: 3, detailUrl: 'https://f.example/1' })]),
+      magnet: () => new Promise<string>((r) => (give = r)),
+    });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('x');
+    await flush();
+    click(byLabel('Категория: Фильмы')[0]);
+    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === 'Музыка')!);
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    expect(el.textContent).toContain('Получаю ссылку…');
+    late([row({ source: 'fake2', Title: 'Film 1080p', sizeBytes: 1000, Seed: 99, detailUrl: 'https://g.example/1', Magnet: 'magnet:?xt=urn:btih:' + 'e'.repeat(40) })]);
+    await flush();
+    expect(el.querySelectorAll('.m-result')).toHaveLength(1);
+    expect(el.querySelector('.m-src-badge')!.textContent).toBe('Фейк-2');
+    expect(el.textContent).toContain('Получаю ссылку…');
+    expect(byLabel('Категория: Музыка')).toHaveLength(1);
+    expect((byLabel('Добавить на сервер')[0] as HTMLButtonElement).disabled).toBe(true);
+    give('https://f.example/dl/1');
+    await flush();
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(add).toHaveBeenCalledWith({ link: 'https://f.example/dl/1', category: 'music' });
+  });
+
+  it('results stay after a visit to «Источники поиска»', async () => {
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([row({ Title: 'Kept 1080p', detailUrl: 'https://f.example/k' })]) });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
+    mount();
+    search('kept');
+    await flush();
+    click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').indexOf('Все источники') === 0)!);
+    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === 'Источники поиска')!);
+    expect(currentRoute.value).toEqual({ name: 'sources' });
+    act(() => render(null, el));
+    // the running source answers while the screen is closed
+    late([row({ source: 'fake2', Title: 'Late 1080p', Size: '2 GB', detailUrl: 'https://g.example/l' })]);
+    await flush();
+    act(() => render(<Add />, el));
+    await flush();
+    expect((el.querySelector('input[aria-label="Поиск по источникам"]') as HTMLInputElement).value).toBe('kept');
+    expect(titles().sort()).toEqual(['Kept 1080p', 'Late 1080p']);
+    expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 2 · 2 из 2 источников ответили');
+  });
+
+  it('a Cloudflare block names the source and shows the Jackett hint', async () => {
+    registerSource({ id: 'fake', name: 'rutracker', kind: 'builtin', search: () => Promise.reject(new Error('Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже')) });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => Promise.reject(new Error('Сайт ответил ошибкой 500')) });
+    mount();
+    search('x');
+    await flush();
+    const hint = el.querySelector('[data-hint="jackett"]')!;
+    expect(hint.textContent).toContain('rutracker: Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже');
+    expect(hint.textContent).toContain('через Jackett или Prowlarr');
+    expect(hint.textContent).not.toContain('Фейк-2');
+  });
+
+  it('row actions name their row', async () => {
+    registerSource({
+      id: 'fake',
+      name: 'Фейк',
+      kind: 'builtin',
+      search: () => Promise.resolve([row({ Title: 'One 1080p', detailUrl: 'https://f.example/1' }), row({ Title: 'Two 1080p', Size: '3 GB', detailUrl: 'https://f.example/2' })]),
+    });
+    mount();
+    search('x');
+    await flush();
+    const labels = Array.from(el.querySelectorAll('.m-result-actions button')).map((b) => b.getAttribute('aria-label'));
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(labels).toContain('Добавить на сервер: One 1080p');
+    expect(labels).toContain('Добавить и смотреть на ТВ: Two 1080p');
   });
 });
