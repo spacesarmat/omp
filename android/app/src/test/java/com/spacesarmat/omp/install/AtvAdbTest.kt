@@ -2,6 +2,7 @@ package com.spacesarmat.omp.install
 
 import dadb.AdbAuthException
 import dadb.AdbConnectException
+import dadb.AdbTimeoutException
 import java.io.File
 import java.io.IOException
 import java.net.ConnectException
@@ -75,8 +76,36 @@ class AtvAdbTest {
         assertEquals(InstallCodes.ADB_CLOSED, connecting(ConnectException("Connection refused")))
         assertEquals(InstallCodes.ADB_CLOSED, connecting(AdbConnectException("Connection handshake failed", ConnectException("refused"))))
         assertEquals(InstallCodes.UNAUTHORIZED, connecting(AdbAuthException("Device rejected authentication (unauthorized)", null)))
-        assertEquals(InstallCodes.UNAUTHORIZED, connecting(AdbConnectException("Connection handshake failed", SocketTimeoutException("Read timed out"))))
-        assertEquals(InstallCodes.UNAUTHORIZED, connecting(IOException("closed")))
+        // the «Разрешить отладку?» question was not answered: a handshake read timeout
+        assertEquals(InstallCodes.AUTH_TIMEOUT, connecting(AdbConnectException("Connection handshake failed", SocketTimeoutException("Read timed out"))))
+        // a dropped handshake is not a refusal
+        assertEquals(InstallCodes.CONNECTION, connecting(AdbConnectException("Connection handshake failed", java.io.EOFException())))
+        assertEquals(InstallCodes.CONNECTION, connecting(IOException("closed")))
+    }
+
+    @Test
+    fun unreachableBoxIsNotUnauthorized() {
+        fun connecting(e: Exception) = code {
+            AtvAdbInstaller(FakeAdbConnector(FakeAdb(shellError = e))).connect("10.0.0.3", Recorder(), CancelToken())
+        }
+        // the exact shape dadb 2.0.0 throws when Socket.connect fails
+        assertEquals(InstallCodes.UNREACHABLE, connecting(AdbConnectException("Failed to connect to 10.0.0.3:5555", SocketTimeoutException("connect timed out"))))
+        assertEquals(InstallCodes.UNREACHABLE, connecting(AdbConnectException("Failed to connect to 10.0.0.3:5555", java.net.NoRouteToHostException("Host unreachable"))))
+        assertEquals(InstallCodes.ADB_CLOSED, connecting(AdbConnectException("Failed to connect to 10.0.0.3:5555", ConnectException("ECONNREFUSED"))))
+        assertEquals(InstallCodes.UNREACHABLE, connecting(AdbConnectException("Failed to connect to 10.0.0.3:5555", null)))
+        assertEquals(InstallCodes.TIMEOUT, connecting(AdbTimeoutException("Timed out waiting for stream", null)))
+    }
+
+    @Test
+    fun tcpProbeFailures() {
+        assertEquals(InstallCodes.ADB_CLOSED, AtvAdbInstaller.probeFailure(ConnectException("Connection refused")).code)
+        assertEquals(InstallCodes.UNREACHABLE, AtvAdbInstaller.probeFailure(SocketTimeoutException("connect timed out")).code)
+        assertEquals(InstallCodes.UNREACHABLE, AtvAdbInstaller.probeFailure(java.net.NoRouteToHostException()).code)
+    }
+
+    @Test
+    fun timeoutsAfterConnecting() {
+        assertEquals(InstallCodes.TIMEOUT, AtvAdbInstaller.adbFailure(AdbTimeoutException("x", null), null, connecting = false).code)
     }
 
     @Test

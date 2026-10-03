@@ -1,20 +1,23 @@
 package com.spacesarmat.omp.install
 
 import dadb.AdbAuthException
-import dadb.AdbKeyPair
+import dadb.AdbConnectException
+import dadb.AdbTimeoutException
 import dadb.Dadb
 import dadb.InstallResult
 import java.io.Closeable
-import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.net.ConnectException
+import java.net.InetSocketAddress
 import java.net.NoRouteToHostException
+import java.net.Socket
 import java.net.SocketTimeoutException
 import okio.source
 
 /**
  * Android TV install over adb on the network (port 5555, «Отладка по сети» / ADB over network). The phone has its own
- * adb RSA key (generated once, app private files, not backed up: allowBackup=false); the TV asks «Разрешить отладку?»
+ * adb RSA key (generated once, encrypted with a Keystore key in noBackupFilesDir, see [AdbIdentityStore]); the TV asks «Разрешить отладку?»
  * the first time. The APK is streamed to the package manager (`cmd package install -S`), nothing stays on the TV.
  * Android 11+ «Беспроводная отладка» pairing by code is not supported (no suitable library), see the task report.
  */
@@ -97,46 +100,74 @@ class AtvAdbInstaller(private val connector: AdbConnector) {
         }
 
         /**
-         * adb errors → codes. While connecting: refused → ADB_CLOSED; rejected key, a timeout or a dropped
-         * handshake → UNAUTHORIZED (the TV did not allow debugging). Later: timeout / connection.
+         * adb errors → codes. UNAUTHORIZED only for a real refusal of our key (AdbAuthException); a handshake that
+         * times out while connecting means the «Разрешить отладку?» question was not answered (AUTH_TIMEOUT). A TCP
+         * connect that times out or has no route → UNREACHABLE, refused → ADB_CLOSED. Later: timeout / connection.
          */
         fun adbFailure(e: Throwable, cancel: CancelToken?, connecting: Boolean): InstallFailure {
             if (cancel?.cancelled == true) return InstallFailure(InstallCodes.CANCELLED, cause = e)
             var c: Throwable? = e
             var timeout = false
+            var handshake = false
+            var tcpConnect = false
             while (c != null) {
+                val m = c.message ?: ""
                 when (c) {
                     is InstallFailure -> return c
-                    is ConnectException, is NoRouteToHostException -> return InstallFailure(InstallCodes.ADB_CLOSED, cause = e)
                     is AdbAuthException -> return InstallFailure(InstallCodes.UNAUTHORIZED, cause = e)
-                    is SocketTimeoutException -> timeout = true
+                    is AdbTimeoutException -> return InstallFailure(InstallCodes.TIMEOUT, cause = e)
+                    is ConnectException -> return InstallFailure(InstallCodes.ADB_CLOSED, cause = e)
+                    is NoRouteToHostException -> return InstallFailure(InstallCodes.UNREACHABLE, cause = e)
+                    is SocketTimeoutException -> {
+                        if (m.contains("connect", ignoreCase = true)) return InstallFailure(InstallCodes.UNREACHABLE, cause = e)
+                        timeout = true
+                    }
+                    is AdbConnectException -> if (m == HANDSHAKE) handshake = true else tcpConnect = true
                 }
-                if ((c.message ?: "").contains("refused", ignoreCase = true)) return InstallFailure(InstallCodes.ADB_CLOSED, cause = e)
-                if ((c.message ?: "").contains("unauthorized", ignoreCase = true)) return InstallFailure(InstallCodes.UNAUTHORIZED, cause = e)
+                if (m.contains("refused", ignoreCase = true)) return InstallFailure(InstallCodes.ADB_CLOSED, cause = e)
+                if (m.contains("unauthorized", ignoreCase = true)) return InstallFailure(InstallCodes.UNAUTHORIZED, cause = e)
                 c = c.cause
             }
-            if (connecting) return InstallFailure(InstallCodes.UNAUTHORIZED, cause = e)
+            if (connecting && tcpConnect) return InstallFailure(InstallCodes.UNREACHABLE, cause = e)
+            if (connecting && handshake && timeout) return InstallFailure(InstallCodes.AUTH_TIMEOUT, cause = e)
             return InstallFailure(if (timeout) InstallCodes.TIMEOUT else InstallCodes.CONNECTION, cause = e)
         }
+
+        /** The plain TCP check before adb: refused → ADB_CLOSED, anything else (timeout, no route) → UNREACHABLE. */
+        fun probeFailure(e: Throwable): InstallFailure =
+            if (e is ConnectException || (e.message ?: "").contains("refused", ignoreCase = true)) {
+                InstallFailure(InstallCodes.ADB_CLOSED, cause = e)
+            } else {
+                InstallFailure(InstallCodes.UNREACHABLE, cause = e)
+            }
+
+        private const val HANDSHAKE = "Connection handshake failed"
     }
 }
 
-/** adb over dadb with the phone's persistent key in [keyDir] (app private files). */
-class DadbConnector(private val keyDir: File) : AdbConnector {
-    private fun keyPair(): AdbKeyPair {
-        val prv = File(keyDir, "adbkey")
-        val pub = File(keyDir, "adbkey.pub")
-        synchronized(lock) {
-            if (!prv.exists() || !pub.exists()) {
-                keyDir.mkdirs()
-                AdbKeyPair.generate(prv, pub)
-            }
-            return AdbKeyPair.read(prv, pub)
-        }
-    }
-
+/**
+ * adb over dadb with the phone's persistent identity from [identities] (encrypted at rest with a Keystore key).
+ * A TCP check comes first so a wrong IP or a sleeping TV is told apart from an unanswered «Разрешить отладку?».
+ */
+class DadbConnector(private val identities: AdbIdentityStore) : AdbConnector {
     override fun connect(ip: String, port: Int, cancel: CancelToken): AdbDevice {
-        val dadb = Dadb.create(ip, port, keyPair(), AtvAdbConst.CONNECT_MS, AtvAdbConst.SOCKET_MS)
+        val probe = Socket()
+        val stop = cancel.onCancel { probe.close() }
+        try {
+            probe.use { it.connect(InetSocketAddress(ip, port), AtvAdbConst.CONNECT_MS) }
+        } catch (e: IOException) {
+            cancel.check()
+            throw AtvAdbInstaller.probeFailure(e)
+        } finally {
+            stop.close()
+        }
+        val id = identities.load()
+        val keyPair = try {
+            id.toKeyPair()
+        } finally {
+            id.wipe()
+        }
+        val dadb = Dadb.create(ip, port, keyPair, AtvAdbConst.CONNECT_MS, AtvAdbConst.SOCKET_MS)
         val hook = cancel.onCancel {
             try {
                 dadb.close()
@@ -157,9 +188,5 @@ class DadbConnector(private val keyDir: File) : AdbConnector {
                 dadb.close()
             }
         }
-    }
-
-    companion object {
-        private val lock = Any()
     }
 }

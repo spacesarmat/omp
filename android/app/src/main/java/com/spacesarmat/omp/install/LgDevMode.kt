@@ -110,16 +110,39 @@ object DevModeKey {
             Arrays.fill(key, 0)
             throw InstallFailure(InstallCodes.KEY_SERVER)
         }
-        val trimmed = String(typed).trim()
-        val candidates = linkedSetOf(trimmed, trimmed.uppercase())
-        for (c in candidates) {
-            if (c.isEmpty()) continue
-            val bytes = c.toByteArray(Charsets.UTF_8)
-            if (opens(key, bytes)) return DevModeCredentials(key, bytes)
-            Arrays.fill(bytes, 0)
+        // no String copies: trimmed / upper-cased char arrays, UTF-8 bytes, all wiped when not used
+        val trimmed = trim(typed)
+        val upper = CharArray(trimmed.size) { trimmed[it].uppercaseChar() }
+        try {
+            val candidates = if (upper.contentEquals(trimmed)) listOf(trimmed) else listOf(trimmed, upper)
+            for (c in candidates) {
+                if (c.isEmpty()) continue
+                val bytes = utf8(c)
+                if (opens(key, bytes)) return DevModeCredentials(key, bytes)
+                Arrays.fill(bytes, 0)
+            }
+        } finally {
+            Arrays.fill(trimmed, '\u0000')
+            Arrays.fill(upper, '\u0000')
         }
         Arrays.fill(key, 0)
         throw InstallFailure(InstallCodes.WRONG_PASSPHRASE)
+    }
+
+    private fun trim(chars: CharArray): CharArray {
+        var a = 0
+        var b = chars.size
+        while (a < b && chars[a].isWhitespace()) a++
+        while (b > a && chars[b - 1].isWhitespace()) b--
+        return chars.copyOfRange(a, b)
+    }
+
+    private fun utf8(chars: CharArray): ByteArray {
+        val buf = Charsets.UTF_8.encode(java.nio.CharBuffer.wrap(chars))
+        val out = ByteArray(buf.remaining())
+        buf.get(out)
+        if (buf.hasArray()) Arrays.fill(buf.array(), 0)
+        return out
     }
 }
 
@@ -137,7 +160,7 @@ object LunaInstall {
     fun command(path: String): String {
         require(SAFE_PATH.matches(path)) { "unsafe path" }
         val payload = "{\"id\":\"com.ares.defaultName\",\"ipkUrl\":\"$path\",\"subscribe\":true}"
-        return "luna-send-pub -i 'luna://com.webos.appInstallService/dev/install' '$payload'"
+        return "/usr/bin/luna-send-pub -i 'luna://com.webos.appInstallService/dev/install' '$payload'"
     }
 
     /** returnValue false or details.state «…failed…» → Failed; details.state «installed» → Installed; else Pending. */
@@ -312,12 +335,18 @@ class JschConnector : DevModeConnector {
     override fun connect(ip: String, key: ByteArray, passphrase: ByteArray, cancel: CancelToken): DevModeShell {
         val jsch = JSch()
         val session: Session
+        // JSch keeps its own copies (dropped by removeAllIdentity in close); ours are wiped right away
+        val keyCopy = key.copyOf()
+        val passCopy = passphrase.copyOf()
         try {
-            // JSch copies what it needs; our arrays are wiped by DevModeCredentials
-            jsch.addIdentity("webos", key.copyOf(), null, passphrase.copyOf())
+            jsch.addIdentity("webos", keyCopy, null, passCopy)
             session = jsch.getSession(LgDevModeConst.USER, ip, LgDevModeConst.SSH_PORT)
         } catch (e: JSchException) {
+            forget(jsch)
             throw sshFailure(e)
+        } finally {
+            Arrays.fill(keyCopy, 0)
+            Arrays.fill(passCopy, 0)
         }
         // the TV's host key cannot be known in advance (it changes with Developer Mode); kept in memory only
         session.setConfig("StrictHostKeyChecking", "no")
@@ -331,12 +360,13 @@ class JschConnector : DevModeConnector {
         } catch (e: JSchException) {
             hook.close()
             session.disconnect()
+            forget(jsch)
             cancel.check()
             throw sshFailure(e)
         }
         // from here a cancel closes only the running command, so the temp file can still be removed
         hook.close()
-        return JschShell(session)
+        return JschShell(jsch, session)
     }
 
     private fun append(list: String?, vararg extra: String): String {
@@ -346,7 +376,15 @@ class JschConnector : DevModeConnector {
     }
 }
 
-private class JschShell(private val session: Session) : DevModeShell {
+/** Drops the decrypted identity JSch holds. */
+private fun forget(jsch: JSch) {
+    try {
+        jsch.removeAllIdentity()
+    } catch (_: Exception) {
+    }
+}
+
+private class JschShell(private val jsch: JSch, private val session: Session) : DevModeShell {
     override fun exec(command: String, stdin: InputStream?, timeoutMs: Long, cancel: CancelToken, onLine: (String) -> Boolean): ExecResult {
         cancel.check()
         val ch = try {
@@ -410,7 +448,11 @@ private class JschShell(private val session: Session) : DevModeShell {
     }
 
     override fun close() {
-        session.disconnect()
+        try {
+            session.disconnect()
+        } finally {
+            forget(jsch)
+        }
     }
 }
 

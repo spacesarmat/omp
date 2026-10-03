@@ -46,7 +46,8 @@ export class InstallError extends Error {
 export interface InstallerPlugin {
   installStart(o: { method: string; ip: string; passphrase?: string; withHbc?: boolean }): Promise<Record<string, unknown>>;
   installCancel(): Promise<unknown>;
-  devModeReminder(o: { at: number | null }): Promise<unknown>;
+  devModeReminder(o: { tv: string; name?: string; at: number | null }): Promise<unknown>;
+  devModeReminderState(o: { tv: string }): Promise<{ at?: unknown }>;
   addListener(event: 'installProgress', cb: (e: Record<string, unknown>) => void): Promise<PluginListenerHandle>;
 }
 
@@ -54,8 +55,10 @@ export interface InstallerNative {
   available: boolean;
   start(req: InstallRequest, onEvent: (e: InstallEvent) => void): Promise<InstallResult>;
   cancel(): Promise<void>;
-  /** Schedules the Developer Mode reminder at `at` (unix ms); null cancels it. */
-  reminder(at: number | null): Promise<void>;
+  /** Schedules the Developer Mode reminder for one TV (its IP) at `at` (unix ms); null cancels it. */
+  reminder(tv: string, at: number | null, name?: string): Promise<void>;
+  /** When the reminder for that TV is due (unix ms); null when none is scheduled or unknown. */
+  reminderState(tv: string): Promise<number | null>;
 }
 
 const PHASES: InstallPhase[] = ['download', 'verify', 'connect', 'upload', 'install'];
@@ -86,15 +89,22 @@ function codeOf(e: unknown): string {
 }
 
 export function createInstallerNative(plugin: InstallerPlugin | null): InstallerNative {
+  // «Отмена» while the listener is being added: the native install has not started yet, so it must not start at all
+  let cancelRequested = false;
   return {
     available: !!plugin,
     async start(req, onEvent) {
       if (!plugin) throw new Error(ONLY_ANDROID);
+      cancelRequested = false;
       // awaited so that no early event is missed
       const handle = await plugin.addListener('installProgress', (e) => {
         const ev = event(e);
         if (ev) onEvent(ev);
       });
+      if (cancelRequested) {
+        void handle.remove();
+        throw new InstallError('cancelled');
+      }
       try {
         const o: { method: string; ip: string; passphrase?: string; withHbc?: boolean } = { method: req.method, ip: req.ip };
         if (req.passphrase !== undefined) o.passphrase = req.passphrase;
@@ -106,8 +116,23 @@ export function createInstallerNative(plugin: InstallerPlugin | null): Installer
         void handle.remove();
       }
     },
-    cancel: () => (plugin ? plugin.installCancel().then(() => undefined, () => undefined) : Promise.resolve()),
-    reminder: (at) => (plugin ? plugin.devModeReminder({ at }).then(() => undefined) : Promise.reject(new Error(ONLY_ANDROID))),
+    cancel() {
+      cancelRequested = true;
+      return plugin ? plugin.installCancel().then(() => undefined, () => undefined) : Promise.resolve();
+    },
+    reminder(tv, at, name) {
+      if (!plugin) return Promise.reject(new Error(ONLY_ANDROID));
+      const o: { tv: string; name?: string; at: number | null } = { tv, at };
+      if (name) o.name = name;
+      return plugin.devModeReminder(o).then(() => undefined);
+    },
+    reminderState(tv) {
+      if (!plugin) return Promise.resolve(null);
+      return plugin.devModeReminderState({ tv }).then(
+        (r) => (typeof r?.at === 'number' && isFinite(r.at) && r.at > 0 ? r.at : null),
+        () => null,
+      );
+    },
   };
 }
 
@@ -219,7 +244,9 @@ const ERRORS: { [code: string]: string } = {
   'old-android': 'Версия Android на приставке слишком старая для OMP.',
   'adb-closed':
     'Приставка не отвечает на порту 5555. Включите «Отладка по сети» в разделе «Для разработчиков» и повторите. Если на Android 11 и новее есть только «Беспроводная отладка» с кодом, установка с телефона пока не работает — скачайте APK и установите по инструкции.',
-  unauthorized: 'Приставка не разрешила отладку. Нажмите «Повторить» и на телевизоре выберите «Разрешить» (можно отметить «Всегда разрешать»).',
+  unauthorized: 'Приставка отклонила подключение телефона. Нажмите «Повторить» и на телевизоре выберите «Разрешить» (можно отметить «Всегда разрешать»).',
+  'auth-timeout': 'Телевизор не дождался ответа на «Разрешить отладку?». Нажмите «Повторить» и на телевизоре выберите «Разрешить».',
+  unreachable: 'Телевизор не отвечает — проверьте IP и что он включён и в той же сети, затем повторите.',
   timeout: 'Телевизор перестал отвечать. Проверьте, что он включён и в той же сети, и повторите.',
   connection: 'Связь с телевизором прервалась. Проверьте сеть и повторите.',
   cancelled: 'Установка отменена.',

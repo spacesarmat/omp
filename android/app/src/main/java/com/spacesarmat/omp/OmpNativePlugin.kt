@@ -19,6 +19,9 @@ import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
 import com.spacesarmat.omp.control.SourcesDone
 import com.spacesarmat.omp.control.TvRemote
+import com.spacesarmat.omp.install.AdbIdentity
+import com.spacesarmat.omp.install.AdbIdentityStore
+import com.spacesarmat.omp.install.AesGcmWrapper
 import com.spacesarmat.omp.install.AtvAdbInstaller
 import com.spacesarmat.omp.install.CancelToken
 import com.spacesarmat.omp.install.DadbConnector
@@ -120,6 +123,8 @@ class OmpNativePlugin : Plugin() {
         player.stop()
         remote?.stop()
         remote = null
+        // blocking socket I/O ignores interrupts: close the install's sockets so it ends now
+        installCancel?.cancel()
         io.shutdownNow()
     }
 
@@ -259,7 +264,7 @@ class OmpNativePlugin : Plugin() {
                     Releases(http),
                     ReleaseDownloader(http, File(context.cacheDir, "install")),
                     LgDevModeInstaller(HttpKeyServer(), JschConnector()),
-                    AtvAdbInstaller(DadbConnector(File(context.filesDir, "adb"))),
+                    AtvAdbInstaller(DadbConnector(adbIdentities())),
                 )
                 val out = runner.run(req, { phase, percent, item, version ->
                     val o = JSObject().put("phase", phase.id).put("item", item.id)
@@ -284,6 +289,16 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
+    /** The phone's adb identity, encrypted with a Keystore key, in noBackupFilesDir (not backed up or transferred). */
+    private fun adbIdentities(): AdbIdentityStore {
+        // an early build kept the key in plain text here
+        File(context.filesDir, "adb").deleteRecursively()
+        return AdbIdentityStore(
+            File(context.noBackupFilesDir, "adb/identity.enc"),
+            AesGcmWrapper { AesGcmWrapper.keystoreKey("omp-adb-aes") },
+        ) { AdbIdentity.generate(File(context.cacheDir, "adbtmp")) }
+    }
+
     /** Stops the running install (downloads and temp files are removed). */
     @PluginMethod
     fun installCancel(call: PluginCall) {
@@ -291,17 +306,42 @@ class OmpNativePlugin : Plugin() {
         call.resolve()
     }
 
-    /** { at: unix ms } schedules the Developer Mode reminder notification; { at: null } cancels it. */
+    /**
+     * { tv, name?, at: unix ms } schedules the Developer Mode reminder for that TV (tv = its address, stored only as
+     * a hash); { tv, at: null } cancels it.
+     */
     @PluginMethod
     fun devModeReminder(call: PluginCall) {
+        val tv = call.getString("tv")?.trim().orEmpty()
         val at = call.getLong("at")
-        if (at == null) {
-            DevModeReminder.cancel(context)
+        if (tv.isEmpty()) {
+            call.reject("Не указан телевизор")
+        } else if (at == null) {
+            DevModeReminder.cancel(context, tv)
             call.resolve()
-        } else if (DevModeReminder.schedule(context, at)) {
+        } else if (DevModeReminder.schedule(context, tv, call.getString("name"), at)) {
             call.resolve()
         } else {
             call.reject("Некорректное время напоминания")
+        }
+    }
+
+    /** { tv } → { at? }: when the reminder for that TV is due; absent when none is scheduled. */
+    @PluginMethod
+    fun devModeReminderState(call: PluginCall) {
+        val once = Once(call)
+        val tv = call.getString("tv")?.trim().orEmpty()
+        if (tv.isEmpty()) {
+            once.reject("Не указан телевизор")
+            return
+        }
+        io.execute {
+            val o = JSObject()
+            try {
+                DevModeReminder.scheduledAt(context, tv)?.let { o.put("at", it) }
+            } catch (_: Exception) {
+            }
+            once.resolve(o)
         }
     }
 

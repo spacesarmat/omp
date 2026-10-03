@@ -30,6 +30,16 @@ data class InstallOutcome(
 /**
  * One install from start to end: the right order of steps per method, downloads in [cacheDir] removed whatever
  * happens, key and passphrase wiped. Only GitHub ([Releases]) and the TV are contacted.
+ *
+ * LAN trust model (the home network is trusted, like ares-cli / webOS Dev Manager do):
+ * - LG Key Server is plain HTTP by LG's design: anyone on the network who fetches the encrypted key while the Key
+ *   Server is on can try to brute-force the 6-character passphrase offline. The result screen asks the user to turn
+ *   the Key Server off after the install.
+ * - SSH host keys are not checked (StrictHostKeyChecking=no): the TV's key changes whenever Developer Mode is
+ *   re-enabled, so there is nothing to pin. A fake sshd learns nothing useful: publickey signatures are bound to its
+ *   own session and cannot be replayed to the real TV; it could only receive the (public, verified) ipk.
+ * - adb on 5555 is plain TCP (Android's design); the TV asks «Разрешить отладку?» for an unknown phone key.
+ * - Downloads come only from allowlisted HTTPS GitHub hosts and are checked by sha256 and size before reaching the TV.
  */
 class InstallRunner(
     private val releases: Releases,

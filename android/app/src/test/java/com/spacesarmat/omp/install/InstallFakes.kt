@@ -85,7 +85,7 @@ class FakeShell(
             uploads[command.substringAfter("'").substringBefore("'")] = stdin!!.readBytes()
             return ExecResult(catExit, catStderr)
         }
-        if (command.startsWith("luna-send-pub")) {
+        if (command.startsWith("/usr/bin/luna-send-pub")) {
             val path = Regex("\"ipkUrl\":\"([^\"]+)\"").find(command)!!.groupValues[1].replace("\\/", "/")
             for (l in luna(path)) if (onLine(l)) return ExecResult(-1, "")
             return ExecResult(0, "")

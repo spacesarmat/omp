@@ -110,11 +110,11 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
   }
 
   if (state.kind === 'done') {
-    return <Done lg={lg} result={state.result} onRecheck={() => (setState({ kind: 'form' }), p.onRecheck())} />;
+    return <Done lg={lg} tv={t.ip} tvName={p.plan.title} result={state.result} onRecheck={() => (setState({ kind: 'form' }), p.onRecheck())} />;
   }
 
   if (state.kind === 'error') {
-    const atvFallback = !lg && (state.code === 'adb-closed' || state.code === 'unauthorized' || state.code === 'timeout');
+    const atvFallback = !lg && ['adb-closed', 'unauthorized', 'auth-timeout', 'unreachable', 'timeout'].indexOf(state.code) >= 0;
     return (
       <div class="m-install-run" data-install="error">
         <div class="m-error" role="alert">
@@ -183,18 +183,43 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
   );
 }
 
-function Done(p: { lg: boolean; result: InstallResult; onRecheck: () => void }) {
+/** «12 ноября» for the reminder note. */
+function dayText(at: number): string {
+  const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+  const d = new Date(at);
+  return d.getDate() + ' ' + months[d.getMonth()];
+}
+
+function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResult; onRecheck: () => void }) {
   const r = p.result;
   const [remind, setRemind] = useState(false);
   const [remindNote, setRemindNote] = useState('');
   const installedAt = useRef(Date.now()).current;
+  const touched = useRef(false);
+
+  // a reminder for this TV may already be scheduled (an earlier install): the box shows it
+  useEffect(() => {
+    if (!p.lg) return;
+    let alive = true;
+    void installerNative()
+      .reminderState(p.tv)
+      .then((at) => {
+        if (!alive || touched.current || at === null) return;
+        setRemind(true);
+        setRemindNote('Напоминание уже включено: ' + dayText(at) + '. Снимите и снова поставьте отметку, чтобы отсчитать 38 дней от сегодня.');
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   async function toggle(on: boolean) {
+    touched.current = true;
     setRemind(on);
     setRemindNote('');
     try {
       if (!on) {
-        await installerNative().reminder(null);
+        await installerNative().reminder(p.tv, null);
         return;
       }
       const perm = await monitorNative.requestNotifyPermission();
@@ -203,7 +228,7 @@ function Done(p: { lg: boolean; result: InstallResult; onRecheck: () => void }) 
         setRemindNote('Уведомления для OMP выключены — напоминание не придёт. Разрешите их в настройках телефона.');
         return;
       }
-      await installerNative().reminder(reminderAt(installedAt));
+      await installerNative().reminder(p.tv, reminderAt(installedAt), p.tvName);
       setRemindNote('Напомню через 38 дней. Чтобы срок совпал, продлите режим сейчас в Developer Mode (кнопка Extend).');
     } catch {
       setRemind(false);
@@ -235,6 +260,7 @@ function Done(p: { lg: boolean; result: InstallResult; onRecheck: () => void }) 
           <div class="m-hint-warn" role="note">
             Режим разработчика действует 1000 часов (около 40 дней). Продлевайте его заранее в приложении Developer Mode, иначе OMP удалится с ТВ.
           </div>
+          <div class="m-muted m-small">Выключите Key Server в Developer Mode: пока он включён, ключ может забрать любое устройство в вашей сети.</div>
           <label class="m-send-check">
             <input type="checkbox" checked={remind} data-reminder onChange={(e) => void toggle((e.target as HTMLInputElement).checked)} />
             Напомнить продлить режим разработчика

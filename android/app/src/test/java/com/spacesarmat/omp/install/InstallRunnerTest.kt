@@ -123,7 +123,7 @@ class InstallRunnerTest {
 
     @Test
     fun atvUnauthorizedDownloadsNothing() {
-        val s = setup(adb = FakeAdb(shellError = SocketTimeoutException()))
+        val s = setup(adb = FakeAdb(shellError = dadb.AdbAuthException("Device rejected authentication (unauthorized)", null)))
         assertEquals(InstallCodes.UNAUTHORIZED, code { s.runner.run(InstallRequest(InstallRequest.ATV, "192.168.1.9", null, false), Recorder(), CancelToken()) })
         assertTrue(s.http.requested.isEmpty())
     }
@@ -158,5 +158,16 @@ class InstallRunnerTest {
         assertTrue(DevModeReminder.validAt(now + 928 * hour, now))
         assertTrue(!DevModeReminder.validAt(now + 10_000, now))
         assertTrue(!DevModeReminder.validAt(now + 1001 * hour, now))
+    }
+
+    @Test
+    fun reminderIsKeyedPerTvWithoutTheAddress() {
+        val a = DevModeReminder.workName("192.168.1.5")
+        assertEquals(a, DevModeReminder.workName(" 192.168.1.5 "))
+        assertTrue(a != DevModeReminder.workName("192.168.1.6"))
+        assertTrue(!a.contains("192"))
+        assertTrue(DevModeReminder.notificationId("192.168.1.5") in 7100 until 8100)
+        assertEquals("LG «Гостиная»", DevModeReminder.cleanName(" LG «Гостиная»\u0007 "))
+        assertEquals(null, DevModeReminder.cleanName("  "))
     }
 }

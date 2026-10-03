@@ -87,7 +87,7 @@ class LgDevModeTest {
     @Test
     fun lunaCommandUsesTheDevInstallService() {
         assertEquals(
-            "luna-send-pub -i 'luna://com.webos.appInstallService/dev/install' " +
+            "/usr/bin/luna-send-pub -i 'luna://com.webos.appInstallService/dev/install' " +
                 "'{\"id\":\"com.ares.defaultName\",\"ipkUrl\":\"/media/developer/temp/omp.ipk\",\"subscribe\":true}'",
             LunaInstall.command("/media/developer/temp/omp.ipk"),
         )
@@ -178,7 +178,7 @@ class LgDevModeTest {
     fun cancelDuringInstallStillRemovesTheFile() {
         val cancel = CancelToken()
         val shell = FakeShell()
-        shell.onCommand = { if (it.startsWith("luna-send-pub")) cancel.cancel() }
+        shell.onCommand = { if (it.startsWith("/usr/bin/luna-send-pub")) cancel.cancel() }
         val creds = DevModeKey.unlock(key.copyOf(), "A1B2C3".toCharArray())
         assertEquals(
             InstallCodes.CANCELLED,

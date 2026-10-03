@@ -44,8 +44,12 @@ object InstallCodes {
     const val OLD_ANDROID = "old-android"
     /** adb port 5555 closed. */
     const val ADB_CLOSED = "adb-closed"
-    /** adb authorization was not given on the TV («Разрешить отладку?»). */
+    /** adb: the TV refused our key. */
     const val UNAUTHORIZED = "unauthorized"
+    /** adb: the «Разрешить отладку?» question was not answered in time. */
+    const val AUTH_TIMEOUT = "auth-timeout"
+    /** The TV does not answer at all (wrong IP, asleep, filtered): TCP connect timed out or no route. */
+    const val UNREACHABLE = "unreachable"
     /** The TV stopped answering. */
     const val TIMEOUT = "timeout"
     /** The connection broke midway. */

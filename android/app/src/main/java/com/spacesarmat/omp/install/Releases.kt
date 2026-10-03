@@ -213,8 +213,12 @@ class ReleaseDownloader(private val http: ReleaseHttp, private val dir: File) {
 }
 
 /** [ReleaseHttp] over OkHttp: redirects are followed by hand so every hop passes [ReleaseHosts]. */
-class OkReleaseHttp : ReleaseHttp {
-    private val client = OkHttpClient.Builder()
+class OkReleaseHttp(
+    baseClient: OkHttpClient = OkHttpClient(),
+    /** Every hop (the first URL and each redirect) must pass; tests swap in a local-server rule. */
+    private val allowed: (String) -> Boolean = ReleaseHosts::allowed,
+) : ReleaseHttp {
+    private val client = baseClient.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(false)
@@ -235,7 +239,7 @@ class OkReleaseHttp : ReleaseHttp {
     override fun stream(url: String, cancel: CancelToken, read: (InputStream, Long) -> Unit) {
         var current = url
         for (hop in 0..MAX_REDIRECTS) {
-            if (!ReleaseHosts.allowed(current)) throw InstallFailure(InstallCodes.RELEASE)
+            if (!allowed(current)) throw InstallFailure(InstallCodes.RELEASE)
             cancel.check()
             val req = Request.Builder().url(current)
                 .header("User-Agent", "OMP")

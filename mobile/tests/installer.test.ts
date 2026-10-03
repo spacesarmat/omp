@@ -27,6 +27,9 @@ function fakePlugin(o: { result?: Record<string, unknown>; error?: unknown; even
     async devModeReminder(a) {
       reminders.push(a);
     },
+    async devModeReminderState(a) {
+      return a.tv === '192.168.1.5' ? { at: 1234 } : {};
+    },
     async addListener(_event, fn) {
       cb = fn;
       return { remove: async () => void removed++ };
@@ -79,14 +82,38 @@ describe('installer native wrapper', () => {
     const f = fakePlugin();
     const n = createInstallerNative(f.plugin);
     await n.cancel();
-    await n.reminder(123);
-    await n.reminder(null);
+    await n.reminder('192.168.1.5', 123, 'LG');
+    await n.reminder('192.168.1.5', null);
     expect(f.calls).toEqual(['cancel']);
-    expect(f.reminders).toEqual([{ at: 123 }, { at: null }]);
+    expect(f.reminders).toEqual([{ tv: '192.168.1.5', at: 123, name: 'LG' }, { tv: '192.168.1.5', at: null }]);
+    expect(await n.reminderState('192.168.1.5')).toBe(1234);
+    expect(await n.reminderState('192.168.1.6')).toBeNull();
     const none = createInstallerNative(null);
     expect(none.available).toBe(false);
     await expect(none.start({ method: 'atv-adb', ip: '192.168.1.9' }, () => {})).rejects.toThrow('Доступно только в приложении Android');
     await expect(none.cancel()).resolves.toBeUndefined();
+    expect(await none.reminderState('192.168.1.5')).toBeNull();
+  });
+
+  it('a cancel while the listener is being added stops the install before it reaches the plugin', async () => {
+    const f = fakePlugin();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const add = f.plugin.addListener.bind(f.plugin);
+    f.plugin.addListener = (async (ev: 'installProgress', cb: (e: Record<string, unknown>) => void) => {
+      await gate;
+      return add(ev, cb);
+    }) as InstallerPlugin['addListener'];
+    const n = createInstallerNative(f.plugin);
+    const p = n.start({ method: 'atv-adb', ip: '192.168.1.9' }, () => {});
+    await n.cancel();
+    release();
+    const err = await p.catch((e) => e);
+    expect(err.code).toBe('cancelled');
+    expect(f.calls).toEqual(['cancel']);
+    expect(f.removed()).toBe(1);
+    // the next install starts normally
+    await expect(n.start({ method: 'atv-adb', ip: '192.168.1.9' }, () => {})).resolves.toEqual({ version: '0.14.0' });
   });
 });
 

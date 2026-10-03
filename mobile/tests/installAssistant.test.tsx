@@ -483,7 +483,8 @@ function fakeInstaller() {
   const f = {
     reqs: [] as InstallRequest[],
     cancels: 0,
-    reminders: [] as Array<number | null>,
+    reminders: [] as Array<{ tv: string; at: number | null; name?: string }>,
+    scheduled: null as number | null,
     emit: (_e: InstallEvent) => {},
     resolve: (_r: InstallResult) => {},
     reject: (_code: string) => {},
@@ -501,8 +502,11 @@ function fakeInstaller() {
     async cancel() {
       f.cancels++;
     },
-    async reminder(at) {
-      f.reminders.push(at);
+    async reminder(tv, at, name) {
+      f.reminders.push(name === undefined ? { tv, at } : { tv, at, name });
+    },
+    async reminderState(tv) {
+      return tv === LG_IP ? f.scheduled : null;
     },
   };
   setInstallerNative(n);
@@ -567,13 +571,15 @@ describe('Install assistant — install from the phone', () => {
     await flush();
     expect(perm).toHaveBeenCalled();
     expect(inst.reminders.length).toBe(1);
-    const at = inst.reminders[0]!;
+    expect(inst.reminders[0].tv).toBe(LG_IP);
+    expect(inst.reminders[0].name).toBe('LG «Гостиная»');
+    const at = inst.reminders[0].at!;
     expect(at - before).toBeGreaterThanOrEqual(928 * 3600e3 - 5000);
     expect(at - before).toBeLessThanOrEqual(928 * 3600e3 + 5000);
     expect(el.textContent).toContain('Напомню через 38 дней');
     await act(async () => check(box, false));
     await flush();
-    expect(inst.reminders[1]).toBeNull();
+    expect(inst.reminders[1]).toEqual({ tv: LG_IP, at: null });
     // notifications refused: no reminder
     perm.mockResolvedValue('denied');
     await act(async () => check(box, true));
@@ -581,6 +587,21 @@ describe('Install assistant — install from the phone', () => {
     expect(inst.reminders.length).toBe(2);
     expect(box.checked).toBe(false);
     expect(el.textContent).toContain('напоминание не придёт');
+  });
+
+  it('LG: a reminder already scheduled for this TV shows as checked; the Key Server hint is shown', async () => {
+    const inst = fakeInstaller();
+    inst.scheduled = new Date(2026, 10, 12, 10, 0).getTime();
+    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
+    await flush();
+    type(el.querySelector<HTMLInputElement>('#install-pass')!, 'A1B2C3');
+    click(button(el, 'Установить OMP и Homebrew Channel'));
+    await act(async () => inst.resolve({ version: '0.14.0' }));
+    await flush();
+    expect(el.querySelector<HTMLInputElement>('[data-reminder]')!.checked).toBe(true);
+    expect(el.textContent).toContain('Напоминание уже включено: 12 ноября');
+    expect(el.textContent).toContain('Выключите Key Server в Developer Mode');
+    expect(inst.reminders).toEqual([]);
   });
 
   it('LG: without Homebrew Channel; a wrong code shows the next step and «Повторить» returns to the form', async () => {
@@ -633,6 +654,19 @@ describe('Install assistant — install from the phone', () => {
     expect(button(el, 'Скачать APK')).toBeDefined();
     click(button(el, 'Как установить через компьютер'));
     expect(currentRoute.value).toEqual({ name: 'faq', q: 'Как установить OMP на Android TV через adb?' });
+  });
+
+  it('Android TV: an unreachable box says to check the IP, not to press «Разрешить»', async () => {
+    const inst = fakeInstaller();
+    const el = mount(<InstallAssistant ip={ATV_IP} kind="atv" />);
+    await flush();
+    click(button(el, 'Установить OMP'));
+    await act(async () => inst.reject('unreachable'));
+    await flush();
+    const alert = el.querySelector('[role="alert"]')!.textContent!;
+    expect(alert).toContain('Телевизор не отвечает — проверьте IP и что он включён');
+    expect(alert).not.toContain('Разрешить');
+    expect(button(el, 'Скачать APK')).toBeDefined();
   });
 
   it('Android TV: success, with the TorrServer note for a 32-bit box', async () => {
