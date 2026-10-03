@@ -1,7 +1,7 @@
 // Shared parts of the built-in tracker parsers: page loading with Russian errors, numbers, results. Chromium 53 safe.
 import { BAD_URL } from './http';
 import { infohashFromMagnet, parseHtml } from './html';
-import type { HttpResponse, SourceContext, SourceResult } from './types';
+import type { HttpOptions, HttpResponse, SourceContext, SourceResult } from './types';
 
 export const SITE_ERROR = 'Сайт ответил ошибкой ';
 export const CHALLENGE = 'Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже';
@@ -20,12 +20,12 @@ export function checkPage(res: HttpResponse): HttpResponse {
   return res;
 }
 
-export function loadPage(ctx: SourceContext, url: string): Promise<HttpResponse> {
-  return ctx.http.get(url).then(checkPage);
+export function loadPage(ctx: SourceContext, url: string, opts?: HttpOptions): Promise<HttpResponse> {
+  return (opts ? ctx.http.get(url, opts) : ctx.http.get(url)).then(checkPage);
 }
 
-export function loadDoc(ctx: SourceContext, url: string): Promise<{ res: HttpResponse; doc: Document }> {
-  return loadPage(ctx, url).then((res) => ({ res, doc: parseHtml(res.text) }));
+export function loadDoc(ctx: SourceContext, url: string, opts?: HttpOptions): Promise<{ res: HttpResponse; doc: Document }> {
+  return loadPage(ctx, url, opts).then((res) => ({ res, doc: parseHtml(res.text) }));
 }
 
 /** True when `url` is http(s) on `host` or its subdomain (release pages are opened only on their own site). */

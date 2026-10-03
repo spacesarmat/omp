@@ -9,7 +9,13 @@ const HOST = 'tr.anidub.com';
 const BASE = 'https://' + HOST;
 const SEARCH = BASE + '/index.php?do=search&subaction=search&story=';
 /** Release pages opened at once. */
-const PARALLEL = 4;
+export const ANIDUB_PARALLEL = 4;
+/** At most this many release pages per search (the site lists 15 per page). */
+export const ANIDUB_MAX_RELEASES = 15;
+/** Own timeout of one release page. */
+export const ANIDUB_PAGE_TIMEOUT_MS = 5000;
+/** From the start of a search: no new release pages after it, and the results found so far are returned. */
+export const ANIDUB_DEADLINE_MS = 12000;
 export const ANIDUB_NO_TORRENT = 'На странице раздачи нет ссылки на торрент';
 
 interface Release {
@@ -80,21 +86,32 @@ function parseRelease(doc: Document, r: Release): SourceResult[] {
   });
 }
 
-/** Opens the release pages, PARALLEL at a time; a failed page is skipped unless every page failed. */
-function openReleases(ctx: SourceContext, releases: Release[]): Promise<SourceResult[]> {
+/**
+ * Opens the release pages, ANIDUB_PARALLEL at a time, each with its own timeout. A failed page is skipped unless
+ * every page failed. At `deadline` (unix ms) no new page is started and the results found so far are returned:
+ * one slow page never costs the ones already read.
+ */
+function openReleases(ctx: SourceContext, releases: Release[], deadline: number): Promise<SourceResult[]> {
+  const list = releases.slice(0, ANIDUB_MAX_RELEASES);
   const found: SourceResult[][] = [];
   let failures = 0;
   let firstError: unknown = null;
   let next = 0;
+  let over = false;
+  const collected = (): SourceResult[] => {
+    const out: SourceResult[] = [];
+    for (let i = 0; i < list.length; i++) if (found[i]) out.push.apply(out, found[i]);
+    return out;
+  };
   const worker = (): Promise<void> => {
-    if (next >= releases.length) return Promise.resolve();
+    if (over || next >= list.length || Date.now() >= deadline) return Promise.resolve();
     const i = next++;
-    const r = releases[i];
+    const r = list[i];
     return requireHost(r.url, HOST)
-      .then(() => loadDoc(ctx, r.url))
+      .then(() => loadDoc(ctx, r.url, { timeoutMs: ANIDUB_PAGE_TIMEOUT_MS }))
       .then(
         (p) => {
-          found[i] = parseRelease(p.doc, r);
+          if (!over) found[i] = parseRelease(p.doc, r);
         },
         (e: unknown) => {
           failures++;
@@ -103,13 +120,21 @@ function openReleases(ctx: SourceContext, releases: Release[]): Promise<SourceRe
       )
       .then(worker);
   };
-  const workers: Promise<void>[] = [];
-  for (let k = 0; k < Math.min(PARALLEL, releases.length); k++) workers.push(worker());
-  return Promise.all(workers).then(() => {
-    if (releases.length && failures === releases.length) throw firstError;
-    const out: SourceResult[] = [];
-    for (let i = 0; i < releases.length; i++) if (found[i]) out.push.apply(out, found[i]);
-    return out;
+  return new Promise<SourceResult[]>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      over = true;
+      resolve(collected());
+    }, Math.max(0, deadline - Date.now()));
+    const workers: Promise<void>[] = [];
+    for (let k = 0; k < Math.min(ANIDUB_PARALLEL, list.length); k++) workers.push(worker());
+    Promise.all(workers).then(() => {
+      if (over) return;
+      over = true;
+      clearTimeout(timer);
+      const out = collected();
+      if (!out.length && failures > 0 && failures === next) reject(firstError);
+      else resolve(out);
+    });
   });
 }
 
@@ -118,7 +143,8 @@ export const anidub: Source = {
   name: 'Anidub',
   kind: 'builtin',
   search(query: string, ctx: SourceContext) {
-    return loadDoc(ctx, SEARCH + encodeURIComponent(query)).then((p) => openReleases(ctx, parseList(p.doc, p.res.url || BASE)));
+    const deadline = Date.now() + ANIDUB_DEADLINE_MS;
+    return loadDoc(ctx, SEARCH + encodeURIComponent(query)).then((p) => openReleases(ctx, parseList(p.doc, p.res.url || BASE), deadline));
   },
   /** The .torrent link (not a magnet): of the torrent named in the #fragment, else the first one of the page. */
   magnet(detailUrl: string, ctx: SourceContext) {
