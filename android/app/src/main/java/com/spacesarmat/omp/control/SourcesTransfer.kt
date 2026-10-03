@@ -31,6 +31,16 @@ sealed class SourcesOutcome {
     object StoreFailed : SourcesOutcome()
 }
 
+/** What [SourcesInbox.done] made of the page's answer. */
+enum class SourcesDone {
+    /** Not the waiting transfer (late or unknown id). */
+    UNKNOWN,
+    /** Taken; a verified login (if any) is now the live one. */
+    STORED,
+    /** Taken, but the verified login could not be written: the TV has no new login. */
+    NOT_STORED,
+}
+
 /** Schema of the request body; the same limits as src/sources/transfer.ts. Pure (unit-tested). */
 object SourcesProtocol {
     const val VERSION = 1
@@ -152,15 +162,21 @@ class SourcesInbox(
         false
     }
 
+    /** Drops a staged login that no transfer waits for (left by a process that died); false when the storage failed. */
+    fun dropStaged(): Boolean = synchronized(lock) {
+        if (pending != null) return true
+        quietly { store.discard() }
+    }
+
     /** The event of the transfer waiting for the page, null when none (answered or timed out). */
     fun pendingEvent(): JSONObject? = synchronized(lock) { pending?.event }
 
     /**
-     * The page's answer: false when [id] is not the transfer waiting (late, unknown). A verified login («ok») is
-     * promoted here, before the call returns, so the page reads the new login as soon as its call resolves.
+     * The page's answer. A verified login («ok») is promoted here, before the call returns, so the page reads the
+     * new login as soon as its call resolves; [SourcesDone.NOT_STORED] tells it the promotion failed.
      */
-    fun done(id: String?, rutracker: String?, failed: Boolean): Boolean = synchronized(lock) {
-        val p = pending?.takeIf { it.id == id } ?: return false
+    fun done(id: String?, rutracker: String?, failed: Boolean): SourcesDone = synchronized(lock) {
+        val p = pending?.takeIf { it.id == id } ?: return SourcesDone.UNKNOWN
         var out: SourcesOutcome = when {
             failed -> SourcesOutcome.Failed
             rutracker == null -> SourcesOutcome.Applied(null)
@@ -169,7 +185,7 @@ class SourcesInbox(
         if (p.staged && out == SourcesOutcome.Applied("ok") && !quietly { store.promote() }) out = SourcesOutcome.StoreFailed
         p.outcome = out
         p.latch.countDown()
-        true
+        if (out == SourcesOutcome.StoreFailed) SourcesDone.NOT_STORED else SourcesDone.STORED
     }
 
     companion object {

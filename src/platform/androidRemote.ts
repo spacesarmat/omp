@@ -10,7 +10,7 @@ import { activeServer } from '../store/servers';
 import { resetTo } from '../ui/nav';
 import { log } from '../lib/log';
 import { allSources } from '../sources/registry';
-import { applyRemoteSources, notifyTransferApplied, parseRemoteSources, TRANSFER_TIMEOUT_MS } from '../sources/transfer';
+import { applyRemoteSources, loginState, notifyTransferApplied, parseRemoteSources, transferLoginNotStored, TRANSFER_TIMEOUT_MS } from '../sources/transfer';
 import { tvSourceContext } from '../sources/tvContext';
 import type { Source, SourceContext } from '../sources/types';
 
@@ -161,12 +161,18 @@ export function applyRemoteSourcesEvent(
     if (typeof id !== 'string' || !id) return Promise.resolve();
     return plugin.remoteSourcesDone({ id, failed: true }).then(() => undefined, () => undefined);
   }
+  const before = loginState();
   const done = (rutracker?: string) => {
     const o: { id: string; rutracker?: string } = { id: r.id };
     if (rutracker) o.rutracker = rutracker;
     return plugin.remoteSourcesDone(o).then(
       // a verified login is promoted by the native side before this resolves: the screen reads it now
-      () => notifyTransferApplied(),
+      (a) => {
+        if (rutracker === 'ok' && a && a.stored === false) {
+          log('error', 'tv', 'Вход на rutracker проверен, но не сохранён на телевизоре');
+          transferLoginNotStored(before);
+        } else notifyTransferApplied();
+      },
       () => {
         log('warn', 'tv', 'Передача источников с телефона: не удалось ответить');
       },

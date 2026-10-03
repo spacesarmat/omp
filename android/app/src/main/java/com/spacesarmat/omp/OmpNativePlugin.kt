@@ -17,6 +17,7 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import com.spacesarmat.omp.control.SourcesDone
 import com.spacesarmat.omp.control.TvRemote
 import com.spacesarmat.omp.monitor.MonitorNotifier
 import com.spacesarmat.omp.monitor.MonitorPlan
@@ -528,8 +529,9 @@ class OmpNativePlugin : Plugin() {
             call.reject("Управление с телефона недоступно")
             return
         }
-        r.sourcesDone(call.getString("id"), call.getString("rutracker"), call.getBoolean("failed") == true)
-        call.resolve()
+        val d = r.sourcesDone(call.getString("id"), call.getString("rutracker"), call.getBoolean("failed") == true)
+        // stored = false: the verified login could not be written, the page must not claim it
+        call.resolve(JSObject().put("stored", d != SourcesDone.NOT_STORED))
     }
 
     /**

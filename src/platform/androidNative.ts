@@ -32,7 +32,8 @@ export interface OmpNativeTvPlugin {
   secretSet(o: { key: string; value: string }): Promise<unknown>;
   secretDelete(o: { key: string }): Promise<unknown>;
   /** «Передать на телевизор»: the page applied remoteSources { id } (rutracker = the login result when one came) or failed. */
-  remoteSourcesDone(o: { id: string; rutracker?: string; failed?: boolean }): Promise<unknown>;
+  /** stored = false: the verified login could not be written (the TV has no new login). */
+  remoteSourcesDone(o: { id: string; rutracker?: string; failed?: boolean }): Promise<{ stored?: boolean } | undefined>;
   /** The transfer still waiting for the page (events are not retained): { event } or { event: null }. */
   remoteSourcesPending(): Promise<{ event?: unknown }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;

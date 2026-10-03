@@ -6,8 +6,8 @@
 // Shared by the phone and the TV bundles: Chromium 53 rules.
 import { isObject, loadJson, saveJson } from '../store/storage';
 import { rutrackerLoginPending, RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA } from './rutracker';
-import { clearHealth, isSourceOn, setSourceOn } from './store';
-import type { Source, SourceContext } from './types';
+import { clearHealth, getHealth, isSourceOn, setHealth, setSourceOn } from './store';
+import type { Source, SourceContext, SourceHealth } from './types';
 
 export const TRANSFER_PATH = '/omp/sources';
 export const TRANSFER_VERSION = 1;
@@ -151,6 +151,25 @@ export function lastTransfer(): LastTransfer | null {
 }
 
 /** After a logout on the TV the rutracker login is no longer «передан с телефона». */
+/** The rutracker note and state before a transfer, to restore when its verified login could not be stored. */
+export interface LoginState {
+  rutracker: boolean;
+  health: SourceHealth | null;
+}
+
+export function loginState(): LoginState {
+  const t = lastTransfer();
+  return { rutracker: !!t && t.rutracker, health: getHealth('rutracker') };
+}
+
+/** The TV verified the phone's login but could not store it: it must not claim the login. */
+export function transferLoginNotStored(prev: LoginState): void {
+  const t = lastTransfer();
+  if (t) saveJson(LAST_KEY, { at: t.at, phone: t.phone, rutracker: prev.rutracker });
+  if (prev.health) setHealth('rutracker', prev.health);
+  notify();
+}
+
 export function forgetTransferredLogin(): void {
   const t = lastTransfer();
   if (t && t.rutracker) saveJson(LAST_KEY, { at: t.at, phone: t.phone, rutracker: false });

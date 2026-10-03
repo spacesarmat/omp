@@ -73,14 +73,14 @@ class SourcesInboxTest {
         assertEquals("andy", entries.map["js:rutracker.pending.username"])
         assertEquals(password, entries.map["js:rutracker.pending.password"])
         assertEquals("old-user" to oldPassword, live())
-        assertFalse(box.done("other", "ok", false))
-        assertTrue(box.done(e.getString("id"), "ok", false))
+        assertEquals(SourcesDone.UNKNOWN, box.done("other", "ok", false))
+        assertEquals(SourcesDone.STORED, box.done(e.getString("id"), "ok", false))
         assertEquals(SourcesOutcome.Applied("ok"), f.get(2, TimeUnit.SECONDS))
         assertEquals("andy" to password, live())
         assertFalse(entries.map.containsKey("js:rutracker.pending.username"))
         assertFalse(entries.map.containsKey("js:rutracker.pending.password"))
         // a late answer finds nothing
-        assertFalse(box.done(e.getString("id"), "ok", false))
+        assertEquals(SourcesDone.UNKNOWN, box.done(e.getString("id"), "ok", false))
     }
 
     @Test
@@ -157,6 +157,28 @@ class SourcesInboxTest {
         val e = events.poll(2, TimeUnit.SECONDS)!!
         box.done(e.getString("id"), "ok", false)
         assertEquals(SourcesOutcome.Applied("ok"), f.get(2, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun aFailedPromotionTellsThePage() {
+        withOldLogin()
+        val box = inbox()
+        val f = start(box, transfer())
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        entries.fails = true
+        assertEquals(SourcesDone.NOT_STORED, box.done(e.getString("id"), "ok", false))
+        assertEquals(SourcesOutcome.StoreFailed, f.get(2, TimeUnit.SECONDS))
+        assertEquals("old-user" to oldPassword, live())
+    }
+
+    @Test
+    fun aStagedLoginLeftByADeadProcessIsDroppedOnStart() {
+        withOldLogin()
+        store.stage("andy", password)
+        val box = inbox()
+        assertTrue(box.dropStaged())
+        assertEquals(setOf("js:rutracker.username", "js:rutracker.password"), entries.map.keys)
+        assertEquals("old-user" to oldPassword, live())
     }
 
     @Test

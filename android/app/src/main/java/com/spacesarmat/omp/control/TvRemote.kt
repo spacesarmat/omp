@@ -95,6 +95,8 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         private set
 
     fun start() {
+        // a staged login left by a process that died mid-transfer is never verified: drop it
+        inbox.dropStaged()
         try {
             server.start()
         } catch (e: IOException) {
@@ -236,7 +238,7 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
     fun pendingSources(): JSONObject? = inbox.pendingEvent()
 
     /** The page's remoteSourcesDone; false when no such transfer waits. */
-    fun sourcesDone(id: String?, rutracker: String?, failed: Boolean): Boolean = inbox.done(id, rutracker, failed)
+    fun sourcesDone(id: String?, rutracker: String?, failed: Boolean): SourcesDone = inbox.done(id, rutracker, failed)
 
     /** REORDER_TO_FRONT keeps the instance (MainActivity is singleTask, PlayerActivity singleTop). */
     private fun bringToFront(cls: Class<*>) {
