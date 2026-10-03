@@ -1,7 +1,7 @@
 import { useEffect } from 'preact/hooks';
 import { Sheet } from './Sheet';
 import { sheetBackHandler } from './UpdateSheet';
-import { whatsNew, closeWhatsNew } from '../../../src/store/whatsNew';
+import { whatsNew, closeWhatsNew, markWhatsNewShown } from '../../../src/store/whatsNew';
 import { CHANGELOG_URL } from '../../../src/lib/changelogData';
 
 /** «Что нового»: opened from Settings or once after an update; state lives in the whatsNew signal. */
@@ -18,6 +18,9 @@ export function WhatsNewSheet() {
       if (sheetBackHandler.current === h) sheetBackHandler.current = null;
     };
   }, [!!w]);
+  useEffect(() => {
+    if (w) markWhatsNewShown();
+  }, [w ? w.title : '']);
   if (!w) return null;
   return (
     <Sheet label="Что нового" onClose={closeWhatsNew}>

@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { parseChangelog, releasesUpTo } from '../../src/lib/changelog';
 import { checkWhatsNew, whatsNew, openWhatsNew, closeWhatsNew, SEEN_KEY } from '../../src/store/whatsNew';
 import { CHANGELOG } from '../../src/lib/changelogData';
+import { APP_VERSION } from '../../src/version';
+import { markWhatsNewShown } from '../../src/store/whatsNew';
 
 const TEXT = '# Изменения\n\n## 0.2.0\n\n- Первое\n- Второе\n\n## 0.10.0\r\n\r\n- Новое\r\n\n## мусор\n- не версия\n\n## 0.1.0\n- Старое\n\n## 0.0.9\n\nбез пунктов\n';
 
@@ -11,6 +13,11 @@ describe('parseChangelog', () => {
     expect(l.map((e) => e.version)).toEqual(['0.10.0', '0.2.0', '0.1.0']);
     expect(l[1].items).toEqual(['Первое', 'Второе']);
     expect(l[0].items).toEqual(['Новое']);
+  });
+  it('accepts dated headings, flattens ### subheadings, strips bold, keeps indented bullets', () => {
+    const l = parseChangelog('## 0.3.0 (2026-10-03)\n\n### Новое\n- **Жирное** раз\n  - вложенное\n### Исправлено\n- Два\n\n## 0.2.0 — осень\n- Старое\n');
+    expect(l.map((e) => e.version)).toEqual(['0.3.0', '0.2.0']);
+    expect(l[0].items).toEqual(['Жирное раз', 'вложенное', 'Два']);
   });
   it('returns an empty list for garbage', () => {
     expect(parseChangelog('')).toEqual([]);
@@ -24,6 +31,8 @@ describe('parseChangelog', () => {
   it('the real CHANGELOG is embedded and parsed', () => {
     expect(CHANGELOG.length).toBeGreaterThan(0);
     expect(CHANGELOG[0].items.length).toBeGreaterThan(0);
+    // a release must not ship without its changelog section
+    expect(CHANGELOG[0].version).toBe(APP_VERSION);
   });
 });
 
@@ -33,14 +42,30 @@ describe('checkWhatsNew', () => {
     localStorage.clear();
     closeWhatsNew();
   });
-  it('fresh install: stores the version, shows nothing', () => {
+  it('fresh install (empty storage): stores the version, shows nothing', () => {
     checkWhatsNew(list, '0.2.0');
     expect(whatsNew.value).toBeNull();
     expect(JSON.parse(localStorage.getItem(SEEN_KEY)!)).toBe('0.2.0');
   });
+  it('missing key but other tsp.* data: an update from before the feature, current version queued', () => {
+    localStorage.setItem('tsp.servers', '[]');
+    checkWhatsNew(list, '0.10.0');
+    expect(whatsNew.value!.auto).toBe(true);
+    expect(whatsNew.value!.entries.map((e) => e.version)).toEqual(['0.10.0']);
+    expect(localStorage.getItem(SEEN_KEY)).toBeNull();
+    markWhatsNewShown();
+    expect(JSON.parse(localStorage.getItem(SEEN_KEY)!)).toBe('0.10.0');
+  });
+  it('multi-version jump lists only versions newer than the seen one', () => {
+    localStorage.setItem(SEEN_KEY, JSON.stringify('0.1.0'));
+    checkWhatsNew(list, '0.10.0');
+    expect(whatsNew.value!.entries.map((e) => e.version)).toEqual(['0.10.0', '0.2.0']);
+  });
   it('after an update: shows once, then not again', () => {
     localStorage.setItem(SEEN_KEY, JSON.stringify('0.1.0'));
     checkWhatsNew(list, '0.2.0');
+    expect(JSON.parse(localStorage.getItem(SEEN_KEY)!)).toBe('0.1.0');
+    markWhatsNewShown();
     expect(whatsNew.value!.title).toBe('Что нового в 0.2.0');
     expect(whatsNew.value!.auto).toBe(true);
     expect(whatsNew.value!.entries[0].version).toBe('0.2.0');

@@ -12,18 +12,19 @@ export function parseChangelog(text: string): ChangelogEntry[] {
   const lines = String(text || '').split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].replace(/\s+$/, '');
-    const h = /^##\s+v?(\d+(?:\.\d+)*)\s*$/.exec(line);
+    const h = /^##\s+v?(\d+(?:\.\d+)*)(?:\s*[(\[—–-].*)?$/.exec(line);
     if (h) {
       cur = { version: h[1], items: [] };
       out.push(cur);
       continue;
     }
-    if (/^#{1,6}\s/.test(line)) {
+    if (/^###+\s/.test(line)) continue; // subheadings inside a version are flattened
+    if (/^#{1,2}\s/.test(line)) {
       cur = null;
       continue;
     }
-    const b = /^[-*]\s+(.+)$/.exec(line);
-    if (b && cur) cur.items.push(b[1].trim());
+    const b = /^\s*[-*]\s+(.+)$/.exec(line);
+    if (b && cur) cur.items.push(b[1].replace(/\*\*(.+?)\*\*/g, '$1').trim());
   }
   const res = out.filter((e) => e.items.length > 0);
   res.sort((a, b) => compareVersions(b.version, a.version));
