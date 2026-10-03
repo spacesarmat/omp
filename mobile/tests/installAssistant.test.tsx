@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { mockFetch } from '../../tests/helpers/fetchMock';
-import { InstallAssistant, setInstaller } from '../src/screens/InstallAssistant';
+import { InstallAssistant } from '../src/screens/InstallAssistant';
+import { setInstallerNative, InstallError, type InstallerNative, type InstallRequest, type InstallEvent, type InstallResult } from '../src/install/installer';
+import { monitorNative } from '../src/monitor/native';
+import { logEntries, clearLog } from '../../src/lib/log';
 import { Settings } from '../src/screens/Settings';
 import { Tv, setTvDiscoverer, setAtvDiscoverer } from '../src/screens/Tv';
 import { Faq } from '../src/screens/Faq';
@@ -146,7 +149,8 @@ beforeEach(() => {
 afterEach(async () => {
   act(() => render(null, document.getElementById('app')!));
   setInstallNative(null);
-  setInstaller(null);
+  setInstallerNative(null);
+  vi.restoreAllMocks();
   setTvDiscoverer(null);
   setAtvDiscoverer(null);
   await disconnectTv();
@@ -206,7 +210,7 @@ describe('Install assistant — device list', () => {
 });
 
 describe('Install assistant — LG steps', () => {
-  it('pairs, reads the TV and shows the Developer Mode path; «Установить» waits for the installer', async () => {
+  it('pairs, reads the TV and shows the Developer Mode path; outside the Android app «Установить» is off', async () => {
     const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
     expect(el.textContent).toContain('Проверяю телевизор…');
     await flush();
@@ -218,7 +222,8 @@ describe('Install assistant — LG steps', () => {
     expect(probed).toEqual([{ ip: LG_IP, ports: [9922, 9991] }]);
     const install = button(el, 'Установить OMP и Homebrew Channel')!;
     expect(install.disabled).toBe(true);
-    expect(el.querySelector('[data-install-soon]')).not.toBeNull();
+    expect(el.textContent).toContain('Установка с телефона работает в приложении OMP для Android.');
+    expect(el.querySelector('#install-pass')).not.toBeNull();
     expect(button(el, 'Можно ли получить root на этой модели')).toBeDefined();
   });
 
@@ -229,19 +234,6 @@ describe('Install assistant — LG steps', () => {
     await flush();
     const marks = Array.from(el.querySelectorAll('.m-install-mark')).map((m) => m.textContent);
     expect(marks).toEqual(['✓', '✓', '✓', '✓', '5', '6']);
-  });
-
-  it('with an installer (Task 7) «Установить» hands over the plan and facts', async () => {
-    const got: any[] = [];
-    setInstaller((plan, facts) => got.push({ plan, facts }));
-    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
-    await flush();
-    const install = button(el, 'Установить OMP и Homebrew Channel')!;
-    expect(install.disabled).toBe(false);
-    click(install);
-    expect(got[0].plan.install).toEqual({ method: 'lg-devmode', ip: LG_IP, withHbc: true });
-    expect(got[0].facts.productName).toBe('webOSTV 6.0');
-    expect(JSON.stringify(got[0].facts)).not.toContain('aa:bb:cc');
   });
 
   it('Homebrew Channel present: opens it on the TV with the OMP repository', async () => {
@@ -484,10 +476,176 @@ describe('Install assistant — more', () => {
     await flush();
     expect(steps.textContent).toContain('Samsung (Tizen) пока не поддерживается');
   });
+});
 
-  it('placeholder for the install button is neutral', async () => {
+/** Scripted phone installer: records requests, lets the test emit events and settle the install. */
+function fakeInstaller() {
+  const f = {
+    reqs: [] as InstallRequest[],
+    cancels: 0,
+    reminders: [] as Array<number | null>,
+    emit: (_e: InstallEvent) => {},
+    resolve: (_r: InstallResult) => {},
+    reject: (_code: string) => {},
+  };
+  const n: InstallerNative = {
+    available: true,
+    start(req, onEvent) {
+      f.reqs.push(req);
+      f.emit = onEvent;
+      return new Promise<InstallResult>((res, rej) => {
+        f.resolve = res;
+        f.reject = (code) => rej(new InstallError(code));
+      });
+    },
+    async cancel() {
+      f.cancels++;
+    },
+    async reminder(at) {
+      f.reminders.push(at);
+    },
+  };
+  setInstallerNative(n);
+  return f;
+}
+
+function check(box: HTMLInputElement, on: boolean) {
+  box.checked = on;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+describe('Install assistant — install from the phone', () => {
+  it('LG: needs the code, sends it once, shows progress and the result with Homebrew Channel', async () => {
+    clearLog();
+    const inst = fakeInstaller();
     const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
     await flush();
-    expect(el.querySelector('[data-install-soon]')!.textContent).toBe('Установка с телефона появится в этом окне.');
+    const install = button(el, 'Установить OMP и Homebrew Channel')!;
+    expect(install.disabled).toBe(false);
+    click(install);
+    expect(el.querySelector('[role="alert"]')!.textContent).toBe('Введите код (Passphrase) с экрана Developer Mode');
+    expect(inst.reqs).toEqual([]);
+    type(el.querySelector<HTMLInputElement>('#install-pass')!, ' a1b2c3 ');
+    click(button(el, 'Установить OMP и Homebrew Channel'));
+    expect(inst.reqs).toEqual([{ method: 'lg-devmode', ip: LG_IP, passphrase: 'a1b2c3', withHbc: true }]);
+    expect(el.querySelector('#install-pass')).toBeNull();
+    expect(el.textContent).toContain('Проверяю код на телевизоре');
+    act(() => inst.emit({ phase: 'download', item: 'omp', percent: 50, version: '0.14.0' }));
+    expect(el.textContent).toContain('Устанавливаю OMP 0.14.0');
+    expect(el.textContent).toContain('Скачиваю OMP с GitHub · 50%');
+    act(() => inst.emit({ phase: 'upload', item: 'omp', percent: 40, version: '0.14.0' }));
+    expect(el.textContent).toContain('Скачано с GitHub, проверено · передаю на телевизор');
+    const bar = el.querySelector('[role="progressbar"]')!;
+    expect(Number(bar.getAttribute('aria-valuenow'))).toBeGreaterThan(30);
+    expect(el.textContent).not.toContain('Разрешить отладку');
+    await act(async () => inst.resolve({ version: '0.14.0', hbcVersion: '0.7.3' }));
+    await flush();
+    expect(el.querySelector('[data-install="done"]')!.textContent).toContain('OMP 0.14.0 установлен');
+    expect(el.textContent).toContain('Homebrew Channel 0.7.3 установлен');
+    const logs = JSON.stringify(logEntries());
+    expect(logs).toContain('Установка с телефона: LG, режим разработчика');
+    expect(logs).toContain('OMP установлен с телефона');
+    expect(logs).not.toContain(LG_IP);
+    expect(logs.toLowerCase()).not.toContain('a1b2c3');
+    expect(localStorage.getItem('tsp.log') || '').not.toContain('a1b2c3');
+  });
+
+  it('LG: the reminder is scheduled 3 days before the 1000 hours end, only with notifications allowed', async () => {
+    const inst = fakeInstaller();
+    const perm = vi.spyOn(monitorNative, 'requestNotifyPermission').mockResolvedValue('granted');
+    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
+    await flush();
+    type(el.querySelector<HTMLInputElement>('#install-pass')!, 'A1B2C3');
+    click(button(el, 'Установить OMP и Homebrew Channel'));
+    const before = Date.now();
+    await act(async () => inst.resolve({ version: '0.14.0', hbcError: 'checksum' }));
+    await flush();
+    expect(el.textContent).toContain('Homebrew Channel не установлен: файл не прошёл проверку');
+    const box = el.querySelector<HTMLInputElement>('[data-reminder]')!;
+    expect(box.checked).toBe(false);
+    await act(async () => check(box, true));
+    await flush();
+    expect(perm).toHaveBeenCalled();
+    expect(inst.reminders.length).toBe(1);
+    const at = inst.reminders[0]!;
+    expect(at - before).toBeGreaterThanOrEqual(928 * 3600e3 - 5000);
+    expect(at - before).toBeLessThanOrEqual(928 * 3600e3 + 5000);
+    expect(el.textContent).toContain('Напомню через 38 дней');
+    await act(async () => check(box, false));
+    await flush();
+    expect(inst.reminders[1]).toBeNull();
+    // notifications refused: no reminder
+    perm.mockResolvedValue('denied');
+    await act(async () => check(box, true));
+    await flush();
+    expect(inst.reminders.length).toBe(2);
+    expect(box.checked).toBe(false);
+    expect(el.textContent).toContain('напоминание не придёт');
+  });
+
+  it('LG: without Homebrew Channel; a wrong code shows the next step and «Повторить» returns to the form', async () => {
+    const inst = fakeInstaller();
+    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
+    await flush();
+    const hbc = el.querySelector<HTMLInputElement>('.m-install-form input[type="checkbox"]')!;
+    act(() => check(hbc, false));
+    type(el.querySelector<HTMLInputElement>('#install-pass')!, 'ZZZZZZ');
+    click(button(el, 'Установить OMP'));
+    expect(inst.reqs[0].withHbc).toBe(false);
+    await act(async () => inst.reject('wrong-passphrase'));
+    await flush();
+    expect(el.querySelector('[role="alert"]')!.textContent).toContain('Код не подошёл');
+    expect(JSON.stringify(logEntries())).toContain('Установка с телефона не удалась: wrong-passphrase');
+    click(button(el, 'Повторить'));
+    expect(el.querySelector<HTMLInputElement>('#install-pass')!.value).toBe('');
+  });
+
+  it('cancel stops the install; leaving the screen cancels too', async () => {
+    const inst = fakeInstaller();
+    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
+    await flush();
+    type(el.querySelector<HTMLInputElement>('#install-pass')!, 'A1B2C3');
+    click(button(el, 'Установить OMP и Homebrew Channel'));
+    click(button(el, 'Отмена'));
+    expect(inst.cancels).toBe(1);
+    await act(async () => inst.reject('cancelled'));
+    await flush();
+    expect(el.textContent).toContain('Установка отменена.');
+    click(button(el, 'Повторить'));
+    type(el.querySelector<HTMLInputElement>('#install-pass')!, 'A1B2C3');
+    click(button(el, 'Установить OMP и Homebrew Channel'));
+    act(() => render(null, el));
+    expect(inst.cancels).toBe(2);
+  });
+
+  it('Android TV: no fields, the «Разрешить отладку?» hint, a closed port offers the APK and the FAQ', async () => {
+    const inst = fakeInstaller();
+    const el = mount(<InstallAssistant ip={ATV_IP} kind="atv" />);
+    await flush();
+    expect(el.querySelector('#install-pass')).toBeNull();
+    click(button(el, 'Установить OMP'));
+    expect(inst.reqs).toEqual([{ method: 'atv-adb', ip: ATV_IP }]);
+    expect(el.textContent).toContain('Подключаюсь к телевизору');
+    expect(el.textContent).toContain('Если на ТВ появится «Разрешить отладку?» — нажмите «Разрешить».');
+    await act(async () => inst.reject('adb-closed'));
+    await flush();
+    expect(el.querySelector('[role="alert"]')!.textContent).toContain('порту 5555');
+    expect(button(el, 'Скачать APK')).toBeDefined();
+    click(button(el, 'Как установить через компьютер'));
+    expect(currentRoute.value).toEqual({ name: 'faq', q: 'Как установить OMP на Android TV через adb?' });
+  });
+
+  it('Android TV: success, with the TorrServer note for a 32-bit box', async () => {
+    const inst = fakeInstaller();
+    const el = mount(<InstallAssistant ip={ATV_IP} kind="atv" />);
+    await flush();
+    click(button(el, 'Установить OMP'));
+    act(() => inst.emit({ phase: 'install', item: 'omp', version: '0.14.0' }));
+    expect(el.textContent).toContain('Телевизор устанавливает OMP');
+    await act(async () => inst.resolve({ version: '0.14.0', sdkInt: 28, abi: 'armeabi-v7a' }));
+    await flush();
+    expect(el.textContent).toContain('OMP 0.14.0 установлен');
+    expect(el.textContent).toContain('не 64-битная (armeabi-v7a)');
+    expect(el.querySelector('[data-reminder]')).toBeNull();
   });
 });

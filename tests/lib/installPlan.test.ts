@@ -257,15 +257,17 @@ describe('installPlan — Android TV', () => {
     expect(p.kind).toBe('atv-adb');
     expect(p.steps.map((s) => s.title)).toEqual(['Режим разработчика', 'Отладка по сети', 'Установка']);
     expect(p.steps[1].text).toContain('Беспроводная отладка');
+    expect(p.steps[1].text).toContain('понадобится компьютер');
     expect(states(p)).toEqual(['current', 'todo', 'todo']);
     expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: null });
     expect(p.notes.join(' ')).toContain('arm64');
     expect(p.actions[0]).toEqual({ id: 'install', label: 'Установить OMP', primary: true });
   });
 
-  it('Android 11+: wireless debugging by code', () => {
+  it('Android 11+: network debugging if offered, pairing by code is not supported', () => {
     const p = installPlan(atv({ sdkInt: 31, abi: 'arm64-v8a', cast: undefined }));
-    expect(p.steps[1].title).toBe('Беспроводная отладка');
+    expect(p.steps[1].title).toBe('Отладка по сети');
+    expect(p.steps[1].text).toContain('телефон пока не поддерживает');
     expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: true });
     expect(p.subtitle).toBe('Google TV · Android 12 · arm64 — встроенный TorrServer будет работать');
     expect(p.notes).toEqual([]);

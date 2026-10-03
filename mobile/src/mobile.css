@@ -807,3 +807,11 @@ button, .m-btn {
 .m-install-step-title { font-size: 14px; font-weight: 700; }
 .m-install-actions { display: flex; flex-direction: column; gap: 10px; }
 .m-install-actions .m-link { align-self: flex-start; }
+/* install from the phone (mockup AssistInstall) */
+.m-install-form { gap: 10px; }
+.m-install-pass { text-transform: uppercase; letter-spacing: 1px; }
+.m-install-run { display: flex; flex-direction: column; gap: 12px; }
+.m-install-run .m-link { align-self: flex-start; }
+.m-install-progress { padding: 14px; border-radius: 14px; background: var(--panel); display: flex; flex-direction: column; gap: 8px; }
+.m-install-progress-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.m-install-done { font-size: 17px; font-weight: 700; }

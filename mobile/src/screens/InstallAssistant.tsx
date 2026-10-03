@@ -21,14 +21,7 @@ import {
 import { deviceFacts } from '../install/facts';
 import { createTakeover, otherConnection, takeoverQuestion, type OtherTv } from '../install/session';
 import { Sheet } from '../ui/Sheet';
-
-/** Task 7 plugs the phone installers in here; until then «Установить» is shown disabled. */
-export type Installer = (plan: InstallPlan, facts: DeviceFacts) => void;
-let installer: Installer | null = null;
-
-export function setInstaller(fn: Installer | null): void {
-  installer = fn;
-}
+import { InstallBox } from '../install/InstallBox';
 
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const BACK = 'M15 5l-7 7 7 7';
@@ -258,7 +251,7 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
   const plan = facts ? installPlan(facts) : null;
   const pairing = device.kind === 'lg' && checking && tvState.value === 'pairing' && sessionIp.value === device.ip;
 
-  async function run(a: PlanAction) {
+  async function run(a: PlanAction, install: () => void) {
     if (!plan || !facts) return;
     if (a.id === 'pair' || a.id === 'recheck') {
       setRound(round + 1);
@@ -267,7 +260,7 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
     } else if (a.id === 'link' && a.url) {
       window.open(a.url, '_system');
     } else if (a.id === 'install') {
-      if (installer && plan.install) installer(plan, facts);
+      if (plan.install) install();
     } else if (a.id === 'open-hbc') {
       try {
         await launchLgApp(LG_HBC_APP_ID, { launchMode: 'addRepository', url: HB_REPO_URL });
@@ -350,35 +343,37 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
               {hint}
             </div>
           )}
-          <div class="m-install-actions">
-            {plan.actions.map((a) => {
-              if (a.id === 'faq' || a.id === 'link') {
-                return (
-                  <button key={a.id + a.label} type="button" class="m-link" onClick={() => void run(a)}>
-                    {a.label}
-                  </button>
-                );
-              }
-              const off = a.id === 'install' && (!installer || !plan.install);
-              return (
-                <button
-                  key={a.id}
-                  type="button"
-                  class={'m-btn ' + (a.primary ? 'm-btn-primary' : 'm-btn-secondary')}
-                  disabled={off}
-                  data-action={a.id}
-                  onClick={() => void run(a)}
-                >
-                  {a.label}
-                </button>
-              );
-            })}
-            {plan.install && !installer && (
-              <p class="m-muted m-small" data-install-soon>
-                Установка с телефона появится в этом окне.
-              </p>
+          <InstallBox
+            key={round}
+            plan={plan}
+            onRecheck={() => setRound(round + 1)}
+            actions={({ install, disabled, label }) => (
+              <div class="m-install-actions">
+                {plan.actions.map((a) => {
+                  if (a.id === 'faq' || a.id === 'link') {
+                    return (
+                      <button key={a.id + a.label} type="button" class="m-link" onClick={() => void run(a, install)}>
+                        {a.label}
+                      </button>
+                    );
+                  }
+                  const off = a.id === 'install' && (disabled || !plan.install);
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      class={'m-btn ' + (a.primary ? 'm-btn-primary' : 'm-btn-secondary')}
+                      disabled={off}
+                      data-action={a.id}
+                      onClick={() => void run(a, install)}
+                    >
+                      {a.id === 'install' && label ? label : a.label}
+                    </button>
+                  );
+                })}
+              </div>
             )}
-          </div>
+          />
         </>
       )}
       {ask && (

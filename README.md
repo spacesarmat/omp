@@ -266,3 +266,8 @@ CI (GitHub Actions) на каждый push и PR запускает тесты, 
 ## Лицензия
 
 OMP распространяется на условиях [GNU GPL v3](LICENSE).
+
+Помощник установки в приложении Android использует сторонние библиотеки:
+
+- [JSch](https://github.com/mwiede/jsch) (форк mwiede) — SSH к LG в режиме разработчика; BSD 3-Clause (включает JZlib — BSD, jBCrypt — ISC).
+- [dadb](https://github.com/mobile-dev-inc/dadb) — adb по сети к Android TV; Apache License 2.0.

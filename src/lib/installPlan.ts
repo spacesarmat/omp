@@ -244,7 +244,7 @@ export type InstallTarget =
   | { method: 'lg-devmode'; ip: string; withHbc: boolean }
   /**
    * adb over the network: `wireless` true = Android 11+ pairing by code and port (shown on the TV), false = plain
-   * TCP ADB_PORT, null = unknown (try ADB_PORT, offer pairing).
+   * TCP ADB_PORT, null = unknown. The phone installer uses ADB_PORT in all cases (pairing by code is not supported).
    */
   | { method: 'atv-adb'; ip: string; wireless: boolean | null };
 
@@ -448,7 +448,8 @@ function lgPlan(f: LgFacts): InstallPlan {
   };
 }
 
-function abiNote(abi: string | undefined): string {
+/** The embedded TorrServer note for a box with this ABI (unknown, arm64 or another). */
+export function abiNote(abi: string | undefined): string {
   if (!abi) {
     return 'Встроенный TorrServer работает только на 64-битных приставках (arm64). На других OMP работает с TorrServer на другом устройстве в сети.';
   }
@@ -498,11 +499,12 @@ function atvPlan(f: AtvFacts): InstallPlan {
   }
 
   const wireless = typeof f.sdkInt === 'number' ? f.sdkInt >= WIRELESS_DEBUG_SDK : null;
+  // the phone installs over adb on port 5555; Android 11+ pairing by code («Беспроводная отладка») is not supported
   const debug =
     wireless === true
       ? {
-          title: 'Беспроводная отладка',
-          text: 'Настройки → Система → Для разработчиков → «Беспроводная отладка» → «Подключить по коду».',
+          title: 'Отладка по сети',
+          text: 'Настройки → Система → Для разработчиков → включите «Отладка по сети» (ADB по сети), если такой пункт есть. Подключение «Беспроводной отладкой» по коду телефон пока не поддерживает — тогда установите OMP через компьютер.',
         }
       : wireless === false
         ? {
@@ -511,7 +513,7 @@ function atvPlan(f: AtvFacts): InstallPlan {
           }
         : {
             title: 'Отладка по сети',
-            text: 'Настройки → Система → Для разработчиков → включите «Отладка по сети» (на некоторых приставках — «Отладка по USB»). На Android 11 и новее — «Беспроводная отладка» → «Подключить по коду».',
+            text: 'Настройки → Система → Для разработчиков → включите «Отладка по сети» (на некоторых приставках — «Отладка по USB»). Если есть только «Беспроводная отладка» с кодом (Android 11 и новее), телефон установить не сможет — понадобится компьютер.',
           };
   return {
     kind: 'atv-adb',

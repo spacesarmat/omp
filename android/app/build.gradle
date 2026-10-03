@@ -69,6 +69,9 @@ dependencies {
     // native player on Android TV (player/PlayerActivity.kt)
     implementation 'androidx.media3:media3-exoplayer:1.8.0'
     implementation 'androidx.media3:media3-ui:1.8.0'
+    // install assistant: LG Developer Mode over SSH (BSD-3-Clause) and Android TV over adb (Apache-2.0), see install/
+    implementation 'com.github.mwiede:jsch:2.28.7'
+    implementation 'dev.mobile:dadb:2.0.0'
     testImplementation "junit:junit:$junitVersion"
     // real org.json for the control router tests (android.jar only has stubs)
     testImplementation "org.json:json:20240303"

@@ -19,6 +19,20 @@ import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
 import com.spacesarmat.omp.control.SourcesDone
 import com.spacesarmat.omp.control.TvRemote
+import com.spacesarmat.omp.install.AtvAdbInstaller
+import com.spacesarmat.omp.install.CancelToken
+import com.spacesarmat.omp.install.DadbConnector
+import com.spacesarmat.omp.install.DevModeReminder
+import com.spacesarmat.omp.install.HttpKeyServer
+import com.spacesarmat.omp.install.InstallCodes
+import com.spacesarmat.omp.install.InstallRequest
+import com.spacesarmat.omp.install.InstallRunner
+import com.spacesarmat.omp.install.JschConnector
+import com.spacesarmat.omp.install.LgDevModeInstaller
+import com.spacesarmat.omp.install.OkReleaseHttp
+import com.spacesarmat.omp.install.ReleaseDownloader
+import com.spacesarmat.omp.install.Releases
+import com.spacesarmat.omp.install.failureOf
 import com.spacesarmat.omp.monitor.MonitorNotifier
 import com.spacesarmat.omp.monitor.MonitorPlan
 import com.spacesarmat.omp.monitor.MonitorScheduler
@@ -51,6 +65,7 @@ import org.json.JSONObject
  * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV);
  * phone remote on Android TV ([TvRemote]): remoteLaunch { params }, remoteAttach { report }, remoteKey { name },
  * remoteText { text | delete | enter }, phonePaired { phone }, remoteSources { id, sources, rutracker, phone }.
+ * Install assistant ([com.spacesarmat.omp.install]): installProgress { phase, item, percent?, version? }.
  */
 @CapacitorPlugin(
     name = "OmpNative",
@@ -66,6 +81,9 @@ class OmpNativePlugin : Plugin() {
     private var pointer: TvSocket? = null
     private var pendingPointer: Once? = null
     private val downloading = AtomicBoolean(false)
+    private val installing = AtomicBoolean(false)
+    @Volatile
+    private var installCancel: CancelToken? = null
     private val player = PlayerServer { body -> notifyListeners("playerMessage", JSObject().put("body", body)) }
     // phone remote: only in TV mode
     private var remote: TvRemote? = null
@@ -203,6 +221,87 @@ class OmpNativePlugin : Plugin() {
             val arr = JSArray()
             for (p in PortProbe.open(ip, ports, timeout)) arr.put(p)
             once.resolve(JSObject().put("open", arr))
+        }
+    }
+
+    // ---- install assistant: install OMP on a TV ----
+
+    /**
+     * Installs OMP on an LG TV in Developer Mode ({ method: 'lg-devmode', ip, passphrase, withHbc }) or an Android TV
+     * over adb ({ method: 'atv-adb', ip }). Progress: events installProgress { phase, percent?, item, version? }.
+     * Resolves { version, hbcVersion?, hbcError?, sdkInt?, abi? }; rejects with an InstallCodes code as message and
+     * code. One install at a time; nothing is logged (addresses, passphrase, key).
+     */
+    @PluginMethod
+    fun installStart(call: PluginCall) {
+        val once = Once(call)
+        val method = call.getString("method").orEmpty()
+        val ip = call.getString("ip")?.trim().orEmpty()
+        val withHbc = call.getBoolean("withHbc", false) == true
+        val pass = call.getString("passphrase")?.toCharArray()
+        if (!PortProbe.isPrivateIpv4(ip) || (method != InstallRequest.LG && method != InstallRequest.ATV)) {
+            pass?.fill('\u0000')
+            once.reject(InstallCodes.BAD_TARGET, InstallCodes.BAD_TARGET)
+            return
+        }
+        if (!installing.compareAndSet(false, true)) {
+            pass?.fill('\u0000')
+            once.reject(InstallCodes.BUSY, InstallCodes.BUSY)
+            return
+        }
+        val cancel = CancelToken()
+        installCancel = cancel
+        val req = InstallRequest(method, ip, pass, withHbc)
+        io.execute {
+            try {
+                val http = OkReleaseHttp()
+                val runner = InstallRunner(
+                    Releases(http),
+                    ReleaseDownloader(http, File(context.cacheDir, "install")),
+                    LgDevModeInstaller(HttpKeyServer(), JschConnector()),
+                    AtvAdbInstaller(DadbConnector(File(context.filesDir, "adb"))),
+                )
+                val out = runner.run(req, { phase, percent, item, version ->
+                    val o = JSObject().put("phase", phase.id).put("item", item.id)
+                    if (percent != null) o.put("percent", percent)
+                    if (version != null) o.put("version", version)
+                    notifyListeners("installProgress", o)
+                }, cancel)
+                val r = JSObject().put("version", out.version)
+                out.hbcVersion?.let { r.put("hbcVersion", it) }
+                out.hbcError?.let { r.put("hbcError", it) }
+                out.sdkInt?.let { r.put("sdkInt", it) }
+                out.abi?.let { r.put("abi", it) }
+                once.resolve(r)
+            } catch (e: Throwable) {
+                val f = failureOf(e, cancel)
+                once.reject(f.code, f.code)
+            } finally {
+                req.wipe()
+                installCancel = null
+                installing.set(false)
+            }
+        }
+    }
+
+    /** Stops the running install (downloads and temp files are removed). */
+    @PluginMethod
+    fun installCancel(call: PluginCall) {
+        installCancel?.cancel()
+        call.resolve()
+    }
+
+    /** { at: unix ms } schedules the Developer Mode reminder notification; { at: null } cancels it. */
+    @PluginMethod
+    fun devModeReminder(call: PluginCall) {
+        val at = call.getLong("at")
+        if (at == null) {
+            DevModeReminder.cancel(context)
+            call.resolve()
+        } else if (DevModeReminder.schedule(context, at)) {
+            call.resolve()
+        } else {
+            call.reject("Некорректное время напоминания")
         }
     }
 
@@ -1023,6 +1122,9 @@ class OmpNativePlugin : Plugin() {
         }
         fun reject(message: String) {
             if (done.compareAndSet(false, true)) call.reject(message)
+        }
+        fun reject(message: String, code: String) {
+            if (done.compareAndSet(false, true)) call.reject(message, code)
         }
     }
 
