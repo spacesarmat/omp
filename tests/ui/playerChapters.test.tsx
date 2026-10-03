@@ -52,6 +52,16 @@ async function until(cond: () => boolean) {
   expect(cond()).toBe(true);
 }
 const tick = () => new Promise((r) => setTimeout(r, 20));
+/**
+ * Plays up to `t` in 1 s steps: the player treats a jump of 5 s or more as a seek, so even if a loaded machine
+ * makes it miss a step or two the last one it saw stays within the crossing window.
+ */
+async function playTo(at: (t: number) => void, t: number) {
+  for (let s = t - 4; s <= t; s++) {
+    at(s);
+    await tick();
+  }
+}
 
 /** Fake clock of the <video>: jsdom has no media pipeline. */
 function drive(video: HTMLVideoElement, duration = 1000) {
@@ -227,8 +237,7 @@ describe('skip intro / credits (LG)', () => {
 
   it('auto skip of the credits with a next item: next episode at once and «Титры пропущены»', async () => {
     const { host, at } = await open(two, { prefs: { i: false, c: true } });
-    at(899);
-    await tick();
+    await playTo(at, 899);
     at(901);
     await until(srcHas('f2.mkv'));
     expect(host.textContent).toContain('Титры пропущены');
@@ -237,8 +246,7 @@ describe('skip intro / credits (LG)', () => {
   it('auto skip of the credits does nothing on the last item', async () => {
     const { host, video, at } = await open(one, { prefs: { i: false, c: true } });
     const before = host.querySelectorAll('.toast').length;
-    at(899);
-    await tick();
+    await playTo(at, 899);
     at(901);
     await tick();
     expect(video.getAttribute('src')).toContain('f1.mkv');
@@ -248,8 +256,7 @@ describe('skip intro / credits (LG)', () => {
   it('credits from the manual mark (last N seconds) skip too', async () => {
     const { at } = await open(two, { probe: noChapters, prefs: { i: false, c: true, mc: 100 } });
     at(850);
-    at(899);
-    await tick();
+    await playTo(at, 899);
     await tick();
     expect(document.querySelector('video')!.getAttribute('src')).toContain('f1.mkv');
     at(901);
@@ -269,8 +276,7 @@ describe('skip intro / credits (LG)', () => {
   it('credits auto skip does not need «Автопереход»', async () => {
     updateSettings({ autoNext: false });
     const { at } = await open(two, { prefs: { i: false, c: true } });
-    at(899);
-    await tick();
+    await playTo(at, 899);
     at(901);
     await until(srcHas('f2.mkv'));
   });
