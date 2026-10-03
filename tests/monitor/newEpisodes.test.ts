@@ -62,6 +62,10 @@ describe('series names', () => {
   it('seriesNames gives every title variant, normalized', () => {
     expect(seriesNames('Дом Дракона / House of the Dragon (2026) WEB-DLRip (сезон 3, серии 1-8 из 8)')).toEqual(['дом дракона', 'house of the dragon']);
     expect(seriesNames('House.of.the.Dragon.S03E01-08.2160p')).toEqual(['house of the dragon']);
+    expect(seriesNames('Дом дракона 2 сезон 1-8 серия (2024) 1080p')).toEqual(['дом дракона']);
+    expect(seriesNames('Дом дракона 1-8 серии (2024) 1080p')).toEqual(['дом дракона']);
+    // the whole name, not the first four words
+    expect(seriesNames('Очень длинное название сериала про жизнь / Серии 1-8 из 10')).toEqual(['очень длинное название сериала про жизнь']);
   });
 
   it('releaseGroups reads «от …», «by …» and the parts after |', () => {
@@ -84,8 +88,15 @@ describe('libraryRange / isWatchedSeries', () => {
     expect(isWatchedSeries(lib(BOG))).toBe(true);
     expect(isWatchedSeries(lib(BOG, { category: '' }))).toBe(true);
     expect(isWatchedSeries(lib(BOG, { category: 'music' }))).toBe(false);
+    expect(isWatchedSeries(lib(BOG, { category: 'movie' }))).toBe(false);
+    expect(isWatchedSeries(lib(BOG, { category: 'other' }))).toBe(false);
+    expect(isWatchedSeries(lib(BOG, { category: undefined }))).toBe(true);
+    // a pack of seasons is not followed
+    expect(isWatchedSeries(lib('Сериал (2024) (Сезоны 1-3, серии 1-30 из 30) 1080p'))).toBe(false);
+    // the old place inside s means nothing
+    expect(isWatchedSeries(lib(BOG, { data: JSON.stringify({ omp: { v: 1, h: [], s: { i: false, c: false, w: false } } }) }))).toBe(true);
     expect(isWatchedSeries(lib('Фильм (2026) 1080p'))).toBe(false);
-    const off = JSON.stringify({ omp: { v: 1, h: [], s: { i: false, c: false, w: false } } });
+    const off = JSON.stringify({ omp: { v: 1, h: [], w: false } });
     expect(isWatchedSeries(lib(BOG, { data: off }))).toBe(false);
     const on = JSON.stringify({ omp: { v: 1, h: [], s: { i: true, c: false } } });
     expect(isWatchedSeries(lib(BOG, { data: on }))).toBe(true);
@@ -125,6 +136,33 @@ describe('pickNewer', () => {
     expect(pickNewer(t, [a, b], { source: 'nnmclub' })!.candidate).toBe(b);
   });
 
+  it('never takes a pack of seasons for a newer release of one season', () => {
+    const t = lib('Сериал (2024) (Сезон 1, серии 1-8 из 10) 1080p');
+    const real = res('Сериал (2024) (Сезон 1, серии 1-10 из 10) 1080p');
+    const packs = [
+      res('Сериал (2024) (Сезоны 1-3, серии 1-30 из 30) 1080p', { Seed: 500 }),
+      res('Сериал (2024) (Сезон 1-3) Серии 1-30 1080p', { Seed: 500 }),
+      res('Сериал [S01-03] Серии 1-30 (2024) 1080p', { Seed: 500 }),
+    ];
+    const n = pickNewer(t, packs.concat([real]))!;
+    expect(n.candidate).toBe(real);
+    expect(n.to).toBe(10);
+    expect(n.others).toEqual([]);
+    expect(pickNewer(t, packs)).toBeNull();
+  });
+
+  it('another series that shares the first words, or another year, is not the same series', () => {
+    const t = lib('Очень длинное название сериала про жизнь / Серии 1-8 из 10 (2024)');
+    expect(pickNewer(t, [res('Очень длинное название сериала про смерть / Серии 1-10 из 10 (2024)')])).toBeNull();
+    const shogun = lib('Сёгун / Shogun [S01] (2024) WEB-DL 1080p [1-8 из 10]');
+    expect(pickNewer(shogun, [res('Сёгун / Shogun (1980) Серии 1-10 из 10 1080p')])).toBeNull();
+    const ok = res('Сёгун / Shogun [S01] (2025) WEB-DL 1080p [1-10 из 10]');
+    expect(pickNewer(shogun, [ok])!.candidate).toBe(ok);
+    // no year on one side: the name decides
+    const noYear = res('Сёгун / Shogun S01E01-10 1080p');
+    expect(pickNewer(shogun, [noYear])!.candidate).toBe(noYear);
+  });
+
   it('null when nothing is newer or the torrent has no episode numbers', () => {
     expect(pickNewer(lib(BOG), [res(BOG)])).toBeNull();
     expect(pickNewer(lib('Фильм (2026)'), [res('Фильм (2026) [1-10 из 10]')])).toBeNull();
@@ -142,7 +180,7 @@ describe('findNewEpisodes', () => {
 
   it('does not search for a torrent that is not watched', async () => {
     const queries: string[] = [];
-    const off = JSON.stringify({ omp: { v: 1, h: [], s: { i: false, c: false, w: false } } });
+    const off = JSON.stringify({ omp: { v: 1, h: [], w: false } });
     expect(await findNewEpisodes(ctx, lib(BOG, { data: off }), { search: fakeSearch([], queries) })).toBeNull();
     expect(queries).toEqual([]);
   });

@@ -1,7 +1,9 @@
 // Watch journal kept on TorrServer in the torrent `data` JSON under the key `omp`:
-// { "omp": { "v": 1, "h": [ { f, t, d, at, src, name? } ], "s"?: SkipPrefs } }, newest first, at most JOURNAL_MAX entries,
+// { "omp": { "v": 1, "h": [ { f, t, d, at, src, name? } ], "s"?: SkipPrefs, "w"?: false } }, newest first, at most JOURNAL_MAX entries,
 // one entry per file + source (+ device name). Every other key of `data` belongs to other clients
 // (TorrServer's own file list, Lampa, …) and is kept as is; a `data` that is not a JSON object is never touched.
+// `w: false` (v0.13) = don't watch for new episodes; a top-level `omp` key, so v0.12 clients keep it (they drop unknown
+// fields inside `s`).
 
 export type JournalSrc = 'tv' | 'phone';
 
@@ -29,13 +31,6 @@ export interface SkipPrefs {
   mi?: [number, number];
   /** Manual credits: the last N seconds. */
   mc?: number;
-  /** Watch for new episodes (monitoring): stored only as false («Не следить»); absent = watch. */
-  w?: boolean;
-}
-
-/** New episodes of the torrent are watched: true unless «Следить за новыми сериями» was switched off (s.w false). */
-export function watchesNewEpisodes(skip: SkipPrefs | null | undefined): boolean {
-  return !skip || skip.w !== false;
 }
 
 export interface ParsedData {
@@ -86,7 +81,6 @@ export function sanitizeSkip(v: unknown): SkipPrefs | null {
   }
   const mc = finiteNum(v.mc);
   if (mc !== null && mc > 0) out.mc = mc;
-  if (v.w === false) out.w = false;
   return out;
 }
 
@@ -163,4 +157,23 @@ export function serializeData(obj: { [k: string]: unknown }, journal: JournalEnt
   if (keep) omp.s = keep;
   out[JOURNAL_KEY] = omp;
   return JSON.stringify(out);
+}
+
+/** New episodes of the torrent are watched: true unless «Следить за новыми сериями» was switched off (omp.w false). */
+export function watchesNewEpisodes(data: string | undefined | null): boolean {
+  const p = parseData(data);
+  if (!p) return true;
+  const o = p.obj[JOURNAL_KEY];
+  return !(isPlainObject(o) && o.w === false);
+}
+
+/** A copy of `obj` with omp.w set (false) or removed (true); write it with serializeData. */
+export function withWatch(obj: { [k: string]: unknown }, watch: boolean): { [k: string]: unknown } {
+  const out: { [k: string]: unknown } = { ...obj };
+  const old = obj[JOURNAL_KEY];
+  const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
+  if (watch) delete omp.w;
+  else omp.w = false;
+  out[JOURNAL_KEY] = omp;
+  return out;
 }

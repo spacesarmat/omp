@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesQuality, matchesSubscription, filterForSubscription, resultSize, resultKeys, isSeen } from '../../src/monitor/match';
+import { matchesQuality, matchesSubscription, filterForSubscription, resultSize, resultKeys, isSeen, seenEntry, seenIndex } from '../../src/monitor/match';
 import type { Subscription } from '../../src/monitor/types';
 import type { SourceResult } from '../../src/sources/types';
 
@@ -62,5 +62,11 @@ describe('resultKeys / isSeen', () => {
     // the hash alone is enough
     expect(isSeen(res('other title', { hash: 'a'.repeat(40) }), keys)).toBe(true);
     expect(resultKeys(res('Без размера'))).toEqual(['t:без размера:?']);
+    // stored entries: one per result, matched by either key
+    const entry = seenEntry(a);
+    expect(entry).toBe(keys.join('|'));
+    expect(isSeen(b, [entry])).toBe(true);
+    expect(isSeen(res('other title', { hash: 'a'.repeat(40) }), seenIndex(['x', entry]))).toBe(true);
+    expect(isSeen(res('other title'), [entry])).toBe(false);
   });
 });

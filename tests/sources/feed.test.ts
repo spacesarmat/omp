@@ -5,7 +5,7 @@ import { nnmclub } from '../../src/sources/nnmclub';
 import { torrentby } from '../../src/sources/torrentby';
 import { anidub } from '../../src/sources/anidub';
 import { mergePages } from '../../src/sources/site';
-import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/store';
+import { getHealth, reloadSourcePrefs, resetHealth, setHealth, setSourceOn } from '../../src/sources/store';
 import { SOURCE_TIMEOUT_MS } from '../../src/sources/search';
 import type { Source, SourceResult } from '../../src/sources/types';
 import { fakeSite, fixture, page, CLOUDFLARE } from './fakeSite';
@@ -172,6 +172,15 @@ describe('feedAll', () => {
     const chosen = feedAll(site.ctx, 'tv', { from, sources: ['off', 'nofeed'] });
     expect(chosen.sourceIds).toEqual(['off']);
     await chosen.done;
+  });
+
+  it('does not touch the source health of the search', async () => {
+    setHealth('a', { state: 'error', at: 1, message: 'search broke' });
+    const site = fakeSite(() => page('', ''));
+    const from = [feedSource('a', () => Promise.resolve([res('a', 'X', 1)])), feedSource('b', () => Promise.reject(new Error('feed broke')))];
+    await feedAll(site.ctx, 'tv', { from }).done;
+    expect(getHealth('a')).toEqual({ state: 'error', at: 1, message: 'search broke' });
+    expect(getHealth('b')).toBeNull();
   });
 
   it('a feed source over 15 s fails', async () => {

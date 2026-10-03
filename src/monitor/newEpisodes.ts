@@ -1,11 +1,11 @@
 // New episodes of the library series: search by the series name, a release of the same season with a later last
 // episode than the torrent has; the same quality and the same source / release group are preferred. Torrents whose
-// journal says s.w: false («Не следить») are skipped. Chromium 53 safe (no \b next to Cyrillic).
+// journal says omp.w: false («Не следить») and packs of seasons are skipped. Chromium 53 safe (no \b next to Cyrillic).
 import type { Torrent } from '../api/types';
 import { guessCategory } from '../lib/categoryGuess';
 import { fileKind, parseEpisode } from '../lib/episodes';
-import { parseData, watchesNewEpisodes } from '../lib/journal';
-import { posterQuery } from '../lib/posterSearch';
+import { watchesNewEpisodes } from '../lib/journal';
+import { posterQuery, titleCore } from '../lib/posterSearch';
 import { normalizeTitle } from '../sources/merge';
 import { searchAll, type SearchHandle } from '../sources/search';
 import { qualityOf } from '../sources/view';
@@ -38,7 +38,10 @@ export interface NewEpisodesOptions extends CheckOptions {
   source?: string;
 }
 
-const SEASON_WORDS = /(?:^|[\s.,:;-])(?:сезон|season|серии|серия|эпизод)[\s\S]*$/i;
+// «… 2 сезон 1-8 серия», «… 1-8 серии», «… Сезон: 1»: everything from the season / episodes on
+const SEASON_WORDS = /(?:^|[\s.,:;-])(?:(?:\d{1,4}\s*[-–—]\s*)?\d{1,4}\s*(?:-?(?:й|ый|я)\s*)?)?(?:сезон|season|серии|серия|эпизод)[\s\S]*$/i;
+// a year, not a resolution like 1920x1080
+const YEAR = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])(?!\s*[xх*×])/;
 
 function head(title: string): string {
   const t = (title || '').trim();
@@ -50,15 +53,16 @@ function head(title: string): string {
   return t.slice(0, end);
 }
 
+/** The whole name of one title variant (no word limit). */
 function cleanName(part: string): string {
-  return posterQuery(part.replace(SEASON_WORDS, ''));
+  return titleCore(part.replace(SEASON_WORDS, ''));
 }
 
 /** Search query for the series: the first title variant without season, episodes, year and quality. */
 export function seriesQuery(title: string): string {
   const parts = head(title).split('/');
   for (let i = 0; i < parts.length; i++) {
-    const q = cleanName(parts[i]);
+    const q = posterQuery(cleanName(parts[i]));
     if (q) return q;
   }
   return '';
@@ -97,6 +101,12 @@ export function releaseGroups(title: string): string[] {
   return out;
 }
 
+/** The release year (19xx / 20xx); null when none. */
+export function yearOf(title: string): number | null {
+  const m = YEAR.exec(title || '');
+  return m ? parseInt(m[1], 10) : null;
+}
+
 export interface LibraryRange {
   season: number;
   from?: number;
@@ -106,6 +116,7 @@ export interface LibraryRange {
 /** Season and last episode of a library torrent: from its title, else from its episode files; null when unknown. */
 export function libraryRange(t: LibraryTorrent): LibraryRange | null {
   const r = parseEpisodeRange(t.title);
+  if (r.seasonTo !== undefined) return null;
   if (r.to !== undefined) {
     const out: LibraryRange = { season: r.season === undefined ? 1 : r.season, to: r.to };
     if (r.from !== undefined) out.from = r.from;
@@ -134,9 +145,9 @@ export function libraryRange(t: LibraryTorrent): LibraryRange | null {
 /** A series of the library (category «Сериалы» or guessed by title) with episode numbers, not switched off. */
 export function isWatchedSeries(t: LibraryTorrent): boolean {
   const c = t.category || '';
-  if (c !== 'tv' && (c === 'music' || guessCategory(t.title) !== 'tv')) return false;
-  const p = parseData(t.data);
-  if (p && !watchesNewEpisodes(p.skip)) return false;
+  // an explicit category other than «Сериалы» is the user's word; only an empty one is guessed
+  if (c !== 'tv' && (c !== '' || guessCategory(t.title) !== 'tv')) return false;
+  if (!watchesNewEpisodes(t.data)) return false;
   return libraryRange(t) !== null;
 }
 
@@ -155,12 +166,15 @@ export function pickNewer(t: LibraryTorrent, results: SourceResult[], prefer?: {
   const names = seriesNames(t.title);
   const groups = releaseGroups(t.title);
   const quality = qualityOf(t.title);
+  const haveYear = yearOf(t.title);
   const hash = (t.hash || '').toLowerCase();
   const list: Scored[] = [];
   results.forEach((r, i) => {
     if (hash && r.hash === hash) return;
     const range = parseEpisodeRange(r.Title);
-    if (range.to === undefined || range.to <= have.to) return;
+    if (range.to === undefined || range.to <= have.to || range.seasonTo !== undefined) return;
+    const year = yearOf(r.Title);
+    if (haveYear !== null && year !== null && Math.abs(year - haveYear) > 1) return;
     if ((range.season === undefined ? 1 : range.season) !== have.season) return;
     if (!seriesNames(r.Title).some((n) => names.indexOf(n) >= 0)) return;
     const sameGroup = releaseGroups(r.Title).some((g) => groups.indexOf(g) >= 0);

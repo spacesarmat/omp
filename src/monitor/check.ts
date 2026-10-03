@@ -1,10 +1,10 @@
 // Checking subscriptions: the unified search over the subscription's sources, its filters, then the results not seen
-// before. The first check of a subscription only remembers what is there (no findings, no notifications).
+// before. The first check of a subscription (and the first answer of each source) only remembers what is there.
 // Chromium 53 safe.
 import { searchAll, type SearchAllOptions, type SearchHandle } from '../sources/search';
 import type { Source, SourceContext, SourceResult } from '../sources/types';
-import { filterForSubscription, isSeen, resultKeys } from './match';
-import { addFindings, loadSubs, rememberSeen, seenKeys } from './subs';
+import { filterForSubscription, isSeen, resultKeys, seenEntry, seenIndex } from './match';
+import { addFindings, loadSubs, rememberSeen, seenKeys, seenSources } from './subs';
 import type { Finding, Subscription } from './types';
 
 /** searchAll or a test double. */
@@ -67,11 +67,15 @@ function runSearch(query: string, ctx: SourceContext, sources: string[] | undefi
   );
 }
 
-function keysOf(list: SourceResult[]): string[] {
-  return list.reduce((acc: string[], r) => acc.concat(resultKeys(r)), []);
+/** The source ids of a merged result (the kept one and its duplicates). */
+function sourcesOf(r: SourceResult): string[] {
+  return [r.source].concat(r.sources || []);
 }
 
-/** Checks one subscription (see the file comment); never rejects. */
+/**
+ * Checks one subscription (see the file comment); never rejects. A source answering for the first time is silent too:
+ * a result only it lists is remembered, not reported.
+ */
 export function checkSubscription(ctx: SourceContext, sub: Subscription, opts?: CheckOptions): Promise<SubCheckResult> {
   const o = opts || {};
   return runSearch(sub.query, ctx, sub.sources || undefined, o).then((out) => {
@@ -80,11 +84,15 @@ export function checkSubscription(ctx: SourceContext, sub: Subscription, opts?: 
     if (!out.answered.length) return base;
     const matched = filterForSubscription(sub, out.results);
     if (seen !== null) {
+      const known = seenSources(sub.id);
+      const index = seenIndex(seen);
       const at = o.now === undefined ? Date.now() : o.now;
-      base.findings = matched.filter((r) => !isSeen(r, seen)).map((r) => ({ subId: sub.id, key: resultKeys(r)[0], result: r, at }));
+      base.findings = matched
+        .filter((r) => !isSeen(r, index) && sourcesOf(r).some((id) => known.indexOf(id) >= 0))
+        .map((r) => ({ subId: sub.id, key: resultKeys(r)[0], result: r, at }));
       addFindings(base.findings);
     }
-    rememberSeen(sub.id, keysOf(matched));
+    rememberSeen(sub.id, matched.map(seenEntry), out.answered);
     return base;
   });
 }

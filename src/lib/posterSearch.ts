@@ -7,6 +7,17 @@ const TAIL = /\b(?:19\d\d|20\d\d|s\d{1,2}(?:e\d{1,3})?|\d{3,4}p|4k|web-?dl|web-?
 
 /** Short query for the poster search from a torrent title, as the TorrServer web page does. */
 export function posterQuery(title: string): string {
+  let q = titleCore(title).split(/\s+/).filter(Boolean).slice(0, MAX_WORDS).join(' ');
+  if (q.length > MAX_LEN) {
+    const cut = q.slice(0, MAX_LEN);
+    const sp = cut.lastIndexOf(' ');
+    q = sp > 0 ? cut.slice(0, sp) : cut;
+  }
+  return q;
+}
+
+/** The title proper of a torrent title: before « [», « (», « / », « | », the year, season or release details. */
+export function titleCore(title: string): string {
   let s = (title || '').trim();
   const seps = [' [', ' (', ' / ', ' | '];
   for (let i = 0; i < seps.length; i++) {
@@ -17,14 +28,7 @@ export function posterQuery(title: string): string {
   if (s.indexOf(' ') < 0) s = s.replace(/[._]+/g, ' ');
   const tail = TAIL.exec(s);
   if (tail && tail.index > 0) s = s.slice(0, tail.index);
-  s = s.replace(/\s*(?:сезон|season)\s*$/i, '').replace(/[\s.,:;-]+$/, '').trim();
-  let q = s.split(/\s+/).filter(Boolean).slice(0, MAX_WORDS).join(' ');
-  if (q.length > MAX_LEN) {
-    const cut = q.slice(0, MAX_LEN);
-    const sp = cut.lastIndexOf(' ');
-    q = sp > 0 ? cut.slice(0, sp) : cut;
-  }
-  return q;
+  return s.replace(/\s*(?:сезон|season)\s*$/i, '').replace(/[\s.,:;-]+$/, '').replace(/\s+/g, ' ').trim();
 }
 
 function withScheme(url: string | undefined, fallback: string): string {

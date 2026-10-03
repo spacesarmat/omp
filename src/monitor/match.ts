@@ -58,11 +58,33 @@ function titleKey(r: SourceResult, bucket: string): string {
   return 't:' + normalizeTitle(r.Title) + ':' + bucket;
 }
 
-/** Any key of the result is among `seen`; the neighbouring size buckets count too (no flip at a bucket edge). */
-export function isSeen(r: SourceResult, seen: string[]): boolean {
+/** The stored «seen» entry of one result: its keys joined by '|' (titles are normalized, they hold no '|'). */
+export function seenEntry(r: SourceResult): string {
+  return resultKeys(r).join('|');
+}
+
+export type SeenIndex = { [key: string]: boolean };
+
+/** Every key of the seen entries, for isSeen. */
+export function seenIndex(entries: string[]): SeenIndex {
+  const index: SeenIndex = {};
+  entries.forEach((e) =>
+    e.split('|').forEach((k) => {
+      if (k) index[k] = true;
+    }),
+  );
+  return index;
+}
+
+/**
+ * Any key of the result is among the seen entries (or their index); the neighbouring size buckets count too (no flip
+ * at a bucket edge).
+ */
+export function isSeen(r: SourceResult, seen: string[] | SeenIndex): boolean {
+  const index = Array.isArray(seen) ? seenIndex(seen) : seen;
   const keys = resultKeys(r);
   const b = bucketOf(r);
   if (b !== null) keys.push(titleKey(r, String(b - 1)), titleKey(r, String(b + 1)));
-  for (let i = 0; i < keys.length; i++) if (seen.indexOf(keys[i]) >= 0) return true;
+  for (let i = 0; i < keys.length; i++) if (index[keys[i]] === true) return true;
   return false;
 }

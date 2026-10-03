@@ -13,7 +13,9 @@ import {
   sanitizeSubscription,
   sanitizeResult,
   seenKeys,
+  seenSources,
   rememberSeen,
+  forgetSeen,
   loadFound,
   findingsOf,
   addFindings,
@@ -100,8 +102,8 @@ describe('subscriptions', () => {
   });
 });
 
-describe('seen keys', () => {
-  it('null before the first check, fresh keys first, at most SEEN_MAX', () => {
+describe('seen results', () => {
+  it('null before the first check; the latest check is kept whole, older entries fill up to SEEN_MAX', () => {
     expect(seenKeys('s1')).toBeNull();
     rememberSeen('s1', []);
     expect(seenKeys('s1')).toEqual([]);
@@ -112,15 +114,47 @@ describe('seen keys', () => {
     for (let i = 0; i < SEEN_MAX + 50; i++) many.push('k' + i);
     rememberSeen('s1', many);
     expect(SEEN_MAX).toBe(300);
+    // more than SEEN_MAX in one check: all of them stay, the older ones go
+    expect(seenKeys('s1')).toHaveLength(SEEN_MAX + 50);
+    expect(seenKeys('s1')!.indexOf('b')).toBe(-1);
+    rememberSeen('s1', ['x']);
     expect(seenKeys('s1')).toHaveLength(SEEN_MAX);
-    expect(seenKeys('s1')![0]).toBe('k0');
+    expect(seenKeys('s1')![0]).toBe('x');
     expect(seenKeys('s2')).toBeNull();
   });
 
-  it('a broken store reads as empty', () => {
-    localStorage.setItem(SEEN_KEY, JSON.stringify({ s1: ['a', 3, 'b'], s2: 'x' }));
+  it('answered sources accumulate; forgetSeen starts over', () => {
+    expect(seenSources('s1')).toEqual([]);
+    rememberSeen('s1', ['a'], ['rutor']);
+    rememberSeen('s1', ['b'], ['nnmclub', 'rutor']);
+    expect(seenSources('s1')).toEqual(['rutor', 'nnmclub']);
+    forgetSeen('s1');
+    expect(seenKeys('s1')).toBeNull();
+    expect(seenSources('s1')).toEqual([]);
+  });
+
+  it('a broken store reads as empty; the old array shape is read', () => {
+    localStorage.setItem(SEEN_KEY, JSON.stringify({ s1: ['a', 3, 'b'], s2: 'x', s3: { k: ['c'], s: ['rutor', 1] }, s4: { s: [] } }));
     expect(seenKeys('s1')).toEqual(['a', 'b']);
     expect(seenKeys('s2')).toBeNull();
+    expect(seenKeys('s3')).toEqual(['c']);
+    expect(seenSources('s3')).toEqual(['rutor']);
+    expect(seenKeys('s4')).toBeNull();
+  });
+
+  it('changing the query or the filters forgets the seen results; other changes keep them', () => {
+    const a = addSubscription({ query: 'q', quality: '', sources: null, notify: true }, 1)!;
+    rememberSeen(a.id, ['k'], ['rutor']);
+    updateSubscription(a.id, { notify: false });
+    expect(seenKeys(a.id)).toEqual(['k']);
+    updateSubscription(a.id, { quality: '1080' });
+    expect(seenKeys(a.id)).toBeNull();
+    const changes: Partial<Parameters<typeof updateSubscription>[1]>[] = [{ query: 'q2' }, { minSeeds: 3 }, { maxSizeGb: 9 }, { sources: ['rutor'] }];
+    changes.forEach((p) => {
+      rememberSeen(a.id, ['k']);
+      updateSubscription(a.id, p);
+      expect(seenKeys(a.id)).toBeNull();
+    });
   });
 });
 

@@ -1,7 +1,7 @@
 // Unified search: every chosen source in parallel, results streamed per source, 15 s per source.
 import { mergeResults } from './merge';
 import { allSources } from './registry';
-import { enabledSources, setHealth } from './store';
+import { enabledSources, setHealth as recordHealth } from './store';
 import { isLoginRequired } from './types';
 import type { Source, SourceContext, SourceResult } from './types';
 
@@ -60,12 +60,18 @@ export function searchAll(query: string, opts: SearchAllOptions): SearchHandle {
  * The engine of searchAll and feedAll: `call` on every source in parallel, results streamed per source, a timeout per
  * source, health recorded, results merged.
  */
+export interface RunOptions extends Pick<SearchAllOptions, 'onResult' | 'onDone' | 'timeoutMs'> {
+  /** Record the answers in the source health («Источники поиска»); default true. The feed passes false. */
+  health?: boolean;
+}
+
 export function runSources(
   chosen: Source[],
   call: (source: Source) => Promise<SourceResult[]>,
-  opts: Pick<SearchAllOptions, 'onResult' | 'onDone' | 'timeoutMs'>,
+  opts: RunOptions,
 ): SearchHandle {
   const timeoutMs = opts.timeoutMs || SOURCE_TIMEOUT_MS;
+  const setHealth: typeof recordHealth = opts.health === false ? () => undefined : recordHealth;
   const collected: SourceResult[] = [];
   const answered: string[] = [];
   const failed: string[] = [];

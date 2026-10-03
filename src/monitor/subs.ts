@@ -1,4 +1,4 @@
-// Monitoring store on the phone: subscriptions (tsp.subs), seen keys per subscription (tsp.subsSeen, at most SEEN_MAX
+// Monitoring store on the phone: subscriptions (tsp.subs), seen results per subscription (tsp.subsSeen, SEEN_MAX
 // each) and the findings for the screen (tsp.monitorFound, the last FOUND_MAX). Read from localStorage on every call:
 // the background page and the app write the same keys from different JS contexts. Chromium 53 safe.
 import { isObject, loadJson, saveJson } from '../store/storage';
@@ -8,7 +8,9 @@ import { EPISODES_ID, type EpisodesInfo, type Finding, type SubQuality, type Sub
 export const SUBS_KEY = 'tsp.subs';
 export const SEEN_KEY = 'tsp.subsSeen';
 export const FOUND_KEY = 'tsp.monitorFound';
+/** Seen results kept per subscription (the latest check is always kept whole, up to SEEN_HARD_MAX). */
 export const SEEN_MAX = 300;
+export const SEEN_HARD_MAX = 2000;
 export const FOUND_MAX = 100;
 const QUERY_MAX = 200;
 
@@ -25,8 +27,12 @@ function str(v: unknown): string {
 function strings(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   const out: string[] = [];
+  const had: { [k: string]: boolean } = {};
   v.forEach((x) => {
-    if (typeof x === 'string' && x && out.indexOf(x) < 0) out.push(x);
+    if (typeof x === 'string' && x && !had[x]) {
+      had[x] = true;
+      out.push(x);
+    }
   });
   return out;
 }
@@ -98,7 +104,14 @@ export function addSubscription(input: SubscriptionInput, now?: number): Subscri
   return sub;
 }
 
-/** «Изменить»: merges `patch` (an undefined minSeeds / maxSizeGb clears it); null when unknown or the query is empty. */
+function searchOf(s: Subscription): string {
+  return JSON.stringify([s.query, s.quality, s.minSeeds || 0, s.maxSizeGb || 0, s.sources]);
+}
+
+/**
+ * «Изменить»: merges `patch` (an undefined minSeeds / maxSizeGb clears it); null when unknown or the query is empty.
+ * A new query, quality, seeds, size or sources forgets the seen results: the next check is silent, like the first.
+ */
 export function updateSubscription(id: string, patch: Partial<SubscriptionInput>): Subscription | null {
   const list = loadSubs();
   for (let i = 0; i < list.length; i++) {
@@ -109,47 +122,79 @@ export function updateSubscription(id: string, patch: Partial<SubscriptionInput>
     });
     const next = sanitizeSubscription(merged);
     if (!next) return null;
+    const changed = searchOf(next) !== searchOf(list[i]);
     list[i] = next;
     saveSubs(list);
+    // another query or other filters see other results: start over silently instead of reporting old ones as new
+    if (changed) forgetSeen(id);
     return next;
   }
   return null;
 }
 
-/** Deletes the subscription with its seen keys and findings. */
+/** Deletes the subscription with its seen results and findings. */
 export function removeSubscription(id: string): void {
   saveSubs(loadSubs().filter((s) => s.id !== id));
-  const seen = loadSeen();
-  if (seen[id]) {
-    delete seen[id];
-    saveJson(SEEN_KEY, seen);
-  }
+  forgetSeen(id);
   removeFindings(id);
 }
 
-// --- seen keys
+// --- seen results
+// tsp.subsSeen: { [subId]: { k: entries, s: source ids that have answered } }. An entry is one result: its seen keys
+// joined by '|' (see match.ts seenEntry). Every entry of the latest check is kept, older ones fill up to SEEN_MAX.
 
-function loadSeen(): { [subId: string]: string[] } {
+interface SeenRecord {
+  k: string[];
+  s: string[];
+}
+
+function loadSeen(): { [subId: string]: SeenRecord } {
   const v = loadJson<unknown>(SEEN_KEY, {}, isObject) as { [k: string]: unknown };
-  const out: { [subId: string]: string[] } = {};
-  Object.keys(v).forEach((k) => {
-    if (Array.isArray(v[k])) out[k] = strings(v[k]).slice(0, SEEN_MAX);
+  const out: { [subId: string]: SeenRecord } = {};
+  Object.keys(v).forEach((id) => {
+    const r = v[id];
+    if (Array.isArray(r)) out[id] = { k: strings(r).slice(0, SEEN_HARD_MAX), s: [] };
+    else if (isObject(r) && Array.isArray(r.k)) out[id] = { k: strings(r.k).slice(0, SEEN_HARD_MAX), s: strings(r.s) };
   });
   return out;
 }
 
-/** Keys already seen by a subscription (or EPISODES_ID); null before its first check. */
+/** Entries already seen by a subscription (or EPISODES_ID); null before its first check. */
 export function seenKeys(subId: string): string[] | null {
   const seen = loadSeen();
-  return Object.prototype.hasOwnProperty.call(seen, subId) ? seen[subId] : null;
+  return Object.prototype.hasOwnProperty.call(seen, subId) ? seen[subId].k : null;
 }
 
-/** Puts `keys` first (each once), keeps older ones after them, at most SEEN_MAX. An empty list marks «checked». */
-export function rememberSeen(subId: string, keys: string[]): void {
+/** Source ids that have answered a check of the subscription (their first answer is silent). */
+export function seenSources(subId: string): string[] {
+  const r = loadSeen()[subId];
+  return r ? r.s.slice() : [];
+}
+
+/**
+ * Remembers the entries of the latest check: all of them first (each once, never trimmed), then older ones up to
+ * SEEN_MAX in all; `sources` are added to the answered sources. An empty list marks «checked».
+ */
+export function rememberSeen(subId: string, entries: string[], sources?: string[]): void {
   const seen = loadSeen();
-  const fresh = strings(keys);
-  const old = (seen[subId] || []).filter((k) => fresh.indexOf(k) < 0);
-  seen[subId] = fresh.concat(old).slice(0, SEEN_MAX);
+  const prev = seen[subId] || { k: [], s: [] };
+  const fresh = strings(entries).slice(0, SEEN_HARD_MAX);
+  const index: { [k: string]: boolean } = {};
+  fresh.forEach((k) => {
+    index[k] = true;
+  });
+  const old = prev.k.filter((k) => !index[k]);
+  const k = fresh.concat(old.slice(0, Math.max(0, SEEN_MAX - fresh.length)));
+  const s = prev.s.concat(strings(sources).filter((id) => prev.s.indexOf(id) < 0));
+  seen[subId] = { k, s };
+  saveJson(SEEN_KEY, seen);
+}
+
+/** Forgets what a subscription has seen: its next check is silent again, like the first. */
+export function forgetSeen(subId: string): void {
+  const seen = loadSeen();
+  if (!seen[subId]) return;
+  delete seen[subId];
   saveJson(SEEN_KEY, seen);
 }
 

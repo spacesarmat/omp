@@ -57,11 +57,11 @@ describe('checkSubscription', () => {
     expect(first.findings).toEqual([]);
     expect(loadFound()).toEqual([]);
     // only matching results are remembered (720p is filtered out)
-    expect(seenKeys(sub.id)!.indexOf('h:' + 'a'.repeat(40))).toBeGreaterThanOrEqual(0);
-    expect(seenKeys(sub.id)).toHaveLength(3);
+    expect(seenKeys(sub.id)!.filter((e) => e.indexOf('h:' + 'a'.repeat(40) + '|t:') === 0)).toHaveLength(1);
+    expect(seenKeys(sub.id)).toHaveLength(2);
     expect(calls).toEqual([{ query: 'Дюна', sources: undefined }]);
 
-    pages['Дюна'] = pages['Дюна'].concat([res('Дюна Часть вторая 1080p', { source: 'nnmclub', sizeBytes: 9e9 }), res('Дюна 480p')]);
+    pages['Дюна'] = pages['Дюна'].concat([res('Дюна Часть вторая 1080p', { sizeBytes: 9e9 }), res('Дюна 480p')]);
     const second = await checkSubscription(ctx, sub, { search: fakeSearch(pages, calls), now: 6000 });
     expect(second.first).toBe(false);
     expect(second.findings.map((f) => f.result.Title)).toEqual(['Дюна Часть вторая 1080p']);
@@ -83,8 +83,48 @@ describe('checkSubscription', () => {
     const calls: Call[] = [];
     const pages = { Дюна: [res('Дюна (2021) 1080p', { hash: 'b'.repeat(40), sizeBytes: 8e9 })] };
     await checkSubscription(ctx, sub, { search: fakeSearch(pages, calls), now: 1 });
-    const again = { Дюна: [res('Дюна (2021) 1080p', { source: 'nnmclub', sizeBytes: 8e9 + 1e6 })] };
+    const again = { Дюна: [res('Дюна (2021) 1080p', { sizeBytes: 8e9 + 1e6 })] };
     expect((await checkSubscription(ctx, sub, { search: fakeSearch(again, calls), now: 2 })).findings).toEqual([]);
+  });
+
+  it('a check with more results than SEEN_MAX never reports them again (200-results probe)', async () => {
+    const sub = newSub({ quality: '' });
+    const calls: Call[] = [];
+    const list: SourceResult[] = [];
+    for (let i = 0; i < 200; i++) list.push(res('Дюна релиз ' + i, { hash: (1000000000 + i).toString(16).padStart(40, '0'), sizeBytes: 1e9 + i * 5e7 }));
+    const pages = { Дюна: list };
+    const counts: number[] = [];
+    for (let run = 0; run < 4; run++) counts.push((await checkSubscription(ctx, sub, { search: fakeSearch(pages, calls), now: run })).findings.length);
+    expect(counts).toEqual([0, 0, 0, 0]);
+    // and 400 results, the same
+    const more = { Дюна: list.concat(list.map((r, i) => res('Дюна другой ' + i, { sizeBytes: 3e9 + i * 1e8 }))) };
+    const sub2 = newSub({ query: 'Дюна', quality: '' });
+    const c2: number[] = [];
+    for (let run = 0; run < 3; run++) c2.push((await checkSubscription(ctx, sub2, { search: fakeSearch(more, calls), now: run })).findings.length);
+    expect(c2).toEqual([0, 0, 0]);
+  });
+
+  it('a source that did not answer the first check is silent on its own first answer', async () => {
+    const sub = newSub({ quality: '' });
+    const answering = (ids: string[], list: SourceResult[]): SearchFn => () => ({
+      sourceIds: ['rutor', 'nnmclub'],
+      results: () => list.slice(),
+      pending: () => [],
+      answered: () => ids.slice(),
+      failed: () => ['rutor', 'nnmclub'].filter((id) => ids.indexOf(id) < 0),
+      done: Promise.resolve(),
+      cancel: () => undefined,
+    });
+    const r1 = res('Дюна A', { sizeBytes: 1e9 });
+    const n1 = res('Дюна N1', { source: 'nnmclub', sizeBytes: 2e9 });
+    const n2 = res('Дюна N2', { source: 'nnmclub', sizeBytes: 3e9 });
+    const both = res('Дюна B', { source: 'nnmclub', sources: ['rutor'], sizeBytes: 4e9 });
+    expect((await checkSubscription(ctx, sub, { search: answering(['rutor'], [r1]) })).first).toBe(true);
+    // nnmclub answers for the first time: its results are remembered, not reported; a result rutor lists too is new
+    const second = await checkSubscription(ctx, sub, { search: answering(['rutor', 'nnmclub'], [r1, n1, both]) });
+    expect(second.findings.map((f) => f.result.Title)).toEqual(['Дюна B']);
+    const third = await checkSubscription(ctx, sub, { search: answering(['rutor', 'nnmclub'], [r1, n1, both, n2]) });
+    expect(third.findings.map((f) => f.result.Title)).toEqual(['Дюна N2']);
   });
 
   it('searches the chosen sources of the subscription', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseData, addEntry, serializeData, removeFile, journalOf, sanitizeSkip, watchesNewEpisodes, JOURNAL_MAX, type JournalEntry } from '../../src/lib/journal';
+import { parseData, addEntry, serializeData, removeFile, journalOf, sanitizeSkip, watchesNewEpisodes, withWatch, JOURNAL_MAX, type JournalEntry } from '../../src/lib/journal';
 
 const T0 = 1_759_400_000_000;
 
@@ -136,25 +136,29 @@ describe('skip settings (key s)', () => {
   });
 });
 
-describe('watch new episodes (s.w)', () => {
-  it('w is kept only when false; absent means watch', () => {
-    expect(sanitizeSkip({ i: true, w: false })).toEqual({ i: true, c: false, w: false });
-    expect(sanitizeSkip({ w: true })).toEqual({ i: false, c: false });
-    expect(sanitizeSkip({ w: 'no' })).toEqual({ i: false, c: false });
+describe('watch new episodes (omp.w)', () => {
+  it('absent or not false means watch; false means do not', () => {
     expect(watchesNewEpisodes(null)).toBe(true);
-    expect(watchesNewEpisodes({ i: false, c: false })).toBe(true);
-    expect(watchesNewEpisodes({ i: false, c: false, w: false })).toBe(false);
+    expect(watchesNewEpisodes('')).toBe(true);
+    expect(watchesNewEpisodes('not json')).toBe(true);
+    expect(watchesNewEpisodes(JSON.stringify({ omp: { v: 1, h: [] } }))).toBe(true);
+    expect(watchesNewEpisodes(JSON.stringify({ omp: { v: 1, h: [], w: true } }))).toBe(true);
+    expect(watchesNewEpisodes(JSON.stringify({ omp: { v: 1, h: [], w: false } }))).toBe(false);
+    // inside s it means nothing (v0.12 clients drop unknown fields of s)
+    expect(watchesNewEpisodes(JSON.stringify({ omp: { v: 1, h: [], s: { i: false, c: false, w: false } } }))).toBe(true);
   });
 
-  it('parseData / serializeData round-trip w with the marks and the history', () => {
+  it('withWatch sets or removes omp.w; serializeData keeps it next to the history and the marks', () => {
     const j: JournalEntry[] = [{ f: 1, t: 1, d: 2, at: T0, src: 'tv' }];
-    const data = JSON.stringify({ lampa: 1, omp: { v: 1, h: j, s: { i: true, c: false, mc: 60, w: false } } });
-    const p = parseData(data)!;
-    expect(p.skip).toEqual({ i: true, c: false, mc: 60, w: false });
-    const out = JSON.parse(serializeData(p.obj, p.journal));
-    expect(out.omp.s).toEqual({ i: true, c: false, mc: 60, w: false });
-    expect(out.omp.h).toEqual(j);
-    expect(out.lampa).toBe(1);
+    const p = parseData(JSON.stringify({ lampa: 1, omp: { v: 1, h: j, s: { i: true, c: false, mc: 60 } } }))!;
+    const off = JSON.parse(serializeData(withWatch(p.obj, false), p.journal));
+    expect(off.omp).toEqual({ v: 1, h: j, s: { i: true, c: false, mc: 60 }, w: false });
+    expect(off.lampa).toBe(1);
+    // a later history write (as a v0.12 client does it) keeps the top-level key
+    const again = parseData(JSON.stringify(off))!;
+    expect(JSON.parse(serializeData(again.obj, again.journal, { i: false, c: true })).omp.w).toBe(false);
+    expect(JSON.parse(serializeData(withWatch(again.obj, true), again.journal)).omp.w).toBeUndefined();
+    expect(JSON.parse(serializeData(withWatch({}, false), [])).omp).toEqual({ v: 1, h: [], w: false });
   });
 });
 

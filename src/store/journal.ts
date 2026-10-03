@@ -2,7 +2,7 @@
 // the torrent list first (another device may have written meanwhile) and every failure is swallowed: the journal must
 // never break playback.
 import type { Torrent } from '../api/types';
-import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs } from '../lib/journal';
+import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, withWatch } from '../lib/journal';
 import { torrents } from './library';
 
 export interface JournalClient {
@@ -100,8 +100,6 @@ function applyPatch(cur: SkipPrefs, patch: SkipPatch): SkipPrefs {
   const mc = patch.mc === undefined ? cur.mc : patch.mc;
   if (mi) out.mi = mi;
   if (mc) out.mc = mc;
-  const w = patch.w === undefined ? cur.w : patch.w;
-  if (w === false) out.w = false;
   // the same checks as reading: a bad mark (end before start, zero, NaN) is dropped, never written
   return sanitizeSkip(out) || { i: out.i, c: out.c };
 }
@@ -126,6 +124,47 @@ export function saveSkip(c: JournalClient, torrent: Pick<Torrent, 'hash'>, patch
       return c.setData(t, data).then(() => {
         patchLibrary(t.hash, data);
         return next;
+      });
+    }),
+  );
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  chains[hash] = tail;
+  tail.then(() => {
+    if (chains[hash] === tail) delete chains[hash];
+  });
+  return run;
+}
+
+/** «Следить за новыми сериями» of a torrent (omp.w); true when nothing is stored or the torrent is unknown. */
+export function loadWatch(c: Pick<JournalClient, 'list'>, hash: string): Promise<boolean> {
+  return c.list().then((all) => {
+    const t = torrentOf(all, hash);
+    return t ? watchesNewEpisodes(t.data) : true;
+  });
+}
+
+/**
+ * Switches watching new episodes of a torrent: false writes omp.w: false, true removes it; the history, the skip
+ * settings and every other key of `data` are kept. Rejects on failure, like saveSkip.
+ */
+export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watch: boolean): Promise<boolean> {
+  const hash = torrent.hash;
+  const prev = chains[hash] || Promise.resolve();
+  const run = prev.then(() =>
+    c.list().then((all) => {
+      const t = torrentOf(all, hash);
+      if (!t) throw new Error('torrent not found');
+      const parsed = parseData(t.data);
+      if (!parsed) throw new Error('data is not JSON');
+      if (watchesNewEpisodes(t.data) === watch) return watch;
+      const base = baseOf(t, parsed);
+      const data = serializeData(withWatch(base.obj, watch), base.journal, base.skip);
+      return c.setData(t, data).then(() => {
+        patchLibrary(t.hash, data);
+        return watch;
       });
     }),
   );
