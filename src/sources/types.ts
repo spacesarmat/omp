@@ -45,6 +45,11 @@ export interface SourceResult extends SearchResult {
   /** Unix ms. */
   date?: number;
   sizeBytes?: number;
+  /**
+   * Set by mergeResults: key of the first result of the group. It stays the same while later, better
+   * duplicates merge in, so the row keeps its UI state.
+   */
+  groupKey?: string;
 }
 
 export interface SourceContext {

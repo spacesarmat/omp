@@ -99,6 +99,8 @@ describe('Sources screen', () => {
     expect(row('Jackett / Prowlarr (Torznab)').textContent).toContain('не отвечает');
     act(() => setHealth('fake-open', { state: 'error', at: 2, message: 'Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже' }));
     expect(row('nnmclub').textContent).toContain('Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже');
+    expect(row('nnmclub').nextElementSibling!.textContent).toContain('через Jackett или Prowlarr');
+    expect(row('Jackett / Prowlarr (Torznab)').nextElementSibling?.getAttribute('data-hint')).not.toBe('jackett');
   });
 
   it('switches are saved', async () => {
@@ -127,8 +129,10 @@ describe('Sources screen', () => {
     await flush();
     expect(login).toHaveBeenCalledWith('reader', PASSWORD, expect.anything());
     expect(el.querySelector('[role="dialog"]')).toBeNull();
-    expect(row('rutracker').textContent).toContain('работает');
-    expect(getHealth('fake-tracker')!.state).toBe('ok');
+    // no search yet: only the login is known
+    expect(row('rutracker').textContent).toContain('вход выполнен');
+    expect(row('rutracker').textContent).not.toContain('работает');
+    expect(getHealth('fake-tracker')).toBeNull();
     expect(sw('rutracker').getAttribute('aria-checked')).toBe('true');
     expect(btn('Выйти')).toBeTruthy();
     for (let i = 0; i < localStorage.length; i++) expect(localStorage.getItem(localStorage.key(i)!)).not.toContain(PASSWORD);
@@ -182,6 +186,41 @@ describe('Sources screen', () => {
     expect(logout).toHaveBeenCalled();
     expect(btn('Войти')).toBeTruthy();
     expect(row('rutracker').textContent).toContain('нужен вход');
+  });
+
+  it('a Cloudflare block at login shows the Jackett hint next to the error', async () => {
+    login.mockImplementation(() => Promise.reject(new Error('Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже')));
+    await mount();
+    click(btn('Войти')!);
+    const dialog = el.querySelector('[role="dialog"]') as HTMLElement;
+    type(dialog.querySelector('input[name="username"]') as HTMLInputElement, 'reader');
+    type(dialog.querySelector('input[type="password"]') as HTMLInputElement, PASSWORD);
+    click(Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent === 'Войти')!);
+    await flush();
+    expect(dialog.querySelector('[role="alert"]')!.textContent).toContain('Cloudflare');
+    expect(dialog.querySelector('[data-hint="jackett"]')!.textContent).toContain('Kinozal, seedoff, rustorka, labtor');
+    click(Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent === 'Вопросы и ответы')!);
+    expect(currentRoute.value).toEqual({ name: 'faq' });
+  });
+
+  it('the sheet cannot be closed while signing in, and the answer reaches the screen', async () => {
+    let finish: () => void = () => {};
+    login.mockImplementation(() => new Promise<void>((r) => (finish = () => { logged = true; r(); })));
+    await mount();
+    click(btn('Войти')!);
+    const dialog = el.querySelector('[role="dialog"]') as HTMLElement;
+    type(dialog.querySelector('input[name="username"]') as HTMLInputElement, 'reader');
+    type(dialog.querySelector('input[type="password"]') as HTMLInputElement, PASSWORD);
+    click(Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent === 'Войти')!);
+    await flush();
+    const cancel = btn('Отмена')!;
+    expect(cancel.disabled).toBe(true);
+    click(el.querySelector('.m-sheet-backdrop')!);
+    expect(el.querySelector('[role="dialog"]')).not.toBeNull();
+    finish();
+    await flush();
+    expect(el.querySelector('[role="dialog"]')).toBeNull();
+    expect(btn('Выйти')).toBeTruthy();
   });
 });
 

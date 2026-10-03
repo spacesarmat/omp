@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
+import { navigate } from '../nav';
 import { errorMessage } from '../../../src/api/http';
+import { isCloudflare, JACKETT_HINT } from '../../../src/sources/view';
 import type { Source, SourceContext } from '../../../src/sources/types';
 
 const LOCK = 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3';
@@ -29,7 +31,9 @@ export function TrackerLogin({ source, ctx, onClose, onDone }: { source: Source;
     [],
   );
 
+  // no closing while the request runs: its answer decides what the sources screen shows
   const close = () => {
+    if (busy) return;
     clearPassword();
     onClose();
   };
@@ -93,8 +97,25 @@ export function TrackerLogin({ source, ctx, onClose, onDone }: { source: Source;
             {error}
           </div>
         )}
+        {isCloudflare(error) && (
+          <div class="m-hint-warn" data-hint="jackett">
+            {JACKETT_HINT}
+            <div>
+              <button
+                type="button"
+                class="m-link"
+                onClick={() => {
+                  close();
+                  navigate({ name: 'faq' });
+                }}
+              >
+                Вопросы и ответы
+              </button>
+            </div>
+          </div>
+        )}
         <div class="m-marks-actions">
-          <button type="button" class="m-btn m-btn-secondary" onClick={close}>
+          <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={close}>
             Отмена
           </button>
           <button type="submit" class="m-btn m-btn-primary" disabled={busy}>

@@ -14,14 +14,20 @@ import { errorMessage } from '../../../src/api/http';
 import { searchAll, type SearchHandle } from '../../../src/sources/search';
 import { allSources } from '../../../src/sources/registry';
 import { enabledSources } from '../../../src/sources/store';
+import { getHealth } from '../../../src/sources/store';
 import {
   filterQuality,
+  isCloudflare,
+  JACKETT_HINT,
   progressText,
   resolveLink,
   resultDate,
   resultKey,
+  seedsText,
   sortResults,
+  sourceBadge,
   sourceName,
+  stableOrder,
   SORT_LABELS,
   type QualityFilter,
   type SortKey,
@@ -45,7 +51,7 @@ export function normalizeLink(raw: string): string | null {
 
 function meta(r: SourceResult): string {
   const more = r.sources && r.sources.length ? 'ещё в ' + r.sources.map(sourceName).join(', ') : '';
-  return [r.Size, r.Seed + ' сид.', resultDate(r), more].filter(Boolean).join(' · ');
+  return [r.Size, seedsText(r.Seed || 0), resultDate(r), more].filter(Boolean).join(' · ');
 }
 
 interface Prog {
@@ -58,37 +64,99 @@ interface Prog {
 /** Row state while adding: taking the link from the release page, then adding. */
 type RowBusy = 'link' | 'add';
 
+/**
+ * The last search outlives the screen: going to «Источники поиска» (or another tab) and back shows the same
+ * results, and a search still running keeps streaming into them.
+ */
+interface SearchMemo {
+  query: string;
+  chosen: string[] | null;
+  quality: QualityFilter;
+  sort: SortKey;
+  handle: SearchHandle | null;
+  /** Row order on screen while results stream in. */
+  order: string[];
+  rowCat: Record<string, string>;
+}
+
+function freshMemo(): SearchMemo {
+  return { query: '', chosen: null, quality: '', sort: 'seeds', handle: null, order: [], rowCat: {} };
+}
+
+let memo: SearchMemo = freshMemo();
+let listener: ((h: SearchHandle) => void) | null = null;
+
+/** Forgets the last search (tests, server change). */
+export function resetAddSearch(): void {
+  if (memo.handle) memo.handle.cancel();
+  memo = freshMemo();
+}
+
+function progOf(h: SearchHandle): Prog {
+  return { answered: h.answered().length, total: h.sourceIds.length, pending: h.pending(), failed: h.failed() };
+}
+
 export function Add({ link }: { link?: string }) {
   const [value, setValue] = useState(link || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [query, setQuery] = useState('');
-  const [chosen, setChosen] = useState<string[] | null>(null);
-  const [quality, setQuality] = useState<QualityFilter>('');
-  const [sort, setSort] = useState<SortKey>('seeds');
-  const [rows, setRows] = useState<SourceResult[] | null>(null);
-  const [prog, setProg] = useState<Prog | null>(null);
-  const [searching, setSearching] = useState(false);
+  const [query, setQueryState] = useState(memo.query);
+  const [chosen, setChosenState] = useState<string[] | null>(memo.chosen);
+  const [quality, setQualityState] = useState<QualityFilter>(memo.quality);
+  const [sort, setSortState] = useState<SortKey>(memo.sort);
+  const [rows, setRows] = useState<SourceResult[] | null>(memo.handle ? memo.handle.results() : null);
+  const [prog, setProg] = useState<Prog | null>(memo.handle ? progOf(memo.handle) : null);
+  const [searching, setSearching] = useState(memo.handle ? memo.handle.pending().length > 0 : false);
   const [searchError, setSearchError] = useState('');
   const [sheet, setSheet] = useState<'sources' | 'sort' | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  const [rowCat, setRowCat] = useState<Record<string, string>>({});
+  const [rowCat, setRowCatState] = useState<Record<string, string>>(memo.rowCat);
   const [catSheet, setCatSheet] = useState<string | null>(null);
   const [pending, setPending] = useState<Record<string, RowBusy>>({});
   const [alive] = useState({ v: true });
   const pendingRef = useRef<Map<string, RowBusy>>(new Map());
-  const handle = useRef<SearchHandle | null>(null);
   const launch = useTvLaunch();
   const tv = activeTv.value;
 
-  useEffect(
-    () => () => {
+  const setQuery = (v: string) => {
+    memo.query = v;
+    setQueryState(v);
+  };
+  const setChosen = (v: string[] | null) => {
+    memo.chosen = v;
+    setChosenState(v);
+  };
+  // a new filter or sort re-sorts everything at once
+  const setQuality = (v: QualityFilter) => {
+    memo.quality = v;
+    memo.order = [];
+    setQualityState(v);
+  };
+  const setSort = (v: SortKey) => {
+    memo.sort = v;
+    memo.order = [];
+    setSortState(v);
+  };
+  const setRowCat = (v: Record<string, string>) => {
+    memo.rowCat = v;
+    setRowCatState(v);
+  };
+
+  const sync = (h: SearchHandle) => {
+    if (!alive.v || memo.handle !== h) return;
+    setRows(h.results());
+    setProg(progOf(h));
+    setSearching(h.pending().length > 0);
+  };
+
+  useEffect(() => {
+    listener = sync;
+    if (memo.handle) sync(memo.handle);
+    return () => {
       alive.v = false;
-      if (handle.current) handle.current.cancel();
-      handle.current = null;
-    },
-    [],
-  );
+      if (listener === sync) listener = null;
+    };
+  }, []);
   useEffect(() => {
     if (link) changeValue(link);
   }, [link]);
@@ -147,33 +215,25 @@ export function Add({ link }: { link?: string }) {
   const allChosen = chosen === null || (chosen.length === enabledIds.length && enabledIds.every((id) => chosen.indexOf(id) >= 0));
   const sourcesLabel = allChosen ? 'Все источники · ' + enabledIds.length : 'Источники · ' + selected.length;
 
-  const sync = (h: SearchHandle) => {
-    if (!alive.v || handle.current !== h) return;
-    setRows(h.results());
-    setProg({ answered: h.answered().length, total: h.sourceIds.length, pending: h.pending(), failed: h.failed() });
-  };
-
   const onSearch = (e?: Event) => {
     e?.preventDefault();
     const q = query.trim();
     if (!q) return;
-    if (handle.current) handle.current.cancel();
+    if (memo.handle) memo.handle.cancel();
     setSearchError('');
-    // callbacks come asynchronously, after `h` is assigned
+    // callbacks come asynchronously, after `h` is assigned; they reach whichever Add screen is open
+    const notify = () => {
+      if (listener) listener(h);
+    };
     const h: SearchHandle = searchAll(q, {
       ctx: phoneSourceContext(),
       sources: selected,
-      onResult: () => sync(h),
-      onDone: () => sync(h),
+      onResult: notify,
+      onDone: notify,
     });
-    handle.current = h;
-    setSearching(true);
+    memo.handle = h;
+    memo.order = [];
     sync(h);
-    void h.done.then(() => {
-      if (!alive.v || handle.current !== h) return;
-      sync(h);
-      setSearching(false);
-    });
   };
 
   const toggleChosen = (id: string) => {
@@ -227,7 +287,12 @@ export function Add({ link }: { link?: string }) {
     }
   };
 
-  const visible = rows ? sortResults(filterQuality(rows, quality), sort) : [];
+  // while sources still answer, rows on screen keep their places (no row moves under the finger);
+  // the full sort comes when the search ends
+  const filtered = rows ? filterQuality(rows, quality) : [];
+  const visible = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
+  memo.order = visible.map(resultKey);
+  const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
   const sortLabel = SORT_LABELS.filter((s) => s.key === sort)[0].label;
   const catRow = catSheet !== null ? (rows || []).filter((x) => resultKey(x) === catSheet)[0] : undefined;
 
@@ -281,7 +346,7 @@ export function Add({ link }: { link?: string }) {
         </button>
       </form>
       <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-        <button type="button" class={'m-chip' + (allChosen ? ' on' : '')} onClick={() => setSheet('sources')}>
+        <button type="button" class={'m-chip' + (allChosen ? ' on' : '')} aria-haspopup="dialog" onClick={() => setSheet('sources')}>
           {sourcesLabel}
         </button>
         {(['1080', '2160'] as QualityFilter[]).map((q) => (
@@ -295,7 +360,7 @@ export function Add({ link }: { link?: string }) {
             {q === '1080' ? '1080p+' : '2160p'}
           </button>
         ))}
-        <button type="button" class="m-chip" onClick={() => setSheet('sort')}>
+        <button type="button" class="m-chip" aria-haspopup="dialog" onClick={() => setSheet('sort')}>
           {sortLabel + ' ▾'}
         </button>
       </div>
@@ -311,6 +376,12 @@ export function Add({ link }: { link?: string }) {
           })}
         </div>
       )}
+      {blocked.length > 0 && (
+        <div class="m-hint-warn" data-hint="jackett">
+          {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ')}
+          <div>{JACKETT_HINT}</div>
+        </div>
+      )}
       {searchError && <LaunchError message={searchError} />}
       {!searching && prog && prog.total > 0 && visible.length === 0 && <div class="m-muted">Ничего не найдено</div>}
       <div class="m-results">
@@ -320,7 +391,7 @@ export function Add({ link }: { link?: string }) {
             <div class="m-result m-result-card" key={k}>
               <div class="m-result-title">{r.Title}</div>
               <div class="m-result-meta m-small">
-                <span class="m-src-badge">{sourceName(r.source)}</span>
+                <span class="m-src-badge">{sourceBadge(r)}</span>
                 <span class="m-muted">{meta(r)}</span>
               </div>
               {pending[k] === 'link' && (
@@ -332,7 +403,7 @@ export function Add({ link }: { link?: string }) {
                 <button
                   type="button"
                   class="m-chip"
-                  aria-label={'Категория: ' + addCategoryLabel(categoryOfRow(r))}
+                  aria-label={'Категория: ' + addCategoryLabel(categoryOfRow(r)) + ', ' + r.Title}
                   onClick={() => setCatSheet(k)}
                 >
                   {addCategoryLabel(categoryOfRow(r)) + ' ▾'}
@@ -341,7 +412,7 @@ export function Add({ link }: { link?: string }) {
                 <button
                   type="button"
                   class="m-btn m-btn-secondary m-btn-sm"
-                  aria-label="Добавить на сервер"
+                  aria-label={'Добавить на сервер: ' + r.Title}
                   disabled={!!pending[k]}
                   onClick={() => void addResult(r, false)}
                 >
@@ -350,7 +421,7 @@ export function Add({ link }: { link?: string }) {
                 <button
                   type="button"
                   class="m-btn m-btn-primary m-btn-sm"
-                  aria-label="Добавить и смотреть на ТВ"
+                  aria-label={'Добавить и смотреть на ТВ: ' + r.Title}
                   disabled={!!pending[k]}
                   onClick={() => void addResult(r, true)}
                 >

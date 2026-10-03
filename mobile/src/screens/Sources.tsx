@@ -6,8 +6,8 @@ import { goBack, navigate } from '../nav';
 import { phoneSourceContext } from '../searchContext';
 import { errorMessage } from '../../../src/api/http';
 import { builtinSources, torrServerSources } from '../../../src/sources/registry';
-import { getHealth, isSourceOn, onHealthChange, setHealth, setSourceOn } from '../../../src/sources/store';
-import { healthText, JACKETT_HINT, type HealthLine } from '../../../src/sources/view';
+import { clearHealth, getHealth, isSourceOn, onHealthChange, setHealth, setSourceOn } from '../../../src/sources/store';
+import { healthText, isCloudflare, JACKETT_HINT, type HealthLine } from '../../../src/sources/view';
 import type { Source } from '../../../src/sources/types';
 
 /** Names of the TorrServer sources on this screen. */
@@ -34,25 +34,32 @@ function SourceRow({
   const on = isSourceOn(source);
   const name = label(source);
   return (
-    <div class="m-src-row" data-source={source.id}>
-      <span class="m-src-name">
-        <span>{name}</span>
-        {note && <span class={'m-src-note' + (note.tone === 'muted' ? '' : ' ' + note.tone)}>{note.text}</span>}
-      </span>
-      {login &&
-        (login.loggedIn ? (
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={login.onLogout}>
-            Выйти
-          </button>
-        ) : (
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={login.onLogin}>
-            Войти
-          </button>
-        ))}
-      <button type="button" role="switch" aria-checked={on} aria-label={name} class={'m-switch' + (on ? ' on' : '')} onClick={onToggle}>
-        <span class="m-switch-knob" />
-      </button>
-    </div>
+    <>
+      <div class="m-src-row" data-source={source.id}>
+        <span class="m-src-name">
+          <span>{name}</span>
+          {note && <span class={'m-src-note' + (note.tone === 'muted' ? '' : ' ' + note.tone)}>{note.text}</span>}
+        </span>
+        {login &&
+          (login.loggedIn ? (
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={login.onLogout}>
+              Выйти
+            </button>
+          ) : (
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={login.onLogin}>
+              Войти
+            </button>
+          ))}
+        <button type="button" role="switch" aria-checked={on} aria-label={name} class={'m-switch' + (on ? ' on' : '')} onClick={onToggle}>
+          <span class="m-switch-knob" />
+        </button>
+      </div>
+      {note && isCloudflare(note.text) && (
+        <div class="m-src-hint" data-hint="jackett">
+          {JACKETT_HINT}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -91,7 +98,10 @@ export function Sources() {
 
   const noteOf = (s: Source): HealthLine | null => {
     if (s.needsLogin && s.login && !loggedIn(s)) return { text: 'нужен вход', tone: 'muted' };
-    return healthText(getHealth(s.id));
+    const h = getHealth(s.id);
+    // signed in, no search since: say only what is known
+    if (s.needsLogin && s.login && !h) return { text: 'вход выполнен', tone: 'muted' };
+    return healthText(h);
   };
 
   const logout = (s: Source) => {
@@ -108,9 +118,9 @@ export function Sources() {
   const loggedInDone = (s: Source) => {
     setLoginFor(null);
     setLogged((m) => ({ ...m, [s.id]: true }));
-    // signed in: the source works and takes part in the search
+    // signed in: the source takes part in the search; its real state comes with the next search
     setSourceOn(s.id, true);
-    setHealth(s.id, { state: 'ok', at: Date.now() });
+    clearHealth(s.id);
   };
 
   return (
@@ -140,7 +150,11 @@ export function Sources() {
                 note={noteOf(s)}
                 login={
                   s.needsLogin && s.login
-                    ? { loggedIn: loggedIn(s), onLogin: () => setLoginFor(s), onLogout: () => logout(s) }
+                    ? {
+                        loggedIn: loggedIn(s),
+                        onLogin: () => setLoginFor(s),
+                        onLogout: () => logout(s),
+                      }
                     : undefined
                 }
                 onToggle={() => toggle(s)}
@@ -157,9 +171,7 @@ export function Sources() {
           </button>
         </div>
       </div>
-      {loginFor && (
-        <TrackerLogin source={loginFor} ctx={phoneSourceContext} onClose={() => setLoginFor(null)} onDone={() => loggedInDone(loginFor)} />
-      )}
+      {loginFor && <TrackerLogin source={loginFor} ctx={phoneSourceContext} onClose={() => setLoginFor(null)} onDone={() => loggedInDone(loginFor)} />}
     </div>
   );
 }

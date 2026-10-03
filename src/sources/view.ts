@@ -7,9 +7,51 @@ import type { SourceContext, SourceHealth, SourceResult } from './types';
 export const JACKETT_HINT =
   'Kinozal, seedoff, rustorka, labtor и другие закрытые трекеры подключайте через Jackett или Prowlarr в TorrServer — как, в «Вопросах и ответах».';
 
-/** Row key: two torrents of one release can share a title (Anidub, BigFANGroup), their pages differ. */
+/**
+ * Row key: two torrents of one release can share a title (Anidub, BigFANGroup), their pages differ.
+ * A merged row keeps the key of its first result (groupKey), whichever duplicate wins later.
+ */
 export function resultKey(r: SourceResult): string {
-  return r.detailUrl || r.Link || r.Hash || r.Title;
+  return r.groupKey || r.detailUrl || r.Link || r.Hash || r.Title;
+}
+
+/**
+ * Order while results still stream in: rows already on screen keep their places (no row moves under the
+ * finger or the TV cursor), new rows go below them, sorted among themselves.
+ */
+export function stableOrder(shownKeys: string[], list: SourceResult[], key: SortKey): SourceResult[] {
+  const byKey: { [k: string]: SourceResult } = {};
+  list.forEach((r) => {
+    byKey[resultKey(r)] = r;
+  });
+  const kept: SourceResult[] = [];
+  const seen: { [k: string]: boolean } = {};
+  shownKeys.forEach((k) => {
+    if (byKey[k] && !seen[k]) {
+      kept.push(byKey[k]);
+      seen[k] = true;
+    }
+  });
+  return kept.concat(sortResults(list.filter((r) => !seen[resultKey(r)]), key));
+}
+
+/** «1 сид», «3 сида», «312 сидов». */
+export function seedsText(n: number): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  const w = m10 === 1 && m100 !== 11 ? 'сид' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'сида' : 'сидов';
+  return n + ' ' + w;
+}
+
+/** Badge of a row: the source name; Torznab rows also name the tracker behind Jackett / Prowlarr. */
+export function sourceBadge(r: SourceResult): string {
+  if (r.source === 'ts-torznab' && r.Tracker) return 'Torznab · ' + r.Tracker;
+  return sourceName(r.source);
+}
+
+/** The error is a Cloudflare block (the site wants a real browser): Jackett / Prowlarr is the way around it. */
+export function isCloudflare(message: string | undefined | null): boolean {
+  return !!message && message.indexOf('Cloudflare') >= 0;
 }
 
 /** 2160 / 1080 / 720 from the title, 0 when unknown. */
@@ -99,7 +141,7 @@ export function healthText(h: SourceHealth | null): HealthLine | null {
     return { text: 'работает' + secs, tone: 'ok' };
   }
   if (h.state === 'login') return { text: 'нужен вход', tone: 'muted' };
-  if (h.message && h.message.indexOf('Cloudflare') >= 0) return { text: h.message, tone: 'bad' };
+  if (isCloudflare(h.message)) return { text: h.message!, tone: 'bad' };
   return { text: 'не отвечает', tone: 'bad' };
 }
 

@@ -10,8 +10,13 @@ import {
   sourceName,
   resultDate,
   JACKETT_HINT,
+  stableOrder,
+  seedsText,
+  sourceBadge,
+  isCloudflare,
 } from '../../src/sources/view';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
+import { mergeResults } from '../../src/sources/merge';
 import type { Source, SourceContext, SourceResult } from '../../src/sources/types';
 
 const ctx: SourceContext = {
@@ -155,5 +160,45 @@ describe('names and dates', () => {
   });
   it('the Jackett hint names the closed trackers', () => {
     expect(JACKETT_HINT).toBe('Kinozal, seedoff, rustorka, labtor и другие закрытые трекеры подключайте через Jackett или Prowlarr в TorrServer — как, в «Вопросах и ответах».');
+  });
+});
+
+describe('fix round 1 helpers', () => {
+  it('a merged row keeps the key of its first result when a better duplicate merges in', () => {
+    const a = res({ source: 'nnmclub', Title: 'Film 1080p', sizeBytes: 1000, Seed: 5, detailUrl: 'https://n/1' });
+    const b = res({ source: 'rutor', Title: 'Film 1080p', sizeBytes: 1000, Seed: 50, detailUrl: 'https://r/1' });
+    const before = mergeResults([a]);
+    const after = mergeResults([a, b]);
+    expect(after).toHaveLength(1);
+    expect(after[0].source).toBe('rutor');
+    expect(resultKey(after[0])).toBe(resultKey(before[0]));
+    expect(resultKey(after[0])).toBe('https://n/1');
+  });
+
+  it('stableOrder keeps shown rows in place and sorts only the new ones below', () => {
+    const list = [res({ Title: 'a', Seed: 1, detailUrl: 'a' }), res({ Title: 'b', Seed: 100, detailUrl: 'b' }), res({ Title: 'c', Seed: 50, detailUrl: 'c' }), res({ Title: 'd', Seed: 70, detailUrl: 'd' })];
+    expect(stableOrder(['a', 'c', 'gone'], list, 'seeds').map((r) => r.Title)).toEqual(['a', 'c', 'b', 'd']);
+    expect(stableOrder([], list, 'seeds').map((r) => r.Title)).toEqual(['b', 'd', 'c', 'a']);
+  });
+
+  it('seeds in words', () => {
+    expect(seedsText(1)).toBe('1 сид');
+    expect(seedsText(3)).toBe('3 сида');
+    expect(seedsText(12)).toBe('12 сидов');
+    expect(seedsText(152)).toBe('152 сида');
+    expect(seedsText(312)).toBe('312 сидов');
+    expect(seedsText(0)).toBe('0 сидов');
+  });
+
+  it('badge names the tracker behind Torznab', () => {
+    expect(sourceBadge(res({ source: 'ts-torznab', Tracker: 'Kinozal' }))).toBe('Torznab · Kinozal');
+    expect(sourceBadge(res({ source: 'ts-torznab', Tracker: '' }))).toBe('Torznab');
+    expect(sourceBadge(res({ source: 'ts-rutor', Tracker: 'rutor' }))).toBe('rutor (TorrServer)');
+  });
+
+  it('recognises the Cloudflare block', () => {
+    expect(isCloudflare('Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже')).toBe(true);
+    expect(isCloudflare('Неверный логин или пароль')).toBe(false);
+    expect(isCloudflare(undefined)).toBe(false);
   });
 });

@@ -55,6 +55,8 @@ export function mergeResults(list: SourceResult[]): SourceResult[] {
     });
     const out: SourceResult = { ...best };
     delete out.sources;
+    const first = g[0].r;
+    out.groupKey = first.groupKey || first.detailUrl || first.Link || first.Hash || first.Title;
     const others: string[] = [];
     g.forEach((it) => {
       const r = it.r;

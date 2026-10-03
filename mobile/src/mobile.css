@@ -691,5 +691,6 @@ button, .m-btn {
 .m-src-note.ok { color: #8FE39A; }
 .m-src-note.bad { color: #FF8A80; }
 .m-src-card { gap: 0; padding: 4px 14px; }
+.m-src-hint { margin: -4px 0 10px; padding: 10px 12px; border-radius: 10px; background: #3A3320; color: var(--accent); font-size: 12px; line-height: 1.45; }
 .m-lock-note { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: var(--muted); line-height: 1.45; }
 .m-lock-note svg { flex-shrink: 0; }

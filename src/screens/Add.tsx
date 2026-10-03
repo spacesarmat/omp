@@ -12,7 +12,8 @@ import { platformKind } from '../platform/env';
 import { nativeSecrets, nativeSourceHttp } from '../platform/androidNative';
 import { searchAll } from '../sources/search';
 import type { SearchHandle } from '../sources/search';
-import { progressText, resolveLink, resultDate, resultKey, sortResults, sourceName } from '../sources/view';
+import { getHealth } from '../sources/store';
+import { isCloudflare, JACKETT_HINT, progressText, resolveLink, resultDate, resultKey, sortResults, sourceBadge, sourceName, stableOrder } from '../sources/view';
 import type { SourceContext, SourceHttp, SourceResult } from '../sources/types';
 
 const SOURCES: { value: SearchSource; label: string }[] = [
@@ -54,6 +55,8 @@ export function AddScreen() {
   const unified = platformKind() === 'androidtv';
   const alive = useRef(true);
   const handle = useRef<SearchHandle | null>(null);
+  // row order on screen while results stream in: shown rows keep their places under the cursor
+  const order = useRef<string[]>([]);
   const [link, setLink] = useState('');
   const [query, setQuery] = useState('');
   const [source, setSource] = useState<SearchSource>('rutor');
@@ -131,6 +134,7 @@ export function AddScreen() {
       onDone: () => sync(h),
     });
     handle.current = h;
+    order.current = [];
     sync(h);
     h.done.then(() => {
       if (!alive.current || handle.current !== h) return;
@@ -164,7 +168,10 @@ export function AddScreen() {
     );
   };
 
-  const sorted = rows ? sortResults(rows, 'seeds') : [];
+  const streaming = !!prog && prog.pending.length > 0;
+  const sorted = rows ? (streaming ? stableOrder(order.current, rows, 'seeds') : sortResults(rows, 'seeds')) : [];
+  order.current = sorted.map(resultKey);
+  const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
 
   return (
     <FocusGroup focusKey="ADD" className="screen add">
@@ -194,13 +201,19 @@ export function AddScreen() {
             : 'Нет включённых источников'}
         </div>
       )}
+      {unified && blocked.length > 0 && (
+        <div class="search-progress search-hint">
+          {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ') + '. ' + JACKETT_HINT}
+        </div>
+      )}
       {unified && rows && (
         <FocusGroup focusKey="ADD-RESULTS">
-          {sorted.map((r, i) => (
-            <Focusable key={resultKey(r)} focusKey={'res-' + i} className="list-item" onPress={() => addResult(r)}>
+          {sorted.map((r) => (
+            // focus key from the row identity, not its place: rows stream in and the cursor must stay on its row
+            <Focusable key={resultKey(r)} focusKey={'res-' + resultKey(r)} className="list-item" onPress={() => addResult(r)}>
               <div class="title">{r.Title}</div>
               <div class="meta">
-                <span class="src-badge">{sourceName(r.source)}</span>
+                <span class="src-badge">{sourceBadge(r)}</span>
                 {unifiedMeta(r)}
               </div>
             </Focusable>

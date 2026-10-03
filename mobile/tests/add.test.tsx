@@ -2,7 +2,7 @@ import { TV_NO_OMP } from '../src/tv/tvClient';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { Add, normalizeLink } from '../src/screens/Add';
+import { Add, normalizeLink, resetAddSearch } from '../src/screens/Add';
 import { setWatchActions } from '../src/watch';
 import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
@@ -43,7 +43,12 @@ function type(sel: string, v: string) {
   });
 }
 
-const byLabel = (l: string) => Array.from(el.querySelectorAll('button')).filter((b) => b.getAttribute('aria-label') === l);
+// row actions carry the row title: «Добавить на сервер: <title>», «Категория: Сериалы, <title>»
+const byLabel = (l: string) =>
+  Array.from(el.querySelectorAll('button')).filter((b) => {
+    const a = b.getAttribute('aria-label') || '';
+    return a === l || a.indexOf(l + ': ') === 0 || a.indexOf(l + ', ') === 0;
+  });
 const byText = (t: string) => Array.from(el.querySelectorAll('button')).find((b) => b.textContent === t)!;
 const click = (n: Element) => act(() => (n as HTMLElement).click());
 const search = (q: string) => {
@@ -57,6 +62,7 @@ beforeEach(() => {
   localStorage.clear();
   reloadSourcePrefs();
   resetHealth();
+  resetAddSearch();
   reloadTvs();
   for (const s of servers.value.slice()) removeServer(s.id);
   setActiveServer(addServer({ url: 'http://srv:8090' }).id);
@@ -74,6 +80,7 @@ afterEach(() => {
   if (el) act(() => render(null, el));
   unregisterSource('fake');
   unregisterSource('fake2');
+  unregisterSource('fake3');
   vi.restoreAllMocks();
   setWatchActions(null);
 });
@@ -118,7 +125,7 @@ describe('Add', () => {
     expect(s).toHaveBeenCalledWith('starbound', 'torznab');
     const rows = el.querySelectorAll('.m-result');
     expect(rows.length).toBe(2);
-    expect(rows[0].textContent).toContain('152 сид.');
+    expect(rows[0].textContent).toContain('152 сида');
     expect(rows[0].querySelector('.m-src-badge')!.textContent).toBe('rutor (TorrServer)');
     expect(rows[0].textContent).toContain('ещё в Torznab');
     expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 2 · 2 из 2 источников ответили');
@@ -480,5 +487,127 @@ describe('Add unified search', () => {
     await flush();
     expect(one).toHaveBeenCalledTimes(1);
     expect(two).not.toHaveBeenCalled();
+  });
+});
+
+describe('Add unified search: stable rows', () => {
+  function row(p: Partial<SourceResult>): SourceResult {
+    return { Title: 'Film 1080p', Categories: '', Size: '18 GB', CreateDate: '', Tracker: 'F', Link: '', Magnet: '', Hash: '', Peer: 0, Seed: 10, source: 'fake', ...p };
+  }
+  const titles = () => Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+  let late: (v: SourceResult[]) => void = () => {};
+
+  beforeEach(() => {
+    setSourceOn('ts-rutor', false);
+    setSourceOn('ts-torznab', false);
+  });
+
+  it('rows do not move while sources answer; the full sort comes at the end', async () => {
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([row({ Title: 'Low', Seed: 3, detailUrl: 'https://f.example/low' })]) });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
+    mount();
+    search('x');
+    await flush();
+    expect(titles()).toEqual(['Low']);
+    late([row({ source: 'fake2', Title: 'High', Size: '5 GB', Seed: 900, detailUrl: 'https://g.example/high' })]);
+    await flush();
+    // the search is over now: sorted by seeds
+    expect(titles()).toEqual(['High', 'Low']);
+  });
+
+  it('while a source is still searching, new rows go below the shown ones', async () => {
+    let mid: (v: SourceResult[]) => void = () => {};
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([row({ Title: 'Low', Seed: 3, detailUrl: 'https://f.example/low' })]) });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (mid = r)) });
+    registerSource({ id: 'fake3', name: 'Фейк-3', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
+    mount();
+    search('x');
+    await flush();
+    mid([row({ source: 'fake2', Title: 'High', Size: '5 GB', Seed: 900, detailUrl: 'https://g.example/high' })]);
+    await flush();
+    expect(titles()).toEqual(['Low', 'High']);
+    late([]);
+    await flush();
+    expect(titles()).toEqual(['High', 'Low']);
+  });
+
+  it('a better duplicate merging in keeps the row category and «Получаю ссылку…»', async () => {
+    let give: (v: string) => void = () => {};
+    registerSource({
+      id: 'fake',
+      name: 'Фейк',
+      kind: 'builtin',
+      search: () => Promise.resolve([row({ Title: 'Film 1080p', sizeBytes: 1000, Seed: 3, detailUrl: 'https://f.example/1' })]),
+      magnet: () => new Promise<string>((r) => (give = r)),
+    });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('x');
+    await flush();
+    click(byLabel('Категория: Фильмы')[0]);
+    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === 'Музыка')!);
+    click(byLabel('Добавить на сервер')[0]);
+    await flush();
+    expect(el.textContent).toContain('Получаю ссылку…');
+    late([row({ source: 'fake2', Title: 'Film 1080p', sizeBytes: 1000, Seed: 99, detailUrl: 'https://g.example/1', Magnet: 'magnet:?xt=urn:btih:' + 'e'.repeat(40) })]);
+    await flush();
+    expect(el.querySelectorAll('.m-result')).toHaveLength(1);
+    expect(el.querySelector('.m-src-badge')!.textContent).toBe('Фейк-2');
+    expect(el.textContent).toContain('Получаю ссылку…');
+    expect(byLabel('Категория: Музыка')).toHaveLength(1);
+    expect((byLabel('Добавить на сервер')[0] as HTMLButtonElement).disabled).toBe(true);
+    give('https://f.example/dl/1');
+    await flush();
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(add).toHaveBeenCalledWith({ link: 'https://f.example/dl/1', category: 'music' });
+  });
+
+  it('results stay after a visit to «Источники поиска»', async () => {
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([row({ Title: 'Kept 1080p', detailUrl: 'https://f.example/k' })]) });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
+    mount();
+    search('kept');
+    await flush();
+    click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').indexOf('Все источники') === 0)!);
+    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === 'Источники поиска')!);
+    expect(currentRoute.value).toEqual({ name: 'sources' });
+    act(() => render(null, el));
+    // the running source answers while the screen is closed
+    late([row({ source: 'fake2', Title: 'Late 1080p', Size: '2 GB', detailUrl: 'https://g.example/l' })]);
+    await flush();
+    act(() => render(<Add />, el));
+    await flush();
+    expect((el.querySelector('input[aria-label="Поиск по источникам"]') as HTMLInputElement).value).toBe('kept');
+    expect(titles().sort()).toEqual(['Kept 1080p', 'Late 1080p']);
+    expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 2 · 2 из 2 источников ответили');
+  });
+
+  it('a Cloudflare block names the source and shows the Jackett hint', async () => {
+    registerSource({ id: 'fake', name: 'rutracker', kind: 'builtin', search: () => Promise.reject(new Error('Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже')) });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => Promise.reject(new Error('Сайт ответил ошибкой 500')) });
+    mount();
+    search('x');
+    await flush();
+    const hint = el.querySelector('[data-hint="jackett"]')!;
+    expect(hint.textContent).toContain('rutracker: Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже');
+    expect(hint.textContent).toContain('через Jackett или Prowlarr');
+    expect(hint.textContent).not.toContain('Фейк-2');
+  });
+
+  it('row actions name their row', async () => {
+    registerSource({
+      id: 'fake',
+      name: 'Фейк',
+      kind: 'builtin',
+      search: () => Promise.resolve([row({ Title: 'One 1080p', detailUrl: 'https://f.example/1' }), row({ Title: 'Two 1080p', Size: '3 GB', detailUrl: 'https://f.example/2' })]),
+    });
+    mount();
+    search('x');
+    await flush();
+    const labels = Array.from(el.querySelectorAll('.m-result-actions button')).map((b) => b.getAttribute('aria-label'));
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(labels).toContain('Добавить на сервер: One 1080p');
+    expect(labels).toContain('Добавить и смотреть на ТВ: Two 1080p');
   });
 });

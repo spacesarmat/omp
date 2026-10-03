@@ -51,6 +51,13 @@ export function setHealth(id: string, h: SourceHealth): void {
   listeners.slice().forEach((cb) => cb(id));
 }
 
+/** Forgets the health of one source (e.g. after a login: the next search tells the real state). */
+export function clearHealth(id: string): void {
+  if (!health[id]) return;
+  delete health[id];
+  listeners.slice().forEach((cb) => cb(id));
+}
+
 /** Called with the source id on every health change; returns the unsubscribe. */
 export function onHealthChange(cb: (id: string) => void): () => void {
   listeners.push(cb);

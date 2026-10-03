@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
-import { init } from '@noriginmedia/norigin-spatial-navigation';
+import { init, setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { AddScreen } from '../../src/screens/Add';
 import { servers, addServer, setActiveServer, removeServer } from '../../src/store/servers';
 import { TorrServerClient } from '../../src/api/torrserver';
@@ -121,5 +121,106 @@ describe('TV search', () => {
     give(MAG);
     await flush();
     expect(add).toHaveBeenCalledWith(expect.objectContaining({ link: MAG, title: 'Северный ветер 2160p' }));
+  });
+});
+
+describe('TV search on Android TV: focus and stale searches', () => {
+  const titleOfFocused = () => {
+    const f = host.querySelector('.list-item.focused');
+    return f ? f.querySelector('.title')!.textContent : null;
+  };
+  const enter = async () => {
+    const ev = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true } as KeyboardEventInit);
+    Object.defineProperty(ev, 'keyCode', { get: () => 13 });
+    Object.defineProperty(ev, 'which', { get: () => 13 });
+    act(() => {
+      window.dispatchEvent(ev);
+    });
+    const up = new KeyboardEvent('keyup', { key: 'Enter', bubbles: true } as KeyboardEventInit);
+    Object.defineProperty(up, 'keyCode', { get: () => 13 });
+    Object.defineProperty(up, 'which', { get: () => 13 });
+    act(() => {
+      window.dispatchEvent(up);
+    });
+    await flush();
+  };
+  const focusRow = async (key: string) => {
+    act(() => setFocus('res-' + key));
+    await flush();
+    expect(getCurrentFocusKey()).toBe('res-' + key);
+  };
+
+  afterEach(() => {
+    unregisterSource('fake2');
+    unregisterSource('fake3');
+  });
+
+  it('after a reorder Enter adds the highlighted row and every row stays reachable', async () => {
+    w.Capacitor = { getPlatform: () => 'android' };
+    let mid: (v: SourceResult[]) => void = () => {};
+    let late: (v: SourceResult[]) => void = () => {};
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([fakeRow({ Title: 'Low', Seed: 3, Magnet: 'magnet:?xt=urn:btih:' + '1'.repeat(40), detailUrl: 'https://f.example/low' })]) });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (mid = r)) });
+    registerSource({ id: 'fake3', name: 'Фейк-3', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue([]);
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH, title: 'x', stat: 1 } as any);
+    mount();
+    typeQuery('x');
+    act(() => button('Искать').click());
+    await flush();
+    await focusRow('https://f.example/low');
+    expect(titleOfFocused()).toBe('Low');
+    // a better row arrives while one source still searches: it goes below, nothing moves under the cursor
+    mid([fakeRow({ source: 'fake2', Title: 'High', Seed: 900, Size: '1 GB', Magnet: 'magnet:?xt=urn:btih:' + '2'.repeat(40), detailUrl: 'https://g.example/high' })]);
+    await flush();
+    let titles = Array.prototype.map.call(host.querySelectorAll('.list-item .title'), (n: Element) => n.textContent);
+    expect(titles).toEqual(['Low', 'High']);
+    // the search ends: full sort, High moves above the focused row
+    late([fakeRow({ source: 'fake3', Title: 'Mid', Seed: 50, Size: '2 GB', Magnet: 'magnet:?xt=urn:btih:' + '3'.repeat(40), detailUrl: 'https://h.example/mid' })]);
+    await flush();
+    titles = Array.prototype.map.call(host.querySelectorAll('.list-item .title'), (n: Element) => n.textContent);
+    expect(titles).toEqual(['High', 'Mid', 'Low']);
+    expect(titleOfFocused()).toBe('Low');
+    // every row can be focused and shows the highlight on itself
+    for (const [k, title] of [['https://g.example/high', 'High'], ['https://h.example/mid', 'Mid'], ['https://f.example/low', 'Low']]) {
+      await focusRow(k);
+      expect(titleOfFocused()).toBe(title);
+    }
+    await enter();
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(add).toHaveBeenCalledWith(expect.objectContaining({ link: 'magnet:?xt=urn:btih:' + '1'.repeat(40), title: 'Low' }));
+  });
+
+  it('a second search started before the first ends does not mix results', async () => {
+    w.Capacitor = { getPlatform: () => 'android' };
+    const answers: ((v: SourceResult[]) => void)[] = [];
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => new Promise((r) => answers.push(r)) });
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue([]);
+    mount();
+    typeQuery('first');
+    act(() => button('Искать').click());
+    typeQuery('second');
+    act(() => button('Искать').click());
+    await flush();
+    answers[1]([fakeRow({ Title: 'Second', detailUrl: 'https://f.example/2' })]);
+    await flush();
+    answers[0]([fakeRow({ Title: 'First', detailUrl: 'https://f.example/1' })]);
+    await flush();
+    const titles = Array.prototype.map.call(host.querySelectorAll('.list-item .title'), (n: Element) => n.textContent);
+    expect(titles).toEqual(['Second']);
+    expect(host.querySelector('.search-progress')!.textContent).toBe('Найдено 1 · 3 из 3 источников ответили');
+  });
+
+  it('a Cloudflare block shows the Jackett hint', async () => {
+    w.Capacitor = { getPlatform: () => 'android' };
+    registerSource({ id: 'fake', name: 'rutracker', kind: 'builtin', search: () => Promise.reject(new Error('Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже')) });
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue([]);
+    mount();
+    typeQuery('x');
+    act(() => button('Искать').click());
+    await flush();
+    const hint = host.querySelector('.search-hint')!;
+    expect(hint.textContent).toContain('rutracker: Сайт закрыт проверкой браузера (Cloudflare)');
+    expect(hint.textContent).toContain('через Jackett или Prowlarr');
   });
 });
