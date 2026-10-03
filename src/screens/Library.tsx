@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
-import { client } from '../store/servers';
-import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, addedTorrents, addedMessage } from '../store/library';
+import { client, activeServer } from '../store/servers';
+import { catalogReason, cachedBanner, CATALOG_HINT } from '../lib/catalogState';
+import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, torrentsAt, addedTorrents, addedMessage } from '../store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed, clearProgress, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../store/progress';
 import { forgetWatch } from '../store/journal';
 import { buildHistory, resumeFrom } from '../lib/history';
@@ -13,7 +14,7 @@ import { filterTorrents, sortTorrents, nextSort } from '../lib/librarySearch';
 import { LibraryTab, nextView } from '../lib/libraryView';
 import { buildTorrentQueue } from '../player/queue';
 import { navigate, resetTo } from '../ui/nav';
-import { FocusGroup, ErrorView, Spinner, TextInput } from '../ui/components';
+import { FocusGroup, Button, Spinner, TextInput } from '../ui/components';
 import { KeyDot } from '../ui/icons';
 import { restoreFocus } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
@@ -147,15 +148,21 @@ export function LibraryScreen() {
   };
 
   if (showingError) {
+    const online = typeof navigator === 'undefined' || navigator.onLine !== false;
     return (
       <div class="screen">
-        <ErrorView
-          message={'Не удалось загрузить список торрентов\n' + error}
-          actions={[
-            { label: 'Повторить', onPress: () => load() },
-            { label: 'Сменить сервер', onPress: () => navigate({ name: 'connect' }) },
-          ]}
-        />
+        <div class="catalog-off">
+          <svg class="catalog-off-icon" width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 20h.01M3 3l18 18" />
+          </svg>
+          <div class="catalog-off-title">Каталог недоступен</div>
+          <div class="catalog-off-reason">{catalogReason(activeServer.value ? activeServer.value.name : null, online)}</div>
+          <FocusGroup focusKey="ERROR-ACTIONS" className="actions" autoFocus>
+            <Button label="Повторить" onPress={() => load()} />
+            <Button label="Сменить сервер" onPress={() => navigate({ name: 'connect' })} />
+          </FocusGroup>
+          <div class="catalog-off-hint">{CATALOG_HINT}</div>
+        </div>
       </div>
     );
   }
@@ -191,7 +198,12 @@ export function LibraryScreen() {
           <div class="search-count">{searching ? 'Найдено: ' + count : 'Введите часть названия'}</div>
         </FocusGroup>
       )}
-      {error && <div class="banner-error">{error} — показан сохранённый список</div>}
+      {error && (
+        <FocusGroup focusKey="LIB-BANNER" className="banner-error banner-row">
+          <span class="banner-text">{cachedBanner(torrentsAt.value)}</span>
+          <Button label="Повторить" onPress={() => load()} onFocused={() => setSel(null)} />
+        </FocusGroup>
+      )}
       {!loaded && <Spinner text="Загрузка…" />}
       {isHistory && <HistoryFilterRow value={hfilter} onChange={(f) => updateSettings({ historyFilter: f })} onFocused={() => setSel(null)} />}
       {isHistory ? (

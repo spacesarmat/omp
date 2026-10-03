@@ -10,7 +10,7 @@ import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { toast } from '../src/ui/toast';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
-import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
+import { torrents, torrentsAt, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
 import { saveProgress, reloadProgress, serverViewed } from '../../src/store/progress';
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { Torrent } from '../../src/api/types';
@@ -387,14 +387,14 @@ describe('Library', () => {
     });
     mount();
     await flush();
-    expect(el.textContent).toContain('показан сохранённый список');
+    expect(el.textContent).toContain('Каталог недоступен');
     const n = listSpy.mock.calls.length;
     await act(async () => byText('Запустить сервер')!.click());
     await flush();
     await flush();
     expect(start).toHaveBeenCalledTimes(1);
     expect(listSpy.mock.calls.length).toBeGreaterThan(n);
-    expect(el.textContent).not.toContain('показан сохранённый список');
+    expect(el.textContent).not.toContain('Каталог недоступен');
     expect(byText('Запустить сервер')).toBeUndefined();
   });
 
@@ -403,14 +403,14 @@ describe('Library', () => {
     localServer.value = { supported: true, running: false };
     mount();
     await flush();
-    expect(el.textContent).toContain('показан сохранённый список');
+    expect(el.textContent).toContain('Каталог недоступен');
     expect(byText('Запустить сервер')).toBeUndefined();
     act(() => render(null, el));
     setActiveServer(addServer({ url: 'http://127.0.0.1:8090' }).id);
     localServer.value = { supported: true, running: true };
     mount();
     await flush();
-    expect(el.textContent).toContain('показан сохранённый список');
+    expect(el.textContent).toContain('Каталог недоступен');
     expect(byText('Запустить сервер')).toBeUndefined();
   });
 
@@ -516,3 +516,92 @@ describe('Library', () => {
   });
 });
 
+describe('Library catalog unavailable', () => {
+  it('no active server: full state, no endless loading', async () => {
+    for (const sv of servers.value.slice()) removeServer(sv.id);
+    torrents.value = [];
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Каталог недоступен');
+    expect(el.textContent).toContain('Сервер не выбран');
+    expect(el.textContent).not.toContain('Загрузка…');
+    expect(el.textContent).not.toContain('Нет торрентов');
+    act(() => byText('Сменить сервер')!.click());
+    expect(currentRoute.value.name).toBe('connect');
+  });
+
+  it('server down and no cache: named reason, retry, faq, no misleading empty text', async () => {
+    torrents.value = [];
+    listSpy.mockRejectedValue(new Error('x'));
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Каталог недоступен');
+    expect(el.textContent).toContain('Сервер «srv:8090» не отвечает');
+    expect(el.textContent).toContain('Проверьте, что телефон и сервер в одной сети');
+    expect(el.textContent).not.toContain('Нет торрентов');
+    expect(byText('Запустить сервер')).toBeUndefined();
+    act(() => byText('Вопросы и ответы')!.click());
+    expect(currentRoute.value.name).toBe('faq');
+    resetTo({ name: 'library' });
+    const n = listSpy.mock.calls.length;
+    listSpy.mockResolvedValue(T);
+    await act(async () => byText('Повторить')!.click());
+    await flush();
+    expect(listSpy.mock.calls.length).toBeGreaterThan(n);
+    expect(el.textContent).not.toContain('Каталог недоступен');
+    expect(el.textContent).toContain('Neon Rivers');
+  });
+
+  it('offline: network reason', async () => {
+    torrents.value = [];
+    listSpy.mockRejectedValue(new Error('x'));
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Нет подключения к сети');
+  });
+
+  it('stopped embedded server: start action in the full state', async () => {
+    setActiveServer(addServer({ url: 'http://127.0.0.1:8090' }).id);
+    torrents.value = [];
+    setLocalServerDeps({ native: { localServerInfo: async () => ({ supported: true, running: false }) } as any });
+    localServer.value = { supported: true, running: false };
+    listSpy.mockRejectedValue(new Error('x'));
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Каталог недоступен');
+    expect(byText('Запустить сервер')).toBeDefined();
+  });
+
+  it('cached list and failed refresh: list kept, banner with time and retry', async () => {
+    torrentsAt.value = new Date(2026, 0, 2, 9, 5).getTime();
+    listSpy.mockRejectedValue(new Error('x'));
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Каталог недоступен · показан сохранённый список от 09:05');
+    expect(el.textContent).toContain('Neon Rivers');
+    expect(el.querySelector('.m-offline')).toBeNull();
+    const n = listSpy.mock.calls.length;
+    await act(async () => byText('Повторить')!.click());
+    await flush();
+    expect(listSpy.mock.calls.length).toBeGreaterThan(n);
+  });
+
+  it('empty text only when the server answered with an empty list', async () => {
+    torrents.value = [];
+    listSpy.mockResolvedValue([]);
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Нет торрентов');
+    expect(el.textContent).not.toContain('Каталог недоступен');
+  });
+
+  it('first load with a server shows loading', async () => {
+    torrents.value = [];
+    listSpy.mockReturnValue(new Promise(() => undefined));
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Загрузка…');
+    expect(el.textContent).not.toContain('Каталог недоступен');
+  });
+});
