@@ -18,10 +18,11 @@ import { logDate } from '../../../src/lib/log';
 
 export const BACKUP_FORMAT = 'omp-backup';
 export const BACKUP_VERSION = 1;
-/** Most entries of one collection; a real copy has a handful. */
-export const BACKUP_MAX_ITEMS = 200;
-/** A copy is a few KB; anything bigger is not ours. */
-export const BACKUP_MAX_BYTES = 1024 * 1024;
+/** Entry caps on restore, only where the store code is quadratic (dedupe by scan). Linear collections (playlists,
+ *  track choices) are bounded by the size cap alone. Never applied when saving. */
+export const BACKUP_MAX_ITEMS: { [key: string]: number } = { 'tsp.servers': 100, 'tsp.tvs': 100, 'tsp.subs': 1000, 'tsp.sources': 500 };
+/** localStorage of the WebView holds about 5 MB per origin, so any copy this app wrote fits. */
+export const BACKUP_MAX_BYTES = 5 * 1024 * 1024;
 
 export interface BackupFile {
   format: typeof BACKUP_FORMAT;
@@ -35,9 +36,11 @@ export interface BackupFile {
 /** Returns the cleaned value or undefined when the value is not usable (the key is then skipped). */
 type Clean = (v: unknown) => unknown;
 
-function tooMany(v: unknown): boolean {
-  if (Array.isArray(v)) return v.length > BACKUP_MAX_ITEMS;
-  return isObject(v) && Object.keys(v).length > BACKUP_MAX_ITEMS;
+function tooMany(key: string, v: unknown): boolean {
+  const max = BACKUP_MAX_ITEMS[key];
+  if (max === undefined) return false;
+  if (Array.isArray(v)) return v.length > max;
+  return isObject(v) && Object.keys(v).length > max;
 }
 
 /** A non-empty list that cleans down to nothing is garbage, not "the user has none". */
@@ -151,7 +154,6 @@ function cleanData(src: { [key: string]: unknown }, merge: boolean): { [key: str
   BACKUP_KEYS.forEach((k) => {
     if (!Object.prototype.hasOwnProperty.call(src, k.key)) return;
     let raw = src[k.key];
-    if (tooMany(raw)) return;
     if (merge && MERGED.indexOf(k.key) >= 0 && isObject(raw)) {
       const cur = readRaw(k.key);
       raw = Object.assign({}, isObject(cur) ? cur : {}, raw);
@@ -205,7 +207,7 @@ export function parseBackup(text: string): ParseResult {
   if (typeof v.v !== 'number' || !Number.isInteger(v.v) || v.v < 1) return { ok: false, error: ERR_VERSION };
   if (v.v > BACKUP_VERSION) return { ok: false, error: ERR_VERSION_NEW };
   const raw = v.data as { [key: string]: unknown };
-  if (BACKUP_KEYS.some((k) => Object.prototype.hasOwnProperty.call(raw, k.key) && tooMany(raw[k.key]))) {
+  if (BACKUP_KEYS.some((k) => Object.prototype.hasOwnProperty.call(raw, k.key) && tooMany(k.key, raw[k.key]))) {
     return { ok: false, error: ERR_TOO_MANY };
   }
   const data = cleanData(raw, true);

@@ -8,7 +8,6 @@ import {
   ERR_NOT_JSON,
   ERR_TOO_BIG,
   ERR_TOO_MANY,
-  BACKUP_MAX_ITEMS,
   ERR_VERSION,
   ERR_VERSION_NEW,
   applyBackup,
@@ -214,7 +213,7 @@ describe('summary, name, warning', () => {
 describe("hardening", () => {
   it("rejects collections over the cap", () => {
     const many = [];
-    for (let i = 0; i < BACKUP_MAX_ITEMS + 1; i++) many.push({ id: "s" + i, name: "n", url: "http://h" + i + ":1" });
+    for (let i = 0; i < 5000; i++) many.push({ id: "s" + i, name: "n", url: "http://h" + i + ":1" });
     const r = parseBackup(file({ "tsp.servers": many }));
     expect(r.ok ? "" : r.error).toBe(ERR_TOO_MANY);
   });
@@ -287,5 +286,33 @@ describe("hardening", () => {
     expect(get("tsp.servers")[0].id).toBe("old");
     expect(get("tsp.settings")).toEqual({ autoNext: false });
     expect(localStorage.getItem("tsp.touchpad")).toBe(null);
+  });
+
+  it("save never drops data: 300 playlists and 300 track choices are collected, parsed and restored", () => {
+    const pl = [];
+    const tp: Record<string, unknown> = {};
+    for (let i = 0; i < 300; i++) {
+      pl.push({ url: "http://x/p" + i + ".m3u", title: "P" + i });
+      tp["h" + i] = { audioLang: "ru", audioLabel: "Дорожка " + i };
+    }
+    put("tsp.playlists", pl);
+    put("tsp.trackPrefs", tp);
+    const b = collectBackup(NOW);
+    expect((b.data["tsp.playlists"] as unknown[]).length).toBe(300);
+    expect(Object.keys(b.data["tsp.trackPrefs"] as object).length).toBe(300);
+    const r = parseBackup(serializeBackup(b));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect((r.backup.data["tsp.playlists"] as unknown[]).length).toBe(300);
+    expect(Object.keys(r.backup.data["tsp.trackPrefs"] as object).length).toBe(300);
+  });
+
+  it("a big collected copy (~2 MB of track choices) still parses", () => {
+    const tp: Record<string, unknown> = {};
+    for (let i = 0; i < 20000; i++) tp["h" + i] = { audioLang: "ru", audioLabel: "Дорожка " + i };
+    put("tsp.trackPrefs", tp);
+    const text = serializeBackup(collectBackup(NOW));
+    expect(text.length).toBeGreaterThan(1024 * 1024);
+    expect(parseBackup(text).ok).toBe(true);
   });
 });

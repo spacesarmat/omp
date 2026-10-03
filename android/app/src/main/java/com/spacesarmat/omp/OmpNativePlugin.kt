@@ -438,7 +438,6 @@ class OmpNativePlugin : Plugin() {
         }
         try {
             val dir = File(context.cacheDir, "logs").apply { mkdirs() }
-            purgeSharedFiles(10 * 60 * 1000L)
             dir.listFiles()?.forEach { it.delete() }
             val file = File(dir, name)
             file.writeText(text, Charsets.UTF_8)

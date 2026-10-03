@@ -140,7 +140,7 @@ describe('Backup screen', () => {
       },
     });
     const el = mount(<Backup />);
-    await pick(el, 'x', 5 * 1024 * 1024);
+    await pick(el, 'x', 6 * 1024 * 1024);
     expect(read).toBe(0);
     expect(el.querySelector('[role=alert]')!.textContent).toContain('слишком большой');
   });
