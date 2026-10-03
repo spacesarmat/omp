@@ -19,6 +19,7 @@ export type MRoute =
   | { name: 'localServer' }
   | { name: 'faq' }
   | { name: 'log' }
+  | { name: 'backup' }
   | { name: 'sources' };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);

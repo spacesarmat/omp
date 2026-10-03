@@ -93,7 +93,7 @@ export interface OmpNativeApi {
   secretSet(key: string, value: string): Promise<void>;
   secretDelete(key: string): Promise<void>;
   /** Writes `text` to a file `name` and opens the system «Поделиться». */
-  shareText(o: { name: string; text: string }): Promise<void>;
+  shareText(o: { name: string; text: string; title?: string }): Promise<void>;
 }
 
 interface OmpNativePlugin {
@@ -123,7 +123,7 @@ interface OmpNativePlugin {
   secretGet(o: { key: string }): Promise<{ value?: string | null }>;
   secretSet(o: { key: string; value: string }): Promise<void>;
   secretDelete(o: { key: string }): Promise<void>;
-  shareText(o: { name: string; text: string }): Promise<void>;
+  shareText(o: { name: string; text: string; title?: string }): Promise<void>;
   addListener(event: 'tvMessage', cb: (e: { json: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'tvClosed', cb: (e: { reason: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'apkProgress', cb: (e: { percent: number }) => void): Promise<PluginListenerHandle>;

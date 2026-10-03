@@ -34,7 +34,7 @@ export function filterEntries(list: LogEntry[], f: LogFilter): LogEntry[] {
 export interface LogActions {
   copyText: (text: string) => Promise<void>;
   openUrl: (url: string) => void;
-  shareText: (o: { name: string; text: string }) => Promise<void>;
+  shareText: (o: { name: string; text: string; title?: string }) => Promise<void>;
   confirm: (text: string) => boolean;
   /** Phone model; null when unknown. */
   phoneName: () => Promise<string | null>;
@@ -80,7 +80,7 @@ export async function reportToGithub(): Promise<void> {
 export async function shareLog(): Promise<void> {
   const info = await deviceInfo();
   try {
-    await actions.shareText({ name: 'omp-журнал-' + logDate(Date.now()) + '.txt', text: formatLog(info) });
+    await actions.shareText({ name: 'omp-журнал-' + logDate(Date.now()) + '.txt', text: formatLog(info), title: 'Поделиться журналом' });
   } catch (e) {
     showToast(e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Не удалось поделиться журналом');
   }

@@ -11,6 +11,7 @@ import { Connect } from './screens/Connect';
 import { Tv } from './screens/Tv';
 import { Faq } from './screens/Faq';
 import { Log } from './screens/Log';
+import { Backup } from './screens/Backup';
 import { Sources } from './screens/Sources';
 import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
@@ -205,6 +206,8 @@ export function App() {
         <Faq />
       ) : route.name === 'log' ? (
         <Log />
+      ) : route.name === 'backup' ? (
+        <Backup />
       ) : route.name === 'sources' ? (
         <Sources />
       ) : route.name === 'library' ? (

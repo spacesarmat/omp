@@ -424,7 +424,8 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
-    /** Writes [text] to cache/logs/[name] and opens the system share sheet for it (FileProvider, text/plain). */
+    /** Writes [text] to cache/logs/[name] and opens the system share sheet for it (FileProvider, text/plain).
+     *  Older shared files are removed first (a settings copy holds secrets); [title] is the chooser title. */
     @PluginMethod
     fun shareText(call: PluginCall) {
         val name = shareFileName(call.getString("name"))
@@ -435,6 +436,7 @@ class OmpNativePlugin : Plugin() {
         }
         try {
             val dir = File(context.cacheDir, "logs").apply { mkdirs() }
+            dir.listFiles()?.forEach { it.delete() }
             val file = File(dir, name)
             file.writeText(text, Charsets.UTF_8)
             val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
@@ -444,7 +446,7 @@ class OmpNativePlugin : Plugin() {
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             // ClipData carries the read grant to the chooser and its preview
             send.clipData = ClipData.newRawUri("", uri)
-            val chooser = Intent.createChooser(send, "Поделиться журналом")
+            val chooser = Intent.createChooser(send, call.getString("title")?.trim().orEmpty().take(60).ifEmpty { "Поделиться файлом" })
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             val act = activity
             if (act != null) act.startActivity(chooser)

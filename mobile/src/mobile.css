@@ -774,3 +774,13 @@ button, .m-btn {
 .m-send-check { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .m-send-check input { width: 20px; height: 20px; accent-color: var(--accent); }
 .m-send-done { font-size: 12px; color: #8FE39A; }
+
+/* backup */
+.m-screen[data-route='backup'] { display: flex; flex-direction: column; gap: 12px; }
+.m-backup-review { display: flex; flex-direction: column; gap: 12px; }
+.m-backup-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.4; }
+.m-backup-list li::before { content: '•'; color: var(--muted); margin-right: 10px; }
+.m-backup-list li.yes::before { content: '✓'; color: var(--accent); }
+.m-backup-list li.no { color: var(--muted); }
+.m-backup-list li.no::before { content: '✕'; }
+.m-backup-warn { color: var(--muted); }
