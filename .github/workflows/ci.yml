@@ -28,3 +28,29 @@ jobs:
         with:
           name: ipk
           path: build/*.ipk
+
+  # the Android app (phone + Android TV): debug build and the Kotlin unit tests, so a broken native side
+  # shows up in the pull request and not only when a release is cut
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+      - name: Sync the web app into the Android project
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run android:sync
+      - name: Build and test
+        run: (cd android && ./gradlew assembleDebug testDebugUnitTest)
