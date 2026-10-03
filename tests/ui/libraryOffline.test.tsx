@@ -70,7 +70,7 @@ describe('TV library: catalog unavailable', () => {
     expect(host.textContent).toContain('Нет подключения к сети');
   });
 
-  it('no server: goes to the connect screen', async () => {
+  it('no server: redirects to the connect screen (no catalog state there)', async () => {
     activeServerId.value = null;
     mount();
     await flush();
@@ -86,6 +86,20 @@ describe('TV library: catalog unavailable', () => {
     expect(host.textContent).toContain('Каталог недоступен · показан сохранённый список от 09:05');
     expect(host.textContent).toContain('Alpha movie');
     expect(btn('Повторить')).toBeDefined();
+  });
+
+  it('real refresh time feeds the banner after a later failure', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 0, 2, 9, 5));
+    mockFetch(() => ({ body: JSON.stringify([{ hash: 'a1', title: 'Alpha movie', timestamp: 2 }]) }));
+    mount();
+    await flush();
+    act(() => render(null, host));
+    failing();
+    mount();
+    await flush();
+    vi.useRealTimers();
+    expect(host.textContent).toContain('показан сохранённый список от 09:05');
   });
 
   it('empty text only when the server answered with an empty list', async () => {

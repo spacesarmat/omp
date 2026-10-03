@@ -359,7 +359,7 @@ export function Library() {
           {unavailable && (
             <CatalogUnavailable
               reason={catalogReason(c ? serverName : null, online)}
-              onRetry={() => (c ? void loadRef.current() : navigate({ name: 'connect' }))}
+              onRetry={c ? () => void loadRef.current() : undefined}
               onChangeServer={() => navigate({ name: 'connect' })}
               onStart={canStartLocal ? () => void startServer() : undefined}
               starting={starting}

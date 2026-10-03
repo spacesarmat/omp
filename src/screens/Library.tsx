@@ -148,6 +148,7 @@ export function LibraryScreen() {
   };
 
   if (showingError) {
+    // with no server the effect above already routes to connect, so c is always set here
     const online = typeof navigator === 'undefined' || navigator.onLine !== false;
     return (
       <div class="screen">
@@ -156,7 +157,7 @@ export function LibraryScreen() {
             <path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 20h.01M3 3l18 18" />
           </svg>
           <div class="catalog-off-title">Каталог недоступен</div>
-          <div class="catalog-off-reason">{catalogReason(activeServer.value ? activeServer.value.name : null, online)}</div>
+          <div class="catalog-off-reason">{catalogReason(activeServer.value!.name, online)}</div>
           <FocusGroup focusKey="ERROR-ACTIONS" className="actions" autoFocus>
             <Button label="Повторить" onPress={() => load()} />
             <Button label="Сменить сервер" onPress={() => navigate({ name: 'connect' })} />

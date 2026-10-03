@@ -34,6 +34,8 @@ export function resetLibrary(): void {
   gen++;
   inflight = null;
   torrents.value = [];
+  torrentsAt.value = 0;
+  saveJson(AT_KEY, 0);
   libraryTab.value = 'all';
   librarySearchOpen.value = false;
   libraryQuery.value = '';
@@ -49,6 +51,8 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> }): Promise<Torr
       if (my !== gen) return sorted;
       inflight = null;
       torrents.value = sorted;
+      torrentsAt.value = Date.now();
+      saveJson(AT_KEY, torrentsAt.value);
       saveJson(
         KEY,
         sorted.map((t) => ({

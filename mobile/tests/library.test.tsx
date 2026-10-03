@@ -385,9 +385,10 @@ describe('Library', () => {
       if (!running) throw new Error('Сервер недоступен');
       return T;
     });
+    torrents.value = [];
     mount();
     await flush();
-    expect(el.textContent).toContain('Каталог недоступен');
+    expect(el.querySelector('.m-offline')).not.toBeNull();
     const n = listSpy.mock.calls.length;
     await act(async () => byText('Запустить сервер')!.click());
     await flush();
@@ -401,16 +402,28 @@ describe('Library', () => {
   it('offers no start for a remote server or a running local one', async () => {
     listSpy.mockRejectedValue(new Error('Сервер недоступен'));
     localServer.value = { supported: true, running: false };
+    torrents.value = [];
     mount();
     await flush();
-    expect(el.textContent).toContain('Каталог недоступен');
+    expect(el.querySelector('.m-offline')).not.toBeNull();
     expect(byText('Запустить сервер')).toBeUndefined();
     act(() => render(null, el));
     setActiveServer(addServer({ url: 'http://127.0.0.1:8090' }).id);
     localServer.value = { supported: true, running: true };
+    torrents.value = [];
     mount();
     await flush();
-    expect(el.textContent).toContain('Каталог недоступен');
+    expect(el.querySelector('.m-offline')).not.toBeNull();
+    expect(byText('Запустить сервер')).toBeUndefined();
+  });
+
+  it('a cached list with a failed refresh keeps the banner, with no start button for a remote server', async () => {
+    torrentsAt.value = new Date(2026, 0, 2, 9, 5).getTime();
+    listSpy.mockRejectedValue(new Error('Сервер недоступен'));
+    mount();
+    await flush();
+    expect(el.querySelector('.m-offline')).toBeNull();
+    expect(el.textContent).toContain('показан сохранённый список от 09:05');
     expect(byText('Запустить сервер')).toBeUndefined();
   });
 
@@ -524,6 +537,7 @@ describe('Library catalog unavailable', () => {
     await flush();
     expect(el.textContent).toContain('Каталог недоступен');
     expect(el.textContent).toContain('Сервер не выбран');
+    expect(byText('Повторить')).toBeUndefined();
     expect(el.textContent).not.toContain('Загрузка…');
     expect(el.textContent).not.toContain('Нет торрентов');
     act(() => byText('Сменить сервер')!.click());
@@ -585,6 +599,20 @@ describe('Library catalog unavailable', () => {
     await act(async () => byText('Повторить')!.click());
     await flush();
     expect(listSpy.mock.calls.length).toBeGreaterThan(n);
+  });
+
+  it('real refresh time feeds the banner after a later failure', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    vi.setSystemTime(new Date(2026, 0, 2, 9, 5));
+    torrentsAt.value = 0;
+    mount();
+    await flush();
+    expect(torrentsAt.value).toBe(new Date(2026, 0, 2, 9, 5).getTime());
+    act(() => render(null, el));
+    listSpy.mockRejectedValue(new Error('x'));
+    mount();
+    await flush();
+    expect(el.textContent).toContain('показан сохранённый список от 09:05');
   });
 
   it('empty text only when the server answered with an empty list', async () => {
