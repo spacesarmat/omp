@@ -19,6 +19,15 @@ export function reloadMonitor(): void {
   monitorVersion.value = monitorVersion.value + 1;
 }
 
+/** Bumped when a background run finishes (monitorDone): ends «Проверяю…». */
+export const monitorDoneCount = signal(0);
+
+/** A background run finished: the stores are re-read and «Проверяю…» ends. */
+export function monitorFinished(): void {
+  monitorDoneCount.value = monitorDoneCount.value + 1;
+  reloadMonitor();
+}
+
 /** The bell badge: findings not looked at yet (subscriptions + new episodes). Re-read on monitorVersion. */
 export function newsBadge(): number {
   void monitorVersion.value;
@@ -33,13 +42,14 @@ export function applySchedule(s: MonitorSettings = loadMonitorSettings()): Promi
 
 const ASKED_KEY = 'tsp.monitorNotifyAsked';
 const BLOCKED_KEY = 'tsp.monitorNotifyHint';
+const isBool = (v: unknown) => typeof v === 'boolean';
 
 /**
  * The system notification dialog, once: when monitoring is first switched on or the first subscription is created.
  * Nothing happens when the permission is already decided.
  */
 export async function askNotifyOnce(): Promise<void> {
-  if (!monitorNative.available || loadJson<boolean>(ASKED_KEY, false)) return;
+  if (!monitorNative.available || loadJson<boolean>(ASKED_KEY, false, isBool)) return;
   const st = await monitorNative.notifyPermission();
   if (st !== 'prompt') return;
   saveJson(ASKED_KEY, true);
@@ -48,7 +58,7 @@ export async function askNotifyOnce(): Promise<void> {
 
 /** A background run could not show its notifications: ask (or hint) once. */
 export async function notifyBlocked(): Promise<void> {
-  if (!monitorNative.available || loadJson<boolean>(BLOCKED_KEY, false)) return;
+  if (!monitorNative.available || loadJson<boolean>(BLOCKED_KEY, false, isBool)) return;
   saveJson(BLOCKED_KEY, true);
   const st = await monitorNative.notifyPermission();
   if (st === 'prompt') {
@@ -57,6 +67,17 @@ export async function notifyBlocked(): Promise<void> {
     return;
   }
   showToast('Уведомления OMP выключены — включите их в настройках Android, чтобы узнавать о новых раздачах', 6000);
+}
+
+/**
+ * App start with monitoring on: a run that could not show its notifications (stored summary) is handled, and the
+ * permission is asked once (monitoring is on by default, so its first start counts as switching it on).
+ */
+export async function startupNotify(): Promise<void> {
+  if (!monitorNative.available || !loadMonitorSettings().enabled) return;
+  const last = lastCheck(await monitorNative.status());
+  if (last && last.notifyBlocked) await notifyBlocked();
+  await askNotifyOnce();
 }
 
 /** The last finished check: the newer of the page's own record and what Android reports. */
@@ -108,19 +129,26 @@ export function openNewsLink(url: string): void {
   if (getSubscription(l.sub)) navigate({ name: 'subFindings', id: l.sub, finding: l.finding, watch: l.watch });
 }
 
-/** monitorStatus(), asked again whenever the monitor stores change; null until it answers (or outside Android). */
-export function useMonitorStatus(): MonitorStatus | null {
+/**
+ * monitorStatus(), asked again whenever the monitor stores change (and every pollMs ms when set); null until it answers
+ * (or outside Android).
+ */
+export function useMonitorStatus(pollMs = 0): MonitorStatus | null {
   const [st, setSt] = useState<MonitorStatus | null>(null);
   const v = monitorVersion.value;
   useEffect(() => {
     let alive = true;
-    monitorNative.status().then(
-      (s) => alive && setSt(s),
-      () => {},
-    );
+    const ask = () =>
+      monitorNative.status().then(
+        (s) => alive && setSt(s),
+        () => {},
+      );
+    void ask();
+    const t = pollMs > 0 ? setInterval(() => void ask(), pollMs) : undefined;
     return () => {
       alive = false;
+      if (t) clearInterval(t);
     };
-  }, [v]);
+  }, [v, pollMs]);
   return st;
 }

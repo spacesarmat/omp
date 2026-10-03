@@ -74,6 +74,22 @@ describe('«Мониторинг»', () => {
     expect(mon.schedule.mock.calls.length).toBe(calls);
   });
 
+  it('the permission hint follows the answer to the prompt of switching on', async () => {
+    saveMonitorSettings({ enabled: false });
+    await mount();
+    expect(el.textContent).toContain('Уведомления для OMP выключены');
+    click(sw('Проверять в фоне'));
+    await flush();
+    expect(mon.requestNotifyPermission).toHaveBeenCalledTimes(1);
+    expect(el.textContent).not.toContain('Уведомления для OMP выключены');
+  });
+
+  it('the hours list is a radio group', async () => {
+    await mount();
+    click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').startsWith('Как часто')));
+    expect(el.querySelector('[role=radiogroup][aria-label="Как часто"]')!.querySelectorAll('[role=radio]')).toHaveLength(4);
+  });
+
   it('«Как часто» picks 1 / 3 / 6 / 12 hours', async () => {
     await mount();
     click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').startsWith('Как часто')));

@@ -7,11 +7,12 @@ import { ReplaceSheet, libraryTorrentOf } from '../ui/ReplaceSheet';
 import { useResultRows } from '../ui/useResultRows';
 import { navigate } from '../nav';
 import { monitorNative } from '../monitor/native';
-import { lastCheck, monitorVersion, reloadMonitor, useMonitorStatus } from '../monitor/ui';
+import { askNotifyOnce, lastCheck, monitorDoneCount, monitorVersion, reloadMonitor, useMonitorStatus } from '../monitor/ui';
 import { checkedLine, clock, dayWord, episodesLine, freshText, subRule } from '../monitor/text';
 import { phoneSourceContext } from '../searchContext';
 import { ONLY_ANDROID } from '../platform/native';
 import { client } from '../../../src/store/servers';
+import { activeTv } from '../tv/tvStore';
 import { torrents } from '../../../src/store/library';
 import { saveWatch } from '../../../src/store/journal';
 import { errorMessage } from '../../../src/api/http';
@@ -19,16 +20,20 @@ import { guessCategory } from '../../../src/lib/categoryGuess';
 import { shortTitle } from '../../../src/lib/libraryView';
 import { feedAll, feedSources } from '../../../src/sources/feed';
 import { enabledSources } from '../../../src/sources/store';
-import { filterQuality, sortResults } from '../../../src/sources/view';
+import { filterQuality, sortResults, sourceName } from '../../../src/sources/view';
 import type { SearchHandle } from '../../../src/sources/search';
 import { FEED_CATEGORIES, type FeedCategory, type SourceResult } from '../../../src/sources/types';
-import { feedFresh, loadFeed, saveFeed } from '../../../src/monitor/feedCache';
+import { FEED_FRESH_MS, feedFresh, loadFeed, storeFeedRefresh } from '../../../src/monitor/feedCache';
 import { findingsOf, loadSubs, markFindingsSeen, removeFindings, unseenCount } from '../../../src/monitor/subs';
 import { libraryRange } from '../../../src/monitor/newEpisodes';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { EPISODES_ID, type Finding } from '../../../src/monitor/types';
 
 type Seg = 'feed' | 'subs';
+
+/** «Проверяю…» ends after this even without monitorDone (the background run is capped at 3 minutes). */
+export const RUN_MAX_MS = 3 * 60 * 1000 + 15000;
+const POLL_MS = 5000;
 
 const CAT_LABELS: Record<FeedCategory, string> = { movie: 'Фильмы', tv: 'Сериалы', anime: 'Аниме' };
 
@@ -38,6 +43,8 @@ const memo: { seg: Seg; cat: FeedCategory; hd: boolean } = { seg: 'feed', cat: '
 // --- feed refresh: one run per category at a time; it fills the shared cache even if the screen is left
 const runs: Partial<Record<FeedCategory, SearchHandle>> = {};
 const failed: Partial<Record<FeedCategory, boolean>> = {};
+/** When a refresh of a category got no answer: not asked again for FEED_FRESH_MS, unless «Обновить». */
+const failedAt: Partial<Record<FeedCategory, number>> = {};
 const listeners = new Set<() => void>();
 
 function changed(): void {
@@ -47,7 +54,10 @@ function changed(): void {
 /** Asks the feed sources for `cat` unless the cache is fresh (or `force`); the screen follows through listeners. */
 export function refreshFeed(cat: FeedCategory, force = false): void {
   if (runs[cat]) return;
-  if (!force && feedFresh(cat, Date.now())) return;
+  const now = Date.now();
+  if (!force && feedFresh(cat, now)) return;
+  const fail = failedAt[cat];
+  if (!force && fail !== undefined && now - fail >= 0 && now - fail < FEED_FRESH_MS) return;
   const h = feedAll(phoneSourceContext(), cat, { onResult: changed });
   if (!h.sourceIds.length) return;
   runs[cat] = h;
@@ -56,8 +66,11 @@ export function refreshFeed(cat: FeedCategory, force = false): void {
   void h.done.then(() => {
     if (runs[cat] !== h) return;
     delete runs[cat];
-    if (h.answered().length) saveFeed(cat, sortResults(h.results(), 'date'), Date.now());
-    else failed[cat] = true;
+    if (storeFeedRefresh(cat, h.results(), h.answered(), Date.now())) delete failedAt[cat];
+    else {
+      failed[cat] = true;
+      failedAt[cat] = Date.now();
+    }
     changed();
   });
 }
@@ -69,6 +82,7 @@ export function resetNews(): void {
     if (h) h.cancel();
     delete runs[c];
     delete failed[c];
+    delete failedAt[c];
   });
   memo.seg = 'feed';
   memo.cat = 'movie';
@@ -114,7 +128,9 @@ function Feed() {
   const shown = filterQuality(list, hd ? '1080' : '');
   const now = Date.now();
   const status: string[] = [];
-  if (names.length) status.push('Свежее с ' + names.join(', '));
+  // the sites the saved rows came from; before the first answer, the switched-on ones
+  const from = cache && cache.sources && cache.sources.length ? cache.sources.map(sourceName) : names;
+  if (names.length) status.push('Свежее с ' + from.join(', '));
   if (cache) {
     const day = dayWord(cache.at, now);
     status.push('обновлено ' + (day ? day + ' ' : '') + 'в ' + clock(cache.at));
@@ -179,9 +195,11 @@ function scrollToHighlight(): void {
 
 function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; running: boolean }) {
   void monitorVersion.value;
-  const status = useMonitorStatus();
+  const [polling, setPolling] = useState(false);
+  // while «Проверяю…» shows, Android's state is asked again every few seconds (a stale «running» never sticks)
+  const status = useMonitorStatus(polling ? POLL_MS : 0);
   const [editing, setEditing] = useState(false);
-  const [replace, setReplace] = useState<Finding | null>(null);
+  const [replace, setReplace] = useState<{ f: Finding; watch: boolean } | null>(null);
   const [prompt, setPrompt] = useState(!!watch);
   const rows = useResultRows();
   const subs = loadSubs();
@@ -201,10 +219,18 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
   useEffect(() => setPrompt(!!watch), [finding, watch]);
 
   const last = lastCheck(status);
-  const line =
-    running || (status && status.running)
-      ? 'Проверяю…'
-      : checkedLine({ last: last ? last.at : null, next: status && status.nextRun ? status.nextRun : null, enabled: settings.enabled, now: Date.now() });
+  const checking = running || !!(status && status.running);
+  useEffect(() => setPolling(checking), [checking]);
+  const line = checking
+    ? 'Проверяю…'
+    : checkedLine({ last: last ? last.at : null, next: status && status.nextRun ? status.nextRun : null, enabled: settings.enabled, now: Date.now() });
+
+  // «Смотреть на ТВ» on a new-episodes card: replace first (history and settings move), then watch the new torrent
+  const replaceAndWatch = (f: Finding) => {
+    if (!activeTv.value) return navigate({ name: 'tv' });
+    setReplace({ f, watch: true });
+  };
+  const watchReplaced = (hash: string, title: string) => void rows.watch(hash, title);
 
   const unwatch = async (f: Finding) => {
     const c = client.value;
@@ -255,13 +281,23 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
             <div class="m-accent m-small">{episodesLine(e, have && have.from !== undefined ? have.from : 1)}</div>
             <div class="m-muted m-small">{f.result.Title}</div>
             {hl && prompt && (
-              <WatchPrompt title={shortTitle(f.result.Title)} onDismiss={() => setPrompt(false)} onWatch={() => void rows.add(f.result, true)} />
+              <WatchPrompt title={shortTitle(f.result.Title)} onDismiss={() => setPrompt(false)} onWatch={() => replaceAndWatch(f)} />
             )}
             <div class="m-result-actions">
-              <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={() => setReplace(f)}>
+              <button
+                type="button"
+                class="m-btn m-btn-primary m-btn-sm"
+                aria-label={'Заменить раздачу: ' + shortTitle(e.torrentTitle)}
+                onClick={() => setReplace({ f, watch: false })}
+              >
                 Заменить…
               </button>
-              <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void unwatch(f)}>
+              <button
+                type="button"
+                class="m-btn m-btn-secondary m-btn-sm"
+                aria-label={'Не следить за новыми сериями: ' + shortTitle(e.torrentTitle)}
+                onClick={() => void unwatch(f)}
+              >
                 Не следить
               </button>
             </div>
@@ -277,7 +313,14 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
         Настройки мониторинга
       </button>
       {editing && <SubSheet onClose={() => setEditing(false)} />}
-      {replace && <ReplaceSheet finding={replace} onClose={() => setReplace(null)} />}
+      {replace && (
+        <ReplaceSheet
+          finding={replace.f}
+          thenWatch={replace.watch}
+          onReplaced={replace.watch ? watchReplaced : undefined}
+          onClose={() => setReplace(null)}
+        />
+      )}
       {rows.sheets}
     </>
   );
@@ -286,15 +329,24 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
 export function News({ seg, finding, watch }: { seg?: Seg; finding?: string; watch?: boolean }) {
   const [current, setCurrent] = useState<Seg>(seg || memo.seg);
   const [running, setRunning] = useState(false);
-  const v = monitorVersion.value;
+  const done = monitorDoneCount.value;
+  useEffect(() => {
+    // monitoring is on by default: the first visit here counts as switching it on (asked once)
+    if (loadMonitorSettings().enabled) void askNotifyOnce().catch(() => {});
+  }, []);
   useEffect(() => {
     if (seg) {
       memo.seg = seg;
       setCurrent(seg);
     }
   }, [seg, finding, watch]);
-  // a finished background run (or any store change) ends «Проверяю…»
-  useEffect(() => setRunning(false), [v]);
+  // a finished background run ends «Проверяю…»; so does a run that never reports back (Android's 3-minute cap)
+  useEffect(() => setRunning(false), [done]);
+  useEffect(() => {
+    if (!running) return;
+    const t = setTimeout(() => setRunning(false), RUN_MAX_MS);
+    return () => clearTimeout(t);
+  }, [running]);
 
   const pick = (s: Seg) => {
     memo.seg = s;

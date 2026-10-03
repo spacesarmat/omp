@@ -39,7 +39,19 @@ export function libraryTorrentOf(f: Finding): Torrent | null {
  * «Заменить раздачу»: the library torrent against the new release, what is carried over, «Другая раздача» (other newer
  * releases, searched when the sheet opens), then the replace (the old torrent stays when anything fails).
  */
-export function ReplaceSheet({ finding, onClose }: { finding: Finding; onClose: () => void }) {
+export function ReplaceSheet({
+  finding,
+  thenWatch,
+  onReplaced,
+  onClose,
+}: {
+  finding: Finding;
+  /** «Смотреть на ТВ»: the button says «Заменить и смотреть»; onReplaced then launches the new torrent. */
+  thenWatch?: boolean;
+  /** Called with the new torrent after a successful replace (before the sheet closes). */
+  onReplaced?: (hash: string, title: string) => void;
+  onClose: () => void;
+}) {
   const e = finding.episodes!;
   const old = libraryTorrentOf(finding);
   const [picked, setPicked] = useState<SourceResult>(finding.result);
@@ -81,6 +93,7 @@ export function ReplaceSheet({ finding, onClose }: { finding: Finding; onClose: 
       reloadMonitor();
       void refreshTorrents(c).catch(() => {});
       showToast('Заменено: ' + shortTitle(picked.Title));
+      onReplaced?.(r.hash, picked.Title);
       if (alive.v) onClose();
       return;
     }
@@ -94,7 +107,7 @@ export function ReplaceSheet({ finding, onClose }: { finding: Finding; onClose: 
     return (
       <Sheet label="Другая раздача" onClose={() => setChoosing(false)}>
         <div class="m-sheet-title">Другая раздача</div>
-        <div class="m-sheet-scroll m-sub-pick">
+        <div class="m-sheet-scroll m-sub-pick" role="radiogroup" aria-label="Другая раздача">
           {list.map((r) => {
             const on = resultKey(r) === resultKey(picked);
             return (
@@ -125,7 +138,8 @@ export function ReplaceSheet({ finding, onClose }: { finding: Finding; onClose: 
   const more = others === null ? 'ищу…' : others.length ? 'ещё ' + others.length + ' ' + plural(others.length, 'вариант', 'варианта', 'вариантов') + ' ›' : 'других нет';
   return (
     <Sheet label="Заменить раздачу" onClose={() => !busy && onClose()}>
-      <div class="m-sheet-title">Заменить раздачу</div>
+      <div class="m-sheet-title">{thenWatch ? 'Заменить и смотреть' : 'Заменить раздачу'}</div>
+      {thenWatch && <div class="m-muted m-small">Сначала новая раздача заменит старую, потом начнётся просмотр на ТВ.</div>}
       <div class="m-muted m-small">{name + ' · Сезон ' + e.season}</div>
       <div class="m-rep-box">
         <div class="m-muted m-small">Сейчас</div>
@@ -168,7 +182,7 @@ export function ReplaceSheet({ finding, onClose }: { finding: Finding; onClose: 
           Отмена
         </button>
         <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={() => void replace()}>
-          Заменить
+          {thenWatch ? 'Заменить и смотреть' : 'Заменить'}
         </button>
       </div>
     </Sheet>

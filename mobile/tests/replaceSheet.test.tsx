@@ -96,6 +96,7 @@ describe('ReplaceSheet', () => {
   it('«Другая раздача» picks another candidate', async () => {
     await mount();
     click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').startsWith('Другая раздача')));
+    expect(el.querySelector('[role=radiogroup][aria-label="Другая раздача"]')).toBeTruthy();
     click(Array.from(el.querySelectorAll('[role=radio]')).find((b) => (b.textContent || '').includes('720p')));
     expect(el.querySelectorAll('.m-rep-line')[1].textContent).toBe('Серии 1–9 из 10 · 720p · 9 ГБ');
     replaceMock.mockResolvedValue({ ok: true, hash: 'd'.repeat(40) });

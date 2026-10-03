@@ -6,6 +6,10 @@ vi.mock('../../src/store/journal', async (orig) => ({
   ...(await orig<typeof import('../../src/store/journal')>()),
   saveWatch: vi.fn(),
 }));
+vi.mock('../../src/monitor/replace', async (orig) => ({
+  ...(await orig<typeof import('../../src/monitor/replace')>()),
+  replaceWithResult: vi.fn(),
+}));
 
 import { News, resetNews } from '../src/screens/News';
 import { currentRoute, resetTo } from '../src/nav';
@@ -17,6 +21,9 @@ import { addServer, setActiveServer, servers, removeServer } from '../../src/sto
 import { TorrServerClient } from '../../src/api/torrserver';
 import { torrents } from '../../src/store/library';
 import { saveWatch } from '../../src/store/journal';
+import { replaceWithResult } from '../../src/monitor/replace';
+import { RUN_MAX_MS } from '../src/screens/News';
+import { monitorFinished, reloadMonitor } from '../src/monitor/ui';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/store';
 import { saveFeed, loadFeed } from '../../src/monitor/feedCache';
@@ -31,6 +38,7 @@ let el: HTMLElement;
 let mon: FakeMonitor;
 const launch = vi.fn();
 const saveWatchMock = saveWatch as unknown as ReturnType<typeof vi.fn>;
+const replaceMock = replaceWithResult as unknown as ReturnType<typeof vi.fn>;
 
 function row(p: Partial<SourceResult>): SourceResult {
   return { Title: 'Тихая гавань (2026) WEB-DL 2160p', Categories: '', Size: '18,2 ГБ', CreateDate: '', Tracker: '', Link: '', Magnet: 'magnet:?xt=urn:btih:' + HASH, Hash: HASH, Peer: 0, Seed: 940, source: 'feedy', ...p };
@@ -92,6 +100,7 @@ beforeEach(() => {
   launch.mockReset().mockResolvedValue(undefined);
   setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
   saveWatchMock.mockReset();
+  replaceMock.mockReset();
   resetTo({ name: 'news' });
   vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
   vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue(null);
@@ -171,6 +180,46 @@ describe('«Новое» · Лента', () => {
     await flush();
     expect(launch).toHaveBeenCalled();
     expect(launch.mock.calls[0][0].torrent).toBe(HASH);
+  });
+
+  it('a partial refresh keeps the rows of sites that did not answer; the line names the sites behind the rows', async () => {
+    registerSource({ id: 'other', name: 'Другой', kind: 'builtin', search: () => Promise.resolve([]), latest: () => Promise.reject(new Error('нет')) });
+    registerSource(feedSource({ movie: [row({ Title: 'Свежий', date: 9000 })] }));
+    saveFeed('movie', [row({ Title: 'С другого', source: 'other', Hash: 'd'.repeat(40), date: 100 }), row({ Title: 'Старый ленточный', Hash: 'e'.repeat(40), date: 50 })], Date.now() - 3600000, ['other', 'feedy']);
+    try {
+      await mount();
+      const titles = Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+      expect(titles).toEqual(['Свежий', 'С другого']);
+      expect(loadFeed('movie')!.sources).toEqual(['feedy', 'other']);
+      expect(el.querySelector('.m-news-status')!.textContent).toContain('Свежее с Ленточный, Другой');
+    } finally {
+      unregisterSource('other');
+    }
+  });
+
+  it('only the sites that answered are named', async () => {
+    registerSource({ id: 'other', name: 'Другой', kind: 'builtin', search: () => Promise.resolve([]), latest: () => Promise.reject(new Error('нет')) });
+    registerSource(feedSource({ movie: [row({})] }));
+    try {
+      await mount();
+      expect(el.querySelector('.m-news-status')!.textContent).toContain('Свежее с Ленточный ·');
+    } finally {
+      unregisterSource('other');
+    }
+  });
+
+  it('a refresh with no answer and no cache is not repeated within 10 minutes (unless «Обновить»)', async () => {
+    let n = 0;
+    registerSource({ ...feedSource({}), latest: () => (n++, Promise.reject(new Error('нет'))) });
+    await mount();
+    expect(n).toBe(1);
+    expect(el.textContent).toContain('Сайты не ответили');
+    act(() => render(null, el));
+    await mount();
+    expect(n).toBe(1);
+    click(byText('Обновить'));
+    await flush();
+    expect(n).toBe(2);
   });
 
   it('no feed source switched on: says which sites give the feed', async () => {
@@ -255,18 +304,87 @@ describe('«Новое» · Подписки', () => {
     expect(toast.value).toBe('Сервер недоступен');
   });
 
-  it('a notification link highlights the card; «Смотреть на ТВ» waits for a tap', async () => {
+  it('a notification link highlights the card; «Смотреть на ТВ» replaces first, then plays the new torrent', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    torrents.value = [{ hash: OLD, title: 'Starbound Frontier / Сезон 2 / Серии 1-8 из 10 / 1080p', category: 'tv', stat: 3 } as any];
     addFindings([episodesFinding()]);
-    vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    const add = vi.spyOn(TorrServerClient.prototype, 'add');
+    const NEW = 'f'.repeat(40);
+    replaceMock.mockResolvedValue({ ok: true, hash: NEW });
     await mount({ seg: 'subs', finding: OLD + ':2:10', watch: true });
     expect(el.querySelector('.m-ep-card.m-hl')).toBeTruthy();
     expect(el.querySelector('.m-watch-prompt')).toBeTruthy();
     await flush();
+    // nothing happens before the taps
+    expect(replaceMock).not.toHaveBeenCalled();
     expect(launch).not.toHaveBeenCalled();
     click(byText('Смотреть на ТВ'));
+    expect(el.querySelector('[role=dialog][aria-label="Заменить раздачу"]')!.textContent).toContain('Заменить и смотреть');
+    expect(launch).not.toHaveBeenCalled();
+    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === 'Заменить и смотреть'));
     await flush();
-    expect(launch).toHaveBeenCalled();
+    expect(replaceMock.mock.calls[0][1]).toBe(OLD);
+    expect(replaceMock.mock.calls[0][2]).toMatchObject({ Title: 'Starbound Frontier / Сезон 2 / Серии 1-10 из 10 / 1080p' });
+    expect(add).not.toHaveBeenCalled();
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(launch.mock.calls[0][0].torrent).toBe(NEW);
+    expect(findingsOf('episodes')).toEqual([]);
+  });
+
+  it('«Смотреть на ТВ» after a failed replace shows the error and plays nothing', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    torrents.value = [{ hash: OLD, title: 'Starbound Frontier / Сезон 2 / Серии 1-8 из 10 / 1080p', category: 'tv', stat: 3 } as any];
+    addFindings([episodesFinding()]);
+    replaceMock.mockResolvedValue({ ok: false, error: 'Сервер недоступен' });
+    await mount({ seg: 'subs', finding: OLD + ':2:10', watch: true });
+    click(byText('Смотреть на ТВ'));
+    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === 'Заменить и смотреть'));
+    await flush();
+    expect(el.querySelector('.m-sheet [role=alert]')!.textContent).toBe('Сервер недоступен');
+    expect(launch).not.toHaveBeenCalled();
+    expect(findingsOf('episodes')).toHaveLength(1);
+  });
+
+  it('the episode buttons name their series', async () => {
+    addFindings([episodesFinding()]);
+    await mount({ seg: 'subs' });
+    expect(el.querySelector('[aria-label="Заменить раздачу: Starbound Frontier"]')).toBeTruthy();
+    expect(el.querySelector('[aria-label="Не следить за новыми сериями: Starbound Frontier"]')).toBeTruthy();
+  });
+
+  it('«Проверяю…» ends on monitorDone, not on other store changes, and after the time limit', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      await mount({ seg: 'subs' });
+      click(byText('Проверить сейчас'));
+      await flush();
+      expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Проверяю…');
+      act(() => reloadMonitor());
+      await flush();
+      expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Проверяю…');
+      act(() => monitorFinished());
+      await flush();
+      expect(el.querySelector('[data-monitor-status]')!.textContent).not.toBe('Проверяю…');
+      click(byText('Проверить сейчас'));
+      await flush();
+      expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Проверяю…');
+      act(() => {
+        vi.advanceTimersByTime(RUN_MAX_MS + 1);
+      });
+      await flush();
+      expect(el.querySelector('[data-monitor-status]')!.textContent).not.toBe('Проверяю…');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the first visit asks for the notification permission once', async () => {
+    await mount({ seg: 'subs' });
+    expect(mon.requestNotifyPermission).toHaveBeenCalledTimes(1);
+    act(() => render(null, el));
+    mon.permission = 'prompt';
+    await mount({ seg: 'subs' });
+    expect(mon.requestNotifyPermission).toHaveBeenCalledTimes(1);
   });
 
   it('«Заменить…» opens the replace sheet', async () => {

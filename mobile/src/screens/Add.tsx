@@ -89,8 +89,10 @@ interface Prog {
  */
 interface SearchMemo {
   query: string;
-  /** The query of the search on screen (the «Подписаться» plate). */
+  /** The query of the search on screen and the filters it ran with (the «Подписаться» plate). */
   searched: string;
+  searchedQuality: QualityFilter;
+  searchedSources: string[] | null;
   chosen: string[] | null;
   quality: QualityFilter;
   sort: SortKey;
@@ -105,7 +107,7 @@ interface SearchMemo {
 }
 
 function freshMemo(): SearchMemo {
-  return { query: '', searched: '', chosen: null, quality: '', sort: 'seeds', handle: null, order: [], rowCat: {}, server: null, busy: new Map() };
+  return { query: '', searched: '', searchedQuality: '', searchedSources: null, chosen: null, quality: '', sort: 'seeds', handle: null, order: [], rowCat: {}, server: null, busy: new Map() };
 }
 
 let memo: SearchMemo = freshMemo();
@@ -263,6 +265,8 @@ export function Add({ link }: { link?: string }) {
     });
     memo.handle = h;
     memo.searched = q;
+    memo.searchedQuality = quality;
+    memo.searchedSources = allChosen ? null : selected;
     memo.server = server;
     memo.order = [];
     sync(h);
@@ -495,7 +499,7 @@ export function Add({ link }: { link?: string }) {
       )}
       {subSheet && (
         <SubSheet
-          initial={{ query: memo.searched, quality: quality, sources: allChosen ? null : selected, notify: true }}
+          initial={{ query: memo.searched, quality: memo.searchedQuality, sources: memo.searchedSources, notify: true }}
           onClose={() => setSubSheet(false)}
         />
       )}

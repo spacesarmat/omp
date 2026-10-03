@@ -5,12 +5,12 @@ import { goBack } from '../nav';
 import { monitorNative, type NotifyPermission } from '../monitor/native';
 import { applySchedule, askNotifyOnce, lastCheck, monitorVersion, useMonitorStatus } from '../monitor/ui';
 import { hoursText, nextLine, summaryLines } from '../monitor/text';
-
-const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 import { MONITOR_HOURS, loadMonitorSettings, saveMonitorSettings, type MonitorSettings } from '../../../src/monitor/settings';
 
 const BACK = 'M15 5l-7 7 7 7';
 const CHECK = 'M5 12l5 5l9-10';
+
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
   return (
@@ -40,12 +40,16 @@ export function Monitor() {
     const next = saveMonitorSettings(patch);
     setS(next);
     if (patch.enabled !== undefined || patch.hours !== undefined || patch.wifiOnly !== undefined) void applySchedule(next);
-    if (patch.enabled === true) void askNotifyOnce().catch(() => {});
+    // the hint below follows what the user answered
+    if (patch.enabled === true) void askNotifyOnce().then(refreshPerm, () => {});
   };
 
   const allow = () => {
     void monitorNative.requestNotifyPermission().then(setPerm);
   };
+  function refreshPerm(): void {
+    if (monitorNative.available) void monitorNative.notifyPermission().then(setPerm);
+  }
 
   const last = lastCheck(status);
   const now = Date.now();
@@ -119,22 +123,24 @@ export function Monitor() {
       {hoursOpen && (
         <Sheet label="Как часто" onClose={() => setHoursOpen(false)}>
           <div class="m-sheet-title">Как часто</div>
-          {MONITOR_HOURS.map((h) => (
-            <button
-              key={h}
-              type="button"
-              role="radio"
-              aria-checked={s.hours === h}
-              class="m-opt"
-              onClick={() => {
-                change({ hours: h });
-                setHoursOpen(false);
-              }}
-            >
-              <span class="m-opt-name m-grow">{hoursText(h)}</span>
-              {s.hours === h && <Icon d={CHECK} size={20} />}
-            </button>
-          ))}
+          <div class="m-sub-pick" role="radiogroup" aria-label="Как часто">
+            {MONITOR_HOURS.map((h) => (
+              <button
+                key={h}
+                type="button"
+                role="radio"
+                aria-checked={s.hours === h}
+                class="m-opt"
+                onClick={() => {
+                  change({ hours: h });
+                  setHoursOpen(false);
+                }}
+              >
+                <span class="m-opt-name m-grow">{hoursText(h)}</span>
+                {s.hours === h && <Icon d={CHECK} size={20} />}
+              </button>
+            ))}
+          </div>
         </Sheet>
       )}
     </div>

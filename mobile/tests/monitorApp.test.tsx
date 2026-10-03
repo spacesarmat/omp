@@ -10,7 +10,7 @@ import { fakeMonitor, type FakeMonitor } from './fakeMonitor';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { addFindings, addSubscription } from '../../src/monitor/subs';
-import { saveMonitorSettings } from '../../src/monitor/settings';
+import { saveLastRun, saveMonitorSettings } from '../../src/monitor/settings';
 import type { SourceResult } from '../../src/sources/types';
 
 let el: HTMLElement;
@@ -57,6 +57,28 @@ describe('monitoring in the app shell', () => {
     saveMonitorSettings({ hours: 6, wifiOnly: false });
     await mount();
     expect(mon.schedule).toHaveBeenCalledWith({ enabled: true, hours: 6, wifiOnly: false });
+  });
+
+  it('monitoring on: the notification permission is asked once at start', async () => {
+    await mount();
+    expect(mon.requestNotifyPermission).toHaveBeenCalledTimes(1);
+    act(() => render(null, el));
+    mon.permission = 'prompt';
+    await mount();
+    expect(mon.requestNotifyPermission).toHaveBeenCalledTimes(1);
+  });
+
+  it('monitoring off: nothing is asked at start', async () => {
+    saveMonitorSettings({ enabled: false });
+    await mount();
+    expect(mon.requestNotifyPermission).not.toHaveBeenCalled();
+  });
+
+  it('a stored run that could not notify is handled at start (closed app: no monitorDone)', async () => {
+    mon.permission = 'denied';
+    saveLastRun({ at: 5, kind: 'check', found: 1, notified: 0, answered: 1, asked: 1, subs: 1, skipped: 0, feed: false, notifyBlocked: true });
+    await mount();
+    expect(toast.value).toContain('Уведомления OMP выключены');
   });
 
   it('the bell on «Новое» counts unseen findings and follows background runs', async () => {

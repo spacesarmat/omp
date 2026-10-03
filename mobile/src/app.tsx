@@ -36,7 +36,7 @@ import { News } from './screens/News';
 import { SubFindings } from './screens/SubFindings';
 import { Monitor } from './screens/Monitor';
 import { monitorNative } from './monitor/native';
-import { applySchedule, notifyBlocked, openNewsLink, reloadMonitor } from './monitor/ui';
+import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
 import './mobile.css';
 
 const TABS: string[] = TAB_IDS;
@@ -141,8 +141,10 @@ export function App() {
   // runs (reload the stores and the library) and open the findings of tapped notifications
   useEffect(() => {
     void applySchedule();
+    // the notification permission: once when monitoring is on, and for a run that could not notify while OMP was closed
+    if (activeServer.value) void startupNotify().catch(() => {});
     const offDone = monitorNative.onDone((summary) => {
-      reloadMonitor();
+      monitorFinished();
       const c = client.value;
       if (c) void refreshTorrents(c).catch(() => {});
       if (summary && summary.notifyBlocked) void notifyBlocked().catch(() => {});

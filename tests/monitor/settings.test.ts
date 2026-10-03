@@ -9,7 +9,7 @@ import {
   saveLastRun,
   saveMonitorSettings,
 } from '../../src/monitor/settings';
-import { FEED_FRESH_MS, FEED_MAX, feedFresh, loadFeed, saveFeed } from '../../src/monitor/feedCache';
+import { FEED_FRESH_MS, FEED_MAX, feedFresh, loadFeed, saveFeed, storeFeedRefresh } from '../../src/monitor/feedCache';
 import type { SourceResult } from '../../src/sources/types';
 
 function res(Title: string): SourceResult {
@@ -69,5 +69,20 @@ describe('feed cache', () => {
     expect(feedFresh('tv', 2000 + FEED_FRESH_MS - 1)).toBe(true);
     expect(feedFresh('tv', 2000 + FEED_FRESH_MS)).toBe(false);
     expect(feedFresh('anime', 2000)).toBe(false);
+  });
+
+  it('a refresh replaces the rows of the sources that answered and keeps the others', () => {
+    const r = (Title: string, source: string, date: number): SourceResult => ({ ...res(Title), source, Link: 'l:' + Title, date });
+    saveFeed('movie', [r('A old', 'a', 10), r('B old', 'b', 20)], 1000, ['a', 'b']);
+    const out = storeFeedRefresh('movie', [r('A new', 'a', 30)], ['a'], 5000)!;
+    expect(out.at).toBe(5000);
+    expect(out.results.map((x) => x.Title)).toEqual(['A new', 'B old']);
+    expect(out.sources).toEqual(['a', 'b']);
+    // nothing answered: nothing stored
+    expect(storeFeedRefresh('movie', [], [], 9000)).toBeNull();
+    expect(loadFeed('movie')!.at).toBe(5000);
+    // junk in sources is dropped
+    localStorage.setItem('tsp.newsFeed', JSON.stringify({ tv: { at: 1, results: [], sources: ['x', 5, 'x'] } }));
+    expect(loadFeed('tv')!.sources).toEqual(['x']);
   });
 });

@@ -655,6 +655,16 @@ describe('Add «Подписаться»', () => {
     setSourceOn('ts-torznab', false);
   });
 
+  it('the prefill uses the filters of the search that ran, not ones changed after it', async () => {
+    registerSource(fakeSource());
+    mount();
+    search('Дюна');
+    await flush();
+    click(byText('2160p'));
+    click(Array.from(el.querySelector('[data-plate="subscribe"]')!.querySelectorAll('button')).find((b) => b.textContent === 'Подписаться')!);
+    expect(el.querySelector('.m-sheet .m-chip.on')!.textContent).toBe('Любое');
+  });
+
   it('no plate before a search', () => {
     mount();
     expect(el.querySelector('[data-plate="subscribe"]')).toBeNull();

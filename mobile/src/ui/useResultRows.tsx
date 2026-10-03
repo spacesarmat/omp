@@ -18,6 +18,8 @@ export interface ResultRows {
   card(r: SourceResult, o?: { flag?: string; highlight?: boolean; onAdded?: () => void }): VNode;
   /** «Добавить» (watch false) or «На ТВ»; `onAdded` runs after a successful add. */
   add(r: SourceResult, watch: boolean, onAdded?: () => void): Promise<void>;
+  /** Plays a torrent already on the server on the TV (after a replace). */
+  watch(hash: string, label: string): Promise<void>;
   /** The category sheet and the launch dialogs. */
   sheets: VNode;
   error: string;
@@ -81,6 +83,15 @@ export function useResultRows(o?: { category?: (r: SourceResult) => string }): R
     }
   };
 
+  const watch = async (hash: string, label: string) => {
+    if (!activeTv.value) {
+      navigate({ name: 'tv' });
+      return;
+    }
+    setError('');
+    await launch.start({ hash, label, onError: setError, onLaunched: (name) => showToast('Запустил на ' + name) });
+  };
+
   const card = (r: SourceResult, c?: { flag?: string; highlight?: boolean; onAdded?: () => void }) => (
     <ResultCard
       key={resultKey(r)}
@@ -123,5 +134,5 @@ export function useResultRows(o?: { category?: (r: SourceResult) => string }): R
     </>
   );
 
-  return { card, add, sheets, error };
+  return { card, add, watch, sheets, error };
 }

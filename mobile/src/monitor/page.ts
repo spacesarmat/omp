@@ -7,7 +7,7 @@ import type { Torrent } from '../../../src/api/types';
 import { guessCategory } from '../../../src/lib/categoryGuess';
 import { checkSubscription, type CheckOptions } from '../../../src/monitor/check';
 import { parseEpisodeRange } from '../../../src/monitor/episodes';
-import { feedFresh, saveFeed } from '../../../src/monitor/feedCache';
+import { feedFresh, storeFeedRefresh } from '../../../src/monitor/feedCache';
 import { checkNewEpisodes, isWatchedSeries, seriesQuery, type LibraryTorrent } from '../../../src/monitor/newEpisodes';
 import { replaceWithResult, type ReplaceClient } from '../../../src/monitor/replace';
 import { loadMonitorSettings, saveLastRun, type MonitorActionResult, type MonitorSummary } from '../../../src/monitor/settings';
@@ -16,7 +16,7 @@ import { EPISODES_ID, type Finding, type Subscription } from '../../../src/monit
 import { feedAll, type FeedAllOptions } from '../../../src/sources/feed';
 import { createSecretStore, createSourceHttp } from '../../../src/sources/http';
 import { FEED_CATEGORIES, type SourceContext } from '../../../src/sources/types';
-import { resolveLink, seedsText, sortResults, sourceName } from '../../../src/sources/view';
+import { resolveLink, seedsText, sourceName } from '../../../src/sources/view';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import type { MonitorAction, MonitorHost, MonitorNotification } from './host';
 import { mergeJournal, type JournalItem } from './journal';
@@ -245,9 +245,7 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
         const h = feedAll(ctx, cat, deps.feed);
         return h.done.then(
           () => {
-            if (!h.answered().length) return false;
-            saveFeed(cat, sortResults(h.results(), 'date'), now());
-            return true;
+            return storeFeedRefresh(cat, h.results(), h.answered(), now()) !== null;
           },
           () => false,
         );
