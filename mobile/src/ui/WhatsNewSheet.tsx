@@ -25,7 +25,7 @@ export function WhatsNewSheet() {
   return (
     <Sheet label="Что нового" onClose={closeWhatsNew}>
       <div class="m-sheet-title">{w.title}</div>
-      <div class="m-whatsnew">
+      <div class="m-whatsnew m-sheet-scroll">
         {w.entries.map((e) => (
           <section key={e.version}>
             <h3>{e.version}</h3>
