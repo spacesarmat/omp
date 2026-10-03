@@ -169,6 +169,20 @@ describe('NowPlaying', () => {
       expect(items[1].textContent).toContain('1:32');
       expect(items[3].textContent).toContain('Глава 4');
     });
+    it('the list is announced: current item has aria-current, labels name chapter, time and state', () => {
+      setState(state({ chapters, chapter: 2 }));
+      mount(<NowPlaying volume={volume} />);
+      const items = Array.from(el.querySelectorAll('.m-now-chitem'));
+      expect(items.map((x) => x.getAttribute('aria-current'))).toEqual([null, null, 'true', null]);
+      expect(items[2].getAttribute('aria-label')).toBe('Погоня, с 20:00, сейчас идёт');
+      expect(items[3].getAttribute('aria-label')).toBe('Глава 4, с 46:40');
+      expect(el.querySelector('.m-now-chlist')!.getAttribute('aria-label')).toBe('Главы');
+    });
+    it('an untitled chapter is not named twice in the header', () => {
+      setState(state({ chapters, chapter: 3 }));
+      mount(<NowPlaying volume={volume} />);
+      expect(el.querySelector('.m-now-chtext')!.textContent).toBe('Глава 4 из 4');
+    });
     it('a list item sends the chapter command', () => {
       setState(state({ chapters, chapter: 2 }));
       mount(<NowPlaying volume={volume} />);

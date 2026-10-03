@@ -7,7 +7,7 @@ import { nowPlaying, lastSeen, linkStatus, launching, sendCmd } from '../tv/play
 import { volume as tvVolume } from '../tv/tvClient';
 import { formatDuration } from '../../../src/lib/format';
 import { displayTitle } from '../ui/displayTitle';
-import { chapterIndexAt, chapterStepIndex, type Chapter } from '../../../src/player/chapters';
+import { chapterIndexAt, chapterLabel, chapterStepIndex, type Chapter } from '../../../src/player/chapters';
 import { hasPosterImage, playerPosterStyle } from '../ui/playerPoster';
 
 const HOLD_MS = 1500;
@@ -110,7 +110,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
   const list: Chapter[] = (s.chapters || []).map((c) => ({ start: c.t, end: c.t, title: c.title, kind: null }));
   const local = chapterIndexAt(list, shown);
   const cur = drag !== null || holding || s.chapter === undefined ? local : s.chapter;
-  const chapterName = (i: number) => (list[i].title || 'Глава ' + (i + 1));
+  const chapterName = (i: number) => chapterLabel(list[i], i);
   const stepChapter = (dir: 1 | -1) => {
     const i = chapterStepIndex(list, shown, dir);
     if (i === null) return;
@@ -178,7 +178,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
             <span class="m-now-chnum">
               {cur >= 0 ? 'Глава ' + (cur + 1) + ' из ' + list.length : 'Глав: ' + list.length}
             </span>
-            {cur >= 0 && chapterName(cur)}
+            {cur >= 0 && list[cur].title.trim() !== '' && chapterName(cur)}
           </span>
           <button
             type="button"
@@ -240,13 +240,15 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
         </div>
       </div>
       {list.length > 0 && (
-        <div class="m-now-chlist">
+        <div class="m-now-chlist" role="group" aria-label="Главы">
           <div class="m-now-chhead">Главы</div>
           {list.map((c, i) => (
             <button
               key={i}
               type="button"
               class={'m-now-chitem' + (i === cur ? ' on' : '')}
+              aria-current={i === cur ? 'true' : undefined}
+              aria-label={chapterName(i) + ', с ' + formatDuration(c.start) + (i === cur ? ', сейчас идёт' : '')}
               disabled={off}
               onClick={() => {
                 sendCmd({ type: 'chapter', i });

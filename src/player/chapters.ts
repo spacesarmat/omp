@@ -30,6 +30,17 @@ export function chapterList(probe: FfprobeResult | null): Chapter[] {
   return out;
 }
 
+/** Chapter name for lists: its title, else «Глава N» (N is the 1-based place in the list, so untitled chapters never repeat). */
+export function chapterLabel(c: { title: string }, index: number): string {
+  const t = c.title.replace(/^\s+|\s+$/g, '');
+  return t || 'Глава ' + (index + 1);
+}
+
+/** The phone gets at most this many chapters (a file with hundreds would bloat every state message). */
+export const MAX_PHONE_CHAPTERS = 100;
+/** Longest chapter title sent to the phone. */
+export const MAX_PHONE_CHAPTER_TITLE = 80;
+
 /** Intro and credits of a file: chapters win over the manual marks (credits mark: the last `mc` seconds). */
 export function skipSegments(
   probe: FfprobeResult | null,

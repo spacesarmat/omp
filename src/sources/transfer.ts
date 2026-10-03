@@ -5,7 +5,7 @@
 // with the saved login and answers remoteSourcesDone { id, rutracker }.
 // Shared by the phone and the TV bundles: Chromium 53 rules.
 import { isObject, loadJson, saveJson } from '../store/storage';
-import { rutrackerLoginPending, RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA } from './rutracker';
+import { RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA } from './rutrackerText';
 import { clearHealth, getHealth, isSourceOn, setHealth, setSourceOn } from './store';
 import type { Source, SourceContext, SourceHealth } from './types';
 
@@ -207,7 +207,9 @@ export function applyRemoteSources(r: RemoteSources, known: Source[], ctx: () =>
   }
   let p: Promise<void>;
   try {
-    p = rutrackerLoginPending(ctx());
+    // the parser is a separate chunk (Android only), never part of the LG bundle
+    const context = ctx();
+    p = import('./rutracker').then((m) => m.rutrackerLoginPending(context));
   } catch (e) {
     p = Promise.reject(e);
   }

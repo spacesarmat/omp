@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { sanitizeCmd, sanitizeMessage } from '../../src/phone/protocol';
+import { MAX_PHONE_CHAPTERS } from '../../src/player/chapters';
 
 const HASH = 'abcdef0123456789abcdef0123456789abcdef01';
 const state = () => ({
@@ -48,6 +49,12 @@ describe('sanitizeMessage', () => {
     expect(sanitizeMessage({ v: 1, app: 'x', state: { ...state(), poster: 'http://p' } })!.state!.poster).toBe('http://p');
     expect(sanitizeMessage({ v: 1, app: 'x', state: state() })!.state).not.toHaveProperty('poster');
     expect(sanitizeMessage({ v: 1, app: 'x', state: { ...state(), next: null } })!.state!.next).toBeNull();
+  });
+  it('cuts a chapter list from an old TV to the cap', () => {
+    const ok = (extra: object) => sanitizeMessage({ v: 1, app: 'x', state: { ...state(), ...extra } })!.state!;
+    const chapters = Array.from({ length: 300 }, (_, i) => ({ t: i, title: 'c' }));
+    expect(ok({ chapters, chapter: 250 }).chapters!.length).toBe(MAX_PHONE_CHAPTERS);
+    expect(ok({ chapters, chapter: 250 }).chapter).toBe(-1);
   });
   it('keeps chapters and the current one, tolerates their absence, drops bad lists', () => {
     const chapters = [{ t: 0, title: 'Пролог' }, { t: 92, title: '' }];

@@ -4,6 +4,7 @@
 // Selectors and the login form follow the open-source Jackett RuTracker indexer (not checked with a real account).
 import { absUrl, parseHtml, parseSize, textOf } from './html';
 import { checkPage, magnetOf, makeResult, requireHost, toInt } from './site';
+import { RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA, RUTRACKER_EMPTY, RUTRACKER_NO_STORE } from './rutrackerText';
 import { loginRequired } from './types';
 import type { HttpResponse, SecretStore, Source, SourceContext, SourceResult } from './types';
 
@@ -18,10 +19,7 @@ const PASS_KEY = 'rutracker.password';
 export const RUTRACKER_PENDING_USER_KEY = 'rutracker.pending.username';
 export const RUTRACKER_PENDING_PASS_KEY = 'rutracker.pending.password';
 
-export const RUTRACKER_CAPTCHA = 'rutracker просит капчу — войдите на сайте в браузере и попробуйте снова';
-export const RUTRACKER_BAD_LOGIN = 'Неверный логин или пароль';
-export const RUTRACKER_EMPTY = 'Введите логин и пароль';
-export const RUTRACKER_NO_STORE = 'Вход доступен только в приложении Android';
+export { RUTRACKER_CAPTCHA, RUTRACKER_BAD_LOGIN, RUTRACKER_EMPTY, RUTRACKER_NO_STORE };
 
 function signedIn(res: HttpResponse, doc: Document): boolean {
   if (/\/forum\/login\.php/i.test(res.url)) return false;

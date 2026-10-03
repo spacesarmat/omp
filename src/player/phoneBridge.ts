@@ -1,7 +1,7 @@
 import type { Cmd, PlayerState } from '../phone/protocol';
 import type { PlayItem } from './types';
 import { episodeLabel } from '../lib/episodes';
-import { chapterIndexAt, type Chapter } from './chapters';
+import { chapterIndexAt, MAX_PHONE_CHAPTERS, MAX_PHONE_CHAPTER_TITLE, type Chapter } from './chapters';
 
 export interface SnapshotInput {
   queue: PlayItem[];
@@ -49,8 +49,9 @@ export function buildSnapshot(i: SnapshotInput): PlayerState | null {
   };
   if (item.poster) s.poster = item.poster;
   if (i.chapters && i.chapters.length) {
-    s.chapters = i.chapters.map((c) => ({ t: c.start, title: c.title }));
-    s.chapter = chapterIndexAt(i.chapters, i.time);
+    const list = i.chapters.slice(0, MAX_PHONE_CHAPTERS);
+    s.chapters = list.map((c) => ({ t: c.start, title: c.title.slice(0, MAX_PHONE_CHAPTER_TITLE) }));
+    s.chapter = Math.min(chapterIndexAt(list, i.time), list.length - 1);
   }
   return s;
 }

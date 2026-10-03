@@ -17,6 +17,8 @@ import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
 import { useSkip, firstPlayableId } from '../lib/useSkip';
 import { skipStatus } from '../lib/skipMarks';
+import { MarksDialog } from '../ui/MarksDialog';
+import { setFocus } from '@noriginmedia/norigin-spatial-navigation';
 
 export function TorrentScreen({ hash }: { hash: string }) {
   const c = client.value!;
@@ -74,6 +76,12 @@ export function TorrentScreen({ hash }: { hash: string }) {
   const skip = useSkip(c, hash, firstPlayableId(files));
   const toggleSkip = (key: 'i' | 'c') => {
     skip.save((p) => (key === 'i' ? { i: !p.i } : { c: !p.c }), true).then(undefined, (e) => toast(errorMessage(e), 'error'));
+  };
+
+  const [marksOpen, setMarksOpen] = useState(false);
+  const closeMarks = () => {
+    setMarksOpen(false);
+    setTimeout(() => setFocus('skip-status'), 0);
   };
 
   useEffect(() => {
@@ -170,11 +178,19 @@ export function TorrentScreen({ hash }: { hash: string }) {
             <span class="skip-label">Пропускать титры — сразу следующая серия</span>
             <span class={'skip-switch' + (skip.prefs.c ? ' on' : '')} role="switch" aria-label="Пропускать титры" aria-checked={skip.prefs.c} />
           </Focusable>
-          <Focusable focusKey="skip-status" className="skip-row skip-status">
+          <Focusable focusKey="skip-status" className="skip-row skip-status" onPress={() => setMarksOpen(true)}>
             <span class="skip-label">Заставка и титры</span>
-            <span class="muted">{skipStatus(skip.hasChapters, skip.prefs)}</span>
+            <span class="muted">{skipStatus(skip.hasChapters, skip.prefs)} · ОК — задать вручную</span>
           </Focusable>
         </FocusGroup>
+      )}
+      {marksOpen && (
+        <MarksDialog
+          subtitle={(t ? t.title || t.name || '' : '') + ' · для всех серий · главы файла важнее'}
+          prefs={{ mi: skip.prefs.mi || null, mc: skip.prefs.mc || null }}
+          onSave={(m) => skip.save({ mi: m.mi, mc: m.mc }, false)}
+          onClose={closeMarks}
+        />
       )}
       {loadingInfo && <Spinner text="Получение списка файлов…" />}
       {error && <div class="banner-error">{error}</div>}

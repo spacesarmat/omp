@@ -7,20 +7,31 @@ import { resetTo } from './ui/nav';
 import { readLaunchParams, onRelaunch } from './platform/launch';
 import { runLaunchParams } from './launchActions';
 import { platformKind } from './platform/env';
-import { installErrorHooks, logStart } from './lib/log';
-import { registerBuiltinSources } from './sources/builtin';
+import { installErrorHooks, log, logStart } from './lib/log';
 
 init({ debug: false, visualDebug: false });
 
 installErrorHooks();
 logStart(platformKind() === 'androidtv' ? 'Android TV' : 'LG webOS');
 
-// the built-in tracker parsers need the native http of the Android APK; LG search stays TorrServer-only
-if (platformKind() === 'androidtv') registerBuiltinSources();
+function start(): void {
+  if (activeServer.value) resetTo({ name: 'library' });
 
-if (activeServer.value) resetTo({ name: 'library' });
+  render(<App />, document.getElementById('app')!);
 
-render(<App />, document.getElementById('app')!);
+  runLaunchParams(readLaunchParams());
+  onRelaunch(runLaunchParams);
+}
 
-runLaunchParams(readLaunchParams());
-onRelaunch(runLaunchParams);
+// The built-in tracker parsers need the native http of the Android APK; LG search stays TorrServer-only, so the
+// parsers are a separate chunk that the LG bundle never loads. A failed load must not keep the TV from starting.
+if (platformKind() === 'androidtv') {
+  import('./sources/builtin')
+    .then(
+      (m) => m.registerBuiltinSources(),
+      () => log('warn', 'tv', 'Не удалось загрузить источники поиска'),
+    )
+    .then(start);
+} else {
+  start();
+}
