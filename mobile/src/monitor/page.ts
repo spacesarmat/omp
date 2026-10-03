@@ -4,6 +4,7 @@
 // A notification button: «Добавить» a subscription finding / «Заменить» a series torrent.
 import { errorMessage } from '../../../src/api/http';
 import type { Torrent } from '../../../src/api/types';
+import { log, flushLog } from '../../../src/lib/log';
 import { guessCategory } from '../../../src/lib/categoryGuess';
 import { checkSubscription, type CheckOptions } from '../../../src/monitor/check';
 import { parseEpisodeRange } from '../../../src/monitor/episodes';
@@ -265,6 +266,22 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
   return s;
 }
 
+/** Counts only, never titles. */
+function logSummary(s: MonitorSummary): void {
+  try {
+    if (s.kind === 'action') log('info', 'monitor', 'Действие из уведомления выполнено');
+    else
+      log(
+        s.error ? 'error' : 'info',
+        'monitor',
+        'Фоновая проверка: подписок ' + s.subs + ', найдено ' + s.found + ', источников ' + s.answered + ' из ' + s.asked + (s.skipped ? ', пропущено ' + s.skipped : '') + (s.error ? '. ' + s.error : ''),
+      );
+    flushLog();
+  } catch {
+    /* never break the run */
+  }
+}
+
 /** The whole run: asks Android what to do, does it, reports. Never rejects; finish() is always called. */
 export async function runMonitor(deps: PageDeps): Promise<MonitorSummary> {
   const now = deps.now || Date.now;
@@ -284,6 +301,7 @@ export async function runMonitor(deps: PageDeps): Promise<MonitorSummary> {
     summary = emptySummary(now(), 'check');
     summary.error = errorMessage(e);
   }
+  logSummary(summary);
   deps.host.finish(summary);
   return summary;
 }

@@ -7,9 +7,13 @@ import { resetTo } from './ui/nav';
 import { readLaunchParams, onRelaunch } from './platform/launch';
 import { runLaunchParams } from './launchActions';
 import { platformKind } from './platform/env';
+import { installErrorHooks, logStart } from './lib/log';
 import { registerBuiltinSources } from './sources/builtin';
 
 init({ debug: false, visualDebug: false });
+
+installErrorHooks();
+logStart(platformKind() === 'androidtv' ? 'Android TV' : 'LG webOS');
 
 // the built-in tracker parsers need the native http of the Android APK; LG search stays TorrServer-only
 if (platformKind() === 'androidtv') registerBuiltinSources();

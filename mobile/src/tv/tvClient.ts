@@ -4,6 +4,7 @@ import { signal, effect } from '@preact/signals';
 import { native, type OmpNativeApi, type FoundOmpTv } from '../platform/native';
 import { activeTv, saveTv, setActiveTv, clearTvToken, normalizeMac, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
 import { showToast } from '../ui/toast';
+import { log } from '../../../src/lib/log';
 import {
   registerMessage,
   requestMessage,
@@ -145,6 +146,7 @@ function fail(s: Session, message: string): void {
   if (session !== s) return;
   endSession(s, message);
   void closeTransport();
+  log('warn', 'tv', 'LG: ' + message);
   tvState.value = 'error';
   // While a warm-up retries, its failures stay silent until it gives up.
   if (warmActive) warmError = message;
@@ -687,6 +689,7 @@ function atvFail(s: AtvSession, message: string): void {
   // the token is dead: the next tap on the TV asks for a code right away
   if (message === TV_FORGOT) clearTvToken(s.tv.ip, s.tv.token);
   endAtv();
+  log('warn', 'tv', 'Android TV: ' + message);
   tvState.value = 'error';
   // While a warm-up retries, its failures stay silent until it gives up.
   if (warmActive) warmError = message;

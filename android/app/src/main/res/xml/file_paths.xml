@@ -2,4 +2,6 @@
 <paths>
     <!-- Only the downloaded update APK is shared with the system installer -->
     <cache-path name="updates" path="updates/" />
+    <!-- The log text file handed to the system «Поделиться» -->
+    <cache-path name="logs" path="logs/" />
 </paths>

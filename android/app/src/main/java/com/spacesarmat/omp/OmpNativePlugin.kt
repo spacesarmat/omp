@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -26,6 +27,7 @@ import com.spacesarmat.omp.sources.HttpSpec
 import com.spacesarmat.omp.sources.SiteHttp
 import com.spacesarmat.omp.sources.SiteHttpException
 import com.spacesarmat.omp.sources.SourceServices
+import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -417,6 +419,38 @@ class OmpNativePlugin : Plugin() {
             call.reject("Нет приложения для просмотра видео")
         } catch (_: RuntimeException) {
             call.reject("Не удалось открыть плеер")
+        }
+    }
+
+    /** Writes [text] to cache/logs/[name] and opens the system share sheet for it (FileProvider, text/plain). */
+    @PluginMethod
+    fun shareText(call: PluginCall) {
+        val name = shareFileName(call.getString("name"))
+        val text = call.getString("text")
+        if (text == null) {
+            call.reject("Нет текста для файла")
+            return
+        }
+        try {
+            val dir = File(context.cacheDir, "logs").apply { mkdirs() }
+            val file = File(dir, name)
+            file.writeText(text, Charsets.UTF_8)
+            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+            val send = Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val chooser = Intent.createChooser(send, "Поделиться журналом")
+            val act = activity
+            if (act != null) act.startActivity(chooser)
+            else context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            call.resolve()
+        } catch (_: ActivityNotFoundException) {
+            call.reject("Нет приложения для отправки файла")
+        } catch (_: java.io.IOException) {
+            call.reject("Не удалось сохранить файл")
+        } catch (_: RuntimeException) {
+            call.reject("Не удалось поделиться файлом")
         }
     }
 
@@ -962,4 +996,13 @@ class OmpNativePlugin : Plugin() {
             return length
         }
     }
+}
+
+/** A safe file name for the share cache: no directories, only letters, digits and `.-_`; `.txt` when it has no extension. */
+internal fun shareFileName(raw: String?): String {
+    val cleaned = (raw ?: "").substringAfterLast('/').substringAfterLast('\\')
+        .map { if (it.isLetterOrDigit() || it == '.' || it == '-' || it == '_') it else '_' }
+        .joinToString("").trim('.', '_')
+    val base = cleaned.ifEmpty { "omp-log.txt" }
+    return if (base.contains('.')) base else "$base.txt"
 }

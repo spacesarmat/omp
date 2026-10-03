@@ -3,6 +3,7 @@
 // SSAP lives in src/tv.
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
+import { log } from '../../../src/lib/log';
 import type { HttpResponse, SecretStore, SourceHttp } from '../../../src/sources/types';
 
 export interface FoundTv {
@@ -91,6 +92,8 @@ export interface OmpNativeApi {
   secretGet(key: string): Promise<string | null>;
   secretSet(key: string, value: string): Promise<void>;
   secretDelete(key: string): Promise<void>;
+  /** Writes `text` to a file `name` and opens the system «Поделиться». */
+  shareText(o: { name: string; text: string }): Promise<void>;
 }
 
 interface OmpNativePlugin {
@@ -120,6 +123,7 @@ interface OmpNativePlugin {
   secretGet(o: { key: string }): Promise<{ value?: string | null }>;
   secretSet(o: { key: string; value: string }): Promise<void>;
   secretDelete(o: { key: string }): Promise<void>;
+  shareText(o: { name: string; text: string }): Promise<void>;
   addListener(event: 'tvMessage', cb: (e: { json: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'tvClosed', cb: (e: { reason: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'apkProgress', cb: (e: { percent: number }) => void): Promise<PluginListenerHandle>;
@@ -161,6 +165,17 @@ function listen(add: () => Promise<PluginListenerHandle>): () => void {
 }
 
 const noop = () => {};
+
+/** Logs a failed native call (method name and message only) and passes the rejection on. */
+function logged<T>(name: string, p: Promise<T>): Promise<T> {
+  return p.then(
+    (v) => v,
+    (e) => {
+      log('error', 'app', 'Нативный вызов ' + name + ': ' + (e && typeof e.message === 'string' ? e.message : 'ошибка'));
+      throw e;
+    },
+  );
+}
 
 function parse(json: string): any {
   try {
@@ -272,12 +287,12 @@ export const native: OmpNativeApi = {
 
   wakeOnLan(mac, ip) {
     if (!plugin) return unavailable();
-    return plugin.wakeOnLan({ mac, ip });
+    return logged('wakeOnLan', plugin.wakeOnLan({ mac, ip }));
   },
 
   openExternal(url, mime) {
     if (!plugin) return unavailable();
-    return plugin.openExternal({ url, mime });
+    return logged('openExternal', plugin.openExternal({ url, mime }));
   },
 
   async downloadAndInstallApk(url, sha256, onProgress) {
@@ -285,7 +300,7 @@ export const native: OmpNativeApi = {
     // awaited so that no early progress event is missed
     const handle = await plugin.addListener('apkProgress', (e) => onProgress(e.percent));
     try {
-      await plugin.downloadAndInstallApk({ url, sha256 });
+      await logged('downloadAndInstallApk', plugin.downloadAndInstallApk({ url, sha256 }));
     } finally {
       void handle.remove();
     }
@@ -330,7 +345,7 @@ export const native: OmpNativeApi = {
 
   async startLocalServer() {
     if (!plugin) return unavailable();
-    return serverInfo(await plugin.startLocalServer());
+    return serverInfo(await logged('startLocalServer', plugin.startLocalServer()));
   },
 
   stopLocalServer() {
@@ -396,6 +411,11 @@ export const native: OmpNativeApi = {
   secretDelete(key) {
     if (!plugin) return unavailable();
     return plugin.secretDelete({ key });
+  },
+
+  shareText(o) {
+    if (!plugin) return unavailable();
+    return logged('shareText', plugin.shareText(o));
   },
 };
 
