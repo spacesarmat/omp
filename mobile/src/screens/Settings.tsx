@@ -229,6 +229,30 @@ export function Settings() {
   return (
     <div class="m-screen" data-route="settings">
       <h1>Настройки</h1>
+      {/* updates first: the version and the check are what people look for most here */}
+      <section class="m-set-group">
+        <div class="m-set-label">Обновление</div>
+        <div class="m-set-row">
+          <span>Версия</span>
+          <span class="m-muted">{APP_VERSION}</span>
+        </div>
+        <button type="button" class="m-btn m-btn-secondary" onClick={() => void check()}>
+          Проверить обновления
+        </button>
+        <div class="m-set-row">
+          <span>Проверять обновления при запуске</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={on}
+            aria-label="Проверять обновления при запуске"
+            class={'m-switch' + (on ? ' on' : '')}
+            onClick={() => updateSettings({ updateCheck: !on })}
+          >
+            <span class="m-switch-knob" />
+          </button>
+        </div>
+      </section>
       {localServer.value.supported && <LocalServerSection />}
       <section class="m-set-group">
         <div class="m-set-label">Сервер</div>
@@ -269,26 +293,6 @@ export function Settings() {
       </section>
       <section class="m-set-group">
         <div class="m-set-label">О приложении</div>
-        <div class="m-set-row">
-          <span>Версия</span>
-          <span class="m-muted">{APP_VERSION}</span>
-        </div>
-        <button type="button" class="m-btn m-btn-secondary" onClick={() => void check()}>
-          Проверить обновления
-        </button>
-        <div class="m-set-row">
-          <span>Проверять обновления при запуске</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={on}
-            aria-label="Проверять обновления при запуске"
-            class={'m-switch' + (on ? ' on' : '')}
-            onClick={() => updateSettings({ updateCheck: !on })}
-          >
-            <span class="m-switch-knob" />
-          </button>
-        </div>
         <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(PROJECT_URL, '_system')}>
           Страница проекта
         </button>
