@@ -17,6 +17,7 @@ function fakeNative(o: Partial<InstallNative> = {}): InstallNative {
     discoverCastTvs: async () => [],
     discoverOmpTvs: async () => [],
     probePorts: async () => [],
+    stopDiscovery: async () => {},
     ...o,
   };
 }

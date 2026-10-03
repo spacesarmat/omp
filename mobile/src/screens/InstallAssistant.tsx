@@ -9,8 +9,18 @@ import { compareVersions } from '../../../src/lib/version';
 import { connectTv, launchLgApp, sessionIp, tvState } from '../tv/tvClient';
 import { tvs } from '../tv/tvStore';
 import { latestOmpVersion, openUpdateOnTv, tvOpensUpdate } from '../tv/tvUpdate';
-import { deviceFor, rememberDevice, searchDevices, type InstallDevice, type InstallDeviceKind } from '../install/devices';
+import {
+  deviceFor,
+  installNative,
+  rememberDevice,
+  searchDevices,
+  KIND_NAME,
+  type InstallDevice,
+  type InstallDeviceKind,
+} from '../install/devices';
 import { deviceFacts } from '../install/facts';
+import { createTakeover, otherConnection, takeoverQuestion, type OtherTv } from '../install/session';
+import { Sheet } from '../ui/Sheet';
 
 /** Task 7 plugs the phone installers in here; until then «Установить» is shown disabled. */
 export type Installer = (plan: InstallPlan, facts: DeviceFacts) => void;
@@ -69,6 +79,9 @@ function Find() {
     };
   }, [round]);
 
+  // leaving the list: the native NSD searches stop too
+  useEffect(() => () => void installNative().stopDiscovery().catch(() => {}), []);
+
   useEffect(() => {
     let alive = true;
     void latestOmpVersion('atv').then((v) => alive && setLatestAtv(v));
@@ -94,7 +107,7 @@ function Find() {
     open(
       known || {
         ip: v,
-        name: saved?.name || (kind === 'atv' ? 'Android TV ' : 'LG ') + v,
+        name: saved?.name || KIND_NAME[kind] + ' ' + v,
         kind,
         online: false,
         saved: !!saved,
@@ -155,6 +168,9 @@ function Find() {
             <button type="button" class={kind === 'atv' ? 'on' : ''} aria-pressed={kind === 'atv'} onClick={() => setKind('atv')}>
               Android TV
             </button>
+            <button type="button" class={kind === 'samsung' ? 'on' : ''} aria-pressed={kind === 'samsung'} onClick={() => setKind('samsung')}>
+              Samsung
+            </button>
           </div>
           {formError && (
             <div class="m-error" role="alert">
@@ -183,19 +199,47 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
   const [hint, setHint] = useState('');
   const alive = useRef(true);
   const req = useRef(0);
+  const takeover = useRef(createTakeover()).current;
+  /** Another TV is connected: asked before the assistant connects to this one. */
+  const [ask, setAsk] = useState<{ other: OtherTv; proceed: () => void } | null>(null);
+  const agreed = useRef(false);
 
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
+      // leaving the steps: the TV the user was connected to comes back
+      void takeover.restore(device.ip);
     };
   }, []);
+
+  /** Runs `go` now, or after «Подключиться» when another TV is connected. */
+  function withConsent(go: () => void, onCancel: () => void) {
+    const other = agreed.current ? null : otherConnection(device.ip);
+    if (!other) {
+      takeover.note(device.ip);
+      go();
+      return;
+    }
+    setAsk({
+      other,
+      proceed: () => {
+        agreed.current = true;
+        setAsk(null);
+        takeover.note(device.ip);
+        go();
+      },
+    });
+    cancelAsk.current = onCancel;
+  }
+  const cancelAsk = useRef<() => void>(() => {});
 
   useEffect(() => {
     setChecking(true);
     setHint('');
     const mine = ++req.current;
-    deviceFacts(device).then(
+    const collect = () =>
+      deviceFacts(device).then(
       (f) => {
         if (!alive.current || mine !== req.current) return;
         setFacts(f);
@@ -206,6 +250,9 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
         setChecking(false);
       },
     );
+    // only an LG check connects to the TV
+    if (device.kind === 'lg') withConsent(collect, () => goBack());
+    else void collect();
   }, [round]);
 
   const plan = facts ? installPlan(facts) : null;
@@ -240,12 +287,13 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
         setHint('Подключите телефон к этому телевизору кодом в разделе «Телевизор» — или на ТВ откройте OMP → Настройки → «Обновление».');
         return;
       }
-      try {
-        await connectTv(saved);
-      } catch (e) {
-        showToast(errorMessage(e));
-        return;
-      }
+      const connected = await new Promise<boolean>((resolve) =>
+        withConsent(
+          () => connectTv(saved, { keepActive: true }).then(() => resolve(true), (e) => (showToast(errorMessage(e)), resolve(false))),
+          () => resolve(false),
+        ),
+      );
+      if (!connected) return;
     }
     const opens = !plan.installed || tvOpensUpdate(plan.installed);
     if (!opens) setHint('Эта версия OMP на ТВ не открывает обновление сама. На телевизоре: Настройки → Обновление → «Проверить обновление».');
@@ -327,11 +375,35 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
             })}
             {plan.install && !installer && (
               <p class="m-muted m-small" data-install-soon>
-                Установка с телефона появится в следующей версии OMP. Пока пройдите шаги по подробной инструкции.
+                Установка с телефона появится в этом окне.
               </p>
             )}
           </div>
         </>
+      )}
+      {ask && (
+        <Sheet
+          label="Подключение к телевизору"
+          onClose={() => {
+            setAsk(null);
+            cancelAsk.current();
+          }}
+        >
+          <p class="m-note">{takeoverQuestion(device.name, ask.other)}</p>
+          <button type="button" class="m-btn m-btn-primary" onClick={() => ask.proceed()}>
+            Подключиться
+          </button>
+          <button
+            type="button"
+            class="m-btn m-btn-secondary"
+            onClick={() => {
+              setAsk(null);
+              cancelAsk.current();
+            }}
+          >
+            Отмена
+          </button>
+        </Sheet>
       )}
     </div>
   );

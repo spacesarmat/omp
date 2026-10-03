@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   installPlan,
   parseWebOs,
+  lgModelYear,
   androidLabel,
   isArm64,
   LG_HBC_APP_ID,
@@ -59,21 +60,40 @@ describe('parseWebOs', () => {
     expect(parseWebOs({ swModel: 'HE_DTV_W24P_AFABATAA' })).toEqual({ label: 'webOS 24', rank: 24 });
   });
 
-  it('maps SDK versions to the year names', () => {
-    expect(parseWebOs({ sdkVersion: '7.3.0' })).toEqual({ label: 'webOS 22', rank: 22 });
-    expect(parseWebOs({ sdkVersion: '9.0.1' })).toEqual({ label: 'webOS 24', rank: 24 });
-    expect(parseWebOs({ sdkVersion: '5.2.0' })).toEqual({ label: 'webOS 5', rank: 5 });
-    expect(parseWebOs({ sdkVersion: '3.4.0' })).toEqual({ label: 'webOS 3', rank: 3 });
+  it('maps the platform major of 2022+ firmware to the year names', () => {
+    expect(parseWebOs({ productName: 'webOSTV 7.0' })).toEqual({ label: 'webOS 22', rank: 22 });
+    expect(parseWebOs({ productName: 'webOSTV 8.0' })).toEqual({ label: 'webOS 23', rank: 23 });
+    expect(parseWebOs({ productName: 'webOSTV 9.0' })).toEqual({ label: 'webOS 24', rank: 24 });
+    expect(parseWebOs({ productName: 'webOSTV 10.1' })).toEqual({ label: 'webOS 25', rank: 25 });
   });
 
-  it('prefers the product name, then the code name', () => {
-    expect(parseWebOs({ productName: 'webOSTV 5.0', swModel: 'HE_DTV_W21O_X', sdkVersion: '8.0' })!.label).toBe('webOS 5.0');
-    expect(parseWebOs({ productName: 'Other', swModel: 'HE_DTV_W21O_X', sdkVersion: '8.0' })!.label).toBe('webOS 6.0');
+  it('2014 sets (W14, webOS 1.x) are recognised', () => {
+    expect(parseWebOs({ swModel: 'HE_DTV_W14H_AFADABAA' })).toEqual({ label: 'webOS 1.0', rank: 1 });
+  });
+
+  it('prefers the product name (Re:New upgrades), then the code name, then the model year', () => {
+    expect(parseWebOs({ productName: 'webOSTV 9.0', swModel: 'HE_DTV_W22O_X', model: 'OLED55C2' })!.label).toBe('webOS 24');
+    expect(parseWebOs({ productName: 'Other', swModel: 'HE_DTV_W21O_X', model: 'OLED55C9' })!.label).toBe('webOS 6.0');
+    expect(parseWebOs({ model: 'OLED55C1RLA' })).toEqual({ label: 'webOS 6.0 (по году модели)', rank: 6 });
+  });
+
+  it('model year of LG retail models', () => {
+    expect(lgModelYear('OLED55C1RLA')).toBe(21);
+    expect(lgModelYear('OLED65CXRLA')).toBe(20);
+    expect(lgModelYear('OLED55B9')).toBe(19);
+    expect(lgModelYear('OLED55C8PLA')).toBe(18);
+    expect(lgModelYear('OLED55C3')).toBe(23);
+    expect(lgModelYear('43UM7300PLB')).toBe(19);
+    expect(lgModelYear('49UJ6300')).toBe(17);
+    expect(lgModelYear('55UQ75006LF')).toBe(22);
+    expect(lgModelYear('LG Smart TV')).toBeNull();
+    expect(lgModelYear(undefined)).toBeNull();
+    expect(parseWebOs({ model: '49UJ6300' })!.rank).toBe(3.5);
   });
 
   it('returns null for nothing recognisable', () => {
     expect(parseWebOs({})).toBeNull();
-    expect(parseWebOs({ productName: 'TV', swModel: 'HE_DTV', sdkVersion: 'x' })).toBeNull();
+    expect(parseWebOs({ productName: 'TV', swModel: 'HE_DTV', model: 'x' })).toBeNull();
   });
 });
 
@@ -102,7 +122,7 @@ describe('installPlan — LG', () => {
     expect(p.kind).toBe('lg-pair');
     expect(ids(p)).toEqual(['pair', 'faq']);
     expect(p.actions[0].label).toBe('Подключиться');
-    expect(p.subtitle).toBe('OLED55C1 · нужно подключение к ТВ');
+    expect(p.subtitle).toBe('OLED55C1 · webOS 6.0 (по году модели) · нужно подключение к ТВ');
     expect(p.install).toBeUndefined();
   });
 
@@ -119,6 +139,23 @@ describe('installPlan — LG', () => {
     expect(p.notes[0]).toContain('webOS 4.0 или новее');
     expect(p.install).toBeUndefined();
     expect(ids(p)).toEqual(['faq']);
+  });
+
+  it('paired but the app list is unknown: no install, a recheck and a note', () => {
+    const p = installPlan(lg({ apps: undefined, ompVersion: undefined }));
+    expect(p.kind).toBe('lg-devmode');
+    expect(p.install).toBeUndefined();
+    expect(ids(p)[0]).toBe('recheck');
+    expect(ids(p)).not.toContain('install');
+    expect(p.notes.join(' ')).toContain('Не удалось получить список приложений');
+  });
+
+  it('OMP without a version in the list: installed, no update offered', () => {
+    const p = installPlan(lg({ ompVersion: '', latest: '0.13.1' }));
+    expect(p.kind).toBe('lg-update');
+    expect(p.steps[0].text).toBe('Версия неизвестна');
+    expect(p.actions).toEqual([]);
+    expect(p.subtitle).toBe('OLED55C1 · webOS 6.0 · OMP установлен');
   });
 
   it('webOS 4.0 is supported', () => {
@@ -198,10 +235,10 @@ describe('installPlan — LG', () => {
   });
 
   it('unknown webOS version: a note, the path still shown', () => {
-    const p = installPlan(lg({ productName: undefined }));
+    const p = installPlan(lg({ productName: undefined, model: 'LG TV' }));
     expect(p.kind).toBe('lg-devmode');
     expect(p.notes[0]).toContain('Не удалось узнать версию webOS');
-    expect(p.subtitle).toBe('OLED55C1 · без root — ставим через режим разработчика');
+    expect(p.subtitle).toBe('LG TV · без root — ставим через режим разработчика');
   });
 });
 
@@ -222,12 +259,12 @@ describe('installPlan — Android TV', () => {
     expect(p.steps[1].text).toContain('Беспроводная отладка');
     expect(states(p)).toEqual(['current', 'todo', 'todo']);
     expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: null });
-    expect(p.notes[0]).toContain('arm64');
+    expect(p.notes.join(' ')).toContain('arm64');
     expect(p.actions[0]).toEqual({ id: 'install', label: 'Установить OMP', primary: true });
   });
 
   it('Android 11+: wireless debugging by code', () => {
-    const p = installPlan(atv({ sdkInt: 31, abi: 'arm64-v8a' }));
+    const p = installPlan(atv({ sdkInt: 31, abi: 'arm64-v8a', cast: undefined }));
     expect(p.steps[1].title).toBe('Беспроводная отладка');
     expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: true });
     expect(p.subtitle).toBe('Google TV · Android 12 · arm64 — встроенный TorrServer будет работать');
@@ -240,12 +277,18 @@ describe('installPlan — Android TV', () => {
     expect(p.steps[1].text).not.toContain('Беспроводная');
     expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: false });
     expect(p.subtitle).toBe('Google TV · Android 9 · armeabi-v7a');
-    expect(p.notes[0]).toContain('не запустится');
+    expect(p.notes.join(' ')).toContain('не запустится');
+    expect(p.steps[1].text).toContain('Отладка по USB');
   });
 
   it('a plain «Chromecast» model gets a hint about the old dongles', () => {
-    expect(installPlan(atv({ model: 'Chromecast' })).notes[0]).toContain('Chromecast без Google TV');
+    expect(installPlan(atv({ model: 'Chromecast' })).notes.join(' ')).toContain('Chromecast без Google TV');
     expect(installPlan(atv({ model: 'Chromecast HD' })).notes.join(' ')).not.toContain('без Google TV');
+  });
+
+  it('found over cast: a note that TVs with only built-in Chromecast cannot take adb', () => {
+    expect(installPlan(atv()).notes[0]).toContain('только встроенный Chromecast');
+    expect(installPlan(atv({ cast: undefined })).notes.join(' ')).not.toContain('встроенный Chromecast');
   });
 
   it('a Chromecast without Google TV is not supported', () => {

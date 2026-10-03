@@ -37,8 +37,9 @@ export interface WebOsVersion {
 /** First webOS OMP runs on. */
 export const MIN_WEBOS_RANK = 4;
 
-/** Year in the firmware code name (HE_DTV_W19H_…) -> webOS of that model year. */
-const CODENAME_YEAR: { [year: number]: string } = {
+/** Model year (two digits) -> webOS that LG shipped that year; 2022+ use the year names. */
+const YEAR_WEBOS: { [year: number]: string } = {
+  14: '1.0',
   15: '2.0',
   16: '3.0',
   17: '3.5',
@@ -48,36 +49,67 @@ const CODENAME_YEAR: { [year: number]: string } = {
   21: '6.0',
 };
 
-/** webOS 22, 23, 24, 25 report SDK / platform major 7, 8, 9, 10. */
-const SDK_YEAR_BASE = 15;
+/** webOS 22, 23, 24, 25… report platform major 7, 8, 9, 10… in product_name. */
+const MAJOR_YEAR_BASE = 15;
 
-function fromNumber(s: string): WebOsVersion | null {
+function fromYear(year: number): WebOsVersion | null {
+  const v = YEAR_WEBOS[year];
+  if (v) return { label: 'webOS ' + v, rank: parseFloat(v) };
+  if (year >= 22 && year < 60) return { label: 'webOS ' + year, rank: year };
+  return null;
+}
+
+/** «4.5» -> webOS 4.5; «7.0» … «21.x» (platform majors of 2022+) -> webOS 22 …; «23» (year name) -> webOS 23. */
+function fromProductNumber(s: string): WebOsVersion | null {
   const n = parseFloat(s);
   if (!isFinite(n) || n <= 0) return null;
+  const major = Math.floor(n);
+  if (major >= 7 && major < 22) return fromYear(major + MAJOR_YEAR_BASE);
+  if (major >= 22 && major < 60) return fromYear(major);
   return { label: 'webOS ' + s, rank: n };
 }
 
+/** Model year from an LG retail model: OLED55C1… -> 21, OLED65CX… -> 20, 43UM7300… -> 19. Null when unknown. */
+export function lgModelYear(model: string | undefined): number | null {
+  const m = (model || '').trim().toUpperCase();
+  const oled = /^OLED\d{2}[A-Z]([0-9X])/.exec(m);
+  if (oled) {
+    const c = oled[1];
+    if (c === 'X') return 20;
+    const d = parseInt(c, 10);
+    if (d >= 6) return 10 + d;
+    if (d >= 1) return 20 + d;
+    return null;
+  }
+  const lcd = /^\d{2}(U[HJKMNPQRT])\d/.exec(m);
+  if (lcd) {
+    const years: { [k: string]: number } = { UH: 16, UJ: 17, UK: 18, UM: 19, UN: 20, UP: 21, UQ: 22, UR: 23, UT: 24 };
+    return years[lcd[1]] || null;
+  }
+  return null;
+}
+
 /**
- * webOS version from what the TV reports: getCurrentSWInformation `product_name` («webOSTV 4.5»), its `model_name`
- * code (HE_DTV_W21O_… -> 2021 -> 6.0) or an SDK version («7.3.0» -> webOS 22). Null when nothing is recognised.
+ * webOS version from what the TV reports, most reliable first: getCurrentSWInformation `product_name` («webOSTV 4.5»,
+ * «webOSTV 7.0» = webOS 22; reflects webOS Re:New upgrades), its firmware code `model_name` (HE_DTV_W21O_… -> 2021 ->
+ * 6.0), and as a last resort the year of the retail model (OLED55C1 -> 2021; marked «по году модели»: needs no
+ * extra permission, so it works on TVs paired without the signed manifest). Null when nothing is recognised.
  */
-export function parseWebOs(src: { productName?: string; swModel?: string; sdkVersion?: string }): WebOsVersion | null {
+export function parseWebOs(src: { productName?: string; swModel?: string; model?: string }): WebOsVersion | null {
   const product = /webos\s*(?:tv)?\s*(\d+(?:\.\d+)?)/i.exec(src.productName || '');
   if (product) {
-    const v = fromNumber(product[1]);
+    const v = fromProductNumber(product[1]);
     if (v) return v;
   }
   const code = /(?:^|_)W(\d{2})[A-Z]/.exec(src.swModel || '');
   if (code) {
-    const year = parseInt(code[1], 10);
-    if (CODENAME_YEAR[year]) return fromNumber(CODENAME_YEAR[year]);
-    if (year >= 22 && year < 60) return { label: 'webOS ' + year, rank: year };
+    const v = fromYear(parseInt(code[1], 10));
+    if (v) return v;
   }
-  const sdk = /^(\d+)(?:\.(\d+))?/.exec((src.sdkVersion || '').trim());
-  if (sdk) {
-    const major = parseInt(sdk[1], 10);
-    if (major >= 7 && major < 45) return { label: 'webOS ' + (major + SDK_YEAR_BASE), rank: major + SDK_YEAR_BASE };
-    if (major >= 1) return { label: 'webOS ' + major, rank: major };
+  const year = lgModelYear(src.model);
+  if (year !== null) {
+    const v = fromYear(year);
+    if (v) return { label: v.label + ' (по году модели)', rank: v.rank };
   }
   return null;
 }
@@ -126,7 +158,6 @@ export interface LgFacts {
   productName?: string;
   /** getCurrentSWInformation `model_name`, e.g. «HE_DTV_W21O_AFABATAA». */
   swModel?: string;
-  sdkVersion?: string;
   /** The phone is paired over SSAP: the app list below is real. False = only discovery data. */
   paired: boolean;
   /** Installed app ids (listApps); undefined when the list is unavailable. */
@@ -316,18 +347,21 @@ function lgPlan(f: LgFacts): InstallPlan {
   const ssh = !!ports && ports.indexOf(LG_SSH_PORT) >= 0;
   const keyServer = !!ports && ports.indexOf(LG_KEY_SERVER_PORT) >= 0;
 
-  if (typeof f.ompVersion === 'string' && f.ompVersion) {
+  if (typeof f.ompVersion === 'string') {
+    // '' = OMP is in the app list without a version
     const installed = f.ompVersion;
-    const old = needsUpdate(installed, f.latest);
+    const old = !!installed && needsUpdate(installed, f.latest);
     if (devApp && !hbc) notes.push(DEVMODE_TIMER_NOTE);
     return {
       ...base,
       kind: 'lg-update',
-      subtitle: join([model, label, 'OMP ' + installed]),
-      steps: [{ id: 'omp', title: 'OMP установлен', text: versionText(installed, f.latest), state: 'done' }],
+      subtitle: join([model, label, installed ? 'OMP ' + installed : 'OMP установлен']),
+      steps: [
+        { id: 'omp', title: 'OMP установлен', text: installed ? versionText(installed, f.latest) : 'Версия неизвестна', state: 'done' },
+      ],
       actions: old ? [{ id: 'update-on-tv', label: 'Обновить на ТВ', primary: true }] : [],
       notes,
-      installed,
+      installed: installed || undefined,
       latest: f.latest,
       needsUpdate: old,
     };
@@ -393,19 +427,24 @@ function lgPlan(f: LgFacts): InstallPlan {
   // the timer is a reminder, never the current step
   const timer = steps[steps.length - 1];
   if (timer.state === 'current') timer.state = 'todo';
+  // without the app list OMP or Homebrew Channel may already be there: no install until a recheck sees the list
+  const appsKnown = f.apps !== undefined;
+  if (!appsKnown) {
+    notes.push('Не удалось получить список приложений с телевизора — OMP или Homebrew Channel могут быть уже установлены. Нажмите «Проверить снова».');
+  }
   return {
     ...base,
     kind: 'lg-devmode',
     subtitle: join([model, label, 'без root — ставим через режим разработчика']),
     steps,
     actions: [
-      { id: 'install', label: 'Установить OMP и Homebrew Channel', primary: true },
-      { id: 'recheck', label: 'Проверить снова' },
+      ...(appsKnown ? [{ id: 'install' as const, label: 'Установить OMP и Homebrew Channel', primary: true }] : []),
+      { id: 'recheck', label: 'Проверить снова', primary: !appsKnown },
       { id: 'link', label: 'Можно ли получить root на этой модели', url: ROOT_CHECK_URL },
       { id: 'faq', label: 'Подробная инструкция', faq: FAQ_LG_DEVMODE },
     ],
     notes,
-    install: { method: 'lg-devmode', ip: f.ip, withHbc: true },
+    install: appsKnown ? { method: 'lg-devmode', ip: f.ip, withHbc: true } : undefined,
   };
 }
 
@@ -421,6 +460,10 @@ function abiNote(abi: string | undefined): string {
 /** Cast reports «Chromecast» both for the old dongles and for Chromecast with Google TV (4K). */
 const PLAIN_CHROMECAST_NOTE =
   'Если это Chromecast без Google TV (до 2020 года) — приложения на него не ставятся. Подойдёт Chromecast с Google TV.';
+
+/** Found over cast: TVs with only a built-in Chromecast advertise the same service. */
+const CAST_ONLY_NOTE =
+  'Установка по adb работает только на Android TV и Google TV. На телевизорах, где есть только встроенный Chromecast (Chromecast built-in), установить OMP нельзя.';
 
 function atvPlan(f: AtvFacts): InstallPlan {
   const model = f.model || 'Android TV';
@@ -462,10 +505,13 @@ function atvPlan(f: AtvFacts): InstallPlan {
           text: 'Настройки → Система → Для разработчиков → «Беспроводная отладка» → «Подключить по коду».',
         }
       : wireless === false
-        ? { title: 'Отладка по сети', text: 'Настройки → Система → Для разработчиков → включите «Отладка по сети».' }
+        ? {
+            title: 'Отладка по сети',
+            text: 'Настройки → Система → Для разработчиков → включите «Отладка по сети» (на некоторых приставках — «Отладка по USB»).',
+          }
         : {
             title: 'Отладка по сети',
-            text: 'Настройки → Система → Для разработчиков → включите «Отладка по сети». На Android 11 и новее — «Беспроводная отладка» → «Подключить по коду».',
+            text: 'Настройки → Система → Для разработчиков → включите «Отладка по сети» (на некоторых приставках — «Отладка по USB»). На Android 11 и новее — «Беспроводная отладка» → «Подключить по коду».',
           };
   return {
     kind: 'atv-adb',
@@ -490,9 +536,9 @@ function atvPlan(f: AtvFacts): InstallPlan {
       { id: 'install', label: 'Установить OMP', primary: true },
       { id: 'faq', label: 'Как установить через компьютер', faq: FAQ_ATV_ADB },
     ],
-    notes: (/^chromecast$/i.test((f.model || '').trim()) ? [PLAIN_CHROMECAST_NOTE] : []).concat(
-      arch === 'arm64' ? [] : [abiNote(f.abi)],
-    ),
+    notes: (f.cast === 'tv' ? [CAST_ONLY_NOTE] : [])
+      .concat(/^chromecast$/i.test((f.model || '').trim()) ? [PLAIN_CHROMECAST_NOTE] : [])
+      .concat(arch === 'arm64' ? [] : [abiNote(f.abi)]),
     install: { method: 'atv-adb', ip: f.ip, wireless },
   };
 }

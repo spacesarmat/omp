@@ -7,7 +7,7 @@ import {
   cancelWarmUp,
   disconnectTv,
   pairAtv,
-  lgInstallInfo,
+  lgAppIds,
   tvKind,
   sessionIp,
   tvState,
@@ -70,10 +70,10 @@ export function Tv() {
     setNoOmp(null);
     if (!connectedIp || tvKind() !== 'lg') return;
     let alive = true;
-    lgInstallInfo().then(
-      (info) => {
+    lgAppIds().then(
+      (ids) => {
         // an unknown app list says nothing: only a list without OMP counts
-        if (alive && info.apps && !info.apps.some((a) => a.id === LG_OMP_APP_ID)) setNoOmp(connectedIp);
+        if (alive && ids && ids.indexOf(LG_OMP_APP_ID) < 0) setNoOmp(connectedIp);
       },
       () => {},
     );

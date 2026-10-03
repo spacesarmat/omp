@@ -4,7 +4,7 @@ import { native, type FoundTv, type FoundCastTv, type FoundOmpTv, type OmpNative
 import { tvs, type SavedTv } from '../tv/tvStore';
 import { log } from '../../../src/lib/log';
 
-export type InstallNative = Pick<OmpNativeApi, 'discoverTvs' | 'discoverCastTvs' | 'discoverOmpTvs' | 'probePorts'>;
+export type InstallNative = Pick<OmpNativeApi, 'discoverTvs' | 'discoverCastTvs' | 'discoverOmpTvs' | 'probePorts' | 'stopDiscovery'>;
 
 let impl: InstallNative = native;
 
@@ -17,7 +17,8 @@ export function installNative(): InstallNative {
   return impl;
 }
 
-export type InstallDeviceKind = 'lg' | 'atv';
+/** 'samsung' only from the manual entry: the plan says it is not supported yet. */
+export type InstallDeviceKind = 'lg' | 'atv' | 'samsung';
 
 export interface InstallDevice {
   ip: string;
@@ -102,6 +103,8 @@ export function rememberDevice(d: InstallDevice): void {
   known.set(d.ip, d);
 }
 
+export const KIND_NAME: { [k in InstallDeviceKind]: string } = { lg: 'LG', atv: 'Android TV', samsung: 'Samsung' };
+
 /** The device for the steps screen: from the last search, else a saved TV, else a bare one of `kind`. */
 export function deviceFor(ip: string, kind?: InstallDeviceKind): InstallDevice {
   const k = known.get(ip);
@@ -110,7 +113,7 @@ export function deviceFor(ip: string, kind?: InstallDeviceKind): InstallDevice {
   const savedKind: InstallDeviceKind = s?.kind === 'atv' ? 'atv' : 'lg';
   if (s && (!kind || kind === savedKind)) return { ip, name: s.name, kind: savedKind, saved: true, online: false };
   const k2: InstallDeviceKind = kind || 'lg';
-  return { ip, name: (k2 === 'atv' ? 'Android TV ' : 'LG ') + ip, kind: k2, online: false };
+  return { ip, name: KIND_NAME[k2] + ' ' + ip, kind: k2, online: false };
 }
 
 export const SEARCH_MS = 4000;

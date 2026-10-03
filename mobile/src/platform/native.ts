@@ -52,6 +52,8 @@ export interface OmpNativeApi {
   discoverOmpTvs(timeoutMs: number): Promise<FoundOmpTv[]>;
   /** Install assistant: NSD search for Google Cast devices; stops after `timeoutMs`. */
   discoverCastTvs(timeoutMs: number): Promise<FoundCastTv[]>;
+  /** Stops running NSD searches early (the screen that started them has gone). */
+  stopDiscovery(): Promise<void>;
   /** Install assistant: which install ports (9922, 9991, 5555, 8095) accept TCP on a home-network IP. */
   probePorts(ip: string, ports: number[], timeoutMs: number): Promise<number[]>;
   /** Phone model for the TV's list of paired phones; «Телефон» when unknown. */
@@ -113,6 +115,7 @@ interface OmpNativePlugin {
   discoverOmpTvs(o: { timeoutMs: number }): Promise<{ tvs?: unknown }>;
   discoverCastTvs(o: { timeoutMs: number }): Promise<{ tvs?: unknown }>;
   probePorts(o: { ip: string; ports: number[]; timeoutMs: number }): Promise<{ open?: unknown }>;
+  stopDiscovery(): Promise<void>;
   phoneName(): Promise<{ name?: string | null }>;
   tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
   tvSend(o: { json: string }): Promise<void>;
@@ -266,6 +269,11 @@ export const native: OmpNativeApi = {
     if (!plugin) return [];
     const r = await plugin.discoverCastTvs({ timeoutMs });
     return castTvs(r?.tvs);
+  },
+
+  async stopDiscovery() {
+    if (!plugin) return;
+    await plugin.stopDiscovery().catch(() => {});
   },
 
   async probePorts(ip, ports, timeoutMs) {

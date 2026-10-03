@@ -79,6 +79,8 @@ interface Session {
   off: Array<() => void>;
   registerId: string;
   signed: boolean;
+  /** Install assistant: pairing saves the TV but leaves the active TV as it is. */
+  keepActive: boolean;
   /** Set while registration is in progress. */
   reg: { resolve: () => void; reject: (e: Error) => void; timer?: ReturnType<typeof setTimeout> } | null;
 }
@@ -175,8 +177,8 @@ function onRegisterMessage(s: Session, m: any): void {
       clientKey: typeof key === 'string' && key ? key : s.tv.clientKey,
       port: s.tv.port,
     };
-    saveTv(s.tv);
-    setActiveTv(s.tv.ip);
+    saveTv(s.tv, { keepActive: s.keepActive });
+    if (!s.keepActive) setActiveTv(s.tv.ip);
     clearTimeout(s.reg.timer);
     const reg = s.reg;
     s.reg = null;
@@ -192,7 +194,7 @@ function onRegisterMessage(s: Session, m: any): void {
       const mac = macFromInfo(info, mySession.tv.ip);
       if (mac && session === mySession) {
         mySession.tv = { ...mySession.tv, mac };
-        saveTv(mySession.tv);
+        saveTv(mySession.tv, { keepActive: mySession.keepActive });
       }
     }, noop);
   } else if (m.type === 'error') {
@@ -251,8 +253,13 @@ export function macFromInfo(info: any, ip: string): string | undefined {
   return wifiMac ?? wiredMac;
 }
 
-export function connectTv(tv: SavedTv): Promise<void> {
-  if (tv.kind === 'atv') return connectAtv(tv);
+export interface ConnectOptions {
+  /** Do not make this TV the active one (install assistant inspecting another TV). */
+  keepActive?: boolean;
+}
+
+export function connectTv(tv: SavedTv, opts: ConnectOptions = {}): Promise<void> {
+  if (tv.kind === 'atv') return connectAtv(tv, opts);
   endAtv();
   if (session && session.tv.ip === tv.ip) {
     if (tvState.value === 'connected') return Promise.resolve();
@@ -262,7 +269,14 @@ export function connectTv(tv: SavedTv): Promise<void> {
     endSession(session, TV_NOT_CONNECTED);
     void closeTransport();
   }
-  const s: Session = { tv: { ...tv, kind: 'lg' }, off: [], registerId: nextId('register'), signed: true, reg: null };
+  const s: Session = {
+    tv: { ...tv, kind: 'lg' },
+    off: [],
+    registerId: nextId('register'),
+    signed: true,
+    keepActive: !!opts.keepActive,
+    reg: null,
+  };
   const promise = new Promise<void>((resolve, reject) => {
     s.reg = { resolve, reject };
   });
@@ -284,7 +298,7 @@ export function connectTv(tv: SavedTv): Promise<void> {
         if (session === s && (port === 3000 || port === 3001)) {
           s.tv = { ...s.tv, port };
           // The TV may have answered `register` before this promise settled.
-          if (tvState.value === 'connected') saveTv(s.tv);
+          if (tvState.value === 'connected') saveTv(s.tv, { keepActive: s.keepActive });
         }
         // Socket open and `register` sent: now the TV has 8 s to answer (unless it already asked the user).
         if (session === s && tvState.value === 'connecting') armRegistration(s, REQUEST_TIMEOUT);
@@ -601,13 +615,8 @@ export async function lgInstallInfo(): Promise<LgInstallInfo> {
   if (model) info.model = model;
   if (productName) info.productName = productName;
   if (swModel) info.swModel = swModel;
-  if (Array.isArray(list?.apps)) {
-    const apps: Array<{ id: string; version?: string }> = [];
-    for (const a of list.apps) {
-      if (!a || typeof a.id !== 'string' || !a.id) continue;
-      const version = str(a.version);
-      apps.push(version ? { id: a.id, version } : { id: a.id });
-    }
+  const apps = parseApps(list);
+  if (apps) {
     info.apps = apps;
     const omp = apps.find((a) => a.id === OMP_APP_ID);
     if (omp?.version && ip !== null && sessionIp.value === ip && tvState.value === 'connected') {
@@ -615,6 +624,25 @@ export async function lgInstallInfo(): Promise<LgInstallInfo> {
     }
   }
   return info;
+}
+
+function parseApps(list: any): Array<{ id: string; version?: string }> | null {
+  if (!Array.isArray(list?.apps)) return null;
+  const apps: Array<{ id: string; version?: string }> = [];
+  for (const a of list.apps) {
+    if (!a || typeof a.id !== 'string' || !a.id) continue;
+    const version = str(a.version);
+    apps.push(version ? { id: a.id, version } : { id: a.id });
+  }
+  return apps;
+}
+
+/** LG only, on the connected session: installed app ids (one soft listApps); null when unknown. */
+export async function lgAppIds(): Promise<string[] | null> {
+  if (!session || tvState.value !== 'connected') return null;
+  const list = await send('ssap://com.webos.applicationManager/listApps', undefined, false, true).catch(() => null);
+  const apps = parseApps(list);
+  return apps ? apps.map((a) => a.id) : null;
 }
 
 /** LG only: launches an app on the TV (e.g. Homebrew Channel with its addRepository params). */
@@ -827,7 +855,7 @@ function parseInfo(d: any): AtvInfo | null {
   };
 }
 
-function connectAtv(tv: SavedTv): Promise<void> {
+function connectAtv(tv: SavedTv, opts: ConnectOptions = {}): Promise<void> {
   if (atv && atv.tv.ip === tv.ip && atv.tv.token === tv.token) {
     if (tvState.value === 'connected') return Promise.resolve();
     if (atvConnecting) return atvConnecting;
@@ -864,8 +892,8 @@ function connectAtv(tv: SavedTv): Promise<void> {
     atvConnecting = null;
     tvState.value = 'connected';
     tvError.value = '';
-    saveTv(s.tv);
-    setActiveTv(s.tv.ip);
+    saveTv(s.tv, opts);
+    if (!opts.keepActive) setActiveTv(s.tv.ip);
   })();
   atvConnecting = p;
   return p;

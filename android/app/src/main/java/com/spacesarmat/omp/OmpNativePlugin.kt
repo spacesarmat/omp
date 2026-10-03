@@ -174,6 +174,13 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
+    /** Stops every running NSD search (the screen that started it has gone); they return what they found. */
+    @PluginMethod
+    fun stopDiscovery(call: PluginCall) {
+        OmpDiscovery.cancelAll()
+        call.resolve()
+    }
+
     /** Install assistant: which of the install ports ([PortProbe.ALLOWED]) answer on a home-network IP: { open: [] }. */
     @PluginMethod
     fun probePorts(call: PluginCall) {

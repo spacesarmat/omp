@@ -9,20 +9,39 @@ import java.net.Inet4Address
 import java.net.InetAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Android TV with OMP found by NSD: control server address, service name, OMP version (TXT `v`). */
 data class FoundOmpTv(val ip: String, val port: Int, val name: String, val version: String)
 
 /**
  * NSD search for OMP on Android TV (`_omp._tcp`, registered by control/TvRemote). Blocking: call from a worker
- * thread. Services are resolved one at a time (older Android allows a single resolve in flight); discovery stops
- * at the deadline and whatever has been resolved by then is returned.
+ * thread. Services are resolved one at a time process-wide, across all service types and concurrent searches (older
+ * Android allows a single resolve in flight); a failed resolve is retried once. Discovery stops at the deadline or on
+ * [cancelAll], and whatever has been resolved by then is returned.
  */
 object OmpDiscovery {
     const val SERVICE_TYPE = "_omp._tcp"
     private const val TAG = "OmpDiscovery"
     private const val RESOLVE_TIMEOUT_MS = 3000L
+    private const val RETRY_PAUSE_MS = 150L
+    private const val POLL_SLICE_MS = 250L
+
+    /** One resolve in flight for the whole process (fair: searches take turns). */
+    private val resolveLock = Semaphore(1, true)
+
+    /** Bumped by [cancelAll]; a search started under an older value stops. */
+    private val generation = AtomicInteger(0)
+
+    /** Stops every running search (the screen that asked has gone). */
+    fun cancelAll() {
+        generation.incrementAndGet()
+    }
+
+    /** Retry a resolve once when NSD reported a failure (e.g. FAILURE_ALREADY_ACTIVE) and time is left. */
+    fun shouldRetry(attempt: Int, failed: Boolean, leftMs: Long): Boolean = failed && attempt == 0 && leftMs > RETRY_PAUSE_MS
 
     fun discover(context: Context, timeoutMs: Long): List<FoundOmpTv> =
         search(context, SERVICE_TYPE, timeoutMs, { toFound(it) }, { it.ip })
@@ -61,16 +80,18 @@ object OmpDiscovery {
             override fun onServiceLost(info: NsdServiceInfo) {}
         }
         val deadline = System.currentTimeMillis() + timeoutMs
+        val gen = generation.get()
+        val cancelled = { generation.get() != gen }
         var started = false
         try {
             lock?.acquire()
             nsd.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
             started = true
-            while (true) {
+            while (!cancelled()) {
                 val left = deadline - System.currentTimeMillis()
                 if (left <= 0) break
-                val service = services.poll(left, TimeUnit.MILLISECONDS) ?: break
-                val info = resolve(nsd, service, minOf(RESOLVE_TIMEOUT_MS, deadline - System.currentTimeMillis())) ?: continue
+                val service = services.poll(minOf(left, POLL_SLICE_MS), TimeUnit.MILLISECONDS) ?: continue
+                val info = resolve(nsd, service, deadline, cancelled) ?: continue
                 val item = map(info) ?: continue
                 val k = key(item)
                 if (!found.containsKey(k)) found[k] = item
@@ -94,13 +115,36 @@ object OmpDiscovery {
         return found.values.toList()
     }
 
+    /** Resolves [service] under the process-wide lock, retrying once on failure; null when it did not resolve. */
+    private fun resolve(nsd: NsdManager, service: NsdServiceInfo, deadline: Long, cancelled: () -> Boolean): NsdServiceInfo? {
+        var attempt = 0
+        while (true) {
+            val left = deadline - System.currentTimeMillis()
+            if (left <= 0 || cancelled()) return null
+            if (!resolveLock.tryAcquire(left, TimeUnit.MILLISECONDS)) return null
+            val r = try {
+                resolveOnce(nsd, service, minOf(RESOLVE_TIMEOUT_MS, deadline - System.currentTimeMillis()))
+            } finally {
+                resolveLock.release()
+            }
+            if (r.info != null) return r.info
+            if (!shouldRetry(attempt, r.failed, deadline - System.currentTimeMillis())) return null
+            attempt++
+            Thread.sleep(RETRY_PAUSE_MS)
+        }
+    }
+
+    private class Resolved(val info: NsdServiceInfo?, val failed: Boolean)
+
     @Suppress("DEPRECATION")
-    private fun resolve(nsd: NsdManager, service: NsdServiceInfo, timeoutMs: Long): NsdServiceInfo? {
-        if (timeoutMs <= 0) return null
+    private fun resolveOnce(nsd: NsdManager, service: NsdServiceInfo, timeoutMs: Long): Resolved {
+        if (timeoutMs <= 0) return Resolved(null, false)
         val done = CountDownLatch(1)
         var result: NsdServiceInfo? = null
+        var failed = false
         val listener = object : NsdManager.ResolveListener {
             override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
+                failed = true
                 done.countDown()
             }
             override fun onServiceResolved(info: NsdServiceInfo) {
@@ -111,7 +155,7 @@ object OmpDiscovery {
         try {
             nsd.resolveService(service, listener)
         } catch (_: RuntimeException) {
-            return null
+            return Resolved(null, true)
         }
         if (!done.await(timeoutMs, TimeUnit.MILLISECONDS)) {
             // a resolve still in flight would block the next one on older Android
@@ -119,9 +163,9 @@ object OmpDiscovery {
                 if (android.os.Build.VERSION.SDK_INT >= 34) nsd.stopServiceResolution(listener)
             } catch (_: RuntimeException) {
             }
-            return null
+            return Resolved(null, false)
         }
-        return result
+        return Resolved(result, failed)
     }
 
     /** IPv4 of a resolved service (API 34+: `host` is deprecated and may be IPv6 while an IPv4 is in `hostAddresses`). */

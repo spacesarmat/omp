@@ -33,6 +33,14 @@ class OmpDiscoveryTest {
     }
 
     @Test
+    fun retriesAFailedResolveOnceWhileTimeIsLeft() {
+        org.junit.Assert.assertTrue(OmpDiscovery.shouldRetry(0, true, 2000))
+        org.junit.Assert.assertFalse(OmpDiscovery.shouldRetry(1, true, 2000))
+        org.junit.Assert.assertFalse(OmpDiscovery.shouldRetry(0, false, 2000))
+        org.junit.Assert.assertFalse(OmpDiscovery.shouldRetry(0, true, 100))
+    }
+
+    @Test
     fun fallsBackForBlank() {
         assertEquals("Android TV", OmpDiscovery.cleanName(null))
         assertEquals("Android TV", OmpDiscovery.cleanName("  "))

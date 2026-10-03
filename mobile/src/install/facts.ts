@@ -16,14 +16,17 @@ import { installNative, type InstallDevice } from './devices';
 const PROBE_MS = 1500;
 const OMP_INFO_MS = 2500;
 
-/** LG: pairs over SSAP if needed (the TV asks «Разрешить»), then reads model, webOS, apps and Dev Mode ports. */
+/**
+ * LG: pairs over SSAP if needed (the TV asks «Разрешить») without making it the active TV, then reads model, webOS,
+ * apps and Dev Mode ports. The caller asks the user first when another TV is connected (see installSession).
+ */
 export async function lgFacts(d: InstallDevice): Promise<LgFacts> {
   const base: LgFacts = { kind: 'lg', name: d.name, ip: d.ip, paired: false };
   if (d.model) base.model = d.model;
   if (!(sessionIp.value === d.ip && tvState.value === 'connected')) {
     const saved = tvs.value.find((t) => t.ip === d.ip && t.kind !== 'atv');
     try {
-      await connectTv({ ...saved, ip: d.ip, name: saved?.name ?? d.name, kind: 'lg' });
+      await connectTv({ ...saved, ip: d.ip, name: saved?.name ?? d.name, kind: 'lg' }, { keepActive: true });
     } catch (e) {
       log('warn', 'install', 'LG: нет подключения для проверки');
       return { ...base, error: tvError.value || (e instanceof Error ? e.message : '') };
@@ -41,10 +44,11 @@ export async function lgFacts(d: InstallDevice): Promise<LgFacts> {
   if (info.apps) {
     facts.apps = info.apps.map((a) => a.id);
     const omp = info.apps.find((a) => a.id === LG_OMP_APP_ID);
-    facts.ompVersion = omp ? omp.version || '0' : null;
+    // '' = in the list without a version
+    facts.ompVersion = omp ? omp.version || '' : null;
   }
   // Dev Mode ports only matter when OMP is missing
-  if (!facts.ompVersion) {
+  if (facts.ompVersion === null || facts.ompVersion === undefined) {
     facts.openPorts = await installNative()
       .probePorts(d.ip, [LG_SSH_PORT, LG_KEY_SERVER_PORT], PROBE_MS)
       .catch(() => {
@@ -84,5 +88,6 @@ export async function atvFacts(d: InstallDevice): Promise<AtvFacts> {
 }
 
 export function deviceFacts(d: InstallDevice): Promise<DeviceFacts> {
+  if (d.kind === 'samsung') return Promise.resolve({ kind: 'samsung', name: d.name, ip: d.ip });
   return d.kind === 'atv' ? atvFacts(d) : lgFacts(d);
 }

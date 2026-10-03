@@ -8,7 +8,8 @@ import { Tv, setTvDiscoverer, setAtvDiscoverer } from '../src/screens/Tv';
 import { Faq } from '../src/screens/Faq';
 import { setInstallNative, type InstallNative } from '../src/install/devices';
 import { setTransport, disconnectTv, connectTv, type TvTransport } from '../src/tv/tvClient';
-import { reloadTvs, saveTv } from '../src/tv/tvStore';
+import { reloadTvs, saveTv, activeTvIp, tvs } from '../src/tv/tvStore';
+import { sessionIp, tvState } from '../src/tv/tvClient';
 import { currentRoute, resetTo, navigate } from '../src/nav';
 import { native } from '../src/platform/native';
 import { UPDATE_URL, ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
@@ -29,10 +30,12 @@ async function flush() {
 /** SSAP fake: accepts pairing (or declines it) and answers requests from `answers` by URI. */
 class FakeLg implements TvTransport {
   sent: any[] = [];
+  connects: string[] = [];
   decline = false;
   answers: Record<string, any> = {};
   private cbs = new Set<(m: any) => void>();
-  async tvConnect(_ip: string, register: any) {
+  async tvConnect(ip: string, register: any) {
+    this.connects.push(ip);
     queueMicrotask(() =>
       this.emit(
         this.decline
@@ -69,6 +72,7 @@ class FakeLg implements TvTransport {
 let lg: FakeLg;
 let probed: { ip: string; ports: number[] }[];
 let openPorts: number[];
+let stops = 0;
 let fakeNative: InstallNative;
 
 function apps(...list: Array<{ id: string; version?: string }>) {
@@ -114,6 +118,7 @@ beforeEach(() => {
   setTransport(lg);
   probed = [];
   openPorts = [];
+  stops = 0;
   fakeNative = {
     discoverTvs: async () => [{ ip: LG_IP, name: 'LG «Гостиная»', model: 'OLED55C1' }],
     discoverCastTvs: async () => [
@@ -124,6 +129,9 @@ beforeEach(() => {
     probePorts: async (ip, ports) => {
       probed.push({ ip, ports });
       return openPorts.filter((p) => ports.indexOf(p) >= 0);
+    },
+    stopDiscovery: async () => {
+      stops++;
     },
   };
   setInstallNative(fakeNative);
@@ -362,5 +370,124 @@ describe('Install assistant — entry points', () => {
     expect(el.textContent).not.toContain('На этом телевизоре нет OMP.');
     click(button(el, 'Нет OMP на телевизоре? Помощник установки'));
     expect(currentRoute.value).toEqual({ name: 'install' });
+  });
+});
+
+describe('Install assistant — the current TV', () => {
+  const A = '192.168.1.50';
+
+  async function connectA() {
+    saveTv({ ip: A, name: 'Спальня', clientKey: 'K' });
+    await act(async () => {
+      await connectTv({ ip: A, name: 'Спальня', clientKey: 'K' });
+    });
+    expect(sessionIp.value).toBe(A);
+  }
+
+  it('asks before switching away from the connected TV; «Отмена» goes back', async () => {
+    await connectA();
+    resetTo({ name: 'install' });
+    navigate({ name: 'install', ip: LG_IP, kind: 'lg' });
+    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
+    await flush();
+    const dlg = document.querySelector('[role="dialog"]')!;
+    expect(dlg.textContent).toContain('Подключиться к «LG «Гостиная»»? Текущее подключение к «Спальня» будет закрыто.');
+    expect(lg.connects).toEqual([A]);
+    click(button(dlg as HTMLElement, 'Отмена'));
+    expect(currentRoute.value).toEqual({ name: 'install' });
+    expect(sessionIp.value).toBe(A);
+    expect(el.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('«Подключиться» inspects the TV without making it active; leaving gives the old TV back', async () => {
+    await connectA();
+    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
+    await flush();
+    click(button(document.querySelector('[role="dialog"]') as HTMLElement, 'Подключиться'));
+    await flush();
+    expect(el.textContent).toContain('без root — ставим через режим разработчика');
+    expect(sessionIp.value).toBe(LG_IP);
+    expect(activeTvIp.value).toBe(A);
+    // a recheck does not ask again
+    click(button(el, 'Проверить снова'));
+    await flush();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => {
+      render(null, el);
+    });
+    await flush();
+    expect(lg.connects[lg.connects.length - 1]).toBe(A);
+    expect(sessionIp.value).toBe(A);
+    expect(tvState.value).toBe('connected');
+    expect(activeTvIp.value).toBe(A);
+  });
+
+  it('with nothing connected: no question, the inspected TV is saved but not active, and is closed on leave', async () => {
+    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
+    await flush();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(tvs.value.map((t) => t.ip)).toEqual([LG_IP]);
+    expect(activeTvIp.value).toBeNull();
+    await act(async () => {
+      render(null, el);
+    });
+    await flush();
+    expect(sessionIp.value).toBeNull();
+  });
+
+  it('Android TV «Обновить на ТВ» asks too and keeps the active TV', async () => {
+    const TOKEN = '0123456789abcdef0123456789abcdef';
+    await connectA();
+    saveTv({ ip: '192.168.1.66', name: 'Приставка', kind: 'atv', token: TOKEN });
+    expect(activeTvIp.value).toBe(A);
+    mockFetch((url) => {
+      if (url === 'http://192.168.1.66:8095/omp/info') return { body: JSON.stringify({ name: 'X', version: '0.12.0', paired: true, foreground: true }) };
+      if (url.indexOf(ANDROID_UPDATE_URL) === 0) return { body: JSON.stringify({ version: '0.13.1', ipkUrl: 'https://x/a.apk', ipkHash: HASH }) };
+      return { body: '{"ok":true}' };
+    });
+    const el = mount(<InstallAssistant ip="192.168.1.66" kind="atv" />);
+    await flush();
+    click(button(el, 'Обновить на ТВ'));
+    await flush();
+    const dlg = document.querySelector('[role="dialog"]') as HTMLElement;
+    expect(dlg.textContent).toContain('Текущее подключение к «Спальня» будет закрыто.');
+    click(button(dlg, 'Подключиться'));
+    await flush();
+    expect(sessionIp.value).toBe('192.168.1.66');
+    expect(activeTvIp.value).toBe(A);
+    await act(async () => {
+      render(null, el);
+    });
+    await flush();
+    expect(sessionIp.value).toBe(A);
+  });
+});
+
+describe('Install assistant — more', () => {
+  it('leaving the list stops the native search', async () => {
+    const el = mount(<InstallAssistant />);
+    await flush();
+    act(() => render(null, el));
+    expect(stops).toBe(1);
+  });
+
+  it('manual Samsung: not supported yet', async () => {
+    resetTo({ name: 'install' });
+    const el = mount(<InstallAssistant />);
+    await flush();
+    click(button(el, 'Ввести IP вручную'));
+    type(el.querySelector<HTMLInputElement>('#install-ip')!, '192.168.1.70');
+    click(button(el, 'Samsung'));
+    click(button(el, 'Показать шаги'));
+    expect(currentRoute.value).toEqual({ name: 'install', ip: '192.168.1.70', kind: 'samsung' });
+    const steps = mount(<InstallAssistant ip="192.168.1.70" kind="samsung" />);
+    await flush();
+    expect(steps.textContent).toContain('Samsung (Tizen) пока не поддерживается');
+  });
+
+  it('placeholder for the install button is neutral', async () => {
+    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
+    await flush();
+    expect(el.querySelector('[data-install-soon]')!.textContent).toBe('Установка с телефона появится в этом окне.');
   });
 });
