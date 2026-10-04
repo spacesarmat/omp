@@ -85,14 +85,19 @@ export function latin1Bytes(s: string): Uint8Array {
  * daily limit…). Cloudflare / network errors reject.
  */
 export function fetchTorrent(ctx: SourceContext, url: string, opts: HttpOptions): Promise<string | null> {
+  return fetchTorrentAnswer(ctx, url, opts).then((a) => a.link);
+}
+
+/** fetchTorrent with the answer (to tell a signed-out page from a limit page). */
+export function fetchTorrentAnswer(ctx: SourceContext, url: string, opts: HttpOptions): Promise<{ link: string | null; res: HttpResponse }> {
   const o: HttpOptions = {};
   for (const k in opts) if (Object.prototype.hasOwnProperty.call(opts, k)) (o as { [k: string]: unknown })[k] = (opts as { [k: string]: unknown })[k];
   o.responseCharset = 'iso-8859-1';
   return ctx.http.get(url, o).then((res) => {
     if (isChallenge(res.text)) throw new Error(CHALLENGE);
     // a bencoded dictionary starts with «d»
-    if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd' || !/^d\d+:/.test(res.text)) return null;
-    return stashFile(latin1Bytes(res.text));
+    if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd' || !/^d\d+:/.test(res.text)) return { link: null, res };
+    return { link: stashFile(latin1Bytes(res.text)), res };
   });
 }
 

@@ -1006,6 +1006,8 @@ export async function sendSourcesToTv(payload: TransferPayload): Promise<Sources
     out.indexers = typeof n === 'number' && n >= 0 && n <= payload.indexers.length ? Math.floor(n) : 0;
   }
   if (payload.rutracker) out.rutracker = isRutrackerResult(r.data.rutracker) ? r.data.rutracker : 'error';
+  // the TV verified the rutracker login but could not write it (the site results still hold)
+  if (payload.rutracker && r.data.rutrackerNotStored === true) out.rutrackerNotStored = true;
   if (payload.logins) {
     // per site that was sent; anything else from the TV is ignored
     const got = r.data.logins && typeof r.data.logins === 'object' ? (r.data.logins as { [k: string]: unknown }) : {};
@@ -1024,6 +1026,7 @@ export interface SourcesSent {
   rutracker?: RutrackerResult;
   indexers?: number;
   logins?: { [site: string]: RutrackerResult };
+  rutrackerNotStored?: boolean;
 }
 
 /**

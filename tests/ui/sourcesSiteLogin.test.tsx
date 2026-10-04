@@ -6,19 +6,20 @@ import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { SourcesScreen } from '../../src/screens/Sources';
 import { DialogHost } from '../../src/ui/dialog';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
-import { reloadSourcePrefs, resetHealth, setCloudflareBypass } from '../../src/sources/store';
+import { reloadSourcePrefs, resetHealth, setCloudflareBypass, setSourceOn } from '../../src/sources/store';
 import { siteLoginFromPhone } from '../../src/sources/transfer';
 import { kinozal } from '../../src/sources/kinozal';
+import { resetMirrors } from '../../src/sources/mirrors';
 import { fakeSite, fixture, page, type FakeSite, type HttpCall } from '../sources/fakeSite';
 
 // test-only value
 const PASSWORD = 'pa55-test-only';
-const LOGIN = 'https://kinozal.tv/takelogin.php';
+const LOGIN = 'https://kinozal.me/takelogin.php';
 let host: HTMLElement;
 let site: FakeSite;
 
 function kinozalSite(c: HttpCall) {
-  if (c.method === 'POST' && c.url === LOGIN) return page(fixture(c.form!.password === PASSWORD ? 'kinozal-search.html' : 'kinozal-login-error.html'), LOGIN);
+  if (c.method === 'POST' && c.url === LOGIN) return c.form!.password === PASSWORD ? page(fixture('kinozal-search.html'), 'https://kinozal.me/') : page(fixture('kinozal-login-error.html'), LOGIN);
   return page(fixture('kinozal-guest.html'), c.url);
 }
 
@@ -54,6 +55,7 @@ beforeAll(() => {
 });
 beforeEach(() => {
   localStorage.clear();
+  resetMirrors();
   reloadSourcePrefs();
   resetHealth();
   site = fakeSite(kinozalSite);
@@ -84,7 +86,9 @@ describe('Android TV: Kinozal login', () => {
     await flush();
     expect(host.querySelector('.login-dialog')).toBeNull();
     expect(site.secrets).toEqual({ 'kinozal.username': 'kino', 'kinozal.password': PASSWORD });
-    expect(line('kinozal').textContent).toContain('вход выполнен');
+    // signed in: searched (through the pass once its switch is on); one row, one switch
+    expect(line('kinozal').textContent).toContain('ищет без обхода Cloudflare');
+    expect(host.querySelectorAll('[data-source="kinozal"]').length).toBe(1);
     click(byText('Выйти', line('kinozal'))!);
     click(Array.from(host.querySelectorAll('.dialog-option')).find((n) => n.textContent === 'Выйти')!);
     await flush();
@@ -95,6 +99,7 @@ describe('Android TV: Kinozal login', () => {
   it('a login from the phone shows «вход передан с телефона» in both rows until it is typed on the TV', async () => {
     site = fakeSite(kinozalSite, { 'kinozal.username': 'kino', 'kinozal.password': PASSWORD });
     localStorage.setItem('tsp.sourcesTransferLogins', JSON.stringify({ kinozal: true }));
+    setSourceOn('kinozal', true);
     setCloudflareBypass('kinozal', true);
     await mount(screen());
     expect(line('kinozal').textContent).toContain('вход передан с телефона');

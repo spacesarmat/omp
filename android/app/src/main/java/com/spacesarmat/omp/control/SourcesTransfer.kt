@@ -42,7 +42,13 @@ sealed class SourcesOutcome {
      * The page applied it; [rutracker] = ok | bad_login | captcha | error, null when no login came; [indexers] = how
      * many connections the page saved, null when none came.
      */
-    data class Applied(val rutracker: String?, val indexers: Int? = null, val logins: Map<String, String> = emptyMap()) : SourcesOutcome()
+    data class Applied(
+        val rutracker: String?,
+        val indexers: Int? = null,
+        val logins: Map<String, String> = emptyMap(),
+        /** The verified rutracker login could not be written (only reported this way when site logins came too). */
+        val rutrackerNotStored: Boolean = false,
+    ) : SourcesOutcome()
     /** Another transfer is still being applied. */
     object Busy : SourcesOutcome()
     /** The page did not answer in time (OMP is not running its interface). */
@@ -375,10 +381,16 @@ class SourcesInbox(
             rutracker == null -> SourcesOutcome.Applied(null, saved, sites)
             else -> SourcesOutcome.Applied(if (rutracker in SourcesProtocol.RESULTS) rutracker else "error", saved, sites)
         }
-        if (p.staged && (out as? SourcesOutcome.Applied)?.rutracker == "ok" && !quietly { store.promote() }) out = SourcesOutcome.StoreFailed
+        var rutrackerStored = true
+        val applied = out as? SourcesOutcome.Applied
+        if (p.staged && applied != null && applied.rutracker == "ok" && !quietly { store.promote() }) {
+            rutrackerStored = false
+            // with site logins the phone still hears their results (some may be stored); alone it is the old 500 «secrets»
+            out = if (p.sitesStaged.isNotEmpty()) applied.copy(rutracker = "error", rutrackerNotStored = true) else SourcesOutcome.StoreFailed
+        }
         p.outcome = out
         p.latch.countDown()
-        Answer(if (out == SourcesOutcome.StoreFailed || notStored.isNotEmpty()) SourcesDone.NOT_STORED else SourcesDone.STORED, notStored, out != SourcesOutcome.StoreFailed)
+        Answer(if (!rutrackerStored || notStored.isNotEmpty()) SourcesDone.NOT_STORED else SourcesDone.STORED, notStored, rutrackerStored)
     }
 
     companion object {

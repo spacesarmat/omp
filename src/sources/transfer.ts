@@ -83,6 +83,11 @@ export function isRutrackerResult(v: unknown): v is RutrackerResult {
   return typeof v === 'string' && RESULTS.indexOf(v as RutrackerResult) >= 0;
 }
 
+/** The login as the TV accepts it (length and control characters), else null. */
+export function validTransferLogin(v: unknown): TransferLogin | null {
+  return validLogin(v);
+}
+
 function validLogin(v: unknown): TransferLogin | null {
   if (!isObject(v)) return null;
   const u = v.username;

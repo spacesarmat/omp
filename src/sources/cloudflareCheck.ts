@@ -263,7 +263,9 @@ export function tvRequestSource(url: string, list: Source[] = allSources()): Sou
   if (!host || siteRoot(url) !== url) return null;
   for (let i = 0; i < list.length; i++) {
     const s = list[i];
-    if (isCloudflareBypassOn(s) && s.siteUrl && siteRoot(s.siteUrl) === url) return s;
+    if (!isCloudflareBypassOn(s)) continue;
+    const roots = (s.siteUrls || []).concat(s.siteUrl ? [s.siteUrl] : []);
+    if (roots.some((r) => siteRoot(r) === url)) return s;
   }
   return null;
 }

@@ -16,6 +16,7 @@ import { applyRemoteSourcesEvent, resetRemoteSources } from '../../src/platform/
 import { getHealth, reloadSourcePrefs, resetHealth, setHealth } from '../../src/sources/store';
 import { clearLog, logEntries } from '../../src/lib/log';
 import { kinozal } from '../../src/sources/kinozal';
+import { resetMirrors } from '../../src/sources/mirrors';
 import { rustorka } from '../../src/sources/rustorka';
 import { siteLoginError } from '../../src/sources/siteLoginText';
 import { fakeSite, fixture, page } from './fakeSite';
@@ -31,6 +32,7 @@ function src(id: string, extra?: Partial<Source>): Source {
 
 beforeEach(() => {
   localStorage.clear();
+  resetMirrors();
   reloadSourcePrefs();
   resetHealth();
   clearLog();
@@ -123,9 +125,9 @@ describe('site logins in the transfer', () => {
   });
 
   it('Android TV: the event signs in to each site through its real login flow and answers per site without secrets', async () => {
-    const LOGIN = 'https://kinozal.tv/takelogin.php';
+    const LOGIN = 'https://kinozal.me/takelogin.php';
     const http = (c: HttpCall) => {
-      if (c.method === 'POST' && c.url === LOGIN) return page(c.form!.password === PASS ? fixture('kinozal-search.html') : fixture('kinozal-login-error.html'), LOGIN);
+      if (c.method === 'POST' && c.url === LOGIN) return c.form!.password === PASS ? page(fixture('kinozal-search.html'), 'https://kinozal.me/') : page(fixture('kinozal-login-error.html'), LOGIN);
       if (c.method === 'POST') return page(fixture('rustorka-login-captcha.html'), c.url);
       return page(fixture('kinozal-guest.html'), c.url);
     };

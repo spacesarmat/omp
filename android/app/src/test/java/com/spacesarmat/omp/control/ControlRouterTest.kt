@@ -176,6 +176,12 @@ class ControlRouterTest {
         // without logins: no logins key
         val plain = req("POST", "/omp/sources", sourcesBody(), t)
         assertFalse(JSONObject(plain.json).has("logins"))
+        // a failed rutracker write with site logins: 200 with the site results and the flag
+        outcome = SourcesOutcome.Applied("error", null, mapOf("kinozal" to "ok"), rutrackerNotStored = true)
+        val nr = JSONObject(req("POST", "/omp/sources", sourcesBody(loginPart() + ""","logins":{"kinozal":{"username":"kino","password":"$password"}}"""), t).json)
+        assertEquals("error", nr.getString("rutracker"))
+        assertEquals(true, nr.getBoolean("rutrackerNotStored"))
+        assertEquals("ok", nr.getJSONObject("logins").getString("kinozal"))
         // an unknown site is refused
         assertEquals(400, req("POST", "/omp/sources", sourcesBody(""","logins":{"evil":{"username":"a","password":"b"}}"""), t).status)
     }

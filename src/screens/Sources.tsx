@@ -124,6 +124,8 @@ export function SourcesScreen({
   const indexers = indexerConnections();
   // sites behind Cloudflare (Source.cloudflare) and when their clearance ends
   const cfSites = builtins.filter((s) => s.cloudflare === true);
+  // the sites behind Cloudflare are listed once, in their own group (with their «Войти» / «Выйти»)
+  const plain = builtins.filter((s) => s.cloudflare !== true);
   const [until, setUntil] = useState<{ [id: string]: number | null }>({});
 
   const readClearance = (alive: () => boolean) => {
@@ -215,8 +217,11 @@ export function SourcesScreen({
   };
 
   // OK on a site: the visible check when it waits for one, else the switch (turning it on shows the warning first)
+  /** A site behind Cloudflare has one switch on the TV: search on it through the Cloudflare pass. */
+  const siteOn = (s: Source) => isSourceOn(s) && isCloudflareBypassOn(s);
+
   const pressSite = (s: Source) => {
-    const on = isCloudflareBypassOn(s);
+    const on = siteOn(s);
     if (on && needsCheck(s) && s.siteUrl) {
       runCloudflareCheck(s.name, s.siteUrl).then((r) => {
         // passed, or closed: either way the next OK is the switch again (it can be turned off)
@@ -226,11 +231,14 @@ export function SourcesScreen({
       return;
     }
     if (on) {
+      setSourceOn(s.id, false);
       setCloudflareBypass(s.id, false);
       return;
     }
     confirmDialog(BYPASS_WARNING, 'Включить').then((ok) => {
-      if (ok) setCloudflareBypass(s.id, true);
+      if (!ok) return;
+      setSourceOn(s.id, true);
+      setCloudflareBypass(s.id, true);
     });
   };
 
@@ -381,12 +389,17 @@ export function SourcesScreen({
           {torznabHiddenText(!ts.some((s) => s.id === 'ts-torznab')) && <div class="src-empty">{torznabHiddenText(true)}</div>}
           {cfSites.length > 0 && <div class="src-group">Сайты за Cloudflare</div>}
           {cfSites.map((s) => {
-            const on = isCloudflareBypassOn(s);
-            const base = tvSiteNote(on, needsCheck(s), until[s.id] === undefined ? null : until[s.id], now());
+            const on = siteOn(s);
+            const login = !!(s.needsLogin && s.login);
+            const base = tvSiteNote(isCloudflareBypassOn(s), needsCheck(s), until[s.id] === undefined ? null : until[s.id], now());
+            let note = base;
+            if (login && !loggedIn(s)) note = { text: 'нужен вход', tone: 'muted' };
+            else if (!isSourceOn(s)) note = { text: 'выключен', tone: 'muted' };
+            else if (!isCloudflareBypassOn(s)) note = { text: 'ищет без обхода Cloudflare', tone: 'muted' };
             // mockup: «обход Cloudflare · вход передан с телефона»
-            const note = base.tone === 'ok' && s.needsLogin && loggedIn(s) && fromPhone(s) ? { text: base.text + ' · вход передан с телефона', tone: base.tone } : base;
+            else if (base.tone === 'ok' && login && fromPhone(s)) note = { text: base.text + ' · вход передан с телефона', tone: base.tone };
             return (
-              <div class="src-line" key={'cf-' + s.id} data-cf-site={s.id}>
+              <div class="src-line" key={'cf-' + s.id} data-cf-site={s.id} data-source={s.id}>
                 <Focusable focusKey={'src-cf-' + s.id} className="src-row src-row-builtin" onPress={() => pressSite(s)}>
                   <span class="src-name">
                     {s.name}
@@ -394,11 +407,19 @@ export function SourcesScreen({
                   </span>
                   <span class={'src-act' + (on ? ' on' : '')}>{on ? 'вкл' : 'выкл'}</span>
                 </Focusable>
+                {login && (
+                  <Button
+                    focusKey={'src-login-' + s.id}
+                    className="src-login"
+                    label={loggedIn(s) ? 'Выйти' : 'Войти'}
+                    onPress={() => (loggedIn(s) ? logout(s) : setLoginFor(s))}
+                  />
+                )}
               </div>
             );
           })}
-          {builtins.length > 0 && <div class="src-group">Встроенные</div>}
-          {builtins.map((s) => {
+          {plain.length > 0 && <div class="src-group">Встроенные</div>}
+          {plain.map((s) => {
             const on = isSourceOn(s);
             const login = !!(s.needsLogin && s.login);
             return (

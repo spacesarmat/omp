@@ -107,15 +107,16 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
     transferLogins(allSources(), ctx(), [source.id])
       .then((logins) => {
         if (!logins[source.id]) throw new Error('Не удалось прочитать вход на ' + source.name);
-        return sendTransfer(null, [], logins);
+        // only the login and this site's own switches: the other switches and FlareSolverr stay as they are on the TV
+        return sendTransfer(null, [], logins, { list: [source], flare: null });
       })
       .then(
-        ({ r, loginDropped, cloudflareDropped, sitesDropped }) => {
+        ({ r, droppedNote, cloudflareDropped, sitesDropped }) => {
           const result = r.logins ? r.logins[source.id] : undefined;
           log(result === 'ok' ? 'info' : 'warn', 'tv', 'Вход на ' + source.id + ' передан на Android TV: ' + (result || 'нет ответа'));
           if (alive.current) setSending(false);
           const notes = [
-            loginDropped ? 'Вход не передан: логин или пароль слишком длинный или с недопустимыми символами' : '',
+            droppedNote,
             sitesDropped ? SITES_NOT_SENT : '',
             cloudflareDropped ? CLOUDFLARE_NOT_SENT : '',
             siteLoginsText(r.logins, () => source.name),

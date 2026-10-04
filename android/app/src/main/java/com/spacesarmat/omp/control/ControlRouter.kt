@@ -136,6 +136,8 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
             is SourcesOutcome.Applied -> {
                 val o = JSONObject().put("ok", true)
                 if (t.login != null) o.put("rutracker", r.rutracker ?: "error")
+                // the verified rutracker login could not be written (the site results above still hold)
+                if (r.rutrackerNotStored) o.put("rutrackerNotStored", true)
                 // how many connections the TV saved; never a key or an address
                 if (t.indexers.isNotEmpty()) o.put("indexers", r.indexers ?: 0)
                 // per site: ok | bad_login | captcha | error, only for the logins that came

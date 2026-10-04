@@ -128,12 +128,21 @@ describe('rustorka', () => {
     await expect(rustorka.resolve!(r, none.ctx)).rejects.toThrow(RUSTORKA_NO_FILE);
   });
 
+  it('a wrong password is refused while an older session is still valid (form again + logged-in header)', async () => {
+    const site = fakeSite((c: HttpCall) => {
+      if (c.method === 'POST') return page('<a href="./login.php?logout=1">Выход</a>' + fixture('rustorka-guest.html'), LOGIN_URL);
+      return page(fixture('rustorka-topic.html'), c.url);
+    }, CREDS);
+    expect(siteLoginCode(await rustorka.login!('u', 'bad', site.ctx).then(() => null, (x: unknown) => x))).toBe('bad_login');
+    expect(site.secrets).toEqual(CREDS);
+  });
+
   it('logout and the staged login of a transfer', async () => {
     const site = fakeSite(server(), { ...CREDS, 'rustorka.pending.username': 'tv', 'rustorka.pending.password': 'tvp' });
     await rustorka.loginPending!(site.ctx);
     expect(site.calls[0].form).toEqual({ login_username: 'tv', login_password: 'tvp', login: 'Вход' });
     await rustorka.logout!(site.ctx);
-    expect(site.cleared).toEqual([FORUM]);
+    expect(site.cleared).toEqual(['https://rustorka.com/']);
     expect(site.secrets).toEqual({ 'rustorka.pending.username': 'tv', 'rustorka.pending.password': 'tvp' });
   });
 });

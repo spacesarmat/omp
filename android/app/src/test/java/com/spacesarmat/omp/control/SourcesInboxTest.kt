@@ -360,6 +360,44 @@ class SourcesInboxTest {
     }
 
     @Test
+    fun aFailedRutrackerPromotionStillReportsTheSiteResults() {
+        val box = inbox()
+        val t = SourcesTransfer(
+            linkedMapOf("kinozal" to true),
+            SourcesTransfer.Login("andy", password),
+            "Pixel",
+            logins = linkedMapOf("kinozal" to SourcesTransfer.Login("kino", password)),
+        )
+        val f = start(box, t)
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        // the site promotion works, then the storage fails for rutracker's
+        val real = entries
+        var calls = 0
+        val failing = object : SecretEntries {
+            override fun get(name: String): String? = real.get(name)
+            override fun replace(values: Map<String, String>, remove: Collection<String>) {
+                calls++
+                if (values.containsKey("js:rutracker.username")) throw IllegalStateException("keystore")
+                real.replace(values, remove)
+            }
+        }
+        val box2 = SourcesInbox(SecretLoginStore(failing) { "js:$it" }, { events.add(it) }, 5_000) { now }
+        // finish the first transfer normally, then run the same one through the failing store
+        box.done(e.getString("id"), "bad_login", false, null, mapOf("kinozal" to "bad_login"))
+        f.get(2, TimeUnit.SECONDS)
+        val g = start(box2, t)
+        val e2 = events.poll(2, TimeUnit.SECONDS)!!
+        val a = box2.answer(e2.getString("id"), "ok", false, null, mapOf("kinozal" to "ok"))
+        assertEquals(SourcesDone.NOT_STORED, a.state)
+        assertFalse(a.rutrackerStored)
+        assertTrue(a.sitesNotStored.isEmpty())
+        assertEquals(SourcesOutcome.Applied("error", null, mapOf("kinozal" to "ok"), rutrackerNotStored = true), g.get(2, TimeUnit.SECONDS))
+        assertEquals(password, entries.map["js:kinozal.password"])
+        assertNull(entries.map["js:rutracker.password"])
+        assertTrue(calls > 0)
+    }
+
+    @Test
     fun siteLoginsFailingToStageStopBeforeThePageAndDeadProcessLeftoversAreDropped() {
         entries.fails = true
         assertEquals(SourcesOutcome.StoreFailed, inbox().receive(withSites()))

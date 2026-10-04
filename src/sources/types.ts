@@ -93,6 +93,8 @@ export interface Source {
   cloudflare?: boolean;
   /** The site's root (https://host/): the visible check and the clearance status of a Cloudflare site use it. */
   siteUrl?: string;
+  /** Every root of a site with mirrors (siteUrl is the active one): a TV check request may name any of them. */
+  siteUrls?: string[];
   /** Sources with needsLogin: sign in; the credentials go to ctx.secrets only. Rejects in Russian. */
   login?(username: string, password: string, ctx: SourceContext): Promise<void>;
   /** Forgets the site cookies and the saved credentials. */

@@ -5,7 +5,7 @@ import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { SourcesScreen } from '../../src/screens/Sources';
 import { DialogHost } from '../../src/ui/dialog';
 import { reloadIndexers } from '../../src/sources/indexerStore';
-import { getHealth, isCloudflareBypassOn, reloadSourcePrefs, resetHealth, setCloudflareBypass, setHealth } from '../../src/sources/store';
+import { getHealth, isCloudflareBypassOn, reloadSourcePrefs, resetHealth, setCloudflareBypass, setHealth, setSourceOn } from '../../src/sources/store';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { setFlareStatus } from '../../src/sources/flaresolverr';
 import { CF_INTERACTIVE } from '../../src/sources/cloudflare';
@@ -119,6 +119,7 @@ describe('Android TV «Источники поиска»: «Сайты за Clou
   });
 
   it('turning the switch on shows the warning first; off at once', async () => {
+    setSourceOn('kinozal', false);
     await mount();
     expect(row('kinozal').textContent).toContain('выключен');
     await click(row('kinozal').querySelector('.src-row')!);

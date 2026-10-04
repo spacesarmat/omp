@@ -18,6 +18,7 @@ import {
   transferLogins,
   transferWhen,
   validateTransferPayload,
+  validTransferLogin,
   withoutNewParts,
   type RutrackerResult,
   type TransferIndexer,
@@ -47,7 +48,14 @@ export function sentText(r: RutrackerResult | undefined): string {
   return 'Передано';
 }
 
-export const LOGIN_NOT_SENT = 'Вход на сайты не передан: логин или пароль слишком длинный или с недопустимыми символами';
+/** The logins left out of a transfer: by site (too long, bad characters), or all of them when the body was too big. */
+export function loginsNotSent(names: string[], tooBig: boolean): string {
+  if (tooBig) return 'Входы на сайты не переданы: слишком много данных для телевизора';
+  return 'Вход на ' + names.join(', ') + ' не передан: логин или пароль слишком длинный или с недопустимыми символами';
+}
+
+export const LOGIN_NOT_SENT = loginsNotSent(['rutracker'], false);
+export const RUTRACKER_NOT_STORED = 'Телевизор не смог сохранить вход на rutracker: защищённое хранилище недоступно';
 
 /** What the phone adds about each site's login the TV checked ('' when all were accepted). */
 export function siteLoginsText(logins: { [site: string]: RutrackerResult } | undefined, nameOf: (id: string) => string): string {
@@ -79,9 +87,20 @@ export function indexersText(sent: number, saved: number | undefined): string {
 }
 export const SOURCES_NOT_READY = 'Не удалось подготовить источники к передаче';
 
+export interface PreparedTransfer {
+  payload: TransferPayload;
+  /** Some login was left out (droppedLogins names them). */
+  loginDropped: boolean;
+  /** Source ids of the logins left out ('rutracker' included). */
+  droppedLogins: string[];
+  /** All logins were left out because the body was too big. */
+  tooBig: boolean;
+  indexersDropped: boolean;
+}
+
 /**
- * The payload the TV accepts (same schema as its control server). A login the TV would refuse is left out so the
- * switches still go; loginDropped says so.
+ * The payload the TV accepts (same schema as its control server). A login the TV would refuse is left out on its own,
+ * so the other logins and the switches still go; only when the body is still too big are all logins left out.
  */
 export function transferPayload(
   list: Source[],
@@ -89,15 +108,28 @@ export function transferPayload(
   indexers?: TransferIndexer[],
   flare: string | null = flareSolverrUrl(),
   logins?: { [id: string]: TransferLogin } | null,
-): { payload: TransferPayload; loginDropped: boolean; indexersDropped: boolean } {
-  const hasLogins = !!login || !!(logins && Object.keys(logins).length);
-  const full = validateTransferPayload(buildTransferPayload(list, login, indexers, flare, logins));
-  if (full) return { payload: full, loginDropped: false, indexersDropped: false };
+): PreparedTransfer {
+  const dropped: string[] = [];
+  const rut = login && validTransferLogin(login) ? login : null;
+  if (login && !rut) dropped.push('rutracker');
+  const sites: { [id: string]: TransferLogin } = {};
+  Object.keys(logins || {}).forEach((id) => {
+    if (validTransferLogin(logins![id])) sites[id] = logins![id];
+    else dropped.push(id);
+  });
+  const all = (login ? ['rutracker'] : []).concat(Object.keys(logins || {}));
+  const full = validateTransferPayload(buildTransferPayload(list, rut, indexers, flare, sites));
+  if (full) return { payload: full, loginDropped: dropped.length > 0, droppedLogins: dropped, tooBig: false, indexersDropped: false };
   const noLogin = validateTransferPayload(buildTransferPayload(list, null, indexers, flare));
-  if (noLogin) return { payload: noLogin, loginDropped: hasLogins, indexersDropped: false };
+  if (noLogin) return { payload: noLogin, loginDropped: all.length > 0, droppedLogins: all, tooBig: all.length > dropped.length, indexersDropped: false };
   const bare = validateTransferPayload(buildTransferPayload(list, null, undefined, flare));
   if (!bare) throw new Error(SOURCES_NOT_READY);
-  return { payload: bare, loginDropped: hasLogins, indexersDropped: !!(indexers && indexers.length) };
+  return { payload: bare, loginDropped: all.length > 0, droppedLogins: all, tooBig: all.length > dropped.length, indexersDropped: !!(indexers && indexers.length) };
+}
+
+/** The «not sent» note of a prepared transfer ('' when every login went). */
+export function droppedText(p: { droppedLogins: string[]; tooBig: boolean }): string {
+  return p.droppedLogins.length ? loginsNotSent(p.droppedLogins.map(nameOf), p.tooBig) : '';
 }
 
 /**
@@ -108,9 +140,18 @@ export function sendTransfer(
   login: TransferLogin | null,
   indexers: TransferIndexer[],
   logins: { [id: string]: TransferLogin },
-): Promise<{ r: SourcesSent; loginDropped: boolean; indexersDropped: boolean; cloudflareDropped: boolean; sitesDropped: boolean; sent: number }> {
-  const p = transferPayload(allSources(), login, indexers, undefined, logins);
-  const state = { loginDropped: p.loginDropped, indexersDropped: p.indexersDropped, cloudflareDropped: false, sitesDropped: false, sent: p.payload.indexers ? p.payload.indexers.length : 0 };
+  /** The site screen sends only its own site's switches and no FlareSolverr address. */
+  only?: { list: Source[]; flare: string | null },
+): Promise<{ r: SourcesSent; loginDropped: boolean; droppedNote: string; indexersDropped: boolean; cloudflareDropped: boolean; sitesDropped: boolean; sent: number }> {
+  const p = only ? transferPayload(only.list, login, indexers, only.flare, logins) : transferPayload(allSources(), login, indexers, undefined, logins);
+  const state = {
+    loginDropped: p.loginDropped,
+    droppedNote: droppedText(p),
+    indexersDropped: p.indexersDropped,
+    cloudflareDropped: false,
+    sitesDropped: false,
+    sent: p.payload.indexers ? p.payload.indexers.length : 0,
+  };
   const extras = !!(p.payload.indexers || p.payload.flaresolverr || p.payload.cloudflare || p.payload.logins);
   return sendSourcesToTv(p.payload)
     .catch((e: unknown) => {
@@ -173,7 +214,7 @@ function SendToTv({ loginNames, indexers, ctx }: { loginNames: { id: string; nam
     Promise.all([login, list, sites])
       .then(([l, idx, s]) => sendTransfer(l, idx, s))
       .then(
-        ({ r, loginDropped, indexersDropped, cloudflareDropped, sitesDropped, sent }) => {
+        ({ r, droppedNote, indexersDropped, cloudflareDropped, sitesDropped, sent }) => {
           saveJson(SENT_KEY, { ip, at: Date.now() });
           const partial = indexersText(sent, r.indexers);
           const siteNotes = siteLoginsText(r.logins, nameOf);
@@ -188,14 +229,15 @@ function SendToTv({ loginNames, indexers, ctx }: { loginNames: { id: string; nam
           setBusy(false);
           setTick((n) => n + 1);
           const notes = [
-            loginDropped ? LOGIN_NOT_SENT : '',
+            droppedNote,
+            r.rutrackerNotStored ? RUTRACKER_NOT_STORED : '',
             indexersDropped ? INDEXERS_NOT_SENT : '',
             cloudflareDropped ? CLOUDFLARE_NOT_SENT : '',
             sitesDropped ? SITES_NOT_SENT : '',
             partial,
             siteNotes,
           ].filter((x) => x);
-          const head = notes.length && !r.rutracker ? 'Источники переданы.' : sentText(r.rutracker);
+          const head = notes.length && (!r.rutracker || r.rutrackerNotStored) ? 'Источники переданы.' : sentText(r.rutracker);
           showToast(notes.length ? head + ' ' + notes.join('. ') : head, notes.length ? 6000 : undefined);
         },
         (e) => {
