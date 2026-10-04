@@ -22,7 +22,7 @@ class LanScanTest {
 
     @Test
     fun onlyTheJackettAndProwlarrPorts() {
-        assertEquals(listOf(9117, 9696), LanScan.allowedPorts(listOf(22, 9117, 80, 9696, 9117, 5555)))
+        assertEquals(listOf(9117, 9696, 8191), LanScan.allowedPorts(listOf(22, 9117, 80, 9696, 9117, 8191, 5555)))
         assertTrue(LanScan.scan("192.168.1.40", listOf(22, 80), 100) { _, _, _ -> true }.isEmpty())
         assertTrue(LanScan.scan("8.8.8.8", listOf(9117), 100) { _, _, _ -> true }.isEmpty())
     }

@@ -6,7 +6,8 @@ import org.json.JSONObject
 
 /**
  * A site request of the search sources as the page sends it (OmpNative.http and the background page's bridge):
- * { url, method?: GET|POST, headers?, form?, formCharset?, body?, timeoutMs?, responseCharset? }. Pure: tested on the JVM.
+ * { url, method?: GET|POST, headers?, form?, formCharset?, body?, timeoutMs?, responseCharset?, cloudflare?, flaresolverr? }.
+ * Pure: tested on the JVM.
  */
 data class HttpSpec(
     val url: String,
@@ -18,6 +19,10 @@ data class HttpSpec(
     val timeoutMs: Long,
     /** Charset to decode the body with, overriding the headers ('iso-8859-1' gives the raw bytes of a .torrent 1:1). */
     val responseCharset: String? = null,
+    /** The site's «Обходить проверку Cloudflare» is on: a Cloudflare check is passed (built-in page, then FlareSolverr). */
+    val cloudflare: Boolean = false,
+    /** The user's FlareSolverr address (http/https), only with [cloudflare]. */
+    val flareSolverr: String? = null,
 ) {
     companion object {
         const val DEFAULT_TIMEOUT_MS = 20_000
@@ -41,6 +46,8 @@ data class HttpSpec(
                 body = o.opt("body") as? String,
                 timeoutMs = timeout.coerceIn(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS).toLong(),
                 responseCharset = o.opt("responseCharset") as? String,
+                cloudflare = o.opt("cloudflare") == true,
+                flareSolverr = if (o.opt("cloudflare") == true) (o.opt("flaresolverr") as? String)?.takeIf { it.toHttpUrlOrNull() != null } else null,
             )
         }
 
@@ -57,7 +64,11 @@ data class HttpSpec(
         }
 
         /** { status, url, text } as both callers answer it. */
-        fun reply(r: SiteHttp.Response): JSONObject = JSONObject().put("status", r.status).put("url", r.url).put("text", r.text)
+        fun reply(r: SiteHttp.Response): JSONObject {
+            val o = JSONObject().put("status", r.status).put("url", r.url).put("text", r.text)
+            if (r.cloudflare != null) o.put("cloudflare", r.cloudflare)
+            return o
+        }
     }
 }
 
@@ -68,11 +79,21 @@ data class HttpSpec(
  */
 class SourceServices private constructor(context: Context) {
     val secrets = SecretStorage(context)
-    val siteHttp = SiteHttp(SiteCookieJar(SecretCookieStore(secrets)))
+    private val jar = SiteCookieJar(SecretCookieStore(secrets))
+    private val app = context.applicationContext
+    val cloudflare = CloudflarePass(
+        CloudflareSolver({ WebViewCloudflareBrowser(app) }, MainScheduler(), jar),
+        FlareSolverrClient(),
+        jar,
+    )
+    val siteHttp = SiteHttp(jar, cloudflare)
 
     /** Blocking. Throws [SiteHttpException]. */
     fun request(spec: HttpSpec): SiteHttp.Response =
-        siteHttp.request(spec.url, spec.method, spec.headers, spec.form, spec.formCharset, spec.body, spec.timeoutMs, spec.responseCharset)
+        siteHttp.request(
+            spec.url, spec.method, spec.headers, spec.form, spec.formCharset, spec.body, spec.timeoutMs, spec.responseCharset,
+            if (spec.cloudflare) SiteHttp.CloudflareOptions(spec.flareSolverr?.toHttpUrlOrNull()) else null,
+        )
 
     companion object {
         const val SECRETS_FAILED = "Не удалось открыть защищённое хранилище"

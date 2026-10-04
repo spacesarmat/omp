@@ -849,3 +849,11 @@ button, .m-btn {
 .m-support-actions { display: flex; gap: 10px; }
 .m-support-actions .m-btn { flex: 1 1 0; }
 .m-support-ok { padding: 14px 16px; border-radius: 14px; background: #1e2a1f; color: #8fe39a; font-size: 14px; line-height: 1.45; }
+
+/* «Источники поиска» → FlareSolverr */
+.m-flare { display: flex; flex-direction: column; gap: 12px; }
+.m-flare-intro { font-size: 14px; color: #C9CEDA; line-height: 1.5; }
+.m-flare-actions { display: flex; gap: 10px; }
+.m-flare-actions .m-btn { flex: 1 1 0; }
+.m-flare-howto { gap: 8px; }
+.m-flare-howto-title { font-size: 15px; font-weight: 700; }

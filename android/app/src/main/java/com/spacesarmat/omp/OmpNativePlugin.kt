@@ -244,7 +244,7 @@ class OmpNativePlugin : Plugin() {
     }
 
     /**
-     * «Источники поиска»: hosts of the device's /24 that answer on the Jackett / Prowlarr ports ([LanScan.ALLOWED]):
+     * «Источники поиска»: hosts of the device's /24 that answer on the Jackett / Prowlarr / FlareSolverr ports ([LanScan.ALLOWED]):
      * { hits: [{ ip, port }], lan }. Without a Wi-Fi IPv4 (mobile data) lan is false and nothing is scanned. Nothing is logged.
      */
     @PluginMethod
@@ -1075,7 +1075,8 @@ class OmpNativePlugin : Plugin() {
     // ---- search sources: site HTTP and encrypted secrets ----
 
     /**
-     * { url, method?: GET|POST, headers?, form?, formCharset?, body?, timeoutMs? } → { status, url, text }.
+     * { url, method?: GET|POST, headers?, form?, formCharset?, body?, timeoutMs?, cloudflare?, flaresolverr? } →
+     * { status, url, text, cloudflare? }.
      * Cookies per site, body decoded by its charset. Values are never logged.
      */
     @PluginMethod
@@ -1091,7 +1092,8 @@ class OmpNativePlugin : Plugin() {
                 val r = sources.request(spec)
                 once.resolve(JSObject.fromJSONObject(HttpSpec.reply(r)))
             } catch (e: SiteHttpException) {
-                once.reject(e.reason)
+                // a Cloudflare failure carries its kind as the code (the page offers the visible check for -interactive)
+                if (e.code != null) once.reject(e.reason, e.code) else once.reject(e.reason)
             } catch (e: Exception) {
                 once.reject(SiteHttp.NO_ANSWER)
             }

@@ -23,6 +23,8 @@ import {
 } from '../../../src/sources/transfer';
 import { indexerConnections, onIndexersChange, torznabHiddenText, type IndexerConn } from '../../../src/sources/indexerStore';
 import { IndexerSection, phoneIndexerEnv, type IndexerEnv } from './SourcesIndexers';
+import { flareSolverrUrl, onFlareChange } from '../../../src/sources/flareStore';
+import { flareStatus, onFlareStatus, phoneFlareNote, refreshFlareStatus } from '../../../src/sources/flaresolverr';
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
 import { log } from '../../../src/lib/log';
 import { activeTv, isAtv } from '../tv/tvStore';
@@ -190,6 +192,23 @@ function SendToTv({ hasLogin, indexers, ctx }: { hasLogin: boolean; indexers: In
   );
 }
 
+/** Entry to the FlareSolverr screen with the saved address and its last check. */
+function FlareEntry() {
+  const note = phoneFlareNote(flareSolverrUrl(), flareStatus());
+  return (
+    <section class="m-set-group" data-entry="flaresolverr">
+      <div class="m-set-label">Обход Cloudflare</div>
+      <button type="button" class="m-set-row m-set-row-btn" onClick={() => navigate({ name: 'flaresolverr' })}>
+        <span class="m-src-name">
+          <span>FlareSolverr</span>
+          <span class={'m-src-note' + (note.tone === 'muted' ? '' : ' ' + note.tone)}>{note.text}</span>
+        </span>
+        <Icon d="M9 5l7 7-7 7" size={18} />
+      </button>
+    </section>
+  );
+}
+
 /** Names of the TorrServer sources on this screen. */
 const TS_LABELS: Record<string, string> = {
   'ts-rutor': 'rutor (поиск TorrServer)',
@@ -262,6 +281,9 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
     let alive = true;
     const off = onHealthChange(() => alive && rerender());
     const offIdx = onIndexersChange(() => alive && rerender());
+    const offFlare = onFlareStatus(() => alive && rerender());
+    const offFlareUrl = onFlareChange(() => alive && rerender());
+    if (flareSolverrUrl() && !flareStatus()) refreshFlareStatus(ctx().http).then(undefined, () => undefined);
     builtins
       .filter((s) => s.needsLogin && s.loggedIn)
       .forEach((s) => {
@@ -274,6 +296,8 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
       alive = false;
       off();
       offIdx();
+      offFlare();
+      offFlareUrl();
     };
   }, []);
 
@@ -321,6 +345,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
       </div>
       <SendToTv ctx={ctx} indexers={indexerConnections()} hasLogin={builtins.some((s) => s.id === 'rutracker' && !!logged[s.id])} />
       <IndexerSection ctx={ctx} env={indexerEnv} onChange={rerender} />
+      <FlareEntry />
       <section class="m-set-group">
         <div class="m-set-label">Через TorrServer</div>
         <div class="m-set-card m-src-card">

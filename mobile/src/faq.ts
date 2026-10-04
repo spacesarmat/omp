@@ -15,6 +15,9 @@ export interface FaqSection {
 
 const TORRSERVER_URL = 'https://github.com/YouROK/TorrServer';
 
+/** The FlareSolverr question (opened from «Источники поиска» → FlareSolverr). */
+export const FLARESOLVERR_Q = 'Как установить FlareSolverr?';
+
 export const FAQ: FaqSection[] = [
   {
     title: 'Установка',
@@ -211,6 +214,15 @@ export const FAQ: FaqSection[] = [
           'Поиск TorrServer умеет ходить в Jackett или Prowlarr — программы, которые знают сотни трекеров. Установите одну из них на компьютер или сервер в той же сети, добавьте в ней нужные трекеры (для закрытых — со своим логином) и скопируйте API-ключ.',
           'В веб-интерфейсе TorrServer откройте «Настройки» → «Поиск через Torznab»: включите «Включить поиск Torznab», нажмите «Добавить сервер», в «URL хоста Torznab» впишите адрес Jackett (обычно http://<адрес>:9117) или Prowlarr (http://<адрес>:9696), в «API-ключ» — ключ.',
           'В OMP на телефоне источник «Jackett / Prowlarr (Torznab)» в «Настройки» → «Источники поиска» включён по умолчанию — как только TorrServer настроен, «Добавить» ищет и через него. Android TV тоже ищет через него сам. На LG на экране поиска выберите «Torznab (Jackett)» над поиском.',
+        ],
+      },
+      {
+        q: FLARESOLVERR_Q,
+        a: [
+          'FlareSolverr — программа, которая проходит проверку Cloudflare вместо OMP. Нужна, только если встроенная проверка не проходит. Поставьте её на компьютер или NAS, который всегда включён, одной командой Docker:',
+          'docker run -d --name flaresolverr -p 8191:8191 --restart unless-stopped ghcr.io/flaresolverr/flaresolverr:latest',
+          'Затем в OMP: «Настройки» → «Источники поиска» → FlareSolverr → «Найти в сети» или впишите адрес (http://<адрес>:8191) и нажмите «Проверить».',
+          { text: 'github.com/FlareSolverr/FlareSolverr', url: 'https://github.com/FlareSolverr/FlareSolverr' },
         ],
       },
       {

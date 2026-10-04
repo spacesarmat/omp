@@ -2,6 +2,8 @@
 // The phone (mobile/src/platform/native.ts) and the Android TV bundle (src/platform/androidNative.ts) pass
 // their own plugin calls; tests pass fakes.
 import type { HttpOptions, HttpResponse, SecretStore, SourceHttp } from './types';
+import { hostOf, logCloudflare, toCloudflareError } from './cloudflare';
+import { flareSolverrUrl } from './flareStore';
 
 /** Arguments of OmpNative.http. */
 export interface NativeHttpRequest {
@@ -13,6 +15,10 @@ export interface NativeHttpRequest {
   responseCharset?: string;
   body?: string;
   timeoutMs?: number;
+  /** Pass a Cloudflare check on the way (the site's switch is on). */
+  cloudflare?: boolean;
+  /** The user's FlareSolverr, only with cloudflare. */
+  flaresolverr?: string;
 }
 
 export type NativeHttpCall = (req: NativeHttpRequest) => Promise<unknown>;
@@ -32,23 +38,54 @@ function response(r: unknown, url: string): HttpResponse {
   };
 }
 
-function withOptions(req: NativeHttpRequest, opts?: HttpOptions): NativeHttpRequest {
+function withOptions(req: NativeHttpRequest, opts: HttpOptions | undefined, flare: () => string | null): NativeHttpRequest {
   if (!opts) return req;
   if (opts.headers) req.headers = opts.headers;
   if (opts.formCharset) req.formCharset = opts.formCharset;
   if (opts.responseCharset) req.responseCharset = opts.responseCharset;
   if (opts.timeoutMs) req.timeoutMs = opts.timeoutMs;
+  if (opts.cloudflare) {
+    req.cloudflare = true;
+    const f = flare();
+    if (f) req.flaresolverr = f;
+  }
   return req;
 }
 
-export function createSourceHttp(call: NativeHttpCall, clearCookies?: (url: string) => Promise<unknown>): SourceHttp {
-  const send = (req: NativeHttpRequest): Promise<HttpResponse> => {
+function passed(r: unknown): boolean {
+  const c = r && typeof r === 'object' ? (r as { cloudflare?: unknown }).cloudflare : undefined;
+  return c === 'browser' || c === 'flaresolverr';
+}
+
+/**
+ * flare: the FlareSolverr address sent with requests that pass Cloudflare checks (the saved one by default; tests pass
+ * their own). A Cloudflare failure rejects with a CloudflareError (code + siteUrl); passes and failures are logged with
+ * the site name only.
+ */
+export function createSourceHttp(
+  call: NativeHttpCall,
+  clearCookies?: (url: string) => Promise<unknown>,
+  flare: () => string | null = flareSolverrUrl,
+): SourceHttp {
+  const send = (req: NativeHttpRequest, opts?: HttpOptions): Promise<HttpResponse> => {
     if (!isHttpUrl(req.url)) return Promise.reject(new Error(BAD_URL));
-    return call(req).then((r) => response(r, req.url));
+    const site = () => (opts && opts.siteName) || hostOf(req.url);
+    return call(req).then(
+      (r) => {
+        if (req.cloudflare && passed(r)) logCloudflare('passed', site());
+        return response(r, req.url);
+      },
+      (e: unknown) => {
+        const cf = toCloudflareError(e, req.url);
+        if (!cf) throw e;
+        logCloudflare(cf.code, site());
+        throw cf;
+      },
+    );
   };
   return {
-    get: (url, opts) => send(withOptions({ url, method: 'GET' }, opts)),
-    post: (url, form, opts) => send(withOptions({ url, method: 'POST', form }, opts)),
+    get: (url, opts) => send(withOptions({ url, method: 'GET' }, opts, flare), opts),
+    post: (url, form, opts) => send(withOptions({ url, method: 'POST', form }, opts, flare), opts),
     clearCookies(url) {
       if (!clearCookies) return Promise.resolve();
       return clearCookies(url).then(() => undefined);

@@ -11,6 +11,7 @@ import { sanitizeFavorites } from '../../../src/store/favorites';
 import { sanitizeTrackPrefs } from '../../../src/store/trackPrefs';
 import { sanitizeSourcePrefs } from '../../../src/sources/store';
 import { sanitizeIndexers } from '../../../src/sources/indexerStore';
+import { sanitizeFlare } from '../../../src/sources/flareStore';
 import { sanitizeSubs } from '../../../src/monitor/subs';
 import { sanitizeMonitorSettings } from '../../../src/monitor/settings';
 import { sanitizeTvs } from '../tv/tvStore';
@@ -94,6 +95,8 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.sources', clean: (v) => cleanMap(v, sanitizeSourcePrefs(v)) },
   // Jackett / Prowlarr connections: address + «key set» only (the key lives in Android encrypted storage)
   { key: 'tsp.indexers', clean: (v) => cleanList(v, sanitizeIndexers(v)) },
+  // FlareSolverr: its address only
+  { key: 'tsp.flaresolverr', clean: (v) => sanitizeFlare(v) || undefined },
   { key: 'tsp.settings', clean: cleanObject(sanitizeSettings) },
   { key: 'tsp.touchpad', clean: cleanObject(sanitizeTouchpad) },
   { key: 'tsp.localServer', clean: (v) => (isObject(v) && typeof v.autostart === 'boolean' ? { autostart: v.autostart } : undefined) },
@@ -121,6 +124,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.monitorNotifyHint',
   'tsp.sourcesTransfer', // state of the last handover to the TV
   'tsp.sourcesSent',
+  'tsp.flareScan', // when FlareSolverr was last searched for on the LAN: per device
   'tsp.firstRun', // when this install was first used: per device
   'tsp.donateCard', // the «Поддержать» card was closed
 ];

@@ -42,6 +42,8 @@ export interface OmpNativeTvPlugin {
   remoteSourcesPending(): Promise<{ event?: unknown }>;
   /** Whether libVLC runs on this device (the «VLC» player choice). */
   vlcAvailable(): Promise<{ available?: boolean }>;
+  /** Hosts of the device's /24 open on allowed ports (FlareSolverr 8191 on the TV); lan false off a home network. */
+  scanLan(o: { ports: number[]; timeoutMs?: number }): Promise<{ hits?: unknown; lan?: unknown }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
@@ -83,6 +85,7 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     remoteSourcesDone: (o) => np.call(cap, NAME, 'remoteSourcesDone', o),
     remoteSourcesPending: () => np.call(cap, NAME, 'remoteSourcesPending', {}),
     vlcAvailable: () => np.call(cap, NAME, 'vlcAvailable', {}),
+    scanLan: (o) => np.call(cap, NAME, 'scanLan', o),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }
@@ -123,6 +126,27 @@ export function nativeSourceHttp(): SourceHttp | null {
   return createSourceHttp(
     (req) => p.http(req),
     (url) => p.httpClearCookies({ url }),
+  );
+}
+
+/**
+ * Native LAN scan on Android TV: open ports of the device's /24 (only the ports the native side allows). null off a
+ * home network, outside the APK or when the scan fails.
+ */
+export function nativeScanLan(ports: number[]): Promise<{ ip: string; port: number }[] | null> {
+  const p = nativePlugin();
+  if (!p || typeof p.scanLan !== 'function') return Promise.resolve(null);
+  return p.scanLan({ ports }).then(
+    (r) => {
+      if (!r || r.lan === false || !Array.isArray(r.hits)) return null;
+      const out: { ip: string; port: number }[] = [];
+      (r.hits as unknown[]).forEach((h) => {
+        const o = h && typeof h === 'object' ? (h as { ip?: unknown; port?: unknown }) : {};
+        if (typeof o.ip === 'string' && typeof o.port === 'number' && ports.indexOf(o.port) >= 0) out.push({ ip: o.ip, port: o.port });
+      });
+      return out;
+    },
+    () => null,
   );
 }
 

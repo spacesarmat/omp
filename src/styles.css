@@ -336,6 +336,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .src-phone-title { font-size: 27px; font-weight: 700; margin-bottom: 12px; }
 .src-phone-text { font-size: 24px; color: var(--muted); line-height: 1.45; margin-bottom: 12px; }
 .src-last { font-size: 23px; color: #8fe39a; }
+.src-flare { margin-top: 36px; padding: 28px; border-radius: 24px; background: var(--panel); }
+.src-flare-where { font-size: 24px; color: var(--muted); margin-bottom: 8px; }
+.src-flare-state { font-size: 24px; line-height: 1.45; }
 .src-last.muted { color: var(--muted); }
 .src-list { flex: 1; min-width: 0; }
 .src-group { font-size: 24px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 10px; }

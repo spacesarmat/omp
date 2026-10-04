@@ -8,12 +8,12 @@ import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 
 /**
- * «Источники поиска»: which hosts of the device's own /24 accept a TCP connection on the Jackett (9117) or Prowlarr
- * (9696) port. Nothing is sent; the page identifies each hit with an HTTP probe. Only those ports and only a private
+ * «Источники поиска»: which hosts of the device's own /24 accept a TCP connection on the Jackett (9117), Prowlarr
+ * (9696) or FlareSolverr (8191) port. Nothing is sent; the page identifies each hit with an HTTP probe. Only those ports and only a private
  * IPv4 subnet, short timeouts, bounded concurrency: never a general scanner. Addresses are not logged.
  */
 object LanScan {
-    val ALLOWED = setOf(9117, 9696)
+    val ALLOWED = setOf(9117, 9696, 8191)
     const val CONCURRENCY = 32
     const val DEFAULT_TIMEOUT_MS = 400
 

@@ -51,7 +51,7 @@ describe('LG bundle', () => {
 
   it('has no Jackett / Prowlarr status, discovery or the Android TV sources screen (lazy chunks)', () => {
     const graph = staticGraph(resolve('src/main.tsx'));
-    const lazy = ['src/sources/indexerStatus.ts', 'src/sources/indexerDiscovery.ts', 'src/sources/indexer.ts', 'src/screens/Sources.tsx'].map((f) => resolve(f));
+    const lazy = ['src/sources/indexerStatus.ts', 'src/sources/indexerDiscovery.ts', 'src/sources/indexer.ts', 'src/sources/flaresolverr.ts', 'src/screens/Sources.tsx'].map((f) => resolve(f));
     expect(lazy.filter((f) => graph.indexOf(f) >= 0)).toEqual([]);
   });
 

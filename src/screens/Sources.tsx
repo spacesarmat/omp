@@ -17,6 +17,10 @@ import { checkedText, connLine, connTitle, getIndexerStatus, onIndexerStatus, re
 import type { SourceContext } from '../sources/types';
 import { hostName, readTorznabImports } from '../sources/indexerDiscovery';
 import { client } from '../store/servers';
+import { nativeScanLan } from '../platform/androidNative';
+import { flareSolverrUrl, onFlareChange } from '../sources/flareStore';
+import { flareStatus, onFlareStatus, tvFlareLines, tvFlareRefresh } from '../sources/flaresolverr';
+import type { LanScan } from '../sources/indexerDiscovery';
 import type { Source } from '../sources/types';
 
 /** Names of the TorrServer sources (as on the phone). */
@@ -53,6 +57,18 @@ function Note(p: { note: HealthLine | null }) {
   return <span class={'src-note src-note-' + p.note.tone}>{p.note.text}</span>;
 }
 
+/** FlareSolverr on the TV: the saved (or found on the LAN) address, its version and state (mockup 1, left). */
+function FlareBlock() {
+  const lines = tvFlareLines(flareSolverrUrl(), flareStatus());
+  return (
+    <div class="src-flare" data-flare="">
+      <div class="src-phone-title">FlareSolverr</div>
+      {lines.where && <div class="src-flare-where">{lines.where}</div>}
+      <div class={'src-flare-state src-note-' + lines.tone}>{lines.state}</div>
+    </div>
+  );
+}
+
 function TransferNote() {
   const t = lastTransfer();
   if (!t) return <div class="src-last muted">Передач с телефона ещё не было</div>;
@@ -75,11 +91,17 @@ function chosenServer(): TorrServerSettings | null {
   return c ? { read: () => c.settingsQuiet(), host: hostName(c.baseUrl) } : null;
 }
 
+/** The LAN scan for FlareSolverr (tests pass a fake). */
+function tvScan(): LanScan {
+  return nativeScanLan;
+}
+
 export function SourcesScreen({
   ctx = tvSourceContext,
   now = Date.now,
   server = chosenServer,
-}: { ctx?: () => SourceContext; now?: () => number; server?: () => TorrServerSettings | null } = {}) {
+  scan = tvScan,
+}: { ctx?: () => SourceContext; now?: () => number; server?: () => TorrServerSettings | null; scan?: () => LanScan | null } = {}) {
   const [, setTick] = useState(0);
   const rerender = () => setTick((n) => n + 1);
   const [logged, setLogged] = useState<{ [id: string]: boolean }>({});
@@ -118,6 +140,9 @@ export function SourcesScreen({
     const offHealth = onHealthChange(() => { if (alive) rerender(); });
     const offStatus = onIndexerStatus(() => { if (alive) rerender(); });
     const offConns = onIndexersChange(() => { if (alive) rerender(); });
+    const offFlare = onFlareStatus(() => { if (alive) rerender(); });
+    const offFlareUrl = onFlareChange(() => { if (alive) rerender(); });
+    tvFlareRefresh(ctx().http, scan(), now);
     // a transfer from the phone may arrive while the screen is open
     const offTransfer = onTransferApplied(() => {
       if (!alive) return;
@@ -138,6 +163,8 @@ export function SourcesScreen({
       offTransfer();
       offStatus();
       offConns();
+      offFlare();
+      offFlareUrl();
     };
   }, []);
 
@@ -204,6 +231,7 @@ export function SourcesScreen({
         <div class="src-side">
           <h1>Источники поиска</h1>
           <div class="src-intro">{INTRO}</div>
+          <FlareBlock />
           <div class="src-phone">
             <div class="src-phone-title">С телефона</div>
             <div class="src-phone-text">{PHONE_HOW}</div>

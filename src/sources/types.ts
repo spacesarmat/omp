@@ -18,6 +18,13 @@ export interface HttpOptions {
   formCharset?: string;
   /** Decode the body with this charset whatever the headers say: 'iso-8859-1' keeps every byte of a .torrent as one char. */
   responseCharset?: string;
+  /**
+   * The site's «Обходить проверку Cloudflare» is on: a Cloudflare check on the way is passed natively (hidden page, then the
+   * user's FlareSolverr). Off by default. A check that needs a person rejects with code 'cloudflare-interactive'.
+   */
+  cloudflare?: boolean;
+  /** Name of the site for the log lines of the Cloudflare check (never an address). */
+  siteName?: string;
 }
 
 /** HTTP through the native Android plugin: no CORS, browser User-Agent, cookies per site. */
