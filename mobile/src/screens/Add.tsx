@@ -213,7 +213,7 @@ export function Add({ link }: { link?: string }) {
       setError('Сервер не выбран');
       return null;
     }
-    const t = await c.add({ link: l, category: magnetCategory });
+    const t = await c.add({ link: l, title: magnetName(l) || undefined, category: magnetCategory });
     void rememberAdded(c, t, magnetName(l));
     return t.hash;
   };

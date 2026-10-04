@@ -10,6 +10,7 @@ import { baseOf, type JournalClient } from '../store/journal';
 import { torrents } from '../store/library';
 import { resolveLink } from '../sources/view';
 import type { SourceContext, SourceResult } from '../sources/types';
+import { isPlaceholderTitle } from '../lib/torrentName';
 
 export interface ReplaceClient extends JournalClient {
   add(p: { link: string; title?: string; poster?: string; category?: string }): Promise<Torrent>;
@@ -31,6 +32,11 @@ export interface ReplaceOptions {
 export type ReplaceResult = { ok: true; hash: string } | { ok: false; error: string };
 
 const DEFAULT_TIMEOUT = 60000;
+
+/** The stored title of a torrent unless it is a placeholder («infohash:…»): the new one must not inherit that. */
+function keptTitle(t: Torrent): string {
+  return isPlaceholderTitle(t.title, t.hash) ? '' : t.title;
+}
 
 function sameHash(a: string, b: string): boolean {
   return String(a).toLowerCase() === String(b).toLowerCase();
@@ -174,7 +180,7 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
 
   const prepare = (old: Torrent, oldParsed: NonNullable<ReturnType<typeof parseData>>, all: Torrent[]): Promise<Prepared> =>
     c
-      .add({ link, title: newTitle || old.title || '', poster: old.poster || '', category: old.category || '' })
+      .add({ link, title: newTitle || keptTitle(old), poster: old.poster || '', category: old.category || '' })
       .then(
         (t) => t,
         () => stop('Не удалось добавить новую раздачу.'),
@@ -230,7 +236,7 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
         const obj: { [k: string]: unknown } = { ...base.obj };
         if (oldOmp || newOmp) obj[JOURNAL_KEY] = { ...(newOmp || {}), ...(oldOmp || {}), v: JOURNAL_VERSION };
         const skip = oldParsed.skip || base.skip;
-        const title = newTitle || old.title || listed.title || listed.name || x.info.title || '';
+        const title = newTitle || keptTitle(old) || listed.title || listed.name || x.info.title || '';
         const poster = old.poster || listed.poster || '';
         const category = old.category || listed.category || '';
         const data = serializeData(obj, journal, skip);

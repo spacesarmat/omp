@@ -140,7 +140,7 @@ describe('Add', () => {
     await flush();
     click(byLabel('Добавить и смотреть на ТВ')[0]);
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, category: 'tv' });
+    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, title: 'Starbound Frontier S02', category: 'tv' });
     expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: HASH });
     expect(toast.value).toBe('Запустил на LG OLED');
   });
@@ -187,7 +187,7 @@ describe('Add', () => {
     await flush();
     click(byLabel('Добавить на сервер')[0]);
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: torrentUrl, category: expect.any(String) });
+    expect(add).toHaveBeenCalledWith({ link: torrentUrl, title: expect.any(String), category: expect.any(String) });
     expect(toast.value).toBe('Добавлено на сервер');
   });
 
@@ -288,7 +288,7 @@ describe('Add category', () => {
     mount(M + '&dn=Band+-+Discography+FLAC');
     click(byText('Добавить'));
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: M + '&dn=Band+-+Discography+FLAC', category: 'music' });
+    expect(add).toHaveBeenCalledWith({ link: M + '&dn=Band+-+Discography+FLAC', title: 'Band - Discography FLAC', category: 'music' });
   });
 
   it('a user pick is not overwritten by a later guess', async () => {
@@ -298,7 +298,7 @@ describe('Add category', () => {
     type('input', M + '&dn=Show+S01E02');
     click(byText('Добавить'));
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: M + '&dn=Show+S01E02', category: 'other' });
+    expect(add).toHaveBeenCalledWith({ link: M + '&dn=Show+S01E02', title: 'Show S01E02', category: 'other' });
   });
 
   it('a pick is forgotten when the link is replaced by a different one', async () => {
@@ -324,7 +324,7 @@ describe('Add category', () => {
     expect(byLabel('Категория: Музыка').length).toBe(1);
     click(byLabel('Добавить на сервер')[0]);
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: M, category: 'music' });
+    expect(add).toHaveBeenCalledWith({ link: M, title: 'Starbound Frontier S02', category: 'music' });
   });
 });
 
@@ -378,7 +378,7 @@ describe('Add unified search', () => {
     expect(add).not.toHaveBeenCalled();
     give(MAG);
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: MAG, category: expect.any(String) });
+    expect(add).toHaveBeenCalledWith({ link: MAG, title: expect.any(String), category: expect.any(String) });
     expect(el.textContent).not.toContain('Получаю ссылку…');
     expect(toast.value).toBe('Добавлено на сервер');
   });
@@ -391,7 +391,7 @@ describe('Add unified search', () => {
     await flush();
     click(byLabel('Добавить на сервер')[0]);
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: 'https://f.example/download.php?id=7', category: expect.any(String) });
+    expect(add).toHaveBeenCalledWith({ link: 'https://f.example/download.php?id=7', title: expect.any(String), category: expect.any(String) });
   });
 
   it('a failed link lookup shows the error in Russian', async () => {
@@ -594,7 +594,7 @@ describe('Add unified search: stable rows', () => {
     give('https://f.example/dl/1');
     await flush();
     expect(add).toHaveBeenCalledTimes(1);
-    expect(add).toHaveBeenCalledWith({ link: 'https://f.example/dl/1', category: 'music' });
+    expect(add).toHaveBeenCalledWith({ link: 'https://f.example/dl/1', title: expect.any(String), category: 'music' });
   });
 
   it('results stay after a visit to «Источники поиска»', async () => {

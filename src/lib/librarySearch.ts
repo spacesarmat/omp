@@ -1,5 +1,6 @@
 import type { Torrent } from '../api/types';
 import { naturalCompare } from './episodes';
+import { displayTitle } from './torrentName';
 
 export type LibrarySort = 'new' | 'title' | 'size';
 
@@ -31,7 +32,7 @@ export function filterTorrents(list: Torrent[], query: string): Torrent[] {
   if (!q) return list;
   const words = q.split(/\s+/);
   return list.filter((t) => {
-    const n = norm(t.title || t.name || '');
+    const n = norm(displayTitle(t));
     return words.every((w) => n.indexOf(w) >= 0);
   });
 }
@@ -43,7 +44,7 @@ function byHash(x: Torrent, y: Torrent): number {
 // hash is the final tiebreak: Chromium 53 sort is unstable for >10 items
 export function sortTorrents(list: Torrent[], mode: LibrarySort): Torrent[] {
   const a = list.slice();
-  if (mode === 'title') a.sort((x, y) => naturalCompare(norm(x.title || x.name || ''), norm(y.title || y.name || '')) || byHash(x, y));
+  if (mode === 'title') a.sort((x, y) => naturalCompare(norm(displayTitle(x)), norm(displayTitle(y))) || byHash(x, y));
   else if (mode === 'size') a.sort((x, y) => (y.torrent_size || 0) - (x.torrent_size || 0) || byHash(x, y));
   else a.sort((x, y) => (y.timestamp || 0) - (x.timestamp || 0) || byHash(x, y));
   return a;

@@ -5,6 +5,7 @@ import { CATEGORY_TABS, categoryOf } from '../../lib/category';
 import type { LibraryView } from '../../lib/libraryView';
 import { FocusGroup, Focusable } from '../../ui/components';
 import { Poster } from './Poster';
+import { displayTitle } from '../../lib/torrentName';
 
 interface ItemProps {
   t: Torrent;
@@ -13,7 +14,7 @@ interface ItemProps {
 }
 
 function badgesOf(t: Torrent, max: number): string[] {
-  return releaseBadges(parseReleaseInfo(t.title || t.name || '')).map(displayBadge).slice(0, max);
+  return releaseBadges(parseReleaseInfo(displayTitle(t))).map(displayBadge).slice(0, max);
 }
 
 function Badges(p: { list: string[]; className?: string }) {
@@ -26,7 +27,7 @@ function categoryLabel(t: Torrent): string {
   return '';
 }
 
-const titleOf = (t: Torrent) => t.title || t.name || t.hash;
+const titleOf = (t: Torrent) => displayTitle(t);
 
 function Tile(p: ItemProps & { size: 'large' | 'small' }) {
   const t = p.t;

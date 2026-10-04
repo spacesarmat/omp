@@ -167,7 +167,7 @@ describe('«Новое» · Лента', () => {
     await mount();
     click(el.querySelector('[aria-label^="Добавить на сервер:"]'));
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, category: 'movie' });
+    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, title: expect.any(String), category: 'movie' });
     expect(toast.value).toBe('Добавлено на сервер');
   });
 

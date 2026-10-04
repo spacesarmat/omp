@@ -88,6 +88,15 @@ export class TorrServerClient {
     }).then(() => undefined);
   }
 
+  /** Sets the title; poster and category go back as stored, an empty data keeps the stored one. */
+  setTitle(t: Pick<Torrent, 'hash' | 'poster' | 'category'>, title: string): Promise<void> {
+    const v = title.trim();
+    if (!v) return Promise.reject(new Error('Пустое название'));
+    return this.call<unknown>('/torrents', {
+      body: { action: 'set', hash: t.hash, title: v, poster: t.poster || '', category: t.category || '', data: '' },
+    }).then(() => undefined);
+  }
+
   /** TMDB settings of the server; null on servers without them. */
   tmdbSettings(): Promise<TmdbConfig | null> {
     return this.call<TmdbConfig | null>('/tmdb/settings', { method: 'GET', quiet: true }).then(

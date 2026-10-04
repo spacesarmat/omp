@@ -23,6 +23,7 @@ import { errorMessage } from '../../../src/api/http';
 import { native } from '../platform/native';
 import { donateCardDue, dismissDonateCard, openDonate, supporterActive } from '../donate';
 import { localServer, startLocal, refreshLocalServer, LOCAL_URL, canRun, downloadSize } from '../server/localServer';
+import { displayTitle } from '../../../src/lib/torrentName';
 
 const POLL_MS = 15000;
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
@@ -31,7 +32,7 @@ const PULL_MAX = 110;
 const PULL_TRIGGER = 64;
 const PULL_HOLD = 56;
 const pullOf = (dy: number) => (dy > 0 ? Math.min(PULL_MAX, dy * PULL_DAMP) : 0);
-const titleOf = (t: Torrent) => t.title || t.name || t.hash;
+const titleOf = (t: Torrent) => displayTitle(t);
 
 function episodesText(t: Torrent): string {
   const n = playableFiles(filesOf(t)).length;
@@ -436,7 +437,7 @@ export function Library() {
                     <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
                       <Poster torrent={t} class="m-poster-mini" />
                       <span class="m-hrow-text">
-                        <span class="m-hrow-title">{t.title || t.name || t.hash}</span>
+                        <span class="m-hrow-title">{displayTitle(t)}</span>
                         <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
                         <span class="m-hrow-pos">
                           <span>{positionLabel(time, duration)}</span>
@@ -448,7 +449,7 @@ export function Library() {
                         <span class="m-muted m-small m-hrow-src">{sourceLine(e.source, now)}</span>
                       </span>
                     </button>
-                    <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', t.title || t.name || t.hash].filter(Boolean).join(' · '))}>
+                    <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', displayTitle(t)].filter(Boolean).join(' · '))}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                         <path d="M8 5l11 7-11 7z" />
                       </svg>

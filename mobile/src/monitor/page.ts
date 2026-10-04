@@ -149,7 +149,7 @@ export async function runAction(deps: PageDeps, a: MonitorAction): Promise<Monit
   }
   try {
     const link = await resolveLink(f.result, ctx);
-    const added = await c.add({ link, category: guessCategory(title) });
+    const added = await c.add({ link, title, category: guessCategory(title) });
     markFindingsSeen(f.subId, [f.key]);
     await persist(deps, [{ s: f.subId, k: f.key, a: 'add' }]);
     if (deps.afterAdd) await withTimeout(deps.afterAdd(c, added, title), AFTER_ADD_MS);

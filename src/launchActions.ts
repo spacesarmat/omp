@@ -6,6 +6,7 @@ import { toast } from './ui/toast';
 import { buildTorrentQueue } from './player/queue';
 import { attachPhone } from './phone/link';
 import { checkForUpdate, dismissPrompt } from './store/updates';
+import { magnetName } from './lib/categoryGuess';
 
 /** Applies webOS launch params: {server}, {magnet}, {torrent[, file, t]}, {play, title}. */
 export function runLaunchParams(raw: unknown): void {
@@ -64,7 +65,7 @@ export function runLaunchParams(raw: unknown): void {
       );
     return;
   }
-  c.add({ link: a.link }).then(
+  c.add({ link: a.link, title: magnetName(a.link) || undefined }).then(
     (t) => navigate({ name: 'torrent', hash: t.hash }),
     (e) => toast(errorMessage(e), 'error'),
   );
