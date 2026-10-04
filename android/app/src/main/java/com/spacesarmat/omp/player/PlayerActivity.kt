@@ -51,9 +51,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     /** The engine playing now (the session may switch it). */
     private val engine: PlayerEngine get() = session.engine
     private val flow = PlayerFlow()
-    private var chooser = EngineChooser(EngineMode.AUTO)
-    /** The kind of the engine playing now. */
-    private var engineKind = EngineKind.MEDIA3
+    /** One LibVLC for all VLC engines of this activity (released in onDestroy, after them). */
+    private val vlcLibrary by lazy { VlcLibrary(this) }
+    private lateinit var switcher: EngineSwitcher
     private val dedupe = StateDeduper()
     private lateinit var req: PlayRequest
     private val handler = Handler(Looper.getMainLooper())
@@ -187,8 +187,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = onBack()
         })
-        chooser = EngineChooser(r.engine)
-        session = PlayerSession(createEngine(chooser.initial(assSubsAt(r, r.index))), this)
+        switcher = EngineSwitcher(engineHost, VlcAvailability.available(this))
+        session = PlayerSession(switcher.firstEngine(r), this)
+        switcher.session = session
         NativePlayerBridge.player = this
         load(r, choose = false)
     }
@@ -196,7 +197,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     override fun onStart() {
         super.onStart()
         handler.removeCallbacks(tick)
-        if (::session.isInitialized) handler.post(tick)
+        if (::session.isInitialized) {
+            engine.hostStarted()
+            handler.post(tick)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -223,7 +227,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     override fun onStop() {
         super.onStop()
         handler.removeCallbacks(tick)
-        if (::session.isInitialized && !isFinishing) engine.pause()
+        if (::session.isInitialized) {
+            if (!isFinishing) engine.pause()
+            engine.hostStopped()
+        }
     }
 
     override fun onDestroy() {
@@ -232,6 +239,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         if (::session.isInitialized) {
             emitClosed(replaced = false)
             engine.release()
+            // queued on the libVLC thread after the engine's own release
+            vlcLibrary.release()
         }
         if (NativePlayerBridge.player === this) NativePlayerBridge.player = null
         super.onDestroy()
@@ -249,12 +258,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     /** A new queue; [choose]: pick the engine for it (onCreate already did). */
     private fun load(r: PlayRequest, choose: Boolean = true) {
         // a new run picks its engine again (the setting or the torrent's choice may differ)
-        var next: PlayerEngine? = null
-        if (choose) {
-            chooser = EngineChooser(r.engine)
-            val kind = chooser.initial(assSubsAt(r, r.index))
-            if (kind != engineKind) next = createEngine(kind)
-        }
+        val next = if (choose) switcher.engineForRun(r) else null
         // the session first: everything below may render, and render reads the queue and index from it
         session.load(r, next)
         flow.reset()
@@ -273,75 +277,61 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     private fun index(): Int = session.index
 
-    // ---- engines ----
+    // ---- engines (decisions: EngineSwitcher) ----
 
-    /** The page's ffprobe found ASS/SSA subtitles in item [i] (with playNative, or sent later). */
-    private fun assSubsAt(r: PlayRequest, i: Int): Boolean = r.queue.getOrNull(i)?.assSubs == true || NativePlayerBridge.assSubs(i)
+    private val engineHost = object : EngineSwitcher.Host {
+        override val finishing: Boolean get() = isFinishing || isDestroyed
 
-    /**
-     * A new engine of [kind] in the video container (the playing one, if any, is released by the session).
-     * libVLC that cannot start (no native library for this device) leaves the run on Media3.
-     */
-    private fun createEngine(kind: EngineKind): PlayerEngine {
-        val container = findViewById<ViewGroup>(R.id.player_video)
-        val e: PlayerEngine = if (kind == EngineKind.VLC) {
-            try {
-                VlcEngine(this)
-            } catch (t: Throwable) {
-                Log.w(TAG, "VLC unavailable: " + t.javaClass.simpleName)
-                chooser.fallBack(EngineKind.MEDIA3)
-                engineKind = EngineKind.MEDIA3
-                if (::session.isInitialized && session.engine is Media3Engine) return session.engine
-                Media3Engine(this)
+        override fun create(kind: EngineKind): PlayerEngine? {
+            val e: PlayerEngine = if (kind == EngineKind.VLC) {
+                try {
+                    VlcEngine(vlcLibrary)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "VLC failed to start: " + t.javaClass.simpleName)
+                    return null
+                }
+            } else {
+                Media3Engine(this@PlayerActivity)
             }
-        } else {
-            Media3Engine(this)
+            e.attach(findViewById<ViewGroup>(R.id.player_video))
+            return e
         }
-        e.attach(container)
-        engineKind = if (e is VlcEngine) EngineKind.VLC else EngineKind.MEDIA3
-        return e
+
+        override fun post(block: () -> Unit) {
+            handler.post(block)
+        }
+
+        override fun assSubs(r: PlayRequest, index: Int): Boolean =
+            r.queue.getOrNull(index)?.assSubs == true || NativePlayerBridge.assSubs(index)
+
+        override fun beforeSwitch() = commitPendingSeek()
+
+        override fun switched(kind: EngineKind, reason: SwitchReason) {
+            if (reason == SwitchReason.FORMAT) showMessage(EngineChooser.FORMAT_SWITCH_TEXT, false)
+            emitEngine(kind, reason)
+            showControls()
+            changed()
+        }
+
+        override fun message(text: String) = showMessage(text, false)
     }
 
-    /** The current item continues on [kind] at the same position (the session re-picks the tracks). */
-    private fun switchTo(kind: EngineKind, reason: SwitchReason) {
-        if (isFinishing || !::session.isInitialized || kind == engineKind) return
-        commitPendingSeek()
-        val before = engineKind
-        val next = createEngine(kind)
-        if (next === session.engine) return
-        session.switchEngine(next)
-        if (engineKind == before) return
-        if (reason == SwitchReason.FORMAT) showMessage(EngineChooser.FORMAT_SWITCH_TEXT, false)
-        emitEngine(reason)
-        showControls()
-        changed()
-    }
-
-    /** «Авто»: Media3 could not open the item before its first frame (format / decoder) → VLC. */
-    override fun engineFailed(kind: ErrorKind, beforeFirstFrame: Boolean): Boolean {
-        if (isFinishing || !chooser.onError(kind, !beforeFirstFrame)) return false
-        // not from inside the failing engine's callback: it is released by the switch
-        handler.post {
-            switchTo(EngineKind.VLC, SwitchReason.FORMAT)
-            // libVLC could not start (the chooser stopped switching): the error after all
-            if (engineKind != EngineKind.VLC && ::session.isInitialized) session.onError(kind, "vlc_unavailable")
-        }
-        return true
-    }
+    override fun engineFailed(kind: ErrorKind, detail: String, beforeFirstFrame: Boolean): Boolean =
+        ::switcher.isInitialized && switcher.engineFailed(kind, detail, beforeFirstFrame)
 
     /** { type: "assSubs" } from the page: «Авто» moves the current item to VLC (other items: when they start). */
     fun assSubsKnown(i: Int) {
-        if (isFinishing || !::session.isInitialized || i != index()) return
-        if (chooser.onAssSubs()) switchTo(EngineKind.VLC, SwitchReason.ASS)
+        if (isFinishing || !::session.isInitialized) return
+        switcher.assSubsKnown(i)
     }
 
     /** nativePlayerEngine { session, index, engine: "builtin" | "vlc", reason }: the page logs / remembers it. */
-    private fun emitEngine(reason: SwitchReason) {
+    private fun emitEngine(kind: EngineKind, reason: SwitchReason) {
         if (closedSent) return
         val o = JSObject()
         runId?.let { o.put("session", it) }
         o.put("index", index())
-        o.put("engine", engineKind.wire)
+        o.put("engine", kind.wire)
         o.put("reason", reason.wire)
         NativePlayerBridge.emit("nativePlayerEngine", o)
     }
@@ -369,7 +359,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val sSel = TrackOptions.selectedSub(subs)
         val chapters = skips.chapters(i)
         val rows = ArrayList<Pair<String, () -> Unit>>()
-        rows.add(EngineChooser.menuRow(engineKind) to { switchTo(chooser.toggle(), SwitchReason.MANUAL) })
+        rows.add(switcher.menuRow() to { switcher.menuPressed() })
         rows.add(("Аудио: " + selectedAudioLabel(audio)) to {
             if (audio.size >= 2) {
                 dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
@@ -698,8 +688,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private fun playItem(i: Int) {
         handler.removeCallbacks(commitSeek)
         seeker.cancel()
-        if (!session.goTo(i)) return
-        if (assSubsAt(req, i) && chooser.onAssSubs()) switchTo(EngineKind.VLC, SwitchReason.ASS)
+        if (!switcher.goTo(i)) return
         cancelCountdown()
         flow.entered()
         skips.enter()
@@ -836,7 +825,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             }
             ticksView.setTicks(Chapters.ticks(chapters, dur))
             hint.setText(if (chapters.isNotEmpty()) R.string.player_hint_chapters else R.string.player_hint)
-            engineName.text = engineKind.label
+            engineName.text = switcher.kind.label
         }
         toastBox.visibility = if (toastShown) View.VISIBLE else View.GONE
         toastUndo.visibility = if (undoStart != null) View.VISIBLE else View.GONE

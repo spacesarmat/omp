@@ -338,8 +338,8 @@ class Media3Engine(private val context: Context) : PlayerEngine {
             PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
             PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED -> ErrorKind.UNSUPPORTED_FORMAT
             PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
-            PlaybackException.ERROR_CODE_DECODING_FAILED,
             PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED -> ErrorKind.DECODER
+            // DECODING_FAILED stays OTHER (its text); «Авто» still switches on it before the first frame (detail)
             else -> ErrorKind.OTHER
         }
 

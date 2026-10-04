@@ -101,7 +101,7 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
          * The engine failed ([beforeFirstFrame]: the current item has not shown a frame yet). True: the activity
          * takes over (it moves the item to another engine with [switchEngine]) and no error is shown.
          */
-        fun engineFailed(kind: ErrorKind, beforeFirstFrame: Boolean): Boolean = false
+        fun engineFailed(kind: ErrorKind, detail: String, beforeFirstFrame: Boolean): Boolean = false
     }
 
     /** The engine playing now ([switchEngine] replaces it). */
@@ -169,10 +169,12 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
     }
 
     /** Leaves the current item (its resume point is kept) and plays item [i] from its own; false: no such item. */
-    fun goTo(i: Int): Boolean {
+    fun goTo(i: Int, next: PlayerEngine? = null): Boolean {
         val r = request ?: return false
         if (i !in r.queue.indices || i == index) return false
         tick()
+        // another engine for this item (already attached by the caller): the choices go over by language
+        val carried = if (next != null && next !== engine) adopt(next, r) else null
         val watched = lastDurMs > 0 && lastPosMs.toDouble() / lastDurMs >= WATCHED_RATIO
         if (index in resume.indices) resume[index] = if (watched || lastPosMs < MIN_RESUME_MS) 0L else lastPosMs
         index = i
@@ -181,10 +183,35 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
         lastDurMs = 0L
         error = null
         firstFrame = false
-        pendingAudio = null
-        pendingSub = null
+        pendingAudio = carried?.first
+        // a file of the previous item means nothing here: its language is in the preferences
+        pendingSub = carried?.second?.takeIf { it.external == null }
         engine.open(media(r.queue[i]), start)
         return true
+    }
+
+    /**
+     * Releases the current engine and puts [next] in its place with the selected tracks as preferences; returns
+     * the selected audio / subtitle tracks of the released engine.
+     */
+    private fun adopt(next: PlayerEngine, r: PlayRequest): Pair<EngineTrack?, EngineTrack?> {
+        val old = engine
+        val audio = old.audioTracks().firstOrNull { it.selected }
+        val sub = old.subtitleTracks().firstOrNull { it.selected }
+        old.listener = null
+        old.release()
+        engine = next
+        next.listener = this
+        next.setPreferences(
+            TrackPrefs(
+                audioLang = audio?.language ?: r.audioLang,
+                subLang = sub?.language?.ifEmpty { null }
+                    ?: sub?.external?.let { x -> r.queue.getOrNull(index)?.subtitles?.getOrNull(x)?.lang?.ifEmpty { null } }
+                    ?: r.subLang,
+                subtitlesOn = sub != null,
+            ),
+        )
+        return audio to sub
     }
 
     /**
@@ -198,26 +225,18 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
         tick()
         val pos = old.positionMs
         val playing = old.playWhenReady
-        val audio = old.audioTracks().firstOrNull { it.selected }
-        val sub = old.subtitleTracks().firstOrNull { it.selected }
-        old.listener = null
-        old.release()
-        engine = next
-        next.listener = this
         error = null
         firstFrame = false
-        if (r == null) return
+        if (r == null) {
+            old.listener = null
+            old.release()
+            engine = next
+            next.listener = this
+            return
+        }
+        val (audio, sub) = adopt(next, r)
         pendingAudio = audio
         pendingSub = sub
-        next.setPreferences(
-            TrackPrefs(
-                audioLang = audio?.language ?: r.audioLang,
-                subLang = sub?.language?.ifEmpty { null }
-                    ?: sub?.external?.let { x -> r.queue[index].subtitles.getOrNull(x)?.lang?.ifEmpty { null } }
-                    ?: r.subLang,
-                subtitlesOn = sub != null,
-            ),
-        )
         next.open(media(r.queue[index]), pos)
         if (!playing) next.pause()
     }
@@ -325,7 +344,7 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
     }
 
     override fun onError(kind: ErrorKind, detail: String) {
-        if (ui.engineFailed(kind, !firstFrame)) return
+        if (ui.engineFailed(kind, detail, !firstFrame)) return
         error = kind
         ui.changed()
     }

@@ -40,6 +40,8 @@ export interface OmpNativeTvPlugin {
   remoteSourcesDone(o: { id: string; rutracker?: string; failed?: boolean }): Promise<{ stored?: boolean } | undefined>;
   /** The transfer still waiting for the page (events are not retained): { event } or { event: null }. */
   remoteSourcesPending(): Promise<{ event?: unknown }>;
+  /** Whether libVLC runs on this device (the «VLC» player choice). */
+  vlcAvailable(): Promise<{ available?: boolean }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
@@ -80,6 +82,7 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     secretDelete: (o) => np.call(cap, NAME, 'secretDelete', o),
     remoteSourcesDone: (o) => np.call(cap, NAME, 'remoteSourcesDone', o),
     remoteSourcesPending: () => np.call(cap, NAME, 'remoteSourcesPending', {}),
+    vlcAvailable: () => np.call(cap, NAME, 'vlcAvailable', {}),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }

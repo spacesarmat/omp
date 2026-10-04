@@ -785,6 +785,12 @@ class OmpNativePlugin : Plugin() {
 
     // ---- APK update ----
 
+    /** Whether libVLC runs on this device (its native libraries are present and load): { available }. */
+    @PluginMethod
+    fun vlcAvailable(call: PluginCall) {
+        call.resolve(JSObject().put("available", com.spacesarmat.omp.player.VlcAvailability.available(context)))
+    }
+
     /** Feed key of this device's APK («arm64» / «armv7»; "" = universal), the same rule as downloadAndInstallApk. */
     @PluginMethod
     fun deviceAbiKey(call: PluginCall) {

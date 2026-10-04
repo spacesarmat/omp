@@ -5,6 +5,7 @@
 import type { FfprobeResult } from '../api/types';
 import type { TrackPref } from '../store/trackPrefs';
 import { tracksFromProbe, normalizeLang } from '../lib/tracks';
+import type { OmpNativeTvPlugin } from '../platform/androidNative';
 
 /** «Плеер» of the TV settings. */
 export type PlayerEngineSetting = 'auto' | 'builtin' | 'vlc';
@@ -27,6 +28,15 @@ export const PLAYER_ENGINE_OPTIONS: { value: PlayerEngineSetting; name: string; 
   { value: 'builtin', name: 'Встроенный', text: 'Плеер Android с декодером FFmpeg: DTS, AC3 и TrueHD без поддержки приставки' },
   { value: 'vlc', name: 'VLC', text: 'Почти все форматы и субтитры ASS со стилями; чуть дольше открывает файл' },
 ];
+
+/** Shown instead of the «VLC» text when libVLC cannot run on the device (no native libraries for its ABI). */
+export const VLC_UNAVAILABLE = 'VLC недоступен на этом устройстве';
+
+/** Whether libVLC runs on this device; true when the plugin cannot tell (the player falls back by itself). */
+export function vlcAvailable(p: Pick<OmpNativeTvPlugin, 'vlcAvailable'> | null): Promise<boolean> {
+  if (!p || typeof p.vlcAvailable !== 'function') return Promise.resolve(true);
+  return p.vlcAvailable().then((r) => !(r && r.available === false), () => true);
+}
 
 /** The engine for playNative: the torrent's own choice wins over the setting. */
 export function engineFor(setting: PlayerEngineSetting, pref: TrackPref | null): PlayerEngineSetting {

@@ -78,6 +78,34 @@ object VlcSupport {
         return if (l != null) NameInfo(l, null) else NameInfo(null, n)
     }
 
+    /** The file name of a subtitle URL («Show.S01E01.rus.srt»): last path segment, decoded, without the query. */
+    fun fileName(url: String): String {
+        val path = url.substringBefore('?').substringBefore('#').trimEnd('/')
+        val last = path.substringAfterLast('/')
+        return try {
+            java.net.URLDecoder.decode(last.replace("+", "%2B"), "UTF-8")
+        } catch (_: IllegalArgumentException) {
+            last
+        }
+    }
+
+    /**
+     * The item's subtitle file a new subtitle ES belongs to: the one whose file name (with its extension) is in the
+     * track [name], else the file being added ([inFlight]); null: not a file (an ES of the media itself). Files
+     * already matched ([taken]) are skipped.
+     */
+    fun externalFor(name: String?, files: List<SubFile>, inFlight: Int?, taken: Collection<Int>): Int? {
+        val n = name?.lowercase(Locale.ROOT).orEmpty()
+        if (n.isNotEmpty()) {
+            files.forEachIndexed { i, f ->
+                if (i in taken) return@forEachIndexed
+                val base = fileName(f.url).lowercase(Locale.ROOT)
+                if (base.length >= 5 && base.contains('.') && n.contains(base)) return i
+            }
+        }
+        return inFlight?.takeIf { it !in taken }
+    }
+
     /** The media option that opens the item at [ms] (seconds, dot decimal). */
     fun startOption(ms: Long): String = ":start-time=" + String.format(Locale.ROOT, "%.3f", ms / 1000.0)
 

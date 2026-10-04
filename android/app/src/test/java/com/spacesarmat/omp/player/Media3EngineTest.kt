@@ -23,6 +23,9 @@ class Media3EngineTest {
         assertEquals(ErrorKind.DECODER, k(PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED))
         assertEquals(ErrorKind.OTHER, k(PlaybackException.ERROR_CODE_UNSPECIFIED))
         assertEquals(ErrorKind.OTHER, k(PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND))
+        // the old text («Не удалось воспроизвести видео»); «Авто» recognises it by the code name
+        assertEquals(ErrorKind.OTHER, k(PlaybackException.ERROR_CODE_DECODING_FAILED))
+        assertEquals(EngineChooser.DECODING_FAILED, PlaybackException.getErrorCodeName(PlaybackException.ERROR_CODE_DECODING_FAILED))
     }
 
     @Test

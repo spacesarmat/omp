@@ -57,6 +57,12 @@ interface PlayerEngine {
     /** [id] of one of [subtitleTracks]; null turns subtitles off. */
     fun selectSubtitle(id: String?)
 
+    /** The activity was stopped (its video surface goes away); libVLC detaches its views. */
+    fun hostStopped() {}
+
+    /** The activity was started again after [hostStopped]. */
+    fun hostStarted() {}
+
     /** Frees the decoders and removes what [attach] added; the engine is not used afterwards. */
     fun release()
 

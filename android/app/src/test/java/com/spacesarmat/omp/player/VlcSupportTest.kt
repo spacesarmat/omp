@@ -113,4 +113,29 @@ class VlcSupportTest {
         assertEquals("s3", VlcSupport.pickSub(subs, VlcSupport.choiceOf(subs[0]), TrackPrefs("ru", "ru", false)).track?.id)
         assertEquals(VlcSupport.Choice.Off, VlcSupport.choiceOf(null))
     }
+
+    private val files = listOf(
+        SubFile("http://u:p@h:8090/stream/Show.S01E01.rus.srt?link=abc&index=5&play", "Show.S01E01.rus.srt", "srt", "ru"),
+        SubFile("http://h/stream/Show%20S01E01.eng.ass?link=abc&index=6", "Show S01E01.eng.ass", "ass", "en"),
+    )
+
+    @Test
+    fun subtitleFileNamesFromUrls() {
+        assertEquals("Show.S01E01.rus.srt", VlcSupport.fileName(files[0].url))
+        assertEquals("Show S01E01.eng.ass", VlcSupport.fileName(files[1].url))
+    }
+
+    @Test
+    fun aNewSubtitleTrackIsTheFileItNamesElseTheOneBeingAdded() {
+        // named: whatever is in flight
+        assertEquals(1, VlcSupport.externalFor("Track 3 - [show s01e01.eng.ass]", files, inFlight = 0, taken = emptyList()))
+        // unnamed: the file being added
+        assertEquals(0, VlcSupport.externalFor("Track 3", files, inFlight = 0, taken = emptyList()))
+        // nothing in flight and no name: an ES of the media itself
+        assertNull(VlcSupport.externalFor("Track 4 - [Russian]", files, inFlight = null, taken = emptyList()))
+        // a file already matched is not matched twice
+        assertNull(VlcSupport.externalFor("Show.S01E01.rus.srt", files, inFlight = 0, taken = listOf(0)))
+        // a failed file (dropped after the timeout) does not shift the next one
+        assertEquals(1, VlcSupport.externalFor("Track 5", files, inFlight = 1, taken = emptyList()))
+    }
 }

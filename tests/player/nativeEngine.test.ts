@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   engineFor, assSubsShown, sanitizeNativeEngine, engineLogText, rememberProbe, knownProbe, clearProbes,
-  PLAYER_ENGINE_OPTIONS, isPlayerEngine,
+  PLAYER_ENGINE_OPTIONS, isPlayerEngine, vlcAvailable, VLC_UNAVAILABLE,
 } from '../../src/player/nativeEngine';
 import type { FfprobeResult } from '../../src/api/types';
 
@@ -32,6 +32,17 @@ describe('engine choice', () => {
     expect(PLAYER_ENGINE_OPTIONS[0].text).toBe('Встроенный плеер; если он не может открыть файл или в нём субтитры ASS — VLC с того же места');
     expect(isPlayerEngine('auto')).toBe(true);
     expect(isPlayerEngine('mpv')).toBe(false);
+  });
+});
+
+describe('vlcAvailable', () => {
+  it('asks the plugin; unknown counts as available (the player falls back by itself)', async () => {
+    expect(await vlcAvailable({ vlcAvailable: () => Promise.resolve({ available: false }) })).toBe(false);
+    expect(await vlcAvailable({ vlcAvailable: () => Promise.resolve({ available: true }) })).toBe(true);
+    expect(await vlcAvailable({ vlcAvailable: () => Promise.reject(new Error('x')) })).toBe(true);
+    expect(await vlcAvailable({} as any)).toBe(true);
+    expect(await vlcAvailable(null)).toBe(true);
+    expect(VLC_UNAVAILABLE).toBe('VLC недоступен на этом устройстве');
   });
 });
 

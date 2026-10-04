@@ -56,4 +56,18 @@ describe('SettingsScreen «Плеер»', () => {
     expect(settings.value.playerEngine).toBe('vlc');
     expect(JSON.parse(localStorage.getItem('tsp.settings') || '{}').playerEngine).toBe('vlc');
   });
+  it('Android TV without libVLC: VLC is disabled with the reason', async () => {
+    w.Capacitor = {
+      getPlatform: () => 'android',
+      Plugins: { OmpNative: { localIpv4: () => Promise.resolve({}), vlcAvailable: () => Promise.resolve({ available: false }) } },
+    };
+    const host = mount();
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 20));
+    const vlc = host.querySelector('[aria-label="VLC"]') as HTMLElement;
+    expect(vlc.className).toContain('disabled');
+    expect(vlc.textContent).toContain('VLC недоступен на этом устройстве');
+    vlc.click();
+    expect(settings.value.playerEngine).toBe('auto');
+  });
 });
