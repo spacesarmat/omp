@@ -13,7 +13,9 @@ interface FocusableProps {
   disabled?: boolean;
   /** Accessible name of the element (with role, if given). */
   ariaLabel?: string;
-  role?: 'button' | 'group';
+  role?: 'button' | 'group' | 'radio';
+  /** aria-checked of a radio. */
+  ariaChecked?: boolean;
   children?: ComponentChildren;
 }
 
@@ -33,8 +35,9 @@ export function Focusable(p: FocusableProps) {
     <div
       ref={ref}
       class={cls}
-      role={p.role as 'button' | 'group' | undefined}
+      role={p.role}
       aria-label={p.ariaLabel}
+      aria-checked={p.ariaChecked}
       onMouseEnter={() => { if (!p.disabled) focusSelf(); }}
       onClick={() => { if (!p.disabled && p.onPress) p.onPress(); }}
     >

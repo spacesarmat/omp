@@ -1,4 +1,4 @@
-// Android TV: the native Media3 player (android/.../player/PlayerActivity.kt) driven from the TV app.
+// Android TV: the native player (Media3 or libVLC, android/.../player/PlayerActivity.kt) driven from the TV app.
 // The page keeps the latest state event for the phone bridge and saves progress like useProgressSync.
 import type { TorrServerClient } from '../api/torrserver';
 import type { OmpNativeTvPlugin, ListenerHandle } from '../platform/androidNative';
@@ -19,6 +19,10 @@ import { formatDuration } from '../lib/format';
 import { errorMessage } from '../api/http';
 import { DONATE_QR } from '../ui/donateQr';
 import { DONATE_QR_LABEL } from '../lib/donate';
+import { log } from '../lib/log';
+import { getTrackPref, saveTrackPref } from '../store/trackPrefs';
+import type { PlayerEngineSetting } from './nativeEngine';
+import { assSubsShown, sanitizeNativeEngine, engineLogText, rememberProbe, knownProbe } from './nativeEngine';
 
 export interface NativeQueueItem {
   url: string;
@@ -28,6 +32,8 @@ export interface NativeQueueItem {
   /** Resume point (s) the native player seeks to when it advances to this item (0: from the start). */
   resume: number;
   subtitles: { url: string; label: string; ext: string; lang: string }[];
+  /** ffprobe (already known) says the subtitles to show are ASS/SSA: «Авто» opens the item with VLC. */
+  assSubs?: boolean;
 }
 
 export interface NativeStartOptions {
@@ -40,6 +46,8 @@ export interface NativeStartOptions {
   subtitlesOn: boolean;
   /** Show the «Поддержать» card (pause, credits): not a supporter and a method opens the QR link. */
   donate?: boolean;
+  /** «Плеер»: the setting, or the torrent's own choice (engineFor). */
+  engine?: PlayerEngineSetting;
 }
 
 /** The «Поддержать» card of the native player: QR rows («1» dark, no quiet zone) and the short link. */
@@ -214,6 +222,7 @@ export class NativeSession {
   /** The last segments message sent per item (sent again only when it changes). */
   private readonly sent: { [index: number]: string } = {};
   private donateOff = false;
+  private opts: NativeStartOptions | null = null;
 
   constructor(
     plugin: OmpNativeTvPlugin,
@@ -243,6 +252,7 @@ export class NativeSession {
       this.plugin.addListener('nativePlayerState', (d) => this.onState(d)).then(keep),
       this.plugin.addListener('nativePlayerClosed', (d) => this.onClosed(d)).then(keep),
       this.plugin.addListener('nativePlayerMark', (d) => this.onMark(d)).then(keep),
+      this.plugin.addListener('nativePlayerEngine', (d) => this.onEngine(d)).then(keep),
     ])
       .then(() => {
         if (this.done) return undefined;
@@ -250,10 +260,14 @@ export class NativeSession {
         this.pos = { index: o.index, time: o.startAt, duration: 0 };
         this.launched = true;
         openRuns++;
+        this.opts = o;
         const donate = nativeDonate(o.donate);
+        const queue = toNativeQueue(this.queue, this.client);
+        queue.forEach((n, i) => { if (this.assKnown(i)) n.assSubs = true; });
         return this.plugin.playNative({
           ...(donate ? { donate } : {}),
-          queue: toNativeQueue(this.queue, this.client),
+          ...(o.engine ? { engine: o.engine } : {}),
+          queue,
           index: o.index,
           startAt: o.startAt,
           session: this.sid,
@@ -385,7 +399,9 @@ export class NativeSession {
     }
     (this.probeOf ? this.probeOf(item) : Promise.resolve(null)).then((p) => p, () => null).then((probe) => {
       this.probes[index] = probe;
+      if (item.hash && item.fileIndex !== undefined) rememberProbe(item.hash, item.fileIndex, probe);
       this.refresh(index);
+      this.tellAss(index);
     });
   }
 
@@ -447,6 +463,38 @@ export class NativeSession {
       },
       (e) => this.toast('Не удалось сохранить отметку: ' + errorMessage(e), true),
     );
+  }
+
+  /** The item's ffprobe is known from earlier in this app run and its shown subtitles are ASS/SSA. */
+  private assKnown(index: number): boolean {
+    const item = this.queue[index];
+    const o = this.opts;
+    if (!o || !item || !item.hash || item.fileIndex === undefined) return false;
+    const probe = knownProbe(item.hash, item.fileIndex);
+    return !!probe && assSubsShown(probe, o, getTrackPref(item.hash));
+  }
+
+  /** «Авто»: the item's ffprobe answered with ASS/SSA subtitles to show → the player moves it to VLC. */
+  private tellAss(index: number): void {
+    const o = this.opts;
+    const item = this.queue[index];
+    if (this.done || !o || o.engine !== 'auto' || !item) return;
+    if (!assSubsShown(this.probes[index] || null, o, item.hash ? getTrackPref(item.hash) : null)) return;
+    this.plugin.nativePlayerCommand({ cmd: { type: 'assSubs', index, session: this.sid } }).catch(() => undefined);
+  }
+
+  /**
+   * The player changed its engine: an automatic switch goes to the error log (generic text, no file name),
+   * a choice from the player menu is remembered for the torrent (the next playNative sends it).
+   */
+  private onEngine(d: unknown): void {
+    if (this.done || foreign(d, this.sid)) return;
+    const e = sanitizeNativeEngine(d);
+    const item = e && this.queue[e.index];
+    if (!e || !item) return;
+    const text = engineLogText(e);
+    if (text) log('warn', 'tv', text);
+    if (e.reason === 'manual' && item.hash) saveTrackPref(item.hash, { engine: e.engine });
   }
 
   /** Watch journal: the current item is left at its last position. */

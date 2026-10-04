@@ -96,6 +96,12 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
 
         /** The current item played to its end. */
         fun itemEnded()
+
+        /**
+         * The engine failed ([beforeFirstFrame]: the current item has not shown a frame yet). True: the activity
+         * takes over (it moves the item to another engine with [switchEngine]) and no error is shown.
+         */
+        fun engineFailed(kind: ErrorKind, beforeFirstFrame: Boolean): Boolean = false
     }
 
     /** The engine playing now ([switchEngine] replaces it). */
@@ -138,8 +144,17 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
 
     fun item(): QueueItem? = request?.queue?.getOrNull(index)
 
-    /** A new queue: preferences reset, item [PlayRequest.index] opens at [PlayRequest.startAtMs]. */
-    fun load(r: PlayRequest) {
+    /**
+     * A new queue: preferences reset, item [PlayRequest.index] opens at [PlayRequest.startAtMs]. With [next]
+     * (already attached by the caller) the queue plays on that engine and the current one is released.
+     */
+    fun load(r: PlayRequest, next: PlayerEngine? = null) {
+        if (next != null && next !== engine) {
+            engine.listener = null
+            engine.release()
+            engine = next
+            next.listener = this
+        }
         request = r
         resume = LongArray(r.queue.size) { r.queue[it].resumeMs }
         index = r.index
@@ -310,6 +325,7 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
     }
 
     override fun onError(kind: ErrorKind, detail: String) {
+        if (ui.engineFailed(kind, !firstFrame)) return
         error = kind
         ui.changed()
     }

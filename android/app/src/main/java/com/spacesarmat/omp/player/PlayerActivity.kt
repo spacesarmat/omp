@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -30,7 +31,7 @@ import com.spacesarmat.omp.control.AppForeground
 import org.json.JSONObject
 
 /**
- * Native player on Android TV (Media3 ExoPlayer) with the OMP overlay: title, progress, time, «Пауза»,
+ * Native player on Android TV (Media3 ExoPlayer or libVLC) with the OMP overlay: title, progress, time, «Пауза»,
  * «Аудио: …», «Субтитры: …», «Следующая серия», key hints and the «Управление с телефона» badge.
  * Keys: ◀/▶ seek by the settings step with the LG arrow rule ([SeekAccumulator]: ×(1 + repeats/4) up to ×6,
  * one seek 700 ms after the last press),
@@ -41,14 +42,18 @@ import org.json.JSONObject
  * intro with «Вернуть», credits auto skip to the next item (as the LG player).
  * «Поддержать» ([DonateQr], sent with playNative): a QR card on pause and during the credits, purely visual.
  * Moving to another item starts it from its resume point (queue `resume`, updated when an item is left).
- * Events go to the page through [NativePlayerBridge]. Playback goes through a [PlayerEngine] ([Media3Engine]
- * today) driven by [PlayerSession] (queue, resume points, error, tracks): nothing here knows the engine.
+ * Events go to the page through [NativePlayerBridge]. Playback goes through a [PlayerEngine] ([Media3Engine] or
+ * [VlcEngine], picked by [EngineChooser]: «Плеер» setting / the torrent's choice, «Авто» moves to VLC on a format
+ * error before the first frame or ASS subtitles) driven by [PlayerSession] (queue, resume points, error, tracks).
  */
 class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private lateinit var session: PlayerSession
     /** The engine playing now (the session may switch it). */
     private val engine: PlayerEngine get() = session.engine
     private val flow = PlayerFlow()
+    private var chooser = EngineChooser(EngineMode.AUTO)
+    /** The kind of the engine playing now. */
+    private var engineKind = EngineKind.MEDIA3
     private val dedupe = StateDeduper()
     private lateinit var req: PlayRequest
     private val handler = Handler(Looper.getMainLooper())
@@ -79,6 +84,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private lateinit var donateTitle: TextView
     private lateinit var donateText: TextView
     private lateinit var donateLink: TextView
+    private lateinit var engineName: TextView
     /** The page said a support code is known: no card for the rest of this run. */
     private var donateHidden = false
     private var donateShown = DonateQr.NONE
@@ -176,15 +182,15 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         donateTitle = findViewById(R.id.player_donate_title)
         donateText = findViewById(R.id.player_donate_text)
         donateLink = findViewById(R.id.player_donate_link)
+        engineName = findViewById(R.id.player_engine)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = onBack()
         })
-        val e = Media3Engine(this)
-        e.attach(findViewById<ViewGroup>(R.id.player_video))
-        session = PlayerSession(e, this)
+        chooser = EngineChooser(r.engine)
+        session = PlayerSession(createEngine(chooser.initial(assSubsAt(r, r.index))), this)
         NativePlayerBridge.player = this
-        load(r)
+        load(r, choose = false)
     }
 
     override fun onStart() {
@@ -240,9 +246,17 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     override fun itemEnded() = onItemEnd()
 
-    private fun load(r: PlayRequest) {
+    /** A new queue; [choose]: pick the engine for it (onCreate already did). */
+    private fun load(r: PlayRequest, choose: Boolean = true) {
+        // a new run picks its engine again (the setting or the torrent's choice may differ)
+        var next: PlayerEngine? = null
+        if (choose) {
+            chooser = EngineChooser(r.engine)
+            val kind = chooser.initial(assSubsAt(r, r.index))
+            if (kind != engineKind) next = createEngine(kind)
+        }
         // the session first: everything below may render, and render reads the queue and index from it
-        session.load(r)
+        session.load(r, next)
         flow.reset()
         dedupe.reset()
         cancelCountdown()
@@ -258,6 +272,79 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     }
 
     private fun index(): Int = session.index
+
+    // ---- engines ----
+
+    /** The page's ffprobe found ASS/SSA subtitles in item [i] (with playNative, or sent later). */
+    private fun assSubsAt(r: PlayRequest, i: Int): Boolean = r.queue.getOrNull(i)?.assSubs == true || NativePlayerBridge.assSubs(i)
+
+    /**
+     * A new engine of [kind] in the video container (the playing one, if any, is released by the session).
+     * libVLC that cannot start (no native library for this device) leaves the run on Media3.
+     */
+    private fun createEngine(kind: EngineKind): PlayerEngine {
+        val container = findViewById<ViewGroup>(R.id.player_video)
+        val e: PlayerEngine = if (kind == EngineKind.VLC) {
+            try {
+                VlcEngine(this)
+            } catch (t: Throwable) {
+                Log.w(TAG, "VLC unavailable: " + t.javaClass.simpleName)
+                chooser.fallBack(EngineKind.MEDIA3)
+                engineKind = EngineKind.MEDIA3
+                if (::session.isInitialized && session.engine is Media3Engine) return session.engine
+                Media3Engine(this)
+            }
+        } else {
+            Media3Engine(this)
+        }
+        e.attach(container)
+        engineKind = if (e is VlcEngine) EngineKind.VLC else EngineKind.MEDIA3
+        return e
+    }
+
+    /** The current item continues on [kind] at the same position (the session re-picks the tracks). */
+    private fun switchTo(kind: EngineKind, reason: SwitchReason) {
+        if (isFinishing || !::session.isInitialized || kind == engineKind) return
+        commitPendingSeek()
+        val before = engineKind
+        val next = createEngine(kind)
+        if (next === session.engine) return
+        session.switchEngine(next)
+        if (engineKind == before) return
+        if (reason == SwitchReason.FORMAT) showMessage(EngineChooser.FORMAT_SWITCH_TEXT, false)
+        emitEngine(reason)
+        showControls()
+        changed()
+    }
+
+    /** «Авто»: Media3 could not open the item before its first frame (format / decoder) → VLC. */
+    override fun engineFailed(kind: ErrorKind, beforeFirstFrame: Boolean): Boolean {
+        if (isFinishing || !chooser.onError(kind, !beforeFirstFrame)) return false
+        // not from inside the failing engine's callback: it is released by the switch
+        handler.post {
+            switchTo(EngineKind.VLC, SwitchReason.FORMAT)
+            // libVLC could not start (the chooser stopped switching): the error after all
+            if (engineKind != EngineKind.VLC && ::session.isInitialized) session.onError(kind, "vlc_unavailable")
+        }
+        return true
+    }
+
+    /** { type: "assSubs" } from the page: «Авто» moves the current item to VLC (other items: when they start). */
+    fun assSubsKnown(i: Int) {
+        if (isFinishing || !::session.isInitialized || i != index()) return
+        if (chooser.onAssSubs()) switchTo(EngineKind.VLC, SwitchReason.ASS)
+    }
+
+    /** nativePlayerEngine { session, index, engine: "builtin" | "vlc", reason }: the page logs / remembers it. */
+    private fun emitEngine(reason: SwitchReason) {
+        if (closedSent) return
+        val o = JSObject()
+        runId?.let { o.put("session", it) }
+        o.put("index", index())
+        o.put("engine", engineKind.wire)
+        o.put("reason", reason.wire)
+        NativePlayerBridge.emit("nativePlayerEngine", o)
+    }
 
     private fun hasNext(): Boolean = session.hasNext()
 
@@ -282,6 +369,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val sSel = TrackOptions.selectedSub(subs)
         val chapters = skips.chapters(i)
         val rows = ArrayList<Pair<String, () -> Unit>>()
+        rows.add(EngineChooser.menuRow(engineKind) to { switchTo(chooser.toggle(), SwitchReason.MANUAL) })
         rows.add(("Аудио: " + selectedAudioLabel(audio)) to {
             if (audio.size >= 2) {
                 dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
@@ -611,6 +699,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         handler.removeCallbacks(commitSeek)
         seeker.cancel()
         if (!session.goTo(i)) return
+        if (assSubsAt(req, i) && chooser.onAssSubs()) switchTo(EngineKind.VLC, SwitchReason.ASS)
         cancelCountdown()
         flow.entered()
         skips.enter()
@@ -747,6 +836,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             }
             ticksView.setTicks(Chapters.ticks(chapters, dur))
             hint.setText(if (chapters.isNotEmpty()) R.string.player_hint_chapters else R.string.player_hint)
+            engineName.text = engineKind.label
         }
         toastBox.visibility = if (toastShown) View.VISIBLE else View.GONE
         toastUndo.visibility = if (undoStart != null) View.VISIBLE else View.GONE
@@ -803,6 +893,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     }
 
     companion object {
+        private const val TAG = "OmpPlayer"
         private const val HIDE_MS = 4000L
         private const val SKIP_HIDDEN_SHIFT_DP = 150f
         /** «Поддержать»: bottom margin on pause (above the controls) and in the credits; the skip button lift. */

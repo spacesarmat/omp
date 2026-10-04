@@ -7,7 +7,8 @@ import { LANG_OPTIONS } from '../lib/tracks';
 import { APP_VERSION } from '../version';
 import { SUB_SIZE_OPTIONS } from '../player/subtitleOffset';
 import { navigate } from '../ui/nav';
-import { FocusGroup, ChoiceRow, ON_OFF, Button } from '../ui/components';
+import { FocusGroup, ChoiceRow, ON_OFF, Button, Focusable } from '../ui/components';
+import { PLAYER_ENGINE_OPTIONS } from '../player/nativeEngine';
 import { restoreFocus } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
@@ -25,6 +26,35 @@ const SUB_COLOR: { value: 'white' | 'yellow'; label: string }[] = [
 ];
 
 const LOG_BRIEF = 20;
+
+/** Android TV: «Плеер» — the engine of the native player (per torrent: the player menu). */
+function PlayerEngineSection() {
+  const cur = settings.value.playerEngine;
+  return (
+    <div class="engine-block">
+      <h2>Плеер</h2>
+      <div class="muted engine-intro">Чем показывать видео на этом телевизоре.</div>
+      {PLAYER_ENGINE_OPTIONS.map((o) => (
+        <Focusable
+          key={o.value}
+          focusKey={'set-engine-' + o.value}
+          className={'engine-option' + (cur === o.value ? ' on' : '')}
+          role="radio"
+          ariaChecked={cur === o.value}
+          ariaLabel={o.name}
+          onPress={() => updateSettings({ playerEngine: o.value })}
+        >
+          <span class="engine-dot" />
+          <span class="engine-texts">
+            <span class="engine-name">{o.name}</span>
+            <span class="engine-text">{o.text}</span>
+          </span>
+        </Focusable>
+      ))}
+      <div class="muted engine-note">Для отдельной раздачи плеер меняется в меню плеера — «Сменить плеер».</div>
+    </div>
+  );
+}
 
 /** The last entries of the error log, newest first (read-only; the full log with sharing is on the phone). */
 function LogBrief() {
@@ -118,6 +148,8 @@ export function SettingsScreen() {
           <Button focusKey="set-sources" label="Источники поиска" onPress={() => navigate({ name: 'sources' })} />
         </div>
       )}
+
+      {platformKind() === 'androidtv' && <PlayerEngineSection />}
 
       <h2>Воспроизведение</h2>
       <ChoiceRow focusKey="set-audio" label="Язык аудио" value={s.audioLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ audioLang: v })} />

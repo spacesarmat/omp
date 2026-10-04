@@ -24,6 +24,20 @@ class NativePlayerBridgeTest {
     fun tearDown() {
         NativePlayerBridge.request = null
         NativePlayerBridge.resetSkips()
+        NativePlayerBridge.resetAss()
+    }
+
+    @Test
+    fun assSubtitleHintsOfTheCurrentRunAreKeptUntilTheNextPlayNative() {
+        NativePlayerBridge.request = request(7)
+        assertTrue(NativePlayerBridge.assSubs(JSONObject().put("type", "assSubs").put("index", 1).put("session", 7)))
+        // another run: accepted but ignored; malformed: rejected
+        assertTrue(NativePlayerBridge.assSubs(JSONObject().put("type", "assSubs").put("index", 2).put("session", 6)))
+        assertFalse(NativePlayerBridge.assSubs(JSONObject().put("type", "assSubs")))
+        assertTrue(NativePlayerBridge.assSubs(1))
+        assertFalse(NativePlayerBridge.assSubs(2))
+        NativePlayerBridge.resetAss()
+        assertFalse(NativePlayerBridge.assSubs(1))
     }
 
     @Test

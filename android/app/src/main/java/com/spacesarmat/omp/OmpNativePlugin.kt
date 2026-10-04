@@ -692,6 +692,7 @@ class OmpNativePlugin : Plugin() {
         }
         NativePlayerBridge.resetSkips()
         NativePlayerBridge.resetDonate()
+        NativePlayerBridge.resetAss()
         NativePlayerBridge.request = req
         // REORDER_TO_FRONT: an open player below the TV interface takes the queue over (no second instance)
         val intent = Intent(context, PlayerActivity::class.java)
@@ -776,6 +777,7 @@ class OmpNativePlugin : Plugin() {
             cmd.optString("type") == "segments" -> if (NativePlayerBridge.segments(cmd)) call.resolve() else call.reject("Некорректная команда")
             cmd.optString("type") == "toast" -> if (NativePlayerBridge.toast(cmd)) call.resolve() else call.reject("Некорректная команда")
             cmd.optString("type") == "donate" -> if (NativePlayerBridge.donate(cmd)) call.resolve() else call.reject("Некорректная команда")
+            cmd.optString("type") == "assSubs" -> if (NativePlayerBridge.assSubs(cmd)) call.resolve() else call.reject("Некорректная команда")
             !NativePlayerBridge.command(cmd) -> call.reject("Плеер не открыт")
             else -> call.resolve()
         }

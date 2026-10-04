@@ -15,9 +15,11 @@ data class QueueItem(
     val subtitles: List<SubFile>,
     /** Saved resume point (resumePosition on the page), used when the player advances to this item. */
     val resumeMs: Long,
+    /** ffprobe (on the page) says the subtitles that would be shown are ASS/SSA: «Авто» opens the item with VLC. */
+    val assSubs: Boolean = false,
 )
 
-/** playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn, donate? }). */
+/** playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn, engine?, donate? }). */
 data class PlayRequest(
     val queue: List<QueueItem>,
     val index: Int,
@@ -31,6 +33,8 @@ data class PlayRequest(
     val session: Long?,
     /** The «Поддержать» card (pause, credits); null: not shown. */
     val donate: DonateQr? = null,
+    /** «Плеер» of the TV settings, or this torrent's own choice from the player menu. */
+    val engine: EngineMode = EngineMode.AUTO,
 ) {
     companion object {
         /** Null when the queue is empty or malformed. */
@@ -55,6 +59,7 @@ data class PlayRequest(
                         fileIndex = if (it.has("fileIndex")) it.optInt("fileIndex") else null,
                         subtitles = subs,
                         resumeMs = it.optDouble("resume", 0.0).let { r -> if (r.isNaN() || r < 0) 0L else (r * 1000).toLong() },
+                        assSubs = it.optBoolean("assSubs", false),
                     ),
                 )
             }
@@ -71,6 +76,7 @@ data class PlayRequest(
                 subtitlesOn = o.optBoolean("subtitlesOn", false),
                 session = if (o.opt("session") is Number) o.optLong("session") else null,
                 donate = DonateQr.parse(o.optJSONObject("donate")),
+                engine = EngineMode.parse(o.optString("engine")),
             )
         }
     }
@@ -159,6 +165,29 @@ object NativePlayerBridge {
         donateOffSession = sessionOf(cmd)
         val p = player ?: return true
         p.runOnUiThread { p.hideDonate() }
+        return true
+    }
+
+    /** Queue items of the current run whose subtitles ffprobe found to be ASS/SSA (from the page, after playNative). */
+    private val assItems = HashSet<Int>()
+
+    /** A new playNative: the page tells about the subtitles again. */
+    fun resetAss() = synchronized(assItems) { assItems.clear() }
+
+    /** True when the page said item [index] of the current run has ASS/SSA subtitles. */
+    fun assSubs(index: Int): Boolean = synchronized(assItems) { index in assItems }
+
+    /**
+     * { type: "assSubs", index, session } from the page (its ffprobe answered): «Авто» moves that item to VLC.
+     * Kept for a player that is not created yet; messages of another run are ignored. False when malformed.
+     */
+    fun assSubs(cmd: JSONObject): Boolean {
+        val index = cmd.optInt("index", -1)
+        if (index < 0) return false
+        if (!current(cmd)) return true
+        synchronized(assItems) { assItems.add(index) }
+        val p = player ?: return true
+        p.runOnUiThread { p.assSubsKnown(index) }
         return true
     }
 
