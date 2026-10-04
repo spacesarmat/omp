@@ -30,13 +30,14 @@ data class DonateQr(val modules: Int, val bits: String, val label: String) {
         }
 
         /**
-         * Where the card is: the «Следующая серия» countdown or a position inside the known credits → [CREDITS];
-         * a pause → [PAUSE]; nothing on an error. Without known credits there is no card at the end of a movie.
+         * Where the card is, the same rule as the LG player: a pause → [PAUSE] (even while a countdown runs); the
+         * «Следующая серия» countdown or a position inside the known credits → [CREDITS]; nothing on an error.
+         * Without known credits there is no card at the end of a movie.
          */
         fun mode(enabled: Boolean, error: Boolean, paused: Boolean, countdown: Boolean, posMs: Long, durMs: Long, creditsMs: Long?): Int {
             if (!enabled || error) return NONE
-            if (countdown) return CREDITS
             if (paused) return PAUSE
+            if (countdown) return CREDITS
             if (creditsMs != null && creditsMs > 0 && durMs > 0 && creditsMs < durMs && posMs >= creditsMs && posMs < durMs) return CREDITS
             return NONE
         }

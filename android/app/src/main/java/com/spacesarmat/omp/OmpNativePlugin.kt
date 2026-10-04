@@ -682,6 +682,7 @@ class OmpNativePlugin : Plugin() {
             return
         }
         NativePlayerBridge.resetSkips()
+        NativePlayerBridge.resetDonate()
         NativePlayerBridge.request = req
         // REORDER_TO_FRONT: an open player below the TV interface takes the queue over (no second instance)
         val intent = Intent(context, PlayerActivity::class.java)

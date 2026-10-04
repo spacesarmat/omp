@@ -46,7 +46,9 @@ class DonateCardTest {
         // playing: none; inside the known credits or the next-episode countdown: credits
         assertEquals(DonateQr.NONE, DonateQr.mode(true, false, false, false, 100_000, 1_000_000, 900_000))
         assertEquals(DonateQr.CREDITS, DonateQr.mode(true, false, false, false, 900_000, 1_000_000, 900_000))
-        assertEquals(DonateQr.CREDITS, DonateQr.mode(true, false, true, true, 1_000_000, 1_000_000, null))
+        assertEquals(DonateQr.CREDITS, DonateQr.mode(true, false, false, true, 1_000_000, 1_000_000, null))
+        // paused during a countdown: the pause card, as on LG
+        assertEquals(DonateQr.PAUSE, DonateQr.mode(true, false, true, true, 1_000_000, 1_000_000, null))
         // unknown credits near the end: none
         assertEquals(DonateQr.NONE, DonateQr.mode(true, false, false, false, 990_000, 1_000_000, null))
         // supporter / no card sent, error: none
@@ -55,8 +57,25 @@ class DonateCardTest {
     }
 
     @Test
-    fun hideCommandIsAcceptedWithoutAPlayer() {
-        assertTrue(NativePlayerBridge.donate(JSONObject().put("type", "donate").put("on", false)))
-        assertTrue(NativePlayerBridge.donate(JSONObject().put("type", "donate").put("on", true)))
+    fun hideBeforeThePlayerExistsIsRememberedForItsRun() {
+        val queue = JSONArray().put(JSONObject().put("url", "http://h/1"))
+        NativePlayerBridge.request = PlayRequest.parse(JSONObject().put("queue", queue).put("session", 7))
+        NativePlayerBridge.resetDonate()
+        try {
+            assertFalse(NativePlayerBridge.donateHidden(7))
+            // «on: true» and another run's message change nothing
+            assertTrue(NativePlayerBridge.donate(JSONObject().put("type", "donate").put("on", true).put("session", 7)))
+            assertTrue(NativePlayerBridge.donate(JSONObject().put("type", "donate").put("on", false).put("session", 6)))
+            assertFalse(NativePlayerBridge.donateHidden(7))
+            // no player yet: kept for run 7, not for a later run
+            assertTrue(NativePlayerBridge.donate(JSONObject().put("type", "donate").put("on", false).put("session", 7)))
+            assertTrue(NativePlayerBridge.donateHidden(7))
+            assertFalse(NativePlayerBridge.donateHidden(8))
+            NativePlayerBridge.resetDonate()
+            assertFalse(NativePlayerBridge.donateHidden(7))
+        } finally {
+            NativePlayerBridge.request = null
+            NativePlayerBridge.resetDonate()
+        }
     }
 }

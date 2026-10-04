@@ -14,6 +14,8 @@ import {
   reloadSupport,
   setSupportIo,
   supporterActive,
+  supportShared,
+  supportThanks,
   syncSupport,
   SUPPORT_KEY,
 } from '../src/donate';
@@ -97,6 +99,36 @@ describe('«Уже поддержали?» in the donate sheet', () => {
     expect(JSON.parse(server.t.data!).lampa).toBe(1);
     expect(JSON.parse(server.t.data!).omp.s).toEqual({ i: true, c: false });
     expect(server.t.data).not.toContain(code.slice(12, 40));
+  });
+
+  it('without a server write the TVs are not promised', async () => {
+    setSupportIo({ verify: (text, at) => verifySupportCode(text, at, PUB), client: () => null });
+    const el = mount(<DonateSheet />);
+    await act(async () => { openDonate(); });
+    const input = el.querySelector('input') as HTMLInputElement;
+    await act(async () => {
+      input.value = supportCode(MONTH, PEM);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => btn(el, 'Применить').click());
+    await act(async () => { for (let i = 0; i < 5; i++) await flush(); });
+    expect(el.textContent).toContain(
+      'Спасибо! Просьбы о поддержке скрыты до ' + supportEndText(UNTIL) + ' на этом телефоне; телевизоры узнают, когда телефон подключится к серверу.',
+    );
+    expect(el.textContent).not.toContain('на телефоне и телевизорах');
+    // the phone connects to a server later: written, and the line now promises the TVs
+    expect(await syncSupport(server.c, [server.t])).toBe(true);
+    await act(flush);
+    expect(el.textContent).toContain('на телефоне и телевизорах.');
+  });
+
+  it('a failed server write keeps the phone-only wording', async () => {
+    server.c.setData.mockImplementation(() => Promise.reject(new Error('403')));
+    const r = await applySupportCode(supportCode(MONTH, PEM));
+    expect(r.ok).toBe(true);
+    expect(supporterActive()).toBe(true);
+    expect(supportShared()).toBe(false);
+    expect(supportThanks(UNTIL, supportShared())).toContain('на этом телефоне');
   });
 
   it('a wrong code shows «Код не подходит» and changes nothing', async () => {

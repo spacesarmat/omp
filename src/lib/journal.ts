@@ -164,11 +164,12 @@ export function serializeData(obj: { [k: string]: unknown }, journal: JournalEnt
   const omp: { [k: string]: unknown } = {};
   // keys a newer OMP may add to the journal object survive this version's writes
   if (isPlainObject(old)) Object.keys(old).forEach((k) => {
-    if (k !== 'v' && k !== 'h' && k !== 's' && k !== 'd') omp[k] = old[k];
+    if (k !== 'v' && k !== 'h' && k !== 's') omp[k] = old[k];
   });
-  // the support mark is kept when valid, a malformed one is dropped
+  // the support mark as well (fields a newer OMP may add to it included); only `until` is normalised, and only when
+  // valid — a mark this version cannot read is left as it is
   const support = isPlainObject(old) ? sanitizeSupport(old.d) : null;
-  if (support) omp.d = support;
+  if (support) omp.d = { ...(old as { d: { [k: string]: unknown } }).d, until: support.until };
   omp.v = JOURNAL_VERSION;
   omp.h = journal.slice(0, JOURNAL_MAX);
   if (keep) omp.s = keep;
@@ -203,13 +204,16 @@ export function supportOf(data: string | undefined | null): number {
   return d ? d.until : 0;
 }
 
-/** The latest `omp.d.until` among the torrents of a server (0: none). */
-export function supportOfList(list: { data?: string }[] | null | undefined): number {
+/**
+ * The latest `omp.d.until` among the torrents of a server (0: none). Marks later than `ceiling` (a bogus far-future
+ * value) are ignored before taking the latest, so that one cannot hide a valid mark.
+ */
+export function supportOfList(list: { data?: string }[] | null | undefined, ceiling: number = Infinity): number {
   let max = 0;
   (list || []).forEach((t) => {
     if (!t) return;
     const u = supportOf(t.data);
-    if (u > max) max = u;
+    if (u > max && u <= ceiling) max = u;
   });
   return max;
 }
@@ -219,7 +223,7 @@ export function withSupport(obj: { [k: string]: unknown }, until: number): { [k:
   const out: { [k: string]: unknown } = { ...obj };
   const old = obj[JOURNAL_KEY];
   const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
-  omp.d = { until: Math.floor(until) };
+  omp.d = { ...(isPlainObject(omp.d) ? omp.d : {}), until: Math.floor(until) };
   out[JOURNAL_KEY] = omp;
   return out;
 }

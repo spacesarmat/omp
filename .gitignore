@@ -18,3 +18,7 @@ android/app/src/main/assets/capacitor.config.json
 android/app/src/main/assets/capacitor.plugins.json
 android/app/src/main/res/xml/config.xml
 android/app/src/main/jniLibs/
+# private keys (signing, support codes) never go into the repository
+*.pem
+*.jks
+*.keystore

@@ -656,7 +656,8 @@ class PlayerActivity : AppCompatActivity() {
 
     /** The QR code of the request as a crisp bitmap (one pixel per module, white quiet zone), or no card. */
     private fun setDonate(d: DonateQr?) {
-        donateHidden = false
+        // a hide the page sent before this player was created (or before this queue was loaded)
+        donateHidden = NativePlayerBridge.donateHidden(req.session)
         donateShown = DonateQr.NONE
         donateBox.visibility = View.GONE
         if (d == null) return

@@ -42,7 +42,7 @@ console.log('Telegram: posted', version);
 if (apk && existsSync(apk) && statSync(apk).size <= UPLOAD_MAX) {
   const doc = new FormData();
   doc.set('chat_id', chat);
-  doc.set('reply_to_message_id', String(msg.message_id));
+  doc.set('reply_parameters', JSON.stringify({ message_id: msg.message_id }));
   doc.set('caption', `OMP ${version} для Android и Android TV`);
   doc.set('document', new Blob([readFileSync(apk)], { type: 'application/vnd.android.package-archive' }), basename(apk));
   await call('sendDocument', doc);

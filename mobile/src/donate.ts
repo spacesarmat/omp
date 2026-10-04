@@ -1,14 +1,14 @@
-import { computed, signal } from '@preact/signals';
+import { signal } from '@preact/signals';
 import { loadJson, saveJson } from '../../src/store/storage';
 import { client } from '../../src/store/servers';
 import { torrents } from '../../src/store/library';
 import { saveSupport, type JournalClient } from '../../src/store/journal';
 import { supportOfList } from '../../src/lib/journal';
-import { journalSupportUntil } from '../../src/store/support';
+import { journalSupportUntil, noteSupportUntil } from '../../src/store/support';
 import { verifySupportCode, type CodeCheck } from './supportCode';
 
 // «Поддержать OMP» on the phone: the methods and the support code are shared with the TV (src/lib/donate.ts).
-import { activeMethods, DONATE_METHODS, supportActive, supportEndText, type DonateMethod } from '../../src/lib/donate';
+import { activeMethods, DONATE_METHODS, supportActive, supportEndText, SUPPORT_MAX_AHEAD_MS, type DonateMethod } from '../../src/lib/donate';
 
 export { DONATE_METHODS, DONATE_URL, activeMethods, type DonateMethod, type Wallet } from '../../src/lib/donate';
 
@@ -70,11 +70,24 @@ export function reloadSupport(): void {
   localSupportUntil.value = loadSupport();
 }
 
-/** The prompts are hidden until: this phone's code or one applied elsewhere (the server's journal). */
-export const supportUntilAll = computed(() => Math.max(localSupportUntil.value, journalSupportUntil.value));
+/**
+ * Until when the prompts are hidden (0: they are not): this phone's code or one applied elsewhere (the server's
+ * journal). Each source is checked on its own, so a bogus value in one cannot cancel a valid other.
+ */
+export function activeSupportUntil(now: number = Date.now()): number {
+  const local = localSupportUntil.value;
+  const journal = journalSupportUntil.value;
+  return Math.max(supportActive(local, now) ? local : 0, supportActive(journal, now) ? journal : 0);
+}
 
 export function supporterActive(now: number = Date.now()): boolean {
-  return supportActive(supportUntilAll.value, now);
+  return activeSupportUntil(now) > 0;
+}
+
+/** The TVs know: the server's journal has the mark as late as this phone's own (or the mark came from there). */
+export function supportShared(now: number = Date.now()): boolean {
+  const journal = journalSupportUntil.value;
+  return supportActive(journal, now) && journal >= localSupportUntil.value;
 }
 
 export interface SupportIo {
@@ -99,10 +112,13 @@ let syncing: Promise<boolean> | null = null;
 /** Puts the phone's end time on the server when its journal has none as late (one write; never rejects). */
 export function syncSupport(c: JournalClient | null = io.client(), list: { data?: string }[] = torrents.value, now: number = Date.now()): Promise<boolean> {
   const until = localSupportUntil.value;
-  if (!c || !supportActive(until, now) || supportOfList(list) >= until) return Promise.resolve(false);
+  if (!c || !supportActive(until, now) || supportOfList(list, now + SUPPORT_MAX_AHEAD_MS) >= until) return Promise.resolve(false);
   if (syncing) return syncing;
-  const run = saveSupport(c, until).then(
-    (ok) => ok,
+  const run = saveSupport(c, until, now).then(
+    (ok) => {
+      if (ok) noteSupportUntil(until);
+      return ok;
+    },
     () => false,
   );
   syncing = run;
@@ -112,7 +128,7 @@ export function syncSupport(c: JournalClient | null = io.client(), list: { data?
   return run;
 }
 
-/** «Применить»: checks the code, keeps its end time and shares it with the TVs through the server. */
+/** «Применить»: checks the code, keeps its end time and shares it with the TVs through the server (awaited). */
 export async function applySupportCode(text: string, now: number = Date.now()): Promise<CodeCheck> {
   const r = await io.verify(text, now);
   if (!r.ok) return r;
@@ -120,11 +136,18 @@ export async function applySupportCode(text: string, now: number = Date.now()): 
     saveJson(SUPPORT_KEY, { until: r.until });
     localSupportUntil.value = r.until;
   }
-  void syncSupport(io.client(), torrents.value, now);
+  await syncSupport(io.client(), torrents.value, now);
   return r;
 }
 
-/** «Спасибо! Просьбы о поддержке скрыты до 30 ноября на телефоне и телевизорах.» */
-export function supportThanks(until: number): string {
-  return 'Спасибо! Просьбы о поддержке скрыты до ' + supportEndText(until) + ' на телефоне и телевизорах.';
+/**
+ * «Спасибо! Просьбы о поддержке скрыты до 30 ноября на телефоне и телевизорах.» — the TVs are promised only once the
+ * server has the mark (`shared`).
+ */
+export function supportThanks(until: number, shared: boolean): string {
+  return (
+    'Спасибо! Просьбы о поддержке скрыты до ' +
+    supportEndText(until) +
+    (shared ? ' на телефоне и телевизорах.' : ' на этом телефоне; телевизоры узнают, когда телефон подключится к серверу.')
+  );
 }

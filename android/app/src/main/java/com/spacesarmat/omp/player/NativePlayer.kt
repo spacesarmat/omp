@@ -132,10 +132,31 @@ object NativePlayerBridge {
         return true
     }
 
-    /** { type: "donate", on: false } from the page (a support code became known): the card is hidden for this run. */
+    /** The page hid the «Поддержать» card for this run (kept for a player that is not created yet). */
+    @Volatile
+    private var donateOff = false
+
+    @Volatile
+    private var donateOffSession: Long? = null
+
+    /** A new playNative: the page decides about the card again. */
+    fun resetDonate() {
+        donateOff = false
+        donateOffSession = null
+    }
+
+    /** True when the page hid the card for the run [session]. */
+    fun donateHidden(session: Long?): Boolean = donateOff && SkipInbox.sameRun(donateOffSession, session)
+
+    /**
+     * { type: "donate", on: false } from the page (a support code became known): the card is hidden for this run.
+     * Remembered when the player is not created yet (it reads [donateHidden] on load).
+     */
     fun donate(cmd: JSONObject): Boolean {
         if (cmd.optBoolean("on", true)) return true
         if (!current(cmd)) return true
+        donateOff = true
+        donateOffSession = sessionOf(cmd)
         val p = player ?: return true
         p.runOnUiThread { p.hideDonate() }
         return true

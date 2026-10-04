@@ -3,7 +3,7 @@ import { Clipboard } from '@capacitor/clipboard';
 import { Sheet } from './Sheet';
 import { sheetBackHandler } from './UpdateSheet';
 import { showToast } from './toast';
-import { donateOpen, closeDonate, activeMethods, applySupportCode, supporterActive, supportThanks, supportUntilAll, type DonateMethod } from '../donate';
+import { donateOpen, closeDonate, activeMethods, applySupportCode, activeSupportUntil, supportShared, supportThanks, type DonateMethod } from '../donate';
 
 export interface DonateActions {
   openUrl(url: string): void;
@@ -113,7 +113,7 @@ export function DonateSheet({ methods }: { methods?: DonateMethod[] }) {
   }, [open]);
   if (!open) return null;
   const list = activeMethods(methods);
-  const active = supporterActive();
+  const until = activeSupportUntil();
   const copy = async (address: string) => {
     try {
       await actions.copy(address);
@@ -150,9 +150,9 @@ export function DonateSheet({ methods }: { methods?: DonateMethod[] }) {
           ),
         )}
         <SupportCodeBox />
-        {active && (
+        {until > 0 && (
           <div class="m-support-ok" role="status">
-            {supportThanks(supportUntilAll.value)}
+            {supportThanks(until, supportShared())}
           </div>
         )}
       </div>
