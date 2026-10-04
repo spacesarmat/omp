@@ -306,7 +306,7 @@ describe('Install assistant — LG steps', () => {
     expect(currentRoute.value).toEqual({ name: 'faq', q: FAQ_LG_DEVMODE });
     const faq = mount(<Faq q={FAQ_LG_DEVMODE} />);
     const open = faq.querySelector('.m-faq-item.open')!;
-    expect(open.textContent).toContain(FAQ_LG_DEVMODE);
+    expect(open.textContent).toContain('Установить без root (режим разработчика)');
     expect(open.textContent).toContain('Developer Mode');
   });
 });
