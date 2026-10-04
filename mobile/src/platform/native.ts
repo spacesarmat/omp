@@ -5,7 +5,7 @@ import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
 import { log } from '../../../src/lib/log';
 import type { HttpResponse, SecretStore, SourceHttp } from '../../../src/sources/types';
-import type { UpdateInfo } from '../../../src/lib/updateInfo';
+import type { ApkAbi, UpdateInfo } from '../../../src/lib/updateInfo';
 
 type ApkFiles = NonNullable<UpdateInfo['apks']>;
 
@@ -81,6 +81,8 @@ export interface OmpNativeApi {
   openExternal(url: string, mime: string): Promise<void>;
   /** apks: the feed's per-ABI APKs, the plugin installs the device's one (url/sha256 = universal fallback). */
   downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void>;
+  /** Feed key of this device's APK (Build.SUPPORTED_ABIS[0]: arm64 / armv7); null = universal. */
+  deviceAbiKey(): Promise<ApkAbi | null>;
   takePendingMagnet(): Promise<string | null>;
   onMagnet(cb: (link: string) => void): () => void;
   /** Starts the server (idempotent) on the interface that reaches tvIp; resolves the report URL. */
@@ -129,6 +131,7 @@ interface OmpNativePlugin {
   wakeOnLan(o: { mac: string; ip: string }): Promise<void>;
   openExternal(o: { url: string; mime: string }): Promise<void>;
   downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<void>;
+  deviceAbiKey(): Promise<{ key?: unknown }>;
   takePendingMagnet(): Promise<{ link?: string | null }>;
   startPlayerServer(o: { tvIp: string }): Promise<{ url: string }>;
   stopPlayerServer(): Promise<void>;
@@ -357,6 +360,12 @@ export const native: OmpNativeApi = {
     } finally {
       void handle.remove();
     }
+  },
+
+  async deviceAbiKey() {
+    if (!plugin) return unavailable();
+    const r = await plugin.deviceAbiKey();
+    return r && (r.key === 'arm64' || r.key === 'armv7') ? r.key : null;
   },
 
   async takePendingMagnet() {

@@ -72,6 +72,25 @@ export function apkAbi(name) {
 }
 
 /**
+ * APK paths from the command line → the universal one and the per-ABI ones by file name. Throws without a universal
+ * APK (0.14.x clients need it) or with two files for one slot. No paths → null (no Android feed).
+ */
+export function splitApks(paths) {
+  if (!paths.length) return null;
+  let universal = null;
+  const abis = {};
+  for (const p of paths) {
+    const name = p.split(/[\\/]/).pop();
+    const key = apkAbi(name);
+    if (key ? abis[key] : universal) throw new Error(`two APKs for ${key || 'universal'}: ${name}`);
+    if (key) abis[key] = p;
+    else universal = p;
+  }
+  if (!universal) throw new Error('the universal APK (OMP-x.y.z.apk) is required for the Android feed');
+  return { universal, abis };
+}
+
+/**
  * Update feed for the Android client. ipkUrl/ipkHash/ipkSize point at the universal APK (0.14.x clients read only
  * these); `apks` lists the per-ABI APKs ({ arm64: { url, sha256, size }, armv7: … }) that newer clients pick by the
  * device ABI.

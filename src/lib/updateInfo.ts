@@ -53,6 +53,12 @@ function sanitizeApks(v: unknown): Partial<Record<ApkAbi, ApkFile>> | null {
   return any ? out : null;
 }
 
+/** The APK a device with this feed key (ApkAbi.key in Kotlin; null = universal) downloads. */
+export function apkFor(info: UpdateInfo, key: ApkAbi | null): ApkFile {
+  const e = key && info.apks ? info.apks[key] : undefined;
+  return e || { url: info.ipkUrl, sha256: info.ipkHash, size: info.ipkSize };
+}
+
 /** Validates update.json from the gh-pages feed; anything malformed means "no update". */
 export function sanitizeUpdateInfo(v: unknown): UpdateInfo | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;

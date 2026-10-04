@@ -3,7 +3,8 @@ import { Sheet } from './Sheet';
 import { native } from '../platform/native';
 import { dismissPrompt, skipVersion } from '../../../src/store/updates';
 import { APP_VERSION } from '../../../src/version';
-import type { UpdateInfo } from '../../../src/lib/updateInfo';
+import { apkFor } from '../../../src/lib/updateInfo';
+import type { ApkAbi, UpdateInfo } from '../../../src/lib/updateInfo';
 
 export type ApkInstaller = (
   url: string,
@@ -16,6 +17,14 @@ let installer: ApkInstaller | null = null;
 /** Replaces the APK installer (tests); null restores the native one. */
 export function setApkInstaller(fn: ApkInstaller | null): void {
   installer = fn;
+}
+
+export type AbiKeyReader = () => Promise<ApkAbi | null>;
+let abiKeyReader: AbiKeyReader | null = null;
+
+/** Replaces the device ABI query (tests); null restores the native one. */
+export function setAbiKeyReader(fn: AbiKeyReader | null): void {
+  abiKeyReader = fn;
 }
 
 /** Hardware Back hook: returns true when the sheet consumed the press. */
@@ -39,6 +48,19 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
   const running = useRef(false);
   const busyRef = useRef(false);
   busyRef.current = busy || launching;
+  // with per-ABI APKs in the feed the size is shown once the device's APK is known (undefined = not yet / unknown)
+  const [abiKey, setAbiKey] = useState<ApkAbi | null | undefined>(info.apks ? undefined : null);
+
+  useEffect(() => {
+    if (!info.apks) return;
+    let dead = false;
+    (abiKeyReader ?? native.deviceAbiKey.bind(native))().then(
+      (k) => { if (!dead) setAbiKey(k); },
+      () => {},
+    );
+    return () => { dead = true; };
+  }, [info]);
+  const size = !info.apks ? info.ipkSize : abiKey === undefined ? 0 : apkFor(info, abiKey).size;
 
   useEffect(() => {
     const h = () => {
@@ -85,7 +107,7 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
       <div class="m-sheet-title">Доступна версия {info.version}</div>
       <div class="m-muted m-small">
         Сейчас установлена {APP_VERSION}
-        {info.ipkSize > 0 ? ' · ' + formatMb(info.ipkSize) : ''}
+        {size > 0 ? ' · ' + formatMb(size) : ''}
       </div>
       {info.notes.length > 0 && (
         <ul class="m-notes m-sheet-scroll">

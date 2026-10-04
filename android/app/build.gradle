@@ -88,9 +88,11 @@ dependencies {
     // native player on Android TV (player/PlayerActivity.kt)
     implementation 'androidx.media3:media3-exoplayer:1.8.0'
     implementation 'androidx.media3:media3-ui:1.8.0'
-    // second player engine on Android TV (LGPL-2.1), used from v0.15 Task 4. No FFmpeg decoder for Media3: the only
-    // prebuilt ones (org.jellyfin.media3:media3-ffmpeg-decoder, nextlib-media3ext) are published under GPL-3.0, and
-    // OMP takes no GPL dependencies; libVLC plays DTS/AC3/E-AC3/TrueHD instead (see the v0.15 Task 1 report).
+    // FFmpeg audio decoders for Media3 (DTS, AC3/E-AC3, TrueHD…) when the box has no hardware decoder; enabled in
+    // v0.15 Task 3. Jellyfin's build is GPL-3.0 (compatible with OMP's GPL-3.0); its FFmpeg is configured without
+    // --enable-gpl / nonfree (LGPL decoders only). Must match the Media3 version above.
+    implementation 'org.jellyfin.media3:media3-ffmpeg-decoder:1.8.0+1'
+    // second player engine on Android TV (LGPL-2.1), used from v0.15 Task 4
     implementation 'org.videolan.android:libvlc-all:3.7.7'
     // install assistant: LG Developer Mode over SSH (BSD-3-Clause) and Android TV over adb (Apache-2.0), see install/
     implementation 'com.github.mwiede:jsch:2.28.7'

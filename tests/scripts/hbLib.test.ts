@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { changelogNotes, buildHomebrew, buildAndroidUpdate, apkAbi, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
+import { changelogNotes, buildHomebrew, buildAndroidUpdate, apkAbi, splitApks, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
 import { sanitizeUpdateInfo } from '../../src/lib/updateInfo';
 
 const MD = '# Изменения\n\n## 0.6.0\n\n- Окно обновления\n* Параметры запуска\n\n## 0.5.0\n\n- Новый каталог\n';
@@ -63,6 +63,17 @@ describe('hb-lib', () => {
     expect('apks' in (buildAndroidUpdate({ ...base, abis: {} }) as any)).toBe(false);
     const u = buildAndroidUpdate({ ...base, abis: { x86: { name: 'OMP-0.15.0-x86.apk', sha256: sha, size: 1 } } as any }) as any;
     expect(u.apks).toBeUndefined();
+  });
+  it('routes command-line APK paths by file name', () => {
+    expect(splitApks([])).toBeNull();
+    expect(splitApks(['build/OMP-0.15.0-armv7.apk', 'build/OMP-0.15.0.apk', 'build\\OMP-0.15.0-arm64.apk'])).toEqual({
+      universal: 'build/OMP-0.15.0.apk',
+      abis: { armv7: 'build/OMP-0.15.0-armv7.apk', arm64: 'build\\OMP-0.15.0-arm64.apk' },
+    });
+    expect(splitApks(['build/OMP-0.15.0.apk'])).toEqual({ universal: 'build/OMP-0.15.0.apk', abis: {} });
+    expect(() => splitApks(['build/OMP-0.15.0-arm64.apk'])).toThrow('universal APK');
+    expect(() => splitApks(['a/OMP-0.15.0.apk', 'b/OMP-0.15.0.apk'])).toThrow('two APKs');
+    expect(() => splitApks(['a/OMP-0.15.0-arm64.apk', 'b/OMP-0.15.0-arm64.apk', 'OMP-0.15.0.apk'])).toThrow('two APKs');
   });
   it('tells per-ABI APK names from the universal one', () => {
     expect(apkAbi('OMP-0.15.0-arm64.apk')).toBe('arm64');

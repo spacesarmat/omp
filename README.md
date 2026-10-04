@@ -306,3 +306,4 @@ OMP распространяется на условиях [GNU GPL v3](LICENSE)
 
 - [AndroidX Media3](https://github.com/androidx/media) (ExoPlayer) — встроенный плеер; Apache License 2.0.
 - [libVLC для Android](https://code.videolan.org/videolan/libvlcjni) (`org.videolan.android:libvlc-all`) — второй движок плеера; GNU LGPL 2.1. Библиотека подключается без изменений, её исходники — по ссылке.
+- [FFmpeg-декодер для Media3](https://github.com/jellyfin/jellyfin-androidx-media) (`org.jellyfin.media3:media3-ffmpeg-decoder`, сборка Jellyfin) — звук DTS, AC3/E-AC3, TrueHD без аппаратного декодера; GNU GPL v3. Входящий в него [FFmpeg](https://ffmpeg.org/) собран без GPL-частей (только декодеры под LGPL 2.1+).

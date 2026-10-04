@@ -14,6 +14,7 @@ export function buildHomebrew(p: {
 }): { manifest: object; apps: object; update: object };
 export const APK_ABIS: string[];
 export function apkAbi(name: string): 'arm64' | 'armv7' | null;
+export function splitApks(paths: string[]): { universal: string; abis: Partial<Record<'arm64' | 'armv7', string>> } | null;
 export interface AbiApk {
   name: string;
   sha256: string;

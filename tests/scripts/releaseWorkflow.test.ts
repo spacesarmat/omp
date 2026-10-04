@@ -41,3 +41,12 @@ describe('release workflow asset names', () => {
     expect(step).toMatch(/gh release create "\$TAG" "\$IPK" "\$APK64" "\$APK32" "\$APK" /);
   });
 });
+
+describe('CI workflow', () => {
+  it('prints the size of every debug APK (one per ABI)', () => {
+    const ci = readFileSync('.github/workflows/ci.yml', 'utf8');
+    const at = ci.indexOf('assembleDebug');
+    expect(at).toBeGreaterThan(0);
+    expect(ci.slice(at)).toContain('ls -l android/app/build/outputs/apk/debug/*.apk');
+  });
+});

@@ -100,6 +100,8 @@ describe('native plugin wrapper on Android', () => {
       startPlayerServer: vi.fn(async () => ({ url: 'http://10.0.0.3:41234/omp/abc' })),
       stopPlayerServer: vi.fn(async () => {}),
       wakeOnLan: vi.fn(async () => {}),
+      downloadAndInstallApk: vi.fn(async () => {}),
+      deviceAbiKey: vi.fn(async (): Promise<any> => ({ key: 'arm64' })),
       queuePlayerCommands: vi.fn(async () => {}),
       localServerInfo: vi.fn(async (): Promise<any> => ({ supported: true, running: false, error: '' })),
       startLocalServer: vi.fn(async (): Promise<any> => ({
@@ -178,6 +180,26 @@ describe('native plugin wrapper on Android', () => {
     expect(fake.tvConnect).toHaveBeenCalledWith({ ip: '10.0.0.2', register: '{"type":"register"}', preferPort: 3001 });
     await n.tvConnect('10.0.0.2', {});
     expect(fake.tvConnect).toHaveBeenLastCalledWith({ ip: '10.0.0.2', register: '{}' });
+  });
+
+  it('downloadAndInstallApk passes apks only when the feed has them', async () => {
+    const { native: n, fake, releaseAdd } = await load();
+    releaseAdd();
+    const apks = { arm64: { url: 'https://x/a64.apk', sha256: 'b'.repeat(64), size: 1 } };
+    await n.downloadAndInstallApk('https://x/a.apk', 'a'.repeat(64), () => {}, apks);
+    expect(fake.downloadAndInstallApk).toHaveBeenLastCalledWith({ url: 'https://x/a.apk', sha256: 'a'.repeat(64), apks });
+    await n.downloadAndInstallApk('https://x/a.apk', 'a'.repeat(64), () => {});
+    expect(fake.downloadAndInstallApk).toHaveBeenLastCalledWith({ url: 'https://x/a.apk', sha256: 'a'.repeat(64) });
+  });
+
+  it('deviceAbiKey keeps only known keys', async () => {
+    const { native: n, fake } = await load();
+    fake.deviceAbiKey.mockResolvedValueOnce({ key: 'armv7' });
+    expect(await n.deviceAbiKey()).toBe('armv7');
+    fake.deviceAbiKey.mockResolvedValueOnce({ key: '' });
+    expect(await n.deviceAbiKey()).toBeNull();
+    fake.deviceAbiKey.mockResolvedValueOnce({ key: 'x86' });
+    expect(await n.deviceAbiKey()).toBeNull();
   });
 
   it('wakeOnLan passes mac and ip', async () => {

@@ -3,12 +3,11 @@
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { APP_ID, apkAbi, buildAndroidUpdate, buildHomebrew, changelogNotes } from './hb-lib.mjs';
+import { APP_ID, buildAndroidUpdate, buildHomebrew, changelogNotes, splitApks } from './hb-lib.mjs';
 
 const [tag, ipk, ...apkPaths] = process.argv.slice(2);
 if (!tag || !ipk) throw new Error('usage: node scripts/hb-manifest.mjs <tag> <ipk> [apk...]');
-const apk = apkPaths.find((p) => !apkAbi(basename(p)));
-if (apkPaths.length && !apk) throw new Error('the universal APK (OMP-x.y.z.apk) is required for the Android feed');
+const apkSet = splitApks(apkPaths);
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 if (tag !== `v${version}`) throw new Error(`tag ${tag} does not match package.json version ${version}`);
 
@@ -36,12 +35,11 @@ copyFileSync(fullDescription, 'build/hb/full_description.html');
 writeFileSync(`build/hb/${APP_ID}.manifest.json`, JSON.stringify(manifest, null, 2));
 writeFileSync('build/hb/apps.json', JSON.stringify(apps, null, 2));
 writeFileSync('build/hb/update.json', JSON.stringify(update, null, 2));
-if (apk) {
+if (apkSet) {
+  const apk = apkSet.universal;
   const apkBuf = readFileSync(apk);
   const abis = {};
-  for (const p of apkPaths) {
-    const key = apkAbi(basename(p));
-    if (!key) continue;
+  for (const [key, p] of Object.entries(apkSet.abis)) {
     const b = readFileSync(p);
     abis[key] = { name: basename(p), sha256: createHash('sha256').update(b).digest('hex'), size: b.length };
   }

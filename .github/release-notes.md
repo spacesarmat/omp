@@ -11,7 +11,13 @@
 | ![История](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/history.png) | ![Поиск](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/search.png) |
 | ![Плеер Android TV](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/androidtv-player.png) | |
 
-**Android:** скачайте `OMP-*-arm64.apk` ниже (большинство телефонов и приставок; для 32-битных — `OMP-*-armv7.apk`, если не уверены — `OMP-*.apk` без суффикса, он подходит всем), откройте на телефоне и разрешите установку из браузера. Подробнее — в [README](https://github.com/spacesarmat/omp#omp-для-android).
+**Android:** скачайте APK ниже, откройте на телефоне или приставке и разрешите установку из браузера. Какой файл выбрать:
+
+- `OMP-*-arm64.apk` — 64-битная система (почти все современные телефоны);
+- `OMP-*-armv7.apk` — 32-битная система (многие приставки Android TV, даже с 64-битным процессором);
+- `OMP-*.apk` без суффикса — если не уверены: подходит всем, но больше по размеру.
+
+Помощник установки и обновления внутри OMP выбирают нужный файл сами. Подробнее — в [README](https://github.com/spacesarmat/omp#omp-для-android).
 
 | | |
 |---|---|

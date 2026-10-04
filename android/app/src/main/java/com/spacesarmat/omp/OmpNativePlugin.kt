@@ -775,6 +775,12 @@ class OmpNativePlugin : Plugin() {
 
     // ---- APK update ----
 
+    /** Feed key of this device's APK («arm64» / «armv7»; "" = universal), the same rule as downloadAndInstallApk. */
+    @PluginMethod
+    fun deviceAbiKey(call: PluginCall) {
+        call.resolve(JSObject().put("key", ApkAbi.key(Build.SUPPORTED_ABIS.toList()) ?: ""))
+    }
+
     @PluginMethod
     fun downloadAndInstallApk(call: PluginCall) {
         val once = Once(call)
