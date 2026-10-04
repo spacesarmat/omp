@@ -6,7 +6,7 @@ import org.json.JSONObject
 
 /**
  * A site request of the search sources as the page sends it (OmpNative.http and the background page's bridge):
- * { url, method?: GET|POST, headers?, form?, formCharset?, body?, timeoutMs? }. Pure: tested on the JVM.
+ * { url, method?: GET|POST, headers?, form?, formCharset?, body?, timeoutMs?, responseCharset? }. Pure: tested on the JVM.
  */
 data class HttpSpec(
     val url: String,
@@ -16,6 +16,8 @@ data class HttpSpec(
     val formCharset: String?,
     val body: String?,
     val timeoutMs: Long,
+    /** Charset to decode the body with, overriding the headers ('iso-8859-1' gives the raw bytes of a .torrent 1:1). */
+    val responseCharset: String? = null,
 ) {
     companion object {
         const val DEFAULT_TIMEOUT_MS = 20_000
@@ -38,6 +40,7 @@ data class HttpSpec(
                 formCharset = o.opt("formCharset") as? String,
                 body = o.opt("body") as? String,
                 timeoutMs = timeout.coerceIn(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS).toLong(),
+                responseCharset = o.opt("responseCharset") as? String,
             )
         }
 
@@ -69,7 +72,7 @@ class SourceServices private constructor(context: Context) {
 
     /** Blocking. Throws [SiteHttpException]. */
     fun request(spec: HttpSpec): SiteHttp.Response =
-        siteHttp.request(spec.url, spec.method, spec.headers, spec.form, spec.formCharset, spec.body, spec.timeoutMs)
+        siteHttp.request(spec.url, spec.method, spec.headers, spec.form, spec.formCharset, spec.body, spec.timeoutMs, spec.responseCharset)
 
     companion object {
         const val SECRETS_FAILED = "Не удалось открыть защищённое хранилище"

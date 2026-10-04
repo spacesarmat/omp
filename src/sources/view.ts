@@ -170,6 +170,13 @@ function fail(msg: string): Promise<string> {
 export function resolveLink(r: SourceResult, ctx: SourceContext): Promise<string> {
   if (r.Magnet) return Promise.resolve(r.Magnet);
   const src = getSource(r.source);
+  if (src && src.resolve) {
+    try {
+      return Promise.resolve(src.resolve(r, ctx));
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
   if (src && src.magnet && r.detailUrl) {
     let p: Promise<string>;
     try {

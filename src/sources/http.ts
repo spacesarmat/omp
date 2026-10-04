@@ -10,6 +10,7 @@ export interface NativeHttpRequest {
   headers?: { [name: string]: string };
   form?: { [key: string]: string };
   formCharset?: string;
+  responseCharset?: string;
   body?: string;
   timeoutMs?: number;
 }
@@ -35,6 +36,7 @@ function withOptions(req: NativeHttpRequest, opts?: HttpOptions): NativeHttpRequ
   if (!opts) return req;
   if (opts.headers) req.headers = opts.headers;
   if (opts.formCharset) req.formCharset = opts.formCharset;
+  if (opts.responseCharset) req.responseCharset = opts.responseCharset;
   if (opts.timeoutMs) req.timeoutMs = opts.timeoutMs;
   return req;
 }

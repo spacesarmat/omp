@@ -168,7 +168,7 @@ describe('indexerSource', () => {
     expect(s.name).toBe('Мой Prowlarr');
     const list = await s.search('a b', site.ctx);
     expect(site.calls[0].url).toBe('http://127.0.0.1:9696/sub/api/v1/search?query=a%20b&type=search');
-    expect(site.calls[0].opts).toEqual({ headers: { 'X-Api-Key': KEY } });
+    expect(site.calls[0].opts).toEqual({ headers: { 'X-Api-Key': KEY }, timeoutMs: 20000 });
     expect(site.calls[0].url).not.toContain(KEY);
     expect(list).toHaveLength(1);
   });

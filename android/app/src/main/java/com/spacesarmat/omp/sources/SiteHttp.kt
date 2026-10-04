@@ -45,8 +45,10 @@ class SiteHttp(private val jar: SiteCookieJar) {
         formCharset: String?,
         body: String?,
         timeoutMs: Long,
+        responseCharset: String? = null,
     ): Response {
         val target = parseUrl(url) ?: throw SiteHttpException(BAD_URL)
+        val forced = if (responseCharset == null) null else BodyCharset.forName(responseCharset) ?: throw SiteHttpException(BAD_REQUEST)
         val b = Request.Builder().url(target)
             .header("User-Agent", USER_AGENT)
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
@@ -87,7 +89,7 @@ class SiteHttp(private val jar: SiteCookieJar) {
                         RedirectPolicy.next(r.request.method, r.code, r.request.url, location)
                     }
                     when (action) {
-                        RedirectPolicy.Action.STOP -> return read(r)
+                        RedirectPolicy.Action.STOP -> return read(r, forced)
                         RedirectPolicy.Action.FOLLOW_GET -> redirected(r.request, location!!).get().removeHeader("Content-Type").build()
                         RedirectPolicy.Action.RESEND -> redirected(r.request, location!!).build()
                     }
@@ -109,13 +111,13 @@ class SiteHttp(private val jar: SiteCookieJar) {
         return nb
     }
 
-    private fun read(r: okhttp3.Response): Response {
+    private fun read(r: okhttp3.Response, forced: java.nio.charset.Charset?): Response {
         val rb = r.body ?: return Response(r.code, r.request.url.toString(), "")
         if (rb.contentLength() > MAX_BYTES) throw SiteHttpException(TOO_LARGE)
         val source = rb.source()
         if (source.request(MAX_BYTES + 1)) throw SiteHttpException(TOO_LARGE)
         val bytes = source.buffer.readByteArray()
-        return Response(r.code, r.request.url.toString(), BodyCharset.decode(bytes, r.header("Content-Type")))
+        return Response(r.code, r.request.url.toString(), if (forced != null) String(bytes, forced) else BodyCharset.decode(bytes, r.header("Content-Type")))
     }
 
     companion object {

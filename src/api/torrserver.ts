@@ -1,4 +1,5 @@
-import { request, HttpOptions } from './http';
+import { request, apiError, HttpOptions } from './http';
+import { isStashedFile, takeStashedFile } from './torrentFiles';
 import type { Torrent, CacheState, ViewedEntry, SearchResult, FfprobeResult, ServerSettings, TmdbConfig } from './types';
 import type { TorrentFile } from '../lib/episodes';
 
@@ -65,10 +66,41 @@ export class TorrServerClient {
   }
 
   add(p: { link: string; title?: string; poster?: string; category?: string }): Promise<Torrent> {
+    // a .torrent that OMP downloaded itself (an indexer link with a secret): uploaded as a file, the link never leaves OMP
+    if (isStashedFile(p.link)) return this.upload(p);
     return this.call<Torrent>('/torrents', {
       body: { action: 'add', link: p.link, title: p.title || '', poster: p.poster || '', category: p.category || '', save_to_db: true },
       timeoutMs: 30000,
     });
+  }
+
+  /** Uploads a stashed .torrent file (POST /torrent/upload, multipart). */
+  private upload(p: { link: string; title?: string; poster?: string; category?: string }): Promise<Torrent> {
+    const bytes = takeStashedFile(p.link);
+    if (!bytes) return Promise.reject(apiError('parse', 'Файл раздачи потерян, повторите добавление'));
+    const form = new FormData();
+    form.append('save', 'true');
+    form.append('title', p.title || '');
+    form.append('poster', p.poster || '');
+    form.append('category', p.category || '');
+    form.append('file', new Blob([bytes.slice().buffer as ArrayBuffer], { type: 'application/x-bittorrent' }), 'release.torrent');
+    const headers: { [k: string]: string } = {};
+    if (this.auth) headers['Authorization'] = 'Basic ' + this.auth;
+    return fetch(this.baseUrl + '/torrent/upload', { method: 'POST', headers, body: form }).then(
+      (res) => {
+        if (!res.ok) throw apiError('http', 'HTTP ' + res.status, res.status);
+        return res.text().then((text) => {
+          try {
+            return JSON.parse(text) as Torrent;
+          } catch (e) {
+            throw apiError('parse', 'Parse error');
+          }
+        });
+      },
+      () => {
+        throw apiError('network', 'Network error');
+      },
+    );
   }
 
   /** Replaces `data`; `set` overwrites title/poster/category too, so the current ones are sent back. */

@@ -16,6 +16,8 @@ export interface HttpOptions {
   timeoutMs?: number;
   /** Charset of a POST form body, e.g. 'windows-1251' for old trackers. Default UTF-8. */
   formCharset?: string;
+  /** Decode the body with this charset whatever the headers say: 'iso-8859-1' keeps every byte of a .torrent as one char. */
+  responseCharset?: string;
 }
 
 /** HTTP through the native Android plugin: no CORS, browser User-Agent, cookies per site. */
@@ -70,6 +72,11 @@ export interface Source {
    * link (Anidub) that TorrServer downloads itself.
    */
   magnet?(detailUrl: string, ctx: SourceContext): Promise<string>;
+  /**
+   * Link to add for a result without a magnet whose download needs a secret (indexers): the source fetches it itself
+   * and the secret never reaches the result, TorrServer or storage. Called before `magnet`.
+   */
+  resolve?(r: SourceResult, ctx: SourceContext): Promise<string>;
   /** Sources with needsLogin: sign in; the credentials go to ctx.secrets only. Rejects in Russian. */
   login?(username: string, password: string, ctx: SourceContext): Promise<void>;
   /** Forgets the site cookies and the saved credentials. */
