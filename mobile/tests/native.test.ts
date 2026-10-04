@@ -288,7 +288,9 @@ describe('native plugin wrapper on Android', () => {
       downloadBytes: 64174032,
       pinVersion: 'MatriX.145.1',
     });
-    fake.localServerInfo.mockResolvedValueOnce({ supported: true, running: false, binary: 'weird', downloadBytes: -1 });
+    fake.localServerInfo.mockResolvedValueOnce({ supported: true, running: false, binary: 'missing', downloading: true, downloadPercent: 41.6, mobileData: true });
+    expect(await n.localServerInfo()).toEqual({ supported: true, running: false, binary: 'missing', downloading: true, downloadPercent: 42, mobileData: true });
+    fake.localServerInfo.mockResolvedValueOnce({ supported: true, running: false, binary: 'weird', downloadBytes: -1, downloading: 'yes', downloadPercent: 300 });
     expect(await n.localServerInfo()).toEqual({ supported: true, running: false });
     const got: any[] = [];
     fake.downloadLocalServer.mockImplementationOnce(async () => {

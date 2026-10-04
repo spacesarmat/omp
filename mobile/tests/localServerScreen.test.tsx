@@ -90,10 +90,14 @@ describe('LocalServer screen', () => {
     expect(currentRoute.value.name).toBe('library');
   });
 
-  function downloadDeps(over: { binary?: 'missing' | 'outdated'; fail?: { message: string; code: string } | null } = {}) {
+  function downloadDeps(
+    over: { binary?: 'missing' | 'outdated'; fail?: { message: string; code: string } | null; mobileData?: boolean } = {},
+  ) {
     const calls: string[] = [];
     let binary: string = over.binary ?? 'missing';
     let running = false;
+    let downloading = false;
+    let percent = 0;
     let fail = over.fail ?? null;
     let progress: ((p: any) => void) | null = null;
     let finish: (() => void) | null = null;
@@ -108,17 +112,27 @@ describe('LocalServer screen', () => {
           downloadBytes: 64174032,
           pinVersion: 'MatriX.146',
           ...(running ? { version: 'MatriX.146', ip: '192.168.1.50' } : {}),
+          ...(downloading ? { downloading: true, downloadPercent: percent } : {}),
+          ...(over.mobileData ? { mobileData: true } : {}),
         };
       },
       downloadLocalServer(cb: (p: any) => void) {
         calls.push('download');
-        progress = cb;
+        progress = (p: any) => {
+          if (typeof p.percent === 'number') percent = p.percent;
+          cb(p);
+        };
+        downloading = true;
         return new Promise((res, rej) => {
           finish = () => {
             binary = 'ready';
+            downloading = false;
             res({ supported: true, running, binary });
           };
-          reject = rej;
+          reject = (e: any) => {
+            downloading = false;
+            rej(e);
+          };
         });
       },
       async cancelLocalServerDownload() {
@@ -230,6 +244,59 @@ describe('LocalServer screen', () => {
     await flush();
     expect(d.calls).not.toContain('download');
     expect(el.textContent).toContain('Открыть каталог');
+  });
+
+  it('reopening the screen during a download shows its progress, and leaving does not start the server', async () => {
+    const d = downloadDeps();
+    setLocalServerDeps(d.deps);
+    const el = mount();
+    await flush();
+    await act(async () => button(el, 'Скачать TorrServer (~61 МБ)')!.click());
+    await flush();
+    await act(async () => d.progress({ phase: 'download', percent: 30 }));
+    // leave the screen: the download keeps running
+    act(() => render(null, el));
+    const el2 = mount();
+    await flush();
+    expect(button(el2, 'Скачать TorrServer (~61 МБ)')).toBeUndefined();
+    expect(el2.textContent).toContain('Скачивание TorrServer MatriX.146 · 30%');
+    await act(async () => d.progress({ phase: 'download', percent: 70 }));
+    expect(el2.textContent).toContain('· 70%');
+    await act(async () => d.finish());
+    await flush();
+    expect(el2.textContent).toContain('Открыть каталог');
+    // one start only: the first (left) screen did not start the server after the download
+    expect(d.calls.filter((c) => c === 'start')).toHaveLength(1);
+  });
+
+  it('a download finished after leaving the screen starts nothing', async () => {
+    const d = downloadDeps();
+    setLocalServerDeps(d.deps);
+    const el = mount();
+    await flush();
+    await act(async () => button(el, 'Скачать TorrServer (~61 МБ)')!.click());
+    await flush();
+    act(() => render(null, el));
+    await act(async () => d.finish());
+    await flush();
+    expect(d.calls).not.toContain('start');
+    expect(servers.value).toHaveLength(0);
+  });
+
+  it('on mobile data the download is confirmed first', async () => {
+    const d = downloadDeps({ mobileData: true });
+    setLocalServerDeps(d.deps);
+    const el = mount();
+    await flush();
+    await act(async () => button(el, 'Скачать TorrServer (~61 МБ)')!.click());
+    expect(el.textContent).toContain('Скачать 61 МБ через мобильный интернет?');
+    expect(d.calls).not.toContain('download');
+    await act(async () => button(el, 'Отмена')!.click());
+    expect(button(el, 'Скачать TorrServer (~61 МБ)')).toBeTruthy();
+    await act(async () => button(el, 'Скачать TorrServer (~61 МБ)')!.click());
+    await act(async () => button(el, 'Скачать')!.click());
+    await flush();
+    expect(d.calls).toContain('download');
   });
 
   it('shows the error at the failing step and retries', async () => {

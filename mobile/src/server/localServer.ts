@@ -85,6 +85,7 @@ export async function startLocal(): Promise<void> {
     if (!autostartKnown) setAutostart(true);
     await refreshLocalServer();
   } catch (e) {
+    logStartFailure(e);
     await refreshLocalServer();
     localServer.value = { ...localServer.value, error: errorMessage(e) };
   }
@@ -119,6 +120,18 @@ export function formatBytes(b: number): string {
   if (b >= CACHE_LIMIT_BYTES) return (b / CACHE_LIMIT_BYTES).toFixed(1).replace('.', ',') + ' ГБ';
   return Math.round(b / (1024 * 1024)) + ' МБ';
 }
+
+/** Start of the native text when the binary does not run on this device (linker, 16 KB pages, instant crash). */
+export const CANNOT_RUN_PREFIX = 'Свой сервер не запустился на этом устройстве';
+
+/** Logs a failed start: an error entry when the server cannot run on this device at all. */
+function logStartFailure(e: unknown): void {
+  if (errorMessage(e).startsWith(CANNOT_RUN_PREFIX)) log('error', 'server', CANNOT_RUN_PREFIX);
+  else log('warn', 'server', 'Встроенный TorrServer не запустился');
+}
+
+/** Thrown by setupLocal when the screen that ran it has gone after the download. */
+export const SETUP_ABANDONED = 'setup-abandoned';
 
 /** The binary has to be downloaded (first start) or updated (the pinned release changed). */
 export function needsDownload(info: LocalServerInfo): boolean {
@@ -156,12 +169,14 @@ export const SETUP_STEPS = 4;
  * The visible start sequence: prepare (download the binary when needed), start in the background, check /echo,
  * connect OMP. `onStep(i, version)` reports the step that is running now; the last call is `onStep(4, …)`.
  * `onDownload` gets the download progress; `download` false skips the update of an outdated binary (a missing one is
- * always downloaded). Rejects at the failing step.
+ * always downloaded). The download outlives the screen; when `alive()` is false after it, nothing is started (rejects
+ * with SETUP_ABANDONED). Rejects at the failing step.
  */
 export async function setupLocal(
   onStep: (step: number, version: string) => void,
   onDownload: (p: LocalDownloadProgress) => void = () => {},
   download = true,
+  alive: () => boolean = () => true,
 ): Promise<void> {
   const info = await deps.native.localServerInfo();
   if (!info.supported) throw new Error('Встроенный сервер недоступен на этом телефоне');
@@ -180,10 +195,16 @@ export async function setupLocal(
     }
     log('info', 'server', 'Встроенный TorrServer скачан и проверен');
     // a running old version: restart on the new binary
+    if (!alive()) throw new Error(SETUP_ABANDONED);
     if (info.running) await deps.native.stopLocalServer();
   }
   onStep(1, version);
-  await deps.native.startLocalServer();
+  try {
+    await deps.native.startLocalServer();
+  } catch (e) {
+    logStartFailure(e);
+    throw e;
+  }
   onStep(2, version);
   await deps.echo(LOCAL_URL);
   onStep(3, version);
@@ -206,6 +227,7 @@ export async function autostartLocal(): Promise<void> {
 export function watchLocalServer(): () => void {
   return deps.native.onLocalServerState((s) => {
     localServer.value = { ...localServer.value, running: s.running, error: s.error };
+    if (s.error && s.error.startsWith(CANNOT_RUN_PREFIX)) log('error', 'server', CANNOT_RUN_PREFIX);
     if (s.running) void refreshLocalServer();
   });
 }

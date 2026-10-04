@@ -100,8 +100,15 @@ class OmpNativePlugin : Plugin() {
         notifyListeners("localServerState", o)
     }
 
+    private val downloadProgress = LocalTorrServer.DownloadListener { phase, percent ->
+        val o = JSObject().put("phase", phase)
+        if (percent != null) o.put("percent", percent)
+        notifyListeners("localServerDownload", o)
+    }
+
     override fun load() {
         instance = this
+        LocalTorrServer.addDownloadListener(downloadProgress)
         purgeSharedFiles(10 * 60 * 1000L)
         NativePlayerBridge.emitter = { event, data -> notifyListeners(event, data) }
         LocalTorrServer.addListener(serverState)
@@ -120,6 +127,7 @@ class OmpNativePlugin : Plugin() {
         if (instance === this) instance = null
         NativePlayerBridge.emitter = null
         LocalTorrServer.removeListener(serverState)
+        LocalTorrServer.removeDownloadListener(downloadProgress)
         closeAll()
         player.stop()
         remote?.stop()
@@ -837,8 +845,9 @@ class OmpNativePlugin : Plugin() {
 
     /**
      * Downloads the pinned TorrServer binary (GitHub release asset, sha256 + size checked). Progress: events
-     * localServerDownload { phase: 'download', percent } then { phase: 'verify' }. Resolves the server info; rejects
-     * with Russian text (next step included) and the InstallCodes code.
+     * localServerDownload { phase: 'download', percent } then { phase: 'verify' }. A call while a download runs joins
+     * it (no second download). Resolves the server info; rejects with Russian text (next step included) and the
+     * InstallCodes code.
      */
     @PluginMethod
     fun downloadLocalServer(call: PluginCall) {
@@ -849,11 +858,7 @@ class OmpNativePlugin : Plugin() {
         }
         io.execute {
             try {
-                LocalTorrServer.download(
-                    context,
-                    { p -> notifyListeners("localServerDownload", JSObject().put("phase", "download").put("percent", p)) },
-                    { notifyListeners("localServerDownload", JSObject().put("phase", "verify")) },
-                )
+                LocalTorrServer.download(context)
                 once.resolve(localInfo())
             } catch (e: Throwable) {
                 val f = failureOf(e)
@@ -862,10 +867,7 @@ class OmpNativePlugin : Plugin() {
                 } catch (_: Exception) {
                     0L
                 }
-                once.reject(
-                    if (f.code == InstallCodes.BUSY) "TorrServer уже скачивается" else TorrServerBinary.downloadError(f.code, mb),
-                    f.code,
-                )
+                once.reject(TorrServerBinary.downloadError(f.code, mb), f.code)
             }
         }
     }
@@ -976,6 +978,11 @@ class OmpNativePlugin : Plugin() {
                 o.put("binary", install.state().id)
                 o.put("downloadBytes", install.pin.size)
                 o.put("pinVersion", install.pin.tag)
+                if (LocalTorrServer.downloading()) {
+                    o.put("downloading", true)
+                    LocalTorrServer.downloadPercent?.let { o.put("downloadPercent", it) }
+                }
+                o.put("mobileData", LocalTorrServer.onMobileData(context))
             } catch (_: Exception) {
                 o.put("binary", BinaryState.MISSING.id)
             }

@@ -47,6 +47,13 @@ interface ReleaseHttp {
 
     /** Opens [url] and passes the body and its length (-1 = unknown) to [read]; the stream is closed afterwards. */
     fun stream(url: String, cancel: CancelToken, read: (InputStream, Long) -> Unit)
+
+    /**
+     * Like [stream] from byte [offset] (HTTP Range): [read] gets the body, its length and the offset the body really
+     * starts at — 0 when the server sent the whole file. The default does not resume.
+     */
+    fun streamFrom(url: String, offset: Long, cancel: CancelToken, read: (InputStream, Long, Long) -> Unit) =
+        stream(url, cancel) { input, length -> read(input, length, 0L) }
 }
 
 /**
@@ -153,29 +160,51 @@ class Releases(private val http: ReleaseHttp, private val now: () -> Long = Syst
 
 /**
  * Downloads a [ReleasePackage] into [dir] (app cache) with a size cap and verifies size and sha256. The returned file
- * belongs to the caller (delete it when done); on any failure nothing is left behind.
+ * belongs to the caller (delete it when done); on any failure nothing is left behind — except, with [resume], the
+ * `.part` file after a network failure or a cancel, which the next fetch continues (HTTP Range). The sha256 always
+ * covers the whole file, the kept part included.
  */
-class ReleaseDownloader(private val http: ReleaseHttp, private val dir: File) {
+class ReleaseDownloader(private val http: ReleaseHttp, private val dir: File, private val resume: Boolean = false) {
     fun fetch(pkg: ReleasePackage, cap: Long, cancel: CancelToken, percent: (Int) -> Unit, verifying: () -> Unit = {}): File {
         if (pkg.size > cap) throw InstallFailure(InstallCodes.TOO_BIG)
         dir.mkdirs()
         val part = File(dir, pkg.fileName + ".part")
         val target = File(dir, pkg.fileName)
-        part.delete()
         target.delete()
-        val needed = if (pkg.size > 0) pkg.size else cap
+        // only a known-size package resumes: its size and sha256 tell a finished file
+        var offset = if (resume && pkg.size > 0 && part.isFile && part.length() in 1 until pkg.size) part.length() else 0L
+        if (offset == 0L) part.delete()
+        val needed = (if (pkg.size > 0) pkg.size else cap) - offset
         if (dir.usableSpace in 1 until needed + SPACE_MARGIN) throw InstallFailure(InstallCodes.PHONE_SPACE)
         val digest = MessageDigest.getInstance("SHA-256")
         var ok = false
+        var keepPart = false
         try {
-            http.stream(pkg.url, cancel) { input, length ->
+            http.streamFrom(pkg.url, offset, cancel) { input, length, start ->
+                // the server sent the whole file: start over
+                if (start != offset) {
+                    if (start != 0L) throw InstallFailure(InstallCodes.NETWORK)
+                    offset = 0L
+                }
                 val limit = if (pkg.size > 0) pkg.size else cap
-                if (length > limit) throw InstallFailure(InstallCodes.TOO_BIG)
+                if (length > limit - offset) throw InstallFailure(InstallCodes.TOO_BIG)
+                if (offset > 0) {
+                    part.inputStream().use { old ->
+                        val b = ByteArray(64 * 1024)
+                        var left = offset
+                        while (left > 0) {
+                            val n = old.read(b, 0, minOf(b.size.toLong(), left).toInt())
+                            if (n < 0) throw InstallFailure(InstallCodes.NETWORK)
+                            digest.update(b, 0, n)
+                            left -= n
+                        }
+                    }
+                }
                 val total = if (pkg.size > 0) pkg.size else length
-                var done = 0L
+                var done = offset
                 var last = -1
-                percent(0)
-                part.outputStream().use { out ->
+                percent(if (total > 0) ((done * 100) / total).toInt().coerceIn(0, 100) else 0)
+                java.io.FileOutputStream(part, offset > 0).use { out ->
                     val buf = ByteArray(64 * 1024)
                     while (true) {
                         cancel.check()
@@ -203,11 +232,18 @@ class ReleaseDownloader(private val http: ReleaseHttp, private val dir: File) {
             if (!part.renameTo(target)) throw InstallFailure(InstallCodes.PHONE_SPACE)
             ok = true
             return target
-        } catch (e: IOException) {
-            if (e.message?.contains("ENOSPC") == true) throw InstallFailure(InstallCodes.PHONE_SPACE, cause = e)
-            throw if (cancel.cancelled) InstallFailure(InstallCodes.CANCELLED, cause = e) else InstallFailure(InstallCodes.NETWORK, cause = e)
+        } catch (e: Throwable) {
+            val f = when {
+                e is InstallFailure -> e
+                e is IOException && e.message?.contains("ENOSPC") == true -> InstallFailure(InstallCodes.PHONE_SPACE, cause = e)
+                e is IOException && cancel.cancelled -> InstallFailure(InstallCodes.CANCELLED, cause = e)
+                e is IOException -> InstallFailure(InstallCodes.NETWORK, cause = e)
+                else -> throw e
+            }
+            keepPart = resume && (f.code == InstallCodes.NETWORK || f.code == InstallCodes.CANCELLED) && part.length() > 0
+            throw f
         } finally {
-            part.delete()
+            if (!keepPart) part.delete()
             if (!ok) target.delete()
         }
     }
@@ -241,15 +277,21 @@ class OkReleaseHttp(
         return text
     }
 
-    override fun stream(url: String, cancel: CancelToken, read: (InputStream, Long) -> Unit) {
+    override fun stream(url: String, cancel: CancelToken, read: (InputStream, Long) -> Unit) =
+        streamFrom(url, 0L, cancel) { input, length, _ -> read(input, length) }
+
+    override fun streamFrom(url: String, offset: Long, cancel: CancelToken, read: (InputStream, Long, Long) -> Unit) {
         var current = url
+        var from = offset
         for (hop in 0..MAX_REDIRECTS) {
             if (!allowed(current)) throw InstallFailure(InstallCodes.RELEASE)
             cancel.check()
-            val req = Request.Builder().url(current)
+            val rb = Request.Builder().url(current)
                 .header("User-Agent", "OMP")
                 .header("Accept", if (current.startsWith("https://api.github.com/")) "application/vnd.github+json" else "*/*")
-                .build()
+            // no transparent gzip on a ranged request: offsets must be in file bytes
+            if (from > 0) rb.header("Range", "bytes=$from-").header("Accept-Encoding", "identity")
+            val req = rb.build()
             val call: Call = client.newCall(req)
             val hook = cancel.onCancel { call.cancel() }
             try {
@@ -260,9 +302,16 @@ class OkReleaseHttp(
                         current = next
                         return@use
                     }
+                    // the kept part is longer than the file (it changed?): download it whole
+                    if (resp.code == 416 && from > 0) {
+                        from = 0L
+                        return@use
+                    }
                     if (!resp.isSuccessful) throw InstallFailure(InstallCodes.NETWORK, "HTTP ${resp.code}")
                     val body = resp.body ?: throw InstallFailure(InstallCodes.NETWORK)
-                    body.byteStream().use { read(it, body.contentLength()) }
+                    val start = if (resp.code == 206) rangeStart(resp.header("Content-Range")) else 0L
+                    if (resp.code == 206 && start != from) throw InstallFailure(InstallCodes.NETWORK)
+                    body.byteStream().use { read(it, body.contentLength(), start) }
                     return
                 }
             } catch (e: IOException) {
@@ -276,6 +325,11 @@ class OkReleaseHttp(
 
     companion object {
         private const val MAX_REDIRECTS = 5
+        private val CONTENT_RANGE = Regex("^bytes (\\d+)-(\\d+)/(\\d+|\\*)$")
+
+        /** Start offset of «bytes 100-199/200»; -1 when malformed. */
+        fun rangeStart(header: String?): Long =
+            CONTENT_RANGE.matchEntire(header?.trim() ?: "")?.groupValues?.get(1)?.toLongOrNull() ?: -1L
     }
 }
 

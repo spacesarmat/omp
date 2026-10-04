@@ -44,6 +44,12 @@ export interface LocalServerInfo {
   downloadBytes?: number;
   /** The pinned TorrServer release. */
   pinVersion?: string;
+  /** A download is running (started by an earlier screen or page load). */
+  downloading?: boolean;
+  /** Its last percent. */
+  downloadPercent?: number;
+  /** The phone is on mobile data (not Wi-Fi): ask before the download. */
+  mobileData?: boolean;
   version?: string;
   /** Wi-Fi IPv4 of the phone. */
   ip?: string;
@@ -113,8 +119,9 @@ export interface OmpNativeApi {
   startLocalServer(): Promise<LocalServerInfo>;
   stopLocalServer(): Promise<void>;
   /**
-   * Downloads the pinned TorrServer binary from its GitHub release (sha256 and size checked). Rejects with Russian
-   * text that says what to do next; `code` 'cancelled' after cancelLocalServerDownload.
+   * Downloads the pinned TorrServer binary from its GitHub release (sha256 and size checked; a broken download
+   * resumes). A call while a download runs joins it. Rejects with Russian text that says what to do next; `code`
+   * 'cancelled' after cancelLocalServerDownload.
    */
   downloadLocalServer(onProgress: (p: LocalDownloadProgress) => void): Promise<LocalServerInfo>;
   cancelLocalServerDownload(): Promise<void>;
@@ -250,6 +257,9 @@ function serverInfo(r: Partial<LocalServerInfo> | null | undefined): LocalServer
   if (typeof r?.downloadBytes === 'number' && r.downloadBytes > 0) info.downloadBytes = r.downloadBytes;
   const pin = text(r?.pinVersion);
   if (pin) info.pinVersion = pin;
+  if (r?.downloading === true) info.downloading = true;
+  if (typeof r?.downloadPercent === 'number' && r.downloadPercent >= 0 && r.downloadPercent <= 100) info.downloadPercent = Math.round(r.downloadPercent);
+  if (r?.mobileData === true) info.mobileData = true;
   return info;
 }
 

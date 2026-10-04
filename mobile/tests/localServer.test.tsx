@@ -246,6 +246,23 @@ describe('local server store', () => {
     expect(logEntries().some((e) => e.a === 'server' && e.l === 'warn' && e.x === 'Не удалось скачать TorrServer')).toBe(true);
   });
 
+  it('a start that cannot run on this device is logged as an error', async () => {
+    const msg = 'Свой сервер не запустился на этом устройстве — используйте TorrServer на компьютере или NAS';
+    const f = fakeNative({ startError: msg });
+    setLocalServerDeps({ native: f.native as any, echo: async () => 'x' });
+    await expect(setupLocal(() => {})).rejects.toThrow('используйте TorrServer на компьютере или NAS');
+    expect(logEntries().some((e) => e.a === 'server' && e.l === 'error' && e.x === 'Свой сервер не запустился на этом устройстве')).toBe(true);
+    await startLocal();
+    expect(localServer.value.error).toBe(msg);
+  });
+
+  it('setupLocal starts nothing when the screen has gone after the download', async () => {
+    const f = withBinary('missing');
+    setLocalServerDeps({ native: f.native, echo: async () => 'x' });
+    await expect(setupLocal(() => {}, () => {}, true, () => false)).rejects.toThrow('setup-abandoned');
+    expect(f.calls).toEqual(['info', 'download']);
+  });
+
   it('autostart never downloads: a missing binary is not started, an outdated one is', async () => {
     setAutostart(true);
     const f = withBinary('missing');

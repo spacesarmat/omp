@@ -31,6 +31,8 @@ export function LocalServer() {
   // the user tapped «Скачать» (or «Запустить текущую версию» for an outdated binary)
   const [approved, setApproved] = useState<'download' | 'skip' | null>(null);
   const [progress, setProgress] = useState<LocalDownloadProgress | null>(null);
+  // on mobile data the download is confirmed first
+  const [askMobile, setAskMobile] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -43,11 +45,14 @@ export function LocalServer() {
       const info = await getLocalServerInfo();
       if (!alive) return;
       setChecking(false);
-      if (needsDownload(info) && approved === null) {
+      // a download already running (the screen was left and opened again): show it, it is joined below
+      if (info.downloading) setProgress({ phase: 'download', percent: info.downloadPercent ?? 0 });
+      else if (needsDownload(info) && approved === null) {
         setOffer(info);
         return;
       }
       setOffer(null);
+      setAskMobile(false);
       await setupLocal(
         (i, v) => {
           if (!alive) return;
@@ -58,6 +63,7 @@ export function LocalServer() {
         },
         (p) => alive && setProgress(p),
         approved !== 'skip',
+        () => alive,
       );
     })().catch((e) => {
       if (!alive) return;
@@ -80,6 +86,27 @@ export function LocalServer() {
     const update = offer.binary === 'outdated';
     const size = downloadSize(offer);
     const pinned = offer.pinVersion || TORRSERVER_VERSION;
+    const startDownload = () => {
+      if (offer.mobileData && !askMobile) setAskMobile(true);
+      else setApproved('download');
+    };
+    if (askMobile) {
+      return (
+        <div class="m-screen" data-route="localServer">
+          <h1 class="m-title">TorrServer на телефоне</h1>
+          <div class="m-local-card" data-local="mobile">
+            <div class="m-local-title">{'Скачать ' + (size ? size.replace('~', '') : 'TorrServer') + ' через мобильный интернет?'}</div>
+            <div class="m-local-text">Телефон сейчас не в сети Wi‑Fi. Загрузку можно продолжить позже по Wi‑Fi — скачанное не пропадёт.</div>
+            <button type="button" class="m-btn m-btn-primary" onClick={startDownload}>
+              Скачать
+            </button>
+            <button type="button" class="m-btn m-btn-secondary" onClick={() => setAskMobile(false)}>
+              Отмена
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div class="m-screen" data-route="localServer">
         <h1 class="m-title">TorrServer на телефоне</h1>
@@ -89,7 +116,7 @@ export function LocalServer() {
               ? 'Вышла новая версия встроенного TorrServer — ' + pinned + '. Её нужно скачать с GitHub, лучше по Wi‑Fi.'
               : 'TorrServer не входит в установочный файл OMP. Его нужно один раз скачать с GitHub (версия ' + pinned + '), лучше по Wi‑Fi.'}
           </div>
-          <button type="button" class="m-btn m-btn-primary" onClick={() => setApproved('download')}>
+          <button type="button" class="m-btn m-btn-primary" onClick={startDownload}>
             {(update ? 'Обновить TorrServer' : 'Скачать TorrServer') + (size ? ' (' + size + ')' : '')}
           </button>
           {update && (
