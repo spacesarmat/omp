@@ -42,7 +42,7 @@ class ControlRouterTest {
             lastTransfer = t
             return outcome
         }
-        override fun cloudflarePoll(token: String, phone: String): JSONObject = relay.poll(token, phone)
+        override fun cloudflarePoll(token: String, phone: String, waitMs: Long): JSONObject = relay.poll(token, phone, waitMs)
         override fun cloudflareAnswer(token: String, body: JSONObject): CloudflareRelay.Reply = relay.answer(token, body)
     }
     private val stored = ArrayList<String>()
@@ -402,5 +402,26 @@ class ControlRouterTest {
         assertEquals("{\"ok\":true}", ok.json)
         assertEquals(CloudflareRelay.Outcome.SOLVED, asked.get())
         assertEquals(listOf("https://rustorka.example/:1:Mozilla/5.0 (Linux; Android 14; Pixel 8)"), stored)
+    }
+
+    @Test
+    fun thePollIsPrecheckedAndATvClosedRequestIsGone() {
+        assertEquals(401, router.precheck(ControlHead("POST", CloudflareProtocol.POLL, null, "application/json", 2))!!.status)
+        val t = token()
+        assertEquals(413, router.precheck(ControlHead("POST", CloudflareProtocol.POLL, t, "application/json", 65))!!.status)
+        assertNull(router.precheck(ControlHead("POST", CloudflareProtocol.POLL, t, "application/json", 14)))
+        assertEquals(400, req("POST", CloudflareProtocol.POLL, "nope", t).status)
+        // the phone is live
+        assertEquals(200, req("POST", CloudflareProtocol.POLL, "{}", t).status)
+        val asked = java.util.concurrent.Executors.newSingleThreadExecutor().submit<CloudflareRelay.Outcome> {
+            relay.ask("rustorka", okhttp3.HttpUrl.Builder().scheme("https").host("rustorka.example").build())
+        }
+        // a long poll picks it up
+        val request = JSONObject(req("POST", CloudflareProtocol.POLL, "{\"wait\":1500}", t).json).getJSONObject("request")
+        relay.cancel()
+        assertEquals(CloudflareRelay.Outcome.CANCELLED, asked.get())
+        val r = req("POST", CloudflareProtocol.ANSWER, solvedBody(request.getString("id")), t)
+        assertEquals(410, r.status)
+        assertEquals("{\"error\":\"done\"}", r.json)
     }
 }

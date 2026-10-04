@@ -102,6 +102,22 @@ describe('Android TV «Источники поиска»: «Сайты за Clou
     expect(row('rustorka').textContent).toContain('проверка пройдена · действует до 20:30');
   });
 
+  it('a check closed without passing lets the next OK switch the site off', async () => {
+    setCloudflareBypass('rustorka', true);
+    setHealth('rustorka', { state: 'error', at: NOW, message: CF_INTERACTIVE });
+    setCloudflareChecker((s) => {
+      checks.push(s);
+      return Promise.resolve('cancelled');
+    });
+    await mount();
+    await click(row('rustorka').querySelector('.src-row')!);
+    expect(checks.length).toBe(1);
+    expect(row('rustorka').textContent).not.toContain('нужна проверка');
+    await click(row('rustorka').querySelector('.src-row')!);
+    expect(checks.length).toBe(1);
+    expect(isCloudflareBypassOn(site('rustorka', 'rustorka'))).toBe(false);
+  });
+
   it('turning the switch on shows the warning first; off at once', async () => {
     await mount();
     expect(row('kinozal').textContent).toContain('выключен');

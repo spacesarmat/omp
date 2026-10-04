@@ -38,6 +38,7 @@ class WebViewCloudflareBrowser(
     private val visible: Boolean = false,
 ) : CloudflareBrowser {
     private var web: WebView? = null
+    private var rootHost: String? = null
 
     /** The page, for the visible check to attach to its dialog. */
     val view: WebView? get() = web
@@ -53,6 +54,7 @@ class WebViewCloudflareBrowser(
         CookieManager.getInstance().setAcceptCookie(true)
         val w = WebView(if (visible) context else context.applicationContext)
         web = w
+        rootHost = Uri.parse(url).host?.lowercase()
         if (visible) {
             w.isFocusable = true
             w.isFocusableInTouchMode = true
@@ -71,7 +73,9 @@ class WebViewCloudflareBrowser(
         w.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val scheme = request.url.scheme?.lowercase()
-                return scheme != "http" && scheme != "https"
+                if (scheme != "http" && scheme != "https") return true
+                // the visible page stays on the site (and Cloudflare's challenge pages): no browsing elsewhere in OMP
+                return visible && request.isForMainFrame && !VisibleNavigation.allowed(rootHost, request.url.host)
             }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
@@ -112,12 +116,14 @@ class WebViewCloudflareBrowser(
             val uri = Uri.parse(u)
             val host = uri.host?.lowercase() ?: continue
             val scheme = uri.scheme?.lowercase() ?: continue
-            // only this site: Cloudflare's own frames (challenges.cloudflare.com) are not the site's state
-            if (siteOf(host) != site || (scheme != "http" && scheme != "https")) continue
+            if (scheme != "http" && scheme != "https") continue
+            // hidden check: only this site (Cloudflare's own frames are not its state); the visible page: everything it saw
+            val hostSite = siteOf(host)
+            if (!visible && hostSite != site) continue
             origins.add(scheme + "://" + host + (if (uri.port > 0) ":" + uri.port else ""))
             val paths = WebCookieCleanup.pathPrefixes(uri.path)
             for ((name, _) in CloudflareSolver.parseCookieHeader(cm.getCookie(u))) {
-                for (c in WebCookieCleanup.expiring(name, paths, host, site, scheme == "https")) cm.setCookie(u, c)
+                for (c in WebCookieCleanup.expiring(name, paths, host, hostSite, scheme == "https")) cm.setCookie(u, c)
             }
         }
         cm.flush()

@@ -16,12 +16,13 @@ import {
   SENT_TO_TV,
   setCloudflareChecker,
   SHEET_NOTE_TV,
+  GATE_WAIT,
   SHEET_TITLE,
   WATCH_NOTIFY,
   type CloudflareVisibleRequest,
 } from '../../src/sources/cloudflareCheck';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
-import { isCloudflareBypassOn, isSourceOn, reloadSourcePrefs, resetHealth } from '../../src/sources/store';
+import { isCloudflareBypassOn, isSourceOn, reloadSourcePrefs, resetHealth, setCloudflareBypass } from '../../src/sources/store';
 import { clearLog, logEntries } from '../../src/lib/log';
 import type { Source, SourceContext } from '../../src/sources/types';
 
@@ -50,6 +51,11 @@ function fakeNative() {
     answer: { result: 'solved', sent: true } as { result?: string; sent?: boolean },
     pending: null as TvCloudflareRequest | null,
     listeners: [] as ((r: TvCloudflareRequest) => void)[],
+    declined: [] as string[],
+    cloudflareDecline(id: string) {
+      f.declined.push(id);
+      return Promise.resolve();
+    },
     cloudflareVisible(req: CloudflareVisibleRequest) {
       f.sheets.push(req);
       return Promise.resolve(f.answer);
@@ -74,11 +80,12 @@ function fakeNative() {
 let toasts: string[];
 let visible: (() => void)[];
 
-function deps(n: ReturnType<typeof fakeNative>, tv: () => SavedTv | null): PhoneCloudflareDeps {
+function deps(n: ReturnType<typeof fakeNative>, tv: () => SavedTv | null, bypassOn: () => boolean = () => true): PhoneCloudflareDeps {
   return {
     native: n,
     toast: (t) => toasts.push(t),
     tv,
+    bypassOn,
     onVisible: (cb) => {
       visible.push(cb);
       return () => {
@@ -113,14 +120,31 @@ describe('phone: the visible check', () => {
     setCloudflareChecker(phoneChecker(n));
     expect(await runCloudflareCheck('rustorka', 'https://rustorka.example/tracker.php?nm=x')).toBe('solved');
     expect(n.sheets).toEqual([
-      { url: 'https://rustorka.example/', site: 'rustorka', mode: 'phone', title: SHEET_TITLE, text: 'Сайт rustorka просит пройти проверку Cloudflare.', cancel: 'Отмена' },
+      { url: 'https://rustorka.example/', site: 'rustorka', mode: 'phone', title: SHEET_TITLE, text: 'Сайт rustorka просит пройти проверку Cloudflare.', cancel: 'Отмена', gateWait: GATE_WAIT },
     ]);
   });
 
-  it('the TV asked: the sheet names the TV, the answer goes natively, the phone says whether it got there', async () => {
+  it('a TV request for a site that is not known here (or whose switch is off) is declined without a sheet', async () => {
     const n = fakeNative();
     const d = deps(n, () => ATV);
+    // the switch is off
     await handleTvRequest(request, d);
+    setCloudflareBypass('rustorka', true);
+    // another host, another port, another scheme, not a root
+    await handleTvRequest({ id: 'x1', site: 'rustorka', url: 'https://evil.example/' }, d);
+    await handleTvRequest({ id: 'x2', site: 'rustorka', url: 'https://rustorka.example:8443/' }, d);
+    await handleTvRequest({ id: 'x3', site: 'rustorka', url: 'http://rustorka.example/' }, d);
+    expect(n.sheets).toEqual([]);
+    expect(n.declined).toEqual(['c7', 'x1', 'x2', 'x3']);
+    expect(logEntries().map((e) => e.x).join('\n')).not.toContain('evil');
+  });
+
+  it('the TV asked: the sheet names the TV, the answer goes natively, the phone says whether it got there', async () => {
+    setCloudflareBypass('rustorka', true);
+    const n = fakeNative();
+    const d = deps(n, () => ATV);
+    // the TV's own site name is not trusted: the phone's name for the site is shown
+    await handleTvRequest({ ...request, site: 'Войдите в банк' }, d);
     expect(n.sheets[0].text).toBe('Сайт rustorka просит пройти проверку Cloudflare. Это нужно для телевизора «Гостиная».');
     expect(n.sheets[0].note).toBe(SHEET_NOTE_TV);
     expect(n.sheets[0].forTv).toBe('c7');
@@ -136,6 +160,9 @@ describe('phone: the visible check', () => {
     expect(toasts[2]).toBe(CHECK_BUSY);
     n.answer = { result: 'cancelled' };
     await handleTvRequest({ ...request, id: 'c10' }, d);
+    // the TV passed it itself meanwhile
+    n.answer = { result: 'done' };
+    await handleTvRequest({ ...request, id: 'c13' }, d);
     expect(toasts.length).toBe(3);
     const lines = logEntries().map((e) => e.x).join('\n');
     expect(lines).toContain('Cloudflare: проверка пройдена · rustorka');
@@ -151,12 +178,18 @@ describe('phone: the visible check', () => {
     const tv = signal<SavedTv | null>(null);
     const n = fakeNative();
     n.pending = request;
-    const off = installPhoneCloudflare(deps(n, () => tv.value));
+    setCloudflareBypass('rustorka', true);
+    const off = installPhoneCloudflare(deps(n, () => tv.value, () => isCloudflareBypassOn(site)));
     await tick();
     expect(n.watch).toEqual([null]);
     expect(n.sheets.length).toBe(1);
     tv.value = ATV;
     expect(n.watch[1]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY });
+    // no site with the switch on: the phone stops listening to the TV
+    setCloudflareBypass('rustorka', false);
+    expect(n.watch[2]).toBeNull();
+    setCloudflareBypass('rustorka', true);
+    expect(n.watch[3]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY });
     // a live event
     n.listeners[0]({ ...request, id: 'c11' });
     await tick();

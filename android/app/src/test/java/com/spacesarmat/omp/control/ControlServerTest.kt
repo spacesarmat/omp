@@ -28,7 +28,7 @@ class ControlServerTest {
         override fun text(data: JSONObject) {}
         override fun volume(up: Boolean) {}
         override fun sources(t: SourcesTransfer): SourcesOutcome = SourcesOutcome.Applied(null)
-        override fun cloudflarePoll(token: String, phone: String): JSONObject = CloudflareProtocol.requestJson(null)
+        override fun cloudflarePoll(token: String, phone: String, waitMs: Long): JSONObject = CloudflareProtocol.requestJson(null)
         override fun cloudflareAnswer(token: String, body: JSONObject): CloudflareRelay.Reply = CloudflareRelay.Reply.UNKNOWN
     }
     private val router = ControlRouter(pairing, actions)

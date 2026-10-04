@@ -69,6 +69,8 @@ class MainActivity : BridgeActivity() {
     override fun onResume() {
         super.onResume()
         AppForeground.main = true
+        // «Пройти на телефоне»: a watch asleep after its background grace polls the TV again
+        OmpNativePlugin.wakeCloudflare()
     }
 
     override fun onPause() {

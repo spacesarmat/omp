@@ -8,6 +8,9 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -53,9 +56,13 @@ import com.spacesarmat.omp.monitor.MonitorScheduler
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayRequest
 import com.spacesarmat.omp.player.PlayerActivity
+import com.spacesarmat.omp.sources.CheckTarget
 import com.spacesarmat.omp.sources.CheckTexts
 import com.spacesarmat.omp.sources.CloudflareCheckDialog
 import com.spacesarmat.omp.sources.CloudflareSolver
+import com.spacesarmat.omp.sources.MainScheduler
+import com.spacesarmat.omp.sources.VisibleCheck
+import com.spacesarmat.omp.sources.WebViewCloudflareBrowser
 import com.spacesarmat.omp.sources.HttpSpec
 import com.spacesarmat.omp.sources.SiteHttp
 import com.spacesarmat.omp.sources.SiteHttpException
@@ -137,6 +144,7 @@ class OmpNativePlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        cfCheck?.let { c -> activity?.runOnUiThread { c.cancel() } ?: c.cancel() }
         if (instance === this) instance = null
         NativePlayerBridge.emitter = null
         LocalTorrServer.removeListener(serverState)
@@ -1179,15 +1187,18 @@ class OmpNativePlugin : Plugin() {
     // ---- Cloudflare: the visible check, «Пройти на телефоне» ----
 
     private val cfOpen = AtomicBoolean(false)
+    // the open visible check (cancelled when the plugin goes away, so the gate and the call are never held)
+    @Volatile
+    private var cfCheck: VisibleCheck? = null
 
     private fun cfText(call: PluginCall, key: String): String? =
         call.getString(key)?.filterNot { it.isISOControl() }?.take(400)?.ifEmpty { null }
 
     /**
-     * The visible check (CloudflareCheckDialog): { url, site, mode: phone|tv, title, text, note?, cancel, phone?, remote?,
-     * hint?, noPhone?, waiting?, errors?: { OUTCOME: text }, forTv?: request id } → { result: solved|cancelled|busy|failed,
-     * sent?, via? }. With forTv the phone passes the TV's waiting request (its own address and site, never the page's) and
-     * the cookies go only to that TV. Cookies never reach the page.
+     * The visible check ([VisibleCheck] + [CloudflareCheckDialog]): { url, site, mode: phone|tv, title, text, note?,
+     * cancel, phone?, remote?, hint?, noPhone?, phoneClosed?, waiting?, gateWait?, errors?: { OUTCOME: text }, forTv?:
+     * request id } → { result: solved|cancelled|busy|failed|done, sent?, via? }. With forTv the phone passes the TV's
+     * waiting request (its own address, never the page's) and the cookies go only to that TV. Cookies never reach the page.
      */
     @PluginMethod
     fun cloudflareVisible(call: PluginCall) {
@@ -1198,7 +1209,7 @@ class OmpNativePlugin : Plugin() {
         val req = if (forTv != null) watch?.pending()?.takeIf { it.id == forTv } ?: return once.reject(CF_GONE) else null
         val url = req?.url ?: call.getString("url")
         val root = (url?.toHttpUrlOrNull() ?: return once.reject(SiteHttp.BAD_URL)).let { CloudflareSolver.siteRoot(it) }
-        val site = req?.site ?: CloudflareProtocol.cleanSite(call.getString("site")) ?: root.host
+        val site = CloudflareProtocol.cleanSite(call.getString("site")) ?: req?.site ?: root.host
         val tvMode = call.getString("mode") == "tv" && TvMode.isTv(context)
         val title = cfText(call, "title") ?: return once.reject(SiteHttp.BAD_REQUEST)
         val text = cfText(call, "text") ?: return once.reject(SiteHttp.BAD_REQUEST)
@@ -1209,27 +1220,58 @@ class OmpNativePlugin : Plugin() {
         }
         val texts = CheckTexts(
             title, text, cfText(call, "note"), cancel, cfText(call, "phone"), cfText(call, "remote"), cfText(call, "hint"),
-            cfText(call, "noPhone"), cfText(call, "waiting"), errors,
+            cfText(call, "noPhone"), cfText(call, "phoneClosed"), cfText(call, "waiting"), cfText(call, "gateWait"), errors,
         )
         if (!cfOpen.compareAndSet(false, true)) return once.resolve(JSObject().put("result", "busy"))
+        val relay = if (tvMode) remote?.cloudflare else null
+        val target = if (watch != null && req != null) {
+            CheckTarget.Tv { pairs, ua, until ->
+                if (pairs == null) {
+                    watch.answer(req.id, CloudflareProtocol.endedJson(req.id, cancelled = true))
+                } else {
+                    val body = CloudflareProtocol.solvedJson(req.id, root.host, pairs, ua, until)
+                        ?: CloudflareProtocol.endedJson(req.id, cancelled = false)
+                    watch.answer(req.id, body)
+                }
+            }
+        } else {
+            CheckTarget.Local { pairs, until -> sources.importClearance(root, pairs, null, until) }
+        }
         act.runOnUiThread {
             try {
-                CloudflareCheckDialog(
-                    act, root, site, tvMode, texts, sources, io,
-                    if (tvMode) remote?.cloudflare else null,
-                    if (watch != null && req != null) watch to req.id else null,
-                ) { r ->
-                    cfOpen.set(false)
-                    val o = JSObject().put("result", r.result)
-                    r.sent?.let { o.put("sent", it) }
-                    r.via?.let { o.put("via", it) }
-                    once.resolve(o)
-                }.show()
+                val dialog = CloudflareCheckDialog(act, tvMode, texts, phoneButton = relay != null)
+                val check = VisibleCheck(
+                    root, site, texts, { WebViewCloudflareBrowser(act, visible = true) }, MainScheduler(), sources::userAgent,
+                    System::currentTimeMillis, { io.execute(it) }, target, relay,
+                    { r ->
+                        cfCheck = null
+                        cfOpen.set(false)
+                        val o = JSObject().put("result", r.result)
+                        r.sent?.let { o.put("sent", it) }
+                        r.via?.let { o.put("via", it) }
+                        once.resolve(o)
+                    },
+                )
+                cfCheck = check
+                dialog.show(check)
             } catch (e: Exception) {
+                val c = cfCheck
+                cfCheck = null
+                c?.cancel()
                 cfOpen.set(false)
                 once.resolve(JSObject().put("result", "failed"))
             }
         }
+    }
+
+    /** Phone: the page refused the TV's request (not a site it knows with the switch on): the TV hears «failed». */
+    @PluginMethod
+    fun cloudflareDecline(call: PluginCall) {
+        val id = call.getString("id")
+        if (TvMode.isTv(context) || !CloudflareProtocol.validId(id)) return call.resolve()
+        val w = cfWatch(context)
+        io.execute { w.answer(id!!, CloudflareProtocol.endedJson(id, cancelled = false)) }
+        call.resolve()
     }
 
     /** { url } → { until: epoch ms | null }: when the stored Cloudflare clearance of the site ends. */
@@ -1446,19 +1488,45 @@ class OmpNativePlugin : Plugin() {
             val w = CloudflareWatch(
                 HttpWatchTransport(),
                 { AppForeground.main },
-                { r, fg -> if (!(fg && instance?.emitCloudflare(r) == true)) notifyCloudflare(app, r.site) },
+                { onLan(app) },
+                { r, fg -> (fg && instance?.emitCloudflare(r) == true) || notifyCloudflare(app, r.site) },
             )
             watch = w
+            // a sleeping watch looks again when the phone joins (or leaves) a network
+            try {
+                app.getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) = w.wake()
+                    override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = w.wake()
+                    override fun onLost(network: Network) = w.wake()
+                })
+            } catch (e: RuntimeException) {
+                // without the callback the watch still looks again when the app comes back
+            }
             return w
         }
 
-        /** «Телевизор просит пройти проверку на …»; a tap opens OMP, which asks cloudflarePending. */
-        private fun notifyCloudflare(ctx: Context, site: String) {
-            if (!MonitorNotifier.canNotify(ctx)) return
-            val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        /** The phone is on Wi-Fi or Ethernet (the TV is on the home network; never on mobile data). */
+        private fun onLan(ctx: Context): Boolean = try {
+            val cm = ctx.getSystemService(ConnectivityManager::class.java)
+            val caps = cm?.getNetworkCapabilities(cm.activeNetwork)
+            caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
+        } catch (e: RuntimeException) {
+            false
+        }
+
+        /** MainActivity.onResume: the watch polls again (its background grace may have ended). */
+        fun wakeCloudflare() {
+            watch?.wake()
+        }
+
+        /** «Телевизор просит пройти проверку на …»; a tap opens OMP, which asks cloudflarePending. false = not shown. */
+        private fun notifyCloudflare(ctx: Context, site: String): Boolean {
+            if (!MonitorNotifier.canNotify(ctx)) return false
+            val nm = ctx.getSystemService(NotificationManager::class.java) ?: return false
             if (nm.getNotificationChannel(CF_CHANNEL) == null) {
                 nm.createNotificationChannel(NotificationChannel(CF_CHANNEL, "Запросы телевизора", NotificationManager.IMPORTANCE_HIGH))
             }
+            if (nm.getNotificationChannel(CF_CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE) return false
             val open = PendingIntent.getActivity(
                 ctx, CF_NOTIFICATION,
                 Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -1473,10 +1541,11 @@ class OmpNativePlugin : Plugin() {
                 .setAutoCancel(true)
                 .setTimeoutAfter(CloudflareWatch.REQUEST_TTL_MS)
                 .build()
-            try {
+            return try {
                 NotificationManagerCompat.from(ctx).notify(CF_NOTIFICATION, n)
+                true
             } catch (e: SecurityException) {
-                // notifications not permitted
+                false
             }
         }
         private const val MONITOR_FAILED = "Не удалось настроить фоновую проверку"

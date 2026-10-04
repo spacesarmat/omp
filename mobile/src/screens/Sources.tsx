@@ -47,6 +47,7 @@ export function sentText(r: RutrackerResult | undefined): string {
 
 export const LOGIN_NOT_SENT = 'Вход на rutracker не передан: логин или пароль слишком длинный или с недопустимыми символами';
 export const INDEXERS_NOT_SENT = 'Подключения к Jackett/Prowlarr не переданы — обновите OMP на телевизоре';
+export const CLOUDFLARE_NOT_SENT = 'Настройки обхода Cloudflare и FlareSolverr не переданы — обновите OMP на телевизоре';
 
 /** What the phone adds when the TV saved fewer connections than were sent ('' when all or none were sent). */
 export function indexersText(sent: number, saved: number | undefined): string {
@@ -111,6 +112,7 @@ function SendToTv({ hasLogin, indexers, ctx }: { hasLogin: boolean; indexers: In
     const list = conns.length ? transferIndexers(conns, ctx().secrets, withKeys) : Promise.resolve([] as TransferIndexer[]);
     let loginDropped = false;
     let indexersDropped = false;
+    let cloudflareDropped = false;
     let sent = 0;
     Promise.all([login, list])
       .then(([l, idx]) => {
@@ -123,6 +125,7 @@ function SendToTv({ hasLogin, indexers, ctx }: { hasLogin: boolean; indexers: In
           // an older OMP on the TV refuses the v0.15 parts (connections, FlareSolverr, Cloudflare switches): send the rest
           if (!extras || !(e instanceof Error) || e.message !== SOURCES_REJECTED) throw e;
           if (sent) indexersDropped = true;
+          if (p.payload.flaresolverr || p.payload.cloudflare) cloudflareDropped = true;
           sent = 0;
           return sendSourcesToTv(withoutNewParts(p.payload));
         });
@@ -138,7 +141,12 @@ function SendToTv({ hasLogin, indexers, ctx }: { hasLogin: boolean; indexers: In
           );
           setBusy(false);
           setTick((n) => n + 1);
-          const notes = [loginDropped ? LOGIN_NOT_SENT : '', indexersDropped ? INDEXERS_NOT_SENT : '', partial].filter((x) => x);
+          const notes = [
+            loginDropped ? LOGIN_NOT_SENT : '',
+            indexersDropped ? INDEXERS_NOT_SENT : '',
+            cloudflareDropped ? CLOUDFLARE_NOT_SENT : '',
+            partial,
+          ].filter((x) => x);
           const head = notes.length && !r.rutracker ? 'Источники переданы.' : sentText(r.rutracker);
           showToast(notes.length ? head + ' ' + notes.join('. ') : head, notes.length ? 6000 : undefined);
         },

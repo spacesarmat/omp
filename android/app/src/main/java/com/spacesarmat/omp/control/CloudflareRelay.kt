@@ -42,6 +42,8 @@ object CloudflareProtocol {
         }
         class Cancelled(id: String) : Answer(id)
         class Failed(id: String) : Answer(id)
+        /** The phone cannot show it (OMP in the background without notifications): the TV says «open OMP». */
+        class Unavailable(id: String) : Answer(id)
     }
 
     fun validId(id: String?): Boolean = id != null && ID.matches(id)
@@ -83,9 +85,13 @@ object CloudflareProtocol {
         val id = body.opt("id") as? String ?: return null
         if (!validId(id)) return null
         return when (body.opt("result")) {
-            "cancelled", "failed" -> {
+            "cancelled", "failed", "unavailable" -> {
                 if (body.length() != 2) return null
-                if (body.opt("result") == "cancelled") Answer.Cancelled(id) else Answer.Failed(id)
+                when (body.opt("result")) {
+                    "cancelled" -> Answer.Cancelled(id)
+                    "failed" -> Answer.Failed(id)
+                    else -> Answer.Unavailable(id)
+                }
             }
             "solved" -> solved(id, body)
             else -> null
@@ -135,14 +141,31 @@ object CloudflareProtocol {
 
     fun endedJson(id: String, cancelled: Boolean): String =
         JSONObject().put("id", id).put("result", if (cancelled) "cancelled" else "failed").toString()
+
+    fun unavailableJson(id: String): String = JSONObject().put("id", id).put("result", "unavailable").toString()
+
+    /** The wait a phone asks for in a poll body ({ wait: ms }), 0..[MAX_WAIT_MS]; anything else is 0. */
+    fun waitOf(body: JSONObject?): Long {
+        val w = body?.opt("wait") as? Number ?: return 0
+        val ms = w.toLong()
+        return if (ms <= 0) 0 else minOf(ms, MAX_WAIT_MS)
+    }
+
+    /** A long poll: the TV holds it this long at most (the phone reads for longer). */
+    const val MAX_WAIT_MS = 25_000L
+    /** The poll body is tiny: more is never read. */
+    const val MAX_POLL_BODY = 64
 }
 
 /**
  * The TV side of «Пройти на телефоне»: one request at a time, picked up by the first phone that polls it and answered
- * only by that phone. [ask] blocks until the phone answered, the TV cancelled, or a timeout: [pickupMs] for a phone to
- * pick it up, then [answerMs] for the answer. A phone counts as connected while it polled within [liveMs]. A solved
- * answer goes to [store] (cookies into the encrypted jar, the phone's User-Agent for that host until [until]); `until`
- * outside (now, now + [MAX_UNTIL_MS]] — another clock — becomes now + [DEFAULT_TTL_MS]. Thread-safe.
+ * only by that phone. A poll may wait ([CloudflareProtocol.waitOf], a long poll) until a request appears; at most
+ * [MAX_WAITERS] polls wait at once (the control server has few workers), others answer at once. [ask] blocks until the
+ * phone answered, the TV cancelled, or a timeout: [pickupMs] for a phone to pick it up, then [answerMs] for the answer.
+ * A phone counts as connected while it waits in a poll or polled within [liveMs]. A solved answer goes to [store]
+ * (cookies into the encrypted jar, the phone's User-Agent for that host until `until`); `until` outside
+ * (now, now + [MAX_UNTIL_MS]] — another clock — becomes now + [DEFAULT_TTL_MS]. A request the TV closed itself (passed
+ * by remote, «Отмена») answers the phone [Reply.DONE]. Thread-safe.
  */
 class CloudflareRelay(
     private val store: (root: HttpUrl, cookies: List<Pair<String, String>>, ua: String, until: Long) -> Unit,
@@ -150,11 +173,13 @@ class CloudflareRelay(
     private val pickupMs: Long = PICKUP_MS,
     private val answerMs: Long = ANSWER_MS,
     private val liveMs: Long = LIVE_MS,
+    /** At least one phone is paired (the TV then says «open OMP on the phone» instead of «pair a phone»). */
+    private val paired: () -> Boolean = { false },
 ) {
-    enum class Outcome { SOLVED, CANCELLED, FAILED, NO_PHONE, NOT_TAKEN, TIMEOUT, STORE_FAILED, BUSY }
+    enum class Outcome { SOLVED, CANCELLED, FAILED, UNAVAILABLE, NO_PHONE, NOT_TAKEN, TIMEOUT, STORE_FAILED, BUSY }
 
     /** What the router answers to a phone's answer. */
-    enum class Reply { OK, BAD_REQUEST, UNKNOWN, STORE_FAILED }
+    enum class Reply { OK, BAD_REQUEST, UNKNOWN, DONE, STORE_FAILED }
 
     private class Pending(val id: String, val site: String, val root: HttpUrl) {
         val taken = CountDownLatch(1)
@@ -165,24 +190,36 @@ class CloudflareRelay(
 
     private class Seen(val at: Long, val phone: String)
 
-    private val lock = Any()
+    private val lock = Object()
     private var pending: Pending? = null
     private val seen = HashMap<String, Seen>()
+    /** Tokens waiting in a poll now (phone name). */
+    private val waiting = HashMap<String, String>()
+    /** Requests the TV closed itself: id → the phone that took it. */
+    private val closed = LinkedHashMap<String, String?>()
     private val seq = AtomicLong(System.nanoTime() and 0xffffff)
 
-    /** The name of the phone that polled most recently within [liveMs], null when none did. */
-    fun phone(): String? = synchronized(lock) {
+    fun anyPaired(): Boolean = paired()
+
+    /** The name of the phone waiting in a poll, or the one that polled most recently within [liveMs]; null when none. */
+    fun phone(): String? = synchronized(lock) { livePhone() }
+
+    private fun livePhone(): String? {
+        waiting.values.firstOrNull()?.let { return it }
         val t = clock()
-        seen.values.filter { t - it.at <= liveMs }.maxByOrNull { it.at }?.phone
+        return seen.values.filter { t - it.at <= liveMs }.maxByOrNull { it.at }?.phone
     }
 
     /** Blocking (never on the main thread). [root]: the site root. */
     fun ask(site: String, root: HttpUrl): Outcome {
         val p = synchronized(lock) {
             if (pending != null) return Outcome.BUSY
-            val t = clock()
-            if (seen.values.none { t - it.at <= liveMs }) return Outcome.NO_PHONE
-            Pending("c" + seq.incrementAndGet(), CloudflareProtocol.cleanSite(site) ?: root.host, CloudflareSolver.siteRoot(root)).also { pending = it }
+            if (livePhone() == null) return Outcome.NO_PHONE
+            Pending("c" + seq.incrementAndGet(), CloudflareProtocol.cleanSite(site) ?: root.host, CloudflareSolver.siteRoot(root)).also {
+                pending = it
+                // a waiting long poll takes it at once
+                lock.notifyAll()
+            }
         }
         try {
             if (!p.taken.await(pickupMs, TimeUnit.MILLISECONDS)) return if (p.done.count == 0L) p.outcome else Outcome.NOT_TAKEN
@@ -193,21 +230,52 @@ class CloudflareRelay(
         }
     }
 
-    /** The TV closed its dialog: the waiting [ask] ends with CANCELLED; the phone's later answer is unknown. */
+    /** The TV closed its dialog (passed it by remote or «Отмена»): [ask] ends with CANCELLED; the phone hears DONE. */
     fun cancel() {
-        val p = synchronized(lock) { pending.also { pending = null } } ?: return
+        val p = synchronized(lock) {
+            val cur = pending ?: return
+            pending = null
+            closed[cur.id] = cur.by
+            while (closed.size > MAX_CLOSED) closed.remove(closed.keys.first())
+            cur
+        }
         end(p, Outcome.CANCELLED)
     }
 
-    /** A poll of a paired phone: remembers it and hands it the waiting request (the one it took, or a free one). */
-    fun poll(token: String, phone: String): JSONObject = synchronized(lock) {
+    /**
+     * A poll of a paired phone: remembers it and hands it the waiting request (the one it took, or a free one). With
+     * [waitMs] > 0 it blocks until a request appears or the time is up (a long poll; never on the main thread).
+     */
+    fun poll(token: String, phone: String, waitMs: Long = 0): JSONObject = synchronized(lock) {
         seen[token] = Seen(clock(), phone)
         if (seen.size > MAX_PHONES) seen.entries.minByOrNull { it.value.at }?.let { seen.remove(it.key) }
-        val p = pending
-        if (p == null || p.done.count == 0L || (p.by != null && p.by != token)) return CloudflareProtocol.requestJson(null)
+        var r = take(token)
+        if (r == null && waitMs > 0 && waiting.size < MAX_WAITERS && token !in waiting) {
+            waiting[token] = phone
+            try {
+                val end = System.nanoTime() + waitMs * 1_000_000
+                while (r == null) {
+                    val left = (end - System.nanoTime()) / 1_000_000
+                    if (left <= 0) break
+                    lock.wait(left)
+                    r = take(token)
+                }
+            } catch (e: InterruptedException) {
+                // the server is stopping
+            } finally {
+                waiting.remove(token)
+                seen[token] = Seen(clock(), phone)
+            }
+        }
+        CloudflareProtocol.requestJson(r)
+    }
+
+    private fun take(token: String): CloudflareProtocol.Request? {
+        val p = pending ?: return null
+        if (p.done.count == 0L || (p.by != null && p.by != token)) return null
         p.by = token
         p.taken.countDown()
-        CloudflareProtocol.requestJson(CloudflareProtocol.Request(p.id, p.site, p.root.toString()))
+        return CloudflareProtocol.Request(p.id, p.site, p.root.toString())
     }
 
     /** A phone's answer; only the phone that took the request, only for its host. */
@@ -215,12 +283,15 @@ class CloudflareRelay(
         val a = CloudflareProtocol.parseAnswer(body) ?: return Reply.BAD_REQUEST
         val p = synchronized(lock) {
             val cur = pending
-            if (cur == null || cur.id != a.id || cur.by != token || cur.done.count == 0L) return Reply.UNKNOWN
+            if (cur == null || cur.id != a.id || cur.by != token || cur.done.count == 0L) {
+                return if (closed.containsKey(a.id) && closed[a.id] == token) Reply.DONE else Reply.UNKNOWN
+            }
             cur
         }
         return when (a) {
             is CloudflareProtocol.Answer.Cancelled -> end(p, Outcome.CANCELLED).let { Reply.OK }
             is CloudflareProtocol.Answer.Failed -> end(p, Outcome.FAILED).let { Reply.OK }
+            is CloudflareProtocol.Answer.Unavailable -> end(p, Outcome.UNAVAILABLE).let { Reply.OK }
             is CloudflareProtocol.Answer.Solved -> {
                 if (a.host != p.root.host) return Reply.BAD_REQUEST
                 val t = clock()
@@ -247,13 +318,15 @@ class CloudflareRelay(
     }
 
     companion object {
-        /** A phone that polls every 3 s (app open) or 10 s (in the background) picks it up well within this. */
+        /** A phone with OMP open waits in a long poll and picks it up at once; one just back from the background, soon. */
         const val PICKUP_MS = 30_000L
         /** Time for the person to pass the check on the phone. */
         const val ANSWER_MS = 180_000L
         const val LIVE_MS = 30_000L
         const val DEFAULT_TTL_MS = CloudflareSolver.COPIED_TTL_MS
         const val MAX_UNTIL_MS = 24L * 60 * 60 * 1000
+        const val MAX_WAITERS = 2
         private const val MAX_PHONES = 16
+        private const val MAX_CLOSED = 8
     }
 }

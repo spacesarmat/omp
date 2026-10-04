@@ -130,7 +130,8 @@ class CloudflareRelayTest {
         val id = pollUntilRequest("t1").getString("id")
         relay.cancel()
         assertEquals(CloudflareRelay.Outcome.CANCELLED, c.get())
-        assertEquals(CloudflareRelay.Reply.UNKNOWN, relay.answer("t1", solved(id)))
+        // the TV closed it itself: the phone that took it hears DONE
+        assertEquals(CloudflareRelay.Reply.DONE, relay.answer("t1", solved(id)))
         // the phone could not pass it
         val failed = ask()
         val id2 = pollUntilRequest("t1").getString("id")
@@ -177,5 +178,49 @@ class CloudflareRelayTest {
             """{"request":{"id":"c1","site":"x","url":"ftp://h/"}}""",
             """{"request":null}""",
         )) assertNull(bad, CloudflareProtocol.parseRequest(JSONObject(bad)))
+    }
+
+    @Test
+    fun aLongPollTakesTheRequestAtOnceAndCountsAsConnected() {
+        val waiter = pool.submit<JSONObject> { relay.poll("t1", "Pixel 8", 1_400) }
+        // waiting in the poll: connected, though its last poll is long ago
+        repeat(200) { if (relay.phone() == null) Thread.sleep(5) }
+        now += CloudflareRelay.LIVE_MS * 10
+        assertEquals("Pixel 8", relay.phone())
+        val f = ask()
+        val req = waiter.get().getJSONObject("request")
+        assertEquals("https://rustorka.example/", req.getString("url"))
+        assertEquals(CloudflareRelay.Reply.OK, relay.answer("t1", solved(req.getString("id"), until = now + 600_000)))
+        assertEquals(CloudflareRelay.Outcome.SOLVED, f.get())
+        // nothing appears: the poll ends empty after its wait
+        val t0 = System.nanoTime()
+        assertTrue(relay.poll("t1", "Pixel 8", 200).isNull("request"))
+        assertTrue(System.nanoTime() - t0 >= 150_000_000)
+        assertEquals(0L, CloudflareProtocol.waitOf(JSONObject()))
+        assertEquals(CloudflareProtocol.MAX_WAIT_MS, CloudflareProtocol.waitOf(JSONObject().put("wait", 10_000_000)))
+        assertEquals(0L, CloudflareProtocol.waitOf(JSONObject().put("wait", "x")))
+    }
+
+    @Test
+    fun thePhoneCannotShowItOrTheTvPassedItItself() {
+        relay.poll("t1", "Pixel 8")
+        val f = ask()
+        val id = pollUntilRequest("t1").getString("id")
+        assertEquals(CloudflareRelay.Reply.OK, relay.answer("t1", JSONObject(CloudflareProtocol.unavailableJson(id))))
+        assertEquals(CloudflareRelay.Outcome.UNAVAILABLE, f.get())
+        // the TV passed it by remote while the phone was on it: the phone hears DONE, another phone UNKNOWN
+        val g = ask()
+        val id2 = pollUntilRequest("t1").getString("id")
+        relay.cancel()
+        assertEquals(CloudflareRelay.Outcome.CANCELLED, g.get())
+        assertEquals(CloudflareRelay.Reply.DONE, relay.answer("t1", solved(id2)))
+        assertEquals(CloudflareRelay.Reply.UNKNOWN, relay.answer("t2", solved(id2)))
+        assertTrue(stored.isEmpty())
+    }
+
+    @Test
+    fun knowsWhetherAPhoneIsPaired() {
+        assertFalse(relay.anyPaired())
+        assertTrue(CloudflareRelay({ _, _, _, _ -> }, paired = { true }).anyPaired())
     }
 }

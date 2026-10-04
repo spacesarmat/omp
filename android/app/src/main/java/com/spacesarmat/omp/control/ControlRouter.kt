@@ -16,8 +16,8 @@ interface RemoteActions {
     fun volume(up: Boolean)
     /** «Передать на телевизор», already validated; blocks until the page applied it (see [SourcesInbox]). */
     fun sources(t: SourcesTransfer): SourcesOutcome
-    /** «Пройти на телефоне»: a paired phone polls for a check ([CloudflareRelay.poll]). */
-    fun cloudflarePoll(token: String, phone: String): JSONObject
+    /** «Пройти на телефоне»: a paired phone polls for a check, waiting up to [waitMs] ([CloudflareRelay.poll]). */
+    fun cloudflarePoll(token: String, phone: String, waitMs: Long): JSONObject
     /** The phone's answer to a check, already parsed as JSON ([CloudflareRelay.answer]). */
     fun cloudflareAnswer(token: String, body: JSONObject): CloudflareRelay.Reply
 }
@@ -36,6 +36,8 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
             SOURCES -> SourcesProtocol.MAX_BODY
             // carries cookies: the same checks before the body is read
             CloudflareProtocol.ANSWER -> CloudflareProtocol.MAX_BODY
+            // needs no body: a tiny one at most, after the token
+            CloudflareProtocol.POLL -> CloudflareProtocol.MAX_POLL_BODY
             else -> return null
         }
         if (!pairing.isPaired(h.token)) return ControlResponse(401, ControlServer.error("unauthorized"))
@@ -63,7 +65,10 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         if (req.method != "POST") return methodNotAllowed()
         if (req.path == SOURCES) return sources(req)
         if (req.path == CloudflareProtocol.ANSWER) return cloudflareAnswer(req)
-        if (req.path == CloudflareProtocol.POLL) return ok(actions.cloudflarePoll(req.token!!, pairing.phoneOf(req.token) ?: "Телефон"))
+        if (req.path == CloudflareProtocol.POLL) {
+            val body = parse(req.body) ?: return badRequest()
+            return ok(actions.cloudflarePoll(req.token!!, pairing.phoneOf(req.token) ?: "Телефон", CloudflareProtocol.waitOf(body)))
+        }
         val body = parse(req.body) ?: return badRequest()
         return when (req.path) {
             "/omp/launch" -> launch(body)
@@ -151,6 +156,8 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
             CloudflareRelay.Reply.OK -> okEmpty()
             CloudflareRelay.Reply.BAD_REQUEST -> badRequest()
             CloudflareRelay.Reply.UNKNOWN -> ControlResponse(404, ControlServer.error("no_request"))
+            // the TV closed it itself (passed by remote): the phone says nothing
+            CloudflareRelay.Reply.DONE -> ControlResponse(410, ControlServer.error("done"))
             CloudflareRelay.Reply.STORE_FAILED -> ControlResponse(500, ControlServer.error("secrets"))
         }
     }

@@ -6,7 +6,7 @@
 // gets it as parameters. Shared by the phone and the TV bundles: Chromium 53 rules, no platform imports.
 import { log } from '../lib/log';
 import { cloudflareFailure, hostOf, logCloudflare, siteRoot } from './cloudflare';
-import { getSource } from './registry';
+import { allSources, getSource } from './registry';
 import { isCloudflareBypassOn } from './store';
 import type { Source } from './types';
 
@@ -21,7 +21,12 @@ export const TV_REMOTE = 'Отметить пультом';
 /** %s = the phone's name (the native dialog fills it in). */
 export const TV_HINT = 'Телефон «%s» получит запрос';
 export const TV_WAITING = 'Пройдите проверку на телефоне «%s»';
+/** No phone is paired with the TV. */
 export const NO_PHONE = 'Подключите телефон к телевизору';
+/** A phone is paired, but OMP is not open on it (or it cannot show the request). */
+export const PHONE_CLOSED = 'Откройте OMP на телефоне';
+/** Another Cloudflare check holds the page: the dialog waits for it. */
+export const GATE_WAIT = 'Ждём, пока закончится другая проверка…';
 /** By the native relay outcome: what the TV dialog says when the phone did not pass the check. */
 export const TV_ERRORS: { [outcome: string]: string } = {
   NOT_TAKEN: 'Телефон не ответил — откройте OMP на телефоне',
@@ -30,6 +35,7 @@ export const TV_ERRORS: { [outcome: string]: string } = {
   FAILED: 'На телефоне проверку пройти не удалось',
   STORE_FAILED: 'Телевизор не смог сохранить разрешение: защищённое хранилище недоступно',
   BUSY: 'Телевизор уже ждёт ответ телефона',
+  UNAVAILABLE: PHONE_CLOSED,
 };
 /** The phone's notification when the app is in the background (%s = the site). */
 export const WATCH_NOTIFY = 'Телевизор просит пройти проверку на %s';
@@ -92,6 +98,8 @@ export interface CloudflareVisibleRequest {
   remote?: string;
   hint?: string;
   noPhone?: string;
+  phoneClosed?: string;
+  gateWait?: string;
   waiting?: string;
   errors?: { [outcome: string]: string };
   /** Phone: the id of the TV's waiting request (the native side takes the address from it). */
@@ -111,7 +119,9 @@ export function tvCheckRequest(site: { name: string; url: string }): CloudflareV
     remote: TV_REMOTE,
     hint: TV_HINT,
     noPhone: NO_PHONE,
+    phoneClosed: PHONE_CLOSED,
     waiting: TV_WAITING,
+    gateWait: GATE_WAIT,
     errors: TV_ERRORS,
   };
 }
@@ -125,6 +135,7 @@ export function phoneCheckRequest(site: { name: string; url: string }, forTv?: {
     title: SHEET_TITLE,
     text: sheetText(site.name, forTv ? forTv.tv : undefined),
     cancel: CANCEL,
+    gateWait: GATE_WAIT,
   };
   if (forTv) {
     r.note = SHEET_NOTE_TV;
@@ -236,4 +247,23 @@ export function onSearchFailure(sourceId: string, error: unknown, asked: Checked
     () => log('warn', 'search', 'Cloudflare: проверка не открылась'),
   );
   return true;
+}
+
+/** A site behind Cloudflare has its switch on (the phone then listens to the TV for «Пройти на телефоне»). */
+export function anyBypassOn(list: Source[] = allSources()): boolean {
+  return list.some((s) => isCloudflareBypassOn(s));
+}
+
+/**
+ * The source a TV request may open a check for: a registered site behind Cloudflare with its switch on whose siteUrl
+ * has exactly the request's scheme, host and port. null for anything else (the phone never opens another page in its trusted sheet).
+ */
+export function tvRequestSource(url: string, list: Source[] = allSources()): Source | null {
+  const host = hostOf(url);
+  if (!host || siteRoot(url) !== url) return null;
+  for (let i = 0; i < list.length; i++) {
+    const s = list[i];
+    if (isCloudflareBypassOn(s) && s.siteUrl && siteRoot(s.siteUrl) === url) return s;
+  }
+  return null;
 }

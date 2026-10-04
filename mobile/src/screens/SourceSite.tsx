@@ -46,6 +46,15 @@ export function SourceSite({
     };
   }, [id]);
 
+  // the status goes away when the clearance ends, with the screen open
+  useEffect(() => {
+    if (until === null) return undefined;
+    const left = until - now();
+    if (left <= 0) return undefined;
+    const timer = setTimeout(() => setTick((n) => n + 1), Math.min(left + 500, 2147483000));
+    return () => clearTimeout(timer);
+  }, [until]);
+
   if (!source) {
     return (
       <div class="m-screen" data-route="sourceSite">

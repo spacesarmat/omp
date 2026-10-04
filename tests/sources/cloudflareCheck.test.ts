@@ -3,6 +3,7 @@ import {
   BYPASS_WARNING,
   checkResultOf,
   clearanceText,
+  GATE_WAIT,
   NO_PHONE,
   onSearchFailure,
   phoneCheckRequest,
@@ -85,9 +86,11 @@ describe('copy of the visible check', () => {
     const tv = tvCheckRequest({ name: 'rustorka', url: 'https://rustorka.example/' });
     expect(tv).toMatchObject({ mode: 'tv', title: 'rustorka: проверка Cloudflare', phone: 'Пройти на телефоне', remote: 'Отметить пультом', cancel: 'Отмена', noPhone: NO_PHONE });
     expect(tv.errors).toBe(TV_ERRORS);
-    expect(Object.keys(TV_ERRORS).sort()).toEqual(['BUSY', 'CANCELLED', 'FAILED', 'NOT_TAKEN', 'STORE_FAILED', 'TIMEOUT']);
+    expect(Object.keys(TV_ERRORS).sort()).toEqual(['BUSY', 'CANCELLED', 'FAILED', 'NOT_TAKEN', 'STORE_FAILED', 'TIMEOUT', 'UNAVAILABLE']);
     const own = phoneCheckRequest({ name: 'rustorka', url: 'https://rustorka.example/' });
-    expect(own).toEqual({ url: 'https://rustorka.example/', site: 'rustorka', mode: 'phone', title: SHEET_TITLE, text: sheetText('rustorka'), cancel: 'Отмена' });
+    expect(own).toEqual({ url: 'https://rustorka.example/', site: 'rustorka', mode: 'phone', title: SHEET_TITLE, text: sheetText('rustorka'), cancel: 'Отмена', gateWait: GATE_WAIT });
+    expect(TV_ERRORS.UNAVAILABLE).toBe('Откройте OMP на телефоне');
+    expect(tv.phoneClosed).toBe('Откройте OMP на телефоне');
     const forTv = phoneCheckRequest({ name: 'rustorka', url: 'https://rustorka.example/' }, { id: 'c7', tv: 'Гостиная' });
     expect(forTv.note).toBe(SHEET_NOTE_TV);
     expect(forTv.forTv).toBe('c7');

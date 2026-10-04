@@ -197,6 +197,18 @@ export function SourcesScreen({
     };
   }, []);
 
+  // a status «действует до …» goes away when its time comes, with the screen open
+  useEffect(() => {
+    const t = now();
+    const next = Object.keys(until)
+      .map((id) => until[id])
+      .filter((u): u is number => typeof u === 'number' && u > t)
+      .sort((a, b) => a - b)[0];
+    if (next === undefined) return undefined;
+    const timer = setTimeout(rerender, Math.min(next - t + 500, 2147483000));
+    return () => clearTimeout(timer);
+  }, [until]);
+
   const needsCheck = (s: Source) => {
     const h = getHealth(s.id);
     return !!h && h.state === 'error' && h.message === CF_INTERACTIVE;
@@ -207,9 +219,9 @@ export function SourcesScreen({
     const on = isCloudflareBypassOn(s);
     if (on && needsCheck(s) && s.siteUrl) {
       runCloudflareCheck(s.name, s.siteUrl).then((r) => {
-        if (r !== 'solved') return;
-        clearHealth(s.id);
-        readClearance(() => true);
+        // passed, or closed: either way the next OK is the switch again (it can be turned off)
+        if (r === 'solved' || r === 'cancelled') clearHealth(s.id);
+        if (r === 'solved') readClearance(() => true);
       });
       return;
     }

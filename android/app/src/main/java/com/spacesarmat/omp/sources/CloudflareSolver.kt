@@ -305,6 +305,21 @@ object WebCookieCleanup {
     }
 }
 
+/**
+ * Where the visible check's page may go (pure, JVM-tested): its own host (and its www. twin, a usual redirect) and
+ * Cloudflare's challenge pages — nothing else, so the sheet never becomes a browser for another site.
+ */
+object VisibleNavigation {
+    private val CHALLENGE_HOSTS = setOf("challenges.cloudflare.com")
+
+    fun allowed(rootHost: String?, host: String?): Boolean {
+        val r = rootHost?.lowercase()?.trimEnd('.') ?: return false
+        val h = host?.lowercase()?.trimEnd('.') ?: return false
+        if (h.isEmpty() || r.isEmpty()) return false
+        return h in CHALLENGE_HOSTS || h == r || h == "www.$r" || r == "www.$h"
+    }
+}
+
 /** What [SiteHttp] needs from the built-in check (tests pass a fake). */
 interface CloudflareSolving {
     fun solve(url: HttpUrl): CloudflareSolver.Result

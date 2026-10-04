@@ -15,7 +15,7 @@ import { logEntries, clearLog } from '../../src/lib/log';
 import type { Source, SourceContext } from '../../src/sources/types';
 import { indexerConnections, indexerKeyName, reloadIndexers } from '../../src/sources/indexerStore';
 import { SOURCES_REJECTED } from '../src/tv/tvClient';
-import { INDEXERS_NOT_SENT, indexersText } from '../src/screens/Sources';
+import { CLOUDFLARE_NOT_SENT, INDEXERS_NOT_SENT, indexersText } from '../src/screens/Sources';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
 const ATV: SavedTv = { ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095 };
@@ -337,6 +337,20 @@ describe('«Передать на телевизор» with Jackett / Prowlarr',
     expect(sourcePosts()).toHaveLength(2);
     expect(sourcePosts()[1].body.indexers).toBeUndefined();
     expect(toast.value).toBe('Источники переданы. ' + INDEXERS_NOT_SENT);
+  });
+
+  it('an older TV refusing the FlareSolverr address gets the rest, and the phone says the Cloudflare settings did not go', async () => {
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    localStorage.setItem('tsp.flaresolverr', JSON.stringify({ url: 'http://192.168.1.191:8191' }));
+    answer = (c) => (c.body.flaresolverr ? { status: 400, body: '{"error":"bad_request"}' } : { body: JSON.stringify({ ok: true }) });
+    await mount();
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(sourcePosts()).toHaveLength(2);
+    expect(sourcePosts()[0].body.flaresolverr).toBe('http://192.168.1.191:8191');
+    expect(sourcePosts()[1].body.flaresolverr).toBeUndefined();
+    expect(toast.value).toBe('Источники переданы. ' + CLOUDFLARE_NOT_SENT);
   });
 
   it('a v0.14 TV answering 413 (8 KB limit) also gets the rest without the connections', async () => {

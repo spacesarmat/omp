@@ -82,9 +82,10 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         emit = { data -> emit("remoteSources", JSObject.fromJSONObject(data), false) },
     )
     /** «Пройти на телефоне»: the phone's cookies and User-Agent go straight into the encrypted jar, never to the page. */
-    val cloudflare = CloudflareRelay({ root, cookies, ua, until ->
-        SourceServices.get(context).importClearance(root, cookies, ua, until)
-    })
+    val cloudflare = CloudflareRelay(
+        { root, cookies, ua, until -> SourceServices.get(context).importClearance(root, cookies, ua, until) },
+        paired = { pairing.anyPaired() },
+    )
     private val server = ControlServer(PORT, router::precheck) { router.route(it) }
     private val main = Handler(Looper.getMainLooper())
     private var nsdListener: NsdManager.RegistrationListener? = null
@@ -238,7 +239,7 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
 
     override fun sources(t: SourcesTransfer): SourcesOutcome = inbox.receive(t)
 
-    override fun cloudflarePoll(token: String, phone: String): JSONObject = cloudflare.poll(token, phone)
+    override fun cloudflarePoll(token: String, phone: String, waitMs: Long): JSONObject = cloudflare.poll(token, phone, waitMs)
 
     override fun cloudflareAnswer(token: String, body: JSONObject): CloudflareRelay.Reply = cloudflare.answer(token, body)
 

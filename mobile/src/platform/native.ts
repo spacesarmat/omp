@@ -154,6 +154,8 @@ export interface OmpNativeApi {
   /** The TV's check still waiting for the person (the app was opened from the notification). */
   cloudflarePending(): Promise<TvCloudflareRequest | null>;
   onCloudflareRequest(cb: (r: TvCloudflareRequest) => void): () => void;
+  /** Refuses the TV's request without a sheet (the TV hears «failed»). */
+  cloudflareDecline(id: string): Promise<void>;
 }
 
 /** «Пройти на телефоне»: the TV asks the phone to pass the check of a site (its root only). */
@@ -211,6 +213,7 @@ interface OmpNativePlugin {
   cloudflareClearance(o: { url: string }): Promise<{ until?: number | null }>;
   cloudflareWatch(o: { url?: string; token?: string; notify?: string }): Promise<void>;
   cloudflarePending(): Promise<{ request?: unknown }>;
+  cloudflareDecline(o: { id: string }): Promise<void>;
   addListener(event: 'cloudflareRequest', cb: (e: unknown) => void): Promise<PluginListenerHandle>;
   addListener(event: 'tvMessage', cb: (e: { json: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'tvClosed', cb: (e: { reason: string }) => void): Promise<PluginListenerHandle>;
@@ -607,6 +610,11 @@ export const native: OmpNativeApi = {
     if (!plugin) return null;
     const r = await plugin.cloudflarePending();
     return tvRequest(r && r.request);
+  },
+
+  async cloudflareDecline(id) {
+    if (!plugin) return;
+    await plugin.cloudflareDecline({ id });
   },
 
   onCloudflareRequest(cb) {
