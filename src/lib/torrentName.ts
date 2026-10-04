@@ -3,7 +3,7 @@ import { titleCore } from './posterSearch';
 
 const HEX40 = /^[0-9a-f]{40}$/i;
 const BASE32 = /^[a-z2-7]{32}$/i;
-const SERIES_TOKEN = /sd{1,2}[ ._-]?ed{1,3}|(?:^|[^d])d{1,2}xd{2,3}(?:[^d]|$)/i;
+const SERIES_TOKEN = /s\d{1,2}[ ._-]?e\d{1,3}|(?:^|[^\d])\d{1,2}x\d{2,3}(?:[^\d]|$)/i;
 const PREFIX = /^infohash:/i;
 
 /**
@@ -49,7 +49,8 @@ export function deriveName(files: TorrentFile[] | undefined | null, fallback: st
       break;
     }
   }
-  let name = titleCore(src);
+  // «Name 1x01»: titleCore knows S01E01, not NxM
+  let name = titleCore(src.replace(/[ ._-]+\d{1,2}x\d{2,3}(?:[^\d].*)?$/i, ''));
   if (!name) return fallback;
   if (isSeries) {
     const seasons: number[] = [];

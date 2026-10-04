@@ -42,7 +42,8 @@ export function TorrentRenameSheet({ initial, onSave, onClose }: { initial: stri
           id="rename-title"
           class="m-input"
           type="text"
-          maxLength={TITLE_MAX + 50}
+          maxLength={TITLE_MAX}
+          autoFocus
           autoCapitalize="sentences"
           value={value}
           onInput={(e) => setValue((e.target as HTMLInputElement).value)}

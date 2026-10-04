@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { fixPlaceholderTitles, resetTitleFix } from '../../src/lib/titleFix';
+import { fixPlaceholderTitles, resetTitleFix, RETRY_MS, MAX_TRIES } from '../../src/lib/titleFix';
 import { renameTorrent, checkTitle, TITLE_MAX } from '../../src/lib/renameTorrent';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { torrents, refreshTorrents, resetLibrary } from '../../src/store/library';
@@ -32,12 +32,21 @@ describe('fixPlaceholderTitles', () => {
     expect(done).toEqual([{ hash: H1, title: 'Moon Garden · Сезон 2' }]);
     expect(c.calls).toEqual([{ hash: H1, title: 'Moon Garden · Сезон 2', poster: 'http://p', category: 'tv' }]);
   });
-  it('is idempotent: no retry on the next refresh, even after a failure', async () => {
+  it('is idempotent: a failure is retried only after RETRY_MS, a bounded number of times', async () => {
     const c = fake(true);
     const list = [tor(H1, 'infohash:' + H1)];
-    expect(await fixPlaceholderTitles(c, list)).toEqual([]);
-    await fixPlaceholderTitles(c, list);
+    expect(await fixPlaceholderTitles(c, list, 0)).toEqual([]);
+    await fixPlaceholderTitles(c, list, 1000);
     expect(c.calls).toHaveLength(1);
+    await fixPlaceholderTitles(c, list, RETRY_MS + 1);
+    await fixPlaceholderTitles(c, list, 2 * RETRY_MS + 2);
+    await fixPlaceholderTitles(c, list, 10 * RETRY_MS);
+    expect(c.calls).toHaveLength(MAX_TRIES);
+    resetTitleFix();
+    const good = fake();
+    await fixPlaceholderTitles(good, list, 0);
+    await fixPlaceholderTitles(good, list, 100 * RETRY_MS);
+    expect(good.calls).toHaveLength(1);
     const ok = fake();
     await fixPlaceholderTitles(ok, list);
     expect(ok.calls).toHaveLength(0);
@@ -81,15 +90,25 @@ describe('rename', () => {
     await expect(renameTorrent(c, { hash: H1 }, '   ')).rejects.toThrow('Введите название');
     expect(c.calls).toHaveLength(0);
   });
-  it('the real client sends set with an empty data (stored data is kept)', async () => {
-    const bodies: unknown[] = [];
+  it('the real client re-reads the torrent and sends its current poster/category with an empty data', async () => {
+    const bodies: { action: string }[] = [];
     const c = new TorrServerClient({ url: 'h:1' });
-    (c as unknown as { call: (p: string, o: { body: unknown }) => Promise<null> }).call = (_p, o) => {
+    (c as unknown as { call: (p: string, o: { body: { action: string } }) => Promise<unknown> }).call = (_p, o) => {
       bodies.push(o.body);
-      return Promise.resolve(null);
+      return Promise.resolve(o.body.action === 'get' ? { hash: H1, title: 'x', stat: 0, poster: 'fresh', category: 'tv' } : null);
     };
-    await c.setTitle({ hash: H1, poster: 'p', category: 'tv' }, ' T ');
-    expect(bodies[0]).toEqual({ action: 'set', hash: H1, title: 'T', poster: 'p', category: 'tv', data: '' });
+    await c.setTitle({ hash: H1, poster: 'stale', category: 'other' }, ' T ');
+    expect(bodies[1]).toEqual({ action: 'set', hash: H1, title: 'T', poster: 'fresh', category: 'tv', data: '' });
+  });
+  it('falls back to the passed poster/category when the re-read fails', async () => {
+    const bodies: { action: string }[] = [];
+    const c = new TorrServerClient({ url: 'h:1' });
+    (c as unknown as { call: (p: string, o: { body: { action: string } }) => Promise<unknown> }).call = (_p, o) => {
+      bodies.push(o.body);
+      return o.body.action === 'get' ? Promise.reject(new Error('x')) : Promise.resolve(null);
+    };
+    await c.setTitle({ hash: H1, poster: 'p', category: 'tv' }, 'T');
+    expect(bodies[1]).toEqual({ action: 'set', hash: H1, title: 'T', poster: 'p', category: 'tv', data: '' });
   });
 });
 

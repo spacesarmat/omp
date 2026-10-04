@@ -38,6 +38,14 @@ describe('deriveName', () => {
     const files = [f('Silver Lake/Season 2/01 - Pilot.mkv', 1), f('Silver Lake/Season 2/02 - Next.mkv', 2)];
     expect(deriveName(files, 'x')).toBe('Silver Lake · Сезон 2');
   });
+  it('takes the series name from the file names, not from a generic folder', () => {
+    const files = [f('Pack/Show.Name.S01E01.mkv', 1), f('Pack/Show.Name.S01E02.mkv', 2)];
+    expect(deriveName(files, 'x')).toBe('Show Name · Сезон 1');
+    const ru = [f('Раздача/Мой.Сериал.S01E01.mkv', 1), f('Раздача/Мой.Сериал.S01E02.mkv', 2)];
+    expect(deriveName(ru, 'x')).toBe('Мой Сериал · Сезон 1');
+    const x = [f('Pack/Show Name 1x01.mkv', 1), f('Pack/Show Name 1x02.mkv', 2)];
+    expect(deriveName(x, 'x')).toBe('Show Name · Сезон 1');
+  });
   it('cleans a single movie and adds the year', () => {
     expect(deriveName([f('Paper.Boats.2019.2160p.BluRay.x265-GRP.mkv')], 'x')).toBe('Paper Boats (2019)');
     expect(deriveName([f('Paper Boats.mkv')], 'x')).toBe('Paper Boats');

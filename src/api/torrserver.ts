@@ -88,13 +88,21 @@ export class TorrServerClient {
     }).then(() => undefined);
   }
 
-  /** Sets the title; poster and category go back as stored, an empty data keeps the stored one. */
+  /**
+   * Sets the title. `set` replaces poster and category too, so the torrent is read again right before the write and
+   * its current ones go back (the passed ones are used when the read fails). An empty `data` keeps the stored one.
+   */
   setTitle(t: Pick<Torrent, 'hash' | 'poster' | 'category'>, title: string): Promise<void> {
     const v = title.trim();
     if (!v) return Promise.reject(new Error('Пустое название'));
-    return this.call<unknown>('/torrents', {
-      body: { action: 'set', hash: t.hash, title: v, poster: t.poster || '', category: t.category || '', data: '' },
-    }).then(() => undefined);
+    return this.get(t.hash).then(
+      (cur) => (cur && cur.hash ? cur : t),
+      () => t,
+    ).then((cur) =>
+      this.call<unknown>('/torrents', {
+        body: { action: 'set', hash: t.hash, title: v, poster: cur.poster || '', category: cur.category || '', data: '' },
+      }),
+    ).then(() => undefined);
   }
 
   /** TMDB settings of the server; null on servers without them. */
