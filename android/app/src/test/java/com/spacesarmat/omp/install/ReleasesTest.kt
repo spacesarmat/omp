@@ -51,6 +51,29 @@ class ReleasesTest {
     }
 
     @Test
+    fun picksThePerAbiApkFromTheAndroidFeed() {
+        val rel = "https://github.com/spacesarmat/omp/releases/download/v0.15.0/"
+        val uni = rel + "OMP-0.15.0.apk"
+        val json = """{"version":"0.15.0","ipkUrl":"$uni","ipkHash":"${"a".repeat(64)}","ipkSize":900,
+            "apks":{"arm64":{"url":"${rel}OMP-0.15.0-arm64.apk","sha256":"${"b".repeat(64)}","size":600},
+                    "armv7":{"url":"${rel}OMP-0.15.0-armv7.apk","sha256":"${"c".repeat(64)}","size":300}}}"""
+        val arm = Releases.parseFeed(json, Item.OMP, "omp.apk", listOf("armeabi-v7a", "armeabi"))
+        assertEquals(rel + "OMP-0.15.0-armv7.apk", arm.url)
+        assertEquals("c".repeat(64), arm.sha256)
+        assertEquals(300L, arm.size)
+        assertEquals("0.15.0", arm.version)
+        assertEquals(rel + "OMP-0.15.0-arm64.apk", Releases.parseFeed(json, Item.OMP, "omp.apk", listOf("arm64-v8a")).url)
+        // no ABI known, or an x86 box: the universal APK
+        assertEquals(uni, Releases.parseFeed(json, Item.OMP, "omp.apk").url)
+        assertEquals(uni, Releases.parseFeed(json, Item.OMP, "omp.apk", listOf("x86_64")).url)
+        // a 0.14-style feed without apks still works
+        assertEquals(ipkUrl, Releases.parseFeed(feed(), Item.OMP, "omp.apk", listOf("arm64-v8a")).url)
+        // the universal entry stays mandatory (older clients need it)
+        val noUniversal = json.replace("\"ipkUrl\":\"$uni\",", "")
+        assertEquals(InstallCodes.RELEASE, code { Releases.parseFeed(noUniversal, Item.OMP, "omp.apk", listOf("arm64-v8a")) })
+    }
+
+    @Test
     fun rejectsFeedsWithForeignHostsOrNoChecksum() {
         assertEquals(InstallCodes.RELEASE, code { Releases.parseFeed(feed(url = "https://evil.example/omp.ipk"), Item.OMP, "omp.ipk") })
         assertEquals(InstallCodes.RELEASE, code { Releases.parseFeed(feed(url = "http://github.com/omp.ipk"), Item.OMP, "omp.ipk") })

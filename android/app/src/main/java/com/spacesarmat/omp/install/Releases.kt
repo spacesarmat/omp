@@ -59,8 +59,9 @@ class Releases(private val http: ReleaseHttp, private val now: () -> Long = Syst
     fun ompWebos(cancel: CancelToken): ReleasePackage =
         parseFeed(http.text(FEED_WEBOS + "?t=" + now(), FEED_MAX, cancel), Item.OMP, "omp.ipk")
 
-    fun ompAndroid(cancel: CancelToken): ReleasePackage =
-        parseFeed(http.text(FEED_ANDROID + "?t=" + now(), FEED_MAX, cancel), Item.OMP, "omp.apk")
+    /** The APK for a box with these ABIs (primary first, see [ApkAbi]); empty = the universal APK. */
+    fun ompAndroid(cancel: CancelToken, abis: List<String> = emptyList()): ReleasePackage =
+        parseFeed(http.text(FEED_ANDROID + "?t=" + now(), FEED_MAX, cancel), Item.OMP, "omp.apk", abis)
 
     fun homebrewChannel(cancel: CancelToken): ReleasePackage {
         val rel = parseHbcRelease(http.text(HBC_LATEST, API_MAX, cancel))
@@ -85,8 +86,11 @@ class Releases(private val http: ReleaseHttp, private val now: () -> Long = Syst
         private val SHA256 = Regex("^[0-9a-f]{64}$")
         private val VERSION = Regex("^v?[0-9]+(\\.[0-9]+){1,3}$")
 
-        /** update.json / update-android.json: version, ipkUrl (HTTPS GitHub), ipkHash (sha256), ipkSize. */
-        fun parseFeed(json: String, item: Item, fileName: String): ReleasePackage {
+        /**
+         * update.json / update-android.json: version, ipkUrl (HTTPS GitHub), ipkHash (sha256), ipkSize. With [abis]
+         * the per-ABI APK from `apks` is taken when the feed has one for that ABI ([ApkAbi.choose]).
+         */
+        fun parseFeed(json: String, item: Item, fileName: String, abis: List<String> = emptyList()): ReleasePackage {
             try {
                 val o = JSONObject(json)
                 val version = o.optString("version")
@@ -96,7 +100,8 @@ class Releases(private val http: ReleaseHttp, private val now: () -> Long = Syst
                 if (!VERSION.matches(version) || !ReleaseHosts.allowed(url) || !SHA256.matches(sha)) {
                     throw InstallFailure(InstallCodes.RELEASE)
                 }
-                return ReleasePackage(item, fileName, version.removePrefix("v"), url, sha, size)
+                val apk = ApkAbi.choose(abis, ApkAbi.Apk(url, sha, size), ApkAbi.parseApks(o.optJSONObject("apks")))
+                return ReleasePackage(item, fileName, version.removePrefix("v"), apk.url, apk.sha256, apk.size)
             } catch (e: JSONException) {
                 throw InstallFailure(InstallCodes.RELEASE, cause = e)
             }

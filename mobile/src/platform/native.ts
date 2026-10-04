@@ -5,6 +5,9 @@ import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
 import { log } from '../../../src/lib/log';
 import type { HttpResponse, SecretStore, SourceHttp } from '../../../src/sources/types';
+import type { UpdateInfo } from '../../../src/lib/updateInfo';
+
+type ApkFiles = NonNullable<UpdateInfo['apks']>;
 
 export interface FoundTv {
   ip: string;
@@ -76,7 +79,8 @@ export interface OmpNativeApi {
   /** Wake-on-LAN magic packet (broadcast + the /24 broadcast of `ip`), repeated 3 times. */
   wakeOnLan(mac: string, ip: string): Promise<void>;
   openExternal(url: string, mime: string): Promise<void>;
-  downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void): Promise<void>;
+  /** apks: the feed's per-ABI APKs, the plugin installs the device's one (url/sha256 = universal fallback). */
+  downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void>;
   takePendingMagnet(): Promise<string | null>;
   onMagnet(cb: (link: string) => void): () => void;
   /** Starts the server (idempotent) on the interface that reaches tvIp; resolves the report URL. */
@@ -124,7 +128,7 @@ interface OmpNativePlugin {
   pointerSend(o: { frame: string }): Promise<void>;
   wakeOnLan(o: { mac: string; ip: string }): Promise<void>;
   openExternal(o: { url: string; mime: string }): Promise<void>;
-  downloadAndInstallApk(o: { url: string; sha256: string }): Promise<void>;
+  downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<void>;
   takePendingMagnet(): Promise<{ link?: string | null }>;
   startPlayerServer(o: { tvIp: string }): Promise<{ url: string }>;
   stopPlayerServer(): Promise<void>;
@@ -344,12 +348,12 @@ export const native: OmpNativeApi = {
     return logged('openExternal', plugin.openExternal({ url, mime }));
   },
 
-  async downloadAndInstallApk(url, sha256, onProgress) {
+  async downloadAndInstallApk(url, sha256, onProgress, apks) {
     if (!plugin) return unavailable();
     // awaited so that no early progress event is missed
     const handle = await plugin.addListener('apkProgress', (e) => onProgress(e.percent));
     try {
-      await logged('downloadAndInstallApk', plugin.downloadAndInstallApk({ url, sha256 }));
+      await logged('downloadAndInstallApk', plugin.downloadAndInstallApk(apks ? { url, sha256, apks } : { url, sha256 }));
     } finally {
       void handle.remove();
     }

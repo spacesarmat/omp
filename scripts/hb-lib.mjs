@@ -62,14 +62,35 @@ export function buildHomebrew({ tag, version, ipkName, sha256, size, title, desc
   return { manifest, apps, update };
 }
 
-/** Update feed for the Android client (same shape as update.json; ipkUrl/ipkHash/ipkSize point at the APK). */
-export function buildAndroidUpdate({ tag, version, apkName, sha256, size, notes }) {
-  return {
+/** APK keys of the Android feed by ABI (OMP-x.y.z-arm64.apk → arm64). */
+export const APK_ABIS = ['arm64', 'armv7'];
+
+/** ABI key of a per-ABI APK name (OMP-0.15.0-arm64.apk → 'arm64'); null for the universal APK. */
+export function apkAbi(name) {
+  const m = /-(arm64|armv7)\.apk$/.exec(name);
+  return m ? m[1] : null;
+}
+
+/**
+ * Update feed for the Android client. ipkUrl/ipkHash/ipkSize point at the universal APK (0.14.x clients read only
+ * these); `apks` lists the per-ABI APKs ({ arm64: { url, sha256, size }, armv7: … }) that newer clients pick by the
+ * device ABI.
+ */
+export function buildAndroidUpdate({ tag, version, apkName, sha256, size, notes, abis }) {
+  const url = (name) => `https://github.com/${REPO}/releases/download/${tag}/${name}`;
+  const out = {
     version,
-    ipkUrl: `https://github.com/${REPO}/releases/download/${tag}/${apkName}`,
+    ipkUrl: url(apkName),
     ipkHash: sha256,
     ipkSize: size,
-    notes,
-    releaseUrl: `https://github.com/${REPO}/releases/tag/${tag}`,
   };
+  const apks = {};
+  for (const key of APK_ABIS) {
+    const a = abis && abis[key];
+    if (a) apks[key] = { url: url(a.name), sha256: a.sha256, size: a.size };
+  }
+  if (Object.keys(apks).length) out.apks = apks;
+  out.notes = notes;
+  out.releaseUrl = `https://github.com/${REPO}/releases/tag/${tag}`;
+  return out;
 }

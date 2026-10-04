@@ -22,6 +22,7 @@ import com.spacesarmat.omp.control.TvRemote
 import com.spacesarmat.omp.install.AdbIdentity
 import com.spacesarmat.omp.install.AdbIdentityStore
 import com.spacesarmat.omp.install.AesGcmWrapper
+import com.spacesarmat.omp.install.ApkAbi
 import com.spacesarmat.omp.install.AtvAdbInstaller
 import com.spacesarmat.omp.install.CancelToken
 import com.spacesarmat.omp.install.DadbConnector
@@ -777,8 +778,14 @@ class OmpNativePlugin : Plugin() {
     @PluginMethod
     fun downloadAndInstallApk(call: PluginCall) {
         val once = Once(call)
-        val url = call.getString("url")?.trim().orEmpty()
-        val sha = call.getString("sha256").orEmpty()
+        // the feed's per-ABI APK for this device (arm64 / armv7) when the page passed them, else the universal one
+        val apk = ApkAbi.choose(
+            Build.SUPPORTED_ABIS.toList(),
+            ApkAbi.Apk(call.getString("url")?.trim().orEmpty(), call.getString("sha256").orEmpty(), 0L),
+            ApkAbi.parseApks(call.getObject("apks")),
+        )
+        val url = apk.url
+        val sha = apk.sha256
         if (!ApkInstaller.canInstall(context)) {
             try {
                 ApkInstaller.openInstallPermissionSettings(context)

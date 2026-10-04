@@ -10,7 +10,7 @@ describe('release workflow asset names', () => {
     expect(paths.length).toBeGreaterThan(0);
     paths.forEach((p: string) => {
       if (p.indexOf('com.spacesarmat') >= 0) return; // the packager's own output name
-      expect(p).toMatch(/^build\/OMP-\$\{VERSION\}(-webOS)?\.(apk|ipk)$/);
+      expect(p).toMatch(/^build\/OMP-\$\{VERSION\}(-webOS|-arm64|-armv7)?\.(apk|ipk)$/);
     });
   });
 
@@ -25,5 +25,19 @@ describe('release workflow asset names', () => {
     expect(step).toContain('VERSION=$(node -p');
     expect(step).toContain('IPK="build/OMP-${VERSION}-webOS.ipk"');
     expect(step).toContain('APK="build/OMP-${VERSION}.apk"');
+  });
+
+  it('ships the per-ABI APKs and the universal one, in the release and in the Android feed', () => {
+    const build = yml.slice(yml.indexOf('Build signed Android APKs'), yml.indexOf('Homebrew Channel files'));
+    expect(build).toContain('cp "$OUT/app-universal-release.apk" "build/OMP-${VERSION}.apk"');
+    expect(build).toContain('cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64.apk"');
+    expect(build).toContain('cp "$OUT/app-armeabi-v7a-release.apk" "build/OMP-${VERSION}-armv7.apk"');
+    expect(build).toMatch(/ls -l .*-arm64\.apk.*-armv7\.apk/); // size of every APK in the build log
+    const hb = yml.slice(yml.indexOf('Homebrew Channel files'), yml.indexOf('Create GitHub release'));
+    expect(hb).toContain('"build/OMP-${VERSION}.apk" "build/OMP-${VERSION}-arm64.apk" "build/OMP-${VERSION}-armv7.apk"');
+    const step = yml.slice(yml.indexOf('Create GitHub release'), yml.indexOf('Publish update feed'));
+    expect(step).toContain('APK64="build/OMP-${VERSION}-arm64.apk"');
+    expect(step).toContain('APK32="build/OMP-${VERSION}-armv7.apk"');
+    expect(step).toMatch(/gh release create "\$TAG" "\$IPK" "\$APK64" "\$APK32" "\$APK" /);
   });
 });

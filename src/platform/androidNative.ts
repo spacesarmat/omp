@@ -5,6 +5,9 @@
 import { createSecretStore, createSourceHttp } from '../sources/http';
 import type { NativeHttpRequest } from '../sources/http';
 import type { SecretStore, SourceHttp } from '../sources/types';
+import type { UpdateInfo } from '../lib/updateInfo';
+
+type ApkFiles = NonNullable<UpdateInfo['apks']>;
 
 export interface ListenerHandle {
   remove: () => unknown;
@@ -12,7 +15,8 @@ export interface ListenerHandle {
 
 export interface OmpNativeTvPlugin {
   localIpv4(): Promise<{ ip?: string | null }>;
-  downloadAndInstallApk(o: { url: string; sha256: string }): Promise<unknown>;
+  /** apks: the feed's per-ABI APKs; the plugin picks the device's one, url/sha256 (universal) otherwise. */
+  downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<unknown>;
   /** Starts the native Media3 player (PlayerActivity); resolves once it is launched. */
   playNative(o: object): Promise<unknown>;
   /** A phone command (src/phone/protocol.ts Cmd) for the open native player. */
@@ -144,10 +148,11 @@ export function describeApkError(e: unknown): string {
 }
 
 /**
- * Downloads the APK, verifies sha256 and opens the system installer. onProgress gets 0..100.
+ * Downloads the APK, verifies sha256 and opens the system installer. onProgress gets 0..100. With apks (the feed's
+ * per-ABI APKs) the plugin installs the one for the device's ABI; url/sha256 is the universal fallback.
  * Rejects with an Error whose message is in Russian.
  */
-export function installApk(url: string, sha256: string, onProgress: (percent: number) => void): Promise<void> {
+export function installApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void> {
   const p = nativePlugin();
   if (!p) return Promise.reject(new Error('Установка обновлений недоступна на этом устройстве'));
   let handle: ListenerHandle | null = null;
@@ -165,7 +170,7 @@ export function installApk(url: string, sha256: string, onProgress: (percent: nu
     })
     .then((h) => {
       handle = h;
-      return p.downloadAndInstallApk({ url, sha256 });
+      return p.downloadAndInstallApk(apks ? { url, sha256, apks } : { url, sha256 });
     })
     .then(
       () => { release(); },

@@ -5,7 +5,12 @@ import { dismissPrompt, skipVersion } from '../../../src/store/updates';
 import { APP_VERSION } from '../../../src/version';
 import type { UpdateInfo } from '../../../src/lib/updateInfo';
 
-export type ApkInstaller = (url: string, sha256: string, onProgress: (percent: number) => void) => Promise<void>;
+export type ApkInstaller = (
+  url: string,
+  sha256: string,
+  onProgress: (percent: number) => void,
+  apks?: UpdateInfo['apks'],
+) => Promise<void>;
 let installer: ApkInstaller | null = null;
 
 /** Replaces the APK installer (tests); null restores the native one. */
@@ -59,8 +64,11 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
     setPct(null);
     setBusy(true);
     try {
-      await (installer ?? native.downloadAndInstallApk.bind(native))(info.ipkUrl, info.ipkHash, (p) =>
-        setPct(typeof p === 'number' && isFinite(p) ? Math.max(0, Math.min(100, Math.round(p))) : null),
+      await (installer ?? native.downloadAndInstallApk.bind(native))(
+        info.ipkUrl,
+        info.ipkHash,
+        (p) => setPct(typeof p === 'number' && isFinite(p) ? Math.max(0, Math.min(100, Math.round(p))) : null),
+        info.apks,
       );
       setLaunching(true);
     } catch (e) {

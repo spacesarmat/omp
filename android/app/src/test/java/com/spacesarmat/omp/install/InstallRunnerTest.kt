@@ -122,6 +122,24 @@ class InstallRunnerTest {
     }
 
     @Test
+    fun atvGetsTheApkForTheTvsAbi() {
+        val rel = "https://github.com/spacesarmat/omp/releases/download/v0.15.0/"
+        val arm64 = ByteArray(1500) { 6 }
+        val armv7 = ByteArray(1200) { 7 }
+        val feed = """{"version":"0.15.0","ipkUrl":"$apkUrl","ipkHash":"${sha256(apkBytes)}","ipkSize":${apkBytes.size},
+            "apks":{"arm64":{"url":"${rel}a64.apk","sha256":"${sha256(arm64)}","size":${arm64.size}},
+                    "armv7":{"url":"${rel}a32.apk","sha256":"${sha256(armv7)}","size":${armv7.size}}}}"""
+        val http = FakeHttp(mapOf(Releases.FEED_ANDROID to feed.toByteArray(), apkUrl to apkBytes, "${rel}a64.apk" to arm64, "${rel}a32.apk" to armv7))
+        // a 32-bit TV: the phone itself is arm64, the TV's abilist decides
+        val tv = FakeAdb(props = mapOf("ro.build.version.sdk" to "28", "ro.product.cpu.abi" to "armeabi-v7a", "ro.product.cpu.abilist" to "armeabi-v7a,armeabi"))
+        val s = setup(http = http, adb = tv)
+        val out = s.runner.run(InstallRequest(InstallRequest.ATV, "192.168.1.9", null, false), Recorder(), CancelToken())
+        assertEquals("0.15.0", out.version)
+        assertTrue(armv7.contentEquals(s.adb.installed!!))
+        assertTrue(http.requested.none { it.endsWith("a64.apk") || it == apkUrl })
+    }
+
+    @Test
     fun atvUnauthorizedDownloadsNothing() {
         val s = setup(adb = FakeAdb(shellError = dadb.AdbAuthException("Device rejected authentication (unauthorized)", null)))
         assertEquals(InstallCodes.UNAUTHORIZED, code { s.runner.run(InstallRequest(InstallRequest.ATV, "192.168.1.9", null, false), Recorder(), CancelToken()) })

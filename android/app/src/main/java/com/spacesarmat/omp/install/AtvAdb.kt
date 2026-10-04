@@ -41,8 +41,8 @@ interface AdbConnector {
     fun connect(ip: String, port: Int, cancel: CancelToken): AdbDevice
 }
 
-/** What the box told about itself. */
-data class AtvInfo(val sdkInt: Int?, val abi: String?)
+/** What the box told about itself; [abis] is `ro.product.cpu.abilist` (primary first), the APK is picked by it. */
+data class AtvInfo(val sdkInt: Int?, val abi: String?, val abis: List<String> = listOfNotNull(abi))
 
 class AtvAdbInstaller(private val connector: AdbConnector) {
     /** Connects and reads Android version and ABI; the first call is where authorization happens. */
@@ -52,7 +52,8 @@ class AtvAdbInstaller(private val connector: AdbConnector) {
         try {
             val sdk = device.shell("getprop ro.build.version.sdk").trim().toIntOrNull()
             val abi = device.shell("getprop ro.product.cpu.abi").trim().takeIf { Regex("^[A-Za-z0-9_-]{1,32}$").matches(it) }
-            return device to AtvInfo(sdk, abi)
+            val list = ApkAbi.parseAbiList(device.shell("getprop ro.product.cpu.abilist"))
+            return device to AtvInfo(sdk, abi, list.ifEmpty { listOfNotNull(abi) })
         } catch (e: Exception) {
             try {
                 device.close()

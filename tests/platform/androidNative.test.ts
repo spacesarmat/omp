@@ -90,6 +90,12 @@ describe('installApk', () => {
     expect(seen).toEqual([42, 100]);
     expect(b.removed).toEqual(['OmpNative:apkProgress']);
   });
+  it('passes the per-ABI APKs to the plugin when the feed has them', async () => {
+    const b = bridgeOnly({ downloadAndInstallApk: () => Promise.resolve() });
+    const apks = { arm64: { url: 'https://x/omp-arm64.apk', sha256: 'c'.repeat(64), size: 5 } };
+    await installApk('https://x/omp.apk', 'a'.repeat(64), () => undefined, apks);
+    expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'downloadAndInstallApk', { url: 'https://x/omp.apk', sha256: 'a'.repeat(64), apks });
+  });
   it('rejects with the native Russian message and removes the listener', async () => {
     const b = bridgeOnly({ downloadAndInstallApk: () => Promise.reject({ message: 'Обновление уже скачивается' }) });
     await expect(installApk('https://x/a.apk', 'b'.repeat(64), () => undefined)).rejects.toThrow('Обновление уже скачивается');

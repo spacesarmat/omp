@@ -301,3 +301,8 @@ OMP распространяется на условиях [GNU GPL v3](LICENSE)
 
 - [JSch](https://github.com/mwiede/jsch) (форк mwiede) — SSH к LG в режиме разработчика; BSD 3-Clause (включает JZlib — BSD, jBCrypt — ISC).
 - [dadb](https://github.com/mobile-dev-inc/dadb) — adb по сети к Android TV; Apache License 2.0.
+
+Плеер на Android TV:
+
+- [AndroidX Media3](https://github.com/androidx/media) (ExoPlayer) — встроенный плеер; Apache License 2.0.
+- [libVLC для Android](https://code.videolan.org/videolan/libvlcjni) (`org.videolan.android:libvlc-all`) — второй движок плеера; GNU LGPL 2.1. Библиотека подключается без изменений, её исходники — по ссылке.

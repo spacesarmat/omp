@@ -12,6 +12,13 @@ export function buildHomebrew(p: {
   description: string;
   notes: string[];
 }): { manifest: object; apps: object; update: object };
+export const APK_ABIS: string[];
+export function apkAbi(name: string): 'arm64' | 'armv7' | null;
+export interface AbiApk {
+  name: string;
+  sha256: string;
+  size: number;
+}
 export function buildAndroidUpdate(p: {
   tag: string;
   version: string;
@@ -19,4 +26,5 @@ export function buildAndroidUpdate(p: {
   sha256: string;
   size: number;
   notes: string[];
+  abis?: Partial<Record<'arm64' | 'armv7', AbiApk>>;
 }): object;
