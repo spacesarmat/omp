@@ -140,6 +140,17 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .sub-nobg span { text-shadow: 0 0 6px #000, 0 0 3px #000; }
 .next-banner { position: absolute; right: 80px; bottom: 240px; background: rgba(0, 0, 0, .85); padding: 24px 32px; border-radius: 14px; border: 2px solid var(--accent); max-width: 700px; }
 .next-banner .meta { color: var(--muted); font-size: 22px; margin-top: 8px; }
+/* «Поддержать» card of the player (purely visual: no focus, clicks pass through); no flex gap / inset for Chromium 53 */
+.next-banner.over-donate { bottom: 570px; }
+.donate-card { position: absolute; width: 600px; padding: 30px; border-radius: 27px; background: rgba(15, 17, 21, .92); display: flex; align-items: center; pointer-events: none; }
+.donate-pause { right: 80px; bottom: 280px; }
+.donate-credits { left: 80px; bottom: 72px; background: rgba(15, 17, 21, .94); }
+.donate-credits.raised { bottom: 280px; }
+.donate-qr { display: block; flex-shrink: 0; border-radius: 12px; }
+.donate-text { flex: 1; min-width: 0; margin-left: 30px; }
+.donate-title { font-size: 30px; font-weight: 700; }
+.donate-body { font-size: 22px; color: #c9ceda; line-height: 1.4; margin-top: 12px; }
+.donate-link { font-size: 20px; color: var(--muted); margin-top: 12px; }
 .player-error { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, .85); }
 .player-error .details { color: var(--muted); font-size: 24px; margin-top: 16px; }
 .brand { display: flex; align-items: center; margin-bottom: 32px; }

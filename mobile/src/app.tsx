@@ -27,6 +27,8 @@ import { ServerSettings } from './screens/ServerSettings';
 import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
 import { WhatsNewSheet } from './ui/WhatsNewSheet';
 import { DonateSheet } from './ui/DonateSheet';
+import { syncSupport, localSupportUntil } from './donate';
+import { torrents } from '../../src/store/library';
 import { checkWhatsNew } from '../../src/store/whatsNew';
 import { CHANGELOG } from '../../src/lib/changelogData';
 import { APP_VERSION } from '../../src/version';
@@ -164,6 +166,17 @@ export function App() {
       offOpen();
     };
   }, []);
+
+  // support code: the TVs learn it from the server's journal; a server (or a new one) without the mark gets it
+  useEffect(
+    () =>
+      effect(() => {
+        const list = torrents.value;
+        const c = client.value;
+        if (localSupportUntil.value) void syncSupport(c, list);
+      }),
+    [],
+  );
 
   // embedded TorrServer: status, silent autostart (errors only go to the store), sync with the service
   useEffect(() => {

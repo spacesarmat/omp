@@ -17,6 +17,8 @@ import { segmentsMessage, sanitizeNativeMark } from './nativeSkip';
 import { applyMark, chapterList } from './chapters';
 import { formatDuration } from '../lib/format';
 import { errorMessage } from '../api/http';
+import { DONATE_QR } from '../ui/donateQr';
+import { DONATE_QR_LABEL } from '../lib/donate';
 
 export interface NativeQueueItem {
   url: string;
@@ -36,6 +38,21 @@ export interface NativeStartOptions {
   audioLang: string;
   subLang: string;
   subtitlesOn: boolean;
+  /** Show the «Поддержать» card (pause, credits): not a supporter and a method opens the QR link. */
+  donate?: boolean;
+}
+
+/** The «Поддержать» card of the native player: QR rows («1» dark, no quiet zone) and the short link. */
+export interface NativeDonate {
+  modules: number;
+  bits: string;
+  label: string;
+}
+
+/** The donate card for playNative; absent when it must not show. */
+export function nativeDonate(on: boolean | undefined): NativeDonate | undefined {
+  if (!on || DONATE_QR.bits.length !== DONATE_QR.modules * DONATE_QR.modules) return undefined;
+  return { modules: DONATE_QR.modules, bits: DONATE_QR.bits, label: DONATE_QR_LABEL };
 }
 
 export interface NativeState {
@@ -196,6 +213,7 @@ export class NativeSession {
   private readonly durations: { [index: number]: number } = {};
   /** The last segments message sent per item (sent again only when it changes). */
   private readonly sent: { [index: number]: string } = {};
+  private donateOff = false;
 
   constructor(
     plugin: OmpNativeTvPlugin,
@@ -232,7 +250,9 @@ export class NativeSession {
         this.pos = { index: o.index, time: o.startAt, duration: 0 };
         this.launched = true;
         openRuns++;
+        const donate = nativeDonate(o.donate);
         return this.plugin.playNative({
+          ...(donate ? { donate } : {}),
           queue: toNativeQueue(this.queue, this.client),
           index: o.index,
           startAt: o.startAt,
@@ -269,6 +289,13 @@ export class NativeSession {
       out = { id: cmd.id, type: 'seek', t: ch.start };
     }
     this.plugin.nativePlayerCommand({ cmd: out }).catch(() => undefined);
+  }
+
+  /** A support code became known: the native player hides the «Поддержать» card for the rest of the run (once). */
+  hideDonate(): void {
+    if (this.done || this.donateOff) return;
+    this.donateOff = true;
+    this.plugin.nativePlayerCommand({ cmd: { type: 'donate', on: false, session: this.sid } }).catch(() => undefined);
   }
 
   /**

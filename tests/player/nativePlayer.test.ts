@@ -8,6 +8,7 @@ import { getLocalProgress, reloadProgress, saveProgress } from '../../src/store/
 import { decideStart } from '../../src/player/resume';
 import type { PlayItem } from '../../src/player/types';
 import { WatchJournal, journalSource } from '../../src/player/watchJournal';
+import { DONATE_QR } from '../../src/ui/donateQr';
 
 const H1 = 'a'.repeat(40);
 
@@ -142,6 +143,22 @@ describe('NativeSession', () => {
       audioLang: 'ru', subLang: 'ru', subtitlesOn: false,
     });
     expect(arg.queue[0].url.indexOf('http://u:p@h:1/')).toBe(0);
+  });
+
+  it('«Поддержать»: the QR card goes with playNative when enabled; hideDonate turns it off once', async () => {
+    const f = fakePlugin();
+    const { c } = fakeClient();
+    const s = track(new NativeSession(f.plugin, c, queue));
+    await s.start({ ...opts, donate: true });
+    const arg = f.plugin.playNative.mock.calls[0][0];
+    expect(arg.donate).toEqual({ modules: DONATE_QR.modules, bits: DONATE_QR.bits, label: 'boosty.to/djmaker' });
+    s.hideDonate();
+    s.hideDonate();
+    expect(f.plugin.nativePlayerCommand).toHaveBeenCalledTimes(1);
+    expect(f.plugin.nativePlayerCommand).toHaveBeenCalledWith({ cmd: { type: 'donate', on: false, session: arg.session } });
+    const g = fakePlugin();
+    await track(new NativeSession(g.plugin, c, queue)).start({ ...opts, donate: false });
+    expect('donate' in g.plugin.playNative.mock.calls[0][0]).toBe(false);
   });
 
   it('saves locally every 5 s and to the server every 15 s (driven by state events)', async () => {

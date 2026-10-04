@@ -2,8 +2,9 @@
 // the torrent list first (another device may have written meanwhile) and every failure is swallowed: the journal must
 // never break playback.
 import type { Torrent } from '../api/types';
-import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, withWatch } from '../lib/journal';
+import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, withWatch, supportOf, supportOfList, withSupport } from '../lib/journal';
 import { torrents } from './library';
+import { noteSupport } from './support';
 
 export interface JournalClient {
   list(): Promise<Torrent[]>;
@@ -86,6 +87,7 @@ function torrentOf(all: Torrent[] | null | undefined, hash: string): Torrent | u
 /** Skip settings of a torrent; defaults (everything off) when there are none or the torrent is unknown. */
 export function loadSkip(c: Pick<JournalClient, 'list'>, hash: string): Promise<SkipPrefs> {
   return c.list().then((all) => {
+    noteSupport(all); // the TV player hides the «Поддержать» card for a supporter
     const t = torrentOf(all, hash);
     const p = t ? parseData(t.data) : null;
     return (p && p.skip) || { i: false, c: false };
@@ -177,4 +179,39 @@ export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watc
     if (chains[hash] === tail) delete chains[hash];
   });
   return run;
+}
+
+/**
+ * Support code applied on a phone: makes sure the server carries `omp.d.until` ≥ `until` (the TVs read the latest
+ * one among all torrents). Nothing is written when some torrent already has it; otherwise one torrent gets it — the
+ * newest one whose data OMP may change — keeping the history, the skip settings and every other key of `data`.
+ * Resolves true when the server has the mark afterwards, false when there was nowhere to write or the write failed
+ * (never rejects).
+ */
+export function saveSupport(c: JournalClient, until: number): Promise<boolean> {
+  return c.list().then((all) => {
+    const list = (all || []).filter((x) => !!x && typeof x.hash === 'string');
+    if (supportOfList(list) >= until) return true;
+    const sorted = list.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const t = sorted.filter((x) => parseData(x.data) !== null)[0];
+    if (!t) return false;
+    let ok = false;
+    return enqueue(t.hash, () =>
+      c.list().then((fresh) => {
+        const cur = torrentOf(fresh, t.hash);
+        const parsed = cur ? parseData(cur.data) : null;
+        if (!cur || !parsed) return undefined;
+        if (supportOf(cur.data) >= until) {
+          ok = true;
+          return undefined;
+        }
+        const base = baseOf(cur, parsed);
+        const data = serializeData(withSupport(base.obj, until), base.journal, base.skip);
+        return c.setData(cur, data).then(() => {
+          ok = true;
+          patchLibrary(cur.hash, data);
+        });
+      }),
+    ).then(() => ok);
+  }, () => false);
 }

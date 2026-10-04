@@ -47,18 +47,19 @@ export function NextBanner(p: { seconds: number; title: string; onNext: () => vo
   );
 }
 
-export function SkipBanner(p: { onSkip: () => void }) {
+/** `lift`: above the «Поддержать» card shown on pause in the same corner. */
+export function SkipBanner(p: { onSkip: () => void; lift?: boolean }) {
   return (
-    <div class="next-banner" onClick={(e) => { e.stopPropagation(); p.onSkip(); }}>
+    <div class={'next-banner' + (p.lift ? ' over-donate' : '')} onClick={(e) => { e.stopPropagation(); p.onSkip(); }}>
       <div>Пропустить заставку</div>
       <div class="meta">OK — пропустить · Назад — смотреть</div>
     </div>
   );
 }
 
-export function UndoBanner(p: { text: string; onUndo: () => void }) {
+export function UndoBanner(p: { text: string; onUndo: () => void; lift?: boolean }) {
   return (
-    <div class="next-banner" onClick={(e) => { e.stopPropagation(); p.onUndo(); }}>
+    <div class={'next-banner' + (p.lift ? ' over-donate' : '')} onClick={(e) => { e.stopPropagation(); p.onUndo(); }}>
       <div>{p.text} · Вернуть</div>
       <div class="meta">OK — вернуть</div>
     </div>

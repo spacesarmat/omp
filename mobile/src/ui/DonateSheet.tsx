@@ -1,13 +1,15 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Clipboard } from '@capacitor/clipboard';
 import { Sheet } from './Sheet';
 import { sheetBackHandler } from './UpdateSheet';
 import { showToast } from './toast';
-import { donateOpen, closeDonate, activeMethods, type DonateMethod } from '../donate';
+import { donateOpen, closeDonate, activeMethods, applySupportCode, supporterActive, supportThanks, supportUntilAll, type DonateMethod } from '../donate';
 
 export interface DonateActions {
   openUrl(url: string): void;
   copy(text: string): Promise<unknown>;
+  /** Text of the clipboard («Вставить» of the support code). */
+  paste(): Promise<string>;
 }
 
 const defaults: DonateActions = {
@@ -15,6 +17,7 @@ const defaults: DonateActions = {
     window.open(url, '_system');
   },
   copy: (text) => Clipboard.write({ string: text }),
+  paste: () => Clipboard.read().then((r) => (r && typeof r.value === 'string' ? r.value : '')),
 };
 
 let actions: DonateActions = defaults;
@@ -22,6 +25,76 @@ let actions: DonateActions = defaults;
 /** Replaces the link opener / clipboard (tests); no argument restores the real ones. */
 export function setDonateActions(a?: Partial<DonateActions>): void {
   actions = { ...defaults, ...a };
+}
+
+/** «Уже поддержали?»: the support code field; a valid code hides the prompts on the phone and the TVs. */
+function SupportCodeBox() {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const paste = async () => {
+    try {
+      const t = await actions.paste();
+      if (t) {
+        setCode(t.trim());
+        setError('');
+      } else showToast('Буфер обмена пуст');
+    } catch (e) {
+      showToast('Не удалось вставить');
+    }
+  };
+  const apply = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await applySupportCode(code);
+      if (r.ok) {
+        setError('');
+        setCode('');
+      } else setError(r.error);
+    } catch (e) {
+      setError('Код не подходит');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="m-support">
+      <div class="m-support-title">Уже поддержали?</div>
+      <div class="m-muted m-small m-support-text">
+        Код поддержки опубликован на Boosty для подписчиков и меняется каждый месяц. С кодом OMP не просит о поддержке ни на телефоне, ни на телевизорах.
+      </div>
+      <label class="m-support-label">
+        Код поддержки
+        <input
+          class="m-input m-support-input"
+          type="text"
+          value={code}
+          placeholder="OMP-ГГГГ-ММ-…"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck={false}
+          onInput={(e) => {
+            setCode((e.currentTarget as HTMLInputElement).value);
+            setError('');
+          }}
+        />
+      </label>
+      <div class="m-support-actions">
+        <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void paste()}>
+          Вставить
+        </button>
+        <button type="button" class="m-btn m-btn-primary m-btn-sm" disabled={busy || !code.trim()} onClick={() => void apply()}>
+          Применить
+        </button>
+      </div>
+      {error && (
+        <div class="m-error" role="alert">
+          {error}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** «Поддержать OMP»: a short text and a button per configured method. */
@@ -40,6 +113,7 @@ export function DonateSheet({ methods }: { methods?: DonateMethod[] }) {
   }, [open]);
   if (!open) return null;
   const list = activeMethods(methods);
+  const active = supporterActive();
   const copy = async (address: string) => {
     try {
       await actions.copy(address);
@@ -74,6 +148,12 @@ export function DonateSheet({ methods }: { methods?: DonateMethod[] }) {
               {m.title}
             </button>
           ),
+        )}
+        <SupportCodeBox />
+        {active && (
+          <div class="m-support-ok" role="status">
+            {supportThanks(supportUntilAll.value)}
+          </div>
         )}
       </div>
       <button type="button" class="m-btn m-btn-secondary" onClick={closeDonate}>

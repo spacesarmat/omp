@@ -13,6 +13,11 @@
     <string name="player_credits_skipped">Титры пропущены</string>
     <string name="player_next_hint">OK — смотреть сейчас · Назад — отмена</string>
     <string name="player_error_hint">OK — повторить · Назад — выход</string>
+    <string name="player_donate_qr">QR-код ссылки на Boosty</string>
+    <string name="player_donate_pause_title">Нравится OMP?</string>
+    <string name="player_donate_pause_text">Поддержите разработку — наведите камеру телефона на код</string>
+    <string name="player_donate_credits_title">Досмотрели? Спасибо!</string>
+    <string name="player_donate_credits_text">OMP бесплатный и без рекламы. Поддержать — по коду с телефона</string>
 
     <style name="OmpPlayerTheme" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowFullscreen">true</item>

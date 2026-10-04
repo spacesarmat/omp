@@ -1,43 +1,16 @@
-import { signal } from '@preact/signals';
+import { computed, signal } from '@preact/signals';
 import { loadJson, saveJson } from '../../src/store/storage';
+import { client } from '../../src/store/servers';
+import { torrents } from '../../src/store/library';
+import { saveSupport, type JournalClient } from '../../src/store/journal';
+import { supportOfList } from '../../src/lib/journal';
+import { journalSupportUntil } from '../../src/store/support';
+import { verifySupportCode, type CodeCheck } from './supportCode';
 
-// «Поддержать OMP»: where the donation methods live. Fill a method in to show it; an empty one is hidden.
-// Nothing here is sent anywhere: the buttons only open the link (or copy an address) on the user's tap.
+// «Поддержать OMP» on the phone: the methods and the support code are shared with the TV (src/lib/donate.ts).
+import { activeMethods, DONATE_METHODS, supportActive, supportEndText, type DonateMethod } from '../../src/lib/donate';
 
-export interface Wallet {
-  network: string;
-  address: string;
-}
-
-export interface DonateMethod {
-  id: 'boosty' | 'yoomoney' | 'crypto';
-  title: string;
-  url?: string;
-  wallets?: Wallet[];
-}
-
-export const DONATE_METHODS: DonateMethod[] = [
-  { id: 'boosty', title: 'Boosty', url: 'https://boosty.to/djmaker/donate' },
-  { id: 'yoomoney', title: 'ЮMoney / СБП', url: '' },
-  { id: 'crypto', title: 'Криптовалюта', wallets: [] },
-];
-
-export const DONATE_URL = 'https://boosty.to/djmaker/donate';
-
-const isHttps = (u: unknown): u is string => typeof u === 'string' && /^https:\/\/\S+$/.test(u);
-const validWallet = (w: Wallet) => !!w && typeof w.network === 'string' && w.network.trim() !== '' && typeof w.address === 'string' && w.address.trim() !== '';
-
-/** Only the methods that are filled in, in the configured order. */
-export function activeMethods(list: DonateMethod[] = DONATE_METHODS): DonateMethod[] {
-  const out: DonateMethod[] = [];
-  for (const m of list) {
-    if (m.id === 'crypto') {
-      const wallets = (m.wallets || []).filter(validWallet);
-      if (wallets.length) out.push({ ...m, wallets });
-    } else if (isHttps(m.url)) out.push(m);
-  }
-  return out;
-}
+export { DONATE_METHODS, DONATE_URL, activeMethods, type DonateMethod, type Wallet } from '../../src/lib/donate';
 
 /** The donate sheet; opened from Settings, «Что нового» and the card. */
 export const donateOpen = signal(false);
@@ -61,7 +34,7 @@ export function ensureFirstRun(now: number = Date.now()): number {
 
 export function donateCardDue(methods: DonateMethod[] = DONATE_METHODS, now: number = Date.now()): boolean {
   const first = ensureFirstRun(now);
-  if (!activeMethods(methods).length) return false;
+  if (!activeMethods(methods).length || supporterActive(now)) return false;
   if (loadJson<unknown>(DONATE_CARD_KEY, false, (v) => typeof v === 'boolean') === true) return false;
   return now - first >= CARD_AFTER_MS;
 }
@@ -69,4 +42,89 @@ export function donateCardDue(methods: DonateMethod[] = DONATE_METHODS, now: num
 /** Any way of closing the card hides it for good. */
 export function dismissDonateCard(): void {
   saveJson(DONATE_CARD_KEY, true);
+}
+
+// ---- support code («Уже поддержали?») ----
+// The phone checks the code (supportCode.ts) and keeps only its end time: locally (works offline, in the backup)
+// and in the TorrServer journal (omp.d.until) for the TVs. The code itself is stored nowhere.
+
+export const SUPPORT_KEY = 'tsp.support';
+
+/** The stored support state: { until } (Unix ms); null when absent or malformed. */
+export function sanitizeSupportState(v: unknown): { until: number } | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const until = (v as { until?: unknown }).until;
+  return typeof until === 'number' && isFinite(until) && until > 0 ? { until: Math.floor(until) } : null;
+}
+
+const loadSupport = (): number => {
+  const s = sanitizeSupportState(loadJson<unknown>(SUPPORT_KEY, null, (v) => sanitizeSupportState(v) !== null));
+  return s ? s.until : 0;
+};
+
+/** End time of the code applied on this phone (0: none). */
+export const localSupportUntil = signal(loadSupport());
+
+/** Re-reads the stored state (after a backup restore; tests). */
+export function reloadSupport(): void {
+  localSupportUntil.value = loadSupport();
+}
+
+/** The prompts are hidden until: this phone's code or one applied elsewhere (the server's journal). */
+export const supportUntilAll = computed(() => Math.max(localSupportUntil.value, journalSupportUntil.value));
+
+export function supporterActive(now: number = Date.now()): boolean {
+  return supportActive(supportUntilAll.value, now);
+}
+
+export interface SupportIo {
+  verify(text: string, now: number): Promise<CodeCheck>;
+  /** The active server client (null: none). */
+  client(): JournalClient | null;
+}
+
+const realIo: SupportIo = {
+  verify: (text, now) => verifySupportCode(text, now),
+  client: () => client.value,
+};
+let io: SupportIo = realIo;
+
+/** Replaces the checker / server (tests); no argument restores the real ones. */
+export function setSupportIo(next?: Partial<SupportIo>): void {
+  io = { ...realIo, ...next };
+}
+
+let syncing: Promise<boolean> | null = null;
+
+/** Puts the phone's end time on the server when its journal has none as late (one write; never rejects). */
+export function syncSupport(c: JournalClient | null = io.client(), list: { data?: string }[] = torrents.value, now: number = Date.now()): Promise<boolean> {
+  const until = localSupportUntil.value;
+  if (!c || !supportActive(until, now) || supportOfList(list) >= until) return Promise.resolve(false);
+  if (syncing) return syncing;
+  const run = saveSupport(c, until).then(
+    (ok) => ok,
+    () => false,
+  );
+  syncing = run;
+  run.then(() => {
+    if (syncing === run) syncing = null;
+  });
+  return run;
+}
+
+/** «Применить»: checks the code, keeps its end time and shares it with the TVs through the server. */
+export async function applySupportCode(text: string, now: number = Date.now()): Promise<CodeCheck> {
+  const r = await io.verify(text, now);
+  if (!r.ok) return r;
+  if (r.until > localSupportUntil.value) {
+    saveJson(SUPPORT_KEY, { until: r.until });
+    localSupportUntil.value = r.until;
+  }
+  void syncSupport(io.client(), torrents.value, now);
+  return r;
+}
+
+/** «Спасибо! Просьбы о поддержке скрыты до 30 ноября на телефоне и телевизорах.» */
+export function supportThanks(until: number): string {
+  return 'Спасибо! Просьбы о поддержке скрыты до ' + supportEndText(until) + ' на телефоне и телевизорах.';
 }

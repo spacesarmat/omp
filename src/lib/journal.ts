@@ -1,9 +1,11 @@
 // Watch journal kept on TorrServer in the torrent `data` JSON under the key `omp`:
-// { "omp": { "v": 1, "h": [ { f, t, d, at, src, name? } ], "s"?: SkipPrefs, "w"?: false } }, newest first, at most JOURNAL_MAX entries,
+// { "omp": { "v": 1, "h": [ { f, t, d, at, src, name? } ], "s"?: SkipPrefs, "w"?: false, "d"?: { until } } }, newest first, at most JOURNAL_MAX entries,
 // one entry per file + source (+ device name). Every other key of `data` belongs to other clients
 // (TorrServer's own file list, Lampa, …) and is kept as is; a `data` that is not a JSON object is never touched.
 // `w: false` (v0.13) = don't watch for new episodes; a top-level `omp` key, so v0.12 clients keep it (they drop unknown
 // fields inside `s`).
+// `d: { until }` (v0.14.1) = a support code was applied on a phone: the TVs hide the «Поддержать» card until then
+// (Unix ms). Only the end time is ever written, never the code; any torrent of the server may carry it, the latest wins.
 
 export type JournalSrc = 'tv' | 'phone';
 
@@ -31,6 +33,11 @@ export interface SkipPrefs {
   mi?: [number, number];
   /** Manual credits: the last N seconds. */
   mc?: number;
+}
+
+/** Support mark of the journal (key `d`): prompts to donate are hidden until `until` (Unix ms). */
+export interface SupportMark {
+  until: number;
 }
 
 export interface ParsedData {
@@ -82,6 +89,13 @@ export function sanitizeSkip(v: unknown): SkipPrefs | null {
   const mc = finiteNum(v.mc);
   if (mc !== null && mc > 0) out.mc = mc;
   return out;
+}
+
+/** The support mark (key `d`): { until } with a positive Unix ms time; null when absent or malformed. */
+export function sanitizeSupport(v: unknown): SupportMark | null {
+  if (!isPlainObject(v)) return null;
+  const until = finiteNum(v.until);
+  return until !== null && until > 0 ? { until: Math.floor(until) } : null;
 }
 
 function readJournal(v: unknown): JournalEntry[] {
@@ -150,8 +164,11 @@ export function serializeData(obj: { [k: string]: unknown }, journal: JournalEnt
   const omp: { [k: string]: unknown } = {};
   // keys a newer OMP may add to the journal object survive this version's writes
   if (isPlainObject(old)) Object.keys(old).forEach((k) => {
-    if (k !== 'v' && k !== 'h' && k !== 's') omp[k] = old[k];
+    if (k !== 'v' && k !== 'h' && k !== 's' && k !== 'd') omp[k] = old[k];
   });
+  // the support mark is kept when valid, a malformed one is dropped
+  const support = isPlainObject(old) ? sanitizeSupport(old.d) : null;
+  if (support) omp.d = support;
   omp.v = JOURNAL_VERSION;
   omp.h = journal.slice(0, JOURNAL_MAX);
   if (keep) omp.s = keep;
@@ -174,6 +191,35 @@ export function withWatch(obj: { [k: string]: unknown }, watch: boolean): { [k: 
   const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
   if (watch) delete omp.w;
   else omp.w = false;
+  out[JOURNAL_KEY] = omp;
+  return out;
+}
+
+/** `omp.d.until` of a torrent's data; 0 when there is none. */
+export function supportOf(data: string | undefined | null): number {
+  const p = parseData(data);
+  const o = p ? p.obj[JOURNAL_KEY] : null;
+  const d = isPlainObject(o) ? sanitizeSupport(o.d) : null;
+  return d ? d.until : 0;
+}
+
+/** The latest `omp.d.until` among the torrents of a server (0: none). */
+export function supportOfList(list: { data?: string }[] | null | undefined): number {
+  let max = 0;
+  (list || []).forEach((t) => {
+    if (!t) return;
+    const u = supportOf(t.data);
+    if (u > max) max = u;
+  });
+  return max;
+}
+
+/** A copy of `obj` with omp.d set to { until }; write it with serializeData. */
+export function withSupport(obj: { [k: string]: unknown }, until: number): { [k: string]: unknown } {
+  const out: { [k: string]: unknown } = { ...obj };
+  const old = obj[JOURNAL_KEY];
+  const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
+  omp.d = { until: Math.floor(until) };
   out[JOURNAL_KEY] = omp;
   return out;
 }

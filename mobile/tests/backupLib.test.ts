@@ -68,7 +68,9 @@ describe('collectBackup', () => {
     put('tsp.localServer', { autostart: true });
     put('tsp.playlists', [{ url: 'http://x/p.m3u', title: 'P' }]);
     put('tsp.trackPrefs', { h1: { audioLang: 'ru' } });
+    put('tsp.support', { until: 1798934400000 });
     const b = collectBackup(NOW);
+    expect(b.data['tsp.support']).toEqual({ until: 1798934400000 });
     expect(Object.keys(b.data).sort()).toEqual(BACKUP_KEYS.map((k) => k.key).sort());
     expect((b.data['tsp.settings'] as { libraryView: string }).libraryView).toBe('list');
     expect(b.data['tsp.tvs']).toEqual([TV_LG, TV_ATV]);

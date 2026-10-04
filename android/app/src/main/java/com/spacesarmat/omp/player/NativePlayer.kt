@@ -17,7 +17,7 @@ data class QueueItem(
     val resumeMs: Long,
 )
 
-/** playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn }). */
+/** playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn, donate? }). */
 data class PlayRequest(
     val queue: List<QueueItem>,
     val index: Int,
@@ -29,6 +29,8 @@ data class PlayRequest(
     val subtitlesOn: Boolean,
     /** Echoed in every event so that the page tells runs apart (a new playNative takes an open player over). */
     val session: Long?,
+    /** The «Поддержать» card (pause, credits); null: not shown. */
+    val donate: DonateQr? = null,
 ) {
     companion object {
         /** Null when the queue is empty or malformed. */
@@ -68,6 +70,7 @@ data class PlayRequest(
                 subLang = o.optString("subLang"),
                 subtitlesOn = o.optBoolean("subtitlesOn", false),
                 session = if (o.opt("session") is Number) o.optLong("session") else null,
+                donate = DonateQr.parse(o.optJSONObject("donate")),
             )
         }
     }
@@ -126,6 +129,15 @@ object NativePlayerBridge {
         val p = player ?: return true
         val error = cmd.optBoolean("error", false)
         p.runOnUiThread { p.showMessage(text, error) }
+        return true
+    }
+
+    /** { type: "donate", on: false } from the page (a support code became known): the card is hidden for this run. */
+    fun donate(cmd: JSONObject): Boolean {
+        if (cmd.optBoolean("on", true)) return true
+        if (!current(cmd)) return true
+        val p = player ?: return true
+        p.runOnUiThread { p.hideDonate() }
         return true
     }
 

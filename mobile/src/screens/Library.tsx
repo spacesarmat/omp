@@ -21,7 +21,7 @@ import { episodeLabel, playableFiles } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
 import { native } from '../platform/native';
-import { donateCardDue, dismissDonateCard, openDonate } from '../donate';
+import { donateCardDue, dismissDonateCard, openDonate, supporterActive } from '../donate';
 import { localServer, startLocal, refreshLocalServer, LOCAL_URL } from '../server/localServer';
 
 const POLL_MS = 15000;
@@ -351,7 +351,7 @@ export function Library() {
           </div>
         )}
         <div class="m-lib-body" style={pullStyle}>
-          {donateCard && !unavailable && (
+          {donateCard && !unavailable && !supporterActive() && (
             <div class="m-donate-card" role="region" aria-label="Поддержать OMP">
               <span>OMP бесплатный и без рекламы. Если он вам полезен, можно поддержать разработку.</span>
               <div class="m-donate-actions">
