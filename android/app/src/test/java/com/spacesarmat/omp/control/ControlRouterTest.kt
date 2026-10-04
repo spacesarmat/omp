@@ -42,7 +42,11 @@ class ControlRouterTest {
             lastTransfer = t
             return outcome
         }
+        override fun cloudflarePoll(token: String, phone: String): JSONObject = relay.poll(token, phone)
+        override fun cloudflareAnswer(token: String, body: JSONObject): CloudflareRelay.Reply = relay.answer(token, body)
     }
+    private val stored = ArrayList<String>()
+    private val relay = CloudflareRelay({ root, cookies, ua, _ -> stored.add("$root:${cookies.size}:$ua") }, pickupMs = 2_000, answerMs = 2_000)
     private var outcome: SourcesOutcome = SourcesOutcome.Applied("ok")
     private var lastTransfer: SourcesTransfer? = null
     private val router = ControlRouter(pairing, actions)
@@ -319,5 +323,84 @@ class ControlRouterTest {
         val body = """{"v":1,"sources":{$sources},"rutracker":{"username":"${"u".repeat(100)}","password":"${"п".repeat(200)}"}${indexersPart(*items.toTypedArray())}}"""
         assertTrue(body.toByteArray(Charsets.UTF_8).size <= SourcesProtocol.MAX_BODY)
         assertEquals(200, req("POST", "/omp/sources", body, t).status)
+    }
+
+    @Test
+    fun flareSolverrAndCloudflareSwitchesTravelAsPlainSettings() {
+        val t = token()
+        val ok = sourcesBody(""","flaresolverr":"http://192.168.1.191:8191","cloudflare":{"kinozal":true,"rustorka":false}""")
+        assertEquals(200, req("POST", "/omp/sources", ok, t).status)
+        assertEquals("http://192.168.1.191:8191", lastTransfer!!.flaresolverr)
+        assertEquals(mapOf("kinozal" to true, "rustorka" to false), lastTransfer!!.cloudflare)
+        val bad = listOf(
+            ""","flaresolverr":"http://h:8191/"""",
+            ""","flaresolverr":"HTTP://h:8191"""",
+            ""","flaresolverr":"ftp://h"""",
+            ""","flaresolverr":"http://u@h"""",
+            ""","flaresolverr":"http://h/${"x".repeat(200)}"""",
+            ""","flaresolverr":1""",
+            ""","cloudflare":{}""",
+            ""","cloudflare":[]""",
+            ""","cloudflare":{"Kinozal":true}""",
+            ""","cloudflare":{"kinozal":"yes"}""",
+            ""","cloudflare":{${(1..41).joinToString(",") { "\"s$it\":true" }}}""",
+        )
+        for (b in bad) assertEquals(b, 400, req("POST", "/omp/sources", sourcesBody(b), t).status)
+    }
+
+    @Test
+    fun theLargestValidBodyWithCloudflareFitsTheLimit() {
+        val t = token()
+        val items = (1..20).map { """{"kind":"jackett","url":"http://192.168.1.$it:9117/${"p".repeat(170)}","key":"${"k".repeat(200)}","name":"${"н".repeat(40)}"}""" }
+        val sources = (1..40).joinToString(",") { """"indexer-prowlarr-${it.toString().padStart(23, '0')}":true""" }
+        val cf = (1..40).joinToString(",") { """"site-${it.toString().padStart(35, '0')}":false""" }
+        val flare = "http://192.168.100.200:8191/" + "f".repeat(172)
+        val body = """{"v":1,"sources":{$sources},"rutracker":{"username":"${"u".repeat(100)}","password":"${"п".repeat(200)}"}${indexersPart(*items.toTypedArray())},"flaresolverr":"$flare","cloudflare":{$cf}}"""
+        assertEquals(200, flare.length)
+        assertTrue(body.toByteArray(Charsets.UTF_8).size <= SourcesProtocol.MAX_BODY)
+        assertEquals(200, req("POST", "/omp/sources", body, t).status)
+    }
+
+    private fun solvedBody(id: String, host: String = "rustorka.example", extra: String = "") =
+        """{"id":"$id","result":"solved","host":"$host","cookies":[{"name":"cf_clearance","value":"cl-v4lue"}],"ua":"Mozilla/5.0 (Linux; Android 14; Pixel 8)","until":${System.currentTimeMillis() + 600_000}$extra}"""
+
+    @Test
+    fun cloudflareRoutesNeedTheTokenAndNeverEchoTheCookies() {
+        for (path in listOf(CloudflareProtocol.POLL, CloudflareProtocol.ANSWER)) {
+            assertEquals(path, 401, req("POST", path, "{}").status)
+            assertEquals(path, 401, req("GET", path).status)
+        }
+        // the answer carries cookies: refused before its body is read
+        assertEquals(401, router.precheck(ControlHead("POST", CloudflareProtocol.ANSWER, null, "application/json", 2))!!.status)
+        val t = token()
+        assertEquals(405, req("GET", CloudflareProtocol.POLL, "", t).status)
+        assertEquals(413, router.precheck(ControlHead("POST", CloudflareProtocol.ANSWER, t, "application/json", CloudflareProtocol.MAX_BODY + 1L))!!.status)
+        assertEquals(415, router.precheck(ControlHead("POST", CloudflareProtocol.ANSWER, t, "text/plain", 10))!!.status)
+        assertNull(router.precheck(ControlHead("POST", CloudflareProtocol.ANSWER, t, "application/json", 100)))
+        // nothing waits
+        assertTrue(JSONObject(req("POST", CloudflareProtocol.POLL, "{}", t).json).isNull("request"))
+        val asked = java.util.concurrent.Executors.newSingleThreadExecutor().submit<CloudflareRelay.Outcome> {
+            relay.ask("rustorka", okhttp3.HttpUrl.Builder().scheme("https").host("rustorka.example").build())
+        }
+        var request: JSONObject? = null
+        for (i in 0 until 100) {
+            val r = JSONObject(req("POST", CloudflareProtocol.POLL, "{}", t).json)
+            if (!r.isNull("request")) {
+                request = r.getJSONObject("request")
+                break
+            }
+            Thread.sleep(10)
+        }
+        assertEquals("rustorka", request!!.getString("site"))
+        assertEquals("https://rustorka.example/", request.getString("url"))
+        val id = request.getString("id")
+        assertEquals(400, req("POST", CloudflareProtocol.ANSWER, solvedBody(id, extra = ",\"x\":1"), t).status)
+        assertEquals(400, req("POST", CloudflareProtocol.ANSWER, solvedBody(id, host = "other.example"), t).status)
+        assertEquals(404, req("POST", CloudflareProtocol.ANSWER, solvedBody("c999"), t).status)
+        val ok = req("POST", CloudflareProtocol.ANSWER, solvedBody(id), t)
+        assertEquals(200, ok.status)
+        assertEquals("{\"ok\":true}", ok.json)
+        assertEquals(CloudflareRelay.Outcome.SOLVED, asked.get())
+        assertEquals(listOf("https://rustorka.example/:1:Mozilla/5.0 (Linux; Android 14; Pixel 8)"), stored)
     }
 }

@@ -6,6 +6,7 @@ import { createSecretStore, createSourceHttp } from '../sources/http';
 import type { NativeHttpRequest } from '../sources/http';
 import type { SecretStore, SourceHttp } from '../sources/types';
 import type { UpdateInfo } from '../lib/updateInfo';
+import type { CloudflareVisibleRequest } from '../sources/cloudflareCheck';
 
 type ApkFiles = NonNullable<UpdateInfo['apks']>;
 
@@ -44,8 +45,16 @@ export interface OmpNativeTvPlugin {
   vlcAvailable(): Promise<{ available?: boolean }>;
   /** Hosts of the device's /24 open on allowed ports (FlareSolverr 8191 on the TV); lan false off a home network. */
   scanLan(o: { ports: number[]; timeoutMs?: number }): Promise<{ hits?: unknown; lan?: unknown }>;
+  /**
+   * The visible Cloudflare check (a native dialog with the site under the remote, «Пройти на телефоне»): every text comes
+   * from src/sources/cloudflareCheck.ts. Cookies never come back: { result: solved | cancelled | busy | failed, via? }.
+   */
+  cloudflareVisible(o: CloudflareVisibleRequest): Promise<{ result?: string; via?: string; sent?: boolean }>;
+  /** When the stored Cloudflare clearance of the site of url ends (epoch ms), null without one. */
+  cloudflareClearance(o: { url: string }): Promise<{ until?: number | null }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
+
 
 interface CapacitorBridge {
   Plugins?: { [name: string]: any };
@@ -86,6 +95,8 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     remoteSourcesPending: () => np.call(cap, NAME, 'remoteSourcesPending', {}),
     vlcAvailable: () => np.call(cap, NAME, 'vlcAvailable', {}),
     scanLan: (o) => np.call(cap, NAME, 'scanLan', o),
+    cloudflareVisible: (o) => np.call(cap, NAME, 'cloudflareVisible', o),
+    cloudflareClearance: (o) => np.call(cap, NAME, 'cloudflareClearance', o),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }
@@ -206,4 +217,14 @@ export function installApk(url: string, sha256: string, onProgress: (percent: nu
         throw new Error(describeApkError(e));
       },
     );
+}
+
+/** When the stored Cloudflare clearance of the site at url ends; null without one, outside the APK or on a failure. */
+export function nativeClearance(url: string): Promise<number | null> {
+  const p = nativePlugin();
+  if (!p || typeof p.cloudflareClearance !== 'function') return Promise.resolve(null);
+  return p.cloudflareClearance({ url }).then(
+    (r) => (r && typeof r.until === 'number' && isFinite(r.until) ? r.until : null),
+    () => null,
+  );
 }

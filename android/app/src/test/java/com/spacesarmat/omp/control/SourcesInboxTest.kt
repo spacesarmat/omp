@@ -279,4 +279,25 @@ class SourcesInboxTest {
         box.done(e2.getString("id"), null, false, 999)
         assertEquals(SourcesOutcome.Applied(null, SourcesProtocol.MAX_INDEXERS), f2.get(2, TimeUnit.SECONDS))
     }
+
+    @Test
+    fun theEventCarriesTheFlareSolverrAddressAndTheCloudflareSwitches() {
+        val box = inbox()
+        val t = SourcesTransfer(linkedMapOf("rutor" to true), null, "Pixel", emptyList(), "http://192.168.1.191:8191", linkedMapOf("kinozal" to true, "rustorka" to false))
+        val f = start(box, t)
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        assertEquals("http://192.168.1.191:8191", e.getString("flaresolverr"))
+        assertEquals(true, e.getJSONObject("cloudflare").getBoolean("kinozal"))
+        assertEquals(false, e.getJSONObject("cloudflare").getBoolean("rustorka"))
+        assertEquals(SourcesDone.STORED, box.done(e.getString("id"), null, false))
+        assertEquals(SourcesOutcome.Applied(null), f.get())
+        // without them the event has neither
+        val g = start(box, transfer(login = false))
+        val e2 = events.poll(2, TimeUnit.SECONDS)!!
+        assertFalse(e2.has("flaresolverr"))
+        assertFalse(e2.has("cloudflare"))
+        box.done(e2.getString("id"), null, false)
+        g.get()
+        assertTrue(t.toString().indexOf("192.168") < 0)
+    }
 }

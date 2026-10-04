@@ -12,6 +12,7 @@ import { client } from '../../../src/store/servers';
 import { rememberAdded } from '../../../src/store/library';
 import { errorMessage } from '../../../src/api/http';
 import { searchAll, type SearchHandle } from '../../../src/sources/search';
+import { onSearchFailure, type CheckedHosts } from '../../../src/sources/cloudflareCheck';
 import { allSources } from '../../../src/sources/registry';
 import { enabledSources } from '../../../src/sources/store';
 import { getHealth } from '../../../src/sources/store';
@@ -251,6 +252,11 @@ export function Add({ link }: { link?: string }) {
     e?.preventDefault();
     const q = query.trim();
     if (!q) return;
+    runSearch(q, {});
+  };
+
+  // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
+  const runSearch = (q: string, asked: CheckedHosts) => {
     if (memo.handle) memo.handle.cancel();
     setSearchError('');
     // callbacks come asynchronously, after `h` is assigned; they reach whichever Add screen is open
@@ -261,7 +267,13 @@ export function Add({ link }: { link?: string }) {
       ctx: phoneSourceContext(),
       sources: selected,
       onResult: notify,
-      onDone: notify,
+      onDone: (id, err) => {
+        notify();
+        // a site behind Cloudflare wants a person: the sheet opens, the search runs again once it is passed
+        if (err) onSearchFailure(id, err, asked, () => {
+          if (memo.handle === h) runSearch(q, asked);
+        });
+      },
     });
     memo.handle = h;
     memo.searched = q;

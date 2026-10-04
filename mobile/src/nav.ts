@@ -25,7 +25,8 @@ export type MRoute =
   | { name: 'backup' }
   | { name: 'sources' }
   /** «Источники поиска» → FlareSolverr. */
-  | { name: 'flaresolverr' };
+  | { name: 'flaresolverr' }
+  | { name: 'sourceSite'; id: string };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);

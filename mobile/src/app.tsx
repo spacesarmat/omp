@@ -15,6 +15,8 @@ import { Backup } from './screens/Backup';
 import { InstallAssistant } from './screens/InstallAssistant';
 import { Sources } from './screens/Sources';
 import { FlareSolverr } from './screens/FlareSolverr';
+import { SourceSite } from './screens/SourceSite';
+import { installPhoneCloudflare } from './cloudflare';
 import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
 import { Add } from './screens/Add';
@@ -185,6 +187,9 @@ export function App() {
     return watchLocalServer();
   }, []);
 
+  // the visible Cloudflare check: searches on the phone and «Пройти на телефоне» from the paired Android TV
+  useEffect(() => installPhoneCloudflare(), []);
+
   // «Что нового» once after an update
   useEffect(() => {
     checkWhatsNew(CHANGELOG, APP_VERSION);
@@ -228,6 +233,8 @@ export function App() {
         <Backup />
       ) : route.name === 'sources' ? (
         <Sources />
+      ) : route.name === 'sourceSite' ? (
+        <SourceSite id={route.id} />
       ) : route.name === 'flaresolverr' ? (
         <FlareSolverr />
       ) : route.name === 'library' ? (

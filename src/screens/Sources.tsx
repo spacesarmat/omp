@@ -17,7 +17,10 @@ import { checkedText, connLine, connTitle, getIndexerStatus, onIndexerStatus, re
 import type { SourceContext } from '../sources/types';
 import { hostName, readTorznabImports } from '../sources/indexerDiscovery';
 import { client } from '../store/servers';
-import { nativeScanLan } from '../platform/androidNative';
+import { nativeClearance, nativeScanLan } from '../platform/androidNative';
+import { BYPASS_WARNING, runCloudflareCheck, tvSiteNote } from '../sources/cloudflareCheck';
+import { CF_INTERACTIVE } from '../sources/cloudflare';
+import { isCloudflareBypassOn, onCloudflareBypassChange, setCloudflareBypass } from '../sources/store';
 import { flareSolverrUrl, onFlareChange } from '../sources/flareStore';
 import { flareStatus, onFlareStatus, tvFlareLines, tvFlareRefresh } from '../sources/flaresolverr';
 import type { LanScan } from '../sources/indexerDiscovery';
@@ -101,7 +104,15 @@ export function SourcesScreen({
   now = Date.now,
   server = chosenServer,
   scan = tvScan,
-}: { ctx?: () => SourceContext; now?: () => number; server?: () => TorrServerSettings | null; scan?: () => LanScan | null } = {}) {
+  clearance = nativeClearance,
+}: {
+  ctx?: () => SourceContext;
+  now?: () => number;
+  server?: () => TorrServerSettings | null;
+  scan?: () => LanScan | null;
+  /** When the stored Cloudflare clearance of a site ends (tests pass a fake). */
+  clearance?: (url: string) => Promise<number | null>;
+} = {}) {
   const [, setTick] = useState(0);
   const rerender = () => setTick((n) => n + 1);
   const [logged, setLogged] = useState<{ [id: string]: boolean }>({});
@@ -111,6 +122,21 @@ export function SourcesScreen({
   // the Jackett / Prowlarr sources have their own group
   const builtins = builtinSources().filter((s) => s.kind !== 'indexer');
   const indexers = indexerConnections();
+  // sites behind Cloudflare (Source.cloudflare) and when their clearance ends
+  const cfSites = builtins.filter((s) => s.cloudflare === true);
+  const [until, setUntil] = useState<{ [id: string]: number | null }>({});
+
+  const readClearance = (alive: () => boolean) => {
+    cfSites.forEach((s) => {
+      if (!s.siteUrl) return;
+      clearance(s.siteUrl).then(
+        (u) => {
+          if (alive()) setUntil((m) => ({ ...m, [s.id]: u }));
+        },
+        () => undefined,
+      );
+    });
+  };
 
   const checkIndexers = () => {
     indexerConnections().forEach((c) => {
@@ -152,6 +178,8 @@ export function SourcesScreen({
     });
     checkLogins(isAlive);
     checkIndexers();
+    readClearance(isAlive);
+    const offBypass = onCloudflareBypassChange(() => { if (alive) rerender(); });
     // the TorrServer Torznab hosts decide whether Torznab (TorrServer) is hidden
     const ts = server();
     readTorznabImports(ts ? ts.read : null, ts ? ts.host || undefined : undefined).then(() => {
@@ -165,8 +193,34 @@ export function SourcesScreen({
       offConns();
       offFlare();
       offFlareUrl();
+      offBypass();
     };
   }, []);
+
+  const needsCheck = (s: Source) => {
+    const h = getHealth(s.id);
+    return !!h && h.state === 'error' && h.message === CF_INTERACTIVE;
+  };
+
+  // OK on a site: the visible check when it waits for one, else the switch (turning it on shows the warning first)
+  const pressSite = (s: Source) => {
+    const on = isCloudflareBypassOn(s);
+    if (on && needsCheck(s) && s.siteUrl) {
+      runCloudflareCheck(s.name, s.siteUrl).then((r) => {
+        if (r !== 'solved') return;
+        clearHealth(s.id);
+        readClearance(() => true);
+      });
+      return;
+    }
+    if (on) {
+      setCloudflareBypass(s.id, false);
+      return;
+    }
+    confirmDialog(BYPASS_WARNING, 'Включить').then((ok) => {
+      if (ok) setCloudflareBypass(s.id, true);
+    });
+  };
 
   const toggle = (s: Source) => {
     setSourceOn(s.id, !isSourceOn(s));
@@ -304,6 +358,22 @@ export function SourcesScreen({
             </Focusable>
           ))}
           {torznabHiddenText(!ts.some((s) => s.id === 'ts-torznab')) && <div class="src-empty">{torznabHiddenText(true)}</div>}
+          {cfSites.length > 0 && <div class="src-group">Сайты за Cloudflare</div>}
+          {cfSites.map((s) => {
+            const on = isCloudflareBypassOn(s);
+            const note = tvSiteNote(on, needsCheck(s), until[s.id] === undefined ? null : until[s.id], now());
+            return (
+              <div class="src-line" key={'cf-' + s.id} data-cf-site={s.id}>
+                <Focusable focusKey={'src-cf-' + s.id} className="src-row src-row-builtin" onPress={() => pressSite(s)}>
+                  <span class="src-name">
+                    {s.name}
+                    <span class={'src-note src-note-' + note.tone}>{note.text}</span>
+                  </span>
+                  <span class={'src-act' + (on ? ' on' : '')}>{on ? 'вкл' : 'выкл'}</span>
+                </Focusable>
+              </div>
+            );
+          })}
           {builtins.length > 0 && <div class="src-group">Встроенные</div>}
           {builtins.map((s) => {
             const on = isSourceOn(s);

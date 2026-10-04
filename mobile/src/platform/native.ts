@@ -6,6 +6,7 @@ import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../
 import { log } from '../../../src/lib/log';
 import type { HttpResponse, SecretStore, SourceHttp } from '../../../src/sources/types';
 import type { ApkAbi, UpdateInfo } from '../../../src/lib/updateInfo';
+import type { CloudflareVisibleRequest } from '../../../src/sources/cloudflareCheck';
 
 type ApkFiles = NonNullable<UpdateInfo['apks']>;
 
@@ -144,6 +145,31 @@ export interface OmpNativeApi {
   secretDelete(key: string): Promise<void>;
   /** Writes `text` to a file `name` and opens the system «Поделиться». */
   shareText(o: { name: string; text: string; title?: string }): Promise<void>;
+  /** The visible Cloudflare check (native sheet); cookies never come back. */
+  cloudflareVisible(req: CloudflareVisibleRequest): Promise<{ result?: string; sent?: boolean; via?: string }>;
+  /** When the stored Cloudflare clearance of the site of url ends; null without one (or off-device). */
+  cloudflareClearance(url: string): Promise<number | null>;
+  /** Polls the paired Android TV for «Пройти на телефоне» (null stops). */
+  cloudflareWatch(target: { url: string; token: string; notify: string } | null): Promise<void>;
+  /** The TV's check still waiting for the person (the app was opened from the notification). */
+  cloudflarePending(): Promise<TvCloudflareRequest | null>;
+  onCloudflareRequest(cb: (r: TvCloudflareRequest) => void): () => void;
+}
+
+/** «Пройти на телефоне»: the TV asks the phone to pass the check of a site (its root only). */
+export interface TvCloudflareRequest {
+  id: string;
+  site: string;
+  url: string;
+}
+
+function tvRequest(v: unknown): TvCloudflareRequest | null {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as { id?: unknown; site?: unknown; url?: unknown };
+  if (typeof o.id !== 'string' || !/^[A-Za-z0-9-]{1,64}$/.test(o.id)) return null;
+  if (typeof o.site !== 'string' || !o.site || o.site.length > 60) return null;
+  if (typeof o.url !== 'string' || !/^https?:\/\/[^/?#@\s]+\/$/i.test(o.url)) return null;
+  return { id: o.id, site: o.site, url: o.url };
 }
 
 interface OmpNativePlugin {
@@ -181,6 +207,11 @@ interface OmpNativePlugin {
   secretSet(o: { key: string; value: string }): Promise<void>;
   secretDelete(o: { key: string }): Promise<void>;
   shareText(o: { name: string; text: string; title?: string }): Promise<void>;
+  cloudflareVisible(o: CloudflareVisibleRequest): Promise<{ result?: string; sent?: boolean; via?: string }>;
+  cloudflareClearance(o: { url: string }): Promise<{ until?: number | null }>;
+  cloudflareWatch(o: { url?: string; token?: string; notify?: string }): Promise<void>;
+  cloudflarePending(): Promise<{ request?: unknown }>;
+  addListener(event: 'cloudflareRequest', cb: (e: unknown) => void): Promise<PluginListenerHandle>;
   addListener(event: 'tvMessage', cb: (e: { json: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'tvClosed', cb: (e: { reason: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'apkProgress', cb: (e: { percent: number }) => void): Promise<PluginListenerHandle>;
@@ -525,7 +556,9 @@ export const native: OmpNativeApi = {
       status: typeof r?.status === 'number' ? r.status : 0,
       url: text(r?.url) ?? req.url,
       text: typeof r?.text === 'string' ? r.text : '',
-    };
+      // a passed Cloudflare check ('browser' | 'flaresolverr'): src/sources/http.ts logs it
+      ...((r as { cloudflare?: unknown } | undefined)?.cloudflare ? { cloudflare: (r as { cloudflare?: unknown }).cloudflare } : {}),
+    } as HttpResponse;
   },
 
   httpClearCookies(url) {
@@ -552,6 +585,38 @@ export const native: OmpNativeApi = {
   shareText(o) {
     if (!plugin) return unavailable();
     return logged('shareText', plugin.shareText(o));
+  },
+
+  cloudflareVisible(req) {
+    if (!plugin) return unavailable();
+    return plugin.cloudflareVisible(req);
+  },
+
+  async cloudflareClearance(url) {
+    if (!plugin) return null;
+    const r = await plugin.cloudflareClearance({ url });
+    return r && typeof r.until === 'number' && isFinite(r.until) ? r.until : null;
+  },
+
+  async cloudflareWatch(target) {
+    if (!plugin) return;
+    await plugin.cloudflareWatch(target ? { url: target.url, token: target.token, notify: target.notify } : {});
+  },
+
+  async cloudflarePending() {
+    if (!plugin) return null;
+    const r = await plugin.cloudflarePending();
+    return tvRequest(r && r.request);
+  },
+
+  onCloudflareRequest(cb) {
+    if (!plugin) return noop;
+    return listen(() =>
+      plugin.addListener('cloudflareRequest', (e) => {
+        const r = tvRequest(e);
+        if (r) cb(r);
+      }),
+    );
   },
 };
 

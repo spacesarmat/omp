@@ -62,6 +62,17 @@ class CloudflarePass(
         persist(map)
     }
 
+    /**
+     * A visible check passed (here or on the phone): [pairs] into the jar for [root]'s site until [until]; [ua] = the
+     * User-Agent they were earned with when it is not this device's (the phone's): requests to that host use it until
+     * then; null drops an override. Blocking (Keystore).
+     */
+    fun importClearance(root: HttpUrl, pairs: List<Pair<String, String>>, ua: String?, until: Long) {
+        val site = CloudflareSolver.siteRoot(root)
+        CloudflareCookies.import(jar, site, CloudflareCookies.clean(pairs), until)
+        if (ua != null) setAgent(site.host, ua, until) else clearAgent(site.host)
+    }
+
     @Synchronized
     fun clearAgent(host: String) {
         val map = loaded()

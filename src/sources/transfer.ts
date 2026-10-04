@@ -6,12 +6,14 @@
 // Jackett / Prowlarr connections travel with their API keys when the user leaves «вместе с ключами» on: the native side
 // stages each key in the encrypted storage (`indexer.pending.<i>.apikey`) and the event says only `key: true`; the page
 // moves it to the connection's own entry. The answer never echoes a key.
+// The phone's FlareSolverr address and the sites' «Обходить проверку Cloudflare» switches travel too (plain settings).
 // Shared by the phone and the TV bundles: Chromium 53 rules.
 import { isObject, loadJson, saveJson } from '../store/storage';
 import { RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA } from './rutrackerText';
 import { indexerId, indexerKeyName, indexerPendingKeyName, INDEXERS_MAX, INDEXER_SOURCE_PREFIX, NAME_MAX, normalizeIndexerUrl, storeIndexer } from './indexerStore';
 import type { IndexerConn, IndexerKind } from './indexerStore';
-import { clearHealth, getHealth, isSourceOn, setHealth, setSourceOn } from './store';
+import { clearHealth, getHealth, isCloudflareBypassOn, isSourceOn, setCloudflareBypass, setHealth, setSourceOn } from './store';
+import { normalizeFlareUrl, setFlareSolverrUrl } from './flareStore';
 import type { SecretStore, Source, SourceContext, SourceHealth } from './types';
 
 export const TRANSFER_PATH = '/omp/sources';
@@ -23,6 +25,7 @@ export const MAX_PASSWORD = 200;
 export const MAX_TRANSFER_INDEXERS = INDEXERS_MAX;
 export const MAX_INDEXER_URL = 200;
 export const MAX_INDEXER_KEY = 200;
+export const MAX_FLARE_URL = 200;
 /** Body size the TV reads at most (ControlRouter MAX_BODY). */
 export const MAX_TRANSFER_BYTES = 16384;
 /** Printable ASCII without spaces: what Jackett and Prowlarr keys are made of. */
@@ -53,6 +56,10 @@ export interface TransferPayload {
   sources: { [id: string]: boolean };
   rutracker?: TransferLogin;
   indexers?: TransferIndexer[];
+  /** The phone's FlareSolverr address (normal form). */
+  flaresolverr?: string;
+  /** «Обходить проверку Cloudflare» of every site behind Cloudflare (Source.cloudflare). */
+  cloudflare?: { [id: string]: boolean };
 }
 
 /** What the TV answers about the rutracker login. */
@@ -143,7 +150,7 @@ export function validateTransferPayload(v: unknown): TransferPayload | null {
   if (!isObject(v) || v.v !== TRANSFER_VERSION) return null;
   if (transferBytes(v) > MAX_TRANSFER_BYTES) return null;
   const keys = Object.keys(v);
-  for (let i = 0; i < keys.length; i++) if (['v', 'sources', 'rutracker', 'indexers'].indexOf(keys[i]) < 0) return null;
+  for (let i = 0; i < keys.length; i++) if (PAYLOAD_KEYS.indexOf(keys[i]) < 0) return null;
   const sources = validSources(v.sources);
   if (!sources) return null;
   const out: TransferPayload = { v: TRANSFER_VERSION, sources };
@@ -157,18 +164,55 @@ export function validateTransferPayload(v: unknown): TransferPayload | null {
     if (!list) return null;
     out.indexers = list;
   }
+  if (v.flaresolverr !== undefined) {
+    const flare = validFlare(v.flaresolverr);
+    if (!flare) return null;
+    out.flaresolverr = flare;
+  }
+  if (v.cloudflare !== undefined) {
+    const cf = validSources(v.cloudflare);
+    if (!cf) return null;
+    out.cloudflare = cf;
+  }
   return out;
 }
 
-/** The phone's switches of every source (on and off: the TV mirrors them), the login and the connections when given. */
-export function buildTransferPayload(list: Source[], login: TransferLogin | null, indexers?: TransferIndexer[]): TransferPayload {
+const PAYLOAD_KEYS = ['v', 'sources', 'rutracker', 'indexers', 'flaresolverr', 'cloudflare'];
+
+/** A FlareSolverr address already in its normal form (the TV saves it as it is). */
+function validFlare(v: unknown): string | null {
+  return typeof v === 'string' && v.length <= MAX_FLARE_URL && normalizeFlareUrl(v) === v ? v : null;
+}
+
+/**
+ * The phone's switches of every source (on and off: the TV mirrors them), the login and the connections when given,
+ * the Cloudflare switch of every site behind Cloudflare and the FlareSolverr address when one is saved.
+ */
+export function buildTransferPayload(list: Source[], login: TransferLogin | null, indexers?: TransferIndexer[], flare?: string | null): TransferPayload {
   const sources: { [id: string]: boolean } = {};
+  const cloudflare: { [id: string]: boolean } = {};
+  let cf = 0;
   list.forEach((s) => {
-    if (SOURCE_ID.test(s.id)) sources[s.id] = isSourceOn(s);
+    if (!SOURCE_ID.test(s.id)) return;
+    sources[s.id] = isSourceOn(s);
+    if (s.cloudflare === true && cf < MAX_TRANSFER_SOURCES) {
+      cloudflare[s.id] = isCloudflareBypassOn(s);
+      cf++;
+    }
   });
   const out: TransferPayload = { v: TRANSFER_VERSION, sources };
   if (login) out.rutracker = { username: login.username.trim(), password: login.password };
   if (indexers && indexers.length) out.indexers = indexers.slice(0, MAX_TRANSFER_INDEXERS);
+  const f = flare ? normalizeFlareUrl(flare) : null;
+  if (f) out.flaresolverr = f;
+  if (cf) out.cloudflare = cloudflare;
+  return out;
+}
+
+/** The payload without what an OMP on the TV older than v0.15 refuses (connections, FlareSolverr, Cloudflare switches). */
+export function withoutNewParts(p: TransferPayload): TransferPayload {
+  const out: TransferPayload = { v: p.v, sources: p.sources };
+  if (p.rutracker) out.rutracker = p.rutracker;
   return out;
 }
 
@@ -215,6 +259,10 @@ export interface RemoteSources {
   phone: string;
   /** When the TV received it (epoch ms), 0 when unknown. */
   at: number;
+  /** The phone's FlareSolverr address. */
+  flaresolverr?: string;
+  /** The sites' «Обходить проверку Cloudflare». */
+  cloudflare?: { [id: string]: boolean };
 }
 
 export function parseRemoteSources(d: unknown): RemoteSources | null {
@@ -240,6 +288,16 @@ export function parseRemoteSources(d: unknown): RemoteSources | null {
   }
   const out: RemoteSources = { id: d.id, sources, rutracker: d.rutracker === true, phone: phone || 'Телефон', at };
   if (d.indexers !== undefined) out.indexers = indexers;
+  if (d.flaresolverr !== undefined) {
+    const f = validFlare(d.flaresolverr);
+    if (!f) return null;
+    out.flaresolverr = f;
+  }
+  if (d.cloudflare !== undefined) {
+    const cf = validSources(d.cloudflare);
+    if (!cf) return null;
+    out.cloudflare = cf;
+  }
   return out;
 }
 
@@ -357,6 +415,16 @@ export function applyRemoteSources(r: RemoteSources, known: Source[], ctx: () =>
   Object.keys(r.sources).forEach((id) => {
     if (ids[id]) setSourceOn(id, r.sources[id]);
   });
+  // only for the sites this TV knows to be behind Cloudflare
+  const cfSites: { [id: string]: boolean } = {};
+  known.forEach((s) => {
+    if (s.cloudflare === true) cfSites[s.id] = true;
+  });
+  const cf = r.cloudflare || {};
+  Object.keys(cf).forEach((id) => {
+    if (cfSites[id]) setCloudflareBypass(id, cf[id]);
+  });
+  if (r.flaresolverr) setFlareSolverrUrl(r.flaresolverr);
   notify();
   const save = (rutracker: boolean) => {
     const prev = lastTransfer();

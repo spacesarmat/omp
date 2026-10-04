@@ -3,7 +3,6 @@ package com.spacesarmat.omp.sources
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import okhttp3.Cookie
 import okhttp3.HttpUrl
 
 /**
@@ -226,24 +225,7 @@ class CloudflareSolver(
      * say when a cookie ends: [COPIED_TTL_MS] is assumed; an earlier end shows as a new check, passed again.
      */
     internal fun copyCookies(root: HttpUrl, pairs: List<Pair<String, String>>) {
-        if (pairs.isEmpty()) return
-        val have = jar.loadForRequest(root).map { it.name }.toSet()
-        val domain = SiteCookieJar.siteOf(root)
-        val until = wallClock() + COPIED_TTL_MS
-        val out = ArrayList<Cookie>()
-        for ((name, value) in pairs) {
-            val cf = name == CLEARANCE || name.startsWith("__cf") || name.startsWith("cf_")
-            if (!cf && name in have) continue
-            try {
-                val b = Cookie.Builder().name(name).value(value).path("/").expiresAt(until)
-                if (domain == root.host) b.hostOnlyDomain(domain) else b.domain(domain)
-                if (root.isHttps) b.secure()
-                out.add(b.build())
-            } catch (e: IllegalArgumentException) {
-                // a cookie OkHttp refuses is skipped
-            }
-        }
-        jar.saveFromResponse(root, out)
+        CloudflareCookies.import(jar, root, CloudflareCookies.clean(pairs), wallClock() + COPIED_TTL_MS)
     }
 
     companion object {

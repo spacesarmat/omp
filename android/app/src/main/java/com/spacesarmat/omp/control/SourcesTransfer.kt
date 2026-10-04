@@ -16,6 +16,10 @@ class SourcesTransfer(
     val login: Login?,
     val phone: String,
     val indexers: List<Indexer> = emptyList(),
+    /** The phone's FlareSolverr address (normal form), null when none came. */
+    val flaresolverr: String? = null,
+    /** «Обходить проверку Cloudflare» per site id (Cloudflare-capable sites only), empty when none came. */
+    val cloudflare: Map<String, Boolean> = emptyMap(),
 ) {
     class Login(val username: String, val password: String) {
         override fun toString() = "Login(***)"
@@ -26,7 +30,8 @@ class SourcesTransfer(
         override fun toString() = "Indexer($kind, key=${key != null})"
     }
 
-    override fun toString() = "SourcesTransfer(${sources.size} sources, login=${login != null}, indexers=${indexers.size})"
+    override fun toString() =
+        "SourcesTransfer(${sources.size} sources, login=${login != null}, indexers=${indexers.size}, flare=${flaresolverr != null}, cloudflare=${cloudflare.size})"
 }
 
 /** What became of a transfer; the router turns it into the HTTP answer. */
@@ -68,7 +73,10 @@ object SourcesProtocol {
     const val MAX_INDEXER_NAME = 40
     val RESULTS = setOf("ok", "bad_login", "captcha", "error")
     private val SOURCE_ID = Regex("^[a-z0-9][a-z0-9-]{0,39}$")
-    private val KEYS = setOf("v", "sources", "rutracker", "indexers")
+    private val KEYS = setOf("v", "sources", "rutracker", "indexers", "flaresolverr", "cloudflare")
+    const val MAX_FLARE_URL = 200
+    /** The page's normal form of a FlareSolverr address (src/sources/flareStore.ts normalizeFlareUrl). */
+    private val FLARE_URL = Regex("""^https?://([a-z0-9.-]+|\[[0-9a-f:.]+])(:\d{1,5})?(/[^\s@?#]*)?$""")
     private val INDEXER_FIELDS = setOf("kind", "url", "name", "key")
     private val KINDS = setOf("jackett", "prowlarr")
     /** The page's normalized form: lowercase scheme and host, no credentials, query, hash or trailing slash. */
@@ -84,14 +92,7 @@ object SourcesProtocol {
         while (keys.hasNext()) if (keys.next() !in KEYS) return null
         val src = body.opt("sources") as? JSONObject ?: return null
         if (src.length() < 1 || src.length() > MAX_SOURCES) return null
-        val sources = LinkedHashMap<String, Boolean>()
-        val ids = src.keys()
-        while (ids.hasNext()) {
-            val id = ids.next()
-            val on = src.opt(id)
-            if (!SOURCE_ID.matches(id) || on !is Boolean) return null
-            sources[id] = on
-        }
+        val sources = switches(src) ?: return null
         val raw = body.opt("rutracker")
         val login = when {
             raw == null || raw == JSONObject.NULL -> null
@@ -104,7 +105,31 @@ object SourcesProtocol {
             rawIdx is JSONArray -> indexers(rawIdx) ?: return null
             else -> return null
         }
-        return SourcesTransfer(sources, login, phone, indexers)
+        val flare = when (val f = body.opt("flaresolverr")) {
+            null -> null
+            is String -> f.takeIf { it.length <= MAX_FLARE_URL && FLARE_URL.matches(it) && !it.endsWith("/") } ?: return null
+            else -> return null
+        }
+        val cloudflare = when (val c = body.opt("cloudflare")) {
+            null -> emptyMap()
+            is JSONObject -> if (c.length() < 1) return null else switches(c) ?: return null
+            else -> return null
+        }
+        return SourcesTransfer(sources, login, phone, indexers, flare, cloudflare)
+    }
+
+    /** { id: boolean }, 1..[MAX_SOURCES] source ids. */
+    private fun switches(o: JSONObject): Map<String, Boolean>? {
+        if (o.length() < 1 || o.length() > MAX_SOURCES) return null
+        val out = LinkedHashMap<String, Boolean>()
+        val ids = o.keys()
+        while (ids.hasNext()) {
+            val id = ids.next()
+            val on = o.opt(id)
+            if (!SOURCE_ID.matches(id) || on !is Boolean) return null
+            out[id] = on
+        }
+        return out
     }
 
     private fun indexers(a: JSONArray): List<SourcesTransfer.Indexer>? {
@@ -224,6 +249,13 @@ class SourcesInbox(
                     list.put(o)
                 }
                 event.put("indexers", list)
+            }
+            // not secrets: the FlareSolverr address and the sites' switches go to the page as they are
+            t.flaresolverr?.let { event.put("flaresolverr", it) }
+            if (t.cloudflare.isNotEmpty()) {
+                val cf = JSONObject()
+                for ((id, on) in t.cloudflare) cf.put(id, on)
+                event.put("cloudflare", cf)
             }
             p.event = event
             emit(event)

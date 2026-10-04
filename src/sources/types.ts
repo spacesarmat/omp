@@ -85,10 +85,14 @@ export interface Source {
    */
   resolve?(r: SourceResult, ctx: SourceContext): Promise<string>;
   /**
-   * The site's «Обходить проверку Cloudflare» is on now (its requests pass { cloudflare: true }): a check can make a
-   * request wait, so the search gives this source CLOUDFLARE_TIMEOUT_MS instead of SOURCE_TIMEOUT_MS.
+   * The site is behind Cloudflare: «Источники поиска» shows its «Обходить проверку Cloudflare» switch (store.ts
+   * cloudflareBypass, off by default). While the switch is on, its requests pass { cloudflare: true } (site.ts
+   * siteOptions) and the search gives it CLOUDFLARE_TIMEOUT_MS instead of SOURCE_TIMEOUT_MS (a check can make a request
+   * wait); a check that needs a person opens the visible check (cloudflareCheck.ts).
    */
-  cloudflare?: () => boolean;
+  cloudflare?: boolean;
+  /** The site's root (https://host/): the visible check and the clearance status of a Cloudflare site use it. */
+  siteUrl?: string;
   /** Sources with needsLogin: sign in; the credentials go to ctx.secrets only. Rejects in Russian. */
   login?(username: string, password: string, ctx: SourceContext): Promise<void>;
   /** Forgets the site cookies and the saved credentials. */

@@ -81,6 +81,10 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         // not retained: a page that was not listening asks for the one waiting transfer ([pendingSources])
         emit = { data -> emit("remoteSources", JSObject.fromJSONObject(data), false) },
     )
+    /** «Пройти на телефоне»: the phone's cookies and User-Agent go straight into the encrypted jar, never to the page. */
+    val cloudflare = CloudflareRelay({ root, cookies, ua, until ->
+        SourceServices.get(context).importClearance(root, cookies, ua, until)
+    })
     private val server = ControlServer(PORT, router::precheck) { router.route(it) }
     private val main = Handler(Looper.getMainLooper())
     private var nsdListener: NsdManager.RegistrationListener? = null
@@ -233,6 +237,10 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
     }
 
     override fun sources(t: SourcesTransfer): SourcesOutcome = inbox.receive(t)
+
+    override fun cloudflarePoll(token: String, phone: String): JSONObject = cloudflare.poll(token, phone)
+
+    override fun cloudflareAnswer(token: String, body: JSONObject): CloudflareRelay.Reply = cloudflare.answer(token, body)
 
     /** The event of the transfer still waiting for the page (a page that started listening late), or null. */
     fun pendingSources(): JSONObject? = inbox.pendingEvent()

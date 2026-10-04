@@ -187,6 +187,8 @@ button, .m-btn {
 }
 .m-tv-ok { display: flex; margin-top: 2px; align-items: center; gap: 4px; color: #3FB950; font-size: 13px; font-weight: 700; }
 .m-hint-warn { padding: 12px 14px; border-radius: 12px; background: #3A3320; color: var(--accent); font-size: 14px; line-height: 1.45; }
+/* «Обходить проверку Cloudflare»: the warning under the switch (mockup PhoneSite) */
+.m-cf-warn { padding: 10px 12px; border-radius: 10px; background: #3A3320; color: #F5D77A; font-size: 12px; line-height: 1.45; }
 .m-accent { color: var(--accent); }
 .m-tv-tip { margin-top: auto; }
 

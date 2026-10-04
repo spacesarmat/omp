@@ -11,6 +11,7 @@ import { toast } from '../ui/toast';
 import { platformKind } from '../platform/env';
 import { tvSourceContext } from '../sources/tvContext';
 import { searchAll } from '../sources/search';
+import { onSearchFailure, type CheckedHosts } from '../sources/cloudflareCheck';
 import type { SearchHandle } from '../sources/search';
 import { getHealth } from '../sources/store';
 import { isCloudflare, JACKETT_HINT, progressText, resolveLink, resultDate, resultKey, sortResults, sourceBadge, sourceName, stableOrder } from '../sources/view';
@@ -114,12 +115,19 @@ export function AddScreen() {
     setProg({ answered: h.answered().length, total: h.sourceIds.length, pending: h.pending(), failed: h.failed() });
   };
 
-  const searchUnified = (q: string) => {
+  // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
+  const searchUnified = (q: string, asked: CheckedHosts = {}) => {
     if (handle.current) handle.current.cancel();
     const h: SearchHandle = searchAll(q, {
       ctx: tvSourceContext(),
       onResult: () => sync(h),
-      onDone: () => sync(h),
+      onDone: (id, err) => {
+        sync(h);
+        // a site behind Cloudflare wants a person: the dialog opens, the search runs again once it is passed
+        if (err) onSearchFailure(id, err, asked, () => {
+          if (alive.current && handle.current === h) searchUnified(q, asked);
+        });
+      },
     });
     handle.current = h;
     order.current = [];

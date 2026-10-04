@@ -16,6 +16,7 @@ import {
   transferIndexers,
   transferWhen,
   validateTransferPayload,
+  withoutNewParts,
   type RutrackerResult,
   type TransferIndexer,
   type TransferLogin,
@@ -62,12 +63,13 @@ export function transferPayload(
   list: Source[],
   login: TransferLogin | null,
   indexers?: TransferIndexer[],
+  flare: string | null = flareSolverrUrl(),
 ): { payload: TransferPayload; loginDropped: boolean; indexersDropped: boolean } {
-  const full = validateTransferPayload(buildTransferPayload(list, login, indexers));
+  const full = validateTransferPayload(buildTransferPayload(list, login, indexers, flare));
   if (full) return { payload: full, loginDropped: false, indexersDropped: false };
-  const noLogin = validateTransferPayload(buildTransferPayload(list, null, indexers));
+  const noLogin = validateTransferPayload(buildTransferPayload(list, null, indexers, flare));
   if (noLogin) return { payload: noLogin, loginDropped: !!login, indexersDropped: false };
-  const bare = validateTransferPayload(buildTransferPayload(list, null));
+  const bare = validateTransferPayload(buildTransferPayload(list, null, undefined, flare));
   if (!bare) throw new Error(SOURCES_NOT_READY);
   return { payload: bare, loginDropped: !!login, indexersDropped: !!(indexers && indexers.length) };
 }
@@ -116,14 +118,13 @@ function SendToTv({ hasLogin, indexers, ctx }: { hasLogin: boolean; indexers: In
         loginDropped = p.loginDropped;
         indexersDropped = p.indexersDropped;
         sent = p.payload.indexers ? p.payload.indexers.length : 0;
+        const extras = !!(p.payload.indexers || p.payload.flaresolverr || p.payload.cloudflare);
         return sendSourcesToTv(p.payload).catch((e: unknown) => {
-          // an older OMP on the TV refuses the connections part: send the rest without it
-          if (!sent || !(e instanceof Error) || e.message !== SOURCES_REJECTED) throw e;
-          const rest: TransferPayload = { ...p.payload };
-          delete rest.indexers;
+          // an older OMP on the TV refuses the v0.15 parts (connections, FlareSolverr, Cloudflare switches): send the rest
+          if (!extras || !(e instanceof Error) || e.message !== SOURCES_REJECTED) throw e;
+          if (sent) indexersDropped = true;
           sent = 0;
-          indexersDropped = true;
-          return sendSourcesToTv(rest);
+          return sendSourcesToTv(withoutNewParts(p.payload));
         });
       })
       .then(
@@ -224,11 +225,14 @@ function SourceRow({
   note,
   login,
   onToggle,
+  onOpen,
 }: {
   source: Source;
   note: HealthLine | null;
   login?: { loggedIn: boolean; onLogin: () => void; onLogout: () => void };
   onToggle: () => void;
+  /** A site behind Cloudflare: its own screen (Cloudflare switch, warning). */
+  onOpen?: () => void;
 }) {
   const on = isSourceOn(source);
   const name = label(source);
@@ -249,6 +253,11 @@ function SourceRow({
               Войти
             </button>
           ))}
+        {onOpen && (
+          <button type="button" class="m-icon-btn" aria-label={'Настройки: ' + name} data-open={source.id} onClick={onOpen}>
+            <Icon d="M9 5l7 7-7 7" size={18} />
+          </button>
+        )}
         <button type="button" role="switch" aria-checked={on} aria-label={name} class={'m-switch' + (on ? ' on' : '')} onClick={onToggle}>
           <span class="m-switch-knob" />
         </button>
@@ -378,6 +387,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
                     : undefined
                 }
                 onToggle={() => toggle(s)}
+                onOpen={s.cloudflare === true ? () => navigate({ name: 'sourceSite', id: s.id }) : undefined}
               />
             ))}
           </div>

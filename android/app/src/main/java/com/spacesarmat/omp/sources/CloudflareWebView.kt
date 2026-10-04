@@ -32,8 +32,15 @@ class MainScheduler : CloudflareSolver.Scheduler {
  * requested are remembered (in memory, at most [MAX_SEEN]) so [forget] can expire cookies on every path and drop the
  * site's web storage. Nothing is logged.
  */
-class WebViewCloudflareBrowser(private val context: Context) : CloudflareBrowser {
+class WebViewCloudflareBrowser(
+    private val context: Context,
+    /** The visible check: the page is shown in a dialog of [context] (an Activity) and can take focus (TV remote). */
+    private val visible: Boolean = false,
+) : CloudflareBrowser {
     private var web: WebView? = null
+
+    /** The page, for the visible check to attach to its dialog. */
+    val view: WebView? get() = web
     private val seen = LinkedHashSet<String>()
 
     private fun remember(url: String?) {
@@ -44,8 +51,12 @@ class WebViewCloudflareBrowser(private val context: Context) : CloudflareBrowser
     @SuppressLint("SetJavaScriptEnabled")
     override fun open(url: String, userAgent: String, events: CloudflareBrowser.Events) {
         CookieManager.getInstance().setAcceptCookie(true)
-        val w = WebView(context.applicationContext)
+        val w = WebView(if (visible) context else context.applicationContext)
         web = w
+        if (visible) {
+            w.isFocusable = true
+            w.isFocusableInTouchMode = true
+        }
         CookieManager.getInstance().setAcceptThirdPartyCookies(w, true)
         w.settings.apply {
             javaScriptEnabled = true

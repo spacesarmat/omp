@@ -16,6 +16,10 @@ interface RemoteActions {
     fun volume(up: Boolean)
     /** «Передать на телевизор», already validated; blocks until the page applied it (see [SourcesInbox]). */
     fun sources(t: SourcesTransfer): SourcesOutcome
+    /** «Пройти на телефоне»: a paired phone polls for a check ([CloudflareRelay.poll]). */
+    fun cloudflarePoll(token: String, phone: String): JSONObject
+    /** The phone's answer to a check, already parsed as JSON ([CloudflareRelay.answer]). */
+    fun cloudflareAnswer(token: String, body: JSONObject): CloudflareRelay.Reply
 }
 
 /**
@@ -28,11 +32,16 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
      * body is read, and more than [SourcesProtocol.MAX_BODY] bytes is never read. Other routes: null (go on).
      */
     fun precheck(h: ControlHead): ControlResponse? {
-        if (h.path != SOURCES) return null
+        val max = when (h.path) {
+            SOURCES -> SourcesProtocol.MAX_BODY
+            // carries cookies: the same checks before the body is read
+            CloudflareProtocol.ANSWER -> CloudflareProtocol.MAX_BODY
+            else -> return null
+        }
         if (!pairing.isPaired(h.token)) return ControlResponse(401, ControlServer.error("unauthorized"))
         if (h.method != "POST") return methodNotAllowed()
         if (!isJson(h.contentType)) return ControlResponse(415, ControlServer.error("unsupported_media_type"))
-        if (h.length > SourcesProtocol.MAX_BODY) return ControlResponse(413, ControlServer.error("too_large"))
+        if (h.length > max) return ControlResponse(413, ControlServer.error("too_large"))
         return null
     }
 
@@ -53,6 +62,8 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         if (!pairing.isPaired(req.token)) return ControlResponse(401, ControlServer.error("unauthorized"))
         if (req.method != "POST") return methodNotAllowed()
         if (req.path == SOURCES) return sources(req)
+        if (req.path == CloudflareProtocol.ANSWER) return cloudflareAnswer(req)
+        if (req.path == CloudflareProtocol.POLL) return ok(actions.cloudflarePoll(req.token!!, pairing.phoneOf(req.token) ?: "Телефон"))
         val body = parse(req.body) ?: return badRequest()
         return when (req.path) {
             "/omp/launch" -> launch(body)
@@ -131,6 +142,19 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         }
     }
 
+    /** The answer never echoes the cookies or the User-Agent: only ok or an error code. */
+    private fun cloudflareAnswer(req: ControlRequest): ControlResponse {
+        if (!isJson(req.contentType)) return ControlResponse(415, ControlServer.error("unsupported_media_type"))
+        if (req.body.toByteArray(Charsets.UTF_8).size > CloudflareProtocol.MAX_BODY) return ControlResponse(413, ControlServer.error("too_large"))
+        val body = parse(req.body) ?: return badRequest()
+        return when (actions.cloudflareAnswer(req.token!!, body)) {
+            CloudflareRelay.Reply.OK -> okEmpty()
+            CloudflareRelay.Reply.BAD_REQUEST -> badRequest()
+            CloudflareRelay.Reply.UNKNOWN -> ControlResponse(404, ControlServer.error("no_request"))
+            CloudflareRelay.Reply.STORE_FAILED -> ControlResponse(500, ControlServer.error("secrets"))
+        }
+    }
+
     private fun volume(body: JSONObject): ControlResponse {
         when (body.opt("dir")) {
             "up" -> actions.volume(true)
@@ -144,7 +168,10 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         private const val SOURCES = "/omp/sources"
         private const val MAX_TEXT = 1000
         private const val MAX_REPORT = 200
-        private val PROTECTED = setOf("/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume", "/omp/sources")
+        private val PROTECTED = setOf(
+            "/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume", "/omp/sources",
+            CloudflareProtocol.POLL, CloudflareProtocol.ANSWER,
+        )
         val KEYS = setOf("UP", "DOWN", "LEFT", "RIGHT", "ENTER", "BACK", "CATALOG", "NOWPLAYING")
         private val REPORT = Regex("^http://.+", RegexOption.IGNORE_CASE)
 

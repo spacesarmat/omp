@@ -1,6 +1,7 @@
 package com.spacesarmat.omp.sources
 
 import android.content.Context
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONObject
 
@@ -91,6 +92,20 @@ class SourceServices private constructor(context: Context) {
         SecretAgentStore(secrets),
     )
     val siteHttp = SiteHttp(jar, cloudflare, agent)
+
+    /** This device's User-Agent (the visible check uses it, the phone sends it with a check it passed for the TV). */
+    fun userAgent(): String = agent()
+
+    /**
+     * A visible check passed: [pairs] (the cookies of [root]) into the jar until [until]. [ua] = the User-Agent they were
+     * earned with when it is not this device's (the phone's, for «Пройти на телефоне»): requests to that host use it
+     * until then; null = this device's own, any override is dropped. Blocking (Keystore).
+     */
+    fun importClearance(root: HttpUrl, pairs: List<Pair<String, String>>, ua: String?, until: Long) =
+        cloudflare.importClearance(root, pairs, ua, until)
+
+    /** When the stored clearance of [url]'s site ends, null without one. Blocking (Keystore). */
+    fun clearanceUntil(url: HttpUrl): Long? = CloudflareCookies.clearanceUntil(jar, url)
 
     /** Blocking. Throws [SiteHttpException]. */
     fun request(spec: HttpSpec): SiteHttp.Response =

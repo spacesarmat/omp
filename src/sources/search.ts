@@ -2,7 +2,7 @@
 // Cloudflare pass is on: a hidden check plus FlareSolverr can take that long; the other sources' results show meanwhile).
 import { mergeResults } from './merge';
 import { allSources } from './registry';
-import { enabledSources, setHealth as recordHealth } from './store';
+import { enabledSources, isCloudflareBypassOn, setHealth as recordHealth } from './store';
 import { isLoginRequired } from './types';
 import { log } from '../lib/log';
 import type { Source, SourceContext, SourceResult } from './types';
@@ -27,7 +27,7 @@ export interface SearchAllOptions {
   /** Once per source: after its results, or with the error (timeout included). */
   onDone?: (sourceId: string, error?: Error) => void;
   timeoutMs?: number;
-  /** Per-source timeout of the sources passing Cloudflare checks now (Source.cloudflare); default CLOUDFLARE_TIMEOUT_MS. */
+  /** Per-source timeout of the sites whose «Обходить проверку Cloudflare» is on; default CLOUDFLARE_TIMEOUT_MS. */
   cloudflareTimeoutMs?: number;
 }
 
@@ -84,13 +84,7 @@ export function runSources(
 ): SearchHandle {
   const timeoutMs = opts.timeoutMs || SOURCE_TIMEOUT_MS;
   const cfTimeoutMs = Math.max(timeoutMs, opts.cloudflareTimeoutMs || CLOUDFLARE_TIMEOUT_MS);
-  const slow = (s: Source): boolean => {
-    try {
-      return !!s.cloudflare && s.cloudflare() === true;
-    } catch (e) {
-      return false;
-    }
-  };
+  const slow = (s: Source): boolean => isCloudflareBypassOn(s);
   const setHealth: typeof recordHealth = opts.health === false ? () => undefined : recordHealth;
   const collected: SourceResult[] = [];
   const answered: string[] = [];

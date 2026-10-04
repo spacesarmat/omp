@@ -1,11 +1,16 @@
 package com.spacesarmat.omp
 
 import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.getcapacitor.JSArray
@@ -17,6 +22,11 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import com.spacesarmat.omp.control.AppForeground
+import com.spacesarmat.omp.control.CloudflareProtocol
+import com.spacesarmat.omp.control.CloudflareRelay
+import com.spacesarmat.omp.control.CloudflareWatch
+import com.spacesarmat.omp.control.HttpWatchTransport
 import com.spacesarmat.omp.control.SourcesDone
 import com.spacesarmat.omp.control.TvRemote
 import com.spacesarmat.omp.install.AdbIdentity
@@ -43,6 +53,9 @@ import com.spacesarmat.omp.monitor.MonitorScheduler
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayRequest
 import com.spacesarmat.omp.player.PlayerActivity
+import com.spacesarmat.omp.sources.CheckTexts
+import com.spacesarmat.omp.sources.CloudflareCheckDialog
+import com.spacesarmat.omp.sources.CloudflareSolver
 import com.spacesarmat.omp.sources.HttpSpec
 import com.spacesarmat.omp.sources.SiteHttp
 import com.spacesarmat.omp.sources.SiteHttpException
@@ -1163,6 +1176,111 @@ class OmpNativePlugin : Plugin() {
     /** JS keys live in their own namespace: page code cannot read the cookie entries. */
     private fun secretKey(call: PluginCall): String? = SourceServices.jsSecretKey(call.getString("key"))
 
+    // ---- Cloudflare: the visible check, «Пройти на телефоне» ----
+
+    private val cfOpen = AtomicBoolean(false)
+
+    private fun cfText(call: PluginCall, key: String): String? =
+        call.getString(key)?.filterNot { it.isISOControl() }?.take(400)?.ifEmpty { null }
+
+    /**
+     * The visible check (CloudflareCheckDialog): { url, site, mode: phone|tv, title, text, note?, cancel, phone?, remote?,
+     * hint?, noPhone?, waiting?, errors?: { OUTCOME: text }, forTv?: request id } → { result: solved|cancelled|busy|failed,
+     * sent?, via? }. With forTv the phone passes the TV's waiting request (its own address and site, never the page's) and
+     * the cookies go only to that TV. Cookies never reach the page.
+     */
+    @PluginMethod
+    fun cloudflareVisible(call: PluginCall) {
+        val once = Once(call)
+        val act = activity ?: return once.reject(CF_UNAVAILABLE)
+        val forTv = call.getString("forTv")
+        val watch = if (forTv != null && !TvMode.isTv(context)) cfWatch(context) else null
+        val req = if (forTv != null) watch?.pending()?.takeIf { it.id == forTv } ?: return once.reject(CF_GONE) else null
+        val url = req?.url ?: call.getString("url")
+        val root = (url?.toHttpUrlOrNull() ?: return once.reject(SiteHttp.BAD_URL)).let { CloudflareSolver.siteRoot(it) }
+        val site = req?.site ?: CloudflareProtocol.cleanSite(call.getString("site")) ?: root.host
+        val tvMode = call.getString("mode") == "tv" && TvMode.isTv(context)
+        val title = cfText(call, "title") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val text = cfText(call, "text") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val cancel = cfText(call, "cancel") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val errors = HashMap<String, String>()
+        call.getObject("errors")?.let { o ->
+            for (k in CloudflareRelay.Outcome.values()) (o.opt(k.name) as? String)?.take(400)?.let { errors[k.name] = it }
+        }
+        val texts = CheckTexts(
+            title, text, cfText(call, "note"), cancel, cfText(call, "phone"), cfText(call, "remote"), cfText(call, "hint"),
+            cfText(call, "noPhone"), cfText(call, "waiting"), errors,
+        )
+        if (!cfOpen.compareAndSet(false, true)) return once.resolve(JSObject().put("result", "busy"))
+        act.runOnUiThread {
+            try {
+                CloudflareCheckDialog(
+                    act, root, site, tvMode, texts, sources, io,
+                    if (tvMode) remote?.cloudflare else null,
+                    if (watch != null && req != null) watch to req.id else null,
+                ) { r ->
+                    cfOpen.set(false)
+                    val o = JSObject().put("result", r.result)
+                    r.sent?.let { o.put("sent", it) }
+                    r.via?.let { o.put("via", it) }
+                    once.resolve(o)
+                }.show()
+            } catch (e: Exception) {
+                cfOpen.set(false)
+                once.resolve(JSObject().put("result", "failed"))
+            }
+        }
+    }
+
+    /** { url } → { until: epoch ms | null }: when the stored Cloudflare clearance of the site ends. */
+    @PluginMethod
+    fun cloudflareClearance(call: PluginCall) {
+        val once = Once(call)
+        val url = call.getString("url")?.toHttpUrlOrNull() ?: return once.reject(SiteHttp.BAD_URL)
+        io.execute {
+            try {
+                once.resolve(JSObject().put("until", sources.clearanceUntil(url) ?: JSONObject.NULL))
+            } catch (e: Exception) {
+                once.reject(SECRETS_FAILED)
+            }
+        }
+    }
+
+    /**
+     * Phone: poll the paired Android TV for «Пройти на телефоне» ({ url: http://ip:port, token, notify: text with %s })
+     * or stop ({}). A request comes as the event cloudflareRequest { id, site, url } with the app open, else as a
+     * notification (cloudflarePending gives it to the page later).
+     */
+    @PluginMethod
+    fun cloudflareWatch(call: PluginCall) {
+        if (TvMode.isTv(context)) return call.resolve()
+        val url = call.getString("url")
+        val token = call.getString("token")
+        cfText(call, "notify")?.let { cfNotify = it }
+        val w = cfWatch(context)
+        if (url == null || token == null) {
+            w.configure(null, null)
+            return call.resolve()
+        }
+        if (!CF_BASE.matches(url) || !CF_TOKEN.matches(token)) return call.reject(SiteHttp.BAD_REQUEST)
+        w.configure(url, token)
+        w.start()
+        call.resolve()
+    }
+
+    /** { request: { id, site, url } | null }: the TV's check still waiting for the person. */
+    @PluginMethod
+    fun cloudflarePending(call: PluginCall) {
+        val r = if (TvMode.isTv(context)) null else cfWatch(context).pending()
+        call.resolve(JSObject.fromJSONObject(CloudflareProtocol.requestJson(r)))
+    }
+
+    private fun emitCloudflare(r: CloudflareProtocol.Request): Boolean {
+        if (!hasListeners("cloudflareRequest")) return false
+        notifyListeners("cloudflareRequest", JSObject().put("id", r.id).put("site", r.site).put("url", r.url))
+        return true
+    }
+
     // ---- monitoring (WorkManager, notifications); phone only ----
 
     /** { enabled, hours: 1|3|6|12, wifiOnly }: schedules or cancels the periodic background check. */
@@ -1310,6 +1428,57 @@ class OmpNativePlugin : Plugin() {
         // link of a tapped monitoring notification (omp:news?...), see takeMonitorOpen
         private var pendingOpen: String? = null
         private const val MONITOR_PHONE_ONLY = "Мониторинг работает только на телефоне"
+        private const val CF_UNAVAILABLE = "Проверка недоступна"
+        private const val CF_GONE = "Телевизор уже не ждёт эту проверку"
+        private val CF_BASE = Regex("^http://((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d):\\d{1,5}$")
+        private val CF_TOKEN = Regex("^[0-9a-f]{32}$")
+        private const val CF_CHANNEL = "omp-tv-requests"
+        private const val CF_NOTIFICATION = 7101
+        @Volatile
+        private var cfNotify = "Телевизор просит пройти проверку на %s"
+        private var watch: CloudflareWatch? = null
+
+        /** The phone's one watch of the paired TV (process-wide: it outlives a recreated plugin). */
+        @Synchronized
+        private fun cfWatch(ctx: Context): CloudflareWatch {
+            watch?.let { return it }
+            val app = ctx.applicationContext
+            val w = CloudflareWatch(
+                HttpWatchTransport(),
+                { AppForeground.main },
+                { r, fg -> if (!(fg && instance?.emitCloudflare(r) == true)) notifyCloudflare(app, r.site) },
+            )
+            watch = w
+            return w
+        }
+
+        /** «Телевизор просит пройти проверку на …»; a tap opens OMP, which asks cloudflarePending. */
+        private fun notifyCloudflare(ctx: Context, site: String) {
+            if (!MonitorNotifier.canNotify(ctx)) return
+            val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+            if (nm.getNotificationChannel(CF_CHANNEL) == null) {
+                nm.createNotificationChannel(NotificationChannel(CF_CHANNEL, "Запросы телевизора", NotificationManager.IMPORTANCE_HIGH))
+            }
+            val open = PendingIntent.getActivity(
+                ctx, CF_NOTIFICATION,
+                Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val text = cfNotify.replace("%s", site)
+            val n = NotificationCompat.Builder(ctx, CF_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_monitor)
+                .setContentTitle("OMP")
+                .setContentText(text)
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .setTimeoutAfter(CloudflareWatch.REQUEST_TTL_MS)
+                .build()
+            try {
+                NotificationManagerCompat.from(ctx).notify(CF_NOTIFICATION, n)
+            } catch (e: SecurityException) {
+                // notifications not permitted
+            }
+        }
         private const val MONITOR_FAILED = "Не удалось настроить фоновую проверку"
 
         @Volatile

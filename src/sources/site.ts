@@ -1,7 +1,8 @@
 // Shared parts of the built-in tracker parsers: page loading with Russian errors, numbers, results. Chromium 53 safe.
 import { BAD_URL } from './http';
 import { infohashFromMagnet, parseHtml } from './html';
-import type { HttpOptions, HttpResponse, SourceContext, SourceResult } from './types';
+import { isCloudflareBypassOn } from './store';
+import type { HttpOptions, HttpResponse, Source, SourceContext, SourceResult } from './types';
 
 export const SITE_ERROR = 'Сайт ответил ошибкой ';
 export const CHALLENGE = 'Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже';
@@ -19,6 +20,21 @@ export function checkPage(res: HttpResponse): HttpResponse {
   if (isChallenge(res.text)) throw new Error(CHALLENGE);
   if (res.status < 200 || res.status >= 400) throw new Error(SITE_ERROR + res.status);
   return res;
+}
+
+/**
+ * Request options of a site (pass them to every request of a Cloudflare-capable site): { cloudflare: true, siteName }
+ * while its «Обходить проверку Cloudflare» is on, else only the site name. `extra` is merged in.
+ */
+export function siteOptions(source: Pick<Source, 'id' | 'name' | 'cloudflare'>, extra?: HttpOptions): HttpOptions {
+  const o: HttpOptions = {};
+  if (extra) {
+    for (const k in extra) if (Object.prototype.hasOwnProperty.call(extra, k)) (o as { [k: string]: unknown })[k] = (extra as { [k: string]: unknown })[k];
+  }
+  o.siteName = source.name;
+  if (isCloudflareBypassOn(source)) o.cloudflare = true;
+  else delete o.cloudflare;
+  return o;
 }
 
 export function loadPage(ctx: SourceContext, url: string, opts?: HttpOptions): Promise<HttpResponse> {
