@@ -22,6 +22,7 @@ const XML =
   '<indexer id="rustorka" configured="true"><title>Rustorka</title></indexer>' +
   '<indexer id="torrentby" configured="true"><title>Torrent.by</title></indexer></indexers>';
 const ERRORS = JSON.stringify([
+  { id: 'rutor', last_error: '' },
   { id: 'rustorka', last_error: 'Cloudflare challenge' },
   { id: 'torrentby', last_error: 'Request timed out' },
 ]);
@@ -130,6 +131,27 @@ describe('Android TV «Источники поиска» indexers (mockup 1)', (
     expect(isSourceOn({ id: 'indexer-' + id })).toBe(false);
     expect(host.textContent).not.toContain('Torznab (TorrServer) скрыт');
     expect(host.textContent).toContain('Jackett / Prowlarr (Torznab)');
+  });
+
+  it('the TV reads the TorrServer Torznab hosts (loopback = the server) for the note; unknown hosts give the plain reason', async () => {
+    const id = saveJackett();
+    secrets[indexerKeyName(id)] = KEY;
+    act(() =>
+      render(
+        h(SourcesScreen, {
+          ctx,
+          now: () => NOW,
+          server: () => ({ read: () => Promise.resolve({ TorznabUrls: [{ Host: 'http://127.0.0.1:9117/api/v2.0/indexers/all/results/torznab' }] }), host: '192.168.1.191' }),
+        }),
+        (host = document.body.appendChild(document.createElement('div'))),
+      ),
+    );
+    await flush();
+    expect(host.textContent).toContain('Torznab (TorrServer) скрыт: тот же Jackett подключён напрямую.');
+    act(() => render(null, host));
+    setTorznabHosts(undefined);
+    await mount();
+    expect(host.textContent).toContain('Torznab (TorrServer) скрыт: поиск идёт через Jackett/Prowlarr напрямую.');
   });
 
   it('a connection without its key on the TV says to send it from the phone', async () => {

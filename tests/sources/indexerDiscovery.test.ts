@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   candidateWhere,
+  fromServerView,
+  hostName,
   identifyIndexer,
   INDEXER_PORTS,
   INSECURE_KEY,
@@ -18,7 +20,16 @@ import {
   type LanHit,
 } from '../../src/sources/indexerDiscovery';
 import { hidesTorznab } from '../../src/sources/indexer';
-import { reloadIndexers, torznabHosts, type IndexerConn } from '../../src/sources/indexerStore';
+import {
+  reloadIndexers,
+  setTorznabHosts,
+  torznabHiddenText,
+  torznabHosts,
+  TORZNAB_HIDDEN,
+  TORZNAB_HIDDEN_DIRECT,
+  TORZNAB_HIDDEN_SAME_PROWLARR,
+  type IndexerConn,
+} from '../../src/sources/indexerStore';
 import { reloadSourcePrefs, setSourceOn } from '../../src/sources/store';
 import { fakeSite, page, type HttpCall } from './fakeSite';
 
@@ -111,15 +122,30 @@ describe('LAN scan', () => {
     expect(lastScan()).toEqual({ at: NOW, found });
   });
 
-  it('runs automatically at most once a day; a failed native scan also waits', async () => {
+  it('runs automatically at most once a day after a completed scan', async () => {
     expect(scanDue(NOW)).toBe(true);
-    await scanIndexers(() => Promise.reject(new Error('off-device')), fakeSite(lan).ctx.http, () => NOW);
+    await scanIndexers(() => Promise.resolve([]), fakeSite(lan).ctx.http, () => NOW);
     expect(lastScan()).toEqual({ at: NOW, found: [] });
     expect(scanDue(NOW + 1000)).toBe(false);
     expect(scanDue(NOW + SCAN_EVERY_MS - 1)).toBe(false);
     expect(scanDue(NOW + SCAN_EVERY_MS)).toBe(true);
     // the clock went back
     expect(scanDue(NOW - 1000)).toBe(true);
+  });
+
+  it('off the home network (mobile data) or a failed native scan: earlier finds stay, no 24 h wait', async () => {
+    const http = fakeSite(lan).ctx.http;
+    await scanIndexers(() => Promise.resolve([{ ip: '192.168.1.5', port: 9117 }]), http, () => NOW);
+    const before = lastScan();
+    expect(before!.found).toHaveLength(1);
+    expect(await scanIndexers(() => Promise.resolve(null), http, () => NOW + 5000)).toEqual(before!.found);
+    expect(lastScan()).toEqual(before);
+    expect(await scanIndexers(() => Promise.reject(new Error('off-device')), http, () => NOW + 6000)).toEqual(before!.found);
+    expect(lastScan()).toEqual(before);
+    localStorage.clear();
+    await scanIndexers(() => Promise.resolve(null), http, () => NOW);
+    expect(lastScan()).toBeNull();
+    expect(scanDue(NOW + 1000)).toBe(true);
   });
 
   it('a stored record is sanitized', () => {
@@ -159,6 +185,36 @@ describe('TorrServer settings', () => {
     ]);
   });
 
+  it('a loopback Torznab address means the TorrServer machine', () => {
+    const s = {
+      TorznabUrls: [
+        { Host: 'http://127.0.0.1:9117/api/v2.0/indexers/all/results/torznab', Key: KEY },
+        { Host: 'http://localhost:9696/2/api', Key: KEY },
+        { Host: 'http://[::1]:9118', Key: KEY },
+      ],
+    };
+    const t = torznabFromSettings(s, '192.168.1.5')!;
+    expect(t.hosts).toEqual(['192.168.1.5:9117', '192.168.1.5:9696', '192.168.1.5:9118']);
+    expect(t.imports.map((i) => [i.url, i.kind])).toEqual([
+      ['http://192.168.1.5:9117', 'jackett'],
+      ['http://192.168.1.5:9696', 'prowlarr'],
+      ['http://192.168.1.5:9118', null],
+    ]);
+    // the TorrServer itself on loopback (the phone's own server) or unknown: unchanged
+    expect(fromServerView('http://127.0.0.1:9117', '127.0.0.1')).toBe('http://127.0.0.1:9117');
+    expect(fromServerView('http://127.0.0.1:9117')).toBe('http://127.0.0.1:9117');
+    expect(fromServerView('http://127.0.0.10:9117', 'nas.local')).toBe('http://nas.local:9117');
+    expect(fromServerView('http://127.0.0.1.example.com', 'nas.local')).toBe('http://127.0.0.1.example.com');
+    expect(hostName('http://NAS.local:8090/x')).toBe('nas.local');
+    expect(hostName('http://[::1]:8090')).toBe('[::1]');
+  });
+
+  it('with the rewrite the same Jackett hides Torznab (TorrServer)', async () => {
+    await readTorznabImports(() => Promise.resolve({ TorznabUrls: [{ Host: 'http://127.0.0.1:9117/api/v2.0/indexers/all/results/torznab', Key: KEY }] }), '192.168.1.5');
+    const j: IndexerConn = { id: 'jackett-1', kind: 'jackett', url: 'http://192.168.1.5:9117', keySet: true };
+    expect(hidesTorznab([j], torznabHosts())).toBe(true);
+  });
+
   it('Torznab off or an old server without the list', () => {
     expect(torznabFromSettings({ ...settings, EnableTorznabSearch: false })).toEqual({ enabled: false, hosts: [], imports: [] });
     expect(torznabFromSettings({ CacheSize: 1 })).toBeNull();
@@ -196,6 +252,23 @@ describe('path selection with the TorrServer hosts', () => {
     expect(hidesTorznab([p])).toBe(false);
     setSourceOn('indexer-jackett-1', false);
     expect(hidesTorznab([j], ['192.168.1.5:9117'])).toBe(false);
+  });
+});
+
+describe('the «Torznab скрыт» note', () => {
+  it('names «тот же Jackett» only for a matched TorrServer host', () => {
+    localStorage.setItem('tsp.indexers', JSON.stringify([{ kind: 'jackett', url: 'http://192.168.1.5:9117', keySet: true }]));
+    reloadIndexers();
+    expect(torznabHiddenText(false)).toBe('');
+    // hosts unknown or none: the plain reason
+    expect(torznabHiddenText(true)).toBe(TORZNAB_HIDDEN_DIRECT);
+    setTorznabHosts([]);
+    expect(torznabHiddenText(true)).toBe(TORZNAB_HIDDEN_DIRECT);
+    setTorznabHosts(['192.168.1.5:9117']);
+    expect(torznabHiddenText(true)).toBe(TORZNAB_HIDDEN);
+    localStorage.setItem('tsp.indexers', JSON.stringify([{ kind: 'prowlarr', url: 'http://192.168.1.5:9117', keySet: true }]));
+    reloadIndexers();
+    expect(torznabHiddenText(true)).toBe(TORZNAB_HIDDEN_SAME_PROWLARR);
   });
 });
 

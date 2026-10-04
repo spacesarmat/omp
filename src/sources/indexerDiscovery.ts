@@ -23,7 +23,8 @@ export interface LanHit {
   port: number;
 }
 
-export type LanScan = (ports: number[]) => Promise<LanHit[]>;
+/** null: the device is not on a home network (mobile data), nothing was scanned. */
+export type LanScan = (ports: number[]) => Promise<LanHit[] | null>;
 
 export interface FoundIndexer {
   kind: IndexerKind;
@@ -110,11 +111,17 @@ function isPrivateIp(ip: string): boolean {
 
 /**
  * Scans the LAN and identifies what answers; saves the result with the time. Hits outside the home ranges or on other
- * ports are ignored; at most a few probes run at once.
+ * ports are ignored; at most a few probes run at once. Off the home network (mobile data) or when the native scan
+ * fails, nothing is saved: earlier finds stay and the next automatic scan is not delayed.
  */
 export function scanIndexers(scan: LanScan, http: SourceHttp, now: () => number = Date.now): Promise<FoundIndexer[]> {
+  const previous = (): FoundIndexer[] => {
+    const prev = lastScan();
+    return prev ? prev.found : [];
+  };
   return scan(INDEXER_PORTS.slice()).then(
     (hits) => {
+      if (hits === null) return previous();
       const list: LanHit[] = [];
       (Array.isArray(hits) ? hits : []).forEach((h) => {
         if (!h || typeof h.ip !== 'string' || INDEXER_PORTS.indexOf(h.port) < 0 || !isPrivateIp(h.ip)) return;
@@ -139,13 +146,7 @@ export function scanIndexers(scan: LanScan, http: SourceHttp, now: () => number 
         return found;
       });
     },
-    () => {
-      // no native scan (off-device) or it failed: remember the try so the automatic one waits a day
-      const prev = lastScan();
-      const found = prev ? prev.found : [];
-      saveJson(SCAN_KEY, { at: now(), found });
-      return found;
-    },
+    () => previous(),
   );
 }
 
@@ -160,12 +161,30 @@ export interface TorznabImport {
 
 const KEY_RE = /^[\x21-\x7e]{1,200}$/;
 
+const LOOPBACK = /^(https?:\/\/)(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?=[:/]|$)/i;
+
+/** Host name of an http(s) address ('' when none); IPv6 kept in brackets. */
+export function hostName(url: string): string {
+  const m = /^https?:\/\/(\[[^\]]+\]|[^/:?#@]+)/i.exec(url || '');
+  return m ? m[1].toLowerCase() : '';
+}
+
+/**
+ * A TorrServer Torznab address on loopback (Jackett on the TorrServer box: http://127.0.0.1:9117) points at the
+ * TorrServer machine, not at this device: its host becomes `serverHost` (the TorrServer's own host). Nothing changes
+ * when the TorrServer itself is on loopback (the phone's embedded server) or unknown.
+ */
+export function fromServerView(raw: string, serverHost?: string): string {
+  if (!serverHost || LOOPBACK.test('http://' + serverHost)) return raw;
+  return raw.trim().replace(LOOPBACK, (_m, scheme: string) => scheme + serverHost);
+}
+
 /**
  * Jackett/Prowlarr behind a TorrServer Torznab host: «http://h:9117/api/v2.0/indexers/all/results/torznab» → Jackett
  * at http://h:9117; «http://h:9696/1/api» → Prowlarr at http://h:9696; a bare address → by port, else unknown.
  */
-export function torznabBase(raw: string): { url: string; kind: IndexerKind | null } | null {
-  const full = normalizeIndexerUrl(raw);
+export function torznabBase(raw: string, serverHost?: string): { url: string; kind: IndexerKind | null } | null {
+  const full = normalizeIndexerUrl(fromServerView(raw, serverHost));
   if (!full) return null;
   const m = /^(https?:\/\/[^/]+)(\/.*)?$/.exec(full);
   if (!m) return null;
@@ -182,14 +201,14 @@ export function torznabBase(raw: string): { url: string; kind: IndexerKind | nul
  * The TorrServer settings' Torznab list (BTSets.TorznabUrls [{ Host, Key, Name? }], MatriX): entries with an address,
  * and the host:port of each for the path selection. `enabled` false when Torznab search is off there.
  */
-export function torznabFromSettings(settings: unknown): { enabled: boolean; hosts: string[]; imports: TorznabImport[] } | null {
+export function torznabFromSettings(settings: unknown, serverHost?: string): { enabled: boolean; hosts: string[]; imports: TorznabImport[] } | null {
   if (!isObject(settings) || !Array.isArray(settings.TorznabUrls)) return null;
   const enabled = settings.EnableTorznabSearch !== false;
   const hosts: string[] = [];
   const imports: TorznabImport[] = [];
   settings.TorznabUrls.slice(0, MAX_FOUND).forEach((x) => {
     if (!isObject(x) || typeof x.Host !== 'string') return;
-    const b = torznabBase(x.Host);
+    const b = torznabBase(x.Host, serverHost);
     if (!b) return;
     const h = hostKey(b.url);
     if (hosts.indexOf(h) < 0) hosts.push(h);
@@ -203,11 +222,11 @@ export function torznabFromSettings(settings: unknown): { enabled: boolean; host
  * Reads the TorrServer settings, records their Torznab hosts for the path selection and returns the imports. A server
  * whose settings say nothing about Torznab (older TorrServer) leaves the hosts unknown.
  */
-export function readTorznabImports(read: (() => Promise<unknown>) | null): Promise<TorznabImport[]> {
+export function readTorznabImports(read: (() => Promise<unknown>) | null, serverHost?: string): Promise<TorznabImport[]> {
   if (!read) return Promise.resolve([]);
   return read().then(
     (s) => {
-      const t = torznabFromSettings(s);
+      const t = torznabFromSettings(s, serverHost);
       if (!t) return [];
       setTorznabHosts(t.hosts);
       return t.imports;

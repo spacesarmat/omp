@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Sources } from '../src/screens/Sources';
-import { KEY_NOTE, TORZNAB_HIDDEN, type IndexerEnv } from '../src/screens/SourcesIndexers';
+import { KEY_NOTE, type IndexerEnv } from '../src/screens/SourcesIndexers';
+import { TORZNAB_HIDDEN } from '../../src/sources/indexerStore';
 import { resetTo } from '../src/nav';
 import { indexerConnections, indexerKeyName, reloadIndexers } from '../../src/sources/indexerStore';
 import { resetIndexerStatus } from '../../src/sources/indexerStatus';
@@ -19,7 +20,10 @@ const NOW = 1_800_000_000_000;
 const INDEXERS_XML =
   '<indexers><indexer id="rutor" configured="true"><title>RuTor</title></indexer>' +
   '<indexer id="kinozal" configured="true"><title>Kinozal</title></indexer></indexers>';
-const ERRORS = JSON.stringify([{ id: 'kinozal', last_error: 'Login failed' }]);
+const ERRORS = JSON.stringify([
+  { id: 'rutor', last_error: '' },
+  { id: 'kinozal', last_error: 'Login failed' },
+]);
 
 let secrets: { [k: string]: string };
 let calls: { url: string; opts?: HttpOptions }[];

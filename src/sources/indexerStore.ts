@@ -224,3 +224,20 @@ export function setTorznabHosts(hosts: string[] | undefined): void {
   saveJson(TORZNAB_KEY, next === undefined ? null : next);
   notify();
 }
+
+export const TORZNAB_HIDDEN = 'Torznab (TorrServer) скрыт: тот же Jackett подключён напрямую.';
+export const TORZNAB_HIDDEN_SAME_PROWLARR = 'Torznab (TorrServer) скрыт: тот же Prowlarr подключён напрямую.';
+export const TORZNAB_HIDDEN_DIRECT = 'Torznab (TorrServer) скрыт: поиск идёт через Jackett/Prowlarr напрямую.';
+
+/**
+ * The note under «Через TorrServer» when ts-torznab is hidden (`hidden`): «тот же Jackett» only when the TorrServer
+ * Torznab hosts are known and matched by direct connections; otherwise the plain reason. '' when not hidden.
+ */
+export function torznabHiddenText(hidden: boolean): string {
+  if (!hidden) return '';
+  const hosts = torznabHosts();
+  if (!hosts || !hosts.length) return TORZNAB_HIDDEN_DIRECT;
+  const matched = conns.filter((c) => hosts.indexOf(hostKey(c.url)) >= 0);
+  if (!matched.length) return TORZNAB_HIDDEN_DIRECT;
+  return matched.every((c) => c.kind === 'prowlarr') ? TORZNAB_HIDDEN_SAME_PROWLARR : TORZNAB_HIDDEN;
+}

@@ -8,7 +8,8 @@ import { indexerKeyName } from './indexerStore';
 import type { IndexerConn, IndexerKind } from './indexerStore';
 import type { HttpOptions, SourceContext, SourceHttp } from './types';
 
-export type TrackerState = 'ok' | 'error' | 'login' | 'cloudflare' | 'off';
+/** unknown: the indexer did not tell (Jackett behind an admin password): never shown as working. */
+export type TrackerState = 'ok' | 'error' | 'login' | 'cloudflare' | 'off' | 'unknown';
 
 export interface TrackerStatus {
   name: string;
@@ -29,7 +30,11 @@ export interface IndexerStatus {
   trackers: TrackerStatus[];
   /** Russian text of a failure. */
   message?: string;
+  /** Why the tracker states are not known («Jackett защищён паролем…»). */
+  hint?: string;
 }
+
+export const JACKETT_HIDDEN_STATES = 'Jackett защищён паролем — состояние трекеров не видно';
 
 export const STATUS_NEED_KEY = 'Нужен API-ключ';
 export const STATUS_BAD_KEY = 'Неверный API-ключ';
@@ -41,6 +46,7 @@ const TIMEOUT_MS = 15000;
 const MAX_CHARS = 2 * 1000 * 1000;
 const MAX_TRACKERS = 200;
 const NAME_MAX = 60;
+const RECENT_FAILURE_MS = 60 * 60 * 1000;
 
 type Get = (url: string, opts?: HttpOptions) => Promise<{ status: number; text: string }>;
 
@@ -122,17 +128,25 @@ export function parseJackettIndexers(xml: string): { id: string; name: string }[
   return out;
 }
 
-/** Last errors of Jackett's /api/v2.0/indexers JSON by indexer id (empty when it is not that JSON). */
-export function jackettErrors(text: string): { [id: string]: string } {
+/**
+ * Last errors of Jackett's /api/v2.0/indexers JSON by indexer id ('' = no error); null when it is not that JSON or it
+ * has no `last_error` field at all (an older Jackett): the states are then unknown.
+ */
+export function jackettErrors(text: string): { [id: string]: string } | null {
   const data = parseJson(text);
   const out: { [id: string]: string } = {};
-  if (!Array.isArray(data)) return out;
+  if (!Array.isArray(data)) return null;
+  let known = false;
   data.slice(0, 1000).forEach((x) => {
     if (!x || typeof x !== 'object') return;
     const o = x as { [k: string]: unknown };
-    if (typeof o.id === 'string' && typeof o.last_error === 'string') out[o.id] = o.last_error;
+    if (typeof o.id !== 'string') return;
+    if (typeof o.last_error === 'string') {
+      out[o.id] = o.last_error;
+      known = true;
+    } else if (o.last_error === null || o.last_error === undefined) out[o.id] = '';
   });
-  return out;
+  return known || !data.length ? out : null;
 }
 
 function checkJackett(base: string, key: string, get: Get, at: number): Promise<IndexerStatus> {
@@ -145,16 +159,20 @@ function checkJackett(base: string, key: string, get: Get, at: number): Promise<
     if (!list) return fail('error', at, STATUS_BAD_ANSWER);
     // the last error of each indexer is in the UI list, which Jackett answers only without an admin password
     return get(base + '/api/v2.0/indexers?configured=true&apikey=' + k, opts).then(
-      (r) => (r.status === 200 && r.text.length <= MAX_CHARS ? jackettErrors(r.text) : {}),
-      () => ({}) as { [id: string]: string },
+      (r) => (r.status === 200 && r.text.length <= MAX_CHARS ? jackettErrors(r.text) : null),
+      () => null,
     ).then((errors) => {
       const trackers = list.map((t) => {
+        // no evidence, no «работает»
+        if (!errors || errors[t.id] === undefined) return { name: t.name, state: 'unknown' as TrackerState };
         const s = jackettErrorState(errors[t.id]);
         const out: TrackerStatus = { name: t.name, state: s.state };
         if (s.detail) out.detail = s.detail;
         return out;
       });
-      return { state: 'ok' as ConnState, at, trackers };
+      const st: IndexerStatus = { state: 'ok', at, trackers };
+      if (!errors && trackers.length) st.hint = JACKETT_HIDDEN_STATES;
+      return st;
     });
   });
 }
@@ -175,7 +193,9 @@ export function prowlarrTrackers(indexers: unknown, statuses: unknown, now: numb
       if (typeof o.indexerId !== 'number') return;
       const till = typeof o.disabledTill === 'string' ? Date.parse(o.disabledTill) : NaN;
       const failure = typeof o.mostRecentFailure === 'string' ? Date.parse(o.mostRecentFailure) : NaN;
-      failing[String(o.indexerId)] = { disabledTill: isFinite(till) ? till : 0, failure: isFinite(failure) ? failure : 0 };
+      // escalationLevel goes back to 0 after a success while mostRecentFailure stays
+      const escalated = typeof o.escalationLevel !== 'number' || o.escalationLevel > 0;
+      failing[String(o.indexerId)] = { disabledTill: isFinite(till) ? till : 0, failure: isFinite(failure) && escalated ? failure : 0 };
     });
   }
   const out: TrackerStatus[] = [];
@@ -191,7 +211,8 @@ export function prowlarrTrackers(indexers: unknown, statuses: unknown, now: numb
       return;
     }
     const f = failing[String(o.id)];
-    if (f && (f.disabledTill > now || f.failure > 0)) {
+    // only a current failure: blocked until later, or failed within the last hour and not recovered since
+    if (f && (f.disabledTill > now || (f.failure > 0 && now - f.failure < RECENT_FAILURE_MS))) {
       const t: TrackerStatus = { name, state: 'error' };
       if (f.disabledTill > now) t.detail = 'отключён после ошибок';
       out.push(t);
@@ -308,6 +329,7 @@ export function workingCount(s: IndexerStatus): number {
 export function summaryText(s: IndexerStatus): string {
   const n = s.trackers.length;
   if (!n) return 'нет трекеров';
+  if (s.trackers.every((t) => t.state === 'unknown')) return n + ' ' + plural(n, 'трекер', 'трекера', 'трекеров') + ' · состояние неизвестно';
   const w = workingCount(s);
   return n + ' ' + plural(n, 'трекер', 'трекера', 'трекеров') + ', ' + w + ' ' + plural(w, 'работает', 'работают', 'работают');
 }
@@ -338,6 +360,8 @@ export function trackerStateText(t: TrackerStatus, long?: boolean): string {
       return 'нужен вход';
     case 'cloudflare':
       return 'Cloudflare';
+    case 'unknown':
+      return 'состояние неизвестно';
     case 'off':
       return 'выключен';
     default:
@@ -350,7 +374,7 @@ export type Tone = 'ok' | 'warn' | 'bad' | 'muted';
 
 export function trackerTone(t: TrackerStatus): Tone {
   if (t.state === 'ok') return 'ok';
-  if (t.state === 'off') return 'muted';
+  if (t.state === 'off' || t.state === 'unknown') return 'muted';
   if (t.state === 'error') return 'bad';
   return 'warn';
 }

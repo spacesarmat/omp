@@ -245,7 +245,7 @@ class OmpNativePlugin : Plugin() {
 
     /**
      * «Источники поиска»: hosts of the device's /24 that answer on the Jackett / Prowlarr ports ([LanScan.ALLOWED]):
-     * { hits: [{ ip, port }] }. Without a home-network IPv4 it resolves an empty list. Nothing is logged.
+     * { hits: [{ ip, port }], lan }. Without a Wi-Fi IPv4 (mobile data) lan is false and nothing is scanned. Nothing is logged.
      */
     @PluginMethod
     fun scanLan(call: PluginCall) {
@@ -265,7 +265,7 @@ class OmpNativePlugin : Plugin() {
             if (ip != null) {
                 for (h in LanScan.scan(ip, ports, timeout)) arr.put(JSObject().put("ip", h.ip).put("port", h.port))
             }
-            once.resolve(JSObject().put("hits", arr))
+            once.resolve(JSObject().put("hits", arr).put("lan", ip != null))
         }
     }
 

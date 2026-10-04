@@ -25,6 +25,7 @@ import {
 } from '../../../src/sources/indexerStore';
 import {
   candidateWhere,
+  hostName,
   identifyIndexer,
   kindByPort,
   lastScan,
@@ -60,6 +61,8 @@ export interface IndexerEnv {
   scan: LanScan | null;
   /** TorrServer `/settings` (its Torznab list); null without a server. */
   readSettings: (() => Promise<unknown>) | null;
+  /** Host of the TorrServer: a Torznab address on its loopback means that machine. */
+  serverHost?: string;
   now: () => number;
 }
 
@@ -68,12 +71,12 @@ export function phoneIndexerEnv(): IndexerEnv {
   return {
     scan: (ports) => native.scanLan(ports),
     readSettings: c ? () => c.settingsQuiet() : null,
+    serverHost: c ? hostName(c.baseUrl) || undefined : undefined,
     now: Date.now,
   };
 }
 
 export const KEY_NOTE = 'Ключ хранится в зашифрованном хранилище телефона и не попадает в резервную копию.';
-export const TORZNAB_HIDDEN = 'Torznab (TorrServer) скрыт: тот же Jackett подключён напрямую.';
 export const UNKNOWN_KIND = 'Не удалось понять, Jackett это или Prowlarr: проверьте адрес и порт';
 
 /** Label of the key field with where to find the key. */
@@ -350,6 +353,7 @@ function IndexerCard({
                 <span class={'m-src-note ' + trackerTone(t)}>{trackerStateText(t)}</span>
               </div>
             ))}
+          {st && st.hint && <div class="m-note m-muted" data-hint="states">{st.hint}</div>}
           {st && st.state === 'ok' && !st.trackers.length && <div class="m-note m-muted">В индексаторе нет настроенных трекеров</div>}
           {st && st.state !== 'ok' && st.message && <div class="m-error">{st.message}</div>}
           {st && <div class="m-idx-checked">{checkedText(st.at, now)}</div>}
@@ -439,7 +443,7 @@ export function IndexerSection({ ctx, env, onChange }: { ctx: () => SourceContex
     const offStatus = onIndexerStatus(() => {
       if (alive.current) rerender();
     });
-    readTorznabImports(e.current.readSettings).then((list) => {
+    readTorznabImports(e.current.readSettings, e.current.serverHost).then((list) => {
       if (!alive.current) return;
       setImports(list);
       // the path selection may have changed with the TorrServer Torznab hosts

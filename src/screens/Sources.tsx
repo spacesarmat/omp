@@ -12,9 +12,11 @@ import { clearHealth, getHealth, isSourceOn, onHealthChange, setHealth, setSourc
 import { forgetTransferredLogin, lastTransfer, onTransferApplied, transferWhen } from '../sources/transfer';
 import { tvSourceContext } from '../sources/tvContext';
 import { healthText, type HealthLine } from '../sources/view';
-import { indexerConnections, INDEXER_SOURCE_PREFIX, onIndexersChange, type IndexerConn } from '../sources/indexerStore';
+import { indexerConnections, INDEXER_SOURCE_PREFIX, onIndexersChange, torznabHiddenText, type IndexerConn } from '../sources/indexerStore';
 import { checkedText, connLine, connTitle, getIndexerStatus, onIndexerStatus, refreshIndexerStatus, trackerStateText, trackerTone } from '../sources/indexerStatus';
 import type { SourceContext } from '../sources/types';
+import { hostName, readTorznabImports } from '../sources/indexerDiscovery';
+import { client } from '../store/servers';
 import type { Source } from '../sources/types';
 
 /** Names of the TorrServer sources (as on the phone). */
@@ -62,7 +64,22 @@ function TransferNote() {
  * Android TV «Источники поиска» (mockup 1): Jackett / Prowlarr connections with their trackers, switches of every
  * source, rutracker «Войти» / «Выйти», how to send from the phone. ctx: the source context (tests pass fakes).
  */
-export function SourcesScreen({ ctx = tvSourceContext, now = Date.now }: { ctx?: () => SourceContext; now?: () => number } = {}) {
+/** The TorrServer settings reader for the Torznab path selection (tests pass a fake). */
+export interface TorrServerSettings {
+  read: () => Promise<unknown>;
+  host: string;
+}
+
+function chosenServer(): TorrServerSettings | null {
+  const c = client.value;
+  return c ? { read: () => c.settingsQuiet(), host: hostName(c.baseUrl) } : null;
+}
+
+export function SourcesScreen({
+  ctx = tvSourceContext,
+  now = Date.now,
+  server = chosenServer,
+}: { ctx?: () => SourceContext; now?: () => number; server?: () => TorrServerSettings | null } = {}) {
   const [, setTick] = useState(0);
   const rerender = () => setTick((n) => n + 1);
   const [logged, setLogged] = useState<{ [id: string]: boolean }>({});
@@ -110,6 +127,11 @@ export function SourcesScreen({ ctx = tvSourceContext, now = Date.now }: { ctx?:
     });
     checkLogins(isAlive);
     checkIndexers();
+    // the TorrServer Torznab hosts decide whether Torznab (TorrServer) is hidden
+    const ts = server();
+    readTorznabImports(ts ? ts.read : null, ts ? ts.host || undefined : undefined).then(() => {
+      if (alive) rerender();
+    });
     return () => {
       alive = false;
       offHealth();
@@ -235,6 +257,7 @@ export function SourcesScreen({ ctx = tvSourceContext, now = Date.now }: { ctx?:
                           <span class={'src-note-' + trackerTone(t)}>{trackerStateText(t, true)}</span>
                         </Focusable>
                       ))}
+                    {st && st.hint && <div class="src-tracker-info">{st.hint}</div>}
                     {st && st.state !== 'ok' && st.message && <div class="src-tracker-info src-note-bad">{st.message}</div>}
                     {st && <div class="src-tracker-info">{checkedText(st.at, now())}</div>}
                   </div>
@@ -252,7 +275,7 @@ export function SourcesScreen({ ctx = tvSourceContext, now = Date.now }: { ctx?:
               <Switch on={isSourceOn(s)} />
             </Focusable>
           ))}
-          {!ts.some((s) => s.id === 'ts-torznab') && <div class="src-empty">Torznab (TorrServer) скрыт: тот же Jackett подключён напрямую.</div>}
+          {torznabHiddenText(!ts.some((s) => s.id === 'ts-torznab')) && <div class="src-empty">{torznabHiddenText(true)}</div>}
           {builtins.length > 0 && <div class="src-group">Встроенные</div>}
           {builtins.map((s) => {
             const on = isSourceOn(s);

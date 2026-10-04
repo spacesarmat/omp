@@ -80,8 +80,8 @@ export interface OmpNativeApi {
   stopDiscovery(group?: string): Promise<void>;
   /** Install assistant: which install ports (9922, 9991, 5555, 8095) accept TCP on a home-network IP. */
   probePorts(ip: string, ports: number[], timeoutMs: number): Promise<number[]>;
-  /** Hosts of the phone's /24 that accept a connection on the Jackett / Prowlarr ports (rejects off-device). */
-  scanLan(ports: number[], timeoutMs?: number): Promise<{ ip: string; port: number }[]>;
+  /** Hosts of the phone's /24 that accept a connection on the Jackett / Prowlarr ports; null without Wi-Fi (rejects off-device). */
+  scanLan(ports: number[], timeoutMs?: number): Promise<{ ip: string; port: number }[] | null>;
   /** Phone model for the TV's list of paired phones; «Телефон» when unknown. */
   phoneName(): Promise<string>;
   /**
@@ -151,7 +151,7 @@ interface OmpNativePlugin {
   discoverOmpTvs(o: { timeoutMs: number; group?: string }): Promise<{ tvs?: unknown }>;
   discoverCastTvs(o: { timeoutMs: number; group?: string }): Promise<{ tvs?: unknown }>;
   probePorts(o: { ip: string; ports: number[]; timeoutMs: number }): Promise<{ open?: unknown }>;
-  scanLan(o: { ports: number[]; timeoutMs?: number }): Promise<{ hits?: unknown }>;
+  scanLan(o: { ports: number[]; timeoutMs?: number }): Promise<{ hits?: unknown; lan?: unknown }>;
   stopDiscovery(o: { group?: string }): Promise<void>;
   phoneName(): Promise<{ name?: string | null }>;
   tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
@@ -333,6 +333,7 @@ export const native: OmpNativeApi = {
   async scanLan(ports, timeoutMs) {
     if (!plugin) return unavailable();
     const r = await plugin.scanLan(timeoutMs ? { ports, timeoutMs } : { ports });
+    if (r?.lan === false) return null;
     const out: { ip: string; port: number }[] = [];
     if (Array.isArray(r?.hits)) {
       r.hits.forEach((h: unknown) => {

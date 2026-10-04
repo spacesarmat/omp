@@ -21,8 +21,8 @@ import {
   type TransferLogin,
   type TransferPayload,
 } from '../../../src/sources/transfer';
-import { indexerConnections, onIndexersChange, type IndexerConn } from '../../../src/sources/indexerStore';
-import { IndexerSection, phoneIndexerEnv, TORZNAB_HIDDEN, type IndexerEnv } from './SourcesIndexers';
+import { indexerConnections, onIndexersChange, torznabHiddenText, type IndexerConn } from '../../../src/sources/indexerStore';
+import { IndexerSection, phoneIndexerEnv, type IndexerEnv } from './SourcesIndexers';
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
 import { log } from '../../../src/lib/log';
 import { activeTv, isAtv } from '../tv/tvStore';
@@ -256,7 +256,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   const ts = torrServerSources();
   // the Jackett / Prowlarr sources have their own section
   const builtins = builtinSources().filter((s) => s.kind !== 'indexer');
-  const torznabHidden = !ts.some((s) => s.id === 'ts-torznab');
+  const torznabNote = torznabHiddenText(!ts.some((s) => s.id === 'ts-torznab'));
 
   useEffect(() => {
     let alive = true;
@@ -327,9 +327,9 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
           {ts.map((s) => (
             <SourceRow key={s.id} source={s} note={healthText(getHealth(s.id))} onToggle={() => toggle(s)} />
           ))}
-          {torznabHidden && (
+          {torznabNote && (
             <div class="m-src-row m-note m-muted" data-note="torznab-hidden">
-              {TORZNAB_HIDDEN}
+              {torznabNote}
             </div>
           )}
         </div>

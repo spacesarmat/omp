@@ -339,6 +339,17 @@ describe('«Передать на телевизор» with Jackett / Prowlarr',
     expect(toast.value).toBe('Источники переданы. ' + INDEXERS_NOT_SENT);
   });
 
+  it('a v0.14 TV answering 413 (8 KB limit) also gets the rest without the connections', async () => {
+    withJackett();
+    answer = (c) => (c.body.indexers ? { status: 413, body: '{"error":"too_large"}' } : { body: JSON.stringify({ ok: true }) });
+    await mount();
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(sourcePosts()).toHaveLength(2);
+    expect(sourcePosts()[1].body.indexers).toBeUndefined();
+    expect(toast.value).toBe('Источники переданы. ' + INDEXERS_NOT_SENT);
+  });
+
   it('the TV saved fewer than were sent', async () => {
     withJackett();
     answer = () => ({ body: JSON.stringify({ ok: true, indexers: 0 }) });

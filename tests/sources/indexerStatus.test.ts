@@ -17,6 +17,7 @@ import {
   STATUS_BAD_KEY,
   STATUS_DOWN,
   STATUS_NEED_KEY,
+  JACKETT_HIDDEN_STATES,
   type IndexerStatus,
 } from '../../src/sources/indexerStatus';
 import { indexerKeyName, type IndexerConn } from '../../src/sources/indexerStore';
@@ -78,15 +79,25 @@ describe('Jackett tracker status', () => {
     expect(site.calls[0].url).toContain('t=indexers');
   });
 
-  it('without the UI list (admin password) all configured trackers count as working', async () => {
+  it('without the UI list (admin password) the tracker states are unknown, never «работает»', async () => {
     const site = jackettSite((c) => page('<html><title>Login</title></html>', 'http://192.168.1.5:9117/UI/Login'));
     const st = await checkIndexer(JACKETT, KEY, site.ctx.http, now);
     expect(st.state).toBe('ok');
-    expect(st.trackers.every((t) => t.state === 'ok')).toBe(true);
+    expect(st.trackers.every((t) => t.state === 'unknown')).toBe(true);
+    expect(trackerStateText(st.trackers[0])).toBe('состояние неизвестно');
+    expect(summaryText(st)).toBe('5 трекеров · состояние неизвестно');
+    expect(summaryText(st)).not.toContain('работа');
+    expect(st.hint).toBe(JACKETT_HIDDEN_STATES);
+    expect(connLine(st, true)).toEqual({ text: 'напрямую · 5 трекеров · состояние неизвестно', tone: 'ok' });
+    // an older Jackett without last_error: unknown too
+    const old = jackettSite((c) => page(JSON.stringify([{ id: 'rutor', name: 'RuTor' }, { id: 'kinozal', name: 'Kinozal' }]), c.url));
+    expect((await checkIndexer(JACKETT, KEY, old.ctx.http, now)).trackers.every((t) => t.state === 'unknown')).toBe(true);
     const failing = jackettSite(() => {
       throw new Error('net ' + KEY);
     });
-    expect((await checkIndexer(JACKETT, KEY, failing.ctx.http, now)).state).toBe('ok');
+    const f = await checkIndexer(JACKETT, KEY, failing.ctx.http, now);
+    expect(f.state).toBe('ok');
+    expect(f.trackers.every((t) => t.state === 'unknown')).toBe(true);
   });
 
   it('a wrong key: 401, or the Torznab error 100 in a 200 answer', async () => {
@@ -125,7 +136,11 @@ describe('Prowlarr tracker status', () => {
   ];
   const statuses = [
     { indexerId: 4, disabledTill: new Date(NOW + 3600000).toISOString(), mostRecentFailure: new Date(NOW - 60000).toISOString() },
-    { indexerId: 6, mostRecentFailure: new Date(NOW - 60000).toISOString() },
+    { indexerId: 6, mostRecentFailure: new Date(NOW - 60000).toISOString(), escalationLevel: 1 },
+    // recovered: the failure is old, or the escalation went back to 0 after a success
+    { indexerId: 1, mostRecentFailure: new Date(NOW - 3 * 3600000).toISOString(), escalationLevel: 1 },
+    { indexerId: 2, mostRecentFailure: new Date(NOW - 60000).toISOString(), escalationLevel: 0 },
+    { indexerId: 3, disabledTill: new Date(NOW - 60000).toISOString() },
   ];
 
   it('maps /api/v1/indexer + /api/v1/indexerstatus with the key in the header only', async () => {
