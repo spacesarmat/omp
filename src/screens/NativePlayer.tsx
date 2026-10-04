@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { effect } from '@preact/signals';
 import { client } from '../store/servers';
 import { settings } from '../store/settings';
 import { nativePlugin } from '../platform/androidNative';
@@ -12,6 +13,8 @@ import { recordWatch, loadSkip, saveSkip } from '../store/journal';
 import { setPlayerBridge, postSoon } from '../phone/link';
 import { goBack, currentRoute } from '../ui/nav';
 import { toast } from '../ui/toast';
+import { donateCardEnabled } from '../player/DonateCard';
+import { journalSupportActive } from '../store/support';
 
 interface Props {
   queue: PlayItem[];
@@ -63,6 +66,7 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
     const leave = () => { if (!cancelled && currentRoute.value === route) goBack(); };
     let session: NativeSession | null = null;
     let unbridge: (() => void) | null = null;
+    let unwatch: (() => void) | null = null;
     // a launch while the native player is open (phone) must not ask behind the player
     decideStart(queue[index], startAt, !nativePlayerOpen()).then((pos) => {
       if (cancelled) return;
@@ -88,9 +92,13 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
       }, journal, probeLoader(c), skipIo(c));
       session = run;
       unbridge = setPlayerBridge({ snapshot: () => run.snapshot(), exec: (cmd) => run.exec(cmd) });
+      const donate = donateCardEnabled(journalSupportActive());
+      // a support mark read later (the skip settings' list) hides the card in the open player
+      if (donate) unwatch = effect(() => { if (journalSupportActive()) run.hideDonate(); });
       run.start({
         index, startAt: pos, seekStep: s.seekStep, autoNext: s.autoNext,
         audioLang: s.audioLang, subLang: s.subLang, subtitlesOn: s.subtitlesOn,
+        donate,
       }).then(
         () => { if (!cancelled) setOpened(true); },
         (e) => {
@@ -106,6 +114,7 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
       cancelled = true;
       if (session) session.detach();
       if (unbridge) unbridge();
+      if (unwatch) unwatch();
     };
   }, []);
 

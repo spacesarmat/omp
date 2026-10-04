@@ -633,3 +633,37 @@ describe('Library catalog unavailable', () => {
     expect(el.textContent).not.toContain('Каталог недоступен');
   });
 });
+
+describe('Library donate card', () => {
+  const OLD = JSON.stringify(Date.now() - 31 * 24 * 60 * 60 * 1000);
+  const card = () => el.querySelector('.m-donate-card');
+
+  it('is not shown for a new user (first-run time is stored now)', async () => {
+    mount();
+    await flush();
+    expect(card()).toBeNull();
+    expect(localStorage.getItem('tsp.firstRun')).not.toBeNull();
+  });
+
+  it('appears after 30 days; «Не напоминать» hides it for good', async () => {
+    localStorage.setItem('tsp.firstRun', OLD);
+    mount();
+    await flush();
+    expect(card()).not.toBeNull();
+    await act(async () => byText('Не напоминать')!.click());
+    expect(card()).toBeNull();
+    act(() => render(null, el));
+    mount();
+    await flush();
+    expect(card()).toBeNull();
+  });
+
+  it('«Поддержать» opens the sheet and hides the card', async () => {
+    localStorage.setItem('tsp.firstRun', OLD);
+    mount();
+    await flush();
+    await act(async () => byText('Поддержать')!.click());
+    expect(card()).toBeNull();
+    expect(localStorage.getItem('tsp.donateCard')).toBe('true');
+  });
+});

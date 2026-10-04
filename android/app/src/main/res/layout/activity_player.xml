@@ -170,6 +170,64 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <!-- «Поддержать» (DonateCard.kt): bottom right on pause, bottom left in the credits; purely visual -->
+    <LinearLayout
+        android:id="@+id/player_donate"
+        android:layout_width="400dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginStart="48dp"
+        android:layout_marginEnd="48dp"
+        android:layout_marginBottom="210dp"
+        android:background="@drawable/player_donate"
+        android:focusable="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="20dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/player_donate_qr"
+            android:layout_width="132dp"
+            android:layout_height="132dp"
+            android:background="#FFFFFF"
+            android:contentDescription="@string/player_donate_qr"
+            android:scaleType="fitXY" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/player_donate_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#E8EAF0"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/player_donate_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:lineSpacingMultiplier="1.2"
+                android:textColor="#C9CEDA"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/player_donate_link"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="#9AA1B2"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </LinearLayout>
+
     <TextView
         android:id="@+id/player_skip_intro"
         style="@style/OmpPlayerChip.Accent"

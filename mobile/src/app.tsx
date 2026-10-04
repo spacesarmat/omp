@@ -26,6 +26,9 @@ import { Settings, runUpdateCheck } from './screens/Settings';
 import { ServerSettings } from './screens/ServerSettings';
 import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
 import { WhatsNewSheet } from './ui/WhatsNewSheet';
+import { DonateSheet } from './ui/DonateSheet';
+import { syncSupport, localSupportUntil } from './donate';
+import { torrents } from '../../src/store/library';
 import { checkWhatsNew } from '../../src/store/whatsNew';
 import { CHANGELOG } from '../../src/lib/changelogData';
 import { APP_VERSION } from '../../src/version';
@@ -164,6 +167,17 @@ export function App() {
     };
   }, []);
 
+  // support code: the TVs learn it from the server's journal; a server (or a new one) without the mark gets it
+  useEffect(
+    () =>
+      effect(() => {
+        const list = torrents.value;
+        const c = client.value;
+        if (localSupportUntil.value) void syncSupport(c, list);
+      }),
+    [],
+  );
+
   // embedded TorrServer: status, silent autostart (errors only go to the store), sync with the service
   useEffect(() => {
     void autostartLocal().catch(() => {});
@@ -239,6 +253,7 @@ export function App() {
       {prompt && showNav && <UpdateSheet info={prompt} />}
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
       {showNav && !prompt && <WhatsNewSheet />}
+      {showNav && <DonateSheet />}
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}

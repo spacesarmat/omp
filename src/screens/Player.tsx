@@ -37,6 +37,8 @@ import { choose, dialogOpen } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { setPlayerBridge, postSoon } from '../phone/link';
 import { buildSnapshot, liveTiming, runCmd } from '../player/phoneBridge';
+import { DonateCard, donateCardEnabled, donateMode } from '../player/DonateCard';
+import { journalSupportActive } from '../store/support';
 
 interface Props {
   queue: PlayItem[];
@@ -66,6 +68,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const [subOffset, setSubOffset] = useState(0);
   const [prefs, setPrefs] = useState<SkipPrefs>({ i: false, c: false });
   const [undo, setUndo] = useState<{ start: number; text: string } | null>(null);
+  /** Playback of the item has run (the «Поддержать» card waits for it: a loading video is paused too). */
+  const [started, setStarted] = useState(false);
   const autoIntroDone = useRef(false);
   const autoCreditsDone = useRef(false);
   const pendingIntro = useRef<number | null>(null);
@@ -108,6 +112,18 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     creditsStart: segs.credits ? segs.credits.start : null,
     onNext: goNext,
     onEnd: () => goBack(),
+  });
+
+  useEffect(() => { if (ready && !vs.paused && !vs.error) setStarted(true); }, [ready, vs.paused, vs.error]);
+  const donate = donateMode({
+    enabled: donateCardEnabled(journalSupportActive()),
+    started: ready && started,
+    error: !!vs.error,
+    paused: vs.paused,
+    time: vs.time,
+    duration: vs.duration,
+    creditsStart: segs.credits ? segs.credits.start : null,
+    countdown: next.countdown !== null && hasNext,
   });
 
   const intro = inIntro(segs.intro, vs.time) ? segs.intro! : null;
@@ -225,6 +241,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     setCues(null);
     setSubOffset(0);
     setSkippedIntro(null);
+    setStarted(false);
     hideUndo();
     autoIntroDone.current = false;
     autoCreditsDone.current = false;
@@ -598,11 +615,12 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}
       {ready && vs.buffering && !vs.error && <BufferingOverlay cache={cache} />}
       {statsOn && <StatsOverlay cache={cache} probe={probe} />}
+      <DonateCard mode={donate} raised={donate === 'credits' && controls} />
       {next.countdown !== null && hasNext && (
         <NextBanner seconds={next.countdown} title={queue[index + 1].title} onNext={goNext} />
       )}
-      {showSkip && intro && <SkipBanner onSkip={() => { seekTo(introSkipTarget(intro, vs.duration)); setSkippedIntro(intro.start); }} />}
-      {undo && next.countdown === null && <UndoBanner text={undo.text} onUndo={undoSkip} />}
+      {showSkip && intro && <SkipBanner lift={donate === 'pause'} onSkip={() => { seekTo(introSkipTarget(intro, vs.duration)); setSkippedIntro(intro.start); }} />}
+      {undo && next.countdown === null && <UndoBanner text={undo.text} lift={donate === 'pause'} onUndo={undoSkip} />}
       {(controls || vs.paused) && !vs.error && (
         <Controls
           title={item.title}

@@ -4,6 +4,8 @@ import { compareVersions } from '../lib/version';
 import { releasesUpTo, type ChangelogEntry } from '../lib/changelog';
 
 export const SEEN_KEY = 'tsp.seenVersion';
+/** Keys written on every start (phone: first-run time): they say nothing about an older install. */
+const NOT_DATA = [SEEN_KEY, 'tsp.firstRun'];
 
 export interface WhatsNew {
   title: string;
@@ -34,7 +36,7 @@ function hasOtherData(): boolean {
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && k.indexOf('tsp.') === 0 && k !== SEEN_KEY) return true;
+      if (k && k.indexOf('tsp.') === 0 && NOT_DATA.indexOf(k) < 0) return true;
     }
   } catch (e) {
     // storage unavailable

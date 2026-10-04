@@ -2,15 +2,20 @@ package com.spacesarmat.omp.player
 
 import android.app.Instrumentation
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Base64
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
@@ -55,6 +60,7 @@ import org.json.JSONObject
  * At the end of an item: «Следующая серия через N» (5 s) or close; with known credits the countdown starts there.
  * Chapters and skips come from the page per item ([SkipState]): ticks, «Пропустить заставку», auto skip of the
  * intro with «Вернуть», credits auto skip to the next item (as the LG player).
+ * «Поддержать» ([DonateQr], sent with playNative): a QR card on pause and during the credits, purely visual.
  * Moving to another item starts it from its resume point (queue `resume`, updated when an item is left).
  * Events go to the page through [NativePlayerBridge]; AC3/E-AC3/DTS use the default renderers
  * (passthrough over HDMI when the device reports support; no FFmpeg extension).
@@ -86,6 +92,14 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var toastBox: View
     private lateinit var toastText: TextView
     private lateinit var toastUndo: View
+    private lateinit var donateBox: View
+    private lateinit var donateQrView: ImageView
+    private lateinit var donateTitle: TextView
+    private lateinit var donateText: TextView
+    private lateinit var donateLink: TextView
+    /** The page said a support code is known: no card for the rest of this run. */
+    private var donateHidden = false
+    private var donateShown = DonateQr.NONE
 
     private var session: Long? = null
     private var closedSent = false
@@ -185,6 +199,11 @@ class PlayerActivity : AppCompatActivity() {
         toastBox = findViewById(R.id.player_toast)
         toastText = findViewById(R.id.player_toast_text)
         toastUndo = findViewById(R.id.player_toast_undo)
+        donateBox = findViewById(R.id.player_donate)
+        donateQrView = findViewById(R.id.player_donate_qr)
+        donateTitle = findViewById(R.id.player_donate_title)
+        donateText = findViewById(R.id.player_donate_text)
+        donateLink = findViewById(R.id.player_donate_link)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = onBack()
@@ -311,6 +330,7 @@ class PlayerActivity : AppCompatActivity() {
         session = r.session
         skips.clear()
         hideMessage()
+        setDonate(r.donate)
         applySkips()
         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
             .clearOverrides()
@@ -634,6 +654,62 @@ class PlayerActivity : AppCompatActivity() {
         if (::toastBox.isInitialized) render()
     }
 
+    /** The QR code of the request as a crisp bitmap (one pixel per module, white quiet zone), or no card. */
+    private fun setDonate(d: DonateQr?) {
+        // a hide the page sent before this player was created (or before this queue was loaded)
+        donateHidden = NativePlayerBridge.donateHidden(req.session)
+        donateShown = DonateQr.NONE
+        donateBox.visibility = View.GONE
+        if (d == null) return
+        val n = d.modules + 2 * DonateQr.QUIET
+        val px = IntArray(n * n) { WHITE }
+        for (y in 0 until d.modules) for (x in 0 until d.modules) {
+            if (d.dark(x, y)) px[(y + DonateQr.QUIET) * n + x + DonateQr.QUIET] = QR_DARK
+        }
+        val bmp = Bitmap.createBitmap(px, n, n, Bitmap.Config.ARGB_8888)
+        donateQrView.setImageDrawable(BitmapDrawable(resources, bmp).apply { isFilterBitmap = false })
+        donateLink.text = d.label
+    }
+
+    /** { type: "donate", on: false } from the page. */
+    fun hideDonate() {
+        if (!::exo.isInitialized || isFinishing) return
+        donateHidden = true
+        render()
+    }
+
+    /** Places the «Поддержать» card for the current state (pause: bottom right above the controls, credits: bottom left). */
+    private fun renderDonate(controlsVisible: Boolean, paused: Boolean, pos: Long, dur: Long) {
+        val enabled = req.donate != null && !donateHidden
+        val mode = DonateQr.mode(enabled, error != null, paused, countdown >= 0 && hasNext(), pos, dur, skips.info(index())?.creditsMs)
+        if (mode == DonateQr.NONE) {
+            donateBox.visibility = View.GONE
+            donateShown = mode
+            btnSkip.translationY = if (controlsVisible) 0f else SKIP_HIDDEN_SHIFT_DP * resources.displayMetrics.density
+            return
+        }
+        val dp = resources.displayMetrics.density
+        if (mode != donateShown) {
+            donateShown = mode
+            val pause = mode == DonateQr.PAUSE
+            donateTitle.setText(if (pause) R.string.player_donate_pause_title else R.string.player_donate_credits_title)
+            donateText.setText(if (pause) R.string.player_donate_pause_text else R.string.player_donate_credits_text)
+            val lp = donateBox.layoutParams as FrameLayout.LayoutParams
+            lp.gravity = Gravity.BOTTOM or (if (pause) Gravity.END else Gravity.START)
+            lp.bottomMargin = ((if (pause) DONATE_PAUSE_BOTTOM_DP else DONATE_CREDITS_BOTTOM_DP) * dp).toInt()
+            donateBox.layoutParams = lp
+        }
+        // in the credits the card goes above the controls while they are shown
+        donateBox.translationY = if (mode == DonateQr.CREDITS && controlsVisible) -(DONATE_PAUSE_BOTTOM_DP - DONATE_CREDITS_BOTTOM_DP) * dp else 0f
+        donateBox.visibility = View.VISIBLE
+        // «Пропустить заставку» sits in the pause card's corner: above the card
+        btnSkip.translationY = when {
+            mode == DonateQr.PAUSE -> -DONATE_SKIP_LIFT_DP * dp
+            controlsVisible -> 0f
+            else -> SKIP_HIDDEN_SHIFT_DP * dp
+        }
+    }
+
     private fun togglePause() {
         if (exo.playWhenReady) {
             // the credits countdown waits for playback (shown again on play, as on LG)
@@ -825,8 +901,8 @@ class PlayerActivity : AppCompatActivity() {
         toastBox.visibility = if (toastShown) View.VISIBLE else View.GONE
         toastUndo.visibility = if (undoStart != null) View.VISIBLE else View.GONE
         btnSkip.visibility = if (skipShown()) View.VISIBLE else View.GONE
-        // above the controls while they are shown, near the bottom edge when they are hidden
-        btnSkip.translationY = if (visible) 0f else SKIP_HIDDEN_SHIFT_DP * resources.displayMetrics.density
+        // above the controls while they are shown, near the bottom edge when they are hidden (above the donate card)
+        renderDonate(visible, paused, pos, dur)
         buffering.visibility = if (exo.playbackState == Player.STATE_BUFFERING && error == null) View.VISIBLE else View.GONE
         if (countdown >= 0 && hasNext()) {
             nextBox.visibility = View.VISIBLE
@@ -883,6 +959,12 @@ class PlayerActivity : AppCompatActivity() {
         private const val NEXT_COUNTDOWN_S = 5
         private const val CREDITS_COUNTDOWN_S = 10
         private const val SKIP_HIDDEN_SHIFT_DP = 150f
+        /** «Поддержать»: bottom margin on pause (above the controls) and in the credits; the skip button lift. */
+        private const val DONATE_PAUSE_BOTTOM_DP = 210f
+        private const val DONATE_CREDITS_BOTTOM_DP = 48f
+        private const val DONATE_SKIP_LIFT_DP = 190f
+        private const val WHITE = 0xFFFFFFFF.toInt()
+        private const val QR_DARK = 0xFF0F1115.toInt()
         /** «Заставка пропущена · Вернуть» (SKIP_TOAST_MS of src/player/chapters.ts), other messages. */
         private const val SKIP_TOAST_MS = 5000L
         private const val MESSAGE_MS = 3000L

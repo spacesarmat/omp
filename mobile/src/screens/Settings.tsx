@@ -30,6 +30,7 @@ import { CHANGELOG } from '../../../src/lib/changelogData';
 import { openWhatsNew } from '../../../src/store/whatsNew';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { hoursText } from '../monitor/text';
+import { activeMethods, openDonate } from '../donate';
 
 type Checker = (o: { manual: boolean; url?: string }) => Promise<CheckResult>;
 let checker: Checker | null = null;
@@ -320,6 +321,12 @@ export function Settings() {
           <span>Журнал ошибок</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />
         </button>
+        {activeMethods().length > 0 && (
+          <button type="button" class="m-set-row m-set-pick" onClick={openDonate}>
+            <span>Поддержать OMP</span>
+            <Icon d="M9 6l6 6l-6 6" size={20} />
+          </button>
+        )}
         <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(PROJECT_URL, '_system')}>
           Страница проекта
         </button>

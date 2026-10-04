@@ -2,8 +2,10 @@
 // the torrent list first (another device may have written meanwhile) and every failure is swallowed: the journal must
 // never break playback.
 import type { Torrent } from '../api/types';
-import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, withWatch } from '../lib/journal';
+import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, withWatch, supportOfList, withSupport, journalOf } from '../lib/journal';
 import { torrents } from './library';
+import { noteSupport } from './support';
+import { SUPPORT_MAX_AHEAD_MS } from '../lib/donate';
 
 export interface JournalClient {
   list(): Promise<Torrent[]>;
@@ -86,6 +88,7 @@ function torrentOf(all: Torrent[] | null | undefined, hash: string): Torrent | u
 /** Skip settings of a torrent; defaults (everything off) when there are none or the torrent is unknown. */
 export function loadSkip(c: Pick<JournalClient, 'list'>, hash: string): Promise<SkipPrefs> {
   return c.list().then((all) => {
+    noteSupport(all); // the TV player hides the «Поддержать» card for a supporter
     const t = torrentOf(all, hash);
     const p = t ? parseData(t.data) : null;
     return (p && p.skip) || { i: false, c: false };
@@ -177,4 +180,49 @@ export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watc
     if (chains[hash] === tail) delete chains[hash];
   });
   return run;
+}
+
+/** Last watch-journal activity of a torrent (0: never played through OMP). */
+function lastActivity(data: string | undefined): number {
+  const j = journalOf(data);
+  return j.length ? j[0].at : 0;
+}
+
+/**
+ * Support code applied on a phone: makes sure the server carries `omp.d.until` ≥ `until` (the TVs read the latest
+ * one among all torrents). Nothing is written when some torrent already has it (marks further ahead than a code can
+ * reach do not count). Otherwise one torrent gets it, keeping the history, the skip settings and every other key of
+ * `data`: the one played least recently (then the oldest), because TorrServer has no compare-and-swap and the torrent
+ * being watched is the one a TV rewrites on pause and stop. The write is checked with a fresh list and retried once if
+ * a concurrent write lost it. Resolves true when the server has the mark afterwards, false when there was nowhere to
+ * write or the write failed (never rejects).
+ */
+export function saveSupport(c: JournalClient, until: number, now: number = Date.now()): Promise<boolean> {
+  const ceiling = Math.max(now + SUPPORT_MAX_AHEAD_MS, until);
+  const has = (all: Torrent[] | null | undefined) => supportOfList(all, ceiling) >= until;
+  const attempt = (left: number): Promise<boolean> =>
+    c.list().then((all) => {
+      const list = (all || []).filter((x) => !!x && typeof x.hash === 'string');
+      if (has(list)) return true;
+      const target = list
+        .filter((x) => parseData(x.data) !== null)
+        .map((x) => ({ t: x, at: lastActivity(x.data) }))
+        .sort((a, b) => a.at - b.at || (a.t.timestamp || 0) - (b.t.timestamp || 0))[0];
+      if (!target) return false;
+      const hash = target.t.hash;
+      return enqueue(hash, () =>
+        c.list().then((fresh) => {
+          const cur = torrentOf(fresh, hash);
+          const parsed = cur ? parseData(cur.data) : null;
+          if (!cur || !parsed || has(fresh)) return undefined;
+          const base = baseOf(cur, parsed);
+          const data = serializeData(withSupport(base.obj, until), base.journal, base.skip);
+          return c.setData(cur, data).then(() => patchLibrary(cur.hash, data));
+        }),
+      )
+        // read back: another device may have rewritten the torrent at the same moment (or the write failed)
+        .then(() => c.list().then(has, () => false))
+        .then((ok) => ok || (left > 0 ? attempt(left - 1) : false));
+    }, () => false);
+  return attempt(1);
 }

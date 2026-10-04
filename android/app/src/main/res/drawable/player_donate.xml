@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- «Поддержать» card of the native player (mockup TvDonatePause: rgba(15,17,21,0.92), radius 18) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#EB0F1115" />
+    <corners android:radius="18dp" />
+</shape>

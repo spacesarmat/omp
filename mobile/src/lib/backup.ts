@@ -13,6 +13,7 @@ import { sanitizeSubs } from '../../../src/monitor/subs';
 import { sanitizeMonitorSettings } from '../../../src/monitor/settings';
 import { sanitizeTvs } from '../tv/tvStore';
 import { sanitizeTouchpad } from '../tv/touchpad';
+import { sanitizeSupportState } from '../donate';
 import { APP_VERSION } from '../../../src/version';
 import { logDate } from '../../../src/lib/log';
 
@@ -94,6 +95,8 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.localServer', clean: (v) => (isObject(v) && typeof v.autostart === 'boolean' ? { autostart: v.autostart } : undefined) },
   { key: 'tsp.playlists', clean: (v) => cleanList(v, sanitizeFavorites(v)) },
   { key: 'tsp.trackPrefs', clean: (v) => cleanMap(v, sanitizeTrackPrefs(v)) },
+  // support code applied: only its end time (not a secret), so a restored phone does not ask for support again
+  { key: 'tsp.support', clean: (v) => sanitizeSupportState(v) || undefined },
 ];
 
 /** Known keys that a copy deliberately leaves out (documentation + tested: none of them is in BACKUP_KEYS). */
@@ -114,6 +117,8 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.monitorNotifyHint',
   'tsp.sourcesTransfer', // state of the last handover to the TV
   'tsp.sourcesSent',
+  'tsp.firstRun', // when this install was first used: per device
+  'tsp.donateCard', // the «Поддержать» card was closed
 ];
 
 function readRaw(key: string): unknown {

@@ -21,6 +21,7 @@ import { episodeLabel, playableFiles } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
 import { native } from '../platform/native';
+import { donateCardDue, dismissDonateCard, openDonate, supporterActive } from '../donate';
 import { localServer, startLocal, refreshLocalServer, LOCAL_URL } from '../server/localServer';
 
 const POLL_MS = 15000;
@@ -60,6 +61,7 @@ export function Library() {
   const [starting, setStarting] = useState(false);
   const [phoneName, setPhoneName] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [donateCard, setDonateCard] = useState(() => donateCardDue());
   const [pull, setPull] = useState(0);
   const [dragging, setDragging] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -349,6 +351,34 @@ export function Library() {
           </div>
         )}
         <div class="m-lib-body" style={pullStyle}>
+          {donateCard && !unavailable && !supporterActive() && (
+            <div class="m-donate-card" role="region" aria-label="Поддержать OMP">
+              <span>OMP бесплатный и без рекламы. Если он вам полезен, можно поддержать разработку.</span>
+              <div class="m-donate-actions">
+                <button
+                  type="button"
+                  class="m-btn m-btn-primary"
+                  onClick={() => {
+                    dismissDonateCard();
+                    setDonateCard(false);
+                    openDonate();
+                  }}
+                >
+                  Поддержать
+                </button>
+                <button
+                  type="button"
+                  class="m-btn m-btn-secondary"
+                  onClick={() => {
+                    dismissDonateCard();
+                    setDonateCard(false);
+                  }}
+                >
+                  Не напоминать
+                </button>
+              </div>
+            </div>
+          )}
           {tvError && <LaunchError message={tvError} class="m-hint-warn" />}
           {error && !unavailable && (
             <div class="m-hint-warn m-warn-row">
