@@ -16,7 +16,7 @@ import {
   type LgFacts,
   type AtvFacts,
 } from '../../src/lib/installPlan';
-import { FAQ } from '../../mobile/src/faq';
+import { resolveFaqLink } from '../../mobile/src/faq';
 
 const lg = (o: Partial<LgFacts> = {}): LgFacts => ({
   kind: 'lg',
@@ -315,7 +315,6 @@ describe('installPlan — Samsung', () => {
 
 describe('FAQ links', () => {
   it('every FAQ question the plans link to exists', () => {
-    const questions = FAQ.flatMap((s) => s.items.map((i) => i.q));
     const plans = [
       installPlan(lg({ paired: false })),
       installPlan(lg({ productName: 'webOSTV 3.0' })),
@@ -325,6 +324,6 @@ describe('FAQ links', () => {
       installPlan(atv({ cast: 'chromecast' })),
       installPlan({ kind: 'samsung', name: 'S', ip: '1.1.1.1' }),
     ];
-    for (const p of plans) for (const a of p.actions) if (a.id === 'faq') expect(questions).toContain(a.faq);
+    for (const p of plans) for (const a of p.actions) if (a.id === 'faq') expect(resolveFaqLink(a.faq), a.faq).not.toBeNull();
   });
 });
