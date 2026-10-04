@@ -1,0 +1,255 @@
+package com.spacesarmat.omp.player
+
+import java.util.Locale
+
+/** An audio choice of the menu and of `nativePlayerState` (`audio.list` labels, `audio.sel` index). */
+data class AudioOption(val track: EngineTrack, val label: String)
+
+/** A subtitle choice: `value` «off», «e<n>» (embedded) or «x<n>» (the item's file n), as subtitleMenu on LG. */
+data class SubOption(val value: String, val label: String, val track: EngineTrack?)
+
+/** What the page gets in `nativePlayerState` / `nativePlayerClosed` (times in seconds). */
+data class PlayerSnapshot(
+    val index: Int,
+    val timeSec: Double,
+    val durationSec: Double,
+    val paused: Boolean,
+    val buffering: Boolean,
+    val audio: List<String>,
+    val audioSel: Int,
+    val subs: List<SubOption>,
+    val subSel: String,
+)
+
+/** Engine-independent track labels and menu lists. */
+object TrackOptions {
+    private val RU = Locale.forLanguageTag("ru")
+
+    /** «Русский» for «ru» / «rus»; empty for «und», unknown or unnamed codes. */
+    fun language(code: String?): String {
+        if (code.isNullOrEmpty() || code == "und") return ""
+        val name = Locale.forLanguageTag(code).getDisplayLanguage(RU)
+        if (name.isEmpty() || name.equals(code, ignoreCase = true)) return ""
+        return name.replaceFirstChar { it.titlecase(RU) }
+    }
+
+    fun channels(n: Int): String = when {
+        n <= 0 -> ""
+        n == 1 -> "1.0"
+        n == 2 -> "2.0"
+        n == 6 -> "5.1"
+        n == 8 -> "7.1"
+        else -> "$n кан."
+    }
+
+    /** «Русский · Дубляж · AC3 5.1» (empty parts left out), «Дорожка n» when nothing is known. */
+    fun audioLabel(t: EngineTrack, n: Int): String {
+        val tech = listOf(t.codec, channels(t.channels)).filter { it.isNotEmpty() }.joinToString(" ")
+        val parts = ArrayList<String>()
+        for (p in listOf(language(t.language), t.label.orEmpty(), tech)) if (p.isNotEmpty() && p !in parts) parts.add(p)
+        return if (parts.isEmpty()) "Дорожка $n" else parts.joinToString(" · ")
+    }
+
+    fun subLabel(t: EngineTrack, n: Int): String {
+        val parts = ArrayList<String>()
+        for (p in listOf(language(t.language), t.label.orEmpty())) if (p.isNotEmpty() && p !in parts) parts.add(p)
+        return if (parts.isEmpty()) "Субтитры $n" else parts.joinToString(" · ")
+    }
+
+    fun audio(tracks: List<EngineTrack>): List<AudioOption> = tracks.mapIndexed { i, t -> AudioOption(t, audioLabel(t, i + 1)) }
+
+    /** «Выкл», embedded tracks (e<n>), then the item's files (x<n>, named after [files]) in file order. */
+    fun subs(tracks: List<EngineTrack>, files: List<SubFile>): List<SubOption> {
+        val out = arrayListOf(SubOption("off", "Выкл", null))
+        val external = ArrayList<Pair<Int, SubOption>>()
+        var embedded = 0
+        for (t in tracks) {
+            val x = t.external
+            if (x != null) {
+                val label = files.getOrNull(x)?.label ?: (t.label ?: "Файл")
+                external.add(x to SubOption("x$x", "$label (файл)", t))
+            } else {
+                out.add(SubOption("e$embedded", subLabel(t, embedded + 1), t))
+                embedded++
+            }
+        }
+        external.sortBy { it.first }
+        external.forEach { out.add(it.second) }
+        return out
+    }
+
+    fun selectedAudio(list: List<AudioOption>): Int = list.indexOfFirst { it.track.selected }
+
+    fun selectedSub(list: List<SubOption>): SubOption = list.firstOrNull { it.track?.selected == true } ?: list[0]
+}
+
+/**
+ * The queue on top of a [PlayerEngine]: the current item, resume points of the items (the item left keeps its
+ * position, cleared when nearly finished as resumePosition does; a new item starts from its own), the error on
+ * screen, track menus and what is reported to the page. No Android UI: the activity draws from it.
+ */
+class PlayerSession(val engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Listener {
+    /** The activity's reactions to engine events. */
+    interface Ui {
+        /** Redraw the overlay and report the state to the page. */
+        fun changed()
+
+        /** The current item played to its end. */
+        fun itemEnded()
+    }
+
+    var request: PlayRequest? = null
+        private set
+
+    /** Current queue item. */
+    var index = 0
+        private set
+
+    private var resume = LongArray(0)
+
+    /** Last position / duration seen on a tick (the resume point of the item when it is left). */
+    var lastPosMs = 0L
+        private set
+    var lastDurMs = 0L
+        private set
+
+    var error: ErrorKind? = null
+        private set
+
+    /** The first video frame of the current item was shown (since [load] / [goTo]). */
+    var firstFrame = false
+        private set
+
+    init {
+        engine.listener = this
+    }
+
+    val queueSize: Int get() = request?.queue?.size ?: 0
+
+    fun hasNext(): Boolean = index < queueSize - 1
+
+    fun item(): QueueItem? = request?.queue?.getOrNull(index)
+
+    /** A new queue: preferences reset, item [PlayRequest.index] opens at [PlayRequest.startAtMs]. */
+    fun load(r: PlayRequest) {
+        request = r
+        resume = LongArray(r.queue.size) { r.queue[it].resumeMs }
+        index = r.index
+        lastPosMs = r.startAtMs
+        lastDurMs = 0L
+        error = null
+        firstFrame = false
+        engine.setPreferences(TrackPrefs(r.audioLang, r.subLang, r.subtitlesOn))
+        engine.open(media(r.queue[index]), r.startAtMs)
+    }
+
+    /** Leaves the current item (its resume point is kept) and plays item [i] from its own; false: no such item. */
+    fun goTo(i: Int): Boolean {
+        val r = request ?: return false
+        if (i !in r.queue.indices || i == index) return false
+        tick()
+        val watched = lastDurMs > 0 && lastPosMs.toDouble() / lastDurMs >= WATCHED_RATIO
+        if (index in resume.indices) resume[index] = if (watched || lastPosMs < MIN_RESUME_MS) 0L else lastPosMs
+        index = i
+        val start = resume[i]
+        lastPosMs = start
+        lastDurMs = 0L
+        error = null
+        firstFrame = false
+        engine.open(media(r.queue[i]), start)
+        return true
+    }
+
+    /** Resume point of item [i] (as it would be used when going there). */
+    fun resumeOf(i: Int): Long = resume.getOrElse(i) { 0L }
+
+    /** Position tick: remembers where the current item is. */
+    fun tick() {
+        lastPosMs = engine.positionMs
+        engine.durationMs.let { if (it > 0) lastDurMs = it }
+    }
+
+    fun retry() {
+        error = null
+        engine.retry()
+    }
+
+    fun errorText(): String? = error?.let { message(it) }
+
+    fun audioOptions(): List<AudioOption> = TrackOptions.audio(engine.audioTracks())
+
+    fun subOptions(): List<SubOption> = TrackOptions.subs(engine.subtitleTracks(), item()?.subtitles ?: emptyList())
+
+    /** «audio» of the phone / the menu: option [i] of [audioOptions]. */
+    fun selectAudio(i: Int) {
+        val o = audioOptions().getOrNull(i) ?: return
+        engine.selectAudio(o.track.id)
+    }
+
+    /** «subs» of the phone / the menu: a [SubOption.value]. */
+    fun selectSub(value: String) {
+        if (value == "off") {
+            engine.selectSubtitle(null)
+            return
+        }
+        val t = subOptions().firstOrNull { it.value == value }?.track ?: return
+        engine.selectSubtitle(t.id)
+    }
+
+    fun snapshot(): PlayerSnapshot {
+        val audio = audioOptions()
+        val subs = subOptions()
+        return PlayerSnapshot(
+            index = index,
+            timeSec = engine.positionMs.coerceAtLeast(0L) / 1000.0,
+            durationSec = engine.durationMs.coerceAtLeast(0L) / 1000.0,
+            paused = !engine.playWhenReady || error != null,
+            buffering = engine.isBuffering,
+            audio = audio.map { it.label },
+            audioSel = TrackOptions.selectedAudio(audio),
+            subs = subs,
+            subSel = TrackOptions.selectedSub(subs).value,
+        )
+    }
+
+    private fun media(q: QueueItem) = EngineMedia(q.url, q.subtitles)
+
+    // ---- engine events ----
+
+    override fun onReady() {
+        error = null
+        ui.changed()
+    }
+
+    override fun onFirstFrame() {
+        firstFrame = true
+    }
+
+    override fun onBuffering(buffering: Boolean) = ui.changed()
+
+    override fun onPlayingChanged(playing: Boolean) = ui.changed()
+
+    override fun onTracksChanged() = ui.changed()
+
+    override fun onEnded() {
+        ui.itemEnded()
+        ui.changed()
+    }
+
+    override fun onError(kind: ErrorKind, detail: String) {
+        error = kind
+        ui.changed()
+    }
+
+    companion object {
+        const val WATCHED_RATIO = 0.9
+        const val MIN_RESUME_MS = 10_000L
+
+        /** The text of the error box. */
+        fun message(kind: ErrorKind): String = when (kind) {
+            ErrorKind.NETWORK -> "Сервер недоступен или не отвечает"
+            ErrorKind.UNSUPPORTED_FORMAT, ErrorKind.DECODER -> "Формат видео не поддерживается"
+            ErrorKind.OTHER -> "Не удалось воспроизвести видео"
+        }
+    }
+}

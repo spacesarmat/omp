@@ -1,20 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Native player on Android TV: Media3 PlayerView + the OMP overlay (mockup Player, LG .player-* styles). -->
+<!-- Native player on Android TV: the engine's video view + the OMP overlay (mockup Player, LG .player-* styles). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <androidx.media3.ui.PlayerView
-        android:id="@+id/player_view"
+    <!-- the engine (PlayerEngine.attach) puts its video view here -->
+    <FrameLayout
+        android:id="@+id/player_video"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:focusable="false"
-        app:use_controller="false"
-        app:show_buffering="never"
-        app:resize_mode="fit"
-        app:shutter_background_color="#000000" />
+        android:focusable="false" />
 
     <ProgressBar
         android:id="@+id/player_buffering"

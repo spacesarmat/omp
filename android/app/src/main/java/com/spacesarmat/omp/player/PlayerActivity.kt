@@ -4,50 +4,29 @@ import android.app.Instrumentation
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
-import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.util.Base64
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
-import androidx.annotation.OptIn
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.Format
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.Tracks
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSpec
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.ResolvingDataSource
-import androidx.media3.exoplayer.DefaultRenderersFactory
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.ui.PlayerView
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.spacesarmat.omp.R
 import com.spacesarmat.omp.control.AppForeground
-import java.util.Locale
 import org.json.JSONObject
 
 /**
@@ -62,12 +41,12 @@ import org.json.JSONObject
  * intro with «Вернуть», credits auto skip to the next item (as the LG player).
  * «Поддержать» ([DonateQr], sent with playNative): a QR card on pause and during the credits, purely visual.
  * Moving to another item starts it from its resume point (queue `resume`, updated when an item is left).
- * Events go to the page through [NativePlayerBridge]; AC3/E-AC3/DTS use the default renderers
- * (passthrough over HDMI when the device reports support; no FFmpeg extension).
+ * Events go to the page through [NativePlayerBridge]. Playback goes through a [PlayerEngine] ([Media3Engine]
+ * today) driven by [PlayerSession] (queue, resume points, error, tracks): nothing here knows the engine.
  */
-@OptIn(UnstableApi::class)
-class PlayerActivity : AppCompatActivity() {
-    private lateinit var exo: ExoPlayer
+class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
+    private lateinit var engine: PlayerEngine
+    private lateinit var session: PlayerSession
     private lateinit var req: PlayRequest
     private val handler = Handler(Looper.getMainLooper())
 
@@ -101,16 +80,11 @@ class PlayerActivity : AppCompatActivity() {
     private var donateHidden = false
     private var donateShown = DonateQr.NONE
 
-    private var session: Long? = null
+    private var runId: Long? = null
     private var closedSent = false
     private var controlsShown = true
     private val seeker = SeekAccumulator({ SystemClock.uptimeMillis() })
-    private var resumeMs = LongArray(0)
-    private var lastIndex = -1
-    private var lastPosMs = 0L
-    private var lastDurMs = 0L
     private var countdown = -1
-    private var error: String? = null
     private var ticks = 0
     private var dialog: AlertDialog? = null
     private val skips = SkipState()
@@ -133,7 +107,7 @@ class PlayerActivity : AppCompatActivity() {
         val t = seeker.take()
         if (t != null) {
             skips.seeked()
-            exo.seekTo(t)
+            engine.seekTo(t)
         }
         render()
         emitState()
@@ -150,10 +124,7 @@ class PlayerActivity : AppCompatActivity() {
     }
     private val tick = object : Runnable {
         override fun run() {
-            if (exo.currentMediaItemIndex == lastIndex) {
-                lastPosMs = exo.currentPosition
-                lastDurMs = durationMs()
-            }
+            session.tick()
             checkSkips()
             render()
             if (++ticks % 2 == 0) emitState()
@@ -208,8 +179,9 @@ class PlayerActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = onBack()
         })
-        exo = buildPlayer()
-        findViewById<PlayerView>(R.id.player_view).player = exo
+        engine = Media3Engine(this)
+        engine.attach(findViewById<ViewGroup>(R.id.player_video))
+        session = PlayerSession(engine, this)
         NativePlayerBridge.player = this
         load(r)
     }
@@ -217,7 +189,7 @@ class PlayerActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         handler.removeCallbacks(tick)
-        if (::exo.isInitialized) handler.post(tick)
+        if (::engine.isInitialized) handler.post(tick)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -244,15 +216,15 @@ class PlayerActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         handler.removeCallbacks(tick)
-        if (::exo.isInitialized && !isFinishing) exo.pause()
+        if (::engine.isInitialized && !isFinishing) engine.pause()
     }
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         dialog?.dismiss()
-        if (::exo.isInitialized) {
+        if (::engine.isInitialized) {
             emitClosed(replaced = false)
-            exo.release()
+            engine.release()
         }
         if (NativePlayerBridge.player === this) NativePlayerBridge.player = null
         super.onDestroy()
@@ -260,170 +232,35 @@ class PlayerActivity : AppCompatActivity() {
 
     // ---- player ----
 
-    private fun buildPlayer(): ExoPlayer {
-        val http = DefaultHttpDataSource.Factory()
-            .setUserAgent("OMP")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(30_000)
-            .setReadTimeoutMs(60_000)
-        // TorrServer Basic auth: credentials come in the URL (as for <video> on LG) and go out as a header
-        val auth = ResolvingDataSource.Factory(http) { spec -> withBasicAuth(spec) }
-        val sources = DefaultMediaSourceFactory(DefaultDataSource.Factory(this, auth))
-        val renderers = DefaultRenderersFactory(this).setEnableDecoderFallback(true)
-        val attrs = AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build()
-        val p = ExoPlayer.Builder(this, renderers)
-            .setMediaSourceFactory(sources)
-            .setAudioAttributes(attrs, true)
-            .setHandleAudioBecomingNoisy(true)
-            .build()
-        p.pauseAtEndOfMediaItems = true
-        p.addListener(object : Player.Listener {
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) onItemEnd()
-                changed()
-            }
-
-            override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_ENDED) onItemEnd()
-                if (state == Player.STATE_READY && error != null) {
-                    error = null
-                }
-                changed()
-            }
-
-            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                cancelCountdown()
-                handler.removeCallbacks(commitSeek)
-                seeker.cancel()
-                skips.enter()
-                if (undoStart != null) hideMessage()
-                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) resumeItem()
-                showControls()
-                changed()
-            }
-
-            override fun onTracksChanged(tracks: Tracks) = changed()
-
-            override fun onPlayerError(e: PlaybackException) {
-                error = describe(e)
-                changed()
-            }
-        })
-        return p
-    }
-
-    private fun changed() {
+    override fun changed() {
         render()
         emitState()
     }
+
+    override fun itemEnded() = onItemEnd()
 
     private fun load(r: PlayRequest) {
         cancelCountdown()
         handler.removeCallbacks(commitSeek)
         seeker.cancel()
-        error = null
-        resumeMs = LongArray(r.queue.size) { r.queue[it].resumeMs }
-        lastIndex = r.index
-        lastPosMs = r.startAtMs
-        lastDurMs = 0L
         closedSent = false
-        session = r.session
+        runId = r.session
         skips.clear()
         hideMessage()
         setDonate(r.donate)
+        session.load(r)
         applySkips()
-        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
-            .clearOverrides()
-            .setPreferredAudioLanguage(r.audioLang.ifEmpty { null })
-            .setPreferredTextLanguage(r.subLang.ifEmpty { null })
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !r.subtitlesOn)
-            .build()
-        exo.setMediaItems(r.queue.mapIndexed { i, q -> mediaItem(i, q) }, r.index, r.startAtMs)
-        exo.prepare()
-        exo.playWhenReady = true
         showControls()
     }
 
-    private fun mediaItem(i: Int, q: QueueItem): MediaItem {
-        val subs = ArrayList<MediaItem.SubtitleConfiguration>()
-        q.subtitles.forEachIndexed { n, s ->
-            val mime = subMime(s.ext) ?: return@forEachIndexed
-            if (s.url.isEmpty()) return@forEachIndexed
-            val b = MediaItem.SubtitleConfiguration.Builder(Uri.parse(s.url))
-                .setMimeType(mime)
-                .setLabel(s.label)
-                .setId(EXTERNAL_ID + n)
-            if (s.lang.isNotEmpty()) b.setLanguage(s.lang)
-            subs.add(b.build())
-        }
-        return MediaItem.Builder().setUri(q.url).setMediaId("omp-$i").setSubtitleConfigurations(subs).build()
-    }
+    private fun index(): Int = session.index
 
-    private fun index(): Int = exo.currentMediaItemIndex.coerceIn(0, req.queue.size - 1)
+    private fun hasNext(): Boolean = session.hasNext()
 
-    private fun hasNext(): Boolean = index() < req.queue.size - 1
+    private fun durationMs(): Long = engine.durationMs
 
-    private fun durationMs(): Long = exo.duration.let { if (it == C.TIME_UNSET || it < 0) 0L else it }
-
-    // ---- tracks ----
-
-    private class AudioOpt(val group: Tracks.Group, val label: String)
-    private class SubOpt(val value: String, val label: String, val group: Tracks.Group?)
-
-    private fun audioOptions(): List<AudioOpt> {
-        val out = ArrayList<AudioOpt>()
-        for (g in exo.currentTracks.groups) {
-            if (g.type != C.TRACK_TYPE_AUDIO || !g.isSupported) continue
-            out.add(AudioOpt(g, audioLabel(g.getTrackFormat(0), out.size + 1)))
-        }
-        return out
-    }
-
-    /** «Выкл», embedded tracks (e<n>) and the queue item's files (x<n>): the same values as subtitleMenu on LG. */
-    private fun subOptions(): List<SubOpt> {
-        val out = arrayListOf(SubOpt("off", "Выкл", null))
-        val external = ArrayList<Pair<Int, SubOpt>>()
-        var embedded = 0
-        for (g in exo.currentTracks.groups) {
-            if (g.type != C.TRACK_TYPE_TEXT || !g.isSupported) continue
-            val f = g.getTrackFormat(0)
-            val x = f.id?.let { EXTERNAL_RE.find(it) }?.groupValues?.get(1)?.toIntOrNull()
-            if (x != null) {
-                val label = req.queue.getOrNull(index())?.subtitles?.getOrNull(x)?.label ?: (f.label ?: "Файл")
-                external.add(x to SubOpt("x$x", "$label (файл)", g))
-            } else {
-                out.add(SubOpt("e$embedded", subLabel(f, embedded + 1), g))
-                embedded++
-            }
-        }
-        external.sortBy { it.first }
-        external.forEach { out.add(it.second) }
-        return out
-    }
-
-    private fun selectedAudio(list: List<AudioOpt>): Int = list.indexOfFirst { it.group.isSelected }
-
-    private fun selectedSub(list: List<SubOpt>): SubOpt =
-        list.firstOrNull { it.group != null && it.group.isSelected } ?: list[0]
-
-    private fun selectAudio(i: Int) {
-        val o = audioOptions().getOrNull(i) ?: return
-        exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon()
-            .setOverrideForType(TrackSelectionOverride(o.group.mediaTrackGroup, 0))
-            .build()
-    }
-
-    private fun selectSub(value: String) {
-        val b = exo.trackSelectionParameters.buildUpon()
-        if (value == "off") {
-            b.clearOverridesOfType(C.TRACK_TYPE_TEXT).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-        } else {
-            val o = subOptions().firstOrNull { it.value == value } ?: return
-            val g = o.group ?: return
-            b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, 0))
-        }
-        exo.trackSelectionParameters = b.build()
-    }
+    private fun selectedAudioLabel(audio: List<AudioOption>): String =
+        audio.getOrNull(TrackOptions.selectedAudio(audio))?.label ?: "по умолчанию"
 
     /**
      * «Меню плеера»: «Аудио», «Субтитры», «Главы» (when the file has chapters) and the three «Отметить …» rows
@@ -433,21 +270,21 @@ class PlayerActivity : AppCompatActivity() {
         if (dialog?.isShowing == true) return
         showControls()
         val i = index()
-        val now = (seeker.pending() ?: exo.currentPosition).coerceAtLeast(0L)
+        val now = (seeker.pending() ?: engine.positionMs).coerceAtLeast(0L)
         val dur = durationMs()
-        val audio = audioOptions()
-        val subs = subOptions()
-        val aSel = selectedAudio(audio)
-        val sSel = selectedSub(subs)
+        val audio = session.audioOptions()
+        val subs = session.subOptions()
+        val aSel = TrackOptions.selectedAudio(audio)
+        val sSel = TrackOptions.selectedSub(subs)
         val chapters = skips.chapters(i)
         val rows = ArrayList<Pair<String, () -> Unit>>()
-        rows.add(("Аудио: " + (audio.getOrNull(aSel)?.label ?: "по умолчанию")) to {
+        rows.add(("Аудио: " + selectedAudioLabel(audio)) to {
             if (audio.size >= 2) {
                 dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
                     .setTitle("Аудио")
                     .setSingleChoiceItems(audio.map { it.label }.toTypedArray(), aSel) { d, n ->
                         d.dismiss()
-                        selectAudio(n)
+                        session.selectAudio(n)
                     }
                     .show()
             }
@@ -457,7 +294,7 @@ class PlayerActivity : AppCompatActivity() {
                 .setTitle("Субтитры")
                 .setSingleChoiceItems(subs.map { it.label }.toTypedArray(), subs.indexOf(sSel)) { d, n ->
                     d.dismiss()
-                    selectSub(subs[n].value)
+                    session.selectSub(subs[n].value)
                 }
                 .show()
         })
@@ -493,7 +330,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun emitMark(item: Int, kind: String, nowMs: Long, durMs: Long) {
         if (closedSent) return
         val o = JSObject()
-        session?.let { o.put("session", it) }
+        runId?.let { o.put("session", it) }
         o.put("index", item)
         o.put("kind", kind)
         o.put("now", nowMs / 1000.0)
@@ -514,14 +351,14 @@ class PlayerActivity : AppCompatActivity() {
         when (code) {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> when {
                 countdown >= 0 -> playNext()
-                error != null -> retry()
+                session.error != null -> retry()
                 undoStart != null -> undoSkip()
                 skipShown() -> skipIntro()
                 else -> togglePause()
             }
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_SPACE -> togglePause()
-            KeyEvent.KEYCODE_MEDIA_PLAY -> if (!exo.playWhenReady) togglePause()
-            KeyEvent.KEYCODE_MEDIA_PAUSE -> if (exo.playWhenReady) togglePause()
+            KeyEvent.KEYCODE_MEDIA_PLAY -> if (!engine.playWhenReady) togglePause()
+            KeyEvent.KEYCODE_MEDIA_PAUSE -> if (engine.playWhenReady) togglePause()
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_MEDIA_REWIND -> seekBy(-1)
             KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> seekBy(1)
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MENU -> openMenu()
@@ -561,7 +398,7 @@ class PlayerActivity : AppCompatActivity() {
      * load() takes them with the new queue.
      */
     fun applySkips() {
-        if (!::exo.isInitialized || isFinishing || NativePlayerBridge.request !== req) return
+        if (!::engine.isInitialized || isFinishing || NativePlayerBridge.request !== req) return
         NativePlayerBridge.takeSkips().forEach { if (it.index < req.queue.size) skips.set(it) }
         checkSkips()
         render()
@@ -569,8 +406,8 @@ class PlayerActivity : AppCompatActivity() {
 
     /** «Пропустить заставку» is on screen: inside the intro, not skipped or hidden, no countdown / «Вернуть». */
     private fun skipShown(): Boolean =
-        ::exo.isInitialized && countdown < 0 && error == null && !isFinishing && undoStart == null &&
-            skips.skipDue(index(), exo.currentPosition)
+        ::engine.isInitialized && countdown < 0 && session.error == null && !isFinishing && undoStart == null &&
+            skips.skipDue(index(), engine.positionMs)
 
     private fun skipIntro() {
         val i = index()
@@ -594,12 +431,11 @@ class PlayerActivity : AppCompatActivity() {
      * regardless of autoNext), the «Следующая серия» countdown from the credits start (with autoNext).
      */
     private fun checkSkips() {
-        if (!::exo.isInitialized || isFinishing || error != null || seeker.pending() != null) return
-        if (exo.currentMediaItemIndex != lastIndex) return // the transition has not been handled yet
+        if (!::engine.isInitialized || isFinishing || session.error != null || seeker.pending() != null) return
         val i = index()
-        val pos = exo.currentPosition
+        val pos = engine.positionMs
         val dur = durationMs()
-        if (creditsCountdown && !skips.countdownHolds(i, pos, dur, exo.playWhenReady)) cancelCountdown()
+        if (creditsCountdown && !skips.countdownHolds(i, pos, dur, engine.playWhenReady)) cancelCountdown()
         val start = skips.info(i)?.intro?.startMs
         val auto = skips.autoIntro(i, pos, dur)
         if (auto != null && start != null) {
@@ -608,12 +444,12 @@ class PlayerActivity : AppCompatActivity() {
             emitState()
             return
         }
-        if (skips.creditsCrossed(i, pos, exo.playWhenReady, hasNext())) {
+        if (skips.creditsCrossed(i, pos, engine.playWhenReady, hasNext())) {
             playNext()
             showMessage(getString(R.string.player_credits_skipped), false)
             return
         }
-        if (countdown < 0 && req.autoNext && hasNext() && exo.playWhenReady && skips.countdownDue(i, pos, dur)) {
+        if (countdown < 0 && req.autoNext && hasNext() && engine.playWhenReady && skips.countdownDue(i, pos, dur)) {
             countdown = CREDITS_COUNTDOWN_S
             creditsCountdown = true
             handler.removeCallbacks(countdownTick)
@@ -624,7 +460,7 @@ class PlayerActivity : AppCompatActivity() {
     /** CH+ / CH−: the next / previous chapter; without chapters the next / previous episode (once ffprobe answered). */
     private fun chapterKey(dir: Int) {
         showControls()
-        when (val step = skips.chapterStep(index(), seeker.pending() ?: exo.currentPosition, dir)) {
+        when (val step = skips.chapterStep(index(), seeker.pending() ?: engine.positionMs, dir)) {
             is ChapterStep.Seek -> {
                 seekToMs(step.ms)
                 changed()
@@ -637,7 +473,7 @@ class PlayerActivity : AppCompatActivity() {
 
     /** A message at the top left: «Заставка пропущена» with «Вернуть · OK» for 5 s ([undo]), others for 3 s. */
     fun showMessage(text: String, error: Boolean, undo: Long? = null) {
-        if (!::exo.isInitialized || isFinishing) return
+        if (!::engine.isInitialized || isFinishing) return
         undoStart = undo
         toastText.text = text
         toastText.setTextColor(if (error) ERROR_COLOR else TEXT_COLOR)
@@ -673,7 +509,7 @@ class PlayerActivity : AppCompatActivity() {
 
     /** { type: "donate", on: false } from the page. */
     fun hideDonate() {
-        if (!::exo.isInitialized || isFinishing) return
+        if (!::engine.isInitialized || isFinishing) return
         donateHidden = true
         render()
     }
@@ -681,7 +517,7 @@ class PlayerActivity : AppCompatActivity() {
     /** Places the «Поддержать» card for the current state (pause: bottom right above the controls, credits: bottom left). */
     private fun renderDonate(controlsVisible: Boolean, paused: Boolean, pos: Long, dur: Long) {
         val enabled = req.donate != null && !donateHidden
-        val mode = DonateQr.mode(enabled, error != null, paused, countdown >= 0 && hasNext(), pos, dur, skips.info(index())?.creditsMs)
+        val mode = DonateQr.mode(enabled, session.error != null, paused, countdown >= 0 && hasNext(), pos, dur, skips.info(index())?.creditsMs)
         if (mode == DonateQr.NONE) {
             donateBox.visibility = View.GONE
             donateShown = mode
@@ -711,12 +547,12 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun togglePause() {
-        if (exo.playWhenReady) {
+        if (engine.playWhenReady) {
             // the credits countdown waits for playback (shown again on play, as on LG)
             if (creditsCountdown) cancelCountdown()
-            exo.pause()
+            engine.pause()
         } else {
-            exo.play()
+            engine.play()
         }
         showControls()
         changed()
@@ -724,7 +560,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun seekBy(dir: Int) {
         val dur = durationMs()
-        seeker.press(dir, exo.currentPosition, dur, req.seekStep)
+        seeker.press(dir, engine.positionMs, dur, req.seekStep)
         handler.removeCallbacks(commitSeek)
         handler.postDelayed(commitSeek, SeekAccumulator.COMMIT_DELAY_MS)
         showControls()
@@ -734,29 +570,36 @@ class PlayerActivity : AppCompatActivity() {
         handler.removeCallbacks(commitSeek)
         seeker.cancel()
         skips.seeked()
-        exo.seekTo(t)
+        engine.seekTo(t)
     }
 
     private fun playNext() {
         cancelCountdown()
-        if (hasNext()) {
-            exo.seekToDefaultPosition(index() + 1)
-            exo.play()
-        }
+        if (hasNext()) playItem(index() + 1)
     }
 
     private fun playPrev() {
         cancelCountdown()
-        if (index() > 0) {
-            exo.seekToDefaultPosition(index() - 1)
-            exo.play()
-        }
+        if (index() > 0) playItem(index() - 1)
+    }
+
+    /**
+     * Item change: the session keeps the left item's position as its resume point and opens [i] from its own;
+     * the countdown, a seek being collected and the skips of the left item are dropped.
+     */
+    private fun playItem(i: Int) {
+        handler.removeCallbacks(commitSeek)
+        seeker.cancel()
+        if (!session.goTo(i)) return
+        cancelCountdown()
+        skips.enter()
+        if (undoStart != null) hideMessage()
+        showControls()
+        changed()
     }
 
     private fun retry() {
-        error = null
-        exo.prepare()
-        exo.play()
+        session.retry()
         changed()
     }
 
@@ -786,22 +629,7 @@ class PlayerActivity : AppCompatActivity() {
     /** A seek still being collected is applied first, so that the reported position is where the user went. */
     private fun commitPendingSeek() {
         handler.removeCallbacks(commitSeek)
-        seeker.take()?.let { exo.seekTo(it) }
-    }
-
-    /**
-     * Item change: the item left keeps its position as the resume point (cleared when nearly finished, as
-     * resumePosition does), the new item starts from its own resume point.
-     */
-    private fun resumeItem() {
-        val i = index()
-        if (lastIndex in resumeMs.indices && lastIndex != i) {
-            val watched = lastDurMs > 0 && lastPosMs.toDouble() / lastDurMs >= WATCHED_RATIO
-            resumeMs[lastIndex] = if (watched || lastPosMs < MIN_RESUME_MS) 0L else lastPosMs
-        }
-        lastIndex = i
-        val r = resumeMs.getOrElse(i) { 0L }
-        if (r > 0 && exo.currentPosition < MIN_RESUME_MS) exo.seekTo(r)
+        seeker.take()?.let { engine.seekTo(it) }
     }
 
     private fun close() {
@@ -814,7 +642,7 @@ class PlayerActivity : AppCompatActivity() {
 
     /** A key from the phone remote (UP/DOWN/LEFT/RIGHT/ENTER/BACK) handled like the TV remote's key. */
     fun remoteKey(name: String) {
-        if (isFinishing || !::exo.isInitialized) return
+        if (isFinishing || !::engine.isInitialized) return
         val code = when (name) {
             "UP" -> KeyEvent.KEYCODE_DPAD_UP
             "DOWN" -> KeyEvent.KEYCODE_DPAD_DOWN
@@ -840,25 +668,25 @@ class PlayerActivity : AppCompatActivity() {
 
     /** «Каталог» or a navigating launch from the phone: the player closes (nativePlayerClosed first). */
     fun closeFromRemote() {
-        if (::exo.isInitialized) commitPendingSeek()
+        if (::engine.isInitialized) commitPendingSeek()
         close()
     }
 
     // ---- phone commands (src/phone/protocol.ts Cmd) ----
 
     fun applyCommand(cmd: JSONObject) {
-        if (isFinishing || !::exo.isInitialized) return
+        if (isFinishing || !::engine.isInitialized) return
         badge.visibility = View.VISIBLE
         val dur = durationMs()
         when (cmd.optString("type")) {
-            "play" -> if (!exo.playWhenReady) exo.play()
-            "pause" -> if (exo.playWhenReady) exo.pause()
+            "play" -> if (!engine.playWhenReady) engine.play()
+            "pause" -> if (engine.playWhenReady) engine.pause()
             "seek" -> if (dur > 0) seekToMs((cmd.optDouble("t", 0.0) * 1000).toLong().coerceIn(0L, dur))
-            "skip" -> if (dur > 0) seekToMs((exo.currentPosition + (cmd.optDouble("d", 0.0) * 1000).toLong()).coerceIn(0L, dur))
+            "skip" -> if (dur > 0) seekToMs((engine.positionMs + (cmd.optDouble("d", 0.0) * 1000).toLong()).coerceIn(0L, dur))
             "next" -> playNext()
             "prev" -> playPrev()
-            "audio" -> selectAudio(cmd.optInt("i", -1))
-            "subs" -> selectSub(cmd.optString("value"))
+            "audio" -> session.selectAudio(cmd.optInt("i", -1))
+            "subs" -> session.selectSub(cmd.optString("value"))
         }
         changed()
     }
@@ -873,22 +701,21 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun render() {
-        if (!::exo.isInitialized || isDestroyed) return
+        if (!::engine.isInitialized || isDestroyed) return
         val i = index()
         val item = req.queue[i]
         val dur = durationMs()
-        val pos = seeker.pending() ?: exo.currentPosition
-        val paused = !exo.playWhenReady
-        val visible = controlsShown || paused || seeker.pending() != null || error != null
+        val pos = seeker.pending() ?: engine.positionMs
+        val paused = !engine.playWhenReady
+        val visible = controlsShown || paused || seeker.pending() != null || session.error != null
         controls.visibility = if (visible) View.VISIBLE else View.GONE
         if (visible) {
             title.text = item.title
             progress.progress = if (dur > 0) (pos * 1000 / dur).toInt().coerceIn(0, 1000) else 0
             time.text = clock(pos) + " / " + clock(dur)
             btnPause.setText(if (paused) R.string.player_play else R.string.player_pause)
-            val audio = audioOptions()
-            btnAudio.text = "Аудио: " + (audio.getOrNull(selectedAudio(audio))?.label ?: "по умолчанию")
-            btnSubs.text = "Субтитры: " + selectedSub(subOptions()).label
+            btnAudio.text = "Аудио: " + selectedAudioLabel(session.audioOptions())
+            btnSubs.text = "Субтитры: " + TrackOptions.selectedSub(session.subOptions()).label
             btnNext.visibility = if (hasNext()) View.VISIBLE else View.GONE
             val chapters = skips.chapters(i)
             if (chapters.isNotEmpty()) {
@@ -903,7 +730,7 @@ class PlayerActivity : AppCompatActivity() {
         btnSkip.visibility = if (skipShown()) View.VISIBLE else View.GONE
         // above the controls while they are shown, near the bottom edge when they are hidden (above the donate card)
         renderDonate(visible, paused, pos, dur)
-        buffering.visibility = if (exo.playbackState == Player.STATE_BUFFERING && error == null) View.VISIBLE else View.GONE
+        buffering.visibility = if (engine.isBuffering && session.error == null) View.VISIBLE else View.GONE
         if (countdown >= 0 && hasNext()) {
             nextBox.visibility = View.VISIBLE
             nextCount.text = "Следующая серия через $countdown"
@@ -911,7 +738,7 @@ class PlayerActivity : AppCompatActivity() {
         } else {
             nextBox.visibility = View.GONE
         }
-        val e = error
+        val e = session.errorText()
         errorBox.visibility = if (e != null) View.VISIBLE else View.GONE
         if (e != null) errorText.text = e
     }
@@ -919,23 +746,22 @@ class PlayerActivity : AppCompatActivity() {
     // ---- events to the page ----
 
     private fun emitState() {
-        if (!::exo.isInitialized || closedSent) return
-        val audio = audioOptions()
-        val subs = subOptions()
+        if (!::engine.isInitialized || closedSent) return
+        val st = session.snapshot()
         val aList = JSArray()
-        audio.forEach { aList.put(it.label) }
+        st.audio.forEach { aList.put(it) }
         val sList = JSArray()
-        subs.forEach { sList.put(JSObject().put("label", it.label).put("value", it.value)) }
-        val o = base()
-        o.put("paused", !exo.playWhenReady || error != null)
-        o.put("buffering", exo.playbackState == Player.STATE_BUFFERING)
-        o.put("audio", JSObject().put("list", aList).put("sel", selectedAudio(audio)))
-        o.put("subs", JSObject().put("list", sList).put("sel", selectedSub(subs).value))
+        st.subs.forEach { sList.put(JSObject().put("label", it.label).put("value", it.value)) }
+        val o = base(st)
+        o.put("paused", st.paused)
+        o.put("buffering", st.buffering)
+        o.put("audio", JSObject().put("list", aList).put("sel", st.audioSel))
+        o.put("subs", JSObject().put("list", sList).put("sel", st.subSel))
         NativePlayerBridge.emit("nativePlayerState", o)
     }
 
     private fun emitClosed(replaced: Boolean) {
-        if (closedSent || !::exo.isInitialized) return
+        if (closedSent || !::engine.isInitialized) return
         closedSent = true
         commitPendingSeek()
         val o = base()
@@ -943,19 +769,17 @@ class PlayerActivity : AppCompatActivity() {
         NativePlayerBridge.emit("nativePlayerClosed", o)
     }
 
-    private fun base(): JSObject {
+    private fun base(st: PlayerSnapshot = session.snapshot()): JSObject {
         val o = JSObject()
-        session?.let { o.put("session", it) }
-        o.put("index", index())
-        o.put("time", exo.currentPosition.coerceAtLeast(0L) / 1000.0)
-        o.put("duration", durationMs() / 1000.0)
+        runId?.let { o.put("session", it) }
+        o.put("index", st.index)
+        o.put("time", st.timeSec)
+        o.put("duration", st.durationSec)
         return o
     }
 
     companion object {
         private const val HIDE_MS = 4000L
-        private const val WATCHED_RATIO = 0.9
-        private const val MIN_RESUME_MS = 10_000L
         private const val NEXT_COUNTDOWN_S = 5
         private const val CREDITS_COUNTDOWN_S = 10
         private const val SKIP_HIDDEN_SHIFT_DP = 150f
@@ -970,9 +794,6 @@ class PlayerActivity : AppCompatActivity() {
         private const val MESSAGE_MS = 3000L
         private const val TEXT_COLOR = 0xFFE8EAF0.toInt()
         private const val ERROR_COLOR = 0xFFFF8A80.toInt()
-        private const val EXTERNAL_ID = "omp-x"
-        private val EXTERNAL_RE = Regex("omp-x(\\d+)")
-        private val RU = Locale.forLanguageTag("ru")
 
         private val HANDLED_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
@@ -984,85 +805,6 @@ class PlayerActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_MEDIA_STOP, KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN,
         )
 
-        fun subMime(ext: String): String? = when (ext.lowercase(Locale.ROOT).trimStart('.')) {
-            "srt" -> MimeTypes.APPLICATION_SUBRIP
-            "ass", "ssa" -> MimeTypes.TEXT_SSA
-            "vtt" -> MimeTypes.TEXT_VTT
-            else -> null
-        }
-
-        /** user:password@ from the URL → Authorization: Basic, the URL without credentials. */
-        fun withBasicAuth(spec: DataSpec): DataSpec {
-            val uri = spec.uri
-            val info = uri.encodedUserInfo
-            val authority = uri.encodedAuthority
-            if (info.isNullOrEmpty() || authority == null) return spec
-            val user = Uri.decode(info.substringBefore(':'))
-            val pass = Uri.decode(info.substringAfter(':', ""))
-            val clean = uri.buildUpon().encodedAuthority(authority.substringAfter('@')).build()
-            val token = Base64.encodeToString("$user:$pass".toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-            val headers = HashMap(spec.httpRequestHeaders)
-            headers["Authorization"] = "Basic $token"
-            return spec.buildUpon().setUri(clean).setHttpRequestHeaders(headers).build()
-        }
-
         fun clock(ms: Long): String = formatClock(ms)
-
-        private fun language(code: String?): String {
-            if (code.isNullOrEmpty() || code == C.LANGUAGE_UNDETERMINED) return ""
-            val name = Locale.forLanguageTag(code).getDisplayLanguage(RU)
-            if (name.isEmpty() || name.equals(code, ignoreCase = true)) return ""
-            return name.replaceFirstChar { it.titlecase(RU) }
-        }
-
-        private fun codec(f: Format): String = when (f.sampleMimeType) {
-            MimeTypes.AUDIO_AC3 -> "AC3"
-            MimeTypes.AUDIO_E_AC3, MimeTypes.AUDIO_E_AC3_JOC -> "E-AC3"
-            MimeTypes.AUDIO_AC4 -> "AC4"
-            MimeTypes.AUDIO_DTS, MimeTypes.AUDIO_DTS_HD, MimeTypes.AUDIO_DTS_EXPRESS -> "DTS"
-            MimeTypes.AUDIO_TRUEHD -> "TrueHD"
-            MimeTypes.AUDIO_AAC -> "AAC"
-            MimeTypes.AUDIO_MPEG, MimeTypes.AUDIO_MPEG_L2 -> "MP3"
-            MimeTypes.AUDIO_OPUS -> "Opus"
-            MimeTypes.AUDIO_FLAC -> "FLAC"
-            MimeTypes.AUDIO_VORBIS -> "Vorbis"
-            else -> ""
-        }
-
-        private fun channels(n: Int): String = when (n) {
-            1 -> "1.0"
-            2 -> "2.0"
-            6 -> "5.1"
-            8 -> "7.1"
-            Format.NO_VALUE -> ""
-            else -> n.toString() + " кан."
-        }
-
-        /** «Русский · Дубляж · AC3 5.1» (empty parts left out). */
-        fun audioLabel(f: Format, n: Int): String {
-            val tech = listOf(codec(f), channels(f.channelCount)).filter { it.isNotEmpty() }.joinToString(" ")
-            val parts = ArrayList<String>()
-            for (p in listOf(language(f.language), f.label.orEmpty(), tech)) if (p.isNotEmpty() && p !in parts) parts.add(p)
-            return if (parts.isEmpty()) "Дорожка $n" else parts.joinToString(" · ")
-        }
-
-        fun subLabel(f: Format, n: Int): String {
-            val parts = ArrayList<String>()
-            for (p in listOf(language(f.language), f.label.orEmpty())) if (p.isNotEmpty() && p !in parts) parts.add(p)
-            return if (parts.isEmpty()) "Субтитры $n" else parts.joinToString(" · ")
-        }
-
-        fun describe(e: PlaybackException): String = when (e.errorCode) {
-            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
-            PlaybackException.ERROR_CODE_TIMEOUT -> "Сервер недоступен или не отвечает"
-            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
-            PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
-            PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
-            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
-            PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED -> "Формат видео не поддерживается"
-            else -> "Не удалось воспроизвести видео"
-        }
     }
 }
