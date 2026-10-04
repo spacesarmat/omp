@@ -126,7 +126,7 @@ export function DonateSheet({ methods }: { methods?: DonateMethod[] }) {
     <Sheet label="Поддержать OMP" onClose={closeDonate}>
       <div class="m-sheet-title">Поддержать OMP</div>
       <div class="m-sheet-scroll m-donate">
-        <p>OMP бесплатный и без рекламы. Если он вам полезен, можно поддержать разработку. Все функции остаются бесплатными, а приложение ничего не отправляет и не собирает.</p>
+        <p>OMP бесплатный и без рекламы. Если он вам полезен — можно поддержать разработку. Все функции остаются бесплатными.</p>
         {list.map((m) =>
           m.id === 'crypto' ? (
             <div class="m-donate-crypto" key={m.id}>
@@ -145,7 +145,7 @@ export function DonateSheet({ methods }: { methods?: DonateMethod[] }) {
             </div>
           ) : (
             <button type="button" class="m-btn m-btn-primary" key={m.id} onClick={() => actions.openUrl(m.url as string)}>
-              {m.title}
+              {'Поддержать на ' + m.title}
             </button>
           ),
         )}
