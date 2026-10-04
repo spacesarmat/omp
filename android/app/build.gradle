@@ -35,8 +35,8 @@ android {
     // Per-ABI APKs (OMP-x.y.z-arm64.apk, OMP-x.y.z-armv7.apk) plus the universal one (OMP-x.y.z.apk, both ABIs).
     // Every split keeps the same versionCode (major*10000 + minor*100 + patch): OMP is sideloaded only (no Play
     // Store), so any split installs over any earlier install of a lower version, and over the same version too.
-    // The embedded TorrServer (jniLibs/arm64-v8a) exists only in arm64 builds; LocalTorrServer.supported() checks
-    // for the binary, so armv7 builds simply have no embedded server.
+    // The embedded TorrServer is not packed into any APK: the app downloads the pinned arm64 binary on demand
+    // (res/raw/torrserver.json, see LocalTorrServer / TorrServerBinary), on any arm64 phone whatever the split.
     splits {
         abi {
             enable true

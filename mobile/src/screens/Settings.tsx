@@ -14,6 +14,9 @@ import {
   LOCAL_PORT,
   LOCAL_NAME,
   LOCAL_URL,
+  canRun,
+  needsDownload,
+  downloadSize,
 } from '../server/localServer';
 import { TORRSERVER_VERSION } from '../server/torrserverVersion';
 import { showToast } from '../ui/toast';
@@ -82,6 +85,11 @@ function LocalServerSection() {
 
   async function toggle() {
     if (busy) return;
+    // no binary yet: the setup screen offers the download
+    if (!st.running && !canRun(st)) {
+      navigate({ name: 'localServer' });
+      return;
+    }
     setBusy(true);
     try {
       if (st.running) await stopLocal();
@@ -112,7 +120,11 @@ function LocalServerSection() {
     }
   }
 
-  const meta = [st.version, st.ip ? st.ip + ':' + LOCAL_PORT : ''].filter(Boolean).join(' · ');
+  const missing = !st.running && !canRun(st);
+  const size = downloadSize(st);
+  const meta = missing
+    ? 'Нужно скачать' + (size ? ' (' + size + ')' : '')
+    : [st.version, st.ip ? st.ip + ':' + LOCAL_PORT : ''].filter(Boolean).join(' · ');
   return (
     <section class="m-set-group" data-section="local-server">
       <div class="m-set-label">TorrServer на телефоне</div>
@@ -120,7 +132,7 @@ function LocalServerSection() {
         <div class="m-set-row">
           <span class={'m-status-dot' + (st.running ? ' on' : '')} />
           <div class="m-set-text" style="flex-grow: 1">
-            <span style="font-weight: 700">{starting ? 'Запускаю…' : st.running ? 'Работает' : 'Остановлен'}</span>
+            <span style="font-weight: 700">{starting ? 'Запускаю…' : st.running ? 'Работает' : missing ? 'Не скачан' : 'Остановлен'}</span>
             {meta && <span class="m-muted m-small">{meta}</span>}
           </div>
           <Switch on={st.running} label="TorrServer на телефоне" disabled={starting} onToggle={() => void toggle()} />
@@ -129,6 +141,20 @@ function LocalServerSection() {
           <div class="m-error" role="alert">
             {st.error}
           </div>
+        )}
+        {needsDownload(st) && st.binary === 'outdated' && (
+          <>
+            <div class="m-set-sep" />
+            <div class="m-set-row" data-local="update">
+              <div class="m-set-text" style="flex-grow: 1">
+                <span>Новая версия TorrServer</span>
+                <span class="m-muted m-small">{[st.pinVersion, size].filter(Boolean).join(' · ')}</span>
+              </div>
+              <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'localServer' })}>
+                Обновить
+              </button>
+            </div>
+          </>
         )}
         <div class="m-set-sep" />
         <div class="m-set-row">

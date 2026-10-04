@@ -50,10 +50,10 @@ jobs:
             echo "OMP $OMP_VERSION is not released yet (no tag v$OMP_VERSION), skipping the TorrServer bump"
             exit 0
           fi
-          VERSION=$(node scripts/torrserver-bump.mjs "$LATEST")
+          VERSION=$(node scripts/torrserver-bump.mjs "$LATEST" "$RUNNER_TEMP/latest.json")
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add torrserver.version package.json package-lock.json webos/appinfo.json CHANGELOG.md
+          git add torrserver.version android/app/src/main/res/raw/torrserver.json package.json package-lock.json webos/appinfo.json CHANGELOG.md
           git commit -m "chore: TorrServer $LATEST"
           git tag "v$VERSION"
           git push --atomic origin HEAD:main "v$VERSION"

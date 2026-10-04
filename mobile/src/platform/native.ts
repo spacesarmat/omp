@@ -31,10 +31,19 @@ export interface FoundCastTv {
   model?: string;
 }
 
-/** The embedded TorrServer (arm64 only), port 8090. */
+/** The embedded TorrServer binary on the phone: the pinned one, an older one (still runs) or none. */
+export type LocalBinaryState = 'ready' | 'outdated' | 'missing';
+
+/** The embedded TorrServer (arm64 only), port 8090. Not in the APK: downloaded on demand. */
 export interface LocalServerInfo {
   supported: boolean;
   running: boolean;
+  /** Absent off-device and on unsupported phones. */
+  binary?: LocalBinaryState;
+  /** Size of the pinned download in bytes. */
+  downloadBytes?: number;
+  /** The pinned TorrServer release. */
+  pinVersion?: string;
   version?: string;
   /** Wi-Fi IPv4 of the phone. */
   ip?: string;
@@ -46,6 +55,12 @@ export interface LocalServerInfo {
 export interface LocalServerState {
   running: boolean;
   error?: string;
+}
+
+/** Download progress: `percent` while downloading, then the checksum check. */
+export interface LocalDownloadProgress {
+  phase: 'download' | 'verify';
+  percent?: number;
 }
 
 export interface OmpNativeApi {
@@ -97,6 +112,12 @@ export interface OmpNativeApi {
   /** Starts the foreground service; resolves once the server answers (rejects after 15 s). */
   startLocalServer(): Promise<LocalServerInfo>;
   stopLocalServer(): Promise<void>;
+  /**
+   * Downloads the pinned TorrServer binary from its GitHub release (sha256 and size checked). Rejects with Russian
+   * text that says what to do next; `code` 'cancelled' after cancelLocalServerDownload.
+   */
+  downloadLocalServer(onProgress: (p: LocalDownloadProgress) => void): Promise<LocalServerInfo>;
+  cancelLocalServerDownload(): Promise<void>;
   /** Bytes used by the server's disk cache. */
   localServerCache(): Promise<number>;
   /** Stops the server if running, empties the cache, starts it again. */
@@ -139,6 +160,8 @@ interface OmpNativePlugin {
   localServerInfo(): Promise<Partial<LocalServerInfo>>;
   startLocalServer(): Promise<Partial<LocalServerInfo>>;
   stopLocalServer(): Promise<void>;
+  downloadLocalServer(): Promise<Partial<LocalServerInfo>>;
+  cancelLocalServerDownload(): Promise<void>;
   localServerCache(): Promise<{ usedBytes?: number }>;
   clearLocalServerCache(): Promise<{ usedBytes?: number }>;
   localIpv4(): Promise<{ ip?: string | null }>;
@@ -154,6 +177,7 @@ interface OmpNativePlugin {
   addListener(event: 'magnetReceived', cb: (e: { link: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'playerMessage', cb: (e: { body: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'localServerState', cb: (e: Partial<LocalServerState>) => void): Promise<PluginListenerHandle>;
+  addListener(event: 'localServerDownload', cb: (e: Partial<LocalDownloadProgress>) => void): Promise<PluginListenerHandle>;
 }
 
 export const ONLY_ANDROID = 'Доступно только в приложении Android';
@@ -222,6 +246,10 @@ function serverInfo(r: Partial<LocalServerInfo> | null | undefined): LocalServer
   if (ip) info.ip = ip;
   if (r?.vpn === true) info.vpn = true;
   if (error) info.error = error;
+  if (r?.binary === 'ready' || r?.binary === 'outdated' || r?.binary === 'missing') info.binary = r.binary;
+  if (typeof r?.downloadBytes === 'number' && r.downloadBytes > 0) info.downloadBytes = r.downloadBytes;
+  const pin = text(r?.pinVersion);
+  if (pin) info.pinVersion = pin;
   return info;
 }
 
@@ -413,6 +441,25 @@ export const native: OmpNativeApi = {
   stopLocalServer() {
     if (!plugin) return unavailable();
     return plugin.stopLocalServer();
+  },
+
+  async downloadLocalServer(onProgress) {
+    if (!plugin) return unavailable();
+    // awaited so that no early progress event is missed
+    const handle = await plugin.addListener('localServerDownload', (e) => {
+      if (e.phase === 'verify') onProgress({ phase: 'verify' });
+      else if (typeof e.percent === 'number') onProgress({ phase: 'download', percent: Math.max(0, Math.min(100, Math.round(e.percent))) });
+    });
+    try {
+      return serverInfo(await plugin.downloadLocalServer());
+    } finally {
+      void handle.remove();
+    }
+  },
+
+  cancelLocalServerDownload() {
+    if (!plugin) return unavailable();
+    return plugin.cancelLocalServerDownload();
   },
 
   async localServerCache() {

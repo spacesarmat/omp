@@ -10,8 +10,13 @@ import {
   setAutostart,
   setupLocal,
   autostartLocal,
+  needsDownload,
+  canRun,
+  downloadSize,
+  isDownloadCancelled,
   LOCAL_URL,
 } from '../src/server/localServer';
+import { logEntries } from '../../src/lib/log';
 import { activeServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
 import type { LocalServerInfo } from '../src/platform/native';
 
@@ -168,6 +173,90 @@ describe('local server store', () => {
     setLocalServerDeps({ native: h.native as any });
     await autostartLocal();
     expect(h.calls).not.toContain('start');
+  });
+
+  it('reads the binary state', () => {
+    expect(needsDownload({ supported: true, running: false, binary: 'missing' })).toBe(true);
+    expect(needsDownload({ supported: true, running: false, binary: 'outdated' })).toBe(true);
+    expect(needsDownload({ supported: true, running: false, binary: 'ready' })).toBe(false);
+    expect(needsDownload({ supported: false, running: false, binary: 'missing' })).toBe(false);
+    expect(canRun({ supported: true, running: false, binary: 'outdated' })).toBe(true);
+    expect(canRun({ supported: true, running: false, binary: 'missing' })).toBe(false);
+    expect(canRun({ supported: true, running: false })).toBe(true);
+    expect(downloadSize({ supported: true, running: false, downloadBytes: 64174032 })).toBe('~61 МБ');
+    expect(downloadSize({ supported: true, running: false })).toBe('');
+    expect(isDownloadCancelled(Object.assign(new Error('x'), { code: 'cancelled' }))).toBe(true);
+    expect(isDownloadCancelled(new Error('x'))).toBe(false);
+  });
+
+  function withBinary(binary: 'missing' | 'outdated', running = false) {
+    const f = fakeNative({ info: { supported: true, running, binary, pinVersion: 'MatriX.146', ...(running ? { version: 'MatriX.145.1' } : {}) } });
+    const native: any = {
+      ...f.native,
+      async downloadLocalServer(cb: (p: any) => void) {
+        f.calls.push('download');
+        cb({ phase: 'download', percent: 50 });
+        cb({ phase: 'verify' });
+        return { supported: true, running, binary: 'ready' };
+      },
+    };
+    return { native, calls: f.calls };
+  }
+
+  it('setupLocal downloads a missing binary in the first step, logs generically, then starts', async () => {
+    const f = withBinary('missing');
+    setLocalServerDeps({ native: f.native, echo: async () => 'MatriX.146' });
+    const steps: Array<[number, string]> = [];
+    const progress: any[] = [];
+    await setupLocal((i, v) => steps.push([i, v]), (p) => progress.push(p));
+    expect(f.calls).toEqual(['info', 'download', 'start', 'info']);
+    expect(progress).toEqual([{ phase: 'download', percent: 50 }, { phase: 'verify' }]);
+    expect(steps[0]).toEqual([0, 'MatriX.146']);
+    expect(steps.map((s) => s[0])).toEqual([0, 0, 1, 2, 3, 4]);
+    const texts = logEntries().filter((e) => e.a === 'server').map((e) => e.l + ':' + e.x);
+    expect(texts).toContain('info:Скачивание встроенного TorrServer');
+    expect(texts).toContain('info:Встроенный TorrServer скачан и проверен');
+  });
+
+  it('setupLocal restarts a running outdated server on the new binary, or skips the update when asked', async () => {
+    const f = withBinary('outdated', true);
+    setLocalServerDeps({ native: f.native, echo: async () => 'MatriX.146' });
+    await setupLocal(() => {});
+    expect(f.calls).toEqual(['info', 'download', 'stop', 'start', 'info']);
+    const g = withBinary('outdated');
+    setLocalServerDeps({ native: g.native, echo: async () => 'x' });
+    await setupLocal(() => {}, () => {}, false);
+    expect(g.calls).not.toContain('download');
+    expect(g.calls).toContain('start');
+    // a missing binary is downloaded even then
+    const h = withBinary('missing');
+    setLocalServerDeps({ native: h.native, echo: async () => 'x' });
+    await setupLocal(() => {}, () => {}, false);
+    expect(h.calls).toContain('download');
+  });
+
+  it('a failed download is logged as a warning without details and stops before the start', async () => {
+    const f = withBinary('missing');
+    f.native.downloadLocalServer = async () => {
+      throw Object.assign(new Error('Не удалось скачать TorrServer: нет связи с GitHub. Проверьте интернет и повторите.'), { code: 'network' });
+    };
+    setLocalServerDeps({ native: f.native });
+    await expect(setupLocal(() => {})).rejects.toThrow('Проверьте интернет');
+    expect(f.calls).not.toContain('start');
+    expect(logEntries().some((e) => e.a === 'server' && e.l === 'warn' && e.x === 'Не удалось скачать TorrServer')).toBe(true);
+  });
+
+  it('autostart never downloads: a missing binary is not started, an outdated one is', async () => {
+    setAutostart(true);
+    const f = withBinary('missing');
+    setLocalServerDeps({ native: f.native });
+    await autostartLocal();
+    expect(f.calls).toEqual(['info']);
+    const g = withBinary('outdated');
+    setLocalServerDeps({ native: g.native });
+    await autostartLocal();
+    expect(g.calls).toContain('start');
+    expect(g.calls).not.toContain('download');
   });
 
   it('autostart swallows a start error into the store', async () => {

@@ -112,6 +112,14 @@ describe('native plugin wrapper on Android', () => {
         extra: 1,
       })),
       stopLocalServer: vi.fn(async () => {}),
+      downloadLocalServer: vi.fn(async (): Promise<any> => ({
+        supported: true,
+        running: false,
+        binary: 'ready',
+        downloadBytes: 64174032,
+        pinVersion: 'MatriX.145.1',
+      })),
+      cancelLocalServerDownload: vi.fn(async () => {}),
       localServerCache: vi.fn(async (): Promise<any> => ({ usedBytes: 524288000 })),
       clearLocalServerCache: vi.fn(async () => ({ usedBytes: 0 })),
       localIpv4: vi.fn(async (): Promise<any> => ({ ip: '192.168.1.50' })),
@@ -268,6 +276,35 @@ describe('native plugin wrapper on Android', () => {
     expect(await n.localIpv4()).toBe('192.168.1.50');
     fake.localIpv4.mockResolvedValueOnce({ ip: null });
     expect(await n.localIpv4()).toBeNull();
+  });
+
+  it('downloads the local server with progress and maps the binary state', async () => {
+    const { native: n, fake, listeners, removed, releaseAdd } = await load();
+    fake.localServerInfo.mockResolvedValueOnce({ supported: true, running: false, binary: 'missing', downloadBytes: 64174032, pinVersion: 'MatriX.145.1' });
+    expect(await n.localServerInfo()).toEqual({
+      supported: true,
+      running: false,
+      binary: 'missing',
+      downloadBytes: 64174032,
+      pinVersion: 'MatriX.145.1',
+    });
+    fake.localServerInfo.mockResolvedValueOnce({ supported: true, running: false, binary: 'weird', downloadBytes: -1 });
+    expect(await n.localServerInfo()).toEqual({ supported: true, running: false });
+    const got: any[] = [];
+    fake.downloadLocalServer.mockImplementationOnce(async () => {
+      listeners.get('localServerDownload')!({ phase: 'download', percent: 42.4 });
+      listeners.get('localServerDownload')!({ phase: 'download', percent: 140 });
+      listeners.get('localServerDownload')!({ phase: 'download' });
+      listeners.get('localServerDownload')!({ phase: 'verify' });
+      return { supported: true, running: false, binary: 'ready' };
+    });
+    const p = n.downloadLocalServer((e) => got.push(e));
+    releaseAdd();
+    expect(await p).toEqual({ supported: true, running: false, binary: 'ready' });
+    expect(got).toEqual([{ phase: 'download', percent: 42 }, { phase: 'download', percent: 100 }, { phase: 'verify' }]);
+    expect(removed).toContain('localServerDownload');
+    await n.cancelLocalServerDownload();
+    expect(fake.cancelLocalServerDownload).toHaveBeenCalled();
   });
 
   it('passes plugin rejections of the local server through', async () => {

@@ -1,5 +1,11 @@
-// Pure helpers for scripts/fetch-torrserver.mjs.
+// Pure helpers for scripts/torrserver-pin.mjs and scripts/torrserver-bump.mjs.
 export const ASSET_NAME = 'TorrServer-android-arm64';
+/** The pinned download the app reads (res/raw): tag, asset, url, sha256, size. Committed; written by torrserver-bump. */
+export const PIN_PATH = 'android/app/src/main/res/raw/torrserver.json';
+/** The binary android:sync used to place in the APK; removed when a dev tree still has it. */
+export const LEGACY_LIB = 'android/app/src/main/jniLibs/arm64-v8a/libtorrserver.so';
+const URL_PREFIX = 'https://github.com/YouROK/TorrServer/releases/download/';
+const MAX_SIZE = 256 * 1024 * 1024;
 
 export function parseVersionFile(text) {
   const tag = String(text).trim();
@@ -46,4 +52,42 @@ export function setRootVersion(text, version, lock = false) {
     out = out.replace(re2, `$1${version}$2`);
   }
   return out;
+}
+
+/** The pin for [tag] from a GitHub API release: the arm64 asset's URL, sha256 digest and size. */
+export function pinFromRelease(release, tag) {
+  if (!release || release.tag_name !== tag) throw new Error(`Release is not ${tag} / выпуск не ${tag}`);
+  const asset = pickAsset(release);
+  return checkPin({ tag, asset: asset.name, url: asset.browser_download_url, sha256: parseDigest(asset.digest), size: asset.size });
+}
+
+/** Validates a pin object; returns it with only the known fields. */
+export function checkPin(p) {
+  if (!p || typeof p !== 'object') throw new Error('Pin is not an object');
+  const tag = parseVersionFile(typeof p.tag === 'string' ? p.tag : '');
+  const url = typeof p.url === 'string' ? p.url : '';
+  if (p.asset !== ASSET_NAME) throw new Error('Pin asset must be ' + ASSET_NAME);
+  if (url !== URL_PREFIX + tag + '/' + ASSET_NAME) throw new Error('Pin url does not match the tag: ' + url);
+  if (typeof p.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(p.sha256)) throw new Error('Pin sha256 is invalid');
+  if (!Number.isInteger(p.size) || p.size <= 0 || p.size > MAX_SIZE) throw new Error('Pin size is invalid');
+  return { tag, asset: p.asset, url, sha256: p.sha256, size: p.size };
+}
+
+export function formatPin(p) {
+  return JSON.stringify(checkPin(p), null, 2) + '\n';
+}
+
+/** Parses the pin file and checks it matches torrserver.version. */
+export function parsePin(text, tag) {
+  let p;
+  try {
+    p = JSON.parse(text);
+  } catch {
+    throw new Error('torrserver.json is not JSON / файл torrserver.json повреждён');
+  }
+  const pin = checkPin(p);
+  if (pin.tag !== tag) {
+    throw new Error(`torrserver.json is for ${pin.tag}, torrserver.version says ${tag}: run node scripts/torrserver-bump.mjs ${tag}`);
+  }
+  return pin;
 }

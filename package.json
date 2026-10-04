@@ -18,8 +18,8 @@
     "tv:launch": "node scripts/tv.mjs launch",
     "dev:mobile": "vite --config vite.mobile.config.ts --host",
     "build:mobile": "tsc --noEmit && vite build --config vite.mobile.config.ts && vite build --config vite.tv-android.config.ts",
-    "fetch:torrserver": "node scripts/fetch-torrserver.mjs",
-    "android:sync": "npm run fetch:torrserver && npm run build:mobile && npx cap sync android && node scripts/strip-flatdir.mjs",
+    "check:torrserver": "node scripts/torrserver-pin.mjs",
+    "android:sync": "npm run check:torrserver && npm run build:mobile && npx cap sync android && node scripts/strip-flatdir.mjs",
     "android:debug": "npm run android:sync && node scripts/gradle.mjs assembleDebug"
   },
   "dependencies": {

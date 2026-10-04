@@ -74,8 +74,8 @@ enum class Phase(val id: String) {
     INSTALL("install"),
 }
 
-/** What is being installed: OMP, or Homebrew Channel on LG. */
-enum class Item(val id: String) { OMP("omp"), HBC("hbc") }
+/** What is being downloaded: OMP, Homebrew Channel on LG, or the embedded TorrServer on the phone. */
+enum class Item(val id: String) { OMP("omp"), HBC("hbc"), TORRSERVER("torrserver") }
 
 /** Progress sink: phase, percent 0..100 within the phase (null = unknown), item, release version. */
 fun interface ProgressSink {

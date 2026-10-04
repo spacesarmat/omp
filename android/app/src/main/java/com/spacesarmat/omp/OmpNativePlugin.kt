@@ -65,7 +65,7 @@ import org.json.JSONObject
  * Every PluginCall is settled exactly once (see [Once]). Blocking work runs on [io]; socket
  * callbacks arrive on OkHttp threads. Events: tvMessage { json }, tvClosed { reason },
  * apkProgress { percent }, magnetReceived { link }, playerMessage { body }, monitorOpen { url }, monitorDone { summary? },
- * localServerState { running, error? }, nativePlayerState { session, index, time, duration, paused, buffering,
+ * localServerState { running, error? }, localServerDownload { percent? , phase: download|verify }, nativePlayerState { session, index, time, duration, paused, buffering,
  * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV);
  * phone remote on Android TV ([TvRemote]): remoteLaunch { params }, remoteAttach { report }, remoteKey { name },
  * remoteText { text | delete | enter }, phonePaired { phone }, remoteSources { id, sources, rutracker, phone }.
@@ -835,10 +835,60 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
+    /**
+     * Downloads the pinned TorrServer binary (GitHub release asset, sha256 + size checked). Progress: events
+     * localServerDownload { phase: 'download', percent } then { phase: 'verify' }. Resolves the server info; rejects
+     * with Russian text (next step included) and the InstallCodes code.
+     */
+    @PluginMethod
+    fun downloadLocalServer(call: PluginCall) {
+        val once = Once(call)
+        if (!LocalTorrServer.supported()) {
+            once.reject(NOT_SUPPORTED, "unsupported")
+            return
+        }
+        io.execute {
+            try {
+                LocalTorrServer.download(
+                    context,
+                    { p -> notifyListeners("localServerDownload", JSObject().put("phase", "download").put("percent", p)) },
+                    { notifyListeners("localServerDownload", JSObject().put("phase", "verify")) },
+                )
+                once.resolve(localInfo())
+            } catch (e: Throwable) {
+                val f = failureOf(e)
+                val mb = try {
+                    LocalTorrServer.pin(context).size / (1024 * 1024)
+                } catch (_: Exception) {
+                    0L
+                }
+                once.reject(
+                    if (f.code == InstallCodes.BUSY) "TorrServer уже скачивается" else TorrServerBinary.downloadError(f.code, mb),
+                    f.code,
+                )
+            }
+        }
+    }
+
+    @PluginMethod
+    fun cancelLocalServerDownload(call: PluginCall) {
+        LocalTorrServer.cancelDownload()
+        call.resolve()
+    }
+
     @PluginMethod
     fun startLocalServer(call: PluginCall) {
-        if (!LocalTorrServer.supported(context)) {
+        if (!LocalTorrServer.supported()) {
             call.reject(NOT_SUPPORTED)
+            return
+        }
+        val runnable = try {
+            LocalTorrServer.installation(context).runnable()
+        } catch (_: Exception) {
+            false
+        }
+        if (!runnable) {
+            call.reject(NOT_DOWNLOADED, "not-downloaded")
             return
         }
         // without the permission the service still runs, only its notification is hidden
@@ -918,7 +968,18 @@ class OmpNativePlugin : Plugin() {
 
     private fun localInfo(): JSObject {
         val o = JSObject()
-        o.put("supported", LocalTorrServer.supported(context))
+        val supported = LocalTorrServer.supported()
+        o.put("supported", supported)
+        if (supported) {
+            try {
+                val install = LocalTorrServer.installation(context)
+                o.put("binary", install.state().id)
+                o.put("downloadBytes", install.pin.size)
+                o.put("pinVersion", install.pin.tag)
+            } catch (_: Exception) {
+                o.put("binary", BinaryState.MISSING.id)
+            }
+        }
         val running = LocalTorrServer.running
         o.put("running", running)
         if (running) {
@@ -1196,6 +1257,7 @@ class OmpNativePlugin : Plugin() {
     companion object {
         private const val NOT_SUPPORTED = "Встроенный сервер недоступен на этом телефоне"
         private const val START_FAILED = "Не удалось запустить сервер"
+        private const val NOT_DOWNLOADED = "Сначала скачайте TorrServer"
         private const val SECRETS_FAILED = SourceServices.SECRETS_FAILED
         private const val PREFS = "omp-native"
         private const val CACHE_SET = "torrserverCacheConfigured"

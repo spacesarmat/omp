@@ -3,6 +3,11 @@ package com.spacesarmat.omp
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
+import com.spacesarmat.omp.install.CancelToken
+import com.spacesarmat.omp.install.InstallCodes
+import com.spacesarmat.omp.install.InstallFailure
+import com.spacesarmat.omp.install.OkReleaseHttp
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.Inet4Address
@@ -20,7 +25,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The embedded TorrServer process (`libtorrserver.so` from nativeLibraryDir), one per app process.
+ * The embedded TorrServer process, one per app process. The binary is not in the APK: it is downloaded on demand
+ * ([download], [TorrServerBinary]) into noBackupFilesDir/torrserver-bin and started through the system linker.
  * Owned by [TorrServerService]; every state change runs on the single [worker] thread, so a stop
  * followed by a start never races for port 8090. An unexpected exit is restarted once after 3 s,
  * then the server is reported stopped with an error.
@@ -58,8 +64,22 @@ object LocalTorrServer {
     fun addListener(l: Listener) = listeners.add(l)
     fun removeListener(l: Listener) = listeners.remove(l)
 
-    fun binary(ctx: Context) = File(ctx.applicationInfo.nativeLibraryDir, "libtorrserver.so")
-    fun supported(ctx: Context) = binary(ctx).isFile
+    const val NOT_DOWNLOADED = "TorrServer не скачан"
+
+    @Volatile private var pinCache: TorrServerPin? = null
+
+    /** The pinned download from res/raw/torrserver.json. */
+    fun pin(ctx: Context): TorrServerPin {
+        pinCache?.let { return it }
+        val text = ctx.resources.openRawResource(R.raw.torrserver).use { it.readBytes().toString(Charsets.UTF_8) }
+        return (TorrServerPin.parse(text) ?: throw IllegalStateException("bad torrserver.json")).also { pinCache = it }
+    }
+
+    fun installation(ctx: Context) =
+        TorrServerBinary(File(ctx.applicationContext.noBackupFilesDir, "torrserver-bin"), pin(ctx.applicationContext))
+
+    /** The phone can run the arm64 build (the binary may still have to be downloaded). */
+    fun supported() = TorrServerBinary.supported(Build.SUPPORTED_ABIS.toList())
     fun dataDir(ctx: Context) = File(ctx.filesDir, "torrserver")
     fun cacheDir(ctx: Context) = File(ctx.cacheDir, "torrserver")
 
@@ -94,18 +114,23 @@ object LocalTorrServer {
             trimLog(File(data, "server.log"))
             val pidFile = File(data, "server.pid")
             killOrphan(pidFile)
+            val install = installation(app)
+            if (!install.runnable()) {
+                fail(NOT_DOWNLOADED)
+                return
+            }
             if (echo(400) != null) {
                 fail("Порт $PORT занят другим приложением")
                 return
             }
             // sh records its pid and execs the server, so the pid is the server's own
+            val argv = TorrServerBinary.command(
+                Build.VERSION.SDK_INT,
+                install.file.absolutePath,
+                listOf("--port", PORT.toString(), "--path", data.absolutePath, "--logpath", File(data, "server.log").absolutePath),
+            )
             val pb = ProcessBuilder(
-                "/system/bin/sh", "-c", "echo \$\$ > \"\$0\"; exec \"\$@\"",
-                pidFile.absolutePath,
-                binary(app).absolutePath,
-                "--port", PORT.toString(),
-                "--path", data.absolutePath,
-                "--logpath", File(data, "server.log").absolutePath,
+                listOf("/system/bin/sh", "-c", "echo \$\$ > \"\$0\"; exec \"\$@\"", pidFile.absolutePath) + argv,
             )
             pb.directory(data)
             pb.redirectErrorStream(true)
@@ -213,7 +238,8 @@ object LocalTorrServer {
         } catch (_: Exception) {
             ""
         }
-        if (cmd.contains("libtorrserver")) {
+        // this build runs torrserver-bin/torrserver (via linker64); earlier ones ran libtorrserver.so
+        if (cmd.contains("torrserver-bin/" + TorrServerBinary.NAME) || cmd.contains("libtorrserver")) {
             android.os.Process.killProcess(pid)
             var waited = 0
             while (File("/proc/$pid").exists() && waited < 2000) {
@@ -222,6 +248,31 @@ object LocalTorrServer {
             }
         }
         pidFile.delete()
+    }
+
+    // ---- on-demand download ----
+
+    private val downloading = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var downloadCancel: CancelToken? = null
+
+    /**
+     * Downloads and verifies the pinned binary (blocking; one at a time, else [InstallFailure] BUSY). A running server
+     * keeps its old binary until it is restarted.
+     */
+    fun download(ctx: Context, percent: (Int) -> Unit, verifying: () -> Unit) {
+        if (!downloading.compareAndSet(false, true)) throw InstallFailure(InstallCodes.BUSY)
+        val cancel = CancelToken()
+        downloadCancel = cancel
+        try {
+            installation(ctx).install(OkReleaseHttp(), cancel, percent, verifying)
+        } finally {
+            downloadCancel = null
+            downloading.set(false)
+        }
+    }
+
+    fun cancelDownload() {
+        downloadCancel?.cancel()
     }
 
     // ---- HTTP API of the local server ----
