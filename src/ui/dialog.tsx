@@ -61,7 +61,15 @@ export function DialogHost() {
   let preferred: string | undefined;
   d.options.forEach((o, i) => { if (o.value === d.current) preferred = 'dialog-opt-' + i; });
   return (
-    <div class="dialog-backdrop">
+    <div
+      class="dialog-backdrop"
+      onClick={(e) => {
+        // a pointer click outside the box = Back; never reaches the screen's own click handler (player tap zones)
+        if (e.target !== e.currentTarget) return;
+        e.stopPropagation();
+        close(null);
+      }}
+    >
       <FocusGroup key={d.id} focusKey={'DIALOG-' + d.id} className="dialog" boundary autoFocus preferredChildFocusKey={preferred}>
         <div class="dialog-title">{d.title}</div>
         {d.options.map((o, i) => (

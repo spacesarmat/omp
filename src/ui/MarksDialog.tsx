@@ -93,7 +93,15 @@ export function MarksDialog(p: { subtitle: string; prefs: TvMarks; onSave: (m: T
   };
 
   return (
-    <div class="dialog-backdrop marks-backdrop">
+    <div
+      class="dialog-backdrop marks-backdrop"
+      onClick={(e) => {
+        // a click outside the box closes without saving, and does not reach the player's tap zones
+        if (e.target !== e.currentTarget) return;
+        e.stopPropagation();
+        close();
+      }}
+    >
       <FocusGroup focusKey="MARKS-DIALOG" className="dialog marks-dialog" boundary>
         <div class="dialog-title" id="marks-title">Заставка и титры</div>
         <div class="marks-sub">{p.subtitle}</div>
