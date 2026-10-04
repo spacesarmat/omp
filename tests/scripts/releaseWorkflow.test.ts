@@ -42,6 +42,15 @@ describe('release workflow asset names', () => {
   });
 });
 
+describe('Telegram step', () => {
+  it('posts the whole build dir, never fails the release and keeps the token in env', () => {
+    const step = yml.slice(yml.indexOf('- name: Post to Telegram'));
+    expect(step).toContain('continue-on-error: true');
+    expect(step).toContain('node scripts/telegram-post.mjs "$TAG" build');
+    expect(step).toContain('TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}');
+  });
+});
+
 describe('CI workflow', () => {
   it('prints the size of every debug APK (one per ABI)', () => {
     const ci = readFileSync('.github/workflows/ci.yml', 'utf8');

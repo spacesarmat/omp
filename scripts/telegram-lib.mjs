@@ -30,16 +30,51 @@ export function buildCaption(version, notes) {
   return head + body;
 }
 
-/** Buttons under the post: downloads, release page, support. */
+/** Build files in the order they are posted as replies: arm64 APK, armv7 APK, ipk, universal APK. */
+export function buildFiles(version) {
+  return [
+    `OMP-${version}-arm64.apk`,
+    `OMP-${version}-armv7.apk`,
+    `OMP-${version}-webOS.ipk`,
+    `OMP-${version}.apk`,
+  ];
+}
+
+/** Splits [{name, size}] (post order kept): up to the bot limit are uploaded, the rest are only linked. */
+export function routeFiles(files) {
+  const upload = [];
+  const link = [];
+  for (const f of files) (f.size <= UPLOAD_MAX ? upload : link).push(f);
+  return { upload, link };
+}
+
+export function downloadUrl(tag, name) {
+  return `${REPO_URL}/releases/download/${tag}/${name}`;
+}
+
+/** Closing reply for the builds that do not fit into the bot limit: one line per file with a GitHub link. */
+export function buildLinksMessage(tag, files) {
+  return files
+    .map((f) => `Файл ${escapeHtml(f.name)} больше 50 МБ — скачать: ${downloadUrl(tag, f.name)}`)
+    .join('\n');
+}
+
+/** Log line for the owner, who forwards an oversize build by hand. */
+export function oversizeLogLine(file) {
+  return `Telegram: ${file.name} is ${Math.ceil(file.size / (1024 * 1024))} MB — forward it manually from GitHub`;
+}
+
+/** Buttons under the post: downloads per ABI and for LG, release page, support. */
 export function buildKeyboard({ tag, version, donateUrl }) {
-  const dl = `${REPO_URL}/releases/download/${tag}`;
+  const [arm64, armv7, ipk] = buildFiles(version);
   const rows = [
     [
-      { text: 'Скачать APK', url: `${dl}/OMP-${version}.apk` },
-      { text: 'Для LG (ipk)', url: `${dl}/OMP-${version}-webOS.ipk` },
+      { text: 'arm64', url: downloadUrl(tag, arm64) },
+      { text: 'armv7', url: downloadUrl(tag, armv7) },
     ],
+    [{ text: 'Для LG (ipk)', url: downloadUrl(tag, ipk) }],
     [{ text: 'Что нового', url: `${REPO_URL}/releases/tag/${tag}` }],
   ];
-  if (donateUrl) rows[1].push({ text: 'Поддержать', url: donateUrl });
+  if (donateUrl) rows[2].push({ text: 'Поддержать', url: donateUrl });
   return { inline_keyboard: rows };
 }

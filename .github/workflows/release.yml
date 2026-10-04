@@ -95,12 +95,12 @@ jobs:
           git add .
           git commit -q -m "Update feed for ${TAG}"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
-      # Telegram channel post (skipped without the bot token); a failed post must not fail the release
+      # Telegram channel post (skipped without the bot token): every build as a reply; files over the 50 MB bot
+      # limit are linked (and named in the log) so the owner can forward them by hand. A failure must not fail the release.
       - name: Post to Telegram
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          node scripts/telegram-post.mjs "$TAG" "build/OMP-${VERSION}.apk"
+          node scripts/telegram-post.mjs "$TAG" build
