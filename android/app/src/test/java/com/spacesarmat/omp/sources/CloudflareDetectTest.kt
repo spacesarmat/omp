@@ -1,6 +1,8 @@
 package com.spacesarmat.omp.sources
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CloudflareDetectTest {
@@ -46,6 +48,20 @@ class CloudflareDetectTest {
         assertEquals(CloudflareDetect.Kind.NONE, CloudflareDetect.detect(403, headers("server" to "nginx"), justAMoment))
         assertEquals(CloudflareDetect.Kind.NONE, CloudflareDetect.detect(404, headers("cf-mitigated" to "challenge"), justAMoment))
         assertEquals(CloudflareDetect.Kind.NONE, CloudflareDetect.detect(503, headers("cf-mitigated" to "block"), ""))
+    }
+
+    // Bot Fight Mode / JavaScript Detections: Cloudflare injects this script into ordinary pages
+    private val siteOwn403WithJsd = """<html><head><title>Доступ запрещён</title></head><body><h1>Нужен вход</h1>
+        <script>(function(){var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';
+        document.head.appendChild(a);})();</script></body></html>"""
+
+    @Test
+    fun botDetectionScriptIsNotAChallenge() {
+        assertEquals(CloudflareDetect.Kind.NONE, CloudflareDetect.detect(403, headers("server" to "cloudflare"), siteOwn403WithJsd))
+        assertEquals(CloudflareDetect.Kind.NONE, CloudflareDetect.detect(503, headers("Server" to "cloudflare"), siteOwn403WithJsd))
+        // the page probe looks for the challenge orchestration only
+        assertTrue(CloudflareDetect.PROBE_JS.contains("/challenge-platform/h/"))
+        assertFalse(CloudflareDetect.PROBE_JS.contains("src*=\"challenge-platform\""))
     }
 
     @Test

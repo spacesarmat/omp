@@ -2,44 +2,168 @@ package com.spacesarmat.omp.sources
 
 import java.util.concurrent.ConcurrentHashMap
 import okhttp3.HttpUrl
+import org.json.JSONObject
+
+/** Persistent per-host User-Agent overrides (encrypted on the device, see [SecretAgentStore]). */
+interface AgentStore {
+    /** Throws when the storage is temporarily unreadable. */
+    fun load(): String?
+
+    /** null removes everything. */
+    fun save(data: String?)
+}
 
 /**
  * The order of the ways past a Cloudflare check: the built-in hidden browser first, then the user's FlareSolverr when
- * its address came with the request. A FlareSolverr pass brings its own User-Agent: requests to that host use it from
- * then on (the clearance is bound to it) until the built-in check passes again. Nothing is logged.
+ * its address came with the request. A FlareSolverr pass brings its own User-Agent: requests to that host (the host
+ * the check was on, after redirects) use it until its clearance ends or the built-in check passes again. Overrides are
+ * kept with the cookies (encrypted, with an end time), so a restart does not bring a new check. One FlareSolverr call
+ * per host at a time: callers that asked while one ran take its result. Nothing is logged.
  */
 class CloudflarePass(
     private val solver: CloudflareSolving?,
     private val flare: FlareSolverrClient,
     private val jar: SiteCookieJar,
+    /** The User-Agent without an override (the WebView's own on Android). */
+    private val defaultAgent: () -> String = { SiteHttp.USER_AGENT },
+    private val store: AgentStore? = null,
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
     enum class Outcome { BROWSER, FLARESOLVERR, INTERACTIVE, FAILED }
 
-    private val agents = ConcurrentHashMap<String, String>()
+    private class Agent(val ua: String, val until: Long)
+
+    private var agents: HashMap<String, Agent>? = null
+    // the stored overrides could not be read: memory only, so they are not overwritten
+    private var unreadable = false
+
+    private val flareLocks = ConcurrentHashMap<String, Any>()
+
+    /** host → (finished at, passed) of the last FlareSolverr call. */
+    private val flareDone = ConcurrentHashMap<String, Pair<Long, Boolean>>()
 
     /** The User-Agent for requests to [host]. */
-    fun userAgentFor(host: String): String = agents[host.lowercase()] ?: SiteHttp.USER_AGENT
+    @Synchronized
+    fun userAgentFor(host: String): String {
+        val h = host.lowercase()
+        val map = loaded()
+        val a = map[h] ?: return defaultAgent()
+        if (a.until > now()) return a.ua
+        map.remove(h)
+        persist(map)
+        return defaultAgent()
+    }
 
-    /** Blocking. [flareBase]: the FlareSolverr address, null when none is set. */
+    /** An override for [host] until [until] (FlareSolverr; Task 8: the phone's User-Agent with its cookies). */
+    @Synchronized
+    fun setAgent(host: String, ua: String, until: Long) {
+        val map = loaded()
+        map[host.lowercase()] = Agent(ua, until)
+        persist(map)
+    }
+
+    @Synchronized
+    fun clearAgent(host: String) {
+        val map = loaded()
+        if (map.remove(host.lowercase()) != null) persist(map)
+    }
+
+    /** Blocking. [url]: the challenged address (after redirects). [flareBase]: the FlareSolverr address, null when none. */
     fun pass(url: HttpUrl, flareBase: HttpUrl?): Outcome {
         val host = url.host.lowercase()
+        val asked = now()
         val built = try {
             solver?.solve(url) ?: CloudflareSolver.Result.FAILED
         } catch (e: Exception) {
             CloudflareSolver.Result.FAILED
         }
         if (built == CloudflareSolver.Result.SOLVED) {
-            agents.remove(host)
+            clearAgent(host)
             return Outcome.BROWSER
         }
-        if (flareBase != null) {
-            val r = flare.solve(flareBase, CloudflareSolver.siteRoot(url))
+        if (flareBase != null && viaFlare(host, url, flareBase, asked)) return Outcome.FLARESOLVERR
+        return if (built == CloudflareSolver.Result.INTERACTIVE) Outcome.INTERACTIVE else Outcome.FAILED
+    }
+
+    private fun viaFlare(host: String, url: HttpUrl, base: HttpUrl, asked: Long): Boolean {
+        val lock = flareLocks.getOrPut(host) { Any() }
+        synchronized(lock) {
+            // another request for this host asked FlareSolverr after this one started: its result is ours
+            flareDone[host]?.let { (at, ok) -> if (at >= asked) return ok }
+            val r = flare.solve(base, CloudflareSolver.siteRoot(url))
+            val ok = r is FlareSolverrClient.Result.Solved
             if (r is FlareSolverrClient.Result.Solved) {
                 if (r.cookies.isNotEmpty()) jar.saveFromResponse(url, r.cookies)
-                if (r.userAgent != null) agents[host] = r.userAgent else agents.remove(host)
-                return Outcome.FLARESOLVERR
+                if (r.userAgent != null) setAgent(host, r.userAgent, agentUntil(r)) else clearAgent(host)
+            }
+            flareDone[host] = now() to ok
+            return ok
+        }
+    }
+
+    /** The override lasts as long as the clearance it came with ([AGENT_TTL_MS] when its end is unknown). */
+    private fun agentUntil(r: FlareSolverrClient.Result.Solved): Long {
+        val c = r.cookies.firstOrNull { it.name == CloudflareSolver.CLEARANCE && it.persistent }
+        return c?.expiresAt ?: (now() + AGENT_TTL_MS)
+    }
+
+    private fun loaded(): HashMap<String, Agent> {
+        agents?.let { return it }
+        val map = HashMap<String, Agent>()
+        val data = try {
+            store?.load()
+        } catch (e: Exception) {
+            unreadable = true
+            null
+        }
+        if (data != null) {
+            try {
+                val o = JSONObject(data)
+                val t = now()
+                for (k in o.keys()) {
+                    val a = o.optJSONObject(k) ?: continue
+                    val ua = a.optString("ua", "")
+                    val until = a.optLong("until", 0)
+                    if (ua.isNotEmpty() && until > t) map[k] = Agent(ua, until)
+                }
+            } catch (e: Exception) {
+                // broken data: no overrides
             }
         }
-        return if (built == CloudflareSolver.Result.INTERACTIVE) Outcome.INTERACTIVE else Outcome.FAILED
+        agents = map
+        return map
+    }
+
+    private fun persist(map: Map<String, Agent>) {
+        val s = store ?: return
+        if (unreadable) return
+        try {
+            if (map.isEmpty()) {
+                s.save(null)
+            } else {
+                val o = JSONObject()
+                for ((k, a) in map) o.put(k, JSONObject().put("ua", a.ua).put("until", a.until))
+                s.save(o.toString())
+            }
+        } catch (e: Exception) {
+            // kept in memory
+        }
+    }
+
+    companion object {
+        const val AGENT_TTL_MS = 24L * 60 * 60 * 1000
+    }
+}
+
+/** The overrides in the Keystore-encrypted storage, outside the page's js: namespace. */
+class SecretAgentStore(private val secrets: SecretStorage) : AgentStore {
+    override fun load(): String? = secrets.get(KEY)
+
+    override fun save(data: String?) {
+        if (data == null) secrets.delete(KEY) else secrets.set(KEY, data)
+    }
+
+    companion object {
+        const val KEY = "cloudflare:agents"
     }
 }

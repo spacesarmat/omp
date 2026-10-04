@@ -46,6 +46,18 @@ beforeEach(() => {
 });
 
 describe('checkSubscription', () => {
+  it('background runs keep the normal timeout for Cloudflare sites', async () => {
+    let seen: SearchAllOptions | null = null;
+    const search: SearchFn = (query, opts) => {
+      seen = opts;
+      return fakeSearch({}, [])(query, opts);
+    };
+    await checkSubscription(ctx, newSub(), { search, now: 1 });
+    expect(seen!.cloudflareTimeoutMs).toBe(15000);
+    await checkSubscription(ctx, newSub({ query: 'Другое' }), { search, now: 2, timeoutMs: 8000 });
+    expect(seen!.cloudflareTimeoutMs).toBe(8000);
+  });
+
   it('the first run only remembers what it found; later runs return the new matches', async () => {
     const sub = newSub();
     const calls: Call[] = [];

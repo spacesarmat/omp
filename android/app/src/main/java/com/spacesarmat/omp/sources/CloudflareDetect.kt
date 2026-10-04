@@ -5,7 +5,9 @@ import org.json.JSONObject
 /**
  * Is a site answer a Cloudflare check instead of the page? Pure: tested on the JVM with header / page fixtures.
  * A 403/503 with `cf-mitigated: challenge`, or from `server: cloudflare` with the challenge page markers
- * («Just a moment…», challenge-platform, cf-chl). A Turnstile widget on such a page needs a tick by a person.
+ * («Just a moment…», the challenge orchestration /cdn-cgi/challenge-platform/h/, cf-chl-, _cf_chl_opt). Cloudflare's
+ * bot-detection script on ordinary pages (/cdn-cgi/challenge-platform/scripts/jsd/) is NOT a check: a site's own 403
+ * behind Cloudflare stays a plain answer. A Turnstile widget on a challenge page needs a tick by a person.
  */
 object CloudflareDetect {
     enum class Kind { NONE, CHALLENGE, INTERACTIVE }
@@ -17,9 +19,9 @@ object CloudflareDetect {
 
     private val CHALLENGE_MARKERS = listOf(
         Regex("<title>\\s*Just a moment", RegexOption.IGNORE_CASE),
-        Regex("challenge-platform"),
-        Regex("cf-chl"),
-        Regex("cf_chl_opt"),
+        Regex("/cdn-cgi/challenge-platform/h/"),
+        Regex("cf-chl-"),
+        Regex("_cf_chl_opt"),
         Regex("id=[\"']challenge-(form|running|stage)"),
     )
 
@@ -67,7 +69,7 @@ object CloudflareDetect {
 
     /** Runs in the hidden page: title + markers, never the page text itself. */
     const val PROBE_JS = "(function(){try{var d=document,h=d.documentElement?d.documentElement.innerHTML.slice(0,200000):'';" +
-        "var ch=!!d.querySelector('#challenge-form,#challenge-running,#challenge-stage,script[src*=\"challenge-platform\"]')||/cf-chl|challenge-platform/.test(h);" +
+        "var ch=!!d.querySelector('#challenge-form,#challenge-running,#challenge-stage,script[src*=\"/challenge-platform/h/\"]')||/cf-chl-|_cf_chl_opt/.test(h)||h.indexOf('/challenge-platform/h/')>=0;" +
         "var ts=!!d.querySelector('.cf-turnstile,iframe[src*=\"challenges.cloudflare.com\"],input[name=\"cf-turnstile-response\"]');" +
         "return JSON.stringify({t:String(d.title||'').slice(0,100),ch:ch,ts:ts});}catch(e){return null;}})()"
 }

@@ -81,12 +81,16 @@ class SourceServices private constructor(context: Context) {
     val secrets = SecretStorage(context)
     private val jar = SiteCookieJar(SecretCookieStore(secrets))
     private val app = context.applicationContext
+    // one User-Agent for the site requests and the hidden check: the WebView's own (header and client hints agree)
+    private val agent = DefaultUserAgent(app)
     val cloudflare = CloudflarePass(
-        CloudflareSolver({ WebViewCloudflareBrowser(app) }, MainScheduler(), jar),
+        CloudflareSolver({ WebViewCloudflareBrowser(app) }, MainScheduler(), jar, agent),
         FlareSolverrClient(),
         jar,
+        agent,
+        SecretAgentStore(secrets),
     )
-    val siteHttp = SiteHttp(jar, cloudflare)
+    val siteHttp = SiteHttp(jar, cloudflare, agent)
 
     /** Blocking. Throws [SiteHttpException]. */
     fun request(spec: HttpSpec): SiteHttp.Response =

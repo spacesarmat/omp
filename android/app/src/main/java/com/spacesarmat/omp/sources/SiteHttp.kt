@@ -20,7 +20,12 @@ class SiteHttpException(val reason: String, val code: String? = null) : IOExcept
  * HTTP for the built-in search sources: browser-like User-Agent, cookies per site ([SiteCookieJar]),
  * redirects followed per [RedirectPolicy], body decoded by its charset ([BodyCharset]), at most [MAX_BYTES].
  */
-class SiteHttp(private val jar: SiteCookieJar, private val cloudflare: CloudflarePass? = null) {
+class SiteHttp(
+    private val jar: SiteCookieJar,
+    private val cloudflare: CloudflarePass? = null,
+    /** The User-Agent without a per-host override (the WebView's own on Android, see [DefaultUserAgent]). */
+    private val defaultAgent: () -> String = { USER_AGENT },
+) {
     /** [cloudflare]: how a Cloudflare check on the way was passed ([CloudflarePass.Outcome] in lower case), null when there was none. */
     class Response(val status: Int, val url: String, val text: String, val cloudflare: String? = null)
 
@@ -60,7 +65,6 @@ class SiteHttp(private val jar: SiteCookieJar, private val cloudflare: Cloudflar
         val target = parseUrl(url) ?: throw SiteHttpException(BAD_URL)
         val forced = if (responseCharset == null) null else BodyCharset.forName(responseCharset) ?: throw SiteHttpException(BAD_REQUEST)
         val b = Request.Builder().url(target)
-            .header("User-Agent", cloudflare?.userAgentFor(target.host) ?: USER_AGENT)
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
             .header("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.8")
         try {
@@ -84,15 +88,16 @@ class SiteHttp(private val jar: SiteCookieJar, private val cloudflare: Cloudflar
             }
             else -> throw SiteHttpException(BAD_REQUEST)
         }
-        val first = exchange(b.build(), timeoutMs, forced)
+        // a page-set User-Agent wins; otherwise each hop gets its host's one (a FlareSolverr override after a redirect)
+        val ownAgent = headers.keys.none { it.equals("User-Agent", ignoreCase = true) }
+        val first = exchange(b.build(), timeoutMs, forced, ownAgent)
         val pass = cloudflare
         if (cf == null || pass == null || detect(first) == CloudflareDetect.Kind.NONE) return first.response
         val challenged = parseUrl(first.response.url) ?: target
         return when (val outcome = pass.pass(challenged, cf.flareSolverr)) {
             CloudflarePass.Outcome.BROWSER, CloudflarePass.Outcome.FLARESOLVERR -> {
-                // the clearance may come with another User-Agent (FlareSolverr): the retry carries the current one
-                b.header("User-Agent", pass.userAgentFor(target.host))
-                val again = exchange(b.build(), timeoutMs, forced)
+                // the clearance may come with another User-Agent (FlareSolverr): every hop of the retry asks again
+                val again = exchange(b.build(), timeoutMs, forced, ownAgent)
                 if (detect(again) != CloudflareDetect.Kind.NONE) throw SiteHttpException(CF_FAILED, CODE_CLOUDFLARE)
                 val r = again.response
                 Response(r.status, r.url, r.text, outcome.name.lowercase())
@@ -102,17 +107,21 @@ class SiteHttp(private val jar: SiteCookieJar, private val cloudflare: Cloudflar
         }
     }
 
+    /** The User-Agent of a request to [host]: the host's override, else the one default. */
+    fun agentFor(host: String): String = cloudflare?.userAgentFor(host) ?: defaultAgent()
+
     private fun detect(e: Exchange): CloudflareDetect.Kind =
         CloudflareDetect.detect(e.response.status, { e.headers[it] }, e.response.text)
 
     /** One request with its redirects within [timeoutMs]. */
-    private fun exchange(first: Request, timeoutMs: Long, forced: java.nio.charset.Charset?): Exchange {
+    private fun exchange(first: Request, timeoutMs: Long, forced: java.nio.charset.Charset?, ownAgent: Boolean): Exchange {
         val deadline = System.currentTimeMillis() + timeoutMs
         var request = first
         try {
             for (hop in 0..MAX_REDIRECTS) {
                 val left = deadline - System.currentTimeMillis()
                 if (left <= 0) throw SiteHttpException(NO_ANSWER)
+                if (ownAgent) request = request.newBuilder().header("User-Agent", agentFor(request.url.host)).build()
                 val call = client.newBuilder().callTimeout(left, TimeUnit.MILLISECONDS).build().newCall(request)
                 val next = call.execute().use { r ->
                     val location = r.header("Location")?.let { r.request.url.resolve(it) }
@@ -165,7 +174,7 @@ class SiteHttp(private val jar: SiteCookieJar, private val cloudflare: Cloudflar
         const val CODE_CLOUDFLARE = "cloudflare"
         const val CODE_CLOUDFLARE_INTERACTIVE = "cloudflare-interactive"
 
-        /** The one browser User-Agent of OMP's site requests: the hidden check page uses it too (a clearance is bound to it). */
+        /** Fallback User-Agent when the device's WebView one is unknown (no WebView; JVM tests). */
         const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
     }

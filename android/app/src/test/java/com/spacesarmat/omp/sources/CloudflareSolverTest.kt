@@ -81,7 +81,9 @@ class CloudflareSolverTest {
     private val jar = SiteCookieJar(store)
     private val scheduler = FakeScheduler()
     private val browsers = ArrayList<FakeBrowser>()
-    private val solver = CloudflareSolver({ FakeBrowser().also { browsers.add(it) } }, scheduler, jar)
+    // each test its own gate: a check left running must not hold the process-wide one
+    private val gate = ExclusiveGate()
+    private val solver = CloudflareSolver({ FakeBrowser().also { browsers.add(it) } }, scheduler, jar, gate = gate)
     private val site = "https://kinozal.example.com/browse.php?s=test&apikey=x".toHttpUrl()
 
     private fun start(url: HttpUrl = site): MutableList<CloudflareSolver.Result> {
@@ -195,7 +197,7 @@ class CloudflareSolverTest {
         assertEquals(listOf(CloudflareSolver.Result.FAILED), r)
         assertTrue(browsers.single().closed)
 
-        val broken = CloudflareSolver({ throw IllegalStateException("no WebView") }, scheduler, jar)
+        val broken = CloudflareSolver({ throw IllegalStateException("no WebView") }, scheduler, jar, gate = ExclusiveGate())
         val out = mutableListOf<CloudflareSolver.Result>()
         broken.solveAsync(site) { out.add(it) }
         scheduler.runUntil(scheduler.time)
@@ -212,7 +214,7 @@ class CloudflareSolverTest {
             override fun forget(url: String) {}
             override fun close() {}
         }
-        val s = CloudflareSolver({ stuck }, scheduler, jar)
+        val s = CloudflareSolver({ stuck }, scheduler, jar, gate = ExclusiveGate())
         val out = mutableListOf<CloudflareSolver.Result>()
         s.solveAsync(site) { out.add(it) }
         scheduler.runUntil(CloudflareSolver.TIMEOUT_MS + CloudflareSolver.POLL_MS)
@@ -221,22 +223,91 @@ class CloudflareSolverTest {
     }
 
     @Test
-    fun concurrentRequestsForOneHostShareOneCheck() {
+    fun concurrentRequestsForOneHostShareOneCheckAndChecksNeverOverlap() {
         val a = start()
         val b = start("https://kinozal.example.com/details.php?id=1".toHttpUrl())
         val other = start("https://rustorka.example.org/".toHttpUrl())
         scheduler.runUntil(0)
-        assertEquals(2, browsers.size)
+        // one WebView check at a time: rustorka waits for the gate
+        assertEquals(1, browsers.size)
         assertEquals(setOf("kinozal.example.com", "rustorka.example.org"), solver.running())
         browsers[0].cookieHeader = "cf_clearance=1"
         scheduler.runUntil(500)
         assertEquals(listOf(CloudflareSolver.Result.SOLVED), a)
         assertEquals(listOf(CloudflareSolver.Result.SOLVED), b)
         assertTrue(other.isEmpty())
-        // a later request starts a fresh check
-        start()
+        assertEquals(2, browsers.size)
+        assertEquals("https://rustorka.example.org/", browsers[1].opened)
+        // a later request for kinozal starts a fresh check once rustorka's ends
+        val again = start()
         scheduler.runUntil(500)
+        assertEquals(2, browsers.size)
+        browsers[1].cookieHeader = "cf_clearance=2"
+        scheduler.runUntil(1000)
+        assertEquals(listOf(CloudflareSolver.Result.SOLVED), other)
         assertEquals(3, browsers.size)
+        assertTrue(again.isEmpty())
+    }
+
+    @Test
+    fun aVisibleCheckHoldingTheGateDelaysTheHiddenOne() {
+        assertTrue(gate.tryEnter())
+        val r = start()
+        scheduler.runUntil(3000)
+        assertTrue(browsers.isEmpty())
+        gate.leave()
+        scheduler.runUntil(3500)
+        assertEquals(1, browsers.size)
+        browsers[0].cookieHeader = "cf_clearance=x"
+        scheduler.runUntil(4000)
+        assertEquals(listOf(CloudflareSolver.Result.SOLVED), r)
+        // the gate is free again after the check
+        assertTrue(gate.tryEnter())
+    }
+
+    @Test
+    fun gateNeverFreeFails() {
+        assertTrue(gate.tryEnter())
+        val r = start()
+        scheduler.runUntil(CloudflareSolver.TIMEOUT_MS + 1000)
+        assertEquals(listOf(CloudflareSolver.Result.FAILED), r)
+        assertTrue(browsers.isEmpty())
+    }
+
+    @Test
+    fun clearanceDuringAHungProbeIsKeptAtTheHardStop() {
+        var cookie: String? = null
+        val hung = object : CloudflareBrowser {
+            override fun open(url: String, userAgent: String, events: CloudflareBrowser.Events) {}
+            override fun probe(result: (String?) -> Unit) {} // never answers
+            override fun cookies(url: String): String? = cookie
+            override fun forget(url: String) {}
+            override fun close() {}
+        }
+        val s = CloudflareSolver({ hung }, scheduler, jar, gate = ExclusiveGate())
+        val out = mutableListOf<CloudflareSolver.Result>()
+        s.solveAsync(site) { out.add(it) }
+        scheduler.runUntil(1000)
+        cookie = "cf_clearance=late"
+        scheduler.runUntil(CloudflareSolver.TIMEOUT_MS + CloudflareSolver.POLL_MS)
+        assertEquals(listOf(CloudflareSolver.Result.SOLVED), out)
+        assertEquals("late", jar.loadForRequest("https://kinozal.example.com/".toHttpUrl()).first { it.name == "cf_clearance" }.value)
+    }
+
+    @Test
+    fun webViewCookieCleanup() {
+        assertEquals(listOf("/"), WebCookieCleanup.pathPrefixes("/"))
+        assertEquals(listOf("/", "/forum"), WebCookieCleanup.pathPrefixes("/forum/index.php"))
+        assertEquals(listOf("/", "/forum", "/forum/x"), WebCookieCleanup.pathPrefixes("/forum/x/"))
+        assertEquals(listOf("/"), WebCookieCleanup.pathPrefixes(null))
+        val list = WebCookieCleanup.expiring("cf_clearance", listOf("/", "/forum"), "www.kinozal.example.com", "example.com", true)
+        assertTrue(list.all { it.startsWith("cf_clearance=; Max-Age=0; Path=") && it.contains("; Secure") })
+        assertTrue(list.contains("cf_clearance=; Max-Age=0; Path=/forum; Secure; Domain=example.com"))
+        assertTrue(list.contains("cf_clearance=; Max-Age=0; Path=/; Secure; Domain=www.kinozal.example.com"))
+        assertTrue(list.contains("cf_clearance=; Max-Age=0; Path=/; Secure"))
+        // __Host- cookies: host-only on "/" with Secure, never a Domain
+        assertEquals(listOf("__Host-s=; Max-Age=0; Path=/; Secure"), WebCookieCleanup.expiring("__Host-s", listOf("/", "/a"), "h.example", "h.example", true))
+        assertFalse(WebCookieCleanup.expiring("a", listOf("/"), "h.example", "h.example", false).any { it.contains("Secure") })
     }
 
     @Test

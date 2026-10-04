@@ -84,6 +84,11 @@ export interface Source {
    * and the secret never reaches the result, TorrServer or storage. Called before `magnet`.
    */
   resolve?(r: SourceResult, ctx: SourceContext): Promise<string>;
+  /**
+   * The site's «Обходить проверку Cloudflare» is on now (its requests pass { cloudflare: true }): a check can make a
+   * request wait, so the search gives this source CLOUDFLARE_TIMEOUT_MS instead of SOURCE_TIMEOUT_MS.
+   */
+  cloudflare?: () => boolean;
   /** Sources with needsLogin: sign in; the credentials go to ctx.secrets only. Rejects in Russian. */
   login?(username: string, password: string, ctx: SourceContext): Promise<void>;
   /** Forgets the site cookies and the saved credentials. */
