@@ -1,9 +1,9 @@
 // Release post for the Telegram channel (pure helpers; scripts/telegram-post.mjs does the network part).
 
 export const REPO_URL = 'https://github.com/spacesarmat/omp';
-/** Telegram limits: photo caption 1024 characters, bot uploads 50 MB. */
+/** Telegram limits: photo caption 1024 characters, bot uploads 50 MB (kept at 50,000,000 bytes, the conservative reading). */
 export const CAPTION_MAX = 1024;
-export const UPLOAD_MAX = 50 * 1024 * 1024;
+export const UPLOAD_MAX = 50_000_000;
 
 export function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -61,7 +61,7 @@ export function buildLinksMessage(tag, files) {
 
 /** Log line for the owner, who forwards an oversize build by hand. */
 export function oversizeLogLine(file) {
-  return `Telegram: ${file.name} is ${Math.ceil(file.size / (1024 * 1024))} MB — forward it manually from GitHub`;
+  return `Telegram: ${file.name} is ${Math.ceil(file.size / 1_000_000)} MB — forward it manually from GitHub`;
 }
 
 /** Buttons under the post: downloads per ABI and for LG, release page, support. */

@@ -67,7 +67,7 @@ describe('telegram-lib', () => {
   });
 
   it('logs the size in MB for a manual forward', () => {
-    expect(oversizeLogLine({ name: 'OMP-0.14.1-arm64.apk', size: 67.2 * MB })).toBe(
+    expect(oversizeLogLine({ name: 'OMP-0.14.1-arm64.apk', size: 67_200_000 })).toBe(
       'Telegram: OMP-0.14.1-arm64.apk is 68 MB — forward it manually from GitHub',
     );
   });
