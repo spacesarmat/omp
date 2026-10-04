@@ -63,6 +63,7 @@ describe('collectBackup', () => {
     put('tsp.subs', [SUB]);
     put('tsp.monitor', { enabled: false, hours: 6, wifiOnly: true, episodes: true });
     put('tsp.sources', { rutor: { on: false } });
+    put('tsp.indexers', [{ id: 'jackett-1', kind: 'jackett', url: 'http://192.168.1.5:9117', keySet: true }]);
     put('tsp.settings', { libraryView: 'list', autoNext: false });
     put('tsp.touchpad', { speed: 5, accel: false, tapClick: true, invertScroll: true });
     put('tsp.localServer', { autostart: true });

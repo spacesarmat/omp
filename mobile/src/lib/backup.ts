@@ -1,7 +1,8 @@
 // Settings backup (phone): collect → file → validate → apply. Pure: only localStorage and the sanitizers of the
 // stores themselves. Format v1: { format: 'omp-backup', v: 1, omp, at, data: { <tsp.* key>: value } }.
 // Only the ALLOWLIST below is ever written to a file or restored; anything else in a file is ignored.
-// Never in a copy: tracker passwords/cookies (Android encrypted storage, not localStorage), the error log
+// Never in a copy: tracker passwords/cookies and Jackett/Prowlarr API keys (Android encrypted storage, not
+// localStorage; a copy keeps the indexer address and «key set» only), the error log
 // (tsp.log) and caches/derived state (see NOT_BACKED_UP).
 import { isObject } from '../../../src/store/storage';
 import { sanitizeServers } from '../../../src/store/servers';
@@ -9,6 +10,7 @@ import { sanitizeSettings } from '../../../src/store/settings';
 import { sanitizeFavorites } from '../../../src/store/favorites';
 import { sanitizeTrackPrefs } from '../../../src/store/trackPrefs';
 import { sanitizeSourcePrefs } from '../../../src/sources/store';
+import { sanitizeIndexers } from '../../../src/sources/indexerStore';
 import { sanitizeSubs } from '../../../src/monitor/subs';
 import { sanitizeMonitorSettings } from '../../../src/monitor/settings';
 import { sanitizeTvs } from '../tv/tvStore';
@@ -90,6 +92,8 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.subs', clean: (v) => cleanList(v, sanitizeSubs(v)) },
   { key: 'tsp.monitor', clean: cleanObject(sanitizeMonitorSettings) },
   { key: 'tsp.sources', clean: (v) => cleanMap(v, sanitizeSourcePrefs(v)) },
+  // Jackett / Prowlarr connections: address + «key set» only (the key lives in Android encrypted storage)
+  { key: 'tsp.indexers', clean: (v) => cleanList(v, sanitizeIndexers(v)) },
   { key: 'tsp.settings', clean: cleanObject(sanitizeSettings) },
   { key: 'tsp.touchpad', clean: cleanObject(sanitizeTouchpad) },
   { key: 'tsp.localServer', clean: (v) => (isObject(v) && typeof v.autostart === 'boolean' ? { autostart: v.autostart } : undefined) },
@@ -260,6 +264,8 @@ export interface BackupSummary {
   tvs: string[];
   subs: number;
   sources: number;
+  /** Jackett / Prowlarr connections. */
+  indexers: number;
   playlists: number;
   tracks: number;
   /** A TorrServer password is in the file. */
@@ -283,6 +289,7 @@ export function summarizeBackup(b: BackupFile): BackupSummary {
     subs: arr(b.data['tsp.subs']).length,
     playlists: arr(b.data['tsp.playlists']).length,
     tracks: isObject(b.data['tsp.trackPrefs']) ? Object.keys(b.data['tsp.trackPrefs'] as object).length : 0,
+    indexers: arr(b.data['tsp.indexers']).length,
     sources: isObject(sources) ? Object.keys(sources).length : 0,
     hasPassword: servers.some((s) => typeof s.password === 'string' && !!s.password),
     hasPairKeys: tvs.some((t) => !!t.clientKey || !!t.token),
@@ -310,6 +317,7 @@ export function summaryLines(s: BackupSummary): string[] {
   if (s.tvs.length) out.push('Телевизоров: ' + named(s.tvs.length, s.tvs));
   if (s.subs) out.push(s.subs + ' ' + plural(s.subs, 'подписка', 'подписки', 'подписок') + ' мониторинга');
   if (s.sources) out.push('Источники поиска: ' + s.sources + ' ' + plural(s.sources, 'переключатель', 'переключателя', 'переключателей'));
+  if (s.indexers) out.push('Индексаторов (Jackett, Prowlarr): ' + s.indexers + ' — без API-ключей, ключи придётся ввести заново');
   if (s.playlists) out.push('Избранных плейлистов: ' + s.playlists);
   if (s.tracks) out.push('Выбор дорожек: ' + s.tracks + ' ' + plural(s.tracks, 'раздача', 'раздачи', 'раздач'));
   if (s.settings) out.push('Настройки приложения, мониторинга и тачпада, вид каталога');

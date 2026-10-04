@@ -4,6 +4,7 @@
 // adds itself.
 import { anidub } from './anidub';
 import { bigfangroup } from './bigfangroup';
+import { startIndexerSources } from './indexer';
 import { nnmclub } from './nnmclub';
 import { registerSource } from './registry';
 import { rutor } from './rutor';
@@ -15,7 +16,9 @@ export function builtinParsers(): Source[] {
   return [rutor, nnmclub, anidub, bigfangroup, torrentby, rutracker];
 }
 
-/** Adds the built-in parsers to the registry (calling it again is harmless). */
+/** Adds the built-in parsers and the saved indexer connections to the registry (calling it again is harmless). */
 export function registerBuiltinSources(): void {
   builtinParsers().forEach(registerSource);
+  // Jackett / Prowlarr connections: one source each, and the path selection against ts-torznab
+  startIndexerSources();
 }

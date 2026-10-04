@@ -1,0 +1,170 @@
+// Connections to Jackett / Prowlarr: tsp.indexers [{ id, kind, url, keySet, name? }]. The API key is never here: it
+// goes to the Android encrypted storage (SecretStore) under `indexer.<id>.apikey`. A backup keeps url + keySet only.
+// Chromium 53 safe (shared by the phone and the TV bundles).
+import { isObject, loadJson, saveJson } from '../store/storage';
+import type { SecretStore } from './types';
+
+export const INDEXERS_KEY = 'tsp.indexers';
+export const INDEXERS_MAX = 20;
+export const NAME_MAX = 40;
+
+export type IndexerKind = 'jackett' | 'prowlarr';
+
+export interface IndexerConn {
+  id: string;
+  kind: IndexerKind;
+  /** Base address without a trailing slash, e.g. http://192.168.1.5:9117 (a reverse-proxy path is kept). */
+  url: string;
+  /** The API key is in the secret storage. */
+  keySet: boolean;
+  name?: string;
+}
+
+/** Name of the key in the secret storage. */
+export function indexerKeyName(id: string): string {
+  return 'indexer.' + id + '.apikey';
+}
+
+/** http(s) address cleaned of credentials, query, hash and trailing slashes; null when it is not an address. */
+export function normalizeIndexerUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (s.length > 200 || !/^https?:\/\/[^\s/?#@]+(?::\d{1,5})?(?:\/[^\s?#]*)?$/i.test(s.replace(/[?#].*$/, ''))) return null;
+  const base = s.replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const m = /^(https?):\/\/([^/]+)(\/.*)?$/i.exec(base);
+  if (!m) return null;
+  return m[1].toLowerCase() + '://' + m[2].toLowerCase() + (m[3] || '');
+}
+
+/** Lowercase host:port of an address with the default port made explicit; '' when not an address. */
+export function hostKey(url: string): string {
+  const m = /^(https?):\/\/([^/?#:@]+)(?::(\d+))?/i.exec(url || '');
+  if (!m) return '';
+  const port = m[3] || (m[1].toLowerCase() === 'https' ? '443' : '80');
+  return m[2].toLowerCase() + ':' + port;
+}
+
+function hash32(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(16);
+}
+
+/** Same address and kind give the same id (saving twice updates, never duplicates). */
+export function indexerId(kind: IndexerKind, url: string): string {
+  return kind + '-' + hash32(url);
+}
+
+function cleanName(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const s = v.replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
+  return s || undefined;
+}
+
+export function sanitizeIndexers(v: unknown): IndexerConn[] {
+  if (!Array.isArray(v)) return [];
+  const out: IndexerConn[] = [];
+  v.forEach((x) => {
+    if (out.length >= INDEXERS_MAX || !isObject(x)) return;
+    const kind = x.kind === 'jackett' || x.kind === 'prowlarr' ? x.kind : null;
+    const url = normalizeIndexerUrl(x.url);
+    if (!kind || !url) return;
+    const id = indexerId(kind, url);
+    if (out.some((c) => c.id === id)) return;
+    const conn: IndexerConn = { id, kind, url, keySet: x.keySet === true };
+    const name = cleanName(x.name);
+    if (name) conn.name = name;
+    out.push(conn);
+  });
+  return out;
+}
+
+let conns = sanitizeIndexers(loadJson<unknown>(INDEXERS_KEY, [], Array.isArray));
+let listeners: (() => void)[] = [];
+
+export function reloadIndexers(): void {
+  conns = sanitizeIndexers(loadJson<unknown>(INDEXERS_KEY, [], Array.isArray));
+  notify();
+}
+
+export function indexerConnections(): IndexerConn[] {
+  return conns.map((c) => ({ ...c }));
+}
+
+export function getIndexer(id: string): IndexerConn | undefined {
+  for (let i = 0; i < conns.length; i++) if (conns[i].id === id) return { ...conns[i] };
+  return undefined;
+}
+
+/** Called after every change of the connections; returns the unsubscribe. */
+export function onIndexersChange(cb: () => void): () => void {
+  listeners.push(cb);
+  return () => {
+    listeners = listeners.filter((x) => x !== cb);
+  };
+}
+
+function notify(): void {
+  listeners.slice().forEach((cb) => {
+    try {
+      cb();
+    } catch (e) {
+      /* a listener failure must not stop the others */
+    }
+  });
+}
+
+function persist(next: IndexerConn[]): void {
+  conns = next;
+  saveJson(INDEXERS_KEY, conns);
+  notify();
+}
+
+export const INDEXER_BAD_URL = 'Неверный адрес: нужен вид http://192.168.1.5:9117';
+export const INDEXER_NO_KEY = 'Укажите API-ключ';
+export const INDEXER_NO_STORE = 'Ключ можно сохранить только в приложении на Android';
+export const INDEXER_TOO_MANY = 'Слишком много подключений';
+
+export interface IndexerInput {
+  kind: IndexerKind;
+  url: string;
+  name?: string;
+  /** New API key; omitted or empty keeps the saved one (an existing connection only). */
+  apiKey?: string;
+}
+
+/**
+ * Adds or updates a connection. The key is written to the secret storage first; when that fails nothing is saved and
+ * the error is Russian. Rejects without touching storage when the address or the key is missing.
+ */
+export function saveIndexer(input: IndexerInput, secrets: SecretStore | undefined): Promise<IndexerConn> {
+  const url = normalizeIndexerUrl(input.url);
+  if (!url || (input.kind !== 'jackett' && input.kind !== 'prowlarr')) return Promise.reject(new Error(INDEXER_BAD_URL));
+  const id = indexerId(input.kind, url);
+  const old = getIndexer(id);
+  const key = (input.apiKey || '').trim();
+  if (!key && !(old && old.keySet)) return Promise.reject(new Error(INDEXER_NO_KEY));
+  if (!old && conns.length >= INDEXERS_MAX) return Promise.reject(new Error(INDEXER_TOO_MANY));
+  if (key && !secrets) return Promise.reject(new Error(INDEXER_NO_STORE));
+  const write = key && secrets ? secrets.set(indexerKeyName(id), key) : Promise.resolve();
+  return write.then(
+    () => {
+      const conn: IndexerConn = { id, kind: input.kind, url, keySet: true };
+      const name = cleanName(input.name);
+      if (name) conn.name = name;
+      persist(old ? conns.map((c) => (c.id === id ? conn : c)) : conns.concat([conn]));
+      return { ...conn };
+    },
+    () => {
+      throw new Error(INDEXER_NO_STORE);
+    },
+  );
+}
+
+/** Removes a connection and its key. */
+export function removeIndexer(id: string, secrets: SecretStore | undefined): Promise<void> {
+  const gone = secrets ? secrets.delete(indexerKeyName(id)).then(undefined, () => undefined) : Promise.resolve();
+  return gone.then(() => {
+    if (conns.some((c) => c.id === id)) persist(conns.filter((c) => c.id !== id));
+  });
+}
