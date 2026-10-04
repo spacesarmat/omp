@@ -300,4 +300,99 @@ class SourcesInboxTest {
         g.get()
         assertTrue(t.toString().indexOf("192.168") < 0)
     }
+
+    private fun withSites() = SourcesTransfer(
+        linkedMapOf("kinozal" to true, "rustorka" to true),
+        null,
+        "Pixel",
+        logins = linkedMapOf("kinozal" to SourcesTransfer.Login("kino", password), "rustorka" to SourcesTransfer.Login("rus", "rus-pass-9")),
+    )
+
+    @Test
+    fun siteLoginsAreStagedPerSiteAndOnlyVerifiedOnesReplaceTheLiveOnes() {
+        entries.map["js:kinozal.username"] = "old-kino"
+        entries.map["js:kinozal.password"] = oldPassword
+        entries.map["js:rustorka.username"] = "old-rus"
+        entries.map["js:rustorka.password"] = oldPassword
+        val box = inbox()
+        val t = withSites()
+        val f = start(box, t)
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        // the event says only which sites came
+        assertEquals(true, e.getJSONObject("logins").getBoolean("kinozal"))
+        assertEquals(true, e.getJSONObject("logins").getBoolean("rustorka"))
+        assertFalse(e.toString().contains(password))
+        assertFalse(e.toString().contains("kino\""))
+        assertEquals(false, e.getBoolean("rutracker"))
+        assertEquals("kino", entries.map["js:kinozal.pending.username"])
+        assertEquals("rus-pass-9", entries.map["js:rustorka.pending.password"])
+        assertEquals(oldPassword, entries.map["js:kinozal.password"])
+        assertEquals(SourcesDone.STORED, box.done(e.getString("id"), null, false, null, mapOf("kinozal" to "ok", "rustorka" to "captcha")))
+        assertEquals(SourcesOutcome.Applied(null, null, mapOf("kinozal" to "ok", "rustorka" to "captcha")), f.get(2, TimeUnit.SECONDS))
+        // Kinozal promoted, rustorka keeps the login that worked; nothing stays staged
+        assertEquals("kino", entries.map["js:kinozal.username"])
+        assertEquals(password, entries.map["js:kinozal.password"])
+        assertEquals("old-rus", entries.map["js:rustorka.username"])
+        assertEquals(oldPassword, entries.map["js:rustorka.password"])
+        assertTrue(entries.map.keys.none { it.contains(".pending.") })
+        assertFalse(t.toString().contains(password))
+    }
+
+    @Test
+    fun aSiteThePageDidNotMentionIsAnErrorAndAFailedPromotionIsReported() {
+        val box = inbox()
+        val f = start(box, withSites())
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        // the page names an unknown result and leaves rustorka out
+        val first = box.answer(e.getString("id"), null, false, null, mapOf("kinozal" to "weird"))
+        assertEquals(SourcesDone.STORED, first.state)
+        assertEquals(SourcesOutcome.Applied(null, null, mapOf("kinozal" to "error", "rustorka" to "error")), f.get(2, TimeUnit.SECONDS))
+        assertNull(entries.map["js:kinozal.username"])
+
+        val g = start(box, withSites())
+        val e2 = events.poll(2, TimeUnit.SECONDS)!!
+        entries.fails = true
+        val a = box.answer(e2.getString("id"), null, false, null, mapOf("kinozal" to "ok", "rustorka" to "bad_login"))
+        assertEquals(SourcesDone.NOT_STORED, a.state)
+        assertEquals(setOf("kinozal"), a.sitesNotStored)
+        assertTrue(a.rutrackerStored)
+        assertEquals(SourcesOutcome.Applied(null, null, mapOf("kinozal" to "error", "rustorka" to "bad_login")), g.get(2, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun siteLoginsFailingToStageStopBeforeThePageAndDeadProcessLeftoversAreDropped() {
+        entries.fails = true
+        assertEquals(SourcesOutcome.StoreFailed, inbox().receive(withSites()))
+        assertTrue(events.isEmpty())
+        entries.fails = false
+        entries.map["js:labtor.pending.username"] = "x"
+        entries.map["js:labtor.pending.password"] = "y"
+        assertTrue(inbox().dropStaged())
+        assertTrue(entries.map.keys.none { it.contains(".pending.") })
+    }
+
+    @Test
+    fun parseTakesSiteLoginsOnlyForTheKnownSites() {
+        val t = SourcesProtocol.parse(
+            JSONObject("""{"v":1,"sources":{"kinozal":true},"logins":{"kinozal":{"username":" kino ","password":"p1"},"rustorka":{"username":"r","password":"p2"}}}"""),
+            "P",
+        )!!
+        assertEquals("kino", t.logins["kinozal"]!!.username)
+        assertEquals("p2", t.logins["rustorka"]!!.password)
+        assertNull(t.login)
+        val bad = listOf(
+            """"logins":{"rutracker":{"username":"a","password":"p"}}""",
+            """"logins":{"indexer":{"username":"a","password":"p"}}""",
+            """"logins":{}""",
+            """"logins":[]""",
+            """"logins":{"kinozal":{"username":"","password":"p"}}""",
+            """"logins":{"kinozal":{"username":"a","password":""}}""",
+            """"logins":{"kinozal":{"username":"a","password":"p","extra":1}}""",
+            """"logins":{"kinozal":{"username":"a\u0001","password":"p"}}""",
+            """"logins":{"kinozal":"a:p"}""",
+            """"logins":{"kinozal":{"username":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","password":"p"}}""",
+            """"logins":{"kinozal":{"username":"a","password":"ppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"}}""",
+        )
+        for (b in bad) assertNull(b, SourcesProtocol.parse(JSONObject("""{"v":1,"sources":{"kinozal":true},$b}"""), "P"))
+    }
 }

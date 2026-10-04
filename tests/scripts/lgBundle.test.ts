@@ -51,12 +51,14 @@ describe('LG bundle', () => {
 
   it('has no Jackett / Prowlarr status, discovery or the Android TV sources screen (lazy chunks)', () => {
     const graph = staticGraph(resolve('src/main.tsx'));
-    const lazy = ['src/sources/indexerStatus.ts', 'src/sources/indexerDiscovery.ts', 'src/sources/indexer.ts', 'src/sources/flaresolverr.ts', 'src/sources/cloudflareTv.ts', 'src/screens/Sources.tsx'].map((f) => resolve(f));
+    const lazy = ['src/sources/indexerStatus.ts', 'src/sources/indexerDiscovery.ts', 'src/sources/indexer.ts', 'src/sources/flaresolverr.ts', 'src/sources/cloudflareTv.ts', 'src/screens/Sources.tsx', 'src/sources/siteLogin.ts', 'src/sources/kinozal.ts', 'src/sources/rustorka.ts'].map((f) => resolve(f));
     expect(lazy.filter((f) => graph.indexOf(f) >= 0)).toEqual([]);
   });
 
   it('the parser list is derived from builtin.ts and is not empty', () => {
-    expect(PARSERS.length).toBeGreaterThanOrEqual(7);
+    expect(PARSERS.length).toBeGreaterThanOrEqual(9);
+    expect(PARSERS).toContain(resolve('src/sources/kinozal.ts'));
+    expect(PARSERS).toContain(resolve('src/sources/rustorka.ts'));
   });
 
   it('the built LG entry (dist) has no parser code; skipped when dist is not built', () => {
@@ -69,6 +71,8 @@ describe('LG bundle', () => {
     const code = readFileSync(join(dir, entry), 'utf8');
     expect(code.indexOf('tracker.php?nm=')).toBe(-1);
     expect(code.indexOf('rutor.info')).toBe(-1);
+    expect(code.indexOf('takelogin.php')).toBe(-1);
+    expect(code.indexOf('rustorka.com')).toBe(-1);
   });
 
   it('the Android TV entry loads the parsers with a dynamic import', () => {

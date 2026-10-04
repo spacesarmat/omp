@@ -799,9 +799,20 @@ class OmpNativePlugin : Plugin() {
             call.reject("Управление с телефона недоступно")
             return
         }
-        val d = r.sourcesDone(call.getString("id"), call.getString("rutracker"), call.getBoolean("failed") == true, call.getInt("indexers"))
-        // stored = false: the verified login could not be written, the page must not claim it
-        call.resolve(JSObject().put("stored", d != SourcesDone.NOT_STORED))
+        // the other sites' results: { siteId: ok | bad_login | captcha | error }
+        val logins = LinkedHashMap<String, String?>()
+        call.getObject("logins")?.let { o ->
+            val it = o.keys()
+            while (it.hasNext()) {
+                val k = it.next()
+                logins[k] = o.opt(k) as? String
+            }
+        }
+        val d = r.sourcesDone(call.getString("id"), call.getString("rutracker"), call.getBoolean("failed") == true, call.getInt("indexers"), logins)
+        // stored = false: the verified rutracker login could not be written; sitesNotStored: the other sites in that state
+        val ns = org.json.JSONArray()
+        d.sitesNotStored.forEach { ns.put(it) }
+        call.resolve(JSObject().put("stored", d.rutrackerStored).put("sitesNotStored", ns))
     }
 
     /**

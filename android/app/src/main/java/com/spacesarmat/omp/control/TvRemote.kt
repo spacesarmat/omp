@@ -247,8 +247,8 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
     fun pendingSources(): JSONObject? = inbox.pendingEvent()
 
     /** The page's remoteSourcesDone; false when no such transfer waits. */
-    fun sourcesDone(id: String?, rutracker: String?, failed: Boolean, indexers: Int? = null): SourcesDone =
-        inbox.done(id, rutracker, failed, indexers)
+    fun sourcesDone(id: String?, rutracker: String?, failed: Boolean, indexers: Int? = null, logins: Map<String, String?> = emptyMap()): SourcesInbox.Answer =
+        inbox.answer(id, rutracker, failed, indexers, logins)
 
     /** REORDER_TO_FRONT keeps the instance (MainActivity is singleTask, PlayerActivity singleTop). */
     private fun bringToFront(cls: Class<*>) {

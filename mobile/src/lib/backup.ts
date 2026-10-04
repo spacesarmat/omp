@@ -123,6 +123,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.monitorNotifyAsked',
   'tsp.monitorNotifyHint',
   'tsp.sourcesTransfer', // state of the last handover to the TV
+  'tsp.sourcesTransferLogins', // TV: which sites' logins came from the phone
   'tsp.sourcesSent',
   'tsp.flareScan', // when FlareSolverr was last searched for on the LAN: per device
   'tsp.firstRun', // when this install was first used: per device

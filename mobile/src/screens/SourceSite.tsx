@@ -1,10 +1,191 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
+import { showToast } from '../ui/toast';
 import { goBack } from '../nav';
 import { native } from '../platform/native';
+import { phoneSourceContext } from '../searchContext';
+import { errorMessage } from '../../../src/api/http';
+import { log } from '../../../src/lib/log';
 import { getSource } from '../../../src/sources/registry';
-import { isCloudflareBypassOn, isSourceOn, onCloudflareBypassChange, setCloudflareBypass, setSourceOn } from '../../../src/sources/store';
+import { clearHealth, isCloudflareBypassOn, isSourceOn, onCloudflareBypassChange, setCloudflareBypass, setHealth, setSourceOn } from '../../../src/sources/store';
 import { BYPASS_LABEL, BYPASS_WARNING, clearanceText } from '../../../src/sources/cloudflareCheck';
+import { LOGIN_SITES, transferLogins } from '../../../src/sources/transfer';
+import { allSources } from '../../../src/sources/registry';
+import type { Source, SourceContext } from '../../../src/sources/types';
+import { activeTv, isAtv } from '../tv/tvStore';
+import { CLOUDFLARE_NOT_SENT, sendTransfer, siteLoginsText, SITES_NOT_SENT } from './Sources';
+
+export const SITE_LOGIN_NOTE = 'Без входа сайт не отдаёт .torrent. Пароль хранится в зашифрованном хранилище телефона.';
+export const SEND_LOGIN = 'Передать вход на телевизор';
+
+/** The toast after «Передать вход на телевизор». */
+function sentLoginText(name: string, result: string | undefined, notes: string[]): string {
+  const head = result === 'ok' ? 'Вход на ' + name + ' передан на телевизор' : '';
+  return [head].concat(notes).filter((x) => x).join('. ');
+}
+
+/**
+ * «Вход на …» of a site behind a login (mockup PhoneSite): login and password, «Войти»; when signed in «Выйти». The
+ * password is never kept in component state: read from the field at «Войти», handed to the source (Keystore only) and
+ * the field is emptied right away. «Передать вход на телевизор» sends only this site's login to the paired Android TV.
+ */
+function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }) {
+  const [logged, setLogged] = useState<boolean | null>(null);
+  const [username, setUsername] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
+  const pass = useRef<HTMLInputElement>(null);
+  const alive = useRef(true);
+  const clearPassword = () => {
+    if (pass.current) pass.current.value = '';
+  };
+
+  useEffect(() => {
+    alive.current = true;
+    if (source.loggedIn) {
+      source.loggedIn(ctx()).then(
+        (v) => alive.current && setLogged(v),
+        () => alive.current && setLogged(false),
+      );
+    } else setLogged(false);
+    return () => {
+      alive.current = false;
+      clearPassword();
+    };
+  }, [source.id]);
+
+  const submit = (e?: Event) => {
+    if (e) e.preventDefault();
+    if (busy || !source.login) return;
+    const u = username.trim();
+    const p = pass.current ? pass.current.value : '';
+    if (!u || !p) {
+      setError('Введите логин и пароль');
+      return;
+    }
+    setError('');
+    setBusy(true);
+    source.login(u, p, ctx()).then(
+      () => {
+        clearPassword();
+        if (!alive.current) return;
+        setBusy(false);
+        setLogged(true);
+        setUsername('');
+        // signed in: the site takes part in the search; its real state comes with the next search
+        setSourceOn(source.id, true);
+        clearHealth(source.id);
+      },
+      (err) => {
+        clearPassword();
+        if (!alive.current) return;
+        setBusy(false);
+        setError(errorMessage(err));
+      },
+    );
+  };
+
+  const logout = () => {
+    if (!source.logout) return;
+    source.logout(ctx()).then(
+      () => {
+        if (!alive.current) return;
+        setLogged(false);
+        setHealth(source.id, { state: 'login', at: Date.now() });
+      },
+      (e) => showToast(errorMessage(e)),
+    );
+  };
+
+  const tv = activeTv.value;
+  const canSend = !!logged && LOGIN_SITES.indexOf(source.id) >= 0 && !!tv && isAtv(tv) && !!tv.token;
+
+  const send = () => {
+    if (sending) return;
+    setSending(true);
+    transferLogins(allSources(), ctx(), [source.id])
+      .then((logins) => {
+        if (!logins[source.id]) throw new Error('Не удалось прочитать вход на ' + source.name);
+        return sendTransfer(null, [], logins);
+      })
+      .then(
+        ({ r, loginDropped, cloudflareDropped, sitesDropped }) => {
+          const result = r.logins ? r.logins[source.id] : undefined;
+          log(result === 'ok' ? 'info' : 'warn', 'tv', 'Вход на ' + source.id + ' передан на Android TV: ' + (result || 'нет ответа'));
+          if (alive.current) setSending(false);
+          const notes = [
+            loginDropped ? 'Вход не передан: логин или пароль слишком длинный или с недопустимыми символами' : '',
+            sitesDropped ? SITES_NOT_SENT : '',
+            cloudflareDropped ? CLOUDFLARE_NOT_SENT : '',
+            siteLoginsText(r.logins, () => source.name),
+          ];
+          showToast(sentLoginText(source.name, result, notes) || 'Передано', 6000);
+        },
+        (e) => {
+          const msg = errorMessage(e);
+          log('warn', 'tv', 'Передача входа на Android TV: ' + msg);
+          if (alive.current) setSending(false);
+          showToast(msg, 6000);
+        },
+      );
+  };
+
+  const title = 'Вход на ' + source.name;
+  return (
+    <>
+      <section class="m-set-group">
+        <form class="m-set-card" data-site-card="login" onSubmit={submit}>
+          <div class="m-sheet-title">{title}</div>
+          <div class="m-note m-muted">{SITE_LOGIN_NOTE}</div>
+          {logged ? (
+            <div class="m-src-row">
+              <span class="m-src-name">
+                <span>Вход выполнен</span>
+              </span>
+              <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={logout}>
+                Выйти
+              </button>
+            </div>
+          ) : (
+            <>
+              <div class="m-field">
+                <label for="m-site-user">Логин</label>
+                <input
+                  id="m-site-user"
+                  name="username"
+                  class="m-input"
+                  type="text"
+                  autocomplete="username"
+                  autocapitalize="off"
+                  value={username}
+                  onInput={(e) => setUsername((e.target as HTMLInputElement).value)}
+                />
+              </div>
+              <div class="m-field">
+                <label for="m-site-pass">Пароль</label>
+                <input id="m-site-pass" name="password" class="m-input" type="password" autocomplete="current-password" ref={pass} />
+              </div>
+              {error && (
+                <div class="m-error" role="alert">
+                  {error}
+                </div>
+              )}
+              <button type="submit" class="m-btn m-btn-primary" disabled={busy || logged === null}>
+                {busy ? 'Вхожу…' : 'Войти'}
+              </button>
+            </>
+          )}
+        </form>
+      </section>
+      {canSend && (
+        <button type="button" class="m-btn m-btn-secondary" data-send="site-login" disabled={sending} onClick={send}>
+          {sending ? 'Передаю…' : SEND_LOGIN}
+        </button>
+      )}
+    </>
+  );
+}
 
 function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
   return (
@@ -16,16 +197,18 @@ function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle:
 
 /**
  * A site behind Cloudflare (mockup PhoneSite): «Искать на …», «Обходить проверку Cloudflare» with the clearance time and
- * the warning. The site's login block comes with the sites themselves. clearance / now: fakes in tests.
+ * the warning, then the site's login block (sites that need one). clearance / now / ctx: fakes in tests.
  */
 export function SourceSite({
   id,
   clearance = (url: string) => native.cloudflareClearance(url),
   now = Date.now,
+  ctx = phoneSourceContext,
 }: {
   id: string;
   clearance?: (url: string) => Promise<number | null>;
   now?: () => number;
+  ctx?: () => SourceContext;
 }) {
   const [, setTick] = useState(0);
   const [until, setUntil] = useState<number | null>(null);
@@ -113,6 +296,7 @@ export function SourceSite({
           )}
         </div>
       </section>
+      {source.needsLogin && source.login && <SiteLogin source={source} ctx={ctx} />}
     </div>
   );
 }

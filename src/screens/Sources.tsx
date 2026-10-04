@@ -9,7 +9,7 @@ import { errorMessage } from '../api/http';
 import { log } from '../lib/log';
 import { builtinSources, torrServerSources } from '../sources/registry';
 import { clearHealth, getHealth, isSourceOn, onHealthChange, setHealth, setSourceOn } from '../sources/store';
-import { forgetTransferredLogin, lastTransfer, onTransferApplied, transferWhen } from '../sources/transfer';
+import { forgetSiteLogin, forgetTransferredLogin, lastTransfer, LOGIN_SITES, onTransferApplied, siteLoginFromPhone, transferWhen } from '../sources/transfer';
 import { tvSourceContext } from '../sources/tvContext';
 import { healthText, type HealthLine } from '../sources/view';
 import { indexerConnections, INDEXER_SOURCE_PREFIX, onIndexersChange, torznabHiddenText, type IndexerConn } from '../sources/indexerStore';
@@ -35,7 +35,7 @@ const TS_LABELS: { [id: string]: string } = {
 export const INTRO = 'Jackett и Prowlarr ищут напрямую. Без них поиск идёт через TorrServer.';
 
 export const PHONE_HOW =
-  'На телефоне: OMP → Настройки → Источники поиска → «Передать на телевизор». Подключения к Jackett и Prowlarr и вход на rutracker тоже можно передать — ключи и пароль не вводятся пультом.';
+  'На телефоне: OMP → Настройки → Источники поиска → «Передать на телевизор». Подключения к Jackett и Prowlarr и входы на сайты (rutracker, Kinozal, rustorka) тоже можно передать — ключи и пароли не вводятся пультом.';
 
 export const NO_INDEXERS = 'Подключите Jackett или Prowlarr на телефоне и передайте на телевизор.';
 
@@ -241,14 +241,23 @@ export function SourcesScreen({
 
   const loggedIn = (s: Source) => !!logged[s.id];
 
+  /** The site's current login came from the phone (LOGIN_SITES: their own note; rutracker: the last transfer). */
+  const fromPhone = (s: Source) => {
+    if (LOGIN_SITES.indexOf(s.id) >= 0) return siteLoginFromPhone(s.id);
+    const t = lastTransfer();
+    return !!t && t.rutracker;
+  };
+
+  const forgetFromPhone = (s: Source) => {
+    if (LOGIN_SITES.indexOf(s.id) >= 0) forgetSiteLogin(s.id);
+    else forgetTransferredLogin();
+  };
+
   const noteOf = (s: Source): HealthLine | null => {
     if (s.needsLogin && s.login) {
       if (!loggedIn(s)) return { text: 'нужен вход', tone: 'muted' };
       const h = getHealth(s.id);
-      if (!h) {
-        const t = lastTransfer();
-        return { text: t && t.rutracker ? 'вход передан с телефона' : 'вход выполнен', tone: 'ok' };
-      }
+      if (!h) return { text: fromPhone(s) ? 'вход передан с телефона' : 'вход выполнен', tone: 'ok' };
       return healthText(h);
     }
     if (!isSourceOn(s)) return { text: 'выключен', tone: 'muted' };
@@ -268,7 +277,7 @@ export function SourcesScreen({
         () => {
           setLogged((m) => ({ ...m, [s.id]: false }));
           setHealth(s.id, { state: 'login', at: Date.now() });
-          forgetTransferredLogin();
+          forgetFromPhone(s);
           toast('Вы вышли из ' + s.name);
         },
         (e) => {
@@ -286,7 +295,7 @@ export function SourcesScreen({
     setSourceOn(s.id, true);
     clearHealth(s.id);
     // typed on the TV now: no longer «вход передан с телефона»
-    forgetTransferredLogin();
+    forgetFromPhone(s);
     toast('Вход выполнен');
     setTimeout(() => focusLogin(s), 0);
   };
@@ -373,7 +382,9 @@ export function SourcesScreen({
           {cfSites.length > 0 && <div class="src-group">Сайты за Cloudflare</div>}
           {cfSites.map((s) => {
             const on = isCloudflareBypassOn(s);
-            const note = tvSiteNote(on, needsCheck(s), until[s.id] === undefined ? null : until[s.id], now());
+            const base = tvSiteNote(on, needsCheck(s), until[s.id] === undefined ? null : until[s.id], now());
+            // mockup: «обход Cloudflare · вход передан с телефона»
+            const note = base.tone === 'ok' && s.needsLogin && loggedIn(s) && fromPhone(s) ? { text: base.text + ' · вход передан с телефона', tone: base.tone } : base;
             return (
               <div class="src-line" key={'cf-' + s.id} data-cf-site={s.id}>
                 <Focusable focusKey={'src-cf-' + s.id} className="src-row src-row-builtin" onPress={() => pressSite(s)}>

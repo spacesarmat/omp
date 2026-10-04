@@ -45,6 +45,8 @@ const KNOWN_SITES: [string, string][] = [
   ['torrent.by', 'torrentby'],
   ['anidub', 'anidub'],
   ['bigfangroup', 'bigfangroup'],
+  ['kinozal', 'kinozal'],
+  ['rustorka', 'rustorka'],
   ['github.com', 'github'],
 ];
 

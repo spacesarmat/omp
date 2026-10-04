@@ -1,5 +1,6 @@
 // Shared parts of the built-in tracker parsers: page loading with Russian errors, numbers, results. Chromium 53 safe.
 import { BAD_URL } from './http';
+import { stashFile } from '../api/torrentFiles';
 import { infohashFromMagnet, parseHtml } from './html';
 import { isCloudflareBypassOn } from './store';
 import type { HttpOptions, HttpResponse, Source, SourceContext, SourceResult } from './types';
@@ -69,6 +70,30 @@ export function magnetOf(doc: Document, selector?: string): string {
   const href = a ? (a.getAttribute('href') || '').trim() : '';
   if (href.indexOf('magnet:') !== 0) throw new Error(NO_MAGNET);
   return href;
+}
+
+/** Latin-1 string (one char per byte, responseCharset iso-8859-1) to bytes. */
+export function latin1Bytes(s: string): Uint8Array {
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i) & 255;
+  return out;
+}
+
+/**
+ * A .torrent that needs the site's session (cookies sent natively): stashed for TorrServerClient.add, which uploads it
+ * (resolves the `omp-file:` pseudo-link). null when the answer is not a bencoded file (an HTML page: signed out, a
+ * daily limit…). Cloudflare / network errors reject.
+ */
+export function fetchTorrent(ctx: SourceContext, url: string, opts: HttpOptions): Promise<string | null> {
+  const o: HttpOptions = {};
+  for (const k in opts) if (Object.prototype.hasOwnProperty.call(opts, k)) (o as { [k: string]: unknown })[k] = (opts as { [k: string]: unknown })[k];
+  o.responseCharset = 'iso-8859-1';
+  return ctx.http.get(url, o).then((res) => {
+    if (isChallenge(res.text)) throw new Error(CHALLENGE);
+    // a bencoded dictionary starts with «d»
+    if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd' || !/^d\d+:/.test(res.text)) return null;
+    return stashFile(latin1Bytes(res.text));
+  });
 }
 
 export interface ResultFields {

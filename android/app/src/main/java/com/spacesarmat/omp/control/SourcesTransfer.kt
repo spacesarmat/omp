@@ -20,6 +20,8 @@ class SourcesTransfer(
     val flaresolverr: String? = null,
     /** «Обходить проверку Cloudflare» per site id (Cloudflare-capable sites only), empty when none came. */
     val cloudflare: Map<String, Boolean> = emptyMap(),
+    /** Logins of the other sites behind a login (Kinozal, rustorka…), by site id ([SourcesProtocol.LOGIN_SITES]). */
+    val logins: Map<String, Login> = emptyMap(),
 ) {
     class Login(val username: String, val password: String) {
         override fun toString() = "Login(***)"
@@ -31,7 +33,7 @@ class SourcesTransfer(
     }
 
     override fun toString() =
-        "SourcesTransfer(${sources.size} sources, login=${login != null}, indexers=${indexers.size}, flare=${flaresolverr != null}, cloudflare=${cloudflare.size})"
+        "SourcesTransfer(${sources.size} sources, login=${login != null}, indexers=${indexers.size}, flare=${flaresolverr != null}, cloudflare=${cloudflare.size}, logins=${logins.size})"
 }
 
 /** What became of a transfer; the router turns it into the HTTP answer. */
@@ -40,7 +42,7 @@ sealed class SourcesOutcome {
      * The page applied it; [rutracker] = ok | bad_login | captcha | error, null when no login came; [indexers] = how
      * many connections the page saved, null when none came.
      */
-    data class Applied(val rutracker: String?, val indexers: Int? = null) : SourcesOutcome()
+    data class Applied(val rutracker: String?, val indexers: Int? = null, val logins: Map<String, String> = emptyMap()) : SourcesOutcome()
     /** Another transfer is still being applied. */
     object Busy : SourcesOutcome()
     /** The page did not answer in time (OMP is not running its interface). */
@@ -73,7 +75,13 @@ object SourcesProtocol {
     const val MAX_INDEXER_NAME = 40
     val RESULTS = setOf("ok", "bad_login", "captcha", "error")
     private val SOURCE_ID = Regex("^[a-z0-9][a-z0-9-]{0,39}$")
-    private val KEYS = setOf("v", "sources", "rutracker", "indexers", "flaresolverr", "cloudflare")
+    private val KEYS = setOf("v", "sources", "rutracker", "indexers", "flaresolverr", "cloudflare", "logins")
+    /**
+     * Sites whose login may travel in `logins` (src/sources/transfer.ts LOGIN_SITES). A fixed list: the site id names the
+     * storage entries (`<id>.pending.username`), so a phone can never stage under another name.
+     */
+    val LOGIN_SITES = setOf("kinozal", "rustorka", "labtor", "seedoff", "bitru")
+    private val LOGIN_FIELDS = setOf("username", "password")
     const val MAX_FLARE_URL = 200
     /** The page's normal form of a FlareSolverr address (src/sources/flareStore.ts normalizeFlareUrl). */
     private val FLARE_URL = Regex("""^https?://([a-z0-9.-]+|\[[0-9a-f:.]+])(:\d{1,5})?(/[^\s@?#]*)?$""")
@@ -115,7 +123,28 @@ object SourcesProtocol {
             is JSONObject -> if (c.length() < 1) return null else switches(c) ?: return null
             else -> return null
         }
-        return SourcesTransfer(sources, login, phone, indexers, flare, cloudflare)
+        val logins = when (val l = body.opt("logins")) {
+            null -> emptyMap()
+            is JSONObject -> logins(l) ?: return null
+            else -> return null
+        }
+        return SourcesTransfer(sources, login, phone, indexers, flare, cloudflare, logins)
+    }
+
+    /** { siteId: { username, password } }, 1.. of [LOGIN_SITES]. */
+    private fun logins(o: JSONObject): Map<String, SourcesTransfer.Login>? {
+        if (o.length() < 1 || o.length() > LOGIN_SITES.size) return null
+        val out = LinkedHashMap<String, SourcesTransfer.Login>()
+        val ids = o.keys()
+        while (ids.hasNext()) {
+            val id = ids.next()
+            if (id !in LOGIN_SITES) return null
+            val x = o.opt(id) as? JSONObject ?: return null
+            val keys = x.keys()
+            while (keys.hasNext()) if (keys.next() !in LOGIN_FIELDS) return null
+            out[id] = login(x) ?: return null
+        }
+        return out
     }
 
     /** { id: boolean }, 1..[MAX_SOURCES] source ids. */
@@ -188,6 +217,12 @@ interface LoginStore {
     fun stageKeys(keys: Map<Int, String>)
     /** Forgets every staged API key (the page has moved the ones it took). */
     fun discardKeys()
+    /** Stages the login of another site ([SourcesProtocol.LOGIN_SITES]); throws when the storage is unavailable. */
+    fun stageSite(site: String, username: String, password: String)
+    /** The site's staged pair → its live entries in one write; throws when the storage is unavailable. */
+    fun promoteSite(site: String)
+    /** Forgets the staged pair of every site in [sites] (never a live one). */
+    fun discardSites(sites: Collection<String>)
 }
 
 /**
@@ -212,6 +247,8 @@ class SourcesInbox(
         var staged = false
         @Volatile
         var keysStaged = false
+        @Volatile
+        var sitesStaged: Set<String> = emptySet()
     }
 
     private val lock = Any()
@@ -236,6 +273,12 @@ class SourcesInbox(
                 p.keysStaged = true
                 if (!quietly { store.stageKeys(keys) }) return SourcesOutcome.StoreFailed
             }
+            if (t.logins.isNotEmpty()) {
+                p.sitesStaged = t.logins.keys.toSet()
+                for ((site, l) in t.logins) {
+                    if (!quietly { store.stageSite(site, l.username, l.password) }) return SourcesOutcome.StoreFailed
+                }
+            }
             val sources = JSONObject()
             for ((id, on) in t.sources) sources.put(id, on)
             val event = JSONObject().put("id", p.id).put("sources", sources).put("rutracker", t.login != null)
@@ -257,6 +300,12 @@ class SourcesInbox(
                 for ((id, on) in t.cloudflare) cf.put(id, on)
                 event.put("cloudflare", cf)
             }
+            if (t.logins.isNotEmpty()) {
+                // the page hears only which sites' logins are staged
+                val l = JSONObject()
+                for (site in t.logins.keys) l.put(site, true)
+                event.put("logins", l)
+            }
             p.event = event
             emit(event)
             if (!p.latch.await(timeoutMs, TimeUnit.MILLISECONDS)) return SourcesOutcome.NoAnswer
@@ -268,6 +317,7 @@ class SourcesInbox(
             if (p.staged) quietly { store.discard() }
             // keys the page did not move stay nowhere
             if (p.keysStaged) quietly { store.discardKeys() }
+            if (p.sitesStaged.isNotEmpty()) quietly { store.discardSites(p.sitesStaged) }
         }
     }
 
@@ -284,7 +334,8 @@ class SourcesInbox(
         if (pending != null) return true
         val login = quietly { store.discard() }
         val keys = quietly { store.discardKeys() }
-        login && keys
+        val sites = quietly { store.discardSites(SourcesProtocol.LOGIN_SITES) }
+        login && keys && sites
     }
 
     /** The event of the transfer waiting for the page, null when none (answered or timed out). */
@@ -294,22 +345,44 @@ class SourcesInbox(
      * The page's answer. A verified login («ok») is promoted here, before the call returns, so the page reads the
      * new login as soon as its call resolves; [SourcesDone.NOT_STORED] tells it the promotion failed.
      */
-    fun done(id: String?, rutracker: String?, failed: Boolean, indexers: Int? = null): SourcesDone = synchronized(lock) {
-        val p = pending?.takeIf { it.id == id } ?: return SourcesDone.UNKNOWN
+    fun done(id: String?, rutracker: String?, failed: Boolean, indexers: Int? = null, logins: Map<String, String?> = emptyMap()): SourcesDone =
+        answer(id, rutracker, failed, indexers, logins).state
+
+    /** What [answer] made of the page's answer, and the sites whose verified login could not be written. */
+    class Answer(val state: SourcesDone, val sitesNotStored: Set<String>, val rutrackerStored: Boolean = true)
+
+    /**
+     * [done] with the other sites' results ([logins]: site → ok | bad_login | captcha | error). Every staged site gets a
+     * result (one the page did not mention: «error»); a verified one is promoted here, and when that write fails its
+     * result becomes «error» and it is listed in [Answer.sitesNotStored].
+     */
+    fun answer(id: String?, rutracker: String?, failed: Boolean, indexers: Int? = null, logins: Map<String, String?> = emptyMap()): Answer = synchronized(lock) {
+        val p = pending?.takeIf { it.id == id } ?: return Answer(SourcesDone.UNKNOWN, emptySet())
         val saved = indexers?.coerceIn(0, SourcesProtocol.MAX_INDEXERS)
+        val notStored = LinkedHashSet<String>()
+        val sites = LinkedHashMap<String, String>()
+        if (!failed) {
+            for (site in p.sitesStaged) {
+                val r = logins[site]?.takeIf { it in SourcesProtocol.RESULTS } ?: "error"
+                sites[site] = if (r == "ok" && !quietly { store.promoteSite(site) }) {
+                    notStored.add(site)
+                    "error"
+                } else r
+            }
+        }
         var out: SourcesOutcome = when {
             failed -> SourcesOutcome.Failed
-            rutracker == null -> SourcesOutcome.Applied(null, saved)
-            else -> SourcesOutcome.Applied(if (rutracker in SourcesProtocol.RESULTS) rutracker else "error", saved)
+            rutracker == null -> SourcesOutcome.Applied(null, saved, sites)
+            else -> SourcesOutcome.Applied(if (rutracker in SourcesProtocol.RESULTS) rutracker else "error", saved, sites)
         }
         if (p.staged && (out as? SourcesOutcome.Applied)?.rutracker == "ok" && !quietly { store.promote() }) out = SourcesOutcome.StoreFailed
         p.outcome = out
         p.latch.countDown()
-        if (out == SourcesOutcome.StoreFailed) SourcesDone.NOT_STORED else SourcesDone.STORED
+        Answer(if (out == SourcesOutcome.StoreFailed || notStored.isNotEmpty()) SourcesDone.NOT_STORED else SourcesDone.STORED, notStored, out != SourcesOutcome.StoreFailed)
     }
 
     companion object {
-        /** The page may sign in to rutracker (one request, 20 s at most) before it answers; the phone waits 45 s. */
+        /** The page may sign in to the sites (in parallel, one request each) before it answers; the phone waits 45 s. */
         const val TIMEOUT_MS = 35_000L
     }
 }
@@ -348,6 +421,27 @@ class SecretLoginStore(private val secrets: SecretEntries, private val key: (Str
 
     override fun discardKeys() {
         secrets.replace(emptyMap(), (0 until SourcesProtocol.MAX_INDEXERS).map { key(pendingKey(it)) })
+    }
+
+    override fun stageSite(site: String, username: String, password: String) {
+        require(site in SourcesProtocol.LOGIN_SITES)
+        secrets.replace(mapOf(key("$site.pending.username") to username, key("$site.pending.password") to password), emptyList())
+    }
+
+    override fun promoteSite(site: String) {
+        require(site in SourcesProtocol.LOGIN_SITES)
+        val user = secrets.get(key("$site.pending.username"))
+        val pass = secrets.get(key("$site.pending.password"))
+        if (user == null || pass == null) throw IllegalStateException("nothing staged")
+        secrets.replace(
+            mapOf(key("$site.username") to user, key("$site.password") to pass),
+            listOf(key("$site.pending.username"), key("$site.pending.password")),
+        )
+    }
+
+    override fun discardSites(sites: Collection<String>) {
+        val names = sites.filter { it in SourcesProtocol.LOGIN_SITES }.flatMap { listOf(key("$it.pending.username"), key("$it.pending.password")) }
+        if (names.isNotEmpty()) secrets.replace(emptyMap(), names)
     }
 
     companion object {

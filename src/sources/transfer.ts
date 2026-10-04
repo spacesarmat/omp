@@ -7,9 +7,14 @@
 // stages each key in the encrypted storage (`indexer.pending.<i>.apikey`) and the event says only `key: true`; the page
 // moves it to the connection's own entry. The answer never echoes a key.
 // The phone's FlareSolverr address and the sites' «Обходить проверку Cloudflare» switches travel too (plain settings).
+// The logins of the other sites behind a login (Kinozal, rustorka…) travel in `logins` { siteId: { username, password } }
+// (only LOGIN_SITES): the native side stages each under `<id>.pending.*`, the event says `logins: { id: true }`, the
+// page checks each with Source.loginPending and answers `logins: { id: result }`; only a verified one is promoted,
+// otherwise the TV keeps the login it had (the same staging as rutracker's).
 // Shared by the phone and the TV bundles: Chromium 53 rules.
 import { isObject, loadJson, saveJson } from '../store/storage';
 import { RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA } from './rutrackerText';
+import { siteLoginCode } from './siteLoginText';
 import { indexerId, indexerKeyName, indexerPendingKeyName, INDEXERS_MAX, INDEXER_SOURCE_PREFIX, NAME_MAX, normalizeIndexerUrl, storeIndexer } from './indexerStore';
 import type { IndexerConn, IndexerKind } from './indexerStore';
 import { clearHealth, getHealth, isCloudflareBypassOn, isSourceOn, setCloudflareBypass, setHealth, setSourceOn } from './store';
@@ -34,6 +39,11 @@ const SOURCE_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 // C0, DEL and C1: the same set as Kotlin Char.isISOControl() in SourcesProtocol
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 const CONTROL_ALL = /[\u0000-\u001f\u007f-\u009f]/g;
+/**
+ * Sites whose login may travel in `logins` (the same fixed list as SourcesProtocol.LOGIN_SITES in Kotlin): the id names
+ * the TV's storage entries, so nothing else can be staged.
+ */
+export const LOGIN_SITES = ['kinozal', 'rustorka', 'labtor', 'seedoff', 'bitru'];
 /** How long the phone waits for the TV's answer; an older transfer event on the TV is dropped. */
 export const TRANSFER_TIMEOUT_MS = 45000;
 
@@ -60,9 +70,11 @@ export interface TransferPayload {
   flaresolverr?: string;
   /** «Обходить проверку Cloudflare» of every site behind Cloudflare (Source.cloudflare). */
   cloudflare?: { [id: string]: boolean };
+  /** Logins of the other sites (LOGIN_SITES). */
+  logins?: { [id: string]: TransferLogin };
 }
 
-/** What the TV answers about the rutracker login. */
+/** What the TV answers about the rutracker login (and about each site's login in `logins`). */
 export type RutrackerResult = 'ok' | 'bad_login' | 'captcha' | 'error';
 
 const RESULTS: RutrackerResult[] = ['ok', 'bad_login', 'captcha', 'error'];
@@ -174,10 +186,33 @@ export function validateTransferPayload(v: unknown): TransferPayload | null {
     if (!cf) return null;
     out.cloudflare = cf;
   }
+  if (v.logins !== undefined) {
+    const l = validLogins(v.logins);
+    if (!l) return null;
+    out.logins = l;
+  }
   return out;
 }
 
-const PAYLOAD_KEYS = ['v', 'sources', 'rutracker', 'indexers', 'flaresolverr', 'cloudflare'];
+const PAYLOAD_KEYS = ['v', 'sources', 'rutracker', 'indexers', 'flaresolverr', 'cloudflare', 'logins'];
+
+/** { siteId: { username, password } }: 1.. of LOGIN_SITES, no other fields. */
+function validLogins(v: unknown): { [id: string]: TransferLogin } | null {
+  if (!isObject(v)) return null;
+  const ids = Object.keys(v);
+  if (ids.length < 1 || ids.length > LOGIN_SITES.length) return null;
+  const out: { [id: string]: TransferLogin } = {};
+  for (let i = 0; i < ids.length; i++) {
+    const x = v[ids[i]];
+    if (LOGIN_SITES.indexOf(ids[i]) < 0 || !isObject(x)) return null;
+    const keys = Object.keys(x);
+    for (let k = 0; k < keys.length; k++) if (keys[k] !== 'username' && keys[k] !== 'password') return null;
+    const login = validLogin(x);
+    if (!login) return null;
+    out[ids[i]] = login;
+  }
+  return out;
+}
 
 /** A FlareSolverr address already in its normal form (the TV saves it as it is). */
 function validFlare(v: unknown): string | null {
@@ -188,7 +223,13 @@ function validFlare(v: unknown): string | null {
  * The phone's switches of every source (on and off: the TV mirrors them), the login and the connections when given,
  * the Cloudflare switch of every site behind Cloudflare and the FlareSolverr address when one is saved.
  */
-export function buildTransferPayload(list: Source[], login: TransferLogin | null, indexers?: TransferIndexer[], flare?: string | null): TransferPayload {
+export function buildTransferPayload(
+  list: Source[],
+  login: TransferLogin | null,
+  indexers?: TransferIndexer[],
+  flare?: string | null,
+  logins?: { [id: string]: TransferLogin } | null,
+): TransferPayload {
   const sources: { [id: string]: boolean } = {};
   const cloudflare: { [id: string]: boolean } = {};
   let cf = 0;
@@ -206,10 +247,39 @@ export function buildTransferPayload(list: Source[], login: TransferLogin | null
   const f = flare ? normalizeFlareUrl(flare) : null;
   if (f) out.flaresolverr = f;
   if (cf) out.cloudflare = cloudflare;
+  if (logins) {
+    const l: { [id: string]: TransferLogin } = {};
+    let n = 0;
+    Object.keys(logins).forEach((id) => {
+      if (LOGIN_SITES.indexOf(id) < 0) return;
+      l[id] = { username: logins[id].username.trim(), password: logins[id].password };
+      n++;
+    });
+    if (n) out.logins = l;
+  }
   return out;
 }
 
-/** The payload without what an OMP on the TV older than v0.15 refuses (connections, FlareSolverr, Cloudflare switches). */
+/**
+ * The saved logins of the sites in LOGIN_SITES among `list` (Source.savedLogin), for the transfer; `only` limits it to
+ * some sites (the site screen sends its own). A login that cannot be read is left out.
+ */
+export function transferLogins(list: Source[], ctx: SourceContext, only?: string[]): Promise<{ [id: string]: TransferLogin }> {
+  const sites = list.filter((s) => LOGIN_SITES.indexOf(s.id) >= 0 && !!s.savedLogin && (!only || only.indexOf(s.id) >= 0));
+  const out: { [id: string]: TransferLogin } = {};
+  return Promise.all(
+    sites.map((s) =>
+      s.savedLogin!(ctx).then(
+        (l) => {
+          if (l) out[s.id] = l;
+        },
+        () => undefined,
+      ),
+    ),
+  ).then(() => out);
+}
+
+/** The payload without what an OMP on the TV older than v0.15 refuses (connections, FlareSolverr, Cloudflare switches, site logins). */
 export function withoutNewParts(p: TransferPayload): TransferPayload {
   const out: TransferPayload = { v: p.v, sources: p.sources };
   if (p.rutracker) out.rutracker = p.rutracker;
@@ -263,6 +333,8 @@ export interface RemoteSources {
   flaresolverr?: string;
   /** The sites' «Обходить проверку Cloudflare». */
   cloudflare?: { [id: string]: boolean };
+  /** Sites (LOGIN_SITES) whose login was sent and is staged. */
+  logins?: string[];
 }
 
 export function parseRemoteSources(d: unknown): RemoteSources | null {
@@ -297,6 +369,13 @@ export function parseRemoteSources(d: unknown): RemoteSources | null {
     const cf = validSources(d.cloudflare);
     if (!cf) return null;
     out.cloudflare = cf;
+  }
+  if (d.logins !== undefined) {
+    const l = d.logins;
+    if (!isObject(l)) return null;
+    const ids = Object.keys(l);
+    for (let i = 0; i < ids.length; i++) if (LOGIN_SITES.indexOf(ids[i]) < 0 || l[ids[i]] !== true) return null;
+    if (ids.length) out.logins = ids;
   }
   return out;
 }
@@ -394,6 +473,8 @@ export function forgetTransferredLogin(): void {
 }
 
 function loginResult(e: unknown): RutrackerResult {
+  const code = siteLoginCode(e);
+  if (code) return code;
   const msg = e instanceof Error ? e.message : '';
   if (msg === RUTRACKER_BAD_LOGIN) return 'bad_login';
   if (msg === RUTRACKER_CAPTCHA) return 'captcha';
@@ -456,6 +537,96 @@ export function applyRemoteSources(r: RemoteSources, known: Source[], ctx: () =>
       return loginResult(e);
     },
   );
+}
+
+// ---- the other sites' logins on the TV ----
+
+const SITES_KEY = 'tsp.sourcesTransferLogins';
+
+function sitesFromPhone(): { [id: string]: true } {
+  const v = loadJson<unknown>(SITES_KEY, {}, isObject);
+  const out: { [id: string]: true } = {};
+  if (isObject(v)) Object.keys(v).forEach((id) => {
+    if (LOGIN_SITES.indexOf(id) >= 0 && v[id] === true) out[id] = true;
+  });
+  return out;
+}
+
+/** The site's login on this TV came from the phone (the note «вход передан с телефона»). */
+export function siteLoginFromPhone(id: string): boolean {
+  return !!sitesFromPhone()[id];
+}
+
+function markSite(id: string, on: boolean): void {
+  const m = sitesFromPhone();
+  if (on) m[id] = true;
+  else delete m[id];
+  saveJson(SITES_KEY, m);
+}
+
+/** After a logout or a login typed on the TV the site's login is no longer «передан с телефона». */
+export function forgetSiteLogin(id: string): void {
+  if (siteLoginFromPhone(id)) markSite(id, false);
+}
+
+/** The notes and states of the sites before a transfer, to restore those whose verified login could not be stored. */
+export interface SiteLoginsState {
+  fromPhone: { [id: string]: true };
+  health: { [id: string]: SourceHealth | null };
+}
+
+export function siteLoginsState(): SiteLoginsState {
+  const health: { [id: string]: SourceHealth | null } = {};
+  LOGIN_SITES.forEach((id) => {
+    health[id] = getHealth(id);
+  });
+  return { fromPhone: sitesFromPhone(), health };
+}
+
+/** The TV verified these sites' logins but could not store them: it must not claim them. */
+export function siteLoginsNotStored(sites: string[], prev: SiteLoginsState): void {
+  sites.forEach((id) => {
+    if (LOGIN_SITES.indexOf(id) < 0) return;
+    markSite(id, !!prev.fromPhone[id]);
+    const h = prev.health[id];
+    if (h) setHealth(id, h);
+  });
+  notify();
+}
+
+/**
+ * Checks the staged logins of the sites in the transfer (in parallel, each with one sign-in): resolves the result per
+ * site. A site this TV does not know, or one without loginPending, is an «error» (the native side drops its login).
+ */
+export function applyRemoteLogins(r: RemoteSources, known: Source[], ctx: () => SourceContext): Promise<{ [id: string]: RutrackerResult }> {
+  const out: { [id: string]: RutrackerResult } = {};
+  const sites = r.logins || [];
+  if (!sites.length) return Promise.resolve(out);
+  return Promise.all(
+    sites.map((id) => {
+      const s = known.filter((x) => x.id === id)[0];
+      let p: Promise<void>;
+      try {
+        p = s && s.loginPending ? s.loginPending(ctx()) : Promise.reject(new Error('unknown site'));
+      } catch (e) {
+        p = Promise.reject(e);
+      }
+      return p.then(
+        () => {
+          out[id] = 'ok';
+          clearHealth(id);
+          markSite(id, true);
+        },
+        (e: unknown) => {
+          // not verified: the native side drops it, the TV keeps its earlier login and state
+          out[id] = loginResult(e);
+        },
+      );
+    }),
+  ).then(() => {
+    notify();
+    return out;
+  });
 }
 
 function two(n: number): string {

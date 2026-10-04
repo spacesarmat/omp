@@ -977,7 +977,7 @@ const SOURCES_TIMEOUT = 45000;
  * paired Android TV, over its token). Resolves the TV's rutracker result (undefined without a login); rejects in
  * Russian. The body is never logged.
  */
-export async function sendSourcesToTv(payload: TransferPayload): Promise<{ rutracker?: RutrackerResult; indexers?: number }> {
+export async function sendSourcesToTv(payload: TransferPayload): Promise<SourcesSent> {
   if (tvKind() !== 'atv') throw new Error(SOURCES_ATV_ONLY);
   await ensureConnected();
   const s = atv;
@@ -1000,13 +1000,30 @@ export async function sendSourcesToTv(payload: TransferPayload): Promise<{ rutra
   if (r.status === 503) throw new Error(SOURCES_NO_ANSWER);
   if (r.status === 500) throw new Error(r.data?.error === 'secrets' ? SOURCES_SECRETS : SOURCES_FAILED);
   if (r.status !== 200 || !r.data || r.data.ok !== true) throw new Error(r.status === 200 ? ATV_ERROR : atvErrorText(r.status));
-  const out: { rutracker?: RutrackerResult; indexers?: number } = {};
+  const out: SourcesSent = {};
   if (payload.indexers && payload.indexers.length) {
     const n = r.data.indexers;
     out.indexers = typeof n === 'number' && n >= 0 && n <= payload.indexers.length ? Math.floor(n) : 0;
   }
   if (payload.rutracker) out.rutracker = isRutrackerResult(r.data.rutracker) ? r.data.rutracker : 'error';
+  if (payload.logins) {
+    // per site that was sent; anything else from the TV is ignored
+    const got = r.data.logins && typeof r.data.logins === 'object' ? (r.data.logins as { [k: string]: unknown }) : {};
+    const logins: { [site: string]: RutrackerResult } = {};
+    Object.keys(payload.logins).forEach((site) => {
+      const v = got[site];
+      logins[site] = isRutrackerResult(v) ? v : 'error';
+    });
+    out.logins = logins;
+  }
   return out;
+}
+
+/** What the TV said about a transfer: the rutracker login, how many connections it saved, each site login. */
+export interface SourcesSent {
+  rutracker?: RutrackerResult;
+  indexers?: number;
+  logins?: { [site: string]: RutrackerResult };
 }
 
 /**

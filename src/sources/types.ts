@@ -99,6 +99,12 @@ export interface Source {
   logout?(ctx: SourceContext): Promise<void>;
   /** Saved credentials exist (no network). */
   loggedIn?(ctx: SourceContext): Promise<boolean>;
+  /**
+   * Sites whose login travels to the Android TV in the transfer's `logins` (transfer.ts LOGIN_SITES): the saved login
+   * (phone, for the transfer) and the check of the staged one on the TV (siteLogin.ts). rutracker has its own field.
+   */
+  savedLogin?(ctx: SourceContext): Promise<{ username: string; password: string } | null>;
+  loginPending?(ctx: SourceContext): Promise<void>;
   /** Fresh releases of a category from the site's public «new» pages (no login), newest first. The «Новое» feed. */
   latest?(ctx: SourceContext, category: FeedCategory): Promise<SourceResult[]>;
 }

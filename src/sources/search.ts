@@ -10,7 +10,7 @@ import type { Source, SourceContext, SourceResult } from './types';
 export const SOURCE_TIMEOUT_MS = 15000;
 export const CLOUDFLARE_TIMEOUT_MS = 100000;
 
-const KNOWN_IDS = ['rutor', 'rutracker', 'nnmclub', 'torrentby', 'anidub', 'bigfangroup', 'ts-rutor', 'ts-torznab'];
+const KNOWN_IDS = ['rutor', 'rutracker', 'nnmclub', 'torrentby', 'anidub', 'bigfangroup', 'kinozal', 'rustorka', 'ts-rutor', 'ts-torznab'];
 
 /** Source id for the log: only the known ones (a Torznab name may be personal). */
 function logId(id: string): string {

@@ -9,11 +9,14 @@ import { nnmclub } from './nnmclub';
 import { registerSource } from './registry';
 import { rutor } from './rutor';
 import { rutracker } from './rutracker';
+import { kinozal } from './kinozal';
+import { rustorka } from './rustorka';
 import { torrentby } from './torrentby';
 import type { Source } from './types';
 
 export function builtinParsers(): Source[] {
-  return [rutor, nnmclub, anidub, bigfangroup, torrentby, rutracker];
+  // the sites behind Cloudflare last: off until signed in («Сайты за Cloudflare»)
+  return [rutor, nnmclub, anidub, bigfangroup, torrentby, rutracker, kinozal, rustorka];
 }
 
 /** Adds the built-in parsers and the saved indexer connections to the registry (calling it again is harmless). */

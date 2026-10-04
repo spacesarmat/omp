@@ -13,7 +13,9 @@ import { allSources } from '../../../src/sources/registry';
 import { rutrackerSavedLogin } from '../../../src/sources/rutracker';
 import {
   buildTransferPayload,
+  LOGIN_SITES,
   transferIndexers,
+  transferLogins,
   transferWhen,
   validateTransferPayload,
   withoutNewParts,
@@ -29,13 +31,13 @@ import { flareStatus, onFlareStatus, phoneFlareNote, refreshFlareStatus } from '
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
 import { log } from '../../../src/lib/log';
 import { activeTv, isAtv } from '../tv/tvStore';
-import { sendSourcesToTv, sessionIp, SOURCES_REJECTED, tvState } from '../tv/tvClient';
+import { sendSourcesToTv, sessionIp, SOURCES_REJECTED, tvState, type SourcesSent } from '../tv/tvClient';
 
 const SENT_KEY = 'tsp.sourcesSent';
 const TV_ICON = 'M3 5h18v11H3zM8 20h8';
 
 export const SEND_TEXT =
-  'Передать на телевизор включённые источники, подключения к Jackett/Prowlarr и вход на rutracker. Пароль и ключи уходят только на ваш ТВ по каналу пары и хранятся там в зашифрованном виде.';
+  'Передать на телевизор включённые источники, подключения к Jackett/Prowlarr и входы на сайты. Пароли и ключи уходят только на ваш ТВ по каналу пары и хранятся там в зашифрованном виде.';
 
 /** What the phone says after a transfer, by the TV's rutracker answer. */
 export function sentText(r: RutrackerResult | undefined): string {
@@ -45,7 +47,28 @@ export function sentText(r: RutrackerResult | undefined): string {
   return 'Передано';
 }
 
-export const LOGIN_NOT_SENT = 'Вход на rutracker не передан: логин или пароль слишком длинный или с недопустимыми символами';
+export const LOGIN_NOT_SENT = 'Вход на сайты не передан: логин или пароль слишком длинный или с недопустимыми символами';
+
+/** What the phone adds about each site's login the TV checked ('' when all were accepted). */
+export function siteLoginsText(logins: { [site: string]: RutrackerResult } | undefined, nameOf: (id: string) => string): string {
+  if (!logins) return '';
+  return Object.keys(logins)
+    .map((id) => {
+      const n = nameOf(id);
+      const r = logins[id];
+      if (r === 'bad_login') return n + ' не принял логин или пароль';
+      if (r === 'captcha') return n + ' просит капчу — войдите на сайте в браузере';
+      if (r === 'error') return 'вход на ' + n + ' телевизор проверит при поиске';
+      return '';
+    })
+    .filter((x) => x)
+    .join('. ');
+}
+
+/** The checkbox of the logins that go with the transfer: «Вместе со входом на rutracker, Kinozal». */
+export function withLoginsLabel(names: string[]): string {
+  return 'Вместе со входом на ' + names.join(', ');
+}
 export const INDEXERS_NOT_SENT = 'Подключения к Jackett/Prowlarr не переданы — обновите OMP на телевизоре';
 export const CLOUDFLARE_NOT_SENT = 'Настройки обхода Cloudflare и FlareSolverr не переданы — обновите OMP на телевизоре';
 
@@ -65,14 +88,48 @@ export function transferPayload(
   login: TransferLogin | null,
   indexers?: TransferIndexer[],
   flare: string | null = flareSolverrUrl(),
+  logins?: { [id: string]: TransferLogin } | null,
 ): { payload: TransferPayload; loginDropped: boolean; indexersDropped: boolean } {
-  const full = validateTransferPayload(buildTransferPayload(list, login, indexers, flare));
+  const hasLogins = !!login || !!(logins && Object.keys(logins).length);
+  const full = validateTransferPayload(buildTransferPayload(list, login, indexers, flare, logins));
   if (full) return { payload: full, loginDropped: false, indexersDropped: false };
   const noLogin = validateTransferPayload(buildTransferPayload(list, null, indexers, flare));
-  if (noLogin) return { payload: noLogin, loginDropped: !!login, indexersDropped: false };
+  if (noLogin) return { payload: noLogin, loginDropped: hasLogins, indexersDropped: false };
   const bare = validateTransferPayload(buildTransferPayload(list, null, undefined, flare));
   if (!bare) throw new Error(SOURCES_NOT_READY);
-  return { payload: bare, loginDropped: !!login, indexersDropped: !!(indexers && indexers.length) };
+  return { payload: bare, loginDropped: hasLogins, indexersDropped: !!(indexers && indexers.length) };
+}
+
+/**
+ * Sends the switches (and the given logins) to the paired TV; an older OMP there that refuses the v0.15 parts gets the
+ * rest. Shared by «Передать на телевизор» and the site screen's «Передать вход на телевизор».
+ */
+export function sendTransfer(
+  login: TransferLogin | null,
+  indexers: TransferIndexer[],
+  logins: { [id: string]: TransferLogin },
+): Promise<{ r: SourcesSent; loginDropped: boolean; indexersDropped: boolean; cloudflareDropped: boolean; sitesDropped: boolean; sent: number }> {
+  const p = transferPayload(allSources(), login, indexers, undefined, logins);
+  const state = { loginDropped: p.loginDropped, indexersDropped: p.indexersDropped, cloudflareDropped: false, sitesDropped: false, sent: p.payload.indexers ? p.payload.indexers.length : 0 };
+  const extras = !!(p.payload.indexers || p.payload.flaresolverr || p.payload.cloudflare || p.payload.logins);
+  return sendSourcesToTv(p.payload)
+    .catch((e: unknown) => {
+      // an older OMP on the TV refuses the v0.15 parts (connections, FlareSolverr, Cloudflare switches, site logins)
+      if (!extras || !(e instanceof Error) || e.message !== SOURCES_REJECTED) throw e;
+      if (state.sent) state.indexersDropped = true;
+      if (p.payload.flaresolverr || p.payload.cloudflare) state.cloudflareDropped = true;
+      if (p.payload.logins) state.sitesDropped = true;
+      state.sent = 0;
+      return sendSourcesToTv(withoutNewParts(p.payload));
+    })
+    .then((r) => ({ r, ...state }));
+}
+
+export const SITES_NOT_SENT = 'Входы на сайты за Cloudflare не переданы — обновите OMP на телевизоре';
+
+/** The phone's saved login of every site in LOGIN_SITES among the given ids. */
+function readSiteLogins(ctx: () => SourceContext, ids: string[]): Promise<{ [id: string]: TransferLogin }> {
+  return ids.length ? transferLogins(allSources(), ctx(), ids).catch(() => ({})) : Promise.resolve({});
 }
 
 /** The phone's saved rutracker login, null when there is none or the storage fails. */
@@ -87,7 +144,8 @@ function lastSent(ip: string): number | null {
 }
 
 /** «Передать на телевизор»: only for a paired Android TV with OMP (LG has no built-in sources). */
-function SendToTv({ hasLogin, indexers, ctx }: { hasLogin: boolean; indexers: IndexerConn[]; ctx: () => SourceContext }) {
+function SendToTv({ loginNames, indexers, ctx }: { loginNames: { id: string; name: string }[]; indexers: IndexerConn[]; ctx: () => SourceContext }) {
+  const hasLogin = loginNames.length > 0;
   const tv = activeTv.value;
   const [withLogin, setWithLogin] = useState(true);
   const [withKeys, setWithKeys] = useState(true);
@@ -106,38 +164,26 @@ function SendToTv({ hasLogin, indexers, ctx }: { hasLogin: boolean; indexers: In
     setBusy(true);
     setError('');
     const ip = tv.ip;
-    const login = hasLogin && withLogin ? readLogin(ctx) : Promise.resolve(null);
+    const ids = loginNames.map((x) => x.id);
+    const login = withLogin && ids.indexOf('rutracker') >= 0 ? readLogin(ctx) : Promise.resolve(null);
+    const sites = withLogin ? readSiteLogins(ctx, ids.filter((id) => LOGIN_SITES.indexOf(id) >= 0)) : Promise.resolve({});
     // the keys are read from the Keystore storage only now, and live only in this request
     const conns = indexerConnections();
     const list = conns.length ? transferIndexers(conns, ctx().secrets, withKeys) : Promise.resolve([] as TransferIndexer[]);
-    let loginDropped = false;
-    let indexersDropped = false;
-    let cloudflareDropped = false;
-    let sent = 0;
-    Promise.all([login, list])
-      .then(([l, idx]) => {
-        const p = transferPayload(allSources(), l, idx);
-        loginDropped = p.loginDropped;
-        indexersDropped = p.indexersDropped;
-        sent = p.payload.indexers ? p.payload.indexers.length : 0;
-        const extras = !!(p.payload.indexers || p.payload.flaresolverr || p.payload.cloudflare);
-        return sendSourcesToTv(p.payload).catch((e: unknown) => {
-          // an older OMP on the TV refuses the v0.15 parts (connections, FlareSolverr, Cloudflare switches): send the rest
-          if (!extras || !(e instanceof Error) || e.message !== SOURCES_REJECTED) throw e;
-          if (sent) indexersDropped = true;
-          if (p.payload.flaresolverr || p.payload.cloudflare) cloudflareDropped = true;
-          sent = 0;
-          return sendSourcesToTv(withoutNewParts(p.payload));
-        });
-      })
+    Promise.all([login, list, sites])
+      .then(([l, idx, s]) => sendTransfer(l, idx, s))
       .then(
-        (r) => {
+        ({ r, loginDropped, indexersDropped, cloudflareDropped, sitesDropped, sent }) => {
           saveJson(SENT_KEY, { ip, at: Date.now() });
           const partial = indexersText(sent, r.indexers);
+          const siteNotes = siteLoginsText(r.logins, nameOf);
           log(
-            (r.rutracker && r.rutracker !== 'ok') || partial ? 'warn' : 'info',
+            (r.rutracker && r.rutracker !== 'ok') || partial || siteNotes ? 'warn' : 'info',
             'tv',
-            'Источники переданы на Android TV' + (r.rutracker ? ', вход на rutracker: ' + r.rutracker : '') + (sent ? ', индексаторов: ' + (r.indexers || 0) + ' из ' + sent : ''),
+            'Источники переданы на Android TV' +
+              (r.rutracker ? ', вход на rutracker: ' + r.rutracker : '') +
+              Object.keys(r.logins || {}).map((id) => ', вход на ' + id + ': ' + r.logins![id]).join('') +
+              (sent ? ', индексаторов: ' + (r.indexers || 0) + ' из ' + sent : ''),
           );
           setBusy(false);
           setTick((n) => n + 1);
@@ -145,7 +191,9 @@ function SendToTv({ hasLogin, indexers, ctx }: { hasLogin: boolean; indexers: In
             loginDropped ? LOGIN_NOT_SENT : '',
             indexersDropped ? INDEXERS_NOT_SENT : '',
             cloudflareDropped ? CLOUDFLARE_NOT_SENT : '',
+            sitesDropped ? SITES_NOT_SENT : '',
             partial,
+            siteNotes,
           ].filter((x) => x);
           const head = notes.length && !r.rutracker ? 'Источники переданы.' : sentText(r.rutracker);
           showToast(notes.length ? head + ' ' + notes.join('. ') : head, notes.length ? 6000 : undefined);
@@ -172,7 +220,7 @@ function SendToTv({ hasLogin, indexers, ctx }: { hasLogin: boolean; indexers: In
         {hasLogin && (
           <label class="m-send-check">
             <input type="checkbox" checked={withLogin} onChange={(e) => setWithLogin((e.target as HTMLInputElement).checked)} />
-            Вместе со входом на rutracker
+            {withLoginsLabel(loginNames.map((x) => x.name))}
           </label>
         )}
         {hasKeys && (
@@ -199,6 +247,11 @@ function SendToTv({ hasLogin, indexers, ctx }: { hasLogin: boolean; indexers: In
       </div>
     </section>
   );
+}
+
+function nameOf(id: string): string {
+  const s = allSources().filter((x) => x.id === id)[0];
+  return s ? s.name : id;
 }
 
 /** Entry to the FlareSolverr screen with the saved address and its last check. */
@@ -290,8 +343,10 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   const [logged, setLogged] = useState<Record<string, boolean>>({});
   const [loginFor, setLoginFor] = useState<Source | null>(null);
   const ts = torrServerSources();
-  // the Jackett / Prowlarr sources have their own section
-  const builtins = builtinSources().filter((s) => s.kind !== 'indexer');
+  // the Jackett / Prowlarr sources have their own section; the sites behind Cloudflare too
+  const all = builtinSources().filter((s) => s.kind !== 'indexer');
+  const builtins = all.filter((s) => s.cloudflare !== true);
+  const cfSites = all.filter((s) => s.cloudflare === true);
   const torznabNote = torznabHiddenText(!ts.some((s) => s.id === 'ts-torznab'));
 
   useEffect(() => {
@@ -301,7 +356,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
     const offFlare = onFlareStatus(() => alive && rerender());
     const offFlareUrl = onFlareChange(() => alive && rerender());
     if (flareSolverrUrl() && !flareStatus()) refreshFlareStatus(ctx().http).then(undefined, () => undefined);
-    builtins
+    all
       .filter((s) => s.needsLogin && s.loggedIn)
       .forEach((s) => {
         s.loggedIn!(ctx()).then(
@@ -360,7 +415,11 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
         </button>
         <h1 class="m-bar-title">Источники поиска</h1>
       </div>
-      <SendToTv ctx={ctx} indexers={indexerConnections()} hasLogin={builtins.some((s) => s.id === 'rutracker' && !!logged[s.id])} />
+      <SendToTv
+        ctx={ctx}
+        indexers={indexerConnections()}
+        loginNames={all.filter((s) => (s.id === 'rutracker' || LOGIN_SITES.indexOf(s.id) >= 0) && !!logged[s.id]).map((s) => ({ id: s.id, name: s.name }))}
+      />
       <IndexerSection ctx={ctx} env={indexerEnv} onChange={rerender} />
       <FlareEntry />
       <section class="m-set-group">
@@ -397,6 +456,16 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
                 onToggle={() => toggle(s)}
                 onOpen={s.cloudflare === true ? () => navigate({ name: 'sourceSite', id: s.id }) : undefined}
               />
+            ))}
+          </div>
+        </section>
+      )}
+      {cfSites.length > 0 && (
+        <section class="m-set-group" data-group="cloudflare">
+          <div class="m-set-label">Сайты за Cloudflare</div>
+          <div class="m-set-card m-src-card">
+            {cfSites.map((s) => (
+              <SourceRow key={s.id} source={s} note={noteOf(s)} onToggle={() => toggle(s)} onOpen={() => navigate({ name: 'sourceSite', id: s.id })} />
             ))}
           </div>
         </section>

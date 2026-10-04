@@ -160,6 +160,27 @@ class ControlRouterTest {
         ""","rutracker":{"username":"$user","password":"$pass"}"""
 
     @Test
+    fun siteLoginsAnswerPerSiteWithoutSecrets() {
+        val t = token()
+        outcome = SourcesOutcome.Applied(null, null, mapOf("kinozal" to "ok"))
+        val r = req("POST", "/omp/sources", sourcesBody(""","logins":{"kinozal":{"username":"kino","password":"$password"},"rustorka":{"username":"rus","password":"$password"}}"""), t)
+        assertEquals(200, r.status)
+        val o = JSONObject(r.json).getJSONObject("logins")
+        assertEquals("ok", o.getString("kinozal"))
+        // a site the outcome does not mention is an error
+        assertEquals("error", o.getString("rustorka"))
+        assertFalse(r.json.contains(password))
+        assertFalse(r.json.contains("kino\""))
+        assertFalse(JSONObject(r.json).has("rutracker"))
+        assertEquals(setOf("kinozal", "rustorka"), lastTransfer!!.logins.keys)
+        // without logins: no logins key
+        val plain = req("POST", "/omp/sources", sourcesBody(), t)
+        assertFalse(JSONObject(plain.json).has("logins"))
+        // an unknown site is refused
+        assertEquals(400, req("POST", "/omp/sources", sourcesBody(""","logins":{"evil":{"username":"a","password":"b"}}"""), t).status)
+    }
+
+    @Test
     fun sourcesNeedTheTokenAndJson() {
         val body = sourcesBody(loginPart())
         assertEquals(401, req("POST", "/omp/sources", body).status)

@@ -138,6 +138,12 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
                 if (t.login != null) o.put("rutracker", r.rutracker ?: "error")
                 // how many connections the TV saved; never a key or an address
                 if (t.indexers.isNotEmpty()) o.put("indexers", r.indexers ?: 0)
+                // per site: ok | bad_login | captcha | error, only for the logins that came
+                if (t.logins.isNotEmpty()) {
+                    val l = JSONObject()
+                    for (site in t.logins.keys) l.put(site, r.logins[site] ?: "error")
+                    o.put("logins", l)
+                }
                 ok(o)
             }
             SourcesOutcome.Busy -> ControlResponse(409, ControlServer.error("busy"))
