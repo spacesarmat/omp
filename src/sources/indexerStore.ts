@@ -84,6 +84,7 @@ let listeners: (() => void)[] = [];
 
 export function reloadIndexers(): void {
   conns = sanitizeIndexers(loadJson<unknown>(INDEXERS_KEY, [], Array.isArray));
+  torznab = sanitizeHosts(loadJson<unknown>(TORZNAB_KEY, null, (x) => x === null || Array.isArray(x)));
   notify();
 }
 
@@ -167,4 +168,59 @@ export function removeIndexer(id: string, secrets: SecretStore | undefined): Pro
   return gone.then(() => {
     if (conns.some((c) => c.id === id)) persist(conns.filter((c) => c.id !== id));
   });
+}
+
+/** Search source id prefix of a connection (`indexer-<id>`): here so the TV transfer code needs no parser import. */
+export const INDEXER_SOURCE_PREFIX = 'indexer-';
+
+/** Name of a key the TV's native side staged during a transfer (entry `i` of the payload's indexers). */
+export function indexerPendingKeyName(i: number): string {
+  return 'indexer.pending.' + i + '.apikey';
+}
+
+/**
+ * Adds or updates a connection without touching the secret storage (a transfer to the TV: its key, if any, is already
+ * in place). `keySet` false keeps an existing connection's key. Null when the address is wrong or the list is full.
+ */
+export function storeIndexer(input: { kind: IndexerKind; url: string; name?: string }, keySet: boolean): IndexerConn | null {
+  const url = normalizeIndexerUrl(input.url);
+  if (!url || (input.kind !== 'jackett' && input.kind !== 'prowlarr')) return null;
+  const id = indexerId(input.kind, url);
+  const old = getIndexer(id);
+  if (!old && conns.length >= INDEXERS_MAX) return null;
+  const conn: IndexerConn = { id, kind: input.kind, url, keySet: keySet || (!!old && old.keySet) };
+  const name = cleanName(input.name);
+  if (name) conn.name = name;
+  persist(old ? conns.map((c) => (c.id === id ? conn : c)) : conns.concat([conn]));
+  return { ...conn };
+}
+
+// Torznab addresses in the TorrServer settings (host:port, hostKey form), read by the «Источники поиска» screens.
+// Kept so the path selection survives a restart; hosts only, never keys. Unknown until first read.
+const TORZNAB_KEY = 'tsp.torznabHosts';
+const HOST_KEY = /^[a-z0-9.\-[\]:]{1,120}:\d{1,5}$/;
+
+function sanitizeHosts(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out: string[] = [];
+  v.forEach((h) => {
+    if (typeof h === 'string' && HOST_KEY.test(h) && out.indexOf(h) < 0 && out.length < INDEXERS_MAX) out.push(h);
+  });
+  return out;
+}
+
+let torznab: string[] | undefined = sanitizeHosts(loadJson<unknown>(TORZNAB_KEY, null, (x) => x === null || Array.isArray(x)));
+
+/** Torznab hosts of the TorrServer settings; undefined = not known yet, [] = TorrServer has none. */
+export function torznabHosts(): string[] | undefined {
+  return torznab ? torznab.slice() : undefined;
+}
+
+/** Saves the TorrServer Torznab hosts (undefined forgets them) and tells the listeners (the path selection). */
+export function setTorznabHosts(hosts: string[] | undefined): void {
+  const next = hosts === undefined ? undefined : sanitizeHosts(hosts) || [];
+  if (JSON.stringify(next) === JSON.stringify(torznab)) return;
+  torznab = next;
+  saveJson(TORZNAB_KEY, next === undefined ? null : next);
+  notify();
 }

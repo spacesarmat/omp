@@ -82,7 +82,7 @@ describe('Sources screen', () => {
   it('groups TorrServer and built-in sources and shows the hint', async () => {
     await mount();
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
-    expect(labels).toEqual(['Через TorrServer', 'Встроенные · на телефоне']);
+    expect(labels).toEqual(['Индексаторы', 'Через TorrServer', 'Встроенные · на телефоне']);
     expect(sw('rutor (поиск TorrServer)')).toBeTruthy();
     expect(sw('Jackett / Prowlarr (Torznab)')).toBeTruthy();
     expect(sw('nnmclub')).toBeTruthy();

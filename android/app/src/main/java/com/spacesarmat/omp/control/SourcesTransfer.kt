@@ -3,24 +3,39 @@ package com.spacesarmat.omp.control
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
  * «Передать на телевизор» (POST /omp/sources, see src/sources/transfer.ts): the phone's source switches and,
- * when asked, the rutracker login. The password is never put into toString, logs, events or answers.
+ * when asked, the rutracker login and the Jackett / Prowlarr connections with their API keys. The password and the
+ * keys are never put into toString, logs, events or answers.
  */
-class SourcesTransfer(val sources: Map<String, Boolean>, val login: Login?, val phone: String) {
+class SourcesTransfer(
+    val sources: Map<String, Boolean>,
+    val login: Login?,
+    val phone: String,
+    val indexers: List<Indexer> = emptyList(),
+) {
     class Login(val username: String, val password: String) {
         override fun toString() = "Login(***)"
     }
 
-    override fun toString() = "SourcesTransfer(${sources.size} sources, login=${login != null})"
+    /** [url] is in the page's normal form (the page derives the connection id from it); [key] only when sent. */
+    class Indexer(val kind: String, val url: String, val name: String?, val key: String?) {
+        override fun toString() = "Indexer($kind, key=${key != null})"
+    }
+
+    override fun toString() = "SourcesTransfer(${sources.size} sources, login=${login != null}, indexers=${indexers.size})"
 }
 
 /** What became of a transfer; the router turns it into the HTTP answer. */
 sealed class SourcesOutcome {
-    /** The page applied it; [rutracker] = ok | bad_login | captcha | error, null when no login came. */
-    data class Applied(val rutracker: String?) : SourcesOutcome()
+    /**
+     * The page applied it; [rutracker] = ok | bad_login | captcha | error, null when no login came; [indexers] = how
+     * many connections the page saved, null when none came.
+     */
+    data class Applied(val rutracker: String?, val indexers: Int? = null) : SourcesOutcome()
     /** Another transfer is still being applied. */
     object Busy : SourcesOutcome()
     /** The page did not answer in time (OMP is not running its interface). */
@@ -44,13 +59,22 @@ enum class SourcesDone {
 /** Schema of the request body; the same limits as src/sources/transfer.ts. Pure (unit-tested). */
 object SourcesProtocol {
     const val VERSION = 1
-    const val MAX_BODY = 8_192
+    const val MAX_BODY = 16_384
     const val MAX_SOURCES = 40
     const val MAX_USERNAME = 100
     const val MAX_PASSWORD = 200
+    const val MAX_INDEXERS = 20
+    const val MAX_INDEXER_URL = 200
+    const val MAX_INDEXER_NAME = 40
     val RESULTS = setOf("ok", "bad_login", "captcha", "error")
     private val SOURCE_ID = Regex("^[a-z0-9][a-z0-9-]{0,39}$")
-    private val KEYS = setOf("v", "sources", "rutracker")
+    private val KEYS = setOf("v", "sources", "rutracker", "indexers")
+    private val INDEXER_FIELDS = setOf("kind", "url", "name", "key")
+    private val KINDS = setOf("jackett", "prowlarr")
+    /** The page's normalized form: lowercase scheme and host, no credentials, query, hash or trailing slash. */
+    private val INDEXER_URL = Regex("^https?://[^\\s/?#@A-Z]+(/[^\\s?#]*)?$")
+    /** Printable ASCII without spaces, 1..200: what Jackett and Prowlarr keys are made of. */
+    private val INDEXER_KEY = Regex("^[\\x21-\\x7e]{1,200}$")
 
     /** null when the body does not follow the schema (unknown keys included). */
     fun parse(body: JSONObject, phone: String): SourcesTransfer? {
@@ -74,7 +98,44 @@ object SourcesProtocol {
             raw is JSONObject -> login(raw) ?: return null
             else -> return null
         }
-        return SourcesTransfer(sources, login, phone)
+        val rawIdx = body.opt("indexers")
+        val indexers = when {
+            rawIdx == null -> emptyList()
+            rawIdx is JSONArray -> indexers(rawIdx) ?: return null
+            else -> return null
+        }
+        return SourcesTransfer(sources, login, phone, indexers)
+    }
+
+    private fun indexers(a: JSONArray): List<SourcesTransfer.Indexer>? {
+        if (a.length() < 1 || a.length() > MAX_INDEXERS) return null
+        val out = ArrayList<SourcesTransfer.Indexer>()
+        for (i in 0 until a.length()) {
+            val x = indexer(a.opt(i) as? JSONObject ?: return null) ?: return null
+            if (out.any { it.kind == x.kind && it.url == x.url }) return null
+            out.add(x)
+        }
+        return out
+    }
+
+    private fun indexer(o: JSONObject): SourcesTransfer.Indexer? {
+        val keys = o.keys()
+        while (keys.hasNext()) if (keys.next() !in INDEXER_FIELDS) return null
+        val kind = o.opt("kind") as? String ?: return null
+        if (kind !in KINDS) return null
+        val url = o.opt("url") as? String ?: return null
+        if (url.length > MAX_INDEXER_URL || !INDEXER_URL.matches(url) || url.endsWith("/")) return null
+        val name = when (val n = o.opt("name")) {
+            null -> null
+            is String -> n.trim().takeIf { it.isNotEmpty() && it.length <= MAX_INDEXER_NAME && it.none { c -> c.isISOControl() } } ?: return null
+            else -> return null
+        }
+        val key = when (val k = o.opt("key")) {
+            null -> null
+            is String -> k.takeIf { INDEXER_KEY.matches(it) } ?: return null
+            else -> return null
+        }
+        return SourcesTransfer.Indexer(kind, url, name, key)
     }
 
     private fun login(o: JSONObject): SourcesTransfer.Login? {
@@ -98,6 +159,10 @@ interface LoginStore {
     fun promote()
     /** Forgets the staged pair (never the live one). */
     fun discard()
+    /** Stages the API keys of the transferred connections by their position; throws when the storage is unavailable. */
+    fun stageKeys(keys: Map<Int, String>)
+    /** Forgets every staged API key (the page has moved the ones it took). */
+    fun discardKeys()
 }
 
 /**
@@ -120,6 +185,8 @@ class SourcesInbox(
         var event: JSONObject? = null
         @Volatile
         var staged = false
+        @Volatile
+        var keysStaged = false
     }
 
     private val lock = Any()
@@ -138,10 +205,26 @@ class SourcesInbox(
                 p.staged = true
                 if (!quietly { store.stage(login.username, login.password) }) return SourcesOutcome.StoreFailed
             }
+            val keys = LinkedHashMap<Int, String>()
+            t.indexers.forEachIndexed { i, x -> x.key?.let { keys[i] = it } }
+            if (keys.isNotEmpty()) {
+                p.keysStaged = true
+                if (!quietly { store.stageKeys(keys) }) return SourcesOutcome.StoreFailed
+            }
             val sources = JSONObject()
             for ((id, on) in t.sources) sources.put(id, on)
             val event = JSONObject().put("id", p.id).put("sources", sources).put("rutracker", t.login != null)
                 .put("phone", t.phone).put("at", clock())
+            if (t.indexers.isNotEmpty()) {
+                // the page hears only that a key was staged, never the key
+                val list = JSONArray()
+                for (x in t.indexers) {
+                    val o = JSONObject().put("kind", x.kind).put("url", x.url).put("key", x.key != null)
+                    x.name?.let { o.put("name", it) }
+                    list.put(o)
+                }
+                event.put("indexers", list)
+            }
             p.event = event
             emit(event)
             if (!p.latch.await(timeoutMs, TimeUnit.MILLISECONDS)) return SourcesOutcome.NoAnswer
@@ -151,6 +234,8 @@ class SourcesInbox(
             // whatever is still staged was not verified (wrong, captcha, error, no answer): the live login stays;
             // after a promotion the staged entries are already gone
             if (p.staged) quietly { store.discard() }
+            // keys the page did not move stay nowhere
+            if (p.keysStaged) quietly { store.discardKeys() }
         }
     }
 
@@ -165,7 +250,9 @@ class SourcesInbox(
     /** Drops a staged login that no transfer waits for (left by a process that died); false when the storage failed. */
     fun dropStaged(): Boolean = synchronized(lock) {
         if (pending != null) return true
-        quietly { store.discard() }
+        val login = quietly { store.discard() }
+        val keys = quietly { store.discardKeys() }
+        login && keys
     }
 
     /** The event of the transfer waiting for the page, null when none (answered or timed out). */
@@ -175,14 +262,15 @@ class SourcesInbox(
      * The page's answer. A verified login («ok») is promoted here, before the call returns, so the page reads the
      * new login as soon as its call resolves; [SourcesDone.NOT_STORED] tells it the promotion failed.
      */
-    fun done(id: String?, rutracker: String?, failed: Boolean): SourcesDone = synchronized(lock) {
+    fun done(id: String?, rutracker: String?, failed: Boolean, indexers: Int? = null): SourcesDone = synchronized(lock) {
         val p = pending?.takeIf { it.id == id } ?: return SourcesDone.UNKNOWN
+        val saved = indexers?.coerceIn(0, SourcesProtocol.MAX_INDEXERS)
         var out: SourcesOutcome = when {
             failed -> SourcesOutcome.Failed
-            rutracker == null -> SourcesOutcome.Applied(null)
-            else -> SourcesOutcome.Applied(if (rutracker in SourcesProtocol.RESULTS) rutracker else "error")
+            rutracker == null -> SourcesOutcome.Applied(null, saved)
+            else -> SourcesOutcome.Applied(if (rutracker in SourcesProtocol.RESULTS) rutracker else "error", saved)
         }
-        if (p.staged && out == SourcesOutcome.Applied("ok") && !quietly { store.promote() }) out = SourcesOutcome.StoreFailed
+        if (p.staged && (out as? SourcesOutcome.Applied)?.rutracker == "ok" && !quietly { store.promote() }) out = SourcesOutcome.StoreFailed
         p.outcome = out
         p.latch.countDown()
         if (out == SourcesOutcome.StoreFailed) SourcesDone.NOT_STORED else SourcesDone.STORED
@@ -222,10 +310,21 @@ class SecretLoginStore(private val secrets: SecretEntries, private val key: (Str
         secrets.replace(emptyMap(), listOf(key(PENDING_USER), key(PENDING_PASS)))
     }
 
+    override fun stageKeys(keys: Map<Int, String>) {
+        secrets.replace(keys.entries.associate { (i, k) -> key(pendingKey(i)) to k }, emptyList())
+    }
+
+    override fun discardKeys() {
+        secrets.replace(emptyMap(), (0 until SourcesProtocol.MAX_INDEXERS).map { key(pendingKey(it)) })
+    }
+
     companion object {
         const val USER = "rutracker.username"
         const val PASS = "rutracker.password"
         const val PENDING_USER = "rutracker.pending.username"
         const val PENDING_PASS = "rutracker.pending.password"
+
+        /** The entry src/sources/indexerStore.ts indexerPendingKeyName(i) reads. */
+        fun pendingKey(i: Int) = "indexer.pending.$i.apikey"
     }
 }

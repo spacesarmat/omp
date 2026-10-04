@@ -967,6 +967,8 @@ export const SOURCES_BUSY = 'Телевизор ещё применяет про
 export const SOURCES_NO_ANSWER = 'Телевизор не ответил — откройте OMP на телевизоре и попробуйте снова';
 export const SOURCES_FAILED = 'Телевизор не смог применить источники';
 export const SOURCES_SECRETS = 'Телевизор не смог сохранить вход: защищённое хранилище недоступно';
+/** 400: the TV did not accept the payload (an older OMP there does not know the Jackett / Prowlarr part). */
+export const SOURCES_REJECTED = 'Телевизор не принял данные — обновите OMP на телевизоре';
 /** The TV may sign in to rutracker before it answers (its own wait is 35 s). */
 const SOURCES_TIMEOUT = 45000;
 
@@ -975,7 +977,7 @@ const SOURCES_TIMEOUT = 45000;
  * paired Android TV, over its token). Resolves the TV's rutracker result (undefined without a login); rejects in
  * Russian. The body is never logged.
  */
-export async function sendSourcesToTv(payload: TransferPayload): Promise<{ rutracker?: RutrackerResult }> {
+export async function sendSourcesToTv(payload: TransferPayload): Promise<{ rutracker?: RutrackerResult; indexers?: number }> {
   if (tvKind() !== 'atv') throw new Error(SOURCES_ATV_ONLY);
   await ensureConnected();
   const s = atv;
@@ -992,12 +994,18 @@ export async function sendSourcesToTv(payload: TransferPayload): Promise<{ rutra
     atvFail(s, TV_FORGOT);
     throw new Error(TV_FORGOT);
   }
+  if (r.status === 400) throw new Error(SOURCES_REJECTED);
   if (r.status === 409) throw new Error(SOURCES_BUSY);
   if (r.status === 503) throw new Error(SOURCES_NO_ANSWER);
   if (r.status === 500) throw new Error(r.data?.error === 'secrets' ? SOURCES_SECRETS : SOURCES_FAILED);
   if (r.status !== 200 || !r.data || r.data.ok !== true) throw new Error(r.status === 200 ? ATV_ERROR : atvErrorText(r.status));
-  if (!payload.rutracker) return {};
-  return { rutracker: isRutrackerResult(r.data.rutracker) ? r.data.rutracker : 'error' };
+  const out: { rutracker?: RutrackerResult; indexers?: number } = {};
+  if (payload.indexers && payload.indexers.length) {
+    const n = r.data.indexers;
+    out.indexers = typeof n === 'number' && n >= 0 && n <= payload.indexers.length ? Math.floor(n) : 0;
+  }
+  if (payload.rutracker) out.rutracker = isRutrackerResult(r.data.rutracker) ? r.data.rutracker : 'error';
+  return out;
 }
 
 /**

@@ -6,18 +6,20 @@
 import { stashFile } from '../api/torrentFiles';
 import { formatBytes } from '../lib/format';
 import { infohashFromMagnet } from './html';
-import { getIndexer, hostKey, indexerConnections, indexerKeyName, onIndexersChange } from './indexerStore';
+import { hostKey, indexerConnections, indexerKeyName, INDEXER_SOURCE_PREFIX, onIndexersChange, setTorznabHosts, torznabHosts } from './indexerStore';
 import type { IndexerConn } from './indexerStore';
 import { builtinSources, registerSource, setHideRule, unregisterSource } from './registry';
 import { isSourceOn } from './store';
 import type { Source, SourceContext, SourceResult } from './types';
 
 export const INDEXER_BAD_KEY = 'Неверный API-ключ';
+/** The connection says a key is set but this device has none (e.g. restored from a backup): enter it again. */
+export const INDEXER_NEED_KEY = 'Нужен API-ключ';
 export const INDEXER_DOWN = 'Индексатор не отвечает';
 export const INDEXER_BAD_ANSWER = 'Индексатор ответил не так, как ожидалось';
 export const INDEXER_ERROR = 'Индексатор ответил ошибкой ';
 
-export const INDEXER_ID_PREFIX = 'indexer-';
+export const INDEXER_ID_PREFIX = INDEXER_SOURCE_PREFIX;
 export const INDEXER_TIMEOUT_MS = 20000;
 /** A longer answer is not parsed (a search over every tracker can be huge). */
 export const INDEXER_MAX_CHARS = 5 * 1000 * 1000;
@@ -273,7 +275,7 @@ function downloadTorrent(conn: IndexerConn, r: SourceResult, ctx: SourceContext)
   if (!ctx.secrets) return Promise.reject(new Error(INDEXER_BAD_KEY));
   return ctx.secrets.get(indexerKeyName(conn.id)).then(
     (key) => {
-      if (!key) throw new Error(INDEXER_BAD_KEY);
+      if (!key) throw new Error(INDEXER_NEED_KEY);
       const keyed = conn.kind === 'jackett' ? link + (link.indexOf('?') < 0 ? '?' : '&') + 'jackett_apikey=' + encodeURIComponent(key) : link;
       const opts = { headers: conn.kind === 'prowlarr' ? { 'X-Api-Key': key } : undefined, timeoutMs: 30000, responseCharset: 'iso-8859-1' };
       return ctx.http.get(keyed, opts).then(
@@ -308,7 +310,7 @@ export function indexerSource(conn: IndexerConn): Source {
       if (!ctx.secrets) return Promise.reject(new Error(INDEXER_BAD_KEY));
       return ctx.secrets.get(indexerKeyName(conn.id)).then(
         (key) => {
-          if (!key) throw new Error(INDEXER_BAD_KEY);
+          if (!key) throw new Error(INDEXER_NEED_KEY);
           return request(conn, key, query, ctx).then((res) => {
             if (res.status === 401 || res.status === 403) throw new Error(INDEXER_BAD_KEY);
             if (res.status < 200 || res.status >= 300) throw new Error(INDEXER_ERROR + res.status);
@@ -325,23 +327,22 @@ export function indexerSource(conn: IndexerConn): Source {
 }
 
 /**
- * Path selection: `ts-torznab` is hidden while a direct Jackett connection (switched on) covers it. With
- * `torznabHost` (host:port of the Torznab address in the TorrServer settings) only a connection to that very host
- * hides it. TorrServer's Torznab config is not readable from here yet, so without it any enabled direct Jackett
- * hides it: one search path, no duplicates.
+ * Path selection: `ts-torznab` is hidden while direct connections (switched on) cover it. `tsHosts` are the host:port
+ * of the Torznab addresses in the TorrServer settings: when known, it is hidden only when every one of them is
+ * connected directly (a TorrServer with no Torznab address: any direct connection). Unknown (the settings were not
+ * read yet): any enabled direct Jackett hides it. One search path, no duplicates.
  */
-export function hidesTorznab(conns: IndexerConn[], torznabHost?: string): boolean {
-  return conns.some((c) => {
-    if (c.kind !== 'jackett' || !isSourceOn({ id: indexerSourceId(c) })) return false;
-    return !torznabHost || hostKey(c.url) === torznabHost;
-  });
+export function hidesTorznab(conns: IndexerConn[], tsHosts?: string | string[]): boolean {
+  const on = conns.filter((c) => isSourceOn({ id: indexerSourceId(c) }));
+  if (tsHosts === undefined) return on.some((c) => c.kind === 'jackett');
+  const hosts = typeof tsHosts === 'string' ? [tsHosts] : tsHosts;
+  if (!hosts.length) return on.length > 0;
+  return hosts.every((h) => on.some((c) => hostKey(c.url) === h));
 }
 
-let knownTorznabHost: string | undefined;
-
-/** Host:port of the TorrServer Torznab config when it is known (hostKey form); undefined = unknown. */
-export function setTorznabHost(host: string | undefined): void {
-  knownTorznabHost = host;
+/** Host:port (one or several) of the TorrServer Torznab config when known (hostKey form); undefined = unknown. */
+export function setTorznabHost(host: string | string[] | undefined): void {
+  setTorznabHosts(host === undefined ? undefined : typeof host === 'string' ? [host] : host);
 }
 
 /** Registers a source per saved connection (replacing the previous ones) and installs the path selection. */
@@ -350,7 +351,7 @@ export function syncIndexerSources(): void {
     if (s.kind === 'indexer') unregisterSource(s.id);
   });
   indexerConnections().forEach((c) => registerSource(indexerSource(c)));
-  setHideRule((sid) => sid === 'ts-torznab' && hidesTorznab(indexerConnections(), knownTorznabHost));
+  setHideRule((sid) => sid === 'ts-torznab' && hidesTorznab(indexerConnections(), torznabHosts()));
 }
 
 let watching = false;

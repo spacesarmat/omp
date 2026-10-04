@@ -357,6 +357,15 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .src-switch.on .src-switch-knob { left: 42px; background: var(--bg); }
 .src-row.focused .src-switch { box-shadow: none; }
 .button.src-login { margin-left: 16px; }
+.src-note-warn { color: var(--accent); }
+.src-caret { font-size: 24px; color: var(--muted); }
+.src-empty { padding: 18px 27px; margin-bottom: 9px; border-radius: 21px; background: var(--panel); font-size: 23px; color: var(--muted); line-height: 1.45; }
+.src-trackers { padding: 0 0 9px 27px; }
+.src-tracker { display: flex; align-items: center; min-height: 54px; padding: 0 21px; margin-bottom: 6px; border-radius: 15px; background: #14171d; font-size: 25px; }
+.src-tracker.focused { box-shadow: inset 0 0 0 3px var(--accent); transform: none; }
+.src-tracker-name { flex: 1; min-width: 0; margin-right: 18px; }
+.src-tracker span:last-child { font-size: 22px; }
+.src-tracker-info { padding: 6px 21px; font-size: 22px; color: var(--muted); }
 .login-dialog { width: 1050px; }
 .login-label { font-size: 25px; color: var(--muted); margin-bottom: 8px; }
 .login-dialog .text-input { display: block; background: var(--panel2); }

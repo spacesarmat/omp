@@ -48,7 +48,7 @@ async function flush() {
   });
 }
 
-async function mount(node: VNode = h(SourcesScreen, {})) {
+async function mount(node: VNode<any> = h(SourcesScreen, { now: Date.now })) {
   host = document.createElement('div');
   document.body.appendChild(host);
   act(() => render(h('div', {}, node, h(DialogHost, {})), host));

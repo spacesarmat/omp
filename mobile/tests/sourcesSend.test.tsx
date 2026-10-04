@@ -13,6 +13,9 @@ import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/store';
 import { logEntries, clearLog } from '../../src/lib/log';
 import type { Source, SourceContext } from '../../src/sources/types';
+import { indexerConnections, indexerKeyName, reloadIndexers } from '../../src/sources/indexerStore';
+import { SOURCES_REJECTED } from '../src/tv/tvClient';
+import { INDEXERS_NOT_SENT, indexersText } from '../src/screens/Sources';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
 const ATV: SavedTv = { ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095 };
@@ -274,5 +277,88 @@ describe('«Передать на телевизор» on the phone', () => {
     await vi.advanceTimersByTimeAsync(45000);
     await done;
     expect(tvState.value).toBe('connected');
+  });
+});
+
+describe('«Передать на телевизор» with Jackett / Prowlarr', () => {
+  // test-only key
+  const KEY = 'test0only0key0000000000000000abc';
+
+  function withJackett() {
+    localStorage.setItem('tsp.indexers', JSON.stringify([{ kind: 'jackett', url: 'http://192.168.1.5:9117', keySet: true }]));
+    reloadIndexers();
+    SECRETS[indexerKeyName(indexerConnections()[0].id)] = KEY;
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+  }
+
+  afterEach(() => {
+    localStorage.clear();
+    reloadIndexers();
+  });
+
+  const keysBox = () =>
+    Array.from(card()!.querySelectorAll('label')).find((l) => (l.textContent || '').indexOf('Вместе с ключами Jackett/Prowlarr') >= 0)!.querySelector('input') as HTMLInputElement;
+
+  it('sends the connections with their keys by default; the answer and the log hold no key', async () => {
+    withJackett();
+    answer = () => ({ body: JSON.stringify({ ok: true, indexers: 1 }) });
+    await mount();
+    expect(keysBox().checked).toBe(true);
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    const post = sourcePosts()[0];
+    expect(post.body.indexers).toEqual([{ kind: 'jackett', url: 'http://192.168.1.5:9117', key: KEY }]);
+    expect(toast.value).toBe('Передано');
+    expect(JSON.stringify(logEntries())).not.toContain(KEY);
+    expect(JSON.stringify(localStorage)).not.toContain(KEY);
+  });
+
+  it('without «вместе с ключами» only the address goes', async () => {
+    withJackett();
+    answer = () => ({ body: JSON.stringify({ ok: true, indexers: 1 }) });
+    await mount();
+    act(() => {
+      keysBox().checked = false;
+      keysBox().dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(sourcePosts()[0].body.indexers).toEqual([{ kind: 'jackett', url: 'http://192.168.1.5:9117' }]);
+    expect(JSON.stringify(sourcePosts()[0].body)).not.toContain(KEY);
+  });
+
+  it('an older TV refusing the connections gets the rest, and the phone says so', async () => {
+    withJackett();
+    answer = (c) => (c.body.indexers ? { status: 400, body: '{"error":"bad_request"}' } : { body: JSON.stringify({ ok: true }) });
+    await mount();
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(sourcePosts()).toHaveLength(2);
+    expect(sourcePosts()[1].body.indexers).toBeUndefined();
+    expect(toast.value).toBe('Источники переданы. ' + INDEXERS_NOT_SENT);
+  });
+
+  it('the TV saved fewer than were sent', async () => {
+    withJackett();
+    answer = () => ({ body: JSON.stringify({ ok: true, indexers: 0 }) });
+    await mount();
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(toast.value).toBe('Источники переданы. ' + indexersText(1, 0));
+    expect(indexersText(2, 2)).toBe('');
+    expect(indexersText(0, undefined)).toBe('');
+  });
+
+  it('protocol: 400 is «обновите OMP», the saved count is read', async () => {
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    const payload = { v: 1, sources: { rutor: true }, indexers: [{ kind: 'jackett' as const, url: 'http://192.168.1.5:9117', key: KEY }] };
+    answer = () => ({ body: JSON.stringify({ ok: true, indexers: 1 }) });
+    expect(await sendSourcesToTv(payload)).toEqual({ indexers: 1 });
+    answer = () => ({ body: JSON.stringify({ ok: true, indexers: 99 }) });
+    expect(await sendSourcesToTv(payload)).toEqual({ indexers: 0 });
+    answer = () => ({ status: 400, body: '{"error":"bad_request"}' });
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_REJECTED);
   });
 });

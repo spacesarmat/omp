@@ -37,7 +37,7 @@ export interface OmpNativeTvPlugin {
   secretDelete(o: { key: string }): Promise<unknown>;
   /** «Передать на телевизор»: the page applied remoteSources { id } (rutracker = the login result when one came) or failed. */
   /** stored = false: the verified login could not be written (the TV has no new login). */
-  remoteSourcesDone(o: { id: string; rutracker?: string; failed?: boolean }): Promise<{ stored?: boolean } | undefined>;
+  remoteSourcesDone(o: { id: string; rutracker?: string; failed?: boolean; indexers?: number }): Promise<{ stored?: boolean } | undefined>;
   /** The transfer still waiting for the page (events are not retained): { event } or { event: null }. */
   remoteSourcesPending(): Promise<{ event?: unknown }>;
   /** Whether libVLC runs on this device (the «VLC» player choice). */

@@ -211,4 +211,72 @@ class SourcesInboxTest {
         // C1 control characters are refused like C0 ones (same as src/sources/transfer.ts)
         assertNull(SourcesProtocol.parse(JSONObject("""{"v":1,"sources":{"rutor":true},"rutracker":{"username":"a\u0085b","password":"p"}}"""), "P"))
     }
+
+    // test-only key
+    private val apiKey = "test0only0key0000000000000000abc"
+
+    private fun withIndexers() = SourcesTransfer(
+        linkedMapOf("rutor" to true),
+        null,
+        "Pixel",
+        listOf(
+            SourcesTransfer.Indexer("jackett", "http://192.168.1.5:9117", null, apiKey),
+            SourcesTransfer.Indexer("prowlarr", "http://192.168.1.7:9696", "Дом", null),
+        ),
+    )
+
+    @Test
+    fun stagesIndexerKeysTheEventSaysOnlyThatAndTheyAreDroppedAfterTheAnswer() {
+        val box = inbox()
+        val f = start(box, withIndexers())
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        assertFalse(e.toString().contains(apiKey))
+        val list = e.getJSONArray("indexers")
+        assertEquals(2, list.length())
+        assertEquals("jackett", list.getJSONObject(0).getString("kind"))
+        assertEquals("http://192.168.1.5:9117", list.getJSONObject(0).getString("url"))
+        assertEquals(true, list.getJSONObject(0).getBoolean("key"))
+        assertEquals(false, list.getJSONObject(1).getBoolean("key"))
+        assertEquals("Дом", list.getJSONObject(1).getString("name"))
+        // staged under the entry the page reads, by position
+        assertEquals(apiKey, entries.map["js:indexer.pending.0.apikey"])
+        assertNull(entries.map["js:indexer.pending.1.apikey"])
+        // the page moves the key to the connection's entry, then answers
+        entries.map["js:indexer.jackett-1.apikey"] = entries.map["js:indexer.pending.0.apikey"]!!
+        assertEquals(SourcesDone.STORED, box.done(e.getString("id"), null, false, 2))
+        assertEquals(SourcesOutcome.Applied(null, 2), f.get(2, TimeUnit.SECONDS))
+        assertFalse(entries.map.keys.any { it.startsWith("js:indexer.pending.") })
+        assertEquals(apiKey, entries.map["js:indexer.jackett-1.apikey"])
+    }
+
+    @Test
+    fun noAnswerOrAFailingStorageLeavesNoStagedKey() {
+        val box = inbox(timeout = 200)
+        assertEquals(SourcesOutcome.NoAnswer, box.receive(withIndexers()))
+        assertFalse(entries.map.keys.any { it.startsWith("js:indexer.pending.") })
+        entries.fails = true
+        assertEquals(SourcesOutcome.StoreFailed, inbox().receive(withIndexers()))
+        entries.fails = false
+        // a key left by a process that died is dropped at start
+        entries.map["js:indexer.pending.3.apikey"] = apiKey
+        assertTrue(inbox().dropStaged())
+        assertFalse(entries.map.containsKey("js:indexer.pending.3.apikey"))
+    }
+
+    @Test
+    fun withoutKeysNothingIsStaged() {
+        val box = inbox()
+        val t = SourcesTransfer(linkedMapOf("rutor" to true), null, "Pixel", listOf(SourcesTransfer.Indexer("jackett", "http://h:9117", null, null)))
+        val f = start(box, t)
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        val before = entries.writes
+        assertEquals(SourcesDone.STORED, box.done(e.getString("id"), null, false, 1))
+        assertEquals(SourcesOutcome.Applied(null, 1), f.get(2, TimeUnit.SECONDS))
+        assertEquals(before, entries.writes)
+        // a count from the page is kept within bounds
+        val f2 = start(box, t)
+        val e2 = events.poll(2, TimeUnit.SECONDS)!!
+        box.done(e2.getString("id"), null, false, 999)
+        assertEquals(SourcesOutcome.Applied(null, SourcesProtocol.MAX_INDEXERS), f2.get(2, TimeUnit.SECONDS))
+    }
 }

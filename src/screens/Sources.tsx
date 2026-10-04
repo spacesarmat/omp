@@ -12,6 +12,9 @@ import { clearHealth, getHealth, isSourceOn, onHealthChange, setHealth, setSourc
 import { forgetTransferredLogin, lastTransfer, onTransferApplied, transferWhen } from '../sources/transfer';
 import { tvSourceContext } from '../sources/tvContext';
 import { healthText, type HealthLine } from '../sources/view';
+import { indexerConnections, INDEXER_SOURCE_PREFIX, onIndexersChange, type IndexerConn } from '../sources/indexerStore';
+import { checkedText, connLine, connTitle, getIndexerStatus, onIndexerStatus, refreshIndexerStatus, trackerStateText, trackerTone } from '../sources/indexerStatus';
+import type { SourceContext } from '../sources/types';
 import type { Source } from '../sources/types';
 
 /** Names of the TorrServer sources (as on the phone). */
@@ -20,8 +23,16 @@ const TS_LABELS: { [id: string]: string } = {
   'ts-torznab': 'Jackett / Prowlarr (Torznab)',
 };
 
+export const INTRO = 'Jackett и Prowlarr ищут напрямую. Без них поиск идёт через TorrServer.';
+
 export const PHONE_HOW =
-  'На телефоне: OMP → Настройки → Источники поиска → «Передать на телевизор». Вход на rutracker тоже можно передать — пароль не вводится пультом.';
+  'На телефоне: OMP → Настройки → Источники поиска → «Передать на телевизор». Подключения к Jackett и Prowlarr и вход на rutracker тоже можно передать — ключи и пароль не вводятся пультом.';
+
+export const NO_INDEXERS = 'Подключите Jackett или Prowlarr на телефоне и передайте на телевизор.';
+
+function indexerSourceId(c: IndexerConn): string {
+  return INDEXER_SOURCE_PREFIX + c.id;
+}
 
 function label(s: Source): string {
   return TS_LABELS[s.id] || s.name;
@@ -47,20 +58,32 @@ function TransferNote() {
   return <div class="src-last">{'Последняя передача: ' + w.day + ' ' + w.time + ' · «' + t.phone + '»'}</div>;
 }
 
-/** Android TV «Источники поиска»: switches of every source, rutracker «Войти» / «Выйти», how to send from the phone. */
-export function SourcesScreen() {
+/**
+ * Android TV «Источники поиска» (mockup 1): Jackett / Prowlarr connections with their trackers, switches of every
+ * source, rutracker «Войти» / «Выйти», how to send from the phone. ctx: the source context (tests pass fakes).
+ */
+export function SourcesScreen({ ctx = tvSourceContext, now = Date.now }: { ctx?: () => SourceContext; now?: () => number } = {}) {
   const [, setTick] = useState(0);
   const rerender = () => setTick((n) => n + 1);
   const [logged, setLogged] = useState<{ [id: string]: boolean }>({});
   const [loginFor, setLoginFor] = useState<Source | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const ts = torrServerSources();
-  const builtins = builtinSources();
+  // the Jackett / Prowlarr sources have their own group
+  const builtins = builtinSources().filter((s) => s.kind !== 'indexer');
+  const indexers = indexerConnections();
+
+  const checkIndexers = () => {
+    indexerConnections().forEach((c) => {
+      refreshIndexerStatus(c, ctx(), now).then(undefined, () => undefined);
+    });
+  };
 
   const checkLogins = (alive: () => boolean) => {
     builtins
       .filter((s) => s.needsLogin && s.loggedIn)
       .forEach((s) => {
-        s.loggedIn!(tvSourceContext()).then(
+        s.loggedIn!(ctx()).then(
           (v) => {
             if (alive()) setLogged((m) => ({ ...m, [s.id]: v }));
           },
@@ -76,17 +99,23 @@ export function SourcesScreen() {
     const isAlive = () => alive;
     restoreFocus('src-first');
     const offHealth = onHealthChange(() => { if (alive) rerender(); });
+    const offStatus = onIndexerStatus(() => { if (alive) rerender(); });
+    const offConns = onIndexersChange(() => { if (alive) rerender(); });
     // a transfer from the phone may arrive while the screen is open
     const offTransfer = onTransferApplied(() => {
       if (!alive) return;
       rerender();
       checkLogins(isAlive);
+      checkIndexers();
     });
     checkLogins(isAlive);
+    checkIndexers();
     return () => {
       alive = false;
       offHealth();
       offTransfer();
+      offStatus();
+      offConns();
     };
   }, []);
 
@@ -120,7 +149,7 @@ export function SourcesScreen() {
     if (!s.logout) return;
     confirmDialog('Выйти из ' + s.name + '? Логин и пароль будут удалены с телевизора.', 'Выйти').then((ok) => {
       if (!ok || !s.logout) return;
-      s.logout(tvSourceContext()).then(
+      s.logout(ctx()).then(
         () => {
           setLogged((m) => ({ ...m, [s.id]: false }));
           setHealth(s.id, { state: 'login', at: Date.now() });
@@ -152,7 +181,7 @@ export function SourcesScreen() {
       <div class="src-layout">
         <div class="src-side">
           <h1>Источники поиска</h1>
-          <div class="src-intro">Где искать на экране «Поиск». Включённые сайты опрашиваются все сразу.</div>
+          <div class="src-intro">{INTRO}</div>
           <div class="src-phone">
             <div class="src-phone-title">С телефона</div>
             <div class="src-phone-text">{PHONE_HOW}</div>
@@ -160,9 +189,62 @@ export function SourcesScreen() {
           </div>
         </div>
         <div class="src-list">
+          {builtins.length > 0 && <div class="src-group">Индексаторы</div>}
+          {builtins.length > 0 && !indexers.length && <div class="src-empty">{NO_INDEXERS}</div>}
+          {indexers.map((c, i) => {
+            const st = getIndexerStatus(c.id);
+            const on = isSourceOn({ id: indexerSourceId(c) });
+            const line = connLine(st, on);
+            const open = openId === c.id;
+            return (
+              <div key={c.id} data-indexer={c.id}>
+                <div class="src-line">
+                  <Focusable
+                    focusKey={i === 0 ? 'src-first' : 'src-idx-' + c.id}
+                    className="src-row src-row-builtin"
+                    onPress={() => {
+                      setOpenId(open ? null : c.id);
+                      // a row opened after more than a minute is checked again
+                      if (!open && (!st || now() - st.at > 60000)) refreshIndexerStatus(c, ctx(), now).then(undefined, () => undefined);
+                    }}
+                  >
+                    <span class="src-name">
+                      {connTitle(c)}
+                      <span class={'src-note src-note-' + line.tone}>
+                        {st && (st.state === 'nokey' || st.state === 'badkey') ? line.text + ' — передайте с телефона' : line.text}
+                      </span>
+                    </span>
+                    <span class="src-caret">{open ? '▴' : '▾'}</span>
+                  </Focusable>
+                  <Button
+                    focusKey={'src-idx-on-' + c.id}
+                    className="src-login"
+                    label={on ? 'вкл' : 'выкл'}
+                    onPress={() => {
+                      setSourceOn(indexerSourceId(c), !on);
+                      rerender();
+                    }}
+                  />
+                </div>
+                {open && (
+                  <div class="src-trackers">
+                    {st &&
+                      st.trackers.map((t, k) => (
+                        <Focusable key={k} focusKey={'src-trk-' + c.id + '-' + k} className="src-tracker" onPress={() => undefined}>
+                          <span class="src-tracker-name">{t.name}</span>
+                          <span class={'src-note-' + trackerTone(t)}>{trackerStateText(t, true)}</span>
+                        </Focusable>
+                      ))}
+                    {st && st.state !== 'ok' && st.message && <div class="src-tracker-info src-note-bad">{st.message}</div>}
+                    {st && <div class="src-tracker-info">{checkedText(st.at, now())}</div>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           <div class="src-group">Через TorrServer</div>
           {ts.map((s, i) => (
-            <Focusable key={s.id} focusKey={i === 0 ? 'src-first' : 'src-' + s.id} className="src-row" onPress={() => toggle(s)}>
+            <Focusable key={s.id} focusKey={i === 0 && !indexers.length ? 'src-first' : 'src-' + s.id} className="src-row" onPress={() => toggle(s)}>
               <span class="src-name">
                 {label(s)}
                 <Note note={healthText(getHealth(s.id))} />
@@ -170,6 +252,7 @@ export function SourcesScreen() {
               <Switch on={isSourceOn(s)} />
             </Focusable>
           ))}
+          {!ts.some((s) => s.id === 'ts-torznab') && <div class="src-empty">Torznab (TorrServer) скрыт: тот же Jackett подключён напрямую.</div>}
           {builtins.length > 0 && <div class="src-group">Встроенные</div>}
           {builtins.map((s) => {
             const on = isSourceOn(s);
@@ -199,7 +282,7 @@ export function SourcesScreen() {
       {loginFor && (
         <TrackerLoginDialog
           source={loginFor}
-          ctx={tvSourceContext}
+          ctx={ctx}
           onClose={() => {
             const s = loginFor;
             setLoginFor(null);

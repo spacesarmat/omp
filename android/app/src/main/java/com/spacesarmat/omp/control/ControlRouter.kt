@@ -109,7 +109,7 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         return okEmpty()
     }
 
-    /** The answer never echoes the request: no login, no password, only the outcome. */
+    /** The answer never echoes the request: no login, no password, no API key, only the outcome. */
     private fun sources(req: ControlRequest): ControlResponse {
         if (!isJson(req.contentType)) return ControlResponse(415, ControlServer.error("unsupported_media_type"))
         if (req.body.toByteArray(Charsets.UTF_8).size > SourcesProtocol.MAX_BODY) return ControlResponse(413, ControlServer.error("too_large"))
@@ -120,6 +120,8 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
             is SourcesOutcome.Applied -> {
                 val o = JSONObject().put("ok", true)
                 if (t.login != null) o.put("rutracker", r.rutracker ?: "error")
+                // how many connections the TV saved; never a key or an address
+                if (t.indexers.isNotEmpty()) o.put("indexers", r.indexers ?: 0)
                 ok(o)
             }
             SourcesOutcome.Busy -> ControlResponse(409, ControlServer.error("busy"))

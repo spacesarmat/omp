@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { parseTorznab, parseProwlarr, indexerSource, hidesTorznab, syncIndexerSources, startIndexerSources, INDEXER_BAD_KEY, INDEXER_DOWN, INDEXER_ERROR } from '../../src/sources/indexer';
+import { parseTorznab, parseProwlarr, indexerSource, hidesTorznab, syncIndexerSources, startIndexerSources, INDEXER_BAD_KEY, INDEXER_DOWN, INDEXER_ERROR, INDEXER_NEED_KEY } from '../../src/sources/indexer';
 import { saveIndexer, removeIndexer, indexerKeyName, reloadIndexers, indexerConnections } from '../../src/sources/indexerStore';
 import type { IndexerConn } from '../../src/sources/indexerStore';
 import { allSources, getSource, builtinSources, setHideRule, unregisterSource } from '../../src/sources/registry';
@@ -199,9 +199,9 @@ describe('indexerSource', () => {
     expect(err!.message).not.toContain(KEY);
   });
 
-  it('a missing key or secret store -> wrong key, no request', async () => {
+  it('a missing key -> enter the key (not «wrong»); no secret store -> wrong key; no request', async () => {
     const none = fakeSite((c) => page('', c.url), {});
-    await expect(indexerSource(JACKETT).search('q', none.ctx)).rejects.toThrow(INDEXER_BAD_KEY);
+    await expect(indexerSource(JACKETT).search('q', none.ctx)).rejects.toThrow(INDEXER_NEED_KEY);
     const noStore = fakeSite((c) => page('', c.url), null);
     await expect(indexerSource(JACKETT).search('q', noStore.ctx)).rejects.toThrow(INDEXER_BAD_KEY);
     expect(none.calls).toHaveLength(0);

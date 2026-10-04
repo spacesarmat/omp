@@ -80,6 +80,8 @@ export interface OmpNativeApi {
   stopDiscovery(group?: string): Promise<void>;
   /** Install assistant: which install ports (9922, 9991, 5555, 8095) accept TCP on a home-network IP. */
   probePorts(ip: string, ports: number[], timeoutMs: number): Promise<number[]>;
+  /** Hosts of the phone's /24 that accept a connection on the Jackett / Prowlarr ports (rejects off-device). */
+  scanLan(ports: number[], timeoutMs?: number): Promise<{ ip: string; port: number }[]>;
   /** Phone model for the TV's list of paired phones; «Телефон» when unknown. */
   phoneName(): Promise<string>;
   /**
@@ -149,6 +151,7 @@ interface OmpNativePlugin {
   discoverOmpTvs(o: { timeoutMs: number; group?: string }): Promise<{ tvs?: unknown }>;
   discoverCastTvs(o: { timeoutMs: number; group?: string }): Promise<{ tvs?: unknown }>;
   probePorts(o: { ip: string; ports: number[]; timeoutMs: number }): Promise<{ open?: unknown }>;
+  scanLan(o: { ports: number[]; timeoutMs?: number }): Promise<{ hits?: unknown }>;
   stopDiscovery(o: { group?: string }): Promise<void>;
   phoneName(): Promise<{ name?: string | null }>;
   tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
@@ -325,6 +328,19 @@ export const native: OmpNativeApi = {
     if (!plugin) return [];
     const r = await plugin.probePorts({ ip, ports, timeoutMs });
     return Array.isArray(r?.open) ? r.open.filter((p): p is number => typeof p === 'number' && ports.indexOf(p) >= 0) : [];
+  },
+
+  async scanLan(ports, timeoutMs) {
+    if (!plugin) return unavailable();
+    const r = await plugin.scanLan(timeoutMs ? { ports, timeoutMs } : { ports });
+    const out: { ip: string; port: number }[] = [];
+    if (Array.isArray(r?.hits)) {
+      r.hits.forEach((h: unknown) => {
+        const o = h && typeof h === 'object' ? (h as { ip?: unknown; port?: unknown }) : {};
+        if (typeof o.ip === 'string' && typeof o.port === 'number' && ports.indexOf(o.port) >= 0) out.push({ ip: o.ip, port: o.port });
+      });
+    }
+    return out;
   },
 
   async phoneName() {

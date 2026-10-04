@@ -11,17 +11,28 @@ import { healthText, isCloudflare, JACKETT_HINT, type HealthLine } from '../../.
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { allSources } from '../../../src/sources/registry';
 import { rutrackerSavedLogin } from '../../../src/sources/rutracker';
-import { buildTransferPayload, transferWhen, validateTransferPayload, type RutrackerResult, type TransferLogin, type TransferPayload } from '../../../src/sources/transfer';
+import {
+  buildTransferPayload,
+  transferIndexers,
+  transferWhen,
+  validateTransferPayload,
+  type RutrackerResult,
+  type TransferIndexer,
+  type TransferLogin,
+  type TransferPayload,
+} from '../../../src/sources/transfer';
+import { indexerConnections, onIndexersChange, type IndexerConn } from '../../../src/sources/indexerStore';
+import { IndexerSection, phoneIndexerEnv, TORZNAB_HIDDEN, type IndexerEnv } from './SourcesIndexers';
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
 import { log } from '../../../src/lib/log';
 import { activeTv, isAtv } from '../tv/tvStore';
-import { sendSourcesToTv, sessionIp, tvState } from '../tv/tvClient';
+import { sendSourcesToTv, sessionIp, SOURCES_REJECTED, tvState } from '../tv/tvClient';
 
 const SENT_KEY = 'tsp.sourcesSent';
 const TV_ICON = 'M3 5h18v11H3zM8 20h8';
 
 export const SEND_TEXT =
-  'Передать на телевизор включённые источники и вход на rutracker. Пароль уходит только на ваш ТВ по каналу пары и хранится там в зашифрованном виде.';
+  'Передать на телевизор включённые источники, подключения к Jackett/Prowlarr и вход на rutracker. Пароль и ключи уходят только на ваш ТВ по каналу пары и хранятся там в зашифрованном виде.';
 
 /** What the phone says after a transfer, by the TV's rutracker answer. */
 export function sentText(r: RutrackerResult | undefined): string {
@@ -32,18 +43,31 @@ export function sentText(r: RutrackerResult | undefined): string {
 }
 
 export const LOGIN_NOT_SENT = 'Вход на rutracker не передан: логин или пароль слишком длинный или с недопустимыми символами';
+export const INDEXERS_NOT_SENT = 'Подключения к Jackett/Prowlarr не переданы — обновите OMP на телевизоре';
+
+/** What the phone adds when the TV saved fewer connections than were sent ('' when all or none were sent). */
+export function indexersText(sent: number, saved: number | undefined): string {
+  if (!sent || saved === undefined || saved >= sent) return '';
+  return 'Подключения к Jackett/Prowlarr сохранены не все: ' + saved + ' из ' + sent;
+}
 export const SOURCES_NOT_READY = 'Не удалось подготовить источники к передаче';
 
 /**
  * The payload the TV accepts (same schema as its control server). A login the TV would refuse is left out so the
  * switches still go; loginDropped says so.
  */
-export function transferPayload(list: Source[], login: TransferLogin | null): { payload: TransferPayload; loginDropped: boolean } {
-  const full = validateTransferPayload(buildTransferPayload(list, login));
-  if (full) return { payload: full, loginDropped: false };
+export function transferPayload(
+  list: Source[],
+  login: TransferLogin | null,
+  indexers?: TransferIndexer[],
+): { payload: TransferPayload; loginDropped: boolean; indexersDropped: boolean } {
+  const full = validateTransferPayload(buildTransferPayload(list, login, indexers));
+  if (full) return { payload: full, loginDropped: false, indexersDropped: false };
+  const noLogin = validateTransferPayload(buildTransferPayload(list, null, indexers));
+  if (noLogin) return { payload: noLogin, loginDropped: !!login, indexersDropped: false };
   const bare = validateTransferPayload(buildTransferPayload(list, null));
   if (!bare) throw new Error(SOURCES_NOT_READY);
-  return { payload: bare, loginDropped: !!login };
+  return { payload: bare, loginDropped: !!login, indexersDropped: !!(indexers && indexers.length) };
 }
 
 /** The phone's saved rutracker login, null when there is none or the storage fails. */
@@ -58,9 +82,11 @@ function lastSent(ip: string): number | null {
 }
 
 /** «Передать на телевизор»: only for a paired Android TV with OMP (LG has no built-in sources). */
-function SendToTv({ hasLogin, ctx }: { hasLogin: boolean; ctx: () => SourceContext }) {
+function SendToTv({ hasLogin, indexers, ctx }: { hasLogin: boolean; indexers: IndexerConn[]; ctx: () => SourceContext }) {
   const tv = activeTv.value;
   const [withLogin, setWithLogin] = useState(true);
+  const [withKeys, setWithKeys] = useState(true);
+  const hasKeys = indexers.some((c) => c.keySet);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [, setTick] = useState(0);
@@ -76,20 +102,42 @@ function SendToTv({ hasLogin, ctx }: { hasLogin: boolean; ctx: () => SourceConte
     setError('');
     const ip = tv.ip;
     const login = hasLogin && withLogin ? readLogin(ctx) : Promise.resolve(null);
+    // the keys are read from the Keystore storage only now, and live only in this request
+    const conns = indexerConnections();
+    const list = conns.length ? transferIndexers(conns, ctx().secrets, withKeys) : Promise.resolve([] as TransferIndexer[]);
     let loginDropped = false;
-    login
-      .then((l) => {
-        const p = transferPayload(allSources(), l);
+    let indexersDropped = false;
+    let sent = 0;
+    Promise.all([login, list])
+      .then(([l, idx]) => {
+        const p = transferPayload(allSources(), l, idx);
         loginDropped = p.loginDropped;
-        return sendSourcesToTv(p.payload);
+        indexersDropped = p.indexersDropped;
+        sent = p.payload.indexers ? p.payload.indexers.length : 0;
+        return sendSourcesToTv(p.payload).catch((e: unknown) => {
+          // an older OMP on the TV refuses the connections part: send the rest without it
+          if (!sent || !(e instanceof Error) || e.message !== SOURCES_REJECTED) throw e;
+          const rest: TransferPayload = { ...p.payload };
+          delete rest.indexers;
+          sent = 0;
+          indexersDropped = true;
+          return sendSourcesToTv(rest);
+        });
       })
       .then(
         (r) => {
           saveJson(SENT_KEY, { ip, at: Date.now() });
-          log(r.rutracker && r.rutracker !== 'ok' ? 'warn' : 'info', 'tv', 'Источники переданы на Android TV' + (r.rutracker ? ', вход на rutracker: ' + r.rutracker : ''));
+          const partial = indexersText(sent, r.indexers);
+          log(
+            (r.rutracker && r.rutracker !== 'ok') || partial ? 'warn' : 'info',
+            'tv',
+            'Источники переданы на Android TV' + (r.rutracker ? ', вход на rutracker: ' + r.rutracker : '') + (sent ? ', индексаторов: ' + (r.indexers || 0) + ' из ' + sent : ''),
+          );
           setBusy(false);
           setTick((n) => n + 1);
-          showToast(loginDropped ? 'Источники переданы. ' + LOGIN_NOT_SENT : sentText(r.rutracker), loginDropped ? 6000 : undefined);
+          const notes = [loginDropped ? LOGIN_NOT_SENT : '', indexersDropped ? INDEXERS_NOT_SENT : '', partial].filter((x) => x);
+          const head = notes.length && !r.rutracker ? 'Источники переданы.' : sentText(r.rutracker);
+          showToast(notes.length ? head + ' ' + notes.join('. ') : head, notes.length ? 6000 : undefined);
         },
         (e) => {
           const msg = errorMessage(e);
@@ -114,6 +162,12 @@ function SendToTv({ hasLogin, ctx }: { hasLogin: boolean; ctx: () => SourceConte
           <label class="m-send-check">
             <input type="checkbox" checked={withLogin} onChange={(e) => setWithLogin((e.target as HTMLInputElement).checked)} />
             Вместе со входом на rutracker
+          </label>
+        )}
+        {hasKeys && (
+          <label class="m-send-check">
+            <input type="checkbox" checked={withKeys} onChange={(e) => setWithKeys((e.target as HTMLInputElement).checked)} />
+            Вместе с ключами Jackett/Prowlarr
           </label>
         )}
         {paired ? (
@@ -189,19 +243,25 @@ function SourceRow({
   );
 }
 
-/** ctx: the source context (tests pass fakes of the native http and the Keystore storage). */
-export function Sources({ ctx = phoneSourceContext }: { ctx?: () => SourceContext } = {}) {
+/**
+ * ctx: the source context (tests pass fakes of the native http and the Keystore storage); indexerEnv: the LAN scan and
+ * the TorrServer settings for the Jackett / Prowlarr part.
+ */
+export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv }: { ctx?: () => SourceContext; indexerEnv?: () => IndexerEnv } = {}) {
   const [, setTick] = useState(0);
   const rerender = () => setTick((n) => n + 1);
   // sources with a login: saved credentials exist (asked once, no network)
   const [logged, setLogged] = useState<Record<string, boolean>>({});
   const [loginFor, setLoginFor] = useState<Source | null>(null);
   const ts = torrServerSources();
-  const builtins = builtinSources();
+  // the Jackett / Prowlarr sources have their own section
+  const builtins = builtinSources().filter((s) => s.kind !== 'indexer');
+  const torznabHidden = !ts.some((s) => s.id === 'ts-torznab');
 
   useEffect(() => {
     let alive = true;
     const off = onHealthChange(() => alive && rerender());
+    const offIdx = onIndexersChange(() => alive && rerender());
     builtins
       .filter((s) => s.needsLogin && s.loggedIn)
       .forEach((s) => {
@@ -213,6 +273,7 @@ export function Sources({ ctx = phoneSourceContext }: { ctx?: () => SourceContex
     return () => {
       alive = false;
       off();
+      offIdx();
     };
   }, []);
 
@@ -258,13 +319,19 @@ export function Sources({ ctx = phoneSourceContext }: { ctx?: () => SourceContex
         </button>
         <h1 class="m-bar-title">Источники поиска</h1>
       </div>
-      <SendToTv ctx={ctx} hasLogin={builtins.some((s) => s.id === 'rutracker' && !!logged[s.id])} />
+      <SendToTv ctx={ctx} indexers={indexerConnections()} hasLogin={builtins.some((s) => s.id === 'rutracker' && !!logged[s.id])} />
+      <IndexerSection ctx={ctx} env={indexerEnv} onChange={rerender} />
       <section class="m-set-group">
         <div class="m-set-label">Через TorrServer</div>
         <div class="m-set-card m-src-card">
           {ts.map((s) => (
             <SourceRow key={s.id} source={s} note={healthText(getHealth(s.id))} onToggle={() => toggle(s)} />
           ))}
+          {torznabHidden && (
+            <div class="m-src-row m-note m-muted" data-note="torznab-hidden">
+              {TORZNAB_HIDDEN}
+            </div>
+          )}
         </div>
       </section>
       {builtins.length > 0 && (

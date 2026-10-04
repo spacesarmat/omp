@@ -10,7 +10,7 @@ import { activeServer } from '../store/servers';
 import { resetTo } from '../ui/nav';
 import { log } from '../lib/log';
 import { allSources } from '../sources/registry';
-import { applyRemoteSources, loginState, notifyTransferApplied, parseRemoteSources, transferLoginNotStored, TRANSFER_TIMEOUT_MS } from '../sources/transfer';
+import { applyRemoteIndexers, applyRemoteSources, loginState, notifyTransferApplied, parseRemoteSources, transferLoginNotStored, TRANSFER_TIMEOUT_MS } from '../sources/transfer';
 import { tvSourceContext } from '../sources/tvContext';
 import type { Source, SourceContext } from '../sources/types';
 
@@ -162,9 +162,10 @@ export function applyRemoteSourcesEvent(
     return plugin.remoteSourcesDone({ id, failed: true }).then(() => undefined, () => undefined);
   }
   const before = loginState();
-  const done = (rutracker?: string) => {
-    const o: { id: string; rutracker?: string } = { id: r.id };
+  const done = (rutracker?: string, indexers?: number) => {
+    const o: { id: string; rutracker?: string; indexers?: number } = { id: r.id };
     if (rutracker) o.rutracker = rutracker;
+    if (indexers !== undefined) o.indexers = indexers;
     return plugin.remoteSourcesDone(o).then(
       // a verified login is promoted by the native side before this resolves: the screen reads it now
       (a) => {
@@ -178,10 +179,17 @@ export function applyRemoteSourcesEvent(
       },
     );
   };
-  return applyRemoteSources(r, known(), ctx).then(
-    (res) => {
-      log(res && res !== 'ok' ? 'warn' : 'info', 'tv', 'Источники переданы с телефона' + (res ? ', вход на rutracker: ' + res : ''));
-      return done(res);
+  const sent = r.indexers ? r.indexers.length : 0;
+  // connections first (their keys move to their own entries), so their switches apply to known sources
+  const indexers = sent ? applyRemoteIndexers(r, ctx().secrets) : Promise.resolve(0);
+  return indexers.then((saved) => applyRemoteSources(r, known(), ctx).then((res) => ({ res, saved }))).then(
+    ({ res, saved }) => {
+      log(
+        (res && res !== 'ok') || saved < sent ? 'warn' : 'info',
+        'tv',
+        'Источники переданы с телефона' + (res ? ', вход на rutracker: ' + res : '') + (sent ? ', индексаторов: ' + saved + ' из ' + sent : ''),
+      );
+      return done(res, sent ? saved : undefined);
     },
     () => {
       log('error', 'tv', 'Передача источников с телефона не применилась');

@@ -243,4 +243,81 @@ class ControlRouterTest {
         assertEquals(413, req("POST", "/omp/sources", big, t).status)
         assertEquals(listOf("paired:Pixel"), calls)
     }
+
+    // test-only key
+    private val apiKey = "test0only0key0000000000000000abc"
+
+    private fun indexersPart(vararg items: String) = ""","indexers":[${items.joinToString(",")}]"""
+
+    @Test
+    fun indexerConnectionsTravelWithKeysAndTheAnswerHasOnlyTheCount() {
+        val t = token()
+        outcome = SourcesOutcome.Applied(null, 2)
+        val body = sourcesBody(
+            indexersPart(
+                """{"kind":"jackett","url":"http://192.168.1.5:9117","key":"$apiKey"}""",
+                """{"kind":"prowlarr","url":"https://nas.local/prowlarr","name":"Дом"}""",
+            ),
+        )
+        val r = req("POST", "/omp/sources", body, t)
+        assertEquals(200, r.status)
+        val o = JSONObject(r.json)
+        assertEquals(2, o.getInt("indexers"))
+        assertFalse(o.has("rutracker"))
+        assertFalse(r.json.contains(apiKey))
+        assertFalse(r.json.contains("192.168.1.5"))
+        val got = lastTransfer!!
+        assertEquals(2, got.indexers.size)
+        assertEquals(apiKey, got.indexers[0].key)
+        assertNull(got.indexers[1].key)
+        assertEquals("Дом", got.indexers[1].name)
+        assertFalse(got.toString().contains(apiKey))
+        assertFalse(got.indexers[0].toString().contains(apiKey))
+        // no connections: no count in the answer
+        outcome = SourcesOutcome.Applied(null)
+        assertFalse(JSONObject(req("POST", "/omp/sources", sourcesBody(), t).json).has("indexers"))
+    }
+
+    @Test
+    fun indexerSchemaIsChecked() {
+        val t = token()
+        val ok = """{"kind":"jackett","url":"http://192.168.1.5:9117"}"""
+        val many = (1..21).joinToString(",") { """{"kind":"jackett","url":"http://192.168.1.$it:9117"}""" }
+        val bad = listOf(
+            ""","indexers":[]""",
+            ""","indexers":{}""",
+            ""","indexers":[$many]""",
+            indexersPart(ok, ok),
+            indexersPart("""{"kind":"sonarr","url":"http://h:1"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h:9117/"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://Host:9117"}"""),
+            indexersPart("""{"kind":"jackett","url":"ftp://h"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://u@h"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h/${"x".repeat(200)}"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","key":"has space"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","key":""}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","key":"${"k".repeat(201)}"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","key":1}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","apiKey":"$apiKey"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","name":"${"n".repeat(41)}"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","name":"a\u0007b"}"""),
+        )
+        for (b in bad) {
+            val r = req("POST", "/omp/sources", sourcesBody(b), t)
+            assertEquals(b, 400, r.status)
+            assertFalse(r.json.contains(apiKey))
+        }
+        assertEquals(listOf("paired:Pixel"), calls)
+        assertEquals(200, req("POST", "/omp/sources", sourcesBody(indexersPart(ok)), t).status)
+    }
+
+    @Test
+    fun theLargestValidBodyFitsTheLimit() {
+        val t = token()
+        val items = (1..20).map { """{"kind":"jackett","url":"http://192.168.1.$it:9117/${"p".repeat(170)}","key":"${"k".repeat(200)}","name":"${"н".repeat(40)}"}""" }
+        val sources = (1..40).joinToString(",") { """"indexer-prowlarr-${it.toString().padStart(23, '0')}":true""" }
+        val body = """{"v":1,"sources":{$sources},"rutracker":{"username":"${"u".repeat(100)}","password":"${"п".repeat(200)}"}${indexersPart(*items.toTypedArray())}}"""
+        assertTrue(body.toByteArray(Charsets.UTF_8).size <= SourcesProtocol.MAX_BODY)
+        assertEquals(200, req("POST", "/omp/sources", body, t).status)
+    }
 }

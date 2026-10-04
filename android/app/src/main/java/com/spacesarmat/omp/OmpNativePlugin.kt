@@ -243,6 +243,32 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
+    /**
+     * «Источники поиска»: hosts of the device's /24 that answer on the Jackett / Prowlarr ports ([LanScan.ALLOWED]):
+     * { hits: [{ ip, port }] }. Without a home-network IPv4 it resolves an empty list. Nothing is logged.
+     */
+    @PluginMethod
+    fun scanLan(call: PluginCall) {
+        val once = Once(call)
+        val timeout = (call.getInt("timeoutMs") ?: LanScan.DEFAULT_TIMEOUT_MS).coerceIn(150, 1500)
+        val ports = ArrayList<Int>()
+        val raw = call.getArray("ports")
+        if (raw != null) {
+            for (i in 0 until raw.length()) {
+                val p = raw.optInt(i, -1)
+                if (p > 0) ports.add(p)
+            }
+        }
+        io.execute {
+            val arr = JSArray()
+            val ip = LocalTorrServer.wifiIpv4(context)
+            if (ip != null) {
+                for (h in LanScan.scan(ip, ports, timeout)) arr.put(JSObject().put("ip", h.ip).put("port", h.port))
+            }
+            once.resolve(JSObject().put("hits", arr))
+        }
+    }
+
     // ---- install assistant: install OMP on a TV ----
 
     /**
@@ -752,7 +778,7 @@ class OmpNativePlugin : Plugin() {
             call.reject("Управление с телефона недоступно")
             return
         }
-        val d = r.sourcesDone(call.getString("id"), call.getString("rutracker"), call.getBoolean("failed") == true)
+        val d = r.sourcesDone(call.getString("id"), call.getString("rutracker"), call.getBoolean("failed") == true, call.getInt("indexers"))
         // stored = false: the verified login could not be written, the page must not claim it
         call.resolve(JSObject().put("stored", d != SourcesDone.NOT_STORED))
     }

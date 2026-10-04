@@ -222,6 +222,11 @@ export class TorrServerClient {
     return this.call<ServerSettings>('/settings', { body: { action: 'get' } });
   }
 
+  /** The settings read in the background (the Torznab list for «Источники поиска»): a failure is not logged. */
+  settingsQuiet(): Promise<ServerSettings> {
+    return this.call<ServerSettings>('/settings', { body: { action: 'get' }, quiet: true });
+  }
+
   setSettings(sets: ServerSettings): Promise<void> {
     return this.call<unknown>('/settings', { body: { action: 'set', sets } }).then(() => undefined);
   }
