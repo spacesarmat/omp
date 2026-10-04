@@ -3,6 +3,7 @@ import { Sheet } from './Sheet';
 import { sheetBackHandler } from './UpdateSheet';
 import { whatsNew, closeWhatsNew, markWhatsNewShown } from '../../../src/store/whatsNew';
 import { CHANGELOG_URL } from '../../../src/lib/changelogData';
+import { activeMethods, openDonate } from '../donate';
 
 /** «Что нового»: opened from Settings or once after an update; state lives in the whatsNew signal. */
 export function WhatsNewSheet() {
@@ -41,6 +42,18 @@ export function WhatsNewSheet() {
       <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(CHANGELOG_URL, '_system')}>
         Все изменения на GitHub
       </button>
+      {activeMethods().length > 0 && (
+        <button
+          type="button"
+          class="m-link"
+          onClick={() => {
+            closeWhatsNew();
+            openDonate();
+          }}
+        >
+          Поддержать OMP
+        </button>
+      )}
       <button type="button" class="m-btn m-btn-primary" onClick={closeWhatsNew}>
         Закрыть
       </button>

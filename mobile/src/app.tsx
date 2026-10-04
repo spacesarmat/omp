@@ -26,6 +26,7 @@ import { Settings, runUpdateCheck } from './screens/Settings';
 import { ServerSettings } from './screens/ServerSettings';
 import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
 import { WhatsNewSheet } from './ui/WhatsNewSheet';
+import { DonateSheet } from './ui/DonateSheet';
 import { checkWhatsNew } from '../../src/store/whatsNew';
 import { CHANGELOG } from '../../src/lib/changelogData';
 import { APP_VERSION } from '../../src/version';
@@ -239,6 +240,7 @@ export function App() {
       {prompt && showNav && <UpdateSheet info={prompt} />}
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
       {showNav && !prompt && <WhatsNewSheet />}
+      {showNav && <DonateSheet />}
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}

@@ -114,6 +114,8 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.monitorNotifyHint',
   'tsp.sourcesTransfer', // state of the last handover to the TV
   'tsp.sourcesSent',
+  'tsp.firstRun', // when this install was first used: per device
+  'tsp.donateCard', // the «Поддержать» card was closed
 ];
 
 function readRaw(key: string): unknown {
