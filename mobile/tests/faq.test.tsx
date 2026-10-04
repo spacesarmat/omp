@@ -107,6 +107,52 @@ describe('FAQ data', () => {
   });
 });
 
+const viewText = (id: string, d: 'lg' | 'atv' | 'phone' | 'server' | 'common') => {
+  const v = itemFor(FAQ.find((i) => i.id === id)!, d);
+  return [v.q, ...v.short, ...v.more].map((l) => (typeof l === 'string' ? l : l.text)).join(' | ');
+};
+const deviceText = (d: 'lg' | 'atv' | 'phone' | 'server' | 'common') =>
+  FAQ.filter((i) => i.devices.includes(d)).map((i) => viewText(i.id, d)).join(' | ');
+
+describe('FAQ per-device content', () => {
+  it('keeps the key facts under the right device', () => {
+    const lg = deviceText('lg');
+    for (const f of ['1000 часов', 'webOS 4.0', 'Key Server', 'Passphrase', 'Homebrew Channel', '928 часов', 'ares-install']) expect(lg, f).toContain(f);
+    const atv = deviceText('atv');
+    for (const f of ['arm64', 'adb connect', '5555', 'Отладк', 'неизвестных источников', 'Android 11', 'AC3', 'Jackett']) expect(atv, f).toContain(f);
+    const phone = deviceText('phone');
+    for (const f of ['AC3', '3 часа по умолчанию', 'без пароля', 'Boosty', 'omp-копия']) expect(phone, f).toContain(f);
+    expect(deviceText('server')).toContain('arm64');
+    expect(deviceText('common')).toContain('Tizen');
+  });
+
+  it('LG views never show adb or Android TV install steps', () => {
+    for (const id of ['helper', 'safety', 'after-install', 'phone-no-control', 'sources-transfer']) {
+      if (!FAQ.find((i) => i.id === id)!.devices.includes('lg')) continue;
+      const t = viewText(id, 'lg');
+      expect(t, id).not.toMatch(/adb|Отладк|порт 5555|Android 10|Android TV и Google TV/);
+    }
+    expect(viewText('helper', 'lg')).toContain('928 часов');
+    expect(viewText('after-install', 'lg')).not.toContain('Сеть и интернет');
+  });
+
+  it('Android TV views never show Developer Mode codes or Homebrew steps', () => {
+    for (const id of ['helper', 'safety', 'after-install']) {
+      const t = viewText(id, 'atv');
+      expect(t, id).not.toMatch(/Passphrase|Key Server|Homebrew|928|Дополнительно/);
+    }
+    expect(viewText('helper', 'atv')).toContain('Android 11');
+    expect(viewText('helper', 'atv')).toContain('5555');
+    expect(viewText('after-install', 'atv')).toContain('Сеть и интернет');
+  });
+
+  it('lists Jackett and the open-server warning where the old FAQ did', () => {
+    expect(FAQ.find((i) => i.id === 'jackett')!.devices).toContain('atv');
+    expect(FAQ.find((i) => i.id === 'ts-phone')!.short.join(' ')).toContain('без пароля');
+    expect(viewText('sources-transfer', 'phone')).not.toContain('Подключить телефон к Android TV');
+  });
+});
+
 describe('FAQ search', () => {
   it('ignores case and ё/е', () => {
     expect(normalizeFaq('ПодойдЁт')).toBe('подойдет');
@@ -129,8 +175,9 @@ describe('FAQ search', () => {
   });
 
   it('highlights the match, e/yo-insensitive', () => {
-    const parts = highlightFaq('Подойдёт ли', 'подоидет');
-    expect(parts).toEqual(['Подойдёт ли']);
+    expect(highlightFaq('Подойдёт ли', 'нет такого')).toEqual(['Подойдёт ли']);
+    const yo = highlightFaq('Ёлка и ёжик', 'елка ЕЖИК') as preact.VNode[];
+    expect(yo.filter((x) => typeof x !== 'string').map((x) => x.props.children)).toEqual(['Ёлка', 'ёжик']);
     const hit = highlightFaq('Подойдёт ли', 'ПОДОЙДЕТ') as preact.VNode[];
     expect((hit[0] as preact.VNode).type).toBe('mark');
     expect((hit[0] as preact.VNode).props.children).toBe('Подойдёт');
@@ -236,8 +283,7 @@ describe('Faq screen', () => {
   it('searches across all devices with badge, section, count and highlight', async () => {
     const el = mount(<Faq />);
     await type(el, 'ЗВУК');
-    const expected = searchFaq('звук').length;
-    expect(el.querySelector('[role="status"]')!.textContent).toBe(`Найдено ${expected} · во всех устройствах`);
+    expect(el.querySelector('[role="status"]')!.textContent).toBe('Найдено 2 · во всех устройствах');
     expect(el.querySelector('.m-chip')).toBeNull();
     const first = q(el, 'Нет звука');
     expect(first.querySelector('.m-faq-badge')!.textContent).toBe('Телефон');
@@ -245,6 +291,14 @@ describe('Faq screen', () => {
     expect(first.querySelector('mark')!.textContent).toBe('звук');
     await act(async () => first.click());
     expect(el.textContent).toContain('AC3 и DTS');
+    // a hit that matches only in the answer is highlighted there
+    await type(el, 'ares-install');
+    await act(async () => q(el, 'Как обновить OMP').click());
+    await act(async () => el.querySelector<HTMLButtonElement>('.m-faq-more')!.click());
+    expect(el.querySelector('.m-faq-a mark')!.textContent).toBe('ares-install');
+    expect(el.querySelector('.m-faq-more')!.getAttribute('aria-controls')).toBe('faq-more-lg-update');
+    expect(document.getElementById('faq-more-lg-update')).not.toBeNull();
+    expect(q(el, 'Как обновить OMP').getAttribute('aria-controls')).toBe('faq-a-lg-update');
     await type(el, 'ёжик-нет-такого');
     expect(el.querySelector('[role="status"]')!.textContent).toContain('Ничего не найдено');
     await type(el, '');

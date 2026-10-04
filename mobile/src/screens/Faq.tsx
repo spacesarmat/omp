@@ -67,16 +67,17 @@ function initialDevice(link: { device: Device } | null): { device: Device; fromT
   return { device: loadJson<Device>(DEVICE_KEY, 'phone', isDevice), fromTv: false };
 }
 
-function Lines(p: { lines: FaqLine[] }) {
+function Lines(p: { lines: FaqLine[]; query?: string }) {
+  const hl = (t: string) => (p.query ? highlightFaq(t, p.query) : t);
   return (
     <>
       {p.lines.map((l, i) =>
         typeof l === 'string' ? (
-          <p key={i}>{l}</p>
+          <p key={i}>{hl(l)}</p>
         ) : (
           <p key={i}>
             <button type="button" class="m-link" onClick={() => window.open(l.url, '_system')}>
-              {l.text}
+              {hl(l.text)}
             </button>
           </p>
         ),
@@ -121,6 +122,7 @@ export function Faq(p: { q?: string } = {}) {
           type="button"
           class="m-faq-q"
           aria-expanded={isOpen}
+          aria-controls={isOpen ? 'faq-a-' + it.id : undefined}
           onClick={() => {
             setOpen(isOpen ? null : it.id);
             setMoreOpen(null);
@@ -138,18 +140,18 @@ export function Faq(p: { q?: string } = {}) {
           <Icon d={isOpen ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} size={18} />
         </button>
         {isOpen && (
-          <div class="m-faq-a">
+          <div class="m-faq-a" id={'faq-a-' + it.id}>
             <div class="m-faq-short">
-              <Lines lines={v.short} />
+              <Lines lines={v.short} query={badge ? query : undefined} />
             </div>
             {v.more.length > 0 && (
               <>
-                <button type="button" class="m-faq-more" aria-expanded={moreOpen === it.id} onClick={() => setMoreOpen(moreOpen === it.id ? null : it.id)}>
+                <button type="button" class="m-faq-more" aria-expanded={moreOpen === it.id} aria-controls={moreOpen === it.id ? 'faq-more-' + it.id : undefined} onClick={() => setMoreOpen(moreOpen === it.id ? null : it.id)}>
                   Подробнее
                 </button>
                 {moreOpen === it.id && (
-                  <div class="m-faq-detail">
-                    <Lines lines={v.more} />
+                  <div class="m-faq-detail" id={'faq-more-' + it.id}>
+                    <Lines lines={v.more} query={badge ? query : undefined} />
                   </div>
                 )}
               </>
