@@ -88,7 +88,7 @@ object TrackOptions {
  * position, cleared when nearly finished as resumePosition does; a new item starts from its own), the error on
  * screen, track menus and what is reported to the page. No Android UI: the activity draws from it.
  */
-class PlayerSession(val engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Listener {
+class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Listener {
     /** The activity's reactions to engine events. */
     interface Ui {
         /** Redraw the overlay and report the state to the page. */
@@ -97,6 +97,14 @@ class PlayerSession(val engine: PlayerEngine, private val ui: Ui) : PlayerEngine
         /** The current item played to its end. */
         fun itemEnded()
     }
+
+    /** The engine playing now ([switchEngine] replaces it). */
+    var engine: PlayerEngine = engine
+        private set
+
+    /** Track choices carried over from the previous engine, applied once the new one lists its tracks. */
+    private var pendingAudio: EngineTrack? = null
+    private var pendingSub: EngineTrack? = null
 
     var request: PlayRequest? = null
         private set
@@ -121,7 +129,7 @@ class PlayerSession(val engine: PlayerEngine, private val ui: Ui) : PlayerEngine
         private set
 
     init {
-        engine.listener = this
+        this.engine.listener = this
     }
 
     val queueSize: Int get() = request?.queue?.size ?: 0
@@ -139,6 +147,8 @@ class PlayerSession(val engine: PlayerEngine, private val ui: Ui) : PlayerEngine
         lastDurMs = 0L
         error = null
         firstFrame = false
+        pendingAudio = null
+        pendingSub = null
         engine.setPreferences(TrackPrefs(r.audioLang, r.subLang, r.subtitlesOn))
         engine.open(media(r.queue[index]), r.startAtMs)
     }
@@ -156,8 +166,68 @@ class PlayerSession(val engine: PlayerEngine, private val ui: Ui) : PlayerEngine
         lastDurMs = 0L
         error = null
         firstFrame = false
+        pendingAudio = null
+        pendingSub = null
         engine.open(media(r.queue[i]), start)
         return true
+    }
+
+    /**
+     * Continues the current item on [next] (already attached by the caller): same queue item and position,
+     * paused if it was paused, the selected audio / subtitle tracks re-picked by language (and title / file) once
+     * [next] lists its tracks. The previous engine is released (its view removed). Resume points are kept.
+     */
+    fun switchEngine(next: PlayerEngine) {
+        val old = engine
+        val r = request
+        tick()
+        val pos = old.positionMs
+        val playing = old.playWhenReady
+        val audio = old.audioTracks().firstOrNull { it.selected }
+        val sub = old.subtitleTracks().firstOrNull { it.selected }
+        old.listener = null
+        old.release()
+        engine = next
+        next.listener = this
+        error = null
+        firstFrame = false
+        if (r == null) return
+        pendingAudio = audio
+        pendingSub = sub
+        next.setPreferences(
+            TrackPrefs(
+                audioLang = audio?.language ?: r.audioLang,
+                subLang = sub?.language?.ifEmpty { null }
+                    ?: sub?.external?.let { x -> r.queue[index].subtitles.getOrNull(x)?.lang?.ifEmpty { null } }
+                    ?: r.subLang,
+                subtitlesOn = sub != null,
+            ),
+        )
+        next.open(media(r.queue[index]), pos)
+        if (!playing) next.pause()
+    }
+
+    /** The carried-over choices on the new engine's tracks (by subtitle file, else language + title). */
+    private fun applyPending() {
+        val a = pendingAudio
+        if (a != null) {
+            val list = engine.audioTracks()
+            if (list.isNotEmpty()) {
+                pendingAudio = null
+                val m = list.firstOrNull { it.language == a.language && it.label == a.label }
+                if (m != null && !m.selected) engine.selectAudio(m.id)
+            }
+        }
+        val s = pendingSub
+        if (s != null) {
+            val list = engine.subtitleTracks()
+            if (list.isNotEmpty()) {
+                pendingSub = null
+                val m = if (s.external != null) list.firstOrNull { it.external == s.external }
+                else list.firstOrNull { it.external == null && it.language == s.language && it.label == s.label }
+                if (m != null && !m.selected) engine.selectSubtitle(m.id)
+            }
+        }
     }
 
     /** Resume point of item [i] (as it would be used when going there). */
@@ -229,7 +299,10 @@ class PlayerSession(val engine: PlayerEngine, private val ui: Ui) : PlayerEngine
 
     override fun onPlayingChanged(playing: Boolean) = ui.changed()
 
-    override fun onTracksChanged() = ui.changed()
+    override fun onTracksChanged() {
+        applyPending()
+        ui.changed()
+    }
 
     override fun onEnded() {
         ui.itemEnded()

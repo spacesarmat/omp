@@ -226,4 +226,78 @@ class PlayerSessionTest {
         assertEquals("Выкл", TrackOptions.selectedSub(TrackOptions.subs(emptyList(), emptyList())).label)
         assertEquals(-1, TrackOptions.selectedAudio(emptyList()))
     }
+
+    @Test
+    fun replacingWithAShorterQueueMovesIndexAndItemToTheNewQueue() {
+        session.load(request(resume = listOf(0, 0, 0, 0, 0)))
+        session.goTo(4)
+        val movie = PlayRequest(listOf(QueueItem("http://h/movie", "Фильм", null, 0, emptyList(), 0)), 0, 0, 10, true, "", "", false, 8)
+        session.load(movie)
+        assertEquals(0, session.index)
+        assertEquals("Фильм", session.item()!!.title)
+        assertFalse(session.hasNext())
+        assertEquals("http://h/movie", engine.opened.last().first.url)
+        assertEquals(0, session.snapshot().index)
+    }
+
+    @Test
+    fun switchEngineContinuesTheItemAtThePositionWithTheSameTracks() {
+        session.load(request(resume = listOf(0, 0, 0)))
+        session.goTo(1)
+        engine.durationMs = 2_000_000
+        engine.positionMs = 754_000
+        engine.audio = listOf(EngineTrack("g0", "ru", "Дубляж"), EngineTrack("g1", "ru", "MVO", selected = true))
+        engine.subs = listOf(EngineTrack("g2", "en", "Full", selected = true))
+        engine.listener!!.onFirstFrame()
+        engine.listener!!.onError(ErrorKind.DECODER, "x")
+
+        val next = FakeEngine()
+        session.switchEngine(next)
+        assertTrue(engine.released)
+        assertNull(engine.listener)
+        assertTrue(session.engine === next)
+        assertTrue(next.listener === session)
+        assertNull(session.error)
+        assertFalse(session.firstFrame)
+        assertEquals(1, session.index)
+        assertEquals("http://h/1", next.opened.single().first.url)
+        assertEquals(754_000L, next.opened.single().second)
+        assertEquals(TrackPrefs("ru", "en", true), next.prefs)
+        assertTrue(next.playWhenReady)
+
+        // the new engine lists its tracks (other ids): the same ones are picked
+        next.audio = listOf(EngineTrack("1", "ru", "Дубляж", selected = true), EngineTrack("2", "ru", "MVO"))
+        next.subs = listOf(EngineTrack("5", "en", "Forced"), EngineTrack("6", "en", "Full"))
+        next.listener!!.onTracksChanged()
+        assertEquals("2", next.selectedAudioId)
+        assertEquals("6", next.selectedSubId)
+        // once only: a later manual choice is not overridden
+        next.selectedAudioId = null
+        next.listener!!.onTracksChanged()
+        assertNull(next.selectedAudioId)
+        // resume points survive the switch
+        engine.positionMs = 0
+        next.positionMs = 900_000
+        session.goTo(0)
+        assertEquals(900_000L, session.resumeOf(1))
+    }
+
+    @Test
+    fun switchEngineKeepsPauseSubtitleFileAndSubtitlesOff() {
+        session.load(request())
+        engine.pause()
+        engine.subs = listOf(EngineTrack("g9", null, null, external = 1, selected = true))
+        val next = FakeEngine()
+        session.switchEngine(next)
+        assertFalse(next.playWhenReady)
+        assertEquals(TrackPrefs("ru", "ru", true), next.prefs)
+        next.subs = listOf(EngineTrack("a", "ru", "Надписи", external = 0), EngineTrack("b", "ru", "Надписи", external = 1))
+        next.listener!!.onTracksChanged()
+        assertEquals("b", next.selectedSubId)
+
+        val third = FakeEngine()
+        next.subs = emptyList()
+        session.switchEngine(third)
+        assertEquals(TrackPrefs("ru", "en", false), third.prefs)
+    }
 }

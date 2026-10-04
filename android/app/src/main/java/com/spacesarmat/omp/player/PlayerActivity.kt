@@ -45,8 +45,11 @@ import org.json.JSONObject
  * today) driven by [PlayerSession] (queue, resume points, error, tracks): nothing here knows the engine.
  */
 class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
-    private lateinit var engine: PlayerEngine
     private lateinit var session: PlayerSession
+    /** The engine playing now (the session may switch it). */
+    private val engine: PlayerEngine get() = session.engine
+    private val flow = PlayerFlow()
+    private val dedupe = StateDeduper()
     private lateinit var req: PlayRequest
     private val handler = Handler(Looper.getMainLooper())
 
@@ -84,14 +87,11 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private var closedSent = false
     private var controlsShown = true
     private val seeker = SeekAccumulator({ SystemClock.uptimeMillis() })
-    private var countdown = -1
     private var ticks = 0
     private var dialog: AlertDialog? = null
     private val skips = SkipState()
     /** «Заставка пропущена · Вернуть» on screen: the intro start OK returns to. */
     private var undoStart: Long? = null
-    /** The running countdown started at the credits (pausing hides it, Back dismisses it for this item). */
-    private var creditsCountdown = false
 
     private var toastShown = false
     private val hideToast = Runnable {
@@ -107,6 +107,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val t = seeker.take()
         if (t != null) {
             skips.seeked()
+            flow.moved()
             engine.seekTo(t)
         }
         render()
@@ -114,9 +115,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     }
     private val countdownTick = object : Runnable {
         override fun run() {
-            if (countdown < 0) return
-            countdown--
-            if (countdown <= 0) playNext() else {
+            if (flow.countdown < 0) return
+            if (flow.second()) playNext() else {
                 render()
                 handler.postDelayed(this, 1000)
             }
@@ -126,6 +126,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         override fun run() {
             session.tick()
             checkSkips()
+            preloadNext()
             render()
             if (++ticks % 2 == 0) emitState()
             handler.postDelayed(this, 500)
@@ -179,9 +180,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = onBack()
         })
-        engine = Media3Engine(this)
-        engine.attach(findViewById<ViewGroup>(R.id.player_video))
-        session = PlayerSession(engine, this)
+        val e = Media3Engine(this)
+        e.attach(findViewById<ViewGroup>(R.id.player_video))
+        session = PlayerSession(e, this)
         NativePlayerBridge.player = this
         load(r)
     }
@@ -189,7 +190,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     override fun onStart() {
         super.onStart()
         handler.removeCallbacks(tick)
-        if (::engine.isInitialized) handler.post(tick)
+        if (::session.isInitialized) handler.post(tick)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -216,13 +217,13 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     override fun onStop() {
         super.onStop()
         handler.removeCallbacks(tick)
-        if (::engine.isInitialized && !isFinishing) engine.pause()
+        if (::session.isInitialized && !isFinishing) engine.pause()
     }
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         dialog?.dismiss()
-        if (::engine.isInitialized) {
+        if (::session.isInitialized) {
             emitClosed(replaced = false)
             engine.release()
         }
@@ -240,6 +241,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     override fun itemEnded() = onItemEnd()
 
     private fun load(r: PlayRequest) {
+        // the session first: everything below may render, and render reads the queue and index from it
+        session.load(r)
+        flow.reset()
+        dedupe.reset()
         cancelCountdown()
         handler.removeCallbacks(commitSeek)
         seeker.cancel()
@@ -248,7 +253,6 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         skips.clear()
         hideMessage()
         setDonate(r.donate)
-        session.load(r)
         applySkips()
         showControls()
     }
@@ -350,7 +354,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private fun onKey(code: Int) {
         when (code) {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> when {
-                countdown >= 0 -> playNext()
+                flow.countdown >= 0 -> playNext()
                 session.error != null -> retry()
                 undoStart != null -> undoSkip()
                 skipShown() -> skipIntro()
@@ -372,8 +376,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     }
 
     private fun onBack() {
-        if (countdown >= 0) {
-            if (creditsCountdown) skips.dismissCountdown()
+        if (flow.countdown >= 0) {
+            if (flow.creditsCountdown) skips.dismissCountdown()
             cancelCountdown()
             showControls()
             return
@@ -398,7 +402,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
      * load() takes them with the new queue.
      */
     fun applySkips() {
-        if (!::engine.isInitialized || isFinishing || NativePlayerBridge.request !== req) return
+        if (!::session.isInitialized || isFinishing || NativePlayerBridge.request !== req) return
         NativePlayerBridge.takeSkips().forEach { if (it.index < req.queue.size) skips.set(it) }
         checkSkips()
         render()
@@ -406,7 +410,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     /** «Пропустить заставку» is on screen: inside the intro, not skipped or hidden, no countdown / «Вернуть». */
     private fun skipShown(): Boolean =
-        ::engine.isInitialized && countdown < 0 && session.error == null && !isFinishing && undoStart == null &&
+        ::session.isInitialized && flow.countdown < 0 && session.error == null && !isFinishing && undoStart == null &&
             skips.skipDue(index(), engine.positionMs)
 
     private fun skipIntro() {
@@ -431,11 +435,11 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
      * regardless of autoNext), the «Следующая серия» countdown from the credits start (with autoNext).
      */
     private fun checkSkips() {
-        if (!::engine.isInitialized || isFinishing || session.error != null || seeker.pending() != null) return
+        if (!::session.isInitialized || isFinishing || session.error != null || seeker.pending() != null) return
         val i = index()
         val pos = engine.positionMs
         val dur = durationMs()
-        if (creditsCountdown && !skips.countdownHolds(i, pos, dur, engine.playWhenReady)) cancelCountdown()
+        if (flow.creditsCountdown && !skips.countdownHolds(i, pos, dur, engine.playWhenReady)) cancelCountdown()
         val start = skips.info(i)?.intro?.startMs
         val auto = skips.autoIntro(i, pos, dur)
         if (auto != null && start != null) {
@@ -449,9 +453,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             showMessage(getString(R.string.player_credits_skipped), false)
             return
         }
-        if (countdown < 0 && req.autoNext && hasNext() && engine.playWhenReady && skips.countdownDue(i, pos, dur)) {
-            countdown = CREDITS_COUNTDOWN_S
-            creditsCountdown = true
+        if (flow.countdown < 0 && skips.countdownDue(i, pos, dur) && flow.creditsDue(hasNext(), req.autoNext, engine.playWhenReady)) {
             handler.removeCallbacks(countdownTick)
             handler.postDelayed(countdownTick, 1000)
         }
@@ -473,7 +475,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     /** A message at the top left: «Заставка пропущена» with «Вернуть · OK» for 5 s ([undo]), others for 3 s. */
     fun showMessage(text: String, error: Boolean, undo: Long? = null) {
-        if (!::engine.isInitialized || isFinishing) return
+        if (!::session.isInitialized || isFinishing) return
         undoStart = undo
         toastText.text = text
         toastText.setTextColor(if (error) ERROR_COLOR else TEXT_COLOR)
@@ -509,7 +511,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     /** { type: "donate", on: false } from the page. */
     fun hideDonate() {
-        if (!::engine.isInitialized || isFinishing) return
+        if (!::session.isInitialized || isFinishing) return
         donateHidden = true
         render()
     }
@@ -517,7 +519,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     /** Places the «Поддержать» card for the current state (pause: bottom right above the controls, credits: bottom left). */
     private fun renderDonate(controlsVisible: Boolean, paused: Boolean, pos: Long, dur: Long) {
         val enabled = req.donate != null && !donateHidden
-        val mode = DonateQr.mode(enabled, session.error != null, paused, countdown >= 0 && hasNext(), pos, dur, skips.info(index())?.creditsMs)
+        val mode = DonateQr.mode(enabled, session.error != null, paused, flow.countdown >= 0 && hasNext(), pos, dur, skips.info(index())?.creditsMs)
         if (mode == DonateQr.NONE) {
             donateBox.visibility = View.GONE
             donateShown = mode
@@ -547,15 +549,32 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     }
 
     private fun togglePause() {
-        if (engine.playWhenReady) {
-            // the credits countdown waits for playback (shown again on play, as on LG)
-            if (creditsCountdown) cancelCountdown()
-            engine.pause()
-        } else {
-            engine.play()
+        when (flow.playPressed(engine.playWhenReady, hasNext())) {
+            PlayerFlow.Play.PAUSE -> {
+                // the credits countdown waits for playback (shown again on play, as on LG)
+                if (flow.creditsCountdown) cancelCountdown()
+                engine.pause()
+            }
+            PlayerFlow.Play.PLAY -> engine.play()
+            // at the end of an item (the countdown dismissed with Back) Play goes on to the next one
+            PlayerFlow.Play.NEXT -> {
+                playNext()
+                return
+            }
+            PlayerFlow.Play.CLOSE -> {
+                close()
+                return
+            }
         }
         showControls()
         changed()
+    }
+
+    /** Asks TorrServer to start the next item ahead (a countdown runs or the last minute plays), once per item. */
+    private fun preloadNext() {
+        if (!::session.isInitialized || isFinishing) return
+        if (!flow.preloadDue(index(), hasNext(), engine.playWhenReady, engine.positionMs, durationMs())) return
+        session.request?.queue?.getOrNull(index() + 1)?.let { NextPreload.send(it.url) }
     }
 
     private fun seekBy(dir: Int) {
@@ -570,6 +589,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         handler.removeCallbacks(commitSeek)
         seeker.cancel()
         skips.seeked()
+        flow.moved()
         engine.seekTo(t)
     }
 
@@ -592,6 +612,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         seeker.cancel()
         if (!session.goTo(i)) return
         cancelCountdown()
+        flow.entered()
         skips.enter()
         if (undoStart != null) hideMessage()
         showControls()
@@ -599,29 +620,27 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     }
 
     private fun retry() {
+        flow.moved()
         session.retry()
         changed()
     }
 
     private fun onItemEnd() {
         if (isFinishing) return
-        // a credits countdown still running at the end (short credits) gives way to the end-of-item one
-        // (it would be cancelled anyway: the player pauses at the end)
-        if (creditsCountdown) cancelCountdown()
-        if (countdown >= 0) return
-        if (hasNext() && req.autoNext) {
-            countdown = NEXT_COUNTDOWN_S
-            handler.removeCallbacks(countdownTick)
-            handler.postDelayed(countdownTick, 1000)
-            render()
-        } else {
-            close()
+        when (flow.itemEnded(hasNext(), req.autoNext)) {
+            PlayerFlow.End.COUNTDOWN -> {
+                handler.removeCallbacks(countdownTick)
+                handler.postDelayed(countdownTick, 1000)
+                preloadNext()
+                render()
+            }
+            PlayerFlow.End.CLOSE -> close()
+            PlayerFlow.End.NONE -> Unit
         }
     }
 
     private fun cancelCountdown() {
-        countdown = -1
-        creditsCountdown = false
+        flow.cancel()
         handler.removeCallbacks(countdownTick)
         if (::nextBox.isInitialized) nextBox.visibility = View.GONE
     }
@@ -642,7 +661,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     /** A key from the phone remote (UP/DOWN/LEFT/RIGHT/ENTER/BACK) handled like the TV remote's key. */
     fun remoteKey(name: String) {
-        if (isFinishing || !::engine.isInitialized) return
+        if (isFinishing || !::session.isInitialized) return
         val code = when (name) {
             "UP" -> KeyEvent.KEYCODE_DPAD_UP
             "DOWN" -> KeyEvent.KEYCODE_DPAD_DOWN
@@ -668,18 +687,21 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     /** «Каталог» or a navigating launch from the phone: the player closes (nativePlayerClosed first). */
     fun closeFromRemote() {
-        if (::engine.isInitialized) commitPendingSeek()
+        if (::session.isInitialized) commitPendingSeek()
         close()
     }
 
     // ---- phone commands (src/phone/protocol.ts Cmd) ----
 
     fun applyCommand(cmd: JSONObject) {
-        if (isFinishing || !::engine.isInitialized) return
+        if (isFinishing || !::session.isInitialized) return
         badge.visibility = View.VISIBLE
         val dur = durationMs()
         when (cmd.optString("type")) {
-            "play" -> if (!engine.playWhenReady) engine.play()
+            "play" -> if (!engine.playWhenReady) {
+                togglePause()
+                return
+            }
             "pause" -> if (engine.playWhenReady) engine.pause()
             "seek" -> if (dur > 0) seekToMs((cmd.optDouble("t", 0.0) * 1000).toLong().coerceIn(0L, dur))
             "skip" -> if (dur > 0) seekToMs((engine.positionMs + (cmd.optDouble("d", 0.0) * 1000).toLong()).coerceIn(0L, dur))
@@ -701,9 +723,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     }
 
     private fun render() {
-        if (!::engine.isInitialized || isDestroyed) return
+        if (!::session.isInitialized || isDestroyed) return
+        val r = session.request ?: return
         val i = index()
-        val item = req.queue[i]
+        val item = r.queue.getOrNull(i) ?: return
         val dur = durationMs()
         val pos = seeker.pending() ?: engine.positionMs
         val paused = !engine.playWhenReady
@@ -731,10 +754,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         // above the controls while they are shown, near the bottom edge when they are hidden (above the donate card)
         renderDonate(visible, paused, pos, dur)
         buffering.visibility = if (engine.isBuffering && session.error == null) View.VISIBLE else View.GONE
-        if (countdown >= 0 && hasNext()) {
+        if (flow.countdown >= 0 && hasNext()) {
             nextBox.visibility = View.VISIBLE
-            nextCount.text = "Следующая серия через $countdown"
-            nextTitle.text = req.queue[i + 1].title
+            nextCount.text = "Следующая серия через " + flow.countdown
+            nextTitle.text = r.queue.getOrNull(i + 1)?.title.orEmpty()
         } else {
             nextBox.visibility = View.GONE
         }
@@ -746,8 +769,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     // ---- events to the page ----
 
     private fun emitState() {
-        if (!::engine.isInitialized || closedSent) return
+        if (!::session.isInitialized || closedSent) return
         val st = session.snapshot()
+        if (!dedupe.shouldEmit(st, SystemClock.uptimeMillis())) return
         val aList = JSArray()
         st.audio.forEach { aList.put(it) }
         val sList = JSArray()
@@ -761,7 +785,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     }
 
     private fun emitClosed(replaced: Boolean) {
-        if (closedSent || !::engine.isInitialized) return
+        if (closedSent || !::session.isInitialized) return
         closedSent = true
         commitPendingSeek()
         val o = base()
@@ -780,8 +804,6 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     companion object {
         private const val HIDE_MS = 4000L
-        private const val NEXT_COUNTDOWN_S = 5
-        private const val CREDITS_COUNTDOWN_S = 10
         private const val SKIP_HIDDEN_SHIFT_DP = 150f
         /** «Поддержать»: bottom margin on pause (above the controls) and in the credits; the skip button lift. */
         private const val DONATE_PAUSE_BOTTOM_DP = 210f

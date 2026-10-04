@@ -57,16 +57,17 @@ interface PlayerEngine {
     /** [id] of one of [subtitleTracks]; null turns subtitles off. */
     fun selectSubtitle(id: String?)
 
-    /** Frees the decoders and the surface; the engine is not used afterwards. */
+    /** Frees the decoders and removes what [attach] added; the engine is not used afterwards. */
     fun release()
 
     interface Listener {
         /** The open item can play (also after buffering or [retry]). */
         fun onReady() {}
 
-        /** The first video frame of the open item is on screen. */
+        /** The first video frame of the open item is on screen (media without video: when it is first ready). Once per [open]. */
         fun onFirstFrame() {}
 
+        /** Sent when the flag changes. */
         fun onBuffering(buffering: Boolean) {}
 
         /** [playWhenReady] changed. */

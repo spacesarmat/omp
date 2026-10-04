@@ -52,6 +52,12 @@ class Media3Engine(private val context: Context) : PlayerEngine {
     /** onEnded once per end (the player may report the end both as a pause and as STATE_ENDED). */
     private var endSent = false
 
+    /** onFirstFrame once per opened item (a rendered frame, or the first READY of media without video). */
+    private var frameSent = false
+
+    /** Last buffering flag reported (onBuffering only on a change). */
+    private var buffering = false
+
     private fun build(): ExoPlayer {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent("OMP")
@@ -77,13 +83,19 @@ class Media3Engine(private val context: Context) : PlayerEngine {
 
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) ended()
-                if (state == Player.STATE_READY) listener?.onReady()
-                listener?.onBuffering(state == Player.STATE_BUFFERING)
+                if (state == Player.STATE_READY) {
+                    // audio-only media never renders a frame: being ready counts as the first frame
+                    if (!p.currentTracks.containsType(C.TRACK_TYPE_VIDEO)) firstFrame()
+                    listener?.onReady()
+                }
+                val b = state == Player.STATE_BUFFERING
+                if (b != buffering) {
+                    buffering = b
+                    listener?.onBuffering(b)
+                }
             }
 
-            override fun onRenderedFirstFrame() {
-                listener?.onFirstFrame()
-            }
+            override fun onRenderedFirstFrame() = firstFrame()
 
             override fun onTracksChanged(tracks: Tracks) {
                 listener?.onTracksChanged()
@@ -94,6 +106,12 @@ class Media3Engine(private val context: Context) : PlayerEngine {
             }
         })
         return p
+    }
+
+    private fun firstFrame() {
+        if (frameSent) return
+        frameSent = true
+        listener?.onFirstFrame()
     }
 
     private fun ended() {
@@ -126,6 +144,7 @@ class Media3Engine(private val context: Context) : PlayerEngine {
 
     override fun open(media: EngineMedia, startMs: Long) {
         endSent = false
+        frameSent = false
         exo.setMediaItem(mediaItem(media), startMs.coerceAtLeast(0L))
         exo.prepare()
         exo.playWhenReady = true
@@ -195,7 +214,11 @@ class Media3Engine(private val context: Context) : PlayerEngine {
 
     override fun release() {
         listener = null
-        view?.player = null
+        view?.let { v ->
+            v.player = null
+            (v.parent as? ViewGroup)?.removeView(v)
+        }
+        view = null
         exo.release()
     }
 
