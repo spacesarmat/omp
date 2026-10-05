@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.player
 
+import com.spacesarmat.omp.I18n
+
 import android.app.Instrumentation
 import android.content.Intent
 import android.graphics.Bitmap
@@ -141,6 +143,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        I18n.load(this)
         val r = NativePlayerBridge.request
         if (r == null) {
             // process restarted without a request from the page
@@ -183,6 +186,13 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         donateText = findViewById(R.id.player_donate_text)
         donateLink = findViewById(R.id.player_donate_link)
         engineName = findViewById(R.id.player_engine)
+        findViewById<TextView>(R.id.player_badge).text = I18n.s("player.res.phoneBadge")
+        btnNext.text = I18n.s("player.res.next")
+        btnSkip.text = I18n.s("player.res.skipIntro")
+        findViewById<TextView>(R.id.player_toast_undo).text = I18n.s("player.res.undoSkip")
+        donateQrView.contentDescription = I18n.s("player.res.donateQr")
+        findViewById<TextView>(R.id.player_next_hint).text = I18n.s("player.res.nextHint")
+        findViewById<TextView>(R.id.player_error_hint).text = I18n.s("player.res.errorHint")
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = onBack()
@@ -341,7 +351,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private fun durationMs(): Long = engine.durationMs
 
     private fun selectedAudioLabel(audio: List<AudioOption>): String =
-        audio.getOrNull(TrackOptions.selectedAudio(audio))?.label ?: "по умолчанию"
+        audio.getOrNull(TrackOptions.selectedAudio(audio))?.label ?: I18n.s("player.default")
 
     /**
      * «Меню плеера»: «Аудио», «Субтитры», «Главы» (when the file has chapters) and the three «Отметить …» rows
@@ -360,10 +370,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val chapters = skips.chapters(i)
         val rows = ArrayList<Pair<String, () -> Unit>>()
         rows.add(switcher.menuRow() to { switcher.menuPressed() })
-        rows.add(("Аудио: " + selectedAudioLabel(audio)) to {
+        rows.add(I18n.s("player.audioRow", "v" to selectedAudioLabel(audio)) to {
             if (audio.size >= 2) {
                 dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-                    .setTitle("Аудио")
+                    .setTitle(I18n.s("player.audio"))
                     .setSingleChoiceItems(audio.map { it.label }.toTypedArray(), aSel) { d, n ->
                         d.dismiss()
                         session.selectAudio(n)
@@ -371,22 +381,22 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                     .show()
             }
         })
-        rows.add(("Субтитры: " + sSel.label) to {
+        rows.add(I18n.s("player.subsRow", "v" to sSel.label) to {
             dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-                .setTitle("Субтитры")
+                .setTitle(I18n.s("player.subs"))
                 .setSingleChoiceItems(subs.map { it.label }.toTypedArray(), subs.indexOf(sSel)) { d, n ->
                     d.dismiss()
                     session.selectSub(subs[n].value)
                 }
                 .show()
         })
-        if (chapters.isNotEmpty()) rows.add(("Главы: " + chapters.size) to { openChapters(i, now) })
+        if (chapters.isNotEmpty()) rows.add(I18n.s("player.chaptersRow", "n" to chapters.size.toString()) to { openChapters(i, now) })
         val marks = markRows(skips.info(i), now, dur)
         listOf("intro-start", "intro-end", "credits").forEachIndexed { n, kind ->
             rows.add(marks[n] to { emitMark(i, kind, now, dur) })
         }
         dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-            .setTitle("Меню плеера")
+            .setTitle(I18n.s("player.menu"))
             .setItems(rows.map { it.first }.toTypedArray()) { _, which -> rows.getOrNull(which)?.second?.invoke() }
             .show()
     }
@@ -396,7 +406,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val list = skips.chapters(item)
         if (list.isEmpty() || item != index()) return
         dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-            .setTitle("Главы")
+            .setTitle(I18n.s("player.chapters"))
             .setSingleChoiceItems(Chapters.rows(list).toTypedArray(), Chapters.indexAt(list, now)) { d, n ->
                 d.dismiss()
                 if (item == index()) {
@@ -522,13 +532,13 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val auto = skips.autoIntro(i, pos, dur)
         if (auto != null && start != null) {
             seekToMs(auto)
-            showMessage(getString(R.string.player_intro_skipped), false, undo = start)
+            showMessage(I18n.s("player.res.introSkipped"), false, undo = start)
             emitState()
             return
         }
         if (skips.creditsCrossed(i, pos, engine.playWhenReady, hasNext())) {
             playNext()
-            showMessage(getString(R.string.player_credits_skipped), false)
+            showMessage(I18n.s("player.res.creditsSkipped"), false)
             return
         }
         if (flow.countdown < 0 && skips.countdownDue(i, pos, dur) && flow.creditsDue(hasNext(), req.autoNext, engine.playWhenReady)) {
@@ -608,8 +618,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         if (mode != donateShown) {
             donateShown = mode
             val pause = mode == DonateQr.PAUSE
-            donateTitle.setText(if (pause) R.string.player_donate_pause_title else R.string.player_donate_credits_title)
-            donateText.setText(if (pause) R.string.player_donate_pause_text else R.string.player_donate_credits_text)
+            donateTitle.text = I18n.s(if (pause) "player.res.donatePauseTitle" else "player.res.donateCreditsTitle")
+            donateText.text = I18n.s(if (pause) "player.res.donatePauseText" else "player.res.donateCreditsText")
             val lp = donateBox.layoutParams as FrameLayout.LayoutParams
             lp.gravity = Gravity.BOTTOM or (if (pause) Gravity.END else Gravity.START)
             lp.bottomMargin = ((if (pause) DONATE_PAUSE_BOTTOM_DP else DONATE_CREDITS_BOTTOM_DP) * dp).toInt()
@@ -814,9 +824,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             title.text = item.title
             progress.progress = if (dur > 0) (pos * 1000 / dur).toInt().coerceIn(0, 1000) else 0
             time.text = clock(pos) + " / " + clock(dur)
-            btnPause.setText(if (paused) R.string.player_play else R.string.player_pause)
-            btnAudio.text = "Аудио: " + selectedAudioLabel(session.audioOptions())
-            btnSubs.text = "Субтитры: " + TrackOptions.selectedSub(session.subOptions()).label
+            btnPause.text = I18n.s(if (paused) "player.res.play" else "player.res.pause")
+            btnAudio.text = I18n.s("player.audioRow", "v" to selectedAudioLabel(session.audioOptions()))
+            btnSubs.text = I18n.s("player.subsRow", "v" to TrackOptions.selectedSub(session.subOptions()).label)
             btnNext.visibility = if (hasNext()) View.VISIBLE else View.GONE
             val chapters = skips.chapters(i)
             if (chapters.isNotEmpty()) {
@@ -824,7 +834,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                 if (cur.isNotEmpty()) title.text = item.title + " · " + cur
             }
             ticksView.setTicks(Chapters.ticks(chapters, dur))
-            hint.setText(if (chapters.isNotEmpty()) R.string.player_hint_chapters else R.string.player_hint)
+            hint.text = I18n.s(if (chapters.isNotEmpty()) "player.res.hintChapters" else "player.res.hint")
             engineName.text = switcher.kind.label
         }
         toastBox.visibility = if (toastShown) View.VISIBLE else View.GONE
@@ -835,7 +845,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         buffering.visibility = if (engine.isBuffering && session.error == null) View.VISIBLE else View.GONE
         if (flow.countdown >= 0 && hasNext()) {
             nextBox.visibility = View.VISIBLE
-            nextCount.text = "Следующая серия через " + flow.countdown
+            nextCount.text = I18n.s("player.nextIn", "n" to flow.countdown.toString())
             nextTitle.text = r.queue.getOrNull(i + 1)?.title.orEmpty()
         } else {
             nextBox.visibility = View.GONE

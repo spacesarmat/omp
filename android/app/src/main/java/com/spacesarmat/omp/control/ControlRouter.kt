@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.control
 
+import com.spacesarmat.omp.I18n
+
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -68,7 +70,7 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         if (req.path == CloudflareProtocol.ANSWER) return cloudflareAnswer(req)
         if (req.path == CloudflareProtocol.POLL) {
             val body = parse(req.body) ?: return badRequest()
-            return ok(actions.cloudflarePoll(req.token!!, pairing.phoneOf(req.token) ?: "Телефон", CloudflareProtocol.waitOf(body)))
+            return ok(actions.cloudflarePoll(req.token!!, pairing.phoneOf(req.token) ?: I18n.s("phone.default"), CloudflareProtocol.waitOf(body)))
         }
         val body = parse(req.body) ?: return badRequest()
         return when (req.path) {
@@ -132,7 +134,7 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         if (!isJson(req.contentType)) return ControlResponse(415, ControlServer.error("unsupported_media_type"))
         if (req.body.toByteArray(Charsets.UTF_8).size > SourcesProtocol.MAX_BODY) return ControlResponse(413, ControlServer.error("too_large"))
         val body = parse(req.body) ?: return badRequest()
-        val phone = pairing.phoneOf(req.token) ?: "Телефон"
+        val phone = pairing.phoneOf(req.token) ?: I18n.s("phone.default")
         val t = SourcesProtocol.parse(body, phone) ?: return badRequest()
         return when (val r = actions.sources(t)) {
             is SourcesOutcome.Applied -> {

@@ -33,7 +33,6 @@
         android:paddingTop="8dp"
         android:paddingEnd="12dp"
         android:paddingBottom="8dp"
-        android:text="@string/player_phone_badge"
         android:textColor="#C9CEDA"
         android:textSize="13sp"
         android:visibility="gone" />
@@ -98,8 +97,7 @@
             <TextView
                 android:id="@+id/player_btn_pause"
                 style="@style/OmpPlayerChip.Accent"
-                android:layout_marginStart="15dp"
-                android:text="@string/player_pause" />
+                android:layout_marginStart="15dp" />
 
             <TextView
                 android:id="@+id/player_btn_audio"
@@ -114,8 +112,7 @@
             <TextView
                 android:id="@+id/player_btn_next"
                 style="@style/OmpPlayerChip"
-                android:layout_marginStart="15dp"
-                android:text="@string/player_next" />
+                android:layout_marginStart="15dp" />
 
             <View
                 android:layout_width="0dp"
@@ -137,7 +134,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="@string/player_hint"
             android:textColor="#9AA1B2"
             android:textSize="13sp" />
     </LinearLayout>
@@ -174,7 +170,6 @@
             android:layout_marginStart="10dp"
             android:paddingTop="8dp"
             android:paddingBottom="8dp"
-            android:text="@string/player_undo_skip"
             android:textSize="18sp"
             android:textStyle="bold"
             android:visibility="gone" />
@@ -201,7 +196,6 @@
             android:layout_width="132dp"
             android:layout_height="132dp"
             android:background="#FFFFFF"
-            android:contentDescription="@string/player_donate_qr"
             android:scaleType="fitXY" />
 
         <LinearLayout
@@ -248,7 +242,6 @@
         android:paddingTop="12dp"
         android:paddingEnd="24dp"
         android:paddingBottom="12dp"
-        android:text="@string/player_skip_intro"
         android:textSize="20sp"
         android:visibility="gone" />
 
@@ -287,10 +280,10 @@
             android:textSize="15sp" />
 
         <TextView
+            android:id="@+id/player_next_hint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="@string/player_next_hint"
             android:textColor="#9AA1B2"
             android:textSize="13sp" />
     </LinearLayout>
@@ -315,10 +308,10 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/player_error_hint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:text="@string/player_error_hint"
             android:textColor="#9AA1B2"
             android:textSize="14sp" />
     </LinearLayout>

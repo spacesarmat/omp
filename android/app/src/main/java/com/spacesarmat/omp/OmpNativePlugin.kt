@@ -133,6 +133,7 @@ class OmpNativePlugin : Plugin() {
     }
 
     override fun load() {
+        I18n.load(context)
         instance = this
         LocalTorrServer.addDownloadListener(downloadProgress)
         purgeSharedFiles(10 * 60 * 1000L)
@@ -175,6 +176,7 @@ class OmpNativePlugin : Plugin() {
         val lang = call.getString("lang")
         if (lang == "ru" || lang == "en") {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LANG_KEY, lang).apply()
+            I18n.lang = lang
         }
         call.resolve()
     }
@@ -198,7 +200,7 @@ class OmpNativePlugin : Plugin() {
                 }
                 once.resolve(JSObject().put("tvs", arr))
             } catch (e: Exception) {
-                once.reject("Не удалось выполнить поиск телевизоров. Проверьте Wi-Fi")
+                once.reject(I18n.s("plugin.discoverFailed"))
             }
         }
     }
@@ -219,7 +221,7 @@ class OmpNativePlugin : Plugin() {
                 }
                 once.resolve(JSObject().put("tvs", arr))
             } catch (e: Exception) {
-                once.reject("Не удалось выполнить поиск телевизоров. Проверьте Wi-Fi")
+                once.reject(I18n.s("plugin.discoverFailed"))
             }
         }
     }
@@ -240,7 +242,7 @@ class OmpNativePlugin : Plugin() {
                 }
                 once.resolve(JSObject().put("tvs", arr))
             } catch (e: Exception) {
-                once.reject("Не удалось выполнить поиск телевизоров. Проверьте Wi-Fi")
+                once.reject(I18n.s("plugin.discoverFailed"))
             }
         }
     }
@@ -270,7 +272,7 @@ class OmpNativePlugin : Plugin() {
             }
         }
         if (!PortProbe.isPrivateIpv4(ip)) {
-            once.reject("Неверный адрес телевизора")
+            once.reject(I18n.s("plugin.badTvAddr"))
             return
         }
         io.execute {
@@ -394,14 +396,14 @@ class OmpNativePlugin : Plugin() {
         val tv = call.getString("tv")?.trim().orEmpty()
         val at = call.getLong("at")
         if (tv.isEmpty()) {
-            call.reject("Не указан телевизор")
+            call.reject(I18n.s("plugin.noTv"))
         } else if (at == null) {
             DevModeReminder.cancel(context, tv, stableId(call))
             call.resolve()
         } else if (DevModeReminder.schedule(context, tv, call.getString("name"), at, stableId = stableId(call))) {
             call.resolve()
         } else {
-            call.reject("Некорректное время напоминания")
+            call.reject(I18n.s("plugin.badReminder"))
         }
     }
 
@@ -413,7 +415,7 @@ class OmpNativePlugin : Plugin() {
         val once = Once(call)
         val tv = call.getString("tv")?.trim().orEmpty()
         if (tv.isEmpty()) {
-            once.reject("Не указан телевизор")
+            once.reject(I18n.s("plugin.noTv"))
             return
         }
         val id = stableId(call)
@@ -448,21 +450,22 @@ class OmpNativePlugin : Plugin() {
         val ip = call.getString("ip")?.trim().orEmpty()
         val register = call.getString("register")
         if (!IPV4.matches(ip)) {
-            once.reject("Некорректный адрес телевизора")
+            once.reject(I18n.s("plugin.badTvAddr2"))
             return
         }
         if (register.isNullOrEmpty()) {
-            once.reject("Нет сообщения регистрации")
+            once.reject(I18n.s("plugin.noRegMsg"))
             return
         }
         closeAll()
         var self: TvSocket? = null
+        I18n.load(context)
         val socket = TvSocket(
             onOpen = { s ->
                 if (!s.send(register)) {
                     s.close()
                     clearTv(s)
-                    once.reject("Не удалось отправить запрос телевизору")
+                    once.reject(I18n.s("plugin.tvSendFailed"))
                 } else {
                     synchronized(lock) { if (pendingConnect === once) pendingConnect = null }
                     once.resolve(JSObject().put("port", s.port))
@@ -470,7 +473,7 @@ class OmpNativePlugin : Plugin() {
             },
             onFail = { _ ->
                 clearTv(self)
-                once.reject("Не удалось подключиться к телевизору")
+                once.reject(I18n.s("plugin.tvConnectFailed"))
             },
             onMessage = { text -> notifyListeners("tvMessage", JSObject().put("json", text)) },
             onClosed = { reason ->
@@ -501,9 +504,9 @@ class OmpNativePlugin : Plugin() {
         val json = call.getString("json")
         val socket = synchronized(lock) { tv }
         when {
-            json.isNullOrEmpty() -> call.reject("Пустое сообщение")
-            socket == null || !socket.isOpen -> call.reject("Телевизор не подключён")
-            !socket.send(json) -> call.reject("Не удалось отправить команду телевизору")
+            json.isNullOrEmpty() -> call.reject(I18n.s("plugin.emptyMsg"))
+            socket == null || !socket.isOpen -> call.reject(I18n.s("plugin.tvNotConnected"))
+            !socket.send(json) -> call.reject(I18n.s("plugin.tvCmdFailed"))
             else -> call.resolve()
         }
     }
@@ -522,18 +525,19 @@ class OmpNativePlugin : Plugin() {
         val raw = call.getString("url")?.trim().orEmpty()
         val ip = synchronized(lock) { if (tv?.isOpen == true) tvIp else null }
         if (ip == null) {
-            once.reject("Телевизор не подключён")
+            once.reject(I18n.s("plugin.tvNotConnected"))
             return
         }
         // OkHttp parses ws/wss as http/https
         val parsed = raw.replaceFirst(Regex("^ws", RegexOption.IGNORE_CASE), "http").toHttpUrlOrNull()
         if (parsed == null || !raw.matches(Regex("^wss?://.*", RegexOption.IGNORE_CASE)) || parsed.host != ip) {
-            once.reject("Некорректный адрес пульта")
+            once.reject(I18n.s("plugin.badRemoteAddr"))
             return
         }
         closePointer()
         var self: TvSocket? = null
         val client = if (parsed.isHttps) TvHttp.trustingOnly(ip) else TvHttp.plain()
+        I18n.load(context)
         val socket = TvSocket(
             onOpen = { _ ->
                 synchronized(lock) { if (pendingPointer === once) pendingPointer = null }
@@ -541,7 +545,7 @@ class OmpNativePlugin : Plugin() {
             },
             onFail = { _ ->
                 clearPointer(self)
-                once.reject("Не удалось подключиться к пульту телевизора")
+                once.reject(I18n.s("plugin.remoteConnectFailed"))
             },
             onMessage = { _ -> },
             onClosed = { _ -> clearPointer(self) },
@@ -559,9 +563,9 @@ class OmpNativePlugin : Plugin() {
         val frame = call.getString("frame")
         val socket = synchronized(lock) { pointer }
         when {
-            frame.isNullOrEmpty() -> call.reject("Пустая команда")
-            socket == null || !socket.isOpen -> call.reject("Пульт телевизора не подключён")
-            !socket.send(frame) -> call.reject("Не удалось отправить команду телевизору")
+            frame.isNullOrEmpty() -> call.reject(I18n.s("plugin.emptyCmd"))
+            socket == null || !socket.isOpen -> call.reject(I18n.s("plugin.remoteNotConnected"))
+            !socket.send(frame) -> call.reject(I18n.s("plugin.tvCmdFailed"))
             else -> call.resolve()
         }
     }
@@ -596,7 +600,7 @@ class OmpNativePlugin : Plugin() {
             r
         }
         socket?.close()
-        pending?.reject("Подключение отменено")
+        pending?.reject(I18n.s("plugin.connectCancelled"))
     }
 
     /** Silent close of both sockets; a pending tvConnect is rejected. No tvClosed event. */
@@ -610,22 +614,23 @@ class OmpNativePlugin : Plugin() {
             r
         }
         socket?.close()
-        pending?.reject("Подключение отменено")
+        pending?.reject(I18n.s("plugin.connectCancelled"))
     }
 
     // ---- player server (TV -> phone state, phone -> TV commands) ----
 
     @PluginMethod
     fun startPlayerServer(call: PluginCall) {
+        I18n.load(context)
         val once = Once(call)
         val ip = call.getString("tvIp")?.trim().orEmpty()
         io.execute {
             try {
                 once.resolve(JSObject().put("url", player.start(ip)))
             } catch (e: UserError) {
-                once.reject(e.message ?: "Не удалось запустить управление плеером")
+                once.reject(e.message ?: I18n.s("plugin.playerCtlFailed"))
             } catch (_: Exception) {
-                once.reject("Не удалось запустить управление плеером")
+                once.reject(I18n.s("plugin.playerCtlFailed"))
             }
         }
     }
@@ -645,7 +650,7 @@ class OmpNativePlugin : Plugin() {
             null
         }
         if (cmds == null) {
-            call.reject("Некорректные команды")
+            call.reject(I18n.s("plugin.badCmds"))
             return
         }
         player.enqueue(cmds)
@@ -661,7 +666,7 @@ class OmpNativePlugin : Plugin() {
         val ip = call.getString("ip")?.trim().orEmpty()
         val packet = WakeOnLan.magicPacket(mac)
         if (packet == null || !IPV4.matches(ip)) {
-            once.reject("Не удалось включить телевизор")
+            once.reject(I18n.s("plugin.wakeFailed"))
             return
         }
         io.execute {
@@ -669,7 +674,7 @@ class OmpNativePlugin : Plugin() {
                 WakeOnLan.send(packet, ip)
                 once.resolve()
             } catch (_: Exception) {
-                once.reject("Не удалось отправить сигнал включения")
+                once.reject(I18n.s("plugin.wakeSendFailed"))
             }
         }
     }
@@ -681,20 +686,20 @@ class OmpNativePlugin : Plugin() {
         val url = call.getString("url")?.trim().orEmpty()
         val mime = call.getString("mime")?.trim().orEmpty().ifEmpty { "video/*" }
         if (url.isEmpty()) {
-            call.reject("Нет ссылки на видео")
+            call.reject(I18n.s("plugin.noVideoUrl"))
             return
         }
         val view = Intent(Intent.ACTION_VIEW).setDataAndType(url.toUri(), mime)
-        val chooser = Intent.createChooser(view, "Открыть в плеере")
+        val chooser = Intent.createChooser(view, I18n.s("plugin.openInPlayer"))
         try {
             val act = activity
             if (act != null) act.startActivity(chooser)
             else context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             call.resolve()
         } catch (_: ActivityNotFoundException) {
-            call.reject("Нет приложения для просмотра видео")
+            call.reject(I18n.s("plugin.noVideoApp"))
         } catch (_: RuntimeException) {
-            call.reject("Не удалось открыть плеер")
+            call.reject(I18n.s("plugin.openPlayerFailed"))
         }
     }
 
@@ -706,7 +711,7 @@ class OmpNativePlugin : Plugin() {
         val name = shareFileName(call.getString("name"))
         val text = call.getString("text")
         if (text == null) {
-            call.reject("Нет текста для файла")
+            call.reject(I18n.s("plugin.noFileText"))
             return
         }
         try {
@@ -721,18 +726,18 @@ class OmpNativePlugin : Plugin() {
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             // ClipData carries the read grant to the chooser and its preview
             send.clipData = ClipData.newRawUri("", uri)
-            val chooser = Intent.createChooser(send, call.getString("title")?.trim().orEmpty().take(60).ifEmpty { "Поделиться файлом" })
+            val chooser = Intent.createChooser(send, call.getString("title")?.trim().orEmpty().take(60).ifEmpty { I18n.s("plugin.shareFile") })
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             val act = activity
             if (act != null) act.startActivity(chooser)
             else context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             call.resolve()
         } catch (_: ActivityNotFoundException) {
-            call.reject("Нет приложения для отправки файла")
+            call.reject(I18n.s("plugin.noShareApp"))
         } catch (_: java.io.IOException) {
-            call.reject("Не удалось сохранить файл")
+            call.reject(I18n.s("plugin.saveFileFailed"))
         } catch (_: RuntimeException) {
-            call.reject("Не удалось поделиться файлом")
+            call.reject(I18n.s("plugin.shareFailed"))
         }
     }
 
@@ -750,7 +755,7 @@ class OmpNativePlugin : Plugin() {
     fun playNative(call: PluginCall) {
         val req = PlayRequest.parse(call.data)
         if (req == null) {
-            call.reject("Нечего воспроизводить")
+            call.reject(I18n.s("plugin.nothingToPlay"))
             return
         }
         NativePlayerBridge.resetSkips()
@@ -766,7 +771,7 @@ class OmpNativePlugin : Plugin() {
             else context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             call.resolve()
         } catch (_: RuntimeException) {
-            call.reject("Не удалось запустить плеер")
+            call.reject(I18n.s("plugin.startPlayerFailed"))
         }
     }
 
@@ -777,12 +782,12 @@ class OmpNativePlugin : Plugin() {
     fun pairingCode(call: PluginCall) {
         val r = remote
         if (r == null) {
-            call.reject("Управление с телефона недоступно")
+            call.reject(I18n.s("plugin.remoteUnavailable"))
             return
         }
         // the port could not be bound: a code would be useless
         if (!r.running) {
-            call.reject("Сервер управления не запустился")
+            call.reject(I18n.s("plugin.ctlServerFailed"))
             return
         }
         val c = r.pairing.newCode()
@@ -801,7 +806,7 @@ class OmpNativePlugin : Plugin() {
     fun tvName(call: PluginCall) {
         val r = remote
         if (r == null) {
-            call.reject("Управление с телефона недоступно")
+            call.reject(I18n.s("plugin.remoteUnavailable"))
             return
         }
         call.resolve(JSObject().put("name", r.name()))
@@ -812,7 +817,7 @@ class OmpNativePlugin : Plugin() {
     fun remoteSourcesDone(call: PluginCall) {
         val r = remote
         if (r == null) {
-            call.reject("Управление с телефона недоступно")
+            call.reject(I18n.s("plugin.remoteUnavailable"))
             return
         }
         // the other sites' results: { siteId: ok | bad_login | captcha | error }
@@ -855,13 +860,13 @@ class OmpNativePlugin : Plugin() {
     fun nativePlayerCommand(call: PluginCall) {
         val cmd = call.getObject("cmd")
         when {
-            cmd == null -> call.reject("Некорректная команда")
+            cmd == null -> call.reject(I18n.s("plugin.badCmd"))
             // the page's data for the overlay, not a remote command (the player may still be opening)
-            cmd.optString("type") == "segments" -> if (NativePlayerBridge.segments(cmd)) call.resolve() else call.reject("Некорректная команда")
-            cmd.optString("type") == "toast" -> if (NativePlayerBridge.toast(cmd)) call.resolve() else call.reject("Некорректная команда")
-            cmd.optString("type") == "donate" -> if (NativePlayerBridge.donate(cmd)) call.resolve() else call.reject("Некорректная команда")
-            cmd.optString("type") == "assSubs" -> if (NativePlayerBridge.assSubs(cmd)) call.resolve() else call.reject("Некорректная команда")
-            !NativePlayerBridge.command(cmd) -> call.reject("Плеер не открыт")
+            cmd.optString("type") == "segments" -> if (NativePlayerBridge.segments(cmd)) call.resolve() else call.reject(I18n.s("plugin.badCmd"))
+            cmd.optString("type") == "toast" -> if (NativePlayerBridge.toast(cmd)) call.resolve() else call.reject(I18n.s("plugin.badCmd"))
+            cmd.optString("type") == "donate" -> if (NativePlayerBridge.donate(cmd)) call.resolve() else call.reject(I18n.s("plugin.badCmd"))
+            cmd.optString("type") == "assSubs" -> if (NativePlayerBridge.assSubs(cmd)) call.resolve() else call.reject(I18n.s("plugin.badCmd"))
+            !NativePlayerBridge.command(cmd) -> call.reject(I18n.s("plugin.playerNotOpen"))
             else -> call.resolve()
         }
     }
@@ -896,11 +901,11 @@ class OmpNativePlugin : Plugin() {
                 ApkInstaller.openInstallPermissionSettings(context)
             } catch (_: RuntimeException) {
             }
-            once.reject("Разрешите установку из OMP и повторите установку")
+            once.reject(I18n.s("plugin.allowInstall"))
             return
         }
         if (!downloading.compareAndSet(false, true)) {
-            once.reject("Обновление уже скачивается")
+            once.reject(I18n.s("plugin.updateBusy"))
             return
         }
         io.execute {
@@ -911,9 +916,9 @@ class OmpNativePlugin : Plugin() {
                 ApkInstaller.install(context, apk)
                 once.resolve()
             } catch (e: UserError) {
-                once.reject(e.message ?: "Не удалось установить обновление")
+                once.reject(e.message ?: I18n.s("plugin.updateFailed"))
             } catch (_: Exception) {
-                once.reject("Не удалось установить обновление")
+                once.reject(I18n.s("plugin.updateFailed"))
             } finally {
                 downloading.set(false)
             }
@@ -929,7 +934,7 @@ class OmpNativePlugin : Plugin() {
             try {
                 once.resolve(localInfo())
             } catch (_: Exception) {
-                once.reject("Не удалось узнать состояние сервера")
+                once.reject(I18n.s("plugin.stateFailed"))
             }
         }
     }
@@ -1019,7 +1024,7 @@ class OmpNativePlugin : Plugin() {
                 stopLocal()
                 once.resolve()
             } catch (_: Exception) {
-                once.reject("Не удалось остановить сервер")
+                once.reject(I18n.s("plugin.stopFailed"))
             }
         }
     }
@@ -1031,7 +1036,7 @@ class OmpNativePlugin : Plugin() {
             try {
                 once.resolve(JSObject().put("usedBytes", LocalTorrServer.dirSize(LocalTorrServer.cacheDir(context))))
             } catch (_: Exception) {
-                once.reject("Не удалось узнать размер кэша")
+                once.reject(I18n.s("plugin.cacheSizeFailed"))
             }
         }
     }
@@ -1047,9 +1052,9 @@ class OmpNativePlugin : Plugin() {
                 if (wasRunning) runLocal()
                 once.resolve(JSObject().put("usedBytes", LocalTorrServer.dirSize(LocalTorrServer.cacheDir(context))))
             } catch (e: UserError) {
-                once.reject(e.message ?: "Не удалось очистить кэш")
+                once.reject(e.message ?: I18n.s("plugin.cacheClearFailed"))
             } catch (_: Exception) {
-                once.reject("Не удалось очистить кэш")
+                once.reject(I18n.s("plugin.cacheClearFailed"))
             }
         }
     }
@@ -1113,7 +1118,7 @@ class OmpNativePlugin : Plugin() {
         }
         if (version == null) {
             TorrServerService.stop(context)
-            throw UserError("TorrServer не ответил за 15 секунд")
+            throw UserError(I18n.s("plugin.tsNoReply"))
         }
         LocalTorrServer.version = version
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -1409,7 +1414,7 @@ class OmpNativePlugin : Plugin() {
     @PluginMethod
     fun siteSessionPending(call: PluginCall) {
         val once = Once(call)
-        val r = remote ?: return once.reject("Управление с телефона недоступно")
+        val r = remote ?: return once.reject(I18n.s("plugin.remoteUnavailable"))
         val site = call.getString("site") ?: return once.reject(SiteHttp.BAD_REQUEST)
         val check = loginCheck(call.getObject("check")) ?: return once.reject(SiteHttp.BAD_REQUEST)
         io.execute {
@@ -1696,10 +1701,10 @@ class OmpNativePlugin : Plugin() {
     }
 
     companion object {
-        private const val NOT_SUPPORTED = "Встроенный сервер недоступен на этом телефоне"
-        private const val START_FAILED = "Не удалось запустить сервер"
-        private const val NOT_DOWNLOADED = "Сначала скачайте TorrServer"
-        private const val SECRETS_FAILED = SourceServices.SECRETS_FAILED
+        private val NOT_SUPPORTED: String get() = I18n.s("plugin.notSupported")
+        private val START_FAILED: String get() = I18n.s("ts.startFailed")
+        private val NOT_DOWNLOADED: String get() = I18n.s("plugin.downloadFirst")
+        private val SECRETS_FAILED: String get() = SourceServices.SECRETS_FAILED
         private const val PREFS = "omp-native"
         private const val CACHE_SET = "torrserverCacheConfigured"
         /** The page's UI language (ru | en) in [PREFS]. */
@@ -1709,11 +1714,11 @@ class OmpNativePlugin : Plugin() {
         private var pendingMagnet: String? = null
         // link of a tapped monitoring notification (omp:news?...), see takeMonitorOpen
         private var pendingOpen: String? = null
-        private const val MONITOR_PHONE_ONLY = "Мониторинг работает только на телефоне"
-        private const val CF_UNAVAILABLE = "Проверка недоступна"
-        private const val CF_GONE = "Телевизор уже не ждёт эту проверку"
-        private const val TV_NO_ANSWER = "Телевизор не ответил"
-        private const val NOT_PAIRED = "Телефон не подключён к телевизору"
+        private val MONITOR_PHONE_ONLY: String get() = I18n.s("plugin.monitorPhoneOnly")
+        private val CF_UNAVAILABLE: String get() = I18n.s("plugin.cfUnavailable")
+        private val CF_GONE: String get() = I18n.s("plugin.cfGone")
+        private val TV_NO_ANSWER: String get() = I18n.s("plugin.tvNoAnswer")
+        private val NOT_PAIRED: String get() = I18n.s("plugin.notPaired")
         /** The paired Android TV (base, token), set by the page through pairedTv. */
         @Volatile
         private var paired: Pair<String, String>? = null
@@ -1722,9 +1727,9 @@ class OmpNativePlugin : Plugin() {
         private const val CF_CHANNEL = "omp-tv-requests"
         private const val CF_NOTIFICATION = 7101
         @Volatile
-        private var cfNotify = "Телевизор просит пройти проверку на %s"
+        private var cfNotify: String? = null
         @Volatile
-        private var cfNotifyLogin = "Телевизор просит войти на %s"
+        private var cfNotifyLogin: String? = null
         private var watch: CloudflareWatch? = null
 
         /** The phone's one watch of the paired TV (process-wide: it outlives a recreated plugin). */
@@ -1770,8 +1775,8 @@ class OmpNativePlugin : Plugin() {
         private fun notifyCloudflare(ctx: Context, site: String, login: Boolean = false): Boolean {
             if (!MonitorNotifier.canNotify(ctx)) return false
             val nm = ctx.getSystemService(NotificationManager::class.java) ?: return false
-            if (nm.getNotificationChannel(CF_CHANNEL) == null) {
-                nm.createNotificationChannel(NotificationChannel(CF_CHANNEL, "Запросы телевизора", NotificationManager.IMPORTANCE_HIGH))
+            run { // same id again only renames the channel to the current language
+                nm.createNotificationChannel(NotificationChannel(CF_CHANNEL, I18n.s("plugin.cfChannel"), NotificationManager.IMPORTANCE_HIGH))
             }
             if (nm.getNotificationChannel(CF_CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE) return false
             val open = PendingIntent.getActivity(
@@ -1779,7 +1784,7 @@ class OmpNativePlugin : Plugin() {
                 Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-            val text = (if (login) cfNotifyLogin else cfNotify).replace("%s", site)
+            val text = (if (login) cfNotifyLogin ?: I18n.s("plugin.cfNotifyLogin") else cfNotify ?: I18n.s("plugin.cfNotify")).replace("%s", site)
             val n = NotificationCompat.Builder(ctx, CF_CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_monitor)
                 .setContentTitle("OMP")
@@ -1795,7 +1800,7 @@ class OmpNativePlugin : Plugin() {
                 false
             }
         }
-        private const val MONITOR_FAILED = "Не удалось настроить фоновую проверку"
+        private val MONITOR_FAILED: String get() = I18n.s("plugin.monitorFailed")
 
         @Volatile
         private var instance: OmpNativePlugin? = null

@@ -40,6 +40,7 @@ class TorrServerService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        I18n.load(this)
         if (intent?.action == ACTION_STOP) {
             stopSelf()
             return START_NOT_STICKY
@@ -55,7 +56,7 @@ class TorrServerService : Service() {
                 foreground = true
             } catch (_: Exception) {
                 // not allowed from the background (sticky restart): give up, a waiting start fails at once
-                LocalTorrServer.failStart("Не удалось запустить сервер")
+                LocalTorrServer.failStart(I18n.s("ts.startFailed"))
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -140,7 +141,7 @@ class TorrServerService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_server)
-            .setContentTitle("TorrServer работает")
+            .setContentTitle(I18n.s("ts.notifTitle"))
             .setContentText(text)
             .setContentIntent(open)
             .setOngoing(true)
@@ -149,8 +150,8 @@ class TorrServerService : Service() {
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .addAction(0, "Остановить", stop)
-            .addAction(0, "Открыть OMP", open)
+            .addAction(0, I18n.s("ts.notifStop"), stop)
+            .addAction(0, I18n.s("ts.notifOpen"), open)
             .build()
     }
 

@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.sources
 
+import com.spacesarmat.omp.I18n
+
 import android.content.Context
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -140,7 +142,7 @@ class SourceServices private constructor(context: Context) {
         )
 
     companion object {
-        const val SECRETS_FAILED = "Не удалось открыть защищённое хранилище"
+        val SECRETS_FAILED: String get() = I18n.s("errors.secretsFailed")
         private const val JS_SECRET_PREFIX = "js:"
 
         @Volatile
@@ -148,7 +150,7 @@ class SourceServices private constructor(context: Context) {
 
         fun get(context: Context): SourceServices =
             instance ?: synchronized(this) {
-                instance ?: SourceServices(context.applicationContext).also { instance = it }
+                instance ?: SourceServices(context.applicationContext).also { I18n.load(context.applicationContext); instance = it }
             }
 
         /** JS keys live in their own namespace: page code cannot read the cookie entries. null when invalid. */

@@ -1,23 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Native player on Android TV (player/PlayerActivity.kt) -->
 <resources>
-    <string name="player_phone_badge">Управление с телефона</string>
-    <string name="player_pause">Пауза</string>
-    <string name="player_play">Воспроизвести</string>
-    <string name="player_skip_intro">Пропустить заставку</string>
-    <string name="player_next">Следующая серия</string>
-    <string name="player_hint">◀ ▶ перемотка · OK пауза · ▲ меню · Назад выход</string>
-    <string name="player_hint_chapters">◀ ▶ перемотка · OK пауза · ▲ меню · CH− · CH+ — соседняя глава · Назад выход</string>
-    <string name="player_undo_skip">Вернуть · OK</string>
-    <string name="player_intro_skipped">Заставка пропущена</string>
-    <string name="player_credits_skipped">Титры пропущены</string>
-    <string name="player_next_hint">OK — смотреть сейчас · Назад — отмена</string>
-    <string name="player_error_hint">OK — повторить · Назад — выход</string>
-    <string name="player_donate_qr">QR-код ссылки на Boosty</string>
-    <string name="player_donate_pause_title">Нравится OMP?</string>
-    <string name="player_donate_pause_text">Поддержите разработку — наведите камеру телефона на код</string>
-    <string name="player_donate_credits_title">Досмотрели? Спасибо!</string>
-    <string name="player_donate_credits_text">OMP бесплатный и без рекламы. Поддержать — по коду с телефона</string>
 
     <style name="OmpPlayerTheme" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowFullscreen">true</item>

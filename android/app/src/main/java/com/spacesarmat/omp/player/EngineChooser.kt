@@ -1,10 +1,14 @@
 package com.spacesarmat.omp.player
 
+import com.spacesarmat.omp.I18n
+
 /** The two engines behind the player UI. [wire] is the value the page stores, [label] the name on screen. */
-enum class EngineKind(val wire: String, val label: String) {
-    MEDIA3("builtin", "Встроенный"),
+enum class EngineKind(val wire: String, private val text: String?) {
+    MEDIA3("builtin", null),
     VLC("vlc", "VLC"),
     ;
+
+    val label: String get() = text ?: I18n.s("player.engineBuiltin")
 
     val other: EngineKind get() = if (this == MEDIA3) VLC else MEDIA3
 }
@@ -97,16 +101,16 @@ class EngineChooser(val mode: EngineMode, val vlcAvailable: Boolean = true) {
     companion object {
         /** «Плеер: VLC → сменить на встроенный» (the player menu row). */
         fun menuRow(current: EngineKind, vlcAvailable: Boolean = true): String =
-            if (!vlcAvailable) "Плеер: " + current.label + " · " + VLC_UNAVAILABLE_TEXT
-            else "Плеер: " + current.label + " → сменить на " + (if (current.other == EngineKind.VLC) "VLC" else "встроенный")
+            if (!vlcAvailable) I18n.s("player.menuRowNoVlc", "current" to current.label, "note" to VLC_UNAVAILABLE_TEXT)
+            else I18n.s("player.menuRowSwitch", "current" to current.label, "other" to (if (current.other == EngineKind.VLC) "VLC" else I18n.s("player.engineBuiltinLower")))
 
         /** Media3's PlaybackException code name of a decoder that failed while decoding. */
         const val DECODING_FAILED = "ERROR_CODE_DECODING_FAILED"
 
         /** libVLC has no native libraries for this device (menu row, message, TV settings). */
-        const val VLC_UNAVAILABLE_TEXT = "VLC недоступен на этом устройстве"
+        val VLC_UNAVAILABLE_TEXT: String get() = I18n.s("player.vlcUnavailable")
 
         /** The message after the automatic switch because of the format. */
-        const val FORMAT_SWITCH_TEXT = "Встроенный плеер не открыл этот файл — включён VLC"
+        val FORMAT_SWITCH_TEXT: String get() = I18n.s("player.formatSwitch")
     }
 }

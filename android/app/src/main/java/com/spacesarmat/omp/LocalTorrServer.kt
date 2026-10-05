@@ -36,7 +36,7 @@ import org.json.JSONObject
 object LocalTorrServer {
     const val PORT = 8090
     const val BASE = "http://127.0.0.1:$PORT"
-    const val CRASHED = "Сервер остановился с ошибкой"
+    val CRASHED: String get() = I18n.s("ts.crashed")
 
     /** (running, error) after every change. */
     fun interface Listener {
@@ -68,7 +68,7 @@ object LocalTorrServer {
     fun addListener(l: Listener) = listeners.add(l)
     fun removeListener(l: Listener) = listeners.remove(l)
 
-    const val NOT_DOWNLOADED = "TorrServer не скачан"
+    val NOT_DOWNLOADED: String get() = I18n.s("ts.notDownloaded")
 
     @Volatile private var pinCache: TorrServerPin? = null
 
@@ -134,7 +134,7 @@ object LocalTorrServer {
                 return
             }
             if (echo(400) != null) {
-                fail("Порт $PORT занят другим приложением")
+                fail(I18n.s("ts.portBusy", "port" to PORT.toString()))
                 return
             }
             // sh records its pid and execs the server, so the pid is the server's own
@@ -163,7 +163,7 @@ object LocalTorrServer {
                 worker.execute { exited(app, p) }
             }, "torrserver-watch").apply { isDaemon = true }.start()
         } catch (_: Exception) {
-            fail("Не удалось запустить сервер")
+            fail(I18n.s("ts.startFailed"))
         }
     }
 
@@ -484,15 +484,15 @@ object LocalTorrServer {
 
     // ---- notification text ----
 
-    private val ru: Locale = Locale.forLanguageTag("ru")
+    private val numLocale: Locale get() = if (I18n.lang == "en") Locale.US else Locale.forLanguageTag("ru")
 
     fun torrents(n: Int): String {
         val m10 = n % 10
         val m100 = n % 100
         val word = when {
-            m10 == 1 && m100 != 11 -> "раздача"
-            m10 in 2..4 && m100 !in 12..14 -> "раздачи"
-            else -> "раздач"
+            m10 == 1 && m100 != 11 -> I18n.s("ts.torrentOne")
+            m10 in 2..4 && m100 !in 12..14 -> I18n.s("ts.torrentFew")
+            else -> I18n.s("ts.torrentMany")
         }
         return "$n $word"
     }
@@ -500,13 +500,13 @@ object LocalTorrServer {
     /** 4404019 → «4,2 МБ/с», 52000 → «51 КБ/с». */
     fun speed(bytesPerSec: Double): String {
         val mb = bytesPerSec / (1024.0 * 1024.0)
-        return if (mb >= 1) String.format(ru, "%.1f МБ/с", mb)
-        else "${Math.round(bytesPerSec / 1024.0)} КБ/с"
+        return if (mb >= 1) String.format(numLocale, "%.1f ", mb) + I18n.s("ts.mbps")
+        else "${Math.round(bytesPerSec / 1024.0)} " + I18n.s("ts.kbps")
     }
 
     /** «192.168.1.50:8090 · 1 раздача · 4,2 МБ/с». */
     fun statusLine(ip: String?, stats: Stats?): String {
-        val parts = mutableListOf(if (ip != null) "$ip:$PORT" else "IP не найден")
+        val parts = mutableListOf(if (ip != null) "$ip:$PORT" else I18n.s("ts.noIp"))
         if (stats != null) {
             parts.add(torrents(stats.count))
             stats.speed?.let { parts.add(speed(it)) }

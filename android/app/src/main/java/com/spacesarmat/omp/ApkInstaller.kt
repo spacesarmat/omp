@@ -41,11 +41,11 @@ object ApkInstaller {
     /** Downloads [url] to cacheDir/updates/omp.apk and verifies [sha256]; [progress] gets 0..100. */
     fun download(context: Context, url: String, sha256: String, progress: (Int) -> Unit): File {
         val expected = sha256.trim().lowercase()
-        if (!Regex("[0-9a-f]{64}").matches(expected)) throw UserError("Нет контрольной суммы обновления")
+        if (!Regex("[0-9a-f]{64}").matches(expected)) throw UserError(I18n.s("install.err.noChecksum"))
         val request = try {
             Request.Builder().url(url).build()
         } catch (_: IllegalArgumentException) {
-            throw UserError("Некорректная ссылка на обновление")
+            throw UserError(I18n.s("install.err.badUrl"))
         }
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
         val part = File(dir, "omp.apk.part")
@@ -55,8 +55,8 @@ object ApkInstaller {
         val digest = MessageDigest.getInstance("SHA-256")
         try {
             client.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) throw UserError("Не удалось скачать обновление (HTTP ${resp.code})")
-                val body = resp.body ?: throw UserError("Не удалось скачать обновление")
+                if (!resp.isSuccessful) throw UserError(I18n.s("install.err.downloadHttp", "code" to resp.code.toString()))
+                val body = resp.body ?: throw UserError(I18n.s("install.err.download"))
                 val total = body.contentLength()
                 var done = 0L
                 var lastPercent = -1
@@ -86,16 +86,16 @@ object ApkInstaller {
             throw e
         } catch (e: IOException) {
             part.delete()
-            throw UserError("Не удалось скачать обновление")
+            throw UserError(I18n.s("install.err.download"))
         }
         val actual = digest.digest().joinToString("") { "%02x".format(it) }
         if (actual != expected) {
             part.delete()
-            throw UserError("Файл повреждён (контрольная сумма)")
+            throw UserError(I18n.s("install.err.corrupt"))
         }
         if (!part.renameTo(target)) {
             part.delete()
-            throw UserError("Не удалось сохранить обновление")
+            throw UserError(I18n.s("install.err.save"))
         }
         progress(100)
         return target
