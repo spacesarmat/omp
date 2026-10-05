@@ -13,7 +13,7 @@ export type Key = StringKeys<typeof ru>;
 export type PluralKey = PluralKeys<typeof ru>;
 export type Params = { [k: string]: string | number };
 
-/** The current UI language; components re-render when it changes. */
+/** The current UI language. t() reads it with peek(): the app roots re-mount the UI (key={lang.value}) when it changes. */
 export const lang = signal<Lang>('ru');
 
 /** System languages that get the Russian UI. */
@@ -58,7 +58,7 @@ function fill(s: string, params?: Params): string {
 }
 
 function entry(key: string): unknown {
-  const v = lang.value === 'en' ? lookup(en, key) : undefined;
+  const v = lang.peek() === 'en' ? lookup(en, key) : undefined;
   return v !== undefined ? v : lookup(ru, key);
 }
 
@@ -94,7 +94,7 @@ export function tp(key: PluralKey, n: number, params?: Params): string {
 /** «7,4» in Russian, «7.4» in English; digits = fixed decimals. */
 export function fmtNumber(n: number, digits?: number): string {
   const s = digits === undefined ? String(n) : n.toFixed(digits);
-  return lang.value === 'ru' ? s.replace('.', ',') : s;
+  return lang.peek() === 'ru' ? s.replace('.', ',') : s;
 }
 
 const MIB = 1024 * 1024;

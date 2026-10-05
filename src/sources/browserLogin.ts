@@ -11,7 +11,7 @@ import { rutrackerCaptcha } from './rutrackerText';
 import { siteLoginCode, siteLoginKeys } from './siteLoginText';
 import type { SecretStore, SourceContext } from './types';
 
-/// ---- copy ----
+// ---- copy ----
 
 export const browserLoginText = (): string => t('sources.browser.login');
 export const browserHint = (): string => t('sources.browser.hint');

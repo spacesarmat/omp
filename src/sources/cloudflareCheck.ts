@@ -11,7 +11,7 @@ import { allSources, getSource } from './registry';
 import { isCloudflareBypassOn } from './store';
 import type { Source } from './types';
 
-/// ---- copy (mockups PhoneCloudflare, TvCloudflare, PhoneSite, Main) ----
+// ---- copy (mockups PhoneCloudflare, TvCloudflare, PhoneSite, Main) ----
 
 export const sheetTitle = (): string => t('cloudflare.sheetTitle');
 export const sheetNoteTv = (): string => t('cloudflare.sheetNoteTv');

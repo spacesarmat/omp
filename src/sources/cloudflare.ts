@@ -4,6 +4,7 @@
 // matched too). Log lines name the site, never an address or a cookie. Chromium 53 safe (no Error subclasses).
 import { t } from '../i18n';
 import { ru } from '../i18n/ru';
+import { en } from '../i18n/en';
 import { log } from '../lib/log';
 
 export type CloudflareKind = 'cloudflare' | 'cloudflare-interactive';
@@ -19,11 +20,11 @@ const NATIVE_CF_INTERACTIVE = ru.cloudflare.interactive;
 
 /** The message is a Cloudflare 'interactive' one: the native text or the shown one (any language the person had). */
 export function isCfInteractiveMessage(m: unknown): boolean {
-  return m === NATIVE_CF_INTERACTIVE || m === cfInteractive();
+  return m === NATIVE_CF_INTERACTIVE || m === en.cloudflare.interactive || m === cfInteractive();
 }
 
 function isCfFailedMessage(m: unknown): boolean {
-  return m === NATIVE_CF_FAILED || m === cfFailed();
+  return m === NATIVE_CF_FAILED || m === en.cloudflare.failed || m === cfFailed();
 }
 
 /** A failed site request because of Cloudflare: `code` is the kind, `siteUrl` the site root to open a visible check on. */

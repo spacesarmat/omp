@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { ComponentType } from 'preact';
+import { lang } from './i18n';
 import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { installWheelScroll } from './ui/wheel';
@@ -109,7 +110,7 @@ export function App() {
   const wn = whatsNew.value;
   const showWhatsNew = !!wn && !dialogOpen.value && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value));
   return (
-    <div class="app">
+    <div class="app" key={lang.value}>
       <div class="screen-host" key={routeKey(r)}>{renderRoute(r)}</div>
       {shouldShowUpdateDialog(r.name) && !dialogOpen.value && <UpdateDialog />}
       {showWhatsNew && <WhatsNewDialog />}
