@@ -13,6 +13,10 @@ describe('registrationUrl', () => {
   it('rustorka is phpBB-style on its host', () => {
     expect(registrationUrl('rustorka')).toBe('https://rustorka.com/forum/profile.php?mode=register');
   });
+  it('NNM-Club is phpBB-style on nnmclub.to', () => {
+    expect(registrationUrl('nnmclub')).toBe('https://nnmclub.to/forum/profile.php?mode=register');
+    expect(registrationOf({ id: 'nnmclub', siteUrl: 'https://nnmclub.to/' })).toBe('https://nnmclub.to/forum/profile.php?mode=register');
+  });
   it('any other source has none', () => {
     expect(registrationUrl('rutor')).toBeNull();
     expect(registrationUrl('')).toBeNull();

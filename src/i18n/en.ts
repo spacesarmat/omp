@@ -526,7 +526,7 @@ export const en: EnDict<typeof ru> = {
     today: 'today',
     yesterday: 'yesterday',
     seeds: { one: '{n} seed', other: '{n} seeds' },
-    jackettHint: 'Is the site blocked by Cloudflare? For Kinozal and rustorka turn on the bypass in “Search sources”; connect other trackers through Jackett or Prowlarr — see “Questions and answers” for how.',
+    jackettHint: 'Is the site blocked by Cloudflare? Sign in to it with the browser (the “Sign in” button next to the site in “Search sources”) or connect it through Jackett, Prowlarr or FlareSolverr — see “Questions and answers” for how.',
     sort: {
       seeds: 'By seeds',
       date: 'By date',
@@ -545,6 +545,13 @@ export const en: EnDict<typeof ru> = {
       off: 'off',
       error: 'error',
       errorDetail: 'error: {detail}',
+      behindCf: 'behind Cloudflare',
+    },
+    cfHint: {
+      login: 'Sign in with the browser — the “Sign in” button',
+      again: 'Sign in with the browser again — “Sign out”, then “Sign in”',
+      jackett: 'Connect {name} through Jackett, Prowlarr or FlareSolverr',
+      how: 'How',
     },
     site: {
       error: 'The site answered with error {status}',
@@ -667,6 +674,7 @@ export const en: EnDict<typeof ru> = {
       notFound: 'Source not found',
       searchOn: 'Search on {name}',
       loginNote: 'Without signing in the site does not give out the .torrent. The password is kept in the phone’s encrypted storage.',
+      loginNoteOptional: 'Signing in is optional: it helps to get past the Cloudflare check. The password is kept in the phone’s encrypted storage.',
       sendLogin: 'Send the sign-in to the TV',
       sending: 'Sending…',
       loginSent: 'The sign-in to {name} was sent to the TV',
@@ -1322,7 +1330,7 @@ export const en: EnDict<typeof ru> = {
   tvSources: {
     tsRutor: 'rutor (TorrServer search)',
     intro: 'Jackett and Prowlarr search directly. Without them, the search goes through TorrServer.',
-    phoneHow: 'On the phone: OMP → Settings → Search sources → "Send to TV". Connections to Jackett and Prowlarr, site sign-ins (rutracker, Kinozal, rustorka) and the Cloudflare check can be sent too — keys and passwords are not typed with the remote.',
+    phoneHow: 'On the phone: OMP → Settings → Search sources → "Send to TV". Connections to Jackett and Prowlarr, site sign-ins (rutracker, Kinozal, rustorka, NNM-Club) and the Cloudflare check can be sent too — keys and passwords are not typed with the remote.',
     noIndexers: 'Connect Jackett or Prowlarr on the phone and send it to the TV.',
     noTransfers: 'Nothing has been sent from the phone yet',
     lastTransfer: 'Last transfer: {day} {time} · "{phone}"',

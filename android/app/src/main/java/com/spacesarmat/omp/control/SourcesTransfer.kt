@@ -100,7 +100,7 @@ object SourcesProtocol {
      * Sites whose login may travel in `logins` (src/sources/transfer.ts LOGIN_SITES). A fixed list: the site id names the
      * storage entries (`<id>.pending.username`), so a phone can never stage under another name.
      */
-    val LOGIN_SITES = setOf("kinozal", "rustorka")
+    val LOGIN_SITES = setOf("kinozal", "rustorka", "nnmclub")
     private val LOGIN_FIELDS = setOf("username", "password")
     /** Sites whose browser session may travel in `sessions` (src/sources/transfer.ts SESSION_SITES). */
     val SESSION_SITES = LOGIN_SITES + "rutracker"
@@ -112,6 +112,7 @@ object SourcesProtocol {
         "rutracker" to setOf("rutracker.org"),
         "kinozal" to setOf("kinozal.me", "kinozal.guru", "kinozal.tv"),
         "rustorka" to setOf("rustorka.com"),
+        "nnmclub" to setOf("nnmclub.to"),
     )
     private val SESSION_FIELDS = setOf("host", "cookies", "ua")
     private val COOKIE_FIELDS = setOf("name", "value")

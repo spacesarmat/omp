@@ -15,7 +15,7 @@ import { torrentby } from './torrentby';
 import type { Source } from './types';
 
 export function builtinParsers(): Source[] {
-  // the sites behind Cloudflare last: off until signed in («Сайты за Cloudflare»)
+  // Kinozal and rustorka last: off until signed in (NNM-Club searches as a guest)
   return [rutor, nnmclub, anidub, bigfangroup, torrentby, rutracker, kinozal, rustorka];
 }
 

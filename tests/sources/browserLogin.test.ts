@@ -18,6 +18,7 @@ import {
 } from '../../src/sources/browserLogin';
 import { kinozal, kinozalHosts } from '../../src/sources/kinozal';
 import { rustorka } from '../../src/sources/rustorka';
+import { nnmclub } from '../../src/sources/nnmclub';
 import { rutracker, rutrackerCaptcha } from '../../src/sources/rutracker';
 import { resetMirrors } from '../../src/sources/mirrors';
 import { reloadSourcePrefs } from '../../src/sources/store';
@@ -55,6 +56,29 @@ afterEach(() => setBrowserLoginPlatform(null));
 const CREDS = { 'kinozal.username': 'test-user', 'kinozal.password': 'test-pass' };
 
 describe('browser login flows', () => {
+  it('NNM-Club: the browser login opens forum/login.php, checks forum/index.php for the logout link, «Выйти» clears it', async () => {
+    const f = fakePlatform({ result: 'ok', host: 'nnmclub.to', via: 'here' });
+    setBrowserLoginPlatform(f.p);
+    const site = fakeSite(() => page('', 'https://nnmclub.to/'));
+    expect((await nnmclub.browserLogin!(site.ctx)).result).toBe('ok');
+    expect(f.asked[0].spec).toEqual({
+      url: 'https://nnmclub.to/forum/login.php',
+      site: 'NNM-Club',
+      source: 'nnmclub',
+      hosts: ['nnmclub.to'],
+      // no cookie names: phpBB guests and members share them (checked on a device)
+      check: { loginPath: 'forum/login.php', path: 'forum/index.php', marker: 'login.php?logout' },
+    });
+    expect(site.secrets).toEqual({ 'nnmclub.browser': '1' });
+    expect(await nnmclub.browserSession!(site.ctx)).toBe(true);
+    expect(await nnmclub.loggedIn!(site.ctx)).toBe(true);
+    expect(nnmclub.sessionHosts!()).toEqual(['nnmclub.to']);
+    await nnmclub.logout!(site.ctx);
+    expect(site.secrets).toEqual({});
+    expect(site.cleared).toEqual(['https://nnmclub.to/']);
+    expect(site.calls).toEqual([]);
+  });
+
   it('a signed-in browser session marks the site, forgets the saved password and adopts the mirror', async () => {
     const f = fakePlatform({ result: 'ok', host: 'kinozal.tv', via: 'here' });
     setBrowserLoginPlatform(f.p);

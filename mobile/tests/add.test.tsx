@@ -645,7 +645,7 @@ describe('Add unified search: stable rows', () => {
     await flush();
     const hint = el.querySelector('[data-hint="jackett"]')!;
     expect(hint.textContent).toContain('rutracker: Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже');
-    expect(hint.textContent).toContain('через Jackett или Prowlarr');
+    expect(hint.textContent).toContain('через Jackett, Prowlarr или FlareSolverr');
     expect(hint.textContent).not.toContain('Фейк-2');
   });
 
