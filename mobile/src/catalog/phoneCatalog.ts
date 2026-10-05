@@ -36,18 +36,19 @@ export function setCatalogClientForTests(c: CatalogClient | null): void {
 
 /**
  * The catalog client for the active server: its TMDB settings when it has a key, else OMP's built-in key.
- * Resolved once per server; a server without any key is asked again next time (the key may be added meanwhile).
+ * `fresh` reads the server's settings again (each «Обзор» visit and «Повторить» do: the key or the mirror may have
+ * changed); otherwise the client of the last read for this server is reused (chips, next pages). A failed or empty
+ * read is never kept.
  */
-export function phoneCatalog(): Promise<CatalogClient> {
+export function phoneCatalog(fresh?: boolean): Promise<CatalogClient> {
   if (forTests) return Promise.resolve(forTests);
   const ts = client.value;
   const server = ts ? ts.baseUrl : '';
-  if (cached && cached.server === server) return cached.client;
+  if (!fresh && cached && cached.server === server) return cached.client;
   const http = phoneSourceContext().http;
-  const p = (ts ? ts.tmdbSettings() : Promise.resolve(null)).then((cfg) => {
-    const endpoint = endpointOf(cfg, TMDB_FALLBACK_KEY);
-    if (!endpoint && cached && cached.client === p) cached = null;
-    return createCatalogClient(endpoint, http);
+  const p: Promise<CatalogClient> = (ts ? ts.tmdbSettings() : Promise.resolve(null)).then((cfg) => {
+    if (!cfg && cached && cached.client === p) cached = null;
+    return createCatalogClient(endpointOf(cfg, TMDB_FALLBACK_KEY), http);
   });
   cached = { server, client: p };
   return p;

@@ -41,6 +41,8 @@ export function Discover() {
   // the current request: answers of an older one (another chip, a retry) are dropped
   const gen = useRef(0);
   const sentinel = useRef<HTMLDivElement>(null);
+  // the first load of a visit and «Повторить» read the server's TMDB settings again
+  const fresh = useRef(true);
   const list = torrents.value;
   const index = useMemo(() => libraryIndex(list), [list]);
 
@@ -50,7 +52,9 @@ export function Discover() {
     setError(null);
     setMoreFailed(false);
     setMoreBusy(false);
-    phoneCatalog()
+    const reread = fresh.current;
+    fresh.current = false;
+    phoneCatalog(reread)
       .then((c) => c.novelties(filter, 1))
       .then(
         (r) => {
@@ -131,7 +135,10 @@ export function Discover() {
           <p class="m-disc-error-title">{t(OFFLINE_TITLE)}</p>
           <p class="m-muted">{t(error === 'nokey' ? NOKEY_TEXT : OFFLINE_TEXT)}</p>
           <div class="m-disc-error-actions">
-            <button type="button" class="m-btn m-btn-primary" onClick={() => setReload((n) => n + 1)}>
+            <button type="button" class="m-btn m-btn-primary" onClick={() => {
+                fresh.current = true;
+                setReload((n) => n + 1);
+              }}>
               {t('common.retry')}
             </button>
             {error === 'nokey' && (

@@ -11,6 +11,7 @@ import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { CatalogClient } from '../../src/catalog/client';
+import { sourceHttp } from '../src/platform/native';
 import type { CatalogTitle, Kind } from '../../src/catalog/tmdb';
 import type { Torrent } from '../../src/api/types';
 
@@ -361,6 +362,47 @@ describe('phoneCatalog', () => {
     await expect(c.novelties('all', 1)).rejects.toMatchObject({ code: 'nokey' });
     await phoneCatalog();
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  const answer = (title: string) => ({
+    status: 200,
+    url: '',
+    text: JSON.stringify({ results: [{ id: 5, title, original_title: title, release_date: '2026-03-01', vote_average: 7 }], total_pages: 1 }),
+  });
+
+  it('a failed settings read is not kept: «Повторить» reads them again and uses the server key', async () => {
+    const settingsSpy = vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValueOnce(null).mockResolvedValue({ APIKey: 'own' });
+    const get = vi.spyOn(sourceHttp, 'get').mockImplementation(async () => answer('Полуночный архив'));
+    mount(<Discover />);
+    await flush();
+    expect(el.textContent).toContain(ru.discover.nokeyText);
+    expect(get).not.toHaveBeenCalled();
+    act(() => button('Повторить')!.click());
+    await flush();
+    expect(settingsSpy).toHaveBeenCalledTimes(2);
+    expect(get).toHaveBeenCalled();
+    expect(String(get.mock.calls[0][0])).toContain('api_key=own');
+    expect(tiles().length).toBeGreaterThan(0);
+  });
+
+  it('a new Discover picks up a changed TMDB mirror of the same server', async () => {
+    const settingsSpy = vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'own', APIURL: 'https://mirror-a.test' });
+    const get = vi.spyOn(sourceHttp, 'get').mockImplementation(async () => answer('Clockwork Harbor'));
+    mount(<Discover />);
+    await flush();
+    expect(String(get.mock.calls[0][0]).indexOf('https://mirror-a.test/3/')).toBe(0);
+    act(() => render(null, el));
+    settingsSpy.mockResolvedValue({ APIKey: 'own', APIURL: 'https://mirror-b.test' });
+    get.mockClear();
+    mount(<Discover />);
+    await flush();
+    expect(get).toHaveBeenCalled();
+    expect(get.mock.calls.every((c) => String(c[0]).indexOf('https://mirror-b.test/3/') === 0)).toBe(true);
+    // the chips and the next pages keep the client of this visit: no extra settings reads
+    const reads = settingsSpy.mock.calls.length;
+    act(() => button('Фильмы')!.click());
+    await flush();
+    expect(settingsSpy.mock.calls.length).toBe(reads);
   });
 
   it('another server gets its own client', async () => {
