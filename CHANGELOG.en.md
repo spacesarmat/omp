@@ -10,6 +10,14 @@ The English translation covers the latest versions only; the full history (in Ru
 - «Search sources»: one row style — only › and the switch on the right, «Sign in» and «Sign out» as a link in the status line; rutracker gets its site screen too (including «Send the sign-in to the TV»)
 - torrent.by works on the phone again: the site leaves out an intermediate certificate, OMP now carries it itself; a certificate error says «Site certificate error» instead of «not responding»
 - Browser sign-in: an ad on a site's page (NNM-Club, for example) no longer pulls the sign-in window away — taps on the fields work and the keyboard opens; the sign-in page fits the screen width and can be zoomed with two fingers
+- Tab header: one compact row on all tabs. In «New» the buttons are round, refresh replaces «Check now», and monitoring is a separate icon
+- «Add»: search first, the magnet link is tucked behind «Add by magnet link» under it and opens the field in place
+- «New» and search results: short titles, quality badges and posters
+- The torrent card is compact: poster, three lines, round ＋ and ▶TV; details, category and the full title are in a sheet on tap
+- «Mine»: a series' seasons are grouped into one card. The series screen: a TMDB backdrop, years · rating · genres, overview, seasons with episode count and year, missing seasons with «Find torrents»
+- Torrent screen: episode names from TMDB, season chips to switch seasons
+- «Find in better quality» for films and series: a warning when seeds are few, a note for multi-season packs, clear reasons when it fails, «Cancel»; replacing in place keeps your watch positions
+- Fixed: content no longer hides under the tab bar, the bar hides while the keyboard is open and stays above the cards; «Name (2026)» in «Mine» reads «Name · 2026»; the series screen opens on the requested season
 
 ## 0.17.0-beta.1
 
