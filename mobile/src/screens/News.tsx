@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { t } from '../../../src/i18n';
+import { t, tp } from '../../../src/i18n';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
@@ -30,17 +30,19 @@ import { findingsOf, loadSubs, markFindingsSeen, removeFindings, unseenCount } f
 import { libraryRange } from '../../../src/monitor/newEpisodes';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { BETTER_ID, EPISODES_ID, type Finding } from '../../../src/monitor/types';
+import { filterSubs, loadSubsSort, matchFindings, saveSubsSort, sortLabel, sortSubs, SUBS_SORTS, type SubsSort } from '../monitor/subsView';
 
 type Seg = 'feed' | 'subs';
 
 /** «Checking…» ends after this even without monitorDone (the background run is capped at 3 minutes). */
 export const RUN_MAX_MS = 3 * 60 * 1000 + 15000;
 const POLL_MS = 5000;
+const CLEAR = 'M6 6l12 12M18 6L6 18';
 
 const catLabel = (c: FeedCategory): string => (c === 'movie' ? t('category.movie') : c === 'tv' ? t('category.tv') : t('news.anime'));
 
 /** The segment, category and filter outlive the screen (another tab and back keeps them). */
-const memo: { seg: Seg; cat: FeedCategory; hd: boolean } = { seg: 'feed', cat: 'movie', hd: false };
+const memo: { seg: Seg; cat: FeedCategory; hd: boolean; q: string } = { seg: 'feed', cat: 'movie', hd: false, q: '' };
 
 // --- feed refresh: one run per category at a time; it fills the shared cache even if the screen is left
 const runs: Partial<Record<FeedCategory, SearchHandle>> = {};
@@ -89,6 +91,7 @@ export function resetNews(): void {
   memo.seg = 'feed';
   memo.cat = 'movie';
   memo.hd = false;
+  memo.q = '';
 }
 
 function feedCategoryOf(cat: FeedCategory): (r: SourceResult) => string {
@@ -204,7 +207,20 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
   const [replace, setReplace] = useState<{ f: Finding; watch: boolean } | null>(null);
   const [prompt, setPrompt] = useState(!!watch);
   const rows = useResultRows();
+  const [query, setQueryState] = useState(memo.q);
+  const [sort, setSort] = useState<SubsSort>(loadSubsSort);
+  const setQuery = (q: string) => {
+    memo.q = q;
+    setQueryState(q);
+  };
+  const pickSort = (m: SubsSort) => {
+    saveSubsSort(m);
+    setSort(m);
+  };
   const subs = loadSubs();
+  const searching = !!query.trim();
+  const shownSubs = filterSubs(sortSubs(subs, sort), query);
+  const found = matchFindings(query);
   const eps = findingsOf(EPISODES_ID);
   const better = findingsOf(BETTER_ID);
   const settings = loadMonitorSettings();
@@ -273,7 +289,36 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       </div>
       <div class="m-set-label">{t('news.subs')}</div>
       {subs.length === 0 && <div class="m-muted m-small">{t('news.noSubs')}</div>}
-      {subs.map((s) => {
+      {subs.length > 0 && (
+        <div class="m-subs-search">
+          <input
+            class="m-input m-lib-search m-grow"
+            type="search"
+            data-subs-search
+            aria-label={t('news.subsSearch')}
+            placeholder={t('news.subsSearch')}
+            value={query}
+            onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
+          />
+          {query && (
+            <button type="button" class="m-icon-btn" data-subs-clear aria-label={t('news.clearSearch')} onClick={() => setQuery('')}>
+              <Icon d={CLEAR} size={18} />
+            </button>
+          )}
+        </div>
+      )}
+      {subs.length > 1 && (
+        <div class="m-chips m-subs-sort" role="group" aria-label={t('news.sortHead')} style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          <span class="m-muted m-small">{t('news.sortHead') + ':'}</span>
+          {SUBS_SORTS.map((m) => (
+            <button key={m} type="button" class={'m-chip' + (sort === m ? ' on' : '')} aria-pressed={sort === m} onClick={() => pickSort(m)}>
+              {sortLabel(m)}
+            </button>
+          ))}
+        </div>
+      )}
+      {searching && shownSubs.length === 0 && subs.length > 0 && <div class="m-muted m-small">{t('news.noSubsMatch')}</div>}
+      {shownSubs.map((s) => {
         const n = unseenCount(s.id);
         return (
           <button key={s.id} type="button" class="m-sub-row" onClick={() => navigate({ name: 'subFindings', id: s.id })}>
@@ -285,6 +330,14 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
           </button>
         );
       })}
+      {searching && (
+        <div data-found-releases>
+          <div class="m-set-label">{t('news.foundReleases')}</div>
+          {found.shown.length === 0 && <div class="m-muted m-small">{t('news.noFindingsMatch')}</div>}
+          <div class="m-results">{found.shown.map((f) => rows.card(f.result))}</div>
+          {found.more > 0 && <div class="m-muted m-small">{tp('news.moreFindings', found.more)}</div>}
+        </div>
+      )}
       <button type="button" class="m-sub-new" onClick={() => setEditing(true)}>
         {t('news.newSub')}
       </button>
