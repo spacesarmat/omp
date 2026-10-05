@@ -56,14 +56,14 @@ export function FiltersSheet({
       </div>
       <div class="m-sheet-scroll m-filters">
         <div class="m-filter-group">
-          <span class="m-filter-label">{t('filters.quality')}</span>
+          <span class="m-filter-label">{t('monitor.sub.quality')}</span>
           <div class="m-chips" style={{ flexWrap: 'wrap' }}>
             {res.map(([r, l]) => <Chip key={r} on={f.res.indexOf(r) >= 0} label={l} onClick={() => set({ res: toggle(f.res, r) })} />)}
             <Chip on={f.hdr} label={t('filters.hdrDv')} onClick={() => set({ hdr: !f.hdr })} />
           </div>
         </div>
         <div class="m-filter-group">
-          <span class="m-filter-label">{t('filters.source')}</span>
+          <span class="m-filter-label">{t('add.source')}</span>
           <div class="m-chips" style={{ flexWrap: 'wrap' }}>
             {src.map(([s, l]) => <Chip key={s} on={f.source.indexOf(s) >= 0} label={l} onClick={() => set({ source: toggle(f.source, s) })} />)}
             <Chip on={f.hideCam} label={t('filters.hideCam')} onClick={() => set({ hideCam: !f.hideCam })} />
@@ -97,9 +97,9 @@ export function FiltersSheet({
         </div>
         {(seasons.length > 0 || f.season > 0) && (
           <div class="m-filter-group">
-            <span class="m-filter-label">{t('filters.series')}</span>
+            <span class="m-filter-label">{t('category.tv')}</span>
             <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-              {seasons.map((s) => <Chip key={s} on={f.season === s} label={t('filters.seasonChip', { n: s })} onClick={() => set({ season: f.season === s ? 0 : s })} />)}
+              {seasons.map((s) => <Chip key={s} on={f.season === s} label={t('library.season', { n: s })} onClick={() => set({ season: f.season === s ? 0 : s })} />)}
               <Chip on={f.fullSeason} label={t('filters.fullSeasonOnly')} onClick={() => set({ fullSeason: !f.fullSeason })} />
             </div>
           </div>
