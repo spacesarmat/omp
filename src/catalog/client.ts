@@ -63,11 +63,11 @@ export function createCatalogClient(
     saveJson(CACHE_KEY, mem);
   }
 
-  /** The parsed JSON answer for the URL: from the cache while fresh, else fetched. */
-  function fetchJson(url: string, ttl: number): Promise<unknown> {
+  /** The sanitized answer for the URL (only that is cached, never the raw body): from the cache while fresh, else fetched. */
+  function fetchJson<T>(url: string, ttl: number, parse: (raw: unknown) => T): Promise<T> {
     const key = cacheKeyOf(url);
     const hit = mem[key];
-    if (hit && now() - hit.at < ttl && now() >= hit.at) return Promise.resolve(hit.data);
+    if (hit && now() - hit.at < ttl && now() >= hit.at) return Promise.resolve(hit.data as T);
     return http.get(url, { timeoutMs: TIMEOUT_MS }).then(
       (r) => {
         const s = r.status;
@@ -81,8 +81,9 @@ export function createCatalogClient(
         } catch (e) {
           throw fail('blocked');
         }
-        remember(key, data);
-        return data;
+        const out = parse(data);
+        remember(key, out);
+        return out;
       },
       () => { throw fail('offline'); },
     );
@@ -94,7 +95,8 @@ export function createCatalogClient(
   }
 
   function list(url: string, kind: Kind | null): Promise<{ items: CatalogTitle[]; pages: number }> {
-    return fetchJson(url, LIST_TTL).then((raw) => sanitizeList(need(), raw, kind));
+    const e = need();
+    return fetchJson(url, LIST_TTL, (raw) => sanitizeList(e, raw, kind));
   }
 
   return {
@@ -121,7 +123,7 @@ export function createCatalogClient(
     card(kind, id) {
       let e: TmdbEndpoint;
       try { e = need(); } catch (err) { return Promise.reject(err); }
-      return fetchJson(cardUrl(e, kind, id), CARD_TTL).then((raw) => {
+      return fetchJson(cardUrl(e, kind, id), CARD_TTL, (raw) => {
         const c = sanitizeCard(e, raw, kind);
         if (!c) throw fail('bad');
         return c;

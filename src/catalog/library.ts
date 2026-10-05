@@ -1,17 +1,15 @@
 // Library matching of TMDB titles against torrent titles. Pure.
 import { titleCore } from '../lib/posterSearch';
 
-// Built from char codes: ё (U+0451) and е (U+0435), the letters а-я (U+0430-U+044F); keeps Cyrillic out of the source.
-const YO = new RegExp(String.fromCharCode(0x451), 'g');
+// ye as a char code: the guard strips regex literals but not string literals.
 const YE = String.fromCharCode(0x435);
-const NOT_WORD = new RegExp('[^a-z0-9' + String.fromCharCode(0x430) + '-' + String.fromCharCode(0x44f) + ']+', 'g');
 
 /** Lowercase, yo folded to ye, non-letters/digits to single spaces, plus '|' and the year (0 when unknown). */
 export function libraryKey(title: string, year: number): string {
   const s = (title || '')
     .toLowerCase()
-    .replace(YO, YE)
-    .replace(NOT_WORD, ' ')
+    .replace(/ё/g, YE)
+    .replace(/[^a-z0-9а-я]+/g, ' ')
     .trim();
   return s + '|' + year;
 }

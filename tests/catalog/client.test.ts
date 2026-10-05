@@ -95,6 +95,23 @@ describe('catalog client', () => {
     expect(raw.indexOf('api_key')).toBe(-1);
   });
 
+  it('caches the sanitized shape, not the raw answer', async () => {
+    const f = fake();
+    const c = createCatalogClient(E, f.http, { today: () => '2026-10-05' });
+    await c.novelties('movie', 1);
+    await c.card('movie', 101);
+    const stored = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+    const keys = Object.keys(stored);
+    expect(keys.length).toBe(2);
+    const list = stored[keys.filter((k) => k.indexOf('discover') >= 0)[0]].data;
+    expect(list.items[0].poster).toBe('https://img.mirror.test/t/p/w300/nw.jpg');
+    expect(list.items[0].vote_count).toBeUndefined();
+    expect(list.results).toBeUndefined();
+    const card = stored[keys.filter((k) => k.indexOf('movie/101') >= 0)[0]].data;
+    expect(card.genres).toEqual(['драма']);
+    expect(card.credits).toBeUndefined();
+  });
+
   it('maps failures to error codes', async () => {
     const f = fake();
     expect(catalogErrorCode(await failure(createCatalogClient(null, f.http).search('x', 1)))).toBe('nokey');
