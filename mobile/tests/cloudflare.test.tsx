@@ -25,6 +25,8 @@ import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { isCloudflareBypassOn, isSourceOn, reloadSourcePrefs, resetHealth, setCloudflareBypass } from '../../src/sources/store';
 import { clearLog, logEntries } from '../../src/lib/log';
 import type { Source, SourceContext } from '../../src/sources/types';
+import type { BrowserLoginRequest } from '../../src/sources/browserLogin';
+import { WATCH_NOTIFY_LOGIN } from '../../src/sources/browserLogin';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
 const ATV: SavedTv = { ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095 };
@@ -47,7 +49,7 @@ const tick = async () => {
 function fakeNative() {
   const f = {
     sheets: [] as CloudflareVisibleRequest[],
-    watch: [] as ({ url: string; token: string; notify: string } | null)[],
+    watch: [] as ({ url: string; token: string; notify: string; notifyLogin?: string } | null)[],
     answer: { result: 'solved', sent: true } as { result?: string; sent?: boolean },
     pending: null as TvCloudflareRequest | null,
     listeners: [] as ((r: TvCloudflareRequest) => void)[],
@@ -60,12 +62,18 @@ function fakeNative() {
       f.sheets.push(req);
       return Promise.resolve(f.answer);
     },
-    cloudflareWatch(t: { url: string; token: string; notify: string } | null) {
+    cloudflareWatch(t: { url: string; token: string; notify: string; notifyLogin?: string } | null) {
       f.watch.push(t);
       return Promise.resolve();
     },
     cloudflarePending() {
       return Promise.resolve(f.pending);
+    },
+    logins: [] as BrowserLoginRequest[],
+    loginAnswer: { result: 'ok', sent: true } as { result?: string; sent?: boolean; host?: string },
+    siteBrowserLogin(req: BrowserLoginRequest) {
+      f.logins.push(req);
+      return Promise.resolve(f.loginAnswer);
     },
     onCloudflareRequest(cb: (r: TvCloudflareRequest) => void) {
       f.listeners.push(cb);
@@ -174,7 +182,7 @@ describe('phone: the visible check', () => {
     expect(watchTarget(null)).toBeNull();
     expect(watchTarget({ ip: '192.168.1.50', name: 'LG', clientKey: 'k' })).toBeNull();
     expect(watchTarget({ ...ATV, token: undefined })).toBeNull();
-    expect(watchTarget(ATV)).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY });
+    expect(watchTarget(ATV)).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY, notifyLogin: WATCH_NOTIFY_LOGIN });
     const tv = signal<SavedTv | null>(null);
     const n = fakeNative();
     n.pending = request;
@@ -184,12 +192,12 @@ describe('phone: the visible check', () => {
     expect(n.watch).toEqual([null]);
     expect(n.sheets.length).toBe(1);
     tv.value = ATV;
-    expect(n.watch[1]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY });
+    expect(n.watch[1]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY, notifyLogin: WATCH_NOTIFY_LOGIN });
     // no site with the switch on: the phone stops listening to the TV
     setCloudflareBypass('rustorka', false);
     expect(n.watch[2]).toBeNull();
     setCloudflareBypass('rustorka', true);
-    expect(n.watch[3]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY });
+    expect(n.watch[3]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY, notifyLogin: WATCH_NOTIFY_LOGIN });
     // a live event
     n.listeners[0]({ ...request, id: 'c11' });
     await tick();

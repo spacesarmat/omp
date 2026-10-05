@@ -2,6 +2,7 @@ package com.spacesarmat.omp.control
 
 import com.spacesarmat.omp.sources.CloudflareCookies
 import com.spacesarmat.omp.sources.CloudflareSolver
+import com.spacesarmat.omp.sources.SiteSession
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -20,6 +21,10 @@ import org.json.JSONObject
  *   [CloudflareCookies.MAX_COOKIES], body ≤ [MAX_BODY]) or `{ id, result: "cancelled" | "failed" }`;
  * - the answer is `{ ok: true }` — never an echo.
  *
+ * «Войти на телефоне» (Task 9b) is the same channel: the request has `kind: "login"` and `source` (the site id), the
+ * phone signs in in its browser page and answers `solved` with that host's session cookies (no clearance needed); the
+ * TV checks the session before it keeps it.
+ *
  * Pure (JVM-tested). Cookies and User-Agents are never logged or put into toString.
  */
 object CloudflareProtocol {
@@ -33,8 +38,12 @@ object CloudflareProtocol {
     private val KEYS = setOf("id", "result", "host", "cookies", "ua", "until")
     private val COOKIE_KEYS = setOf("name", "value")
 
-    /** A check the TV asks the phone for. */
-    class Request(val id: String, val site: String, val url: String)
+    const val KIND_CHECK = "check"
+    const val KIND_LOGIN = "login"
+    private val SOURCE_ID = Regex("^[a-z0-9][a-z0-9-]{0,39}$")
+
+    /** A check (or, [kind] = login, a browser sign-in to the site [source]) the TV asks the phone for. */
+    class Request(val id: String, val site: String, val url: String, val kind: String = KIND_CHECK, val source: String? = null)
 
     sealed class Answer(val id: String) {
         class Solved(id: String, val host: String, val cookies: List<Pair<String, String>>, val ua: String, val until: Long) : Answer(id) {
@@ -64,7 +73,9 @@ object CloudflareProtocol {
     fun requestJson(r: Request?): JSONObject {
         val o = JSONObject()
         if (r == null) return o.put("request", JSONObject.NULL)
-        return o.put("request", JSONObject().put("id", r.id).put("site", r.site).put("url", r.url))
+        val x = JSONObject().put("id", r.id).put("site", r.site).put("url", r.url)
+        if (r.kind == KIND_LOGIN) x.put("kind", KIND_LOGIN).put("source", r.source)
+        return o.put("request", x)
     }
 
     /** The phone's view of a poll answer; null when it does not follow the schema. A missing request is NONE. */
@@ -75,11 +86,21 @@ object CloudflareProtocol {
         val site = cleanSite(r.opt("site") as? String) ?: return null
         val url = r.opt("url") as? String ?: return null
         if (siteRoot(url) == null) return null
-        return Request(id, site, url)
+        return when (r.opt("kind")) {
+            null, KIND_CHECK -> Request(id, site, url)
+            KIND_LOGIN -> {
+                val source = (r.opt("source") as? String)?.takeIf { SOURCE_ID.matches(it) } ?: return null
+                Request(id, site, url, KIND_LOGIN, source)
+            }
+            else -> null
+        }
     }
 
-    /** null when the body does not follow the schema (unknown keys, sizes, a cookie name twice, no clearance). */
-    fun parseAnswer(body: JSONObject): Answer? {
+    /**
+     * null when the body does not follow the schema (unknown keys, sizes, a cookie name twice, no clearance). [clearance]
+     * = false: a browser sign-in's session needs no cf_clearance.
+     */
+    fun parseAnswer(body: JSONObject, clearance: Boolean = true): Answer? {
         val keys = body.keys()
         while (keys.hasNext()) if (keys.next() !in KEYS) return null
         val id = body.opt("id") as? String ?: return null
@@ -93,12 +114,12 @@ object CloudflareProtocol {
                     else -> Answer.Unavailable(id)
                 }
             }
-            "solved" -> solved(id, body)
+            "solved" -> solved(id, body, clearance)
             else -> null
         }
     }
 
-    private fun solved(id: String, body: JSONObject): Answer? {
+    private fun solved(id: String, body: JSONObject, clearance: Boolean): Answer? {
         val host = body.opt("host") as? String ?: return null
         if (host.isEmpty() || host.length > 253 || host != host.lowercase()) return null
         val ua = body.opt("ua") as? String ?: return null
@@ -117,7 +138,7 @@ object CloudflareProtocol {
             if (!CloudflareCookies.validName(name) || !CloudflareCookies.validValue(value) || !names.add(name)) return null
             cookies.add(name to value)
         }
-        if (CloudflareCookies.CLEARANCE !in names) return null
+        if (clearance && CloudflareCookies.CLEARANCE !in names) return null
         return Answer.Solved(id, host, cookies, ua, until.toLong())
     }
 
@@ -137,6 +158,17 @@ object CloudflareProtocol {
             if (drop < 0) return null
             list = list.filterIndexed { i, _ -> i != drop }
         }
+    }
+
+    /** The answer body of a browser sign-in done on the phone: [host]'s session cookies (capped); null when none fit. */
+    fun sessionJson(id: String, host: String, pairs: List<Pair<String, String>>, ua: String, until: Long): String? {
+        val clean = SiteSession.clean(pairs)
+        if (clean.isEmpty() || !UA.matches(ua) || !SiteSession.validHost(host)) return null
+        val arr = JSONArray()
+        for ((n, v) in clean) arr.put(JSONObject().put("name", n).put("value", v))
+        val s = JSONObject().put("id", id).put("result", "solved").put("host", host).put("cookies", arr)
+            .put("ua", ua).put("until", until).toString()
+        return if (s.toByteArray(Charsets.UTF_8).size <= MAX_BODY) s else null
     }
 
     fun endedJson(id: String, cancelled: Boolean): String =
@@ -181,7 +213,18 @@ class CloudflareRelay(
     /** What the router answers to a phone's answer. */
     enum class Reply { OK, BAD_REQUEST, UNKNOWN, DONE, STORE_FAILED }
 
-    private class Pending(val id: String, val site: String, val root: HttpUrl) {
+    /** What [askLogin] got: the phone's session (not stored yet: the TV checks it first) with SOLVED. */
+    class LoginAsk(val outcome: Outcome, val session: CloudflareProtocol.Answer.Solved?)
+
+    private class Pending(
+        val id: String,
+        val site: String,
+        val root: HttpUrl,
+        val kind: String = CloudflareProtocol.KIND_CHECK,
+        val source: String? = null,
+        val hosts: List<String> = emptyList(),
+    ) {
+        @Volatile var session: CloudflareProtocol.Answer.Solved? = null
         val taken = CountDownLatch(1)
         val done = CountDownLatch(1)
         @Volatile var by: String? = null
@@ -211,15 +254,29 @@ class CloudflareRelay(
     }
 
     /** Blocking (never on the main thread). [root]: the site root. */
-    fun ask(site: String, root: HttpUrl): Outcome {
-        val p = synchronized(lock) {
+    fun ask(site: String, root: HttpUrl): Outcome =
+        submit(Pending("c" + seq.incrementAndGet(), CloudflareProtocol.cleanSite(site) ?: root.host, CloudflareSolver.siteRoot(root)))
+
+    /**
+     * «Войти на телефоне»: the phone signs in to [source] in its browser page; [hosts] = the site's hosts the answer may
+     * come from (its mirrors). Blocking. The session comes back unstored: the caller checks it, then keeps it.
+     */
+    fun askLogin(site: String, root: HttpUrl, source: String, hosts: List<String>): LoginAsk {
+        val p = Pending(
+            "c" + seq.incrementAndGet(), CloudflareProtocol.cleanSite(site) ?: root.host, CloudflareSolver.siteRoot(root),
+            CloudflareProtocol.KIND_LOGIN, source, hosts,
+        )
+        val o = submit(p)
+        return LoginAsk(o, if (o == Outcome.SOLVED) p.session else null)
+    }
+
+    private fun submit(p: Pending): Outcome {
+        synchronized(lock) {
             if (pending != null) return Outcome.BUSY
             if (livePhone() == null) return Outcome.NO_PHONE
-            Pending("c" + seq.incrementAndGet(), CloudflareProtocol.cleanSite(site) ?: root.host, CloudflareSolver.siteRoot(root)).also {
-                pending = it
-                // a waiting long poll takes it at once
-                lock.notifyAll()
-            }
+            pending = p
+            // a waiting long poll takes it at once
+            lock.notifyAll()
         }
         try {
             if (!p.taken.await(pickupMs, TimeUnit.MILLISECONDS)) return if (p.done.count == 0L) p.outcome else Outcome.NOT_TAKEN
@@ -275,12 +332,15 @@ class CloudflareRelay(
         if (p.done.count == 0L || (p.by != null && p.by != token)) return null
         p.by = token
         p.taken.countDown()
-        return CloudflareProtocol.Request(p.id, p.site, p.root.toString())
+        return CloudflareProtocol.Request(p.id, p.site, p.root.toString(), p.kind, p.source)
     }
 
     /** A phone's answer; only the phone that took the request, only for its host. */
     fun answer(token: String, body: JSONObject): Reply {
-        val a = CloudflareProtocol.parseAnswer(body) ?: return Reply.BAD_REQUEST
+        val a = CloudflareProtocol.parseAnswer(body, clearance = false) ?: return Reply.BAD_REQUEST
+        val login = synchronized(lock) { pending?.takeIf { it.id == a.id }?.kind == CloudflareProtocol.KIND_LOGIN }
+        // a check's answer must carry the clearance; only a sign-in brings a plain session
+        if (a is CloudflareProtocol.Answer.Solved && !login && a.cookies.none { it.first == CloudflareCookies.CLEARANCE }) return Reply.BAD_REQUEST
         val p = synchronized(lock) {
             val cur = pending
             if (cur == null || cur.id != a.id || cur.by != token || cur.done.count == 0L) {
@@ -293,6 +353,13 @@ class CloudflareRelay(
             is CloudflareProtocol.Answer.Failed -> end(p, Outcome.FAILED).let { Reply.OK }
             is CloudflareProtocol.Answer.Unavailable -> end(p, Outcome.UNAVAILABLE).let { Reply.OK }
             is CloudflareProtocol.Answer.Solved -> {
+                if (p.kind == CloudflareProtocol.KIND_LOGIN) {
+                    // only that site's hosts; kept in memory for the TV's own check, never stored here
+                    if (!SiteSession.onSite(a.host, p.hosts) || SiteSession.clean(a.cookies).isEmpty()) return Reply.BAD_REQUEST
+                    p.session = a
+                    end(p, Outcome.SOLVED)
+                    return Reply.OK
+                }
                 if (a.host != p.root.host) return Reply.BAD_REQUEST
                 val t = clock()
                 val until = if (a.until > t && a.until <= t + MAX_UNTIL_MS) a.until else t + DEFAULT_TTL_MS

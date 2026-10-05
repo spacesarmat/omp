@@ -16,6 +16,21 @@ export function isChallenge(text: string): boolean {
   return text.indexOf('challenges.cloudflare.com') >= 0 || /<title>\s*Just a moment/i.test(text);
 }
 
+/** Cloudflare's own check page (the interstitial), not a site page that only embeds a Turnstile widget. */
+export function isCloudflareInterstitial(text: string): boolean {
+  return /<title>\s*Just a moment/i.test(text) || /cf-chl-|_cf_chl_opt|id=["']challenge-(?:form|running|stage)/.test(text);
+}
+
+/**
+ * A login answer: a site page with an inline captcha (a Turnstile widget on the login form loads from
+ * challenges.cloudflare.com, which checkPage would call a Cloudflare block) is `captcha()`'s error; anything else goes
+ * through checkPage.
+ */
+export function checkLoginPage(res: HttpResponse, hasCaptcha: (doc: Document) => boolean, captcha: () => Error): HttpResponse {
+  if (isChallenge(res.text) && !isCloudflareInterstitial(res.text) && hasCaptcha(parseHtml(res.text))) throw captcha();
+  return checkPage(res);
+}
+
 /** The response as a page, or a Russian error (Cloudflare check, HTTP error status). */
 export function checkPage(res: HttpResponse): HttpResponse {
   if (isChallenge(res.text)) throw new Error(CHALLENGE);

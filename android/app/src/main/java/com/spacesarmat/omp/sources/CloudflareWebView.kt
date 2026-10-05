@@ -36,6 +36,8 @@ class WebViewCloudflareBrowser(
     private val context: Context,
     /** The visible check: the page is shown in a dialog of [context] (an Activity) and can take focus (TV remote). */
     private val visible: Boolean = false,
+    /** The browser login: where the visible page may go (host, path; [LoginNavigation]); null = the Cloudflare check rule. */
+    private val navigation: ((String?, String?) -> Boolean)? = null,
 ) : CloudflareBrowser {
     private var web: WebView? = null
     private var rootHost: String? = null
@@ -75,7 +77,9 @@ class WebViewCloudflareBrowser(
                 val scheme = request.url.scheme?.lowercase()
                 if (scheme != "http" && scheme != "https") return true
                 // the visible page stays on the site (and Cloudflare's challenge pages): no browsing elsewhere in OMP
-                return visible && request.isForMainFrame && !VisibleNavigation.allowed(rootHost, request.url.host)
+                if (!visible || !request.isForMainFrame) return false
+                val nav = navigation
+                return if (nav != null) !nav(request.url.host, request.url.path) else !VisibleNavigation.allowed(rootHost, request.url.host)
             }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {

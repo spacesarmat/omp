@@ -433,4 +433,108 @@ class SourcesInboxTest {
         )
         for (b in bad) assertNull(b, SourcesProtocol.parse(JSONObject("""{"v":1,"sources":{"kinozal":true},$b}"""), "P"))
     }
+
+    // ---- browser sessions (Task 9b) ----
+
+    private class Imported(val host: String, val pairs: List<Pair<String, String>>, val ua: String)
+    private val imported = ArrayList<Imported>()
+    private var importFails = false
+    private val sessionStore = SecretSessionStore(entries, { "js:$it" }) { root, pairs, ua ->
+        if (importFails) throw IllegalStateException("keystore")
+        imported.add(Imported(root.host, pairs, ua))
+    }
+    private val cookieValue = "s3ss10n-value"
+
+    private fun sessionTransfer() = SourcesTransfer(
+        linkedMapOf("kinozal" to true), null, "Pixel",
+        sessions = mapOf("kinozal" to SourcesTransfer.Session("kinozal.tv", listOf("uid" to "7", "pass" to cookieValue), "Phone-UA")),
+    )
+
+    @Test
+    fun stagesASessionPromotesItIntoTheJarOnlyAfterTheCheck() {
+        entries.map["js:kinozal.username"] = "old"
+        entries.map["js:kinozal.password"] = oldPassword
+        val box = SourcesInbox(store, { events.add(it) }, 5_000, sessionStore) { now }
+        val f = start(box, sessionTransfer())
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        // the page hears only the host: never a cookie or the User-Agent
+        assertEquals("kinozal.tv", e.getJSONObject("sessions").getString("kinozal"))
+        assertFalse(e.toString().contains(cookieValue))
+        assertFalse(e.toString().contains("Phone-UA"))
+        // staged outside the page's namespace, nothing live yet
+        assertTrue(entries.map.containsKey("session.pending.kinozal"))
+        assertEquals("kinozal.tv", sessionStore.staged("kinozal")!!.host)
+        assertTrue(imported.isEmpty())
+        val a = box.answer(e.getString("id"), null, false, sessionResults = mapOf("kinozal" to "ok"))
+        assertEquals(SourcesDone.STORED, a.state)
+        val out = f.get(2, TimeUnit.SECONDS) as SourcesOutcome.Applied
+        assertEquals(mapOf("kinozal" to "ok"), out.sessions)
+        val i = imported.single()
+        assertEquals("kinozal.tv", i.host)
+        assertEquals("Phone-UA", i.ua)
+        assertEquals(listOf("uid" to "7", "pass" to cookieValue), i.pairs)
+        // marked as a browser login, the old password gone, nothing staged
+        assertEquals("1", entries.map["js:kinozal.browser"])
+        assertNull(entries.map["js:kinozal.password"])
+        assertFalse(entries.map.containsKey("session.pending.kinozal"))
+    }
+
+    @Test
+    fun anUnverifiedOrUnstoredSessionKeepsWhatTheTvHad() {
+        entries.map["js:kinozal.password"] = oldPassword
+        val box = SourcesInbox(store, { events.add(it) }, 5_000, sessionStore) { now }
+        var f = start(box, sessionTransfer())
+        var e = events.poll(2, TimeUnit.SECONDS)!!
+        box.answer(e.getString("id"), null, false, sessionResults = mapOf("kinozal" to "error"))
+        assertEquals(mapOf("kinozal" to "error"), (f.get(2, TimeUnit.SECONDS) as SourcesOutcome.Applied).sessions)
+        assertTrue(imported.isEmpty())
+        assertEquals(oldPassword, entries.map["js:kinozal.password"])
+        assertFalse(entries.map.containsKey("session.pending.kinozal"))
+
+        // verified, but the jar refuses it: reported, the old login stays
+        importFails = true
+        f = start(box, sessionTransfer())
+        e = events.poll(2, TimeUnit.SECONDS)!!
+        val a = box.answer(e.getString("id"), null, false, sessionResults = mapOf("kinozal" to "ok"))
+        assertEquals(SourcesDone.NOT_STORED, a.state)
+        assertEquals(setOf("kinozal"), a.sitesNotStored)
+        assertEquals(mapOf("kinozal" to "error"), (f.get(2, TimeUnit.SECONDS) as SourcesOutcome.Applied).sessions)
+        assertEquals(oldPassword, entries.map["js:kinozal.password"])
+        assertNull(entries.map["js:kinozal.browser"])
+        assertFalse(entries.map.containsKey("session.pending.kinozal"))
+        // a dead process' leftovers go on start
+        entries.map["session.pending.rutracker"] = "x"
+        assertTrue(box.dropStaged())
+        assertFalse(entries.map.containsKey("session.pending.rutracker"))
+    }
+
+    @Test
+    fun parseTakesSessionsOnlyForTheKnownSitesWithinTheCaps() {
+        val ok = SourcesProtocol.parse(
+            JSONObject("""{"v":1,"sources":{"rutracker":true},"sessions":{"rutracker":{"host":"rutracker.org","cookies":[{"name":"bb_session","value":"v"}],"ua":"UA/1"}}}"""),
+            "P",
+        )!!
+        val s = ok.sessions.getValue("rutracker")
+        assertEquals("rutracker.org", s.host)
+        assertEquals(listOf("bb_session" to "v"), s.cookies)
+        assertFalse(ok.toString().contains("bb_session"))
+        assertEquals("Session(1 cookies)", s.toString())
+        val cookie = """[{"name":"a","value":"b"}]"""
+        val many = (1..31).joinToString(",", "[", "]") { """{"name":"c$it","value":"v"}""" }
+        val huge = """[{"name":"a","value":"${"x".repeat(4000)}"},{"name":"b","value":"${"y".repeat(2500)}"}]"""
+        val bad = listOf(
+            """"sessions":{"evil":{"host":"evil.example","cookies":$cookie,"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"Kinozal.TV","cookies":$cookie,"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":[],"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":$many,"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":$huge,"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":[{"name":"a","value":"b"},{"name":"a","value":"c"}],"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":[{"name":"a b","value":"c"}],"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":[{"name":"a","value":"c","domain":"x"}],"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":$cookie,"ua":"U\u0001"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":$cookie,"ua":"U","extra":1}}""",
+            """"sessions":{}""",
+        )
+        for (b in bad) assertNull(b, SourcesProtocol.parse(JSONObject("""{"v":1,"sources":{"kinozal":true},$b}"""), "P"))
+    }
 }

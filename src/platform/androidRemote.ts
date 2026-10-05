@@ -13,6 +13,7 @@ import { allSources } from '../sources/registry';
 import {
   applyRemoteIndexers,
   applyRemoteLogins,
+  applyRemoteSessions,
   applyRemoteSources,
   loginState,
   notifyTransferApplied,
@@ -176,11 +177,12 @@ export function applyRemoteSourcesEvent(
   }
   const before = loginState();
   const sitesBefore = siteLoginsState();
-  const done = (rutracker?: string, indexers?: number, logins?: { [site: string]: RutrackerResult }) => {
-    const o: { id: string; rutracker?: string; indexers?: number; logins?: { [site: string]: string } } = { id: r.id };
+  const done = (rutracker?: string, indexers?: number, logins?: { [site: string]: RutrackerResult }, sessions?: { [site: string]: string }) => {
+    const o: { id: string; rutracker?: string; indexers?: number; logins?: { [site: string]: string }; sessions?: { [site: string]: string } } = { id: r.id };
     if (rutracker) o.rutracker = rutracker;
     if (indexers !== undefined) o.indexers = indexers;
     if (logins && Object.keys(logins).length) o.logins = logins;
+    if (sessions && Object.keys(sessions).length) o.sessions = sessions;
     return plugin.remoteSourcesDone(o).then(
       // a verified login is promoted by the native side before this resolves: the screen reads it now
       (a) => {
@@ -208,21 +210,25 @@ export function applyRemoteSourcesEvent(
       // the switches are applied synchronously first, then the sign-ins run side by side
       const rut = applyRemoteSources(r, list, ctx);
       const sites = applyRemoteLogins(r, list, ctx);
-      return Promise.all([rut, sites]).then(([res, logins]) => ({ res, saved, logins }));
+      // browser sessions: each checked with the staged cookies (never seen here)
+      const ses = applyRemoteSessions(r, list, ctx);
+      return Promise.all([rut, sites, ses]).then(([res, logins, sessions]) => ({ res, saved, logins, sessions }));
     })
     .then(
-      ({ res, saved, logins }) => {
+      ({ res, saved, logins, sessions }) => {
         const ids = Object.keys(logins);
-        const bad = ids.filter((id) => logins[id] !== 'ok');
+        const sids = Object.keys(sessions);
+        const bad = ids.filter((id) => logins[id] !== 'ok').concat(sids.filter((id) => sessions[id] !== 'ok'));
         log(
           (res && res !== 'ok') || saved < sent || bad.length ? 'warn' : 'info',
           'tv',
           'Источники переданы с телефона' +
             (res ? ', вход на rutracker: ' + res : '') +
             ids.map((id) => ', вход на ' + id + ': ' + logins[id]).join('') +
+            sids.map((id) => ', вход через браузер на ' + id + ': ' + sessions[id]).join('') +
             (sent ? ', индексаторов: ' + saved + ' из ' + sent : ''),
         );
-        return done(res, sent ? saved : undefined, logins);
+        return done(res, sent ? saved : undefined, logins, sessions);
       },
       () => {
         log('error', 'tv', 'Передача источников с телефона не применилась');

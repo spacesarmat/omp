@@ -95,6 +95,8 @@ export const kinozalLogin = createSiteLogin({
   refused: (doc) => !!doc.querySelector('div.bx1 div.red'),
   stillOnLogin: (res) => urlIsPath(res, LOGIN_PATH) || urlIsPath(res, 'login.php'),
   checkPath: 'my.php',
+  // the login page and the signed-in check of «Войти через браузер» (the same logout link as above)
+  browser: { loginPath: 'login.php', path: 'my.php', marker: 'logout.php?hash4u=' },
 });
 
 /** The release id of a details link on any mirror (…/details.php?id=123), '' otherwise. */
@@ -180,4 +182,9 @@ export const kinozal: Source = {
   loggedIn: (ctx) => kinozalLogin.loggedIn(ctx),
   savedLogin: (ctx) => (ctx.secrets ? kinozalLogin.savedLogin(ctx.secrets) : Promise.resolve(null)),
   loginPending: (ctx) => kinozalLogin.loginPending(ctx),
+  browserLogin: (ctx, o) => kinozalLogin.browserLogin(ctx, o),
+  browserSession: (ctx) => kinozalLogin.browserSession(ctx),
+  browserSpec: () => kinozalLogin.browserSpec(),
+  sessionHosts: () => kinozalLogin.sessionHosts(),
+  sessionPending: (ctx, host) => kinozalLogin.sessionPending(ctx, host),
 };

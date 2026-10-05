@@ -975,16 +975,33 @@ const SOURCES_TIMEOUT = 45000;
 /**
  * «Передать на телевизор»: POST /omp/sources with the switches and, when given, the rutracker login (only to the
  * paired Android TV, over its token). Resolves the TV's rutracker result (undefined without a login); rejects in
- * Russian. The body is never logged.
+ * Russian. The body is never logged. `sessions` (sites signed in through the browser → their hosts): the request goes
+ * through the native side, which adds each site's session cookies and User-Agent (they never pass through the page).
  */
-export async function sendSourcesToTv(payload: TransferPayload): Promise<SourcesSent> {
+export async function sendSourcesToTv(
+  payload: TransferPayload,
+  sessions?: { [id: string]: string[] },
+  send: Pick<OmpNativeApi, 'siteSessionSend'> = native,
+): Promise<SourcesSent> {
   if (tvKind() !== 'atv') throw new Error(SOURCES_ATV_ONLY);
   await ensureConnected();
   const s = atv;
   if (!s || tvState.value !== 'connected') throw new Error(TV_NOT_CONNECTED);
+  const withSessions = !!sessions && Object.keys(sessions).length > 0;
   let r: AtvAnswer;
+  let missing: string[] = [];
   try {
-    r = await atvFetch(s.tv, 'POST', TRANSFER_PATH, payload, SOURCES_TIMEOUT);
+    if (withSessions && s.tv.token) {
+      const n = await send.siteSessionSend({
+        url: 'http://' + s.tv.ip + ':' + (s.tv.ctlPort || ATV_PORT),
+        token: s.tv.token,
+        payload,
+        sessions: sessions!,
+        timeoutMs: SOURCES_TIMEOUT,
+      });
+      r = { status: n.status, data: n.data };
+      missing = n.missing;
+    } else r = await atvFetch(s.tv, 'POST', TRANSFER_PATH, payload, SOURCES_TIMEOUT);
   } catch (e) {
     // a slow sign-in on the TV is not a dead TV: only a network failure ends the session
     if (!isTimeout(e)) atvFail(s, TV_NO_ANSWER);
@@ -1018,6 +1035,15 @@ export async function sendSourcesToTv(payload: TransferPayload): Promise<Sources
     });
     out.logins = logins;
   }
+  if (withSessions) {
+    // per site that was asked for; a site whose session the phone had not (any more) is «missing»
+    const got = r.data.sessions && typeof r.data.sessions === 'object' ? (r.data.sessions as { [k: string]: unknown }) : {};
+    const res: { [site: string]: 'ok' | 'error' | 'missing' } = {};
+    Object.keys(sessions!).forEach((site) => {
+      res[site] = missing.indexOf(site) >= 0 ? 'missing' : got[site] === 'ok' ? 'ok' : 'error';
+    });
+    out.sessions = res;
+  }
   return out;
 }
 
@@ -1027,6 +1053,8 @@ export interface SourcesSent {
   indexers?: number;
   logins?: { [site: string]: RutrackerResult };
   rutrackerNotStored?: boolean;
+  /** Browser sessions: ok (the TV verified and kept it) | error | missing (the phone had no session to send). */
+  sessions?: { [site: string]: 'ok' | 'error' | 'missing' };
 }
 
 /**

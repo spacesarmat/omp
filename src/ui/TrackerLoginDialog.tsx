@@ -4,6 +4,17 @@ import { FocusGroup, Button, TextInput } from './components';
 import { useKeys } from './keys';
 import { errorMessage } from '../api/http';
 import type { Source, SourceContext } from '../sources/types';
+import {
+  BROWSER_BUSY,
+  BROWSER_CAPTCHA,
+  BROWSER_FAILED,
+  BROWSER_LOGIN,
+  BROWSER_STORE_FAILED,
+  canLoginOnPhone,
+  hasBrowserLogin,
+  isCaptchaError,
+  LOGIN_ON_PHONE,
+} from '../sources/browserLogin';
 
 export const TV_LOGIN_HINT =
   'Проще с телефона: OMP → Пульт → «Клавиатура» вводит текст в это поле, или OMP → Настройки → Источники поиска → «Передать на телевизор».';
@@ -12,13 +23,16 @@ export const TV_LOGIN_NOTE = 'Логин и пароль хранятся тол
 /**
  * Android TV «Вход на rutracker»: login and password by the remote (or the phone keyboard), the source keeps them
  * in the Keystore storage only. The password lives in a ref for the time of the dialog and is emptied after «Войти».
+ * «Войти через браузер» opens the site's login page under the remote (native dialog), «Войти на телефоне» asks the paired
+ * phone to sign in in its browser and send the session (Task 8's relay); onDone(true) after either.
  */
-export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext; onClose: () => void; onDone: () => void }) {
+export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext; onClose: () => void; onDone: (browser?: boolean) => void }) {
   const [username, setUsername] = useState('');
   const pass = useRef('');
   const [, setTick] = useState(0);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [captcha, setCaptcha] = useState(false);
   const alive = useRef(true);
 
   useEffect(() => {
@@ -53,6 +67,7 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
       return;
     }
     setError('');
+    setCaptcha(false);
     setBusy(true);
     let run: Promise<void>;
     try {
@@ -72,6 +87,36 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
         if (!alive.current) return;
         setBusy(false);
         setError(errorMessage(e));
+        setCaptcha(isCaptchaError(e));
+      },
+    );
+  };
+
+  const browser = !!p.source.browserLogin && hasBrowserLogin();
+  const viaBrowser = (askPhone: boolean) => {
+    if (busy || !p.source.browserLogin) return;
+    setError('');
+    setBusy(true);
+    let run: Promise<{ result: string }>;
+    try {
+      run = p.source.browserLogin(p.ctx(), askPhone ? { askPhone: true } : undefined);
+    } catch (e) {
+      run = Promise.reject(e);
+    }
+    run.then(
+      (r) => {
+        pass.current = '';
+        if (!alive.current) return;
+        setBusy(false);
+        if (r.result === 'ok') p.onDone(true);
+        else if (r.result === 'busy') setError(BROWSER_BUSY);
+        else if (r.result === 'failed') setError(BROWSER_FAILED);
+        else setFocus(askPhone ? 'login-phone' : 'login-browser');
+      },
+      () => {
+        if (!alive.current) return;
+        setBusy(false);
+        setError(BROWSER_STORE_FAILED);
       },
     );
   };
@@ -97,6 +142,13 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
         <div class="login-hint">{TV_LOGIN_HINT}</div>
         <div class="login-note">{TV_LOGIN_NOTE}</div>
         {error && <div class="banner-error login-error">{error}</div>}
+        {browser && captcha && <div class="login-hint login-captcha">{BROWSER_CAPTCHA}</div>}
+        {browser && (
+          <div class="login-actions login-browser">
+            <Button focusKey="login-browser" className={captcha ? 'primary' : ''} label={BROWSER_LOGIN} onPress={() => viaBrowser(false)} />
+            {canLoginOnPhone() && <Button focusKey="login-phone" label={LOGIN_ON_PHONE} onPress={() => viaBrowser(true)} />}
+          </div>
+        )}
         <div class="login-actions">
           <Button focusKey="login-cancel" label="Отмена" onPress={close} />
           <Button focusKey="login-ok" className="primary" label={busy ? 'Вхожу…' : 'Войти'} onPress={submit} />

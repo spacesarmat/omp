@@ -1,11 +1,13 @@
 // Sign-in of a site behind a login (Kinozal, rustorka; labtor next), the way rutracker does it: the credentials live
 // only in the Android secret store (ctx.secrets, siteLoginKeys) and go only to the site; the session cookie stays in
 // the native per-site jar. A page that needs the session signs in again once with the saved credentials, else it
-// rejects with loginRequired(). A captcha is never solved: «… войдите на сайте в браузере». Every request goes to the
+// rejects with loginRequired(). A captcha is never solved: the screen offers «Войти через браузер» (browserLogin.ts: the
+// person signs in in a visible page, the session is kept natively, no password is stored). Every request goes to the
 // site's active mirror (mirrors.ts) with the site's options (siteOptions: the Cloudflare pass while its switch is on).
 // Chromium 53 safe.
 import { parseHtml } from './html';
-import { checkPage, siteOptions } from './site';
+import { checkLoginPage, checkPage, siteOptions } from './site';
+import { createBrowserLogin, type BrowserCheck, type BrowserOutcome, type BrowserSpec } from './browserLogin';
 import { SITE_EMPTY, SITE_NO_STORE, siteLoginCode, siteLoginError, siteLoginKeys } from './siteLoginText';
 import { loginRequired } from './types';
 import type { SiteHosts } from './mirrors';
@@ -35,6 +37,8 @@ export interface SiteLoginConfig {
   stillOnLogin?(res: HttpResponse): boolean;
   /** A page that shows whether the session works, asked when the login answer is not conclusive (Kinozal: my.php). */
   checkPath?: string;
+  /** «Войти через браузер»: the login page to open and how the native side tells a signed-in session. */
+  browser: BrowserCheck;
 }
 
 export interface SavedLogin {
@@ -60,6 +64,15 @@ export interface SiteLogin {
   sessionDoc(ctx: SourceContext, path: string, extra?: HttpOptions): Promise<{ res: HttpResponse; doc: Document }>;
   /** One sign-in with the saved credentials (parallel callers share it); loginRequired() when there are none or they fail. */
   signInAgain(ctx: SourceContext): Promise<void>;
+  /** «Войти через браузер»: on «ok» the site is signed in with a browser session (no saved password). */
+  browserLogin(ctx: SourceContext, opts?: { askPhone?: boolean }): Promise<BrowserOutcome>;
+  /** The current login is a browser session. */
+  browserSession(ctx: SourceContext): Promise<boolean>;
+  browserSpec(): BrowserSpec;
+  /** The hosts, the active mirror first. */
+  sessionHosts(): string[];
+  /** Android TV: checks the browser session the phone sent (staged) on `host`. */
+  sessionPending(ctx: SourceContext, host: string): Promise<void>;
 }
 
 function pair(s: SecretStore, user: string, pass: string): Promise<SavedLogin | null> {
@@ -70,6 +83,18 @@ export function createSiteLogin(cfg: SiteLoginConfig): SiteLogin {
   const keys = siteLoginKeys(cfg.source.id);
   const name = cfg.source.name;
   const opts = (extra?: HttpOptions) => siteOptions(cfg.source, extra);
+  const hostsFirst = () => {
+    const active = cfg.hosts.host();
+    return [active].concat(cfg.hosts.hosts.filter((h) => h !== active));
+  };
+  const browser = createBrowserLogin({
+    id: cfg.source.id,
+    name,
+    hosts: hostsFirst,
+    base: () => cfg.hosts.base(),
+    check: cfg.browser,
+    adopt: (url) => cfg.hosts.adopt(url),
+  });
 
   const load = (ctx: SourceContext, path: string, extra?: HttpOptions) =>
     cfg.hosts
@@ -85,7 +110,8 @@ export function createSiteLogin(cfg: SiteLoginConfig): SiteLogin {
   const postLogin = (username: string, password: string, ctx: SourceContext): Promise<void> =>
     cfg.hosts
       .post(ctx, cfg.loginPath, cfg.form(username, password), opts(cfg.formCharset ? { formCharset: cfg.formCharset } : undefined))
-      .then(checkPage)
+      // an inline Turnstile on the login form is a captcha (the browser login), not a Cloudflare block
+      .then((res) => checkLoginPage(res, cfg.hasCaptcha, () => siteLoginError('captcha', name)))
       .then((res) => {
         const doc = parseHtml(res.text);
         if (cfg.hasCaptcha(doc)) throw siteLoginError('captcha', name);
@@ -131,17 +157,20 @@ export function createSiteLogin(cfg: SiteLoginConfig): SiteLogin {
       const user = (username || '').trim();
       if (!user || !password) return Promise.reject(new Error(SITE_EMPTY));
       if (!secrets) return Promise.reject(new Error(SITE_NO_STORE));
-      return postLogin(user, password, ctx).then(() => secrets.set(keys.user, user).then(() => secrets.set(keys.pass, password)));
+      return postLogin(user, password, ctx)
+        .then(() => secrets.set(keys.user, user).then(() => secrets.set(keys.pass, password)))
+        // a password login replaces a browser session
+        .then(() => browser.forget(secrets).then(undefined, () => undefined));
     },
     logout(ctx) {
       const secrets = ctx.secrets;
-      const forget = secrets ? Promise.all([secrets.delete(keys.user), secrets.delete(keys.pass)]) : Promise.resolve([]);
+      const forget = secrets ? Promise.all([secrets.delete(keys.user), secrets.delete(keys.pass), browser.forget(secrets)]) : Promise.resolve([]);
       // the jar is per registrable domain: every mirror has its own session
       const cookies = Promise.all(cfg.hosts.roots().map((r) => ctx.http.clearCookies(r)));
       return Promise.all([cookies, forget]).then(() => undefined);
     },
     loggedIn(ctx) {
-      return saved(ctx).then((c) => !!c);
+      return saved(ctx).then((c) => !!c || browser.active(ctx));
     },
     loginPending(ctx) {
       const secrets = ctx.secrets;
@@ -165,6 +194,11 @@ export function createSiteLogin(cfg: SiteLoginConfig): SiteLogin {
       });
     },
     signInAgain,
+    browserLogin: (ctx, o) => browser.login(ctx, o),
+    browserSession: (ctx) => browser.active(ctx),
+    browserSpec: () => browser.spec(),
+    sessionHosts: hostsFirst,
+    sessionPending: (ctx, host) => browser.pending(ctx, host),
   };
 }
 

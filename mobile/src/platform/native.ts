@@ -7,6 +7,7 @@ import { log } from '../../../src/lib/log';
 import type { HttpResponse, SecretStore, SourceHttp } from '../../../src/sources/types';
 import type { ApkAbi, UpdateInfo } from '../../../src/lib/updateInfo';
 import type { CloudflareVisibleRequest } from '../../../src/sources/cloudflareCheck';
+import type { BrowserLoginRequest } from '../../../src/sources/browserLogin';
 
 type ApkFiles = NonNullable<UpdateInfo['apks']>;
 
@@ -149,20 +150,38 @@ export interface OmpNativeApi {
   cloudflareVisible(req: CloudflareVisibleRequest): Promise<{ result?: string; sent?: boolean; via?: string }>;
   /** When the stored Cloudflare clearance of the site of url ends; null without one (or off-device). */
   cloudflareClearance(url: string): Promise<number | null>;
-  /** Polls the paired Android TV for «Пройти на телефоне» (null stops). */
-  cloudflareWatch(target: { url: string; token: string; notify: string } | null): Promise<void>;
+  /** Polls the paired Android TV for «Пройти на телефоне» / «Войти на телефоне» (null stops). */
+  cloudflareWatch(target: { url: string; token: string; notify: string; notifyLogin?: string } | null): Promise<void>;
   /** The TV's check still waiting for the person (the app was opened from the notification). */
   cloudflarePending(): Promise<TvCloudflareRequest | null>;
   onCloudflareRequest(cb: (r: TvCloudflareRequest) => void): () => void;
   /** Refuses the TV's request without a sheet (the TV hears «failed»). */
   cloudflareDecline(id: string): Promise<void>;
+  /** «Войти через браузер» (native sheet with the site's login page); cookies never come back. */
+  siteBrowserLogin(req: BrowserLoginRequest): Promise<{ result?: string; host?: string; via?: string; sent?: boolean }>;
+  /**
+   * «Передать вход на телевизор» with browser sessions: the native side adds each site's session cookies and User-Agent
+   * to `payload` and posts it to the paired TV (they never pass through the page). Resolves the TV's answer.
+   */
+  siteSessionSend(o: {
+    url: string;
+    token: string;
+    payload: unknown;
+    sessions: { [id: string]: string[] };
+    timeoutMs?: number;
+  }): Promise<{ status: number; data: { [k: string]: unknown } | null; missing: string[] }>;
 }
 
-/** «Пройти на телефоне»: the TV asks the phone to pass the check of a site (its root only). */
+/**
+ * «Пройти на телефоне»: the TV asks the phone to pass the check of a site (its root only); kind 'login' («Войти на
+ * телефоне»): to sign in to the site `source` in the browser and send the session.
+ */
 export interface TvCloudflareRequest {
   id: string;
   site: string;
   url: string;
+  kind?: 'login';
+  source?: string;
 }
 
 function tvRequest(v: unknown): TvCloudflareRequest | null {
@@ -171,7 +190,14 @@ function tvRequest(v: unknown): TvCloudflareRequest | null {
   if (typeof o.id !== 'string' || !/^[A-Za-z0-9-]{1,64}$/.test(o.id)) return null;
   if (typeof o.site !== 'string' || !o.site || o.site.length > 60) return null;
   if (typeof o.url !== 'string' || !/^https?:\/\/[^/?#@\s]+\/$/i.test(o.url)) return null;
-  return { id: o.id, site: o.site, url: o.url };
+  const r: TvCloudflareRequest = { id: o.id, site: o.site, url: o.url };
+  const x = v as { kind?: unknown; source?: unknown };
+  if (x.kind === 'login') {
+    if (typeof x.source !== 'string' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(x.source)) return null;
+    r.kind = 'login';
+    r.source = x.source;
+  } else if (x.kind !== undefined && x.kind !== 'check') return null;
+  return r;
 }
 
 interface OmpNativePlugin {
@@ -211,7 +237,13 @@ interface OmpNativePlugin {
   shareText(o: { name: string; text: string; title?: string }): Promise<void>;
   cloudflareVisible(o: CloudflareVisibleRequest): Promise<{ result?: string; sent?: boolean; via?: string }>;
   cloudflareClearance(o: { url: string }): Promise<{ until?: number | null }>;
-  cloudflareWatch(o: { url?: string; token?: string; notify?: string }): Promise<void>;
+  cloudflareWatch(o: { url?: string; token?: string; notify?: string; notifyLogin?: string }): Promise<void>;
+  siteBrowserLogin(o: BrowserLoginRequest): Promise<{ result?: string; host?: string; via?: string; sent?: boolean }>;
+  siteSessionSend(o: { url: string; token: string; payload: unknown; sessions: { [id: string]: string[] }; timeoutMs?: number }): Promise<{
+    status?: unknown;
+    data?: unknown;
+    missing?: unknown;
+  }>;
   cloudflarePending(): Promise<{ request?: unknown }>;
   cloudflareDecline(o: { id: string }): Promise<void>;
   addListener(event: 'cloudflareRequest', cb: (e: unknown) => void): Promise<PluginListenerHandle>;
@@ -603,7 +635,23 @@ export const native: OmpNativeApi = {
 
   async cloudflareWatch(target) {
     if (!plugin) return;
-    await plugin.cloudflareWatch(target ? { url: target.url, token: target.token, notify: target.notify } : {});
+    await plugin.cloudflareWatch(
+      target ? { url: target.url, token: target.token, notify: target.notify, ...(target.notifyLogin ? { notifyLogin: target.notifyLogin } : {}) } : {},
+    );
+  },
+
+  siteBrowserLogin(req) {
+    if (!plugin) return unavailable();
+    return plugin.siteBrowserLogin(req);
+  },
+
+  async siteSessionSend(o) {
+    if (!plugin) return unavailable();
+    const r = await plugin.siteSessionSend(o);
+    const status = r && typeof r.status === 'number' ? r.status : 0;
+    const data = r && r.data && typeof r.data === 'object' ? (r.data as { [k: string]: unknown }) : null;
+    const missing = r && Array.isArray(r.missing) ? r.missing.filter((x): x is string => typeof x === 'string') : [];
+    return { status, data, missing };
   },
 
   async cloudflarePending() {

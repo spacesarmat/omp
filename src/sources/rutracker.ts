@@ -1,9 +1,12 @@
 // rutracker.org: search needs a login. Credentials live only in the Android secret store (ctx.secrets) and are
 // sent only to rutracker; the session cookie stays in the native per-site cookie jar. When the session expires the
-// source signs in again once with the saved credentials, otherwise it rejects with loginRequired().
+// source signs in again once with the saved credentials, otherwise it rejects with loginRequired(). «Войти через
+// браузер» signs in with a browser session instead (browserLogin.ts): no password is stored then.
 // Selectors and the login form follow the open-source Jackett RuTracker indexer (not checked with a real account).
 import { absUrl, parseHtml, parseSize, textOf } from './html';
-import { checkPage, magnetOf, makeResult, requireHost, toInt } from './site';
+import { checkLoginPage, checkPage, magnetOf, makeResult, requireHost, toInt } from './site';
+import { commonCaptcha } from './siteLogin';
+import { createBrowserLogin } from './browserLogin';
 import { RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA, RUTRACKER_EMPTY, RUTRACKER_NO_STORE } from './rutrackerText';
 import { loginRequired } from './types';
 import type { HttpResponse, SecretStore, Source, SourceContext, SourceResult } from './types';
@@ -30,11 +33,21 @@ function hasCaptcha(doc: Document): boolean {
   return !!doc.querySelector('img[src*="/captcha/"], input[name="cap_sid"], input[name^="cap_code_"]');
 }
 
+/** «Войти через браузер»: the login page, and the signed-in header (#logged-in-username) on the forum index. */
+const browser = createBrowserLogin({
+  id: 'rutracker',
+  name: 'rutracker',
+  hosts: () => [HOST],
+  base: () => 'https://' + HOST + '/',
+  check: { loginPath: 'forum/login.php', path: 'forum/index.php', marker: 'logged-in-username', cookies: ['bb_session'] },
+});
+
 /** POST to login.php; resolves when the answer is a signed-in page. Never stores anything. */
 function postLogin(username: string, password: string, ctx: SourceContext): Promise<void> {
   return ctx.http
     .post(LOGIN_URL, { login_username: username, login_password: password, login: 'вход' }, { formCharset: 'windows-1251' })
-    .then(checkPage)
+    // an inline Turnstile on the login form is a captcha (the browser login), not a Cloudflare block
+    .then((res) => checkLoginPage(res, commonCaptcha, () => new Error(RUTRACKER_CAPTCHA)))
     .then((res) => {
       const doc = parseHtml(res.text);
       if (signedIn(res, doc)) return;
@@ -166,16 +179,22 @@ export const rutracker: Source = {
     const user = (username || '').trim();
     if (!user || !password) return Promise.reject(new Error(RUTRACKER_EMPTY));
     if (!secrets) return Promise.reject(new Error(RUTRACKER_NO_STORE));
-    return postLogin(user, password, ctx).then(() =>
-      secrets.set(USER_KEY, user).then(() => secrets.set(PASS_KEY, password)),
-    );
+    return postLogin(user, password, ctx)
+      .then(() => secrets.set(USER_KEY, user).then(() => secrets.set(PASS_KEY, password)))
+      // a password login replaces a browser session
+      .then(() => browser.forget(secrets).then(undefined, () => undefined));
   },
   logout(ctx: SourceContext) {
     const secrets = ctx.secrets;
-    const forget = secrets ? Promise.all([secrets.delete(USER_KEY), secrets.delete(PASS_KEY)]) : Promise.resolve([]);
+    const forget = secrets ? Promise.all([secrets.delete(USER_KEY), secrets.delete(PASS_KEY), browser.forget(secrets)]) : Promise.resolve([]);
     return Promise.all([ctx.http.clearCookies(FORUM), forget]).then(() => undefined);
   },
   loggedIn(ctx: SourceContext) {
-    return savedCredentials(ctx).then((c) => !!c);
+    return savedCredentials(ctx).then((c) => !!c || browser.active(ctx));
   },
+  browserLogin: (ctx, o) => browser.login(ctx, o),
+  browserSession: (ctx) => browser.active(ctx),
+  browserSpec: () => browser.spec(),
+  sessionHosts: () => [HOST],
+  sessionPending: (ctx, host) => browser.pending(ctx, host),
 };

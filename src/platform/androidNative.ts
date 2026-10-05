@@ -7,6 +7,7 @@ import type { NativeHttpRequest } from '../sources/http';
 import type { SecretStore, SourceHttp } from '../sources/types';
 import type { UpdateInfo } from '../lib/updateInfo';
 import type { CloudflareVisibleRequest } from '../sources/cloudflareCheck';
+import type { BrowserCheck, BrowserLoginRequest } from '../sources/browserLogin';
 
 type ApkFiles = NonNullable<UpdateInfo['apks']>;
 
@@ -47,6 +48,8 @@ export interface OmpNativeTvPlugin {
     failed?: boolean;
     indexers?: number;
     logins?: { [site: string]: string };
+    /** Browser sessions: ok (verified, promoted natively) | error. */
+    sessions?: { [site: string]: string };
   }): Promise<{ stored?: boolean; sitesNotStored?: string[] } | undefined>;
   /** The transfer still waiting for the page (events are not retained): { event } or { event: null }. */
   remoteSourcesPending(): Promise<{ event?: unknown }>;
@@ -61,6 +64,13 @@ export interface OmpNativeTvPlugin {
   cloudflareVisible(o: CloudflareVisibleRequest): Promise<{ result?: string; via?: string; sent?: boolean }>;
   /** When the stored Cloudflare clearance of the site of url ends (epoch ms), null without one. */
   cloudflareClearance(o: { url: string }): Promise<{ until?: number | null }>;
+  /**
+   * «Войти через браузер» (a native dialog with the site's login page under the remote, «Войти на телефоне»): every text
+   * comes from src/sources/browserLogin.ts. Cookies never come back: { result: ok | cancelled | busy | failed, host?, via? }.
+   */
+  siteBrowserLogin(o: BrowserLoginRequest): Promise<{ result?: string; host?: string; via?: string }>;
+  /** The browser session the phone sent for the site (staged) opens its check page signed in: { ok, host? }. */
+  siteSessionPending(o: { site: string; check: BrowserCheck }): Promise<{ ok?: boolean; host?: string }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
@@ -106,6 +116,8 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     scanLan: (o) => np.call(cap, NAME, 'scanLan', o),
     cloudflareVisible: (o) => np.call(cap, NAME, 'cloudflareVisible', o),
     cloudflareClearance: (o) => np.call(cap, NAME, 'cloudflareClearance', o),
+    siteBrowserLogin: (o) => np.call(cap, NAME, 'siteBrowserLogin', o),
+    siteSessionPending: (o) => np.call(cap, NAME, 'siteSessionPending', o),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }

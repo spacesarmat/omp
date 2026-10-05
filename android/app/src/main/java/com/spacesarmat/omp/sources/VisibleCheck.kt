@@ -17,6 +17,16 @@ interface CheckUi {
     fun dismiss()
 }
 
+/** What the dialog's buttons drive: the visible Cloudflare check and the browser login. Main thread only. */
+interface CheckControl {
+    fun start(screen: CheckUi)
+
+    fun cancel()
+
+    /** TV: ask the paired phone. */
+    fun askPhone()
+}
+
 /** Where a passed check goes: this device's jar, or the TV that asked the phone. */
 sealed class CheckTarget {
     /** Throws when the encrypted storage refuses the cookies. */
@@ -50,7 +60,7 @@ class VisibleCheck(
     private val gateWaitMs: Long = GATE_WAIT_MS,
     private val pollMs: Long = POLL_MS,
     private val maxOpenMs: Long = MAX_OPEN_MS,
-) {
+) : CheckControl {
     private var ui: CheckUi? = null
     private var browser: CloudflareBrowser? = null
     private var entered = false
@@ -59,7 +69,7 @@ class VisibleCheck(
     private var asking = false
     private var opened = 0L
 
-    fun start(screen: CheckUi) {
+    override fun start(screen: CheckUi) {
         ui = screen
         enter(scheduler.now(), first = true)
     }
@@ -142,7 +152,7 @@ class VisibleCheck(
     }
 
     /** «Отмена», Back, the dialog dismissed, the activity gone, or open too long. */
-    fun cancel() {
+    override fun cancel() {
         if (ended) return
         relay?.cancel()
         close()
@@ -194,7 +204,7 @@ class VisibleCheck(
 
     // ---- «Пройти на телефоне» (TV) ----
 
-    fun askPhone() {
+    override fun askPhone() {
         val r = relay ?: return
         if (asking || ended || browser == null) return
         val phone = r.phone()

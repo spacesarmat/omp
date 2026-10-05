@@ -378,6 +378,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .login-actions { display: flex; }
 .login-actions .button { flex: 1; text-align: center; }
 .login-actions .button:first-child { margin-right: 20px; }
+.login-browser { margin-bottom: 16px; }
 
 .marks-dialog { width: 900px; min-width: 0; }
 .marks-sub { font-size: 22px; color: var(--muted); margin: -14px 0 20px; }

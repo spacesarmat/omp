@@ -46,6 +46,23 @@ class SiteCookieJar(private val store: CookieStore, private val now: () -> Long 
         return list.filter { it.matches(url) }
     }
 
+    /**
+     * A new session of the site of [url]: its cookies that [keep] refuses go, then [cookies] are added (a browser
+     * sign-in replaces an older form login; Cloudflare's clearance stays).
+     */
+    @Synchronized
+    fun replaceSite(url: HttpUrl, keep: (Cookie) -> Boolean, cookies: List<Cookie>) {
+        val site = siteOf(url)
+        val list = cookiesOf(site)
+        val t = now()
+        list.removeAll { !keep(it) || it.expiresAt <= t }
+        for (c in cookies) {
+            list.removeAll { it.name == c.name && it.domain == c.domain && it.path == c.path }
+            if (c.expiresAt > t) list.add(c)
+        }
+        persist(site, list)
+    }
+
     /** Forgets every cookie of the site of [url] (logout). */
     @Synchronized
     fun clear(url: HttpUrl) {

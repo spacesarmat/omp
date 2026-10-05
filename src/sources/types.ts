@@ -2,6 +2,7 @@
 // Shared by the phone and the TV bundles: Chromium 53 rules (no Error subclasses, no AbortController).
 import type { SearchResult } from '../api/types';
 import type { SearchSource } from '../api/torrserver';
+import type { BrowserOutcome, BrowserSpec } from './browserLogin';
 
 export interface HttpResponse {
   status: number;
@@ -107,6 +108,19 @@ export interface Source {
    */
   savedLogin?(ctx: SourceContext): Promise<{ username: string; password: string } | null>;
   loginPending?(ctx: SourceContext): Promise<void>;
+  /**
+   * «Войти через браузер» (browserLogin.ts): the person signs in in a visible page, the session is kept natively and the
+   * saved password forgotten. Resolves the outcome (never the cookies).
+   */
+  browserLogin?(ctx: SourceContext, opts?: { askPhone?: boolean }): Promise<BrowserOutcome>;
+  /** What the browser login opens and checks (the phone shows it for the TV's «Войти на телефоне»). */
+  browserSpec?(): BrowserSpec;
+  /** The current login is a browser session («вход выполнен в браузере»; no saved password). */
+  browserSession?(ctx: SourceContext): Promise<boolean>;
+  /** The site's hosts, the active mirror first: «Передать вход на телевизор» of a browser session reads one of them. */
+  sessionHosts?(): string[];
+  /** Android TV: checks the browser session the phone sent (staged natively on `host`); rejects when not signed in. */
+  sessionPending?(ctx: SourceContext, host: string): Promise<void>;
   /** Fresh releases of a category from the site's public «new» pages (no login), newest first. The «Новое» feed. */
   latest?(ctx: SourceContext, category: FeedCategory): Promise<SourceResult[]>;
 }

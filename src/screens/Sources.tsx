@@ -12,6 +12,7 @@ import { clearHealth, getHealth, isSourceOn, onHealthChange, setHealth, setSourc
 import { forgetSiteLogin, forgetTransferredLogin, lastTransfer, LOGIN_SITES, onTransferApplied, siteLoginFromPhone, transferWhen } from '../sources/transfer';
 import { tvSourceContext } from '../sources/tvContext';
 import { healthText, type HealthLine } from '../sources/view';
+import { BROWSER_DONE, BROWSER_DONE_TITLE } from '../sources/browserLogin';
 import { indexerConnections, INDEXER_SOURCE_PREFIX, onIndexersChange, torznabHiddenText, type IndexerConn } from '../sources/indexerStore';
 import { checkedText, connLine, connTitle, getIndexerStatus, onIndexerStatus, refreshIndexerStatus, trackerStateText, trackerTone } from '../sources/indexerStatus';
 import type { SourceContext } from '../sources/types';
@@ -116,6 +117,8 @@ export function SourcesScreen({
   const [, setTick] = useState(0);
   const rerender = () => setTick((n) => n + 1);
   const [logged, setLogged] = useState<{ [id: string]: boolean }>({});
+  // the current login is a browser session («вход выполнен в браузере»)
+  const [browser, setBrowser] = useState<{ [id: string]: boolean }>({});
   const [loginFor, setLoginFor] = useState<Source | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const ts = torrServerSources();
@@ -158,6 +161,14 @@ export function SourcesScreen({
             if (alive()) setLogged((m) => ({ ...m, [s.id]: false }));
           },
         );
+        if (s.browserSession) {
+          s.browserSession(ctx()).then(
+            (v) => {
+              if (alive()) setBrowser((m) => ({ ...m, [s.id]: v }));
+            },
+            () => undefined,
+          );
+        }
       });
   };
 
@@ -251,21 +262,23 @@ export function SourcesScreen({
 
   /** The site's current login came from the phone (LOGIN_SITES: their own note; rutracker: the last transfer). */
   const fromPhone = (s: Source) => {
-    if (LOGIN_SITES.indexOf(s.id) >= 0) return siteLoginFromPhone(s.id);
+    // a site's own note (its login, or a browser session from the phone)
+    if (siteLoginFromPhone(s.id)) return true;
+    if (LOGIN_SITES.indexOf(s.id) >= 0) return false;
     const t = lastTransfer();
     return !!t && t.rutracker;
   };
 
   const forgetFromPhone = (s: Source) => {
-    if (LOGIN_SITES.indexOf(s.id) >= 0) forgetSiteLogin(s.id);
-    else forgetTransferredLogin();
+    forgetSiteLogin(s.id);
+    if (LOGIN_SITES.indexOf(s.id) < 0) forgetTransferredLogin();
   };
 
   const noteOf = (s: Source): HealthLine | null => {
     if (s.needsLogin && s.login) {
       if (!loggedIn(s)) return { text: 'нужен вход', tone: 'muted' };
       const h = getHealth(s.id);
-      if (!h) return { text: fromPhone(s) ? 'вход передан с телефона' : 'вход выполнен', tone: 'ok' };
+      if (!h) return { text: fromPhone(s) ? 'вход передан с телефона' : browser[s.id] ? BROWSER_DONE : 'вход выполнен', tone: 'ok' };
       return healthText(h);
     }
     if (!isSourceOn(s)) return { text: 'выключен', tone: 'muted' };
@@ -284,6 +297,7 @@ export function SourcesScreen({
       s.logout(ctx()).then(
         () => {
           setLogged((m) => ({ ...m, [s.id]: false }));
+          setBrowser((m) => ({ ...m, [s.id]: false }));
           setHealth(s.id, { state: 'login', at: Date.now() });
           forgetFromPhone(s);
           toast('Вы вышли из ' + s.name);
@@ -296,15 +310,16 @@ export function SourcesScreen({
     });
   };
 
-  const loginDone = (s: Source) => {
+  const loginDone = (s: Source, viaBrowser?: boolean) => {
     setLoginFor(null);
     setLogged((m) => ({ ...m, [s.id]: true }));
+    setBrowser((m) => ({ ...m, [s.id]: !!viaBrowser }));
     // signed in: the source takes part in the search; its real state comes with the next search
     setSourceOn(s.id, true);
     clearHealth(s.id);
     // typed on the TV now: no longer «вход передан с телефона»
     forgetFromPhone(s);
-    toast('Вход выполнен');
+    toast(viaBrowser ? BROWSER_DONE_TITLE : 'Вход выполнен');
     setTimeout(() => focusLogin(s), 0);
   };
 
@@ -453,7 +468,7 @@ export function SourcesScreen({
             setLoginFor(null);
             setTimeout(() => focusLogin(s), 0);
           }}
-          onDone={() => loginDone(loginFor)}
+          onDone={(b) => loginDone(loginFor, b)}
         />
       )}
     </FocusGroup>

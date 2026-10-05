@@ -11,6 +11,10 @@
 // (only LOGIN_SITES): the native side stages each under `<id>.pending.*`, the event says `logins: { id: true }`, the
 // page checks each with Source.loginPending and answers `logins: { id: result }`; only a verified one is promoted,
 // otherwise the TV keeps the login it had (the same staging as rutracker's).
+// A site signed in through the browser (browserLogin.ts) travels as a session in `sessions`: the phone's native side
+// adds that host's cookies and its User-Agent (OmpNative.siteSessionSend; they never pass through the page), the TV
+// stages them, the event says `sessions: { id: host }`, the page checks each with Source.sessionPending and answers
+// `sessions: { id: ok | error }`; only a verified session is promoted, otherwise the TV keeps what it had.
 // Shared by the phone and the TV bundles: Chromium 53 rules.
 import { isObject, loadJson, saveJson } from '../store/storage';
 import { RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA } from './rutrackerText';
@@ -44,6 +48,9 @@ const CONTROL_ALL = /[\u0000-\u001f\u007f-\u009f]/g;
  * the TV's storage entries, so nothing else can be staged.
  */
 export const LOGIN_SITES = ['kinozal', 'rustorka', 'labtor', 'seedoff', 'bitru'];
+/** Sites whose browser session may travel in `sessions` (SourcesProtocol.SESSION_SITES in Kotlin). */
+export const SESSION_SITES = LOGIN_SITES.concat(['rutracker']);
+const HOST = /^[a-z0-9]([a-z0-9-]{0,62}\.)+[a-z0-9-]{1,63}$/;
 /** How long the phone waits for the TV's answer; an older transfer event on the TV is dropped. */
 export const TRANSFER_TIMEOUT_MS = 45000;
 
@@ -340,6 +347,8 @@ export interface RemoteSources {
   cloudflare?: { [id: string]: boolean };
   /** Sites (LOGIN_SITES) whose login was sent and is staged. */
   logins?: string[];
+  /** Browser sessions staged natively (SESSION_SITES): the host each one is on (never a cookie). */
+  sessions?: { [id: string]: string };
 }
 
 export function parseRemoteSources(d: unknown): RemoteSources | null {
@@ -381,6 +390,18 @@ export function parseRemoteSources(d: unknown): RemoteSources | null {
     const ids = Object.keys(l);
     for (let i = 0; i < ids.length; i++) if (LOGIN_SITES.indexOf(ids[i]) < 0 || l[ids[i]] !== true) return null;
     if (ids.length) out.logins = ids;
+  }
+  if (d.sessions !== undefined) {
+    const x = d.sessions;
+    if (!isObject(x)) return null;
+    const ids = Object.keys(x);
+    const sessions: { [id: string]: string } = {};
+    for (let i = 0; i < ids.length; i++) {
+      const h = x[ids[i]];
+      if (SESSION_SITES.indexOf(ids[i]) < 0 || typeof h !== 'string' || h.length > 253 || !HOST.test(h)) return null;
+      sessions[ids[i]] = h;
+    }
+    if (ids.length) out.sessions = sessions;
   }
   return out;
 }
@@ -552,7 +573,7 @@ function sitesFromPhone(): { [id: string]: true } {
   const v = loadJson<unknown>(SITES_KEY, {}, isObject);
   const out: { [id: string]: true } = {};
   if (isObject(v)) Object.keys(v).forEach((id) => {
-    if (LOGIN_SITES.indexOf(id) >= 0 && v[id] === true) out[id] = true;
+    if (SESSION_SITES.indexOf(id) >= 0 && v[id] === true) out[id] = true;
   });
   return out;
 }
@@ -582,7 +603,7 @@ export interface SiteLoginsState {
 
 export function siteLoginsState(): SiteLoginsState {
   const health: { [id: string]: SourceHealth | null } = {};
-  LOGIN_SITES.forEach((id) => {
+  SESSION_SITES.forEach((id) => {
     health[id] = getHealth(id);
   });
   return { fromPhone: sitesFromPhone(), health };
@@ -591,7 +612,7 @@ export function siteLoginsState(): SiteLoginsState {
 /** The TV verified these sites' logins but could not store them: it must not claim them. */
 export function siteLoginsNotStored(sites: string[], prev: SiteLoginsState): void {
   sites.forEach((id) => {
-    if (LOGIN_SITES.indexOf(id) < 0) return;
+    if (SESSION_SITES.indexOf(id) < 0) return;
     markSite(id, !!prev.fromPhone[id]);
     const h = prev.health[id];
     if (h) setHealth(id, h);
@@ -632,6 +653,61 @@ export function applyRemoteLogins(r: RemoteSources, known: Source[], ctx: () => 
     notify();
     return out;
   });
+}
+
+/**
+ * Checks the browser sessions the phone sent (staged natively): each must be on one of the site's hosts and open the
+ * site's check page signed in (Source.sessionPending). Resolves ok | error per site; only an «ok» is promoted natively.
+ */
+export function applyRemoteSessions(r: RemoteSources, known: Source[], ctx: () => SourceContext): Promise<{ [id: string]: 'ok' | 'error' }> {
+  const out: { [id: string]: 'ok' | 'error' } = {};
+  const sessions = r.sessions || {};
+  const ids = Object.keys(sessions);
+  if (!ids.length) return Promise.resolve(out);
+  return Promise.all(
+    ids.map((id) => {
+      const s = known.filter((x) => x.id === id)[0];
+      let p: Promise<void>;
+      try {
+        p = s && s.sessionPending ? s.sessionPending(ctx(), sessions[id]) : Promise.reject(new Error('unknown site'));
+      } catch (e) {
+        p = Promise.reject(e);
+      }
+      return p.then(
+        () => {
+          out[id] = 'ok';
+          clearHealth(id);
+          markSite(id, true);
+        },
+        () => {
+          // not verified: the native side drops it, the TV keeps its earlier login and state
+          out[id] = 'error';
+        },
+      );
+    }),
+  ).then(() => {
+    notify();
+    return out;
+  });
+}
+
+/**
+ * The phone's sites signed in through the browser among `list` (`only` limits it): their hosts, the active mirror first,
+ * for OmpNative.siteSessionSend. A site whose state cannot be read is left out.
+ */
+export function transferSessions(list: Source[], ctx: SourceContext, only?: string[]): Promise<{ [id: string]: string[] }> {
+  const sites = list.filter((s) => SESSION_SITES.indexOf(s.id) >= 0 && !!s.browserSession && !!s.sessionHosts && (!only || only.indexOf(s.id) >= 0));
+  const out: { [id: string]: string[] } = {};
+  return Promise.all(
+    sites.map((s) =>
+      s.browserSession!(ctx).then(
+        (on) => {
+          if (on) out[s.id] = s.sessionHosts!().slice(0, 10);
+        },
+        () => undefined,
+      ),
+    ),
+  ).then(() => out);
 }
 
 function two(n: number): string {

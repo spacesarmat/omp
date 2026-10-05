@@ -8,6 +8,7 @@ import { errorMessage } from '../../../src/api/http';
 import { builtinSources, torrServerSources } from '../../../src/sources/registry';
 import { clearHealth, getHealth, isSourceOn, onHealthChange, setHealth, setSourceOn } from '../../../src/sources/store';
 import { healthText, isCloudflare, JACKETT_HINT, type HealthLine } from '../../../src/sources/view';
+import { BROWSER_DONE } from '../../../src/sources/browserLogin';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { allSources } from '../../../src/sources/registry';
 import { rutrackerSavedLogin } from '../../../src/sources/rutracker';
@@ -16,6 +17,7 @@ import {
   LOGIN_SITES,
   transferIndexers,
   transferLogins,
+  transferSessions,
   transferWhen,
   validateTransferPayload,
   validTransferLogin,
@@ -142,7 +144,18 @@ export function sendTransfer(
   logins: { [id: string]: TransferLogin },
   /** The site screen sends only its own site's switches and no FlareSolverr address. */
   only?: { list: Source[]; flare: string | null },
-): Promise<{ r: SourcesSent; loginDropped: boolean; droppedNote: string; indexersDropped: boolean; cloudflareDropped: boolean; sitesDropped: boolean; sent: number }> {
+  /** Sites signed in through the browser → their hosts: their sessions are added natively. */
+  sessions?: { [id: string]: string[] },
+): Promise<{
+  r: SourcesSent;
+  loginDropped: boolean;
+  droppedNote: string;
+  indexersDropped: boolean;
+  cloudflareDropped: boolean;
+  sitesDropped: boolean;
+  sessionsDropped: boolean;
+  sent: number;
+}> {
   const p = only ? transferPayload(only.list, login, indexers, only.flare, logins) : transferPayload(allSources(), login, indexers, undefined, logins);
   const state = {
     loginDropped: p.loginDropped,
@@ -150,16 +163,19 @@ export function sendTransfer(
     indexersDropped: p.indexersDropped,
     cloudflareDropped: false,
     sitesDropped: false,
+    sessionsDropped: false,
     sent: p.payload.indexers ? p.payload.indexers.length : 0,
   };
-  const extras = !!(p.payload.indexers || p.payload.flaresolverr || p.payload.cloudflare || p.payload.logins);
-  return sendSourcesToTv(p.payload)
+  const withSessions = !!sessions && Object.keys(sessions).length > 0;
+  const extras = !!(p.payload.indexers || p.payload.flaresolverr || p.payload.cloudflare || p.payload.logins) || withSessions;
+  return sendSourcesToTv(p.payload, withSessions ? sessions : undefined)
     .catch((e: unknown) => {
       // an older OMP on the TV refuses the v0.15 parts (connections, FlareSolverr, Cloudflare switches, site logins)
       if (!extras || !(e instanceof Error) || e.message !== SOURCES_REJECTED) throw e;
       if (state.sent) state.indexersDropped = true;
       if (p.payload.flaresolverr || p.payload.cloudflare) state.cloudflareDropped = true;
       if (p.payload.logins) state.sitesDropped = true;
+      if (withSessions) state.sessionsDropped = true;
       state.sent = 0;
       return sendSourcesToTv(withoutNewParts(p.payload));
     })
@@ -167,6 +183,21 @@ export function sendTransfer(
 }
 
 export const SITES_NOT_SENT = 'Входы на сайты за Cloudflare не переданы — обновите OMP на телевизоре';
+export const SESSIONS_NOT_SENT = 'Входы через браузер не переданы — обновите OMP на телевизоре';
+
+/** What the phone adds about each browser session the TV checked ('' when all were kept). */
+export function sessionsText(sessions: { [site: string]: string } | undefined, nameOf: (id: string) => string): string {
+  if (!sessions) return '';
+  return Object.keys(sessions)
+    .map((id) => {
+      const r = sessions[id];
+      if (r === 'error') return 'телевизор не подтвердил вход на ' + nameOf(id) + ' — войдите на телевизоре через браузер';
+      if (r === 'missing') return 'вход на ' + nameOf(id) + ' не найден — войдите заново';
+      return '';
+    })
+    .filter((x) => x)
+    .join('. ');
+}
 
 /** The phone's saved login of every site in LOGIN_SITES among the given ids. */
 function readSiteLogins(ctx: () => SourceContext, ids: string[]): Promise<{ [id: string]: TransferLogin }> {
@@ -211,13 +242,15 @@ function SendToTv({ loginNames, indexers, ctx }: { loginNames: { id: string; nam
     // the keys are read from the Keystore storage only now, and live only in this request
     const conns = indexerConnections();
     const list = conns.length ? transferIndexers(conns, ctx().secrets, withKeys) : Promise.resolve([] as TransferIndexer[]);
-    Promise.all([login, list, sites])
-      .then(([l, idx, s]) => sendTransfer(l, idx, s))
+    // sites signed in through the browser go as sessions (added natively)
+    const ses = withLogin ? transferSessions(allSources(), ctx(), ids).catch(() => ({})) : Promise.resolve({});
+    Promise.all([login, list, sites, ses])
+      .then(([l, idx, s, b]) => sendTransfer(l, idx, s, undefined, b))
       .then(
-        ({ r, droppedNote, indexersDropped, cloudflareDropped, sitesDropped, sent }) => {
+        ({ r, droppedNote, indexersDropped, cloudflareDropped, sitesDropped, sessionsDropped, sent }) => {
           saveJson(SENT_KEY, { ip, at: Date.now() });
           const partial = indexersText(sent, r.indexers);
-          const siteNotes = siteLoginsText(r.logins, nameOf);
+          const siteNotes = [siteLoginsText(r.logins, nameOf), sessionsText(r.sessions, nameOf)].filter((x) => x).join('. ');
           log(
             (r.rutracker && r.rutracker !== 'ok') || partial || siteNotes ? 'warn' : 'info',
             'tv',
@@ -234,6 +267,7 @@ function SendToTv({ loginNames, indexers, ctx }: { loginNames: { id: string; nam
             indexersDropped ? INDEXERS_NOT_SENT : '',
             cloudflareDropped ? CLOUDFLARE_NOT_SENT : '',
             sitesDropped ? SITES_NOT_SENT : '',
+            sessionsDropped ? SESSIONS_NOT_SENT : '',
             partial,
             siteNotes,
           ].filter((x) => x);
@@ -383,6 +417,8 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   const rerender = () => setTick((n) => n + 1);
   // sources with a login: saved credentials exist (asked once, no network)
   const [logged, setLogged] = useState<Record<string, boolean>>({});
+  // sources whose login is a browser session («вход выполнен в браузере»)
+  const [browser, setBrowser] = useState<Record<string, boolean>>({});
   const [loginFor, setLoginFor] = useState<Source | null>(null);
   const ts = torrServerSources();
   // the Jackett / Prowlarr sources have their own section; the sites behind Cloudflare too
@@ -405,6 +441,12 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
           (v) => alive && setLogged((m) => ({ ...m, [s.id]: v })),
           () => alive && setLogged((m) => ({ ...m, [s.id]: false })),
         );
+        if (s.browserSession) {
+          s.browserSession(ctx()).then(
+            (v) => alive && setBrowser((m) => ({ ...m, [s.id]: v })),
+            () => undefined,
+          );
+        }
       });
     return () => {
       alive = false;
@@ -426,7 +468,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
     if (s.needsLogin && s.login && !loggedIn(s)) return { text: 'нужен вход', tone: 'muted' };
     const h = getHealth(s.id);
     // signed in, no search since: say only what is known
-    if (s.needsLogin && s.login && !h) return { text: 'вход выполнен', tone: 'muted' };
+    if (s.needsLogin && s.login && !h) return { text: browser[s.id] ? BROWSER_DONE : 'вход выполнен', tone: 'muted' };
     return healthText(h);
   };
 
@@ -435,15 +477,17 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
     s.logout(ctx()).then(
       () => {
         setLogged((m) => ({ ...m, [s.id]: false }));
+        setBrowser((m) => ({ ...m, [s.id]: false }));
         setHealth(s.id, { state: 'login', at: Date.now() });
       },
       (e) => showToast(errorMessage(e)),
     );
   };
 
-  const loggedInDone = (s: Source) => {
+  const loggedInDone = (s: Source, viaBrowser?: boolean) => {
     setLoginFor(null);
     setLogged((m) => ({ ...m, [s.id]: true }));
+    setBrowser((m) => ({ ...m, [s.id]: !!viaBrowser }));
     // signed in: the source takes part in the search; its real state comes with the next search
     setSourceOn(s.id, true);
     clearHealth(s.id);
@@ -520,7 +564,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
           </button>
         </div>
       </div>
-      {loginFor && <TrackerLogin source={loginFor} ctx={ctx} onClose={() => setLoginFor(null)} onDone={() => loggedInDone(loginFor)} />}
+      {loginFor && <TrackerLogin source={loginFor} ctx={ctx} onClose={() => setLoginFor(null)} onDone={(b) => loggedInDone(loginFor, b)} />}
     </div>
   );
 }

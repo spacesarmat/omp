@@ -5,6 +5,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import org.json.JSONArray
 import org.json.JSONObject
+import com.spacesarmat.omp.sources.CloudflareCookies
+import com.spacesarmat.omp.sources.SiteSession
 
 /**
  * «Передать на телевизор» (POST /omp/sources, see src/sources/transfer.ts): the phone's source switches and,
@@ -22,7 +24,14 @@ class SourcesTransfer(
     val cloudflare: Map<String, Boolean> = emptyMap(),
     /** Logins of the other sites behind a login (Kinozal, rustorka…), by site id ([SourcesProtocol.LOGIN_SITES]). */
     val logins: Map<String, Login> = emptyMap(),
+    /** Browser sign-ins (Task 9b): the session cookies of one host per site ([SourcesProtocol.SESSION_SITES]). */
+    val sessions: Map<String, Session> = emptyMap(),
 ) {
+    /** A browser session: [host]'s cookies and the phone's User-Agent it was made with. */
+    class Session(val host: String, val cookies: List<Pair<String, String>>, val ua: String) {
+        override fun toString() = "Session(${cookies.size} cookies)"
+    }
+
     class Login(val username: String, val password: String) {
         override fun toString() = "Login(***)"
     }
@@ -33,7 +42,7 @@ class SourcesTransfer(
     }
 
     override fun toString() =
-        "SourcesTransfer(${sources.size} sources, login=${login != null}, indexers=${indexers.size}, flare=${flaresolverr != null}, cloudflare=${cloudflare.size}, logins=${logins.size})"
+        "SourcesTransfer(${sources.size} sources, login=${login != null}, indexers=${indexers.size}, flare=${flaresolverr != null}, cloudflare=${cloudflare.size}, logins=${logins.size}, sessions=${sessions.size})"
 }
 
 /** What became of a transfer; the router turns it into the HTTP answer. */
@@ -48,6 +57,8 @@ sealed class SourcesOutcome {
         val logins: Map<String, String> = emptyMap(),
         /** The verified rutracker login could not be written (only reported this way when site logins came too). */
         val rutrackerNotStored: Boolean = false,
+        /** Per browser session that came: ok | error. */
+        val sessions: Map<String, String> = emptyMap(),
     ) : SourcesOutcome()
     /** Another transfer is still being applied. */
     object Busy : SourcesOutcome()
@@ -72,7 +83,8 @@ enum class SourcesDone {
 /** Schema of the request body; the same limits as src/sources/transfer.ts. Pure (unit-tested). */
 object SourcesProtocol {
     const val VERSION = 1
-    const val MAX_BODY = 16_384
+    /** 16 KB until Task 9b; a browser session per site adds up to ~7 KB. */
+    const val MAX_BODY = 32_768
     const val MAX_SOURCES = 40
     const val MAX_USERNAME = 100
     const val MAX_PASSWORD = 200
@@ -81,13 +93,19 @@ object SourcesProtocol {
     const val MAX_INDEXER_NAME = 40
     val RESULTS = setOf("ok", "bad_login", "captcha", "error")
     private val SOURCE_ID = Regex("^[a-z0-9][a-z0-9-]{0,39}$")
-    private val KEYS = setOf("v", "sources", "rutracker", "indexers", "flaresolverr", "cloudflare", "logins")
+    private val KEYS = setOf("v", "sources", "rutracker", "indexers", "flaresolverr", "cloudflare", "logins", "sessions")
     /**
      * Sites whose login may travel in `logins` (src/sources/transfer.ts LOGIN_SITES). A fixed list: the site id names the
      * storage entries (`<id>.pending.username`), so a phone can never stage under another name.
      */
     val LOGIN_SITES = setOf("kinozal", "rustorka", "labtor", "seedoff", "bitru")
     private val LOGIN_FIELDS = setOf("username", "password")
+    /** Sites whose browser session may travel in `sessions` (src/sources/transfer.ts SESSION_SITES). */
+    val SESSION_SITES = LOGIN_SITES + "rutracker"
+    private val SESSION_FIELDS = setOf("host", "cookies", "ua")
+    private val COOKIE_FIELDS = setOf("name", "value")
+    private val UA = Regex("^[\\x20-\\x7e]{1,512}$")
+    val SESSION_RESULTS = setOf("ok", "error")
     const val MAX_FLARE_URL = 200
     /** The page's normal form of a FlareSolverr address (src/sources/flareStore.ts normalizeFlareUrl). */
     private val FLARE_URL = Regex("""^https?://([a-z0-9.-]+|\[[0-9a-f:.]+])(:\d{1,5})?(/[^\s@?#]*)?$""")
@@ -134,7 +152,51 @@ object SourcesProtocol {
             is JSONObject -> logins(l) ?: return null
             else -> return null
         }
-        return SourcesTransfer(sources, login, phone, indexers, flare, cloudflare, logins)
+        val sessions = when (val x = body.opt("sessions")) {
+            null -> emptyMap()
+            is JSONObject -> sessions(x) ?: return null
+            else -> return null
+        }
+        return SourcesTransfer(sources, login, phone, indexers, flare, cloudflare, logins, sessions)
+    }
+
+    /**
+     * { siteId: { host, cookies: [{ name, value }], ua } }, 1.. of [SESSION_SITES]: a valid host, 1..[SiteSession.MAX_COOKIES]
+     * valid cookies without duplicates and at most [SiteSession.MAX_CHARS] characters, a printable User-Agent.
+     */
+    private fun sessions(o: JSONObject): Map<String, SourcesTransfer.Session>? {
+        if (o.length() < 1 || o.length() > SESSION_SITES.size) return null
+        val out = LinkedHashMap<String, SourcesTransfer.Session>()
+        val ids = o.keys()
+        while (ids.hasNext()) {
+            val id = ids.next()
+            if (id !in SESSION_SITES) return null
+            val x = o.opt(id) as? JSONObject ?: return null
+            val keys = x.keys()
+            while (keys.hasNext()) if (keys.next() !in SESSION_FIELDS) return null
+            val host = x.opt("host") as? String ?: return null
+            if (!SiteSession.validHost(host)) return null
+            val ua = x.opt("ua") as? String ?: return null
+            if (!UA.matches(ua)) return null
+            val arr = x.opt("cookies") as? JSONArray ?: return null
+            if (arr.length() < 1 || arr.length() > SiteSession.MAX_COOKIES) return null
+            val pairs = ArrayList<Pair<String, String>>()
+            val names = HashSet<String>()
+            var chars = 0
+            for (i in 0 until arr.length()) {
+                val c = arr.opt(i) as? JSONObject ?: return null
+                val ck = c.keys()
+                while (ck.hasNext()) if (ck.next() !in COOKIE_FIELDS) return null
+                val n = c.opt("name") as? String ?: return null
+                val v = c.opt("value") as? String ?: return null
+                if (!CloudflareCookies.validName(n) || !CloudflareCookies.validValue(v) || !names.add(n)) return null
+                chars += n.length + v.length
+                pairs.add(n to v)
+            }
+            if (chars > SiteSession.MAX_CHARS) return null
+            out[id] = SourcesTransfer.Session(host, pairs, ua)
+        }
+        return out
     }
 
     /** { siteId: { username, password } }, 1.. of [LOGIN_SITES]. */
@@ -232,6 +294,26 @@ interface LoginStore {
 }
 
 /**
+ * Browser sessions on their way to the TV's jar ([SourcesProtocol.SESSION_SITES]): staged in the encrypted storage, only
+ * a session the page verified replaces the site's live one ([promote]: cookies into the jar, the phone's User-Agent for
+ * that host, the site marked «вход выполнен в браузере», its saved password dropped); anything else is dropped.
+ */
+interface SessionStore {
+    /** Throws when the storage is unavailable. */
+    fun stage(site: String, s: SourcesTransfer.Session)
+    /** Throws when the storage is unavailable or nothing is staged. */
+    fun promote(site: String)
+    fun discard(sites: Collection<String>)
+}
+
+/** No browser sessions (tests of the other parts). */
+object NoSessions : SessionStore {
+    override fun stage(site: String, s: SourcesTransfer.Session) = throw IllegalStateException("no session store")
+    override fun promote(site: String) = throw IllegalStateException("no session store")
+    override fun discard(sites: Collection<String>) {}
+}
+
+/**
  * Hands a transfer to the page and waits for its answer ([done]), at most [timeoutMs]. One transfer at a time.
  * The login is staged before the page hears of it; the page event carries only `rutracker: true`. The event of
  * the waiting transfer is also kept ([pendingEvent]): a page that starts listening late asks for it instead of
@@ -241,6 +323,7 @@ class SourcesInbox(
     private val store: LoginStore,
     private val emit: (JSONObject) -> Unit,
     private val timeoutMs: Long = TIMEOUT_MS,
+    private val sessions: SessionStore = NoSessions,
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) {
     private class Pending(val id: String) {
@@ -255,6 +338,8 @@ class SourcesInbox(
         var keysStaged = false
         @Volatile
         var sitesStaged: Set<String> = emptySet()
+        @Volatile
+        var sessionsStaged: Set<String> = emptySet()
     }
 
     private val lock = Any()
@@ -285,6 +370,12 @@ class SourcesInbox(
                     if (!quietly { store.stageSite(site, l.username, l.password) }) return SourcesOutcome.StoreFailed
                 }
             }
+            if (t.sessions.isNotEmpty()) {
+                p.sessionsStaged = t.sessions.keys.toSet()
+                for ((site, x) in t.sessions) {
+                    if (!quietly { sessions.stage(site, x) }) return SourcesOutcome.StoreFailed
+                }
+            }
             val sources = JSONObject()
             for ((id, on) in t.sources) sources.put(id, on)
             val event = JSONObject().put("id", p.id).put("sources", sources).put("rutracker", t.login != null)
@@ -312,6 +403,12 @@ class SourcesInbox(
                 for (site in t.logins.keys) l.put(site, true)
                 event.put("logins", l)
             }
+            if (t.sessions.isNotEmpty()) {
+                // the page hears only the host of each staged session (it checks it is the site's), never a cookie
+                val x = JSONObject()
+                for ((site, ses) in t.sessions) x.put(site, ses.host)
+                event.put("sessions", x)
+            }
             p.event = event
             emit(event)
             if (!p.latch.await(timeoutMs, TimeUnit.MILLISECONDS)) return SourcesOutcome.NoAnswer
@@ -324,6 +421,7 @@ class SourcesInbox(
             // keys the page did not move stay nowhere
             if (p.keysStaged) quietly { store.discardKeys() }
             if (p.sitesStaged.isNotEmpty()) quietly { store.discardSites(p.sitesStaged) }
+            if (p.sessionsStaged.isNotEmpty()) quietly { sessions.discard(p.sessionsStaged) }
         }
     }
 
@@ -341,7 +439,8 @@ class SourcesInbox(
         val login = quietly { store.discard() }
         val keys = quietly { store.discardKeys() }
         val sites = quietly { store.discardSites(SourcesProtocol.LOGIN_SITES) }
-        login && keys && sites
+        val ses = quietly { sessions.discard(SourcesProtocol.SESSION_SITES) }
+        login && keys && sites && ses
     }
 
     /** The event of the transfer waiting for the page, null when none (answered or timed out). */
@@ -362,7 +461,15 @@ class SourcesInbox(
      * result (one the page did not mention: «error»); a verified one is promoted here, and when that write fails its
      * result becomes «error» and it is listed in [Answer.sitesNotStored].
      */
-    fun answer(id: String?, rutracker: String?, failed: Boolean, indexers: Int? = null, logins: Map<String, String?> = emptyMap()): Answer = synchronized(lock) {
+    fun answer(
+        id: String?,
+        rutracker: String?,
+        failed: Boolean,
+        indexers: Int? = null,
+        logins: Map<String, String?> = emptyMap(),
+        /** Per staged browser session: ok (verified) | error. */
+        sessionResults: Map<String, String?> = emptyMap(),
+    ): Answer = synchronized(lock) {
         val p = pending?.takeIf { it.id == id } ?: return Answer(SourcesDone.UNKNOWN, emptySet())
         val saved = indexers?.coerceIn(0, SourcesProtocol.MAX_INDEXERS)
         val notStored = LinkedHashSet<String>()
@@ -376,17 +483,27 @@ class SourcesInbox(
                 } else r
             }
         }
+        val ses = LinkedHashMap<String, String>()
+        if (!failed) {
+            for (site in p.sessionsStaged) {
+                val r = sessionResults[site]?.takeIf { it in SourcesProtocol.SESSION_RESULTS } ?: "error"
+                ses[site] = if (r == "ok" && !quietly { sessions.promote(site) }) {
+                    notStored.add(site)
+                    "error"
+                } else r
+            }
+        }
         var out: SourcesOutcome = when {
             failed -> SourcesOutcome.Failed
-            rutracker == null -> SourcesOutcome.Applied(null, saved, sites)
-            else -> SourcesOutcome.Applied(if (rutracker in SourcesProtocol.RESULTS) rutracker else "error", saved, sites)
+            rutracker == null -> SourcesOutcome.Applied(null, saved, sites, sessions = ses)
+            else -> SourcesOutcome.Applied(if (rutracker in SourcesProtocol.RESULTS) rutracker else "error", saved, sites, sessions = ses)
         }
         var rutrackerStored = true
         val applied = out as? SourcesOutcome.Applied
         if (p.staged && applied != null && applied.rutracker == "ok" && !quietly { store.promote() }) {
             rutrackerStored = false
             // with site logins the phone still hears their results (some may be stored); alone it is the old 500 «secrets»
-            out = if (p.sitesStaged.isNotEmpty()) applied.copy(rutracker = "error", rutrackerNotStored = true) else SourcesOutcome.StoreFailed
+            out = if (p.sitesStaged.isNotEmpty() || p.sessionsStaged.isNotEmpty()) applied.copy(rutracker = "error", rutrackerNotStored = true) else SourcesOutcome.StoreFailed
         }
         p.outcome = out
         p.latch.countDown()
@@ -464,5 +581,42 @@ class SecretLoginStore(private val secrets: SecretEntries, private val key: (Str
 
         /** The entry src/sources/indexerStore.ts indexerPendingKeyName(i) reads. */
         fun pendingKey(i: Int) = "indexer.pending.$i.apikey"
+    }
+}
+
+/**
+ * [SessionStore] over the encrypted entries: a session is staged under `session.pending.<site>` (outside the page's js:
+ * namespace: the page never reads a cookie); [promote] puts it into the jar ([import]: cookies + the phone's User-Agent)
+ * and, in one write, marks the site «вход выполнен в браузере» (`<site>.browser`, what src/sources/browserLogin.ts reads)
+ * and drops its saved password (a browser session has none) and the staged entry. [key] maps a page key to its storage name.
+ */
+class SecretSessionStore(
+    private val secrets: SecretEntries,
+    private val key: (String) -> String,
+    private val import: (root: okhttp3.HttpUrl, pairs: List<Pair<String, String>>, ua: String) -> Unit,
+) : SessionStore {
+    override fun stage(site: String, s: SourcesTransfer.Session) {
+        require(site in SourcesProtocol.SESSION_SITES)
+        secrets.replace(mapOf(stagedName(site) to SiteSession.encode(SiteSession.Staged(s.host, s.cookies, s.ua))), emptyList())
+    }
+
+    /** The staged session of [site] (the TV page checks it before answering), null when none. */
+    fun staged(site: String): SiteSession.Staged? =
+        if (site in SourcesProtocol.SESSION_SITES) SiteSession.decode(secrets.get(stagedName(site))) else null
+
+    override fun promote(site: String) {
+        val s = staged(site) ?: throw IllegalStateException("nothing staged")
+        val root = okhttp3.HttpUrl.Builder().scheme("https").host(s.host).build()
+        import(root, s.cookies, s.ua ?: throw IllegalStateException("no user agent"))
+        secrets.replace(mapOf(key("$site.browser") to "1"), listOf(key("$site.username"), key("$site.password"), stagedName(site)))
+    }
+
+    override fun discard(sites: Collection<String>) {
+        val names = sites.filter { it in SourcesProtocol.SESSION_SITES }.map { stagedName(it) }
+        if (names.isNotEmpty()) secrets.replace(emptyMap(), names)
+    }
+
+    companion object {
+        fun stagedName(site: String) = "session.pending.$site"
     }
 }

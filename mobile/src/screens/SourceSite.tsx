@@ -9,11 +9,13 @@ import { log } from '../../../src/lib/log';
 import { getSource } from '../../../src/sources/registry';
 import { clearHealth, isCloudflareBypassOn, isSourceOn, onCloudflareBypassChange, setCloudflareBypass, setHealth, setSourceOn } from '../../../src/sources/store';
 import { BYPASS_LABEL, BYPASS_WARNING, clearanceText } from '../../../src/sources/cloudflareCheck';
-import { LOGIN_SITES, transferLogins } from '../../../src/sources/transfer';
+import { LOGIN_SITES, SESSION_SITES, transferLogins, transferSessions } from '../../../src/sources/transfer';
+import { BROWSER_DONE_TITLE, isCaptchaError } from '../../../src/sources/browserLogin';
+import { BrowserLoginButton } from '../ui/BrowserLoginButton';
 import { allSources } from '../../../src/sources/registry';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { activeTv, isAtv } from '../tv/tvStore';
-import { CLOUDFLARE_NOT_SENT, sendTransfer, siteLoginsText, SITES_NOT_SENT } from './Sources';
+import { CLOUDFLARE_NOT_SENT, sendTransfer, sessionsText, SESSIONS_NOT_SENT, siteLoginsText, SITES_NOT_SENT } from './Sources';
 
 export const SITE_LOGIN_NOTE = 'Без входа сайт не отдаёт .torrent. Пароль хранится в зашифрованном хранилище телефона.';
 export const SEND_LOGIN = 'Передать вход на телевизор';
@@ -31,6 +33,9 @@ function sentLoginText(name: string, result: string | undefined, notes: string[]
  */
 function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }) {
   const [logged, setLogged] = useState<boolean | null>(null);
+  // the current login is a browser session («Вход выполнен в браузере», no password)
+  const [browser, setBrowser] = useState(false);
+  const [captcha, setCaptcha] = useState(false);
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -49,6 +54,12 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
         () => alive.current && setLogged(false),
       );
     } else setLogged(false);
+    if (source.browserSession) {
+      source.browserSession(ctx()).then(
+        (v) => alive.current && setBrowser(v),
+        () => undefined,
+      );
+    }
     return () => {
       alive.current = false;
       clearPassword();
@@ -65,6 +76,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
       return;
     }
     setError('');
+    setCaptcha(false);
     setBusy(true);
     source.login(u, p, ctx()).then(
       () => {
@@ -72,6 +84,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
         if (!alive.current) return;
         setBusy(false);
         setLogged(true);
+        setBrowser(false);
         setUsername('');
         // signed in: the site takes part in the search; its real state comes with the next search
         setSourceOn(source.id, true);
@@ -82,8 +95,22 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
         if (!alive.current) return;
         setBusy(false);
         setError(errorMessage(err));
+        // a captcha: «Войти через браузер» is suggested right under the form
+        setCaptcha(isCaptchaError(err));
       },
     );
+  };
+
+  const browserDone = () => {
+    clearPassword();
+    if (!alive.current) return;
+    setLogged(true);
+    setBrowser(true);
+    setError('');
+    setCaptcha(false);
+    setUsername('');
+    setSourceOn(source.id, true);
+    clearHealth(source.id);
   };
 
   const logout = () => {
@@ -92,6 +119,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
       () => {
         if (!alive.current) return;
         setLogged(false);
+        setBrowser(false);
         setHealth(source.id, { state: 'login', at: Date.now() });
       },
       (e) => showToast(errorMessage(e)),
@@ -99,27 +127,35 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
   };
 
   const tv = activeTv.value;
-  const canSend = !!logged && LOGIN_SITES.indexOf(source.id) >= 0 && !!tv && isAtv(tv) && !!tv.token;
+  const canSend = !!logged && (browser ? SESSION_SITES : LOGIN_SITES).indexOf(source.id) >= 0 && !!tv && isAtv(tv) && !!tv.token;
 
   const send = () => {
     if (sending) return;
     setSending(true);
-    transferLogins(allSources(), ctx(), [source.id])
-      .then((logins) => {
-        if (!logins[source.id]) throw new Error('Не удалось прочитать вход на ' + source.name);
-        // only the login and this site's own switches: the other switches and FlareSolverr stay as they are on the TV
-        return sendTransfer(null, [], logins, { list: [source], flare: null });
-      })
+    // a browser session: its cookies are added natively; a password login: the login itself
+    const prepared = browser
+      ? transferSessions(allSources(), ctx(), [source.id]).then((sessions) => {
+          if (!sessions[source.id]) throw new Error('Не удалось прочитать вход на ' + source.name);
+          return sendTransfer(null, [], {}, { list: [source], flare: null }, sessions);
+        })
+      : transferLogins(allSources(), ctx(), [source.id]).then((logins) => {
+          if (!logins[source.id]) throw new Error('Не удалось прочитать вход на ' + source.name);
+          // only the login and this site's own switches: the other switches and FlareSolverr stay as they are on the TV
+          return sendTransfer(null, [], logins, { list: [source], flare: null });
+        });
+    prepared
       .then(
-        ({ r, droppedNote, cloudflareDropped, sitesDropped }) => {
-          const result = r.logins ? r.logins[source.id] : undefined;
+        ({ r, droppedNote, cloudflareDropped, sitesDropped, sessionsDropped }) => {
+          const result = browser ? (r.sessions ? r.sessions[source.id] : undefined) : r.logins ? r.logins[source.id] : undefined;
           log(result === 'ok' ? 'info' : 'warn', 'tv', 'Вход на ' + source.id + ' передан на Android TV: ' + (result || 'нет ответа'));
           if (alive.current) setSending(false);
           const notes = [
             droppedNote,
             sitesDropped ? SITES_NOT_SENT : '',
             cloudflareDropped ? CLOUDFLARE_NOT_SENT : '',
+            sessionsDropped ? SESSIONS_NOT_SENT : '',
             siteLoginsText(r.logins, () => source.name),
+            sessionsText(r.sessions, () => source.name),
           ];
           showToast(sentLoginText(source.name, result, notes) || 'Передано', 6000);
         },
@@ -142,7 +178,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
           {logged ? (
             <div class="m-src-row">
               <span class="m-src-name">
-                <span>Вход выполнен</span>
+                <span>{browser ? BROWSER_DONE_TITLE : 'Вход выполнен'}</span>
               </span>
               <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={logout}>
                 Выйти
@@ -175,6 +211,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
               <button type="submit" class="m-btn m-btn-primary" disabled={busy || logged === null}>
                 {busy ? 'Вхожу…' : 'Войти'}
               </button>
+              <BrowserLoginButton source={source} ctx={ctx} captcha={captcha} disabled={busy || logged === null} onDone={browserDone} />
             </>
           )}
         </form>

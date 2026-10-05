@@ -43,7 +43,7 @@ class CheckTexts(
 )
 
 /** How the visible check ended. [sent]: the phone passed it for the TV and the TV took the answer. */
-class CheckResult(val result: String, val sent: Boolean? = null, val via: String? = null)
+class CheckResult(val result: String, val sent: Boolean? = null, val via: String? = null, val host: String? = null)
 
 /**
  * The screen of the visible Cloudflare check ([VisibleCheck] is the logic): a bottom sheet on the phone (title, text,
@@ -56,7 +56,7 @@ class CloudflareCheckDialog(
     private val texts: CheckTexts,
     private val phoneButton: Boolean,
 ) : CheckUi {
-    private var check: VisibleCheck? = null
+    private var check: CheckControl? = null
     private var dialog: Dialog? = null
     private var frame: FrameLayout? = null
     private var hintView: TextView? = null
@@ -64,7 +64,7 @@ class CloudflareCheckDialog(
     private var web: View? = null
 
     /** Builds and shows the dialog, then starts [c] on it. */
-    fun show(c: VisibleCheck) {
+    fun show(c: CheckControl) {
         check = c
         val d = build()
         dialog = d

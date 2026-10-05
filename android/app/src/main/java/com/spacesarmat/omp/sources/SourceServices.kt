@@ -104,6 +104,30 @@ class SourceServices private constructor(context: Context) {
     fun importClearance(root: HttpUrl, pairs: List<Pair<String, String>>, ua: String?, until: Long) =
         cloudflare.importClearance(root, pairs, ua, until)
 
+    /**
+     * A browser sign-in (here, from the phone, or staged from a transfer): the session [pairs] of [root]'s host into the
+     * jar ([SiteSession.import]: replaces the site's earlier session). [ua] = the User-Agent the session was made with when
+     * it is not this device's (the phone's): requests to that host use it for as long as the session is kept; null =
+     * this device's own, any override is dropped. Throws when nothing usable came. Blocking (Keystore).
+     */
+    fun importSession(root: HttpUrl, pairs: List<Pair<String, String>>, ua: String?) {
+        val site = CloudflareSolver.siteRoot(root)
+        val now = System.currentTimeMillis()
+        SiteSession.import(jar, site, pairs, now)
+        if (ua != null) cloudflare.setAgent(site.host, ua, now + SiteSession.SESSION_TTL_MS) else cloudflare.clearAgent(site.host)
+    }
+
+    /** Blocking: the session opens [check]'s page on [root] as a signed-in one ([SessionVerifier]). */
+    fun verifySession(root: HttpUrl, pairs: List<Pair<String, String>>, ua: String, check: SiteSession.Check): Boolean =
+        SessionVerifier().verify(root, pairs, ua, check)
+
+    /** The session cookies of [root]'s host for «Передать вход на телевизор» (only that site, capped); never logged. */
+    fun sessionCookies(root: HttpUrl): List<Pair<String, String>> =
+        SiteSession.clean(jar.loadForRequest(CloudflareSolver.siteRoot(root)).map { it.name to it.value })
+
+    /** The User-Agent requests to [host] go with (a session's or a clearance's override, else this device's). */
+    fun agentFor(host: String): String = cloudflare.userAgentFor(host)
+
     /** When the stored clearance of [url]'s site ends, null without one. Blocking (Keystore). */
     fun clearanceUntil(url: HttpUrl): Long? = CloudflareCookies.clearanceUntil(jar, url)
 

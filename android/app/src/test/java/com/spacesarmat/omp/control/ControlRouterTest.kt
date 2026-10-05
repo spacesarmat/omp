@@ -187,6 +187,26 @@ class ControlRouterTest {
     }
 
     @Test
+    fun browserSessionsAnswerPerSiteWithoutCookies() {
+        val t = token()
+        val secret = "s3ss10n-value"
+        outcome = SourcesOutcome.Applied(null, null, sessions = mapOf("kinozal" to "ok"))
+        val body = sourcesBody(
+            ""","sessions":{"kinozal":{"host":"kinozal.tv","cookies":[{"name":"uid","value":"$secret"}],"ua":"Phone-UA"},""" +
+                """"rutracker":{"host":"rutracker.org","cookies":[{"name":"bb_session","value":"$secret"}],"ua":"Phone-UA"}}""",
+        )
+        val r = req("POST", "/omp/sources", body, t)
+        assertEquals(200, r.status)
+        val o = JSONObject(r.json).getJSONObject("sessions")
+        assertEquals("ok", o.getString("kinozal"))
+        assertEquals("error", o.getString("rutracker"))
+        assertFalse(r.json.contains(secret))
+        assertFalse(r.json.contains("Phone-UA"))
+        assertEquals(setOf("kinozal", "rutracker"), lastTransfer!!.sessions.keys)
+        assertFalse(JSONObject(req("POST", "/omp/sources", sourcesBody(), t).json).has("sessions"))
+    }
+
+    @Test
     fun sourcesNeedTheTokenAndJson() {
         val body = sourcesBody(loginPart())
         assertEquals(401, req("POST", "/omp/sources", body).status)

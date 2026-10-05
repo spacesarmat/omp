@@ -146,6 +146,12 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
                     for (site in t.logins.keys) l.put(site, r.logins[site] ?: "error")
                     o.put("logins", l)
                 }
+                // per browser session: ok | error, never a cookie or a User-Agent
+                if (t.sessions.isNotEmpty()) {
+                    val x = JSONObject()
+                    for (site in t.sessions.keys) x.put(site, r.sessions[site] ?: "error")
+                    o.put("sessions", x)
+                }
                 ok(o)
             }
             SourcesOutcome.Busy -> ControlResponse(409, ControlServer.error("busy"))

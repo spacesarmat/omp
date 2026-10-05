@@ -223,4 +223,53 @@ class CloudflareRelayTest {
         assertFalse(relay.anyPaired())
         assertTrue(CloudflareRelay({ _, _, _, _ -> }, paired = { true }).anyPaired())
     }
+
+    // ---- «Войти на телефоне» (Task 9b) ----
+
+    private fun askLogin(): Future<CloudflareRelay.LoginAsk> =
+        pool.submit<CloudflareRelay.LoginAsk> { relay.askLogin("Kinozal", "https://kinozal.example/".toHttpUrl(), "kinozal", listOf("kinozal.example", "kinozal.mirror")) }
+
+    @Test
+    fun loginRequestCarriesKindAndSourceAndComesBackUnstored() {
+        relay.poll("t1", "Pixel 8")
+        val f = askLogin()
+        val req = pollUntilRequest("t1")
+        assertEquals("login", req.getString("kind"))
+        assertEquals("kinozal", req.getString("source"))
+        val parsed = CloudflareProtocol.parseRequest(JSONObject().put("request", req))!!
+        assertEquals(CloudflareProtocol.KIND_LOGIN, parsed.kind)
+        assertEquals("kinozal", parsed.source)
+        // a session from a host that is not the site's is refused; the site's mirror is fine, no clearance needed
+        val id = req.getString("id")
+        assertEquals(CloudflareRelay.Reply.BAD_REQUEST, relay.answer("t1", solved(id, host = "evil.example", cookies = """[{"name":"uid","value":"1"}]""")))
+        assertEquals(CloudflareRelay.Reply.OK, relay.answer("t1", solved(id, host = "kinozal.mirror", cookies = """[{"name":"uid","value":"1"},{"name":"pass","value":"p"}]""")))
+        val got = f.get()
+        assertEquals(CloudflareRelay.Outcome.SOLVED, got.outcome)
+        assertEquals("kinozal.mirror", got.session!!.host)
+        assertEquals(listOf("uid" to "1", "pass" to "p"), got.session!!.cookies)
+        assertEquals(ua, got.session!!.ua)
+        // the TV checks it first: nothing was stored by the relay
+        assertTrue(stored.isEmpty())
+    }
+
+    @Test
+    fun checkAnswerStillNeedsTheClearanceAndUnknownKindsAreRefused() {
+        relay.poll("t1", "Pixel 8")
+        val f = ask()
+        val id = pollUntilRequest("t1").getString("id")
+        assertEquals(CloudflareRelay.Reply.BAD_REQUEST, relay.answer("t1", solved(id, cookies = """[{"name":"uid","value":"1"}]""")))
+        assertEquals(CloudflareRelay.Reply.OK, relay.answer("t1", solved(id)))
+        assertEquals(CloudflareRelay.Outcome.SOLVED, f.get())
+        assertNull(CloudflareProtocol.parseRequest(JSONObject("""{"request":{"id":"c1","site":"x","url":"https://x.example/","kind":"other"}}""")))
+        assertNull(CloudflareProtocol.parseRequest(JSONObject("""{"request":{"id":"c1","site":"x","url":"https://x.example/","kind":"login","source":"../x"}}""")))
+    }
+
+    @Test
+    fun sessionJsonCapsAndNeedsASession() {
+        val json = CloudflareProtocol.sessionJson("c1", "kinozal.example", listOf("uid" to "1", "bad name" to "x"), ua, now)!!
+        val o = JSONObject(json)
+        assertEquals(1, o.getJSONArray("cookies").length())
+        assertNull(CloudflareProtocol.sessionJson("c1", "kinozal.example", emptyList(), ua, now))
+        assertNull(CloudflareProtocol.sessionJson("c1", "Not A Host", listOf("uid" to "1"), ua, now))
+    }
 }

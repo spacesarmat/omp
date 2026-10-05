@@ -11,6 +11,7 @@ import { siteLoginFromPhone } from '../../src/sources/transfer';
 import { kinozal } from '../../src/sources/kinozal';
 import { resetMirrors } from '../../src/sources/mirrors';
 import { fakeSite, fixture, page, type FakeSite, type HttpCall } from '../sources/fakeSite';
+import { BROWSER_CAPTCHA, BROWSER_LOGIN, LOGIN_ON_PHONE, setBrowserLoginPlatform } from '../../src/sources/browserLogin';
 
 // test-only value
 const PASSWORD = 'pa55-test-only';
@@ -65,6 +66,7 @@ afterEach(() => {
   Array.from(document.body.children).forEach((c) => act(() => render(null, c)));
   document.body.innerHTML = '';
   unregisterSource('kinozal');
+  setBrowserLoginPlatform(null);
 });
 
 describe('Android TV: Kinozal login', () => {
@@ -94,6 +96,37 @@ describe('Android TV: Kinozal login', () => {
     await flush();
     expect(site.secrets).toEqual({});
     expect(line('kinozal').textContent).toContain('нужен вход');
+  });
+
+  it('«Войти через браузер» and «Войти на телефоне» in the login dialog; a captcha suggests them', async () => {
+    const asked: (boolean | undefined)[] = [];
+    let next = 'cancelled';
+    setBrowserLoginPlatform({ phone: true, login: (_s, o) => (asked.push(o && o.askPhone), Promise.resolve({ result: next as 'ok' })) });
+    site = fakeSite((c) =>
+      c.method === 'POST' ? page('<html><head><script src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script></head><body><div class="cf-turnstile"></div></body></html>', c.url) : page('', c.url),
+    );
+    await mount(screen());
+    click(byText('Войти', line('kinozal'))!);
+    const dialog = host.querySelector('.login-dialog') as HTMLElement;
+    expect(byText(BROWSER_LOGIN, dialog)).toBeTruthy();
+    expect(byText(LOGIN_ON_PHONE, dialog)).toBeTruthy();
+    const [user, pass] = Array.from(dialog.querySelectorAll('input')) as HTMLInputElement[];
+    type(user, 'kino');
+    type(pass, 'x');
+    click(byText('Войти', dialog)!);
+    await flush();
+    expect(dialog.textContent).toContain(BROWSER_CAPTCHA);
+    click(byText(LOGIN_ON_PHONE, dialog)!);
+    await flush();
+    // cancelled: the dialog stays
+    expect(host.querySelector('.login-dialog')).toBeTruthy();
+    next = 'ok';
+    click(byText(BROWSER_LOGIN, host.querySelector('.login-dialog')!)!);
+    await flush();
+    expect(asked).toEqual([true, undefined]);
+    expect(host.querySelector('.login-dialog')).toBeNull();
+    expect(site.secrets).toEqual({ 'kinozal.browser': '1' });
+    expect(byText('Выйти', line('kinozal'))).toBeTruthy();
   });
 
   it('a login from the phone shows «вход передан с телефона» in both rows until it is typed on the TV', async () => {

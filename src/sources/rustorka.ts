@@ -68,6 +68,7 @@ export const rustorkaLogin = createSiteLogin({
   refused: (doc) => !!doc.querySelector('input[name="login_password"]'),
   stillOnLogin: (res) => urlIsPath(res, 'forum/login.php'),
   checkPath: 'forum/index.php',
+  browser: { loginPath: 'forum/login.php', path: 'forum/index.php', marker: 'login.php?logout' },
 });
 
 export const RUSTORKA_NO_FILE = 'rustorka не отдал торрент — войдите заново и попробуйте снова';
@@ -123,4 +124,9 @@ export const rustorka: Source = {
   loggedIn: (ctx) => rustorkaLogin.loggedIn(ctx),
   savedLogin: (ctx) => (ctx.secrets ? rustorkaLogin.savedLogin(ctx.secrets) : Promise.resolve(null)),
   loginPending: (ctx) => rustorkaLogin.loginPending(ctx),
+  browserLogin: (ctx, o) => rustorkaLogin.browserLogin(ctx, o),
+  browserSession: (ctx) => rustorkaLogin.browserSession(ctx),
+  browserSpec: () => rustorkaLogin.browserSpec(),
+  sessionHosts: () => rustorkaLogin.sessionHosts(),
+  sessionPending: (ctx, host) => rustorkaLogin.sessionPending(ctx, host),
 };
