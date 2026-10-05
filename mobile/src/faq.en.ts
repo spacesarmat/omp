@@ -670,6 +670,33 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       },
     },
   },
+  'accounts': {
+    q: 'Where to get an account for rutracker, Kinozal and rustorka',
+    short: [
+      'Registration is free on each of the three sites; OMP does not create accounts for you.',
+      { text: 'rutracker — sign up', url: 'https://rutracker.org/forum/profile.php?mode=register' },
+      { text: 'Kinozal — sign up', url: 'https://kinozal.tv/signup.php' },
+      { text: 'rustorka — sign up', url: 'https://rustorka.com/forum/profile.php?mode=register' },
+      'After signing up, sign in to OMP: “Search sources” → the site → “Sign in” or “Sign in with browser”.',
+    ],
+    more: [
+      'The “Sign in to …” screen of each site also has a “No account? Sign up on …” link, and on Android TV the sign-in window shows a QR code: point the phone camera at it to open the registration page.',
+      'If a site is blocked in your country, open its registration page through a mirror or a VPN; Kinozal mirrors: kinozal.me, kinozal.guru, kinozal.tv.',
+    ],
+  },
+  'tmdb-key': {
+    q: 'TMDB key for “Discover”',
+    short: [
+      '“Discover” uses the TMDB key from the TorrServer settings.',
+      'The key is free: register at themoviedb.org → Settings → API → request an API key (Developer, personal use).',
+      'Paste the key in TorrServer: the web page → Settings → TMDB.',
+      'OMP picks the key up at once, no restart needed.',
+    ],
+    more: [
+      { text: 'themoviedb.org — registration', url: 'https://www.themoviedb.org/signup' },
+      'The same key is also used by TorrServer for posters of new torrents.',
+    ],
+  },
   'names': {
     q: 'Clear names and “Rename”',
     short: [

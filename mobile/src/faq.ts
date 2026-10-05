@@ -130,6 +130,8 @@ const STRUCT: FaqStruct[] = [
   { id: 'flaresolverr', section: 'setup', devices: ['server', 'phone', 'atv'] },
   { id: 'cloudflare', section: 'setup', devices: ['phone', 'atv'] },
   { id: 'sites-login', section: 'setup', devices: ['phone', 'atv'] },
+  { id: 'accounts', section: 'setup', devices: ['phone', 'atv'] },
+  { id: 'tmdb-key', section: 'setup', devices: ['phone', 'atv', 'lg'] },
   { id: 'names', section: 'setup', devices: ['phone', 'atv', 'lg'] },
   { id: 'torrserver', section: 'install', devices: ['server', 'common'] },
   { id: 'ts-phone', section: 'install', devices: ['server', 'phone'] },

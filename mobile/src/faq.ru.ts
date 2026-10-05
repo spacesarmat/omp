@@ -669,6 +669,33 @@ export const FAQ_RU: { [id: string]: FaqText } = {
       },
     },
   },
+  'accounts': {
+    q: 'Где взять аккаунт для rutracker, Kinozal и rustorka',
+    short: [
+      'Регистрация на каждом из трёх сайтов бесплатная; аккаунт за вас OMP не создаёт.',
+      { text: 'rutracker — регистрация', url: 'https://rutracker.org/forum/profile.php?mode=register' },
+      { text: 'Kinozal — регистрация', url: 'https://kinozal.tv/signup.php' },
+      { text: 'rustorka — регистрация', url: 'https://rustorka.com/forum/profile.php?mode=register' },
+      'После регистрации войдите в OMP: «Источники поиска» → сайт → «Войти» или «Войти через браузер».',
+    ],
+    more: [
+      'На экране «Вход на …» у каждого сайта есть ссылка «Нет аккаунта? Зарегистрироваться на …», а в окне входа на Android TV — QR-код: наведите камеру телефона, и откроется страница регистрации.',
+      'Если сайт заблокирован в вашей стране, откройте страницу регистрации через зеркало или VPN; зеркала Kinozal: kinozal.me, kinozal.guru, kinozal.tv.',
+    ],
+  },
+  'tmdb-key': {
+    q: 'Ключ TMDB для «Обзора»',
+    short: [
+      '«Обзор» использует ключ TMDB из настроек TorrServer.',
+      'Ключ бесплатный: зарегистрируйтесь на themoviedb.org → Settings → API → запросите ключ API (Developer, личное использование).',
+      'Вставьте ключ в TorrServer: веб-страница → Настройки → TMDB.',
+      'OMP подхватит ключ сразу, перезапуск не нужен.',
+    ],
+    more: [
+      { text: 'themoviedb.org — регистрация', url: 'https://www.themoviedb.org/signup' },
+      'Тот же ключ TorrServer использует и для обложек новых раздач.',
+    ],
+  },
   'names': {
     q: 'Понятные названия и «Переименовать»',
     short: [

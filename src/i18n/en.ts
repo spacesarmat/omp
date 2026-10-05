@@ -525,6 +525,8 @@ export const en: EnDict<typeof ru> = {
     logBrowser: 'Signed in through the browser: {site}',
     userPlaceholder: 'your login on {site}',
     storedNote: 'The login and password are stored only on this phone, encrypted, and sent only to {site}.',
+    noAccount: 'No account? Sign up on {site}',
+    noAccountTv: 'No account? Point your phone camera here to sign up on {site}',
     },
     browser: {
       login: 'Sign in with browser',

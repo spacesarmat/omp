@@ -4,6 +4,8 @@ import { FocusGroup, Button, TextInput } from './components';
 import { useKeys } from './keys';
 import { errorMessage } from '../api/http';
 import { t } from '../i18n';
+import { Qr } from './Qr';
+import { registrationOf } from '../sources/registration';
 import type { Source, SourceContext } from '../sources/types';
 import {
   browserBusy,
@@ -121,6 +123,7 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
     );
   };
 
+  const regUrl = registrationOf(p.source);
   const title = t('common.signInTo', { site: p.source.name });
   return (
     <div class="dialog-backdrop">
@@ -147,6 +150,12 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
           <div class="login-actions login-browser">
             <Button focusKey="login-browser" className={suggest ? 'primary' : ''} label={browserLoginText()} onPress={() => viaBrowser(false)} />
             {canLoginOnPhone() && <Button focusKey="login-phone" label={loginOnPhone()} onPress={() => viaBrowser(true)} />}
+          </div>
+        )}
+        {regUrl && (
+          <div class="login-noacct">
+            <Qr text={regUrl} size={150} />
+            <div class="login-note">{t('sources.login.noAccountTv', { site: p.source.name })}</div>
           </div>
         )}
         <div class="login-actions">
