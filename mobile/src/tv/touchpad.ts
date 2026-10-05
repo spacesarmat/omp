@@ -7,12 +7,14 @@ export interface TouchpadSettings {
   speed: number;
   accel: boolean;
   tapClick: boolean;
-  /** Flips the two-finger scroll direction (the real TV's direction is checked by the user). */
+  /** Flips the scroll direction (two fingers and the strip; the real TV's direction is checked by the user). */
   invertScroll: boolean;
+  /** The scroll strip along the right edge of the touchpad (one finger scrolls there). */
+  scrollStrip: boolean;
 }
 
 export const TOUCHPAD_KEY = 'tsp.touchpad';
-export const TOUCHPAD_DEFAULTS: TouchpadSettings = { speed: 3, accel: true, tapClick: true, invertScroll: false };
+export const TOUCHPAD_DEFAULTS: TouchpadSettings = { speed: 3, accel: true, tapClick: true, invertScroll: false, scrollStrip: true };
 
 /** Gain per speed step 1…5, multiplied with the base gain of 1. */
 export const SPEED_MULT = [0.6, 0.8, 1.0, 1.4, 1.9];
@@ -28,6 +30,7 @@ export function sanitizeTouchpad(v: unknown): TouchpadSettings {
     accel: typeof o.accel === 'boolean' ? o.accel : TOUCHPAD_DEFAULTS.accel,
     tapClick: typeof o.tapClick === 'boolean' ? o.tapClick : TOUCHPAD_DEFAULTS.tapClick,
     invertScroll: typeof o.invertScroll === 'boolean' ? o.invertScroll : TOUCHPAD_DEFAULTS.invertScroll,
+    scrollStrip: typeof o.scrollStrip === 'boolean' ? o.scrollStrip : TOUCHPAD_DEFAULTS.scrollStrip,
   };
 }
 

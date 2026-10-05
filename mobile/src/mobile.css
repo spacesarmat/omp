@@ -468,7 +468,11 @@ button, .m-btn {
 .m-dpad-left { left: 3%; top: 36.5%; }
 .m-dpad-right { left: 70%; top: 36.5%; }
 .m-dpad-ok { position: absolute; left: 30.8%; top: 30.8%; width: 38.4%; height: 38.4%; min-width: 0; min-height: 0; border: none; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 20px; font-weight: 800; }
-.m-touchpad { height: 260px; border-radius: 20px; background: var(--panel); display: flex; align-items: center; justify-content: center; user-select: none; }
+.m-touchpad { position: relative; height: 260px; border-radius: 20px; background: var(--panel); display: flex; align-items: center; justify-content: center; user-select: none; }
+/* the scroll strip on the right edge of the touchpad (TouchpadSheet: «Полоса прокрутки») */
+.m-tp-strip { position: absolute; top: 8px; right: 8px; bottom: 8px; width: 44px; border-radius: 14px; background: var(--panel-2); color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 8px 0; touch-action: none; }
+.m-touchpad.with-strip { padding: 0 60px; text-align: center; }
+.m-tp-strip-line { flex: 1 1 auto; width: 3px; margin: 6px 0; border-radius: 2px; background: currentColor; opacity: .35; }
 .m-keyrow { display: flex; gap: 10px; }
 .m-key, .m-media {
   flex: 1 1 0;
