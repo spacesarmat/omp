@@ -30,7 +30,9 @@ function fakeFetch(calls: Call[], fail: (method: string, form: FormData) => Resp
     const f = fail(method, init.body);
     if (f instanceof Error) throw f;
     if (f) return f;
-    return new Response(JSON.stringify({ ok: true, result: { message_id: 7 } }), { status: 200 });
+    const doc = method === 'sendDocument' ? (init.body.get('document') as File) : null;
+    const result = doc ? { message_id: 100 + calls.length, document: { file_id: 'id:' + doc.name } } : { message_id: 7 };
+    return new Response(JSON.stringify({ ok: true, result }), { status: 200 });
   };
 }
 const names = (calls: Call[]) => calls.map((c) => c.method + (c.method === 'sendDocument' ? ':' + (c.form.get('document') as File).name : ''));
@@ -47,17 +49,17 @@ describe('postRelease', () => {
     const logs: string[] = [];
     const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: (s: string) => logs.push(s) });
     expect(failed).toBe(0);
-    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage', 'sendMediaGroup']);
+    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMediaGroup', 'deleteMessages']);
+    expect(calls[2].form.get('disable_notification')).toBe('true');
+    expect(JSON.parse(String(calls[5].form.get('message_ids')))).toEqual([103, 104]);
     expect(calls[1].form.get('message_id')).toBe('7');
     expect(calls[1].form.get('disable_notification')).toBe('true');
     expect(String(calls[0].form.get('caption'))).toContain('• Первое');
     expect(String(calls[0].form.get('reply_markup'))).toContain('OMP-1.2.3-arm64.apk');
-    const album = calls[2].form;
+    const album = calls[4].form;
     expect(JSON.parse(String(album.get('reply_parameters')))).toEqual({ message_id: 7 });
     const media = JSON.parse(String(album.get('media')));
-    expect(media.map((m: { type: string; media: string }) => [m.type, m.media])).toEqual([['document', 'attach://file0'], ['document', 'attach://file1']]);
-    expect((album.get('file0') as File).name).toBe('OMP-1.2.3-armv7.apk');
-    expect((album.get('file1') as File).name).toBe('OMP-1.2.3-webOS.ipk');
+    expect(media.map((m: { type: string; media: string }) => [m.type, m.media])).toEqual([['document', 'id:OMP-1.2.3-armv7.apk'], ['document', 'id:OMP-1.2.3-webOS.ipk']]);
     expect(media[0].caption).toBeUndefined();
     const text = media[1].caption as string;
     expect(media[1].parse_mode).toBe('HTML');
@@ -125,8 +127,9 @@ describe('files as one block', () => {
     const refuse = (m: string) => (m === 'sendMediaGroup' ? new Response(JSON.stringify({ ok: false, description: 'Request Entity Too Large' }), { status: 413 }) : null);
     const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, refuse) as any, log: (s: string) => logs.push(s) });
     expect(failed).toBe(0);
-    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage', 'sendMediaGroup', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMessage']);
-    expect(String(calls[5].form.get('text'))).toContain('OMP-1.2.3.apk');
+    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMediaGroup', 'deleteMessages', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMessage']);
+    expect(JSON.parse(String(calls[5].form.get('message_ids')))).toEqual([103, 104]);
+    expect(String(calls[8].form.get('text'))).toContain('OMP-1.2.3.apk');
     expect(logs.some((l) => l.includes('one by one'))).toBe(true);
   });
 
@@ -143,9 +146,9 @@ describe('files as one block', () => {
     const calls: Call[] = [];
     const failed = await repostFiles({ tag: 'v1.2.3', messageId: 8, deleteIds: [9, 10, 11], dir: join(root, 'build'), token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: () => {} });
     expect(failed).toBe(0);
-    expect(names(calls)).toEqual(['sendMediaGroup', 'deleteMessages']);
-    expect(JSON.parse(String(calls[0].form.get('reply_parameters')))).toEqual({ message_id: 8 });
-    expect(JSON.parse(String(calls[1].form.get('message_ids')))).toEqual([9, 10, 11]);
+    expect(names(calls)).toEqual(['sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMediaGroup', 'deleteMessages', 'deleteMessages']);
+    expect(JSON.parse(String(calls[2].form.get('reply_parameters')))).toEqual({ message_id: 8 });
+    expect(JSON.parse(String(calls[4].form.get('message_ids')))).toEqual([9, 10, 11]);
   });
 
   it('keeps the old file messages when the repost fails', async () => {
