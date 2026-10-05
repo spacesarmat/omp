@@ -164,7 +164,7 @@ export const en: EnDict<typeof ru> = {
     plan: {
       byModelYear: '{label} (by model year)',
       versionNewer: 'Version {installed} — {latest} is available',
-      versionLatest: 'Version {installed} — the latest',
+      versionLatest: 'Version {installed} — up to date',
       version: 'Version {installed}',
       versionUnknown: 'Version unknown',
       timerNote: 'Developer Mode lasts 1000 hours (about 40 days). Renew it in the Developer Mode app in advance, or OMP will be removed from the TV.',

@@ -96,7 +96,8 @@ describe('shared modules in English', () => {
     expect(skipStatus(true, { i: false, c: false, mi: [45, 135] })).toBe('from the file chapters · manual: intro 0:45–2:15');
     expect(skipStatus(false, { i: false, c: false })).toBe('not set');
     const f = (path: string, id: number) => ({ id, path, length: 1000 });
-    expect(deriveName([f('Moon.Garden.S13E01.1080p.mkv', 1), f('Moon.Garden.S13E02.1080p.mkv', 2)], 'x')).toBe('Moon Garden · Season 13');
+    // the persisted title stays Russian whatever the UI language
+    expect(deriveName([f('Moon.Garden.S13E01.1080p.mkv', 1), f('Moon.Garden.S13E02.1080p.mkv', 2)], 'x')).toBe('Moon Garden · Сезон 13');
   });
 
   it('server settings options', () => {

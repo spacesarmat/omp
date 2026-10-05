@@ -1,6 +1,10 @@
 import { parseEpisode, playableFiles, baseName, stripExt, type TorrentFile } from './episodes';
 import { titleCore } from './posterSearch';
-import { t } from '../i18n';
+import { ru } from '../i18n/ru';
+
+// the title is written to TorrServer and read by every device: its season suffix is always Russian
+const ruSeason = (n: number) => ru.library.season.replace('{n}', String(n));
+const ruSeasons = (a: number, b: number) => ru.library.seasons.replace('{a}', String(a)).replace('{b}', String(b));
 
 const HEX40 = /^[0-9a-f]{40}$/i;
 const BASE32 = /^[a-z2-7]{32}$/i;
@@ -59,8 +63,8 @@ export function deriveName(files: TorrentFile[] | undefined | null, fallback: st
       if (e.season !== null && seasons.indexOf(e.season) < 0) seasons.push(e.season);
     });
     seasons.sort((a, b) => a - b);
-    if (seasons.length === 1) name += ' · ' + t('library.season', { n: seasons[0] });
-    else if (seasons.length > 1) name += ' · ' + t('library.seasons', { a: seasons[0], b: seasons[seasons.length - 1] });
+    if (seasons.length === 1) name += ' · ' + ruSeason(seasons[0]);
+    else if (seasons.length > 1) name += ' · ' + ruSeasons(seasons[0], seasons[seasons.length - 1]);
     return name;
   }
   if (list.length === 1) {
