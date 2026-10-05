@@ -80,7 +80,7 @@ describe('monitoring texts in English', () => {
     expect(subRule(sub)).toBe('All sources · 1080p+ · 20+ seeds · up to 30 GB · no notifications');
     expect(summaryLines({ at: at(14, 20), kind: 'check', found: 3, notified: 0, answered: 7, asked: 8, subs: 3, skipped: 2, feed: false }, now)).toEqual([
       'Last check: today 14:20',
-      'New found: 3',
+      'New: 3',
       'Sources: 7 of 8 answered',
       'Not checked in time: 2 subscriptions',
     ]);

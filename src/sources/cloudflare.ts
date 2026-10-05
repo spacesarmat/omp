@@ -13,8 +13,8 @@ export type CloudflareKind = 'cloudflare' | 'cloudflare-interactive';
 export const cfFailed = (): string => t('cloudflare.failed');
 export const cfInteractive = (): string => t('cloudflare.interactive');
 
-// The messages of the native http (android/.../sources/SiteHttp.kt CF_FAILED / CF_INTERACTIVE) are Russian until the
-// Kotlin side is localized; they are matched, never shown. The code is matched first.
+// The messages of the native http (android/.../sources/SiteHttp.kt CF_FAILED / CF_INTERACTIVE) come in either language
+// (the Kotlin side sends both; the matcher covers both); they are matched, never shown. The code is matched first.
 const NATIVE_CF_FAILED = ru.cloudflare.failed;
 const NATIVE_CF_INTERACTIVE = ru.cloudflare.interactive;
 

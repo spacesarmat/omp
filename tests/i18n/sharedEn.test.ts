@@ -63,6 +63,9 @@ describe('shared modules in English', () => {
     expect(whenLabel(new Date(2026, 3, 30, 10, 0).getTime(), now)).toBe('April 30');
     expect(whenLabel(new Date(2025, 11, 31, 10, 0).getTime(), now)).toBe('December 31, 2025');
     expect(deviceLabel('phone', 'Pixel 7')).toBe('Phone “Pixel 7”');
+    // the default phone word of either language is not a device name
+    expect(deviceLabel('phone', 'Телефон')).toBe('Phone');
+    expect(deviceLabel('phone', 'Phone')).toBe('Phone');
     expect(sourceLine({ src: 'tv', at: 0 }, now)).toBe('TV');
   });
 

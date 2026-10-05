@@ -3,6 +3,8 @@
 import type { Torrent } from '../api/types';
 import { journalOf, type JournalSrc } from './journal';
 import { t } from '../i18n';
+import { ru } from '../i18n/ru';
+import { en } from '../i18n/en';
 
 export type HistoryFilter = 'all' | 'tv' | 'phone';
 
@@ -123,7 +125,8 @@ export function whenLabel(at: number, now: number): string {
 /** «Телевизор» / «Телефон «Pixel 7»» (a TV name, if one is ever written, is shown the same way). */
 export function deviceLabel(src: JournalSrc, name?: string): string {
   const base = src === 'phone' ? t('history.phone') : t('history.tv');
-  return name && name !== base ? t('history.named', { device: base, name }) : base;
+  const isDefault = name === ru.history.phone || name === en.history.phone || name === base;
+  return name && !isDefault ? t('history.named', { device: base, name }) : base;
 }
 
 /** «Телефон «Pixel 7» · сегодня 21:40»; without a known time just the device. */

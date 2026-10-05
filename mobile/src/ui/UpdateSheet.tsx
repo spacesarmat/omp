@@ -29,7 +29,9 @@ export function setAbiKeyReader(fn: AbiKeyReader | null): void {
 }
 
 export function describeInstallError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : '';
+  const m = e && typeof e === 'object' ? (e as { message?: unknown }).message : e;
+  const msg = typeof m === 'string' ? m : '';
+  if (e && typeof e === 'object' && (e as { code?: unknown }).code === 'omp' && msg) return msg;
   if (/[А-Яа-яЁё]/.test(msg)) return msg;
   return t('update.installFailed') + (msg ? ': ' + msg : '');
 }

@@ -104,12 +104,14 @@ describe('TV screens in English: no Cyrillic', () => {
     Object.defineProperty(video, 'duration', { configurable: true, get: () => 1000 });
     video.dispatchEvent(new Event('loadedmetadata'));
     video.dispatchEvent(new Event('playing'));
-    await new Promise((r) => setTimeout(r, 80));
-    dispatchKey('up', new KeyboardEvent('keydown'));
-    await new Promise((r) => setTimeout(r, 80));
+    // the menu opens once the player is ready: press again until it shows
+    for (let i = 0; i < 200 && (host.textContent || '').indexOf('Player menu') < 0; i++) {
+      dispatchKey('up', new KeyboardEvent('keydown'));
+      await new Promise((r) => setTimeout(r, 10));
+    }
     expect(host.textContent).toContain('Player menu');
     expect(noRussian(host)).not.toMatch(CYR);
     dispatchKey('back', new KeyboardEvent('keydown'));
-    await new Promise((r) => setTimeout(r, 60));
+    for (let i = 0; i < 200 && (host.textContent || '').indexOf('Player menu') >= 0; i++) await new Promise((r) => setTimeout(r, 5));
   });
 });

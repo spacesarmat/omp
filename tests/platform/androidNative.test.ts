@@ -109,6 +109,8 @@ describe('installApk', () => {
     expect(describeApkError({ message: 'boom' })).toBe('Не удалось установить обновление: boom');
     expect(describeApkError(undefined)).toBe('Не удалось установить обновление');
     expect(describeApkError('Нет места')).toBe('Нет места');
+    // OMP's own native message (code 'omp') passes as it is, in any language
+    expect(describeApkError({ message: 'Could not download the update (HTTP 404)', code: 'omp' })).toBe('Could not download the update (HTTP 404)');
   });
 });
 

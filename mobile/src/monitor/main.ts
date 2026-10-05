@@ -1,5 +1,7 @@
 // Entry of mobile/monitor.html (the hidden background page). Opened anywhere but Android's monitor WebView it does
 // nothing.
+// the stored language (tsp.settings) is applied when the settings store loads, before any text is built
+import '../../../src/store/settings';
 import { registerBuiltinSources } from '../../../src/sources/builtin';
 import { client } from '../../../src/store/servers';
 import { rememberAdded } from '../../../src/store/library';

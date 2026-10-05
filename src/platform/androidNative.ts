@@ -204,9 +204,10 @@ function errorText(e: unknown): string {
   return '';
 }
 
-/** Russian message for an APK install failure (the native side already rejects in Russian). */
+/** Message for an APK install failure: OMP's own native messages (code 'omp', or Cyrillic from an older native) pass as they are. */
 export function describeApkError(e: unknown): string {
   const msg = errorText(e);
+  if (e && typeof e === 'object' && (e as { code?: unknown }).code === 'omp' && msg) return msg;
   if (/[А-Яа-яЁё]/.test(msg)) return msg;
   return t('update.installFailed') + (msg ? ': ' + msg : '');
 }

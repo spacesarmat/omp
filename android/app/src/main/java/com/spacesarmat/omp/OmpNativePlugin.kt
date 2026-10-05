@@ -901,11 +901,11 @@ class OmpNativePlugin : Plugin() {
                 ApkInstaller.openInstallPermissionSettings(context)
             } catch (_: RuntimeException) {
             }
-            once.reject(I18n.s("plugin.allowInstall"))
+            once.reject(I18n.s("plugin.allowInstall"), "omp")
             return
         }
         if (!downloading.compareAndSet(false, true)) {
-            once.reject(I18n.s("plugin.updateBusy"))
+            once.reject(I18n.s("plugin.updateBusy"), "omp")
             return
         }
         io.execute {
@@ -916,9 +916,9 @@ class OmpNativePlugin : Plugin() {
                 ApkInstaller.install(context, apk)
                 once.resolve()
             } catch (e: UserError) {
-                once.reject(e.message ?: I18n.s("plugin.updateFailed"))
+                once.reject(e.message ?: I18n.s("plugin.updateFailed"), "omp")
             } catch (_: Exception) {
-                once.reject(I18n.s("plugin.updateFailed"))
+                once.reject(I18n.s("plugin.updateFailed"), "omp")
             } finally {
                 downloading.set(false)
             }

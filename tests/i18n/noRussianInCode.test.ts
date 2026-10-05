@@ -68,7 +68,7 @@ export function stripCommentsAndRegexes(src: string): string {
       prev = c;
       continue;
     }
-    if (c === '/' && (prev === '' || /[=(,:!&|?{};[+\-*%<>~^]/.test(prev) || /(return|typeof|case)$/.test(out.replace(/\s+$/, '')))) {
+    if (c === '/' && (prev === '' || /[=(,:!&|?{};[+\-*%>~^]/.test(prev) || /(return|typeof|case)$/.test(out.replace(/\s+$/, '')))) {
       let j = i + 1;
       let cls = false;
       while (j < n && src[j] !== '\n' && (cls || src[j] !== '/')) {
@@ -122,5 +122,8 @@ describe('the scanner itself', () => {
     expect(russianCopy("const u = 'http://x.y/'; const a = 'Привет';")).toHaveLength(1);
     expect(russianCopy('const r = /[а-я]+/i.test(s);')).toEqual([]);
     expect(russianCopy('x.replace(/ё/g, "е"); const a = "Привет";')).toHaveLength(1);
+    // Cyrillic after a closing tag on the same line is not swallowed as a regex
+    expect(russianCopy('const a = <p><b>A</b> Привет <i>B</i></p>;')).toHaveLength(1);
+    expect(russianCopy('const a = <b>A</b>Привет;')).toHaveLength(1);
   });
 });

@@ -723,7 +723,7 @@ export const en: EnDict<typeof ru> = {
     episodeOne: 'Episode {to}',
     rangeOfTotal: '{head} of {total}',
     lastCheck: 'Last check: {when}',
-    foundNew: 'New found: {n}',
+    foundNew: 'New: {n}',
     noNew: 'No new torrents',
     sourcesAnswered: 'Sources: {answered} of {asked} answered',
     skipped: {

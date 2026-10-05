@@ -6,7 +6,7 @@ vi.mock('../../src/version', () => ({ APP_VERSION: '0.15.5' }));
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
-import { UpdateSheet, setApkInstaller, setAbiKeyReader } from '../src/ui/UpdateSheet';
+import { UpdateSheet, setApkInstaller, setAbiKeyReader, describeInstallError } from '../src/ui/UpdateSheet';
 import { updatePrompt } from '../../src/store/updates';
 import type { UpdateInfo } from '../../src/lib/updateInfo';
 
@@ -187,5 +187,18 @@ describe('UpdateSheet in English', () => {
     await act(async () => btn(el, 'Install').click());
     await act(async () => {});
     expect(el.querySelector('.m-error')!.textContent).toBe('Could not install the update: checksum mismatch');
+  });
+
+  it('an OMP native English error is shown once, with a single prefix', async () => {
+    applyLanguageSetting('en');
+    const native = Object.assign(new Error('Could not download the update (HTTP 404)'), { code: 'omp' });
+    setApkInstaller(() => Promise.reject(native));
+    let el: HTMLElement = null as any;
+    await act(async () => { el = mountWith(info); });
+    await act(async () => btn(el, 'Install').click());
+    await act(async () => {});
+    expect(el.querySelector('.m-error')!.textContent).toBe('Could not download the update (HTTP 404)');
+    expect(describeInstallError({ message: 'Allow installs from OMP and try again', code: 'omp' })).toBe('Allow installs from OMP and try again');
+    expect(describeInstallError(new Error('boom'))).toBe('Could not install the update: boom');
   });
 });

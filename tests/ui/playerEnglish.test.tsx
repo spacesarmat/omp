@@ -47,7 +47,7 @@ beforeEach(() => {
 afterEach(async () => {
   dispatchKey('back', new KeyboardEvent('keydown'));
   render(null, host);
-  await new Promise((r) => setTimeout(r, 60));
+  await until(() => !host.querySelector('video'));
   document.body.innerHTML = '';
   applyLanguageSetting('ru');
 });
@@ -59,13 +59,15 @@ describe('TV player in English', () => {
     render(h('div', {}, h(PlayerScreen, { queue: [item], index: 0 }), h(DialogHost, {}), h(ToastHost, {})), host);
     await until(() => !!host.querySelector('video') && !!host.querySelector('video')!.getAttribute('src'));
     await until(() => loadSkipMock.mock.calls.length > 0);
-    await new Promise((r) => setTimeout(r, 80));
     const video = host.querySelector('video') as HTMLVideoElement;
     Object.defineProperty(video, 'duration', { configurable: true, get: () => 1000 });
     video.dispatchEvent(new Event('loadedmetadata'));
     video.dispatchEvent(new Event('playing'));
-    dispatchKey('up', new KeyboardEvent('keydown'));
-    await until(() => host.querySelectorAll('.dialog-option').length > 0);
+    // the menu opens once the player is ready: press again until it shows
+    await until(() => {
+      if (host.querySelectorAll('.dialog-option').length === 0) dispatchKey('up', new KeyboardEvent('keydown'));
+      return host.querySelectorAll('.dialog-option').length > 0;
+    });
     const options = Array.prototype.map.call(host.querySelectorAll('.dialog-option'), (o: Element) => (o.textContent || '').trim()) as string[];
     expect(options).toContain('Audio: default');
     expect(options.some((o) => o.indexOf('Subtitles: ') === 0)).toBe(true);

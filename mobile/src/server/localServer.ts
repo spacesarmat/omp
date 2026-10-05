@@ -119,9 +119,6 @@ export async function clearLocalCache(): Promise<void> {
 
 export const CACHE_LIMIT_BYTES = 1024 * 1024 * 1024;
 
-/** Start of the native (Russian) text when the binary does not run on this device (linker, 16 KB pages, instant crash). */
-export const CANNOT_RUN_PREFIX = ru.localServer.cannotRun;
-
 /** The native text (Russian or English, by the device language) says the binary cannot run here. */
 export function isCannotRun(msg: string): boolean {
   return msg.startsWith(ru.localServer.cannotRun) || msg.startsWith(en.localServer.cannotRun);
