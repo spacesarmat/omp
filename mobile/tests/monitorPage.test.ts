@@ -457,12 +457,27 @@ describe('«Лучшее качество» in the background', () => {
   const UHD = 'Северный ветер (2026) 2160p WEB-DL';
   const film = { hash: 'd'.repeat(40), title: FILM, category: 'movie' } as Torrent;
 
+  it('an upgrade with films in the library: the first run notifies nothing and keeps the other cards', async () => {
+    const names = ['Северный ветер', 'Тихая гавань', 'Ночной рейс', 'Белый город'];
+    const films = names.map((n, i) => ({ hash: String(i).repeat(40), title: n + ' (2026) WEB-DL 1080p', category: 'movie' }) as Torrent);
+    const pages: { [q: string]: SourceResult[] } = {};
+    names.forEach((n) => (pages[n + ' 2026'] = [res(n + ' (2026) 2160p Remux')]));
+    const host = fakeHost();
+    const s = await runMonitor(deps(host, { client: () => fakeClient(films), check: { search: fakeSearch(pages) }, now: () => 1_000_000 }));
+    expect(host.notes).toEqual([]);
+    expect(s.found).toBe(0);
+    expect(findingsOf(BETTER_ID)).toEqual([]);
+    expect(seenKeys(BETTER_ID)).toHaveLength(names.length);
+  });
+
   it('the films are checked after the episodes, once a day, on the «better» channel', async () => {
+    // checked before (the baseline is done), nothing reported yet
+    localStorage.setItem('tsp.betterChecked', JSON.stringify({ ['d'.repeat(40)]: 1 }));
     const queries: string[] = [];
     const client = fakeClient([film]);
     const search = fakeSearch({ 'Северный ветер 2026': [res(UHD)] }, queries);
     const host = fakeHost();
-    const s = await runMonitor(deps(host, { client: () => client, check: { search }, now: () => 1_000_000 }));
+    const s = await runMonitor(deps(host, { client: () => client, check: { search }, now: () => 100_000_000 }));
     expect(queries).toEqual(['Северный ветер 2026']);
     expect(host.notes).toEqual([
       {
@@ -479,7 +494,7 @@ describe('«Лучшее качество» in the background', () => {
     expect(host.persisted).toEqual([{ s: BETTER_ID, e: 'd'.repeat(40) + ':32' }]);
     expect(s.found).toBe(1);
     // an hour later the film is not searched again
-    await runMonitor(deps(fakeHost(), { client: () => client, check: { search }, now: () => 1_000_000 + 3_600_000 }));
+    await runMonitor(deps(fakeHost(), { client: () => client, check: { search }, now: () => 100_000_000 + 3_600_000 }));
     expect(queries).toHaveLength(1);
   });
 

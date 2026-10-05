@@ -1,6 +1,8 @@
 // «Лучшее качество» (v0.17) for the films of the library: a release of the same film (name, year ±1) in a better
 // quality (quality.ts) than the library torrent. Each film is searched at most once a day (stamps in tsp.betterChecked,
-// pruned to the library); one finding per new best rank (`<hash>:<rank>`). Films whose journal says omp.q: false
+// pruned to the library). A film's first check is silent, as a subscription's is: the best rank it finds is only
+// remembered as the baseline, so an upgrade with a big library does not flood the notifications. After that, one
+// finding per new best rank (`<hash>:<rank>`). Films whose journal says omp.q: false
 // («Следить за качеством» off) are skipped. Series are left to the new-episodes check. Chromium 53 safe.
 import { guessCategory } from '../lib/categoryGuess';
 import { watchesBetterQuality } from '../lib/journal';
@@ -173,7 +175,7 @@ export function dueFilms<T extends LibraryTorrent>(torrents: T[], now: number): 
 
 /**
  * Checks the due watched films one by one; returns (and saves) the findings of ranks above any reported before for the
- * film. A film is stamped only when some source answered (an offline run tries again next time). Never rejects.
+ * film. The first check of a film only stores its baseline rank (no finding). A film is stamped only when some source answered (an offline run tries again next time). Never rejects.
  */
 export function checkBetterQuality(ctx: SourceContext, torrents: LibraryTorrent[], opts?: CheckOptions): Promise<Finding[]> {
   const o = opts || {};
@@ -184,10 +186,17 @@ export function checkBetterQuality(ctx: SourceContext, torrents: LibraryTorrent[
     chain = chain.then(() =>
       search(ctx, t, o).then((x) => {
         const hash = (t.hash || '').toLowerCase();
+        const reported = reportedRank(hash, seenKeys(BETTER_ID) || []);
+        // never searched (no stamp) and nothing reported: this answer is the film's baseline
+        const baseline = !loadChecked()[hash] && reported < 0;
         if (x.answered) stamp(hash, at);
         const b = x.best;
-        if (!b || b.rank <= reportedRank(hash, seenKeys(BETTER_ID) || [])) return;
+        if (!b || b.rank <= reported) return;
         const key = betterKey(b);
+        if (baseline) {
+          rememberSeen(BETTER_ID, [key]);
+          return;
+        }
         const title = displayTitle(t);
         const f: Finding = {
           subId: BETTER_ID,

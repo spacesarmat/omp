@@ -1,5 +1,6 @@
 // Monitoring store on the phone: subscriptions (tsp.subs), seen results per subscription (tsp.subsSeen, SEEN_MAX
-// each) and the findings for the screen (tsp.monitorFound, the last FOUND_MAX). Read from localStorage on every call:
+// each) and the findings for the screen (tsp.monitorFound: the last FOUND_MAX, plus the last BETTER_FOUND_MAX
+// better-quality ones, which never push the others out). Read from localStorage on every call:
 // the background page and the app write the same keys from different JS contexts. Chromium 53 safe.
 import { isObject, loadJson, saveJson } from '../store/storage';
 import type { SourceResult } from '../sources/types';
@@ -11,7 +12,10 @@ export const FOUND_KEY = 'tsp.monitorFound';
 /** Seen results kept per subscription (the latest check is always kept whole, up to SEEN_HARD_MAX). */
 export const SEEN_MAX = 300;
 export const SEEN_HARD_MAX = 2000;
+/** Subscription and new-episode findings kept. */
 export const FOUND_MAX = 100;
+/** Better-quality findings kept, on top of FOUND_MAX: they never push the other findings out. */
+export const BETTER_FOUND_MAX = 30;
 const QUERY_MAX = 200;
 
 const QUALITIES: SubQuality[] = ['', '720', '1080', '2160'];
@@ -335,11 +339,19 @@ export function loadFound(): Finding[] {
     const f = sanitizeFinding(x);
     if (f) out.push(f);
   });
-  return out.sort((a, b) => b.at - a.at).slice(0, FOUND_MAX);
+  return capFound(out.sort((a, b) => b.at - a.at));
 }
 
+/** The newest FOUND_MAX subscription / episode findings plus the newest BETTER_FOUND_MAX better-quality ones. */
+function capFound(list: Finding[]): Finding[] {
+  let better = 0;
+  let other = 0;
+  return list.filter((f) => (f.subId === BETTER_ID ? ++better <= BETTER_FOUND_MAX : ++other <= FOUND_MAX));
+}
+
+/** `list` newest first. */
 function saveFound(list: Finding[]): void {
-  saveJson(FOUND_KEY, list.slice(0, FOUND_MAX));
+  saveJson(FOUND_KEY, capFound(list));
 }
 
 /** Findings of one subscription (or EPISODES_ID), newest first. */

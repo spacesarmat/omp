@@ -114,39 +114,70 @@ describe('pickBetter', () => {
 });
 
 describe('checkBetterQuality', () => {
-  it('one finding per new best rank; each film at most once a day; series are not searched', async () => {
+  it('the first check of a film is silent: the best rank found is its baseline', async () => {
     const q: string[] = [];
+    const uhd = res('Северный ветер (2026) 2160p WEB-DL', { Seed: 30 });
+    const first = await checkBetterQuality(ctx, [film()], { search: fakeSearch([uhd], q), now: 1_000_000 });
+    expect(first).toEqual([]);
+    expect(findingsOf(BETTER_ID)).toEqual([]);
+    expect(seenKeys(BETTER_ID)).toEqual([H + ':32']);
+    expect(JSON.parse(localStorage.getItem(BETTER_CHECKED_KEY)!)).toEqual({ [H]: 1_000_000 });
+  });
+
+  it('an upgrade with many films in the library notifies nothing on the first run', async () => {
+    const names = ['Северный ветер', 'Тихая гавань', 'Ночной рейс', 'Белый город', 'Последний мост', 'Долгая зима'];
+    const lib = names.map((n, i) => film(n + ' (2026) WEB-DL 1080p', { hash: String(i).repeat(40) }));
+    const list = names.map((n) => res(n + ' (2026) 2160p Remux'));
+    const found = await checkBetterQuality(ctx, lib, { search: fakeSearch(list, []), now: 5 });
+    expect(found).toEqual([]);
+    expect(findingsOf(BETTER_ID)).toEqual([]);
+    expect(seenKeys(BETTER_ID)).toHaveLength(names.length);
+  });
+
+  it('a film with nothing better at first: the first better release later is reported', async () => {
+    const q: string[] = [];
+    expect(await checkBetterQuality(ctx, [film()], { search: fakeSearch([res(FILM)], q), now: 1 })).toEqual([]);
+    expect(seenKeys(BETTER_ID)).toBeNull();
+    const later = await checkBetterQuality(ctx, [film()], { search: fakeSearch([res('Северный ветер (2026) BDRip 1080p')], q), now: 1 + BETTER_EVERY_MS });
+    expect(later.map((f) => f.key)).toEqual([H + ':23']);
+  });
+
+  it('after the baseline one finding per new best rank; each film at most once a day; series are not searched', async () => {
+    const q: string[] = [];
+    const bd = res('Северный ветер (2026) BDRip 1080p', { Seed: 30 });
     const uhd = res('Северный ветер (2026) 2160p WEB-DL', { Seed: 30 });
     const series: LibraryTorrent = { hash: 'e'.repeat(40), title: 'Starbound Frontier / Сезон: 1 / Серии: 1-8 из 10 [2026]', category: 'tv' };
     const lib = [film(), series];
     const T0 = 1_000_000;
-    const first = await checkBetterQuality(ctx, lib, { search: fakeSearch([uhd], q), now: T0 });
+    // the baseline: BDRip (rank 23), silent
+    expect(await checkBetterQuality(ctx, lib, { search: fakeSearch([bd], q), now: T0 })).toEqual([]);
     expect(q).toEqual(['Северный ветер 2026']);
+    const day = T0 + BETTER_EVERY_MS;
+    const first = await checkBetterQuality(ctx, lib, { search: fakeSearch([bd, uhd], q), now: day });
     expect(first).toHaveLength(1);
     expect(first[0]).toMatchObject({
       subId: BETTER_ID,
       key: H + ':32',
-      at: T0,
+      at: day,
       better: { torrentHash: H, torrentTitle: FILM, have: '1080p WEB-DL', got: '4K WEB-DL' },
     });
     expect(first[0].result).toBe(uhd);
-    expect(seenKeys(BETTER_ID)).toEqual([H + ':32']);
-    expect(JSON.parse(localStorage.getItem(BETTER_CHECKED_KEY)!)).toEqual({ [H]: T0 });
+    expect(seenKeys(BETTER_ID)).toEqual([H + ':32', H + ':23']);
+    expect(JSON.parse(localStorage.getItem(BETTER_CHECKED_KEY)!)).toEqual({ [H]: day });
     // within a day: not searched again
-    expect(await checkBetterQuality(ctx, lib, { search: fakeSearch([uhd], q), now: T0 + 3_600_000 })).toEqual([]);
-    expect(q).toHaveLength(1);
-    // a day later the same rank is not reported again
-    const day = T0 + BETTER_EVERY_MS;
-    expect(await checkBetterQuality(ctx, lib, { search: fakeSearch([uhd], q), now: day })).toEqual([]);
+    expect(await checkBetterQuality(ctx, lib, { search: fakeSearch([uhd], q), now: day + 3_600_000 })).toEqual([]);
     expect(q).toHaveLength(2);
+    // a day later the same rank is not reported again
+    expect(await checkBetterQuality(ctx, lib, { search: fakeSearch([uhd], q), now: day * 2 })).toEqual([]);
+    expect(q).toHaveLength(3);
     // a higher rank is; the film keeps one card
     const remux = res('Северный ветер (2026) 2160p Remux', { Seed: 4 });
-    const third = await checkBetterQuality(ctx, lib, { search: fakeSearch([uhd, remux], q), now: day * 2 });
+    const third = await checkBetterQuality(ctx, lib, { search: fakeSearch([uhd, remux], q), now: day * 3 });
     expect(third.map((f) => f.key)).toEqual([H + ':34']);
     expect(findingsOf(BETTER_ID).map((f) => f.key)).toEqual([H + ':34']);
     // better than the library but below the reported rank: silent
-    expect(await checkBetterQuality(ctx, lib, { search: fakeSearch([res('Северный ветер (2026) BDRip 1080p')], q), now: day * 3 })).toEqual([]);
-    expect(q).toHaveLength(4);
+    expect(await checkBetterQuality(ctx, lib, { search: fakeSearch([bd], q), now: day * 4 })).toEqual([]);
+    expect(q).toHaveLength(5);
   });
 
   it('a search no source answered does not use up the day', async () => {

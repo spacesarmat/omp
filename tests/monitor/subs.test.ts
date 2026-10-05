@@ -5,6 +5,7 @@ import {
   FOUND_KEY,
   SEEN_MAX,
   FOUND_MAX,
+  BETTER_FOUND_MAX,
   loadSubs,
   getSubscription,
   addSubscription,
@@ -174,6 +175,33 @@ describe('findings', () => {
     expect(all).toHaveLength(FOUND_MAX);
     expect(all[0].key).toBe('k' + (FOUND_MAX + 9));
     expect(JSON.parse(localStorage.getItem(FOUND_KEY)!)).toHaveLength(FOUND_MAX);
+  });
+
+  it('better-quality cards have their own cap and never push out subscription or episode cards', () => {
+    expect(BETTER_FOUND_MAX).toBe(30);
+    const subs: Finding[] = [];
+    for (let i = 0; i < 90; i++) subs.push(finding('s1', 'k' + i, 10 + i));
+    const eps: Finding[] = [];
+    for (let i = 0; i < 10; i++)
+      eps.push(finding(EPISODES_ID, 'e' + i + ':1:10', 200 + i, { episodes: { torrentHash: 'e' + i, torrentTitle: 'T', season: 1, haveTo: 8, to: 10 } }));
+    addFindings(subs.concat(eps));
+    const better: Finding[] = [];
+    for (let i = 0; i < 40; i++)
+      better.push(
+        finding(BETTER_ID, 'b' + i + ':32', 1000 + i, { better: { torrentHash: 'b' + i, torrentTitle: 'T', have: '1080p WEB-DL', got: '4K WEB-DL' } }),
+      );
+    // one by one, as the background adds them
+    better.forEach((f) => addFindings([f]));
+    expect(findingsOf('s1')).toHaveLength(90);
+    expect(findingsOf(EPISODES_ID)).toHaveLength(10);
+    const kept = findingsOf(BETTER_ID).map((f) => f.key);
+    expect(kept).toHaveLength(BETTER_FOUND_MAX);
+    // the oldest better-quality cards went first
+    expect(kept[0]).toBe('b39:32');
+    expect(kept[kept.length - 1]).toBe('b10:32');
+    expect(JSON.parse(localStorage.getItem(FOUND_KEY)!)).toHaveLength(130);
+    markFindingsSeen();
+    expect(loadFound()).toHaveLength(130);
   });
 
   it('a newer release of the same library torrent replaces the older card', () => {
