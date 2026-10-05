@@ -514,12 +514,12 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       '“Add” searches all the turned-on sources at once and merges identical torrents.',
       'To turn sources on and off: Settings → “Search sources”.',
       'The sources: Jackett and Prowlarr directly, the TorrServer search and the built-in sites: rutor, nnmclub, rutracker, Anidub, BigFANGroup, torrent.by, Kinozal, rustorka.',
-      'rutracker, Kinozal and rustorka require sign-in: “Sign in” next to them.',
-      'Kinozal and rustorka are behind the Cloudflare check — see the question “Sites behind Cloudflare”.',
+      'rutracker, Kinozal and rustorka require sign-in: “Sign in” right on the site row. NNM-Club searches without an account too; it needs the sign-in to download a torrent.',
+      'Kinozal, rustorka and NNM-Club are behind the Cloudflare check — see the question “Sites behind Cloudflare”.',
     ],
     more: [
       'On the phone “Add” searches all the turned-on sources at once and merges identical torrents into one row. There are three kinds of sources: Jackett and Prowlarr connected directly (the “Indexers” section), the search of TorrServer itself (rutor and Torznab) and the built-in sites — rutor, nnmclub, rutracker, Anidub, BigFANGroup, torrent.by, Kinozal and rustorka.',
-      'Sources are turned on and off in Settings → “Search sources”. It also shows which of them is answering. Kinozal and rustorka are off by default: each has its own page with the sign-in and the Cloudflare bypass.',
+      'Sources are turned on and off in Settings → “Search sources”. It also shows which of them is answering. Kinozal and rustorka are off by default. For Kinozal, rustorka and NNM-Club “Sign in” is right on the site row (on the phone this is the “Built-in · on the phone” group), and › opens the site page: the password sign-in, the Cloudflare bypass, sending the sign-in to the TV.',
       'rutracker requires a sign-in: tap “Sign in” next to it in “Search sources” and enter your rutracker username and password. The password is stored only in the protected Android storage and is sent nowhere except rutracker. If the site asks for a captcha, tap “Sign in with browser”.',
       'If rutracker or another site is behind bot protection (Cloudflare) and has no bypass switch (Kinozal and rustorka have it), the built-in search cannot reach it: connect the tracker through Jackett or Prowlarr, as described in the question “Jackett and Prowlarr: other trackers”.',
       'Android TV has its own “Search sources” screen: Settings → “Search sources”. It has the same switches and the state of each source. You can sign in to a site right on the TV (type the username and password with the remote or with the “Keyboard” on the phone) or send the sign-in from the phone — see the question “Send the sources and sign-ins to Android TV”. LG has no built-in sources: the search goes through TorrServer there.',
@@ -615,7 +615,8 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'cloudflare': {
     q: 'Sites behind Cloudflare: the bypass and “Pass on the phone”',
     short: [
-      'Kinozal and rustorka are behind the Cloudflare check. Each has a “Bypass the Cloudflare check” switch: Settings → “Search sources” → the site. It is off by default.',
+      'Kinozal, rustorka and NNM-Club are behind the Cloudflare check. Each has a “Bypass the Cloudflare check” switch: Settings → “Search sources” → › on the site row. It is off by default.',
+      'Signing in with the browser (“Sign in” on the site row) turns the bypass on by itself.',
       'When on, it lets OMP pass the check: first with a hidden window inside the app, then through FlareSolverr (if connected).',
       'The bypass may break the rules of the site: turn it on at your own risk, OMP warns you when you turn it on.',
       'If the “I am not a robot” tick is needed, OMP opens the check on the screen — tick it yourself.',
@@ -626,14 +627,14 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'When the check is passed, the site page shows “check passed · valid until …”. The check cookies are stored encrypted and valid for a limited time, then OMP passes the check again.',
       'If the tick cannot be avoided, a window with the site opens at the bottom of the phone: tick it, and the window closes by itself.',
       'Android TV. The check window opens on the TV with the buttons “Pass on the phone”, “Tick with the remote” and “Cancel”. “Pass on the phone”: a phone with OMP (in the same network and connected to the TV) gets a request, you pass the check on it, and the permission is sent to the TV. If OMP is closed on the phone, a notification “The TV asks to pass a check on …” arrives. “Tick with the remote” — put the tick with the remote, which is inconvenient.',
-      'The switch on the TV: in “Search sources” the “Sites behind Cloudflare” group, OK on a row turns the bypass on (after a warning) and, if the check is needed, opens it.',
+      'The switch on the TV: in “Search sources” the “Sites behind Cloudflare” group, OK on a row turns the bypass on (after a warning) and, if the check is needed, opens it. The phone has no separate group: these sites are in “Built-in · on the phone”, with “Sign in” next to them.',
       'If the built-in check does not pass, connect FlareSolverr (the question “How to install FlareSolverr”). For sites without a switch (rutracker and others) there is one way — Jackett or Prowlarr.',
     ],
     by: {
       atv: {
         q: 'Sites behind Cloudflare and “Pass on the phone”',
         short: [
-          'Kinozal and rustorka are behind the Cloudflare check. On the TV they are in Settings → “Search sources” → “Sites behind Cloudflare”.',
+          'Kinozal, rustorka and NNM-Club are behind the Cloudflare check. On the TV they are in Settings → “Search sources” → “Sites behind Cloudflare”.',
           'OK on a site row turns the bypass on (after a warning: it may break the rules of the site, at your own risk).',
           'If the “I am not a robot” tick is needed, tap “Pass on the phone”: the check opens on the phone, and the permission is sent to the TV.',
           'You can also “Tick with the remote”, but it is inconvenient.',
@@ -643,13 +644,14 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     },
   },
   'sites-login': {
-    q: 'Kinozal and rustorka: sign-in, mirrors and “Sign in with browser”',
+    q: 'Kinozal, rustorka and NNM-Club: sign-in, mirrors and “Sign in with browser”',
     short: [
-      'Kinozal and rustorka search only after you sign in: Settings → “Search sources” → the site → “Sign in to …” (username and password).',
+      'Kinozal and rustorka search only after you sign in, NNM-Club searches without it: Settings → “Search sources” → “Sign in” on the site row (the “Built-in · on the phone” group).',
+      'The username and password are entered on the site page — › on its row.',
       'The password is stored encrypted only on the phone and goes only to the site itself.',
-      'The site asks for a captcha or does not accept the password — tap “Sign in with browser”: sign in on the site yourself in the OMP window, OMP does not see the password.',
+      'The site asks for a captcha or does not accept the password — tap “Sign in with browser”: sign in on the site yourself in the OMP window, OMP does not see the password. Such a sign-in turns “Bypass the Cloudflare check” on by itself.',
       'Kinozal is sometimes blocked by DNS: OMP tries the mirrors kinozal.me, kinozal.guru and kinozal.tv itself.',
-      'The sign-in can be sent to Android TV: “Send the sign-in to the TV”.',
+      'The sign-in can be sent to Android TV: “Send the sign-in to the TV” on the site page.',
     ],
     more: [
       'The sign-in is needed because without it Kinozal and rustorka do not give out the .torrent. The username and password are checked at sign-in: if the password is wrong, OMP says so, even when the previous sign-in is still valid.',
@@ -657,12 +659,13 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'The browser sign-in is valid for about 30 days (the site does not tell the exact term). When it ends, the site shows “sign-in needed” — sign in again. “Sign out” on the site page erases the sign-in on all mirrors.',
       'Kinozal. The address depends on availability: OMP tries kinozal.me, kinozal.guru and kinozal.tv and remembers the working one. If OMP moved to another mirror and you signed in through the browser, you may have to sign in again. Kinozal does not give the torrent without a sign-in or when the daily download limit is used up: OMP signs in again once by itself, and then writes “Kinozal did not give the torrent — sign in again or check the daily download limit”.',
       'rustorka. The sign-in is like rutracker: username and password or “Sign in with browser”. Torrents under moderation are not shown in the results.',
+      'NNM-Club. The site is behind Cloudflare: “Sign in” → “Sign in with browser”, the window closes by itself once the sign-in is confirmed. The search works without an account; the sign-in is needed to download a torrent.',
       'Android TV. You can enter the sign-in right on the TV (“Sign in” on the site row, with the remote or with the “Keyboard” on the phone); the sign-in window has “Sign in with browser” and “Sign in on the phone” (the sign-in is done on the phone, checked and sent to the TV). Or send the sign-in from the phone: “sign-in sent from the phone” appears on the site row.',
     ],
     by: {
       atv: {
         short: [
-          'Kinozal and rustorka search only after you sign in: Settings → “Search sources” → “Sites behind Cloudflare” → “Sign in”.',
+          'Kinozal and rustorka search only after you sign in, NNM-Club searches without it: Settings → “Search sources” → “Sites behind Cloudflare” → “Sign in”.',
           'The username and password can be typed with the remote or sent from the phone (“Send to TV”).',
           'It asks for a captcha — “Sign in with browser” (the window on the TV) or “Sign in on the phone”.',
           'Kinozal is sometimes blocked by DNS: OMP tries the mirrors kinozal.me, kinozal.guru and kinozal.tv itself.',
@@ -671,17 +674,67 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     },
   },
   'accounts': {
-    q: 'Where to get an account for rutracker, Kinozal and rustorka',
+    q: 'Where to get an account for rutracker, Kinozal, rustorka and NNM-Club',
     short: [
-      'Registration is free on each of the three sites; OMP does not create accounts for you.',
+      'Registration is free on each of the four sites; OMP does not create accounts for you.',
       { text: 'rutracker — sign up', url: 'https://rutracker.org/forum/profile.php?mode=register' },
       { text: 'Kinozal — sign up', url: 'https://kinozal.tv/signup.php' },
       { text: 'rustorka — sign up', url: 'https://rustorka.com/forum/profile.php?mode=register' },
+      { text: 'NNM-Club — sign up', url: 'https://nnmclub.to/forum/profile.php?mode=register' },
       'After signing up, sign in to OMP: “Search sources” → the site → “Sign in” or “Sign in with browser”.',
     ],
     more: [
-      'The “Sign in to …” screen of each site also has a “No account? Sign up on …” link, and on Android TV the sign-in window shows a QR code: point the phone camera at it to open the registration page.',
+      'On the phone the “Sign in to …” screen of each site also has a “No account? Sign up on …” link, and on Android TV the sign-in window shows a QR code: point the phone camera at it to open the registration page.',
       'If a site is blocked in your country, open its registration page through a mirror or a VPN; Kinozal mirrors: kinozal.me, kinozal.guru, kinozal.tv.',
+    ],
+  },
+  'discover': {
+    q: 'What is “Discover”',
+    short: [
+      'In “Catalog” switch “Mine / Discover”: new films and series from TMDB, search by title and a card with the description.',
+      'In the card “Find torrents” searches your sources, “Want to watch” subscribes you in “New”.',
+      'If the catalog is unavailable, set a TMDB key or mirror in the TorrServer settings.',
+    ],
+    more: [
+      'A film card has the description, the rating and the cast. A series has season chips on top: pick a season to see the list of episodes and tap “Find torrents for the season”. If the film or series is already on the server, “Open in library” takes the place of the search.',
+      '“Want to watch” creates a subscription: OMP tells you in “New” when a torrent appears on your sources (for a series, when new episodes come out). Such a subscription has “Better quality only” on.',
+      'The scale changes with two fingers: in “Mine” it is the catalog view, in “Discover” it is 2 or 3 posters in a row. After you come back from a card, “Discover” stays where it was. The data comes from TMDB; for the key and the mirror see the question “TMDB key for “Discover””.',
+      'You can delete from “Mine” with a long press on a poster: a menu opens, and several can be chosen at once there.',
+    ],
+  },
+  'search-filters': {
+    q: 'Search filters for torrents',
+    short: [
+      'On the “Add” screen, after a search, tap “Filters”: they apply to the results at once.',
+      'Resolution and HDR / DV; the source and “Hide camrips”; the size from and to, GB; seeds, at least; voice-over (dub, multi-voice, original) and Russian subtitles.',
+      'For series — a season or “Full season only”. “Reset” clears everything.',
+    ],
+    more: [
+      'OMP remembers the chosen filters and shows them as chips under the search field. “Subscribe” takes the quality of the subscription from the filters.',
+      'The filters look at the title of a torrent: if it has no resolution or voice-over in it, the torrent may not pass a filter. “Show N torrents” in the filters window tells how many will be left.',
+    ],
+  },
+  'better-quality': {
+    q: 'Better quality: a better torrent',
+    short: [
+      'Turn “Better quality only” on in a subscription: OMP reports only when the quality is higher than the earlier findings.',
+      'OMP checks films from the catalog once a day: if a torrent in better quality is out, a card appears in “New” in the “Better quality” section.',
+      '“Replace” in the notification or the card adds the new torrent and moves the history and “Skip” into it.',
+    ],
+    more: [
+      'Following the films is turned on in “Settings → Monitoring” (“Better quality of films”) and, for one film, in its card.',
+      '“Replace” works as for new episodes (the question “New episodes and the “Replace” button”): the old torrent is removed from the server only once the new one is added. A card in “New” can be dismissed with “Hide”.',
+    ],
+  },
+  'torrent-by-code': {
+    q: 'torrent.by asks for a code',
+    short: [
+      'If torrent.by has blocked your IP, OMP says “torrent.by asks for a verification code”.',
+      'Tap “Enter the code” in “Search sources”, enter the code from the picture on the site page and close the window.',
+      'OMP checks the site again after the window is closed.',
+    ],
+    more: [
+      'On the TV the code is entered on the phone (OMP → “Search sources”) or in any browser on the same network.',
     ],
   },
   'tmdb-key': {
@@ -780,7 +833,8 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'The “New” tab is a feed of fresh torrents from rutor, nnmclub and torrent.by: “Movies”, “Series”, “Anime” and the 1080p+ filter. Each torrent has “Add” and “On TV”. The sources must be turned on in “Search sources”.',
       'A subscription is a query with rules: sources, the minimum quality and the number of seeds. Create it with the “+ New subscription” button on the “Subscriptions” tab. OMP checks the subscriptions itself and reports new torrents with a notification and a badge on the “New” tab.',
       'The first check of a new subscription goes without notifications: the torrents already on the sites are considered known. Notifications come only about what appeared later.',
-      'You can also check by hand: the “Check now” button. How often OMP checks by itself and whether Wi‑Fi is needed for it — in “Settings → Monitoring”.',
+      'You can also check by hand: the “Check now” button. How often OMP checks by itself and whether Wi‑Fi is needed for it — in “Settings → Monitoring” (the gear in the “New” header and the “Monitoring settings” button at the bottom lead there too).',
+      'Each subscription has its own “Check now”. Subscriptions and found torrents can be searched with the search field and sorted: new findings, by name, by date added.',
     ],
   },
   'new-episodes': {
@@ -794,7 +848,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'For series from the catalog OMP looks for a fuller torrent of the same series and season itself. If new episodes are out, a card “Episodes 9–10 are out · you have 1–8” appears in “New” on the “Subscriptions” tab.',
       '“Replace” adds the new torrent to the server and moves into it the watch history, the stop positions, the “Skip” settings and the category. The old torrent is removed from the server only after the new one is added successfully: if something goes wrong, the old one stays in place. The name and the poster are taken from the new torrent.',
       '“Watch on TV” on the new episodes card first does the replace, and then starts playback. If there are several suitable torrents, you can choose “Another release” in the replace window.',
-      '“Stop following” turns off the new episodes check for this series. For all series at once it can be turned off in “Settings → Monitoring”.',
+      '“Stop following” turns off the new episodes check for this series. For all series at once it can be turned off in “Settings → Monitoring” (the gear in the “New” header).',
     ],
   },
 
