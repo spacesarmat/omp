@@ -4,6 +4,7 @@ import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
 import { ru } from '../../src/i18n/ru';
 import { Discover } from '../src/screens/catalog/Discover';
+import { clearDiscover, DISCOVER_TTL_MS } from '../src/screens/catalog/discoverCache';
 import { Library } from '../src/screens/Library';
 import { phoneCatalog, setCatalogClientForTests, catalogMode, setCatalogMode, OFFLINE_TITLE, OFFLINE_TEXT, NOKEY_TEXT } from '../src/catalog/phoneCatalog';
 import { currentRoute, resetTo } from '../src/nav';
@@ -92,6 +93,7 @@ async function scrollToEnd() {
 }
 
 beforeEach(() => {
+  clearDiscover();
   localStorage.clear();
   observed = [];
   vi.stubGlobal('IntersectionObserver', FakeObserver);
@@ -310,6 +312,7 @@ describe('Discover («Новинки»)', () => {
       expect(el.querySelector('.m-disc-foot')!.textContent).toBe('Data: TMDB');
 
       act(() => render(null, el));
+      clearDiscover();
       fake(() => Promise.reject(codeError('nokey')));
       mount(<Discover />);
       await flush();
@@ -338,6 +341,95 @@ describe('Discover («Новинки»)', () => {
     } finally {
       applyLanguageSetting('ru');
     }
+  });
+});
+
+describe('«Обзор» comes back as it was', () => {
+  const SHOW2: CatalogTitle = { kind: 'tv', id: 22, title: 'Copper Valley', original: 'Copper Valley', year: 2026, poster: '', rating: 0 };
+
+  beforeEach(() => {
+    for (const s of servers.value.slice()) removeServer(s.id);
+    setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+  });
+
+  function series() {
+    return fake((kind: Kind | 'all', page: number) => {
+      if (kind === 'tv') return Promise.resolve({ items: page === 1 ? [SHOW] : [SHOW2], pages: 2 });
+      return Promise.resolve({ items: [MOVIE, SHOW, MOVIE2], pages: 1 });
+    });
+  }
+
+  /** «Сериалы», both pages loaded, a card opened; the screen is unmounted as the title card replaces it. */
+  async function leaveFromCard() {
+    mount(<Discover />);
+    await flush();
+    act(() => button('Сериалы')!.click());
+    await flush();
+    await scrollToEnd();
+    expect(tiles().map((b) => b.querySelector('.m-card-title')!.textContent)).toEqual(['Ледяной перевал', 'Copper Valley']);
+    act(() => tiles()[1].click());
+    expect(currentRoute.value).toEqual({ name: 'title', kind: 'tv', id: 22 });
+    act(() => render(null, el));
+  }
+
+  it('Back from a title card: the same chip and both pages, with no new request', async () => {
+    const nov = series();
+    await leaveFromCard();
+    const calls = nov.mock.calls.length;
+    mount(<Discover />);
+    expect(button('Сериалы')!.getAttribute('aria-pressed')).toBe('true');
+    expect(tiles().length).toBe(2);
+    await flush();
+    expect(tiles().length).toBe(2);
+    expect(nov.mock.calls.length).toBe(calls);
+  });
+
+  it('another server, another language or an old feed: fetched again from «Все»', async () => {
+    const nov = series();
+    await leaveFromCard();
+    setActiveServer(addServer({ url: 'http://other:8090' }).id);
+    nov.mockClear();
+    mount(<Discover />);
+    await flush();
+    expect(nov).toHaveBeenCalledWith('all', 1);
+    expect(button('Все')!.getAttribute('aria-pressed')).toBe('true');
+    expect(tiles().length).toBe(3);
+    act(() => render(null, el));
+
+    // the language
+    applyLanguageSetting('en');
+    try {
+      nov.mockClear();
+      mount(<Discover />);
+      await flush();
+      expect(nov).toHaveBeenCalledWith('all', 1);
+      act(() => render(null, el));
+    } finally {
+      applyLanguageSetting('ru');
+    }
+
+    // 15 minutes later
+    mount(<Discover />);
+    await flush();
+    act(() => render(null, el));
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + DISCOVER_TTL_MS + 1000);
+    nov.mockClear();
+    mount(<Discover />);
+    await flush();
+    expect(nov).toHaveBeenCalledWith('all', 1);
+  });
+
+  it('a failed load is not kept', async () => {
+    const nov = fake(() => Promise.reject(codeError('offline')));
+    mount(<Discover />);
+    await flush();
+    act(() => render(null, el));
+    nov.mockClear();
+    mount(<Discover />);
+    await flush();
+    // nothing was kept from a failed load: the next visit asks again
+    expect(nov).toHaveBeenCalledWith('all', 1);
   });
 });
 
@@ -392,6 +484,8 @@ describe('phoneCatalog', () => {
     await flush();
     expect(String(get.mock.calls[0][0]).indexOf('https://mirror-a.test/3/')).toBe(0);
     act(() => render(null, el));
+    // a later visit: the kept feed has expired
+    clearDiscover();
     settingsSpy.mockResolvedValue({ APIKey: 'own', APIURL: 'https://mirror-b.test' });
     get.mockClear();
     mount(<Discover />);

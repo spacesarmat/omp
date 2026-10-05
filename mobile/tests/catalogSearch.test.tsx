@@ -4,6 +4,7 @@ import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
 import { CatalogSearch } from '../src/screens/catalog/CatalogSearch';
 import { Discover } from '../src/screens/catalog/Discover';
+import { clearDiscover } from '../src/screens/catalog/discoverCache';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { currentRoute, resetTo } from '../src/nav';
 import { runBack } from '../src/ui/backStack';
@@ -47,6 +48,7 @@ function type(v: string) {
 }
 
 beforeEach(() => {
+  clearDiscover();
   applyLanguageSetting('en');
   vi.useFakeTimers();
   torrents.value = [];
@@ -167,6 +169,31 @@ describe('Discover search entry', () => {
     expect(field()).not.toBeNull();
     expect(el.querySelector('.m-disc-grid')).toBeNull();
     act(() => { runBack(); });
+    expect(field()).toBeNull();
+  });
+
+  it('Back from a title opened in the results: the search, its query and results, with no new request', async () => {
+    const search = fake();
+    mount(<Discover />);
+    await flush();
+    act(() => (el.querySelector('button[aria-label="Search"]') as HTMLButtonElement).click());
+    type('midnight');
+    await act(async () => { vi.advanceTimersByTime(400); });
+    await flush();
+    act(() => (el.querySelector('button.m-srch-row') as HTMLButtonElement).click());
+    expect(currentRoute.value).toEqual({ name: 'title', kind: 'movie', id: 11 });
+    act(() => render(null, el));
+    mount(<Discover />);
+    await act(async () => { vi.advanceTimersByTime(1000); });
+    await flush();
+    expect(field().value).toBe('midnight');
+    expect(el.querySelectorAll('button.m-srch-row').length).toBe(2);
+    expect(search).toHaveBeenCalledTimes(1);
+    // closing the search forgets it: the next visit opens on the feed
+    act(() => { runBack(); });
+    act(() => render(null, el));
+    mount(<Discover />);
+    await flush();
     expect(field()).toBeNull();
   });
 });

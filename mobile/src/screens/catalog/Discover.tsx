@@ -7,11 +7,9 @@ import { navigate } from '../../nav';
 import { torrents } from '../../../../src/store/library';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
 import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
-import type { CatalogTitle, Kind } from '../../../../src/catalog/tmdb';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
-
-type Filter = Kind | 'all';
+import { readDiscover, saveDiscover, type Feed, type Filter } from './discoverCache';
 
 const SKELETONS = 6;
 
@@ -25,20 +23,18 @@ function chips(): { id: Filter; label: string }[] {
   ];
 }
 
-interface Feed {
-  items: CatalogTitle[];
-  page: number;
-  pages: number;
-}
-
 export function Discover() {
-  const [filter, setFilter] = useState<Filter>('all');
-  const [feed, setFeed] = useState<Feed | null>(null);
+  // back from a title card (or another tab): the chip, the loaded pages and the open search come back as they were
+  const kept = useMemo(() => readDiscover(), []);
+  const [filter, setFilter] = useState<Filter>(kept ? kept.filter : 'all');
+  const [feed, setFeed] = useState<Feed | null>(kept ? kept.feed : null);
   const [error, setError] = useState<CatalogErrorCode | null>(null);
   const [moreBusy, setMoreBusy] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
   const [reload, setReload] = useState(0);
-  const [searching, setSearching] = useState(false);
+  const [searching, setSearching] = useState(!!(kept && kept.search));
+  // a kept feed is shown as is: the first run of the load effect skips the fetch
+  const restored = useRef(!!(kept && kept.feed));
   // the current request: answers of an older one (another chip, a retry) are dropped
   const gen = useRef(0);
   const sentinel = useRef<HTMLDivElement>(null);
@@ -48,6 +44,10 @@ export function Discover() {
   const index = useMemo(() => libraryIndex(list), [list]);
 
   useEffect(() => {
+    if (restored.current) {
+      restored.current = false;
+      return;
+    }
     const my = ++gen.current;
     setFeed(null);
     setError(null);
@@ -93,6 +93,8 @@ export function Discover() {
         },
       );
   };
+  useEffect(() => saveDiscover({ filter, feed }), [filter, feed]);
+
   const loadMoreRef = useRef(loadMore);
   loadMoreRef.current = loadMore;
 
@@ -112,13 +114,24 @@ export function Discover() {
   }, [hasMore, moreFailed, feed]);
 
   const current = filter;
-  if (searching) return <CatalogSearch onClose={() => setSearching(false)} />;
+  if (searching)
+    return (
+      <CatalogSearch
+        onClose={() => {
+          saveDiscover({ search: null });
+          setSearching(false);
+        }}
+      />
+    );
   return (
     <div class="m-discover">
       <div class="m-disc-head">
         <h2>{t('discover.novelties')}</h2>
         <span class="m-muted m-small m-grow">{t('discover.fromTmdb')}</span>
-        <button type="button" class="m-btn m-btn-secondary m-btn-sm" aria-label={t('add.search')} onClick={() => setSearching(true)}>
+        <button type="button" class="m-btn m-btn-secondary m-btn-sm" aria-label={t('add.search')} onClick={() => {
+            saveDiscover({ search: { text: '', items: null } });
+            setSearching(true);
+          }}>
           <Icon d={SEARCH} size={18} />
         </button>
       </div>
