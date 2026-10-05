@@ -270,7 +270,7 @@ export function App() {
         <ServerSettings url={route.url} />
       ) : route.name === 'remote' ? (
         <Remote />
-      ) : (
+      ) : route.name === 'title' ? null : (
         <Settings />
       )}
       {prompt && showNav && <UpdateSheet info={prompt} />}

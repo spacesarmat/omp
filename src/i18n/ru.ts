@@ -101,6 +101,7 @@ export const ru = {
     notChosen: 'Не выбран',
     change: 'Сменить',
     choose: 'Выбрать',
+    tmdbData: 'Данные о фильмах: TMDB',
     projectPage: 'Страница проекта',
   },
   errors: {
@@ -1015,6 +1016,20 @@ export const ru = {
     rename: 'Переименовать {name}',
     serverName: 'Название сервера',
     addedToast: 'Сервер «{name}» добавлен',
+  },
+  discover: {
+    mine: 'Мои',
+    browse: 'Обзор',
+    novelties: 'Новинки',
+    fromTmdb: 'из каталога TMDB',
+    series: 'Сериал',
+    inLibrary: 'В медиатеке',
+    pageFailed: 'Не удалось загрузить',
+    offlineTitle: 'Каталог фильмов недоступен',
+    offlineText: 'TMDB не отвечает из этой сети. Укажите зеркало TMDB в настройках TorrServer или попробуйте позже. Ваши раздачи — во вкладке «Мои».',
+    nokeyText: 'Нет ключа TMDB. Добавьте его в настройках TorrServer (TMDB → API key). Ваши раздачи — во вкладке «Мои».',
+    howToKey: 'Как получить ключ',
+    attribution: 'Данные: TMDB',
   },
   catalog: {
     querySeason: '{n} сезон',

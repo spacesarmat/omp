@@ -437,6 +437,7 @@ export function Settings() {
         <button type="button" class="m-link" onClick={() => window.open(TORRSERVER_SOURCE_URL, '_system')}>
           TorrServer © YouROK, GPL-3.0
         </button>
+        <p class="m-muted m-small m-set-attr">{t('settings.tmdbData')}</p>
       </section>
     </div>
   );

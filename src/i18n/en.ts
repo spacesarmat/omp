@@ -102,6 +102,7 @@ export const en: EnDict<typeof ru> = {
     notChosen: 'Not chosen',
     change: 'Change',
     choose: 'Choose',
+    tmdbData: 'Movie data: TMDB',
     projectPage: 'Project page',
   },
   errors: {
@@ -1006,6 +1007,20 @@ export const en: EnDict<typeof ru> = {
     rename: 'Rename {name}',
     serverName: 'Server name',
     addedToast: 'Server “{name}” added',
+  },
+  discover: {
+    mine: 'Mine',
+    browse: 'Discover',
+    novelties: 'New releases',
+    fromTmdb: 'from the TMDB catalog',
+    series: 'Series',
+    inLibrary: 'In library',
+    pageFailed: 'Could not load',
+    offlineTitle: 'Movie catalog unavailable',
+    offlineText: 'TMDB does not respond from this network. Set a TMDB mirror in the TorrServer settings or try again later. Your torrents are in the “Mine” tab.',
+    nokeyText: 'No TMDB key. Add it in the TorrServer settings (TMDB → API key). Your torrents are in the “Mine” tab.',
+    howToKey: 'How to get a key',
+    attribution: 'Data: TMDB',
   },
   catalog: {
     querySeason: 'season {n}',

@@ -25,6 +25,8 @@ import { native } from '../platform/native';
 import { donateCardDue, dismissDonateCard, openDonate, supporterActive } from '../donate';
 import { localServer, startLocal, refreshLocalServer, LOCAL_URL, canRun, downloadSize } from '../server/localServer';
 import { displayTitle } from '../../../src/lib/torrentName';
+import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
+import { Discover } from './catalog/Discover';
 
 const POLL_MS = 15000;
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
@@ -53,6 +55,8 @@ export function Library() {
   const sort = settings.value.librarySort;
   const view = settings.value.libraryView;
   const hfilter = settings.value.historyFilter;
+  const mode = catalogMode.value;
+  const mine = mode === 'mine';
   const [loaded, setLoaded] = useState(list.length > 0);
   const [error, setError] = useState('');
   const [tvError, setTvError] = useState('');
@@ -145,7 +149,8 @@ export function Library() {
     };
     const start = (e: TouchEvent) => {
       stop();
-      if (busy || e.touches.length !== 1 || !atTop()) return;
+      // «Обзор» has no pull-to-refresh: the list below is the library's
+      if (busy || e.touches.length !== 1 || !atTop() || catalogMode.peek() !== 'mine') return;
       const target = e.target as Element | null;
       if (target && target.closest && target.closest('.m-tabs, .m-hfilters')) return;
       startY = e.touches[0].clientY;
@@ -264,7 +269,7 @@ export function Library() {
           <span class="m-brand-name">OMP</span>
         </div>
         <TvChip />
-        {!isHistory && (
+        {mine && !isHistory && (
           <button
             type="button"
             class="m-icon-btn m-sort"
@@ -274,7 +279,7 @@ export function Library() {
             <Icon d={ICONS.sort} size={20} />
           </button>
         )}
-        {!isHistory && (
+        {mine && !isHistory && (
           <button
             type="button"
             class="m-icon-btn m-view"
@@ -284,16 +289,34 @@ export function Library() {
             <Icon d={ICONS['view-' + view as keyof typeof ICONS]} size={20} />
           </button>
         )}
-        <button
-          type="button"
-          class="m-icon-btn"
-          aria-label={t('add.search')}
-          aria-pressed={searchOpen}
-          onClick={() => (librarySearchOpen.value = !searchOpen)}
-        >
-          <Icon d={SEARCH} size={20} />
-        </button>
+        {mine && (
+          <button
+            type="button"
+            class="m-icon-btn"
+            aria-label={t('add.search')}
+            aria-pressed={searchOpen}
+            onClick={() => (librarySearchOpen.value = !searchOpen)}
+          >
+            <Icon d={SEARCH} size={20} />
+          </button>
+        )}
       </div>
+      <div class="m-seg" role="tablist" aria-label={t('nav.library')}>
+        {(['mine', 'discover'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={mode === m}
+            class={'m-seg-btn' + (mode === m ? ' on' : '')}
+            onClick={() => setCatalogMode(m)}
+          >
+            {m === 'mine' ? t('discover.mine') : t('discover.browse')}
+          </button>
+        ))}
+      </div>
+      {mine ? (
+      <>
       {searchOpen && (
         <input
           class="m-input m-lib-search"
@@ -501,6 +524,10 @@ export function Library() {
           )}
         </div>
       </div>
+      </>
+      ) : (
+        <Discover />
+      )}
       {launch.sheet}
     </div>
   );

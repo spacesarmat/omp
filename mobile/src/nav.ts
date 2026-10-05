@@ -26,7 +26,9 @@ export type MRoute =
   | { name: 'sources' }
   /** «Источники поиска» → FlareSolverr. */
   | { name: 'flaresolverr' }
-  | { name: 'sourceSite'; id: string };
+  | { name: 'sourceSite'; id: string }
+  /** A TMDB title card from «Обзор» (the screen comes in Task 8). */
+  | { name: 'title'; kind: 'movie' | 'tv'; id: number };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);
