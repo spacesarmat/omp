@@ -3,7 +3,8 @@
 // then shows what it showed before.
 import type { Torrent } from '../../../src/api/types';
 import type { CatalogCard, Episode, SeasonDetails } from '../../../src/catalog/tmdb';
-import { seriesQuery, yearOf } from '../../../src/monitor/newEpisodes';
+import { yearOf } from '../../../src/monitor/newEpisodes';
+import { findShow } from './tmdbShow';
 import { displayTitle } from '../../../src/lib/torrentName';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 
@@ -23,20 +24,13 @@ export function resetEpisodeNames(): void {
   shows.clear();
 }
 
-function pick(items: { kind: string; id: number; year: number }[], year: number) {
-  const tv = items.filter((x) => x.kind === 'tv');
-  return (year ? tv.filter((x) => x.year === year)[0] : undefined) || tv[0];
-}
 
 async function match(tor: Torrent): Promise<ShowInfo | null> {
   const title = tor.title || displayTitle(tor);
-  const q = seriesQuery(title);
-  if (!q) return null;
   const c = await phoneCatalog();
-  const r = await c.search(q, 1);
-  const hit = pick(r.items, yearOf(title) || 0);
-  if (!hit) return null;
-  const item = r.items.filter((x) => x.id === hit.id && x.kind === 'tv')[0];
+  const item = await findShow(c, title, yearOf(title) || 0);
+  if (!item) return null;
+  const hit = item;
   let card: CatalogCard | null = null;
   try {
     card = await c.card('tv', hit.id);

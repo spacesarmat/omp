@@ -197,10 +197,22 @@ describe('series screen without TMDB', () => {
     await flush();
     expect(el.querySelector('.m-sh-backdrop')).toBeNull();
     expect(card).not.toHaveBeenCalled();
+    // every name variant of the title was tried once
+    const tried = search.mock.calls.length;
+    expect(tried).toBeGreaterThanOrEqual(1);
     unmount();
     mount();
     await flush();
-    expect(search).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenCalledTimes(tried);
+  });
+
+  it('the local name finds nothing: the original name is tried next', async () => {
+    const { findShow } = await import('../src/lib/tmdbShow');
+    const show = { ...FOUND[0], kind: 'tv' as const };
+    const s = vi.fn((q: string) => Promise.resolve({ items: q.indexOf('Star Trek') === 0 ? [show] : [] }));
+    const hit = await findShow({ search: s }, 'Звездный путь: Странные новые миры / Star Trek: Strange New Worlds / Сезон: 4', 0);
+    expect(hit && hit.id).toBe(show.id);
+    expect(s.mock.calls.map((c) => c[0])).toContain('Star Trek: Strange New Worlds');
   });
 
   it('pickShow prefers a series of the year, else the first series, never a film', () => {
