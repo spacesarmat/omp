@@ -10,7 +10,8 @@ export type MRoute =
   /** «Настройки» → «Мониторинг». */
   | { name: 'monitor' }
   | { name: 'torrent'; hash: string }
-  | { name: 'add'; link?: string }
+  /** `query` fills the tracker search; `run` starts it on arrival. */
+  | { name: 'add'; link?: string; query?: string; run?: boolean }
   | { name: 'remote' }
   | { name: 'nowPlaying' }
   | { name: 'tv' }

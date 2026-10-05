@@ -347,6 +347,14 @@ button, .m-btn {
 .m-disc-error-title { font-size: 17px; font-weight: 700; }
 .m-disc-error-actions { display: flex; flex-direction: column; gap: 8px; }
 .m-disc-foot { margin: 4px 0 0; text-align: center; }
+.m-srch-bar { display: flex; align-items: center; gap: 8px; }
+.m-srch-list { display: flex; flex-direction: column; gap: 10px; }
+.m-srch-row { display: flex; gap: 12px; align-items: center; padding: 0; border: none; background: none; color: inherit; text-align: left; }
+.m-srch-poster { flex: none; width: 64px; height: 92px; border-radius: 8px; background: var(--panel); object-fit: cover; }
+.m-srch-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.m-srch-rating { color: var(--accent); font-weight: 700; }
+.m-srch-lib { color: #8FE39A; font-weight: 700; }
+.m-srch-trackers { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 14px; background: var(--panel); }
 .m-set-attr { margin: 4px 0 0; text-align: center; }
 .m-bar-track { display: block; height: 6px; border-radius: 3px; background: #2A2F3A; overflow: hidden; }
 .m-bar-track.thin { height: 4px; border-radius: 2px; }

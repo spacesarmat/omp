@@ -1021,6 +1021,10 @@ export const en: EnDict<typeof ru> = {
     nokeyText: 'No TMDB key. Add it in the TorrServer settings (TMDB → API key). Your torrents are in the “Mine” tab.',
     howToKey: 'How to get a key',
     attribution: 'Data: TMDB',
+    searchLabel: 'Movie or series',
+    nothingFound: 'Nothing found in the catalog',
+    trackerAsk: 'Need a specific release?',
+    trackerSearch: 'Search “{q}” on trackers',
   },
   catalog: {
     querySeason: 'season {n}',

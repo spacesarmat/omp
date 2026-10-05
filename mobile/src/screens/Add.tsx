@@ -125,14 +125,14 @@ function progOf(h: SearchHandle): Prog {
   return { answered: h.answered().length, total: h.sourceIds.length, pending: h.pending(), failed: h.failed() };
 }
 
-export function Add({ link }: { link?: string }) {
+export function Add({ link, query: initialQuery, run }: { link?: string; query?: string; run?: boolean }) {
   // results of another server must not be added to this one
   const server = client.value ? client.value.baseUrl : null;
   if (memo.handle && memo.server !== server) resetAddSearch();
   const [value, setValue] = useState(link || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [query, setQueryState] = useState(memo.query);
+  const [query, setQueryState] = useState(initialQuery || memo.query);
   const [chosen, setChosenState] = useState<string[] | null>(memo.chosen);
   const [filters, setFiltersState] = useState<SearchFilters>(memo.filters);
   const [sort, setSortState] = useState<SortKey>(memo.sort);
@@ -286,7 +286,15 @@ export function Add({ link }: { link?: string }) {
     sync(h);
   };
 
-  const toggleChosen = (id: string) => {
+  // arriving from «Обзор» with a ready query: the field is filled and the search starts once
+  useEffect(() => {
+    const q = (initialQuery || '').trim();
+    if (!q) return;
+    memo.query = initialQuery || '';
+    if (run) runSearch(q, {});
+  }, []);
+
+  const toggleChosen =(id: string) => {
     const next = selected.indexOf(id) >= 0 ? selected.filter((x) => x !== id) : selected.concat([id]);
     setChosen(all.map((s) => s.id).filter((x) => next.indexOf(x) >= 0));
   };

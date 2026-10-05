@@ -1030,6 +1030,10 @@ export const ru = {
     nokeyText: 'Нет ключа TMDB. Добавьте его в настройках TorrServer (TMDB → API key). Ваши раздачи — во вкладке «Мои».',
     howToKey: 'Как получить ключ',
     attribution: 'Данные: TMDB',
+    searchLabel: 'Фильм или сериал',
+    nothingFound: 'Ничего не нашлось',
+    trackerAsk: 'Нужна конкретная раздача?',
+    trackerSearch: 'Искать «{q}» на трекерах',
   },
   catalog: {
     querySeason: '{n} сезон',

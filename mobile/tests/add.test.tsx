@@ -132,6 +132,18 @@ describe('Add', () => {
     expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 2 · 2 из 2 источников ответили');
   });
 
+  it('opens with a ready query and runs the search once on mount (route query + run)', async () => {
+    const s = vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<Add query="starbound" run />, el));
+    await flush();
+    expect((el.querySelector('input[aria-label="Поиск по источникам"]') as HTMLInputElement).value).toBe('starbound');
+    expect(s).toHaveBeenCalledWith('starbound', 'rutor');
+    expect(s).toHaveBeenCalledTimes(2);
+    expect(el.querySelectorAll('.m-result').length).toBe(2);
+  });
+
   it('«Добавить и смотреть на ТВ» adds then launches', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);

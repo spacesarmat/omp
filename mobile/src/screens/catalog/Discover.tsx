@@ -1,6 +1,8 @@
 // «Обзор» → «Новинки»: the TMDB novelties feed (movies and series), marked when already in the library.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { t, lang } from '../../../../src/i18n';
+import { t } from '../../../../src/i18n';
+import { Icon } from '../../ui/Icon';
+import { CatalogSearch, ratingText } from './CatalogSearch';
 import { navigate } from '../../nav';
 import { torrents } from '../../../../src/store/library';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
@@ -12,10 +14,7 @@ type Filter = Kind | 'all';
 
 const SKELETONS = 6;
 
-function ratingText(r: number): string {
-  const s = r.toFixed(1);
-  return '★ ' + (lang.peek() === 'en' ? s : s.replace('.', ','));
-}
+const SEARCH = 'M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5';
 
 function chips(): { id: Filter; label: string }[] {
   return [
@@ -38,6 +37,7 @@ export function Discover() {
   const [moreBusy, setMoreBusy] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
   const [reload, setReload] = useState(0);
+  const [searching, setSearching] = useState(false);
   // the current request: answers of an older one (another chip, a retry) are dropped
   const gen = useRef(0);
   const sentinel = useRef<HTMLDivElement>(null);
@@ -111,11 +111,15 @@ export function Discover() {
   }, [hasMore, moreFailed, feed]);
 
   const current = filter;
+  if (searching) return <CatalogSearch onClose={() => setSearching(false)} />;
   return (
     <div class="m-discover">
       <div class="m-disc-head">
         <h2>{t('discover.novelties')}</h2>
-        <span class="m-muted m-small">{t('discover.fromTmdb')}</span>
+        <span class="m-muted m-small m-grow">{t('discover.fromTmdb')}</span>
+        <button type="button" class="m-btn m-btn-secondary m-btn-sm" aria-label={t('add.search')} onClick={() => setSearching(true)}>
+          <Icon d={SEARCH} size={18} />
+        </button>
       </div>
       <div class="m-disc-chips" role="group" aria-label={t('discover.novelties')}>
         {chips().map((c) => (
