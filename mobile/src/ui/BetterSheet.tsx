@@ -12,15 +12,26 @@ import { shortTitle } from '../../../src/lib/libraryView';
 import { displayTitle } from '../../../src/lib/torrentName';
 import type { TorrentFile } from '../../../src/lib/episodes';
 import { qualityLabel } from '../../../src/monitor/quality';
-import { replaceWithResult, type ReplaceResult } from '../../../src/monitor/replace';
+import { replaceAbort, replaceWithResult, type ReplaceAbort, type ReplaceResult } from '../../../src/monitor/replace';
 import { findingsOf, removeFindings } from '../../../src/monitor/subs';
 import { BETTER_ID, EPISODES_ID } from '../../../src/monitor/types';
-import { carryProgress, findUpgrades, upgradeQuery, type UpgradeOutcome } from '../../../src/monitor/upgrade';
+import {
+  carryProgress,
+  findUpgrades,
+  isLowSeeds,
+  seasonsCovered,
+  upgradeQuery,
+  type UpgradeOutcome,
+} from '../../../src/monitor/upgrade';
+import { getSource } from '../../../src/sources/registry';
 import { resultKey, seedsText, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
+import type { LibraryTorrent } from '../../../src/monitor/newEpisodes';
 import type { Torrent } from '../../../src/api/types';
 
 const FILES_TIMEOUT_MS = 10000;
+/** The longest the sheet waits for a replace before it gives up as a timeout. */
+export const REPLACE_WAIT_MS = 45000;
 
 function sameHash(a: string, b: string): boolean {
   return (a || '').toLowerCase() === (b || '').toLowerCase();
@@ -30,9 +41,16 @@ function qualityOrUnknown(title: string): string {
   return qualityLabel(title) || t('torrent.better.unknown');
 }
 
-/** «18,2 ГБ · 940 сидов · rutor». */
-function rowMeta(r: SourceResult): string {
-  return [r.Size, seedsText(r.Seed || 0), sourceName(r.source)].filter(Boolean).join(' · ');
+/** «сезоны 1–3» / «все сезоны» when a series candidate holds more than the torrent's season. */
+function coverageNote(lib: LibraryTorrent, r: SourceResult): string {
+  const s = seasonsCovered(lib, r);
+  if (!s) return '';
+  return 'all' in s ? t('torrent.better.allSeasons') : t('torrent.better.seasons', { from: s.from, to: s.to });
+}
+
+/** «18,2 ГБ · 940 сидов · rutor · сезоны 1–3». */
+function rowMeta(lib: LibraryTorrent, r: SourceResult): string {
+  return [r.Size, seedsText(r.Seed || 0), sourceName(r.source), coverageNote(lib, r)].filter(Boolean).join(' · ');
 }
 
 /** The cards of the monitoring findings about the replaced torrent go with it. */
@@ -42,10 +60,29 @@ function dropFindingsOf(hash: string): void {
   findingsOf(EPISODES_ID).forEach((f) => f.episodes && f.episodes.torrentHash === h && removeFindings(EPISODES_ID, f.key));
 }
 
+interface Failure {
+  text: string;
+  /** The site to sign in to («Войти»), for a login / link failure. */
+  source?: string;
+}
+
+/** The text for a failed replace: what went wrong, and that the user's torrent is untouched. */
+export function failureOf(res: Extract<ReplaceResult, { ok: false }>, r: SourceResult): Failure {
+  if (res.cause === 'timeout') return { text: t('torrent.better.failTimeout') };
+  if (res.cause === 'login' || res.cause === 'link') {
+    return { text: t('torrent.better.failLogin', { site: sourceName(r.source) }), source: r.source };
+  }
+  // both torrents are kept: the message says so itself
+  if (res.cause === 'both') return { text: res.error };
+  return { text: [res.error, t('torrent.better.untouched')].filter(Boolean).join(' ') };
+}
+
 /**
  * «Найти в лучшем качестве»: searches now for releases of the same film / season in a better quality, lists them best
- * first; «Заменить» confirms «1080p WEB-DL → 2160p Remux» and replaces the torrent in place (history, skip settings,
- * category and the phone's watch positions carry over). Nothing better: «Искать все раздачи» opens «Добавить».
+ * first (few seeds last, with a warning); «Заменить» confirms «1080p WEB-DL → 2160p Remux» and replaces the torrent in
+ * place (history, skip settings, category and the phone's watch positions carry over). «Отмена» stops a running
+ * replace and takes back the new torrent. A failure says why under the list, the torrent stays. Nothing better:
+ * «Искать все раздачи» opens «Добавить».
  */
 export function BetterSheet({
   torrent,
@@ -61,13 +98,14 @@ export function BetterSheet({
   onClose: () => void;
 }) {
   const title = displayTitle(torrent);
-  const lib = { hash: torrent.hash, title: torrent.title || title, category: torrent.category, data: '', file_stats: files };
+  const lib: LibraryTorrent = { hash: torrent.hash, title: torrent.title || title, category: torrent.category, data: '', file_stats: files };
   const [outcome, setOutcome] = useState<UpgradeOutcome | null>(null);
   const [picked, setPicked] = useState<SourceResult | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [running, setRunning] = useState<ReplaceAbort | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
   const [alive] = useState({ v: true });
   const [search] = useState(() => findUpgrades(phoneSourceContext(), lib));
+  const busy = !!running;
 
   useEffect(() => {
     alive.v = true;
@@ -84,6 +122,12 @@ export function BetterSheet({
     const q = upgradeQuery(lib);
     onClose();
     navigate({ name: 'add', query: q, run: true });
+  };
+
+  const signIn = (id: string) => {
+    const src = getSource(id);
+    onClose();
+    navigate(src && src.login ? { name: 'sourceSite', id } : { name: 'sources' });
   };
 
   const newFilesOf = (hash: string): Promise<TorrentFile[]> => {
@@ -109,12 +153,15 @@ export function BetterSheet({
 
   const replace = async (r: SourceResult) => {
     const c = client.value;
-    if (!c) return setError(t('errors.noServerSelected'));
-    setBusy(true);
-    setError('');
-    const res: ReplaceResult = await replaceWithResult(c, torrent.hash, r, phoneSourceContext()).catch(
-      (): ReplaceResult => ({ ok: false, error: t('monitor.replace.failed') }),
-    );
+    if (!c) return setFailure({ text: t('errors.noServerSelected') });
+    const ab = replaceAbort();
+    setRunning(ab);
+    setFailure(null);
+    const res: ReplaceResult = await replaceWithResult(c, torrent.hash, r, phoneSourceContext(), {
+      abort: ab,
+      timeoutMs: REPLACE_WAIT_MS,
+      deadlineMs: REPLACE_WAIT_MS,
+    }).catch((): ReplaceResult => ({ ok: false, error: t('monitor.replace.failed') }));
     if (res.ok) {
       const fresh = await newFilesOf(res.hash);
       carryProgress(torrent.hash, files, res.hash, fresh);
@@ -127,18 +174,33 @@ export function BetterSheet({
       return;
     }
     if (!alive.v) return;
-    setBusy(false);
-    setError(res.error);
+    setRunning(null);
+    // back to the list: another candidate can be picked
+    setPicked(null);
+    if (res.cause !== 'cancelled') setFailure(failureOf(res, r));
+    if (res.cause === 'both') void refreshTorrents(c).catch(() => {});
+  };
+
+  // «Отмена»: a running replace stops waiting (the new torrent is taken back), else back to the list
+  const cancel = () => {
+    if (running) running.abort();
+    else setPicked(null);
   };
 
   if (picked) {
     const oldSize = torrent.torrent_size ? formatBytes(torrent.torrent_size) : '';
+    const covered = coverageNote(lib, picked);
     return (
-      <Sheet label={t('monitor.replaceSheet.title')} onClose={() => !busy && setPicked(null)}>
+      <Sheet label={t('monitor.replaceSheet.title')} onClose={cancel}>
         <div class="m-sheet-title">{t('monitor.replaceSheet.title')}</div>
         <div class="m-accent" data-block="better-change">
           {have + ' → ' + qualityOrUnknown(picked.Title)}
         </div>
+        {isLowSeeds(picked) && (
+          <div class="m-hint-warn" data-block="low-seeds">
+            {t('torrent.better.lowSeedsWarn')}
+          </div>
+        )}
         <div class="m-rep-box">
           <div class="m-muted m-small">{t('monitor.replaceSheet.now')}</div>
           <div class="m-rep-line">{[shortTitle(title), oldSize].filter(Boolean).join(' · ')}</div>
@@ -148,7 +210,7 @@ export function BetterSheet({
         </div>
         <div class="m-rep-box new">
           <div class="m-accent m-small">{[t('monitor.replaceSheet.fresh'), sourceName(picked.source), seedsText(picked.Seed || 0)].join(' · ')}</div>
-          <div class="m-rep-line">{[shortTitle(picked.Title), picked.Size].filter(Boolean).join(' · ')}</div>
+          <div class="m-rep-line">{[shortTitle(picked.Title), picked.Size, covered].filter(Boolean).join(' · ')}</div>
         </div>
         <div class="m-rep-moves">
           <div>✓ {t('monitor.replaceSheet.keepsHistory')}</div>
@@ -160,13 +222,8 @@ export function BetterSheet({
             {t('monitor.replaceSheet.busy')}
           </div>
         )}
-        {error && (
-          <div class="m-error" role="alert">
-            {error}
-          </div>
-        )}
         <div class="m-marks-actions">
-          <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={() => setPicked(null)}>
+          <button type="button" class="m-btn m-btn-secondary" data-action="cancel-replace" onClick={cancel}>
             {t('common.cancel')}
           </button>
           <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={() => void replace(picked)}>
@@ -181,6 +238,16 @@ export function BetterSheet({
     <Sheet label={t('torrent.better.find')} onClose={onClose}>
       <div class="m-sheet-title">{t('torrent.better.find')}</div>
       <div class="m-muted m-small">{[shortTitle(title), t('torrent.better.have', { quality: have })].join(' · ')}</div>
+      {failure && (
+        <div class="m-error" role="alert" data-block="better-failure">
+          <span>{failure.text}</span>
+          {failure.source && (
+            <button type="button" class="m-link-btn" onClick={() => signIn(failure.source!)}>
+              {getSource(failure.source) && getSource(failure.source)!.login ? t('torrent.better.signIn') : t('torrent.better.openSources')}
+            </button>
+          )}
+        </div>
+      )}
       {!outcome && (
         <div class="m-better-wait" data-block="better-searching">
           <div class="m-muted" role="status">
@@ -210,22 +277,28 @@ export function BetterSheet({
         <div class="m-sheet-scroll m-better-list" data-block="better-list">
           {outcome.candidates.map((r) => {
             const chips = qualityLabel(r.Title).split(' ').filter(Boolean);
+            const low = isLowSeeds(r);
             return (
               <div class="m-result m-result-card" key={resultKey(r)} data-better-row="">
                 <div class="m-result-title" title={r.Title}>
                   {shortTitle(r.Title)}
                 </div>
-                {chips.length > 0 && (
+                {(chips.length > 0 || low) && (
                   <div class="m-badges">
                     {chips.map((b) => (
                       <span class="m-badge static" key={b}>
                         {b}
                       </span>
                     ))}
+                    {low && (
+                      <span class="m-badge static m-badge-warn" data-low-seeds="">
+                        {t('torrent.better.lowSeeds')}
+                      </span>
+                    )}
                   </div>
                 )}
                 <div class="m-result-meta m-small">
-                  <span class="m-muted">{rowMeta(r)}</span>
+                  <span class="m-muted">{rowMeta(lib, r)}</span>
                 </div>
                 <div class="m-result-actions">
                   <span class="m-grow" />
@@ -234,7 +307,7 @@ export function BetterSheet({
                     class="m-btn m-btn-primary m-btn-sm"
                     aria-label={t('torrent.better.replaceAria', { title: r.Title })}
                     onClick={() => {
-                      setError('');
+                      setFailure(null);
                       setPicked(r);
                     }}
                   >

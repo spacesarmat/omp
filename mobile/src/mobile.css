@@ -990,6 +990,8 @@ button, .m-btn {
 .m-better-wait, .m-better-empty { display: flex; flex-direction: column; gap: 12px; padding: 12px 0 4px; }
 .m-better-list { display: flex; flex-direction: column; gap: 10px; }
 .m-better-list .m-badges { margin-top: 2px; }
+.m-better-list .m-badge-warn { background: rgba(255, 138, 128, .16); color: #FF8A80; }
+[data-block="better-failure"] { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .m-monitor-last { gap: 4px; line-height: 1.45; }
 .m-monitor-last-head { font-weight: 700; }
 .m-sheet .m-set-pick { background: var(--panel-2); }

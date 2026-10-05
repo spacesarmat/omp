@@ -189,6 +189,125 @@ describe('«Найти в лучшем качестве» · series', () => {
   });
 });
 
+describe('«Найти в лучшем качестве» · few seeds, packs, failures, cancel', () => {
+  const pickFirst = async () => {
+    click(el.querySelector('[data-better-row] .m-btn-primary'));
+    await flush();
+  };
+
+  it('few seeds: last, with a chip; choosing it warns before the replace', async () => {
+    found = () =>
+      Promise.resolve([
+        row({ Title: 'Северный ветер (2026) 2160p Remux', Seed: 2, Hash: 'd'.repeat(40), Magnet: 'magnet:?xt=urn:btih:' + 'd'.repeat(40) }),
+        row({ Title: 'Северный ветер (2026) BDRip 1080p', Seed: 50 }),
+      ]);
+    await mountTorrent(film);
+    await openBetter();
+    const rows = Array.from(el.querySelectorAll('[data-better-row]'));
+    expect(rows[0].textContent).toContain('BDRip');
+    expect(rows[0].querySelector('[data-low-seeds]')).toBeNull();
+    expect(rows[1].querySelector('[data-low-seeds]')!.textContent).toBe('мало сидов');
+    click(rows[1].querySelector('.m-btn-primary'));
+    await flush();
+    expect(el.querySelector('[data-block="low-seeds"]')!.textContent).toBe('У раздачи мало сидов — получить её может не получиться');
+    expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it('a pack of more seasons says so in its row', async () => {
+    found = () => Promise.resolve([row({ Title: 'Дом дракона (2024) Сезоны 1-3 WEB-DL 2160p' })]);
+    await mountTorrent(show);
+    await openBetter();
+    expect(el.querySelector('[data-better-row]')!.textContent).toContain('сезоны 1–3');
+  });
+
+  it('a timeout: says why, the list stays for another pick', async () => {
+    found = () => Promise.resolve([row({})]);
+    replaceMock.mockResolvedValue({ ok: false, error: 'x', cause: 'timeout' });
+    await mountTorrent(film);
+    await openBetter();
+    await pickFirst();
+    click(byText('Заменить'));
+    await flush();
+    expect(el.querySelector('[data-block="better-failure"]')!.textContent).toBe(
+      'Не удалось получить раздачу: TorrServer не дождался данных — возможно, мало сидов. Ваша раздача не тронута.',
+    );
+    expect(el.querySelectorAll('[data-better-row]').length).toBe(1);
+  });
+
+  it('a site that wants a login: names it, «Войти» opens its page', async () => {
+    found = () => Promise.resolve([row({})]);
+    registerSource({ id: 'locked', name: 'Kinozal', kind: 'builtin', search: () => Promise.resolve([]), login: () => Promise.resolve() } as never);
+    replaceMock.mockImplementation(async () => ({ ok: false, error: 'x', cause: 'login' }));
+    try {
+      found = () => Promise.resolve([row({ source: 'locked' })]);
+      await mountTorrent(film);
+      await openBetter();
+      await pickFirst();
+      click(byText('Заменить'));
+      await flush();
+      const fail = el.querySelector('[data-block="better-failure"]')!;
+      expect(fail.textContent).toContain('Сайт не отдал раздачу — нужен вход в Kinozal. Ваша раздача не тронута.');
+      click(Array.from(fail.querySelectorAll('button')).find((b) => b.textContent === 'Войти'));
+      expect(currentRoute.value).toEqual({ name: 'sourceSite', id: 'locked' });
+    } finally {
+      unregisterSource('locked');
+    }
+  });
+
+  it('anything else: the error plus «Ваша раздача не тронута.»', async () => {
+    found = () => Promise.resolve([row({})]);
+    replaceMock.mockResolvedValue({ ok: false, error: 'Сервер недоступен.', cause: 'other' });
+    await mountTorrent(film);
+    await openBetter();
+    await pickFirst();
+    click(byText('Заменить'));
+    await flush();
+    expect(el.querySelector('[data-block="better-failure"]')!.textContent).toBe('Сервер недоступен. Ваша раздача не тронута.');
+  });
+
+  it('«Отмена» stays enabled during the replace and stops it with a 45 s cap', async () => {
+    found = () => Promise.resolve([row({})]);
+    replaceMock.mockImplementation(
+      (_c: unknown, _h: string, _r: unknown, _ctx: unknown, o: { abort: { onAbort(fn: () => void): void }; deadlineMs: number }) =>
+        new Promise((resolve) => o.abort.onAbort(() => resolve({ ok: false, error: 'x', cause: 'cancelled' }))),
+    );
+    await mountTorrent(film);
+    await openBetter();
+    await pickFirst();
+    click(byText('Заменить'));
+    await flush();
+    expect(el.textContent).toContain('Заменяю…');
+    expect(replaceMock.mock.calls[0][4].deadlineMs).toBe(45000);
+    const cancel = el.querySelector('[data-action="cancel-replace"]') as HTMLButtonElement;
+    expect(cancel.disabled).toBe(false);
+    click(cancel);
+    await flush();
+    expect(el.textContent).not.toContain('Заменяю…');
+    expect(el.querySelector('[data-block="better-failure"]')).toBeNull();
+    expect(el.querySelectorAll('[data-better-row]').length).toBe(1);
+  });
+});
+
+describe('«Найти в лучшем качестве» in English', () => {
+  it('the warnings and the failures have no Russian', async () => {
+    applyLanguageSetting('en');
+    const en: T = { ...film, title: 'North Wind (2026) WEB-DL 1080p' } as T;
+    found = () => Promise.resolve([row({ Title: 'North Wind (2026) 2160p Remux', Seed: 2, Size: '18.2 GB' })]);
+    replaceMock.mockResolvedValue({ ok: false, error: 'x', cause: 'timeout' });
+    await mountTorrent(en);
+    await openBetter();
+    expect(el.querySelector('[data-low-seeds]')!.textContent).toBe('few seeds');
+    click(el.querySelector('[data-better-row] .m-btn-primary'));
+    await flush();
+    expect(el.querySelector('[data-block="low-seeds"]')!.textContent).toBe('This release has few seeds — getting it may not work');
+    click(byText('Replace'));
+    await flush();
+    const fail = el.querySelector('[data-block="better-failure"]')!.textContent!;
+    expect(fail).toContain('Your release is untouched.');
+    expect(el.querySelector('[role=dialog]')!.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+});
+
 describe('«Найти в лучшем качестве» in English', () => {
   beforeEach(() => applyLanguageSetting('en'));
 

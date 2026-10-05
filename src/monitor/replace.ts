@@ -5,6 +5,8 @@
 import { t as tr } from '../i18n';
 import type { Torrent } from '../api/types';
 import { parseTorrentData } from '../api/torrserver';
+import { isApiError } from '../api/http';
+import { isLoginRequired } from '../sources/types';
 import { baseName, episodeLabel, fileKind, parseEpisode, type TorrentFile } from '../lib/episodes';
 import { JOURNAL_KEY, JOURNAL_MAX, JOURNAL_VERSION, parseData, serializeData, type JournalEntry } from '../lib/journal';
 import { baseOf, type JournalClient } from '../store/journal';
@@ -20,9 +22,42 @@ export interface ReplaceClient extends JournalClient {
   remove(hash: string): Promise<void>;
 }
 
+/** Why a replace failed: no data from TorrServer in time, the site wants a login, the link could not be had, the user stopped it, the old one could not be removed (both are kept), anything else. */
+export type ReplaceCause = 'timeout' | 'login' | 'link' | 'cancelled' | 'both' | 'other';
+
+/** «Отмена» of a running replace: it stops waiting and takes back the new torrent if one was added. */
+export interface ReplaceAbort {
+  readonly aborted: boolean;
+  abort(): void;
+  onAbort(fn: () => void): void;
+}
+
+export function replaceAbort(): ReplaceAbort {
+  const fns: (() => void)[] = [];
+  const a = {
+    aborted: false,
+    abort() {
+      if (a.aborted) return;
+      a.aborted = true;
+      fns.splice(0).forEach((fn) => fn());
+    },
+    onAbort(fn: () => void) {
+      if (a.aborted) fn();
+      else fns.push(fn);
+    },
+  };
+  return a;
+}
+
 export interface ReplaceOptions {
   /** How long to wait for the file list of the new torrent, ms (default 60000). */
   timeoutMs?: number;
+  /**
+   * The whole wait before the old torrent is removed, ms (absent: none). When it runs out the replace stops as a
+   * timeout and the new torrent is taken back.
+   */
+  deadlineMs?: number;
+  abort?: ReplaceAbort;
   /**
    * Title of the new release (the search result's Title). The old title is not carried: it holds the old episode range.
    * Without it the old torrent's title is used; the title is never empty.
@@ -30,7 +65,15 @@ export interface ReplaceOptions {
   title?: string;
 }
 
-export type ReplaceResult = { ok: true; hash: string } | { ok: false; error: string };
+export type ReplaceResult = { ok: true; hash: string } | { ok: false; error: string; cause?: ReplaceCause };
+
+const BTIH = /xt=urn:btih:([0-9a-f]{40})(?![0-9a-z])/i;
+
+/** The infohash a magnet link names (lowercase), '' for anything else. */
+function linkHash(link: string): string {
+  const m = BTIH.exec(link || '');
+  return m ? m[1].toLowerCase() : '';
+}
 
 const DEFAULT_TIMEOUT = 60000;
 
@@ -128,13 +171,19 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 /** A failure with the text for the user (a rejection of anything else becomes the generic text). */
 class Step {
   readonly msg: string;
-  constructor(msg: string) {
+  readonly cause: ReplaceCause;
+  constructor(msg: string, cause?: ReplaceCause) {
     this.msg = msg;
+    this.cause = cause || 'other';
   }
 }
 
-function stop(msg: string): Promise<never> {
-  return Promise.reject(new Step(msg));
+function stop(msg: string, cause?: ReplaceCause): Promise<never> {
+  return Promise.reject(new Step(msg, cause));
+}
+
+function isTimeout(e: unknown): boolean {
+  return isApiError(e) && e.kind === 'timeout';
 }
 
 function find(all: Torrent[] | null | undefined, hash: string): Torrent | undefined {
@@ -166,8 +215,14 @@ interface Prepared {
 export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, opts?: ReplaceOptions): Promise<ReplaceResult> {
   const timeoutMs = opts && opts.timeoutMs ? opts.timeoutMs : DEFAULT_TIMEOUT;
   const newTitle = ((opts && opts.title) || '').trim();
+  const abort = opts && opts.abort;
+  const deadlineMs = opts && opts.deadlineMs ? opts.deadlineMs : 0;
   let added: Torrent | null = null;
   let preexisting = false;
+  // the wait was stopped («Отмена» or the deadline): nothing goes on, a torrent added late is taken back
+  let halted = false;
+  // the old torrent is being removed: past this point the replace is not stopped any more
+  let committing = false;
 
   const undo = (): Promise<void> => {
     if (!added || preexisting) return Promise.resolve();
@@ -184,7 +239,15 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
       .add({ link, title: newTitle || keptTitle(old), poster: old.poster || '', category: old.category || '' })
       .then(
         (t) => t,
-        () => stop(tr('monitor.replace.addFailed')),
+        (e) => {
+          // the add can time out here while TorrServer goes on and adds the magnet: take that one back too
+          const h = linkHash(link);
+          if (h && !find(all, h) && !sameHash(h, old.hash)) {
+            preexisting = false;
+            added = { hash: h } as Torrent;
+          }
+          return stop(tr('monitor.replace.addFailed'), isTimeout(e) ? 'timeout' : 'other');
+        },
       )
       .then((t) => {
         if (!t || !t.hash) return stop(tr('monitor.replace.notAccepted'));
@@ -192,14 +255,15 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
         // a torrent that was there before this call is never taken back
         preexisting = !!find(all, t.hash);
         added = t;
+        if (halted) return stop(tr('monitor.replace.cancelledByUser'), 'cancelled');
         return withTimeout(c.loadInfo(t.hash), timeoutMs).then(
           (info) => ({ t, info }),
-          () => stop(tr('monitor.replace.noFileList')),
+          () => stop(tr('monitor.replace.noFileList'), 'timeout'),
         );
       })
       .then((x) => {
         const newFiles = filesOf(x.info);
-        if (!newFiles.length) return stop(tr('monitor.replace.noFiles'));
+        if (!newFiles.length) return stop(tr('monitor.replace.noFiles'), 'timeout');
         // the list holds the torrent as the server stores it (its own `data`), the same source the journal writes read
         return c.list().then(
           (all2) => ({ info: x.info, listed: find(all2, x.t.hash) || { ...x.t, ...x.info }, newFiles, oldNow: find(all2, old.hash) || old }),
@@ -275,8 +339,10 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
         if (!old) return stop(tr('monitor.replace.notFound'));
         const oldParsed = parseData(old.data);
         if (!oldParsed) return stop(tr('monitor.replace.cancelled'));
-        return prepare(old, oldParsed, all).then((p) =>
-          c.remove(old.hash).then(
+        return prepare(old, oldParsed, all).then((p) => {
+          if (halted) return stop(tr('monitor.replace.cancelledByUser'), 'cancelled');
+          committing = true;
+          return c.remove(old.hash).then(
             (): ReplaceResult => {
               added = null;
               swapInLibrary(old.hash, p.done);
@@ -286,16 +352,45 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
               // both exist now and the history is on the new one: keep both and say so
               added = null;
               swapInLibrary('', p.done);
-              return { ok: false, error: tr('monitor.replace.removeOldFailed') };
+              return { ok: false, error: tr('monitor.replace.removeOldFailed'), cause: 'both' };
             },
-          ),
-        );
+          );
+        });
       });
 
-  return run().then(
+  const inner = run().then(
     (r) => r,
-    (e) => undo().then((): ReplaceResult => ({ ok: false, error: e instanceof Step ? e.msg : tr('monitor.replace.failed') })),
+    (e) =>
+      undo().then(
+        (): ReplaceResult => ({
+          ok: false,
+          error: e instanceof Step ? e.msg : tr('monitor.replace.failed'),
+          cause: e instanceof Step ? e.cause : 'other',
+        }),
+      ),
   );
+  if (!abort && !deadlineMs) return inner;
+
+  // «Отмена» or the deadline: stop waiting now, take back what was added (a late add is taken back by `prepare`)
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let settled = false;
+  const halt = new Promise<ReplaceResult>((resolve) => {
+    const finish = (cause: ReplaceCause, error: string) => {
+      if (settled || halted || committing) return;
+      halted = true;
+      undo().then(() => resolve({ ok: false, error, cause }));
+    };
+    if (abort) abort.onAbort(() => finish('cancelled', tr('monitor.replace.cancelledByUser')));
+    if (deadlineMs) timer = setTimeout(() => finish('timeout', tr('monitor.replace.noFileList')), deadlineMs);
+  });
+  const done = inner.then((r) => {
+    settled = true;
+    return r;
+  });
+  return Promise.race([done, halt]).then((r) => {
+    if (timer) clearTimeout(timer);
+    return r;
+  });
 }
 
 /** The same for a search result (its link is resolved like «Добавить» does). */
@@ -306,8 +401,21 @@ export function replaceWithResult(
   ctx: SourceContext,
   opts?: ReplaceOptions,
 ): Promise<ReplaceResult> {
-  return resolveLink(result, ctx).then(
-    (link) => replaceTorrent(c, oldHash, link, { ...(opts || {}), title: (opts && opts.title) || result.Title }),
-    (e): ReplaceResult => ({ ok: false, error: e && typeof e.message === 'string' && e.message ? e.message : tr('monitor.replace.noLink') }),
+  const ab = opts && opts.abort;
+  const cancelled = (): ReplaceResult => ({ ok: false, error: tr('monitor.replace.cancelledByUser'), cause: 'cancelled' });
+  // «Отмена» while the site is asked for the link: nothing was added yet
+  const link: Promise<string | null> = ab
+    ? Promise.race([resolveLink(result, ctx), new Promise<null>((resolve) => ab.onAbort(() => resolve(null)))])
+    : resolveLink(result, ctx);
+  return link.then(
+    (l) =>
+      l === null || (ab && ab.aborted)
+        ? cancelled()
+        : replaceTorrent(c, oldHash, l, { ...(opts || {}), title: (opts && opts.title) || result.Title }),
+    (e): ReplaceResult => ({
+      ok: false,
+      error: e && typeof e.message === 'string' && e.message ? e.message : tr('monitor.replace.noLink'),
+      cause: isLoginRequired(e) ? 'login' : 'link',
+    }),
   );
 }

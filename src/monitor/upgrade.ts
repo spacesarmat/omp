@@ -8,6 +8,7 @@
 import { guessCategory } from '../lib/categoryGuess';
 import type { TorrentFile } from '../lib/episodes';
 import { displayTitle } from '../lib/torrentName';
+import { parseRelease } from '../sources/filters';
 import { searchAll, type SearchHandle } from '../sources/search';
 import type { SourceContext, SourceResult } from '../sources/types';
 import { clearProgress, getLocalProgress, saveProgress } from '../store/progress';
@@ -19,6 +20,9 @@ import { isBetter } from './quality';
 import { mapFiles } from './replace';
 
 export type UpgradeKind = 'film' | 'series';
+
+// a pack of the whole series («все сезоны», «полный сериал», «Complete Series», «All Seasons»); no \b next to Cyrillic
+const ALL_SEASONS = /(?:^|[^а-яёa-z])(?:все\s+сезоны|полный\s+сериал)|complete\s+series|all\s+seasons/i;
 
 /** A library series (category «Сериалы», or an empty one guessed as a series) whose season and episodes are known. */
 function isUpgradeSeries(t: LibraryTorrent): boolean {
@@ -62,7 +66,10 @@ export function betterSeriesReleases(t: LibraryTorrent, results: SourceResult[])
       if (hash && r.hash === hash) return false;
       if (guessCategory(r.Title) === 'music') return false;
       const range = parseEpisodeRange(r.Title);
-      if (range.seasonTo !== undefined) {
+      const pack = ALL_SEASONS.test(r.Title) || range.seasonTo !== undefined;
+      if (ALL_SEASONS.test(r.Title)) {
+        // «все сезоны» / «Complete Series»: every season, ours too
+      } else if (range.seasonTo !== undefined) {
         // a pack of seasons: the whole seasons, ours among them
         if (range.season === undefined || have.season < range.season || have.season > range.seasonTo) return false;
       } else {
@@ -71,19 +78,45 @@ export function betterSeriesReleases(t: LibraryTorrent, results: SourceResult[])
         if (range.from !== undefined && have.from !== undefined && range.from > have.from) return false;
       }
       const year = yearOf(r.Title);
-      if (haveYear !== null && year !== null && Math.abs(year - haveYear) > 1) return false;
+      // a pack names the year of its first season: it may be earlier than ours, never later
+      if (haveYear !== null && year !== null && (pack ? year - haveYear > 1 : Math.abs(year - haveYear) > 1)) return false;
       if (!seriesNames(r.Title).some((n) => names.indexOf(n) >= 0)) return false;
       return isBetter(r.Title, title);
     }),
   );
 }
 
-/** The better releases of the torrent among `results`, best first (rank, then seeds); [] when it is not offered. */
+/** Fewer seeds than this: the release may never arrive; it goes after every healthy one. */
+export const LOW_SEEDS = 5;
+
+export function isLowSeeds(r: Pick<SourceResult, 'Seed'>): boolean {
+  return (r.Seed || 0) < LOW_SEEDS;
+}
+
+/**
+ * The better releases of the torrent among `results`, best first (rank, then seeds), the ones with few seeds after
+ * every healthy one whatever their rank; [] when it is not offered.
+ */
 export function pickUpgrades(t: LibraryTorrent, results: SourceResult[]): SourceResult[] {
   const kind = upgradeKind(t);
-  if (kind === 'film') return betterFilmReleases(t, results);
-  if (kind === 'series') return betterSeriesReleases(t, results);
-  return [];
+  const list = kind === 'film' ? betterFilmReleases(t, results) : kind === 'series' ? betterSeriesReleases(t, results) : [];
+  return list.filter((r) => !isLowSeeds(r)).concat(list.filter(isLowSeeds));
+}
+
+/** Seasons a series candidate holds beyond the torrent's one: a range, or every season; null when just ours. */
+export type SeasonsCovered = { all: true } | { from: number; to: number };
+
+export function seasonsCovered(t: LibraryTorrent, r: Pick<SourceResult, 'Title'>): SeasonsCovered | null {
+  const have = libraryRange(t);
+  if (!have) return null;
+  if (ALL_SEASONS.test(r.Title)) return { all: true };
+  const range = parseEpisodeRange(r.Title);
+  if (range.season !== undefined && range.seasonTo !== undefined && range.seasonTo > range.season) {
+    return { from: range.season, to: range.seasonTo };
+  }
+  const s = parseRelease(r.Title).seasons;
+  if (s.length > 1) return { from: s[0], to: s[s.length - 1] };
+  return null;
 }
 
 export interface UpgradeOutcome {

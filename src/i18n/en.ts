@@ -820,6 +820,7 @@ export const en: EnDict<typeof ru> = {
       removeOldFailed: 'The new torrent was added, but the old one could not be removed.',
       failed: 'Could not replace the torrent.',
       noLink: 'Could not get the torrent link',
+      cancelledByUser: 'The replace was cancelled.',
     },
     sub: {
       title: 'Subscription',
@@ -1299,6 +1300,15 @@ export const en: EnDict<typeof ru> = {
       noAnswer: 'The sources did not answer — try later',
       searchAll: 'Search all releases',
       replaceAria: 'Replace with {title}',
+      lowSeeds: 'few seeds',
+      lowSeedsWarn: 'This release has few seeds — getting it may not work',
+      seasons: 'seasons {from}–{to}',
+      allSeasons: 'all seasons',
+      failTimeout: 'Could not get the release: TorrServer did not get its data in time — maybe too few seeds. Your release is untouched.',
+      failLogin: 'The site did not give the release — sign in to {site}. Your release is untouched.',
+      untouched: 'Your release is untouched.',
+      signIn: 'Sign in',
+      openSources: 'Search sources',
     },
   },
   add: {
