@@ -12,7 +12,6 @@ import { actions, filesOf, recordPhoneWatch, streamUrlFor, tvServerUrl, useTvLau
 import { client, activeServer } from '../../../src/store/servers';
 import { torrents, refreshTorrents, findPosters, repairTitles } from '../../../src/store/library';
 import {
-  continueWatching,
   refreshViewed,
   progressVersion,
   serverViewed,
@@ -34,7 +33,7 @@ import { isWatchedSeries } from '../../../src/monitor/newEpisodes';
 import { findingsOf, removeFindings } from '../../../src/monitor/subs';
 import { EPISODES_ID } from '../../../src/monitor/types';
 import { reloadMonitor } from '../monitor/ui';
-import { deleteTorrents } from '../lib/torrentActions';
+import { deleteTorrents, watchTarget } from '../lib/torrentActions';
 import { displayTitle } from '../../../src/lib/torrentName';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 
@@ -376,8 +375,7 @@ export function Torrent({ hash }: { hash: string }) {
   ].filter(Boolean);
 
   // where to continue: the latest started file of this torrent, else the first one
-  const last = continueWatching(torrents.value, 1000).find((e) => e.torrent.hash === hash);
-  const target = (last && files.find((f) => f.id === last.fileIndex)) || first;
+  const target = watchTarget(hash, files);
   const at = target ? resumePosition(hash, target.id) : 0;
   const targetCode = target ? fileCode(target) : '';
   const mainLabel = at > 0

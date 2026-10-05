@@ -2,20 +2,18 @@ import { useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
-import { LaunchError } from './LaunchError';
 import { TorrentRenameSheet } from './TorrentRenameSheet';
 import { showToast } from './toast';
 import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { filesOf, useTvLaunch } from '../watch';
-import { deleteTorrents, reportDeleted } from '../lib/torrentActions';
+import { filesOf } from '../watch';
+import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
 import { client } from '../../../src/store/servers';
 import { torrents, refreshTorrents } from '../../../src/store/library';
-import { continueWatching, getLocalProgress, resumePosition } from '../../../src/store/progress';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 import { displayTitle } from '../../../src/lib/torrentName';
 import { shortTitle } from '../../../src/lib/libraryView';
-import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
+import { playableFiles } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 
 const OPEN = 'M9 6l6 6-6 6';
@@ -25,12 +23,21 @@ const CHECK = 'M5 12.5l4.5 4.5L19 7';
 const TRASH = 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3';
 
 /** What a long press on a torrent in «Мои» opens: open, watch on the TV, rename, select, delete. */
-export function TorrentMenu({ tor, onClose, onSelect }: { tor: Torrent; onClose: () => void; onSelect?: (hash: string) => void }) {
+export function TorrentMenu({
+  tor,
+  onClose,
+  onSelect,
+  onWatchTv,
+}: {
+  tor: Torrent;
+  onClose: () => void;
+  onSelect?: (hash: string) => void;
+  /** Runs the launch outside the menu (it closes at once), so its toast and the jump to the remote survive. */
+  onWatchTv?: (tor: Torrent) => void;
+}) {
   const tv = activeTv.value;
-  const launch = useTvLaunch();
   const [renaming, setRenaming] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   const title = displayTitle(tor);
 
   const open = () => {
@@ -38,23 +45,11 @@ export function TorrentMenu({ tor, onClose, onSelect }: { tor: Torrent; onClose:
     navigate({ name: 'torrent', hash: tor.hash });
   };
 
-  // the same target as the card's main button: the latest started file, else the first one
-  const watch = async () => {
-    const files = playableFiles(filesOf(tor));
-    const last = continueWatching(torrents.value, 1000).find((e) => e.torrent.hash === tor.hash);
-    const target = (last && files.find((f) => f.id === last.fileIndex)) || files[0];
-    const id = target ? target.id : 1;
-    setError('');
-    await launch.start({
-      hash: tor.hash,
-      file: id,
-      at: resumePosition(tor.hash, id),
-      duration: getLocalProgress(tor.hash, id)?.duration || undefined,
-      label: [target ? episodeLabel(target.path) : '', target ? stripExt(baseName(target.path)) : title].filter(Boolean).join(' · '),
-      onBusy: setBusy,
-      onError: setError,
-      onLaunched: () => onClose(),
-    });
+  // the same target as the card's main button; no playable file: nothing to start
+  const canWatch = !!watchTarget(tor.hash, playableFiles(filesOf(tor)));
+  const watch = () => {
+    onClose();
+    onWatchTv?.(tor);
   };
 
   const rename = (raw: string) => {
@@ -86,8 +81,8 @@ export function TorrentMenu({ tor, onClose, onSelect }: { tor: Torrent; onClose:
         <Icon d={OPEN} size={22} />
         <span class="m-opt-name">{t('common.open')}</span>
       </button>
-      {tv && (
-        <button type="button" class="m-opt" disabled={busy} onClick={() => void watch()}>
+      {tv && onWatchTv && (
+        <button type="button" class="m-opt" disabled={busy || !canWatch} onClick={watch}>
           <Icon d={TV_PLAY} size={22} />
           <span class="m-opt-name">{t('news.watchOnTv')}</span>
         </button>
@@ -107,15 +102,13 @@ export function TorrentMenu({ tor, onClose, onSelect }: { tor: Torrent; onClose:
           }}
         >
           <Icon d={CHECK} size={22} />
-          <span class="m-opt-name">{t('settings.choose')}</span>
+          <span class="m-opt-name">{t('library.select')}</span>
         </button>
       )}
       <button type="button" class="m-opt m-danger" disabled={busy} onClick={() => void remove()}>
         <Icon d={TRASH} size={22} />
         <span class="m-opt-name">{t('common.delete')}</span>
       </button>
-      {error && <LaunchError message={error} class="m-status-err" />}
-      {launch.sheet}
     </Sheet>
   );
 }

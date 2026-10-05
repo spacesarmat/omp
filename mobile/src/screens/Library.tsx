@@ -6,7 +6,7 @@ import { Logo } from '../../../src/ui/Logo';
 import { TvChip } from '../ui/TvChip';
 import { TorrentMenu } from '../ui/TorrentMenu';
 import { useBackHandler } from '../ui/backStack';
-import { deleteTorrents, reportDeleted } from '../lib/torrentActions';
+import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
 import { LaunchError } from '../ui/LaunchError';
 import { CatalogUnavailable } from '../ui/CatalogUnavailable';
 import { navigate } from '../nav';
@@ -14,14 +14,14 @@ import { filesOf, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
-import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
+import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, resumePosition, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
 import { buildHistory, resumeFrom, sourceLine, historyFilters } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
 import { libraryTabs, nextView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { formatBytes } from '../../../src/lib/format';
-import { episodeLabel, playableFiles } from '../../../src/lib/episodes';
+import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
 import { native } from '../platform/native';
@@ -337,6 +337,19 @@ export function Library() {
     ) : null;
   const sel = (tor: Torrent) => (selecting && chosen.indexOf(tor.hash) >= 0 ? ' selected' : '');
 
+  const watchOnTv = (tor: Torrent) => {
+    const target = watchTarget(tor.hash, playableFiles(filesOf(tor)));
+    if (!target) return;
+    void launch.start({
+      hash: tor.hash,
+      file: target.id,
+      at: resumePosition(tor.hash, target.id),
+      duration: getLocalProgress(tor.hash, target.id)?.duration || undefined,
+      label: [episodeLabel(target.path), stripExt(baseName(target.path))].filter(Boolean).join(' · '),
+      onError: setTvError,
+    });
+  };
+
   const continueOnTv = (hash: string, fileIndex: number, time: number, duration: number, label: string) =>
     launch.start({
       hash,
@@ -647,7 +660,7 @@ export function Library() {
         <Discover />
       )}
       {launch.sheet}
-      {menuFor && <TorrentMenu tor={menuFor} onClose={() => setMenuFor(null)} onSelect={(h) => setSelected([h])} />}
+      {menuFor && <TorrentMenu tor={menuFor} onClose={() => setMenuFor(null)} onSelect={(h) => setSelected([h])} onWatchTv={watchOnTv} />}
     </div>
   );
 }

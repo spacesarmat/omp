@@ -194,6 +194,7 @@ export const ru = {
     addedMany: 'Добавлено торрентов: {n}',
     added: 'Добавлено: {titles}',
     episodes: { one: '{n} серия', few: '{n} серии', many: '{n} серий' },
+    select: 'Выбрать',
     selectCancel: 'Отменить выбор',
     selected: 'Выбрано: {n}',
     selectAll: 'Выбрать все',

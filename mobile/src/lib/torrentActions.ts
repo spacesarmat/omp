@@ -4,6 +4,14 @@ import { pruneEpisodeFindings } from '../../../src/monitor/subs';
 import { reloadMonitor } from '../monitor/ui';
 import { showToast } from '../ui/toast';
 import { t } from '../../../src/i18n';
+import { continueWatching } from '../../../src/store/progress';
+import type { TorrentFile } from '../../../src/lib/episodes';
+
+/** Where «Смотреть на ТВ» continues: the latest started file of the torrent, else the first playable one (none: undefined). */
+export function watchTarget(hash: string, playable: TorrentFile[]): TorrentFile | undefined {
+  const last = continueWatching(torrents.value, 1000).find((e) => e.torrent.hash === hash);
+  return (last && playable.find((f) => f.id === last.fileIndex)) || playable[0];
+}
 
 export interface DeleteResult {
   deleted: string[];

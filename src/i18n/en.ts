@@ -195,6 +195,7 @@ export const en: EnDict<typeof ru> = {
     addedMany: 'Torrents added: {n}',
     added: 'Added: {titles}',
     episodes: { one: '{n} episode', other: '{n} episodes' },
+    select: 'Select',
     selectCancel: 'Cancel selection',
     selected: 'Selected: {n}',
     selectAll: 'Select all',

@@ -10,14 +10,18 @@ import { runBack } from '../src/ui/backStack';
 import { settings, updateSettings } from '../../src/store/settings';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
-import { reloadProgress, serverViewed } from '../../src/store/progress';
+import { reloadProgress, saveProgress, serverViewed } from '../../src/store/progress';
 import { applyLanguageSetting } from '../../src/i18n';
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { Torrent } from '../../src/api/types';
 
+function files(names: string[]) {
+  return JSON.stringify({ TorrServer: { Files: names.map((p, i) => ({ id: i + 1, path: p, length: 1000 })) } });
+}
+
 const T: Torrent[] = [
-  { hash: 'h1', title: 'Starbound Frontier S02 1080p WEB-DL', category: 'tv', stat: 3, torrent_size: 2 * 1024 ** 3, timestamp: 3 },
-  { hash: 'h2', title: 'Quiet Signal 2160p', category: 'movie', stat: 3, torrent_size: 1024 ** 3, timestamp: 2 },
+  { hash: 'h1', title: 'Starbound Frontier S02 1080p WEB-DL', category: 'tv', stat: 3, torrent_size: 2 * 1024 ** 3, timestamp: 3, data: files(['S02E01.mkv', 'S02E02.mkv']) },
+  { hash: 'h2', title: 'Quiet Signal 2160p', category: 'movie', stat: 3, torrent_size: 1024 ** 3, timestamp: 2, data: files(['movie.mkv']) },
   { hash: 'h3', title: 'Neon Rivers', category: 'movie', stat: 3, torrent_size: 500 * 1024 ** 2, timestamp: 1 },
 ];
 
@@ -110,7 +114,7 @@ describe('Library delete', () => {
     expect(currentRoute.value.name).toBe('library');
   });
 
-  it('«Смотреть на ТВ» in the menu starts the torrent on the TV', async () => {
+  it('«Смотреть на ТВ» in the menu launches like the card: closes the menu, keeps the toast', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     const launch = vi.fn().mockResolvedValue(undefined);
     setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
@@ -122,6 +126,36 @@ describe('Library delete', () => {
     });
     await flush();
     expect(launch).toHaveBeenCalledWith(expect.objectContaining({ server: 'http://srv:8090', torrent: 'h2', file: 1 }));
+    expect(menu()).toBeNull();
+    expect(toast.value).toContain('Запустил на LG OLED');
+  });
+
+  it('the menu continues from the latest started file, like the card', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    saveProgress('h1', 2, 1394, 3651);
+    const launch = vi.fn().mockResolvedValue(undefined);
+    setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
+    mount();
+    await flush();
+    longPress(cards()[0]);
+    await act(async () => {
+      btn('Смотреть на ТВ', menu()!)!.click();
+    });
+    await flush();
+    expect(document.querySelector('[role=dialog]')!.textContent).toContain('Продолжить с 23:14');
+    await act(async () => {
+      (Array.from(document.querySelectorAll('button')).find((b) => (b.textContent || '').includes('Продолжить с 23:14')) as HTMLElement).click();
+    });
+    await flush();
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ torrent: 'h1', file: 2, t: 1394 }));
+  });
+
+  it('«Смотреть на ТВ» is disabled for a torrent without files', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    await flush();
+    longPress(cards()[2]);
+    expect(btn('Смотреть на ТВ', menu()!)!.hasAttribute('disabled')).toBe(true);
   });
 
   it('the menu has no «Смотреть на ТВ» when no TV is active', async () => {
@@ -323,7 +357,7 @@ describe('Library delete', () => {
       const m = menu()!;
       expect(btn('Open', m)).toBeTruthy();
       expect(btn('Rename', m)).toBeTruthy();
-      act(() => btn('Choose', m)!.click());
+      act(() => btn('Select', m)!.click());
       tap(cards()[1]);
       expect(el.querySelector('.m-select-bar')!.textContent).toContain('Selected: 2');
       expect(btn('Delete (2)')).toBeTruthy();
