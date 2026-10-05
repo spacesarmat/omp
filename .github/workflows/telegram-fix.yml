@@ -1,0 +1,54 @@
+# Fixes an already posted release in the Telegram channel. Run by hand:
+#   picture — replace the picture of the post (caption and buttons stay), needs message_id
+#   files   — send the files again as one block in reply to the post and delete the old file messages (ids)
+#   delete  — delete channel messages (ids, e.g. 13 or 9-12 or 9,11)
+name: Telegram release fix
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: What to do
+        type: choice
+        options: [picture, files, delete]
+        required: true
+      tag:
+        description: Release tag, e.g. v0.15.0
+        required: true
+      message_id:
+        description: Id of the release post (picture, files)
+        required: false
+        default: ''
+      ids:
+        description: Message ids to delete (files, delete)
+        required: false
+        default: ''
+permissions:
+  contents: read
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Download the release files
+        if: inputs.action == 'files'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release download "$TAG" --dir build --pattern 'OMP-*'
+      - name: Fix the post
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+          ACTION: ${{ inputs.action }}
+          TAG: ${{ inputs.tag }}
+          MESSAGE_ID: ${{ inputs.message_id }}
+          IDS: ${{ inputs.ids }}
+        run: |
+          case "$ACTION" in
+            picture) node scripts/telegram-post.mjs "$TAG" --edit-photo "$MESSAGE_ID" ;;
+            files) node scripts/telegram-post.mjs "$TAG" --repost-files "$MESSAGE_ID" build "$IDS" ;;
+            delete) node scripts/telegram-post.mjs "$TAG" --delete "$IDS" ;;
+          esac

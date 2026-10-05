@@ -6,6 +6,7 @@ export function postRelease(p: {
   chat: string;
   fetch?: typeof fetch;
   log?: (line: string) => void;
+  pause?: (ms: number) => Promise<void>;
 }): Promise<number>;
 export function replacePhoto(p: {
   tag: string;
@@ -15,6 +16,7 @@ export function replacePhoto(p: {
   chat: string;
   fetch?: typeof fetch;
   log?: (line: string) => void;
+  pause?: (ms: number) => Promise<void>;
 }): Promise<void>;
 export function repostFiles(p: {
   tag: string;

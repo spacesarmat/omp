@@ -30,7 +30,7 @@ function caller(token, doFetch) {
 }
 
 /** Pins the release post silently (only the post with the description, never the files). A failure is only logged. */
-async function pinPost(call, chat, messageId, log) {
+async function pinPost(call, chat, messageId, log, pause) {
   const form = new FormData();
   form.set('chat_id', chat);
   form.set('message_id', String(messageId));
@@ -39,8 +39,45 @@ async function pinPost(call, chat, messageId, log) {
     await call('pinChatMessage', form);
   } catch (e) {
     log(`${e.message} (the bot needs the «pin messages» right)`);
+    return;
   }
+  await deletePinNotice(call, chat, messageId, log, pause);
 }
+
+/**
+ * Deletes the «… pinned a message» line Telegram adds to the channel. The Bot API does not return its id, so it is
+ * looked up in the bot's channel updates (the service post whose pinned_message is our post).
+ */
+async function deletePinNotice(call, chat, messageId, log, pause) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (attempt) await pause(1500);
+    let updates;
+    try {
+      const form = new FormData();
+      form.set('allowed_updates', JSON.stringify(['channel_post']));
+      updates = await call('getUpdates', form);
+    } catch (e) {
+      log(`${e.message} (pin notice left in the channel)`);
+      return;
+    }
+    const notice = updates.map((u) => u.channel_post).find((p) => p && p.pinned_message && p.pinned_message.message_id === messageId);
+    if (updates.length) {
+      // confirm what was read so the next run does not see it again
+      const ack = new FormData();
+      ack.set('offset', String(updates[updates.length - 1].update_id + 1));
+      ack.set('allowed_updates', JSON.stringify(['channel_post']));
+      await call('getUpdates', ack).catch(() => {});
+    }
+    if (notice) {
+      await deleteMessages(call, chat, [notice.message_id], log);
+      log(`Telegram: deleted the pin notice ${notice.message_id}`);
+      return;
+    }
+  }
+  log('Telegram: pin notice not found, left in the channel');
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Caption, buttons and picture of the release post. */
 function releasePost(tag, root, log) {
@@ -55,7 +92,7 @@ function releasePost(tag, root, log) {
   return { version, caption: buildCaption(version, notes), keyboard, photo };
 }
 
-export async function postRelease({ tag, dir = 'build', root = '.', token, chat, fetch: doFetch = fetch, log = console.log }) {
+export async function postRelease({ tag, dir = 'build', root = '.', token, chat, fetch: doFetch = fetch, log = console.log, pause = sleep }) {
   const call = caller(token, doFetch);
   const { version, caption, keyboard, photo } = releasePost(tag, root, log);
 
@@ -67,7 +104,7 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
   post.set('photo', new Blob([readFileSync(photo)], { type: 'image/png' }), basename(photo));
   const msg = await call('sendPhoto', post);
   log(`Telegram: posted ${version}`);
-  await pinPost(call, chat, msg.message_id, log);
+  await pinPost(call, chat, msg.message_id, log, pause);
 
   return sendFiles({ call, chat, replyTo: msg.message_id, tag, version, dir, log });
 }
@@ -197,7 +234,7 @@ export async function repostFiles({ tag, messageId, deleteIds = [], dir = 'build
 }
 
 /** Replaces the picture of an already posted release (caption and buttons are sent again: Telegram drops them otherwise) and pins it. */
-export async function replacePhoto({ tag, messageId, root = '.', token, chat, fetch: doFetch = fetch, log = console.log }) {
+export async function replacePhoto({ tag, messageId, root = '.', token, chat, fetch: doFetch = fetch, log = console.log, pause = sleep }) {
   const call = caller(token, doFetch);
   const { version, caption, keyboard, photo } = releasePost(tag, root, log);
   const form = new FormData();
@@ -208,7 +245,7 @@ export async function replacePhoto({ tag, messageId, root = '.', token, chat, fe
   form.set('photo', new Blob([readFileSync(photo)], { type: 'image/png' }), basename(photo));
   await call('editMessageMedia', form);
   log(`Telegram: replaced the picture of ${version} (message ${messageId})`);
-  await pinPost(call, chat, messageId, log);
+  await pinPost(call, chat, messageId, log, pause);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -219,14 +256,29 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log('Telegram: no TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID, skipping');
     process.exit(0);
   }
-  if (!tag) throw new Error('usage: telegram-post.mjs <tag> [build dir] | <tag> --edit-photo <message id>');
+  if (!tag) throw new Error('usage: telegram-post.mjs <tag> [build dir] | <tag> --edit-photo <id> | <tag> --repost-files <id> <dir> [ids] | <tag> --delete <ids>');
+  const parseIds = (ids = '') => ids.split(',').map((p) => p.trim()).filter(Boolean).flatMap((p) => {
+    const [a, b = a] = p.split('-').map(Number);
+    return Array.from({ length: b - a + 1 }, (_, i) => a + i);
+  });
+  if (dir === '--delete') {
+    // <tag> --delete <message ids, comma separated or a-b>
+    const ids = parseIds(process.argv[4]);
+    if (!ids.length || ids.some((n) => !(n > 0))) throw new Error('--delete <ids>');
+    const form = new FormData();
+    form.set('chat_id', chat);
+    form.set('message_ids', JSON.stringify(ids));
+    await caller(token, fetch)('deleteMessages', form).catch((e) => {
+      console.log(String(e.message));
+      process.exit(1);
+    });
+    console.log(`Telegram: deleted ${ids.join(', ')}`);
+    process.exit(0);
+  }
   if (dir === '--repost-files') {
     // <tag> --repost-files <post id> <build dir> [old message ids, comma separated or a-b]
     const [messageId, filesDir, ids = ''] = process.argv.slice(4);
-    const deleteIds = ids.split(',').filter(Boolean).flatMap((p) => {
-      const [a, b = a] = p.split('-').map(Number);
-      return Array.from({ length: b - a + 1 }, (_, i) => a + i);
-    });
+    const deleteIds = parseIds(ids);
     if (!(Number(messageId) > 0) || !filesDir || deleteIds.some((n) => !(n > 0))) throw new Error('--repost-files <post id> <dir> [ids]');
     const failed = await repostFiles({ tag, messageId: Number(messageId), deleteIds, dir: filesDir, token, chat }).catch((e) => {
       console.log(String(e.message));
