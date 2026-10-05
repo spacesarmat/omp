@@ -7,6 +7,7 @@ import { useResultRows } from '../ui/useResultRows';
 import { goBack } from '../nav';
 import { monitorVersion, reloadMonitor } from '../monitor/ui';
 import { subRule } from '../monitor/text';
+import { checkSubNow, checkingSubs } from '../monitor/subsView';
 import { WatchPrompt } from './News';
 import { shortTitle } from '../../../src/lib/libraryView';
 import { findingsOf, getSubscription, markFindingsSeen, seenKeys } from '../../../src/monitor/subs';
@@ -22,6 +23,7 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
   const [editing, setEditing] = useState(false);
   const [prompt, setPrompt] = useState(!!watch);
   const rows = useResultRows();
+  const busy = checkingSubs.value.indexOf(id) >= 0;
 
   useEffect(() => {
     const unseen = findingsOf(id).filter((f) => !f.seen);
@@ -57,6 +59,9 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
       ) : (
         <>
           <div class="m-muted m-small">{subRule(sub)}</div>
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm m-sub-check" data-check-sub disabled={busy} onClick={() => void checkSubNow(id)}>
+            {busy ? t('news.checking') : t('news.checkNow')}
+          </button>
           {target && prompt && (
             <WatchPrompt title={shortTitle(target.result.Title)} onDismiss={() => setPrompt(false)} onWatch={() => void rows.add(target.result, true)} />
           )}
