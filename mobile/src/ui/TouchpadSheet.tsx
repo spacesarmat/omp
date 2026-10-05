@@ -59,6 +59,13 @@ export function TouchpadSheet({ onClose }: { onClose: () => void }) {
         </div>
         <Switch on={s.invertScroll} label="Обратная прокрутка" onToggle={() => updateTouchpad({ invertScroll: !s.invertScroll })} />
       </div>
+      <div class="m-tp-row">
+        <div class="m-tp-text">
+          <span class="m-tp-label">Полоса прокрутки</span>
+          <span class="m-muted m-small">Справа на тачпаде: ведите пальцем вверх или вниз</span>
+        </div>
+        <Switch on={s.scrollStrip} label="Полоса прокрутки" onToggle={() => updateTouchpad({ scrollStrip: !s.scrollStrip })} />
+      </div>
       <button type="button" class="m-btn m-btn-primary" onClick={onClose}>
         Готово
       </button>

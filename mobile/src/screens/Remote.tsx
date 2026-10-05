@@ -139,6 +139,59 @@ interface Scroll {
   last: number;
 }
 
+/**
+ * The strip along the right edge of the touchpad: one finger moving up or down scrolls the TV page (like a laptop
+ * touchpad's edge). It keeps its touches to itself, so the cursor does not move and nothing is clicked.
+ */
+function ScrollStrip({ run }: { run: (p: Promise<void>) => void }) {
+  const g = useRef<{ id: number; y: number; acc: number; last: number } | null>(null);
+  const flush = (s: { acc: number }) => {
+    const dy = Math.round(s.acc * scrollFactor(touchpad.value));
+    if (!dy) return;
+    s.acc = 0;
+    run(act.scroll(0, dy));
+  };
+  const end = (e: PointerEvent, send: boolean) => {
+    e.stopPropagation();
+    const s = g.current;
+    if (!s || s.id !== e.pointerId) return;
+    if (send) flush(s);
+    g.current = null;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+  };
+  return (
+    <div
+      class="m-tp-strip"
+      role="scrollbar"
+      aria-label="Прокрутка"
+      aria-orientation="vertical"
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        if (g.current) return;
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        g.current = { id: e.pointerId, y: e.clientY, acc: 0, last: Date.now() };
+      }}
+      onPointerMove={(e) => {
+        e.stopPropagation();
+        const s = g.current;
+        if (!s || s.id !== e.pointerId) return;
+        s.acc += e.clientY - s.y;
+        s.y = e.clientY;
+        const now = Date.now();
+        if (now - s.last < MOVE_THROTTLE_MS) return;
+        s.last = now;
+        flush(s);
+      }}
+      onPointerUp={(e) => end(e, true)}
+      onPointerCancel={(e) => end(e, false)}
+    >
+      <Icon d="M7 14l5-5 5 5" />
+      <span class="m-tp-strip-line" />
+      <Icon d="M7 10l5 5 5-5" />
+    </div>
+  );
+}
+
 function Touchpad() {
   const st = useRef<Gesture | null>(null);
   const sc = useRef<Scroll | null>(null);
@@ -157,7 +210,7 @@ function Touchpad() {
   const release = (e: PointerEvent) => (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
   return (
     <div
-      class="m-touchpad"
+      class={'m-touchpad' + (touchpad.value.scrollStrip ? ' with-strip' : '')}
       role="application"
       aria-label="Тачпад"
       style={{ touchAction: 'none' }}
@@ -256,6 +309,7 @@ function Touchpad() {
       }}
     >
       <span class="m-muted m-small">Проведите пальцем · двумя — прокрутка</span>
+      {touchpad.value.scrollStrip && <ScrollStrip run={run} />}
     </div>
   );
 }

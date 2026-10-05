@@ -105,7 +105,7 @@ describe('collectBackup', () => {
     put('tsp.touchpad', { speed: 99, accel: 'yes' });
     const b = collectBackup(NOW);
     expect(b.data['tsp.servers']).toBeUndefined();
-    expect(b.data['tsp.touchpad']).toEqual({ speed: 5, accel: true, tapClick: true, invertScroll: false });
+    expect(b.data['tsp.touchpad']).toEqual({ speed: 5, accel: true, tapClick: true, invertScroll: false, scrollStrip: true });
   });
 });
 
@@ -255,7 +255,7 @@ describe("hardening", () => {
     if (!r.ok) throw new Error("parse");
     applyBackup(r.backup);
     expect(get("tsp.settings")).toMatchObject({ libraryView: "list", autoNext: false, seekStep: 30 });
-    expect(get("tsp.touchpad")).toEqual({ speed: 2, accel: false, tapClick: true, invertScroll: true });
+    expect(get("tsp.touchpad")).toEqual({ speed: 2, accel: false, tapClick: true, invertScroll: true, scrollStrip: true });
   });
 
   it("resets active ids that no longer exist after the restore", () => {
