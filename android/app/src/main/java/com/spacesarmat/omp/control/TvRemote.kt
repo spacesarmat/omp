@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.control
 
+import com.spacesarmat.omp.I18n
+
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
@@ -112,6 +114,7 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         private set
 
     fun start() {
+        I18n.load(context)
         // a staged login left by a process that died mid-transfer is never verified: drop it
         inbox.dropStaged()
         try {

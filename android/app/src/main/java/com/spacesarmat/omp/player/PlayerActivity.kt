@@ -186,6 +186,13 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         donateText = findViewById(R.id.player_donate_text)
         donateLink = findViewById(R.id.player_donate_link)
         engineName = findViewById(R.id.player_engine)
+        findViewById<TextView>(R.id.player_badge).text = I18n.s("player.res.phoneBadge")
+        btnNext.text = I18n.s("player.res.next")
+        btnSkip.text = I18n.s("player.res.skipIntro")
+        findViewById<TextView>(R.id.player_toast_undo).text = I18n.s("player.res.undoSkip")
+        donateQrView.contentDescription = I18n.s("player.res.donateQr")
+        findViewById<TextView>(R.id.player_next_hint).text = I18n.s("player.res.nextHint")
+        findViewById<TextView>(R.id.player_error_hint).text = I18n.s("player.res.errorHint")
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = onBack()
@@ -525,13 +532,13 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val auto = skips.autoIntro(i, pos, dur)
         if (auto != null && start != null) {
             seekToMs(auto)
-            showMessage(getString(R.string.player_intro_skipped), false, undo = start)
+            showMessage(I18n.s("player.res.introSkipped"), false, undo = start)
             emitState()
             return
         }
         if (skips.creditsCrossed(i, pos, engine.playWhenReady, hasNext())) {
             playNext()
-            showMessage(getString(R.string.player_credits_skipped), false)
+            showMessage(I18n.s("player.res.creditsSkipped"), false)
             return
         }
         if (flow.countdown < 0 && skips.countdownDue(i, pos, dur) && flow.creditsDue(hasNext(), req.autoNext, engine.playWhenReady)) {
@@ -611,8 +618,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         if (mode != donateShown) {
             donateShown = mode
             val pause = mode == DonateQr.PAUSE
-            donateTitle.setText(if (pause) R.string.player_donate_pause_title else R.string.player_donate_credits_title)
-            donateText.setText(if (pause) R.string.player_donate_pause_text else R.string.player_donate_credits_text)
+            donateTitle.text = I18n.s(if (pause) "player.res.donatePauseTitle" else "player.res.donateCreditsTitle")
+            donateText.text = I18n.s(if (pause) "player.res.donatePauseText" else "player.res.donateCreditsText")
             val lp = donateBox.layoutParams as FrameLayout.LayoutParams
             lp.gravity = Gravity.BOTTOM or (if (pause) Gravity.END else Gravity.START)
             lp.bottomMargin = ((if (pause) DONATE_PAUSE_BOTTOM_DP else DONATE_CREDITS_BOTTOM_DP) * dp).toInt()
@@ -817,7 +824,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             title.text = item.title
             progress.progress = if (dur > 0) (pos * 1000 / dur).toInt().coerceIn(0, 1000) else 0
             time.text = clock(pos) + " / " + clock(dur)
-            btnPause.setText(if (paused) R.string.player_play else R.string.player_pause)
+            btnPause.text = I18n.s(if (paused) "player.res.play" else "player.res.pause")
             btnAudio.text = I18n.s("player.audioRow", "v" to selectedAudioLabel(session.audioOptions()))
             btnSubs.text = I18n.s("player.subsRow", "v" to TrackOptions.selectedSub(session.subOptions()).label)
             btnNext.visibility = if (hasNext()) View.VISIBLE else View.GONE
@@ -827,7 +834,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                 if (cur.isNotEmpty()) title.text = item.title + " · " + cur
             }
             ticksView.setTicks(Chapters.ticks(chapters, dur))
-            hint.setText(if (chapters.isNotEmpty()) R.string.player_hint_chapters else R.string.player_hint)
+            hint.text = I18n.s(if (chapters.isNotEmpty()) "player.res.hintChapters" else "player.res.hint")
             engineName.text = switcher.kind.label
         }
         toastBox.visibility = if (toastShown) View.VISIBLE else View.GONE

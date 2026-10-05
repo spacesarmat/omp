@@ -35,10 +35,10 @@ object MonitorNotifier {
     fun ensureChannels(ctx: Context) {
         I18n.load(ctx)
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
-        if (nm.getNotificationChannel(MonitorIds.CHANNEL_SUBS) == null) {
+        run { // same id again only renames the channel to the current language
             nm.createNotificationChannel(NotificationChannel(MonitorIds.CHANNEL_SUBS, I18n.s("monitor.subs"), NotificationManager.IMPORTANCE_DEFAULT))
         }
-        if (nm.getNotificationChannel(MonitorIds.CHANNEL_EPISODES) == null) {
+        run { // same id again only renames the channel to the current language
             nm.createNotificationChannel(NotificationChannel(MonitorIds.CHANNEL_EPISODES, I18n.s("monitor.episodes"), NotificationManager.IMPORTANCE_DEFAULT))
         }
     }

@@ -105,7 +105,7 @@ object DevModeReminder {
     fun show(ctx: Context, id: Int, name: String?) {
         I18n.load(ctx)
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
-        if (nm.getNotificationChannel(CHANNEL) == null) {
+        run { // same id again only renames the channel to the current language
             nm.createNotificationChannel(NotificationChannel(CHANNEL, I18n.s("devmode.channel"), NotificationManager.IMPORTANCE_DEFAULT))
         }
         if (!MonitorNotifier.canNotify(ctx)) return

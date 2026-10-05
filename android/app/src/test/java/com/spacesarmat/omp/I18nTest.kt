@@ -65,4 +65,22 @@ class I18nTest {
         assertEquals("Сайт закрыт проверкой Cloudflare — пройти её не удалось", I18n.s("errors.cfFailed"))
         assertEquals("Сайт просит пройти проверку Cloudflare вручную", I18n.s("errors.cfInteractive"))
     }
+
+    @Test
+    fun everyFormerPlayerResourceStringHasBothTexts() {
+        val names = listOf("phoneBadge", "pause", "play", "skipIntro", "next", "hint", "hintChapters", "undoSkip", "introSkipped",
+            "creditsSkipped", "nextHint", "errorHint", "donateQr", "donatePauseTitle", "donatePauseText", "donateCreditsTitle", "donateCreditsText")
+        assertEquals(17, names.size)
+        for (n in names) {
+            val key = "player.res." + n
+            assertTrue(key, key in I18n.keys("ru") && key in I18n.keys("en"))
+            I18n.lang = "ru"
+            val ru = I18n.s(key)
+            I18n.lang = "en"
+            assertTrue(key, ru != key && I18n.s(key) != key && I18n.s(key) != ru)
+        }
+        I18n.lang = "ru"
+        assertEquals("Пауза", I18n.s("player.res.pause"))
+        assertEquals("Skip intro", I18n.s("player.res.skipIntro").also { I18n.lang = "en" }.let { I18n.s("player.res.skipIntro") })
+    }
 }

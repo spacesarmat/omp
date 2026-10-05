@@ -150,7 +150,7 @@ class SourceServices private constructor(context: Context) {
 
         fun get(context: Context): SourceServices =
             instance ?: synchronized(this) {
-                instance ?: SourceServices(context.applicationContext).also { instance = it }
+                instance ?: SourceServices(context.applicationContext).also { I18n.load(context.applicationContext); instance = it }
             }
 
         /** JS keys live in their own namespace: page code cannot read the cookie entries. null when invalid. */

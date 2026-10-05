@@ -459,6 +459,7 @@ class OmpNativePlugin : Plugin() {
         }
         closeAll()
         var self: TvSocket? = null
+        I18n.load(context)
         val socket = TvSocket(
             onOpen = { s ->
                 if (!s.send(register)) {
@@ -536,6 +537,7 @@ class OmpNativePlugin : Plugin() {
         closePointer()
         var self: TvSocket? = null
         val client = if (parsed.isHttps) TvHttp.trustingOnly(ip) else TvHttp.plain()
+        I18n.load(context)
         val socket = TvSocket(
             onOpen = { _ ->
                 synchronized(lock) { if (pendingPointer === once) pendingPointer = null }
@@ -619,6 +621,7 @@ class OmpNativePlugin : Plugin() {
 
     @PluginMethod
     fun startPlayerServer(call: PluginCall) {
+        I18n.load(context)
         val once = Once(call)
         val ip = call.getString("tvIp")?.trim().orEmpty()
         io.execute {
@@ -1772,7 +1775,7 @@ class OmpNativePlugin : Plugin() {
         private fun notifyCloudflare(ctx: Context, site: String, login: Boolean = false): Boolean {
             if (!MonitorNotifier.canNotify(ctx)) return false
             val nm = ctx.getSystemService(NotificationManager::class.java) ?: return false
-            if (nm.getNotificationChannel(CF_CHANNEL) == null) {
+            run { // same id again only renames the channel to the current language
                 nm.createNotificationChannel(NotificationChannel(CF_CHANNEL, I18n.s("plugin.cfChannel"), NotificationManager.IMPORTANCE_HIGH))
             }
             if (nm.getNotificationChannel(CF_CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE) return false
