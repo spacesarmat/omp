@@ -5,7 +5,7 @@ import { getSource } from './registry';
 import type { SourceContext, SourceHealth, SourceResult } from './types';
 
 export const JACKETT_HINT =
-  'Kinozal, seedoff, rustorka, labtor и другие закрытые трекеры подключайте через Jackett или Prowlarr в TorrServer — как, в «Вопросах и ответах».';
+  'Сайт закрыт защитой Cloudflare? Для Kinozal и rustorka включите обход в «Источниках поиска», другие трекеры подключайте через Jackett или Prowlarr — как, в «Вопросах и ответах».';
 
 /**
  * Row key: two torrents of one release can share a title (Anidub, BigFANGroup), their pages differ.

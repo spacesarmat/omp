@@ -101,12 +101,16 @@ interface Preset {
   tsKey?: string;
 }
 
+/** Shown after a manual search while the phone is not on a home Wi-Fi network. */
+export const NO_WIFI_INDEXERS = 'Подключитесь к Wi‑Fi, чтобы найти Jackett и Prowlarr в сети';
+
 /** «Подключить индексатор» (mockup 6). */
 export function IndexerAddSheet({
   candidates,
   preset,
   scanning,
   scanned,
+  noWifi,
   onScan,
   ctx,
   now,
@@ -116,6 +120,8 @@ export function IndexerAddSheet({
   preset: Preset | null;
   scanning: boolean;
   scanned: boolean;
+  /** The manual scan found no home network (mobile data). */
+  noWifi: boolean;
   onScan: () => void;
   ctx: () => SourceContext;
   now: () => number;
@@ -242,7 +248,8 @@ export function IndexerAddSheet({
         <button type="button" class="m-link m-idx-scan" disabled={scanning} onClick={onScan}>
           {scanning ? 'Ищу в сети…' : 'Искать в сети'}
         </button>
-        {scanned && !scanning && candidates.length === 0 && <div class="m-note m-muted">В сети Jackett и Prowlarr не нашлись</div>}
+        {noWifi && !scanning && <div class="m-note m-muted">{NO_WIFI_INDEXERS}</div>}
+        {scanned && !noWifi && !scanning && candidates.length === 0 && <div class="m-note m-muted">В сети Jackett и Prowlarr не нашлись</div>}
         <div class="m-field">
           <label for="m-idx-url">Адрес</label>
           <input
@@ -404,6 +411,7 @@ export function IndexerSection({ ctx, env, onChange }: { ctx: () => SourceContex
   });
   const [scanning, setScanning] = useState(false);
   const [scanned, setScanned] = useState(false);
+  const [noWifi, setNoWifi] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [sheet, setSheet] = useState<Preset | null | false>(false);
   const alive = useRef(true);
@@ -420,10 +428,18 @@ export function IndexerSection({ ctx, env, onChange }: { ctx: () => SourceContex
       return;
     }
     setScanning(true);
-    scanIndexers(s, ctx().http, e.current.now).then(
+    setNoWifi(false);
+    let offLan = false;
+    const watched: LanScan = (ports) =>
+      s(ports).then((hits) => {
+        if (hits === null) offLan = true;
+        return hits;
+      });
+    scanIndexers(watched, ctx().http, e.current.now).then(
       (list) => {
         if (!alive.current) return;
         setFound(list);
+        setNoWifi(offLan);
         setScanning(false);
         setScanned(true);
       },
@@ -530,6 +546,7 @@ export function IndexerSection({ ctx, env, onChange }: { ctx: () => SourceContex
           preset={sheet}
           scanning={scanning}
           scanned={scanned}
+          noWifi={noWifi}
           onScan={scan}
           ctx={ctx}
           now={e.current.now}

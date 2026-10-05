@@ -86,7 +86,7 @@ describe('Sources screen', () => {
     expect(sw('rutor (поиск TorrServer)')).toBeTruthy();
     expect(sw('Jackett / Prowlarr (Torznab)')).toBeTruthy();
     expect(sw('nnmclub')).toBeTruthy();
-    expect(el.textContent).toContain('Kinozal, seedoff, rustorka, labtor и другие закрытые трекеры подключайте через Jackett или Prowlarr в TorrServer');
+    expect(el.textContent).toContain('Для Kinozal и rustorka включите обход в «Источниках поиска», другие трекеры подключайте через Jackett или Prowlarr');
     click(btn('Вопросы и ответы')!);
     expect(currentRoute.value).toEqual({ name: 'faq' });
   });
@@ -198,7 +198,7 @@ describe('Sources screen', () => {
     click(Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent === 'Войти')!);
     await flush();
     expect(dialog.querySelector('[role="alert"]')!.textContent).toContain('Cloudflare');
-    expect(dialog.querySelector('[data-hint="jackett"]')!.textContent).toContain('Kinozal, seedoff, rustorka, labtor');
+    expect(dialog.querySelector('[data-hint="jackett"]')!.textContent).toContain('Для Kinozal и rustorka включите обход');
     click(Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent === 'Вопросы и ответы')!);
     expect(currentRoute.value).toEqual({ name: 'faq' });
   });

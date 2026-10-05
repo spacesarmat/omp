@@ -46,7 +46,7 @@ export const SEND_TEXT =
 /** What the phone says after a transfer, by the TV's rutracker answer. */
 export function sentText(r: RutrackerResult | undefined): string {
   if (r === 'bad_login') return 'Источники переданы, но rutracker не принял логин или пароль';
-  if (r === 'captcha') return 'Источники переданы, но rutracker просит капчу — войдите на сайте в браузере';
+  if (r === 'captcha') return 'Источники переданы, но rutracker просит капчу — нажмите «Войти через браузер»';
   if (r === 'error') return 'Источники переданы; вход на rutracker телевизор проверит при поиске';
   return 'Передано';
 }
@@ -68,7 +68,7 @@ export function siteLoginsText(logins: { [site: string]: RutrackerResult } | und
       const n = nameOf(id);
       const r = logins[id];
       if (r === 'bad_login') return n + ' не принял логин или пароль';
-      if (r === 'captcha') return n + ' просит капчу — войдите на сайте в браузере';
+      if (r === 'captcha') return n + ' просит капчу — нажмите «Войти через браузер»';
       if (r === 'error') return 'вход на ' + n + ' телевизор проверит при поиске';
       return '';
     })

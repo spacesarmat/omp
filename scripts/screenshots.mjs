@@ -7,9 +7,9 @@ import { pathToFileURL } from 'node:url';
 
 const SCENES = ['login', 'login-history', 'library-large', 'library-list', 'history', 'search'];
 // Android client scenes: phone viewport at 2x.
-const ANDROID_SCENES = ['android-library', 'android-torrent', 'android-watch', 'android-remote', 'android-nowplaying', 'android-server', 'android-tvlist', 'android-skip', 'android-chapters', 'android-search', 'android-sources', 'android-news', 'android-subs', 'android-notify', 'android-replace', 'android-send', 'android-backup', 'android-log', 'android-install-find', 'android-install-steps'];
+const ANDROID_SCENES = ['android-library', 'android-torrent', 'android-watch', 'android-remote', 'android-nowplaying', 'android-server', 'android-tvlist', 'android-skip', 'android-chapters', 'android-search', 'android-sources', 'android-news', 'android-subs', 'android-notify', 'android-replace', 'android-send', 'android-backup', 'android-log', 'android-install-find', 'android-install-steps', 'android-indexers', 'android-flaresolverr', 'android-site', 'android-cloudflare'];
 // Android TV scene: 1280x720 like the TV UI.
-const ANDROIDTV_SCENES = ['androidtv-player', 'androidtv-chapters', 'androidtv-skip', 'androidtv-sources'];
+const ANDROIDTV_SCENES = ['androidtv-player', 'androidtv-chapters', 'androidtv-skip', 'androidtv-sources', 'androidtv-sources-indexers', 'androidtv-player-settings', 'androidtv-player-menu', 'androidtv-cloudflare'];
 
 const candidates = [
   process.env.CHROME_PATH,
@@ -23,7 +23,10 @@ const candidates = [
 const chrome = candidates.find((p) => existsSync(p));
 if (!chrome) throw new Error('Chrome not found; set CHROME_PATH');
 
+// Optional: scene names as arguments render only those (node scripts/screenshots.mjs android-site).
+const only = process.argv.slice(2);
 for (const scene of [...SCENES, ...ANDROID_SCENES, ...ANDROIDTV_SCENES]) {
+  if (only.length && !only.includes(scene)) continue;
   const android = scene.startsWith('android-');
   const tv720 = ANDROIDTV_SCENES.includes(scene);
   const page = pathToFileURL(resolve('docs/screenshots/src', scene + '.html')).href;

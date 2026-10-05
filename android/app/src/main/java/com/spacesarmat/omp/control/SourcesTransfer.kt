@@ -104,7 +104,7 @@ object SourcesProtocol {
     val SESSION_SITES = LOGIN_SITES + "rutracker"
     /**
      * The hosts a site's session may be on (its mirrors, as in the parsers under src/sources): the phone sends, and the TV takes, a session
-     * only for one of them. A site without an entry here sends none (Task 10 adds labtor, seedoff, BitRu).
+     * only for one of them. A site without an entry here sends none (labtor, seedoff and BitRu ids stay in LOGIN_SITES but have no source).
      */
     val SESSION_HOSTS: Map<String, Set<String>> = mapOf(
         "rutracker" to setOf("rutracker.org"),

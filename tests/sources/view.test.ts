@@ -158,8 +158,8 @@ describe('names and dates', () => {
     expect(resultDate(res({ CreateDate: '2025-01-09T10:00:00Z' }))).toBe('09.01.2025');
     expect(resultDate(res({}))).toBe('');
   });
-  it('the Jackett hint names the closed trackers', () => {
-    expect(JACKETT_HINT).toBe('Kinozal, seedoff, rustorka, labtor и другие закрытые трекеры подключайте через Jackett или Prowlarr в TorrServer — как, в «Вопросах и ответах».');
+  it('the hint points to the Cloudflare switch and to Jackett or Prowlarr', () => {
+    expect(JACKETT_HINT).toBe('Сайт закрыт защитой Cloudflare? Для Kinozal и rustorka включите обход в «Источниках поиска», другие трекеры подключайте через Jackett или Prowlarr — как, в «Вопросах и ответах».');
   });
 });
 

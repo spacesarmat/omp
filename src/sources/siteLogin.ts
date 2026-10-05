@@ -1,4 +1,4 @@
-// Sign-in of a site behind a login (Kinozal, rustorka; labtor next), the way rutracker does it: the credentials live
+// Sign-in of a site behind a login (Kinozal, rustorka), the way rutracker does it: the credentials live
 // only in the Android secret store (ctx.secrets, siteLoginKeys) and go only to the site; the session cookie stays in
 // the native per-site jar. A page that needs the session signs in again once with the saved credentials, else it
 // rejects with loginRequired(). A captcha is never solved: the screen offers «Войти через браузер» (browserLogin.ts: the

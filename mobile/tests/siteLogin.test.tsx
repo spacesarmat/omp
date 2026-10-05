@@ -201,7 +201,7 @@ describe('phone: «Источники поиска» with the sites behind Cloud
     const p = posts()[0];
     expect(p.body.rutracker).toEqual({ username: 'rt', password: PASSWORD });
     expect(p.body.logins).toEqual({ kinozal: { username: 'kino', password: PASSWORD } });
-    expect(toast.value).toContain('Kinozal просит капчу — войдите на сайте в браузере');
+    expect(toast.value).toContain('Kinozal просит капчу — нажмите «Войти через браузер»');
     // the TV verified rutracker's login but could not write it: the site results still show
     answer = () => ({ body: JSON.stringify({ ok: true, rutracker: 'error', rutrackerNotStored: true, logins: { kinozal: 'ok' } }) });
     act(() => btn('Передать на телевизор')!.click());

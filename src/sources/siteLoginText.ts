@@ -6,9 +6,9 @@ export const SITE_BAD_LOGIN = 'Неверный логин или пароль';
 export const SITE_EMPTY = 'Введите логин и пароль';
 export const SITE_NO_STORE = 'Вход доступен только в приложении Android';
 
-/** «Kinozal просит капчу — войдите на сайте в браузере и попробуйте снова» (no captcha solving in OMP). */
+/** Kinozal asks for a captcha: points to «Войти через браузер» (no captcha solving in OMP). */
 export function siteCaptcha(name: string): string {
-  return name + ' просит капчу — войдите на сайте в браузере и попробуйте снова';
+  return name + ' просит капчу — нажмите «Войти через браузер»';
 }
 
 export type SiteLoginCode = 'bad_login' | 'captcha';

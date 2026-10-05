@@ -94,7 +94,7 @@ describe('rustorka', () => {
     expect(bad.calls).toHaveLength(1);
     expect(bad.secrets).toEqual({});
     const cap = fakeSite(server({ loginPage: 'rustorka-login-captcha.html' }));
-    await expect(rustorka.login!('user', 'p', cap.ctx)).rejects.toThrow('rustorka просит капчу — войдите на сайте в браузере и попробуйте снова');
+    await expect(rustorka.login!('user', 'p', cap.ctx)).rejects.toThrow('rustorka просит капчу — нажмите «Войти через браузер»');
     expect(cap.secrets).toEqual({});
     await expect(rustorka.login!('u', 'p', fakeSite((c) => page(CLOUDFLARE, c.url, 403)).ctx)).rejects.toThrow('Cloudflare');
   });

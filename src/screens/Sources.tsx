@@ -36,7 +36,7 @@ const TS_LABELS: { [id: string]: string } = {
 export const INTRO = 'Jackett и Prowlarr ищут напрямую. Без них поиск идёт через TorrServer.';
 
 export const PHONE_HOW =
-  'На телефоне: OMP → Настройки → Источники поиска → «Передать на телевизор». Подключения к Jackett и Prowlarr и входы на сайты (rutracker, Kinozal, rustorka) тоже можно передать — ключи и пароли не вводятся пультом.';
+  'На телефоне: OMP → Настройки → Источники поиска → «Передать на телевизор». Подключения к Jackett и Prowlarr, входы на сайты (rutracker, Kinozal, rustorka) и проверку Cloudflare тоже можно передать — ключи и пароли не вводятся пультом.';
 
 export const NO_INDEXERS = 'Подключите Jackett или Prowlarr на телефоне и передайте на телевизор.';
 

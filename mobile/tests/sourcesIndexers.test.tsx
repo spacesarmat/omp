@@ -212,6 +212,18 @@ describe('phone «Индексаторы»', () => {
     expect(scans).toBe(2);
   });
 
+  it('a manual search on mobile data asks for Wi-Fi instead of saying nothing was found', async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    const off = (): IndexerEnv => ({ scan: () => Promise.resolve(null), readSettings: () => Promise.resolve(settings), now: () => NOW });
+    act(() => render(<Sources ctx={ctx} indexerEnv={off} />, el));
+    await flush();
+    await click(btn('Добавить Jackett или Prowlarr')!);
+    await click(btn('Искать в сети')!);
+    expect(el.textContent).toContain('Подключитесь к Wi‑Fi, чтобы найти Jackett и Prowlarr в сети');
+    expect(el.textContent).not.toContain('не нашлись');
+  });
+
   it('a Torznab entry with a key in the TorrServer settings is offered; the same Jackett hides Torznab (TorrServer)', async () => {
     settings = { EnableTorznabSearch: true, TorznabUrls: [{ Host: 'http://192.168.1.5:9117/api/v2.0/indexers/all/results/torznab', Key: TS_KEY }] };
     await mount();
