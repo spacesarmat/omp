@@ -10,7 +10,7 @@ import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import { readDiscover, saveDiscover, type Feed, type Filter } from './discoverCache';
-import { readDiscoverCols, saveDiscoverCols, type DiscoverCols } from './discoverCols';
+import { readDiscoverCols, saveDiscoverCols, COLS_BY_SIZE, type DiscoverCols } from './discoverCols';
 import { usePinchStep } from '../../ui/usePinchStep';
 import { discoverQueryKey, discoverFilterCount, sanitizeDiscoverQuery, type DiscoverQuery } from '../../../../src/catalog/discoverQuery';
 import { loadDiscoverQuery, saveDiscoverQuery } from './discoverQueryStore';
@@ -51,24 +51,27 @@ export function Discover() {
   const fresh = useRef(true);
   const list = torrents.value;
   const index = useMemo(() => libraryIndex(list), [list]);
-  // posters per row: two fingers apart = bigger posters (2), together = smaller (3)
+  // posters per row: the grid follows two fingers and settles on 2, 3 or 4 (apart = fewer, bigger posters)
   const [cols, setCols] = useState<DiscoverCols>(readDiscoverCols);
   const colsRef = useRef(cols);
   colsRef.current = cols;
   const rootRef = useRef<HTMLDivElement>(null);
   usePinchStep(rootRef, {
     enabled: !searching,
-    onStep: (dir) => {
-      const next: DiscoverCols = dir > 0 ? 2 : 3;
-      if (next === colsRef.current) return false;
+    levels: COLS_BY_SIZE.length,
+    level: () => Math.max(0, COLS_BY_SIZE.indexOf(colsRef.current)),
+    apply: (i) => {
+      const next = COLS_BY_SIZE[i];
       colsRef.current = next;
       setCols(next);
       saveDiscoverCols(next);
-      return true;
     },
+    // a poster at n per row is (n / m) times as wide as at m per row
+    scaleOf: (from, to) => COLS_BY_SIZE[from] / COLS_BY_SIZE[to],
     anchorAttr: 'data-anchor',
+    target: (root) => root.querySelector<HTMLElement>('.m-disc-grid'),
   });
-  const gridClass = 'm-disc-grid' + (cols === 3 ? ' m-cols-3' : '');
+  const gridClass = 'm-disc-grid' + (cols === 3 ? ' m-cols-3' : cols === 4 ? ' m-cols-3 m-cols-4' : '');
 
   useEffect(() => {
     if (restored.current) {

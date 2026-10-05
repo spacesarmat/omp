@@ -18,7 +18,7 @@ import { continueWatching, refreshViewed, progressVersion, serverViewed, getLoca
 import { buildHistory, resumeFrom, sourceLine, historyFilters } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
-import { libraryTabs, nextView, zoomView, viewLabel, episodeLine, positionLabel, remainingLabel, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
+import { libraryTabs, nextView, BY_SIZE, viewLabel, episodeLine, positionLabel, remainingLabel, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { formatBytes } from '../../../src/lib/format';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
@@ -279,16 +279,12 @@ export function Library() {
     else empty = t('catalog.categoryEmpty');
   }
 
-  // two fingers on the list step the view like the header button, one notch per gesture (spread = bigger)
+  // two fingers on the list scale it with them and settle on the nearest view (spread = bigger)
   const pinch = usePinchStep(bodyRef, {
     enabled: mine && !isHistory && !unavailable,
-    onStep: (dir) => {
-      const cur = settings.peek().libraryView;
-      const next = zoomView(cur, dir);
-      if (next === cur) return false;
-      updateSettings({ libraryView: next });
-      return true;
-    },
+    levels: BY_SIZE.length,
+    level: () => Math.max(0, BY_SIZE.indexOf(settings.peek().libraryView)),
+    apply: (i) => updateSettings({ libraryView: BY_SIZE[i] }),
     // the first finger may have started the long press timer on a card
     onStart: () => {
       clearTimeout(press.current.timer);

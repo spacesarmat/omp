@@ -397,6 +397,18 @@ button, .m-btn {
 .m-disc-tile .m-disc-title { flex: none; margin-top: 0; line-height: 19px; min-height: 38px; max-height: 38px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .m-cols-3 .m-disc-tile .m-disc-title { line-height: 16px; min-height: 32px; max-height: 32px; }
 .m-disc-meta { flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* four per row (also carries m-cols-3): tighter gaps, smaller labels, a 14px two-line title clamp */
+.m-disc-grid.m-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 6px; }
+.m-cols-4 .m-disc-poster { border-radius: 8px; }
+.m-cols-4 .m-disc-ph { padding: 6px; font-size: 11px; }
+.m-cols-4 .m-disc-rating, .m-cols-4 .m-disc-badge { top: 4px; left: 4px; padding: 0 4px; font-size: 9px; }
+.m-cols-4 .m-disc-badge { top: auto; bottom: 4px; }
+.m-cols-4 .m-card-title { font-size: 11px; line-height: 14px; }
+.m-cols-4 .m-disc-tile { gap: 2px; }
+.m-cols-4 .m-disc-tile .m-disc-title { line-height: 14px; min-height: 28px; max-height: 28px; }
+.m-cols-4 .m-disc-meta { font-size: 10px; }
+/* a two-finger pinch is scaling a list: a scaled-up list must not make the page scroll sideways */
+html.m-pinch-live, html.m-pinch-live body { overflow-x: clip; }
 .m-disc-empty { margin: 24px 0; text-align: center; }
 .m-disc-head .m-sort { align-self: center; }
 .m-disc-sort-opt.on { box-shadow: inset 0 0 0 2px var(--accent); }

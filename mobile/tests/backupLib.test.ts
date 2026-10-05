@@ -181,6 +181,10 @@ describe('collectBackup', () => {
     b = collectBackup(NOW);
     expect(b.data['tsp.catalogMode']).toBe('mine');
     expect(b.data['tsp.discoverCols']).toBe(2);
+    put('tsp.discoverCols', 4);
+    expect(collectBackup(NOW).data['tsp.discoverCols']).toBe(4);
+    put('tsp.discoverCols', 5);
+    expect(collectBackup(NOW).data['tsp.discoverCols']).toBeUndefined();
   });
 
   it('cleans values with the stores sanitizers and survives corrupt storage', () => {

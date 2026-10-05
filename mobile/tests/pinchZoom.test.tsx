@@ -5,7 +5,16 @@ import { Library } from '../src/screens/Library';
 import { Discover } from '../src/screens/catalog/Discover';
 import { clearDiscover } from '../src/screens/catalog/discoverCache';
 import { DISCOVER_COLS_KEY, readDiscoverCols } from '../src/screens/catalog/discoverCols';
-import { pinchStepOf, PINCH_OUT, PINCH_IN } from '../src/ui/usePinchStep';
+import {
+  pinchScale,
+  pinchStepsOf,
+  pinchTarget,
+  PINCH_MIN,
+  PINCH_MAX,
+  PINCH_SETTLE_MS,
+  PINCH_LIVE_CLASS,
+} from '../src/ui/usePinchStep';
+import { BACKUP_KEYS } from '../src/lib/backup';
 import { setCatalogClientForTests, setCatalogMode } from '../src/catalog/phoneCatalog';
 import { currentRoute, resetTo } from '../src/nav';
 import { settings, updateSettings } from '../../src/store/settings';
@@ -70,22 +79,57 @@ function pointer(target: Element, type: string) {
 }
 
 let vibrate: ReturnType<typeof vi.fn>;
+let reduced = true;
 
 beforeEach(() => {
   localStorage.clear();
   vibrate = vi.fn(() => true);
   Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
+  // most tests: reduced motion, so the step lands as the fingers are lifted
+  reduced = true;
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: (q: string) => ({ matches: reduced && q.indexOf('reduce') >= 0, media: q, addEventListener() {}, removeEventListener() {} }),
+  });
 });
 
 describe('pinch step', () => {
-  it('passes the threshold one way or the other', () => {
-    expect(PINCH_OUT).toBe(1.25);
-    expect(PINCH_IN).toBe(0.8);
-    expect(pinchStepOf(1.3)).toBe(1);
-    expect(pinchStepOf(0.7)).toBe(-1);
-    expect(pinchStepOf(1.1)).toBe(0);
-    expect(pinchStepOf(0.9)).toBe(0);
-    expect(pinchStepOf(NaN)).toBe(0);
+  it('the live scale follows the finger distance ratio and is clamped', () => {
+    expect(pinchScale(1)).toBe(1);
+    expect(pinchScale(1.2)).toBeCloseTo(1.2);
+    expect(pinchScale(0.75)).toBeCloseTo(0.75);
+    expect(pinchScale(3)).toBe(PINCH_MAX);
+    expect(pinchScale(0.1)).toBe(PINCH_MIN);
+    expect(pinchScale(NaN)).toBe(1);
+    expect(pinchScale(0)).toBe(1);
+    expect(pinchScale(Infinity)).toBe(1);
+  });
+
+  it('a release picks the nearest step, more than one for a big pinch', () => {
+    expect(pinchStepsOf(1)).toBe(0);
+    expect(pinchStepsOf(1.1)).toBe(0);
+    expect(pinchStepsOf(0.9)).toBe(0);
+    expect(pinchStepsOf(1.15)).toBe(1);
+    expect(pinchStepsOf(1.3)).toBe(1);
+    expect(pinchStepsOf(1.35)).toBe(2);
+    expect(pinchStepsOf(1.6)).toBe(3);
+    expect(pinchStepsOf(0.86)).toBe(-1);
+    expect(pinchStepsOf(0.74)).toBe(-2);
+    expect(pinchStepsOf(0.6)).toBe(-3);
+    expect(pinchStepsOf(NaN)).toBe(0);
+    // kept inside the range
+    expect(pinchTarget(1, 4, 1.6)).toBe(3);
+    expect(pinchTarget(1, 4, 0.6)).toBe(0);
+    expect(pinchTarget(2, 3, 1.2)).toBe(2);
+    expect(pinchTarget(1, 3, 1.05)).toBe(1);
+  });
+
+  it('the backup keeps four posters per row', () => {
+    const k = BACKUP_KEYS.find((x) => x.key === 'tsp.discoverCols')!;
+    expect(k.clean(4)).toBe(4);
+    expect(k.clean(3)).toBe(3);
+    expect(k.clean(5)).toBeUndefined();
+    expect(k.clean('4')).toBeUndefined();
   });
 
   it('steps the library views in the size order and stops at the ends', () => {
@@ -131,7 +175,8 @@ describe('pinch in «Мои»', () => {
     updateSettings({ libraryView: 'list' });
     mount(<Library />);
     await flush();
-    const mv = pinch(body(), 140);
+    const mv = pinch(body(), 125);
+    await flush();
     expect(mv.defaultPrevented).toBe(true);
     expect(settings.value.libraryView).toBe('small');
     expect(el.querySelector('.m-grid.m-view-small')).not.toBeNull();
@@ -139,17 +184,102 @@ describe('pinch in «Мои»', () => {
     expect(vibrate).toHaveBeenCalledTimes(1);
   });
 
-  it('pinching saves the next smaller view, one step per gesture', async () => {
+  it('pinching saves a smaller view; the last finger distance decides how many steps', async () => {
     updateSettings({ libraryView: 'large' });
     mount(<Library />);
     await flush();
     touch(body(), 'touchstart', [[100, 100], [300, 100]]);
-    touch(body(), 'touchmove', [[150, 100], [250, 100]]);
-    touch(body(), 'touchmove', [[190, 100], [210, 100]]);
+    touch(body(), 'touchmove', [[175, 100], [225, 100]]);
+    // back out to 160 of 200: 0.8 = one step
+    touch(body(), 'touchmove', [[120, 100], [280, 100]]);
     touch(body(), 'touchend', []);
+    await flush();
     expect(settings.value.libraryView).toBe('small');
-    pinch(body(), 60);
+    pinch(body(), 72);
+    await flush();
+    expect(settings.value.libraryView).toBe('compact');
+    expect(vibrate).toHaveBeenCalledTimes(2);
+  });
+
+  it('a big spread goes up more than one step, in proportion', async () => {
+    updateSettings({ libraryView: 'compact' });
+    mount(<Library />);
+    await flush();
+    pinch(body(), 140);
+    await flush();
+    expect(settings.value.libraryView).toBe('small');
+  });
+
+  it('the list follows the fingers, then settles with an animation and the transform is cleared', async () => {
+    reduced = false;
+    vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => setTimeout(() => f(0), 16));
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+    updateSettings({ libraryView: 'list' });
+    mount(<Library />);
+    await flush();
+    const b = body();
+    touch(b, 'touchstart', [[100, 100], [200, 100]]);
+    expect(b.style.willChange).toBe('transform');
+    expect(document.documentElement.classList.contains(PINCH_LIVE_CLASS)).toBe(true);
+    touch(b, 'touchmove', [[90, 100], [210, 100]]);
+    act(() => {
+      vi.advanceTimersByTime(16);
+    });
+    expect(b.style.transform).toBe('scale(1.2000)');
+    expect(b.style.transformOrigin).not.toBe('');
+    touch(b, 'touchmove', [[0, 100], [300, 100]]);
+    act(() => {
+      vi.advanceTimersByTime(16);
+    });
+    expect(b.style.transform).toBe('scale(' + PINCH_MAX.toFixed(4) + ')');
+    // back to 1.2: one step bigger
+    touch(b, 'touchmove', [[90, 100], [210, 100]]);
+    touch(b, 'touchend', []);
+    expect(b.style.transition).toContain(PINCH_SETTLE_MS + 'ms');
+    expect(b.style.transform).toBe('scale(1.2500)');
     expect(settings.value.libraryView).toBe('list');
+    act(() => {
+      vi.advanceTimersByTime(PINCH_SETTLE_MS);
+    });
+    await flush();
+    expect(settings.value.libraryView).toBe('small');
+    expect(b.style.transform).toBe('');
+    expect(b.style.willChange).toBe('');
+    expect(b.style.transition).toBe('transform .25s ease');
+    expect(document.documentElement.classList.contains(PINCH_LIVE_CLASS)).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it('with reduced motion the step lands at once and the transform is cleared', async () => {
+    updateSettings({ libraryView: 'list' });
+    mount(<Library />);
+    await flush();
+    const b = body();
+    touch(b, 'touchstart', [[100, 100], [200, 100]]);
+    touch(b, 'touchmove', [[90, 100], [210, 100]]);
+    touch(b, 'touchend', []);
+    expect(settings.value.libraryView).toBe('small');
+    expect(b.style.transition).not.toContain(PINCH_SETTLE_MS + 'ms');
+    await flush();
+    expect(b.style.transform).toBe('');
+    expect(b.style.willChange).toBe('');
+  });
+
+  it('a release short of a step springs back with no change', async () => {
+    reduced = false;
+    updateSettings({ libraryView: 'list' });
+    mount(<Library />);
+    await flush();
+    const b = body();
+    pinch(b, 110);
+    expect(b.style.transform).toBe('scale(1.0000)');
+    act(() => {
+      vi.advanceTimersByTime(PINCH_SETTLE_MS);
+    });
+    await flush();
+    expect(b.style.transform).toBe('');
+    expect(settings.value.libraryView).toBe('list');
+    expect(vibrate).not.toHaveBeenCalled();
   });
 
   it('does nothing at the ends of the range', async () => {
@@ -157,10 +287,12 @@ describe('pinch in «Мои»', () => {
     mount(<Library />);
     await flush();
     pinch(body(), 160);
+    await flush();
     expect(settings.value.libraryView).toBe('large');
     updateSettings({ libraryView: 'compact' });
     await flush();
     pinch(body(), 50);
+    await flush();
     expect(settings.value.libraryView).toBe('compact');
     expect(vibrate).not.toHaveBeenCalled();
   });
@@ -170,6 +302,7 @@ describe('pinch in «Мои»', () => {
     mount(<Library />);
     await flush();
     pinch(body(), 110);
+    await flush();
     expect(settings.value.libraryView).toBe('small');
   });
 
@@ -237,23 +370,46 @@ describe('pinch in «Обзор»', () => {
 
   const grid = () => el.querySelector('.m-disc-grid') as HTMLElement;
 
-  it('two posters per row by default; pinching makes three and it is kept', async () => {
+  it('two posters per row by default; pinching makes three or four and it is kept', async () => {
     mount(<Discover />);
     await flush();
+    const root = () => el.querySelector('.m-discover')!;
     expect(grid().classList.contains('m-cols-3')).toBe(false);
-    pinch(el.querySelector('.m-discover')!, 60);
+    pinch(root(), 80);
+    await flush();
     expect(grid().classList.contains('m-cols-3')).toBe(true);
+    expect(grid().classList.contains('m-cols-4')).toBe(false);
     expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('3');
     expect(vibrate).toHaveBeenCalledTimes(1);
     act(() => render(null, el));
     mount(<Discover />);
     await flush();
     expect(grid().classList.contains('m-cols-3')).toBe(true);
-    pinch(el.querySelector('.m-discover')!, 60);
-    expect(vibrate).toHaveBeenCalledTimes(1);
-    pinch(el.querySelector('.m-discover')!, 150);
+    pinch(root(), 80);
+    await flush();
+    expect(grid().classList.contains('m-cols-4')).toBe(true);
+    expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('4');
+    pinch(root(), 60);
+    await flush();
+    expect(vibrate).toHaveBeenCalledTimes(2);
+    // a big spread: four straight to two
+    pinch(root(), 150);
+    await flush();
     expect(grid().classList.contains('m-cols-3')).toBe(false);
     expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('2');
+    expect(grid().style.transform).toBe('');
+  });
+
+  it('only the grid is scaled, not the header', async () => {
+    mount(<Discover />);
+    await flush();
+    const root = el.querySelector('.m-discover') as HTMLElement;
+    touch(root, 'touchstart', [[100, 100], [200, 100]]);
+    expect(grid().style.willChange).toBe('transform');
+    expect(root.style.willChange).toBe('');
+    touch(root, 'touchend', []);
+    await flush();
+    expect(grid().style.willChange).toBe('');
   });
 
   it('a pinch does not open the title under the fingers', async () => {
@@ -266,11 +422,13 @@ describe('pinch in «Обзор»', () => {
   });
 
   it('a bad stored value falls back to two', () => {
-    for (const bad of ['7', '"3"', 'garbage', '{}', '0', '2.5']) {
+    for (const bad of ['7', '5', '1', '"3"', 'garbage', '{}', '0', '2.5']) {
       localStorage.setItem(DISCOVER_COLS_KEY, bad);
       expect(readDiscoverCols()).toBe(2);
     }
     localStorage.setItem(DISCOVER_COLS_KEY, '3');
     expect(readDiscoverCols()).toBe(3);
+    localStorage.setItem(DISCOVER_COLS_KEY, '4');
+    expect(readDiscoverCols()).toBe(4);
   });
 });

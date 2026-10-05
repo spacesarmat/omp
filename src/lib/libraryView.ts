@@ -26,7 +26,7 @@ export function nextView(v: LibraryView): LibraryView {
 }
 
 // smallest to biggest: what a two-finger pinch steps through (spread = bigger)
-const BY_SIZE: LibraryView[] = ['compact', 'list', 'small', 'large'];
+export const BY_SIZE: LibraryView[] = ['compact', 'list', 'small', 'large'];
 
 /** One step bigger (dir 1) or smaller (dir -1); the ends of the range stay put. */
 export function zoomView(v: LibraryView, dir: 1 | -1): LibraryView {
