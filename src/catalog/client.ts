@@ -3,8 +3,8 @@
 import type { SourceHttp } from '../sources/types';
 import { loadJson, saveJson, isObject } from '../store/storage';
 import {
-  noveltiesUrl, searchUrl, cardUrl, sanitizeList, sanitizeCard,
-  type Kind, type CatalogTitle, type CatalogCard, type TmdbEndpoint,
+  noveltiesUrl, searchUrl, cardUrl, seasonUrl, sanitizeList, sanitizeCard, sanitizeSeason,
+  type Kind, type CatalogTitle, type CatalogCard, type SeasonDetails, type TmdbEndpoint,
 } from './tmdb';
 
 export type CatalogErrorCode = 'offline' | 'nokey' | 'blocked' | 'bad';
@@ -13,6 +13,8 @@ export interface CatalogClient {
   novelties(kind: Kind | 'all', page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
   search(q: string, page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
   card(kind: Kind, id: number): Promise<CatalogCard>;
+  /** A season of a series with its episodes (cached like cards). */
+  season(id: number, n: number): Promise<SeasonDetails>;
 }
 
 export const CACHE_KEY = 'tsp.tmdbCache';
@@ -127,6 +129,15 @@ export function createCatalogClient(
         const c = sanitizeCard(e, raw, kind);
         if (!c) throw fail('bad');
         return c;
+      });
+    },
+    season(id, n) {
+      let e: TmdbEndpoint;
+      try { e = need(); } catch (err) { return Promise.reject(err); }
+      return fetchJson(seasonUrl(e, id, n), CARD_TTL, (raw) => {
+        const s = sanitizeSeason(raw, n);
+        if (!s) throw fail('bad');
+        return s;
       });
     },
   };

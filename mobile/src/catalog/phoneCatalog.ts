@@ -29,8 +29,9 @@ export const NOKEY_TEXT: Key = 'discover.nokeyText';
 let forTests: CatalogClient | null = null;
 let cached: { server: string; client: Promise<CatalogClient> } | null = null;
 
-export function setCatalogClientForTests(c: CatalogClient | null): void {
-  forTests = c;
+/** A fake client for tests; one without `season` rejects season requests. */
+export function setCatalogClientForTests(c: (Omit<CatalogClient, 'season'> & Partial<Pick<CatalogClient, 'season'>>) | null): void {
+  forTests = c ? { ...c, season: c.season || (() => Promise.reject(new Error('catalog:bad'))) } : null;
   cached = null;
 }
 

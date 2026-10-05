@@ -1082,6 +1082,12 @@ export const ru = {
     season: '{n} сезон',
     airing: 'выходит: {a} из {b}',
     find: 'Найти',
+    /** A season chip and the heading of the chosen season when TMDB gives no name. */
+    seasonChip: 'Сезон {n}',
+    findSeason: 'Найти раздачи на сезон',
+    openInLibrary: 'Открыть в медиатеке',
+    episodesError: 'Не удалось загрузить серии',
+    noEpisodes: 'Серий пока нет',
   },
   catalog: {
     querySeason: '{n} сезон',

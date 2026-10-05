@@ -35,3 +35,12 @@ export const TV_CARD = {
   next_episode_to_air: { season_number: 2, episode_number: 7, air_date: '2026-10-12' },
   credits: { cast: Array.from({ length: 12 }, (_, i) => ({ name: 'Актёр ' + (i + 1), character: 'Роль ' + (i + 1), profile_path: '/c' + i + '.jpg' })) },
 };
+
+export const TV_SEASON = {
+  _id: 'x', air_date: '2026-08-01', name: 'Сезон 2', overview: 'Экспедиция возвращается.', season_number: 2, id: 77,
+  episodes: [
+    { episode_number: 2, name: '  Вторая смена ', air_date: '2026-08-08', runtime: 51, overview: 'Связь пропадает.', still_path: '/s2.jpg', crew: [{}] },
+    { episode_number: 1, name: 'Первый лёд', air_date: '2026-08-01', runtime: 48, overview: 'Станция открывается.' },
+    { episode_number: 3, name: 'Третий день', air_date: '', runtime: null, overview: '' },
+  ],
+};

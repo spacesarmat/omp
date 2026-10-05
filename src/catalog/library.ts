@@ -53,18 +53,26 @@ function nameKey(title: string): string {
   return k.slice(0, k.length - 2);
 }
 
-/** Keys 'name|N' of the series seasons in the torrents (from the season marks of the title; none without them). */
-export function seasonIndex(torrents: { title: string }[]): Set<string> {
-  const idx = new Set<string>();
+/**
+ * Keys 'name|N' of the series seasons in the torrents (from the season marks of the title; none without them),
+ * each with the hash of the first torrent that has it.
+ */
+export function seasonIndex(torrents: { title: string; hash?: string }[]): Map<string, string> {
+  const idx = new Map<string, string>();
   torrents.forEach((tr) => {
     const raw = tr.title || '';
     const seasons = parseRelease(raw).seasons;
     if (!seasons.length) return;
+    const hash = tr.hash || '';
     const add = (s: string): void => {
       const core = titleCore(s);
       if (!core) return;
       const name = nameKey(core);
-      if (name) seasons.forEach((n) => idx.add(name + '|' + n));
+      if (!name) return;
+      seasons.forEach((n) => {
+        const k = name + '|' + n;
+        if (!idx.has(k)) idx.set(k, hash);
+      });
     };
     add(raw);
     if (raw.indexOf(' / ') > 0) raw.split(' / ').forEach(add);
@@ -72,8 +80,18 @@ export function seasonIndex(torrents: { title: string }[]): Set<string> {
   return idx;
 }
 
+/** The hash of the first torrent with season N of the series (its title or original name); '' when none. */
+export function librarySeasonHash(idx: Map<string, string>, t: { title: string; original: string }, season: number): string {
+  const names = [t.title, t.original];
+  for (let i = 0; i < names.length; i++) {
+    const k = names[i] ? nameKey(names[i]) + '|' + season : '';
+    if (k && idx.has(k)) return idx.get(k) || '';
+  }
+  return '';
+}
+
 /** True when season N of the series (its title or original name) is in the season index. */
-export function inLibrarySeason(idx: Set<string>, t: { title: string; original: string }, season: number): boolean {
+export function inLibrarySeason(idx: { has(k: string): boolean }, t: { title: string; original: string }, season: number): boolean {
   const names = [t.title, t.original];
   for (let i = 0; i < names.length; i++) {
     if (names[i] && idx.has(nameKey(names[i]) + '|' + season)) return true;

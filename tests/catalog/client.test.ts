@@ -3,7 +3,7 @@ import { createCatalogClient, catalogErrorCode, CACHE_KEY } from '../../src/cata
 import { applyLanguageSetting } from '../../src/i18n';
 import type { TmdbEndpoint } from '../../src/catalog/tmdb';
 import type { SourceHttp } from '../../src/sources/types';
-import { MOVIE_LIST, TV_LIST, MOVIE_CARD } from './fixtures';
+import { MOVIE_LIST, TV_LIST, MOVIE_CARD, TV_SEASON } from './fixtures';
 
 const E: TmdbEndpoint = { base: 'https://api.tmdb.mirror.test/3/', key: 'SECRETKEY', images: 'https://img.mirror.test' };
 
@@ -16,6 +16,7 @@ function fake(): Fake {
       if (url.indexOf('discover/movie') >= 0) return { status: 200, text: JSON.stringify(MOVIE_LIST) };
       if (url.indexOf('tv/on_the_air') >= 0) return { status: 200, text: JSON.stringify(TV_LIST) };
       if (url.indexOf('movie/101') >= 0) return { status: 200, text: JSON.stringify(MOVIE_CARD) };
+      if (url.indexOf('tv/202/season/') >= 0) return { status: 200, text: JSON.stringify(TV_SEASON) };
       return { status: 200, text: JSON.stringify({ results: [], total_pages: 1 }) };
     },
     http: {
@@ -72,6 +73,40 @@ describe('catalog client', () => {
     now += 2 * 60 * 60 * 1000;
     await c.card('movie', 101);
     expect(f.urls.length).toBe(2);
+  });
+
+  it('caches seasons for 24 hours, per season and language, sanitized only', async () => {
+    const f = fake();
+    let now = 1000;
+    const c = createCatalogClient(E, f.http, { now: () => now });
+    const s = await c.season(202, 2);
+    expect(s.episodes.map((e) => e.n)).toEqual([1, 2, 3]);
+    expect(f.urls[0]).toContain('/3/tv/202/season/2?');
+    now += 23 * 60 * 60 * 1000;
+    await c.season(202, 2);
+    expect(f.urls.length).toBe(1);
+    await c.season(202, 1);
+    expect(f.urls.length).toBe(2);
+    applyLanguageSetting('en');
+    await c.season(202, 2);
+    expect(f.urls.length).toBe(3);
+    applyLanguageSetting('ru');
+    now += 2 * 60 * 60 * 1000;
+    await c.season(202, 2);
+    expect(f.urls.length).toBe(4);
+    const raw = localStorage.getItem(CACHE_KEY) || '';
+    expect(raw.indexOf('still_path')).toBe(-1);
+    expect(raw.indexOf('SECRETKEY')).toBe(-1);
+  });
+
+  it('a season error maps to a code; no key rejects', async () => {
+    const f = fake();
+    f.answer = () => ({ status: 404, text: '{"success":false}' });
+    expect(catalogErrorCode(await failure(createCatalogClient(E, f.http).season(202, 9)))).toBe('bad');
+    const g = fake();
+    g.answer = () => ({ status: 200, text: '[]' });
+    expect(catalogErrorCode(await failure(createCatalogClient(E, g.http).season(202, 9)))).toBe('bad');
+    expect(catalogErrorCode(await failure(createCatalogClient(null, g.http).season(202, 1)))).toBe('nokey');
   });
 
   it('does not mix languages in the cache', async () => {
