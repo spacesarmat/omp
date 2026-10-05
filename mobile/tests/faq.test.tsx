@@ -1,3 +1,4 @@
+import { applyLanguageSetting } from '../../src/i18n';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -404,5 +405,40 @@ describe('Settings entry', () => {
     const row = Array.from(el.querySelectorAll('button')).find((b) => b.textContent!.includes('Вопросы и ответы'))!;
     await act(async () => row.click());
     expect(currentRoute.value.name).toBe('faq');
+  });
+});
+
+describe('FAQ screen chrome in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  // the question and answer texts are migrated with the FAQ data (mobile/src/faq.ts)
+  const enSearch = (el: HTMLElement) => el.querySelector<HTMLInputElement>('input[aria-label="Search the questions"]')!;
+
+  it('title, search, device group and the details button', async () => {
+    const el = mount(<Faq />);
+    expect(el.querySelector('h1')!.textContent).toBe('Questions and answers');
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    expect(enSearch(el).placeholder).toBe('Search: “no sound”, “update”…');
+    expect(el.querySelector('[role=group]')!.getAttribute('aria-label')).toBe('Device');
+    // open the questions of the phone list one by one until one has details
+    for (const q of Array.from(el.querySelectorAll<HTMLButtonElement>('.m-faq-q'))) {
+      await act(async () => q.click());
+      if (el.querySelector('.m-faq-more')) break;
+    }
+    expect(el.querySelector('.m-faq-more')!.textContent).toBe('More');
+  });
+
+  it('search results line and the TV hint', async () => {
+    const el = mount(<Faq />);
+    await act(async () => {
+      const i = enSearch(el);
+      i.value = 'qqqzzz';
+      i.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(el.querySelector('.m-faq-hint')!.textContent).toBe('Nothing found · in all devices');
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    setActiveTv('192.168.1.5');
+    const el2 = mount(<Faq />);
+    expect(el2.querySelector('.m-faq-hint')!.textContent).toBe('Chosen by the connected TV · LG OLED');
   });
 });

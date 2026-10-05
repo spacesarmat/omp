@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { signal } from '@preact/signals';
 import { Icon } from '../ui/Icon';
 import { Logo } from '../../../src/ui/Logo';
@@ -38,8 +39,6 @@ export async function scanLan(
   return d.discover({ subnets: own ? [own] : candidateSubnets(null, []), ports: DEFAULT_PORTS, isCancelled });
 }
 
-const TROUBLE =
-  'Не находится? Проверьте, что оба устройства в одной сети Wi‑Fi, VPN выключен или разрешает локальную сеть, а в роутере выключена изоляция клиентов (гостевая сеть).';
 
 const PHONE = 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2M10 7h4M10 10h4';
 const INFO = 'M12 8v5M12 16h.01M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18';
@@ -68,8 +67,8 @@ function checkAll(list: SavedServer[]): void {
 }
 
 function statusText(st: Status | undefined): string {
-  if (!st || st === 'pending') return 'проверка…';
-  return st.online ? 'онлайн' + (st.version ? ' · ' + st.version : '') : 'недоступен';
+  if (!st || st === 'pending') return t('connect.checking');
+  return st.online ? (st.version ? t('connect.online', { version: st.version }) : t('connect.onlineShort')) : t('connect.offline');
 }
 
 export function Connect() {
@@ -144,7 +143,7 @@ export function Connect() {
     e.preventDefault();
     if (busy) return;
     if (!addr.trim()) {
-      setError('Введите адрес сервера');
+      setError(t('connect.enterAddress'));
       return;
     }
     void enter({ url: addr, user: auth && user.trim() ? user.trim() : undefined, password: auth && pass ? pass : undefined });
@@ -163,7 +162,7 @@ export function Connect() {
     if (!data) return;
     const name = data.name || data.url.replace(/^https?:\/\//, '');
     if (await enter({ name, url: data.url, user: data.user, password: data.password })) {
-      showToast('Сервер «' + name + '» добавлен');
+      showToast(t('connect.addedToast', { name }));
       // the TV shows the QR in OMP: link to it so it returns to its catalog
       if (activeTv.value) void attachIfOmpForeground();
       else navigate({ name: 'tv' });
@@ -198,11 +197,11 @@ export function Connect() {
         </div>
       </div>
       {auto && scanState === 'scanning' && (
-        <div class="m-hint-info m-muted">Ищу TorrServer в сети…</div>
+        <div class="m-hint-info m-muted">{t('connect.searchingLan')}</div>
       )}
       {scanState === 'done' && found.length > 0 && (
         <>
-          <h2 class="m-section">Найдено в сети</h2>
+          <h2 class="m-section">{t('connect.foundInNet')}</h2>
           <div class="m-list">
             {found.map((f) => {
               const saved = list.find((x) => x.url === normalizeServerUrl(f.url));
@@ -217,7 +216,7 @@ export function Connect() {
                   <span class="m-dot on" />
                   <span class="m-server-text">
                     <span class="m-server-name">{f.url.replace(/^https?:\/\//, '')}</span>
-                    <span class="m-muted m-small">{saved ? 'сохранён · ' : ''}{f.version}</span>
+                    <span class="m-muted m-small">{saved ? t('connect.foundSaved', { version: f.version }) : f.version}</span>
                   </span>
                   <Icon d="M9 5l7 7-7 7" size={18} />
                 </button>
@@ -230,23 +229,21 @@ export function Connect() {
         <>
           <div class="m-hint-info m-muted">
             <Icon d={INFO} size={18} />
-            В сети не нашлось TorrServer
+            {t('connect.nothingOnNet')}
           </div>
           <div class="m-local-card">
             <div class="m-local-head">
               <span class="m-local-icon">
                 <Icon d={PHONE} size={24} />
               </span>
-              <div class="m-local-title">TorrServer прямо на телефоне</div>
+              <div class="m-local-title">{t('connect.localTitle')}</div>
             </div>
-            <div class="m-local-text">
-              OMP запустит встроенный сервер. Телевизор найдёт его сам, пока телефон в той же сети Wi‑Fi.
-            </div>
+            <div class="m-local-text">{t('connect.localText')}</div>
             <button type="button" class="m-btn m-btn-primary" onClick={() => navigate({ name: 'localServer' })}>
-              Запустить TorrServer на телефоне
+              {t('connect.localStart')}
             </button>
           </div>
-          <div class="m-muted m-small m-or">или</div>
+          <div class="m-muted m-small m-or">{t('connect.or')}</div>
         </>
       )}
       <button
@@ -255,14 +252,14 @@ export function Connect() {
         disabled={scanState === 'scanning'}
         onClick={() => setScanRun(scanRun + 1)}
       >
-        {scanState === 'scanning' ? 'Ищу…' : 'Найти в сети'}
+        {scanState === 'scanning' ? t('connect.searchingShort') : t('connect.scan')}
       </button>
       {(emptyScan || netFail) && scanState !== 'scanning' && (
-        <div class="m-hint-info m-muted m-trouble">{TROUBLE}</div>
+        <div class="m-hint-info m-muted m-trouble">{t('connect.trouble')}</div>
       )}
-      <h1 class="m-title">Подключение к TorrServer</h1>
+      <h1 class="m-title">{t('connect.pageTitle')}</h1>
       <div class="m-field">
-        <label for="addr">Адрес сервера</label>
+        <label for="addr">{t('connect.serverAddress')}</label>
         <input
           id="addr"
           class="m-input"
@@ -282,12 +279,12 @@ export function Connect() {
       </div>
       <button type="button" class="m-link" aria-expanded={auth} onClick={() => setAuth(!auth)}>
         <Icon d={auth ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} size={18} />
-        Логин и пароль
+        {t('connect.loginPassword')}
       </button>
       {auth && (
         <div class="m-field-group">
           <div class="m-field">
-            <label for="user">Логин</label>
+            <label for="user">{t('common.login')}</label>
             <input
               id="user"
               class="m-input"
@@ -299,7 +296,7 @@ export function Connect() {
             />
           </div>
           <div class="m-field">
-            <label for="pass">Пароль</label>
+            <label for="pass">{t('common.password')}</label>
             <input
               id="pass"
               class="m-input"
@@ -312,18 +309,16 @@ export function Connect() {
         </div>
       )}
       <button type="submit" class="m-btn m-btn-primary" disabled={busy}>
-        {busy ? 'Подключаюсь…' : 'Подключиться'}
+        {busy ? t('connect.connectingMe') : t('connect.connect')}
       </button>
       <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={() => void scan()}>
         <Icon d={SCAN} size={20} />
-        Сканировать QR с телевизора
+        {t('connect.scanQr')}
       </button>
-      <p class="m-muted m-note">
-        На телевизоре: OMP → Настройки → «Подключить телефон». Сервер, логин и пароль перенесутся автоматически.
-      </p>
+      <p class="m-muted m-note">{t('connect.qrNote')}</p>
       {list.length > 0 && (
         <>
-          <h2 class="m-section">Сохранённые серверы</h2>
+          <h2 class="m-section">{t('connect.savedServers')}</h2>
           <div class="m-list">
             {list.map((s) => {
               const st = statuses.value[s.id];
@@ -341,7 +336,7 @@ export function Connect() {
                   </span>
                   <Icon d="M9 5l7 7-7 7" size={18} />
                 </button>
-                <button type="button" class="m-icon-btn" aria-label={'Переименовать ' + s.name} onClick={() => setRenaming(s)}>
+                <button type="button" class="m-icon-btn" aria-label={t('connect.rename', { name: s.name })} onClick={() => setRenaming(s)}>
                   <Icon d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4" size={20} />
                 </button>
                 </div>
@@ -358,7 +353,7 @@ export function Connect() {
       )}
       {renaming && (
         <RenameSheet
-          title="Название сервера"
+          title={t('connect.serverName')}
           value={renaming.name}
           onSave={(n) => {
             updateServer(renaming.id, { name: n || renaming.url.replace(/^https?:\/\//, '') });

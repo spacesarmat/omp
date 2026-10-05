@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { goBack, navigate } from '../nav';
 import { showToast } from '../ui/toast';
@@ -30,7 +31,7 @@ const TV_ICON = 'M3 5h18v11H3zM8 20h8';
 function Bar(p: { title: string }) {
   return (
     <div class="m-bar">
-      <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+      <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
         <Icon d={BACK} />
       </button>
       <h1 class="m-bar-title">{p.title}</h1>
@@ -43,14 +44,14 @@ function stateOf(d: InstallDevice, latestAtv: string | null): { text: string; ok
   if (d.kind === 'atv') {
     if (d.ompVersion) {
       const old = !!latestAtv && compareVersions(latestAtv, d.ompVersion) > 0;
-      return { text: 'OMP ' + d.ompVersion + (old ? ' — есть ' + latestAtv : ''), ok: !old };
+      return { text: old ? t('install.assistant.ompVersionNewer', { version: d.ompVersion, latest: latestAtv! }) : t('install.assistant.ompVersion', { version: d.ompVersion }), ok: !old };
     }
-    if (d.cast === 'chromecast') return { text: 'Не поддерживается', ok: false };
-    if (!d.online) return { text: 'Сохранён · не найден в сети', ok: false };
-    return { text: 'OMP не найден', ok: false };
+    if (d.cast === 'chromecast') return { text: t('install.assistant.notSupported'), ok: false };
+    if (!d.online) return { text: t('install.assistant.savedOffline'), ok: false };
+    return { text: t('install.assistant.ompNotFound'), ok: false };
   }
-  if (!d.online) return { text: 'Сохранён · не найден в сети', ok: false };
-  return { text: 'Подключусь и проверю, что установлено', ok: false };
+  if (!d.online) return { text: t('install.assistant.savedOffline'), ok: false };
+  return { text: t('install.assistant.willCheck'), ok: false };
 }
 
 function Find() {
@@ -94,7 +95,7 @@ function Find() {
     e.preventDefault();
     const v = ip.trim();
     if (!IPV4.test(v)) {
-      setFormError('Введите IP-адрес вида 192.168.1.42');
+      setFormError(t('install.assistant.badIp'));
       return;
     }
     const known = list.find((d) => d.ip === v && d.kind === kind);
@@ -112,9 +113,9 @@ function Find() {
 
   return (
     <div class="m-screen m-install" data-route="install">
-      <Bar title="Установить OMP на телевизор" />
+      <Bar title={t('install.assistant.title')} />
       <p class="m-muted m-note">
-        {searching ? 'Телефон и телевизор должны быть в одной сети. Ищу устройства…' : 'Телефон и телевизор должны быть в одной сети.'}
+        {searching ? t('install.assistant.sameNetSearching') : t('install.assistant.sameNet')}
       </p>
       <div class="m-install-list">
         {list.map((d) => {
@@ -137,16 +138,16 @@ function Find() {
         })}
       </div>
       {!searching && list.length === 0 && (
-        <p class="m-muted m-note">Ничего не нашлось. Проверьте, что телевизор включён и в той же сети, или введите IP вручную.</p>
+        <p class="m-muted m-note">{t('install.assistant.nothingFound')}</p>
       )}
       {!searching && (
         <button type="button" class="m-btn m-btn-secondary" onClick={() => setRound(round + 1)}>
-          Искать снова
+          {t('install.assistant.searchAgain')}
         </button>
       )}
       {manual ? (
         <form class="m-field" onSubmit={submit}>
-          <label for="install-ip">IP-адрес телевизора</label>
+          <label for="install-ip">{t('install.assistant.ipLabel')}</label>
           <input
             id="install-ip"
             class="m-input"
@@ -156,7 +157,7 @@ function Find() {
             value={ip}
             onInput={(e) => setIp((e.target as HTMLInputElement).value)}
           />
-          <div class="m-seg" role="group" aria-label="Тип телевизора">
+          <div class="m-seg" role="group" aria-label={t('install.assistant.kindLabel')}>
             <button type="button" class={kind === 'lg' ? 'on' : ''} aria-pressed={kind === 'lg'} onClick={() => setKind('lg')}>
               LG webOS
             </button>
@@ -173,15 +174,15 @@ function Find() {
             </div>
           )}
           <button type="submit" class="m-btn m-btn-primary">
-            Показать шаги
+            {t('install.assistant.showSteps')}
           </button>
         </form>
       ) : (
         <button type="button" class="m-install-manual" onClick={() => setManual(true)}>
-          Ввести IP вручную
+          {t('install.assistant.manualIp')}
         </button>
       )}
-      <p class="m-muted m-small">Samsung (Tizen) пока не поддерживается.</p>
+      <p class="m-muted m-small">{t('install.assistant.samsungNote')}</p>
     </div>
   );
 }
@@ -266,7 +267,7 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
     } else if (a.id === 'open-hbc') {
       try {
         await launchLgApp(LG_HBC_APP_ID, { launchMode: 'addRepository', url: HB_REPO_URL });
-        showToast('Homebrew Channel открыт на телевизоре');
+        showToast(t('install.assistant.hbcOpened'));
       } catch (e) {
         showToast(errorMessage(e));
       }
@@ -279,7 +280,7 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
     if (device.kind === 'atv') {
       const saved = tvs.value.find((t) => t.ip === device.ip && t.kind === 'atv' && t.token);
       if (!saved) {
-        setHint('Подключите телефон к этому телевизору кодом в разделе «Телевизор» — или на ТВ откройте OMP → Настройки → «Обновление».');
+        setHint(t('install.assistant.pairFirst'));
         return;
       }
       const connected = await new Promise<boolean>((resolve) =>
@@ -291,10 +292,10 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
       if (!connected) return;
     }
     const opens = !plan.installed || tvOpensUpdate(plan.installed);
-    if (!opens) setHint('Эта версия OMP на ТВ не открывает обновление сама. На телевизоре: Настройки → Обновление → «Проверить обновление».');
+    if (!opens) setHint(t('install.assistant.noSelfUpdate'));
     try {
       await openUpdateOnTv();
-      showToast(opens ? 'На телевизоре открыто обновление OMP' : 'OMP открыт на телевизоре');
+      showToast(opens ? t('install.assistant.updateOpened') : t('install.assistant.ompOpened'));
     } catch (e) {
       showToast(errorMessage(e));
     }
@@ -309,13 +310,13 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
             <svg class="m-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5B700" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
               <path d="M12 3a9 9 0 1 0 9 9" />
             </svg>
-            Проверяю телевизор…
+            {t('install.assistant.checking')}
           </div>
-          {pairing && <div class="m-hint-warn">Подтвердите подключение на экране телевизора пультом: «Разрешить».</div>}
+          {pairing && <div class="m-hint-warn">{t('install.assistant.confirmOnTv')}</div>}
         </>
       ) : !plan ? (
         <div class="m-error" role="alert">
-          Не удалось проверить телевизор
+          {t('install.assistant.checkFailed')}
         </div>
       ) : (
         <>
@@ -380,7 +381,7 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
       )}
       {ask && (
         <Sheet
-          label="Подключение к телевизору"
+          label={t('install.assistant.connectSheet')}
           onClose={() => {
             setAsk(null);
             cancelAsk.current();
@@ -388,7 +389,7 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
         >
           <p class="m-note">{takeoverQuestion(device.name, ask.other)}</p>
           <button type="button" class="m-btn m-btn-primary" onClick={() => ask.proceed()}>
-            Подключиться
+            {t('connect.connect')}
           </button>
           <button
             type="button"
@@ -398,7 +399,7 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
               cancelAsk.current();
             }}
           >
-            Отмена
+            {t('common.cancel')}
           </button>
         </Sheet>
       )}

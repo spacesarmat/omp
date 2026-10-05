@@ -1,3 +1,4 @@
+import { applyLanguageSetting } from '../../src/i18n';
 import { TV_NO_OMP } from '../src/tv/tvClient';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
@@ -696,5 +697,46 @@ describe('Add «Подписаться»', () => {
     expect(again.textContent).toContain('Вы подписаны на этот запрос');
     click(Array.from(again.querySelectorAll('button')).find((b) => b.textContent === 'Открыть')!);
     expect(currentRoute.value).toEqual({ name: 'subFindings', id: subs[0].id });
+  });
+});
+
+describe('Add in English', () => {
+  beforeEach(() => {
+    applyLanguageSetting('en');
+    setSourceOn('ts-rutor', false);
+    setSourceOn('ts-torznab', false);
+  });
+  afterEach(() => applyLanguageSetting('ru'));
+
+  it('screen chrome, search sheets and the subscribe plate', async () => {
+    registerSource({ id: 'fake', name: 'Fake', kind: 'builtin', search: () => Promise.resolve([]) });
+    mount();
+    expect(el.querySelector('h1')!.textContent).toBe('Add');
+    expect(byText('Add')).toBeTruthy();
+    expect(el.textContent).toContain('Category');
+    expect(el.textContent).toContain('Search in sources');
+    expect(el.textContent).toContain('Magnet links from the browser open in OMP on their own — via “Share”.');
+    expect(el.querySelector('input[aria-label="Magnet link or hash"]')).toBeTruthy();
+    expect(el.querySelector<HTMLInputElement>('input[type=search]')!.placeholder).toBe('Name');
+    expect(byText('All sources · 1')).toBeTruthy();
+    click(byText('All sources · 1'));
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Sources for search');
+    expect(el.textContent).toContain('Search sources');
+    click(el.querySelector('.m-sheet-backdrop')!);
+    click(Array.from(el.querySelectorAll('.m-chip')).find((b) => (b.textContent || '').includes('▾'))!);
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Sort');
+    click(el.querySelector('.m-sheet-backdrop')!);
+    type('input[type=search]', 'zzz');
+    act(() => {
+      el.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect(el.textContent).toContain('Nothing found');
+    const plate = el.querySelector('[data-plate="subscribe"]')!;
+    expect(plate.textContent).toContain('Get notified when new torrents for this search appear');
+    expect(byText('Subscribe')).toBeTruthy();
+    click(byText('Add'));
+    expect(el.querySelector('.m-error')!.textContent).toBe('Paste a magnet link or a 40-character hash');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 });

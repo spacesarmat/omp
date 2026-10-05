@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { resetTo, afterConnectRoute } from '../nav';
 import { errorMessage } from '../../../src/api/http';
@@ -93,15 +94,15 @@ export function LocalServer() {
     if (askMobile) {
       return (
         <div class="m-screen" data-route="localServer">
-          <h1 class="m-title">TorrServer на телефоне</h1>
+          <h1 class="m-title">{t('localServer.title')}</h1>
           <div class="m-local-card" data-local="mobile">
-            <div class="m-local-title">{'Скачать ' + (size ? size.replace('~', '') : 'TorrServer') + ' через мобильный интернет?'}</div>
-            <div class="m-local-text">Телефон сейчас не в сети Wi‑Fi. Загрузку можно продолжить позже по Wi‑Fi — скачанное не пропадёт.</div>
+            <div class="m-local-title">{t('localServer.mobileAsk', { what: size ? size.replace('~', '') : 'TorrServer' })}</div>
+            <div class="m-local-text">{t('localServer.mobileText')}</div>
             <button type="button" class="m-btn m-btn-primary" onClick={startDownload}>
-              Скачать
+              {t('localServer.download')}
             </button>
             <button type="button" class="m-btn m-btn-secondary" onClick={() => setAskMobile(false)}>
-              Отмена
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -109,19 +110,23 @@ export function LocalServer() {
     }
     return (
       <div class="m-screen" data-route="localServer">
-        <h1 class="m-title">TorrServer на телефоне</h1>
+        <h1 class="m-title">{t('localServer.title')}</h1>
         <div class="m-local-card" data-local="offer">
           <div class="m-local-text">
-            {update
-              ? 'Вышла новая версия встроенного TorrServer — ' + pinned + '. Её нужно скачать с GitHub, лучше по Wi‑Fi.'
-              : 'TorrServer не входит в установочный файл OMP. Его нужно один раз скачать с GitHub (версия ' + pinned + '), лучше по Wi‑Fi.'}
+            {update ? t('localServer.updateText', { version: pinned }) : t('localServer.offerText', { version: pinned })}
           </div>
           <button type="button" class="m-btn m-btn-primary" onClick={startDownload}>
-            {(update ? 'Обновить TorrServer' : 'Скачать TorrServer') + (size ? ' (' + size + ')' : '')}
+            {update
+              ? size
+                ? t('localServer.updateServerSize', { size })
+                : t('localServer.updateServer')
+              : size
+                ? t('library.downloadServerSize', { size })
+                : t('library.downloadServer')}
           </button>
           {update && (
             <button type="button" class="m-btn m-btn-secondary" onClick={() => setApproved('skip')}>
-              Запустить текущую версию
+              {t('localServer.runCurrent')}
             </button>
           )}
         </div>
@@ -132,16 +137,16 @@ export function LocalServer() {
   const downloading = progress !== null && step === 0 && !error;
   const first =
     progress === null
-      ? 'Подготовка сервера ' + version
+      ? t('localServer.preparing', { version })
       : progress.phase === 'verify'
-        ? 'Проверка файла TorrServer ' + version
-        : 'Скачивание TorrServer ' + version + ' · ' + (progress.percent ?? 0) + '%';
-  const labels = [first, 'Запуск в фоне', 'Проверка связи', 'Подключение OMP'];
+        ? t('localServer.verifying', { version })
+        : t('localServer.downloading', { version, pct: progress.percent ?? 0 });
+  const labels = [first, t('localServer.stepRun'), t('localServer.stepCheck'), t('localServer.stepConnect')];
   const done = step >= SETUP_STEPS;
   const ip = localServer.value.ip;
   return (
     <div class="m-screen" data-route="localServer">
-      <h1 class="m-title">TorrServer на телефоне</h1>
+      <h1 class="m-title">{t('localServer.title')}</h1>
       <div class="m-steps">
         {labels.map((label, i) => {
           const state = checking ? 'wait' : i < step ? 'ok' : i === step ? (error ? 'fail' : 'run') : 'wait';
@@ -168,7 +173,7 @@ export function LocalServer() {
           </span>
           {progress!.phase === 'download' && (
             <button type="button" class="m-btn m-btn-secondary" onClick={() => void cancelLocalDownload()}>
-              Отмена
+              {t('common.cancel')}
             </button>
           )}
         </>
@@ -179,28 +184,26 @@ export function LocalServer() {
             {error}
           </div>
           <button type="button" class="m-btn m-btn-secondary" onClick={() => setAttempt(attempt + 1)}>
-            Повторить
+            {t('common.retry')}
           </button>
         </>
       )}
       {done && (
         <>
           <div class="m-addr-card">
-            <div class="m-muted m-small">Адрес для телевизора</div>
+            <div class="m-muted m-small">{t('localServer.addrForTv')}</div>
             {ip ? (
               <div class="m-addr">
                 {ip}:{LOCAL_PORT}
               </div>
             ) : (
-              <div class="m-error">Телефон не в сети Wi‑Fi — телевизор не увидит сервер</div>
+              <div class="m-error">{t('localServer.noWifi')}</div>
             )}
-            {localServer.value.vpn && <div class="m-hint-warn" role="alert">Включён VPN — другие устройства могут не видеть сервер. Разрешите в VPN доступ к локальной сети или выключите его.</div>}
-            <div class="m-muted m-note">
-              На ТВ: Вход → «Найти в сети». Сервер работает, пока телефон включён и в этой сети Wi‑Fi.
-            </div>
+            {localServer.value.vpn && <div class="m-hint-warn" role="alert">{t('localServer.vpn')}</div>}
+            <div class="m-muted m-note">{t('localServer.tvHint')}</div>
           </div>
           <button type="button" class="m-btn m-btn-primary" onClick={() => resetTo(afterConnectRoute())}>
-            Открыть каталог
+            {t('localServer.openCatalog')}
           </button>
         </>
       )}

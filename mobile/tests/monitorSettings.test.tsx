@@ -1,3 +1,4 @@
+import { applyLanguageSetting } from '../../src/i18n';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -133,5 +134,37 @@ describe('«Мониторинг»', () => {
     expect(row.textContent).toContain('раз в 3 часа');
     click(row);
     expect(currentRoute.value.name).toBe('monitor');
+  });
+});
+
+describe('Monitoring settings in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+
+  it('title, switches, hours sheet and the hints', async () => {
+    mon.permission = 'prompt';
+    await mount();
+    expect(el.querySelector('h1')!.textContent).toBe('Monitoring');
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    expect(sw('Check in the background').getAttribute('aria-checked')).toBe('true');
+    expect(sw('Wi-Fi only').getAttribute('aria-checked')).toBe('true');
+    expect(sw('Watch for new episodes').getAttribute('aria-checked')).toBe('true');
+    expect(el.textContent).toContain('subscriptions and new episodes, even when OMP is closed');
+    expect(el.textContent).toContain('for series from the catalog');
+    expect(el.textContent).toContain('No checks yet');
+    expect(el.textContent).toContain('every 3 hours ›');
+    expect(el.textContent).toContain('Notifications for OMP are off — you will only learn about new torrents by opening the “News” tab.');
+    expect(el.textContent).toContain('Android may postpone background checks to save battery.');
+    expect(Array.from(el.querySelectorAll('button')).some((b) => b.textContent === 'Allow notifications')).toBe(true);
+    click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').startsWith('How often')));
+    expect(el.querySelector('[role=radiogroup][aria-label="How often"]')!.querySelectorAll('[role=radio]')).toHaveLength(4);
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('How often');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('a failed last check shows its reason', async () => {
+    mon.status = { enabled: true, hours: 3, wifiOnly: true, running: false, lastError: 'No network' } as any;
+    await mount();
+    expect(el.textContent).toContain('The check did not finish: No network');
   });
 });

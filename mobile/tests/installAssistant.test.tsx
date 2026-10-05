@@ -1,3 +1,4 @@
+import { applyLanguageSetting } from '../../src/i18n';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -725,5 +726,73 @@ describe('Install assistant — install from the phone', () => {
     expect(el.textContent).toContain('OMP 0.14.0 установлен');
     expect(el.textContent).toContain('не 64-битная (armeabi-v7a)');
     expect(el.querySelector('[data-reminder]')).toBeNull();
+  });
+});
+
+describe('Install assistant in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  const CYR = /[А-Яа-яЁё]/;
+
+  it('device list', async () => {
+    setInstallNative({
+      ...fakeNative,
+      discoverTvs: async () => [{ ip: LG_IP, name: 'LG Lounge', model: 'OLED55C1' }],
+      discoverCastTvs: async () => [{ ip: ATV_IP, name: 'Chromecast Bedroom', model: 'Google TV' }],
+      discoverOmpTvs: async () => [{ ip: '192.168.1.20', port: 8095, name: 'Kitchen', version: '0.12.1' }],
+    });
+    const el = mount(<InstallAssistant />);
+    expect(el.querySelector('.m-bar-title')!.textContent).toBe('Install OMP on the TV');
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    expect(el.textContent).toContain('The phone and the TV must be on the same network. Looking for devices…');
+    await flush();
+    const rows = Array.from(el.querySelectorAll('.m-install-dev')).map((n) => n.textContent);
+    expect(rows[0]).toContain('I will connect and check what is installed');
+    expect(rows[1]).toContain('OMP not found');
+    expect(rows[2]).toContain('OMP 0.12.1 — 0.13.1 is available');
+    expect(el.textContent).toContain('Samsung (Tizen) is not supported yet.');
+    expect(button(el, 'Search again')).toBeTruthy();
+    expect(el.textContent).not.toMatch(CYR);
+  });
+
+  it('nothing found and the manual IP form', async () => {
+    setInstallNative({ ...fakeNative, discoverTvs: async () => [], discoverCastTvs: async () => [], discoverOmpTvs: async () => [] });
+    const el = mount(<InstallAssistant />);
+    await flush();
+    expect(el.textContent).toContain('Nothing found. Check that the TV is on and on the same network, or enter the IP manually.');
+    click(button(el, 'Enter the IP manually'));
+    expect(el.querySelector('label[for=install-ip]')!.textContent).toBe('TV IP address');
+    expect(el.querySelector('[role=group][aria-label="TV type"]')).toBeTruthy();
+    type(el.querySelector<HTMLInputElement>('#install-ip')!, '192.168.1');
+    click(button(el, 'Show the steps'));
+    expect(el.querySelector('[role="alert"]')!.textContent).toBe('Enter an IP address like 192.168.1.42');
+    expect(el.textContent).not.toMatch(CYR);
+  });
+
+  it('LG steps: checking, the steps and the plan texts', async () => {
+    setInstallNative({ ...fakeNative, discoverTvs: async () => [{ ip: LG_IP, name: 'LG Lounge', model: 'OLED55C1' }] });
+    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
+    expect(el.textContent).toContain('Checking the TV…');
+    await flush();
+    expect(el.textContent).toContain('OLED55C1RLA · webOS 6.0 · no root — install through Developer Mode');
+    expect(el.querySelectorAll('.m-install-step').length).toBe(6);
+    expect(button(el, 'Install OMP and Homebrew Channel')).toBeTruthy();
+    // the install box is migrated in the next task: only the steps and the notes are checked here
+    const own = Array.from(el.querySelectorAll('.m-install-steps, .m-hint-warn, .m-bar')).map((n) => n.textContent).join('\n');
+    expect(own).not.toMatch(CYR);
+  });
+
+  it('Android TV: the update on a saved TV without a pairing explains what to do', async () => {
+    mockFetch((url) => {
+      if (url === 'http://192.168.1.66:8095/omp/info') return { body: JSON.stringify({ name: 'X', version: '0.12.0', paired: false }) };
+      if (url.indexOf(ANDROID_UPDATE_URL) === 0) return { body: JSON.stringify({ version: '0.13.1', ipkUrl: 'https://x/a.apk', ipkHash: HASH }) };
+      return { status: 404, body: '' };
+    });
+    const el = mount(<InstallAssistant ip="192.168.1.66" kind="atv" />);
+    await flush();
+    expect(el.textContent).toContain('Version 0.12.0 — 0.13.1 is available');
+    click(button(el, 'Update on the TV'));
+    await flush();
+    expect(el.textContent).toContain('Connect the phone to this TV with the code in the “TV” section');
   });
 });

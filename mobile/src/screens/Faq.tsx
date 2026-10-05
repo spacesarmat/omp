@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { goBack } from '../nav';
 import { DEVICES, FAQ, SECTIONS, itemFor, resolveFaqLink, type Device, type FaqItem, type FaqLine } from '../faq';
@@ -147,7 +148,7 @@ export function Faq(p: { q?: string } = {}) {
             {v.more.length > 0 && (
               <>
                 <button type="button" class="m-faq-more" aria-expanded={moreOpen === it.id} aria-controls={moreOpen === it.id ? 'faq-more-' + it.id : undefined} onClick={() => setMoreOpen(moreOpen === it.id ? null : it.id)}>
-                  Подробнее
+                  {t('common.more')}
                 </button>
                 {moreOpen === it.id && (
                   <div class="m-faq-detail" id={'faq-more-' + it.id}>
@@ -168,17 +169,17 @@ export function Faq(p: { q?: string } = {}) {
   return (
     <div class="m-screen" data-route="faq">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
-        <h1 class="m-bar-title">Вопросы и ответы</h1>
+        <h1 class="m-bar-title">{t('common.faq')}</h1>
       </div>
       <label class="m-faq-search">
         <Icon d="M20 20l-3.5-3.5M18 11a7 7 0 11-14 0 7 7 0 0114 0z" size={18} />
         <input
           type="text"
-          aria-label="Поиск по вопросам"
-          placeholder="Поиск: «нет звука», «обновить»…"
+          aria-label={t('faq.searchLabel')}
+          placeholder={t('faq.searchPlaceholder')}
           value={query}
           onInput={(e) => {
             setQuery((e.target as HTMLInputElement).value);
@@ -190,20 +191,20 @@ export function Faq(p: { q?: string } = {}) {
       {searching ? (
         <>
           <div class="m-faq-hint" role="status">
-            {hits.length ? `Найдено ${hits.length} · во всех устройствах` : 'Ничего не найдено · во всех устройствах'}
+            {hits.length ? t('faq.found', { n: hits.length }) : t('faq.nothing')}
           </div>
           <div class="m-faq-list">{hits.map((h) => row(h.item, h.device, true))}</div>
         </>
       ) : (
         <>
-          <div class="m-faq-devices" role="group" aria-label="Устройство">
+          <div class="m-faq-devices" role="group" aria-label={t('faq.device')}>
             {DEVICES.map((d) => (
               <button type="button" class={'m-chip' + (d.id === device ? ' on' : '')} aria-pressed={d.id === device} key={d.id} onClick={() => pick(d.id)}>
                 {d.label}
               </button>
             ))}
           </div>
-          {fromTv && tvName && <div class="m-faq-hint">Выбрано по подключённому телевизору · {tvName}</div>}
+          {fromTv && tvName && <div class="m-faq-hint">{t('faq.fromTv', { name: tvName })}</div>}
           {shown.map((g) => (
             <section class="m-set-group" key={g.s.id}>
               <div class="m-set-label">{g.s.label}</div>

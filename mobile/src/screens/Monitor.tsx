@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { goBack } from '../nav';
@@ -10,7 +11,7 @@ import { MONITOR_HOURS, loadMonitorSettings, saveMonitorSettings, type MonitorSe
 const BACK = 'M15 5l-7 7 7 7';
 const CHECK = 'M5 12l5 5l9-10';
 
-const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
   return (
@@ -58,36 +59,36 @@ export function Monitor() {
   return (
     <div class="m-screen" data-route="monitor">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
-        <h1 class="m-bar-title">Мониторинг</h1>
+        <h1 class="m-bar-title">{t('monitor.title')}</h1>
       </div>
       <div class="m-set-card">
         <div class="m-set-row">
           <div class="m-set-text" style="flex-grow: 1">
-            <span>Проверять в фоне</span>
-            <span class="m-muted m-small">подписки и новые серии, даже когда OMP закрыт</span>
+            <span>{t('monitor.settings.background')}</span>
+            <span class="m-muted m-small">{t('monitor.settings.backgroundSub')}</span>
           </div>
-          <Switch on={s.enabled} label="Проверять в фоне" onToggle={() => change({ enabled: !s.enabled })} />
+          <Switch on={s.enabled} label={t('monitor.settings.background')} onToggle={() => change({ enabled: !s.enabled })} />
         </div>
         <div class="m-set-sep" />
         <button type="button" class="m-set-row m-set-pick" aria-haspopup="dialog" disabled={!s.enabled} onClick={() => setHoursOpen(true)}>
-          <span>Как часто</span>
+          <span>{t('monitor.settings.howOften')}</span>
           <span class="m-muted">{hoursText(s.hours)} ›</span>
         </button>
         <div class="m-set-sep" />
         <div class="m-set-row">
-          <span style="flex-grow: 1">Только через Wi-Fi</span>
-          <Switch on={s.wifiOnly} label="Только через Wi-Fi" onToggle={() => change({ wifiOnly: !s.wifiOnly })} />
+          <span style="flex-grow: 1">{t('monitor.settings.wifiOnly')}</span>
+          <Switch on={s.wifiOnly} label={t('monitor.settings.wifiOnly')} onToggle={() => change({ wifiOnly: !s.wifiOnly })} />
         </div>
         <div class="m-set-sep" />
         <div class="m-set-row">
           <div class="m-set-text" style="flex-grow: 1">
-            <span>Следить за новыми сериями</span>
-            <span class="m-muted m-small">для сериалов из каталога</span>
+            <span>{t('monitor.settings.episodes')}</span>
+            <span class="m-muted m-small">{t('monitor.settings.episodesSub')}</span>
           </div>
-          <Switch on={s.episodes} label="Следить за новыми сериями" onToggle={() => change({ episodes: !s.episodes })} />
+          <Switch on={s.episodes} label={t('monitor.settings.episodes')} onToggle={() => change({ episodes: !s.episodes })} />
         </div>
       </div>
       <div class="m-set-card m-monitor-last" data-last-check>
@@ -99,31 +100,28 @@ export function Monitor() {
           ))
         ) : (
           <div class="m-muted m-small">
-            {status && status.lastError ? 'Проверка не завершилась: ' + status.lastError : 'Проверок ещё не было'}
+            {status && status.lastError ? t('monitor.settings.failed', { error: status.lastError }) : t('monitor.settings.never')}
           </div>
         )}
         {nextLine(next, s.enabled, now) && <div class="m-muted m-small">{cap(nextLine(next, s.enabled, now))}</div>}
       </div>
       {perm && perm !== 'granted' && (
         <div class="m-hint-warn" role="status">
-          Уведомления для OMP выключены — о новых раздачах вы узнаете, только открыв вкладку «Новое».
+          {t('monitor.settings.notifyOff')}
           {perm === 'prompt' && (
             <div>
               <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={allow}>
-                Разрешить уведомления
+                {t('monitor.settings.allowNotify')}
               </button>
             </div>
           )}
         </div>
       )}
-      <div class="m-hint-warn">
-        Android может откладывать фоновые проверки ради батареи. Если уведомления приходят редко — разрешите OMP работу без ограничений в
-        настройках батареи.
-      </div>
+      <div class="m-hint-warn">{t('monitor.settings.batteryNote')}</div>
       {hoursOpen && (
-        <Sheet label="Как часто" onClose={() => setHoursOpen(false)}>
-          <div class="m-sheet-title">Как часто</div>
-          <div class="m-sub-pick" role="radiogroup" aria-label="Как часто">
+        <Sheet label={t('monitor.settings.howOften')} onClose={() => setHoursOpen(false)}>
+          <div class="m-sheet-title">{t('monitor.settings.howOften')}</div>
+          <div class="m-sub-pick" role="radiogroup" aria-label={t('monitor.settings.howOften')}>
             {MONITOR_HOURS.map((h) => (
               <button
                 key={h}
