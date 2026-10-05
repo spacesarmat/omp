@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.monitor
 
+import com.spacesarmat.omp.I18n
+
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
@@ -177,7 +179,7 @@ class MonitorHost(
         const val ORIGIN = MonitorOrigin.ORIGIN
         const val PAGE = "$ORIGIN/monitor.html"
         const val BRIDGE = "OmpMonitorHost"
-        private const val NO_ANSWER = "Сайт не отвечает"
-        private const val JOURNAL_FAILED = "Не удалось сохранить состояние проверки"
+        private val NO_ANSWER: String get() = I18n.s("errors.siteDown")
+        private val JOURNAL_FAILED: String get() = I18n.s("monitor.journalFailed")
     }
 }

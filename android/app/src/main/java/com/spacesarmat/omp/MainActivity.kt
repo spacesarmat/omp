@@ -17,6 +17,7 @@ class MainActivity : BridgeActivity() {
     private var tvMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        I18n.load(this)
         skipLaunchIntent = savedInstanceState != null ||
             ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
         registerPlugin(OmpNativePlugin::class.java)

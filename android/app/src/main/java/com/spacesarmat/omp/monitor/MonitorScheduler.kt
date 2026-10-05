@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.monitor
 
+import com.spacesarmat.omp.I18n
+
 import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -68,7 +70,7 @@ object MonitorScheduler {
     fun recordRun(ctx: Context, at: Long, summary: JSONObject?, error: String?) {
         val e = prefs(ctx).edit().putLong("lastRun", at)
         if (summary != null) e.putString("lastSummary", summary.toString()).remove("lastError")
-        else e.remove("lastSummary").putString("lastError", error ?: "Проверка не завершилась")
+        else e.remove("lastSummary").putString("lastError", error ?: I18n.s("monitor.noFinish"))
         e.apply()
     }
 

@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.sources
 
+import com.spacesarmat.omp.I18n
+
 import android.content.Context
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -140,7 +142,7 @@ class SourceServices private constructor(context: Context) {
         )
 
     companion object {
-        const val SECRETS_FAILED = "Не удалось открыть защищённое хранилище"
+        val SECRETS_FAILED: String get() = I18n.s("errors.secretsFailed")
         private const val JS_SECRET_PREFIX = "js:"
 
         @Volatile

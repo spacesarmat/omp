@@ -203,13 +203,13 @@ class PlayerServer(private val onMessage: (String) -> Unit) {
         /** Local IPv4 address the OS would use to reach [tvIp] (UDP connect sends no packets). */
         @Throws(IOException::class, UserError::class)
         fun localAddressFor(tvIp: String): InetAddress {
-            if (!IPV4.matches(tvIp)) throw UserError("Некорректный адрес телевизора")
+            if (!IPV4.matches(tvIp)) throw UserError(I18n.s("plugin.badTvAddr2"))
             val local = DatagramSocket().use { s ->
                 s.connect(InetAddress.getByName(tvIp), 9)
                 s.localAddress
             }
             if (local !is Inet4Address || local.isAnyLocalAddress || local.isLoopbackAddress) {
-                throw UserError("Нет сети до телевизора. Проверьте Wi-Fi")
+                throw UserError(I18n.s("errors.noNetTv"))
             }
             return local
         }

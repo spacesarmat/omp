@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.monitor
 
+import com.spacesarmat.omp.I18n
+
 import com.spacesarmat.omp.sources.HttpSpec
 import com.spacesarmat.omp.sources.SiteHttpException
 import com.spacesarmat.omp.sources.SourceServices
@@ -37,7 +39,7 @@ sealed class BridgeRequest {
 }
 
 object BridgeProtocol {
-    const val BAD_MESSAGE = "Неверный запрос"
+    val BAD_MESSAGE: String get() = I18n.s("errors.badRequest")
     const val MAX_MESSAGE = 1_000_000
     const val MAX_TITLE = 200
     const val MAX_TEXT = 500

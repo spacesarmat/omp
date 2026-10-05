@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.sources
 
+import com.spacesarmat.omp.I18n
+
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import okhttp3.FormBody
@@ -168,12 +170,12 @@ class SiteHttp(
     companion object {
         const val MAX_BYTES = 5L * 1024 * 1024
         const val MAX_REDIRECTS = 10
-        const val BAD_URL = "Неверный адрес"
-        const val BAD_REQUEST = "Неверный запрос"
-        const val TOO_LARGE = "Слишком большой ответ сайта"
-        const val NO_ANSWER = "Сайт не отвечает"
-        const val CF_FAILED = "Сайт закрыт проверкой Cloudflare — пройти её не удалось"
-        const val CF_INTERACTIVE = "Сайт просит пройти проверку Cloudflare вручную"
+        val BAD_URL: String get() = I18n.s("errors.badUrl")
+        val BAD_REQUEST: String get() = I18n.s("errors.badRequest")
+        val TOO_LARGE: String get() = I18n.s("errors.tooLarge")
+        val NO_ANSWER: String get() = I18n.s("errors.siteDown")
+        val CF_FAILED: String get() = I18n.s("errors.cfFailed")
+        val CF_INTERACTIVE: String get() = I18n.s("errors.cfInteractive")
         const val CODE_CLOUDFLARE = "cloudflare"
         const val CODE_CLOUDFLARE_INTERACTIVE = "cloudflare-interactive"
 

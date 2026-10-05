@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.player
 
+import com.spacesarmat.omp.I18n
+
 import java.util.Locale
 
 /** An audio choice of the menu and of `nativePlayerState` (`audio.list` labels, `audio.sel` index). */
@@ -23,7 +25,7 @@ data class PlayerSnapshot(
 
 /** Engine-independent track labels and menu lists. */
 object TrackOptions {
-    private val RU = Locale.forLanguageTag("ru")
+    private val RU: Locale get() = if (I18n.lang == "en") Locale.ENGLISH else Locale.forLanguageTag("ru")
 
     /** «Русский» for «ru» / «rus»; empty for «und», unknown or unnamed codes. */
     fun language(code: String?): String {
@@ -39,7 +41,7 @@ object TrackOptions {
         n == 2 -> "2.0"
         n == 6 -> "5.1"
         n == 8 -> "7.1"
-        else -> "$n кан."
+        else -> I18n.s("player.channels", "n" to n.toString())
     }
 
     /** «Русский · Дубляж · AC3 5.1» (empty parts left out), «Дорожка n» when nothing is known. */
@@ -47,27 +49,27 @@ object TrackOptions {
         val tech = listOf(t.codec, channels(t.channels)).filter { it.isNotEmpty() }.joinToString(" ")
         val parts = ArrayList<String>()
         for (p in listOf(language(t.language), t.label.orEmpty(), tech)) if (p.isNotEmpty() && p !in parts) parts.add(p)
-        return if (parts.isEmpty()) "Дорожка $n" else parts.joinToString(" · ")
+        return if (parts.isEmpty()) I18n.s("player.track", "n" to n.toString()) else parts.joinToString(" · ")
     }
 
     fun subLabel(t: EngineTrack, n: Int): String {
         val parts = ArrayList<String>()
         for (p in listOf(language(t.language), t.label.orEmpty())) if (p.isNotEmpty() && p !in parts) parts.add(p)
-        return if (parts.isEmpty()) "Субтитры $n" else parts.joinToString(" · ")
+        return if (parts.isEmpty()) I18n.s("player.subTrack", "n" to n.toString()) else parts.joinToString(" · ")
     }
 
     fun audio(tracks: List<EngineTrack>): List<AudioOption> = tracks.mapIndexed { i, t -> AudioOption(t, audioLabel(t, i + 1)) }
 
     /** «Выкл», embedded tracks (e<n>), then the item's files (x<n>, named after [files]) in file order. */
     fun subs(tracks: List<EngineTrack>, files: List<SubFile>): List<SubOption> {
-        val out = arrayListOf(SubOption("off", "Выкл", null))
+        val out = arrayListOf(SubOption("off", I18n.s("player.off"), null))
         val external = ArrayList<Pair<Int, SubOption>>()
         var embedded = 0
         for (t in tracks) {
             val x = t.external
             if (x != null) {
-                val label = files.getOrNull(x)?.label ?: (t.label ?: "Файл")
-                external.add(x to SubOption("x$x", "$label (файл)", t))
+                val label = files.getOrNull(x)?.label ?: (t.label ?: I18n.s("player.file"))
+                external.add(x to SubOption("x$x", I18n.s("player.fileSuffix", "label" to label), t))
             } else {
                 out.add(SubOption("e$embedded", subLabel(t, embedded + 1), t))
                 embedded++
@@ -355,9 +357,9 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
 
         /** The text of the error box. */
         fun message(kind: ErrorKind): String = when (kind) {
-            ErrorKind.NETWORK -> "Сервер недоступен или не отвечает"
-            ErrorKind.UNSUPPORTED_FORMAT, ErrorKind.DECODER -> "Формат видео не поддерживается"
-            ErrorKind.OTHER -> "Не удалось воспроизвести видео"
+            ErrorKind.NETWORK -> I18n.s("player.errNetwork")
+            ErrorKind.UNSUPPORTED_FORMAT, ErrorKind.DECODER -> I18n.s("player.errFormat")
+            ErrorKind.OTHER -> I18n.s("player.errOther")
         }
     }
 }

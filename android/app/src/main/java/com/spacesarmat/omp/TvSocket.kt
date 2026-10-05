@@ -97,7 +97,7 @@ class TvSocket(
     fun race(candidates: List<TvCandidate>, preferPort: Int?) {
         synchronized(lock) { total = candidates.size }
         if (candidates.isEmpty()) {
-            fail("нет адреса")
+            fail(I18n.s("tv.noAddr"))
             return
         }
         val preferred = candidates.firstOrNull { it.port == preferPort }
@@ -153,11 +153,11 @@ class TvSocket(
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 webSocket.close(1000, null)
-                if (isCurrent(webSocket)) closed("Телевизор закрыл соединение")
+                if (isCurrent(webSocket)) closed(I18n.s("tv.closed"))
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                if (isCurrent(webSocket)) closed("Телевизор закрыл соединение")
+                if (isCurrent(webSocket)) closed(I18n.s("tv.closed"))
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -169,7 +169,7 @@ class TvSocket(
                     }
                 }
                 when (state) {
-                    1 -> closed("Связь с телевизором потеряна")
+                    1 -> closed(I18n.s("tv.lost"))
                     2 -> attemptFailed(t.message ?: t.javaClass.simpleName, isPreferred)
                 }
             }
@@ -193,7 +193,7 @@ class TvSocket(
             failed >= total
         }
         join?.invoke()
-        if (allFailed) fail(synchronized(lock) { lastError } ?: "нет адреса")
+        if (allFailed) fail(synchronized(lock) { lastError } ?: I18n.s("tv.noAddr"))
     }
 
     private fun isCurrent(webSocket: WebSocket): Boolean =

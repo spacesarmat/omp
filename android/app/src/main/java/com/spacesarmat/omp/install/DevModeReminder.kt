@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.install
 
+import com.spacesarmat.omp.I18n
+
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -101,9 +103,10 @@ object DevModeReminder {
     }
 
     fun show(ctx: Context, id: Int, name: String?) {
+        I18n.load(ctx)
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         if (nm.getNotificationChannel(CHANNEL) == null) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "Режим разработчика LG", NotificationManager.IMPORTANCE_DEFAULT))
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, I18n.s("devmode.channel"), NotificationManager.IMPORTANCE_DEFAULT))
         }
         if (!MonitorNotifier.canNotify(ctx)) return
         val open = PendingIntent.getActivity(
@@ -112,11 +115,10 @@ object DevModeReminder {
             Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val text = "Через 3 дня закончатся 1000 часов режима разработчика, и OMP удалится с телевизора. " +
-            "Откройте на ТВ приложение Developer Mode и продлите срок."
+        val text = I18n.s("devmode.text")
         val n = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_monitor)
-            .setContentTitle(if (name != null) "Продлите режим разработчика на «$name»" else "Продлите режим разработчика на LG")
+            .setContentTitle(if (name != null) I18n.s("devmode.titleNamed", "name" to name) else I18n.s("devmode.title"))
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(open)
@@ -135,6 +137,7 @@ object DevModeReminder {
 
 class DevModeReminderWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
     override fun doWork(): Result {
+        I18n.load(applicationContext)
         DevModeReminder.showFrom(applicationContext, inputData)
         return Result.success()
     }

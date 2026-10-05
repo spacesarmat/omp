@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.sources
 
+import com.spacesarmat.omp.I18n
+
 import java.util.concurrent.TimeUnit
 import okhttp3.Cookie
 import okhttp3.HttpUrl
@@ -53,8 +55,8 @@ class FlareSolverrClient(
     companion object {
         const val MAX_TIMEOUT_MS = 60_000L
         const val MAX_BYTES = 5L * 1024 * 1024
-        const val NO_ANSWER = "FlareSolverr не отвечает"
-        const val FAILED = "FlareSolverr не прошёл проверку"
+        val NO_ANSWER: String get() = I18n.s("errors.flareNoAnswer")
+        val FAILED: String get() = I18n.s("errors.flareFailed")
 
         /** {base}/v1 (a reverse-proxy path in the base is kept). */
         fun endpoint(base: HttpUrl): HttpUrl =

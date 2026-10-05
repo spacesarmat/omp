@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.control
 
+import com.spacesarmat.omp.I18n
+
 import java.security.MessageDigest
 import java.security.SecureRandom
 
@@ -107,6 +109,6 @@ class Pairing(
         val TOKEN = Regex("^[0-9a-f]{32}$")
 
         fun cleanName(phone: String?): String =
-            phone.orEmpty().filter { !it.isISOControl() }.trim().take(MAX_NAME).ifEmpty { "Телефон" }
+            phone.orEmpty().filter { !it.isISOControl() }.trim().take(MAX_NAME).ifEmpty { I18n.s("phone.default") }
     }
 }
