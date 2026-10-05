@@ -1,5 +1,18 @@
 /** The Russian dictionary: the source of truth for the keys. Placeholders: {name}; plurals: one / few / many with {n}. */
 export const ru = {
+  filters: {
+    noCam: 'без экранок',
+    seeds: 'сиды ≥ {n}',
+    dub: 'дубляж',
+    mvo: 'многоголосый',
+    original: 'оригинал',
+    rusSubs: 'рус. субтитры',
+    season: '{n} сезон',
+    fullSeason: 'полный сезон',
+    gb: 'ГБ',
+    from: 'от',
+    to: 'до',
+  },
   common: {
     signInTo: 'Вход на {site}',
     torrents: { one: '{n} раздача', few: '{n} раздачи', many: '{n} раздач' },
