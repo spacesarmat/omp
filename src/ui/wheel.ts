@@ -15,13 +15,32 @@ function canScroll(el: Element, dy: number): boolean {
   return dy < 0 ? h.scrollTop > 0 : h.scrollTop + h.clientHeight < h.scrollHeight - 1;
 }
 
-/** Nearest ancestor (or self) that can scroll in the wheel direction; falls back to the current screen. */
+function anyDialog(): boolean {
+  return dialogOpen.value || !!document.querySelector('.dialog-backdrop');
+}
+
+/** The open dialog's backdrop that holds `el` (a dialog is a world of its own: nothing behind it scrolls). */
+function dialogOf(el: Element | null): Element | null {
+  let n: Element | null = el;
+  while (n && n !== document.body) {
+    if (n.classList && n.classList.contains('dialog-backdrop')) return n;
+    n = n.parentElement;
+  }
+  return null;
+}
+
+/** Nearest ancestor (or self) that can scroll in the wheel direction; falls back to the current screen outside dialogs. */
 export function findScrollTarget(from: Element | null, dy: number): HTMLElement | null {
+  const stop = dialogOf(from);
+  // a dialog is open but the pointer is outside it: nothing behind the dialog scrolls
+  if (!stop && anyDialog()) return null;
   let el: Element | null = from;
   while (el && el !== document.body) {
     if (canScroll(el, dy)) return el as HTMLElement;
+    if (el === stop) return null;
     el = el.parentElement;
   }
+  if (stop) return null;
   const screen = document.querySelector('.screen');
   return screen && canScroll(screen, dy) ? (screen as HTMLElement) : null;
 }
@@ -29,10 +48,12 @@ export function findScrollTarget(from: Element | null, dy: number): HTMLElement 
 /** Magic Remote / LG pointer scrolling: scroll the container under the pointer by the wheel delta. */
 export function installWheelScroll(): () => void {
   const onWheel = (e: WheelEvent) => {
-    if (e.defaultPrevented || !e.deltaY || dialogOpen.value) return;
+    if (e.defaultPrevented || !e.deltaY) return;
     const dy = wheelDelta(e, window.innerHeight);
     const under = (document.elementFromPoint ? document.elementFromPoint(e.clientX, e.clientY) : null) || (e.target as Element | null);
     const t = findScrollTarget(under, dy);
+    // with a dialog open the browser must not scroll the page behind it either
+    if (anyDialog()) e.preventDefault();
     if (!t) return;
     t.scrollTop += dy;
     e.preventDefault();
