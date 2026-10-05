@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   BROWSER_HINT,
+  browserSignedIn,
   browserKey,
   browserOutcome,
   canLoginOnPhone,
@@ -176,6 +177,16 @@ describe('requests and answers', () => {
     expect(tv.askPhone).toBe(true);
     expect(tv.errors!.UNVERIFIED).toBeTruthy();
     expect(tvLoginRequest(spec).askPhone).toBeUndefined();
+  });
+
+  it('both say the window closes by itself and carry the checking / not confirmed / retry copy', () => {
+    for (const r of [phoneLoginRequest(spec), tvLoginRequest(spec)]) {
+      expect(r.text).toContain('окно закроется само');
+      expect(r.checking).toBe('Проверяю вход…');
+      expect(r.notConfirmed).toContain('«Проверить ещё раз»');
+      expect(r.retry).toBe('Проверить ещё раз');
+    }
+    expect(browserSignedIn('rutracker')).toBe('Вход в rutracker выполнен');
   });
 
   it('native answers are read strictly', () => {

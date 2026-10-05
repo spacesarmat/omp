@@ -1,7 +1,19 @@
 import type { ComponentChildren } from 'preact';
+import { useBackHandler } from './backStack';
 
-/** Bottom sheet with a dimmed backdrop; the backdrop closes it. */
-export function Sheet({ onClose, label, children }: { onClose: () => void; label: string; children: ComponentChildren }) {
+/** Bottom sheet with a dimmed backdrop; the backdrop and the system «Назад» (`onBack`, else `onClose`) close it. */
+export function Sheet({
+  onClose,
+  onBack,
+  label,
+  children,
+}: {
+  onClose: () => void;
+  onBack?: () => void;
+  label: string;
+  children: ComponentChildren;
+}) {
+  useBackHandler(() => (onBack ?? onClose)());
   return (
     <div class="m-sheet-host">
       <button type="button" class="m-sheet-backdrop" aria-label="Закрыть" onClick={onClose} />

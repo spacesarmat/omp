@@ -42,6 +42,12 @@ class CheckTexts(
     val errors: Map<String, String>,
     /** The login page tried to leave the site (it is back on the login page). */
     val blocked: String? = null,
+    /** Browser login: while the sign-in is being checked. */
+    val checking: String? = null,
+    /** Browser login: the cookies did not open the site signed in. */
+    val notConfirmed: String? = null,
+    /** Browser login: the button that checks again. */
+    val retry: String? = null,
 )
 
 /** How the visible check ended. [sent]: the phone passed it for the TV and the TV took the answer. */
@@ -63,6 +69,7 @@ class CloudflareCheckDialog(
     private var frame: FrameLayout? = null
     private var hintView: TextView? = null
     private var remoteBtn: TextView? = null
+    private var retryBtn: View? = null
     private var web: View? = null
 
     /** Builds and shows the dialog, then starts [c] on it. */
@@ -96,6 +103,10 @@ class CloudflareCheckDialog(
             it.text = text ?: ""
             it.visibility = if (text.isNullOrEmpty()) View.GONE else View.VISIBLE
         }
+    }
+
+    override fun showRetry(show: Boolean) {
+        retryBtn?.visibility = if (show) View.VISIBLE else View.GONE
     }
 
     override fun dismiss() {
@@ -206,6 +217,11 @@ class CloudflareCheckDialog(
                 addBtn(b)
                 if (first == null) first = b
             }
+            texts.retry?.let {
+                val b = button(it) { check?.retry() }.apply { visibility = View.GONE }
+                retryBtn = b
+                addBtn(b)
+            }
             val c = button(texts.cancel) { check?.cancel() }
             addBtn(c)
             if (first == null) first = c
@@ -222,6 +238,11 @@ class CloudflareCheckDialog(
             val hint = label("", 12f, ACCENT).apply { visibility = View.GONE }
             hintView = hint
             add(hint)
+            texts.retry?.let {
+                val b = button(it) { check?.retry() }.apply { visibility = View.GONE }
+                retryBtn = b
+                add(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48f)))
+            }
             add(button(texts.cancel) { check?.cancel() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48f)))
         }
         d.setContentView(box)

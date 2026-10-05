@@ -12,7 +12,14 @@ import type { SecretStore, SourceContext } from './types';
 // ---- copy ----
 
 export const BROWSER_LOGIN = 'Войти через браузер';
-export const BROWSER_HINT = 'Войдите как обычно — OMP сохранит вход. Пароль OMP не видит.';
+export const BROWSER_HINT = 'Войдите на сайте как обычно — окно закроется само, когда OMP увидит вход. Пароль OMP не видит.';
+/** While the native side checks the sign-in. */
+export const BROWSER_CHECKING = 'Проверяю вход…';
+/** The sign-in did not open the site signed in. */
+export const BROWSER_NOT_CONFIRMED = 'Не удалось подтвердить вход. Если вы вошли на сайте — нажмите «Проверить ещё раз»';
+export const BROWSER_RETRY = 'Проверить ещё раз';
+/** After a sign-in kept on this device (%s = the site). */
+export const BROWSER_SIGNED_IN = 'Вход в %s выполнен';
 /** Shown under a form login that hit a captcha. */
 export const BROWSER_CAPTCHA = 'Сайт просит капчу — войдите через браузер';
 /** The state of a site signed in through the browser. */
@@ -21,7 +28,7 @@ export const BROWSER_DONE_TITLE = 'Вход выполнен в браузере
 export const BROWSER_CANCEL = 'Отмена';
 export const LOGIN_ON_PHONE = 'Войти на телефоне';
 export const LOGIN_BY_REMOTE = 'Ввести пультом';
-export const BROWSER_TV_TEXT = 'Войдите на сайт как обычно. Пультом это неудобно — войдите на телефоне, OMP передаст вход сюда.';
+export const BROWSER_TV_TEXT = 'Войдите на сайт как обычно — окно закроется само. Пультом это неудобно — войдите на телефоне, OMP передаст вход сюда.';
 /** %s = the phone's name (the native dialog fills it in). */
 export const BROWSER_TV_HINT = 'Телефон «%s» получит запрос';
 export const BROWSER_TV_WAITING = 'Войдите на телефоне «%s»';
@@ -51,6 +58,11 @@ export const BROWSER_BUSY = 'Уже открыта другая проверка
 export const BROWSER_STORE_FAILED = 'Не удалось сохранить вход — попробуйте ещё раз';
 export const BROWSER_SENT_TV = 'Вход передан на телевизор';
 export const BROWSER_NOT_SENT_TV = 'Не удалось передать вход на телевизор — попробуйте ещё раз';
+
+/** «Вход в rutracker выполнен». */
+export function browserSignedIn(site: string): string {
+  return BROWSER_SIGNED_IN.replace('%s', site);
+}
 
 /** «Вход на Kinozal» (the sheet's title). */
 export function browserTitle(site: string): string {
@@ -106,6 +118,10 @@ export interface BrowserLoginRequest extends BrowserSpec {
   askPhone?: boolean;
   /** The login page tried to leave the site (it is back on the login page). */
   blocked?: string;
+  /** While the sign-in is checked; when it is not confirmed; the button that checks again. */
+  checking?: string;
+  notConfirmed?: string;
+  retry?: string;
 }
 
 /** The phone sheet; with forTv the TV «tv» asked for it and gets the session. */
@@ -122,6 +138,9 @@ export function phoneLoginRequest(spec: BrowserSpec, forTv?: { id: string; tv: s
     cancel: BROWSER_CANCEL,
     gateWait: BROWSER_GATE_WAIT,
     blocked: BROWSER_BLOCKED,
+    checking: BROWSER_CHECKING,
+    notConfirmed: BROWSER_NOT_CONFIRMED,
+    retry: BROWSER_RETRY,
   };
   if (forTv) {
     r.note = BROWSER_NOTE_TV;
@@ -151,6 +170,9 @@ export function tvLoginRequest(spec: BrowserSpec, askPhone?: boolean): BrowserLo
     gateWait: BROWSER_GATE_WAIT,
     errors: BROWSER_TV_ERRORS,
     blocked: BROWSER_BLOCKED,
+    checking: BROWSER_CHECKING,
+    notConfirmed: BROWSER_NOT_CONFIRMED,
+    retry: BROWSER_RETRY,
   };
   if (askPhone) r.askPhone = true;
   return r;

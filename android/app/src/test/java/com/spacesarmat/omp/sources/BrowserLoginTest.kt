@@ -69,6 +69,10 @@ class BrowserLoginTest {
         override fun setHint(text: String?) {
             shown = text
         }
+        var retry = false
+        override fun showRetry(show: Boolean) {
+            retry = show
+        }
         override fun dismiss() {
             log.add("dismiss")
         }
@@ -88,7 +92,7 @@ class BrowserLoginTest {
         "Вход на Kinozal", "Войдите как обычно", null, "Отмена", "Войти на телефоне", "Ввести пультом", "Телефон «%s» получит запрос",
         "Подключите телефон", "Откройте OMP на телефоне", "Войдите на телефоне «%s»", "Ждём",
         mapOf("UNVERIFIED" to "Вход с телефона не подтвердился", "NOT_TAKEN" to "Телефон не ответил"),
-        "off-site",
+        "off-site", "Проверяю вход…", "Не удалось подтвердить вход", "Проверить ещё раз",
     )
     private val check = SiteSession.check("my.php", "logout.php?hash4u=", "login.php", listOf("uid"))!!
     private val start = "https://kinozal.me/login.php".toHttpUrl()
@@ -164,6 +168,58 @@ class BrowserLoginTest {
         assertEquals(2, verified.size)
         assertEquals("ok", results.single().result)
         assertClosed()
+    }
+
+    @Test
+    fun saysItChecksThenThatTheSignInIsNotConfirmedAndChecksAgainOnRetry() {
+        var ok = false
+        verifyOk = { ok }
+        val l = login()
+        l.start(ui)
+        browser.jar["https://kinozal.me/"] = "uid=7"
+        // the check is in flight: «Проверяю вход…»
+        var during: String? = null
+        verifyOk = { during = ui.shown; ok }
+        sched.runUntil(1_000)
+        assertEquals("Проверяю вход…", during)
+        assertEquals("Не удалось подтвердить вход", ui.shown)
+        assertTrue(ui.retry)
+        assertTrue(results.isEmpty())
+        // «Проверить ещё раз»: the same cookies are checked at once (not after RETRY_SAME_MS)
+        ok = true
+        val before = verified.size
+        l.retry()
+        assertFalse(ui.retry)
+        assertEquals("Проверяю вход…", ui.shown)
+        sched.runUntil(sched.time + 600)
+        assertEquals(before + 1, verified.size)
+        assertEquals("ok", results.single().result)
+        assertClosed()
+    }
+
+    @Test
+    fun aRetryWithNoSiteCookiesSaysNotConfirmedAgain() {
+        val l = login()
+        l.start(ui)
+        sched.runUntil(1_000)
+        l.retry()
+        sched.runUntil(2_000)
+        assertTrue(verified.isEmpty())
+        assertEquals("Не удалось подтвердить вход", ui.shown)
+        assertTrue(ui.retry)
+        l.cancel()
+    }
+
+    @Test
+    fun aBackgroundCheckWithoutASignInSignalStaysQuiet() {
+        verifyOk = { false }
+        login().start(ui)
+        // a guest cookie, then a long wait: the slow check runs, but says nothing
+        browser.jar["https://kinozal.me/"] = "guest=1"
+        sched.runUntil(40_000)
+        assertTrue(verified.isNotEmpty())
+        assertNull(ui.shown)
+        assertFalse(ui.retry)
     }
 
     @Test

@@ -27,7 +27,8 @@ import { NowPlaying } from './screens/NowPlaying';
 import { MiniPlayer } from './ui/MiniPlayer';
 import { Settings, runUpdateCheck } from './screens/Settings';
 import { ServerSettings } from './screens/ServerSettings';
-import { UpdateSheet, sheetBackHandler } from './ui/UpdateSheet';
+import { UpdateSheet } from './ui/UpdateSheet';
+import { runBack } from './ui/backStack';
 import { WhatsNewSheet } from './ui/WhatsNewSheet';
 import { DonateSheet } from './ui/DonateSheet';
 import { syncSupport, localSupportUntil } from './donate';
@@ -52,7 +53,7 @@ import './mobile.css';
 const TABS: string[] = TAB_IDS;
 
 export function handleBack(): void {
-  if (sheetBackHandler.current?.()) return;
+  if (runBack()) return;
   if (goBack()) return;
   try {
     // tab roots: send the app to the background instead of closing it
