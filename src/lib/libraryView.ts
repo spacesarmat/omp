@@ -86,6 +86,9 @@ export interface LibraryTitle {
 export function libraryTitle(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): LibraryTitle {
   const own = (tor.title || '').trim();
   const shown = displayTitle(tor);
+  // a plain name with the year in brackets («Название (2026)») reads like the others: «Название · 2026»
+  const plainYear = shown === own ? /^(.+?)\s*\((19\d\d|20\d\d)\)$/.exec(own) : null;
+  if (plainYear && !looksRaw(plainYear[1])) return { title: plainYear[1], meta: plainYear[2] };
   if (shown !== own || !looksRaw(own)) return { title: shown, meta: '' };
   const first = own.split(' / ')[0];
   const core = shortTitle(first.replace(SEASON_WORDS, ''));

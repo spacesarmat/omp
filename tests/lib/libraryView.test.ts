@@ -47,6 +47,10 @@ describe('libraryTitle', () => {
     expect(libraryTitle(tor('Человек-паук: Новый день / Spider-Man: Brand New Day (2026) WEB-DL 1080p'))).toEqual({ title: 'Человек-паук: Новый день', meta: '2026' });
     expect(libraryTitle(tor('Аватар: Пламя и Пепел / Avatar: Fire and Ash (Джеймс Кэмерон) [2025, США, фантастика, WEB-DL 2160p]'))).toEqual({ title: 'Аватар: Пламя и Пепел', meta: '2025' });
   });
+  it('a plain name with the year in brackets: the year moves to the meta', () => {
+    expect(libraryTitle(tor('Последний богатырь (2026)'))).toEqual({ title: 'Последний богатырь', meta: '2026' });
+    expect(libraryTitle(tor('Последний богатырь'))).toEqual({ title: 'Последний богатырь', meta: '' });
+  });
   it('a series: season and episodes', () => {
     expect(libraryTitle(tor('Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 10 (Алик Сахаров) [2026, США, WEB-DL 1080p]'))).toEqual({ title: 'Темная материя', meta: '2 сезон · серии 1–6 из 10' });
     expect(libraryTitle(tor('Starbound Frontier S02 1080p WEB-DL'))).toEqual({ title: 'Starbound Frontier', meta: '2 сезон' });
