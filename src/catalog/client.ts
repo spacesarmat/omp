@@ -36,6 +36,13 @@ interface Entry { at: number; used: number; data: unknown; }
 /** Pending debounced saves, run by flushCatalogCache. */
 const pending: Array<() => void> = [];
 
+/** The local calendar date YYYY-MM-DD: «Обзор» novelties are released up to the person's today, not UTC's. */
+export function localDate(ms: number): string {
+  const d = new Date(ms);
+  const two = (n: number) => (n < 10 ? '0' : '') + n;
+  return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate());
+}
+
 /** Runs the pending cache writes now (tests; a page about to close). */
 export function flushCatalogCache(): void {
   const list = pending.splice(0, pending.length);
@@ -65,7 +72,7 @@ export function createCatalogClient(
   opts?: { now?: () => number; today?: () => string },
 ): CatalogClient {
   const now = opts && opts.now ? opts.now : function () { return Date.now(); };
-  const today = opts && opts.today ? opts.today : function () { return new Date(now()).toISOString().slice(0, 10); };
+  const today = opts && opts.today ? opts.today : function () { return localDate(now()); };
   const mem: { [k: string]: Entry } = {};
   /** Serialized length of each entry with its key. */
   const size: { [k: string]: number } = {};

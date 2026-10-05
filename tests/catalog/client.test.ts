@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createCatalogClient, catalogErrorCode, flushCatalogCache, CACHE_KEY, CACHE_BUDGET_CHARS } from '../../src/catalog/client';
+import { createCatalogClient, catalogErrorCode, flushCatalogCache, localDate, CACHE_KEY, CACHE_BUDGET_CHARS } from '../../src/catalog/client';
 import { applyLanguageSetting } from '../../src/i18n';
 import type { TmdbEndpoint } from '../../src/catalog/tmdb';
 import type { SourceHttp } from '../../src/sources/types';
@@ -260,5 +260,14 @@ describe('catalog client', () => {
     applyLanguageSetting('ru');
     await d.novelties('movie', 1);
     expect(g.urls).toHaveLength(0);
+  });
+  it('novelties use the local date, not the UTC one', async () => {
+    // 00:30 local time: in any zone east of UTC the UTC date is still the day before
+    const at = new Date(2026, 9, 6, 0, 30).getTime();
+    expect(localDate(at)).toBe('2026-10-06');
+    expect(localDate(new Date(2026, 0, 5, 23, 59).getTime())).toBe('2026-01-05');
+    const f = fake();
+    await createCatalogClient(E, f.http, { now: () => at }).novelties('movie', 1);
+    expect(f.urls[0]).toContain('2026-10-06');
   });
 });
