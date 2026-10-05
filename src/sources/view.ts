@@ -5,6 +5,7 @@ import { parseDate, parseSize } from './html';
 import { getSource } from './registry';
 import { ipBanText, sourcePaused } from './ipBan';
 import { getHealth } from './store';
+import { isTlsMessage, tlsText } from './tls';
 import type { Source, SourceContext, SourceHealth, SourceResult } from './types';
 
 export const jackettHint = (): string => tr('sources.jackettHint');
@@ -139,6 +140,8 @@ export function healthText(h: SourceHealth | null): HealthLine | null {
   if (isCloudflare(h.message)) return { text: h.message!, tone: 'bad' };
   // the site's code page: its own message («torrent.by просит ввести проверочный код»), not «не отвечает»
   if (h.code === 'ipban' && h.message) return { text: h.message, tone: 'bad' };
+  // the site answered, but its certificate could not be verified: not «не отвечает»
+  if (h.code === 'tls' || isTlsMessage(h.message)) return { text: tlsText(), tone: 'bad' };
   return { text: tr('sources.state.noAnswer'), tone: 'bad' };
 }
 

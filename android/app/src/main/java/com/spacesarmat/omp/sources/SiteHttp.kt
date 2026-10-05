@@ -4,6 +4,8 @@ import com.spacesarmat.omp.I18n
 
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -14,7 +16,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Why a site request failed; [reason] is shown to the user (Russian). [code] tells the page what kind of failure it is
- * ([SiteHttp.CODE_CLOUDFLARE], [SiteHttp.CODE_CLOUDFLARE_INTERACTIVE]), null for the rest.
+ * ([SiteHttp.CODE_CLOUDFLARE], [SiteHttp.CODE_CLOUDFLARE_INTERACTIVE], [SiteHttp.CODE_TLS]), null for the rest.
  */
 class SiteHttpException(val reason: String, val code: String? = null) : IOException(reason)
 
@@ -147,7 +149,7 @@ class SiteHttp(
         } catch (e: SiteHttpException) {
             throw e
         } catch (e: IOException) {
-            throw SiteHttpException(NO_ANSWER)
+            throw failureOf(e)
         }
     }
 
@@ -178,6 +180,19 @@ class SiteHttp(
         val CF_INTERACTIVE: String get() = I18n.s("errors.cfInteractive")
         const val CODE_CLOUDFLARE = "cloudflare"
         const val CODE_CLOUDFLARE_INTERACTIVE = "cloudflare-interactive"
+        val TLS_ERROR: String get() = I18n.s("errors.siteTls")
+        /** The site's certificate could not be verified (an incomplete chain, an unknown CA, a wrong host name). */
+        const val CODE_TLS = "tls"
+
+        /**
+         * A failed exchange as the page sees it: a certificate the handshake could not verify gets its own message and
+         * [CODE_TLS] (it answered, so «не отвечает» would mislead); any other I/O failure is [NO_ANSWER].
+         */
+        fun failureOf(e: IOException): SiteHttpException = when (e) {
+            is SiteHttpException -> e
+            is SSLHandshakeException, is SSLPeerUnverifiedException -> SiteHttpException(TLS_ERROR, CODE_TLS)
+            else -> SiteHttpException(NO_ANSWER)
+        }
 
         /** Fallback User-Agent when the device's WebView one is unknown (no WebView; JVM tests). */
         const val USER_AGENT =

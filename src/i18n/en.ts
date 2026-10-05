@@ -545,6 +545,8 @@ export const en: EnDict<typeof ru> = {
       ok: 'working',
       login: 'sign-in needed',
       noAnswer: 'not responding',
+      // the same text as the native one (android/.../I18n.kt errors.siteTls): the background page matches it
+      tls: 'Site certificate error',
       unknown: 'state unknown',
       off: 'off',
       error: 'error',
