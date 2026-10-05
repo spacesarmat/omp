@@ -448,6 +448,12 @@ describe('Add unified search', () => {
     expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 2 · 2 из 2 источников ответили');
   });
 
+  const pickFilter = (label: string) => {
+    if (!el.querySelector('.m-sheet')) click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').indexOf('Фильтры') === 0)!);
+    click(sheetButtons().filter((b) => b.textContent === label)[0]);
+    click(el.querySelector('.m-sheet-backdrop')!);
+  };
+
   it('quality chips and sorting', async () => {
     registerSource(
       fake('fake', [
@@ -461,11 +467,12 @@ describe('Add unified search', () => {
     await flush();
     const titles = () => Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
     expect(titles()).toEqual(['Small 2160p', 'Old 720p', 'Big 1080p']);
-    click(byText('1080p+'));
+    pickFilter('1080p');
+    expect(titles()).toEqual(['Big 1080p']);
+    pickFilter('4K');
     expect(titles()).toEqual(['Small 2160p', 'Big 1080p']);
-    click(byText('2160p'));
-    expect(titles()).toEqual(['Small 2160p']);
-    click(byText('2160p'));
+    pickFilter('1080p');
+    pickFilter('4K');
     click(byText('По сидам ▾'));
     click(sheetButtons().filter((b) => b.textContent === 'По размеру')[0]);
     expect(titles()).toEqual(['Big 1080p', 'Old 720p', 'Small 2160p']);
@@ -661,7 +668,9 @@ describe('Add «Подписаться»', () => {
     mount();
     search('Дюна');
     await flush();
-    click(byText('2160p'));
+    click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').indexOf('Фильтры') === 0)!);
+    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === '4K')!);
+    click(el.querySelector('.m-sheet-backdrop')!);
     click(Array.from(el.querySelector('[data-plate="subscribe"]')!.querySelectorAll('button')).find((b) => b.textContent === 'Подписаться')!);
     expect(el.querySelector('.m-sheet .m-chip.on')!.textContent).toBe('Любое');
   });
@@ -679,7 +688,9 @@ describe('Add «Подписаться»', () => {
     click(byText('Все источники · 2'));
     click(Array.from(el.querySelectorAll('.m-sheet [role=checkbox]')).find((b) => b.textContent === 'Фейк-2')!);
     click(el.querySelector('.m-sheet-backdrop')!);
-    click(byText('1080p+'));
+    click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').indexOf('Фильтры') === 0)!);
+    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === '1080p')!);
+    click(el.querySelector('.m-sheet-backdrop')!);
     search('  Северный ветер сезон 2 ');
     await flush();
     const plate = el.querySelector('[data-plate="subscribe"]')!;
