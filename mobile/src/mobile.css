@@ -22,7 +22,7 @@ h1, h2 { font-family: 'Unbounded', 'Manrope', sans-serif; font-weight: 600; }
 
 .m-screen {
   min-height: 100vh;
-  padding: env(safe-area-inset-top) 16px 96px;
+  padding: env(safe-area-inset-top) 16px calc(var(--m-nav-h) + 24px + env(safe-area-inset-bottom));
 }
 
 button, .m-btn {
@@ -500,7 +500,7 @@ button, .m-btn {
 }
 
 /* ---- torrent ---- */
-.m-torrent { padding: 0 0 96px; gap: 0; }
+.m-torrent { padding: 0 0 calc(var(--m-nav-h) + 24px + env(safe-area-inset-bottom)); gap: 0; }
 .m-thead { position: relative; height: 300px; padding: calc(env(safe-area-inset-top) + 24px) 16px 0; }
 .m-thead::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 17, 21, 0.1), var(--bg) 96%); }
 .m-thead-bar, .m-thead-info { position: relative; }
