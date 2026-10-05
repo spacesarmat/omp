@@ -4,6 +4,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { init, setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { Focusable, FocusGroup } from '../../src/ui/components';
 import { restoreFocus } from '../../src/ui/focus';
+import { SettingsScreen } from '../../src/screens/Settings';
 import { navigate, goBack, resetTo, currentRoute } from '../../src/ui/nav';
 
 async function until(cond: () => boolean) {
@@ -108,6 +109,19 @@ describe('focus on Back (TV)', () => {
     goBack();
     await until(() => getCurrentFocusKey() === 'first');
     await until(() => getCurrentFocusKey() === 'row-6');
+  });
+
+  it('every row of TV Settings has its own focus key (Back returns to it even if a section appears)', async () => {
+    const box = document.createElement('div');
+    box.className = 'screen-host';
+    document.body.appendChild(box);
+    render(h(SettingsScreen, {}), box);
+    await wait(150);
+    const keys = Array.from(box.querySelectorAll('[data-fk]')).map((n) => n.getAttribute('data-fk')!);
+    expect(keys.length).toBeGreaterThan(10);
+    expect(keys.filter((k) => k.indexOf('sn:') === 0)).toEqual([]);
+    render(null, box);
+    box.remove();
   });
 
   it('a key press while waiting keeps the focus where the user put it', async () => {

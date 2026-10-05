@@ -182,34 +182,34 @@ export function SettingsScreen() {
 
       <h2>{t('tvSettings.playback')}</h2>
       <ChoiceRow focusKey="set-audio" label={t('tvSettings.audioLang')} value={s.audioLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ audioLang: v })} />
-      <ChoiceRow label={t('tvSettings.subtitlesOn')} value={s.subtitlesOn} options={onOff()} onChange={(v) => updateSettings({ subtitlesOn: v })} />
-      <ChoiceRow label={t('tvSettings.subLang')} value={s.subLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ subLang: v })} />
-      <ChoiceRow label={t('tvSettings.seekStep')} value={s.seekStep} options={seekOptions()} onChange={(v) => updateSettings({ seekStep: v })} />
-      <ChoiceRow label={t('tvSettings.edgeStep')} value={s.edgeSeekStep} options={[5, 10, 15].map((v) => ({ value: v, label: v + ' ' + t('common.sec') }))} onChange={(v) => updateSettings({ edgeSeekStep: v })} />
-      <ChoiceRow label={t('tvSettings.autoNext')} value={s.autoNext} options={onOff()} onChange={(v) => updateSettings({ autoNext: v })} />
-      <ChoiceRow label={t('tvSettings.showStats')} value={s.showStats} options={onOff()} onChange={(v) => updateSettings({ showStats: v })} />
+      <ChoiceRow focusKey="set-subtitlesOn" label={t('tvSettings.subtitlesOn')} value={s.subtitlesOn} options={onOff()} onChange={(v) => updateSettings({ subtitlesOn: v })} />
+      <ChoiceRow focusKey="set-subLang" label={t('tvSettings.subLang')} value={s.subLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ subLang: v })} />
+      <ChoiceRow focusKey="set-seekStep" label={t('tvSettings.seekStep')} value={s.seekStep} options={seekOptions()} onChange={(v) => updateSettings({ seekStep: v })} />
+      <ChoiceRow focusKey="set-edgeStep" label={t('tvSettings.edgeStep')} value={s.edgeSeekStep} options={[5, 10, 15].map((v) => ({ value: v, label: v + ' ' + t('common.sec') }))} onChange={(v) => updateSettings({ edgeSeekStep: v })} />
+      <ChoiceRow focusKey="set-autoNext" label={t('tvSettings.autoNext')} value={s.autoNext} options={onOff()} onChange={(v) => updateSettings({ autoNext: v })} />
+      <ChoiceRow focusKey="set-showStats" label={t('tvSettings.showStats')} value={s.showStats} options={onOff()} onChange={(v) => updateSettings({ showStats: v })} />
 
       <h2>{t('common.subtitles')}</h2>
-      <ChoiceRow label={t('tvSettings.subSize')} value={s.subSize} options={subSizeOptions()} onChange={(v) => updateSettings({ subSize: v })} />
-      <ChoiceRow label={t('tvSettings.subColor')} value={s.subColor} options={subColorOptions()} onChange={(v) => updateSettings({ subColor: v })} />
-      <ChoiceRow label={t('tvSettings.subBackground')} value={s.subBackground} options={onOff()} onChange={(v) => updateSettings({ subBackground: v })} />
+      <ChoiceRow focusKey="set-subSize" label={t('tvSettings.subSize')} value={s.subSize} options={subSizeOptions()} onChange={(v) => updateSettings({ subSize: v })} />
+      <ChoiceRow focusKey="set-subColor" label={t('tvSettings.subColor')} value={s.subColor} options={subColorOptions()} onChange={(v) => updateSettings({ subColor: v })} />
+      <ChoiceRow focusKey="set-subBackground" label={t('tvSettings.subBackground')} value={s.subBackground} options={onOff()} onChange={(v) => updateSettings({ subBackground: v })} />
 
       <h2>{activeServer.value ? t('tvSettings.serverNamed', { name: activeServer.value.name }) : t('tvSettings.server')}</h2>
       {srvError && <div class="banner-error">{srvError}</div>}
       {srv && (
         <div>
-          <ChoiceRow label={t('tvSettings.cacheSize')} value={srv.CacheSize} options={withCurrent(cacheOptions(), srv.CacheSize)} onChange={(v) => patch({ CacheSize: v })} />
-          <ChoiceRow label={t('tvSettings.preload')} value={srv.PreloadCache} options={withCurrent(preloadOptions(), srv.PreloadCache)} onChange={(v) => patch({ PreloadCache: v })} />
-          <ChoiceRow label={t('tvSettings.readahead')} value={srv.ReaderReadAHead} options={withCurrent(readaheadOptions(), srv.ReaderReadAHead)} onChange={(v) => patch({ ReaderReadAHead: v })} />
-          <ChoiceRow label={t('tvSettings.connsLimit')} value={srv.ConnectionsLimit} options={withCurrent(connsOptions(), srv.ConnectionsLimit)} onChange={(v) => patch({ ConnectionsLimit: v })} />
-          <ChoiceRow label={t('tvSettings.downLimit')} value={srv.DownloadRateLimit} options={withCurrent(rateOptions(), srv.DownloadRateLimit)} onChange={(v) => patch({ DownloadRateLimit: v })} />
-          <ChoiceRow label={t('tvSettings.upLimit')} value={srv.UploadRateLimit} options={withCurrent(rateOptions(), srv.UploadRateLimit)} onChange={(v) => patch({ UploadRateLimit: v })} />
-          <ChoiceRow label={t('tvSettings.disconnectAfter')} value={srv.TorrentDisconnectTimeout} options={withCurrent(disconnectOptions(), srv.TorrentDisconnectTimeout)} onChange={(v) => patch({ TorrentDisconnectTimeout: v })} />
-          <ChoiceRow label={t('tvSettings.trackTimecode')} value={!!srv.TrackTimecode} options={onOff()} onChange={(v) => patch({ TrackTimecode: v })} />
+          <ChoiceRow focusKey="set-cacheSize" label={t('tvSettings.cacheSize')} value={srv.CacheSize} options={withCurrent(cacheOptions(), srv.CacheSize)} onChange={(v) => patch({ CacheSize: v })} />
+          <ChoiceRow focusKey="set-preload" label={t('tvSettings.preload')} value={srv.PreloadCache} options={withCurrent(preloadOptions(), srv.PreloadCache)} onChange={(v) => patch({ PreloadCache: v })} />
+          <ChoiceRow focusKey="set-readahead" label={t('tvSettings.readahead')} value={srv.ReaderReadAHead} options={withCurrent(readaheadOptions(), srv.ReaderReadAHead)} onChange={(v) => patch({ ReaderReadAHead: v })} />
+          <ChoiceRow focusKey="set-connsLimit" label={t('tvSettings.connsLimit')} value={srv.ConnectionsLimit} options={withCurrent(connsOptions(), srv.ConnectionsLimit)} onChange={(v) => patch({ ConnectionsLimit: v })} />
+          <ChoiceRow focusKey="set-downLimit" label={t('tvSettings.downLimit')} value={srv.DownloadRateLimit} options={withCurrent(rateOptions(), srv.DownloadRateLimit)} onChange={(v) => patch({ DownloadRateLimit: v })} />
+          <ChoiceRow focusKey="set-upLimit" label={t('tvSettings.upLimit')} value={srv.UploadRateLimit} options={withCurrent(rateOptions(), srv.UploadRateLimit)} onChange={(v) => patch({ UploadRateLimit: v })} />
+          <ChoiceRow focusKey="set-disconnectAfter" label={t('tvSettings.disconnectAfter')} value={srv.TorrentDisconnectTimeout} options={withCurrent(disconnectOptions(), srv.TorrentDisconnectTimeout)} onChange={(v) => patch({ TorrentDisconnectTimeout: v })} />
+          <ChoiceRow focusKey="set-trackTimecode" label={t('tvSettings.trackTimecode')} value={!!srv.TrackTimecode} options={onOff()} onChange={(v) => patch({ TrackTimecode: v })} />
           <div class="row">
-            <Button label={dirty ? t('tvSettings.saveOnServerDirty') : t('tvSettings.saveOnServer')} onPress={saveServer} />
-            <Button label={t('tvSettings.defaults')} onPress={resetServer} />
-            <Button label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
+            <Button focusKey="set-saveOnServer" label={dirty ? t('tvSettings.saveOnServerDirty') : t('tvSettings.saveOnServer')} onPress={saveServer} />
+            <Button focusKey="set-defaults" label={t('tvSettings.defaults')} onPress={resetServer} />
+            <Button focusKey="set-server-2" label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
           </div>
         </div>
       )}
@@ -233,16 +233,18 @@ export function SettingsScreen() {
           })}
         />
       </div>
-      <ChoiceRow label={t('tvSettings.updateOnStart')} value={s.updateCheck} options={onOff()} onChange={(v) => updateSettings({ updateCheck: v })} />
+      <ChoiceRow focusKey="set-updateOnStart" label={t('tvSettings.updateOnStart')} value={s.updateCheck} options={onOff()} onChange={(v) => updateSettings({ updateCheck: v })} />
       <div class="row" style={{ marginTop: '16px' }}>
-        <Button label={t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} />
+        <Button focusKey="set-update" label={t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} />
         {platformKind() !== 'androidtv' && (
           <Button
+            focusKey="set-addHbRepo"
             label={t('tvSettings.addHbRepo')}
             onPress={() => { openHbChannel(HB_REPO_URL).catch(() => toast(t('updateScreen.openHbFailed'), 'error')); }}
           />
         )}
         <Button
+          focusKey="set-resetApp"
           label={t('tvSettings.resetApp')}
           onPress={() => confirmDialog(t('tvSettings.resetAppAsk'), t('tv.marks.reset')).then((ok) => { if (ok) resetSettings(); })}
         />

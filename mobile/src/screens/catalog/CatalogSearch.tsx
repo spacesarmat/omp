@@ -10,6 +10,7 @@ import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
 import type { CatalogTitle } from '../../../../src/catalog/tmdb';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
+import { readDiscover, saveDiscover } from './discoverCache';
 
 const DEBOUNCE_MS = 400;
 const MIN_CHARS = 2;
@@ -21,8 +22,15 @@ export function ratingText(r: number): string {
 }
 
 export function CatalogSearch({ onClose }: { onClose: () => void }) {
-  const [text, setText] = useState('');
-  const [items, setItems] = useState<CatalogTitle[] | null>(null);
+  // back from a title card opened from the results: the query and its results come back
+  const kept = useMemo(() => {
+    const d = readDiscover();
+    return d ? d.search : null;
+  }, []);
+  const [text, setText] = useState(kept ? kept.text : '');
+  const [items, setItems] = useState<CatalogTitle[] | null>(kept ? kept.items : null);
+  // kept results are shown as is: the first run of the search effect skips the request
+  const restored = useRef(!!(kept && kept.items));
   const [error, setError] = useState<CatalogErrorCode | null>(null);
   const [reload, setReload] = useState(0);
   const gen = useRef(0);
@@ -35,7 +43,13 @@ export function CatalogSearch({ onClose }: { onClose: () => void }) {
   const q = text.trim();
   useBackHandler(onClose);
 
+  useEffect(() => saveDiscover({ search: { text: text, items: items } }), [text, items]);
+
   useEffect(() => {
+    if (restored.current) {
+      restored.current = false;
+      return;
+    }
     const my = ++gen.current;
     setError(null);
     if (q.length < MIN_CHARS) {
@@ -69,7 +83,7 @@ export function CatalogSearch({ onClose }: { onClose: () => void }) {
         <input
           class="m-input m-lib-search"
           type="search"
-          autoFocus
+          autoFocus={!kept || !kept.text}
           aria-label={t('discover.searchLabel')}
           placeholder={t('discover.searchLabel')}
           value={text}
