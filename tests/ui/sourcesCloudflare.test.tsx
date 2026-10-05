@@ -5,7 +5,7 @@ import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { SourcesScreen } from '../../src/screens/Sources';
 import { DialogHost } from '../../src/ui/dialog';
 import { reloadIndexers } from '../../src/sources/indexerStore';
-import { getHealth, isCloudflareBypassOn, reloadSourcePrefs, resetHealth, setCloudflareBypass, setHealth, setSourceOn } from '../../src/sources/store';
+import { enabledSources, getHealth, isCloudflareBypassOn, isSourceOn, reloadSourcePrefs, resetHealth, setCloudflareBypass, setHealth, setSourceOn } from '../../src/sources/store';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { setFlareStatus } from '../../src/sources/flaresolverr';
 import { cfInteractive } from '../../src/sources/cloudflare';
@@ -17,14 +17,17 @@ let host: HTMLElement;
 let checks: { name: string; url: string }[];
 let clearances: { [url: string]: number | null };
 
-const site = (id: string, name: string): Source => ({
+/** A site behind Cloudflare; Kinozal and rustorka need a login (one switch: on with the pass), a guest site does not. */
+const site = (id: string, name: string, needsLogin = true): Source => ({
   id,
   name,
   kind: 'builtin',
   cloudflare: true,
+  needsLogin,
   siteUrl: 'https://' + id + '.example/',
   search: () => Promise.resolve([]),
 });
+const guest = () => site('guestsite', 'Guest Site', false);
 
 const ctx = (): SourceContext => ({
   http: { get: () => Promise.reject(new Error('x')), post: () => Promise.reject(new Error('x')), clearCookies: () => Promise.resolve() },
@@ -80,6 +83,8 @@ afterEach(() => {
 
 describe('Android TV «Источники поиска»: «Сайты за Cloudflare» (mockup Main)', () => {
   it('lists the sites with their notes', async () => {
+    setSourceOn('kinozal', true);
+    setSourceOn('rustorka', true);
     setCloudflareBypass('kinozal', true);
     setCloudflareBypass('rustorka', true);
     clearances['https://kinozal.example/'] = new Date(2026, 9, 4, 22, 40).getTime();
@@ -92,6 +97,7 @@ describe('Android TV «Источники поиска»: «Сайты за Clou
   });
 
   it('OK on a site waiting for a check opens it; once passed the note clears', async () => {
+    setSourceOn('rustorka', true);
     setCloudflareBypass('rustorka', true);
     setHealth('rustorka', { state: 'error', at: NOW, message: cfInteractive() });
     await mount();
@@ -103,6 +109,7 @@ describe('Android TV «Источники поиска»: «Сайты за Clou
   });
 
   it('a check closed without passing lets the next OK switch the site off', async () => {
+    setSourceOn('rustorka', true);
     setCloudflareBypass('rustorka', true);
     setHealth('rustorka', { state: 'error', at: NOW, message: cfInteractive() });
     setCloudflareChecker((s) => {
@@ -131,6 +138,59 @@ describe('Android TV «Источники поиска»: «Сайты за Clou
     await click(row('kinozal').querySelector('.src-row')!);
     expect(isCloudflareBypassOn(site('kinozal', 'Kinozal'))).toBe(false);
     expect(checks).toEqual([]);
+  });
+
+  it('a site that searches as a guest: on with the bypass off says «вкл» and is searched', async () => {
+    registerSource(guest());
+    try {
+      await mount();
+      expect(isSourceOn(guest())).toBe(true);
+      expect(isCloudflareBypassOn(guest())).toBe(false);
+      expect(row('guestsite').querySelector('.src-act')!.textContent).toBe('вкл');
+      expect(row('guestsite').textContent).toContain('ищет без обхода Cloudflare');
+      expect(enabledSources([guest()]).map((s) => s.id)).toEqual(['guestsite']);
+    } finally {
+      unregisterSource('guestsite');
+    }
+  });
+
+  it('OK on a guest site switches only the site; the bypass is its own button', async () => {
+    registerSource(guest());
+    try {
+      await mount();
+      await click(row('guestsite').querySelector('.src-row')!);
+      expect(host.querySelector('.dialog-title')).toBeNull();
+      expect(isSourceOn(guest())).toBe(false);
+      expect(isCloudflareBypassOn(guest())).toBe(false);
+      expect(row('guestsite').querySelector('.src-act')!.textContent).toBe('выкл');
+      await click(row('guestsite').querySelector('.src-row')!);
+      expect(isSourceOn(guest())).toBe(true);
+      expect(isCloudflareBypassOn(guest())).toBe(false);
+      // the bypass: the warning first, then on; the site switch stays as it was
+      const bypass = row('guestsite').querySelector('.src-bypass') as HTMLElement;
+      expect(bypass.textContent).toBe('Обходить проверку Cloudflare: выкл');
+      await click(bypass);
+      expect(host.querySelector('.dialog-title')!.textContent).toBe(bypassWarning());
+      await click(Array.from(host.querySelectorAll('.dialog-option')).find((b) => b.textContent === 'Включить')!);
+      expect(isCloudflareBypassOn(guest())).toBe(true);
+      expect(isSourceOn(guest())).toBe(true);
+      expect((row('guestsite').querySelector('.src-bypass') as HTMLElement).textContent).toBe('Обходить проверку Cloudflare: вкл');
+      // switching the site off keeps the bypass; the bypass goes off at once, the site stays off
+      await click(row('guestsite').querySelector('.src-row')!);
+      expect(isSourceOn(guest())).toBe(false);
+      expect(isCloudflareBypassOn(guest())).toBe(true);
+      await click(row('guestsite').querySelector('.src-bypass')!);
+      expect(isCloudflareBypassOn(guest())).toBe(false);
+      expect(isSourceOn(guest())).toBe(false);
+      expect(checks).toEqual([]);
+    } finally {
+      unregisterSource('guestsite');
+    }
+  });
+
+  it('the login sites have no separate bypass button', async () => {
+    await mount();
+    expect(row('kinozal').querySelector('.src-bypass')).toBeNull();
   });
 
   it('no group without sites behind Cloudflare', async () => {

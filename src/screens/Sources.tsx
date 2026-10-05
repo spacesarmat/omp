@@ -230,17 +230,26 @@ export function SourcesScreen({
   };
 
   // OK on a site: the visible check when it waits for one, else the switch (turning it on shows the warning first)
-  /** A site behind Cloudflare has one switch on the TV: search on it through the Cloudflare pass. */
-  const siteOn = (s: Source) => isSourceOn(s) && isCloudflareBypassOn(s);
+  /**
+   * A site behind Cloudflare that needs a login (Kinozal, rustorka) has one switch on the TV: search on it through the
+   * Cloudflare pass. A site that searches as a guest (NNM-Club) is on / off by itself; its pass is a separate button.
+   */
+  const coupled = (s: Source) => !!s.needsLogin;
+  const siteOn = (s: Source) => (coupled(s) ? isSourceOn(s) && isCloudflareBypassOn(s) : isSourceOn(s));
 
   const pressSite = (s: Source) => {
     const on = siteOn(s);
-    if (on && needsCheck(s) && s.siteUrl) {
+    if (on && isCloudflareBypassOn(s) && needsCheck(s) && s.siteUrl) {
       runCloudflareCheck(s.name, s.siteUrl).then((r) => {
         // passed, or closed: either way the next OK is the switch again (it can be turned off)
         if (r === 'solved' || r === 'cancelled') clearHealth(s.id);
         if (r === 'solved') readClearance(() => true);
       });
+      return;
+    }
+    if (!coupled(s)) {
+      // a guest site: the switch alone, the pass stays as it is
+      toggle(s);
       return;
     }
     if (on) {
@@ -252,6 +261,17 @@ export function SourcesScreen({
       if (!ok) return;
       setSourceOn(s.id, true);
       setCloudflareBypass(s.id, true);
+    });
+  };
+
+  /** The separate pass of a guest site: off at once, on after the warning; the site switch is left alone. */
+  const pressBypass = (s: Source) => {
+    if (isCloudflareBypassOn(s)) {
+      setCloudflareBypass(s.id, false);
+      return;
+    }
+    confirmDialog(bypassWarning(), t('tvSources.enable')).then((ok) => {
+      if (ok) setCloudflareBypass(s.id, true);
     });
   };
 
@@ -426,6 +446,14 @@ export function SourcesScreen({
                   </span>
                   <span class={'src-act' + (on ? ' on' : '')}>{on ? t('tvSources.on') : t('tvSources.off')}</span>
                 </Focusable>
+                {!coupled(s) && (
+                  <Button
+                    focusKey={'src-bypass-' + s.id}
+                    className="src-login src-bypass"
+                    label={t('cloudflare.bypassLabel') + ': ' + (isCloudflareBypassOn(s) ? t('tvSources.on') : t('tvSources.off'))}
+                    onPress={() => pressBypass(s)}
+                  />
+                )}
                 {login && (
                   <Button
                     focusKey={'src-login-' + s.id}
