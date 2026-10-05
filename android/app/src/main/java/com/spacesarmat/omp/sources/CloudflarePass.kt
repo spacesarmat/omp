@@ -109,6 +109,9 @@ class SessionAgents(private val store: AgentStore?, private val now: () -> Long 
  * kept with the cookies (encrypted, with an end time), so a restart does not bring a new check. One FlareSolverr call
  * per host at a time: callers that asked while one ran take its result. Nothing is logged.
  *
+ * FlareSolverr is not used for a host that has a browser session (its User-Agent would not match the session's), and
+ * only its Cloudflare cookies (cf_clearance, __cf_bm, cf_chl_*) go into the jar: a login stays.
+ *
  * User-Agent precedence for a host ([userAgentFor]): a live Cloudflare override first (a clearance is bound to the UA
  * it was earned with), then the host's browser-session agent ([SessionAgents]), then this device's own. The checks
  * themselves start from the session agent ([baseAgentFor]), so a clearance earned on a session host matches it.
@@ -199,7 +202,8 @@ class CloudflarePass(
             clearAgent(host)
             return Outcome.BROWSER
         }
-        if (flareBase != null && viaFlare(host, url, flareBase, asked)) return Outcome.FLARESOLVERR
+        // a host with a browser session keeps that session's User-Agent (FlareSolverr's clearance would not match it): no FlareSolverr there
+        if (flareBase != null && sessions?.agentFor(host) == null && viaFlare(host, url, flareBase, asked)) return Outcome.FLARESOLVERR
         return if (built == CloudflareSolver.Result.INTERACTIVE) Outcome.INTERACTIVE else Outcome.FAILED
     }
 
@@ -211,7 +215,9 @@ class CloudflarePass(
             val r = flare.solve(base, CloudflareSolver.siteRoot(url))
             val ok = r is FlareSolverrClient.Result.Solved
             if (r is FlareSolverrClient.Result.Solved) {
-                if (r.cookies.isNotEmpty()) jar.saveFromResponse(url, r.cookies)
+                // only Cloudflare's cookies: FlareSolverr loaded the site as a guest, its other cookies must not replace a login
+                val cf = r.cookies.filter { CloudflareCookies.isCloudflare(it.name) }
+                if (cf.isNotEmpty()) jar.saveFromResponse(url, cf)
                 if (r.userAgent != null) setAgent(host, r.userAgent, agentUntil(r)) else clearAgent(host)
             }
             flareDone[host] = now() to ok

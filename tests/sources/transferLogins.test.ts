@@ -49,7 +49,7 @@ describe('site logins in the transfer', () => {
     expect(p.logins).toEqual({ kinozal: { username: 'kino', password: PASS }, rustorka: { username: 'rus', password: PASS } });
     expect(p.cloudflare).toEqual({ kinozal: false, rustorka: false });
     expect(validateTransferPayload(p)).toEqual(p);
-    expect(LOGIN_SITES).toEqual(['kinozal', 'rustorka', 'labtor', 'seedoff', 'bitru']);
+    expect(LOGIN_SITES).toEqual(['kinozal', 'rustorka']);
     const base = { v: 1, sources: { kinozal: true } };
     const bad: unknown[] = [
       { rutracker: { username: 'a', password: 'p' } },
@@ -94,14 +94,14 @@ describe('site logins in the transfer', () => {
     expect(parseRemoteSources({ id: 's1', sources: { kinozal: true }, phone: 'P' })!.logins).toBeUndefined();
   });
 
-  it('checks each staged login in parallel: ok / wrong password / captcha / unknown site; only ok is noted', async () => {
+  it('checks each staged login in parallel: ok / wrong password / captcha / only ok is noted', async () => {
     setHealth('rustorka', { state: 'login', at: 1 });
     const ok = src('kinozal', { loginPending: () => Promise.resolve() });
     const bad = src('rustorka', { loginPending: () => Promise.reject(siteLoginError('bad_login', 'rustorka')) });
-    const cap = src('labtor', { loginPending: () => Promise.reject(siteLoginError('captcha', 'labtor')) });
-    const r = parseRemoteSources({ id: 's2', sources: { kinozal: true }, phone: 'P', logins: { kinozal: true, rustorka: true, labtor: true, seedoff: true } })!;
-    const res = await applyRemoteLogins(r, [ok, bad, cap], () => fakeSite(() => page('', '')).ctx);
-    expect(res).toEqual({ kinozal: 'ok', rustorka: 'bad_login', labtor: 'captcha', seedoff: 'error' });
+    const r = parseRemoteSources({ id: 's2', sources: { kinozal: true }, phone: 'P', logins: { kinozal: true, rustorka: true } })!;
+    expect(parseRemoteSources({ id: 's2', sources: { kinozal: true }, phone: 'P', logins: { labtor: true } })).toBeNull();
+    const res = await applyRemoteLogins(r, [ok, bad], () => fakeSite(() => page('', '')).ctx);
+    expect(res).toEqual({ kinozal: 'ok', rustorka: 'bad_login' });
     expect(siteLoginFromPhone('kinozal')).toBe(true);
     expect(siteLoginFromPhone('rustorka')).toBe(false);
     // the TV keeps its earlier state for the refused one

@@ -170,6 +170,9 @@ describe('FAQ v0.15 content', () => {
     expect(it.devices).toEqual(['phone', 'atv']);
     expect(it.section).toBe('install');
     for (const d of ['phone', 'atv'] as const) for (const f of ['arm64.apk', 'armv7.apk', 'общий']) expect(viewText('apk-choice', d), f).toContain(f);
+    // the same advice everywhere: arm64 = 64-bit system, armv7 = 32-bit system (many TV boxes, even on a 64-bit CPU), universal if unsure
+    for (const d of ['phone', 'atv'] as const) for (const f of ['64-битн', '32-битн', ' приставки']) expect(viewText('apk-choice', d), f).toContain(f);
+    expect(deviceText('atv')).not.toContain('для приставки обычно');
     const tg = urls(FAQ.filter((i) => i.id === 'apk-choice' || i.id === 'telegram').flatMap((i) => [...i.short, ...(i.more ?? [])]));
     expect(tg).toContain('https://t.me/ompplyaer');
     expect(viewText('telegram', 'lg')).toContain('50 МБ');

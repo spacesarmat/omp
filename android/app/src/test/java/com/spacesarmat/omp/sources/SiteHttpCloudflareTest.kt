@@ -141,6 +141,47 @@ class SiteHttpCloudflareTest {
     }
 
     @Test
+    fun flareSolverrKeepsTheSiteLoginAndTakesOnlyCloudflareCookies() {
+        val root = site.url("/")
+        jar.saveFromResponse(root, listOf(Cookie.Builder().name("sid").value("login").hostOnlyDomain(root.host).path("/").expiresAt(System.currentTimeMillis() + 3_600_000).build()))
+        site.enqueue(challenge())
+        site.enqueue(page())
+        flare.enqueue(
+            MockResponse().setBody(
+                JSONObject().put("status", "ok").put(
+                    "solution",
+                    JSONObject().put(
+                        "cookies",
+                        org.json.JSONArray()
+                            .put(JSONObject().put("name", "cf_clearance").put("value", "from-flare").put("domain", root.host).put("path", "/"))
+                            .put(JSONObject().put("name", "sid").put("value", "guest").put("domain", root.host).put("path", "/"))
+                            .put(JSONObject().put("name", "other").put("value", "x").put("domain", root.host).put("path", "/")),
+                    ).put("userAgent", "FlareAgent/1.0"),
+                ).toString(),
+            ),
+        )
+        val r = get(http(FakeSolver(CloudflareSolver.Result.FAILED)), SiteHttp.CloudflareOptions(flare.url("/")))
+        assertEquals("flaresolverr", r.cloudflare)
+        site.takeRequest()
+        val cookie = site.takeRequest().getHeader("Cookie")!!
+        assertTrue(cookie, cookie.contains("sid=login"))
+        assertTrue(cookie, cookie.contains("cf_clearance=from-flare"))
+        assertFalse(cookie, cookie.contains("guest") || cookie.contains("other"))
+    }
+
+    @Test
+    fun flareSolverrIsSkippedForAHostWithABrowserSession() {
+        val agents = SessionAgents(null)
+        agents.set(site.url("/").host, "Phone-UA", System.currentTimeMillis() + 60_000)
+        site.enqueue(challenge())
+        flare.enqueue(MockResponse().setBody(flareSolution()))
+        val h = SiteHttp(jar, CloudflarePass(FakeSolver(CloudflareSolver.Result.FAILED), FlareSolverrClient(), jar, { SiteHttp.USER_AGENT }, null, agents))
+        failure { get(h, SiteHttp.CloudflareOptions(flare.url("/"))) }
+        assertEquals(0, flare.requestCount)
+        assertEquals("Phone-UA", site.takeRequest().getHeader("User-Agent"))
+    }
+
+    @Test
     fun interactiveWithoutFlareSolverr() {
         site.enqueue(challenge())
         val e = failure { get(http(FakeSolver(CloudflareSolver.Result.INTERACTIVE)), SiteHttp.CloudflareOptions(null)) }

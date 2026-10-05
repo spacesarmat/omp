@@ -126,6 +126,9 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.sourcesTransferLogins', // TV: which sites' logins came from the phone
   'tsp.sourceMirrors', // the mirror of a site that answered last: per device
   'tsp.sourcesSent',
+  'tsp.indexerScan', // when Jackett/Prowlarr was last searched for on the LAN: per device
+  'tsp.torznabHosts', // which Torznab hosts this device has seen: per device
+  'tsp.faqDevice', // FAQ device filter: per device
   'tsp.flareScan', // when FlareSolverr was last searched for on the LAN: per device
   'tsp.firstRun', // when this install was first used: per device
   'tsp.donateCard', // the «Поддержать» card was closed

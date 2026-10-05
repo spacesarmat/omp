@@ -98,13 +98,13 @@ object SourcesProtocol {
      * Sites whose login may travel in `logins` (src/sources/transfer.ts LOGIN_SITES). A fixed list: the site id names the
      * storage entries (`<id>.pending.username`), so a phone can never stage under another name.
      */
-    val LOGIN_SITES = setOf("kinozal", "rustorka", "labtor", "seedoff", "bitru")
+    val LOGIN_SITES = setOf("kinozal", "rustorka")
     private val LOGIN_FIELDS = setOf("username", "password")
     /** Sites whose browser session may travel in `sessions` (src/sources/transfer.ts SESSION_SITES). */
     val SESSION_SITES = LOGIN_SITES + "rutracker"
     /**
      * The hosts a site's session may be on (its mirrors, as in the parsers under src/sources): the phone sends, and the TV takes, a session
-     * only for one of them. A site without an entry here sends none (labtor, seedoff and BitRu ids stay in LOGIN_SITES but have no source).
+     * only for one of them. A site without an entry here sends none.
      */
     val SESSION_HOSTS: Map<String, Set<String>> = mapOf(
         "rutracker" to setOf("rutracker.org"),

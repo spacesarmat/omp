@@ -403,8 +403,8 @@ class SourcesInboxTest {
         assertEquals(SourcesOutcome.StoreFailed, inbox().receive(withSites()))
         assertTrue(events.isEmpty())
         entries.fails = false
-        entries.map["js:labtor.pending.username"] = "x"
-        entries.map["js:labtor.pending.password"] = "y"
+        entries.map["js:rustorka.pending.username"] = "x"
+        entries.map["js:rustorka.pending.password"] = "y"
         assertTrue(inbox().dropStaged())
         assertTrue(entries.map.keys.none { it.contains(".pending.") })
     }

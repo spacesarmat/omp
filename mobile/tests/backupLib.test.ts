@@ -87,6 +87,13 @@ describe('collectBackup', () => {
     expect(text).toContain('abc123');
   });
 
+  it('lists the per-device v0.15 keys as not backed up', () => {
+    for (const k of ['tsp.indexerScan', 'tsp.torznabHosts', 'tsp.faqDevice']) {
+      expect(NOT_BACKED_UP).toContain(k);
+      expect(BACKUP_KEYS.map((b) => b.key)).not.toContain(k);
+    }
+  });
+
   it('never lists excluded keys in the allowlist', () => {
     const keys = BACKUP_KEYS.map((k) => k.key);
     NOT_BACKED_UP.forEach((k) => expect(keys).not.toContain(k));

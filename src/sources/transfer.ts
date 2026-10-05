@@ -47,7 +47,7 @@ const CONTROL_ALL = /[\u0000-\u001f\u007f-\u009f]/g;
  * Sites whose login may travel in `logins` (the same fixed list as SourcesProtocol.LOGIN_SITES in Kotlin): the id names
  * the TV's storage entries, so nothing else can be staged.
  */
-export const LOGIN_SITES = ['kinozal', 'rustorka', 'labtor', 'seedoff', 'bitru'];
+export const LOGIN_SITES = ['kinozal', 'rustorka'];
 /** Sites whose browser session may travel in `sessions` (SourcesProtocol.SESSION_SITES in Kotlin). */
 export const SESSION_SITES = LOGIN_SITES.concat(['rutracker']);
 const HOST = /^[a-z0-9]([a-z0-9-]{0,62}\.)+[a-z0-9-]{1,63}$/;
