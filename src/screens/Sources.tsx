@@ -11,7 +11,8 @@ import { builtinSources, torrServerSources } from '../sources/registry';
 import { clearHealth, getHealth, isSourceOn, onHealthChange, setHealth, setSourceOn } from '../sources/store';
 import { forgetSiteLogin, forgetTransferredLogin, lastTransfer, LOGIN_SITES, onTransferApplied, siteLoginFromPhone, transferWhen } from '../sources/transfer';
 import { tvSourceContext } from '../sources/tvContext';
-import { healthText, type HealthLine } from '../sources/view';
+import { healthText, ipBanNote, type HealthLine } from '../sources/view';
+import { ipBanTvHint } from '../sources/ipBan';
 import { browserDone, browserDoneTitle } from '../sources/browserLogin';
 import { indexerConnections, INDEXER_SOURCE_PREFIX, onIndexersChange, torznabHiddenText, type IndexerConn } from '../sources/indexerStore';
 import { checkedText, connLine, connTitle, getIndexerStatus, onIndexerStatus, refreshIndexerStatus, trackerStateText, trackerTone } from '../sources/indexerStatus';
@@ -304,6 +305,8 @@ export function SourcesScreen({
       return healthText(h);
     }
     if (!isSourceOn(s)) return { text: t('sources.state.off'), tone: 'muted' };
+    const ban = ipBanNote(s.id);
+    if (ban) return { text: ban, tone: 'bad' };
     return healthText(getHealth(s.id));
   };
 
@@ -469,12 +472,19 @@ export function SourcesScreen({
           {plain.map((s) => {
             const on = isSourceOn(s);
             const login = !!(s.needsLogin && s.login);
+            // the site's code page: no browser here, the code is entered on the phone or in any browser on this network
+            const ban = on && !!ipBanNote(s.id);
             return (
               <div class="src-line" key={s.id} data-source={s.id}>
                 <Focusable focusKey={'src-' + s.id} className="src-row src-row-builtin" onPress={() => toggle(s)}>
                   <span class="src-name">
                     {s.name}
                     <Note note={noteOf(s)} />
+                    {ban && (
+                      <span class="src-note src-note-muted" data-hint="ipban">
+                        {ipBanTvHint()}
+                      </span>
+                    )}
                   </span>
                   <span class={'src-act' + (on ? ' on' : '')}>{on ? t('tvSources.on') : t('tvSources.off')}</span>
                 </Focusable>

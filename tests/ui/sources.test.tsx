@@ -109,6 +109,18 @@ describe('Android TV «Источники поиска»', () => {
     expect(line('fake-tracker').textContent).toContain('Войти');
   });
 
+  it('a site asking for a verification code: the message and where to enter it (no browser here)', async () => {
+    await mount();
+    expect(line('fake-open').querySelector('[data-hint="ipban"]')).toBeNull();
+    act(() => setHealth('fake-open', { state: 'error', at: 1, message: 'nnmclub просит ввести проверочный код', code: 'ipban' }));
+    const l = line('fake-open');
+    expect(l.querySelector('.src-note-bad')!.textContent).toBe('nnmclub просит ввести проверочный код');
+    expect(l.querySelector('[data-hint="ipban"]')!.textContent).toBe(
+      'Введите код на телефоне (OMP → Источники поиска) или в любом браузере в этой же сети',
+    );
+    expect(l.textContent).not.toContain('не отвечает');
+  });
+
   it('toggles a source with OK', async () => {
     await mount();
     const row = line('fake-open').querySelector('.src-row') as HTMLElement;

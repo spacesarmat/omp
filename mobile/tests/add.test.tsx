@@ -14,6 +14,7 @@ import { torrents } from '../../src/store/library';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/store';
 import type { Source, SourceResult } from '../../src/sources/types';
+import { ipBanError } from '../../src/sources/ipBan';
 
 async function flush() {
   await act(async () => {
@@ -647,6 +648,15 @@ describe('Add unified search: stable rows', () => {
     expect(hint.textContent).toContain('rutracker: Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже');
     expect(hint.textContent).toContain('через Jackett, Prowlarr или FlareSolverr');
     expect(hint.textContent).not.toContain('Фейк-2');
+  });
+
+  it('a site asking for a verification code: its own message, not the Jackett hint', async () => {
+    registerSource({ id: 'fake', name: 'torrent.by', kind: 'builtin', search: () => Promise.reject(ipBanError('torrent.by')) });
+    mount();
+    search('x');
+    await flush();
+    expect(el.querySelector('[data-hint="ipban"]')!.textContent).toBe('torrent.by просит ввести проверочный код');
+    expect(el.querySelector('[data-hint="jackett"]')).toBeNull();
   });
 
   it('row actions name their row', async () => {

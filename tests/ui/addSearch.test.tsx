@@ -7,6 +7,7 @@ import { servers, addServer, setActiveServer, removeServer } from '../../src/sto
 import { TorrServerClient } from '../../src/api/torrserver';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth } from '../../src/sources/store';
+import { ipBanError } from '../../src/sources/ipBan';
 import type { SearchResult } from '../../src/api/types';
 import type { SourceResult } from '../../src/sources/types';
 
@@ -222,5 +223,20 @@ describe('TV search on Android TV: focus and stale searches', () => {
     const hint = host.querySelector('.search-hint')!;
     expect(hint.textContent).toContain('rutracker: Сайт закрыт проверкой браузера (Cloudflare)');
     expect(hint.textContent).toContain('через Jackett, Prowlarr или FlareSolverr');
+  });
+
+  it('a site asking for a verification code says so and where to enter it', async () => {
+    w.Capacitor = { getPlatform: () => 'android' };
+    registerSource({ id: 'fake', name: 'torrent.by', kind: 'builtin', search: () => Promise.reject(ipBanError('torrent.by')) });
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue([]);
+    mount();
+    typeQuery('x');
+    act(() => button('Искать').click());
+    await flush();
+    const hint = host.querySelector('[data-hint="ipban"]')!;
+    expect(hint.textContent).toBe(
+      'torrent.by просит ввести проверочный код. Введите код на телефоне (OMP → Источники поиска) или в любом браузере в этой же сети',
+    );
+    expect(host.querySelector('.search-hint:not([data-hint])')).toBeNull();
   });
 });

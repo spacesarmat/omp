@@ -3,6 +3,8 @@
 import { fmtNumber, t as tr, tp } from '../i18n';
 import { parseDate, parseSize } from './html';
 import { getSource } from './registry';
+import { ipBanText, sourcePaused } from './ipBan';
+import { getHealth } from './store';
 import type { Source, SourceContext, SourceHealth, SourceResult } from './types';
 
 export const jackettHint = (): string => tr('sources.jackettHint');
@@ -135,7 +137,19 @@ export function healthText(h: SourceHealth | null): HealthLine | null {
   }
   if (h.state === 'login') return { text: tr('sources.state.login'), tone: 'muted' };
   if (isCloudflare(h.message)) return { text: h.message!, tone: 'bad' };
+  // the site's code page: its own message («torrent.by просит ввести проверочный код»), not «не отвечает»
+  if (h.code === 'ipban' && h.message) return { text: h.message, tone: 'bad' };
   return { text: tr('sources.state.noAnswer'), tone: 'bad' };
+}
+
+/**
+ * The site's code page (ipBan.ts): the message of its last search, or of a background pause when it has no state yet;
+ * '' otherwise.
+ */
+export function ipBanNote(id: string): string {
+  const h = getHealth(id);
+  if (h) return h.code === 'ipban' && h.message ? h.message : '';
+  return sourcePaused(id) ? ipBanText(sourceName(id)) : '';
 }
 
 /** The short hint under a site whose last search hit Cloudflare. */
