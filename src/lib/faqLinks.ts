@@ -1,5 +1,5 @@
-// Keys of the FAQ questions the install assistant links to: they are matched by text against the question texts of
-// the FAQ (mobile/src/faq.ru.ts), so they stay Russian in every UI language.
+// Keys of the FAQ questions the install assistant links to: the legacy Russian question texts, which OLD_Q_LINKS
+// (mobile/src/faq.ru.ts) resolves to the item ids, so the links open the same question in every UI language.
 
 /** FAQ questions the assistant links to (must match the FAQ question texts exactly). */
 export const FAQ_LG_DEVMODE = 'Как установить OMP на LG без root (Developer Mode)?';
