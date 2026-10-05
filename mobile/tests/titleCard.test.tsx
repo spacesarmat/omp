@@ -254,6 +254,22 @@ describe('TitleCard: series', () => {
     expect(r[0].querySelector('.m-tc-season-state')!.textContent).toBe('выходит: 4 из 10');
   });
 
+  it('a season-less torrent marks no season; a season range marks each season in it', async () => {
+    torrents.value = [tor('Ледяной перевал WEB-DL 1080p')];
+    serve({ ...SHOW, airing: false });
+    mount(<TitleCard kind="tv" id={21} />);
+    await flush();
+    expect(rows().map((r) => r.querySelector('.m-tc-season-state'))).toEqual([null, null, null]);
+    act(() => render(null, el));
+    torrents.value = [tor('Ледяной перевал / Frost Pass / Сезоны: 1-3 (2024-2026) WEB-DL')];
+    serve({ ...SHOW, airing: false });
+    mount(<TitleCard kind="tv" id={21} />);
+    await flush();
+    expect(rows().map((r) => (r.querySelector('.m-tc-season-state') || { textContent: '' }).textContent)).toEqual([
+      'В медиатеке', 'В медиатеке', 'В медиатеке',
+    ]);
+  });
+
   it('«Найти раздачи» searches the series, «Найти» on a row searches that season', async () => {
     serve(SHOW);
     mount(<TitleCard kind="tv" id={21} />);
@@ -361,7 +377,7 @@ describe('TitleCard in English', () => {
       mount(<TitleCard kind="tv" id={21} />);
       await flush();
       expect(button('Following this series')).toBeTruthy();
-      torrents.value = [tor('Frost Pass (2025) Season 2 1080p')];
+      torrents.value = [tor('Frost Pass S02 1080p WEB-DL')];
       act(() => render(null, el));
       mount(<TitleCard kind="tv" id={21} />);
       await flush();

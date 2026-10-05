@@ -1,5 +1,6 @@
 // Library matching of TMDB titles against torrent titles. Pure.
 import { titleCore } from '../lib/posterSearch';
+import { parseRelease } from '../sources/filters';
 
 // ye as a char code: the guard strips regex literals but not string literals.
 const YE = String.fromCharCode(0x435);
@@ -42,6 +43,40 @@ export function inLibrary(idx: Set<string>, t: { title: string; original: string
   for (let i = 0; i < names.length; i++) {
     if (!names[i]) continue;
     if (idx.has(libraryKey(names[i], t.year)) || idx.has(libraryKey(names[i], 0))) return true;
+  }
+  return false;
+}
+
+/** The name part of libraryKey (no year). */
+function nameKey(title: string): string {
+  const k = libraryKey(title, 0);
+  return k.slice(0, k.length - 2);
+}
+
+/** Keys 'name|N' of the series seasons in the torrents (from the season marks of the title; none without them). */
+export function seasonIndex(torrents: { title: string }[]): Set<string> {
+  const idx = new Set<string>();
+  torrents.forEach((tr) => {
+    const raw = tr.title || '';
+    const seasons = parseRelease(raw).seasons;
+    if (!seasons.length) return;
+    const add = (s: string): void => {
+      const core = titleCore(s);
+      if (!core) return;
+      const name = nameKey(core);
+      if (name) seasons.forEach((n) => idx.add(name + '|' + n));
+    };
+    add(raw);
+    if (raw.indexOf(' / ') > 0) raw.split(' / ').forEach(add);
+  });
+  return idx;
+}
+
+/** True when season N of the series (its title or original name) is in the season index. */
+export function inLibrarySeason(idx: Set<string>, t: { title: string; original: string }, season: number): boolean {
+  const names = [t.title, t.original];
+  for (let i = 0; i < names.length; i++) {
+    if (names[i] && idx.has(nameKey(names[i]) + '|' + season)) return true;
   }
   return false;
 }

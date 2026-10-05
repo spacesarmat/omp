@@ -1043,7 +1043,7 @@ export const ru = {
     more: 'Ещё',
     cast: 'В ролях',
     seasons: 'Сезоны',
-    /** A season row heading; the tracker query word is catalog.querySeason (stays Russian in English). */
+    /** A season row heading (English «Season {n}»); filters.season is the lowercase chip, catalog.querySeason the query word. */
     season: '{n} сезон',
     airing: 'выходит: {a} из {b}',
     find: 'Найти',

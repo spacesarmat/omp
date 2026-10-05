@@ -6,7 +6,7 @@ import { Icon } from '../../ui/Icon';
 import { torrents } from '../../../../src/store/library';
 import { loadSubs, sameQuery } from '../../../../src/monitor/subs';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
-import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
+import { seasonIndex, inLibrarySeason } from '../../../../src/catalog/library';
 import { torrentQuery, type CatalogCard, type Kind, type Season } from '../../../../src/catalog/tmdb';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
@@ -37,7 +37,7 @@ function metaText(card: CatalogCard): string {
 
 function seasonState(card: CatalogCard, s: Season, latest: number, index: Set<string>): string {
   if (card.airing && s.number === latest && s.aired < s.episodes) return t('titleCard.airing', { a: s.aired, b: s.episodes });
-  if (s.year && inLibrary(index, { title: card.title, original: card.original, year: s.year })) return t('discover.inLibrary');
+  if (inLibrarySeason(index, card, s.number)) return t('discover.inLibrary');
   return '';
 }
 
@@ -66,7 +66,7 @@ function Overview({ text }: { text: string }) {
 
 function Body({ card }: { card: CatalogCard }) {
   const list = torrents.value;
-  const index = useMemo(() => libraryIndex(list), [list]);
+  const index = useMemo(() => seasonIndex(list), [list]);
   const query = wantQuery(card);
   const following = loadSubs().some((s) => sameQuery(s.query, query));
   const latest = card.seasons.reduce((m, s) => Math.max(m, s.number), 0);
