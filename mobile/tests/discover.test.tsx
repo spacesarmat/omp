@@ -153,6 +153,32 @@ describe('«Мои / Обзор» switch in «Каталог»', () => {
     expect(el.textContent).toContain('Neon Rivers');
   });
 
+  it('switching «Мои / Обзор» starts the other mode at the top; a tap on the open mode keeps the scroll', async () => {
+    let top = 0;
+    const root = document.documentElement;
+    Object.defineProperty(root, 'scrollTop', { configurable: true, get: () => top, set: (v: number) => (top = v) });
+    try {
+      fake();
+      mount(<Library />);
+      await flush();
+      const tab = (i: number) => el.querySelectorAll('[role=tablist][aria-label="Каталог"] [role=tab]')[i] as HTMLElement;
+      top = 900;
+      act(() => tab(0).click());
+      await flush();
+      expect(top).toBe(900);
+      act(() => tab(1).click());
+      await flush();
+      expect(catalogMode.value).toBe('discover');
+      expect(top).toBe(0);
+      top = 700;
+      act(() => tab(0).click());
+      await flush();
+      expect(top).toBe(0);
+    } finally {
+      delete (root as unknown as { scrollTop?: number }).scrollTop;
+    }
+  });
+
   it('opens on «Обзор» when it was chosen last time', async () => {
     fake();
     setCatalogMode('discover');

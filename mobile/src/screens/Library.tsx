@@ -9,7 +9,7 @@ import { useBackHandler } from '../ui/backStack';
 import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
 import { LaunchError } from '../ui/LaunchError';
 import { CatalogUnavailable } from '../ui/CatalogUnavailable';
-import { navigate } from '../nav';
+import { navigate, scrollToTop } from '../nav';
 import { filesOf, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
@@ -453,7 +453,12 @@ export function Library() {
             role="tab"
             aria-selected={mode === m}
             class={'m-seg-btn' + (mode === m ? ' on' : '')}
-            onClick={() => setCatalogMode(m)}
+            onClick={() => {
+              if (m === mode) return;
+              setCatalogMode(m);
+              // the other mode starts at the top (one scroll offset for the tab: the mode left is not kept)
+              scrollToTop();
+            }}
           >
             {m === 'mine' ? t('discover.mine') : t('discover.browse')}
           </button>

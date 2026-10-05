@@ -1,5 +1,7 @@
 import { signal, computed } from '@preact/signals';
-import { cancelRestore, currentScroll, rememberTab, restoreScroll, tabScrollOf } from './scrollMemory';
+import { cancelRestore, currentScroll, rememberTab, restoreScroll, scrollToTop, tabScrollOf } from './scrollMemory';
+
+export { scrollToTop };
 
 export type MRoute =
   | { name: 'connect' }

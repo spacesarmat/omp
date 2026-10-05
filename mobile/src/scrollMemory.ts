@@ -25,6 +25,12 @@ function maxScroll(): number {
 let frame = 0;
 let stopListening: (() => void) | null = null;
 
+/** The page to the top now (a restore still waiting is dropped). */
+export function scrollToTop(): void {
+  cancelRestore();
+  setScroll(0);
+}
+
 /** Stops a restore still waiting for the page to grow. */
 export function cancelRestore(): void {
   if (frame) cancelAnimationFrame(frame);
