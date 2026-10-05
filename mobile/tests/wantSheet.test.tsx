@@ -82,9 +82,33 @@ describe('WantSheet', () => {
     act(() => button('Subscribe')!.click());
     const subs = loadSubs();
     expect(subs).toHaveLength(1);
-    expect(subs[0]).toMatchObject({ query: wantQuery(FILM), quality: '2160', sources: null, notify: true });
+    expect(subs[0]).toMatchObject({ query: wantQuery(FILM), quality: '2160', sources: null, notify: true, better: true });
     expect(toast.value).toBe('Subscribed - see "New"');
     expect(closed).toBe(1);
+  });
+
+  it('the switch «Только лучшее качество» is on by default; switched off, the subscription has no better', () => {
+    applyLanguageSetting('ru');
+    const better = () => el.querySelector('[role=switch][aria-label="Только лучшее качество"]') as HTMLElement;
+    sheet(FILM);
+    expect(better().getAttribute('aria-checked')).toBe('true');
+    expect(el.textContent).toContain('сообщать, только когда качество выше прежних находок');
+    act(() => button('Подписаться')!.click());
+    expect(loadSubs()[0].better).toBe(true);
+    localStorage.clear();
+    act(() => render(null, el));
+    sheet(FILM);
+    act(() => better().click());
+    expect(better().getAttribute('aria-checked')).toBe('false');
+    act(() => button('Подписаться')!.click());
+    expect(loadSubs()).toHaveLength(1);
+    expect(loadSubs()[0].better).toBeUndefined();
+  });
+
+  it('the better-quality switch in English', () => {
+    sheet(FILM);
+    expect(el.querySelector('[role=switch][aria-label="Better quality only"]')).toBeTruthy();
+    expect(el.textContent).toContain('only when the quality beats earlier finds');
   });
 
   it('cancels without subscribing', () => {

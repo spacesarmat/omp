@@ -28,10 +28,11 @@ import { useSkip, firstPlayableId } from '../../../src/lib/useSkip';
 import { parseMark, skipStatus } from '../../../src/lib/skipMarks';
 import type { SkipPrefs } from '../../../src/lib/journal';
 import { posterColor, shortTitle } from '../../../src/lib/libraryView';
-import { loadWatch, saveWatch } from '../../../src/store/journal';
+import { loadQualityWatch, loadWatch, saveQualityWatch, saveWatch } from '../../../src/store/journal';
+import { isLibraryFilm } from '../../../src/monitor/better';
 import { isWatchedSeries } from '../../../src/monitor/newEpisodes';
-import { findingsOf, removeFindings } from '../../../src/monitor/subs';
-import { EPISODES_ID } from '../../../src/monitor/types';
+import { findingsOf, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
+import { BETTER_ID, EPISODES_ID } from '../../../src/monitor/types';
 import { reloadMonitor } from '../monitor/ui';
 import { deleteTorrents, watchTarget } from '../lib/torrentActions';
 import { displayTitle } from '../../../src/lib/torrentName';
@@ -276,6 +277,8 @@ export function Torrent({ hash }: { hash: string }) {
   const [renaming, setRenaming] = useState(false);
   // «Follow new episodes» (omp.w in the journal); null until read from the server
   const [watchNew, setWatchNew] = useState<boolean | null>(null);
+  // «Watch the quality» (omp.q in the journal); null until read from the server
+  const [watchQuality, setWatchQuality] = useState<boolean | null>(null);
   progressVersion.value;
   serverViewed.value;
 
@@ -308,6 +311,18 @@ export function Torrent({ hash }: { hash: string }) {
     loadWatch(c, hash).then(
       (v) => alive && setWatchNew(v),
       () => alive && setWatchNew(true),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [c, hash, !!tor]);
+
+  useEffect(() => {
+    if (!c || !tor) return;
+    let alive = true;
+    loadQualityWatch(c, hash).then(
+      (v) => alive && setWatchQuality(v),
+      () => alive && setWatchQuality(true),
     );
     return () => {
       alive = false;
@@ -358,6 +373,24 @@ export function Torrent({ hash }: { hash: string }) {
       },
       (e) => {
         setWatchNew(!next);
+        showToast(errorMessage(e));
+      },
+    );
+  };
+  // a film of the catalogue: better releases are looked for unless switched off here
+  const film = isLibraryFilm({ title, category: tor.category });
+  const toggleWatchQuality = () => {
+    if (watchQuality === null) return;
+    const next = !watchQuality;
+    setWatchQuality(next);
+    saveQualityWatch(c, tor, next).then(
+      () => {
+        // switched off: its «better quality» card goes too
+        if (!next) findingsOf(BETTER_ID).forEach((f) => f.better && f.better.torrentHash === hash.toLowerCase() && removeFindings(BETTER_ID, f.key));
+        reloadMonitor();
+      },
+      (e) => {
+        setWatchQuality(!next);
         showToast(errorMessage(e));
       },
     );
@@ -523,6 +556,17 @@ export function Torrent({ hash }: { hash: string }) {
                 <span class="m-muted m-small">{t('torrent.screen.watchNewSub')}</span>
               </span>
               <SkipSwitch on={watchNew !== false} label={t('monitor.settings.episodes')} onToggle={toggleWatchNew} />
+            </div>
+          </div>
+        )}
+        {film && (
+          <div class="m-skip" data-block="watch-quality">
+            <div class="m-skip-row">
+              <span class="m-skip-text">
+                {t('torrent.screen.watchQuality')}
+                <span class="m-muted m-small">{t('torrent.screen.watchQualitySub')}</span>
+              </span>
+              <SkipSwitch on={watchQuality !== false} label={t('torrent.screen.watchQuality')} onToggle={toggleWatchQuality} />
             </div>
           </div>
         )}

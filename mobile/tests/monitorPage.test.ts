@@ -5,6 +5,7 @@ import {
   runAction,
   subNotification,
   episodeNotification,
+  betterNotification,
   EPISODE_CURSOR_KEY,
   type MonitorClient,
   type PageDeps,
@@ -15,11 +16,11 @@ import { addSubscription, addFindings, findingsOf, loadFound, seenKeys } from '.
 import { resultKeys } from '../../src/monitor/match';
 import { loadFeed } from '../../src/monitor/feedCache';
 import { loadLastRun, saveMonitorSettings, type MonitorSummary } from '../../src/monitor/settings';
-import { EPISODES_ID, type Finding } from '../../src/monitor/types';
+import { BETTER_ID, EPISODES_ID, type Finding } from '../../src/monitor/types';
 import type { Torrent } from '../../src/api/types';
 import type { Source, SourceResult } from '../../src/sources/types';
 import type { NativeHttpRequest } from '../../src/sources/http';
-import type { JournalItem } from '../src/monitor/journal';
+import { mergeJournal, type JournalItem } from '../src/monitor/journal';
 import { SEEN_KEY } from '../../src/monitor/subs';
 
 function res(Title: string, extra?: Partial<SourceResult>): SourceResult {
@@ -121,7 +122,7 @@ const SERIES = 'Starbound Frontier / Сезон: 1 / Серии: 1-8 из 10 [20
 const NEWER = 'Starbound Frontier / Сезон: 1 / Серии: 1-10 из 10 [2026, WEB-DL 1080p]';
 
 function deps(host: MonitorHost, extra: Partial<PageDeps> = {}): PageDeps {
-  return { host, client: () => null, feed: { from: [] }, ...extra };
+  return { host, client: () => null, feed: { from: [] }, check: { search: fakeSearch({}) }, ...extra };
 }
 
 beforeEach(() => {
@@ -225,7 +226,7 @@ describe('runMonitor: a check', () => {
     const host = fakeHost();
     const client = fakeClient([watched, off, film]);
     const s = await runMonitor(deps(host, { client: () => client, check: { search: fakeSearch({ 'Starbound Frontier': [res(NEWER)] }, queries) } }));
-    expect(queries).toEqual(['Starbound Frontier']);
+    expect(queries).toEqual(['Starbound Frontier', 'Дюна 2021']);
     expect(host.notes.map((n) => n.title)).toEqual(['Starbound Frontier: вышли серии 9–10']);
     expect(s.found).toBe(1);
     expect(findingsOf(EPISODES_ID)).toHaveLength(1);
@@ -262,8 +263,8 @@ describe('runMonitor: a check', () => {
     expect(findingsOf(sub.id)).toHaveLength(1);
   });
 
-  it('«Следить за новыми сериями» off: the library is not read', async () => {
-    saveMonitorSettings({ episodes: false });
+  it('new episodes and better quality both off: the library is not read', async () => {
+    saveMonitorSettings({ episodes: false, better: false });
     let listed = false;
     const client = fakeClient();
     client.list = () => {
@@ -445,5 +446,86 @@ describe('durable dedup markers (journal)', () => {
     expect(s.found).toBe(1);
     expect(s.notified).toBe(0);
     expect(s.notifyBlocked).toBe(true);
+  });
+});
+
+describe('«Лучшее качество» in the background', () => {
+  const FILM = 'Северный ветер (2026) WEB-DL 1080p';
+  const UHD = 'Северный ветер (2026) 2160p WEB-DL';
+  const film = { hash: 'd'.repeat(40), title: FILM, category: 'movie' } as Torrent;
+
+  it('the films are checked after the episodes, once a day, on the «better» channel', async () => {
+    const queries: string[] = [];
+    const client = fakeClient([film]);
+    const search = fakeSearch({ 'Северный ветер 2026': [res(UHD)] }, queries);
+    const host = fakeHost();
+    const s = await runMonitor(deps(host, { client: () => client, check: { search }, now: () => 1_000_000 }));
+    expect(queries).toEqual(['Северный ветер 2026']);
+    expect(host.notes).toEqual([
+      {
+        channel: 'better',
+        id: 'better:' + 'd'.repeat(40),
+        subId: BETTER_ID,
+        key: 'd'.repeat(40) + ':32',
+        title: 'Вышло в лучшем качестве',
+        text: 'Северный ветер · 4K WEB-DL · у вас 1080p WEB-DL',
+        action: 'replace',
+      },
+    ]);
+    expect(host.log).toEqual(['persist', 'notify']);
+    expect(host.persisted).toEqual([{ s: BETTER_ID, e: 'd'.repeat(40) + ':32' }]);
+    expect(s.found).toBe(1);
+    // an hour later the film is not searched again
+    await runMonitor(deps(fakeHost(), { client: () => client, check: { search }, now: () => 1_000_000 + 3_600_000 }));
+    expect(queries).toHaveLength(1);
+  });
+
+  it('«Лучшее качество фильмов» off: no film is searched; with the episodes off alone the films still are', async () => {
+    saveMonitorSettings({ better: false });
+    const queries: string[] = [];
+    const client = fakeClient([film]);
+    await runMonitor(deps(fakeHost(), { client: () => client, check: { search: fakeSearch({}, queries) } }));
+    expect(queries).toEqual([]);
+    saveMonitorSettings({ better: true, episodes: false });
+    await runMonitor(deps(fakeHost(), { client: () => client, check: { search: fakeSearch({}, queries) } }));
+    expect(queries).toEqual(['Северный ветер 2026']);
+  });
+
+  it('«Заменить» on a film notification runs the replace and keeps the card when it fails', async () => {
+    const f: Finding = {
+      subId: BETTER_ID,
+      key: 'd'.repeat(40) + ':32',
+      result: res(UHD),
+      at: 1,
+      better: { torrentHash: 'd'.repeat(40), torrentTitle: FILM, have: '1080p WEB-DL', got: '4K WEB-DL' },
+    };
+    addFindings([f]);
+    const r = await runAction(deps(fakeHost(), { client: () => fakeClient([], true) }), { kind: 'replace', subId: BETTER_ID, key: f.key });
+    expect(r.ok).toBe(false);
+    expect(r.message).not.toBe('Находка больше не доступна — откройте OMP');
+    expect(findingsOf(BETTER_ID)).toHaveLength(1);
+  });
+
+  it('better-quality markers merge back like the new-episode ones', () => {
+    expect(mergeJournal([{ s: BETTER_ID, e: 'd'.repeat(40) + ':32' }])).toBe(1);
+    expect(seenKeys(BETTER_ID)).toEqual(['d'.repeat(40) + ':32']);
+  });
+
+  it('the notification in English', () => {
+    applyLanguageSetting('en');
+    try {
+      const n = betterNotification({
+        subId: BETTER_ID,
+        key: 'h:32',
+        result: res('North Wind (2026) 2160p WEB-DL'),
+        at: 1,
+        better: { torrentHash: 'h', torrentTitle: 'North Wind (2026) WEB-DL 1080p', have: '', got: '4K WEB-DL' },
+      });
+      expect(n.title).toBe('Out in better quality');
+      expect(n.text).toBe('North Wind · 4K WEB-DL · you have unknown quality');
+      expect(n.title + n.text).not.toMatch(/[А-Яа-яЁё]/);
+    } finally {
+      applyLanguageSetting('ru');
+    }
   });
 });

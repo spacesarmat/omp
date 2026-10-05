@@ -11,10 +11,11 @@ import { client } from '../../../src/store/servers';
 import { torrents, refreshTorrents } from '../../../src/store/library';
 import { formatBytes } from '../../../src/lib/format';
 import { shortTitle } from '../../../src/lib/libraryView';
+import { findBetter } from '../../../src/monitor/better';
 import { findNewEpisodes } from '../../../src/monitor/newEpisodes';
 import { replaceWithResult, type ReplaceResult } from '../../../src/monitor/replace';
 import { removeFindings } from '../../../src/monitor/subs';
-import { EPISODES_ID, type Finding } from '../../../src/monitor/types';
+import type { Finding } from '../../../src/monitor/types';
 import { resultKey, seedsText, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import type { Torrent } from '../../../src/api/types';
@@ -31,15 +32,20 @@ function releaseLine(title: string, size: string): string {
   return [rangeText(title), qualityBadge(title), size].filter(Boolean).join(' · ') || title;
 }
 
-/** Library torrent of a new-episodes finding, when the library list has it. */
+/** The library torrent a finding is about: a series with new episodes or a film in better quality. */
+function libraryHashOf(f: Finding): string {
+  return f.episodes ? f.episodes.torrentHash : f.better ? f.better.torrentHash : '';
+}
+
+/** Library torrent of a new-episodes or better-quality finding, when the library list has it. */
 export function libraryTorrentOf(f: Finding): Torrent | null {
-  const hash = f.episodes ? f.episodes.torrentHash : '';
+  const hash = libraryHashOf(f);
   return torrents.value.filter((t) => sameHash(t.hash, hash))[0] || null;
 }
 
 /**
  * «Заменить раздачу»: the library torrent against the new release, what is carried over, «Другая раздача» (other newer
- * releases, searched when the sheet opens), then the replace (the old torrent stays when anything fails).
+ * or better releases, searched when the sheet opens), then the replace (the old torrent stays when anything fails).
  */
 export function ReplaceSheet({
   finding,
@@ -54,7 +60,9 @@ export function ReplaceSheet({
   onReplaced?: (hash: string, title: string) => void;
   onClose: () => void;
 }) {
-  const e = finding.episodes!;
+  const e = finding.episodes;
+  const hash = libraryHashOf(finding);
+  const torrentTitle = e ? e.torrentTitle : finding.better ? finding.better.torrentTitle : '';
   const old = libraryTorrentOf(finding);
   const [picked, setPicked] = useState<SourceResult>(finding.result);
   const [others, setOthers] = useState<SourceResult[] | null>(null);
@@ -67,9 +75,11 @@ export function ReplaceSheet({
     alive.v = true;
     setOthers(null);
     if (old) {
-      findNewEpisodes(phoneSourceContext(), old).then((n) => {
+      const more: Promise<SourceResult[]> = e
+        ? findNewEpisodes(phoneSourceContext(), old).then((n) => (n ? [n.candidate].concat(n.others) : []))
+        : findBetter(phoneSourceContext(), old).then((b) => (b ? [b.candidate].concat(b.others) : []));
+      void more.then((list) => {
         if (!alive.v) return;
-        const list = n ? [n.candidate].concat(n.others) : [];
         const key = resultKey(finding.result);
         setOthers(list.filter((r) => resultKey(r) !== key));
       });
@@ -79,8 +89,8 @@ export function ReplaceSheet({
     };
   }, [old ? old.hash : '']);
 
-  const name = shortTitle(e.torrentTitle || (old ? displayTitle(old) : ''));
-  const oldTitle = old ? displayTitle(old) || e.torrentTitle : e.torrentTitle;
+  const name = shortTitle(torrentTitle || (old ? displayTitle(old) : ''));
+  const oldTitle = old ? displayTitle(old) || torrentTitle : torrentTitle;
   const oldSize = old && old.torrent_size ? formatBytes(old.torrent_size) : '';
 
   const replace = async () => {
@@ -94,11 +104,11 @@ export function ReplaceSheet({
       if (!alive.v) return;
       setBusy(false);
       if (!all) return setError(t('monitor.replaceSheet.noList'));
-      if (all.some((t) => sameHash(t.hash, e.torrentHash))) {
+      if (all.some((t) => sameHash(t.hash, hash))) {
         void refreshTorrents(c).catch(() => {});
         return setError(t('monitor.replaceSheet.loading'));
       }
-      removeFindings(EPISODES_ID, finding.key);
+      removeFindings(finding.subId, finding.key);
       reloadMonitor();
       showToast(t('monitor.replaceSheet.gone'));
       onClose();
@@ -110,7 +120,7 @@ export function ReplaceSheet({
       (): ReplaceResult => ({ ok: false, error: t('monitor.replace.failed') }),
     );
     if (r.ok) {
-      removeFindings(EPISODES_ID, finding.key);
+      removeFindings(finding.subId, finding.key);
       reloadMonitor();
       void refreshTorrents(c).catch(() => {});
       showToast(t('monitor.replaceSheet.replaced', { title: shortTitle(picked.Title) }));
@@ -161,7 +171,7 @@ export function ReplaceSheet({
     <Sheet label={t('monitor.replaceSheet.title')} onClose={() => !busy && onClose()}>
       <div class="m-sheet-title">{thenWatch ? t('monitor.replaceSheet.titleWatch') : t('monitor.replaceSheet.title')}</div>
       {thenWatch && <div class="m-muted m-small">{t('monitor.replaceSheet.watchNote')}</div>}
-      <div class="m-muted m-small">{name + ' · ' + t('library.season', { n: e.season })}</div>
+      <div class="m-muted m-small">{e ? name + ' · ' + t('library.season', { n: e.season }) : name}</div>
       <div class="m-rep-box">
         <div class="m-muted m-small">{t('monitor.replaceSheet.now')}</div>
         <div class="m-rep-line">{releaseLine(oldTitle, oldSize)}</div>

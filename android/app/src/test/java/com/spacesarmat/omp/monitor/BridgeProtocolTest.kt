@@ -89,6 +89,7 @@ class BridgeProtocolTest {
         assertNull(noAction.action)
         assertEquals(200, BridgeProtocol.notify(note().put("title", "x".repeat(400)))!!.title.length)
         assertEquals(500, BridgeProtocol.notify(note().put("text", "x".repeat(900)))!!.text.length)
+        assertEquals(MonitorIds.CHANNEL_BETTER, BridgeProtocol.notify(note().put("channel", "better"))!!.channel)
         assertNull(BridgeProtocol.notify(note().put("channel", "ads")))
         assertNull(BridgeProtocol.notify(note().put("title", "  ")))
         assertNull(BridgeProtocol.notify(note().put("key", "")))

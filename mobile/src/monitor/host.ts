@@ -6,7 +6,7 @@ import type { NativeHttpRequest } from '../../../src/sources/http';
 import type { MonitorSummary } from '../../../src/monitor/settings';
 import { sanitizeJournal, type JournalItem } from './journal';
 
-/** A notification button handed to the page: «Добавить» (subscription) or «Заменить» (new episodes). */
+/** A notification button handed to the page: «Добавить» (subscription) or «Заменить» (new episodes or better quality). */
 export interface MonitorAction {
   kind: 'add' | 'replace';
   subId: string;
@@ -24,7 +24,7 @@ export interface StartInfo {
 
 /** One notification; Android builds the buttons and the links into the app from `subId` / `key`. */
 export interface MonitorNotification {
-  channel: 'subs' | 'episodes';
+  channel: 'subs' | 'episodes' | 'better';
   /** Stable id: a later notification with the same id replaces this one. */
   id: string;
   subId: string;

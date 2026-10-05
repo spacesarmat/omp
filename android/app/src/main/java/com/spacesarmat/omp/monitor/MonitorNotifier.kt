@@ -17,7 +17,7 @@ import com.spacesarmat.omp.MainActivity
 import com.spacesarmat.omp.R
 
 /**
- * Notifications of the monitoring: channels «Подписки» and «Новые серии», grouped per channel. Buttons: «Добавить» /
+ * Notifications of the monitoring: channels «Подписки», «Новые серии» and «Лучшее качество», grouped per channel. Buttons: «Добавить» /
  * «Заменить» run in the background ([MonitorActionReceiver] → one-time work), «Смотреть на ТВ» and a tap open OMP
  * with a link ([MonitorLinks]).
  */
@@ -31,19 +31,21 @@ object MonitorNotifier {
         return NotificationManagerCompat.from(ctx).areNotificationsEnabled()
     }
 
+    private fun channelName(channel: String) = when (channel) {
+        MonitorIds.CHANNEL_SUBS -> I18n.s("monitor.subs")
+        MonitorIds.CHANNEL_BETTER -> I18n.s("monitor.better")
+        else -> I18n.s("monitor.episodes")
+    }
+
     /** Called when monitoring is switched on too, so the channels can be tuned before the first notification. */
     fun ensureChannels(ctx: Context) {
         I18n.load(ctx)
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
-        run { // same id again only renames the channel to the current language
-            nm.createNotificationChannel(NotificationChannel(MonitorIds.CHANNEL_SUBS, I18n.s("monitor.subs"), NotificationManager.IMPORTANCE_DEFAULT))
-        }
-        run { // same id again only renames the channel to the current language
-            nm.createNotificationChannel(NotificationChannel(MonitorIds.CHANNEL_EPISODES, I18n.s("monitor.episodes"), NotificationManager.IMPORTANCE_DEFAULT))
+        // same id again only renames the channel to the current language
+        for (id in MonitorIds.CHANNELS) {
+            nm.createNotificationChannel(NotificationChannel(id, channelName(id), NotificationManager.IMPORTANCE_DEFAULT))
         }
     }
-
-    private fun group(channel: String) = if (channel == MonitorIds.CHANNEL_SUBS) MonitorIds.GROUP_SUBS else MonitorIds.GROUP_EPISODES
 
     private fun openIntent(ctx: Context, url: String, requestCode: Int): PendingIntent {
         val i = Intent(ctx, MainActivity::class.java)
@@ -66,7 +68,7 @@ object MonitorNotifier {
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setGroup(group(channel))
+            .setGroup(MonitorIds.group(channel))
             .setAutoCancel(true)
 
     /** false when notifications are off for the app or not permitted. */
@@ -76,11 +78,11 @@ object MonitorNotifier {
         val nm = NotificationManagerCompat.from(ctx)
         try {
             nm.notify(id, b.build())
-            val summaryId = if (channel == MonitorIds.CHANNEL_SUBS) MonitorIds.SUMMARY_SUBS else MonitorIds.SUMMARY_EPISODES
+            val summaryId = MonitorIds.summary(channel)
             val summary = NotificationCompat.Builder(ctx, channel)
                 .setSmallIcon(R.drawable.ic_stat_monitor)
-                .setContentTitle(if (channel == MonitorIds.CHANNEL_SUBS) I18n.s("monitor.subs") else I18n.s("monitor.episodes"))
-                .setGroup(group(channel))
+                .setContentTitle(channelName(channel))
+                .setGroup(MonitorIds.group(channel))
                 .setGroupSummary(true)
                 .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
                 .setAutoCancel(true)

@@ -121,6 +121,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.monitorFound',
   'tsp.monitorLast',
   'tsp.monitorEpisodeCursor',
+  'tsp.betterChecked', // when each film was last searched for a better release: rebuilt by the next runs
   'tsp.monitorNotifyAsked',
   'tsp.monitorNotifyHint',
   'tsp.sourcesTransfer', // state of the last handover to the TV

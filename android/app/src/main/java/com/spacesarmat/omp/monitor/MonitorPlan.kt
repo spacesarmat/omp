@@ -34,13 +34,34 @@ object MonitorIds {
     const val GROUP_EPISODES = "omp-monitor-episodes"
     const val SUMMARY_SUBS = 7001
     const val SUMMARY_EPISODES = 7002
+    const val CHANNEL_BETTER = "omp-better"
+    const val GROUP_BETTER = "omp-monitor-better"
+    const val SUMMARY_BETTER = 7003
     private const val BASE = 0x10000
+
+    /** Every monitoring channel. */
+    val CHANNELS = listOf(CHANNEL_SUBS, CHANNEL_EPISODES, CHANNEL_BETTER)
 
     /** The page's channel name → the Android channel; null when unknown. */
     fun channel(name: String?): String? = when (name) {
         "subs" -> CHANNEL_SUBS
         "episodes" -> CHANNEL_EPISODES
+        "better" -> CHANNEL_BETTER
         else -> null
+    }
+
+    /** Notification group of a channel. */
+    fun group(channel: String): String = when (channel) {
+        CHANNEL_SUBS -> GROUP_SUBS
+        CHANNEL_BETTER -> GROUP_BETTER
+        else -> GROUP_EPISODES
+    }
+
+    /** Id of a channel's group summary. */
+    fun summary(channel: String): Int = when (channel) {
+        CHANNEL_SUBS -> SUMMARY_SUBS
+        CHANNEL_BETTER -> SUMMARY_BETTER
+        else -> SUMMARY_EPISODES
     }
 
     /** Stable notification id of a page item id ("sub:<id>", "ep:<hash>"), never a summary or the server's 8090. */
@@ -79,7 +100,7 @@ object MonitorLinks {
 
 /**
  * A notification button run in the background: «Добавить» (a subscription finding) or «Заменить» (a newer
- * release of a library series). Carried in the broadcast extras and the work input. Pure.
+ * release of a library series or a better release of a film). Carried in the broadcast extras and the work input. Pure.
  */
 data class MonitorAction(
     val kind: String,
@@ -108,7 +129,7 @@ data class MonitorAction(
         fun of(kind: String?, subId: String?, key: String?, notifId: Int?, channel: String?, title: String?): MonitorAction? {
             if (kind != ADD && kind != REPLACE) return null
             if (subId.isNullOrEmpty() || subId.length > MAX_ID || key.isNullOrEmpty() || key.length > MAX_ID) return null
-            if (notifId == null || channel != MonitorIds.CHANNEL_SUBS && channel != MonitorIds.CHANNEL_EPISODES) return null
+            if (notifId == null || channel == null || channel !in MonitorIds.CHANNELS) return null
             return MonitorAction(kind, subId, key, notifId, channel, (title ?: "").take(MAX_TITLE))
         }
 
