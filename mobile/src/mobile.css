@@ -1117,3 +1117,21 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-series-title { overflow-wrap: anywhere; }
 .m-series .m-tc-chips { margin-bottom: 0; }
 .m-series-rows { display: flex; flex-direction: column; gap: 8px; }
+/* the series screen with its TMDB show: a backdrop hero, the poster over its bottom edge */
+.m-series.m-series-hero { padding-top: 0; }
+.m-sh-backdrop { height: calc(220px + env(safe-area-inset-top)); flex: none; }
+.m-sh-backdrop::after { background: linear-gradient(180deg, rgba(15, 17, 21, 0) 35%, rgba(15, 17, 21, 0.75) 75%, var(--bg, #0F1115)); }
+.m-sh-head { position: relative; margin-top: -84px; }
+.m-sh-poster { width: 96px; height: 144px; }
+.m-sh-poster.m-poster { border-radius: 12px; }
+.m-sh-meta { color: var(--text); opacity: 0.85; }
+.m-sh-overview { -webkit-line-clamp: 3; }
+.m-chip.m-chip-missing { opacity: 0.5; }
+.m-chip.m-chip-missing.on { opacity: 0.85; }
+.m-chip-plus { margin-right: 4px; font-weight: 700; }
+.m-sh-caption { margin-top: -4px; }
+.m-sh-missing { display: flex; flex-direction: column; gap: 8px; }
+.m-sh-missing p { margin: 0; }
+.m-sh-season-about { display: flex; flex-direction: column; gap: 2px; }
+.m-sh-season-name { font-weight: 700; }
+.m-sh-season-overview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.4; }

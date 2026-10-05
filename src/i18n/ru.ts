@@ -229,6 +229,8 @@ export const ru = {
     noSeason: 'Без сезона',
     gone: 'Этого сериала больше нет в «Моих».',
     continue: 'Продолжить',
+    notInLibrary: 'Этого сезона нет в каталоге',
+    missingSeason: 'Сезон {n}, нет в каталоге',
   },
   donate: {
     codeExpired: 'Срок кода истёк',

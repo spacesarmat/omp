@@ -228,6 +228,8 @@ export const en: EnDict<typeof ru> = {
     noSeason: 'No season',
     gone: 'This series is no longer in Mine.',
     continue: 'Continue',
+    notInLibrary: 'This season is not in your library',
+    missingSeason: 'Season {n}, not in your library',
   },
   donate: {
     codeExpired: 'The code has expired',
