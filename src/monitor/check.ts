@@ -76,13 +76,29 @@ function sourcesOf(r: SourceResult): string[] {
   return [r.source].concat(r.sources || []);
 }
 
-/** «Только лучшее качество»: the one best new result (rank, then seeds) above the rank reported before; remembers it. */
-function bestOnly(subId: string, list: SourceResult[]): SourceResult[] {
-  const floor = bestRank(subId);
+/** The highest quality rank among `list` (-1 for an empty one). */
+function topRank(list: SourceResult[]): number {
+  let max = -1;
+  list.forEach((r) => {
+    const rank = qualityRank(r.Title);
+    if (rank > max) max = rank;
+  });
+  return max;
+}
+
+/**
+ * «Только лучшее качество»: the one best new result (rank, then seeds) above the floor, which is the highest rank among
+ * the stored best rank and every result seen before (a better release already listed is not news). Without a stored
+ * rank (the flag was just switched on) nothing is reported: the caller stores the current best rank.
+ */
+function bestOnly(subId: string, fresh: SourceResult[], known: SourceResult[]): SourceResult[] {
+  const stored = bestRank(subId);
+  if (stored < 0) return [];
+  const floor = Math.max(stored, topRank(known));
   let pick: SourceResult | null = null;
   let pickRank = -1;
-  for (let i = 0; i < list.length; i++) {
-    const r = list[i];
+  for (let i = 0; i < fresh.length; i++) {
+    const r = fresh[i];
     const rank = qualityRank(r.Title);
     if (rank <= floor) continue;
     if (!pick || rank > pickRank || (rank === pickRank && (r.Seed || 0) > (pick.Seed || 0))) {
@@ -90,9 +106,7 @@ function bestOnly(subId: string, list: SourceResult[]): SourceResult[] {
       pickRank = rank;
     }
   }
-  if (!pick) return [];
-  rememberBestRank(subId, pickRank);
-  return [pick];
+  return pick ? [pick] : [];
 }
 
 /**
@@ -112,12 +126,15 @@ export function checkSubscription(ctx: SourceContext, sub: Subscription, opts?: 
       const known = seenSources(sub.id);
       const index = seenIndex(seen);
       const at = o.now === undefined ? Date.now() : o.now;
-      let fresh = matched.filter((r) => !isSeen(r, index) && sourcesOf(r).some((id) => known.indexOf(id) >= 0));
-      if (sub.better) fresh = bestOnly(sub.id, fresh);
+      const isNew = (r: SourceResult) => !isSeen(r, index) && sourcesOf(r).some((id) => known.indexOf(id) >= 0);
+      let fresh = matched.filter(isNew);
+      if (sub.better) fresh = bestOnly(sub.id, fresh, matched.filter((r) => !isNew(r)));
       base.findings = fresh.map((r) => ({ subId: sub.id, key: resultKeys(r)[0], result: r, at }));
       addFindings(base.findings);
     }
     rememberSeen(sub.id, matched.map(seenEntry), out.answered);
+    // the first check (and the first one after the flag was switched on) stores the best rank listed now, silently
+    if (sub.better) rememberBestRank(sub.id, topRank(matched));
     return base;
   });
 }

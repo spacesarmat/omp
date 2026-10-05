@@ -220,7 +220,7 @@ describe('«Только лучшее качество»', () => {
     const pages: { [q: string]: SourceResult[] } = { 'Северный ветер': [res('Северный ветер (2026) CAMRip')] };
     await checkSubscription(ctx, sub, { search: fakeSearch(pages, calls), now: 1 });
     expect(findingsOf(sub.id)).toEqual([]);
-    expect(bestRank(sub.id)).toBe(-1);
+    expect(bestRank(sub.id)).toBe(0);
     pages['Северный ветер'] = [
       res('Северный ветер (2026) CAMRip'),
       res('Северный ветер (2026) TS 1080p'),
@@ -238,6 +238,32 @@ describe('«Только лучшее качество»', () => {
     expect(fourth.findings.map((f) => f.result.Title)).toEqual(['Северный ветер (2026) 2160p WEB-DL']);
     expect(bestRank(sub.id)).toBe(32);
     expect(findingsOf(sub.id)).toHaveLength(2);
+  });
+
+  it('a better release already listed is not news; a higher one is', async () => {
+    const sub = newSub({ query: 'Северный ветер', quality: '', better: true });
+    const pages: { [q: string]: SourceResult[] } = { 'Северный ветер': [res('Северный ветер (2026) 2160p WEB-DL')] };
+    await checkSubscription(ctx, sub, { search: fakeSearch(pages, []), now: 1 });
+    expect(bestRank(sub.id)).toBe(32);
+    pages['Северный ветер'] = pages['Северный ветер'].concat([res('Северный ветер (2026) WEB-DL 1080p')]);
+    expect((await checkSubscription(ctx, sub, { search: fakeSearch(pages, []), now: 2 })).findings).toEqual([]);
+    pages['Северный ветер'] = pages['Северный ветер'].concat([res('Северный ветер (2026) 2160p Remux')]);
+    const third = await checkSubscription(ctx, sub, { search: fakeSearch(pages, []), now: 3 });
+    expect(third.findings.map((f) => f.result.Title)).toEqual(['Северный ветер (2026) 2160p Remux']);
+    expect(bestRank(sub.id)).toBe(34);
+  });
+
+  it('switched on later: the first check is silent and stores the rank', async () => {
+    const sub = newSub({ query: 'Северный ветер', quality: '' });
+    const pages: { [q: string]: SourceResult[] } = { 'Северный ветер': [res('Северный ветер (2026) WEB-DL 1080p')] };
+    await checkSubscription(ctx, sub, { search: fakeSearch(pages, []), now: 1 });
+    expect(bestRank(sub.id)).toBe(-1);
+    const on = updateSubscription(sub.id, { better: true })!;
+    pages['Северный ветер'] = pages['Северный ветер'].concat([res('Северный ветер (2026) 720p'), res('Северный ветер (2026) BDRip 1080p')]);
+    expect((await checkSubscription(ctx, on, { search: fakeSearch(pages, []), now: 2 })).findings).toEqual([]);
+    expect(bestRank(sub.id)).toBe(23);
+    pages['Северный ветер'] = pages['Северный ветер'].concat([res('Северный ветер (2026) 2160p WEB-DL')]);
+    expect((await checkSubscription(ctx, on, { search: fakeSearch(pages, []), now: 3 })).findings).toHaveLength(1);
   });
 
   it('without the flag every new result is reported, as before', async () => {
