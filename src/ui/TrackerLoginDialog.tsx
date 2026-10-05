@@ -6,13 +6,12 @@ import { errorMessage } from '../api/http';
 import type { Source, SourceContext } from '../sources/types';
 import {
   BROWSER_BUSY,
-  BROWSER_CAPTCHA,
   BROWSER_FAILED,
   BROWSER_LOGIN,
   BROWSER_STORE_FAILED,
   canLoginOnPhone,
   hasBrowserLogin,
-  isCaptchaError,
+  browserSuggestion,
   LOGIN_ON_PHONE,
 } from '../sources/browserLogin';
 
@@ -32,7 +31,7 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
   const [, setTick] = useState(0);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [captcha, setCaptcha] = useState(false);
+  const [suggest, setSuggest] = useState('');
   const alive = useRef(true);
 
   useEffect(() => {
@@ -67,7 +66,7 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
       return;
     }
     setError('');
-    setCaptcha(false);
+    setSuggest('');
     setBusy(true);
     let run: Promise<void>;
     try {
@@ -87,7 +86,7 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
         if (!alive.current) return;
         setBusy(false);
         setError(errorMessage(e));
-        setCaptcha(isCaptchaError(e));
+        setSuggest(browserSuggestion(e));
       },
     );
   };
@@ -143,10 +142,10 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
         <div class="login-hint">{TV_LOGIN_HINT}</div>
         <div class="login-note">{TV_LOGIN_NOTE}</div>
         {error && <div class="banner-error login-error">{error}</div>}
-        {browser && captcha && <div class="login-hint login-captcha">{BROWSER_CAPTCHA}</div>}
+        {browser && suggest && <div class="login-hint login-captcha">{suggest}</div>}
         {browser && (
           <div class="login-actions login-browser">
-            <Button focusKey="login-browser" className={captcha ? 'primary' : ''} label={BROWSER_LOGIN} onPress={() => viaBrowser(false)} />
+            <Button focusKey="login-browser" className={suggest ? 'primary' : ''} label={BROWSER_LOGIN} onPress={() => viaBrowser(false)} />
             {canLoginOnPhone() && <Button focusKey="login-phone" label={LOGIN_ON_PHONE} onPress={() => viaBrowser(true)} />}
           </div>
         )}

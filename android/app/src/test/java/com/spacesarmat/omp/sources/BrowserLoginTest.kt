@@ -223,6 +223,29 @@ class BrowserLoginTest {
     }
 
     @Test
+    fun findsASessionScopedToTheForumPath() {
+        // rutracker: bb_session lives on /forum/, the root shows only the guest's cookies
+        val forum = SiteSession.check("forum/index.php", "logged-in-username", "forum/login.php", listOf("bb_session"))!!
+        val l = BrowserLogin(
+            "https://rutracker.org/forum/login.php".toHttpUrl(), listOf("rutracker.org"), forum, "rutracker", "rutracker", texts,
+            { browser }, sched, { "Device-UA" }, { it() },
+            { root, pairs, ua ->
+                verified.add(root to ua)
+                pairs.any { it.first == "bb_session" }
+            },
+            LoginTarget.Local { root, pairs, ua -> stored.add(Stored(root, pairs, ua)) }, null, { results.add(it); log.add("done:" + it.result) }, gate,
+            gateWaitMs = 2_000, pollMs = 500, verifyEveryMs = 1_000, maxOpenMs = 60_000,
+        )
+        l.start(ui)
+        browser.jar["https://rutracker.org/"] = "guest=1"
+        browser.jar["https://rutracker.org/forum/index.php"] = "bb_session=s; guest=1"
+        sched.runUntil(2_000)
+        assertEquals("ok", results.single().result)
+        assertEquals(setOf("bb_session", "guest"), stored.single().pairs.map { it.first }.toSet())
+        assertClosed()
+    }
+
+    @Test
     fun cancelAndBusyAndTimeout() {
         val l = login()
         l.start(ui)

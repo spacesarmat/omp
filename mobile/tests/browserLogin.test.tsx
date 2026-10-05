@@ -152,7 +152,7 @@ describe('phone: «Войти через браузер» on the site screen', (
     act(() => btn('Войти')!.click());
     await flush();
     // the form login hit a captcha: the suggestion comes, the button becomes the main one
-    expect(el.querySelector('[data-hint="captcha"]')!.textContent).toBe(BROWSER_CAPTCHA);
+    expect(el.querySelector('[data-hint="browser"]')!.textContent).toBe(BROWSER_CAPTCHA);
     expect(btn(BROWSER_LOGIN)!.className).toContain('m-btn-primary');
     // cancelled: nothing changes
     logins = [{ result: 'cancelled' }];

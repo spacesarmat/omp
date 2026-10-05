@@ -135,7 +135,7 @@ class BrowserLogin(
         if (!verifying && (forced || scheduler.now() - lastVerify >= verifyEveryMs)) {
             for (root in roots) {
                 val pairs = try {
-                    SiteSession.clean(CloudflareSolver.parseCookieHeader(b.cookies(root.toString())))
+                    SiteSession.clean(pageCookies(b, root))
                 } catch (e: Throwable) {
                     emptyList()
                 }
@@ -168,6 +168,19 @@ class BrowserLogin(
             }
         }
         scheduler.post(pollMs) { poll() }
+    }
+
+    /**
+     * The page's cookies for [root]: a site may scope its session to a path (rutracker: bb_session on /forum/), so the
+     * check page and the login page are read too, not only the root. The first value of a name wins.
+     */
+    private fun pageCookies(b: CloudflareBrowser, root: HttpUrl): List<Pair<String, String>> {
+        val out = LinkedHashMap<String, String>()
+        for (path in listOf(check.path, check.loginPath, "")) {
+            val u = root.resolve(path) ?: continue
+            for ((name, value) in CloudflareSolver.parseCookieHeader(b.cookies(u.toString()))) out.putIfAbsent(name, value)
+        }
+        return out.map { it.key to it.value }
     }
 
     private fun tryVerify(root: HttpUrl, pairs: List<Pair<String, String>>, shown: Boolean) {

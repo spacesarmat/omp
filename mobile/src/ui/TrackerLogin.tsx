@@ -5,7 +5,7 @@ import { navigate } from '../nav';
 import { errorMessage } from '../../../src/api/http';
 import { isCloudflare, JACKETT_HINT } from '../../../src/sources/view';
 import type { Source, SourceContext } from '../../../src/sources/types';
-import { isCaptchaError } from '../../../src/sources/browserLogin';
+import { browserSuggestion } from '../../../src/sources/browserLogin';
 import { BrowserLoginButton } from './BrowserLoginButton';
 
 const LOCK = 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3';
@@ -13,7 +13,7 @@ const LOCK = 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3';
 /**
  * «Вход на rutracker». The password is never kept in component state: it is read from the field at «Войти»,
  * handed to the source (which stores it in the Android Keystore only) and the field is emptied right away. Under the
- * form: «Войти через браузер» (suggested first when the site asked for a captcha); onDone(true) after a browser login.
+ * form: «Войти через браузер» (suggested first when the site asked for a captcha or Cloudflare stopped the form); onDone(true) after a browser login.
  */
 export function TrackerLogin({
   source,
@@ -28,7 +28,7 @@ export function TrackerLogin({
 }) {
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
-  const [captcha, setCaptcha] = useState(false);
+  const [suggest, setSuggest] = useState('');
   const [busy, setBusy] = useState(false);
   const pass = useRef<HTMLInputElement>(null);
   const alive = useRef(true);
@@ -62,7 +62,7 @@ export function TrackerLogin({
       return;
     }
     setError('');
-    setCaptcha(false);
+    setSuggest('');
     setBusy(true);
     source.login(u, p, ctx()).then(
       () => {
@@ -76,7 +76,7 @@ export function TrackerLogin({
         if (!alive.current) return;
         setBusy(false);
         setError(errorMessage(err));
-        setCaptcha(isCaptchaError(err));
+        setSuggest(browserSuggestion(err));
       },
     );
   };
@@ -133,7 +133,7 @@ export function TrackerLogin({
         <BrowserLoginButton
           source={source}
           ctx={ctx}
-          captcha={captcha}
+          suggest={suggest}
           disabled={busy}
           onDone={() => {
             clearPassword();
