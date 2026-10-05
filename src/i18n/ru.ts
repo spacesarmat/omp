@@ -1348,6 +1348,8 @@ export const ru = {
     noneSelected: 'Не выбрано ни одного источника — включите их в настройках, «Источники поиска»',
     sourcesSheet: 'Источники для поиска',
     sort: 'Сортировка',
+    detailsOf: 'Подробнее: {title}',
+    openOnSite: 'Открыть на сайте',
   },
   updateScreen: {
     title: 'Обновление OMP',

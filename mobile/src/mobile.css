@@ -883,6 +883,27 @@ button, .m-btn {
 .m-rel-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .m-raw-title { display: block; width: 100%; padding: 0; border: 0; background: none; text-align: left; font-family: inherit; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .m-raw-title.open { white-space: normal; overflow-wrap: anywhere; }
+/* the compact found-release card (Лента, search, findings): the poster down the card, three lines, the date with round ＋ / ▶ ТВ;
+   a tap on the card (a stretched button under the content) opens «Подробнее». ≤ 140 px tall. */
+.m-rc { position: relative; flex-direction: row; align-items: stretch; gap: 10px; padding: 10px 10px 10px 10px; }
+.m-rc-open { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: none; border-radius: inherit; background: none; }
+.m-rc > .m-rel-thumb { width: 64px; min-width: 64px; height: 96px; border-radius: 8px; pointer-events: none; }
+.m-rc-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; pointer-events: none; }
+.m-rc .m-result-title { font-size: 14px; line-height: 1.25; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.m-rc .m-rel-chips { flex-wrap: nowrap; overflow: hidden; }
+.m-rc .m-rel-chips .m-badge-inline { flex-shrink: 0; font-size: 10px; line-height: 14px; }
+.m-rc-meta { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; font-size: 12px; line-height: 16px; }
+.m-rc-meta .m-src-badge, .m-rc-meta .m-flag { flex-shrink: 0; padding: 0 6px; border-radius: 5px; }
+.m-rc-meta-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.m-rc-bottom { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+.m-rc-date { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-rc-btn { position: relative; z-index: 1; pointer-events: auto; width: 40px; height: 40px; min-width: 40px; min-height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 50%; background: var(--panel-2); color: var(--text); }
+.m-rc-btn-tv { background: var(--accent); color: var(--bg); }
+.m-rc-btn:disabled { opacity: 0.5; }
+.m-rc-sheet { display: flex; flex-direction: column; gap: 8px; }
+.m-rc-sheet-title { font-size: 18px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.m-rc-raw { line-height: 1.4; overflow-wrap: anywhere; user-select: text; }
+.m-rc-sheet-label { margin-top: 4px; }
 .m-src-item { display: flex; flex-direction: column; flex-shrink: 0; }
 /* every row: the same height and padding; the right side is only two fixed columns — › (or its empty slot) and the switch */
 .m-src-row { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 6px 0; box-sizing: border-box; flex-shrink: 0; }

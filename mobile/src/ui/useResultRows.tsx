@@ -1,5 +1,5 @@
 // Rows of found releases outside «Добавить» (the «Новое» feed, subscription findings): the same card and the same add
-// path, with the category sheet and the TV launch.
+// path, with the category picked in the card's «Подробнее» and the TV launch.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { VNode } from 'preact';
 import { Sheet } from './Sheet';
@@ -10,7 +10,7 @@ import { activeTv } from '../tv/tvStore';
 import { useTvLaunch } from '../watch';
 import { addSearchResult, type RowBusy } from '../addResult';
 import { errorMessage } from '../../../src/api/http';
-import { addCategories, guessCategory } from '../../../src/lib/categoryGuess';
+import { guessCategory } from '../../../src/lib/categoryGuess';
 import { resultKey } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import { t } from '../../../src/i18n';
@@ -21,7 +21,7 @@ export interface ResultRows {
   add(r: SourceResult, watch: boolean, onAdded?: () => void): Promise<void>;
   /** Plays a torrent already on the server on the TV (after a replace). */
   watch(hash: string, label: string): Promise<void>;
-  /** The category sheet and the launch dialogs. */
+  /** The launch dialogs. */
   sheets: VNode;
   error: string;
 }
@@ -101,36 +101,14 @@ export function useResultRows(o?: { category?: (r: SourceResult) => string }): R
       busy={pending[resultKey(r)]}
       flag={c?.flag}
       highlight={c?.highlight}
-      onCategory={() => setCatFor(r)}
+      onCategory={(id) => setRowCat((m) => ({ ...m, [resultKey(r)]: id }))}
       onAdd={() => void add(r, false, c?.onAdded)}
       onWatch={() => void add(r, true, c?.onAdded)}
     />
   );
 
-  const current = catFor ? categoryOf(catFor) : '';
   const sheets = (
     <>
-      {catFor && (
-        <Sheet label={t('add.category')} onClose={() => setCatFor(null)}>
-          <div class="m-sheet-title">{t('add.category')}</div>
-          <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-            {addCategories().map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                class={'m-chip' + (current === c.id ? ' on' : '')}
-                aria-pressed={current === c.id}
-                onClick={() => {
-                  setRowCat({ ...rowCat, [resultKey(catFor)]: c.id });
-                  setCatFor(null);
-                }}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        </Sheet>
-      )}
       {launch.sheet}
     </>
   );

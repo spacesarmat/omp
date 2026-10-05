@@ -80,25 +80,67 @@ afterEach(() => {
 });
 
 describe('found release rows', () => {
-  it('show the short title with its meta and the full tracker title as one line that opens on tap', () => {
+  it('show the short title with its meta; the full tracker title is in «Подробнее» (a tap on the card)', () => {
     mount([res(STAR_TREK)]);
     const title = el.querySelector('.m-result-title')!;
     expect(title.firstChild!.textContent).toBe('Звездный путь: Странные новые миры');
     expect(title.querySelector('.m-title-meta')!.textContent).toMatch(/^ · /);
-    const raw = el.querySelector('.m-raw-title') as HTMLButtonElement;
-    expect(raw.textContent).toBe(STAR_TREK);
-    expect(raw.getAttribute('aria-expanded')).toBe('false');
-    act(() => raw.click());
-    expect(raw.getAttribute('aria-expanded')).toBe('true');
-    expect(raw.classList.contains('open')).toBe(true);
-    act(() => raw.click());
-    expect(raw.getAttribute('aria-expanded')).toBe('false');
+    expect(el.querySelector('.m-raw-title')).toBeNull();
+    expect(el.querySelector('[data-raw-title]')).toBeNull();
+    const open = el.querySelector('.m-rc-open') as HTMLButtonElement;
+    expect(open.getAttribute('aria-label')).toBe('Подробнее: ' + STAR_TREK);
+    act(() => open.click());
+    expect(el.querySelector('[role=dialog]')!.getAttribute('aria-label')).toBe('Подробнее');
+    expect(el.querySelector('[data-raw-title]')!.textContent).toBe(STAR_TREK);
+    act(() => (el.querySelector('.m-sheet-backdrop') as HTMLButtonElement).click());
+    expect(el.querySelector('[role=dialog]')).toBeNull();
   });
 
-  it('a plain title has no repeated full line', () => {
+  it('a plain title: the short title is the whole of it', () => {
     mount([res('Дюна')]);
     expect(el.querySelector('.m-result-title')!.textContent).toBe('Дюна');
-    expect(el.querySelector('.m-raw-title')).toBeNull();
+  });
+
+  it('the card: poster, title, chips, «source · size · seeds», the date with round «＋» / «▶ ТВ» that call the handlers', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    const calls: string[] = [];
+    const r = { ...res('Северный ветер (2026) WEB-DL 2160p HDR | Дубляж'), source: 'ts-rutor', date: Date.now() } as SourceResult;
+    act(() =>
+      render(
+        <ResultCard
+          r={r}
+          category="movie"
+          onCategory={(id) => calls.push('cat:' + id)}
+          onAdd={() => calls.push('add')}
+          onWatch={() => calls.push('watch')}
+        />,
+        el,
+      ),
+    );
+    const card = el.querySelector('.m-rc')!;
+    expect(card.querySelector('.m-rel-thumb')).toBeTruthy();
+    expect(card.querySelector('.m-btn')).toBeNull();
+    expect(card.querySelector('.m-rc-meta')!.textContent).toContain('10 GB');
+    expect(card.querySelector('.m-rc-date')!.textContent).not.toBe('');
+    const [plus, tv] = Array.from(card.querySelectorAll('.m-rc-btn')) as HTMLButtonElement[];
+    expect(plus.getAttribute('aria-label')).toBe('Добавить на сервер: ' + r.Title);
+    expect(tv.getAttribute('aria-label')).toBe('Добавить и смотреть на ТВ: ' + r.Title);
+    act(() => plus.click());
+    act(() => tv.click());
+    expect(calls).toEqual(['add', 'watch']);
+    // the card's buttons do not open the details
+    expect(el.querySelector('[role=dialog]')).toBeNull();
+    act(() => (card.querySelector('.m-rc-open') as HTMLButtonElement).click());
+    const chips = Array.from(el.querySelectorAll('[data-result-details] .m-chip')) as HTMLButtonElement[];
+    expect(chips.filter((c) => c.getAttribute('aria-pressed') === 'true').map((c) => c.textContent)).toEqual(['Фильмы']);
+    act(() => chips.find((c) => c.textContent === 'Музыка')!.click());
+    expect(calls).toEqual(['add', 'watch', 'cat:music']);
+    const full = Array.from(el.querySelectorAll('[role=dialog] .m-btn')) as HTMLButtonElement[];
+    expect(full.map((b) => b.textContent)).toEqual(['Добавить', 'На ТВ']);
+    act(() => full[1].click());
+    expect(calls).toEqual(['add', 'watch', 'cat:music', 'watch']);
+    expect(el.querySelector('[role=dialog]')).toBeNull();
   });
 
   it('quality chips: resolution, HDR, source and voice-over', () => {
