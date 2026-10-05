@@ -272,7 +272,7 @@ describe('«Новое» · Подписки', () => {
     await mount({ seg: 'subs' });
     const line = el.querySelector('[data-monitor-status]')!.textContent!;
     expect(line).toMatch(/^Проверено в \d\d:\d\d · следующая проверка около \d\d:\d\d$/);
-    click(byText('Проверить сейчас'));
+    click(el.querySelector('[data-check-now]'));
     await flush();
     expect(mon.runNow).toHaveBeenCalled();
     expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Проверяю…');
@@ -374,7 +374,7 @@ describe('«Новое» · Подписки', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
     try {
       await mount({ seg: 'subs' });
-      click(byText('Проверить сейчас'));
+      click(el.querySelector('[data-check-now]'));
       await flush();
       expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Проверяю…');
       act(() => reloadMonitor());
@@ -387,7 +387,7 @@ describe('«Новое» · Подписки', () => {
       act(() => monitorFinished({ at: 2, kind: 'check' } as any));
       await flush();
       expect(el.querySelector('[data-monitor-status]')!.textContent).not.toBe('Проверяю…');
-      click(byText('Проверить сейчас'));
+      click(el.querySelector('[data-check-now]'));
       await flush();
       expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Проверяю…');
       act(() => {
@@ -422,7 +422,7 @@ describe('«Новое» · Настройки мониторинга', () => {
     await mount({ seg: 'subs' });
     const gear = el.querySelector('[data-monitor-gear]')!;
     expect(gear.getAttribute('aria-label')).toBe('Настройки мониторинга');
-    expect(gear.classList.contains('m-icon-btn')).toBe(true);
+    expect(gear.classList.contains('m-head-btn')).toBe(true);
     const rowBtn = el.querySelector('[data-monitor-row]')!;
     expect(rowBtn.textContent).toContain('Настройки мониторинга');
     click(gear);
@@ -435,6 +435,31 @@ describe('«Новое» · Настройки мониторинга', () => {
   it('the gear is there on the feed too', async () => {
     await mount();
     expect(el.querySelector('[data-monitor-gear]')).toBeTruthy();
+  });
+
+  it('one compact header: the title, then round icon buttons; «Проверить сейчас» is a refresh button that spins while checking', async () => {
+    await mount();
+    const head = el.querySelector('.m-screen-head')!;
+    expect(head.querySelector('h1')!.textContent).toBe('Новое');
+    // the feed: TV and the monitoring settings
+    expect(Array.from(head.querySelectorAll('button')).map((b) => b.className)).toEqual(['m-tvchip', 'm-tvchip m-head-btn']);
+    // the monitoring icon is not the sliders of the «Настройки» tab
+    expect(head.querySelector('[data-monitor-gear] path')!.getAttribute('d')).not.toBe(
+      'M4 7h10M18 7h2M4 17h4M12 17h8M14 7a2 2 0 1 0 4 0a2 2 0 1 0-4 0M8 17a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
+    );
+    click(byText('Подписки'));
+    const check = head.querySelector('[data-check-now]') as HTMLButtonElement;
+    expect(check.classList.contains('m-head-btn')).toBe(true);
+    expect(check.getAttribute('aria-label')).toBe('Проверить сейчас');
+    expect(check.textContent).toBe('');
+    expect(check.disabled).toBe(false);
+    click(check);
+    await flush();
+    const busy = el.querySelector('[data-check-now]') as HTMLButtonElement;
+    expect(busy.disabled).toBe(true);
+    expect(busy.getAttribute('aria-busy')).toBe('true');
+    expect(busy.querySelector('svg')!.getAttribute('class')).toBe('m-spin');
+    mon.done(null);
   });
 });
 
@@ -475,7 +500,7 @@ describe('News in English', () => {
 
   it('subscriptions: empty list, buttons and the monitoring link', async () => {
     await mount({ seg: 'subs' });
-    expect(byText('Check now')).toBeTruthy();
+    expect(el.querySelector('[data-check-now]')!.getAttribute('aria-label')).toBe('Check now');
     expect(byText('+ New subscription')).toBeTruthy();
     expect(el.querySelector('[data-monitor-gear]')!.getAttribute('aria-label')).toBe('Monitoring settings');
     expect(el.querySelector('[data-monitor-row]')!.textContent).toContain('Monitoring settings');
@@ -515,7 +540,7 @@ describe('News in English', () => {
     await mount({ seg: 'subs', finding: OLD + ':2:10', watch: true });
     expect(el.querySelector('.m-watch-prompt')!.textContent).toContain('Watch on TV: Starbound Frontier?');
     expect(byText('Not now')).toBeTruthy();
-    click(byText('Check now'));
+    click(el.querySelector('[data-check-now]'));
     await flush();
     expect(toast.value).toBe('Checking subscriptions and series');
     expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Checking…');

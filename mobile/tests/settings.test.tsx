@@ -481,7 +481,7 @@ describe('Settings in English', () => {
 
   it('title, sections, rows and buttons', () => {
     const el = mount();
-    expect(el.querySelector('h1')!.textContent).toBe('Settings');
+    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Settings');
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
     expect(labels).toEqual(['Update', 'Server', 'TV', 'About']);
     const text = el.textContent!;

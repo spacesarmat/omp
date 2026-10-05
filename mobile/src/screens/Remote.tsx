@@ -31,6 +31,7 @@ import {
 import type { RemoteButton } from '../tv/ssap';
 import { errorMessage } from '../../../src/api/http';
 import { vibrate } from '../ui/vibrate';
+import { ScreenHeader } from '../ui/ScreenHeader';
 
 export interface RemoteActions {
   pressButton: (name: RemoteButton) => Promise<void>;
@@ -453,7 +454,7 @@ export function Remote() {
   if (!tv) {
     return (
       <div class="m-screen" data-route="remote">
-        <h1>{t('nav.remote')}</h1>
+        <ScreenHeader title={t('nav.remote')} />
         <div class="m-empty">
           <h2>{t('remote.noTvTitle')}</h2>
           <p class="m-muted">{t('remote.noTvText')}</p>
@@ -518,7 +519,7 @@ export function Remote() {
           <span class="m-remote-title">{tv.name}</span>
           <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{tvWaking.value && state !== 'connected' && state !== 'pairing' ? stateText('connecting') : stateText(state)}</span>
         </div>
-        <button type="button" class="m-icon-btn" aria-label={t('remote.touchpad.label')} onClick={() => setTuning(true)}>
+        <button type="button" class="m-tvchip m-head-btn" aria-label={t('remote.touchpad.label')} onClick={() => setTuning(true)}>
           <Icon d={TUNE} />
         </button>
         <button
