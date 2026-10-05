@@ -272,3 +272,41 @@ describe('SubSheet in English', () => {
     ask.mockRestore();
   });
 });
+
+describe('SubFindings in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  function mount(p: { id: string }) {
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<SubFindings {...p} />, el));
+  }
+
+  it('never checked, then new findings with the flag, and the edit button', async () => {
+    const s = addSubscription({ query: 'Dune', quality: '', sources: null, notify: true })!;
+    mount({ id: s.id });
+    await flush();
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    expect(byText('Edit')).toBeTruthy();
+    expect(el.textContent).toContain('The subscription has not been checked yet. The first check only remembers what is already there — OMP will report new releases after it.');
+    rememberSeen(s.id, []);
+    addFindings([{ subId: s.id, key: 'new', at: 5, result: row({ Title: 'Dune Part Three', Size: '41 GB' }) }]);
+    mount({ id: s.id });
+    await flush();
+    expect(el.querySelector('.m-flag')!.textContent).toBe('New');
+    // the fixture source «Фейк» is tracker data
+    expect(el.textContent!.replace('Фейк', '')).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('no new releases, and a deleted subscription', async () => {
+    const s = addSubscription({ query: 'Dune', quality: '', sources: null, notify: true })!;
+    rememberSeen(s.id, []);
+    mount({ id: s.id });
+    await flush();
+    expect(el.textContent).toContain('No new releases yet');
+    mount({ id: 'nope' });
+    expect(el.querySelector('h1')!.textContent).toBe('Subscription');
+    expect(el.textContent).toContain('Subscription deleted');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+});

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { goBack } from '../nav';
 import { Sheet } from '../ui/Sheet';
 import { showToast } from '../ui/toast';
@@ -14,13 +15,13 @@ import { cacheOptions, preloadOptions, readaheadOptions, connsOptions, rateOptio
 type NumField = 'CacheSize' | 'PreloadCache' | 'ReaderReadAHead' | 'ConnectionsLimit' | 'DownloadRateLimit' | 'UploadRateLimit' | 'TorrentDisconnectTimeout';
 
 const rows = (): { field: NumField; label: string; options: NumOption[] }[] => [
-  { field: 'CacheSize', label: 'Размер кэша', options: cacheOptions() },
-  { field: 'PreloadCache', label: 'Предзагрузка', options: preloadOptions() },
-  { field: 'ReaderReadAHead', label: 'Опережающее чтение', options: readaheadOptions() },
-  { field: 'ConnectionsLimit', label: 'Лимит соединений', options: connsOptions() },
-  { field: 'DownloadRateLimit', label: 'Ограничение загрузки', options: rateOptions() },
-  { field: 'UploadRateLimit', label: 'Ограничение отдачи', options: rateOptions() },
-  { field: 'TorrentDisconnectTimeout', label: 'Отключать неактивный торрент через', options: disconnectOptions() },
+  { field: 'CacheSize', label: t('tvSettings.cacheSize'), options: cacheOptions() },
+  { field: 'PreloadCache', label: t('tvSettings.preload'), options: preloadOptions() },
+  { field: 'ReaderReadAHead', label: t('tvSettings.readahead'), options: readaheadOptions() },
+  { field: 'ConnectionsLimit', label: t('tvSettings.connsLimit'), options: connsOptions() },
+  { field: 'DownloadRateLimit', label: t('tvSettings.downLimit'), options: rateOptions() },
+  { field: 'UploadRateLimit', label: t('tvSettings.upLimit'), options: rateOptions() },
+  { field: 'TorrentDisconnectTimeout', label: t('tvSettings.disconnectAfter'), options: disconnectOptions() },
 ];
 
 function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
@@ -49,7 +50,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
     setError(null);
     c.getSettings().then(
       (r) => setSrv(r),
-      () => setError('Не удалось загрузить настройки сервера'),
+      () => setError(t('serverSettings.loadFailed')),
     );
   }
   useEffect(load, [c ? c.baseUrl : '']);
@@ -60,7 +61,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
     const next = { ...before, ...patch } as Sets;
     setSrv(next);
     c.setSettings(next).then(
-      () => showToast('Сохранено'),
+      () => showToast(t('connect.saved')),
       (e) => {
         setSrv(before);
         showToast(errorMessage(e));
@@ -78,7 +79,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
     if (!c) return;
     c.resetSettings().then(
       () => {
-        showToast('Сохранено');
+        showToast(t('connect.saved'));
         load();
       },
       (e) => showToast(errorMessage(e)),
@@ -96,15 +97,15 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   const isActive = !!c && !!active && c.baseUrl === active.baseUrl;
   function fillAll() {
     if (!c || progress !== null) return;
-    const missing = torrents.value.filter((t) => !t.poster);
+    const missing = torrents.value.filter((x) => !x.poster);
     if (!missing.length) {
-      showToast('У всех раздач есть обложки');
+      showToast(t('serverSettings.allHavePosters'));
       return;
     }
-    setProgress('Ищу…');
-    findPosters(c, missing, (_h, _p, done, total) => setProgress('Ищу… ' + done + ' из ' + total)).then((r) => {
+    setProgress(t('serverSettings.searching'));
+    findPosters(c, missing, (_h, _p, done, total) => setProgress(t('serverSettings.searchingProgress', { done: done, total: total }))).then((r) => {
       setProgress(null);
-      showToast(r.hasKey ? 'Найдено обложек: ' + r.found + ' из ' + r.tried : 'Задайте ключ TMDB');
+      showToast(r.hasKey ? t('serverSettings.foundPosters', { found: r.found, tried: r.tried }) : t('serverSettings.needKey'));
     });
   }
 
@@ -113,21 +114,21 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   return (
     <div class="m-screen" data-route="serverSettings">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
-        <h1 class="m-bar-title">Настройки сервера</h1>
+        <h1 class="m-bar-title">{t('serverSettings.title')}</h1>
       </div>
       {server && <div class="m-muted m-small m-ss-sub">{server.name}</div>}
       {error && (
         <div class="m-error" role="alert">
           <span>{error}</span>{' '}
           <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={load}>
-            Повторить
+            {t('common.retry')}
           </button>
         </div>
       )}
-      {!srv && !error && <div class="m-muted">Загружаю…</div>}
+      {!srv && !error && <div class="m-muted">{t('serverSettings.loading')}</div>}
       {srv && (
         <>
           <section class="m-set-group">
@@ -142,13 +143,13 @@ export function ServerSettings({ url }: { url?: string } = {}) {
               );
             })}
             <div class="m-set-row m-ss-row">
-              <span>Сохранять тайм-коды на сервере</span>
-              <Switch on={!!srv.TrackTimecode} label="Сохранять тайм-коды на сервере" onToggle={() => save({ TrackTimecode: !srv.TrackTimecode })} />
+              <span>{t('tvSettings.trackTimecode')}</span>
+              <Switch on={!!srv.TrackTimecode} label={t('tvSettings.trackTimecode')} onToggle={() => save({ TrackTimecode: !srv.TrackTimecode })} />
             </div>
             {isLocal && (
               <div class="m-set-row m-ss-row">
-                <span>Кэш на диске телефона</span>
-                <Switch on={!!srv.UseDisk} label="Кэш на диске телефона" onToggle={() => save({ UseDisk: !srv.UseDisk })} />
+                <span>{t('serverSettings.diskCache')}</span>
+                <Switch on={!!srv.UseDisk} label={t('serverSettings.diskCache')} onToggle={() => save({ UseDisk: !srv.UseDisk })} />
               </div>
             )}
           </section>
@@ -163,19 +164,19 @@ export function ServerSettings({ url }: { url?: string } = {}) {
                   setTmdbOpen(true);
                 }}
               >
-                <span>Ключ TMDB для обложек</span>
-                <span class="m-muted">{tmdb.APIKey ? 'Задан' : 'Не задан'}</span>
+                <span>{t('serverSettings.tmdbKey')}</span>
+                <span class="m-muted">{tmdb.APIKey ? t('serverSettings.set') : t('serverSettings.notSet')}</span>
               </button>
               {tmdb.APIKey && isActive && (
                 <button type="button" class="m-set-row m-set-pick" data-field="posters" disabled={progress !== null} onClick={fillAll}>
-                  <span>Найти обложки для раздач без обложек</span>
+                  <span>{t('serverSettings.fillPosters')}</span>
                   <span class="m-muted">{progress || ''}</span>
                 </button>
               )}
             </section>
           )}
           <button type="button" class="m-btn m-btn-secondary m-ss-reset" onClick={() => setConfirmReset(true)}>
-            Сбросить к стандартным
+            {t('serverSettings.reset')}
           </button>
         </>
       )}
@@ -191,13 +192,13 @@ export function ServerSettings({ url }: { url?: string } = {}) {
         </Sheet>
       )}
       {tmdbOpen && (
-        <Sheet onClose={() => setTmdbOpen(false)} label="Ключ TMDB">
-          <div class="m-sheet-title">Ключ TMDB</div>
+        <Sheet onClose={() => setTmdbOpen(false)} label={t('serverSettings.tmdbTitle')}>
+          <div class="m-sheet-title">{t('serverSettings.tmdbTitle')}</div>
           <div class="m-muted">
-            По нему OMP и TorrServer находят обложки для новых раздач. Ключ бесплатный: themoviedb.org → Настройки → API.
+            {t('serverSettings.tmdbText')}
           </div>
           <div class="m-field">
-            <label for="tmdb-key">Ключ API</label>
+            <label for="tmdb-key">{t('serverSettings.apiKey')}</label>
             <input
               id="tmdb-key"
               class="m-input"
@@ -211,24 +212,24 @@ export function ServerSettings({ url }: { url?: string } = {}) {
           </div>
           <div class="m-sheet-row">
             <button type="button" class="m-btn m-btn-secondary" onClick={() => setTmdbOpen(false)}>
-              Отмена
+              {t('common.cancel')}
             </button>
             <button type="button" class="m-btn m-btn-primary" onClick={saveTmdb}>
-              Сохранить
+              {t('common.save')}
             </button>
           </div>
         </Sheet>
       )}
       {confirmReset && (
-        <Sheet onClose={() => setConfirmReset(false)} label="Сбросить настройки сервера">
-          <div class="m-sheet-title">Сбросить настройки сервера?</div>
-          <div class="m-muted">Все настройки вернутся к стандартным значениям.</div>
+        <Sheet onClose={() => setConfirmReset(false)} label={t('serverSettings.resetLabel')}>
+          <div class="m-sheet-title">{t('serverSettings.resetTitle')}</div>
+          <div class="m-muted">{t('serverSettings.resetText')}</div>
           <div class="m-sheet-row">
             <button type="button" class="m-btn m-btn-secondary" onClick={() => setConfirmReset(false)}>
-              Отмена
+              {t('common.cancel')}
             </button>
             <button type="button" class="m-btn m-btn-primary" onClick={reset}>
-              Сбросить
+              {t('common.reset')}
             </button>
           </div>
         </Sheet>

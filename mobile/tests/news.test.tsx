@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 
@@ -408,5 +409,89 @@ describe('«Новое» · Подписки', () => {
     await mount({ seg: 'subs' });
     click(byText('Заменить…'));
     expect(el.querySelector('[role=dialog][aria-label="Заменить раздачу"]')).toBeTruthy();
+  });
+});
+
+describe('News in English', () => {
+  const EN = (p: Partial<SourceResult>) => row({ Size: '18.2 GB', ...p });
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+
+  it('feed: tabs, chips, status line, refresh and the empty states', async () => {
+    registerSource({
+      id: 'feedy',
+      name: 'Feedy',
+      kind: 'builtin',
+      search: () => Promise.resolve([]),
+      latest: () => Promise.resolve([EN({ Title: 'Quiet Harbor (2026) WEB-DL 720p', date: 5000 })]),
+    });
+    await mount();
+    expect(el.querySelector('h1')!.textContent).toBe('New');
+    expect(Array.from(el.querySelectorAll('[role=tab]')).map((b) => b.textContent)).toEqual(['Feed', 'Subscriptions']);
+    expect(Array.from(el.querySelectorAll('.m-chips')[0].querySelectorAll('.m-chip')).map((b) => b.textContent)).toEqual(['Movies', 'Series', 'Anime', '1080p+']);
+    expect(el.querySelector('.m-news-status .m-grow')!.textContent).toMatch(/^Latest from Feedy · updated at \d\d:\d\d$/);
+    expect(byText('Refresh')).toBeTruthy();
+    click(byText('1080p+'));
+    expect(el.textContent).toContain('No 1080p or higher releases');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('feed: no sources switched on and sites that did not answer', async () => {
+    await mount();
+    expect(el.querySelector('.m-hint-warn')!.textContent).toBe('The feed comes from rutor, nnmclub and torrent.by — turn them on in “Search sources”.');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    registerSource({ id: 'feedy', name: 'Feedy', kind: 'builtin', search: () => Promise.resolve([]), latest: () => Promise.reject(new Error('down')) });
+    click(byText('Series'));
+    await flush();
+    expect(el.querySelector('.m-news-status')!.textContent).toContain('sites did not respond');
+    expect(el.textContent).toContain('Sites did not respond — try again later');
+  });
+
+  it('subscriptions: empty list, buttons and the monitoring link', async () => {
+    await mount({ seg: 'subs' });
+    expect(byText('Check now')).toBeTruthy();
+    expect(byText('+ New subscription')).toBeTruthy();
+    expect(byText('Monitoring settings')).toBeTruthy();
+    const text = el.textContent!;
+    expect(text).toContain('Not checked yet');
+    expect(text).toContain('No subscriptions yet. OMP will tell you when new releases appear for a query.');
+    expect(text).toContain('New episodes of catalog series');
+    expect(text).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('subscriptions: counts on the tab, the episodes card and its buttons', async () => {
+    const s = addSubscription({ query: 'Dune 2160p', quality: '2160', sources: null, notify: true })!;
+    addFindings([{ subId: s.id, key: 'k1', at: 2, result: EN({ Title: 'Dune 1' }) }]);
+    torrents.value = [{ hash: OLD, title: 'Starbound Frontier / Season 2 / Episodes 1-8 of 10 / 1080p', stat: 3 } as any];
+    addFindings([
+      episodesFinding({
+        result: EN({ Title: 'Starbound Frontier / Season 2 / Episodes 1-10 of 10 / 1080p' }),
+        episodes: { torrentHash: OLD, torrentTitle: 'Starbound Frontier / Season 2 / Episodes 1-8 of 10 / 1080p', season: 2, haveTo: 8, from: 1, to: 10 },
+      }),
+    ]);
+    await mount({ seg: 'subs' });
+    expect(el.querySelector('[role=tab][aria-selected=true]')!.textContent).toBe('Subscriptions · 2 new');
+    const card = el.querySelector('.m-ep-card')!;
+    expect(card.textContent).toContain('Starbound Frontier · Season 2');
+    expect(card.textContent).toContain('Episodes 9–10 are out · you have 1–8');
+    expect(byText('Replace…')).toBeTruthy();
+    expect(byText('Stop following')).toBeTruthy();
+    expect(el.querySelector('[aria-label="Replace the release: Starbound Frontier"]')).toBeTruthy();
+    expect(el.querySelector('[aria-label="Stop following new episodes: Starbound Frontier"]')).toBeTruthy();
+    expect(el.textContent).toContain('Catalog series are checked automatically; you can turn this off in the series card or here.');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('subscriptions: «Check now» toast and the watch prompt', async () => {
+    mon.status = { enabled: true, hours: 3, wifiOnly: true, running: false };
+    addFindings([episodesFinding({ result: EN({ Title: 'Starbound Frontier / Season 2 / Episodes 1-10 of 10 / 1080p' }), episodes: { torrentHash: OLD, torrentTitle: 'Starbound Frontier / Season 2 / Episodes 1-8 of 10 / 1080p', season: 2, haveTo: 8, from: 1, to: 10 } })]);
+    await mount({ seg: 'subs', finding: OLD + ':2:10', watch: true });
+    expect(el.querySelector('.m-watch-prompt')!.textContent).toContain('Watch on TV: Starbound Frontier?');
+    expect(byText('Not now')).toBeTruthy();
+    click(byText('Check now'));
+    await flush();
+    expect(toast.value).toBe('Checking subscriptions and series');
+    expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Checking…');
+    mon.done(null);
   });
 });

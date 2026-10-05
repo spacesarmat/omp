@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Tv, setTvDiscoverer } from '../src/screens/Tv';
@@ -231,5 +232,52 @@ describe('Tv screen', () => {
     await flush();
     await act(async () => (el.querySelector('[aria-label="Назад"]') as HTMLButtonElement).click());
     expect(currentRoute.value.name).toBe('library');
+  });
+});
+
+describe('Tv screen in English', () => {
+  beforeEach(() => {
+    applyLanguageSetting('en');
+    setTvDiscoverer(async () => [{ ip: '192.168.1.42', name: 'LG OLED', model: 'webOS 6' }]);
+  });
+  afterEach(() => applyLanguageSetting('ru'));
+
+  it('title, notes, search, a card and the forget button', async () => {
+    saveTv({ ip: '192.168.1.9', name: 'Bedroom' });
+    const el = mount();
+    expect(el.querySelector('h1')!.textContent).toBe('TV');
+    expect(el.textContent).toContain('Looking for TVs…');
+    expect(el.textContent).toContain('The phone and the TV must be on the same Wi-Fi network. OMP must be installed on the TV.');
+    expect(btn(el, 'No OMP on the TV? Install assistant')).toBeTruthy();
+    await flush();
+    expect(el.textContent).toContain('192.168.1.9 · saved');
+    expect(el.textContent).toContain('192.168.1.42 · webOS 6');
+    expect(el.querySelector('[aria-label="Rename Bedroom"]')).toBeTruthy();
+    expect(el.querySelector('[aria-label="Forget Bedroom"]')).toBeTruthy();
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    expect(el.querySelector('.m-tv-tip')!.textContent).toContain('The phone remembers the TV');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('manual IP form: error, label and the connect button', async () => {
+    const el = mount();
+    await flush();
+    act(() => btn(el, 'Enter the TV’s IP address').click());
+    expect(el.querySelector('label[for=tv-ip]')!.textContent).toBe('TV IP address');
+    const form = el.querySelector('form')!;
+    act(() => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(el.querySelector('[role=alert]')!.textContent).toBe('Enter an IP address like 192.168.1.42');
+    expect(btn(el, 'Connect')).toBeTruthy();
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('connecting shows the pairing hint', async () => {
+    const el = mount();
+    await flush();
+    await act(async () => (el.querySelector('.m-tv-main') as HTMLButtonElement).click());
+    expect(el.textContent).toContain('connecting…');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 });

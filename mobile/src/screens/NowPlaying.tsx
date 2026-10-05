@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
 import { TracksSheet } from '../ui/TracksSheet';
 import { goBack, navigate, switchTab } from '../nav';
@@ -57,18 +58,18 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
 
   const head = (
     <div class="m-now-head">
-      <button type="button" class="m-icon-btn" aria-label="Свернуть" onClick={() => goBack()}>
+      <button type="button" class="m-icon-btn" aria-label={t('now.collapse')} onClick={() => goBack()}>
         <Icon d={ICONS.collapse} />
       </button>
       <div class="m-now-status">
-        <span class="m-now-kicker">СЕЙЧАС НА ТВ</span>
+        <span class="m-now-kicker">{t('now.kicker')}</span>
         {status === 'stale' ? (
-          <span class="m-now-tv warn">Телевизор не отвечает</span>
+          <span class="m-now-tv warn">{t('remote.mini.noAnswer')}</span>
         ) : (
           tv && <span class="m-now-tv">{tv.name}</span>
         )}
       </div>
-      <button type="button" class="m-icon-btn" aria-label="Пульт" onClick={() => navigate({ name: 'remote' })}>
+      <button type="button" class="m-icon-btn" aria-label={t('nav.remote')} onClick={() => navigate({ name: 'remote' })}>
         <Icon d={ICONS.remote} />
       </button>
     </div>
@@ -80,7 +81,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
         <div class="m-screen m-now" data-route="nowPlaying">
           {head}
           <div class="m-now-empty">
-            <div class="m-sheet-title">Запускаем на телевизоре…</div>
+            <div class="m-sheet-title">{t('now.launching')}</div>
           </div>
         </div>
       );
@@ -89,9 +90,9 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
       <div class="m-screen m-now" data-route="nowPlaying">
         {head}
         <div class="m-now-empty">
-          <div class="m-sheet-title">На телевизоре ничего не играет</div>
+          <div class="m-sheet-title">{t('now.nothing')}</div>
           <button type="button" class="m-btn m-btn-primary" onClick={() => switchTab({ name: 'library' })}>
-            Открыть каталог
+            {t('localServer.openCatalog')}
           </button>
         </div>
       </div>
@@ -111,6 +112,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
   const local = chapterIndexAt(list, shown);
   const cur = drag !== null || holding || s.chapter === undefined ? local : s.chapter;
   const chapterName = (i: number) => chapterLabel(list[i], i);
+  const chapterLabelAria = (i: number, start: number) => t('now.chapterAria', { name: chapterName(i), time: formatDuration(start) });
   const stepChapter = (dir: 1 | -1) => {
     const i = chapterStepIndex(list, shown, dir);
     if (i === null) return;
@@ -143,7 +145,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
           <input
             type="range"
             class="m-seek-input"
-            aria-label="Перемотка"
+            aria-label={t('now.seek')}
             min={0}
             max={max}
             step={1}
@@ -168,7 +170,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
           <button
             type="button"
             class="m-now-chbtn"
-            aria-label="Предыдущая глава"
+            aria-label={t('now.prevChapter')}
             disabled={off}
             onClick={() => stepChapter(-1)}
           >
@@ -176,14 +178,14 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
           </button>
           <span class="m-now-chtext">
             <span class="m-now-chnum">
-              {cur >= 0 ? 'Глава ' + (cur + 1) + ' из ' + list.length : 'Глав: ' + list.length}
+              {cur >= 0 ? t('now.chapterOf', { n: cur + 1, total: list.length }) : t('now.chaptersN', { n: list.length })}
             </span>
             {cur >= 0 && list[cur].title.trim() !== '' && chapterName(cur)}
           </span>
           <button
             type="button"
             class="m-now-chbtn"
-            aria-label="Следующая глава"
+            aria-label={t('now.nextChapter')}
             disabled={off || chapterStepIndex(list, shown, 1) === null}
             onClick={() => stepChapter(1)}
           >
@@ -192,9 +194,9 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
         </div>
       )}
       <div class="m-now-controls">
-        <Skip label="Предыдущая серия" text="" d={ICONS.prev} disabled={off} onClick={() => sendCmd({ type: 'prev' })} />
+        <Skip label={t('now.prevEpisode')} text="" d={ICONS.prev} disabled={off} onClick={() => sendCmd({ type: 'prev' })} />
         <Skip
-          label="Назад на 10 секунд"
+          label={t('remote.mini.back10')}
           text="10"
           d={ICONS.back10}
           disabled={off}
@@ -203,21 +205,21 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
         <button
           type="button"
           class="m-now-play"
-          aria-label={s.paused ? 'Играть' : 'Пауза'}
+          aria-label={s.paused ? t('remote.mini.play') : t('remote.mini.pause')}
           disabled={off}
           onClick={() => sendCmd({ type: s.paused ? 'play' : 'pause' })}
         >
           <Icon d={s.paused ? ICONS.play : ICONS.pause} size={32} />
         </button>
         <Skip
-          label="Вперёд на 10 секунд"
+          label={t('now.fwd10')}
           text="10"
           d={ICONS.fwd10}
           disabled={off}
           onClick={() => sendCmd({ type: 'skip', d: 10 })}
         />
         <Skip
-          label="Следующая серия"
+          label={t('now.nextEpisode')}
           text=""
           d={ICONS.next}
           disabled={off || !s.next}
@@ -227,28 +229,28 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
       <div class="m-now-row">
         <button type="button" class="m-now-wide" disabled={off} onClick={() => setTracks(true)}>
           <Icon d={ICONS.tracks} size={20} />
-          Звук и субтитры
+          {t('remote.tracks.label')}
         </button>
         <div class="m-now-wide m-now-vol">
-          <button type="button" aria-label="Громкость меньше" onClick={() => vol('down')}>
+          <button type="button" aria-label={t('now.volDown')} onClick={() => vol('down')}>
             −
           </button>
           <Icon d={ICONS.volume} size={20} />
-          <button type="button" aria-label="Громкость больше" onClick={() => vol('up')}>
+          <button type="button" aria-label={t('now.volUp')} onClick={() => vol('up')}>
             +
           </button>
         </div>
       </div>
       {list.length > 0 && (
-        <div class="m-now-chlist" role="group" aria-label="Главы">
-          <div class="m-now-chhead">Главы</div>
+        <div class="m-now-chlist" role="group" aria-label={t('player.chapters')}>
+          <div class="m-now-chhead">{t('player.chapters')}</div>
           {list.map((c, i) => (
             <button
               key={i}
               type="button"
               class={'m-now-chitem' + (i === cur ? ' on' : '')}
               aria-current={i === cur ? 'true' : undefined}
-              aria-label={chapterName(i) + ', с ' + formatDuration(c.start) + (i === cur ? ', сейчас идёт' : '')}
+              aria-label={i === cur ? t('now.chapterNow', { label: chapterLabelAria(i, c.start) }) : chapterLabelAria(i, c.start)}
               disabled={off}
               onClick={() => {
                 sendCmd({ type: 'chapter', i });
@@ -263,9 +265,9 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
       )}
       {s.next && (
         <div class="m-now-next">
-          <span class="m-now-next-text">Дальше: {displayTitle(s.next.title)}</span>
+          <span class="m-now-next-text">{t('now.next', { title: displayTitle(s.next.title) })}</span>
           <button type="button" disabled={off} onClick={() => sendCmd({ type: 'next' })}>
-            Включить
+            {t('now.playNext')}
           </button>
         </div>
       )}
