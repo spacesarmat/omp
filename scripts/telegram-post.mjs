@@ -69,6 +69,15 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
   log(`Telegram: posted ${version}`);
   await pinPost(call, chat, msg.message_id, log);
 
+  return sendFiles({ call, chat, replyTo: msg.message_id, tag, version, dir, log });
+}
+
+/**
+ * Sends the build files as a reply to the release post: one album of documents (Telegram shows it as a single
+ * block), with the links to the files over the bot limit as the album caption. If Telegram refuses the album the
+ * files go one by one and the links follow in a message. Resolves to the number of files that could not be attached.
+ */
+async function sendFiles({ call, chat, replyTo, tag, version, dir, log }) {
   const files = [];
   for (const name of buildFiles(version)) {
     const path = join(dir, name);
@@ -76,30 +85,90 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
     else log(`Telegram: ${name} not found, skipped`);
   }
   const { upload, link } = routeFiles(files);
+  link.forEach((f) => log(oversizeLogLine(f)));
+  const blob = (f) => new Blob([readFileSync(f.path)], { type: type(f.name) });
+  const base = () => {
+    const form = new FormData();
+    form.set('chat_id', chat);
+    form.set('reply_parameters', JSON.stringify({ message_id: replyTo }));
+    return form;
+  };
+
+  if (upload.length >= 2) {
+    try {
+      const form = base();
+      const linksText = link.length ? buildLinksMessage(tag, link) : '';
+      form.set('media', JSON.stringify(upload.map((f, i) => ({
+        type: 'document',
+        media: `attach://file${i}`,
+        ...(linksText && i === upload.length - 1 ? { caption: linksText, parse_mode: 'HTML' } : {}),
+      }))));
+      upload.forEach((f, i) => form.set(`file${i}`, blob(f), f.name));
+      await call('sendMediaGroup', form);
+      log(`Telegram: attached ${upload.map((f) => f.name).join(', ')} as one block`);
+      return 0;
+    } catch (e) {
+      log(`${e.message}, sending the files one by one`);
+    }
+  } else if (upload.length === 1) {
+    try {
+      const form = base();
+      form.set('document', blob(upload[0]), upload[0].name);
+      if (link.length) {
+        form.set('caption', buildLinksMessage(tag, link));
+        form.set('parse_mode', 'HTML');
+      }
+      await call('sendDocument', form);
+      log(`Telegram: attached ${upload[0].name}`);
+      return 0;
+    } catch (e) {
+      log(String(e.message));
+      link.push(upload[0]);
+      log(oversizeLogLine(upload[0]));
+      await sendLinks(call, base(), tag, link);
+      return 1;
+    }
+  }
+
   let failed = 0;
   for (const f of upload) {
     try {
-      const doc = new FormData();
-      doc.set('chat_id', chat);
-      doc.set('reply_parameters', JSON.stringify({ message_id: msg.message_id }));
-      doc.set('document', new Blob([readFileSync(f.path)], { type: type(f.name) }), f.name);
+      const doc = base();
+      doc.set('document', blob(f), f.name);
       await call('sendDocument', doc);
       log(`Telegram: attached ${f.name}`);
     } catch (e) {
       failed++;
       link.push(f);
       log(String(e.message));
+      log(oversizeLogLine(f));
     }
   }
-  if (link.length) {
-    link.forEach((f) => log(oversizeLogLine(f)));
-    const m = new FormData();
-    m.set('chat_id', chat);
-    m.set('reply_parameters', JSON.stringify({ message_id: msg.message_id }));
-    m.set('parse_mode', 'HTML');
-    m.set('link_preview_options', JSON.stringify({ is_disabled: true }));
-    m.set('text', buildLinksMessage(tag, link));
-    await call('sendMessage', m);
+  if (link.length) await sendLinks(call, base(), tag, link);
+  return failed;
+}
+
+async function sendLinks(call, form, tag, link) {
+  form.set('parse_mode', 'HTML');
+  form.set('link_preview_options', JSON.stringify({ is_disabled: true }));
+  form.set('text', buildLinksMessage(tag, link));
+  await call('sendMessage', form);
+}
+
+/**
+ * Sends the files of an already posted release again as one block (reply to the post) and then deletes the old
+ * file messages. Resolves to the number of files that could not be attached.
+ */
+export async function repostFiles({ tag, messageId, deleteIds = [], dir = 'build', token, chat, fetch: doFetch = fetch, log = console.log }) {
+  const call = caller(token, doFetch);
+  const version = tag.replace(/^v/, '');
+  const failed = await sendFiles({ call, chat, replyTo: messageId, tag, version, dir, log });
+  if (deleteIds.length) {
+    const form = new FormData();
+    form.set('chat_id', chat);
+    form.set('message_ids', JSON.stringify(deleteIds));
+    await call('deleteMessages', form);
+    log(`Telegram: deleted the old file messages ${deleteIds.join(', ')}`);
   }
   return failed;
 }
@@ -128,6 +197,20 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(0);
   }
   if (!tag) throw new Error('usage: telegram-post.mjs <tag> [build dir] | <tag> --edit-photo <message id>');
+  if (dir === '--repost-files') {
+    // <tag> --repost-files <post id> <build dir> [old message ids, comma separated or a-b]
+    const [messageId, filesDir, ids = ''] = process.argv.slice(4);
+    const deleteIds = ids.split(',').filter(Boolean).flatMap((p) => {
+      const [a, b = a] = p.split('-').map(Number);
+      return Array.from({ length: b - a + 1 }, (_, i) => a + i);
+    });
+    if (!(Number(messageId) > 0) || !filesDir || deleteIds.some((n) => !(n > 0))) throw new Error('--repost-files <post id> <dir> [ids]');
+    const failed = await repostFiles({ tag, messageId: Number(messageId), deleteIds, dir: filesDir, token, chat }).catch((e) => {
+      console.log(String(e.message));
+      return -1;
+    });
+    process.exit(failed ? 1 : 0);
+  }
   if (dir === '--edit-photo') {
     const messageId = Number(process.argv[4]);
     if (!Number.isInteger(messageId) || messageId <= 0) throw new Error('--edit-photo needs a message id');

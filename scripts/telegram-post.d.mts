@@ -16,3 +16,13 @@ export function replacePhoto(p: {
   fetch?: typeof fetch;
   log?: (line: string) => void;
 }): Promise<void>;
+export function repostFiles(p: {
+  tag: string;
+  messageId: number;
+  deleteIds?: number[];
+  dir?: string;
+  token: string;
+  chat: string;
+  fetch?: typeof fetch;
+  log?: (line: string) => void;
+}): Promise<number>;
