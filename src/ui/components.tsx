@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import { useFocusable, FocusContext, pause, resume } from '@noriginmedia/norigin-spatial-navigation';
@@ -174,9 +175,9 @@ export function ChoiceRow<T>(p: ChoiceRowProps<T>) {
   );
 }
 
-export const ON_OFF = [
-  { value: true, label: 'Вкл' },
-  { value: false, label: 'Выкл' },
+export const onOff = () => [
+  { value: true, label: t('tv.on') },
+  { value: false, label: t('tv.off') },
 ];
 
 export function Spinner(p: { text?: string }) {

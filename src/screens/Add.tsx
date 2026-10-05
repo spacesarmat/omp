@@ -8,6 +8,7 @@ import { replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, ChoiceRow, Spinner } from '../ui/components';
 import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
+import { t } from '../i18n';
 import { platformKind } from '../platform/env';
 import { tvSourceContext } from '../sources/tvContext';
 import { searchAll } from '../sources/search';
@@ -31,10 +32,10 @@ interface Prog {
 }
 
 function unifiedMeta(r: SourceResult): string {
-  const parts = [r.Size, 'сиды ' + r.Seed, 'пиры ' + r.Peer];
+  const parts = [r.Size, t('add.seeds', { n: r.Seed }), t('add.peers', { n: r.Peer })];
   const d = resultDate(r);
   if (d) parts.push(d);
-  if (r.sources && r.sources.length) parts.push('ещё в ' + r.sources.map(sourceName).join(', '));
+  if (r.sources && r.sources.length) parts.push(t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }));
   return parts.filter(Boolean).join(' · ');
 }
 
@@ -53,7 +54,7 @@ export function AddScreen() {
   const [rows, setRows] = useState<SourceResult[] | null>(null);
   const [prog, setProg] = useState<Prog | null>(null);
   const [busy, setBusy] = useState(false);
-  const [busyText, setBusyText] = useState('Подождите…');
+  const [busyText, setBusyText] = useState(t('add.wait'));
 
   useEffect(() => {
     restoreFocus('ADD');
@@ -65,12 +66,12 @@ export function AddScreen() {
   }, []);
 
   const doAdd = (p: { link: string; title?: string; category?: string }) => {
-    setBusyText('Подождите…');
+    setBusyText(t('add.wait'));
     c.add({ link: p.link, title: p.title, category: p.category }).then(
-      (t) => {
+      (tt) => {
         if (!alive.current) return;
-        toast('Добавлено: ' + (t.title || p.title || t.hash));
-        replaceRoute({ name: 'torrent', hash: t.hash });
+        toast(t('add.added', { title: tt.title || p.title || tt.hash }));
+        replaceRoute({ name: 'torrent', hash: tt.hash });
       },
       (e) => {
         if (!alive.current) return;
@@ -84,7 +85,7 @@ export function AddScreen() {
     if (busy) return;
     const l = p.link.trim();
     if (!l) {
-      toast('Введите magnet-ссылку, хеш или URL .torrent', 'error');
+      toast(t('add.enterLink'), 'error');
       return;
     }
     setBusy(true);
@@ -95,7 +96,7 @@ export function AddScreen() {
   const addResult = (r: SourceResult) => {
     if (busy) return;
     setBusy(true);
-    setBusyText('Получаю ссылку…');
+    setBusyText(t('add.gettingLink'));
     resolveLink(r, tvSourceContext()).then(
       (l) => {
         if (!alive.current) return;
@@ -135,7 +136,7 @@ export function AddScreen() {
     h.done.then(() => {
       if (!alive.current || handle.current !== h) return;
       sync(h);
-      if (!h.results().length) toast('Ничего не найдено');
+      if (!h.results().length) toast(t('catalog.nothingFound'));
     });
   };
 
@@ -154,7 +155,7 @@ export function AddScreen() {
         if (!alive.current) return;
         setBusy(false);
         setResults(r);
-        if (!r.length) toast('Ничего не найдено');
+        if (!r.length) toast(t('catalog.nothingFound'));
       },
       (e) => {
         if (!alive.current) return;
@@ -171,17 +172,17 @@ export function AddScreen() {
 
   return (
     <FocusGroup focusKey="ADD" className="screen add">
-      <h1>Добавить торрент</h1>
-      <h2>Magnet-ссылка, хеш или URL .torrent</h2>
+      <h1>{t('add.title')}</h1>
+      <h2>{t('add.linkHeading')}</h2>
       <div class="row">
         <TextInput focusKey="add-link" value={link} onChange={setLink} placeholder="magnet:?xt=urn:btih:…" onSubmit={() => add({ link })} />
-        <Button label="Добавить" onPress={() => add({ link })} disabled={busy} />
+        <Button label={t('add.add')} onPress={() => add({ link })} disabled={busy} />
       </div>
-      <h2>{unified ? 'Поиск по источникам' : 'Поиск'}</h2>
+      <h2>{unified ? t('add.searchBySources') : t('add.search')}</h2>
       <div class="row">
-        <TextInput value={query} onChange={setQuery} placeholder="Название фильма или сериала" onSubmit={search} />
-        {!unified && <ChoiceRow label="Источник" value={source} options={SOURCES} onChange={setSource} />}
-        <Button label="Искать" onPress={search} disabled={busy} />
+        <TextInput value={query} onChange={setQuery} placeholder={t('add.queryPlaceholder')} onSubmit={search} />
+        {!unified && <ChoiceRow label={t('add.source')} value={source} options={SOURCES} onChange={setSource} />}
+        <Button label={t('add.go')} onPress={search} disabled={busy} />
       </div>
       {busy && <Spinner text={busyText} />}
       {unified && prog && (
@@ -194,7 +195,7 @@ export function AddScreen() {
                 pending: prog.pending.map(sourceName),
                 failed: prog.failed.map(sourceName),
               })
-            : 'Нет включённых источников'}
+            : t('add.noSources')}
         </div>
       )}
       {unified && blocked.length > 0 && (
@@ -227,13 +228,13 @@ export function AddScreen() {
             >
               <div class="title">{r.Title}</div>
               <div class="meta">
-                {r.Size} · сиды {r.Seed} · пиры {r.Peer} · {r.Tracker}{r.CreateDate ? ' · ' + r.CreateDate.slice(0, 10) : ''}
+                {r.Size} · {t('add.seeds', { n: r.Seed })} · {t('add.peers', { n: r.Peer })} · {r.Tracker}{r.CreateDate ? ' · ' + r.CreateDate.slice(0, 10) : ''}
               </div>
             </Focusable>
           ))}
         </FocusGroup>
       )}
-      {!unified && <div class="hints">Текст удобно вводить с клавиатуры телефона в приложении LG ThinQ</div>}
+      {!unified && <div class="hints">{t('add.typeHint')}</div>}
     </FocusGroup>
   );
 }

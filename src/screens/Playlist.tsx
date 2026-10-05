@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { client } from '../store/servers';
 import { request, errorMessage } from '../api/http';
@@ -38,7 +39,7 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
           return;
         }
         const list = parseM3U(body, target);
-        if (!list.length) setError('Плейлист пуст или имеет неизвестный формат');
+        if (!list.length) setError(t('playlist.empty'));
         setEntries(list);
         setLoadedUrl(target);
       },
@@ -75,14 +76,14 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
 
   return (
     <FocusGroup focusKey="PLAYLIST" className="screen playlist">
-      <h1>{p.title || 'Плейлист'}</h1>
+      <h1>{p.title || t('playlist.title')}</h1>
       {!p.url && (
         <div class="row">
-          <TextInput focusKey="pl-url" value={url} onChange={setUrl} placeholder="URL плейлиста M3U / M3U8" type="url" onSubmit={() => load(url)} />
-          <Button label="Открыть" onPress={() => load(url)} />
+          <TextInput focusKey="pl-url" value={url} onChange={setUrl} placeholder={t('playlist.urlPlaceholder')} type="url" onSubmit={() => load(url)} />
+          <Button label={t('playlist.open')} onPress={() => load(url)} />
           {c && (
             <Button
-              label="Все торренты сервера"
+              label={t('playlist.allTorrents')}
               onPress={() => {
                 const u = c.allPlaylistUrl();
                 setUrl(u);
@@ -94,7 +95,7 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
       )}
       {!p.url && !entries && favorites.value.length > 0 && (
         <FocusGroup focusKey="PL-FAVORITES">
-          <h2>Избранное</h2>
+          <h2>{t('playlist.favorites')}</h2>
           {favorites.value.map((f) => (
             <Focusable key={f.url} focusKey={'fav-' + f.url} className="list-item" onPress={() => navigate({ name: 'playlist', url: f.url, title: f.title })}>
               <div class="title">{f.title}</div>
@@ -103,18 +104,18 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
           ))}
         </FocusGroup>
       )}
-      {busy && <Spinner text="Загрузка плейлиста…" />}
+      {busy && <Spinner text={t('playlist.loading')} />}
       {error && <div class="banner-error">{error}</div>}
       {entries && entries.length > 0 && (
         <FocusGroup focusKey="PLAYLIST-ENTRIES">
-          {queue.length > 0 && <Button icon="play" label={'Воспроизвести всё (' + queue.length + ')'} onPress={() => navigate({ name: 'player', queue, index: 0 })} />}
+          {queue.length > 0 && <Button icon="play" label={t('playlist.playAll', { n: queue.length })} onPress={() => navigate({ name: 'player', queue, index: 0 })} />}
           {loadedUrl && (
             <Button
               icon="star"
-              label={isFavorite(loadedUrl) ? 'Убрать из избранного' : 'В избранное'}
+              label={isFavorite(loadedUrl) ? t('playlist.unfavorite') : t('playlist.favorite')}
               onPress={() => {
                 const title = p.title || loadedUrl.split('?')[0].split('/').pop() || loadedUrl;
-                toast(toggleFavorite(loadedUrl, title) ? 'Добавлено в избранное' : 'Удалено из избранного');
+                toast(toggleFavorite(loadedUrl, title) ? t('playlist.added') : t('playlist.removed'));
               }}
             />
           )}

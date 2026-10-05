@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { t } from '../../i18n';
 import { servers, activeServerId, SavedServer } from '../../store/servers';
 import { TorrServerClient } from '../../api/torrserver';
 import { FocusGroup, Focusable, Button } from '../../ui/components';
@@ -11,8 +12,8 @@ export function ServerHistory(p: { onConnect: (s: SavedServer) => void; onEdit: 
     let dead = false;
     servers.value.forEach((s) => {
       new TorrServerClient(s).echo().then(
-        (v) => { if (!dead) setStatus((st) => ({ ...st, [s.id]: { online: true, text: 'онлайн · ' + v } })); },
-        () => { if (!dead) setStatus((st) => ({ ...st, [s.id]: { online: false, text: 'недоступен' } })); },
+        (v) => { if (!dead) setStatus((st) => ({ ...st, [s.id]: { online: true, text: t('connect.online', { version: v }) } })); },
+        () => { if (!dead) setStatus((st) => ({ ...st, [s.id]: { online: false, text: t('connect.offline') } })); },
       );
     });
     return () => { dead = true; };
@@ -41,16 +42,16 @@ export function ServerHistory(p: { onConnect: (s: SavedServer) => void; onEdit: 
               <div class="hist-text">
                 <div class="hist-name">
                   {s.name}
-                  {s.id === active && <span class="hist-current">текущий</span>}
+                  {s.id === active && <span class="hist-current">{t('connect.current')}</span>}
                 </div>
-                <div class="hist-meta">{s.url.replace(/^https?:\/\//, '')} · {st ? st.text : 'проверка…'}</div>
+                <div class="hist-meta">{s.url.replace(/^https?:\/\//, '')} · {st ? st.text : t('connect.checking')}</div>
               </div>
             </Focusable>
-            <Button icon="pencil" label="Изменить" onPress={() => p.onEdit(s)} />
+            <Button icon="pencil" label={t('connect.edit')} onPress={() => p.onEdit(s)} />
           </div>
         );
       })}
-      <div class="hist-hint">OK — подключиться · Назад — закрыть список</div>
+      <div class="hist-hint">{t('connect.historyHint')}</div>
     </FocusGroup>
   );
 }

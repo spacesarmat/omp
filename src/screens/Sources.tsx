@@ -27,26 +27,26 @@ import { flareStatus, onFlareStatus, tvFlareLines, tvFlareRefresh } from '../sou
 import type { FlareStatus } from '../sources/flaresolverr';
 import type { LanScan } from '../sources/indexerDiscovery';
 import type { Source } from '../sources/types';
+import { t } from '../i18n';
 
 /** Names of the TorrServer sources (as on the phone). */
-const TS_LABELS: { [id: string]: string } = {
-  'ts-rutor': 'rutor (поиск TorrServer)',
+const tsLabels = (): { [id: string]: string } => ({
+  'ts-rutor': t('tvSources.tsRutor'),
   'ts-torznab': 'Jackett / Prowlarr (Torznab)',
-};
+});
 
-export const INTRO = 'Jackett и Prowlarr ищут напрямую. Без них поиск идёт через TorrServer.';
+export const intro = () => t('tvSources.intro');
 
-export const PHONE_HOW =
-  'На телефоне: OMP → Настройки → Источники поиска → «Передать на телевизор». Подключения к Jackett и Prowlarr, входы на сайты (rutracker, Kinozal, rustorka) и проверку Cloudflare тоже можно передать — ключи и пароли не вводятся пультом.';
+export const phoneHow = () => t('tvSources.phoneHow');
 
-export const NO_INDEXERS = 'Подключите Jackett или Prowlarr на телефоне и передайте на телевизор.';
+export const noIndexers = () => t('tvSources.noIndexers');
 
 function indexerSourceId(c: IndexerConn): string {
   return INDEXER_SOURCE_PREFIX + c.id;
 }
 
 function label(s: Source): string {
-  return TS_LABELS[s.id] || s.name;
+  return tsLabels()[s.id] || s.name;
 }
 
 function Switch(p: { on: boolean }) {
@@ -76,10 +76,10 @@ function FlareBlock(props: { url: string | null; status: FlareStatus | null }) {
 }
 
 function TransferNote() {
-  const t = lastTransfer();
-  if (!t) return <div class="src-last muted">Передач с телефона ещё не было</div>;
-  const w = transferWhen(t.at);
-  return <div class="src-last">{'Последняя передача: ' + w.day + ' ' + w.time + ' · «' + t.phone + '»'}</div>;
+  const last = lastTransfer();
+  if (!last) return <div class="src-last muted">{t('tvSources.noTransfers')}</div>;
+  const w = transferWhen(last.at);
+  return <div class="src-last">{t('tvSources.lastTransfer', { day: w.day, time: w.time, phone: last.phone })}</div>;
 }
 
 /**
@@ -248,7 +248,7 @@ export function SourcesScreen({
       setCloudflareBypass(s.id, false);
       return;
     }
-    confirmDialog(bypassWarning(), 'Включить').then((ok) => {
+    confirmDialog(bypassWarning(), t('tvSources.enable')).then((ok) => {
       if (!ok) return;
       setSourceOn(s.id, true);
       setCloudflareBypass(s.id, true);
@@ -278,12 +278,12 @@ export function SourcesScreen({
 
   const noteOf = (s: Source): HealthLine | null => {
     if (s.needsLogin && s.login) {
-      if (!loggedIn(s)) return { text: 'нужен вход', tone: 'muted' };
+      if (!loggedIn(s)) return { text: t('sources.state.login'), tone: 'muted' };
       const h = getHealth(s.id);
-      if (!h) return { text: fromPhone(s) ? 'вход передан с телефона' : browser[s.id] ? browserDone() : 'вход выполнен', tone: 'ok' };
+      if (!h) return { text: fromPhone(s) ? t('tvSources.loginFromPhone') : browser[s.id] ? browserDone() : t('tvSources.loggedInDone'), tone: 'ok' };
       return healthText(h);
     }
-    if (!isSourceOn(s)) return { text: 'выключен', tone: 'muted' };
+    if (!isSourceOn(s)) return { text: t('sources.state.off'), tone: 'muted' };
     return healthText(getHealth(s.id));
   };
 
@@ -294,7 +294,7 @@ export function SourcesScreen({
 
   const logout = (s: Source) => {
     if (!s.logout) return;
-    confirmDialog('Выйти из ' + s.name + '? Логин и пароль будут удалены с телевизора.', 'Выйти').then((ok) => {
+    confirmDialog(t('tvSources.signOutAsk', { name: s.name }), t('tvSources.signOut')).then((ok) => {
       if (!ok || !s.logout) return;
       s.logout(ctx()).then(
         () => {
@@ -302,10 +302,10 @@ export function SourcesScreen({
           setBrowser((m) => ({ ...m, [s.id]: false }));
           setHealth(s.id, { state: 'login', at: Date.now() });
           forgetFromPhone(s);
-          toast('Вы вышли из ' + s.name);
+          toast(t('tvSources.signedOut', { name: s.name }));
         },
         (e) => {
-          log('warn', 'search', 'Выход из источника не удался');
+          log('warn', 'search', t('tvSources.logSignOutFailed'));
           toast(errorMessage(e), 'error');
         },
       );
@@ -321,7 +321,7 @@ export function SourcesScreen({
     clearHealth(s.id);
     // typed on the TV now: no longer «вход передан с телефона»
     forgetFromPhone(s);
-    toast(viaBrowser ? browserDoneTitle() : 'Вход выполнен');
+    toast(viaBrowser ? browserDoneTitle() : t('tvSources.signedIn'));
     setTimeout(() => focusLogin(s), 0);
   };
 
@@ -329,18 +329,18 @@ export function SourcesScreen({
     <FocusGroup focusKey="SOURCES" className="screen sources">
       <div class="src-layout">
         <div class="src-side">
-          <h1>Источники поиска</h1>
-          <div class="src-intro">{INTRO}</div>
+          <h1>{t('tvSettings.sources')}</h1>
+          <div class="src-intro">{intro()}</div>
           <FlareBlock url={flareSolverrUrl()} status={flareStatus()} />
           <div class="src-phone">
-            <div class="src-phone-title">С телефона</div>
-            <div class="src-phone-text">{PHONE_HOW}</div>
+            <div class="src-phone-title">{t('tvSources.fromPhone')}</div>
+            <div class="src-phone-text">{phoneHow()}</div>
             <TransferNote />
           </div>
         </div>
         <div class="src-list">
-          {builtins.length > 0 && <div class="src-group">Индексаторы</div>}
-          {builtins.length > 0 && !indexers.length && <div class="src-empty">{NO_INDEXERS}</div>}
+          {builtins.length > 0 && <div class="src-group">{t('tvSources.indexers')}</div>}
+          {builtins.length > 0 && !indexers.length && <div class="src-empty">{noIndexers()}</div>}
           {indexers.map((c, i) => {
             const st = getIndexerStatus(c.id);
             const on = isSourceOn({ id: indexerSourceId(c) });
@@ -361,7 +361,7 @@ export function SourcesScreen({
                     <span class="src-name">
                       {connTitle(c)}
                       <span class={'src-note src-note-' + line.tone}>
-                        {st && (st.state === 'nokey' || st.state === 'badkey') ? line.text + ' — передайте с телефона' : line.text}
+                        {st && (st.state === 'nokey' || st.state === 'badkey') ? t('tvSources.sendFromPhone', { text: line.text }) : line.text}
                       </span>
                     </span>
                     <span class="src-caret">{open ? '▴' : '▾'}</span>
@@ -369,7 +369,7 @@ export function SourcesScreen({
                   <Button
                     focusKey={'src-idx-on-' + c.id}
                     className="src-login"
-                    label={on ? 'вкл' : 'выкл'}
+                    label={on ? t('tvSources.on') : t('tvSources.off')}
                     onPress={() => {
                       setSourceOn(indexerSourceId(c), !on);
                       rerender();
@@ -393,7 +393,7 @@ export function SourcesScreen({
               </div>
             );
           })}
-          <div class="src-group">Через TorrServer</div>
+          <div class="src-group">{t('tvSources.viaTorrServer')}</div>
           {ts.map((s, i) => (
             <Focusable key={s.id} focusKey={i === 0 && !indexers.length ? 'src-first' : 'src-' + s.id} className="src-row" onPress={() => toggle(s)}>
               <span class="src-name">
@@ -404,17 +404,17 @@ export function SourcesScreen({
             </Focusable>
           ))}
           {torznabHiddenText(!ts.some((s) => s.id === 'ts-torznab')) && <div class="src-empty">{torznabHiddenText(true)}</div>}
-          {cfSites.length > 0 && <div class="src-group">Сайты за Cloudflare</div>}
+          {cfSites.length > 0 && <div class="src-group">{t('tvSources.cfSites')}</div>}
           {cfSites.map((s) => {
             const on = siteOn(s);
             const login = !!(s.needsLogin && s.login);
             const base = tvSiteNote(isCloudflareBypassOn(s), needsCheck(s), until[s.id] === undefined ? null : until[s.id], now());
             let note = base;
-            if (login && !loggedIn(s)) note = { text: 'нужен вход', tone: 'muted' };
-            else if (!isSourceOn(s)) note = { text: 'выключен', tone: 'muted' };
-            else if (!isCloudflareBypassOn(s)) note = { text: 'ищет без обхода Cloudflare', tone: 'muted' };
+            if (login && !loggedIn(s)) note = { text: t('sources.state.login'), tone: 'muted' };
+            else if (!isSourceOn(s)) note = { text: t('sources.state.off'), tone: 'muted' };
+            else if (!isCloudflareBypassOn(s)) note = { text: t('tvSources.cfNoBypass'), tone: 'muted' };
             // mockup: «обход Cloudflare · вход передан с телефона»
-            else if (base.tone === 'ok' && login && fromPhone(s)) note = { text: base.text + ' · вход передан с телефона', tone: base.tone };
+            else if (base.tone === 'ok' && login && fromPhone(s)) note = { text: base.text + ' · ' + t('tvSources.loginFromPhone'), tone: base.tone };
             return (
               <div class="src-line" key={'cf-' + s.id} data-cf-site={s.id} data-source={s.id}>
                 <Focusable focusKey={'src-cf-' + s.id} className="src-row src-row-builtin" onPress={() => pressSite(s)}>
@@ -422,20 +422,20 @@ export function SourcesScreen({
                     {s.name}
                     <span class={'src-note src-note-' + note.tone}>{note.text}</span>
                   </span>
-                  <span class={'src-act' + (on ? ' on' : '')}>{on ? 'вкл' : 'выкл'}</span>
+                  <span class={'src-act' + (on ? ' on' : '')}>{on ? t('tvSources.on') : t('tvSources.off')}</span>
                 </Focusable>
                 {login && (
                   <Button
                     focusKey={'src-login-' + s.id}
                     className="src-login"
-                    label={loggedIn(s) ? 'Выйти' : 'Войти'}
+                    label={loggedIn(s) ? t('tvSources.signOut') : t('tv.login.signIn')}
                     onPress={() => (loggedIn(s) ? logout(s) : setLoginFor(s))}
                   />
                 )}
               </div>
             );
           })}
-          {plain.length > 0 && <div class="src-group">Встроенные</div>}
+          {plain.length > 0 && <div class="src-group">{t('tvSources.builtin')}</div>}
           {plain.map((s) => {
             const on = isSourceOn(s);
             const login = !!(s.needsLogin && s.login);
@@ -446,13 +446,13 @@ export function SourcesScreen({
                     {s.name}
                     <Note note={noteOf(s)} />
                   </span>
-                  <span class={'src-act' + (on ? ' on' : '')}>{on ? 'вкл' : 'выкл'}</span>
+                  <span class={'src-act' + (on ? ' on' : '')}>{on ? t('tvSources.on') : t('tvSources.off')}</span>
                 </Focusable>
                 {login && (
                   <Button
                     focusKey={'src-login-' + s.id}
                     className="src-login"
-                    label={loggedIn(s) ? 'Выйти' : 'Войти'}
+                    label={loggedIn(s) ? t('tvSources.signOut') : t('tv.login.signIn')}
                     onPress={() => (loggedIn(s) ? logout(s) : setLoginFor(s))}
                   />
                 )}

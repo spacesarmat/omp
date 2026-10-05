@@ -3,6 +3,7 @@ import { setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { FocusGroup, Button, TextInput } from './components';
 import { useKeys } from './keys';
 import { errorMessage } from '../api/http';
+import { t } from '../i18n';
 import type { Source, SourceContext } from '../sources/types';
 import {
   browserBusy,
@@ -15,9 +16,8 @@ import {
   loginOnPhone,
 } from '../sources/browserLogin';
 
-export const TV_LOGIN_HINT =
-  'Проще с телефона: OMP → Пульт → «Клавиатура» вводит текст в это поле, или OMP → Настройки → Источники поиска → «Передать на телевизор».';
-export const TV_LOGIN_NOTE = 'Логин и пароль хранятся только на этом телевизоре в зашифрованном виде.';
+export const tvLoginHint = () => t('tv.login.hint');
+export const tvLoginNote = () => t('tv.login.note');
 
 /**
  * Android TV «Вход на rutracker»: login and password by the remote (or the phone keyboard), the source keeps them
@@ -62,7 +62,7 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
     const u = username.trim();
     const pw = pass.current;
     if (!u || !pw) {
-      setError('Введите логин и пароль');
+      setError(t('tv.login.enterBoth'));
       return;
     }
     setError('');
@@ -121,14 +121,14 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
     );
   };
 
-  const title = 'Вход на ' + p.source.name;
+  const title = t('common.signInTo', { site: p.source.name });
   return (
     <div class="dialog-backdrop">
       <FocusGroup focusKey="LOGIN-DIALOG" className="dialog login-dialog" boundary>
         <div class="dialog-title">{title}</div>
-        <div class="login-label">Логин</div>
+        <div class="login-label">{t('tv.login.user')}</div>
         <TextInput focusKey="login-user" value={username} onChange={setUsername} />
-        <div class="login-label">Пароль</div>
+        <div class="login-label">{t('tv.login.password')}</div>
         <TextInput
           focusKey="login-pass"
           type="password"
@@ -139,8 +139,8 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
           }}
           onSubmit={submit}
         />
-        <div class="login-hint">{TV_LOGIN_HINT}</div>
-        <div class="login-note">{TV_LOGIN_NOTE}</div>
+        <div class="login-hint">{tvLoginHint()}</div>
+        <div class="login-note">{tvLoginNote()}</div>
         {error && <div class="banner-error login-error">{error}</div>}
         {browser && suggest && <div class="login-hint login-captcha">{suggest}</div>}
         {browser && (
@@ -150,8 +150,8 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
           </div>
         )}
         <div class="login-actions">
-          <Button focusKey="login-cancel" label="Отмена" onPress={close} />
-          <Button focusKey="login-ok" className="primary" label={busy ? 'Вхожу…' : 'Войти'} onPress={submit} />
+          <Button focusKey="login-cancel" label={t('tv.cancel')} onPress={close} />
+          <Button focusKey="login-ok" className="primary" label={busy ? t('tv.login.signingIn') : t('tv.login.signIn')} onPress={submit} />
         </div>
       </FocusGroup>
     </div>

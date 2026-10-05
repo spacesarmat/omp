@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { ComponentType } from 'preact';
-import { lang } from './i18n';
+import { lang, t } from './i18n';
 import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { installWheelScroll } from './ui/wheel';
@@ -79,7 +79,7 @@ function renderRoute(r: Route) {
 }
 
 function exitApp() {
-  confirmDialog('Выйти из приложения?', 'Выйти').then((ok) => {
+  confirmDialog(t('tv.exitAsk'), t('tv.exit')).then((ok) => {
     if (ok) window.close();
   });
 }

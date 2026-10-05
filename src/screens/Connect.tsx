@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { servers, addServer, setActiveServer, SavedServer } from '../store/servers';
@@ -56,7 +57,7 @@ export function ConnectScreen() {
   const connect = (address = url) => {
     if (busy) return;
     if (!address.trim()) {
-      toast('Введите адрес сервера', 'error');
+      toast(t('connect.enterAddress'), 'error');
       return;
     }
     cancelScan();
@@ -65,7 +66,7 @@ export function ConnectScreen() {
     new TorrServerClient(cfg).echo().then(
       (v) => {
         if (!alive.current) return;
-        toast('Подключено: ' + v);
+        toast(t('connect.connected', { version: v }));
         open(addServer(cfg));
       },
       (e) => {
@@ -92,7 +93,7 @@ export function ConnectScreen() {
       .then((list) => {
         if (!alive.current || scanId.current !== my) return;
         setScan(null);
-        if (!list.length) toast('Серверы TorrServer не найдены', 'error');
+        if (!list.length) toast(t('connect.noServersFound'), 'error');
       })
       .catch((e) => {
         if (!alive.current || scanId.current !== my) return;
@@ -110,7 +111,7 @@ export function ConnectScreen() {
           onPress={() => (historyOpen ? closeHistory() : setHistoryOpen(true))}
         >
           <Icon name="history" size={28} />
-          История серверов
+          {t('connect.history')}
           {historyOpen ? <Icon name="chevronUp" size={22} class="history-chevron" /> : <span class="history-count">{servers.value.length}</span>}
         </Focusable>
       )}
@@ -130,24 +131,24 @@ export function ConnectScreen() {
           </div>
         </div>
         <div class="connect-card">
-          <label class="field-label">Адрес TorrServer</label>
-          <TextInput focusKey="connect-url" value={url} onChange={setUrl} placeholder="Например, 192.168.1.191:8090" type="url" onSubmit={() => connect()} />
+          <label class="field-label">{t('connect.address')}</label>
+          <TextInput focusKey="connect-url" value={url} onChange={setUrl} placeholder={t('connect.addressPlaceholder')} type="url" onSubmit={() => connect()} />
           <Focusable focusKey="connect-advanced" className="link-toggle" onPress={() => setAdvanced(!advanced)}>
             <Icon name={advanced ? 'chevronUp' : 'chevronDown'} size={22} />
-            Дополнительно: логин и пароль
+            {t('connect.advanced')}
           </Focusable>
           {advanced && (
             <div class="row">
-              <TextInput value={user} onChange={setUser} placeholder="Логин" />
-              <TextInput value={password} onChange={setPassword} placeholder="Пароль" type="password" />
+              <TextInput value={user} onChange={setUser} placeholder={t('connect.user')} />
+              <TextInput value={password} onChange={setPassword} placeholder={t('connect.password')} type="password" />
             </div>
           )}
           <div class="row">
-            <Button label={busy ? 'Подключение…' : 'Подключиться'} className="primary grow" onPress={() => connect()} disabled={busy} />
-            <Button icon="search" label="Найти в сети" onPress={scanNetwork} disabled={!!scan} />
+            <Button label={busy ? t('connect.connecting') : t('connect.connect')} className="primary grow" onPress={() => connect()} disabled={busy} />
+            <Button icon="search" label={t('connect.scan')} onPress={scanNetwork} disabled={!!scan} />
           </div>
         </div>
-        {scan && <Spinner text={'Поиск серверов… ' + Math.round((scan.done * 100) / scan.total) + '%'} />}
+        {scan && <Spinner text={t('connect.scanning', { pct: Math.round((scan.done * 100) / scan.total) })} />}
         {found.map((f) => (
           <Focusable key={f.url} className="list-item" onPress={() => connect(f.url)}>
             <div class="title">{f.url}</div>
@@ -155,9 +156,9 @@ export function ConnectScreen() {
           </Focusable>
         ))}
         <div class="connect-hint">
-          Поиск проверяет домашнюю сеть на портах 8090 и 5665.
+          {t('connect.scanNote')}
           {platformKind() !== 'androidtv' && <br />}
-          {platformKind() !== 'androidtv' && 'Адрес удобно вводить с клавиатуры телефона в LG ThinQ.'}
+          {platformKind() !== 'androidtv' && t('connect.typeHint')}
         </div>
       </div>
       {editing && (
@@ -166,7 +167,7 @@ export function ConnectScreen() {
           onClose={() => { setEditing(null); focusHistoryButton(); }}
         />
       )}
-      <div class="hints">Стрелки — перемещение · OK — выбрать · Назад — {routeStack.value.length > 1 ? 'назад' : 'выход'}</div>
+      <div class="hints">{routeStack.value.length > 1 ? t('connect.hintsBack') : t('connect.hintsExit')}</div>
     </FocusGroup>
   );
 }

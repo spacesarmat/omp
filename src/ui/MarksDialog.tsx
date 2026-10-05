@@ -4,14 +4,15 @@ import { FocusGroup, Focusable, Button } from './components';
 import { useKeys } from './keys';
 import { errorMessage } from '../api/http';
 import { log } from '../lib/log';
+import { t } from '../i18n';
 import { clampMarks, holdStep, markText, marksValid, stepMark, type KeyTrack, type MarkRow, type TvMarks } from '../lib/skipMarks';
 
-export const MARKS_HINT = '◀ ▶ — шаг 5 с, удерживайте для 30 с. Точнее — из плеера: меню → «Отметить начало заставки».';
+export const marksHint = () => t('tv.marks.hint');
 
-const ROWS: { row: MarkRow; label: string }[] = [
-  { row: 'from', label: 'Заставка с' },
-  { row: 'to', label: 'Заставка до' },
-  { row: 'last', label: 'Титры: последние' },
+const rows = (): { row: MarkRow; label: string }[] => [
+  { row: 'from', label: t('tv.marks.from') },
+  { row: 'to', label: t('tv.marks.to') },
+  { row: 'last', label: t('tv.marks.last') },
 ];
 
 /**
@@ -68,7 +69,7 @@ export function MarksDialog(p: { subtitle: string; prefs: TvMarks; onSave: (m: T
   const write = (m: TvMarks) => {
     if (busy) return;
     if (!marksValid(m)) {
-      setError('Отметки заданы неверно: конец заставки должен быть позже начала, значения — не больше 6 часов');
+      setError(t('tv.marks.invalid'));
       return;
     }
     setBusy(true);
@@ -84,7 +85,7 @@ export function MarksDialog(p: { subtitle: string; prefs: TvMarks; onSave: (m: T
         if (alive.current) p.onClose();
       },
       (e) => {
-        log('warn', 'tv', 'Не удалось сохранить отметки пропуска');
+        log('warn', 'tv', t('tv.marks.logSaveFailed'));
         if (!alive.current) return;
         setBusy(false);
         setError(errorMessage(e));
@@ -103,9 +104,9 @@ export function MarksDialog(p: { subtitle: string; prefs: TvMarks; onSave: (m: T
       }}
     >
       <FocusGroup focusKey="MARKS-DIALOG" className="dialog marks-dialog" boundary>
-        <div class="dialog-title" id="marks-title">Заставка и титры</div>
+        <div class="dialog-title" id="marks-title">{t('tv.marks.title')}</div>
         <div class="marks-sub">{p.subtitle}</div>
-        {ROWS.map((r) => (
+        {rows().map((r) => (
           <Focusable
             key={r.row}
             focusKey={'marks-' + r.row}
@@ -114,23 +115,23 @@ export function MarksDialog(p: { subtitle: string; prefs: TvMarks; onSave: (m: T
             ariaLabel={r.label + ', ' + markText(marks, r.row)}
           >
             <span class="marks-label">{r.label}</span>
-            <span class="marks-step" role="button" aria-label={r.label + ': меньше на 5 секунд'} onClick={() => step(r.row, -1, 5)}>◀</span>
+            <span class="marks-step" role="button" aria-label={t('tv.marks.lessBy5', { label: r.label })} onClick={() => step(r.row, -1, 5)}>◀</span>
             <span class="marks-value">{markText(marks, r.row)}</span>
-            <span class="marks-step" role="button" aria-label={r.label + ': больше на 5 секунд'} onClick={() => step(r.row, 1, 5)}>▶</span>
+            <span class="marks-step" role="button" aria-label={t('tv.marks.moreBy5', { label: r.label })} onClick={() => step(r.row, 1, 5)}>▶</span>
           </Focusable>
         ))}
-        <div class="marks-hint">{MARKS_HINT}</div>
+        <div class="marks-hint">{marksHint()}</div>
         {error && <div class="banner-error marks-error">{error}</div>}
         <div class="marks-actions">
           <Button
             focusKey="marks-reset"
-            label="Сбросить"
+            label={t('tv.marks.reset')}
             onPress={() => write({ mi: null, mc: null })}
           />
           <Button
             focusKey="marks-save"
             className="primary"
-            label={busy ? 'Сохраняю…' : 'Сохранить'}
+            label={busy ? t('tv.marks.saving') : t('tv.save')}
             onPress={() => write(cur.current)}
           />
         </div>

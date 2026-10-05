@@ -20,11 +20,12 @@ import { skipStatus } from '../lib/skipMarks';
 import { MarksDialog } from '../ui/MarksDialog';
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { displayTitle } from '../lib/torrentName';
+import { t } from '../i18n';
 
 export function TorrentScreen({ hash }: { hash: string }) {
   const c = client.value!;
-  const cached = torrents.value.find((t) => t.hash === hash) || null;
-  const [t, setT] = useState<Torrent | null>(cached);
+  const cached = torrents.value.find((tor) => tor.hash === hash) || null;
+  const [tor, setT] = useState<Torrent | null>(cached);
   const [files, setFiles] = useState<TorrentFile[]>(cached ? c.files(cached) : []);
   const [loadingInfo, setLoadingInfo] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -71,7 +72,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
     };
   }, [hash]);
 
-  const queue = useMemo(() => (t ? buildTorrentQueue(c, t, files) : []), [t ? t.hash : '', files]);
+  const queue = useMemo(() => (tor ? buildTorrentQueue(c, tor, files) : []), [tor ? tor.hash : '', files]);
   const groups = useMemo(() => groupBySeason(playableFiles(files)), [files]);
 
   const skip = useSkip(c, hash, firstPlayableId(files));
@@ -94,12 +95,12 @@ export function TorrentScreen({ hash }: { hash: string }) {
   };
 
   const remove = () => {
-    confirmDialog('Удалить торрент с сервера?', 'Удалить').then((ok) => {
+    confirmDialog(t('torrent.deleteAsk'), t('tv.delete')).then((ok) => {
       if (!ok) return;
       c.remove(hash).then(
         () => {
           torrents.value = torrents.value.filter((x) => x.hash !== hash);
-          toast('Торрент удалён');
+          toast(t('catalog.torrentDeleted'));
           goBack();
         },
         (e) => toast(errorMessage(e), 'error'),
@@ -108,7 +109,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   };
 
   const resetViewed = () => {
-    confirmDialog('Сбросить отметки просмотра?', 'Сбросить').then((ok) => {
+    confirmDialog(t('torrent.resetAsk'), t('tv.marks.reset')).then((ok) => {
       if (!ok) return;
       clearProgress(hash);
       c.removeViewed(hash).then(() => refreshViewed(c), () => undefined);
@@ -139,68 +140,68 @@ export function TorrentScreen({ hash }: { hash: string }) {
   if (target < 0) target = 0;
   const targetLabel = queue[target] ? episodeLabel(queue[target].title) : '';
   const playLabel = targetPos > 0
-    ? 'Продолжить ' + (targetLabel ? targetLabel + ' ' : '') + 'с ' + formatDuration(targetPos)
-    : 'Смотреть' + (targetLabel ? ' ' + targetLabel : '');
+    ? t('torrent.continueFrom', { ep: targetLabel ? targetLabel + ' ' : '', time: formatDuration(targetPos) })
+    : targetLabel ? t('torrent.watchEp', { ep: targetLabel }) : t('torrent.watch');
 
   return (
     <FocusGroup focusKey="TORRENT" className="screen torrent">
       <div class="torrent-head">
-        {t && t.poster ? <img src={t.poster} alt="" /> : null}
+        {tor && tor.poster ? <img src={tor.poster} alt="" /> : null}
         <div class="info">
-          <h1>{t ? displayTitle(t) : hash}</h1>
+          <h1>{tor ? displayTitle(tor) : hash}</h1>
           <div class="muted">
-            {t && t.torrent_size ? formatBytes(t.torrent_size) + ' · ' : ''}
-            {t && t.stat_string ? t.stat_string : ''}
-            {t && t.stat === 3 ? ' · ' + formatSpeed(t.download_speed || 0) + ' · пиры ' + (t.active_peers || 0) + '/' + (t.total_peers || 0) : ''}
+            {tor && tor.torrent_size ? formatBytes(tor.torrent_size) + ' · ' : ''}
+            {tor && tor.stat_string ? tor.stat_string : ''}
+            {tor && tor.stat === 3 ? ' · ' + formatSpeed(tor.download_speed || 0) + ' · ' + t('torrent.peers', { a: tor.active_peers || 0, b: tor.total_peers || 0 }) : ''}
           </div>
           {(() => {
-            const badges = releaseBadges(parseReleaseInfo(t ? displayTitle(t) : ''));
+            const badges = releaseBadges(parseReleaseInfo(tor ? displayTitle(tor) : ''));
             return badges.length ? <div class="badges">{badges.map((x) => <span key={x} class="badge">{x}</span>)}</div> : null;
           })()}
           <FocusGroup focusKey="TORRENT-ACTIONS" className="row" preferredChildFocusKey="torrent-play">
             {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onPress={() => play(target, targetPos || undefined)} />}
-            {queue.length > 0 && <Button label="Плейлист" onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: t ? displayTitle(t) : '' })} />}
-            <Button label="Сбросить просмотр" onPress={resetViewed} />
-            <Button label="Удалить" onPress={remove} />
+            {queue.length > 0 && <Button label={t('playlist.title')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? displayTitle(tor) : '' })} />}
+            <Button label={t('torrent.resetViewed')} onPress={resetViewed} />
+            <Button label={t('tv.delete')} onPress={remove} />
           </FocusGroup>
         </div>
       </div>
       {queue.length > 0 && (
         <FocusGroup focusKey="TORRENT-SKIP" className="skip-block">
           <div class="skip-head">
-            <span class="skip-title">Пропуск</span>
-            <span class="muted">для всех серий · общий для ТВ и телефона</span>
+            <span class="skip-title">{t('torrent.skip')}</span>
+            <span class="muted">{t('torrent.skipSub')}</span>
           </div>
           <Focusable focusKey="skip-intro" className="skip-row" onPress={() => toggleSkip('i')}>
-            <span class="skip-label">Пропускать заставку автоматически</span>
-            <span class={'skip-switch' + (skip.prefs.i ? ' on' : '')} role="switch" aria-label="Пропускать заставку автоматически" aria-checked={skip.prefs.i} />
+            <span class="skip-label">{t('torrent.skipIntro')}</span>
+            <span class={'skip-switch' + (skip.prefs.i ? ' on' : '')} role="switch" aria-label={t('torrent.skipIntro')} aria-checked={skip.prefs.i} />
           </Focusable>
           <Focusable focusKey="skip-credits" className="skip-row" onPress={() => toggleSkip('c')}>
-            <span class="skip-label">Пропускать титры — сразу следующая серия</span>
-            <span class={'skip-switch' + (skip.prefs.c ? ' on' : '')} role="switch" aria-label="Пропускать титры" aria-checked={skip.prefs.c} />
+            <span class="skip-label">{t('torrent.skipCredits')}</span>
+            <span class={'skip-switch' + (skip.prefs.c ? ' on' : '')} role="switch" aria-label={t('torrent.skipCreditsShort')} aria-checked={skip.prefs.c} />
           </Focusable>
-          <Focusable focusKey="skip-status" className="skip-row skip-status" role="button" ariaLabel="Заставка и титры — задать вручную" onPress={() => setMarksOpen(true)}>
-            <span class="skip-label">Заставка и титры</span>
+          <Focusable focusKey="skip-status" className="skip-row skip-status" role="button" ariaLabel={t('torrent.marksAria')} onPress={() => setMarksOpen(true)}>
+            <span class="skip-label">{t('tv.marks.title')}</span>
             <span class="muted">{skipStatus(skip.hasChapters, skip.prefs)}</span>
           </Focusable>
         </FocusGroup>
       )}
       {marksOpen && (
         <MarksDialog
-          subtitle={(t ? displayTitle(t) : '') + ' · для всех серий · главы файла важнее'}
+          subtitle={t('torrent.marksSub', { title: tor ? displayTitle(tor) : '' })}
           prefs={{ mi: skip.prefs.mi || null, mc: skip.prefs.mc || null }}
           onSave={(m) => skip.save({ mi: m.mi, mc: m.mc }, false)}
           onClose={closeMarks}
         />
       )}
-      {loadingInfo && <Spinner text="Получение списка файлов…" />}
+      {loadingInfo && <Spinner text={t('torrent.gettingFiles')} />}
       {error && <div class="banner-error">{error}</div>}
-      {!loadingInfo && !error && loaded && files.length === 0 && <div class="empty">Файлы не найдены</div>}
-      {!loadingInfo && !error && files.length > 0 && queue.length === 0 && <div class="empty">В торренте нет видео- или аудиофайлов</div>}
+      {!loadingInfo && !error && loaded && files.length === 0 && <div class="empty">{t('torrent.noFiles')}</div>}
+      {!loadingInfo && !error && files.length > 0 && queue.length === 0 && <div class="empty">{t('torrent.noMedia')}</div>}
       <FocusGroup focusKey="TORRENT-FILES">
         {groups.map((g) => (
           <section key={String(g.season)}>
-            {(groups.length > 1 || g.season !== null) && <h2>{g.season !== null ? 'Сезон ' + g.season : 'Другое'}</h2>}
+            {(groups.length > 1 || g.season !== null) && <h2>{g.season !== null ? t('library.season', { n: g.season }) : t('torrent.other')}</h2>}
             {g.files.map((f) => {
               const watched = isWatched(hash, f.id);
               const ratio = progressRatio(hash, f.id);
@@ -222,7 +223,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
           </section>
         ))}
       </FocusGroup>
-      <div class="hints">OK — смотреть · <KeyDot color="red" /> удалить торрент · Назад — к библиотеке</div>
+      <div class="hints">{t('torrent.hintOk')} · <KeyDot color="red" /> {t('torrent.hintDelete')} · {t('torrent.hintBack')}</div>
     </FocusGroup>
   );
 }
