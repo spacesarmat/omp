@@ -294,7 +294,7 @@ export function Add({ link, query: initialQuery, run }: { link?: string; query?:
     if (run) runSearch(q, {});
   }, []);
 
-  const toggleChosen =(id: string) => {
+  const toggleChosen = (id: string) => {
     const next = selected.indexOf(id) >= 0 ? selected.filter((x) => x !== id) : selected.concat([id]);
     setChosen(all.map((s) => s.id).filter((x) => next.indexOf(x) >= 0));
   };

@@ -139,6 +139,13 @@ describe('CatalogSearch', () => {
     await flush();
     expect(search).toHaveBeenCalledTimes(2);
     expect(el.textContent).toContain('Midnight Archive');
+    // typing after a retry is debounced again
+    type('midnight!');
+    await act(async () => { vi.advanceTimersByTime(399); });
+    expect(search).toHaveBeenCalledTimes(2);
+    await act(async () => { vi.advanceTimersByTime(1); });
+    await flush();
+    expect(search).toHaveBeenCalledTimes(3);
   });
 
   it('system «Back» closes the search', () => {

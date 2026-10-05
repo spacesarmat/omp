@@ -25,6 +25,8 @@ export function CatalogSearch({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<CatalogErrorCode | null>(null);
   const [reload, setReload] = useState(0);
   const gen = useRef(0);
+  // only the search started by «Повторить» skips the debounce; typing debounces again
+  const instant = useRef(false);
   // the first search of a visit and «Повторить» read the server's TMDB settings again
   const fresh = useRef(true);
   const list = torrents.value;
@@ -52,7 +54,8 @@ export function CatalogSearch({ onClose }: { onClose: () => void }) {
             if (gen.current === my) setError(catalogErrorCode(e));
           },
         );
-    }, reload ? 0 : DEBOUNCE_MS);
+    }, instant.current ? 0 : DEBOUNCE_MS);
+    instant.current = false;
     return () => clearTimeout(timer);
   }, [q, reload]);
 
@@ -82,6 +85,7 @@ export function CatalogSearch({ onClose }: { onClose: () => void }) {
               class="m-btn m-btn-primary"
               onClick={() => {
                 fresh.current = true;
+                instant.current = true;
                 setReload((n) => n + 1);
               }}
             >
