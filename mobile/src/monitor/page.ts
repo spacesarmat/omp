@@ -1,7 +1,15 @@
 // The background check (mobile/monitor.html), run by Android's WorkManager in a hidden WebView on the app's own
 // origin, so it reads the same localStorage (subscriptions, findings, servers, settings) as the app.
-// A check: subscriptions → the library (new episodes of the series, then better releases of the films) → the «Новое»
-// feed, each only while time is left.
+// A check, each step only while time is left (the budget is RUN_LIMIT_MS on Android, about 3 minutes):
+//   1. subscriptions, two at a time, until SUB_MARGIN_MS before the deadline;
+//   2. new episodes of the library series, until EPISODE_MARGIN_MS plus the films' share (BETTER_SHARE_MS, only when
+//      some film is due) before the deadline;
+//   3. the «Новое» feed when stale (cheap: feedFresh), when FEED_MARGIN_MS are left;
+//   4. better releases of the library films last: at most BETTER_PER_RUN films, the never checked and then the longest
+//      unchecked first, each started within BETTER_SHARE_MS of the first and BETTER_MARGIN_MS before the deadline.
+// So the films never take the turn of the subscriptions, the series or the feed, and a big library is covered over
+// several runs (each film at most once a day, tsp.betterChecked). Sites paused by their code page (tsp.sourcePause)
+// are not asked from here (hostContext: background).
 // A notification button: «Добавить» a subscription finding / «Заменить» a series or film torrent.
 import { errorMessage } from '../../../src/api/http';
 import { t, tp } from '../../../src/i18n';
@@ -19,6 +27,7 @@ import { loadMonitorSettings, saveLastRun, type MonitorActionResult, type Monito
 import { loadFound, loadSubs, markFindingsSeen, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
 import { BETTER_ID, EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
 import { feedAll, type FeedAllOptions } from '../../../src/sources/feed';
+import { SOURCE_TIMEOUT_MS } from '../../../src/sources/search';
 import { createSecretStore, createSourceHttp } from '../../../src/sources/http';
 import { FEED_CATEGORIES, type SourceContext } from '../../../src/sources/types';
 import { resolveLink, seedsText, sourceName } from '../../../src/sources/view';
@@ -54,8 +63,12 @@ export const EPISODE_MARGIN_MS = 35_000;
 export const FEED_MARGIN_MS = 25_000;
 /** The run is wrapped up this long before the deadline. */
 export const FINISH_MARGIN_MS = 8_000;
-/** No film check starts later than this before the deadline. */
-export const BETTER_MARGIN_MS = 35_000;
+/** No film check starts later than this before the deadline: one search (SOURCE_TIMEOUT_MS) plus slack. */
+export const BETTER_MARGIN_MS = SOURCE_TIMEOUT_MS + 5_000;
+/** Films checked per run at most. */
+export const BETTER_PER_RUN = 5;
+/** The films' share of a run: no film check starts later than this after the first one; kept free by the series. */
+export const BETTER_SHARE_MS = 45_000;
 const AFTER_ADD_MS = 15_000;
 /** Next library series to check: big libraries are covered over several runs. */
 export const EPISODE_CURSOR_KEY = 'tsp.monitorEpisodeCursor';
@@ -234,7 +247,8 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
   s.answered = Object.keys(answered).length;
   s.asked = Object.keys(asked).length;
 
-  // the library: new episodes of the series, then better releases of the films, one torrent at a time
+  // the library: new episodes of the series, one torrent at a time
+  let films: LibraryTorrent[] = [];
   if ((settings.episodes || settings.better) && left() >= EPISODE_MARGIN_MS) {
     if (!c) s.error = t('errors.noServerSelected');
     else {
@@ -250,12 +264,16 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
         // cards of torrents deleted from the server can no longer be replaced or switched off
         pruneEpisodeFindings((h) => have[(h || '').toLowerCase()] === true);
         pruneBetterChecked((h) => have[h] === true);
+        // the films not searched for the longest come first; each one at most once a day (tsp.betterChecked)
+        if (settings.better) films = dueFilms(list as LibraryTorrent[], now()).slice(0, BETTER_PER_RUN);
       }
       if (settings.episodes) {
+        // the films' share is kept free when some film is due
+        const margin = EPISODE_MARGIN_MS + (films.length ? BETTER_SHARE_MS : 0);
         const watched = (list || []).filter((t) => isWatchedSeries(t as LibraryTorrent));
         const start = watched.length ? cursor() % watched.length : 0;
         let done = 0;
-        for (; done < watched.length && left() >= EPISODE_MARGIN_MS; done++) {
+        for (; done < watched.length && left() >= margin; done++) {
           const t = watched[(start + done) % watched.length];
           const found = await checkNewEpisodes(ctx, [t], deps.check);
           for (const f of found) {
@@ -265,18 +283,6 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
           }
         }
         if (watched.length) saveJson(EPISODE_CURSOR_KEY, (start + done) % watched.length);
-      }
-      if (list && settings.better) {
-        // the films not searched for the longest come first; each one at most once a day (tsp.betterChecked)
-        for (const film of dueFilms(list as LibraryTorrent[], now())) {
-          if (left() < BETTER_MARGIN_MS) break;
-          const found = await checkBetterQuality(ctx, [film], { ...deps.check, now: now() });
-          for (const f of found) {
-            s.found++;
-            await persist(deps, [{ s: BETTER_ID, e: f.key }]);
-            await notify(betterNotification(f));
-          }
-        }
       }
     }
   }
@@ -296,6 +302,18 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
       }),
     );
     s.feed = refreshed.some((x) => x);
+  }
+
+  // better releases of the films, last and within their share
+  const filmsFrom = now();
+  for (const film of films) {
+    if (left() < BETTER_MARGIN_MS || now() - filmsFrom >= BETTER_SHARE_MS) break;
+    const found = await checkBetterQuality(ctx, [film], { ...deps.check, now: now() });
+    for (const f of found) {
+      s.found++;
+      await persist(deps, [{ s: BETTER_ID, e: f.key }]);
+      await notify(betterNotification(f));
+    }
   }
   return s;
 }

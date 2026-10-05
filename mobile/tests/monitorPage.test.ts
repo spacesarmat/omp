@@ -7,6 +7,8 @@ import {
   episodeNotification,
   betterNotification,
   EPISODE_CURSOR_KEY,
+  BETTER_PER_RUN,
+  BETTER_SHARE_MS,
   hostContext,
   type MonitorClient,
   type PageDeps,
@@ -545,6 +547,85 @@ describe('«Лучшее качество» in the background', () => {
     } finally {
       applyLanguageSetting('ru');
     }
+  });
+});
+
+describe('the background load of the film checks', () => {
+  const NAMES = ['Северный ветер', 'Тихая гавань', 'Ночной рейс', 'Белый город', 'Последний мост', 'Долгая зима', 'Синяя птица', 'Старый маяк'];
+  const films = NAMES.map((n, i) => ({ hash: String(i).repeat(40), title: n + ' (2026) WEB-DL 1080p', category: 'movie' }) as Torrent);
+  const filmQueries = (q: string[]) => q.filter((x) => / 2026$/.test(x)).map((x) => NAMES.indexOf(x.replace(/ 2026$/, '')));
+
+  /** searchAll double that takes `ms` of the page clock per search. */
+  function slowSearch(clock: { now: number }, ms: number, queries: string[]): SearchFn {
+    const inner = fakeSearch({}, queries);
+    return (query, opts) => {
+      clock.now += ms;
+      return inner(query, opts);
+    };
+  }
+
+  it('at most BETTER_PER_RUN films per run, the never checked and then the longest unchecked first', async () => {
+    expect(BETTER_PER_RUN).toBe(5);
+    const T = 10 * 24 * 3_600_000;
+    const q: string[] = [];
+    const client = fakeClient(films);
+    const run = (now: number) => runMonitor(deps(fakeHost(), { client: () => client, check: { search: fakeSearch({}, q) }, now: () => now }));
+    await run(T);
+    expect(filmQueries(q)).toEqual([0, 1, 2, 3, 4]);
+    q.length = 0;
+    // the next run goes on with the films never checked
+    await run(T + 3_600_000);
+    expect(filmQueries(q)).toEqual([5, 6, 7]);
+    q.length = 0;
+    // a day later every film is due again: the longest unchecked first
+    await run(T + 24 * 3_600_000 + 2 * 3_600_000);
+    expect(filmQueries(q)).toEqual([0, 1, 2, 3, 4]);
+    q.length = 0;
+    await run(T + 24 * 3_600_000 + 3 * 3_600_000);
+    expect(filmQueries(q)).toEqual([5, 6, 7]);
+  });
+
+  it('the films keep to their share: the «Новое» feed still runs and the films stop within BETTER_SHARE_MS', async () => {
+    expect(BETTER_SHARE_MS).toBe(45_000);
+    const clock = { now: 1_000_000 };
+    const q: string[] = [];
+    const calls: string[] = [];
+    const host = fakeHost({ deadline: clock.now + 180_000 });
+    const s = await runMonitor(
+      deps(host, { client: () => fakeClient(films), check: { search: slowSearch(clock, 20_000, q) }, feed: { from: [feedSource(calls)] }, now: () => clock.now }),
+    );
+    expect(s.feed).toBe(true);
+    expect(calls.sort()).toEqual(['anime', 'movie', 'tv']);
+    // started at 0, 20 and 40 s of the share; the fourth would start at 60 s
+    expect(filmQueries(q)).toEqual([0, 1, 2]);
+  });
+
+  it('a backlog of series leaves the films their share and the feed its turn', async () => {
+    const clock = { now: 1_000_000 };
+    const q: string[] = [];
+    const calls: string[] = [];
+    const series: Torrent[] = [];
+    for (let i = 0; i < 12; i++)
+      series.push({ hash: String.fromCharCode(97 + i).repeat(40), title: 'Сериал ' + 'абвгдежзиклм'[i] + ' / Сезон: 1 / Серии: 1-8 из 10 [2026]', category: 'tv' } as Torrent);
+    const host = fakeHost({ deadline: clock.now + 180_000 });
+    const s = await runMonitor(
+      deps(host, {
+        client: () => fakeClient(series.concat(films)),
+        check: { search: slowSearch(clock, 20_000, q) },
+        feed: { from: [feedSource(calls)] },
+        now: () => clock.now,
+      }),
+    );
+    expect(q.filter((x) => x.indexOf('Сериал') === 0).length).toBeGreaterThan(0);
+    expect(filmQueries(q).length).toBeGreaterThan(0);
+    expect(s.feed).toBe(true);
+  });
+
+  it('a paused torrent.by is not asked by the film checks', async () => {
+    pauseSource('torrentby');
+    const host = fakeHost();
+    await runMonitor(deps(host, { client: () => fakeClient(films.slice(0, 2)), feed: { from: [] }, check: { from: [torrentby] } }));
+    expect(host.httpCalls.filter((r) => r.url.indexOf('https://torrent.by/') === 0)).toEqual([]);
   });
 });
 
