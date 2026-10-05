@@ -40,7 +40,7 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
-      - name: Build signed Android APK
+      - name: Build signed Android APKs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -57,13 +57,18 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           npm run android:sync
           (cd android && ./gradlew assembleRelease)
-          cp android/app/build/outputs/apk/release/app-release.apk "build/OMP-${VERSION}.apk"
+          OUT=android/app/build/outputs/apk/release
+          cp "$OUT/app-universal-release.apk" "build/OMP-${VERSION}.apk"
+          cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64.apk"
+          cp "$OUT/app-armeabi-v7a-release.apk" "build/OMP-${VERSION}-armv7.apk"
           rm -f "$RUNNER_TEMP/omp.jks"
+          echo "APK sizes (bytes):"
+          ls -l "build/OMP-${VERSION}-arm64.apk" "build/OMP-${VERSION}-armv7.apk" "build/OMP-${VERSION}.apk"
       - name: Homebrew Channel files
         run: |
           VERSION=$(node -p "require('./package.json').version")
           mv "$(ls build/com.spacesarmat.torrplayer_*_all.ipk)" "build/OMP-${VERSION}-webOS.ipk"
-          node scripts/hb-manifest.mjs "$TAG" "build/OMP-${VERSION}-webOS.ipk" "build/OMP-${VERSION}.apk"
+          node scripts/hb-manifest.mjs "$TAG" "build/OMP-${VERSION}-webOS.ipk" "build/OMP-${VERSION}.apk" "build/OMP-${VERSION}-arm64.apk" "build/OMP-${VERSION}-armv7.apk"
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -71,12 +76,14 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           IPK="build/OMP-${VERSION}-webOS.ipk"
           APK="build/OMP-${VERSION}.apk"
-          SUM=$(sha256sum "$IPK" | cut -d' ' -f1)
-          APKSUM=$(sha256sum "$APK" | cut -d' ' -f1)
+          APK64="build/OMP-${VERSION}-arm64.apk"
+          APK32="build/OMP-${VERSION}-armv7.apk"
           sed "s/{{TAG}}/${TAG}/g" .github/release-notes.md > notes.md
-          printf '\nSHA-256 `%s`: `%s`\n' "$(basename "$IPK")" "$SUM" >> notes.md
-          printf 'SHA-256 `%s`: `%s`\n' "$(basename "$APK")" "$APKSUM" >> notes.md
-          gh release create "$TAG" "$IPK" "$APK" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $TAG" --notes-file notes.md --generate-notes
+          printf '\n' >> notes.md
+          for F in "$IPK" "$APK64" "$APK32" "$APK"; do
+            printf 'SHA-256 `%s`: `%s`\n' "$(basename "$F")" "$(sha256sum "$F" | cut -d' ' -f1)" >> notes.md
+          done
+          gh release create "$TAG" "$IPK" "$APK64" "$APK32" "$APK" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $TAG" --notes-file notes.md --generate-notes
       - name: Publish update feed to gh-pages
         env:
           GH_TOKEN: ${{ github.token }}
@@ -88,12 +95,12 @@ jobs:
           git add .
           git commit -q -m "Update feed for ${TAG}"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
-      # Telegram channel post (skipped without the bot token); a failed post must not fail the release
+      # Telegram channel post (skipped without the bot token): every build as a reply; files over the 50 MB bot
+      # limit are linked (and named in the log) so the owner can forward them by hand. A failure must not fail the release.
       - name: Post to Telegram
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          node scripts/telegram-post.mjs "$TAG" "build/OMP-${VERSION}.apk"
+          node scripts/telegram-post.mjs "$TAG" build

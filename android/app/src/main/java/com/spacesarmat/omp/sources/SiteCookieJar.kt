@@ -13,6 +13,9 @@ interface CookieStore {
 
     /** null removes the site. */
     fun save(site: String, data: String?)
+
+    /** [save] that throws when the data could not be written (a browser session must not live in memory only). */
+    fun saveStrict(site: String, data: String?) = save(site, data)
 }
 
 /**
@@ -44,6 +47,28 @@ class SiteCookieJar(private val store: CookieStore, private val now: () -> Long 
         val t = now()
         if (list.removeAll { it.expiresAt <= t }) persist(site, list)
         return list.filter { it.matches(url) }
+    }
+
+    /**
+     * A new session of the site of [url]: its cookies that [keep] refuses go, then [cookies] are added (a browser
+     * sign-in replaces an older form login; Cloudflare's clearance stays). Strict: the result is written first
+     * ([CookieStore.saveStrict]) and only then taken in memory; throws (and changes nothing) when it cannot be written.
+     */
+    @Synchronized
+    fun replaceSite(url: HttpUrl, keep: (Cookie) -> Boolean, cookies: List<Cookie>) {
+        val site = siteOf(url)
+        val list = cookiesOf(site)
+        if (site in unreadable) throw IllegalStateException("stored cookies unreadable")
+        val t = now()
+        val next = ArrayList(list)
+        next.removeAll { !keep(it) || it.expiresAt <= t }
+        for (c in cookies) {
+            next.removeAll { it.name == c.name && it.domain == c.domain && it.path == c.path }
+            if (c.expiresAt > t) next.add(c)
+        }
+        store.saveStrict(site, if (next.isEmpty()) null else CookieCodec.encode(next))
+        list.clear()
+        list.addAll(next)
     }
 
     /** Forgets every cookie of the site of [url] (logout). */

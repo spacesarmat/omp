@@ -54,3 +54,5 @@ jobs:
         run: npm run android:sync
       - name: Build and test
         run: (cd android && ./gradlew assembleDebug testDebugUnitTest)
+      - name: APK size per ABI
+        run: ls -l android/app/build/outputs/apk/debug/*.apk

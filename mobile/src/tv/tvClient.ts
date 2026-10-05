@@ -967,22 +967,41 @@ export const SOURCES_BUSY = 'Телевизор ещё применяет про
 export const SOURCES_NO_ANSWER = 'Телевизор не ответил — откройте OMP на телевизоре и попробуйте снова';
 export const SOURCES_FAILED = 'Телевизор не смог применить источники';
 export const SOURCES_SECRETS = 'Телевизор не смог сохранить вход: защищённое хранилище недоступно';
+/** 400 / 413: the TV did not accept the payload (an older OMP there does not know the Jackett / Prowlarr part). */
+export const SOURCES_REJECTED = 'Телевизор не принял данные — обновите OMP на телевизоре';
 /** The TV may sign in to rutracker before it answers (its own wait is 35 s). */
 const SOURCES_TIMEOUT = 45000;
 
 /**
  * «Передать на телевизор»: POST /omp/sources with the switches and, when given, the rutracker login (only to the
  * paired Android TV, over its token). Resolves the TV's rutracker result (undefined without a login); rejects in
- * Russian. The body is never logged.
+ * Russian. The body is never logged. `sessions` (sites signed in through the browser → their hosts): the request goes
+ * through the native side, which adds each site's session cookies and User-Agent (they never pass through the page).
  */
-export async function sendSourcesToTv(payload: TransferPayload): Promise<{ rutracker?: RutrackerResult }> {
+export async function sendSourcesToTv(
+  payload: TransferPayload,
+  sessions?: { [id: string]: string[] },
+  send: Pick<OmpNativeApi, 'siteSessionSend' | 'pairedTv'> = native,
+): Promise<SourcesSent> {
   if (tvKind() !== 'atv') throw new Error(SOURCES_ATV_ONLY);
   await ensureConnected();
   const s = atv;
   if (!s || tvState.value !== 'connected') throw new Error(TV_NOT_CONNECTED);
+  const withSessions = !!sessions && Object.keys(sessions).length > 0;
   let r: AtvAnswer;
+  let missing: string[] = [];
   try {
-    r = await atvFetch(s.tv, 'POST', TRANSFER_PATH, payload, SOURCES_TIMEOUT);
+    if (withSessions && s.tv.token) {
+      // the native side posts only to the TV registered as paired (this one), never to an address in the call
+      await send.pairedTv({ url: 'http://' + s.tv.ip + ':' + (s.tv.ctlPort || ATV_PORT), token: s.tv.token });
+      const n = await send.siteSessionSend({
+        payload,
+        sessions: sessions!,
+        timeoutMs: SOURCES_TIMEOUT,
+      });
+      r = { status: n.status, data: n.data };
+      missing = n.missing;
+    } else r = await atvFetch(s.tv, 'POST', TRANSFER_PATH, payload, SOURCES_TIMEOUT);
   } catch (e) {
     // a slow sign-in on the TV is not a dead TV: only a network failure ends the session
     if (!isTimeout(e)) atvFail(s, TV_NO_ANSWER);
@@ -992,12 +1011,50 @@ export async function sendSourcesToTv(payload: TransferPayload): Promise<{ rutra
     atvFail(s, TV_FORGOT);
     throw new Error(TV_FORGOT);
   }
+  // 400: an older OMP does not know a field; 413: its body limit was 8 KB (v0.14)
+  if (r.status === 400 || r.status === 413) throw new Error(SOURCES_REJECTED);
   if (r.status === 409) throw new Error(SOURCES_BUSY);
   if (r.status === 503) throw new Error(SOURCES_NO_ANSWER);
   if (r.status === 500) throw new Error(r.data?.error === 'secrets' ? SOURCES_SECRETS : SOURCES_FAILED);
   if (r.status !== 200 || !r.data || r.data.ok !== true) throw new Error(r.status === 200 ? ATV_ERROR : atvErrorText(r.status));
-  if (!payload.rutracker) return {};
-  return { rutracker: isRutrackerResult(r.data.rutracker) ? r.data.rutracker : 'error' };
+  const out: SourcesSent = {};
+  if (payload.indexers && payload.indexers.length) {
+    const n = r.data.indexers;
+    out.indexers = typeof n === 'number' && n >= 0 && n <= payload.indexers.length ? Math.floor(n) : 0;
+  }
+  if (payload.rutracker) out.rutracker = isRutrackerResult(r.data.rutracker) ? r.data.rutracker : 'error';
+  // the TV verified the rutracker login but could not write it (the site results still hold)
+  if (payload.rutracker && r.data.rutrackerNotStored === true) out.rutrackerNotStored = true;
+  if (payload.logins) {
+    // per site that was sent; anything else from the TV is ignored
+    const got = r.data.logins && typeof r.data.logins === 'object' ? (r.data.logins as { [k: string]: unknown }) : {};
+    const logins: { [site: string]: RutrackerResult } = {};
+    Object.keys(payload.logins).forEach((site) => {
+      const v = got[site];
+      logins[site] = isRutrackerResult(v) ? v : 'error';
+    });
+    out.logins = logins;
+  }
+  if (withSessions) {
+    // per site that was asked for; a site whose session the phone had not (any more) is «missing»
+    const got = r.data.sessions && typeof r.data.sessions === 'object' ? (r.data.sessions as { [k: string]: unknown }) : {};
+    const res: { [site: string]: 'ok' | 'error' | 'missing' } = {};
+    Object.keys(sessions!).forEach((site) => {
+      res[site] = missing.indexOf(site) >= 0 ? 'missing' : got[site] === 'ok' ? 'ok' : 'error';
+    });
+    out.sessions = res;
+  }
+  return out;
+}
+
+/** What the TV said about a transfer: the rutracker login, how many connections it saved, each site login. */
+export interface SourcesSent {
+  rutracker?: RutrackerResult;
+  indexers?: number;
+  logins?: { [site: string]: RutrackerResult };
+  rutrackerNotStored?: boolean;
+  /** Browser sessions: ok (the TV verified and kept it) | error | missing (the phone had no session to send). */
+  sessions?: { [site: string]: 'ok' | 'error' | 'missing' };
 }
 
 /**

@@ -85,6 +85,9 @@ class Pairing(
         return synchronized(lock) { list().firstOrNull { MessageDigest.isEqual(it.token.toByteArray(), t) }?.phone }
     }
 
+    /** At least one phone is paired. */
+    fun anyPaired(): Boolean = synchronized(lock) { list().isNotEmpty() }
+
     private fun list(): MutableList<PairedPhone> =
         phones ?: store.load().filter { TOKEN.matches(it.token) }.takeLast(MAX_PHONES).toMutableList().also { phones = it }
 

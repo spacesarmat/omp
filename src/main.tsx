@@ -32,6 +32,9 @@ if (platformKind() === 'androidtv') {
       () => log('warn', 'tv', 'Не удалось загрузить источники поиска'),
     )
     .then(undefined, () => log('warn', 'app', 'Не удалось подключить источники поиска'))
+    // the visible Cloudflare check (native dialog, «Пройти на телефоне»)
+    .then(() => import('./sources/cloudflareTv').then((m) => m.installTvCloudflare()))
+    .then(undefined, () => log('warn', 'app', 'Не удалось подключить проверку Cloudflare'))
     .then(start, start);
 } else {
   start();

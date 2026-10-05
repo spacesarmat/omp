@@ -117,7 +117,8 @@ class InstallRunner(
         device.use {
             try {
                 progress.report(Phase.DOWNLOAD, null, Item.OMP, null)
-                val omp = releases.ompAndroid(cancel)
+                // the APK for the TV's ABI (arm64 / armv7 / universal), not the phone's
+                val omp = releases.ompAndroid(cancel, info.abis)
                 file = download(omp, APK_CAP, progress, cancel)
                 atv.install(device, TvPackage(omp, file!!), progress, cancel)
                 return InstallOutcome(omp.version, sdkInt = info.sdkInt, abi = info.abi)

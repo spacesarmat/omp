@@ -45,7 +45,18 @@ object SecretCodec {
  * cannot be moved to another name. A value that no longer decrypts (key lost) reads as null and is dropped.
  * Values are never logged.
  */
-class SecretStorage(context: Context) {
+/** The calls of the encrypted storage the cookie and agent stores need (a fake in JVM tests). */
+interface SecretValues {
+    /** Throws on a transient Keystore failure. */
+    fun get(name: String): String?
+    /** Throws when the Keystore is unavailable. */
+    fun set(name: String, value: String)
+    /** All of [values] written and [remove] removed in one commit, or nothing (throws). */
+    fun replace(values: Map<String, String>, remove: Collection<String>)
+    fun delete(name: String)
+}
+
+class SecretStorage(context: Context) : SecretValues {
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /**
@@ -53,7 +64,7 @@ class SecretStorage(context: Context) {
      * dropped and reads as null; a transient Keystore failure throws and keeps the value.
      */
     @Synchronized
-    fun get(name: String): String? {
+    override fun get(name: String): String? {
         val packed = prefs.getString(name, null) ?: return null
         val parts = SecretCodec.unpack(packed)
         if (parts == null) {
@@ -77,7 +88,7 @@ class SecretStorage(context: Context) {
 
     /** Throws when the Keystore is unavailable. */
     @Synchronized
-    fun set(name: String, value: String) {
+    override fun set(name: String, value: String) {
         val c = Cipher.getInstance(TRANSFORMATION)
         c.init(Cipher.ENCRYPT_MODE, key())
         c.updateAAD(name.toByteArray(Charsets.UTF_8))
@@ -90,7 +101,7 @@ class SecretStorage(context: Context) {
      * Throws when the Keystore is unavailable (nothing is written then) or the commit fails.
      */
     @Synchronized
-    fun replace(values: Map<String, String>, remove: Collection<String>) {
+    override fun replace(values: Map<String, String>, remove: Collection<String>) {
         val packed = values.mapValues { (name, value) ->
             val c = Cipher.getInstance(TRANSFORMATION)
             c.init(Cipher.ENCRYPT_MODE, key())
@@ -104,7 +115,7 @@ class SecretStorage(context: Context) {
     }
 
     @Synchronized
-    fun delete(name: String) {
+    override fun delete(name: String) {
         prefs.edit().remove(name).apply()
     }
 
@@ -132,8 +143,11 @@ class SecretStorage(context: Context) {
     }
 }
 
-/** Cookies of each site as an encrypted entry «cookies:<site>». Save failures keep cookies in memory only. */
-class SecretCookieStore(private val secrets: SecretStorage) : CookieStore {
+/**
+ * Cookies of each site as an encrypted entry «cookies:<site>». Save failures keep cookies in memory only; a strict save
+ * (a browser session) is one committed write that throws when the Keystore or the commit fails.
+ */
+class SecretCookieStore(private val secrets: SecretValues) : CookieStore {
     /** Throws on a transient Keystore failure ([SiteCookieJar] then keeps the site in memory only). */
     override fun load(site: String): String? = secrets.get(PREFIX + site)
 
@@ -143,6 +157,10 @@ class SecretCookieStore(private val secrets: SecretStorage) : CookieStore {
         } catch (e: Exception) {
             // Keystore unavailable: the session lives until the app closes
         }
+    }
+
+    override fun saveStrict(site: String, data: String?) {
+        if (data == null) secrets.replace(emptyMap(), listOf(PREFIX + site)) else secrets.replace(mapOf(PREFIX + site to data), emptyList())
     }
 
     companion object {

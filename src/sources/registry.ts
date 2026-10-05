@@ -37,8 +37,17 @@ const TS: Source[] = [
 
 let builtins: Source[] = [];
 
+// Path selection: a rule that hides a TorrServer source (ts-torznab while a direct Jackett connection exists). The rule
+// is asked on every listing, so a switch changed in «Источники поиска» takes effect at once. Hidden sources are still
+// found by getSource, so results saved earlier keep their label.
+let hideRule: ((id: string) => boolean) | null = null;
+
+export function setHideRule(rule: ((id: string) => boolean) | null): void {
+  hideRule = rule;
+}
+
 export function torrServerSources(): Source[] {
-  return TS.slice();
+  return TS.filter((s) => !hideRule || !hideRule(s.id));
 }
 
 export function builtinSources(): Source[] {
@@ -55,11 +64,11 @@ export function unregisterSource(id: string): void {
 }
 
 export function allSources(): Source[] {
-  return TS.concat(builtins);
+  return torrServerSources().concat(builtins);
 }
 
 export function getSource(id: string): Source | undefined {
-  const all = allSources();
+  const all = TS.concat(builtins);
   for (let i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
   return undefined;
 }

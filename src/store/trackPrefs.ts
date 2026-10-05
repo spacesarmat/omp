@@ -4,6 +4,8 @@ export interface TrackPref {
   audioLang?: string;
   audioLabel?: string;
   sub?: 'off' | { lang: string; label: string };
+  /** Android TV: the player engine chosen for this torrent in the player menu («Плеер: … → сменить»). */
+  engine?: 'builtin' | 'vlc';
 }
 
 const KEY = 'tsp.trackPrefs';
@@ -21,6 +23,7 @@ export function sanitizeTrackPrefs(v: unknown): { [hash: string]: TrackPref } {
     else if (isObject(p.sub) && typeof p.sub.lang === 'string' && typeof p.sub.label === 'string') {
       pref.sub = { lang: p.sub.lang, label: p.sub.label };
     }
+    if (p.engine === 'builtin' || p.engine === 'vlc') pref.engine = p.engine;
     out[hash] = pref;
   });
   return out;

@@ -16,6 +16,10 @@ interface RemoteActions {
     fun volume(up: Boolean)
     /** «Передать на телевизор», already validated; blocks until the page applied it (see [SourcesInbox]). */
     fun sources(t: SourcesTransfer): SourcesOutcome
+    /** «Пройти на телефоне»: a paired phone polls for a check, waiting up to [waitMs] ([CloudflareRelay.poll]). */
+    fun cloudflarePoll(token: String, phone: String, waitMs: Long): JSONObject
+    /** The phone's answer to a check, already parsed as JSON ([CloudflareRelay.answer]). */
+    fun cloudflareAnswer(token: String, body: JSONObject): CloudflareRelay.Reply
 }
 
 /**
@@ -28,11 +32,18 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
      * body is read, and more than [SourcesProtocol.MAX_BODY] bytes is never read. Other routes: null (go on).
      */
     fun precheck(h: ControlHead): ControlResponse? {
-        if (h.path != SOURCES) return null
+        val max = when (h.path) {
+            SOURCES -> SourcesProtocol.MAX_BODY
+            // carries cookies: the same checks before the body is read
+            CloudflareProtocol.ANSWER -> CloudflareProtocol.MAX_BODY
+            // needs no body: a tiny one at most, after the token
+            CloudflareProtocol.POLL -> CloudflareProtocol.MAX_POLL_BODY
+            else -> return null
+        }
         if (!pairing.isPaired(h.token)) return ControlResponse(401, ControlServer.error("unauthorized"))
         if (h.method != "POST") return methodNotAllowed()
         if (!isJson(h.contentType)) return ControlResponse(415, ControlServer.error("unsupported_media_type"))
-        if (h.length > SourcesProtocol.MAX_BODY) return ControlResponse(413, ControlServer.error("too_large"))
+        if (h.length > max) return ControlResponse(413, ControlServer.error("too_large"))
         return null
     }
 
@@ -53,6 +64,11 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         if (!pairing.isPaired(req.token)) return ControlResponse(401, ControlServer.error("unauthorized"))
         if (req.method != "POST") return methodNotAllowed()
         if (req.path == SOURCES) return sources(req)
+        if (req.path == CloudflareProtocol.ANSWER) return cloudflareAnswer(req)
+        if (req.path == CloudflareProtocol.POLL) {
+            val body = parse(req.body) ?: return badRequest()
+            return ok(actions.cloudflarePoll(req.token!!, pairing.phoneOf(req.token) ?: "Телефон", CloudflareProtocol.waitOf(body)))
+        }
         val body = parse(req.body) ?: return badRequest()
         return when (req.path) {
             "/omp/launch" -> launch(body)
@@ -109,7 +125,7 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         return okEmpty()
     }
 
-    /** The answer never echoes the request: no login, no password, only the outcome. */
+    /** The answer never echoes the request: no login, no password, no API key, only the outcome. */
     private fun sources(req: ControlRequest): ControlResponse {
         if (!isJson(req.contentType)) return ControlResponse(415, ControlServer.error("unsupported_media_type"))
         if (req.body.toByteArray(Charsets.UTF_8).size > SourcesProtocol.MAX_BODY) return ControlResponse(413, ControlServer.error("too_large"))
@@ -120,12 +136,43 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
             is SourcesOutcome.Applied -> {
                 val o = JSONObject().put("ok", true)
                 if (t.login != null) o.put("rutracker", r.rutracker ?: "error")
+                // the verified rutracker login could not be written (the site results above still hold)
+                if (r.rutrackerNotStored) o.put("rutrackerNotStored", true)
+                // how many connections the TV saved; never a key or an address
+                if (t.indexers.isNotEmpty()) o.put("indexers", r.indexers ?: 0)
+                // per site: ok | bad_login | captcha | error, only for the logins that came
+                if (t.logins.isNotEmpty()) {
+                    val l = JSONObject()
+                    for (site in t.logins.keys) l.put(site, r.logins[site] ?: "error")
+                    o.put("logins", l)
+                }
+                // per browser session: ok | error, never a cookie or a User-Agent
+                if (t.sessions.isNotEmpty()) {
+                    val x = JSONObject()
+                    for (site in t.sessions.keys) x.put(site, r.sessions[site] ?: "error")
+                    o.put("sessions", x)
+                }
                 ok(o)
             }
             SourcesOutcome.Busy -> ControlResponse(409, ControlServer.error("busy"))
             SourcesOutcome.NoAnswer -> ControlResponse(503, ControlServer.error("no_answer"))
             SourcesOutcome.Failed -> ControlResponse(500, ControlServer.error("not_applied"))
             SourcesOutcome.StoreFailed -> ControlResponse(500, ControlServer.error("secrets"))
+        }
+    }
+
+    /** The answer never echoes the cookies or the User-Agent: only ok or an error code. */
+    private fun cloudflareAnswer(req: ControlRequest): ControlResponse {
+        if (!isJson(req.contentType)) return ControlResponse(415, ControlServer.error("unsupported_media_type"))
+        if (req.body.toByteArray(Charsets.UTF_8).size > CloudflareProtocol.MAX_BODY) return ControlResponse(413, ControlServer.error("too_large"))
+        val body = parse(req.body) ?: return badRequest()
+        return when (actions.cloudflareAnswer(req.token!!, body)) {
+            CloudflareRelay.Reply.OK -> okEmpty()
+            CloudflareRelay.Reply.BAD_REQUEST -> badRequest()
+            CloudflareRelay.Reply.UNKNOWN -> ControlResponse(404, ControlServer.error("no_request"))
+            // the TV closed it itself (passed by remote): the phone says nothing
+            CloudflareRelay.Reply.DONE -> ControlResponse(410, ControlServer.error("done"))
+            CloudflareRelay.Reply.STORE_FAILED -> ControlResponse(500, ControlServer.error("secrets"))
         }
     }
 
@@ -142,7 +189,10 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         private const val SOURCES = "/omp/sources"
         private const val MAX_TEXT = 1000
         private const val MAX_REPORT = 200
-        private val PROTECTED = setOf("/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume", "/omp/sources")
+        private val PROTECTED = setOf(
+            "/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume", "/omp/sources",
+            CloudflareProtocol.POLL, CloudflareProtocol.ANSWER,
+        )
         val KEYS = setOf("UP", "DOWN", "LEFT", "RIGHT", "ENTER", "BACK", "CATALOG", "NOWPLAYING")
         private val REPORT = Regex("^http://.+", RegexOption.IGNORE_CASE)
 

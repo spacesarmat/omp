@@ -15,6 +15,8 @@ import { goBack, currentRoute } from '../ui/nav';
 import { toast } from '../ui/toast';
 import { donateCardEnabled } from '../player/DonateCard';
 import { journalSupportActive } from '../store/support';
+import { getTrackPref } from '../store/trackPrefs';
+import { engineFor, knownProbe } from '../player/nativeEngine';
 
 interface Props {
   queue: PlayItem[];
@@ -37,6 +39,9 @@ function probeLoader(c: TorrServerClient | null): ProbeLoader | null {
     if (!item.hash || item.fileIndex === undefined) return Promise.resolve(null);
     const hash = item.hash;
     const index = item.fileIndex;
+    // probed earlier in this app run (the file opened again)
+    const known = knownProbe(hash, index);
+    if (known) return Promise.resolve(known);
     if (!available) available = c.ffprobeAvailable();
     return available.then((ok) => (ok ? c.probe(hash, index) : null));
   };
@@ -48,7 +53,7 @@ function skipIo(c: TorrServerClient | null): SkipIo | null {
   return { load: (hash) => loadSkip(c, hash), save: (hash, patch) => saveSkip(c, { hash }, patch) };
 }
 
-/** Android TV: the player route opens the native Media3 player and stays as a placeholder behind it. */
+/** Android TV: the player route opens the native player and stays as a placeholder behind it. */
 export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
   const [current, setCurrent] = useState(index);
   const [opened, setOpened] = useState(false);
@@ -99,6 +104,8 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
         index, startAt: pos, seekStep: s.seekStep, autoNext: s.autoNext,
         audioLang: s.audioLang, subLang: s.subLang, subtitlesOn: s.subtitlesOn,
         donate,
+        // «Плеер»: the torrent's choice from the player menu wins over the setting
+        engine: engineFor(s.playerEngine, queue[index].hash ? getTrackPref(queue[index].hash!) : null),
       }).then(
         () => { if (!cancelled) setOpened(true); },
         (e) => {

@@ -514,4 +514,30 @@ describe('TV launch flow', () => {
     await flush();
     expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500, from: 'Телефон' });
   });
+
+  it('«Переименовать»: the sheet starts with the shown title, saves the trimmed one and updates the list', async () => {
+    const set = vi.spyOn(TorrServerClient.prototype, 'setTitle').mockResolvedValue(undefined);
+    vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([{ ...tor, title: 'Звёздная граница' }]);
+    mount();
+    await flush();
+    click('[aria-label="Переименовать"]');
+    const input = el.querySelector('#rename-title') as HTMLInputElement;
+    expect(input.value).toBe('Starbound Frontier S02 1080p WEB-DL');
+    act(() => {
+      input.value = '   ';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    click(byText('Сохранить'));
+    expect(set).not.toHaveBeenCalled();
+    expect(el.textContent).toContain('Введите название');
+    act(() => {
+      input.value = '  Звёздная граница  ';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    click(byText('Сохранить'));
+    await flush();
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({ hash: 'abc', category: 'tv' }), 'Звёздная граница');
+    expect(torrents.value[0].title).toBe('Звёздная граница');
+    expect(el.querySelector('#rename-title')).toBeNull();
+  });
 });

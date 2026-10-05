@@ -19,6 +19,7 @@ import { useSkip, firstPlayableId } from '../lib/useSkip';
 import { skipStatus } from '../lib/skipMarks';
 import { MarksDialog } from '../ui/MarksDialog';
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { displayTitle } from '../lib/torrentName';
 
 export function TorrentScreen({ hash }: { hash: string }) {
   const c = client.value!;
@@ -146,19 +147,19 @@ export function TorrentScreen({ hash }: { hash: string }) {
       <div class="torrent-head">
         {t && t.poster ? <img src={t.poster} alt="" /> : null}
         <div class="info">
-          <h1>{t ? t.title || t.name : hash}</h1>
+          <h1>{t ? displayTitle(t) : hash}</h1>
           <div class="muted">
             {t && t.torrent_size ? formatBytes(t.torrent_size) + ' · ' : ''}
             {t && t.stat_string ? t.stat_string : ''}
             {t && t.stat === 3 ? ' · ' + formatSpeed(t.download_speed || 0) + ' · пиры ' + (t.active_peers || 0) + '/' + (t.total_peers || 0) : ''}
           </div>
           {(() => {
-            const badges = releaseBadges(parseReleaseInfo(t ? t.title || t.name || '' : ''));
+            const badges = releaseBadges(parseReleaseInfo(t ? displayTitle(t) : ''));
             return badges.length ? <div class="badges">{badges.map((x) => <span key={x} class="badge">{x}</span>)}</div> : null;
           })()}
           <FocusGroup focusKey="TORRENT-ACTIONS" className="row" preferredChildFocusKey="torrent-play">
             {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onPress={() => play(target, targetPos || undefined)} />}
-            {queue.length > 0 && <Button label="Плейлист" onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: t ? t.title : '' })} />}
+            {queue.length > 0 && <Button label="Плейлист" onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: t ? displayTitle(t) : '' })} />}
             <Button label="Сбросить просмотр" onPress={resetViewed} />
             <Button label="Удалить" onPress={remove} />
           </FocusGroup>
@@ -186,7 +187,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
       )}
       {marksOpen && (
         <MarksDialog
-          subtitle={(t ? t.title || t.name || '' : '') + ' · для всех серий · главы файла важнее'}
+          subtitle={(t ? displayTitle(t) : '') + ' · для всех серий · главы файла важнее'}
           prefs={{ mi: skip.prefs.mi || null, mc: skip.prefs.mc || null }}
           onSave={(m) => skip.save({ mi: m.mi, mc: m.mc }, false)}
           onClose={closeMarks}

@@ -23,6 +23,7 @@ import { useKeys } from '../ui/keys';
 import { TopBar } from '../ui/TopBar';
 import { TorrentViews } from './library/TorrentViews';
 import { HistoryGrid, HistoryEntry, HistoryFilterRow } from './library/HistoryGrid';
+import { displayTitle } from '../lib/torrentName';
 
 export function LibraryScreen() {
   const c = client.value;
@@ -90,7 +91,7 @@ export function LibraryScreen() {
 
   const removeTorrent = (hash: string) => {
     const t = torrents.value.find((x) => x.hash === hash);
-    confirmDialog('Удалить «' + (t ? t.title : hash) + '»?', 'Удалить').then((ok) => {
+    confirmDialog('Удалить «' + (t ? displayTitle(t) : hash) + '»?', 'Удалить').then((ok) => {
       if (!ok || !c) return;
       c.remove(hash).then(
         () => { torrents.value = torrents.value.filter((x) => x.hash !== hash); setSel(null); toast('Торрент удалён'); },

@@ -226,6 +226,46 @@ describe('Settings: TorrServer on the phone', () => {
     expect(el.textContent).toContain('Остановлен');
   });
 
+  it('without a downloaded binary the switch opens the setup screen; an outdated one offers the update', async () => {
+    const calls: string[] = [];
+    let binary = 'missing';
+    setLocalServerDeps({
+      native: {
+        localServerInfo: async () => ({ supported: true, running: false, binary, downloadBytes: 64174032, pinVersion: 'MatriX.146' }),
+        startLocalServer: async () => {
+          calls.push('start');
+          return { supported: true, running: true };
+        },
+        stopLocalServer: async () => {},
+        localServerCache: async () => 0,
+        clearLocalServerCache: async () => {},
+        onLocalServerState: () => () => {},
+      } as any,
+    });
+    localServer.value = { supported: true, running: false };
+    const el = mount();
+    await flush();
+    const section = () => el.querySelector('[data-section="local-server"]')!;
+    expect(section().textContent).toContain('Не скачан');
+    expect(section().textContent).toContain('Нужно скачать (~61 МБ)');
+    await act(async () => el.querySelector<HTMLElement>('[aria-label="TorrServer на телефоне"]')!.click());
+    await flush();
+    expect(calls).toEqual([]);
+    expect(currentRoute.value.name).toBe('localServer');
+
+    resetTo({ name: 'settings' });
+    binary = 'outdated';
+    localServer.value = { supported: true, running: false };
+    const el2 = mount();
+    await flush();
+    const s2 = el2.querySelector('[data-section="local-server"]')!;
+    expect(s2.textContent).toContain('Остановлен');
+    expect(s2.querySelector('[data-local="update"]')!.textContent).toContain('Новая версия TorrServerMatriX.146 · ~61 МБ');
+    const upd = Array.from(s2.querySelectorAll('button')).find((b) => b.textContent === 'Обновить')!;
+    await act(async () => upd.click());
+    expect(currentRoute.value.name).toBe('localServer');
+  });
+
   it('a server started from the switch joins the saved servers without becoming active', async () => {
     fake({ running: false });
     const home = addServer({ url: 'http://192.168.1.5:8090', name: 'Home' });

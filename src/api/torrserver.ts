@@ -1,4 +1,5 @@
-import { request, HttpOptions } from './http';
+import { request, apiError, HttpOptions } from './http';
+import { isStashedFile, takeStashedFile } from './torrentFiles';
 import type { Torrent, CacheState, ViewedEntry, SearchResult, FfprobeResult, ServerSettings, TmdbConfig } from './types';
 import type { TorrentFile } from '../lib/episodes';
 
@@ -65,10 +66,41 @@ export class TorrServerClient {
   }
 
   add(p: { link: string; title?: string; poster?: string; category?: string }): Promise<Torrent> {
+    // a .torrent that OMP downloaded itself (an indexer link with a secret): uploaded as a file, the link never leaves OMP
+    if (isStashedFile(p.link)) return this.upload(p);
     return this.call<Torrent>('/torrents', {
       body: { action: 'add', link: p.link, title: p.title || '', poster: p.poster || '', category: p.category || '', save_to_db: true },
       timeoutMs: 30000,
     });
+  }
+
+  /** Uploads a stashed .torrent file (POST /torrent/upload, multipart). */
+  private upload(p: { link: string; title?: string; poster?: string; category?: string }): Promise<Torrent> {
+    const bytes = takeStashedFile(p.link);
+    if (!bytes) return Promise.reject(apiError('parse', 'Файл раздачи потерян, повторите добавление'));
+    const form = new FormData();
+    form.append('save', 'true');
+    form.append('title', p.title || '');
+    form.append('poster', p.poster || '');
+    form.append('category', p.category || '');
+    form.append('file', new Blob([bytes.slice().buffer as ArrayBuffer], { type: 'application/x-bittorrent' }), 'release.torrent');
+    const headers: { [k: string]: string } = {};
+    if (this.auth) headers['Authorization'] = 'Basic ' + this.auth;
+    return fetch(this.baseUrl + '/torrent/upload', { method: 'POST', headers, body: form }).then(
+      (res) => {
+        if (!res.ok) throw apiError('http', 'HTTP ' + res.status, res.status);
+        return res.text().then((text) => {
+          try {
+            return JSON.parse(text) as Torrent;
+          } catch (e) {
+            throw apiError('parse', 'Parse error');
+          }
+        });
+      },
+      () => {
+        throw apiError('network', 'Network error');
+      },
+    );
   }
 
   /** Replaces `data`; `set` overwrites title/poster/category too, so the current ones are sent back. */
@@ -86,6 +118,23 @@ export class TorrServerClient {
     return this.call<unknown>('/torrents', {
       body: { action: 'set', hash: t.hash, title: t.title || t.name || '', poster, category: t.category || '', data: '' },
     }).then(() => undefined);
+  }
+
+  /**
+   * Sets the title. `set` replaces poster and category too, so the torrent is read again right before the write and
+   * its current ones go back (the passed ones are used when the read fails). An empty `data` keeps the stored one.
+   */
+  setTitle(t: Pick<Torrent, 'hash' | 'poster' | 'category'>, title: string): Promise<void> {
+    const v = title.trim();
+    if (!v) return Promise.reject(new Error('Пустое название'));
+    return this.get(t.hash).then(
+      (cur) => (cur && cur.hash ? cur : t),
+      () => t,
+    ).then((cur) =>
+      this.call<unknown>('/torrents', {
+        body: { action: 'set', hash: t.hash, title: v, poster: cur.poster || '', category: cur.category || '', data: '' },
+      }),
+    ).then(() => undefined);
   }
 
   /** TMDB settings of the server; null on servers without them. */
@@ -171,6 +220,11 @@ export class TorrServerClient {
 
   getSettings(): Promise<ServerSettings> {
     return this.call<ServerSettings>('/settings', { body: { action: 'get' } });
+  }
+
+  /** The settings read in the background (the Torznab list for «Источники поиска»): a failure is not logged. */
+  settingsQuiet(): Promise<ServerSettings> {
+    return this.call<ServerSettings>('/settings', { body: { action: 'get' }, quiet: true });
   }
 
   setSettings(sets: ServerSettings): Promise<void> {

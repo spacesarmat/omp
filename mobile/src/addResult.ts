@@ -27,7 +27,7 @@ export async function addSearchResult(
   const l = await resolveLink(r, phoneSourceContext());
   if (o?.alive && !o.alive()) return null;
   o?.onStep?.('add');
-  const added = await c.add({ link: l, category });
+  const added = await c.add({ link: l, title: r.Title, category });
   void rememberAdded(c, added, r.Title);
   return added.hash;
 }

@@ -3,6 +3,7 @@ import { loadJson, saveJson, isObject } from './storage';
 import type { LibrarySort } from '../lib/librarySearch';
 import type { LibraryView } from '../lib/libraryView';
 import { isHistoryFilter, type HistoryFilter } from '../lib/history';
+import type { PlayerEngineSetting } from '../player/nativeEngine';
 
 export interface AppSettings {
   audioLang: string;
@@ -19,6 +20,8 @@ export interface AppSettings {
   librarySort: LibrarySort;
   updateCheck: boolean;
   historyFilter: HistoryFilter;
+  /** Android TV: «Плеер» — Авто / Встроенный / VLC. */
+  playerEngine: PlayerEngineSetting;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -36,6 +39,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   librarySort: 'new',
   updateCheck: true,
   historyFilter: 'all',
+  playerEngine: 'auto',
 };
 
 const KEY = 'tsp.settings';
@@ -56,6 +60,7 @@ export function sanitizeSettings(v: unknown): AppSettings {
   if (['large', 'small', 'list', 'compact'].indexOf(out.libraryView) < 0) out.libraryView = DEFAULT_SETTINGS.libraryView;
   if (['new', 'title', 'size'].indexOf(out.librarySort) < 0) out.librarySort = DEFAULT_SETTINGS.librarySort;
   if (!isHistoryFilter(out.historyFilter)) out.historyFilter = DEFAULT_SETTINGS.historyFilter;
+  if (['auto', 'builtin', 'vlc'].indexOf(out.playerEngine) < 0) out.playerEngine = DEFAULT_SETTINGS.playerEngine;
   return out;
 }
 

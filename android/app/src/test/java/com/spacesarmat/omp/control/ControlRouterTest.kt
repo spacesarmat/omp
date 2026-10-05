@@ -42,7 +42,11 @@ class ControlRouterTest {
             lastTransfer = t
             return outcome
         }
+        override fun cloudflarePoll(token: String, phone: String, waitMs: Long): JSONObject = relay.poll(token, phone, waitMs)
+        override fun cloudflareAnswer(token: String, body: JSONObject): CloudflareRelay.Reply = relay.answer(token, body)
     }
+    private val stored = ArrayList<String>()
+    private val relay = CloudflareRelay({ root, cookies, ua, _ -> stored.add("$root:${cookies.size}:$ua") }, pickupMs = 2_000, answerMs = 2_000)
     private var outcome: SourcesOutcome = SourcesOutcome.Applied("ok")
     private var lastTransfer: SourcesTransfer? = null
     private val router = ControlRouter(pairing, actions)
@@ -156,6 +160,53 @@ class ControlRouterTest {
         ""","rutracker":{"username":"$user","password":"$pass"}"""
 
     @Test
+    fun siteLoginsAnswerPerSiteWithoutSecrets() {
+        val t = token()
+        outcome = SourcesOutcome.Applied(null, null, mapOf("kinozal" to "ok"))
+        val r = req("POST", "/omp/sources", sourcesBody(""","logins":{"kinozal":{"username":"kino","password":"$password"},"rustorka":{"username":"rus","password":"$password"}}"""), t)
+        assertEquals(200, r.status)
+        val o = JSONObject(r.json).getJSONObject("logins")
+        assertEquals("ok", o.getString("kinozal"))
+        // a site the outcome does not mention is an error
+        assertEquals("error", o.getString("rustorka"))
+        assertFalse(r.json.contains(password))
+        assertFalse(r.json.contains("kino\""))
+        assertFalse(JSONObject(r.json).has("rutracker"))
+        assertEquals(setOf("kinozal", "rustorka"), lastTransfer!!.logins.keys)
+        // without logins: no logins key
+        val plain = req("POST", "/omp/sources", sourcesBody(), t)
+        assertFalse(JSONObject(plain.json).has("logins"))
+        // a failed rutracker write with site logins: 200 with the site results and the flag
+        outcome = SourcesOutcome.Applied("error", null, mapOf("kinozal" to "ok"), rutrackerNotStored = true)
+        val nr = JSONObject(req("POST", "/omp/sources", sourcesBody(loginPart() + ""","logins":{"kinozal":{"username":"kino","password":"$password"}}"""), t).json)
+        assertEquals("error", nr.getString("rutracker"))
+        assertEquals(true, nr.getBoolean("rutrackerNotStored"))
+        assertEquals("ok", nr.getJSONObject("logins").getString("kinozal"))
+        // an unknown site is refused
+        assertEquals(400, req("POST", "/omp/sources", sourcesBody(""","logins":{"evil":{"username":"a","password":"b"}}"""), t).status)
+    }
+
+    @Test
+    fun browserSessionsAnswerPerSiteWithoutCookies() {
+        val t = token()
+        val secret = "s3ss10n-value"
+        outcome = SourcesOutcome.Applied(null, null, sessions = mapOf("kinozal" to "ok"))
+        val body = sourcesBody(
+            ""","sessions":{"kinozal":{"host":"kinozal.tv","cookies":[{"name":"uid","value":"$secret"}],"ua":"Phone-UA"},""" +
+                """"rutracker":{"host":"rutracker.org","cookies":[{"name":"bb_session","value":"$secret"}],"ua":"Phone-UA"}}""",
+        )
+        val r = req("POST", "/omp/sources", body, t)
+        assertEquals(200, r.status)
+        val o = JSONObject(r.json).getJSONObject("sessions")
+        assertEquals("ok", o.getString("kinozal"))
+        assertEquals("error", o.getString("rutracker"))
+        assertFalse(r.json.contains(secret))
+        assertFalse(r.json.contains("Phone-UA"))
+        assertEquals(setOf("kinozal", "rutracker"), lastTransfer!!.sessions.keys)
+        assertFalse(JSONObject(req("POST", "/omp/sources", sourcesBody(), t).json).has("sessions"))
+    }
+
+    @Test
     fun sourcesNeedTheTokenAndJson() {
         val body = sourcesBody(loginPart())
         assertEquals(401, req("POST", "/omp/sources", body).status)
@@ -242,5 +293,182 @@ class ControlRouterTest {
         val big = sourcesBody(""","pad":"${"x".repeat(SourcesProtocol.MAX_BODY)}"""")
         assertEquals(413, req("POST", "/omp/sources", big, t).status)
         assertEquals(listOf("paired:Pixel"), calls)
+    }
+
+    // test-only key
+    private val apiKey = "test0only0key0000000000000000abc"
+
+    private fun indexersPart(vararg items: String) = ""","indexers":[${items.joinToString(",")}]"""
+
+    @Test
+    fun indexerConnectionsTravelWithKeysAndTheAnswerHasOnlyTheCount() {
+        val t = token()
+        outcome = SourcesOutcome.Applied(null, 2)
+        val body = sourcesBody(
+            indexersPart(
+                """{"kind":"jackett","url":"http://192.168.1.5:9117","key":"$apiKey"}""",
+                """{"kind":"prowlarr","url":"https://nas.local/prowlarr","name":"Дом"}""",
+            ),
+        )
+        val r = req("POST", "/omp/sources", body, t)
+        assertEquals(200, r.status)
+        val o = JSONObject(r.json)
+        assertEquals(2, o.getInt("indexers"))
+        assertFalse(o.has("rutracker"))
+        assertFalse(r.json.contains(apiKey))
+        assertFalse(r.json.contains("192.168.1.5"))
+        val got = lastTransfer!!
+        assertEquals(2, got.indexers.size)
+        assertEquals(apiKey, got.indexers[0].key)
+        assertNull(got.indexers[1].key)
+        assertEquals("Дом", got.indexers[1].name)
+        assertFalse(got.toString().contains(apiKey))
+        assertFalse(got.indexers[0].toString().contains(apiKey))
+        // no connections: no count in the answer
+        outcome = SourcesOutcome.Applied(null)
+        assertFalse(JSONObject(req("POST", "/omp/sources", sourcesBody(), t).json).has("indexers"))
+    }
+
+    @Test
+    fun indexerSchemaIsChecked() {
+        val t = token()
+        val ok = """{"kind":"jackett","url":"http://192.168.1.5:9117"}"""
+        val many = (1..21).joinToString(",") { """{"kind":"jackett","url":"http://192.168.1.$it:9117"}""" }
+        val bad = listOf(
+            ""","indexers":[]""",
+            ""","indexers":{}""",
+            ""","indexers":[$many]""",
+            indexersPart(ok, ok),
+            indexersPart("""{"kind":"sonarr","url":"http://h:1"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h:9117/"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://Host:9117"}"""),
+            indexersPart("""{"kind":"jackett","url":"ftp://h"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://u@h"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h/${"x".repeat(200)}"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","key":"has space"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","key":""}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","key":"${"k".repeat(201)}"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","key":1}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","apiKey":"$apiKey"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","name":"${"n".repeat(41)}"}"""),
+            indexersPart("""{"kind":"jackett","url":"http://h","name":"a\u0007b"}"""),
+        )
+        for (b in bad) {
+            val r = req("POST", "/omp/sources", sourcesBody(b), t)
+            assertEquals(b, 400, r.status)
+            assertFalse(r.json.contains(apiKey))
+        }
+        assertEquals(listOf("paired:Pixel"), calls)
+        assertEquals(200, req("POST", "/omp/sources", sourcesBody(indexersPart(ok)), t).status)
+    }
+
+    @Test
+    fun theLargestValidBodyFitsTheLimit() {
+        val t = token()
+        val items = (1..20).map { """{"kind":"jackett","url":"http://192.168.1.$it:9117/${"p".repeat(170)}","key":"${"k".repeat(200)}","name":"${"н".repeat(40)}"}""" }
+        val sources = (1..40).joinToString(",") { """"indexer-prowlarr-${it.toString().padStart(23, '0')}":true""" }
+        val body = """{"v":1,"sources":{$sources},"rutracker":{"username":"${"u".repeat(100)}","password":"${"п".repeat(200)}"}${indexersPart(*items.toTypedArray())}}"""
+        assertTrue(body.toByteArray(Charsets.UTF_8).size <= SourcesProtocol.MAX_BODY)
+        assertEquals(200, req("POST", "/omp/sources", body, t).status)
+    }
+
+    @Test
+    fun flareSolverrAndCloudflareSwitchesTravelAsPlainSettings() {
+        val t = token()
+        val ok = sourcesBody(""","flaresolverr":"http://192.168.1.191:8191","cloudflare":{"kinozal":true,"rustorka":false}""")
+        assertEquals(200, req("POST", "/omp/sources", ok, t).status)
+        assertEquals("http://192.168.1.191:8191", lastTransfer!!.flaresolverr)
+        assertEquals(mapOf("kinozal" to true, "rustorka" to false), lastTransfer!!.cloudflare)
+        val bad = listOf(
+            ""","flaresolverr":"http://h:8191/"""",
+            ""","flaresolverr":"HTTP://h:8191"""",
+            ""","flaresolverr":"ftp://h"""",
+            ""","flaresolverr":"http://u@h"""",
+            ""","flaresolverr":"http://h/${"x".repeat(200)}"""",
+            ""","flaresolverr":1""",
+            ""","cloudflare":{}""",
+            ""","cloudflare":[]""",
+            ""","cloudflare":{"Kinozal":true}""",
+            ""","cloudflare":{"kinozal":"yes"}""",
+            ""","cloudflare":{${(1..41).joinToString(",") { "\"s$it\":true" }}}""",
+        )
+        for (b in bad) assertEquals(b, 400, req("POST", "/omp/sources", sourcesBody(b), t).status)
+    }
+
+    @Test
+    fun theLargestValidBodyWithCloudflareFitsTheLimit() {
+        val t = token()
+        val items = (1..20).map { """{"kind":"jackett","url":"http://192.168.1.$it:9117/${"p".repeat(170)}","key":"${"k".repeat(200)}","name":"${"н".repeat(40)}"}""" }
+        val sources = (1..40).joinToString(",") { """"indexer-prowlarr-${it.toString().padStart(23, '0')}":true""" }
+        val cf = (1..40).joinToString(",") { """"site-${it.toString().padStart(35, '0')}":false""" }
+        val flare = "http://192.168.100.200:8191/" + "f".repeat(172)
+        val body = """{"v":1,"sources":{$sources},"rutracker":{"username":"${"u".repeat(100)}","password":"${"п".repeat(200)}"}${indexersPart(*items.toTypedArray())},"flaresolverr":"$flare","cloudflare":{$cf}}"""
+        assertEquals(200, flare.length)
+        assertTrue(body.toByteArray(Charsets.UTF_8).size <= SourcesProtocol.MAX_BODY)
+        assertEquals(200, req("POST", "/omp/sources", body, t).status)
+    }
+
+    private fun solvedBody(id: String, host: String = "rustorka.example", extra: String = "") =
+        """{"id":"$id","result":"solved","host":"$host","cookies":[{"name":"cf_clearance","value":"cl-v4lue"}],"ua":"Mozilla/5.0 (Linux; Android 14; Pixel 8)","until":${System.currentTimeMillis() + 600_000}$extra}"""
+
+    @Test
+    fun cloudflareRoutesNeedTheTokenAndNeverEchoTheCookies() {
+        for (path in listOf(CloudflareProtocol.POLL, CloudflareProtocol.ANSWER)) {
+            assertEquals(path, 401, req("POST", path, "{}").status)
+            assertEquals(path, 401, req("GET", path).status)
+        }
+        // the answer carries cookies: refused before its body is read
+        assertEquals(401, router.precheck(ControlHead("POST", CloudflareProtocol.ANSWER, null, "application/json", 2))!!.status)
+        val t = token()
+        assertEquals(405, req("GET", CloudflareProtocol.POLL, "", t).status)
+        assertEquals(413, router.precheck(ControlHead("POST", CloudflareProtocol.ANSWER, t, "application/json", CloudflareProtocol.MAX_BODY + 1L))!!.status)
+        assertEquals(415, router.precheck(ControlHead("POST", CloudflareProtocol.ANSWER, t, "text/plain", 10))!!.status)
+        assertNull(router.precheck(ControlHead("POST", CloudflareProtocol.ANSWER, t, "application/json", 100)))
+        // nothing waits
+        assertTrue(JSONObject(req("POST", CloudflareProtocol.POLL, "{}", t).json).isNull("request"))
+        val asked = java.util.concurrent.Executors.newSingleThreadExecutor().submit<CloudflareRelay.Outcome> {
+            relay.ask("rustorka", okhttp3.HttpUrl.Builder().scheme("https").host("rustorka.example").build())
+        }
+        var request: JSONObject? = null
+        for (i in 0 until 100) {
+            val r = JSONObject(req("POST", CloudflareProtocol.POLL, "{}", t).json)
+            if (!r.isNull("request")) {
+                request = r.getJSONObject("request")
+                break
+            }
+            Thread.sleep(10)
+        }
+        assertEquals("rustorka", request!!.getString("site"))
+        assertEquals("https://rustorka.example/", request.getString("url"))
+        val id = request.getString("id")
+        assertEquals(400, req("POST", CloudflareProtocol.ANSWER, solvedBody(id, extra = ",\"x\":1"), t).status)
+        assertEquals(400, req("POST", CloudflareProtocol.ANSWER, solvedBody(id, host = "other.example"), t).status)
+        assertEquals(404, req("POST", CloudflareProtocol.ANSWER, solvedBody("c999"), t).status)
+        val ok = req("POST", CloudflareProtocol.ANSWER, solvedBody(id), t)
+        assertEquals(200, ok.status)
+        assertEquals("{\"ok\":true}", ok.json)
+        assertEquals(CloudflareRelay.Outcome.SOLVED, asked.get())
+        assertEquals(listOf("https://rustorka.example/:1:Mozilla/5.0 (Linux; Android 14; Pixel 8)"), stored)
+    }
+
+    @Test
+    fun thePollIsPrecheckedAndATvClosedRequestIsGone() {
+        assertEquals(401, router.precheck(ControlHead("POST", CloudflareProtocol.POLL, null, "application/json", 2))!!.status)
+        val t = token()
+        assertEquals(413, router.precheck(ControlHead("POST", CloudflareProtocol.POLL, t, "application/json", 65))!!.status)
+        assertNull(router.precheck(ControlHead("POST", CloudflareProtocol.POLL, t, "application/json", 14)))
+        assertEquals(400, req("POST", CloudflareProtocol.POLL, "nope", t).status)
+        // the phone is live
+        assertEquals(200, req("POST", CloudflareProtocol.POLL, "{}", t).status)
+        val asked = java.util.concurrent.Executors.newSingleThreadExecutor().submit<CloudflareRelay.Outcome> {
+            relay.ask("rustorka", okhttp3.HttpUrl.Builder().scheme("https").host("rustorka.example").build())
+        }
+        // a long poll picks it up
+        val request = JSONObject(req("POST", CloudflareProtocol.POLL, "{\"wait\":1500}", t).json).getJSONObject("request")
+        relay.cancel()
+        assertEquals(CloudflareRelay.Outcome.CANCELLED, asked.get())
+        val r = req("POST", CloudflareProtocol.ANSWER, solvedBody(request.getString("id")), t)
+        assertEquals(410, r.status)
+        assertEquals("{\"error\":\"done\"}", r.json)
     }
 }

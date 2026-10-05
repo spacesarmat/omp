@@ -3,6 +3,13 @@ package com.spacesarmat.omp
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
+import android.system.Os
+import android.system.OsConstants
+import com.spacesarmat.omp.install.CancelToken
+import com.spacesarmat.omp.install.OkReleaseHttp
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.Inet4Address
@@ -20,7 +27,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The embedded TorrServer process (`libtorrserver.so` from nativeLibraryDir), one per app process.
+ * The embedded TorrServer process, one per app process. The binary is not in the APK: it is downloaded on demand
+ * ([download], [TorrServerBinary]) into noBackupFilesDir/torrserver-bin and started through the system linker.
  * Owned by [TorrServerService]; every state change runs on the single [worker] thread, so a stop
  * followed by a start never races for port 8090. An unexpected exit is restarted once after 3 s,
  * then the server is reported stopped with an error.
@@ -53,13 +61,29 @@ object LocalTorrServer {
     private var wanted = false
     private var restarted = false
     private var startedAt = 0L
+    // the exit before the restart came right after the launch
+    private var quickBefore = false
     private var onFatal: (() -> Unit)? = null
 
     fun addListener(l: Listener) = listeners.add(l)
     fun removeListener(l: Listener) = listeners.remove(l)
 
-    fun binary(ctx: Context) = File(ctx.applicationInfo.nativeLibraryDir, "libtorrserver.so")
-    fun supported(ctx: Context) = binary(ctx).isFile
+    const val NOT_DOWNLOADED = "TorrServer не скачан"
+
+    @Volatile private var pinCache: TorrServerPin? = null
+
+    /** The pinned download from res/raw/torrserver.json. */
+    fun pin(ctx: Context): TorrServerPin {
+        pinCache?.let { return it }
+        val text = ctx.resources.openRawResource(R.raw.torrserver).use { it.readBytes().toString(Charsets.UTF_8) }
+        return (TorrServerPin.parse(text) ?: throw IllegalStateException("bad torrserver.json")).also { pinCache = it }
+    }
+
+    fun installation(ctx: Context) =
+        TorrServerBinary(File(ctx.applicationContext.noBackupFilesDir, "torrserver-bin"), pin(ctx.applicationContext))
+
+    /** The phone can run the arm64 build (the binary may still have to be downloaded). */
+    fun supported() = TorrServerBinary.supported(Build.SUPPORTED_ABIS.toList())
     fun dataDir(ctx: Context) = File(ctx.filesDir, "torrserver")
     fun cacheDir(ctx: Context) = File(ctx.cacheDir, "torrserver")
 
@@ -94,18 +118,33 @@ object LocalTorrServer {
             trimLog(File(data, "server.log"))
             val pidFile = File(data, "server.pid")
             killOrphan(pidFile)
+            val install = installation(app)
+            if (!install.runnable()) {
+                fail(NOT_DOWNLOADED)
+                return
+            }
+            // a binary the loader cannot map (4 KB segments on a 16 KB-page device, foreign ELF) fails clearly
+            val page = try {
+                Os.sysconf(OsConstants._SC_PAGESIZE)
+            } catch (_: Exception) {
+                4096L
+            }
+            if (ElfInfo.read(install.file)?.fits(page) != true) {
+                fail(TorrServerBinary.CANNOT_RUN)
+                return
+            }
             if (echo(400) != null) {
                 fail("Порт $PORT занят другим приложением")
                 return
             }
             // sh records its pid and execs the server, so the pid is the server's own
+            val argv = TorrServerBinary.command(
+                Build.VERSION.SDK_INT,
+                install.file.absolutePath,
+                listOf("--port", PORT.toString(), "--path", data.absolutePath, "--logpath", File(data, "server.log").absolutePath),
+            )
             val pb = ProcessBuilder(
-                "/system/bin/sh", "-c", "echo \$\$ > \"\$0\"; exec \"\$@\"",
-                pidFile.absolutePath,
-                binary(app).absolutePath,
-                "--port", PORT.toString(),
-                "--path", data.absolutePath,
-                "--logpath", File(data, "server.log").absolutePath,
+                listOf("/system/bin/sh", "-c", "echo \$\$ > \"\$0\"; exec \"\$@\"", pidFile.absolutePath) + argv,
             )
             pb.directory(data)
             pb.redirectErrorStream(true)
@@ -133,11 +172,14 @@ object LocalTorrServer {
         proc = null
         // a server that ran for a while gets its one restart again
         if (System.currentTimeMillis() - startedAt > 60_000) restarted = false
+        val quick = System.currentTimeMillis() - startedAt < TorrServerBinary.QUICK_EXIT_MS
         if (wanted && !restarted) {
             restarted = true
+            quickBefore = quick
             worker.schedule({ if (wanted && proc == null) launch(app) }, 3, TimeUnit.SECONDS)
         } else {
-            fail(CRASHED)
+            // twice dead right after the launch: the binary does not run on this device (linker, page size)
+            fail(TorrServerBinary.exitMessage(quick, quickBefore, CRASHED))
         }
     }
 
@@ -213,7 +255,8 @@ object LocalTorrServer {
         } catch (_: Exception) {
             ""
         }
-        if (cmd.contains("libtorrserver")) {
+        // this build runs torrserver-bin/torrserver (via linker64); earlier ones ran libtorrserver.so
+        if (cmd.contains("torrserver-bin/" + TorrServerBinary.NAME) || cmd.contains("libtorrserver")) {
             android.os.Process.killProcess(pid)
             var waited = 0
             while (File("/proc/$pid").exists() && waited < 2000) {
@@ -222,6 +265,75 @@ object LocalTorrServer {
             }
         }
         pidFile.delete()
+    }
+
+    // ---- on-demand download ----
+
+    /** Download progress: phase "download" with percent, then "verify". */
+    fun interface DownloadListener {
+        fun progress(phase: String, percent: Int?)
+    }
+
+    private val downloadListeners = CopyOnWriteArraySet<DownloadListener>()
+    private val downloadLock = Any()
+    @Volatile private var downloadJob: CompletableFuture<Unit>? = null
+    @Volatile private var downloadCancel: CancelToken? = null
+    /** Last percent of the running download; null when none runs. */
+    @Volatile var downloadPercent: Int? = null
+        private set
+
+    fun addDownloadListener(l: DownloadListener) = downloadListeners.add(l)
+    fun removeDownloadListener(l: DownloadListener) = downloadListeners.remove(l)
+    fun downloading() = downloadJob != null
+
+    /**
+     * Downloads and verifies the pinned binary (blocking). A call while a download runs waits for that same download
+     * (its progress reaches every [DownloadListener]) and gets its result. A running server keeps its old binary until
+     * it is restarted.
+     */
+    fun download(ctx: Context) {
+        var own = false
+        val job = synchronized(downloadLock) {
+            downloadJob ?: CompletableFuture<Unit>().also {
+                downloadJob = it
+                own = true
+            }
+        }
+        if (!own) {
+            try {
+                job.get()
+            } catch (e: ExecutionException) {
+                throw e.cause ?: e
+            }
+            return
+        }
+        val cancel = CancelToken()
+        downloadCancel = cancel
+        downloadPercent = 0
+        try {
+            val install = installation(ctx)
+            install.install(
+                OkReleaseHttp(allowed = install.pin::hopAllowed),
+                cancel,
+                { p ->
+                    downloadPercent = p
+                    for (l in downloadListeners) l.progress("download", p)
+                },
+                { for (l in downloadListeners) l.progress("verify", null) },
+            )
+            job.complete(Unit)
+        } catch (e: Throwable) {
+            job.completeExceptionally(e)
+            throw e
+        } finally {
+            synchronized(downloadLock) { downloadJob = null }
+            downloadCancel = null
+            downloadPercent = null
+        }
+    }
+
+    fun cancelDownload() {
+        downloadCancel?.cancel()
     }
 
     // ---- HTTP API of the local server ----
@@ -347,6 +459,16 @@ object LocalTorrServer {
         } catch (_: Exception) {
         }
         return null
+    }
+
+    /** The active network is mobile data (not Wi-Fi or Ethernet): ask before a big download. */
+    fun onMobileData(ctx: Context): Boolean = try {
+        val cm = ctx.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?
+        val caps = cm?.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+        caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
+            !caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && !caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+    } catch (_: Exception) {
+        false
     }
 
     /** True when any network is a VPN: other devices may then not reach the phone. */

@@ -242,6 +242,16 @@ describe('UpdateScreen on Android TV', () => {
     expect(installButton(host).classList.contains('disabled')).toBe(false);
   });
 
+  it('passes the per-ABI APKs of the feed to the plugin', async () => {
+    const apks = { armv7: { url: 'https://github.com/spacesarmat/omp/releases/download/v9.9.9/OMP-9.9.9-armv7.apk', sha256: 'd'.repeat(64), size: 5 } };
+    latestUpdate.value = { ...info, apks };
+    const host = await mount();
+    installButton(host).click();
+    await until(() => calls.length === 1);
+    expect(calls[0]).toEqual({ method: 'downloadAndInstallApk', o: { url: info.ipkUrl, sha256: info.ipkHash, apks } });
+    settle!.resolve();
+  });
+
   it('returning to the screen during a download: «Обновление уже скачивается…», no enabled button', async () => {
     let host = await mount();
     installButton(host).click();

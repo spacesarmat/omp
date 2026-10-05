@@ -56,6 +56,8 @@ class BridgeProtocolTest {
         assertEquals(20_000L, spec.timeoutMs)
         assertNull(spec.form)
         assertNull(spec.body)
+        assertNull(spec.responseCharset)
+        assertEquals("iso-8859-1", HttpSpec.parse(JSONObject().put("url", "http://a.b/").put("responseCharset", "iso-8859-1")).responseCharset)
         assertEquals(1_000L, HttpSpec.parse(JSONObject().put("url", "http://a.b/").put("timeoutMs", 5)).timeoutMs)
         try {
             HttpSpec.parse(null)

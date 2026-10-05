@@ -1,7 +1,9 @@
 // Shared parts of the built-in tracker parsers: page loading with Russian errors, numbers, results. Chromium 53 safe.
 import { BAD_URL } from './http';
+import { stashFile } from '../api/torrentFiles';
 import { infohashFromMagnet, parseHtml } from './html';
-import type { HttpOptions, HttpResponse, SourceContext, SourceResult } from './types';
+import { isCloudflareBypassOn } from './store';
+import type { HttpOptions, HttpResponse, Source, SourceContext, SourceResult } from './types';
 
 export const SITE_ERROR = 'Сайт ответил ошибкой ';
 export const CHALLENGE = 'Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже';
@@ -14,11 +16,41 @@ export function isChallenge(text: string): boolean {
   return text.indexOf('challenges.cloudflare.com') >= 0 || /<title>\s*Just a moment/i.test(text);
 }
 
+/** Cloudflare's own check page (the interstitial), not a site page that only embeds a Turnstile widget. */
+export function isCloudflareInterstitial(text: string): boolean {
+  return /<title>\s*Just a moment/i.test(text) || /cf-chl-|_cf_chl_opt|id=["']challenge-(?:form|running|stage)/.test(text);
+}
+
+/**
+ * A login answer: a site page with an inline captcha (a Turnstile widget on the login form loads from
+ * challenges.cloudflare.com, which checkPage would call a Cloudflare block) is `captcha()`'s error; anything else goes
+ * through checkPage.
+ */
+export function checkLoginPage(res: HttpResponse, hasCaptcha: (doc: Document) => boolean, captcha: () => Error): HttpResponse {
+  if (isChallenge(res.text) && !isCloudflareInterstitial(res.text) && hasCaptcha(parseHtml(res.text))) throw captcha();
+  return checkPage(res);
+}
+
 /** The response as a page, or a Russian error (Cloudflare check, HTTP error status). */
 export function checkPage(res: HttpResponse): HttpResponse {
   if (isChallenge(res.text)) throw new Error(CHALLENGE);
   if (res.status < 200 || res.status >= 400) throw new Error(SITE_ERROR + res.status);
   return res;
+}
+
+/**
+ * Request options of a site (pass them to every request of a Cloudflare-capable site): { cloudflare: true, siteName }
+ * while its «Обходить проверку Cloudflare» is on, else only the site name. `extra` is merged in.
+ */
+export function siteOptions(source: Pick<Source, 'id' | 'name' | 'cloudflare'>, extra?: HttpOptions): HttpOptions {
+  const o: HttpOptions = {};
+  if (extra) {
+    for (const k in extra) if (Object.prototype.hasOwnProperty.call(extra, k)) (o as { [k: string]: unknown })[k] = (extra as { [k: string]: unknown })[k];
+  }
+  o.siteName = source.name;
+  if (isCloudflareBypassOn(source)) o.cloudflare = true;
+  else delete o.cloudflare;
+  return o;
 }
 
 export function loadPage(ctx: SourceContext, url: string, opts?: HttpOptions): Promise<HttpResponse> {
@@ -53,6 +85,35 @@ export function magnetOf(doc: Document, selector?: string): string {
   const href = a ? (a.getAttribute('href') || '').trim() : '';
   if (href.indexOf('magnet:') !== 0) throw new Error(NO_MAGNET);
   return href;
+}
+
+/** Latin-1 string (one char per byte, responseCharset iso-8859-1) to bytes. */
+export function latin1Bytes(s: string): Uint8Array {
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i) & 255;
+  return out;
+}
+
+/**
+ * A .torrent that needs the site's session (cookies sent natively): stashed for TorrServerClient.add, which uploads it
+ * (resolves the `omp-file:` pseudo-link). null when the answer is not a bencoded file (an HTML page: signed out, a
+ * daily limit…). Cloudflare / network errors reject.
+ */
+export function fetchTorrent(ctx: SourceContext, url: string, opts: HttpOptions): Promise<string | null> {
+  return fetchTorrentAnswer(ctx, url, opts).then((a) => a.link);
+}
+
+/** fetchTorrent with the answer (to tell a signed-out page from a limit page). */
+export function fetchTorrentAnswer(ctx: SourceContext, url: string, opts: HttpOptions): Promise<{ link: string | null; res: HttpResponse }> {
+  const o: HttpOptions = {};
+  for (const k in opts) if (Object.prototype.hasOwnProperty.call(opts, k)) (o as { [k: string]: unknown })[k] = (opts as { [k: string]: unknown })[k];
+  o.responseCharset = 'iso-8859-1';
+  return ctx.http.get(url, o).then((res) => {
+    if (isChallenge(res.text)) throw new Error(CHALLENGE);
+    // a bencoded dictionary starts with «d»
+    if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd' || !/^d\d+:/.test(res.text)) return { link: null, res };
+    return { link: stashFile(latin1Bytes(res.text)), res };
+  });
 }
 
 export interface ResultFields {

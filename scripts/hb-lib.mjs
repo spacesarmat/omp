@@ -62,14 +62,54 @@ export function buildHomebrew({ tag, version, ipkName, sha256, size, title, desc
   return { manifest, apps, update };
 }
 
-/** Update feed for the Android client (same shape as update.json; ipkUrl/ipkHash/ipkSize point at the APK). */
-export function buildAndroidUpdate({ tag, version, apkName, sha256, size, notes }) {
-  return {
+/** APK keys of the Android feed by ABI (OMP-x.y.z-arm64.apk → arm64). */
+export const APK_ABIS = ['arm64', 'armv7'];
+
+/** ABI key of a per-ABI APK name (OMP-0.15.0-arm64.apk → 'arm64'); null for the universal APK. */
+export function apkAbi(name) {
+  const m = /-(arm64|armv7)\.apk$/.exec(name);
+  return m ? m[1] : null;
+}
+
+/**
+ * APK paths from the command line → the universal one and the per-ABI ones by file name. Throws without a universal
+ * APK (0.14.x clients need it) or with two files for one slot. No paths → null (no Android feed).
+ */
+export function splitApks(paths) {
+  if (!paths.length) return null;
+  let universal = null;
+  const abis = {};
+  for (const p of paths) {
+    const name = p.split(/[\\/]/).pop();
+    const key = apkAbi(name);
+    if (key ? abis[key] : universal) throw new Error(`two APKs for ${key || 'universal'}: ${name}`);
+    if (key) abis[key] = p;
+    else universal = p;
+  }
+  if (!universal) throw new Error('the universal APK (OMP-x.y.z.apk) is required for the Android feed');
+  return { universal, abis };
+}
+
+/**
+ * Update feed for the Android client. ipkUrl/ipkHash/ipkSize point at the universal APK (0.14.x clients read only
+ * these); `apks` lists the per-ABI APKs ({ arm64: { url, sha256, size }, armv7: … }) that newer clients pick by the
+ * device ABI.
+ */
+export function buildAndroidUpdate({ tag, version, apkName, sha256, size, notes, abis }) {
+  const url = (name) => `https://github.com/${REPO}/releases/download/${tag}/${name}`;
+  const out = {
     version,
-    ipkUrl: `https://github.com/${REPO}/releases/download/${tag}/${apkName}`,
+    ipkUrl: url(apkName),
     ipkHash: sha256,
     ipkSize: size,
-    notes,
-    releaseUrl: `https://github.com/${REPO}/releases/tag/${tag}`,
   };
+  const apks = {};
+  for (const key of APK_ABIS) {
+    const a = abis && abis[key];
+    if (a) apks[key] = { url: url(a.name), sha256: a.sha256, size: a.size };
+  }
+  if (Object.keys(apks).length) out.apks = apks;
+  out.notes = notes;
+  out.releaseUrl = `https://github.com/${REPO}/releases/tag/${tag}`;
+  return out;
 }

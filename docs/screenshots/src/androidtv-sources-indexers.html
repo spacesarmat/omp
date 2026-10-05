@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>OMP — источники поиска на ТВ (v0.15)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { width: 1280px; height: 720px; overflow: hidden; background: #0F1115; }
+button { font-family: 'Manrope', sans-serif; }
+svg { flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div style="width: 1280px; height: 720px; position: relative; overflow: hidden; background: #0F1115; color: #E8EAF0; font-family: 'Manrope', sans-serif">
+<div style="padding: 36px 56px; display: flex; gap: 40px">
+<div style="width: 360px; display: flex; flex-direction: column; gap: 14px">
+<div style="font-size: 32px; font-weight: 700">Источники поиска</div>
+<div style="font-size: 17px; color: #9AA1B2; line-height: 1.45">Jackett и Prowlarr ищут напрямую. Без них поиск идёт через TorrServer.</div>
+<div style="padding: 16px; border-radius: 16px; background: #181B22; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 17px; font-weight: 700">FlareSolverr</div>
+<div style="font-size: 15px; color: #9AA1B2">192.168.1.191:8191 · версия 3.4</div>
+<div style="font-size: 15px; color: #8FE39A">Работает — запасной путь для сайтов за Cloudflare</div>
+</div>
+<div style="padding: 16px; border-radius: 16px; background: #181B22; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 17px; font-weight: 700">С телефона</div>
+<div style="font-size: 15px; color: #9AA1B2; line-height: 1.45">Подключения к Jackett, входы на сайты и проверку Cloudflare можно передать с телефона.</div>
+</div>
+</div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 15px; color: #9AA1B2; text-transform: uppercase; letter-spacing: 0.06em">Индексаторы</div>
+<button type="button" style="display: flex; align-items: center; gap: 16px; height: 62px; padding: 0 18px; border: none; border-radius: 14px; background: #252A35; box-shadow: inset 0 0 0 3px #F5B700; color: #E8EAF0; font-family: 'Manrope', sans-serif; font-size: 20px; text-align: left">
+<span style="flex-grow: 1">Jackett · 192.168.1.191<span style="display: block; font-size: 14px; color: #8FE39A">напрямую · 6 трекеров, 5 работают</span></span>
+<span style="font-size: 16px; color: #9AA1B2">▾</span>
+</button>
+<div style="padding: 4px 0 4px 18px; display: flex; flex-direction: column; gap: 4px">
+
+<div style="display: flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 10px; background: #14171D; font-size: 17px">
+<span style="flex-grow: 1">RuTor</span>
+<span style="font-size: 15px; color: #8FE39A">работает</span>
+</div>
+
+<div style="display: flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 10px; background: #14171D; font-size: 17px">
+<span style="flex-grow: 1">NNM-Club</span>
+<span style="font-size: 15px; color: #8FE39A">работает</span>
+</div>
+
+<div style="display: flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 10px; background: #14171D; font-size: 17px">
+<span style="flex-grow: 1">Kinozal</span>
+<span style="font-size: 15px; color: #F5B700">нужен вход</span>
+</div>
+
+<div style="display: flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 10px; background: #14171D; font-size: 17px">
+<span style="flex-grow: 1">RuTracker</span>
+<span style="font-size: 15px; color: #8FE39A">работает</span>
+</div>
+
+<div style="display: flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 10px; background: #14171D; font-size: 17px">
+<span style="flex-grow: 1">Rustorka</span>
+<span style="font-size: 15px; color: #8FE39A">Cloudflare — через FlareSolverr</span>
+</div>
+
+<div style="display: flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 10px; background: #14171D; font-size: 17px">
+<span style="flex-grow: 1">Torrent.by</span>
+<span style="font-size: 15px; color: #FF8A80">ошибка: не отвечает</span>
+</div>
+
+</div>
+<div style="font-size: 15px; color: #9AA1B2; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 8px">Сайты за Cloudflare</div>
+
+<button type="button" style="display: flex; align-items: center; gap: 16px; height: 54px; padding: 0 18px; border: none; border-radius: 14px; background: #181B22; color: #E8EAF0; font-family: 'Manrope', sans-serif; font-size: 19px; text-align: left">
+<span style="flex-grow: 1">Kinozal<span style="display: block; font-size: 14px; color: #8FE39A">обход Cloudflare · вход передан с телефона</span></span>
+<span style="font-size: 16px; color: #F5B700">вкл</span>
+</button>
+
+<button type="button" style="display: flex; align-items: center; gap: 16px; height: 54px; padding: 0 18px; border: none; border-radius: 14px; background: #181B22; color: #E8EAF0; font-family: 'Manrope', sans-serif; font-size: 19px; text-align: left">
+<span style="flex-grow: 1">rustorka<span style="display: block; font-size: 14px; color: #F5B700">нужна проверка — пройдите на телефоне</span></span>
+<span style="font-size: 16px; color: #F5B700">вкл</span>
+</button>
+
+
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -100,6 +100,8 @@ describe('native plugin wrapper on Android', () => {
       startPlayerServer: vi.fn(async () => ({ url: 'http://10.0.0.3:41234/omp/abc' })),
       stopPlayerServer: vi.fn(async () => {}),
       wakeOnLan: vi.fn(async () => {}),
+      downloadAndInstallApk: vi.fn(async () => {}),
+      deviceAbiKey: vi.fn(async (): Promise<any> => ({ key: 'arm64' })),
       queuePlayerCommands: vi.fn(async () => {}),
       localServerInfo: vi.fn(async (): Promise<any> => ({ supported: true, running: false, error: '' })),
       startLocalServer: vi.fn(async (): Promise<any> => ({
@@ -110,6 +112,14 @@ describe('native plugin wrapper on Android', () => {
         extra: 1,
       })),
       stopLocalServer: vi.fn(async () => {}),
+      downloadLocalServer: vi.fn(async (): Promise<any> => ({
+        supported: true,
+        running: false,
+        binary: 'ready',
+        downloadBytes: 64174032,
+        pinVersion: 'MatriX.145.1',
+      })),
+      cancelLocalServerDownload: vi.fn(async () => {}),
       localServerCache: vi.fn(async (): Promise<any> => ({ usedBytes: 524288000 })),
       clearLocalServerCache: vi.fn(async () => ({ usedBytes: 0 })),
       localIpv4: vi.fn(async (): Promise<any> => ({ ip: '192.168.1.50' })),
@@ -180,6 +190,26 @@ describe('native plugin wrapper on Android', () => {
     expect(fake.tvConnect).toHaveBeenLastCalledWith({ ip: '10.0.0.2', register: '{}' });
   });
 
+  it('downloadAndInstallApk passes apks only when the feed has them', async () => {
+    const { native: n, fake, releaseAdd } = await load();
+    releaseAdd();
+    const apks = { arm64: { url: 'https://x/a64.apk', sha256: 'b'.repeat(64), size: 1 } };
+    await n.downloadAndInstallApk('https://x/a.apk', 'a'.repeat(64), () => {}, apks);
+    expect(fake.downloadAndInstallApk).toHaveBeenLastCalledWith({ url: 'https://x/a.apk', sha256: 'a'.repeat(64), apks });
+    await n.downloadAndInstallApk('https://x/a.apk', 'a'.repeat(64), () => {});
+    expect(fake.downloadAndInstallApk).toHaveBeenLastCalledWith({ url: 'https://x/a.apk', sha256: 'a'.repeat(64) });
+  });
+
+  it('deviceAbiKey keeps only known keys', async () => {
+    const { native: n, fake } = await load();
+    fake.deviceAbiKey.mockResolvedValueOnce({ key: 'armv7' });
+    expect(await n.deviceAbiKey()).toBe('armv7');
+    fake.deviceAbiKey.mockResolvedValueOnce({ key: '' });
+    expect(await n.deviceAbiKey()).toBeNull();
+    fake.deviceAbiKey.mockResolvedValueOnce({ key: 'x86' });
+    expect(await n.deviceAbiKey()).toBeNull();
+  });
+
   it('wakeOnLan passes mac and ip', async () => {
     const { native: n, fake } = await load();
     await n.wakeOnLan('aa:bb:cc:dd:ee:ff', '192.168.1.5');
@@ -246,6 +276,37 @@ describe('native plugin wrapper on Android', () => {
     expect(await n.localIpv4()).toBe('192.168.1.50');
     fake.localIpv4.mockResolvedValueOnce({ ip: null });
     expect(await n.localIpv4()).toBeNull();
+  });
+
+  it('downloads the local server with progress and maps the binary state', async () => {
+    const { native: n, fake, listeners, removed, releaseAdd } = await load();
+    fake.localServerInfo.mockResolvedValueOnce({ supported: true, running: false, binary: 'missing', downloadBytes: 64174032, pinVersion: 'MatriX.145.1' });
+    expect(await n.localServerInfo()).toEqual({
+      supported: true,
+      running: false,
+      binary: 'missing',
+      downloadBytes: 64174032,
+      pinVersion: 'MatriX.145.1',
+    });
+    fake.localServerInfo.mockResolvedValueOnce({ supported: true, running: false, binary: 'missing', downloading: true, downloadPercent: 41.6, mobileData: true });
+    expect(await n.localServerInfo()).toEqual({ supported: true, running: false, binary: 'missing', downloading: true, downloadPercent: 42, mobileData: true });
+    fake.localServerInfo.mockResolvedValueOnce({ supported: true, running: false, binary: 'weird', downloadBytes: -1, downloading: 'yes', downloadPercent: 300 });
+    expect(await n.localServerInfo()).toEqual({ supported: true, running: false });
+    const got: any[] = [];
+    fake.downloadLocalServer.mockImplementationOnce(async () => {
+      listeners.get('localServerDownload')!({ phase: 'download', percent: 42.4 });
+      listeners.get('localServerDownload')!({ phase: 'download', percent: 140 });
+      listeners.get('localServerDownload')!({ phase: 'download' });
+      listeners.get('localServerDownload')!({ phase: 'verify' });
+      return { supported: true, running: false, binary: 'ready' };
+    });
+    const p = n.downloadLocalServer((e) => got.push(e));
+    releaseAdd();
+    expect(await p).toEqual({ supported: true, running: false, binary: 'ready' });
+    expect(got).toEqual([{ phase: 'download', percent: 42 }, { phase: 'download', percent: 100 }, { phase: 'verify' }]);
+    expect(removed).toContain('localServerDownload');
+    await n.cancelLocalServerDownload();
+    expect(fake.cancelLocalServerDownload).toHaveBeenCalled();
   });
 
   it('passes plugin rejections of the local server through', async () => {

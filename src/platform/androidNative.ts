@@ -5,6 +5,11 @@
 import { createSecretStore, createSourceHttp } from '../sources/http';
 import type { NativeHttpRequest } from '../sources/http';
 import type { SecretStore, SourceHttp } from '../sources/types';
+import type { UpdateInfo } from '../lib/updateInfo';
+import type { CloudflareVisibleRequest } from '../sources/cloudflareCheck';
+import type { BrowserCheck, BrowserLoginRequest } from '../sources/browserLogin';
+
+type ApkFiles = NonNullable<UpdateInfo['apks']>;
 
 export interface ListenerHandle {
   remove: () => unknown;
@@ -12,7 +17,8 @@ export interface ListenerHandle {
 
 export interface OmpNativeTvPlugin {
   localIpv4(): Promise<{ ip?: string | null }>;
-  downloadAndInstallApk(o: { url: string; sha256: string }): Promise<unknown>;
+  /** apks: the feed's per-ABI APKs; the plugin picks the device's one, url/sha256 (universal) otherwise. */
+  downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<unknown>;
   /** Starts the native Media3 player (PlayerActivity); resolves once it is launched. */
   playNative(o: object): Promise<unknown>;
   /** A phone command (src/phone/protocol.ts Cmd) for the open native player. */
@@ -32,12 +38,42 @@ export interface OmpNativeTvPlugin {
   secretSet(o: { key: string; value: string }): Promise<unknown>;
   secretDelete(o: { key: string }): Promise<unknown>;
   /** «Передать на телевизор»: the page applied remoteSources { id } (rutracker = the login result when one came) or failed. */
-  /** stored = false: the verified login could not be written (the TV has no new login). */
-  remoteSourcesDone(o: { id: string; rutracker?: string; failed?: boolean }): Promise<{ stored?: boolean } | undefined>;
+  /**
+   * stored = false: the verified rutracker login could not be written (the TV has no new login); sitesNotStored: the
+   * other sites (logins = their results) in that state.
+   */
+  remoteSourcesDone(o: {
+    id: string;
+    rutracker?: string;
+    failed?: boolean;
+    indexers?: number;
+    logins?: { [site: string]: string };
+    /** Browser sessions: ok (verified, promoted natively) | error. */
+    sessions?: { [site: string]: string };
+  }): Promise<{ stored?: boolean; sitesNotStored?: string[] } | undefined>;
   /** The transfer still waiting for the page (events are not retained): { event } or { event: null }. */
   remoteSourcesPending(): Promise<{ event?: unknown }>;
+  /** Whether libVLC runs on this device (the «VLC» player choice). */
+  vlcAvailable(): Promise<{ available?: boolean }>;
+  /** Hosts of the device's /24 open on allowed ports (FlareSolverr 8191 on the TV); lan false off a home network. */
+  scanLan(o: { ports: number[]; timeoutMs?: number }): Promise<{ hits?: unknown; lan?: unknown }>;
+  /**
+   * The visible Cloudflare check (a native dialog with the site under the remote, «Пройти на телефоне»): every text comes
+   * from src/sources/cloudflareCheck.ts. Cookies never come back: { result: solved | cancelled | busy | failed, via? }.
+   */
+  cloudflareVisible(o: CloudflareVisibleRequest): Promise<{ result?: string; via?: string; sent?: boolean }>;
+  /** When the stored Cloudflare clearance of the site of url ends (epoch ms), null without one. */
+  cloudflareClearance(o: { url: string }): Promise<{ until?: number | null }>;
+  /**
+   * «Войти через браузер» (a native dialog with the site's login page under the remote, «Войти на телефоне»): every text
+   * comes from src/sources/browserLogin.ts. Cookies never come back: { result: ok | cancelled | busy | failed, host?, via? }.
+   */
+  siteBrowserLogin(o: BrowserLoginRequest): Promise<{ result?: string; host?: string; via?: string }>;
+  /** The browser session the phone sent for the site (staged) opens its check page signed in: { ok, host? }. */
+  siteSessionPending(o: { site: string; check: BrowserCheck }): Promise<{ ok?: boolean; host?: string }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
+
 
 interface CapacitorBridge {
   Plugins?: { [name: string]: any };
@@ -76,6 +112,12 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     secretDelete: (o) => np.call(cap, NAME, 'secretDelete', o),
     remoteSourcesDone: (o) => np.call(cap, NAME, 'remoteSourcesDone', o),
     remoteSourcesPending: () => np.call(cap, NAME, 'remoteSourcesPending', {}),
+    vlcAvailable: () => np.call(cap, NAME, 'vlcAvailable', {}),
+    scanLan: (o) => np.call(cap, NAME, 'scanLan', o),
+    cloudflareVisible: (o) => np.call(cap, NAME, 'cloudflareVisible', o),
+    cloudflareClearance: (o) => np.call(cap, NAME, 'cloudflareClearance', o),
+    siteBrowserLogin: (o) => np.call(cap, NAME, 'siteBrowserLogin', o),
+    siteSessionPending: (o) => np.call(cap, NAME, 'siteSessionPending', o),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }
@@ -119,6 +161,27 @@ export function nativeSourceHttp(): SourceHttp | null {
   );
 }
 
+/**
+ * Native LAN scan on Android TV: open ports of the device's /24 (only the ports the native side allows). null off a
+ * home network, outside the APK or when the scan fails.
+ */
+export function nativeScanLan(ports: number[]): Promise<{ ip: string; port: number }[] | null> {
+  const p = nativePlugin();
+  if (!p || typeof p.scanLan !== 'function') return Promise.resolve(null);
+  return p.scanLan({ ports }).then(
+    (r) => {
+      if (!r || r.lan === false || !Array.isArray(r.hits)) return null;
+      const out: { ip: string; port: number }[] = [];
+      (r.hits as unknown[]).forEach((h) => {
+        const o = h && typeof h === 'object' ? (h as { ip?: unknown; port?: unknown }) : {};
+        if (typeof o.ip === 'string' && typeof o.port === 'number' && ports.indexOf(o.port) >= 0) out.push({ ip: o.ip, port: o.port });
+      });
+      return out;
+    },
+    () => null,
+  );
+}
+
 /** Keystore-encrypted storage on Android TV; null outside the APK. */
 export function nativeSecrets(): SecretStore | null {
   const p = nativePlugin();
@@ -144,10 +207,11 @@ export function describeApkError(e: unknown): string {
 }
 
 /**
- * Downloads the APK, verifies sha256 and opens the system installer. onProgress gets 0..100.
+ * Downloads the APK, verifies sha256 and opens the system installer. onProgress gets 0..100. With apks (the feed's
+ * per-ABI APKs) the plugin installs the one for the device's ABI; url/sha256 is the universal fallback.
  * Rejects with an Error whose message is in Russian.
  */
-export function installApk(url: string, sha256: string, onProgress: (percent: number) => void): Promise<void> {
+export function installApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void> {
   const p = nativePlugin();
   if (!p) return Promise.reject(new Error('Установка обновлений недоступна на этом устройстве'));
   let handle: ListenerHandle | null = null;
@@ -165,7 +229,7 @@ export function installApk(url: string, sha256: string, onProgress: (percent: nu
     })
     .then((h) => {
       handle = h;
-      return p.downloadAndInstallApk({ url, sha256 });
+      return p.downloadAndInstallApk(apks ? { url, sha256, apks } : { url, sha256 });
     })
     .then(
       () => { release(); },
@@ -174,4 +238,14 @@ export function installApk(url: string, sha256: string, onProgress: (percent: nu
         throw new Error(describeApkError(e));
       },
     );
+}
+
+/** When the stored Cloudflare clearance of the site at url ends; null without one, outside the APK or on a failure. */
+export function nativeClearance(url: string): Promise<number | null> {
+  const p = nativePlugin();
+  if (!p || typeof p.cloudflareClearance !== 'function') return Promise.resolve(null);
+  return p.cloudflareClearance({ url }).then(
+    (r) => (r && typeof r.until === 'number' && isFinite(r.until) ? r.until : null),
+    () => null,
+  );
 }

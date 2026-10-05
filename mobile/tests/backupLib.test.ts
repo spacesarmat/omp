@@ -63,6 +63,8 @@ describe('collectBackup', () => {
     put('tsp.subs', [SUB]);
     put('tsp.monitor', { enabled: false, hours: 6, wifiOnly: true, episodes: true });
     put('tsp.sources', { rutor: { on: false } });
+    put('tsp.indexers', [{ id: 'jackett-1', kind: 'jackett', url: 'http://192.168.1.5:9117', keySet: true }]);
+    put('tsp.flaresolverr', { url: 'http://192.168.1.5:8191', extra: 'dropped' });
     put('tsp.settings', { libraryView: 'list', autoNext: false });
     put('tsp.touchpad', { speed: 5, accel: false, tapClick: true, invertScroll: true });
     put('tsp.localServer', { autostart: true });
@@ -71,6 +73,7 @@ describe('collectBackup', () => {
     put('tsp.support', { until: 1798934400000 });
     const b = collectBackup(NOW);
     expect(b.data['tsp.support']).toEqual({ until: 1798934400000 });
+    expect(b.data['tsp.flaresolverr']).toEqual({ url: 'http://192.168.1.5:8191' });
     expect(Object.keys(b.data).sort()).toEqual(BACKUP_KEYS.map((k) => k.key).sort());
     expect((b.data['tsp.settings'] as { libraryView: string }).libraryView).toBe('list');
     expect(b.data['tsp.tvs']).toEqual([TV_LG, TV_ATV]);
@@ -82,6 +85,13 @@ describe('collectBackup', () => {
     const text = serializeBackup(collectBackup(NOW));
     expect(text).toContain('secret-pass');
     expect(text).toContain('abc123');
+  });
+
+  it('lists the per-device v0.15 keys as not backed up', () => {
+    for (const k of ['tsp.indexerScan', 'tsp.torznabHosts', 'tsp.faqDevice']) {
+      expect(NOT_BACKED_UP).toContain(k);
+      expect(BACKUP_KEYS.map((b) => b.key)).not.toContain(k);
+    }
   });
 
   it('never lists excluded keys in the allowlist', () => {

@@ -1,7 +1,7 @@
 // Checking subscriptions: the unified search over the subscription's sources, its filters, then the results not seen
 // before. The first check of a subscription (and the first answer of each source) only remembers what is there.
 // Chromium 53 safe.
-import { searchAll, type SearchAllOptions, type SearchHandle } from '../sources/search';
+import { searchAll, SOURCE_TIMEOUT_MS, type SearchAllOptions, type SearchHandle } from '../sources/search';
 import type { Source, SourceContext, SourceResult } from '../sources/types';
 import { filterForSubscription, isSeen, resultKeys, seenEntry, seenIndex } from './match';
 import { addFindings, getSubscription, loadSubs, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
@@ -57,7 +57,9 @@ function runSearch(query: string, ctx: SourceContext, sources: string[] | undefi
   const search = opts.search || searchAll;
   let h: SearchHandle;
   try {
-    h = search(query, { ctx, sources, from: opts.from, timeoutMs: opts.timeoutMs });
+    // background runs keep the normal per-source timeout for Cloudflare sites too (the run has a deadline); a hidden
+    // check still finishes natively and its cookies serve the next run
+    h = search(query, { ctx, sources, from: opts.from, timeoutMs: opts.timeoutMs, cloudflareTimeoutMs: opts.timeoutMs || SOURCE_TIMEOUT_MS });
   } catch (e) {
     return Promise.resolve({ results: [], answered: [], failed: [] });
   }

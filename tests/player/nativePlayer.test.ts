@@ -9,6 +9,9 @@ import { decideStart } from '../../src/player/resume';
 import type { PlayItem } from '../../src/player/types';
 import { WatchJournal, journalSource } from '../../src/player/watchJournal';
 import { DONATE_QR } from '../../src/ui/donateQr';
+import { clearProbes, rememberProbe } from '../../src/player/nativeEngine';
+import { getTrackPref, reloadTrackPrefs, saveTrackPref } from '../../src/store/trackPrefs';
+import { logEntries, clearLog } from '../../src/lib/log';
 
 const H1 = 'a'.repeat(40);
 
@@ -61,6 +64,9 @@ function state(over: any = {}) {
 beforeEach(() => {
   localStorage.clear();
   reloadProgress();
+  reloadTrackPrefs();
+  clearLog();
+  clearProbes();
   vi.useFakeTimers();
 });
 const sessions: NativeSession[] = [];
@@ -135,7 +141,7 @@ describe('NativeSession', () => {
     f.plugin.addListener.mockImplementation((e: string) => { order.push('listen:' + e); return Promise.resolve({ remove: () => undefined }); });
     f.plugin.playNative.mockImplementation(() => { order.push('play'); return Promise.resolve(); });
     await track(new NativeSession(f.plugin, c, queue)).start(opts);
-    expect(order).toEqual(['listen:nativePlayerState', 'listen:nativePlayerClosed', 'listen:nativePlayerMark', 'play']);
+    expect(order).toEqual(['listen:nativePlayerState', 'listen:nativePlayerClosed', 'listen:nativePlayerMark', 'listen:nativePlayerEngine', 'play']);
     const arg = f.plugin.playNative.mock.calls[0][0];
     expect(typeof arg.session).toBe('number');
     expect(arg).toEqual({
@@ -220,7 +226,7 @@ describe('NativeSession', () => {
     expect(closed).toHaveBeenCalledWith({ index: 0, time: 320.4, duration: 1000 }, false);
     expect(getLocalProgress(H1, 1)!.time).toBe(320.4);
     expect(setViewed).toHaveBeenCalledWith(H1, 1, 320);
-    expect(f.removed.sort()).toEqual(['nativePlayerClosed', 'nativePlayerMark', 'nativePlayerState']);
+    expect(f.removed.sort()).toEqual(['nativePlayerClosed', 'nativePlayerEngine', 'nativePlayerMark', 'nativePlayerState']);
     expect(s.snapshot()).toBeNull();
     setViewed.mockClear();
     await vi.advanceTimersByTimeAsync(30000);
@@ -306,7 +312,7 @@ describe('NativeSession', () => {
     expect(getLocalProgress(H1, 1)!.time).toBe(333);
     expect(setViewed).toHaveBeenCalledWith(H1, 1, 333);
     expect(closed).not.toHaveBeenCalled();
-    expect(f.removed.length).toBe(3);
+    expect(f.removed.length).toBe(4);
     expect(nativePlayerOpen()).toBe(false);
   });
 
@@ -317,7 +323,7 @@ describe('NativeSession', () => {
     s.detach();
     await p;
     expect(f.plugin.playNative).not.toHaveBeenCalled();
-    expect(f.removed.length).toBe(3);
+    expect(f.removed.length).toBe(4);
     expect(nativePlayerOpen()).toBe(false);
   });
 
@@ -326,7 +332,7 @@ describe('NativeSession', () => {
     f.plugin.playNative.mockImplementation(() => Promise.reject({ message: 'Нет плеера' }));
     const s = track(new NativeSession(f.plugin, null, queue));
     await expect(s.start(opts)).rejects.toEqual({ message: 'Нет плеера' });
-    expect(f.removed.length).toBe(3);
+    expect(f.removed.length).toBe(4);
   });
 
   it('dispose before the listeners resolve still removes them', async () => {
@@ -335,7 +341,7 @@ describe('NativeSession', () => {
     const p = s.start(opts);
     s.dispose();
     await p;
-    expect(f.removed.length).toBe(3);
+    expect(f.removed.length).toBe(4);
     expect(f.plugin.playNative).not.toHaveBeenCalled();
   });
 
@@ -457,5 +463,74 @@ describe('NativeSession', () => {
       g.emit('nativePlayerMark', { index: 0, kind: 'credits', now: 900, duration: 1000 });
       expect(sent(g).pop()).toMatchObject({ type: 'toast', text: 'Не удалось сохранить отметку: нет связи с сервером', error: true });
     });
+  });
+});
+
+describe('player engine (VLC / Авто)', () => {
+  const flush = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+  const assProbe = {
+    streams: [
+      { index: 0, codec_type: 'video', codec_name: 'h264' },
+      { index: 1, codec_type: 'subtitle', codec_name: 'ass', tags: { language: 'rus', title: 'Надписи' } },
+    ],
+  } as any;
+  const srtProbe = { streams: [{ index: 1, codec_type: 'subtitle', codec_name: 'subrip', tags: { language: 'rus' } }] } as any;
+  const cmds = (f: ReturnType<typeof fakePlugin>) => f.plugin.nativePlayerCommand.mock.calls.map((c: any[]) => c[0].cmd);
+
+  it('playNative carries the engine; no engine field without one', async () => {
+    const f = fakePlugin();
+    await track(new NativeSession(f.plugin, null, queue)).start({ ...opts, engine: 'vlc' });
+    expect(f.plugin.playNative.mock.calls[0][0].engine).toBe('vlc');
+    const g = fakePlugin();
+    await track(new NativeSession(g.plugin, null, queue)).start(opts);
+    expect('engine' in g.plugin.playNative.mock.calls[0][0]).toBe(false);
+  });
+
+  it('an item probed earlier with ASS subtitles to show goes with assSubs', async () => {
+    rememberProbe(H1, 1, assProbe);
+    rememberProbe(H1, 2, srtProbe);
+    const f = fakePlugin();
+    await track(new NativeSession(f.plugin, null, queue)).start({ ...opts, subtitlesOn: true, engine: 'auto' });
+    const q = f.plugin.playNative.mock.calls[0][0].queue;
+    expect(q[0].assSubs).toBe(true);
+    expect('assSubs' in q[1]).toBe(false);
+    // subtitles off: nothing would be shown
+    const g = fakePlugin();
+    await track(new NativeSession(g.plugin, null, queue)).start({ ...opts, subtitlesOn: false, engine: 'auto' });
+    expect('assSubs' in g.plugin.playNative.mock.calls[0][0].queue[0]).toBe(false);
+  });
+
+  it('«Авто»: the probe answering with ASS subtitles tells the player (once per item)', async () => {
+    const f = fakePlugin();
+    const s = track(new NativeSession(f.plugin, null, queue, {}, null, () => Promise.resolve(assProbe)));
+    await s.start({ ...opts, subtitlesOn: true, engine: 'auto' });
+    await flush();
+    const sid = f.plugin.playNative.mock.calls[0][0].session;
+    expect(cmds(f).filter((c: any) => c.type === 'assSubs')).toEqual([{ type: 'assSubs', index: 0, session: sid }]);
+    // an explicit engine: the player does not switch by itself, nothing sent
+    const g = fakePlugin();
+    await track(new NativeSession(g.plugin, null, queue, {}, null, () => Promise.resolve(assProbe))).start({ ...opts, subtitlesOn: true, engine: 'builtin' });
+    await flush();
+    expect(cmds(g).filter((c: any) => c.type === 'assSubs')).toEqual([]);
+  });
+
+  it('an automatic switch goes to the log without file names; a menu choice is remembered for the torrent', async () => {
+    const f = fakePlugin();
+    await track(new NativeSession(f.plugin, null, queue)).start({ ...opts, engine: 'auto' });
+    const sid = f.plugin.playNative.mock.calls[0][0].session;
+    f.emit('nativePlayerEngine', { session: sid, index: 0, engine: 'vlc', reason: 'format' });
+    const list = logEntries();
+    expect(list.length).toBe(1);
+    expect(list[0]).toMatchObject({ l: 'warn', a: 'tv', x: 'плеер: переключение на VLC (формат)' });
+    expect(getTrackPref(H1)).toBeNull();
+    f.emit('nativePlayerEngine', { session: sid, index: 1, engine: 'builtin', reason: 'manual' });
+    expect(getTrackPref(H1)).toEqual({ engine: 'builtin' });
+    expect(logEntries().length).toBe(1);
+    // other runs and malformed events are ignored
+    f.emit('nativePlayerEngine', { session: sid + 1, index: 0, engine: 'vlc', reason: 'manual' });
+    f.emit('nativePlayerEngine', { session: sid, index: 0, engine: 'mpv', reason: 'manual' });
+    expect(getTrackPref(H1)).toEqual({ engine: 'builtin' });
+    saveTrackPref(H1, { audioLang: 'en' });
+    expect(getTrackPref(H1)).toEqual({ engine: 'builtin', audioLang: 'en' });
   });
 });

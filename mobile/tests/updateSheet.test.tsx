@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { UpdateSheet, setApkInstaller } from '../src/ui/UpdateSheet';
+import { UpdateSheet, setApkInstaller, setAbiKeyReader } from '../src/ui/UpdateSheet';
 import { updatePrompt } from '../../src/store/updates';
 import type { UpdateInfo } from '../../src/lib/updateInfo';
 
@@ -27,6 +27,55 @@ beforeEach(() => {
   localStorage.clear();
   updatePrompt.value = info;
   setApkInstaller(null);
+  setAbiKeyReader(null);
+});
+
+const apks = {
+  arm64: { url: 'https://example.com/omp-arm64.apk', sha256: 'b'.repeat(64), size: 3145728 },
+  armv7: { url: 'https://example.com/omp-armv7.apk', sha256: 'c'.repeat(64), size: 2097152 },
+};
+function mountWith(i: UpdateInfo): HTMLElement {
+  document.body.innerHTML = '<div id="app"></div>';
+  const el = document.getElementById('app')!;
+  render(<UpdateSheet info={i} />, el);
+  return el;
+}
+
+describe('UpdateSheet with per-ABI APKs', () => {
+  it('shows the size of the APK this device gets', async () => {
+    setAbiKeyReader(() => Promise.resolve('armv7'));
+    let el: HTMLElement = null as any;
+    await act(async () => { el = mountWith({ ...info, apks }); });
+    await act(async () => {});
+    expect(el.textContent).toContain('2,0 МБ');
+    expect(el.textContent).not.toContain('4,2 МБ');
+  });
+
+  it('falls back to the universal size for other ABIs and hides it while unknown', async () => {
+    setAbiKeyReader(() => Promise.resolve(null));
+    let el: HTMLElement = null as any;
+    await act(async () => { el = mountWith({ ...info, apks }); });
+    await act(async () => {});
+    expect(el.textContent).toContain('4,2 МБ');
+    setAbiKeyReader(() => Promise.reject(new Error('нет')));
+    await act(async () => { el = mountWith({ ...info, apks }); });
+    await act(async () => {});
+    expect(el.textContent).not.toContain('МБ');
+  });
+
+  it('passes the per-ABI APKs to the installer', async () => {
+    setAbiKeyReader(() => Promise.resolve('arm64'));
+    const seen: unknown[] = [];
+    setApkInstaller((url, sha, _p, a) => {
+      seen.push([url, sha, a]);
+      return Promise.resolve();
+    });
+    let el: HTMLElement = null as any;
+    await act(async () => { el = mountWith({ ...info, apks }); });
+    await act(async () => {});
+    await act(async () => btn(el, 'Установить').click());
+    expect(seen).toEqual([[info.ipkUrl, HASH, apks]]);
+  });
 });
 
 describe('UpdateSheet', () => {

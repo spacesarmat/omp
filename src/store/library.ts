@@ -3,6 +3,8 @@ import { loadJson, saveJson, isObject } from './storage';
 import type { Torrent } from '../api/types';
 import type { LibraryTab } from '../lib/libraryView';
 import { attachPoster, fillPosters, type FillResult, type PosterClient } from '../lib/autoPoster';
+import { displayTitle } from '../lib/torrentName';
+import { fixPlaceholderTitles, type TitleClient } from '../lib/titleFix';
 
 const KEY = 'tsp.torrents';
 const AT_KEY = 'tsp.torrentsAt';
@@ -42,7 +44,20 @@ export function resetLibrary(): void {
   saveJson(KEY, []);
 }
 
-export function refreshTorrents(c: { list(): Promise<Torrent[]> }): Promise<Torrent[]> {
+/**
+ * «infohash:…» titles get the name from the files, once per torrent; the shown list is patched when the server took it.
+ */
+export function repairTitles(c: TitleClient, list: Torrent[]): void {
+  const my = gen;
+  void fixPlaceholderTitles(c, list).then((done) => {
+    if (my !== gen || !done.length) return;
+    const by: { [h: string]: string } = {};
+    done.forEach((d) => { by[d.hash] = d.title; });
+    torrents.value = torrents.value.map((x) => (by[x.hash] ? { ...x, title: by[x.hash] } : x));
+  });
+}
+
+export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<TitleClient>): Promise<Torrent[]> {
   if (inflight) return inflight;
   const my = gen;
   inflight = c.list().then(
@@ -60,6 +75,7 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> }): Promise<Torr
           torrent_size: t.torrent_size, data: t.data, stat: t.stat, timestamp: t.timestamp,
         })),
       );
+      if (c.setTitle) repairTitles(c as TitleClient, sorted);
       return sorted;
     },
     (e) => {
@@ -80,7 +96,7 @@ export function addedTorrents(prev: Torrent[], next: Torrent[]): Torrent[] {
 export function addedMessage(added: Torrent[]): string | null {
   if (!added.length) return null;
   if (added.length > 3) return 'Добавлено торрентов: ' + added.length;
-  return 'Добавлено: ' + added.map((t) => t.title || t.hash).join(', ');
+  return 'Добавлено: ' + added.map((t) => displayTitle(t)).join(', ');
 }
 
 /**

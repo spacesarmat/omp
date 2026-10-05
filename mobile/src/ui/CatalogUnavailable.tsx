@@ -8,6 +8,10 @@ export function CatalogUnavailable(p: {
   onRetry?: () => void;
   onChangeServer: () => void;
   onStart?: () => void;
+  /** Label of the start button (default «Запустить сервер»). */
+  startLabel?: string;
+  /** Why the server is not running / what the start button does (shown above the actions). */
+  startNote?: string;
   starting?: boolean;
   onFaq: () => void;
 }) {
@@ -18,10 +22,13 @@ export function CatalogUnavailable(p: {
       </span>
       <h2 class="m-offline-title">Каталог недоступен</h2>
       <p class="m-muted m-offline-reason">{p.reason}</p>
+      {p.onStart && p.startNote && <p class="m-hint-warn" data-local="note">{p.startNote}</p>}
       <div class="m-offline-actions">
         {p.onRetry && <button type="button" class="m-btn m-btn-primary" onClick={p.onRetry}>Повторить</button>}
         {p.onStart && (
-          <button type="button" class="m-btn m-btn-secondary" disabled={p.starting} onClick={p.onStart}>Запустить сервер</button>
+          <button type="button" class="m-btn m-btn-secondary" disabled={p.starting} onClick={p.onStart}>
+            {p.startLabel || 'Запустить сервер'}
+          </button>
         )}
         <button type="button" class="m-btn m-btn-secondary" onClick={p.onChangeServer}>Сменить сервер</button>
       </div>

@@ -27,6 +27,22 @@ describe('sanitizeUpdateInfo', () => {
     expect(sanitizeUpdateInfo({ ...good, ipkHash: 'abc' })).toBeNull();
     expect(sanitizeUpdateInfo({ ...good, releaseUrl: 'ftp://x' })!.releaseUrl).toBe(RELEASES_URL);
   });
+  it('keeps valid per-ABI APKs and drops broken ones', () => {
+    const B = 'b'.repeat(64);
+    const arm64 = { url: 'https://github.com/spacesarmat/omp/releases/download/v0.15.0/OMP-0.15.0-arm64.apk', sha256: B.toUpperCase(), size: 600 };
+    const r = sanitizeUpdateInfo({ ...good, apks: { arm64, armv7: { url: 'http://x/a.apk', sha256: B, size: 1 }, x86: arm64 } });
+    expect(r!.apks).toEqual({ arm64: { ...arm64, sha256: B } });
+    expect(r!.ipkUrl).toBe(good.ipkUrl);
+    const noSize = sanitizeUpdateInfo({ ...good, apks: { armv7: { url: arm64.url, sha256: B, size: -5 } } });
+    expect(noSize!.apks).toEqual({ armv7: { url: arm64.url, sha256: B, size: 0 } });
+  });
+  it('ignores a malformed apks object without rejecting the feed', () => {
+    for (const apks of [null, 'x', [], { arm64: 'x' }, { arm64: { url: good.ipkUrl, sha256: 'abc' } }, { armv7: { sha256: 'b'.repeat(64) } }]) {
+      const r = sanitizeUpdateInfo({ ...good, apks });
+      expect(r).not.toBeNull();
+      expect('apks' in r!).toBe(false);
+    }
+  });
   it('exposes the feed urls', () => {
     expect(ANDROID_UPDATE_URL).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update-android.json');
     expect(UPDATE_URL).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update.json');

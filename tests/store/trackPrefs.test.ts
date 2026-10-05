@@ -17,4 +17,11 @@ describe('trackPrefs store', () => {
       .toEqual({ a: {}, c: { sub: { lang: 'ru', label: 'rus' } } });
     expect(sanitizeTrackPrefs([])).toEqual({});
   });
+  it('keeps the player engine chosen for a torrent (builtin / vlc only)', () => {
+    expect(sanitizeTrackPrefs({ a: { engine: 'vlc' }, b: { engine: 'builtin', sub: 'off' }, c: { engine: 'auto' }, d: { engine: 1 } }))
+      .toEqual({ a: { engine: 'vlc' }, b: { engine: 'builtin', sub: 'off' }, c: {}, d: {} });
+    saveTrackPref('h', { engine: 'vlc' });
+    reloadTrackPrefs();
+    expect(getTrackPref('h')).toEqual({ engine: 'vlc' });
+  });
 });

@@ -40,6 +40,19 @@ class AtvAdbTest {
     }
 
     @Test
+    fun connectReadsTheAbiList() {
+        val dev = FakeAdb(
+            props = mapOf(
+                "ro.build.version.sdk" to "28",
+                "ro.product.cpu.abi" to "armeabi-v7a",
+                "ro.product.cpu.abilist" to "armeabi-v7a,armeabi\n",
+            ),
+        )
+        val (_, info) = AtvAdbInstaller(FakeAdbConnector(dev)).connect("192.168.1.9", Recorder(), CancelToken())
+        assertEquals(AtvInfo(28, "armeabi-v7a", listOf("armeabi-v7a", "armeabi")), info)
+    }
+
+    @Test
     fun oddPropsAreDropped() {
         val dev = FakeAdb(props = mapOf("ro.build.version.sdk" to "x", "ro.product.cpu.abi" to "arm64; rm -rf"))
         val (_, info) = AtvAdbInstaller(FakeAdbConnector(dev)).connect("192.168.1.9", Recorder(), CancelToken())

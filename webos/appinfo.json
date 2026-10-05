@@ -1,6 +1,6 @@
 {
   "id": "com.spacesarmat.torrplayer",
-  "version": "0.14.2",
+  "version": "0.15.0",
   "vendor": "spacesarmat",
   "type": "web",
   "main": "index.html",

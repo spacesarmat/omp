@@ -211,4 +211,333 @@ class SourcesInboxTest {
         // C1 control characters are refused like C0 ones (same as src/sources/transfer.ts)
         assertNull(SourcesProtocol.parse(JSONObject("""{"v":1,"sources":{"rutor":true},"rutracker":{"username":"a\u0085b","password":"p"}}"""), "P"))
     }
+
+    // test-only key
+    private val apiKey = "test0only0key0000000000000000abc"
+
+    private fun withIndexers() = SourcesTransfer(
+        linkedMapOf("rutor" to true),
+        null,
+        "Pixel",
+        listOf(
+            SourcesTransfer.Indexer("jackett", "http://192.168.1.5:9117", null, apiKey),
+            SourcesTransfer.Indexer("prowlarr", "http://192.168.1.7:9696", "Дом", null),
+        ),
+    )
+
+    @Test
+    fun stagesIndexerKeysTheEventSaysOnlyThatAndTheyAreDroppedAfterTheAnswer() {
+        val box = inbox()
+        val f = start(box, withIndexers())
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        assertFalse(e.toString().contains(apiKey))
+        val list = e.getJSONArray("indexers")
+        assertEquals(2, list.length())
+        assertEquals("jackett", list.getJSONObject(0).getString("kind"))
+        assertEquals("http://192.168.1.5:9117", list.getJSONObject(0).getString("url"))
+        assertEquals(true, list.getJSONObject(0).getBoolean("key"))
+        assertEquals(false, list.getJSONObject(1).getBoolean("key"))
+        assertEquals("Дом", list.getJSONObject(1).getString("name"))
+        // staged under the entry the page reads, by position
+        assertEquals(apiKey, entries.map["js:indexer.pending.0.apikey"])
+        assertNull(entries.map["js:indexer.pending.1.apikey"])
+        // the page moves the key to the connection's entry, then answers
+        entries.map["js:indexer.jackett-1.apikey"] = entries.map["js:indexer.pending.0.apikey"]!!
+        assertEquals(SourcesDone.STORED, box.done(e.getString("id"), null, false, 2))
+        assertEquals(SourcesOutcome.Applied(null, 2), f.get(2, TimeUnit.SECONDS))
+        assertFalse(entries.map.keys.any { it.startsWith("js:indexer.pending.") })
+        assertEquals(apiKey, entries.map["js:indexer.jackett-1.apikey"])
+    }
+
+    @Test
+    fun noAnswerOrAFailingStorageLeavesNoStagedKey() {
+        val box = inbox(timeout = 200)
+        assertEquals(SourcesOutcome.NoAnswer, box.receive(withIndexers()))
+        assertFalse(entries.map.keys.any { it.startsWith("js:indexer.pending.") })
+        entries.fails = true
+        assertEquals(SourcesOutcome.StoreFailed, inbox().receive(withIndexers()))
+        entries.fails = false
+        // a key left by a process that died is dropped at start
+        entries.map["js:indexer.pending.3.apikey"] = apiKey
+        assertTrue(inbox().dropStaged())
+        assertFalse(entries.map.containsKey("js:indexer.pending.3.apikey"))
+    }
+
+    @Test
+    fun withoutKeysNothingIsStaged() {
+        val box = inbox()
+        val t = SourcesTransfer(linkedMapOf("rutor" to true), null, "Pixel", listOf(SourcesTransfer.Indexer("jackett", "http://h:9117", null, null)))
+        val f = start(box, t)
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        val before = entries.writes
+        assertEquals(SourcesDone.STORED, box.done(e.getString("id"), null, false, 1))
+        assertEquals(SourcesOutcome.Applied(null, 1), f.get(2, TimeUnit.SECONDS))
+        assertEquals(before, entries.writes)
+        // a count from the page is kept within bounds
+        val f2 = start(box, t)
+        val e2 = events.poll(2, TimeUnit.SECONDS)!!
+        box.done(e2.getString("id"), null, false, 999)
+        assertEquals(SourcesOutcome.Applied(null, SourcesProtocol.MAX_INDEXERS), f2.get(2, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun theEventCarriesTheFlareSolverrAddressAndTheCloudflareSwitches() {
+        val box = inbox()
+        val t = SourcesTransfer(linkedMapOf("rutor" to true), null, "Pixel", emptyList(), "http://192.168.1.191:8191", linkedMapOf("kinozal" to true, "rustorka" to false))
+        val f = start(box, t)
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        assertEquals("http://192.168.1.191:8191", e.getString("flaresolverr"))
+        assertEquals(true, e.getJSONObject("cloudflare").getBoolean("kinozal"))
+        assertEquals(false, e.getJSONObject("cloudflare").getBoolean("rustorka"))
+        assertEquals(SourcesDone.STORED, box.done(e.getString("id"), null, false))
+        assertEquals(SourcesOutcome.Applied(null), f.get())
+        // without them the event has neither
+        val g = start(box, transfer(login = false))
+        val e2 = events.poll(2, TimeUnit.SECONDS)!!
+        assertFalse(e2.has("flaresolverr"))
+        assertFalse(e2.has("cloudflare"))
+        box.done(e2.getString("id"), null, false)
+        g.get()
+        assertTrue(t.toString().indexOf("192.168") < 0)
+    }
+
+    private fun withSites() = SourcesTransfer(
+        linkedMapOf("kinozal" to true, "rustorka" to true),
+        null,
+        "Pixel",
+        logins = linkedMapOf("kinozal" to SourcesTransfer.Login("kino", password), "rustorka" to SourcesTransfer.Login("rus", "rus-pass-9")),
+    )
+
+    @Test
+    fun siteLoginsAreStagedPerSiteAndOnlyVerifiedOnesReplaceTheLiveOnes() {
+        entries.map["js:kinozal.username"] = "old-kino"
+        entries.map["js:kinozal.password"] = oldPassword
+        entries.map["js:rustorka.username"] = "old-rus"
+        entries.map["js:rustorka.password"] = oldPassword
+        val box = inbox()
+        val t = withSites()
+        val f = start(box, t)
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        // the event says only which sites came
+        assertEquals(true, e.getJSONObject("logins").getBoolean("kinozal"))
+        assertEquals(true, e.getJSONObject("logins").getBoolean("rustorka"))
+        assertFalse(e.toString().contains(password))
+        assertFalse(e.toString().contains("kino\""))
+        assertEquals(false, e.getBoolean("rutracker"))
+        assertEquals("kino", entries.map["js:kinozal.pending.username"])
+        assertEquals("rus-pass-9", entries.map["js:rustorka.pending.password"])
+        assertEquals(oldPassword, entries.map["js:kinozal.password"])
+        assertEquals(SourcesDone.STORED, box.done(e.getString("id"), null, false, null, mapOf("kinozal" to "ok", "rustorka" to "captcha")))
+        assertEquals(SourcesOutcome.Applied(null, null, mapOf("kinozal" to "ok", "rustorka" to "captcha")), f.get(2, TimeUnit.SECONDS))
+        // Kinozal promoted, rustorka keeps the login that worked; nothing stays staged
+        assertEquals("kino", entries.map["js:kinozal.username"])
+        assertEquals(password, entries.map["js:kinozal.password"])
+        assertEquals("old-rus", entries.map["js:rustorka.username"])
+        assertEquals(oldPassword, entries.map["js:rustorka.password"])
+        assertTrue(entries.map.keys.none { it.contains(".pending.") })
+        assertFalse(t.toString().contains(password))
+    }
+
+    @Test
+    fun aSiteThePageDidNotMentionIsAnErrorAndAFailedPromotionIsReported() {
+        val box = inbox()
+        val f = start(box, withSites())
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        // the page names an unknown result and leaves rustorka out
+        val first = box.answer(e.getString("id"), null, false, null, mapOf("kinozal" to "weird"))
+        assertEquals(SourcesDone.STORED, first.state)
+        assertEquals(SourcesOutcome.Applied(null, null, mapOf("kinozal" to "error", "rustorka" to "error")), f.get(2, TimeUnit.SECONDS))
+        assertNull(entries.map["js:kinozal.username"])
+
+        val g = start(box, withSites())
+        val e2 = events.poll(2, TimeUnit.SECONDS)!!
+        entries.fails = true
+        val a = box.answer(e2.getString("id"), null, false, null, mapOf("kinozal" to "ok", "rustorka" to "bad_login"))
+        assertEquals(SourcesDone.NOT_STORED, a.state)
+        assertEquals(setOf("kinozal"), a.sitesNotStored)
+        assertTrue(a.rutrackerStored)
+        assertEquals(SourcesOutcome.Applied(null, null, mapOf("kinozal" to "error", "rustorka" to "bad_login")), g.get(2, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun aFailedRutrackerPromotionStillReportsTheSiteResults() {
+        val box = inbox()
+        val t = SourcesTransfer(
+            linkedMapOf("kinozal" to true),
+            SourcesTransfer.Login("andy", password),
+            "Pixel",
+            logins = linkedMapOf("kinozal" to SourcesTransfer.Login("kino", password)),
+        )
+        val f = start(box, t)
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        // the site promotion works, then the storage fails for rutracker's
+        val real = entries
+        var calls = 0
+        val failing = object : SecretEntries {
+            override fun get(name: String): String? = real.get(name)
+            override fun replace(values: Map<String, String>, remove: Collection<String>) {
+                calls++
+                if (values.containsKey("js:rutracker.username")) throw IllegalStateException("keystore")
+                real.replace(values, remove)
+            }
+        }
+        val box2 = SourcesInbox(SecretLoginStore(failing) { "js:$it" }, { events.add(it) }, 5_000) { now }
+        // finish the first transfer normally, then run the same one through the failing store
+        box.done(e.getString("id"), "bad_login", false, null, mapOf("kinozal" to "bad_login"))
+        f.get(2, TimeUnit.SECONDS)
+        val g = start(box2, t)
+        val e2 = events.poll(2, TimeUnit.SECONDS)!!
+        val a = box2.answer(e2.getString("id"), "ok", false, null, mapOf("kinozal" to "ok"))
+        assertEquals(SourcesDone.NOT_STORED, a.state)
+        assertFalse(a.rutrackerStored)
+        assertTrue(a.sitesNotStored.isEmpty())
+        assertEquals(SourcesOutcome.Applied("error", null, mapOf("kinozal" to "ok"), rutrackerNotStored = true), g.get(2, TimeUnit.SECONDS))
+        assertEquals(password, entries.map["js:kinozal.password"])
+        assertNull(entries.map["js:rutracker.password"])
+        assertTrue(calls > 0)
+    }
+
+    @Test
+    fun siteLoginsFailingToStageStopBeforeThePageAndDeadProcessLeftoversAreDropped() {
+        entries.fails = true
+        assertEquals(SourcesOutcome.StoreFailed, inbox().receive(withSites()))
+        assertTrue(events.isEmpty())
+        entries.fails = false
+        entries.map["js:rustorka.pending.username"] = "x"
+        entries.map["js:rustorka.pending.password"] = "y"
+        assertTrue(inbox().dropStaged())
+        assertTrue(entries.map.keys.none { it.contains(".pending.") })
+    }
+
+    @Test
+    fun parseTakesSiteLoginsOnlyForTheKnownSites() {
+        val t = SourcesProtocol.parse(
+            JSONObject("""{"v":1,"sources":{"kinozal":true},"logins":{"kinozal":{"username":" kino ","password":"p1"},"rustorka":{"username":"r","password":"p2"}}}"""),
+            "P",
+        )!!
+        assertEquals("kino", t.logins["kinozal"]!!.username)
+        assertEquals("p2", t.logins["rustorka"]!!.password)
+        assertNull(t.login)
+        val bad = listOf(
+            """"logins":{"rutracker":{"username":"a","password":"p"}}""",
+            """"logins":{"indexer":{"username":"a","password":"p"}}""",
+            """"logins":{}""",
+            """"logins":[]""",
+            """"logins":{"kinozal":{"username":"","password":"p"}}""",
+            """"logins":{"kinozal":{"username":"a","password":""}}""",
+            """"logins":{"kinozal":{"username":"a","password":"p","extra":1}}""",
+            """"logins":{"kinozal":{"username":"a\u0001","password":"p"}}""",
+            """"logins":{"kinozal":"a:p"}""",
+            """"logins":{"kinozal":{"username":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","password":"p"}}""",
+            """"logins":{"kinozal":{"username":"a","password":"ppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"}}""",
+        )
+        for (b in bad) assertNull(b, SourcesProtocol.parse(JSONObject("""{"v":1,"sources":{"kinozal":true},$b}"""), "P"))
+    }
+
+    // ---- browser sessions (Task 9b) ----
+
+    private class Imported(val host: String, val pairs: List<Pair<String, String>>, val ua: String)
+    private val imported = ArrayList<Imported>()
+    private var importFails = false
+    private val sessionStore = SecretSessionStore(entries, { "js:$it" }) { root, pairs, ua ->
+        if (importFails) throw IllegalStateException("keystore")
+        imported.add(Imported(root.host, pairs, ua))
+    }
+    private val cookieValue = "s3ss10n-value"
+
+    private fun sessionTransfer() = SourcesTransfer(
+        linkedMapOf("kinozal" to true), null, "Pixel",
+        sessions = mapOf("kinozal" to SourcesTransfer.Session("kinozal.tv", listOf("uid" to "7", "pass" to cookieValue), "Phone-UA")),
+    )
+
+    @Test
+    fun stagesASessionPromotesItIntoTheJarOnlyAfterTheCheck() {
+        entries.map["js:kinozal.username"] = "old"
+        entries.map["js:kinozal.password"] = oldPassword
+        val box = SourcesInbox(store, { events.add(it) }, 5_000, sessionStore) { now }
+        val f = start(box, sessionTransfer())
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        // the page hears only the host: never a cookie or the User-Agent
+        assertEquals("kinozal.tv", e.getJSONObject("sessions").getString("kinozal"))
+        assertFalse(e.toString().contains(cookieValue))
+        assertFalse(e.toString().contains("Phone-UA"))
+        // staged outside the page's namespace, nothing live yet
+        assertTrue(entries.map.containsKey("session.pending.kinozal"))
+        assertEquals("kinozal.tv", sessionStore.staged("kinozal")!!.host)
+        assertTrue(imported.isEmpty())
+        val a = box.answer(e.getString("id"), null, false, sessionResults = mapOf("kinozal" to "ok"))
+        assertEquals(SourcesDone.STORED, a.state)
+        val out = f.get(2, TimeUnit.SECONDS) as SourcesOutcome.Applied
+        assertEquals(mapOf("kinozal" to "ok"), out.sessions)
+        val i = imported.single()
+        assertEquals("kinozal.tv", i.host)
+        assertEquals("Phone-UA", i.ua)
+        assertEquals(listOf("uid" to "7", "pass" to cookieValue), i.pairs)
+        // marked as a browser login, the old password gone, nothing staged
+        assertEquals("1", entries.map["js:kinozal.browser"])
+        assertNull(entries.map["js:kinozal.password"])
+        assertFalse(entries.map.containsKey("session.pending.kinozal"))
+    }
+
+    @Test
+    fun anUnverifiedOrUnstoredSessionKeepsWhatTheTvHad() {
+        entries.map["js:kinozal.password"] = oldPassword
+        val box = SourcesInbox(store, { events.add(it) }, 5_000, sessionStore) { now }
+        var f = start(box, sessionTransfer())
+        var e = events.poll(2, TimeUnit.SECONDS)!!
+        box.answer(e.getString("id"), null, false, sessionResults = mapOf("kinozal" to "error"))
+        assertEquals(mapOf("kinozal" to "error"), (f.get(2, TimeUnit.SECONDS) as SourcesOutcome.Applied).sessions)
+        assertTrue(imported.isEmpty())
+        assertEquals(oldPassword, entries.map["js:kinozal.password"])
+        assertFalse(entries.map.containsKey("session.pending.kinozal"))
+
+        // verified, but the jar refuses it: reported, the old login stays
+        importFails = true
+        f = start(box, sessionTransfer())
+        e = events.poll(2, TimeUnit.SECONDS)!!
+        val a = box.answer(e.getString("id"), null, false, sessionResults = mapOf("kinozal" to "ok"))
+        assertEquals(SourcesDone.NOT_STORED, a.state)
+        assertEquals(setOf("kinozal"), a.sitesNotStored)
+        assertEquals(mapOf("kinozal" to "error"), (f.get(2, TimeUnit.SECONDS) as SourcesOutcome.Applied).sessions)
+        assertEquals(oldPassword, entries.map["js:kinozal.password"])
+        assertNull(entries.map["js:kinozal.browser"])
+        assertFalse(entries.map.containsKey("session.pending.kinozal"))
+        // a dead process' leftovers go on start
+        entries.map["session.pending.rutracker"] = "x"
+        assertTrue(box.dropStaged())
+        assertFalse(entries.map.containsKey("session.pending.rutracker"))
+    }
+
+    @Test
+    fun parseTakesSessionsOnlyForTheKnownSitesWithinTheCaps() {
+        val ok = SourcesProtocol.parse(
+            JSONObject("""{"v":1,"sources":{"rutracker":true},"sessions":{"rutracker":{"host":"rutracker.org","cookies":[{"name":"bb_session","value":"v"}],"ua":"UA/1"}}}"""),
+            "P",
+        )!!
+        val s = ok.sessions.getValue("rutracker")
+        assertEquals("rutracker.org", s.host)
+        assertEquals(listOf("bb_session" to "v"), s.cookies)
+        assertFalse(ok.toString().contains("bb_session"))
+        assertEquals("Session(1 cookies)", s.toString())
+        val cookie = """[{"name":"a","value":"b"}]"""
+        val many = (1..31).joinToString(",", "[", "]") { """{"name":"c$it","value":"v"}""" }
+        val huge = """[{"name":"a","value":"${"x".repeat(4000)}"},{"name":"b","value":"${"y".repeat(2500)}"}]"""
+        val bad = listOf(
+            """"sessions":{"evil":{"host":"evil.example","cookies":$cookie,"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"Kinozal.TV","cookies":$cookie,"ua":"U"}}""",
+            // a valid host that is not one of the site's mirrors
+            """"sessions":{"kinozal":{"host":"rutracker.org","cookies":$cookie,"ua":"U"}}""",
+            """"sessions":{"labtor":{"host":"labtor.example","cookies":$cookie,"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":[],"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":$many,"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":$huge,"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":[{"name":"a","value":"b"},{"name":"a","value":"c"}],"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":[{"name":"a b","value":"c"}],"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":[{"name":"a","value":"c","domain":"x"}],"ua":"U"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":$cookie,"ua":"U\u0001"}}""",
+            """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":$cookie,"ua":"U","extra":1}}""",
+            """"sessions":{}""",
+        )
+        for (b in bad) assertNull(b, SourcesProtocol.parse(JSONObject("""{"v":1,"sources":{"kinozal":true},$b}"""), "P"))
+    }
 }

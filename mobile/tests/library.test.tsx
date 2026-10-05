@@ -399,6 +399,51 @@ describe('Library', () => {
     expect(byText('Запустить сервер')).toBeUndefined();
   });
 
+  it('without the downloaded binary the start leads to the download, never a silent refusal', async () => {
+    setActiveServer(addServer({ url: 'http://127.0.0.1:8090' }).id);
+    const start = vi.fn(async () => ({ supported: true, running: true }));
+    setLocalServerDeps({
+      native: {
+        localServerInfo: async () => ({ supported: true, running: false, binary: 'missing', downloadBytes: 64174032 }),
+        startLocalServer: start,
+      } as any,
+    });
+    localServer.value = { supported: true, running: false, binary: 'missing', downloadBytes: 64174032 };
+    listSpy.mockRejectedValue(new Error('Сервер недоступен'));
+    torrents.value = [];
+    mount();
+    await flush();
+    expect(el.querySelector('.m-offline')).not.toBeNull();
+    expect(byText('Запустить сервер')).toBeUndefined();
+    expect(el.querySelector('[data-local="note"]')!.textContent).toBe(
+      'TorrServer на телефоне больше не входит в OMP — его нужно один раз скачать.',
+    );
+    await act(async () => byText('Скачать TorrServer (~61 МБ)')!.click());
+    expect(start).not.toHaveBeenCalled();
+    expect(currentRoute.value.name).toBe('localServer');
+  });
+
+  it('a failed start shows its reason next to the start button', async () => {
+    setActiveServer(addServer({ url: 'http://127.0.0.1:8090' }).id);
+    setLocalServerDeps({
+      native: {
+        localServerInfo: async () => ({ supported: true, running: false, binary: 'ready' }),
+        startLocalServer: async () => {
+          throw new Error('Порт 8090 занят другим приложением');
+        },
+      } as any,
+    });
+    localServer.value = { supported: true, running: false, binary: 'ready' };
+    listSpy.mockRejectedValue(new Error('Сервер недоступен'));
+    torrents.value = [];
+    mount();
+    await flush();
+    await act(async () => byText('Запустить сервер')!.click());
+    await flush();
+    await flush();
+    expect(el.querySelector('[data-local="note"]')!.textContent).toBe('Порт 8090 занят другим приложением');
+  });
+
   it('offers no start for a remote server or a running local one', async () => {
     listSpy.mockRejectedValue(new Error('Сервер недоступен'));
     localServer.value = { supported: true, running: false };

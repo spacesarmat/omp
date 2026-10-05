@@ -1,11 +1,19 @@
 package com.spacesarmat.omp
 
 import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.getcapacitor.JSArray
@@ -17,11 +25,18 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import com.spacesarmat.omp.control.AppForeground
+import com.spacesarmat.omp.control.CloudflareProtocol
+import com.spacesarmat.omp.control.CloudflareRelay
+import com.spacesarmat.omp.control.CloudflareWatch
+import com.spacesarmat.omp.control.HttpWatchTransport
 import com.spacesarmat.omp.control.SourcesDone
+import com.spacesarmat.omp.control.SourcesProtocol
 import com.spacesarmat.omp.control.TvRemote
 import com.spacesarmat.omp.install.AdbIdentity
 import com.spacesarmat.omp.install.AdbIdentityStore
 import com.spacesarmat.omp.install.AesGcmWrapper
+import com.spacesarmat.omp.install.ApkAbi
 import com.spacesarmat.omp.install.AtvAdbInstaller
 import com.spacesarmat.omp.install.CancelToken
 import com.spacesarmat.omp.install.DadbConnector
@@ -42,6 +57,18 @@ import com.spacesarmat.omp.monitor.MonitorScheduler
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayRequest
 import com.spacesarmat.omp.player.PlayerActivity
+import com.spacesarmat.omp.sources.CheckTarget
+import com.spacesarmat.omp.sources.CheckTexts
+import com.spacesarmat.omp.sources.BrowserLogin
+import com.spacesarmat.omp.sources.CheckControl
+import com.spacesarmat.omp.sources.CloudflareCheckDialog
+import com.spacesarmat.omp.sources.LoginNavigation
+import com.spacesarmat.omp.sources.LoginTarget
+import com.spacesarmat.omp.sources.SiteSession
+import com.spacesarmat.omp.sources.CloudflareSolver
+import com.spacesarmat.omp.sources.MainScheduler
+import com.spacesarmat.omp.sources.VisibleCheck
+import com.spacesarmat.omp.sources.WebViewCloudflareBrowser
 import com.spacesarmat.omp.sources.HttpSpec
 import com.spacesarmat.omp.sources.SiteHttp
 import com.spacesarmat.omp.sources.SiteHttpException
@@ -64,7 +91,7 @@ import org.json.JSONObject
  * Every PluginCall is settled exactly once (see [Once]). Blocking work runs on [io]; socket
  * callbacks arrive on OkHttp threads. Events: tvMessage { json }, tvClosed { reason },
  * apkProgress { percent }, magnetReceived { link }, playerMessage { body }, monitorOpen { url }, monitorDone { summary? },
- * localServerState { running, error? }, nativePlayerState { session, index, time, duration, paused, buffering,
+ * localServerState { running, error? }, localServerDownload { percent? , phase: download|verify }, nativePlayerState { session, index, time, duration, paused, buffering,
  * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV);
  * phone remote on Android TV ([TvRemote]): remoteLaunch { params }, remoteAttach { report }, remoteKey { name },
  * remoteText { text | delete | enter }, phonePaired { phone }, remoteSources { id, sources, rutracker, phone }.
@@ -99,8 +126,15 @@ class OmpNativePlugin : Plugin() {
         notifyListeners("localServerState", o)
     }
 
+    private val downloadProgress = LocalTorrServer.DownloadListener { phase, percent ->
+        val o = JSObject().put("phase", phase)
+        if (percent != null) o.put("percent", percent)
+        notifyListeners("localServerDownload", o)
+    }
+
     override fun load() {
         instance = this
+        LocalTorrServer.addDownloadListener(downloadProgress)
         purgeSharedFiles(10 * 60 * 1000L)
         NativePlayerBridge.emitter = { event, data -> notifyListeners(event, data) }
         LocalTorrServer.addListener(serverState)
@@ -116,9 +150,11 @@ class OmpNativePlugin : Plugin() {
     }
 
     override fun handleOnDestroy() {
+        cfCheck?.let { c -> activity?.runOnUiThread { c.cancel() } ?: c.cancel() }
         if (instance === this) instance = null
         NativePlayerBridge.emitter = null
         LocalTorrServer.removeListener(serverState)
+        LocalTorrServer.removeDownloadListener(downloadProgress)
         closeAll()
         player.stop()
         remote?.stop()
@@ -231,6 +267,32 @@ class OmpNativePlugin : Plugin() {
             val arr = JSArray()
             for (p in PortProbe.open(ip, ports, timeout)) arr.put(p)
             once.resolve(JSObject().put("open", arr))
+        }
+    }
+
+    /**
+     * «Источники поиска»: hosts of the device's /24 that answer on the Jackett / Prowlarr / FlareSolverr ports ([LanScan.ALLOWED]):
+     * { hits: [{ ip, port }], lan }. Without a Wi-Fi IPv4 (mobile data) lan is false and nothing is scanned. Nothing is logged.
+     */
+    @PluginMethod
+    fun scanLan(call: PluginCall) {
+        val once = Once(call)
+        val timeout = (call.getInt("timeoutMs") ?: LanScan.DEFAULT_TIMEOUT_MS).coerceIn(150, 1500)
+        val ports = ArrayList<Int>()
+        val raw = call.getArray("ports")
+        if (raw != null) {
+            for (i in 0 until raw.length()) {
+                val p = raw.optInt(i, -1)
+                if (p > 0) ports.add(p)
+            }
+        }
+        io.execute {
+            val arr = JSArray()
+            val ip = LocalTorrServer.wifiIpv4(context)
+            if (ip != null) {
+                for (h in LanScan.scan(ip, ports, timeout)) arr.put(JSObject().put("ip", h.ip).put("port", h.port))
+            }
+            once.resolve(JSObject().put("hits", arr).put("lan", ip != null))
         }
     }
 
@@ -683,6 +745,7 @@ class OmpNativePlugin : Plugin() {
         }
         NativePlayerBridge.resetSkips()
         NativePlayerBridge.resetDonate()
+        NativePlayerBridge.resetAss()
         NativePlayerBridge.request = req
         // REORDER_TO_FRONT: an open player below the TV interface takes the queue over (no second instance)
         val intent = Intent(context, PlayerActivity::class.java)
@@ -742,9 +805,29 @@ class OmpNativePlugin : Plugin() {
             call.reject("Управление с телефона недоступно")
             return
         }
-        val d = r.sourcesDone(call.getString("id"), call.getString("rutracker"), call.getBoolean("failed") == true)
-        // stored = false: the verified login could not be written, the page must not claim it
-        call.resolve(JSObject().put("stored", d != SourcesDone.NOT_STORED))
+        // the other sites' results: { siteId: ok | bad_login | captcha | error }
+        val logins = LinkedHashMap<String, String?>()
+        call.getObject("logins")?.let { o ->
+            val it = o.keys()
+            while (it.hasNext()) {
+                val k = it.next()
+                logins[k] = o.opt(k) as? String
+            }
+        }
+        // the browser sessions' results: { siteId: ok | error }
+        val sessions = LinkedHashMap<String, String?>()
+        call.getObject("sessions")?.let { o ->
+            val it = o.keys()
+            while (it.hasNext()) {
+                val k = it.next()
+                sessions[k] = o.opt(k) as? String
+            }
+        }
+        val d = r.sourcesDone(call.getString("id"), call.getString("rutracker"), call.getBoolean("failed") == true, call.getInt("indexers"), logins, sessions)
+        // stored = false: the verified rutracker login could not be written; sitesNotStored: the other sites in that state
+        val ns = org.json.JSONArray()
+        d.sitesNotStored.forEach { ns.put(it) }
+        call.resolve(JSObject().put("stored", d.rutrackerStored).put("sitesNotStored", ns))
     }
 
     /**
@@ -767,6 +850,7 @@ class OmpNativePlugin : Plugin() {
             cmd.optString("type") == "segments" -> if (NativePlayerBridge.segments(cmd)) call.resolve() else call.reject("Некорректная команда")
             cmd.optString("type") == "toast" -> if (NativePlayerBridge.toast(cmd)) call.resolve() else call.reject("Некорректная команда")
             cmd.optString("type") == "donate" -> if (NativePlayerBridge.donate(cmd)) call.resolve() else call.reject("Некорректная команда")
+            cmd.optString("type") == "assSubs" -> if (NativePlayerBridge.assSubs(cmd)) call.resolve() else call.reject("Некорректная команда")
             !NativePlayerBridge.command(cmd) -> call.reject("Плеер не открыт")
             else -> call.resolve()
         }
@@ -774,11 +858,29 @@ class OmpNativePlugin : Plugin() {
 
     // ---- APK update ----
 
+    /** Whether libVLC runs on this device (its native libraries are present and load): { available }. */
+    @PluginMethod
+    fun vlcAvailable(call: PluginCall) {
+        call.resolve(JSObject().put("available", com.spacesarmat.omp.player.VlcAvailability.available(context)))
+    }
+
+    /** Feed key of this device's APK («arm64» / «armv7»; "" = universal), the same rule as downloadAndInstallApk. */
+    @PluginMethod
+    fun deviceAbiKey(call: PluginCall) {
+        call.resolve(JSObject().put("key", ApkAbi.key(Build.SUPPORTED_ABIS.toList()) ?: ""))
+    }
+
     @PluginMethod
     fun downloadAndInstallApk(call: PluginCall) {
         val once = Once(call)
-        val url = call.getString("url")?.trim().orEmpty()
-        val sha = call.getString("sha256").orEmpty()
+        // the feed's per-ABI APK for this device (arm64 / armv7) when the page passed them, else the universal one
+        val apk = ApkAbi.choose(
+            Build.SUPPORTED_ABIS.toList(),
+            ApkAbi.Apk(call.getString("url")?.trim().orEmpty(), call.getString("sha256").orEmpty(), 0L),
+            ApkAbi.parseApks(call.getObject("apks")),
+        )
+        val url = apk.url
+        val sha = apk.sha256
         if (!ApkInstaller.canInstall(context)) {
             try {
                 ApkInstaller.openInstallPermissionSettings(context)
@@ -822,10 +924,54 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
+    /**
+     * Downloads the pinned TorrServer binary (GitHub release asset, sha256 + size checked). Progress: events
+     * localServerDownload { phase: 'download', percent } then { phase: 'verify' }. A call while a download runs joins
+     * it (no second download). Resolves the server info; rejects with Russian text (next step included) and the
+     * InstallCodes code.
+     */
+    @PluginMethod
+    fun downloadLocalServer(call: PluginCall) {
+        val once = Once(call)
+        if (!LocalTorrServer.supported()) {
+            once.reject(NOT_SUPPORTED, "unsupported")
+            return
+        }
+        io.execute {
+            try {
+                LocalTorrServer.download(context)
+                once.resolve(localInfo())
+            } catch (e: Throwable) {
+                val f = failureOf(e)
+                val mb = try {
+                    LocalTorrServer.pin(context).size / (1024 * 1024)
+                } catch (_: Exception) {
+                    0L
+                }
+                once.reject(TorrServerBinary.downloadError(f.code, mb), f.code)
+            }
+        }
+    }
+
+    @PluginMethod
+    fun cancelLocalServerDownload(call: PluginCall) {
+        LocalTorrServer.cancelDownload()
+        call.resolve()
+    }
+
     @PluginMethod
     fun startLocalServer(call: PluginCall) {
-        if (!LocalTorrServer.supported(context)) {
+        if (!LocalTorrServer.supported()) {
             call.reject(NOT_SUPPORTED)
+            return
+        }
+        val runnable = try {
+            LocalTorrServer.installation(context).runnable()
+        } catch (_: Exception) {
+            false
+        }
+        if (!runnable) {
+            call.reject(NOT_DOWNLOADED, "not-downloaded")
             return
         }
         // without the permission the service still runs, only its notification is hidden
@@ -905,7 +1051,23 @@ class OmpNativePlugin : Plugin() {
 
     private fun localInfo(): JSObject {
         val o = JSObject()
-        o.put("supported", LocalTorrServer.supported(context))
+        val supported = LocalTorrServer.supported()
+        o.put("supported", supported)
+        if (supported) {
+            try {
+                val install = LocalTorrServer.installation(context)
+                o.put("binary", install.state().id)
+                o.put("downloadBytes", install.pin.size)
+                o.put("pinVersion", install.pin.tag)
+                if (LocalTorrServer.downloading()) {
+                    o.put("downloading", true)
+                    LocalTorrServer.downloadPercent?.let { o.put("downloadPercent", it) }
+                }
+                o.put("mobileData", LocalTorrServer.onMobileData(context))
+            } catch (_: Exception) {
+                o.put("binary", BinaryState.MISSING.id)
+            }
+        }
         val running = LocalTorrServer.running
         o.put("running", running)
         if (running) {
@@ -960,7 +1122,8 @@ class OmpNativePlugin : Plugin() {
     // ---- search sources: site HTTP and encrypted secrets ----
 
     /**
-     * { url, method?: GET|POST, headers?, form?, formCharset?, body?, timeoutMs? } → { status, url, text }.
+     * { url, method?: GET|POST, headers?, form?, formCharset?, body?, timeoutMs?, cloudflare?, flaresolverr? } →
+     * { status, url, text, cloudflare? }.
      * Cookies per site, body decoded by its charset. Values are never logged.
      */
     @PluginMethod
@@ -976,7 +1139,8 @@ class OmpNativePlugin : Plugin() {
                 val r = sources.request(spec)
                 once.resolve(JSObject.fromJSONObject(HttpSpec.reply(r)))
             } catch (e: SiteHttpException) {
-                once.reject(e.reason)
+                // a Cloudflare failure carries its kind as the code (the page offers the visible check for -interactive)
+                if (e.code != null) once.reject(e.reason, e.code) else once.reject(e.reason)
             } catch (e: Exception) {
                 once.reject(SiteHttp.NO_ANSWER)
             }
@@ -1045,6 +1209,347 @@ class OmpNativePlugin : Plugin() {
 
     /** JS keys live in their own namespace: page code cannot read the cookie entries. */
     private fun secretKey(call: PluginCall): String? = SourceServices.jsSecretKey(call.getString("key"))
+
+    // ---- Cloudflare: the visible check, «Пройти на телефоне» ----
+
+    private val cfOpen = AtomicBoolean(false)
+    // the open visible check (cancelled when the plugin goes away, so the gate and the call are never held)
+    @Volatile
+    private var cfCheck: CheckControl? = null
+
+    private fun cfText(call: PluginCall, key: String): String? =
+        call.getString(key)?.filterNot { it.isISOControl() }?.take(400)?.ifEmpty { null }
+
+    /**
+     * The visible check ([VisibleCheck] + [CloudflareCheckDialog]): { url, site, mode: phone|tv, title, text, note?,
+     * cancel, phone?, remote?, hint?, noPhone?, phoneClosed?, waiting?, gateWait?, errors?: { OUTCOME: text }, forTv?:
+     * request id } → { result: solved|cancelled|busy|failed|done, sent?, via? }. With forTv the phone passes the TV's
+     * waiting request (its own address, never the page's) and the cookies go only to that TV. Cookies never reach the page.
+     */
+    @PluginMethod
+    fun cloudflareVisible(call: PluginCall) {
+        val once = Once(call)
+        val act = activity ?: return once.reject(CF_UNAVAILABLE)
+        val forTv = call.getString("forTv")
+        val watch = if (forTv != null && !TvMode.isTv(context)) cfWatch(context) else null
+        val req = if (forTv != null) watch?.pending()?.takeIf { it.id == forTv } ?: return once.reject(CF_GONE) else null
+        val url = req?.url ?: call.getString("url")
+        val root = (url?.toHttpUrlOrNull() ?: return once.reject(SiteHttp.BAD_URL)).let { CloudflareSolver.siteRoot(it) }
+        val site = CloudflareProtocol.cleanSite(call.getString("site")) ?: req?.site ?: root.host
+        val tvMode = call.getString("mode") == "tv" && TvMode.isTv(context)
+        val title = cfText(call, "title") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val text = cfText(call, "text") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val cancel = cfText(call, "cancel") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val errors = HashMap<String, String>()
+        call.getObject("errors")?.let { o ->
+            for (k in CloudflareRelay.Outcome.values()) (o.opt(k.name) as? String)?.take(400)?.let { errors[k.name] = it }
+        }
+        val texts = CheckTexts(
+            title, text, cfText(call, "note"), cancel, cfText(call, "phone"), cfText(call, "remote"), cfText(call, "hint"),
+            cfText(call, "noPhone"), cfText(call, "phoneClosed"), cfText(call, "waiting"), cfText(call, "gateWait"), errors,
+        )
+        if (!cfOpen.compareAndSet(false, true)) return once.resolve(JSObject().put("result", "busy"))
+        val relay = if (tvMode) remote?.cloudflare else null
+        val target = if (watch != null && req != null) {
+            CheckTarget.Tv { pairs, ua, until ->
+                if (pairs == null) {
+                    watch.answer(req.id, CloudflareProtocol.endedJson(req.id, cancelled = true))
+                } else {
+                    val body = CloudflareProtocol.solvedJson(req.id, root.host, pairs, ua, until)
+                        ?: CloudflareProtocol.endedJson(req.id, cancelled = false)
+                    watch.answer(req.id, body)
+                }
+            }
+        } else {
+            CheckTarget.Local { pairs, until -> sources.importClearance(root, pairs, null, until) }
+        }
+        act.runOnUiThread {
+            try {
+                val dialog = CloudflareCheckDialog(act, tvMode, texts, phoneButton = relay != null)
+                val check = VisibleCheck(
+                    // a host with a browser session passes with that session's User-Agent (the clearance must match it)
+                    root, site, texts, { WebViewCloudflareBrowser(act, visible = true) }, MainScheduler(), { sources.baseAgentFor(root.host) },
+                    System::currentTimeMillis, { io.execute(it) }, target, relay,
+                    { r ->
+                        cfCheck = null
+                        cfOpen.set(false)
+                        val o = JSObject().put("result", r.result)
+                        r.sent?.let { o.put("sent", it) }
+                        r.via?.let { o.put("via", it) }
+                        once.resolve(o)
+                    },
+                )
+                cfCheck = check
+                dialog.show(check)
+            } catch (e: Exception) {
+                val c = cfCheck
+                cfCheck = null
+                c?.cancel()
+                cfOpen.set(false)
+                once.resolve(JSObject().put("result", "failed"))
+            }
+        }
+    }
+
+    // ---- «Войти через браузер» (Task 9b) ----
+
+    private fun loginCheck(o: JSONObject?): SiteSession.Check? {
+        if (o == null) return null
+        val names = ArrayList<String>()
+        (o.opt("cookies") as? org.json.JSONArray)?.let { a -> for (i in 0 until a.length()) (a.opt(i) as? String)?.let { names.add(it) } }
+        return SiteSession.check(o.opt("path") as? String, o.opt("marker") as? String, o.opt("loginPath") as? String, names)
+    }
+
+    private fun loginHosts(call: PluginCall): List<String> {
+        val raw = ArrayList<String>()
+        call.getArray("hosts")?.let { a -> for (i in 0 until a.length()) (a.opt(i) as? String)?.let { raw.add(it) } }
+        return SiteSession.hosts(raw)
+    }
+
+    /**
+     * The browser login ([BrowserLogin] on [CloudflareCheckDialog]): { url: the login page, site, source, hosts: [the
+     * site's hosts], check: { path, marker, loginPath, cookies? }, mode: phone|tv, title, text, note?, cancel, phone?,
+     * remote?, hint?, noPhone?, phoneClosed?, waiting?, gateWait?, errors?: { OUTCOME|UNVERIFIED: text }, forTv?: request
+     * id } → { result: ok|cancelled|busy|failed|done, host?, via?, sent? }. The page stays on the site's hosts (and the
+     * captcha pages); a verified session goes into the jar (or, forTv, straight to the TV that asked). Cookies never
+     * reach the page.
+     */
+    @PluginMethod
+    fun siteBrowserLogin(call: PluginCall) {
+        val once = Once(call)
+        val act = activity ?: return once.reject(CF_UNAVAILABLE)
+        val forTv = call.getString("forTv")
+        val watch = if (forTv != null && !TvMode.isTv(context)) cfWatch(context) else null
+        val req = if (forTv != null) {
+            watch?.pending()?.takeIf { it.id == forTv && it.kind == CloudflareProtocol.KIND_LOGIN } ?: return once.reject(CF_GONE)
+        } else null
+        val hosts = loginHosts(call)
+        val check = loginCheck(call.getObject("check")) ?: return once.reject(SiteHttp.BAD_REQUEST)
+        // the TV's request names only the site root; the page's own login page on it otherwise
+        val start = (if (req != null) req.url.toHttpUrlOrNull()?.resolve(check.loginPath) else call.getString("url")?.toHttpUrlOrNull())
+            ?: return once.reject(SiteHttp.BAD_URL)
+        if (hosts.isEmpty() || !SiteSession.onSite(start.host, hosts)) return once.reject(SiteHttp.BAD_URL)
+        val source = (call.getString("source") ?: req?.source)?.takeIf { Regex("^[a-z0-9][a-z0-9-]{0,39}$").matches(it) }
+            ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val site = CloudflareProtocol.cleanSite(call.getString("site")) ?: req?.site ?: start.host
+        val tvMode = call.getString("mode") == "tv" && TvMode.isTv(context)
+        val title = cfText(call, "title") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val text = cfText(call, "text") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val cancel = cfText(call, "cancel") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val errors = HashMap<String, String>()
+        call.getObject("errors")?.let { o ->
+            for (k in CloudflareRelay.Outcome.values().map { it.name } + BrowserLogin.UNVERIFIED) (o.opt(k) as? String)?.take(400)?.let { errors[k] = it }
+        }
+        val texts = CheckTexts(
+            title, text, cfText(call, "note"), cancel, cfText(call, "phone"), cfText(call, "remote"), cfText(call, "hint"),
+            cfText(call, "noPhone"), cfText(call, "phoneClosed"), cfText(call, "waiting"), cfText(call, "gateWait"), errors,
+            cfText(call, "blocked"),
+        )
+        if (!cfOpen.compareAndSet(false, true)) return once.resolve(JSObject().put("result", "busy"))
+        val relay = if (tvMode) remote?.cloudflare else null
+        val target = if (watch != null && req != null) {
+            LoginTarget.Tv { host, pairs, ua ->
+                val body = if (pairs == null || host == null) {
+                    CloudflareProtocol.endedJson(req.id, cancelled = true)
+                } else {
+                    CloudflareProtocol.sessionJson(req.id, host, pairs, ua, System.currentTimeMillis() + SiteSession.SESSION_TTL_MS)
+                        ?: CloudflareProtocol.endedJson(req.id, cancelled = false)
+                }
+                watch.answer(req.id, body)
+            }
+        } else {
+            LoginTarget.Local { root, pairs, ua -> sources.importSession(root, pairs, ua) }
+        }
+        act.runOnUiThread {
+            try {
+                val dialog = CloudflareCheckDialog(act, tvMode, texts, phoneButton = relay != null)
+                val login = BrowserLogin(
+                    start, hosts, check, site, source, texts,
+                    { WebViewCloudflareBrowser(act, visible = true) { h, p -> LoginNavigation.allowed(hosts, h, p) } },
+                    MainScheduler(), sources::userAgent, { io.execute(it) },
+                    { root, pairs, ua -> sources.verifySession(root, pairs, ua, check) },
+                    target, relay,
+                    done = { r ->
+                        cfCheck = null
+                        cfOpen.set(false)
+                        val o = JSObject().put("result", r.result)
+                        r.sent?.let { o.put("sent", it) }
+                        r.via?.let { o.put("via", it) }
+                        r.host?.let { o.put("host", it) }
+                        once.resolve(o)
+                    },
+                    askPhoneFirst = relay != null && call.getBoolean("askPhone") == true,
+                )
+                cfCheck = login
+                dialog.show(login)
+            } catch (e: Exception) {
+                val c = cfCheck
+                cfCheck = null
+                c?.cancel()
+                cfOpen.set(false)
+                once.resolve(JSObject().put("result", "failed"))
+            }
+        }
+    }
+
+    /**
+     * Android TV: { site, check } → { ok, host? }: the browser session the phone sent for [site] (staged, not live yet)
+     * opens the check page as a signed-in one. Nothing is stored here: the answer of the transfer promotes or drops it.
+     */
+    @PluginMethod
+    fun siteSessionPending(call: PluginCall) {
+        val once = Once(call)
+        val r = remote ?: return once.reject("Управление с телефона недоступно")
+        val site = call.getString("site") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val check = loginCheck(call.getObject("check")) ?: return once.reject(SiteHttp.BAD_REQUEST)
+        io.execute {
+            val s = try {
+                r.sessions.staged(site)
+            } catch (e: Exception) {
+                null
+            }
+            if (s == null) return@execute once.resolve(JSObject().put("ok", false))
+            val root = okhttp3.HttpUrl.Builder().scheme("https").host(s.host).build()
+            val ok = try {
+                sources.verifySession(root, s.cookies, s.ua ?: sources.userAgent(), check)
+            } catch (e: Exception) {
+                false
+            }
+            once.resolve(JSObject().put("ok", ok).put("host", s.host))
+        }
+    }
+
+    /**
+     * Phone: the Android TV this phone is paired with ({ url: http://ip:port, token }, or {} when none). The page tells it
+     * whenever the paired TV changes; [siteSessionSend] sends session cookies only there.
+     */
+    @PluginMethod
+    fun pairedTv(call: PluginCall) {
+        if (TvMode.isTv(context)) return call.resolve()
+        val url = call.getString("url")
+        val token = call.getString("token")
+        if (url == null || token == null) {
+            paired = null
+            return call.resolve()
+        }
+        if (!CF_BASE.matches(url) || !CF_TOKEN.matches(token)) return call.reject(SiteHttp.BAD_REQUEST)
+        paired = url to token
+        call.resolve()
+    }
+
+    /**
+     * Phone, «Передать вход на телевизор» of a browser session: { payload: the transfer body, sessions: { siteId: [the
+     * site's hosts, active first] } } → { status, data, missing: [siteId] }. The target is the paired TV registered
+     * natively ([pairedTv]), never an address from this call; each site's hosts are limited to its own
+     * ([SourcesProtocol.SESSION_HOSTS]). The cookies of each site's session (one host, capped) and the User-Agent they go
+     * with are added here, so they never pass through the page; the answer has no cookie in it. Never logged.
+     */
+    @PluginMethod
+    fun siteSessionSend(call: PluginCall) {
+        val once = Once(call)
+        if (TvMode.isTv(context)) return once.reject(SiteHttp.BAD_REQUEST)
+        val (url, token) = paired ?: return once.reject(NOT_PAIRED)
+        val payload = call.getObject("payload") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val wanted = call.getObject("sessions") ?: return once.reject(SiteHttp.BAD_REQUEST)
+        val timeout = (call.getInt("timeoutMs") ?: 45_000).coerceIn(5_000, 60_000)
+        io.execute {
+            try {
+                val sessions = JSONObject()
+                val missing = org.json.JSONArray()
+                val ids = wanted.keys()
+                while (ids.hasNext()) {
+                    val id = ids.next()
+                    val raw = ArrayList<String>()
+                    (wanted.opt(id) as? org.json.JSONArray)?.let { a -> for (i in 0 until a.length()) (a.opt(i) as? String)?.let { raw.add(it) } }
+                    var found: JSONObject? = null
+                    val allowed = SourcesProtocol.SESSION_HOSTS[id].orEmpty()
+                    for (h in SiteSession.hosts(raw).filter { it in allowed }) {
+                        val root = okhttp3.HttpUrl.Builder().scheme("https").host(h).build()
+                        val pairs = sources.sessionCookies(root)
+                        if (pairs.none { !com.spacesarmat.omp.sources.CloudflareCookies.isCloudflare(it.first) }) continue
+                        val arr = org.json.JSONArray()
+                        for ((n, v) in pairs) arr.put(JSONObject().put("name", n).put("value", v))
+                        found = JSONObject().put("host", h).put("cookies", arr).put("ua", sources.agentFor(h))
+                        break
+                    }
+                    if (found != null) sessions.put(id, found) else missing.put(id)
+                }
+                val body = JSONObject(payload.toString())
+                if (sessions.length() > 0) body.put("sessions", sessions)
+                val (status, text) = HttpWatchTransport().post("$url/omp/sources", token, body.toString(), timeout)
+                val data = try {
+                    JSONObject(text)
+                } catch (e: Exception) {
+                    JSONObject()
+                }
+                once.resolve(JSObject().put("status", status).put("data", data).put("missing", missing))
+            } catch (e: Exception) {
+                once.reject(TV_NO_ANSWER)
+            }
+        }
+    }
+
+    /** Phone: the page refused the TV's request (not a site it knows with the switch on): the TV hears «failed». */
+    @PluginMethod
+    fun cloudflareDecline(call: PluginCall) {
+        val id = call.getString("id")
+        if (TvMode.isTv(context) || !CloudflareProtocol.validId(id)) return call.resolve()
+        val w = cfWatch(context)
+        io.execute { w.answer(id!!, CloudflareProtocol.endedJson(id, cancelled = false)) }
+        call.resolve()
+    }
+
+    /** { url } → { until: epoch ms | null }: when the stored Cloudflare clearance of the site ends. */
+    @PluginMethod
+    fun cloudflareClearance(call: PluginCall) {
+        val once = Once(call)
+        val url = call.getString("url")?.toHttpUrlOrNull() ?: return once.reject(SiteHttp.BAD_URL)
+        io.execute {
+            try {
+                once.resolve(JSObject().put("until", sources.clearanceUntil(url) ?: JSONObject.NULL))
+            } catch (e: Exception) {
+                once.reject(SECRETS_FAILED)
+            }
+        }
+    }
+
+    /**
+     * Phone: poll the paired Android TV for «Пройти на телефоне» ({ url: http://ip:port, token, notify: text with %s })
+     * or stop ({}). A request comes as the event cloudflareRequest { id, site, url } with the app open, else as a
+     * notification (cloudflarePending gives it to the page later).
+     */
+    @PluginMethod
+    fun cloudflareWatch(call: PluginCall) {
+        if (TvMode.isTv(context)) return call.resolve()
+        val url = call.getString("url")
+        val token = call.getString("token")
+        cfText(call, "notify")?.let { cfNotify = it }
+        cfText(call, "notifyLogin")?.let { cfNotifyLogin = it }
+        val w = cfWatch(context)
+        if (url == null || token == null) {
+            w.configure(null, null)
+            return call.resolve()
+        }
+        if (!CF_BASE.matches(url) || !CF_TOKEN.matches(token)) return call.reject(SiteHttp.BAD_REQUEST)
+        w.configure(url, token)
+        w.start()
+        call.resolve()
+    }
+
+    /** { request: { id, site, url } | null }: the TV's check still waiting for the person. */
+    @PluginMethod
+    fun cloudflarePending(call: PluginCall) {
+        val r = if (TvMode.isTv(context)) null else cfWatch(context).pending()
+        call.resolve(JSObject.fromJSONObject(CloudflareProtocol.requestJson(r)))
+    }
+
+    private fun emitCloudflare(r: CloudflareProtocol.Request): Boolean {
+        if (!hasListeners("cloudflareRequest")) return false
+        val o = JSObject().put("id", r.id).put("site", r.site).put("url", r.url)
+        if (r.kind == CloudflareProtocol.KIND_LOGIN) o.put("kind", r.kind).put("source", r.source)
+        notifyListeners("cloudflareRequest", o)
+        return true
+    }
 
     // ---- monitoring (WorkManager, notifications); phone only ----
 
@@ -1183,6 +1688,7 @@ class OmpNativePlugin : Plugin() {
     companion object {
         private const val NOT_SUPPORTED = "Встроенный сервер недоступен на этом телефоне"
         private const val START_FAILED = "Не удалось запустить сервер"
+        private const val NOT_DOWNLOADED = "Сначала скачайте TorrServer"
         private const val SECRETS_FAILED = SourceServices.SECRETS_FAILED
         private const val PREFS = "omp-native"
         private const val CACHE_SET = "torrserverCacheConfigured"
@@ -1192,6 +1698,91 @@ class OmpNativePlugin : Plugin() {
         // link of a tapped monitoring notification (omp:news?...), see takeMonitorOpen
         private var pendingOpen: String? = null
         private const val MONITOR_PHONE_ONLY = "Мониторинг работает только на телефоне"
+        private const val CF_UNAVAILABLE = "Проверка недоступна"
+        private const val CF_GONE = "Телевизор уже не ждёт эту проверку"
+        private const val TV_NO_ANSWER = "Телевизор не ответил"
+        private const val NOT_PAIRED = "Телефон не подключён к телевизору"
+        /** The paired Android TV (base, token), set by the page through pairedTv. */
+        @Volatile
+        private var paired: Pair<String, String>? = null
+        private val CF_BASE = Regex("^http://((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d):\\d{1,5}$")
+        private val CF_TOKEN = Regex("^[0-9a-f]{32}$")
+        private const val CF_CHANNEL = "omp-tv-requests"
+        private const val CF_NOTIFICATION = 7101
+        @Volatile
+        private var cfNotify = "Телевизор просит пройти проверку на %s"
+        @Volatile
+        private var cfNotifyLogin = "Телевизор просит войти на %s"
+        private var watch: CloudflareWatch? = null
+
+        /** The phone's one watch of the paired TV (process-wide: it outlives a recreated plugin). */
+        @Synchronized
+        private fun cfWatch(ctx: Context): CloudflareWatch {
+            watch?.let { return it }
+            val app = ctx.applicationContext
+            val w = CloudflareWatch(
+                HttpWatchTransport(),
+                { AppForeground.main },
+                { onLan(app) },
+                { r, fg -> (fg && instance?.emitCloudflare(r) == true) || notifyCloudflare(app, r.site, r.kind == CloudflareProtocol.KIND_LOGIN) },
+            )
+            watch = w
+            // a sleeping watch looks again when the phone joins (or leaves) a network
+            try {
+                app.getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) = w.wake()
+                    override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = w.wake()
+                    override fun onLost(network: Network) = w.wake()
+                })
+            } catch (e: RuntimeException) {
+                // without the callback the watch still looks again when the app comes back
+            }
+            return w
+        }
+
+        /** The phone is on Wi-Fi or Ethernet (the TV is on the home network; never on mobile data). */
+        private fun onLan(ctx: Context): Boolean = try {
+            val cm = ctx.getSystemService(ConnectivityManager::class.java)
+            val caps = cm?.getNetworkCapabilities(cm.activeNetwork)
+            caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
+        } catch (e: RuntimeException) {
+            false
+        }
+
+        /** MainActivity.onResume: the watch polls again (its background grace may have ended). */
+        fun wakeCloudflare() {
+            watch?.wake()
+        }
+
+        /** «Телевизор просит пройти проверку на …»; a tap opens OMP, which asks cloudflarePending. false = not shown. */
+        private fun notifyCloudflare(ctx: Context, site: String, login: Boolean = false): Boolean {
+            if (!MonitorNotifier.canNotify(ctx)) return false
+            val nm = ctx.getSystemService(NotificationManager::class.java) ?: return false
+            if (nm.getNotificationChannel(CF_CHANNEL) == null) {
+                nm.createNotificationChannel(NotificationChannel(CF_CHANNEL, "Запросы телевизора", NotificationManager.IMPORTANCE_HIGH))
+            }
+            if (nm.getNotificationChannel(CF_CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE) return false
+            val open = PendingIntent.getActivity(
+                ctx, CF_NOTIFICATION,
+                Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val text = (if (login) cfNotifyLogin else cfNotify).replace("%s", site)
+            val n = NotificationCompat.Builder(ctx, CF_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_monitor)
+                .setContentTitle("OMP")
+                .setContentText(text)
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .setTimeoutAfter(CloudflareWatch.REQUEST_TTL_MS)
+                .build()
+            return try {
+                NotificationManagerCompat.from(ctx).notify(CF_NOTIFICATION, n)
+                true
+            } catch (e: SecurityException) {
+                false
+            }
+        }
         private const val MONITOR_FAILED = "Не удалось настроить фоновую проверку"
 
         @Volatile

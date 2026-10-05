@@ -23,7 +23,10 @@ export type MRoute =
   | { name: 'install'; ip?: string; kind?: 'lg' | 'atv' | 'samsung' }
   | { name: 'log' }
   | { name: 'backup' }
-  | { name: 'sources' };
+  | { name: 'sources' }
+  /** «Источники поиска» → FlareSolverr. */
+  | { name: 'flaresolverr' }
+  | { name: 'sourceSite'; id: string };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);

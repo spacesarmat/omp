@@ -14,6 +14,7 @@ import type { CheckOptions } from './check';
 import { parseEpisodeRange } from './episodes';
 import { addFindings, rememberSeen, seenKeys } from './subs';
 import { EPISODES_ID, type Finding } from './types';
+import { displayTitle } from '../lib/torrentName';
 
 /** The fields of a library torrent the check needs. */
 export type LibraryTorrent = Pick<Torrent, 'hash' | 'title' | 'category' | 'data' | 'file_stats'>;
@@ -242,7 +243,7 @@ export function checkNewEpisodes(ctx: SourceContext, torrents: LibraryTorrent[],
           key,
           result: n.candidate,
           at,
-          episodes: { torrentHash: n.torrentHash, torrentTitle: t.title, season: n.season, haveTo: n.haveTo, to: n.to },
+          episodes: { torrentHash: n.torrentHash, torrentTitle: displayTitle(t), season: n.season, haveTo: n.haveTo, to: n.to },
         };
         if (n.from !== undefined) f.episodes!.from = n.from;
         rememberSeen(EPISODES_ID, [key]);

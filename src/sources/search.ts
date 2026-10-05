@@ -1,14 +1,16 @@
-// Unified search: every chosen source in parallel, results streamed per source, 15 s per source.
+// Unified search: every chosen source in parallel, results streamed per source, 15 s per source (100 s for a site whose
+// Cloudflare pass is on: a hidden check plus FlareSolverr can take that long; the other sources' results show meanwhile).
 import { mergeResults } from './merge';
 import { allSources } from './registry';
-import { enabledSources, setHealth as recordHealth } from './store';
+import { enabledSources, isCloudflareBypassOn, setHealth as recordHealth } from './store';
 import { isLoginRequired } from './types';
 import { log } from '../lib/log';
 import type { Source, SourceContext, SourceResult } from './types';
 
 export const SOURCE_TIMEOUT_MS = 15000;
+export const CLOUDFLARE_TIMEOUT_MS = 100000;
 
-const KNOWN_IDS = ['rutor', 'rutracker', 'nnmclub', 'torrentby', 'anidub', 'bigfangroup', 'ts-rutor', 'ts-torznab'];
+const KNOWN_IDS = ['rutor', 'rutracker', 'nnmclub', 'torrentby', 'anidub', 'bigfangroup', 'kinozal', 'rustorka', 'ts-rutor', 'ts-torznab'];
 
 /** Source id for the log: only the known ones (a Torznab name may be personal). */
 function logId(id: string): string {
@@ -25,6 +27,8 @@ export interface SearchAllOptions {
   /** Once per source: after its results, or with the error (timeout included). */
   onDone?: (sourceId: string, error?: Error) => void;
   timeoutMs?: number;
+  /** Per-source timeout of the sites whose «Обходить проверку Cloudflare» is on; default CLOUDFLARE_TIMEOUT_MS. */
+  cloudflareTimeoutMs?: number;
 }
 
 export interface SearchHandle {
@@ -68,7 +72,7 @@ export function searchAll(query: string, opts: SearchAllOptions): SearchHandle {
  * The engine of searchAll and feedAll: `call` on every source in parallel, results streamed per source, a timeout per
  * source, health recorded, results merged.
  */
-export interface RunOptions extends Pick<SearchAllOptions, 'onResult' | 'onDone' | 'timeoutMs'> {
+export interface RunOptions extends Pick<SearchAllOptions, 'onResult' | 'onDone' | 'timeoutMs' | 'cloudflareTimeoutMs'> {
   /** Record the answers in the source health («Источники поиска»); default true. The feed passes false. */
   health?: boolean;
 }
@@ -79,6 +83,8 @@ export function runSources(
   opts: RunOptions,
 ): SearchHandle {
   const timeoutMs = opts.timeoutMs || SOURCE_TIMEOUT_MS;
+  const cfTimeoutMs = Math.max(timeoutMs, opts.cloudflareTimeoutMs || CLOUDFLARE_TIMEOUT_MS);
+  const slow = (s: Source): boolean => isCloudflareBypassOn(s);
   const setHealth: typeof recordHealth = opts.health === false ? () => undefined : recordHealth;
   const collected: SourceResult[] = [];
   const answered: string[] = [];
@@ -110,7 +116,7 @@ export function runSources(
       setHealth(source.id, { state: 'error', at: Date.now(), message: err.message });
       settle(source.id);
       safe(() => opts.onDone && opts.onDone(source.id, err));
-    }, timeoutMs);
+    }, slow(source) ? cfTimeoutMs : timeoutMs);
     timers.push(timer);
 
     let run: Promise<SourceResult[]>;

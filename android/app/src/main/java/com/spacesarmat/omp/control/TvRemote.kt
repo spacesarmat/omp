@@ -69,6 +69,17 @@ class PrefsPhoneStore(context: Context) : PhoneStore {
 class TvRemote(private val context: Context, private val emit: (String, JSObject, Boolean) -> Unit) : RemoteActions {
     val pairing = Pairing(PrefsPhoneStore(context))
     private val router = ControlRouter(pairing, this)
+    private val entries = object : SecretEntries {
+        override fun get(name: String): String? = SourceServices.get(context).secrets.get(name)
+        override fun replace(values: Map<String, String>, remove: Collection<String>) =
+            SourceServices.get(context).secrets.replace(values, remove)
+    }
+
+    /** Browser sessions from the phone: staged, checked by the page ([stagedSession]), promoted into the jar. */
+    val sessions = SecretSessionStore(entries, { SourceServices.jsSecretKey(it)!! }) { root, pairs, ua ->
+        SourceServices.get(context).importSession(root, pairs, ua)
+    }
+
     // the login is staged in the Keystore entries of the page (js: namespace) and promoted once the page signed in
     private val inbox = SourcesInbox(
         store = SecretLoginStore(
@@ -80,6 +91,12 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         ) { SourceServices.jsSecretKey(it)!! },
         // not retained: a page that was not listening asks for the one waiting transfer ([pendingSources])
         emit = { data -> emit("remoteSources", JSObject.fromJSONObject(data), false) },
+        sessions = sessions,
+    )
+    /** «Пройти на телефоне»: the phone's cookies and User-Agent go straight into the encrypted jar, never to the page. */
+    val cloudflare = CloudflareRelay(
+        { root, cookies, ua, until -> SourceServices.get(context).importClearance(root, cookies, ua, until) },
+        paired = { pairing.anyPaired() },
     )
     private val server = ControlServer(PORT, router::precheck) { router.route(it) }
     private val main = Handler(Looper.getMainLooper())
@@ -234,11 +251,22 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
 
     override fun sources(t: SourcesTransfer): SourcesOutcome = inbox.receive(t)
 
+    override fun cloudflarePoll(token: String, phone: String, waitMs: Long): JSONObject = cloudflare.poll(token, phone, waitMs)
+
+    override fun cloudflareAnswer(token: String, body: JSONObject): CloudflareRelay.Reply = cloudflare.answer(token, body)
+
     /** The event of the transfer still waiting for the page (a page that started listening late), or null. */
     fun pendingSources(): JSONObject? = inbox.pendingEvent()
 
     /** The page's remoteSourcesDone; false when no such transfer waits. */
-    fun sourcesDone(id: String?, rutracker: String?, failed: Boolean): SourcesDone = inbox.done(id, rutracker, failed)
+    fun sourcesDone(
+        id: String?,
+        rutracker: String?,
+        failed: Boolean,
+        indexers: Int? = null,
+        logins: Map<String, String?> = emptyMap(),
+        sessionResults: Map<String, String?> = emptyMap(),
+    ): SourcesInbox.Answer = inbox.answer(id, rutracker, failed, indexers, logins, sessionResults)
 
     /** REORDER_TO_FRONT keeps the instance (MainActivity is singleTask, PlayerActivity singleTop). */
     private fun bringToFront(cls: Class<*>) {

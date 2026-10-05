@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
+import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
 import { qualityBadge, posterStyle } from '../ui/Poster';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
@@ -8,7 +9,7 @@ import { currentRoute, goBack, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { actions, filesOf, recordPhoneWatch, streamUrlFor, tvServerUrl, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
-import { torrents, refreshTorrents, findPosters } from '../../../src/store/library';
+import { torrents, refreshTorrents, findPosters, repairTitles } from '../../../src/store/library';
 import {
   continueWatching,
   refreshViewed,
@@ -32,9 +33,12 @@ import { isWatchedSeries } from '../../../src/monitor/newEpisodes';
 import { findingsOf, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
 import { EPISODES_ID } from '../../../src/monitor/types';
 import { reloadMonitor } from '../monitor/ui';
+import { displayTitle } from '../../../src/lib/torrentName';
+import { renameTorrent } from '../../../src/lib/renameTorrent';
 
 const BACK = 'M15 5l-7 7 7 7';
 const IMAGE = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 3-3L20 17M15.5 9.5h.01';
+const PENCIL = 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4';
 const TRASH = 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3';
 const TV = 'M3 5h18v11H3zM8 20h8';
 const TV_PLAY = 'M3 5h18v11H3zM8 20h8M10 8.5l4 2.5-4 2.5z';
@@ -276,6 +280,7 @@ export function Torrent({ hash }: { hash: string }) {
   const launch = useTvLaunch();
   const [marksOpen, setMarksOpen] = useState(false);
   const [finding, setFinding] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   // «Следить за новыми сериями» (omp.w in the journal); null until read from the server
   const [watchNew, setWatchNew] = useState<boolean | null>(null);
   progressVersion.value;
@@ -289,7 +294,10 @@ export function Torrent({ hash }: { hash: string }) {
     if (!c || !t || own.length) return;
     let alive = true;
     c.loadInfo(hash).then(
-      (info) => alive && setLoaded(info),
+      (info) => {
+        repairTitles(c, [{ ...t, file_stats: info.file_stats }]);
+        if (alive) setLoaded(info);
+      },
       () => {},
     );
     return () => {
@@ -342,7 +350,7 @@ export function Torrent({ hash }: { hash: string }) {
     skip.save((p) => (key === 'i' ? { i: !p.i } : { c: !p.c }), true).then(undefined, (e) => showToast(errorMessage(e)));
   };
   const tv = activeTv.value;
-  const title = t.title || t.name || t.hash;
+  const title = displayTitle(t);
   // a series of the catalogue with episode numbers: new episodes are looked for unless switched off here
   const series = isWatchedSeries({ hash: t.hash, title, category: t.category, data: '', file_stats: allFiles });
   const toggleWatchNew = () => {
@@ -424,6 +432,14 @@ export function Torrent({ hash }: { hash: string }) {
     });
   };
 
+  const rename = (raw: string) =>
+    renameTorrent(c, t, raw).then((saved) => {
+      torrents.value = torrents.value.map((x) => (x.hash === hash ? { ...x, title: saved } : x));
+      if (!listed && fetched) setFetched({ ...fetched, title: saved });
+      showToast('Переименовано');
+      void refreshTorrents(c).catch(() => {});
+    });
+
   const remove = () => {
     if (!window.confirm('Удалить раздачу «' + shortTitle(title) + '»?')) return;
     c.remove(hash).then(
@@ -453,6 +469,9 @@ export function Torrent({ hash }: { hash: string }) {
                 <Icon d={IMAGE} size={20} />
               </button>
             )}
+            <button type="button" class="m-icon-btn m-glass" aria-label="Переименовать" onClick={() => setRenaming(true)}>
+              <Icon d={PENCIL} size={20} />
+            </button>
             <button type="button" class="m-icon-btn m-glass m-danger" aria-label="Удалить раздачу" onClick={remove}>
               <Icon d={TRASH} size={20} />
             </button>
@@ -538,6 +557,7 @@ export function Torrent({ hash }: { hash: string }) {
           })}
         </div>
       </div>
+      {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
       {sheet && <WatchSheet torrent={t} file={sheet} onClose={() => setSheet(null)} />}
       {launch.sheet}

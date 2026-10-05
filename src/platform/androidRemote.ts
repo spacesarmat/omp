@@ -10,7 +10,20 @@ import { activeServer } from '../store/servers';
 import { resetTo } from '../ui/nav';
 import { log } from '../lib/log';
 import { allSources } from '../sources/registry';
-import { applyRemoteSources, loginState, notifyTransferApplied, parseRemoteSources, transferLoginNotStored, TRANSFER_TIMEOUT_MS } from '../sources/transfer';
+import {
+  applyRemoteIndexers,
+  applyRemoteLogins,
+  applyRemoteSessions,
+  applyRemoteSources,
+  loginState,
+  notifyTransferApplied,
+  parseRemoteSources,
+  siteLoginsNotStored,
+  siteLoginsState,
+  transferLoginNotStored,
+  TRANSFER_TIMEOUT_MS,
+} from '../sources/transfer';
+import type { RutrackerResult } from '../sources/transfer';
 import { tvSourceContext } from '../sources/tvContext';
 import type { Source, SourceContext } from '../sources/types';
 
@@ -138,8 +151,9 @@ export function resetRemoteSources(): void {
 }
 
 /**
- * remoteSources { id, sources, rutracker, phone, at }: «Передать на телевизор» from the phone. The switches are applied,
- * the saved login is tried, and the native side gets remoteSourcesDone { id, rutracker? } (it answers the phone).
+ * remoteSources { id, sources, rutracker, phone, at, logins? }: «Передать на телевизор» from the phone. The switches are
+ * applied, the staged logins are tried (rutracker and the sites in `logins`, in parallel), and the native side gets
+ * remoteSourcesDone { id, rutracker?, logins? } (it answers the phone).
  */
 export function applyRemoteSourcesEvent(
   d: unknown,
@@ -162,12 +176,21 @@ export function applyRemoteSourcesEvent(
     return plugin.remoteSourcesDone({ id, failed: true }).then(() => undefined, () => undefined);
   }
   const before = loginState();
-  const done = (rutracker?: string) => {
-    const o: { id: string; rutracker?: string } = { id: r.id };
+  const sitesBefore = siteLoginsState();
+  const done = (rutracker?: string, indexers?: number, logins?: { [site: string]: RutrackerResult }, sessions?: { [site: string]: string }) => {
+    const o: { id: string; rutracker?: string; indexers?: number; logins?: { [site: string]: string }; sessions?: { [site: string]: string } } = { id: r.id };
     if (rutracker) o.rutracker = rutracker;
+    if (indexers !== undefined) o.indexers = indexers;
+    if (logins && Object.keys(logins).length) o.logins = logins;
+    if (sessions && Object.keys(sessions).length) o.sessions = sessions;
     return plugin.remoteSourcesDone(o).then(
       // a verified login is promoted by the native side before this resolves: the screen reads it now
       (a) => {
+        const notStored = a && Array.isArray(a.sitesNotStored) ? a.sitesNotStored.filter((x): x is string => typeof x === 'string') : [];
+        if (notStored.length) {
+          log('error', 'tv', 'Вход на сайты проверен, но не сохранён на телевизоре: ' + notStored.join(', '));
+          siteLoginsNotStored(notStored, sitesBefore);
+        }
         if (rutracker === 'ok' && a && a.stored === false) {
           log('error', 'tv', 'Вход на rutracker проверен, но не сохранён на телевизоре');
           transferLoginNotStored(before);
@@ -178,16 +201,40 @@ export function applyRemoteSourcesEvent(
       },
     );
   };
-  return applyRemoteSources(r, known(), ctx).then(
-    (res) => {
-      log(res && res !== 'ok' ? 'warn' : 'info', 'tv', 'Источники переданы с телефона' + (res ? ', вход на rutracker: ' + res : ''));
-      return done(res);
-    },
-    () => {
-      log('error', 'tv', 'Передача источников с телефона не применилась');
-      return plugin.remoteSourcesDone({ id: r.id, failed: true }).then(() => undefined, () => undefined);
-    },
-  );
+  const sent = r.indexers ? r.indexers.length : 0;
+  // connections first (their keys move to their own entries), so their switches apply to known sources
+  const indexers = sent ? applyRemoteIndexers(r, ctx().secrets) : Promise.resolve(0);
+  return indexers
+    .then((saved) => {
+      const list = known();
+      // the switches are applied synchronously first, then the sign-ins run side by side
+      const rut = applyRemoteSources(r, list, ctx);
+      const sites = applyRemoteLogins(r, list, ctx);
+      // browser sessions: each checked with the staged cookies (never seen here)
+      const ses = applyRemoteSessions(r, list, ctx);
+      return Promise.all([rut, sites, ses]).then(([res, logins, sessions]) => ({ res, saved, logins, sessions }));
+    })
+    .then(
+      ({ res, saved, logins, sessions }) => {
+        const ids = Object.keys(logins);
+        const sids = Object.keys(sessions);
+        const bad = ids.filter((id) => logins[id] !== 'ok').concat(sids.filter((id) => sessions[id] !== 'ok'));
+        log(
+          (res && res !== 'ok') || saved < sent || bad.length ? 'warn' : 'info',
+          'tv',
+          'Источники переданы с телефона' +
+            (res ? ', вход на rutracker: ' + res : '') +
+            ids.map((id) => ', вход на ' + id + ': ' + logins[id]).join('') +
+            sids.map((id) => ', вход через браузер на ' + id + ': ' + sessions[id]).join('') +
+            (sent ? ', индексаторов: ' + saved + ' из ' + sent : ''),
+        );
+        return done(res, sent ? saved : undefined, logins, sessions);
+      },
+      () => {
+        log('error', 'tv', 'Передача источников с телефона не применилась');
+        return plugin.remoteSourcesDone({ id: r.id, failed: true }).then(() => undefined, () => undefined);
+      },
+    );
 }
 
 /** Subscribes to the phone remote events; returns the uninstaller. No-op without the plugin. */

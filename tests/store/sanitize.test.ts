@@ -35,6 +35,13 @@ describe('sanitizeSettings', () => {
     expect(sanitizeSettings({ libraryView: 'huge' }).libraryView).toBe('large');
     expect(sanitizeSettings({}).libraryView).toBe('large');
   });
+  it('validates the player engine (Android TV «Плеер»)', () => {
+    expect(DEFAULT_SETTINGS.playerEngine).toBe('auto');
+    expect(sanitizeSettings({ playerEngine: 'vlc' }).playerEngine).toBe('vlc');
+    expect(sanitizeSettings({ playerEngine: 'builtin' }).playerEngine).toBe('builtin');
+    expect(sanitizeSettings({ playerEngine: 'mpv' }).playerEngine).toBe('auto');
+    expect(sanitizeSettings({ playerEngine: 1 }).playerEngine).toBe('auto');
+  });
 });
 
 describe('sanitizeProgress', () => {

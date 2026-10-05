@@ -17,6 +17,7 @@ import { EPISODES_ID, type Finding } from '../../../src/monitor/types';
 import { resultKey, seedsText, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import type { Torrent } from '../../../src/api/types';
+import { displayTitle } from '../../../src/lib/torrentName';
 
 const CHECK = 'M5 12l5 5l9-10';
 
@@ -77,8 +78,8 @@ export function ReplaceSheet({
     };
   }, [old ? old.hash : '']);
 
-  const name = shortTitle(e.torrentTitle || (old ? old.title : ''));
-  const oldTitle = old ? old.title || e.torrentTitle : e.torrentTitle;
+  const name = shortTitle(e.torrentTitle || (old ? displayTitle(old) : ''));
+  const oldTitle = old ? displayTitle(old) || e.torrentTitle : e.torrentTitle;
   const oldSize = old && old.torrent_size ? formatBytes(old.torrent_size) : '';
 
   const replace = async () => {

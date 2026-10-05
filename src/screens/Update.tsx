@@ -44,7 +44,7 @@ function ApkInstall({ info }: { info: UpdateInfo }) {
     const version = info.version;
     startedHere.current = true;
     apkJob.value = { version, running: true, pct: null, done: false, error: null };
-    installApk(info.ipkUrl, info.ipkHash, (pct) => patch(version, { pct })).then(
+    installApk(info.ipkUrl, info.ipkHash, (pct) => patch(version, { pct }), info.apks).then(
       () => patch(version, { running: false, done: true }),
       (e: Error) => patch(version, { running: false, error: e.message }),
     );

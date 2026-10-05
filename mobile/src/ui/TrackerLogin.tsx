@@ -5,16 +5,30 @@ import { navigate } from '../nav';
 import { errorMessage } from '../../../src/api/http';
 import { isCloudflare, JACKETT_HINT } from '../../../src/sources/view';
 import type { Source, SourceContext } from '../../../src/sources/types';
+import { isCaptchaError } from '../../../src/sources/browserLogin';
+import { BrowserLoginButton } from './BrowserLoginButton';
 
 const LOCK = 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3';
 
 /**
  * «Вход на rutracker». The password is never kept in component state: it is read from the field at «Войти»,
- * handed to the source (which stores it in the Android Keystore only) and the field is emptied right away.
+ * handed to the source (which stores it in the Android Keystore only) and the field is emptied right away. Under the
+ * form: «Войти через браузер» (suggested first when the site asked for a captcha); onDone(true) after a browser login.
  */
-export function TrackerLogin({ source, ctx, onClose, onDone }: { source: Source; ctx: () => SourceContext; onClose: () => void; onDone: () => void }) {
+export function TrackerLogin({
+  source,
+  ctx,
+  onClose,
+  onDone,
+}: {
+  source: Source;
+  ctx: () => SourceContext;
+  onClose: () => void;
+  onDone: (browser?: boolean) => void;
+}) {
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
+  const [captcha, setCaptcha] = useState(false);
   const [busy, setBusy] = useState(false);
   const pass = useRef<HTMLInputElement>(null);
   const alive = useRef(true);
@@ -48,6 +62,7 @@ export function TrackerLogin({ source, ctx, onClose, onDone }: { source: Source;
       return;
     }
     setError('');
+    setCaptcha(false);
     setBusy(true);
     source.login(u, p, ctx()).then(
       () => {
@@ -61,6 +76,7 @@ export function TrackerLogin({ source, ctx, onClose, onDone }: { source: Source;
         if (!alive.current) return;
         setBusy(false);
         setError(errorMessage(err));
+        setCaptcha(isCaptchaError(err));
       },
     );
   };
@@ -114,6 +130,16 @@ export function TrackerLogin({ source, ctx, onClose, onDone }: { source: Source;
             </div>
           </div>
         )}
+        <BrowserLoginButton
+          source={source}
+          ctx={ctx}
+          captcha={captcha}
+          disabled={busy}
+          onDone={() => {
+            clearPassword();
+            onDone(true);
+          }}
+        />
         <div class="m-marks-actions">
           <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={close}>
             Отмена

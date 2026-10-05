@@ -32,7 +32,31 @@ android {
             }
         }
     }
+    // Per-ABI APKs (OMP-x.y.z-arm64.apk, OMP-x.y.z-armv7.apk) plus the universal one (OMP-x.y.z.apk, both ABIs).
+    // Every split keeps the same versionCode (major*10000 + minor*100 + patch): OMP is sideloaded only (no Play
+    // Store), so any split installs over any earlier install of a lower version, and over the same version too.
+    // The embedded TorrServer is not packed into any APK: the app downloads the pinned arm64 binary on demand
+    // (res/raw/torrserver.json, see LocalTorrServer / TorrServerBinary), on any arm64 phone whatever the split.
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'arm64-v8a', 'armeabi-v7a'
+            universalApk true
+        }
+    }
+    // the universal APK carries only the two ARM ABIs (libVLC also ships x86/x86_64 libraries)
+    packaging {
+        jniLibs {
+            excludes += ['lib/x86/**', 'lib/x86_64/**']
+        }
+    }
     buildTypes {
+        // test builds install next to the released app (different package, its own data) for device checks
+        debug {
+            applicationIdSuffix '.test'
+            versionNameSuffix '-test'
+        }
         release {
             if (System.getenv('ANDROID_KEYSTORE_FILE')) {
                 signingConfig signingConfigs.release
@@ -69,6 +93,12 @@ dependencies {
     // native player on Android TV (player/PlayerActivity.kt)
     implementation 'androidx.media3:media3-exoplayer:1.8.0'
     implementation 'androidx.media3:media3-ui:1.8.0'
+    // FFmpeg audio decoders for Media3 (DTS, AC3/E-AC3, TrueHD…) when the box has no hardware decoder; enabled in
+    // v0.15 Task 3. Jellyfin's build is GPL-3.0 (compatible with OMP's GPL-3.0); its FFmpeg is configured without
+    // --enable-gpl / nonfree (LGPL decoders only). Must match the Media3 version above.
+    implementation 'org.jellyfin.media3:media3-ffmpeg-decoder:1.8.0+1'
+    // second player engine on Android TV (LGPL-2.1), used from v0.15 Task 4
+    implementation 'org.videolan.android:libvlc-all:3.7.7'
     // install assistant: LG Developer Mode over SSH (BSD-3-Clause) and Android TV over adb (Apache-2.0), see install/
     implementation 'com.github.mwiede:jsch:2.28.7'
     implementation 'dev.mobile:dadb:2.0.0'

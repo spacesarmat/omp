@@ -22,7 +22,8 @@ import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
 import { native } from '../platform/native';
 import { donateCardDue, dismissDonateCard, openDonate, supporterActive } from '../donate';
-import { localServer, startLocal, refreshLocalServer, LOCAL_URL } from '../server/localServer';
+import { localServer, startLocal, refreshLocalServer, LOCAL_URL, canRun, downloadSize } from '../server/localServer';
+import { displayTitle } from '../../../src/lib/torrentName';
 
 const POLL_MS = 15000;
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
@@ -31,7 +32,7 @@ const PULL_MAX = 110;
 const PULL_TRIGGER = 64;
 const PULL_HOLD = 56;
 const pullOf = (dy: number) => (dy > 0 ? Math.min(PULL_MAX, dy * PULL_DAMP) : 0);
-const titleOf = (t: Torrent) => t.title || t.name || t.hash;
+const titleOf = (t: Torrent) => displayTitle(t);
 
 function episodesText(t: Torrent): string {
   const n = playableFiles(filesOf(t)).length;
@@ -59,6 +60,8 @@ export function Library() {
   const [tvError, setTvError] = useState('');
   const [reload, setReload] = useState(0);
   const [starting, setStarting] = useState(false);
+  // why the last start from here failed (the store's error is reset by the next status refresh)
+  const [startError, setStartError] = useState('');
   const [phoneName, setPhoneName] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [donateCard, setDonateCard] = useState(() => donateCardDue());
@@ -188,11 +191,23 @@ export function Library() {
   // the active server is the phone's own one and it is stopped: offer to start it right here
   const local = localServer.value;
   const canStartLocal = !!error && !!c && c.baseUrl === LOCAL_URL && local.supported && !local.running;
+  // no binary yet (e.g. updated from 0.14, when it was in the APK): the setup screen offers the download
+  const mustDownload = canStartLocal && !canRun(local);
+  const size = downloadSize(local);
+  const startLabel = mustDownload ? 'Скачать TorrServer' + (size ? ' (' + size + ')' : '') : 'Запустить сервер';
+  const startNote = mustDownload
+    ? 'TorrServer на телефоне больше не входит в OMP — его нужно один раз скачать.'
+    : startError || undefined;
   async function startServer() {
+    if (mustDownload) {
+      navigate({ name: 'localServer' });
+      return;
+    }
     if (starting) return;
     setStarting(true);
     try {
       await startLocal();
+      setStartError(localServer.value.running ? '' : localServer.value.error || 'Не удалось запустить сервер');
     } finally {
       setStarting(false);
       setReload((n) => n + 1);
@@ -392,14 +407,19 @@ export function Library() {
               onRetry={c ? () => void loadRef.current() : undefined}
               onChangeServer={() => navigate({ name: 'connect' })}
               onStart={canStartLocal ? () => void startServer() : undefined}
+              startLabel={startLabel}
+              startNote={startNote}
               starting={starting}
               onFaq={() => navigate({ name: 'faq' })}
             />
           )}
           {canStartLocal && !unavailable && (
-            <button type="button" class="m-btn m-btn-primary" disabled={starting} onClick={() => void startServer()}>
-              Запустить сервер
-            </button>
+            <>
+              {startNote && <p class="m-hint-warn" data-local="note">{startNote}</p>}
+              <button type="button" class="m-btn m-btn-primary" disabled={starting} onClick={() => void startServer()}>
+                {startLabel}
+              </button>
+            </>
           )}
           {c && !loaded && !list.length && <p class="m-muted m-note">Загрузка…</p>}
           {empty && <p class="m-muted m-note m-empty">{empty}</p>}
@@ -417,7 +437,7 @@ export function Library() {
                     <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
                       <Poster torrent={t} class="m-poster-mini" />
                       <span class="m-hrow-text">
-                        <span class="m-hrow-title">{t.title || t.name || t.hash}</span>
+                        <span class="m-hrow-title">{displayTitle(t)}</span>
                         <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
                         <span class="m-hrow-pos">
                           <span>{positionLabel(time, duration)}</span>
@@ -429,7 +449,7 @@ export function Library() {
                         <span class="m-muted m-small m-hrow-src">{sourceLine(e.source, now)}</span>
                       </span>
                     </button>
-                    <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', t.title || t.name || t.hash].filter(Boolean).join(' · '))}>
+                    <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', displayTitle(t)].filter(Boolean).join(' · '))}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                         <path d="M8 5l11 7-11 7z" />
                       </svg>

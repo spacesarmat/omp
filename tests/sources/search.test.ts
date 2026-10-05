@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { searchAll, SOURCE_TIMEOUT_MS } from '../../src/sources/search';
-import { getHealth, resetHealth, reloadSourcePrefs, setSourceOn } from '../../src/sources/store';
+import { CLOUDFLARE_TIMEOUT_MS, searchAll, SOURCE_TIMEOUT_MS } from '../../src/sources/search';
+import { getHealth, resetHealth, reloadSourcePrefs, setCloudflareBypass, setSourceOn } from '../../src/sources/store';
 import { loginRequired, isLoginRequired } from '../../src/sources/types';
 import type { Source, SourceContext, SourceResult } from '../../src/sources/types';
 
@@ -28,6 +28,45 @@ beforeEach(() => { localStorage.clear(); reloadSourcePrefs(); resetHealth(); vi.
 afterEach(() => { vi.useRealTimers(); });
 
 describe('searchAll', () => {
+  it('a site passing Cloudflare checks gets the long timeout; the others answer meanwhile', async () => {
+    const slow = deferred<SourceResult[]>();
+    setCloudflareBypass('cf', true);
+    setCloudflareBypass('cf2', true);
+    const cf: Source = { ...source('cf', () => slow.promise), cloudflare: true };
+    const events: string[] = [];
+    const h = searchAll('q', {
+      ctx,
+      from: [cf, source('fast', () => Promise.resolve([res('fast', 'F', 1)]))],
+      onResult: (id) => events.push('result:' + id),
+      onDone: (id, err) => events.push('done:' + id + (err ? ':' + err.message : '')),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    // the fast source's results are there right away
+    expect(events).toEqual(['result:fast', 'done:fast']);
+    expect(h.results().map((r) => r.Title)).toEqual(['F']);
+    await vi.advanceTimersByTimeAsync(SOURCE_TIMEOUT_MS + 1000);
+    expect(h.pending()).toEqual(['cf']);
+    // a late answer (the check passed) still streams in
+    slow.resolve([res('cf', 'Late', 5)]);
+    await h.done;
+    expect(events).toEqual(['result:fast', 'done:fast', 'result:cf', 'done:cf']);
+    expect(h.results().map((r) => r.Title).sort()).toEqual(['F', 'Late']);
+
+    // still bounded
+    const never = deferred<SourceResult[]>();
+    const h2 = searchAll('q', { ctx, from: [{ ...source('cf2', () => never.promise), cloudflare: true }] });
+    await vi.advanceTimersByTimeAsync(CLOUDFLARE_TIMEOUT_MS - 1);
+    expect(h2.pending()).toEqual(['cf2']);
+    await vi.advanceTimersByTimeAsync(2);
+    expect(h2.failed()).toEqual(['cf2']);
+
+    // the switch off, or a switch saved for a site that is not behind Cloudflare: the normal timeout
+    setCloudflareBypass('cf4', true);
+    const h3 = searchAll('q', { ctx, from: [{ ...source('cf3', () => never.promise), cloudflare: true }, source('cf4', () => never.promise)] });
+    await vi.advanceTimersByTimeAsync(SOURCE_TIMEOUT_MS + 1);
+    expect(h3.failed().sort()).toEqual(['cf3', 'cf4']);
+  });
+
   it('runs sources in parallel, streams results and merges them', async () => {
     const a = deferred<SourceResult[]>();
     const b = deferred<SourceResult[]>();

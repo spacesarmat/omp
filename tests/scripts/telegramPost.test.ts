@@ -1,0 +1,89 @@
+import { describe, it, expect } from 'vitest';
+// @ts-ignore node builtins, no @types/node in this project
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+// @ts-ignore
+import { tmpdir } from 'node:os';
+// @ts-ignore
+import { join } from 'node:path';
+import { postRelease } from '../../scripts/telegram-post.mjs';
+import { UPLOAD_MAX } from '../../scripts/telegram-lib.mjs';
+
+const TOKEN = '123:SECRET-TOKEN';
+
+function setup(sizes: Record<string, number>) {
+  const root = mkdtempSync(join(tmpdir(), 'omp-tg-'));
+  mkdirSync(join(root, 'src/lib'), { recursive: true });
+  mkdirSync(join(root, 'assets/telegram'), { recursive: true });
+  mkdirSync(join(root, 'build'));
+  writeFileSync(join(root, 'CHANGELOG.md'), '## 1.2.3\n\n- Первое\n- Второе\n\n## 1.2.2\n\n- Старое\n');
+  writeFileSync(join(root, 'src/lib/donate.ts'), "export const DONATE_URL = 'https://example.org/donate';\n");
+  writeFileSync(join(root, 'assets/telegram/omp-telegram.png'), 'png');
+  for (const [name, size] of Object.entries(sizes)) writeFileSync(join(root, 'build', name), new Uint8Array(size).fill(1));
+  return root;
+}
+
+type Call = { method: string; form: FormData };
+function fakeFetch(calls: Call[], fail: (method: string, form: FormData) => Response | Error | null = () => null) {
+  return async (url: string, init: { body: FormData }) => {
+    const method = url.split('/').pop() as string;
+    calls.push({ method, form: init.body });
+    const f = fail(method, init.body);
+    if (f instanceof Error) throw f;
+    if (f) return f;
+    return new Response(JSON.stringify({ ok: true, result: { message_id: 7 } }), { status: 200 });
+  };
+}
+const names = (calls: Call[]) => calls.map((c) => c.method + (c.method === 'sendDocument' ? ':' + (c.form.get('document') as File).name : ''));
+
+describe('postRelease', () => {
+  it('posts the photo, uploads small files in order and links the big ones', async () => {
+    const root = setup({
+      'OMP-1.2.3-arm64.apk': UPLOAD_MAX + 1,
+      'OMP-1.2.3-armv7.apk': 10,
+      'OMP-1.2.3-webOS.ipk': 20,
+      'OMP-1.2.3.apk': UPLOAD_MAX + 5,
+    });
+    const calls: Call[] = [];
+    const logs: string[] = [];
+    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: (s: string) => logs.push(s) });
+    expect(failed).toBe(0);
+    expect(names(calls)).toEqual(['sendPhoto', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMessage']);
+    expect(String(calls[0].form.get('caption'))).toContain('• Первое');
+    expect(String(calls[0].form.get('reply_markup'))).toContain('OMP-1.2.3-arm64.apk');
+    expect(JSON.parse(String(calls[1].form.get('reply_parameters')))).toEqual({ message_id: 7 });
+    const text = String(calls[3].form.get('text'));
+    expect(text).toContain('Файл OMP-1.2.3-arm64.apk больше 50 МБ — скачать: https://github.com/spacesarmat/omp/releases/download/v1.2.3/OMP-1.2.3-arm64.apk');
+    expect(text).toContain('OMP-1.2.3.apk');
+    expect(logs.filter((l) => l.includes('forward it manually'))).toHaveLength(2);
+  });
+
+  it('links a file Telegram refuses, logs missing files, and never leaks the token', async () => {
+    const root = setup({ 'OMP-1.2.3-armv7.apk': 10 });
+    const calls: Call[] = [];
+    const logs: string[] = [];
+    const refuse = (m: string) =>
+      m === 'sendDocument' ? new Response(JSON.stringify({ ok: false, description: 'Request Entity Too Large' }), { status: 413 }) : null;
+    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, refuse) as any, log: (s: string) => logs.push(s) });
+    expect(failed).toBe(1);
+    expect(names(calls)).toEqual(['sendPhoto', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendMessage']);
+    expect(String(calls[2].form.get('text'))).toContain('OMP-1.2.3-armv7.apk');
+    expect(logs).toContain('Telegram: OMP-1.2.3-arm64.apk not found, skipped');
+    expect(logs.some((l) => l.includes('forward it manually'))).toBe(true);
+    expect(logs.join('\n')).not.toContain(TOKEN);
+  });
+
+  it('a network error carries no URL or token', async () => {
+    const root = setup({});
+    const boom = async (url: string) => {
+      throw new TypeError('fetch failed for ' + url);
+    };
+    let msg = '';
+    try {
+      await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: boom as any, log: () => {} });
+    } catch (e: any) {
+      msg = String(e.message);
+    }
+    expect(msg).toBe('Telegram sendPhoto: network error');
+    expect(msg).not.toContain(TOKEN);
+  });
+});

@@ -1,4 +1,5 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import type { ComponentType } from 'preact';
 import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { installWheelScroll } from './ui/wheel';
@@ -14,7 +15,6 @@ import { PlaylistScreen } from './screens/Playlist';
 import { SettingsScreen } from './screens/Settings';
 import { UpdateScreen } from './screens/Update';
 import { PairPhoneScreen } from './screens/PairPhone';
-import { SourcesScreen } from './screens/Sources';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { WhatsNewDialog, shouldShowWhatsNew } from './ui/WhatsNewDialog';
 import { checkWhatsNew, whatsNew } from './store/whatsNew';
@@ -25,6 +25,26 @@ import { platformKind } from './platform/env';
 import { installAndroidKeyBridge } from './platform/androidKeys';
 import { installAndroidRemote } from './platform/androidRemote';
 import { installAndroidScale } from './platform/androidScale';
+
+/**
+ * «Источники поиска» (Android TV only) is a separate chunk: its indexer status code stays out of the LG bundle.
+ */
+function LazySources() {
+  const [Screen, setScreen] = useState<ComponentType | null>(null);
+  useEffect(() => {
+    let alive = true;
+    import('./screens/Sources').then(
+      (m) => {
+        if (alive) setScreen(() => m.SourcesScreen as ComponentType);
+      },
+      () => undefined,
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return Screen ? <Screen /> : null;
+}
 
 function renderRoute(r: Route) {
   switch (r.name) {
@@ -50,7 +70,7 @@ function renderRoute(r: Route) {
       return <UpdateScreen />;
     case 'sources':
       // built-in sites need the native http of the APK: Android TV only
-      return platformKind() === 'androidtv' ? <SourcesScreen /> : null;
+      return platformKind() === 'androidtv' ? <LazySources /> : null;
     default:
       return null;
   }

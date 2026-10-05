@@ -48,6 +48,16 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 
 .choice-row { line-height: 32px; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-between; padding: 20px 28px; background: var(--panel); border-radius: 12px; margin-bottom: 10px; }
 .choice-row.focused { background: var(--panel2); transform: none; }
+/* «Плеер» (Android TV): Авто / Встроенный / VLC */
+.engine-intro { font-size: 24px; margin-bottom: 14px; }
+.engine-option { display: flex; align-items: center; padding: 20px 24px; background: var(--panel); border-radius: 14px; margin-bottom: 10px; }
+.engine-option.focused { background: var(--panel2); transform: none; box-shadow: inset 0 0 0 3px var(--accent); }
+.engine-dot { width: 26px; height: 26px; border-radius: 13px; flex-shrink: 0; margin-right: 20px; box-shadow: inset 0 0 0 2px #6b7280; }
+.engine-option.on .engine-dot { background: var(--accent); box-shadow: inset 0 0 0 6px var(--panel2); }
+.engine-texts { display: flex; flex-direction: column; }
+.engine-name { font-size: 26px; font-weight: bold; margin-bottom: 4px; }
+.engine-text { font-size: 20px; color: var(--muted); line-height: 1.4; }
+.engine-note { font-size: 20px; margin-top: 6px; }
 .choice-label { flex: 1; min-width: 0; margin-right: 24px; }
 .choice-value .icon { flex: none; display: block; margin: 0 10px; }
 .choice-value { display: flex; align-items: center; flex: 0 0 auto; margin-left: auto; text-align: right; white-space: nowrap; color: var(--accent); }
@@ -326,6 +336,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .src-phone-title { font-size: 27px; font-weight: 700; margin-bottom: 12px; }
 .src-phone-text { font-size: 24px; color: var(--muted); line-height: 1.45; margin-bottom: 12px; }
 .src-last { font-size: 23px; color: #8fe39a; }
+.src-flare { margin-top: 36px; padding: 28px; border-radius: 24px; background: var(--panel); }
+.src-flare-where { font-size: 24px; color: var(--muted); margin-bottom: 8px; }
+.src-flare-state { font-size: 24px; line-height: 1.45; }
 .src-last.muted { color: var(--muted); }
 .src-list { flex: 1; min-width: 0; }
 .src-group { font-size: 24px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 10px; }
@@ -347,6 +360,15 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .src-switch.on .src-switch-knob { left: 42px; background: var(--bg); }
 .src-row.focused .src-switch { box-shadow: none; }
 .button.src-login { margin-left: 16px; }
+.src-note-warn { color: var(--accent); }
+.src-caret { font-size: 24px; color: var(--muted); }
+.src-empty { padding: 18px 27px; margin-bottom: 9px; border-radius: 21px; background: var(--panel); font-size: 23px; color: var(--muted); line-height: 1.45; }
+.src-trackers { padding: 0 0 9px 27px; }
+.src-tracker { display: flex; align-items: center; min-height: 54px; padding: 0 21px; margin-bottom: 6px; border-radius: 15px; background: #14171d; font-size: 25px; }
+.src-tracker.focused { box-shadow: inset 0 0 0 3px var(--accent); transform: none; }
+.src-tracker-name { flex: 1; min-width: 0; margin-right: 18px; }
+.src-tracker span:last-child { font-size: 22px; }
+.src-tracker-info { padding: 6px 21px; font-size: 22px; color: var(--muted); }
 .login-dialog { width: 1050px; }
 .login-label { font-size: 25px; color: var(--muted); margin-bottom: 8px; }
 .login-dialog .text-input { display: block; background: var(--panel2); }
@@ -356,6 +378,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .login-actions { display: flex; }
 .login-actions .button { flex: 1; text-align: center; }
 .login-actions .button:first-child { margin-right: 20px; }
+.login-browser { margin-bottom: 16px; }
 
 .marks-dialog { width: 900px; min-width: 0; }
 .marks-sub { font-size: 22px; color: var(--muted); margin: -14px 0 20px; }

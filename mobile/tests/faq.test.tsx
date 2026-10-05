@@ -153,6 +153,72 @@ describe('FAQ per-device content', () => {
   });
 });
 
+describe('FAQ v0.15 content', () => {
+  const ids = (d: 'lg' | 'atv' | 'phone' | 'server' | 'common') => FAQ.filter((i) => i.devices.includes(d)).map((i) => i.id);
+
+  it('the player questions belong to Android TV only', () => {
+    for (const id of ['player-engine', 'player-auto', 'player-audio']) expect(FAQ.find((i) => i.id === id)!.devices).toEqual(['atv']);
+    const atv = deviceText('atv');
+    for (const f of ['VLC', 'Авто', 'FFmpeg', 'passthrough', 'TrueHD', 'ASS', 'сменить на VLC']) expect(atv, f).toContain(f);
+    expect(viewText('player-audio', 'atv')).toContain('VLC всегда декодирует звук в PCM');
+    expect(viewText('no-sound', 'atv')).toContain('сменить на VLC');
+    expect(viewText('no-sound', 'phone')).not.toContain('VLC');
+  });
+
+  it('explains which APK to pick and where the releases are posted', () => {
+    const it = FAQ.find((i) => i.id === 'apk-choice')!;
+    expect(it.devices).toEqual(['phone', 'atv']);
+    expect(it.section).toBe('install');
+    for (const d of ['phone', 'atv'] as const) for (const f of ['arm64.apk', 'armv7.apk', 'общий']) expect(viewText('apk-choice', d), f).toContain(f);
+    // the same advice everywhere: arm64 = 64-bit system, armv7 = 32-bit system (many TV boxes, even on a 64-bit CPU), universal if unsure
+    for (const d of ['phone', 'atv'] as const) for (const f of ['64-битн', '32-битн', ' приставки']) expect(viewText('apk-choice', d), f).toContain(f);
+    expect(deviceText('atv')).not.toContain('для приставки обычно');
+    const tg = urls(FAQ.filter((i) => i.id === 'apk-choice' || i.id === 'telegram').flatMap((i) => [...i.short, ...(i.more ?? [])]));
+    expect(tg).toContain('https://t.me/ompplyaer');
+    expect(viewText('telegram', 'lg')).toContain('50 МБ');
+    expect(viewText('ts-phone', 'phone')).toContain('61 МБ');
+    expect(viewText('ts-phone', 'phone')).toContain('Android 10');
+  });
+
+  it('describes the direct Jackett and Prowlarr connection on the phone and the TorrServer path on LG', () => {
+    const phone = viewText('jackett', 'phone');
+    for (const f of ['Искать в сети', 'API-ключ', 'состояние неизвестно', 'защищённом хранилище', '9117', 'без шифрования']) expect(phone, f).toContain(f);
+    expect(viewText('jackett', 'atv')).toContain('Передать на телевизор');
+    expect(viewText('jackett', 'server')).toContain('Поиск через Torznab');
+    const lg = viewText('jackett', 'lg');
+    expect(lg).toContain('Поиск через Torznab');
+    expect(lg).not.toContain('Индексаторы');
+    expect(viewText('sources-transfer', 'atv')).toContain('FlareSolverr');
+  });
+
+  it('covers FlareSolverr, the Cloudflare switch, the site logins and the names', () => {
+    expect(viewText('flaresolverr', 'phone')).toContain('docker run');
+    expect(viewText('flaresolverr', 'phone')).toContain('FlareSolverr is ready!');
+    const cf = viewText('cloudflare', 'phone');
+    for (const f of ['Обходить проверку Cloudflare', 'выключен', 'правила сайта', 'Пройти на телефоне']) expect(cf, f).toContain(f);
+    expect(viewText('cloudflare', 'atv')).toContain('Отметить пультом');
+    const login = viewText('sites-login', 'phone');
+    for (const f of ['Войти через браузер', 'kinozal.me', 'kinozal.guru', 'kinozal.tv', 'rustorka']) expect(login, f).toContain(f);
+    expect(viewText('names', 'phone')).toContain('Переименовать');
+    expect(viewText('sources', 'phone')).toContain('Kinozal');
+    expect(viewText('sources', 'phone')).not.toMatch(/seedoff|labtor|BitRu/i);
+  });
+
+  it('LG items never mention VLC, adb, Cloudflare sites, FlareSolverr or the browser sign-in', () => {
+    for (const id of ids('lg')) {
+      expect(viewText(id, 'lg'), id).not.toMatch(/VLC|FlareSolverr|Cloudflare|Kinozal|rustorka|Войти через браузер|Отладк/);
+      if (id !== 'safety') expect(viewText(id, 'lg'), id).not.toMatch(/adb/);
+    }
+    expect(ids('lg')).not.toContain('player-engine');
+    expect(ids('lg')).not.toContain('cloudflare');
+    expect(ids('lg')).not.toContain('sites-login');
+  });
+
+  it('no item mentions the dropped sites', () => {
+    for (const d of ['lg', 'atv', 'phone', 'server', 'common'] as const) expect(deviceText(d), d).not.toMatch(/seedoff|labtor|BitRu/i);
+  });
+});
+
 describe('FAQ search', () => {
   it('ignores case and ё/е', () => {
     expect(normalizeFaq('ПодойдЁт')).toBe('подойдет');
@@ -170,8 +236,9 @@ describe('FAQ search', () => {
   });
 
   it('prefers the chosen device for the badge', () => {
-    expect(searchFaq('нет звука', 'atv')[0].device).toBe('atv');
-    expect(searchFaq('нет звука')[0].device).toBe('lg');
+    const noSound = (prefer?: 'atv') => searchFaq('нет звука', prefer).find((h) => h.item.id === 'no-sound')!;
+    expect(noSound('atv').device).toBe('atv');
+    expect(noSound().device).toBe('lg');
   });
 
   it('highlights the match, e/yo-insensitive', () => {
@@ -283,7 +350,7 @@ describe('Faq screen', () => {
   it('searches across all devices with badge, section, count and highlight', async () => {
     const el = mount(<Faq />);
     await type(el, 'ЗВУК');
-    expect(el.querySelector('[role="status"]')!.textContent).toBe('Найдено 2 · во всех устройствах');
+    expect(el.querySelector('[role="status"]')!.textContent).toBe('Найдено 4 · во всех устройствах');
     expect(el.querySelector('.m-chip')).toBeNull();
     const first = q(el, 'Нет звука');
     expect(first.querySelector('.m-faq-badge')!.textContent).toBe('Телефон');
