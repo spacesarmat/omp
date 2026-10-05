@@ -58,6 +58,8 @@ class BrowserLogin(
     private var verifying = false
     private var lastKey: String? = null
     private var lastVerify = Long.MIN_VALUE / 2
+    /** «Проверить ещё раз»: the next poll checks whatever cookies the page has. */
+    private var forced = false
     /** Per root: the cookie names already seen (the guest cookies on the first sight, then every name tried). */
     private val baseline = HashMap<String, MutableSet<String>>()
     private var opened = 0L
@@ -130,7 +132,7 @@ class BrowserLogin(
         if (ended) return
         val b = browser ?: return
         if (scheduler.now() - opened >= maxOpenMs) return cancel()
-        if (!verifying && scheduler.now() - lastVerify >= verifyEveryMs) {
+        if (!verifying && (forced || scheduler.now() - lastVerify >= verifyEveryMs)) {
             for (root in roots) {
                 val pairs = try {
                     SiteSession.clean(CloudflareSolver.parseCookieHeader(b.cookies(root.toString())))
@@ -143,27 +145,38 @@ class BrowserLogin(
                 if (seen == null) {
                     // the first cookies of this root are the guest's: a sign-in brings a named or a new cookie
                     baseline[root.host] = names.toMutableSet()
-                    if (check.cookies.none { it in names }) continue
+                    if (!forced && check.cookies.none { it in names }) continue
                 }
                 val key = root.host + "\n" + pairs.sortedBy { it.first }.joinToString(";") { it.first + "=" + it.second }
                 val since = scheduler.now() - lastVerify
                 val signal = check.cookies.any { it in names } || names.any { seen != null && it !in seen }
                 // a sign-in signal: at once when the cookies changed, the same ones again after a while; without one,
                 // any site cookie is tried only every SLOW_MS (no cookie names known for the site)
-                val due = if (signal) key != lastKey || since >= RETRY_SAME_MS else since >= SLOW_MS
+                val due = forced || if (signal) key != lastKey || since >= RETRY_SAME_MS else since >= SLOW_MS
                 if (!due) continue
                 lastKey = key
                 baseline.getOrPut(root.host) { HashSet() }.addAll(names)
-                tryVerify(root, pairs)
+                // the person sees the check only when it follows their sign-in (or their «Проверить ещё раз»)
+                tryVerify(root, pairs, shown = signal || forced)
+                forced = false
                 break
+            }
+            if (forced) {
+                // nothing to check: the page has no cookies of the site yet
+                forced = false
+                showNotConfirmed()
             }
         }
         scheduler.post(pollMs) { poll() }
     }
 
-    private fun tryVerify(root: HttpUrl, pairs: List<Pair<String, String>>) {
+    private fun tryVerify(root: HttpUrl, pairs: List<Pair<String, String>>, shown: Boolean) {
         verifying = true
         lastVerify = scheduler.now()
+        if (shown && !asking) {
+            ui?.showRetry(false)
+            ui?.setHint(texts.checking)
+        }
         val ua = userAgent()
         background {
             val ok = try {
@@ -173,9 +186,23 @@ class BrowserLogin(
             }
             scheduler.post(0) {
                 verifying = false
-                if (ok && !ended) signedIn(root, pairs, ua)
+                if (ok && !ended) signedIn(root, pairs, ua) else if (shown) showNotConfirmed()
             }
         }
+    }
+
+    private fun showNotConfirmed() {
+        if (ended || asking) return
+        ui?.setHint(texts.notConfirmed)
+        ui?.showRetry(texts.notConfirmed != null)
+    }
+
+    override fun retry() {
+        if (ended || browser == null) return
+        ui?.showRetry(false)
+        ui?.setHint(texts.checking)
+        // the running poll loop picks it up within POLL_MS (a check in flight finishes first)
+        forced = true
     }
 
     /** Verified here: the page is closed, then the session stored or sent to the TV. */

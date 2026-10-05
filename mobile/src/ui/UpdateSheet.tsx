@@ -27,9 +27,6 @@ export function setAbiKeyReader(fn: AbiKeyReader | null): void {
   abiKeyReader = fn;
 }
 
-/** Hardware Back hook: returns true when the sheet consumed the press. */
-export const sheetBackHandler: { current: (() => boolean) | null } = { current: null };
-
 export function describeInstallError(e: unknown): string {
   const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : '';
   if (/[А-Яа-яЁё]/.test(msg)) return msg;
@@ -63,17 +60,6 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
   const size = !info.apks ? info.ipkSize : abiKey === undefined ? 0 : apkFor(info, abiKey).size;
 
   useEffect(() => {
-    const h = () => {
-      if (!busyRef.current) dismissPrompt();
-      return true;
-    };
-    sheetBackHandler.current = h;
-    return () => {
-      if (sheetBackHandler.current === h) sheetBackHandler.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
     if (!launching) return;
     const t = setTimeout(() => setLaunching(false), 5000);
     return () => clearTimeout(t);
@@ -103,7 +89,7 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
 
   const locked = busy || launching;
   return (
-    <Sheet label="Обновление" onClose={() => !locked && dismissPrompt()}>
+    <Sheet label="Обновление" onClose={() => !locked && dismissPrompt()} onBack={() => !busyRef.current && dismissPrompt()}>
       <div class="m-sheet-title">Доступна версия {info.version}</div>
       <div class="m-muted m-small">
         Сейчас установлена {APP_VERSION}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { showToast } from './toast';
 import { log } from '../../../src/lib/log';
-import { BROWSER_BUSY, BROWSER_CAPTCHA, BROWSER_FAILED, BROWSER_LOGIN, BROWSER_STORE_FAILED, hasBrowserLogin } from '../../../src/sources/browserLogin';
+import { BROWSER_BUSY, BROWSER_CAPTCHA, BROWSER_FAILED, BROWSER_LOGIN, BROWSER_STORE_FAILED, browserSignedIn, hasBrowserLogin } from '../../../src/sources/browserLogin';
 import type { Source, SourceContext } from '../../../src/sources/types';
 
 /**
@@ -40,6 +40,7 @@ export function BrowserLoginButton({
         if (alive.current) setBusy(false);
         if (r.result === 'ok') {
           log('info', 'search', 'Вход через браузер: ' + source.name);
+          showToast(browserSignedIn(source.name));
           onDone();
         } else if (r.result === 'busy') showToast(BROWSER_BUSY);
         else if (r.result === 'failed') showToast(BROWSER_FAILED);

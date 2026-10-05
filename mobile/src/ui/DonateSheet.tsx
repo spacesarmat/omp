@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { Clipboard } from '@capacitor/clipboard';
 import { Sheet } from './Sheet';
-import { sheetBackHandler } from './UpdateSheet';
 import { showToast } from './toast';
 import { donateOpen, closeDonate, activeMethods, applySupportCode, activeSupportUntil, supportShared, supportThanks, type DonateMethod } from '../donate';
 
@@ -100,17 +99,6 @@ function SupportCodeBox() {
 /** «Поддержать OMP»: a short text and a button per configured method. */
 export function DonateSheet({ methods }: { methods?: DonateMethod[] }) {
   const open = donateOpen.value;
-  useEffect(() => {
-    if (!open) return;
-    const h = () => {
-      closeDonate();
-      return true;
-    };
-    sheetBackHandler.current = h;
-    return () => {
-      if (sheetBackHandler.current === h) sheetBackHandler.current = null;
-    };
-  }, [open]);
   if (!open) return null;
   const list = activeMethods(methods);
   const until = activeSupportUntil();

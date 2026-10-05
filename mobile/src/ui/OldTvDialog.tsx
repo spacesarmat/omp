@@ -1,4 +1,5 @@
 import { Icon } from './Icon';
+import { useBackHandler } from './backStack';
 
 const DOWNLOAD = 'M12 4v10M8 10l4 4 4-4M5 20h14';
 
@@ -16,6 +17,7 @@ export function OldTvDialog({
   onGuide: () => void;
   onClose: () => void;
 }) {
+  useBackHandler(onClose);
   return (
     <div class="m-sheet-host m-dialog-host">
       <button type="button" class="m-sheet-backdrop" aria-label="Закрыть" onClick={onClose} />

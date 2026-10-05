@@ -163,6 +163,7 @@ describe('phone: «Войти через браузер» on the site screen', (
     act(() => btn(BROWSER_LOGIN)!.click());
     await flush();
     expect(el.textContent).toContain(BROWSER_DONE_TITLE);
+    expect(toast.value).toBe('Вход в Kinozal выполнен');
     // no password in this mode: only the marker
     expect(site.secrets).toEqual({ 'kinozal.browser': '1' });
     act(() => btn('Выйти')!.click());

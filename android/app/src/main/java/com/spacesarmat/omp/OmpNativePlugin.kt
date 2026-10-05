@@ -1343,7 +1343,7 @@ class OmpNativePlugin : Plugin() {
         val texts = CheckTexts(
             title, text, cfText(call, "note"), cancel, cfText(call, "phone"), cfText(call, "remote"), cfText(call, "hint"),
             cfText(call, "noPhone"), cfText(call, "phoneClosed"), cfText(call, "waiting"), cfText(call, "gateWait"), errors,
-            cfText(call, "blocked"),
+            cfText(call, "blocked"), cfText(call, "checking"), cfText(call, "notConfirmed"), cfText(call, "retry"),
         )
         if (!cfOpen.compareAndSet(false, true)) return once.resolve(JSObject().put("result", "busy"))
         val relay = if (tvMode) remote?.cloudflare else null

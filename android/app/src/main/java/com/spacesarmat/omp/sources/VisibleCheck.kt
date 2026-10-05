@@ -13,6 +13,9 @@ interface CheckUi {
 
     fun setHint(text: String?)
 
+    /** Browser login: shows or hides «Проверить ещё раз». */
+    fun showRetry(show: Boolean) {}
+
     /** Closes the dialog (before the page is destroyed). */
     fun dismiss()
 }
@@ -25,6 +28,9 @@ interface CheckControl {
 
     /** TV: ask the paired phone. */
     fun askPhone()
+
+    /** Browser login: «Проверить ещё раз» — check the page's cookies now. */
+    fun retry() {}
 }
 
 /** Where a passed check goes: this device's jar, or the TV that asked the phone. */
