@@ -10,6 +10,8 @@ import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import { readDiscover, saveDiscover, type Feed, type Filter } from './discoverCache';
+import { readDiscoverCols, saveDiscoverCols, type DiscoverCols } from './discoverCols';
+import { usePinchStep } from '../../ui/usePinchStep';
 
 const SKELETONS = 6;
 
@@ -42,6 +44,24 @@ export function Discover() {
   const fresh = useRef(true);
   const list = torrents.value;
   const index = useMemo(() => libraryIndex(list), [list]);
+  // posters per row: two fingers apart = bigger posters (2), together = smaller (3)
+  const [cols, setCols] = useState<DiscoverCols>(readDiscoverCols);
+  const colsRef = useRef(cols);
+  colsRef.current = cols;
+  const rootRef = useRef<HTMLDivElement>(null);
+  usePinchStep(rootRef, {
+    enabled: !searching,
+    onStep: (dir) => {
+      const next: DiscoverCols = dir > 0 ? 2 : 3;
+      if (next === colsRef.current) return false;
+      colsRef.current = next;
+      setCols(next);
+      saveDiscoverCols(next);
+      return true;
+    },
+    anchorAttr: 'data-anchor',
+  });
+  const gridClass = 'm-disc-grid' + (cols === 3 ? ' m-cols-3' : '');
 
   useEffect(() => {
     if (restored.current) {
@@ -124,7 +144,7 @@ export function Discover() {
       />
     );
   return (
-    <div class="m-discover">
+    <div class="m-discover" ref={rootRef}>
       <div class="m-disc-head">
         <h2>{t('discover.novelties')}</h2>
         <span class="m-muted m-small m-grow">{t('discover.fromTmdb')}</span>
@@ -157,7 +177,7 @@ export function Discover() {
           }}
         />
       ) : !feed ? (
-        <div class="m-disc-grid" aria-busy="true">
+        <div class={gridClass} aria-busy="true">
           {Array.from({ length: SKELETONS }, (_, i) => (
             <div key={i} class="m-disc-tile m-disc-skel" aria-hidden="true">
               <span class="m-disc-poster" />
@@ -167,10 +187,11 @@ export function Discover() {
         </div>
       ) : (
         <>
-          <div class="m-disc-grid">
+          <div class={gridClass}>
             {feed.items.map((x) => (
               <button
                 key={x.kind + ':' + x.id}
+                data-anchor={x.kind + ':' + x.id}
                 type="button"
                 class="m-disc-tile"
                 aria-label={x.year ? x.title + ' ' + x.year : x.title}

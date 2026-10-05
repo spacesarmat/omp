@@ -18,7 +18,7 @@ import { continueWatching, refreshViewed, progressVersion, serverViewed, getLoca
 import { buildHistory, resumeFrom, sourceLine, historyFilters } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
-import { libraryTabs, nextView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
+import { libraryTabs, nextView, zoomView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { formatBytes } from '../../../src/lib/format';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
@@ -30,6 +30,7 @@ import { localServer, startLocal, refreshLocalServer, LOCAL_URL, canRun, downloa
 import { displayTitle } from '../../../src/lib/torrentName';
 import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
 import { Discover } from './catalog/Discover';
+import { usePinchStep } from '../ui/usePinchStep';
 
 const POLL_MS = 15000;
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
@@ -78,6 +79,7 @@ export function Library() {
   const [pull, setPull] = useState(0);
   const [dragging, setDragging] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   // selection mode (null = off) and the torrent whose menu is open; a long press that fired swallows the click after it
   const [selected, setSelected] = useState<string[] | null>(null);
   const [menuFor, setMenuFor] = useState<Torrent | null>(null);
@@ -267,6 +269,24 @@ export function Library() {
     else empty = t('catalog.categoryEmpty');
   }
 
+  // two fingers on the list step the view like the header button, one notch per gesture (spread = bigger)
+  const pinch = usePinchStep(bodyRef, {
+    enabled: mine && !isHistory && !unavailable,
+    onStep: (dir) => {
+      const cur = settings.peek().libraryView;
+      const next = zoomView(cur, dir);
+      if (next === cur) return false;
+      updateSettings({ libraryView: next });
+      return true;
+    },
+    // the first finger may have started the long press timer on a card
+    onStart: () => {
+      clearTimeout(press.current.timer);
+      press.current.timer = undefined;
+    },
+    anchorAttr: 'data-anchor',
+  });
+
   const selecting = selected !== null;
   // only the torrents still in the list count (a refresh may drop some)
   const chosen = selected ? selected.filter((h) => shown.some((x) => x.hash === h)) : [];
@@ -289,11 +309,12 @@ export function Library() {
       const p = press.current;
       clearTimeout(p.timer);
       p.fired = false;
-      if (selecting) return;
+      if (selecting || pinch.active()) return;
       p.x = e.clientX;
       p.y = e.clientY;
       p.timer = setTimeout(() => {
         p.timer = undefined;
+        if (pinch.active()) return;
         p.fired = true;
         setMenuFor(tor);
       }, LONG_PRESS_MS);
@@ -509,7 +530,7 @@ export function Library() {
             {refreshing && <span class="m-sr">{t('library.refreshing')}</span>}
           </div>
         )}
-        <div class="m-lib-body" style={pullStyle}>
+        <div class="m-lib-body" style={pullStyle} ref={bodyRef}>
           {donateCard && !unavailable && !supporterActive() && (
             <div class="m-donate-card" role="region" aria-label={t('donate.title')}>
               <span>{t('library.donateText')}</span>
@@ -609,7 +630,7 @@ export function Library() {
                   const eps = episodesText(t);
                   const q = qualityBadge(titleOf(t));
                   return (
-                    <div class={'m-row-wrap' + sel(t)} key={t.hash}>
+                    <div class={'m-row-wrap' + sel(t)} key={t.hash} data-anchor={t.hash}>
                       <button type="button" class="m-vrow" {...pressProps(t)}>
                         <Poster torrent={t} class="m-poster-row" />
                         {mark(t)}
@@ -630,7 +651,7 @@ export function Library() {
             ) : view === 'compact' ? (
               <div class="m-vlist m-clist">
                 {shown.map((t) => (
-                  <div class={'m-row-wrap' + sel(t)} key={t.hash}>
+                  <div class={'m-row-wrap' + sel(t)} key={t.hash} data-anchor={t.hash}>
                     <button type="button" class="m-crow" {...pressProps(t)}>
                       {mark(t)}
                       <span class="m-crow-title">{titleOf(t)}</span>
@@ -643,7 +664,7 @@ export function Library() {
             ) : (
               <div class={'m-grid m-view-' + view}>
                 {shown.map((t) => (
-                  <button type="button" class={'m-card' + sel(t)} key={t.hash} {...pressProps(t)}>
+                  <button type="button" class={'m-card' + sel(t)} key={t.hash} data-anchor={t.hash} {...pressProps(t)}>
                     <Poster torrent={t} />
                     {mark(t)}
                     <span class="m-card-title">{titleOf(t)}</span>

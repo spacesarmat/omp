@@ -30,6 +30,7 @@ import {
 } from '../tv/tvClient';
 import type { RemoteButton } from '../tv/ssap';
 import { errorMessage } from '../../../src/api/http';
+import { vibrate } from '../ui/vibrate';
 
 export interface RemoteActions {
   pressButton: (name: RemoteButton) => Promise<void>;
@@ -97,14 +98,6 @@ const VOL_DOWN = 'M4 10v4h4l5 4V6L8 10z';
 const VOL_UP = 'M4 10v4h4l5 4V6L8 10zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11';
 const TUNE = 'M4 7h9M17 7h3M4 17h3M11 17h9M15 4v6M9 14v6';
 const KEYBOARD = 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10';
-
-function vibrate(): void {
-  try {
-    navigator.vibrate?.(10);
-  } catch {
-    /* no vibration support */
-  }
-}
 
 const stateText = (s: string): string => {
   const map: Record<string, string> = {

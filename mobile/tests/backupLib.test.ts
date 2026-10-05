@@ -71,7 +71,11 @@ describe('collectBackup', () => {
     put('tsp.playlists', [{ url: 'http://x/p.m3u', title: 'P' }]);
     put('tsp.trackPrefs', { h1: { audioLang: 'ru' } });
     put('tsp.support', { until: 1798934400000 });
+    put('tsp.catalogMode', 'discover');
+    put('tsp.discoverCols', 3);
     const b = collectBackup(NOW);
+    expect(b.data['tsp.catalogMode']).toBe('discover');
+    expect(b.data['tsp.discoverCols']).toBe(3);
     expect(b.data['tsp.support']).toEqual({ until: 1798934400000 });
     expect(b.data['tsp.flaresolverr']).toEqual({ url: 'http://192.168.1.5:8191' });
     expect(Object.keys(b.data).sort()).toEqual(BACKUP_KEYS.map((k) => k.key).sort());
@@ -97,7 +101,21 @@ describe('collectBackup', () => {
   it('never lists excluded keys in the allowlist', () => {
     const keys = BACKUP_KEYS.map((k) => k.key);
     NOT_BACKED_UP.forEach((k) => expect(keys).not.toContain(k));
-    expect(keys.some((k) => /log|cookie|pass|secret|cache/i.test(k))).toBe(false);
+    // «log» as a word: tsp.catalogMode is a UI choice, not a log
+    expect(keys.some((k) => /\blog\b|cookie|pass|secret|cache/i.test(k))).toBe(false);
+  });
+
+  it('keeps the «Каталог» choices only when they are valid', () => {
+    put('tsp.catalogMode', 'elsewhere');
+    put('tsp.discoverCols', 7);
+    let b = collectBackup(NOW);
+    expect(b.data['tsp.catalogMode']).toBeUndefined();
+    expect(b.data['tsp.discoverCols']).toBeUndefined();
+    put('tsp.catalogMode', 'mine');
+    put('tsp.discoverCols', 2);
+    b = collectBackup(NOW);
+    expect(b.data['tsp.catalogMode']).toBe('mine');
+    expect(b.data['tsp.discoverCols']).toBe(2);
   });
 
   it('cleans values with the stores sanitizers and survives corrupt storage', () => {

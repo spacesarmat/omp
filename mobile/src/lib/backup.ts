@@ -103,6 +103,9 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.localServer', clean: (v) => (isObject(v) && typeof v.autostart === 'boolean' ? { autostart: v.autostart } : undefined) },
   { key: 'tsp.playlists', clean: (v) => cleanList(v, sanitizeFavorites(v)) },
   { key: 'tsp.trackPrefs', clean: (v) => cleanMap(v, sanitizeTrackPrefs(v)) },
+  // «Каталог»: the «Мои / Обзор» switch and the «Обзор» posters per row
+  { key: 'tsp.catalogMode', clean: (v) => (v === 'mine' || v === 'discover' ? v : undefined) },
+  { key: 'tsp.discoverCols', clean: (v) => (v === 2 || v === 3 ? v : undefined) },
   // support code applied: only its end time (not a secret), so a restored phone does not ask for support again
   { key: 'tsp.support', clean: (v) => sanitizeSupportState(v) || undefined },
 ];
