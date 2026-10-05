@@ -6,4 +6,17 @@
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+    <!--
+        torrent.by sends its leaf certificate without the Let's Encrypt intermediate (YE1). Browsers fetch it via AIA,
+        Android does not, so the native search request failed the handshake. The public Let's Encrypt ECDSA
+        intermediates YE1-YE3 (letsencrypt.org/certificates, issued by ISRG Root YE) complete the chain; the leaf is
+        still fully verified (signature, host name, validity). Valid until 2028-09-02.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">torrent.by</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/letsencrypt_ye" />
+        </trust-anchors>
+    </domain-config>
 </network-security-config>

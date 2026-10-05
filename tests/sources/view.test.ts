@@ -118,6 +118,19 @@ describe('healthText', () => {
     const m = 'Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже';
     expect(healthText({ state: 'error', at: 1, message: m })).toEqual({ text: m, tone: 'bad' });
   });
+  it('a certificate error says so, not «не отвечает»', () => {
+    const tls = { text: 'Ошибка сертификата сайта', tone: 'bad' };
+    expect(healthText({ state: 'error', at: 1, message: 'Ошибка сертификата сайта', code: 'tls' })).toEqual(tls);
+    // the background page has the native message only, in either language
+    expect(healthText({ state: 'error', at: 1, message: 'Ошибка сертификата сайта' })).toEqual(tls);
+    expect(healthText({ state: 'error', at: 1, message: 'Site certificate error' })).toEqual(tls);
+    applyLanguageSetting('en');
+    try {
+      expect(healthText({ state: 'error', at: 1, message: 'Ошибка сертификата сайта', code: 'tls' })).toEqual({ text: 'Site certificate error', tone: 'bad' });
+    } finally {
+      applyLanguageSetting('ru');
+    }
+  });
 });
 
 describe('resolveLink', () => {

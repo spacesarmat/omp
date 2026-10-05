@@ -148,8 +148,11 @@ export interface SourceHealth {
   at: number;
   /** Error text of a failed search (e.g. the Cloudflare block). */
   message?: string;
-  /** 'ipban': the site showed its «введите проверочный код» page (ipBan.ts). */
-  code?: 'ipban';
+  /**
+   * 'ipban': the site showed its «введите проверочный код» page (ipBan.ts); 'tls': its certificate could not be
+   * verified (tls.ts).
+   */
+  code?: 'ipban' | 'tls';
 }
 
 const LOGIN = 'login';

@@ -151,6 +151,22 @@ describe('searchAll', () => {
     expect(isLoginRequired(new Error('x'))).toBe(false);
   });
 
+  it('a certificate error of the native http is recorded with the code tls', async () => {
+    // the plugin rejects with { message, code } (android/.../SiteHttp.kt CODE_TLS); the monitor page with the message only
+    const h = searchAll('q', {
+      ctx,
+      from: [
+        source('tls', () => Promise.reject({ message: 'Ошибка сертификата сайта', code: 'tls' })),
+        source('tlsmsg', () => Promise.reject(new Error('Site certificate error'))),
+        source('down', () => Promise.reject(new Error('Сайт не отвечает'))),
+      ],
+    });
+    await h.done;
+    expect(getHealth('tls')).toEqual({ state: 'error', at: 1000, message: 'Ошибка сертификата сайта', code: 'tls' });
+    expect(getHealth('tlsmsg')!.code).toBe('tls');
+    expect(getHealth('down')!.code).toBeUndefined();
+  });
+
   it('defaults to the enabled sources and accepts ids', async () => {
     setSourceOn('off', false);
     const called: string[] = [];

@@ -552,6 +552,8 @@ export const ru = {
       ok: 'работает',
       login: 'нужен вход',
       noAnswer: 'не отвечает',
+      // the same text as the native one (android/.../I18n.kt errors.siteTls): the background page matches it
+      tls: 'Ошибка сертификата сайта',
       unknown: 'состояние неизвестно',
       off: 'выключен',
       error: 'ошибка',
