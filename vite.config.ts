@@ -40,6 +40,8 @@ export default defineConfig({
     environment: 'jsdom',
     // one jsdom per worker instead of per file (each file still gets its own context): about twice as fast
     pool: 'vmThreads',
+    // pins the Russian UI (and a Russian browser language) so the assertions stay in Russian
+    setupFiles: ['tests/setup/i18n.ts'],
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx', 'mobile/tests/**/*.test.{ts,tsx}'],
     alias: {
       react: 'preact/compat',
