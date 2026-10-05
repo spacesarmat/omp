@@ -222,6 +222,7 @@ describe('pinch in «Обзор»', () => {
       novelties: vi.fn(() => Promise.resolve({ items: ITEMS, pages: 1 })),
       search: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
       card: vi.fn(() => Promise.reject(new Error('x'))),
+      season: vi.fn(() => Promise.reject(new Error('x'))),
     };
     setCatalogClientForTests(c);
   });

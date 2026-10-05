@@ -1078,8 +1078,6 @@ export const ru = {
     more: 'Ещё',
     cast: 'В ролях',
     seasons: 'Сезоны',
-    /** A season row heading (English «Season {n}»); filters.season is the lowercase chip, catalog.querySeason the query word. */
-    season: '{n} сезон',
     airing: 'выходит: {a} из {b}',
     find: 'Найти',
     /** A season chip and the heading of the chosen season when TMDB gives no name. */
@@ -1195,14 +1193,10 @@ export const ru = {
       episodesHead: 'Серии',
       filesHead: 'Файлы',
       watchOnPhone: 'Смотреть на телефоне',
-      skipSub: 'для всех серий · ТВ и телефон',
       skipIntroSwitch: 'Пропускать заставку',
       skipSumIntro: 'заставка {state}',
       skipSumCredits: 'титры {state}',
-      creditsSub: 'сразу следующая серия',
-      watchNewSub: 'сообщить, когда выйдут следующие серии',
       watchQuality: 'Следить за качеством',
-      watchQualitySub: 'сообщить, когда фильм выйдет в лучшем качестве',
       findPoster: 'Найти обложку',
       deleteTorrent: 'Удалить раздачу',
       needTmdbKey: 'Задайте ключ TMDB в «Настройках сервера»',
