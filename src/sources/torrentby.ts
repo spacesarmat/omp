@@ -14,8 +14,8 @@ const NAME = 'torrent.by';
 const HOST = 'torrent.by';
 const BASE = 'https://' + HOST;
 const SEARCH = BASE + '/search/?search=';
-/** One section page per category, newest first, open to guests (checked live): the foreign films and series. */
-const FEED: { [c: string]: string } = { movie: '/films/', tv: '/serials/', anime: '/anime/' };
+/** Section pages, newest first, open to guests (checked live): foreign + ours (one page each). */
+const FEED: { [c: string]: string[] } = { movie: ['/films/', '/movies/'], tv: ['/serials/', '/series/'], anime: ['/anime/'] };
 /** The page «Ввести код» re-checks: a section list (its rows are never on the code page). */
 const PROBE = 'films/';
 const ROW_MARK = 'ttable_col1';
@@ -132,8 +132,17 @@ export const torrentby: Source = {
     return load(ctx, SEARCH + encodeURIComponent(query)).then((p) => parse(p.doc, p.res.url || BASE));
   },
   latest(ctx: SourceContext, category: FeedCategory) {
-    const path = FEED[category];
-    return mergePages(path ? [load(ctx, BASE + path).then((p) => parseSection(p.doc, p.res.url || BASE))] : []);
+    const paths = FEED[category] || [];
+    if (!paths.length) return mergePages([]);
+    const section = (path: string) => load(ctx, BASE + path).then((p) => parseSection(p.doc, p.res.url || BASE));
+    // the first section goes alone: after its code page no more requests go into the ban
+    const first = section(paths[0]);
+    const goOn = first.then(
+      () => true,
+      (e) => !isIpBan(e),
+    );
+    const rest = paths.slice(1).map((path) => goOn.then((go) => (go ? section(path) : Promise.reject(ipBanError(NAME)))));
+    return mergePages([first].concat(rest));
   },
   unblock(ctx: SourceContext) {
     return openSitePage(codeSpec()).then((r) => {

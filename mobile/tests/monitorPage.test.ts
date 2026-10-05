@@ -543,10 +543,16 @@ describe('a site whose code page paused its background requests', () => {
     expect(host.httpCalls.filter((r) => r.url.indexOf('https://torrent.by/') === 0)).toEqual([]);
   });
 
-  it('after the hour the background asks it again (one section page per category)', async () => {
+  it('after the hour the background asks it again (both sections of a category)', async () => {
     pauseSource('torrentby', Date.now() - PAUSE_MS - 1);
     const host = fakeHost();
     await runMonitor(deps(host, { feed: { from: [torrentby] } }));
-    expect(host.httpCalls.map((r) => r.url).sort()).toEqual(['https://torrent.by/anime/', 'https://torrent.by/films/', 'https://torrent.by/serials/']);
+    expect(host.httpCalls.map((r) => r.url).sort()).toEqual([
+      'https://torrent.by/anime/',
+      'https://torrent.by/films/',
+      'https://torrent.by/movies/',
+      'https://torrent.by/serials/',
+      'https://torrent.by/series/',
+    ]);
   });
 });

@@ -115,7 +115,7 @@ describe('torrentby code page', () => {
     expect(site.calls).toHaveLength(0);
     vi.setSystemTime(new Date(2026, 9, 5, 13, 0, 1));
     expect((await torrentby.latest!(bg, 'movie')).length).toBeGreaterThan(0);
-    expect(site.calls.map((c) => c.url)).toEqual(['https://torrent.by/films/']);
+    expect(site.calls.map((c) => c.url)).toEqual(['https://torrent.by/films/', 'https://torrent.by/movies/']);
   });
 });
 

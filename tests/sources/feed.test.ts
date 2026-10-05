@@ -103,12 +103,28 @@ describe('torrentby.latest', () => {
     expect(typeof ted.date).toBe('number');
   });
 
-  it('loads one section page per category (a light background load)', async () => {
+  it('asks both sections for movies and series', async () => {
     const site = fakeSite((c) => page(fixture('torrentby-category.html'), c.url));
     await torrentby.latest!(site.ctx, 'movie');
     await torrentby.latest!(site.ctx, 'tv');
-    await torrentby.latest!(site.ctx, 'anime');
-    expect(site.calls.map((c) => c.url)).toEqual(['https://torrent.by/films/', 'https://torrent.by/serials/', 'https://torrent.by/anime/']);
+    expect(site.calls.map((c) => c.url)).toEqual([
+      'https://torrent.by/films/',
+      'https://torrent.by/movies/',
+      'https://torrent.by/serials/',
+      'https://torrent.by/series/',
+    ]);
+  });
+
+  it('skips the second section after the code page on the first', async () => {
+    const site = fakeSite((c) => page(fixture('torrentby-ban.html'), c.url));
+    await expect(torrentby.latest!(site.ctx, 'movie')).rejects.toThrow('torrent.by просит ввести проверочный код');
+    expect(site.calls.map((c) => c.url)).toEqual(['https://torrent.by/films/']);
+  });
+
+  it('a failing first section (not a ban) still lets the second one answer', async () => {
+    const site = fakeSite((c) => (c.url.indexOf('/films/') > 0 ? page('oops', c.url, 503) : page(fixture('torrentby-category.html'), c.url)));
+    expect((await torrentby.latest!(site.ctx, 'movie')).length).toBeGreaterThan(0);
+    expect(site.calls.map((c) => c.url)).toEqual(['https://torrent.by/films/', 'https://torrent.by/movies/']);
   });
 
   it('reports a page without the list', async () => {
