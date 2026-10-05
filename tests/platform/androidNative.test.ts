@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { nativePlugin, nativeLocalIp, installApk, describeApkError, nativeSourceHttp, nativeSecrets } from '../../src/platform/androidNative';
+import { nativePlugin, nativeLocalIp, installApk, describeApkError, nativeSourceHttp, nativeSecrets, nativeSetLanguage, syncNativeLanguage } from '../../src/platform/androidNative';
+import { applyLanguageSetting } from '../../src/i18n';
 
 const w = window as unknown as { Capacitor?: unknown };
 afterEach(() => { delete w.Capacitor; });
@@ -142,5 +143,32 @@ describe('sources: http and secrets on Android TV', () => {
     expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'secretGet', { key: 'k' });
     expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'secretSet', { key: 'k', value: 'v' });
     expect(b.nativePromise).toHaveBeenCalledWith('OmpNative', 'secretDelete', { key: 'k' });
+  });
+});
+
+describe('nativeSetLanguage', () => {
+  it('is a no-op outside the APK (webOS) and never throws', async () => {
+    await expect(nativeSetLanguage('en')).resolves.toBeUndefined();
+  });
+  it('sends { lang } to the plugin; a failing or older plugin is ignored', async () => {
+    const seen: any[] = [];
+    bridgeOnly({ localIpv4: () => Promise.resolve({ ip: null }), setLanguage: (o) => { seen.push(o); return Promise.resolve(); } });
+    await nativeSetLanguage('en');
+    expect(seen).toEqual([{ lang: 'en' }]);
+    bridgeOnly({ localIpv4: () => Promise.resolve({ ip: null }) });
+    await expect(nativeSetLanguage('ru')).resolves.toBeUndefined();
+  });
+});
+
+describe('syncNativeLanguage', () => {
+  it('sends the resolved language on start and on every change', () => {
+    const sent: string[] = [];
+    const stop = syncNativeLanguage((l) => { sent.push(l); return Promise.resolve(); });
+    expect(sent).toEqual(['ru']);
+    applyLanguageSetting('en');
+    expect(sent).toEqual(['ru', 'en']);
+    stop();
+    applyLanguageSetting('ru');
+    expect(sent).toEqual(['ru', 'en']);
   });
 });

@@ -5,6 +5,8 @@ import { en } from '../../src/i18n/en';
 type Node = { [k: string]: unknown };
 
 const CYRILLIC = /[А-Яа-яЁё]/;
+/** Names a language in that language (the language switch): the same in both dictionaries. */
+const NATIVE_NAMES = ['settings.language.ru'];
 
 function isObj(v: unknown): v is Node {
   return !!v && typeof v === 'object' && !Array.isArray(v);
@@ -50,7 +52,7 @@ function compare(r: Node, e: Node, path: string, problems: Problem[]): void {
       }
       if (!rv) problems.push({ key: p, issue: 'empty ru' });
       if (!ev) problems.push({ key: p, issue: 'empty en' });
-      if (CYRILLIC.test(ev)) problems.push({ key: p, issue: 'Cyrillic in en' });
+      if (CYRILLIC.test(ev) && NATIVE_NAMES.indexOf(p) < 0) problems.push({ key: p, issue: 'Cyrillic in en' });
       if (placeholders(rv).join() !== placeholders(ev).join()) problems.push({ key: p, issue: 'placeholders differ' });
     } else if (isRuPlural(rv)) {
       const rp = rv as Node;

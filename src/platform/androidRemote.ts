@@ -7,6 +7,7 @@ import { sendKey, BACK_KEY } from './androidKeys';
 import { runLaunchParams } from '../launchActions';
 import { attachPhone } from '../phone/link';
 import { activeServer } from '../store/servers';
+import { updateSettings } from '../store/settings';
 import { resetTo } from '../ui/nav';
 import { log } from '../lib/log';
 import { allSources } from '../sources/registry';
@@ -137,9 +138,12 @@ export function applyRemoteKey(d: unknown): void {
   if (code !== undefined) sendKey(code);
 }
 
-/** remoteAttach { report }: the «Сейчас играет» link only (same check as the launch param). */
+/** remoteAttach { report, lang? }: the «Сейчас играет» link (same check as the launch param) and the phone's language. */
 export function applyRemoteAttach(d: unknown): void {
   const r = isObj(d) && typeof d.report === 'string' ? d.report.trim() : '';
+  // the phone's resolved language (an older phone sends none, an unknown one is ignored)
+  const l = isObj(d) ? d.lang : undefined;
+  if (l === 'ru' || l === 'en') updateSettings({ language: l });
   if (/^http:\/\//i.test(r) && r.length <= 200) attachPhone(r);
 }
 

@@ -276,7 +276,7 @@ describe('Install assistant — LG steps', () => {
     expect(probed).toEqual([]);
     click(button(el, 'Обновить на ТВ'));
     await flush();
-    expect(lg.launches()).toEqual([{ id: 'com.spacesarmat.torrplayer', params: { open: 'update' } }]);
+    expect(lg.launches()).toEqual([{ id: 'com.spacesarmat.torrplayer', params: { open: 'update', lang: 'ru' } }]);
   });
 
   it('webOS 3.x: not supported', async () => {

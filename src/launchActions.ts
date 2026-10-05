@@ -7,11 +7,14 @@ import { buildTorrentQueue } from './player/queue';
 import { attachPhone } from './phone/link';
 import { checkForUpdate, dismissPrompt } from './store/updates';
 import { magnetName } from './lib/categoryGuess';
+import { updateSettings } from './store/settings';
 
-/** Applies webOS launch params: {server}, {magnet}, {torrent[, file, t]}, {play, title}. */
+/** Applies webOS launch params: {server}, {magnet}, {torrent[, file, t]}, {play, title}, {lang}. */
 export function runLaunchParams(raw: unknown): void {
   const plan = parseLaunchParams(raw);
   if (!plan) return;
+  // the phone sets the TV's language first, so whatever follows is shown in it
+  if (plan.lang) updateSettings({ language: plan.lang });
   if (plan.report) attachPhone(plan.report);
   if (plan.invalid) {
     toast('Некорректные параметры запуска', 'error');

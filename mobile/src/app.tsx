@@ -46,6 +46,7 @@ import { SubFindings } from './screens/SubFindings';
 import { Monitor } from './screens/Monitor';
 import { monitorNative } from './monitor/native';
 import { reloadLog } from '../../src/lib/log';
+import { lang, type Lang } from '../../src/i18n';
 import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
 import './mobile.css';
 
@@ -72,7 +73,17 @@ function intakeMagnet(l: string): void {
   if (currentRoute.value.name !== 'connect') switchTab({ name: 'connect' });
 }
 
+/** Sends the resolved UI language to the native side now and on every change; returns the stopper. */
+export function syncNativeLanguage(set: (l: Lang) => Promise<void> = (l) => native.setLanguage(l)): () => void {
+  return effect(() => {
+    void set(lang.value);
+  });
+}
+
 export function App() {
+  // the native copy (notifications, install assistant…) follows the page's language
+  useEffect(() => syncNativeLanguage(), []);
+
   useEffect(() => {
     let remove: (() => void) | undefined;
     let cancelled = false;

@@ -5,6 +5,7 @@ import { native, type OmpNativeApi, type FoundOmpTv } from '../platform/native';
 import { activeTv, saveTv, setActiveTv, clearTvToken, normalizeMac, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
 import { showToast } from '../ui/toast';
 import { log } from '../../../src/lib/log';
+import { lang } from '../../../src/i18n';
 import { isRutrackerResult, TRANSFER_PATH, type RutrackerResult, type TransferPayload } from '../../../src/sources/transfer';
 import {
   registerMessage,
@@ -531,7 +532,12 @@ export function warmUp(): Promise<void> {
   return p;
 }
 
+/**
+ * Opens OMP on the TV with launch params (LG: system.launcher, Android TV: /omp/launch). Every launch carries the
+ * phone's resolved UI language as `lang`: the TV stores it as its own language (an older OMP ignores it).
+ */
 export async function launchOnTv(params: object): Promise<void> {
+  params = { ...params, lang: lang.value };
   if (tvKind() === 'atv') {
     await atvPost('/omp/launch', { params });
     checkForeground();
@@ -958,8 +964,9 @@ function checkForeground(): void {
 }
 
 /** Android TV: starts the «Сейчас играет» link to `report` without navigating. */
+/** Android TV: links «Сейчас играет» to `report` and sets the TV's language to the phone's (`lang`). */
 export async function attachOnTv(report: string): Promise<void> {
-  await atvPost('/omp/attach', { report });
+  await atvPost('/omp/attach', { report, lang: lang.value });
 }
 
 export const SOURCES_ATV_ONLY = 'Передать источники можно только на Android TV с OMP';

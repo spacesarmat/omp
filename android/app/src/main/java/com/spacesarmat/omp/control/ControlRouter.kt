@@ -9,7 +9,8 @@ interface RemoteActions {
     fun info(): JSONObject
     fun paired(phone: String)
     fun launch(params: JSONObject)
-    fun attach(report: String)
+    /** [lang]: the phone's resolved UI language (ru | en), null when none came or an unknown one. */
+    fun attach(report: String, lang: String?)
     fun key(name: String)
     /** `{ text }`, `{ delete }` or `{ enter: true }`, already validated. */
     fun text(data: JSONObject)
@@ -97,7 +98,8 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
     private fun attach(body: JSONObject): ControlResponse {
         val report = (body.opt("report") as? String)?.trim() ?: return badRequest()
         if (!REPORT.matches(report) || report.length > MAX_REPORT) return badRequest()
-        actions.attach(report)
+        // an unknown language is ignored, so a newer phone does not break the link
+        actions.attach(report, (body.opt("lang") as? String)?.takeIf { it in LANGS })
         return okEmpty()
     }
 
@@ -194,6 +196,8 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
             CloudflareProtocol.POLL, CloudflareProtocol.ANSWER,
         )
         val KEYS = setOf("UP", "DOWN", "LEFT", "RIGHT", "ENTER", "BACK", "CATALOG", "NOWPLAYING")
+        /** UI languages of OMP (the phone sends its resolved one). */
+        val LANGS = setOf("ru", "en")
         private val REPORT = Regex("^http://.+", RegexOption.IGNORE_CASE)
 
         /** The pairing code as 4 digits: a string as given, a whole JSON number 0..9999 left-padded («0123»). */

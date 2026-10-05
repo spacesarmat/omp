@@ -146,6 +146,8 @@ export interface OmpNativeApi {
   secretDelete(key: string): Promise<void>;
   /** Writes `text` to a file `name` and opens the system «Поделиться». */
   shareText(o: { name: string; text: string; title?: string }): Promise<void>;
+  /** The page's resolved UI language for the native copy (SharedPreferences `omp.lang`); never rejects, no-op off-device. */
+  setLanguage(lang: 'ru' | 'en'): Promise<void>;
   /** The visible Cloudflare check (native sheet); cookies never come back. */
   cloudflareVisible(req: CloudflareVisibleRequest): Promise<{ result?: string; sent?: boolean; via?: string }>;
   /** When the stored Cloudflare clearance of the site of url ends; null without one (or off-device). */
@@ -236,6 +238,7 @@ interface OmpNativePlugin {
   secretSet(o: { key: string; value: string }): Promise<void>;
   secretDelete(o: { key: string }): Promise<void>;
   shareText(o: { name: string; text: string; title?: string }): Promise<void>;
+  setLanguage(o: { lang: string }): Promise<void>;
   cloudflareVisible(o: CloudflareVisibleRequest): Promise<{ result?: string; sent?: boolean; via?: string }>;
   cloudflareClearance(o: { url: string }): Promise<{ until?: number | null }>;
   cloudflareWatch(o: { url?: string; token?: string; notify?: string; notifyLogin?: string }): Promise<void>;
@@ -622,6 +625,16 @@ export const native: OmpNativeApi = {
   shareText(o) {
     if (!plugin) return unavailable();
     return logged('shareText', plugin.shareText(o));
+  },
+
+  setLanguage(lang) {
+    if (!plugin) return Promise.resolve();
+    // an older APK has no such method: the native copy just stays as it was
+    try {
+      return plugin.setLanguage({ lang }).then(noop, noop);
+    } catch {
+      return Promise.resolve();
+    }
   },
 
   cloudflareVisible(req) {

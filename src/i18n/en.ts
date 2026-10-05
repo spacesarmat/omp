@@ -16,4 +16,12 @@ export const en: EnDict<typeof ru> = {
     day: '{month} {d}',
     dayTime: '{day}, {time}',
   },
+  settings: {
+    language: {
+      title: 'Language',
+      system: 'As on the device',
+      ru: 'Русский',
+      en: 'English',
+    },
+  },
 };

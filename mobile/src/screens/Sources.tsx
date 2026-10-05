@@ -33,6 +33,7 @@ import { flareSolverrUrl, onFlareChange } from '../../../src/sources/flareStore'
 import { flareStatus, onFlareStatus, phoneFlareNote, refreshFlareStatus } from '../../../src/sources/flaresolverr';
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
 import { log } from '../../../src/lib/log';
+import { lang } from '../../../src/i18n';
 import { activeTv, isAtv } from '../tv/tvStore';
 import { holdSignInScreen } from '../cloudflare';
 import { sendSourcesToTv, sessionIp, SOURCES_REJECTED, tvState, type SourcesSent } from '../tv/tvClient';
@@ -121,11 +122,13 @@ export function transferPayload(
     else dropped.push(id);
   });
   const all = (login ? ['rutracker'] : []).concat(Object.keys(logins || {}));
-  const full = validateTransferPayload(buildTransferPayload(list, rut, indexers, flare, sites));
+  // the phone's resolved language goes with every variant: the TV stores it as its own
+  const language = lang.value;
+  const full = validateTransferPayload(buildTransferPayload(list, rut, indexers, flare, sites, language));
   if (full) return { payload: full, loginDropped: dropped.length > 0, droppedLogins: dropped, tooBig: false, indexersDropped: false };
-  const noLogin = validateTransferPayload(buildTransferPayload(list, null, indexers, flare));
+  const noLogin = validateTransferPayload(buildTransferPayload(list, null, indexers, flare, null, language));
   if (noLogin) return { payload: noLogin, loginDropped: all.length > 0, droppedLogins: all, tooBig: all.length > dropped.length, indexersDropped: false };
-  const bare = validateTransferPayload(buildTransferPayload(list, null, undefined, flare));
+  const bare = validateTransferPayload(buildTransferPayload(list, null, undefined, flare, null, language));
   if (!bare) throw new Error(SOURCES_NOT_READY);
   return { payload: bare, loginDropped: all.length > 0, droppedLogins: all, tooBig: all.length > dropped.length, indexersDropped: !!(indexers && indexers.length) };
 }
@@ -168,10 +171,10 @@ export function sendTransfer(
     sent: p.payload.indexers ? p.payload.indexers.length : 0,
   };
   const withSessions = !!sessions && Object.keys(sessions).length > 0;
-  const extras = !!(p.payload.indexers || p.payload.flaresolverr || p.payload.cloudflare || p.payload.logins) || withSessions;
+  const extras = !!(p.payload.indexers || p.payload.flaresolverr || p.payload.cloudflare || p.payload.logins || p.payload.language) || withSessions;
   return sendSourcesToTv(p.payload, withSessions ? sessions : undefined)
     .catch((e: unknown) => {
-      // an older OMP on the TV refuses the v0.15 parts (connections, FlareSolverr, Cloudflare switches, site logins)
+      // an older OMP on the TV refuses the v0.15 parts (connections, FlareSolverr, Cloudflare switches, site logins) and the v0.16 language
       if (!extras || !(e instanceof Error) || e.message !== SOURCES_REJECTED) throw e;
       if (state.sent) state.indexersDropped = true;
       if (p.payload.flaresolverr || p.payload.cloudflare) state.cloudflareDropped = true;

@@ -8,6 +8,8 @@ import type { SecretStore, SourceHttp } from '../sources/types';
 import type { UpdateInfo } from '../lib/updateInfo';
 import type { CloudflareVisibleRequest } from '../sources/cloudflareCheck';
 import type { BrowserCheck, BrowserLoginRequest } from '../sources/browserLogin';
+import { effect } from '@preact/signals';
+import { lang, type Lang } from '../i18n';
 
 type ApkFiles = NonNullable<UpdateInfo['apks']>;
 
@@ -71,6 +73,8 @@ export interface OmpNativeTvPlugin {
   siteBrowserLogin(o: BrowserLoginRequest): Promise<{ result?: string; host?: string; via?: string }>;
   /** The browser session the phone sent for the site (staged) opens its check page signed in: { ok, host? }. */
   siteSessionPending(o: { site: string; check: BrowserCheck }): Promise<{ ok?: boolean; host?: string }>;
+  /** The page's resolved UI language for the native copy (SharedPreferences `omp.lang`); missing in an older APK. */
+  setLanguage?(o: { lang: string }): Promise<unknown>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
@@ -118,6 +122,7 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     cloudflareClearance: (o) => np.call(cap, NAME, 'cloudflareClearance', o),
     siteBrowserLogin: (o) => np.call(cap, NAME, 'siteBrowserLogin', o),
     siteSessionPending: (o) => np.call(cap, NAME, 'siteSessionPending', o),
+    setLanguage: (o) => np.call(cap, NAME, 'setLanguage', o),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }
@@ -248,4 +253,22 @@ export function nativeClearance(url: string): Promise<number | null> {
     (r) => (r && typeof r.until === 'number' && isFinite(r.until) ? r.until : null),
     () => null,
   );
+}
+
+/** Android TV: the resolved UI language to the native side; a no-op on webOS (no plugin), never rejects. */
+export function nativeSetLanguage(l: Lang): Promise<void> {
+  const p = nativePlugin();
+  if (!p || typeof p.setLanguage !== 'function') return Promise.resolve();
+  try {
+    return p.setLanguage({ lang: l }).then(() => undefined, () => undefined);
+  } catch (e) {
+    return Promise.resolve();
+  }
+}
+
+/** Sends the resolved UI language to the native side now and on every change; returns the stopper. */
+export function syncNativeLanguage(set: (l: Lang) => Promise<void> = nativeSetLanguage): () => void {
+  return effect(() => {
+    void set(lang.value);
+  });
 }

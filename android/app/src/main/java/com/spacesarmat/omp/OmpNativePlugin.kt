@@ -93,7 +93,7 @@ import org.json.JSONObject
  * apkProgress { percent }, magnetReceived { link }, playerMessage { body }, monitorOpen { url }, monitorDone { summary? },
  * localServerState { running, error? }, localServerDownload { percent? , phase: download|verify }, nativePlayerState { session, index, time, duration, paused, buffering,
  * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV);
- * phone remote on Android TV ([TvRemote]): remoteLaunch { params }, remoteAttach { report }, remoteKey { name },
+ * phone remote on Android TV ([TvRemote]): remoteLaunch { params }, remoteAttach { report, lang? }, remoteKey { name },
  * remoteText { text | delete | enter }, phonePaired { phone }, remoteSources { id, sources, rutracker, phone }.
  * Install assistant ([com.spacesarmat.omp.install]): installProgress { phase, item, percent?, version? }.
  */
@@ -167,6 +167,16 @@ class OmpNativePlugin : Plugin() {
     @PluginMethod
     fun isTv(call: PluginCall) {
         call.resolve(JSObject().put("tv", TvMode.isTv(context)))
+    }
+
+    /** { lang: ru | en }: the page's resolved UI language, kept for the native copy under [LANG_KEY]; another value is ignored. */
+    @PluginMethod
+    fun setLanguage(call: PluginCall) {
+        val lang = call.getString("lang")
+        if (lang == "ru" || lang == "en") {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(LANG_KEY, lang).apply()
+        }
+        call.resolve()
     }
 
     // ---- discovery ----
@@ -1692,6 +1702,8 @@ class OmpNativePlugin : Plugin() {
         private const val SECRETS_FAILED = SourceServices.SECRETS_FAILED
         private const val PREFS = "omp-native"
         private const val CACHE_SET = "torrserverCacheConfigured"
+        /** The page's UI language (ru | en) in [PREFS]. */
+        const val LANG_KEY = "omp.lang"
         private val IPV4 = Regex("^((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$")
         private val magnetLock = Any()
         private var pendingMagnet: String? = null

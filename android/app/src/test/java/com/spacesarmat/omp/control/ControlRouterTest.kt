@@ -25,8 +25,8 @@ class ControlRouterTest {
         override fun launch(params: JSONObject) {
             calls.add("launch:$params")
         }
-        override fun attach(report: String) {
-            calls.add("attach:$report")
+        override fun attach(report: String, lang: String?) {
+            calls.add("attach:$report" + (lang?.let { ":$it" } ?: ""))
         }
         override fun key(name: String) {
             calls.add("key:$name")
@@ -370,6 +370,27 @@ class ControlRouterTest {
         val body = """{"v":1,"sources":{$sources},"rutracker":{"username":"${"u".repeat(100)}","password":"${"п".repeat(200)}"}${indexersPart(*items.toTypedArray())}}"""
         assertTrue(body.toByteArray(Charsets.UTF_8).size <= SourcesProtocol.MAX_BODY)
         assertEquals(200, req("POST", "/omp/sources", body, t).status)
+    }
+
+    @Test
+    fun attachCarriesThePhoneLanguageAnUnknownOneIsDropped() {
+        val t = token()
+        calls.clear()
+        assertEquals(200, req("POST", "/omp/attach", "{\"report\":\"http://10.0.0.5:4000/omp/a\",\"lang\":\"en\"}", t).status)
+        assertEquals(200, req("POST", "/omp/attach", "{\"report\":\"http://10.0.0.5:4000/omp/a\",\"lang\":\"de\"}", t).status)
+        assertEquals(listOf("attach:http://10.0.0.5:4000/omp/a:en", "attach:http://10.0.0.5:4000/omp/a"), calls)
+    }
+
+    @Test
+    fun theTransferCarriesThePhoneLanguageOnlyRuOrEn() {
+        val t = token()
+        assertEquals(200, req("POST", "/omp/sources", sourcesBody(""","language":"en""""), t).status)
+        assertEquals("en", lastTransfer!!.language)
+        assertEquals(200, req("POST", "/omp/sources", sourcesBody(""), t).status)
+        assertNull(lastTransfer!!.language)
+        for (b in listOf(""","language":"de"""", ""","language":1""", ""","language":null""")) {
+            assertEquals(b, 400, req("POST", "/omp/sources", sourcesBody(b), t).status)
+        }
     }
 
     @Test

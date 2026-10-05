@@ -4,6 +4,8 @@ import { mockFetch } from './helpers/fetchMock';
 import { runLaunchParams } from '../src/launchActions';
 import { servers, activeServerId, addServer, setActiveServer } from '../src/store/servers';
 import { routeStack } from '../src/ui/nav';
+import { settings, resetSettings } from '../src/store/settings';
+import { lang } from '../src/i18n';
 
 const HASH = 'abcdef0123456789abcdef0123456789abcdef01';
 const top = () => routeStack.value[routeStack.value.length - 1];
@@ -112,6 +114,21 @@ describe('report launch param', () => {
   it('attaches and still plays', () => {
     runLaunchParams({ report: 'http://192.168.1.5:8765/r', play: 'https://cdn.example/a.mp4', title: 'A' });
     expect(phoneAttached.value).toBe(true);
+    expect(top().name).toBe('player');
+  });
+});
+
+describe('lang launch param', () => {
+  afterEach(() => resetSettings());
+  it('stores the phone language as the TV setting', () => {
+    runLaunchParams({ lang: 'en' });
+    expect(settings.value.language).toBe('en');
+    expect(lang.value).toBe('en');
+    expect(routeStack.value).toEqual([{ name: 'connect' }]);
+  });
+  it('applies it with the rest of the plan', () => {
+    runLaunchParams({ lang: 'ru', play: 'https://cdn.example/a.mp4', title: 'A' });
+    expect(settings.value.language).toBe('ru');
     expect(top().name).toBe('player');
   });
 });

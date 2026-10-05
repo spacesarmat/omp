@@ -14,4 +14,12 @@ export const ru = {
     day: '{d} {month}',
     dayTime: '{day} {time}',
   },
+  settings: {
+    language: {
+      title: 'Язык',
+      system: 'Как в системе',
+      ru: 'Русский',
+      en: 'English',
+    },
+  },
 };

@@ -16,6 +16,7 @@ import type { Source, SourceContext } from '../../src/sources/types';
 import { indexerConnections, indexerKeyName, reloadIndexers } from '../../src/sources/indexerStore';
 import { SOURCES_REJECTED } from '../src/tv/tvClient';
 import { CLOUDFLARE_NOT_SENT, INDEXERS_NOT_SENT, indexersText } from '../src/screens/Sources';
+import { applyLanguageSetting } from '../../src/i18n';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
 const ATV: SavedTv = { ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095 };
@@ -385,5 +386,14 @@ describe('«Передать на телевизор» with Jackett / Prowlarr',
     expect(await sendSourcesToTv(payload)).toEqual({ indexers: 0 });
     answer = () => ({ status: 400, body: '{"error":"bad_request"}' });
     await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_REJECTED);
+  });
+});
+
+describe('transfer language', () => {
+  it('the payload carries the phone resolved language', async () => {
+    const list: Source[] = [{ id: 'rutor', name: 'rutor', kind: 'builtin', search: () => Promise.resolve([]) }];
+    expect(transferPayload(list, null).payload.language).toBe('ru');
+    applyLanguageSetting('en');
+    expect(transferPayload(list, null).payload.language).toBe('en');
   });
 });

@@ -35,6 +35,8 @@ import { openWhatsNew } from '../../../src/store/whatsNew';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
+import { Sheet } from '../ui/Sheet';
+import { t, type LanguageSetting } from '../../../src/i18n';
 
 type Checker = (o: { manual: boolean; url?: string }) => Promise<CheckResult>;
 let checker: Checker | null = null;
@@ -205,6 +207,52 @@ function LocalServerSection() {
   );
 }
 
+const CHECK = 'M5 12l5 5l9-10';
+const LANGUAGES: LanguageSetting[] = ['system', 'ru', 'en'];
+
+/** «Как в системе» / «Русский» / «English» in the current language. */
+function languageName(v: LanguageSetting): string {
+  return v === 'ru' ? t('settings.language.ru') : v === 'en' ? t('settings.language.en') : t('settings.language.system');
+}
+
+/** «Язык»: the row shows the setting, a sheet offers the three choices; a choice applies at once. */
+function LanguageRow() {
+  const [open, setOpen] = useState(false);
+  const cur = settings.value.language;
+  const title = t('settings.language.title');
+  return (
+    <>
+      <button type="button" class="m-set-row m-set-pick" data-row="language" onClick={() => setOpen(true)}>
+        <span>{title}</span>
+        <span class="m-muted">{languageName(cur)} ›</span>
+      </button>
+      {open && (
+        <Sheet label={title} onClose={() => setOpen(false)}>
+          <div class="m-sheet-title">{title}</div>
+          <div class="m-sub-pick" role="radiogroup" aria-label={title}>
+            {LANGUAGES.map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={cur === v}
+                class="m-opt"
+                onClick={() => {
+                  updateSettings({ language: v });
+                  setOpen(false);
+                }}
+              >
+                <span class="m-opt-name m-grow">{languageName(v)}</span>
+                {cur === v && <Icon d={CHECK} size={20} />}
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
+    </>
+  );
+}
+
 /** OMP version on the connected TV; an old one gets «Обновить на ТВ». */
 function TvOmpRow() {
   const connected = tvState.value === 'connected';
@@ -309,6 +357,9 @@ export function Settings() {
             onToggle={() => updateSettings({ betaUpdates: !settings.value.betaUpdates })}
           />
         </div>
+      </section>
+      <section class="m-set-group">
+        <LanguageRow />
       </section>
       {localServer.value.supported && <LocalServerSection />}
       <section class="m-set-group">

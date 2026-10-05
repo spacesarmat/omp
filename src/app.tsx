@@ -25,6 +25,7 @@ import { platformKind } from './platform/env';
 import { installAndroidKeyBridge } from './platform/androidKeys';
 import { installAndroidRemote } from './platform/androidRemote';
 import { installAndroidScale } from './platform/androidScale';
+import { syncNativeLanguage } from './platform/androidNative';
 
 /**
  * «Источники поиска» (Android TV only) is a separate chunk: its indexer status code stays out of the LG bundle.
@@ -96,6 +97,8 @@ export function App() {
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidKeyBridge() : undefined), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidRemote() : undefined), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidScale() : undefined), []);
+  // the native copy follows the page's language (Android TV only: LG has no plugin)
+  useEffect(() => (platformKind() === 'androidtv' ? syncNativeLanguage() : undefined), []);
   useEffect(() => {
     const t = setTimeout(() => { checkForUpdate({ manual: false }); }, 3000);
     return () => clearTimeout(t);

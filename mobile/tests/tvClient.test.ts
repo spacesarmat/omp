@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import {
   setTransport,
   tvState,
@@ -373,6 +374,17 @@ describe('tvClient commands', () => {
     });
     fake.emit({ type: 'response', id: req.id, payload: { returnValue: true } });
     await expect(p).resolves.toBeUndefined();
+  });
+
+  it('LG launch params carry the phone resolved language', async () => {
+    await connected(fake);
+    applyLanguageSetting('en');
+    const p = launchOnTv({ torrent: 'h' });
+    await flush();
+    const req = fake.sent[fake.sent.length - 1];
+    expect(req.payload).toEqual({ id: 'com.spacesarmat.torrplayer', params: { torrent: 'h', lang: 'en' } });
+    fake.emit({ type: 'response', id: req.id, payload: { returnValue: true } });
+    await p;
   });
 
   it('reports a missing OMP app', async () => {

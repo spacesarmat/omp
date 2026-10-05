@@ -19,6 +19,7 @@ import { HB_REPO_URL } from '../lib/updateInfo';
 import { platformKind } from '../platform/env';
 import { logEntries, clearLog, logVersion, logTime, LEVEL_LABEL, AREA_LABEL } from '../lib/log';
 import { CACHE, PRELOAD, READAHEAD, CONNS, RATE, DISCONNECT, withCurrent } from '../lib/serverSettingsOptions';
+import { t, type LanguageSetting } from '../i18n';
 
 const SEEK = [5, 10, 15, 30, 60].map((v) => ({ value: v, label: v + ' с' }));
 const SUB_COLOR: { value: 'white' | 'yellow'; label: string }[] = [
@@ -27,6 +28,15 @@ const SUB_COLOR: { value: 'white' | 'yellow'; label: string }[] = [
 ];
 
 const LOG_BRIEF = 20;
+
+/** «Язык»: a press cycles Как в системе → Русский → English (read at render: the labels follow the language). */
+function languageOptions(): { value: LanguageSetting; label: string }[] {
+  return [
+    { value: 'system', label: t('settings.language.system') },
+    { value: 'ru', label: t('settings.language.ru') },
+    { value: 'en', label: t('settings.language.en') },
+  ];
+}
 
 /** Android TV: «Плеер» — the engine of the native player (per torrent: the player menu). */
 function PlayerEngineSection() {
@@ -144,6 +154,13 @@ export function SettingsScreen() {
   return (
     <FocusGroup focusKey="SETTINGS" className="screen settings">
       <h1>Настройки</h1>
+      <ChoiceRow
+        focusKey="set-language"
+        label={t('settings.language.title')}
+        value={s.language}
+        options={languageOptions()}
+        onChange={(v) => updateSettings({ language: v })}
+      />
 
       <h2>Сервер</h2>
       <div class="row">

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import { mockFetch, type MockResponse } from '../../tests/helpers/fetchMock';
 import {
   setTransport,
@@ -145,7 +146,7 @@ describe('Android TV transport', () => {
   it('launches with POST /omp/launch {params}', async () => {
     saveTv(ATV);
     await launchOnTv({ server: 'http://192.168.1.2:8090', torrent: 'abc', file: 1, t: 0 });
-    expect(posts('/omp/launch')).toEqual([{ params: { server: 'http://192.168.1.2:8090', torrent: 'abc', file: 1, t: 0 } }]);
+    expect(posts('/omp/launch')).toEqual([{ params: { server: 'http://192.168.1.2:8090', torrent: 'abc', file: 1, t: 0, lang: 'ru' } }]);
     expect(calls.find((c) => c.url === BASE + '/omp/launch')!.auth).toBe('Bearer ' + TOKEN);
   });
 
@@ -247,10 +248,19 @@ describe('Android TV transport', () => {
     expect(await ompVersionOnTv()).toBe('0.10.0');
   });
 
+  it('launch and attach carry the phone resolved language', async () => {
+    saveTv(ATV);
+    applyLanguageSetting('en');
+    await launchOnTv({ open: 'update' });
+    await attachOnTv('http://192.168.1.2:8123/omp/x');
+    expect(posts('/omp/launch')).toEqual([{ params: { open: 'update', lang: 'en' } }]);
+    expect(posts('/omp/attach')).toEqual([{ report: 'http://192.168.1.2:8123/omp/x', lang: 'en' }]);
+  });
+
   it('attach posts the report URL', async () => {
     saveTv(ATV);
     await attachOnTv('http://192.168.1.2:8123/omp/x');
-    expect(posts('/omp/attach')).toEqual([{ report: 'http://192.168.1.2:8123/omp/x' }]);
+    expect(posts('/omp/attach')).toEqual([{ report: 'http://192.168.1.2:8123/omp/x', lang: 'ru' }]);
   });
 
   it('warm-up stops at once when the TV forgot the phone', async () => {

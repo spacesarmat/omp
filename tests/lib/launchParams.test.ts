@@ -87,3 +87,15 @@ describe('launch params: from (watch journal source)', () => {
   });
 });
 
+
+describe('lang param', () => {
+  it('carries the phone language with any plan, alone too', () => {
+    expect(parseLaunchParams({ lang: 'en' })).toEqual({ invalid: false, lang: 'en' });
+    expect(parseLaunchParams({ lang: 'ru', torrent: HASH })!.lang).toBe('ru');
+  });
+  it('ignores an unknown language (a newer phone does not break an older TV)', () => {
+    expect(parseLaunchParams({ lang: 'de' })).toBeNull();
+    expect(parseLaunchParams({ lang: 5, torrent: HASH })!.lang).toBeUndefined();
+    expect(parseLaunchParams({ lang: 5, torrent: HASH })!.invalid).toBe(false);
+  });
+});
