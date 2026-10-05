@@ -8,6 +8,7 @@ import { errorMessage } from '../../../src/api/http';
 import { log } from '../../../src/lib/log';
 import { t, fmtSize } from '../../../src/i18n';
 import { ru } from '../../../src/i18n/ru';
+import { en } from '../../../src/i18n/en';
 import { TORRSERVER_VERSION } from './torrserverVersion';
 
 export const LOCAL_URL = 'http://127.0.0.1:8090';
@@ -121,9 +122,14 @@ export const CACHE_LIMIT_BYTES = 1024 * 1024 * 1024;
 /** Start of the native (Russian) text when the binary does not run on this device (linker, 16 KB pages, instant crash). */
 export const CANNOT_RUN_PREFIX = ru.localServer.cannotRun;
 
+/** The native text (Russian or English, by the device language) says the binary cannot run here. */
+export function isCannotRun(msg: string): boolean {
+  return msg.startsWith(ru.localServer.cannotRun) || msg.startsWith(en.localServer.cannotRun);
+}
+
 /** Logs a failed start: an error entry when the server cannot run on this device at all. */
 function logStartFailure(e: unknown): void {
-  if (errorMessage(e).startsWith(CANNOT_RUN_PREFIX)) log('error', 'server', t('localServer.cannotRun'));
+  if (isCannotRun(errorMessage(e))) log('error', 'server', t('localServer.cannotRun'));
   else log('warn', 'server', t('localServer.logStartFailed'));
 }
 
@@ -224,7 +230,7 @@ export async function autostartLocal(): Promise<void> {
 export function watchLocalServer(): () => void {
   return deps.native.onLocalServerState((s) => {
     localServer.value = { ...localServer.value, running: s.running, error: s.error };
-    if (s.error && s.error.startsWith(CANNOT_RUN_PREFIX)) log('error', 'server', t('localServer.cannotRun'));
+    if (s.error && isCannotRun(s.error)) log('error', 'server', t('localServer.cannotRun'));
     if (s.running) void refreshLocalServer();
   });
 }

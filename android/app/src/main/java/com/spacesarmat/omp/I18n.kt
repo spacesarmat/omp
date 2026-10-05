@@ -354,7 +354,7 @@ object I18n {
         "ts.dlSpace" to "Not enough space: about {mb} MB needed. Free up space on the phone and try again.",
         "ts.dlOther" to "Could not download TorrServer. Try again later.",
         "ts.dlCancelled" to "The download was cancelled",
-        "ts.cannotRun" to "The own server did not start on this device — use TorrServer on a computer or NAS",
+        "ts.cannotRun" to "The built-in server could not start on this device — use TorrServer on a computer or NAS",
         "ts.notifTitle" to "TorrServer is running",
         "ts.notifStop" to "Stop",
         "ts.notifOpen" to "Open OMP",

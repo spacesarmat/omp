@@ -346,11 +346,11 @@ const phoneFallback = () => t('history.phone');
 function ompTvs(v: unknown): FoundOmpTv[] {
   const out: FoundOmpTv[] = [];
   if (!Array.isArray(v)) return out;
-  for (const t of v) {
-    if (!t || typeof t !== 'object' || typeof t.ip !== 'string' || !IPV4.test(t.ip)) continue;
-    if (out.some((o) => o.ip === t.ip)) continue;
-    const port = Number.isInteger(t.port) && t.port > 0 && t.port < 65536 ? t.port : ATV_PORT;
-    out.push({ ip: t.ip, port, name: text(t.name) ?? 'Android TV', version: text(t.version) ?? '' });
+  for (const item of v) {
+    if (!item || typeof item !== 'object' || typeof item.ip !== 'string' || !IPV4.test(item.ip)) continue;
+    if (out.some((o) => o.ip === item.ip)) continue;
+    const port = Number.isInteger(item.port) && item.port > 0 && item.port < 65536 ? item.port : ATV_PORT;
+    out.push({ ip: item.ip, port, name: text(item.name) ?? 'Android TV', version: text(item.version) ?? '' });
   }
   return out;
 }
@@ -359,11 +359,11 @@ function ompTvs(v: unknown): FoundOmpTv[] {
 function castTvs(v: unknown): FoundCastTv[] {
   const out: FoundCastTv[] = [];
   if (!Array.isArray(v)) return out;
-  for (const t of v) {
-    if (!t || typeof t !== 'object' || typeof t.ip !== 'string' || !IPV4.test(t.ip)) continue;
-    if (out.some((o) => o.ip === t.ip)) continue;
-    const tv: FoundCastTv = { ip: t.ip, name: text(t.name) ?? 'Android TV' };
-    const model = text(t.model);
+  for (const item of v) {
+    if (!item || typeof item !== 'object' || typeof item.ip !== 'string' || !IPV4.test(item.ip)) continue;
+    if (out.some((o) => o.ip === item.ip)) continue;
+    const tv: FoundCastTv = { ip: item.ip, name: text(item.name) ?? 'Android TV' };
+    const model = text(item.model);
     if (model) tv.model = model;
     out.push(tv);
   }
