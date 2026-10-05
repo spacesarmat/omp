@@ -19,13 +19,13 @@ import { getHealth } from '../../../src/sources/store';
 import {
   filterQuality,
   isCloudflare,
-  JACKETT_HINT,
+  jackettHint,
   progressText,
   resultKey,
   sortResults,
   sourceName,
   stableOrder,
-  SORT_LABELS,
+  sortLabels,
   type QualityFilter,
   type SortKey,
 } from '../../../src/sources/view';
@@ -334,7 +334,7 @@ export function Add({ link }: { link?: string }) {
   const visible = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
   memo.order = visible.map(resultKey);
   const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
-  const sortLabel = SORT_LABELS.filter((s) => s.key === sort)[0].label;
+  const sortLabel = sortLabels().filter((s) => s.key === sort)[0].label;
   const catRow = catSheet !== null ? (rows || []).filter((x) => resultKey(x) === catSheet)[0] : undefined;
 
   return (
@@ -423,7 +423,7 @@ export function Add({ link }: { link?: string }) {
       {blocked.length > 0 && (
         <div class="m-hint-warn" data-hint="jackett">
           {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ')}
-          <div>{JACKETT_HINT}</div>
+          <div>{jackettHint()}</div>
         </div>
       )}
       {searchError && <LaunchError message={searchError} />}
@@ -471,7 +471,7 @@ export function Add({ link }: { link?: string }) {
       {sheet === 'sort' && (
         <Sheet label="Сортировка" onClose={() => setSheet(null)}>
           <div class="m-sheet-title">Сортировка</div>
-          {SORT_LABELS.map((s) => (
+          {sortLabels().map((s) => (
             <button
               key={s.key}
               type="button"

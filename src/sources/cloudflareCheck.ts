@@ -4,58 +4,58 @@
 // is run again once it is passed. The cookies never reach the page: the native side stores them (or, for the TV, the
 // phone sends them to the TV over the pairing channel). All the Russian copy of the check lives here; the native dialog
 // gets it as parameters. Shared by the phone and the TV bundles: Chromium 53 rules, no platform imports.
+import { t } from '../i18n';
 import { log } from '../lib/log';
 import { cloudflareFailure, hostOf, logCloudflare, siteRoot } from './cloudflare';
 import { allSources, getSource } from './registry';
 import { isCloudflareBypassOn } from './store';
 import type { Source } from './types';
 
-// ---- copy (mockups PhoneCloudflare, TvCloudflare, PhoneSite, Main) ----
+/// ---- copy (mockups PhoneCloudflare, TvCloudflare, PhoneSite, Main) ----
 
-export const SHEET_TITLE = 'Подтвердите, что вы не робот';
-export const SHEET_NOTE_TV = 'После проверки OMP сам передаст разрешение на телевизор. Пароли и личные данные не передаются.';
-export const CANCEL = 'Отмена';
-export const TV_TEXT = 'Сайт просит подтвердить, что вы не робот. Пультом это неудобно — пройдите проверку на телефоне.';
-export const TV_PHONE = 'Пройти на телефоне';
-export const TV_REMOTE = 'Отметить пультом';
-/** %s = the phone's name (the native dialog fills it in). */
-export const TV_HINT = 'Телефон «%s» получит запрос';
-export const TV_WAITING = 'Пройдите проверку на телефоне «%s»';
+export const sheetTitle = (): string => t('cloudflare.sheetTitle');
+export const sheetNoteTv = (): string => t('cloudflare.sheetNoteTv');
+export const cancelText = (): string => t('cloudflare.cancel');
+export const tvText = (): string => t('cloudflare.tvText');
+export const tvPhone = (): string => t('cloudflare.tvPhone');
+export const tvRemote = (): string => t('cloudflare.tvRemote');
+/** The text keeps `%s` = the phone's name (the native dialog fills it in). */
+export const tvHint = (): string => t('cloudflare.tvHint');
+export const tvWaiting = (): string => t('cloudflare.tvWaiting');
 /** No phone is paired with the TV. */
-export const NO_PHONE = 'Подключите телефон к телевизору';
+export const noPhone = (): string => t('cloudflare.noPhone');
 /** A phone is paired, but OMP is not open on it (or it cannot show the request). */
-export const PHONE_CLOSED = 'Откройте OMP на телефоне';
+export const phoneClosed = (): string => t('cloudflare.phoneClosed');
 /** Another Cloudflare check holds the page: the dialog waits for it. */
-export const GATE_WAIT = 'Ждём, пока закончится другая проверка…';
-/** By the native relay outcome: what the TV dialog says when the phone did not pass the check. */
-export const TV_ERRORS: { [outcome: string]: string } = {
-  NOT_TAKEN: 'Телефон не ответил — откройте OMP на телефоне',
-  TIMEOUT: 'Телефон не прислал ответ вовремя — попробуйте ещё раз',
-  CANCELLED: 'Проверку на телефоне отменили',
-  FAILED: 'На телефоне проверку пройти не удалось',
-  STORE_FAILED: 'Телевизор не смог сохранить разрешение: защищённое хранилище недоступно',
-  BUSY: 'Телевизор уже ждёт ответ телефона',
-  UNAVAILABLE: PHONE_CLOSED,
-};
-/** The phone's notification when the app is in the background (%s = the site). */
-export const WATCH_NOTIFY = 'Телевизор просит пройти проверку на %s';
-export const SENT_TO_TV = 'Разрешение передано на телевизор';
-export const NOT_SENT_TO_TV = 'Не удалось передать разрешение на телевизор — попробуйте ещё раз';
-export const CHECK_BUSY = 'Уже идёт другая проверка Cloudflare — попробуйте через минуту';
-export const CHECK_FAILED = 'Не удалось открыть проверку Cloudflare';
+export const gateWait = (): string => t('cloudflare.gateWait');
+/** By the native relay outcome (a code, never a text): what the TV dialog says when the phone did not pass the check. */
+export const tvErrors = (): { [outcome: string]: string } => ({
+  NOT_TAKEN: t('cloudflare.tvErrors.notTaken'),
+  TIMEOUT: t('cloudflare.tvErrors.timeout'),
+  CANCELLED: t('cloudflare.tvErrors.cancelled'),
+  FAILED: t('cloudflare.tvErrors.failed'),
+  STORE_FAILED: t('cloudflare.tvErrors.storeFailed'),
+  BUSY: t('cloudflare.tvErrors.busy'),
+  UNAVAILABLE: phoneClosed(),
+});
+/** The phone's notification when the app is in the background (the text keeps `%s` = the site). */
+export const watchNotify = (): string => t('cloudflare.watchNotify');
+export const sentToTv = (): string => t('cloudflare.sentToTv');
+export const notSentToTv = (): string => t('cloudflare.notSentToTv');
+export const checkBusy = (): string => t('cloudflare.checkBusy');
+export const checkFailed = (): string => t('cloudflare.checkFailed');
 
-export const BYPASS_LABEL = 'Обходить проверку Cloudflare';
-export const BYPASS_WARNING =
-  'Обход проверки может нарушать правила сайта. Включайте на свой риск. OMP обращается только к самому сайту и к вашему FlareSolverr.';
+export const bypassLabel = (): string => t('cloudflare.bypassLabel');
+export const bypassWarning = (): string => t('cloudflare.bypassWarning');
 
 /** «Сайт rustorka просит пройти проверку Cloudflare.» + «Это нужно для телевизора «Гостиная».» when the TV asked. */
 export function sheetText(site: string, tv?: string): string {
-  return 'Сайт ' + site + ' просит пройти проверку Cloudflare.' + (tv ? ' Это нужно для телевизора «' + tv + '».' : '');
+  return t('cloudflare.sheetText', { site }) + (tv ? ' ' + t('cloudflare.forTv', { tv }) : '');
 }
 
 /** «rustorka: проверка Cloudflare». */
 export function tvTitle(site: string): string {
-  return site + ': проверка Cloudflare';
+  return t('cloudflare.tvTitle', { site });
 }
 
 function two(n: number): string {
@@ -66,7 +66,7 @@ function two(n: number): string {
 export function clearanceText(until: number | null | undefined, now: number = Date.now()): string | null {
   if (typeof until !== 'number' || !isFinite(until) || until <= now) return null;
   const d = new Date(until);
-  return 'проверка пройдена · действует до ' + two(d.getHours()) + ':' + two(d.getMinutes());
+  return t('cloudflare.clearance', { time: two(d.getHours()) + ':' + two(d.getMinutes()) });
 }
 
 export interface SiteNote {
@@ -79,10 +79,10 @@ export interface SiteNote {
  * the clearance time, or just «обход Cloudflare».
  */
 export function tvSiteNote(bypass: boolean, needsCheck: boolean, until: number | null, now: number = Date.now()): SiteNote {
-  if (!bypass) return { text: 'выключен', tone: 'muted' };
-  if (needsCheck) return { text: 'нужна проверка — пройдите на телефоне', tone: 'warn' };
+  if (!bypass) return { text: t('sources.state.off'), tone: 'muted' };
+  if (needsCheck) return { text: t('cloudflare.noteNeedsCheck'), tone: 'warn' };
   const c = clearanceText(until, now);
-  return { text: c ? 'обход Cloudflare · ' + c : 'обход Cloudflare', tone: 'ok' };
+  return { text: c ? t('cloudflare.noteBypassUntil', { until: c }) : t('cloudflare.noteBypass'), tone: 'ok' };
 }
 
 /** Arguments of OmpNative.cloudflareVisible (phone and TV). */
@@ -113,16 +113,16 @@ export function tvCheckRequest(site: { name: string; url: string }): CloudflareV
     site: site.name,
     mode: 'tv',
     title: tvTitle(site.name),
-    text: TV_TEXT,
-    cancel: CANCEL,
-    phone: TV_PHONE,
-    remote: TV_REMOTE,
-    hint: TV_HINT,
-    noPhone: NO_PHONE,
-    phoneClosed: PHONE_CLOSED,
-    waiting: TV_WAITING,
-    gateWait: GATE_WAIT,
-    errors: TV_ERRORS,
+    text: tvText(),
+    cancel: cancelText(),
+    phone: tvPhone(),
+    remote: tvRemote(),
+    hint: tvHint(),
+    noPhone: noPhone(),
+    phoneClosed: phoneClosed(),
+    waiting: tvWaiting(),
+    gateWait: gateWait(),
+    errors: tvErrors(),
   };
 }
 
@@ -132,13 +132,13 @@ export function phoneCheckRequest(site: { name: string; url: string }, forTv?: {
     url: site.url,
     site: site.name,
     mode: 'phone',
-    title: SHEET_TITLE,
+    title: sheetTitle(),
     text: sheetText(site.name, forTv ? forTv.tv : undefined),
-    cancel: CANCEL,
-    gateWait: GATE_WAIT,
+    cancel: cancelText(),
+    gateWait: gateWait(),
   };
   if (forTv) {
-    r.note = SHEET_NOTE_TV;
+    r.note = sheetNoteTv();
     r.forTv = forTv.id;
   }
   return r;
@@ -244,7 +244,7 @@ export function onSearchFailure(sourceId: string, error: unknown, asked: Checked
     (r) => {
       if (r === 'solved') retry();
     },
-    () => log('warn', 'search', 'Cloudflare: проверка не открылась'),
+    () => log('warn', 'search', t('cloudflare.logNotOpened')),
   );
   return true;
 }

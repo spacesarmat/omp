@@ -1,6 +1,6 @@
 // rutor.info: open search page with magnets in the list (UTF-8).
 import { absUrl, parseDate, parseSize, textOf } from './html';
-import { loadDoc, makeResult, mergePages, PARSE_ERROR, toInt } from './site';
+import { loadDoc, makeResult, mergePages, parseError, toInt } from './site';
 import type { FeedCategory, Source, SourceContext, SourceResult } from './types';
 
 const BASE = 'https://rutor.info';
@@ -10,7 +10,7 @@ const FEED: { [c: string]: number[] } = { movie: [1, 5], tv: [4, 16], anime: [10
 
 function parse(doc: Document, base: string): SourceResult[] {
   const index = doc.getElementById('index');
-  if (!index) throw new Error(PARSE_ERROR);
+  if (!index) throw new Error(parseError());
   const out: SourceResult[] = [];
   const rows = index.querySelectorAll('tr.gai, tr.tum');
   for (let i = 0; i < rows.length; i++) {

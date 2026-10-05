@@ -3,7 +3,7 @@ import { Sheet } from './Sheet';
 import { Icon } from './Icon';
 import { navigate } from '../nav';
 import { errorMessage } from '../../../src/api/http';
-import { isCloudflare, JACKETT_HINT } from '../../../src/sources/view';
+import { isCloudflare, jackettHint } from '../../../src/sources/view';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { browserSuggestion } from '../../../src/sources/browserLogin';
 import { BrowserLoginButton } from './BrowserLoginButton';
@@ -115,7 +115,7 @@ export function TrackerLogin({
         )}
         {isCloudflare(error) && (
           <div class="m-hint-warn" data-hint="jackett">
-            {JACKETT_HINT}
+            {jackettHint()}
             <div>
               <button
                 type="button"

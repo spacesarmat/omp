@@ -17,11 +17,11 @@ import { clearLog, logEntries } from '../../src/lib/log';
 import { kinozal } from '../../src/sources/kinozal';
 import { resetMirrors } from '../../src/sources/mirrors';
 import {
-  BROWSER_STORE_FAILED,
-  BROWSER_CAPTCHA,
-  BROWSER_DONE_TITLE,
-  BROWSER_LOGIN,
-  BROWSER_SENT_TV,
+  browserStoreFailed,
+  browserCaptcha,
+  browserDoneTitle,
+  browserLoginText,
+  browserSentTv,
   setBrowserLoginPlatform,
   type BrowserLoginPlatform,
   type BrowserLoginRequest,
@@ -145,24 +145,24 @@ afterEach(async () => {
 describe('phone: «Войти через браузер» on the site screen', () => {
   it('is under the form; a captcha suggests it; a browser login shows «Вход выполнен в браузере»; «Выйти» clears it', async () => {
     await mountWith(<SourceSite id="kinozal" clearance={() => Promise.resolve(null)} ctx={() => site.ctx} />);
-    expect(btn(BROWSER_LOGIN)).toBeTruthy();
-    expect(el.textContent).not.toContain(BROWSER_CAPTCHA);
+    expect(btn(browserLoginText())).toBeTruthy();
+    expect(el.textContent).not.toContain(browserCaptcha());
     type('#m-site-user', 'kino');
     type('#m-site-pass', 'secret-test');
     act(() => btn('Войти')!.click());
     await flush();
     // the form login hit a captcha: the suggestion comes, the button becomes the main one
-    expect(el.querySelector('[data-hint="browser"]')!.textContent).toBe(BROWSER_CAPTCHA);
-    expect(btn(BROWSER_LOGIN)!.className).toContain('m-btn-primary');
+    expect(el.querySelector('[data-hint="browser"]')!.textContent).toBe(browserCaptcha());
+    expect(btn(browserLoginText())!.className).toContain('m-btn-primary');
     // cancelled: nothing changes
     logins = [{ result: 'cancelled' }];
-    act(() => btn(BROWSER_LOGIN)!.click());
+    act(() => btn(browserLoginText())!.click());
     await flush();
     expect(site.secrets).toEqual({});
     logins = [{ result: 'ok', host: 'kinozal.me' }];
-    act(() => btn(BROWSER_LOGIN)!.click());
+    act(() => btn(browserLoginText())!.click());
     await flush();
-    expect(el.textContent).toContain(BROWSER_DONE_TITLE);
+    expect(el.textContent).toContain(browserDoneTitle());
     expect(toast.value).toBe('Вход в Kinozal выполнен');
     // no password in this mode: only the marker
     expect(site.secrets).toEqual({ 'kinozal.browser': '1' });
@@ -170,14 +170,14 @@ describe('phone: «Войти через браузер» on the site screen', (
     await flush();
     expect(site.secrets).toEqual({});
     expect(site.cleared.length).toBe(3);
-    expect(btn(BROWSER_LOGIN)).toBeTruthy();
+    expect(btn(browserLoginText())).toBeTruthy();
     // signed in, but the encrypted storage refused it: said so, no marker
     logins = [{ result: 'store_failed' }];
-    act(() => btn(BROWSER_LOGIN)!.click());
+    act(() => btn(browserLoginText())!.click());
     await flush();
-    expect(toast.value).toBe(BROWSER_STORE_FAILED);
+    expect(toast.value).toBe(browserStoreFailed());
     expect(site.secrets).toEqual({});
-    expect(el.textContent).not.toContain(BROWSER_DONE_TITLE);
+    expect(el.textContent).not.toContain(browserDoneTitle());
   });
 
   it('«Передать вход на телевизор» of a browser session goes natively with the hosts, never a cookie in the page', async () => {
@@ -185,7 +185,7 @@ describe('phone: «Войти через браузер» on the site screen', (
     saveTv(ATV);
     setActiveTv(ATV.ip);
     await mountWith(<SourceSite id="kinozal" clearance={() => Promise.resolve(null)} ctx={() => site.ctx} />);
-    expect(el.textContent).toContain(BROWSER_DONE_TITLE);
+    expect(el.textContent).toContain(browserDoneTitle());
     act(() => btn(SEND_LOGIN)!.click());
     await flush();
     const c = sessionCalls[0];
@@ -249,7 +249,7 @@ describe('phone: the TV asks «Войти на телефоне»', () => {
     expect(sheets[0].mode).toBe('phone');
     expect(sheets[0].hosts).toContain('kinozal.tv');
     expect(sheets[0].text).toContain('«Гостиная»');
-    expect(toasts).toEqual([BROWSER_SENT_TV]);
+    expect(toasts).toEqual([browserSentTv()]);
     // a root that is not the site's, or an unknown site
     await handleTvRequest({ ...req, id: 'c10', url: 'https://evil.example/' }, deps(n, toasts));
     await handleTvRequest({ ...req, id: 'c11', source: 'nosuch' }, deps(n, toasts));

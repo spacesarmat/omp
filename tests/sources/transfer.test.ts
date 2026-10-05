@@ -13,7 +13,7 @@ import {
 } from '../../src/sources/transfer';
 import { settings, resetSettings, updateSettings } from '../../src/store/settings';
 import { lang } from '../../src/i18n';
-import { rutracker, rutrackerLoginPending, rutrackerSavedLogin, RUTRACKER_CAPTCHA } from '../../src/sources/rutracker';
+import { rutracker, rutrackerLoginPending, rutrackerSavedLogin, rutrackerCaptcha } from '../../src/sources/rutracker';
 import { getHealth, isSourceOn, reloadSourcePrefs, resetHealth, setHealth, setSourceOn } from '../../src/sources/store';
 import { fakeSite, fixture, page } from './fakeSite';
 import type { HttpCall } from './fakeSite';
@@ -181,7 +181,7 @@ describe('rutracker saved and staged login', () => {
   it('the staged login needs a store and leaves the storage alone', async () => {
     await expect(rutrackerLoginPending(fakeSite(loginServer(), null).ctx)).rejects.toThrow('Вход доступен только в приложении Android');
     const c = fakeSite(loginServer('rutracker-login-captcha.html'), PENDING);
-    await expect(rutrackerLoginPending(c.ctx)).rejects.toThrow(RUTRACKER_CAPTCHA);
+    await expect(rutrackerLoginPending(c.ctx)).rejects.toThrow(rutrackerCaptcha());
     expect(c.secrets).toEqual(PENDING);
   });
 });

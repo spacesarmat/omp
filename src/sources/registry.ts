@@ -1,4 +1,5 @@
 // All search sources: TorrServer rutor and Torznab first, then the built-in parsers (registered by their modules).
+import { t } from '../i18n';
 import type { SearchResult } from '../api/types';
 import type { SearchSource } from '../api/torrserver';
 import { infohashFromMagnet, parseDate, parseSize } from './html';
@@ -24,7 +25,7 @@ function torrServerSource(id: string, name: string, kind: SearchSource): Source 
     name,
     kind: 'torrserver',
     search(query: string, ctx: SourceContext) {
-      if (!ctx.client) return Promise.reject(new Error('Нет сервера'));
+      if (!ctx.client) return Promise.reject(new Error(t('sources.noServer')));
       return ctx.client.search(query, kind).then((list) => (list || []).map((r) => fromSearchResult(r, id)));
     },
   };

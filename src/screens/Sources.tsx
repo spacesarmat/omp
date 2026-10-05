@@ -12,18 +12,19 @@ import { clearHealth, getHealth, isSourceOn, onHealthChange, setHealth, setSourc
 import { forgetSiteLogin, forgetTransferredLogin, lastTransfer, LOGIN_SITES, onTransferApplied, siteLoginFromPhone, transferWhen } from '../sources/transfer';
 import { tvSourceContext } from '../sources/tvContext';
 import { healthText, type HealthLine } from '../sources/view';
-import { BROWSER_DONE, BROWSER_DONE_TITLE } from '../sources/browserLogin';
+import { browserDone, browserDoneTitle } from '../sources/browserLogin';
 import { indexerConnections, INDEXER_SOURCE_PREFIX, onIndexersChange, torznabHiddenText, type IndexerConn } from '../sources/indexerStore';
 import { checkedText, connLine, connTitle, getIndexerStatus, onIndexerStatus, refreshIndexerStatus, trackerStateText, trackerTone } from '../sources/indexerStatus';
 import type { SourceContext } from '../sources/types';
 import { hostName, readTorznabImports } from '../sources/indexerDiscovery';
 import { client } from '../store/servers';
 import { nativeClearance, nativeScanLan } from '../platform/androidNative';
-import { BYPASS_WARNING, runCloudflareCheck, tvSiteNote } from '../sources/cloudflareCheck';
-import { CF_INTERACTIVE } from '../sources/cloudflare';
+import { bypassWarning, runCloudflareCheck, tvSiteNote } from '../sources/cloudflareCheck';
+import { isCfInteractiveMessage } from '../sources/cloudflare';
 import { isCloudflareBypassOn, onCloudflareBypassChange, setCloudflareBypass } from '../sources/store';
 import { flareSolverrUrl, onFlareChange } from '../sources/flareStore';
 import { flareStatus, onFlareStatus, tvFlareLines, tvFlareRefresh } from '../sources/flaresolverr';
+import type { FlareStatus } from '../sources/flaresolverr';
 import type { LanScan } from '../sources/indexerDiscovery';
 import type { Source } from '../sources/types';
 
@@ -62,8 +63,9 @@ function Note(p: { note: HealthLine | null }) {
 }
 
 /** FlareSolverr on the TV: the saved (or found on the LAN) address, its version and state (mockup 1, left). */
-function FlareBlock() {
-  const lines = tvFlareLines(flareSolverrUrl(), flareStatus());
+/** The address and the status come as props: a component that reads the language signal only re-renders on a prop change. */
+function FlareBlock(props: { url: string | null; status: FlareStatus | null }) {
+  const lines = tvFlareLines(props.url, props.status);
   return (
     <div class="src-flare" data-flare="">
       <div class="src-phone-title">FlareSolverr</div>
@@ -224,7 +226,7 @@ export function SourcesScreen({
 
   const needsCheck = (s: Source) => {
     const h = getHealth(s.id);
-    return !!h && h.state === 'error' && h.message === CF_INTERACTIVE;
+    return !!h && h.state === 'error' && isCfInteractiveMessage(h.message);
   };
 
   // OK on a site: the visible check when it waits for one, else the switch (turning it on shows the warning first)
@@ -246,7 +248,7 @@ export function SourcesScreen({
       setCloudflareBypass(s.id, false);
       return;
     }
-    confirmDialog(BYPASS_WARNING, 'Включить').then((ok) => {
+    confirmDialog(bypassWarning(), 'Включить').then((ok) => {
       if (!ok) return;
       setSourceOn(s.id, true);
       setCloudflareBypass(s.id, true);
@@ -278,7 +280,7 @@ export function SourcesScreen({
     if (s.needsLogin && s.login) {
       if (!loggedIn(s)) return { text: 'нужен вход', tone: 'muted' };
       const h = getHealth(s.id);
-      if (!h) return { text: fromPhone(s) ? 'вход передан с телефона' : browser[s.id] ? BROWSER_DONE : 'вход выполнен', tone: 'ok' };
+      if (!h) return { text: fromPhone(s) ? 'вход передан с телефона' : browser[s.id] ? browserDone() : 'вход выполнен', tone: 'ok' };
       return healthText(h);
     }
     if (!isSourceOn(s)) return { text: 'выключен', tone: 'muted' };
@@ -319,7 +321,7 @@ export function SourcesScreen({
     clearHealth(s.id);
     // typed on the TV now: no longer «вход передан с телефона»
     forgetFromPhone(s);
-    toast(viaBrowser ? BROWSER_DONE_TITLE : 'Вход выполнен');
+    toast(viaBrowser ? browserDoneTitle() : 'Вход выполнен');
     setTimeout(() => focusLogin(s), 0);
   };
 
@@ -329,7 +331,7 @@ export function SourcesScreen({
         <div class="src-side">
           <h1>Источники поиска</h1>
           <div class="src-intro">{INTRO}</div>
-          <FlareBlock />
+          <FlareBlock url={flareSolverrUrl()} status={flareStatus()} />
           <div class="src-phone">
             <div class="src-phone-title">С телефона</div>
             <div class="src-phone-text">{PHONE_HOW}</div>

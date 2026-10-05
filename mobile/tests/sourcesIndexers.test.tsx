@@ -3,7 +3,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Sources } from '../src/screens/Sources';
 import { KEY_NOTE, type IndexerEnv } from '../src/screens/SourcesIndexers';
-import { TORZNAB_HIDDEN } from '../../src/sources/indexerStore';
+import { torznabHidden } from '../../src/sources/indexerStore';
 import { resetTo } from '../src/nav';
 import { indexerConnections, indexerKeyName, reloadIndexers } from '../../src/sources/indexerStore';
 import { resetIndexerStatus } from '../../src/sources/indexerStatus';
@@ -229,7 +229,7 @@ describe('phone «Индексаторы»', () => {
     await mount();
     const found = el.querySelector('[data-candidate="192.168.1.5:9117"]') as HTMLElement;
     expect(found.textContent).toContain('в настройках TorrServer — ключ есть');
-    expect(el.textContent).not.toContain(TORZNAB_HIDDEN);
+    expect(el.textContent).not.toContain(torznabHidden());
     await click(btn('Подключить', found)!);
     const sheet = el.querySelector('[role="dialog"]') as HTMLElement;
     expect((sheet.querySelector('#m-idx-key') as HTMLInputElement).placeholder).toBe('ключ из настроек TorrServer');
@@ -238,7 +238,7 @@ describe('phone «Индексаторы»', () => {
     expect(sheet.querySelector('[role="status"]')!.textContent).toBe('Jackett · 2 трекера, 1 работает');
     expect(secrets[indexerKeyName(indexerConnections()[0].id)]).toBe(TS_KEY);
     await click(btn('Готово', sheet)!);
-    expect(el.textContent).toContain(TORZNAB_HIDDEN);
+    expect(el.textContent).toContain(torznabHidden());
     expect(el.querySelector('[role="switch"][aria-label="Jackett / Prowlarr (Torznab)"]')).toBeNull();
   });
 

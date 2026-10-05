@@ -14,10 +14,10 @@ import {
   successText,
   summaryText,
   trackerStateText,
-  STATUS_BAD_KEY,
-  STATUS_DOWN,
-  STATUS_NEED_KEY,
-  JACKETT_HIDDEN_STATES,
+  statusBadKey,
+  statusDown,
+  statusNeedKey,
+  jackettHiddenStates,
   type IndexerStatus,
 } from '../../src/sources/indexerStatus';
 import { indexerKeyName, type IndexerConn } from '../../src/sources/indexerStore';
@@ -87,7 +87,7 @@ describe('Jackett tracker status', () => {
     expect(trackerStateText(st.trackers[0])).toBe('состояние неизвестно');
     expect(summaryText(st)).toBe('5 трекеров · состояние неизвестно');
     expect(summaryText(st)).not.toContain('работа');
-    expect(st.hint).toBe(JACKETT_HIDDEN_STATES);
+    expect(st.hint).toBe(jackettHiddenStates());
     expect(connLine(st, true)).toEqual({ text: 'напрямую · 5 трекеров · состояние неизвестно', tone: 'ok' });
     // an older Jackett without last_error: unknown too
     const old = jackettSite((c) => page(JSON.stringify([{ id: 'rutor', name: 'RuTor' }, { id: 'kinozal', name: 'Kinozal' }]), c.url));
@@ -102,9 +102,9 @@ describe('Jackett tracker status', () => {
 
   it('a wrong key: 401, or the Torznab error 100 in a 200 answer', async () => {
     const s401 = fakeSite((c) => page('', c.url, 401));
-    expect(await checkIndexer(JACKETT, KEY, s401.ctx.http, now)).toMatchObject({ state: 'badkey', message: STATUS_BAD_KEY });
+    expect(await checkIndexer(JACKETT, KEY, s401.ctx.http, now)).toMatchObject({ state: 'badkey', message: statusBadKey() });
     const s100 = fakeSite((c) => page('<error code="100" description="Invalid API Key"/>', c.url));
-    expect(await checkIndexer(JACKETT, KEY, s100.ctx.http, now)).toMatchObject({ state: 'badkey', message: STATUS_BAD_KEY });
+    expect(await checkIndexer(JACKETT, KEY, s100.ctx.http, now)).toMatchObject({ state: 'badkey', message: statusBadKey() });
   });
 
   it('a native failure is «не отвечает» and its text (it may hold the keyed URL) is never passed on', async () => {
@@ -112,7 +112,7 @@ describe('Jackett tracker status', () => {
       throw new Error('failed ' + c.url);
     });
     const st = await checkIndexer(JACKETT, KEY, site.ctx.http, now);
-    expect(st).toMatchObject({ state: 'down', message: STATUS_DOWN });
+    expect(st).toMatchObject({ state: 'down', message: statusDown() });
     expect(JSON.stringify(st)).not.toContain(KEY);
   });
 
@@ -180,7 +180,7 @@ describe('key re-prompt and cache', () => {
   it('«ключ задан» but no key on this device (restored backup) -> «нужен API-ключ», no request', async () => {
     const site = fakeSite((c) => page('', c.url, 401), {});
     const st = await refreshIndexerStatus(JACKETT, site.ctx, now);
-    expect(st).toMatchObject({ state: 'nokey', message: STATUS_NEED_KEY });
+    expect(st).toMatchObject({ state: 'nokey', message: statusNeedKey() });
     expect(site.calls).toHaveLength(0);
     expect(getIndexerStatus(JACKETT.id)).toBe(st);
     expect(connLine(st, true)).toEqual({ text: 'нужен API-ключ', tone: 'warn' });

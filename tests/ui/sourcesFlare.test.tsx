@@ -6,7 +6,7 @@ import { SourcesScreen } from '../../src/screens/Sources';
 import { reloadIndexers } from '../../src/sources/indexerStore';
 import { reloadSourcePrefs, resetHealth } from '../../src/sources/store';
 import { flareSolverrUrl, setFlareSolverrUrl } from '../../src/sources/flareStore';
-import { setFlareStatus, TV_FLARE_NONE, TV_FLARE_OK } from '../../src/sources/flaresolverr';
+import { setFlareStatus, tvFlareNone, tvFlareOk } from '../../src/sources/flaresolverr';
 import type { LanScan } from '../../src/sources/indexerDiscovery';
 import type { HttpResponse, SourceContext } from '../../src/sources/types';
 
@@ -66,7 +66,7 @@ describe('Android TV «Источники поиска»: FlareSolverr block (mo
     const b = block();
     expect(b.textContent).toContain('FlareSolverr');
     expect(b.textContent).toContain('192.168.1.191:8191 · версия 3.4');
-    expect(b.querySelector('.src-note-ok')!.textContent).toBe(TV_FLARE_OK);
+    expect(b.querySelector('.src-note-ok')!.textContent).toBe(tvFlareOk());
   });
 
   it('a silent FlareSolverr', async () => {
@@ -89,7 +89,7 @@ describe('Android TV «Источники поиска»: FlareSolverr block (mo
 
   it('none saved and none found', async () => {
     await mount(() => Promise.resolve([]));
-    expect(block().textContent).toContain(TV_FLARE_NONE);
+    expect(block().textContent).toContain(tvFlareNone());
     expect(flareSolverrUrl()).toBeNull();
   });
 });

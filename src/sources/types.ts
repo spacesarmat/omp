@@ -1,5 +1,6 @@
 // Search sources: TorrServer (rutor, Torznab) and built-in tracker parsers (Android only).
 // Shared by the phone and the TV bundles: Chromium 53 rules (no Error subclasses, no AbortController).
+import { t } from '../i18n';
 import type { SearchResult } from '../api/types';
 import type { SearchSource } from '../api/torrserver';
 import type { BrowserOutcome, BrowserSpec } from './browserLogin';
@@ -146,7 +147,7 @@ const LOGIN = 'login';
 
 /** Error a source rejects with when it needs a login (health «нужен вход»). */
 export function loginRequired(): Error {
-  const e = new Error('Нужен вход');
+  const e = new Error(t('sources.needLogin'));
   (e as Error & { code?: string }).code = LOGIN;
   return e;
 }

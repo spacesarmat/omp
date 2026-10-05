@@ -1,6 +1,6 @@
 // torrent.by: open search page with magnets in the list (UTF-8).
 import { absUrl, parseDate, parseSize, textOf } from './html';
-import { loadDoc, makeResult, mergePages, PARSE_ERROR, toInt } from './site';
+import { loadDoc, makeResult, mergePages, parseError, toInt } from './site';
 import type { FeedCategory, Source, SourceContext, SourceResult } from './types';
 
 const BASE = 'https://torrent.by';
@@ -40,7 +40,7 @@ function parse(doc: Document, base: string): SourceResult[] {
   if (!table) {
     // «Ничего не найдено.» keeps the search form of the results page
     if (doc.getElementById('text-to-find')) return [];
-    throw new Error(PARSE_ERROR);
+    throw new Error(parseError());
   }
   return parseRows(table, base);
 }
@@ -50,7 +50,7 @@ function parseSection(doc: Document, base: string): SourceResult[] {
   const h1 = doc.querySelector('h1');
   let table = h1 ? h1.nextElementSibling : null;
   while (table && table.tagName !== 'TABLE') table = table.nextElementSibling;
-  if (!table) throw new Error(PARSE_ERROR);
+  if (!table) throw new Error(parseError());
   return parseRows(table, base);
 }
 

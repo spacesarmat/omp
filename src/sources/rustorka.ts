@@ -3,9 +3,10 @@
 // (download.php through the session), else by the magnet of the topic page.
 // Selectors and the search URL follow the open-source Jackett definition rustorka.yml (Jackett signs in with a cookie;
 // the login form is TorrentPier's, like rutracker's). Not checked with a real account; verified on a device.
+import { t } from '../i18n';
 import { absUrl, encodeWin1251, parseSize, textOf } from './html';
-import { fetchTorrentAnswer, magnetOf, makeResult, NO_MAGNET, siteOptions, toInt } from './site';
-import { BAD_URL } from './http';
+import { fetchTorrentAnswer, magnetOf, makeResult, noMagnet, siteOptions, toInt } from './site';
+import { badUrl } from './http';
 import { createSiteHosts } from './mirrors';
 import { createSiteLogin, commonCaptcha, urlIsPath } from './siteLogin';
 import { loginRequired } from './types';
@@ -72,7 +73,7 @@ export const rustorkaLogin = createSiteLogin({
   browser: { loginPath: 'forum/login.php', path: 'forum/index.php', marker: 'login.php?logout' },
 });
 
-export const RUSTORKA_NO_FILE = 'rustorka не отдал торрент — войдите заново и попробуйте снова';
+export const rustorkaNoFile = (): string => t('sources.site.rustorkaNoFile');
 
 /** An answer that says the session is gone: the login page or its form, 401/403. */
 function signedOut(res: HttpResponse): boolean {
@@ -99,7 +100,7 @@ export const rustorka: Source = {
   resolve(r: SourceResult, ctx: SourceContext) {
     const file = rustorkaHosts.path(r.Link || '');
     const topic = rustorkaHosts.path(r.detailUrl || '');
-    if (file === null) return Promise.reject(new Error(BAD_URL));
+    if (file === null) return Promise.reject(new Error(badUrl()));
     const get = () => fetchTorrentAnswer(ctx, rustorkaHosts.base() + file, siteOptions(rustorka));
     return rustorkaLogin
       .loggedIn(ctx)
@@ -111,12 +112,12 @@ export const rustorka: Source = {
       .then((a) => {
         if (a.link) return a.link;
         // no file (e.g. a limit): the magnet of the topic page
-        if (topic === null) throw new Error(RUSTORKA_NO_FILE);
+        if (topic === null) throw new Error(rustorkaNoFile());
         return rustorkaLogin
           .sessionDoc(ctx, topic)
           .then((p) => magnetOf(p.doc))
           .then(undefined, (e: unknown) => {
-            throw e instanceof Error && e.message === NO_MAGNET ? new Error(RUSTORKA_NO_FILE) : e;
+            throw e instanceof Error && e.message === noMagnet() ? new Error(rustorkaNoFile()) : e;
           });
       });
   },

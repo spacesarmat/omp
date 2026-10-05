@@ -18,7 +18,7 @@
 // The phone's resolved UI language travels as `language`; the TV stores it as its own language setting.
 // Shared by the phone and the TV bundles: Chromium 53 rules.
 import { isObject, loadJson, saveJson } from '../store/storage';
-import { RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA } from './rutrackerText';
+import { rutrackerBadLogin, rutrackerCaptcha } from './rutrackerText';
 import { siteLoginCode } from './siteLoginText';
 import { indexerId, indexerKeyName, indexerPendingKeyName, INDEXERS_MAX, INDEXER_SOURCE_PREFIX, NAME_MAX, normalizeIndexerUrl, storeIndexer } from './indexerStore';
 import type { IndexerConn, IndexerKind } from './indexerStore';
@@ -26,6 +26,7 @@ import { clearHealth, getHealth, isCloudflareBypassOn, isSourceOn, setCloudflare
 import { normalizeFlareUrl, setFlareSolverrUrl } from './flareStore';
 import type { SecretStore, Source, SourceContext, SourceHealth } from './types';
 import { updateSettings } from '../store/settings';
+import { t } from '../i18n';
 import type { Lang } from '../i18n';
 
 export const TRANSFER_PATH = '/omp/sources';
@@ -393,7 +394,7 @@ export function parseRemoteSources(d: unknown): RemoteSources | null {
       indexers.push(r);
     }
   }
-  const out: RemoteSources = { id: d.id, sources, rutracker: d.rutracker === true, phone: phone || 'Телефон', at };
+  const out: RemoteSources = { id: d.id, sources, rutracker: d.rutracker === true, phone: phone || t('sources.defaultPhone'), at };
   if (d.indexers !== undefined) out.indexers = indexers;
   if (d.flaresolverr !== undefined) {
     const f = validFlare(d.flaresolverr);
@@ -525,8 +526,8 @@ function loginResult(e: unknown): RutrackerResult {
   const code = siteLoginCode(e);
   if (code) return code;
   const msg = e instanceof Error ? e.message : '';
-  if (msg === RUTRACKER_BAD_LOGIN) return 'bad_login';
-  if (msg === RUTRACKER_CAPTCHA) return 'captcha';
+  if (msg === rutrackerBadLogin()) return 'bad_login';
+  if (msg === rutrackerCaptcha()) return 'captcha';
   return 'error';
 }
 
@@ -746,9 +747,9 @@ export function transferWhen(at: number, now: number = Date.now()): { day: strin
   const start = today.getTime();
   const day =
     at >= start && at < start + 86400000
-      ? 'сегодня'
+      ? t('sources.today')
       : at >= start - 86400000 && at < start
-        ? 'вчера'
+        ? t('sources.yesterday')
         : two(d.getDate()) + '.' + two(d.getMonth() + 1) + '.' + d.getFullYear();
   return { day, time: two(d.getHours()) + ':' + two(d.getMinutes()) };
 }

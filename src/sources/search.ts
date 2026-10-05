@@ -1,5 +1,6 @@
 // Unified search: every chosen source in parallel, results streamed per source, 15 s per source (100 s for a site whose
 // Cloudflare pass is on: a hidden check plus FlareSolverr can take that long; the other sources' results show meanwhile).
+import { t } from '../i18n';
 import { mergeResults } from './merge';
 import { allSources } from './registry';
 import { enabledSources, isCloudflareBypassOn, setHealth as recordHealth } from './store';
@@ -14,7 +15,7 @@ const KNOWN_IDS = ['rutor', 'rutracker', 'nnmclub', 'torrentby', 'anidub', 'bigf
 
 /** Source id for the log: only the known ones (a Torznab name may be personal). */
 function logId(id: string): string {
-  return KNOWN_IDS.indexOf(id) >= 0 ? id : 'источник';
+  return KNOWN_IDS.indexOf(id) >= 0 ? id : t('sources.sourceFallback');
 }
 
 export interface SearchAllOptions {
@@ -110,7 +111,7 @@ export function runSources(
       if (over) return;
       over = true;
       if (cancelled) return;
-      const err = new Error('Источник не отвечает');
+      const err = new Error(t('sources.sourceTimeout'));
       log('warn', 'search', logId(source.id) + ': ' + err.message);
       failed.push(source.id);
       setHealth(source.id, { state: 'error', at: Date.now(), message: err.message });
@@ -146,7 +147,7 @@ export function runSources(
         clearTimeout(timer);
         if (cancelled) return;
         const err = asError(e);
-        log(isLoginRequired(e) ? 'warn' : 'error', 'search', logId(source.id) + ': ' + (isLoginRequired(e) ? 'нужен вход' : err.message));
+        log(isLoginRequired(e) ? 'warn' : 'error', 'search', logId(source.id) + ': ' + (isLoginRequired(e) ? t('sources.state.login') : err.message));
         failed.push(source.id);
         if (isLoginRequired(e)) setHealth(source.id, { state: 'login', at: Date.now() });
         else setHealth(source.id, { state: 'error', at: Date.now(), message: err.message });

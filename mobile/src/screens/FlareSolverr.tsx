@@ -6,17 +6,17 @@ import { native } from '../platform/native';
 import { FLARESOLVERR_Q } from '../faq';
 import { flareSolverrUrl, normalizeFlareUrl, setFlareSolverrUrl } from '../../../src/sources/flareStore';
 import {
-  BAD_ADDRESS,
+  flareBadAddress,
   checkFlareSolverr,
   checkText,
-  FLARE_HOWTO,
-  FLARE_INTRO,
-  FLARE_NONE_TEXT,
-  FLARE_NONE_TITLE,
+  flareHowto,
+  flareIntro,
+  flareNoneText,
+  flareNoneTitle,
   flareHost,
   flareStatus,
-  NO_WIFI,
-  NOT_FOUND,
+  flareNoWifi,
+  flareNotFound,
   refreshFlareStatus,
   scanFlareSolverr,
   setFlareStatus,
@@ -77,7 +77,7 @@ export function FlareSolverr({ ctx = phoneSourceContext, scan = phoneScan }: { c
     }
     const url = normalizeFlareUrl(raw);
     if (!url) {
-      setCheck({ ok: false, message: BAD_ADDRESS });
+      setCheck({ ok: false, message: flareBadAddress() });
       return;
     }
     setValue(url);
@@ -102,8 +102,8 @@ export function FlareSolverr({ ctx = phoneSourceContext, scan = phoneScan }: { c
     scanFlareSolverr(scan(), ctx().http).then((list) => {
       if (!alive.current) return;
       setScanning(false);
-      if (list === null) return setNote(NO_WIFI);
-      if (!list.length) return setNote(NOT_FOUND);
+      if (list === null) return setNote(flareNoWifi());
+      if (!list.length) return setNote(flareNotFound());
       if (list.length === 1) return runCheck(list[0]);
       setFound(list);
     });
@@ -118,7 +118,7 @@ export function FlareSolverr({ ctx = phoneSourceContext, scan = phoneScan }: { c
         <h1 class="m-bar-title">FlareSolverr</h1>
       </div>
       <div class="m-flare">
-        <div class="m-flare-intro">{FLARE_INTRO}</div>
+        <div class="m-flare-intro">{flareIntro()}</div>
         <div class="m-field">
           <label for="flare-url">Адрес</label>
           <input
@@ -162,10 +162,10 @@ export function FlareSolverr({ ctx = phoneSourceContext, scan = phoneScan }: { c
         )}
         {note && <div class="m-note m-muted">{note}</div>}
         <div class="m-set-card m-flare-howto">
-          <div class="m-flare-howto-title">{FLARE_NONE_TITLE}</div>
-          <div class="m-note m-muted">{FLARE_NONE_TEXT}</div>
+          <div class="m-flare-howto-title">{flareNoneTitle()}</div>
+          <div class="m-note m-muted">{flareNoneText()}</div>
           <button type="button" class="m-link" onClick={() => navigate({ name: 'faq', q: FLARESOLVERR_Q })}>
-            {FLARE_HOWTO}
+            {flareHowto()}
           </button>
         </div>
       </div>

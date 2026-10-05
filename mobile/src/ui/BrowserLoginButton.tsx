@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { showToast } from './toast';
 import { log } from '../../../src/lib/log';
-import { BROWSER_BUSY, BROWSER_FAILED, BROWSER_LOGIN, BROWSER_STORE_FAILED, browserSignedIn, hasBrowserLogin } from '../../../src/sources/browserLogin';
+import { browserBusy, browserFailed, browserLoginText, browserStoreFailed, browserSignedIn, hasBrowserLogin } from '../../../src/sources/browserLogin';
 import type { Source, SourceContext } from '../../../src/sources/types';
 
 /**
@@ -42,14 +42,14 @@ export function BrowserLoginButton({
           log('info', 'search', 'Вход через браузер: ' + source.name);
           showToast(browserSignedIn(source.name));
           onDone();
-        } else if (r.result === 'busy') showToast(BROWSER_BUSY);
-        else if (r.result === 'failed') showToast(BROWSER_FAILED);
-        else if (r.result === 'store_failed') showToast(BROWSER_STORE_FAILED);
+        } else if (r.result === 'busy') showToast(browserBusy());
+        else if (r.result === 'failed') showToast(browserFailed());
+        else if (r.result === 'store_failed') showToast(browserStoreFailed());
       },
       () => {
         // the session is kept, but the marker could not be written
         if (alive.current) setBusy(false);
-        showToast(BROWSER_STORE_FAILED);
+        showToast(browserStoreFailed());
       },
     );
   };
@@ -68,7 +68,7 @@ export function BrowserLoginButton({
         disabled={busy || disabled}
         onClick={open}
       >
-        {BROWSER_LOGIN}
+        {browserLoginText()}
       </button>
     </>
   );

@@ -2,19 +2,21 @@
 // from the parsers so code that only compares them (the transfer from the phone) does not pull a parser into the LG
 // bundle. Chromium 53 rules: plain Errors with a `code`.
 
-export const SITE_BAD_LOGIN = 'Неверный логин или пароль';
-export const SITE_EMPTY = 'Введите логин и пароль';
-export const SITE_NO_STORE = 'Вход доступен только в приложении Android';
+import { t } from '../i18n';
+
+export const siteBadLogin = (): string => t('sources.login.badLogin');
+export const siteEmpty = (): string => t('sources.login.empty');
+export const siteNoStore = (): string => t('sources.login.noStore');
 
 /** Kinozal asks for a captcha: points to «Войти через браузер» (no captcha solving in OMP). */
 export function siteCaptcha(name: string): string {
-  return name + ' просит капчу — нажмите «Войти через браузер»';
+  return t('sources.login.captcha', { name });
 }
 
 export type SiteLoginCode = 'bad_login' | 'captcha';
 
 export function siteLoginError(code: SiteLoginCode, name: string): Error {
-  const e = new Error(code === 'captcha' ? siteCaptcha(name) : SITE_BAD_LOGIN);
+  const e = new Error(code === 'captcha' ? siteCaptcha(name) : siteBadLogin());
   (e as Error & { code?: string }).code = code;
   return e;
 }

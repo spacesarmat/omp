@@ -7,8 +7,8 @@ import { phoneSourceContext } from '../searchContext';
 import { errorMessage } from '../../../src/api/http';
 import { builtinSources, torrServerSources } from '../../../src/sources/registry';
 import { clearHealth, getHealth, isSourceOn, onHealthChange, setHealth, setSourceOn } from '../../../src/sources/store';
-import { healthText, isCloudflare, JACKETT_HINT, type HealthLine } from '../../../src/sources/view';
-import { BROWSER_DONE } from '../../../src/sources/browserLogin';
+import { healthText, isCloudflare, jackettHint, type HealthLine } from '../../../src/sources/view';
+import { browserDone } from '../../../src/sources/browserLogin';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { allSources } from '../../../src/sources/registry';
 import { rutrackerSavedLogin } from '../../../src/sources/rutracker';
@@ -413,7 +413,7 @@ function SourceRow({
       </div>
       {note && isCloudflare(note.text) && (
         <div class="m-src-hint" data-hint="jackett">
-          {JACKETT_HINT}
+          {jackettHint()}
         </div>
       )}
     </>
@@ -483,7 +483,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
     if (s.needsLogin && s.login && !loggedIn(s)) return { text: 'нужен вход', tone: 'muted' };
     const h = getHealth(s.id);
     // signed in, no search since: say only what is known
-    if (s.needsLogin && s.login && !h) return { text: browser[s.id] ? BROWSER_DONE : 'вход выполнен', tone: 'muted' };
+    if (s.needsLogin && s.login && !h) return { text: browser[s.id] ? browserDone() : 'вход выполнен', tone: 'muted' };
     return healthText(h);
   };
 
@@ -572,7 +572,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
         </section>
       )}
       <div class="m-hint-warn">
-        {JACKETT_HINT}
+        {jackettHint()}
         <div>
           <button type="button" class="m-link" onClick={() => navigate({ name: 'faq' })}>
             Вопросы и ответы

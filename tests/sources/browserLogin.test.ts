@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
-  BROWSER_HINT,
+  browserHint,
   browserSignedIn,
   browserSuggestion,
-  BROWSER_CAPTCHA,
-  BROWSER_CLOUDFLARE,
+  browserCaptcha,
+  browserCloudflare,
   browserKey,
   browserOutcome,
   canLoginOnPhone,
@@ -18,11 +18,11 @@ import {
 } from '../../src/sources/browserLogin';
 import { kinozal, kinozalHosts } from '../../src/sources/kinozal';
 import { rustorka } from '../../src/sources/rustorka';
-import { rutracker, RUTRACKER_CAPTCHA } from '../../src/sources/rutracker';
+import { rutracker, rutrackerCaptcha } from '../../src/sources/rutracker';
 import { resetMirrors } from '../../src/sources/mirrors';
 import { reloadSourcePrefs } from '../../src/sources/store';
 import { siteLoginCode } from '../../src/sources/siteLoginText';
-import { CHALLENGE } from '../../src/sources/site';
+import { challenge } from '../../src/sources/site';
 import { isLoginRequired } from '../../src/sources/types';
 import { fakeSite, page, CLOUDFLARE } from './fakeSite';
 
@@ -145,12 +145,12 @@ describe('a captcha on the form login', () => {
     expect(isCaptchaError(e)).toBe(true);
     const r = fakeSite((c) => page(inline, c.url));
     const re = await rutracker.login!('u', 'p', r.ctx).then(() => null, (x: unknown) => x);
-    expect((re as Error).message).toBe(RUTRACKER_CAPTCHA);
+    expect((re as Error).message).toBe(rutrackerCaptcha());
     expect(isCaptchaError(re)).toBe(true);
     // the full Cloudflare page is still a Cloudflare block (the visible check), never a captcha suggestion
     const cf = fakeSite((c) => page(CLOUDFLARE, c.url));
     const ce = await rustorka.login!('u', 'p', cf.ctx).then(() => null, (x: unknown) => x);
-    expect((ce as Error).message).toBe(CHALLENGE);
+    expect((ce as Error).message).toBe(challenge());
     expect(isCaptchaError(ce)).toBe(false);
     expect(isCaptchaError(new Error('Неверный логин или пароль'))).toBe(false);
   });
@@ -168,7 +168,7 @@ describe('requests and answers', () => {
   it('the phone sheet and the TV dialog carry the copy; the TV request names its TV', () => {
     const p = phoneLoginRequest(spec);
     expect(p.title).toBe('Вход на Kinozal');
-    expect(p.text).toBe(BROWSER_HINT);
+    expect(p.text).toBe(browserHint());
     expect(p.mode).toBe('phone');
     expect(p.forTv).toBeUndefined();
     const forTv = phoneLoginRequest(spec, { id: 'c1', tv: 'Гостиная' });
@@ -193,10 +193,10 @@ describe('requests and answers', () => {
   });
 
   it('suggests the browser login for a captcha and for a Cloudflare check OMP could not pass', () => {
-    expect(browserSuggestion(new Error('rutracker просит капчу — нажмите «Войти через браузер»'))).toBe(BROWSER_CAPTCHA);
+    expect(browserSuggestion(new Error('rutracker просит капчу — нажмите «Войти через браузер»'))).toBe(browserCaptcha());
     const cf = Object.assign(new Error('Сайт закрыт проверкой Cloudflare — пройти её не удалось'), { code: 'cloudflare' });
-    expect(browserSuggestion(cf)).toBe(BROWSER_CLOUDFLARE);
-    expect(browserSuggestion(Object.assign(new Error('x'), { code: 'cloudflare-interactive' }))).toBe(BROWSER_CLOUDFLARE);
+    expect(browserSuggestion(cf)).toBe(browserCloudflare());
+    expect(browserSuggestion(Object.assign(new Error('x'), { code: 'cloudflare-interactive' }))).toBe(browserCloudflare());
     expect(browserSuggestion(new Error('Неверный логин или пароль'))).toBe('');
   });
 

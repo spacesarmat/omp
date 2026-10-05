@@ -6,7 +6,7 @@ import { Sources } from '../src/screens/Sources';
 import { currentRoute, resetTo } from '../src/nav';
 import { FLARESOLVERR_Q } from '../src/faq';
 import { flareSolverrUrl, setFlareSolverrUrl } from '../../src/sources/flareStore';
-import { FLARE_INTRO, NO_WIFI, NOT_ANSWERING, NOT_FOUND, setFlareStatus } from '../../src/sources/flaresolverr';
+import { flareIntro, flareNoWifi, flareNotAnswering, flareNotFound, setFlareStatus } from '../../src/sources/flaresolverr';
 import type { LanScan } from '../../src/sources/indexerDiscovery';
 import type { HttpResponse, SourceContext } from '../../src/sources/types';
 import type { IndexerEnv } from '../src/screens/SourcesIndexers';
@@ -75,7 +75,7 @@ afterEach(() => {
 describe('FlareSolverr screen', () => {
   it('shows the mockup texts', async () => {
     await mount();
-    expect(el.textContent).toContain(FLARE_INTRO);
+    expect(el.textContent).toContain(flareIntro());
     expect(el.textContent).toContain('Нет FlareSolverr?');
     expect(button('Найти в сети')).toBeTruthy();
     expect(button('Проверить')).toBeTruthy();
@@ -97,7 +97,7 @@ describe('FlareSolverr screen', () => {
     type('http://192.168.1.50:8191');
     await click(button('Проверить'));
     expect(flareSolverrUrl()).toBe('http://192.168.1.50:8191');
-    expect(el.querySelector('[data-flare-state="error"]')!.textContent).toBe(NOT_ANSWERING);
+    expect(el.querySelector('[data-flare-state="error"]')!.textContent).toBe(flareNotAnswering());
   });
 
   it('an empty address forgets FlareSolverr', async () => {
@@ -138,10 +138,10 @@ describe('FlareSolverr screen', () => {
   it('«Найти в сети»: nothing found / not on Wi-Fi', async () => {
     await mount();
     await click(button('Найти в сети'));
-    expect(el.textContent).toContain(NOT_FOUND);
+    expect(el.textContent).toContain(flareNotFound());
     hits = null;
     await click(button('Найти в сети'));
-    expect(el.textContent).toContain(NO_WIFI);
+    expect(el.textContent).toContain(flareNoWifi());
     expect(flareSolverrUrl()).toBeNull();
   });
 

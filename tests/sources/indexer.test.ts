@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { parseTorznab, parseProwlarr, indexerSource, hidesTorznab, syncIndexerSources, startIndexerSources, INDEXER_BAD_KEY, INDEXER_DOWN, INDEXER_ERROR, INDEXER_NEED_KEY } from '../../src/sources/indexer';
+import { parseTorznab, parseProwlarr, indexerSource, hidesTorznab, syncIndexerSources, startIndexerSources, indexerBadKey, indexerDown, indexerError, indexerNeedKey } from '../../src/sources/indexer';
 import { saveIndexer, removeIndexer, indexerKeyName, reloadIndexers, indexerConnections } from '../../src/sources/indexerStore';
 import type { IndexerConn } from '../../src/sources/indexerStore';
 import { allSources, getSource, builtinSources, setHideRule, unregisterSource } from '../../src/sources/registry';
@@ -93,7 +93,7 @@ describe('parseTorznab', () => {
   });
 
   it('a Torznab error element: key errors and others', () => {
-    expect(() => parseTorznab('<error code="100" description="Invalid API Key"/>', 'x')).toThrow(INDEXER_BAD_KEY);
+    expect(() => parseTorznab('<error code="100" description="Invalid API Key"/>', 'x')).toThrow(indexerBadKey());
     expect(() => parseTorznab('<error code="900" description="x"/>', 'x')).toThrow();
   });
 
@@ -176,10 +176,10 @@ describe('indexerSource', () => {
   it('401/403 -> wrong key, other statuses -> generic error', async () => {
     for (const status of [401, 403]) {
       const site = fakeSite((c) => page('', c.url, status), { [indexerKeyName('jackett-1')]: KEY });
-      await expect(indexerSource(JACKETT).search('q', site.ctx)).rejects.toThrow(INDEXER_BAD_KEY);
+      await expect(indexerSource(JACKETT).search('q', site.ctx)).rejects.toThrow(indexerBadKey());
     }
     const site = fakeSite((c) => page('', c.url, 502), { [indexerKeyName('jackett-1')]: KEY });
-    await expect(indexerSource(JACKETT).search('q', site.ctx)).rejects.toThrow(INDEXER_ERROR + '502');
+    await expect(indexerSource(JACKETT).search('q', site.ctx)).rejects.toThrow(indexerError(502));
   });
 
   it('a network failure becomes "не отвечает" without the URL or the key', async () => {
@@ -195,22 +195,22 @@ describe('indexerSource', () => {
         () => null,
         (e: Error) => e,
       );
-    expect(err!.message).toBe(INDEXER_DOWN);
+    expect(err!.message).toBe(indexerDown());
     expect(err!.message).not.toContain(KEY);
   });
 
   it('a missing key -> enter the key (not «wrong»); no secret store -> wrong key; no request', async () => {
     const none = fakeSite((c) => page('', c.url), {});
-    await expect(indexerSource(JACKETT).search('q', none.ctx)).rejects.toThrow(INDEXER_NEED_KEY);
+    await expect(indexerSource(JACKETT).search('q', none.ctx)).rejects.toThrow(indexerNeedKey());
     const noStore = fakeSite((c) => page('', c.url), null);
-    await expect(indexerSource(JACKETT).search('q', noStore.ctx)).rejects.toThrow(INDEXER_BAD_KEY);
+    await expect(indexerSource(JACKETT).search('q', noStore.ctx)).rejects.toThrow(indexerBadKey());
     expect(none.calls).toHaveLength(0);
     expect(noStore.calls).toHaveLength(0);
   });
 
   it('a Torznab key error inside a 200 answer -> wrong key', async () => {
     const site = fakeSite((c) => page('<error code="100" description="Invalid API Key"/>', c.url), { [indexerKeyName('jackett-1')]: KEY });
-    await expect(indexerSource(JACKETT).search('q', site.ctx)).rejects.toThrow(INDEXER_BAD_KEY);
+    await expect(indexerSource(JACKETT).search('q', site.ctx)).rejects.toThrow(indexerBadKey());
   });
 });
 

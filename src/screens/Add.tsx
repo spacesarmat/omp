@@ -14,7 +14,7 @@ import { searchAll } from '../sources/search';
 import { onSearchFailure, type CheckedHosts } from '../sources/cloudflareCheck';
 import type { SearchHandle } from '../sources/search';
 import { getHealth } from '../sources/store';
-import { isCloudflare, JACKETT_HINT, progressText, resolveLink, resultDate, resultKey, sortResults, sourceBadge, sourceName, stableOrder } from '../sources/view';
+import { isCloudflare, jackettHint, progressText, resolveLink, resultDate, resultKey, sortResults, sourceBadge, sourceName, stableOrder } from '../sources/view';
 import type { SourceResult } from '../sources/types';
 
 const SOURCES: { value: SearchSource; label: string }[] = [
@@ -199,7 +199,7 @@ export function AddScreen() {
       )}
       {unified && blocked.length > 0 && (
         <div class="search-progress search-hint">
-          {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ') + '. ' + JACKETT_HINT}
+          {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ') + '. ' + jackettHint()}
         </div>
       )}
       {unified && rows && (

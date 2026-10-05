@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createSourceHttp, type NativeHttpRequest } from '../../src/sources/http';
-import { CF_FAILED, CF_INTERACTIVE, cloudflareFailure, siteRoot, toCloudflareError } from '../../src/sources/cloudflare';
+import { cfFailed, cfInteractive, cloudflareFailure, siteRoot, toCloudflareError } from '../../src/sources/cloudflare';
 import { setFlareSolverrUrl } from '../../src/sources/flareStore';
 import { isCloudflare } from '../../src/sources/view';
 import { clearLog, logEntries } from '../../src/lib/log';
@@ -72,7 +72,7 @@ describe('results', () => {
   });
 
   it('a check that needs a person rejects with its kind and the site root', async () => {
-    const http = createSourceHttp(rejectWith({ message: CF_INTERACTIVE, code: 'cloudflare-interactive' }));
+    const http = createSourceHttp(rejectWith({ message: cfInteractive(), code: 'cloudflare-interactive' }));
     const e = await http.get('https://user:pw@rustorka.example:8443/forum/tracker.php?nm=x', { cloudflare: true }).catch((x) => x);
     expect(e).toBeInstanceOf(Error);
     expect(e.code).toBe('cloudflare-interactive');
@@ -87,10 +87,10 @@ describe('results', () => {
   });
 
   it('a failed check; the background page sends the message without the code', async () => {
-    const http = createSourceHttp(rejectWith({ message: CF_FAILED }));
+    const http = createSourceHttp(rejectWith({ message: cfFailed() }));
     const e = await http.get('https://site.example/x', { cloudflare: true, siteName: 'Сайт' }).catch((x) => x);
     expect(e.code).toBe('cloudflare');
-    expect(e.message).toBe(CF_FAILED);
+    expect(e.message).toBe(cfFailed());
     expect(logEntries()[0].x).toBe('Cloudflare: не удалось · Сайт');
   });
 

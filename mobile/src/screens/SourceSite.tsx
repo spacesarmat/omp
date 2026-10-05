@@ -8,9 +8,9 @@ import { errorMessage } from '../../../src/api/http';
 import { log } from '../../../src/lib/log';
 import { getSource } from '../../../src/sources/registry';
 import { clearHealth, isCloudflareBypassOn, isSourceOn, onCloudflareBypassChange, setCloudflareBypass, setHealth, setSourceOn } from '../../../src/sources/store';
-import { BYPASS_LABEL, BYPASS_WARNING, clearanceText } from '../../../src/sources/cloudflareCheck';
+import { bypassLabel, bypassWarning, clearanceText } from '../../../src/sources/cloudflareCheck';
 import { LOGIN_SITES, SESSION_SITES, transferLogins, transferSessions } from '../../../src/sources/transfer';
-import { BROWSER_DONE_TITLE, browserSuggestion } from '../../../src/sources/browserLogin';
+import { browserDoneTitle, browserSuggestion } from '../../../src/sources/browserLogin';
 import { BrowserLoginButton } from '../ui/BrowserLoginButton';
 import { allSources } from '../../../src/sources/registry';
 import type { Source, SourceContext } from '../../../src/sources/types';
@@ -179,7 +179,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
           {logged ? (
             <div class="m-src-row">
               <span class="m-src-name">
-                <span>{browser ? BROWSER_DONE_TITLE : 'Вход выполнен'}</span>
+                <span>{browser ? browserDoneTitle() : 'Вход выполнен'}</span>
               </span>
               <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={logout}>
                 Выйти
@@ -325,13 +325,13 @@ export function SourceSite({
             <>
               <div class="m-src-row" data-bypass={bypass ? 'on' : 'off'}>
                 <span class="m-src-name">
-                  <span>{BYPASS_LABEL}</span>
+                  <span>{bypassLabel()}</span>
                   {status && <span class="m-src-note ok">{status}</span>}
                 </span>
-                <Switch on={bypass} label={BYPASS_LABEL} onToggle={() => setCloudflareBypass(source.id, !bypass)} />
+                <Switch on={bypass} label={bypassLabel()} onToggle={() => setCloudflareBypass(source.id, !bypass)} />
               </div>
               <div class="m-cf-warn" data-note="cloudflare-warning">
-                {BYPASS_WARNING}
+                {bypassWarning()}
               </div>
             </>
           )}

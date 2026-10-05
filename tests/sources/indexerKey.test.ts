@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { parseTorznab, parseProwlarr, indexerSource, stripKey, INDEXER_MAX_ITEMS, INDEXER_MAX_CHARS, INDEXER_BAD_ANSWER, INDEXER_TIMEOUT_MS, INDEXER_NO_FILE } from '../../src/sources/indexer';
+import { parseTorznab, parseProwlarr, indexerSource, stripKey, INDEXER_MAX_ITEMS, INDEXER_MAX_CHARS, indexerBadAnswer, INDEXER_TIMEOUT_MS, indexerNoFile } from '../../src/sources/indexer';
 import { indexerKeyName, reloadIndexers } from '../../src/sources/indexerStore';
 import type { IndexerConn } from '../../src/sources/indexerStore';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
@@ -120,10 +120,10 @@ describe('adding a result with only a download link', () => {
     const r = parseTorznab(RSS(FILE_ONLY), src.id, 'jackett')[0];
     const secrets = { [indexerKeyName(JACKETT.id)]: KEY };
     const foreign = fakeSite(() => page(BENCODE, 'x'), secrets);
-    await expect(resolveLink({ ...r, Link: 'http://evil.test/dl?x=1' }, foreign.ctx)).rejects.toThrow(INDEXER_NO_FILE);
+    await expect(resolveLink({ ...r, Link: 'http://evil.test/dl?x=1' }, foreign.ctx)).rejects.toThrow(indexerNoFile());
     expect(foreign.calls).toHaveLength(0);
     await expect(resolveLink(r, fakeSite(() => page(BENCODE, 'x'), {}).ctx)).rejects.toThrow();
-    await expect(resolveLink(r, fakeSite(() => page('<html>login</html>', 'x'), secrets).ctx)).rejects.toThrow(INDEXER_NO_FILE);
+    await expect(resolveLink(r, fakeSite(() => page('<html>login</html>', 'x'), secrets).ctx)).rejects.toThrow(indexerNoFile());
   });
 });
 
@@ -142,6 +142,6 @@ describe('limits', () => {
     for (let i = 0; i < INDEXER_MAX_ITEMS + 50; i++) rows.push({ title: 'T' + i, protocol: 'torrent', infoHash: 'b'.repeat(40) });
     expect(parseProwlarr(JSON.stringify(rows), 'x')).toHaveLength(INDEXER_MAX_ITEMS);
     const big = fakeSite((c) => page('x'.repeat(INDEXER_MAX_CHARS + 1), c.url), { [indexerKeyName(JACKETT.id)]: KEY });
-    await expect(indexerSource(JACKETT).search('q', big.ctx)).rejects.toThrow(INDEXER_BAD_ANSWER);
+    await expect(indexerSource(JACKETT).search('q', big.ctx)).rejects.toThrow(indexerBadAnswer());
   });
 });

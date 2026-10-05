@@ -1,6 +1,6 @@
 // nnmclub.to: forum tracker search (windows-1251, decoded by the native http); magnet on the release page.
 import { absUrl, parseSize, textOf } from './html';
-import { loadDoc, magnetOf, makeResult, PARSE_ERROR, requireHost, toInt } from './site';
+import { loadDoc, magnetOf, makeResult, parseError, requireHost, toInt } from './site';
 import type { FeedCategory, Source, SourceContext, SourceResult } from './types';
 
 const HOST = 'nnmclub.to';
@@ -20,7 +20,7 @@ function keyed(cell: Element | undefined): { key: string; text: string } {
 
 function parse(doc: Document, base: string): SourceResult[] {
   const table = doc.querySelector('table.forumline.tablesorter');
-  if (!table) throw new Error(PARSE_ERROR);
+  if (!table) throw new Error(parseError());
   const out: SourceResult[] = [];
   const rows = table.querySelectorAll('tbody > tr');
   for (let i = 0; i < rows.length; i++) {

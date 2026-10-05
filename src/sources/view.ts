@@ -1,11 +1,11 @@
 // Unified search on screen: row keys, quality filter, sorting, the progress line, source states and the link to add.
 // Shared by the phone and the Android TV bundle: Chromium 53 rules (no Object.values/entries, regex without u).
+import { fmtNumber, t as tr, tp } from '../i18n';
 import { parseDate, parseSize } from './html';
 import { getSource } from './registry';
 import type { SourceContext, SourceHealth, SourceResult } from './types';
 
-export const JACKETT_HINT =
-  'Сайт закрыт защитой Cloudflare? Для Kinozal и rustorka включите обход в «Источниках поиска», другие трекеры подключайте через Jackett или Prowlarr — как, в «Вопросах и ответах».';
+export const jackettHint = (): string => tr('sources.jackettHint');
 
 /**
  * Row key: two torrents of one release can share a title (Anidub, BigFANGroup), their pages differ.
@@ -37,10 +37,7 @@ export function stableOrder(shownKeys: string[], list: SourceResult[], key: Sort
 
 /** «1 сид», «3 сида», «312 сидов». */
 export function seedsText(n: number): string {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  const w = m10 === 1 && m100 !== 11 ? 'сид' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'сида' : 'сидов';
-  return n + ' ' + w;
+  return tp('sources.seeds', n);
 }
 
 /** Badge of a row: the source name; Torznab rows also name the tracker behind Jackett / Prowlarr. */
@@ -74,10 +71,10 @@ export function filterQuality(list: SourceResult[], q: QualityFilter): SourceRes
 
 export type SortKey = 'seeds' | 'date' | 'size';
 
-export const SORT_LABELS: { key: SortKey; label: string }[] = [
-  { key: 'seeds', label: 'По сидам' },
-  { key: 'date', label: 'По дате' },
-  { key: 'size', label: 'По размеру' },
+export const sortLabels = (): { key: SortKey; label: string }[] => [
+  { key: 'seeds', label: tr('sources.sort.seeds') },
+  { key: 'date', label: tr('sources.sort.date') },
+  { key: 'size', label: tr('library.sortSize') },
 ];
 
 function sizeOf(r: SourceResult): number {
@@ -106,10 +103,6 @@ export function sourceName(id: string): string {
   return s ? s.name : id;
 }
 
-function one(n: number): boolean {
-  return n % 10 === 1 && n % 100 !== 11;
-}
-
 export interface Progress {
   found: number;
   answered: number;
@@ -122,9 +115,9 @@ export interface Progress {
 
 /** «Найдено N · K из M источников ответили · ещё ищу в …». */
 export function progressText(p: Progress): string {
-  let s = 'Найдено ' + p.found + ' · ' + p.answered + ' из ' + p.total + (one(p.total) ? ' источника' : ' источников') + (one(p.answered) ? ' ответил' : ' ответили');
-  if (p.pending.length) s += ' · ещё ищу в ' + p.pending.join(', ') + '…';
-  else if (p.failed.length) s += ' · не ответили: ' + p.failed.join(', ');
+  let s = tp('sources.progress.line', p.answered, { found: p.found, sources: tp('sources.progress.sources', p.total) });
+  if (p.pending.length) s += ' · ' + tr('sources.progress.searchingIn', { names: p.pending.join(', ') });
+  else if (p.failed.length) s += ' · ' + tr('sources.progress.failed', { names: p.failed.join(', ') });
   return s;
 }
 
@@ -137,12 +130,12 @@ export interface HealthLine {
 export function healthText(h: SourceHealth | null): HealthLine | null {
   if (!h) return null;
   if (h.state === 'ok') {
-    const secs = typeof h.ms === 'number' ? ' · ' + (Math.round(h.ms / 100) / 10).toFixed(1).replace('.', ',') + ' с' : '';
-    return { text: 'работает' + secs, tone: 'ok' };
+    const secs = typeof h.ms === 'number' ? ' · ' + fmtNumber(Math.round(h.ms / 100) / 10, 1) + ' ' + tr('common.sec') : '';
+    return { text: tr('sources.state.ok') + secs, tone: 'ok' };
   }
-  if (h.state === 'login') return { text: 'нужен вход', tone: 'muted' };
+  if (h.state === 'login') return { text: tr('sources.state.login'), tone: 'muted' };
   if (isCloudflare(h.message)) return { text: h.message!, tone: 'bad' };
-  return { text: 'не отвечает', tone: 'bad' };
+  return { text: tr('sources.state.noAnswer'), tone: 'bad' };
 }
 
 function two(n: number): string {
@@ -184,9 +177,9 @@ export function resolveLink(r: SourceResult, ctx: SourceContext): Promise<string
     } catch (e) {
       p = Promise.reject(e);
     }
-    return p.then((l) => (typeof l === 'string' && ADDABLE.test(l.trim()) ? l.trim() : fail('Не удалось получить ссылку на раздачу')));
+    return p.then((l) => (typeof l === 'string' && ADDABLE.test(l.trim()) ? l.trim() : fail(tr('sources.cannotGetLink'))));
   }
   if (r.Link) return Promise.resolve(r.Link);
   if (r.Hash) return Promise.resolve('magnet:?xt=urn:btih:' + r.Hash);
-  return fail('У результата нет ссылки');
+  return fail(tr('sources.noLink'));
 }

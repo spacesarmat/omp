@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rutracker, RUTRACKER_CAPTCHA } from '../../src/sources/rutracker';
+import { rutracker, rutrackerCaptcha } from '../../src/sources/rutracker';
 import { isLoginRequired } from '../../src/sources/types';
 import { fakeSite, fixture, page, CLOUDFLARE } from './fakeSite';
 import type { HttpCall } from './fakeSite';
@@ -55,8 +55,8 @@ describe('rutracker', () => {
 
   it('detects a captcha and asks to sign in in the browser', async () => {
     const site = fakeSite(server({ loginPage: 'rutracker-login-captcha.html' }));
-    await expect(rutracker.login!('u', 'p', site.ctx)).rejects.toThrow(RUTRACKER_CAPTCHA);
-    expect(RUTRACKER_CAPTCHA).toBe('rutracker просит капчу — нажмите «Войти через браузер»');
+    await expect(rutracker.login!('u', 'p', site.ctx)).rejects.toThrow(rutrackerCaptcha());
+    expect(rutrackerCaptcha()).toBe('rutracker просит капчу — нажмите «Войти через браузер»');
     expect(site.secrets).toEqual({});
   });
 

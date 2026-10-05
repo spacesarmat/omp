@@ -3,6 +3,7 @@
 // Android only (native http, like the built-in parsers): registered by registerBuiltinSources, never in the LG bundle.
 // The API key is read from the secret storage per search and is never logged: errors are generic Russian texts, and
 // a failed native request is replaced by one so that no URL (it carries the key for Jackett) can leak.
+import { t } from '../i18n';
 import { stashFile } from '../api/torrentFiles';
 import { formatBytes } from '../lib/format';
 import { infohashFromMagnet } from './html';
@@ -12,19 +13,19 @@ import { builtinSources, registerSource, setHideRule, unregisterSource } from '.
 import { isSourceOn } from './store';
 import type { Source, SourceContext, SourceResult } from './types';
 
-export const INDEXER_BAD_KEY = 'Неверный API-ключ';
+export const indexerBadKey = (): string => t('sources.indexer.badKey');
 /** The connection says a key is set but this device has none (e.g. restored from a backup): enter it again. */
-export const INDEXER_NEED_KEY = 'Нужен API-ключ';
-export const INDEXER_DOWN = 'Индексатор не отвечает';
-export const INDEXER_BAD_ANSWER = 'Индексатор ответил не так, как ожидалось';
-export const INDEXER_ERROR = 'Индексатор ответил ошибкой ';
+export const indexerNeedKey = (): string => t('sources.indexer.needKey');
+export const indexerDown = (): string => t('sources.indexer.down');
+export const indexerBadAnswer = (): string => t('sources.indexer.badAnswer');
+export const indexerError = (status: number): string => t('sources.indexer.error', { status });
 
 export const INDEXER_ID_PREFIX = INDEXER_SOURCE_PREFIX;
 export const INDEXER_TIMEOUT_MS = 20000;
 /** A longer answer is not parsed (a search over every tracker can be huge). */
 export const INDEXER_MAX_CHARS = 5 * 1000 * 1000;
 export const INDEXER_MAX_ITEMS = 500;
-export const INDEXER_NO_FILE = 'Не удалось скачать файл раздачи';
+export const indexerNoFile = (): string => t('sources.indexer.noFile');
 
 const KEY_NAMES = ['jackett_apikey', 'apikey', 'api_key'];
 
@@ -132,18 +133,18 @@ export function parseTorznab(xml: string, sourceId: string, kind: Kind = 'jacket
   try {
     doc = new DOMParser().parseFromString(xml, 'text/xml');
   } catch (e) {
-    throw new Error(INDEXER_BAD_ANSWER);
+    throw new Error(indexerBadAnswer());
   }
-  if (doc.getElementsByTagName('parsererror').length) throw new Error(INDEXER_BAD_ANSWER);
+  if (doc.getElementsByTagName('parsererror').length) throw new Error(indexerBadAnswer());
   const root = doc.documentElement;
-  if (!root) throw new Error(INDEXER_BAD_ANSWER);
+  if (!root) throw new Error(indexerBadAnswer());
   if (root.localName === 'error') {
     const code = parseInt(root.getAttribute('code') || '', 10);
     // Torznab: 100-199 are account/key errors
-    if (code >= 100 && code < 200) throw new Error(INDEXER_BAD_KEY);
-    throw new Error(INDEXER_BAD_ANSWER);
+    if (code >= 100 && code < 200) throw new Error(indexerBadKey());
+    throw new Error(indexerBadAnswer());
   }
-  if (root.localName !== 'rss') throw new Error(INDEXER_BAD_ANSWER);
+  if (root.localName !== 'rss') throw new Error(indexerBadAnswer());
   const out: SourceResult[] = [];
   const items = doc.getElementsByTagName('item');
   for (let i = 0; i < items.length && i < INDEXER_MAX_ITEMS; i++) {
@@ -207,9 +208,9 @@ export function parseProwlarr(text: string, sourceId: string): SourceResult[] {
   try {
     data = JSON.parse(text);
   } catch (e) {
-    throw new Error(INDEXER_BAD_ANSWER);
+    throw new Error(indexerBadAnswer());
   }
-  if (!Array.isArray(data)) throw new Error(INDEXER_BAD_ANSWER);
+  if (!Array.isArray(data)) throw new Error(indexerBadAnswer());
   const out: SourceResult[] = [];
   data.slice(0, INDEXER_MAX_ITEMS).forEach((x) => {
     if (!x || typeof x !== 'object') return;
@@ -252,7 +253,7 @@ function request(conn: IndexerConn, key: string, query: string, ctx: SourceConte
     (res) => res,
     // the native error text may hold the URL (with the key): never pass it on
     () => {
-      throw new Error(INDEXER_DOWN);
+      throw new Error(indexerDown());
     },
   );
 }
@@ -271,27 +272,27 @@ function bytesOf(s: string): Uint8Array {
  */
 function downloadTorrent(conn: IndexerConn, r: SourceResult, ctx: SourceContext): Promise<string> {
   const link = r.Link;
-  if (!link || !/^https?:\/\//i.test(link) || hostKey(link) !== hostKey(conn.url)) return Promise.reject(new Error(INDEXER_NO_FILE));
-  if (!ctx.secrets) return Promise.reject(new Error(INDEXER_BAD_KEY));
+  if (!link || !/^https?:\/\//i.test(link) || hostKey(link) !== hostKey(conn.url)) return Promise.reject(new Error(indexerNoFile()));
+  if (!ctx.secrets) return Promise.reject(new Error(indexerBadKey()));
   return ctx.secrets.get(indexerKeyName(conn.id)).then(
     (key) => {
-      if (!key) throw new Error(INDEXER_NEED_KEY);
+      if (!key) throw new Error(indexerNeedKey());
       const keyed = conn.kind === 'jackett' ? link + (link.indexOf('?') < 0 ? '?' : '&') + 'jackett_apikey=' + encodeURIComponent(key) : link;
       const opts = { headers: conn.kind === 'prowlarr' ? { 'X-Api-Key': key } : undefined, timeoutMs: 30000, responseCharset: 'iso-8859-1' };
       return ctx.http.get(keyed, opts).then(
         (res) => {
-          if (res.status === 401 || res.status === 403) throw new Error(INDEXER_BAD_KEY);
+          if (res.status === 401 || res.status === 403) throw new Error(indexerBadKey());
           // a bencoded dictionary starts with «d»
-          if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd') throw new Error(INDEXER_NO_FILE);
+          if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd') throw new Error(indexerNoFile());
           return stashFile(bytesOf(res.text));
         },
         () => {
-          throw new Error(INDEXER_DOWN);
+          throw new Error(indexerDown());
         },
       );
     },
     () => {
-      throw new Error(INDEXER_BAD_KEY);
+      throw new Error(indexerBadKey());
     },
   );
 }
@@ -307,19 +308,19 @@ export function indexerSource(conn: IndexerConn): Source {
       return downloadTorrent(conn, r, ctx);
     },
     search(query: string, ctx: SourceContext): Promise<SourceResult[]> {
-      if (!ctx.secrets) return Promise.reject(new Error(INDEXER_BAD_KEY));
+      if (!ctx.secrets) return Promise.reject(new Error(indexerBadKey()));
       return ctx.secrets.get(indexerKeyName(conn.id)).then(
         (key) => {
-          if (!key) throw new Error(INDEXER_NEED_KEY);
+          if (!key) throw new Error(indexerNeedKey());
           return request(conn, key, query, ctx).then((res) => {
-            if (res.status === 401 || res.status === 403) throw new Error(INDEXER_BAD_KEY);
-            if (res.status < 200 || res.status >= 300) throw new Error(INDEXER_ERROR + res.status);
-            if (res.text.length > INDEXER_MAX_CHARS) throw new Error(INDEXER_BAD_ANSWER);
+            if (res.status === 401 || res.status === 403) throw new Error(indexerBadKey());
+            if (res.status < 200 || res.status >= 300) throw new Error(indexerError(res.status));
+            if (res.text.length > INDEXER_MAX_CHARS) throw new Error(indexerBadAnswer());
             return conn.kind === 'jackett' ? parseTorznab(res.text, id, 'jackett') : parseProwlarr(res.text, id);
           });
         },
         () => {
-          throw new Error(INDEXER_BAD_KEY);
+          throw new Error(indexerBadKey());
         },
       );
     },

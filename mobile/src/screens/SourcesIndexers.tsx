@@ -13,8 +13,8 @@ import {
   hostKey,
   indexerConnections,
   indexerKeyName,
-  INDEXER_BAD_URL,
-  INDEXER_NO_KEY,
+  indexerBadUrl,
+  indexerNoKey,
   INDEXER_SOURCE_PREFIX,
   normalizeIndexerUrl,
   onIndexersChange,
@@ -176,7 +176,7 @@ export function IndexerAddSheet({
     }
     const base = normalizeIndexerUrl(url);
     if (!base) {
-      setError(INDEXER_BAD_URL);
+      setError(indexerBadUrl());
       return;
     }
     const typed = keyField.current ? keyField.current.value.trim() : '';
@@ -200,7 +200,7 @@ export function IndexerAddSheet({
         return '';
       })
       .then((key) => {
-        if (!key) throw new Error(INDEXER_NO_KEY);
+        if (!key) throw new Error(indexerNoKey());
         return checkIndexer({ kind: saved, url: base }, key, c.http, now).then((st) => {
           if (st.state !== 'ok') throw new Error(st.message || 'Не удалось подключиться');
           return saveIndexer({ kind: saved, url: base, apiKey: key }, c.secrets).then((conn) => {

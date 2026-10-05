@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { kinozal, KINOZAL_MIRRORS, KINOZAL_NO_FILE, kinozalHosts, kinozalQuery, parseKinozal } from '../../src/sources/kinozal';
+import { kinozal, KINOZAL_MIRRORS, kinozalNoFile, kinozalHosts, kinozalQuery, parseKinozal } from '../../src/sources/kinozal';
 import { createSourceHttp } from '../../src/sources/http';
 import type { NativeHttpRequest } from '../../src/sources/http';
 import { parseHtml } from '../../src/sources/html';
@@ -301,7 +301,7 @@ describe('Kinozal', () => {
       if (c.url.indexOf('get_srv_details') >= 0) return page(fixture('kinozal-guest.html'), ME + 'login.php');
       return page(fixture('kinozal-guest.html'), c.url);
     }, CREDS);
-    await expect(kinozal.resolve!(r, signedOutSite.ctx)).rejects.toThrow(KINOZAL_NO_FILE);
+    await expect(kinozal.resolve!(r, signedOutSite.ctx)).rejects.toThrow(kinozalNoFile());
     expect(signedOutSite.calls.filter((c) => c.method === 'POST')).toHaveLength(1);
   });
 
