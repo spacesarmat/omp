@@ -23,15 +23,23 @@ function setup(sizes: Record<string, number>) {
 }
 
 type Call = { method: string; form: FormData };
-function fakeFetch(calls: Call[], fail: (method: string, form: FormData) => Response | Error | null = () => null) {
+// the pin notice lookup (getUpdates, delete of notice 999) goes to `side`, so `calls` keeps the release flow only
+const NOTICE = 999;
+function fakeFetch(calls: Call[], fail: (method: string, form: FormData) => Response | Error | null = () => null, side: Call[] = []) {
+  let pinned = 0;
   return async (url: string, init: { body: FormData }) => {
     const method = url.split('/').pop() as string;
-    calls.push({ method, form: init.body });
+    const notice = method === 'getUpdates' || (method === 'deleteMessages' && init.body.get('message_ids') === `[${NOTICE}]`);
+    (notice ? side : calls).push({ method, form: init.body });
     const f = fail(method, init.body);
     if (f instanceof Error) throw f;
     if (f) return f;
+    if (method === 'pinChatMessage') pinned = Number(init.body.get('message_id'));
     const doc = method === 'sendDocument' ? (init.body.get('document') as File) : null;
-    const result = doc ? { message_id: 100 + calls.length, document: { file_id: 'id:' + doc.name } } : { message_id: 7 };
+    const result =
+      method === 'getUpdates'
+        ? init.body.get('offset') ? [] : [{ update_id: 40, channel_post: { message_id: 5 } }, { update_id: 41, channel_post: { message_id: NOTICE, pinned_message: { message_id: pinned } } }]
+        : doc ? { message_id: 100 + calls.length, document: { file_id: 'id:' + doc.name } } : { message_id: 7 };
     return new Response(JSON.stringify({ ok: true, result }), { status: 200 });
   };
 }
@@ -157,5 +165,31 @@ describe('files as one block', () => {
     const down = () => new Error('offline');
     await expect(repostFiles({ tag: 'v1.2.3', messageId: 8, deleteIds: [9], dir: join(root, 'build'), token: TOKEN, chat: '@c', fetch: fakeFetch(calls, down) as any, log: () => {} })).rejects.toThrow('network error');
     expect(names(calls)).not.toContain('deleteMessages');
+  });
+});
+
+describe('pin notice', () => {
+  it('deletes the «pinned a message» line of the release post and confirms the updates', async () => {
+    const root = setup({});
+    const calls: Call[] = [];
+    const side: Call[] = [];
+    const logs: string[] = [];
+    await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, () => null, side) as any, log: (s: string) => logs.push(s) });
+    expect(side.map((c) => c.method)).toEqual(['getUpdates', 'getUpdates', 'deleteMessages']);
+    expect(side[1].form.get('offset')).toBe('42');
+    expect(logs).toContain(`Telegram: deleted the pin notice ${NOTICE}`);
+  });
+
+  it('leaves the notice when it never shows up in the updates', async () => {
+    const root = setup({});
+    const calls: Call[] = [];
+    const side: Call[] = [];
+    const logs: string[] = [];
+    const none = (m: string) => (m === 'getUpdates' ? new Response(JSON.stringify({ ok: true, result: [] }), { status: 200 }) : null);
+    const pauses: number[] = [];
+    await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, none, side) as any, log: (s: string) => logs.push(s), pause: async (ms: number) => { pauses.push(ms); } });
+    expect(side.filter((c) => c.method === 'getUpdates')).toHaveLength(5);
+    expect(pauses).toHaveLength(4);
+    expect(logs).toContain('Telegram: pin notice not found, left in the channel');
   });
 });
