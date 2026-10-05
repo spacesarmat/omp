@@ -221,6 +221,14 @@ export const en: EnDict<typeof ru> = {
     metaEpisodes: 'episodes {from}–{to}',
     metaEpisodesOf: 'episodes {from}–{to} of {total}',
   },
+  series: {
+    seasons: { one: '{n} season', other: '{n} seasons' },
+    releases: { one: '{n} torrent', other: '{n} torrents' },
+    deleteSeries: { one: 'Delete series ({n} torrent)', other: 'Delete series ({n} torrents)' },
+    noSeason: 'No season',
+    gone: 'This series is no longer in Mine.',
+    continue: 'Continue',
+  },
   donate: {
     codeExpired: 'The code has expired',
     thanksShared: 'Thank you! Support requests are hidden until {until} on this phone and your TVs.',

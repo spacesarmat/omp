@@ -221,6 +221,15 @@ export const ru = {
     metaEpisodes: 'серии {from}–{to}',
     metaEpisodesOf: 'серии {from}–{to} из {total}',
   },
+  // «Мои»: one card for the torrents of one series, its screen with season chips
+  series: {
+    seasons: { one: '{n} сезон', few: '{n} сезона', many: '{n} сезонов' },
+    releases: { one: '{n} раздача', few: '{n} раздачи', many: '{n} раздач' },
+    deleteSeries: { one: 'Удалить сериал ({n} раздача)', few: 'Удалить сериал ({n} раздачи)', many: 'Удалить сериал ({n} раздач)' },
+    noSeason: 'Без сезона',
+    gone: 'Этого сериала больше нет в «Моих».',
+    continue: 'Продолжить',
+  },
   donate: {
     codeExpired: 'Срок кода истёк',
     thanksShared: 'Спасибо! Просьбы о поддержке скрыты до {until} на телефоне и телевизорах.',

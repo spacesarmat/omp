@@ -1090,3 +1090,11 @@ button, .m-btn {
 html.m-kb-open { --m-nav-reserve: 0px; }
 html.m-kb-open .m-nav, html.m-kb-open .m-mini, html.m-kb-open .m-mini-pad { display: none; }
 html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom)); }
+
+/* ---- «Мои» → the screen of a series card ---- */
+.m-screen[data-route='series'] { display: flex; flex-direction: column; gap: 12px; }
+.m-series-head { display: flex; gap: 14px; align-items: center; }
+.m-series-info { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.m-series-title { overflow-wrap: anywhere; }
+.m-series .m-tc-chips { margin-bottom: 0; }
+.m-series-rows { display: flex; flex-direction: column; gap: 8px; }
