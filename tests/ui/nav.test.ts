@@ -23,7 +23,7 @@ describe('nav', () => {
     navigate({ name: 'torrent', hash: 'abc' });
     expect(takeSavedFocus()).toBeUndefined();
     goBack();
-    expect(takeSavedFocus()).toBe('torrent-abc');
+    expect(takeSavedFocus()).toEqual({ key: 'torrent-abc', index: -1 });
     expect(takeSavedFocus()).toBeUndefined();
   });
   it('replace and reset', () => {

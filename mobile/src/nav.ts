@@ -1,4 +1,5 @@
 import { signal, computed } from '@preact/signals';
+import { cancelRestore, currentScroll, rememberTab, restoreScroll, tabScrollOf } from './scrollMemory';
 
 export type MRoute =
   | { name: 'connect' }
@@ -34,23 +35,51 @@ export type MRoute =
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);
 
+// window scroll of each stack entry when another screen was pushed over it
+const coveredScroll = new WeakMap<MRoute, number>();
+
 export function navigate(r: MRoute): void {
-  routeStack.value = routeStack.value.concat(r);
+  const s = routeStack.value;
+  coveredScroll.set(s[s.length - 1], currentScroll());
+  cancelRestore();
+  routeStack.value = s.concat(r);
+  restoreScroll(0);
 }
 
 export function goBack(): boolean {
   if (routeStack.value.length <= 1) return false;
-  routeStack.value = routeStack.value.slice(0, -1);
+  const s = routeStack.value.slice(0, -1);
+  routeStack.value = s;
+  restoreScroll(coveredScroll.get(s[s.length - 1]) || 0);
   return true;
 }
 
+/** Deep links and the connect flow: a fresh stack that starts at the top. */
 export function resetTo(r: MRoute): void {
   routeStack.value = [r];
+  restoreScroll(0);
 }
 
-// root tabs (library/news/add/remote/settings) replace the whole stack
+/** A plain tab tap (no extra fields): the only kind of switch that brings back the tab's scroll. */
+function isPlainTab(r: MRoute): boolean {
+  return Object.keys(r).length === 1;
+}
+
+// Root tabs (library/news/add/remote/settings) replace the whole stack. The tab being left keeps the scroll of its
+// root screen; opening it again from the tab bar brings that scroll back. Tapping the tab already open: from its root
+// screen it goes to the top; from a screen above the root (the «Обзор» title card) it returns to the root where it was.
+// A switch carrying data (a shared magnet, a notification) starts at the top.
 export function switchTab(r: MRoute): void {
-  resetTo(r);
+  const s = routeStack.value;
+  const root = s[0];
+  const rootScroll = s.length === 1 ? currentScroll() : coveredScroll.get(root) || 0;
+  const sameTab = root.name === r.name;
+  if (!sameTab) rememberTab(root.name, rootScroll);
+  cancelRestore();
+  routeStack.value = [r];
+  if (!isPlainTab(r)) restoreScroll(0);
+  else if (sameTab) restoreScroll(s.length > 1 ? rootScroll : 0);
+  else restoreScroll(tabScrollOf(r.name));
 }
 
 // a magnet received before any server is connected: opened in «Добавить» after the connect
