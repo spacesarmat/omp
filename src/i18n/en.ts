@@ -561,6 +561,11 @@ export const en: EnDict<typeof ru> = {
       noTorrent: 'The torrent page has no torrent link',
       kinozalNoFile: 'Kinozal did not give the torrent — sign in again or check the daily download limit',
       rustorkaNoFile: 'rustorka did not give the torrent — sign in again and try once more',
+      ipBan: '{name} asks for a verification code',
+      enterCode: 'Enter the code',
+      ipBanTv: 'Enter the code on the phone (OMP → Search sources) or in any browser on the same network',
+      codeTitle: '{site} verification code',
+      codeText: 'Enter the code from the picture on the site page and close the window — OMP will check the site again.',
     },
     login: {
       badLogin: 'Wrong username or password',

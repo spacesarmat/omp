@@ -103,16 +103,12 @@ describe('torrentby.latest', () => {
     expect(typeof ted.date).toBe('number');
   });
 
-  it('asks both sections for movies and series', async () => {
+  it('loads one section page per category (a light background load)', async () => {
     const site = fakeSite((c) => page(fixture('torrentby-category.html'), c.url));
     await torrentby.latest!(site.ctx, 'movie');
     await torrentby.latest!(site.ctx, 'tv');
-    expect(site.calls.map((c) => c.url)).toEqual([
-      'https://torrent.by/films/',
-      'https://torrent.by/movies/',
-      'https://torrent.by/serials/',
-      'https://torrent.by/series/',
-    ]);
+    await torrentby.latest!(site.ctx, 'anime');
+    expect(site.calls.map((c) => c.url)).toEqual(['https://torrent.by/films/', 'https://torrent.by/serials/', 'https://torrent.by/anime/']);
   });
 
   it('reports a page without the list', async () => {

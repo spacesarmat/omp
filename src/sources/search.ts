@@ -5,6 +5,7 @@ import { mergeResults } from './merge';
 import { allSources } from './registry';
 import { enabledSources, isCloudflareBypassOn, setHealth as recordHealth } from './store';
 import { isLoginRequired } from './types';
+import { isIpBan } from './ipBan';
 import { log } from '../lib/log';
 import type { Source, SourceContext, SourceResult } from './types';
 
@@ -150,6 +151,7 @@ export function runSources(
         log(isLoginRequired(e) ? 'warn' : 'error', 'search', logId(source.id) + ': ' + (isLoginRequired(e) ? t('sources.state.login') : err.message));
         failed.push(source.id);
         if (isLoginRequired(e)) setHealth(source.id, { state: 'login', at: Date.now() });
+        else if (isIpBan(e)) setHealth(source.id, { state: 'error', at: Date.now(), message: err.message, code: 'ipban' });
         else setHealth(source.id, { state: 'error', at: Date.now(), message: err.message });
         settle(source.id);
         safe(() => opts.onDone && opts.onDone(source.id, err));

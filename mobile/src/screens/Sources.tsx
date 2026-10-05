@@ -7,8 +7,9 @@ import { phoneSourceContext } from '../searchContext';
 import { errorMessage } from '../../../src/api/http';
 import { builtinSources, torrServerSources } from '../../../src/sources/registry';
 import { clearHealth, getHealth, isSourceOn, onHealthChange, setCloudflareBypass, setHealth, setSourceOn } from '../../../src/sources/store';
-import { cloudflareHint, healthText, isCloudflare, jackettHint, withCloudflareNote, type CloudflareHint, type HealthLine } from '../../../src/sources/view';
-import { browserDone } from '../../../src/sources/browserLogin';
+import { cloudflareHint, healthText, ipBanNote, isCloudflare, jackettHint, withCloudflareNote, type CloudflareHint, type HealthLine } from '../../../src/sources/view';
+import { browserDone, browserFailed, hasBrowserLogin } from '../../../src/sources/browserLogin';
+import { enterCodeText } from '../../../src/sources/ipBan';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { allSources } from '../../../src/sources/registry';
 import { rutrackerSavedLogin } from '../../../src/sources/rutracker';
@@ -373,6 +374,7 @@ function SourceRow({
   note,
   hint,
   login,
+  code,
   onToggle,
   onOpen,
 }: {
@@ -381,6 +383,8 @@ function SourceRow({
   /** The site's own short hint when its last search hit Cloudflare (cloudflareHint). */
   hint?: CloudflareHint | null;
   login?: { loggedIn: boolean; onLogin: () => void; onLogout: () => void };
+  /** The site showed its code page (ipBanNote): «Ввести код» opens it in the browser sheet. */
+  code?: { busy: boolean; onPress: () => void };
   onToggle: () => void;
   /** A site behind Cloudflare: its own screen (password login, «Передать вход на телевизор», the bypass switch). */
   onOpen?: () => void;
@@ -405,6 +409,11 @@ function SourceRow({
               {t('common.signIn')}
             </button>
           ))}
+        {code && (
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm" data-action="enter-code" disabled={code.busy} onClick={code.onPress}>
+            {enterCodeText()}
+          </button>
+        )}
         {onOpen && (
           <button type="button" class="m-icon-btn" aria-label={t('sources.screen.settingsOf', { name: name })} data-open={source.id} onClick={onOpen}>
             <Icon d="M9 5l7 7-7 7" size={18} />
@@ -440,6 +449,8 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   // sources whose login is a browser session («signed in with the browser»)
   const [browser, setBrowser] = useState<Record<string, boolean>>({});
   const [loginFor, setLoginFor] = useState<Source | null>(null);
+  // «Ввести код»: the site's page is open in the browser sheet, or checked again after it
+  const [unblocking, setUnblocking] = useState<Record<string, boolean>>({});
   const ts = torrServerSources();
   // one list of the built-in sites (the sites behind Cloudflare included); Jackett / Prowlarr have their own section
   const all = builtinSources().filter((s) => s.kind !== 'indexer');
@@ -487,6 +498,8 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
 
   const baseNote = (s: Source): HealthLine | null => {
     if (s.needsLogin && s.login && !loggedIn(s)) return { text: t('sources.state.login'), tone: 'muted' };
+    const ban = ipBanNote(s.id);
+    if (ban) return { text: ban, tone: 'bad' };
     const h = getHealth(s.id);
     // signed in, no search since: say only what is known
     if (s.login && loggedIn(s) && !h) return { text: browser[s.id] ? browserDone() : t('tvSources.loggedInDone'), tone: 'muted' };
@@ -511,6 +524,23 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
       },
       (e) => showToast(errorMessage(e)),
     );
+  };
+
+  // the site's code page: the person enters the code in the browser sheet, then the site is checked once
+  const codeOf = (s: Source): { busy: boolean; onPress: () => void } | undefined => {
+    if (!s.unblock || !hasBrowserLogin() || (!ipBanNote(s.id) && !unblocking[s.id])) return undefined;
+    return {
+      busy: !!unblocking[s.id],
+      onPress: () => {
+        if (unblocking[s.id] || !s.unblock) return;
+        setUnblocking((m) => ({ ...m, [s.id]: true }));
+        const end = () => setUnblocking((m) => ({ ...m, [s.id]: false }));
+        s.unblock(ctx()).then((opened) => {
+          end();
+          if (!opened) showToast(browserFailed());
+        }, end);
+      },
+    };
   };
 
   const loggedInDone = (s: Source, viaBrowser?: boolean) => {
@@ -565,6 +595,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
                   note={note}
                   hint={hintOf(s, note)}
                   login={s.login ? { loggedIn: loggedIn(s), onLogin: () => setLoginFor(s), onLogout: () => logout(s) } : undefined}
+                  code={codeOf(s)}
                   onToggle={() => toggle(s)}
                   onOpen={s.cloudflare === true ? () => navigate({ name: 'sourceSite', id: s.id }) : undefined}
                 />

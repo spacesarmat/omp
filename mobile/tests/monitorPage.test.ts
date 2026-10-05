@@ -7,6 +7,7 @@ import {
   episodeNotification,
   betterNotification,
   EPISODE_CURSOR_KEY,
+  hostContext,
   type MonitorClient,
   type PageDeps,
 } from '../src/monitor/page';
@@ -22,6 +23,8 @@ import type { Source, SourceResult } from '../../src/sources/types';
 import type { NativeHttpRequest } from '../../src/sources/http';
 import { mergeJournal, type JournalItem } from '../src/monitor/journal';
 import { SEEN_KEY } from '../../src/monitor/subs';
+import { torrentby } from '../../src/sources/torrentby';
+import { pauseSource, PAUSE_MS } from '../../src/sources/ipBan';
 
 function res(Title: string, extra?: Partial<SourceResult>): SourceResult {
   return { Title, Categories: '', Size: '41 ГБ', CreateDate: '', Tracker: 'rutor', Link: '', Magnet: 'magnet:?xt=urn:btih:' + 'a'.repeat(40), Hash: '', Peer: 0, Seed: 1200, source: 'rutor', ...extra };
@@ -527,5 +530,23 @@ describe('«Лучшее качество» in the background', () => {
     } finally {
       applyLanguageSetting('ru');
     }
+  });
+});
+
+describe('a site whose code page paused its background requests', () => {
+  it('the background context says so; a paused torrent.by is not asked by the feed or a subscription', async () => {
+    expect(hostContext(fakeHost(), null).background).toBe(true);
+    addSubscription({ query: 'Starbound', quality: '', sources: null, notify: true });
+    pauseSource('torrentby');
+    const host = fakeHost();
+    await runMonitor(deps(host, { feed: { from: [torrentby] }, check: { from: [torrentby] } }));
+    expect(host.httpCalls.filter((r) => r.url.indexOf('https://torrent.by/') === 0)).toEqual([]);
+  });
+
+  it('after the hour the background asks it again (one section page per category)', async () => {
+    pauseSource('torrentby', Date.now() - PAUSE_MS - 1);
+    const host = fakeHost();
+    await runMonitor(deps(host, { feed: { from: [torrentby] } }));
+    expect(host.httpCalls.map((r) => r.url).sort()).toEqual(['https://torrent.by/anime/', 'https://torrent.by/films/', 'https://torrent.by/serials/']);
   });
 });

@@ -18,6 +18,7 @@ import { allSources } from '../../../src/sources/registry';
 import { enabledSources } from '../../../src/sources/store';
 import { getHealth } from '../../../src/sources/store';
 import {
+  ipBanNote,
   isCloudflare,
   jackettHint,
   progressText,
@@ -346,6 +347,8 @@ export function Add({ link, query: initialQuery, run }: { link?: string; query?:
   const seasons = Array.from(new Set((rows || []).reduce((a: number[], r) => a.concat(parseRelease(r.Title).seasons), []))).sort((a, b) => a - b).slice(0, 12);
   const nFilters = activeFilterCount(filters);
   const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
+  // a site that showed its code page: its own message («torrent.by просит ввести проверочный код»)
+  const banned = prog ? prog.failed.map(ipBanNote).filter((x) => !!x) : [];
   const sortLabel = sortLabels().filter((s) => s.key === sort)[0].label;
   const catRow = catSheet !== null ? (rows || []).filter((x) => resultKey(x) === catSheet)[0] : undefined;
 
@@ -433,6 +436,11 @@ export function Add({ link, query: initialQuery, run }: { link?: string; query?:
         <div class="m-hint-warn" data-hint="jackett">
           {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ')}
           <div>{jackettHint()}</div>
+        </div>
+      )}
+      {banned.length > 0 && (
+        <div class="m-hint-warn" data-hint="ipban">
+          {banned.join('; ')}
         </div>
       )}
       {searchError && <LaunchError message={searchError} />}
