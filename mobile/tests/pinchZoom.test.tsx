@@ -5,15 +5,7 @@ import { Library } from '../src/screens/Library';
 import { Discover } from '../src/screens/catalog/Discover';
 import { clearDiscover } from '../src/screens/catalog/discoverCache';
 import { DISCOVER_COLS_KEY, readDiscoverCols } from '../src/screens/catalog/discoverCols';
-import {
-  pinchScale,
-  pinchStepsOf,
-  pinchTarget,
-  PINCH_MIN,
-  PINCH_MAX,
-  PINCH_SETTLE_MS,
-  PINCH_LIVE_CLASS,
-} from '../src/ui/usePinchStep';
+import { pinchDir, pinchTarget, PINCH_UP, PINCH_DOWN, PINCH_FLIP_MS, PINCH_FADE_MS } from '../src/ui/usePinchStep';
 import { BACKUP_KEYS } from '../src/lib/backup';
 import { setCatalogClientForTests, setCatalogMode } from '../src/catalog/phoneCatalog';
 import { currentRoute, resetTo } from '../src/nav';
@@ -78,6 +70,33 @@ function pointer(target: Element, type: string) {
   });
 }
 
+/** Element.animate is missing in jsdom: a recording stand-in. */
+let animate: ReturnType<typeof vi.fn>;
+function mockAnimate() {
+  animate = vi.fn(() => ({ cancel: vi.fn() }));
+  Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, writable: true, value: animate });
+}
+function unmockAnimate() {
+  delete (HTMLElement.prototype as { animate?: unknown }).animate;
+}
+/** requestAnimationFrame on the fake clock. */
+function stubFrame() {
+  vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => setTimeout(() => f(0), 1));
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+}
+/** Cards laid out in a column, 150 px apart: 200 px wide in the large grid, 60 px at three posters, 100 px otherwise. */
+function mockRects() {
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    if (!this.hasAttribute('data-anchor') || !this.parentElement) return new DOMRect(0, 0, 0, 0);
+    const i = Array.prototype.indexOf.call(this.parentElement.children, this);
+    const w = this.closest('.m-view-large') ? 200 : this.closest('.m-cols-3') ? 60 : 100;
+    return new DOMRect(0, 10 + i * 150, w, 140);
+  });
+}
+type Frames = Record<string, unknown>[];
+const framesOf = (call: unknown[]) => call[0] as Frames;
+const optsOf = (call: unknown[]) => call[1] as KeyframeAnimationOptions;
+
 let vibrate: ReturnType<typeof vi.fn>;
 let reduced = true;
 
@@ -85,7 +104,7 @@ beforeEach(() => {
   localStorage.clear();
   vibrate = vi.fn(() => true);
   Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
-  // most tests: reduced motion, so the step lands as the fingers are lifted
+  // most tests: reduced motion, so the step lands with no animation
   reduced = true;
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
@@ -94,34 +113,23 @@ beforeEach(() => {
 });
 
 describe('pinch step', () => {
-  it('the live scale follows the finger distance ratio and is clamped', () => {
-    expect(pinchScale(1)).toBe(1);
-    expect(pinchScale(1.2)).toBeCloseTo(1.2);
-    expect(pinchScale(0.75)).toBeCloseTo(0.75);
-    expect(pinchScale(3)).toBe(PINCH_MAX);
-    expect(pinchScale(0.1)).toBe(PINCH_MIN);
-    expect(pinchScale(NaN)).toBe(1);
-    expect(pinchScale(0)).toBe(1);
-    expect(pinchScale(Infinity)).toBe(1);
-  });
-
-  it('a release picks the nearest step, more than one for a big pinch', () => {
-    expect(pinchStepsOf(1)).toBe(0);
-    expect(pinchStepsOf(1.1)).toBe(0);
-    expect(pinchStepsOf(0.9)).toBe(0);
-    expect(pinchStepsOf(1.15)).toBe(1);
-    expect(pinchStepsOf(1.3)).toBe(1);
-    expect(pinchStepsOf(1.35)).toBe(2);
-    expect(pinchStepsOf(1.6)).toBe(3);
-    expect(pinchStepsOf(0.86)).toBe(-1);
-    expect(pinchStepsOf(0.74)).toBe(-2);
-    expect(pinchStepsOf(0.6)).toBe(-3);
-    expect(pinchStepsOf(NaN)).toBe(0);
-    // kept inside the range
-    expect(pinchTarget(1, 4, 1.6)).toBe(3);
-    expect(pinchTarget(1, 4, 0.6)).toBe(0);
-    expect(pinchTarget(2, 3, 1.2)).toBe(2);
-    expect(pinchTarget(1, 3, 1.05)).toBe(1);
+  it('a step fires past x1.2 apart or x0.83 together, not before', () => {
+    expect(PINCH_UP).toBe(1.2);
+    expect(PINCH_DOWN).toBe(0.83);
+    expect(pinchDir(1)).toBe(0);
+    expect(pinchDir(1.19)).toBe(0);
+    expect(pinchDir(0.84)).toBe(0);
+    expect(pinchDir(1.2)).toBe(1);
+    expect(pinchDir(3)).toBe(1);
+    expect(pinchDir(0.83)).toBe(-1);
+    expect(pinchDir(0.2)).toBe(-1);
+    expect(pinchDir(NaN)).toBe(0);
+    expect(pinchDir(0)).toBe(0);
+    expect(pinchDir(Infinity)).toBe(0);
+    // one step, kept inside the range
+    expect(pinchTarget(1, 4, 1)).toBe(2);
+    expect(pinchTarget(3, 4, 1)).toBe(3);
+    expect(pinchTarget(0, 4, -1)).toBe(0);
   });
 
   it('the backup keeps four posters per row', () => {
@@ -165,121 +173,155 @@ describe('pinch in «Мои»', () => {
   afterEach(() => {
     act(() => render(null, el));
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    unmockAnimate();
     updateSettings({ libraryView: 'large' });
   });
 
   const body = () => el.querySelector('.m-lib-body') as HTMLElement;
 
-  it('spreading the fingers saves the next bigger view, with a short vibration', async () => {
+  it('one step fires as soon as the fingers pass x1.2, with a vibration, and only once per gesture', async () => {
     updateSettings({ libraryView: 'list' });
     mount(<Library />);
     await flush();
-    const mv = pinch(body(), 125);
+    const b = body();
+    touch(b, 'touchstart', [[100, 100]]);
+    touch(b, 'touchstart', [[100, 100], [200, 100]]);
+    const mv = touch(b, 'touchmove', [[85, 100], [210, 100]]);
     await flush();
+    // before the fingers lift
     expect(mv.defaultPrevented).toBe(true);
     expect(settings.value.libraryView).toBe('small');
     expect(el.querySelector('.m-grid.m-view-small')).not.toBeNull();
     expect(JSON.parse(localStorage.getItem('tsp.settings') || '{}').libraryView).toBe('small');
     expect(vibrate).toHaveBeenCalledTimes(1);
-  });
-
-  it('pinching saves a smaller view; the last finger distance decides how many steps', async () => {
-    updateSettings({ libraryView: 'large' });
-    mount(<Library />);
+    // the rest of the gesture is ignored, both ways, but still keeps the page from scrolling
+    const more = touch(b, 'touchmove', [[0, 100], [300, 100]]);
+    touch(b, 'touchmove', [[140, 100], [160, 100]]);
+    touch(b, 'touchend', [[140, 100]]);
+    touch(b, 'touchend', []);
     await flush();
-    touch(body(), 'touchstart', [[100, 100], [300, 100]]);
-    touch(body(), 'touchmove', [[175, 100], [225, 100]]);
-    // back out to 160 of 200: 0.8 = one step
-    touch(body(), 'touchmove', [[120, 100], [280, 100]]);
-    touch(body(), 'touchend', []);
-    await flush();
+    expect(more.defaultPrevented).toBe(true);
     expect(settings.value.libraryView).toBe('small');
-    pinch(body(), 72);
+    expect(vibrate).toHaveBeenCalledTimes(1);
+    // the next gesture steps again
+    pinch(b, 80);
     await flush();
-    expect(settings.value.libraryView).toBe('compact');
+    expect(settings.value.libraryView).toBe('list');
     expect(vibrate).toHaveBeenCalledTimes(2);
   });
 
-  it('a big spread goes up more than one step, in proportion', async () => {
+  it('a big pinch is still one step', async () => {
     updateSettings({ libraryView: 'compact' });
     mount(<Library />);
     await flush();
-    pinch(body(), 140);
+    pinch(body(), 300);
     await flush();
-    expect(settings.value.libraryView).toBe('small');
+    expect(settings.value.libraryView).toBe('list');
   });
 
-  it('the list follows the fingers, then settles with an animation and the transform is cleared', async () => {
+  it('nothing is scaled while the fingers move', async () => {
     reduced = false;
-    vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => setTimeout(() => f(0), 16));
-    vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+    mockAnimate();
+    stubFrame();
+    updateSettings({ libraryView: 'small' });
+    mount(<Library />);
+    await flush();
+    const b = body();
+    const transforms = () =>
+      [b, ...Array.from(b.querySelectorAll<HTMLElement>('*'))].map((x) => x.style.transform).filter(Boolean);
+    touch(b, 'touchstart', [[100, 100], [200, 100]]);
+    touch(b, 'touchmove', [[95, 100], [210, 100]]);
+    expect(transforms()).toEqual([]);
+    expect(b.style.willChange).toBe('');
+    touch(b, 'touchmove', [[80, 100], [220, 100]]);
+    act(() => {
+      vi.advanceTimersByTime(20);
+    });
+    await flush();
+    expect(settings.value.libraryView).toBe('large');
+    expect(transforms()).toEqual([]);
+    touch(b, 'touchend', []);
+  });
+
+  it('after the change the cards on screen move from their old place to the new one (FLIP)', async () => {
+    reduced = false;
+    mockAnimate();
+    stubFrame();
+    mockRects();
+    updateSettings({ libraryView: 'small' });
+    mount(<Library />);
+    await flush();
+    const cards = Array.from(el.querySelectorAll('.m-card'));
+    expect(cards.length).toBe(2);
+    pinch(body(), 130);
+    expect(settings.value.libraryView).toBe('large');
+    // played in the next frame, after the new layout rendered
+    expect(animate).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    await flush();
+    const now = Array.from(el.querySelectorAll('.m-card'));
+    expect(now).toEqual(cards);
+    expect(animate).toHaveBeenCalledTimes(now.length);
+    for (const call of animate.mock.calls) {
+      const f = framesOf(call);
+      expect(String(f[0].transform)).toContain('scale(0.5000)');
+      expect(f[1].transform).toBe('none');
+      expect(optsOf(call).duration).toBe(PINCH_FLIP_MS);
+    }
+    expect(animate.mock.contexts).toEqual(now);
+  });
+
+  it('between rows and poster cards the views cross-fade instead', async () => {
+    reduced = false;
+    mockAnimate();
+    stubFrame();
+    mockRects();
+    updateSettings({ libraryView: 'list' });
+    mount(<Library />);
+    await flush();
+    const b = body();
+    pinch(b, 130);
+    // the rows fade out first
+    expect(animate).toHaveBeenCalledTimes(1);
+    expect(animate.mock.contexts[0]).toBe(b);
+    expect(framesOf(animate.mock.calls[0])).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+    expect(settings.value.libraryView).toBe('list');
+    act(() => {
+      vi.advanceTimersByTime(PINCH_FADE_MS / 2);
+    });
+    await flush();
+    expect(settings.value.libraryView).toBe('small');
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    await flush();
+    // then the cards fade in, and nothing is moved or scaled
+    expect(animate).toHaveBeenCalledTimes(2);
+    expect(animate.mock.contexts[1]).toBe(b);
+    expect(framesOf(animate.mock.calls[1])).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+    expect(animate.mock.calls.some((c) => framesOf(c).some((f) => 'transform' in f))).toBe(false);
+  });
+
+  it('with reduced motion the view switches at once, with no animation', async () => {
+    mockAnimate();
+    mockRects();
     updateSettings({ libraryView: 'list' });
     mount(<Library />);
     await flush();
     const b = body();
     touch(b, 'touchstart', [[100, 100], [200, 100]]);
-    expect(b.style.willChange).toBe('transform');
-    expect(document.documentElement.classList.contains(PINCH_LIVE_CLASS)).toBe(true);
     touch(b, 'touchmove', [[90, 100], [210, 100]]);
-    act(() => {
-      vi.advanceTimersByTime(16);
-    });
-    expect(b.style.transform).toBe('scale(1.2000)');
-    expect(b.style.transformOrigin).not.toBe('');
-    touch(b, 'touchmove', [[0, 100], [300, 100]]);
-    act(() => {
-      vi.advanceTimersByTime(16);
-    });
-    expect(b.style.transform).toBe('scale(' + PINCH_MAX.toFixed(4) + ')');
-    // back to 1.2: one step bigger
-    touch(b, 'touchmove', [[90, 100], [210, 100]]);
-    touch(b, 'touchend', []);
-    expect(b.style.transition).toContain(PINCH_SETTLE_MS + 'ms');
-    expect(b.style.transform).toBe('scale(1.2500)');
-    expect(settings.value.libraryView).toBe('list');
-    act(() => {
-      vi.advanceTimersByTime(PINCH_SETTLE_MS);
-    });
-    await flush();
     expect(settings.value.libraryView).toBe('small');
-    expect(b.style.transform).toBe('');
-    expect(b.style.willChange).toBe('');
-    expect(b.style.transition).toBe('transform .25s ease');
-    expect(document.documentElement.classList.contains(PINCH_LIVE_CLASS)).toBe(false);
-    vi.unstubAllGlobals();
-  });
-
-  it('with reduced motion the step lands at once and the transform is cleared', async () => {
-    updateSettings({ libraryView: 'list' });
-    mount(<Library />);
-    await flush();
-    const b = body();
-    touch(b, 'touchstart', [[100, 100], [200, 100]]);
-    touch(b, 'touchmove', [[90, 100], [210, 100]]);
     touch(b, 'touchend', []);
-    expect(settings.value.libraryView).toBe('small');
-    expect(b.style.transition).not.toContain(PINCH_SETTLE_MS + 'ms');
-    await flush();
-    expect(b.style.transform).toBe('');
-    expect(b.style.willChange).toBe('');
-  });
-
-  it('a release short of a step springs back with no change', async () => {
-    reduced = false;
-    updateSettings({ libraryView: 'list' });
-    mount(<Library />);
-    await flush();
-    const b = body();
-    pinch(b, 110);
-    expect(b.style.transform).toBe('scale(1.0000)');
     act(() => {
-      vi.advanceTimersByTime(PINCH_SETTLE_MS);
+      vi.advanceTimersByTime(500);
     });
     await flush();
-    expect(b.style.transform).toBe('');
-    expect(settings.value.libraryView).toBe('list');
-    expect(vibrate).not.toHaveBeenCalled();
+    expect(animate).not.toHaveBeenCalled();
   });
 
   it('does nothing at the ends of the range', async () => {
@@ -301,12 +343,14 @@ describe('pinch in «Мои»', () => {
     updateSettings({ libraryView: 'small' });
     mount(<Library />);
     await flush();
-    pinch(body(), 110);
+    pinch(body(), 115);
+    pinch(body(), 85);
     await flush();
     expect(settings.value.libraryView).toBe('small');
+    expect(vibrate).not.toHaveBeenCalled();
   });
 
-  it('the long press menu and the tap do not fire during a pinch', async () => {
+  it('the long press menu and the tap do not fire during or right after a pinch', async () => {
     updateSettings({ libraryView: 'large' });
     mount(<Library />);
     await flush();
@@ -318,13 +362,19 @@ describe('pinch in «Мои»', () => {
       vi.advanceTimersByTime(700);
     });
     expect(document.querySelector('.m-sheet')).toBeNull();
-    touch(card, 'touchmove', [[110, 100], [190, 100]]);
-    touch(card, 'touchend', [[110, 100]]);
+    touch(card, 'touchmove', [[105, 100], [195, 100]]);
+    touch(card, 'touchend', [[105, 100]]);
     touch(card, 'touchend', []);
     pointer(card, 'pointerup');
     act(() => card.click());
     expect(currentRoute.value.name).toBe('library');
     expect(document.querySelector('.m-sheet')).toBeNull();
+    // a step down: a tap on the new view right after it is still swallowed
+    pinch(body(), 70);
+    await flush();
+    expect(settings.value.libraryView).toBe('small');
+    act(() => (el.querySelector('.m-card') as HTMLElement).click());
+    expect(currentRoute.value.name).toBe('library');
     // later taps work as before
     act(() => {
       vi.advanceTimersByTime(1000);
@@ -366,16 +416,17 @@ describe('pinch in «Обзор»', () => {
     setCatalogClientForTests(null);
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    unmockAnimate();
   });
 
   const grid = () => el.querySelector('.m-disc-grid') as HTMLElement;
 
-  it('two posters per row by default; pinching makes three or four and it is kept', async () => {
+  it('two posters per row by default; one pinch makes three, the next four, and it is kept', async () => {
     mount(<Discover />);
     await flush();
     const root = () => el.querySelector('.m-discover')!;
     expect(grid().classList.contains('m-cols-3')).toBe(false);
-    pinch(root(), 80);
+    pinch(root(), 60);
     await flush();
     expect(grid().classList.contains('m-cols-3')).toBe(true);
     expect(grid().classList.contains('m-cols-4')).toBe(false);
@@ -389,27 +440,42 @@ describe('pinch in «Обзор»', () => {
     await flush();
     expect(grid().classList.contains('m-cols-4')).toBe(true);
     expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('4');
-    pinch(root(), 60);
+    // the end of the range
+    pinch(root(), 50);
     await flush();
     expect(vibrate).toHaveBeenCalledTimes(2);
-    // a big spread: four straight to two
-    pinch(root(), 150);
+    // a big spread is still one step: four to three
+    pinch(root(), 250);
     await flush();
-    expect(grid().classList.contains('m-cols-3')).toBe(false);
-    expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('2');
+    expect(grid().classList.contains('m-cols-4')).toBe(false);
+    expect(grid().classList.contains('m-cols-3')).toBe(true);
+    expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('3');
     expect(grid().style.transform).toBe('');
   });
 
-  it('only the grid is scaled, not the header', async () => {
+  it('the posters move to their new place by their TMDB key; nothing is scaled during the gesture', async () => {
+    reduced = false;
+    mockAnimate();
+    mockRects();
+    vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => setTimeout(() => f(0), 1));
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
     mount(<Discover />);
     await flush();
     const root = el.querySelector('.m-discover') as HTMLElement;
     touch(root, 'touchstart', [[100, 100], [200, 100]]);
-    expect(grid().style.willChange).toBe('transform');
-    expect(root.style.willChange).toBe('');
+    touch(root, 'touchmove', [[95, 100], [205, 100]]);
+    expect(grid().style.transform).toBe('');
+    expect(root.style.transform).toBe('');
+    touch(root, 'touchmove', [[110, 100], [190, 100]]);
     touch(root, 'touchend', []);
     await flush();
-    expect(grid().style.willChange).toBe('');
+    expect(grid().classList.contains('m-cols-3')).toBe(true);
+    await new Promise((r) => setTimeout(r, 5));
+    await flush();
+    const tiles = Array.from(el.querySelectorAll('.m-disc-tile'));
+    expect(tiles.length).toBe(2);
+    expect(animate.mock.contexts).toEqual(tiles);
+    expect(grid().style.transform).toBe('');
   });
 
   it('a pinch does not open the title under the fingers', async () => {

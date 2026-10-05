@@ -64,6 +64,11 @@ const CHECK = 'M5 12.5l4.5 4.5L19 7';
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_SLOP = 10;
 
+/** The views drawn as rows (the others are poster grids). */
+function isRowView(v: string): boolean {
+  return v === 'compact' || v === 'list';
+}
+
 export function Library() {
   const c = client.value;
   const tab = libraryTab.value;
@@ -279,7 +284,7 @@ export function Library() {
     else empty = t('catalog.categoryEmpty');
   }
 
-  // two fingers on the list scale it with them and settle on the nearest view (spread = bigger)
+  // two fingers on the list step the view once per gesture (spread = bigger), animated after the change
   const pinch = usePinchStep(bodyRef, {
     enabled: mine && !isHistory && !unavailable,
     levels: BY_SIZE.length,
@@ -291,6 +296,8 @@ export function Library() {
       press.current.timer = undefined;
     },
     anchorAttr: 'data-anchor',
+    // rows and poster cards have different markup: cross-fade between them instead of moving the cards
+    crossFade: (from, to) => isRowView(BY_SIZE[from]) !== isRowView(BY_SIZE[to]),
   });
 
   const selecting = selected !== null;

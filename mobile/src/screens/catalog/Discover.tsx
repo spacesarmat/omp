@@ -51,7 +51,7 @@ export function Discover() {
   const fresh = useRef(true);
   const list = torrents.value;
   const index = useMemo(() => libraryIndex(list), [list]);
-  // posters per row: the grid follows two fingers and settles on 2, 3 or 4 (apart = fewer, bigger posters)
+  // posters per row: one two-finger pinch steps between 2, 3 and 4 (apart = fewer, bigger posters)
   const [cols, setCols] = useState<DiscoverCols>(readDiscoverCols);
   const colsRef = useRef(cols);
   colsRef.current = cols;
@@ -66,10 +66,7 @@ export function Discover() {
       setCols(next);
       saveDiscoverCols(next);
     },
-    // a poster at n per row is (n / m) times as wide as at m per row
-    scaleOf: (from, to) => COLS_BY_SIZE[from] / COLS_BY_SIZE[to],
     anchorAttr: 'data-anchor',
-    target: (root) => root.querySelector<HTMLElement>('.m-disc-grid'),
   });
   const gridClass = 'm-disc-grid' + (cols === 3 ? ' m-cols-3' : cols === 4 ? ' m-cols-3 m-cols-4' : '');
 

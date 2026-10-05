@@ -407,8 +407,6 @@ button, .m-btn {
 .m-cols-4 .m-disc-tile { gap: 2px; }
 .m-cols-4 .m-disc-tile .m-disc-title { line-height: 14px; min-height: 28px; max-height: 28px; }
 .m-cols-4 .m-disc-meta { font-size: 10px; }
-/* a two-finger pinch is scaling a list: a scaled-up list must not make the page scroll sideways */
-html.m-pinch-live, html.m-pinch-live body { overflow-x: clip; }
 .m-disc-empty { margin: 24px 0; text-align: center; }
 .m-disc-head .m-sort { align-self: center; }
 .m-disc-sort-opt.on { box-shadow: inset 0 0 0 2px var(--accent); }
