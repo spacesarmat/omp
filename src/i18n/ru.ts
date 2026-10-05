@@ -1354,6 +1354,8 @@ export const ru = {
     found: 'Найдено {n} · во всех устройствах',
     nothing: 'Ничего не найдено · во всех устройствах',
     device: 'Устройство',
+    dev: { lg: 'Телевизор LG', atv: 'Android TV', phone: 'Телефон', server: 'TorrServer', common: 'Общее' },
+    sec: { install: 'Установка', connect: 'Подключение', player: 'Плеер', trouble: 'Если что-то не работает', setup: 'Поиск и настройка', about: 'О проекте', log: 'Журнал и резервная копия', news: 'Новое и подписки' },
     fromTv: 'Выбрано по подключённому телевизору · {name}',
   },
   localServer: {

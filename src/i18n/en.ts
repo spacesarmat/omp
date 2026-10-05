@@ -1345,6 +1345,8 @@ export const en: EnDict<typeof ru> = {
     found: 'Found {n} · in all devices',
     nothing: 'Nothing found · in all devices',
     device: 'Device',
+    dev: { lg: 'LG TV', atv: 'Android TV', phone: 'Phone', server: 'TorrServer', common: 'General' },
+    sec: { install: 'Installation', connect: 'Connecting', player: 'Player', trouble: 'If something does not work', setup: 'Search and setup', about: 'About the project', log: 'Log and backup', news: 'New and subscriptions' },
     fromTv: 'Chosen by the connected TV · {name}',
   },
   localServer: {
