@@ -1,3 +1,5 @@
+English: [README.en.md](README.en.md)
+
 <p align="center"><img src="assets/logo.svg" width="128" alt="OMP"></p>
 
 <h1 align="center">OMP — Open Movie Player</h1>

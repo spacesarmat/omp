@@ -27,3 +27,5 @@
 | ![Выбор телевизора](https://raw.githubusercontent.com/spacesarmat/omp/{{TAG}}/docs/screenshots/android-tvlist.png) | |
 
 **Установка на ТВ:** скачайте `OMP-*-webOS.ipk` ниже и установите по инструкции из [README](https://github.com/spacesarmat/omp#readme).
+
+**English:** download the APK (Android) or `OMP-*-webOS.ipk` (LG) below; install steps are in the [English README](https://github.com/spacesarmat/omp/blob/main/README.en.md).

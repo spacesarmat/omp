@@ -6,7 +6,7 @@ import { isBetaVersion } from '../lib/version';
 import { settings, updateSettings } from '../store/settings';
 import { hbPresence, hbHasRoot, openHbChannel, hbInstall, InstallStatus, HbPresence } from '../platform/hbchannel';
 import { APP_VERSION } from '../version';
-import { CHANGELOG } from '../lib/changelogData';
+import { getChangelog } from '../lib/changelogData';
 import { openWhatsNew } from '../store/whatsNew';
 import { FocusGroup, Button, ProgressBar } from '../ui/components';
 import { Qr } from '../ui/Qr';
@@ -158,7 +158,7 @@ export function UpdateScreen() {
         </div>
       )}
       <div class="row update-actions">
-        <Button focusKey="upd-whatsnew" label={t('whatsNew.title')} onPress={() => openWhatsNew(CHANGELOG, APP_VERSION)} />
+        <Button focusKey="upd-whatsnew" label={t('whatsNew.title')} onPress={() => openWhatsNew(getChangelog(), APP_VERSION)} />
         <Button
           focusKey="upd-beta"
           label={t('updateScreen.betaToggle', { state: settings.value.betaUpdates ? t('updateScreen.betaOn') : t('updateScreen.betaOff') })}
