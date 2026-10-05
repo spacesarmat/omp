@@ -171,12 +171,12 @@ function Seasons({ card, index, find }: { card: CatalogCard; index: Map<string, 
             aria-pressed={x.number === s.number}
             onClick={() => pick(x.number)}
           >
-            {t('titleCard.seasonChip', { n: x.number })}
+            {t('library.season', { n: x.number })}
           </button>
         ))}
       </div>
       <div class="m-tc-season">
-        <span class="m-tc-season-name">{t('titleCard.seasonChip', { n: s.number })}</span>
+        <span class="m-tc-season-name">{t('library.season', { n: s.number })}</span>
         {sub && <span class="m-small m-muted m-tc-season-sub">{sub}</span>}
         {state && <span class="m-small m-tc-season-state">{state}</span>}
       </div>

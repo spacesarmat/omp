@@ -1080,8 +1080,6 @@ export const ru = {
     seasons: 'Сезоны',
     airing: 'выходит: {a} из {b}',
     find: 'Найти',
-    /** A season chip and the heading of the chosen season when TMDB gives no name. */
-    seasonChip: 'Сезон {n}',
     findSeason: 'Найти раздачи на сезон',
     openInLibrary: 'Открыть в медиатеке',
     episodesError: 'Не удалось загрузить серии',
@@ -1635,7 +1633,6 @@ export const ru = {
     foundReleases: 'Найденные раздачи',
     noFindingsMatch: 'Среди найденных раздач совпадений нет',
     moreFindings: { one: 'и ещё {n} раздача — уточните запрос', few: 'и ещё {n} раздачи — уточните запрос', many: 'и ещё {n} раздач — уточните запрос' },
-    sortHead: 'Сортировка',
     sortFresh: 'новые находки',
     sortName: 'по имени',
     sortAdded: 'по дате добавления',

@@ -308,8 +308,8 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
         </div>
       )}
       {subs.length > 1 && (
-        <div class="m-chips m-subs-sort" role="group" aria-label={t('news.sortHead')} style={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <span class="m-muted m-small">{t('news.sortHead') + ':'}</span>
+        <div class="m-chips m-subs-sort" role="group" aria-label={t('add.sort')} style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          <span class="m-muted m-small">{t('add.sort') + ':'}</span>
           {SUBS_SORTS.map((m) => (
             <button key={m} type="button" class={'m-chip' + (sort === m ? ' on' : '')} aria-pressed={sort === m} onClick={() => pickSort(m)}>
               {sortLabel(m)}
