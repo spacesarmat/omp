@@ -13,6 +13,7 @@ import { addServer, setActiveServer, servers, removeServer } from '../../src/sto
 import { torrents, torrentsAt, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
 import { saveProgress, reloadProgress, serverViewed } from '../../src/store/progress';
 import { TorrServerClient } from '../../src/api/torrserver';
+import { applyLanguageSetting } from '../../src/i18n';
 import type { Torrent } from '../../src/api/types';
 
 function files(names: string[]) {
@@ -105,17 +106,72 @@ describe('Library', () => {
     await flush();
     const cards = el.querySelectorAll('.m-grid .m-card');
     expect(cards.length).toBe(3);
-    expect(cards[0].textContent).toContain('Starbound Frontier S02');
+    expect(cards[0].querySelector('.m-card-title')!.textContent).toBe('Starbound Frontier · 2 сезон');
     expect(cards[0].textContent).toContain('2.0 GB');
     expect(cards[1].querySelector('.m-badge')!.textContent).toBe('4K');
   });
 
-  it('shows the logo and name in the header', async () => {
+  it('compact header: the small logo, the «Мои | Обзор» switch, then the icon buttons, all in one row', async () => {
     mount();
     await flush();
-    const brand = el.querySelector('.m-lib-brand')!;
-    expect(brand.querySelector('svg.logo')!.getAttribute('width')).toBe('28');
-    expect(brand.textContent).toBe('OMP');
+    const head = el.querySelector('.m-lib-head')!;
+    const brand = head.querySelector('.m-lib-brand')!;
+    expect(brand.querySelector('svg.logo')!.getAttribute('width')).toBe('24');
+    // no big wordmark: the name is for screen readers only
+    expect(head.querySelector('.m-brand-name')).toBeNull();
+    expect(brand.querySelector('.m-sr')!.textContent).toBe('OMP');
+    const kids = Array.from(head.children);
+    const seg = head.querySelector('.m-seg[role=tablist]')!;
+    expect(seg).toBeTruthy();
+    expect(Array.from(seg.querySelectorAll('[role=tab]')).map((b) => b.textContent)).toEqual(['Мои', 'Обзор']);
+    expect(kids.indexOf(brand)).toBe(0);
+    expect(kids.indexOf(seg)).toBe(1);
+    expect(kids.indexOf(head.querySelector('.m-sort')!)).toBeGreaterThan(1);
+    expect(kids.indexOf(head.querySelector('.m-view')!)).toBeGreaterThan(1);
+    // the switch is not a separate row any more
+    expect(el.querySelectorAll('.m-seg').length).toBe(1);
+    expect(seg.parentElement).toBe(head);
+  });
+
+  it('shows short titles with a meta line in every view and in the search results', async () => {
+    const list: Torrent[] = [
+      { hash: 's1', title: 'Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 10 (Алик Сахаров) [2026, США, WEB-DL 1080p]', category: 'tv', stat: 3, torrent_size: 3, timestamp: 3 },
+      { hash: 's2', title: 'Человек-паук: Новый день / Spider-Man: Brand New Day (2026) WEB-DL 1080p', category: 'movie', stat: 3, torrent_size: 2, timestamp: 2 },
+      { hash: 's3', title: 'Мой любимый фильм', category: 'movie', stat: 3, torrent_size: 1, timestamp: 1 },
+    ];
+    torrents.value = list;
+    listSpy.mockResolvedValue(list);
+    updateSettings({ librarySort: 'new' });
+    const want = ['Темная материя · 2 сезон · серии 1–6 из 10', 'Человек-паук: Новый день · 2026', 'Мой любимый фильм'];
+    for (const view of ['large', 'small', 'list', 'compact'] as const) {
+      updateSettings({ libraryView: view });
+      mount();
+      await flush();
+      const sel = view === 'compact' ? '.m-crow-title' : '.m-card-title';
+      expect(Array.from(el.querySelectorAll(sel)).map((n) => n.textContent), view).toEqual(want);
+      expect(el.querySelector('.m-title-meta')!.textContent).toBe(' · 2 сезон · серии 1–6 из 10');
+      act(() => render(null, el));
+    }
+    updateSettings({ libraryView: 'large' });
+    librarySearchOpen.value = true;
+    libraryQuery.value = 'spider';
+    mount();
+    await flush();
+    expect(Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent)).toEqual(['Человек-паук: Новый день · 2026']);
+  });
+
+  it('English: the meta line is translated', async () => {
+    const list: Torrent[] = [{ hash: 's1', title: 'Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 10 [2026, WEB-DL 1080p]', category: 'tv', stat: 3, torrent_size: 3, timestamp: 3 }];
+    torrents.value = list;
+    listSpy.mockResolvedValue(list);
+    updateSettings({ libraryView: 'large' });
+    // after updateSettings: saving the settings re-applies their language
+    applyLanguageSetting('en');
+    onTestFinished(() => applyLanguageSetting('ru'));
+    mount();
+    await flush();
+    expect(el.querySelector('.m-card-title')!.textContent).toBe('Темная материя · season 2 · episodes 1–6 of 10');
+    expect(Array.from(el.querySelectorAll('.m-lib-head [role=tab]')).map((b) => b.textContent)).toEqual(['Mine', 'Discover']);
   });
 
   it('filters by tab and search', async () => {

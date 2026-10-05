@@ -216,6 +216,10 @@ export const en: EnDict<typeof ru> = {
     donate: 'Support',
     dontRemind: 'Do not remind me',
     continueOnTv: 'Continue on TV',
+    metaSeasons: 'seasons {a}–{b}',
+    metaEpisode: 'episode {n}',
+    metaEpisodes: 'episodes {from}–{to}',
+    metaEpisodesOf: 'episodes {from}–{to} of {total}',
   },
   donate: {
     codeExpired: 'The code has expired',

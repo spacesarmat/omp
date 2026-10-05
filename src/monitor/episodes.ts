@@ -2,6 +2,9 @@
 // «1-10 из 10», «1-8 серии из 10», «[S02]», packs «Сезоны 1-3» / «[S01-03]». Chromium 53 safe (no u flag, no lookbehind;
 // no \b next to Cyrillic, it is not a word char there).
 
+// «… 2 сезон 1-8 серия», «… 1-8 серии», «… Сезон: 1»: everything from the season / episodes on
+export const SEASON_WORDS = /(?:^|[\s.,:;-])(?:(?:\d{1,4}\s*[-–—]\s*)?\d{1,4}\s*(?:-?(?:й|ый|я)\s*)?)?(?:сезон|season|серии|серия|эпизод)[\s\S]*$/i;
+
 export interface EpisodeRange {
   season?: number;
   /** Last season of a pack of seasons («Сезоны 1-3», «[S01-03]»); season is then the first one. */

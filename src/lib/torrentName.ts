@@ -24,7 +24,8 @@ export function isPlaceholderTitle(title: string | undefined | null, hash?: stri
   return false;
 }
 
-function yearOf(s: string): string {
+/** The release year (193x–204x) in a title or file name; '' when none. */
+export function yearOf(s: string): string {
   const m = /(?:^|[^0-9])((?:19[3-9]|20[0-4])[0-9])(?:[^0-9]|$)/.exec(s);
   return m ? m[1] : '';
 }

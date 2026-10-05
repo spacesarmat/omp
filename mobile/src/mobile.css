@@ -321,6 +321,65 @@ button, .m-btn {
 .m-seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--panel); }
 .m-seg-btn { flex: 1 1 0; min-height: 40px; border: none; border-radius: 10px; background: none; color: var(--muted); font-size: 15px; font-weight: 700; }
 .m-seg-btn.on { background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 2px var(--accent); }
+/* «Каталог» → compact top (v0.17): the small logo, a 36px «Мои | Обзор» switch and the icon buttons share one 44px row;
+   the switch buttons stay 44px tall for the finger, their pill and the track are drawn 30 / 36px tall */
+.m-library { gap: 12px; }
+/* no gaps: the 44px icon buttons sit edge to edge, which leaves the switch room for «Discover» on a 360px phone */
+.m-library .m-lib-head { gap: 0; }
+.m-library .m-lib-head .m-lib-brand { margin-right: 6px; }
+.m-library .m-lib-head .m-seg {
+  position: relative;
+  z-index: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-right: auto;
+  gap: 0;
+  padding: 0 3px;
+  background: none;
+}
+.m-library .m-lib-head .m-seg::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 12px;
+  background: var(--panel);
+}
+.m-library .m-lib-head .m-seg-btn {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 9px;
+  background: none;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.m-library .m-lib-head .m-seg-btn.on { background: none; box-shadow: none; }
+.m-library .m-lib-head .m-seg-btn.on::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  top: 7px;
+  bottom: 7px;
+  border-radius: 9px;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+@media (max-width: 374px) {
+  .m-library .m-lib-head .m-seg-btn { padding: 0 7px; font-size: 12px; }
+}
+/* chips: 36px, tighter padding, still a horizontal scroller */
+.m-library .m-tab { min-height: 36px; height: 36px; padding: 0 12px; border-radius: 18px; font-size: 13px; }
 .m-discover { display: flex; flex-direction: column; gap: 14px; }
 .m-disc-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .m-disc-head h2 { margin: 0; font-size: 20px; font-weight: 700; }

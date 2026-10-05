@@ -1,7 +1,9 @@
 import { categoryTabs, Category } from './category';
-import { parseEpisode, baseName, stripExt } from './episodes';
+import { parseEpisode, baseName, stripExt, type TorrentFile } from './episodes';
 import { formatDuration } from './format';
 import { t, fmtDuration } from '../i18n';
+import { displayTitle, yearOf } from './torrentName';
+import { parseEpisodeRange, SEASON_WORDS } from '../monitor/episodes';
 
 export type LibraryView = 'large' | 'small' | 'list' | 'compact';
 
@@ -59,6 +61,51 @@ export function shortTitle(title: string): string {
   const m = CUT.exec(first);
   const cut = (m ? first.slice(0, m.index) : first).replace(/[\s\-–:,]+$/, '').trim();
   return cut || first;
+}
+
+// a tracker string, not a name typed by the user: title variants, brackets, quality / source / SxxEyy marks,
+// «Сезон: 2», or a dotted release name without spaces (Chromium 53: no  next to Cyrillic)
+const RAW_MARKS = /(?:^|[^0-9a-z])(?:2160p|1080[pi]|720p|480p|4k|uhd|hdr|web-?dl|web-?rip|bd-?rip|blu-?ray|hd-?rip|hdtv|remux|x26[45]|h\.?26[45]|hevc|s\d{1,2}(?:e\d{1,3})?)(?:[^0-9a-z]|$)/i;
+const RAW_SEP = / \/ |[[\]|]|(?:сезон|сезоны|серии|серия)\s*:/i;
+
+function looksRaw(s: string): boolean {
+  return RAW_SEP.test(s) || RAW_MARKS.test(s) || (s.indexOf(' ') < 0 && /[._]/.test(s));
+}
+
+export interface LibraryTitle {
+  /** The name to show: the first title variant without season, year and release details. */
+  title: string;
+  /** Short details: «2 сезон · серии 1–6 из 10» for a series, the year for a film; '' when none. */
+  meta: string;
+}
+
+/**
+ * A short title for the library rows: «Темная материя» + «2 сезон · серии 1–6 из 10» from a tracker string.
+ * A name the user typed (no tracker marks) and one derived from the files stay as they are.
+ */
+export function libraryTitle(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): LibraryTitle {
+  const own = (tor.title || '').trim();
+  const shown = displayTitle(tor);
+  if (shown !== own || !looksRaw(own)) return { title: shown, meta: '' };
+  const first = own.split(' / ')[0];
+  const core = shortTitle(first.replace(SEASON_WORDS, ''));
+  const name = core === '?' ? shortTitle(first) : core;
+  if (name === '?') return { title: shown, meta: '' };
+  const r = parseEpisodeRange(own);
+  const parts: string[] = [];
+  if (r.season !== undefined) {
+    parts.push(r.seasonTo !== undefined ? t('library.metaSeasons', { a: r.season, b: r.seasonTo }) : t('filters.season', { n: r.season }));
+  }
+  if (r.from !== undefined && r.to !== undefined) {
+    if (r.from === r.to) parts.push(t('library.metaEpisode', { n: r.to }));
+    else if (r.total !== undefined) parts.push(t('library.metaEpisodesOf', { from: r.from, to: r.to, total: r.total }));
+    else parts.push(t('library.metaEpisodes', { from: r.from, to: r.to }));
+  }
+  if (!parts.length) {
+    const y = yearOf(own.replace(/[._]+/g, ' '));
+    if (y) parts.push(y);
+  }
+  return { title: name, meta: parts.join(' · ') };
 }
 
 export function episodeLine(path: string, isMovie: boolean): string {

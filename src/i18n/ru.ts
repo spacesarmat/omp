@@ -215,6 +215,11 @@ export const ru = {
     donate: 'Поддержать',
     dontRemind: 'Не напоминать',
     continueOnTv: 'Продолжить на ТВ',
+    // the short line after a library title: «Темная материя · 2 сезон · серии 1–6 из 10»
+    metaSeasons: 'сезоны {a}–{b}',
+    metaEpisode: 'серия {n}',
+    metaEpisodes: 'серии {from}–{to}',
+    metaEpisodesOf: 'серии {from}–{to} из {total}',
   },
   donate: {
     codeExpired: 'Срок кода истёк',

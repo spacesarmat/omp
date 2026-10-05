@@ -18,7 +18,7 @@ import { continueWatching, refreshViewed, progressVersion, serverViewed, getLoca
 import { buildHistory, resumeFrom, sourceLine, historyFilters } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
-import { libraryTabs, nextView, zoomView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
+import { libraryTabs, nextView, zoomView, viewLabel, episodeLine, positionLabel, remainingLabel, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { formatBytes } from '../../../src/lib/format';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
@@ -40,6 +40,16 @@ const PULL_TRIGGER = 64;
 const PULL_HOLD = 56;
 const pullOf = (dy: number) => (dy > 0 ? Math.min(PULL_MAX, dy * PULL_DAMP) : 0);
 const titleOf = (t: Torrent) => displayTitle(t);
+// the short name and its meta («2 сезон · серии 1–6 из 10», the year); the torrent screen shows the full title
+function ShortTitle({ tor }: { tor: Torrent }) {
+  const s = libraryTitle(tor);
+  return (
+    <>
+      {s.title}
+      {s.meta && <span class="m-title-meta">{' · ' + s.meta}</span>}
+    </>
+  );
+}
 
 function episodesText(tor: Torrent): string {
   const n = playableFiles(filesOf(tor)).length;
@@ -407,9 +417,29 @@ export function Library() {
         </div>
       ) : (
       <div class="m-lib-head">
+        {/* compact: the small logo and the «Мои | Обзор» switch share the row with the icon buttons */}
         <div class="m-lib-brand">
-          <Logo size={28} />
-          <span class="m-brand-name">OMP</span>
+          <Logo size={24} />
+          <span class="m-sr">OMP</span>
+        </div>
+        <div class="m-seg" role="tablist" aria-label={t('nav.library')}>
+          {(['mine', 'discover'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={mode === m}
+              class={'m-seg-btn' + (mode === m ? ' on' : '')}
+              onClick={() => {
+                if (m === mode) return;
+                setCatalogMode(m);
+                // the other mode starts at the top (one scroll offset for the tab: the mode left is not kept)
+                scrollToTop();
+              }}
+            >
+              {m === 'mine' ? t('discover.mine') : t('discover.browse')}
+            </button>
+          ))}
         </div>
         <TvChip />
         {mine && !isHistory && (
@@ -445,25 +475,6 @@ export function Library() {
         )}
       </div>
       )}
-      <div class="m-seg" role="tablist" aria-label={t('nav.library')}>
-        {(['mine', 'discover'] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="tab"
-            aria-selected={mode === m}
-            class={'m-seg-btn' + (mode === m ? ' on' : '')}
-            onClick={() => {
-              if (m === mode) return;
-              setCatalogMode(m);
-              // the other mode starts at the top (one scroll offset for the tab: the mode left is not kept)
-              scrollToTop();
-            }}
-          >
-            {m === 'mine' ? t('discover.mine') : t('discover.browse')}
-          </button>
-        ))}
-      </div>
       {mine ? (
       <>
       {searchOpen && (
@@ -607,7 +618,7 @@ export function Library() {
                     <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: tor.hash })}>
                       <Poster torrent={tor} class="m-poster-mini" />
                       <span class="m-hrow-text">
-                        <span class="m-hrow-title">{displayTitle(tor)}</span>
+                        <span class="m-hrow-title"><ShortTitle tor={tor} /></span>
                         <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
                         <span class="m-hrow-pos">
                           <span>{positionLabel(time, duration)}</span>
@@ -640,7 +651,7 @@ export function Library() {
                         <Poster torrent={t} class="m-poster-row" />
                         {mark(t)}
                         <span class="m-vrow-text">
-                          <span class="m-card-title">{titleOf(t)}</span>
+                          <span class="m-card-title"><ShortTitle tor={t} /></span>
                           <span class="m-muted m-small m-vrow-meta">
                             <span>{formatBytes(t.torrent_size || 0)}</span>
                             {q && <span class="m-badge-inline">{q}</span>}
@@ -659,7 +670,7 @@ export function Library() {
                   <div class={'m-row-wrap' + sel(t)} key={t.hash} data-anchor={t.hash}>
                     <button type="button" class="m-crow" {...pressProps(t)}>
                       {mark(t)}
-                      <span class="m-crow-title">{titleOf(t)}</span>
+                      <span class="m-crow-title"><ShortTitle tor={t} /></span>
                       <span class="m-muted m-small m-crow-size">{formatBytes(t.torrent_size || 0)}</span>
                     </button>
                     {moreBtn(t)}
@@ -672,7 +683,7 @@ export function Library() {
                   <button type="button" class={'m-card' + sel(t)} key={t.hash} data-anchor={t.hash} {...pressProps(t)}>
                     <Poster torrent={t} />
                     {mark(t)}
-                    <span class="m-card-title">{titleOf(t)}</span>
+                    <span class="m-card-title"><ShortTitle tor={t} /></span>
                     {view === 'large' && <span class="m-muted m-small">{formatBytes(t.torrent_size || 0)}</span>}
                   </button>
                 ))}

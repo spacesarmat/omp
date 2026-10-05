@@ -11,7 +11,7 @@ import { searchAll, type SearchHandle } from '../sources/search';
 import { qualityOf } from '../sources/view';
 import type { SourceContext, SourceResult } from '../sources/types';
 import type { CheckOptions } from './check';
-import { parseEpisodeRange } from './episodes';
+import { parseEpisodeRange, SEASON_WORDS } from './episodes';
 import { addFindings, rememberSeen, seenKeys } from './subs';
 import { EPISODES_ID, type Finding } from './types';
 import { displayTitle } from '../lib/torrentName';
@@ -39,8 +39,6 @@ export interface NewEpisodesOptions extends CheckOptions {
   source?: string;
 }
 
-// «… 2 сезон 1-8 серия», «… 1-8 серии», «… Сезон: 1»: everything from the season / episodes on
-const SEASON_WORDS = /(?:^|[\s.,:;-])(?:(?:\d{1,4}\s*[-–—]\s*)?\d{1,4}\s*(?:-?(?:й|ый|я)\s*)?)?(?:сезон|season|серии|серия|эпизод)[\s\S]*$/i;
 // a year, not a resolution like 1920x1080
 const YEAR = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])(?!\s*[xх*×])/;
 
