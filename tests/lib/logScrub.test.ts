@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { scrub, log, logEntries, clearLog, flushLog, reloadLog, githubIssueUrl, LOG_MAX, LOG_KEY, LOG_COPIED_NOTE, type LogInfo } from '../../src/lib/log';
+import { scrub, log, logEntries, clearLog, flushLog, reloadLog, githubIssueUrl, LOG_MAX, LOG_KEY, logCopiedNote, type LogInfo } from '../../src/lib/log';
 
 const info: LogInfo = { version: '0.14.0', platform: 'Телефон' };
 
@@ -103,6 +103,6 @@ describe('GitHub URL when copying failed', () => {
     log('info', 'app', 'x');
     const body = new URLSearchParams(githubIssueUrl(info, false).split('?')[1]).get('body')!;
     expect(body).toContain('Не удалось скопировать журнал');
-    expect(body).not.toContain(LOG_COPIED_NOTE);
+    expect(body).not.toContain(logCopiedNote());
   });
 });

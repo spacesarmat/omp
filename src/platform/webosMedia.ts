@@ -1,4 +1,5 @@
 import { hasLuna, lunaCall } from './luna';
+import { t } from '../i18n';
 
 interface TrackLike {
   enabled?: boolean;
@@ -31,13 +32,13 @@ function filterSubtitleTracks(tracks: TrackLike[]): TrackLike[] {
 
 export function audioTrackList(video: HTMLVideoElement): { language: string; label: string }[] {
   const at = list((video as any).audioTracks) || [];
-  return at.map((t, i) => ({ language: t.language || '', label: t.label || 'Дорожка ' + (i + 1) }));
+  return at.map((tr, i) => ({ language: tr.language || '', label: tr.label || t('common.audioTrackN', { n: i + 1 }) }));
 }
 
 export function textTrackList(video: HTMLVideoElement): { language: string; label: string }[] {
   const tt = list((video as any).textTracks) || [];
   const st = filterSubtitleTracks(tt);
-  return st.map((t, i) => ({ language: t.language || '', label: t.label || 'Субтитры ' + (i + 1) }));
+  return st.map((tr, i) => ({ language: tr.language || '', label: tr.label || t('common.subtitlesN', { n: i + 1 }) }));
 }
 
 export function selectAudioTrack(video: HTMLVideoElement, index: number): boolean {

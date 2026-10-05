@@ -1,34 +1,36 @@
-import { CATEGORY_TABS, Category } from './category';
+import { categoryTabs, Category } from './category';
 import { parseEpisode, baseName, stripExt } from './episodes';
 import { formatDuration } from './format';
+import { t, fmtDuration } from '../i18n';
 
 export type LibraryView = 'large' | 'small' | 'list' | 'compact';
 
-export const VIEW_OPTIONS: { value: LibraryView; label: string }[] = [
-  { value: 'large', label: 'Крупные постеры' },
-  { value: 'small', label: 'Мелкие постеры' },
-  { value: 'list', label: 'Список' },
-  { value: 'compact', label: 'Компактный' },
+export const viewOptions = (): { value: LibraryView; label: string }[] => [
+  { value: 'large', label: t('library.viewLarge') },
+  { value: 'small', label: t('library.viewSmall') },
+  { value: 'list', label: t('library.viewList') },
+  { value: 'compact', label: t('library.viewCompact') },
 ];
 
 function indexOfView(v: LibraryView): number {
-  for (let k = 0; k < VIEW_OPTIONS.length; k++) if (VIEW_OPTIONS[k].value === v) return k;
+  const list = viewOptions();
+  for (let k = 0; k < list.length; k++) if (list[k].value === v) return k;
   return 0;
 }
 
 export function nextView(v: LibraryView): LibraryView {
-  return VIEW_OPTIONS[(indexOfView(v) + 1) % VIEW_OPTIONS.length].value;
+  const list = viewOptions();
+  return list[(indexOfView(v) + 1) % list.length].value;
 }
 
 export function viewLabel(v: LibraryView): string {
-  return VIEW_OPTIONS[indexOfView(v)].label;
+  return viewOptions()[indexOfView(v)].label;
 }
 
 export type LibraryTab = 'history' | 'all' | Category;
 
-export const LIBRARY_TABS: { id: LibraryTab; label: string }[] = [
-  { id: 'history' as LibraryTab, label: 'История' },
-].concat(CATEGORY_TABS);
+export const libraryTabs = (): { id: LibraryTab; label: string }[] =>
+  [{ id: 'history' as LibraryTab, label: t('library.tabHistory') }].concat(categoryTabs());
 
 export const POSTER_COLORS = ['#2B3A55', '#4A2E3A', '#2F4A3A', '#4A3F2A', '#3A2F55', '#2A4A4F'];
 
@@ -51,8 +53,8 @@ export function shortTitle(title: string): string {
 
 export function episodeLine(path: string, isMovie: boolean): string {
   const e = parseEpisode(path);
-  if (e.episode !== null) return (e.season !== null ? 'Сезон ' + e.season + ' · ' : '') + 'Серия ' + e.episode;
-  if (isMovie) return 'Фильм';
+  if (e.episode !== null) return (e.season !== null ? t('library.season', { n: e.season }) + ' · ' : '') + t('library.episode', { n: e.episode });
+  if (isMovie) return t('library.movie');
   return stripExt(baseName(path));
 }
 
@@ -63,9 +65,6 @@ export function positionLabel(time: number, duration: number): string {
 export function remainingLabel(time: number, duration: number): string {
   if (!(duration > 0)) return '';
   const left = Math.max(0, Math.round((duration - time) / 60));
-  if (left < 1) return 'осталось меньше минуты';
-  if (left < 60) return 'осталось ' + left + ' мин';
-  const h = Math.floor(left / 60);
-  const m = left % 60;
-  return 'осталось ' + h + ' ч' + (m ? ' ' + m + ' мин' : '');
+  if (left < 1) return t('library.leftLess');
+  return t('library.left', { time: fmtDuration(left) });
 }

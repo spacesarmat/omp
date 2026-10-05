@@ -17,8 +17,8 @@ import { latestUpdate, checkForUpdate } from '../store/updates';
 import { openHbChannel } from '../platform/hbchannel';
 import { HB_REPO_URL } from '../lib/updateInfo';
 import { platformKind } from '../platform/env';
-import { logEntries, clearLog, logVersion, logTime, LEVEL_LABEL, AREA_LABEL } from '../lib/log';
-import { CACHE, PRELOAD, READAHEAD, CONNS, RATE, DISCONNECT, withCurrent } from '../lib/serverSettingsOptions';
+import { logEntries, clearLog, logVersion, logTime, levelLabel, areaLabel } from '../lib/log';
+import { cacheOptions, preloadOptions, readaheadOptions, connsOptions, rateOptions, disconnectOptions, withCurrent } from '../lib/serverSettingsOptions';
 import { t, type LanguageSetting } from '../i18n';
 import { LANGUAGE_NAMES } from '../i18n/languageNames';
 
@@ -89,7 +89,7 @@ function LogBrief() {
       ) : (
         list.map((e, i) => (
           <div class={'log-line log-' + e.l} key={e.t + ':' + i}>
-            <span class="log-level">{LEVEL_LABEL[e.l]}</span> {logTime(e.t)} · {AREA_LABEL[e.a]}: {e.x}
+            <span class="log-level">{levelLabel(e.l)}</span> {logTime(e.t)} · {areaLabel(e.a)}: {e.x}
           </div>
         ))
       )}
@@ -198,13 +198,13 @@ export function SettingsScreen() {
       {srvError && <div class="banner-error">{srvError}</div>}
       {srv && (
         <div>
-          <ChoiceRow label="Размер кэша" value={srv.CacheSize} options={withCurrent(CACHE, srv.CacheSize)} onChange={(v) => patch({ CacheSize: v })} />
-          <ChoiceRow label="Предзагрузка" value={srv.PreloadCache} options={withCurrent(PRELOAD, srv.PreloadCache)} onChange={(v) => patch({ PreloadCache: v })} />
-          <ChoiceRow label="Опережающее чтение" value={srv.ReaderReadAHead} options={withCurrent(READAHEAD, srv.ReaderReadAHead)} onChange={(v) => patch({ ReaderReadAHead: v })} />
-          <ChoiceRow label="Лимит соединений" value={srv.ConnectionsLimit} options={withCurrent(CONNS, srv.ConnectionsLimit)} onChange={(v) => patch({ ConnectionsLimit: v })} />
-          <ChoiceRow label="Ограничение загрузки" value={srv.DownloadRateLimit} options={withCurrent(RATE, srv.DownloadRateLimit)} onChange={(v) => patch({ DownloadRateLimit: v })} />
-          <ChoiceRow label="Ограничение отдачи" value={srv.UploadRateLimit} options={withCurrent(RATE, srv.UploadRateLimit)} onChange={(v) => patch({ UploadRateLimit: v })} />
-          <ChoiceRow label="Отключать неактивный торрент через" value={srv.TorrentDisconnectTimeout} options={withCurrent(DISCONNECT, srv.TorrentDisconnectTimeout)} onChange={(v) => patch({ TorrentDisconnectTimeout: v })} />
+          <ChoiceRow label="Размер кэша" value={srv.CacheSize} options={withCurrent(cacheOptions(), srv.CacheSize)} onChange={(v) => patch({ CacheSize: v })} />
+          <ChoiceRow label="Предзагрузка" value={srv.PreloadCache} options={withCurrent(preloadOptions(), srv.PreloadCache)} onChange={(v) => patch({ PreloadCache: v })} />
+          <ChoiceRow label="Опережающее чтение" value={srv.ReaderReadAHead} options={withCurrent(readaheadOptions(), srv.ReaderReadAHead)} onChange={(v) => patch({ ReaderReadAHead: v })} />
+          <ChoiceRow label="Лимит соединений" value={srv.ConnectionsLimit} options={withCurrent(connsOptions(), srv.ConnectionsLimit)} onChange={(v) => patch({ ConnectionsLimit: v })} />
+          <ChoiceRow label="Ограничение загрузки" value={srv.DownloadRateLimit} options={withCurrent(rateOptions(), srv.DownloadRateLimit)} onChange={(v) => patch({ DownloadRateLimit: v })} />
+          <ChoiceRow label="Ограничение отдачи" value={srv.UploadRateLimit} options={withCurrent(rateOptions(), srv.UploadRateLimit)} onChange={(v) => patch({ UploadRateLimit: v })} />
+          <ChoiceRow label="Отключать неактивный торрент через" value={srv.TorrentDisconnectTimeout} options={withCurrent(disconnectOptions(), srv.TorrentDisconnectTimeout)} onChange={(v) => patch({ TorrentDisconnectTimeout: v })} />
           <ChoiceRow label="Сохранять тайм-коды на сервере" value={!!srv.TrackTimecode} options={ON_OFF} onChange={(v) => patch({ TrackTimecode: v })} />
           <div class="row">
             <Button label={dirty ? 'Сохранить на сервере •' : 'Сохранить на сервере'} onPress={saveServer} />

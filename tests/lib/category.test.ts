@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { categoryOf, mapSearchCategory, CATEGORY_TABS } from '../../src/lib/category';
+import { categoryOf, mapSearchCategory, categoryTabs } from '../../src/lib/category';
 
 describe('categoryOf', () => {
   it('maps TorrServer categories', () => {
@@ -22,6 +22,6 @@ describe('mapSearchCategory', () => {
   });
 });
 
-describe('CATEGORY_TABS', () => {
-  it('starts with all', () => expect(CATEGORY_TABS[0].id).toBe('all'));
+describe('categoryTabs', () => {
+  it('starts with all', () => expect(categoryTabs()[0].id).toBe('all'));
 });

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
-import { ADD_CATEGORIES, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
+import { addCategories, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
@@ -357,7 +357,7 @@ export function Add({ link }: { link?: string }) {
       </div>
       <div class="m-muted m-small">Категория</div>
       <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-        {ADD_CATEGORIES.map((c) => (
+        {addCategories().map((c) => (
           <button
             key={c.id}
             type="button"
@@ -493,7 +493,7 @@ export function Add({ link }: { link?: string }) {
         <Sheet label="Категория" onClose={() => setCatSheet(null)}>
           <div class="m-sheet-title">Категория</div>
           <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-            {ADD_CATEGORIES.map((c) => (
+            {addCategories().map((c) => (
               <button
                 key={c.id}
                 type="button"

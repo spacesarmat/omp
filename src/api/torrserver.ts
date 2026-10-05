@@ -2,6 +2,7 @@ import { request, apiError, HttpOptions } from './http';
 import { isStashedFile, takeStashedFile } from './torrentFiles';
 import type { Torrent, CacheState, ViewedEntry, SearchResult, FfprobeResult, ServerSettings, TmdbConfig } from './types';
 import type { TorrentFile } from '../lib/episodes';
+import { t } from '../i18n';
 
 export interface ServerConfig {
   url: string;
@@ -77,7 +78,7 @@ export class TorrServerClient {
   /** Uploads a stashed .torrent file (POST /torrent/upload, multipart). */
   private upload(p: { link: string; title?: string; poster?: string; category?: string }): Promise<Torrent> {
     const bytes = takeStashedFile(p.link);
-    if (!bytes) return Promise.reject(apiError('parse', 'Файл раздачи потерян, повторите добавление'));
+    if (!bytes) return Promise.reject(apiError('parse', t('errors.torrentFileLost')));
     const form = new FormData();
     form.append('save', 'true');
     form.append('title', p.title || '');
@@ -124,15 +125,15 @@ export class TorrServerClient {
    * Sets the title. `set` replaces poster and category too, so the torrent is read again right before the write and
    * its current ones go back (the passed ones are used when the read fails). An empty `data` keeps the stored one.
    */
-  setTitle(t: Pick<Torrent, 'hash' | 'poster' | 'category'>, title: string): Promise<void> {
+  setTitle(tor: Pick<Torrent, 'hash' | 'poster' | 'category'>, title: string): Promise<void> {
     const v = title.trim();
-    if (!v) return Promise.reject(new Error('Пустое название'));
-    return this.get(t.hash).then(
-      (cur) => (cur && cur.hash ? cur : t),
-      () => t,
+    if (!v) return Promise.reject(new Error(t('errors.emptyTitle')));
+    return this.get(tor.hash).then(
+      (cur) => (cur && cur.hash ? cur : tor),
+      () => tor,
     ).then((cur) =>
       this.call<unknown>('/torrents', {
-        body: { action: 'set', hash: t.hash, title: v, poster: cur.poster || '', category: cur.category || '', data: '' },
+        body: { action: 'set', hash: tor.hash, title: v, poster: cur.poster || '', category: cur.category || '', data: '' },
       }),
     ).then(() => undefined);
   }

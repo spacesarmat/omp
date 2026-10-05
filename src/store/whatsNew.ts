@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { loadJson, saveJson } from './storage';
 import { compareVersions } from '../lib/version';
 import { releasesUpTo, type ChangelogEntry } from '../lib/changelog';
+import { t } from '../i18n';
 
 export const SEEN_KEY = 'tsp.seenVersion';
 /** Keys written on every start (phone: first-run time): they say nothing about an older install. */
@@ -24,7 +25,7 @@ export function sanitizeSeen(v: unknown): string | null {
 }
 
 export function openWhatsNew(list: ChangelogEntry[], current: string): void {
-  whatsNew.value = { title: 'Что нового', entries: releasesUpTo(list, current), auto: false };
+  whatsNew.value = { title: t('whatsNew.title'), entries: releasesUpTo(list, current), auto: false };
 }
 
 export function closeWhatsNew(): void {
@@ -74,5 +75,5 @@ export function checkWhatsNew(list: ChangelogEntry[], current: string): void {
     saveJson(SEEN_KEY, current);
     return;
   }
-  whatsNew.value = { title: 'Что нового в ' + current, entries, auto: true, version: current };
+  whatsNew.value = { title: t('whatsNew.titleIn', { version: current }), entries, auto: true, version: current };
 }

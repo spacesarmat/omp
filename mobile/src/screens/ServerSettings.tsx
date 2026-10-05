@@ -9,18 +9,18 @@ import { torrents, findPosters } from '../../../src/store/library';
 import { TorrServerClient } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
 import type { ServerSettings as Sets, TmdbConfig } from '../../../src/api/types';
-import { CACHE, PRELOAD, READAHEAD, CONNS, RATE, DISCONNECT, withCurrent, type NumOption } from '../../../src/lib/serverSettingsOptions';
+import { cacheOptions, preloadOptions, readaheadOptions, connsOptions, rateOptions, disconnectOptions, withCurrent, type NumOption } from '../../../src/lib/serverSettingsOptions';
 
 type NumField = 'CacheSize' | 'PreloadCache' | 'ReaderReadAHead' | 'ConnectionsLimit' | 'DownloadRateLimit' | 'UploadRateLimit' | 'TorrentDisconnectTimeout';
 
-const ROWS: { field: NumField; label: string; options: NumOption[] }[] = [
-  { field: 'CacheSize', label: 'Размер кэша', options: CACHE },
-  { field: 'PreloadCache', label: 'Предзагрузка', options: PRELOAD },
-  { field: 'ReaderReadAHead', label: 'Опережающее чтение', options: READAHEAD },
-  { field: 'ConnectionsLimit', label: 'Лимит соединений', options: CONNS },
-  { field: 'DownloadRateLimit', label: 'Ограничение загрузки', options: RATE },
-  { field: 'UploadRateLimit', label: 'Ограничение отдачи', options: RATE },
-  { field: 'TorrentDisconnectTimeout', label: 'Отключать неактивный торрент через', options: DISCONNECT },
+const rows = (): { field: NumField; label: string; options: NumOption[] }[] => [
+  { field: 'CacheSize', label: 'Размер кэша', options: cacheOptions() },
+  { field: 'PreloadCache', label: 'Предзагрузка', options: preloadOptions() },
+  { field: 'ReaderReadAHead', label: 'Опережающее чтение', options: readaheadOptions() },
+  { field: 'ConnectionsLimit', label: 'Лимит соединений', options: connsOptions() },
+  { field: 'DownloadRateLimit', label: 'Ограничение загрузки', options: rateOptions() },
+  { field: 'UploadRateLimit', label: 'Ограничение отдачи', options: rateOptions() },
+  { field: 'TorrentDisconnectTimeout', label: 'Отключать неактивный торрент через', options: disconnectOptions() },
 ];
 
 function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
@@ -109,7 +109,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   }
 
   const isLocal = !!c && c.baseUrl === LOCAL_URL;
-  const row = ROWS.filter((r) => r.field === open)[0];
+  const row = rows().filter((r) => r.field === open)[0];
   return (
     <div class="m-screen" data-route="serverSettings">
       <div class="m-bar">
@@ -131,7 +131,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
       {srv && (
         <>
           <section class="m-set-group">
-            {ROWS.map((r) => {
+            {rows().map((r) => {
               const v = srv[r.field];
               const cur = typeof v === 'number' ? withCurrent(r.options, v).filter((o) => o.value === v)[0] : undefined;
               return (

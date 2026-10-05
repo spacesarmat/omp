@@ -5,8 +5,8 @@ import { showToast } from '../ui/toast';
 import { goBack } from '../nav';
 import { native } from '../platform/native';
 import {
-  AREA_LABEL,
-  LEVEL_LABEL,
+  areaLabel,
+  levelLabel,
   clearLog,
   currentLogInfo,
   formatLog,
@@ -132,7 +132,7 @@ export function Log() {
           {rows.map((e, i) => (
             <div class={'m-log-row ' + e.l} key={e.t + ':' + i}>
               <div class="m-log-meta">
-                <span class="m-log-level">{LEVEL_LABEL[e.l]}</span> {logTime(e.t)} · {AREA_LABEL[e.a]}
+                <span class="m-log-level">{levelLabel(e.l)}</span> {logTime(e.t)} · {areaLabel(e.a)}
               </div>
               <div class="m-log-text">{e.x}</div>
             </div>

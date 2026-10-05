@@ -1,7 +1,7 @@
 import type { Torrent } from '../../api/types';
 import { formatBytes } from '../../lib/format';
 import { parseReleaseInfo, releaseBadges, displayBadge } from '../../lib/releaseInfo';
-import { CATEGORY_TABS, categoryOf } from '../../lib/category';
+import { categoryTabs, categoryOf } from '../../lib/category';
 import type { LibraryView } from '../../lib/libraryView';
 import { FocusGroup, Focusable } from '../../ui/components';
 import { Poster } from './Poster';
@@ -23,7 +23,8 @@ function Badges(p: { list: string[]; className?: string }) {
 
 function categoryLabel(t: Torrent): string {
   const id = categoryOf(t.category);
-  for (let i = 0; i < CATEGORY_TABS.length; i++) if (CATEGORY_TABS[i].id === id) return CATEGORY_TABS[i].label;
+  const tabs = categoryTabs();
+  for (let i = 0; i < tabs.length; i++) if (tabs[i].id === id) return tabs[i].label;
   return '';
 }
 

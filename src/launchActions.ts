@@ -8,6 +8,7 @@ import { attachPhone } from './phone/link';
 import { checkForUpdate, dismissPrompt } from './store/updates';
 import { magnetName } from './lib/categoryGuess';
 import { updateSettings } from './store/settings';
+import { t } from './i18n';
 
 /** Applies webOS launch params: {server}, {magnet}, {torrent[, file, t]}, {play, title}, {lang}. */
 export function runLaunchParams(raw: unknown): void {
@@ -17,7 +18,7 @@ export function runLaunchParams(raw: unknown): void {
   if (plan.lang) updateSettings({ language: plan.lang });
   if (plan.report) attachPhone(plan.report);
   if (plan.invalid) {
-    toast('Некорректные параметры запуска', 'error');
+    toast(t('errors.badLaunchParams'), 'error');
     return;
   }
   if (plan.server) {
@@ -38,7 +39,7 @@ export function runLaunchParams(raw: unknown): void {
   }
   const c = client.value;
   if (!c) {
-    toast('Сначала подключитесь к серверу', 'error');
+    toast(t('errors.connectFirst'), 'error');
     resetTo({ name: 'connect' });
     return;
   }
@@ -52,13 +53,13 @@ export function runLaunchParams(raw: unknown): void {
     const hash = a.hash;
     const from = a.from;
     c.get(hash)
-      .then((t) => (c.files(t).length ? t : c.loadInfo(hash)))
+      .then((tor) => (c.files(tor).length ? tor : c.loadInfo(hash)))
       .then(
-        (t) => {
-          const queue = buildTorrentQueue(c, t, c.files(t));
+        (tor) => {
+          const queue = buildTorrentQueue(c, tor, c.files(tor));
           const index = queue.findIndex((q) => q.fileIndex === file);
           if (index < 0) {
-            toast('Некорректные параметры запуска', 'error');
+            toast(t('errors.badLaunchParams'), 'error');
             navigate({ name: 'torrent', hash });
             return;
           }

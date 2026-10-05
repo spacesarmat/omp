@@ -10,7 +10,7 @@ import { activeTv } from '../tv/tvStore';
 import { useTvLaunch } from '../watch';
 import { addSearchResult, type RowBusy } from '../addResult';
 import { errorMessage } from '../../../src/api/http';
-import { ADD_CATEGORIES, guessCategory } from '../../../src/lib/categoryGuess';
+import { addCategories, guessCategory } from '../../../src/lib/categoryGuess';
 import { resultKey } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 
@@ -113,7 +113,7 @@ export function useResultRows(o?: { category?: (r: SourceResult) => string }): R
         <Sheet label="Категория" onClose={() => setCatFor(null)}>
           <div class="m-sheet-title">Категория</div>
           <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-            {ADD_CATEGORIES.map((c) => (
+            {addCategories().map((c) => (
               <button
                 key={c.id}
                 type="button"

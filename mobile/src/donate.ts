@@ -8,9 +8,9 @@ import { journalSupportUntil, noteSupportUntil } from '../../src/store/support';
 import { verifySupportCode, type CodeCheck } from './supportCode';
 
 // «Поддержать OMP» on the phone: the methods and the support code are shared with the TV (src/lib/donate.ts).
-import { activeMethods, DONATE_METHODS, supportActive, supportEndText, SUPPORT_MAX_AHEAD_MS, type DonateMethod } from '../../src/lib/donate';
+import { activeMethods, donateMethods, supportActive, supportEndText, SUPPORT_MAX_AHEAD_MS, type DonateMethod } from '../../src/lib/donate';
 
-export { DONATE_METHODS, DONATE_URL, activeMethods, type DonateMethod, type Wallet } from '../../src/lib/donate';
+export { donateMethods, DONATE_URL, activeMethods, type DonateMethod, type Wallet } from '../../src/lib/donate';
 
 /** The donate sheet; opened from Settings, «Что нового» and the card. */
 export const donateOpen = signal(false);
@@ -32,7 +32,7 @@ export function ensureFirstRun(now: number = Date.now()): number {
   return now;
 }
 
-export function donateCardDue(methods: DonateMethod[] = DONATE_METHODS, now: number = Date.now()): boolean {
+export function donateCardDue(methods: DonateMethod[] = donateMethods(), now: number = Date.now()): boolean {
   const first = ensureFirstRun(now);
   if (!activeMethods(methods).length || supporterActive(now)) return false;
   if (loadJson<unknown>(DONATE_CARD_KEY, false, (v) => typeof v === 'boolean') === true) return false;

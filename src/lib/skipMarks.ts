@@ -1,6 +1,7 @@
 // Manual intro / credits marks as text (m:ss, h:mm:ss) and the status line of the torrent card.
 import { formatDuration } from './format';
 import type { SkipPrefs } from './journal';
+import { t } from '../i18n';
 
 /** «45», «0:45», «1:02:03» → seconds; null for anything else (empty, letters, seconds or minutes over 59 with a hour part). */
 export function parseMark(text: string): number | null {
@@ -18,8 +19,8 @@ export function parseMark(text: string): number | null {
 /** The manual marks as text («заставка 0:45–2:15», «титры: последние 1:30»). */
 export function manualMarks(prefs: SkipPrefs): string[] {
   const marks: string[] = [];
-  if (prefs.mi) marks.push('заставка ' + formatDuration(prefs.mi[0]) + '–' + formatDuration(prefs.mi[1]));
-  if (prefs.mc) marks.push('титры: последние ' + formatDuration(prefs.mc));
+  if (prefs.mi) marks.push(t('skip.intro', { from: formatDuration(prefs.mi[0]), to: formatDuration(prefs.mi[1]) }));
+  if (prefs.mc) marks.push(t('skip.credits', { n: formatDuration(prefs.mc) }));
   return marks;
 }
 
@@ -29,8 +30,8 @@ export function manualMarks(prefs: SkipPrefs): string[] {
  */
 export function skipStatus(hasChapters: boolean, prefs: SkipPrefs): string {
   const marks = manualMarks(prefs);
-  if (hasChapters) return marks.length ? 'по главам файла · вручную: ' + marks.join(' · ') : 'по главам файла';
-  return marks.length ? 'в файле нет глав · ' + marks.join(' · ') : 'не заданы';
+  if (hasChapters) return marks.length ? t('skip.byChaptersManual', { marks: marks.join(' · ') }) : t('skip.byChapters');
+  return marks.length ? t('skip.noChapters', { marks: marks.join(' · ') }) : t('skip.notSet');
 }
 
 /** Manual marks as the TV dialog edits them: the intro as a pair, the credits as «last N seconds»; null = not set. */

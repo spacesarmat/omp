@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { client, activeServer } from '../store/servers';
-import { catalogReason, cachedBanner, CATALOG_HINT } from '../lib/catalogState';
+import { catalogReason, cachedBanner, catalogHint } from '../lib/catalogState';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, torrentsAt, addedTorrents, addedMessage } from '../store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed, clearProgress, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../store/progress';
 import { forgetWatch } from '../store/journal';
@@ -163,7 +163,7 @@ export function LibraryScreen() {
             <Button label="Повторить" onPress={() => load()} />
             <Button label="Сменить сервер" onPress={() => navigate({ name: 'connect' })} />
           </FocusGroup>
-          <div class="catalog-off-hint">{CATALOG_HINT}</div>
+          <div class="catalog-off-hint">{catalogHint()}</div>
         </div>
       </div>
     );

@@ -1,5 +1,6 @@
 import { parseEpisode, playableFiles, baseName, stripExt, type TorrentFile } from './episodes';
 import { titleCore } from './posterSearch';
+import { t } from '../i18n';
 
 const HEX40 = /^[0-9a-f]{40}$/i;
 const BASE32 = /^[a-z2-7]{32}$/i;
@@ -58,8 +59,8 @@ export function deriveName(files: TorrentFile[] | undefined | null, fallback: st
       if (e.season !== null && seasons.indexOf(e.season) < 0) seasons.push(e.season);
     });
     seasons.sort((a, b) => a - b);
-    if (seasons.length === 1) name += ' · Сезон ' + seasons[0];
-    else if (seasons.length > 1) name += ' · Сезоны ' + seasons[0] + '–' + seasons[seasons.length - 1];
+    if (seasons.length === 1) name += ' · ' + t('library.season', { n: seasons[0] });
+    else if (seasons.length > 1) name += ' · ' + t('library.seasons', { a: seasons[0], b: seasons[seasons.length - 1] });
     return name;
   }
   if (list.length === 1) {

@@ -1,6 +1,6 @@
 import { categoryOf } from '../../lib/category';
 import { episodeLine, positionLabel, remainingLabel } from '../../lib/libraryView';
-import { HISTORY_FILTERS, sourceLine, type HistoryFilter, type HistoryItem } from '../../lib/history';
+import { historyFilters, sourceLine, type HistoryFilter, type HistoryItem } from '../../lib/history';
 import { FocusGroup, Focusable, ProgressBar } from '../../ui/components';
 import { Icon } from '../../ui/icons';
 import { Poster } from './Poster';
@@ -12,7 +12,7 @@ export type HistoryEntry = HistoryItem;
 export function HistoryFilterRow(p: { value: HistoryFilter; onChange: (f: HistoryFilter) => void; onFocused?: () => void }) {
   return (
     <FocusGroup focusKey="LIB-HFILTER" className="history-filter">
-      {HISTORY_FILTERS.map((f) => (
+      {historyFilters().map((f) => (
         <Focusable
           key={f.id}
           focusKey={'hfilter-' + f.id}

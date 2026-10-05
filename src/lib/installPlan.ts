@@ -1,5 +1,6 @@
 // Install assistant (phone): device facts -> the steps for that model. Pure: no I/O, no platform imports.
 import { compareVersions } from './version';
+import { t } from '../i18n';
 
 /** App ids the phone looks for in the LG app list (ssap listApps). */
 export const LG_OMP_APP_ID = 'com.spacesarmat.torrplayer';
@@ -16,14 +17,8 @@ export const ADB_PORT = 5555;
 export const ROOT_CHECK_URL = 'https://cani.rootmy.tv';
 export const LG_DEV_ACCOUNT_URL = 'https://webostv.developer.lge.com';
 
-/** FAQ questions the assistant links to (must match mobile/src/faq.ts exactly). */
-export const FAQ_LG_DEVMODE = 'Как установить OMP на LG без root (Developer Mode)?';
-export const FAQ_LG_HBC = 'Как установить OMP на LG через Homebrew Channel (с root)?';
-export const FAQ_LG_ROOT = 'Нужен ли root для установки OMP на LG?';
-export const FAQ_LG_VERSION = 'Подойдёт ли мой телевизор LG и как узнать версию webOS?';
-export const FAQ_ATV_ADB = 'Как установить OMP на Android TV через adb?';
-export const FAQ_ATV_BOXES = 'На каких приставках работает OMP и встроенный TorrServer?';
-export const FAQ_SAMSUNG = 'Есть ли OMP для Samsung (Tizen)?';
+export { FAQ_LG_DEVMODE, FAQ_LG_HBC, FAQ_LG_ROOT, FAQ_LG_VERSION, FAQ_ATV_ADB, FAQ_ATV_BOXES, FAQ_SAMSUNG } from './faqLinks';
+import { FAQ_LG_DEVMODE, FAQ_LG_VERSION, FAQ_LG_HBC, FAQ_ATV_ADB, FAQ_ATV_BOXES, FAQ_SAMSUNG } from './faqLinks';
 
 // ---- webOS version ----
 
@@ -109,7 +104,7 @@ export function parseWebOs(src: { productName?: string; swModel?: string; model?
   const year = lgModelYear(src.model);
   if (year !== null) {
     const v = fromYear(year);
-    if (v) return { label: v.label + ' (по году модели)', rank: v.rank };
+    if (v) return { label: t('install.plan.byModelYear', { label: v.label }), rank: v.rank };
   }
   return null;
 }
@@ -292,12 +287,11 @@ function needsUpdate(installed: string, latest: string | null | undefined): bool
 }
 
 function versionText(installed: string, latest: string | null | undefined): string {
-  if (needsUpdate(installed, latest)) return 'Версия ' + installed + ' — есть ' + latest;
-  return 'Версия ' + installed + (latest ? ' — последняя версия' : '');
+  if (needsUpdate(installed, latest)) return t('install.plan.versionNewer', { installed, latest: latest || '' });
+  return latest ? t('install.plan.versionLatest', { installed }) : t('install.plan.version', { installed });
 }
 
-const DEVMODE_TIMER_NOTE =
-  'Режим разработчика действует 1000 часов (около 40 дней). Продлевайте его заранее в приложении Developer Mode, иначе OMP удалится с ТВ.';
+const devmodeTimerNote = () => t('install.plan.timerNote');
 
 function lgPlan(f: LgFacts): InstallPlan {
   const webos = parseWebOs(f);
@@ -311,18 +305,18 @@ function lgPlan(f: LgFacts): InstallPlan {
     return {
       ...base,
       kind: 'lg-pair',
-      subtitle: join([model, label, 'нужно подключение к ТВ']),
+      subtitle: join([model, label, t('install.plan.needsPairing')]),
       steps: [
         {
           id: 'pair',
-          title: 'Подключение к телевизору',
-          text: 'Телефон узнает модель, версию webOS и установленные приложения. На экране ТВ нажмите «Разрешить».',
+          title: t('install.plan.pairTitle'),
+          text: t('install.plan.pairText'),
           state: 'current',
         },
       ],
       actions: [
-        { id: 'pair', label: f.error ? 'Подключиться снова' : 'Подключиться', primary: true },
-        { id: 'faq', label: 'Как установить без подключения', faq: FAQ_LG_DEVMODE },
+        { id: 'pair', label: f.error ? t('install.plan.pairAgain') : t('install.plan.pair'), primary: true },
+        { id: 'faq', label: t('install.plan.pairFaq'), faq: FAQ_LG_DEVMODE },
       ],
       notes,
     };
@@ -332,15 +326,15 @@ function lgPlan(f: LgFacts): InstallPlan {
     return {
       ...base,
       kind: 'lg-unsupported',
-      subtitle: join([model, label, 'не поддерживается']),
+      subtitle: join([model, label, t('install.plan.unsupported')]),
       steps: [],
-      actions: [{ id: 'faq', label: 'Какие телевизоры подходят', faq: FAQ_LG_VERSION }],
-      notes: ['OMP нужен webOS 4.0 или новее — это примерно телевизоры 2018 года и новее. На ' + webos.label + ' OMP не работает.'],
+      actions: [{ id: 'faq', label: t('install.plan.whichTvs'), faq: FAQ_LG_VERSION }],
+      notes: [t('install.plan.tooOld', { label: webos.label })],
     };
   }
 
   const notes: string[] = [];
-  if (!webos) notes.push('Не удалось узнать версию webOS. OMP нужен webOS 4.0 или новее.');
+  if (!webos) notes.push(t('install.plan.noWebos'));
   const hbc = has(f.apps, LG_HBC_APP_ID);
   const devApp = has(f.apps, LG_DEVMODE_APP_ID);
   const ports = f.openPorts;
@@ -351,15 +345,15 @@ function lgPlan(f: LgFacts): InstallPlan {
     // '' = OMP is in the app list without a version
     const installed = f.ompVersion;
     const old = !!installed && needsUpdate(installed, f.latest);
-    if (devApp && !hbc) notes.push(DEVMODE_TIMER_NOTE);
+    if (devApp && !hbc) notes.push(devmodeTimerNote());
     return {
       ...base,
       kind: 'lg-update',
-      subtitle: join([model, label, installed ? 'OMP ' + installed : 'OMP установлен']),
+      subtitle: join([model, label, installed ? 'OMP ' + installed : t('install.plan.ompInstalled')]),
       steps: [
-        { id: 'omp', title: 'OMP установлен', text: installed ? versionText(installed, f.latest) : 'Версия неизвестна', state: 'done' },
+        { id: 'omp', title: t('install.plan.ompInstalled'), text: installed ? versionText(installed, f.latest) : t('install.plan.versionUnknown'), state: 'done' },
       ],
-      actions: old ? [{ id: 'update-on-tv', label: 'Обновить на ТВ', primary: true }] : [],
+      actions: old ? [{ id: 'update-on-tv', label: t('install.plan.updateOnTv'), primary: true }] : [],
       notes,
       installed: installed || undefined,
       latest: f.latest,
@@ -371,21 +365,21 @@ function lgPlan(f: LgFacts): InstallPlan {
     return {
       ...base,
       kind: 'lg-hbc',
-      subtitle: join([model, label, 'есть Homebrew Channel']),
+      subtitle: join([model, label, t('install.plan.hbcSubtitle')]),
       steps: [
-        { id: 'hbc', title: 'Homebrew Channel', text: 'Установлен на телевизоре', state: 'done' },
+        { id: 'hbc', title: 'Homebrew Channel', text: t('install.plan.hbcInstalled'), state: 'done' },
         {
           id: 'repo',
-          title: 'Репозиторий OMP',
-          text: 'Кнопка ниже откроет Homebrew Channel на ТВ и предложит добавить репозиторий OMP — подтвердите пультом.',
+          title: t('install.plan.repoTitle'),
+          text: t('install.plan.repoText'),
           state: 'current',
         },
-        { id: 'install', title: 'Установка', text: 'В Homebrew Channel найдите OMP и нажмите «Install».', state: 'todo' },
+        { id: 'install', title: t('install.plan.installTitle'), text: t('install.plan.hbcInstallText'), state: 'todo' },
       ],
       actions: [
-        { id: 'open-hbc', label: 'Открыть Homebrew Channel на ТВ', primary: true },
-        ...(ssh ? [{ id: 'install' as const, label: 'Установить OMP с телефона' }] : []),
-        { id: 'faq', label: 'Подробнее о Homebrew Channel', faq: FAQ_LG_HBC },
+        { id: 'open-hbc', label: t('install.plan.openHbc'), primary: true },
+        ...(ssh ? [{ id: 'install' as const, label: t('install.plan.installFromPhone') }] : []),
+        { id: 'faq', label: t('install.plan.hbcMore'), faq: FAQ_LG_HBC },
       ],
       notes,
       install: ssh ? { method: 'lg-devmode', ip: f.ip, withHbc: false } : undefined,
@@ -395,34 +389,30 @@ function lgPlan(f: LgFacts): InstallPlan {
   const steps = withProgress([
     {
       id: 'account',
-      title: 'Аккаунт разработчика LG',
-      text: 'webostv.developer.lge.com — регистрация и подтверждение почты. Один аккаунт работает на одном ТВ одновременно.',
+      title: t('install.plan.accountTitle'),
+      text: t('install.plan.accountText'),
       done: devApp || ssh || keyServer,
     },
     {
       id: 'app',
-      title: 'Приложение Developer Mode',
-      text: devApp
-        ? 'Установлено на ТВ. Войдите в нём в аккаунт разработчика.'
-        : 'Установите его на ТВ из LG Content Store и войдите в аккаунт разработчика.',
+      title: t('install.plan.appTitle'),
+      text: devApp ? t('install.plan.appTextHave') : t('install.plan.appTextNeed'),
       done: devApp || ssh || keyServer,
     },
     {
       id: 'status',
       title: 'Dev Mode Status',
-      text: ssh ? 'Включён' : 'Включите Dev Mode Status в приложении Developer Mode — ТВ перезагрузится.',
+      text: ssh ? t('install.plan.statusOn') : t('install.plan.statusOff'),
       done: ssh || keyServer,
     },
     {
       id: 'keyserver',
       title: 'Key Server',
-      text: keyServer
-        ? 'Включён. Телефону понадобится код (Passphrase) с экрана Developer Mode.'
-        : 'Снова откройте Developer Mode и включите Key Server. Телефону понадобится код (Passphrase) с его экрана.',
+      text: keyServer ? t('install.plan.keyServerOn') : t('install.plan.keyServerOff'),
       done: keyServer,
     },
-    { id: 'install', title: 'Установка', text: 'Телефон поставит Homebrew Channel и OMP сам.', done: false },
-    { id: 'timer', title: 'Таймер 1000 часов', text: DEVMODE_TIMER_NOTE, done: false },
+    { id: 'install', title: t('install.plan.installTitle'), text: t('install.plan.installBothText'), done: false },
+    { id: 'timer', title: t('install.plan.timerTitle'), text: devmodeTimerNote(), done: false },
   ]);
   // the timer is a reminder, never the current step
   const timer = steps[steps.length - 1];
@@ -430,18 +420,18 @@ function lgPlan(f: LgFacts): InstallPlan {
   // without the app list OMP or Homebrew Channel may already be there: no install until a recheck sees the list
   const appsKnown = f.apps !== undefined;
   if (!appsKnown) {
-    notes.push('Не удалось получить список приложений с телевизора — OMP или Homebrew Channel могут быть уже установлены. Нажмите «Проверить снова».');
+    notes.push(t('install.plan.noAppList'));
   }
   return {
     ...base,
     kind: 'lg-devmode',
-    subtitle: join([model, label, 'без root — ставим через режим разработчика']),
+    subtitle: join([model, label, t('install.plan.devmodeSubtitle')]),
     steps,
     actions: [
-      ...(appsKnown ? [{ id: 'install' as const, label: 'Установить OMP и Homebrew Channel', primary: true }] : []),
-      { id: 'recheck', label: 'Проверить снова', primary: !appsKnown },
-      { id: 'link', label: 'Можно ли получить root на этой модели', url: ROOT_CHECK_URL },
-      { id: 'faq', label: 'Подробная инструкция', faq: FAQ_LG_DEVMODE },
+      ...(appsKnown ? [{ id: 'install' as const, label: t('install.plan.installBoth'), primary: true }] : []),
+      { id: 'recheck', label: t('install.plan.recheck'), primary: !appsKnown },
+      { id: 'link', label: t('install.plan.rootLink'), url: ROOT_CHECK_URL },
+      { id: 'faq', label: t('install.plan.devmodeFaq'), faq: FAQ_LG_DEVMODE },
     ],
     notes,
     install: appsKnown ? { method: 'lg-devmode', ip: f.ip, withHbc: true } : undefined,
@@ -451,20 +441,16 @@ function lgPlan(f: LgFacts): InstallPlan {
 /** The embedded TorrServer note for a box with this ABI (unknown, arm64 or another). */
 export function abiNote(abi: string | undefined): string {
   if (!abi) {
-    return 'Встроенный TorrServer работает только на 64-битных приставках (arm64). На других OMP работает с TorrServer на другом устройстве в сети.';
+    return t('install.plan.abiUnknown');
   }
-  return isArm64(abi)
-    ? 'arm64 — встроенный TorrServer будет работать.'
-    : 'Приставка не 64-битная (' + abi + ') — встроенный TorrServer на ней не запустится. OMP будет работать с TorrServer на другом устройстве в сети.';
+  return isArm64(abi) ? t('install.plan.abiArm64') : t('install.plan.abiOther', { abi });
 }
 
 /** Cast reports «Chromecast» both for the old dongles and for Chromecast with Google TV (4K). */
-const PLAIN_CHROMECAST_NOTE =
-  'Если это Chromecast без Google TV (до 2020 года) — приложения на него не ставятся. Подойдёт Chromecast с Google TV.';
+const plainChromecastNote = () => t('install.plan.chromecastNote');
 
 /** Found over cast: TVs with only a built-in Chromecast advertise the same service. */
-const CAST_ONLY_NOTE =
-  'Установка по adb работает только на Android TV и Google TV. На телевизорах, где есть только встроенный Chromecast (Chromecast built-in), установить OMP нельзя.';
+const castOnlyNote = () => t('install.plan.castOnlyNote');
 
 function atvPlan(f: AtvFacts): InstallPlan {
   const model = f.model || 'Android TV';
@@ -475,10 +461,10 @@ function atvPlan(f: AtvFacts): InstallPlan {
     return {
       kind: 'atv-unsupported',
       title: f.name,
-      subtitle: join([model, 'не поддерживается']),
+      subtitle: join([model, t('install.plan.unsupported')]),
       steps: [],
-      actions: [{ id: 'faq', label: 'На каких приставках работает OMP', faq: FAQ_ATV_BOXES }],
-      notes: ['Это Chromecast без Google TV: на него нельзя установить приложения. Нужна приставка или телевизор с Android TV / Google TV.'],
+      actions: [{ id: 'faq', label: t('install.plan.atvBoxes'), faq: FAQ_ATV_BOXES }],
+      notes: [t('install.plan.chromecastUnsupported')],
     };
   }
 
@@ -489,8 +475,8 @@ function atvPlan(f: AtvFacts): InstallPlan {
       kind: 'atv-installed',
       title: f.name,
       subtitle: join([model, android, 'OMP ' + installed]),
-      steps: [{ id: 'omp', title: 'OMP установлен', text: versionText(installed, f.latest), state: 'done' }],
-      actions: old ? [{ id: 'update-on-tv', label: 'Обновить на ТВ', primary: true }] : [],
+      steps: [{ id: 'omp', title: t('install.plan.ompInstalled'), text: versionText(installed, f.latest), state: 'done' }],
+      actions: old ? [{ id: 'update-on-tv', label: t('install.plan.updateOnTv'), primary: true }] : [],
       notes: f.abi && !isArm64(f.abi) ? [abiNote(f.abi)] : [],
       installed,
       latest: f.latest,
@@ -502,44 +488,35 @@ function atvPlan(f: AtvFacts): InstallPlan {
   // the phone installs over adb on port 5555; Android 11+ pairing by code («Беспроводная отладка») is not supported
   const debug =
     wireless === true
-      ? {
-          title: 'Отладка по сети',
-          text: 'Настройки → Система → Для разработчиков → включите «Отладка по сети» (ADB по сети), если такой пункт есть. Подключение «Беспроводной отладкой» по коду телефон пока не поддерживает — тогда установите OMP через компьютер.',
-        }
+      ? { title: t('install.plan.debugTitle'), text: t('install.plan.debugWireless') }
       : wireless === false
-        ? {
-            title: 'Отладка по сети',
-            text: 'Настройки → Система → Для разработчиков → включите «Отладка по сети» (на некоторых приставках — «Отладка по USB»).',
-          }
-        : {
-            title: 'Отладка по сети',
-            text: 'Настройки → Система → Для разработчиков → включите «Отладка по сети» (на некоторых приставках — «Отладка по USB»). Если есть только «Беспроводная отладка» с кодом (Android 11 и новее), телефон установить не сможет — понадобится компьютер.',
-          };
+        ? { title: t('install.plan.debugTitle'), text: t('install.plan.debugPlain') }
+        : { title: t('install.plan.debugTitle'), text: t('install.plan.debugUnknown') };
   return {
     kind: 'atv-adb',
     title: f.name,
-    subtitle: join([model, android, arch === 'arm64' ? 'arm64 — встроенный TorrServer будет работать' : arch]),
+    subtitle: join([model, android, arch === 'arm64' ? t('install.plan.arm64Subtitle') : arch]),
     steps: withProgress([
       {
         id: 'devopts',
-        title: 'Режим разработчика',
-        text: 'Настройки → Система → Об устройстве → 7 раз нажмите «Сборка» (названия пунктов зависят от прошивки).',
+        title: t('install.plan.devOptsTitle'),
+        text: t('install.plan.devOptsText'),
         done: false,
       },
       { id: 'debug', title: debug.title, text: debug.text, done: false },
       {
         id: 'install',
-        title: 'Установка',
-        text: 'Телефон скачает OMP с GitHub и поставит его. Если на ТВ появится «Разрешить отладку?» — нажмите «Разрешить».',
+        title: t('install.plan.installTitle'),
+        text: t('install.plan.adbInstallText'),
         done: false,
       },
     ]),
     actions: [
-      { id: 'install', label: 'Установить OMP', primary: true },
-      { id: 'faq', label: 'Как установить через компьютер', faq: FAQ_ATV_ADB },
+      { id: 'install', label: t('install.plan.installOmp'), primary: true },
+      { id: 'faq', label: t('install.plan.adbFaq'), faq: FAQ_ATV_ADB },
     ],
-    notes: (f.cast === 'tv' ? [CAST_ONLY_NOTE] : [])
-      .concat(/^chromecast$/i.test((f.model || '').trim()) ? [PLAIN_CHROMECAST_NOTE] : [])
+    notes: (f.cast === 'tv' ? [castOnlyNote()] : [])
+      .concat(/^chromecast$/i.test((f.model || '').trim()) ? [plainChromecastNote()] : [])
       .concat(arch === 'arm64' ? [] : [abiNote(f.abi)]),
     install: { method: 'atv-adb', ip: f.ip, wireless },
   };
@@ -552,9 +529,9 @@ export function installPlan(f: DeviceFacts): InstallPlan {
   return {
     kind: 'samsung-unsupported',
     title: f.name,
-    subtitle: join([f.model || 'Samsung', 'не поддерживается']),
+    subtitle: join([f.model || 'Samsung', t('install.plan.unsupported')]),
     steps: [],
-    actions: [{ id: 'faq', label: 'Подробнее', faq: FAQ_SAMSUNG }],
-    notes: ['Samsung (Tizen) пока не поддерживается. Поддержка запланирована в одном из будущих выпусков.'],
+    actions: [{ id: 'faq', label: t('install.plan.more'), faq: FAQ_SAMSUNG }],
+    notes: [t('install.plan.samsungUnsupported')],
   };
 }

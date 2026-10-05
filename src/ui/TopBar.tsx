@@ -2,7 +2,7 @@ import { FocusGroup, Focusable, IconButton } from './components';
 import { Icon } from './icons';
 import { Logo } from './Logo';
 import { navigate } from './nav';
-import { LIBRARY_TABS, LibraryTab, LibraryView, viewLabel } from '../lib/libraryView';
+import { libraryTabs, LibraryTab, LibraryView, viewLabel } from '../lib/libraryView';
 import { LibrarySort, sortLabel } from '../lib/librarySearch';
 
 export interface TopBarProps {
@@ -23,7 +23,7 @@ export function TopBar(p: TopBarProps) {
     <FocusGroup focusKey="LIB-HEADER" className="topbar">
       <Logo size={52} />
       <span class="topbar-brand">OMP</span>
-      {LIBRARY_TABS.map((t) => (
+      {libraryTabs().map((t) => (
         <Focusable
           key={t.id}
           focusKey={'tab-' + t.id}

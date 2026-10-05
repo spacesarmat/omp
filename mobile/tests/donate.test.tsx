@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import {
-  DONATE_METHODS,
+  donateMethods,
   activeMethods,
   donateCardDue,
   dismissDonateCard,
@@ -55,7 +55,7 @@ describe('donate config', () => {
     const a = activeMethods();
     expect(a.map((m) => m.id)).toEqual(['boosty']);
     expect(a[0].url).toBe('https://boosty.to/djmaker/donate');
-    expect(DONATE_METHODS.map((m) => m.id)).toEqual(['boosty', 'yoomoney', 'crypto']);
+    expect(donateMethods().map((m) => m.id)).toEqual(['boosty', 'yoomoney', 'crypto']);
   });
 
   it('hides blank urls, non-https urls and wallets without data; keeps order', () => {

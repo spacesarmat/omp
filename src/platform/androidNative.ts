@@ -9,7 +9,7 @@ import type { UpdateInfo } from '../lib/updateInfo';
 import type { CloudflareVisibleRequest } from '../sources/cloudflareCheck';
 import type { BrowserCheck, BrowserLoginRequest } from '../sources/browserLogin';
 import { effect } from '@preact/signals';
-import { lang, type Lang } from '../i18n';
+import { lang, t, type Lang } from '../i18n';
 
 type ApkFiles = NonNullable<UpdateInfo['apks']>;
 
@@ -208,7 +208,7 @@ function errorText(e: unknown): string {
 export function describeApkError(e: unknown): string {
   const msg = errorText(e);
   if (/[А-Яа-яЁё]/.test(msg)) return msg;
-  return 'Не удалось установить обновление' + (msg ? ': ' + msg : '');
+  return t('update.installFailed') + (msg ? ': ' + msg : '');
 }
 
 /**
@@ -218,7 +218,7 @@ export function describeApkError(e: unknown): string {
  */
 export function installApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void> {
   const p = nativePlugin();
-  if (!p) return Promise.reject(new Error('Установка обновлений недоступна на этом устройстве'));
+  if (!p) return Promise.reject(new Error(t('update.installUnavailable')));
   let handle: ListenerHandle | null = null;
   const release = () => {
     if (handle) {

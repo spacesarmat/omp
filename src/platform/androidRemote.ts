@@ -10,6 +10,7 @@ import { activeServer } from '../store/servers';
 import { updateSettings } from '../store/settings';
 import { resetTo } from '../ui/nav';
 import { log } from '../lib/log';
+import { t } from '../i18n';
 import { allSources } from '../sources/registry';
 import {
   applyRemoteIndexers,
@@ -173,7 +174,7 @@ export function applyRemoteSourcesEvent(
   }
   if (r) lastSourcesId = r.id;
   if (!r) {
-    log('warn', 'tv', 'Передача источников с телефона: неверные данные');
+    log('warn', 'tv', t('log.sourcesBadData'));
     const id = d && typeof d === 'object' ? (d as { id?: unknown }).id : undefined;
     // the native side waits for an answer: say it failed rather than let the phone wait for the timeout
     if (typeof id !== 'string' || !id) return Promise.resolve();
@@ -192,16 +193,16 @@ export function applyRemoteSourcesEvent(
       (a) => {
         const notStored = a && Array.isArray(a.sitesNotStored) ? a.sitesNotStored.filter((x): x is string => typeof x === 'string') : [];
         if (notStored.length) {
-          log('error', 'tv', 'Вход на сайты проверен, но не сохранён на телевизоре: ' + notStored.join(', '));
+          log('error', 'tv', t('log.sourcesLoginsNotStored', { sites: notStored.join(', ') }));
           siteLoginsNotStored(notStored, sitesBefore);
         }
         if (rutracker === 'ok' && a && a.stored === false) {
-          log('error', 'tv', 'Вход на rutracker проверен, но не сохранён на телевизоре');
+          log('error', 'tv', t('log.sourcesRutrackerNotStored'));
           transferLoginNotStored(before);
         } else notifyTransferApplied();
       },
       () => {
-        log('warn', 'tv', 'Передача источников с телефона: не удалось ответить');
+        log('warn', 'tv', t('log.sourcesNoReply'));
       },
     );
   };
@@ -226,16 +227,16 @@ export function applyRemoteSourcesEvent(
         log(
           (res && res !== 'ok') || saved < sent || bad.length ? 'warn' : 'info',
           'tv',
-          'Источники переданы с телефона' +
-            (res ? ', вход на rutracker: ' + res : '') +
-            ids.map((id) => ', вход на ' + id + ': ' + logins[id]).join('') +
-            sids.map((id) => ', вход через браузер на ' + id + ': ' + sessions[id]).join('') +
-            (sent ? ', индексаторов: ' + saved + ' из ' + sent : ''),
+          t('log.sourcesReceived') +
+            (res ? t('log.sourcesRutrackerLogin', { res }) : '') +
+            ids.map((id) => t('log.sourcesLogin', { id, res: logins[id] })).join('') +
+            sids.map((id) => t('log.sourcesBrowserLogin', { id, res: sessions[id] })).join('') +
+            (sent ? t('log.sourcesIndexers', { saved, sent }) : ''),
         );
         return done(res, sent ? saved : undefined, logins, sessions);
       },
       () => {
-        log('error', 'tv', 'Передача источников с телефона не применилась');
+        log('error', 'tv', t('log.sourcesNotApplied'));
         return plugin.remoteSourcesDone({ id: r.id, failed: true }).then(() => undefined, () => undefined);
       },
     );

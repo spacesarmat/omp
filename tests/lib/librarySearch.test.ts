@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterTorrents, sortTorrents, nextSort, sortLabel, SORT_OPTIONS } from '../../src/lib/librarySearch';
+import { filterTorrents, sortTorrents, nextSort, sortLabel, sortOptions } from '../../src/lib/librarySearch';
 import type { Torrent } from '../../src/api/types';
 
 const t = (hash: string, title: string, size = 0, ts = 0): Torrent => ({ hash, title, stat: 5, torrent_size: size, timestamp: ts });
@@ -24,7 +24,7 @@ describe('sortTorrents', () => {
     expect(list.map((x) => x.hash)).toEqual(['a', 'b', 'c']);
   });
   it('cycles modes and labels them', () => {
-    expect(SORT_OPTIONS.map((o) => o.value)).toEqual(['new', 'title', 'size']);
+    expect(sortOptions().map((o) => o.value)).toEqual(['new', 'title', 'size']);
     expect(nextSort('new')).toBe('title');
     expect(nextSort('size')).toBe('new');
     expect(sortLabel('title')).toBe('По названию');

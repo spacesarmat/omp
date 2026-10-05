@@ -11,10 +11,10 @@ import { client, activeServer } from '../../../src/store/servers';
 import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
-import { buildHistory, resumeFrom, sourceLine, HISTORY_FILTERS } from '../../../src/lib/history';
+import { buildHistory, resumeFrom, sourceLine, historyFilters } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
-import { LIBRARY_TABS, nextView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
+import { libraryTabs, nextView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { formatBytes } from '../../../src/lib/format';
 import { episodeLabel, playableFiles } from '../../../src/lib/episodes';
@@ -307,7 +307,7 @@ export function Library() {
         />
       )}
       <div class="m-tabs" role="tablist">
-        {LIBRARY_TABS.map((t) => (
+        {libraryTabs().map((t) => (
           <button
             key={t.id}
             type="button"
@@ -322,7 +322,7 @@ export function Library() {
       </div>
       {isHistory && (
         <div class="m-hfilters" role="group" aria-label="Источник">
-          {HISTORY_FILTERS.map((f) => (
+          {historyFilters().map((f) => (
             <button
               key={f.id}
               type="button"
