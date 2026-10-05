@@ -29,6 +29,19 @@ function caller(token, doFetch) {
   };
 }
 
+/** Pins the release post silently (only the post with the description, never the files). A failure is only logged. */
+async function pinPost(call, chat, messageId, log) {
+  const form = new FormData();
+  form.set('chat_id', chat);
+  form.set('message_id', String(messageId));
+  form.set('disable_notification', 'true');
+  try {
+    await call('pinChatMessage', form);
+  } catch (e) {
+    log(`${e.message} (the bot needs the «pin messages» right)`);
+  }
+}
+
 /** Caption, buttons and picture of the release post. */
 function releasePost(tag, root, log) {
   const version = tag.replace(/^v/, '');
@@ -54,6 +67,7 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
   post.set('photo', new Blob([readFileSync(photo)], { type: 'image/png' }), basename(photo));
   const msg = await call('sendPhoto', post);
   log(`Telegram: posted ${version}`);
+  await pinPost(call, chat, msg.message_id, log);
 
   const files = [];
   for (const name of buildFiles(version)) {
@@ -90,7 +104,7 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
   return failed;
 }
 
-/** Replaces the picture of an already posted release (caption and buttons are sent again: Telegram drops them otherwise). */
+/** Replaces the picture of an already posted release (caption and buttons are sent again: Telegram drops them otherwise) and pins it. */
 export async function replacePhoto({ tag, messageId, root = '.', token, chat, fetch: doFetch = fetch, log = console.log }) {
   const call = caller(token, doFetch);
   const { version, caption, keyboard, photo } = releasePost(tag, root, log);
@@ -102,6 +116,7 @@ export async function replacePhoto({ tag, messageId, root = '.', token, chat, fe
   form.set('photo', new Blob([readFileSync(photo)], { type: 'image/png' }), basename(photo));
   await call('editMessageMedia', form);
   log(`Telegram: replaced the picture of ${version} (message ${messageId})`);
+  await pinPost(call, chat, messageId, log);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
