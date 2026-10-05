@@ -109,6 +109,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => render(null, el));
   unregisterSource('feedy');
   mon.restore();
@@ -262,6 +263,9 @@ describe('«Новое» · Подписки', () => {
   });
 
   it('«Проверить сейчас» starts a check; the status line shows the last and the next check', async () => {
+    // pin the clock to midday so «около завтра …» can't appear near midnight
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 5, 15, 12, 0, 0));
     const now = Date.now();
     saveLastRun({ at: now - 60000, kind: 'check', found: 0, notified: 0, answered: 1, asked: 1, subs: 1, skipped: 0, feed: false });
     mon.status = { enabled: true, hours: 3, wifiOnly: true, running: false, nextRun: now + 3600000 };
@@ -274,6 +278,7 @@ describe('«Новое» · Подписки', () => {
     expect(el.querySelector('[data-monitor-status]')!.textContent).toBe('Проверяю…');
     // the background run ends
     mon.done(null);
+    vi.useRealTimers();
   });
 
   it('new episodes: card with the ranges, «Не следить» switches the series off', async () => {
