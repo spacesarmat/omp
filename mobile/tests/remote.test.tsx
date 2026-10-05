@@ -629,7 +629,7 @@ describe('Remote in English', () => {
 
   it('without a TV: the placeholder and its button', () => {
     mount();
-    expect(el.querySelector('h1')!.textContent).toBe('Remote');
+    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Remote');
     expect(el.querySelector('h2')!.textContent).toBe('Connect a TV');
     expect(el.textContent).toContain('To control the TV from the phone, connect it first.');
     click(text('Connect a TV'));

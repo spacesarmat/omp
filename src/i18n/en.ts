@@ -1310,6 +1310,7 @@ export const en: EnDict<typeof ru> = {
     subscribe: 'Subscribe',
     badLink: 'Paste a magnet link or a 40-character hash',
     magnetLabel: 'Magnet link or hash',
+    byMagnet: 'Add by magnet link',
     sourcesAll: 'All sources · {n}',
     sourcesSome: 'Sources · {n}',
     magnetHint: 'Magnet links from the browser open in OMP on their own — via “Share”.',

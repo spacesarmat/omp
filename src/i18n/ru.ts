@@ -1320,6 +1320,7 @@ export const ru = {
     subscribe: 'Подписаться',
     badLink: 'Вставьте magnet-ссылку или хеш из 40 символов',
     magnetLabel: 'Magnet-ссылка или хеш',
+    byMagnet: 'Добавить по magnet-ссылке',
     sourcesAll: 'Все источники · {n}',
     sourcesSome: 'Источники · {n}',
     magnetHint: 'Ссылки magnet из браузера открываются в OMP сами — через «Поделиться».',

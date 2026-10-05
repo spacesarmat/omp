@@ -53,6 +53,9 @@ const byLabel = (l: string) =>
   });
 const byText = (t: string) => Array.from(el.querySelectorAll('button')).find((b) => b.textContent === t)!;
 const click = (n: Element) => act(() => (n as HTMLElement).click());
+const MAGNET = 'input[aria-label="Magnet-ссылка или хеш"]';
+// the magnet field opens from the «Добавить по magnet-ссылке» link under the search
+const openMagnet = () => click(el.querySelector('[data-magnet-open]')!);
 const search = (q: string) => {
   type('input[aria-label="Поиск по источникам"]', q);
   act(() => {
@@ -99,7 +102,7 @@ describe('Add', () => {
   it('prefills the incoming link and adds it, then opens the torrent', async () => {
     const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
     mount('magnet:?xt=urn:btih:' + HASH);
-    expect((el.querySelector('input') as HTMLInputElement).value).toBe('magnet:?xt=urn:btih:' + HASH);
+    expect((el.querySelector('input[aria-label="Magnet-ссылка или хеш"]') as HTMLInputElement).value).toBe('magnet:?xt=urn:btih:' + HASH);
     click(byText('Добавить'));
     await flush();
     expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, category: '' });
@@ -110,7 +113,8 @@ describe('Add', () => {
   it('rejects garbage input', async () => {
     const add = vi.spyOn(TorrServerClient.prototype, 'add');
     mount();
-    type('input', 'nope');
+    openMagnet();
+    type(MAGNET, 'nope');
     click(byText('Добавить'));
     await flush();
     expect(add).not.toHaveBeenCalled();
@@ -329,22 +333,71 @@ describe('Add category', () => {
     expect(add).toHaveBeenCalledWith({ link: M + '&dn=Band+-+Discography+FLAC', title: 'Band - Discography FLAC', category: 'music' });
   });
 
-  it('a user pick is not overwritten by a later guess', async () => {
+  it('a user pick is not overwritten by the guess', async () => {
     const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
     mount();
+    openMagnet();
+    type(MAGNET, M + '&dn=Show+S01E02');
     click(byText('Прочее'));
-    type('input', M + '&dn=Show+S01E02');
     click(byText('Добавить'));
     await flush();
     expect(add).toHaveBeenCalledWith({ link: M + '&dn=Show+S01E02', title: 'Show S01E02', category: 'other' });
   });
 
+  it('the search comes first; the magnet is a collapsed link under the search, before the results', () => {
+    mount();
+    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Добавить');
+    // collapsed by default: one link, no magnet field, no category chips
+    expect(el.querySelector(MAGNET)).toBeNull();
+    expect(el.querySelector('[data-magnet-block]')).toBeNull();
+    const open = el.querySelector('[data-magnet-open]')!;
+    expect(open.textContent).toBe('Добавить по magnet-ссылке');
+    expect(open.getAttribute('aria-expanded')).toBe('false');
+    expect(el.querySelector('form')!.compareDocumentPosition(open) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(open.compareDocumentPosition(el.querySelector('.m-results')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(Array.from(el.querySelectorAll('input')).map((i) => i.getAttribute('aria-label'))).toEqual(['Поиск по источникам']);
+  });
+
+  it('a tap on the link opens the magnet field in place; the category chips come once a valid link is entered', () => {
+    mount();
+    openMagnet();
+    expect(el.querySelector('[data-magnet-open]')).toBeNull();
+    const block = el.querySelector('[data-magnet-block]')!;
+    expect(block.compareDocumentPosition(el.querySelector('.m-results')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(Array.from(el.querySelectorAll('input')).map((i) => i.getAttribute('aria-label'))).toEqual(['Поиск по источникам', 'Magnet-ссылка или хеш']);
+    expect(block.querySelector('[data-magnet-row]')!.textContent).toBe('Добавить');
+    expect(el.querySelector('[data-magnet-category]')).toBeNull();
+    expect(byText('Прочее')).toBeUndefined();
+    type(MAGNET, 'nope');
+    expect(el.querySelector('[data-magnet-category]')).toBeNull();
+    type(MAGNET, HASH);
+    expect(el.querySelector('[data-magnet-category]')).toBeTruthy();
+    expect(byText('Прочее')).toBeTruthy();
+    // the «Поделиться» hint: one muted line under the magnet row
+    expect(block.textContent).toContain('Ссылки magnet из браузера открываются в OMP сами — через «Поделиться».');
+  });
+
+  it('a shared link opens the screen with the magnet field already open', () => {
+    mount(M);
+    expect(el.querySelector('[data-magnet-open]')).toBeNull();
+    expect((el.querySelector(MAGNET) as HTMLInputElement).value).toBe(M);
+    expect(el.querySelector('[data-magnet-category]')).toBeTruthy();
+  });
+
+  it('a link arriving while the screen is open opens the field', () => {
+    mount();
+    expect(el.querySelector(MAGNET)).toBeNull();
+    act(() => render(<Add link={M} />, el));
+    expect((el.querySelector(MAGNET) as HTMLInputElement).value).toBe(M);
+  });
+
   it('a pick is forgotten when the link is replaced by a different one', async () => {
     const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
     mount();
-    type('input', M + '&dn=Show+S01E02');
+    openMagnet();
+    type(MAGNET, M + '&dn=Show+S01E02');
     click(byText('Прочее'));
-    type('input', 'magnet:?xt=urn:btih:' + 'b'.repeat(40) + '&dn=Show+S01E03');
+    type(MAGNET, 'magnet:?xt=urn:btih:' + 'b'.repeat(40) + '&dn=Show+S01E03');
     click(byText('Добавить'));
     await flush();
     expect(add.mock.calls[0][0].category).toBe('tv');
@@ -768,12 +821,19 @@ describe('Add in English', () => {
   it('screen chrome, search sheets and the subscribe plate', async () => {
     registerSource({ id: 'fake', name: 'Fake', kind: 'builtin', search: () => Promise.resolve([]) });
     mount();
-    expect(el.querySelector('h1')!.textContent).toBe('Add');
-    expect(byText('Add')).toBeTruthy();
-    expect(el.textContent).toContain('Category');
+    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Add');
+    expect(el.textContent).not.toContain('Category');
     expect(el.textContent).toContain('Search in sources');
+    expect(el.querySelector('[data-magnet-open]')!.textContent).toBe('Add by magnet link');
+    click(el.querySelector('[data-magnet-open]')!);
+    expect(byText('Add')).toBeTruthy();
     expect(el.textContent).toContain('Magnet links from the browser open in OMP on their own — via “Share”.');
-    expect(el.querySelector('input[aria-label="Magnet link or hash"]')).toBeTruthy();
+    const magnet = el.querySelector<HTMLInputElement>('input[aria-label="Magnet link or hash"]')!;
+    expect(magnet.placeholder).toBe('Magnet link or hash');
+    type('input[aria-label="Magnet link or hash"]', HASH);
+    expect(el.querySelector('[data-magnet-category]')!.getAttribute('aria-label')).toBe('Category');
+    expect(el.querySelector('[data-magnet-category]')!.textContent).toContain('Category:');
+    type('input[aria-label="Magnet link or hash"]', '');
     expect(el.querySelector<HTMLInputElement>('input[type=search]')!.placeholder).toBe('Name');
     expect(byText('All sources · 1')).toBeTruthy();
     click(byText('All sources · 1'));
