@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { checkSubscriptions, checkSubscription, type SearchFn } from '../../src/monitor/check';
-import { addSubscription, bestRank, findingsOf, loadFound, removeSubscription, seenKeys, unseenCount, updateSubscription } from '../../src/monitor/subs';
+import { addSubscription, bestRank, hasBestRank, findingsOf, loadFound, removeSubscription, seenKeys, unseenCount, updateSubscription } from '../../src/monitor/subs';
 import { resultKeys } from '../../src/monitor/match';
 import type { Subscription } from '../../src/monitor/types';
 import type { SearchAllOptions, SearchHandle } from '../../src/sources/search';
@@ -251,6 +251,18 @@ describe('«Только лучшее качество»', () => {
     const third = await checkSubscription(ctx, sub, { search: fakeSearch(pages, []), now: 3 });
     expect(third.findings.map((f) => f.result.Title)).toEqual(['Северный ветер (2026) 2160p Remux']);
     expect(bestRank(sub.id)).toBe(34);
+  });
+
+  it('nothing listed at the first check: the first release that appears is reported', async () => {
+    const sub = newSub({ query: 'Северный ветер', quality: '', better: true });
+    const pages: { [q: string]: SourceResult[] } = { 'Северный ветер': [] };
+    await checkSubscription(ctx, sub, { search: fakeSearch(pages, []), now: 1 });
+    expect(bestRank(sub.id)).toBe(-1);
+    expect(hasBestRank(sub.id)).toBe(true);
+    pages['Северный ветер'] = [res('Северный ветер (2026) WEB-DL 1080p')];
+    const second = await checkSubscription(ctx, sub, { search: fakeSearch(pages, []), now: 2 });
+    expect(second.findings).toHaveLength(1);
+    expect(bestRank(sub.id)).toBe(22);
   });
 
   it('switched on later: the first check is silent and stores the rank', async () => {

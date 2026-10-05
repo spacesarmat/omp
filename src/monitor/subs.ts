@@ -165,7 +165,7 @@ function loadSeen(): { [subId: string]: SeenRecord } {
     else if (isObject(r) && Array.isArray(r.k)) {
       const rec: SeenRecord = { k: strings(r.k).slice(0, SEEN_HARD_MAX), s: strings(r.s) };
       const b = finite(r.b);
-      if (b !== null && b >= 0) rec.b = b;
+      if (b !== null && b >= -1) rec.b = b;
       out[id] = rec;
     }
   });
@@ -211,7 +211,13 @@ export function forgetSeen(subId: string): void {
   saveJson(SEEN_KEY, seen);
 }
 
-/** The best quality rank reported by a «Только лучшее качество» subscription; -1 before the first report. */
+/** A best rank is stored (-1 included: nothing was listed at the first check) — the flag has been through a check. */
+export function hasBestRank(subId: string): boolean {
+  const r = loadSeen()[subId];
+  return !!r && r.b !== undefined;
+}
+
+/** The best quality rank reported by a «Только лучшее качество» subscription; -1 when none is stored (or nothing was listed). */
 export function bestRank(subId: string): number {
   const r = loadSeen()[subId];
   return r && r.b !== undefined ? r.b : -1;

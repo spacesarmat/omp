@@ -6,7 +6,7 @@ import { searchAll, SOURCE_TIMEOUT_MS, type SearchAllOptions, type SearchHandle 
 import type { Source, SourceContext, SourceResult } from '../sources/types';
 import { filterForSubscription, isSeen, resultKeys, seenEntry, seenIndex } from './match';
 import { qualityRank } from './quality';
-import { addFindings, bestRank, getSubscription, loadSubs, rememberBestRank, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
+import { addFindings, bestRank, getSubscription, hasBestRank, loadSubs, rememberBestRank, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
 import type { Finding, Subscription } from './types';
 
 /** searchAll or a test double. */
@@ -89,11 +89,11 @@ function topRank(list: SourceResult[]): number {
 /**
  * «Только лучшее качество»: the one best new result (rank, then seeds) above the floor, which is the highest rank among
  * the stored best rank and every result seen before (a better release already listed is not news). Without a stored
- * rank (the flag was just switched on) nothing is reported: the caller stores the current best rank.
+ * rank (-1 is a rank: nothing was listed yet) (the flag was just switched on) nothing is reported: the caller stores the current best rank.
  */
 function bestOnly(subId: string, fresh: SourceResult[], known: SourceResult[]): SourceResult[] {
+  if (!hasBestRank(subId)) return [];
   const stored = bestRank(subId);
-  if (stored < 0) return [];
   const floor = Math.max(stored, topRank(known));
   let pick: SourceResult | null = null;
   let pickRank = -1;
