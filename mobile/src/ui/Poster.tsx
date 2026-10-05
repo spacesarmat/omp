@@ -18,11 +18,12 @@ export function posterStyle(t: Torrent): string {
     : `background: ${gradient}`;
 }
 
-export function Poster({ torrent, class: cls = '' }: { torrent: Torrent; class?: string }) {
+/** `morphKey` marks the poster (data-poster) so a view change can move it to its place in the new view. */
+export function Poster({ torrent, class: cls = '', morphKey }: { torrent: Torrent; class?: string; morphKey?: string }) {
   const hasImage = /^https?:\/\//i.test(torrent.poster || '');
   const badge = qualityBadge(displayTitle(torrent));
   return (
-    <div class={'m-poster ' + cls} style={posterStyle(torrent)}>
+    <div class={'m-poster ' + cls} style={posterStyle(torrent)} data-poster={morphKey}>
       {!hasImage && <div class="m-poster-title">{shortTitle(displayTitle(torrent))}</div>}
       {badge && <span class="m-badge">{badge}</span>}
     </div>

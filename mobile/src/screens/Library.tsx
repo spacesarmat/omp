@@ -296,8 +296,9 @@ export function Library() {
       press.current.timer = undefined;
     },
     anchorAttr: 'data-anchor',
-    // rows and poster cards have different markup: cross-fade between them instead of moving the cards
-    crossFade: (from, to) => isRowView(BY_SIZE[from]) !== isRowView(BY_SIZE[to]),
+    // rows and poster cards have different markup: the posters morph between them and the text fades in
+    posterAttr: 'data-poster',
+    morph: (from, to) => isRowView(BY_SIZE[from]) !== isRowView(BY_SIZE[to]),
   });
 
   const selecting = selected !== null;
@@ -651,7 +652,7 @@ export function Library() {
                   return (
                     <div class={'m-row-wrap' + sel(t)} key={t.hash} data-anchor={t.hash}>
                       <button type="button" class="m-vrow" {...pressProps(t)}>
-                        <Poster torrent={t} class="m-poster-row" />
+                        <Poster torrent={t} class="m-poster-row" morphKey={t.hash} />
                         {mark(t)}
                         <span class="m-vrow-text">
                           <span class="m-card-title"><ShortTitle tor={t} /></span>
@@ -684,7 +685,7 @@ export function Library() {
               <div class={'m-grid m-view-' + view}>
                 {shown.map((t) => (
                   <button type="button" class={'m-card' + sel(t)} key={t.hash} data-anchor={t.hash} {...pressProps(t)}>
-                    <Poster torrent={t} />
+                    <Poster torrent={t} morphKey={t.hash} />
                     {mark(t)}
                     <span class="m-card-title"><ShortTitle tor={t} /></span>
                     {view === 'large' && <span class="m-muted m-small">{formatBytes(t.torrent_size || 0)}</span>}

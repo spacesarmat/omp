@@ -5,7 +5,7 @@ import { Library } from '../src/screens/Library';
 import { Discover } from '../src/screens/catalog/Discover';
 import { clearDiscover } from '../src/screens/catalog/discoverCache';
 import { DISCOVER_COLS_KEY, readDiscoverCols } from '../src/screens/catalog/discoverCols';
-import { pinchDir, pinchTarget, PINCH_UP, PINCH_DOWN, PINCH_FLIP_MS, PINCH_FADE_MS } from '../src/ui/usePinchStep';
+import { pinchDir, pinchTarget, PINCH_UP, PINCH_DOWN, PINCH_FLIP_MS, PINCH_MORPH_MS, PINCH_TEXT_DELAY_MS, PINCH_TEXT_MS } from '../src/ui/usePinchStep';
 import { BACKUP_KEYS } from '../src/lib/backup';
 import { setCatalogClientForTests, setCatalogMode } from '../src/catalog/phoneCatalog';
 import { currentRoute, resetTo } from '../src/nav';
@@ -84,13 +84,25 @@ function stubFrame() {
   vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => setTimeout(() => f(0), 1));
   vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
 }
-/** Cards laid out in a column, 150 px apart: 200 px wide in the large grid, 60 px at three posters, 100 px otherwise. */
+/**
+ * Cards laid out in a column, 150 px apart (50 px for compact rows): 200 px wide in the large grid, 60 px at three
+ * posters, 100 px otherwise. A row's poster is 56 x 84 at (0, 28) in the row; a tile's poster fills its width, 1.4 high.
+ */
+function cardRect(card: Element): DOMRect {
+  const i = Array.prototype.indexOf.call(card.parentElement!.children, card);
+  const w = card.closest('.m-view-large') ? 200 : card.closest('.m-cols-3') ? 60 : 100;
+  return new DOMRect(0, 10 + i * (card.closest('.m-clist') ? 50 : 150), w, 140);
+}
 function mockRects() {
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    if (this.hasAttribute('data-poster')) {
+      const card = this.closest('[data-anchor]');
+      if (!card || !card.parentElement) return new DOMRect(0, 0, 0, 0);
+      const c = cardRect(card);
+      return this.classList.contains('m-poster-row') ? new DOMRect(0, c.top + 28, 56, 84) : new DOMRect(0, c.top, c.width, c.width * 1.4);
+    }
     if (!this.hasAttribute('data-anchor') || !this.parentElement) return new DOMRect(0, 0, 0, 0);
-    const i = Array.prototype.indexOf.call(this.parentElement.children, this);
-    const w = this.closest('.m-view-large') ? 200 : this.closest('.m-cols-3') ? 60 : 100;
-    return new DOMRect(0, 10 + i * 150, w, 140);
+    return cardRect(this);
   });
 }
 type Frames = Record<string, unknown>[];
@@ -275,7 +287,99 @@ describe('pinch in «Мои»', () => {
     expect(animate.mock.contexts).toEqual(now);
   });
 
-  it('between rows and poster cards the views cross-fade instead', async () => {
+  it('from rows to poster tiles each poster morphs from its old box and the rest of the card fades in', async () => {
+    reduced = false;
+    mockAnimate();
+    stubFrame();
+    mockRects();
+    updateSettings({ libraryView: 'list' });
+    mount(<Library />);
+    await flush();
+    expect(el.querySelectorAll('.m-vrow [data-poster]').length).toBe(2);
+    pinch(body(), 130);
+    // the step lands at once, nothing fades out first
+    expect(settings.value.libraryView).toBe('small');
+    expect(animate).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    await flush();
+    const cards = Array.from(el.querySelectorAll<HTMLElement>('.m-card'));
+    expect(cards.length).toBe(2);
+    const calls = animate.mock.calls.map((c, k) => ({ el: animate.mock.contexts[k] as HTMLElement, f: framesOf(c), o: optsOf(c) }));
+    for (const card of cards) {
+      const hash = card.getAttribute('data-anchor')!;
+      const poster = card.querySelector('[data-poster]') as HTMLElement;
+      expect(poster.getAttribute('data-poster')).toBe(hash);
+      // the poster: from the 56 x 84 thumbnail 28 px down the row to the 100 x 140 tile poster
+      const p = calls.filter((x) => x.el === poster);
+      expect(p.length).toBe(1);
+      expect(p[0].f[0].transform).toBe('translate(0.0px,28.0px) scale(0.5600,0.6000)');
+      expect(p[0].f[0].transformOrigin).toBe('0 0');
+      expect(p[0].f[1].transform).toBe('none');
+      expect(p[0].o.duration).toBe(PINCH_MORPH_MS);
+      // the rest of the card fades in a little later; the card itself is not moved
+      const text = calls.filter((x) => x.el !== poster && card.contains(x.el));
+      expect(text.length).toBeGreaterThan(0);
+      expect(text.some((x) => x.el.classList.contains('m-card-title'))).toBe(true);
+      for (const x of text) {
+        expect(x.f).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+        expect(x.o.delay).toBe(PINCH_TEXT_DELAY_MS);
+        expect(x.o.duration).toBe(PINCH_TEXT_MS);
+      }
+      expect(calls.some((x) => x.el === card)).toBe(false);
+    }
+    // nothing else moves: only the posters carry a transform
+    expect(calls.filter((x) => x.f.some((f) => 'transform' in f)).map((x) => x.el)).toEqual(cards.map((c) => c.querySelector('[data-poster]')));
+  });
+
+  it('and back: the tile posters shrink into the row thumbnails', async () => {
+    reduced = false;
+    mockAnimate();
+    stubFrame();
+    mockRects();
+    updateSettings({ libraryView: 'small' });
+    mount(<Library />);
+    await flush();
+    pinch(body(), 70);
+    expect(settings.value.libraryView).toBe('list');
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    await flush();
+    const posters = Array.from(el.querySelectorAll('.m-vrow [data-poster]'));
+    expect(posters.length).toBe(2);
+    const moved = animate.mock.calls.map((c, k) => ({ el: animate.mock.contexts[k], f: framesOf(c) })).filter((x) => x.f.some((f) => 'transform' in f));
+    expect(moved.map((x) => x.el)).toEqual(posters);
+    for (const x of moved) expect(x.f[0].transform).toBe('translate(0.0px,-28.0px) scale(1.7857,1.6667)');
+  });
+
+  it('between two row views the rows move FLIP style, like the poster grids', async () => {
+    reduced = false;
+    mockAnimate();
+    stubFrame();
+    mockRects();
+    updateSettings({ libraryView: 'list' });
+    mount(<Library />);
+    await flush();
+    pinch(body(), 70);
+    expect(settings.value.libraryView).toBe('compact');
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    await flush();
+    const rows = Array.from(el.querySelectorAll('.m-clist [data-anchor]'));
+    expect(rows.length).toBe(2);
+    // the first row stays put; the second comes from 150 px down to 50 px down
+    expect(animate).toHaveBeenCalledTimes(1);
+    expect(animate.mock.contexts[0]).toBe(rows[1]);
+    const f = framesOf(animate.mock.calls[0]);
+    expect(f[0].transform).toBe('translate(0.0px,100.0px) scale(1.0000)');
+    expect(f[1].transform).toBe('none');
+    expect(optsOf(animate.mock.calls[0]).duration).toBe(PINCH_FLIP_MS);
+  });
+
+  it('a pinch that lands on a row view and one more in the same gesture: still one step, one set of animations', async () => {
     reduced = false;
     mockAnimate();
     stubFrame();
@@ -284,28 +388,18 @@ describe('pinch in «Мои»', () => {
     mount(<Library />);
     await flush();
     const b = body();
-    pinch(b, 130);
-    // the rows fade out first
-    expect(animate).toHaveBeenCalledTimes(1);
-    expect(animate.mock.contexts[0]).toBe(b);
-    expect(framesOf(animate.mock.calls[0])).toEqual([{ opacity: 1 }, { opacity: 0 }]);
-    expect(settings.value.libraryView).toBe('list');
-    act(() => {
-      vi.advanceTimersByTime(PINCH_FADE_MS / 2);
-    });
-    await flush();
-    expect(settings.value.libraryView).toBe('small');
+    touch(b, 'touchstart', [[100, 100], [200, 100]]);
+    touch(b, 'touchmove', [[85, 100], [215, 100]]);
+    touch(b, 'touchmove', [[0, 100], [300, 100]]);
+    touch(b, 'touchend', []);
     act(() => {
       vi.advanceTimersByTime(1);
     });
     await flush();
-    // then the cards fade in, and nothing is moved or scaled
-    expect(animate).toHaveBeenCalledTimes(2);
-    expect(animate.mock.contexts[1]).toBe(b);
-    expect(framesOf(animate.mock.calls[1])).toEqual([{ opacity: 0 }, { opacity: 1 }]);
-    expect(animate.mock.calls.some((c) => framesOf(c).some((f) => 'transform' in f))).toBe(false);
+    expect(settings.value.libraryView).toBe('small');
+    expect(vibrate).toHaveBeenCalledTimes(1);
+    expect(animate.mock.calls.filter((c) => framesOf(c).some((f) => 'transform' in f)).length).toBe(2);
   });
-
   it('with reduced motion the view switches at once, with no animation', async () => {
     mockAnimate();
     mockRects();

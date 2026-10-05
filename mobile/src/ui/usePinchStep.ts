@@ -1,7 +1,8 @@
 // Two-finger pinch on a list container: one view step per gesture (fingers apart = bigger, together = smaller).
 // The step fires as soon as the finger distance passes a threshold; the rest of the gesture is ignored until the
 // fingers lift. Nothing is scaled while the fingers move: the change itself is animated afterwards, FLIP style on the
-// cards visible on screen (or a short cross-fade when the card markup changes), so the text stays crisp.
+// cards visible on screen, so the text stays crisp. When the card markup changes (rows and poster tiles), each
+// poster moves and resizes from its old place to its new one (a shared-element transition) and the rest fades in.
 // Touch events, not pointer events: with the page's default touch-action the WebView cancels the pointers as soon as
 // it treats two fingers as a pan or zoom, while touchmove keeps coming and can be cancelled.
 import { useEffect, useRef } from 'preact/hooks';
@@ -13,8 +14,10 @@ export const PINCH_UP = 1.2;
 export const PINCH_DOWN = 0.83;
 /** The FLIP animation of the cards after a step. */
 export const PINCH_FLIP_MS = 250;
-/** The cross-fade (out, then in) when the card markup changes. */
-export const PINCH_FADE_MS = 200;
+/** When the card markup changes: the poster morph, and the fade-in of the rest of the card after a short delay. */
+export const PINCH_MORPH_MS = 250;
+export const PINCH_TEXT_DELAY_MS = 70;
+export const PINCH_TEXT_MS = 180;
 /** At most this many cards are measured and animated. */
 export const PINCH_FLIP_MAX = 40;
 /** After the last finger is up, a click (the browser's tap on the card under a finger) is swallowed for this long. */
@@ -107,8 +110,53 @@ export interface PinchOptions {
   onStart?: () => void;
   /** The attribute carrying each card's stable key: cards are matched by it before and after the step. */
   anchorAttr?: string;
-  /** The step changes the card markup (grid and list): cross-fade instead of FLIP. */
-  crossFade?: (from: number, to: number) => boolean;
+  /** The attribute on each card's poster (same key as the card): posters are matched by it when the markup changes. */
+  posterAttr?: string;
+  /** The step changes the card markup (rows and poster tiles): morph the posters instead of moving the cards. */
+  morph?: (from: number, to: number) => boolean;
+}
+
+interface PosterBox {
+  rect: DOMRect;
+  radius: number;
+}
+
+function radiusOf(el: Element): number {
+  try {
+    const r = parseFloat(getComputedStyle(el).borderTopLeftRadius);
+    return r > 0 ? r : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** The posters inside the given cards, by card key (the first poster of each card). */
+function postersOf(cards: Card[], attr: string): Map<string, PosterBox> {
+  const out = new Map<string, PosterBox>();
+  for (const c of cards) {
+    const p = c.el.hasAttribute(attr) ? c.el : c.el.querySelector('[' + attr + ']');
+    if (!p) continue;
+    const rect = p.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    out.set(p.getAttribute(attr) || c.key, { rect, radius: radiusOf(p) });
+  }
+  return out;
+}
+
+/** Everything in the card but the poster: the siblings of the poster and of each of its ancestors up to the card. */
+function besidePoster(card: HTMLElement, poster: Element): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  let node: Element = poster;
+  while (node !== card && node.parentElement) {
+    const parent: HTMLElement = node.parentElement;
+    for (let i = 0; i < parent.children.length; i++) {
+      const sib = parent.children[i];
+      if (sib !== node) out.push(sib as HTMLElement);
+    }
+    if (parent === card) break;
+    node = parent;
+  }
+  return out;
 }
 
 interface Anchor {
@@ -120,13 +168,12 @@ interface Anchor {
 /**
  * Listens for two fingers on the element. While they are down the page does not scroll and the click that may follow
  * is swallowed; once the distance passes PINCH_UP or PINCH_DOWN the step is applied (with a short vibration) and the
- * change animated. One finger is left alone. Returns `active()`: a pinch is in progress (fingers down or a step
- * waiting to be applied).
+ * change animated. One finger is left alone. Returns `active()`: two fingers are down.
  */
 export function usePinchStep(ref: RefObject<HTMLElement | null>, opts: PinchOptions): { active: () => boolean } {
   const optsRef = useRef(opts);
   optsRef.current = opts;
-  const state = useRef({ on: false, pending: false, guard: false });
+  const state = useRef({ on: false, guard: false });
   const enabled = opts.enabled;
 
   useEffect(() => {
@@ -134,7 +181,6 @@ export function usePinchStep(ref: RefObject<HTMLElement | null>, opts: PinchOpti
     if (!enabled || !root) return;
     const st = state.current;
     let guardTimer: ReturnType<typeof setTimeout> | undefined;
-    let fadeTimer: ReturnType<typeof setTimeout> | undefined;
     let frame = 0;
     let start = 0;
     /** The step of this gesture has fired (or hit an end): ignore the fingers until they all lift. */
@@ -142,7 +188,6 @@ export function usePinchStep(ref: RefObject<HTMLElement | null>, opts: PinchOpti
     let my = 0;
     let mx = 0;
     let running: Animation[] = [];
-    let pendingApply: (() => void) | null = null;
 
     const stopAnimations = () => {
       for (const a of running) {
@@ -253,9 +298,48 @@ export function usePinchStep(ref: RefObject<HTMLElement | null>, opts: PinchOpti
       }
     };
 
+    /**
+     * Rows and poster tiles: each poster seen before moves and resizes from its old box to its new one, the rest of
+     * the card fades in a little later. Cards without a poster counterpart fade in whole; the old ones are just gone.
+     */
+    const morph = (oldPosters: Map<string, PosterBox>) => {
+      const o = optsRef.current;
+      const attr = o.anchorAttr;
+      const pAttr = o.posterAttr;
+      if (!attr || !pAttr) return;
+      const after = visibleCards(root, attr);
+      const timing: KeyframeAnimationOptions = { duration: PINCH_MORPH_MS, easing: EASE_OUT };
+      const text: KeyframeAnimationOptions = { duration: PINCH_TEXT_MS, delay: PINCH_TEXT_DELAY_MS, easing: 'ease-out', fill: 'backwards' };
+      for (const c of after) {
+        const poster = c.el.querySelector<HTMLElement>('[' + pAttr + ']');
+        const old = poster ? oldPosters.get(poster.getAttribute(pAttr) || c.key) : undefined;
+        if (!poster || !old) {
+          play(c.el, [{ opacity: 0 }, { opacity: 1 }], timing);
+          continue;
+        }
+        const n = poster.getBoundingClientRect();
+        const sx = n.width > 0 ? old.rect.width / n.width : 1;
+        const sy = n.height > 0 ? old.rect.height / n.height : 1;
+        const dx = old.rect.left - n.left;
+        const dy = old.rect.top - n.top;
+        const first: Keyframe = {
+          transformOrigin: '0 0',
+          transform: 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) scale(' + sx.toFixed(4) + ',' + sy.toFixed(4) + ')',
+        };
+        const last: Keyframe = { transformOrigin: '0 0', transform: 'none' };
+        // the corners keep their old look while the box is scaled unevenly
+        const r = radiusOf(poster);
+        if ((old.radius || r) && sx > 0 && sy > 0) {
+          first.borderRadius = (old.radius / sx).toFixed(1) + 'px / ' + (old.radius / sy).toFixed(1) + 'px';
+          last.borderRadius = r + 'px';
+        }
+        play(poster, [first, last], timing);
+        for (const x of besidePoster(c.el, poster)) play(x, [{ opacity: 0 }, { opacity: 1 }], text);
+      }
+    };
+
     const step = (dir: 1 | -1) => {
       spent = true;
-      if (pendingApply) pendingApply();
       const o = optsRef.current;
       const from = o.level();
       const to = pinchTarget(from, o.levels, dir);
@@ -265,41 +349,17 @@ export function usePinchStep(ref: RefObject<HTMLElement | null>, opts: PinchOpti
       // measured with any running animation still on, so a new step starts from what is seen
       const before = attr ? visibleCards(root, attr) : [];
       const anchor = anchorOf(before);
-      stopAnimations();
       const still = prefersReducedMotion() || !canAnimate(root);
-      const fade = !still && !!o.crossFade && o.crossFade(from, to);
-      const land = (then: () => void) => {
-        optsRef.current.apply(to);
-        afterRender(() => {
-          if (anchor) keepAnchor(anchor);
-          then();
-        });
-      };
-      if (still) {
-        land(() => {});
-        return;
-      }
-      if (!fade) {
-        land(() => flip(before));
-        return;
-      }
-      // cross-fade: the old cards fade out, the step lands, the new ones fade in
-      const half = PINCH_FADE_MS / 2;
-      play(root, [{ opacity: 1 }, { opacity: 0 }], { duration: half, easing: 'ease-in', fill: 'forwards' });
-      st.pending = true;
-      pendingApply = () => {
-        pendingApply = null;
-        clearTimeout(fadeTimer);
-        fadeTimer = undefined;
-        st.pending = false;
-        land(() => {
-          stopAnimations();
-          play(root, [{ opacity: 0 }, { opacity: 1 }], { duration: half, easing: 'ease-out' });
-        });
-      };
-      fadeTimer = setTimeout(() => {
-        if (pendingApply) pendingApply();
-      }, half);
+      const morphing = !still && !!o.morph && !!o.posterAttr && o.morph(from, to);
+      const posters = morphing && o.posterAttr ? postersOf(before, o.posterAttr) : null;
+      stopAnimations();
+      optsRef.current.apply(to);
+      afterRender(() => {
+        if (anchor) keepAnchor(anchor);
+        if (still) return;
+        if (posters) morph(posters);
+        else flip(before);
+      });
     };
 
     const onStart = (e: TouchEvent) => {
@@ -338,7 +398,7 @@ export function usePinchStep(ref: RefObject<HTMLElement | null>, opts: PinchOpti
       }
     };
     const onClick = (e: Event) => {
-      if (!st.guard && !st.on && !st.pending) return;
+      if (!st.guard && !st.on) return;
       e.preventDefault();
       e.stopPropagation();
     };
@@ -349,13 +409,10 @@ export function usePinchStep(ref: RefObject<HTMLElement | null>, opts: PinchOpti
     root.addEventListener('click', onClick, true);
     return () => {
       clearTimeout(guardTimer);
-      clearTimeout(fadeTimer);
       if (frame) cancelAnimationFrame(frame);
       frame = 0;
-      pendingApply = null;
       stopAnimations();
       st.on = false;
-      st.pending = false;
       st.guard = false;
       root.removeEventListener('touchstart', onStart);
       root.removeEventListener('touchmove', onMove);
@@ -365,5 +422,5 @@ export function usePinchStep(ref: RefObject<HTMLElement | null>, opts: PinchOpti
     };
   }, [enabled]);
 
-  return { active: () => state.current.on || state.current.pending };
+  return { active: () => state.current.on };
 }
