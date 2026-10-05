@@ -1181,6 +1181,8 @@ export const en: EnDict<typeof ru> = {
       watchOnPhone: 'Watch on the phone',
       skipSub: 'for all episodes · TV and phone',
       skipIntroSwitch: 'Skip the intro',
+      skipSumIntro: 'intro {state}',
+      skipSumCredits: 'credits {state}',
       creditsSub: 'straight to the next episode',
       watchNewSub: 'tell me when the next episodes come out',
       watchQuality: 'Watch the quality',

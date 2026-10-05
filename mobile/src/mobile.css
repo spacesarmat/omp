@@ -972,3 +972,5 @@ button, .m-btn {
 .m-card.selected .m-poster, .m-row-wrap.selected .m-poster-row { outline: 3px solid var(--accent); outline-offset: -3px; }
 
 .m-news-monitor-l { display: flex; align-items: center; gap: 10px; }
+.m-skip-toggle { min-height: 52px; }
+.m-skip-toggle .m-skip-title { font-size: 16px; }

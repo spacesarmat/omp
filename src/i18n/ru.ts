@@ -1191,6 +1191,8 @@ export const ru = {
       watchOnPhone: 'Смотреть на телефоне',
       skipSub: 'для всех серий · ТВ и телефон',
       skipIntroSwitch: 'Пропускать заставку',
+      skipSumIntro: 'заставка {state}',
+      skipSumCredits: 'титры {state}',
       creditsSub: 'сразу следующая серия',
       watchNewSub: 'сообщить, когда выйдут следующие серии',
       watchQuality: 'Следить за качеством',

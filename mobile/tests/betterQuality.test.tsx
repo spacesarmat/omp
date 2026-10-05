@@ -235,6 +235,6 @@ describe('«Лучшее качество» in English', () => {
     expect(el.textContent).toContain('Catalog films are checked once a day');
     await mountTorrent({ ...film, title: EN });
     expect(el.querySelector('[role=switch][aria-label="Watch the quality"]')).toBeTruthy();
-    expect(el.textContent).toContain('tell me when the film comes out in better quality');
+    expect(el.textContent).toContain('Monitoring');
   });
 });

@@ -10,6 +10,7 @@ import { currentRoute, goBack, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { actions, filesOf, recordPhoneWatch, streamUrlFor, tvServerUrl, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
+import { loadJson, saveJson } from '../../../src/store/storage';
 import { torrents, refreshTorrents, findPosters, repairTitles } from '../../../src/store/library';
 import {
   refreshViewed,
@@ -48,6 +49,9 @@ const PHONE = 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1
 const LINK = 'M9 15l6-6M10 6l1.5-1.5a5 5 0 0 1 7 7L17 13M14 18l-1.5 1.5a5 5 0 0 1-7-7L7 11';
 const CHECK = 'M5 12.5l4.5 4.5L19 7';
 const CHEVRON = 'M9 6l6 6-6 6';
+const CHEVRON_DOWN = 'M6 9l6 6 6-6';
+const CHEVRON_UP = 'M6 15l6-6 6 6';
+const SKIP_OPEN_KEY = 'tsp.ui.skipOpen';
 
 function fileCode(f: TorrentFile): string {
   return episodeLabel(f.path);
@@ -273,6 +277,13 @@ export function Torrent({ hash }: { hash: string }) {
   const [busy, setBusy] = useState(false);
   const launch = useTvLaunch();
   const [marksOpen, setMarksOpen] = useState(false);
+  // the «Skip» block is folded by default; the choice is remembered across torrents
+  const [skipOpen, setSkipOpen] = useState(() => loadJson<boolean>(SKIP_OPEN_KEY, false, (v) => typeof v === 'boolean'));
+  const toggleSkipOpen = () => {
+    const next = !skipOpen;
+    setSkipOpen(next);
+    saveJson(SKIP_OPEN_KEY, next);
+  };
   const [finding, setFinding] = useState(false);
   const [renaming, setRenaming] = useState(false);
   // «Follow new episodes» (omp.w in the journal); null until read from the server
@@ -354,6 +365,7 @@ export function Torrent({ hash }: { hash: string }) {
   }
 
   const files = playableFiles(allFiles);
+  const onOff = (v: boolean) => t(v ? 'tvSources.on' : 'tvSources.off');
   const toggleSkip = (key: 'i' | 'c') => {
     skip.save((p) => (key === 'i' ? { i: !p.i } : { c: !p.c }), true).then(undefined, (e) => showToast(errorMessage(e)));
   };
@@ -523,51 +535,54 @@ export function Torrent({ hash }: { hash: string }) {
         </button>
         {status && <LaunchError message={status} />}
         {files.length > 0 && (
-          <div class="m-skip">
-            <div class="m-skip-head">
-              <span class="m-skip-title">{t('torrent.skip')}</span>
-              <span class="m-muted m-small">{t('torrent.screen.skipSub')}</span>
-            </div>
-            <div class="m-skip-row">
-              <span class="m-skip-text">{t('torrent.screen.skipIntroSwitch')}</span>
-              <SkipSwitch on={skip.prefs.i} label={t('torrent.screen.skipIntroSwitch')} onToggle={() => toggleSkip('i')} />
-            </div>
-            <div class="m-skip-row">
+          <div class="m-skip" data-block="skip">
+            <button type="button" class="m-skip-row m-skip-open m-skip-toggle" aria-expanded={skipOpen} onClick={toggleSkipOpen}>
               <span class="m-skip-text">
-                {t('torrent.skipCreditsShort')}
-                <span class="m-muted m-small">{t('torrent.screen.creditsSub')}</span>
+                <span class="m-skip-title">{t('torrent.skip')}</span>
+                <span class="m-muted m-small">
+                  {t('torrent.screen.skipSumIntro', { state: onOff(skip.prefs.i) })} · {t('torrent.screen.skipSumCredits', { state: onOff(skip.prefs.c) })}
+                </span>
               </span>
-              <SkipSwitch on={skip.prefs.c} label={t('torrent.skipCreditsShort')} onToggle={() => toggleSkip('c')} />
-            </div>
-            <button type="button" class="m-skip-row m-skip-open" onClick={() => setMarksOpen(true)}>
-              <span class="m-skip-text">
-                {t('tv.marks.title')}
-                <span class="m-muted m-small">{skipStatus(skip.hasChapters, skip.prefs)}</span>
-              </span>
-              <Icon d={CHEVRON} size={20} />
+              <Icon d={skipOpen ? CHEVRON_UP : CHEVRON_DOWN} size={20} />
             </button>
+            {skipOpen && (
+              <>
+                <div class="m-skip-row">
+                  <span class="m-skip-text">{t('torrent.screen.skipIntroSwitch')}</span>
+                  <SkipSwitch on={skip.prefs.i} label={t('torrent.screen.skipIntroSwitch')} onToggle={() => toggleSkip('i')} />
+                </div>
+                <div class="m-skip-row">
+                  <span class="m-skip-text">{t('torrent.skipCreditsShort')}</span>
+                  <SkipSwitch on={skip.prefs.c} label={t('torrent.skipCreditsShort')} onToggle={() => toggleSkip('c')} />
+                </div>
+                <button type="button" class="m-skip-row m-skip-open" onClick={() => setMarksOpen(true)}>
+                  <span class="m-skip-text">
+                    {t('tv.marks.title')}
+                    <span class="m-muted m-small">{skipStatus(skip.hasChapters, skip.prefs)}</span>
+                  </span>
+                  <Icon d={CHEVRON} size={20} />
+                </button>
+              </>
+            )}
           </div>
         )}
-        {series && (
-          <div class="m-skip" data-block="watch-new">
-            <div class="m-skip-row">
-              <span class="m-skip-text">
-                {t('monitor.settings.episodes')}
-                <span class="m-muted m-small">{t('torrent.screen.watchNewSub')}</span>
-              </span>
-              <SkipSwitch on={watchNew !== false} label={t('monitor.settings.episodes')} onToggle={toggleWatchNew} />
+        {(series || film) && (
+          <div class="m-skip" data-block="monitoring">
+            <div class="m-skip-head">
+              <span class="m-skip-title">{t('monitor.title')}</span>
             </div>
-          </div>
-        )}
-        {film && (
-          <div class="m-skip" data-block="watch-quality">
-            <div class="m-skip-row">
-              <span class="m-skip-text">
-                {t('torrent.screen.watchQuality')}
-                <span class="m-muted m-small">{t('torrent.screen.watchQualitySub')}</span>
-              </span>
-              <SkipSwitch on={watchQuality !== false} label={t('torrent.screen.watchQuality')} onToggle={toggleWatchQuality} />
-            </div>
+            {series && (
+              <div class="m-skip-row" data-block="watch-new">
+                <span class="m-skip-text">{t('monitor.settings.episodes')}</span>
+                <SkipSwitch on={watchNew !== false} label={t('monitor.settings.episodes')} onToggle={toggleWatchNew} />
+              </div>
+            )}
+            {film && (
+              <div class="m-skip-row" data-block="watch-quality">
+                <span class="m-skip-text">{t('torrent.screen.watchQuality')}</span>
+                <SkipSwitch on={watchQuality !== false} label={t('torrent.screen.watchQuality')} onToggle={toggleWatchQuality} />
+              </div>
+            )}
           </div>
         )}
         {files.length > 0 && <div class="m-section">{hasEpisodes ? t('torrent.screen.episodesHead') : t('torrent.screen.filesHead')}</div>}

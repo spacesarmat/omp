@@ -42,7 +42,8 @@ function type(id: string, value: string) {
   act(() => { input.dispatchEvent(new Event('input', { bubbles: true })); });
 }
 
-async function mount(prefs: any = { i: false, c: false }) {
+async function mount(prefs: any = { i: false, c: false }, open = true) {
+  if (open) localStorage.setItem('tsp.ui.skipOpen', 'true');
   loadMock.mockImplementation(() => Promise.resolve(prefs));
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
@@ -72,12 +73,44 @@ afterEach(() => {
 });
 
 describe('phone torrent card · Пропуск', () => {
+  const toggle = () => el.querySelector('.m-skip-toggle') as HTMLElement;
+
+  it('is folded by default into one row with a summary of the prefs', async () => {
+    await mount({ i: true, c: false }, false);
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    expect(toggle().textContent).toContain('Пропуск');
+    expect(toggle().textContent).toContain('заставка вкл · титры выкл');
+    expect(el.querySelector('[role=switch][aria-label="Пропускать заставку"]')).toBeNull();
+    expect(byText('Заставка и титры')).toBeUndefined();
+  });
+
+  it('expands on tap, saves from the switch and remembers the state across remounts', async () => {
+    saveMock.mockResolvedValue({ i: true, c: false });
+    await mount({ i: false, c: false }, false);
+    click(toggle());
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(sw('Пропускать заставку').getAttribute('aria-checked')).toBe('false');
+    click(sw('Пропускать заставку'));
+    expect(saveMock.mock.calls[0][2]).toEqual({ i: true });
+    expect(localStorage.getItem('tsp.ui.skipOpen')).toBe('true');
+    await mount({ i: true, c: false }, false);
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(toggle().textContent).toContain('заставка вкл · титры выкл');
+    click(toggle());
+    expect(localStorage.getItem('tsp.ui.skipOpen')).toBe('false');
+  });
+
+  it('a corrupt stored state falls back to folded', async () => {
+    localStorage.setItem('tsp.ui.skipOpen', '"yes"');
+    await mount({ i: false, c: false }, false);
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('shows the block with the saved prefs and the status', async () => {
     await mount({ i: true, c: false });
     expect(el.querySelector('.m-skip-title')!.textContent).toBe('Пропуск');
     expect(sw('Пропускать заставку').getAttribute('aria-checked')).toBe('true');
     expect(sw('Пропускать титры').getAttribute('aria-checked')).toBe('false');
-    expect(el.textContent).toContain('сразу следующая серия');
     expect(byText('Заставка и титры')!.textContent).toContain('не заданы');
   });
 
