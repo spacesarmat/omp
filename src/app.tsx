@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { ComponentType } from 'preact';
+import { lang, t } from './i18n';
 import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { installWheelScroll } from './ui/wheel';
@@ -18,13 +19,14 @@ import { PairPhoneScreen } from './screens/PairPhone';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { WhatsNewDialog, shouldShowWhatsNew } from './ui/WhatsNewDialog';
 import { checkWhatsNew, whatsNew } from './store/whatsNew';
-import { CHANGELOG } from './lib/changelogData';
+import { getChangelog } from './lib/changelogData';
 import { APP_VERSION } from './version';
 import { checkForUpdate, updatePrompt } from './store/updates';
 import { platformKind } from './platform/env';
 import { installAndroidKeyBridge } from './platform/androidKeys';
 import { installAndroidRemote } from './platform/androidRemote';
 import { installAndroidScale } from './platform/androidScale';
+import { syncNativeLanguage } from './platform/androidNative';
 
 /**
  * «Источники поиска» (Android TV only) is a separate chunk: its indexer status code stays out of the LG bundle.
@@ -77,7 +79,7 @@ function renderRoute(r: Route) {
 }
 
 function exitApp() {
-  confirmDialog('Выйти из приложения?', 'Выйти').then((ok) => {
+  confirmDialog(t('tv.exitAsk'), t('tv.exit')).then((ok) => {
     if (ok) window.close();
   });
 }
@@ -96,17 +98,19 @@ export function App() {
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidKeyBridge() : undefined), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidRemote() : undefined), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidScale() : undefined), []);
+  // the native copy follows the page's language (Android TV only: LG has no plugin)
+  useEffect(() => (platformKind() === 'androidtv' ? syncNativeLanguage() : undefined), []);
   useEffect(() => {
     const t = setTimeout(() => { checkForUpdate({ manual: false }); }, 3000);
     return () => clearTimeout(t);
   }, []);
-  useEffect(() => { checkWhatsNew(CHANGELOG, APP_VERSION); }, []);
+  useEffect(() => { checkWhatsNew(getChangelog(), APP_VERSION); }, []);
   const r = currentRoute.value;
   // opened by the user (Update screen) shows anywhere; the automatic one waits for the update prompt, the player and pairing
   const wn = whatsNew.value;
   const showWhatsNew = !!wn && !dialogOpen.value && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value));
   return (
-    <div class="app">
+    <div class="app" key={lang.value}>
       <div class="screen-host" key={routeKey(r)}>{renderRoute(r)}</div>
       {shouldShowUpdateDialog(r.name) && !dialogOpen.value && <UpdateDialog />}
       {showWhatsNew && <WhatsNewDialog />}

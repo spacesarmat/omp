@@ -7,6 +7,7 @@ import { log } from '../../../src/lib/log';
 import { RELEASES_URL } from '../../../src/lib/updateInfo';
 import { abiNote, isArm64, FAQ_ATV_ADB, FAQ_LG_DEVMODE, type InstallPlan, type InstallTarget } from '../../../src/lib/installPlan';
 import { monitorNative } from '../monitor/native';
+import { t as tr } from '../../../src/i18n';
 import { tvs } from '../tv/tvStore';
 import {
   createProgress,
@@ -28,7 +29,7 @@ type State =
 /** Renders the plan's buttons; `install` starts the phone install, `label` replaces the install button text. */
 export type ActionsRenderer = (o: { install: () => void; disabled: boolean; label?: string }) => ComponentChildren;
 
-const START_TEXT = { 'lg-devmode': 'LG, режим разработчика', 'atv-adb': 'Android TV, adb' } as const;
+const START_TEXT = { 'lg-devmode': 'install.run.startLg', 'atv-adb': 'install.run.startAtv' } as const;
 
 /**
  * The install part of the steps screen. Without `plan.install` it only renders the actions. Leaving the screen
@@ -62,26 +63,26 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
     if (running.current) return;
     const code = pass.trim();
     if (lg && !code) {
-      setFormError('Введите код (Passphrase) с экрана Developer Mode');
+      setFormError(tr('install.run.passRequired'));
       passInput.current?.focus();
       return;
     }
     setFormError('');
     running.current = true;
     const progress = createProgress(t.method, withHbc);
-    setState({ kind: 'running', view: { percent: 0, title: 'Устанавливаю OMP', text: lg ? 'Проверяю код на телевизоре' : 'Подключаюсь к телевизору' } });
+    setState({ kind: 'running', view: { percent: 0, title: tr('install.run.title'), text: lg ? tr('install.run.checkCode') : tr('install.run.connecting') } });
     // the code is passed once and not kept in the screen
     setPass('');
-    log('info', 'install', 'Установка с телефона: ' + START_TEXT[t.method]);
+    log('info', 'install', tr('install.run.logStart', { what: tr(START_TEXT[t.method]) }));
     try {
       const result = await native.start(lg ? { method: t.method, ip: t.ip, passphrase: code, withHbc } : { method: t.method, ip: t.ip }, (e) => {
         if (alive.current) setState({ kind: 'running', view: progress(e) });
       });
-      log('info', 'install', 'OMP установлен с телефона' + (result.hbcError ? ' (без Homebrew Channel)' : ''));
+      log('info', 'install', tr(result.hbcError ? 'install.run.logDoneNoHbc' : 'install.run.logDone'));
       if (alive.current) setState({ kind: 'done', result });
     } catch (e) {
       const c = e instanceof InstallError ? e.code : 'unknown';
-      log(c === 'cancelled' ? 'info' : 'warn', 'install', 'Установка с телефона не удалась: ' + c);
+      log(c === 'cancelled' ? 'info' : 'warn', 'install', tr('install.run.logFailed', { code: c }));
       if (alive.current) setState({ kind: 'error', code: c });
     } finally {
       running.current = false;
@@ -102,9 +103,9 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
           </span>
           <div class="m-muted m-small">{v.text}</div>
         </div>
-        {!lg && <div class="m-muted m-small">Если на ТВ появится «Разрешить отладку?» — нажмите «Разрешить».</div>}
+        {!lg && <div class="m-muted m-small">{tr('install.run.allowHint')}</div>}
         <button type="button" class="m-btn m-btn-secondary" onClick={() => void native.cancel()}>
-          Отмена
+          {tr('common.cancel')}
         </button>
       </div>
     );
@@ -129,15 +130,15 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
             if (state.code === 'wrong-passphrase' || state.code === 'ssh-auth') setTimeout(() => passInput.current?.focus(), 0);
           }}
         >
-          Повторить
+          {tr('common.retry')}
         </button>
         {atvFallback && (
           <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(RELEASES_URL, '_system')}>
-            Скачать APK
+            {tr('install.run.apk')}
           </button>
         )}
         <button type="button" class="m-link" onClick={() => navigate({ name: 'faq', q: lg ? FAQ_LG_DEVMODE : FAQ_ATV_ADB })}>
-          {lg ? 'Подробная инструкция' : 'Как установить через компьютер'}
+          {lg ? tr('install.plan.devmodeFaq') : tr('install.plan.adbFaq')}
         </button>
       </div>
     );
@@ -147,7 +148,7 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
     <>
       {lg && (
         <div class="m-field m-install-form">
-          <label for="install-pass">Код (Passphrase) из приложения Developer Mode</label>
+          <label for="install-pass">{tr('install.run.passLabel')}</label>
           <input
             id="install-pass"
             ref={passInput}
@@ -164,7 +165,7 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
           {t.withHbc && (
             <label class="m-send-check">
               <input type="checkbox" checked={hbc} onChange={(e) => setHbc((e.target as HTMLInputElement).checked)} />
-              Вместе с Homebrew Channel
+              {tr('install.run.withHbc')}
             </label>
           )}
           {formError && (
@@ -174,21 +175,20 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
           )}
         </div>
       )}
-      {!native.available && <p class="m-muted m-small">Установка с телефона работает в приложении OMP для Android.</p>}
+      {!native.available && <p class="m-muted m-small">{tr('install.run.needsApp')}</p>}
       {p.actions({
         install: () => void start(),
         disabled: !native.available,
-        label: lg && t.withHbc && !hbc ? 'Установить OMP' : undefined,
+        label: lg && t.withHbc && !hbc ? tr('install.plan.installOmp') : undefined,
       })}
     </>
   );
 }
 
-/** «12 ноября» for the reminder note. */
+/** «12 ноября» / «November 12» for the reminder note. */
 function dayText(at: number): string {
-  const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
   const d = new Date(at);
-  return d.getDate() + ' ' + months[d.getMonth()];
+  return tr('date.day', { d: d.getDate(), month: tr('date.monthsFull').split(' ')[d.getMonth()] });
 }
 
 function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResult; onRecheck: () => void }) {
@@ -209,7 +209,7 @@ function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResul
       .then((at) => {
         if (!alive || touched.current || at === null) return;
         setRemind(true);
-        setRemindNote('Напоминание уже включено: ' + dayText(at) + '. Снимите и снова поставьте отметку, чтобы отсчитать 38 дней от сегодня.');
+        setRemindNote(tr('install.run.remindExists', { day: dayText(at) }));
       });
     return () => {
       alive = false;
@@ -228,26 +228,26 @@ function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResul
       const perm = await monitorNative.requestNotifyPermission();
       if (perm !== 'granted') {
         setRemind(false);
-        setRemindNote('Уведомления для OMP выключены — напоминание не придёт. Разрешите их в настройках телефона.');
+        setRemindNote(tr('install.run.remindNoPerm'));
         return;
       }
       await installerNative().reminder(p.tv, reminderAt(installedAt), p.tvName, stableId);
-      setRemindNote('Напомню через 38 дней. Чтобы срок совпал, продлите режим сейчас в Developer Mode (кнопка Extend).');
+      setRemindNote(tr('install.run.remindSet'));
     } catch {
       setRemind(false);
-      setRemindNote('Не удалось включить напоминание');
+      setRemindNote(tr('install.run.remindFailed'));
     }
   }
 
   return (
     <div class="m-install-run" data-install="done">
       <div class="m-install-done" role="status">
-        <span class="m-ok">✓</span> {r.version ? 'OMP ' + r.version + ' установлен' : 'OMP установлен'}
+        <span class="m-ok">✓</span> {r.version ? tr('install.run.doneOmpVersion', { version: r.version }) : tr('install.run.doneOmp')}
       </div>
       <div class="m-muted m-note">
-        {p.lg ? 'Откройте OMP на телевизоре: кнопка Home → список приложений → OMP.' : 'Откройте OMP на телевизоре из списка приложений.'}
+        {p.lg ? tr('install.run.openLg') : tr('install.run.openAtv')}
       </div>
-      {r.hbcVersion && <div class="m-note">Homebrew Channel {r.hbcVersion} установлен</div>}
+      {r.hbcVersion && <div class="m-note">{tr('install.run.hbcDone', { version: r.hbcVersion })}</div>}
       {r.hbcError && (
         <div class="m-hint-warn" role="note">
           {hbcErrorText(r.hbcError)}
@@ -261,18 +261,18 @@ function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResul
       {p.lg && (
         <>
           <div class="m-hint-warn" role="note">
-            Режим разработчика действует 1000 часов (около 40 дней). Продлевайте его заранее в приложении Developer Mode, иначе OMP удалится с ТВ.
+            {tr('install.plan.timerNote')}
           </div>
-          <div class="m-muted m-small">Выключите Key Server в Developer Mode: пока он включён, ключ может забрать любое устройство в вашей сети.</div>
+          <div class="m-muted m-small">{tr('install.run.keyServerOff')}</div>
           <label class="m-send-check">
             <input type="checkbox" checked={remind} data-reminder onChange={(e) => void toggle((e.target as HTMLInputElement).checked)} />
-            Напомнить продлить режим разработчика
+            {tr('install.run.remindLabel')}
           </label>
           {remindNote && <div class="m-muted m-small">{remindNote}</div>}
         </>
       )}
       <button type="button" class="m-btn m-btn-secondary" onClick={p.onRecheck}>
-        Проверить телевизор снова
+        {tr('install.run.recheck')}
       </button>
     </div>
   );

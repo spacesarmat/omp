@@ -2,6 +2,7 @@
 // first and given back when the assistant closes; the inspected TV never becomes the active one.
 import { connectTv, disconnectTv, sessionIp, tvState } from '../tv/tvClient';
 import { tvs, type SavedTv } from '../tv/tvStore';
+import { t } from '../../../src/i18n';
 
 export interface OtherTv {
   ip: string;
@@ -20,7 +21,7 @@ export function otherConnection(ip: string): OtherTv | null {
 
 /** «Подключиться к «B»? Текущее подключение к «A» будет закрыто». */
 export function takeoverQuestion(target: string, other: OtherTv): string {
-  return 'Подключиться к «' + target + '»? Текущее подключение к «' + other.name + '» будет закрыто.';
+  return t('install.run.takeover', { target: target, other: other.name });
 }
 
 export interface Takeover {

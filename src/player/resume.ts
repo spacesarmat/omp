@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { resumePosition } from '../store/progress';
 import { formatDuration } from '../lib/format';
 import { choose } from '../ui/dialog';
@@ -13,8 +14,8 @@ export function decideStart(item: PlayItem, explicit?: number, ask = true): Prom
   if (!item.hash || item.fileIndex === undefined) return Promise.resolve(0);
   const pos = resumePosition(item.hash, item.fileIndex);
   if (pos <= 0 || !ask) return Promise.resolve(Math.max(0, pos));
-  return choose('Продолжить просмотр?', [
-    { label: 'Продолжить с ' + formatDuration(pos), value: pos },
-    { label: 'Сначала', value: 0 },
+  return choose(t('player.resumeAsk'), [
+    { label: t('player.resumeFrom', { t: formatDuration(pos) }), value: pos },
+    { label: t('player.resumeStart'), value: 0 },
   ]).then((v) => (v === null ? -1 : v));
 }

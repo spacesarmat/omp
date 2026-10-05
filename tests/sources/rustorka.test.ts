@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parseRustorka, rustorka, RUSTORKA_NO_FILE } from '../../src/sources/rustorka';
+import { parseRustorka, rustorka, rustorkaNoFile } from '../../src/sources/rustorka';
 import { parseHtml } from '../../src/sources/html';
 import { reloadSourcePrefs, setCloudflareBypass } from '../../src/sources/store';
 import { isLoginRequired } from '../../src/sources/types';
@@ -125,7 +125,7 @@ describe('rustorka', () => {
       if (c.url.indexOf('viewtopic') >= 0) return page('<a href="./login.php?logout=1">Выход</a>', c.url);
       return page(fixture('rustorka-guest.html'), c.url);
     }, CREDS);
-    await expect(rustorka.resolve!(r, none.ctx)).rejects.toThrow(RUSTORKA_NO_FILE);
+    await expect(rustorka.resolve!(r, none.ctx)).rejects.toThrow(rustorkaNoFile());
   });
 
   it('a wrong password is refused while an older session is still valid (form again + logged-in header)', async () => {

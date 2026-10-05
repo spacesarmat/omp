@@ -1,4 +1,5 @@
 import { useRef, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { goBack } from '../nav';
@@ -6,7 +7,7 @@ import { native } from '../platform/native';
 import { log } from '../../../src/lib/log';
 import {
   BACKUP_MAX_BYTES,
-  ERR_TOO_BIG,
+  errTooBig,
   applyBackup,
   backupFileName,
   backupWarning,
@@ -46,16 +47,16 @@ export function setBackupActions(a: Partial<BackupActions> | null): void {
   actions = a ? { ...defaults, ...a } : defaults;
 }
 
-const INCLUDED = [
-  'Серверы TorrServer и их имена',
-  'Телевизоры и пары с ними',
-  'Подписки и настройки мониторинга',
-  'Источники поиска (вкл./выкл.)',
-  'Настройки приложения и тачпада',
-  'Категории и вид каталога',
-  'Избранные плейлисты и выбор дорожек',
+const included = () => [
+  t('backup.inc.servers'),
+  t('backup.inc.tvs'),
+  t('backup.inc.subs'),
+  t('backup.inc.sources'),
+  t('backup.inc.settings'),
+  t('backup.inc.catalog'),
+  t('backup.inc.playlists'),
 ];
-const EXCLUDED = ['Пароли трекеров и cookie — их нужно ввести заново', 'История и «Пропуск» — они на TorrServer'];
+const excluded = () => [t('backup.exc.passwords'), t('backup.exc.history')];
 
 let saving = false;
 
@@ -64,10 +65,10 @@ export async function saveBackup(): Promise<void> {
   saving = true;
   try {
     const now = actions.now();
-    await actions.shareText({ name: backupFileName(now), text: serializeBackup(collectBackup(now)), title: 'Поделиться копией' });
+    await actions.shareText({ name: backupFileName(now), text: serializeBackup(collectBackup(now)), title: t('backup.shareTitle') });
   } catch (e) {
-    log('error', 'app', 'Не удалось поделиться копией настроек');
-    showToast(e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Не удалось сохранить копию');
+    log('error', 'app', t('backup.logShareFailed'));
+    showToast(e && typeof (e as Error).message === 'string' ? (e as Error).message : t('backup.saveFailed'));
   } finally {
     saving = false;
   }
@@ -85,20 +86,20 @@ export function Backup() {
     if (!file) return;
     setError('');
     if (file.size > BACKUP_MAX_BYTES) {
-      setError(ERR_TOO_BIG);
+      setError(errTooBig());
       return;
     }
     let text: string;
     try {
       text = await actions.readFile(file);
     } catch (err) {
-      log('warn', 'app', 'Не удалось прочитать файл копии настроек');
-      setError('Не удалось прочитать файл');
+      log('warn', 'app', t('backup.logReadFailed'));
+      setError(t('backup.readFailed'));
       return;
     }
     const r = parseBackup(text);
     if (!r.ok) {
-      log('warn', 'app', 'Файл копии настроек отклонён');
+      log('warn', 'app', t('backup.logRejected'));
       setError(r.error);
       return;
     }
@@ -110,12 +111,12 @@ export function Backup() {
     try {
       applyBackup(review);
     } catch (err) {
-      log('error', 'app', 'Не удалось восстановить настройки из копии');
-      setError('Не удалось записать настройки на телефон');
+      log('error', 'app', t('backup.logRestoreFailed'));
+      setError(t('backup.writeFailed'));
       setReview(null);
       return;
     }
-    showToast('Копия восстановлена');
+    showToast(t('backup.restored'));
     actions.reload();
   }
 
@@ -124,57 +125,57 @@ export function Backup() {
   return (
     <div class="m-screen" data-route="backup">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => (review ? setReview(null) : goBack())}>
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => (review ? setReview(null) : goBack())}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
-        <h1 class="m-bar-title">Резервная копия</h1>
+        <h1 class="m-bar-title">{t('backup.title')}</h1>
       </div>
       {review && summary ? (
         <div class="m-backup-review">
-          <h2 class="m-section">Что в файле</h2>
+          <h2 class="m-section">{t('backup.whatInFile')}</h2>
           <ul class="m-backup-list">
             {summaryLines(summary).map((l) => (
               <li key={l}>{l}</li>
             ))}
           </ul>
           <p class="m-muted m-small">
-            Копия от {review.at.slice(0, 10) || 'неизвестной даты'}
-            {review.omp ? ', OMP ' + review.omp : ''}.
+            {t('backup.copyFrom', { date: review.at.slice(0, 10) || t('backup.unknownDate') })}
+            {review.omp ? t('backup.copyOmp', { version: review.omp }) : ''}.
           </p>
           <p class="m-note m-backup-warn">{backupWarning(summary)}</p>
-          <p class="m-muted m-small">Восстановление заменит эти данные на телефоне. Остальное не изменится.</p>
+          <p class="m-muted m-small">{t('backup.restoreNote')}</p>
           <button type="button" class="m-btn m-btn-primary" onClick={confirmRestore}>
-            Заменить данные на телефоне
+            {t('backup.replace')}
           </button>
           <button type="button" class="m-btn m-btn-secondary" onClick={() => setReview(null)}>
-            Отмена
+            {t('common.cancel')}
           </button>
         </div>
       ) : (
         <>
-          <h2 class="m-section">Что сохраняется</h2>
+          <h2 class="m-section">{t('backup.whatSaved')}</h2>
           <ul class="m-backup-list">
-            {INCLUDED.map((t) => (
-              <li class="yes" key={t}>
-                {t}
+            {included().map((x) => (
+              <li class="yes" key={x}>
+                {x}
               </li>
             ))}
-            {EXCLUDED.map((t) => (
-              <li class="no" key={t}>
-                {t}
+            {excluded().map((x) => (
+              <li class="no" key={x}>
+                {x}
               </li>
             ))}
           </ul>
           <button type="button" class="m-btn m-btn-primary" onClick={() => void saveBackup()}>
-            Сохранить копию…
+            {t('backup.save')}
           </button>
-          <p class="m-muted m-small">Файл {backupFileName(actions.now())} — отправьте его себе в Телеграм, на диск или в папку телефона.</p>
+          <p class="m-muted m-small">{t('backup.fileNote', { name: backupFileName(actions.now()) })}</p>
           <p class="m-note m-backup-warn">{backupWarning()}</p>
           <button type="button" class="m-btn m-btn-secondary" onClick={() => input.current && input.current.click()}>
-            Восстановить из файла…
+            {t('backup.restoreFile')}
           </button>
-          <input ref={input} type="file" accept="application/json,.json,text/plain,.txt" hidden aria-label="Файл копии" onChange={(e) => void onPick(e)} />
-          <p class="m-muted m-small">Восстановление заменит серверы, телевизоры, подписки и настройки на этом телефоне. Перед заменой покажу, что в файле.</p>
+          <input ref={input} type="file" accept="application/json,.json,text/plain,.txt" hidden aria-label={t('backup.fileLabel')} onChange={(e) => void onPick(e)} />
+          <p class="m-muted m-small">{t('backup.restoreWarn')}</p>
           {error ? <p class="m-error" role="alert">{error}</p> : null}
         </>
       )}

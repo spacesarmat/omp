@@ -3,6 +3,7 @@ import { activeServer } from '../store/servers';
 import { buildPairUri } from '../lib/pairing';
 import { goBack, resetTo } from '../ui/nav';
 import { toast } from '../ui/toast';
+import { t, lang } from '../i18n';
 import { phoneAttachCount } from '../phone/link';
 import { FocusGroup, Button } from '../ui/components';
 import { Qr } from '../ui/Qr';
@@ -14,7 +15,7 @@ const MIN_REFRESH_MS = 250;
 const CODE_TTL_MS = 300000;
 
 function backToCatalog(): void {
-  toast('Телефон подключён');
+  toast(t('pair.phoneConnected'));
   resetTo(activeServer.value ? { name: 'library' } : { name: 'connect' });
 }
 
@@ -25,12 +26,10 @@ interface CodeState {
   error: string | null;
 }
 
-const NO_CODE = 'Не удалось получить код — нажмите «Новый код»';
-
 /** The native rejection when it is Russian (e.g. «Сервер управления не запустился»), else a generic text. */
 function codeError(e: unknown): string {
   const m = e && typeof e === 'object' && typeof (e as { message?: unknown }).message === 'string' ? (e as { message: string }).message : '';
-  return /[А-Яа-яЁё]/.test(m) ? m : NO_CODE;
+  return lang.peek() === 'ru' && /[\u0400-\u04FF]/.test(m) ? m : t('pair.noCode');
 }
 
 /**
@@ -43,7 +42,7 @@ function useRemoteCode(generation: number): CodeState {
   useEffect(() => {
     const plugin = nativePlugin();
     if (!plugin) {
-      setSt({ code: null, expiresAt: 0, error: NO_CODE });
+      setSt({ code: null, expiresAt: 0, error: t('pair.noCode') });
       return undefined;
     }
     let alive = true;
@@ -53,7 +52,7 @@ function useRemoteCode(generation: number): CodeState {
         if (!alive) return;
         const ok = r && typeof r.code === 'string' && /^[0-9]{4}$/.test(r.code);
         const exp = r && typeof r.expiresAt === 'number' && isFinite(r.expiresAt) ? r.expiresAt : Date.now() + CODE_TTL_MS;
-        setSt({ code: ok ? r.code : null, expiresAt: exp, error: ok ? null : NO_CODE });
+        setSt({ code: ok ? r.code : null, expiresAt: exp, error: ok ? null : t('pair.noCode') });
         if (!ok) return;
         const wait = Math.min(CODE_TTL_MS, Math.max(MIN_REFRESH_MS, exp - Date.now()));
         timer = setTimeout(() => { if (alive) setTick((n) => n + 1); }, wait);
@@ -112,7 +111,7 @@ function RemoteCodeBlock({ generation }: { generation: number }) {
   const digits = st.code ? st.code.split('') : ['–', '–', '–', '–'];
   return (
     <div class="pair-code">
-      <div class="pair-code-label">Код для пульта на телефоне</div>
+      <div class="pair-code-label">{t('pair.codeLabel')}</div>
       {!st.error && (
         <div class="pair-digits">
           {digits.map((d, i) => <span key={i} class="pair-digit">{d}</span>)}
@@ -121,7 +120,7 @@ function RemoteCodeBlock({ generation }: { generation: number }) {
       {st.error ? (
         <div class="pair-code-hint pair-code-error">{st.error}</div>
       ) : (
-        <div class="pair-code-hint">На телефоне: OMP → Телевизор → «{name || 'Android TV'}» → введите код</div>
+        <div class="pair-code-hint">{t('pair.codeHint', { name: name || 'Android TV' })}</div>
       )}
     </div>
   );
@@ -140,26 +139,26 @@ function AndroidTvPair() {
   }, []);
   return (
     <FocusGroup focusKey="PAIR-PHONE" className="screen pair-phone">
-      <h1>Подключить телефон</h1>
+      <h1>{t('pair.title')}</h1>
       <div class="pair-row pair-row-top">
         {srv ? (
           <Qr text={buildPairUri({ url: srv.url, name: srv.name, user: srv.user, password: srv.password })} size={360} />
         ) : (
-          <div class="pair-noserver">Сначала подключитесь к серверу — тогда здесь появится QR</div>
+          <div class="pair-noserver">{t('pair.noServerQr')}</div>
         )}
         <div class="pair-side">
           <RemoteCodeBlock generation={generation} />
           <div class="pair-steps pair-steps-atv">
-            <div>1. QR слева переносит сервер на телефон.</div>
-            <div>2. Код подключает пульт и «Смотреть на ТВ».</div>
-            <div>3. Код действует 5 минут.</div>
+            <div>{t('pair.qrNote1')}</div>
+            <div>{t('pair.qrNote2')}</div>
+            <div>{t('pair.qrNote3')}</div>
           </div>
         </div>
       </div>
-      {srv && <p class="muted">QR содержит пароль сервера — не показывайте его посторонним.</p>}
+      {srv && <p class="muted">{t('pair.qrPassword')}</p>}
       <div class="row">
-        <Button focusKey="pair-back" label="Готово" onPress={() => goBack()} />
-        <Button focusKey="pair-new-code" label="Новый код" onPress={() => setGeneration((n) => n + 1)} />
+        <Button focusKey="pair-back" label={t('common.done')} onPress={() => goBack()} />
+        <Button focusKey="pair-new-code" label={t('pair.newCode')} onPress={() => setGeneration((n) => n + 1)} />
       </div>
     </FocusGroup>
   );
@@ -169,25 +168,25 @@ function LgPair() {
   const srv = activeServer.value;
   return (
     <FocusGroup focusKey="PAIR-PHONE" className="screen pair-phone">
-      <h1>Подключить телефон</h1>
+      <h1>{t('pair.title')}</h1>
       {!srv ? (
-        <p>Сначала подключитесь к серверу</p>
+        <p>{t('errors.connectFirst')}</p>
       ) : (
         <div>
           <div class="pair-row">
             <Qr text={buildPairUri({ url: srv.url, name: srv.name, user: srv.user, password: srv.password })} size={360} />
             <div class="pair-steps">
-              <div>1. Установите OMP на Android-телефон (ссылка в README на GitHub).</div>
-              <div>2. Откройте OMP на телефоне → «Сканировать QR с телевизора».</div>
-              <div>3. Сервер, логин и пароль перенесутся автоматически.</div>
-              <div>4. Выберите этот телевизор на телефоне — OMP сам вернётся в каталог.</div>
+              <div>{t('pair.step1')}</div>
+              <div>{t('pair.step2')}</div>
+              <div>{t('pair.step3')}</div>
+              <div>{t('pair.step4')}</div>
             </div>
           </div>
-          <p class="muted">QR содержит пароль сервера — не показывайте его посторонним.</p>
+          <p class="muted">{t('pair.qrPassword')}</p>
         </div>
       )}
       <div class="row">
-        <Button focusKey="pair-back" label="Готово" onPress={() => goBack()} />
+        <Button focusKey="pair-back" label={t('common.done')} onPress={() => goBack()} />
       </div>
     </FocusGroup>
   );

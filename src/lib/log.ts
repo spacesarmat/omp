@@ -5,6 +5,7 @@
 import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from '../store/storage';
 import { APP_VERSION } from '../version';
+import { t } from '../i18n';
 
 export type LogLevel = 'info' | 'warn' | 'error';
 export type LogArea = 'app' | 'server' | 'search' | 'monitor' | 'tv' | 'install';
@@ -16,14 +17,16 @@ export const LOG_KEY = 'tsp.log';
 /** The same entry again within this time is dropped. */
 export const DUP_MS = 30000;
 
-export const LEVEL_LABEL: { [k in LogLevel]: string } = { info: 'ИНФО', warn: 'ВНИМАНИЕ', error: 'ОШИБКА' };
-export const AREA_LABEL: { [k in LogArea]: string } = {
-  app: 'приложение',
-  server: 'сервер',
-  search: 'поиск',
-  monitor: 'мониторинг',
-  tv: 'ТВ',
-  install: 'установка',
+export const levelLabel = (l: LogLevel): string => t(l === 'info' ? 'log.info' : l === 'warn' ? 'log.warn' : 'log.error');
+export const areaLabel = (a: LogArea): string => {
+  switch (a) {
+    case 'app': return t('log.areaApp');
+    case 'server': return t('log.areaServer');
+    case 'search': return t('log.areaSearch');
+    case 'monitor': return t('log.areaMonitor');
+    case 'tv': return t('log.areaTv');
+    default: return t('log.areaInstall');
+  }
 };
 
 export interface LogEntry {
@@ -53,7 +56,7 @@ const KNOWN_SITES: [string, string][] = [
 function hostKind(host: string): string {
   const h = host.toLowerCase();
   for (let i = 0; i < KNOWN_SITES.length; i++) if (h.indexOf(KNOWN_SITES[i][0]) >= 0) return KNOWN_SITES[i][1];
-  return 'сервер';
+  return t('log.scrubServer');
 }
 
 const MAGNET = /magnet:\?[^\s"'<>]*/gi;
@@ -93,8 +96,8 @@ export function scrub(text: string): string {
     const at = host.lastIndexOf('@');
     return scheme.toLowerCase() + '://' + hostKind(at >= 0 ? host.slice(at + 1) : host);
   });
-  s = s.replace(FILE_PATH, '$1файл');
-  s = s.replace(RESOLVE_HOST, '$1"сервер"');
+  s = s.replace(FILE_PATH, (_m, pre: string) => pre + t('log.scrubFile'));
+  s = s.replace(RESOLVE_HOST, (_m, pre: string) => pre + '"' + t('log.scrubServer') + '"');
   s = s.replace(EMAIL, 'e-mail');
   s = s.replace(HASH, 'hash');
   s = s.replace(BASE32, 'hash');
@@ -102,7 +105,7 @@ export function scrub(text: string): string {
   s = s.replace(IP6_SHORT, 'IP');
   s = s.replace(LOCAL_HOST, (m) => hostKind(m));
   s = s.replace(HOST_PORT, (m) => (CODE_EXT.test(m) || /^[0-9.]+:/.test(m) ? m : hostKind(m)));
-  s = s.replace(HOST_SLASH_IP, 'сервер');
+  s = s.replace(HOST_SLASH_IP, t('log.scrubServer'));
   s = s.replace(IP, 'IP');
   s = s.replace(QUERY, '?…');
   s = s.replace(/\s+/g, ' ').trim();
@@ -268,21 +271,21 @@ export function logTime(t: number): string {
 }
 
 function infoLines(info: LogInfo): string[] {
-  const lines = ['OMP: ' + info.version, 'Платформа: ' + info.platform];
+  const lines = ['OMP: ' + info.version, t('log.platform') + ': ' + info.platform];
   if (info.android) lines.push('Android: ' + info.android);
-  if (info.model) lines.push('Модель: ' + info.model);
+  if (info.model) lines.push(t('log.model') + ': ' + info.model);
   if (info.webview) lines.push('WebView: ' + info.webview);
   return lines;
 }
 
 function entryLine(e: LogEntry): string {
-  return logDate(e.t) + ' ' + logTime(e.t) + ' ' + LEVEL_LABEL[e.l] + ' ' + AREA_LABEL[e.a] + ': ' + e.x;
+  return logDate(e.t) + ' ' + logTime(e.t) + ' ' + levelLabel(e.l) + ' ' + areaLabel(e.a) + ': ' + e.x;
 }
 
 /** Plain text of the whole log (oldest first) with a header. */
 export function formatLog(info: LogInfo, list?: LogEntry[]): string {
   const src = list || entries;
-  return infoLines(info).concat(['Записей: ' + src.length, '']).concat(src.map(entryLine)).join('\n') + '\n';
+  return infoLines(info).concat([t('log.records') + ': ' + src.length, '']).concat(src.map(entryLine)).join('\n') + '\n';
 }
 
 // ---- GitHub report ----
@@ -290,19 +293,19 @@ export function formatLog(info: LogInfo, list?: LogEntry[]): string {
 export const ISSUE_URL = 'https://github.com/spacesarmat/omp/issues/new';
 export const ISSUE_URL_MAX = 6000;
 export const ISSUE_LINES = 30;
-export const LOG_COPIED_NOTE = 'Журнал скопирован — вставьте его сюда.';
-export const LOG_NOT_COPIED_NOTE = 'Не удалось скопировать журнал — приложите файл через «Поделиться журналом».';
+export const logCopiedNote = () => t('log.copied');
+export const logNotCopiedNote = () => t('log.notCopied');
 
 /** New-issue URL: title, body with the device and the last error lines when they fit (else a note). */
 export function githubIssueUrl(info: LogInfo, copied = true, list?: LogEntry[]): string {
   const src = list || entries;
   const errors = src.filter((e) => e.l === 'error').slice(-ISSUE_LINES);
-  const head = infoLines(info).map((l) => '- ' + l).join('\n') + '\n\n**Что случилось:**\n(опишите, что вы делали и что пошло не так)\n';
-  const prefix = ISSUE_URL + '?title=' + encodeURIComponent('Ошибка в OMP ' + info.version) + '&body=';
+  const head = infoLines(info).map((l) => '- ' + l).join('\n') + '\n\n**' + t('log.issueWhat') + '**\n' + t('log.issueDescribe') + '\n';
+  const prefix = ISSUE_URL + '?title=' + encodeURIComponent(t('log.issueTitle', { version: info.version })) + '&body=';
   for (let n = errors.length; n >= 0; n--) {
     let body = head;
-    if (n > 0) body += '\n**Последние ошибки:**\n```\n' + errors.slice(errors.length - n).map(entryLine).join('\n') + '\n```\n';
-    if (n < errors.length || n === 0) body += '\n' + (copied ? LOG_COPIED_NOTE : LOG_NOT_COPIED_NOTE) + '\n';
+    if (n > 0) body += '\n**' + t('log.issueLastErrors') + '**\n```\n' + errors.slice(errors.length - n).map(entryLine).join('\n') + '\n```\n';
+    if (n < errors.length || n === 0) body += '\n' + (copied ? logCopiedNote() : logNotCopiedNote()) + '\n';
     const url = prefix + encodeURIComponent(body);
     if (url.length <= ISSUE_URL_MAX || n === 0) return url;
   }
@@ -326,7 +329,7 @@ export function installErrorHooks(): void {
   hooked = true;
   window.addEventListener('error', (ev: ErrorEvent) => {
     const file = ev && ev.filename ? baseName(ev.filename) : '';
-    log('error', 'app', 'Ошибка: ' + (ev && ev.message ? ev.message : 'неизвестная') + (file ? ' (' + file + ')' : ''));
+    log('error', 'app', t('log.windowError', { msg: ev && ev.message ? ev.message : t('log.unknownError') }) + (file ? ' (' + file + ')' : ''));
   });
   window.addEventListener('unhandledrejection', (ev: PromiseRejectionEvent) => {
     const reason = ev ? (ev.reason as unknown) : null;
@@ -335,8 +338,8 @@ export function installErrorHooks(): void {
         ? (reason as { message: string }).message
         : typeof reason === 'string'
           ? reason
-          : 'без описания';
-    log('error', 'app', 'Необработанная ошибка: ' + msg);
+          : t('log.noDescription');
+    log('error', 'app', t('log.unhandled', { msg }));
   });
   window.addEventListener('pagehide', flushLog);
 }
@@ -344,5 +347,5 @@ export function installErrorHooks(): void {
 /** First log line of a run. */
 export function logStart(platform: string): void {
   const i = currentLogInfo(platform);
-  log('info', 'app', 'Запуск OMP ' + i.version + ' · ' + platform + (i.android ? ' · Android ' + i.android : '') + (i.webview ? ' · WebView ' + i.webview : ''));
+  log('info', 'app', t('log.start', { version: i.version }) + ' · ' + platform + (i.android ? ' · Android ' + i.android : '') + (i.webview ? ' · WebView ' + i.webview : ''));
 }

@@ -1,10 +1,11 @@
 // QR scan of the pairing code shown on the TV: Google code scanner (no camera permission needed).
 import { BarcodeScanner, BarcodeFormat, GoogleBarcodeScannerModuleInstallState as Install } from '@capacitor-mlkit/barcode-scanning';
 import { parsePairUri, type PairData } from '../../../src/lib/pairing';
+import { t } from '../../../src/i18n';
 
-export const NOT_OMP_QR = 'Это не QR OMP';
-export const SCAN_UNAVAILABLE = 'Сканер QR недоступен на этом устройстве';
-export const SCAN_PREPARE_FAILED = 'Не удалось подготовить сканер QR';
+export const notOmpQr = () => t('errors.qrNotOmp');
+export const scanUnavailable = () => t('errors.qrUnavailable');
+export const scanPrepareFailed = () => t('errors.qrPrepareFailed');
 const INSTALL_TIMEOUT_MS = 60000;
 
 export type QrScanner = () => Promise<PairData | null>;
@@ -21,7 +22,7 @@ async function ensureModule(): Promise<void> {
   if (available) return;
   await new Promise<void>((resolve, reject) => {
     let off: (() => void) | undefined;
-    const timer = setTimeout(() => done(new Error(SCAN_PREPARE_FAILED)), INSTALL_TIMEOUT_MS);
+    const timer = setTimeout(() => done(new Error(scanPrepareFailed())), INSTALL_TIMEOUT_MS);
     const done = (err?: Error) => {
       clearTimeout(timer);
       off?.();
@@ -30,13 +31,13 @@ async function ensureModule(): Promise<void> {
     };
     BarcodeScanner.addListener('googleBarcodeScannerModuleInstallProgress', (e) => {
       if (e.state === Install.COMPLETED) done();
-      else if (e.state === Install.FAILED || e.state === Install.CANCELED) done(new Error(SCAN_UNAVAILABLE));
+      else if (e.state === Install.FAILED || e.state === Install.CANCELED) done(new Error(scanUnavailable()));
     })
       .then((h) => {
         off = () => void h.remove();
         return BarcodeScanner.installGoogleBarcodeScannerModule();
       })
-      .catch(() => done(new Error(SCAN_UNAVAILABLE)));
+      .catch(() => done(new Error(scanUnavailable())));
   });
 }
 
@@ -50,10 +51,10 @@ export async function scanPairQr(): Promise<PairData | null> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/cancel/i.test(msg)) return null;
-    throw new Error(msg === SCAN_PREPARE_FAILED ? SCAN_PREPARE_FAILED : SCAN_UNAVAILABLE);
+    throw new Error(msg === scanPrepareFailed() ? scanPrepareFailed() : scanUnavailable());
   }
   if (!barcodes.length) return null;
   const data = parsePairUri(barcodes[0].rawValue ?? '');
-  if (!data) throw new Error(NOT_OMP_QR);
+  if (!data) throw new Error(notOmpQr());
   return data;
 }

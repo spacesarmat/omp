@@ -5,7 +5,7 @@ import {
   hostName,
   identifyIndexer,
   INDEXER_PORTS,
-  INSECURE_KEY,
+  insecureKey,
   isLanHost,
   kindByPort,
   lastScan,
@@ -25,9 +25,9 @@ import {
   setTorznabHosts,
   torznabHiddenText,
   torznabHosts,
-  TORZNAB_HIDDEN,
-  TORZNAB_HIDDEN_DIRECT,
-  TORZNAB_HIDDEN_SAME_PROWLARR,
+  torznabHidden,
+  torznabHiddenDirect,
+  torznabHiddenSameProwlarr,
   type IndexerConn,
 } from '../../src/sources/indexerStore';
 import { reloadSourcePrefs, setSourceOn } from '../../src/sources/store';
@@ -261,14 +261,14 @@ describe('the «Torznab скрыт» note', () => {
     reloadIndexers();
     expect(torznabHiddenText(false)).toBe('');
     // hosts unknown or none: the plain reason
-    expect(torznabHiddenText(true)).toBe(TORZNAB_HIDDEN_DIRECT);
+    expect(torznabHiddenText(true)).toBe(torznabHiddenDirect());
     setTorznabHosts([]);
-    expect(torznabHiddenText(true)).toBe(TORZNAB_HIDDEN_DIRECT);
+    expect(torznabHiddenText(true)).toBe(torznabHiddenDirect());
     setTorznabHosts(['192.168.1.5:9117']);
-    expect(torznabHiddenText(true)).toBe(TORZNAB_HIDDEN);
+    expect(torznabHiddenText(true)).toBe(torznabHidden());
     localStorage.setItem('tsp.indexers', JSON.stringify([{ kind: 'prowlarr', url: 'http://192.168.1.5:9117', keySet: true }]));
     reloadIndexers();
-    expect(torznabHiddenText(true)).toBe(TORZNAB_HIDDEN_SAME_PROWLARR);
+    expect(torznabHiddenText(true)).toBe(torznabHiddenSameProwlarr());
   });
 });
 
@@ -300,10 +300,10 @@ describe('merge', () => {
 
 describe('plain http warning', () => {
   it('only for http outside the home network', () => {
-    expect(plainHttpWarning('http://my-seedbox.example.com:9117')).toBe(INSECURE_KEY);
-    expect(INSECURE_KEY).toContain('ключ передаётся без шифрования');
-    expect(plainHttpWarning('http://8.8.8.8:9117')).toBe(INSECURE_KEY);
-    expect(plainHttpWarning('http://172.32.0.1:9117')).toBe(INSECURE_KEY);
+    expect(plainHttpWarning('http://my-seedbox.example.com:9117')).toBe(insecureKey());
+    expect(insecureKey()).toContain('ключ передаётся без шифрования');
+    expect(plainHttpWarning('http://8.8.8.8:9117')).toBe(insecureKey());
+    expect(plainHttpWarning('http://172.32.0.1:9117')).toBe(insecureKey());
     for (const u of ['http://192.168.1.5:9117', 'http://10.0.0.2:9696', 'http://172.16.0.1', 'http://172.31.255.1', 'http://nas.local:9117', 'http://localhost:9117', 'http://127.0.0.1:9117', 'https://my-seedbox.example.com', '']) {
       expect(plainHttpWarning(u)).toBe('');
     }

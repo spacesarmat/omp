@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { NowPlaying } from '../src/screens/NowPlaying';
@@ -473,5 +474,50 @@ describe('long file-name title', () => {
     setState(state({ title: 'Trudno.byt.bogom.S01.E07.2026.WEB-DL.1080p.ExKinoRay.mkv' }));
     mount(<NowPlaying volume={volume} />);
     expect(el.querySelector('.m-now-title')!.textContent).toBe('Trudno byt bogom S01 E07 2026 WEB-DL 1080p ExKinoRay');
+  });
+});
+
+describe('NowPlaying in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  const en = (o: Partial<PlayerState> = {}) =>
+    state({
+      title: 'Silent Broadcast',
+      audio: { list: ['English'], sel: 0 },
+      subs: { list: [{ label: 'Off', value: 'off' }], sel: 'off' },
+      next: { title: 'S02E04 · Border' },
+      chapters: [
+        { t: 0, title: 'Opening' },
+        { t: 600, title: '' },
+      ],
+      chapter: 0,
+      ...o,
+    });
+
+  it('header, controls, chapters and the next episode', () => {
+    setState(en());
+    mount(<NowPlaying volume={volume} />);
+    expect(el.querySelector('.m-now-kicker')!.textContent).toBe('NOW ON TV');
+    for (const l of ['Collapse', 'Remote', 'Seek', 'Previous chapter', 'Next chapter', 'Previous episode', 'Back 10 seconds', 'Pause', 'Forward 10 seconds', 'Next episode', 'Volume down', 'Volume up', 'Chapters']) {
+      expect(lbl(l), l).toBeTruthy();
+    }
+    expect(el.querySelector('.m-now-chnum')!.textContent).toBe('Chapter 1 of 2');
+    expect(byText('Audio and subtitles')).toBeTruthy();
+    expect(el.querySelector('.m-now-chhead')!.textContent).toBe('Chapters');
+    expect(el.querySelector('.m-now-chitem')!.getAttribute('aria-label')).toBe('Opening, from 0:00, playing now');
+    expect(el.querySelector('.m-now-next-text')!.textContent).toBe('Next: S02E04 · Border');
+    expect(byText('Play')).toBeTruthy();
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('paused label, a silent TV and nothing playing', () => {
+    setState(en({ paused: true }), 6000);
+    mount(<NowPlaying volume={volume} />);
+    expect(lbl('Play')).toBeTruthy();
+    expect(el.querySelector('.m-now-tv.warn')!.textContent).toBe('The TV is not responding');
+    setState(null);
+    mount(<NowPlaying volume={volume} />);
+    expect(el.querySelector('.m-now-empty')!.textContent).toBe('Nothing is playing on the TVOpen the catalog');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 });

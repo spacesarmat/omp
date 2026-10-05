@@ -3,7 +3,8 @@
 // release from GitHub, checks it and reports phases; this module turns them into one progress bar, Russian texts and
 // error messages with the next step. The passphrase is passed through once and never stored or logged.
 import type { PluginListenerHandle } from '@capacitor/core';
-import { rawPlugin, ONLY_ANDROID } from '../platform/native';
+import { rawPlugin, onlyAndroid } from '../platform/native';
+import { t, type Key } from '../../../src/i18n';
 
 export type InstallMethod = 'lg-devmode' | 'atv-adb';
 export type InstallPhase = 'download' | 'verify' | 'connect' | 'upload' | 'install';
@@ -97,7 +98,7 @@ export function createInstallerNative(plugin: InstallerPlugin | null): Installer
   return {
     available: !!plugin,
     async start(req, onEvent) {
-      if (!plugin) throw new Error(ONLY_ANDROID);
+      if (!plugin) throw new Error(onlyAndroid());
       cancelRequested = false;
       // awaited so that no early event is missed
       const handle = await plugin.addListener('installProgress', (e) => {
@@ -124,7 +125,7 @@ export function createInstallerNative(plugin: InstallerPlugin | null): Installer
       return plugin ? plugin.installCancel().then(() => undefined, () => undefined) : Promise.resolve();
     },
     reminder(tv, at, name, id) {
-      if (!plugin) return Promise.reject(new Error(ONLY_ANDROID));
+      if (!plugin) return Promise.reject(new Error(onlyAndroid()));
       const o: { tv: string; id?: string; name?: string; at: number | null } = { tv, at };
       if (name) o.name = name;
       if (id) o.id = id;
@@ -207,7 +208,7 @@ export function createProgress(method: InstallMethod, withHbc: boolean): (e: Ins
       const within = (list[i].weight * (e.percent ?? 0)) / 100;
       best = Math.max(best, Math.round(((before + within) / total) * 100));
     }
-    return { percent: Math.min(best, 100), title: version ? 'Устанавливаю OMP ' + version : 'Устанавливаю OMP', text: phaseText(method, e, late) };
+    return { percent: Math.min(best, 100), title: version ? t('install.run.titleVersion', { version: version }) : t('install.run.title'), text: phaseText(method, e, late) };
   };
 }
 
@@ -215,59 +216,61 @@ function phaseText(method: InstallMethod, e: InstallEvent, late: boolean): strin
   const hbc = e.item === 'hbc';
   switch (e.phase) {
     case 'connect':
-      if (late) return 'Скачано с GitHub, проверено · подключаюсь к телевизору';
-      return method === 'lg-devmode' ? 'Проверяю код на телевизоре' : 'Подключаюсь к телевизору';
+      if (late) return t('install.run.connectLate');
+      return method === 'lg-devmode' ? t('install.run.checkCode') : t('install.run.connecting');
     case 'download':
-      return (hbc ? 'Скачиваю Homebrew Channel с GitHub' : 'Скачиваю OMP с GitHub') + (e.percent !== undefined ? ' · ' + e.percent + '%' : '');
+      {
+        const text = hbc ? t('install.run.downloadHbc') : t('install.run.downloadOmp');
+        return e.percent !== undefined ? t('install.run.withPct', { text: text, pct: e.percent }) : text;
+      }
     case 'verify':
-      return 'Скачано с GitHub · проверяю файл';
+      return t('install.run.verifying');
     case 'upload':
-      return hbc ? 'Homebrew Channel · передаю на телевизор' : 'Скачано с GitHub, проверено · передаю на телевизор';
+      return hbc ? t('install.run.uploadHbc') : t('install.run.upload');
     case 'install':
-      return hbc ? 'Телевизор устанавливает Homebrew Channel' : 'Телевизор устанавливает OMP';
+      return hbc ? t('install.run.installingHbc') : t('install.run.installing');
   }
 }
 
 // ---- errors ----
 
-const ERRORS: { [code: string]: string } = {
-  network: 'Не удалось скачать OMP с GitHub. Проверьте интернет на телефоне и повторите.',
-  release: 'Не удалось получить с GitHub сведения о последней версии. Повторите позже.',
-  checksum: 'Скачанный файл не прошёл проверку контрольной суммы. Повторите установку.',
-  'too-big': 'Файл релиза больше допустимого — установка остановлена. Повторите позже.',
-  'phone-space': 'На телефоне не хватает места для скачивания. Освободите место и повторите.',
-  'key-server': 'Телевизор не отдал ключ. Откройте на ТВ Developer Mode, включите Key Server и повторите.',
-  'wrong-passphrase': 'Код не подошёл. Введите код (Passphrase) с экрана Developer Mode ещё раз — буквы и цифры как на экране.',
-  'ssh-closed':
-    'Телевизор не принимает подключение (порт 9922). Включите Dev Mode Status в приложении Developer Mode. Если срок режима разработчика истёк, войдите в приложение и включите режим снова.',
-  'ssh-auth': 'Телевизор не принял ключ. В Developer Mode выключите и снова включите Key Server и введите новый код.',
-  'low-space': 'На телевизоре не хватает места. Удалите ненужные приложения и повторите.',
-  'install-failed': 'Телевизор отказался устанавливать пакет. Повторите; если не получится — установите по инструкции.',
-  signature: 'На приставке стоит OMP с другой подписью. Удалите его в настройках приставки и повторите.',
-  abi: 'Эта приставка не подходит для OMP (другая архитектура процессора).',
-  'old-android': 'Версия Android на приставке слишком старая для OMP.',
-  'adb-closed':
-    'Приставка не отвечает на порту 5555. Включите «Отладка по сети» в разделе «Для разработчиков» и повторите. Если на Android 11 и новее есть только «Беспроводная отладка» с кодом, установка с телефона пока не работает — скачайте APK и установите по инструкции.',
-  unauthorized: 'Приставка отклонила подключение телефона. Нажмите «Повторить» и на телевизоре выберите «Разрешить» (можно отметить «Всегда разрешать»).',
-  'auth-timeout': 'Телевизор не дождался ответа на «Разрешить отладку?». Нажмите «Повторить» и на телевизоре выберите «Разрешить».',
-  unreachable: 'Телевизор не отвечает — проверьте IP и что он включён и в той же сети, затем повторите.',
-  timeout: 'Телевизор перестал отвечать. Проверьте, что он включён и в той же сети, и повторите.',
-  connection: 'Связь с телевизором прервалась. Проверьте сеть и повторите.',
-  cancelled: 'Установка отменена.',
-  busy: 'Установка уже идёт.',
+/** Error code → the dictionary key of its text and next step. */
+const ERRORS: { [code: string]: Key } = {
+  network: 'install.run.errNetwork',
+  release: 'install.run.errRelease',
+  checksum: 'install.run.errChecksum',
+  'too-big': 'install.run.errTooBig',
+  'phone-space': 'install.run.errPhoneSpace',
+  'key-server': 'install.run.errKeyServer',
+  'wrong-passphrase': 'install.run.errWrongPassphrase',
+  'ssh-closed': 'install.run.errSshClosed',
+  'ssh-auth': 'install.run.errSshAuth',
+  'low-space': 'install.run.errLowSpace',
+  'install-failed': 'install.run.errInstallFailed',
+  signature: 'install.run.errSignature',
+  abi: 'install.run.errAbi',
+  'old-android': 'install.run.errOldAndroid',
+  'adb-closed': 'install.run.errAdbClosed',
+  unauthorized: 'install.run.errUnauthorized',
+  'auth-timeout': 'install.run.errAuthTimeout',
+  unreachable: 'install.run.errUnreachable',
+  timeout: 'install.run.errTimeout',
+  connection: 'install.run.errConnection',
+  cancelled: 'install.run.errCancelled',
+  busy: 'install.run.errBusy',
 };
 
-/** Russian text with the next step for an error code. */
+/** Text with the next step for an error code, in the current language. */
 export function errorText(code: string): string {
-  return ERRORS[code] || 'Не удалось установить OMP. Повторите попытку.';
+  return t(ERRORS[code] || 'install.run.errOther');
 }
 
 /** Homebrew Channel was skipped: why, briefly. */
 export function hbcErrorText(code: string): string {
-  if (code === 'checksum') return 'Homebrew Channel не установлен: файл не прошёл проверку. Его можно поставить позже.';
-  if (code === 'network' || code === 'release') return 'Homebrew Channel не установлен: не удалось скачать его с GitHub. Его можно поставить позже.';
-  if (code === 'low-space') return 'Homebrew Channel не установлен: на телевизоре не хватает места.';
-  return 'Homebrew Channel не установлен. Его можно поставить позже.';
+  if (code === 'checksum') return t('install.run.hbcChecksum');
+  if (code === 'network' || code === 'release') return t('install.run.hbcDownload');
+  if (code === 'low-space') return t('install.run.hbcSpace');
+  return t('install.run.hbcOther');
 }
 
 // ---- Developer Mode reminder ----

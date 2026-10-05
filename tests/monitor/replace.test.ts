@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import { replaceTorrent, replaceWithResult, mapFiles, mapJournal, type ReplaceClient } from '../../src/monitor/replace';
 import { torrents } from '../../src/store/library';
 import { parseData } from '../../src/lib/journal';
@@ -329,6 +330,22 @@ describe('replaceTorrent', () => {
     expect(r).toEqual({ ok: false, error: 'Это та же раздача, заменять нечего.' });
     expect(s.calls).toEqual([]);
     expect(Object.keys(s.server)).toEqual(['oldhash']);
+  });
+
+  describe('in English', () => {
+    afterEach(() => applyLanguageSetting('ru'));
+
+    it('the errors are English', async () => {
+      applyLanguageSetting('en');
+      const s = setup();
+      const c = { ...s.c, add: vi.fn(() => Promise.resolve({ ...s.old })) } as ReplaceClient;
+      const r = await replaceTorrent(c, 'oldhash', 'magnet:x');
+      expect(r).toEqual({ ok: false, error: 'This is the same torrent, nothing to replace.' });
+      const s2 = setup();
+      const r2 = await replaceTorrent(s2.c, 'nohash', 'magnet:x');
+      expect(r2.ok).toBe(false);
+      if (!r2.ok) expect(r2.error).not.toMatch(/[А-Яа-яЁё]/);
+    });
   });
 
   it('refuses an unknown old torrent before adding anything', async () => {

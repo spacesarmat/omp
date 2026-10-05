@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Sheet } from './Sheet';
 import { checkTitle, TITLE_MAX } from '../../../src/lib/renameTorrent';
+import { t } from '../../../src/i18n';
 
 /** «Переименовать»: a text field with the current title; `onSave` writes it and resolves, errors are shown here. */
 export function TorrentRenameSheet({ initial, onSave, onClose }: { initial: string; onSave: (title: string) => Promise<unknown>; onClose: () => void }) {
@@ -28,16 +29,16 @@ export function TorrentRenameSheet({ initial, onSave, onClose }: { initial: stri
       (e) => {
         if (!alive.v) return;
         setBusy(false);
-        setError(e && e.message ? String(e.message) : 'Не удалось сохранить');
+        setError(e && e.message ? String(e.message) : t('torrent.rename.saveFailed'));
       },
     );
   };
 
   return (
-    <Sheet label="Переименовать" onClose={onClose}>
-      <div class="m-sheet-title">Переименовать</div>
+    <Sheet label={t('torrent.rename.title')} onClose={onClose}>
+      <div class="m-sheet-title">{t('torrent.rename.title')}</div>
       <div class="m-field">
-        <label for="rename-title">Название</label>
+        <label for="rename-title">{t('torrent.rename.name')}</label>
         <input
           id="rename-title"
           class="m-input"
@@ -57,10 +58,10 @@ export function TorrentRenameSheet({ initial, onSave, onClose }: { initial: stri
       </div>
       <div class="m-sheet-row">
         <button type="button" class="m-btn m-btn-secondary" onClick={onClose}>
-          Отмена
+          {t('common.cancel')}
         </button>
         <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={save}>
-          Сохранить
+          {t('common.save')}
         </button>
       </div>
     </Sheet>

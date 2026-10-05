@@ -5,6 +5,7 @@ import type { LibraryTab } from '../lib/libraryView';
 import { attachPoster, fillPosters, type FillResult, type PosterClient } from '../lib/autoPoster';
 import { displayTitle } from '../lib/torrentName';
 import { fixPlaceholderTitles, type TitleClient } from '../lib/titleFix';
+import { t } from '../i18n';
 
 const KEY = 'tsp.torrents';
 const AT_KEY = 'tsp.torrentsAt';
@@ -95,8 +96,8 @@ export function addedTorrents(prev: Torrent[], next: Torrent[]): Torrent[] {
 
 export function addedMessage(added: Torrent[]): string | null {
   if (!added.length) return null;
-  if (added.length > 3) return 'Добавлено торрентов: ' + added.length;
-  return 'Добавлено: ' + added.map((t) => displayTitle(t)).join(', ');
+  if (added.length > 3) return t('library.addedMany', { n: added.length });
+  return t('library.added', { titles: added.map((x) => displayTitle(x)).join(', ') });
 }
 
 /**

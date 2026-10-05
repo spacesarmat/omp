@@ -1,4 +1,5 @@
 import { log } from '../lib/log';
+import { t } from '../i18n';
 
 export type ApiErrorKind = 'network' | 'timeout' | 'http' | 'parse';
 
@@ -23,14 +24,14 @@ export function isApiError(e: unknown): e is ApiError {
 export function errorMessage(e: unknown): string {
   if (isApiError(e)) {
     switch (e.kind) {
-      case 'network': return 'Сервер недоступен';
-      case 'timeout': return 'Сервер не отвечает';
-      case 'http': return 'Ошибка сервера (' + e.status + ')';
-      case 'parse': return 'Некорректный ответ сервера';
+      case 'network': return t('errors.network');
+      case 'timeout': return t('errors.timeout');
+      case 'http': return t('errors.http', { status: String(e.status) });
+      case 'parse': return t('errors.parse');
     }
   }
   if (e && typeof (e as Error).message === 'string') return (e as Error).message;
-  return 'Неизвестная ошибка';
+  return t('errors.unknown');
 }
 
 export interface HttpOptions {
@@ -48,7 +49,7 @@ function logFailure(url: string, e: unknown): void {
   const m = /^[a-z][a-z0-9+.-]*:\/\/[^\/?#]*/i.exec(url);
   const k = isApiError(e) ? e.kind : 'unknown';
   const st = isApiError(e) && e.status !== undefined ? ' ' + e.status : '';
-  log('error', 'server', 'Запрос не удался (' + k + st + '): ' + (m ? m[0] : 'адрес'));
+  log('error', 'server', t('log.requestFailed', { kind: k, status: st, host: m ? m[0] : t('log.address') }));
 }
 
 export function request<T>(url: string, opts: HttpOptions = {}): Promise<T> {

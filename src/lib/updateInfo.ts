@@ -1,4 +1,5 @@
 import { isBetaVersion } from './version';
+import { t } from '../i18n';
 
 const FEED_BASE = 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/';
 export const UPDATE_URL = FEED_BASE + 'update.json';
@@ -95,7 +96,7 @@ export function sanitizeUpdateInfo(v: unknown): UpdateInfo | null {
  * over an installed beta), else «Доступна версия 0.15.4».
  */
 export function updateTitle(version: string, installed: string): string {
-  if (isBetaVersion(version)) return 'Доступна бета ' + version;
-  if (isBetaVersion(installed)) return 'Вышла OMP ' + version + ' — она заменит бету';
-  return 'Доступна версия ' + version;
+  if (isBetaVersion(version)) return t('update.beta', { version });
+  if (isBetaVersion(installed)) return t('update.replacesBeta', { version });
+  return t('update.available', { version });
 }

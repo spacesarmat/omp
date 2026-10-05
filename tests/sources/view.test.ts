@@ -9,7 +9,7 @@ import {
   resolveLink,
   sourceName,
   resultDate,
-  JACKETT_HINT,
+  jackettHint,
   stableOrder,
   seedsText,
   sourceBadge,
@@ -159,7 +159,7 @@ describe('names and dates', () => {
     expect(resultDate(res({}))).toBe('');
   });
   it('the hint points to the Cloudflare switch and to Jackett or Prowlarr', () => {
-    expect(JACKETT_HINT).toBe('Сайт закрыт защитой Cloudflare? Для Kinozal и rustorka включите обход в «Источниках поиска», другие трекеры подключайте через Jackett или Prowlarr — как, в «Вопросах и ответах».');
+    expect(jackettHint()).toBe('Сайт закрыт защитой Cloudflare? Для Kinozal и rustorka включите обход в «Источниках поиска», другие трекеры подключайте через Jackett или Prowlarr — как, в «Вопросах и ответах».');
   });
 });
 

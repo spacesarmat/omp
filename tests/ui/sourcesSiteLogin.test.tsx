@@ -11,7 +11,7 @@ import { siteLoginFromPhone } from '../../src/sources/transfer';
 import { kinozal } from '../../src/sources/kinozal';
 import { resetMirrors } from '../../src/sources/mirrors';
 import { fakeSite, fixture, page, type FakeSite, type HttpCall } from '../sources/fakeSite';
-import { BROWSER_CAPTCHA, BROWSER_LOGIN, LOGIN_ON_PHONE, setBrowserLoginPlatform } from '../../src/sources/browserLogin';
+import { browserCaptcha, browserLoginText, loginOnPhone, setBrowserLoginPlatform } from '../../src/sources/browserLogin';
 
 // test-only value
 const PASSWORD = 'pa55-test-only';
@@ -108,20 +108,20 @@ describe('Android TV: Kinozal login', () => {
     await mount(screen());
     click(byText('Войти', line('kinozal'))!);
     const dialog = host.querySelector('.login-dialog') as HTMLElement;
-    expect(byText(BROWSER_LOGIN, dialog)).toBeTruthy();
-    expect(byText(LOGIN_ON_PHONE, dialog)).toBeTruthy();
+    expect(byText(browserLoginText(), dialog)).toBeTruthy();
+    expect(byText(loginOnPhone(), dialog)).toBeTruthy();
     const [user, pass] = Array.from(dialog.querySelectorAll('input')) as HTMLInputElement[];
     type(user, 'kino');
     type(pass, 'x');
     click(byText('Войти', dialog)!);
     await flush();
-    expect(dialog.textContent).toContain(BROWSER_CAPTCHA);
-    click(byText(LOGIN_ON_PHONE, dialog)!);
+    expect(dialog.textContent).toContain(browserCaptcha());
+    click(byText(loginOnPhone(), dialog)!);
     await flush();
     // cancelled: the dialog stays
     expect(host.querySelector('.login-dialog')).toBeTruthy();
     next = 'ok';
-    click(byText(BROWSER_LOGIN, host.querySelector('.login-dialog')!)!);
+    click(byText(browserLoginText(), host.querySelector('.login-dialog')!)!);
     await flush();
     expect(asked).toEqual([true, undefined]);
     expect(host.querySelector('.login-dialog')).toBeNull();

@@ -23,7 +23,7 @@ class ControlServerTest {
         override fun info(): JSONObject = JSONObject().put("name", "ТВ").put("version", "0").put("foreground", true)
         override fun paired(phone: String) {}
         override fun launch(params: JSONObject) {}
-        override fun attach(report: String) {}
+        override fun attach(report: String, lang: String?) {}
         override fun key(name: String) {}
         override fun text(data: JSONObject) {}
         override fun volume(up: Boolean) {}

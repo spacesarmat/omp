@@ -3,6 +3,7 @@
 // component state: it is read from the field at «Проверить и подключить», written to the Keystore storage, and the
 // field is emptied. A key imported from the TorrServer settings stays in memory only.
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Sheet } from '../ui/Sheet';
 import { native } from '../platform/native';
 import { client } from '../../../src/store/servers';
@@ -13,8 +14,8 @@ import {
   hostKey,
   indexerConnections,
   indexerKeyName,
-  INDEXER_BAD_URL,
-  INDEXER_NO_KEY,
+  indexerBadUrl,
+  indexerNoKey,
   INDEXER_SOURCE_PREFIX,
   normalizeIndexerUrl,
   onIndexersChange,
@@ -76,14 +77,14 @@ export function phoneIndexerEnv(): IndexerEnv {
   };
 }
 
-export const KEY_NOTE = 'Ключ хранится в зашифрованном хранилище телефона и не попадает в резервную копию.';
-export const UNKNOWN_KIND = 'Не удалось понять, Jackett это или Prowlarr: проверьте адрес и порт';
+export const keyNote = (): string => t('sources.idx.keyNote');
+const unknownKind = (): string => t('sources.idx.unknownKind');
 
 /** Label of the key field with where to find the key. */
 export function keyLabel(kind: IndexerKind | null): string {
-  if (kind === 'prowlarr') return 'API-ключ (Prowlarr → Settings → General)';
-  if (kind === 'jackett') return 'API-ключ (Jackett → главная страница, поле API Key)';
-  return 'API-ключ (Jackett: главная страница · Prowlarr: Settings → General)';
+  if (kind === 'prowlarr') return t('sources.idx.keyProwlarr');
+  if (kind === 'jackett') return t('sources.idx.keyJackett');
+  return t('sources.idx.keyEither');
 }
 
 function sourceId(c: IndexerConn): string {
@@ -102,7 +103,7 @@ interface Preset {
 }
 
 /** Shown after a manual search while the phone is not on a home Wi-Fi network. */
-export const NO_WIFI_INDEXERS = 'Подключитесь к Wi‑Fi, чтобы найти Jackett и Prowlarr в сети';
+export const noWifiIndexers = (): string => t('sources.idx.noWifi');
 
 /** «Подключить индексатор» (mockup 6). */
 export function IndexerAddSheet({
@@ -176,7 +177,7 @@ export function IndexerAddSheet({
     }
     const base = normalizeIndexerUrl(url);
     if (!base) {
-      setError(INDEXER_BAD_URL);
+      setError(indexerBadUrl());
       return;
     }
     const typed = keyField.current ? keyField.current.value.trim() : '';
@@ -192,7 +193,7 @@ export function IndexerAddSheet({
     let saved: IndexerKind = 'jackett';
     kindP
       .then((k) => {
-        if (!k) throw new Error(UNKNOWN_KIND);
+        if (!k) throw new Error(unknownKind());
         saved = k;
         if (typed || imported) return typed || imported;
         const old = getIndexer(existingId(k, base));
@@ -200,9 +201,9 @@ export function IndexerAddSheet({
         return '';
       })
       .then((key) => {
-        if (!key) throw new Error(INDEXER_NO_KEY);
+        if (!key) throw new Error(indexerNoKey());
         return checkIndexer({ kind: saved, url: base }, key, c.http, now).then((st) => {
-          if (st.state !== 'ok') throw new Error(st.message || 'Не удалось подключиться');
+          if (st.state !== 'ok') throw new Error(st.message || t('sources.idx.connectFailed'));
           return saveIndexer({ kind: saved, url: base, apiKey: key }, c.secrets).then((conn) => {
             setIndexerStatus(conn.id, st);
             return successText(saved, st);
@@ -213,7 +214,7 @@ export function IndexerAddSheet({
         (text) => {
           clearKey();
           if (!alive.current) return;
-          log('info', 'search', 'Подключён ' + kindLabel(saved));
+          log('info', 'search', t('sources.idx.logConnected', { kind: kindLabel(saved) }));
           setBusy(false);
           setDone(text);
         },
@@ -221,24 +222,24 @@ export function IndexerAddSheet({
           clearKey();
           if (!alive.current) return;
           setBusy(false);
-          setError(err instanceof Error ? err.message : 'Не удалось подключиться');
+          setError(err instanceof Error ? err.message : t('sources.idx.connectFailed'));
         },
       );
   };
 
-  const placeholder = tsKey && norm && tsKey.host === hostKey(norm) ? 'ключ из настроек TorrServer' : existing && existing.keySet ? 'оставьте пустым, чтобы не менять' : '';
+  const placeholder = tsKey && norm && tsKey.host === hostKey(norm) ? t('sources.idx.tsKeyPlaceholder') : existing && existing.keySet ? t('sources.idx.keepKeyPlaceholder') : '';
   return (
-    <Sheet label="Подключить индексатор" onClose={close}>
+    <Sheet label={t('sources.idx.addTitle')} onClose={close}>
       <form class="m-field-group m-idx-add" onSubmit={submit}>
-        <div class="m-sheet-title">Подключить индексатор</div>
-        {candidates.length > 0 && <div class="m-note m-muted">Нашлось в сети и в настройках TorrServer:</div>}
+        <div class="m-sheet-title">{t('sources.idx.addTitle')}</div>
+        {candidates.length > 0 && <div class="m-note m-muted">{t('sources.idx.foundHead')}</div>}
         {candidates.map((c) => {
           const chosen = norm !== null && hostKey(c.url) === hostKey(norm);
-          const state = c.connId ? 'подключён' : c.tsKey ? 'ключ есть' : 'нужен ключ';
+          const state = c.connId ? t('remote.atvState.connected') : c.tsKey ? t('sources.idx.hasKey') : t('sources.idx.needsKey');
           return (
             <button type="button" key={c.host} class={'m-idx-pick' + (chosen ? ' on' : '')} data-candidate={c.host} onClick={() => pick(c)}>
               <span class="m-src-name">
-                <span class="m-idx-title">{c.kind ? kindLabel(c.kind) : 'Jackett или Prowlarr'}</span>
+                <span class="m-idx-title">{c.kind ? kindLabel(c.kind) : t('sources.idx.either')}</span>
                 <span class="m-src-note">{candidateWhere(c)}</span>
               </span>
               <span class={'m-src-note ' + (c.connId || c.tsKey ? 'ok' : 'warn')}>{state}</span>
@@ -246,12 +247,12 @@ export function IndexerAddSheet({
           );
         })}
         <button type="button" class="m-link m-idx-scan" disabled={scanning} onClick={onScan}>
-          {scanning ? 'Ищу в сети…' : 'Искать в сети'}
+          {scanning ? t('sources.idx.scanning') : t('sources.idx.scan')}
         </button>
-        {noWifi && !scanning && <div class="m-note m-muted">{NO_WIFI_INDEXERS}</div>}
-        {scanned && !noWifi && !scanning && candidates.length === 0 && <div class="m-note m-muted">В сети Jackett и Prowlarr не нашлись</div>}
+        {noWifi && !scanning && <div class="m-note m-muted">{noWifiIndexers()}</div>}
+        {scanned && !noWifi && !scanning && candidates.length === 0 && <div class="m-note m-muted">{t('sources.idx.nothingFound')}</div>}
         <div class="m-field">
-          <label for="m-idx-url">Адрес</label>
+          <label for="m-idx-url">{t('connect.addressShort')}</label>
           <input
             id="m-idx-url"
             class="m-input"
@@ -275,14 +276,14 @@ export function IndexerAddSheet({
           <label for="m-idx-key">{keyLabel(shownKind)}</label>
           <input id="m-idx-key" class="m-input" type="password" autocomplete="off" autocapitalize="off" placeholder={placeholder} ref={keyField} />
         </div>
-        <div class="m-note m-muted">{KEY_NOTE}</div>
+        <div class="m-note m-muted">{keyNote()}</div>
         {error && (
           <div class="m-error" role="alert">
             {error}
           </div>
         )}
         <button type="submit" class="m-btn m-btn-primary" disabled={busy}>
-          {busy ? 'Проверяю…' : done ? 'Готово' : 'Проверить и подключить'}
+          {busy ? t('news.checking') : done ? t('common.done') : t('sources.idx.checkConnect')}
         </button>
         {done && (
           <div class="m-idx-done" role="status">
@@ -343,7 +344,7 @@ function IndexerCard({
       </div>
       {needKey && (
         <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={onKey}>
-          Ввести ключ
+          {t('sources.idx.enterKey')}
         </button>
       )}
       {warn && (
@@ -361,14 +362,14 @@ function IndexerCard({
               </div>
             ))}
           {st && st.hint && <div class="m-note m-muted" data-hint="states">{st.hint}</div>}
-          {st && st.state === 'ok' && !st.trackers.length && <div class="m-note m-muted">В индексаторе нет настроенных трекеров</div>}
+          {st && st.state === 'ok' && !st.trackers.length && <div class="m-note m-muted">{t('sources.idx.noTrackers')}</div>}
           {st && st.state !== 'ok' && st.message && <div class="m-error">{st.message}</div>}
           {st && <div class="m-idx-checked">{checkedText(st.at, now)}</div>}
           {confirm ? (
             <div class="m-idx-actions">
-              <span class="m-note">Удалить подключение? Ключ тоже будет удалён с телефона.</span>
+              <span class="m-note">{t('sources.idx.removeAsk')}</span>
               <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => setConfirm(false)}>
-                Отмена
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -378,19 +379,19 @@ function IndexerCard({
                   onRemove();
                 }}
               >
-                Удалить
+                {t('common.delete')}
               </button>
             </div>
           ) : (
             <div class="m-idx-actions">
               <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={onCheck}>
-                Проверить
+                {t('common.check')}
               </button>
               <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={onKey}>
-                Изменить ключ
+                {t('sources.idx.changeKey')}
               </button>
               <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => setConfirm(true)}>
-                Удалить
+                {t('common.delete')}
               </button>
             </div>
           )}
@@ -501,7 +502,7 @@ export function IndexerSection({ ctx, env, onChange }: { ctx: () => SourceContex
 
   return (
     <section class="m-set-group" data-section="indexers">
-      <div class="m-set-label">Индексаторы</div>
+      <div class="m-set-label">{t('tvSources.indexers')}</div>
       {conns.map((c) => (
         <IndexerCard
           key={c.id}
@@ -525,20 +526,20 @@ export function IndexerSection({ ctx, env, onChange }: { ctx: () => SourceContex
         <div class="m-set-card m-idx-found" key={c.host} data-candidate={c.host}>
           <div class="m-src-row">
             <span class="m-src-name">
-              <span class="m-idx-title">{(c.kind ? kindLabel(c.kind) : 'Jackett или Prowlarr') + ' · ' + hostOf(c.url)}</span>
+              <span class="m-idx-title">{(c.kind ? kindLabel(c.kind) : t('sources.idx.either')) + ' · ' + hostOf(c.url)}</span>
               <span class={'m-src-note ' + (c.tsKey ? 'ok' : 'warn')}>
-                {c.torrserver ? (c.tsKey ? 'в настройках TorrServer — ключ есть' : 'в настройках TorrServer — нужен API-ключ') : 'найден в сети — нужен API-ключ'}
+                {c.torrserver ? (c.tsKey ? t('sources.idx.inTsKey') : t('sources.idx.inTsNeedKey')) : t('sources.idx.foundNeedKey')}
               </span>
             </span>
             <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => setSheet({ kind: c.kind, url: c.url, tsKey: c.tsKey })}>
-              Подключить
+              {t('remote.code.connect')}
             </button>
           </div>
         </div>
       ))}
-      {scanning && <div class="m-note m-muted">Ищу Jackett и Prowlarr в сети…</div>}
+      {scanning && <div class="m-note m-muted">{t('sources.idx.scanningBoth')}</div>}
       <button type="button" class="m-idx-add-btn" onClick={() => setSheet(null)}>
-        Добавить Jackett или Prowlarr
+        {t('sources.idx.addButton')}
       </button>
       {sheet !== false && (
         <IndexerAddSheet

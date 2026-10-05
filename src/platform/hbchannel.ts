@@ -1,4 +1,5 @@
 import { lunaCall, lunaSubscribe } from './luna';
+import { t } from '../i18n';
 
 export const HB_APP_ID = 'org.webosbrew.hbchannel';
 const HB_SERVICE = 'luna://org.webosbrew.hbchannel.service/';
@@ -31,15 +32,15 @@ export interface InstallStatus {
 }
 
 export function installStatus(m: { statusText?: string; progress?: number; finished?: boolean }): InstallStatus {
-  if (m.finished) return { stage: 'done', text: 'Готово. Откройте OMP заново' };
-  const t = m.statusText || '';
-  if (/verif/i.test(t)) return { stage: 'verify', text: 'Проверка…' };
-  if (/install|self-update/i.test(t)) return { stage: 'install', text: 'Установка…' };
+  if (m.finished) return { stage: 'done', text: t('update.hb.done') };
+  const st = m.statusText || '';
+  if (/verif/i.test(st)) return { stage: 'verify', text: t('update.hb.verifying') };
+  if (/install|self-update/i.test(st)) return { stage: 'install', text: t('update.hb.installing') };
   if (typeof m.progress === 'number' && isFinite(m.progress)) {
     const p = Math.max(0, Math.min(100, Math.round(m.progress)));
-    return { stage: 'download', progress: p, text: 'Скачивание… ' + p + '%' };
+    return { stage: 'download', progress: p, text: t('update.hb.downloadingPct', { p }) };
   }
-  return { stage: 'download', text: 'Скачивание…' };
+  return { stage: 'download', text: t('update.hb.downloading') };
 }
 
 /** One-click install via Homebrew Channel; only works on rooted TVs. Returns a cancel function. */

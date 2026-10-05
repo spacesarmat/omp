@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useRef } from 'preact/hooks';
 import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { whatsNew, closeWhatsNew, markWhatsNewShown } from '../store/whatsNew';
@@ -53,7 +54,7 @@ export function WhatsNewDialog() {
               <ul class="update-notes">{e.items.map((n, j) => <li key={j}>{n}</li>)}</ul>
             </Focusable>
           ))}
-          {w.entries.length === 0 && <div class="muted">Список изменений недоступен</div>}
+          {w.entries.length === 0 && <div class="muted">{t('whatsNew.empty')}</div>}
         </div>
         <div class="row update-actions">
           <Button focusKey="whatsnew-ok" label="OK" className="primary" onPress={close} />

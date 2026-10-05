@@ -3,6 +3,8 @@
 // Nothing here is sent anywhere: the phone buttons only open the link (or copy an address) on the user's tap, the TV
 // only draws a QR code of the link.
 
+import { t } from '../i18n';
+
 export interface Wallet {
   network: string;
   address: string;
@@ -17,10 +19,10 @@ export interface DonateMethod {
 
 export const DONATE_URL = 'https://boosty.to/djmaker/donate';
 
-export const DONATE_METHODS: DonateMethod[] = [
+export const donateMethods = (): DonateMethod[] => [
   { id: 'boosty', title: 'Boosty', url: DONATE_URL },
-  { id: 'yoomoney', title: 'ЮMoney / СБП', url: '' },
-  { id: 'crypto', title: 'Криптовалюта', wallets: [] },
+  { id: 'yoomoney', title: t('donate.yoomoney'), url: '' },
+  { id: 'crypto', title: t('donate.crypto'), wallets: [] },
 ];
 
 /** The link the TV card's QR code opens (src/ui/donateQr.ts is generated from it: npm run gen:donate-qr). */
@@ -32,7 +34,7 @@ export const isHttps = (u: unknown): u is string => typeof u === 'string' && /^h
 const validWallet = (w: Wallet) => !!w && typeof w.network === 'string' && w.network.trim() !== '' && typeof w.address === 'string' && w.address.trim() !== '';
 
 /** Only the methods that are filled in, in the configured order. */
-export function activeMethods(list: DonateMethod[] = DONATE_METHODS): DonateMethod[] {
+export function activeMethods(list: DonateMethod[] = donateMethods()): DonateMethod[] {
   const out: DonateMethod[] = [];
   for (const m of list) {
     if (m.id === 'crypto') {
@@ -44,7 +46,7 @@ export function activeMethods(list: DonateMethod[] = DONATE_METHODS): DonateMeth
 }
 
 /** The TV card has something to show: a configured method opens the QR code's link. */
-export function qrMethodActive(qrUrl: string, list: DonateMethod[] = DONATE_METHODS): boolean {
+export function qrMethodActive(qrUrl: string, list: DonateMethod[] = donateMethods()): boolean {
   if (!isHttps(qrUrl)) return false;
   return activeMethods(list).some((m) => m.url === qrUrl);
 }
@@ -97,10 +99,8 @@ export function supportActive(until: number, now: number = Date.now()): boolean 
   return typeof until === 'number' && isFinite(until) && until > now && until - now <= SUPPORT_MAX_AHEAD_MS;
 }
 
-const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-
 /** «30 ноября»: the last day of the code's month (the grace days are not announced). */
 export function supportEndText(until: number): string {
   const d = new Date(until - SUPPORT_GRACE_MS - 1);
-  return d.getDate() + ' ' + MONTHS_GEN[d.getMonth()];
+  return t('date.day', { d: d.getDate(), month: t('date.monthsFull').split(' ')[d.getMonth()] });
 }

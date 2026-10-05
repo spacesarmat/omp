@@ -1,10 +1,10 @@
-import { TV_NO_OMP, tvState } from '../src/tv/tvClient';
+import { tvNoOmp, tvState } from '../src/tv/tvClient';
 import { settings, updateSettings } from '../../src/store/settings';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
-import { setWatchActions, NO_WIFI } from '../src/watch';
+import { setWatchActions, noWifi } from '../src/watch';
 import { localServer, setLocalServerDeps } from '../src/server/localServer';
 import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
@@ -340,7 +340,7 @@ describe('Library', () => {
   it('history play with no OMP on the TV offers the install guide', async () => {
     saveProgress('h1', 2, 100, 3000);
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn().mockRejectedValue(new Error(TV_NO_OMP)), remoteDelayMs: 0 });
+    setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn().mockRejectedValue(new Error(tvNoOmp())), remoteDelayMs: 0 });
     mount();
     await flush();
     act(() => tab('История').click());
@@ -365,7 +365,7 @@ describe('Library', () => {
     await flush();
     act(() => byText('Сначала')!.click());
     await flush();
-    expect(el.textContent).toContain(NO_WIFI);
+    expect(el.textContent).toContain(noWifi());
     expect(report).not.toHaveBeenCalled();
     expect(launch).not.toHaveBeenCalled();
   });
@@ -710,5 +710,72 @@ describe('Library donate card', () => {
     await act(async () => byText('Поддержать')!.click());
     expect(card()).toBeNull();
     expect(localStorage.getItem('tsp.donateCard')).toBe('true');
+  });
+});
+
+describe('Library in English', () => {
+  const EN: Torrent[] = [
+    { hash: 'e1', title: 'Starbound Frontier S02 1080p WEB-DL', category: 'tv', stat: 3, torrent_size: 2 * 1024 ** 3, timestamp: 3, data: files(['S02E01.mkv', 'S02E02.mkv']) },
+    { hash: 'e2', title: 'Quiet Signal 2160p', category: 'movie', stat: 3, torrent_size: 1024 ** 3, timestamp: 2, data: files(['movie.mkv']) },
+  ];
+  beforeEach(() => {
+    updateSettings({ language: 'en' });
+    torrents.value = EN;
+    listSpy.mockResolvedValue(EN);
+  });
+  afterEach(() => updateSettings({ language: 'system', libraryView: 'large' }));
+
+  it('header, tabs, cards and the episode count', async () => {
+    mount();
+    await flush();
+    expect(Array.from(el.querySelectorAll('[role=tab]')).map((b) => b.textContent)).toEqual(['History', 'All', 'Movies', 'Series', 'Music', 'Other']);
+    expect(el.querySelector('[aria-label^="Sort: "]')).toBeTruthy();
+    expect(el.querySelector('[aria-label^="View: "]')).toBeTruthy();
+    expect(el.querySelector('[aria-label="Search"]')).toBeTruthy();
+    expect(el.textContent).toContain('2.0 GB');
+    act(() => updateSettings({ libraryView: 'list' }));
+    expect(el.textContent).toContain('2 episodes');
+    updateSettings({ libraryView: 'large' });
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('empty states, history and the donate card', async () => {
+    torrents.value = [];
+    listSpy.mockResolvedValue([]);
+    mount();
+    await flush();
+    expect(el.textContent).toContain('No torrents. Add them via “Add” or the TorrServer web interface.');
+    act(() => tab('History').click());
+    expect(el.textContent).toContain('History is empty. What you start watching will appear here');
+    act(() => (el.querySelector('[aria-label="Search"]') as HTMLElement).click());
+    const input = el.querySelector('input[type=search]') as HTMLInputElement;
+    expect(input.placeholder).toBe('Search by title');
+    act(() => {
+      input.value = 'zzz';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(el.textContent).toContain('Nothing found');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('history row: continue on TV label', async () => {
+    saveProgress('e1', 2, 1394, 3651);
+    mount();
+    await flush();
+    act(() => tab('History').click());
+    expect(el.querySelector('.m-hrow')!.textContent).toContain('Season 2 · Episode 2');
+    expect(el.querySelector('[aria-label="Continue on TV"]')).toBeTruthy();
+  });
+
+  it('a stopped phone server: start and download offers', async () => {
+    setActiveServer(addServer({ url: 'http://127.0.0.1:8090' }).id);
+    setLocalServerDeps({ native: { localServerInfo: async () => ({ supported: true, running: false }), startLocalServer: async () => ({ supported: true, running: false }) } as any });
+    localServer.value = { supported: true, running: false };
+    listSpy.mockRejectedValue(new Error('Server unreachable'));
+    torrents.value = [];
+    mount();
+    await flush();
+    expect(byText('Start the server')).toBeTruthy();
+    expect(byText('Retry')).toBeTruthy();
   });
 });

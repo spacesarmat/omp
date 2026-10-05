@@ -1,7 +1,8 @@
+import { t } from '../i18n';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { client, activeServer } from '../store/servers';
-import { catalogReason, cachedBanner, CATALOG_HINT } from '../lib/catalogState';
+import { catalogReason, cachedBanner, catalogHint } from '../lib/catalogState';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, torrentsAt, addedTorrents, addedMessage } from '../store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed, clearProgress, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../store/progress';
 import { forgetWatch } from '../store/journal';
@@ -90,18 +91,18 @@ export function LibraryScreen() {
   };
 
   const removeTorrent = (hash: string) => {
-    const t = torrents.value.find((x) => x.hash === hash);
-    confirmDialog('Удалить «' + (t ? displayTitle(t) : hash) + '»?', 'Удалить').then((ok) => {
+    const tor = torrents.value.find((x) => x.hash === hash);
+    confirmDialog(t('catalog.deleteAsk', { title: tor ? displayTitle(tor) : hash }), t('common.delete')).then((ok) => {
       if (!ok || !c) return;
       c.remove(hash).then(
-        () => { torrents.value = torrents.value.filter((x) => x.hash !== hash); setSel(null); toast('Торрент удалён'); },
+        () => { torrents.value = torrents.value.filter((x) => x.hash !== hash); setSel(null); toast(t('catalog.torrentDeleted')); },
         (e) => toast(errorMessage(e), 'error'),
       );
     });
   };
 
   const removeHistory = (hash: string, fileIndex: number) => {
-    confirmDialog('Убрать из истории?', 'Убрать').then((ok) => {
+    confirmDialog(t('catalog.removeFromHistoryAsk'), t('catalog.removeFromHistory')).then((ok) => {
       if (!ok || !c) return;
       clearProgress(hash, fileIndex);
       // drop the server mark too, otherwise the entry comes back from /viewed
@@ -157,13 +158,13 @@ export function LibraryScreen() {
           <svg class="catalog-off-icon" width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 20h.01M3 3l18 18" />
           </svg>
-          <div class="catalog-off-title">Каталог недоступен</div>
+          <div class="catalog-off-title">{t('catalog.unavailable')}</div>
           <div class="catalog-off-reason">{catalogReason(activeServer.value!.name, online)}</div>
           <FocusGroup focusKey="ERROR-ACTIONS" className="actions" autoFocus>
-            <Button label="Повторить" onPress={() => load()} />
-            <Button label="Сменить сервер" onPress={() => navigate({ name: 'connect' })} />
+            <Button label={t('common.retry')} onPress={() => load()} />
+            <Button label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
           </FocusGroup>
-          <div class="catalog-off-hint">{CATALOG_HINT}</div>
+          <div class="catalog-off-hint">{catalogHint()}</div>
         </div>
       </div>
     );
@@ -174,11 +175,11 @@ export function LibraryScreen() {
 
   let empty: string | null = null;
   if (loaded && !count) {
-    if (searching) empty = 'Ничего не найдено';
-    else if (isHistory && hfilter !== 'all') empty = hfilter === 'phone' ? 'С телефона пока ничего не смотрели' : 'С телевизора пока ничего не смотрели';
-    else if (isHistory) empty = 'История пуста. Здесь появится то, что вы начали смотреть';
-    else if (!torrents.value.length) empty = 'Нет торрентов. Добавьте через «Добавить» или веб-интерфейс TorrServer на телефоне.';
-    else empty = 'В этой категории пока ничего нет';
+    if (searching) empty = t('catalog.nothingFound');
+    else if (isHistory && hfilter !== 'all') empty = hfilter === 'phone' ? t('catalog.nothingFromPhone') : t('catalog.nothingFromTv');
+    else if (isHistory) empty = t('catalog.historyEmpty');
+    else if (!torrents.value.length) empty = t('catalog.noTorrents');
+    else empty = t('catalog.categoryEmpty');
   }
 
   return (
@@ -196,17 +197,17 @@ export function LibraryScreen() {
       />
       {searchOpen && (
         <FocusGroup focusKey="LIB-SEARCH" className="search-row">
-          <TextInput focusKey="lib-search" value={query} onChange={setQuery} placeholder="Поиск по названию" onFocused={() => setSel(null)} />
-          <div class="search-count">{searching ? 'Найдено: ' + count : 'Введите часть названия'}</div>
+          <TextInput focusKey="lib-search" value={query} onChange={setQuery} placeholder={t('catalog.searchPlaceholder')} onFocused={() => setSel(null)} />
+          <div class="search-count">{searching ? t('catalog.found', { n: count }) : t('catalog.typePart')}</div>
         </FocusGroup>
       )}
       {error && (
         <FocusGroup focusKey="LIB-BANNER" className="banner-error banner-row">
           <span class="banner-text">{cachedBanner(torrentsAt.value)}</span>
-          <Button label="Повторить" onPress={() => load()} onFocused={() => setSel(null)} />
+          <Button label={t('common.retry')} onPress={() => load()} onFocused={() => setSel(null)} />
         </FocusGroup>
       )}
-      {!loaded && <Spinner text="Загрузка…" />}
+      {!loaded && <Spinner text={t('catalog.loading')} />}
       {isHistory && <HistoryFilterRow value={hfilter} onChange={(f) => updateSettings({ historyFilter: f })} onFocused={() => setSel(null)} />}
       {isHistory ? (
         <HistoryGrid
@@ -228,7 +229,7 @@ export function LibraryScreen() {
       )}
       {empty && <div class="empty">{empty}</div>}
       <div class="hints">
-        OK — {isHistory ? 'продолжить' : 'открыть'} · <KeyDot color="red" /> {isHistory ? 'убрать из истории' : 'удалить'} · <KeyDot color="blue" /> настройки · Назад — {searchOpen ? 'закрыть поиск' : 'выход'}
+        {isHistory ? t('catalog.okContinue') : t('catalog.okOpen')} · <KeyDot color="red" /> {isHistory ? t('catalog.removeFromHistoryKey') : t('catalog.deleteKey')} · <KeyDot color="blue" /> {t('catalog.settingsKey')} · {searchOpen ? t('catalog.backCloseSearch') : t('catalog.backExit')}
       </div>
     </FocusGroup>
   );

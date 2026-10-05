@@ -6,7 +6,7 @@ import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { SourcesScreen } from '../../src/screens/Sources';
 import { SettingsScreen } from '../../src/screens/Settings';
 import { DialogHost } from '../../src/ui/dialog';
-import { TV_LOGIN_HINT } from '../../src/ui/TrackerLoginDialog';
+import { tvLoginHint } from '../../src/ui/TrackerLoginDialog';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { getHealth, isSourceOn, reloadSourcePrefs, resetHealth, setHealth } from '../../src/sources/store';
 import { applyRemoteSources } from '../../src/sources/transfer';
@@ -127,7 +127,7 @@ describe('Android TV «Источники поиска»', () => {
     click(byText('Войти')!);
     const dialog = host.querySelector('.login-dialog') as HTMLElement;
     expect(dialog.textContent).toContain('Вход на rutracker');
-    expect(dialog.textContent).toContain(TV_LOGIN_HINT);
+    expect(dialog.textContent).toContain(tvLoginHint());
     expect(dialog.textContent).toContain('Логин и пароль хранятся только на этом телевизоре в зашифрованном виде.');
     const [user, pass] = Array.from(dialog.querySelectorAll('input')) as HTMLInputElement[];
     expect(pass.type).toBe('password');

@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.player
 
+import com.spacesarmat.omp.I18n
+
 import java.util.Locale
 import org.json.JSONObject
 
@@ -113,12 +115,12 @@ object Chapters {
         val i = indexAt(list, posMs)
         if (i < 0) return ""
         val t = list[i].title
-        return "Глава ${i + 1}" + if (t.isNotEmpty()) " «$t»" else ""
+        return I18n.s("player.chapterN", "n" to (i + 1).toString()) + if (t.isNotEmpty()) " «$t»" else ""
     }
 
     /** «0:00 · Пролог» rows of the «Главы» list («Глава N» for untitled chapters). */
     fun rows(list: List<ChapterMark>): List<String> =
-        list.mapIndexed { i, c -> formatClock(c.startMs) + " · " + c.title.ifEmpty { "Глава ${i + 1}" } }
+        list.mapIndexed { i, c -> formatClock(c.startMs) + " · " + c.title.ifEmpty { I18n.s("player.chapterN", "n" to (i + 1).toString()) } }
 }
 
 /** «1:02:03» / «2:15». */
@@ -141,12 +143,12 @@ fun markRows(info: ItemSkip?, nowMs: Long, durMs: Long): List<String> {
         mi != null -> formatClock(mi.startMs)
         else -> "—"
     }
-    val end = (if (pending != null) "начало " + formatClock(pending) + " · " else "") + "сейчас " + formatClock(nowMs)
+    val end = if (pending != null) I18n.s("player.markStartVal", "a" to formatClock(pending), "b" to formatClock(nowMs)) else I18n.s("player.markNowVal", "b" to formatClock(nowMs))
     val credits = if (mc != null && durMs > mc * 1000) formatClock(durMs - mc * 1000) else "—"
     return listOf(
-        "Отметить начало заставки: $start",
-        "Отметить конец заставки: $end",
-        "Отметить начало титров: $credits",
+        I18n.s("player.markIntroStart", "v" to start),
+        I18n.s("player.markIntroEnd", "v" to end),
+        I18n.s("player.markCredits", "v" to credits),
     )
 }
 

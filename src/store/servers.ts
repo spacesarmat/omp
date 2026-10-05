@@ -3,6 +3,7 @@ import { loadJson, saveJson, isObject } from './storage';
 import { resetLibrary } from './library';
 import { resetViewed } from './progress';
 import { TorrServerClient, normalizeServerUrl } from '../api/torrserver';
+import { t } from '../i18n';
 
 export interface SavedServer {
   id: string;
@@ -101,6 +102,6 @@ export function setActiveServer(id: string | null): void {
 
 export function requireClient(): TorrServerClient {
   const c = client.value;
-  if (!c) throw new Error('Сервер не выбран');
+  if (!c) throw new Error(t('errors.noServerSelected'));
   return c;
 }

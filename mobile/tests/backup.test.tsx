@@ -1,3 +1,4 @@
+import { applyLanguageSetting } from '../../src/i18n';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -189,5 +190,45 @@ describe('Backup screen', () => {
     const el = mount(<Backup />);
     expect(el.querySelector("input[type=file]")!.getAttribute("accept")).toContain(".txt");
     expect(el.textContent).toContain("Избранные плейлисты и выбор дорожек");
+  });
+});
+
+describe('Backup screen in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+
+
+  it('lists what is saved and offers save and restore', () => {
+    fake();
+    const el = mount(<Backup />);
+    expect(el.querySelector('h1')!.textContent).toBe('Backup');
+    expect(el.textContent).toContain('What is saved');
+    expect(el.textContent).toContain('TorrServer servers and their names');
+    expect(el.textContent).toContain('Tracker passwords and cookies — enter them again');
+    expect(el.textContent).toContain('History and “Skip” — they are on TorrServer');
+    expect(btn(el, 'Save the backup…')).toBeTruthy();
+    expect(btn(el, 'Restore from a file…')).toBeTruthy();
+    expect(el.querySelector('[aria-label="Backup file"]')).toBeTruthy();
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('a share failure without a message is reported in English', async () => {
+    fake({ shareText: () => Promise.reject(null) });
+    const el = mount(<Backup />);
+    await act(async () => btn(el, 'Save the backup…').click());
+    await settle();
+    expect(toast.value).toBe('Could not save the backup');
+    expect(logEntries().some((e) => e.l === 'error' && e.x === 'Could not share the settings backup')).toBe(true);
+  });
+
+  it('review: what is in the file and the replace button', async () => {
+    fake();
+    const el = mount(<Backup />);
+    await pick(el, copy({ 'tsp.servers': [{ id: 'h', name: 'Home', url: 'http://h:1' }] }));
+    expect(el.textContent).toContain('What is in the file');
+    expect(el.textContent).toContain('Backup from 2026-10-03, OMP 0.14.0.');
+    expect(el.textContent).toContain('Restoring replaces this data on the phone. Everything else stays as it is.');
+    expect(btn(el, 'Replace the data on the phone')).toBeTruthy();
+    expect(btn(el, 'Cancel')).toBeTruthy();
   });
 });

@@ -8,6 +8,7 @@ import { readLaunchParams, onRelaunch } from './platform/launch';
 import { runLaunchParams } from './launchActions';
 import { platformKind } from './platform/env';
 import { installErrorHooks, log, logStart } from './lib/log';
+import { t } from './i18n';
 
 init({ debug: false, visualDebug: false });
 
@@ -29,12 +30,12 @@ if (platformKind() === 'androidtv') {
   import('./sources/builtin')
     .then(
       (m) => m.registerBuiltinSources(),
-      () => log('warn', 'tv', 'Не удалось загрузить источники поиска'),
+      () => log('warn', 'tv', t('log.sourcesLoadFailed')),
     )
-    .then(undefined, () => log('warn', 'app', 'Не удалось подключить источники поиска'))
+    .then(undefined, () => log('warn', 'app', t('log.sourcesConnectFailed')))
     // the visible Cloudflare check (native dialog, «Пройти на телефоне»)
     .then(() => import('./sources/cloudflareTv').then((m) => m.installTvCloudflare()))
-    .then(undefined, () => log('warn', 'app', 'Не удалось подключить проверку Cloudflare'))
+    .then(undefined, () => log('warn', 'app', t('log.cloudflareConnectFailed')))
     .then(start, start);
 } else {
   start();

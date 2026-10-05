@@ -1,7 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// the tests describe a stable installed build; the real version (a beta now) must not leak in
+vi.mock('../../src/version', () => ({ APP_VERSION: '0.15.5' }));
+
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { UpdateSheet, setApkInstaller, setAbiKeyReader } from '../src/ui/UpdateSheet';
+import { applyLanguageSetting } from '../../src/i18n';
+import { UpdateSheet, setApkInstaller, setAbiKeyReader, describeInstallError } from '../src/ui/UpdateSheet';
 import { updatePrompt } from '../../src/store/updates';
 import type { UpdateInfo } from '../../src/lib/updateInfo';
 
@@ -142,5 +147,58 @@ describe('UpdateSheet', () => {
     const el = mount();
     await act(async () => btn(el, 'Позже').click());
     expect(updatePrompt.value).toBeNull();
+  });
+});
+
+describe('UpdateSheet in English', () => {
+  afterEach(() => applyLanguageSetting('ru'));
+
+  it('shows the title, the size and the buttons in English, without Cyrillic', async () => {
+    applyLanguageSetting('en');
+    let el: HTMLElement = null as any;
+    await act(async () => { el = mountWith({ ...info, notes: ['First', 'Second'] }); });
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Version 9.9.9 available');
+    expect(el.textContent).toContain('Currently installed:');
+    expect(el.textContent).toContain('4.2 MB');
+    expect(btn(el, 'Install')).toBeTruthy();
+    expect(btn(el, 'Later')).toBeTruthy();
+    expect(btn(el, 'Skip')).toBeTruthy();
+    expect(el.textContent).toContain('Android will ask you to allow installing from this app');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('progress, launching and a plain failure are English', async () => {
+    applyLanguageSetting('en');
+    let report: (p: number) => void = () => {};
+    let finish: () => void = () => {};
+    setApkInstaller((_u, _s, onProgress) => {
+      report = onProgress;
+      return new Promise<void>((r) => (finish = r));
+    });
+    let el: HTMLElement = null as any;
+    await act(async () => { el = mountWith(info); });
+    await act(async () => btn(el, 'Install').click());
+    await act(async () => report(64));
+    expect(el.textContent).toContain('Downloading… 64%');
+    await act(async () => finish());
+    expect(el.textContent).toContain('Starting the installation…');
+    setApkInstaller(() => Promise.reject(new Error('checksum mismatch')));
+    await act(async () => { el = mountWith(info); });
+    await act(async () => btn(el, 'Install').click());
+    await act(async () => {});
+    expect(el.querySelector('.m-error')!.textContent).toBe('Could not install the update: checksum mismatch');
+  });
+
+  it('an OMP native English error is shown once, with a single prefix', async () => {
+    applyLanguageSetting('en');
+    const native = Object.assign(new Error('Could not download the update (HTTP 404)'), { code: 'omp' });
+    setApkInstaller(() => Promise.reject(native));
+    let el: HTMLElement = null as any;
+    await act(async () => { el = mountWith(info); });
+    await act(async () => btn(el, 'Install').click());
+    await act(async () => {});
+    expect(el.querySelector('.m-error')!.textContent).toBe('Could not download the update (HTTP 404)');
+    expect(describeInstallError({ message: 'Allow installs from OMP and try again', code: 'omp' })).toBe('Allow installs from OMP and try again');
+    expect(describeInstallError(new Error('boom'))).toBe('Could not install the update: boom');
   });
 });

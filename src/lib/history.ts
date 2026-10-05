@@ -2,13 +2,16 @@
 // torrents without a journal from the older sources (local progress, TorrServer /viewed) shown as «Телевизор».
 import type { Torrent } from '../api/types';
 import { journalOf, type JournalSrc } from './journal';
+import { t } from '../i18n';
+import { ru } from '../i18n/ru';
+import { en } from '../i18n/en';
 
 export type HistoryFilter = 'all' | 'tv' | 'phone';
 
-export const HISTORY_FILTERS: { id: HistoryFilter; label: string }[] = [
-  { id: 'all', label: 'Все' },
-  { id: 'tv', label: 'С телевизора' },
-  { id: 'phone', label: 'С телефона' },
+export const historyFilters = (): { id: HistoryFilter; label: string }[] => [
+  { id: 'all', label: t('common.all') },
+  { id: 'tv', label: t('history.fromTv') },
+  { id: 'phone', label: t('history.fromPhone') },
 ];
 
 export function isHistoryFilter(v: unknown): v is HistoryFilter {
@@ -96,8 +99,6 @@ export function buildHistory(
   return order.slice(0, limit).map((x) => x.it);
 }
 
-const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-
 function pad(n: number): string {
   return n < 10 ? '0' + n : String(n);
 }
@@ -114,17 +115,18 @@ export function whenLabel(at: number, now: number): string {
   const time = pad(d.getHours()) + ':' + pad(d.getMinutes());
   const today = dayStart(now);
   const day = dayStart(at);
-  if (day === today) return 'сегодня ' + time;
+  if (day === today) return t('history.today', { time });
   // a calendar day back (not 24 h, DST-safe): the start of «yesterday» is the start of the day before today
-  if (day === dayStart(today - 12 * 3600 * 1000)) return 'вчера ' + time;
-  const label = d.getDate() + ' ' + MONTHS[d.getMonth()];
-  return d.getFullYear() === new Date(now).getFullYear() ? label : label + ' ' + d.getFullYear();
+  if (day === dayStart(today - 12 * 3600 * 1000)) return t('history.yesterday', { time });
+  const label = t('date.day', { d: d.getDate(), month: t('date.monthsFull').split(' ')[d.getMonth()] });
+  return d.getFullYear() === new Date(now).getFullYear() ? label : t('date.dayYear', { day: label, year: d.getFullYear() });
 }
 
 /** «Телевизор» / «Телефон «Pixel 7»» (a TV name, if one is ever written, is shown the same way). */
 export function deviceLabel(src: JournalSrc, name?: string): string {
-  const base = src === 'phone' ? 'Телефон' : 'Телевизор';
-  return name && name !== base ? base + ' «' + name + '»' : base;
+  const base = src === 'phone' ? t('history.phone') : t('history.tv');
+  const isDefault = name === ru.history.phone || name === en.history.phone || name === base;
+  return name && !isDefault ? t('history.named', { device: base, name }) : base;
 }
 
 /** «Телефон «Pixel 7» · сегодня 21:40»; without a known time just the device. */

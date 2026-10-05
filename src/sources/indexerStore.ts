@@ -2,6 +2,7 @@
 // goes to the Android encrypted storage (SecretStore) under `indexer.<id>.apikey`. A backup keeps url + keySet only.
 // Chromium 53 safe (shared by the phone and the TV bundles).
 import { isObject, loadJson, saveJson } from '../store/storage';
+import { t } from '../i18n';
 import type { SecretStore } from './types';
 
 export const INDEXERS_KEY = 'tsp.indexers';
@@ -121,10 +122,10 @@ function persist(next: IndexerConn[]): void {
   notify();
 }
 
-export const INDEXER_BAD_URL = 'Неверный адрес: нужен вид http://192.168.1.5:9117';
-export const INDEXER_NO_KEY = 'Укажите API-ключ';
-export const INDEXER_NO_STORE = 'Ключ можно сохранить только в приложении на Android';
-export const INDEXER_TOO_MANY = 'Слишком много подключений';
+export const indexerBadUrl = (): string => t('sources.indexer.badUrl');
+export const indexerNoKey = (): string => t('sources.indexer.noKey');
+export const indexerNoStore = (): string => t('sources.indexer.noStore');
+export const indexerTooMany = (): string => t('sources.indexer.tooMany');
 
 export interface IndexerInput {
   kind: IndexerKind;
@@ -140,13 +141,13 @@ export interface IndexerInput {
  */
 export function saveIndexer(input: IndexerInput, secrets: SecretStore | undefined): Promise<IndexerConn> {
   const url = normalizeIndexerUrl(input.url);
-  if (!url || (input.kind !== 'jackett' && input.kind !== 'prowlarr')) return Promise.reject(new Error(INDEXER_BAD_URL));
+  if (!url || (input.kind !== 'jackett' && input.kind !== 'prowlarr')) return Promise.reject(new Error(indexerBadUrl()));
   const id = indexerId(input.kind, url);
   const old = getIndexer(id);
   const key = (input.apiKey || '').trim();
-  if (!key && !(old && old.keySet)) return Promise.reject(new Error(INDEXER_NO_KEY));
-  if (!old && conns.length >= INDEXERS_MAX) return Promise.reject(new Error(INDEXER_TOO_MANY));
-  if (key && !secrets) return Promise.reject(new Error(INDEXER_NO_STORE));
+  if (!key && !(old && old.keySet)) return Promise.reject(new Error(indexerNoKey()));
+  if (!old && conns.length >= INDEXERS_MAX) return Promise.reject(new Error(indexerTooMany()));
+  if (key && !secrets) return Promise.reject(new Error(indexerNoStore()));
   const write = key && secrets ? secrets.set(indexerKeyName(id), key) : Promise.resolve();
   return write.then(
     () => {
@@ -157,7 +158,7 @@ export function saveIndexer(input: IndexerInput, secrets: SecretStore | undefine
       return { ...conn };
     },
     () => {
-      throw new Error(INDEXER_NO_STORE);
+      throw new Error(indexerNoStore());
     },
   );
 }
@@ -225,9 +226,9 @@ export function setTorznabHosts(hosts: string[] | undefined): void {
   notify();
 }
 
-export const TORZNAB_HIDDEN = 'Torznab (TorrServer) скрыт: тот же Jackett подключён напрямую.';
-export const TORZNAB_HIDDEN_SAME_PROWLARR = 'Torznab (TorrServer) скрыт: тот же Prowlarr подключён напрямую.';
-export const TORZNAB_HIDDEN_DIRECT = 'Torznab (TorrServer) скрыт: поиск идёт через Jackett/Prowlarr напрямую.';
+export const torznabHidden = (): string => t('sources.indexer.torznabHidden');
+export const torznabHiddenSameProwlarr = (): string => t('sources.indexer.torznabHiddenProwlarr');
+export const torznabHiddenDirect = (): string => t('sources.indexer.torznabHiddenDirect');
 
 /**
  * The note under «Через TorrServer» when ts-torznab is hidden (`hidden`): «тот же Jackett» only when the TorrServer
@@ -236,8 +237,8 @@ export const TORZNAB_HIDDEN_DIRECT = 'Torznab (TorrServer) скрыт: поис�
 export function torznabHiddenText(hidden: boolean): string {
   if (!hidden) return '';
   const hosts = torznabHosts();
-  if (!hosts || !hosts.length) return TORZNAB_HIDDEN_DIRECT;
+  if (!hosts || !hosts.length) return torznabHiddenDirect();
   const matched = conns.filter((c) => hosts.indexOf(hostKey(c.url)) >= 0);
-  if (!matched.length) return TORZNAB_HIDDEN_DIRECT;
-  return matched.every((c) => c.kind === 'prowlarr') ? TORZNAB_HIDDEN_SAME_PROWLARR : TORZNAB_HIDDEN;
+  if (!matched.length) return torznabHiddenDirect();
+  return matched.every((c) => c.kind === 'prowlarr') ? torznabHiddenSameProwlarr() : torznabHidden();
 }

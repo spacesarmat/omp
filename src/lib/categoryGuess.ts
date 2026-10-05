@@ -1,17 +1,20 @@
+import { t } from '../i18n';
+
 /** TorrServer category values: "" (none), movie, tv, music, other. */
 export type AddCategory = '' | 'movie' | 'tv' | 'music' | 'other';
 
-export const ADD_CATEGORIES: { id: AddCategory; label: string }[] = [
-  { id: '', label: 'Без категории' },
-  { id: 'movie', label: 'Фильмы' },
-  { id: 'tv', label: 'Сериалы' },
-  { id: 'music', label: 'Музыка' },
-  { id: 'other', label: 'Прочее' },
+export const addCategories = (): { id: AddCategory; label: string }[] => [
+  { id: '', label: t('category.none') },
+  { id: 'movie', label: t('category.movie') },
+  { id: 'tv', label: t('category.tv') },
+  { id: 'music', label: t('category.music') },
+  { id: 'other', label: t('category.other') },
 ];
 
 export function addCategoryLabel(c: string): string {
-  for (let i = 0; i < ADD_CATEGORIES.length; i++) if (ADD_CATEGORIES[i].id === c) return ADD_CATEGORIES[i].label;
-  return ADD_CATEGORIES[0].label;
+  const list = addCategories();
+  for (let i = 0; i < list.length; i++) if (list[i].id === c) return list[i].label;
+  return list[0].label;
 }
 
 const TV = /(сезон|серии|серия|сериал|season|series|episode|\bs\d{1,2}(e\d{1,3})?\b|\b\d{1,2}x\d{1,3}\b)/i;

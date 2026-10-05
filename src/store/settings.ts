@@ -4,6 +4,7 @@ import type { LibrarySort } from '../lib/librarySearch';
 import type { LibraryView } from '../lib/libraryView';
 import { isHistoryFilter, type HistoryFilter } from '../lib/history';
 import type { PlayerEngineSetting } from '../player/nativeEngine';
+import { applyLanguageSetting, type LanguageSetting } from '../i18n';
 
 export interface AppSettings {
   audioLang: string;
@@ -24,6 +25,8 @@ export interface AppSettings {
   historyFilter: HistoryFilter;
   /** Android TV: «Плеер» — Авто / Встроенный / VLC. */
   playerEngine: PlayerEngineSetting;
+  /** UI language: 'system' follows the device (ru/uk/be/kk → Russian, else English). */
+  language: LanguageSetting;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -43,6 +46,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   betaUpdates: false,
   historyFilter: 'all',
   playerEngine: 'auto',
+  language: 'system',
 };
 
 const KEY = 'tsp.settings';
@@ -64,17 +68,21 @@ export function sanitizeSettings(v: unknown): AppSettings {
   if (['new', 'title', 'size'].indexOf(out.librarySort) < 0) out.librarySort = DEFAULT_SETTINGS.librarySort;
   if (!isHistoryFilter(out.historyFilter)) out.historyFilter = DEFAULT_SETTINGS.historyFilter;
   if (['auto', 'builtin', 'vlc'].indexOf(out.playerEngine) < 0) out.playerEngine = DEFAULT_SETTINGS.playerEngine;
+  if (['system', 'ru', 'en'].indexOf(out.language) < 0) out.language = DEFAULT_SETTINGS.language;
   return out;
 }
 
 export const settings = signal<AppSettings>(sanitizeSettings(loadJson<unknown>(KEY, {}, isObject)));
+applyLanguageSetting(settings.value.language);
 
 export function updateSettings(patch: Partial<AppSettings>): void {
   settings.value = { ...settings.value, ...patch };
   saveJson(KEY, settings.value);
+  applyLanguageSetting(settings.value.language);
 }
 
 export function resetSettings(): void {
   settings.value = { ...DEFAULT_SETTINGS };
   saveJson(KEY, settings.value);
+  applyLanguageSetting(settings.value.language);
 }

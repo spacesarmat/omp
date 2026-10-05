@@ -12,7 +12,7 @@ export function parseChangelog(text: string): ChangelogEntry[] {
   const lines = String(text || '').split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].replace(/\s+$/, '');
-    const h = /^##\s+v?(\d+(?:\.\d+)*)(?:\s*[(\[—–-].*)?$/.exec(line);
+    const h = /^##\s+v?(\d+(?:\.\d+)*(?:-beta\.\d+)?)(?:\s*[(\[—–-].*)?$/.exec(line);
     if (h) {
       cur = { version: h[1], items: [] };
       out.push(cur);

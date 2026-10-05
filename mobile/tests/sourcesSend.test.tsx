@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { mockFetch, type MockResponse } from '../../tests/helpers/fetchMock';
-import { Sources, sentText, SEND_TEXT, LOGIN_NOT_SENT, transferPayload } from '../src/screens/Sources';
+import { Sources, sentText, sendText, loginNotSent, transferPayload } from '../src/screens/Sources';
 import { currentRoute } from '../src/nav';
 import { resetTo } from '../src/nav';
-import { cancelWarmUp, disconnectTv, sendSourcesToTv, setTransport, tvState, SOURCES_ATV_ONLY, SOURCES_BUSY, SOURCES_NO_ANSWER, SOURCES_SECRETS, TV_FORGOT, type TvTransport } from '../src/tv/tvClient';
+import { cancelWarmUp, disconnectTv, sendSourcesToTv, setTransport, tvState, sourcesAtvOnly, sourcesBusy, sourcesNoAnswer, sourcesSecrets, tvForgot, type TvTransport } from '../src/tv/tvClient';
 import { reloadTvs, saveTv, setActiveTv, type SavedTv } from '../src/tv/tvStore';
 import { native } from '../src/platform/native';
 import { toast } from '../src/ui/toast';
@@ -14,8 +14,9 @@ import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/s
 import { logEntries, clearLog } from '../../src/lib/log';
 import type { Source, SourceContext } from '../../src/sources/types';
 import { indexerConnections, indexerKeyName, reloadIndexers } from '../../src/sources/indexerStore';
-import { SOURCES_REJECTED } from '../src/tv/tvClient';
-import { CLOUDFLARE_NOT_SENT, INDEXERS_NOT_SENT, indexersText } from '../src/screens/Sources';
+import { sourcesRejected } from '../src/tv/tvClient';
+import { cloudflareNotSent, indexersNotSent, indexersText } from '../src/screens/Sources';
+import { applyLanguageSetting } from '../../src/i18n';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
 const ATV: SavedTv = { ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095 };
@@ -142,20 +143,20 @@ describe('sendSourcesToTv (protocol)', () => {
     setActiveTv(ATV.ip);
     const payload = { v: 1, sources: { rutor: true } };
     answer = () => ({ status: 409, body: '{"error":"busy"}' });
-    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_BUSY);
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(sourcesBusy());
     answer = () => ({ status: 503, body: '{"error":"no_answer"}' });
-    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_NO_ANSWER);
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(sourcesNoAnswer());
     answer = () => ({ status: 500, body: '{"error":"secrets"}' });
-    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_SECRETS);
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(sourcesSecrets());
     answer = () => ({ status: 401, body: '{"error":"unauthorized"}' });
-    await expect(sendSourcesToTv(payload)).rejects.toThrow(TV_FORGOT);
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(tvForgot());
     expect(tvState.value).toBe('error');
   });
 
   it('is only for an Android TV', async () => {
     saveTv(LG);
     setActiveTv(LG.ip);
-    await expect(sendSourcesToTv({ v: 1, sources: { rutor: true } })).rejects.toThrow(SOURCES_ATV_ONLY);
+    await expect(sendSourcesToTv({ v: 1, sources: { rutor: true } })).rejects.toThrow(sourcesAtvOnly());
     expect(calls).toHaveLength(0);
   });
 });
@@ -178,7 +179,7 @@ describe('«Передать на телевизор» on the phone', () => {
     setActiveTv(ATV.ip);
     await mount();
     expect(card()!.textContent).toContain('Android TV «Гостиная»');
-    expect(card()!.textContent).toContain(SEND_TEXT);
+    expect(card()!.textContent).toContain(sendText());
     const box = card()!.querySelector('input[type="checkbox"]') as HTMLInputElement;
     expect(box.checked).toBe(true);
     act(() => btn('Передать на телевизор')!.click());
@@ -233,7 +234,7 @@ describe('«Передать на телевизор» on the phone', () => {
     answer = () => ({ status: 503, body: '{"error":"no_answer"}' });
     act(() => btn('Передать на телевизор')!.click());
     await flush();
-    expect(el.querySelector('[role="alert"]')!.textContent).toBe(SOURCES_NO_ANSWER);
+    expect(el.querySelector('[role="alert"]')!.textContent).toBe(sourcesNoAnswer());
   });
 
   it('after a 401 the card stays with the reason and «Подключить заново»', async () => {
@@ -244,7 +245,7 @@ describe('«Передать на телевизор» on the phone', () => {
     act(() => btn('Передать на телевизор')!.click());
     await flush();
     expect(card()).not.toBeNull();
-    expect(el.querySelector('[role="alert"]')!.textContent).toBe(TV_FORGOT);
+    expect(el.querySelector('[role="alert"]')!.textContent).toBe(tvForgot());
     expect(btn('Передать на телевизор')).toBeUndefined();
     act(() => btn('Подключить заново')!.click());
     expect(currentRoute.value.name).toBe('tv');
@@ -261,7 +262,7 @@ describe('«Передать на телевизор» on the phone', () => {
     const post = sourcePosts()[0];
     expect(post.body.rutracker).toBeUndefined();
     expect(post.body.sources.nnmclub).toBe(true);
-    expect(toast.value).toBe('Источники переданы. ' + LOGIN_NOT_SENT);
+    expect(toast.value).toBe('Источники переданы. ' + loginNotSent());
     expect(() => transferPayload([], null)).toThrow('Не удалось подготовить источники к передаче');
     expect(transferPayload([{ id: 'rutor', name: 'rutor', kind: 'builtin', search: () => Promise.resolve([]) }], { username: 'u', password: 'p'.repeat(201) }).loginDropped).toBe(true);
   });
@@ -273,7 +274,7 @@ describe('«Передать на телевизор» on the phone', () => {
     answer = () => new Promise<MockResponse>(() => {});
     vi.useFakeTimers();
     const p = sendSourcesToTv({ v: 1, sources: { rutor: true } });
-    const done = expect(p).rejects.toThrow(SOURCES_NO_ANSWER);
+    const done = expect(p).rejects.toThrow(sourcesNoAnswer());
     await vi.advanceTimersByTimeAsync(45000);
     await done;
     expect(tvState.value).toBe('connected');
@@ -328,15 +329,34 @@ describe('«Передать на телевизор» with Jackett / Prowlarr',
     expect(JSON.stringify(sourcePosts()[0].body)).not.toContain(KEY);
   });
 
+  it('a v0.15 TV refusing only the language gets everything else, and no «обновите OMP» note', async () => {
+    withJackett();
+    localStorage.setItem('tsp.flaresolverr', JSON.stringify({ url: 'http://192.168.1.191:8191' }));
+    answer = (c) => (c.body.language !== undefined ? { status: 400, body: '{"error":"bad_request"}' } : { body: JSON.stringify({ ok: true, indexers: 1 }) });
+    await mount();
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(sourcePosts()).toHaveLength(2);
+    expect(sourcePosts()[0].body.language).toBe('ru');
+    const second = sourcePosts()[1].body;
+    expect(second.language).toBeUndefined();
+    expect(second.indexers).toEqual([{ kind: 'jackett', url: 'http://192.168.1.5:9117', key: KEY }]);
+    expect(second.flaresolverr).toBe('http://192.168.1.191:8191');
+    expect(toast.value).not.toContain('обновите OMP');
+    expect(toast.value).not.toContain(indexersNotSent());
+    expect(toast.value).not.toContain(cloudflareNotSent());
+  });
+
   it('an older TV refusing the connections gets the rest, and the phone says so', async () => {
     withJackett();
     answer = (c) => (c.body.indexers ? { status: 400, body: '{"error":"bad_request"}' } : { body: JSON.stringify({ ok: true }) });
     await mount();
     act(() => btn('Передать на телевизор')!.click());
     await flush();
-    expect(sourcePosts()).toHaveLength(2);
-    expect(sourcePosts()[1].body.indexers).toBeUndefined();
-    expect(toast.value).toBe('Источники переданы. ' + INDEXERS_NOT_SENT);
+    // without the language first (a v0.15 TV), then without the v0.15 parts
+    expect(sourcePosts()).toHaveLength(3);
+    expect(sourcePosts()[2].body.indexers).toBeUndefined();
+    expect(toast.value).toBe('Источники переданы. ' + indexersNotSent());
   });
 
   it('an older TV refusing the FlareSolverr address gets the rest, and the phone says the Cloudflare settings did not go', async () => {
@@ -347,10 +367,11 @@ describe('«Передать на телевизор» with Jackett / Prowlarr',
     await mount();
     act(() => btn('Передать на телевизор')!.click());
     await flush();
-    expect(sourcePosts()).toHaveLength(2);
+    // without the language first (a v0.15 TV), then without the v0.15 parts
+    expect(sourcePosts()).toHaveLength(3);
     expect(sourcePosts()[0].body.flaresolverr).toBe('http://192.168.1.191:8191');
-    expect(sourcePosts()[1].body.flaresolverr).toBeUndefined();
-    expect(toast.value).toBe('Источники переданы. ' + CLOUDFLARE_NOT_SENT);
+    expect(sourcePosts()[2].body.flaresolverr).toBeUndefined();
+    expect(toast.value).toBe('Источники переданы. ' + cloudflareNotSent());
   });
 
   it('a v0.14 TV answering 413 (8 KB limit) also gets the rest without the connections', async () => {
@@ -359,9 +380,10 @@ describe('«Передать на телевизор» with Jackett / Prowlarr',
     await mount();
     act(() => btn('Передать на телевизор')!.click());
     await flush();
-    expect(sourcePosts()).toHaveLength(2);
-    expect(sourcePosts()[1].body.indexers).toBeUndefined();
-    expect(toast.value).toBe('Источники переданы. ' + INDEXERS_NOT_SENT);
+    // without the language first (a v0.15 TV), then without the v0.15 parts
+    expect(sourcePosts()).toHaveLength(3);
+    expect(sourcePosts()[2].body.indexers).toBeUndefined();
+    expect(toast.value).toBe('Источники переданы. ' + indexersNotSent());
   });
 
   it('the TV saved fewer than were sent', async () => {
@@ -384,6 +406,84 @@ describe('«Передать на телевизор» with Jackett / Prowlarr',
     answer = () => ({ body: JSON.stringify({ ok: true, indexers: 99 }) });
     expect(await sendSourcesToTv(payload)).toEqual({ indexers: 0 });
     answer = () => ({ status: 400, body: '{"error":"bad_request"}' });
-    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_REJECTED);
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(sourcesRejected());
+  });
+});
+
+describe('transfer language', () => {
+  it('the payload carries the phone resolved language', async () => {
+    const list: Source[] = [{ id: 'rutor', name: 'rutor', kind: 'builtin', search: () => Promise.resolve([]) }];
+    expect(transferPayload(list, null).payload.language).toBe('ru');
+    applyLanguageSetting('en');
+    expect(transferPayload(list, null).payload.language).toBe('en');
+  });
+});
+
+describe('«Send to the TV» in English', () => {
+  const ATV_EN: SavedTv = { ...ATV, name: 'Living room' };
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  const noCyrillic = (t: string) => expect(t).not.toMatch(/[А-Яа-яЁё]/);
+
+  it('the card, the checkbox and the sent line', async () => {
+    registerSource(rutrackerFake(true));
+    saveTv(ATV_EN);
+    setActiveTv(ATV_EN.ip);
+    await mount();
+    expect(card()!.textContent).toContain('Android TV “Living room”');
+    expect(card()!.textContent).toContain(sendText());
+    expect(sendText()).toBe('Send the enabled sources, the Jackett/Prowlarr connections and the site sign-ins to the TV. Passwords and keys go only to your TV over the pairing channel and are stored there encrypted.');
+    expect(card()!.textContent).toContain('Together with the sign-in to rutracker');
+    act(() => btn('Send to the TV')!.click());
+    await flush();
+    expect(toast.value).toBe('Sent');
+    expect(card()!.textContent).toMatch(/Sent today at \d\d:\d\d/);
+    expect(card()!.textContent).toContain('connected');
+    noCyrillic(card()!.textContent!);
+    expect(logEntries().some((e) => e.x.indexOf('Sources sent to the Android TV, rutracker sign-in: ok') === 0)).toBe(true);
+    noCyrillic(JSON.stringify(logEntries().map((e) => e.x)));
+  });
+
+  it('the refusals: login, captcha, dropped login, partial connections', async () => {
+    registerSource(rutrackerFake(true));
+    saveTv(ATV_EN);
+    setActiveTv(ATV_EN.ip);
+    answer = () => ({ body: '{"ok":true,"rutracker":"bad_login"}' });
+    await mount();
+    act(() => btn('Send to the TV')!.click());
+    await flush();
+    expect(toast.value).toBe('Sources were sent, but rutracker did not accept the login or password');
+    expect(sentText('captcha')).toBe('Sources were sent, but rutracker asks for a captcha — press “Sign in with the browser”');
+    expect(sentText('error')).toBe('Sources were sent; the TV will check the rutracker sign-in during a search');
+    expect(sentText(undefined)).toBe('Sent');
+    expect(indexersText(2, 1)).toBe('Not all Jackett/Prowlarr connections were saved: 1 of 2');
+    expect(indexersNotSent()).toBe('The Jackett/Prowlarr connections were not sent — update OMP on the TV');
+    expect(cloudflareNotSent()).toBe('The Cloudflare bypass and FlareSolverr settings were not sent — update OMP on the TV');
+    expect(loginNotSent()).toBe('The sign-in to rutracker was not sent: the login or password is too long or has invalid characters');
+    expect(() => transferPayload([], null)).toThrow('Could not prepare the sources for sending');
+  });
+
+  it('a login the TV would refuse is left out and the phone says so', async () => {
+    registerSource(rutrackerFake(true));
+    // a control character in the login: the TV would refuse it
+    SECRETS = { 'rutracker.username': 'ab', 'rutracker.password': PASSWORD };
+    saveTv(ATV_EN);
+    setActiveTv(ATV_EN.ip);
+    await mount();
+    act(() => btn('Send to the TV')!.click());
+    await flush();
+    expect(toast.value).toBe('Sources were sent. ' + loginNotSent());
+  });
+
+  it('a 401 keeps the card with «Connect again»', async () => {
+    saveTv(ATV_EN);
+    setActiveTv(ATV_EN.ip);
+    answer = () => ({ status: 401, body: '{"error":"unauthorized"}' });
+    await mount();
+    act(() => btn('Send to the TV')!.click());
+    await flush();
+    expect(document.body.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    expect(btn('Connect again')).toBeTruthy();
+    expect(btn('Send to the TV')).toBeUndefined();
   });
 });

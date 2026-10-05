@@ -2,6 +2,7 @@
 // port 8191 (native scan of the device's /24, then an HTTP probe: GET / answers { msg: 'FlareSolverr is ready!', version })
 // and the state texts of the phone screen and the Android TV block. Requests go only to the address the user set or OMP
 // found on the LAN. Android only (lazy, out of the LG bundle). Chromium 53 safe.
+import { fmtNumber, t } from '../i18n';
 import { isObject, loadJson, saveJson } from '../store/storage';
 import { FLARE_PORT, flareSolverrUrl, normalizeFlareUrl, setFlareSolverrUrl } from './flareStore';
 import type { LanScan } from './indexerDiscovery';
@@ -13,19 +14,17 @@ const SCAN_KEY = 'tsp.flareScan';
 const PROBE_TIMEOUT_MS = 4000;
 const MAX_HITS = 16;
 
-export const BAD_ADDRESS = 'Неверный адрес';
-export const NOT_ANSWERING = 'Не отвечает — проверьте адрес и что FlareSolverr запущен';
-export const NOT_FLARE = 'По этому адресу отвечает не FlareSolverr';
-export const NOT_FOUND = 'FlareSolverr в домашней сети не найден';
-export const NO_WIFI = 'Подключитесь к Wi-Fi, чтобы искать в домашней сети';
+export const flareBadAddress = (): string => t('sources.badAddress');
+export const flareNotAnswering = (): string => t('sources.flare.notAnswering');
+export const notFlare = (): string => t('sources.flare.notFlare');
+export const flareNotFound = (): string => t('sources.flare.notFound');
+export const flareNoWifi = (): string => t('sources.flare.noWifi');
 
 /** Phone screen texts (mockup «FlareSolverr»). */
-export const FLARE_INTRO =
-  'Программа на вашем сервере, которая проходит проверку Cloudflare. OMP обращается к ней, только если встроенная проверка не прошла.';
-export const FLARE_NONE_TITLE = 'Нет FlareSolverr?';
-export const FLARE_NONE_TEXT =
-  'Его ставят одной командой Docker на компьютер или NAS, который всегда включён. Пошаговая инструкция — в «Вопросах и ответах».';
-export const FLARE_HOWTO = 'Как установить FlareSolverr';
+export const flareIntro = (): string => t('sources.flare.intro');
+export const flareNoneTitle = (): string => t('sources.flare.noneTitle');
+export const flareNoneText = (): string => t('sources.flare.noneText');
+export const flareHowto = (): string => t('sources.flare.howto');
 
 export type FlareCheck = { ok: true; version: string; ms: number } | { ok: false; message: string };
 
@@ -42,13 +41,16 @@ export function shortVersion(v: string): string {
 }
 
 function seconds(ms: number): string {
-  return (Math.round(ms / 100) / 10).toFixed(1).replace('.', ',');
+  return fmtNumber(Math.round(ms / 100) / 10, 1);
 }
 
 /** «Работает · версия 3.4 · ответ 0,3 с», or the error. */
 export function checkText(c: FlareCheck): string {
   if (!c.ok) return c.message;
-  return 'Работает' + (c.version ? ' · версия ' + shortVersion(c.version) : '') + ' · ответ ' + seconds(c.ms) + ' с';
+  const parts = [t('sources.flare.works')];
+  if (c.version) parts.push(t('sources.flare.version', { version: shortVersion(c.version) }));
+  parts.push(t('sources.flare.answer', { sec: seconds(c.ms) }));
+  return parts.join(' · ');
 }
 
 /** The answer of GET {url}/: the version when it is FlareSolverr, null when it is something else. */
@@ -66,15 +68,15 @@ export function readyVersion(text: string): string | null {
 /** GET {url}/ through the native http; never rejects. */
 export function checkFlareSolverr(url: string, http: SourceHttp, now: () => number = Date.now): Promise<FlareCheck> {
   const base = normalizeFlareUrl(url);
-  if (!base) return Promise.resolve({ ok: false, message: BAD_ADDRESS } as FlareCheck);
+  if (!base) return Promise.resolve({ ok: false, message: flareBadAddress() } as FlareCheck);
   const t0 = now();
   return http.get(base + '/', { timeoutMs: PROBE_TIMEOUT_MS }).then(
     (r): FlareCheck => {
       const v = r.status >= 200 && r.status < 300 ? readyVersion(r.text) : null;
-      if (v === null) return { ok: false, message: NOT_FLARE };
+      if (v === null) return { ok: false, message: notFlare() };
       return { ok: true, version: v, ms: Math.max(0, now() - t0) };
     },
-    (): FlareCheck => ({ ok: false, message: NOT_ANSWERING }),
+    (): FlareCheck => ({ ok: false, message: flareNotAnswering() }),
   );
 }
 
@@ -191,27 +193,27 @@ export interface FlareLines {
   tone: 'ok' | 'bad' | 'muted';
 }
 
-export const TV_FLARE_OK = 'Работает — запасной путь для сайтов за Cloudflare';
-export const TV_FLARE_NONE = 'Не найден в домашней сети. Нужен, только если встроенная проверка Cloudflare не проходит.';
-export const TV_FLARE_CHECKING = 'Проверяю…';
+export const tvFlareOk = (): string => t('sources.flare.tvOk');
+export const tvFlareNone = (): string => t('sources.flare.tvNone');
+export const tvFlareChecking = (): string => t('sources.flare.tvChecking');
 
 /** The Android TV block (mockup: address · version, state line). */
 export function tvFlareLines(url: string | null, s: FlareStatus | null): FlareLines {
-  if (!url) return { where: '', state: TV_FLARE_NONE, tone: 'muted' };
+  if (!url) return { where: '', state: tvFlareNone(), tone: 'muted' };
   const st = s && s.url === url ? s : null;
-  if (!st) return { where: flareHost(url), state: TV_FLARE_CHECKING, tone: 'muted' };
+  if (!st) return { where: flareHost(url), state: tvFlareChecking(), tone: 'muted' };
   if (!st.check.ok) return { where: flareHost(url), state: st.check.message, tone: 'bad' };
   return {
-    where: flareHost(url) + (st.check.version ? ' · версия ' + shortVersion(st.check.version) : ''),
-    state: TV_FLARE_OK,
+    where: flareHost(url) + (st.check.version ? ' · ' + t('sources.flare.version', { version: shortVersion(st.check.version) }) : ''),
+    state: tvFlareOk(),
     tone: 'ok',
   };
 }
 
 /** The phone «Источники поиска» row: the address and the last check, or «не задан». */
 export function phoneFlareNote(url: string | null, s: FlareStatus | null): { text: string; tone: 'ok' | 'bad' | 'muted' } {
-  if (!url) return { text: 'не задан · запасной путь для сайтов за Cloudflare', tone: 'muted' };
+  if (!url) return { text: t('sources.flare.notSet'), tone: 'muted' };
   const st = s && s.url === url ? s : null;
   if (!st) return { text: flareHost(url), tone: 'muted' };
-  return st.check.ok ? { text: flareHost(url) + ' · работает', tone: 'ok' } : { text: flareHost(url) + ' · не отвечает', tone: 'bad' };
+  return st.check.ok ? { text: flareHost(url) + ' · ' + t('sources.state.ok'), tone: 'ok' } : { text: flareHost(url) + ' · ' + t('sources.state.noAnswer'), tone: 'bad' };
 }

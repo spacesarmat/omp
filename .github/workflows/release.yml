@@ -80,6 +80,9 @@ jobs:
           APK32="build/OMP-${VERSION}-armv7.apk"
           sed "s/{{TAG}}/${TAG}/g" .github/release-notes.md > notes.md
           printf '\n' >> notes.md
+          # English changelog of this version (nothing when CHANGELOG.en.md lacks it)
+          EN_NOTES=$(node scripts/changelog-en.mjs "$VERSION")
+          if [ -n "$EN_NOTES" ]; then printf '## English\n\n%s\n\n' "$EN_NOTES" >> notes.md; fi
           for F in "$IPK" "$APK64" "$APK32" "$APK"; do
             printf 'SHA-256 `%s`: `%s`\n' "$(basename "$F")" "$(sha256sum "$F" | cut -d' ' -f1)" >> notes.md
           done

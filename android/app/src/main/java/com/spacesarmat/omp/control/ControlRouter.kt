@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.control
 
+import com.spacesarmat.omp.I18n
+
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -9,7 +11,8 @@ interface RemoteActions {
     fun info(): JSONObject
     fun paired(phone: String)
     fun launch(params: JSONObject)
-    fun attach(report: String)
+    /** [lang]: the phone's resolved UI language (ru | en), null when none came or an unknown one. */
+    fun attach(report: String, lang: String?)
     fun key(name: String)
     /** `{ text }`, `{ delete }` or `{ enter: true }`, already validated. */
     fun text(data: JSONObject)
@@ -67,7 +70,7 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         if (req.path == CloudflareProtocol.ANSWER) return cloudflareAnswer(req)
         if (req.path == CloudflareProtocol.POLL) {
             val body = parse(req.body) ?: return badRequest()
-            return ok(actions.cloudflarePoll(req.token!!, pairing.phoneOf(req.token) ?: "Телефон", CloudflareProtocol.waitOf(body)))
+            return ok(actions.cloudflarePoll(req.token!!, pairing.phoneOf(req.token) ?: I18n.s("phone.default"), CloudflareProtocol.waitOf(body)))
         }
         val body = parse(req.body) ?: return badRequest()
         return when (req.path) {
@@ -97,7 +100,8 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
     private fun attach(body: JSONObject): ControlResponse {
         val report = (body.opt("report") as? String)?.trim() ?: return badRequest()
         if (!REPORT.matches(report) || report.length > MAX_REPORT) return badRequest()
-        actions.attach(report)
+        // an unknown language is ignored, so a newer phone does not break the link
+        actions.attach(report, (body.opt("lang") as? String)?.takeIf { it in LANGS })
         return okEmpty()
     }
 
@@ -130,7 +134,7 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         if (!isJson(req.contentType)) return ControlResponse(415, ControlServer.error("unsupported_media_type"))
         if (req.body.toByteArray(Charsets.UTF_8).size > SourcesProtocol.MAX_BODY) return ControlResponse(413, ControlServer.error("too_large"))
         val body = parse(req.body) ?: return badRequest()
-        val phone = pairing.phoneOf(req.token) ?: "Телефон"
+        val phone = pairing.phoneOf(req.token) ?: I18n.s("phone.default")
         val t = SourcesProtocol.parse(body, phone) ?: return badRequest()
         return when (val r = actions.sources(t)) {
             is SourcesOutcome.Applied -> {
@@ -194,6 +198,8 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
             CloudflareProtocol.POLL, CloudflareProtocol.ANSWER,
         )
         val KEYS = setOf("UP", "DOWN", "LEFT", "RIGHT", "ENTER", "BACK", "CATALOG", "NOWPLAYING")
+        /** UI languages of OMP (the phone sends its resolved one). */
+        val LANGS = setOf("ru", "en")
         private val REPORT = Regex("^http://.+", RegexOption.IGNORE_CASE)
 
         /** The pairing code as 4 digits: a string as given, a whole JSON number 0..9999 left-padded («0123»). */

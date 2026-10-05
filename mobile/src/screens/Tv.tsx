@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { goBack, navigate } from '../nav';
 import { native, type FoundTv, type FoundOmpTv } from '../platform/native';
@@ -12,7 +13,7 @@ import {
   sessionIp,
   tvState,
   tvError,
-  TV_FORGOT,
+  tvForgot,
 } from '../tv/tvClient';
 import { LG_OMP_APP_ID } from '../../../src/lib/installPlan';
 import { RenameSheet } from '../ui/RenameSheet';
@@ -99,11 +100,11 @@ export function Tv() {
 
   const savedList = tvs.value;
   const ompMeta = (ip: string, version?: string) => ip + (version ? ' · OMP ' + version : '');
-  const rows: Row[] = savedList.map((t) => {
-    const kind: TvKind = t.kind === 'atv' ? 'atv' : 'lg';
-    const atv = kind === 'atv' ? foundAtv.find((f) => f.ip === t.ip) : undefined;
-    const meta = atv && atv.version ? ompMeta(t.ip, atv.version) : t.ip + ' · сохранён';
-    return { ip: t.ip, name: t.name, meta, kind, saved: t, atv };
+  const rows: Row[] = savedList.map((sv) => {
+    const kind: TvKind = sv.kind === 'atv' ? 'atv' : 'lg';
+    const atv = kind === 'atv' ? foundAtv.find((f) => f.ip === sv.ip) : undefined;
+    const meta = atv && atv.version ? ompMeta(sv.ip, atv.version) : t('tvScreen.savedMeta', { ip: sv.ip });
+    return { ip: sv.ip, name: sv.name, meta, kind, saved: sv, atv };
   });
   for (const f of foundAtv) {
     if (rows.some((r) => r.ip === f.ip)) continue;
@@ -116,7 +117,7 @@ export function Tv() {
 
   const state = tvState.value;
   if (target && !rows.some((r) => r.ip === target) && (state === 'connecting' || state === 'pairing' || state === 'error')) {
-    rows.push({ ip: target, name: 'Телевизор ' + target, meta: target, kind: 'lg' });
+    rows.push({ ip: target, name: t('tvScreen.unnamed', { ip: target }), meta: target, kind: 'lg' });
   }
 
   async function forget(ip: string) {
@@ -130,7 +131,7 @@ export function Tv() {
       connect(r);
       return;
     }
-    const forgot = target === r.ip && state === 'error' && tvError.value === TV_FORGOT;
+    const forgot = target === r.ip && state === 'error' && tvError.value === tvForgot();
     if (r.saved?.token && !forgot) {
       setTarget(r.ip);
       setFormError('');
@@ -165,7 +166,7 @@ export function Tv() {
     e.preventDefault();
     const v = ip.trim();
     if (!IPV4.test(v)) {
-      setFormError('Введите IP-адрес вида 192.168.1.42');
+      setFormError(t('install.assistant.badIp'));
       return;
     }
     connect({ ip: v, name: 'LG ' + v });
@@ -174,23 +175,23 @@ export function Tv() {
   return (
     <div class="m-screen m-tvscreen">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
-        <h1 class="m-bar-title">Телевизор</h1>
+        <h1 class="m-bar-title">{t('history.tv')}</h1>
       </div>
       <p class="m-muted m-note">
-        Телефон и телевизор должны быть в одной сети Wi-Fi. На телевизоре должен быть установлен OMP.
+        {t('tvScreen.note')}
       </p>
       <button type="button" class="m-link m-tv-install" onClick={() => navigate({ name: 'install' })}>
-        Нет OMP на телевизоре? Помощник установки
+        {t('tvScreen.installLink')}
       </button>
       {searching && (
         <div class="m-muted m-searching">
           <svg class="m-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5B700" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
             <path d="M12 3a9 9 0 1 0 9 9" />
           </svg>
-          Ищу телевизоры…
+          {t('tvScreen.searching')}
         </div>
       )}
       <div class="m-list">
@@ -212,34 +213,34 @@ export function Tv() {
                     <span class="m-server-name">{r.name}</span>
                     <span class="m-muted m-small">
                       {r.meta}
-                      {connecting || pairing ? ' · подключение…' : ''}
+                      {connecting || pairing ? t('tvScreen.connectingSuffix') : ''}
                     </span>
                     <span class={'m-tv-kind ' + r.kind}>{KIND_LABEL[r.kind]}</span>
                     {connected && (
                       <span class="m-tv-ok">
                         <Icon d="M5 12l5 5 9-10" size={16} />
-                        Подключён
+                        {t('tvScreen.connected')}
                       </span>
                     )}
                   </span>
                 </button>
                 {r.saved && (
-                  <button type="button" class="m-icon-btn" aria-label={'Переименовать ' + r.name} onClick={() => setRenaming(r.saved!)}>
+                  <button type="button" class="m-icon-btn" aria-label={t('connect.rename', { name: r.name })} onClick={() => setRenaming(r.saved!)}>
                     <Icon d={PENCIL} size={20} />
                   </button>
                 )}
                 {r.saved && (
-                  <button type="button" class="m-icon-btn" aria-label={'Забыть ' + r.name} onClick={() => void forget(r.ip)}>
+                  <button type="button" class="m-icon-btn" aria-label={t('tvScreen.forgetAria', { name: r.name })} onClick={() => void forget(r.ip)}>
                     <Icon d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" size={20} />
                   </button>
                 )}
               </div>
-              {pairing && <div class="m-hint-warn">Подтвердите подключение на экране телевизора пультом: «Разрешить».</div>}
+              {pairing && <div class="m-hint-warn">{t('install.assistant.confirmOnTv')}</div>}
               {connected && noOmp === r.ip && (
                 <div class="m-hint-warn m-tv-noomp" role="status">
-                  <span>На этом телевизоре нет OMP.</span>
+                  <span>{t('tvScreen.noOmp')}</span>
                   <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={() => navigate({ name: 'install', ip: r.ip, kind: 'lg' })}>
-                    Установить OMP
+                    {t('install.plan.installOmp')}
                   </button>
                 </div>
               )}
@@ -254,7 +255,7 @@ export function Tv() {
       </div>
       {manual ? (
         <form class="m-field" onSubmit={connectManual}>
-          <label for="tv-ip">IP-адрес телевизора</label>
+          <label for="tv-ip">{t('install.assistant.ipLabel')}</label>
           <input
             id="tv-ip"
             class="m-input"
@@ -270,24 +271,23 @@ export function Tv() {
             </div>
           )}
           <button type="submit" class="m-btn m-btn-primary">
-            Подключить
+            {t('remote.code.connect')}
           </button>
         </form>
       ) : (
         <button type="button" class="m-btn m-btn-secondary" onClick={() => setManual(true)}>
-          Ввести IP-адрес телевизора
+          {t('tvScreen.manualIp')}
         </button>
       )}
       <p class="m-muted m-note m-tv-tip">
-        Телефон запомнит телевизор: в следующий раз «Смотреть на ТВ» и пульт заработают сразу. Чтобы включать телевизор с
-        телефона, на ТВ включите: Общие → Устройства → «Включение мобильного ТВ» (или «Включение через Wi‑Fi»).
+        {t('tvScreen.tip')}
       </p>
       {coding && (
         <CodeSheet tvName={coding.name} onSubmit={(code) => pair(coding, code)} onCancel={() => setCoding(null)} />
       )}
       {renaming && (
         <RenameSheet
-          title="Название телевизора"
+          title={t('tvScreen.renameTitle')}
           value={renaming.name}
           onSave={(n) => {
             renameTv(renaming.ip, n);

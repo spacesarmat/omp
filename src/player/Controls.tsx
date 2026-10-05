@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { formatDuration } from '../lib/format';
 import { Icon, KeyDot } from '../ui/icons';
 import type { Chapter } from './chapters';
@@ -34,7 +35,7 @@ export function Controls(p: ControlsProps) {
   };
   return (
     <div class="player-controls" onClick={(e) => e.stopPropagation()}>
-      <div class="player-title">{p.title}{cur && <span class="player-chapter"> · Глава {p.chapterIdx + 1}{cur.title ? ' «' + cur.title + '»' : ''}</span>}</div>
+      <div class="player-title">{p.title}{cur && <span class="player-chapter"> · {cur.title ? t('player.chapterTitled', { n: p.chapterIdx + 1, title: cur.title }) : t('player.chapterN', { n: p.chapterIdx + 1 })}</span>}</div>
       <div class="player-bar" onClick={barClick}>
         <div class="player-bar-fill" style={{ width: pct + '%' }} />
         {p.duration > 0 && p.chapters.map((ch, i) => (ch.start > 0 && ch.start < p.duration ? <div key={i} class="player-bar-tick" style={{ left: (ch.start / p.duration) * 100 + '%' }} /> : null))}
@@ -45,10 +46,10 @@ export function Controls(p: ControlsProps) {
         <span class="player-btn" onClick={p.onToggle}><Icon name={p.paused ? 'play' : 'pause'} size={32} /></span>
         {p.hasNext && <span class="player-btn" onClick={p.onNext}><Icon name="next" size={32} /></span>}
         <span>{formatDuration(shown)} / {formatDuration(p.duration)}</span>
-        <span class="player-btn" onClick={p.onTracks}><Icon name="tracks" size={28} /> Меню</span>
-        {p.chapters.length > 0 && <span class="player-btn" onClick={p.onChapters}>Главы</span>}
+        <span class="player-btn" onClick={p.onTracks}><Icon name="tracks" size={28} /> {t('player.menu')}</span>
+        {p.chapters.length > 0 && <span class="player-btn" onClick={p.onChapters}>{t('player.chapters')}</span>}
         <div class="spacer" />
-        <span class="player-hints">Влево/вправо — перемотка · Вверх — меню · <KeyDot color="green" /> статистика · {p.chapters.length > 0 ? 'CH− · CH+ — соседняя глава' : 'CH± — серии'}</span>
+        <span class="player-hints">{t('player.hintsHead')}<KeyDot color="green" />{t('player.hintsStats')}{p.chapters.length > 0 ? t('player.hintsChapters') : t('player.hintsEpisodes')}</span>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { native } from '../platform/native';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
@@ -12,7 +13,7 @@ import type { FoundOmpTv } from '../platform/native';
 import {
   tvState,
   tvError,
-  TV_FORGOT,
+  tvForgot,
   pairAtv,
   tvWaking,
   warmUp,
@@ -105,12 +106,15 @@ function vibrate(): void {
   }
 }
 
-const STATE_TEXT: Record<string, string> = {
-  idle: 'Не подключён',
-  connecting: 'Подключение…',
-  pairing: 'Подтвердите на ТВ',
-  connected: 'Подключён',
-  error: 'Нет связи',
+const stateText = (s: string): string => {
+  const map: Record<string, string> = {
+    idle: t('remote.state.idle'),
+    connecting: t('remote.state.connecting'),
+    pairing: t('remote.state.pairing'),
+    connected: t('remote.state.connected'),
+    error: t('remote.state.error'),
+  };
+  return map[s] || s;
 };
 
 interface Gesture {
@@ -163,7 +167,7 @@ function ScrollStrip({ run }: { run: (p: Promise<void>) => void }) {
     <div
       class="m-tp-strip"
       role="scrollbar"
-      aria-label="Прокрутка"
+      aria-label={t('remote.scrollStrip')}
       aria-orientation="vertical"
       onPointerDown={(e) => {
         e.stopPropagation();
@@ -212,7 +216,7 @@ function Touchpad() {
     <div
       class={'m-touchpad' + (touchpad.value.scrollStrip ? ' with-strip' : '')}
       role="application"
-      aria-label="Тачпад"
+      aria-label={t('remote.touchpad.title')}
       style={{ touchAction: 'none' }}
       onPointerDown={(e) => {
         const el = e.currentTarget as HTMLElement;
@@ -308,7 +312,7 @@ function Touchpad() {
         release(e);
       }}
     >
-      <span class="m-muted m-small">Проведите пальцем · двумя — прокрутка</span>
+      <span class="m-muted m-small">{t('remote.touchpadArea')}</span>
       {touchpad.value.scrollStrip && <ScrollStrip run={run} />}
     </div>
   );
@@ -352,8 +356,8 @@ function TvKeyboard() {
     <input
       ref={field}
       class="m-input"
-      aria-label="Ввод на телевизоре"
-      placeholder="Печатайте — текст уйдёт на ТВ"
+      aria-label={t('remote.typeLabel')}
+      placeholder={t('remote.typePlaceholder')}
       onCompositionStart={() => (composing.current = true)}
       onCompositionEnd={(e) => {
         composing.current = false;
@@ -388,10 +392,10 @@ function dpadButton(name: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT', label: string, press
 function DPad({ press }: { press: (n: RemoteButton) => void }) {
   return (
     <div class="m-dpad-wrap">
-      {dpadButton('UP', 'Вверх', press)}
-      {dpadButton('LEFT', 'Влево', press)}
-      {dpadButton('RIGHT', 'Вправо', press)}
-      {dpadButton('DOWN', 'Вниз', press)}
+      {dpadButton('UP', t('remote.up'), press)}
+      {dpadButton('LEFT', t('remote.left'), press)}
+      {dpadButton('RIGHT', t('remote.right'), press)}
+      {dpadButton('DOWN', t('remote.down'), press)}
       <button type="button" class="m-dpad-ok" onClick={() => press('ENTER')}>
         OK
       </button>
@@ -399,12 +403,15 @@ function DPad({ press }: { press: (n: RemoteButton) => void }) {
   );
 }
 
-const ATV_STATE: Record<string, string> = {
-  idle: 'не подключён',
-  connecting: 'подключение…',
-  pairing: 'подключение…',
-  connected: 'подключён',
-  error: 'нет связи',
+const atvStateText = (s: string): string => {
+  const map: Record<string, string> = {
+    idle: t('remote.atvState.idle'),
+    connecting: t('remote.atvState.connecting'),
+    pairing: t('remote.atvState.pairing'),
+    connected: t('remote.atvState.connected'),
+    error: t('remote.atvState.error'),
+  };
+  return map[s] || s;
 };
 
 /** Remote for OMP on Android TV (spec item 9): no power, touchpad or channel keys. */
@@ -414,7 +421,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
   const [kbd, setKbd] = useState(false);
   const [coding, setCoding] = useState(false);
   // the TV forgot this phone (its token was dropped): pair again by the code
-  const forgot = !tv.token || (state === 'error' && tvError.value === TV_FORGOT);
+  const forgot = !tv.token || (state === 'error' && tvError.value === tvForgot());
   const found: FoundOmpTv = { ip: tv.ip, port: tv.ctlPort || ATV_PORT, name: tv.defaultName ?? tv.name, version: '' };
   const press = (n: RemoteButton) => {
     vibrate();
@@ -435,16 +442,16 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
         <div class="m-remote-name">
           <span class="m-remote-title">{name}</span>
           <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>
-            {'Android TV · ' + (ATV_STATE[shown] || shown)}
+            {t('remote.atvLine', { state: atvStateText(shown) })}
           </span>
         </div>
       </div>
-      <p class="m-remote-note">Пульт управляет OMP на телевизоре. Включение ТВ и другие приложения — пультом от телевизора.</p>
+      <p class="m-remote-note">{t('remote.atvNote')}</p>
       {forgot && (
         <div class="m-remote-forgot">
-          <div class="m-hint-warn">{TV_FORGOT}</div>
+          <div class="m-hint-warn">{tvForgot()}</div>
           <button type="button" class="m-btn m-btn-primary" onClick={() => setCoding(true)}>
-            Подключить заново
+            {t('remote.pairAgain')}
           </button>
         </div>
       )}
@@ -453,25 +460,25 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
       </div>
       <div class="m-keyrow">
         <button type="button" class="m-key" onClick={() => press('BACK')}>
-          <Icon d={BACK} size={20} /> Назад
+          <Icon d={BACK} size={20} /> {t('common.back')}
         </button>
         <button type="button" class="m-key" onClick={() => ompKey('CATALOG')}>
-          Каталог
+          {t('nav.library')}
         </button>
         <button type="button" class="m-key" onClick={() => ompKey('NOWPLAYING')}>
-          Сейчас играет
+          {t('remote.nowPlaying')}
         </button>
       </div>
       <div class="m-keyrow">
-        <button type="button" class="m-key" aria-label="Клавиатура" aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
-          <Icon d={KEYBOARD} size={20} /> Клавиатура
+        <button type="button" class="m-key" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
+          <Icon d={KEYBOARD} size={20} /> {t('remote.keyboard')}
         </button>
         <div class="m-vol">
-          <button type="button" class="m-key" aria-label="Тише" onClick={() => vol('down')}>
+          <button type="button" class="m-key" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
             −
           </button>
-          <span class="m-vol-label">Громк.</span>
-          <button type="button" class="m-key" aria-label="Громче" onClick={() => vol('up')}>
+          <span class="m-vol-label">{t('remote.volShort')}</span>
+          <button type="button" class="m-key" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
             +
           </button>
         </div>
@@ -507,12 +514,12 @@ export function Remote() {
   if (!tv) {
     return (
       <div class="m-screen" data-route="remote">
-        <h1>Пульт</h1>
+        <h1>{t('nav.remote')}</h1>
         <div class="m-empty">
-          <h2>Подключите телевизор</h2>
-          <p class="m-muted">Чтобы управлять ТВ с телефона, сначала подключите его.</p>
+          <h2>{t('remote.noTvTitle')}</h2>
+          <p class="m-muted">{t('remote.noTvText')}</p>
           <button type="button" class="m-btn m-btn-primary" onClick={() => navigate({ name: 'tv' })}>
-            Подключить ТВ
+            {t('remote.noTvButton')}
           </button>
         </div>
       </div>
@@ -537,17 +544,17 @@ export function Remote() {
     act.volume(dir).catch(fail);
   };
   const off = async () => {
-    if (!act.confirm('Выключить ' + tv.name + '?')) return;
+    if (!act.confirm(t('remote.turnOffAsk', { name: tv.name }))) return;
     try {
       await act.turnOffTv();
-      showToast('Телевизор выключается');
+      showToast(t('remote.turnedOff'));
     } catch (e) {
       fail(e);
     }
   };
   const on = async () => {
     if (!tv.mac) {
-      showToast('Подключитесь к телевизору, когда он включён, — тогда его можно будет включать с телефона');
+      showToast(t('remote.needOnToConnect'));
       return;
     }
     try {
@@ -556,7 +563,7 @@ export function Remote() {
       fail(e);
       return;
     }
-    showToast('Включаю ' + tv.name + '…');
+    showToast(t('remote.turningOn', { name: tv.name }));
     void act.warmUp();
   };
   const media = (label: string, d: string, onClick: () => void, primary = false) => (
@@ -570,15 +577,15 @@ export function Remote() {
       <div class="m-lib-head">
         <div class="m-remote-name">
           <span class="m-remote-title">{tv.name}</span>
-          <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{tvWaking.value && state !== 'connected' && state !== 'pairing' ? STATE_TEXT.connecting : STATE_TEXT[state] || state}</span>
+          <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{tvWaking.value && state !== 'connected' && state !== 'pairing' ? stateText('connecting') : stateText(state)}</span>
         </div>
-        <button type="button" class="m-icon-btn" aria-label="Настройки тачпада" onClick={() => setTuning(true)}>
+        <button type="button" class="m-icon-btn" aria-label={t('remote.touchpad.label')} onClick={() => setTuning(true)}>
           <Icon d={TUNE} />
         </button>
         <button
           type="button"
           class={'m-power' + (state !== 'connected' && state !== 'pairing' && tv.mac ? ' on' : '')}
-          aria-label={state === 'connected' || state === 'pairing' ? 'Выключить телевизор' : 'Включить телевизор'}
+          aria-label={state === 'connected' || state === 'pairing' ? t('remote.turnOff') : t('remote.turnOn')}
           disabled={state === 'pairing'}
           onClick={() => void (state === 'connected' ? off() : on())}
         >
@@ -587,10 +594,10 @@ export function Remote() {
       </div>
       <div class="m-seg" role="tablist">
         <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>
-          Кнопки
+          {t('remote.buttons')}
         </button>
         <button type="button" role="tab" aria-selected={mode === 'touchpad'} class={mode === 'touchpad' ? 'on' : ''} onClick={() => setMode('touchpad')}>
-          Тачпад
+          {t('remote.touchpad.title')}
         </button>
       </div>
       {mode === 'buttons' ? (
@@ -601,31 +608,31 @@ export function Remote() {
         <Touchpad />
       )}
       <div class="m-keyrow">
-        <button type="button" class="m-key" aria-label="Назад" onClick={() => press('BACK')}>
-          <Icon d={BACK} size={20} /> Назад
+        <button type="button" class="m-key" aria-label={t('common.back')} onClick={() => press('BACK')}>
+          <Icon d={BACK} size={20} /> {t('common.back')}
         </button>
-        <button type="button" class="m-key" aria-label="Домой" onClick={() => press('HOME')}>
-          <Icon d={HOME} size={20} /> Домой
+        <button type="button" class="m-key" aria-label={t('remote.home')} onClick={() => press('HOME')}>
+          <Icon d={HOME} size={20} /> {t('remote.home')}
         </button>
-        <button type="button" class="m-key" aria-label="Меню" onClick={() => press('MENU')}>
-          <Icon d={MENU} size={20} /> Меню
+        <button type="button" class="m-key" aria-label={t('remote.menu')} onClick={() => press('MENU')}>
+          <Icon d={MENU} size={20} /> {t('remote.menu')}
         </button>
       </div>
       <div class="m-keyrow">
-        {media('Назад на 10 с', REW10, () => press('REWIND'))}
-        {media('Пред. серия', PREV, () => press('CHANNELDOWN'))}
-        {media(playing ? 'Пауза' : 'Воспроизвести', playing ? PAUSE : PLAY, togglePlay, true)}
-        {media('След. серия', NEXT, () => press('CHANNELUP'))}
-        {media('Вперёд на 10 с', FF10, () => press('FASTFORWARD'))}
+        {media(t('remote.back10s'), REW10, () => press('REWIND'))}
+        {media(t('remote.prevEpisode'), PREV, () => press('CHANNELDOWN'))}
+        {media(playing ? t('remote.mini.pause') : t('remote.playBtn'), playing ? PAUSE : PLAY, togglePlay, true)}
+        {media(t('remote.nextEpisode'), NEXT, () => press('CHANNELUP'))}
+        {media(t('remote.fwd10s'), FF10, () => press('FASTFORWARD'))}
       </div>
       <div class="m-keyrow">
-        <button type="button" class="m-key" aria-label="Тише" onClick={() => vol('down')}>
+        <button type="button" class="m-key" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
           <Icon d={VOL_DOWN} size={20} /> −
         </button>
-        <button type="button" class="m-key" aria-label="Клавиатура" aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
-          <Icon d={KEYBOARD} size={20} /> Клавиатура
+        <button type="button" class="m-key" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
+          <Icon d={KEYBOARD} size={20} /> {t('remote.keyboard')}
         </button>
-        <button type="button" class="m-key" aria-label="Громче" onClick={() => vol('up')}>
+        <button type="button" class="m-key" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
           <Icon d={VOL_UP} size={20} /> +
         </button>
       </div>

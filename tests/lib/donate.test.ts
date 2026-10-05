@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   activeMethods,
-  DONATE_METHODS,
+  donateMethods,
   DONATE_QR_URL,
   DONATE_URL,
   parseSupportCode,
@@ -22,7 +22,7 @@ describe('shared donate config', () => {
     expect(qrMethodActive(DONATE_QR_URL)).toBe(true);
   });
   it('no card when no method opens the QR link', () => {
-    expect(qrMethodActive(DONATE_QR_URL, DONATE_METHODS.map((m) => ({ ...m, url: '' })))).toBe(false);
+    expect(qrMethodActive(DONATE_QR_URL, donateMethods().map((m) => ({ ...m, url: '' })))).toBe(false);
     expect(qrMethodActive('')).toBe(false);
     expect(qrMethodActive('https://elsewhere.example/x')).toBe(false);
   });

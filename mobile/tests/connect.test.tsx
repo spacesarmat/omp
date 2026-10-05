@@ -1,3 +1,4 @@
+import { applyLanguageSetting } from '../../src/i18n';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -390,5 +391,57 @@ describe('scanLan', () => {
       ['192.168.1', '192.168.0'],
       ['192.168.1', '192.168.0'],
     ]);
+  });
+});
+
+describe('Connect screen in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  const supportedDeps = () =>
+    setLocalServerDeps({ native: { localServerInfo: async () => ({ supported: true, running: false }) } as any });
+
+  it('form, login block and QR', async () => {
+    mockFetch(() => ({ body: 'MatriX' }));
+    addServer({ url: 'http://192.168.1.5:8090', name: 'Home' });
+    const el = mount();
+    await flush();
+    expect(el.querySelector('h1')!.textContent).toBe('Connect to TorrServer');
+    expect(el.querySelector('label[for=addr]')!.textContent).toBe('Server address');
+    expect(btn(el, 'Connect')).toBeTruthy();
+    expect(btn(el, 'Find on network')).toBeTruthy();
+    expect(btn(el, 'Scan the QR from the TV')).toBeTruthy();
+    expect(el.textContent).toContain('On the TV: OMP → Settings → “Connect phone”.');
+    expect(el.textContent).toContain('Saved servers');
+    expect(el.textContent).toContain('192.168.1.5:8090 · online · MatriX');
+    expect(el.querySelector('[aria-label="Rename Home"]')).toBeTruthy();
+    await act(async () => btn(el, 'Login and password').click());
+    expect(el.querySelector('label[for=user]')!.textContent).toBe('Login');
+    expect(el.querySelector('label[for=pass]')!.textContent).toBe('Password');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('empty address and the toast after a scanned QR', async () => {
+    mockFetch(() => ({ body: 'MatriX' }));
+    setQrScanner(async () => ({ url: 'http://192.168.1.10:8090', name: 'Home' }));
+    const el = mount();
+    await act(async () => btn(el, 'Connect').click());
+    expect(el.querySelector('.m-error')!.textContent).toBe('Enter the server address');
+    await act(async () => btn(el, 'Scan the QR from the TV').click());
+    await flush();
+    expect(toast.value).toBe('Server “Home” added');
+  });
+
+  it('the card with the phone server after an empty scan', async () => {
+    supportedDeps();
+    setServerScanner(async () => []);
+    localServer.value = { supported: true, running: false };
+    const el = mount();
+    await flush();
+    const t = el.textContent!;
+    expect(t).toContain('No TorrServer found on the network');
+    expect(t).toContain('TorrServer right on the phone');
+    expect(t).toContain('Not found? Check that both devices are on the same Wi‑Fi network');
+    expect(btn(el, 'Start TorrServer on the phone')).toBeTruthy();
+    expect(t).not.toMatch(/[А-Яа-яЁё]/);
   });
 });

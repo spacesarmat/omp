@@ -9,6 +9,8 @@ export interface LaunchPlan {
   report?: string;
   /** a screen to open: `update` (sent by the phone when the TV has an old OMP) */
   open?: 'update';
+  /** The phone's resolved UI language: the TV stores it as its own language setting. */
+  lang?: 'ru' | 'en';
   invalid: boolean;
 }
 
@@ -84,6 +86,8 @@ export function parseLaunchParams(raw: unknown): LaunchPlan | null {
   }
   // unknown screens are ignored, so a newer phone does not break an older TV
   if (o.open === 'update') plan.open = 'update';
-  if (!plan.server && !plan.action && !plan.report && !plan.open && !plan.invalid) return null;
+  // an unknown language is ignored the same way
+  if (o.lang === 'ru' || o.lang === 'en') plan.lang = o.lang;
+  if (!plan.server && !plan.action && !plan.report && !plan.open && !plan.lang && !plan.invalid) return null;
   return plan;
 }

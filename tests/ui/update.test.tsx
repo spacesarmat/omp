@@ -1,6 +1,11 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+
+// the tests describe a stable installed build; the real version (a beta now) must not leak in
+vi.mock('../../src/version', () => ({ APP_VERSION: '0.15.5' }));
+
 import { render, h } from 'preact';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
+import { applyLanguageSetting } from '../../src/i18n';
 import { Qr } from '../../src/ui/Qr';
 import { UpdateScreen, apkJob } from '../../src/screens/Update';
 import { latestUpdate } from '../../src/store/updates';
@@ -282,5 +287,26 @@ describe('UpdateScreen on Android TV', () => {
     installButton(host).click();
     await until(() => calls.length === 2);
     expect(host.querySelector('.banner-error')).toBeNull();
+  });
+
+  it('an OMP native English error is shown once, without a second prefix', async () => {
+    applyLanguageSetting('en');
+    const host = await mount();
+    const btnEn = Array.from(host.querySelectorAll('.button')).find((x) => /Download and install/i.test(x.textContent || '')) as HTMLElement;
+    btnEn.click();
+    await until(() => calls.length === 1);
+    settle!.reject({ message: 'Could not download the update (HTTP 404)', code: 'omp' });
+    await until(() => !!host.querySelector('.banner-error'));
+    expect(host.querySelector('.banner-error')!.textContent).toBe('Could not download the update (HTTP 404)');
+  });
+  it('a bare English native error gets the prefix exactly once', async () => {
+    applyLanguageSetting('en');
+    const host = await mount();
+    const btnEn = Array.from(host.querySelectorAll('.button')).find((x) => /Download and install/i.test(x.textContent || '')) as HTMLElement;
+    btnEn.click();
+    await until(() => calls.length === 1);
+    settle!.reject({ message: 'HTTP 404' });
+    await until(() => !!host.querySelector('.banner-error'));
+    expect(host.querySelector('.banner-error')!.textContent).toBe('Could not install the update: HTTP 404');
   });
 });

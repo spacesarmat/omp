@@ -1,12 +1,13 @@
+import { applyLanguageSetting } from '../../src/i18n';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { FlareSolverr, ADDRESS_REMOVED } from '../src/screens/FlareSolverr';
+import { FlareSolverr, addressRemoved } from '../src/screens/FlareSolverr';
 import { Sources } from '../src/screens/Sources';
 import { currentRoute, resetTo } from '../src/nav';
 import { FLARESOLVERR_Q } from '../src/faq';
 import { flareSolverrUrl, setFlareSolverrUrl } from '../../src/sources/flareStore';
-import { FLARE_INTRO, NO_WIFI, NOT_ANSWERING, NOT_FOUND, setFlareStatus } from '../../src/sources/flaresolverr';
+import { flareIntro, flareNoWifi, flareNotAnswering, flareNotFound, setFlareStatus } from '../../src/sources/flaresolverr';
 import type { LanScan } from '../../src/sources/indexerDiscovery';
 import type { HttpResponse, SourceContext } from '../../src/sources/types';
 import type { IndexerEnv } from '../src/screens/SourcesIndexers';
@@ -75,7 +76,7 @@ afterEach(() => {
 describe('FlareSolverr screen', () => {
   it('shows the mockup texts', async () => {
     await mount();
-    expect(el.textContent).toContain(FLARE_INTRO);
+    expect(el.textContent).toContain(flareIntro());
     expect(el.textContent).toContain('Нет FlareSolverr?');
     expect(button('Найти в сети')).toBeTruthy();
     expect(button('Проверить')).toBeTruthy();
@@ -97,7 +98,7 @@ describe('FlareSolverr screen', () => {
     type('http://192.168.1.50:8191');
     await click(button('Проверить'));
     expect(flareSolverrUrl()).toBe('http://192.168.1.50:8191');
-    expect(el.querySelector('[data-flare-state="error"]')!.textContent).toBe(NOT_ANSWERING);
+    expect(el.querySelector('[data-flare-state="error"]')!.textContent).toBe(flareNotAnswering());
   });
 
   it('an empty address forgets FlareSolverr', async () => {
@@ -108,7 +109,7 @@ describe('FlareSolverr screen', () => {
     type('');
     await click(button('Проверить'));
     expect(flareSolverrUrl()).toBeNull();
-    expect(el.textContent).toContain(ADDRESS_REMOVED);
+    expect(el.textContent).toContain(addressRemoved());
   });
 
   it('«Найти в сети»: one found is filled in and checked', async () => {
@@ -138,10 +139,10 @@ describe('FlareSolverr screen', () => {
   it('«Найти в сети»: nothing found / not on Wi-Fi', async () => {
     await mount();
     await click(button('Найти в сети'));
-    expect(el.textContent).toContain(NOT_FOUND);
+    expect(el.textContent).toContain(flareNotFound());
     hits = null;
     await click(button('Найти в сети'));
-    expect(el.textContent).toContain(NO_WIFI);
+    expect(el.textContent).toContain(flareNoWifi());
     expect(flareSolverrUrl()).toBeNull();
   });
 
@@ -176,5 +177,43 @@ describe('entry in «Источники поиска»', () => {
     await flush();
     expect(el.querySelector('[data-entry="flaresolverr"]')!.textContent).toContain('не задан');
     expect(calls).toEqual([]);
+  });
+});
+
+describe('FlareSolverr screen in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+
+  it('texts, check result and removal of the address', async () => {
+    up['http://192.168.1.191:8191/'] = true;
+    await mount();
+    expect(el.querySelector('h1')!.textContent).toBe('FlareSolverr');
+    expect(el.querySelector('label[for=flare-url]')!.textContent).toBe('Address');
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    expect(el.textContent).toContain('No FlareSolverr?');
+    expect(button('Find on network')).toBeTruthy();
+    type('192.168.1.191');
+    await click(button('Check'));
+    expect(el.querySelector('[data-flare-state="ok"]')!.textContent).toMatch(/^Working · version 3\.4 · answer \d+\.\d s$/);
+    type('');
+    await click(button('Check'));
+    expect(el.textContent).toContain('Address removed: FlareSolverr is not used');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('a silent address and several found', async () => {
+    await mount();
+    type('http://192.168.1.50:8191');
+    await click(button('Check'));
+    expect(el.querySelector('[data-flare-state="error"]')!.textContent).toBe(flareNotAnswering());
+    up['http://192.168.1.5:8191/'] = true;
+    up['http://192.168.1.6:8191/'] = true;
+    hits = [
+      { ip: '192.168.1.5', port: 8191 },
+      { ip: '192.168.1.6', port: 8191 },
+    ];
+    await click(button('Find on network'));
+    expect(el.textContent).toContain('Several found — choose one:');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 });

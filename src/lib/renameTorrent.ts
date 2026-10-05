@@ -1,4 +1,5 @@
 import type { Torrent } from '../api/types';
+import { t } from '../i18n';
 
 export const TITLE_MAX = 200;
 
@@ -7,8 +8,8 @@ export type TitleCheck = { ok: true; title: string } | { ok: false; error: strin
 /** A title typed by the user: trimmed, 1–200 characters. */
 export function checkTitle(raw: string): TitleCheck {
   const title = (raw || '').replace(/\s+/g, ' ').trim();
-  if (!title) return { ok: false, error: 'Введите название' };
-  if (title.length > TITLE_MAX) return { ok: false, error: 'Не длиннее ' + TITLE_MAX + ' символов' };
+  if (!title) return { ok: false, error: t('errors.enterTitle') };
+  if (title.length > TITLE_MAX) return { ok: false, error: t('errors.titleTooLong', { max: TITLE_MAX }) };
   return { ok: true, title };
 }
 

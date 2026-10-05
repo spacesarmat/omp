@@ -3,21 +3,21 @@ import { setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { FocusGroup, Button, TextInput } from './components';
 import { useKeys } from './keys';
 import { errorMessage } from '../api/http';
+import { t } from '../i18n';
 import type { Source, SourceContext } from '../sources/types';
 import {
-  BROWSER_BUSY,
-  BROWSER_FAILED,
-  BROWSER_LOGIN,
-  BROWSER_STORE_FAILED,
+  browserBusy,
+  browserFailed,
+  browserLoginText,
+  browserStoreFailed,
   canLoginOnPhone,
   hasBrowserLogin,
   browserSuggestion,
-  LOGIN_ON_PHONE,
+  loginOnPhone,
 } from '../sources/browserLogin';
 
-export const TV_LOGIN_HINT =
-  'Проще с телефона: OMP → Пульт → «Клавиатура» вводит текст в это поле, или OMP → Настройки → Источники поиска → «Передать на телевизор».';
-export const TV_LOGIN_NOTE = 'Логин и пароль хранятся только на этом телевизоре в зашифрованном виде.';
+export const tvLoginHint = () => t('tv.login.hint');
+export const tvLoginNote = () => t('tv.login.note');
 
 /**
  * Android TV «Вход на rutracker»: login and password by the remote (or the phone keyboard), the source keeps them
@@ -62,7 +62,7 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
     const u = username.trim();
     const pw = pass.current;
     if (!u || !pw) {
-      setError('Введите логин и пароль');
+      setError(t('common.enterCredentials'));
       return;
     }
     setError('');
@@ -108,27 +108,27 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
         if (!alive.current) return;
         setBusy(false);
         if (r.result === 'ok') p.onDone(true);
-        else if (r.result === 'busy') setError(BROWSER_BUSY);
-        else if (r.result === 'failed') setError(BROWSER_FAILED);
-        else if (r.result === 'store_failed') setError(BROWSER_STORE_FAILED);
+        else if (r.result === 'busy') setError(browserBusy());
+        else if (r.result === 'failed') setError(browserFailed());
+        else if (r.result === 'store_failed') setError(browserStoreFailed());
         else setFocus(askPhone ? 'login-phone' : 'login-browser');
       },
       () => {
         if (!alive.current) return;
         setBusy(false);
-        setError(BROWSER_STORE_FAILED);
+        setError(browserStoreFailed());
       },
     );
   };
 
-  const title = 'Вход на ' + p.source.name;
+  const title = t('common.signInTo', { site: p.source.name });
   return (
     <div class="dialog-backdrop">
       <FocusGroup focusKey="LOGIN-DIALOG" className="dialog login-dialog" boundary>
         <div class="dialog-title">{title}</div>
-        <div class="login-label">Логин</div>
+        <div class="login-label">{t('common.login')}</div>
         <TextInput focusKey="login-user" value={username} onChange={setUsername} />
-        <div class="login-label">Пароль</div>
+        <div class="login-label">{t('common.password')}</div>
         <TextInput
           focusKey="login-pass"
           type="password"
@@ -139,19 +139,19 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
           }}
           onSubmit={submit}
         />
-        <div class="login-hint">{TV_LOGIN_HINT}</div>
-        <div class="login-note">{TV_LOGIN_NOTE}</div>
+        <div class="login-hint">{tvLoginHint()}</div>
+        <div class="login-note">{tvLoginNote()}</div>
         {error && <div class="banner-error login-error">{error}</div>}
         {browser && suggest && <div class="login-hint login-captcha">{suggest}</div>}
         {browser && (
           <div class="login-actions login-browser">
-            <Button focusKey="login-browser" className={suggest ? 'primary' : ''} label={BROWSER_LOGIN} onPress={() => viaBrowser(false)} />
-            {canLoginOnPhone() && <Button focusKey="login-phone" label={LOGIN_ON_PHONE} onPress={() => viaBrowser(true)} />}
+            <Button focusKey="login-browser" className={suggest ? 'primary' : ''} label={browserLoginText()} onPress={() => viaBrowser(false)} />
+            {canLoginOnPhone() && <Button focusKey="login-phone" label={loginOnPhone()} onPress={() => viaBrowser(true)} />}
           </div>
         )}
         <div class="login-actions">
-          <Button focusKey="login-cancel" label="Отмена" onPress={close} />
-          <Button focusKey="login-ok" className="primary" label={busy ? 'Вхожу…' : 'Войти'} onPress={submit} />
+          <Button focusKey="login-cancel" label={t('common.cancel')} onPress={close} />
+          <Button focusKey="login-ok" className="primary" label={busy ? t('common.signingIn') : t('common.signIn')} onPress={submit} />
         </div>
       </FocusGroup>
     </div>

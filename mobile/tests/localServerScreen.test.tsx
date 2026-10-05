@@ -1,3 +1,4 @@
+import { applyLanguageSetting } from '../../src/i18n';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -314,5 +315,66 @@ describe('LocalServer screen', () => {
     expect(el.querySelector('.m-error')).toBeNull();
     expect(el.textContent).toContain('Открыть каталог');
     expect(servers.value).toHaveLength(1);
+  });
+});
+
+describe('LocalServer screen in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  const CYR = /[А-Яа-яЁё]/;
+  const btn = (el: HTMLElement, text: string) => Array.from(el.querySelectorAll('button')).find((b) => b.textContent === text);
+  // the binary has to be downloaded; no size is given (the size text comes from server/localServer)
+  const offerDeps = (over: { binary: 'missing' | 'outdated'; mobileData?: boolean }) => ({
+    native: {
+      async localServerInfo() {
+        return { supported: true, running: false, binary: over.binary, pinVersion: 'MatriX.146', ...(over.mobileData ? { mobileData: true } : {}) };
+      },
+    } as any,
+  });
+
+  it('steps, address for the TV and the VPN warning', async () => {
+    setLocalServerDeps(deps({ vpn: true }));
+    const el = mount();
+    await flush();
+    expect(el.querySelector('h1')!.textContent).toBe('TorrServer on the phone');
+    const steps = Array.from(el.querySelectorAll('.m-step-label')).map((n) => n.textContent);
+    expect(steps.slice(1)).toEqual(['Starting in the background', 'Checking the connection', 'Connecting OMP']);
+    expect(el.textContent).toContain('Address for the TV');
+    expect(el.textContent).toContain('VPN is on — other devices may not see the server.');
+    expect(el.textContent).toContain('On the TV: Sign in → “Find on network”.');
+    expect(btn(el, 'Open the catalog')).toBeTruthy();
+    expect(el.textContent).not.toMatch(CYR);
+  });
+
+  it('the download offer, the update offer and the mobile data question', async () => {
+    setLocalServerDeps(offerDeps({ binary: 'missing' }));
+    const el = mount();
+    await flush();
+    expect(el.textContent).toContain('TorrServer is not part of the OMP installation file. It has to be downloaded once from GitHub (version MatriX.146), preferably over Wi‑Fi.');
+    expect(btn(el, 'Download TorrServer')).toBeTruthy();
+    expect(el.textContent).not.toMatch(CYR);
+    setLocalServerDeps(offerDeps({ binary: 'outdated' }));
+    const el2 = mount();
+    await flush();
+    expect(el2.textContent).toContain('A new version of the built-in TorrServer is out — MatriX.146.');
+    expect(btn(el2, 'Update TorrServer')).toBeTruthy();
+    expect(btn(el2, 'Run the current version')).toBeTruthy();
+    setLocalServerDeps(offerDeps({ binary: 'missing', mobileData: true }));
+    const el3 = mount();
+    await flush();
+    await act(async () => btn(el3, 'Download TorrServer')!.click());
+    expect(el3.textContent).toContain('Download TorrServer over mobile data?');
+    expect(el3.textContent).toContain('The phone is not on Wi‑Fi right now.');
+    expect(btn(el3, 'Download')).toBeTruthy();
+    expect(btn(el3, 'Cancel')).toBeTruthy();
+    expect(el3.textContent).not.toMatch(CYR);
+  });
+
+  it('a failed step offers a retry', async () => {
+    setLocalServerDeps(deps({ echoFails: 1 }));
+    const el = mount();
+    await flush();
+    expect(el.querySelector('.m-step.fail')!.textContent).toContain('Checking the connection');
+    expect(btn(el, 'Retry')).toBeTruthy();
   });
 });

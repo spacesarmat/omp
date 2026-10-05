@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import {
   runMonitor,
   runAction,
@@ -299,6 +300,35 @@ describe('runMonitor: a check', () => {
     const s = await runMonitor(deps(host));
     expect(s.error).toBe('Нет ответа от приложения');
     expect(host.finished).toEqual([s]);
+  });
+});
+
+describe('notification texts in English', () => {
+  afterEach(() => applyLanguageSetting('ru'));
+
+  it('titles, texts and button results have no Russian', async () => {
+    applyLanguageSetting('en');
+    const sub = addSubscription({ query: 'Dune', quality: '2160', sources: null, notify: true })!;
+    const r = res('Dune 2021 2160p');
+    const f = (key: string): Finding => ({ subId: sub.id, key, result: r, at: 1 });
+    expect(subNotification(sub, [f('k1'), f('k2')]).title).toBe('Dune 2160p: 2 new torrents');
+    expect(subNotification(sub, [f('k1')]).title).toBe('Dune 2160p: 1 new torrent');
+    const ep: Finding = {
+      subId: EPISODES_ID,
+      key: 'h:1:10',
+      result: res('Starbound Frontier S01E01-10 of 10'),
+      at: 1,
+      episodes: { torrentHash: 'f'.repeat(40), torrentTitle: 'Starbound Frontier S01 1-8', season: 1, haveTo: 8, from: 1, to: 10 },
+    };
+    const n = episodeNotification(ep);
+    expect(n.title).toBe('Starbound Frontier: episodes 9–10 are out');
+    expect(n.text).toBe('New torrent on rutor: episodes 1–10 of 10. You have 1–8.');
+    expect(n.title + n.text).not.toMatch(/[А-Яа-яЁё]/);
+    // a button with no saved finding and no server
+    const host = fakeHost({ action: { kind: 'add', subId: 'nope', key: 'nope' } });
+    const s = await runMonitor(deps(host, { client: () => null }));
+    expect(s.action!.message).toBe('The finding is no longer available — open OMP');
+    expect(s.action!.message).not.toMatch(/[А-Яа-яЁё]/);
   });
 });
 

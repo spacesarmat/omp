@@ -16,7 +16,7 @@ import {
   LOG_TEXT_MAX,
   LOG_KEY,
   ISSUE_URL_MAX,
-  LOG_COPIED_NOTE,
+  logCopiedNote,
   type LogInfo,
 } from '../../src/lib/log';
 
@@ -157,7 +157,7 @@ describe('format and GitHub URL', () => {
     expect(body).toContain('сбой 0');
     expect(body).toContain('сбой 2');
     expect(body).not.toContain('инфо не в отчёте');
-    expect(body).not.toContain(LOG_COPIED_NOTE);
+    expect(body).not.toContain(logCopiedNote());
     // fully percent-encoded: ASCII only, no spaces or raw newlines
     expect(/^[\x21-\x7e]+$/.test(url)).toBe(true);
   });
@@ -170,14 +170,14 @@ describe('format and GitHub URL', () => {
     const url = githubIssueUrl(info);
     expect(url.length).toBeLessThanOrEqual(ISSUE_URL_MAX);
     const body = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('body')!;
-    expect(body).toContain(LOG_COPIED_NOTE);
+    expect(body).toContain(logCopiedNote());
     expect(body).toContain('сбой 99');
     expect(body).not.toContain('сбой 0 ');
   });
   it('without errors only the note', () => {
     log('info', 'app', 'x');
     const body = new URLSearchParams(githubIssueUrl(info).split('?')[1]).get('body')!;
-    expect(body).toContain(LOG_COPIED_NOTE);
+    expect(body).toContain(logCopiedNote());
     expect(body).not.toContain('Последние ошибки');
   });
 });

@@ -2,7 +2,7 @@
 // (per format tab) with .torrent links that download without a login, and no magnet links. TorrServer adds an
 // http(s) .torrent link itself, so a result carries it in Link (Magnet and hash stay empty).
 import { absUrl, parseSize, textOf } from './html';
-import { loadDoc, makeResult, NO_TORRENT, PARSE_ERROR, requireHost, toInt } from './site';
+import { loadDoc, makeResult, noTorrent, parseError, requireHost, toInt } from './site';
 import type { Source, SourceContext, SourceResult } from './types';
 
 const HOST = 'tr.anidub.com';
@@ -16,7 +16,7 @@ export const ANIDUB_MAX_RELEASES = 15;
 export const ANIDUB_PAGE_TIMEOUT_MS = 5000;
 /** From the start of a search: no new release pages after it, and the results found so far are returned. */
 export const ANIDUB_DEADLINE_MS = 12000;
-export const ANIDUB_NO_TORRENT = NO_TORRENT;
+export const anidubNoTorrent = (): string => noTorrent();
 
 interface Release {
   title: string;
@@ -26,7 +26,7 @@ interface Release {
 
 function parseList(doc: Document, base: string): Release[] {
   const posts = doc.querySelectorAll('div.search_post');
-  if (!posts.length && !doc.querySelector('input[name="story"]')) throw new Error(PARSE_ERROR);
+  if (!posts.length && !doc.querySelector('input[name="story"]')) throw new Error(parseError());
   const out: Release[] = [];
   for (let i = 0; i < posts.length; i++) {
     const a = posts[i].querySelector('h2 a');
@@ -153,7 +153,7 @@ export const anidub: Source = {
       if (id) return downloadUrl(id[1]);
       return loadDoc(ctx, detailUrl).then((p) => {
         const blocks = torrentBlocks(p.doc);
-        if (!blocks.length) throw new Error(ANIDUB_NO_TORRENT);
+        if (!blocks.length) throw new Error(anidubNoTorrent());
         return downloadUrl(blocks[0].id);
       });
     });

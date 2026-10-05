@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { LaunchError } from '../ui/LaunchError';
 import { SubSheet } from '../ui/SubSheet';
@@ -41,18 +42,18 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
   return (
     <div class="m-screen" data-route="subFindings">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
-        <h1 class="m-bar-title m-grow">{sub ? sub.query : 'Подписка'}</h1>
+        <h1 class="m-bar-title m-grow">{sub ? sub.query : t('monitor.sub.title')}</h1>
         {sub && (
           <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => setEditing(true)}>
-            Изменить
+            {t('connect.edit')}
           </button>
         )}
       </div>
       {!sub ? (
-        <div class="m-muted">Подписка удалена</div>
+        <div class="m-muted">{t('monitor.sub.deleted')}</div>
       ) : (
         <>
           <div class="m-muted m-small">{subRule(sub)}</div>
@@ -63,12 +64,12 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
           {list.length === 0 && (
             <div class="m-muted">
               {seenKeys(id) === null
-                ? 'Подписка ещё не проверялась. Первая проверка только запомнит, что уже есть, — о новых раздачах OMP сообщит после неё.'
-                : 'Новых раздач пока нет'}
+                ? t('news.subNeverChecked')
+                : t('news.subNoFindings')}
             </div>
           )}
           <div class="m-results">
-            {list.map((f) => rows.card(f.result, { flag: fresh.indexOf(f.key) >= 0 ? 'Новая' : undefined, highlight: f.key === finding }))}
+            {list.map((f) => rows.card(f.result, { flag: fresh.indexOf(f.key) >= 0 ? t('monitor.replaceSheet.fresh') : undefined, highlight: f.key === finding }))}
           </div>
         </>
       )}

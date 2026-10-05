@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
-import { SourcesScreen, NO_INDEXERS, INTRO } from '../../src/screens/Sources';
+import { SourcesScreen, noIndexers, intro } from '../../src/screens/Sources';
 import { registerSource, unregisterSource, builtinSources } from '../../src/sources/registry';
 import { indexerConnections, indexerKeyName, reloadIndexers, setTorznabHosts } from '../../src/sources/indexerStore';
 import { startIndexerSources } from '../../src/sources/indexer';
@@ -104,7 +104,7 @@ describe('Android TV «Источники поиска» indexers (mockup 1)', (
     const id = saveJackett();
     secrets[indexerKeyName(id)] = KEY;
     await mount();
-    expect(host.textContent).toContain(INTRO);
+    expect(host.textContent).toContain(intro());
     const groups = Array.from(host.querySelectorAll('.src-group')).map((g) => g.textContent);
     expect(groups).toEqual(['Индексаторы', 'Через TorrServer', 'Встроенные']);
     const r = row(id);
@@ -163,6 +163,6 @@ describe('Android TV «Источники поиска» indexers (mockup 1)', (
 
   it('no connections: how to add one', async () => {
     await mount();
-    expect(host.textContent).toContain(NO_INDEXERS);
+    expect(host.textContent).toContain(noIndexers());
   });
 });

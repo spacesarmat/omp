@@ -2,6 +2,7 @@
 // android/.../player/EngineChooser.kt. The page sends the setting (or the torrent's own choice from the player
 // menu) with playNative and tells the player when ffprobe finds ASS/SSA subtitles; the player reports its
 // switches with `nativePlayerEngine`.
+import { t } from '../i18n';
 import type { FfprobeResult } from '../api/types';
 import type { TrackPref } from '../store/trackPrefs';
 import { tracksFromProbe, normalizeLang } from '../lib/tracks';
@@ -23,14 +24,16 @@ export function isEngineChoice(v: unknown): v is EngineChoice {
 }
 
 /** The settings choices (names and texts of the «Плеер» section). */
-export const PLAYER_ENGINE_OPTIONS: { value: PlayerEngineSetting; name: string; text: string }[] = [
-  { value: 'auto', name: 'Авто', text: 'Встроенный плеер; если он не может открыть файл или в нём субтитры ASS — VLC с того же места' },
-  { value: 'builtin', name: 'Встроенный', text: 'Плеер Android с декодером FFmpeg: DTS, AC3 и TrueHD без поддержки приставки' },
-  { value: 'vlc', name: 'VLC', text: 'Почти все форматы и субтитры ASS со стилями; чуть дольше открывает файл' },
-];
+export function playerEngineOptions(): { value: PlayerEngineSetting; name: string; text: string }[] {
+  return [
+    { value: 'auto', name: t('player.engineAuto'), text: t('player.engineAutoText') },
+    { value: 'builtin', name: t('player.engineBuiltin'), text: t('player.engineBuiltinText') },
+    { value: 'vlc', name: t('player.engineVlc'), text: t('player.engineVlcText') },
+  ];
+}
 
 /** Shown instead of the «VLC» text when libVLC cannot run on the device (no native libraries for its ABI). */
-export const VLC_UNAVAILABLE = 'VLC недоступен на этом устройстве';
+export const vlcUnavailable = (): string => t('player.vlcUnavailable');
 
 /** Whether libVLC runs on this device; true when the plugin cannot tell (the player falls back by itself). */
 export function vlcAvailable(p: Pick<OmpNativeTvPlugin, 'vlcAvailable'> | null): Promise<boolean> {
@@ -93,8 +96,8 @@ export function sanitizeNativeEngine(v: unknown): NativeEngineEvent | null {
 
 /** The error-log text of an automatic switch (no file names); null for a choice from the menu. */
 export function engineLogText(e: NativeEngineEvent): string | null {
-  if (e.reason === 'format') return 'плеер: переключение на VLC (формат)';
-  if (e.reason === 'ass') return 'плеер: переключение на VLC (субтитры ASS)';
+  if (e.reason === 'format') return t('player.logVlcFormat');
+  if (e.reason === 'ass') return t('player.logVlcAss');
   return null;
 }
 

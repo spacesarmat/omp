@@ -4,6 +4,7 @@ import { FocusGroup, Button, TextInput } from '../../ui/components';
 import { useKeys } from '../../ui/keys';
 import { confirmDialog } from '../../ui/dialog';
 import { toast } from '../../ui/toast';
+import { t } from '../../i18n';
 
 export function EditServerDialog(p: { server: SavedServer; onClose: () => void }) {
   const [name, setName] = useState(p.server.name);
@@ -19,20 +20,20 @@ export function EditServerDialog(p: { server: SavedServer; onClose: () => void }
 
   const save = () => {
     if (!url.trim()) {
-      toast('Введите адрес сервера', 'error');
+      toast(t('connect.enterAddress'), 'error');
       return;
     }
     const r = updateServer(p.server.id, { name, url, user, password });
     if (r === 'duplicate') {
-      toast('Такой сервер уже есть', 'error');
+      toast(t('connect.duplicate'), 'error');
       return;
     }
-    toast('Сохранено');
+    toast(t('connect.saved'));
     p.onClose();
   };
 
   const remove = () => {
-    confirmDialog('Удалить сервер «' + p.server.name + '»?', 'Удалить').then((ok) => {
+    confirmDialog(t('connect.deleteAsk', { name: p.server.name }), t('common.delete')).then((ok) => {
       if (!ok) return;
       removeServer(p.server.id);
       p.onClose();
@@ -42,26 +43,26 @@ export function EditServerDialog(p: { server: SavedServer; onClose: () => void }
   return (
     <div class="dialog-backdrop">
       <FocusGroup focusKey="EDIT-SERVER" className="dialog edit-server" boundary autoFocus>
-        <div class="dialog-title">Изменить сервер</div>
-        <label class="field-label">Название</label>
-        <TextInput focusKey="edit-name" value={name} onChange={setName} placeholder="Например, Дом" />
-        <label class="field-label">Адрес</label>
+        <div class="dialog-title">{t('connect.editTitle')}</div>
+        <label class="field-label">{t('connect.name')}</label>
+        <TextInput focusKey="edit-name" value={name} onChange={setName} placeholder={t('connect.namePlaceholder')} />
+        <label class="field-label">{t('connect.addressShort')}</label>
         <TextInput value={url} onChange={setUrl} placeholder="192.168.1.191:8090" type="url" />
         <div class="row">
           <div class="grow">
-            <label class="field-label">Логин</label>
-            <TextInput value={user} onChange={setUser} placeholder="Нет" />
+            <label class="field-label">{t('common.login')}</label>
+            <TextInput value={user} onChange={setUser} placeholder={t('connect.none')} />
           </div>
           <div class="grow">
-            <label class="field-label">Пароль</label>
-            <TextInput value={password} onChange={setPassword} placeholder="Нет" type="password" />
+            <label class="field-label">{t('common.password')}</label>
+            <TextInput value={password} onChange={setPassword} placeholder={t('connect.none')} type="password" />
           </div>
         </div>
-        <div class="muted small">Логин и пароль сохраняются вместе с сервером. Оставьте пустыми, если авторизация на TorrServer выключена.</div>
+        <div class="muted small">{t('connect.authNote')}</div>
         <div class="row edit-actions">
-          <Button label="Сохранить" className="primary grow" onPress={save} />
-          <Button label="Отмена" onPress={p.onClose} />
-          <Button label="Удалить" className="danger" onPress={remove} />
+          <Button label={t('common.save')} className="primary grow" onPress={save} />
+          <Button label={t('common.cancel')} onPress={p.onClose} />
+          <Button label={t('common.delete')} className="danger" onPress={remove} />
         </div>
       </FocusGroup>
     </div>

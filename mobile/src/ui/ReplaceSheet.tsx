@@ -3,7 +3,8 @@ import { Sheet } from './Sheet';
 import { Icon } from './Icon';
 import { showToast } from './toast';
 import { qualityBadge } from './Poster';
-import { rangeText, plural } from '../monitor/text';
+import { rangeText } from '../monitor/text';
+import { t, tp } from '../../../src/i18n';
 import { reloadMonitor } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
 import { client } from '../../../src/store/servers';
@@ -84,7 +85,7 @@ export function ReplaceSheet({
 
   const replace = async () => {
     const c = client.value;
-    if (!c) return setError('Сервер не выбран');
+    if (!c) return setError(t('errors.noServerSelected'));
     if (!old) {
       // not in the loaded list: ask the server; when it is really gone there is nothing to replace, the card goes
       setBusy(true);
@@ -92,27 +93,27 @@ export function ReplaceSheet({
       const all = await c.list().catch((): Torrent[] | null => null);
       if (!alive.v) return;
       setBusy(false);
-      if (!all) return setError('Не удалось получить список раздач');
+      if (!all) return setError(t('monitor.replaceSheet.noList'));
       if (all.some((t) => sameHash(t.hash, e.torrentHash))) {
         void refreshTorrents(c).catch(() => {});
-        return setError('Список раздач ещё загружается — повторите');
+        return setError(t('monitor.replaceSheet.loading'));
       }
       removeFindings(EPISODES_ID, finding.key);
       reloadMonitor();
-      showToast('Раздачи уже нет на сервере');
+      showToast(t('monitor.replaceSheet.gone'));
       onClose();
       return;
     }
     setBusy(true);
     setError('');
     const r: ReplaceResult = await replaceWithResult(c, old.hash, picked, phoneSourceContext()).catch(
-      (): ReplaceResult => ({ ok: false, error: 'Не удалось заменить раздачу.' }),
+      (): ReplaceResult => ({ ok: false, error: t('monitor.replace.failed') }),
     );
     if (r.ok) {
       removeFindings(EPISODES_ID, finding.key);
       reloadMonitor();
       void refreshTorrents(c).catch(() => {});
-      showToast('Заменено: ' + shortTitle(picked.Title));
+      showToast(t('monitor.replaceSheet.replaced', { title: shortTitle(picked.Title) }));
       onReplaced?.(r.hash, picked.Title);
       if (alive.v) onClose();
       return;
@@ -125,9 +126,9 @@ export function ReplaceSheet({
   if (choosing) {
     const list = [finding.result].concat((others || []).filter((r) => resultKey(r) !== resultKey(finding.result)));
     return (
-      <Sheet label="Другая раздача" onClose={() => setChoosing(false)}>
-        <div class="m-sheet-title">Другая раздача</div>
-        <div class="m-sheet-scroll m-sub-pick" role="radiogroup" aria-label="Другая раздача">
+      <Sheet label={t('monitor.replaceSheet.other')} onClose={() => setChoosing(false)}>
+        <div class="m-sheet-title">{t('monitor.replaceSheet.other')}</div>
+        <div class="m-sheet-scroll m-sub-pick" role="radiogroup" aria-label={t('monitor.replaceSheet.other')}>
           {list.map((r) => {
             const on = resultKey(r) === resultKey(picked);
             return (
@@ -155,27 +156,27 @@ export function ReplaceSheet({
     );
   }
 
-  const more = others === null ? 'ищу…' : others.length ? 'ещё ' + others.length + ' ' + plural(others.length, 'вариант', 'варианта', 'вариантов') + ' ›' : 'других нет';
+  const more = others === null ? t('monitor.replaceSheet.searching') : others.length ? tp('monitor.replaceSheet.moreN', others.length) + ' ›' : t('monitor.replaceSheet.noOthers');
   return (
-    <Sheet label="Заменить раздачу" onClose={() => !busy && onClose()}>
-      <div class="m-sheet-title">{thenWatch ? 'Заменить и смотреть' : 'Заменить раздачу'}</div>
-      {thenWatch && <div class="m-muted m-small">Сначала новая раздача заменит старую, потом начнётся просмотр на ТВ.</div>}
-      <div class="m-muted m-small">{name + ' · Сезон ' + e.season}</div>
+    <Sheet label={t('monitor.replaceSheet.title')} onClose={() => !busy && onClose()}>
+      <div class="m-sheet-title">{thenWatch ? t('monitor.replaceSheet.titleWatch') : t('monitor.replaceSheet.title')}</div>
+      {thenWatch && <div class="m-muted m-small">{t('monitor.replaceSheet.watchNote')}</div>}
+      <div class="m-muted m-small">{name + ' · ' + t('library.season', { n: e.season })}</div>
       <div class="m-rep-box">
-        <div class="m-muted m-small">Сейчас</div>
+        <div class="m-muted m-small">{t('monitor.replaceSheet.now')}</div>
         <div class="m-rep-line">{releaseLine(oldTitle, oldSize)}</div>
       </div>
       <div class="m-rep-arrow m-muted" aria-hidden="true">
         ↓
       </div>
       <div class="m-rep-box new">
-        <div class="m-accent m-small">{['Новая', sourceName(picked.source), seedsText(picked.Seed || 0)].join(' · ')}</div>
+        <div class="m-accent m-small">{[t('monitor.replaceSheet.fresh'), sourceName(picked.source), seedsText(picked.Seed || 0)].join(' · ')}</div>
         <div class="m-rep-line">{releaseLine(picked.Title, picked.Size)}</div>
       </div>
       <div class="m-rep-moves">
-        <div>✓ История просмотров и места остановки переносятся</div>
-        <div>✓ Настройки «Пропуск» и категория переносятся</div>
-        <div>✓ Старая раздача удаляется с сервера</div>
+        <div>✓ {t('monitor.replaceSheet.keepsHistory')}</div>
+        <div>✓ {t('monitor.replaceSheet.keepsSkip')}</div>
+        <div>✓ {t('monitor.replaceSheet.removesOld')}</div>
       </div>
       <button
         type="button"
@@ -184,12 +185,12 @@ export function ReplaceSheet({
         disabled={busy || !others || !others.length}
         onClick={() => setChoosing(true)}
       >
-        <span>Другая раздача</span>
+        <span>{t('monitor.replaceSheet.other')}</span>
         <span class="m-muted">{more}</span>
       </button>
       {busy && (
         <div class="m-muted m-small" role="status">
-          Заменяю… Это может занять до минуты.
+          {t('monitor.replaceSheet.busy')}
         </div>
       )}
       {error && (
@@ -199,10 +200,10 @@ export function ReplaceSheet({
       )}
       <div class="m-marks-actions">
         <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={onClose}>
-          Отмена
+          {t('common.cancel')}
         </button>
         <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={() => void replace()}>
-          {thenWatch ? 'Заменить и смотреть' : 'Заменить'}
+          {thenWatch ? t('monitor.replaceSheet.titleWatch') : t('monitor.replaceSheet.replace')}
         </button>
       </div>
     </Sheet>

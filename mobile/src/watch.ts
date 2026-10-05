@@ -3,7 +3,7 @@
 import { h, type VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Clipboard } from '@capacitor/clipboard';
-import { launchOnTv, ompVersionOnTv, TV_NO_OMP } from './tv/tvClient';
+import { launchOnTv, ompVersionOnTv, tvNoOmp } from './tv/tvClient';
 import { reportUrl, markLaunched } from './tv/playerLink';
 import { activeTv } from './tv/tvStore';
 import { showToast } from './ui/toast';
@@ -19,6 +19,7 @@ import { parseTorrentData, type TorrServerClient } from '../../src/api/torrserve
 import { recordWatch } from '../../src/store/journal';
 import type { Torrent } from '../../src/api/types';
 import { baseName, type TorrentFile } from '../../src/lib/episodes';
+import { t as tr } from '../../src/i18n';
 
 export interface WatchOnTvParams {
   server: string;
@@ -46,7 +47,7 @@ export function streamUrlFor(c: TorrServerClient, t: Pick<Torrent, 'hash'>, file
   return withAuth ? c.videoSrc(url) : url;
 }
 
-export const NO_WIFI = 'Телефон не в сети Wi‑Fi — телевизор не увидит сервер';
+export const noWifi = () => tr('localServer.noWifi');
 
 /** Replaces a loopback host with the phone's LAN address; null when the host is local and there is no address. */
 export function lanServerUrl(url: string, ip: string | null): string | null {
@@ -57,11 +58,11 @@ export function lanServerUrl(url: string, ip: string | null): string | null {
 
 const ip_replace = (url: string, at: number, len: number, ip: string) => url.slice(0, at) + ip + url.slice(at + len);
 
-/** Server URL as the TV (or a copied link) must see it; throws NO_WIFI when only the phone can reach it. */
+/** Server URL as the TV (or a copied link) must see it; throws noWifi() when only the phone can reach it. */
 export async function tvServerUrl(url: string): Promise<string> {
   if (lanServerUrl(url, '0.0.0.0') === url) return url;
   const r = lanServerUrl(url, await actions.localIpv4().catch(() => null));
-  if (r === null) throw new Error(NO_WIFI);
+  if (r === null) throw new Error(noWifi());
   return r;
 }
 
@@ -102,12 +103,12 @@ export function setWatchActions(a: Partial<WatchActions> | null): void {
   actions = a ? { ...defaults, ...a } : defaults;
 }
 
-const PHONE = 'Телефон';
+const phoneFallback = () => tr('history.phone');
 
 function phoneNameSafe(): Promise<string> {
   return actions.phoneName().then(
-    (n) => (typeof n === 'string' && n.trim() ? n.trim() : PHONE),
-    () => PHONE,
+    (n) => (typeof n === 'string' && n.trim() ? n.trim() : phoneFallback()),
+    () => phoneFallback(),
   );
 }
 
@@ -162,7 +163,7 @@ export const OMP_INSTALL_URL = 'https://github.com/spacesarmat/omp#readme';
 
 /** True when a TV launch failed because OMP is not installed on the TV. */
 export function isNoOmp(message: string): boolean {
-  return message === TV_NO_OMP;
+  return message === tvNoOmp();
 }
 
 /** Opens the TV install guide in the external browser. */
@@ -251,7 +252,7 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
           if (choice === 'resume') t = o.at;
         }
       }
-      // first: without Wi-Fi (NO_WIFI) there is nothing to launch, so the player-state server is not started
+      // first: without Wi-Fi (noWifi()) there is nothing to launch, so the player-state server is not started
       const serverUrl = await tvServerUrl(c.baseUrl);
       const report = await actions.reportUrl();
       const from = o.file !== undefined ? await phoneNameSafe() : undefined;
@@ -260,7 +261,7 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
       if (o.file !== undefined) void recordPhoneWatch(c, o.hash, o.file, t || 0, o.duration || 0, from);
       if (!alive.v) return;
       if (o.onLaunched) o.onLaunched(tv.name);
-      else showToast('Запустил на ' + tv.name);
+      else showToast(tr('add.launchedOn', { name: tv.name }));
       jumping = true;
       cancelJump.current = openRemoteSoon(currentRoute.value, release, landing);
     } catch (e) {
@@ -282,7 +283,7 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
       });
     } else {
       sheet = h(ResumeSheet, {
-        info: step.label + ' · на ' + step.tv,
+        info: tr('add.resumeInfo', { label: step.label, tv: step.tv }),
         at: step.at,
         duration: step.duration,
         onResume: () => step.answer('resume'),

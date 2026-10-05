@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { t, tp } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
@@ -47,14 +48,6 @@ const LINK = 'M9 15l6-6M10 6l1.5-1.5a5 5 0 0 1 7 7L17 13M14 18l-1.5 1.5a5 5 0 0 
 const CHECK = 'M5 12.5l4.5 4.5L19 7';
 const CHEVRON = 'M9 6l6 6-6 6';
 
-function plural(n: number, one: string, few: string, many: string): string {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
-}
-
 function fileCode(f: TorrentFile): string {
   return episodeLabel(f.path);
 }
@@ -96,7 +89,7 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
       label: [code, fileTitle(file)].filter(Boolean).join(' · '),
       onBusy: setBusy,
       onError: (m) => setStatus(m ? { kind: 'error', text: m } : null),
-      onLaunched: (name) => setStatus({ kind: 'ok', text: 'Запустил на ' + name }),
+      onLaunched: (name) => setStatus({ kind: 'ok', text: t('add.launchedOn', { name: name }) }),
     });
   };
 
@@ -113,7 +106,7 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
   const onCopy = async (withAuth: boolean) => {
     try {
       await actions.copyText(await tvServerUrl(streamUrlFor(c, torrent, file, withAuth)));
-      showToast(withAuth && hasAuth ? 'Ссылка скопирована (с логином и паролем)' : 'Ссылка скопирована');
+      showToast(withAuth && hasAuth ? t('torrent.screen.linkCopiedAuth') : t('torrent.screen.linkCopied'));
       if (alive.v) onClose();
     } catch (e) {
       if (alive.v) setStatus({ kind: 'error', text: errorMessage(e) });
@@ -121,29 +114,29 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
   };
 
   return (
-    <Sheet onClose={onClose} label="Где смотреть">
+    <Sheet onClose={onClose} label={t('torrent.screen.whereLabel')}>
       <div class="m-muted m-small">{head.join(' · ')}</div>
-      <div class="m-sheet-title">Где смотреть?</div>
+      <div class="m-sheet-title">{t('torrent.screen.whereTitle')}</div>
       <button type="button" class="m-opt primary" disabled={busy} onClick={onTv}>
         <Icon d={TV} size={26} />
         <span class="m-opt-text">
-          <span class="m-opt-name">{tv ? 'На телевизоре ' + tv.name : 'На телевизоре'}</span>
-          <span class="m-opt-sub">{tv ? 'Откроется OMP и начнётся просмотр' : 'Сначала подключите телевизор'}</span>
+          <span class="m-opt-name">{tv ? t('torrent.screen.onTvNamed', { name: tv.name }) : t('torrent.screen.onTv')}</span>
+          <span class="m-opt-sub">{tv ? t('torrent.screen.onTvSub') : t('torrent.screen.connectTvFirst')}</span>
         </span>
       </button>
       <button type="button" class="m-opt" onClick={onPhone}>
         <Icon d={PHONE} size={26} />
         <span class="m-opt-text">
-          <span class="m-opt-name">На телефоне</span>
-          <span class="m-opt-sub">В VLC, MX Player или другом плеере</span>
+          <span class="m-opt-name">{t('torrent.screen.onPhone')}</span>
+          <span class="m-opt-sub">{t('torrent.screen.onPhoneSub')}</span>
         </span>
       </button>
       <button type="button" class="m-opt" onClick={() => onCopy(true)}>
         <Icon d={LINK} size={26} />
         <span class="m-opt-text">
-          <span class="m-opt-name">Скопировать ссылку на поток</span>
+          <span class="m-opt-name">{t('torrent.screen.copyLink')}</span>
           <span class="m-opt-sub">
-            {hasAuth ? 'Ссылка содержит логин и пароль сервера' : 'Для другого устройства в этой сети'}
+            {hasAuth ? t('torrent.screen.copyLinkAuth') : t('torrent.screen.copyLinkSub')}
           </span>
         </span>
       </button>
@@ -151,8 +144,8 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
         <button type="button" class="m-opt" onClick={() => onCopy(false)}>
           <Icon d={LINK} size={26} />
           <span class="m-opt-text">
-            <span class="m-opt-name">Скопировать без пароля</span>
-            <span class="m-opt-sub">Плеер на другом устройстве спросит логин</span>
+            <span class="m-opt-name">{t('torrent.screen.copyNoPassword')}</span>
+            <span class="m-opt-sub">{t('torrent.screen.copyNoPasswordSub')}</span>
           </span>
         </button>
       )}
@@ -177,7 +170,7 @@ function SkipSwitch({ on, label, onToggle }: { on: boolean; label: string; onTog
 }
 
 type Marks = { mi: [number, number] | null; mc: number | null };
-const BAD_TIME = 'Введите время как мин:сек, например 1:30';
+const badTime = (): string => t('torrent.screen.badTime');
 
 /** «Заставка и титры»: manual marks for the whole torrent (used when the file has no chapters). */
 function MarksSheet({ title, prefs, onSave, onClose }: { title: string; prefs: SkipPrefs; onSave: (p: Marks) => Promise<unknown>; onClose: () => void }) {
@@ -209,20 +202,20 @@ function MarksSheet({ title, prefs, onSave, onClose }: { title: string; prefs: S
 
   const save = () => {
     const f = from.trim();
-    const t = to.trim();
+    const tt = to.trim();
     const l = last.trim();
     let mi: [number, number] | null = null;
     let mc: number | null = null;
-    if (f || t) {
+    if (f || tt) {
       const a = parseMark(f);
-      const b = parseMark(t);
-      if (a === null || b === null) return setError(BAD_TIME);
-      if (b <= a) return setError('Конец заставки должен быть позже начала');
+      const b = parseMark(tt);
+      if (a === null || b === null) return setError(badTime());
+      if (b <= a) return setError(t('torrent.screen.introEndLater'));
       mi = [a, b];
     }
     if (l) {
       const m = parseMark(l);
-      if (m === null || m <= 0) return setError(BAD_TIME);
+      if (m === null || m <= 0) return setError(badTime());
       mc = m;
     }
     setError('');
@@ -230,26 +223,26 @@ function MarksSheet({ title, prefs, onSave, onClose }: { title: string; prefs: S
   };
 
   return (
-    <Sheet onClose={onClose} label="Заставка и титры">
-      <div class="m-sheet-title">Заставка и титры</div>
-      <div class="m-muted m-small">Для всех серий «{title}». Если в файле есть главы «Заставка» или «Титры» — используются они.</div>
-      <div class="m-section">Заставка</div>
+    <Sheet onClose={onClose} label={t('tv.marks.title')}>
+      <div class="m-sheet-title">{t('tv.marks.title')}</div>
+      <div class="m-muted m-small">{t('torrent.screen.marksText', { title: title })}</div>
+      <div class="m-section">{t('torrent.screen.marksIntro')}</div>
       <div class="m-marks-pair">
         <div class="m-field">
-          <label for="m-mark-from">С</label>
+          <label for="m-mark-from">{t('torrent.screen.marksFrom')}</label>
           <input id="m-mark-from" class="m-input" type="text" inputMode="numeric" value={from} onInput={(e) => setFrom((e.target as HTMLInputElement).value)} />
         </div>
         <div class="m-field">
-          <label for="m-mark-to">До</label>
+          <label for="m-mark-to">{t('torrent.screen.marksTo')}</label>
           <input id="m-mark-to" class="m-input" type="text" inputMode="numeric" value={to} onInput={(e) => setTo((e.target as HTMLInputElement).value)} />
         </div>
       </div>
-      <div class="m-section">Титры</div>
+      <div class="m-section">{t('torrent.screen.marksCredits')}</div>
       <div class="m-field">
-        <label for="m-mark-last">Последние (мин:сек)</label>
+        <label for="m-mark-last">{t('torrent.screen.marksLast')}</label>
         <input id="m-mark-last" class="m-input" type="text" inputMode="numeric" value={last} onInput={(e) => setLast((e.target as HTMLInputElement).value)} />
       </div>
-      <div class="m-muted m-small">Удобнее отметить прямо в плеере: меню → «Отметить начало заставки».</div>
+      <div class="m-muted m-small">{t('torrent.screen.marksHint')}</div>
       {error && (
         <div class="m-error" role="alert">
           {error}
@@ -257,10 +250,10 @@ function MarksSheet({ title, prefs, onSave, onClose }: { title: string; prefs: S
       )}
       <div class="m-marks-actions">
         <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={() => write({ mi: null, mc: null })}>
-          Сбросить
+          {t('common.reset')}
         </button>
         <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={save}>
-          Сохранить
+          {t('common.save')}
         </button>
       </div>
     </Sheet>
@@ -272,7 +265,7 @@ export function Torrent({ hash }: { hash: string }) {
   const listed = torrents.value.find((x) => x.hash === hash);
   // a torrent just added may not be in the list yet: ask the server for it
   const [fetched, setFetched] = useState<TorrentT | null | undefined>(undefined);
-  const t = listed || fetched || undefined;
+  const tor = listed || fetched || undefined;
   const [loaded, setLoaded] = useState<TorrentT | null>(null);
   const [sheet, setSheet] = useState<TorrentFile | null>(null);
   const [status, setStatus] = useState('');
@@ -281,21 +274,21 @@ export function Torrent({ hash }: { hash: string }) {
   const [marksOpen, setMarksOpen] = useState(false);
   const [finding, setFinding] = useState(false);
   const [renaming, setRenaming] = useState(false);
-  // «Следить за новыми сериями» (omp.w in the journal); null until read from the server
+  // «Follow new episodes» (omp.w in the journal); null until read from the server
   const [watchNew, setWatchNew] = useState<boolean | null>(null);
   progressVersion.value;
   serverViewed.value;
 
-  const own = t ? filesOf(t) : [];
+  const own = tor ? filesOf(tor) : [];
   const allFiles = own.length ? own : loaded ? filesOf(loaded) : [];
-  const skip = useSkip(c, hash, firstPlayableId(allFiles), !!t);
+  const skip = useSkip(c, hash, firstPlayableId(allFiles), !!tor);
   // file list comes from the list entry; load it from the server if the entry has none
   useEffect(() => {
-    if (!c || !t || own.length) return;
+    if (!c || !tor || own.length) return;
     let alive = true;
     c.loadInfo(hash).then(
       (info) => {
-        repairTitles(c, [{ ...t, file_stats: info.file_stats }]);
+        repairTitles(c, [{ ...tor, file_stats: info.file_stats }]);
         if (alive) setLoaded(info);
       },
       () => {},
@@ -303,14 +296,14 @@ export function Torrent({ hash }: { hash: string }) {
     return () => {
       alive = false;
     };
-  }, [c, hash, !!t, own.length]);
+  }, [c, hash, !!tor, own.length]);
 
   useEffect(() => {
     if (c) void refreshViewed(c);
   }, [c]);
 
   useEffect(() => {
-    if (!c || !t) return;
+    if (!c || !tor) return;
     let alive = true;
     loadWatch(c, hash).then(
       (v) => alive && setWatchNew(v),
@@ -319,7 +312,7 @@ export function Torrent({ hash }: { hash: string }) {
     return () => {
       alive = false;
     };
-  }, [c, hash, !!t]);
+  }, [c, hash, !!tor]);
 
   useEffect(() => {
     if (!c || listed) return;
@@ -334,13 +327,13 @@ export function Torrent({ hash }: { hash: string }) {
     };
   }, [c, hash, !!listed]);
 
-  if (!c || !t) {
+  if (!c || !tor) {
     return (
       <div class="m-screen m-torrent" data-route="torrent">
-        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} size={20} />
         </button>
-        <p class="m-muted m-note">{c && fetched === undefined ? 'Загружаю…' : 'Раздача не найдена'}</p>
+        <p class="m-muted m-note">{c && fetched === undefined ? t('torrent.screen.loading') : t('torrent.screen.notFound')}</p>
       </div>
     );
   }
@@ -350,14 +343,14 @@ export function Torrent({ hash }: { hash: string }) {
     skip.save((p) => (key === 'i' ? { i: !p.i } : { c: !p.c }), true).then(undefined, (e) => showToast(errorMessage(e)));
   };
   const tv = activeTv.value;
-  const title = displayTitle(t);
+  const title = displayTitle(tor);
   // a series of the catalogue with episode numbers: new episodes are looked for unless switched off here
-  const series = isWatchedSeries({ hash: t.hash, title, category: t.category, data: '', file_stats: allFiles });
+  const series = isWatchedSeries({ hash: tor.hash, title, category: tor.category, data: '', file_stats: allFiles });
   const toggleWatchNew = () => {
     if (watchNew === null) return;
     const next = !watchNew;
     setWatchNew(next);
-    saveWatch(c, t, next).then(
+    saveWatch(c, tor, next).then(
       () => {
         // switched off: its «new episodes» card goes too
         if (!next) findingsOf(EPISODES_ID).forEach((f) => f.episodes && f.episodes.torrentHash === hash.toLowerCase() && removeFindings(EPISODES_ID, f.key));
@@ -373,12 +366,12 @@ export function Torrent({ hash }: { hash: string }) {
   const first = files[0];
   const season = first ? parseEpisode(first.path).season : null;
   const hasEpisodes = files.length > 1;
-  const peers = t.total_peers || t.active_peers || 0;
+  const peers = tor.total_peers || tor.active_peers || 0;
   const meta = [
-    season !== null ? 'Сезон ' + season : '',
-    hasEpisodes ? files.length + ' ' + plural(files.length, 'серия', 'серии', 'серий') : '',
-    t.torrent_size ? formatBytes(t.torrent_size) : '',
-    peers ? peers + ' ' + plural(peers, 'пир', 'пира', 'пиров') : '',
+    season !== null ? t('library.season', { n: season }) : '',
+    hasEpisodes ? tp('library.episodes', files.length) : '',
+    tor.torrent_size ? formatBytes(tor.torrent_size) : '',
+    peers ? tp('torrent.screen.peerCount', peers) : '',
   ].filter(Boolean);
 
   // where to continue: the latest started file of this torrent, else the first one
@@ -387,8 +380,8 @@ export function Torrent({ hash }: { hash: string }) {
   const at = target ? resumePosition(hash, target.id) : 0;
   const targetCode = target ? fileCode(target) : '';
   const mainLabel = at > 0
-    ? 'Продолжить на ТВ · ' + (targetCode ? targetCode + ' ' : '') + 'с ' + formatDuration(at)
-    : 'Смотреть на ТВ' + (hasEpisodes && targetCode ? ' · ' + targetCode : '');
+    ? t('torrent.screen.continueOnTv', { ep: targetCode ? targetCode + ' ' : '', time: formatDuration(at) })
+    : t('news.watchOnTv') + (hasEpisodes && targetCode ? ' · ' + targetCode : '');
 
   const watchMain = async () => {
     if (!target) return;
@@ -410,7 +403,7 @@ export function Torrent({ hash }: { hash: string }) {
   const watchPhone = async () => {
     if (!target) return;
     try {
-      await actions.openExternal(streamUrlFor(c, t, target), 'video/*');
+      await actions.openExternal(streamUrlFor(c, tor, target), 'video/*');
       void recordPhoneWatch(c, hash, target.id, 0, getLocalProgress(hash, target.id)?.duration || 0);
     } catch (e) {
       setStatus(errorMessage(e));
@@ -421,31 +414,31 @@ export function Torrent({ hash }: { hash: string }) {
     if (finding) return;
     setFinding(true);
     let found = '';
-    findPosters(c, [t], (_h, poster) => (found = poster)).then((r) => {
+    findPosters(c, [tor], (_h, poster) => (found = poster)).then((r) => {
       setFinding(false);
-      if (!r.hasKey) showToast('Задайте ключ TMDB в «Настройках сервера»');
-      else if (!found) showToast('Обложка не найдена');
+      if (!r.hasKey) showToast(t('torrent.screen.needTmdbKey'));
+      else if (!found) showToast(t('torrent.screen.posterNotFound'));
       else {
-        showToast('Обложка найдена');
+        showToast(t('torrent.screen.posterFound'));
         if (!listed && fetched) setFetched({ ...fetched, poster: found });
       }
     });
   };
 
   const rename = (raw: string) =>
-    renameTorrent(c, t, raw).then((saved) => {
+    renameTorrent(c, tor, raw).then((saved) => {
       torrents.value = torrents.value.map((x) => (x.hash === hash ? { ...x, title: saved } : x));
       if (!listed && fetched) setFetched({ ...fetched, title: saved });
-      showToast('Переименовано');
+      showToast(t('torrent.screen.renamed'));
       void refreshTorrents(c).catch(() => {});
     });
 
   const remove = () => {
-    if (!window.confirm('Удалить раздачу «' + shortTitle(title) + '»?')) return;
+    if (!window.confirm(t('torrent.screen.deleteAsk', { title: shortTitle(title) }))) return;
     c.remove(hash).then(
       () => {
         torrents.value = torrents.value.filter((x) => x.hash !== hash);
-        // its «Новые серии» card can't be replaced any more
+        // its «New episodes» card can't be replaced any more
         pruneEpisodeFindings((h) => h.toLowerCase() !== hash.toLowerCase());
         reloadMonitor();
         void refreshTorrents(c).catch(() => {});
@@ -458,21 +451,21 @@ export function Torrent({ hash }: { hash: string }) {
 
   return (
     <div class="m-screen m-torrent" data-route="torrent">
-      <div class="m-thead" style={posterStyle(t) + '; --poster: ' + posterColor(hash)}>
+      <div class="m-thead" style={posterStyle(tor) + '; --poster: ' + posterColor(hash)}>
         <div class="m-thead-bar">
-          <button type="button" class="m-icon-btn m-glass" aria-label="Назад" onClick={() => goBack()}>
+          <button type="button" class="m-icon-btn m-glass" aria-label={t('common.back')} onClick={() => goBack()}>
             <Icon d={BACK} size={20} />
           </button>
           <div class="m-thead-actions">
-            {!t.poster && (
-              <button type="button" class="m-icon-btn m-glass" aria-label="Найти обложку" disabled={finding} onClick={findPoster}>
+            {!tor.poster && (
+              <button type="button" class="m-icon-btn m-glass" aria-label={t('torrent.screen.findPoster')} disabled={finding} onClick={findPoster}>
                 <Icon d={IMAGE} size={20} />
               </button>
             )}
-            <button type="button" class="m-icon-btn m-glass" aria-label="Переименовать" onClick={() => setRenaming(true)}>
+            <button type="button" class="m-icon-btn m-glass" aria-label={t('torrent.rename.title')} onClick={() => setRenaming(true)}>
               <Icon d={PENCIL} size={20} />
             </button>
-            <button type="button" class="m-icon-btn m-glass m-danger" aria-label="Удалить раздачу" onClick={remove}>
+            <button type="button" class="m-icon-btn m-glass m-danger" aria-label={t('torrent.screen.deleteTorrent')} onClick={remove}>
               <Icon d={TRASH} size={20} />
             </button>
           </div>
@@ -498,29 +491,29 @@ export function Torrent({ hash }: { hash: string }) {
         </button>
         <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={!target} onClick={watchPhone}>
           <Icon d={PHONE} size={18} />
-          Смотреть на телефоне
+          {t('torrent.screen.watchOnPhone')}
         </button>
         {status && <LaunchError message={status} />}
         {files.length > 0 && (
           <div class="m-skip">
             <div class="m-skip-head">
-              <span class="m-skip-title">Пропуск</span>
-              <span class="m-muted m-small">для всех серий · ТВ и телефон</span>
+              <span class="m-skip-title">{t('torrent.skip')}</span>
+              <span class="m-muted m-small">{t('torrent.screen.skipSub')}</span>
             </div>
             <div class="m-skip-row">
-              <span class="m-skip-text">Пропускать заставку</span>
-              <SkipSwitch on={skip.prefs.i} label="Пропускать заставку" onToggle={() => toggleSkip('i')} />
+              <span class="m-skip-text">{t('torrent.screen.skipIntroSwitch')}</span>
+              <SkipSwitch on={skip.prefs.i} label={t('torrent.screen.skipIntroSwitch')} onToggle={() => toggleSkip('i')} />
             </div>
             <div class="m-skip-row">
               <span class="m-skip-text">
-                Пропускать титры
-                <span class="m-muted m-small">сразу следующая серия</span>
+                {t('torrent.skipCreditsShort')}
+                <span class="m-muted m-small">{t('torrent.screen.creditsSub')}</span>
               </span>
-              <SkipSwitch on={skip.prefs.c} label="Пропускать титры" onToggle={() => toggleSkip('c')} />
+              <SkipSwitch on={skip.prefs.c} label={t('torrent.skipCreditsShort')} onToggle={() => toggleSkip('c')} />
             </div>
             <button type="button" class="m-skip-row m-skip-open" onClick={() => setMarksOpen(true)}>
               <span class="m-skip-text">
-                Заставка и титры
+                {t('tv.marks.title')}
                 <span class="m-muted m-small">{skipStatus(skip.hasChapters, skip.prefs)}</span>
               </span>
               <Icon d={CHEVRON} size={20} />
@@ -531,14 +524,14 @@ export function Torrent({ hash }: { hash: string }) {
           <div class="m-skip" data-block="watch-new">
             <div class="m-skip-row">
               <span class="m-skip-text">
-                Следить за новыми сериями
-                <span class="m-muted m-small">сообщить, когда выйдут следующие серии</span>
+                {t('monitor.settings.episodes')}
+                <span class="m-muted m-small">{t('torrent.screen.watchNewSub')}</span>
               </span>
-              <SkipSwitch on={watchNew !== false} label="Следить за новыми сериями" onToggle={toggleWatchNew} />
+              <SkipSwitch on={watchNew !== false} label={t('monitor.settings.episodes')} onToggle={toggleWatchNew} />
             </div>
           </div>
         )}
-        {files.length > 0 && <div class="m-section">{hasEpisodes ? 'Серии' : 'Файлы'}</div>}
+        {files.length > 0 && <div class="m-section">{hasEpisodes ? t('torrent.screen.episodesHead') : t('torrent.screen.filesHead')}</div>}
         <div class="m-list m-eps">
           {files.map((f, i) => {
             const pct = isWatched(hash, f.id) ? 100 : Math.round(progressRatio(hash, f.id) * 100);
@@ -559,7 +552,7 @@ export function Torrent({ hash }: { hash: string }) {
       </div>
       {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
-      {sheet && <WatchSheet torrent={t} file={sheet} onClose={() => setSheet(null)} />}
+      {sheet && <WatchSheet torrent={tor} file={sheet} onClose={() => setSheet(null)} />}
       {launch.sheet}
     </div>
   );

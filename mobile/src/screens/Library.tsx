@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { t, tp } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
 import { Poster, qualityBadge } from '../ui/Poster';
 import { Logo } from '../../../src/ui/Logo';
@@ -11,10 +12,10 @@ import { client, activeServer } from '../../../src/store/servers';
 import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
-import { buildHistory, resumeFrom, sourceLine, HISTORY_FILTERS } from '../../../src/lib/history';
+import { buildHistory, resumeFrom, sourceLine, historyFilters } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
-import { LIBRARY_TABS, nextView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
+import { libraryTabs, nextView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { formatBytes } from '../../../src/lib/format';
 import { episodeLabel, playableFiles } from '../../../src/lib/episodes';
@@ -34,13 +35,10 @@ const PULL_HOLD = 56;
 const pullOf = (dy: number) => (dy > 0 ? Math.min(PULL_MAX, dy * PULL_DAMP) : 0);
 const titleOf = (t: Torrent) => displayTitle(t);
 
-function episodesText(t: Torrent): string {
-  const n = playableFiles(filesOf(t)).length;
+function episodesText(tor: Torrent): string {
+  const n = playableFiles(filesOf(tor)).length;
   if (n < 2) return '';
-  const m10 = n % 10;
-  const m100 = n % 100;
-  const word = m10 === 1 && m100 !== 11 ? 'серия' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'серии' : 'серий';
-  return n + ' ' + word;
+  return tp('library.episodes', n);
 }
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0 6 6 0 0 0-12 0zM21 21l-5-5';
@@ -194,9 +192,9 @@ export function Library() {
   // no binary yet (e.g. updated from 0.14, when it was in the APK): the setup screen offers the download
   const mustDownload = canStartLocal && !canRun(local);
   const size = downloadSize(local);
-  const startLabel = mustDownload ? 'Скачать TorrServer' + (size ? ' (' + size + ')' : '') : 'Запустить сервер';
+  const startLabel = mustDownload ? (size ? t('library.downloadServerSize', { size }) : t('library.downloadServer')) : t('remote.startServer');
   const startNote = mustDownload
-    ? 'TorrServer на телефоне больше не входит в OMP — его нужно один раз скачать.'
+    ? t('library.mustDownload')
     : startError || undefined;
   async function startServer() {
     if (mustDownload) {
@@ -207,7 +205,7 @@ export function Library() {
     setStarting(true);
     try {
       await startLocal();
-      setStartError(localServer.value.running ? '' : localServer.value.error || 'Не удалось запустить сервер');
+      setStartError(localServer.value.running ? '' : localServer.value.error || t('library.startFailed'));
     } finally {
       setStarting(false);
       setReload((n) => n + 1);
@@ -237,11 +235,11 @@ export function Library() {
   const count = isHistory ? history.length : shown.length;
   let empty = '';
   if (loaded && !count && !unavailable) {
-    if (query.trim()) empty = 'Ничего не найдено';
-    else if (isHistory && hfilter !== 'all') empty = hfilter === 'phone' ? 'С телефона пока ничего не смотрели' : 'С телевизора пока ничего не смотрели';
-    else if (isHistory) empty = 'История пуста. Здесь появится то, что вы начали смотреть';
-    else if (!list.length) empty = 'Нет торрентов. Добавьте через «Добавить» или веб-интерфейс TorrServer.';
-    else empty = 'В этой категории пока ничего нет';
+    if (query.trim()) empty = t('catalog.nothingFound');
+    else if (isHistory && hfilter !== 'all') empty = hfilter === 'phone' ? t('catalog.nothingFromPhone') : t('catalog.nothingFromTv');
+    else if (isHistory) empty = t('catalog.historyEmpty');
+    else if (!list.length) empty = t('library.noTorrents');
+    else empty = t('catalog.categoryEmpty');
   }
 
   const continueOnTv = (hash: string, fileIndex: number, time: number, duration: number, label: string) =>
@@ -270,7 +268,7 @@ export function Library() {
           <button
             type="button"
             class="m-icon-btn m-sort"
-            aria-label={'Сортировка: ' + sortLabel(sort)}
+            aria-label={t('tv.topbar.sort', { name: sortLabel(sort) })}
             onClick={() => updateSettings({ librarySort: nextSort(sort) })}
           >
             <Icon d={ICONS.sort} size={20} />
@@ -280,7 +278,7 @@ export function Library() {
           <button
             type="button"
             class="m-icon-btn m-view"
-            aria-label={'Вид: ' + viewLabel(view)}
+            aria-label={t('tv.topbar.view', { name: viewLabel(view) })}
             onClick={() => updateSettings({ libraryView: nextView(view) })}
           >
             <Icon d={ICONS['view-' + view as keyof typeof ICONS]} size={20} />
@@ -289,7 +287,7 @@ export function Library() {
         <button
           type="button"
           class="m-icon-btn"
-          aria-label="Поиск"
+          aria-label={t('add.search')}
           aria-pressed={searchOpen}
           onClick={() => (librarySearchOpen.value = !searchOpen)}
         >
@@ -300,14 +298,14 @@ export function Library() {
         <input
           class="m-input m-lib-search"
           type="search"
-          aria-label="Поиск по названию"
-          placeholder="Поиск по названию"
+          aria-label={t('catalog.searchPlaceholder')}
+          placeholder={t('catalog.searchPlaceholder')}
           value={query}
           onInput={(e) => (libraryQuery.value = (e.target as HTMLInputElement).value)}
         />
       )}
       <div class="m-tabs" role="tablist">
-        {LIBRARY_TABS.map((t) => (
+        {libraryTabs().map((t) => (
           <button
             key={t.id}
             type="button"
@@ -321,8 +319,8 @@ export function Library() {
         ))}
       </div>
       {isHistory && (
-        <div class="m-hfilters" role="group" aria-label="Источник">
-          {HISTORY_FILTERS.map((f) => (
+        <div class="m-hfilters" role="group" aria-label={t('add.source')}>
+          {historyFilters().map((f) => (
             <button
               key={f.id}
               type="button"
@@ -362,13 +360,13 @@ export function Library() {
             >
               <path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4" />
             </svg>
-            {refreshing && <span class="m-sr">Обновляю…</span>}
+            {refreshing && <span class="m-sr">{t('library.refreshing')}</span>}
           </div>
         )}
         <div class="m-lib-body" style={pullStyle}>
           {donateCard && !unavailable && !supporterActive() && (
-            <div class="m-donate-card" role="region" aria-label="Поддержать OMP">
-              <span>OMP бесплатный и без рекламы. Если он вам полезен, можно поддержать разработку.</span>
+            <div class="m-donate-card" role="region" aria-label={t('donate.title')}>
+              <span>{t('library.donateText')}</span>
               <div class="m-donate-actions">
                 <button
                   type="button"
@@ -379,7 +377,7 @@ export function Library() {
                     openDonate();
                   }}
                 >
-                  Поддержать
+                  {t('library.donate')}
                 </button>
                 <button
                   type="button"
@@ -389,7 +387,7 @@ export function Library() {
                     setDonateCard(false);
                   }}
                 >
-                  Не напоминать
+                  {t('library.dontRemind')}
                 </button>
               </div>
             </div>
@@ -398,7 +396,7 @@ export function Library() {
           {error && !unavailable && (
             <div class="m-hint-warn m-warn-row">
               <span>{cachedBanner(cachedAt)}</span>
-              <button type="button" class="m-btn m-btn-secondary" onClick={() => void loadRef.current()}>Повторить</button>
+              <button type="button" class="m-btn m-btn-secondary" onClick={() => void loadRef.current()}>{t('common.retry')}</button>
             </div>
           )}
           {unavailable && (
@@ -421,23 +419,23 @@ export function Library() {
               </button>
             </>
           )}
-          {c && !loaded && !list.length && <p class="m-muted m-note">Загрузка…</p>}
+          {c && !loaded && !list.length && <p class="m-muted m-note">{t('catalog.loading')}</p>}
           {empty && <p class="m-muted m-note m-empty">{empty}</p>}
           {unavailable ? null : isHistory ? (
             <div class="m-list m-history">
               {history.map((e) => {
-                const t = e.torrent;
-                const files = filesOf(t);
+                const tor = e.torrent;
+                const files = filesOf(tor);
                 const file = files.find((f) => f.id === e.fileIndex);
-                const isMovie = t.category === 'movie' || playableFiles(files).length <= 1;
+                const isMovie = tor.category === 'movie' || playableFiles(files).length <= 1;
                 const { time, duration } = e.progress;
                 const from = resumeFrom(e.progress, MIN_RESUME, WATCHED_RATIO);
                 return (
-                  <div class="m-hrow" key={t.hash}>
-                    <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
-                      <Poster torrent={t} class="m-poster-mini" />
+                  <div class="m-hrow" key={tor.hash}>
+                    <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: tor.hash })}>
+                      <Poster torrent={tor} class="m-poster-mini" />
                       <span class="m-hrow-text">
-                        <span class="m-hrow-title">{displayTitle(t)}</span>
+                        <span class="m-hrow-title">{displayTitle(tor)}</span>
                         <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
                         <span class="m-hrow-pos">
                           <span>{positionLabel(time, duration)}</span>
@@ -449,7 +447,7 @@ export function Library() {
                         <span class="m-muted m-small m-hrow-src">{sourceLine(e.source, now)}</span>
                       </span>
                     </button>
-                    <button type="button" class="m-play" aria-label="Продолжить на ТВ" onClick={() => void continueOnTv(t.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', displayTitle(t)].filter(Boolean).join(' · '))}>
+                    <button type="button" class="m-play" aria-label={t('library.continueOnTv')} onClick={() => void continueOnTv(tor.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', displayTitle(tor)].filter(Boolean).join(' · '))}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                         <path d="M8 5l11 7-11 7z" />
                       </svg>

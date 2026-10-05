@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Remote, setRemoteActions } from '../src/screens/Remote';
 import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv, setActiveTv } from '../src/tv/tvStore';
-import { tvWaking, tvState, tvError, TV_FORGOT } from '../src/tv/tvClient';
+import { tvWaking, tvState, tvError, tvForgot } from '../src/tv/tvClient';
 import { toast } from '../src/ui/toast';
 import { nowPlaying, lastSeen } from '../src/tv/playerLink';
 import { reloadTouchpad, updateTouchpad, touchpad, cursorGain, sanitizeTouchpad, TOUCHPAD_DEFAULTS } from '../src/tv/touchpad';
@@ -581,10 +582,10 @@ describe('Remote for Android TV', () => {
   it('a forgetful TV offers «Подключить заново»: the code sheet pairs again', async () => {
     mount();
     act(() => {
-      tvError.value = TV_FORGOT;
+      tvError.value = tvForgot();
       tvState.value = 'error';
     });
-    expect(el.querySelector('.m-remote-forgot')!.textContent).toContain(TV_FORGOT);
+    expect(el.querySelector('.m-remote-forgot')!.textContent).toContain(tvForgot());
     click(text('Подключить заново'));
     const d = document.querySelector('[role="dialog"]') as HTMLElement;
     expect(d.textContent).toContain('Гостиная · Android TV');
@@ -634,3 +635,112 @@ describe('touchpad settings maths', () => {
     expect(cursorGain(s(5, true), 10)).toBeCloseTo(4.75);
   });
 });
+
+describe('Remote in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => {
+    applyLanguageSetting('ru');
+    tvState.value = 'idle';
+  });
+  const noCyrillic = () => expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  const noCyrillicLabels = () =>
+    expect(Array.from(el.querySelectorAll('[aria-label],[placeholder]')).map((n) => (n.getAttribute('aria-label') || '') + (n.getAttribute('placeholder') || '')).join('|')).not.toMatch(/[А-Яа-яЁё]/);
+
+  it('without a TV: the placeholder and its button', () => {
+    mount();
+    expect(el.querySelector('h1')!.textContent).toBe('Remote');
+    expect(el.querySelector('h2')!.textContent).toBe('Connect a TV');
+    expect(el.textContent).toContain('To control the TV from the phone, connect it first.');
+    click(text('Connect a TV'));
+    expect(currentRoute.value).toEqual({ name: 'tv' });
+    noCyrillic();
+  });
+
+  it('LG remote: state, tabs, keys and their labels', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED', mac: 'aa:bb:cc:dd:ee:ff' });
+    mount();
+    expect(el.querySelector('.m-remote-state')!.textContent).toBe('Not connected');
+    act(() => {
+      tvState.value = 'connected';
+    });
+    expect(el.querySelector('.m-remote-state')!.textContent).toBe('Connected');
+    expect(Array.from(el.querySelectorAll('[role=tab]')).map((b) => b.textContent)).toEqual(['Buttons', 'Touchpad']);
+    for (const l of ['Touchpad settings', 'Turn off the TV', 'Up', 'Down', 'Left', 'Right', 'Back', 'Home', 'Menu', 'Back 10 s', 'Prev. episode', 'Pause', 'Next episode', 'Forward 10 s', 'Quieter', 'Keyboard', 'Louder']) {
+      expect(lbl(l), l).toBeTruthy();
+    }
+    click(lbl('Pause'));
+    return flush().then(() => {
+      expect(lbl('Play')).toBeTruthy();
+      noCyrillic();
+      noCyrillicLabels();
+    });
+  });
+
+  it('LG remote: touchpad hint, keyboard field, power question and toasts', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    act(() => {
+      tvState.value = 'connected';
+    });
+    click(text('Touchpad'));
+    expect(el.querySelector('.m-touchpad')!.getAttribute('aria-label')).toBe('Touchpad');
+    expect(el.querySelector('.m-touchpad .m-muted')!.textContent).toBe('Swipe with a finger · two fingers scroll');
+    click(lbl('Keyboard'));
+    expect(el.querySelector('input.m-input')!.getAttribute('aria-label')).toBe('Typing on the TV');
+    expect(el.querySelector('input.m-input')!.getAttribute('placeholder')).toBe('Type — the text goes to the TV');
+    click(lbl('Turn off the TV'));
+    expect(a.confirm).toHaveBeenCalledWith('Turn off LG OLED?');
+    await flush();
+    expect(toast.value).toBe('The TV is turning off');
+    act(() => {
+      tvState.value = 'idle';
+    });
+    click(lbl('Turn on the TV'));
+    await flush();
+    expect(toast.value).toBe('Connect to the TV while it is on — then you can turn it on from the phone');
+    noCyrillic();
+    noCyrillicLabels();
+  });
+
+  it('LG remote: waking and the touchpad scroll strip', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED', mac: 'aa:bb:cc:dd:ee:ff' });
+    updateTouchpad({ scrollStrip: true });
+    mount();
+    click(lbl('Turn on the TV'));
+    await flush();
+    expect(toast.value).toBe('Turning on LG OLED…');
+    click(text('Touchpad'));
+    expect(lbl('Scroll')).toBeTruthy();
+    noCyrillicLabels();
+  });
+
+  it('Android TV: state line, note, keys and labels', () => {
+    saveTv({ ip: '192.168.1.40', name: 'Living room', kind: 'atv', token: '0123456789abcdef0123456789abcdef' });
+    mount();
+    act(() => {
+      tvState.value = 'connected';
+    });
+    expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · connected');
+    expect(el.querySelector('.m-remote-note')!.textContent).toBe('The remote controls OMP on the TV. Turning the TV on and other apps — with the TV’s own remote.');
+    expect(Array.from(el.querySelectorAll('.m-keyrow')[0].querySelectorAll('button')).map((b) => (b.textContent || '').trim())).toEqual(['Back', 'Catalog', 'Now playing']);
+    expect(el.querySelector('.m-vol-label')!.textContent).toBe('Vol.');
+    for (const l of ['Keyboard', 'Quieter', 'Louder', 'Up', 'Down', 'Left', 'Right']) expect(lbl(l), l).toBeTruthy();
+    act(() => {
+      tvState.value = 'error';
+    });
+    expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · no connection');
+    noCyrillic();
+    noCyrillicLabels();
+  });
+
+  it('Android TV: «Connect again» (including the «forgot» message)', () => {
+    saveTv({ ip: '192.168.1.40', name: 'Living room', kind: 'atv' });
+    mount();
+    expect(byBtn('Connect again')).toBeTruthy();
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+});
+
+function byBtn(t: string) {
+  return Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === t);
+}

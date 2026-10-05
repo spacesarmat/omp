@@ -1,26 +1,26 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
-  BYPASS_WARNING,
+  bypassWarning,
   checkResultOf,
   clearanceText,
-  GATE_WAIT,
-  NO_PHONE,
+  gateWait,
+  noPhone,
   onSearchFailure,
   phoneCheckRequest,
   runCloudflareCheck,
   setCloudflareChecker,
   sheetText,
-  SHEET_NOTE_TV,
-  SHEET_TITLE,
-  TV_ERRORS,
-  TV_HINT,
+  sheetNoteTv,
+  sheetTitle,
+  tvErrors,
+  tvHint,
   tvCheckRequest,
   tvSiteNote,
   tvTitle,
   visibleCheckUrl,
   type CheckResult,
 } from '../../src/sources/cloudflareCheck';
-import { CF_INTERACTIVE, toCloudflareError } from '../../src/sources/cloudflare';
+import { cfInteractive, toCloudflareError } from '../../src/sources/cloudflare';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { siteOptions } from '../../src/sources/site';
 import {
@@ -45,7 +45,7 @@ const site: Source = {
 };
 const plain: Source = { id: 'plain', name: 'plain', kind: 'builtin', search: () => Promise.resolve([]) };
 
-const interactive = () => toCloudflareError({ code: 'cloudflare-interactive', message: CF_INTERACTIVE }, 'https://rustorka.example/tracker.php?nm=secret')!;
+const interactive = () => toCloudflareError({ code: 'cloudflare-interactive', message: cfInteractive() }, 'https://rustorka.example/tracker.php?nm=secret')!;
 
 function deferred<T>() {
   let resolve!: (v: T) => void;
@@ -72,27 +72,27 @@ afterEach(() => {
 
 describe('copy of the visible check', () => {
   it('phone sheet and TV dialog texts follow the mockups', () => {
-    expect(SHEET_TITLE).toBe('Подтвердите, что вы не робот');
+    expect(sheetTitle()).toBe('Подтвердите, что вы не робот');
     expect(sheetText('rustorka')).toBe('Сайт rustorka просит пройти проверку Cloudflare.');
     expect(sheetText('rustorka', 'Гостиная')).toBe('Сайт rustorka просит пройти проверку Cloudflare. Это нужно для телевизора «Гостиная».');
     expect(tvTitle('rustorka')).toBe('rustorka: проверка Cloudflare');
-    expect(TV_HINT.replace('%s', 'Pixel 8')).toBe('Телефон «Pixel 8» получит запрос');
-    expect(BYPASS_WARNING).toBe(
+    expect(tvHint().replace('%s', 'Pixel 8')).toBe('Телефон «Pixel 8» получит запрос');
+    expect(bypassWarning()).toBe(
       'Обход проверки может нарушать правила сайта. Включайте на свой риск. OMP обращается только к самому сайту и к вашему FlareSolverr.',
     );
   });
 
   it('requests carry every text and no secret', () => {
     const tv = tvCheckRequest({ name: 'rustorka', url: 'https://rustorka.example/' });
-    expect(tv).toMatchObject({ mode: 'tv', title: 'rustorka: проверка Cloudflare', phone: 'Пройти на телефоне', remote: 'Отметить пультом', cancel: 'Отмена', noPhone: NO_PHONE });
-    expect(tv.errors).toBe(TV_ERRORS);
-    expect(Object.keys(TV_ERRORS).sort()).toEqual(['BUSY', 'CANCELLED', 'FAILED', 'NOT_TAKEN', 'STORE_FAILED', 'TIMEOUT', 'UNAVAILABLE']);
+    expect(tv).toMatchObject({ mode: 'tv', title: 'rustorka: проверка Cloudflare', phone: 'Пройти на телефоне', remote: 'Отметить пультом', cancel: 'Отмена', noPhone: noPhone() });
+    expect(tv.errors).toEqual(tvErrors());
+    expect(Object.keys(tvErrors()).sort()).toEqual(['BUSY', 'CANCELLED', 'FAILED', 'NOT_TAKEN', 'STORE_FAILED', 'TIMEOUT', 'UNAVAILABLE']);
     const own = phoneCheckRequest({ name: 'rustorka', url: 'https://rustorka.example/' });
-    expect(own).toEqual({ url: 'https://rustorka.example/', site: 'rustorka', mode: 'phone', title: SHEET_TITLE, text: sheetText('rustorka'), cancel: 'Отмена', gateWait: GATE_WAIT });
-    expect(TV_ERRORS.UNAVAILABLE).toBe('Откройте OMP на телефоне');
+    expect(own).toEqual({ url: 'https://rustorka.example/', site: 'rustorka', mode: 'phone', title: sheetTitle(), text: sheetText('rustorka'), cancel: 'Отмена', gateWait: gateWait() });
+    expect(tvErrors().UNAVAILABLE).toBe('Откройте OMP на телефоне');
     expect(tv.phoneClosed).toBe('Откройте OMP на телефоне');
     const forTv = phoneCheckRequest({ name: 'rustorka', url: 'https://rustorka.example/' }, { id: 'c7', tv: 'Гостиная' });
-    expect(forTv.note).toBe(SHEET_NOTE_TV);
+    expect(forTv.note).toBe(sheetNoteTv());
     expect(forTv.forTv).toBe('c7');
     expect(forTv.text).toContain('«Гостиная»');
     expect(checkResultOf({ result: 'solved' })).toBe('solved');

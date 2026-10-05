@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { ServerSettings } from '../src/screens/ServerSettings';
@@ -268,5 +269,65 @@ describe('Settings entry', () => {
     act(() => render(<Settings />, el));
     await act(async () => btn('Настройки сервера').click());
     expect(currentRoute.value.name).toBe('serverSettings');
+  });
+});
+
+describe('ServerSettings in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  const noCyrillic = () => expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+
+  it('rows, values, switches and the reset sheet', async () => {
+    setup();
+    await mount();
+    expect(el.querySelector('h1')!.textContent).toBe('Server settings');
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    expect(btn('Cache size').textContent).toContain('64 MB');
+    expect(btn('Download limit').textContent).toContain('Unlimited');
+    expect(btn('Upload limit').textContent).toContain('1 MB/s');
+    expect(el.querySelector('[role=switch][aria-label="Save timecodes on the server"]')).toBeTruthy();
+    expect(btn('Reset to defaults')).toBeTruthy();
+    noCyrillic();
+    act(() => btn('Reset to defaults').click());
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Reset the server settings?');
+    expect(el.textContent).toContain('All settings will return to their default values.');
+    expect(btn('Cancel')).toBeTruthy();
+    act(() => btn('Reset', el.querySelector('.m-sheet-row')!).click());
+    await flush();
+    expect(toast.value).toBe('Saved');
+    noCyrillic();
+  });
+
+  it('a failed load offers a retry', async () => {
+    setup('http://192.168.1.5:8090', true);
+    await mount();
+    expect(el.querySelector('[role=alert]')!.textContent).toContain('Could not load the server settings');
+    expect(btn('Retry')).toBeTruthy();
+    noCyrillic();
+  });
+
+  it('TMDB: the key row, the sheet and the poster search', async () => {
+    setup();
+    current = { ...BASE, TMDBSettings: { APIKey: '' } };
+    await mount();
+    expect(btn('TMDB key for posters').textContent).toContain('Not set');
+    act(() => btn('TMDB key for posters').click());
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('TMDB key');
+    expect(el.querySelector('label[for=tmdb-key]')!.textContent).toBe('API key');
+    expect(el.textContent).toContain('OMP and TorrServer use it to find posters for new torrents.');
+    expect(btn('Save')).toBeTruthy();
+    noCyrillic();
+  });
+
+  it('the poster search says what it did', async () => {
+    setup();
+    current = { ...BASE, TMDBSettings: { APIKey: 'k' } };
+    torrents.value = [{ hash: 'b', title: 'Beta', stat: 0, poster: 'http://p/b.jpg' } as any];
+    await mount();
+    expect(btn('TMDB key for posters').textContent).toContain('Set');
+    act(() => btn('Find posters for torrents without one').click());
+    await flush();
+    expect(toast.value).toBe('All torrents have posters');
+    torrents.value = [];
   });
 });

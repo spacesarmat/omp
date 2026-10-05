@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   INDEXERS_KEY,
   INDEXERS_MAX,
-  INDEXER_BAD_URL,
-  INDEXER_NO_KEY,
-  INDEXER_NO_STORE,
+  indexerBadUrl,
+  indexerNoKey,
+  indexerNoStore,
   hostKey,
   indexerConnections,
   indexerId,
@@ -112,11 +112,11 @@ describe('saveIndexer / removeIndexer', () => {
 
   it('rejects bad input without touching storage', async () => {
     const { store } = memorySecrets();
-    await expect(saveIndexer({ kind: 'jackett', url: 'oops', apiKey: KEY }, store)).rejects.toThrow(INDEXER_BAD_URL);
-    await expect(saveIndexer({ kind: 'jackett', url: 'http://h:9117' }, store)).rejects.toThrow(INDEXER_NO_KEY);
-    await expect(saveIndexer({ kind: 'jackett', url: 'http://h:9117', apiKey: KEY }, undefined)).rejects.toThrow(INDEXER_NO_STORE);
+    await expect(saveIndexer({ kind: 'jackett', url: 'oops', apiKey: KEY }, store)).rejects.toThrow(indexerBadUrl());
+    await expect(saveIndexer({ kind: 'jackett', url: 'http://h:9117' }, store)).rejects.toThrow(indexerNoKey());
+    await expect(saveIndexer({ kind: 'jackett', url: 'http://h:9117', apiKey: KEY }, undefined)).rejects.toThrow(indexerNoStore());
     const failing = memorySecrets(true);
-    await expect(saveIndexer({ kind: 'jackett', url: 'http://h:9117', apiKey: KEY }, failing.store)).rejects.toThrow(INDEXER_NO_STORE);
+    await expect(saveIndexer({ kind: 'jackett', url: 'http://h:9117', apiKey: KEY }, failing.store)).rejects.toThrow(indexerNoStore());
     expect(localStorage.getItem(INDEXERS_KEY)).toBeNull();
     expect(indexerConnections()).toEqual([]);
   });

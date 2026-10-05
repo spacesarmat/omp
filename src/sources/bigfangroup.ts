@@ -2,7 +2,7 @@
 // and date; there are no magnets, but the .torrent of a release downloads without a login (checked live), and
 // TorrServer adds an http(s) .torrent link itself, so a result carries it in Link (Magnet and hash stay empty).
 import { absUrl, encodeWin1251, parseDate, parseSize, textOf } from './html';
-import { loadDoc, makeResult, NO_TORRENT, PARSE_ERROR, requireHost, toInt } from './site';
+import { loadDoc, makeResult, noTorrent, parseError, requireHost, toInt } from './site';
 import type { Source, SourceContext, SourceResult } from './types';
 
 const HOST = 'bigfangroup.org';
@@ -32,7 +32,7 @@ function parse(doc: Document, base: string): SourceResult[] {
   if (!table) {
     const error = doc.querySelector('div.error');
     if (error && textOf(error).indexOf('Ничего не найдено') >= 0) return [];
-    throw new Error(PARSE_ERROR);
+    throw new Error(parseError());
   }
   const out: SourceResult[] = [];
   const rows = table.querySelectorAll('tr');
@@ -77,7 +77,7 @@ export const bigfangroup: Source = {
   magnet(detailUrl: string) {
     return requireHost(detailUrl, HOST).then(() => {
       const id = releaseId(detailUrl);
-      if (!id) throw new Error(NO_TORRENT);
+      if (!id) throw new Error(noTorrent());
       return downloadUrl(id);
     });
   },

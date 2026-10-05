@@ -1,3 +1,4 @@
+import { applyLanguageSetting } from '../../src/i18n';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -153,5 +154,60 @@ describe('Settings entry', () => {
     const el = mount(<Settings />);
     await act(async () => btn(el, 'Журнал ошибок').click());
     expect(currentRoute.value.name).toBe('log');
+  });
+});
+
+describe('Log screen in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  const CYR = /[А-Яа-яЁё]/;
+
+  it('title, buttons, filters and the empty state', async () => {
+    actionsFake();
+    const el = mount(<Log />);
+    expect(el.querySelector('h1')!.textContent).toBe('Error log');
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    expect(el.textContent).toContain('The last 500 records, only on this phone.');
+    expect(btn(el, 'Report an error on GitHub')).toBeTruthy();
+    expect(btn(el, 'Share log')).toBeTruthy();
+    expect(Array.from(el.querySelectorAll('[role=tab]')).map((b) => b.textContent)).toEqual(['All', 'Errors', 'Monitoring']);
+    expect(el.textContent).toContain('No records.');
+    expect(el.textContent).not.toMatch(CYR);
+  });
+
+  it('filters, GitHub report, share and clear speak English', async () => {
+    const calls = actionsFake({ phoneName: () => Promise.resolve(null) });
+    vi.useFakeTimers();
+    log('info', 'monitor', 'Background check');
+    vi.advanceTimersByTime(1);
+    log('error', 'search', 'rutracker: site closed');
+    vi.useRealTimers();
+    const el = mount(<Log />);
+    expect(rows(el)).toEqual(['rutracker: site closed', 'Background check']);
+    await act(async () => btn(el, 'Errors').click());
+    expect(rows(el)).toEqual(['rutracker: site closed']);
+    expect(el.textContent).toContain('ERROR');
+    await act(async () => btn(el, 'Report an error on GitHub').click());
+    await settle();
+    expect(toast.value).toBe('Log copied');
+    expect(calls.copy[0]).toContain('Platform: Phone');
+    await act(async () => btn(el, 'Share log').click());
+    await settle();
+    expect(calls.share[0].name).toMatch(/^omp-log-\d{4}-\d\d-\d\d\.txt$/);
+    await act(async () => btn(el, 'Clear').click());
+    expect(calls.confirm).toEqual(['Clear the log?']);
+    expect(toast.value).toBe('Log cleared');
+    expect(el.textContent).not.toMatch(CYR);
+  });
+
+  it('copy and share failures', async () => {
+    actionsFake({ copyText: () => Promise.reject(new Error('x')), shareText: () => Promise.reject(null) });
+    const el = mount(<Log />);
+    await act(async () => btn(el, 'Report an error on GitHub').click());
+    await settle();
+    expect(toast.value).toBe('Could not copy the log');
+    await act(async () => btn(el, 'Share log').click());
+    await settle();
+    expect(toast.value).toBe('Could not share the log');
   });
 });

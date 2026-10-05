@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { lanServerUrl, tvServerUrl, NO_WIFI, setWatchActions, watchOnTvParams, streamUrlFor, isNoOmp, openInstallGuide, OMP_INSTALL_URL, recordPhoneWatch } from '../src/watch';
-import { TV_NO_OMP } from '../src/tv/tvClient';
+import { lanServerUrl, tvServerUrl, noWifi, setWatchActions, watchOnTvParams, streamUrlFor, isNoOmp, openInstallGuide, OMP_INSTALL_URL, recordPhoneWatch } from '../src/watch';
+import { tvNoOmp } from '../src/tv/tvClient';
 import { TorrServerClient } from '../../src/api/torrserver';
 
 describe('watchOnTvParams', () => {
@@ -49,7 +49,7 @@ describe('streamUrlFor', () => {
 
 describe('install guide', () => {
   it('recognises the no-OMP error only', () => {
-    expect(isNoOmp(TV_NO_OMP)).toBe(true);
+    expect(isNoOmp(tvNoOmp())).toBe(true);
     expect(isNoOmp('Нет связи')).toBe(false);
   });
   it('opens the readme in the external browser', () => {
@@ -82,7 +82,7 @@ describe('tvServerUrl', () => {
     setWatchActions({ localIpv4: async () => '192.168.1.5' });
     expect(await tvServerUrl('http://127.0.0.1:8090')).toBe('http://192.168.1.5:8090');
     setWatchActions({ localIpv4: async () => null });
-    await expect(tvServerUrl('http://127.0.0.1:8090')).rejects.toThrow(NO_WIFI);
+    await expect(tvServerUrl('http://127.0.0.1:8090')).rejects.toThrow(noWifi());
     expect(await tvServerUrl('http://tv-side:8090')).toBe('http://tv-side:8090');
     setWatchActions(null);
   });

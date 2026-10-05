@@ -7,7 +7,7 @@ import { absUrl, parseHtml, parseSize, textOf } from './html';
 import { checkLoginPage, checkPage, magnetOf, makeResult, requireHost, toInt } from './site';
 import { commonCaptcha } from './siteLogin';
 import { createBrowserLogin } from './browserLogin';
-import { RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA, RUTRACKER_EMPTY, RUTRACKER_NO_STORE } from './rutrackerText';
+import { rutrackerBadLogin, rutrackerCaptcha, rutrackerEmpty, rutrackerNoStore } from './rutrackerText';
 import { loginRequired } from './types';
 import type { HttpResponse, SecretStore, Source, SourceContext, SourceResult } from './types';
 
@@ -22,7 +22,7 @@ const PASS_KEY = 'rutracker.password';
 export const RUTRACKER_PENDING_USER_KEY = 'rutracker.pending.username';
 export const RUTRACKER_PENDING_PASS_KEY = 'rutracker.pending.password';
 
-export { RUTRACKER_CAPTCHA, RUTRACKER_BAD_LOGIN, RUTRACKER_EMPTY, RUTRACKER_NO_STORE };
+export { rutrackerCaptcha, rutrackerBadLogin, rutrackerEmpty, rutrackerNoStore };
 
 function signedIn(res: HttpResponse, doc: Document): boolean {
   if (/\/forum\/login\.php/i.test(res.url)) return false;
@@ -47,12 +47,12 @@ function postLogin(username: string, password: string, ctx: SourceContext): Prom
   return ctx.http
     .post(LOGIN_URL, { login_username: username, login_password: password, login: 'вход' }, { formCharset: 'windows-1251' })
     // an inline Turnstile on the login form is a captcha (the browser login), not a Cloudflare block
-    .then((res) => checkLoginPage(res, commonCaptcha, () => new Error(RUTRACKER_CAPTCHA)))
+    .then((res) => checkLoginPage(res, commonCaptcha, () => new Error(rutrackerCaptcha())))
     .then((res) => {
       const doc = parseHtml(res.text);
       if (signedIn(res, doc)) return;
-      if (hasCaptcha(doc)) throw new Error(RUTRACKER_CAPTCHA);
-      throw new Error(RUTRACKER_BAD_LOGIN);
+      if (hasCaptcha(doc)) throw new Error(rutrackerCaptcha());
+      throw new Error(rutrackerBadLogin());
     });
 }
 
@@ -76,9 +76,9 @@ function savedCredentials(ctx: SourceContext): Promise<{ username: string; passw
  */
 export function rutrackerLoginPending(ctx: SourceContext): Promise<void> {
   const secrets = ctx.secrets;
-  if (!secrets) return Promise.reject(new Error(RUTRACKER_NO_STORE));
+  if (!secrets) return Promise.reject(new Error(rutrackerNoStore()));
   return pair(secrets, RUTRACKER_PENDING_USER_KEY, RUTRACKER_PENDING_PASS_KEY).then((c) => {
-    if (!c) throw new Error(RUTRACKER_EMPTY);
+    if (!c) throw new Error(rutrackerEmpty());
     return postLogin(c.username, c.password, ctx);
   });
 }
@@ -95,7 +95,7 @@ function signInAgain(ctx: SourceContext): Promise<void> {
         return postLogin(c.username, c.password, ctx).then(undefined, (e: unknown) => {
           // wrong password or captcha: the user has to act; network / Cloudflare errors stay errors
           const msg = e instanceof Error ? e.message : '';
-          if (msg === RUTRACKER_BAD_LOGIN || msg === RUTRACKER_CAPTCHA) throw loginRequired();
+          if (msg === rutrackerBadLogin() || msg === rutrackerCaptcha()) throw loginRequired();
           throw e;
         });
       })
@@ -178,8 +178,8 @@ export const rutracker: Source = {
   login(username: string, password: string, ctx: SourceContext) {
     const secrets = ctx.secrets;
     const user = (username || '').trim();
-    if (!user || !password) return Promise.reject(new Error(RUTRACKER_EMPTY));
-    if (!secrets) return Promise.reject(new Error(RUTRACKER_NO_STORE));
+    if (!user || !password) return Promise.reject(new Error(rutrackerEmpty()));
+    if (!secrets) return Promise.reject(new Error(rutrackerNoStore()));
     return postLogin(user, password, ctx)
       .then(() => secrets.set(USER_KEY, user).then(() => secrets.set(PASS_KEY, password)))
       // a password login replaces a browser session

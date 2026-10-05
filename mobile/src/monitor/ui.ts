@@ -2,6 +2,7 @@
 // writes the same localStorage keys), the bell badge, the WorkManager schedule, the notification permission prompt and
 // links from notifications (omp:news?sub=…&finding=…[&watch=1]).
 import { signal } from '@preact/signals';
+import { t } from '../../../src/i18n';
 import { useEffect, useState } from 'preact/hooks';
 import { monitorNative, type MonitorStatus } from './native';
 import { switchTab, navigate } from '../nav';
@@ -78,7 +79,7 @@ export async function notifyBlocked(): Promise<void> {
     await monitorNative.requestNotifyPermission();
     return;
   }
-  showToast('Уведомления OMP выключены — включите их в настройках Android, чтобы узнавать о новых раздачах', 6000);
+  showToast(t('monitor.notifyOff'), 6000);
 }
 
 /**

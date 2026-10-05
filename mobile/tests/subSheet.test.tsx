@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
+import { applyLanguageSetting } from '../../src/i18n';
 import { SubSheet, parseGb, parseSeeds } from '../src/ui/SubSheet';
 import { SubFindings } from '../src/screens/SubFindings';
 import { currentRoute, navigate, resetTo } from '../src/nav';
@@ -222,5 +223,90 @@ describe('SubFindings', () => {
     setSourceOn('fake', true);
     mount({ id: 'nope' });
     expect(el.textContent).toContain('Подписка удалена');
+  });
+});
+
+describe('SubSheet in English', () => {
+  afterEach(() => applyLanguageSetting('ru'));
+
+  it('shows the form, the errors and the sources picker in English', () => {
+    applyLanguageSetting('en');
+    sheet();
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Subscription');
+    const form = el.querySelector('.m-sub-form')!.textContent!;
+    for (const w of ['What to search for', 'Quality', 'Minimum seeds', 'Size up to, GB', 'Sources', 'all enabled', 'Notify', 'about every new release']) {
+      expect(form).toContain(w);
+    }
+    expect(el.querySelector('#m-sub-size')!.getAttribute('placeholder')).toBe('no limit');
+    expect(form).not.toMatch(/[А-Яа-яЁё]/);
+    expect(Array.from(el.querySelectorAll('.m-marks-actions button')).map((b) => b.textContent)).toEqual(['Cancel', 'Save']);
+    click(byText('Save'));
+    expect(error()).toBe('Enter what to search for');
+    type('m-sub-query', 'Dune');
+    type('m-sub-seeds', 'x');
+    click(byText('Save'));
+    expect(error()).toBe('Seeds: a whole number from 1, or leave the field empty');
+    type('m-sub-seeds', '');
+    type('m-sub-size', '0');
+    click(byText('Save'));
+    expect(error()).toBe('Size: a number above zero, for example 20, or leave the field empty');
+    click(el.querySelector('.m-set-pick'));
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Sources');
+    expect(el.querySelector('.m-opt-name')!.textContent).toBe('All enabled');
+    expect(byText('Done')).toBeTruthy();
+  });
+
+  it('toasts, the delete question and the sources count are English', async () => {
+    applyLanguageSetting('en');
+    const close = vi.fn();
+    sheet({ onClose: close });
+    type('m-sub-query', 'Dune');
+    click(byText('Save'));
+    await flush();
+    expect(toast.value).toBe('Subscription created');
+    const [s] = loadSubs();
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    sheet({ sub: s });
+    click(byText('Delete'));
+    expect(ask).toHaveBeenCalledWith('Delete the subscription “Dune”?');
+    ask.mockRestore();
+  });
+});
+
+describe('SubFindings in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  function mount(p: { id: string }) {
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<SubFindings {...p} />, el));
+  }
+
+  it('never checked, then new findings with the flag, and the edit button', async () => {
+    const s = addSubscription({ query: 'Dune', quality: '', sources: null, notify: true })!;
+    mount({ id: s.id });
+    await flush();
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    expect(byText('Edit')).toBeTruthy();
+    expect(el.textContent).toContain('The subscription has not been checked yet. The first check only remembers what is already there — OMP will report new releases after it.');
+    rememberSeen(s.id, []);
+    addFindings([{ subId: s.id, key: 'new', at: 5, result: row({ Title: 'Dune Part Three', Size: '41 GB' }) }]);
+    mount({ id: s.id });
+    await flush();
+    expect(el.querySelector('.m-flag')!.textContent).toBe('New');
+    // the fixture source «Фейк» is tracker data
+    expect(el.textContent!.replace('Фейк', '')).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('no new releases, and a deleted subscription', async () => {
+    const s = addSubscription({ query: 'Dune', quality: '', sources: null, notify: true })!;
+    rememberSeen(s.id, []);
+    mount({ id: s.id });
+    await flush();
+    expect(el.textContent).toContain('No new releases yet');
+    mount({ id: 'nope' });
+    expect(el.querySelector('h1')!.textContent).toBe('Subscription');
+    expect(el.textContent).toContain('Subscription deleted');
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 });

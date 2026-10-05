@@ -6,6 +6,7 @@ import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type
 import { torrents } from './library';
 import { noteSupport } from './support';
 import { SUPPORT_MAX_AHEAD_MS } from '../lib/donate';
+import { t } from '../i18n';
 
 export interface JournalClient {
   list(): Promise<Torrent[]>;
@@ -116,16 +117,16 @@ export function saveSkip(c: JournalClient, torrent: Pick<Torrent, 'hash'>, patch
   const prev = chains[hash] || Promise.resolve();
   const run = prev.then(() =>
     c.list().then((all) => {
-      const t = torrentOf(all, hash);
-      if (!t) throw new Error('Раздачи нет на сервере');
-      const parsed = parseData(t.data);
-      if (!parsed) throw new Error('Данные раздачи не в формате JSON — OMP их не меняет');
-      const base = baseOf(t, parsed);
+      const tor = torrentOf(all, hash);
+      if (!tor) throw new Error(t('errors.torrentMissing'));
+      const parsed = parseData(tor.data);
+      if (!parsed) throw new Error(t('errors.notJson'));
+      const base = baseOf(tor, parsed);
       const next = applyPatch(base.skip || { i: false, c: false }, patch);
       if (base.skip && JSON.stringify(next) === JSON.stringify(base.skip)) return next;
       const data = serializeData(base.obj, base.journal, next);
-      return c.setData(t, data).then(() => {
-        patchLibrary(t.hash, data);
+      return c.setData(tor, data).then(() => {
+        patchLibrary(tor.hash, data);
         return next;
       });
     }),
@@ -158,15 +159,15 @@ export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watc
   const prev = chains[hash] || Promise.resolve();
   const run = prev.then(() =>
     c.list().then((all) => {
-      const t = torrentOf(all, hash);
-      if (!t) throw new Error('Раздачи нет на сервере');
-      const parsed = parseData(t.data);
-      if (!parsed) throw new Error('Данные раздачи не в формате JSON — OMP их не меняет');
-      if (watchesNewEpisodes(t.data) === watch) return watch;
-      const base = baseOf(t, parsed);
+      const tor = torrentOf(all, hash);
+      if (!tor) throw new Error(t('errors.torrentMissing'));
+      const parsed = parseData(tor.data);
+      if (!parsed) throw new Error(t('errors.notJson'));
+      if (watchesNewEpisodes(tor.data) === watch) return watch;
+      const base = baseOf(tor, parsed);
       const data = serializeData(withWatch(base.obj, watch), base.journal, base.skip);
-      return c.setData(t, data).then(() => {
-        patchLibrary(t.hash, data);
+      return c.setData(tor, data).then(() => {
+        patchLibrary(tor.hash, data);
         return watch;
       });
     }),

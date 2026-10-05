@@ -8,8 +8,8 @@ import { reloadIndexers } from '../../src/sources/indexerStore';
 import { getHealth, isCloudflareBypassOn, reloadSourcePrefs, resetHealth, setCloudflareBypass, setHealth, setSourceOn } from '../../src/sources/store';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { setFlareStatus } from '../../src/sources/flaresolverr';
-import { CF_INTERACTIVE } from '../../src/sources/cloudflare';
-import { BYPASS_WARNING, setCloudflareChecker } from '../../src/sources/cloudflareCheck';
+import { cfInteractive } from '../../src/sources/cloudflare';
+import { bypassWarning, setCloudflareChecker } from '../../src/sources/cloudflareCheck';
 import type { Source, SourceContext } from '../../src/sources/types';
 
 const NOW = new Date(2026, 9, 4, 20, 0).getTime();
@@ -83,7 +83,7 @@ describe('Android TV «Источники поиска»: «Сайты за Clou
     setCloudflareBypass('kinozal', true);
     setCloudflareBypass('rustorka', true);
     clearances['https://kinozal.example/'] = new Date(2026, 9, 4, 22, 40).getTime();
-    setHealth('rustorka', { state: 'error', at: NOW, message: CF_INTERACTIVE });
+    setHealth('rustorka', { state: 'error', at: NOW, message: cfInteractive() });
     await mount();
     expect(host.textContent).toContain('Сайты за Cloudflare');
     expect(row('kinozal').textContent).toContain('обход Cloudflare · проверка пройдена · действует до 22:40');
@@ -93,7 +93,7 @@ describe('Android TV «Источники поиска»: «Сайты за Clou
 
   it('OK on a site waiting for a check opens it; once passed the note clears', async () => {
     setCloudflareBypass('rustorka', true);
-    setHealth('rustorka', { state: 'error', at: NOW, message: CF_INTERACTIVE });
+    setHealth('rustorka', { state: 'error', at: NOW, message: cfInteractive() });
     await mount();
     clearances['https://rustorka.example/'] = NOW + 30 * 60000;
     await click(row('rustorka').querySelector('.src-row')!);
@@ -104,7 +104,7 @@ describe('Android TV «Источники поиска»: «Сайты за Clou
 
   it('a check closed without passing lets the next OK switch the site off', async () => {
     setCloudflareBypass('rustorka', true);
-    setHealth('rustorka', { state: 'error', at: NOW, message: CF_INTERACTIVE });
+    setHealth('rustorka', { state: 'error', at: NOW, message: cfInteractive() });
     setCloudflareChecker((s) => {
       checks.push(s);
       return Promise.resolve('cancelled');
@@ -123,7 +123,7 @@ describe('Android TV «Источники поиска»: «Сайты за Clou
     await mount();
     expect(row('kinozal').textContent).toContain('выключен');
     await click(row('kinozal').querySelector('.src-row')!);
-    expect(host.querySelector('.dialog-title')!.textContent).toBe(BYPASS_WARNING);
+    expect(host.querySelector('.dialog-title')!.textContent).toBe(bypassWarning());
     const ok = Array.from(host.querySelectorAll('.dialog-option')).find((b) => b.textContent === 'Включить')!;
     await click(ok);
     expect(isCloudflareBypassOn(site('kinozal', 'Kinozal'))).toBe(true);

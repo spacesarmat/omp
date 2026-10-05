@@ -3,6 +3,7 @@
 // (OmpNative.scanLan: those two ports only, short timeouts, bounded concurrency), the identification an HTTP probe here.
 // The automatic scan runs at most once a day; a tap scans any time. Found addresses (never keys) are kept in
 // tsp.indexerScan. Chromium 53 safe.
+import { t } from '../i18n';
 import { isObject, loadJson, saveJson } from '../store/storage';
 import { hostKey, normalizeIndexerUrl, setTorznabHosts } from './indexerStore';
 import type { IndexerConn, IndexerKind } from './indexerStore';
@@ -295,7 +296,13 @@ export function mergeCandidates(conns: IndexerConn[], found: FoundIndexer[], imp
 
 /** «192.168.1.191:9117 · ключ из TorrServer» / «… · найден в сети». */
 export function candidateWhere(c: IndexerCandidate): string {
-  const where = c.torrserver ? (c.tsKey ? 'ключ из TorrServer' : 'в настройках TorrServer') : c.network ? 'найден в сети' : 'добавлен вручную';
+  const where = c.torrserver
+    ? c.tsKey
+      ? t('sources.indexer.whereTsKey')
+      : t('sources.indexer.whereTsSettings')
+    : c.network
+      ? t('sources.indexer.whereNetwork')
+      : t('sources.indexer.whereManual');
   return c.host.replace(/:(80|443)$/, '') + ' · ' + where;
 }
 
@@ -309,10 +316,10 @@ export function isLanHost(host: string): boolean {
   return isPrivateIp(h);
 }
 
-export const INSECURE_KEY = 'Адрес не в домашней сети и без https: ключ передаётся без шифрования';
+export const insecureKey = (): string => t('sources.indexer.insecureKey');
 
 /** The warning for an http:// address outside the home network, '' otherwise. */
 export function plainHttpWarning(url: string): string {
   const m = /^http:\/\/([^/:?#]+)/i.exec((url || '').trim());
-  return m && !isLanHost(m[1]) ? INSECURE_KEY : '';
+  return m && !isLanHost(m[1]) ? insecureKey() : '';
 }

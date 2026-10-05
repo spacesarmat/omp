@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { FLARE_KEY, flareSolverrUrl, normalizeFlareUrl, onFlareChange, sanitizeFlare, setFlareSolverrUrl } from '../../src/sources/flareStore';
 import {
-  BAD_ADDRESS,
+  flareBadAddress,
   checkFlareSolverr,
   checkText,
   flareScanDue,
   flareStatus,
-  NOT_ANSWERING,
-  NOT_FLARE,
+  flareNotAnswering,
+  notFlare,
   phoneFlareNote,
   readyVersion,
   refreshFlareStatus,
@@ -15,9 +15,9 @@ import {
   SCAN_EVERY_MS,
   setFlareStatus,
   shortVersion,
-  TV_FLARE_CHECKING,
-  TV_FLARE_NONE,
-  TV_FLARE_OK,
+  tvFlareChecking,
+  tvFlareNone,
+  tvFlareOk,
   tvFlareLines,
   tvFlareRefresh,
 } from '../../src/sources/flaresolverr';
@@ -101,11 +101,11 @@ describe('check', () => {
 
   it('tells a stranger, a silent address and a bad one apart', async () => {
     answers['http://192.168.1.5:8191/'] = ok('http://192.168.1.5:8191/', '<html>router</html>');
-    expect(await checkFlareSolverr('http://192.168.1.5:8191', http)).toEqual({ ok: false, message: NOT_FLARE });
+    expect(await checkFlareSolverr('http://192.168.1.5:8191', http)).toEqual({ ok: false, message: notFlare() });
     answers['http://192.168.1.6:8191/'] = ok('http://192.168.1.6:8191/', READY, 500);
-    expect(await checkFlareSolverr('http://192.168.1.6:8191', http)).toEqual({ ok: false, message: NOT_FLARE });
-    expect(await checkFlareSolverr('http://192.168.1.7:8191', http)).toEqual({ ok: false, message: NOT_ANSWERING });
-    expect(await checkFlareSolverr('ftp://x', http)).toEqual({ ok: false, message: BAD_ADDRESS });
+    expect(await checkFlareSolverr('http://192.168.1.6:8191', http)).toEqual({ ok: false, message: notFlare() });
+    expect(await checkFlareSolverr('http://192.168.1.7:8191', http)).toEqual({ ok: false, message: flareNotAnswering() });
+    expect(await checkFlareSolverr('ftp://x', http)).toEqual({ ok: false, message: flareBadAddress() });
     expect(calls.length).toBe(3);
   });
 
@@ -186,23 +186,23 @@ describe('LAN search', () => {
 
 describe('texts', () => {
   it('TV block', () => {
-    expect(tvFlareLines(null, null)).toEqual({ where: '', state: TV_FLARE_NONE, tone: 'muted' });
+    expect(tvFlareLines(null, null)).toEqual({ where: '', state: tvFlareNone(), tone: 'muted' });
     const url = 'http://192.168.1.191:8191';
-    expect(tvFlareLines(url, null)).toEqual({ where: '192.168.1.191:8191', state: TV_FLARE_CHECKING, tone: 'muted' });
+    expect(tvFlareLines(url, null)).toEqual({ where: '192.168.1.191:8191', state: tvFlareChecking(), tone: 'muted' });
     expect(tvFlareLines(url, { url, at: NOW, check: { ok: true, version: '3.4.0', ms: 300 } })).toEqual({
       where: '192.168.1.191:8191 · версия 3.4',
-      state: TV_FLARE_OK,
+      state: tvFlareOk(),
       tone: 'ok',
     });
-    expect(tvFlareLines(url, { url, at: NOW, check: { ok: false, message: NOT_ANSWERING } }).tone).toBe('bad');
+    expect(tvFlareLines(url, { url, at: NOW, check: { ok: false, message: flareNotAnswering() } }).tone).toBe('bad');
     // a check of another address is not shown
-    expect(tvFlareLines(url, { url: 'http://x:8191', at: NOW, check: { ok: true, version: '3', ms: 1 } }).state).toBe(TV_FLARE_CHECKING);
+    expect(tvFlareLines(url, { url: 'http://x:8191', at: NOW, check: { ok: true, version: '3', ms: 1 } }).state).toBe(tvFlareChecking());
   });
 
   it('phone row', () => {
     expect(phoneFlareNote(null, null).text).toBe('не задан · запасной путь для сайтов за Cloudflare');
     const url = 'http://192.168.1.191:8191';
     expect(phoneFlareNote(url, { url, at: NOW, check: { ok: true, version: '3.4.0', ms: 1 } })).toEqual({ text: '192.168.1.191:8191 · работает', tone: 'ok' });
-    expect(phoneFlareNote(url, { url, at: NOW, check: { ok: false, message: NOT_ANSWERING } }).tone).toBe('bad');
+    expect(phoneFlareNote(url, { url, at: NOW, check: { ok: false, message: flareNotAnswering() } }).tone).toBe('bad');
   });
 });

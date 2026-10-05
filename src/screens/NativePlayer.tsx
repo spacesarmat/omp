@@ -13,6 +13,7 @@ import { recordWatch, loadSkip, saveSkip } from '../store/journal';
 import { setPlayerBridge, postSoon } from '../phone/link';
 import { goBack, currentRoute } from '../ui/nav';
 import { toast } from '../ui/toast';
+import { t, lang } from '../i18n';
 import { donateCardEnabled } from '../player/DonateCard';
 import { journalSupportActive } from '../store/support';
 import { getTrackPref } from '../store/trackPrefs';
@@ -28,7 +29,7 @@ interface Props {
 
 function failText(e: unknown): string {
   const m = e && typeof e === 'object' && typeof (e as { message?: unknown }).message === 'string' ? (e as { message: string }).message : '';
-  return /[А-Яа-яЁё]/.test(m) ? m : 'Не удалось открыть плеер';
+  return lang.peek() === 'ru' && /[\u0400-\u04FF]/.test(m) ? m : t('nativePlayer.openFailed');
 }
 
 /** ffprobe for chapters and skips: only when the server has ffprobe (checked once), only for torrent files. */
@@ -61,7 +62,7 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
   useEffect(() => {
     const plugin = nativePlugin();
     if (!plugin || !queue[index]) {
-      toast('Плеер недоступен', 'error');
+      toast(t('nativePlayer.unavailable'), 'error');
       goBack();
       return undefined;
     }
@@ -129,7 +130,7 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
   return (
     <div class="player native-player">
       <div class="native-player-note">
-        <div class="native-player-text">{opened ? 'Плеер открыт на телевизоре' : 'Открываем плеер…'}</div>
+        <div class="native-player-text">{opened ? t('nativePlayer.opened') : t('nativePlayer.opening')}</div>
         {item && <div class="native-player-title">{nativeHeading(item)}</div>}
       </div>
     </div>

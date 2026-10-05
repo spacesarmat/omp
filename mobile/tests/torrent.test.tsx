@@ -1,4 +1,5 @@
-import { TV_NO_OMP } from '../src/tv/tvClient';
+import { tvNoOmp } from '../src/tv/tvClient';
+import { applyLanguageSetting } from '../../src/i18n';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -323,7 +324,7 @@ describe('Torrent', () => {
 
   it('shows the install guide button when the TV has no OMP', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    launch.mockRejectedValueOnce(new Error(TV_NO_OMP));
+    launch.mockRejectedValueOnce(new Error(tvNoOmp()));
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     mount();
     await flush();
@@ -339,7 +340,7 @@ describe('Torrent', () => {
 
   it('main button error with no OMP offers the guide too', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    launch.mockRejectedValueOnce(new Error(TV_NO_OMP));
+    launch.mockRejectedValueOnce(new Error(tvNoOmp()));
     mount();
     await flush();
     click(el.querySelector('.m-btn-primary')!);
@@ -539,5 +540,127 @@ describe('TV launch flow', () => {
     expect(set).toHaveBeenCalledWith(expect.objectContaining({ hash: 'abc', category: 'tv' }), 'Звёздная граница');
     expect(torrents.value[0].title).toBe('Звёздная граница');
     expect(el.querySelector('#rename-title')).toBeNull();
+  });
+});
+
+describe('Torrent in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  const noCyrillic = () => expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  const labels = () =>
+    Array.from(el.querySelectorAll('[aria-label]'))
+      .map((n) => n.getAttribute('aria-label'))
+      .join('|');
+
+  it('header meta, buttons, the skip block and the episodes list', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    await flush();
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Season 2 · 4 episodes · 18.0 GB · 12 peers');
+    expect(el.querySelector('.m-btn-primary')!.textContent).toContain('Watch on TV · S02E01');
+    expect(byText('Watch on the phone')).toBeTruthy();
+    expect(el.querySelector('.m-skip-title')!.textContent).toBe('Skip');
+    const text = el.textContent!;
+    for (const w of ['for all episodes · TV and phone', 'Skip the intro', 'Skip the credits', 'straight to the next episode', 'Intro and credits', 'Episodes']) {
+      expect(text, w).toContain(w);
+    }
+    for (const l of ['Back', 'Find a poster', 'Rename', 'Delete the torrent', 'Skip the intro', 'Skip the credits']) {
+      expect(labels(), l).toContain(l);
+    }
+    noCyrillic();
+    expect(labels()).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('the main button resumes the last position', async () => {
+    saveProgress('abc', 3, 1394, 3600);
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    await flush();
+    expect(el.querySelector('.m-btn-primary')!.textContent).toContain('Continue on TV · S02E03 from 23:14');
+  });
+
+  it('a single file: «Files» instead of «Episodes»', async () => {
+    torrents.value = [{ ...tor, file_stats: [{ id: 1, path: 'Movie.2026.mkv', length: 1000000000 }] }];
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Files');
+    expect(el.textContent).not.toContain('Episodes');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('18.0 GB · 12 peers');
+  });
+
+  it('the watch sheet: three options in English', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    await flush();
+    click(el.querySelectorAll('.m-ep')[3]);
+    const dialog = el.querySelector('[role=dialog]')!;
+    expect(dialog.getAttribute('aria-label')).toBe('Where to watch');
+    expect(dialog.querySelector('.m-sheet-title')!.textContent).toBe('Where to watch?');
+    const opts = Array.from(dialog.querySelectorAll('.m-opt')).map((o) => o.textContent);
+    expect(opts).toEqual([
+      'On the TV LG OLEDOMP will open and playback will start',
+      'On the phoneIn VLC, MX Player or another player',
+      'Copy the stream linkFor another device on this network',
+    ]);
+    click(byText('Copy the stream link'));
+    await flush();
+    expect(toast.value).toBe('Link copied');
+  });
+
+  it('the watch sheet without a TV asks to connect one', async () => {
+    mount();
+    await flush();
+    click(el.querySelectorAll('.m-ep')[0]);
+    expect(el.querySelector('[role=dialog]')!.textContent).toContain('Connect a TV first');
+    noCyrillic();
+  });
+
+  it('the marks sheet: texts and the time errors', async () => {
+    mount();
+    await flush();
+    click(byText('Intro and credits'));
+    const dialog = el.querySelector('[role=dialog]')!;
+    expect(dialog.getAttribute('aria-label')).toBe('Intro and credits');
+    const text = dialog.textContent!;
+    for (const w of ['For all episodes of “Starbound Frontier”. If the file has chapters named “Intro” or “Credits”, they are used.', 'Intro', 'Credits', 'Last (min:sec)', 'It is easier to mark it right in the player: menu → “Mark the intro start”.']) {
+      expect(text, w).toContain(w);
+    }
+    expect(dialog.querySelector('label[for=m-mark-from]')!.textContent).toBe('From');
+    expect(dialog.querySelector('label[for=m-mark-to]')!.textContent).toBe('To');
+    expect(Array.from(dialog.querySelectorAll('.m-marks-actions button')).map((b) => b.textContent)).toEqual(['Reset', 'Save']);
+    const type = (id: string, v: string) =>
+      act(() => {
+        const i = el.querySelector('#' + id) as HTMLInputElement;
+        i.value = v;
+        i.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    type('m-mark-from', 'x');
+    type('m-mark-to', '1:00');
+    click(byText('Save'));
+    expect(el.querySelector('[role=alert]')!.textContent).toBe('Enter the time as min:sec, for example 1:30');
+    type('m-mark-from', '2:00');
+    click(byText('Save'));
+    expect(el.querySelector('[role=alert]')!.textContent).toBe('The end of the intro must be after its start');
+    noCyrillic();
+  });
+
+  it('poster toasts, the delete question and not found', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: '' });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    mount();
+    await flush();
+    click('button[aria-label="Find a poster"]');
+    await flush();
+    expect(toast.value).toBe('Set a TMDB key in “Server settings”');
+    click('button[aria-label="Delete the torrent"]');
+    expect(confirm).toHaveBeenCalledWith('Delete the torrent “Starbound Frontier”?');
+    torrents.value = [];
+    vi.spyOn(TorrServerClient.prototype, 'get').mockRejectedValue(new Error('404'));
+    mount();
+    expect(el.textContent).toContain('Loading…');
+    await flush();
+    expect(el.textContent).toContain('Torrent not found');
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    noCyrillic();
   });
 });

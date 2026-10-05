@@ -4,6 +4,8 @@ import { nativePlugin } from '../../src/platform/androidNative';
 import { detachPhone, phoneAttached, setLinkTransport } from '../../src/phone/link';
 import { currentRoute, resetTo } from '../../src/ui/nav';
 import { servers, activeServerId, addServer, setActiveServer } from '../../src/store/servers';
+import { settings, resetSettings } from '../../src/store/settings';
+import { lang } from '../../src/i18n';
 
 const w = window as unknown as { Capacitor?: unknown };
 
@@ -38,6 +40,8 @@ beforeEach(() => {
   resetTo({ name: 'connect' });
 });
 afterEach(() => {
+  // a language a test stored (remoteAttach lang) must not leak into the next one
+  resetSettings();
   if (uninstall) uninstall();
   uninstall = null;
   delete w.Capacitor;
@@ -84,6 +88,16 @@ describe('installAndroidRemote', () => {
     f.emit('remoteAttach', { report: ' http://10.0.0.3:4000/omp/x ' });
     expect(phoneAttached.value).toBe(true);
     expect(currentRoute.value.name).toBe('connect');
+  });
+
+  it('remoteAttach with lang stores the phone language; an unknown one is ignored', async () => {
+    setLinkTransport(() => new Promise<string>(() => {}));
+    const f = await install();
+    f.emit('remoteAttach', { report: 'http://10.0.0.3:4000/omp/x', lang: 'de' });
+    expect(settings.value.language).toBe('system');
+    f.emit('remoteAttach', { report: 'http://10.0.0.3:4000/omp/x', lang: 'en' });
+    expect(settings.value.language).toBe('en');
+    expect(lang.value).toBe('en');
   });
 
   it('turns remote keys into webOS key codes', async () => {

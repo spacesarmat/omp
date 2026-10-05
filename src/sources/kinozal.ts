@@ -6,10 +6,11 @@
 // download.php through the session.
 // Selectors, the search URL, the login form and the logged-in marker follow the open-source Jackett definitions
 // kinozal.yml / kinozal-magnet.yml (not checked with a real account; verified on a device).
+import { t } from '../i18n';
 import { absUrl, encodeWin1251, parseDate, parseHtml, parseSize, textOf } from './html';
 import { createSiteHosts } from './mirrors';
-import { CHALLENGE, fetchTorrentAnswer, isChallenge, makeResult, siteOptions, toInt } from './site';
-import { BAD_URL } from './http';
+import { challenge, fetchTorrentAnswer, isChallenge, makeResult, siteOptions, toInt } from './site';
+import { badUrl } from './http';
 import { createSiteLogin, commonCaptcha, urlIsPath } from './siteLogin';
 import { loginRequired } from './types';
 import type { HttpResponse, Source, SourceContext, SourceResult } from './types';
@@ -21,7 +22,7 @@ export const kinozalHosts = createSiteHosts('kinozal', KINOZAL_MIRRORS);
 const SEARCH_TAIL = '&g=0&c=0&v=0&d=0&w=0&t=0&f=0';
 const LOGIN_PATH = 'takelogin.php';
 
-export const KINOZAL_NO_FILE = 'Kinozal не отдал торрент — войдите заново или проверьте дневной лимит скачиваний';
+export const kinozalNoFile = (): string => t('sources.site.kinozalNoFile');
 
 /** Kinozal category ids (Jackett's mapping) → the label of the result. */
 const CATEGORIES: { [id: string]: string } = {
@@ -117,7 +118,7 @@ function signedOut(res: HttpResponse): boolean {
 /** The infohash from «get_srv_details.php?id=…&action=2» (its first <li>), '' when the answer has none. */
 function infohash(ctx: SourceContext, id: string): Promise<{ hash: string; out: boolean }> {
   return kinozalHosts.get(ctx, 'get_srv_details.php?id=' + id + '&action=2', siteOptions(kinozal)).then((res) => {
-    if (isChallenge(res.text)) throw new Error(CHALLENGE);
+    if (isChallenge(res.text)) throw new Error(challenge());
     if (res.status < 200 || res.status >= 400) return { hash: '', out: signedOut(res) };
     const li = parseHtml(res.text).querySelector('li');
     const m = /\b([A-Fa-f0-9]{40})\b/.exec(textOf(li) || '');
@@ -138,7 +139,7 @@ function torrent(ctx: SourceContext, id: string, signedAgain: boolean): Promise<
   return get()
     .then((a) => (a.link || signedAgain || !signedOut(a.res) ? a : kinozalLogin.signInAgain(ctx).then(get)))
     .then((a) => {
-      if (!a.link) throw new Error(KINOZAL_NO_FILE);
+      if (!a.link) throw new Error(kinozalNoFile());
       return a.link;
     });
 }
@@ -163,7 +164,7 @@ export const kinozal: Source = {
   resolve(r: SourceResult, ctx: SourceContext) {
     // a result from before a mirror switch still resolves: only its id is used, on the active mirror
     const id = releaseId(r.detailUrl || '');
-    if (!id) return Promise.reject(new Error(BAD_URL));
+    if (!id) return Promise.reject(new Error(badUrl()));
     let signedAgain = false;
     return kinozalLogin
       .loggedIn(ctx)

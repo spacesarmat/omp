@@ -6,7 +6,7 @@ import { isBetaVersion } from '../lib/version';
 import { settings, updateSettings } from '../store/settings';
 import { hbPresence, hbHasRoot, openHbChannel, hbInstall, InstallStatus, HbPresence } from '../platform/hbchannel';
 import { APP_VERSION } from '../version';
-import { CHANGELOG } from '../lib/changelogData';
+import { getChangelog } from '../lib/changelogData';
 import { openWhatsNew } from '../store/whatsNew';
 import { FocusGroup, Button, ProgressBar } from '../ui/components';
 import { Qr } from '../ui/Qr';
@@ -14,6 +14,7 @@ import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
 import { platformKind } from '../platform/env';
 import { installApk } from '../platform/androidNative';
+import { t } from '../i18n';
 import type { UpdateInfo } from '../lib/updateInfo';
 
 interface ApkJob {
@@ -54,23 +55,23 @@ function ApkInstall({ info }: { info: UpdateInfo }) {
 
   let statusText: string | null = null;
   if (running) {
-    if (job!.pct !== null) statusText = 'Скачивание… ' + job!.pct + '%';
-    else statusText = startedHere.current ? 'Скачивание…' : 'Обновление уже скачивается…';
+    if (job!.pct !== null) statusText = t('update.hb.downloadingPct', { p: job!.pct! });
+    else statusText = startedHere.current ? t('update.hb.downloading') : t('updateScreen.alreadyDownloading');
   } else if (job && job.done) {
-    statusText = 'Подтвердите установку в открывшемся окне Android';
+    statusText = t('updateScreen.confirmInstall');
   }
-  const label = job && job.error ? 'Повторить' : job && job.done ? 'Установить снова' : 'Скачать и установить';
+  const label = job && job.error ? t('common.retry') : job && job.done ? t('updateScreen.installAgain') : t('updateScreen.downloadInstall');
 
   return (
     <section class="update-block">
-      <h2>Установить сейчас</h2>
+      <h2>{t('updateScreen.installNow')}</h2>
       {statusText && <div class="update-status">{statusText}</div>}
       {running && job!.pct !== null && <ProgressBar ratio={job!.pct / 100} />}
       {job && job.error && <div class="banner-error">{job.error}</div>}
       <div class="row update-actions">
         <Button focusKey="upd-install" label={label} className="primary" onPress={install} disabled={running} />
       </div>
-      <div class="muted">Настройки и сохранённые серверы не пропадут.</div>
+      <div class="muted">{t('updateScreen.keepData')}</div>
     </section>
   );
 }
@@ -112,8 +113,8 @@ export function UpdateScreen() {
     checkForUpdate({ manual: true }).then((r) => {
       setChecking(false);
       dismissPrompt(); // already on the update screen
-      if (r === 'error') toast('Не удалось проверить обновления', 'error');
-      else if (r === 'latest') toast('У вас последняя версия');
+      if (r === 'error') toast(t('updateScreen.checkFailed'), 'error');
+      else if (r === 'latest') toast(t('updateScreen.latest'));
     });
   };
 
@@ -121,7 +122,7 @@ export function UpdateScreen() {
     if (!info) return;
     stopInstall();
     setError(null);
-    setStatus({ stage: 'download', text: 'Скачивание…' });
+    setStatus({ stage: 'download', text: t('update.hb.downloading') });
     cancel.current = hbInstall(
       info.ipkUrl,
       info.ipkHash,
@@ -132,35 +133,35 @@ export function UpdateScreen() {
       (e) => {
         stopInstall();
         setStatus(null);
-        setError('Не удалось установить: ' + e.message);
+        setError(t('updateScreen.installFailed', { error: e.message }));
       },
     );
   };
 
   const openHb = (withRepo: boolean) => {
-    openHbChannel(withRepo ? HB_REPO_URL : undefined).catch(() => toast('Не удалось открыть Homebrew Channel', 'error'));
+    openHbChannel(withRepo ? HB_REPO_URL : undefined).catch(() => toast(t('updateScreen.openHbFailed'), 'error'));
   };
 
   const busy = !!status && status.stage !== 'done';
 
   return (
     <FocusGroup focusKey="UPDATE" className="screen update">
-      <h1>Обновление OMP</h1>
+      <h1>{t('updateScreen.title')}</h1>
       {info && <div class="update-title">{updateTitle(info.version, APP_VERSION)}</div>}
       <div class="muted">
-        {'Установлена ' + APP_VERSION}
-        {isBetaVersion(APP_VERSION) && <span class="badge-beta">Бета</span>}
+        {t('updateScreen.installed', { version: APP_VERSION })}
+        {isBetaVersion(APP_VERSION) && <span class="badge-beta">{t('updateScreen.beta')}</span>}
       </div>
       {!info && (
         <div class="row update-actions">
-          <Button focusKey="upd-check" label={checking ? 'Проверка…' : 'Проверить обновления'} onPress={check} disabled={checking} />
+          <Button focusKey="upd-check" label={checking ? t('updateScreen.checking') : t('updateScreen.check')} onPress={check} disabled={checking} />
         </div>
       )}
       <div class="row update-actions">
-        <Button focusKey="upd-whatsnew" label="Что нового" onPress={() => openWhatsNew(CHANGELOG, APP_VERSION)} />
+        <Button focusKey="upd-whatsnew" label={t('whatsNew.title')} onPress={() => openWhatsNew(getChangelog(), APP_VERSION)} />
         <Button
           focusKey="upd-beta"
-          label={'Бета-версии: ' + (settings.value.betaUpdates ? 'включены' : 'выключены')}
+          label={t('updateScreen.betaToggle', { state: settings.value.betaUpdates ? t('updateScreen.betaOn') : t('updateScreen.betaOff') })}
           onPress={() => {
             updateSettings({ betaUpdates: !settings.value.betaUpdates });
             // the other feed decides what is offered now
@@ -169,7 +170,7 @@ export function UpdateScreen() {
           }}
         />
       </div>
-      <div class="muted">Бета — новые функции раньше всех, могут быть ошибки. Основная версия заменит бету сама</div>
+      <div class="muted">{t('updateScreen.betaNote')}</div>
       {info && info.notes.length > 0 && (
         <ul class="update-notes">{info.notes.slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>
       )}
@@ -178,32 +179,32 @@ export function UpdateScreen() {
 
       {info && !android && root && (
         <section class="update-block">
-          <h2>Установить сейчас</h2>
+          <h2>{t('updateScreen.installNow')}</h2>
           {status && <div class="update-status">{status.text}</div>}
           {status && status.stage === 'download' && status.progress !== undefined && <ProgressBar ratio={status.progress / 100} />}
           {error && <div class="banner-error">{error}</div>}
           <div class="row update-actions">
-            <Button focusKey="upd-install" label={error ? 'Повторить' : 'Установить'} className="primary" onPress={install} disabled={busy} />
+            <Button focusKey="upd-install" label={error ? t('common.retry') : t('common.install')} className="primary" onPress={install} disabled={busy} />
           </div>
         </section>
       )}
 
       {!android && (
         <section class="update-block">
-          <h2>Через Homebrew Channel</h2>
+          <h2>{t('updateScreen.viaHb')}</h2>
           {hb === 'missing' ? (
             <div class="update-row">
               <Qr text={HB_SITE_URL} size={200} />
-              <div class="update-text">Homebrew Channel не установлен. Установите его по инструкции на webosbrew.org — QR-код ведёт туда.</div>
+              <div class="update-text">{t('updateScreen.hbMissing')}</div>
             </div>
           ) : (
             <div>
-              {hb === 'unknown' && <div class="muted">Если Homebrew Channel установлен:</div>}
+              {hb === 'unknown' && <div class="muted">{t('updateScreen.hbIfInstalled')}</div>}
               <div class="row update-actions">
-                <Button focusKey="upd-hb-open" label="Открыть Homebrew Channel" onPress={() => openHb(false)} />
-                <Button focusKey="upd-hb-repo" label="Добавить репозиторий OMP" onPress={() => openHb(true)} />
+                <Button focusKey="upd-hb-open" label={t('updateScreen.openHb')} onPress={() => openHb(false)} />
+                <Button focusKey="upd-hb-repo" label={t('updateScreen.addRepo')} onPress={() => openHb(true)} />
               </div>
-              <div class="muted">Найдите OMP в списке и нажмите «Обновить». Если OMP нет в списке — добавьте репозиторий OMP.</div>
+              <div class="muted">{t('updateScreen.hbHint')}</div>
             </div>
           )}
         </section>
@@ -211,13 +212,13 @@ export function UpdateScreen() {
 
       {!android && (
         <section class="update-block">
-          <h2>С компьютера</h2>
+          <h2>{t('updateScreen.fromPc')}</h2>
           <div class="update-row">
             <Qr text={(info && info.releaseUrl) || RELEASES_URL} size={200} />
             <ol class="update-text">
-              <li>Скачайте файл .ipk со страницы релиза (QR-код ведёт туда).</li>
-              <li>Установите его через webOS Dev Manager (Windows/macOS/Linux) или командой ares-install.</li>
-              <li>Настройки и сохранённые серверы не пропадут.</li>
+              <li>{t('updateScreen.pc1')}</li>
+              <li>{t('updateScreen.pc2')}</li>
+              <li>{t('updateScreen.keepData')}</li>
             </ol>
           </div>
         </section>

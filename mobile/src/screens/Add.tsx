@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
-import { ADD_CATEGORIES, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
+import { addCategories, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
@@ -19,13 +20,13 @@ import { getHealth } from '../../../src/sources/store';
 import {
   filterQuality,
   isCloudflare,
-  JACKETT_HINT,
+  jackettHint,
   progressText,
   resultKey,
   sortResults,
   sourceName,
   stableOrder,
-  SORT_LABELS,
+  sortLabels,
   type QualityFilter,
   type SortKey,
 } from '../../../src/sources/view';
@@ -52,14 +53,14 @@ function SubscribePlate({ query, onSubscribe }: { query: string; onSubscribe: ()
   return (
     <div class="m-sub-plate" data-plate="subscribe">
       <Icon d={BELL} size={22} />
-      <span class="m-grow">{existing ? 'Вы подписаны на этот запрос' : 'Сообщить, когда появятся новые раздачи по этому запросу'}</span>
+      <span class="m-grow">{existing ? t('add.subscribed') : t('add.subscribeHint')}</span>
       {existing ? (
         <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={() => navigate({ name: 'subFindings', id: existing.id })}>
-          Открыть
+          {t('common.open')}
         </button>
       ) : (
         <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={onSubscribe}>
-          Подписаться
+          {t('add.subscribe')}
         </button>
       )}
     </div>
@@ -211,18 +212,18 @@ export function Add({ link }: { link?: string }) {
   const addLink = async (l: string): Promise<string | null> => {
     const c = client.value;
     if (!c) {
-      setError('Сервер не выбран');
+      setError(t('errors.noServerSelected'));
       return null;
     }
-    const t = await c.add({ link: l, title: magnetName(l) || undefined, category: magnetCategory });
-    void rememberAdded(c, t, magnetName(l));
-    return t.hash;
+    const added = await c.add({ link: l, title: magnetName(l) || undefined, category: magnetCategory });
+    void rememberAdded(c, added, magnetName(l));
+    return added.hash;
   };
 
   const onAdd = async () => {
     const l = normalizeLink(value);
     if (!l) {
-      setError('Вставьте magnet-ссылку или хеш из 40 символов');
+      setError(t('add.badLink'));
       return;
     }
     setError('');
@@ -230,7 +231,7 @@ export function Add({ link }: { link?: string }) {
     try {
       const hash = await addLink(l);
       if (hash && alive.v) {
-        showToast('Добавлено');
+        showToast(t('common.added'));
         setPicked(null);
         navigate({ name: 'torrent', hash });
       }
@@ -246,7 +247,7 @@ export function Add({ link }: { link?: string }) {
   const enabledIds = enabledSources(all).map((s) => s.id);
   const selected = chosen || enabledIds;
   const allChosen = chosen === null || (chosen.length === enabledIds.length && enabledIds.every((id) => chosen.indexOf(id) >= 0));
-  const sourcesLabel = allChosen ? 'Все источники · ' + enabledIds.length : 'Источники · ' + selected.length;
+  const sourcesLabel = allChosen ? t('add.sourcesAll', { n: enabledIds.length }) : t('add.sourcesSome', { n: selected.length });
 
   const onSearch = (e?: Event) => {
     e?.preventDefault();
@@ -304,7 +305,7 @@ export function Add({ link }: { link?: string }) {
     }
     const c = client.value;
     if (!c) {
-      setSearchError('Сервер не выбран');
+      setSearchError(t('errors.noServerSelected'));
       return;
     }
     setSearchError('');
@@ -312,14 +313,14 @@ export function Add({ link }: { link?: string }) {
       const hash = await addSearchResult(r, categoryOfRow(r), { onStep: (s) => markRow(key, s), alive: () => alive.v });
       if (!hash || !alive.v) return;
       if (!watch) {
-        showToast('Добавлено на сервер');
+        showToast(t('notify.added'));
         return;
       }
       await launch.start({
         hash,
         label: r.Title,
         onError: setSearchError,
-        onLaunched: (name) => showToast('Запустил на ' + name),
+        onLaunched: (name) => showToast(t('add.launchedOn', { name })),
       });
     } catch (err) {
       if (alive.v) setSearchError(errorMessage(err));
@@ -334,30 +335,30 @@ export function Add({ link }: { link?: string }) {
   const visible = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
   memo.order = visible.map(resultKey);
   const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
-  const sortLabel = SORT_LABELS.filter((s) => s.key === sort)[0].label;
+  const sortLabel = sortLabels().filter((s) => s.key === sort)[0].label;
   const catRow = catSheet !== null ? (rows || []).filter((x) => resultKey(x) === catSheet)[0] : undefined;
 
   return (
     <div class="m-screen" data-route="add">
       <div class="m-lib-head">
-        <h1 class="m-lib-brand">Добавить</h1>
+        <h1 class="m-lib-brand">{t('common.add')}</h1>
         <TvChip />
       </div>
       <div class="m-add-row">
         <input
           class="m-input m-lib-search"
-          aria-label="Magnet-ссылка или хеш"
+          aria-label={t('add.magnetLabel')}
           placeholder="magnet:?xt=urn:btih:…"
           value={value}
           onInput={(e) => changeValue((e.target as HTMLInputElement).value)}
         />
         <button type="button" class="m-btn m-btn-primary m-btn-sm" disabled={busy} onClick={onAdd}>
-          Добавить
+          {t('common.add')}
         </button>
       </div>
-      <div class="m-muted m-small">Категория</div>
+      <div class="m-muted m-small">{t('add.category')}</div>
       <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-        {ADD_CATEGORIES.map((c) => (
+        {addCategories().map((c) => (
           <button
             key={c.id}
             type="button"
@@ -370,19 +371,19 @@ export function Add({ link }: { link?: string }) {
         ))}
       </div>
       {error && <div class="m-error">{error}</div>}
-      <div class="m-muted m-small">Ссылки magnet из браузера открываются в OMP сами — через «Поделиться».</div>
-      <h2 class="m-add-title">Поиск по источникам</h2>
+      <div class="m-muted m-small">{t('add.magnetHint')}</div>
+      <h2 class="m-add-title">{t('add.searchBySources')}</h2>
       <form class="m-add-row" onSubmit={onSearch}>
         <input
           class="m-input m-lib-search"
           type="search"
-          aria-label="Поиск по источникам"
-          placeholder="Название"
+          aria-label={t('add.searchBySources')}
+          placeholder={t('common.name')}
           enterkeyhint="search"
           value={query}
           onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
         />
-        <button type="submit" class="m-btn m-btn-secondary m-btn-sm" aria-label="Искать">
+        <button type="submit" class="m-btn m-btn-secondary m-btn-sm" aria-label={t('add.go')}>
           <Icon d={SEARCH} size={18} />
         </button>
       </form>
@@ -408,7 +409,7 @@ export function Add({ link }: { link?: string }) {
       {memo.handle && memo.searched && (
         <SubscribePlate query={memo.searched} onSubscribe={() => setSubSheet(true)} />
       )}
-      {prog && prog.total === 0 && <div class="m-muted">Не выбрано ни одного источника — включите их в настройках, «Источники поиска»</div>}
+      {prog && prog.total === 0 && <div class="m-muted">{t('add.noneSelected')}</div>}
       {prog && prog.total > 0 && (
         <div class="m-muted m-small" role="status" data-search-progress>
           {progressText({
@@ -423,11 +424,11 @@ export function Add({ link }: { link?: string }) {
       {blocked.length > 0 && (
         <div class="m-hint-warn" data-hint="jackett">
           {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ')}
-          <div>{JACKETT_HINT}</div>
+          <div>{jackettHint()}</div>
         </div>
       )}
       {searchError && <LaunchError message={searchError} />}
-      {!searching && prog && prog.total > 0 && visible.length === 0 && <div class="m-muted">Ничего не найдено</div>}
+      {!searching && prog && prog.total > 0 && visible.length === 0 && <div class="m-muted">{t('catalog.nothingFound')}</div>}
       <div class="m-results">
         {visible.map((r) => {
           const k = resultKey(r);
@@ -445,8 +446,8 @@ export function Add({ link }: { link?: string }) {
         })}
       </div>
       {sheet === 'sources' && (
-        <Sheet label="Источники для поиска" onClose={() => setSheet(null)}>
-          <div class="m-sheet-title">Источники для поиска</div>
+        <Sheet label={t('add.sourcesSheet')} onClose={() => setSheet(null)}>
+          <div class="m-sheet-title">{t('add.sourcesSheet')}</div>
           {all.map((s) => {
             const on = selected.indexOf(s.id) >= 0;
             return (
@@ -464,14 +465,14 @@ export function Add({ link }: { link?: string }) {
               navigate({ name: 'sources' });
             }}
           >
-            Источники поиска
+            {t('tvSettings.sources')}
           </button>
         </Sheet>
       )}
       {sheet === 'sort' && (
-        <Sheet label="Сортировка" onClose={() => setSheet(null)}>
-          <div class="m-sheet-title">Сортировка</div>
-          {SORT_LABELS.map((s) => (
+        <Sheet label={t('add.sort')} onClose={() => setSheet(null)}>
+          <div class="m-sheet-title">{t('add.sort')}</div>
+          {sortLabels().map((s) => (
             <button
               key={s.key}
               type="button"
@@ -490,10 +491,10 @@ export function Add({ link }: { link?: string }) {
         </Sheet>
       )}
       {catSheet !== null && (
-        <Sheet label="Категория" onClose={() => setCatSheet(null)}>
-          <div class="m-sheet-title">Категория</div>
+        <Sheet label={t('add.category')} onClose={() => setCatSheet(null)}>
+          <div class="m-sheet-title">{t('add.category')}</div>
           <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-            {ADD_CATEGORIES.map((c) => (
+            {addCategories().map((c) => (
               <button
                 key={c.id}
                 type="button"

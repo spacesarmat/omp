@@ -1,7 +1,8 @@
+import { t } from '../i18n';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { client } from '../store/servers';
 import { settings, updateSettings } from '../store/settings';
-import { SUB_SIZE_OPTIONS, formatOffset, subtitleOffsetOptions } from '../player/subtitleOffset';
+import { subSizeOptions, formatOffset, subtitleOffsetOptions } from '../player/subtitleOffset';
 import { decideStart } from '../player/resume';
 import type { FfprobeResult } from '../api/types';
 import { errorMessage } from '../api/http';
@@ -149,23 +150,23 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   useEffect(() => {
     const v = videoRef.current;
     if (!ready || !v || vs.error || !metaLoaded.current) return;
-    const t = isFinite(v.currentTime) ? v.currentTime : vs.time;
+    const ct = isFinite(v.currentTime) ? v.currentTime : vs.time;
     const prevT = lastT.current;
-    lastT.current = t;
-    if (prefs.i && !autoIntroDone.current && segs.intro && inIntro(segs.intro, t)) {
+    lastT.current = ct;
+    if (prefs.i && !autoIntroDone.current && segs.intro && inIntro(segs.intro, ct)) {
       autoIntroDone.current = true;
       const start = segs.intro.start;
       v.currentTime = introSkipTarget(segs.intro, vs.duration);
       postSoon();
       setSkippedIntro(start);
       if (undoTimer.current) clearTimeout(undoTimer.current);
-      setUndo({ start, text: 'Заставка пропущена' });
+      setUndo({ start, text: t('tvPlayer.introSkipped') });
       undoTimer.current = setTimeout(hideUndo, SKIP_TOAST_MS);
       return;
     }
-    if (prefs.c && hasNext && !autoCreditsDone.current && segs.credits && vs.duration > 0 && !v.paused && prevT >= 0 && prevT < segs.credits.start && t >= segs.credits.start && t - prevT < 5) {
+    if (prefs.c && hasNext && !autoCreditsDone.current && segs.credits && vs.duration > 0 && !v.paused && prevT >= 0 && prevT < segs.credits.start && ct >= segs.credits.start && ct - prevT < 5) {
       autoCreditsDone.current = true;
-      toast('Титры пропущены');
+      toast(t('tvPlayer.creditsSkipped'));
       goNext();
     }
   }, [vs.time, ready, prefs, probe]);
@@ -222,7 +223,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       const target = dir < 0 ? Math.max(0, cur - step) : Math.max(cur, Math.min(max, cur + step));
       if (!isFinite(target) || target === cur) return;
       seekTo(target);
-      showFlash({ text: (dir < 0 ? '−' : '+') + step + ' с', side: zone });
+      showFlash({ text: (dir < 0 ? '−' : '+') + step + ' ' + t('common.sec'), side: zone });
     },
   };
   const taps = useMemo(() => new TapDetector({
@@ -318,7 +319,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
 
   const openChapters = () => {
     if (!chapters.length) return;
-    choose('Главы', chapters.map((ch, i) => ({ label: formatDuration(ch.start) + ' · ' + chapterLabel(ch, i), value: i })), chapterIdx >= 0 ? chapterIdx : undefined)
+    choose(t('player.chapters'), chapters.map((ch, i) => ({ label: formatDuration(ch.start) + ' · ' + chapterLabel(ch, i), value: i })), chapterIdx >= 0 ? chapterIdx : undefined)
       .then((i) => { if (i !== null) seekTo(chapters[i].start); });
   };
 
@@ -337,12 +338,12 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       return;
     }
     if (!c || !item.hash) {
-      toast('Не удалось сохранить отметку: нет связи с сервером', 'error');
+      toast(t('player.markNoServer'), 'error');
       return;
     }
     saveSkip(c, { hash: item.hash }, r.patch).then(
       (saved) => { setPrefs(saved); toast(r.text); },
-      (e) => toast('Не удалось сохранить отметку: ' + errorMessage(e), 'error'),
+      (e) => toast(t('player.markSaveFailed', { error: errorMessage(e) }), 'error'),
     );
   };
 
@@ -379,7 +380,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     if (!sub || !c) return;
     c.fetchBytes(sub.url).then(
       (buf) => { if (subReq.current === token) setCues(parseSubtitles(decodeText(buf), sub.ext)); },
-      (e) => { if (subReq.current === token) toast('Не удалось загрузить субтитры: ' + errorMessage(e), 'error'); },
+      (e) => { if (subReq.current === token) toast(t('tvPlayer.subLoadFailed', { error: errorMessage(e) }), 'error'); },
     );
   };
 
@@ -425,47 +426,47 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     const audio = audioOptions(probe, v);
     const menu = subtitleMenu(embeddedSubOptions(probe, v), item.subtitles || []);
     const current = menu.find((o) => o.value === subChoice) || menu[0];
-    const audioLabel = audio[audioIdx] ? audio[audioIdx].label : 'по умолчанию';
-    const sizeLabel = (SUB_SIZE_OPTIONS.find((o) => o.value === settings.value.subSize) || SUB_SIZE_OPTIONS[1]).label;
+    const audioLabel = audio[audioIdx] ? audio[audioIdx].label : t('tvPlayer.byDefault');
+    const sizeLabel = (subSizeOptions().find((o) => o.value === settings.value.subSize) || subSizeOptions()[1]).label;
     const root: { label: string; value: string }[] = [
-      { label: 'Аудио: ' + audioLabel, value: 'audio' },
-      { label: 'Субтитры: ' + current.label, value: 'subs' },
-      { label: 'Размер субтитров: ' + sizeLabel, value: 'size' },
+      { label: t('tvPlayer.audioRow', { v: audioLabel }), value: 'audio' },
+      { label: t('tvPlayer.subsRow', { v: current.label }), value: 'subs' },
+      { label: t('tvPlayer.subSizeRow', { v: sizeLabel }), value: 'size' },
     ];
-    if (cues) root.push({ label: 'Сдвиг субтитров: ' + formatOffset(subOffset), value: 'offset' });
-    if (chapters.length) root.push({ label: 'Главы: ' + chapters.length, value: 'chapters' });
+    if (cues) root.push({ label: t('tvPlayer.offsetRow', { v: formatOffset(subOffset) }), value: 'offset' });
+    if (chapters.length) root.push({ label: t('tvPlayer.chaptersRow', { n: chapters.length }), value: 'chapters' });
     const now = v.currentTime;
     const credits = prefs.mc && vs.duration > prefs.mc ? formatDuration(vs.duration - prefs.mc) : '—';
     root.push(
-      { label: 'Отметить начало заставки: ' + (pendingIntro.current !== null ? formatDuration(pendingIntro.current) : prefs.mi ? formatDuration(prefs.mi[0]) : '—'), value: 'mark-intro-start' },
-      { label: 'Отметить конец заставки: ' + (pendingIntro.current !== null ? 'начало ' + formatDuration(pendingIntro.current) + ' · ' : '') + 'сейчас ' + formatDuration(now), value: 'mark-intro-end' },
-      { label: 'Отметить начало титров: ' + credits, value: 'mark-credits' },
+      { label: t('tvPlayer.markIntroStartRow', { v: pendingIntro.current !== null ? formatDuration(pendingIntro.current) : prefs.mi ? formatDuration(prefs.mi[0]) : '—' }), value: 'mark-intro-start' },
+      { label: t('tvPlayer.markIntroEndRow', { v: (pendingIntro.current !== null ? t('tvPlayer.pendingStart', { t: formatDuration(pendingIntro.current) }) : '') + t('tvPlayer.atNow', { t: formatDuration(now) }) }), value: 'mark-intro-end' },
+      { label: t('tvPlayer.markCreditsRow', { v: credits }), value: 'mark-credits' },
     );
-    choose('Меню плеера', root).then((kind) => {
+    choose(t('tvPlayer.menuTitle'), root).then((kind) => {
       if (kind === 'chapters') openChapters();
       else if (kind === 'mark-intro-start') mark('intro-start', now);
       else if (kind === 'mark-intro-end') mark('intro-end', now);
       else if (kind === 'mark-credits') mark('credits', now);
       if (kind === 'audio') {
         if (audio.length < 2) {
-          toast('Других аудиодорожек нет');
+          toast(t('tvPlayer.noOtherAudio'));
           return;
         }
-        choose('Аудио', audio.map((a, i) => ({ label: a.label, value: i })), audioIdx).then((i) => {
+        choose(t('tvPlayer.audio'), audio.map((a, i) => ({ label: a.label, value: i })), audioIdx).then((i) => {
           if (i === null) return;
           chooseAudio(v, audio, i);
         });
       } else if (kind === 'subs') {
-        choose('Субтитры', menu, subChoice).then((ch) => {
+        choose(t('common.subtitles'), menu, subChoice).then((ch) => {
           if (ch === null) return;
           userTracks.current = true;
           applySubChoice(ch);
           if (item.hash) saveTrackPref(item.hash, { sub: subPrefFromChoice(ch, embeddedSubOptions(probe, v), item.subtitles || []) });
         });
       } else if (kind === 'size') {
-        choose('Размер субтитров', SUB_SIZE_OPTIONS, settings.value.subSize).then((size) => { if (size) updateSettings({ subSize: size }); });
+        choose(t('tvPlayer.subSize'), subSizeOptions(), settings.value.subSize).then((size) => { if (size) updateSettings({ subSize: size }); });
       } else if (kind === 'offset') {
-        choose('Сдвиг субтитров', subtitleOffsetOptions(), subOffset).then((off) => { if (off !== null) setSubOffset(off); });
+        choose(t('tvPlayer.offset'), subtitleOffsetOptions(), subOffset).then((off) => { if (off !== null) setSubOffset(off); });
       }
     });
   };
@@ -491,7 +492,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       if (!v || !ready) return;
       if (!phoneToasted.current) {
         phoneToasted.current = true;
-        toast('Управление с телефона');
+        toast(t('tvPlayer.phoneControl'));
       }
       const audio = audioOptions(probeRef.current, v);
       const menu = subtitleMenu(embeddedSubOptions(probeRef.current, v), item.subtitles || []);

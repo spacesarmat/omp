@@ -4,6 +4,7 @@ import { loadSkip, saveSkip, type SkipPatch, type JournalClient } from '../store
 import type { Torrent, FfprobeResult } from '../api/types';
 import type { SkipPrefs } from './journal';
 import { playableFiles, type TorrentFile } from './episodes';
+import { t } from '../i18n';
 
 const OFF: SkipPrefs = { i: false, c: false };
 
@@ -72,7 +73,7 @@ export function useSkip(c: SkipClient | null | undefined, hash: string, fileInde
   }, [!!c, hash, fileIndex]);
 
   const save = (update: SkipUpdate, optimistic: boolean): Promise<SkipPrefs> => {
-    if (!c) return Promise.reject(new Error('нет подключения к серверу'));
+    if (!c) return Promise.reject(new Error(t('errors.noServerConnection')));
     const before = cur.current;
     const patch = typeof update === 'function' ? update(before) : update;
     touched.current = true;

@@ -34,7 +34,7 @@ import { DonateSheet } from './ui/DonateSheet';
 import { syncSupport, localSupportUntil } from './donate';
 import { torrents } from '../../src/store/library';
 import { checkWhatsNew } from '../../src/store/whatsNew';
-import { CHANGELOG } from '../../src/lib/changelogData';
+import { getChangelog } from '../../src/lib/changelogData';
 import { APP_VERSION } from '../../src/version';
 import { updatePrompt } from '../../src/store/updates';
 import { tvState, warmUp, cancelWarmUp } from './tv/tvClient';
@@ -46,6 +46,8 @@ import { SubFindings } from './screens/SubFindings';
 import { Monitor } from './screens/Monitor';
 import { monitorNative } from './monitor/native';
 import { reloadLog } from '../../src/lib/log';
+import { Fragment } from 'preact';
+import { lang, type Lang } from '../../src/i18n';
 import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
 import './mobile.css';
 
@@ -72,7 +74,17 @@ function intakeMagnet(l: string): void {
   if (currentRoute.value.name !== 'connect') switchTab({ name: 'connect' });
 }
 
+/** Sends the resolved UI language to the native side now and on every change; returns the stopper. */
+export function syncNativeLanguage(set: (l: Lang) => Promise<void> = (l) => native.setLanguage(l)): () => void {
+  return effect(() => {
+    void set(lang.value);
+  });
+}
+
 export function App() {
+  // the native copy (notifications, install assistant…) follows the page's language
+  useEffect(() => syncNativeLanguage(), []);
+
   useEffect(() => {
     let remove: (() => void) | undefined;
     let cancelled = false;
@@ -192,7 +204,7 @@ export function App() {
 
   // «Что нового» once after an update
   useEffect(() => {
-    checkWhatsNew(CHANGELOG, APP_VERSION);
+    checkWhatsNew(getChangelog(), APP_VERSION);
   }, []);
 
   // background update check 3 s after start (cheap GET; honours the setting and the 6 h interval)
@@ -217,8 +229,9 @@ export function App() {
     });
   }, [showNav]);
   const showMini = (route.name === 'library' || route.name === 'remote') && linkStatus.value !== 'none';
+  // a language change remounts the whole UI (t() does not subscribe components to the language)
   return (
-    <>
+    <Fragment key={lang.value}>
       {route.name === 'connect' ? (
         <Connect />
       ) : route.name === 'tv' ? (
@@ -268,6 +281,6 @@ export function App() {
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}
       {showNav && <NavBar active={route.name as Tab} />}
-    </>
+    </Fragment>
   );
 }

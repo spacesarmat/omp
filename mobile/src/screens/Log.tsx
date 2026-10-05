@@ -1,12 +1,14 @@
 import { useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
+import { ru } from '../../../src/i18n/ru';
 import { Clipboard } from '@capacitor/clipboard';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { goBack } from '../nav';
 import { native } from '../platform/native';
 import {
-  AREA_LABEL,
-  LEVEL_LABEL,
+  areaLabel,
+  levelLabel,
   clearLog,
   currentLogInfo,
   formatLog,
@@ -21,10 +23,10 @@ import {
 
 export type LogFilter = 'all' | 'errors' | 'monitor';
 
-const FILTERS: { id: LogFilter; label: string }[] = [
-  { id: 'all', label: 'Все' },
-  { id: 'errors', label: 'Ошибки' },
-  { id: 'monitor', label: 'Мониторинг' },
+const filters = (): { id: LogFilter; label: string }[] => [
+  { id: 'all', label: t('common.all') },
+  { id: 'errors', label: t('log.filterErrors') },
+  { id: 'monitor', label: t('monitor.title') },
 ];
 
 export function filterEntries(list: LogEntry[], f: LogFilter): LogEntry[] {
@@ -46,8 +48,8 @@ const defaults: LogActions = {
     window.open(url, '_system');
   },
   shareText: (o) => native.shareText(o),
-  confirm: (t) => window.confirm(t),
-  phoneName: () => native.phoneName().then((n) => (n && n !== 'Телефон' ? n : null)),
+  confirm: (text) => window.confirm(text),
+  phoneName: () => native.phoneName().then((n) => (n && n !== ru.history.phone && n !== t('history.phone') ? n : null)),
 };
 
 export let actions: LogActions = defaults;
@@ -58,7 +60,7 @@ export function setLogActions(a: Partial<LogActions> | null): void {
 }
 
 async function deviceInfo(): Promise<LogInfo> {
-  const info = currentLogInfo('Телефон');
+  const info = currentLogInfo(t('history.phone'));
   const model = await actions.phoneName().catch(() => null);
   if (model) info.model = model;
   return info;
@@ -74,22 +76,22 @@ export async function reportToGithub(): Promise<void> {
     copied = false;
   }
   actions.openUrl(githubIssueUrl(info, copied));
-  showToast(copied ? 'Журнал скопирован' : 'Не удалось скопировать журнал');
+  showToast(copied ? t('log.toastCopied') : t('log.toastNotCopied'));
 }
 
 export async function shareLog(): Promise<void> {
   const info = await deviceInfo();
   try {
-    await actions.shareText({ name: 'omp-журнал-' + logDate(Date.now()) + '.txt', text: formatLog(info), title: 'Поделиться журналом' });
+    await actions.shareText({ name: t('log.fileName', { date: logDate(Date.now()) }), text: formatLog(info), title: t('log.share') });
   } catch (e) {
-    showToast(e && typeof (e as Error).message === 'string' ? (e as Error).message : 'Не удалось поделиться журналом');
+    showToast(e && typeof (e as Error).message === 'string' ? (e as Error).message : t('log.shareFailed'));
   }
 }
 
 export function clearWithConfirm(): void {
-  if (!actions.confirm('Очистить журнал?')) return;
+  if (!actions.confirm(t('tvSettings.clearLogAsk'))) return;
   clearLog();
-  showToast('Журнал очищен');
+  showToast(t('log.cleared'));
 }
 
 export function Log() {
@@ -100,39 +102,39 @@ export function Log() {
   return (
     <div class="m-screen" data-route="log">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
-        <h1 class="m-bar-title">Журнал ошибок</h1>
+        <h1 class="m-bar-title">{t('log.screenTitle')}</h1>
       </div>
-      <p class="m-muted m-small">Последние 500 записей, только на этом телефоне. Без паролей, cookie, адресов серверов и названий раздач.</p>
+      <p class="m-muted m-small">{t('log.keepNote')}</p>
       <button type="button" class="m-btn m-btn-primary" onClick={() => void reportToGithub()}>
-        Сообщить об ошибке на GitHub
+        {t('log.report')}
       </button>
-      <p class="m-muted m-small">Откроется новая задача в репозитории OMP с версией и устройством; журнал скопируется — вставьте его в текст задачи.</p>
+      <p class="m-muted m-small">{t('log.reportNote')}</p>
       <div class="m-log-actions">
         <button type="button" class="m-btn m-btn-secondary" onClick={() => void shareLog()}>
-          Поделиться журналом
+          {t('log.share')}
         </button>
         <button type="button" class="m-btn m-btn-secondary" onClick={clearWithConfirm}>
-          Очистить
+          {t('tvSettings.clear')}
         </button>
       </div>
       <div class="m-chips" role="tablist">
-        {FILTERS.map((f) => (
+        {filters().map((f) => (
           <button type="button" role="tab" aria-selected={filter === f.id} class={'m-chip' + (filter === f.id ? ' on' : '')} key={f.id} onClick={() => setFilter(f.id)}>
             {f.label}
           </button>
         ))}
       </div>
       {rows.length === 0 ? (
-        <p class="m-muted">Записей нет.</p>
+        <p class="m-muted">{t('log.empty')}</p>
       ) : (
         <div class="m-log-list">
           {rows.map((e, i) => (
             <div class={'m-log-row ' + e.l} key={e.t + ':' + i}>
               <div class="m-log-meta">
-                <span class="m-log-level">{LEVEL_LABEL[e.l]}</span> {logTime(e.t)} · {AREA_LABEL[e.a]}
+                <span class="m-log-level">{levelLabel(e.l)}</span> {logTime(e.t)} · {areaLabel(e.a)}
               </div>
               <div class="m-log-text">{e.x}</div>
             </div>

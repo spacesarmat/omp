@@ -15,15 +15,19 @@
 // adds that host's cookies and its User-Agent (OmpNative.siteSessionSend; they never pass through the page), the TV
 // stages them, the event says `sessions: { id: host }`, the page checks each with Source.sessionPending and answers
 // `sessions: { id: ok | error }`; only a verified session is promoted, otherwise the TV keeps what it had.
+// The phone's resolved UI language travels as `language`; the TV stores it as its own language setting.
 // Shared by the phone and the TV bundles: Chromium 53 rules.
 import { isObject, loadJson, saveJson } from '../store/storage';
-import { RUTRACKER_BAD_LOGIN, RUTRACKER_CAPTCHA } from './rutrackerText';
+import { rutrackerBadLogin, rutrackerCaptcha } from './rutrackerText';
 import { siteLoginCode } from './siteLoginText';
 import { indexerId, indexerKeyName, indexerPendingKeyName, INDEXERS_MAX, INDEXER_SOURCE_PREFIX, NAME_MAX, normalizeIndexerUrl, storeIndexer } from './indexerStore';
 import type { IndexerConn, IndexerKind } from './indexerStore';
 import { clearHealth, getHealth, isCloudflareBypassOn, isSourceOn, setCloudflareBypass, setHealth, setSourceOn } from './store';
 import { normalizeFlareUrl, setFlareSolverrUrl } from './flareStore';
 import type { SecretStore, Source, SourceContext, SourceHealth } from './types';
+import { updateSettings } from '../store/settings';
+import { t } from '../i18n';
+import type { Lang } from '../i18n';
 
 export const TRANSFER_PATH = '/omp/sources';
 export const TRANSFER_VERSION = 1;
@@ -79,6 +83,8 @@ export interface TransferPayload {
   cloudflare?: { [id: string]: boolean };
   /** Logins of the other sites (LOGIN_SITES). */
   logins?: { [id: string]: TransferLogin };
+  /** The phone's resolved UI language: the TV stores it as its own language setting. */
+  language?: Lang;
 }
 
 /** What the TV answers about the rutracker login (and about each site's login in `logins`). */
@@ -203,10 +209,18 @@ export function validateTransferPayload(v: unknown): TransferPayload | null {
     if (!l) return null;
     out.logins = l;
   }
+  if (v.language !== undefined) {
+    if (!isLang(v.language)) return null;
+    out.language = v.language;
+  }
   return out;
 }
 
-const PAYLOAD_KEYS = ['v', 'sources', 'rutracker', 'indexers', 'flaresolverr', 'cloudflare', 'logins'];
+function isLang(v: unknown): v is Lang {
+  return v === 'ru' || v === 'en';
+}
+
+const PAYLOAD_KEYS = ['v', 'sources', 'rutracker', 'indexers', 'flaresolverr', 'cloudflare', 'logins', 'language'];
 
 /** { siteId: { username, password } }: 1.. of LOGIN_SITES, no other fields. */
 function validLogins(v: unknown): { [id: string]: TransferLogin } | null {
@@ -241,6 +255,8 @@ export function buildTransferPayload(
   indexers?: TransferIndexer[],
   flare?: string | null,
   logins?: { [id: string]: TransferLogin } | null,
+  /** The phone's resolved UI language. */
+  language?: Lang,
 ): TransferPayload {
   const sources: { [id: string]: boolean } = {};
   const cloudflare: { [id: string]: boolean } = {};
@@ -269,6 +285,7 @@ export function buildTransferPayload(
     });
     if (n) out.logins = l;
   }
+  if (language) out.language = language;
   return out;
 }
 
@@ -291,7 +308,10 @@ export function transferLogins(list: Source[], ctx: SourceContext, only?: string
   ).then(() => out);
 }
 
-/** The payload without what an OMP on the TV older than v0.15 refuses (connections, FlareSolverr, Cloudflare switches, site logins). */
+/**
+ * The payload without what an OMP on the TV older than v0.15 refuses (connections, FlareSolverr, Cloudflare switches,
+ * site logins) and what one older than v0.16 refuses (the language).
+ */
 export function withoutNewParts(p: TransferPayload): TransferPayload {
   const out: TransferPayload = { v: p.v, sources: p.sources };
   if (p.rutracker) out.rutracker = p.rutracker;
@@ -349,6 +369,8 @@ export interface RemoteSources {
   logins?: string[];
   /** Browser sessions staged natively (SESSION_SITES): the host each one is on (never a cookie). */
   sessions?: { [id: string]: string };
+  /** The phone's resolved UI language. */
+  language?: Lang;
 }
 
 export function parseRemoteSources(d: unknown): RemoteSources | null {
@@ -372,7 +394,7 @@ export function parseRemoteSources(d: unknown): RemoteSources | null {
       indexers.push(r);
     }
   }
-  const out: RemoteSources = { id: d.id, sources, rutracker: d.rutracker === true, phone: phone || 'Телефон', at };
+  const out: RemoteSources = { id: d.id, sources, rutracker: d.rutracker === true, phone: phone || t('sources.defaultPhone'), at };
   if (d.indexers !== undefined) out.indexers = indexers;
   if (d.flaresolverr !== undefined) {
     const f = validFlare(d.flaresolverr);
@@ -403,6 +425,8 @@ export function parseRemoteSources(d: unknown): RemoteSources | null {
     }
     if (ids.length) out.sessions = sessions;
   }
+  // an unknown language is ignored: the switches still apply
+  if (isLang(d.language)) out.language = d.language;
   return out;
 }
 
@@ -502,8 +526,8 @@ function loginResult(e: unknown): RutrackerResult {
   const code = siteLoginCode(e);
   if (code) return code;
   const msg = e instanceof Error ? e.message : '';
-  if (msg === RUTRACKER_BAD_LOGIN) return 'bad_login';
-  if (msg === RUTRACKER_CAPTCHA) return 'captcha';
+  if (msg === rutrackerBadLogin()) return 'bad_login';
+  if (msg === rutrackerCaptcha()) return 'captcha';
   return 'error';
 }
 
@@ -532,6 +556,7 @@ export function applyRemoteSources(r: RemoteSources, known: Source[], ctx: () =>
     if (cfSites[id]) setCloudflareBypass(id, cf[id]);
   });
   if (r.flaresolverr) setFlareSolverrUrl(r.flaresolverr);
+  if (r.language) updateSettings({ language: r.language });
   notify();
   const save = (rutracker: boolean) => {
     const prev = lastTransfer();
@@ -722,9 +747,9 @@ export function transferWhen(at: number, now: number = Date.now()): { day: strin
   const start = today.getTime();
   const day =
     at >= start && at < start + 86400000
-      ? 'сегодня'
+      ? t('sources.today')
       : at >= start - 86400000 && at < start
-        ? 'вчера'
+        ? t('sources.yesterday')
         : two(d.getDate()) + '.' + two(d.getMonth() + 1) + '.' + d.getFullYear();
   return { day, time: two(d.getHours()) + ':' + two(d.getMinutes()) };
 }

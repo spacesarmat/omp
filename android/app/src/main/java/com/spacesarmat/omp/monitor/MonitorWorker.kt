@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.monitor
 
+import com.spacesarmat.omp.I18n
+
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -21,6 +23,7 @@ import org.json.JSONObject
  */
 class MonitorWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
+        I18n.load(applicationContext)
         val raw = inputData.getString(MonitorScheduler.KEY_ACTION)
         val action = MonitorAction.fromJson(raw)
         if (raw != null && action == null) return Result.success()
@@ -88,9 +91,9 @@ class MonitorWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
         val running = AtomicBoolean(false)
         /** Longer than Chromium's localStorage commit delay (about 5 s). */
         const val STORAGE_FLUSH_MS = 6_000L
-        private const val TOO_LONG = "Проверка не уложилась в 3 минуты"
-        private const val NO_SUMMARY = "Проверка не завершилась"
-        private const val NO_WEBVIEW = "Не удалось открыть WebView"
-        private const val FAILED = "Не удалось выполнить"
+        private val TOO_LONG: String get() = I18n.s("monitor.tooLong")
+        private val NO_SUMMARY: String get() = I18n.s("monitor.noFinish")
+        private val NO_WEBVIEW: String get() = I18n.s("monitor.noWebview")
+        private val FAILED: String get() = I18n.s("monitor.failed")
     }
 }

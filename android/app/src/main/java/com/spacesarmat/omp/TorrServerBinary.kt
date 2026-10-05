@@ -200,14 +200,14 @@ class TorrServerBinary(private val dir: File, val pin: TorrServerPin) {
 
         /** Russian text with the next step for a download failure code; [mb] = download size. */
         fun downloadError(code: String, mb: Long): String = when (code) {
-            InstallCodes.NETWORK -> "Не удалось скачать TorrServer: нет связи с GitHub. Проверьте интернет и повторите."
-            InstallCodes.CHECKSUM, InstallCodes.TOO_BIG -> "Файл TorrServer пришёл повреждённым и удалён. Повторите загрузку."
-            InstallCodes.PHONE_SPACE -> "Не хватает места: нужно около $mb МБ. Освободите место на телефоне и повторите."
+            InstallCodes.NETWORK -> I18n.s("ts.dlNetwork")
+            InstallCodes.CHECKSUM, InstallCodes.TOO_BIG -> I18n.s("ts.dlCorrupt")
+            InstallCodes.PHONE_SPACE -> I18n.s("ts.dlSpace", "mb" to mb.toString())
             InstallCodes.CANCELLED -> CANCELLED
-            else -> "Не удалось скачать TorrServer. Повторите позже."
+            else -> I18n.s("ts.dlOther")
         }
 
-        const val CANCELLED = "Загрузка отменена"
+        val CANCELLED: String get() = I18n.s("ts.dlCancelled")
         /** An exit within this long of the launch counts as «did not start». */
         const val QUICK_EXIT_MS = 10_000L
 
@@ -215,6 +215,6 @@ class TorrServerBinary(private val dir: File, val pin: TorrServerPin) {
         fun exitMessage(quick: Boolean, quickBefore: Boolean, crashed: String) = if (quick && quickBefore) CANNOT_RUN else crashed
 
         /** The binary does not load on this device (16 KB pages, linker refused it, crashes at once). */
-        const val CANNOT_RUN = "Свой сервер не запустился на этом устройстве — используйте TorrServer на компьютере или NAS"
+        val CANNOT_RUN: String get() = I18n.s("ts.cannotRun")
     }
 }

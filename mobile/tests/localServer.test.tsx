@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import {
   localServer,
   localAutostart,
@@ -254,6 +255,19 @@ describe('local server store', () => {
     expect(logEntries().some((e) => e.a === 'server' && e.l === 'error' && e.x === 'Свой сервер не запустился на этом устройстве')).toBe(true);
     await startLocal();
     expect(localServer.value.error).toBe(msg);
+  });
+
+  it('the English native text of a start that cannot run is logged as an error in English', async () => {
+    applyLanguageSetting('en');
+    try {
+      const msg = 'The built-in server could not start on this device — use TorrServer on a computer or NAS';
+      const f = fakeNative({ startError: msg });
+      setLocalServerDeps({ native: f.native as any, echo: async () => 'x' });
+      await expect(setupLocal(() => {})).rejects.toThrow('use TorrServer on a computer or NAS');
+      expect(logEntries().some((e) => e.a === 'server' && e.l === 'error' && e.x === 'The built-in server could not start on this device')).toBe(true);
+    } finally {
+      applyLanguageSetting('ru');
+    }
   });
 
   it('setupLocal starts nothing when the screen has gone after the download', async () => {

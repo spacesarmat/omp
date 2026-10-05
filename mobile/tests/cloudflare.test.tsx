@@ -9,16 +9,16 @@ import { currentRoute, resetTo } from '../src/nav';
 import type { SavedTv } from '../src/tv/tvStore';
 import type { TvCloudflareRequest } from '../src/platform/native';
 import {
-  BYPASS_WARNING,
-  CHECK_BUSY,
-  NOT_SENT_TO_TV,
+  bypassWarning,
+  checkBusy,
+  notSentToTv,
   runCloudflareCheck,
-  SENT_TO_TV,
+  sentToTv,
   setCloudflareChecker,
-  SHEET_NOTE_TV,
-  GATE_WAIT,
-  SHEET_TITLE,
-  WATCH_NOTIFY,
+  sheetNoteTv,
+  gateWait,
+  sheetTitle,
+  watchNotify,
   type CloudflareVisibleRequest,
 } from '../../src/sources/cloudflareCheck';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
@@ -26,7 +26,7 @@ import { isCloudflareBypassOn, isSourceOn, reloadSourcePrefs, resetHealth, setCl
 import { clearLog, logEntries } from '../../src/lib/log';
 import type { Source, SourceContext } from '../../src/sources/types';
 import type { BrowserLoginRequest } from '../../src/sources/browserLogin';
-import { WATCH_NOTIFY_LOGIN } from '../../src/sources/browserLogin';
+import { watchNotifyLogin } from '../../src/sources/browserLogin';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
 const ATV: SavedTv = { ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095 };
@@ -133,7 +133,7 @@ describe('phone: the visible check', () => {
     setCloudflareChecker(phoneChecker(n));
     expect(await runCloudflareCheck('rustorka', 'https://rustorka.example/tracker.php?nm=x')).toBe('solved');
     expect(n.sheets).toEqual([
-      { url: 'https://rustorka.example/', site: 'rustorka', mode: 'phone', title: SHEET_TITLE, text: 'Сайт rustorka просит пройти проверку Cloudflare.', cancel: 'Отмена', gateWait: GATE_WAIT },
+      { url: 'https://rustorka.example/', site: 'rustorka', mode: 'phone', title: sheetTitle(), text: 'Сайт rustorka просит пройти проверку Cloudflare.', cancel: 'Отмена', gateWait: gateWait() },
     ]);
   });
 
@@ -159,18 +159,18 @@ describe('phone: the visible check', () => {
     // the TV's own site name is not trusted: the phone's name for the site is shown
     await handleTvRequest({ ...request, site: 'Войдите в банк' }, d);
     expect(n.sheets[0].text).toBe('Сайт rustorka просит пройти проверку Cloudflare. Это нужно для телевизора «Гостиная».');
-    expect(n.sheets[0].note).toBe(SHEET_NOTE_TV);
+    expect(n.sheets[0].note).toBe(sheetNoteTv());
     expect(n.sheets[0].forTv).toBe('c7');
-    expect(toasts).toEqual([SENT_TO_TV]);
+    expect(toasts).toEqual([sentToTv()]);
     // the same request again (event + pending): shown once
     await handleTvRequest(request, d);
     expect(n.sheets.length).toBe(1);
     n.answer = { result: 'solved', sent: false };
     await handleTvRequest({ ...request, id: 'c8' }, d);
-    expect(toasts[1]).toBe(NOT_SENT_TO_TV);
+    expect(toasts[1]).toBe(notSentToTv());
     n.answer = { result: 'busy' };
     await handleTvRequest({ ...request, id: 'c9' }, d);
-    expect(toasts[2]).toBe(CHECK_BUSY);
+    expect(toasts[2]).toBe(checkBusy());
     n.answer = { result: 'cancelled' };
     await handleTvRequest({ ...request, id: 'c10' }, d);
     // the TV passed it itself meanwhile
@@ -187,7 +187,7 @@ describe('phone: the visible check', () => {
     expect(watchTarget(null)).toBeNull();
     expect(watchTarget({ ip: '192.168.1.50', name: 'LG', clientKey: 'k' })).toBeNull();
     expect(watchTarget({ ...ATV, token: undefined })).toBeNull();
-    expect(watchTarget(ATV)).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY, notifyLogin: WATCH_NOTIFY_LOGIN });
+    expect(watchTarget(ATV)).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: watchNotify(), notifyLogin: watchNotifyLogin() });
     const tv = signal<SavedTv | null>(null);
     const n = fakeNative();
     n.pending = request;
@@ -197,7 +197,7 @@ describe('phone: the visible check', () => {
     expect(n.watch).toEqual([null]);
     expect(n.sheets.length).toBe(1);
     tv.value = ATV;
-    expect(n.watch[1]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY, notifyLogin: WATCH_NOTIFY_LOGIN });
+    expect(n.watch[1]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: watchNotify(), notifyLogin: watchNotifyLogin() });
     // the paired TV is registered natively whatever the polling (session cookies go only there)
     expect(n.paired).toEqual([null, { url: 'http://192.168.1.40:8095', token: TOKEN }]);
     // no site with the switch on: the phone stops listening to the TV
@@ -205,7 +205,7 @@ describe('phone: the visible check', () => {
     expect(n.watch[2]).toBeNull();
     expect(n.paired.length).toBe(2);
     setCloudflareBypass('rustorka', true);
-    expect(n.watch[3]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY, notifyLogin: WATCH_NOTIFY_LOGIN });
+    expect(n.watch[3]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: watchNotify(), notifyLogin: watchNotifyLogin() });
     // a live event
     n.listeners[0]({ ...request, id: 'c11' });
     await tick();
@@ -235,7 +235,7 @@ describe('phone: a site behind Cloudflare (mockup PhoneSite)', () => {
   it('the switch is off by default, persists, and shows the warning and the clearance time', async () => {
     const el = await mount(new Date(2026, 9, 4, 22, 40).getTime());
     expect(el.querySelector('h1')!.textContent).toBe('rustorka');
-    expect(el.querySelector('[data-note="cloudflare-warning"]')!.textContent).toBe(BYPASS_WARNING);
+    expect(el.querySelector('[data-note="cloudflare-warning"]')!.textContent).toBe(bypassWarning());
     const bypass = el.querySelector('[aria-label="Обходить проверку Cloudflare"]') as HTMLButtonElement;
     expect(bypass.getAttribute('aria-checked')).toBe('false');
     // off: no status line

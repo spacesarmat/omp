@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { goBack, navigate } from '../nav';
 import { phoneSourceContext } from '../searchContext';
@@ -6,17 +7,17 @@ import { native } from '../platform/native';
 import { FLARESOLVERR_Q } from '../faq';
 import { flareSolverrUrl, normalizeFlareUrl, setFlareSolverrUrl } from '../../../src/sources/flareStore';
 import {
-  BAD_ADDRESS,
+  flareBadAddress,
   checkFlareSolverr,
   checkText,
-  FLARE_HOWTO,
-  FLARE_INTRO,
-  FLARE_NONE_TEXT,
-  FLARE_NONE_TITLE,
+  flareHowto,
+  flareIntro,
+  flareNoneText,
+  flareNoneTitle,
   flareHost,
   flareStatus,
-  NO_WIFI,
-  NOT_FOUND,
+  flareNoWifi,
+  flareNotFound,
   refreshFlareStatus,
   scanFlareSolverr,
   setFlareStatus,
@@ -26,7 +27,7 @@ import type { LanScan } from '../../../src/sources/indexerDiscovery';
 import type { SourceContext } from '../../../src/sources/types';
 import { log } from '../../../src/lib/log';
 
-export const ADDRESS_REMOVED = 'Адрес удалён: FlareSolverr не используется';
+export const addressRemoved = () => t('sources.flare.addressRemoved');
 
 function phoneScan(): LanScan {
   return (ports) => native.scanLan(ports);
@@ -72,12 +73,12 @@ export function FlareSolverr({ ctx = phoneSourceContext, scan = phoneScan }: { c
       setFlareSolverrUrl(null);
       setFlareStatus(null);
       setCheck(null);
-      setNote(ADDRESS_REMOVED);
+      setNote(addressRemoved());
       return;
     }
     const url = normalizeFlareUrl(raw);
     if (!url) {
-      setCheck({ ok: false, message: BAD_ADDRESS });
+      setCheck({ ok: false, message: flareBadAddress() });
       return;
     }
     setValue(url);
@@ -87,7 +88,7 @@ export function FlareSolverr({ ctx = phoneSourceContext, scan = phoneScan }: { c
     setCheck(null);
     checkFlareSolverr(url, ctx().http).then((c) => {
       setFlareStatus({ url, check: c, at: Date.now() });
-      log(c.ok ? 'info' : 'warn', 'search', c.ok ? 'FlareSolverr работает' : 'FlareSolverr: ' + c.message);
+      log(c.ok ? 'info' : 'warn', 'search', c.ok ? t('sources.flare.logWorks') : t('sources.flare.logFailed', { message: c.message }));
       if (!alive.current) return;
       setBusy(false);
       setCheck(c);
@@ -102,8 +103,8 @@ export function FlareSolverr({ ctx = phoneSourceContext, scan = phoneScan }: { c
     scanFlareSolverr(scan(), ctx().http).then((list) => {
       if (!alive.current) return;
       setScanning(false);
-      if (list === null) return setNote(NO_WIFI);
-      if (!list.length) return setNote(NOT_FOUND);
+      if (list === null) return setNote(flareNoWifi());
+      if (!list.length) return setNote(flareNotFound());
       if (list.length === 1) return runCheck(list[0]);
       setFound(list);
     });
@@ -112,15 +113,15 @@ export function FlareSolverr({ ctx = phoneSourceContext, scan = phoneScan }: { c
   return (
     <div class="m-screen" data-route="flaresolverr">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
         <h1 class="m-bar-title">FlareSolverr</h1>
       </div>
       <div class="m-flare">
-        <div class="m-flare-intro">{FLARE_INTRO}</div>
+        <div class="m-flare-intro">{flareIntro()}</div>
         <div class="m-field">
-          <label for="flare-url">Адрес</label>
+          <label for="flare-url">{t('connect.addressShort')}</label>
           <input
             id="flare-url"
             class="m-input"
@@ -134,15 +135,15 @@ export function FlareSolverr({ ctx = phoneSourceContext, scan = phoneScan }: { c
         </div>
         <div class="m-flare-actions">
           <button type="button" class="m-btn m-btn-secondary" disabled={scanning || busy} onClick={find}>
-            {scanning ? 'Ищу…' : 'Найти в сети'}
+            {scanning ? t('connect.searchingShort') : t('connect.scan')}
           </button>
           <button type="button" class="m-btn m-btn-primary" disabled={busy || scanning} onClick={() => runCheck(value)}>
-            {busy ? 'Проверяю…' : 'Проверить'}
+            {busy ? t('sources.flare.tvChecking') : t('common.check')}
           </button>
         </div>
         {found.length > 1 && (
           <div class="m-set-card" data-found="flare">
-            <div class="m-note m-muted">Найдено несколько — выберите:</div>
+            <div class="m-note m-muted">{t('sources.flare.foundSeveral')}</div>
             {found.map((u) => (
               <button type="button" key={u} class="m-btn m-btn-secondary m-btn-sm" onClick={() => runCheck(u)}>
                 {flareHost(u)}
@@ -162,10 +163,10 @@ export function FlareSolverr({ ctx = phoneSourceContext, scan = phoneScan }: { c
         )}
         {note && <div class="m-note m-muted">{note}</div>}
         <div class="m-set-card m-flare-howto">
-          <div class="m-flare-howto-title">{FLARE_NONE_TITLE}</div>
-          <div class="m-note m-muted">{FLARE_NONE_TEXT}</div>
+          <div class="m-flare-howto-title">{flareNoneTitle()}</div>
+          <div class="m-note m-muted">{flareNoneText()}</div>
           <button type="button" class="m-link" onClick={() => navigate({ name: 'faq', q: FLARESOLVERR_Q })}>
-            {FLARE_HOWTO}
+            {flareHowto()}
           </button>
         </div>
       </div>

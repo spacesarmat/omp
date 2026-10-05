@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { mockFetch, type MockResponse } from '../../tests/helpers/fetchMock';
-import { loginsNotSent, RUTRACKER_NOT_STORED, Sources, SITES_NOT_SENT, transferPayload, withLoginsLabel } from '../src/screens/Sources';
+import { loginsNotSent, rutrackerNotStored, Sources, sitesNotSent, transferPayload, withLoginsLabel } from '../src/screens/Sources';
 import { setCloudflareBypass, setSourceOn } from '../../src/sources/store';
-import { SourceSite, SEND_LOGIN, SITE_LOGIN_NOTE } from '../src/screens/SourceSite';
+import { SourceSite, sendLogin, siteLoginNote } from '../src/screens/SourceSite';
 import { resetTo } from '../src/nav';
 import { cancelWarmUp, disconnectTv, setTransport, type TvTransport } from '../src/tv/tvClient';
 import { reloadTvs, saveTv, setActiveTv, type SavedTv } from '../src/tv/tvStore';
@@ -126,12 +127,12 @@ describe('phone: Kinozal site screen', () => {
     await mountWith(<SourceSite id="kinozal" clearance={() => Promise.resolve(null)} ctx={() => site.ctx} />);
     const card = el.querySelector('[data-site-card="login"]') as HTMLElement;
     expect(card.textContent).toContain('Вход на Kinozal');
-    expect(card.textContent).toContain(SITE_LOGIN_NOTE);
-    expect(SITE_LOGIN_NOTE).toBe('Без входа сайт не отдаёт .torrent. Пароль хранится в зашифрованном хранилище телефона.');
+    expect(card.textContent).toContain(siteLoginNote());
+    expect(siteLoginNote()).toBe('Без входа сайт не отдаёт .torrent. Пароль хранится в зашифрованном хранилище телефона.');
     expect(el.textContent).toContain('Искать на Kinozal');
     expect(el.textContent).toContain('Обходить проверку Cloudflare');
     // no TV paired: no transfer button
-    expect(btn(SEND_LOGIN)).toBeUndefined();
+    expect(btn(sendLogin())).toBeUndefined();
     type('#m-site-user', 'kino');
     type('#m-site-pass', 'wrong');
     act(() => btn('Войти')!.click());
@@ -158,7 +159,7 @@ describe('phone: Kinozal site screen', () => {
     saveTv(ATV);
     setActiveTv(ATV.ip);
     await mountWith(<SourceSite id="kinozal" clearance={() => Promise.resolve(null)} ctx={() => site.ctx} />);
-    act(() => btn(SEND_LOGIN)!.click());
+    act(() => btn(sendLogin())!.click());
     await flush();
     const p = posts()[0];
     expect(p.body.logins).toEqual({ kinozal: { username: 'kino', password: PASSWORD } });
@@ -169,15 +170,17 @@ describe('phone: Kinozal site screen', () => {
     expect(p.body.flaresolverr).toBeUndefined();
     expect(toast.value).toBe('Вход на Kinozal передан на телевизор');
     answer = (c) => ({ body: JSON.stringify({ ok: true, logins: { kinozal: 'bad_login' } }) });
-    act(() => btn(SEND_LOGIN)!.click());
+    act(() => btn(sendLogin())!.click());
     await flush();
     expect(toast.value).toBe('Kinozal не принял логин или пароль');
     // an older TV refuses the logins: the rest goes, the phone says so
     answer = (c) => (c.body.logins || c.body.cloudflare ? { status: 400, body: '{"error":"bad_request"}' } : { body: '{"ok":true}' });
-    act(() => btn(SEND_LOGIN)!.click());
+    act(() => btn(sendLogin())!.click());
     await flush();
-    expect(posts()[3].body.logins).toBeUndefined();
-    expect(toast.value).toContain(SITES_NOT_SENT);
+    // the same transfer without the language first (a v0.15 TV), then without the v0.15 parts
+    expect(posts()[3].body.logins).toBeDefined();
+    expect(posts()[4].body.logins).toBeUndefined();
+    expect(toast.value).toContain(sitesNotSent());
     expect(JSON.stringify(logEntries())).not.toContain(PASSWORD);
   });
 });
@@ -206,7 +209,7 @@ describe('phone: «Источники поиска» with the sites behind Cloud
     answer = () => ({ body: JSON.stringify({ ok: true, rutracker: 'error', rutrackerNotStored: true, logins: { kinozal: 'ok' } }) });
     act(() => btn('Передать на телевизор')!.click());
     await flush();
-    expect(toast.value).toContain(RUTRACKER_NOT_STORED);
+    expect(toast.value).toContain(rutrackerNotStored());
     expect(toast.value.indexOf('Источники переданы.')).toBe(0);
   });
 
@@ -227,5 +230,65 @@ describe('phone: «Источники поиска» with the sites behind Cloud
     expect(p.payload.logins).toEqual({ rustorka: { username: 'r', password: PASSWORD } });
     expect(loginsNotSent(['Kinozal'], false)).toBe('Вход на Kinozal не передан: логин или пароль слишком длинный или с недопустимыми символами');
     expect(loginsNotSent(['rutracker', 'Kinozal'], true)).toBe('Входы на сайты не переданы: слишком много данных для телевизора');
+  });
+});
+
+describe('phone: site screen in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  const noCyrillic = () => expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+
+  it('the Kinozal screen: title, switches, the login form and its errors', async () => {
+    await mountWith(<SourceSite id="kinozal" clearance={() => Promise.resolve(null)} ctx={() => site.ctx} />);
+    expect(el.querySelector('h1')!.textContent).toBe('Kinozal');
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    expect(el.textContent).toContain('Search on Kinozal');
+    expect(el.textContent).toContain('Bypass the Cloudflare check');
+    const card = el.querySelector('[data-site-card="login"]') as HTMLElement;
+    expect(card.querySelector('.m-sheet-title')!.textContent).toBe('Sign in to Kinozal');
+    expect(card.textContent).toContain('Without signing in the site does not give out the .torrent. The password is kept in the phone’s encrypted storage.');
+    expect(card.querySelector('label[for=m-site-user]')!.textContent).toBe('Login');
+    expect(card.querySelector('label[for=m-site-pass]')!.textContent).toBe('Password');
+    act(() => btn('Sign in')!.click());
+    expect(el.querySelector('[role=alert]')!.textContent).toBe('Enter the login and password');
+    noCyrillic();
+  });
+
+  it('an unknown source', async () => {
+    await mountWith(<SourceSite id="nope" ctx={() => site.ctx} />);
+    expect(el.querySelector('h1')!.textContent).toBe('Source');
+    expect(el.textContent).toContain('Source not found');
+    noCyrillic();
+  });
+
+  it('signed in: «Signed in», sign-out and the transfer to the TV', async () => {
+    const atv: SavedTv = { ...ATV, name: 'Living room' };
+    saveTv(atv);
+    setActiveTv(atv.ip);
+    site = fakeSite((c) => (c.method === 'POST' && c.url === LOGIN ? page(fixture('kinozal-search.html'), 'https://kinozal.me/') : page(fixture('kinozal-search.html'), c.url)));
+    await mountWith(<SourceSite id="kinozal" clearance={() => Promise.resolve(null)} ctx={() => site.ctx} />);
+    type('#m-site-user', 'kino');
+    type('#m-site-pass', PASSWORD);
+    act(() => btn('Sign in')!.click());
+    await flush();
+    expect(el.textContent).toContain('Signed in');
+    expect(btn('Sign out')).toBeTruthy();
+    expect(btn('Send the sign-in to the TV')).toBeTruthy();
+    act(() => btn('Send the sign-in to the TV')!.click());
+    await flush();
+    expect(toast.value).toBe('The sign-in to Kinozal was sent to the TV');
+    expect(logEntries().map((e) => e.x).join('|')).toContain('Sign-in to kinozal sent to the Android TV: ok');
+    expect(JSON.stringify(logEntries())).not.toMatch(/[А-Яа-яЁё]/);
+    noCyrillic();
+  });
+
+  it('the transfer notes and the toggles are English', () => {
+    expect(withLoginsLabel(['Kinozal', 'rutracker'])).toBe('Together with the sign-in to Kinozal, rutracker');
+    expect(loginsNotSent(['Kinozal'], false)).toBe('The sign-in to Kinozal was not sent: the login or password is too long or has invalid characters');
+    expect(loginsNotSent(['Kinozal'], true)).toBe('Site sign-ins were not sent: too much data for the TV');
+    expect(sitesNotSent()).toBe('Sign-ins to sites behind Cloudflare were not sent — update OMP on the TV');
+    expect(rutrackerNotStored()).toBe('The TV could not save the rutracker sign-in: secure storage is unavailable');
+    expect(siteLoginNote()).toContain('Without signing in');
+    expect(sendLogin()).toBe('Send the sign-in to the TV');
   });
 });

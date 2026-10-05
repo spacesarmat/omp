@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.monitor
 
+import com.spacesarmat.omp.I18n
+
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -31,12 +33,13 @@ object MonitorNotifier {
 
     /** Called when monitoring is switched on too, so the channels can be tuned before the first notification. */
     fun ensureChannels(ctx: Context) {
+        I18n.load(ctx)
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
-        if (nm.getNotificationChannel(MonitorIds.CHANNEL_SUBS) == null) {
-            nm.createNotificationChannel(NotificationChannel(MonitorIds.CHANNEL_SUBS, "Подписки", NotificationManager.IMPORTANCE_DEFAULT))
+        run { // same id again only renames the channel to the current language
+            nm.createNotificationChannel(NotificationChannel(MonitorIds.CHANNEL_SUBS, I18n.s("monitor.subs"), NotificationManager.IMPORTANCE_DEFAULT))
         }
-        if (nm.getNotificationChannel(MonitorIds.CHANNEL_EPISODES) == null) {
-            nm.createNotificationChannel(NotificationChannel(MonitorIds.CHANNEL_EPISODES, "Новые серии", NotificationManager.IMPORTANCE_DEFAULT))
+        run { // same id again only renames the channel to the current language
+            nm.createNotificationChannel(NotificationChannel(MonitorIds.CHANNEL_EPISODES, I18n.s("monitor.episodes"), NotificationManager.IMPORTANCE_DEFAULT))
         }
     }
 
@@ -76,7 +79,7 @@ object MonitorNotifier {
             val summaryId = if (channel == MonitorIds.CHANNEL_SUBS) MonitorIds.SUMMARY_SUBS else MonitorIds.SUMMARY_EPISODES
             val summary = NotificationCompat.Builder(ctx, channel)
                 .setSmallIcon(R.drawable.ic_stat_monitor)
-                .setContentTitle(if (channel == MonitorIds.CHANNEL_SUBS) "Подписки" else "Новые серии")
+                .setContentTitle(if (channel == MonitorIds.CHANNEL_SUBS) I18n.s("monitor.subs") else I18n.s("monitor.episodes"))
                 .setGroup(group(channel))
                 .setGroupSummary(true)
                 .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
@@ -92,20 +95,22 @@ object MonitorNotifier {
 
     /** A new item from the page; false when it could not be shown. */
     fun post(ctx: Context, n: NotifySpec): Boolean {
+        I18n.load(ctx)
         val id = n.notifId
         val b = builder(ctx, n.channel, n.title, n.text)
             .setContentIntent(openIntent(ctx, MonitorLinks.open(n.subId, n.key, false), id * 4))
         if (n.action != null) {
             val a = MonitorAction(n.action, n.subId, n.key, id, n.channel, n.title)
-            b.addAction(0, if (n.action == MonitorAction.ADD) "Добавить" else "Заменить", actionIntent(ctx, a))
+            b.addAction(0, if (n.action == MonitorAction.ADD) I18n.s("monitor.add") else I18n.s("monitor.replace"), actionIntent(ctx, a))
         }
-        b.addAction(0, "Смотреть на ТВ", openIntent(ctx, MonitorLinks.open(n.subId, n.key, true), id * 4 + 2))
+        b.addAction(0, I18n.s("monitor.watchTv"), openIntent(ctx, MonitorLinks.open(n.subId, n.key, true), id * 4 + 2))
         return show(ctx, id, n.channel, b)
     }
 
     /** The button was pressed: «Добавляю…» / «Заменяю…» without buttons (no second press). */
     fun progress(ctx: Context, a: MonitorAction) {
-        val b = builder(ctx, a.channel, if (a.kind == MonitorAction.ADD) "Добавляю на сервер…" else "Заменяю раздачу…", a.title)
+        I18n.load(ctx)
+        val b = builder(ctx, a.channel, if (a.kind == MonitorAction.ADD) I18n.s("monitor.adding") else I18n.s("monitor.replacing"), a.title)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setProgress(0, 0, true)
@@ -115,13 +120,14 @@ object MonitorNotifier {
 
     /** «Добавлено на сервер» / «Заменено» with «Открыть», or the error with the button to try again. */
     fun result(ctx: Context, a: MonitorAction, ok: Boolean, message: String, title: String?) {
+        I18n.load(ctx)
         val text = title?.takeIf { it.isNotEmpty() } ?: a.title
-        val b = builder(ctx, a.channel, if (ok) message else "Не получилось: $message", text)
+        val b = builder(ctx, a.channel, if (ok) message else I18n.s("monitor.failedPrefix", "message" to message), text)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setContentIntent(openIntent(ctx, MonitorLinks.open(a.subId, a.key, false), a.notifId * 4))
-        if (!ok) b.addAction(0, if (a.kind == MonitorAction.ADD) "Добавить" else "Заменить", actionIntent(ctx, a))
-        b.addAction(0, "Открыть", openIntent(ctx, MonitorLinks.open(a.subId, a.key, false), a.notifId * 4 + 3))
+        if (!ok) b.addAction(0, if (a.kind == MonitorAction.ADD) I18n.s("monitor.add") else I18n.s("monitor.replace"), actionIntent(ctx, a))
+        b.addAction(0, I18n.s("monitor.open"), openIntent(ctx, MonitorLinks.open(a.subId, a.key, false), a.notifId * 4 + 3))
         show(ctx, a.notifId, a.channel, b)
     }
 }

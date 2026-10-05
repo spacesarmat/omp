@@ -1,19 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import {
-  VIEW_OPTIONS, nextView, viewLabel, LIBRARY_TABS, POSTER_COLORS, posterColor, shortTitle,
+  viewOptions, nextView, viewLabel, libraryTabs, POSTER_COLORS, posterColor, shortTitle,
   episodeLine, positionLabel, remainingLabel,
 } from '../../src/lib/libraryView';
 
 describe('views and tabs', () => {
   it('cycles views', () => {
-    expect(VIEW_OPTIONS.map((o) => o.value)).toEqual(['large', 'small', 'list', 'compact']);
+    expect(viewOptions().map((o) => o.value)).toEqual(['large', 'small', 'list', 'compact']);
     expect(nextView('large')).toBe('small');
     expect(nextView('compact')).toBe('large');
     expect(viewLabel('list')).toBe('Список');
   });
   it('puts history first', () => {
-    expect(LIBRARY_TABS.map((t) => t.id)).toEqual(['history', 'all', 'movie', 'tv', 'music', 'other']);
-    expect(LIBRARY_TABS[0].label).toBe('История');
+    expect(libraryTabs().map((t) => t.id)).toEqual(['history', 'all', 'movie', 'tv', 'music', 'other']);
+    expect(libraryTabs()[0].label).toBe('История');
   });
 });
 

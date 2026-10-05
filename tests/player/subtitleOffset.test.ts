@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatOffset, subtitleOffsetOptions, SUB_SIZE_OPTIONS } from '../../src/player/subtitleOffset';
+import { formatOffset, subtitleOffsetOptions, subSizeOptions } from '../../src/player/subtitleOffset';
 
 describe('subtitle offset', () => {
   it('formats values', () => {
@@ -15,6 +15,6 @@ describe('subtitle offset', () => {
     expect(o[20].value).toBe(5);
   });
   it('has three sizes', () => {
-    expect(SUB_SIZE_OPTIONS.map((x) => x.value)).toEqual(['small', 'medium', 'large']);
+    expect(subSizeOptions().map((x) => x.value)).toEqual(['small', 'medium', 'large']);
   });
 });

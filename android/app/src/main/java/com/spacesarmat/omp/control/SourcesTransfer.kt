@@ -26,6 +26,8 @@ class SourcesTransfer(
     val logins: Map<String, Login> = emptyMap(),
     /** Browser sign-ins (Task 9b): the session cookies of one host per site ([SourcesProtocol.SESSION_SITES]). */
     val sessions: Map<String, Session> = emptyMap(),
+    /** The phone's resolved UI language (ru | en): the page stores it as the TV's language; null when none came. */
+    val language: String? = null,
 ) {
     /** A browser session: [host]'s cookies and the phone's User-Agent it was made with. */
     class Session(val host: String, val cookies: List<Pair<String, String>>, val ua: String) {
@@ -93,7 +95,7 @@ object SourcesProtocol {
     const val MAX_INDEXER_NAME = 40
     val RESULTS = setOf("ok", "bad_login", "captcha", "error")
     private val SOURCE_ID = Regex("^[a-z0-9][a-z0-9-]{0,39}$")
-    private val KEYS = setOf("v", "sources", "rutracker", "indexers", "flaresolverr", "cloudflare", "logins", "sessions")
+    private val KEYS = setOf("v", "sources", "rutracker", "indexers", "flaresolverr", "cloudflare", "logins", "sessions", "language")
     /**
      * Sites whose login may travel in `logins` (src/sources/transfer.ts LOGIN_SITES). A fixed list: the site id names the
      * storage entries (`<id>.pending.username`), so a phone can never stage under another name.
@@ -166,7 +168,12 @@ object SourcesProtocol {
             is JSONObject -> sessions(x) ?: return null
             else -> return null
         }
-        return SourcesTransfer(sources, login, phone, indexers, flare, cloudflare, logins, sessions)
+        val language = when (val l = body.opt("language")) {
+            null -> null
+            is String -> l.takeIf { it in ControlRouter.LANGS } ?: return null
+            else -> return null
+        }
+        return SourcesTransfer(sources, login, phone, indexers, flare, cloudflare, logins, sessions, language)
     }
 
     /**
@@ -401,6 +408,7 @@ class SourcesInbox(
             }
             // not secrets: the FlareSolverr address and the sites' switches go to the page as they are
             t.flaresolverr?.let { event.put("flaresolverr", it) }
+            t.language?.let { event.put("language", it) }
             if (t.cloudflare.isNotEmpty()) {
                 val cf = JSONObject()
                 for ((id, on) in t.cloudflare) cf.put(id, on)

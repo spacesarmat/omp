@@ -4,6 +4,7 @@
 // /api/v1/indexer and /api/v1/indexerstatus. Results are kept in memory and refreshed when a screen opens or on a tap.
 // The key is read per check and never logged or kept; native errors (they may hold a keyed URL) become generic texts.
 // Chromium 53 safe; no parser import (the TV screen is part of the bundle that LG shares).
+import { t as tr, tp } from '../i18n';
 import { indexerKeyName } from './indexerStore';
 import type { IndexerConn, IndexerKind } from './indexerStore';
 import type { HttpOptions, SourceContext, SourceHttp } from './types';
@@ -34,13 +35,13 @@ export interface IndexerStatus {
   hint?: string;
 }
 
-export const JACKETT_HIDDEN_STATES = 'Jackett защищён паролем — состояние трекеров не видно';
+export const jackettHiddenStates = (): string => tr('sources.indexer.hiddenStates');
 
-export const STATUS_NEED_KEY = 'Нужен API-ключ';
-export const STATUS_BAD_KEY = 'Неверный API-ключ';
-export const STATUS_DOWN = 'Индексатор не отвечает';
-export const STATUS_BAD_ANSWER = 'Индексатор ответил не так, как ожидалось';
-export const STATUS_ERROR = 'Индексатор ответил ошибкой ';
+export const statusNeedKey = (): string => tr('sources.indexer.needKey');
+export const statusBadKey = (): string => tr('sources.indexer.badKey');
+export const statusDown = (): string => tr('sources.indexer.down');
+export const statusBadAnswer = (): string => tr('sources.indexer.badAnswer');
+export const statusError = (status: number): string => tr('sources.indexer.error', { status });
 
 const TIMEOUT_MS = 15000;
 const MAX_CHARS = 2 * 1000 * 1000;
@@ -60,7 +61,7 @@ function getter(http: SourceHttp): Get {
     http.get(url, opts).then(
       (r) => r,
       () => {
-        throw new Error(STATUS_DOWN);
+        throw new Error(statusDown());
       },
     );
 }
@@ -70,9 +71,9 @@ class Stop {
 }
 
 function check(res: { status: number; text: string }, at: number): void {
-  if (res.status === 401 || res.status === 403) throw new Stop(fail('badkey', at, STATUS_BAD_KEY));
-  if (res.status < 200 || res.status >= 300) throw new Stop(fail('error', at, STATUS_ERROR + res.status));
-  if (res.text.length > MAX_CHARS) throw new Stop(fail('error', at, STATUS_BAD_ANSWER));
+  if (res.status === 401 || res.status === 403) throw new Stop(fail('badkey', at, statusBadKey()));
+  if (res.status < 200 || res.status >= 300) throw new Stop(fail('error', at, statusError(res.status)));
+  if (res.text.length > MAX_CHARS) throw new Stop(fail('error', at, statusBadAnswer()));
 }
 
 function cleanName(v: unknown): string {
@@ -94,7 +95,7 @@ export function jackettErrorState(error: unknown): { state: TrackerState; detail
   const t = e.toLowerCase();
   if (/cloudflare|challenge|flaresolverr|ddos-guard/.test(t)) return { state: 'cloudflare' };
   if (/login|log in|logged|credential|password|unauthori[sz]ed|captcha|cookie|auth/.test(t)) return { state: 'login' };
-  if (/timed? ?out|timeout|no such host|name or service|connection|refused|unreachable|503|502|504/.test(t)) return { state: 'error', detail: 'не отвечает' };
+  if (/timed? ?out|timeout|no such host|name or service|connection|refused|unreachable|503|502|504/.test(t)) return { state: 'error', detail: tr('sources.state.noAnswer') };
   return { state: 'error' };
 }
 
@@ -155,8 +156,8 @@ function checkJackett(base: string, key: string, get: Get, at: number): Promise<
   return get(base + '/api/v2.0/indexers/all/results/torznab/api?apikey=' + k + '&t=indexers&configured=true', opts).then((res) => {
     check(res, at);
     const list = parseJackettIndexers(res.text);
-    if (list === 'badkey') return fail('badkey', at, STATUS_BAD_KEY);
-    if (!list) return fail('error', at, STATUS_BAD_ANSWER);
+    if (list === 'badkey') return fail('badkey', at, statusBadKey());
+    if (!list) return fail('error', at, statusBadAnswer());
     // the last error of each indexer is in the UI list, which Jackett answers only without an admin password
     return get(base + '/api/v2.0/indexers?configured=true&apikey=' + k, opts).then(
       (r) => (r.status === 200 && r.text.length <= MAX_CHARS ? jackettErrors(r.text) : null),
@@ -171,7 +172,7 @@ function checkJackett(base: string, key: string, get: Get, at: number): Promise<
         return out;
       });
       const st: IndexerStatus = { state: 'ok', at, trackers };
-      if (!errors && trackers.length) st.hint = JACKETT_HIDDEN_STATES;
+      if (!errors && trackers.length) st.hint = jackettHiddenStates();
       return st;
     });
   });
@@ -214,7 +215,7 @@ export function prowlarrTrackers(indexers: unknown, statuses: unknown, now: numb
     // only a current failure: blocked until later, or failed within the last hour and not recovered since
     if (f && (f.disabledTill > now || (f.failure > 0 && now - f.failure < RECENT_FAILURE_MS))) {
       const t: TrackerStatus = { name, state: 'error' };
-      if (f.disabledTill > now) t.detail = 'отключён после ошибок';
+      if (f.disabledTill > now) t.detail = tr('sources.indexer.disabledAfterErrors');
       out.push(t);
       return;
     }
@@ -228,12 +229,12 @@ function checkProwlarr(base: string, key: string, get: Get, at: number): Promise
   return get(base + '/api/v1/system/status', opts).then((res) => {
     check(res, at);
     const sys = parseJson(res.text);
-    if (!sys || typeof sys !== 'object' || Array.isArray(sys)) return fail('error', at, STATUS_BAD_ANSWER);
+    if (!sys || typeof sys !== 'object' || Array.isArray(sys)) return fail('error', at, statusBadAnswer());
     const version = shortVersion((sys as { version?: unknown }).version);
     return get(base + '/api/v1/indexer', opts).then((ir) => {
       check(ir, at);
       const indexers = parseJson(ir.text);
-      if (!Array.isArray(indexers)) return fail('error', at, STATUS_BAD_ANSWER);
+      if (!Array.isArray(indexers)) return fail('error', at, statusBadAnswer());
       return get(base + '/api/v1/indexerstatus', opts).then(
         (sr) => (sr.status === 200 && sr.text.length <= MAX_CHARS ? parseJson(sr.text) : []),
         () => [],
@@ -252,14 +253,14 @@ function checkProwlarr(base: string, key: string, get: Get, at: number): Promise
  */
 export function checkIndexer(conn: { kind: IndexerKind; url: string }, key: string, http: SourceHttp, now: () => number = Date.now): Promise<IndexerStatus> {
   const at = now();
-  if (!key) return Promise.resolve(fail('nokey', at, STATUS_NEED_KEY));
+  if (!key) return Promise.resolve(fail('nokey', at, statusNeedKey()));
   const get = getter(http);
   const run = conn.kind === 'jackett' ? checkJackett(conn.url, key, get, at) : checkProwlarr(conn.url, key, get, at);
   return run.then(
     (s) => s,
     (e: unknown) => {
       if (e instanceof Stop) return e.status;
-      return e instanceof Error && e.message === STATUS_DOWN ? fail('down', at, STATUS_DOWN) : fail('error', at, STATUS_BAD_ANSWER);
+      return e instanceof Error && e.message === statusDown() ? fail('down', at, statusDown()) : fail('error', at, statusBadAnswer());
     },
   );
 }
@@ -313,14 +314,6 @@ export function hasIndexerKey(conn: IndexerConn, ctx: SourceContext): Promise<bo
 
 // ---- texts ----
 
-function plural(n: number, one: string, few: string, many: string): string {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
-}
-
 export function workingCount(s: IndexerStatus): number {
   return s.trackers.filter((t) => t.state === 'ok').length;
 }
@@ -328,10 +321,10 @@ export function workingCount(s: IndexerStatus): number {
 /** «6 трекеров, 5 работают». */
 export function summaryText(s: IndexerStatus): string {
   const n = s.trackers.length;
-  if (!n) return 'нет трекеров';
-  if (s.trackers.every((t) => t.state === 'unknown')) return n + ' ' + plural(n, 'трекер', 'трекера', 'трекеров') + ' · состояние неизвестно';
+  if (!n) return tr('sources.indexer.noTrackers');
+  if (s.trackers.every((t) => t.state === 'unknown')) return tp('sources.indexer.trackers', n) + ' · ' + tr('sources.state.unknown');
   const w = workingCount(s);
-  return n + ' ' + plural(n, 'трекер', 'трекера', 'трекеров') + ', ' + w + ' ' + plural(w, 'работает', 'работают', 'работают');
+  return tp('sources.indexer.trackers', n) + ', ' + tp('sources.indexer.working', w);
 }
 
 const KIND: { [k in IndexerKind]: string } = { jackett: 'Jackett', prowlarr: 'Prowlarr' };
@@ -355,18 +348,18 @@ export function connTitle(conn: { kind: IndexerKind; url: string; name?: string 
 export function trackerStateText(t: TrackerStatus, long?: boolean): string {
   switch (t.state) {
     case 'ok':
-      return 'работает';
+      return tr('sources.state.ok');
     case 'login':
-      return 'нужен вход';
+      return tr('sources.state.login');
     case 'cloudflare':
       return 'Cloudflare';
     case 'unknown':
-      return 'состояние неизвестно';
+      return tr('sources.state.unknown');
     case 'off':
-      return 'выключен';
+      return tr('sources.state.off');
     default:
-      if (!t.detail) return 'ошибка';
-      return long ? 'ошибка: ' + t.detail : t.detail;
+      if (!t.detail) return tr('sources.state.error');
+      return long ? tr('sources.state.errorDetail', { detail: t.detail }) : t.detail;
   }
 }
 
@@ -381,21 +374,24 @@ export function trackerTone(t: TrackerStatus): Tone {
 
 /** The line under a connection's name. */
 export function connLine(s: IndexerStatus | null, on: boolean): { text: string; tone: Tone } {
-  if (!s) return { text: on ? 'напрямую · проверяю…' : 'выключен', tone: 'muted' };
-  if (s.state === 'ok') return { text: on ? 'напрямую · ' + summaryText(s) : 'выключен · ' + summaryText(s), tone: on ? 'ok' : 'muted' };
-  if (s.state === 'nokey') return { text: 'нужен API-ключ', tone: 'warn' };
-  if (s.state === 'badkey') return { text: 'неверный API-ключ', tone: 'bad' };
-  if (s.state === 'down') return { text: 'не отвечает', tone: 'bad' };
-  return { text: s.message || 'ошибка', tone: 'bad' };
+  if (!s) return { text: on ? tr('sources.indexer.directChecking') : tr('sources.state.off'), tone: 'muted' };
+  if (s.state === 'ok') {
+    const rest = summaryText(s);
+    return { text: on ? tr('sources.indexer.direct', { rest }) : tr('sources.indexer.offWith', { rest }), tone: on ? 'ok' : 'muted' };
+  }
+  if (s.state === 'nokey') return { text: tr('sources.indexer.noKeyLine'), tone: 'warn' };
+  if (s.state === 'badkey') return { text: tr('sources.indexer.badKeyLine'), tone: 'bad' };
+  if (s.state === 'down') return { text: tr('sources.state.noAnswer'), tone: 'bad' };
+  return { text: s.message || tr('sources.state.error'), tone: 'bad' };
 }
 
 /** «Проверено 5 минут назад». */
 export function checkedText(at: number, now: number = Date.now()): string {
   const min = Math.floor(Math.max(0, now - at) / 60000);
-  if (min < 1) return 'Проверено только что';
-  if (min < 60) return 'Проверено ' + min + ' ' + plural(min, 'минуту', 'минуты', 'минут') + ' назад';
+  if (min < 1) return tr('sources.indexer.justChecked');
+  if (min < 60) return tp('sources.indexer.checkedMin', min);
   const h = Math.floor(min / 60);
-  if (h < 24) return 'Проверено ' + h + ' ' + plural(h, 'час', 'часа', 'часов') + ' назад';
+  if (h < 24) return tp('sources.indexer.checkedHour', h);
   const d = Math.floor(h / 24);
-  return 'Проверено ' + d + ' ' + plural(d, 'день', 'дня', 'дней') + ' назад';
+  return tp('sources.indexer.checkedDay', d);
 }

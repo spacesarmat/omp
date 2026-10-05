@@ -1,5 +1,6 @@
 // Android TV: the native player (Media3 or libVLC, android/.../player/PlayerActivity.kt) driven from the TV app.
 // The page keeps the latest state event for the phone bridge and saves progress like useProgressSync.
+import { t } from '../i18n';
 import type { TorrServerClient } from '../api/torrserver';
 import type { OmpNativeTvPlugin, ListenerHandle } from '../platform/androidNative';
 import type { Cmd, PlayerState } from '../phone/protocol';
@@ -134,7 +135,7 @@ export function sanitizeNativeState(v: unknown): NativeState | null {
     audio.list = v.audio.list.filter((x: unknown) => typeof x === 'string');
     audio.sel = typeof v.audio.sel === 'number' && v.audio.sel < audio.list.length ? Math.floor(v.audio.sel) : -1;
   }
-  const subs: { list: { label: string; value: string }[]; sel: string } = { list: [{ label: 'Выкл', value: 'off' }], sel: 'off' };
+  const subs: { list: { label: string; value: string }[]; sel: string } = { list: [{ label: t('player.off'), value: 'off' }], sel: 'off' };
   if (isObj(v.subs) && Array.isArray(v.subs.list)) {
     const list = v.subs.list.filter((o: unknown) => isObj(o) && typeof o.label === 'string' && typeof o.value === 'string')
       .map((o: { label: string; value: string }) => ({ label: o.label, value: o.value }));
@@ -452,7 +453,7 @@ export class NativeSession {
     }
     const io = this.skipIo;
     if (!io || !hash) {
-      this.toast('Не удалось сохранить отметку: нет связи с сервером', true);
+      this.toast(t('player.markNoServer'), true);
       return;
     }
     io.save(hash, r.patch).then(
@@ -461,7 +462,7 @@ export class NativeSession {
         this.refreshTorrent(hash);
         this.toast(r.text);
       },
-      (e) => this.toast('Не удалось сохранить отметку: ' + errorMessage(e), true),
+      (e) => this.toast(t('player.markSaveFailed', { error: errorMessage(e) }), true),
     );
   }
 

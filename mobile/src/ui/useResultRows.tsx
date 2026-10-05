@@ -10,9 +10,10 @@ import { activeTv } from '../tv/tvStore';
 import { useTvLaunch } from '../watch';
 import { addSearchResult, type RowBusy } from '../addResult';
 import { errorMessage } from '../../../src/api/http';
-import { ADD_CATEGORIES, guessCategory } from '../../../src/lib/categoryGuess';
+import { addCategories, guessCategory } from '../../../src/lib/categoryGuess';
 import { resultKey } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
+import { t } from '../../../src/i18n';
 
 export interface ResultRows {
   card(r: SourceResult, o?: { flag?: string; highlight?: boolean; onAdded?: () => void }): VNode;
@@ -67,14 +68,14 @@ export function useResultRows(o?: { category?: (r: SourceResult) => string }): R
       if (!hash || !alive.v) return;
       onAdded?.();
       if (!watch) {
-        showToast('Добавлено на сервер');
+        showToast(t('notify.added'));
         return;
       }
       await launch.start({
         hash,
         label: r.Title,
         onError: setError,
-        onLaunched: (name) => showToast('Запустил на ' + name),
+        onLaunched: (name) => showToast(t('add.launchedOn', { name })),
       });
     } catch (e) {
       if (alive.v) setError(errorMessage(e));
@@ -89,7 +90,7 @@ export function useResultRows(o?: { category?: (r: SourceResult) => string }): R
       return;
     }
     setError('');
-    await launch.start({ hash, label, onError: setError, onLaunched: (name) => showToast('Запустил на ' + name) });
+    await launch.start({ hash, label, onError: setError, onLaunched: (name) => showToast(t('add.launchedOn', { name })) });
   };
 
   const card = (r: SourceResult, c?: { flag?: string; highlight?: boolean; onAdded?: () => void }) => (
@@ -110,10 +111,10 @@ export function useResultRows(o?: { category?: (r: SourceResult) => string }): R
   const sheets = (
     <>
       {catFor && (
-        <Sheet label="Категория" onClose={() => setCatFor(null)}>
-          <div class="m-sheet-title">Категория</div>
+        <Sheet label={t('add.category')} onClose={() => setCatFor(null)}>
+          <div class="m-sheet-title">{t('add.category')}</div>
           <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-            {ADD_CATEGORIES.map((c) => (
+            {addCategories().map((c) => (
               <button
                 key={c.id}
                 type="button"

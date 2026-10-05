@@ -1,5 +1,7 @@
 package com.spacesarmat.omp.control
 
+import com.spacesarmat.omp.I18n
+
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
@@ -63,7 +65,7 @@ class PrefsPhoneStore(context: Context) : PhoneStore {
 /**
  * Phone remote on Android TV (spec «Управление с телефона»): the control server on [PORT] ([ControlRouter] does
  * the routes), the NSD service `_omp._tcp`, pairing, and the actions. Page events (through [emit]):
- * remoteLaunch { params }, remoteAttach { report }, remoteKey { name }, remoteText { text | delete | enter },
+ * remoteLaunch { params }, remoteAttach { report, lang? }, remoteKey { name }, remoteText { text | delete | enter },
  * phonePaired { phone }, remoteSources { id, sources, rutracker, phone } (answered with [sourcesDone]).
  */
 class TvRemote(private val context: Context, private val emit: (String, JSObject, Boolean) -> Unit) : RemoteActions {
@@ -112,6 +114,7 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         private set
 
     fun start() {
+        I18n.load(context)
         // a staged login left by a process that died mid-transfer is never verified: drop it
         inbox.dropStaged()
         try {
@@ -214,8 +217,10 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         }
     }
 
-    override fun attach(report: String) {
-        emit("remoteAttach", JSObject().put("report", report), true)
+    override fun attach(report: String, lang: String?) {
+        val o = JSObject().put("report", report)
+        if (lang != null) o.put("lang", lang)
+        emit("remoteAttach", o, true)
     }
 
     override fun key(name: String) {

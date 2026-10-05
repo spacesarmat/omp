@@ -1,6 +1,7 @@
 // SourceHttp / SecretStore over the native plugin calls (OmpNative.http, secretGet/Set/Delete).
 // The phone (mobile/src/platform/native.ts) and the Android TV bundle (src/platform/androidNative.ts) pass
 // their own plugin calls; tests pass fakes.
+import { t } from '../i18n';
 import type { HttpOptions, HttpResponse, SecretStore, SourceHttp } from './types';
 import { hostOf, logCloudflare, toCloudflareError } from './cloudflare';
 import { flareSolverrUrl } from './flareStore';
@@ -23,7 +24,7 @@ export interface NativeHttpRequest {
 
 export type NativeHttpCall = (req: NativeHttpRequest) => Promise<unknown>;
 
-export const BAD_URL = 'Неверный адрес';
+export const badUrl = (): string => t('sources.badAddress');
 
 function isHttpUrl(url: string): boolean {
   return /^https?:\/\/[^\s/?#]+/i.test(url);
@@ -68,7 +69,7 @@ export function createSourceHttp(
   flare: () => string | null = flareSolverrUrl,
 ): SourceHttp {
   const send = (req: NativeHttpRequest, opts?: HttpOptions): Promise<HttpResponse> => {
-    if (!isHttpUrl(req.url)) return Promise.reject(new Error(BAD_URL));
+    if (!isHttpUrl(req.url)) return Promise.reject(new Error(badUrl()));
     const site = () => (opts && opts.siteName) || hostOf(req.url);
     return call(req).then(
       (r) => {

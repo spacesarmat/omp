@@ -6,11 +6,15 @@ import { addServer, setActiveServer } from '../../../src/store/servers';
 import { TorrServerClient } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
 import { log } from '../../../src/lib/log';
+import { t, fmtSize } from '../../../src/i18n';
+import { ru } from '../../../src/i18n/ru';
+import { en } from '../../../src/i18n/en';
 import { TORRSERVER_VERSION } from './torrserverVersion';
 
 export const LOCAL_URL = 'http://127.0.0.1:8090';
 export const LOCAL_PORT = 8090;
-export const LOCAL_NAME = 'Этот телефон';
+/** Display name of the local server, in the current language (stored with the server when it is added). */
+export const localName = () => t('localServer.name');
 
 type NativeSlice = Pick<
   OmpNativeApi,
@@ -115,19 +119,15 @@ export async function clearLocalCache(): Promise<void> {
 
 export const CACHE_LIMIT_BYTES = 1024 * 1024 * 1024;
 
-/** «412 МБ» / «1,2 ГБ». */
-export function formatBytes(b: number): string {
-  if (b >= CACHE_LIMIT_BYTES) return (b / CACHE_LIMIT_BYTES).toFixed(1).replace('.', ',') + ' ГБ';
-  return Math.round(b / (1024 * 1024)) + ' МБ';
+/** The native text (Russian or English, by the device language) says the binary cannot run here. */
+export function isCannotRun(msg: string): boolean {
+  return msg.startsWith(ru.localServer.cannotRun) || msg.startsWith(en.localServer.cannotRun);
 }
-
-/** Start of the native text when the binary does not run on this device (linker, 16 KB pages, instant crash). */
-export const CANNOT_RUN_PREFIX = 'Свой сервер не запустился на этом устройстве';
 
 /** Logs a failed start: an error entry when the server cannot run on this device at all. */
 function logStartFailure(e: unknown): void {
-  if (errorMessage(e).startsWith(CANNOT_RUN_PREFIX)) log('error', 'server', CANNOT_RUN_PREFIX);
-  else log('warn', 'server', 'Встроенный TorrServer не запустился');
+  if (isCannotRun(errorMessage(e))) log('error', 'server', t('localServer.cannotRun'));
+  else log('warn', 'server', t('localServer.logStartFailed'));
 }
 
 /** Thrown by setupLocal when the screen that ran it has gone after the download. */
@@ -145,7 +145,7 @@ export function canRun(info: LocalServerInfo): boolean {
 
 /** «~61 МБ» from the pinned download size; empty when unknown. */
 export function downloadSize(info: LocalServerInfo): string {
-  return info.downloadBytes ? '~' + Math.max(1, Math.round(info.downloadBytes / (1024 * 1024))) + ' МБ' : '';
+  return info.downloadBytes ? '~' + fmtSize(Math.max(info.downloadBytes, 1024 * 1024)) : '';
 }
 
 /** True for the rejection of a download the user cancelled. */
@@ -179,21 +179,21 @@ export async function setupLocal(
   alive: () => boolean = () => true,
 ): Promise<void> {
   const info = await deps.native.localServerInfo();
-  if (!info.supported) throw new Error('Встроенный сервер недоступен на этом телефоне');
+  if (!info.supported) throw new Error(t('localServer.unsupported'));
   const pinned = info.pinVersion || TORRSERVER_VERSION;
   let version = (info.running && info.version) || pinned;
   onStep(0, version);
   if (needsDownload(info) && (download || info.binary === 'missing')) {
     version = pinned;
     onStep(0, version);
-    log('info', 'server', info.binary === 'outdated' ? 'Обновление встроенного TorrServer' : 'Скачивание встроенного TorrServer');
+    log('info', 'server', info.binary === 'outdated' ? t('localServer.logUpdating') : t('localServer.logDownloading'));
     try {
       await deps.native.downloadLocalServer(onDownload);
     } catch (e) {
-      log(isDownloadCancelled(e) ? 'info' : 'warn', 'server', isDownloadCancelled(e) ? 'Скачивание TorrServer отменено' : 'Не удалось скачать TorrServer');
+      log(isDownloadCancelled(e) ? 'info' : 'warn', 'server', isDownloadCancelled(e) ? t('localServer.logCancelled') : t('localServer.logDownloadFailed'));
       throw e;
     }
-    log('info', 'server', 'Встроенный TorrServer скачан и проверен');
+    log('info', 'server', t('localServer.logDownloaded'));
     // a running old version: restart on the new binary
     if (!alive()) throw new Error(SETUP_ABANDONED);
     if (info.running) await deps.native.stopLocalServer();
@@ -208,7 +208,7 @@ export async function setupLocal(
   onStep(2, version);
   await deps.echo(LOCAL_URL);
   onStep(3, version);
-  const s = addServer({ name: LOCAL_NAME, url: LOCAL_URL });
+  const s = addServer({ name: localName(), url: LOCAL_URL });
   setActiveServer(s.id);
   if (!autostartKnown) setAutostart(true);
   await refreshLocalServer();
@@ -227,7 +227,7 @@ export async function autostartLocal(): Promise<void> {
 export function watchLocalServer(): () => void {
   return deps.native.onLocalServerState((s) => {
     localServer.value = { ...localServer.value, running: s.running, error: s.error };
-    if (s.error && s.error.startsWith(CANNOT_RUN_PREFIX)) log('error', 'server', CANNOT_RUN_PREFIX);
+    if (s.error && isCannotRun(s.error)) log('error', 'server', t('localServer.cannotRun'));
     if (s.running) void refreshLocalServer();
   });
 }

@@ -281,6 +281,22 @@ class SourcesInboxTest {
     }
 
     @Test
+    fun theEventCarriesThePhoneLanguageOnlyWhenOneCame() {
+        val box = inbox()
+        val t = SourcesTransfer(linkedMapOf("rutor" to true), null, "Pixel", language = "en")
+        val f = start(box, t)
+        val e = events.poll(2, TimeUnit.SECONDS)!!
+        assertEquals("en", e.getString("language"))
+        box.done(e.getString("id"), null, false)
+        f.get()
+        val g = start(box, transfer(login = false))
+        val e2 = events.poll(2, TimeUnit.SECONDS)!!
+        assertFalse(e2.has("language"))
+        box.done(e2.getString("id"), null, false)
+        g.get()
+    }
+
+    @Test
     fun theEventCarriesTheFlareSolverrAddressAndTheCloudflareSwitches() {
         val box = inbox()
         val t = SourcesTransfer(linkedMapOf("rutor" to true), null, "Pixel", emptyList(), "http://192.168.1.191:8191", linkedMapOf("kinozal" to true, "rustorka" to false))

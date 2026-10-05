@@ -1,9 +1,10 @@
 // Texts of the «Каталог недоступен» state, shared by the phone and the TV.
+import { t } from '../i18n';
 
 export function catalogReason(server: string | null, online: boolean): string {
-  if (!server) return 'Сервер не выбран';
-  if (!online) return 'Нет подключения к сети';
-  return 'Сервер «' + server + '» не отвечает';
+  if (!server) return t('errors.noServerSelected');
+  if (!online) return t('server.offline');
+  return t('server.notAnswering', { server });
 }
 
 function pad(n: number): string {
@@ -17,8 +18,8 @@ export function timeLabel(ts: number): string {
 }
 
 export function cachedBanner(ts: number): string {
-  const t = timeLabel(ts);
-  return 'Каталог недоступен · показан сохранённый список' + (t ? ' от ' + t : '');
+  const time = timeLabel(ts);
+  return time ? t('server.catalogCachedAt', { time }) : t('server.catalogCached');
 }
 
-export const CATALOG_HINT = 'Проверьте, что телефон и сервер в одной сети';
+export const catalogHint = () => t('server.catalogHint');

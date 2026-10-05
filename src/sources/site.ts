@@ -1,15 +1,15 @@
 // Shared parts of the built-in tracker parsers: page loading with Russian errors, numbers, results. Chromium 53 safe.
-import { BAD_URL } from './http';
+import { t } from '../i18n';
+import { badUrl } from './http';
 import { stashFile } from '../api/torrentFiles';
 import { infohashFromMagnet, parseHtml } from './html';
 import { isCloudflareBypassOn } from './store';
 import type { HttpOptions, HttpResponse, Source, SourceContext, SourceResult } from './types';
 
-export const SITE_ERROR = 'Сайт ответил ошибкой ';
-export const CHALLENGE = 'Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже';
-export const PARSE_ERROR = 'Не удалось разобрать страницу сайта';
-export const NO_MAGNET = 'На странице раздачи нет magnet-ссылки';
-export const NO_TORRENT = 'На странице раздачи нет ссылки на торрент';
+export const challenge = (): string => t('sources.site.challenge');
+export const parseError = (): string => t('sources.site.parseError');
+export const noMagnet = (): string => t('sources.site.noMagnet');
+export const noTorrent = (): string => t('sources.site.noTorrent');
 
 /** Cloudflare «Just a moment…» / Turnstile challenge instead of the page. */
 export function isChallenge(text: string): boolean {
@@ -33,8 +33,8 @@ export function checkLoginPage(res: HttpResponse, hasCaptcha: (doc: Document) =>
 
 /** The response as a page, or a Russian error (Cloudflare check, HTTP error status). */
 export function checkPage(res: HttpResponse): HttpResponse {
-  if (isChallenge(res.text)) throw new Error(CHALLENGE);
-  if (res.status < 200 || res.status >= 400) throw new Error(SITE_ERROR + res.status);
+  if (isChallenge(res.text)) throw new Error(challenge());
+  if (res.status < 200 || res.status >= 400) throw new Error(t('sources.site.error', { status: res.status }));
   return res;
 }
 
@@ -70,7 +70,7 @@ export function onHost(url: string, host: string): boolean {
 }
 
 export function requireHost(url: string, host: string): Promise<void> {
-  return onHost(url, host) ? Promise.resolve() : Promise.reject(new Error(BAD_URL));
+  return onHost(url, host) ? Promise.resolve() : Promise.reject(new Error(badUrl()));
 }
 
 /** First integer in the text (' 11' → 11); 0 when none. */
@@ -83,7 +83,7 @@ export function toInt(s: string | null | undefined): number {
 export function magnetOf(doc: Document, selector?: string): string {
   const a = (selector && doc.querySelector(selector)) || doc.querySelector('a[href^="magnet:"]');
   const href = a ? (a.getAttribute('href') || '').trim() : '';
-  if (href.indexOf('magnet:') !== 0) throw new Error(NO_MAGNET);
+  if (href.indexOf('magnet:') !== 0) throw new Error(noMagnet());
   return href;
 }
 
@@ -109,7 +109,7 @@ export function fetchTorrentAnswer(ctx: SourceContext, url: string, opts: HttpOp
   for (const k in opts) if (Object.prototype.hasOwnProperty.call(opts, k)) (o as { [k: string]: unknown })[k] = (opts as { [k: string]: unknown })[k];
   o.responseCharset = 'iso-8859-1';
   return ctx.http.get(url, o).then((res) => {
-    if (isChallenge(res.text)) throw new Error(CHALLENGE);
+    if (isChallenge(res.text)) throw new Error(challenge());
     // a bencoded dictionary starts with «d»
     if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd' || !/^d\d+:/.test(res.text)) return { link: null, res };
     return { link: stashFile(latin1Bytes(res.text)), res };

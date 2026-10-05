@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   engineFor, assSubsShown, sanitizeNativeEngine, engineLogText, rememberProbe, knownProbe, clearProbes,
-  PLAYER_ENGINE_OPTIONS, isPlayerEngine, vlcAvailable, VLC_UNAVAILABLE,
+  playerEngineOptions, isPlayerEngine, vlcAvailable, vlcUnavailable,
 } from '../../src/player/nativeEngine';
 import type { FfprobeResult } from '../../src/api/types';
 
@@ -27,9 +27,9 @@ describe('engine choice', () => {
   });
 
   it('settings choices: names and texts of the mockup', () => {
-    expect(PLAYER_ENGINE_OPTIONS.map((o) => o.value)).toEqual(['auto', 'builtin', 'vlc']);
-    expect(PLAYER_ENGINE_OPTIONS.map((o) => o.name)).toEqual(['Авто', 'Встроенный', 'VLC']);
-    expect(PLAYER_ENGINE_OPTIONS[0].text).toBe('Встроенный плеер; если он не может открыть файл или в нём субтитры ASS — VLC с того же места');
+    expect(playerEngineOptions().map((o) => o.value)).toEqual(['auto', 'builtin', 'vlc']);
+    expect(playerEngineOptions().map((o) => o.name)).toEqual(['Авто', 'Встроенный', 'VLC']);
+    expect(playerEngineOptions()[0].text).toBe('Встроенный плеер; если он не может открыть файл или в нём субтитры ASS — VLC с того же места');
     expect(isPlayerEngine('auto')).toBe(true);
     expect(isPlayerEngine('mpv')).toBe(false);
   });
@@ -42,7 +42,7 @@ describe('vlcAvailable', () => {
     expect(await vlcAvailable({ vlcAvailable: () => Promise.reject(new Error('x')) })).toBe(true);
     expect(await vlcAvailable({} as any)).toBe(true);
     expect(await vlcAvailable(null)).toBe(true);
-    expect(VLC_UNAVAILABLE).toBe('VLC недоступен на этом устройстве');
+    expect(vlcUnavailable()).toBe('VLC недоступен на этом устройстве');
   });
 });
 

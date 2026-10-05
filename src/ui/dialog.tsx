@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { signal, computed } from '@preact/signals';
 import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { FocusGroup, Focusable } from './components';
@@ -31,10 +32,10 @@ export function choose<T>(title: string, options: { label: string; value: T }[],
   });
 }
 
-export function confirmDialog(text: string, okLabel = 'Да'): Promise<boolean> {
+export function confirmDialog(text: string, okLabel = t('tv.yes')): Promise<boolean> {
   return choose(text, [
     { label: okLabel, value: true },
-    { label: 'Отмена', value: false },
+    { label: t('common.cancel'), value: false },
   ]).then((v) => v === true);
 }
 

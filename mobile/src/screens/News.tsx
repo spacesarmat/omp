@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
@@ -10,7 +11,7 @@ import { monitorNative } from '../monitor/native';
 import { askNotifyOnce, lastCheck, monitorDoneCount, monitorVersion, reloadMonitor, useMonitorStatus } from '../monitor/ui';
 import { checkedLine, clock, dayWord, episodesLine, freshText, subRule } from '../monitor/text';
 import { phoneSourceContext } from '../searchContext';
-import { ONLY_ANDROID } from '../platform/native';
+import { onlyAndroid } from '../platform/native';
 import { client } from '../../../src/store/servers';
 import { activeTv } from '../tv/tvStore';
 import { torrents } from '../../../src/store/library';
@@ -31,11 +32,11 @@ import { EPISODES_ID, type Finding } from '../../../src/monitor/types';
 
 type Seg = 'feed' | 'subs';
 
-/** «Проверяю…» ends after this even without monitorDone (the background run is capped at 3 minutes). */
+/** «Checking…» ends after this even without monitorDone (the background run is capped at 3 minutes). */
 export const RUN_MAX_MS = 3 * 60 * 1000 + 15000;
 const POLL_MS = 5000;
 
-const CAT_LABELS: Record<FeedCategory, string> = { movie: 'Фильмы', tv: 'Сериалы', anime: 'Аниме' };
+const catLabel = (c: FeedCategory): string => (c === 'movie' ? t('category.movie') : c === 'tv' ? t('category.tv') : t('news.anime'));
 
 /** The segment, category and filter outlive the screen (another tab and back keeps them). */
 const memo: { seg: Seg; cat: FeedCategory; hd: boolean } = { seg: 'feed', cat: 'movie', hd: false };
@@ -43,7 +44,7 @@ const memo: { seg: Seg; cat: FeedCategory; hd: boolean } = { seg: 'feed', cat: '
 // --- feed refresh: one run per category at a time; it fills the shared cache even if the screen is left
 const runs: Partial<Record<FeedCategory, SearchHandle>> = {};
 const failed: Partial<Record<FeedCategory, boolean>> = {};
-/** When a refresh of a category got no answer: not asked again for FEED_FRESH_MS, unless «Обновить». */
+/** When a refresh of a category got no answer: not asked again for FEED_FRESH_MS, unless «Refresh». */
 const failedAt: Partial<Record<FeedCategory, number>> = {};
 const listeners = new Set<() => void>();
 
@@ -130,20 +131,20 @@ function Feed() {
   const status: string[] = [];
   // the sites the saved rows came from; before the first answer, the switched-on ones
   const from = cache && cache.sources && cache.sources.length ? cache.sources.map(sourceName) : names;
-  if (names.length) status.push('Свежее с ' + from.join(', '));
+  if (names.length) status.push(t('news.freshFrom', { sites: from.join(', ') }));
   if (cache) {
     const day = dayWord(cache.at, now);
-    status.push('обновлено ' + (day ? day + ' ' : '') + 'в ' + clock(cache.at));
+    status.push(day ? t('news.updatedDayAt', { day: day, time: clock(cache.at) }) : t('news.updatedAt', { time: clock(cache.at) }));
   }
-  if (h) status.push('обновляю…');
-  else if (failed[cat]) status.push('сайты не ответили');
+  if (h) status.push(t('news.updating'));
+  else if (failed[cat]) status.push(t('news.noAnswer'));
 
   return (
     <>
       <div class="m-chips" style={{ flexWrap: 'wrap' }}>
         {FEED_CATEGORIES.map((c) => (
           <button key={c} type="button" class={'m-chip' + (cat === c ? ' on' : '')} aria-pressed={cat === c} onClick={() => setCat(c)}>
-            {CAT_LABELS[c]}
+            {catLabel(c)}
           </button>
         ))}
         <button type="button" class={'m-chip' + (hd ? ' on' : '')} aria-pressed={hd} onClick={() => setHd(!hd)}>
@@ -151,18 +152,18 @@ function Feed() {
         </button>
       </div>
       {names.length === 0 ? (
-        <div class="m-hint-warn">Лента берётся с rutor, nnmclub и torrent.by — включите их в «Источниках поиска».</div>
+        <div class="m-hint-warn">{t('news.enableSites')}</div>
       ) : (
         <div class="m-news-status m-muted m-small" role="status">
           <span class="m-grow">{status.join(' · ')}</span>
           <button type="button" class="m-btn-text" disabled={!!h} onClick={() => refreshFeed(cat, true)}>
-            Обновить
+            {t('news.refresh')}
           </button>
         </div>
       )}
       {rows.error && <LaunchError message={rows.error} />}
       {names.length > 0 && !h && shown.length === 0 && (
-        <div class="m-muted">{list.length ? 'Нет раздач 1080p и выше' : failed[cat] ? 'Сайты не ответили — попробуйте позже' : 'Пока пусто'}</div>
+        <div class="m-muted">{list.length ? t('news.noHd') : failed[cat] ? t('news.noAnswerLater') : t('news.empty')}</div>
       )}
       <div class="m-results">{shown.map((r) => rows.card(r))}</div>
       {rows.sheets}
@@ -170,18 +171,18 @@ function Feed() {
   );
 }
 
-/** «Смотреть на ТВ?» for a finding opened from a notification: playback starts only with this tap. */
+/** «Watch on TV?» for a finding opened from a notification: playback starts only with this tap. */
 export function WatchPrompt({ title, onWatch, onDismiss }: { title: string; onWatch: () => void; onDismiss: () => void }) {
   return (
-    <div class="m-hint-warn m-watch-prompt" role="group" aria-label="Смотреть на ТВ">
-      <div>{'Смотреть на ТВ: ' + title + '?'}</div>
+    <div class="m-hint-warn m-watch-prompt" role="group" aria-label={t('news.watchOnTv')}>
+      <div>{t('news.watchAsk', { title: title })}</div>
       <div class="m-result-actions">
         <span class="m-grow" />
         <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={onDismiss}>
-          Не сейчас
+          {t('news.notNow')}
         </button>
         <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={onWatch}>
-          Смотреть на ТВ
+          {t('news.watchOnTv')}
         </button>
       </div>
     </div>
@@ -196,7 +197,7 @@ function scrollToHighlight(): void {
 function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; running: boolean }) {
   void monitorVersion.value;
   const [polling, setPolling] = useState(false);
-  // while «Проверяю…» shows, Android's state is asked again every few seconds (a stale «running» never sticks)
+  // while «Checking…» shows, Android's state is asked again every few seconds (a stale «running» never sticks)
   const status = useMonitorStatus(polling ? POLL_MS : 0);
   const [editing, setEditing] = useState(false);
   const [replace, setReplace] = useState<{ f: Finding; watch: boolean } | null>(null);
@@ -222,10 +223,10 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
   const checking = running || !!(status && status.running);
   useEffect(() => setPolling(checking), [checking]);
   const line = checking
-    ? 'Проверяю…'
+    ? t('news.checking')
     : checkedLine({ last: last ? last.at : null, next: status && status.nextRun ? status.nextRun : null, enabled: settings.enabled, now: Date.now() });
 
-  // «Смотреть на ТВ» on a new-episodes card: replace first (history and settings move), then watch the new torrent
+  // «Watch on TV» on a new-episodes card: replace first (history and settings move), then watch the new torrent
   const replaceAndWatch = (f: Finding) => {
     if (!activeTv.value) return navigate({ name: 'tv' });
     setReplace({ f, watch: true });
@@ -234,10 +235,10 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
 
   const unwatch = async (f: Finding) => {
     const c = client.value;
-    if (!c) return showToast('Сервер не выбран');
-    const t = libraryTorrentOf(f);
+    if (!c) return showToast(t('errors.noServerSelected'));
+    const tor = libraryTorrentOf(f);
     try {
-      if (!t) {
+      if (!tor) {
         // not in the loaded list: when the server really has no such torrent, nothing is left to switch off
         const all = await c.list();
         const hash = f.episodes!.torrentHash.toLowerCase();
@@ -247,10 +248,10 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
           return;
         }
       }
-      await saveWatch(c, { hash: t ? t.hash : f.episodes!.torrentHash }, false);
+      await saveWatch(c, { hash: tor ? tor.hash : f.episodes!.torrentHash }, false);
       removeFindings(EPISODES_ID, f.key);
       reloadMonitor();
-      showToast('Больше не слежу за новыми сериями «' + shortTitle(f.episodes!.torrentTitle) + '»');
+      showToast(t('news.unwatched', { title: shortTitle(f.episodes!.torrentTitle) }));
     } catch (e) {
       showToast(errorMessage(e));
     }
@@ -261,8 +262,8 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       <div class="m-muted m-small" role="status" data-monitor-status>
         {line}
       </div>
-      <div class="m-set-label">Подписки</div>
-      {subs.length === 0 && <div class="m-muted m-small">Подписок пока нет. OMP сообщит, когда по запросу появятся новые раздачи.</div>}
+      <div class="m-set-label">{t('news.subs')}</div>
+      {subs.length === 0 && <div class="m-muted m-small">{t('news.noSubs')}</div>}
       {subs.map((s) => {
         const n = unseenCount(s.id);
         return (
@@ -276,18 +277,18 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
         );
       })}
       <button type="button" class="m-sub-new" onClick={() => setEditing(true)}>
-        + Новая подписка
+        {t('news.newSub')}
       </button>
-      <div class="m-set-label">Новые серии сериалов из каталога</div>
+      <div class="m-set-label">{t('news.episodesHead')}</div>
       {rows.error && <LaunchError message={rows.error} />}
       {eps.map((f) => {
         const e = f.episodes!;
-        const t = libraryTorrentOf(f);
-        const have = t ? libraryRange(t) : null;
+        const tor = libraryTorrentOf(f);
+        const have = tor ? libraryRange(tor) : null;
         const hl = !!finding && f.key === finding;
         return (
           <div key={f.key} class={'m-ep-card' + (hl ? ' m-hl' : '')} data-highlight={hl ? '' : undefined}>
-            <div class="m-ep-card-title">{shortTitle(e.torrentTitle) + ' · Сезон ' + e.season}</div>
+            <div class="m-ep-card-title">{shortTitle(e.torrentTitle) + ' · ' + t('library.season', { n: e.season })}</div>
             <div class="m-accent m-small">{episodesLine(e, have && have.from !== undefined ? have.from : 1)}</div>
             <div class="m-muted m-small">{f.result.Title}</div>
             {hl && prompt && (
@@ -297,18 +298,18 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
               <button
                 type="button"
                 class="m-btn m-btn-primary m-btn-sm"
-                aria-label={'Заменить раздачу: ' + shortTitle(e.torrentTitle)}
+                aria-label={t('news.replaceAria', { title: shortTitle(e.torrentTitle) })}
                 onClick={() => setReplace({ f, watch: false })}
               >
-                Заменить…
+                {t('news.replace')}
               </button>
               <button
                 type="button"
                 class="m-btn m-btn-secondary m-btn-sm"
-                aria-label={'Не следить за новыми сериями: ' + shortTitle(e.torrentTitle)}
+                aria-label={t('news.unwatchAria', { title: shortTitle(e.torrentTitle) })}
                 onClick={() => void unwatch(f)}
               >
-                Не следить
+                {t('news.unwatch')}
               </button>
             </div>
           </div>
@@ -316,11 +317,11 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       })}
       <div class="m-muted m-small">
         {settings.episodes
-          ? 'Сериалы из каталога проверяются сами; выключить можно в карточке сериала или здесь.'
-          : 'Слежение за новыми сериями выключено в настройках мониторинга.'}
+          ? t('news.epsOn')
+          : t('news.epsOff')}
       </div>
       <button type="button" class="m-link" onClick={() => navigate({ name: 'monitor' })}>
-        Настройки мониторинга
+        {t('news.monitorSettings')}
       </button>
       {editing && <SubSheet onClose={() => setEditing(false)} />}
       {replace && (
@@ -354,8 +355,8 @@ export function News({ seg, finding, watch }: { seg?: Seg; finding?: string; wat
   useEffect(() => setRunning(false), [done]);
   useEffect(() => {
     if (!running) return;
-    const t = setTimeout(() => setRunning(false), RUN_MAX_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setRunning(false), RUN_MAX_MS);
+    return () => clearTimeout(timer);
   }, [running]);
 
   const pick = (s: Seg) => {
@@ -365,10 +366,10 @@ export function News({ seg, finding, watch }: { seg?: Seg; finding?: string; wat
   const fresh = unseenCount();
 
   const runNow = () => {
-    if (!monitorNative.available) return showToast(ONLY_ANDROID);
+    if (!monitorNative.available) return showToast(onlyAndroid());
     setRunning(true);
     monitorNative.runNow().then(
-      () => showToast('Проверяю подписки и сериалы'),
+      () => showToast(t('news.runToast')),
       (e) => {
         setRunning(false);
         showToast(errorMessage(e));
@@ -379,21 +380,21 @@ export function News({ seg, finding, watch }: { seg?: Seg; finding?: string; wat
   return (
     <div class="m-screen" data-route="news">
       <div class="m-lib-head">
-        <h1 class="m-lib-brand">Новое</h1>
+        <h1 class="m-lib-brand">{t('news.title')}</h1>
         {current === 'subs' ? (
           <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={running} onClick={runNow}>
-            Проверить сейчас
+            {t('news.checkNow')}
           </button>
         ) : (
           <TvChip />
         )}
       </div>
-      <div class="m-seg" role="tablist" aria-label="Новое">
+      <div class="m-seg" role="tablist" aria-label={t('news.title')}>
         <button type="button" role="tab" aria-selected={current === 'feed'} class={current === 'feed' ? 'on' : ''} onClick={() => pick('feed')}>
-          Лента
+          {t('news.feed')}
         </button>
         <button type="button" role="tab" aria-selected={current === 'subs'} class={current === 'subs' ? 'on' : ''} onClick={() => pick('subs')}>
-          {fresh > 0 ? 'Подписки · ' + freshText(fresh) : 'Подписки'}
+          {fresh > 0 ? t('news.subsFresh', { fresh: freshText(fresh) }) : t('news.subs')}
         </button>
       </div>
       {current === 'feed' ? <Feed /> : <Subs finding={finding} watch={watch} running={running} />}

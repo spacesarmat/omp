@@ -95,3 +95,21 @@ describe('checkWhatsNew', () => {
     expect(whatsNew.value!.entries.map((e) => e.version)).toEqual(['0.2.0', '0.1.0']);
   });
 });
+
+describe('beta versions', () => {
+  it('a «## 0.16.0-beta.1» section keeps its beta suffix and sorts before the release', () => {
+    const list = parseChangelog('## 0.16.0\n\n- a\n\n## 0.16.0-beta.1\n\n- b\n\n## 0.15.5\n\n- c\n');
+    expect(list.map((e) => e.version)).toEqual(['0.16.0', '0.16.0-beta.1', '0.15.5']);
+  });
+  it('a beta install remembers its version and is told about it once', () => {
+    localStorage.clear();
+    localStorage.setItem('tsp.x', '1');
+    const list = parseChangelog('## 0.16.0-beta.1\n\n- b\n\n## 0.15.5\n\n- c\n');
+    checkWhatsNew(list, '0.16.0-beta.1');
+    expect(whatsNew.value?.entries[0].version).toBe('0.16.0-beta.1');
+    markWhatsNewShown();
+    closeWhatsNew();
+    checkWhatsNew(list, '0.16.0-beta.1');
+    expect(whatsNew.value).toBeNull();
+  });
+});

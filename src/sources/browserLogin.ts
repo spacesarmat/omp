@@ -5,76 +5,75 @@
 // has no saved password: its `<id>.browser` marker says «вход выполнен в браузере», «Выйти» forgets the session.
 // The platforms register their way of showing the page (mobile/src/browserLogin.ts, src/sources/cloudflareTv.ts);
 // LG has none. All the Russian copy lives here. Shared by the phone and the TV bundles: Chromium 53 rules, no platform imports.
+import { t } from '../i18n';
 import { cloudflareFailure } from './cloudflare';
-import { RUTRACKER_CAPTCHA } from './rutrackerText';
+import { rutrackerCaptcha } from './rutrackerText';
 import { siteLoginCode, siteLoginKeys } from './siteLoginText';
 import type { SecretStore, SourceContext } from './types';
 
 // ---- copy ----
 
-export const BROWSER_LOGIN = 'Войти через браузер';
-export const BROWSER_HINT = 'Войдите на сайте как обычно — окно закроется само, когда OMP увидит вход. Пароль OMP не видит.';
+export const browserLoginText = (): string => t('sources.browser.login');
+export const browserHint = (): string => t('sources.browser.hint');
 /** While the native side checks the sign-in. */
-export const BROWSER_CHECKING = 'Проверяю вход…';
+export const browserChecking = (): string => t('sources.browser.checking');
 /** The sign-in did not open the site signed in. */
-export const BROWSER_NOT_CONFIRMED = 'Не удалось подтвердить вход. Если вы вошли на сайте — нажмите «Проверить ещё раз»';
-export const BROWSER_RETRY = 'Проверить ещё раз';
-/** After a sign-in kept on this device (%s = the site). */
-export const BROWSER_SIGNED_IN = 'Вход в %s выполнен';
+export const browserNotConfirmed = (): string => t('sources.browser.notConfirmed');
+export const browserRetry = (): string => t('sources.browser.retry');
 /** Shown under a form login that hit a captcha. */
-export const BROWSER_CAPTCHA = 'Сайт просит капчу — войдите через браузер';
+export const browserCaptcha = (): string => t('sources.browser.captcha');
 /** Shown under a form login that Cloudflare stopped (the browser page passes the check itself). */
-export const BROWSER_CLOUDFLARE = 'Сайт закрыт проверкой Cloudflare — войдите через браузер';
+export const browserCloudflare = (): string => t('sources.browser.cloudflare');
 /** The state of a site signed in through the browser. */
-export const BROWSER_DONE = 'вход выполнен в браузере';
-export const BROWSER_DONE_TITLE = 'Вход выполнен в браузере';
-export const BROWSER_CANCEL = 'Отмена';
-export const LOGIN_ON_PHONE = 'Войти на телефоне';
-export const LOGIN_BY_REMOTE = 'Ввести пультом';
-export const BROWSER_TV_TEXT = 'Войдите на сайт как обычно — окно закроется само. Пультом это неудобно — войдите на телефоне, OMP передаст вход сюда.';
-/** %s = the phone's name (the native dialog fills it in). */
-export const BROWSER_TV_HINT = 'Телефон «%s» получит запрос';
-export const BROWSER_TV_WAITING = 'Войдите на телефоне «%s»';
-export const BROWSER_NO_PHONE = 'Подключите телефон к телевизору';
+export const browserDone = (): string => t('sources.browser.done');
+export const browserDoneTitle = (): string => t('sources.browser.doneTitle');
+export const browserCancel = (): string => t('common.cancel');
+export const loginOnPhone = (): string => t('sources.browser.loginOnPhone');
+export const loginByRemote = (): string => t('sources.browser.loginByRemote');
+export const browserTvText = (): string => t('sources.browser.tvText');
+/** The text keeps `%s` = the phone's name (the native dialog fills it in). */
+export const browserTvHint = (): string => t('sources.browser.tvHint');
+export const browserTvWaiting = (): string => t('sources.browser.tvWaiting');
+export const browserNoPhone = (): string => t('sources.browser.noPhone');
 /** The phone listens to the TV only on «Источники поиска» (or with a Cloudflare switch on): where to open it. */
-export const BROWSER_PHONE_CLOSED = 'Откройте на телефоне OMP → Настройки → Источники поиска';
+export const browserPhoneClosed = (): string => t('sources.browser.phoneClosed');
 /** The login page tried to leave the site. */
-export const BROWSER_BLOCKED = 'OMP открывает только страницы сайта — вернули на страницу входа';
-export const BROWSER_GATE_WAIT = 'Ждём, пока закончится другая проверка…';
-/** By the native relay outcome: what the TV dialog says when the phone did not sign in. */
-export const BROWSER_TV_ERRORS: { [outcome: string]: string } = {
-  NOT_TAKEN: 'Телефон не ответил — откройте OMP на телефоне',
-  TIMEOUT: 'Телефон не прислал вход вовремя — попробуйте ещё раз',
-  CANCELLED: 'Вход на телефоне отменили',
-  FAILED: 'На телефоне войти не удалось',
-  STORE_FAILED: 'Телевизор не смог сохранить вход: защищённое хранилище недоступно',
-  BUSY: 'Телевизор уже ждёт ответ телефона',
-  UNAVAILABLE: BROWSER_PHONE_CLOSED,
-  UNVERIFIED: 'Вход с телефона не подтвердился — попробуйте ещё раз',
-};
-export const BROWSER_NOTE_TV = 'После входа OMP передаст его на телевизор. Пароль OMP не видит и не передаёт.';
-/** The phone's notification when the TV asks for a sign-in (%s = the site). */
-export const WATCH_NOTIFY_LOGIN = 'Телевизор просит войти на %s';
-export const BROWSER_FAILED = 'Не удалось открыть вход через браузер';
-export const BROWSER_BUSY = 'Уже открыта другая проверка — попробуйте через минуту';
+export const browserBlocked = (): string => t('sources.browser.blocked');
+export const browserGateWait = (): string => t('sources.browser.gateWait');
+/** By the native relay outcome (a code, never a text): what the TV dialog says when the phone did not sign in. */
+export const browserTvErrors = (): { [outcome: string]: string } => ({
+  NOT_TAKEN: t('sources.browser.tvErrors.notTaken'),
+  TIMEOUT: t('sources.browser.tvErrors.timeout'),
+  CANCELLED: t('sources.browser.tvErrors.cancelled'),
+  FAILED: t('sources.browser.tvErrors.failed'),
+  STORE_FAILED: t('sources.browser.tvErrors.storeFailed'),
+  BUSY: t('sources.browser.tvErrors.busy'),
+  UNAVAILABLE: browserPhoneClosed(),
+  UNVERIFIED: t('sources.browser.tvErrors.unverified'),
+});
+export const browserNoteTv = (): string => t('sources.browser.noteTv');
+/** The phone's notification when the TV asks for a sign-in (the text keeps `%s` = the site). */
+export const watchNotifyLogin = (): string => t('sources.browser.watchNotify');
+export const browserFailed = (): string => t('sources.browser.failed');
+export const browserBusy = (): string => t('sources.browser.busy');
 /** Signed in, but the encrypted storage refused the session: nothing is kept. */
-export const BROWSER_STORE_FAILED = 'Не удалось сохранить вход — попробуйте ещё раз';
-export const BROWSER_SENT_TV = 'Вход передан на телевизор';
-export const BROWSER_NOT_SENT_TV = 'Не удалось передать вход на телевизор — попробуйте ещё раз';
+export const browserStoreFailed = (): string => t('sources.browser.storeFailed');
+export const browserSentTv = (): string => t('sources.browser.sentTv');
+export const browserNotSentTv = (): string => t('sources.browser.notSentTv');
 
 /** «Вход в rutracker выполнен». */
 export function browserSignedIn(site: string): string {
-  return BROWSER_SIGNED_IN.replace('%s', site);
+  return t('sources.browser.signedIn', { site });
 }
 
 /** «Вход на Kinozal» (the sheet's title). */
 export function browserTitle(site: string): string {
-  return 'Вход на ' + site;
+  return t('common.signInTo', { site });
 }
 
 /** «Войдите … Это нужно для телевизора «Гостиная».» when the TV asked. */
 export function browserText(tv?: string): string {
-  return BROWSER_HINT + (tv ? ' Это нужно для телевизора «' + tv + '».' : '');
+  return browserHint() + (tv ? ' ' + t('cloudflare.forTv', { tv }) : '');
 }
 
 // ---- the request ----
@@ -138,15 +137,15 @@ export function phoneLoginRequest(spec: BrowserSpec, forTv?: { id: string; tv: s
     mode: 'phone',
     title: browserTitle(spec.site),
     text: browserText(forTv ? forTv.tv : undefined),
-    cancel: BROWSER_CANCEL,
-    gateWait: BROWSER_GATE_WAIT,
-    blocked: BROWSER_BLOCKED,
-    checking: BROWSER_CHECKING,
-    notConfirmed: BROWSER_NOT_CONFIRMED,
-    retry: BROWSER_RETRY,
+    cancel: browserCancel(),
+    gateWait: browserGateWait(),
+    blocked: browserBlocked(),
+    checking: browserChecking(),
+    notConfirmed: browserNotConfirmed(),
+    retry: browserRetry(),
   };
   if (forTv) {
-    r.note = BROWSER_NOTE_TV;
+    r.note = browserNoteTv();
     r.forTv = forTv.id;
   }
   return r;
@@ -162,20 +161,20 @@ export function tvLoginRequest(spec: BrowserSpec, askPhone?: boolean): BrowserLo
     check: spec.check,
     mode: 'tv',
     title: browserTitle(spec.site),
-    text: BROWSER_TV_TEXT,
-    cancel: BROWSER_CANCEL,
-    phone: LOGIN_ON_PHONE,
-    remote: LOGIN_BY_REMOTE,
-    hint: BROWSER_TV_HINT,
-    noPhone: BROWSER_NO_PHONE,
-    phoneClosed: BROWSER_PHONE_CLOSED,
-    waiting: BROWSER_TV_WAITING,
-    gateWait: BROWSER_GATE_WAIT,
-    errors: BROWSER_TV_ERRORS,
-    blocked: BROWSER_BLOCKED,
-    checking: BROWSER_CHECKING,
-    notConfirmed: BROWSER_NOT_CONFIRMED,
-    retry: BROWSER_RETRY,
+    text: browserTvText(),
+    cancel: browserCancel(),
+    phone: loginOnPhone(),
+    remote: loginByRemote(),
+    hint: browserTvHint(),
+    noPhone: browserNoPhone(),
+    phoneClosed: browserPhoneClosed(),
+    waiting: browserTvWaiting(),
+    gateWait: browserGateWait(),
+    errors: browserTvErrors(),
+    blocked: browserBlocked(),
+    checking: browserChecking(),
+    notConfirmed: browserNotConfirmed(),
+    retry: browserRetry(),
   };
   if (askPhone) r.askPhone = true;
   return r;
@@ -244,7 +243,7 @@ export function canLoginOnPhone(): boolean {
 /** A form login was refused with a captcha (the screen then suggests «Войти через браузер»). */
 export function isCaptchaError(e: unknown): boolean {
   if (siteLoginCode(e) === 'captcha') return true;
-  return e instanceof Error && e.message === RUTRACKER_CAPTCHA;
+  return e instanceof Error && e.message === rutrackerCaptcha();
 }
 
 /**
@@ -252,8 +251,8 @@ export function isCaptchaError(e: unknown): boolean {
  * browser page shows it, the person ticks it). The suggestion shown above «Войти через браузер», '' for anything else.
  */
 export function browserSuggestion(e: unknown): string {
-  if (isCaptchaError(e)) return BROWSER_CAPTCHA;
-  if (cloudflareFailure(e)) return BROWSER_CLOUDFLARE;
+  if (isCaptchaError(e)) return browserCaptcha();
+  if (cloudflareFailure(e)) return browserCloudflare();
   return '';
 }
 
@@ -295,7 +294,7 @@ export interface BrowserLogin {
   pending(ctx: SourceContext, host: string): Promise<void>;
 }
 
-export const SESSION_NOT_VERIFIED = 'Вход с телефона не подтвердился';
+export const sessionNotVerified = (): string => t('sources.browser.sessionNotVerified');
 
 export function createBrowserLogin(site: BrowserSite): BrowserLogin {
   const key = browserKey(site.id);
@@ -343,10 +342,10 @@ export function createBrowserLogin(site: BrowserSite): BrowserLogin {
     },
     pending(_ctx, host) {
       const p = platform;
-      if (!p || !p.pending) return Promise.reject(new Error(SESSION_NOT_VERIFIED));
-      if (site.hosts().indexOf(host) < 0) return Promise.reject(new Error(SESSION_NOT_VERIFIED));
+      if (!p || !p.pending) return Promise.reject(new Error(sessionNotVerified()));
+      if (site.hosts().indexOf(host) < 0) return Promise.reject(new Error(sessionNotVerified()));
       return p.pending(site.id, site.check).then((r) => {
-        if (!r || r.ok !== true) throw new Error(SESSION_NOT_VERIFIED);
+        if (!r || r.ok !== true) throw new Error(sessionNotVerified());
         if (r.host && site.adopt) site.adopt('https://' + r.host + '/');
       });
     },

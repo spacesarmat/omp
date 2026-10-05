@@ -8,7 +8,7 @@
 import { parseHtml } from './html';
 import { checkLoginPage, checkPage, siteOptions } from './site';
 import { createBrowserLogin, type BrowserCheck, type BrowserOutcome, type BrowserSpec } from './browserLogin';
-import { SITE_EMPTY, SITE_NO_STORE, siteLoginCode, siteLoginError, siteLoginKeys } from './siteLoginText';
+import { siteEmpty, siteNoStore, siteLoginCode, siteLoginError, siteLoginKeys } from './siteLoginText';
 import { loginRequired } from './types';
 import type { SiteHosts } from './mirrors';
 import type { HttpOptions, HttpResponse, SecretStore, Source, SourceContext } from './types';
@@ -156,8 +156,8 @@ export function createSiteLogin(cfg: SiteLoginConfig): SiteLogin {
     login(username, password, ctx) {
       const secrets = ctx.secrets;
       const user = (username || '').trim();
-      if (!user || !password) return Promise.reject(new Error(SITE_EMPTY));
-      if (!secrets) return Promise.reject(new Error(SITE_NO_STORE));
+      if (!user || !password) return Promise.reject(new Error(siteEmpty()));
+      if (!secrets) return Promise.reject(new Error(siteNoStore()));
       return postLogin(user, password, ctx)
         .then(() => secrets.set(keys.user, user).then(() => secrets.set(keys.pass, password)))
         // a password login replaces a browser session
@@ -175,9 +175,9 @@ export function createSiteLogin(cfg: SiteLoginConfig): SiteLogin {
     },
     loginPending(ctx) {
       const secrets = ctx.secrets;
-      if (!secrets) return Promise.reject(new Error(SITE_NO_STORE));
+      if (!secrets) return Promise.reject(new Error(siteNoStore()));
       return pair(secrets, keys.pendingUser, keys.pendingPass).then((c) => {
-        if (!c) throw new Error(SITE_EMPTY);
+        if (!c) throw new Error(siteEmpty());
         return postLogin(c.username, c.password, ctx);
       });
     },

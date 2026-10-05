@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   applyRemoteSources,
   buildTransferPayload,
@@ -8,9 +8,12 @@ import {
   parseRemoteSources,
   transferWhen,
   validateTransferPayload,
+  withoutNewParts,
   MAX_TRANSFER_SOURCES,
 } from '../../src/sources/transfer';
-import { rutracker, rutrackerLoginPending, rutrackerSavedLogin, RUTRACKER_CAPTCHA } from '../../src/sources/rutracker';
+import { settings, resetSettings, updateSettings } from '../../src/store/settings';
+import { lang } from '../../src/i18n';
+import { rutracker, rutrackerLoginPending, rutrackerSavedLogin, rutrackerCaptcha } from '../../src/sources/rutracker';
 import { getHealth, isSourceOn, reloadSourcePrefs, resetHealth, setHealth, setSourceOn } from '../../src/sources/store';
 import { fakeSite, fixture, page } from './fakeSite';
 import type { HttpCall } from './fakeSite';
@@ -178,7 +181,7 @@ describe('rutracker saved and staged login', () => {
   it('the staged login needs a store and leaves the storage alone', async () => {
     await expect(rutrackerLoginPending(fakeSite(loginServer(), null).ctx)).rejects.toThrow('Вход доступен только в приложении Android');
     const c = fakeSite(loginServer('rutracker-login-captcha.html'), PENDING);
-    await expect(rutrackerLoginPending(c.ctx)).rejects.toThrow(RUTRACKER_CAPTCHA);
+    await expect(rutrackerLoginPending(c.ctx)).rejects.toThrow(rutrackerCaptcha());
     expect(c.secrets).toEqual(PENDING);
   });
 });
@@ -189,5 +192,35 @@ describe('transferWhen', () => {
     expect(transferWhen(new Date(2026, 9, 3, 18, 40).getTime(), now)).toEqual({ day: 'сегодня', time: '18:40' });
     expect(transferWhen(new Date(2026, 9, 2, 9, 5).getTime(), now)).toEqual({ day: 'вчера', time: '09:05' });
     expect(transferWhen(new Date(2026, 8, 30, 7, 0).getTime(), now)).toEqual({ day: '30.09.2026', time: '07:00' });
+  });
+});
+
+describe('transfer language', () => {
+  afterEach(() => resetSettings());
+  it('the payload carries the phone language when given; the TV accepts only ru / en', () => {
+    const p = buildTransferPayload(KNOWN, null, undefined, null, null, 'en');
+    expect(p.language).toBe('en');
+    expect(validateTransferPayload(p)).toEqual(p);
+    expect(buildTransferPayload(KNOWN, null).language).toBeUndefined();
+    expect(validateTransferPayload({ ...p, language: 'de' })).toBeNull();
+    expect(validateTransferPayload({ ...p, language: 1 })).toBeNull();
+  });
+  it('an older TV gets the payload without it', () => {
+    const p = buildTransferPayload(KNOWN, null, undefined, null, null, 'en');
+    expect(withoutNewParts(p).language).toBeUndefined();
+  });
+  it('the TV reads it from the event and stores it as its language', async () => {
+    const r = parseRemoteSources({ id: 'l', sources: { rutor: true }, rutracker: false, phone: 'P', at: 0, language: 'en' })!;
+    expect(r.language).toBe('en');
+    expect(parseRemoteSources({ id: 'l', sources: { rutor: true }, rutracker: false, phone: 'P', at: 0, language: 'de' })!.language).toBeUndefined();
+    await applyRemoteSources(r, KNOWN, () => fakeSite(loginServer(), null).ctx);
+    expect(settings.value.language).toBe('en');
+    expect(lang.value).toBe('en');
+  });
+  it('without it the TV keeps its language', async () => {
+    updateSettings({ language: 'ru' });
+    const r = parseRemoteSources({ id: 'm', sources: { rutor: true }, rutracker: false, phone: 'P', at: 0 })!;
+    await applyRemoteSources(r, KNOWN, () => fakeSite(loginServer(), null).ctx);
+    expect(settings.value.language).toBe('ru');
   });
 });
