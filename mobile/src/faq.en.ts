@@ -511,7 +511,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'sources': {
     q: 'Where OMP searches and how to turn on rutracker',
     short: [
-      '“Add” searches all the turned-on sources at once and merges identical torrents.',
+      '“Add” searches all the turned-on sources at once and merges identical torrents; a magnet link goes under the search, “Add by magnet link”.',
       'To turn sources on and off: Settings → “Search sources”.',
       'The sources: Jackett and Prowlarr directly, the TorrServer search and the built-in sites: rutor, nnmclub, rutracker, Anidub, BigFANGroup, torrent.by, Kinozal, rustorka.',
       'rutracker, Kinozal and rustorka require sign-in: “Sign in” right on the site row. NNM-Club searches without an account too; it needs the sign-in to download a torrent.',
@@ -702,6 +702,17 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'You can delete from “Mine” with a long press on a poster: a menu opens, and several can be chosen at once there.',
     ],
   },
+  'add-magnet': {
+    q: 'Add a torrent by magnet link',
+    short: [
+      'The “Add” screen starts with search; the magnet link is tucked under it.',
+      'Tap “Add by magnet link”: the field opens in place.',
+      'Paste a magnet link or a 40-character hash and add it.',
+    ],
+    more: [
+      'Magnet links from the browser open in OMP on their own — via “Share”.',
+    ],
+  },
   'search-filters': {
     q: 'Search filters for torrents',
     short: [
@@ -723,7 +734,31 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     ],
     more: [
       'Following the films is turned on in “Settings → Monitoring” (“Better quality of films”) and, for one film, in its card.',
+      'This is separate from “Find in better quality” on the torrent screen: see the question “Find in better quality: search on demand”.',
       '“Replace” works as for new episodes (the question “New episodes and the “Replace” button”): the old torrent is removed from the server only once the new one is added. A card in “New” can be dismissed with “Hide”.',
+    ],
+  },
+  'find-better': {
+    q: 'Find in better quality: search on demand',
+    short: [
+      'On the torrent screen (a film or a series) tap “Find in better quality”: OMP searches now instead of waiting for the nightly check.',
+      'The best torrents come first; “Replace” adds the chosen one, moves watch positions and “Skip” and only then removes the old one.',
+      'The automatic “Better quality” check runs by itself once a day and reports in “New”; the button is for searching right away.',
+    ],
+    more: [
+      'If a torrent has few seeds, OMP warns you and puts such torrents last. A torrent covering several seasons is marked. If a replace fails (no seeds, a site needs a sign-in), OMP explains why and your torrent stays untouched. “Cancel” stops a replace.',
+      'For a series the search is for the season open on the screen; switch seasons with the chips above the episode list.',
+    ],
+  },
+  'series-card': {
+    q: 'A series as one card, and the series screen',
+    short: [
+      'In “Mine” a series’ seasons are grouped into one card.',
+      'Tap it to open the series screen: a backdrop and overview from TMDB, years · rating · genres, and the seasons with episode count and year.',
+      'Missing seasons are shown with a “Find torrents” button.',
+    ],
+    more: [
+      'Tapping a season opens the torrent screen, where episode names come from TMDB and seasons switch with chips. A TMDB key is needed (the question “TMDB key for “Discover””).',
     ],
   },
   'torrent-by-code': {
@@ -833,8 +868,8 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'The “New” tab is a feed of fresh torrents from rutor, nnmclub and torrent.by: “Movies”, “Series”, “Anime” and the 1080p+ filter. Each torrent has “Add” and “On TV”. The sources must be turned on in “Search sources”.',
       'A subscription is a query with rules: sources, the minimum quality and the number of seeds. Create it with the “+ New subscription” button on the “Subscriptions” tab. OMP checks the subscriptions itself and reports new torrents with a notification and a badge on the “New” tab.',
       'The first check of a new subscription goes without notifications: the torrents already on the sites are considered known. Notifications come only about what appeared later.',
-      'You can also check by hand: the “Check now” button. How often OMP checks by itself and whether Wi‑Fi is needed for it — in “Settings → Monitoring” (the gear in the “New” header and the “Monitoring settings” button at the bottom lead there too).',
-      'Each subscription has its own “Check now”. Subscriptions and found torrents can be searched with the search field and sorted: new findings, by name, by date added.',
+      'You can also check by hand: the refresh button in the “New” header. How often OMP checks by itself and whether Wi‑Fi is needed for it — in “Settings → Monitoring” (the monitoring icon in the “New” header and the “Monitoring settings” button at the bottom lead there too).',
+      'Each subscription has its own check button. Subscriptions and found torrents can be searched with the search field and sorted: new findings, by name, by date added.',
     ],
   },
   'new-episodes': {
@@ -848,7 +883,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'For series from the catalog OMP looks for a fuller torrent of the same series and season itself. If new episodes are out, a card “Episodes 9–10 are out · you have 1–8” appears in “New” on the “Subscriptions” tab.',
       '“Replace” adds the new torrent to the server and moves into it the watch history, the stop positions, the “Skip” settings and the category. The old torrent is removed from the server only after the new one is added successfully: if something goes wrong, the old one stays in place. The name and the poster are taken from the new torrent.',
       '“Watch on TV” on the new episodes card first does the replace, and then starts playback. If there are several suitable torrents, you can choose “Another release” in the replace window.',
-      '“Stop following” turns off the new episodes check for this series. For all series at once it can be turned off in “Settings → Monitoring” (the gear in the “New” header).',
+      '“Stop following” turns off the new episodes check for this series. For all series at once it can be turned off in “Settings → Monitoring” (the monitoring icon in the “New” header).',
     ],
   },
 

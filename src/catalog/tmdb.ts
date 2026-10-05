@@ -3,13 +3,26 @@
 import type { TmdbConfig } from '../api/types';
 import { lang } from '../i18n';
 import { ru } from '../i18n/ru';
+import { discoverParams, type DiscoverQuery } from './discoverQuery';
 
 export type Kind = 'movie' | 'tv';
 
 export interface CatalogTitle { kind: Kind; id: number; title: string; original: string; year: number; poster: string; rating: number; }
 export interface Person { name: string; photo: string; role: string; }
-export interface Season { number: number; episodes: number; year: number; aired: number; }
-export interface CatalogCard extends CatalogTitle { backdrop: string; genres: string[]; runtime: number; overview: string; cast: Person[]; seasons: Season[]; airing: boolean; }
+/** `airDate`: 'YYYY-MM-DD' or '' (absent in cards cached before 0.17.0-beta.2: unknown). */
+export interface Season { number: number; episodes: number; year: number; aired: number; airDate?: string; }
+/** A series' state, language-neutral: '' when TMDB says nothing known (or a card cached without it). */
+export type SeriesStatus = 'returning' | 'ended' | 'canceled' | 'production' | 'planned' | '';
+/** TMDB's next_episode_to_air: `airDate` is 'YYYY-MM-DD' or '' when not dated yet. */
+export interface NextEpisode { season: number; episode: number; airDate: string; }
+/**
+ * `status`, `nextEpisode` and `lastAirDate` are optional: cards cached before 0.17.0-beta.2 have none of them, and
+ * missing reads as unknown ('' / null / '').
+ */
+export interface CatalogCard extends CatalogTitle {
+  backdrop: string; genres: string[]; runtime: number; overview: string; cast: Person[]; seasons: Season[]; airing: boolean;
+  status?: SeriesStatus; nextEpisode?: NextEpisode | null; lastAirDate?: string;
+}
 export interface TmdbEndpoint { base: string; key: string; images: string; }
 export interface Episode { n: number; title: string; airDate: string; runtime: number; overview: string; }
 export interface SeasonDetails { number: number; name: string; airDate: string; overview: string; episodes: Episode[]; }
@@ -45,6 +58,14 @@ export function noveltiesUrl(e: TmdbEndpoint, kind: Kind, page: number, today: s
   return url(e, 'discover/movie', {
     page: page, region: 'RU', with_release_type: 4, 'release_date.lte': today, sort_by: 'primary_release_date.desc', 'vote_count.gte': 20,
   });
+}
+
+/** «Обзор» with its sort and filters: /discover/{kind}; null when the kind has none of the chosen genres. */
+export function discoverUrl(e: TmdbEndpoint, kind: Kind, query: DiscoverQuery, page: number, today: string): string | null {
+  const p = discoverParams(kind, query, today);
+  if (!p) return null;
+  p.page = page;
+  return url(e, 'discover/' + kind, p);
 }
 
 export function searchUrl(e: TmdbEndpoint, query: string, page: number): string {
@@ -128,7 +149,10 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
         const x = (s || {}) as { [k: string]: unknown };
         const num = n(x.season_number);
         const eps = n(x.episode_count);
-        return { number: num, episodes: eps, year: year(x.air_date), aired: num < lastSeason ? eps : num === lastSeason ? Math.min(eps, lastEp) : 0 };
+        return {
+          number: num, episodes: eps, year: year(x.air_date), aired: num < lastSeason ? eps : num === lastSeason ? Math.min(eps, lastEp) : 0,
+          airDate: date(x.air_date),
+        };
       }).filter((s) => s.number > 0).sort((a, b) => b.number - a.number)
     : [];
   return {
@@ -140,7 +164,36 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
     cast: cast,
     seasons: seasons,
     airing: kind === 'tv' && (o.in_production === true || !!o.next_episode_to_air),
+    status: kind === 'tv' ? statusOf(o.status) : '',
+    nextEpisode: kind === 'tv' ? nextEpisodeOf(o.next_episode_to_air) : null,
+    lastAirDate: kind === 'tv' ? date(o.last_air_date) : '',
   };
+}
+
+const STATUSES: { [k: string]: SeriesStatus } = {
+  'returning series': 'returning',
+  ended: 'ended',
+  canceled: 'canceled',
+  cancelled: 'canceled',
+  'in production': 'production',
+  planned: 'planned',
+  pilot: 'planned',
+};
+
+/** TMDB's status of a series as a code; '' for anything else. */
+export function statusOf(v: unknown): SeriesStatus {
+  const k = str(v).toLowerCase().replace(/\s+/g, ' ');
+  return Object.prototype.hasOwnProperty.call(STATUSES, k) ? STATUSES[k] : '';
+}
+
+/** next_episode_to_air: null unless it has a season and an episode number (whole, positive, sane). */
+export function nextEpisodeOf(v: unknown): NextEpisode | null {
+  const x = v && typeof v === 'object' && !Array.isArray(v) ? (v as { [k: string]: unknown }) : null;
+  if (!x) return null;
+  const season = Math.floor(n(x.season_number));
+  const episode = Math.floor(n(x.episode_number));
+  if (season <= 0 || season > 1000 || episode <= 0 || episode > 10000) return null;
+  return { season: season, episode: episode, airDate: date(x.air_date) };
 }
 
 /** The text trimmed and cut to `max` characters. */

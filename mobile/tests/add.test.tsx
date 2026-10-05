@@ -45,7 +45,7 @@ function type(sel: string, v: string) {
   });
 }
 
-// row actions carry the row title: «Добавить на сервер: <title>», «Категория: Сериалы, <title>»
+// row actions carry the row title: «Добавить на сервер: <title>», «Подробнее: <title>»
 const byLabel = (l: string) =>
   Array.from(el.querySelectorAll('button')).filter((b) => {
     const a = b.getAttribute('aria-label') || '';
@@ -53,6 +53,14 @@ const byLabel = (l: string) =>
   });
 const byText = (t: string) => Array.from(el.querySelectorAll('button')).find((b) => b.textContent === t)!;
 const click = (n: Element) => act(() => (n as HTMLElement).click());
+// a tap on a found-release card opens its «Подробнее» sheet (the category, the full title, the actions)
+const openDetails = (i: number) => click(el.querySelectorAll('.m-rc-open')[i]);
+const closeDetails = () => click(el.querySelector('.m-sheet-backdrop')!);
+const detailsCategory = () => el.querySelector('[data-result-details] .m-chip[aria-pressed="true"]')!.textContent;
+const detailsChip = (label: string) => Array.from(el.querySelectorAll('[data-result-details] .m-chip')).find((b) => b.textContent === label)!;
+const MAGNET = 'input[aria-label="Magnet-ссылка или хеш"]';
+// the magnet field opens from the «Добавить по magnet-ссылке» link under the search
+const openMagnet = () => click(el.querySelector('[data-magnet-open]')!);
 const search = (q: string) => {
   type('input[aria-label="Поиск по источникам"]', q);
   act(() => {
@@ -99,7 +107,7 @@ describe('Add', () => {
   it('prefills the incoming link and adds it, then opens the torrent', async () => {
     const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
     mount('magnet:?xt=urn:btih:' + HASH);
-    expect((el.querySelector('input') as HTMLInputElement).value).toBe('magnet:?xt=urn:btih:' + HASH);
+    expect((el.querySelector('input[aria-label="Magnet-ссылка или хеш"]') as HTMLInputElement).value).toBe('magnet:?xt=urn:btih:' + HASH);
     click(byText('Добавить'));
     await flush();
     expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, category: '' });
@@ -110,7 +118,8 @@ describe('Add', () => {
   it('rejects garbage input', async () => {
     const add = vi.spyOn(TorrServerClient.prototype, 'add');
     mount();
-    type('input', 'nope');
+    openMagnet();
+    type(MAGNET, 'nope');
     click(byText('Добавить'));
     await flush();
     expect(add).not.toHaveBeenCalled();
@@ -129,8 +138,10 @@ describe('Add', () => {
     expect(rows.length).toBe(2);
     expect(rows[0].textContent).toContain('152 сида');
     expect(rows[0].querySelector('.m-src-badge')!.textContent).toBe('rutor (TorrServer)');
-    expect(rows[0].textContent).toContain('ещё в Torznab');
     expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 2 · 2 из 2 источников ответили');
+    // «ещё в …» is in the card's «Подробнее»
+    openDetails(0);
+    expect(el.querySelector('[data-result-details]')!.textContent).toContain('ещё в Torznab');
   });
 
   it('opens with a ready query and runs the search once on mount (route query + run)', async () => {
@@ -253,7 +264,7 @@ describe('Add', () => {
     await flush();
     const rows = el.querySelectorAll('.m-result');
     expect(rows.length).toBe(1);
-    expect(rows[0].textContent).toContain('S01');
+    expect(rows[0].getAttribute('data-title')).toContain('S01');
   });
 
   it('does not jump to the remote after unmount', async () => {
@@ -329,37 +340,93 @@ describe('Add category', () => {
     expect(add).toHaveBeenCalledWith({ link: M + '&dn=Band+-+Discography+FLAC', title: 'Band - Discography FLAC', category: 'music' });
   });
 
-  it('a user pick is not overwritten by a later guess', async () => {
+  it('a user pick is not overwritten by the guess', async () => {
     const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
     mount();
+    openMagnet();
+    type(MAGNET, M + '&dn=Show+S01E02');
     click(byText('Прочее'));
-    type('input', M + '&dn=Show+S01E02');
     click(byText('Добавить'));
     await flush();
     expect(add).toHaveBeenCalledWith({ link: M + '&dn=Show+S01E02', title: 'Show S01E02', category: 'other' });
   });
 
+  it('the search comes first; the magnet is a collapsed link under the search, before the results', () => {
+    mount();
+    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Добавить');
+    // collapsed by default: one link, no magnet field, no category chips
+    expect(el.querySelector(MAGNET)).toBeNull();
+    expect(el.querySelector('[data-magnet-block]')).toBeNull();
+    const open = el.querySelector('[data-magnet-open]')!;
+    expect(open.textContent).toBe('Добавить по magnet-ссылке');
+    expect(open.getAttribute('aria-expanded')).toBe('false');
+    expect(el.querySelector('form')!.compareDocumentPosition(open) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(open.compareDocumentPosition(el.querySelector('.m-results')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(Array.from(el.querySelectorAll('input')).map((i) => i.getAttribute('aria-label'))).toEqual(['Поиск по источникам']);
+  });
+
+  it('a tap on the link opens the magnet field in place; the category chips come once a valid link is entered', () => {
+    mount();
+    openMagnet();
+    expect(el.querySelector('[data-magnet-open]')).toBeNull();
+    const block = el.querySelector('[data-magnet-block]')!;
+    expect(block.compareDocumentPosition(el.querySelector('.m-results')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(Array.from(el.querySelectorAll('input')).map((i) => i.getAttribute('aria-label'))).toEqual(['Поиск по источникам', 'Magnet-ссылка или хеш']);
+    expect(block.querySelector('[data-magnet-row]')!.textContent).toBe('Добавить');
+    expect(el.querySelector('[data-magnet-category]')).toBeNull();
+    expect(byText('Прочее')).toBeUndefined();
+    type(MAGNET, 'nope');
+    expect(el.querySelector('[data-magnet-category]')).toBeNull();
+    type(MAGNET, HASH);
+    expect(el.querySelector('[data-magnet-category]')).toBeTruthy();
+    expect(byText('Прочее')).toBeTruthy();
+    // the «Поделиться» hint: one muted line under the magnet row
+    expect(block.textContent).toContain('Ссылки magnet из браузера открываются в OMP сами — через «Поделиться».');
+  });
+
+  it('a shared link opens the screen with the magnet field already open', () => {
+    mount(M);
+    expect(el.querySelector('[data-magnet-open]')).toBeNull();
+    expect((el.querySelector(MAGNET) as HTMLInputElement).value).toBe(M);
+    expect(el.querySelector('[data-magnet-category]')).toBeTruthy();
+  });
+
+  it('a link arriving while the screen is open opens the field', () => {
+    mount();
+    expect(el.querySelector(MAGNET)).toBeNull();
+    act(() => render(<Add link={M} />, el));
+    expect((el.querySelector(MAGNET) as HTMLInputElement).value).toBe(M);
+  });
+
   it('a pick is forgotten when the link is replaced by a different one', async () => {
     const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
     mount();
-    type('input', M + '&dn=Show+S01E02');
+    openMagnet();
+    type(MAGNET, M + '&dn=Show+S01E02');
     click(byText('Прочее'));
-    type('input', 'magnet:?xt=urn:btih:' + 'b'.repeat(40) + '&dn=Show+S01E03');
+    type(MAGNET, 'magnet:?xt=urn:btih:' + 'b'.repeat(40) + '&dn=Show+S01E03');
     click(byText('Добавить'));
     await flush();
     expect(add.mock.calls[0][0].category).toBe('tv');
   });
 
-  it('search result category can be changed through the sheet', async () => {
+  it('search result category can be changed in the card details', async () => {
     vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
     const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
     mount();
     search('x');
     await flush();
-    expect(byLabel('Категория: Сериалы').length).toBe(2);
-    click(byLabel('Категория: Сериалы')[0]);
-    click(el.querySelector('.m-sheet')!.querySelectorAll('button')[3]);
-    expect(byLabel('Категория: Музыка').length).toBe(1);
+    openDetails(1);
+    expect(detailsCategory()).toBe('Сериалы');
+    closeDetails();
+    openDetails(0);
+    expect(detailsCategory()).toBe('Сериалы');
+    click(detailsChip('Музыка'));
+    expect(detailsCategory()).toBe('Музыка');
+    closeDetails();
+    openDetails(1);
+    expect(detailsCategory()).toBe('Сериалы');
+    closeDetails();
     click(byLabel('Добавить на сервер')[0]);
     await flush();
     expect(add).toHaveBeenCalledWith({ link: M, title: 'Starbound Frontier S02', category: 'music' });
@@ -502,7 +569,7 @@ describe('Add unified search', () => {
     mount();
     search('x');
     await flush();
-    const titles = () => Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+    const titles = () => Array.from(el.querySelectorAll('.m-result-card')).map((n) => n.getAttribute('data-title'));
     expect(titles()).toEqual(['Small 2160p', 'Old 720p', 'Big 1080p']);
     pickFilter('1080p');
     expect(titles()).toEqual(['Big 1080p']);
@@ -539,7 +606,7 @@ describe('Add unified search: stable rows', () => {
   function row(p: Partial<SourceResult>): SourceResult {
     return { Title: 'Film 1080p', Categories: '', Size: '18 GB', CreateDate: '', Tracker: 'F', Link: '', Magnet: '', Hash: '', Peer: 0, Seed: 10, source: 'fake', ...p };
   }
-  const titles = () => Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+  const titles = () => Array.from(el.querySelectorAll('.m-result-card')).map((n) => n.getAttribute('data-title'));
   let late: (v: SourceResult[]) => void = () => {};
 
   beforeEach(() => {
@@ -624,8 +691,10 @@ describe('Add unified search: stable rows', () => {
     mount();
     search('x');
     await flush();
-    click(byLabel('Категория: Фильмы')[0]);
-    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === 'Музыка')!);
+    openDetails(0);
+    expect(detailsCategory()).toBe('Фильмы');
+    click(detailsChip('Музыка'));
+    closeDetails();
     click(byLabel('Добавить на сервер')[0]);
     await flush();
     expect(el.textContent).toContain('Получаю ссылку…');
@@ -634,8 +703,10 @@ describe('Add unified search: stable rows', () => {
     expect(el.querySelectorAll('.m-result')).toHaveLength(1);
     expect(el.querySelector('.m-src-badge')!.textContent).toBe('Фейк-2');
     expect(el.textContent).toContain('Получаю ссылку…');
-    expect(byLabel('Категория: Музыка')).toHaveLength(1);
     expect((byLabel('Добавить на сервер')[0] as HTMLButtonElement).disabled).toBe(true);
+    openDetails(0);
+    expect(detailsCategory()).toBe('Музыка');
+    closeDetails();
     give('https://f.example/dl/1');
     await flush();
     expect(add).toHaveBeenCalledTimes(1);
@@ -693,10 +764,68 @@ describe('Add unified search: stable rows', () => {
     mount();
     search('x');
     await flush();
-    const labels = Array.from(el.querySelectorAll('.m-result-actions button')).map((b) => b.getAttribute('aria-label'));
+    const labels = Array.from(el.querySelectorAll('.m-result-card button')).map((b) => b.getAttribute('aria-label'));
     expect(new Set(labels).size).toBe(labels.length);
     expect(labels).toContain('Добавить на сервер: One 1080p');
     expect(labels).toContain('Добавить и смотреть на ТВ: Two 1080p');
+    expect(labels).toContain('Подробнее: Two 1080p');
+  });
+
+  it('a compact card: no big buttons or category inline, round «＋» / «▶ ТВ»; details hold the rest', async () => {
+    const open = vi.fn();
+    vi.stubGlobal('open', open);
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    registerSource({
+      id: 'fake',
+      name: 'Фейк',
+      kind: 'builtin',
+      search: () => Promise.resolve([row({ Title: 'Дюна / Dune (2021) WEB-DL 1080p MVO', Magnet: 'magnet:?xt=urn:btih:' + HASH, detailUrl: 'https://f.example/1' })]),
+    });
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount();
+    search('x');
+    await flush();
+    const card = el.querySelector('.m-result-card')!;
+    expect(card.querySelector('.m-btn')).toBeNull();
+    expect(card.querySelector('.m-chip')).toBeNull();
+    expect(card.querySelector('.m-raw-title')).toBeNull();
+    const round = Array.from(card.querySelectorAll('.m-rc-btn'));
+    expect(round.map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Добавить на сервер: Дюна / Dune (2021) WEB-DL 1080p MVO',
+      'Добавить и смотреть на ТВ: Дюна / Dune (2021) WEB-DL 1080p MVO',
+    ]);
+    expect(round[1].classList.contains('m-rc-btn-tv')).toBe(true);
+    expect(el.querySelector('[role=dialog]')).toBeNull();
+    openDetails(0);
+    const sheet = el.querySelector('[role=dialog]')!;
+    expect(sheet.getAttribute('aria-label')).toBe('Подробнее');
+    expect(sheet.querySelector('[data-raw-title]')!.textContent).toBe('Дюна / Dune (2021) WEB-DL 1080p MVO');
+    expect(detailsCategory()).toBe('Фильмы');
+    click(Array.from(sheet.querySelectorAll('button')).find((b) => b.textContent === 'Открыть на сайте')!);
+    expect(open).toHaveBeenCalledWith('https://f.example/1', '_system');
+    // the full «Добавить» of the sheet goes the same way as the round «＋» and closes the sheet
+    click(Array.from(sheet.querySelectorAll('.m-btn')).find((b) => b.textContent === 'Добавить')!);
+    await flush();
+    expect(el.querySelector('[role=dialog]')).toBeNull();
+    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, title: expect.any(String), category: 'movie' });
+    expect(toast.value).toBe('Добавлено на сервер');
+    expect(launch).not.toHaveBeenCalled();
+    openDetails(0);
+    click(Array.from(el.querySelectorAll('[role=dialog] .m-btn')).find((b) => b.textContent === 'На ТВ')!);
+    await flush();
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: HASH });
+  });
+
+  it('no «Открыть на сайте» without a page link', async () => {
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([row({ Title: 'Film 1080p', detailUrl: '', Magnet: 'magnet:?xt=urn:btih:' + HASH })]) });
+    mount();
+    search('x');
+    await flush();
+    openDetails(0);
+    expect(el.querySelector('[role=dialog]')!.textContent).not.toContain('Открыть на сайте');
   });
 });
 
@@ -768,12 +897,19 @@ describe('Add in English', () => {
   it('screen chrome, search sheets and the subscribe plate', async () => {
     registerSource({ id: 'fake', name: 'Fake', kind: 'builtin', search: () => Promise.resolve([]) });
     mount();
-    expect(el.querySelector('h1')!.textContent).toBe('Add');
-    expect(byText('Add')).toBeTruthy();
-    expect(el.textContent).toContain('Category');
+    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Add');
+    expect(el.textContent).not.toContain('Category');
     expect(el.textContent).toContain('Search in sources');
+    expect(el.querySelector('[data-magnet-open]')!.textContent).toBe('Add by magnet link');
+    click(el.querySelector('[data-magnet-open]')!);
+    expect(byText('Add')).toBeTruthy();
     expect(el.textContent).toContain('Magnet links from the browser open in OMP on their own — via “Share”.');
-    expect(el.querySelector('input[aria-label="Magnet link or hash"]')).toBeTruthy();
+    const magnet = el.querySelector<HTMLInputElement>('input[aria-label="Magnet link or hash"]')!;
+    expect(magnet.placeholder).toBe('Magnet link or hash');
+    type('input[aria-label="Magnet link or hash"]', HASH);
+    expect(el.querySelector('[data-magnet-category]')!.getAttribute('aria-label')).toBe('Category');
+    expect(el.querySelector('[data-magnet-category]')!.textContent).toContain('Category:');
+    type('input[aria-label="Magnet link or hash"]', '');
     expect(el.querySelector<HTMLInputElement>('input[type=search]')!.placeholder).toBe('Name');
     expect(byText('All sources · 1')).toBeTruthy();
     click(byText('All sources · 1'));

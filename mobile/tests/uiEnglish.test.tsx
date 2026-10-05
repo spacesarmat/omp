@@ -140,12 +140,16 @@ describe('phone shared UI in English', () => {
   it('ResultCard', () => {
     const r: SourceResult = {
       Title: 'Dune', Categories: '', Size: '41 GB', CreateDate: '', Tracker: '', Link: '', Magnet: '', Hash: '', Peer: 0, Seed: 12, source: 'fake',
-      sources: ['one', 'two'],
+      sources: ['one', 'two'], detailUrl: 'https://example.org/t/1',
     } as SourceResult;
     mount(<ResultCard r={r} category="movie" busy="link" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />);
     expect(text()).toContain('Getting the link…');
-    expect(buttons()).toEqual(expect.arrayContaining(['Add', 'On TV']));
-    expect(labels()).toEqual(expect.arrayContaining(['Add to the server: Dune', 'Add and watch on TV: Dune']));
+    expect(labels()).toEqual(expect.arrayContaining(['Add to the server: Dune', 'Add and watch on TV: Dune', 'Details: Dune']));
+    expect(el.innerHTML).not.toMatch(CYR);
+    act(() => (el.querySelector('.m-rc-open') as HTMLElement).click());
+    expect(el.querySelector('[role=dialog]')!.getAttribute('aria-label')).toBe('More');
+    expect(buttons()).toEqual(expect.arrayContaining(['Add', 'On TV', 'Open on the site', 'Movies']));
+    expect(text()).toContain('Category');
     expect(text()).toContain('also in');
     expect(el.innerHTML).not.toMatch(CYR);
   });
@@ -215,7 +219,7 @@ describe('phone shared UI in English', () => {
     reloadTvs();
   });
 
-  it('useResultRows: the category sheet', () => {
+  it('useResultRows: the category in the card details', () => {
     const r = { Title: 'Dune', Categories: '', Size: '41 GB', CreateDate: '', Tracker: '', Link: '', Magnet: '', Hash: '', Peer: 0, Seed: 12, source: 'fake' } as SourceResult;
     function Rows() {
       const rows = useResultRows();
@@ -227,9 +231,12 @@ describe('phone shared UI in English', () => {
       );
     }
     mount(<Rows />);
-    act(() => (el.querySelector('.m-chip') as HTMLElement).click());
-    expect(el.querySelector('[role=dialog]')!.getAttribute('aria-label')).toBe('Category');
-    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Category');
+    act(() => (el.querySelector('.m-rc-open') as HTMLElement).click());
+    expect(el.querySelector('[role=dialog]')!.getAttribute('aria-label')).toBe('More');
+    expect(el.querySelector('[data-result-details] [role=group]')!.getAttribute('aria-label')).toBe('Category');
+    const chips = () => Array.from(el.querySelectorAll('[data-result-details] .m-chip')) as HTMLElement[];
+    act(() => chips().find((c) => c.textContent === 'Music')!.click());
+    expect(chips().filter((c) => c.getAttribute('aria-pressed') === 'true').map((c) => c.textContent)).toEqual(['Music']);
     expect(el.innerHTML).not.toMatch(CYR);
   });
 });

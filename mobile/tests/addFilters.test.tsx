@@ -43,7 +43,7 @@ const buttons = (root: ParentNode = el) => Array.from(root.querySelectorAll('but
 const click = (n: Element) => act(() => (n as HTMLElement).click());
 const filtersChip = () => buttons().find((b) => b.getAttribute('aria-haspopup') === 'dialog' && /^(Фильтры|Filters)/.test(b.textContent || ''))!;
 const sheetBtn = (text: string) => buttons(el.querySelector('.m-sheet')!).find((b) => b.textContent === text)!;
-const titles = () => Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+const titles = () => Array.from(el.querySelectorAll('.m-result-card')).map((n) => n.getAttribute('data-title'));
 
 function search(q: string) {
   const i = el.querySelector('input[type=search]') as HTMLInputElement;

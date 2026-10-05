@@ -14,6 +14,8 @@ import { sanitizeSourcePrefs } from '../../../src/sources/store';
 import { sanitizeIndexers } from '../../../src/sources/indexerStore';
 import { sanitizeFlare } from '../../../src/sources/flareStore';
 import { sanitizeFilters } from '../../../src/sources/filters';
+import { sanitizeDiscoverQuery } from '../../../src/catalog/discoverQuery';
+import { isDiscoverCols } from '../screens/catalog/discoverCols';
 import { sanitizeSubs } from '../../../src/monitor/subs';
 import { sanitizeMonitorSettings } from '../../../src/monitor/settings';
 import { sanitizeTvs } from '../tv/tvStore';
@@ -106,7 +108,9 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.trackPrefs', clean: (v) => cleanMap(v, sanitizeTrackPrefs(v)) },
   // «Каталог»: the «Мои / Обзор» switch and the «Обзор» posters per row
   { key: 'tsp.catalogMode', clean: (v) => (v === 'mine' || v === 'discover' ? v : undefined) },
-  { key: 'tsp.discoverCols', clean: (v) => (v === 2 || v === 3 ? v : undefined) },
+  { key: 'tsp.discoverCols', clean: (v) => (isDiscoverCols(v) ? v : undefined) },
+  // «Обзор»: the sort and the filters
+  { key: 'tsp.discoverQuery', clean: (v) => (isObject(v) ? sanitizeDiscoverQuery(v) : undefined) },
   // «Добавить»: the search filters; «Подписки»: the sort (SUBS_SORTS); the torrent screen: «не открывать»
   { key: 'tsp.searchFilters', clean: (v) => (isObject(v) ? sanitizeFilters(v) : undefined) },
   { key: 'tsp.subsSort', clean: (v) => (v === 'fresh' || v === 'name' || v === 'added' ? v : undefined) },

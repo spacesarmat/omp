@@ -37,6 +37,7 @@ import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
 import { fmtSize, t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
+import { ScreenHeader } from '../ui/ScreenHeader';
 
 type Checker = (o: { manual: boolean; url?: string }) => Promise<CheckResult>;
 let checker: Checker | null = null;
@@ -321,7 +322,7 @@ export function Settings() {
 
   return (
     <div class="m-screen" data-route="settings">
-      <h1>{t('common.settings')}</h1>
+      <ScreenHeader title={t('common.settings')} />
       {/* updates first: the version and the check are what people look for most here */}
       <section class="m-set-group">
         <div class="m-set-label">{t('update.sheetLabel')}</div>

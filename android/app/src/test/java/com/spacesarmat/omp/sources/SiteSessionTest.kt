@@ -102,6 +102,52 @@ class SiteSessionTest {
     }
 
     @Test
+    fun loginNavigationRefusesAdClickThroughs() {
+        val nnm = listOf("nnmclub.to")
+        // the click-under ad of NNM-Club's login page: refused, its frames and scripts answered empty
+        assertFalse(LoginNavigation.allowed(nnm, "under.nnmclub.to", "/clicks/aHR0cHM6Ly9leGFtcGxlLmNvbQ=="))
+        assertTrue(LoginNavigation.ad(nnm, "under.nnmclub.to", "/clicks/aHR0cHM6Ly9leGFtcGxlLmNvbQ=="))
+        assertFalse(LoginNavigation.allowed(nnm, "under.nnmclub.to", "/"))
+        assertTrue(LoginNavigation.ad(nnm, "under.nnmclub.to", "/x.js"))
+        // a /clicks/ path is an ad on the site's own host too
+        assertFalse(LoginNavigation.allowed(nnm, "nnmclub.to", "/clicks/abc"))
+        assertTrue(LoginNavigation.ad(nnm, "nnmclub.to", "/clicks/abc"))
+        // the login page, its www. form and the check page
+        assertTrue(LoginNavigation.allowed(nnm, "nnmclub.to", "/forum/login.php"))
+        assertFalse(LoginNavigation.ad(nnm, "nnmclub.to", "/forum/login.php"))
+        assertTrue(LoginNavigation.allowed(nnm, "www.nnmclub.to", "/forum/index.php"))
+        assertTrue(LoginNavigation.allowed(nnm, "NNMCLUB.TO.", "/forum/login.php"))
+        assertTrue(LoginNavigation.allowed(listOf("rutracker.org"), "rutracker.org", "/forum/login.php"))
+        assertTrue(LoginNavigation.allowed(listOf("rutracker.org"), "www.rutracker.org", "/forum/login.php"))
+        // a host sent in its www. form allows the bare one
+        assertTrue(LoginNavigation.allowed(listOf("www.bigfangroup.org"), "bigfangroup.org", "/login.php"))
+        // every mirror passes, a deeper subdomain does not
+        val kinozal = listOf("kinozal.me", "kinozal.guru", "kinozal.tv")
+        for (h in kinozal) {
+            assertTrue(LoginNavigation.allowed(kinozal, h, "/login.php"))
+            assertTrue(LoginNavigation.allowed(kinozal, "www.$h", "/takelogin.php"))
+        }
+        assertFalse(LoginNavigation.allowed(kinozal, "dl.kinozal.tv", "/"))
+        assertTrue(LoginNavigation.allowed(listOf("rustorka.com"), "rustorka.com", "/forum/login.php"))
+        assertFalse(LoginNavigation.allowed(listOf("rustorka.com"), "ads.rustorka.com", "/forum/login.php"))
+        // captcha pages still pass; reCAPTCHA only under /recaptcha/
+        assertTrue(LoginNavigation.allowed(nnm, "challenges.cloudflare.com", "/cdn-cgi/challenge-platform/h/b"))
+        assertTrue(LoginNavigation.allowed(nnm, "hcaptcha.com", "/checkcaptcha"))
+        assertTrue(LoginNavigation.allowed(nnm, "newassets.hcaptcha.com", "/captcha/v1"))
+        assertTrue(LoginNavigation.allowed(nnm, "www.recaptcha.net", "/recaptcha/api2/anchor"))
+        assertTrue(LoginNavigation.allowed(nnm, "google.com", "/recaptcha/api2/bframe"))
+        assertFalse(LoginNavigation.allowed(nnm, "www.google.com", "/"))
+        assertFalse(LoginNavigation.allowed(nnm, "recaptcha.net", "/other"))
+        assertFalse(LoginNavigation.allowed(nnm, "www.google.com", "/url?q=recaptcha/"))
+        // other hosts are never ads (a CDN, the captcha scripts load as usual) and never pages
+        assertFalse(LoginNavigation.ad(nnm, "cdn.example", "/clicks/x"))
+        assertFalse(LoginNavigation.ad(nnm, "www.gstatic.com", "/recaptcha/x.js"))
+        assertFalse(LoginNavigation.ad(nnm, null, "/clicks/x"))
+        assertFalse(LoginNavigation.allowed(nnm, "evilnnmclub.to", "/forum/login.php"))
+        assertFalse(LoginNavigation.allowed(nnm, "", "/"))
+    }
+
+    @Test
     fun verifierSendsOnlyTheSessionWithItsUserAgent() {
         val server = MockWebServer()
         server.enqueue(MockResponse().setBody("<a href=\"logout.php?hash4u=9\">Выход</a>"))

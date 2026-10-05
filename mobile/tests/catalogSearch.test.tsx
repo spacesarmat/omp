@@ -21,6 +21,7 @@ function fake(impl?: Search) {
   const search = vi.fn<Search>(impl || (() => Promise.resolve({ items: [MOVIE, SHOW], pages: 1 })));
   setCatalogClientForTests({
     novelties: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
+    discover: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
     search,
     card: vi.fn(() => Promise.reject(new Error('x'))),
   });

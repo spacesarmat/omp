@@ -5,8 +5,10 @@ import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { Icon, ICONS } from '../ui/Icon';
 import { SubSheet } from '../ui/SubSheet';
+import { HeadButton, ScreenHeader } from '../ui/ScreenHeader';
 import { ReplaceSheet, libraryTorrentOf } from '../ui/ReplaceSheet';
 import { useResultRows } from '../ui/useResultRows';
+import { RawTitle, ReleaseChips, ResultThumb } from '../ui/ReleaseRow';
 import { navigate } from '../nav';
 import { monitorNative } from '../monitor/native';
 import { askNotifyOnce, lastCheck, monitorDoneCount, monitorVersion, reloadMonitor, useMonitorStatus } from '../monitor/ui';
@@ -350,9 +352,15 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
         const hl = !!finding && f.key === finding;
         return (
           <div key={f.key} class={'m-ep-card' + (hl ? ' m-hl' : '')} data-highlight={hl ? '' : undefined}>
-            <div class="m-ep-card-title">{shortTitle(e.torrentTitle) + ' · ' + t('library.season', { n: e.season })}</div>
-            <div class="m-accent m-small">{episodesLine(e, have && have.from !== undefined ? have.from : 1)}</div>
-            <div class="m-muted m-small">{f.result.Title}</div>
+            <div class="m-rel-top">
+              <ResultThumb title={e.torrentTitle} poster={tor ? tor.poster : undefined} />
+              <div class="m-rel-text">
+                <div class="m-ep-card-title">{shortTitle(e.torrentTitle) + ' · ' + t('library.season', { n: e.season })}</div>
+                <div class="m-accent m-small">{episodesLine(e, have && have.from !== undefined ? have.from : 1)}</div>
+                <ReleaseChips raw={f.result.Title} />
+                <RawTitle raw={f.result.Title} />
+              </div>
+            </div>
             {hl && prompt && (
               <WatchPrompt title={shortTitle(f.result.Title)} onDismiss={() => setPrompt(false)} onWatch={() => replaceAndWatch(f)} />
             )}
@@ -386,11 +394,17 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       {better.map((f) => {
         const name = shortTitle(f.better!.torrentTitle);
         const hl = !!finding && f.key === finding;
+        const tor = libraryTorrentOf(f);
         return (
           <div key={f.key} class={'m-ep-card' + (hl ? ' m-hl' : '')} data-better="" data-highlight={hl ? '' : undefined}>
-            <div class="m-ep-card-title">{name}</div>
-            <div class="m-accent m-small">{betterLine(f.better!)}</div>
-            <div class="m-muted m-small">{f.result.Title}</div>
+            <div class="m-rel-top">
+              <ResultThumb title={f.better!.torrentTitle} poster={tor ? tor.poster : undefined} />
+              <div class="m-rel-text">
+                <div class="m-ep-card-title">{name}</div>
+                <div class="m-accent m-small">{betterLine(f.better!)}</div>
+                <RawTitle raw={f.result.Title} />
+              </div>
+            </div>
             {hl && prompt && (
               <WatchPrompt title={shortTitle(f.result.Title)} onDismiss={() => setPrompt(false)} onWatch={() => replaceAndWatch(f)} />
             )}
@@ -413,7 +427,7 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       <div class="m-muted m-small">{settings.better ? t('news.betterOn') : t('news.betterOff')}</div>
       <button type="button" class="m-set-row m-set-pick m-news-monitor" data-monitor-row onClick={() => navigate({ name: 'monitor' })}>
         <span class="m-news-monitor-l">
-          <Icon d={ICONS.settings} size={20} />
+          <Icon d={ICONS.monitor} size={20} />
           <span>{t('news.monitorSettings')}</span>
         </span>
         <span class="m-muted" aria-hidden="true">›</span>
@@ -474,19 +488,14 @@ export function News({ seg, finding, watch }: { seg?: Seg; finding?: string; wat
 
   return (
     <div class="m-screen" data-route="news">
-      <div class="m-lib-head">
-        <h1 class="m-lib-brand">{t('news.title')}</h1>
+      <ScreenHeader title={t('news.title')}>
         {current === 'subs' ? (
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={running} onClick={runNow}>
-            {t('news.checkNow')}
-          </button>
+          <HeadButton d={ICONS.refresh} label={t('news.checkNow')} disabled={running} spin={running} data={{ 'data-check-now': '' }} onClick={runNow} />
         ) : (
           <TvChip />
         )}
-        <button type="button" class="m-icon-btn" data-monitor-gear aria-label={t('news.monitorSettings')} onClick={() => navigate({ name: 'monitor' })}>
-          <Icon d={ICONS.settings} />
-        </button>
-      </div>
+        <HeadButton d={ICONS.monitor} label={t('news.monitorSettings')} data={{ 'data-monitor-gear': '' }} onClick={() => navigate({ name: 'monitor' })} />
+      </ScreenHeader>
       <div class="m-seg" role="tablist" aria-label={t('news.title')}>
         <button type="button" role="tab" aria-selected={current === 'feed'} class={current === 'feed' ? 'on' : ''} onClick={() => pick('feed')}>
           {t('news.feed')}

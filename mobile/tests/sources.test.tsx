@@ -87,7 +87,10 @@ describe('Sources screen', () => {
     expect(sw('rutor (поиск TorrServer)')).toBeTruthy();
     expect(sw('Jackett / Prowlarr (Torznab)')).toBeTruthy();
     expect(sw('nnmclub')).toBeTruthy();
-    expect(el.textContent).toContain('Войдите на нём через браузер (кнопка «Войти» у сайта в «Источниках поиска») или подключите его через Jackett, Prowlarr или FlareSolverr');
+    const general = el.querySelector('[data-hint="general"]') as HTMLElement;
+    expect(general.textContent).toContain('Сайт закрыт проверкой Cloudflare? Войдите на нём через браузер или подключите Jackett, Prowlarr или FlareSolverr.');
+    // the FAQ link is the app's accent link
+    expect(btn('Вопросы и ответы')!.className).toBe('m-link-btn');
     click(btn('Вопросы и ответы')!);
     expect(currentRoute.value).toEqual({ name: 'faq' });
   });

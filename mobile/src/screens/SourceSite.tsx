@@ -18,7 +18,8 @@ import { allSources } from '../../../src/sources/registry';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { activeTv, isAtv } from '../tv/tvStore';
 import { holdSignInScreen } from '../cloudflare';
-import { cloudflareNotSent, sendTransfer, sessionsNotSent, sessionsText, siteLoginsText, sitesNotSent } from './Sources';
+import { cloudflareNotSent, rutrackerNotStored, sendTransfer, sentText, sessionsNotSent, sessionsText, siteLoginsText, sitesNotSent } from './Sources';
+import { rutrackerSavedLogin } from '../../../src/sources/rutracker';
 
 export const siteLoginNote = (): string => t('sources.screen.loginNote');
 export const siteLoginNoteOptional = (): string => t('sources.screen.loginNoteOptional');
@@ -135,16 +136,24 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
   };
 
   const tv = activeTv.value;
-  const canSend = !!logged && (browser ? SESSION_SITES : LOGIN_SITES).indexOf(source.id) >= 0 && !!tv && isAtv(tv) && !!tv.token;
+  // rutracker's password login travels in the payload's own `rutracker` part, the other sites' in `logins`
+  const rutracker = source.id === 'rutracker';
+  const canSend = !!logged && (browser ? SESSION_SITES : LOGIN_SITES.concat(['rutracker'])).indexOf(source.id) >= 0 && !!tv && isAtv(tv) && !!tv.token;
 
   const send = () => {
     if (sending) return;
     setSending(true);
+    const secrets = ctx().secrets;
     // a browser session: its cookies are added natively; a password login: the login itself
     const prepared = browser
       ? transferSessions(allSources(), ctx(), [source.id]).then((sessions) => {
           if (!sessions[source.id]) throw new Error(t('sources.screen.readFailed', { name: source.name }));
           return sendTransfer(null, [], {}, { list: [source], flare: null }, sessions);
+        })
+      : rutracker
+      ? (secrets ? rutrackerSavedLogin(secrets) : Promise.resolve(null)).then((login) => {
+          if (!login) throw new Error(t('sources.screen.readFailed', { name: source.name }));
+          return sendTransfer(login, [], {}, { list: [source], flare: null });
         })
       : transferLogins(allSources(), ctx(), [source.id]).then((logins) => {
           if (!logins[source.id]) throw new Error(t('sources.screen.readFailed', { name: source.name }));
@@ -154,11 +163,13 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
     prepared
       .then(
         ({ r, droppedNote, cloudflareDropped, sitesDropped, sessionsDropped }) => {
-          const result = browser ? (r.sessions ? r.sessions[source.id] : undefined) : r.logins ? r.logins[source.id] : undefined;
+          const result = browser ? (r.sessions ? r.sessions[source.id] : undefined) : rutracker ? r.rutracker : r.logins ? r.logins[source.id] : undefined;
           log(result === 'ok' ? 'info' : 'warn', 'tv', t('sources.send.logLoginSent', { id: source.id, res: result || t('sources.send.logNoReply') }));
           if (alive.current) setSending(false);
           const notes = [
             droppedNote,
+            r.rutrackerNotStored ? rutrackerNotStored() : '',
+            rutracker && !browser && r.rutracker && r.rutracker !== 'ok' ? sentText(r.rutracker) : '',
             sitesDropped ? sitesNotSent() : '',
             cloudflareDropped ? cloudflareNotSent() : '',
             sessionsDropped ? sessionsNotSent() : '',

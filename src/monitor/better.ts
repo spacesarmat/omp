@@ -58,28 +58,42 @@ interface Ranked {
   i: number;
 }
 
-/** The best better release of the same film among `results`, or null. */
-export function pickBetter(t: LibraryTorrent, results: SourceResult[]): BetterRelease | null {
+/** Best first: the highest qualityRank, then the most seeds, then the order of `list`. */
+export function rankReleases(list: SourceResult[]): SourceResult[] {
+  const ranked: Ranked[] = list.map((r, i) => ({ r, rank: qualityRank(r.Title), i }));
+  ranked.sort((a, b) => b.rank - a.rank || (b.r.Seed || 0) - (a.r.Seed || 0) || a.i - b.i);
+  return ranked.map((x) => x.r);
+}
+
+/**
+ * Releases of the same film among `results` in a better quality than the library torrent, best first: the same name,
+ * the year ±1 (required when the library title has one), a film (not a series or a soundtrack), not the torrent itself.
+ */
+export function betterFilmReleases(t: LibraryTorrent, results: SourceResult[]): SourceResult[] {
   const title = displayTitle(t);
   const names = seriesNames(title);
-  if (!names.length) return null;
+  if (!names.length) return [];
   const haveYear = yearOf(title);
   const hash = (t.hash || '').toLowerCase();
-  const list: Ranked[] = [];
-  results.forEach((r, i) => {
-    if (hash && r.hash === hash) return;
-    // a series or a soundtrack of the same name is not the film
-    if (guessCategory(r.Title) !== 'movie') return;
-    // without a year a remake cannot be told apart: when the library title has one, the candidate needs it too
-    const year = yearOf(r.Title);
-    if (haveYear !== null && (year === null || Math.abs(year - haveYear) > 1)) return;
-    if (!seriesNames(r.Title).some((n) => names.indexOf(n) >= 0)) return;
-    if (!isBetter(r.Title, title)) return;
-    list.push({ r, rank: qualityRank(r.Title), i });
-  });
+  return rankReleases(
+    results.filter((r) => {
+      if (hash && r.hash === hash) return false;
+      // a series or a soundtrack of the same name is not the film
+      if (guessCategory(r.Title) !== 'movie') return false;
+      // without a year a remake cannot be told apart: when the library title has one, the candidate needs it too
+      const year = yearOf(r.Title);
+      if (haveYear !== null && (year === null || Math.abs(year - haveYear) > 1)) return false;
+      if (!seriesNames(r.Title).some((n) => names.indexOf(n) >= 0)) return false;
+      return isBetter(r.Title, title);
+    }),
+  );
+}
+
+/** The best better release of the same film among `results`, or null. */
+export function pickBetter(t: LibraryTorrent, results: SourceResult[]): BetterRelease | null {
+  const list = betterFilmReleases(t, results);
   if (!list.length) return null;
-  list.sort((a, b) => b.rank - a.rank || (b.r.Seed || 0) - (a.r.Seed || 0) || a.i - b.i);
-  return { torrentHash: hash, rank: list[0].rank, candidate: list[0].r, others: list.slice(1).map((x) => x.r) };
+  return { torrentHash: (t.hash || '').toLowerCase(), rank: qualityRank(list[0].Title), candidate: list[0], others: list.slice(1) };
 }
 
 interface Outcome {

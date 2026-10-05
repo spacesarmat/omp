@@ -15,11 +15,17 @@ export const ICONS = {
   'view-compact': 'M3 6h18M3 12h18M3 18h18',
   settings: 'M4 7h10M18 7h2M4 17h4M12 17h8M14 7a2 2 0 1 0 4 0a2 2 0 1 0-4 0M8 17a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
   volume: 'M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7',
+  /** «Новое» → monitoring settings: a bell with a small gear (not the sliders of the «Настройки» tab) */
+  monitor: 'M4 10a5 5 0 0 1 10 0c0 4 1.5 5 1.5 5H2.5S4 14 4 10M7.5 19a1.5 1.5 0 0 0 3 0M17 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0M19 14.5V16M19 20v1.5M15.5 18H17M21 18h1.5',
+  refresh: 'M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5',
+  /** a season still to come (the series screen) */
+  clock: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 7v5l3 2',
 };
 
-export function Icon({ d, size = 22 }: { d: string; size?: number }) {
+export function Icon({ d, size = 22, spin }: { d: string; size?: number; spin?: boolean }) {
   return (
     <svg
+      class={spin ? 'm-spin' : undefined}
       width={size}
       height={size}
       viewBox="0 0 24 24"

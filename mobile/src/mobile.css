@@ -1,5 +1,6 @@
 :root {
   --m-nav-h: 78px;
+  --m-nav-reserve: var(--m-nav-h);
   --m-mini-h: 64px;
   --bg: #0F1115;
   --panel: #181B22;
@@ -22,7 +23,7 @@ h1, h2 { font-family: 'Unbounded', 'Manrope', sans-serif; font-weight: 600; }
 
 .m-screen {
   min-height: 100vh;
-  padding: env(safe-area-inset-top) 16px 96px;
+  padding: env(safe-area-inset-top) 16px calc(var(--m-nav-reserve) + 24px + env(safe-area-inset-bottom));
 }
 
 button, .m-btn {
@@ -34,6 +35,7 @@ button, .m-btn {
 
 .m-nav {
   position: fixed;
+  z-index: 10;
   left: 0;
   right: 0;
   bottom: 0;
@@ -293,6 +295,11 @@ button, .m-btn {
 }
 .m-badge.static { position: static; }
 .m-badges { display: flex; gap: 6px; }
+.m-thead .m-badge { background: #252A35; }
+.m-thead-chips { margin-bottom: 0; }
+.m-chip.dim { opacity: .6; }
+.m-ep-min { font-weight: 400; }
+.m-ep-sub { overflow-wrap: anywhere; }
 
 /* history */
 .m-hrow { display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 14px; background: var(--panel); }
@@ -321,6 +328,65 @@ button, .m-btn {
 .m-seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--panel); }
 .m-seg-btn { flex: 1 1 0; min-height: 40px; border: none; border-radius: 10px; background: none; color: var(--muted); font-size: 15px; font-weight: 700; }
 .m-seg-btn.on { background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 2px var(--accent); }
+/* «Каталог» → compact top (v0.17): the small logo, a 36px «Мои | Обзор» switch and the icon buttons share one 44px row;
+   the switch buttons stay 44px tall for the finger, their pill and the track are drawn 30 / 36px tall */
+.m-library { gap: 12px; }
+/* no gaps: the 44px icon buttons sit edge to edge, which leaves the switch room for «Discover» on a 360px phone */
+.m-library .m-lib-head { gap: 0; }
+.m-library .m-lib-head .m-lib-brand { margin-right: 6px; }
+.m-library .m-lib-head .m-seg {
+  position: relative;
+  z-index: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-right: auto;
+  gap: 0;
+  padding: 0 3px;
+  background: none;
+}
+.m-library .m-lib-head .m-seg::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 12px;
+  background: var(--panel);
+}
+.m-library .m-lib-head .m-seg-btn {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 9px;
+  background: none;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.m-library .m-lib-head .m-seg-btn.on { background: none; box-shadow: none; }
+.m-library .m-lib-head .m-seg-btn.on::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  top: 7px;
+  bottom: 7px;
+  border-radius: 9px;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+@media (max-width: 374px) {
+  .m-library .m-lib-head .m-seg-btn { padding: 0 7px; font-size: 12px; }
+}
+/* chips: 36px, tighter padding, still a horizontal scroller */
+.m-library .m-tab { min-height: 36px; height: 36px; padding: 0 12px; border-radius: 18px; font-size: 13px; }
 .m-discover { display: flex; flex-direction: column; gap: 14px; }
 .m-disc-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .m-disc-head h2 { margin: 0; font-size: 20px; font-weight: 700; }
@@ -334,6 +400,23 @@ button, .m-btn {
 .m-cols-3 .m-disc-badge { top: auto; bottom: 6px; }
 .m-cols-3 .m-card-title { font-size: 12px; line-height: 16px; }
 .m-disc-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 0; border: none; background: none; color: inherit; text-align: left; }
+/* the title: two lines at most, «…» on the second; the box is exactly two lines tall so no third line peeks out */
+.m-disc-tile .m-disc-title { flex: none; margin-top: 0; line-height: 19px; min-height: 38px; max-height: 38px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m-cols-3 .m-disc-tile .m-disc-title { line-height: 16px; min-height: 32px; max-height: 32px; }
+.m-disc-meta { flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* four per row (also carries m-cols-3): tighter gaps, smaller labels, a 14px two-line title clamp */
+.m-disc-grid.m-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 6px; }
+.m-cols-4 .m-disc-poster { border-radius: 8px; }
+.m-cols-4 .m-disc-ph { padding: 6px; font-size: 11px; }
+.m-cols-4 .m-disc-rating, .m-cols-4 .m-disc-badge { top: 4px; left: 4px; padding: 0 4px; font-size: 9px; }
+.m-cols-4 .m-disc-badge { top: auto; bottom: 4px; }
+.m-cols-4 .m-card-title { font-size: 11px; line-height: 14px; }
+.m-cols-4 .m-disc-tile { gap: 2px; }
+.m-cols-4 .m-disc-tile .m-disc-title { line-height: 14px; min-height: 28px; max-height: 28px; }
+.m-cols-4 .m-disc-meta { font-size: 10px; }
+.m-disc-empty { margin: 24px 0; text-align: center; }
+.m-disc-head .m-sort { align-self: center; }
+.m-disc-sort-opt.on { box-shadow: inset 0 0 0 2px var(--accent); }
 .m-disc-poster { position: relative; display: block; aspect-ratio: 2 / 3; overflow: hidden; border-radius: 14px; background: var(--panel); }
 .m-disc-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .m-disc-ph { display: flex; align-items: flex-end; width: 100%; height: 100%; box-sizing: border-box; padding: 12px; font-family: 'Unbounded', sans-serif; font-size: 16px; font-weight: 700; line-height: 1.15; color: rgba(255, 255, 255, 0.88); overflow-wrap: anywhere; }
@@ -424,7 +507,7 @@ button, .m-btn {
 }
 
 /* ---- torrent ---- */
-.m-torrent { padding: 0 0 96px; gap: 0; }
+.m-torrent { padding: 0 0 calc(var(--m-nav-reserve) + 24px + env(safe-area-inset-bottom)); gap: 0; }
 .m-thead { position: relative; height: 300px; padding: calc(env(safe-area-inset-top) + 24px) 16px 0; }
 .m-thead::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 17, 21, 0.1), var(--bg) 96%); }
 .m-thead-bar, .m-thead-info { position: relative; }
@@ -529,8 +612,8 @@ button, .m-btn {
   gap: 10px;
   min-height: 0;
   /* --m-remote-gap: room between the last row and the bottom menu / the mini-player */
-  height: calc(100vh - var(--m-nav-h) - var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
-  height: calc(100dvh - var(--m-nav-h) - var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
+  height: calc(100vh - var(--m-nav-reserve) -var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
+  height: calc(100dvh - var(--m-nav-reserve) -var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
   padding: calc(env(safe-area-inset-top) + 8px) 16px 0;
   /* safety valve: controls are never clipped on short screens, landscape or with the soft keyboard */
   overflow-x: hidden;
@@ -795,9 +878,47 @@ button, .m-btn {
 .m-src-badge { padding: 2px 8px; border-radius: 6px; background: #252A35; color: var(--text); font-weight: 700; }
 .m-result-actions { display: flex; align-items: center; gap: 8px; }
 .m-result-actions .m-btn { flex-shrink: 0; }
+.m-rel-top { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.m-rel-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.m-rel-thumb { width: 48px; min-width: 48px; height: 72px; border-radius: 8px; flex-shrink: 0; }
+.m-rel-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.m-raw-title { display: block; width: 100%; padding: 0; border: 0; background: none; text-align: left; font-family: inherit; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.m-raw-title.open { white-space: normal; overflow-wrap: anywhere; }
+/* the compact found-release card (Лента, search, findings): the poster down the card, three lines, the date with round ＋ / ▶ ТВ;
+   a tap on the card (a stretched button under the content) opens «Подробнее». ≤ 140 px tall. */
+.m-rc { position: relative; flex-direction: row; align-items: stretch; gap: 10px; padding: 10px 10px 10px 10px; }
+.m-rc-open { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: none; border-radius: inherit; background: none; }
+.m-rc > .m-rel-thumb { width: 64px; min-width: 64px; height: 96px; border-radius: 8px; pointer-events: none; }
+.m-rc-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; pointer-events: none; }
+.m-rc .m-result-title { font-size: 14px; line-height: 1.25; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.m-rc .m-rel-chips { flex-wrap: nowrap; overflow: hidden; }
+.m-rc .m-rel-chips .m-badge-inline { flex-shrink: 0; font-size: 10px; line-height: 14px; }
+.m-rc-meta { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; font-size: 12px; line-height: 16px; }
+.m-rc-meta .m-src-badge, .m-rc-meta .m-flag { flex-shrink: 0; padding: 0 6px; border-radius: 5px; }
+.m-rc-meta-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.m-rc-bottom { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+.m-rc-date { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-rc-btn { position: relative; z-index: 1; pointer-events: auto; width: 40px; height: 40px; min-width: 40px; min-height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 50%; background: var(--panel-2); color: var(--text); }
+.m-rc-btn-tv { background: var(--accent); color: var(--bg); }
+.m-rc-btn:disabled { opacity: 0.5; }
+.m-rc-sheet { display: flex; flex-direction: column; gap: 8px; }
+.m-rc-sheet-title { font-size: 18px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.m-rc-raw { line-height: 1.4; overflow-wrap: anywhere; user-select: text; }
+.m-rc-sheet-label { margin-top: 4px; }
 .m-src-item { display: flex; flex-direction: column; flex-shrink: 0; }
-.m-src-row { display: flex; align-items: center; gap: 10px; min-height: 52px; flex-shrink: 0; }
+/* every row: the same height and padding; the right side is only two fixed columns — › (or its empty slot) and the switch */
+.m-src-row { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 6px 0; box-sizing: border-box; flex-shrink: 0; }
 .m-src-name { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
+.m-src-open { flex: 0 0 44px; width: 44px; display: flex; align-items: center; justify-content: center; }
+.m-src-open .m-icon-btn { background: none; color: var(--muted); }
+/* the status line: the note keeps its colour, «Войти» / «Выйти» / «Ввести код» follow it as accent links */
+.m-src-status { font-size: 12px; line-height: 18px; color: var(--muted); }
+.m-src-status > .m-src-sep:first-child { display: none; }
+.m-src-sep { color: var(--muted); }
+.m-src-link { display: inline-flex; align-items: center; min-height: 44px; margin: -13px -8px; padding: 0 8px; border: none; background: none; color: var(--accent); font: inherit; font-size: 12px; font-weight: 700; vertical-align: baseline; white-space: nowrap; }
+.m-src-link:disabled { opacity: 0.6; }
+.m-src-general { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+.m-src-general .m-link-btn { padding: 0; margin-bottom: -10px; font-size: 14px; }
 .m-src-note { font-size: 12px; color: var(--muted); }
 .m-src-note.ok { color: #8FE39A; }
 .m-src-note.bad { color: #FF8A80; }
@@ -865,6 +986,12 @@ button, .m-btn {
 .m-rep-line { font-size: 14px; font-weight: 700; }
 .m-rep-arrow { align-self: center; }
 .m-rep-moves { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #C9CEDA; line-height: 1.4; }
+/* «Найти в лучшем качестве» */
+.m-better-wait, .m-better-empty { display: flex; flex-direction: column; gap: 12px; padding: 12px 0 4px; }
+.m-better-list { display: flex; flex-direction: column; gap: 10px; }
+.m-better-list .m-badges { margin-top: 2px; }
+.m-better-list .m-badge-warn { background: rgba(255, 138, 128, .16); color: #FF8A80; }
+[data-block="better-failure"] { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .m-monitor-last { gap: 4px; line-height: 1.45; }
 .m-monitor-last-head { font-weight: 700; }
 .m-sheet .m-set-pick { background: var(--panel-2); }
@@ -997,3 +1124,56 @@ button, .m-btn {
 .m-news-monitor-l { display: flex; align-items: center; gap: 10px; }
 .m-skip-toggle { min-height: 52px; }
 .m-skip-toggle .m-skip-title { font-size: 16px; }
+
+/* soft keyboard open: the tab bar and the mini player step aside, the toast drops to the bottom */
+html.m-kb-open { --m-nav-reserve: 0px; }
+html.m-kb-open .m-nav, html.m-kb-open .m-mini, html.m-kb-open .m-mini-pad { display: none; }
+html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom)); }
+
+/* one compact header for the bottom tabs («Новое», «Добавить», «Пульт», «Настройки»): a 22px display title,
+   then the round 44px icon buttons (the TV button look of «Мои») */
+.m-screen-head { min-height: 44px; margin-top: 24px; }
+.m-head-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 22px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-head-btn:disabled { opacity: 0.6; }
+/* «Добавить»: the magnet is a compact link under the search field and chips; tapped, the field opens in place */
+.m-add-magnet { display: flex; flex-direction: column; gap: 10px; }
+.m-add-magnet-link { align-self: flex-start; min-height: 44px; padding: 0; color: var(--accent); font-size: 15px; font-weight: 600; text-align: left; }
+.m-add-magnet .m-input { height: 44px; font-size: 15px; }
+/* ---- «Мои» → the screen of a series card ---- */
+.m-screen[data-route='series'] { display: flex; flex-direction: column; gap: 12px; }
+.m-series-head { display: flex; gap: 14px; align-items: center; }
+.m-series-info { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.m-series-title { overflow-wrap: anywhere; }
+.m-series .m-tc-chips { margin-bottom: 0; }
+.m-series-rows { display: flex; flex-direction: column; gap: 8px; }
+/* the series screen with its TMDB show: a backdrop hero, the poster over its bottom edge */
+.m-series.m-series-hero { padding-top: 0; }
+.m-sh-backdrop { height: calc(220px + env(safe-area-inset-top)); flex: none; }
+.m-sh-backdrop::after { background: linear-gradient(180deg, rgba(15, 17, 21, 0) 35%, rgba(15, 17, 21, 0.75) 75%, var(--bg, #0F1115)); }
+.m-sh-head { position: relative; margin-top: -84px; }
+.m-sh-poster { width: 96px; height: 144px; }
+.m-sh-poster.m-poster { border-radius: 12px; }
+.m-sh-meta { color: var(--text); opacity: 0.85; }
+.m-sh-overview { -webkit-line-clamp: 3; }
+.m-chip.m-chip-missing { opacity: 0.5; }
+.m-chip.m-chip-missing.on { opacity: 0.85; }
+.m-chip-plus { margin-right: 4px; font-weight: 700; }
+.m-sh-caption { margin-top: -4px; }
+.m-sh-missing { display: flex; flex-direction: column; gap: 8px; }
+.m-sh-missing p { margin: 0; }
+.m-sh-season-about { display: flex; flex-direction: column; gap: 2px; }
+.m-sh-season-name { font-weight: 700; }
+.m-sh-season-overview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.4; }
+/* a series' status (series screen hero, «Обзор» card) */
+.m-status-pill { align-self: flex-start; display: inline-block; margin-top: 4px; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; line-height: 18px; }
+.m-status-airing { background: rgba(143, 227, 154, .16); color: #8FE39A; }
+.m-status-ended { background: #252A35; color: var(--muted); }
+.m-status-canceled { background: rgba(255, 138, 128, .16); color: #FF8A80; }
+.m-status-soon { background: rgba(245, 183, 0, .18); color: var(--accent); }
+/* a season still to come: an outlined chip with a clock */
+.m-chip.m-chip-future { display: inline-flex; align-items: center; gap: 6px; background: transparent; box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent); }
+.m-chip.m-chip-future.on { background: var(--accent); color: var(--bg); }
+.m-sh-future p { color: var(--text); }
+/* «новая серия 12.10» / «новый сезон» on a «Мои» tile */
+.m-new-badge { display: inline-block; align-self: flex-start; padding: 1px 6px; border-radius: 6px; background: rgba(245, 183, 0, .18); color: var(--accent); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.m-new-badge:empty { display: none; }

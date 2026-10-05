@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createCatalogClient, catalogErrorCode, flushCatalogCache, localDate, CACHE_KEY, CACHE_BUDGET_CHARS } from '../../src/catalog/client';
+import { createCatalogClient, catalogErrorCode, flushCatalogCache, resetCatalogCache, localDate, CACHE_KEY, CACHE_BUDGET_CHARS } from '../../src/catalog/client';
 import { applyLanguageSetting } from '../../src/i18n';
 import type { TmdbEndpoint } from '../../src/catalog/tmdb';
 import type { SourceHttp } from '../../src/sources/types';
-import { MOVIE_LIST, TV_LIST, MOVIE_CARD, TV_SEASON } from './fixtures';
+import { MOVIE_LIST, TV_LIST, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
 
 const E: TmdbEndpoint = { base: 'https://api.tmdb.mirror.test/3/', key: 'SECRETKEY', images: 'https://img.mirror.test' };
 
@@ -40,6 +40,31 @@ beforeEach(() => { localStorage.clear(); applyLanguageSetting('ru'); });
 afterEach(() => { flushCatalogCache(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('catalog client', () => {
+  it('a series card cached before the status fields is fetched again, so the status shows at once', async () => {
+    const f = fake();
+    f.answer = (url) => (url.indexOf('tv/202') >= 0 ? { status: 200, text: JSON.stringify({ ...TV_CARD, status: 'Returning Series' }) } : { status: 404, text: '{}' });
+    const fresh = await createCatalogClient(E, f.http).card('tv', 202);
+    expect(fresh.status).toBe('returning');
+    expect(fresh.nextEpisode).toEqual({ season: 2, episode: 7, airDate: '2026-10-12' });
+    flushCatalogCache();
+    // the stored card as an older OMP wrote it
+    const stored = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+    Object.keys(stored).forEach((k) => {
+      const d = stored[k].data;
+      delete d.status;
+      delete d.nextEpisode;
+      delete d.lastAirDate;
+      d.seasons.forEach((s: { airDate?: string }) => delete s.airDate);
+    });
+    localStorage.setItem(CACHE_KEY, JSON.stringify(stored));
+    resetCatalogCache();
+    const old = await createCatalogClient(E, f.http).card('tv', 202);
+    expect(f.urls).toHaveLength(2);
+    expect(old.title).toBe(fresh.title);
+    expect(old.status).toBe('returning');
+    expect(old.nextEpisode).toEqual({ season: 2, episode: 7, airDate: '2026-10-12' });
+  });
+
   it('interleaves movies and series for all', async () => {
     const f = fake();
     const c = createCatalogClient(E, f.http, { today: () => '2026-10-05' });

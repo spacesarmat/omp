@@ -6,7 +6,7 @@ import { mockFetch, type MockResponse } from '../../tests/helpers/fetchMock';
 import { loginsNotSent, rutrackerNotStored, Sources, sitesNotSent, transferPayload, withLoginsLabel } from '../src/screens/Sources';
 import { setCloudflareBypass, setSourceOn } from '../../src/sources/store';
 import { SourceSite, sendLogin, siteLoginNote } from '../src/screens/SourceSite';
-import { resetTo } from '../src/nav';
+import { currentRoute, resetTo } from '../src/nav';
 import { cancelWarmUp, disconnectTv, setTransport, type TvTransport } from '../src/tv/tvClient';
 import { reloadTvs, saveTv, setActiveTv, type SavedTv } from '../src/tv/tvStore';
 import { native } from '../src/platform/native';
@@ -185,6 +185,38 @@ describe('phone: Kinozal site screen', () => {
   });
 });
 
+describe('phone: rutracker opens the site screen from its ›', () => {
+  it('the › of rutracker leads to its site screen, whose «Передать вход на телевизор» sends the rutracker login', async () => {
+    registerSource(rutrackerFake);
+    site = fakeSite(kinozalSite, { 'rutracker.username': 'rt', 'rutracker.password': PASSWORD });
+    saveTv(ATV);
+    setActiveTv(ATV.ip);
+    resetTo({ name: 'sources' });
+    await mountWith(<Sources ctx={() => site.ctx} />);
+    const row = el.querySelector('[data-source="rutracker"]') as HTMLElement;
+    act(() => (row.querySelector('[data-open="rutracker"]') as HTMLElement).click());
+    expect(currentRoute.value).toEqual({ name: 'sourceSite', id: 'rutracker' });
+    act(() => render(null, el));
+    await mountWith(<SourceSite id="rutracker" clearance={() => Promise.resolve(null)} ctx={() => site.ctx} />);
+    // the password login block: signed in, «Выйти»; no Cloudflare bypass for rutracker
+    expect(el.querySelector('[data-site-card="login"]')!.textContent).toContain('Вход выполнен');
+    expect(el.querySelector('[data-bypass]')).toBeNull();
+    answer = () => ({ body: JSON.stringify({ ok: true, rutracker: 'ok' }) });
+    act(() => btn(sendLogin())!.click());
+    await flush();
+    const p = posts()[0];
+    expect(p.body.rutracker).toEqual({ username: 'rt', password: PASSWORD });
+    expect(p.body.logins).toBeUndefined();
+    expect(Object.keys(p.body.sources)).toEqual(['rutracker']);
+    expect(toast.value).toBe('Вход на rutracker передан на телевизор');
+    answer = () => ({ body: JSON.stringify({ ok: true, rutracker: 'error', rutrackerNotStored: true }) });
+    act(() => btn(sendLogin())!.click());
+    await flush();
+    expect(toast.value).toContain(rutrackerNotStored());
+    expect(JSON.stringify(logEntries())).not.toContain(PASSWORD);
+  });
+});
+
 describe('phone: «Источники поиска» with the sites behind Cloudflare', () => {
   it('lists them in the one built-in list and sends their logins with rutracker\'s', async () => {
     registerSource(rutrackerFake);
@@ -197,7 +229,7 @@ describe('phone: «Источники поиска» with the sites behind Cloud
     const group = el.querySelector('[data-group="builtin"]') as HTMLElement;
     expect(group.textContent).toContain('Kinozal');
     expect(group.textContent).toContain('rustorka');
-    expect(group.querySelector('[data-source="rustorka"]')!.textContent).toContain('нужен вход · за Cloudflare');
+    expect(group.querySelector('[data-source="rustorka"]')!.textContent).toContain('нужен вход · Cloudflare · Войти');
     expect(el.textContent).toContain(withLoginsLabel(['Kinozal', 'rutracker']));
     act(() => btn('Передать на телевизор')!.click());
     await flush();

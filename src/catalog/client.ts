@@ -8,14 +8,17 @@
 import type { SourceHttp } from '../sources/types';
 import { loadJson, isObject } from '../store/storage';
 import {
-  noveltiesUrl, searchUrl, cardUrl, seasonUrl, sanitizeList, sanitizeCard, sanitizeSeason,
+  noveltiesUrl, discoverUrl, searchUrl, cardUrl, seasonUrl, sanitizeList, sanitizeCard, sanitizeSeason,
   type Kind, type CatalogTitle, type CatalogCard, type SeasonDetails, type TmdbEndpoint,
 } from './tmdb';
+import type { DiscoverQuery } from './discoverQuery';
 
 export type CatalogErrorCode = 'offline' | 'nokey' | 'blocked' | 'bad';
 
 export interface CatalogClient {
   novelties(kind: Kind | 'all', page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
+  /** «Обзор» with its sort and filters; 'all' merges a page of films and a page of series. */
+  discover(kind: Kind | 'all', query: DiscoverQuery, page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
   search(q: string, page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
   card(kind: Kind, id: number): Promise<CatalogCard>;
   /** A season of a series with its episodes (cached like cards). */
@@ -178,10 +181,11 @@ export function createCatalogClient(
   }
 
   /** The sanitized answer for the URL (only that is cached, never the raw body): from the cache while fresh, else fetched. */
-  function fetchJson<T>(url: string, ttl: number, parse: (raw: unknown) => T): Promise<T> {
+  function fetchJson<T>(url: string, ttl: number, parse: (raw: unknown) => T, current?: (data: T) => boolean): Promise<T> {
     const key = cacheKeyOf(url);
     const hit = mem[key];
-    if (hit && now() - hit.at < ttl && now() >= hit.at) {
+    // `current`: a stored answer of an older shape (fields added since) is fetched again
+    if (hit && now() - hit.at < ttl && now() >= hit.at && (!current || current(hit.data as T))) {
       hit.used = now();
       clock = now;
       scheduleSave();
@@ -213,6 +217,17 @@ export function createCatalogClient(
     return endpoint;
   }
 
+  /** A page of films and a page of series, interleaved. */
+  function merge(r: { items: CatalogTitle[]; pages: number }[]): { items: CatalogTitle[]; pages: number } {
+    const items: CatalogTitle[] = [];
+    const len = Math.max(r[0].items.length, r[1].items.length);
+    for (let i = 0; i < len; i++) {
+      if (i < r[0].items.length) items.push(r[0].items[i]);
+      if (i < r[1].items.length) items.push(r[1].items[i]);
+    }
+    return { items: items, pages: Math.max(r[0].pages, r[1].pages) };
+  }
+
   function list(url: string, kind: Kind | null): Promise<{ items: CatalogTitle[]; pages: number }> {
     const e = need();
     return fetchJson(url, LIST_TTL, (raw) => sanitizeList(e, raw, kind));
@@ -224,15 +239,18 @@ export function createCatalogClient(
       try { e = need(); } catch (err) { return Promise.reject(err); }
       const d = today();
       if (kind !== 'all') return list(noveltiesUrl(e, kind, page, d), kind);
-      return Promise.all([list(noveltiesUrl(e, 'movie', page, d), 'movie'), list(noveltiesUrl(e, 'tv', page, d), 'tv')]).then((r) => {
-        const items: CatalogTitle[] = [];
-        const len = Math.max(r[0].items.length, r[1].items.length);
-        for (let i = 0; i < len; i++) {
-          if (i < r[0].items.length) items.push(r[0].items[i]);
-          if (i < r[1].items.length) items.push(r[1].items[i]);
-        }
-        return { items: items, pages: Math.max(r[0].pages, r[1].pages) };
-      });
+      return Promise.all([list(noveltiesUrl(e, 'movie', page, d), 'movie'), list(noveltiesUrl(e, 'tv', page, d), 'tv')]).then(merge);
+    },
+    discover(kind, query, page) {
+      let e: TmdbEndpoint;
+      try { e = need(); } catch (err) { return Promise.reject(err); }
+      const d = today();
+      const one = (k: Kind) => {
+        const u = discoverUrl(e, k, query, page, d);
+        return u ? list(u, k) : Promise.resolve({ items: [] as CatalogTitle[], pages: 0 });
+      };
+      if (kind !== 'all') return one(kind);
+      return Promise.all([one('movie'), one('tv')]).then(merge);
     },
     search(q, page) {
       let e: TmdbEndpoint;
@@ -246,7 +264,7 @@ export function createCatalogClient(
         const c = sanitizeCard(e, raw, kind);
         if (!c) throw fail('bad');
         return c;
-      });
+      }, (c) => kind !== 'tv' || (c as { status?: unknown }).status !== undefined);
     },
     season(id, n) {
       let e: TmdbEndpoint;

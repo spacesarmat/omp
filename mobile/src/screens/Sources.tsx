@@ -7,8 +7,8 @@ import { phoneSourceContext } from '../searchContext';
 import { errorMessage } from '../../../src/api/http';
 import { builtinSources, torrServerSources } from '../../../src/sources/registry';
 import { clearHealth, getHealth, isSourceOn, onHealthChange, setCloudflareBypass, setHealth, setSourceOn } from '../../../src/sources/store';
-import { cloudflareHint, healthText, ipBanNote, isCloudflare, jackettHint, withCloudflareNote, type CloudflareHint, type HealthLine } from '../../../src/sources/view';
-import { browserDone, browserFailed, hasBrowserLogin } from '../../../src/sources/browserLogin';
+import { cloudflareHint, healthText, ipBanNote, isCloudflare, withCloudflareNote, type CloudflareHint, type HealthLine } from '../../../src/sources/view';
+import { browserFailed, hasBrowserLogin } from '../../../src/sources/browserLogin';
 import { enterCodeText } from '../../../src/sources/ipBan';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { allSources } from '../../../src/sources/registry';
@@ -369,6 +369,24 @@ function label(s: Source): string {
 /** The FAQ question behind «Как» under a site Cloudflare stopped: Jackett and Prowlarr (FlareSolverr in them). */
 export const CF_HOW_Q = 'jackett';
 
+/** A status-line action («Войти», «Выйти», «Ввести код»): accent text with a 44px touch target. */
+function StatusLink({ text, onPress, disabled, action }: { text: string; onPress: () => void; disabled?: boolean; action?: string }) {
+  return (
+    <>
+      <span class="m-src-sep" aria-hidden="true">
+        {' · '}
+      </span>
+      <button type="button" class="m-src-link" data-action={action} disabled={disabled} onClick={onPress}>
+        {text}
+      </button>
+    </>
+  );
+}
+
+/**
+ * One row of «Источники поиска»: the name and its status line on the left; on the right only two fixed columns — the
+ * optional › to the site's screen and the switch. «Войти» / «Выйти» / «Ввести код» are links at the end of the status line.
+ */
 function SourceRow({
   source,
   note,
@@ -386,39 +404,36 @@ function SourceRow({
   /** The site showed its code page (ipBanNote): «Ввести код» opens it in the browser sheet. */
   code?: { busy: boolean; onPress: () => void };
   onToggle: () => void;
-  /** A site behind Cloudflare: its own screen (password login, «Передать вход на телевизор», the bypass switch). */
+  /** A site with a login: its own screen (password login, «Передать вход на телевизор», the Cloudflare bypass switch). */
   onOpen?: () => void;
 }) {
   const on = isSourceOn(source);
   const name = label(source);
+  const links = [
+    login ? (login.loggedIn ? <StatusLink key="out" text={t('tvSources.signOut')} onPress={login.onLogout} /> : <StatusLink key="in" text={t('common.signIn')} onPress={login.onLogin} />) : null,
+    code ? <StatusLink key="code" action="enter-code" text={enterCodeText()} disabled={code.busy} onPress={code.onPress} /> : null,
+  ].filter((x) => x);
+  const status = !!note || links.length > 0;
   // the row and its hint are a column: the hint always starts below the row, whatever the height of the note
   return (
     <div class="m-src-item">
-      <div class="m-src-row" data-source={source.id}>
+      <div class={'m-src-row' + (status ? ' with-status' : '')} data-source={source.id}>
         <span class="m-src-name">
-          <span>{name}</span>
-          {note && <span class={'m-src-note' + (note.tone === 'muted' ? '' : ' ' + note.tone)}>{note.text}</span>}
+          <span class="m-src-title">{name}</span>
+          {status && (
+            <span class="m-src-status">
+              {note ? <span class={'m-src-note' + (note.tone === 'muted' ? '' : ' ' + note.tone)}>{note.text}</span> : null}
+              {links}
+            </span>
+          )}
         </span>
-        {login &&
-          (login.loggedIn ? (
-            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={login.onLogout}>
-              {t('tvSources.signOut')}
+        <span class="m-src-open">
+          {onOpen && (
+            <button type="button" class="m-icon-btn" aria-label={t('sources.screen.settingsOf', { name: name })} data-open={source.id} onClick={onOpen}>
+              <Icon d="M9 5l7 7-7 7" size={18} />
             </button>
-          ) : (
-            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={login.onLogin}>
-              {t('common.signIn')}
-            </button>
-          ))}
-        {code && (
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" data-action="enter-code" disabled={code.busy} onClick={code.onPress}>
-            {enterCodeText()}
-          </button>
-        )}
-        {onOpen && (
-          <button type="button" class="m-icon-btn" aria-label={t('sources.screen.settingsOf', { name: name })} data-open={source.id} onClick={onOpen}>
-            <Icon d="M9 5l7 7-7 7" size={18} />
-          </button>
-        )}
+          )}
+        </span>
         <button type="button" role="switch" aria-checked={on} aria-label={name} class={'m-switch' + (on ? ' on' : '')} onClick={onToggle}>
           <span class="m-switch-knob" />
         </button>
@@ -446,8 +461,6 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   const rerender = () => setTick((n) => n + 1);
   // sources with a login: saved credentials exist (asked once, no network)
   const [logged, setLogged] = useState<Record<string, boolean>>({});
-  // sources whose login is a browser session («signed in with the browser»)
-  const [browser, setBrowser] = useState<Record<string, boolean>>({});
   const [loginFor, setLoginFor] = useState<Source | null>(null);
   // «Ввести код»: the site's page is open in the browser sheet, or checked again after it
   const [unblocking, setUnblocking] = useState<Record<string, boolean>>({});
@@ -473,12 +486,6 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
           (v) => alive && setLogged((m) => ({ ...m, [s.id]: v })),
           () => alive && setLogged((m) => ({ ...m, [s.id]: false })),
         );
-        if (s.browserSession) {
-          s.browserSession(ctx()).then(
-            (v) => alive && setBrowser((m) => ({ ...m, [s.id]: v })),
-            () => undefined,
-          );
-        }
       });
     return () => {
       alive = false;
@@ -501,8 +508,8 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
     const ban = ipBanNote(s.id);
     if (ban) return { text: ban, tone: 'bad' };
     const h = getHealth(s.id);
-    // signed in, no search since: say only what is known
-    if (s.login && loggedIn(s) && !h) return { text: browser[s.id] ? browserDone() : t('tvSources.loggedInDone'), tone: 'muted' };
+    // signed in, no search since: say only what is known (a password or a browser login alike: the site screen tells which)
+    if (s.login && loggedIn(s) && !h) return { text: t('tvSources.loggedInDone'), tone: 'muted' };
     return healthText(h);
   };
 
@@ -517,7 +524,6 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
     s.logout(ctx()).then(
       () => {
         setLogged((m) => ({ ...m, [s.id]: false }));
-        setBrowser((m) => ({ ...m, [s.id]: false }));
         // an optional login (NNM-Club) leaves no «нужен вход» behind
         if (s.needsLogin) setHealth(s.id, { state: 'login', at: Date.now() });
         else clearHealth(s.id);
@@ -546,7 +552,6 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   const loggedInDone = (s: Source, viaBrowser?: boolean) => {
     setLoginFor(null);
     setLogged((m) => ({ ...m, [s.id]: true }));
-    setBrowser((m) => ({ ...m, [s.id]: !!viaBrowser }));
     // signed in: the source takes part in the search; its real state comes with the next search
     setSourceOn(s.id, true);
     // a browser session got past the check in the page: the site's requests pass it too from now on
@@ -597,20 +602,18 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
                   login={s.login ? { loggedIn: loggedIn(s), onLogin: () => setLoginFor(s), onLogout: () => logout(s) } : undefined}
                   code={codeOf(s)}
                   onToggle={() => toggle(s)}
-                  onOpen={s.cloudflare === true ? () => navigate({ name: 'sourceSite', id: s.id }) : undefined}
+                  onOpen={s.login || s.cloudflare === true ? () => navigate({ name: 'sourceSite', id: s.id }) : undefined}
                 />
               );
             })}
           </div>
         </section>
       )}
-      <div class="m-hint-warn" data-hint="general">
-        {jackettHint()}
-        <div>
-          <button type="button" class="m-link" onClick={() => navigate({ name: 'faq' })}>
-            {t('common.faq')}
-          </button>
-        </div>
+      <div class="m-hint-warn m-src-general" data-hint="general">
+        <span>{t('sources.screen.generalHint')}</span>
+        <button type="button" class="m-link-btn" data-faq="general" onClick={() => navigate({ name: 'faq' })}>
+          {t('common.faq')}
+        </button>
       </div>
       {loginFor && <TrackerLogin source={loginFor} ctx={ctx} onClose={() => setLoginFor(null)} onDone={(b) => loggedInDone(loginFor, b)} />}
     </div>

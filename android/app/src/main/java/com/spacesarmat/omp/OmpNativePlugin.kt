@@ -1380,7 +1380,13 @@ class OmpNativePlugin : Plugin() {
                 val dialog = CloudflareCheckDialog(act, tvMode, texts, phoneButton = relay != null)
                 val login = BrowserLogin(
                     start, hosts, check, site, source, texts,
-                    { WebViewCloudflareBrowser(act, visible = true) { h, p -> LoginNavigation.allowed(hosts, h, p) } },
+                    {
+                        WebViewCloudflareBrowser(
+                            act, visible = true,
+                            navigation = { h, p -> LoginNavigation.allowed(hosts, h, p) },
+                            ads = { h, p -> LoginNavigation.ad(hosts, h, p) },
+                        )
+                    },
                     MainScheduler(), sources::userAgent, { io.execute(it) },
                     { root, pairs, ua -> sources.verifySession(root, pairs, ua, check) },
                     target, relay,

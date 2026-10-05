@@ -7,6 +7,7 @@ import { absUrl, parseDate, parseHtml, parseSize, textOf } from './html';
 import { clearSourcePause, ipBanError, isIpBan, pauseSource, sourcePaused } from './ipBan';
 import { checkPage, makeResult, mergePages, parseError, toInt } from './site';
 import { clearHealth, setHealth } from './store';
+import { isTlsError } from './tls';
 import type { FeedCategory, HttpResponse, Source, SourceContext, SourceResult } from './types';
 
 const ID = 'torrentby';
@@ -119,6 +120,7 @@ function probe(ctx: SourceContext): Promise<void> {
       (e) => {
         const message = e instanceof Error ? e.message : String(e);
         if (isIpBan(e)) setHealth(ID, { state: 'error', at: Date.now(), message, code: 'ipban' });
+        else if (isTlsError(e)) setHealth(ID, { state: 'error', at: Date.now(), message, code: 'tls' });
         else setHealth(ID, { state: 'error', at: Date.now(), message });
       },
     );

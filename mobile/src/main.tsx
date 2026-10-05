@@ -7,8 +7,10 @@ import { registerBuiltinSources } from '../../src/sources/builtin';
 
 import { ensureFirstRun } from './donate';
 import { t } from '../../src/i18n';
+import { startKeyboardWatch } from './ui/keyboard';
 
 installErrorHooks();
+startKeyboardWatch();
 ensureFirstRun(); // starts the 30-day clock of the «Поддержать» card
 logStart(t('history.phone'));
 

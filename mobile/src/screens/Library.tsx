@@ -18,7 +18,7 @@ import { continueWatching, refreshViewed, progressVersion, serverViewed, getLoca
 import { buildHistory, resumeFrom, sourceLine, historyFilters } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
-import { libraryTabs, nextView, zoomView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
+import { libraryTabs, nextView, BY_SIZE, viewLabel, episodeLine, positionLabel, remainingLabel, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { formatBytes } from '../../../src/lib/format';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
@@ -31,6 +31,9 @@ import { displayTitle } from '../../../src/lib/torrentName';
 import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
 import { Discover } from './catalog/Discover';
 import { usePinchStep } from '../ui/usePinchStep';
+import { SeriesMenu } from '../ui/SeriesMenu';
+import { SeriesTileBadge } from '../ui/SeriesTileBadge';
+import { groupLabel, groupLibrary, groupSize, itemHashes, type LibraryItem, type SeriesGroup } from '../lib/seriesGroups';
 
 const POLL_MS = 15000;
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
@@ -40,6 +43,29 @@ const PULL_TRIGGER = 64;
 const PULL_HOLD = 56;
 const pullOf = (dy: number) => (dy > 0 ? Math.min(PULL_MAX, dy * PULL_DAMP) : 0);
 const titleOf = (t: Torrent) => displayTitle(t);
+// the short name and its meta («2 сезон · серии 1–6 из 10», the year); the torrent screen shows the full title
+function ShortTitle({ tor }: { tor: Torrent }) {
+  const s = libraryTitle(tor);
+  return (
+    <>
+      {s.title}
+      {s.meta && <span class="m-title-meta">{' · ' + s.meta}</span>}
+    </>
+  );
+}
+
+// a series card: the newest season's name and the count of its seasons
+function GroupTitle({ g }: { g: SeriesGroup }) {
+  return (
+    <>
+      {libraryTitle(g.lead).title}
+      <span class="m-title-meta">{' · ' + groupLabel(g)}</span>
+    </>
+  );
+}
+
+const itemKey = (it: LibraryItem) => (it.kind === 'torrent' ? it.tor.hash : 'g:' + it.key);
+const hashesOf = (it: LibraryItem) => (it.kind === 'torrent' ? [it.tor.hash] : it.members.map((m) => m.hash));
 
 function episodesText(tor: Torrent): string {
   const n = playableFiles(filesOf(tor)).length;
@@ -53,6 +79,11 @@ const MORE = 'M5 12h.01M12 12h.01M19 12h.01';
 const CHECK = 'M5 12.5l4.5 4.5L19 7';
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_SLOP = 10;
+
+/** The views drawn as rows (the others are poster grids). */
+function isRowView(v: string): boolean {
+  return v === 'compact' || v === 'list';
+}
 
 export function Library() {
   const c = client.value;
@@ -82,7 +113,7 @@ export function Library() {
   const bodyRef = useRef<HTMLDivElement>(null);
   // selection mode (null = off) and the torrent whose menu is open; a long press that fired swallows the click after it
   const [selected, setSelected] = useState<string[] | null>(null);
-  const [menuFor, setMenuFor] = useState<Torrent | null>(null);
+  const [menuFor, setMenuFor] = useState<LibraryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const press = useRef<{ timer: ReturnType<typeof setTimeout> | undefined; x: number; y: number; fired: boolean }>({ timer: undefined, x: 0, y: 0, fired: false });
   const loadRef = useRef<() => Promise<void>>(() => Promise.resolve());
@@ -240,11 +271,14 @@ export function Library() {
   }
 
   const isHistory = tab === 'history';
-  const shown = useMemo(() => {
+  // «Все» and «Сериалы»: the torrents of one series are one card
+  const shown = useMemo<LibraryItem[]>(() => {
     if (isHistory) return [];
-    const inTab = list.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
-    return sortTorrents(filterTorrents(inTab, query), sort);
+    const inTab = sortTorrents(list.filter((t) => tab === 'all' || categoryOf(t.category) === tab), sort);
+    if (tab === 'all' || tab === 'tv') return groupLibrary(inTab, query);
+    return filterTorrents(inTab, query).map((tor) => ({ kind: 'torrent' as const, tor }));
   }, [list, tab, query, isHistory, sort]);
+  const shownHashes = useMemo(() => itemHashes(shown), [shown]);
   const pv = progressVersion.value;
   const sv = serverViewed.value;
   const history = useMemo(() => {
@@ -269,29 +303,34 @@ export function Library() {
     else empty = t('catalog.categoryEmpty');
   }
 
-  // two fingers on the list step the view like the header button, one notch per gesture (spread = bigger)
+  // two fingers on the list step the view once per gesture (spread = bigger), animated after the change
   const pinch = usePinchStep(bodyRef, {
     enabled: mine && !isHistory && !unavailable,
-    onStep: (dir) => {
-      const cur = settings.peek().libraryView;
-      const next = zoomView(cur, dir);
-      if (next === cur) return false;
-      updateSettings({ libraryView: next });
-      return true;
-    },
+    levels: BY_SIZE.length,
+    level: () => Math.max(0, BY_SIZE.indexOf(settings.peek().libraryView)),
+    apply: (i) => updateSettings({ libraryView: BY_SIZE[i] }),
     // the first finger may have started the long press timer on a card
     onStart: () => {
       clearTimeout(press.current.timer);
       press.current.timer = undefined;
     },
     anchorAttr: 'data-anchor',
+    // rows and poster cards have different markup: the posters morph between them and the text fades in
+    posterAttr: 'data-poster',
+    morph: (from, to) => isRowView(BY_SIZE[from]) !== isRowView(BY_SIZE[to]),
   });
 
   const selecting = selected !== null;
   // only the torrents still in the list count (a refresh may drop some)
-  const chosen = selected ? selected.filter((h) => shown.some((x) => x.hash === h)) : [];
-  const toggle = (hash: string) =>
-    setSelected((cur) => (cur ? (cur.indexOf(hash) >= 0 ? cur.filter((h) => h !== hash) : cur.concat(hash)) : cur));
+  const chosen = selected ? selected.filter((h) => shownHashes.indexOf(h) >= 0) : [];
+  const isChosen = (it: LibraryItem) => hashesOf(it).every((h) => chosen.indexOf(h) >= 0);
+  // a series card selects (or clears) all its torrents
+  const toggle = (hashes: string[]) =>
+    setSelected((cur) => {
+      if (!cur) return cur;
+      const all = hashes.every((h) => cur.indexOf(h) >= 0);
+      return all ? cur.filter((h) => hashes.indexOf(h) < 0) : cur.concat(hashes.filter((h) => cur.indexOf(h) < 0));
+    });
   const deleteChosen = async () => {
     if (!c || deleting || !chosen.length) return;
     if (!window.confirm(tp('library.deleteAsk', chosen.length))) return;
@@ -304,7 +343,7 @@ export function Library() {
     }
   };
   // long press (500 ms without moving more than 10 px) or contextmenu opens the menu; a tap opens the card or toggles the selection
-  const pressProps = (tor: Torrent) => ({
+  const pressProps = (it: LibraryItem) => ({
     onPointerDown: (e: PointerEvent) => {
       const p = press.current;
       clearTimeout(p.timer);
@@ -316,7 +355,7 @@ export function Library() {
         p.timer = undefined;
         if (pinch.active()) return;
         p.fired = true;
-        setMenuFor(tor);
+        setMenuFor(it);
       }, LONG_PRESS_MS);
     },
     onPointerMove: (e: PointerEvent) => {
@@ -333,30 +372,31 @@ export function Library() {
       clearTimeout(press.current.timer);
       if (selecting) return;
       press.current.fired = true;
-      setMenuFor(tor);
+      setMenuFor(it);
     },
     onClick: () => {
       if (press.current.fired) {
         press.current.fired = false;
         return;
       }
-      if (selecting) toggle(tor.hash);
-      else navigate({ name: 'torrent', hash: tor.hash });
+      if (selecting) toggle(hashesOf(it));
+      else if (it.kind === 'torrent') navigate({ name: 'torrent', hash: it.tor.hash });
+      else navigate({ name: 'series', key: it.key });
     },
-    'aria-pressed': selecting ? chosen.indexOf(tor.hash) >= 0 : undefined,
+    'aria-pressed': selecting ? isChosen(it) : undefined,
   });
-  const moreBtn = (tor: Torrent) => (
-    <button type="button" class="m-icon-btn m-card-more" aria-label={t('library.actions')} disabled={selecting} onClick={() => setMenuFor(tor)}>
+  const moreBtn = (it: LibraryItem) => (
+    <button type="button" class="m-icon-btn m-card-more" aria-label={t('library.actions')} disabled={selecting} onClick={() => setMenuFor(it)}>
       <Icon d={MORE} size={20} />
     </button>
   );
-  const mark = (tor: Torrent) =>
-    selecting && chosen.indexOf(tor.hash) >= 0 ? (
+  const mark = (it: LibraryItem) =>
+    selecting && isChosen(it) ? (
       <span class="m-check" aria-hidden="true">
         <Icon d={CHECK} size={16} />
       </span>
     ) : null;
-  const sel = (tor: Torrent) => (selecting && chosen.indexOf(tor.hash) >= 0 ? ' selected' : '');
+  const sel = (it: LibraryItem) => (selecting && isChosen(it) ? ' selected' : '');
 
   const watchOnTv = (tor: Torrent) => {
     const target = watchTarget(tor.hash, playableFiles(filesOf(tor)));
@@ -397,9 +437,9 @@ export function Library() {
             type="button"
             class="m-btn m-btn-secondary m-btn-sm"
             disabled={deleting}
-            onClick={() => setSelected(chosen.length === shown.length ? [] : shown.map((x) => x.hash))}
+            onClick={() => setSelected(chosen.length === shownHashes.length ? [] : shownHashes.slice())}
           >
-            {chosen.length === shown.length && shown.length > 0 ? t('library.selectNone') : t('library.selectAll')}
+            {chosen.length === shownHashes.length && shownHashes.length > 0 ? t('library.selectNone') : t('library.selectAll')}
           </button>
           <button type="button" class="m-btn m-btn-secondary m-btn-sm m-danger" disabled={deleting || !chosen.length} onClick={() => void deleteChosen()}>
             {t('library.deleteN', { n: chosen.length })}
@@ -407,9 +447,29 @@ export function Library() {
         </div>
       ) : (
       <div class="m-lib-head">
+        {/* compact: the small logo and the «Мои | Обзор» switch share the row with the icon buttons */}
         <div class="m-lib-brand">
-          <Logo size={28} />
-          <span class="m-brand-name">OMP</span>
+          <Logo size={24} />
+          <span class="m-sr">OMP</span>
+        </div>
+        <div class="m-seg" role="tablist" aria-label={t('nav.library')}>
+          {(['mine', 'discover'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={mode === m}
+              class={'m-seg-btn' + (mode === m ? ' on' : '')}
+              onClick={() => {
+                if (m === mode) return;
+                setCatalogMode(m);
+                // the other mode starts at the top (one scroll offset for the tab: the mode left is not kept)
+                scrollToTop();
+              }}
+            >
+              {m === 'mine' ? t('discover.mine') : t('discover.browse')}
+            </button>
+          ))}
         </div>
         <TvChip />
         {mine && !isHistory && (
@@ -445,25 +505,6 @@ export function Library() {
         )}
       </div>
       )}
-      <div class="m-seg" role="tablist" aria-label={t('nav.library')}>
-        {(['mine', 'discover'] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="tab"
-            aria-selected={mode === m}
-            class={'m-seg-btn' + (mode === m ? ' on' : '')}
-            onClick={() => {
-              if (m === mode) return;
-              setCatalogMode(m);
-              // the other mode starts at the top (one scroll offset for the tab: the mode left is not kept)
-              scrollToTop();
-            }}
-          >
-            {m === 'mine' ? t('discover.mine') : t('discover.browse')}
-          </button>
-        ))}
-      </div>
       {mine ? (
       <>
       {searchOpen && (
@@ -607,7 +648,7 @@ export function Library() {
                     <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: tor.hash })}>
                       <Poster torrent={tor} class="m-poster-mini" />
                       <span class="m-hrow-text">
-                        <span class="m-hrow-title">{displayTitle(tor)}</span>
+                        <span class="m-hrow-title"><ShortTitle tor={tor} /></span>
                         <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
                         <span class="m-hrow-pos">
                           <span>{positionLabel(time, duration)}</span>
@@ -631,51 +672,82 @@ export function Library() {
           ) : (
             view === 'list' ? (
               <div class="m-vlist">
-                {shown.map((t) => {
+                {shown.map((it) => {
+                  const k = itemKey(it);
+                  if (it.kind === 'series') {
+                    return (
+                      <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
+                        <button type="button" class="m-vrow m-series-card" {...pressProps(it)}>
+                          <Poster torrent={it.lead} class="m-poster-row" morphKey={k} />
+                          {mark(it)}
+                          <span class="m-vrow-text">
+                            <span class="m-card-title"><GroupTitle g={it} /></span>
+                            <span class="m-muted m-small m-vrow-meta">
+                              <span>{formatBytes(groupSize(it))}</span>
+                              <SeriesTileBadge group={it} />
+                            </span>
+                          </span>
+                        </button>
+                        {moreBtn(it)}
+                      </div>
+                    );
+                  }
+                  const t = it.tor;
                   const eps = episodesText(t);
                   const q = qualityBadge(titleOf(t));
                   return (
-                    <div class={'m-row-wrap' + sel(t)} key={t.hash} data-anchor={t.hash}>
-                      <button type="button" class="m-vrow" {...pressProps(t)}>
-                        <Poster torrent={t} class="m-poster-row" />
-                        {mark(t)}
+                    <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
+                      <button type="button" class="m-vrow" {...pressProps(it)}>
+                        <Poster torrent={t} class="m-poster-row" morphKey={k} />
+                        {mark(it)}
                         <span class="m-vrow-text">
-                          <span class="m-card-title">{titleOf(t)}</span>
+                          <span class="m-card-title"><ShortTitle tor={t} /></span>
                           <span class="m-muted m-small m-vrow-meta">
                             <span>{formatBytes(t.torrent_size || 0)}</span>
                             {q && <span class="m-badge-inline">{q}</span>}
                             {eps && <span>{eps}</span>}
+                            <SeriesTileBadge tor={t} />
                           </span>
                         </span>
                       </button>
-                      {moreBtn(t)}
+                      {moreBtn(it)}
                     </div>
                   );
                 })}
               </div>
             ) : view === 'compact' ? (
               <div class="m-vlist m-clist">
-                {shown.map((t) => (
-                  <div class={'m-row-wrap' + sel(t)} key={t.hash} data-anchor={t.hash}>
-                    <button type="button" class="m-crow" {...pressProps(t)}>
-                      {mark(t)}
-                      <span class="m-crow-title">{titleOf(t)}</span>
-                      <span class="m-muted m-small m-crow-size">{formatBytes(t.torrent_size || 0)}</span>
-                    </button>
-                    {moreBtn(t)}
-                  </div>
-                ))}
+                {shown.map((it) => {
+                  const k = itemKey(it);
+                  return (
+                    <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
+                      <button type="button" class={'m-crow' + (it.kind === 'series' ? ' m-series-card' : '')} {...pressProps(it)}>
+                        {mark(it)}
+                        <span class="m-crow-title">{it.kind === 'series' ? <GroupTitle g={it} /> : <ShortTitle tor={it.tor} />}</span>
+                        {it.kind === 'series' ? <SeriesTileBadge group={it} /> : <SeriesTileBadge tor={it.tor} />}
+                        <span class="m-muted m-small m-crow-size">{formatBytes(it.kind === 'series' ? groupSize(it) : it.tor.torrent_size || 0)}</span>
+                      </button>
+                      {moreBtn(it)}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div class={'m-grid m-view-' + view}>
-                {shown.map((t) => (
-                  <button type="button" class={'m-card' + sel(t)} key={t.hash} data-anchor={t.hash} {...pressProps(t)}>
-                    <Poster torrent={t} />
-                    {mark(t)}
-                    <span class="m-card-title">{titleOf(t)}</span>
-                    {view === 'large' && <span class="m-muted m-small">{formatBytes(t.torrent_size || 0)}</span>}
-                  </button>
-                ))}
+                {shown.map((it) => {
+                  const k = itemKey(it);
+                  const g = it.kind === 'series' ? it : null;
+                  const tor = it.kind === 'series' ? it.lead : it.tor;
+                  return (
+                    <button type="button" class={'m-card' + (g ? ' m-series-card' : '') + sel(it)} key={k} data-anchor={k} {...pressProps(it)}>
+                      <Poster torrent={tor} morphKey={k} badge={g ? groupLabel(g) : undefined} />
+                      {mark(it)}
+                      <span class="m-card-title">{g ? <GroupTitle g={g} /> : <ShortTitle tor={tor} />}</span>
+                      {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
+                      {view === 'large' && <span class="m-muted m-small">{formatBytes(g ? groupSize(g) : tor.torrent_size || 0)}</span>}
+                    </button>
+                  );
+                })}
               </div>
             )
           )}
@@ -686,7 +758,10 @@ export function Library() {
         <Discover />
       )}
       {launch.sheet}
-      {menuFor && <TorrentMenu tor={menuFor} onClose={() => setMenuFor(null)} onSelect={(h) => setSelected([h])} onWatchTv={watchOnTv} />}
+      {menuFor && menuFor.kind === 'torrent' && (
+        <TorrentMenu tor={menuFor.tor} onClose={() => setMenuFor(null)} onSelect={(h) => setSelected([h])} onWatchTv={watchOnTv} />
+      )}
+      {menuFor && menuFor.kind === 'series' && <SeriesMenu group={menuFor} onClose={() => setMenuFor(null)} onSelect={(hs) => setSelected(hs)} />}
     </div>
   );
 }

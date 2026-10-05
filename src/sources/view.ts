@@ -5,6 +5,7 @@ import { parseDate, parseSize } from './html';
 import { getSource } from './registry';
 import { ipBanText, sourcePaused } from './ipBan';
 import { getHealth } from './store';
+import { isTlsMessage, tlsText } from './tls';
 import type { Source, SourceContext, SourceHealth, SourceResult } from './types';
 
 export const jackettHint = (): string => tr('sources.jackettHint');
@@ -139,6 +140,8 @@ export function healthText(h: SourceHealth | null): HealthLine | null {
   if (isCloudflare(h.message)) return { text: h.message!, tone: 'bad' };
   // the site's code page: its own message («torrent.by просит ввести проверочный код»), not «не отвечает»
   if (h.code === 'ipban' && h.message) return { text: h.message, tone: 'bad' };
+  // the site answered, but its certificate could not be verified: not «не отвечает»
+  if (h.code === 'tls' || isTlsMessage(h.message)) return { text: tlsText(), tone: 'bad' };
   return { text: tr('sources.state.noAnswer'), tone: 'bad' };
 }
 
@@ -168,9 +171,9 @@ export function cloudflareHint(s: Pick<Source, 'name' | 'browserLogin'>, loggedI
   return { text: tr('sources.cfHint.jackett', { name: s.name }), how: true };
 }
 
-/** A site behind Cloudflare: «за Cloudflare» joins its note unless the note is an error. */
+/** A site behind Cloudflare: «Cloudflare» joins its note unless the note is an error. */
 export function withCloudflareNote(note: HealthLine | null): HealthLine {
-  const cf = tr('sources.state.behindCf');
+  const cf = tr('sources.state.cloudflare');
   if (!note) return { text: cf, tone: 'muted' };
   if (note.tone === 'bad') return note;
   return { text: note.text + ' · ' + cf, tone: note.tone };

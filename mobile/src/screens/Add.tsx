@@ -4,6 +4,7 @@ import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { addCategories, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
 import { TvChip } from '../ui/TvChip';
+import { ScreenHeader } from '../ui/ScreenHeader';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { navigate } from '../nav';
@@ -150,8 +151,9 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const [sheet, setSheet] = useState<'sources' | 'sort' | 'filters' | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [rowCat, setRowCatState] = useState<Record<string, string>>(memo.rowCat);
-  const [catSheet, setCatSheet] = useState<string | null>(null);
   const [subSheet, setSubSheet] = useState(false);
+  // collapsed to one link under the search; opened at once when the screen comes with a link
+  const [magnetOpen, setMagnetOpen] = useState(!!link);
   void monitorVersion.value;
   const [pending, setPending] = useState<Record<string, RowBusy>>(() => Object.fromEntries(memo.busy));
   const [alive] = useState({ v: true });
@@ -200,7 +202,10 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     };
   }, []);
   useEffect(() => {
-    if (link) changeValue(link);
+    if (link) {
+      changeValue(link);
+      setMagnetOpen(true);
+    }
   }, [link]);
 
   // replacing a link by a different one forgets the category picked for the previous one
@@ -212,6 +217,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   };
 
   const magnetCategory = picked !== null ? picked : guessCategory(magnetName(value));
+  const linkEntered = normalizeLink(value) !== null;
   const categoryOfRow = (r: SourceResult) => {
     const v = rowCat[resultKey(r)];
     return v !== undefined ? v : guessCategory(r.Title);
@@ -357,42 +363,13 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   // a site that showed its code page: its own message («torrent.by просит ввести проверочный код»)
   const banned = prog ? prog.failed.map(ipBanNote).filter((x) => !!x) : [];
   const sortLabel = sortLabels().filter((s) => s.key === sort)[0].label;
-  const catRow = catSheet !== null ? (rows || []).filter((x) => resultKey(x) === catSheet)[0] : undefined;
 
   return (
     <div class="m-screen" data-route="add">
-      <div class="m-lib-head">
-        <h1 class="m-lib-brand">{t('common.add')}</h1>
+      <ScreenHeader title={t('common.add')}>
         <TvChip />
-      </div>
-      <div class="m-add-row">
-        <input
-          class="m-input m-lib-search"
-          aria-label={t('add.magnetLabel')}
-          placeholder="magnet:?xt=urn:btih:…"
-          value={value}
-          onInput={(e) => changeValue((e.target as HTMLInputElement).value)}
-        />
-        <button type="button" class="m-btn m-btn-primary m-btn-sm" disabled={busy} onClick={onAdd}>
-          {t('common.add')}
-        </button>
-      </div>
-      <div class="m-muted m-small">{t('add.category')}</div>
-      <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-        {addCategories().map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            class={'m-chip' + (magnetCategory === c.id ? ' on' : '')}
-            aria-pressed={magnetCategory === c.id}
-            onClick={() => setPicked(c.id)}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
-      {error && <div class="m-error">{error}</div>}
-      <div class="m-muted m-small">{t('add.magnetHint')}</div>
+      </ScreenHeader>
+      {/* search first: it is what this tab is for; the magnet row comes below it */}
       <h2 class="m-add-title">{t('add.searchBySources')}</h2>
       <form class="m-add-row" onSubmit={onSearch}>
         <input
@@ -424,6 +401,46 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           {sortLabel + ' ▾'}
         </button>
       </div>
+      {/* the magnet: a compact link under the search; the field opens in place (a shared link opens it at once) */}
+      {magnetOpen ? (
+        <div class="m-add-magnet" data-magnet-block>
+          <div class="m-add-row" data-magnet-row>
+            <input
+              class="m-input m-lib-search"
+              aria-label={t('add.magnetLabel')}
+              placeholder={t('add.magnetLabel')}
+              value={value}
+              onInput={(e) => changeValue((e.target as HTMLInputElement).value)}
+            />
+            <button type="button" class="m-btn m-btn-primary m-btn-sm" disabled={busy} onClick={onAdd}>
+              {t('common.add')}
+            </button>
+          </div>
+          {/* the category matters only for a link about to be added: the chips come once one is entered */}
+          {linkEntered && (
+            <div class="m-chips" role="group" aria-label={t('add.category')} data-magnet-category style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+              <span class="m-muted m-small">{t('add.category') + ':'}</span>
+              {addCategories().map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  class={'m-chip' + (magnetCategory === c.id ? ' on' : '')}
+                  aria-pressed={magnetCategory === c.id}
+                  onClick={() => setPicked(c.id)}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {error && <div class="m-error">{error}</div>}
+          <div class="m-muted m-small">{t('add.magnetHint')}</div>
+        </div>
+      ) : (
+        <button type="button" class="m-link m-add-magnet-link" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>
+          {t('add.byMagnet')}
+        </button>
+      )}
       {memo.handle && memo.searched && (
         <SubscribePlate query={memo.searched} onSubscribe={() => setSubSheet(true)} />
       )}
@@ -461,7 +478,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
               r={r}
               category={categoryOfRow(r)}
               busy={pending[k]}
-              onCategory={() => setCatSheet(k)}
+              onCategory={(id) => setRowCat({ ...memo.rowCat, [k]: id })}
               onAdd={() => void addResult(r, false)}
               onWatch={() => void addResult(r, true)}
             />
@@ -514,26 +531,6 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
               {sort === s.key && <Icon d={CHECK} size={20} />}
             </button>
           ))}
-        </Sheet>
-      )}
-      {catSheet !== null && (
-        <Sheet label={t('add.category')} onClose={() => setCatSheet(null)}>
-          <div class="m-sheet-title">{t('add.category')}</div>
-          <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-            {addCategories().map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                class={'m-chip' + ((rowCat[catSheet] !== undefined ? rowCat[catSheet] : guessCategory(catRow ? catRow.Title : '')) === c.id ? ' on' : '')}
-                onClick={() => {
-                  setRowCat({ ...rowCat, [catSheet]: c.id });
-                  setCatSheet(null);
-                }}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
         </Sheet>
       )}
       {subSheet && (
