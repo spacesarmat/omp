@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
 import { showToast } from './toast';
-import { QUALITY_LABELS, gbText, plural } from '../monitor/text';
+import { qualityLabels, gbText, plural } from '../monitor/text';
 import { askNotifyOnce, reloadMonitor } from '../monitor/ui';
 import { addSubscription, loadSubs, removeSubscription, updateSubscription } from '../../../src/monitor/subs';
 import type { SubQuality, Subscription, SubscriptionInput } from '../../../src/monitor/types';
@@ -141,7 +141,7 @@ export function SubSheet(p: {
         </div>
         <div class="m-muted m-small">Качество</div>
         <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-          {QUALITY_LABELS.map((q) => (
+          {qualityLabels().map((q) => (
             <button
               key={q.id}
               type="button"

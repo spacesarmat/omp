@@ -1,6 +1,7 @@
 // The background page's link to Android (android/.../monitor/MonitorHost.kt). Android adds the object
 // `OmpMonitorHost` (androidx.webkit addWebMessageListener, only for this app's origin) to the hidden WebView;
 // requests are JSON messages { id, op, ... } and every answer is { id, ok, value | error }.
+import { t } from '../../../src/i18n';
 import type { NativeHttpRequest } from '../../../src/sources/http';
 import type { MonitorSummary } from '../../../src/monitor/settings';
 import { sanitizeJournal, type JournalItem } from './journal';
@@ -59,7 +60,7 @@ export interface HostPort {
 }
 
 export const HOST_NAME = 'OmpMonitorHost';
-const FAILED = 'Нет ответа от приложения';
+const failed = (): string => t('notify.noReply');
 
 function parseAction(v: unknown): MonitorAction | null {
   if (!v || typeof v !== 'object') return null;
@@ -84,7 +85,7 @@ export function bridgeHost(port: HostPort): MonitorHost {
     if (!w) return;
     waiting.delete(m.id);
     if (m.ok === true) w.resolve(m.value);
-    else w.reject(new Error(typeof m.error === 'string' && m.error ? m.error : FAILED));
+    else w.reject(new Error(typeof m.error === 'string' && m.error ? m.error : failed()));
   };
   const send = (op: string, body: object): Promise<unknown> =>
     new Promise((resolve, reject) => {
@@ -94,7 +95,7 @@ export function bridgeHost(port: HostPort): MonitorHost {
         port.postMessage(JSON.stringify({ ...body, id, op }));
       } catch {
         waiting.delete(id);
-        reject(new Error(FAILED));
+        reject(new Error(failed()));
       }
     });
   return {

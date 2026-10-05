@@ -2,6 +2,7 @@
 // category and poster, the watch journal (omp.h) is moved to it with the files matched by episode, together with the skip
 // settings (omp.s), omp.w and every other key of `omp`; only then the old torrent is removed. Whatever fails before that,
 // the old torrent stays and a torrent added by this call is taken back. Chromium 53 safe.
+import { t as tr } from '../i18n';
 import type { Torrent } from '../api/types';
 import { parseTorrentData } from '../api/torrserver';
 import { baseName, episodeLabel, fileKind, parseEpisode, type TorrentFile } from '../lib/episodes';
@@ -183,22 +184,22 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
       .add({ link, title: newTitle || keptTitle(old), poster: old.poster || '', category: old.category || '' })
       .then(
         (t) => t,
-        () => stop('Не удалось добавить новую раздачу.'),
+        () => stop(tr('monitor.replace.addFailed')),
       )
       .then((t) => {
-        if (!t || !t.hash) return stop('Сервер не принял новую раздачу.');
-        if (sameHash(t.hash, old.hash)) return stop('Это та же раздача, заменять нечего.');
+        if (!t || !t.hash) return stop(tr('monitor.replace.notAccepted'));
+        if (sameHash(t.hash, old.hash)) return stop(tr('monitor.replace.sameTorrent'));
         // a torrent that was there before this call is never taken back
         preexisting = !!find(all, t.hash);
         added = t;
         return withTimeout(c.loadInfo(t.hash), timeoutMs).then(
           (info) => ({ t, info }),
-          () => stop('Новая раздача не получила список файлов. Старая раздача осталась.'),
+          () => stop(tr('monitor.replace.noFileList')),
         );
       })
       .then((x) => {
         const newFiles = filesOf(x.info);
-        if (!newFiles.length) return stop('В новой раздаче нет файлов. Старая раздача осталась.');
+        if (!newFiles.length) return stop(tr('monitor.replace.noFiles'));
         // the list holds the torrent as the server stores it (its own `data`), the same source the journal writes read
         return c.list().then(
           (all2) => ({ info: x.info, listed: find(all2, x.t.hash) || { ...x.t, ...x.info }, newFiles, oldNow: find(all2, old.hash) || old }),
@@ -208,7 +209,7 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
       .then((x) => {
         // the old torrent as it is now: playback may have written the journal while the new one was loading
         const oldP = parseData(x.oldNow.data);
-        if (!oldP) return stop('Данные раздачи не удалось прочитать. Старая раздача осталась.');
+        if (!oldP) return stop(tr('monitor.replace.oldUnreadable'));
         const oldFiles = filesOf(x.oldNow).length ? filesOf(x.oldNow) : filesOf(old);
         const needFiles = oldP.journal.length > 0 && !oldFiles.length;
         // the file list of the old torrent is needed to map its history: ask the server, never drop the history silently
@@ -219,7 +220,7 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
             )
           : Promise.resolve(oldFiles);
         return files.then((of) => {
-          if (needFiles && !of.length) return stop('Не удалось получить список файлов старой раздачи, чтобы перенести историю. Старая раздача осталась.');
+          if (needFiles && !of.length) return stop(tr('monitor.replace.oldFilesFailed'));
           return { ...x, oldP, oldFiles: of };
         });
       })
@@ -227,7 +228,7 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
         const listed = x.listed;
         const oldParsed = x.oldP;
         const newParsed = parseData(listed.data || x.info.data);
-        if (!newParsed) return stop('Данные новой раздачи не удалось прочитать. Старая раздача осталась.');
+        if (!newParsed) return stop(tr('monitor.replace.newUnreadable'));
         const base = baseOf({ ...listed, file_stats: listed.file_stats || x.newFiles } as Torrent, newParsed);
         const journal = mapJournal(oldParsed.journal, mapFiles(x.oldFiles, x.newFiles));
         // everything of the old `omp` (skip settings, omp.w, keys of newer versions) goes over; the history is rebuilt
@@ -244,7 +245,7 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
         const carried = !!oldOmp || journal.length > 0 || !!skip;
         const differs = (!!old.poster && listed.poster !== old.poster) || (listed.title !== title) || (category !== (listed.category || ''));
         if (!carried && !differs) return Promise.resolve({ done });
-        const failed = (): Promise<never> => stop('Не удалось перенести историю в новую раздачу. Старая раздача осталась.');
+        const failed = (): Promise<never> => stop(tr('monitor.replace.historyFailed'));
         // TorrServerClient.setData writes nothing for an empty title: that would lose the history
         if (!title) return failed();
         return c
@@ -267,13 +268,13 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
       .list()
       .then(
         (all) => all,
-        () => stop('Сервер недоступен.'),
+        () => stop(tr('monitor.replace.serverDown')),
       )
       .then((all) => {
         const old = find(all, oldHash);
-        if (!old) return stop('Раздача не найдена на сервере.');
+        if (!old) return stop(tr('monitor.replace.notFound'));
         const oldParsed = parseData(old.data);
-        if (!oldParsed) return stop('Данные раздачи не удалось прочитать, замена отменена.');
+        if (!oldParsed) return stop(tr('monitor.replace.cancelled'));
         return prepare(old, oldParsed, all).then((p) =>
           c.remove(old.hash).then(
             (): ReplaceResult => {
@@ -285,7 +286,7 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
               // both exist now and the history is on the new one: keep both and say so
               added = null;
               swapInLibrary('', p.done);
-              return { ok: false, error: 'Новая раздача добавлена, но старую удалить не удалось.' };
+              return { ok: false, error: tr('monitor.replace.removeOldFailed') };
             },
           ),
         );
@@ -293,7 +294,7 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
 
   return run().then(
     (r) => r,
-    (e) => undo().then((): ReplaceResult => ({ ok: false, error: e instanceof Step ? e.msg : 'Не удалось заменить раздачу.' })),
+    (e) => undo().then((): ReplaceResult => ({ ok: false, error: e instanceof Step ? e.msg : tr('monitor.replace.failed') })),
   );
 }
 
@@ -307,6 +308,6 @@ export function replaceWithResult(
 ): Promise<ReplaceResult> {
   return resolveLink(result, ctx).then(
     (link) => replaceTorrent(c, oldHash, link, { ...(opts || {}), title: (opts && opts.title) || result.Title }),
-    (e): ReplaceResult => ({ ok: false, error: e && typeof e.message === 'string' && e.message ? e.message : 'Не удалось получить ссылку на раздачу' }),
+    (e): ReplaceResult => ({ ok: false, error: e && typeof e.message === 'string' && e.message ? e.message : tr('monitor.replace.noLink') }),
   );
 }

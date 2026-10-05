@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
+import type { Subscription } from '../../src/monitor/types';
 import { checkedLine, episodesLine, freshText, hoursText, rangeText, subRule, summaryLines, whenText } from '../src/monitor/text';
 
 const at = (h: number, m: number, dayShift = 0) => new Date(2026, 9, 3 + dayShift, h, m).getTime();
+
+afterEach(() => applyLanguageSetting('ru'));
 
 describe('monitoring texts', () => {
   it('times: today, yesterday, a date', () => {
@@ -46,5 +50,39 @@ describe('monitoring texts', () => {
     expect(
       summaryLines({ at: at(14, 20), kind: 'check', found: 0, notified: 0, answered: 7, asked: 8, subs: 3, skipped: 2, feed: false, error: 'Сервер недоступен' }, now),
     ).toEqual(['Последняя проверка: сегодня 14:20', 'Новых раздач нет', 'Источники: 7 из 8 ответили', 'Не успели проверить: 2 подписки', 'Сервер недоступен']);
+  });
+});
+
+describe('monitoring texts in English', () => {
+  it('has no Russian and reads naturally', () => {
+    applyLanguageSetting('en');
+    const now = at(15, 0);
+    const sub = { id: 's', query: 'Dune', quality: '1080', sources: null, notify: false, minSeeds: 20, maxSizeGb: 30 } as unknown as Subscription;
+    const all = [
+      whenText(at(14, 20), now),
+      whenText(at(9, 5, -1), now),
+      whenText(at(9, 5, -3), now),
+      checkedLine({ last: at(14, 20), next: at(17, 20), enabled: true, now }),
+      checkedLine({ last: null, next: null, enabled: false, now }),
+      ...[1, 3].map(hoursText),
+      freshText(2),
+      subRule(sub),
+      episodesLine({ torrentHash: 'h', torrentTitle: 'S', season: 1, haveTo: 8, from: 1, to: 10 }),
+      rangeText('Show S01E01-10 of 10'),
+      ...summaryLines({ at: at(14, 20), kind: 'check', found: 3, notified: 0, answered: 7, asked: 8, subs: 3, skipped: 2, feed: false, notifyBlocked: true }, now),
+    ];
+    for (const line of all) expect(line).not.toMatch(/[А-Яа-яЁё]/);
+    expect(whenText(at(14, 20), now)).toBe('today 14:20');
+    expect(whenText(at(9, 5, -3), now)).toBe('Sep 30 09:05');
+    expect(checkedLine({ last: at(14, 20), next: at(17, 20), enabled: true, now })).toBe('Checked at 14:20 · next check around 17:20');
+    expect(hoursText(1)).toBe('every hour');
+    expect(hoursText(3)).toBe('every 3 hours');
+    expect(subRule(sub)).toBe('All sources · 1080p+ · 20+ seeds · up to 30 GB · no notifications');
+    expect(summaryLines({ at: at(14, 20), kind: 'check', found: 3, notified: 0, answered: 7, asked: 8, subs: 3, skipped: 2, feed: false }, now)).toEqual([
+      'Last check: today 14:20',
+      'New found: 3',
+      'Sources: 7 of 8 answered',
+      'Not checked in time: 2 subscriptions',
+    ]);
   });
 });

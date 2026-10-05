@@ -3,6 +3,7 @@
 // A check: subscriptions → new episodes of the library series → the «Новое» feed, each only while time is left.
 // A notification button: «Добавить» a subscription finding / «Заменить» a series torrent.
 import { errorMessage } from '../../../src/api/http';
+import { t, tp } from '../../../src/i18n';
 import type { Torrent } from '../../../src/api/types';
 import { log, flushLog } from '../../../src/lib/log';
 import { guessCategory } from '../../../src/lib/categoryGuess';
@@ -53,17 +54,6 @@ const AFTER_ADD_MS = 15_000;
 /** Next library series to check: big libraries are covered over several runs. */
 export const EPISODE_CURSOR_KEY = 'tsp.monitorEpisodeCursor';
 
-const NO_SERVER = 'Сервер не выбран';
-const GONE = 'Находка больше не доступна — откройте OMP';
-
-function plural(n: number, one: string, few: string, many: string): string {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
-}
-
 /** «Дюна 2160p: 2 новые раздачи» / «Дюна 2160p · 2 новые раздачи» as in the mockup. */
 export function subNotification(sub: Subscription, found: Finding[]): MonitorNotification {
   const n = found.length;
@@ -79,7 +69,7 @@ export function subNotification(sub: Subscription, found: Finding[]): MonitorNot
     id: 'sub:' + sub.id,
     subId: sub.id,
     key: top.key,
-    title: sub.query + q + ': ' + n + ' ' + plural(n, 'новая раздача', 'новые раздачи', 'новых раздач'),
+    title: sub.query + q + ': ' + tp('notify.newTorrents', n),
     text: parts.join(' · '),
     action: 'add',
   };
@@ -94,17 +84,21 @@ export function episodeNotification(f: Finding): MonitorNotification {
   const e = f.episodes!;
   const name = seriesQuery(e.torrentTitle) || e.torrentTitle;
   const first = e.haveTo + 1;
-  const title = first >= e.to ? name + ': вышла серия ' + e.to : name + ': вышли серии ' + first + '–' + e.to;
+  const title = first >= e.to ? t('notify.episodeTitle', { name: name, to: e.to }) : t('notify.episodesTitle', { name: name, from: first, to: e.to });
   const total = parseEpisodeRange(f.result.Title).total;
-  const all = range(e.from !== undefined ? e.from : 1, e.to) + (total ? ' из ' + total : '');
-  const text = 'Новая раздача на ' + sourceName(f.result.source) + ': ' + (e.from !== undefined && e.from >= e.to ? 'серия ' : 'серии ') + all +
-    '. У вас ' + range(1, e.haveTo) + '.';
+  const rng = range(e.from !== undefined ? e.from : 1, e.to);
+  const all = total ? t('notify.rangeOfTotal', { range: rng, total: total }) : rng;
+  const text = t(e.from !== undefined && e.from >= e.to ? 'notify.newReleaseEpisode' : 'notify.newReleaseEpisodes', {
+    source: sourceName(f.result.source),
+    all: all,
+    have: range(1, e.haveTo),
+  });
   return { channel: 'episodes', id: 'ep:' + e.torrentHash, subId: EPISODES_ID, key: f.key, title, text, action: 'replace' };
 }
 
 /** SourceHttp / secrets over the host; the page never writes secrets. */
 export function hostContext(host: MonitorHost, client: MonitorClient | null): SourceContext {
-  const readOnly = () => Promise.reject(new Error('Недоступно в фоне'));
+  const readOnly = () => Promise.reject(new Error(t('notify.readOnly')));
   return {
     http: createSourceHttp((req) => host.http(req)),
     client,
@@ -135,17 +129,17 @@ function emptySummary(at: number, kind: MonitorSummary['kind']): MonitorSummary 
 /** Runs one notification button; never rejects. */
 export async function runAction(deps: PageDeps, a: MonitorAction): Promise<MonitorActionResult> {
   const f = loadFound().filter((x) => x.subId === a.subId && x.key === a.key)[0];
-  if (!f || (a.kind === 'replace' && !f.episodes)) return { ok: false, message: GONE };
+  if (!f || (a.kind === 'replace' && !f.episodes)) return { ok: false, message: t('notify.gone') };
   const title = f.result.Title;
   const c = deps.client();
-  if (!c) return { ok: false, message: NO_SERVER, title };
+  if (!c) return { ok: false, message: t('errors.noServerSelected'), title };
   const ctx = hostContext(deps.host, c);
   if (a.kind === 'replace') {
     const r = await replaceWithResult(c, f.episodes!.torrentHash, f.result, ctx);
     if (!r.ok) return { ok: false, message: r.error, title };
     removeFindings(EPISODES_ID, f.key);
     await persist(deps, [{ s: EPISODES_ID, k: f.key, a: 'replace' }]);
-    return { ok: true, message: 'Заменено', title };
+    return { ok: true, message: t('notify.replaced'), title };
   }
   try {
     const link = await resolveLink(f.result, ctx);
@@ -153,7 +147,7 @@ export async function runAction(deps: PageDeps, a: MonitorAction): Promise<Monit
     markFindingsSeen(f.subId, [f.key]);
     await persist(deps, [{ s: f.subId, k: f.key, a: 'add' }]);
     if (deps.afterAdd) await withTimeout(deps.afterAdd(c, added, title), AFTER_ADD_MS);
-    return { ok: true, message: 'Добавлено на сервер', title };
+    return { ok: true, message: t('notify.added'), title };
   } catch (e) {
     return { ok: false, message: errorMessage(e), title };
   }
@@ -217,7 +211,7 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
 
   // new episodes of the library series, one series at a time
   if (settings.episodes && left() >= EPISODE_MARGIN_MS) {
-    if (!c) s.error = NO_SERVER;
+    if (!c) s.error = t('errors.noServerSelected');
     else {
       let list: Torrent[] | null = null;
       try {
@@ -270,14 +264,16 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
 function logSummary(s: MonitorSummary): void {
   try {
     if (s.kind === 'action') {
-      // the message is generic Russian text; the release title is never logged
-      if (s.action && !s.action.ok) log('error', 'monitor', 'Действие из уведомления не выполнено: ' + s.action.message);
-      else log('info', 'monitor', 'Действие из уведомления выполнено');
+      // the message is generic text; the release title is never logged
+      if (s.action && !s.action.ok) log('error', 'monitor', t('notify.logActionFailed', { message: s.action.message }));
+      else log('info', 'monitor', t('notify.logActionDone'));
     } else
       log(
         s.error ? 'error' : 'info',
         'monitor',
-        'Фоновая проверка: подписок ' + s.subs + ', найдено ' + s.found + ', источников ' + s.answered + ' из ' + s.asked + (s.skipped ? ', пропущено ' + s.skipped : '') + (s.error ? '. ' + s.error : ''),
+        t('notify.logRun', { subs: s.subs, found: s.found, answered: s.answered, asked: s.asked }) +
+          (s.skipped ? t('notify.logSkipped', { n: s.skipped }) : '') +
+          (s.error ? t('notify.logError', { error: s.error }) : ''),
       );
     flushLog();
   } catch {
