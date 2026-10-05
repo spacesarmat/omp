@@ -602,25 +602,59 @@ describe('the background load of the film checks', () => {
     expect(filmQueries(q)).toEqual([0, 1, 2]);
   });
 
-  it('a backlog of series leaves the films their share and the feed its turn', async () => {
+  function seriesList(n: number): Torrent[] {
+    const out: Torrent[] = [];
+    for (let i = 0; i < n; i++)
+      out.push({ hash: String.fromCharCode(97 + i).repeat(40), title: 'Сериал ' + 'абвгдежзиклм'[i] + ' / Сезон: 1 / Серии: 1-8 из 10 [2026]', category: 'tv' } as Torrent);
+    return out;
+  }
+  const seriesQueries = (q: string[]) => q.filter((x) => x.indexOf('Сериал') === 0);
+
+  it('a backlog of series: the series keep their time, the films wait for a run the series finish, the feed runs', async () => {
     const clock = { now: 1_000_000 };
     const q: string[] = [];
     const calls: string[] = [];
-    const series: Torrent[] = [];
-    for (let i = 0; i < 12; i++)
-      series.push({ hash: String.fromCharCode(97 + i).repeat(40), title: 'Сериал ' + 'абвгдежзиклм'[i] + ' / Сезон: 1 / Серии: 1-8 из 10 [2026]', category: 'tv' } as Torrent);
     const host = fakeHost({ deadline: clock.now + 180_000 });
     const s = await runMonitor(
       deps(host, {
-        client: () => fakeClient(series.concat(films)),
+        client: () => fakeClient(seriesList(12).concat(films)),
         check: { search: slowSearch(clock, 20_000, q) },
         feed: { from: [feedSource(calls)] },
         now: () => clock.now,
       }),
     );
-    expect(q.filter((x) => x.indexOf('Сериал') === 0).length).toBeGreaterThan(0);
-    expect(filmQueries(q).length).toBeGreaterThan(0);
+    // 172 s: series start at 172, 152, … 52 s left (down to EPISODE_MARGIN_MS), whatever films are due
+    expect(seriesQueries(q)).toHaveLength(7);
+    expect(filmQueries(q)).toEqual([]);
     expect(s.feed).toBe(true);
+  });
+
+  it('many due films and slow subscriptions: the series are still checked; the films get only what they leave', async () => {
+    const many: Torrent[] = [];
+    for (let i = 0; i < 40; i++) many.push({ hash: (i < 10 ? '0' : '') + i + 'f'.repeat(38), title: NAMES[i % NAMES.length] + ' (2026) WEB-DL 1080p', category: 'movie' } as Torrent);
+    const run = async (series: number) => {
+      localStorage.clear();
+      ['Дюна', 'Солярис', 'Сталкер'].forEach((query) => addSubscription({ query, quality: '', sources: null, notify: true }));
+      const clock = { now: 1_000_000 };
+      const q: string[] = [];
+      const inner = fakeSearch({}, q);
+      // a subscription search takes 40 s, a series 25 s, a film 10 s
+      const search: SearchFn = (query, opts) => {
+        clock.now += query.indexOf('Сериал') === 0 ? 25_000 : / 2026$/.test(query) ? 10_000 : 40_000;
+        return inner(query, opts);
+      };
+      await runMonitor(deps(fakeHost({ deadline: clock.now + 180_000 }), { client: () => fakeClient(seriesList(series).concat(many)), check: { search }, now: () => clock.now }));
+      return q;
+    };
+    // the subscriptions take 120 s of 172: one series fits (52 s left), the second does not (27 s); the series ran
+    // out of time, so no film this run although 27 s would fit one
+    let q = await run(2);
+    expect(seriesQueries(q)).toHaveLength(1);
+    expect(filmQueries(q)).toEqual([]);
+    // one series: it is done, and the films get the 27 s it leaves: one film (the next would start 17 s before the end)
+    q = await run(1);
+    expect(seriesQueries(q)).toHaveLength(1);
+    expect(filmQueries(q)).toHaveLength(1);
   });
 
   it('a paused torrent.by is not asked by the film checks', async () => {

@@ -2,11 +2,12 @@
 // origin, so it reads the same localStorage (subscriptions, findings, servers, settings) as the app.
 // A check, each step only while time is left (the budget is RUN_LIMIT_MS on Android, about 3 minutes):
 //   1. subscriptions, two at a time, until SUB_MARGIN_MS before the deadline;
-//   2. new episodes of the library series, until EPISODE_MARGIN_MS plus the films' share (BETTER_SHARE_MS, only when
-//      some film is due) before the deadline;
+//   2. new episodes of the library series, until EPISODE_MARGIN_MS before the deadline (the series always come before
+//      the films);
 //   3. the «Новое» feed when stale (cheap: feedFresh), when FEED_MARGIN_MS are left;
-//   4. better releases of the library films last: at most BETTER_PER_RUN films, the never checked and then the longest
-//      unchecked first, each started within BETTER_SHARE_MS of the first and BETTER_MARGIN_MS before the deadline.
+//   4. better releases of the library films last, only with the time the series leave: none in a run where the series
+//      ran out of time; else at most BETTER_PER_RUN films, the never checked and then the longest unchecked first,
+//      each started within BETTER_SHARE_MS of the first and BETTER_MARGIN_MS before the deadline.
 // So the films never take the turn of the subscriptions, the series or the feed, and a big library is covered over
 // several runs (each film at most once a day, tsp.betterChecked). Sites paused by their code page (tsp.sourcePause)
 // are not asked from here (hostContext: background).
@@ -67,7 +68,7 @@ export const FINISH_MARGIN_MS = 8_000;
 export const BETTER_MARGIN_MS = SOURCE_TIMEOUT_MS + 5_000;
 /** Films checked per run at most. */
 export const BETTER_PER_RUN = 5;
-/** The films' share of a run: no film check starts later than this after the first one; kept free by the series. */
+/** The films' share of a run at most: no film check starts later than this after the first one. */
 export const BETTER_SHARE_MS = 45_000;
 const AFTER_ADD_MS = 15_000;
 /** Next library series to check: big libraries are covered over several runs. */
@@ -271,12 +272,10 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
         if (settings.better) films = dueFilms(list as LibraryTorrent[], now()).slice(0, BETTER_PER_RUN);
       }
       if (settings.episodes) {
-        // the films' share is kept free when some film is due
-        const margin = EPISODE_MARGIN_MS + (films.length ? BETTER_SHARE_MS : 0);
         const watched = (list || []).filter((t) => isWatchedSeries(t as LibraryTorrent));
         const start = watched.length ? cursor() % watched.length : 0;
         let done = 0;
-        for (; done < watched.length && left() >= margin; done++) {
+        for (; done < watched.length && left() >= EPISODE_MARGIN_MS; done++) {
           const t = watched[(start + done) % watched.length];
           const found = await checkNewEpisodes(ctx, [t], check);
           for (const f of found) {
@@ -286,6 +285,8 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
           }
         }
         if (watched.length) saveJson(EPISODE_CURSOR_KEY, (start + done) % watched.length);
+        // the series ran out of time: the films wait for a run that gets through the series
+        if (done < watched.length) films = [];
       }
     }
   }
@@ -307,7 +308,7 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
     s.feed = refreshed.some((x) => x);
   }
 
-  // better releases of the films, last and within their share
+  // better releases of the films, last, with the time the series left and within their share
   const filmsFrom = now();
   for (const film of films) {
     if (left() < BETTER_MARGIN_MS || now() - filmsFrom >= BETTER_SHARE_MS) break;
