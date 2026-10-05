@@ -1,10 +1,12 @@
 // Checking subscriptions: the unified search over the subscription's sources, its filters, then the results not seen
+// before. A «Только лучшее качество» subscription reports only the best new result above the best rank it reported
 // before. The first check of a subscription (and the first answer of each source) only remembers what is there.
 // Chromium 53 safe.
 import { searchAll, SOURCE_TIMEOUT_MS, type SearchAllOptions, type SearchHandle } from '../sources/search';
 import type { Source, SourceContext, SourceResult } from '../sources/types';
 import { filterForSubscription, isSeen, resultKeys, seenEntry, seenIndex } from './match';
-import { addFindings, getSubscription, loadSubs, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
+import { qualityRank } from './quality';
+import { addFindings, bestRank, getSubscription, loadSubs, rememberBestRank, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
 import type { Finding, Subscription } from './types';
 
 /** searchAll or a test double. */
@@ -74,6 +76,25 @@ function sourcesOf(r: SourceResult): string[] {
   return [r.source].concat(r.sources || []);
 }
 
+/** «Только лучшее качество»: the one best new result (rank, then seeds) above the rank reported before; remembers it. */
+function bestOnly(subId: string, list: SourceResult[]): SourceResult[] {
+  const floor = bestRank(subId);
+  let pick: SourceResult | null = null;
+  let pickRank = -1;
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i];
+    const rank = qualityRank(r.Title);
+    if (rank <= floor) continue;
+    if (!pick || rank > pickRank || (rank === pickRank && (r.Seed || 0) > (pick.Seed || 0))) {
+      pick = r;
+      pickRank = rank;
+    }
+  }
+  if (!pick) return [];
+  rememberBestRank(subId, pickRank);
+  return [pick];
+}
+
 /**
  * Checks one subscription (see the file comment); never rejects. A source answering for the first time is silent too:
  * a result only it lists is remembered, not reported.
@@ -91,9 +112,9 @@ export function checkSubscription(ctx: SourceContext, sub: Subscription, opts?: 
       const known = seenSources(sub.id);
       const index = seenIndex(seen);
       const at = o.now === undefined ? Date.now() : o.now;
-      base.findings = matched
-        .filter((r) => !isSeen(r, index) && sourcesOf(r).some((id) => known.indexOf(id) >= 0))
-        .map((r) => ({ subId: sub.id, key: resultKeys(r)[0], result: r, at }));
+      let fresh = matched.filter((r) => !isSeen(r, index) && sourcesOf(r).some((id) => known.indexOf(id) >= 0));
+      if (sub.better) fresh = bestOnly(sub.id, fresh);
+      base.findings = fresh.map((r) => ({ subId: sub.id, key: resultKeys(r)[0], result: r, at }));
       addFindings(base.findings);
     }
     rememberSeen(sub.id, matched.map(seenEntry), out.answered);
