@@ -18,7 +18,6 @@ import { allSources } from '../../../src/sources/registry';
 import { enabledSources } from '../../../src/sources/store';
 import { getHealth } from '../../../src/sources/store';
 import {
-  filterQuality,
   isCloudflare,
   jackettHint,
   progressText,
@@ -27,11 +26,12 @@ import {
   sourceName,
   stableOrder,
   sortLabels,
-  type QualityFilter,
   type SortKey,
 } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import { loadSubs } from '../../../src/monitor/subs';
+import { applyFilters, activeFilterCount, filterChips, parseRelease, subQualityOf, type SearchFilters } from '../../../src/sources/filters';
+import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
 import { ResultCard } from '../ui/ResultCard';
 import { SubSheet } from '../ui/SubSheet';
 import { addSearchResult, type RowBusy } from '../addResult';
@@ -93,10 +93,10 @@ interface SearchMemo {
   query: string;
   /** The query of the search on screen and the filters it ran with (the «Подписаться» plate). */
   searched: string;
-  searchedQuality: QualityFilter;
+  searchedQuality: '' | '720' | '1080' | '2160';
   searchedSources: string[] | null;
   chosen: string[] | null;
-  quality: QualityFilter;
+  filters: SearchFilters;
   sort: SortKey;
   handle: SearchHandle | null;
   /** Row order on screen while results stream in. */
@@ -109,7 +109,7 @@ interface SearchMemo {
 }
 
 function freshMemo(): SearchMemo {
-  return { query: '', searched: '', searchedQuality: '', searchedSources: null, chosen: null, quality: '', sort: 'seeds', handle: null, order: [], rowCat: {}, server: null, busy: new Map() };
+  return { query: '', searched: '', searchedQuality: '', searchedSources: null, chosen: null, filters: loadSearchFilters(), sort: 'seeds', handle: null, order: [], rowCat: {}, server: null, busy: new Map() };
 }
 
 let memo: SearchMemo = freshMemo();
@@ -134,13 +134,13 @@ export function Add({ link }: { link?: string }) {
   const [error, setError] = useState('');
   const [query, setQueryState] = useState(memo.query);
   const [chosen, setChosenState] = useState<string[] | null>(memo.chosen);
-  const [quality, setQualityState] = useState<QualityFilter>(memo.quality);
+  const [filters, setFiltersState] = useState<SearchFilters>(memo.filters);
   const [sort, setSortState] = useState<SortKey>(memo.sort);
   const [rows, setRows] = useState<SourceResult[] | null>(memo.handle ? memo.handle.results() : null);
   const [prog, setProg] = useState<Prog | null>(memo.handle ? progOf(memo.handle) : null);
   const [searching, setSearching] = useState(memo.handle ? memo.handle.pending().length > 0 : false);
   const [searchError, setSearchError] = useState('');
-  const [sheet, setSheet] = useState<'sources' | 'sort' | null>(null);
+  const [sheet, setSheet] = useState<'sources' | 'sort' | 'filters' | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [rowCat, setRowCatState] = useState<Record<string, string>>(memo.rowCat);
   const [catSheet, setCatSheet] = useState<string | null>(null);
@@ -161,10 +161,11 @@ export function Add({ link }: { link?: string }) {
     setChosenState(v);
   };
   // a new filter or sort re-sorts everything at once
-  const setQuality = (v: QualityFilter) => {
-    memo.quality = v;
+  const setFilters = (v: SearchFilters) => {
+    memo.filters = v;
     memo.order = [];
-    setQualityState(v);
+    saveSearchFilters(v);
+    setFiltersState(v);
   };
   const setSort = (v: SortKey) => {
     memo.sort = v;
@@ -278,7 +279,7 @@ export function Add({ link }: { link?: string }) {
     });
     memo.handle = h;
     memo.searched = q;
-    memo.searchedQuality = quality;
+    memo.searchedQuality = subQualityOf(filters);
     memo.searchedSources = allChosen ? null : selected;
     memo.server = server;
     memo.order = [];
@@ -331,9 +332,11 @@ export function Add({ link }: { link?: string }) {
 
   // while sources still answer, rows on screen keep their places (no row moves under the finger);
   // the full sort comes when the search ends
-  const filtered = rows ? filterQuality(rows, quality) : [];
+  const filtered = rows ? applyFilters(rows, filters) : [];
   const visible = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
   memo.order = visible.map(resultKey);
+  const seasons = Array.from(new Set((rows || []).reduce((a: number[], r) => a.concat(parseRelease(r.Title).seasons), []))).sort((a, b) => a - b).slice(0, 12);
+  const nFilters = activeFilterCount(filters);
   const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
   const sortLabel = sortLabels().filter((s) => s.key === sort)[0].label;
   const catRow = catSheet !== null ? (rows || []).filter((x) => resultKey(x) === catSheet)[0] : undefined;
@@ -391,16 +394,13 @@ export function Add({ link }: { link?: string }) {
         <button type="button" class={'m-chip' + (allChosen ? ' on' : '')} aria-haspopup="dialog" onClick={() => setSheet('sources')}>
           {sourcesLabel}
         </button>
-        {(['1080', '2160'] as QualityFilter[]).map((q) => (
-          <button
-            key={q}
-            type="button"
-            class={'m-chip' + (quality === q ? ' on' : '')}
-            aria-pressed={quality === q}
-            onClick={() => setQuality(quality === q ? '' : q)}
-          >
-            {q === '1080' ? '1080p+' : '2160p'}
-          </button>
+        <button type="button" class={'m-chip' + (nFilters ? ' on' : '')} aria-haspopup="dialog" onClick={() => setSheet('filters')}>
+          {nFilters ? t('filters.title') + ' · ' + nFilters : t('filters.title')}
+        </button>
+        {filterChips(filters).map((c) => (
+          <span key={c} class="m-chip m-chip-static">
+            {c}
+          </span>
         ))}
         <button type="button" class="m-chip" aria-haspopup="dialog" onClick={() => setSheet('sort')}>
           {sortLabel + ' ▾'}
@@ -468,6 +468,9 @@ export function Add({ link }: { link?: string }) {
             {t('tvSettings.sources')}
           </button>
         </Sheet>
+      )}
+      {sheet === 'filters' && (
+        <FiltersSheet value={filters} seasons={seasons} count={filtered.length} onChange={setFilters} onClose={() => setSheet(null)} />
       )}
       {sheet === 'sort' && (
         <Sheet label={t('add.sort')} onClose={() => setSheet(null)}>
