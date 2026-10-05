@@ -126,14 +126,20 @@ function progOf(h: SearchHandle): Prog {
   return { answered: h.answered().length, total: h.sourceIds.length, pending: h.pending(), failed: h.failed() };
 }
 
-export function Add({ link, query: initialQuery, run }: { link?: string; query?: string; run?: boolean }) {
+/** Route entries whose ready query was taken (and searched) already: back to one keeps the person's own query. */
+const takenEntries = new WeakSet<object>();
+
+export function Add({ link, query: initialQuery, run, entry }: { link?: string; query?: string; run?: boolean; entry?: object }) {
+  // the ready query of «Обзор» counts once per route entry (back from another screen remounts the same entry)
+  const fresh = useRef<boolean | null>(null);
+  if (fresh.current === null) fresh.current = !(entry && takenEntries.has(entry));
   // results of another server must not be added to this one
   const server = client.value ? client.value.baseUrl : null;
   if (memo.handle && memo.server !== server) resetAddSearch();
   const [value, setValue] = useState(link || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [query, setQueryState] = useState(initialQuery || memo.query);
+  const [query, setQueryState] = useState((fresh.current && initialQuery) || memo.query);
   const [chosen, setChosenState] = useState<string[] | null>(memo.chosen);
   const [filters, setFiltersState] = useState<SearchFilters>(memo.filters);
   const [sort, setSortState] = useState<SortKey>(memo.sort);
@@ -287,10 +293,11 @@ export function Add({ link, query: initialQuery, run }: { link?: string; query?:
     sync(h);
   };
 
-  // arriving from «Обзор» with a ready query: the field is filled and the search starts once
+  // arriving from «Обзор» with a ready query: the field is filled and the search starts, once per route entry
   useEffect(() => {
     const q = (initialQuery || '').trim();
-    if (!q) return;
+    if (!q || !fresh.current) return;
+    if (entry) takenEntries.add(entry);
     memo.query = initialQuery || '';
     if (run) runSearch(q, {});
   }, []);

@@ -145,6 +145,30 @@ describe('Add', () => {
     expect(el.querySelectorAll('.m-result').length).toBe(2);
   });
 
+  it('back to the same route entry does not run the search again or bring back the original query', async () => {
+    const s = vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    const entry = { name: 'add' as const, query: 'starbound', run: true };
+    act(() => render(<Add query={entry.query} run entry={entry} />, el));
+    await flush();
+    expect(s).toHaveBeenCalledTimes(2);
+    // the person refines the query, opens another screen and comes back
+    type('input[aria-label="Поиск по источникам"]', 'starbound s02');
+    act(() => render(null, el));
+    act(() => render(<Add query={entry.query} run entry={entry} />, el));
+    await flush();
+    expect((el.querySelector('input[aria-label="Поиск по источникам"]') as HTMLInputElement).value).toBe('starbound s02');
+    expect(s).toHaveBeenCalledTimes(2);
+    // a new entry (another «Найти раздачи») runs again
+    const next = { name: 'add' as const, query: 'dune', run: true };
+    act(() => render(null, el));
+    act(() => render(<Add query={next.query} run entry={next} />, el));
+    await flush();
+    expect(s).toHaveBeenCalledTimes(4);
+    expect(s).toHaveBeenCalledWith('dune', 'rutor');
+  });
+
   it('«Добавить и смотреть на ТВ» adds then launches', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);

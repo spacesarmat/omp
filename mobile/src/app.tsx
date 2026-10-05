@@ -264,7 +264,7 @@ export function App() {
       ) : route.name === 'torrent' ? (
         <Torrent hash={route.hash} />
       ) : route.name === 'add' ? (
-        <Add link={route.link} query={route.query} run={route.run} />
+        <Add link={route.link} query={route.query} run={route.run} entry={route} />
       ) : route.name === 'nowPlaying' ? (
         <NowPlaying />
       ) : route.name === 'localServer' ? (
