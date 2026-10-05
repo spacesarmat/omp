@@ -4,11 +4,13 @@ import {
   buildTransferPayload,
   forgetSiteLogin,
   LOGIN_SITES,
+  SESSION_SITES,
   parseRemoteSources,
   siteLoginFromPhone,
   siteLoginsNotStored,
   siteLoginsState,
   transferLogins,
+  transferSessions,
   validateTransferPayload,
   withoutNewParts,
 } from '../../src/sources/transfer';
@@ -18,6 +20,7 @@ import { clearLog, logEntries } from '../../src/lib/log';
 import { kinozal } from '../../src/sources/kinozal';
 import { resetMirrors } from '../../src/sources/mirrors';
 import { rustorka } from '../../src/sources/rustorka';
+import { nnmclub } from '../../src/sources/nnmclub';
 import { siteLoginError } from '../../src/sources/siteLoginText';
 import { fakeSite, fixture, page } from './fakeSite';
 import type { HttpCall } from './fakeSite';
@@ -40,6 +43,18 @@ beforeEach(() => {
 });
 
 describe('site logins in the transfer', () => {
+  it('NNM-Club\'s login and browser session travel like Kinozal\'s', async () => {
+    const p = buildTransferPayload([nnmclub], null, undefined, null, { nnmclub: { username: 'nnm', password: PASS } });
+    expect(p.logins).toEqual({ nnmclub: { username: 'nnm', password: PASS } });
+    expect(p.cloudflare).toEqual({ nnmclub: false });
+    expect(validateTransferPayload(p)).toEqual(p);
+    const saved = fakeSite(() => page('', ''), { 'nnmclub.username': 'nnm', 'nnmclub.password': PASS });
+    expect(await transferLogins([nnmclub], saved.ctx)).toEqual({ nnmclub: { username: 'nnm', password: PASS } });
+    const browser = fakeSite(() => page('', ''), { 'nnmclub.browser': '1' });
+    expect(await transferSessions([nnmclub], browser.ctx)).toEqual({ nnmclub: ['nnmclub.to'] });
+    expect(SESSION_SITES).toContain('nnmclub');
+  });
+
   it('the schema takes logins of the known sites only (both sites behind Cloudflare included)', () => {
     const p = buildTransferPayload([kinozal, rustorka], null, undefined, null, {
       kinozal: { username: ' kino ', password: PASS },
@@ -49,7 +64,7 @@ describe('site logins in the transfer', () => {
     expect(p.logins).toEqual({ kinozal: { username: 'kino', password: PASS }, rustorka: { username: 'rus', password: PASS } });
     expect(p.cloudflare).toEqual({ kinozal: false, rustorka: false });
     expect(validateTransferPayload(p)).toEqual(p);
-    expect(LOGIN_SITES).toEqual(['kinozal', 'rustorka']);
+    expect(LOGIN_SITES).toEqual(['kinozal', 'rustorka', 'nnmclub']);
     const base = { v: 1, sources: { kinozal: true } };
     const bad: unknown[] = [
       { rutracker: { username: 'a', password: 'p' } },

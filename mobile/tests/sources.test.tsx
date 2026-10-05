@@ -87,7 +87,7 @@ describe('Sources screen', () => {
     expect(sw('rutor (поиск TorrServer)')).toBeTruthy();
     expect(sw('Jackett / Prowlarr (Torznab)')).toBeTruthy();
     expect(sw('nnmclub')).toBeTruthy();
-    expect(el.textContent).toContain('Для Kinozal и rustorka включите обход в «Источниках поиска», другие трекеры подключайте через Jackett или Prowlarr');
+    expect(el.textContent).toContain('Войдите на нём через браузер (кнопка «Войти» у сайта в «Источниках поиска») или подключите его через Jackett, Prowlarr или FlareSolverr');
     click(btn('Вопросы и ответы')!);
     expect(currentRoute.value).toEqual({ name: 'faq' });
   });
@@ -100,8 +100,8 @@ describe('Sources screen', () => {
     expect(row('Jackett / Prowlarr (Torznab)').textContent).toContain('не отвечает');
     act(() => setHealth('fake-open', { state: 'error', at: 2, message: 'Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже' }));
     expect(row('nnmclub').textContent).toContain('Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже');
-    expect(row('nnmclub').nextElementSibling!.textContent).toContain('через Jackett или Prowlarr');
-    expect(row('Jackett / Prowlarr (Torznab)').nextElementSibling?.getAttribute('data-hint')).not.toBe('jackett');
+    expect(row('nnmclub').nextElementSibling!.textContent).toContain('Подключите nnmclub через Jackett, Prowlarr или FlareSolverr');
+    expect(row('Jackett / Prowlarr (Torznab)').nextElementSibling).toBeNull();
   });
 
   it('switches are saved', async () => {
@@ -199,7 +199,7 @@ describe('Sources screen', () => {
     click(Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent === 'Войти')!);
     await flush();
     expect(dialog.querySelector('[role="alert"]')!.textContent).toContain('Cloudflare');
-    expect(dialog.querySelector('[data-hint="jackett"]')!.textContent).toContain('Для Kinozal и rustorka включите обход');
+    expect(dialog.querySelector('[data-hint="jackett"]')!.textContent).toContain('через Jackett, Prowlarr или FlareSolverr');
     click(Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent === 'Вопросы и ответы')!);
     expect(currentRoute.value).toEqual({ name: 'faq' });
   });

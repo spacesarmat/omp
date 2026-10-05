@@ -60,13 +60,6 @@ export function TouchpadSheet({ onClose }: { onClose: () => void }) {
         </div>
         <Switch on={s.invertScroll} label={t('remote.touchpad.invert')} onToggle={() => updateTouchpad({ invertScroll: !s.invertScroll })} />
       </div>
-      <div class="m-tp-row">
-        <div class="m-tp-text">
-          <span class="m-tp-label">{t('remote.touchpad.strip')}</span>
-          <span class="m-muted m-small">{t('remote.touchpad.stripHint')}</span>
-        </div>
-        <Switch on={s.scrollStrip} label={t('remote.touchpad.strip')} onToggle={() => updateTouchpad({ scrollStrip: !s.scrollStrip })} />
-      </div>
       <button type="button" class="m-btn m-btn-primary" onClick={onClose}>
         {t('common.done')}
       </button>

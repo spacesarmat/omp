@@ -186,18 +186,18 @@ describe('phone: Kinozal site screen', () => {
 });
 
 describe('phone: «Источники поиска» with the sites behind Cloudflare', () => {
-  it('lists them in their own group and sends their logins with rutracker\'s', async () => {
+  it('lists them in the one built-in list and sends their logins with rutracker\'s', async () => {
     registerSource(rutrackerFake);
     site = fakeSite(kinozalSite, { 'rutracker.username': 'rt', 'rutracker.password': PASSWORD, 'kinozal.username': 'kino', 'kinozal.password': PASSWORD });
     saveTv(ATV);
     setActiveTv(ATV.ip);
     answer = (c) => ({ body: JSON.stringify({ ok: true, rutracker: 'ok', logins: { kinozal: 'captcha' } }) });
     await mountWith(<Sources ctx={() => site.ctx} />);
-    const group = el.querySelector('[data-group="cloudflare"]') as HTMLElement;
-    expect(group.textContent).toContain('Сайты за Cloudflare');
+    expect(el.querySelector('[data-group="cloudflare"]')).toBeNull();
+    const group = el.querySelector('[data-group="builtin"]') as HTMLElement;
     expect(group.textContent).toContain('Kinozal');
     expect(group.textContent).toContain('rustorka');
-    expect(group.querySelector('[data-source="rustorka"]')!.textContent).toContain('нужен вход');
+    expect(group.querySelector('[data-source="rustorka"]')!.textContent).toContain('нужен вход · за Cloudflare');
     expect(el.textContent).toContain(withLoginsLabel(['Kinozal', 'rutracker']));
     act(() => btn('Передать на телевизор')!.click());
     await flush();

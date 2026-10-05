@@ -13,6 +13,7 @@ import { sanitizeTrackPrefs } from '../../../src/store/trackPrefs';
 import { sanitizeSourcePrefs } from '../../../src/sources/store';
 import { sanitizeIndexers } from '../../../src/sources/indexerStore';
 import { sanitizeFlare } from '../../../src/sources/flareStore';
+import { sanitizeFilters } from '../../../src/sources/filters';
 import { sanitizeSubs } from '../../../src/monitor/subs';
 import { sanitizeMonitorSettings } from '../../../src/monitor/settings';
 import { sanitizeTvs } from '../tv/tvStore';
@@ -103,6 +104,13 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.localServer', clean: (v) => (isObject(v) && typeof v.autostart === 'boolean' ? { autostart: v.autostart } : undefined) },
   { key: 'tsp.playlists', clean: (v) => cleanList(v, sanitizeFavorites(v)) },
   { key: 'tsp.trackPrefs', clean: (v) => cleanMap(v, sanitizeTrackPrefs(v)) },
+  // «Каталог»: the «Мои / Обзор» switch and the «Обзор» posters per row
+  { key: 'tsp.catalogMode', clean: (v) => (v === 'mine' || v === 'discover' ? v : undefined) },
+  { key: 'tsp.discoverCols', clean: (v) => (v === 2 || v === 3 ? v : undefined) },
+  // «Добавить»: the search filters; «Подписки»: the sort (SUBS_SORTS); the torrent screen: «не открывать»
+  { key: 'tsp.searchFilters', clean: (v) => (isObject(v) ? sanitizeFilters(v) : undefined) },
+  { key: 'tsp.subsSort', clean: (v) => (v === 'fresh' || v === 'name' || v === 'added' ? v : undefined) },
+  { key: 'tsp.ui.skipOpen', clean: (v) => (typeof v === 'boolean' ? v : undefined) },
   // support code applied: only its end time (not a secret), so a restored phone does not ask for support again
   { key: 'tsp.support', clean: (v) => sanitizeSupportState(v) || undefined },
 ];
@@ -121,6 +129,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.monitorFound',
   'tsp.monitorLast',
   'tsp.monitorEpisodeCursor',
+  'tsp.betterChecked', // when each film was last searched for a better release: rebuilt by the next runs
   'tsp.monitorNotifyAsked',
   'tsp.monitorNotifyHint',
   'tsp.sourcesTransfer', // state of the last handover to the TV
@@ -133,6 +142,8 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.flareScan', // when FlareSolverr was last searched for on the LAN: per device
   'tsp.firstRun', // when this install was first used: per device
   'tsp.donateCard', // the «Поддержать» card was closed
+  'tsp.tmdbCache', // «Обзор»: cache of TMDB answers
+  'tsp.sourcePause', // background requests to a site paused after its code page: per device, an hour
 ];
 
 function readRaw(key: string): unknown {

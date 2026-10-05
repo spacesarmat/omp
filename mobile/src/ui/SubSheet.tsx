@@ -49,6 +49,7 @@ export function SubSheet(p: {
   const [size, setSize] = useState(base.maxSizeGb ? gbText(base.maxSizeGb) : '');
   const [sources, setSources] = useState<string[] | null>(base.sources === undefined ? null : base.sources);
   const [notify, setNotify] = useState(base.notify !== false);
+  const [better, setBetter] = useState(base.better === true);
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
 
@@ -77,7 +78,7 @@ export function SubSheet(p: {
     if (maxSizeGb === null) return setError(t('monitor.sub.errSize'));
     if (sources !== null && !sources.length) return setError(t('monitor.sub.errSources'));
     setError('');
-    const input: SubscriptionInput = { query: q, quality, sources, notify, minSeeds, maxSizeGb };
+    const input: SubscriptionInput = { query: q, quality, sources, notify, minSeeds, maxSizeGb, better };
     let saved: Subscription | null;
     if (p.sub) {
       saved = updateSubscription(p.sub.id, input);
@@ -192,6 +193,22 @@ export function SubSheet(p: {
             aria-label={t('monitor.sub.notify')}
             class={'m-switch' + (notify ? ' on' : '')}
             onClick={() => setNotify(!notify)}
+          >
+            <span class="m-switch-knob" />
+          </button>
+        </div>
+        <div class="m-skip-row">
+          <span class="m-skip-text">
+            {t('monitor.sub.better')}
+            <span class="m-muted m-small">{t('monitor.sub.betterHint')}</span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={better}
+            aria-label={t('monitor.sub.better')}
+            class={'m-switch' + (better ? ' on' : '')}
+            onClick={() => setBetter(!better)}
           >
             <span class="m-switch-knob" />
           </button>

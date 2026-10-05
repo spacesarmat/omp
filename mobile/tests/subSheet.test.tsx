@@ -16,6 +16,7 @@ import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { addFindings, addSubscription, getSubscription, loadSubs, rememberSeen, seenKeys, unseenCount } from '../../src/monitor/subs';
 import type { SourceResult } from '../../src/sources/types';
 import type { Subscription } from '../../src/monitor/types';
+import { subRule } from '../src/monitor/text';
 
 let el: HTMLElement;
 let mon: FakeMonitor;
@@ -151,6 +152,36 @@ describe('SubSheet', () => {
     expect(getSubscription(s.id)!.quality).toBe('1080');
     expect(seenKeys(s.id)).toBeNull();
     expect(toast.value).toBe('Подписка сохранена');
+  });
+
+  it('«Только лучшее качество»: off for a new subscription, saved when on, cleared when switched off', async () => {
+    const better = () => el.querySelector('[role=switch][aria-label="Только лучшее качество"]') as HTMLElement;
+    sheet();
+    expect(better().getAttribute('aria-checked')).toBe('false');
+    type('m-sub-query', 'Северный ветер');
+    click(better());
+    click(byText('Сохранить'));
+    await flush();
+    const [s] = loadSubs();
+    expect(s.better).toBe(true);
+    expect(subRule(s)).toContain('только лучшее качество');
+    sheet({ sub: s });
+    expect(better().getAttribute('aria-checked')).toBe('true');
+    click(better());
+    click(byText('Сохранить'));
+    await flush();
+    expect(loadSubs()[0].better).toBeUndefined();
+  });
+
+  it('the better-quality switch in English', () => {
+    applyLanguageSetting('en');
+    try {
+      sheet();
+      expect(el.querySelector('[role=switch][aria-label="Better quality only"]')).toBeTruthy();
+      expect(el.textContent).toContain('only when the quality beats earlier finds');
+    } finally {
+      applyLanguageSetting('ru');
+    }
   });
 
   it('«Удалить» asks and deletes', () => {

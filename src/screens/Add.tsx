@@ -15,7 +15,8 @@ import { searchAll } from '../sources/search';
 import { onSearchFailure, type CheckedHosts } from '../sources/cloudflareCheck';
 import type { SearchHandle } from '../sources/search';
 import { getHealth } from '../sources/store';
-import { isCloudflare, jackettHint, progressText, resolveLink, resultDate, resultKey, sortResults, sourceBadge, sourceName, stableOrder } from '../sources/view';
+import { ipBanTvHint } from '../sources/ipBan';
+import { ipBanNote, isCloudflare, jackettHint, progressText, resolveLink, resultDate, resultKey, sortResults, sourceBadge, sourceName, stableOrder } from '../sources/view';
 import type { SourceResult } from '../sources/types';
 
 const SOURCES: { value: SearchSource; label: string }[] = [
@@ -169,6 +170,8 @@ export function AddScreen() {
   const sorted = rows ? (streaming ? stableOrder(order.current, rows, 'seeds') : sortResults(rows, 'seeds')) : [];
   order.current = sorted.map(resultKey);
   const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
+  // a site that showed its code page: its message, and where to enter the code (no browser on the TV)
+  const banned = prog ? prog.failed.map(ipBanNote).filter((x) => !!x) : [];
 
   return (
     <FocusGroup focusKey="ADD" className="screen add">
@@ -201,6 +204,11 @@ export function AddScreen() {
       {unified && blocked.length > 0 && (
         <div class="search-progress search-hint">
           {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ') + '. ' + jackettHint()}
+        </div>
+      )}
+      {unified && banned.length > 0 && (
+        <div class="search-progress search-hint" data-hint="ipban">
+          {banned.join('; ') + '. ' + ipBanTvHint()}
         </div>
       )}
       {unified && rows && (

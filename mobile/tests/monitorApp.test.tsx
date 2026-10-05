@@ -143,6 +143,13 @@ describe('monitoring in the app shell', () => {
     expect(currentRoute.value.name).toBe('news');
   });
 
+  it('a better-quality link opens «Новое» on the film card', async () => {
+    await mount();
+    act(() => mon.open('omp:news?sub=better&finding=' + encodeURIComponent('d:32')));
+    await flush();
+    expect(currentRoute.value).toEqual({ name: 'news', seg: 'subs', finding: 'd:32', watch: false });
+  });
+
   it('a link to a deleted subscription opens the subscriptions list', async () => {
     await mount();
     act(() => mon.open('omp:news?sub=gone&finding=k'));

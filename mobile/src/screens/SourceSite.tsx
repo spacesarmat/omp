@@ -13,6 +13,7 @@ import { bypassLabel, bypassWarning, clearanceText } from '../../../src/sources/
 import { LOGIN_SITES, SESSION_SITES, transferLogins, transferSessions } from '../../../src/sources/transfer';
 import { browserDoneTitle, browserSuggestion } from '../../../src/sources/browserLogin';
 import { BrowserLoginButton } from '../ui/BrowserLoginButton';
+import { NoAccount } from '../ui/NoAccount';
 import { allSources } from '../../../src/sources/registry';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { activeTv, isAtv } from '../tv/tvStore';
@@ -20,6 +21,7 @@ import { holdSignInScreen } from '../cloudflare';
 import { cloudflareNotSent, sendTransfer, sessionsNotSent, sessionsText, siteLoginsText, sitesNotSent } from './Sources';
 
 export const siteLoginNote = (): string => t('sources.screen.loginNote');
+export const siteLoginNoteOptional = (): string => t('sources.screen.loginNoteOptional');
 export const sendLogin = (): string => t('sources.screen.sendLogin');
 
 /** The toast after «Передать вход на телевизор». */
@@ -112,6 +114,8 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
     setSuggest('');
     setUsername('');
     setSourceOn(source.id, true);
+    // a browser session got past the check in the page: the site's requests pass it too from now on
+    if (source.cloudflare === true) setCloudflareBypass(source.id, true);
     clearHealth(source.id);
   };
 
@@ -122,7 +126,9 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
         if (!alive.current) return;
         setLogged(false);
         setBrowser(false);
-        setHealth(source.id, { state: 'login', at: Date.now() });
+        // an optional login (NNM-Club) leaves no «нужен вход» behind
+        if (source.needsLogin) setHealth(source.id, { state: 'login', at: Date.now() });
+        else clearHealth(source.id);
       },
       (e) => showToast(errorMessage(e)),
     );
@@ -176,7 +182,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
       <section class="m-set-group">
         <form class="m-set-card" data-site-card="login" onSubmit={submit}>
           <div class="m-sheet-title">{title}</div>
-          <div class="m-note m-muted">{siteLoginNote()}</div>
+          <div class="m-note m-muted">{source.needsLogin ? siteLoginNote() : siteLoginNoteOptional()}</div>
           {logged ? (
             <div class="m-src-row">
               <span class="m-src-name">
@@ -214,6 +220,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
                 {busy ? t('common.signingIn') : t('common.signIn')}
               </button>
               <BrowserLoginButton source={source} ctx={ctx} suggest={suggest} disabled={busy || logged === null} onDone={browserDone} />
+              <NoAccount source={source} />
             </>
           )}
         </form>
@@ -237,7 +244,7 @@ function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle:
 
 /**
  * A site behind Cloudflare (mockup PhoneSite): «Искать на …», «Обходить проверку Cloudflare» with the clearance time and
- * the warning, then the site's login block (sites that need one). clearance / now / ctx: fakes in tests.
+ * the warning, then the site's login block (every site with a login). clearance / now / ctx: fakes in tests.
  */
 export function SourceSite({
   id,
@@ -338,7 +345,7 @@ export function SourceSite({
           )}
         </div>
       </section>
-      {source.needsLogin && source.login && <SiteLogin source={source} ctx={ctx} />}
+      {source.login && <SiteLogin source={source} ctx={ctx} />}
     </div>
   );
 }

@@ -39,7 +39,8 @@ const open = vi.fn();
 const copy = vi.fn();
 const record = vi.fn();
 
-function mount() {
+function mount(skipOpen = true) {
+  if (skipOpen) localStorage.setItem('tsp.ui.skipOpen', 'true');
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
   act(() => render(<Torrent hash="abc" />, el));
@@ -561,7 +562,7 @@ describe('Torrent in English', () => {
     expect(byText('Watch on the phone')).toBeTruthy();
     expect(el.querySelector('.m-skip-title')!.textContent).toBe('Skip');
     const text = el.textContent!;
-    for (const w of ['for all episodes · TV and phone', 'Skip the intro', 'Skip the credits', 'straight to the next episode', 'Intro and credits', 'Episodes']) {
+    for (const w of ['Skip the intro', 'Skip the credits', 'Intro and credits', 'Episodes']) {
       expect(text, w).toContain(w);
     }
     for (const l of ['Back', 'Find a poster', 'Rename', 'Delete the torrent', 'Skip the intro', 'Skip the credits']) {

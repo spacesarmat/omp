@@ -421,33 +421,14 @@ describe('Remote with a TV', () => {
     expect(sum).toBe(-20);
   });
 
-  it('touchpad: one finger on the right strip scrolls, never moves the cursor or clicks', () => {
-    vi.useFakeTimers();
-    mount();
-    click(text('Тачпад'));
-    const strip = el.querySelector('.m-touchpad .m-tp-strip')!;
-    expect(strip).toBeTruthy();
-    ptr(strip, 'pointerdown', 300, 200);
-    vi.setSystemTime(Date.now() + 40);
-    ptr(strip, 'pointermove', 300, 170);
-    ptr(strip, 'pointermove', 300, 160); // throttled: sent on release
-    ptr(strip, 'pointerup', 300, 160);
-    const sum = a.scroll.mock.calls.reduce((n: number, c: number[]) => n + c[1], 0);
-    expect(sum).toBe(40); // finger up = page down, like two fingers
-    expect(a.moveCursor).not.toHaveBeenCalled();
-    expect(a.click).not.toHaveBeenCalled();
-    // a tap on the strip is not a click either
-    ptr(strip, 'pointerdown', 300, 200);
-    ptr(strip, 'pointerup', 300, 200);
-    expect(a.click).not.toHaveBeenCalled();
-  });
-
-  it('touchpad: «Полоса прокрутки» off hides the strip', () => {
-    updateTouchpad({ scrollStrip: false });
+  it('touchpad: no scroll strip is rendered, and an old saved scrollStrip setting loads fine', () => {
+    localStorage.setItem('tsp.touchpad', JSON.stringify({ speed: 3, accel: true, tapClick: true, invertScroll: false, scrollStrip: true }));
+    reloadTouchpad();
+    expect(touchpad.value).toEqual({ speed: 3, accel: true, tapClick: true, invertScroll: false });
     mount();
     click(text('Тачпад'));
     expect(el.querySelector('.m-tp-strip')).toBeNull();
-    updateTouchpad({ scrollStrip: true });
+    expect(el.querySelector('.m-touchpad.with-strip')).toBeNull();
   });
 
   it('adds the mini class while the player link is live', () => {
@@ -477,7 +458,7 @@ describe('Remote with a TV', () => {
     click(lbl('Скорость 5'));
     click(lbl('Ускорение'));
     click(lbl('Касание = щелчок'));
-    expect(JSON.parse(localStorage.getItem('tsp.touchpad')!)).toEqual({ speed: 5, accel: false, tapClick: false, invertScroll: false, scrollStrip: true });
+    expect(JSON.parse(localStorage.getItem('tsp.touchpad')!)).toEqual({ speed: 5, accel: false, tapClick: false, invertScroll: false });
     click(lbl('Обратная прокрутка'));
     expect(JSON.parse(localStorage.getItem('tsp.touchpad')!).invertScroll).toBe(true);
     expect(el.textContent).toContain('5 из 5');
@@ -622,12 +603,12 @@ describe('Remote for Android TV', () => {
 describe('touchpad settings maths', () => {
   it('sanitizer: defaults and clamping', () => {
     expect(sanitizeTouchpad(null)).toEqual(TOUCHPAD_DEFAULTS);
-    expect(sanitizeTouchpad({ speed: 99, accel: 'x', tapClick: false, invertScroll: 1 })).toEqual({ speed: 5, accel: true, tapClick: false, invertScroll: false, scrollStrip: true });
+    expect(sanitizeTouchpad({ speed: 99, accel: 'x', tapClick: false, invertScroll: 1 })).toEqual({ speed: 5, accel: true, tapClick: false, invertScroll: false });
     expect(sanitizeTouchpad({ speed: -2 }).speed).toBe(1);
     expect(sanitizeTouchpad({ speed: NaN }).speed).toBe(3);
   });
   it('gain: step multipliers, acceleration capped at 2.5', () => {
-    const s = (speed: number, accel: boolean) => ({ speed, accel, tapClick: true, invertScroll: false, scrollStrip: true });
+    const s = (speed: number, accel: boolean) => ({ speed, accel, tapClick: true, invertScroll: false });
     expect([1, 2, 3, 4, 5].map((n) => cursorGain(s(n, false), 5))).toEqual([0.6, 0.8, 1, 1.4, 1.9]);
     expect(cursorGain(s(3, true), 0)).toBe(1);
     expect(cursorGain(s(3, true), 1)).toBeCloseTo(1.8);
@@ -702,15 +683,14 @@ describe('Remote in English', () => {
     noCyrillicLabels();
   });
 
-  it('LG remote: waking and the touchpad scroll strip', async () => {
+  it('LG remote: waking and the touchpad', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED', mac: 'aa:bb:cc:dd:ee:ff' });
-    updateTouchpad({ scrollStrip: true });
     mount();
     click(lbl('Turn on the TV'));
     await flush();
     expect(toast.value).toBe('Turning on LG OLED…');
     click(text('Touchpad'));
-    expect(lbl('Scroll')).toBeTruthy();
+    expect(el.querySelector('.m-tp-strip')).toBeNull();
     noCyrillicLabels();
   });
 

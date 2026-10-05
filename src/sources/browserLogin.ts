@@ -97,6 +97,10 @@ export interface BrowserSpec {
   source: string;
   hosts: string[];
   check: BrowserCheck;
+  /** The sheet's own copy instead of the sign-in one (a site's code page: «Ввести код»). */
+  title?: string;
+  text?: string;
+  cancel?: string;
 }
 
 /** Arguments of OmpNative.siteBrowserLogin (phone and TV). */
@@ -135,9 +139,9 @@ export function phoneLoginRequest(spec: BrowserSpec, forTv?: { id: string; tv: s
     hosts: spec.hosts,
     check: spec.check,
     mode: 'phone',
-    title: browserTitle(spec.site),
-    text: browserText(forTv ? forTv.tv : undefined),
-    cancel: browserCancel(),
+    title: spec.title || browserTitle(spec.site),
+    text: spec.text || browserText(forTv ? forTv.tv : undefined),
+    cancel: spec.cancel || browserCancel(),
     gateWait: browserGateWait(),
     blocked: browserBlocked(),
     checking: browserChecking(),
@@ -233,6 +237,20 @@ export function setBrowserLoginPlatform(p: BrowserLoginPlatform | null): void {
 
 export function hasBrowserLogin(): boolean {
   return !!platform;
+}
+
+/**
+ * Shows a site page in the browser sheet without signing in (a site's code page): nothing is marked. Resolves the
+ * outcome, 'failed' without a platform; never rejects.
+ */
+export function openSitePage(spec: BrowserSpec): Promise<BrowserOutcome> {
+  const p = platform;
+  if (!p) return Promise.resolve({ result: 'failed' } as BrowserOutcome);
+  try {
+    return p.login(spec).then(browserOutcome, () => ({ result: 'failed' }) as BrowserOutcome);
+  } catch (e) {
+    return Promise.resolve({ result: 'failed' } as BrowserOutcome);
+  }
 }
 
 /** The TV can ask the phone to sign in. */

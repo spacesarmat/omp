@@ -1,11 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
 import {
   runMonitor,
   runAction,
   subNotification,
   episodeNotification,
+  betterNotification,
   EPISODE_CURSOR_KEY,
+  BETTER_PER_RUN,
+  BETTER_SHARE_MS,
+  hostContext,
   type MonitorClient,
   type PageDeps,
 } from '../src/monitor/page';
@@ -15,12 +19,16 @@ import { addSubscription, addFindings, findingsOf, loadFound, seenKeys } from '.
 import { resultKeys } from '../../src/monitor/match';
 import { loadFeed } from '../../src/monitor/feedCache';
 import { loadLastRun, saveMonitorSettings, type MonitorSummary } from '../../src/monitor/settings';
-import { EPISODES_ID, type Finding } from '../../src/monitor/types';
+import { BETTER_ID, EPISODES_ID, type Finding } from '../../src/monitor/types';
 import type { Torrent } from '../../src/api/types';
 import type { Source, SourceResult } from '../../src/sources/types';
 import type { NativeHttpRequest } from '../../src/sources/http';
-import type { JournalItem } from '../src/monitor/journal';
+import { mergeJournal, type JournalItem } from '../src/monitor/journal';
 import { SEEN_KEY } from '../../src/monitor/subs';
+import { torrentby } from '../../src/sources/torrentby';
+import { pauseSource, PAUSE_MS } from '../../src/sources/ipBan';
+import { setCloudflareBypass } from '../../src/sources/store';
+import { SOURCE_TIMEOUT_MS, type SearchAllOptions } from '../../src/sources/search';
 
 function res(Title: string, extra?: Partial<SourceResult>): SourceResult {
   return { Title, Categories: '', Size: '41 ГБ', CreateDate: '', Tracker: 'rutor', Link: '', Magnet: 'magnet:?xt=urn:btih:' + 'a'.repeat(40), Hash: '', Peer: 0, Seed: 1200, source: 'rutor', ...extra };
@@ -121,7 +129,7 @@ const SERIES = 'Starbound Frontier / Сезон: 1 / Серии: 1-8 из 10 [20
 const NEWER = 'Starbound Frontier / Сезон: 1 / Серии: 1-10 из 10 [2026, WEB-DL 1080p]';
 
 function deps(host: MonitorHost, extra: Partial<PageDeps> = {}): PageDeps {
-  return { host, client: () => null, feed: { from: [] }, ...extra };
+  return { host, client: () => null, feed: { from: [] }, check: { search: fakeSearch({}) }, ...extra };
 }
 
 beforeEach(() => {
@@ -225,7 +233,7 @@ describe('runMonitor: a check', () => {
     const host = fakeHost();
     const client = fakeClient([watched, off, film]);
     const s = await runMonitor(deps(host, { client: () => client, check: { search: fakeSearch({ 'Starbound Frontier': [res(NEWER)] }, queries) } }));
-    expect(queries).toEqual(['Starbound Frontier']);
+    expect(queries).toEqual(['Starbound Frontier', 'Дюна 2021']);
     expect(host.notes.map((n) => n.title)).toEqual(['Starbound Frontier: вышли серии 9–10']);
     expect(s.found).toBe(1);
     expect(findingsOf(EPISODES_ID)).toHaveLength(1);
@@ -262,8 +270,8 @@ describe('runMonitor: a check', () => {
     expect(findingsOf(sub.id)).toHaveLength(1);
   });
 
-  it('«Следить за новыми сериями» off: the library is not read', async () => {
-    saveMonitorSettings({ episodes: false });
+  it('new episodes and better quality both off: the library is not read', async () => {
+    saveMonitorSettings({ episodes: false, better: false });
     let listed = false;
     const client = fakeClient();
     client.list = () => {
@@ -445,5 +453,280 @@ describe('durable dedup markers (journal)', () => {
     expect(s.found).toBe(1);
     expect(s.notified).toBe(0);
     expect(s.notifyBlocked).toBe(true);
+  });
+});
+
+describe('«Лучшее качество» in the background', () => {
+  const FILM = 'Северный ветер (2026) WEB-DL 1080p';
+  const UHD = 'Северный ветер (2026) 2160p WEB-DL';
+  const film = { hash: 'd'.repeat(40), title: FILM, category: 'movie' } as Torrent;
+
+  it('an upgrade with films in the library: the first run notifies nothing and keeps the other cards', async () => {
+    const names = ['Северный ветер', 'Тихая гавань', 'Ночной рейс', 'Белый город'];
+    const films = names.map((n, i) => ({ hash: String(i).repeat(40), title: n + ' (2026) WEB-DL 1080p', category: 'movie' }) as Torrent);
+    const pages: { [q: string]: SourceResult[] } = {};
+    names.forEach((n) => (pages[n + ' 2026'] = [res(n + ' (2026) 2160p Remux')]));
+    const host = fakeHost();
+    const s = await runMonitor(deps(host, { client: () => fakeClient(films), check: { search: fakeSearch(pages) }, now: () => 1_000_000 }));
+    expect(host.notes).toEqual([]);
+    expect(s.found).toBe(0);
+    expect(findingsOf(BETTER_ID)).toEqual([]);
+    expect(seenKeys(BETTER_ID)).toHaveLength(names.length);
+  });
+
+  it('the films are checked after the episodes, once a day, on the «better» channel', async () => {
+    // checked before (the baseline is done), nothing reported yet
+    localStorage.setItem('tsp.betterChecked', JSON.stringify({ ['d'.repeat(40)]: 1 }));
+    const queries: string[] = [];
+    const client = fakeClient([film]);
+    const search = fakeSearch({ 'Северный ветер 2026': [res(UHD)] }, queries);
+    const host = fakeHost();
+    const s = await runMonitor(deps(host, { client: () => client, check: { search }, now: () => 100_000_000 }));
+    expect(queries).toEqual(['Северный ветер 2026']);
+    expect(host.notes).toEqual([
+      {
+        channel: 'better',
+        id: 'better:' + 'd'.repeat(40),
+        subId: BETTER_ID,
+        key: 'd'.repeat(40) + ':32',
+        title: 'Вышло в лучшем качестве',
+        text: 'Северный ветер · 4K WEB-DL · у вас 1080p WEB-DL',
+        action: 'replace',
+      },
+    ]);
+    expect(host.log).toEqual(['persist', 'notify']);
+    expect(host.persisted).toEqual([{ s: BETTER_ID, e: 'd'.repeat(40) + ':32' }]);
+    expect(s.found).toBe(1);
+    // an hour later the film is not searched again
+    await runMonitor(deps(fakeHost(), { client: () => client, check: { search }, now: () => 100_000_000 + 3_600_000 }));
+    expect(queries).toHaveLength(1);
+  });
+
+  it('«Лучшее качество фильмов» off: no film is searched; with the episodes off alone the films still are', async () => {
+    saveMonitorSettings({ better: false });
+    const queries: string[] = [];
+    const client = fakeClient([film]);
+    await runMonitor(deps(fakeHost(), { client: () => client, check: { search: fakeSearch({}, queries) } }));
+    expect(queries).toEqual([]);
+    saveMonitorSettings({ better: true, episodes: false });
+    await runMonitor(deps(fakeHost(), { client: () => client, check: { search: fakeSearch({}, queries) } }));
+    expect(queries).toEqual(['Северный ветер 2026']);
+  });
+
+  it('«Заменить» on a film notification runs the replace and keeps the card when it fails', async () => {
+    const f: Finding = {
+      subId: BETTER_ID,
+      key: 'd'.repeat(40) + ':32',
+      result: res(UHD),
+      at: 1,
+      better: { torrentHash: 'd'.repeat(40), torrentTitle: FILM, have: '1080p WEB-DL', got: '4K WEB-DL' },
+    };
+    addFindings([f]);
+    const r = await runAction(deps(fakeHost(), { client: () => fakeClient([], true) }), { kind: 'replace', subId: BETTER_ID, key: f.key });
+    expect(r.ok).toBe(false);
+    expect(r.message).not.toBe('Находка больше не доступна — откройте OMP');
+    expect(findingsOf(BETTER_ID)).toHaveLength(1);
+  });
+
+  it('better-quality markers merge back like the new-episode ones', () => {
+    expect(mergeJournal([{ s: BETTER_ID, e: 'd'.repeat(40) + ':32' }])).toBe(1);
+    expect(seenKeys(BETTER_ID)).toEqual(['d'.repeat(40) + ':32']);
+  });
+
+  it('the notification in English', () => {
+    applyLanguageSetting('en');
+    try {
+      const n = betterNotification({
+        subId: BETTER_ID,
+        key: 'h:32',
+        result: res('North Wind (2026) 2160p WEB-DL'),
+        at: 1,
+        better: { torrentHash: 'h', torrentTitle: 'North Wind (2026) WEB-DL 1080p', have: '', got: '4K WEB-DL' },
+      });
+      expect(n.title).toBe('Out in better quality');
+      expect(n.text).toBe('North Wind · 4K WEB-DL · you have unknown quality');
+      expect(n.title + n.text).not.toMatch(/[А-Яа-яЁё]/);
+    } finally {
+      applyLanguageSetting('ru');
+    }
+  });
+});
+
+describe('the background load of the film checks', () => {
+  const NAMES = ['Северный ветер', 'Тихая гавань', 'Ночной рейс', 'Белый город', 'Последний мост', 'Долгая зима', 'Синяя птица', 'Старый маяк'];
+  const films = NAMES.map((n, i) => ({ hash: String(i).repeat(40), title: n + ' (2026) WEB-DL 1080p', category: 'movie' }) as Torrent);
+  const filmQueries = (q: string[]) => q.filter((x) => / 2026$/.test(x)).map((x) => NAMES.indexOf(x.replace(/ 2026$/, '')));
+
+  /** searchAll double that takes `ms` of the page clock per search. */
+  function slowSearch(clock: { now: number }, ms: number, queries: string[]): SearchFn {
+    const inner = fakeSearch({}, queries);
+    return (query, opts) => {
+      clock.now += ms;
+      return inner(query, opts);
+    };
+  }
+
+  it('at most BETTER_PER_RUN films per run, the never checked and then the longest unchecked first', async () => {
+    expect(BETTER_PER_RUN).toBe(5);
+    const T = 10 * 24 * 3_600_000;
+    const q: string[] = [];
+    const client = fakeClient(films);
+    const run = (now: number) => runMonitor(deps(fakeHost(), { client: () => client, check: { search: fakeSearch({}, q) }, now: () => now }));
+    await run(T);
+    expect(filmQueries(q)).toEqual([0, 1, 2, 3, 4]);
+    q.length = 0;
+    // the next run goes on with the films never checked
+    await run(T + 3_600_000);
+    expect(filmQueries(q)).toEqual([5, 6, 7]);
+    q.length = 0;
+    // a day later every film is due again: the longest unchecked first
+    await run(T + 24 * 3_600_000 + 2 * 3_600_000);
+    expect(filmQueries(q)).toEqual([0, 1, 2, 3, 4]);
+    q.length = 0;
+    await run(T + 24 * 3_600_000 + 3 * 3_600_000);
+    expect(filmQueries(q)).toEqual([5, 6, 7]);
+  });
+
+  it('the films keep to their share: the «Новое» feed still runs and the films stop within BETTER_SHARE_MS', async () => {
+    expect(BETTER_SHARE_MS).toBe(45_000);
+    const clock = { now: 1_000_000 };
+    const q: string[] = [];
+    const calls: string[] = [];
+    const host = fakeHost({ deadline: clock.now + 180_000 });
+    const s = await runMonitor(
+      deps(host, { client: () => fakeClient(films), check: { search: slowSearch(clock, 20_000, q) }, feed: { from: [feedSource(calls)] }, now: () => clock.now }),
+    );
+    expect(s.feed).toBe(true);
+    expect(calls.sort()).toEqual(['anime', 'movie', 'tv']);
+    // started at 0, 20 and 40 s of the share; the fourth would start at 60 s
+    expect(filmQueries(q)).toEqual([0, 1, 2]);
+  });
+
+  function seriesList(n: number): Torrent[] {
+    const out: Torrent[] = [];
+    for (let i = 0; i < n; i++)
+      out.push({ hash: String.fromCharCode(97 + i).repeat(40), title: 'Сериал ' + 'абвгдежзиклм'[i] + ' / Сезон: 1 / Серии: 1-8 из 10 [2026]', category: 'tv' } as Torrent);
+    return out;
+  }
+  const seriesQueries = (q: string[]) => q.filter((x) => x.indexOf('Сериал') === 0);
+
+  it('a backlog of series: the series keep their time, the films wait for a run the series finish, the feed runs', async () => {
+    const clock = { now: 1_000_000 };
+    const q: string[] = [];
+    const calls: string[] = [];
+    const host = fakeHost({ deadline: clock.now + 180_000 });
+    const s = await runMonitor(
+      deps(host, {
+        client: () => fakeClient(seriesList(12).concat(films)),
+        check: { search: slowSearch(clock, 20_000, q) },
+        feed: { from: [feedSource(calls)] },
+        now: () => clock.now,
+      }),
+    );
+    // 172 s: series start at 172, 152, … 52 s left (down to EPISODE_MARGIN_MS), whatever films are due
+    expect(seriesQueries(q)).toHaveLength(7);
+    expect(filmQueries(q)).toEqual([]);
+    expect(s.feed).toBe(true);
+  });
+
+  it('many due films and slow subscriptions: the series are still checked; the films get only what they leave', async () => {
+    const many: Torrent[] = [];
+    for (let i = 0; i < 40; i++) many.push({ hash: (i < 10 ? '0' : '') + i + 'f'.repeat(38), title: NAMES[i % NAMES.length] + ' (2026) WEB-DL 1080p', category: 'movie' } as Torrent);
+    const run = async (series: number) => {
+      localStorage.clear();
+      ['Дюна', 'Солярис', 'Сталкер'].forEach((query) => addSubscription({ query, quality: '', sources: null, notify: true }));
+      const clock = { now: 1_000_000 };
+      const q: string[] = [];
+      const inner = fakeSearch({}, q);
+      // a subscription search takes 40 s, a series 25 s, a film 10 s
+      const search: SearchFn = (query, opts) => {
+        clock.now += query.indexOf('Сериал') === 0 ? 25_000 : / 2026$/.test(query) ? 10_000 : 40_000;
+        return inner(query, opts);
+      };
+      await runMonitor(deps(fakeHost({ deadline: clock.now + 180_000 }), { client: () => fakeClient(seriesList(series).concat(many)), check: { search }, now: () => clock.now }));
+      return q;
+    };
+    // the subscriptions take 120 s of 172: one series fits (52 s left), the second does not (27 s); the series ran
+    // out of time, so no film this run although 27 s would fit one
+    let q = await run(2);
+    expect(seriesQueries(q)).toHaveLength(1);
+    expect(filmQueries(q)).toEqual([]);
+    // one series: it is done, and the films get the 27 s it leaves: one film (the next would start 17 s before the end)
+    q = await run(1);
+    expect(seriesQueries(q)).toHaveLength(1);
+    expect(filmQueries(q)).toHaveLength(1);
+  });
+
+  it('a paused torrent.by is not asked by the film checks', async () => {
+    pauseSource('torrentby');
+    const host = fakeHost();
+    await runMonitor(deps(host, { client: () => fakeClient(films.slice(0, 2)), feed: { from: [] }, check: { from: [torrentby] } }));
+    expect(host.httpCalls.filter((r) => r.url.indexOf('https://torrent.by/') === 0)).toEqual([]);
+  });
+});
+
+describe('Cloudflare sites in the background', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    setCloudflareBypass('nnmclub', false);
+  });
+
+  it('subscriptions, series and films search with the normal timeout for Cloudflare sites', async () => {
+    addSubscription({ query: 'Дюна', quality: '', sources: null, notify: true });
+    const seen: { [q: string]: SearchAllOptions } = {};
+    const inner = fakeSearch({});
+    const search: SearchFn = (query, opts) => {
+      seen[query] = opts;
+      return inner(query, opts);
+    };
+    const lib = [
+      { hash: 'f'.repeat(40), title: SERIES, category: 'tv' },
+      { hash: 'd'.repeat(40), title: 'Северный ветер (2026) WEB-DL 1080p', category: 'movie' },
+    ] as Torrent[];
+    await runMonitor(deps(fakeHost(), { client: () => fakeClient(lib), check: { search } }));
+    expect(Object.keys(seen).sort()).toEqual(['Starbound Frontier', 'Дюна', 'Северный ветер 2026']);
+    Object.keys(seen).forEach((q) => expect(seen[q].cloudflareTimeoutMs).toBe(SOURCE_TIMEOUT_MS));
+  });
+
+  it('the feed gives a Cloudflare site the normal timeout too', async () => {
+    vi.useFakeTimers();
+    setCloudflareBypass('nnmclub', true);
+    const never: Source = {
+      id: 'nnmclub',
+      name: 'NNM-Club',
+      kind: 'builtin',
+      cloudflare: true,
+      search: () => Promise.resolve([]),
+      latest: () => new Promise<SourceResult[]>(() => undefined),
+    };
+    let done = false;
+    const run = runMonitor(deps(fakeHost(), { feed: { from: [never] } })).then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(SOURCE_TIMEOUT_MS + 1);
+    expect(done).toBe(true);
+    await run;
+  });
+});
+
+describe('a site whose code page paused its background requests', () => {
+  it('the background context says so; a paused torrent.by is not asked by the feed or a subscription', async () => {
+    expect(hostContext(fakeHost(), null).background).toBe(true);
+    addSubscription({ query: 'Starbound', quality: '', sources: null, notify: true });
+    pauseSource('torrentby');
+    const host = fakeHost();
+    await runMonitor(deps(host, { feed: { from: [torrentby] }, check: { from: [torrentby] } }));
+    expect(host.httpCalls.filter((r) => r.url.indexOf('https://torrent.by/') === 0)).toEqual([]);
+  });
+
+  it('after the hour the background asks it again (both sections of a category)', async () => {
+    pauseSource('torrentby', Date.now() - PAUSE_MS - 1);
+    const host = fakeHost();
+    await runMonitor(deps(host, { feed: { from: [torrentby] } }));
+    expect(host.httpCalls.map((r) => r.url).sort()).toEqual([
+      'https://torrent.by/anime/',
+      'https://torrent.by/films/',
+      'https://torrent.by/movies/',
+      'https://torrent.by/serials/',
+      'https://torrent.by/series/',
+    ]);
   });
 });

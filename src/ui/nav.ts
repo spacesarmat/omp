@@ -31,15 +31,42 @@ export function routeKey(r: Route): number {
   return id;
 }
 
-// focus key that was active on each stack level when we navigated away from it
-const focusMemory: (string | undefined)[] = [];
+/** Where focus was on a screen we left: its focus key and its position among the screen's focusables. */
+export interface SavedFocus {
+  key: string;
+  /** Index among `.screen-host [data-fk]`, or -1 (focus was in a dialog or outside the screen). */
+  index: number;
+}
 
-function currentFocus(): string | undefined {
+// focus that was active on each stack level when we navigated away from it
+const focusMemory: (SavedFocus | undefined)[] = [];
+
+/** Focusables of the current screen, in document order (dialogs live outside the screen host). */
+export function screenFocusables(): HTMLElement[] {
+  if (typeof document === 'undefined') return [];
+  const list = document.querySelectorAll('.screen-host [data-fk]');
+  const out: HTMLElement[] = [];
+  for (let i = 0; i < list.length; i++) out.push(list[i] as HTMLElement);
+  return out;
+}
+
+function currentFocus(): SavedFocus | undefined {
+  let key: string | undefined;
   try {
-    return getCurrentFocusKey() || undefined;
+    key = getCurrentFocusKey() || undefined;
   } catch (e) {
     return undefined;
   }
+  if (!key) return undefined;
+  const els = screenFocusables();
+  let index = -1;
+  for (let i = 0; i < els.length; i++) {
+    if (els[i].getAttribute('data-fk') === key) {
+      index = i;
+      break;
+    }
+  }
+  return { key: key, index: index };
 }
 
 export function navigate(r: Route): void {
@@ -70,7 +97,7 @@ export function goBack(): boolean {
   return true;
 }
 
-export function takeSavedFocus(): string | undefined {
+export function takeSavedFocus(): SavedFocus | undefined {
   const i = routeStack.value.length - 1;
   const k = focusMemory[i];
   focusMemory[i] = undefined;

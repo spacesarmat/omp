@@ -207,6 +207,21 @@ class ControlRouterTest {
     }
 
     @Test
+    fun nnmClubLoginAndSessionTravelOnlyForItsHost() {
+        val t = token()
+        outcome = SourcesOutcome.Applied(null, null, mapOf("nnmclub" to "ok"), sessions = mapOf("nnmclub" to "ok"))
+        val body = sourcesBody(
+            ""","logins":{"nnmclub":{"username":"nnm","password":"$password"}},""" +
+                """"sessions":{"nnmclub":{"host":"nnmclub.to","cookies":[{"name":"phpbb2mysql_sid","value":"s1"}],"ua":"Phone-UA"}}""",
+        )
+        assertEquals(200, req("POST", "/omp/sources", body, t).status)
+        assertEquals(setOf("nnmclub"), lastTransfer!!.logins.keys)
+        assertEquals(setOf("nnmclub"), lastTransfer!!.sessions.keys)
+        val evil = sourcesBody(""","sessions":{"nnmclub":{"host":"evil.example","cookies":[{"name":"a","value":"b"}],"ua":"Phone-UA"}}""")
+        assertEquals(400, req("POST", "/omp/sources", evil, t).status)
+    }
+
+    @Test
     fun sourcesNeedTheTokenAndJson() {
         val body = sourcesBody(loginPart())
         assertEquals(401, req("POST", "/omp/sources", body).status)

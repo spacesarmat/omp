@@ -436,6 +436,26 @@ describe('Settings: OMP on the TV', () => {
   });
 });
 
+describe('Settings «О приложении»: TMDB attribution', () => {
+  it('names TMDB as the movie data source', () => {
+    const el = mount();
+    const about = Array.from(el.querySelectorAll('.m-set-group')).pop()!;
+    expect(about.querySelector('.m-set-label')!.textContent).toBe('О приложении');
+    expect(about.querySelector('.m-set-attr')!.textContent).toBe('Данные о фильмах: TMDB');
+  });
+
+  it('in English', () => {
+    applyLanguageSetting('en');
+    try {
+      const el = mount();
+      const about = Array.from(el.querySelectorAll('.m-set-group')).pop()!;
+      expect(about.querySelector('.m-set-attr')!.textContent).toBe('Movie data: TMDB');
+    } finally {
+      applyLanguageSetting('ru');
+    }
+  });
+});
+
 describe('Settings in English', () => {
   beforeEach(() => applyLanguageSetting('en'));
   afterEach(() => applyLanguageSetting('ru'));

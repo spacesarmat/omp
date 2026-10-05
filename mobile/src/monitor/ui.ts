@@ -11,7 +11,7 @@ import { activeServer } from '../../../src/store/servers';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { getSubscription, unseenCount } from '../../../src/monitor/subs';
 import { loadLastRun, loadMonitorSettings, type MonitorSettings, type MonitorSummary } from '../../../src/monitor/settings';
-import { EPISODES_ID } from '../../../src/monitor/types';
+import { BETTER_ID, EPISODES_ID } from '../../../src/monitor/types';
 
 /** Bumped whenever the monitor stores may have changed (a background run, an edit, the app back in front). */
 export const monitorVersion = signal(0);
@@ -134,7 +134,7 @@ export function openNewsLink(url: string): void {
   const l = parseNewsLink(url);
   if (!l || !activeServer.value) return;
   reloadMonitor();
-  if (l.sub === EPISODES_ID) {
+  if (l.sub === EPISODES_ID || l.sub === BETTER_ID) {
     switchTab({ name: 'news', seg: 'subs', finding: l.finding, watch: l.watch });
     return;
   }

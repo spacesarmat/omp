@@ -4,27 +4,33 @@ import { Icon, ICONS } from '../ui/Icon';
 import { Poster, qualityBadge } from '../ui/Poster';
 import { Logo } from '../../../src/ui/Logo';
 import { TvChip } from '../ui/TvChip';
+import { TorrentMenu } from '../ui/TorrentMenu';
+import { useBackHandler } from '../ui/backStack';
+import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
 import { LaunchError } from '../ui/LaunchError';
 import { CatalogUnavailable } from '../ui/CatalogUnavailable';
-import { navigate } from '../nav';
+import { navigate, scrollToTop } from '../nav';
 import { filesOf, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
-import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
+import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, resumePosition, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
 import { buildHistory, resumeFrom, sourceLine, historyFilters } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
-import { libraryTabs, nextView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
+import { libraryTabs, nextView, zoomView, viewLabel, episodeLine, positionLabel, remainingLabel, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { formatBytes } from '../../../src/lib/format';
-import { episodeLabel, playableFiles } from '../../../src/lib/episodes';
+import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
 import { native } from '../platform/native';
 import { donateCardDue, dismissDonateCard, openDonate, supporterActive } from '../donate';
 import { localServer, startLocal, refreshLocalServer, LOCAL_URL, canRun, downloadSize } from '../server/localServer';
 import { displayTitle } from '../../../src/lib/torrentName';
+import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
+import { Discover } from './catalog/Discover';
+import { usePinchStep } from '../ui/usePinchStep';
 
 const POLL_MS = 15000;
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
@@ -42,6 +48,11 @@ function episodesText(tor: Torrent): string {
 }
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0 6 6 0 0 0-12 0zM21 21l-5-5';
+const CLOSE = 'M6 6l12 12M18 6L6 18';
+const MORE = 'M5 12h.01M12 12h.01M19 12h.01';
+const CHECK = 'M5 12.5l4.5 4.5L19 7';
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP = 10;
 
 export function Library() {
   const c = client.value;
@@ -53,6 +64,8 @@ export function Library() {
   const sort = settings.value.librarySort;
   const view = settings.value.libraryView;
   const hfilter = settings.value.historyFilter;
+  const mode = catalogMode.value;
+  const mine = mode === 'mine';
   const [loaded, setLoaded] = useState(list.length > 0);
   const [error, setError] = useState('');
   const [tvError, setTvError] = useState('');
@@ -66,6 +79,12 @@ export function Library() {
   const [pull, setPull] = useState(0);
   const [dragging, setDragging] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // selection mode (null = off) and the torrent whose menu is open; a long press that fired swallows the click after it
+  const [selected, setSelected] = useState<string[] | null>(null);
+  const [menuFor, setMenuFor] = useState<Torrent | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const press = useRef<{ timer: ReturnType<typeof setTimeout> | undefined; x: number; y: number; fired: boolean }>({ timer: undefined, x: 0, y: 0, fired: false });
   const loadRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const launch = useTvLaunch();
   progressVersion.value; // re-render when local progress changes
@@ -145,7 +164,8 @@ export function Library() {
     };
     const start = (e: TouchEvent) => {
       stop();
-      if (busy || e.touches.length !== 1 || !atTop()) return;
+      // «Обзор» has no pull-to-refresh: the list below is the library's
+      if (busy || e.touches.length !== 1 || !atTop() || catalogMode.peek() !== 'mine') return;
       const target = e.target as Element | null;
       if (target && target.closest && target.closest('.m-tabs, .m-hfilters')) return;
       startY = e.touches[0].clientY;
@@ -185,6 +205,13 @@ export function Library() {
       root.removeEventListener('touchcancel', cancel);
     };
   }, []);
+
+  // switching the tab or the «Мои / Обзор» switch leaves selection mode
+  useEffect(() => {
+    setSelected(null);
+  }, [tab, mine]);
+  useBackHandler(() => setSelected(null), selected !== null);
+  useEffect(() => () => clearTimeout(press.current.timer), []);
 
   // the active server is the phone's own one and it is stopped: offer to start it right here
   const local = localServer.value;
@@ -242,6 +269,108 @@ export function Library() {
     else empty = t('catalog.categoryEmpty');
   }
 
+  // two fingers on the list step the view like the header button, one notch per gesture (spread = bigger)
+  const pinch = usePinchStep(bodyRef, {
+    enabled: mine && !isHistory && !unavailable,
+    onStep: (dir) => {
+      const cur = settings.peek().libraryView;
+      const next = zoomView(cur, dir);
+      if (next === cur) return false;
+      updateSettings({ libraryView: next });
+      return true;
+    },
+    // the first finger may have started the long press timer on a card
+    onStart: () => {
+      clearTimeout(press.current.timer);
+      press.current.timer = undefined;
+    },
+    anchorAttr: 'data-anchor',
+  });
+
+  const selecting = selected !== null;
+  // only the torrents still in the list count (a refresh may drop some)
+  const chosen = selected ? selected.filter((h) => shown.some((x) => x.hash === h)) : [];
+  const toggle = (hash: string) =>
+    setSelected((cur) => (cur ? (cur.indexOf(hash) >= 0 ? cur.filter((h) => h !== hash) : cur.concat(hash)) : cur));
+  const deleteChosen = async () => {
+    if (!c || deleting || !chosen.length) return;
+    if (!window.confirm(tp('library.deleteAsk', chosen.length))) return;
+    setDeleting(true);
+    try {
+      reportDeleted(await deleteTorrents(c, chosen));
+    } finally {
+      setDeleting(false);
+      setSelected(null);
+    }
+  };
+  // long press (500 ms without moving more than 10 px) or contextmenu opens the menu; a tap opens the card or toggles the selection
+  const pressProps = (tor: Torrent) => ({
+    onPointerDown: (e: PointerEvent) => {
+      const p = press.current;
+      clearTimeout(p.timer);
+      p.fired = false;
+      if (selecting || pinch.active()) return;
+      p.x = e.clientX;
+      p.y = e.clientY;
+      p.timer = setTimeout(() => {
+        p.timer = undefined;
+        if (pinch.active()) return;
+        p.fired = true;
+        setMenuFor(tor);
+      }, LONG_PRESS_MS);
+    },
+    onPointerMove: (e: PointerEvent) => {
+      const p = press.current;
+      if (p.timer && Math.hypot(e.clientX - p.x, e.clientY - p.y) > LONG_PRESS_SLOP) {
+        clearTimeout(p.timer);
+        p.timer = undefined;
+      }
+    },
+    onPointerUp: () => clearTimeout(press.current.timer),
+    onPointerCancel: () => clearTimeout(press.current.timer),
+    onContextMenu: (e: Event) => {
+      e.preventDefault();
+      clearTimeout(press.current.timer);
+      if (selecting) return;
+      press.current.fired = true;
+      setMenuFor(tor);
+    },
+    onClick: () => {
+      if (press.current.fired) {
+        press.current.fired = false;
+        return;
+      }
+      if (selecting) toggle(tor.hash);
+      else navigate({ name: 'torrent', hash: tor.hash });
+    },
+    'aria-pressed': selecting ? chosen.indexOf(tor.hash) >= 0 : undefined,
+  });
+  const moreBtn = (tor: Torrent) => (
+    <button type="button" class="m-icon-btn m-card-more" aria-label={t('library.actions')} disabled={selecting} onClick={() => setMenuFor(tor)}>
+      <Icon d={MORE} size={20} />
+    </button>
+  );
+  const mark = (tor: Torrent) =>
+    selecting && chosen.indexOf(tor.hash) >= 0 ? (
+      <span class="m-check" aria-hidden="true">
+        <Icon d={CHECK} size={16} />
+      </span>
+    ) : null;
+  const sel = (tor: Torrent) => (selecting && chosen.indexOf(tor.hash) >= 0 ? ' selected' : '');
+
+  const watchOnTv = (tor: Torrent) => {
+    const target = watchTarget(tor.hash, playableFiles(filesOf(tor)));
+    if (!target) return;
+    void launch.start({
+      hash: tor.hash,
+      file: target.id,
+      at: resumePosition(tor.hash, target.id),
+      duration: getLocalProgress(tor.hash, target.id)?.duration || undefined,
+      label: [episodeLabel(target.path), stripExt(baseName(target.path))].filter(Boolean).join(' · '),
+      onError: setTvError,
+    });
+  };
+
   const continueOnTv = (hash: string, fileIndex: number, time: number, duration: number, label: string) =>
     launch.start({
       hash,
@@ -258,13 +387,32 @@ export function Library() {
   const armed = pull >= PULL_TRIGGER || refreshing;
   return (
     <div class="m-screen m-library" data-route="library" ref={rootRef}>
+      {selecting && mine && !isHistory ? (
+        <div class="m-lib-head m-select-bar">
+          <button type="button" class="m-icon-btn" aria-label={t('library.selectCancel')} disabled={deleting} onClick={() => setSelected(null)}>
+            <Icon d={CLOSE} size={20} />
+          </button>
+          <span class="m-select-count" role="status">{t('library.selected', { n: chosen.length })}</span>
+          <button
+            type="button"
+            class="m-btn m-btn-secondary m-btn-sm"
+            disabled={deleting}
+            onClick={() => setSelected(chosen.length === shown.length ? [] : shown.map((x) => x.hash))}
+          >
+            {chosen.length === shown.length && shown.length > 0 ? t('library.selectNone') : t('library.selectAll')}
+          </button>
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm m-danger" disabled={deleting || !chosen.length} onClick={() => void deleteChosen()}>
+            {t('library.deleteN', { n: chosen.length })}
+          </button>
+        </div>
+      ) : (
       <div class="m-lib-head">
         <div class="m-lib-brand">
           <Logo size={28} />
           <span class="m-brand-name">OMP</span>
         </div>
         <TvChip />
-        {!isHistory && (
+        {mine && !isHistory && (
           <button
             type="button"
             class="m-icon-btn m-sort"
@@ -274,7 +422,7 @@ export function Library() {
             <Icon d={ICONS.sort} size={20} />
           </button>
         )}
-        {!isHistory && (
+        {mine && !isHistory && (
           <button
             type="button"
             class="m-icon-btn m-view"
@@ -284,16 +432,40 @@ export function Library() {
             <Icon d={ICONS['view-' + view as keyof typeof ICONS]} size={20} />
           </button>
         )}
-        <button
-          type="button"
-          class="m-icon-btn"
-          aria-label={t('add.search')}
-          aria-pressed={searchOpen}
-          onClick={() => (librarySearchOpen.value = !searchOpen)}
-        >
-          <Icon d={SEARCH} size={20} />
-        </button>
+        {mine && (
+          <button
+            type="button"
+            class="m-icon-btn"
+            aria-label={t('add.search')}
+            aria-pressed={searchOpen}
+            onClick={() => (librarySearchOpen.value = !searchOpen)}
+          >
+            <Icon d={SEARCH} size={20} />
+          </button>
+        )}
       </div>
+      )}
+      <div class="m-seg" role="tablist" aria-label={t('nav.library')}>
+        {(['mine', 'discover'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={mode === m}
+            class={'m-seg-btn' + (mode === m ? ' on' : '')}
+            onClick={() => {
+              if (m === mode) return;
+              setCatalogMode(m);
+              // the other mode starts at the top (one scroll offset for the tab: the mode left is not kept)
+              scrollToTop();
+            }}
+          >
+            {m === 'mine' ? t('discover.mine') : t('discover.browse')}
+          </button>
+        ))}
+      </div>
+      {mine ? (
+      <>
       {searchOpen && (
         <input
           class="m-input m-lib-search"
@@ -363,7 +535,7 @@ export function Library() {
             {refreshing && <span class="m-sr">{t('library.refreshing')}</span>}
           </div>
         )}
-        <div class="m-lib-body" style={pullStyle}>
+        <div class="m-lib-body" style={pullStyle} ref={bodyRef}>
           {donateCard && !unavailable && !supporterActive() && (
             <div class="m-donate-card" role="region" aria-label={t('donate.title')}>
               <span>{t('library.donateText')}</span>
@@ -463,35 +635,43 @@ export function Library() {
                   const eps = episodesText(t);
                   const q = qualityBadge(titleOf(t));
                   return (
-                    <button type="button" class="m-vrow" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
-                      <Poster torrent={t} class="m-poster-row" />
-                      <span class="m-vrow-text">
-                        <span class="m-card-title">{titleOf(t)}</span>
-                        <span class="m-muted m-small m-vrow-meta">
-                          <span>{formatBytes(t.torrent_size || 0)}</span>
-                          {q && <span class="m-badge-inline">{q}</span>}
-                          {eps && <span>{eps}</span>}
+                    <div class={'m-row-wrap' + sel(t)} key={t.hash} data-anchor={t.hash}>
+                      <button type="button" class="m-vrow" {...pressProps(t)}>
+                        <Poster torrent={t} class="m-poster-row" />
+                        {mark(t)}
+                        <span class="m-vrow-text">
+                          <span class="m-card-title">{titleOf(t)}</span>
+                          <span class="m-muted m-small m-vrow-meta">
+                            <span>{formatBytes(t.torrent_size || 0)}</span>
+                            {q && <span class="m-badge-inline">{q}</span>}
+                            {eps && <span>{eps}</span>}
+                          </span>
                         </span>
-                      </span>
-                      <Icon d="M9 6l6 6-6 6" size={18} />
-                    </button>
+                      </button>
+                      {moreBtn(t)}
+                    </div>
                   );
                 })}
               </div>
             ) : view === 'compact' ? (
               <div class="m-vlist m-clist">
                 {shown.map((t) => (
-                  <button type="button" class="m-crow" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
-                    <span class="m-crow-title">{titleOf(t)}</span>
-                    <span class="m-muted m-small m-crow-size">{formatBytes(t.torrent_size || 0)}</span>
-                  </button>
+                  <div class={'m-row-wrap' + sel(t)} key={t.hash} data-anchor={t.hash}>
+                    <button type="button" class="m-crow" {...pressProps(t)}>
+                      {mark(t)}
+                      <span class="m-crow-title">{titleOf(t)}</span>
+                      <span class="m-muted m-small m-crow-size">{formatBytes(t.torrent_size || 0)}</span>
+                    </button>
+                    {moreBtn(t)}
+                  </div>
                 ))}
               </div>
             ) : (
               <div class={'m-grid m-view-' + view}>
                 {shown.map((t) => (
-                  <button type="button" class="m-card" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
+                  <button type="button" class={'m-card' + sel(t)} key={t.hash} data-anchor={t.hash} {...pressProps(t)}>
                     <Poster torrent={t} />
+                    {mark(t)}
                     <span class="m-card-title">{titleOf(t)}</span>
                     {view === 'large' && <span class="m-muted m-small">{formatBytes(t.torrent_size || 0)}</span>}
                   </button>
@@ -501,7 +681,12 @@ export function Library() {
           )}
         </div>
       </div>
+      </>
+      ) : (
+        <Discover />
+      )}
       {launch.sheet}
+      {menuFor && <TorrentMenu tor={menuFor} onClose={() => setMenuFor(null)} onSelect={(h) => setSelected([h])} onWatchTv={watchOnTv} />}
     </div>
   );
 }

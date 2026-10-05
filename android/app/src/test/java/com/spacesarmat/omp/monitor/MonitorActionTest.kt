@@ -12,6 +12,8 @@ class MonitorActionTest {
         assertEquals(add, MonitorAction.fromJson(add.toJson().toString()))
         val rep = MonitorAction(MonitorAction.REPLACE, "episodes", "abc:2:10", 70001, MonitorIds.CHANNEL_EPISODES, "")
         assertEquals(rep, MonitorAction.fromJson(rep.toJson().toString()))
+        val better = MonitorAction(MonitorAction.REPLACE, "better", "abc:32", 70002, MonitorIds.CHANNEL_BETTER, "")
+        assertEquals(better, MonitorAction.fromJson(better.toJson().toString()))
     }
 
     @Test

@@ -14,6 +14,7 @@ import { torrents } from '../../src/store/library';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/store';
 import type { Source, SourceResult } from '../../src/sources/types';
+import { ipBanError } from '../../src/sources/ipBan';
 
 async function flush() {
   await act(async () => {
@@ -130,6 +131,42 @@ describe('Add', () => {
     expect(rows[0].querySelector('.m-src-badge')!.textContent).toBe('rutor (TorrServer)');
     expect(rows[0].textContent).toContain('ещё в Torznab');
     expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 2 · 2 из 2 источников ответили');
+  });
+
+  it('opens with a ready query and runs the search once on mount (route query + run)', async () => {
+    const s = vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<Add query="starbound" run />, el));
+    await flush();
+    expect((el.querySelector('input[aria-label="Поиск по источникам"]') as HTMLInputElement).value).toBe('starbound');
+    expect(s).toHaveBeenCalledWith('starbound', 'rutor');
+    expect(s).toHaveBeenCalledTimes(2);
+    expect(el.querySelectorAll('.m-result').length).toBe(2);
+  });
+
+  it('back to the same route entry does not run the search again or bring back the original query', async () => {
+    const s = vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    const entry = { name: 'add' as const, query: 'starbound', run: true };
+    act(() => render(<Add query={entry.query} run entry={entry} />, el));
+    await flush();
+    expect(s).toHaveBeenCalledTimes(2);
+    // the person refines the query, opens another screen and comes back
+    type('input[aria-label="Поиск по источникам"]', 'starbound s02');
+    act(() => render(null, el));
+    act(() => render(<Add query={entry.query} run entry={entry} />, el));
+    await flush();
+    expect((el.querySelector('input[aria-label="Поиск по источникам"]') as HTMLInputElement).value).toBe('starbound s02');
+    expect(s).toHaveBeenCalledTimes(2);
+    // a new entry (another «Найти раздачи») runs again
+    const next = { name: 'add' as const, query: 'dune', run: true };
+    act(() => render(null, el));
+    act(() => render(<Add query={next.query} run entry={next} />, el));
+    await flush();
+    expect(s).toHaveBeenCalledTimes(4);
+    expect(s).toHaveBeenCalledWith('dune', 'rutor');
   });
 
   it('«Добавить и смотреть на ТВ» adds then launches', async () => {
@@ -448,6 +485,12 @@ describe('Add unified search', () => {
     expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 2 · 2 из 2 источников ответили');
   });
 
+  const pickFilter = (label: string) => {
+    if (!el.querySelector('.m-sheet')) click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').indexOf('Фильтры') === 0)!);
+    click(sheetButtons().filter((b) => b.textContent === label)[0]);
+    click(el.querySelector('.m-sheet-backdrop')!);
+  };
+
   it('quality chips and sorting', async () => {
     registerSource(
       fake('fake', [
@@ -461,11 +504,12 @@ describe('Add unified search', () => {
     await flush();
     const titles = () => Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
     expect(titles()).toEqual(['Small 2160p', 'Old 720p', 'Big 1080p']);
-    click(byText('1080p+'));
+    pickFilter('1080p');
+    expect(titles()).toEqual(['Big 1080p']);
+    pickFilter('4K');
     expect(titles()).toEqual(['Small 2160p', 'Big 1080p']);
-    click(byText('2160p'));
-    expect(titles()).toEqual(['Small 2160p']);
-    click(byText('2160p'));
+    pickFilter('1080p');
+    pickFilter('4K');
     click(byText('По сидам ▾'));
     click(sheetButtons().filter((b) => b.textContent === 'По размеру')[0]);
     expect(titles()).toEqual(['Big 1080p', 'Old 720p', 'Small 2160p']);
@@ -626,8 +670,17 @@ describe('Add unified search: stable rows', () => {
     await flush();
     const hint = el.querySelector('[data-hint="jackett"]')!;
     expect(hint.textContent).toContain('rutracker: Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже');
-    expect(hint.textContent).toContain('через Jackett или Prowlarr');
+    expect(hint.textContent).toContain('через Jackett, Prowlarr или FlareSolverr');
     expect(hint.textContent).not.toContain('Фейк-2');
+  });
+
+  it('a site asking for a verification code: its own message, not the Jackett hint', async () => {
+    registerSource({ id: 'fake', name: 'torrent.by', kind: 'builtin', search: () => Promise.reject(ipBanError('torrent.by')) });
+    mount();
+    search('x');
+    await flush();
+    expect(el.querySelector('[data-hint="ipban"]')!.textContent).toBe('torrent.by просит ввести проверочный код');
+    expect(el.querySelector('[data-hint="jackett"]')).toBeNull();
   });
 
   it('row actions name their row', async () => {
@@ -661,7 +714,9 @@ describe('Add «Подписаться»', () => {
     mount();
     search('Дюна');
     await flush();
-    click(byText('2160p'));
+    click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').indexOf('Фильтры') === 0)!);
+    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === '4K')!);
+    click(el.querySelector('.m-sheet-backdrop')!);
     click(Array.from(el.querySelector('[data-plate="subscribe"]')!.querySelectorAll('button')).find((b) => b.textContent === 'Подписаться')!);
     expect(el.querySelector('.m-sheet .m-chip.on')!.textContent).toBe('Любое');
   });
@@ -679,7 +734,9 @@ describe('Add «Подписаться»', () => {
     click(byText('Все источники · 2'));
     click(Array.from(el.querySelectorAll('.m-sheet [role=checkbox]')).find((b) => b.textContent === 'Фейк-2')!);
     click(el.querySelector('.m-sheet-backdrop')!);
-    click(byText('1080p+'));
+    click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').indexOf('Фильтры') === 0)!);
+    click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === '1080p')!);
+    click(el.querySelector('.m-sheet-backdrop')!);
     search('  Северный ветер сезон 2 ');
     await flush();
     const plate = el.querySelector('[data-plate="subscribe"]')!;

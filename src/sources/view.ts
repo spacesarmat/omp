@@ -3,7 +3,9 @@
 import { fmtNumber, t as tr, tp } from '../i18n';
 import { parseDate, parseSize } from './html';
 import { getSource } from './registry';
-import type { SourceContext, SourceHealth, SourceResult } from './types';
+import { ipBanText, sourcePaused } from './ipBan';
+import { getHealth } from './store';
+import type { Source, SourceContext, SourceHealth, SourceResult } from './types';
 
 export const jackettHint = (): string => tr('sources.jackettHint');
 
@@ -135,7 +137,43 @@ export function healthText(h: SourceHealth | null): HealthLine | null {
   }
   if (h.state === 'login') return { text: tr('sources.state.login'), tone: 'muted' };
   if (isCloudflare(h.message)) return { text: h.message!, tone: 'bad' };
+  // the site's code page: its own message («torrent.by просит ввести проверочный код»), not «не отвечает»
+  if (h.code === 'ipban' && h.message) return { text: h.message, tone: 'bad' };
   return { text: tr('sources.state.noAnswer'), tone: 'bad' };
+}
+
+/**
+ * The site's code page (ipBan.ts): the message of its last search, or of a background pause when it has no state yet;
+ * '' otherwise.
+ */
+export function ipBanNote(id: string): string {
+  const h = getHealth(id);
+  if (h) return h.code === 'ipban' && h.message ? h.message : '';
+  return sourcePaused(id) ? ipBanText(sourceName(id)) : '';
+}
+
+/** The short hint under a site whose last search hit Cloudflare. */
+export interface CloudflareHint {
+  text: string;
+  /** Add the «Как» link to the FAQ about Jackett / Prowlarr (a site without a browser login). */
+  how: boolean;
+}
+
+/**
+ * The site's own way past Cloudflare: a site with a browser login signs in there (again, when it is signed in already);
+ * any other site goes through Jackett / Prowlarr, FlareSolverr included.
+ */
+export function cloudflareHint(s: Pick<Source, 'name' | 'browserLogin'>, loggedIn: boolean): CloudflareHint {
+  if (s.browserLogin) return { text: tr(loggedIn ? 'sources.cfHint.again' : 'sources.cfHint.login'), how: false };
+  return { text: tr('sources.cfHint.jackett', { name: s.name }), how: true };
+}
+
+/** A site behind Cloudflare: «за Cloudflare» joins its note unless the note is an error. */
+export function withCloudflareNote(note: HealthLine | null): HealthLine {
+  const cf = tr('sources.state.behindCf');
+  if (!note) return { text: cf, tone: 'muted' };
+  if (note.tone === 'bad') return note;
+  return { text: note.text + ' · ' + cf, tone: note.tone };
 }
 
 function two(n: number): string {

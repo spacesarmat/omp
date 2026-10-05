@@ -7,6 +7,7 @@ import { isCloudflare, jackettHint } from '../../../src/sources/view';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { browserSuggestion } from '../../../src/sources/browserLogin';
 import { BrowserLoginButton } from './BrowserLoginButton';
+import { NoAccount } from './NoAccount';
 import { t } from '../../../src/i18n';
 
 const LOCK = 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3';
@@ -141,6 +142,7 @@ export function TrackerLogin({
             onDone(true);
           }}
         />
+        <NoAccount source={source} />
         <div class="m-marks-actions">
           <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={close}>
             {t('common.cancel')}

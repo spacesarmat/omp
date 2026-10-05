@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseData, addEntry, serializeData, removeFile, journalOf, sanitizeSkip, watchesNewEpisodes, withWatch, JOURNAL_MAX, type JournalEntry } from '../../src/lib/journal';
+import { parseData, addEntry, serializeData, removeFile, journalOf, sanitizeSkip, watchesNewEpisodes, watchesBetterQuality, withQualityWatch, withWatch, JOURNAL_MAX, type JournalEntry } from '../../src/lib/journal';
 
 const T0 = 1_759_400_000_000;
 
@@ -170,5 +170,21 @@ describe('journal: keys of newer versions', () => {
     expect(out.omp.future).toEqual({ x: 1 });
     expect(out.omp.s).toEqual({ i: true, c: false });
     expect(out.lampa).toBe(2);
+  });
+
+  it('watchesBetterQuality / withQualityWatch: omp.q next to omp.w, kept by later writes', () => {
+    expect(watchesBetterQuality(null)).toBe(true);
+    expect(watchesBetterQuality('not json')).toBe(true);
+    expect(watchesBetterQuality(JSON.stringify({ omp: { v: 1, h: [], w: false } }))).toBe(true);
+    expect(watchesBetterQuality(JSON.stringify({ omp: { v: 1, h: [], q: false } }))).toBe(false);
+    const j: JournalEntry[] = [{ f: 1, t: 1, d: 2, at: T0, src: 'tv' }];
+    const p = parseData(JSON.stringify({ lampa: 1, omp: { v: 1, h: j, w: false } }))!;
+    const off = JSON.parse(serializeData(withQualityWatch(p.obj, false), p.journal));
+    expect(off.omp).toEqual({ v: 1, h: j, w: false, q: false });
+    expect(off.lampa).toBe(1);
+    const again = parseData(JSON.stringify(off))!;
+    expect(JSON.parse(serializeData(again.obj, again.journal, { i: true, c: false })).omp.q).toBe(false);
+    expect(JSON.parse(serializeData(withQualityWatch(again.obj, true), again.journal)).omp.q).toBeUndefined();
+    expect(JSON.parse(serializeData(withQualityWatch({}, false), [])).omp).toEqual({ v: 1, h: [], q: false });
   });
 });

@@ -68,6 +68,8 @@ export interface SourceContext {
   /** TorrServer client for the TorrServer sources; null when no server is chosen. */
   client: { search(query: string, source: SearchSource): Promise<SearchResult[]> } | null;
   secrets?: SecretStore;
+  /** The background monitoring page: a site whose background requests are paused (ipBan.ts) is not asked. */
+  background?: boolean;
 }
 
 export interface Source {
@@ -97,7 +99,7 @@ export interface Source {
   siteUrl?: string;
   /** Every root of a site with mirrors (siteUrl is the active one): a TV check request may name any of them. */
   siteUrls?: string[];
-  /** Sources with needsLogin: sign in; the credentials go to ctx.secrets only. Rejects in Russian. */
+  /** Sites with an account (needsLogin, or an optional one like NNM-Club): sign in; the credentials go to ctx.secrets only. Rejects in Russian. */
   login?(username: string, password: string, ctx: SourceContext): Promise<void>;
   /** Forgets the site cookies and the saved credentials. */
   logout?(ctx: SourceContext): Promise<void>;
@@ -124,6 +126,11 @@ export interface Source {
   sessionPending?(ctx: SourceContext, host: string): Promise<void>;
   /** Fresh releases of a category from the site's public «new» pages (no login), newest first. The «Новое» feed. */
   latest?(ctx: SourceContext, category: FeedCategory): Promise<SourceResult[]>;
+  /**
+   * The site blocks this IP with a code page (health code 'ipban'): opens it in the browser for the person to enter
+   * the code, then checks the site once (health recorded). Resolves false when no browser could be opened.
+   */
+  unblock?(ctx: SourceContext): Promise<boolean>;
 }
 
 /** Categories of the «Новое» feed: «Фильмы / Сериалы / Аниме». */
@@ -141,6 +148,8 @@ export interface SourceHealth {
   at: number;
   /** Error text of a failed search (e.g. the Cloudflare block). */
   message?: string;
+  /** 'ipban': the site showed its «введите проверочный код» page (ipBan.ts). */
+  code?: 'ipban';
 }
 
 const LOGIN = 'login';

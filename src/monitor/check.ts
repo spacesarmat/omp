@@ -1,10 +1,12 @@
 // Checking subscriptions: the unified search over the subscription's sources, its filters, then the results not seen
+// before. A «Только лучшее качество» subscription reports only the best new result above the best rank it reported
 // before. The first check of a subscription (and the first answer of each source) only remembers what is there.
 // Chromium 53 safe.
 import { searchAll, SOURCE_TIMEOUT_MS, type SearchAllOptions, type SearchHandle } from '../sources/search';
 import type { Source, SourceContext, SourceResult } from '../sources/types';
 import { filterForSubscription, isSeen, resultKeys, seenEntry, seenIndex } from './match';
-import { addFindings, getSubscription, loadSubs, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
+import { qualityRank } from './quality';
+import { addFindings, bestRank, getSubscription, hasBestRank, loadSubs, rememberBestRank, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
 import type { Finding, Subscription } from './types';
 
 /** searchAll or a test double. */
@@ -17,6 +19,12 @@ export interface CheckOptions {
   from?: Source[];
   /** Per-source timeout, ms (default: SOURCE_TIMEOUT_MS). */
   timeoutMs?: number;
+  /**
+   * Per-source timeout of the sites whose Cloudflare pass is on. Subscriptions default to timeoutMs (background runs
+   * have a deadline); the library checks default to CLOUDFLARE_TIMEOUT_MS (the replace sheet waits for the check).
+   * The background page passes SOURCE_TIMEOUT_MS.
+   */
+  cloudflareTimeoutMs?: number;
   /** Unix ms of the findings (default: now). */
   now?: number;
 }
@@ -59,7 +67,7 @@ function runSearch(query: string, ctx: SourceContext, sources: string[] | undefi
   try {
     // background runs keep the normal per-source timeout for Cloudflare sites too (the run has a deadline); a hidden
     // check still finishes natively and its cookies serve the next run
-    h = search(query, { ctx, sources, from: opts.from, timeoutMs: opts.timeoutMs, cloudflareTimeoutMs: opts.timeoutMs || SOURCE_TIMEOUT_MS });
+    h = search(query, { ctx, sources, from: opts.from, timeoutMs: opts.timeoutMs, cloudflareTimeoutMs: opts.cloudflareTimeoutMs || opts.timeoutMs || SOURCE_TIMEOUT_MS });
   } catch (e) {
     return Promise.resolve({ results: [], answered: [], failed: [] });
   }
@@ -72,6 +80,39 @@ function runSearch(query: string, ctx: SourceContext, sources: string[] | undefi
 /** The source ids of a merged result (the kept one and its duplicates). */
 function sourcesOf(r: SourceResult): string[] {
   return [r.source].concat(r.sources || []);
+}
+
+/** The highest quality rank among `list` (-1 for an empty one). */
+function topRank(list: SourceResult[]): number {
+  let max = -1;
+  list.forEach((r) => {
+    const rank = qualityRank(r.Title);
+    if (rank > max) max = rank;
+  });
+  return max;
+}
+
+/**
+ * «Только лучшее качество»: the one best new result (rank, then seeds) above the floor, which is the highest rank among
+ * the stored best rank and every result seen before (a better release already listed is not news). Without a stored
+ * rank (-1 is a rank: nothing was listed yet) (the flag was just switched on) nothing is reported: the caller stores the current best rank.
+ */
+function bestOnly(subId: string, fresh: SourceResult[], known: SourceResult[]): SourceResult[] {
+  if (!hasBestRank(subId)) return [];
+  const stored = bestRank(subId);
+  const floor = Math.max(stored, topRank(known));
+  let pick: SourceResult | null = null;
+  let pickRank = -1;
+  for (let i = 0; i < fresh.length; i++) {
+    const r = fresh[i];
+    const rank = qualityRank(r.Title);
+    if (rank <= floor) continue;
+    if (!pick || rank > pickRank || (rank === pickRank && (r.Seed || 0) > (pick.Seed || 0))) {
+      pick = r;
+      pickRank = rank;
+    }
+  }
+  return pick ? [pick] : [];
 }
 
 /**
@@ -91,12 +132,15 @@ export function checkSubscription(ctx: SourceContext, sub: Subscription, opts?: 
       const known = seenSources(sub.id);
       const index = seenIndex(seen);
       const at = o.now === undefined ? Date.now() : o.now;
-      base.findings = matched
-        .filter((r) => !isSeen(r, index) && sourcesOf(r).some((id) => known.indexOf(id) >= 0))
-        .map((r) => ({ subId: sub.id, key: resultKeys(r)[0], result: r, at }));
+      const isNew = (r: SourceResult) => !isSeen(r, index) && sourcesOf(r).some((id) => known.indexOf(id) >= 0);
+      let fresh = matched.filter(isNew);
+      if (sub.better) fresh = bestOnly(sub.id, fresh, matched.filter((r) => !isNew(r)));
+      base.findings = fresh.map((r) => ({ subId: sub.id, key: resultKeys(r)[0], result: r, at }));
       addFindings(base.findings);
     }
     rememberSeen(sub.id, matched.map(seenEntry), out.answered);
+    // the first check (and the first one after the flag was switched on) stores the best rank listed now, silently
+    if (sub.better) rememberBestRank(sub.id, topRank(matched));
     return base;
   });
 }

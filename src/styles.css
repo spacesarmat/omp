@@ -376,6 +376,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .login-dialog .text-input { display: block; background: var(--panel2); }
 .login-dialog .text-input.focused { box-shadow: inset 0 0 0 4px var(--accent); }
 .login-hint { padding: 20px 24px; border-radius: 21px; background: #3a3320; color: var(--accent); font-size: 25px; line-height: 1.45; margin-bottom: 16px; }
+.login-noacct { display: flex; align-items: center; gap: 24px; margin-bottom: 20px; }
+.login-noacct .login-note { margin-bottom: 0; }
 .login-note { font-size: 22px; color: var(--muted); margin-bottom: 20px; }
 .login-actions { display: flex; }
 .login-actions .button { flex: 1; text-align: center; }

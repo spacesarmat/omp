@@ -2,7 +2,7 @@
 // the torrent list first (another device may have written meanwhile) and every failure is swallowed: the journal must
 // never break playback.
 import type { Torrent } from '../api/types';
-import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, withWatch, supportOfList, withSupport, journalOf } from '../lib/journal';
+import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, watchesBetterQuality, withQualityWatch, withWatch, supportOfList, withSupport, journalOf } from '../lib/journal';
 import { torrents } from './library';
 import { noteSupport } from './support';
 import { SUPPORT_MAX_AHEAD_MS } from '../lib/donate';
@@ -150,11 +150,21 @@ export function loadWatch(c: Pick<JournalClient, 'list'>, hash: string): Promise
   });
 }
 
-/**
- * Switches watching new episodes of a torrent: false writes omp.w: false, true removes it; the history, the skip
- * settings and every other key of `data` are kept. Rejects on failure, like saveSkip.
- */
-export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watch: boolean): Promise<boolean> {
+/** «Следить за качеством» of a film (omp.q); true when nothing is stored or the torrent is unknown. */
+export function loadQualityWatch(c: Pick<JournalClient, 'list'>, hash: string): Promise<boolean> {
+  return c.list().then((all) => {
+    const t = torrentOf(all, hash);
+    return t ? watchesBetterQuality(t.data) : true;
+  });
+}
+
+interface OmpFlag {
+  read: (data: string | undefined | null) => boolean;
+  write: (obj: { [k: string]: unknown }, on: boolean) => { [k: string]: unknown };
+}
+
+/** Writes an on/off flag of the journal object; the history, the skip settings and every other key are kept. */
+function saveFlag(c: JournalClient, torrent: Pick<Torrent, 'hash'>, on: boolean, flag: OmpFlag): Promise<boolean> {
   const hash = torrent.hash;
   const prev = chains[hash] || Promise.resolve();
   const run = prev.then(() =>
@@ -163,12 +173,12 @@ export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watc
       if (!tor) throw new Error(t('errors.torrentMissing'));
       const parsed = parseData(tor.data);
       if (!parsed) throw new Error(t('errors.notJson'));
-      if (watchesNewEpisodes(tor.data) === watch) return watch;
+      if (flag.read(tor.data) === on) return on;
       const base = baseOf(tor, parsed);
-      const data = serializeData(withWatch(base.obj, watch), base.journal, base.skip);
+      const data = serializeData(flag.write(base.obj, on), base.journal, base.skip);
       return c.setData(tor, data).then(() => {
         patchLibrary(tor.hash, data);
-        return watch;
+        return on;
       });
     }),
   );
@@ -181,6 +191,19 @@ export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watc
     if (chains[hash] === tail) delete chains[hash];
   });
   return run;
+}
+
+/**
+ * Switches watching new episodes of a torrent: false writes omp.w: false, true removes it; the history, the skip
+ * settings and every other key of `data` are kept. Rejects on failure, like saveSkip.
+ */
+export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watch: boolean): Promise<boolean> {
+  return saveFlag(c, torrent, watch, { read: watchesNewEpisodes, write: withWatch });
+}
+
+/** «Следить за качеством» of a film: false writes omp.q: false, true removes it. Rejects on failure. */
+export function saveQualityWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watch: boolean): Promise<boolean> {
+  return saveFlag(c, torrent, watch, { read: watchesBetterQuality, write: withQualityWatch });
 }
 
 /** Last watch-journal activity of a torrent (0: never played through OMP). */

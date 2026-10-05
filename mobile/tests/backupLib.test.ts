@@ -1,4 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+// @ts-ignore node builtins
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+// @ts-ignore
+import { join } from 'node:path';
+import { SUBS_SORTS } from '../src/monitor/subsView';
 import {
   BACKUP_KEYS,
   BACKUP_MAX_BYTES,
@@ -71,7 +76,14 @@ describe('collectBackup', () => {
     put('tsp.playlists', [{ url: 'http://x/p.m3u', title: 'P' }]);
     put('tsp.trackPrefs', { h1: { audioLang: 'ru' } });
     put('tsp.support', { until: 1798934400000 });
+    put('tsp.catalogMode', 'discover');
+    put('tsp.discoverCols', 3);
+    put('tsp.searchFilters', { hdr: true });
+    put('tsp.subsSort', 'added');
+    put('tsp.ui.skipOpen', false);
     const b = collectBackup(NOW);
+    expect(b.data['tsp.catalogMode']).toBe('discover');
+    expect(b.data['tsp.discoverCols']).toBe(3);
     expect(b.data['tsp.support']).toEqual({ until: 1798934400000 });
     expect(b.data['tsp.flaresolverr']).toEqual({ url: 'http://192.168.1.5:8191' });
     expect(Object.keys(b.data).sort()).toEqual(BACKUP_KEYS.map((k) => k.key).sort());
@@ -97,7 +109,69 @@ describe('collectBackup', () => {
   it('never lists excluded keys in the allowlist', () => {
     const keys = BACKUP_KEYS.map((k) => k.key);
     NOT_BACKED_UP.forEach((k) => expect(keys).not.toContain(k));
-    expect(keys.some((k) => /log|cookie|pass|secret|cache/i.test(k))).toBe(false);
+    // «log» as a word: tsp.catalogMode is a UI choice, not a log
+    expect(keys.some((k) => /\blog\b|cookie|pass|secret|cache/i.test(k))).toBe(false);
+  });
+
+  it('every tsp.* key in the code is either backed up or listed as not backed up', () => {
+    const listed = BACKUP_KEYS.map((k) => k.key).concat(NOT_BACKED_UP);
+    const found: { [k: string]: string } = {};
+    const walk = (dir: string) => {
+      readdirSync(dir).forEach((name: string) => {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) walk(p);
+        else if (/\.tsx?$/.test(name)) {
+          const re = /['"`](tsp\.[A-Za-z0-9_.]+)['"`]/g;
+          const text = readFileSync(p, 'utf8');
+          let m: RegExpExecArray | null;
+          while ((m = re.exec(text))) found[m[1]] = p;
+        }
+      });
+    };
+    // the tests run from the repository root
+    walk('src');
+    walk(join('mobile', 'src'));
+    expect(Object.keys(found).length).toBeGreaterThan(40);
+    expect(Object.keys(found).filter((k) => listed.indexOf(k) < 0).map((k) => k + ' (' + found[k] + ')')).toEqual([]);
+  });
+
+  it('keeps the search filters, the subscriptions sort and «skip open» only when they are valid', () => {
+    put('tsp.searchFilters', 'junk');
+    put('tsp.subsSort', 'sideways');
+    put('tsp.ui.skipOpen', 'yes');
+    let b = collectBackup(NOW);
+    expect(b.data['tsp.searchFilters']).toBeUndefined();
+    expect(b.data['tsp.subsSort']).toBeUndefined();
+    expect(b.data['tsp.ui.skipOpen']).toBeUndefined();
+    put('tsp.searchFilters', { res: [2160, 999], hdr: true, minSeeds: 5 });
+    put('tsp.subsSort', 'name');
+    put('tsp.ui.skipOpen', true);
+    b = collectBackup(NOW);
+    expect(b.data['tsp.searchFilters']).toMatchObject({ res: [2160], hdr: true, minSeeds: 5 });
+    expect(b.data['tsp.subsSort']).toBe('name');
+    expect(b.data['tsp.ui.skipOpen']).toBe(true);
+    SUBS_SORTS.forEach((s) => {
+      put('tsp.subsSort', s);
+      expect(collectBackup(NOW).data['tsp.subsSort']).toBe(s);
+    });
+  });
+
+  it('leaves the TMDB cache and the background pauses out', () => {
+    expect(NOT_BACKED_UP).toContain('tsp.tmdbCache');
+    expect(NOT_BACKED_UP).toContain('tsp.sourcePause');
+  });
+
+  it('keeps the «Каталог» choices only when they are valid', () => {
+    put('tsp.catalogMode', 'elsewhere');
+    put('tsp.discoverCols', 7);
+    let b = collectBackup(NOW);
+    expect(b.data['tsp.catalogMode']).toBeUndefined();
+    expect(b.data['tsp.discoverCols']).toBeUndefined();
+    put('tsp.catalogMode', 'mine');
+    put('tsp.discoverCols', 2);
+    b = collectBackup(NOW);
+    expect(b.data['tsp.catalogMode']).toBe('mine');
+    expect(b.data['tsp.discoverCols']).toBe(2);
   });
 
   it('cleans values with the stores sanitizers and survives corrupt storage', () => {
@@ -105,7 +179,7 @@ describe('collectBackup', () => {
     put('tsp.touchpad', { speed: 99, accel: 'yes' });
     const b = collectBackup(NOW);
     expect(b.data['tsp.servers']).toBeUndefined();
-    expect(b.data['tsp.touchpad']).toEqual({ speed: 5, accel: true, tapClick: true, invertScroll: false, scrollStrip: true });
+    expect(b.data['tsp.touchpad']).toEqual({ speed: 5, accel: true, tapClick: true, invertScroll: false });
   });
 });
 
@@ -255,7 +329,7 @@ describe("hardening", () => {
     if (!r.ok) throw new Error("parse");
     applyBackup(r.backup);
     expect(get("tsp.settings")).toMatchObject({ libraryView: "list", autoNext: false, seekStep: 30 });
-    expect(get("tsp.touchpad")).toEqual({ speed: 2, accel: false, tapClick: true, invertScroll: true, scrollStrip: true });
+    expect(get("tsp.touchpad")).toEqual({ speed: 2, accel: false, tapClick: true, invertScroll: true });
   });
 
   it("resets active ids that no longer exist after the restore", () => {

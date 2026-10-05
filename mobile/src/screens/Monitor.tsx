@@ -21,7 +21,7 @@ function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
   );
 }
 
-/** «Настройки» → «Мониторинг»: background checks, how often, Wi-Fi only, new episodes, the last check. */
+/** «Настройки» → «Мониторинг»: background checks, how often, Wi-Fi only, new episodes, better quality, the last check. */
 export function Monitor() {
   const [s, setS] = useState<MonitorSettings>(loadMonitorSettings);
   const [hoursOpen, setHoursOpen] = useState(false);
@@ -89,6 +89,14 @@ export function Monitor() {
             <span class="m-muted m-small">{t('monitor.settings.episodesSub')}</span>
           </div>
           <Switch on={s.episodes} label={t('monitor.settings.episodes')} onToggle={() => change({ episodes: !s.episodes })} />
+        </div>
+        <div class="m-set-sep" />
+        <div class="m-set-row">
+          <div class="m-set-text" style="flex-grow: 1">
+            <span>{t('monitor.settings.better')}</span>
+            <span class="m-muted m-small">{t('monitor.settings.betterSub')}</span>
+          </div>
+          <Switch on={s.better} label={t('monitor.settings.better')} onToggle={() => change({ better: !s.better })} />
         </div>
       </div>
       <div class="m-set-card m-monitor-last" data-last-check>

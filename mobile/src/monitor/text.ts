@@ -3,7 +3,7 @@ import { fmtDate, fmtNumber, t, tp } from '../../../src/i18n';
 import { sourceName } from '../../../src/sources/view';
 import { parseEpisodeRange } from '../../../src/monitor/episodes';
 import type { MonitorSummary } from '../../../src/monitor/settings';
-import type { EpisodesInfo, SubQuality, Subscription } from '../../../src/monitor/types';
+import type { BetterInfo, EpisodesInfo, SubQuality, Subscription } from '../../../src/monitor/types';
 
 function pad(n: number): string {
   return (n < 10 ? '0' : '') + n;
@@ -90,6 +90,7 @@ export function subSources(s: Pick<Subscription, 'sources'>): string {
 /** The conditions under the query: «Все источники · от 1080p · от 20 сидов · до 30 ГБ». */
 export function subRule(s: Subscription): string {
   const parts = [subSources(s), qualityRule(s.quality)];
+  if (s.better) parts.push(t('monitor.betterRule'));
   if (s.minSeeds) parts.push(tp('monitor.minSeeds', s.minSeeds));
   if (s.maxSizeGb) parts.push(t('monitor.maxSize', { size: gbText(s.maxSizeGb) }));
   if (!s.notify) parts.push(t('monitor.noNotify'));
@@ -111,6 +112,16 @@ export function episodesLine(e: EpisodesInfo, haveFrom = 1): string {
   const first = e.haveTo + 1;
   const news = first >= e.to ? t('monitor.episodeOut', { to: e.to }) : t('monitor.episodesOut', { from: first, to: e.to });
   return t('monitor.youHave', { news: news, range: rangeOf(Math.min(haveFrom, e.haveTo), e.haveTo) });
+}
+
+/** A quality label, or «качество не указано» when the title said nothing. */
+export function qualityText(label: string): string {
+  return label || t('monitor.qualityUnknown');
+}
+
+/** «4K WEB-DL · у вас 1080p WEB-DL». */
+export function betterLine(b: BetterInfo): string {
+  return t('monitor.youHave', { news: qualityText(b.got), range: qualityText(b.have) });
 }
 
 /** «Серии 1–10 из 10» from a release title; '' when it has no episode numbers. */

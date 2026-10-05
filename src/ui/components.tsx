@@ -21,7 +21,7 @@ interface FocusableProps {
 }
 
 export function Focusable(p: FocusableProps) {
-  const { ref, focused, focusSelf } = useFocusable({
+  const { ref, focused, focusSelf, focusKey } = useFocusable({
     focusKey: p.focusKey,
     focusable: !p.disabled,
     onEnterPress: () => { if (p.onPress) p.onPress(); },
@@ -36,6 +36,7 @@ export function Focusable(p: FocusableProps) {
     <div
       ref={ref}
       class={cls}
+      data-fk={focusKey}
       role={p.role}
       aria-label={p.ariaLabel}
       aria-checked={p.ariaChecked}
@@ -104,7 +105,7 @@ interface TextInputProps {
 /** Spatial-nav item that opens the system keyboard (TV or LG ThinQ phone keyboard) on OK. */
 export function TextInput(p: TextInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { ref, focused, focusSelf } = useFocusable({
+  const { ref, focused, focusSelf, focusKey } = useFocusable({
     focusKey: p.focusKey,
     onEnterPress: () => { if (inputRef.current) inputRef.current.focus(); },
     onFocus: () => {
@@ -118,6 +119,7 @@ export function TextInput(p: TextInputProps) {
     <div
       ref={ref}
       class={'focusable text-input' + (focused ? ' focused' : '')}
+      data-fk={focusKey}
       onMouseEnter={() => focusSelf()}
       onClick={() => { if (inputRef.current) inputRef.current.focus(); }}
     >

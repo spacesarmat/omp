@@ -5,6 +5,7 @@ import {
   FOUND_KEY,
   SEEN_MAX,
   FOUND_MAX,
+  BETTER_FOUND_MAX,
   loadSubs,
   getSubscription,
   addSubscription,
@@ -23,8 +24,10 @@ import {
   markFindingsSeen,
   removeFindings,
   unseenCount,
+  bestRank,
+  rememberBestRank,
 } from '../../src/monitor/subs';
-import { EPISODES_ID, type Finding } from '../../src/monitor/types';
+import { BETTER_ID, EPISODES_ID, type Finding } from '../../src/monitor/types';
 import type { SourceResult } from '../../src/sources/types';
 
 function res(Title: string, extra?: Partial<SourceResult>): SourceResult {
@@ -174,6 +177,33 @@ describe('findings', () => {
     expect(JSON.parse(localStorage.getItem(FOUND_KEY)!)).toHaveLength(FOUND_MAX);
   });
 
+  it('better-quality cards have their own cap and never push out subscription or episode cards', () => {
+    expect(BETTER_FOUND_MAX).toBe(30);
+    const subs: Finding[] = [];
+    for (let i = 0; i < 90; i++) subs.push(finding('s1', 'k' + i, 10 + i));
+    const eps: Finding[] = [];
+    for (let i = 0; i < 10; i++)
+      eps.push(finding(EPISODES_ID, 'e' + i + ':1:10', 200 + i, { episodes: { torrentHash: 'e' + i, torrentTitle: 'T', season: 1, haveTo: 8, to: 10 } }));
+    addFindings(subs.concat(eps));
+    const better: Finding[] = [];
+    for (let i = 0; i < 40; i++)
+      better.push(
+        finding(BETTER_ID, 'b' + i + ':32', 1000 + i, { better: { torrentHash: 'b' + i, torrentTitle: 'T', have: '1080p WEB-DL', got: '4K WEB-DL' } }),
+      );
+    // one by one, as the background adds them
+    better.forEach((f) => addFindings([f]));
+    expect(findingsOf('s1')).toHaveLength(90);
+    expect(findingsOf(EPISODES_ID)).toHaveLength(10);
+    const kept = findingsOf(BETTER_ID).map((f) => f.key);
+    expect(kept).toHaveLength(BETTER_FOUND_MAX);
+    // the oldest better-quality cards went first
+    expect(kept[0]).toBe('b39:32');
+    expect(kept[kept.length - 1]).toBe('b10:32');
+    expect(JSON.parse(localStorage.getItem(FOUND_KEY)!)).toHaveLength(130);
+    markFindingsSeen();
+    expect(loadFound()).toHaveLength(130);
+  });
+
   it('a newer release of the same library torrent replaces the older card', () => {
     const ep = (to: number) => ({ torrentHash: 'abc', torrentTitle: 'T', season: 1, haveTo: 8, to });
     addFindings([finding(EPISODES_ID, 'abc:1:9', 10, { episodes: ep(9) })]);
@@ -242,5 +272,51 @@ describe('pruneEpisodeFindings', () => {
     pruneEpisodeFindings((h) => h === 'a');
     expect(findingsOf(EPISODES_ID).map((f) => f.episodes!.torrentHash)).toEqual(['a']);
     expect(findingsOf('s1')).toHaveLength(1);
+  });
+});
+
+describe('«Лучшее качество»', () => {
+  it('a subscription keeps `better` only when true', () => {
+    expect(sanitizeSubscription({ id: 'a', query: 'q', better: true })!.better).toBe(true);
+    expect(sanitizeSubscription({ id: 'a', query: 'q', better: 'yes' })).not.toHaveProperty('better');
+    expect(sanitizeSubscription({ id: 'a', query: 'q', better: false })).not.toHaveProperty('better');
+    const s = addSubscription({ query: 'Северный ветер', quality: '', sources: null, notify: true, better: true }, 1)!;
+    expect(s.better).toBe(true);
+    expect(updateSubscription(s.id, { better: false })).not.toHaveProperty('better');
+  });
+
+  it('the best rank lives in the seen record: kept by rememberSeen, only raised, forgotten with it', () => {
+    expect(bestRank('s1')).toBe(-1);
+    rememberBestRank('s1', 22);
+    expect(bestRank('s1')).toBe(-1); // before the first check there is no record to keep it in
+    rememberSeen('s1', ['a']);
+    rememberBestRank('s1', 22);
+    rememberBestRank('s1', 12);
+    expect(bestRank('s1')).toBe(22);
+    rememberSeen('s1', ['b'], ['rutor']);
+    expect(bestRank('s1')).toBe(22);
+    expect(seenKeys('s1')).toEqual(['b', 'a']);
+    forgetSeen('s1');
+    expect(bestRank('s1')).toBe(-1);
+  });
+
+  it('better findings: sanitized, one card per film, pruned with the library', () => {
+    const b = (hash: string, rank: number): Finding => ({
+      subId: BETTER_ID,
+      key: hash + ':' + rank,
+      at: rank,
+      result: res('Северный ветер (2026) 2160p WEB-DL'),
+      better: { torrentHash: hash, torrentTitle: 'Северный ветер (2026) WEB-DL 1080p', have: '1080p WEB-DL', got: '4K WEB-DL' },
+    });
+    addFindings([b('a', 31), b('c', 31)]);
+    addFindings([b('a', 32)]);
+    expect(findingsOf(BETTER_ID).map((f) => f.key)).toEqual(['a:32', 'c:31']);
+    expect(findingsOf(BETTER_ID)[0].better).toEqual(b('a', 32).better);
+    // a better finding without its info is dropped on load
+    const stored = JSON.parse(localStorage.getItem(FOUND_KEY)!);
+    localStorage.setItem(FOUND_KEY, JSON.stringify(stored.concat([{ subId: BETTER_ID, key: 'x:1', at: 1, result: { Title: 'T', source: 'rutor' } }])));
+    expect(findingsOf(BETTER_ID)).toHaveLength(2);
+    pruneEpisodeFindings((h) => h === 'a');
+    expect(findingsOf(BETTER_ID).map((f) => f.key)).toEqual(['a:32']);
   });
 });

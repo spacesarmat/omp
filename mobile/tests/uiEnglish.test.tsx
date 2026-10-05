@@ -175,7 +175,7 @@ describe('phone shared UI in English', () => {
     expect(text()).toContain('3 of 5');
     expect(text()).toContain('Tap to click');
     expect(text()).toContain('Reverse scrolling');
-    expect(text()).toContain('Scroll strip');
+    expect(text()).not.toContain('Scroll strip');
     expect(buttons()).toContain('Done');
     expect(el.innerHTML).not.toMatch(CYR);
   });

@@ -14,7 +14,10 @@ import {
   seedsText,
   sourceBadge,
   isCloudflare,
+  cloudflareHint,
+  withCloudflareNote,
 } from '../../src/sources/view';
+import { applyLanguageSetting } from '../../src/i18n';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { mergeResults } from '../../src/sources/merge';
 import type { Source, SourceContext, SourceResult } from '../../src/sources/types';
@@ -158,8 +161,33 @@ describe('names and dates', () => {
     expect(resultDate(res({ CreateDate: '2025-01-09T10:00:00Z' }))).toBe('09.01.2025');
     expect(resultDate(res({}))).toBe('');
   });
-  it('the hint points to the Cloudflare switch and to Jackett or Prowlarr', () => {
-    expect(jackettHint()).toBe('Сайт закрыт защитой Cloudflare? Для Kinozal и rustorka включите обход в «Источниках поиска», другие трекеры подключайте через Jackett или Prowlarr — как, в «Вопросах и ответах».');
+  it('the general hint names no site', () => {
+    expect(jackettHint()).toBe(
+      'Сайт закрыт проверкой Cloudflare? Войдите на нём через браузер (кнопка «Войти» у сайта в «Источниках поиска») или подключите его через Jackett, Prowlarr или FlareSolverr — как, в «Вопросах и ответах».',
+    );
+  });
+  it('the short Cloudflare hint of a site and the «за Cloudflare» note', () => {
+    const browser = () => Promise.resolve({ result: 'ok' as const });
+    expect(cloudflareHint({ name: 'NNM-Club', browserLogin: browser }, false)).toEqual({ text: 'Войдите через браузер — кнопка «Войти»', how: false });
+    expect(cloudflareHint({ name: 'NNM-Club', browserLogin: browser }, true)).toEqual({ text: 'Войдите через браузер заново — «Выйти», затем «Войти»', how: false });
+    expect(cloudflareHint({ name: 'Anidub' }, false)).toEqual({ text: 'Подключите Anidub через Jackett, Prowlarr или FlareSolverr', how: true });
+    expect(withCloudflareNote(null)).toEqual({ text: 'за Cloudflare', tone: 'muted' });
+    expect(withCloudflareNote({ text: 'нужен вход', tone: 'muted' })).toEqual({ text: 'нужен вход · за Cloudflare', tone: 'muted' });
+    expect(withCloudflareNote({ text: 'работает', tone: 'ok' })).toEqual({ text: 'работает · за Cloudflare', tone: 'ok' });
+    const bad = { text: 'Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже', tone: 'bad' as const };
+    expect(withCloudflareNote(bad)).toBe(bad);
+  });
+  it('the hints in English', () => {
+    applyLanguageSetting('en');
+    try {
+      expect(cloudflareHint({ name: 'NNM-Club', browserLogin: () => Promise.resolve({ result: 'ok' as const }) }, false).text).toBe('Sign in with the browser — the “Sign in” button');
+      expect(cloudflareHint({ name: 'Anidub' }, false).text).toBe('Connect Anidub through Jackett, Prowlarr or FlareSolverr');
+      expect(withCloudflareNote({ text: 'sign-in needed', tone: 'muted' }).text).toBe('sign-in needed · behind Cloudflare');
+      expect(jackettHint()).toMatch(/^Is the site blocked by Cloudflare\? Sign in to it with the browser/);
+      expect(jackettHint() + cloudflareHint({ name: 'Anidub' }, false).text).not.toMatch(/[А-Яа-яЁё]/);
+    } finally {
+      applyLanguageSetting('ru');
+    }
   });
 });
 

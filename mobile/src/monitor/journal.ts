@@ -4,9 +4,9 @@
 // into localStorage at the start of the next run. Merging only adds «seen»: it never brings a finding back.
 import { seenIndex } from '../../../src/monitor/match';
 import { loadSubs, markFindingsSeen, rememberSeen, removeFindings, seenKeys } from '../../../src/monitor/subs';
-import { EPISODES_ID } from '../../../src/monitor/types';
+import { BETTER_ID, EPISODES_ID } from '../../../src/monitor/types';
 
-/** A result seen by a subscription (`e` = seenEntry) or a reported new last episode (`e` = episodesKey). */
+/** A result seen by a subscription (`e` = seenEntry), a reported new last episode (`e` = episodesKey) or a reported better rank (`e` = betterKey). */
 export interface SeenMarker {
   s: string;
   e: string;
@@ -52,10 +52,10 @@ export function mergeJournal(items: JournalItem[]): number {
     else removeFindings(it.s, it.k);
   });
   Object.keys(entries).forEach((subId) => {
-    const episodes = subId === EPISODES_ID;
-    if (!episodes && !subs[subId]) return;
+    const library = subId === EPISODES_ID || subId === BETTER_ID;
+    if (!library && !subs[subId]) return;
     const seen = seenKeys(subId);
-    if (seen === null && !episodes) return;
+    if (seen === null && !library) return;
     const index = seenIndex(seen || []);
     const missing = entries[subId].filter((e, i, all) => all.indexOf(e) === i && !e.split('|').some((k) => index[k]));
     if (!missing.length) return;

@@ -9,6 +9,7 @@ vi.mock('../../src/store/journal', async (orig) => ({
   saveWatch: vi.fn(),
 }));
 
+import { applyLanguageSetting } from '../../src/i18n';
 import { Torrent } from '../src/screens/Torrent';
 import { resetTo, navigate } from '../src/nav';
 import { toast } from '../src/ui/toast';
@@ -105,5 +106,38 @@ describe('phone torrent card · «Следить за новыми сериям�
     await flush();
     expect(sw()!.getAttribute('aria-checked')).toBe('true');
     expect(toast.value).toBe('Сервер недоступен');
+  });
+});
+
+describe('phone torrent card · one «Мониторинг» card', () => {
+  const card = () => el.querySelector('[data-block=monitoring]');
+  const film = { ...series, title: 'Ночной рейс (2026) BDRip 1080p', category: 'movie', file_stats: [{ id: 1, path: 'film.mkv', length: 1e9 }] };
+
+  it('a series: the card has only the episodes row, no subtitles', async () => {
+    await mount(series);
+    expect(card()!.querySelector('.m-skip-title')!.textContent).toBe('Мониторинг');
+    expect(card()!.querySelectorAll('[role=switch]').length).toBe(1);
+    expect(card()!.querySelector('[aria-label="Следить за новыми сериями"]')).toBeTruthy();
+    expect(card()!.textContent).not.toContain('сообщить');
+    expect(el.querySelectorAll('[data-block=monitoring]').length).toBe(1);
+  });
+
+  it('a film: the card has only the quality row', async () => {
+    await mount(film);
+    expect(card()!.querySelectorAll('[role=switch]').length).toBe(1);
+    expect(card()!.querySelector('[aria-label="Следить за качеством"]')).toBeTruthy();
+    expect(card()!.textContent).not.toContain('сообщить');
+  });
+
+  it('English render of the card', async () => {
+    applyLanguageSetting('en');
+    try {
+      await mount(film);
+      expect(card()!.querySelector('.m-skip-title')!.textContent).toBe('Monitoring');
+      expect(card()!.textContent).toContain('Watch the quality');
+      expect(card()!.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    } finally {
+      applyLanguageSetting('ru');
+    }
   });
 });
