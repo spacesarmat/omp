@@ -1,4 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// the tests describe a stable installed build; the real version (a beta now) must not leak in
+vi.mock('../../src/version', () => ({ APP_VERSION: '0.15.5' }));
+
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';

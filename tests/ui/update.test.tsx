@@ -1,4 +1,8 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+
+// the tests describe a stable installed build; the real version (a beta now) must not leak in
+vi.mock('../../src/version', () => ({ APP_VERSION: '0.15.5' }));
+
 import { render, h } from 'preact';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { Qr } from '../../src/ui/Qr';

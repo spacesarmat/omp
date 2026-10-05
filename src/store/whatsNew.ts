@@ -2,7 +2,8 @@ import { signal } from '@preact/signals';
 import { loadJson, saveJson } from './storage';
 import { compareVersions } from '../lib/version';
 import { releasesUpTo, type ChangelogEntry } from '../lib/changelog';
-import { t } from '../i18n';
+import { t, lang } from '../i18n';
+import { getChangelog } from '../lib/changelogData';
 
 export const SEEN_KEY = 'tsp.seenVersion';
 /** Keys written on every start (phone: first-run time): they say nothing about an older install. */
@@ -15,13 +16,15 @@ export interface WhatsNew {
   auto: boolean;
   /** Version to remember once an automatic notice is actually shown. */
   version?: string;
+  /** The version in the title (an automatic notice), so a language change can rebuild it. */
+  titleVersion?: string;
 }
 
 /** What the «Что нового» sheet/dialog shows right now. */
 export const whatsNew = signal<WhatsNew | null>(null);
 
 export function sanitizeSeen(v: unknown): string | null {
-  return typeof v === 'string' && /^\d+(\.\d+)*$/.test(v) ? v : null;
+  return typeof v === 'string' && /^\d+(\.\d+)*(-beta\.\d+)?$/.test(v) ? v : null;
 }
 
 export function openWhatsNew(list: ChangelogEntry[], current: string): void {
@@ -75,5 +78,17 @@ export function checkWhatsNew(list: ChangelogEntry[], current: string): void {
     saveJson(SEEN_KEY, current);
     return;
   }
-  whatsNew.value = { title: t('whatsNew.titleIn', { version: current }), entries, auto: true, version: current };
+  whatsNew.value = { title: t('whatsNew.titleIn', { version: current }), entries, auto: true, version: current, titleVersion: current };
 }
+
+/** A notice that is on screen follows a language change: the title and the entries are rebuilt in the new language. */
+lang.subscribe(() => {
+  const w = whatsNew.peek();
+  if (!w) return;
+  const list = getChangelog();
+  whatsNew.value = {
+    ...w,
+    title: w.titleVersion ? t('whatsNew.titleIn', { version: w.titleVersion }) : t('whatsNew.title'),
+    entries: w.entries.map((e) => list.filter((x) => x.version === e.version)[0] || e),
+  };
+});
