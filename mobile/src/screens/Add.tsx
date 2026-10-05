@@ -151,7 +151,6 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const [sheet, setSheet] = useState<'sources' | 'sort' | 'filters' | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [rowCat, setRowCatState] = useState<Record<string, string>>(memo.rowCat);
-  const [catSheet, setCatSheet] = useState<string | null>(null);
   const [subSheet, setSubSheet] = useState(false);
   // collapsed to one link under the search; opened at once when the screen comes with a link
   const [magnetOpen, setMagnetOpen] = useState(!!link);
@@ -364,7 +363,6 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   // a site that showed its code page: its own message («torrent.by просит ввести проверочный код»)
   const banned = prog ? prog.failed.map(ipBanNote).filter((x) => !!x) : [];
   const sortLabel = sortLabels().filter((s) => s.key === sort)[0].label;
-  const catRow = catSheet !== null ? (rows || []).filter((x) => resultKey(x) === catSheet)[0] : undefined;
 
   return (
     <div class="m-screen" data-route="add">
@@ -480,7 +478,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
               r={r}
               category={categoryOfRow(r)}
               busy={pending[k]}
-              onCategory={() => setCatSheet(k)}
+              onCategory={(id) => setRowCat({ ...memo.rowCat, [k]: id })}
               onAdd={() => void addResult(r, false)}
               onWatch={() => void addResult(r, true)}
             />
@@ -533,26 +531,6 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
               {sort === s.key && <Icon d={CHECK} size={20} />}
             </button>
           ))}
-        </Sheet>
-      )}
-      {catSheet !== null && (
-        <Sheet label={t('add.category')} onClose={() => setCatSheet(null)}>
-          <div class="m-sheet-title">{t('add.category')}</div>
-          <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-            {addCategories().map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                class={'m-chip' + ((rowCat[catSheet] !== undefined ? rowCat[catSheet] : guessCategory(catRow ? catRow.Title : '')) === c.id ? ' on' : '')}
-                onClick={() => {
-                  setRowCat({ ...rowCat, [catSheet]: c.id });
-                  setCatSheet(null);
-                }}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
         </Sheet>
       )}
       {subSheet && (

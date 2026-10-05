@@ -52,12 +52,6 @@ export function ReleaseChips({ raw }: { raw: string }) {
   );
 }
 
-/** True when the short title says less than the tracker title (otherwise the full line would only repeat it). */
-export function hasRawLine(raw: string): boolean {
-  const s = releaseTitle(raw);
-  return s.title !== (raw || '').trim() || !!s.meta;
-}
-
 /** The full tracker title: one muted line, the whole of it after a tap (and one line again after another). */
 export function RawTitle({ raw }: { raw: string }) {
   const [open, setOpen] = useState(false);

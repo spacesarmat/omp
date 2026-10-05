@@ -175,10 +175,12 @@ describe('«Подписки» search and sort on screen', () => {
     expect(subRows()).toEqual([]);
     const sec = el.querySelector('[data-found-releases]')!;
     expect(sec.textContent).toContain('Найденные раздачи');
-    expect(sec.textContent).toContain('Дюна: Часть вторая 2160p');
-    expect(sec.textContent).not.toContain('Дюна 1080p');
+    // the full release title is the card's data-title (on screen it is in the card's «Подробнее»)
+    const found = () => Array.from(el.querySelectorAll('[data-found-releases] [data-title]')).map((n) => n.getAttribute('data-title'));
+    expect(found()).toContain('Дюна: Часть вторая 2160p');
+    expect(found()).not.toContain('Дюна 1080p');
     type('ёлки');
-    expect(el.querySelector('[data-found-releases]')!.textContent).toContain('Ёлки 11 WEB-DL');
+    expect(found().join('|')).toContain('Ёлки 11 WEB-DL');
   });
 
   it('caps the findings section with a «ещё N» note', async () => {
@@ -238,7 +240,7 @@ describe('«Проверить сейчас» for one subscription', () => {
     expect(toast.value).toBe('Найдено новых: 1');
     expect((el.querySelector('[data-check-sub]') as HTMLButtonElement).textContent).toBe('Проверить сейчас');
     expect(findingsOf(s.id)).toHaveLength(1);
-    expect(el.textContent).toContain('Дюна 2160p');
+    expect(el.querySelector('[data-title="Дюна 2160p"]')).toBeTruthy();
   });
 
   it('says «Новых раздач нет», the first-check note, or that the sites did not answer', async () => {

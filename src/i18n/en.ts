@@ -1335,6 +1335,8 @@ export const en: EnDict<typeof ru> = {
     noneSelected: 'No sources selected — turn them on in Settings, “Search sources”',
     sourcesSheet: 'Sources for search',
     sort: 'Sort',
+    detailsOf: 'Details: {title}',
+    openOnSite: 'Open on the site',
   },
   updateScreen: {
     title: 'OMP update',
