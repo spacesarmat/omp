@@ -980,6 +980,7 @@ export const en: EnDict<typeof ru> = {
     addedToast: 'Server “{name}” added',
   },
   catalog: {
+    querySeason: 'season {n}',
     deleteAsk: 'Delete "{title}"?',
     torrentDeleted: 'Torrent deleted',
     removeFromHistoryAsk: 'Remove from history?',
