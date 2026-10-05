@@ -4,6 +4,11 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## 0.17.0-beta.2
 
+- «Discover»: sorting (popular, by rating, by release date, most anticipated) and filters (genre, year, country, minimum rating); talk shows, news and reality are hidden by default; type and year under the poster, long titles neatly cut at two lines; 2, 3 or 4 posters per row
+- «Mine»: short, readable titles instead of the tracker string («Dark Matter · season 2 · episodes 1–6 of 10»), a compact header — the «Mine / Discover» switch shares a row with the buttons, smaller chips
+- Two-finger zoom in «Catalog»: one step per gesture with a smooth transition — cards move to their new places and the text stays sharp
+- «Search sources»: one row style — only › and the switch on the right, «Sign in» and «Sign out» as a link in the status line; rutracker gets its site screen too (including «Send the sign-in to the TV»)
+- torrent.by works on the phone again: the site leaves out an intermediate certificate, OMP now carries it itself; a certificate error says «Site certificate error» instead of «not responding»
 - Browser sign-in: an ad on a site's page (NNM-Club, for example) no longer pulls the sign-in window away — taps on the fields work and the keyboard opens; the sign-in page fits the screen width and can be zoomed with two fingers
 
 ## 0.17.0-beta.1
