@@ -329,14 +329,33 @@ describe('«Передать на телевизор» with Jackett / Prowlarr',
     expect(JSON.stringify(sourcePosts()[0].body)).not.toContain(KEY);
   });
 
+  it('a v0.15 TV refusing only the language gets everything else, and no «обновите OMP» note', async () => {
+    withJackett();
+    localStorage.setItem('tsp.flaresolverr', JSON.stringify({ url: 'http://192.168.1.191:8191' }));
+    answer = (c) => (c.body.language !== undefined ? { status: 400, body: '{"error":"bad_request"}' } : { body: JSON.stringify({ ok: true, indexers: 1 }) });
+    await mount();
+    act(() => btn('Передать на телевизор')!.click());
+    await flush();
+    expect(sourcePosts()).toHaveLength(2);
+    expect(sourcePosts()[0].body.language).toBe('ru');
+    const second = sourcePosts()[1].body;
+    expect(second.language).toBeUndefined();
+    expect(second.indexers).toEqual([{ kind: 'jackett', url: 'http://192.168.1.5:9117', key: KEY }]);
+    expect(second.flaresolverr).toBe('http://192.168.1.191:8191');
+    expect(toast.value).not.toContain('обновите OMP');
+    expect(toast.value).not.toContain(INDEXERS_NOT_SENT);
+    expect(toast.value).not.toContain(CLOUDFLARE_NOT_SENT);
+  });
+
   it('an older TV refusing the connections gets the rest, and the phone says so', async () => {
     withJackett();
     answer = (c) => (c.body.indexers ? { status: 400, body: '{"error":"bad_request"}' } : { body: JSON.stringify({ ok: true }) });
     await mount();
     act(() => btn('Передать на телевизор')!.click());
     await flush();
-    expect(sourcePosts()).toHaveLength(2);
-    expect(sourcePosts()[1].body.indexers).toBeUndefined();
+    // without the language first (a v0.15 TV), then without the v0.15 parts
+    expect(sourcePosts()).toHaveLength(3);
+    expect(sourcePosts()[2].body.indexers).toBeUndefined();
     expect(toast.value).toBe('Источники переданы. ' + INDEXERS_NOT_SENT);
   });
 
@@ -348,9 +367,10 @@ describe('«Передать на телевизор» with Jackett / Prowlarr',
     await mount();
     act(() => btn('Передать на телевизор')!.click());
     await flush();
-    expect(sourcePosts()).toHaveLength(2);
+    // without the language first (a v0.15 TV), then without the v0.15 parts
+    expect(sourcePosts()).toHaveLength(3);
     expect(sourcePosts()[0].body.flaresolverr).toBe('http://192.168.1.191:8191');
-    expect(sourcePosts()[1].body.flaresolverr).toBeUndefined();
+    expect(sourcePosts()[2].body.flaresolverr).toBeUndefined();
     expect(toast.value).toBe('Источники переданы. ' + CLOUDFLARE_NOT_SENT);
   });
 
@@ -360,8 +380,9 @@ describe('«Передать на телевизор» with Jackett / Prowlarr',
     await mount();
     act(() => btn('Передать на телевизор')!.click());
     await flush();
-    expect(sourcePosts()).toHaveLength(2);
-    expect(sourcePosts()[1].body.indexers).toBeUndefined();
+    // without the language first (a v0.15 TV), then without the v0.15 parts
+    expect(sourcePosts()).toHaveLength(3);
+    expect(sourcePosts()[2].body.indexers).toBeUndefined();
     expect(toast.value).toBe('Источники переданы. ' + INDEXERS_NOT_SENT);
   });
 

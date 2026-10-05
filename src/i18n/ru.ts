@@ -18,8 +18,6 @@ export const ru = {
     language: {
       title: 'Язык',
       system: 'Как в системе',
-      ru: 'Русский',
-      en: 'English',
     },
   },
 };

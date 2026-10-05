@@ -176,7 +176,9 @@ describe('phone: Kinozal site screen', () => {
     answer = (c) => (c.body.logins || c.body.cloudflare ? { status: 400, body: '{"error":"bad_request"}' } : { body: '{"ok":true}' });
     act(() => btn(SEND_LOGIN)!.click());
     await flush();
-    expect(posts()[3].body.logins).toBeUndefined();
+    // the same transfer without the language first (a v0.15 TV), then without the v0.15 parts
+    expect(posts()[3].body.logins).toBeDefined();
+    expect(posts()[4].body.logins).toBeUndefined();
     expect(toast.value).toContain(SITES_NOT_SENT);
     expect(JSON.stringify(logEntries())).not.toContain(PASSWORD);
   });

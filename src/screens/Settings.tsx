@@ -20,6 +20,7 @@ import { platformKind } from '../platform/env';
 import { logEntries, clearLog, logVersion, logTime, LEVEL_LABEL, AREA_LABEL } from '../lib/log';
 import { CACHE, PRELOAD, READAHEAD, CONNS, RATE, DISCONNECT, withCurrent } from '../lib/serverSettingsOptions';
 import { t, type LanguageSetting } from '../i18n';
+import { LANGUAGE_NAMES } from '../i18n/languageNames';
 
 const SEEK = [5, 10, 15, 30, 60].map((v) => ({ value: v, label: v + ' с' }));
 const SUB_COLOR: { value: 'white' | 'yellow'; label: string }[] = [
@@ -33,8 +34,8 @@ const LOG_BRIEF = 20;
 function languageOptions(): { value: LanguageSetting; label: string }[] {
   return [
     { value: 'system', label: t('settings.language.system') },
-    { value: 'ru', label: t('settings.language.ru') },
-    { value: 'en', label: t('settings.language.en') },
+    { value: 'ru', label: LANGUAGE_NAMES.ru },
+    { value: 'en', label: LANGUAGE_NAMES.en },
   ];
 }
 

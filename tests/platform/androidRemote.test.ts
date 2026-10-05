@@ -40,6 +40,8 @@ beforeEach(() => {
   resetTo({ name: 'connect' });
 });
 afterEach(() => {
+  // a language a test stored (remoteAttach lang) must not leak into the next one
+  resetSettings();
   if (uninstall) uninstall();
   uninstall = null;
   delete w.Capacitor;
@@ -96,7 +98,6 @@ describe('installAndroidRemote', () => {
     f.emit('remoteAttach', { report: 'http://10.0.0.3:4000/omp/x', lang: 'en' });
     expect(settings.value.language).toBe('en');
     expect(lang.value).toBe('en');
-    resetSettings();
   });
 
   it('turns remote keys into webOS key codes', async () => {

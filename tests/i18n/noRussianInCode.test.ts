@@ -156,7 +156,7 @@ const PENDING: string[] = [
 /** Not copy: tracker parsers and patterns (reason each). */
 const ALLOWLIST: { [file: string]: string } = {
   'src/i18n/ru.ts': 'the Russian dictionary',
-  'src/i18n/en.ts': 'the language switch names Russian in Russian («Русский», settings.language.ru)',
+  'src/i18n/languageNames.ts': 'language names in their own language',
   'mobile/src/faq.ru.ts': 'Russian FAQ texts',
   'src/monitor/episodes.ts': 'tracker page parsing (season/episode patterns in tracker titles)',
   'src/sources/bigfangroup.ts': 'tracker page parsing (the site «nothing found» text)',

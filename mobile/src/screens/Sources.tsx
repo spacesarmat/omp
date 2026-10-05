@@ -171,11 +171,19 @@ export function sendTransfer(
     sent: p.payload.indexers ? p.payload.indexers.length : 0,
   };
   const withSessions = !!sessions && Object.keys(sessions).length > 0;
-  const extras = !!(p.payload.indexers || p.payload.flaresolverr || p.payload.cloudflare || p.payload.logins || p.payload.language) || withSessions;
-  return sendSourcesToTv(p.payload, withSessions ? sessions : undefined)
+  const extras = !!(p.payload.indexers || p.payload.flaresolverr || p.payload.cloudflare || p.payload.logins) || withSessions;
+  const rejected = (e: unknown) => e instanceof Error && e.message === SOURCES_REJECTED;
+  // a v0.15 OMP on the TV refuses only the v0.16 language: the same transfer goes again without it
+  const first = sendSourcesToTv(p.payload, withSessions ? sessions : undefined).catch((e: unknown) => {
+    if (!p.payload.language || !rejected(e)) throw e;
+    const rest: TransferPayload = { ...p.payload };
+    delete rest.language;
+    return sendSourcesToTv(rest, withSessions ? sessions : undefined);
+  });
+  return first
     .catch((e: unknown) => {
-      // an older OMP on the TV refuses the v0.15 parts (connections, FlareSolverr, Cloudflare switches, site logins) and the v0.16 language
-      if (!extras || !(e instanceof Error) || e.message !== SOURCES_REJECTED) throw e;
+      // an older OMP on the TV refuses the v0.15 parts (connections, FlareSolverr, Cloudflare switches, site logins)
+      if (!extras || !rejected(e)) throw e;
       if (state.sent) state.indexersDropped = true;
       if (p.payload.flaresolverr || p.payload.cloudflare) state.cloudflareDropped = true;
       if (p.payload.logins) state.sitesDropped = true;

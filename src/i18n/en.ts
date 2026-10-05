@@ -20,8 +20,6 @@ export const en: EnDict<typeof ru> = {
     language: {
       title: 'Language',
       system: 'As on the device',
-      ru: 'Русский',
-      en: 'English',
     },
   },
 };

@@ -37,6 +37,7 @@ import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
 import { t, type LanguageSetting } from '../../../src/i18n';
+import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 
 type Checker = (o: { manual: boolean; url?: string }) => Promise<CheckResult>;
 let checker: Checker | null = null;
@@ -212,7 +213,7 @@ const LANGUAGES: LanguageSetting[] = ['system', 'ru', 'en'];
 
 /** «Как в системе» / «Русский» / «English» in the current language. */
 function languageName(v: LanguageSetting): string {
-  return v === 'ru' ? t('settings.language.ru') : v === 'en' ? t('settings.language.en') : t('settings.language.system');
+  return v === 'ru' || v === 'en' ? LANGUAGE_NAMES[v] : t('settings.language.system');
 }
 
 /** «Язык»: the row shows the setting, a sheet offers the three choices; a choice applies at once. */

@@ -963,7 +963,6 @@ function checkForeground(): void {
   }, ATV_FOREGROUND_CHECK_MS);
 }
 
-/** Android TV: starts the «Сейчас играет» link to `report` without navigating. */
 /** Android TV: links «Сейчас играет» to `report` and sets the TV's language to the phone's (`lang`). */
 export async function attachOnTv(report: string): Promise<void> {
   await atvPost('/omp/attach', { report, lang: lang.value });
