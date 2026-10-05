@@ -373,6 +373,7 @@ button, .m-btn {
 .m-tc-overview { margin: 0; line-height: 1.45; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .m-tc-overview.open { display: block; -webkit-line-clamp: unset; }
 .m-tc-more { padding: 0; color: var(--accent); }
+.m-want-text { margin: 0; font-size: 15px; line-height: 1.45; }
 .m-tc-section h2 { margin: 0 0 10px; font-size: 16px; }
 .m-tc-cast { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; }
 .m-tc-cast::-webkit-scrollbar { display: none; }

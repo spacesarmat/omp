@@ -5,6 +5,8 @@ import { goBack, navigate } from '../../nav';
 import { Icon } from '../../ui/Icon';
 import { torrents } from '../../../../src/store/library';
 import { loadSubs, sameQuery } from '../../../../src/monitor/subs';
+import { monitorVersion } from '../../monitor/ui';
+import { WantSheet } from './WantSheet';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
 import { seasonIndex, inLibrarySeason } from '../../../../src/catalog/library';
 import { torrentQuery, type CatalogCard, type Kind, type Season } from '../../../../src/catalog/tmdb';
@@ -68,6 +70,9 @@ function Body({ card }: { card: CatalogCard }) {
   const list = torrents.value;
   const index = useMemo(() => seasonIndex(list), [list]);
   const query = wantQuery(card);
+  const [wanting, setWanting] = useState(false);
+  // re-read after «Хочу посмотреть» subscribes (reloadMonitor bumps the version)
+  void monitorVersion.value;
   const following = loadSubs().some((s) => sameQuery(s.query, query));
   const latest = card.seasons.reduce((m, s) => Math.max(m, s.number), 0);
   const find = (season?: number) => navigate({ name: 'add', query: torrentQuery(card, season), run: true });
@@ -94,12 +99,12 @@ function Body({ card }: { card: CatalogCard }) {
             {t(card.kind === 'tv' ? 'titleCard.followingSeries' : 'titleCard.followingMovie')}
           </button>
         ) : (
-          // the «Хочу посмотреть» sheet comes in Task 9
-          <button type="button" class="m-btn m-btn-secondary" onClick={() => {}}>
+          <button type="button" class="m-btn m-btn-secondary" onClick={() => setWanting(true)}>
             {t('titleCard.want')}
           </button>
         )}
       </div>
+      {wanting && <WantSheet card={card} onClose={() => setWanting(false)} />}
       {card.overview && <Overview text={card.overview} />}
       {card.cast.length > 0 && (
         <section class="m-tc-section">
