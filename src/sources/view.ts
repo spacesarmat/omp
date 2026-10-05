@@ -168,9 +168,9 @@ export function cloudflareHint(s: Pick<Source, 'name' | 'browserLogin'>, loggedI
   return { text: tr('sources.cfHint.jackett', { name: s.name }), how: true };
 }
 
-/** A site behind Cloudflare: «за Cloudflare» joins its note unless the note is an error. */
+/** A site behind Cloudflare: «Cloudflare» joins its note unless the note is an error. */
 export function withCloudflareNote(note: HealthLine | null): HealthLine {
-  const cf = tr('sources.state.behindCf');
+  const cf = tr('sources.state.cloudflare');
   if (!note) return { text: cf, tone: 'muted' };
   if (note.tone === 'bad') return note;
   return { text: note.text + ' · ' + cf, tone: note.tone };

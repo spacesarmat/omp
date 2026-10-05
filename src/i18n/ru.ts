@@ -551,7 +551,7 @@ export const ru = {
       off: 'выключен',
       error: 'ошибка',
       errorDetail: 'ошибка: {detail}',
-      behindCf: 'за Cloudflare',
+      cloudflare: 'Cloudflare',
     },
     cfHint: {
       login: 'Войдите через браузер — кнопка «Войти»',
@@ -683,6 +683,7 @@ export const ru = {
       builtin: 'Встроенные · на телефоне',
       flareEntry: 'Обход Cloudflare',
       settingsOf: 'Настройки: {name}',
+      generalHint: 'Сайт закрыт проверкой Cloudflare? Войдите на нём через браузер или подключите Jackett, Prowlarr или FlareSolverr.',
       title: 'Источник',
       notFound: 'Источник не найден',
       searchOn: 'Искать на {name}',

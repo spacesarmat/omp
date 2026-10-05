@@ -62,7 +62,9 @@ describe('phone «Источники поиска»: torrent.by asks for a verif
     expect(note()!.textContent).toBe(BAN);
     expect(note()!.className).toBe('m-src-note bad');
     expect(codeBtn()!.textContent).toBe('Ввести код');
-    expect(codeBtn()!.className).toBe('m-btn m-btn-secondary m-btn-sm');
+    // a status-line link after the note, like «Войти»
+    expect(codeBtn()!.className).toBe('m-src-link');
+    expect(codeBtn()!.closest('.m-src-status')).toBe(note()!.parentElement);
     act(() => setHealth('torrentby', { state: 'ok', ms: 500, at: 3 }));
     expect(codeBtn()).toBeNull();
   });

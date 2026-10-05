@@ -111,12 +111,12 @@ describe('phone «Источники поиска»: one list, sign-in on the ro
 
   it('a site behind Cloudflare says so in its note while the note is not an error', async () => {
     await mountWith(screen());
-    expect(note('NNM-Club')!.textContent).toBe('за Cloudflare');
+    expect(note('NNM-Club')!.textContent).toBe('Cloudflare');
     expect(note('NNM-Club')!.className).toBe('m-src-note');
-    expect(note('Kinozal')!.textContent).toBe('нужен вход · за Cloudflare');
+    expect(note('Kinozal')!.textContent).toBe('нужен вход · Cloudflare');
     expect(note('Anidub')).toBeNull();
     act(() => setHealth('nnmclub', { state: 'ok', ms: 800, at: 1 }));
-    expect(note('NNM-Club')!.textContent).toBe('работает · 0,8 с · за Cloudflare');
+    expect(note('NNM-Club')!.textContent).toBe('работает · 0,8 с · Cloudflare');
     act(() => setHealth('nnmclub', { state: 'error', at: 2, message: CF }));
     expect(note('NNM-Club')!.textContent).toBe(CF);
     expect(note('NNM-Club')!.className).toBe('m-src-note bad');
@@ -183,7 +183,7 @@ describe('phone «Источники поиска»: one list, sign-in on the ro
     expect(site.secrets).toEqual({ 'kinozal.browser': '1' });
     expect(isCloudflareBypassOn(kinozal)).toBe(true);
     expect(isSourceOn(kinozal)).toBe(true);
-    expect(note('Kinozal')!.textContent).toBe('вход выполнен в браузере · за Cloudflare');
+    expect(note('Kinozal')!.textContent).toBe('вход выполнен · Cloudflare');
     expect(inRow('Kinozal', 'Выйти')).toBeTruthy();
   });
 
@@ -196,19 +196,19 @@ describe('phone «Источники поиска»: one list, sign-in on the ro
     await flush();
     expect(site.secrets).toEqual({ 'kinozal.username': 'kino', 'kinozal.password': PASSWORD });
     expect(isCloudflareBypassOn(kinozal)).toBe(false);
-    expect(note('Kinozal')!.textContent).toBe('вход выполнен · за Cloudflare');
+    expect(note('Kinozal')!.textContent).toBe('вход выполнен · Cloudflare');
   });
 
   it('NNM-Club: «Выйти» brings back the plain note, never «нужен вход»', async () => {
     site = fakeSite(kinozalSite, { 'nnmclub.browser': '1' });
     await mountWith(screen());
-    expect(note('NNM-Club')!.textContent).toBe('вход выполнен в браузере · за Cloudflare');
+    expect(note('NNM-Club')!.textContent).toBe('вход выполнен · Cloudflare');
     click(inRow('NNM-Club', 'Выйти')!);
     await flush();
     expect(site.secrets).toEqual({});
     expect(site.cleared).toEqual(['https://nnmclub.to/']);
     expect(getHealth('nnmclub')).toBeNull();
-    expect(note('NNM-Club')!.textContent).toBe('за Cloudflare');
+    expect(note('NNM-Club')!.textContent).toBe('Cloudflare');
     expect(inRow('NNM-Club', 'Войти')).toBeTruthy();
   });
 
@@ -233,6 +233,112 @@ describe('phone «Источники поиска»: one list, sign-in on the ro
   });
 });
 
+/** rutracker: a password login (no Cloudflare), signed out. */
+const rutrackerFake: Source = {
+  id: 'rutracker',
+  name: 'rutracker',
+  kind: 'builtin',
+  needsLogin: true,
+  search: () => Promise.resolve([]),
+  login: () => Promise.resolve(),
+  logout: () => Promise.resolve(),
+  loggedIn: () => Promise.resolve(false),
+};
+
+const LOGIN_NAMES = ['rutracker', 'Kinozal', 'rustorka', 'NNM-Club'];
+const rows = () => Array.from(el.querySelectorAll('[data-route="sources"] .m-src-row[data-source]')) as HTMLElement[];
+const links = (r: HTMLElement) => Array.from(r.querySelectorAll('.m-src-status .m-src-link')) as HTMLButtonElement[];
+
+describe('phone «Источники поиска»: one row style', () => {
+  beforeEach(() => registerSource(rutrackerFake));
+  afterEach(() => unregisterSource('rutracker'));
+
+  it('every row with a login has a › and a status-line link; the rest have neither', async () => {
+    site = fakeSite(kinozalSite, { 'nnmclub.browser': '1' });
+    await mountWith(screen());
+    for (const name of LOGIN_NAMES) {
+      const r = row(name);
+      expect(r.querySelector('.m-src-open [data-open]'), name).toBeTruthy();
+      const l = links(r);
+      expect(l.length, name).toBe(1);
+      expect(l[0].tagName).toBe('BUTTON');
+      expect(l[0].getAttribute('type')).toBe('button');
+    }
+    expect(links(row('rutracker'))[0].textContent).toBe('Войти');
+    expect(links(row('NNM-Club'))[0].textContent).toBe('Выйти');
+    // the link closes the status line: «нужен вход · Cloudflare · Войти»
+    expect(row('Kinozal').querySelector('.m-src-status')!.textContent).toBe('нужен вход · Cloudflare · Войти');
+    expect(row('NNM-Club').querySelector('.m-src-status')!.textContent).toBe('вход выполнен · Cloudflare · Выйти');
+    expect(row('rutracker').querySelector('.m-src-status')!.textContent).toBe('нужен вход · Войти');
+    expect(row('Anidub').querySelector('[data-open]')).toBeNull();
+    expect(links(row('Anidub'))).toEqual([]);
+    // rutracker's › leads to its own site screen too
+    click(row('rutracker').querySelector('[data-open="rutracker"]')!);
+    expect(currentRoute.value).toEqual({ name: 'sourceSite', id: 'rutracker' });
+  });
+
+  it('«Войти» in the status line opens the sign-in sheet, as the old pill did', async () => {
+    await mountWith(screen());
+    click(links(row('rutracker'))[0]);
+    expect(el.querySelector('[role="dialog"]')!.getAttribute('aria-label')).toBe('Вход на rutracker');
+  });
+
+  it('a health or error note keeps its colour and the link follows it', async () => {
+    setHealth('kinozal', { state: 'error', at: 1, message: CF });
+    await mountWith(screen());
+    const status = row('Kinozal').querySelector('.m-src-status') as HTMLElement;
+    // Kinozal is signed out: «нужен вход» first; NNM-Club shows the Cloudflare error in red with «Войти» after it
+    expect(status.textContent).toBe('нужен вход · Cloudflare · Войти');
+    act(() => setHealth('nnmclub', { state: 'error', at: 2, message: CF }));
+    const nnm = row('NNM-Club').querySelector('.m-src-status') as HTMLElement;
+    expect(nnm.firstElementChild!.className).toBe('m-src-note bad');
+    expect(nnm.lastElementChild!.className).toBe('m-src-link');
+    act(() => setHealth('nnmclub', { state: 'ok', ms: 600, at: 3 }));
+    expect(note('NNM-Club')!.className).toBe('m-src-note ok');
+    expect(row('NNM-Club').querySelector('.m-src-status')!.textContent).toBe('работает · 0,6 с · Cloudflare · Войти');
+  });
+
+  it('no row has a pill button any more', async () => {
+    setHealth('nnmclub', { state: 'error', at: 1, message: CF });
+    await mountWith(screen());
+    for (const r of rows()) expect(r.querySelector('.m-btn, .m-btn-sm'), r.getAttribute('data-source')!).toBeNull();
+    expect(el.querySelector('[data-route="sources"] .m-src-card .m-btn-sm')).toBeNull();
+  });
+
+  it('the switches share one structure: the last two columns are the › slot and the switch', async () => {
+    await mountWith(screen());
+    const all = rows();
+    expect(all.length).toBeGreaterThan(5);
+    for (const r of all) {
+      const kids = Array.from(r.children);
+      const id = r.getAttribute('data-source')!;
+      expect(kids.length, id).toBe(3);
+      expect(kids[0].className, id).toBe('m-src-name');
+      expect(kids[1].className, id).toBe('m-src-open');
+      expect(kids[2].getAttribute('role'), id).toBe('switch');
+      expect(kids[2].className, id).toMatch(/^m-switch( on)?$/);
+    }
+    const css = readFileSync('mobile/src/mobile.css', 'utf8') as string;
+    // fixed columns, one height for every row, a 44px touch target for the links
+    expect(cssRule(css, '.m-src-open')).toMatch(/flex:\s*0 0 44px/);
+    expect(cssRule(css, '.m-src-row')).toMatch(/min-height:\s*56px/);
+    expect(cssRule(css, '.m-src-row')).toMatch(/padding:\s*6px 0/);
+    expect(cssRule(css, '.m-src-link')).toMatch(/min-height:\s*44px/);
+    expect(cssRule(css, '.m-src-link')).toMatch(/color:\s*var\(--accent\)/);
+  });
+
+  it('the general hint is short and its FAQ link is the accent link', async () => {
+    await mountWith(screen());
+    const general = el.querySelector('[data-hint="general"]') as HTMLElement;
+    const faq = general.querySelector('button') as HTMLButtonElement;
+    expect(faq.className).toBe('m-link-btn');
+    expect(faq.textContent).toBe('Вопросы и ответы');
+    const text = general.querySelector('span')!.textContent || '';
+    expect(text.split(/[.?!](\s|$)/).filter((x) => x && x.trim()).length).toBeLessThanOrEqual(2);
+    for (const name of ['Kinozal', 'rustorka', 'NNM-Club', 'rutracker', 'Anidub']) expect(text).not.toContain(name);
+  });
+});
+
 describe('phone «Источники поиска» in English', () => {
   beforeEach(() => applyLanguageSetting('en'));
   afterEach(() => applyLanguageSetting('ru'));
@@ -241,7 +347,7 @@ describe('phone «Источники поиска» in English', () => {
     setHealth('nnmclub', { state: 'error', at: 1, message: CF_EN });
     setHealth('fake-plain', { state: 'error', at: 1, message: CF_EN });
     await mountWith(screen());
-    expect(note('Kinozal')!.textContent).toBe('sign-in needed · behind Cloudflare');
+    expect(note('Kinozal')!.textContent).toBe('sign-in needed · Cloudflare');
     expect(inRow('Kinozal', 'Sign in')).toBeTruthy();
     expect(hint('NNM-Club')!.textContent).toBe('Sign in with the browser — the “Sign in” button');
     const other = hint('Anidub')!;
@@ -249,6 +355,24 @@ describe('phone «Источники поиска» in English', () => {
     expect(other.querySelector('button')!.textContent).toBe('How');
     expect(el.querySelector('.m-hint-warn')!.textContent).toContain('Is the site blocked by Cloudflare? Sign in to it with the browser');
     expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('the new row style in English: «sign-in needed · Cloudflare · Sign in», the › and the FAQ link', async () => {
+    registerSource(rutrackerFake);
+    try {
+      site = fakeSite(kinozalSite, { 'nnmclub.browser': '1' });
+      await mountWith(screen());
+      expect(row('Kinozal').querySelector('.m-src-status')!.textContent).toBe('sign-in needed · Cloudflare · Sign in');
+      expect(row('NNM-Club').querySelector('.m-src-status')!.textContent).toBe('signed in · Cloudflare · Sign out');
+      expect(row('rutracker').querySelector('.m-src-status')!.textContent).toBe('sign-in needed · Sign in');
+      expect(row('rutracker').querySelector('[data-open="rutracker"]')!.getAttribute('aria-label')).toBe('Settings: rutracker');
+      const general = el.querySelector('[data-hint="general"]') as HTMLElement;
+      expect(general.textContent).toBe('Is the site blocked by Cloudflare? Sign in to it with the browser or connect Jackett, Prowlarr or FlareSolverr.Questions and answers');
+      expect(el.querySelector('[data-route="sources"] .m-src-row .m-btn-sm')).toBeNull();
+      expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    } finally {
+      unregisterSource('rutracker');
+    }
   });
 
   it('the NNM-Club screen note', async () => {

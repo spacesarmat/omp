@@ -166,14 +166,14 @@ describe('names and dates', () => {
       'Сайт закрыт проверкой Cloudflare? Войдите на нём через браузер (кнопка «Войти» у сайта в «Источниках поиска») или подключите его через Jackett, Prowlarr или FlareSolverr — как, в «Вопросах и ответах».',
     );
   });
-  it('the short Cloudflare hint of a site and the «за Cloudflare» note', () => {
+  it('the short Cloudflare hint of a site and the «Cloudflare» note', () => {
     const browser = () => Promise.resolve({ result: 'ok' as const });
     expect(cloudflareHint({ name: 'NNM-Club', browserLogin: browser }, false)).toEqual({ text: 'Войдите через браузер — кнопка «Войти»', how: false });
     expect(cloudflareHint({ name: 'NNM-Club', browserLogin: browser }, true)).toEqual({ text: 'Войдите через браузер заново — «Выйти», затем «Войти»', how: false });
     expect(cloudflareHint({ name: 'Anidub' }, false)).toEqual({ text: 'Подключите Anidub через Jackett, Prowlarr или FlareSolverr', how: true });
-    expect(withCloudflareNote(null)).toEqual({ text: 'за Cloudflare', tone: 'muted' });
-    expect(withCloudflareNote({ text: 'нужен вход', tone: 'muted' })).toEqual({ text: 'нужен вход · за Cloudflare', tone: 'muted' });
-    expect(withCloudflareNote({ text: 'работает', tone: 'ok' })).toEqual({ text: 'работает · за Cloudflare', tone: 'ok' });
+    expect(withCloudflareNote(null)).toEqual({ text: 'Cloudflare', tone: 'muted' });
+    expect(withCloudflareNote({ text: 'нужен вход', tone: 'muted' })).toEqual({ text: 'нужен вход · Cloudflare', tone: 'muted' });
+    expect(withCloudflareNote({ text: 'работает', tone: 'ok' })).toEqual({ text: 'работает · Cloudflare', tone: 'ok' });
     const bad = { text: 'Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже', tone: 'bad' as const };
     expect(withCloudflareNote(bad)).toBe(bad);
   });
@@ -182,7 +182,7 @@ describe('names and dates', () => {
     try {
       expect(cloudflareHint({ name: 'NNM-Club', browserLogin: () => Promise.resolve({ result: 'ok' as const }) }, false).text).toBe('Sign in with the browser — the “Sign in” button');
       expect(cloudflareHint({ name: 'Anidub' }, false).text).toBe('Connect Anidub through Jackett, Prowlarr or FlareSolverr');
-      expect(withCloudflareNote({ text: 'sign-in needed', tone: 'muted' }).text).toBe('sign-in needed · behind Cloudflare');
+      expect(withCloudflareNote({ text: 'sign-in needed', tone: 'muted' }).text).toBe('sign-in needed · Cloudflare');
       expect(jackettHint()).toMatch(/^Is the site blocked by Cloudflare\? Sign in to it with the browser/);
       expect(jackettHint() + cloudflareHint({ name: 'Anidub' }, false).text).not.toMatch(/[А-Яа-яЁё]/);
     } finally {

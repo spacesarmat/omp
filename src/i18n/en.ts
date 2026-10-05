@@ -545,7 +545,7 @@ export const en: EnDict<typeof ru> = {
       off: 'off',
       error: 'error',
       errorDetail: 'error: {detail}',
-      behindCf: 'behind Cloudflare',
+      cloudflare: 'Cloudflare',
     },
     cfHint: {
       login: 'Sign in with the browser — the “Sign in” button',
@@ -675,6 +675,7 @@ export const en: EnDict<typeof ru> = {
       builtin: 'Built-in · on the phone',
       flareEntry: 'Cloudflare bypass',
       settingsOf: 'Settings: {name}',
+      generalHint: 'Is the site blocked by Cloudflare? Sign in to it with the browser or connect Jackett, Prowlarr or FlareSolverr.',
       title: 'Source',
       notFound: 'Source not found',
       searchOn: 'Search on {name}',
