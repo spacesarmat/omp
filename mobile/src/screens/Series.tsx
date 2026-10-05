@@ -236,7 +236,9 @@ function Row({ tor, onWatch }: { tor: Torrent; onWatch: (tor: Torrent) => void }
 function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null }) {
   const route = useMemo(() => currentRoute.peek(), []);
   const remembered = chosenSeason.get(route);
-  const [chosen, setChosen] = useState(() => (remembered !== undefined ? remembered : firstSeason(group)));
+  // a season chip on the torrent screen opens this screen on that season (route.season)
+  const asked = route.name === 'series' && typeof route.season === 'number' ? route.season : undefined;
+  const [chosen, setChosen] = useState(() => (remembered !== undefined ? remembered : asked !== undefined ? asked : firstSeason(group)));
   const [error, setError] = useState('');
   const launch = useTvLaunch();
   const chipsRef = useRef<HTMLDivElement>(null);
