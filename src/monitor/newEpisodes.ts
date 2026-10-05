@@ -206,7 +206,7 @@ export function findNewEpisodes(ctx: SourceContext, t: LibraryTorrent, opts?: Ne
   if (!query) return Promise.resolve(null);
   let h: SearchHandle;
   try {
-    h = (o.search || searchAll)(query, { ctx, from: o.from, timeoutMs: o.timeoutMs });
+    h = (o.search || searchAll)(query, { ctx, from: o.from, timeoutMs: o.timeoutMs, cloudflareTimeoutMs: o.cloudflareTimeoutMs });
   } catch (e) {
     return Promise.resolve(null);
   }

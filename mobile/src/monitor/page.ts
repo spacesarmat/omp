@@ -209,6 +209,9 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
   const settings = loadMonitorSettings();
   const c = deps.client();
   const ctx = hostContext(deps.host, c);
+  // a Cloudflare site gets the normal per-source timeout here, not CLOUDFLARE_TIMEOUT_MS: the run has a deadline
+  const check: CheckOptions = { cloudflareTimeoutMs: SOURCE_TIMEOUT_MS, ...deps.check };
+  const feed: FeedAllOptions = { cloudflareTimeoutMs: SOURCE_TIMEOUT_MS, ...deps.feed };
   const notify = (n: MonitorNotification) =>
     deps.host.notify(n).then(
       (shown) => {
@@ -233,7 +236,7 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
         s.skipped++;
         continue;
       }
-      const r = await checkSubscription(ctx, sub, deps.check);
+      const r = await checkSubscription(ctx, sub, check);
       s.subs++;
       r.answered.forEach((id) => (answered[id] = asked[id] = true));
       r.failed.forEach((id) => (asked[id] = true));
@@ -275,7 +278,7 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
         let done = 0;
         for (; done < watched.length && left() >= margin; done++) {
           const t = watched[(start + done) % watched.length];
-          const found = await checkNewEpisodes(ctx, [t], deps.check);
+          const found = await checkNewEpisodes(ctx, [t], check);
           for (const f of found) {
             s.found++;
             await persist(deps, [{ s: EPISODES_ID, e: f.key }]);
@@ -292,7 +295,7 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
     const stale = FEED_CATEGORIES.filter((cat) => !feedFresh(cat, now()));
     const refreshed = await Promise.all(
       stale.map((cat) => {
-        const h = feedAll(ctx, cat, deps.feed);
+        const h = feedAll(ctx, cat, feed);
         return h.done.then(
           () => {
             return storeFeedRefresh(cat, h.results(), h.answered(), now()) !== null;
@@ -308,7 +311,7 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
   const filmsFrom = now();
   for (const film of films) {
     if (left() < BETTER_MARGIN_MS || now() - filmsFrom >= BETTER_SHARE_MS) break;
-    const found = await checkBetterQuality(ctx, [film], { ...deps.check, now: now() });
+    const found = await checkBetterQuality(ctx, [film], { ...check, now: now() });
     for (const f of found) {
       s.found++;
       await persist(deps, [{ s: BETTER_ID, e: f.key }]);

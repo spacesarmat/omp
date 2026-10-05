@@ -19,6 +19,12 @@ export interface CheckOptions {
   from?: Source[];
   /** Per-source timeout, ms (default: SOURCE_TIMEOUT_MS). */
   timeoutMs?: number;
+  /**
+   * Per-source timeout of the sites whose Cloudflare pass is on. Subscriptions default to timeoutMs (background runs
+   * have a deadline); the library checks default to CLOUDFLARE_TIMEOUT_MS (the replace sheet waits for the check).
+   * The background page passes SOURCE_TIMEOUT_MS.
+   */
+  cloudflareTimeoutMs?: number;
   /** Unix ms of the findings (default: now). */
   now?: number;
 }
@@ -61,7 +67,7 @@ function runSearch(query: string, ctx: SourceContext, sources: string[] | undefi
   try {
     // background runs keep the normal per-source timeout for Cloudflare sites too (the run has a deadline); a hidden
     // check still finishes natively and its cookies serve the next run
-    h = search(query, { ctx, sources, from: opts.from, timeoutMs: opts.timeoutMs, cloudflareTimeoutMs: opts.timeoutMs || SOURCE_TIMEOUT_MS });
+    h = search(query, { ctx, sources, from: opts.from, timeoutMs: opts.timeoutMs, cloudflareTimeoutMs: opts.cloudflareTimeoutMs || opts.timeoutMs || SOURCE_TIMEOUT_MS });
   } catch (e) {
     return Promise.resolve({ results: [], answered: [], failed: [] });
   }

@@ -93,7 +93,12 @@ function search(ctx: SourceContext, t: LibraryTorrent, o: CheckOptions): Promise
   if (!isWatchedFilm(t)) return Promise.resolve(none);
   let h: SearchHandle;
   try {
-    h = (o.search || searchAll)(filmQuery(displayTitle(t)), { ctx, from: o.from, timeoutMs: o.timeoutMs });
+    h = (o.search || searchAll)(filmQuery(displayTitle(t)), {
+      ctx,
+      from: o.from,
+      timeoutMs: o.timeoutMs,
+      cloudflareTimeoutMs: o.cloudflareTimeoutMs,
+    });
   } catch (e) {
     return Promise.resolve(none);
   }

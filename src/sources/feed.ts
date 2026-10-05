@@ -6,7 +6,7 @@ import { runSources, type SearchAllOptions, type SearchHandle } from './search';
 import { enabledSources } from './store';
 import type { FeedCategory, Source, SourceContext } from './types';
 
-export interface FeedAllOptions extends Pick<SearchAllOptions, 'onResult' | 'onDone' | 'timeoutMs'> {
+export interface FeedAllOptions extends Pick<SearchAllOptions, 'onResult' | 'onDone' | 'timeoutMs' | 'cloudflareTimeoutMs'> {
   /** Ids to ask; default: the switched-on sources. Sources without `latest` are always left out. */
   sources?: string[];
   /** Candidate sources; default: allSources(). */
@@ -26,5 +26,11 @@ export function feedAll(ctx: SourceContext, category: FeedCategory, opts?: FeedA
   const o = opts || {};
   const from = feedSources(o.from);
   const chosen = o.sources ? from.filter((s) => o.sources!.indexOf(s.id) >= 0) : enabledSources(from);
-  return runSources(chosen, (source) => source.latest!(ctx, category), { onResult: o.onResult, onDone: o.onDone, timeoutMs: o.timeoutMs, health: false });
+  return runSources(chosen, (source) => source.latest!(ctx, category), {
+    onResult: o.onResult,
+    onDone: o.onDone,
+    timeoutMs: o.timeoutMs,
+    cloudflareTimeoutMs: o.cloudflareTimeoutMs,
+    health: false,
+  });
 }

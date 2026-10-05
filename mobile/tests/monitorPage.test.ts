@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
 import {
   runMonitor,
@@ -27,6 +27,8 @@ import { mergeJournal, type JournalItem } from '../src/monitor/journal';
 import { SEEN_KEY } from '../../src/monitor/subs';
 import { torrentby } from '../../src/sources/torrentby';
 import { pauseSource, PAUSE_MS } from '../../src/sources/ipBan';
+import { setCloudflareBypass } from '../../src/sources/store';
+import { SOURCE_TIMEOUT_MS, type SearchAllOptions } from '../../src/sources/search';
 
 function res(Title: string, extra?: Partial<SourceResult>): SourceResult {
   return { Title, Categories: '', Size: '41 ГБ', CreateDate: '', Tracker: 'rutor', Link: '', Magnet: 'magnet:?xt=urn:btih:' + 'a'.repeat(40), Hash: '', Peer: 0, Seed: 1200, source: 'rutor', ...extra };
@@ -626,6 +628,48 @@ describe('the background load of the film checks', () => {
     const host = fakeHost();
     await runMonitor(deps(host, { client: () => fakeClient(films.slice(0, 2)), feed: { from: [] }, check: { from: [torrentby] } }));
     expect(host.httpCalls.filter((r) => r.url.indexOf('https://torrent.by/') === 0)).toEqual([]);
+  });
+});
+
+describe('Cloudflare sites in the background', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    setCloudflareBypass('nnmclub', false);
+  });
+
+  it('subscriptions, series and films search with the normal timeout for Cloudflare sites', async () => {
+    addSubscription({ query: 'Дюна', quality: '', sources: null, notify: true });
+    const seen: { [q: string]: SearchAllOptions } = {};
+    const inner = fakeSearch({});
+    const search: SearchFn = (query, opts) => {
+      seen[query] = opts;
+      return inner(query, opts);
+    };
+    const lib = [
+      { hash: 'f'.repeat(40), title: SERIES, category: 'tv' },
+      { hash: 'd'.repeat(40), title: 'Северный ветер (2026) WEB-DL 1080p', category: 'movie' },
+    ] as Torrent[];
+    await runMonitor(deps(fakeHost(), { client: () => fakeClient(lib), check: { search } }));
+    expect(Object.keys(seen).sort()).toEqual(['Starbound Frontier', 'Дюна', 'Северный ветер 2026']);
+    Object.keys(seen).forEach((q) => expect(seen[q].cloudflareTimeoutMs).toBe(SOURCE_TIMEOUT_MS));
+  });
+
+  it('the feed gives a Cloudflare site the normal timeout too', async () => {
+    vi.useFakeTimers();
+    setCloudflareBypass('nnmclub', true);
+    const never: Source = {
+      id: 'nnmclub',
+      name: 'NNM-Club',
+      kind: 'builtin',
+      cloudflare: true,
+      search: () => Promise.resolve([]),
+      latest: () => new Promise<SourceResult[]>(() => undefined),
+    };
+    let done = false;
+    const run = runMonitor(deps(fakeHost(), { feed: { from: [never] } })).then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(SOURCE_TIMEOUT_MS + 1);
+    expect(done).toBe(true);
+    await run;
   });
 });
 
