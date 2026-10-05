@@ -294,6 +294,11 @@ button, .m-btn {
 }
 .m-badge.static { position: static; }
 .m-badges { display: flex; gap: 6px; }
+.m-thead .m-badge { background: #252A35; }
+.m-thead-chips { margin-bottom: 0; }
+.m-chip.dim { opacity: .6; }
+.m-ep-min { font-weight: 400; }
+.m-ep-sub { overflow-wrap: anywhere; }
 
 /* history */
 .m-hrow { display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 14px; background: var(--panel); }

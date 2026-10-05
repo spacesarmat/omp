@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { t, tp } from '../../../src/i18n';
+import { t, tp, fmtDuration } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
@@ -40,6 +40,9 @@ import { reloadMonitor } from '../monitor/ui';
 import { deleteTorrents, watchTarget } from '../lib/torrentActions';
 import { displayTitle } from '../../../src/lib/torrentName';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
+import { torrentQuery, type Episode } from '../../../src/catalog/tmdb';
+import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../lib/seriesGroups';
+import { cleanFileName, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
 
 const BACK = 'M15 5l-7 7 7 7';
 const IMAGE = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 3-3L20 17M15.5 9.5h.01';
@@ -61,6 +64,40 @@ function fileCode(f: TorrentFile): string {
 
 function fileTitle(f: TorrentFile): string {
   return stripExt(baseName(f.path));
+}
+
+type EpisodeMap = { [season: number]: { [ep: number]: Episode } };
+
+/**
+ * The TMDB show of a series torrent and the names of the seasons its files belong to. Never blocks: null / {} until
+ * the data arrives (and for good when TMDB cannot be reached).
+ */
+function useTmdb(tor: TorrentT | undefined, seasons: number[], enabled: boolean): { show: ShowInfo | null; eps: EpisodeMap } {
+  const [show, setShow] = useState<ShowInfo | null>(null);
+  const [eps, setEps] = useState<EpisodeMap>({});
+  const hash = tor ? tor.hash : '';
+  useEffect(() => {
+    setShow(null);
+    if (!tor || !enabled) return;
+    let alive = true;
+    showOf(tor).then((s) => alive && setShow(s));
+    return () => {
+      alive = false;
+    };
+  }, [hash, enabled]);
+  const wanted = seasons.join(',');
+  useEffect(() => {
+    setEps({});
+    if (!show || !wanted) return;
+    let alive = true;
+    seasons.forEach((n) => {
+      seasonEpisodes(show, n).then((m) => alive && setEps((cur) => ({ ...cur, [n]: m })));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [show, wanted]);
+  return { show, eps };
 }
 
 function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: TorrentFile; onClose: () => void }) {
@@ -299,6 +336,10 @@ export function Torrent({ hash }: { hash: string }) {
   const own = tor ? filesOf(tor) : [];
   const allFiles = own.length ? own : loaded ? filesOf(loaded) : [];
   const skip = useSkip(c, hash, firstPlayableId(allFiles), !!tor);
+  const fileSeasons = playableFiles(allFiles)
+    .map((f) => parseEpisode(f.path).season)
+    .filter((n, i, a): n is number => n !== null && a.indexOf(n) === i);
+  const tmdb = useTmdb(tor, fileSeasons, !!tor && isSeries(tor) && fileSeasons.length > 0);
   // file list comes from the list entry; load it from the server if the entry has none
   useEffect(() => {
     if (!c || !tor || own.length) return;
@@ -422,6 +463,23 @@ export function Torrent({ hash }: { hash: string }) {
     );
   };
   const badges = [qualityBadge(title)].filter(Boolean);
+  const gkey = seriesKey(tor);
+  const group = gkey ? findGroup(torrents.value, gkey) : null;
+  const own0 = seasonsOf(tor);
+  const mine = own0.length ? own0 : fileSeasons;
+  const inLibrary = group ? group.seasons.filter((n) => n !== NO_SEASON) : [];
+  const chipSeasons = Array.from(new Set(inLibrary.concat(mine, tmdb.show ? tmdb.show.seasons : []))).sort((a, b) => a - b);
+  const openSeason = (n: number) => {
+    if (mine.indexOf(n) >= 0) return;
+    if (group && inLibrary.indexOf(n) >= 0) {
+      const rows = seasonMembers(group, n);
+      if (rows.length === 1) navigate({ name: 'torrent', hash: rows[0].hash });
+      else navigate({ name: 'series', key: group.key, season: n });
+    } else if (tmdb.show) {
+      const q = torrentQuery({ title: tmdb.show.title, original: tmdb.show.original, year: tmdb.show.year, kind: 'tv' }, n);
+      navigate({ name: 'add', query: q, run: true });
+    }
+  };
   const first = files[0];
   const season = first ? parseEpisode(first.path).season : null;
   const hasEpisodes = files.length > 1;
@@ -536,6 +594,24 @@ export function Torrent({ hash }: { hash: string }) {
               ))}
             </div>
           )}
+          {chipSeasons.length > 1 && (
+            <div class="m-chips m-tc-chips m-thead-chips" role="group" aria-label={t('titleCard.seasons')} data-block="seasons">
+              {chipSeasons.map((n) => {
+                const have = mine.indexOf(n) >= 0 || inLibrary.indexOf(n) >= 0;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    class={'m-chip' + (mine.indexOf(n) >= 0 ? ' on' : '') + (have ? '' : ' dim')}
+                    aria-pressed={mine.indexOf(n) >= 0}
+                    onClick={() => openSeason(n)}
+                  >
+                    {(have ? '' : '+ ') + t('library.season', { n })}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
       <div class="m-tbody">
@@ -609,16 +685,37 @@ export function Torrent({ hash }: { hash: string }) {
         <div class="m-list m-eps">
           {files.map((f, i) => {
             const pct = isWatched(hash, f.id) ? 100 : Math.round(progressRatio(hash, f.id) * 100);
+            const pe = parseEpisode(f.path);
+            if (pe.episode === null) {
+              return (
+                <button type="button" class="m-ep" key={f.id} onClick={() => setSheet(f)}>
+                  <span class="m-ep-code">{fileCode(f) || i + 1}</span>
+                  <span class="m-ep-text">
+                    <span class="m-ep-name">{fileTitle(f)}</span>
+                    <span class="m-bar-track thin">
+                      <span class="m-bar-fill" style={{ width: pct + '%' }} />
+                    </span>
+                  </span>
+                  <span class="m-muted m-small">{formatBytes(f.length)}</span>
+                </button>
+              );
+            }
+            // an episode: «1. Name  45 min» from TMDB (else «Episode 1»); the label, the clean file name and the size below
+            const ep = pe.season !== null && tmdb.eps[pe.season] ? tmdb.eps[pe.season][pe.episode] : undefined;
+            const name = ep && ep.title ? pe.episode + '. ' + ep.title : t('library.episode', { n: pe.episode });
+            const sub = [fileCode(f), cleanFileName(fileTitle(f)), formatBytes(f.length)].filter(Boolean).join(' · ');
             return (
-              <button type="button" class="m-ep" key={f.id} onClick={() => setSheet(f)}>
-                <span class="m-ep-code">{fileCode(f) || i + 1}</span>
+              <button type="button" class="m-ep m-ep-named" key={f.id} onClick={() => setSheet(f)}>
                 <span class="m-ep-text">
-                  <span class="m-ep-name">{fileTitle(f)}</span>
+                  <span class="m-ep-name">
+                    {name}
+                    {ep && ep.runtime > 0 && <span class="m-muted m-small m-ep-min"> {fmtDuration(ep.runtime)}</span>}
+                  </span>
+                  <span class="m-muted m-small m-ep-sub">{sub}</span>
                   <span class="m-bar-track thin">
                     <span class="m-bar-fill" style={{ width: pct + '%' }} />
                   </span>
                 </span>
-                <span class="m-muted m-small">{formatBytes(f.length)}</span>
               </button>
             );
           })}
