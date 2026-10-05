@@ -1288,6 +1288,16 @@ export const en: EnDict<typeof ru> = {
       marksLast: 'Last (min:sec)',
       marksHint: 'It is easier to mark it right in the player: menu → “Mark the intro start”.',
     },
+    better: {
+      find: 'Find in better quality',
+      searching: 'Searching…',
+      have: 'You have: {quality}',
+      unknown: 'quality not stated',
+      none: 'Nothing better than your release was found',
+      noAnswer: 'The sources did not answer — try later',
+      searchAll: 'Search all releases',
+      replaceAria: 'Replace with {title}',
+    },
   },
   add: {
     resumeInfo: '{label} · on {tv}',

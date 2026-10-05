@@ -32,6 +32,8 @@ import { posterColor, shortTitle } from '../../../src/lib/libraryView';
 import { loadQualityWatch, loadWatch, saveQualityWatch, saveWatch } from '../../../src/store/journal';
 import { isLibraryFilm } from '../../../src/monitor/better';
 import { isWatchedSeries } from '../../../src/monitor/newEpisodes';
+import { upgradeKind } from '../../../src/monitor/upgrade';
+import { BetterSheet } from '../ui/BetterSheet';
 import { findingsOf, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
 import { BETTER_ID, EPISODES_ID } from '../../../src/monitor/types';
 import { reloadMonitor } from '../monitor/ui';
@@ -286,6 +288,7 @@ export function Torrent({ hash }: { hash: string }) {
   };
   const [finding, setFinding] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [betterOpen, setBetterOpen] = useState(false);
   // «Follow new episodes» (omp.w in the journal); null until read from the server
   const [watchNew, setWatchNew] = useState<boolean | null>(null);
   // «Watch the quality» (omp.q in the journal); null until read from the server
@@ -391,6 +394,17 @@ export function Torrent({ hash }: { hash: string }) {
   };
   // a film of the catalogue: better releases are looked for unless switched off here
   const film = isLibraryFilm({ title, category: tor.category });
+  // «Найти в лучшем качестве»: a film, or a series whose season and episodes are known
+  const upgrade = upgradeKind({ hash: tor.hash, title: tor.title || title, category: tor.category, data: '', file_stats: allFiles });
+  const onUpgraded = (fresh: string) => {
+    setBetterOpen(false);
+    // this screen's torrent is gone: show the new one in its place
+    const cur = currentRoute.value;
+    if (cur.name === 'torrent' && cur.hash === hash) {
+      goBack();
+      navigate({ name: 'torrent', hash: fresh });
+    }
+  };
   const toggleWatchQuality = () => {
     if (watchQuality === null) return;
     const next = !watchQuality;
@@ -566,7 +580,7 @@ export function Torrent({ hash }: { hash: string }) {
             )}
           </div>
         )}
-        {(series || film) && (
+        {(series || film || upgrade) && (
           <div class="m-skip" data-block="monitoring">
             <div class="m-skip-head">
               <span class="m-skip-title">{t('monitor.title')}</span>
@@ -582,6 +596,12 @@ export function Torrent({ hash }: { hash: string }) {
                 <span class="m-skip-text">{t('torrent.screen.watchQuality')}</span>
                 <SkipSwitch on={watchQuality !== false} label={t('torrent.screen.watchQuality')} onToggle={toggleWatchQuality} />
               </div>
+            )}
+            {upgrade && (
+              <button type="button" class="m-skip-row m-skip-open" data-block="find-better" aria-haspopup="dialog" onClick={() => setBetterOpen(true)}>
+                <span class="m-skip-text">{t('torrent.better.find')}</span>
+                <Icon d={CHEVRON} size={20} />
+              </button>
             )}
           </div>
         )}
@@ -606,6 +626,7 @@ export function Torrent({ hash }: { hash: string }) {
       </div>
       {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
+      {betterOpen && <BetterSheet torrent={tor} files={allFiles} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}
       {sheet && <WatchSheet torrent={tor} file={sheet} onClose={() => setSheet(null)} />}
       {launch.sheet}
     </div>

@@ -959,6 +959,10 @@ button, .m-btn {
 .m-rep-line { font-size: 14px; font-weight: 700; }
 .m-rep-arrow { align-self: center; }
 .m-rep-moves { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #C9CEDA; line-height: 1.4; }
+/* «Найти в лучшем качестве» */
+.m-better-wait, .m-better-empty { display: flex; flex-direction: column; gap: 12px; padding: 12px 0 4px; }
+.m-better-list { display: flex; flex-direction: column; gap: 10px; }
+.m-better-list .m-badges { margin-top: 2px; }
 .m-monitor-last { gap: 4px; line-height: 1.45; }
 .m-monitor-last-head { font-weight: 700; }
 .m-sheet .m-set-pick { background: var(--panel-2); }
