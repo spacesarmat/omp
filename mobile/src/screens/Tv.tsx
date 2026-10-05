@@ -13,7 +13,7 @@ import {
   sessionIp,
   tvState,
   tvError,
-  TV_FORGOT,
+  tvForgot,
 } from '../tv/tvClient';
 import { LG_OMP_APP_ID } from '../../../src/lib/installPlan';
 import { RenameSheet } from '../ui/RenameSheet';
@@ -131,7 +131,7 @@ export function Tv() {
       connect(r);
       return;
     }
-    const forgot = target === r.ip && state === 'error' && tvError.value === TV_FORGOT;
+    const forgot = target === r.ip && state === 'error' && tvError.value === tvForgot();
     if (r.saved?.token && !forgot) {
       setTarget(r.ip);
       setFormError('');

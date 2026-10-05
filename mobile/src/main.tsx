@@ -6,10 +6,11 @@ import { installErrorHooks, logStart } from '../../src/lib/log';
 import { registerBuiltinSources } from '../../src/sources/builtin';
 
 import { ensureFirstRun } from './donate';
+import { t } from '../../src/i18n';
 
 installErrorHooks();
 ensureFirstRun(); // starts the 30-day clock of the «Поддержать» card
-logStart('Телефон');
+logStart(t('history.phone'));
 
 // the phone app runs on Android: the built-in tracker parsers work through its native http
 registerBuiltinSources();

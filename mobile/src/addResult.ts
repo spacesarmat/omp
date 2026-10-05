@@ -6,11 +6,10 @@ import { rememberAdded } from '../../src/store/library';
 import { resolveLink } from '../../src/sources/view';
 import type { SourceResult } from '../../src/sources/types';
 import { phoneSourceContext } from './searchContext';
+import { t } from '../../src/i18n';
 
 /** Row state while adding: taking the link from the release page, then adding. */
 export type RowBusy = 'link' | 'add';
-
-export const NO_SERVER = 'Сервер не выбран';
 
 /**
  * Adds `r` with `category`; resolves with the new torrent's hash, or null when `alive()` turned false after the link
@@ -22,7 +21,7 @@ export async function addSearchResult(
   o?: { onStep?: (s: RowBusy) => void; alive?: () => boolean },
 ): Promise<string | null> {
   const c = client.value;
-  if (!c) throw new Error(NO_SERVER);
+  if (!c) throw new Error(t('errors.noServerSelected'));
   o?.onStep?.('link');
   const l = await resolveLink(r, phoneSourceContext());
   if (o?.alive && !o.alive()) return null;

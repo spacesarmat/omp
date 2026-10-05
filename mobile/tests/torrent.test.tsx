@@ -1,4 +1,4 @@
-import { TV_NO_OMP } from '../src/tv/tvClient';
+import { tvNoOmp } from '../src/tv/tvClient';
 import { applyLanguageSetting } from '../../src/i18n';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
@@ -324,7 +324,7 @@ describe('Torrent', () => {
 
   it('shows the install guide button when the TV has no OMP', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    launch.mockRejectedValueOnce(new Error(TV_NO_OMP));
+    launch.mockRejectedValueOnce(new Error(tvNoOmp()));
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     mount();
     await flush();
@@ -340,7 +340,7 @@ describe('Torrent', () => {
 
   it('main button error with no OMP offers the guide too', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    launch.mockRejectedValueOnce(new Error(TV_NO_OMP));
+    launch.mockRejectedValueOnce(new Error(tvNoOmp()));
     mount();
     await flush();
     click(el.querySelector('.m-btn-primary')!);

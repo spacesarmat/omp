@@ -11,7 +11,7 @@ import {
   localCacheBytes,
   clearLocalCache,
   LOCAL_PORT,
-  LOCAL_NAME,
+  localName,
   LOCAL_URL,
   canRun,
   needsDownload,
@@ -111,7 +111,7 @@ function LocalServerSection() {
         await startLocal();
         // started here, not through the setup screen: make it a saved server too (not the active one)
         if (localServer.value.running && !servers.value.some((s) => s.url === LOCAL_URL)) {
-          addServer({ name: LOCAL_NAME, url: LOCAL_URL });
+          addServer({ name: localName(), url: LOCAL_URL });
         }
       }
     } finally {

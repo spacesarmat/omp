@@ -36,7 +36,7 @@ import { log } from '../../../src/lib/log';
 import { lang, t } from '../../../src/i18n';
 import { activeTv, isAtv } from '../tv/tvStore';
 import { holdSignInScreen } from '../cloudflare';
-import { sendSourcesToTv, sessionIp, SOURCES_REJECTED, tvState, type SourcesSent } from '../tv/tvClient';
+import { sendSourcesToTv, sessionIp, sourcesRejected, tvState, type SourcesSent } from '../tv/tvClient';
 
 const SENT_KEY = 'tsp.sourcesSent';
 const TV_ICON = 'M3 5h18v11H3zM8 20h8';
@@ -171,7 +171,7 @@ export function sendTransfer(
   };
   const withSessions = !!sessions && Object.keys(sessions).length > 0;
   const extras = !!(p.payload.indexers || p.payload.flaresolverr || p.payload.cloudflare || p.payload.logins) || withSessions;
-  const rejected = (e: unknown) => e instanceof Error && e.message === SOURCES_REJECTED;
+  const rejected = (e: unknown) => e instanceof Error && e.message === sourcesRejected();
   // a v0.15 OMP on the TV refuses only the v0.16 language: the same transfer goes again without it
   const first = sendSourcesToTv(p.payload, withSessions ? sessions : undefined).catch((e: unknown) => {
     if (!p.payload.language || !rejected(e)) throw e;

@@ -5,7 +5,7 @@ import { mockFetch, type MockResponse } from '../../tests/helpers/fetchMock';
 import { Sources, sentText, sendText, loginNotSent, transferPayload } from '../src/screens/Sources';
 import { currentRoute } from '../src/nav';
 import { resetTo } from '../src/nav';
-import { cancelWarmUp, disconnectTv, sendSourcesToTv, setTransport, tvState, SOURCES_ATV_ONLY, SOURCES_BUSY, SOURCES_NO_ANSWER, SOURCES_SECRETS, TV_FORGOT, type TvTransport } from '../src/tv/tvClient';
+import { cancelWarmUp, disconnectTv, sendSourcesToTv, setTransport, tvState, sourcesAtvOnly, sourcesBusy, sourcesNoAnswer, sourcesSecrets, tvForgot, type TvTransport } from '../src/tv/tvClient';
 import { reloadTvs, saveTv, setActiveTv, type SavedTv } from '../src/tv/tvStore';
 import { native } from '../src/platform/native';
 import { toast } from '../src/ui/toast';
@@ -14,7 +14,7 @@ import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/s
 import { logEntries, clearLog } from '../../src/lib/log';
 import type { Source, SourceContext } from '../../src/sources/types';
 import { indexerConnections, indexerKeyName, reloadIndexers } from '../../src/sources/indexerStore';
-import { SOURCES_REJECTED } from '../src/tv/tvClient';
+import { sourcesRejected } from '../src/tv/tvClient';
 import { cloudflareNotSent, indexersNotSent, indexersText } from '../src/screens/Sources';
 import { applyLanguageSetting } from '../../src/i18n';
 
@@ -143,20 +143,20 @@ describe('sendSourcesToTv (protocol)', () => {
     setActiveTv(ATV.ip);
     const payload = { v: 1, sources: { rutor: true } };
     answer = () => ({ status: 409, body: '{"error":"busy"}' });
-    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_BUSY);
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(sourcesBusy());
     answer = () => ({ status: 503, body: '{"error":"no_answer"}' });
-    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_NO_ANSWER);
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(sourcesNoAnswer());
     answer = () => ({ status: 500, body: '{"error":"secrets"}' });
-    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_SECRETS);
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(sourcesSecrets());
     answer = () => ({ status: 401, body: '{"error":"unauthorized"}' });
-    await expect(sendSourcesToTv(payload)).rejects.toThrow(TV_FORGOT);
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(tvForgot());
     expect(tvState.value).toBe('error');
   });
 
   it('is only for an Android TV', async () => {
     saveTv(LG);
     setActiveTv(LG.ip);
-    await expect(sendSourcesToTv({ v: 1, sources: { rutor: true } })).rejects.toThrow(SOURCES_ATV_ONLY);
+    await expect(sendSourcesToTv({ v: 1, sources: { rutor: true } })).rejects.toThrow(sourcesAtvOnly());
     expect(calls).toHaveLength(0);
   });
 });
@@ -234,7 +234,7 @@ describe('«Передать на телевизор» on the phone', () => {
     answer = () => ({ status: 503, body: '{"error":"no_answer"}' });
     act(() => btn('Передать на телевизор')!.click());
     await flush();
-    expect(el.querySelector('[role="alert"]')!.textContent).toBe(SOURCES_NO_ANSWER);
+    expect(el.querySelector('[role="alert"]')!.textContent).toBe(sourcesNoAnswer());
   });
 
   it('after a 401 the card stays with the reason and «Подключить заново»', async () => {
@@ -245,7 +245,7 @@ describe('«Передать на телевизор» on the phone', () => {
     act(() => btn('Передать на телевизор')!.click());
     await flush();
     expect(card()).not.toBeNull();
-    expect(el.querySelector('[role="alert"]')!.textContent).toBe(TV_FORGOT);
+    expect(el.querySelector('[role="alert"]')!.textContent).toBe(tvForgot());
     expect(btn('Передать на телевизор')).toBeUndefined();
     act(() => btn('Подключить заново')!.click());
     expect(currentRoute.value.name).toBe('tv');
@@ -274,7 +274,7 @@ describe('«Передать на телевизор» on the phone', () => {
     answer = () => new Promise<MockResponse>(() => {});
     vi.useFakeTimers();
     const p = sendSourcesToTv({ v: 1, sources: { rutor: true } });
-    const done = expect(p).rejects.toThrow(SOURCES_NO_ANSWER);
+    const done = expect(p).rejects.toThrow(sourcesNoAnswer());
     await vi.advanceTimersByTimeAsync(45000);
     await done;
     expect(tvState.value).toBe('connected');
@@ -406,7 +406,7 @@ describe('«Передать на телевизор» with Jackett / Prowlarr',
     answer = () => ({ body: JSON.stringify({ ok: true, indexers: 99 }) });
     expect(await sendSourcesToTv(payload)).toEqual({ indexers: 0 });
     answer = () => ({ status: 400, body: '{"error":"bad_request"}' });
-    await expect(sendSourcesToTv(payload)).rejects.toThrow(SOURCES_REJECTED);
+    await expect(sendSourcesToTv(payload)).rejects.toThrow(sourcesRejected());
   });
 });
 
@@ -482,7 +482,7 @@ describe('«Send to the TV» in English', () => {
     await mount();
     act(() => btn('Send to the TV')!.click());
     await flush();
-    // the error text itself (TV_FORGOT) is tvClient copy of Task 10b
+    expect(document.body.textContent).not.toMatch(/[А-Яа-яЁё]/);
     expect(btn('Connect again')).toBeTruthy();
     expect(btn('Send to the TV')).toBeUndefined();
   });

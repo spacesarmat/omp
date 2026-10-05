@@ -3,13 +3,13 @@ import {
   BACKUP_KEYS,
   BACKUP_MAX_BYTES,
   NOT_BACKED_UP,
-  ERR_EMPTY,
-  ERR_FORMAT,
-  ERR_NOT_JSON,
-  ERR_TOO_BIG,
-  ERR_TOO_MANY,
-  ERR_VERSION,
-  ERR_VERSION_NEW,
+  errEmpty,
+  errFormat,
+  errNotJson,
+  errTooBig,
+  errTooMany,
+  errVersion,
+  errVersionNew,
   applyBackup,
   backupFileName,
   backupWarning,
@@ -116,16 +116,16 @@ describe('parseBackup', () => {
   };
 
   it('rejects bad JSON, wrong format, odd versions, oversize and empty', () => {
-    expect(err('не json')).toBe(ERR_NOT_JSON);
-    expect(err('[]')).toBe(ERR_FORMAT);
-    expect(err(JSON.stringify({ format: 'other', v: 1, data: {} }))).toBe(ERR_FORMAT);
-    expect(err(JSON.stringify({ format: 'omp-backup', v: 1 }))).toBe(ERR_FORMAT);
-    expect(err(file({ 'tsp.servers': [SERVER] }, { v: 2 }))).toBe(ERR_VERSION_NEW);
-    expect(err(file({ 'tsp.servers': [SERVER] }, { v: 0 }))).toBe(ERR_VERSION);
-    expect(err(file({ 'tsp.servers': [SERVER] }, { v: '1' }))).toBe(ERR_VERSION);
-    expect(err(file({}))).toBe(ERR_EMPTY);
-    expect(err(file({ 'tsp.log': [1], x: 1 }))).toBe(ERR_EMPTY);
-    expect(err('x'.repeat(BACKUP_MAX_BYTES + 1))).toBe(ERR_TOO_BIG);
+    expect(err('не json')).toBe(errNotJson());
+    expect(err('[]')).toBe(errFormat());
+    expect(err(JSON.stringify({ format: 'other', v: 1, data: {} }))).toBe(errFormat());
+    expect(err(JSON.stringify({ format: 'omp-backup', v: 1 }))).toBe(errFormat());
+    expect(err(file({ 'tsp.servers': [SERVER] }, { v: 2 }))).toBe(errVersionNew());
+    expect(err(file({ 'tsp.servers': [SERVER] }, { v: 0 }))).toBe(errVersion());
+    expect(err(file({ 'tsp.servers': [SERVER] }, { v: '1' }))).toBe(errVersion());
+    expect(err(file({}))).toBe(errEmpty());
+    expect(err(file({ 'tsp.log': [1], x: 1 }))).toBe(errEmpty());
+    expect(err('x'.repeat(BACKUP_MAX_BYTES + 1))).toBe(errTooBig());
   });
 
   it('ignores unknown and excluded keys', () => {
@@ -227,7 +227,7 @@ describe("hardening", () => {
     const many = [];
     for (let i = 0; i < 5000; i++) many.push({ id: "s" + i, name: "n", url: "http://h" + i + ":1" });
     const r = parseBackup(file({ "tsp.servers": many }));
-    expect(r.ok ? "" : r.error).toBe(ERR_TOO_MANY);
+    expect(r.ok ? "" : r.error).toBe(errTooMany());
   });
 
   it("survives __proto__ and constructor keys without pollution", () => {

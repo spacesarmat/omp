@@ -3,6 +3,7 @@ import { connectTv, lgInstallInfo, sessionIp, tvState, tvError } from '../tv/tvC
 import { tvs, ATV_PORT } from '../tv/tvStore';
 import { latestOmpVersion } from '../tv/tvUpdate';
 import { log } from '../../../src/lib/log';
+import { t } from '../../../src/i18n';
 import {
   LG_OMP_APP_ID,
   LG_SSH_PORT,
@@ -28,7 +29,7 @@ export async function lgFacts(d: InstallDevice): Promise<LgFacts> {
     try {
       await connectTv({ ...saved, ip: d.ip, name: saved?.name ?? d.name, kind: 'lg' }, { keepActive: true });
     } catch (e) {
-      log('warn', 'install', 'LG: нет подключения для проверки');
+      log('warn', 'install', t('install.run.lgNoConnect'));
       return { ...base, error: tvError.value || (e instanceof Error ? e.message : '') };
     }
   }
@@ -52,7 +53,7 @@ export async function lgFacts(d: InstallDevice): Promise<LgFacts> {
     facts.openPorts = await installNative()
       .probePorts(d.ip, [LG_SSH_PORT, LG_KEY_SERVER_PORT], PROBE_MS)
       .catch(() => {
-        log('warn', 'install', 'LG: проверка режима разработчика не удалась');
+        log('warn', 'install', t('install.run.lgProbeFailed'));
         return undefined;
       });
   }

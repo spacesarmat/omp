@@ -4,6 +4,7 @@
 // Never in a copy: tracker passwords/cookies and Jackett/Prowlarr API keys (Android encrypted storage, not
 // localStorage; a copy keeps the indexer address and «key set» only), the error log
 // (tsp.log) and caches/derived state (see NOT_BACKED_UP).
+import { t, tp } from '../../../src/i18n';
 import { isObject } from '../../../src/store/storage';
 import { sanitizeServers } from '../../../src/store/servers';
 import { sanitizeSettings } from '../../../src/store/settings';
@@ -197,39 +198,39 @@ export function serializeBackup(b: BackupFile): string {
   return JSON.stringify(b, null, 2);
 }
 
-/** «omp-копия-2026-10-03.json» */
+/** «omp-копия-2026-10-03.json» / «omp-backup-2026-10-03.json» */
 export function backupFileName(now: number): string {
-  return 'omp-копия-' + logDate(now) + '.json';
+  return t('backup.fileName', { date: logDate(now) });
 }
 
 export type ParseResult = { ok: true; backup: BackupFile } | { ok: false; error: string };
+export const errTooBig = () => t('backup.errTooBig');
+export const errNotJson = () => t('backup.errNotJson');
+export const errFormat = () => t('backup.errFormat');
+export const errVersionNew = () => t('backup.errVersionNew');
+export const errVersion = () => t('backup.errVersion');
+export const errTooMany = () => t('backup.errTooMany');
+export const errEmpty = () => t('backup.errEmpty');
 
-export const ERR_TOO_BIG = 'Файл слишком большой — это не копия OMP';
-export const ERR_NOT_JSON = 'Это не копия OMP: файл не удалось прочитать';
-export const ERR_FORMAT = 'Это не копия OMP';
-export const ERR_VERSION_NEW = 'Копия сделана более новой версией OMP — обновите приложение и повторите';
-export const ERR_VERSION = 'Неизвестная версия копии';
-export const ERR_TOO_MANY = 'В копии слишком много записей — это не копия OMP';
-export const ERR_EMPTY = 'В копии нет данных для восстановления';
 
 /** Validates a file's text; the returned backup holds only allowlisted, sanitized keys. */
 export function parseBackup(text: string): ParseResult {
-  if (text.length > BACKUP_MAX_BYTES) return { ok: false, error: ERR_TOO_BIG };
+  if (text.length > BACKUP_MAX_BYTES) return { ok: false, error: errTooBig() };
   let v: unknown;
   try {
     v = JSON.parse(text);
   } catch (e) {
-    return { ok: false, error: ERR_NOT_JSON };
+    return { ok: false, error: errNotJson() };
   }
-  if (!isObject(v) || v.format !== BACKUP_FORMAT || !isObject(v.data)) return { ok: false, error: ERR_FORMAT };
-  if (typeof v.v !== 'number' || !Number.isInteger(v.v) || v.v < 1) return { ok: false, error: ERR_VERSION };
-  if (v.v > BACKUP_VERSION) return { ok: false, error: ERR_VERSION_NEW };
+  if (!isObject(v) || v.format !== BACKUP_FORMAT || !isObject(v.data)) return { ok: false, error: errFormat() };
+  if (typeof v.v !== 'number' || !Number.isInteger(v.v) || v.v < 1) return { ok: false, error: errVersion() };
+  if (v.v > BACKUP_VERSION) return { ok: false, error: errVersionNew() };
   const raw = v.data as { [key: string]: unknown };
   if (BACKUP_KEYS.some((k) => Object.prototype.hasOwnProperty.call(raw, k.key) && tooMany(k.key, raw[k.key]))) {
-    return { ok: false, error: ERR_TOO_MANY };
+    return { ok: false, error: errTooMany() };
   }
   const data = cleanData(raw, true);
-  if (Object.keys(data).length === 0) return { ok: false, error: ERR_EMPTY };
+  if (Object.keys(data).length === 0) return { ok: false, error: errEmpty() };
   return {
     ok: true,
     backup: {
@@ -306,14 +307,6 @@ export function summarizeBackup(b: BackupFile): BackupSummary {
   };
 }
 
-export function plural(n: number, one: string, few: string, many: string): string {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
-}
-
 function named(n: number, names: string[]): string {
   const shown = names.slice(0, 4).join(', ') + (names.length > 4 ? '…' : '');
   return n + (shown ? ' (' + shown + ')' : '');
@@ -322,19 +315,19 @@ function named(n: number, names: string[]): string {
 /** The lines of the confirmation screen: what the file holds. */
 export function summaryLines(s: BackupSummary): string[] {
   const out: string[] = [];
-  if (s.servers.length) out.push('Серверов TorrServer: ' + named(s.servers.length, s.servers));
-  if (s.tvs.length) out.push('Телевизоров: ' + named(s.tvs.length, s.tvs));
-  if (s.subs) out.push(s.subs + ' ' + plural(s.subs, 'подписка', 'подписки', 'подписок') + ' мониторинга');
-  if (s.sources) out.push('Источники поиска: ' + s.sources + ' ' + plural(s.sources, 'переключатель', 'переключателя', 'переключателей'));
-  if (s.indexers) out.push('Индексаторов (Jackett, Prowlarr): ' + s.indexers + ' — без API-ключей, ключи придётся ввести заново');
-  if (s.playlists) out.push('Избранных плейлистов: ' + s.playlists);
-  if (s.tracks) out.push('Выбор дорожек: ' + s.tracks + ' ' + plural(s.tracks, 'раздача', 'раздачи', 'раздач'));
-  if (s.settings) out.push('Настройки приложения, мониторинга и тачпада, вид каталога');
+  if (s.servers.length) out.push(t('backup.sumServers', { list: named(s.servers.length, s.servers) }));
+  if (s.tvs.length) out.push(t('backup.sumTvs', { list: named(s.tvs.length, s.tvs) }));
+  if (s.subs) out.push(tp('backup.sumSubs', s.subs));
+  if (s.sources) out.push(tp('backup.sumSources', s.sources));
+  if (s.indexers) out.push(t('backup.sumIndexers', { n: s.indexers }));
+  if (s.playlists) out.push(t('backup.sumPlaylists', { n: s.playlists }));
+  if (s.tracks) out.push(tp('backup.sumTracks', s.tracks));
+  if (s.settings) out.push(t('backup.sumSettings'));
   return out;
 }
 
 /** Shown before saving and when reviewing a file. */
 export function backupWarning(s?: BackupSummary): string {
-  if (s && !s.hasPassword && !s.hasPairKeys) return 'В копии есть адреса серверов — храните файл в надёжном месте.';
-  return 'В копии есть адреса серверов, пароль доступа к вашему TorrServer, если он задан, и ключи пар с телевизорами — храните файл как пароль.';
+  if (s && !s.hasPassword && !s.hasPairKeys) return t('backup.warnNoSecrets');
+  return t('backup.warnSecrets');
 }

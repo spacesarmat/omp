@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { native, ONLY_ANDROID, sourceHttp, secrets } from '../src/platform/native';
+import { native, onlyAndroid, sourceHttp, secrets } from '../src/platform/native';
 
 describe('native plugin wrapper outside Android', () => {
   it('is not available', () => {
@@ -22,18 +22,18 @@ describe('native plugin wrapper outside Android', () => {
   });
 
   it('rejects openExternal and the other actions', async () => {
-    await expect(native.openExternal('http://x/v.mkv', 'video/*')).rejects.toThrow(ONLY_ANDROID);
-    await expect(native.tvConnect('192.168.1.5', {})).rejects.toThrow(ONLY_ANDROID);
-    await expect(native.pointerSend('type:click\n\n')).rejects.toThrow(ONLY_ANDROID);
-    await expect(native.wakeOnLan('aa:bb:cc:dd:ee:ff', '192.168.1.5')).rejects.toThrow(ONLY_ANDROID);
-    await expect(native.takePendingMagnet()).rejects.toThrow(ONLY_ANDROID);
-    await expect(native.downloadAndInstallApk('https://x/a.apk', 'ab', () => {})).rejects.toThrow(ONLY_ANDROID);
+    await expect(native.openExternal('http://x/v.mkv', 'video/*')).rejects.toThrow(onlyAndroid());
+    await expect(native.tvConnect('192.168.1.5', {})).rejects.toThrow(onlyAndroid());
+    await expect(native.pointerSend('type:click\n\n')).rejects.toThrow(onlyAndroid());
+    await expect(native.wakeOnLan('aa:bb:cc:dd:ee:ff', '192.168.1.5')).rejects.toThrow(onlyAndroid());
+    await expect(native.takePendingMagnet()).rejects.toThrow(onlyAndroid());
+    await expect(native.downloadAndInstallApk('https://x/a.apk', 'ab', () => {})).rejects.toThrow(onlyAndroid());
   });
 
   it('rejects the player server actions', async () => {
-    await expect(native.startPlayerServer('192.168.1.5')).rejects.toThrow(ONLY_ANDROID);
-    await expect(native.stopPlayerServer()).rejects.toThrow(ONLY_ANDROID);
-    await expect(native.queuePlayerCommands([{ id: 1, type: 'play' }])).rejects.toThrow(ONLY_ANDROID);
+    await expect(native.startPlayerServer('192.168.1.5')).rejects.toThrow(onlyAndroid());
+    await expect(native.stopPlayerServer()).rejects.toThrow(onlyAndroid());
+    await expect(native.queuePlayerCommands([{ id: 1, type: 'play' }])).rejects.toThrow(onlyAndroid());
   });
 
   it('player message listener is a no-op', () => {
@@ -54,10 +54,10 @@ describe('native plugin wrapper outside Android', () => {
   });
 
   it('rejects the local server actions', async () => {
-    await expect(native.startLocalServer()).rejects.toThrow(ONLY_ANDROID);
-    await expect(native.stopLocalServer()).rejects.toThrow(ONLY_ANDROID);
-    await expect(native.localServerCache()).rejects.toThrow(ONLY_ANDROID);
-    await expect(native.clearLocalServerCache()).rejects.toThrow(ONLY_ANDROID);
+    await expect(native.startLocalServer()).rejects.toThrow(onlyAndroid());
+    await expect(native.stopLocalServer()).rejects.toThrow(onlyAndroid());
+    await expect(native.localServerCache()).rejects.toThrow(onlyAndroid());
+    await expect(native.clearLocalServerCache()).rejects.toThrow(onlyAndroid());
   });
 });
 
@@ -330,11 +330,11 @@ describe('native plugin wrapper on Android', () => {
 
 describe('sources http and secrets outside Android', () => {
   it('reject with a clear message', async () => {
-    await expect(native.http({ url: 'https://rutor.info/', method: 'GET' })).rejects.toThrow(ONLY_ANDROID);
-    await expect(sourceHttp.get('https://rutor.info/')).rejects.toThrow(ONLY_ANDROID);
-    await expect(sourceHttp.clearCookies('https://rutor.info/')).rejects.toThrow(ONLY_ANDROID);
-    await expect(secrets.get('k')).rejects.toThrow(ONLY_ANDROID);
-    await expect(secrets.set('k', 'v')).rejects.toThrow(ONLY_ANDROID);
-    await expect(secrets.delete('k')).rejects.toThrow(ONLY_ANDROID);
+    await expect(native.http({ url: 'https://rutor.info/', method: 'GET' })).rejects.toThrow(onlyAndroid());
+    await expect(sourceHttp.get('https://rutor.info/')).rejects.toThrow(onlyAndroid());
+    await expect(sourceHttp.clearCookies('https://rutor.info/')).rejects.toThrow(onlyAndroid());
+    await expect(secrets.get('k')).rejects.toThrow(onlyAndroid());
+    await expect(secrets.set('k', 'v')).rejects.toThrow(onlyAndroid());
+    await expect(secrets.delete('k')).rejects.toThrow(onlyAndroid());
   });
 });
