@@ -33,7 +33,7 @@ import { flareSolverrUrl, onFlareChange } from '../../../src/sources/flareStore'
 import { flareStatus, onFlareStatus, phoneFlareNote, refreshFlareStatus } from '../../../src/sources/flaresolverr';
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
 import { log } from '../../../src/lib/log';
-import { lang } from '../../../src/i18n';
+import { lang, t } from '../../../src/i18n';
 import { activeTv, isAtv } from '../tv/tvStore';
 import { holdSignInScreen } from '../cloudflare';
 import { sendSourcesToTv, sessionIp, SOURCES_REJECTED, tvState, type SourcesSent } from '../tv/tvClient';
@@ -41,25 +41,24 @@ import { sendSourcesToTv, sessionIp, SOURCES_REJECTED, tvState, type SourcesSent
 const SENT_KEY = 'tsp.sourcesSent';
 const TV_ICON = 'M3 5h18v11H3zM8 20h8';
 
-export const SEND_TEXT =
-  'Передать на телевизор включённые источники, подключения к Jackett/Prowlarr и входы на сайты. Пароли и ключи уходят только на ваш ТВ по каналу пары и хранятся там в зашифрованном виде.';
+export const sendText = (): string => t('sources.send.text');
 
 /** What the phone says after a transfer, by the TV's rutracker answer. */
 export function sentText(r: RutrackerResult | undefined): string {
-  if (r === 'bad_login') return 'Источники переданы, но rutracker не принял логин или пароль';
-  if (r === 'captcha') return 'Источники переданы, но rutracker просит капчу — нажмите «Войти через браузер»';
-  if (r === 'error') return 'Источники переданы; вход на rutracker телевизор проверит при поиске';
-  return 'Передано';
+  if (r === 'bad_login') return t('sources.send.rutBadLogin');
+  if (r === 'captcha') return t('sources.send.rutCaptcha');
+  if (r === 'error') return t('sources.send.rutError');
+  return t('sources.screen.sent');
 }
 
 /** The logins left out of a transfer: by site (too long, bad characters), or all of them when the body was too big. */
 export function loginsNotSent(names: string[], tooBig: boolean): string {
-  if (tooBig) return 'Входы на сайты не переданы: слишком много данных для телевизора';
-  return 'Вход на ' + names.join(', ') + ' не передан: логин или пароль слишком длинный или с недопустимыми символами';
+  if (tooBig) return t('sources.send.loginsTooBig');
+  return t('sources.send.loginsBad', { names: names.join(', ') });
 }
 
-export const LOGIN_NOT_SENT = loginsNotSent(['rutracker'], false);
-export const RUTRACKER_NOT_STORED = 'Телевизор не смог сохранить вход на rutracker: защищённое хранилище недоступно';
+export const loginNotSent = (): string => loginsNotSent(['rutracker'], false);
+export const rutrackerNotStored = (): string => t('sources.send.rutrackerNotStored');
 
 /** What the phone adds about each site's login the TV checked ('' when all were accepted). */
 export function siteLoginsText(logins: { [site: string]: RutrackerResult } | undefined, nameOf: (id: string) => string): string {
@@ -68,9 +67,9 @@ export function siteLoginsText(logins: { [site: string]: RutrackerResult } | und
     .map((id) => {
       const n = nameOf(id);
       const r = logins[id];
-      if (r === 'bad_login') return n + ' не принял логин или пароль';
-      if (r === 'captcha') return n + ' просит капчу — нажмите «Войти через браузер»';
-      if (r === 'error') return 'вход на ' + n + ' телевизор проверит при поиске';
+      if (r === 'bad_login') return t('sources.send.siteBadLogin', { name: n });
+      if (r === 'captcha') return t('sources.send.siteCaptcha', { name: n });
+      if (r === 'error') return t('sources.send.siteError', { name: n });
       return '';
     })
     .filter((x) => x)
@@ -79,17 +78,17 @@ export function siteLoginsText(logins: { [site: string]: RutrackerResult } | und
 
 /** The checkbox of the logins that go with the transfer: «Вместе со входом на rutracker, Kinozal». */
 export function withLoginsLabel(names: string[]): string {
-  return 'Вместе со входом на ' + names.join(', ');
+  return t('sources.send.withLogins', { names: names.join(', ') });
 }
-export const INDEXERS_NOT_SENT = 'Подключения к Jackett/Prowlarr не переданы — обновите OMP на телевизоре';
-export const CLOUDFLARE_NOT_SENT = 'Настройки обхода Cloudflare и FlareSolverr не переданы — обновите OMP на телевизоре';
+export const indexersNotSent = (): string => t('sources.send.indexersNotSent');
+export const cloudflareNotSent = (): string => t('sources.send.cloudflareNotSent');
 
 /** What the phone adds when the TV saved fewer connections than were sent ('' when all or none were sent). */
 export function indexersText(sent: number, saved: number | undefined): string {
   if (!sent || saved === undefined || saved >= sent) return '';
-  return 'Подключения к Jackett/Prowlarr сохранены не все: ' + saved + ' из ' + sent;
+  return t('sources.send.indexersPartial', { saved: saved, sent: sent });
 }
-export const SOURCES_NOT_READY = 'Не удалось подготовить источники к передаче';
+export const sourcesNotReady = (): string => t('sources.send.notReady');
 
 export interface PreparedTransfer {
   payload: TransferPayload;
@@ -129,7 +128,7 @@ export function transferPayload(
   const noLogin = validateTransferPayload(buildTransferPayload(list, null, indexers, flare, null, language));
   if (noLogin) return { payload: noLogin, loginDropped: all.length > 0, droppedLogins: all, tooBig: all.length > dropped.length, indexersDropped: false };
   const bare = validateTransferPayload(buildTransferPayload(list, null, undefined, flare, null, language));
-  if (!bare) throw new Error(SOURCES_NOT_READY);
+  if (!bare) throw new Error(sourcesNotReady());
   return { payload: bare, loginDropped: all.length > 0, droppedLogins: all, tooBig: all.length > dropped.length, indexersDropped: !!(indexers && indexers.length) };
 }
 
@@ -194,8 +193,8 @@ export function sendTransfer(
     .then((r) => ({ r, ...state }));
 }
 
-export const SITES_NOT_SENT = 'Входы на сайты за Cloudflare не переданы — обновите OMP на телевизоре';
-export const SESSIONS_NOT_SENT = 'Входы через браузер не переданы — обновите OMP на телевизоре';
+export const sitesNotSent = (): string => t('sources.send.sitesNotSent');
+export const sessionsNotSent = (): string => t('sources.send.sessionsNotSent');
 
 /** What the phone adds about each browser session the TV checked ('' when all were kept). */
 export function sessionsText(sessions: { [site: string]: string } | undefined, nameOf: (id: string) => string): string {
@@ -203,8 +202,8 @@ export function sessionsText(sessions: { [site: string]: string } | undefined, n
   return Object.keys(sessions)
     .map((id) => {
       const r = sessions[id];
-      if (r === 'error') return 'телевизор не подтвердил вход на ' + nameOf(id) + ' — войдите на телевизоре через браузер';
-      if (r === 'missing') return 'вход на ' + nameOf(id) + ' не найден — войдите заново';
+      if (r === 'error') return t('sources.send.sessionError', { name: nameOf(id) });
+      if (r === 'missing') return t('sources.send.sessionMissing', { name: nameOf(id) });
       return '';
     })
     .filter((x) => x)
@@ -266,29 +265,29 @@ function SendToTv({ loginNames, indexers, ctx }: { loginNames: { id: string; nam
           log(
             (r.rutracker && r.rutracker !== 'ok') || partial || siteNotes ? 'warn' : 'info',
             'tv',
-            'Источники переданы на Android TV' +
-              (r.rutracker ? ', вход на rutracker: ' + r.rutracker : '') +
-              Object.keys(r.logins || {}).map((id) => ', вход на ' + id + ': ' + r.logins![id]).join('') +
-              (sent ? ', индексаторов: ' + (r.indexers || 0) + ' из ' + sent : ''),
+            t('sources.send.logSent') +
+              (r.rutracker ? t('log.sourcesRutrackerLogin', { res: r.rutracker }) : '') +
+              Object.keys(r.logins || {}).map((id) => t('log.sourcesLogin', { id: id, res: r.logins![id] })).join('') +
+              (sent ? t('log.sourcesIndexers', { saved: r.indexers || 0, sent: sent }) : ''),
           );
           setBusy(false);
           setTick((n) => n + 1);
           const notes = [
             droppedNote,
-            r.rutrackerNotStored ? RUTRACKER_NOT_STORED : '',
-            indexersDropped ? INDEXERS_NOT_SENT : '',
-            cloudflareDropped ? CLOUDFLARE_NOT_SENT : '',
-            sitesDropped ? SITES_NOT_SENT : '',
-            sessionsDropped ? SESSIONS_NOT_SENT : '',
+            r.rutrackerNotStored ? rutrackerNotStored() : '',
+            indexersDropped ? indexersNotSent() : '',
+            cloudflareDropped ? cloudflareNotSent() : '',
+            sitesDropped ? sitesNotSent() : '',
+            sessionsDropped ? sessionsNotSent() : '',
             partial,
             siteNotes,
           ].filter((x) => x);
-          const head = notes.length && (!r.rutracker || r.rutrackerNotStored) ? 'Источники переданы.' : sentText(r.rutracker);
+          const head = notes.length && (!r.rutracker || r.rutrackerNotStored) ? t('sources.send.head') : sentText(r.rutracker);
           showToast(notes.length ? head + ' ' + notes.join('. ') : head, notes.length ? 6000 : undefined);
         },
         (e) => {
           const msg = errorMessage(e);
-          log('warn', 'tv', 'Передача источников на Android TV: ' + msg);
+          log('warn', 'tv', t('sources.send.logFailed', { msg: msg }));
           setBusy(false);
           setError(msg);
         },
@@ -301,10 +300,10 @@ function SendToTv({ loginNames, indexers, ctx }: { loginNames: { id: string; nam
       <div class="m-set-card m-send-card">
         <div class="m-send-head">
           <Icon d={TV_ICON} size={22} />
-          <span class="m-send-name">{'Android TV «' + tv.name + '»'}</span>
-          <span class={'m-send-state' + (connected && paired ? ' ok' : '')}>{connected && paired ? 'подключён' : 'не подключён'}</span>
+          <span class="m-send-name">{t('sources.send.tvName', { name: tv.name })}</span>
+          <span class={'m-send-state' + (connected && paired ? ' ok' : '')}>{connected && paired ? t('remote.atvState.connected') : t('remote.atvState.idle')}</span>
         </div>
-        <div class="m-note m-muted">{SEND_TEXT}</div>
+        <div class="m-note m-muted">{sendText()}</div>
         {hasLogin && (
           <label class="m-send-check">
             <input type="checkbox" checked={withLogin} onChange={(e) => setWithLogin((e.target as HTMLInputElement).checked)} />
@@ -314,16 +313,16 @@ function SendToTv({ loginNames, indexers, ctx }: { loginNames: { id: string; nam
         {hasKeys && (
           <label class="m-send-check">
             <input type="checkbox" checked={withKeys} onChange={(e) => setWithKeys((e.target as HTMLInputElement).checked)} />
-            Вместе с ключами Jackett/Prowlarr
+            {t('sources.send.withKeys')}
           </label>
         )}
         {paired ? (
           <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={send}>
-            {busy ? 'Передаю…' : 'Передать на телевизор'}
+            {busy ? t('sources.screen.sending') : t('sources.send.button')}
           </button>
         ) : (
           <button type="button" class="m-btn m-btn-secondary" onClick={() => navigate({ name: 'tv' })}>
-            Подключить заново
+            {t('remote.pairAgain')}
           </button>
         )}
         {error && (
@@ -331,7 +330,7 @@ function SendToTv({ loginNames, indexers, ctx }: { loginNames: { id: string; nam
             {error}
           </div>
         )}
-        {when && !error && <div class="m-send-done">{'Передано ' + when.day + ' в ' + when.time}</div>}
+        {when && !error && <div class="m-send-done">{t('sources.send.sentOn', { day: when.day, time: when.time })}</div>}
       </div>
     </section>
   );
@@ -347,7 +346,7 @@ function FlareEntry() {
   const note = phoneFlareNote(flareSolverrUrl(), flareStatus());
   return (
     <section class="m-set-group" data-entry="flaresolverr">
-      <div class="m-set-label">Обход Cloudflare</div>
+      <div class="m-set-label">{t('sources.screen.flareEntry')}</div>
       <button type="button" class="m-set-row m-set-row-btn" onClick={() => navigate({ name: 'flaresolverr' })}>
         <span class="m-src-name">
           <span>FlareSolverr</span>
@@ -360,13 +359,10 @@ function FlareEntry() {
 }
 
 /** Names of the TorrServer sources on this screen. */
-const TS_LABELS: Record<string, string> = {
-  'ts-rutor': 'rutor (поиск TorrServer)',
-  'ts-torznab': 'Jackett / Prowlarr (Torznab)',
-};
-
 function label(s: Source): string {
-  return TS_LABELS[s.id] || s.name;
+  if (s.id === 'ts-rutor') return t('tvSources.tsRutor');
+  if (s.id === 'ts-torznab') return 'Jackett / Prowlarr (Torznab)';
+  return s.name;
 }
 
 function SourceRow({
@@ -395,15 +391,15 @@ function SourceRow({
         {login &&
           (login.loggedIn ? (
             <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={login.onLogout}>
-              Выйти
+              {t('tvSources.signOut')}
             </button>
           ) : (
             <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={login.onLogin}>
-              Войти
+              {t('common.signIn')}
             </button>
           ))}
         {onOpen && (
-          <button type="button" class="m-icon-btn" aria-label={'Настройки: ' + name} data-open={source.id} onClick={onOpen}>
+          <button type="button" class="m-icon-btn" aria-label={t('sources.screen.settingsOf', { name: name })} data-open={source.id} onClick={onOpen}>
             <Icon d="M9 5l7 7-7 7" size={18} />
           </button>
         )}
@@ -429,7 +425,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   const rerender = () => setTick((n) => n + 1);
   // sources with a login: saved credentials exist (asked once, no network)
   const [logged, setLogged] = useState<Record<string, boolean>>({});
-  // sources whose login is a browser session («вход выполнен в браузере»)
+  // sources whose login is a browser session («signed in with the browser»)
   const [browser, setBrowser] = useState<Record<string, boolean>>({});
   const [loginFor, setLoginFor] = useState<Source | null>(null);
   const ts = torrServerSources();
@@ -480,10 +476,10 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   const loggedIn = (s: Source) => !!logged[s.id];
 
   const noteOf = (s: Source): HealthLine | null => {
-    if (s.needsLogin && s.login && !loggedIn(s)) return { text: 'нужен вход', tone: 'muted' };
+    if (s.needsLogin && s.login && !loggedIn(s)) return { text: t('sources.state.login'), tone: 'muted' };
     const h = getHealth(s.id);
     // signed in, no search since: say only what is known
-    if (s.needsLogin && s.login && !h) return { text: browser[s.id] ? browserDone() : 'вход выполнен', tone: 'muted' };
+    if (s.needsLogin && s.login && !h) return { text: browser[s.id] ? browserDone() : t('tvSources.loggedInDone'), tone: 'muted' };
     return healthText(h);
   };
 
@@ -511,10 +507,10 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   return (
     <div class="m-screen" data-route="sources">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
-        <h1 class="m-bar-title">Источники поиска</h1>
+        <h1 class="m-bar-title">{t('tvSettings.sources')}</h1>
       </div>
       <SendToTv
         ctx={ctx}
@@ -524,7 +520,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
       <IndexerSection ctx={ctx} env={indexerEnv} onChange={rerender} />
       <FlareEntry />
       <section class="m-set-group">
-        <div class="m-set-label">Через TorrServer</div>
+        <div class="m-set-label">{t('tvSources.viaTorrServer')}</div>
         <div class="m-set-card m-src-card">
           {ts.map((s) => (
             <SourceRow key={s.id} source={s} note={healthText(getHealth(s.id))} onToggle={() => toggle(s)} />
@@ -538,7 +534,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
       </section>
       {builtins.length > 0 && (
         <section class="m-set-group">
-          <div class="m-set-label">Встроенные · на телефоне</div>
+          <div class="m-set-label">{t('sources.screen.builtin')}</div>
           <div class="m-set-card m-src-card">
             {builtins.map((s) => (
               <SourceRow
@@ -563,7 +559,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
       )}
       {cfSites.length > 0 && (
         <section class="m-set-group" data-group="cloudflare">
-          <div class="m-set-label">Сайты за Cloudflare</div>
+          <div class="m-set-label">{t('tvSources.cfSites')}</div>
           <div class="m-set-card m-src-card">
             {cfSites.map((s) => (
               <SourceRow key={s.id} source={s} note={noteOf(s)} onToggle={() => toggle(s)} onOpen={() => navigate({ name: 'sourceSite', id: s.id })} />
@@ -575,7 +571,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
         {jackettHint()}
         <div>
           <button type="button" class="m-link" onClick={() => navigate({ name: 'faq' })}>
-            Вопросы и ответы
+            {t('common.faq')}
           </button>
         </div>
       </div>

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { mockFetch, type MockResponse } from '../../tests/helpers/fetchMock';
-import { SESSIONS_NOT_SENT } from '../src/screens/Sources';
-import { SourceSite, SEND_LOGIN } from '../src/screens/SourceSite';
+import { sessionsNotSent } from '../src/screens/Sources';
+import { SourceSite, sendLogin } from '../src/screens/SourceSite';
 import { resetTo } from '../src/nav';
 import { cancelWarmUp, disconnectTv, setTransport, type TvTransport } from '../src/tv/tvClient';
 import { reloadTvs, saveTv, setActiveTv, type SavedTv } from '../src/tv/tvStore';
@@ -186,7 +186,7 @@ describe('phone: «Войти через браузер» on the site screen', (
     setActiveTv(ATV.ip);
     await mountWith(<SourceSite id="kinozal" clearance={() => Promise.resolve(null)} ctx={() => site.ctx} />);
     expect(el.textContent).toContain(browserDoneTitle());
-    act(() => btn(SEND_LOGIN)!.click());
+    act(() => btn(sendLogin())!.click());
     await flush();
     const c = sessionCalls[0];
     // the target is registered as the paired TV first; the send call itself names no address
@@ -199,17 +199,17 @@ describe('phone: «Войти через браузер» on the site screen', (
     expect(toast.value).toBe('Вход на Kinozal передан на телевизор');
     // the TV could not verify it: says so
     sessionAnswer = () => Promise.resolve({ status: 200, data: { ok: true, sessions: { kinozal: 'error' } }, missing: [] });
-    act(() => btn(SEND_LOGIN)!.click());
+    act(() => btn(sendLogin())!.click());
     await flush();
     expect(toast.value).toContain('телевизор не подтвердил вход на Kinozal');
     // an older TV refuses the sessions: the rest goes over the page's own request, the phone says so
     sessionAnswer = () => Promise.resolve({ status: 400, data: { error: 'bad_request' }, missing: [] });
-    act(() => btn(SEND_LOGIN)!.click());
+    act(() => btn(sendLogin())!.click());
     await flush();
     const plain = fetched.filter((f) => f.url === BASE + '/omp/sources');
     expect(plain.length).toBe(1);
     expect(plain[0].body.sessions).toBeUndefined();
-    expect(toast.value).toContain(SESSIONS_NOT_SENT);
+    expect(toast.value).toContain(sessionsNotSent());
     expect(JSON.stringify(logEntries())).not.toContain(COOKIE);
   });
 });

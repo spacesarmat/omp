@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { goBack } from '../nav';
@@ -16,14 +17,14 @@ import { allSources } from '../../../src/sources/registry';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { activeTv, isAtv } from '../tv/tvStore';
 import { holdSignInScreen } from '../cloudflare';
-import { CLOUDFLARE_NOT_SENT, sendTransfer, sessionsText, SESSIONS_NOT_SENT, siteLoginsText, SITES_NOT_SENT } from './Sources';
+import { cloudflareNotSent, sendTransfer, sessionsNotSent, sessionsText, siteLoginsText, sitesNotSent } from './Sources';
 
-export const SITE_LOGIN_NOTE = 'Без входа сайт не отдаёт .torrent. Пароль хранится в зашифрованном хранилище телефона.';
-export const SEND_LOGIN = 'Передать вход на телевизор';
+export const siteLoginNote = (): string => t('sources.screen.loginNote');
+export const sendLogin = (): string => t('sources.screen.sendLogin');
 
 /** The toast after «Передать вход на телевизор». */
 function sentLoginText(name: string, result: string | undefined, notes: string[]): string {
-  const head = result === 'ok' ? 'Вход на ' + name + ' передан на телевизор' : '';
+  const head = result === 'ok' ? t('sources.screen.loginSent', { name: name }) : '';
   return [head].concat(notes).filter((x) => x).join('. ');
 }
 
@@ -73,7 +74,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
     const u = username.trim();
     const p = pass.current ? pass.current.value : '';
     if (!u || !p) {
-      setError('Введите логин и пароль');
+      setError(t('common.enterCredentials'));
       return;
     }
     setError('');
@@ -136,11 +137,11 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
     // a browser session: its cookies are added natively; a password login: the login itself
     const prepared = browser
       ? transferSessions(allSources(), ctx(), [source.id]).then((sessions) => {
-          if (!sessions[source.id]) throw new Error('Не удалось прочитать вход на ' + source.name);
+          if (!sessions[source.id]) throw new Error(t('sources.screen.readFailed', { name: source.name }));
           return sendTransfer(null, [], {}, { list: [source], flare: null }, sessions);
         })
       : transferLogins(allSources(), ctx(), [source.id]).then((logins) => {
-          if (!logins[source.id]) throw new Error('Не удалось прочитать вход на ' + source.name);
+          if (!logins[source.id]) throw new Error(t('sources.screen.readFailed', { name: source.name }));
           // only the login and this site's own switches: the other switches and FlareSolverr stay as they are on the TV
           return sendTransfer(null, [], logins, { list: [source], flare: null });
         });
@@ -148,47 +149,47 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
       .then(
         ({ r, droppedNote, cloudflareDropped, sitesDropped, sessionsDropped }) => {
           const result = browser ? (r.sessions ? r.sessions[source.id] : undefined) : r.logins ? r.logins[source.id] : undefined;
-          log(result === 'ok' ? 'info' : 'warn', 'tv', 'Вход на ' + source.id + ' передан на Android TV: ' + (result || 'нет ответа'));
+          log(result === 'ok' ? 'info' : 'warn', 'tv', t('sources.send.logLoginSent', { id: source.id, res: result || t('sources.send.logNoReply') }));
           if (alive.current) setSending(false);
           const notes = [
             droppedNote,
-            sitesDropped ? SITES_NOT_SENT : '',
-            cloudflareDropped ? CLOUDFLARE_NOT_SENT : '',
-            sessionsDropped ? SESSIONS_NOT_SENT : '',
+            sitesDropped ? sitesNotSent() : '',
+            cloudflareDropped ? cloudflareNotSent() : '',
+            sessionsDropped ? sessionsNotSent() : '',
             siteLoginsText(r.logins, () => source.name),
             sessionsText(r.sessions, () => source.name),
           ];
-          showToast(sentLoginText(source.name, result, notes) || 'Передано', 6000);
+          showToast(sentLoginText(source.name, result, notes) || t('sources.screen.sent'), 6000);
         },
         (e) => {
           const msg = errorMessage(e);
-          log('warn', 'tv', 'Передача входа на Android TV: ' + msg);
+          log('warn', 'tv', t('sources.send.logLoginFailed', { msg: msg }));
           if (alive.current) setSending(false);
           showToast(msg, 6000);
         },
       );
   };
 
-  const title = 'Вход на ' + source.name;
+  const title = t('common.signInTo', { site: source.name });
   return (
     <>
       <section class="m-set-group">
         <form class="m-set-card" data-site-card="login" onSubmit={submit}>
           <div class="m-sheet-title">{title}</div>
-          <div class="m-note m-muted">{SITE_LOGIN_NOTE}</div>
+          <div class="m-note m-muted">{siteLoginNote()}</div>
           {logged ? (
             <div class="m-src-row">
               <span class="m-src-name">
-                <span>{browser ? browserDoneTitle() : 'Вход выполнен'}</span>
+                <span>{browser ? browserDoneTitle() : t('tvSources.signedIn')}</span>
               </span>
               <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={logout}>
-                Выйти
+                {t('tvSources.signOut')}
               </button>
             </div>
           ) : (
             <>
               <div class="m-field">
-                <label for="m-site-user">Логин</label>
+                <label for="m-site-user">{t('common.login')}</label>
                 <input
                   id="m-site-user"
                   name="username"
@@ -201,7 +202,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
                 />
               </div>
               <div class="m-field">
-                <label for="m-site-pass">Пароль</label>
+                <label for="m-site-pass">{t('common.password')}</label>
                 <input id="m-site-pass" name="password" class="m-input" type="password" autocomplete="current-password" ref={pass} />
               </div>
               {error && (
@@ -210,7 +211,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
                 </div>
               )}
               <button type="submit" class="m-btn m-btn-primary" disabled={busy || logged === null}>
-                {busy ? 'Вхожу…' : 'Войти'}
+                {busy ? t('common.signingIn') : t('common.signIn')}
               </button>
               <BrowserLoginButton source={source} ctx={ctx} suggest={suggest} disabled={busy || logged === null} onDone={browserDone} />
             </>
@@ -219,7 +220,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
       </section>
       {canSend && (
         <button type="button" class="m-btn m-btn-secondary" data-send="site-login" disabled={sending} onClick={send}>
-          {sending ? 'Передаю…' : SEND_LOGIN}
+          {sending ? t('sources.screen.sending') : sendLogin()}
         </button>
       )}
     </>
@@ -283,12 +284,12 @@ export function SourceSite({
     return (
       <div class="m-screen" data-route="sourceSite">
         <div class="m-bar">
-          <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+          <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
             <Icon d="M15 5l-7 7 7 7" />
           </button>
-          <h1 class="m-bar-title">Источник</h1>
+          <h1 class="m-bar-title">{t('sources.screen.title')}</h1>
         </div>
-        <div class="m-note m-muted">Источник не найден</div>
+        <div class="m-note m-muted">{t('sources.screen.notFound')}</div>
       </div>
     );
   }
@@ -296,12 +297,12 @@ export function SourceSite({
   const on = isSourceOn(source);
   const bypass = isCloudflareBypassOn(source);
   const status = bypass ? clearanceText(until, now()) : null;
-  const searchLabel = 'Искать на ' + source.name;
+  const searchLabel = t('sources.screen.searchOn', { name: source.name });
 
   return (
     <div class="m-screen" data-route="sourceSite">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label="Назад" onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
         <h1 class="m-bar-title">{source.name}</h1>

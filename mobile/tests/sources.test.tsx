@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Sources } from '../src/screens/Sources';
@@ -233,5 +234,41 @@ describe('Settings → «Источники поиска»', () => {
     const b = Array.from(el.querySelectorAll('button')).find((x) => (x.textContent || '').indexOf('Источники поиска') >= 0)!;
     click(b);
     expect(currentRoute.value).toEqual({ name: 'sources' });
+  });
+});
+
+describe('Sources screen in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  const noCyrillic = () => expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+
+  it('title, groups, switches and the hint', async () => {
+    await mount();
+    expect(el.querySelector('h1')!.textContent).toBe('Search sources');
+    expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
+    const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
+    expect(labels).toEqual(['Indexers', 'Cloudflare bypass', 'Via TorrServer', 'Built-in · on the phone']);
+    expect(sw('rutor (TorrServer search)')).toBeTruthy();
+    expect(sw('Jackett / Prowlarr (Torznab)')).toBeTruthy();
+    expect(btn('Questions and answers')).toBeTruthy();
+    noCyrillic();
+  });
+
+  it('the notes under the sources, and signing in', async () => {
+    setHealth('fake-open', { state: 'ok', ms: 800, at: 1 });
+    await mount();
+    expect(row('nnmclub').textContent).toContain('working · 0.8 s');
+    expect(row('rutracker').textContent).toContain('sign-in needed');
+    click(btn('Sign in')!);
+    const dialog = el.querySelector('[role="dialog"]') as HTMLElement;
+    expect(dialog.getAttribute('aria-label')).toBe('Sign in to rutracker');
+    type(dialog.querySelector('input[name="username"]') as HTMLInputElement, 'reader');
+    type(dialog.querySelector('input[type="password"]') as HTMLInputElement, PASSWORD);
+    click(Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent === 'Sign in')!);
+    await flush();
+    expect(row('rutracker').textContent).toContain('signed in');
+    expect(btn('Sign out')).toBeTruthy();
+    expect(row('rutracker').closest('.m-set-card')!.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    noCyrillic();
   });
 });

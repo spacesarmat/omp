@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Sources } from '../src/screens/Sources';
-import { KEY_NOTE, type IndexerEnv } from '../src/screens/SourcesIndexers';
+import { keyNote, type IndexerEnv } from '../src/screens/SourcesIndexers';
 import { torznabHidden } from '../../src/sources/indexerStore';
 import { resetTo } from '../src/nav';
 import { indexerConnections, indexerKeyName, reloadIndexers } from '../../src/sources/indexerStore';
@@ -181,7 +182,7 @@ describe('phone «Индексаторы»', () => {
     const sheet = el.querySelector('[role="dialog"]') as HTMLElement;
     expect(sheet.textContent).toContain('Нашлось в сети и в настройках TorrServer:');
     expect(sheet.textContent).toContain('API-ключ (Prowlarr → Settings → General)');
-    expect(sheet.textContent).toContain(KEY_NOTE);
+    expect(sheet.textContent).toContain(keyNote());
     await click(btn('Проверить и подключить', sheet)!);
     expect(sheet.textContent).toContain('Укажите API-ключ');
     (sheet.querySelector('#m-idx-key') as HTMLInputElement).value = KEY;
@@ -287,5 +288,82 @@ describe('phone «Индексаторы»', () => {
     await click(btn('Удалить', card(id))!);
     expect(indexerConnections()).toHaveLength(0);
     expect(secrets[indexerKeyName(id)]).toBeUndefined();
+  });
+});
+
+describe('phone indexers in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  // «Трекер N» are the fake Prowlarr tracker names (tracker data)
+  const noCyrillic = (n: Element) => expect((n.textContent || '').replace(/Трекер \d/g, '')).not.toMatch(/[А-Яа-яЁё]/);
+
+  it('a connection card: line, trackers, buttons and the removal question', async () => {
+    const id = saveJackett();
+    secrets[indexerKeyName(id)] = KEY;
+    await mount();
+    expect(el.querySelector('[data-section="indexers"] .m-set-label')!.textContent).toBe('Indexers');
+    const c = card(id);
+    expect(c.textContent).toContain('Jackett · 192.168.1.5');
+    expect(c.textContent).toContain('direct · 2 trackers, 1 working');
+    await click(c.querySelector('[aria-expanded]')!);
+    expect(c.textContent).toContain('Checked just now');
+    for (const b of ['Check', 'Change the key', 'Delete']) expect(btn(b, c), b).toBeTruthy();
+    await click(btn('Delete', c)!);
+    expect(c.textContent).toContain('Remove the connection? The key will also be deleted from the phone.');
+    expect(btn('Cancel', c)).toBeTruthy();
+    noCyrillic(c);
+  });
+
+  it('a key asked for, the add sheet, the check and the result', async () => {
+    const id = saveJackett(true);
+    await mount();
+    const c = card(id);
+    expect(c.textContent).toContain('API key needed');
+    await click(btn('Enter the key', c)!);
+    const sheet = el.querySelector('[role="dialog"]') as HTMLElement;
+    expect(sheet.getAttribute('aria-label')).toBe('Connect an indexer');
+    expect(sheet.querySelector('.m-sheet-title')!.textContent).toBe('Connect an indexer');
+    expect(sheet.textContent).toContain('API key (Jackett → main page, the API Key field)');
+    expect(sheet.textContent).toContain('The key is kept in the phone’s encrypted storage and is not included in the backup.');
+    expect(sheet.querySelector('label[for=m-idx-url]')!.textContent).toBe('Address');
+    expect((sheet.querySelector('#m-idx-key') as HTMLInputElement).placeholder).toBe('leave empty to keep it');
+    await click(btn('Check and connect', sheet)!);
+    expect(sheet.querySelector('[role=alert]')!.textContent).toBe('Enter the API key');
+    (sheet.querySelector('#m-idx-key') as HTMLInputElement).value = KEY;
+    await click(btn('Check and connect', sheet)!);
+    expect(sheet.querySelector('[role=status]')!.textContent).toBe('Jackett · 2 trackers, 1 working');
+    expect(btn('Done', sheet)).toBeTruthy();
+    noCyrillic(sheet);
+  });
+
+  it('a LAN find: the card, the candidates in the sheet and the scan buttons', async () => {
+    await mount();
+    const found = el.querySelector('[data-candidate="192.168.1.7:9696"]') as HTMLElement;
+    expect(found.textContent).toContain('Prowlarr · 192.168.1.7');
+    expect(found.textContent).toContain('found on the network — needs an API key');
+    expect(btn('Add Jackett or Prowlarr')).toBeTruthy();
+    await click(btn('Connect', found)!);
+    const sheet = el.querySelector('[role="dialog"]') as HTMLElement;
+    expect(sheet.textContent).toContain('Found on the network and in the TorrServer settings:');
+    expect(sheet.textContent).toContain('API key (Prowlarr → Settings → General)');
+    expect(sheet.querySelector('.m-idx-pick')!.textContent).toContain('needs a key');
+    expect(btn('Search the network', sheet)).toBeTruthy();
+    noCyrillic(sheet);
+  });
+
+  it('mobile data asks for Wi-Fi; a Torznab key from TorrServer is offered', async () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    settings = { EnableTorznabSearch: true, TorznabUrls: [{ Host: 'http://192.168.1.5:9117/api/v2.0/indexers/all/results/torznab', Key: TS_KEY }] };
+    const off = (): IndexerEnv => ({ scan: () => Promise.resolve(null), readSettings: () => Promise.resolve(settings), now: () => NOW });
+    act(() => render(<Sources ctx={ctx} indexerEnv={off} />, el));
+    await flush();
+    const found = el.querySelector('[data-candidate="192.168.1.5:9117"]') as HTMLElement;
+    expect(found.textContent).toContain('in the TorrServer settings — has a key');
+    await click(btn('Connect', found)!);
+    expect((el.querySelector('[role=dialog] #m-idx-key') as HTMLInputElement).placeholder).toBe('key from the TorrServer settings');
+    await click(btn('Search the network')!);
+    expect(el.textContent).toContain('Connect to Wi‑Fi to find Jackett and Prowlarr on the network');
+    noCyrillic(el);
   });
 });
