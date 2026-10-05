@@ -52,6 +52,11 @@ android {
         }
     }
     buildTypes {
+        // test builds install next to the released app (different package, its own data) for device checks
+        debug {
+            applicationIdSuffix '.test'
+            versionNameSuffix '-test'
+        }
         release {
             if (System.getenv('ANDROID_KEYSTORE_FILE')) {
                 signingConfig signingConfigs.release

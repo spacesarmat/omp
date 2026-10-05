@@ -22,3 +22,4 @@ android/app/src/main/jniLibs/
 *.pem
 *.jks
 *.keystore
+dist-test/
