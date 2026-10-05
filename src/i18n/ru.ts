@@ -989,6 +989,7 @@ export const ru = {
     addedToast: 'Сервер «{name}» добавлен',
   },
   catalog: {
+    querySeason: '{n} сезон',
     deleteAsk: 'Удалить «{title}»?',
     torrentDeleted: 'Торрент удалён',
     removeFromHistoryAsk: 'Убрать из истории?',
