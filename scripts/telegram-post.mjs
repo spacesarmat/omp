@@ -95,20 +95,34 @@ async function sendFiles({ call, chat, replyTo, tag, version, dir, log }) {
   };
 
   if (upload.length >= 2) {
+    // a request holds at most 50 MB, so each file is uploaded on its own (silently) and the album is built from
+    // the uploaded file ids; the temporary messages are deleted right after
+    const temp = [];
     try {
+      const ids = [];
+      for (const f of upload) {
+        const form = new FormData();
+        form.set('chat_id', chat);
+        form.set('disable_notification', 'true');
+        form.set('document', blob(f), f.name);
+        const m = await call('sendDocument', form);
+        temp.push(m.message_id);
+        ids.push(m.document.file_id);
+      }
       const form = base();
       const linksText = link.length ? buildLinksMessage(tag, link) : '';
-      form.set('media', JSON.stringify(upload.map((f, i) => ({
+      form.set('media', JSON.stringify(ids.map((id, i) => ({
         type: 'document',
-        media: `attach://file${i}`,
-        ...(linksText && i === upload.length - 1 ? { caption: linksText, parse_mode: 'HTML' } : {}),
+        media: id,
+        ...(linksText && i === ids.length - 1 ? { caption: linksText, parse_mode: 'HTML' } : {}),
       }))));
-      upload.forEach((f, i) => form.set(`file${i}`, blob(f), f.name));
       await call('sendMediaGroup', form);
       log(`Telegram: attached ${upload.map((f) => f.name).join(', ')} as one block`);
+      await deleteMessages(call, chat, temp, log);
       return 0;
     } catch (e) {
       log(`${e.message}, sending the files one by one`);
+      await deleteMessages(call, chat, temp, log);
     }
   } else if (upload.length === 1) {
     try {
@@ -148,6 +162,18 @@ async function sendFiles({ call, chat, replyTo, tag, version, dir, log }) {
   return failed;
 }
 
+async function deleteMessages(call, chat, ids, log) {
+  if (!ids.length) return;
+  const form = new FormData();
+  form.set('chat_id', chat);
+  form.set('message_ids', JSON.stringify(ids));
+  try {
+    await call('deleteMessages', form);
+  } catch (e) {
+    log(`${e.message} (the bot needs the «delete messages» right)`);
+  }
+}
+
 async function sendLinks(call, form, tag, link) {
   form.set('parse_mode', 'HTML');
   form.set('link_preview_options', JSON.stringify({ is_disabled: true }));
@@ -164,10 +190,7 @@ export async function repostFiles({ tag, messageId, deleteIds = [], dir = 'build
   const version = tag.replace(/^v/, '');
   const failed = await sendFiles({ call, chat, replyTo: messageId, tag, version, dir, log });
   if (deleteIds.length) {
-    const form = new FormData();
-    form.set('chat_id', chat);
-    form.set('message_ids', JSON.stringify(deleteIds));
-    await call('deleteMessages', form);
+    await deleteMessages(call, chat, deleteIds, log);
     log(`Telegram: deleted the old file messages ${deleteIds.join(', ')}`);
   }
   return failed;
