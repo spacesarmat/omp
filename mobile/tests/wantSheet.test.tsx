@@ -121,6 +121,7 @@ describe('WantSheet', () => {
   it('switches the card to "Following" without reopening it', async () => {
     setCatalogClientForTests({
       novelties: () => Promise.resolve({ items: [], pages: 0 }),
+      discover: () => Promise.resolve({ items: [], pages: 0 }),
       search: () => Promise.resolve({ items: [], pages: 0 }),
       card: () => Promise.resolve(SHOW),
     });

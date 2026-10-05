@@ -3,6 +3,7 @@
 import type { TmdbConfig } from '../api/types';
 import { lang } from '../i18n';
 import { ru } from '../i18n/ru';
+import { discoverParams, type DiscoverQuery } from './discoverQuery';
 
 export type Kind = 'movie' | 'tv';
 
@@ -45,6 +46,14 @@ export function noveltiesUrl(e: TmdbEndpoint, kind: Kind, page: number, today: s
   return url(e, 'discover/movie', {
     page: page, region: 'RU', with_release_type: 4, 'release_date.lte': today, sort_by: 'primary_release_date.desc', 'vote_count.gte': 20,
   });
+}
+
+/** «Обзор» with its sort and filters: /discover/{kind}; null when the kind has none of the chosen genres. */
+export function discoverUrl(e: TmdbEndpoint, kind: Kind, query: DiscoverQuery, page: number, today: string): string | null {
+  const p = discoverParams(kind, query, today);
+  if (!p) return null;
+  p.page = page;
+  return url(e, 'discover/' + kind, p);
 }
 
 export function searchUrl(e: TmdbEndpoint, query: string, page: number): string {

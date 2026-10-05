@@ -78,12 +78,14 @@ describe('collectBackup', () => {
     put('tsp.support', { until: 1798934400000 });
     put('tsp.catalogMode', 'discover');
     put('tsp.discoverCols', 3);
+    put('tsp.discoverQuery', { sort: 'rating', genres: ['drama', 'nope'], rating: 7 });
     put('tsp.searchFilters', { hdr: true });
     put('tsp.subsSort', 'added');
     put('tsp.ui.skipOpen', false);
     const b = collectBackup(NOW);
     expect(b.data['tsp.catalogMode']).toBe('discover');
     expect(b.data['tsp.discoverCols']).toBe(3);
+    expect(b.data['tsp.discoverQuery']).toEqual({ sort: 'rating', genres: ['drama'], year: 'any', from: 0, to: 0, country: '', rating: 7 });
     expect(b.data['tsp.support']).toEqual({ until: 1798934400000 });
     expect(b.data['tsp.flaresolverr']).toEqual({ url: 'http://192.168.1.5:8191' });
     expect(Object.keys(b.data).sort()).toEqual(BACKUP_KEYS.map((k) => k.key).sort());
@@ -133,6 +135,13 @@ describe('collectBackup', () => {
     walk(join('mobile', 'src'));
     expect(Object.keys(found).length).toBeGreaterThan(40);
     expect(Object.keys(found).filter((k) => listed.indexOf(k) < 0).map((k) => k + ' (' + found[k] + ')')).toEqual([]);
+  });
+
+  it('keeps the «Обзор» sort and filters only when they are an object, sanitized', () => {
+    put('tsp.discoverQuery', 'popular');
+    expect(collectBackup(NOW).data['tsp.discoverQuery']).toBeUndefined();
+    put('tsp.discoverQuery', { sort: 'sideways', year: 'range', from: 2030, to: 2010, country: 'XX', rating: 9 });
+    expect(collectBackup(NOW).data['tsp.discoverQuery']).toEqual({ sort: 'popular', genres: [], year: 'range', from: 2010, to: 2030, country: '', rating: 0 });
   });
 
   it('keeps the search filters, the subscriptions sort and «skip open» only when they are valid', () => {
