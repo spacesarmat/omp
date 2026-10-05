@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Settings, setUpdateChecker } from '../src/screens/Settings';
@@ -432,5 +433,115 @@ describe('Settings: OMP on the TV', () => {
     el = mount();
     await flush();
     expect(el.querySelector('[data-row="tv-omp"]')).toBeNull();
+  });
+});
+
+describe('Settings in English', () => {
+  beforeEach(() => applyLanguageSetting('en'));
+  afterEach(() => applyLanguageSetting('ru'));
+  const noCyrillic = (el: HTMLElement) => expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
+  const flush = () =>
+    act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  const local = (info: object) => {
+    setLocalServerDeps({
+      native: {
+        localServerInfo: async () => info,
+        startLocalServer: async () => ({ supported: true, running: true }),
+        stopLocalServer: async () => {},
+        localServerCache: async () => 412 * 1024 * 1024,
+        clearLocalServerCache: async () => {},
+        onLocalServerState: () => () => {},
+      } as any,
+    });
+    localServer.value = { supported: true, running: false, ...info } as any;
+  };
+
+  it('title, sections, rows and buttons', () => {
+    const el = mount();
+    expect(el.querySelector('h1')!.textContent).toBe('Settings');
+    const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
+    expect(labels).toEqual(['Update', 'Server', 'TV', 'About']);
+    const text = el.textContent!;
+    for (const w of ['Version', 'What’s new', 'Check for updates', 'Check for updates on start', 'Get beta versions', 'Not chosen', 'Change', 'Choose', 'Search sources', 'Monitoring', 'Install OMP on the TV', 'Questions and answers', 'Backup', 'Error log', 'Project page']) {
+      expect(text, w).toContain(w);
+    }
+    expect(el.querySelector('[data-row="language"]')!.textContent).toBe('LanguageAs on the device ›');
+    noCyrillic(el);
+  });
+
+  it('the beta switch shows the English hint', () => {
+    const el = mount();
+    expect(el.querySelector('[data-row="beta"]')!.textContent).toBe('Get beta versions' + 'New features first. There may be bugs. When the main version is out, it replaces the beta');
+    expect(el.querySelector('[role=switch][aria-label="Get beta versions"]')).toBeTruthy();
+    expect(el.querySelector('[role=switch][aria-label="Check for updates on start"]')).toBeTruthy();
+  });
+
+  it('manual update check toasts in English', async () => {
+    setUpdateChecker(async () => 'latest');
+    const el = mount();
+    await act(async () => btn(el, 'Check for updates').click());
+    expect(toast.value).toBe('You have the latest version');
+    setUpdateChecker(async () => 'error');
+    await act(async () => btn(el, 'Check for updates').click());
+    expect(toast.value).toBe('Could not check for updates');
+  });
+
+  it('the phone server: status, cache, notes and the VPN warning', async () => {
+    local({ supported: true, running: true, version: 'MatriX.145.1', ip: '192.168.1.50', vpn: true });
+    const el = mount();
+    await flush();
+    const section = el.querySelector('[data-section="local-server"]')!;
+    const t = section.textContent!;
+    expect(t).toContain('TorrServer on the phone');
+    expect(t).toContain('Working');
+    expect(t).toContain('MatriX.145.1 · 192.168.1.50:8090');
+    expect(t).toContain('Start together with OMP');
+    expect(t).toContain('The server starts when the app opens');
+    expect(t).toContain('Cache on the phone');
+    expect(t).toContain('Used 412 MB of 1 GB');
+    expect(t).toContain('Server settings');
+    expect(t).toContain('A new server version comes with an OMP update');
+    expect(t).toContain('The server is available to all devices on this Wi‑Fi network');
+    expect(t).toContain('VPN is on');
+    expect(Array.from(section.querySelectorAll('button')).map((b) => b.textContent)).toContain('Clear');
+    noCyrillic(el);
+  });
+
+  it('the phone server: not downloaded, and an outdated one offers the update', async () => {
+    local({ supported: true, running: false, binary: 'missing' });
+    const el = mount();
+    await flush();
+    const text = el.querySelector('[data-section="local-server"]')!.textContent!;
+    expect(text).toContain('Not downloaded');
+    expect(text).toContain('Needs downloading');
+    noCyrillic(el);
+    resetTo({ name: 'settings' });
+    local({ supported: true, running: false, binary: 'outdated', pinVersion: 'MatriX.146' });
+    const el2 = mount();
+    await flush();
+    const s2 = el2.querySelector('[data-section="local-server"]')!;
+    expect(s2.textContent).toContain('Stopped');
+    expect(s2.querySelector('[data-local="update"]')!.textContent).toBe('New TorrServer versionMatriX.146Update');
+    noCyrillic(el2);
+  });
+
+  it('OMP on the TV: the version line, the button, the toast and the manual hint', async () => {
+    saveTv({ ip: '10.0.0.2', name: 'LG' });
+    tvState.value = 'connected';
+    vi.spyOn(tvUpdate, 'tvOmpVersions').mockResolvedValue({ installed: '0.10.0', latest: '0.11.4' });
+    vi.spyOn(tvUpdate, 'openUpdateOnTv').mockResolvedValue(undefined);
+    const el = mount();
+    await flush();
+    const row = el.querySelector('[data-row="tv-omp"]')!;
+    expect(row.textContent).toContain('OMP on the TV');
+    expect(row.textContent).toContain('0.10.0 — 0.11.4 is available');
+    act(() => btn(el, 'Update on the TV').click());
+    await flush();
+    expect(toast.value).toBe('OMP is open on the TV');
+    expect(el.querySelector('.m-hint-warn')!.textContent).toContain('Settings → Update');
+    noCyrillic(el);
   });
 });

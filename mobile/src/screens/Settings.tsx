@@ -10,7 +10,6 @@ import {
   refreshLocalServer,
   localCacheBytes,
   clearLocalCache,
-  formatBytes,
   LOCAL_PORT,
   LOCAL_NAME,
   LOCAL_URL,
@@ -36,7 +35,7 @@ import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
-import { t, type LanguageSetting } from '../../../src/i18n';
+import { fmtSize, t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 
 type Checker = (o: { manual: boolean; url?: string }) => Promise<CheckResult>;
@@ -56,10 +55,10 @@ export function phoneFeedUrl(): string {
   return updateFeedUrl(true, settings.value.betaUpdates);
 }
 
-/** Under «Получать бета-версии». */
-export const BETA_HINT = 'Новые функции раньше всех. Могут быть ошибки. Когда выйдет основная версия, она заменит бету';
+/** Under «Get beta versions». */
+export const betaHint = (): string => t('settings.betaHint');
 /** The badge next to a beta version. */
-export const BETA_BADGE = 'Бета';
+export const betaBadge = (): string => t('updateScreen.beta');
 
 const PROJECT_URL = 'https://github.com/spacesarmat/omp';
 const TORRSERVER_SOURCE_URL = 'https://github.com/YouROK/TorrServer/tree/' + TORRSERVER_VERSION;
@@ -128,7 +127,7 @@ function LocalServerSection() {
       await clearLocalCache();
       setBytes(await localCacheBytes());
     } catch {
-      showToast('Не удалось очистить кэш');
+      showToast(t('settings.clearFailed'));
     } finally {
       setBusy(false);
     }
@@ -137,19 +136,21 @@ function LocalServerSection() {
   const missing = !st.running && !canRun(st);
   const size = downloadSize(st);
   const meta = missing
-    ? 'Нужно скачать' + (size ? ' (' + size + ')' : '')
+    ? size
+      ? t('settings.localMissingSize', { size: size })
+      : t('settings.localMissing')
     : [st.version, st.ip ? st.ip + ':' + LOCAL_PORT : ''].filter(Boolean).join(' · ');
   return (
     <section class="m-set-group" data-section="local-server">
-      <div class="m-set-label">TorrServer на телефоне</div>
+      <div class="m-set-label">{t('localServer.title')}</div>
       <div class="m-set-card">
         <div class="m-set-row">
           <span class={'m-status-dot' + (st.running ? ' on' : '')} />
           <div class="m-set-text" style="flex-grow: 1">
-            <span style="font-weight: 700">{starting ? 'Запускаю…' : st.running ? 'Работает' : missing ? 'Не скачан' : 'Остановлен'}</span>
+            <span style="font-weight: 700">{starting ? t('settings.localStarting') : st.running ? t('sources.flare.works') : missing ? t('settings.localNotDownloaded') : t('settings.localStopped')}</span>
             {meta && <span class="m-muted m-small">{meta}</span>}
           </div>
-          <Switch on={st.running} label="TorrServer на телефоне" disabled={starting} onToggle={() => void toggle()} />
+          <Switch on={st.running} label={t('localServer.title')} disabled={starting} onToggle={() => void toggle()} />
         </div>
         {st.error && (
           <div class="m-error" role="alert">
@@ -161,11 +162,11 @@ function LocalServerSection() {
             <div class="m-set-sep" />
             <div class="m-set-row" data-local="update">
               <div class="m-set-text" style="flex-grow: 1">
-                <span>Новая версия TorrServer</span>
+                <span>{t('settings.localNewVersion')}</span>
                 <span class="m-muted m-small">{[st.pinVersion, size].filter(Boolean).join(' · ')}</span>
               </div>
               <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'localServer' })}>
-                Обновить
+                {t('settings.localUpdate')}
               </button>
             </div>
           </>
@@ -173,26 +174,26 @@ function LocalServerSection() {
         <div class="m-set-sep" />
         <div class="m-set-row">
           <div class="m-set-text" style="flex-grow: 1">
-            <span>Запускать вместе с OMP</span>
-            <span class="m-muted m-small">Сервер включается при открытии приложения</span>
+            <span>{t('settings.autostart')}</span>
+            <span class="m-muted m-small">{t('settings.autostartSub')}</span>
           </div>
-          <Switch on={localAutostart.value} label="Запускать вместе с OMP" onToggle={() => setAutostart(!localAutostart.value)} />
+          <Switch on={localAutostart.value} label={t('settings.autostart')} onToggle={() => setAutostart(!localAutostart.value)} />
         </div>
         <div class="m-set-sep" />
         <div class="m-set-row">
           <div class="m-set-text" style="flex-grow: 1">
-            <span>Кэш на телефоне</span>
-            <span class="m-muted m-small">{bytes === null ? 'Считаю…' : 'Занято ' + formatBytes(bytes) + ' из 1 ГБ'}</span>
+            <span>{t('settings.cacheTitle')}</span>
+            <span class="m-muted m-small">{bytes === null ? t('settings.counting') : t('settings.cacheUsed', { used: fmtSize(bytes) })}</span>
           </div>
           <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={busy} onClick={() => void clear()}>
-            Очистить
+            {t('tvSettings.clear')}
           </button>
         </div>
         {st.running && (
           <>
             <div class="m-set-sep" />
             <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'serverSettings', url: LOCAL_URL })}>
-              <span>Настройки сервера</span>
+              <span>{t('serverSettings.title')}</span>
               <Icon d="M9 6l6 6-6 6" size={18} />
             </button>
           </>
@@ -200,10 +201,10 @@ function LocalServerSection() {
       </div>
       <div class="m-hint-ok">
         <Icon d="M12 8v.01M11 12h1v5h1M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18" size={18} />
-        <span>Новая версия сервера приходит вместе с обновлением OMP</span>
+        <span>{t('settings.serverNote')}</span>
       </div>
-      <div class="m-hint-warn">Сервер доступен всем устройствам в этой сети Wi‑Fi</div>
-      {st.vpn && <div class="m-hint-warn" role="alert">Включён VPN — другие устройства могут не видеть сервер. Разрешите в VPN доступ к локальной сети или выключите его.</div>}
+      <div class="m-hint-warn">{t('settings.lanWarn')}</div>
+      {st.vpn && <div class="m-hint-warn" role="alert">{t('localServer.vpn')}</div>}
     </section>
   );
 }
@@ -278,7 +279,7 @@ function TvOmpRow() {
     // older TV builds only open OMP: the update is started there by hand
     if (!opens) setHint(true);
     openUpdateOnTv().then(
-      () => showToast(opens ? 'На телевизоре открыто обновление OMP' : 'OMP открыт на телевизоре'),
+      () => showToast(opens ? t('install.assistant.updateOpened') : t('install.assistant.ompOpened')),
       (e) => showToast(errorMessage(e)),
     );
   };
@@ -286,20 +287,20 @@ function TvOmpRow() {
     <>
       <div class="m-set-row" data-row="tv-omp">
         <div class="m-set-text">
-          <span>OMP на телевизоре</span>
+          <span>{t('settings.tvOmp')}</span>
           <span class={'m-small' + (old ? ' m-accent' : ' m-muted')}>
-            {old ? installed + ' — есть ' + v.latest : installed + (v.latest ? ' — последняя версия' : '')}
+            {old ? t('settings.tvOmpNewer', { installed: installed, latest: v.latest || '' }) : v.latest ? t('settings.tvOmpLatest', { installed: installed }) : installed}
           </span>
         </div>
         {old && (
           <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={update}>
-            Обновить на ТВ
+            {t('install.plan.updateOnTv')}
           </button>
         )}
       </div>
       {hint && (
         <div class="m-hint-warn" role="status">
-          Эта версия OMP на ТВ не открывает обновление сама. На телевизоре: Настройки → Обновление → «Проверить обновление».
+          {t('install.assistant.noSelfUpdate')}
         </div>
       )}
     </>
@@ -314,33 +315,33 @@ export function Settings() {
 
   async function check() {
     const r = await runUpdateCheck({ manual: true, url: phoneFeedUrl() }).catch((): CheckResult => 'error');
-    if (r === 'error') showToast('Не удалось проверить обновления');
-    else if (r === 'latest') showToast('У вас последняя версия');
+    if (r === 'error') showToast(t('updateScreen.checkFailed'));
+    else if (r === 'latest') showToast(t('updateScreen.latest'));
   }
 
   return (
     <div class="m-screen" data-route="settings">
-      <h1>Настройки</h1>
+      <h1>{t('common.settings')}</h1>
       {/* updates first: the version and the check are what people look for most here */}
       <section class="m-set-group">
-        <div class="m-set-label">Обновление</div>
+        <div class="m-set-label">{t('update.sheetLabel')}</div>
         <button type="button" class="m-set-row m-set-row-btn" onClick={() => openWhatsNew(CHANGELOG, APP_VERSION)}>
-          <span>Версия</span>
+          <span>{t('settings.version')}</span>
           <span class="m-muted">
             {APP_VERSION}
-            {isBetaVersion(APP_VERSION) && <span class="m-badge-beta">{BETA_BADGE}</span>} · Что нового ›
+            {isBetaVersion(APP_VERSION) && <span class="m-badge-beta">{betaBadge()}</span>} · {t('whatsNew.title')} ›
           </span>
         </button>
         <button type="button" class="m-btn m-btn-secondary" onClick={() => void check()}>
-          Проверить обновления
+          {t('updateScreen.check')}
         </button>
         <div class="m-set-row">
-          <span>Проверять обновления при запуске</span>
+          <span>{t('tvSettings.updateOnStart')}</span>
           <button
             type="button"
             role="switch"
             aria-checked={on}
-            aria-label="Проверять обновления при запуске"
+            aria-label={t('tvSettings.updateOnStart')}
             class={'m-switch' + (on ? ' on' : '')}
             onClick={() => updateSettings({ updateCheck: !on })}
           >
@@ -349,12 +350,12 @@ export function Settings() {
         </div>
         <div class="m-set-row" data-row="beta">
           <div class="m-set-text">
-            <span>Получать бета-версии</span>
-            <span class="m-small m-muted">{BETA_HINT}</span>
+            <span>{t('settings.betaTitle')}</span>
+            <span class="m-small m-muted">{betaHint()}</span>
           </div>
           <Switch
             on={settings.value.betaUpdates}
-            label="Получать бета-версии"
+            label={t('settings.betaTitle')}
             onToggle={() => updateSettings({ betaUpdates: !settings.value.betaUpdates })}
           />
         </div>
@@ -364,74 +365,74 @@ export function Settings() {
       </section>
       {localServer.value.supported && <LocalServerSection />}
       <section class="m-set-group">
-        <div class="m-set-label">Сервер</div>
+        <div class="m-set-label">{t('tvSettings.server')}</div>
         <div class="m-set-row">
           <div class="m-set-text">
-            <span>{server ? server.name : 'Не выбран'}</span>
+            <span>{server ? server.name : t('settings.notChosen')}</span>
             {server && <span class="m-muted m-small">{server.url}</span>}
           </div>
           <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'connect' })}>
-            Сменить
+            {t('settings.change')}
           </button>
         </div>
         {server && (
           <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'serverSettings' })}>
-            <span>Настройки сервера</span>
+            <span>{t('serverSettings.title')}</span>
             <Icon d="M9 6l6 6l-6 6" size={20} />
           </button>
         )}
       </section>
       <section class="m-set-group">
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'sources' })}>
-          <span>Источники поиска</span>
+          <span>{t('tvSettings.sources')}</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />
         </button>
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'monitor' })}>
-          <span>Мониторинг</span>
-          <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : 'выключен'} ›</span>
+          <span>{t('monitor.title')}</span>
+          <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>
         </button>
       </section>
       <section class="m-set-group">
-        <div class="m-set-label">Телевизор</div>
+        <div class="m-set-label">{t('history.tv')}</div>
         <div class="m-set-row">
           <div class="m-set-text">
-            <span>{tv ? tv.name : 'Не выбран'}</span>
+            <span>{tv ? tv.name : t('settings.notChosen')}</span>
             {tv && <span class="m-muted m-small">{tv.ip}</span>}
           </div>
           <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'tv' })}>
-            Выбрать
+            {t('settings.choose')}
           </button>
         </div>
         <TvOmpRow />
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'install' })}>
-          <span>Установить OMP на телевизор</span>
+          <span>{t('install.assistant.title')}</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />
         </button>
       </section>
       <section class="m-set-group">
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'faq' })}>
-          <span>Вопросы и ответы</span>
+          <span>{t('common.faq')}</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />
         </button>
       </section>
       <section class="m-set-group">
-        <div class="m-set-label">О приложении</div>
+        <div class="m-set-label">{t('tvSettings.about')}</div>
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'backup' })}>
-          <span>Резервная копия</span>
+          <span>{t('backup.title')}</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />
         </button>
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'log' })}>
-          <span>Журнал ошибок</span>
+          <span>{t('log.screenTitle')}</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />
         </button>
         {activeMethods().length > 0 && (
           <button type="button" class="m-set-row m-set-pick" onClick={openDonate}>
-            <span>Поддержать OMP</span>
+            <span>{t('donate.title')}</span>
             <Icon d="M9 6l6 6l-6 6" size={20} />
           </button>
         )}
         <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(PROJECT_URL, '_system')}>
-          Страница проекта
+          {t('settings.projectPage')}
         </button>
         <button type="button" class="m-link" onClick={() => window.open(TORRSERVER_SOURCE_URL, '_system')}>
           TorrServer © YouROK, GPL-3.0
