@@ -1,5 +1,6 @@
 :root {
   --m-nav-h: 78px;
+  --m-nav-reserve: var(--m-nav-h);
   --m-mini-h: 64px;
   --bg: #0F1115;
   --panel: #181B22;
@@ -22,7 +23,7 @@ h1, h2 { font-family: 'Unbounded', 'Manrope', sans-serif; font-weight: 600; }
 
 .m-screen {
   min-height: 100vh;
-  padding: env(safe-area-inset-top) 16px calc(var(--m-nav-h) + 24px + env(safe-area-inset-bottom));
+  padding: env(safe-area-inset-top) 16px calc(var(--m-nav-reserve) + 24px + env(safe-area-inset-bottom));
 }
 
 button, .m-btn {
@@ -500,7 +501,7 @@ button, .m-btn {
 }
 
 /* ---- torrent ---- */
-.m-torrent { padding: 0 0 calc(var(--m-nav-h) + 24px + env(safe-area-inset-bottom)); gap: 0; }
+.m-torrent { padding: 0 0 calc(var(--m-nav-reserve) + 24px + env(safe-area-inset-bottom)); gap: 0; }
 .m-thead { position: relative; height: 300px; padding: calc(env(safe-area-inset-top) + 24px) 16px 0; }
 .m-thead::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 17, 21, 0.1), var(--bg) 96%); }
 .m-thead-bar, .m-thead-info { position: relative; }
@@ -605,8 +606,8 @@ button, .m-btn {
   gap: 10px;
   min-height: 0;
   /* --m-remote-gap: room between the last row and the bottom menu / the mini-player */
-  height: calc(100vh - var(--m-nav-h) - var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
-  height: calc(100dvh - var(--m-nav-h) - var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
+  height: calc(100vh - var(--m-nav-reserve) -var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
+  height: calc(100dvh - var(--m-nav-reserve) -var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
   padding: calc(env(safe-area-inset-top) + 8px) 16px 0;
   /* safety valve: controls are never clipped on short screens, landscape or with the soft keyboard */
   overflow-x: hidden;
@@ -1084,3 +1085,8 @@ button, .m-btn {
 .m-news-monitor-l { display: flex; align-items: center; gap: 10px; }
 .m-skip-toggle { min-height: 52px; }
 .m-skip-toggle .m-skip-title { font-size: 16px; }
+
+/* soft keyboard open: the tab bar and the mini player step aside, the toast drops to the bottom */
+html.m-kb-open { --m-nav-reserve: 0px; }
+html.m-kb-open .m-nav, html.m-kb-open .m-mini, html.m-kb-open .m-mini-pad { display: none; }
+html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom)); }
