@@ -931,3 +931,16 @@ button, .m-btn {
 .m-faq-q mark, .m-faq-a mark { background: rgba(245, 183, 0, 0.3); color: var(--text); /* 7.2:1 on the panel */ border-radius: 4px; padding: 0 2px; }
 .m-faq-more { align-self: flex-start; min-height: 44px; padding: 0; border: none; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 700; }
 .m-faq-detail { margin-top: 4px; }
+
+/* «Каталог»: menu on long press and selection mode */
+.m-card, .m-vrow, .m-crow { position: relative; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.m-row-wrap { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.m-row-wrap > .m-vrow, .m-row-wrap > .m-crow { flex: 1 1 auto; }
+.m-card-more { flex-shrink: 0; }
+.m-select-bar { gap: 8px; }
+.m-select-count { flex: 1 1 auto; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-select-bar .m-btn { width: auto; padding: 0 14px; flex-shrink: 0; }
+.m-check { position: absolute; top: 8px; right: 8px; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--bg); pointer-events: none; }
+.m-vrow .m-check { top: 6px; left: 36px; right: auto; }
+.m-crow .m-check { position: static; flex-shrink: 0; }
+.m-card.selected .m-poster, .m-row-wrap.selected .m-poster-row { outline: 3px solid var(--accent); outline-offset: -3px; }

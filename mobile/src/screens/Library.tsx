@@ -4,6 +4,9 @@ import { Icon, ICONS } from '../ui/Icon';
 import { Poster, qualityBadge } from '../ui/Poster';
 import { Logo } from '../../../src/ui/Logo';
 import { TvChip } from '../ui/TvChip';
+import { TorrentMenu } from '../ui/TorrentMenu';
+import { useBackHandler } from '../ui/backStack';
+import { deleteTorrents, reportDeleted } from '../lib/torrentActions';
 import { LaunchError } from '../ui/LaunchError';
 import { CatalogUnavailable } from '../ui/CatalogUnavailable';
 import { navigate } from '../nav';
@@ -44,6 +47,11 @@ function episodesText(tor: Torrent): string {
 }
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0 6 6 0 0 0-12 0zM21 21l-5-5';
+const CLOSE = 'M6 6l12 12M18 6L6 18';
+const MORE = 'M5 12h.01M12 12h.01M19 12h.01';
+const CHECK = 'M5 12.5l4.5 4.5L19 7';
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP = 10;
 
 export function Library() {
   const c = client.value;
@@ -70,6 +78,11 @@ export function Library() {
   const [pull, setPull] = useState(0);
   const [dragging, setDragging] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // selection mode (null = off) and the torrent whose menu is open; a long press that fired swallows the click after it
+  const [selected, setSelected] = useState<string[] | null>(null);
+  const [menuFor, setMenuFor] = useState<Torrent | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const press = useRef<{ timer: ReturnType<typeof setTimeout> | undefined; x: number; y: number; fired: boolean }>({ timer: undefined, x: 0, y: 0, fired: false });
   const loadRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const launch = useTvLaunch();
   progressVersion.value; // re-render when local progress changes
@@ -191,6 +204,13 @@ export function Library() {
     };
   }, []);
 
+  // switching the tab or the «Мои / Обзор» switch leaves selection mode
+  useEffect(() => {
+    setSelected(null);
+  }, [tab, mine]);
+  useBackHandler(() => setSelected(null), selected !== null);
+  useEffect(() => () => clearTimeout(press.current.timer), []);
+
   // the active server is the phone's own one and it is stopped: offer to start it right here
   const local = localServer.value;
   const canStartLocal = !!error && !!c && c.baseUrl === LOCAL_URL && local.supported && !local.running;
@@ -247,6 +267,76 @@ export function Library() {
     else empty = t('catalog.categoryEmpty');
   }
 
+  const selecting = selected !== null;
+  // only the torrents still in the list count (a refresh may drop some)
+  const chosen = selected ? selected.filter((h) => shown.some((x) => x.hash === h)) : [];
+  const toggle = (hash: string) =>
+    setSelected((cur) => (cur ? (cur.indexOf(hash) >= 0 ? cur.filter((h) => h !== hash) : cur.concat(hash)) : cur));
+  const deleteChosen = async () => {
+    if (!c || deleting || !chosen.length) return;
+    if (!window.confirm(tp('library.deleteAsk', chosen.length))) return;
+    setDeleting(true);
+    try {
+      reportDeleted(await deleteTorrents(c, chosen));
+    } finally {
+      setDeleting(false);
+      setSelected(null);
+    }
+  };
+  // long press (500 ms without moving more than 10 px) or contextmenu opens the menu; a tap opens the card or toggles the selection
+  const pressProps = (tor: Torrent) => ({
+    onPointerDown: (e: PointerEvent) => {
+      const p = press.current;
+      clearTimeout(p.timer);
+      p.fired = false;
+      if (selecting) return;
+      p.x = e.clientX;
+      p.y = e.clientY;
+      p.timer = setTimeout(() => {
+        p.timer = undefined;
+        p.fired = true;
+        setMenuFor(tor);
+      }, LONG_PRESS_MS);
+    },
+    onPointerMove: (e: PointerEvent) => {
+      const p = press.current;
+      if (p.timer && Math.hypot(e.clientX - p.x, e.clientY - p.y) > LONG_PRESS_SLOP) {
+        clearTimeout(p.timer);
+        p.timer = undefined;
+      }
+    },
+    onPointerUp: () => clearTimeout(press.current.timer),
+    onPointerCancel: () => clearTimeout(press.current.timer),
+    onContextMenu: (e: Event) => {
+      e.preventDefault();
+      clearTimeout(press.current.timer);
+      if (selecting) return;
+      press.current.fired = true;
+      setMenuFor(tor);
+    },
+    onClick: () => {
+      if (press.current.fired) {
+        press.current.fired = false;
+        return;
+      }
+      if (selecting) toggle(tor.hash);
+      else navigate({ name: 'torrent', hash: tor.hash });
+    },
+    'aria-pressed': selecting ? chosen.indexOf(tor.hash) >= 0 : undefined,
+  });
+  const moreBtn = (tor: Torrent) => (
+    <button type="button" class="m-icon-btn m-card-more" aria-label={t('library.actions')} disabled={selecting} onClick={() => setMenuFor(tor)}>
+      <Icon d={MORE} size={20} />
+    </button>
+  );
+  const mark = (tor: Torrent) =>
+    selecting && chosen.indexOf(tor.hash) >= 0 ? (
+      <span class="m-check" aria-hidden="true">
+        <Icon d={CHECK} size={16} />
+      </span>
+    ) : null;
+  const sel = (tor: Torrent) => (selecting && chosen.indexOf(tor.hash) >= 0 ? ' selected' : '');
+
   const continueOnTv = (hash: string, fileIndex: number, time: number, duration: number, label: string) =>
     launch.start({
       hash,
@@ -263,6 +353,25 @@ export function Library() {
   const armed = pull >= PULL_TRIGGER || refreshing;
   return (
     <div class="m-screen m-library" data-route="library" ref={rootRef}>
+      {selecting && mine && !isHistory ? (
+        <div class="m-lib-head m-select-bar">
+          <button type="button" class="m-icon-btn" aria-label={t('library.selectCancel')} disabled={deleting} onClick={() => setSelected(null)}>
+            <Icon d={CLOSE} size={20} />
+          </button>
+          <span class="m-select-count" role="status">{t('library.selected', { n: chosen.length })}</span>
+          <button
+            type="button"
+            class="m-btn m-btn-secondary m-btn-sm"
+            disabled={deleting}
+            onClick={() => setSelected(chosen.length === shown.length ? [] : shown.map((x) => x.hash))}
+          >
+            {chosen.length === shown.length && shown.length > 0 ? t('library.selectNone') : t('library.selectAll')}
+          </button>
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm m-danger" disabled={deleting || !chosen.length} onClick={() => void deleteChosen()}>
+            {t('library.deleteN', { n: chosen.length })}
+          </button>
+        </div>
+      ) : (
       <div class="m-lib-head">
         <div class="m-lib-brand">
           <Logo size={28} />
@@ -301,6 +410,7 @@ export function Library() {
           </button>
         )}
       </div>
+      )}
       <div class="m-seg" role="tablist" aria-label={t('nav.library')}>
         {(['mine', 'discover'] as const).map((m) => (
           <button
@@ -486,35 +596,43 @@ export function Library() {
                   const eps = episodesText(t);
                   const q = qualityBadge(titleOf(t));
                   return (
-                    <button type="button" class="m-vrow" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
-                      <Poster torrent={t} class="m-poster-row" />
-                      <span class="m-vrow-text">
-                        <span class="m-card-title">{titleOf(t)}</span>
-                        <span class="m-muted m-small m-vrow-meta">
-                          <span>{formatBytes(t.torrent_size || 0)}</span>
-                          {q && <span class="m-badge-inline">{q}</span>}
-                          {eps && <span>{eps}</span>}
+                    <div class={'m-row-wrap' + sel(t)} key={t.hash}>
+                      <button type="button" class="m-vrow" {...pressProps(t)}>
+                        <Poster torrent={t} class="m-poster-row" />
+                        {mark(t)}
+                        <span class="m-vrow-text">
+                          <span class="m-card-title">{titleOf(t)}</span>
+                          <span class="m-muted m-small m-vrow-meta">
+                            <span>{formatBytes(t.torrent_size || 0)}</span>
+                            {q && <span class="m-badge-inline">{q}</span>}
+                            {eps && <span>{eps}</span>}
+                          </span>
                         </span>
-                      </span>
-                      <Icon d="M9 6l6 6-6 6" size={18} />
-                    </button>
+                      </button>
+                      {moreBtn(t)}
+                    </div>
                   );
                 })}
               </div>
             ) : view === 'compact' ? (
               <div class="m-vlist m-clist">
                 {shown.map((t) => (
-                  <button type="button" class="m-crow" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
-                    <span class="m-crow-title">{titleOf(t)}</span>
-                    <span class="m-muted m-small m-crow-size">{formatBytes(t.torrent_size || 0)}</span>
-                  </button>
+                  <div class={'m-row-wrap' + sel(t)} key={t.hash}>
+                    <button type="button" class="m-crow" {...pressProps(t)}>
+                      {mark(t)}
+                      <span class="m-crow-title">{titleOf(t)}</span>
+                      <span class="m-muted m-small m-crow-size">{formatBytes(t.torrent_size || 0)}</span>
+                    </button>
+                    {moreBtn(t)}
+                  </div>
                 ))}
               </div>
             ) : (
               <div class={'m-grid m-view-' + view}>
                 {shown.map((t) => (
-                  <button type="button" class="m-card" key={t.hash} onClick={() => navigate({ name: 'torrent', hash: t.hash })}>
+                  <button type="button" class={'m-card' + sel(t)} key={t.hash} {...pressProps(t)}>
                     <Poster torrent={t} />
+                    {mark(t)}
                     <span class="m-card-title">{titleOf(t)}</span>
                     {view === 'large' && <span class="m-muted m-small">{formatBytes(t.torrent_size || 0)}</span>}
                   </button>
@@ -529,6 +647,7 @@ export function Library() {
         <Discover />
       )}
       {launch.sheet}
+      {menuFor && <TorrentMenu tor={menuFor} onClose={() => setMenuFor(null)} onSelect={(h) => setSelected([h])} />}
     </div>
   );
 }

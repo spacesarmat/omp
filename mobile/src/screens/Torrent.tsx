@@ -31,9 +31,10 @@ import type { SkipPrefs } from '../../../src/lib/journal';
 import { posterColor, shortTitle } from '../../../src/lib/libraryView';
 import { loadWatch, saveWatch } from '../../../src/store/journal';
 import { isWatchedSeries } from '../../../src/monitor/newEpisodes';
-import { findingsOf, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
+import { findingsOf, removeFindings } from '../../../src/monitor/subs';
 import { EPISODES_ID } from '../../../src/monitor/types';
 import { reloadMonitor } from '../monitor/ui';
+import { deleteTorrents } from '../lib/torrentActions';
 import { displayTitle } from '../../../src/lib/torrentName';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 
@@ -435,18 +436,14 @@ export function Torrent({ hash }: { hash: string }) {
 
   const remove = () => {
     if (!window.confirm(t('torrent.screen.deleteAsk', { title: shortTitle(title) }))) return;
-    c.remove(hash).then(
-      () => {
-        torrents.value = torrents.value.filter((x) => x.hash !== hash);
-        // its «New episodes» card can't be replaced any more
-        pruneEpisodeFindings((h) => h.toLowerCase() !== hash.toLowerCase());
-        reloadMonitor();
-        void refreshTorrents(c).catch(() => {});
-        const r = currentRoute.value;
-        if (r.name === 'torrent' && r.hash === hash) goBack();
-      },
-      (e) => showToast(errorMessage(e)),
-    );
+    void deleteTorrents(c, [hash]).then((r) => {
+      if (r.failed.length) {
+        showToast(errorMessage(r.firstError));
+        return;
+      }
+      const cur = currentRoute.value;
+      if (cur.name === 'torrent' && cur.hash === hash) goBack();
+    });
   };
 
   return (
