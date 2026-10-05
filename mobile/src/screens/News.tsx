@@ -3,6 +3,7 @@ import { t } from '../../../src/i18n';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
+import { Icon, ICONS } from '../ui/Icon';
 import { SubSheet } from '../ui/SubSheet';
 import { ReplaceSheet, libraryTorrentOf } from '../ui/ReplaceSheet';
 import { useResultRows } from '../ui/useResultRows';
@@ -357,8 +358,12 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
         );
       })}
       <div class="m-muted m-small">{settings.better ? t('news.betterOn') : t('news.betterOff')}</div>
-      <button type="button" class="m-link" onClick={() => navigate({ name: 'monitor' })}>
-        {t('news.monitorSettings')}
+      <button type="button" class="m-set-row m-set-pick m-news-monitor" data-monitor-row onClick={() => navigate({ name: 'monitor' })}>
+        <span class="m-news-monitor-l">
+          <Icon d={ICONS.settings} size={20} />
+          <span>{t('news.monitorSettings')}</span>
+        </span>
+        <span class="m-muted" aria-hidden="true">›</span>
       </button>
       {editing && <SubSheet onClose={() => setEditing(false)} />}
       {replace && (
@@ -425,6 +430,9 @@ export function News({ seg, finding, watch }: { seg?: Seg; finding?: string; wat
         ) : (
           <TvChip />
         )}
+        <button type="button" class="m-icon-btn" data-monitor-gear aria-label={t('news.monitorSettings')} onClick={() => navigate({ name: 'monitor' })}>
+          <Icon d={ICONS.settings} />
+        </button>
       </div>
       <div class="m-seg" role="tablist" aria-label={t('news.title')}>
         <button type="button" role="tab" aria-selected={current === 'feed'} class={current === 'feed' ? 'on' : ''} onClick={() => pick('feed')}>

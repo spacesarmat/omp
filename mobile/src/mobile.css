@@ -970,3 +970,5 @@ button, .m-btn {
 .m-vrow .m-check { top: 6px; left: 36px; right: auto; }
 .m-crow .m-check { position: static; flex-shrink: 0; }
 .m-card.selected .m-poster, .m-row-wrap.selected .m-poster-row { outline: 3px solid var(--accent); outline-offset: -3px; }
+
+.m-news-monitor-l { display: flex; align-items: center; gap: 10px; }

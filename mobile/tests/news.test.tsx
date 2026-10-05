@@ -412,6 +412,27 @@ describe('«Новое» · Подписки', () => {
   });
 });
 
+describe('«Новое» · Настройки мониторинга', () => {
+  it('a header gear and a row button at the bottom both open the monitoring settings', async () => {
+    await mount({ seg: 'subs' });
+    const gear = el.querySelector('[data-monitor-gear]')!;
+    expect(gear.getAttribute('aria-label')).toBe('Настройки мониторинга');
+    expect(gear.classList.contains('m-icon-btn')).toBe(true);
+    const rowBtn = el.querySelector('[data-monitor-row]')!;
+    expect(rowBtn.textContent).toContain('Настройки мониторинга');
+    click(gear);
+    expect(currentRoute.value).toEqual({ name: 'monitor' });
+    resetTo({ name: 'news' });
+    click(rowBtn);
+    expect(currentRoute.value).toEqual({ name: 'monitor' });
+  });
+
+  it('the gear is there on the feed too', async () => {
+    await mount();
+    expect(el.querySelector('[data-monitor-gear]')).toBeTruthy();
+  });
+});
+
 describe('News in English', () => {
   const EN = (p: Partial<SourceResult>) => row({ Size: '18.2 GB', ...p });
   beforeEach(() => applyLanguageSetting('en'));
@@ -451,7 +472,8 @@ describe('News in English', () => {
     await mount({ seg: 'subs' });
     expect(byText('Check now')).toBeTruthy();
     expect(byText('+ New subscription')).toBeTruthy();
-    expect(byText('Monitoring settings')).toBeTruthy();
+    expect(el.querySelector('[data-monitor-gear]')!.getAttribute('aria-label')).toBe('Monitoring settings');
+    expect(el.querySelector('[data-monitor-row]')!.textContent).toContain('Monitoring settings');
     const text = el.textContent!;
     expect(text).toContain('Not checked yet');
     expect(text).toContain('No subscriptions yet. OMP will tell you when new releases appear for a query.');
