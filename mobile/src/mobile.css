@@ -190,6 +190,7 @@ button, .m-btn {
 /* «Обходить проверку Cloudflare»: the warning under the switch (mockup PhoneSite) */
 .m-cf-warn { padding: 10px 12px; border-radius: 10px; background: #3A3320; color: #F5D77A; font-size: 12px; line-height: 1.45; }
 .m-accent { color: var(--accent); }
+.m-badge-beta { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: rgba(245, 183, 0, .18); color: var(--accent); font-size: 11px; }
 .m-tv-tip { margin-top: auto; }
 
 /* ---- toast ---- */

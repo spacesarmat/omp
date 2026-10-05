@@ -19,6 +19,8 @@ export interface AppSettings {
   libraryView: LibraryView;
   librarySort: LibrarySort;
   updateCheck: boolean;
+  /** «Получать бета-версии»: the beta feed (update-beta.json); off = a beta stays until the next release. */
+  betaUpdates: boolean;
   historyFilter: HistoryFilter;
   /** Android TV: «Плеер» — Авто / Встроенный / VLC. */
   playerEngine: PlayerEngineSetting;
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   libraryView: 'large',
   librarySort: 'new',
   updateCheck: true,
+  betaUpdates: false,
   historyFilter: 'all',
   playerEngine: 'auto',
 };

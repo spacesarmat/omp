@@ -283,6 +283,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .update-block h2 { margin: 0 0 16px; color: var(--text); font-weight: 700; }
 .update-actions { margin: 16px 0; }
 .update-status { margin-bottom: 10px; font-size: 24px; }
+.update-title { font-size: 30px; font-weight: 700; margin-bottom: 6px; }
+.badge-beta { display: inline-block; margin-left: 10px; padding: 2px 10px; border-radius: 8px; background: rgba(245, 183, 0, .18); color: #F5B700; font-size: 20px; }
 .update-row { display: flex; align-items: center; }
 .update-row .qr { flex-shrink: 0; margin-right: 32px; border-radius: 12px; }
 .update-text { margin: 0; font-size: 22px; line-height: 1.6; color: var(--muted); }

@@ -83,12 +83,22 @@ jobs:
           for F in "$IPK" "$APK64" "$APK32" "$APK"; do
             printf 'SHA-256 `%s`: `%s`\n' "$(basename "$F")" "$(sha256sum "$F" | cut -d' ' -f1)" >> notes.md
           done
-          gh release create "$TAG" "$IPK" "$APK64" "$APK32" "$APK" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $TAG" --notes-file notes.md --generate-notes
+          # a beta (vX.Y.Z-beta.N) is a pre-release: never «latest», never the Homebrew repository
+          EXTRA=""
+          case "$TAG" in *-beta.*) EXTRA="--prerelease --latest=false" ;; esac
+          gh release create "$TAG" "$IPK" "$APK64" "$APK32" "$APK" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $TAG" --notes-file notes.md --generate-notes $EXTRA
       - name: Publish update feed to gh-pages
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cd build/hb
+          # gh-pages holds every feed: a release replaces them all (the beta ones too), a beta only its two
+          git clone -q --depth 1 -b gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" build/pages || mkdir -p build/pages
+          rm -rf build/pages/.git
+          case "$TAG" in
+            *-beta.*) cp build/hb/update-beta.json build/hb/update-android-beta.json build/pages/ ;;
+            *) cp -r build/hb/. build/pages/ ;;
+          esac
+          cd build/pages
           git init -q -b gh-pages
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -98,6 +108,8 @@ jobs:
       # Telegram channel post (skipped without the bot token): every build as a reply; files over the 50 MB bot
       # limit are linked (and named in the log) so the owner can forward them by hand. A failure must not fail the release.
       - name: Post to Telegram
+        # betas are not posted: the channel gets releases only
+        if: ${{ !contains(inputs.tag || github.ref_name, '-beta.') }}
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

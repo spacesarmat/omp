@@ -99,3 +99,28 @@ describe('checkForUpdate on Android TV', () => {
     }
   });
 });
+
+describe('beta channel', () => {
+  const BASE = 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/';
+  it('reads update-beta.json with «Получать бета-версии» and offers a beta', async () => {
+    updateSettings({ betaUpdates: true });
+    const f = mockFetch(() => ({ body: feed('0.16.0-beta.1') }));
+    expect(await checkForUpdate({ manual: true, now: NOW, current: '0.15.3' })).toBe('update');
+    expect(f.mock.calls[0][0]).toBe(BASE + 'update-beta.json?t=' + NOW);
+    expect(latestUpdate.value!.version).toBe('0.16.0-beta.1');
+  });
+
+  it('a beta switched off stays until a release newer than itself', async () => {
+    const f = mockFetch(() => ({ body: feed('0.15.4') }));
+    expect(await checkForUpdate({ manual: true, now: NOW, current: '0.16.0-beta.2' })).toBe('latest');
+    expect(f.mock.calls[0][0]).toBe(BASE + 'update.json?t=' + NOW);
+    mockFetch(() => ({ body: feed('0.16.0') }));
+    expect(await checkForUpdate({ manual: true, now: NOW, current: '0.16.0-beta.2' })).toBe('update');
+  });
+
+  it('the beta feed carrying the release replaces the beta', async () => {
+    updateSettings({ betaUpdates: true });
+    mockFetch(() => ({ body: feed('0.16.0') }));
+    expect(await checkForUpdate({ manual: true, now: NOW, current: '0.16.0-beta.2' })).toBe('update');
+  });
+});
