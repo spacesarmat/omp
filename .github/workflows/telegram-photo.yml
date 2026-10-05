@@ -1,0 +1,29 @@
+# Replaces the picture of an already posted release in the Telegram channel (caption, buttons and files stay).
+# Run by hand: tag of the release and the id of its post (the number in t.me/<channel>/<id>).
+name: Telegram release picture
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, e.g. v0.15.0
+        required: true
+      message_id:
+        description: Post id in the channel
+        required: true
+permissions:
+  contents: read
+jobs:
+  photo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Replace the picture
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+          TAG: ${{ inputs.tag }}
+          MESSAGE_ID: ${{ inputs.message_id }}
+        run: node scripts/telegram-post.mjs "$TAG" --edit-photo "$MESSAGE_ID"

@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 // @ts-ignore
 import { join } from 'node:path';
-import { postRelease } from '../../scripts/telegram-post.mjs';
+import { postRelease, replacePhoto } from '../../scripts/telegram-post.mjs';
 import { UPLOAD_MAX } from '../../scripts/telegram-lib.mjs';
 
 const TOKEN = '123:SECRET-TOKEN';
@@ -47,11 +47,13 @@ describe('postRelease', () => {
     const logs: string[] = [];
     const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: (s: string) => logs.push(s) });
     expect(failed).toBe(0);
-    expect(names(calls)).toEqual(['sendPhoto', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMessage']);
+    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMessage']);
+    expect(calls[1].form.get('message_id')).toBe('7');
+    expect(calls[1].form.get('disable_notification')).toBe('true');
     expect(String(calls[0].form.get('caption'))).toContain('• Первое');
     expect(String(calls[0].form.get('reply_markup'))).toContain('OMP-1.2.3-arm64.apk');
-    expect(JSON.parse(String(calls[1].form.get('reply_parameters')))).toEqual({ message_id: 7 });
-    const text = String(calls[3].form.get('text'));
+    expect(JSON.parse(String(calls[2].form.get('reply_parameters')))).toEqual({ message_id: 7 });
+    const text = String(calls[4].form.get('text'));
     expect(text).toContain('Файл OMP-1.2.3-arm64.apk больше 50 МБ — скачать: https://github.com/spacesarmat/omp/releases/download/v1.2.3/OMP-1.2.3-arm64.apk');
     expect(text).toContain('OMP-1.2.3.apk');
     expect(logs.filter((l) => l.includes('forward it manually'))).toHaveLength(2);
@@ -62,11 +64,13 @@ describe('postRelease', () => {
     const calls: Call[] = [];
     const logs: string[] = [];
     const refuse = (m: string) =>
-      m === 'sendDocument' ? new Response(JSON.stringify({ ok: false, description: 'Request Entity Too Large' }), { status: 413 }) : null;
+      m === 'sendDocument' ? new Response(JSON.stringify({ ok: false, description: 'Request Entity Too Large' }), { status: 413 })
+        : m === 'pinChatMessage' ? new Response(JSON.stringify({ ok: false, description: 'not enough rights' }), { status: 400 }) : null;
     const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, refuse) as any, log: (s: string) => logs.push(s) });
     expect(failed).toBe(1);
-    expect(names(calls)).toEqual(['sendPhoto', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendMessage']);
-    expect(String(calls[2].form.get('text'))).toContain('OMP-1.2.3-armv7.apk');
+    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendMessage']);
+    expect(String(calls[3].form.get('text'))).toContain('OMP-1.2.3-armv7.apk');
+    expect(logs.some((l) => l.includes('pinChatMessage'))).toBe(true);
     expect(logs).toContain('Telegram: OMP-1.2.3-arm64.apk not found, skipped');
     expect(logs.some((l) => l.includes('forward it manually'))).toBe(true);
     expect(logs.join('\n')).not.toContain(TOKEN);
@@ -85,5 +89,23 @@ describe('postRelease', () => {
     }
     expect(msg).toBe('Telegram sendPhoto: network error');
     expect(msg).not.toContain(TOKEN);
+  });
+});
+
+describe('replacePhoto', () => {
+  it('swaps the picture of a posted release and keeps its caption and buttons', async () => {
+    const root = setup({});
+    mkdirSync(join(root, 'docs/screenshots'), { recursive: true });
+    writeFileSync(join(root, 'docs/screenshots/release-1.2.3.png'), 'cover');
+    const calls: Call[] = [];
+    await replacePhoto({ tag: 'v1.2.3', messageId: 8, root, token: TOKEN, chat: '@omp', fetch: fakeFetch(calls) as any, log: () => {} });
+    expect(names(calls)).toEqual(['editMessageMedia', 'pinChatMessage']);
+    const f = calls[0].form;
+    expect(f.get('message_id')).toBe('8');
+    const media = JSON.parse(f.get('media') as string);
+    expect(media).toMatchObject({ type: 'photo', media: 'attach://photo', parse_mode: 'HTML' });
+    expect(media.caption).toContain('Первое');
+    expect(JSON.parse(f.get('reply_markup') as string).inline_keyboard.length).toBeGreaterThan(0);
+    expect((f.get('photo') as File).name).toBe('release-1.2.3.png');
   });
 });
