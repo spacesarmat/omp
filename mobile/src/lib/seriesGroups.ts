@@ -88,16 +88,49 @@ function makeGroup(key: string, members: Torrent[]): SeriesGroup {
   return { kind: 'series', key, members, seasons, lead };
 }
 
+/** Every name variant of a series torrent («Звёздный путь…», «Star Trek…»); [] for a film. */
+function namesOf(tor: Torrent): string[] {
+  return isSeries(tor) ? seriesNames(displayTitle(tor)) : [];
+}
+
+/**
+ * The series of each torrent: torrents sharing any name variant are one series (a release titled only in English
+ * joins the ones titled «Русское / English»). The key of a series is the first name of its first torrent in the list;
+ * '' for a film.
+ */
+function seriesKeys(list: Torrent[]): string[] {
+  const parent: number[] = list.map((_, i) => i);
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]];
+      i = parent[i];
+    }
+    return i;
+  };
+  const owner: { [name: string]: number } = {};
+  const names = list.map(namesOf);
+  names.forEach((ns, i) => {
+    ns.forEach((n) => {
+      if (owner[n] === undefined) owner[n] = i;
+      else {
+        const a = find(owner[n]);
+        const b = find(i);
+        if (a !== b) parent[Math.max(a, b)] = Math.min(a, b);
+      }
+    });
+  });
+  return names.map((ns, i) => (ns.length ? names[find(i)][0] : ''));
+}
+
 /**
  * The list as cards: torrents of the same series become one group at the place of the first of them; a series with
  * one torrent stays a plain card. With a query a group is kept (whole) when one of its torrents matches.
  */
 export function groupLibrary(list: Torrent[], query = ''): LibraryItem[] {
   const byKey: { [k: string]: Torrent[] } = {};
-  const keys: string[] = [];
-  list.forEach((tor) => {
-    const k = seriesKey(tor);
-    keys.push(k);
+  const keys = seriesKeys(list);
+  list.forEach((tor, i) => {
+    const k = keys[i];
     if (!k) return;
     (byKey[k] = byKey[k] || []).push(tor);
   });
@@ -119,10 +152,19 @@ export function groupLibrary(list: Torrent[], query = ''): LibraryItem[] {
   return out;
 }
 
-/** The group of `key` in the whole library (the series screen); null when fewer than one torrent is left. */
+/**
+ * The group of `key` in the whole library (the series screen): the series one of whose torrents has that name;
+ * null when none is left.
+ */
 export function findGroup(list: Torrent[], key: string): SeriesGroup | null {
-  const members = list.filter((x) => seriesKey(x) === key);
-  return members.length ? makeGroup(key, members) : null;
+  const keys = seriesKeys(list);
+  let own = '';
+  for (let i = 0; i < list.length && !own; i++) {
+    if (keys[i] && namesOf(list[i]).indexOf(key) >= 0) own = keys[i];
+  }
+  if (!own) return null;
+  const members = list.filter((_, i) => keys[i] === own);
+  return makeGroup(own, members);
 }
 
 /** A lone series torrent as a group of one (its TMDB lookup and tile badge); null for a film. */

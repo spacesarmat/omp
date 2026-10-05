@@ -574,6 +574,12 @@ button, .m-btn {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
+  /* a <span> chip (an active filter) centres its text like a <button> does */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
 .m-chip.on { background: var(--accent); color: var(--bg); font-weight: 700; }
 .m-chip-static { pointer-events: none; }
