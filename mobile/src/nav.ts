@@ -32,7 +32,9 @@ export type MRoute =
   | { name: 'flaresolverr' }
   | { name: 'sourceSite'; id: string }
   /** A TMDB title card from «Обзор» (`TitleCard`). */
-  | { name: 'title'; kind: 'movie' | 'tv'; id: number };
+  | { name: 'title'; kind: 'movie' | 'tv'; id: number }
+  /** «Мои» → the torrents of one series (`key` from seriesGroups), by season. */
+  | { name: 'series'; key: string };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);
