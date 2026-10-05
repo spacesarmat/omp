@@ -166,18 +166,48 @@ object SiteSession {
 }
 
 /**
- * Where the visible login page may go (pure, JVM-tested): the site's hosts (its mirrors and their subdomains),
- * Cloudflare's challenge pages and the captcha pages a login form may open in the main frame (hCaptcha, Google's
- * reCAPTCHA under /recaptcha/ only) — nothing else, so the sheet never becomes a browser for another site.
+ * Where the visible login page may go (pure, JVM-tested). An allow-list, not a list of ads:
+ *  - the site's own hosts exactly as the page sends them (every mirror: kinozal.me, kinozal.guru, kinozal.tv) and their
+ *    www. form (www.kinozal.tv; a host sent as www.x also allows x). The login page, its form target and the check page
+ *    are paths on those hosts, so a sign-in never needs another subdomain of the site;
+ *  - Cloudflare's challenge pages and the captcha pages a login form may open in the main frame (hCaptcha and its
+ *    subdomains, Google's reCAPTCHA under /recaptcha/ only).
+ * Any other subdomain of the site is refused: NNM-Club's click-under ad sends the first tap on the page to
+ * under.nnmclub.to/clicks/…, an empty ad page that left the sheet without a form. A /clicks/ path is refused on every
+ * host, the site's own included. Nothing else, so the sheet never becomes a browser for another site.
  */
 object LoginNavigation {
     private val CAPTCHA_HOSTS = setOf("challenges.cloudflare.com", "hcaptcha.com")
     private val RECAPTCHA_HOSTS = setOf("www.google.com", "google.com", "www.recaptcha.net", "recaptcha.net")
+    private const val AD_PATH = "/clicks/"
+
+    private fun clean(host: String?): String? = host?.lowercase()?.trimEnd('.')?.takeIf { it.isNotEmpty() }
+
+    private fun bare(host: String): String = host.removePrefix("www.")
+
+    private fun adPath(path: String?): Boolean = (path ?: "").startsWith(AD_PATH, ignoreCase = true)
+
+    /** [host] is one of [siteHosts] or its www. form (no other subdomain). */
+    fun siteHost(siteHosts: Collection<String>, host: String?): Boolean {
+        val h = clean(host) ?: return false
+        return siteHosts.any { s -> clean(s)?.let { bare(it) == bare(h) } == true }
+    }
+
+    /**
+     * A request the login page gets an empty answer for (its frames and scripts, not only navigations): a /clicks/ path
+     * on the site, or a subdomain of the site that is not one of its hosts (under.nnmclub.to). Other hosts (a CDN, the
+     * captcha's scripts) load as usual.
+     */
+    fun ad(siteHosts: Collection<String>, host: String?, path: String?): Boolean {
+        val h = clean(host) ?: return false
+        if (!SiteSession.onSite(h, siteHosts)) return false
+        return adPath(path) || !siteHost(siteHosts, h)
+    }
 
     fun allowed(siteHosts: Collection<String>, host: String?, path: String?): Boolean {
-        val h = host?.lowercase()?.trimEnd('.') ?: return false
-        if (h.isEmpty()) return false
-        if (SiteSession.onSite(h, siteHosts)) return true
+        val h = clean(host) ?: return false
+        if (adPath(path)) return false
+        if (siteHost(siteHosts, h)) return true
         if (h in CAPTCHA_HOSTS || h.endsWith(".hcaptcha.com")) return true
         return h in RECAPTCHA_HOSTS && (path ?: "").startsWith("/recaptcha/")
     }

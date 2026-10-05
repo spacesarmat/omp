@@ -14,6 +14,7 @@ import android.webkit.WebStorage
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import java.io.ByteArrayInputStream
 
 /** [CloudflareSolver.Scheduler] on the main looper (WebView lives there). */
 class MainScheduler : CloudflareSolver.Scheduler {
@@ -38,6 +39,8 @@ class WebViewCloudflareBrowser(
     private val visible: Boolean = false,
     /** The browser login: where the visible page may go (host, path; [LoginNavigation]); null = the Cloudflare check rule. */
     private val navigation: ((String?, String?) -> Boolean)? = null,
+    /** The browser login: requests of the page answered empty (host, path; [LoginNavigation.ad]); null = none. */
+    private val ads: ((String?, String?) -> Boolean)? = null,
 ) : CloudflareBrowser {
     private var web: WebView? = null
     private var rootHost: String? = null
@@ -53,6 +56,8 @@ class WebViewCloudflareBrowser(
     @Volatile
     private var overflow = false
     private var startUrl: String? = null
+    /** Reloads of the login page since it was last on screen ([backToLogin]). */
+    private var restarts = 0
 
     private fun remember(url: String?) {
         if (url == null) return
@@ -85,6 +90,14 @@ class WebViewCloudflareBrowser(
             javaScriptCanOpenWindowsAutomatically = false
             setSupportMultipleWindows(false)
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            if (visible) {
+                // the login pages are desktop layouts wider than the sheet: the whole width fits, zoom to read
+                useWideViewPort = true
+                loadWithOverviewMode = true
+                setSupportZoom(true)
+                builtInZoomControls = true
+                displayZoomControls = false
+            }
         }
         w.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -93,8 +106,17 @@ class WebViewCloudflareBrowser(
                 // the visible page stays on the site (and Cloudflare's challenge pages): no browsing elsewhere in OMP
                 if (!visible) return false
                 val nav = navigation
-                // the login page: subframe navigations that reach here are held to the same rule (best effort)
-                if (nav != null) return !nav(request.url.host, request.url.path)
+                if (nav != null) {
+                    // the login page: subframe navigations that reach here are held to the same rule (best effort)
+                    if (nav(request.url.host, request.url.path)) return false
+                    if (request.isForMainFrame) {
+                        // a refused redirect (or a page already left) can leave the document blank: the login page again
+                        val current = view.url?.let { Uri.parse(it) }
+                        if (request.isRedirect || current == null || !nav(current.host, current.path)) view.post { backToLogin(view) }
+                        events.onBlocked()
+                    }
+                    return true
+                }
                 return request.isForMainFrame && !VisibleNavigation.allowed(rootHost, request.url.host)
             }
 
@@ -108,15 +130,25 @@ class WebViewCloudflareBrowser(
                 // a navigation shouldOverrideUrlLoading never saw (a form POST): stopped, back to the login page
                 if (!nav(uri.host, uri.path)) {
                     view.stopLoading()
-                    startUrl?.let { view.loadUrl(it) }
+                    backToLogin(view)
                     events.onBlocked()
                 }
             }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                // read-only: the request goes on to the network as usual
+                // the login page: the site's ad frames and scripts (under.nnmclub.to, /clicks/…) get an empty answer; the
+                // main frame is left to the navigation rule (a refused page goes back to the login page, never blank)
+                val ad = ads
+                if (ad != null && visible && !request.isForMainFrame && ad(request.url.host, request.url.path)) return empty()
+                // read-only otherwise: the request goes on to the network as usual
                 remember(request.url.toString())
                 return null
+            }
+
+            override fun onPageCommitVisible(view: WebView, url: String?) {
+                // a login page on screen again: the next refused navigation may bring it back once more
+                val uri = url?.let { Uri.parse(it) } ?: return
+                if (navigation?.invoke(uri.host, uri.path) == true) restarts = 0
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
@@ -133,6 +165,17 @@ class WebViewCloudflareBrowser(
         remember(url)
         w.loadUrl(url)
     }
+
+    /** Reloads the login page after a refused navigation, at most [MAX_RESTARTS] times in a row (no reload loop). */
+    private fun backToLogin(view: WebView) {
+        if (web !== view) return
+        val url = startUrl ?: return
+        if (restarts >= MAX_RESTARTS) return
+        restarts++
+        view.loadUrl(url)
+    }
+
+    private fun empty(): WebResourceResponse = WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
 
     override fun probe(result: (String?) -> Unit) {
         val w = web ?: return result(null)
@@ -185,6 +228,7 @@ class WebViewCloudflareBrowser(
 
     companion object {
         const val MAX_SEEN = 500
+        const val MAX_RESTARTS = 3
     }
 }
 
