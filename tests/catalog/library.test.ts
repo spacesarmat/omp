@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { libraryKey, libraryIndex, inLibrary, seasonIndex, inLibrarySeason } from '../../src/catalog/library';
+import { libraryKey, libraryIndex, inLibrary, seasonIndex, inLibrarySeason, librarySeasonHash } from '../../src/catalog/library';
 
 describe('library matching', () => {
   it('libraryKey normalises case, yo, punctuation and adds the year', () => {
@@ -49,5 +49,19 @@ describe('season matching', () => {
     const idx = seasonIndex([{ title: 'Frost Pass S02 1080p' }]);
     expect(inLibrarySeason(idx, show, 2)).toBe(true);
     expect(inLibrarySeason(idx, { title: 'Тёплый перевал', original: 'Warm Pass' }, 2)).toBe(false);
+  });
+
+  it('keeps the hash of the first torrent with the season', () => {
+    const idx = seasonIndex([
+      { title: 'Ледяной перевал WEB-DL', hash: 'h0' },
+      { title: 'Ледяной перевал / Frost Pass / Сезоны: 1-2 WEB-DL', hash: 'h1' },
+      { title: 'Frost Pass S02 2160p', hash: 'h2' },
+      { title: 'Ледяной перевал (2026) 3 сезон WEB-DL', hash: 'h3' },
+    ]);
+    expect(librarySeasonHash(idx, show, 1)).toBe('h1');
+    expect(librarySeasonHash(idx, show, 2)).toBe('h1');
+    expect(librarySeasonHash(idx, show, 3)).toBe('h3');
+    expect(librarySeasonHash(idx, show, 4)).toBe('');
+    expect(librarySeasonHash(idx, { title: 'Другой', original: 'Frost Pass' }, 2)).toBe('h1');
   });
 });

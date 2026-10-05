@@ -1072,6 +1072,11 @@ export const en: EnDict<typeof ru> = {
     season: 'Season {n}',
     airing: 'airing: {a} of {b}',
     find: 'Find',
+    seasonChip: 'Season {n}',
+    findSeason: 'Find torrents for the season',
+    openInLibrary: 'Open in library',
+    episodesError: 'Could not load the episodes',
+    noEpisodes: 'No episodes yet',
   },
   catalog: {
     querySeason: 'season {n}',

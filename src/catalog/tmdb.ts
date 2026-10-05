@@ -11,6 +11,8 @@ export interface Person { name: string; photo: string; role: string; }
 export interface Season { number: number; episodes: number; year: number; aired: number; }
 export interface CatalogCard extends CatalogTitle { backdrop: string; genres: string[]; runtime: number; overview: string; cast: Person[]; seasons: Season[]; airing: boolean; }
 export interface TmdbEndpoint { base: string; key: string; images: string; }
+export interface Episode { n: number; title: string; airDate: string; runtime: number; overview: string; }
+export interface SeasonDetails { number: number; name: string; airDate: string; overview: string; episodes: Episode[]; }
 
 function withScheme(u: string | undefined, dflt: string): string {
   const s = (u || '').trim().replace(/\/+$/, '');
@@ -51,6 +53,10 @@ export function searchUrl(e: TmdbEndpoint, query: string, page: number): string 
 
 export function cardUrl(e: TmdbEndpoint, kind: Kind, id: number): string {
   return url(e, kind + '/' + id, { append_to_response: 'credits', include_image_language: lang.peek() === 'en' ? 'en,null' : 'ru,null,en' });
+}
+
+export function seasonUrl(e: TmdbEndpoint, id: number, season: number): string {
+  return url(e, 'tv/' + id + '/season/' + season, {});
 }
 
 export function imageUrl(e: TmdbEndpoint, path: unknown, size: 'w300' | 'w780' | 'w185'): string {
@@ -135,6 +141,49 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
     seasons: seasons,
     airing: kind === 'tv' && (o.in_production === true || !!o.next_episode_to_air),
   };
+}
+
+/** The text trimmed and cut to `max` characters. */
+function text(v: unknown, max: number): string {
+  const s = str(v);
+  return s.length > max ? s.slice(0, max).replace(/\s+$/, '') : s;
+}
+
+/** 'YYYY-MM-DD' or ''. */
+function date(v: unknown): string {
+  const s = str(v);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+}
+
+const MAX_EPISODES = 200;
+
+/**
+ * A season of a series (TMDB tv/{id}/season/{n}): its name, date, overview and up to 200 episodes in order.
+ * `season` is the asked number, used when the answer has none; null for a non-object or an error body.
+ */
+export function sanitizeSeason(raw: unknown, season: number): SeasonDetails | null {
+  const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { [k: string]: unknown }) : null;
+  if (!o || o.success === false) return null;
+  const own = o.season_number;
+  const num = typeof own === 'number' && isFinite(own) && own >= 0 ? Math.floor(own) : season;
+  const episodes: Episode[] = [];
+  const list = Array.isArray(o.episodes) ? (o.episodes as unknown[]) : [];
+  for (let i = 0; i < list.length && episodes.length < MAX_EPISODES; i++) {
+    const x = list[i] && typeof list[i] === 'object' ? (list[i] as { [k: string]: unknown }) : null;
+    if (!x) continue;
+    const en = Math.floor(n(x.episode_number));
+    if (en <= 0) continue;
+    const rt = Math.round(n(x.runtime));
+    episodes.push({
+      n: en,
+      title: text(x.name, 200),
+      airDate: date(x.air_date),
+      runtime: rt > 0 && rt < 1000 ? rt : 0,
+      overview: text(x.overview, 1500),
+    });
+  }
+  episodes.sort((a, b) => a.n - b.n);
+  return { number: num, name: text(o.name, 100), airDate: date(o.air_date), overview: text(o.overview, 1500), episodes: episodes };
 }
 
 // The season word is a search query for Russian trackers, not UI copy: it stays Russian even in the English UI.

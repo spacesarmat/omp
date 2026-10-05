@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { endpointOf, noveltiesUrl, searchUrl, cardUrl, imageUrl, sanitizeList, sanitizeCard, torrentQuery } from '../../src/catalog/tmdb';
+import { endpointOf, noveltiesUrl, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery } from '../../src/catalog/tmdb';
 import { applyLanguageSetting } from '../../src/i18n';
-import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD } from './fixtures';
+import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
 
 const E = endpointOf({ APIKey: 'k1', APIURL: 'api.tmdb.mirror.test', ImageURLRu: 'img.mirror.test' }, 'fallback')!;
 
@@ -67,6 +67,53 @@ describe('sanitizers', () => {
     expect(c.genres).toEqual(['драма']);
     expect(c.seasons).toEqual([]);
     expect(sanitizeCard(E, {}, 'movie')).toBeNull();
+  });
+});
+
+describe('season', () => {
+  it('the season url keeps the language and the key rules', () => {
+    const u = seasonUrl(E, 202, 3);
+    expect(u.indexOf('https://api.tmdb.mirror.test/3/tv/202/season/3?')).toBe(0);
+    expect(u).toContain('api_key=k1');
+    expect(u).toContain('language=ru-RU');
+    applyLanguageSetting('en');
+    try {
+      expect(seasonUrl(E, 202, 3)).toContain('language=en-US');
+    } finally {
+      applyLanguageSetting('ru');
+    }
+  });
+
+  it('keeps the season fields and the episodes in order, trimmed, nothing else', () => {
+    const s = sanitizeSeason(TV_SEASON, 2)!;
+    expect(s).toEqual({
+      number: 2, name: 'Сезон 2', airDate: '2026-08-01', overview: 'Экспедиция возвращается.',
+      episodes: [
+        { n: 1, title: 'Первый лёд', airDate: '2026-08-01', runtime: 48, overview: 'Станция открывается.' },
+        { n: 2, title: 'Вторая смена', airDate: '2026-08-08', runtime: 51, overview: 'Связь пропадает.' },
+        { n: 3, title: 'Третий день', airDate: '', runtime: 0, overview: '' },
+      ],
+    });
+  });
+
+  it('missing fields get defaults; junk episodes are dropped; the asked number fills a missing one', () => {
+    const s = sanitizeSeason({ episodes: [null, 5, { name: 'без номера' }, { episode_number: -1 }, { episode_number: 4, air_date: '2026-13', runtime: 99999, name: 7 }] }, 5)!;
+    expect(s).toEqual({ number: 5, name: '', airDate: '', overview: '', episodes: [{ n: 4, title: '', airDate: '', runtime: 0, overview: '' }] });
+    expect(sanitizeSeason({ season_number: 1 }, 1)!.episodes).toEqual([]);
+    expect(sanitizeSeason({ season_number: 0, episodes: 'x' }, 3)!.number).toBe(0);
+    expect(sanitizeSeason(null, 1)).toBeNull();
+    expect(sanitizeSeason('x', 1)).toBeNull();
+    expect(sanitizeSeason([], 1)).toBeNull();
+    expect(sanitizeSeason({ success: false, status_message: 'not found' }, 1)).toBeNull();
+  });
+
+  it('caps huge lists at 200 episodes and long strings', () => {
+    const many = Array.from({ length: 500 }, (_, i) => ({ episode_number: i + 1, name: 'Серия ' + (i + 1), overview: 'о'.repeat(5000) }));
+    const s = sanitizeSeason({ season_number: 1, name: 'н'.repeat(500), episodes: many }, 1)!;
+    expect(s.episodes).toHaveLength(200);
+    expect(s.episodes[199].n).toBe(200);
+    expect(s.episodes[0].overview.length).toBe(1500);
+    expect(s.name.length).toBe(100);
   });
 });
 
