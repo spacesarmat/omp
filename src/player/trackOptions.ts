@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { FfprobeResult } from '../api/types';
 import { tracksFromProbe, describeTrack, normalizeLang, findLang, guessLangFromName } from '../lib/tracks';
 import { audioTrackList, textTrackList } from '../platform/webosMedia';
@@ -57,9 +58,9 @@ export function defaultAudioIndex(options: TrackOption[]): number {
 }
 
 export function subtitleMenu(embedded: TrackOption[], external: ExternalSub[]): { label: string; value: string }[] {
-  return [{ label: 'Выкл', value: 'off' }]
+  return [{ label: t('player.off'), value: 'off' }]
     .concat(embedded.map((t, i) => ({ label: t.label, value: 'e' + i })))
-    .concat(external.map((s, i) => ({ label: s.label + ' (файл)', value: 'x' + i })));
+    .concat(external.map((s, i) => ({ label: t('player.subFile', { label: s.label }), value: 'x' + i })));
 }
 
 export function defaultSubChoice(

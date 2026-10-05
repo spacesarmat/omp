@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useState } from 'preact/hooks';
 import type { RefObject } from 'preact';
 
@@ -15,11 +16,11 @@ const INITIAL: VideoState = { time: 0, duration: 0, paused: true, buffering: tru
 
 export function mediaErrorText(e: MediaError | null): string {
   switch (e ? e.code : 0) {
-    case 1: return 'Воспроизведение прервано';
-    case 2: return 'Ошибка сети при загрузке видео';
-    case 3: return 'Ошибка декодирования — формат не поддерживается телевизором';
-    case 4: return 'Формат или кодек не поддерживается телевизором';
-    default: return 'Неизвестная ошибка воспроизведения';
+    case 1: return t('player.errAborted');
+    case 2: return t('player.errNetwork');
+    case 3: return t('player.errDecode');
+    case 4: return t('player.errFormat');
+    default: return t('player.errUnknown');
   }
 }
 

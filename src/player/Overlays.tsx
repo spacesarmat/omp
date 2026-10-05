@@ -1,3 +1,4 @@
+import { t, t as tr } from '../i18n';
 import type { CacheState, FfprobeResult } from '../api/types';
 import { cueAt, Cue } from '../lib/subtitles';
 import { formatSpeed } from '../lib/format';
@@ -9,14 +10,14 @@ export function StatsOverlay(p: { cache: CacheState | null; probe: FfprobeResult
   const lines = statsLines(p.cache, p.probe);
   return (
     <div class="player-stats">
-      {lines.length ? lines.map((l) => <div key={l}>{l}</div>) : <div>Нет данных</div>}
+      {lines.length ? lines.map((l) => <div key={l}>{l}</div>) : <div>{t('player.noData')}</div>}
     </div>
   );
 }
 
 export function BufferingOverlay(p: { cache: CacheState | null }) {
   const t = p.cache && p.cache.Torrent;
-  const text = 'Буферизация…' + (t ? ' ' + formatSpeed(t.download_speed || 0) + ' · пиры ' + (t.active_peers || 0) : '');
+  const text = tr('player.buffering') + (t ? ' ' + formatSpeed(t.download_speed || 0) + tr('player.bufferPeers', { n: t.active_peers || 0 }) : '');
   return (
     <div class="player-buffer">
       <Spinner text={text} />
@@ -40,9 +41,9 @@ export function SubtitleOverlay(p: { cues: Cue[] | null; time: number; raised: b
 export function NextBanner(p: { seconds: number; title: string; onNext: () => void }) {
   return (
     <div class="next-banner" onClick={(e) => { e.stopPropagation(); p.onNext(); }}>
-      <div>Следующая серия через {p.seconds} с</div>
+      <div>{t('player.nextIn', { n: p.seconds })}</div>
       <div class="meta">{p.title}</div>
-      <div class="meta">OK — сейчас · Назад — остаться</div>
+      <div class="meta">{t('player.nextKeys')}</div>
     </div>
   );
 }
@@ -51,8 +52,8 @@ export function NextBanner(p: { seconds: number; title: string; onNext: () => vo
 export function SkipBanner(p: { onSkip: () => void; lift?: boolean }) {
   return (
     <div class={'next-banner' + (p.lift ? ' over-donate' : '')} onClick={(e) => { e.stopPropagation(); p.onSkip(); }}>
-      <div>Пропустить заставку</div>
-      <div class="meta">OK — пропустить · Назад — смотреть</div>
+      <div>{t('player.skipIntro')}</div>
+      <div class="meta">{t('player.skipKeys')}</div>
     </div>
   );
 }
@@ -60,8 +61,8 @@ export function SkipBanner(p: { onSkip: () => void; lift?: boolean }) {
 export function UndoBanner(p: { text: string; onUndo: () => void; lift?: boolean }) {
   return (
     <div class={'next-banner' + (p.lift ? ' over-donate' : '')} onClick={(e) => { e.stopPropagation(); p.onUndo(); }}>
-      <div>{p.text} · Вернуть</div>
-      <div class="meta">OK — вернуть</div>
+      <div>{p.text}{t('player.undoSuffix')}</div>
+      <div class="meta">{t('player.undoKeys')}</div>
     </div>
   );
 }
@@ -73,8 +74,8 @@ export function PlayerError(p: { message: string; probe: FfprobeResult | null; o
       <ErrorView
         message={p.message + (details ? '\n\n' + details : '')}
         actions={[
-          { label: 'Повторить', onPress: p.onRetry },
-          { label: 'Назад', onPress: p.onBack },
+          { label: t('player.retry'), onPress: p.onRetry },
+          { label: t('player.back'), onPress: p.onBack },
         ]}
       />
     </div>

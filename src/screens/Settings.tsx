@@ -5,10 +5,10 @@ import type { ServerSettings } from '../api/types';
 import { errorMessage } from '../api/http';
 import { LANG_OPTIONS } from '../lib/tracks';
 import { APP_VERSION } from '../version';
-import { SUB_SIZE_OPTIONS } from '../player/subtitleOffset';
+import { subSizeOptions } from '../player/subtitleOffset';
 import { navigate } from '../ui/nav';
 import { FocusGroup, ChoiceRow, ON_OFF, Button, Focusable } from '../ui/components';
-import { PLAYER_ENGINE_OPTIONS, VLC_UNAVAILABLE, vlcAvailable } from '../player/nativeEngine';
+import { playerEngineOptions, vlcUnavailable, vlcAvailable } from '../player/nativeEngine';
 import { nativePlugin } from '../platform/androidNative';
 import { restoreFocus } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
@@ -52,7 +52,7 @@ function PlayerEngineSection() {
     <div class="engine-block">
       <h2>Плеер</h2>
       <div class="muted engine-intro">Чем показывать видео на этом телевизоре.</div>
-      {PLAYER_ENGINE_OPTIONS.map((o) => {
+      {playerEngineOptions().map((o) => {
         const off = o.value === 'vlc' && !vlcOk;
         return (
           <Focusable
@@ -68,7 +68,7 @@ function PlayerEngineSection() {
             <span class="engine-dot" />
             <span class="engine-texts">
               <span class="engine-name">{o.name}</span>
-              <span class="engine-text">{off ? VLC_UNAVAILABLE : o.text}</span>
+              <span class="engine-text">{off ? vlcUnavailable() : o.text}</span>
             </span>
           </Focusable>
         );
@@ -190,7 +190,7 @@ export function SettingsScreen() {
       <ChoiceRow label="Статистика потока при запуске" value={s.showStats} options={ON_OFF} onChange={(v) => updateSettings({ showStats: v })} />
 
       <h2>Субтитры</h2>
-      <ChoiceRow label="Размер" value={s.subSize} options={SUB_SIZE_OPTIONS} onChange={(v) => updateSettings({ subSize: v })} />
+      <ChoiceRow label="Размер" value={s.subSize} options={subSizeOptions()} onChange={(v) => updateSettings({ subSize: v })} />
       <ChoiceRow label="Цвет" value={s.subColor} options={SUB_COLOR} onChange={(v) => updateSettings({ subColor: v })} />
       <ChoiceRow label="Подложка" value={s.subBackground} options={ON_OFF} onChange={(v) => updateSettings({ subBackground: v })} />
 

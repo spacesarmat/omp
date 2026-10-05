@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { client } from '../store/servers';
 import { settings, updateSettings } from '../store/settings';
-import { SUB_SIZE_OPTIONS, formatOffset, subtitleOffsetOptions } from '../player/subtitleOffset';
+import { subSizeOptions, formatOffset, subtitleOffsetOptions } from '../player/subtitleOffset';
 import { decideStart } from '../player/resume';
 import type { FfprobeResult } from '../api/types';
 import { errorMessage } from '../api/http';
@@ -426,7 +426,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     const menu = subtitleMenu(embeddedSubOptions(probe, v), item.subtitles || []);
     const current = menu.find((o) => o.value === subChoice) || menu[0];
     const audioLabel = audio[audioIdx] ? audio[audioIdx].label : 'по умолчанию';
-    const sizeLabel = (SUB_SIZE_OPTIONS.find((o) => o.value === settings.value.subSize) || SUB_SIZE_OPTIONS[1]).label;
+    const sizeLabel = (subSizeOptions().find((o) => o.value === settings.value.subSize) || subSizeOptions()[1]).label;
     const root: { label: string; value: string }[] = [
       { label: 'Аудио: ' + audioLabel, value: 'audio' },
       { label: 'Субтитры: ' + current.label, value: 'subs' },
@@ -463,7 +463,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
           if (item.hash) saveTrackPref(item.hash, { sub: subPrefFromChoice(ch, embeddedSubOptions(probe, v), item.subtitles || []) });
         });
       } else if (kind === 'size') {
-        choose('Размер субтитров', SUB_SIZE_OPTIONS, settings.value.subSize).then((size) => { if (size) updateSettings({ subSize: size }); });
+        choose('Размер субтитров', subSizeOptions(), settings.value.subSize).then((size) => { if (size) updateSettings({ subSize: size }); });
       } else if (kind === 'offset') {
         choose('Сдвиг субтитров', subtitleOffsetOptions(), subOffset).then((off) => { if (off !== null) setSubOffset(off); });
       }

@@ -1,16 +1,19 @@
+import { t, fmtNumber } from '../i18n';
 export const SUB_OFFSET_STEP = 0.5;
 export const SUB_OFFSET_MAX = 5;
 
-export const SUB_SIZE_OPTIONS: { value: 'small' | 'medium' | 'large'; label: string }[] = [
-  { value: 'small', label: 'Маленький' },
-  { value: 'medium', label: 'Средний' },
-  { value: 'large', label: 'Крупный' },
-];
+export function subSizeOptions(): { value: 'small' | 'medium' | 'large'; label: string }[] {
+  return [
+    { value: 'small', label: t('player.subSizeSmall') },
+    { value: 'medium', label: t('player.subSizeMedium') },
+    { value: 'large', label: t('player.subSizeLarge') },
+  ];
+}
 
 export function formatOffset(v: number): string {
-  if (v === 0) return '0 с';
-  const abs = Math.abs(v).toFixed(1).replace('.', ',');
-  return v > 0 ? '+' + abs + ' с (позже)' : '−' + abs + ' с (раньше)';
+  if (v === 0) return '0 ' + t('common.sec');
+  const n = fmtNumber(Math.abs(v), 1);
+  return v > 0 ? t('player.offsetLater', { n }) : t('player.offsetEarlier', { n });
 }
 
 export function subtitleOffsetOptions(): { value: number; label: string }[] {

@@ -2,6 +2,7 @@
 // the progress bar) and during the end credits (bottom left, next to «Следующая серия»). Purely visual: it takes no
 // focus and no keys or clicks. Hidden for a supporter (support code applied on a phone, omp.d.until in the journal)
 // and when no donation method opens the QR code's link.
+import { t } from '../i18n';
 import { DONATE_QR } from '../ui/donateQr';
 import { DONATE_QR_LABEL, qrMethodActive } from '../lib/donate';
 
@@ -46,7 +47,7 @@ const CRISP: any = { 'shape-rendering': 'crispEdges' };
 export function DonateQrSvg(p: { px: number }) {
   const n = DONATE_QR.size;
   return (
-    <svg class="donate-qr" width={p.px} height={p.px} viewBox={'0 0 ' + n + ' ' + n} aria-label="QR-код ссылки на Boosty" role="img" {...CRISP}>
+    <svg class="donate-qr" width={p.px} height={p.px} viewBox={'0 0 ' + n + ' ' + n} aria-label={t('player.donateQrLabel')} role="img" {...CRISP}>
       <rect width={n} height={n} fill="#fff"></rect>
       <path d={DONATE_QR.path} fill="#0f1115"></path>
     </svg>
@@ -60,8 +61,8 @@ export function DonateCard(p: { mode: DonateMode; raised?: boolean }) {
     <div class={'donate-card donate-' + p.mode + (p.raised ? ' raised' : '')}>
       <DonateQrSvg px={198} />
       <div class="donate-text">
-        <div class="donate-title">{pause ? 'Нравится OMP?' : 'Досмотрели? Спасибо!'}</div>
-        <div class="donate-body">{pause ? 'Поддержите разработку — наведите камеру телефона на код' : 'OMP бесплатный и без рекламы. Поддержать — по коду с телефона'}</div>
+        <div class="donate-title">{pause ? t('player.donateLikeTitle') : t('player.donateThanksTitle')}</div>
+        <div class="donate-body">{pause ? t('player.donateLikeBody') : t('player.donateThanksBody')}</div>
         <div class="donate-link">{DONATE_QR_LABEL}</div>
       </div>
     </div>

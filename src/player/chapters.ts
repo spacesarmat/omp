@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { FfprobeResult } from '../api/types';
 import type { SkipPrefs } from '../lib/journal';
 
@@ -32,8 +33,8 @@ export function chapterList(probe: FfprobeResult | null): Chapter[] {
 
 /** Chapter name for lists: its title, else «Глава N» (N is the 1-based place in the list, so untitled chapters never repeat). */
 export function chapterLabel(c: { title: string }, index: number): string {
-  const t = c.title.replace(/^\s+|\s+$/g, '');
-  return t || 'Глава ' + (index + 1);
+  const title = c.title.replace(/^\s+|\s+$/g, '');
+  return title || t('player.chapterN', { n: index + 1 });
 }
 
 /** The phone gets at most this many chapters (a file with hundreds would bloat every state message). */
@@ -128,15 +129,15 @@ export function applyMark(
   const at = Math.round(now);
   if (kind === 'credits') {
     const mc = Math.round(duration - now);
-    if (!(duration > 0) || mc < 1) return { pending, text: 'Не удалось отметить титры', error: true };
-    return { patch: { mc }, pending, text: 'Отмечено: титры с ' + fmt(Math.round(duration - mc)) };
+    if (!(duration > 0) || mc < 1) return { pending, text: t('player.markNoCredits'), error: true };
+    return { patch: { mc }, pending, text: t('player.markCredits', { t: fmt(Math.round(duration - mc)) }) };
   }
   const mi = cur && cur.mi;
   if (kind === 'intro-start') {
-    if (mi && mi[1] > at) return { patch: { mi: [at, mi[1]] }, pending: null, text: 'Отмечено: заставка с ' + fmt(at) };
-    return { pending: at, text: 'Начало заставки ' + fmt(at) + ' · теперь отметьте конец' };
+    if (mi && mi[1] > at) return { patch: { mi: [at, mi[1]] }, pending: null, text: t('player.markIntroFrom', { t: fmt(at) }) };
+    return { pending: at, text: t('player.markIntroStart', { t: fmt(at) }) };
   }
   const start = pending !== null ? pending : mi ? mi[0] : null;
-  if (start === null || start >= at) return { pending, text: 'Сначала отметьте начало заставки', error: true };
-  return { patch: { mi: [start, at] }, pending: null, text: 'Отмечено: заставка ' + fmt(start) + '–' + fmt(at) };
+  if (start === null || start >= at) return { pending, text: t('player.markIntroFirst'), error: true };
+  return { patch: { mi: [start, at] }, pending: null, text: t('player.markIntroRange', { from: fmt(start), to: fmt(at) }) };
 }

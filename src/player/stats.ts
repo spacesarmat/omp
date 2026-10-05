@@ -1,3 +1,4 @@
+import { t as tt } from '../i18n';
 import type { CacheState, FfprobeResult, FfprobeStream } from '../api/types';
 import { formatBytes, formatSpeed } from '../lib/format';
 
@@ -12,15 +13,15 @@ export function statsLines(cache: CacheState | null, probe: FfprobeResult | null
   const out: string[] = [];
   const t = cache && cache.Torrent;
   if (t) {
-    out.push('Скорость: ' + formatSpeed(t.download_speed || 0));
-    out.push('Пиры: ' + (t.active_peers || 0) + ' / ' + (t.total_peers || 0) + ' (сиды ' + (t.connected_seeders || 0) + ')');
+    out.push(tt('player.statSpeed', { v: formatSpeed(t.download_speed || 0) }));
+    out.push(tt('player.statPeers', { active: t.active_peers || 0, total: t.total_peers || 0, seeds: t.connected_seeders || 0 }));
   }
   if (cache && cache.Capacity > 0) {
-    out.push('Кэш: ' + formatBytes(cache.Filled) + ' / ' + formatBytes(cache.Capacity) + ' (' + Math.min(100, Math.round((cache.Filled * 100) / cache.Capacity)) + '%)');
+    out.push(tt('player.statCache', { filled: formatBytes(cache.Filled), cap: formatBytes(cache.Capacity), pct: Math.min(100, Math.round((cache.Filled * 100) / cache.Capacity)) }));
   }
   const v = probe ? probe.streams.find((s) => s.codec_type === 'video') : undefined;
   if (v) {
-    const parts = ['Видео: ' + v.codec_name.toUpperCase()];
+    const parts = [tt('player.statVideo', { codec: v.codec_name.toUpperCase() })];
     if (v.profile) parts.push(v.profile);
     if (v.width && v.height) parts.push(v.width + '×' + v.height);
     const hdr = hdrLabel(v);
@@ -28,6 +29,6 @@ export function statsLines(cache: CacheState | null, probe: FfprobeResult | null
     out.push(parts.join(' '));
   }
   const br = probe && probe.format && probe.format.bit_rate;
-  if (br) out.push('Битрейт: ' + (+br / 1e6).toFixed(1) + ' Мбит/с');
+  if (br) out.push(tt('player.statBitrate', { n: (+br / 1e6).toFixed(1) }));
   return out;
 }
