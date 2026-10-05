@@ -109,6 +109,22 @@ object SiteSession {
         jar.replaceSite(root, { CloudflareCookies.isCloudflare(it.name) }, out)
     }
 
+    /**
+     * [import] with the User-Agent the session was made with ([ua], null = this device's: the host's session agent is
+     * dropped). The agent is written first and dropped again when the cookies cannot be written: a session is never
+     * kept without its User-Agent, nor reported kept when the encrypted storage refused it. Throws on any failure.
+     */
+    fun importWithAgent(jar: SiteCookieJar, agents: SessionAgents, root: HttpUrl, pairs: List<Pair<String, String>>, ua: String?, now: Long) {
+        val site = CloudflareSolver.siteRoot(root)
+        if (ua != null) agents.set(site.host, ua, now + SESSION_TTL_MS) else agents.clear(site.host)
+        try {
+            import(jar, site, pairs, now)
+        } catch (e: Exception) {
+            if (ua != null) agents.clear(site.host)
+            throw e
+        }
+    }
+
     // ---- a staged session (the transfer from the phone, waiting for the TV's check) ----
 
     class Staged(val host: String, val cookies: List<Pair<String, String>>, val ua: String?) {

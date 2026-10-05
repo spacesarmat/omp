@@ -62,7 +62,7 @@ describe('browser login flows', () => {
     expect(spec.url).toBe('https://kinozal.me/login.php');
     expect(spec.source).toBe('kinozal');
     expect(spec.hosts).toEqual(['kinozal.me', 'kinozal.guru', 'kinozal.tv']);
-    expect(spec.check).toEqual({ loginPath: 'login.php', path: 'my.php', marker: 'logout.php?hash4u=' });
+    expect(spec.check).toEqual({ loginPath: 'login.php', path: 'my.php', marker: 'logout.php?hash4u=', cookies: ['uid', 'pass'] });
     expect(site.secrets).toEqual({ 'kinozal.browser': '1' });
     expect(kinozalHosts.host()).toBe('kinozal.tv');
     expect(await kinozal.loggedIn!(site.ctx)).toBe(true);
@@ -72,7 +72,7 @@ describe('browser login flows', () => {
   });
 
   it('cancel, busy and failure change nothing', async () => {
-    for (const result of ['cancelled', 'busy', 'failed'] as const) {
+    for (const result of ['cancelled', 'busy', 'failed', 'store_failed'] as const) {
       setBrowserLoginPlatform(fakePlatform({ result }).p);
       const site = fakeSite(() => page('', 'https://kinozal.me/'), CREDS);
       expect((await kinozal.browserLogin!(site.ctx)).result).toBe(result);
@@ -104,11 +104,18 @@ describe('browser login flows', () => {
     expect(rut.cleared).toEqual(['https://rutracker.org/forum/']);
   });
 
-  it('an expired browser session asks for a login again (no password to sign in with)', async () => {
+  it('an expired browser session asks for a login again: the marker goes, the site says «нужен вход»', async () => {
     const site = fakeSite((c) => page('<form><input name="password"></form>', c.url), { 'kinozal.browser': '1' });
+    expect(await kinozal.loggedIn!(site.ctx)).toBe(true);
     const e = await kinozal.search('x', site.ctx).then(() => null, (x: unknown) => x);
     expect(isLoginRequired(e)).toBe(true);
     expect(site.calls.filter((c) => c.method === 'POST')).toEqual([]);
+    expect(site.secrets).toEqual({});
+    expect(await kinozal.loggedIn!(site.ctx)).toBe(false);
+    // rutracker the same
+    const rut = fakeSite((c) => page('<html>guest</html>', c.url), { 'rutracker.browser': '1' });
+    expect(isLoginRequired(await rutracker.search('x', rut.ctx).then(() => null, (x: unknown) => x))).toBe(true);
+    expect(rut.secrets).toEqual({});
   });
 
   it('TV: a session from the phone is checked natively, only on one of the site hosts', async () => {
@@ -177,6 +184,7 @@ describe('requests and answers', () => {
     expect(browserOutcome({ result: 'weird' })).toEqual({ result: 'failed' });
     expect(browserOutcome(null)).toEqual({ result: 'failed' });
     expect(browserOutcome({ result: 'done' })).toEqual({ result: 'cancelled', done: true });
+    expect(browserOutcome({ result: 'store_failed' })).toEqual({ result: 'store_failed' });
     expect(canLoginOnPhone()).toBe(false);
     setBrowserLoginPlatform(fakePlatform({ result: 'ok' }).p);
     expect(canLoginOnPhone()).toBe(true);

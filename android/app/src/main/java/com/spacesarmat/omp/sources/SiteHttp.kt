@@ -46,8 +46,11 @@ class SiteHttp(
     /** Only http/https; anything else is null. */
     fun parseUrl(url: String): HttpUrl? = url.toHttpUrlOrNull()
 
+    /** «Выйти»: the site's cookies, and the User-Agent overrides of its hosts (a session's, a clearance's). */
     fun clearCookies(url: String) {
-        jar.clear(parseUrl(url) ?: throw SiteHttpException(BAD_URL))
+        val u = parseUrl(url) ?: throw SiteHttpException(BAD_URL)
+        jar.clear(u)
+        cloudflare?.forgetSite(u)
     }
 
     /** Blocking. Throws [SiteHttpException]. */

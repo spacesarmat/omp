@@ -68,6 +68,7 @@ export const rustorkaLogin = createSiteLogin({
   refused: (doc) => !!doc.querySelector('input[name="login_password"]'),
   stillOnLogin: (res) => urlIsPath(res, 'forum/login.php'),
   checkPath: 'forum/index.php',
+  // no cookie names: TorrentPier's guest and member cookies share names, so a new cookie or the 30 s check decides
   browser: { loginPath: 'forum/login.php', path: 'forum/index.php', marker: 'login.php?logout' },
 });
 

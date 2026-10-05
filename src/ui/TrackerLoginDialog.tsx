@@ -111,6 +111,7 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
         if (r.result === 'ok') p.onDone(true);
         else if (r.result === 'busy') setError(BROWSER_BUSY);
         else if (r.result === 'failed') setError(BROWSER_FAILED);
+        else if (r.result === 'store_failed') setError(BROWSER_STORE_FAILED);
         else setFocus(askPhone ? 'login-phone' : 'login-browser');
       },
       () => {

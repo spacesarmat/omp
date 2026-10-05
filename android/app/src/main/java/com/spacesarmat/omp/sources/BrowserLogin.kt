@@ -50,12 +50,16 @@ class BrowserLogin(
     private var ui: CheckUi? = null
     private var browser: CloudflareBrowser? = null
     private var entered = false
+    // read on the background thread before a late phone session is stored
+    @Volatile
     private var ended = false
     private var reported = false
     private var asking = false
     private var verifying = false
     private var lastKey: String? = null
     private var lastVerify = Long.MIN_VALUE / 2
+    /** Per root: the cookie names already seen (the guest cookies on the first sight, then every name tried). */
+    private val baseline = HashMap<String, MutableSet<String>>()
     private var opened = 0L
 
     /** The roots whose cookies are read: the login page's host first, then the other mirrors. */
@@ -101,12 +105,17 @@ class BrowserLogin(
                 override fun onFinished() {}
                 // an error page is shown as it is: «Отмена» closes it
                 override fun onError() {}
+                override fun onBlocked() {
+                    scheduler.post(0) { if (!ended) ui?.setHint(texts.blocked) }
+                }
             })
             ui?.showPage(b)
         } catch (e: Throwable) {
             return finish(CheckResult("failed"))
         }
         opened = scheduler.now()
+        // a sign-in signal may be checked at once; the slow path counts from the page's opening
+        lastVerify = opened - verifyEveryMs
         if (relay != null) {
             val phone = relay.phone()
             ui?.setHint(if (phone != null) texts.hint?.replace("%s", phone) else noPhoneText())
@@ -128,11 +137,23 @@ class BrowserLogin(
                 } catch (e: Throwable) {
                     emptyList()
                 }
-                if (!SiteSession.ready(pairs, check)) continue
+                val names = pairs.filter { !CloudflareCookies.isCloudflare(it.first) && it.second.isNotEmpty() }.map { it.first }
+                if (names.isEmpty()) continue
+                val seen = baseline[root.host]
+                if (seen == null) {
+                    // the first cookies of this root are the guest's: a sign-in brings a named or a new cookie
+                    baseline[root.host] = names.toMutableSet()
+                    if (check.cookies.none { it in names }) continue
+                }
                 val key = root.host + "\n" + pairs.sortedBy { it.first }.joinToString(";") { it.first + "=" + it.second }
-                // the same cookies again only after a while (a page that was still loading the first time)
-                if (key == lastKey && scheduler.now() - lastVerify < RETRY_SAME_MS) continue
+                val since = scheduler.now() - lastVerify
+                val signal = check.cookies.any { it in names } || names.any { seen != null && it !in seen }
+                // a sign-in signal: at once when the cookies changed, the same ones again after a while; without one,
+                // any site cookie is tried only every SLOW_MS (no cookie names known for the site)
+                val due = if (signal) key != lastKey || since >= RETRY_SAME_MS else since >= SLOW_MS
+                if (!due) continue
                 lastKey = key
+                baseline.getOrPut(root.host) { HashSet() }.addAll(names)
                 tryVerify(root, pairs)
                 break
             }
@@ -173,7 +194,8 @@ class BrowserLogin(
                     t.store(root, pairs, null)
                     CheckResult("ok", via = "here", host = root.host)
                 } catch (e: Exception) {
-                    CheckResult("failed")
+                    // signed in, but the encrypted storage refused it: nothing is kept, the page says so
+                    CheckResult(STORE_FAILED)
                 }
             }
             scheduler.post(0) { report(r) }
@@ -213,11 +235,13 @@ class BrowserLogin(
         val b = browser
         browser = null
         if (b != null) {
-            // the page's own copy of the session (and everything else it saw) goes: it lives on in the jar only
-            try {
-                b.forget(start.toString())
-            } catch (e: Throwable) {
-                // nothing to drop
+            // the page's own copy of the session (and everything else it saw, every mirror) goes: it lives on in the jar only
+            for (u in listOf(start.toString()) + roots.map { it.toString() }) {
+                try {
+                    b.forget(u)
+                } catch (e: Throwable) {
+                    // nothing to drop
+                }
             }
             try {
                 b.close()
@@ -266,7 +290,11 @@ class BrowserLogin(
                     outcome = UNVERIFIED
                 } else {
                     val t = target
-                    result = if (t is LoginTarget.Local) {
+                    result = if (ended) {
+                        // «Отмена» while the phone answered: the late session is dropped, never stored
+                        outcome = CloudflareRelay.Outcome.CANCELLED.name
+                        null
+                    } else if (t is LoginTarget.Local) {
                         try {
                             t.store(sRoot, pairs, s.ua)
                             CheckResult("ok", via = "phone", host = sRoot.host)
@@ -295,6 +323,10 @@ class BrowserLogin(
         const val POLL_MS = 1_000L
         const val VERIFY_EVERY_MS = 3_000L
         const val RETRY_SAME_MS = 15_000L
+        /** Without a sign-in signal (no known cookie name, no new cookie) a check at most this often. */
+        const val SLOW_MS = 30_000L
+        /** The result of a sign-in the encrypted storage refused. */
+        const val STORE_FAILED = "store_failed"
         /** A sign-in left open this long is closed as cancelled (the WebView and the gate are not held forever). */
         const val MAX_OPEN_MS = 10L * 60 * 1000
         /** The errors key of a phone session that did not open the check page. */

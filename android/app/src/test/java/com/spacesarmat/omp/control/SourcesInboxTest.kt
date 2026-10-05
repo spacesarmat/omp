@@ -525,6 +525,9 @@ class SourcesInboxTest {
         val bad = listOf(
             """"sessions":{"evil":{"host":"evil.example","cookies":$cookie,"ua":"U"}}""",
             """"sessions":{"kinozal":{"host":"Kinozal.TV","cookies":$cookie,"ua":"U"}}""",
+            // a valid host that is not one of the site's mirrors
+            """"sessions":{"kinozal":{"host":"rutracker.org","cookies":$cookie,"ua":"U"}}""",
+            """"sessions":{"labtor":{"host":"labtor.example","cookies":$cookie,"ua":"U"}}""",
             """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":[],"ua":"U"}}""",
             """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":$many,"ua":"U"}}""",
             """"sessions":{"kinozal":{"host":"kinozal.tv","cookies":$huge,"ua":"U"}}""",

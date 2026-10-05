@@ -15,6 +15,7 @@ import { BrowserLoginButton } from '../ui/BrowserLoginButton';
 import { allSources } from '../../../src/sources/registry';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { activeTv, isAtv } from '../tv/tvStore';
+import { holdSignInScreen } from '../cloudflare';
 import { CLOUDFLARE_NOT_SENT, sendTransfer, sessionsText, SESSIONS_NOT_SENT, siteLoginsText, SITES_NOT_SENT } from './Sources';
 
 export const SITE_LOGIN_NOTE = 'Без входа сайт не отдаёт .torrent. Пароль хранится в зашифрованном хранилище телефона.';
@@ -251,6 +252,8 @@ export function SourceSite({
   const [, setTick] = useState(0);
   const [until, setUntil] = useState<number | null>(null);
   const source = getSource(id);
+  // the phone listens to the TV's «Войти на телефоне» while this screen is open (and a while after)
+  useEffect(() => holdSignInScreen(), []);
 
   useEffect(() => {
     let alive = true;

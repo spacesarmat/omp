@@ -43,7 +43,7 @@ import {
 
 type CfNative = Pick<
   OmpNativeApi,
-  'cloudflareVisible' | 'cloudflareWatch' | 'cloudflarePending' | 'cloudflareDecline' | 'onCloudflareRequest' | 'siteBrowserLogin'
+  'cloudflareVisible' | 'cloudflareWatch' | 'cloudflarePending' | 'cloudflareDecline' | 'onCloudflareRequest' | 'siteBrowserLogin' | 'pairedTv'
 >;
 
 export interface PhoneCloudflareDeps {
@@ -61,7 +61,7 @@ const realDeps: PhoneCloudflareDeps = {
   native,
   toast: (t) => showToast(t),
   tv: () => activeTv.value,
-  bypassOn: () => anyBypassOn() || anyBrowserLoginOn(),
+  bypassOn: () => anyBypassOn() || signInScreenActive(),
   onVisible: (cb) => {
     const h = () => {
       if (document.visibilityState === 'visible') cb();
@@ -71,9 +71,45 @@ const realDeps: PhoneCloudflareDeps = {
   },
 };
 
-/** A site with «Войти через браузер» takes part in the search (the TV may then ask «Войти на телефоне»). */
-export function anyBrowserLoginOn(list: Source[] = allSources()): boolean {
-  return list.some((s) => !!s.browserLogin && !!s.browserSpec && isSourceOn(s));
+// «Войти на телефоне» without a Cloudflare switch on: the phone listens to the TV only while «Источники поиска» or a
+// site screen is open, and for SIGN_IN_GRACE_MS after it was left (the TV's dialog says where to open it). A cheaper
+// design than polling whenever a login site is on (rutracker is on for almost everyone): no request costs nothing then.
+export const SIGN_IN_GRACE_MS = 5 * 60 * 1000;
+const signInHolds = signal(0);
+const signInGrace = signal(false);
+let graceTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** A screen with sign-ins is open (Sources, a site screen); returns the release (call it on unmount). */
+export function holdSignInScreen(): () => void {
+  signInHolds.value++;
+  if (graceTimer) clearTimeout(graceTimer);
+  graceTimer = null;
+  signInGrace.value = true;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    signInHolds.value--;
+    if (signInHolds.value > 0) return;
+    if (graceTimer) clearTimeout(graceTimer);
+    graceTimer = setTimeout(() => {
+      graceTimer = null;
+      if (signInHolds.value === 0) signInGrace.value = false;
+    }, SIGN_IN_GRACE_MS);
+  };
+}
+
+/** Reactive: a sign-in screen is open or was left less than SIGN_IN_GRACE_MS ago. */
+export function signInScreenActive(): boolean {
+  return signInHolds.value > 0 || signInGrace.value;
+}
+
+/** Forgets the sign-in screen state (tests). */
+export function resetSignInScreens(): void {
+  if (graceTimer) clearTimeout(graceTimer);
+  graceTimer = null;
+  signInHolds.value = 0;
+  signInGrace.value = false;
 }
 
 /** The phone's browser login: the native sheet with the site's login page. */
@@ -89,7 +125,8 @@ export function phoneBrowserLogin(n: Pick<OmpNativeApi, 'siteBrowserLogin'>): Br
  */
 export function tvLoginSource(r: TvCloudflareRequest, list: Source[] = allSources()): Source | null {
   const s = r.source ? list.filter((x) => x.id === r.source)[0] : undefined;
-  if (!s || !s.browserSpec || !s.sessionHosts) return null;
+  // only a site this phone has turned on
+  if (!s || !s.browserSpec || !s.sessionHosts || !isSourceOn(s)) return null;
   const roots = s.sessionHosts().map((h) => 'https://' + h + '/');
   return roots.indexOf(r.url) >= 0 ? s : null;
 }
@@ -185,6 +222,15 @@ export function installPhoneCloudflare(deps: PhoneCloudflareDeps = realDeps): ()
   });
   // null: nothing told yet (the first run tells the native side either way)
   let last: string | null = null;
+  let lastPaired: string | null = null;
+  const stopPaired = effect(() => {
+    // the paired TV, whatever the polling: «Передать вход на телевизор» sends session cookies only there
+    const t = watchTarget(deps.tv());
+    const key = t ? t.url + ' ' + t.token : '';
+    if (key === lastPaired) return;
+    lastPaired = key;
+    deps.native.pairedTv(t ? { url: t.url, token: t.token } : null).then(undefined, () => undefined);
+  });
   const stopWatch = effect(() => {
     void switches.value;
     const t = deps.bypassOn() ? watchTarget(deps.tv()) : null;
@@ -208,6 +254,7 @@ export function installPhoneCloudflare(deps: PhoneCloudflareDeps = realDeps): ()
   const offVisible = deps.onVisible(pending);
   return () => {
     stopWatch();
+    stopPaired();
     offSwitch();
     offHealth();
     offEvent();

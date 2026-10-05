@@ -26,7 +26,10 @@ export const BROWSER_TV_TEXT = 'Войдите на сайт как обычно
 export const BROWSER_TV_HINT = 'Телефон «%s» получит запрос';
 export const BROWSER_TV_WAITING = 'Войдите на телефоне «%s»';
 export const BROWSER_NO_PHONE = 'Подключите телефон к телевизору';
-export const BROWSER_PHONE_CLOSED = 'Откройте OMP на телефоне';
+/** The phone listens to the TV only on «Источники поиска» (or with a Cloudflare switch on): where to open it. */
+export const BROWSER_PHONE_CLOSED = 'Откройте на телефоне OMP → Настройки → Источники поиска';
+/** The login page tried to leave the site. */
+export const BROWSER_BLOCKED = 'OMP открывает только страницы сайта — вернули на страницу входа';
 export const BROWSER_GATE_WAIT = 'Ждём, пока закончится другая проверка…';
 /** By the native relay outcome: what the TV dialog says when the phone did not sign in. */
 export const BROWSER_TV_ERRORS: { [outcome: string]: string } = {
@@ -44,7 +47,8 @@ export const BROWSER_NOTE_TV = 'После входа OMP передаст ег�
 export const WATCH_NOTIFY_LOGIN = 'Телевизор просит войти на %s';
 export const BROWSER_FAILED = 'Не удалось открыть вход через браузер';
 export const BROWSER_BUSY = 'Уже открыта другая проверка — попробуйте через минуту';
-export const BROWSER_STORE_FAILED = 'Не удалось сохранить вход: защищённое хранилище недоступно';
+/** Signed in, but the encrypted storage refused the session: nothing is kept. */
+export const BROWSER_STORE_FAILED = 'Не удалось сохранить вход — попробуйте ещё раз';
 export const BROWSER_SENT_TV = 'Вход передан на телевизор';
 export const BROWSER_NOT_SENT_TV = 'Не удалось передать вход на телевизор — попробуйте ещё раз';
 
@@ -100,6 +104,8 @@ export interface BrowserLoginRequest extends BrowserSpec {
   forTv?: string;
   /** TV: ask the phone right away («Войти на телефоне»). */
   askPhone?: boolean;
+  /** The login page tried to leave the site (it is back on the login page). */
+  blocked?: string;
 }
 
 /** The phone sheet; with forTv the TV «tv» asked for it and gets the session. */
@@ -115,6 +121,7 @@ export function phoneLoginRequest(spec: BrowserSpec, forTv?: { id: string; tv: s
     text: browserText(forTv ? forTv.tv : undefined),
     cancel: BROWSER_CANCEL,
     gateWait: BROWSER_GATE_WAIT,
+    blocked: BROWSER_BLOCKED,
   };
   if (forTv) {
     r.note = BROWSER_NOTE_TV;
@@ -143,13 +150,17 @@ export function tvLoginRequest(spec: BrowserSpec, askPhone?: boolean): BrowserLo
     waiting: BROWSER_TV_WAITING,
     gateWait: BROWSER_GATE_WAIT,
     errors: BROWSER_TV_ERRORS,
+    blocked: BROWSER_BLOCKED,
   };
   if (askPhone) r.askPhone = true;
   return r;
 }
 
-/** ok: signed in (session kept natively); cancelled: closed; busy: another page is open; failed: not opened / not stored. */
-export type BrowserResult = 'ok' | 'cancelled' | 'busy' | 'failed';
+/**
+ * ok: signed in (session kept natively); cancelled: closed; busy: another page is open; failed: not opened;
+ * store_failed: signed in, but the encrypted storage refused the session (nothing kept, no marker).
+ */
+export type BrowserResult = 'ok' | 'cancelled' | 'busy' | 'failed' | 'store_failed';
 
 export interface BrowserOutcome {
   result: BrowserResult;
@@ -169,7 +180,8 @@ const HOST = /^[a-z0-9.-]{1,253}$/;
 export function browserOutcome(r: unknown): BrowserOutcome {
   const o = r && typeof r === 'object' ? (r as { result?: unknown; host?: unknown; via?: unknown; sent?: unknown }) : {};
   if (o.result === 'done') return { result: 'cancelled', done: true };
-  const result: BrowserResult = o.result === 'ok' || o.result === 'cancelled' || o.result === 'busy' ? o.result : 'failed';
+  const result: BrowserResult =
+    o.result === 'ok' || o.result === 'cancelled' || o.result === 'busy' || o.result === 'store_failed' ? o.result : 'failed';
   const out: BrowserOutcome = { result };
   if (typeof o.host === 'string' && HOST.test(o.host)) out.host = o.host;
   if (typeof o.via === 'string') out.via = o.via;
@@ -239,6 +251,11 @@ export interface BrowserLogin {
   active(ctx: SourceContext): Promise<boolean>;
   /** Forgets the marker (logout, a form login). */
   forget(secrets: SecretStore | undefined): Promise<void>;
+  /**
+   * The session is gone (the site answered signed out, no password to sign in again): the marker goes, so the site
+   * says «нужен вход» again. Resolves whether there was one.
+   */
+  expired(secrets: SecretStore | undefined): Promise<boolean>;
   /** Android TV: checks the session the phone sent (staged natively) on `host`; rejects when it is not signed in. */
   pending(ctx: SourceContext, host: string): Promise<void>;
 }
@@ -281,6 +298,13 @@ export function createBrowserLogin(site: BrowserSite): BrowserLogin {
     },
     forget(secrets) {
       return secrets ? secrets.delete(key) : Promise.resolve();
+    },
+    expired(secrets) {
+      if (!secrets) return Promise.resolve(false);
+      return secrets.get(key).then(
+        (v) => (v === '1' ? secrets.delete(key).then(() => true) : false),
+        () => false,
+      );
     },
     pending(_ctx, host) {
       const p = platform;

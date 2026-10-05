@@ -44,11 +44,23 @@ class WebViewCloudflareBrowser(
 
     /** The page, for the visible check to attach to its dialog. */
     val view: WebView? get() = web
-    private val seen = LinkedHashSet<String>()
+    /**
+     * The URLs the page requested, one per origin and directory (the cookie paths [forget] expires are the same for
+     * every page of a directory), at most [MAX_SEEN]. Past that the visible page sets [overflow]: [forget] then clears
+     * the whole WebView cookie store rather than leave cookies of an origin it did not record.
+     */
+    private val seen = LinkedHashMap<String, String>()
+    @Volatile
+    private var overflow = false
+    private var startUrl: String? = null
 
     private fun remember(url: String?) {
         if (url == null) return
-        synchronized(seen) { if (seen.size < MAX_SEEN) seen.add(url) }
+        val key = WebCookieCleanup.directoryKey(url) ?: return
+        synchronized(seen) {
+            if (seen.containsKey(key)) return
+            if (seen.size < MAX_SEEN) seen[key] = url else overflow = true
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -57,11 +69,13 @@ class WebViewCloudflareBrowser(
         val w = WebView(if (visible) context else context.applicationContext)
         web = w
         rootHost = Uri.parse(url).host?.lowercase()
+        startUrl = url
         if (visible) {
             w.isFocusable = true
             w.isFocusableInTouchMode = true
         }
-        CookieManager.getInstance().setAcceptThirdPartyCookies(w, true)
+        // the login page: no third-party cookies (Turnstile and hCaptcha work without them; ad frames get none)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(w, navigation == null)
         w.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -77,9 +91,26 @@ class WebViewCloudflareBrowser(
                 val scheme = request.url.scheme?.lowercase()
                 if (scheme != "http" && scheme != "https") return true
                 // the visible page stays on the site (and Cloudflare's challenge pages): no browsing elsewhere in OMP
-                if (!visible || !request.isForMainFrame) return false
+                if (!visible) return false
                 val nav = navigation
-                return if (nav != null) !nav(request.url.host, request.url.path) else !VisibleNavigation.allowed(rootHost, request.url.host)
+                // the login page: subframe navigations that reach here are held to the same rule (best effort)
+                if (nav != null) return !nav(request.url.host, request.url.path)
+                return request.isForMainFrame && !VisibleNavigation.allowed(rootHost, request.url.host)
+            }
+
+            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                remember(url)
+                val nav = navigation ?: return
+                if (!visible || url == null) return
+                val uri = Uri.parse(url)
+                val scheme = uri.scheme?.lowercase()
+                if (scheme != "http" && scheme != "https") return
+                // a navigation shouldOverrideUrlLoading never saw (a form POST): stopped, back to the login page
+                if (!nav(uri.host, uri.path)) {
+                    view.stopLoading()
+                    startUrl?.let { view.loadUrl(it) }
+                    events.onBlocked()
+                }
             }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
@@ -114,7 +145,7 @@ class WebViewCloudflareBrowser(
         val cm = CookieManager.getInstance()
         val rootHost = Uri.parse(url).host?.lowercase() ?: return
         val site = siteOf(rootHost)
-        val urls = synchronized(seen) { seen.toList() } + url
+        val urls = synchronized(seen) { seen.values.toList() } + url
         val origins = LinkedHashSet<String>()
         for (u in urls) {
             val uri = Uri.parse(u)
@@ -130,6 +161,8 @@ class WebViewCloudflareBrowser(
                 for (c in WebCookieCleanup.expiring(name, paths, host, hostSite, scheme == "https")) cm.setCookie(u, c)
             }
         }
+        // the visible page saw more origins than were recorded: nothing of it may stay (the app's own pages keep no cookies)
+        if (visible && overflow) cm.removeAllCookies(null)
         cm.flush()
         val storage = WebStorage.getInstance()
         for (o in origins) storage.deleteOrigin(o)
@@ -151,7 +184,7 @@ class WebViewCloudflareBrowser(
     }
 
     companion object {
-        const val MAX_SEEN = 200
+        const val MAX_SEEN = 500
     }
 }
 

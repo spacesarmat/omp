@@ -31,6 +31,7 @@ import com.spacesarmat.omp.control.CloudflareRelay
 import com.spacesarmat.omp.control.CloudflareWatch
 import com.spacesarmat.omp.control.HttpWatchTransport
 import com.spacesarmat.omp.control.SourcesDone
+import com.spacesarmat.omp.control.SourcesProtocol
 import com.spacesarmat.omp.control.TvRemote
 import com.spacesarmat.omp.install.AdbIdentity
 import com.spacesarmat.omp.install.AdbIdentityStore
@@ -1266,7 +1267,8 @@ class OmpNativePlugin : Plugin() {
             try {
                 val dialog = CloudflareCheckDialog(act, tvMode, texts, phoneButton = relay != null)
                 val check = VisibleCheck(
-                    root, site, texts, { WebViewCloudflareBrowser(act, visible = true) }, MainScheduler(), sources::userAgent,
+                    // a host with a browser session passes with that session's User-Agent (the clearance must match it)
+                    root, site, texts, { WebViewCloudflareBrowser(act, visible = true) }, MainScheduler(), { sources.baseAgentFor(root.host) },
                     System::currentTimeMillis, { io.execute(it) }, target, relay,
                     { r ->
                         cfCheck = null
@@ -1341,6 +1343,7 @@ class OmpNativePlugin : Plugin() {
         val texts = CheckTexts(
             title, text, cfText(call, "note"), cancel, cfText(call, "phone"), cfText(call, "remote"), cfText(call, "hint"),
             cfText(call, "noPhone"), cfText(call, "phoneClosed"), cfText(call, "waiting"), cfText(call, "gateWait"), errors,
+            cfText(call, "blocked"),
         )
         if (!cfOpen.compareAndSet(false, true)) return once.resolve(JSObject().put("result", "busy"))
         val relay = if (tvMode) remote?.cloudflare else null
@@ -1417,18 +1420,35 @@ class OmpNativePlugin : Plugin() {
     }
 
     /**
-     * Phone, «Передать вход на телевизор» of a browser session: { url: http://ip:port of the paired TV, token, payload:
-     * the transfer body, sessions: { siteId: [the site's hosts, active first] } } → { status, data, missing: [siteId] }.
-     * The cookies of each site's session (one host, capped) and the User-Agent they go with are added here, so they never
-     * pass through the page; the answer has no cookie in it. Never logged.
+     * Phone: the Android TV this phone is paired with ({ url: http://ip:port, token }, or {} when none). The page tells it
+     * whenever the paired TV changes; [siteSessionSend] sends session cookies only there.
+     */
+    @PluginMethod
+    fun pairedTv(call: PluginCall) {
+        if (TvMode.isTv(context)) return call.resolve()
+        val url = call.getString("url")
+        val token = call.getString("token")
+        if (url == null || token == null) {
+            paired = null
+            return call.resolve()
+        }
+        if (!CF_BASE.matches(url) || !CF_TOKEN.matches(token)) return call.reject(SiteHttp.BAD_REQUEST)
+        paired = url to token
+        call.resolve()
+    }
+
+    /**
+     * Phone, «Передать вход на телевизор» of a browser session: { payload: the transfer body, sessions: { siteId: [the
+     * site's hosts, active first] } } → { status, data, missing: [siteId] }. The target is the paired TV registered
+     * natively ([pairedTv]), never an address from this call; each site's hosts are limited to its own
+     * ([SourcesProtocol.SESSION_HOSTS]). The cookies of each site's session (one host, capped) and the User-Agent they go
+     * with are added here, so they never pass through the page; the answer has no cookie in it. Never logged.
      */
     @PluginMethod
     fun siteSessionSend(call: PluginCall) {
         val once = Once(call)
         if (TvMode.isTv(context)) return once.reject(SiteHttp.BAD_REQUEST)
-        val url = call.getString("url")
-        val token = call.getString("token")
-        if (url == null || token == null || !CF_BASE.matches(url) || !CF_TOKEN.matches(token)) return once.reject(SiteHttp.BAD_REQUEST)
+        val (url, token) = paired ?: return once.reject(NOT_PAIRED)
         val payload = call.getObject("payload") ?: return once.reject(SiteHttp.BAD_REQUEST)
         val wanted = call.getObject("sessions") ?: return once.reject(SiteHttp.BAD_REQUEST)
         val timeout = (call.getInt("timeoutMs") ?: 45_000).coerceIn(5_000, 60_000)
@@ -1442,7 +1462,8 @@ class OmpNativePlugin : Plugin() {
                     val raw = ArrayList<String>()
                     (wanted.opt(id) as? org.json.JSONArray)?.let { a -> for (i in 0 until a.length()) (a.opt(i) as? String)?.let { raw.add(it) } }
                     var found: JSONObject? = null
-                    for (h in SiteSession.hosts(raw)) {
+                    val allowed = SourcesProtocol.SESSION_HOSTS[id].orEmpty()
+                    for (h in SiteSession.hosts(raw).filter { it in allowed }) {
                         val root = okhttp3.HttpUrl.Builder().scheme("https").host(h).build()
                         val pairs = sources.sessionCookies(root)
                         if (pairs.none { !com.spacesarmat.omp.sources.CloudflareCookies.isCloudflare(it.first) }) continue
@@ -1680,6 +1701,10 @@ class OmpNativePlugin : Plugin() {
         private const val CF_UNAVAILABLE = "Проверка недоступна"
         private const val CF_GONE = "Телевизор уже не ждёт эту проверку"
         private const val TV_NO_ANSWER = "Телевизор не ответил"
+        private const val NOT_PAIRED = "Телефон не подключён к телевизору"
+        /** The paired Android TV (base, token), set by the page through pairedTv. */
+        @Volatile
+        private var paired: Pair<String, String>? = null
         private val CF_BASE = Regex("^http://((25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.){3}(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d):\\d{1,5}$")
         private val CF_TOKEN = Regex("^[0-9a-f]{32}$")
         private const val CF_CHANNEL = "omp-tv-requests"

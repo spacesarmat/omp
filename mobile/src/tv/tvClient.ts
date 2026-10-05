@@ -981,7 +981,7 @@ const SOURCES_TIMEOUT = 45000;
 export async function sendSourcesToTv(
   payload: TransferPayload,
   sessions?: { [id: string]: string[] },
-  send: Pick<OmpNativeApi, 'siteSessionSend'> = native,
+  send: Pick<OmpNativeApi, 'siteSessionSend' | 'pairedTv'> = native,
 ): Promise<SourcesSent> {
   if (tvKind() !== 'atv') throw new Error(SOURCES_ATV_ONLY);
   await ensureConnected();
@@ -992,9 +992,9 @@ export async function sendSourcesToTv(
   let missing: string[] = [];
   try {
     if (withSessions && s.tv.token) {
+      // the native side posts only to the TV registered as paired (this one), never to an address in the call
+      await send.pairedTv({ url: 'http://' + s.tv.ip + ':' + (s.tv.ctlPort || ATV_PORT), token: s.tv.token });
       const n = await send.siteSessionSend({
-        url: 'http://' + s.tv.ip + ':' + (s.tv.ctlPort || ATV_PORT),
-        token: s.tv.token,
         payload,
         sessions: sessions!,
         timeoutMs: SOURCES_TIMEOUT,

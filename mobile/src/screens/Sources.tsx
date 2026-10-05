@@ -34,6 +34,7 @@ import { flareStatus, onFlareStatus, phoneFlareNote, refreshFlareStatus } from '
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
 import { log } from '../../../src/lib/log';
 import { activeTv, isAtv } from '../tv/tvStore';
+import { holdSignInScreen } from '../cloudflare';
 import { sendSourcesToTv, sessionIp, SOURCES_REJECTED, tvState, type SourcesSent } from '../tv/tvClient';
 
 const SENT_KEY = 'tsp.sourcesSent';
@@ -426,6 +427,9 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   const builtins = all.filter((s) => s.cloudflare !== true);
   const cfSites = all.filter((s) => s.cloudflare === true);
   const torznabNote = torznabHiddenText(!ts.some((s) => s.id === 'ts-torznab'));
+
+  // the phone listens to the TV's «Войти на телефоне» while this screen is open (and a while after)
+  useEffect(() => holdSignInScreen(), []);
 
   useEffect(() => {
     let alive = true;

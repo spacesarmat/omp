@@ -40,6 +40,8 @@ class CheckTexts(
     val gateWait: String?,
     /** By [com.spacesarmat.omp.control.CloudflareRelay.Outcome] name: what the hint says when the phone did not pass it. */
     val errors: Map<String, String>,
+    /** The login page tried to leave the site (it is back on the login page). */
+    val blocked: String? = null,
 )
 
 /** How the visible check ended. [sent]: the phone passed it for the TV and the TV took the answer. */
@@ -217,6 +219,9 @@ class CloudflareCheckDialog(
             first?.post { first.requestFocus() }
         } else {
             texts.note?.let { add(label(it, 12f, MUTED)) }
+            val hint = label("", 12f, ACCENT).apply { visibility = View.GONE }
+            hintView = hint
+            add(hint)
             add(button(texts.cancel) { check?.cancel() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48f)))
         }
         d.setContentView(box)

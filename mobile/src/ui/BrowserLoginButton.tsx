@@ -43,6 +43,7 @@ export function BrowserLoginButton({
           onDone();
         } else if (r.result === 'busy') showToast(BROWSER_BUSY);
         else if (r.result === 'failed') showToast(BROWSER_FAILED);
+        else if (r.result === 'store_failed') showToast(BROWSER_STORE_FAILED);
       },
       () => {
         // the session is kept, but the marker could not be written

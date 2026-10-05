@@ -159,13 +159,14 @@ export interface OmpNativeApi {
   cloudflareDecline(id: string): Promise<void>;
   /** «Войти через браузер» (native sheet with the site's login page); cookies never come back. */
   siteBrowserLogin(req: BrowserLoginRequest): Promise<{ result?: string; host?: string; via?: string; sent?: boolean }>;
+  /** Tells the native side which Android TV this phone is paired with (null: none); session cookies go only there. */
+  pairedTv(target: { url: string; token: string } | null): Promise<void>;
   /**
    * «Передать вход на телевизор» with browser sessions: the native side adds each site's session cookies and User-Agent
-   * to `payload` and posts it to the paired TV (they never pass through the page). Resolves the TV's answer.
+   * to `payload` and posts it to the paired TV registered with pairedTv (they never pass through the page). Resolves the
+   * TV's answer.
    */
   siteSessionSend(o: {
-    url: string;
-    token: string;
     payload: unknown;
     sessions: { [id: string]: string[] };
     timeoutMs?: number;
@@ -239,7 +240,8 @@ interface OmpNativePlugin {
   cloudflareClearance(o: { url: string }): Promise<{ until?: number | null }>;
   cloudflareWatch(o: { url?: string; token?: string; notify?: string; notifyLogin?: string }): Promise<void>;
   siteBrowserLogin(o: BrowserLoginRequest): Promise<{ result?: string; host?: string; via?: string; sent?: boolean }>;
-  siteSessionSend(o: { url: string; token: string; payload: unknown; sessions: { [id: string]: string[] }; timeoutMs?: number }): Promise<{
+  pairedTv(o: { url?: string; token?: string }): Promise<void>;
+  siteSessionSend(o: { payload: unknown; sessions: { [id: string]: string[] }; timeoutMs?: number }): Promise<{
     status?: unknown;
     data?: unknown;
     missing?: unknown;
@@ -643,6 +645,11 @@ export const native: OmpNativeApi = {
   siteBrowserLogin(req) {
     if (!plugin) return unavailable();
     return plugin.siteBrowserLogin(req);
+  },
+
+  async pairedTv(target) {
+    if (!plugin) return;
+    await plugin.pairedTv(target ? { url: target.url, token: target.token } : {});
   },
 
   async siteSessionSend(o) {

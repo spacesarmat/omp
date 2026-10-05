@@ -90,7 +90,8 @@ function signInAgain(ctx: SourceContext): Promise<void> {
   if (!relogin) {
     relogin = savedCredentials(ctx)
       .then((c) => {
-        if (!c) throw loginRequired();
+        // a browser session that expired: its marker goes («нужен вход»), there is no password to sign in with
+        if (!c) return browser.expired(ctx.secrets).then(() => Promise.reject(loginRequired()));
         return postLogin(c.username, c.password, ctx).then(undefined, (e: unknown) => {
           // wrong password or captcha: the user has to act; network / Cloudflare errors stay errors
           const msg = e instanceof Error ? e.message : '';

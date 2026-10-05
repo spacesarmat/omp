@@ -84,12 +84,14 @@ class SourceServices private constructor(context: Context) {
     private val app = context.applicationContext
     // one User-Agent for the site requests and the hidden check: the WebView's own (header and client hints agree)
     private val agent = DefaultUserAgent(app)
+    private val sessionAgents = SessionAgents(SecretAgentStore(secrets, SecretAgentStore.SESSION_KEY))
     val cloudflare = CloudflarePass(
-        CloudflareSolver({ WebViewCloudflareBrowser(app) }, MainScheduler(), jar, agent),
+        CloudflareSolver({ WebViewCloudflareBrowser(app) }, MainScheduler(), jar, agent, agentFor = { sessionAgents.agentFor(it) }),
         FlareSolverrClient(),
         jar,
         agent,
         SecretAgentStore(secrets),
+        sessionAgents,
     )
     val siteHttp = SiteHttp(jar, cloudflare, agent)
 
@@ -110,12 +112,11 @@ class SourceServices private constructor(context: Context) {
      * it is not this device's (the phone's): requests to that host use it for as long as the session is kept; null =
      * this device's own, any override is dropped. Throws when nothing usable came. Blocking (Keystore).
      */
-    fun importSession(root: HttpUrl, pairs: List<Pair<String, String>>, ua: String?) {
-        val site = CloudflareSolver.siteRoot(root)
-        val now = System.currentTimeMillis()
-        SiteSession.import(jar, site, pairs, now)
-        if (ua != null) cloudflare.setAgent(site.host, ua, now + SiteSession.SESSION_TTL_MS) else cloudflare.clearAgent(site.host)
-    }
+    fun importSession(root: HttpUrl, pairs: List<Pair<String, String>>, ua: String?) =
+        SiteSession.importWithAgent(jar, sessionAgents, root, pairs, ua, System.currentTimeMillis())
+
+    /** The User-Agent of [host] without a Cloudflare override (a visible check passes with it). */
+    fun baseAgentFor(host: String): String = cloudflare.baseAgentFor(host)
 
     /** Blocking: the session opens [check]'s page on [root] as a signed-in one ([SessionVerifier]). */
     fun verifySession(root: HttpUrl, pairs: List<Pair<String, String>>, ua: String, check: SiteSession.Check): Boolean =

@@ -42,9 +42,11 @@ class BrowserLoginTest {
         val jar = HashMap<String, String>()
         var closed = false
         val forgotten = ArrayList<String>()
+        var events: CloudflareBrowser.Events? = null
         override fun open(url: String, userAgent: String, events: CloudflareBrowser.Events) {
             opened = url
             agent = userAgent
+            this.events = events
         }
         override fun probe(result: (String?) -> Unit) = result(null)
         override fun cookies(url: String): String? = jar[url]
@@ -86,6 +88,7 @@ class BrowserLoginTest {
         "Вход на Kinozal", "Войдите как обычно", null, "Отмена", "Войти на телефоне", "Ввести пультом", "Телефон «%s» получит запрос",
         "Подключите телефон", "Откройте OMP на телефоне", "Войдите на телефоне «%s»", "Ждём",
         mapOf("UNVERIFIED" to "Вход с телефона не подтвердился", "NOT_TAKEN" to "Телефон не ответил"),
+        "off-site",
     )
     private val check = SiteSession.check("my.php", "logout.php?hash4u=", "login.php", listOf("uid"))!!
     private val start = "https://kinozal.me/login.php".toHttpUrl()
@@ -94,6 +97,7 @@ class BrowserLoginTest {
     private val ui = FakeUi(log)
     private val gate = CountingGate()
     private val browser = FakeBrowser()
+    private val browserEvents get() = browser.events
     private val results = ArrayList<CheckResult>()
     private class Stored(val root: HttpUrl, val pairs: List<Pair<String, String>>, val ua: String?)
     private val stored = ArrayList<Stored>()
@@ -198,12 +202,68 @@ class BrowserLoginTest {
     }
 
     @Test
-    fun aStorageFailureIsAFailure() {
-        login(target = LoginTarget.Local { _, _, _ -> throw IllegalStateException("keystore") }).start(ui)
-        browser.jar["https://kinozal.me/"] = "uid=7"
-        sched.runUntil(3_000)
-        assertEquals("failed", results.single().result)
-        assertClosed()
+    fun everyMirrorIsCleanedAndAnOffSitePageSaysSo() {
+        val l = login()
+        l.start(ui)
+        // the page left the site (a form POST): the browser sent it back, the sheet says why
+        browserEvents!!.onBlocked()
+        sched.runUntil(1)
+        assertEquals("off-site", ui.shown)
+        l.cancel()
+        assertEquals(listOf("https://kinozal.me/login.php", "https://kinozal.me/", "https://kinozal.tv/"), browser.forgotten)
+    }
+
+    @Test
+    fun withoutKnownCookieNamesOnlyANewCookieChecksAtOnceElseEvery30s() {
+        val plain = SiteSession.check("index.php", "logout", "login.php", emptyList())!!
+        val l = BrowserLogin(
+            start, listOf("kinozal.me"), plain, "Kinozal", "kinozal", texts, { browser }, sched, { "UA" }, { it() },
+            { root, _, ua -> verified.add(root to ua); false }, LoginTarget.Local { _, _, _ -> }, null, { results.add(it) }, gate,
+            pollMs = 500, verifyEveryMs = 1_000,
+        )
+        browser.jar["https://kinozal.me/"] = "guest=1"
+        l.start(ui)
+        // the guest cookie, even with a changing value, is not a sign-in: checked only every 30 s
+        sched.runUntil(10_000)
+        browser.jar["https://kinozal.me/"] = "guest=2"
+        sched.runUntil(20_000)
+        assertTrue(verified.isEmpty())
+        sched.runUntil(31_000)
+        assertEquals(1, verified.size)
+        // a new cookie (the session) is checked at once
+        browser.jar["https://kinozal.me/"] = "guest=2; sid=s"
+        sched.runUntil(33_000)
+        assertEquals(2, verified.size)
+        l.cancel()
+    }
+
+    @Test
+    fun aLatePhoneSessionAfterCancelIsDropped() {
+        val relay = CloudflareRelay({ _, _, _, _ -> }, pickupMs = 2_000, answerMs = 2_000)
+        relay.poll("t1", "Pixel 8")
+        lateinit var l: BrowserLogin
+        val phone = Thread {
+            repeat(400) {
+                val r = relay.poll("t1", "Pixel 8")
+                if (!r.isNull("request")) {
+                    val id = r.getJSONObject("request").getString("id")
+                    relay.answer("t1", JSONObject("""{"id":"$id","result":"solved","host":"kinozal.me","cookies":[{"name":"uid","value":"9"}],"ua":"P","until":1}"""))
+                    return@Thread
+                }
+                Thread.sleep(5)
+            }
+        }
+        // the person cancels while the session is being checked
+        verifyOk = { l.cancel(); true }
+        l = login(relay = relay)
+        l.start(ui)
+        phone.start()
+        l.askPhone()
+        phone.join(3_000)
+        sched.runUntil(1)
+        assertTrue(stored.isEmpty())
+        assertEquals("cancelled", results.single().result)
+        assertFalse(gate.held)
     }
 
     @Test

@@ -95,8 +95,9 @@ export const kinozalLogin = createSiteLogin({
   refused: (doc) => !!doc.querySelector('div.bx1 div.red'),
   stillOnLogin: (res) => urlIsPath(res, LOGIN_PATH) || urlIsPath(res, 'login.php'),
   checkPath: 'my.php',
-  // the login page and the signed-in check of «Войти через браузер» (the same logout link as above)
-  browser: { loginPath: 'login.php', path: 'my.php', marker: 'logout.php?hash4u=' },
+  // the login page and the signed-in check of «Войти через браузер» (the same logout link as above); uid / pass are the
+  // TBDev engine's sign-in cookies (a fast signal only: without them the page is still checked every 30 s)
+  browser: { loginPath: 'login.php', path: 'my.php', marker: 'logout.php?hash4u=', cookies: ['uid', 'pass'] },
 });
 
 /** The release id of a details link on any mirror (…/details.php?id=123), '' otherwise. */

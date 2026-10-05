@@ -102,6 +102,15 @@ object SourcesProtocol {
     private val LOGIN_FIELDS = setOf("username", "password")
     /** Sites whose browser session may travel in `sessions` (src/sources/transfer.ts SESSION_SITES). */
     val SESSION_SITES = LOGIN_SITES + "rutracker"
+    /**
+     * The hosts a site's session may be on (its mirrors, as in the parsers under src/sources): the phone sends, and the TV takes, a session
+     * only for one of them. A site without an entry here sends none (Task 10 adds labtor, seedoff, BitRu).
+     */
+    val SESSION_HOSTS: Map<String, Set<String>> = mapOf(
+        "rutracker" to setOf("rutracker.org"),
+        "kinozal" to setOf("kinozal.me", "kinozal.guru", "kinozal.tv"),
+        "rustorka" to setOf("rustorka.com"),
+    )
     private val SESSION_FIELDS = setOf("host", "cookies", "ua")
     private val COOKIE_FIELDS = setOf("name", "value")
     private val UA = Regex("^[\\x20-\\x7e]{1,512}$")
@@ -175,7 +184,7 @@ object SourcesProtocol {
             val keys = x.keys()
             while (keys.hasNext()) if (keys.next() !in SESSION_FIELDS) return null
             val host = x.opt("host") as? String ?: return null
-            if (!SiteSession.validHost(host)) return null
+            if (!SiteSession.validHost(host) || host !in SESSION_HOSTS[id].orEmpty()) return null
             val ua = x.opt("ua") as? String ?: return null
             if (!UA.matches(ua)) return null
             val arr = x.opt("cookies") as? JSONArray ?: return null

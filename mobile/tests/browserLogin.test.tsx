@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { mockFetch, type MockResponse } from '../../tests/helpers/fetchMock';
@@ -9,13 +9,15 @@ import { cancelWarmUp, disconnectTv, setTransport, type TvTransport } from '../s
 import { reloadTvs, saveTv, setActiveTv, type SavedTv } from '../src/tv/tvStore';
 import { native, type OmpNativeApi, type TvCloudflareRequest } from '../src/platform/native';
 import { toast } from '../src/ui/toast';
-import { handleTvRequest, phoneBrowserLogin, resetTvRequests, type PhoneCloudflareDeps } from '../src/cloudflare';
+import { handleTvRequest, holdSignInScreen, phoneBrowserLogin, resetSignInScreens, resetTvRequests, signInScreenActive, SIGN_IN_GRACE_MS, type PhoneCloudflareDeps } from '../src/cloudflare';
+import { setSourceOn } from '../../src/sources/store';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth } from '../../src/sources/store';
 import { clearLog, logEntries } from '../../src/lib/log';
 import { kinozal } from '../../src/sources/kinozal';
 import { resetMirrors } from '../../src/sources/mirrors';
 import {
+  BROWSER_STORE_FAILED,
   BROWSER_CAPTCHA,
   BROWSER_DONE_TITLE,
   BROWSER_LOGIN,
@@ -36,10 +38,12 @@ let el: HTMLElement;
 let site: FakeSite;
 let fetched: { url: string; body: any }[];
 let fetchAnswer: (body: any) => MockResponse;
-let sessionCalls: { url: string; token: string; payload: any; sessions: { [id: string]: string[] } }[];
+let sessionCalls: { payload: any; sessions: { [id: string]: string[] } }[];
+let pairedCalls: ({ url: string; token: string } | null)[];
 let sessionAnswer: () => Promise<{ status: number; data: { [k: string]: unknown } | null; missing: string[] }>;
 let logins: BrowserOutcome[];
 const realSend = native.siteSessionSend;
+const realPaired = native.pairedTv;
 
 const noSsap: TvTransport = {
   tvConnect: () => Promise.reject(new Error('ssap used')),
@@ -101,6 +105,8 @@ beforeEach(() => {
   toast.value = '';
   fetched = [];
   sessionCalls = [];
+  pairedCalls = [];
+  resetSignInScreens();
   logins = [];
   fetchAnswer = () => ({ body: '{"ok":true}' });
   sessionAnswer = () => Promise.resolve({ status: 200, data: { ok: true, sessions: { kinozal: 'ok' } }, missing: [] });
@@ -111,6 +117,10 @@ beforeEach(() => {
     if (url === BASE + '/omp/info') return { body: JSON.stringify({ name: 'Гостиная', version: '0.15.0', paired: true, foreground: true }) };
     return fetchAnswer(body);
   });
+  native.pairedTv = (t) => {
+    pairedCalls.push(t);
+    return Promise.resolve();
+  };
   native.siteSessionSend = (o) => {
     sessionCalls.push(o as any);
     return sessionAnswer();
@@ -126,6 +136,7 @@ afterEach(async () => {
   unregisterSource('kinozal');
   setBrowserLoginPlatform(null);
   native.siteSessionSend = realSend;
+  native.pairedTv = realPaired;
   cancelWarmUp();
   await disconnectTv();
   setTransport(native);
@@ -159,6 +170,13 @@ describe('phone: «Войти через браузер» on the site screen', (
     expect(site.secrets).toEqual({});
     expect(site.cleared.length).toBe(3);
     expect(btn(BROWSER_LOGIN)).toBeTruthy();
+    // signed in, but the encrypted storage refused it: said so, no marker
+    logins = [{ result: 'store_failed' }];
+    act(() => btn(BROWSER_LOGIN)!.click());
+    await flush();
+    expect(toast.value).toBe(BROWSER_STORE_FAILED);
+    expect(site.secrets).toEqual({});
+    expect(el.textContent).not.toContain(BROWSER_DONE_TITLE);
   });
 
   it('«Передать вход на телевизор» of a browser session goes natively with the hosts, never a cookie in the page', async () => {
@@ -170,8 +188,10 @@ describe('phone: «Войти через браузер» on the site screen', (
     act(() => btn(SEND_LOGIN)!.click());
     await flush();
     const c = sessionCalls[0];
-    expect(c.url).toBe(BASE);
-    expect(c.token).toBe(TOKEN);
+    // the target is registered as the paired TV first; the send call itself names no address
+    expect(pairedCalls[pairedCalls.length - 1]).toEqual({ url: BASE, token: TOKEN });
+    expect((c as any).url).toBeUndefined();
+    expect((c as any).token).toBeUndefined();
     expect(c.sessions).toEqual({ kinozal: ['kinozal.me', 'kinozal.guru', 'kinozal.tv'] });
     expect(c.payload.logins).toBeUndefined();
     expect(c.payload.sources).toEqual({ kinozal: false });
@@ -219,6 +239,10 @@ describe('phone: the TV asks «Войти на телефоне»', () => {
       },
     };
     const req: TvCloudflareRequest = { id: 'c9', site: 'Kinozal', url: 'https://kinozal.tv/', kind: 'login', source: 'kinozal' };
+    // a site this phone has turned off: declined without a sheet
+    await handleTvRequest({ ...req, id: 'c8' }, deps(n, toasts));
+    expect(declined).toEqual(['c8']);
+    setSourceOn('kinozal', true);
     await handleTvRequest(req, deps(n, toasts));
     expect(sheets[0].forTv).toBe('c9');
     expect(sheets[0].mode).toBe('phone');
@@ -228,8 +252,32 @@ describe('phone: the TV asks «Войти на телефоне»', () => {
     // a root that is not the site's, or an unknown site
     await handleTvRequest({ ...req, id: 'c10', url: 'https://evil.example/' }, deps(n, toasts));
     await handleTvRequest({ ...req, id: 'c11', source: 'nosuch' }, deps(n, toasts));
-    expect(declined).toEqual(['c10', 'c11']);
+    expect(declined).toEqual(['c8', 'c10', 'c11']);
     expect(sheets.length).toBe(1);
+  });
+
+  it('the phone listens for «Войти на телефоне» only on a sign-in screen and 5 minutes after it', () => {
+    vi.useFakeTimers();
+    try {
+      expect(signInScreenActive()).toBe(false);
+      const a = holdSignInScreen();
+      const b = holdSignInScreen();
+      expect(signInScreenActive()).toBe(true);
+      a();
+      a();
+      b();
+      vi.advanceTimersByTime(SIGN_IN_GRACE_MS - 1000);
+      expect(signInScreenActive()).toBe(true);
+      // back on the screen within the grace: still on, and the old timer does not end it
+      const c = holdSignInScreen();
+      vi.advanceTimersByTime(5000);
+      expect(signInScreenActive()).toBe(true);
+      c();
+      vi.advanceTimersByTime(SIGN_IN_GRACE_MS + 1);
+      expect(signInScreenActive()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('the phone platform maps the native answer', async () => {

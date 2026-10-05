@@ -15,6 +15,9 @@ interface CloudflareBrowser {
 
         /** The main page could not be loaded at all (no network, DNS). */
         fun onError()
+
+        /** The visible login page tried to leave the site and was sent back to the login page. */
+        fun onBlocked() {}
     }
 
     /** Starts loading [url] with [userAgent]. */
@@ -59,6 +62,8 @@ class CloudflareSolver(
     private val turnstileGraceMs: Long = TURNSTILE_GRACE_MS,
     private val wallClock: () -> Long = System::currentTimeMillis,
     private val gate: CheckGate = WEB_CHECKS,
+    /** A host's browser-session User-Agent (null = [userAgent]): the clearance must match the UA its requests use. */
+    private val agentFor: ((String) -> String?)? = null,
 ) : CloudflareSolving {
     enum class Result { SOLVED, INTERACTIVE, FAILED }
 
@@ -129,7 +134,7 @@ class CloudflareSolver(
             }
             browser = b
             try {
-                b.open(root.toString(), userAgent(), this)
+                b.open(root.toString(), agentFor?.invoke(host) ?: userAgent(), this)
             } catch (e: Throwable) {
                 return finish(Result.FAILED)
             }
@@ -279,6 +284,21 @@ class ExclusiveGate : CheckGate {
  * __Host- cookies only host-only on "/".
  */
 object WebCookieCleanup {
+    /** origin + directory of [url] ("https://a.b/forum/x.php?q" → "https://a.b/forum/"); null for other schemes. */
+    fun directoryKey(url: String): String? {
+        val u = try {
+            java.net.URI(url)
+        } catch (e: Exception) {
+            return null
+        }
+        val scheme = u.scheme?.lowercase() ?: return null
+        if (scheme != "http" && scheme != "https") return null
+        val host = u.host?.lowercase() ?: return null
+        val path = u.rawPath ?: "/"
+        val dir = if (path.endsWith("/")) path else path.substring(0, path.lastIndexOf('/') + 1).ifEmpty { "/" }
+        return scheme + "://" + host + (if (u.port > 0) ":" + u.port else "") + dir
+    }
+
     fun pathPrefixes(path: String?): List<String> {
         val out = mutableListOf("/")
         val parts = (path ?: "/").split('/').filter { it.isNotEmpty() }

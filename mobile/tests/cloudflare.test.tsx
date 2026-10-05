@@ -69,6 +69,11 @@ function fakeNative() {
     cloudflarePending() {
       return Promise.resolve(f.pending);
     },
+    paired: [] as ({ url: string; token: string } | null)[],
+    pairedTv(t: { url: string; token: string } | null) {
+      f.paired.push(t);
+      return Promise.resolve();
+    },
     logins: [] as BrowserLoginRequest[],
     loginAnswer: { result: 'ok', sent: true } as { result?: string; sent?: boolean; host?: string },
     siteBrowserLogin(req: BrowserLoginRequest) {
@@ -193,9 +198,12 @@ describe('phone: the visible check', () => {
     expect(n.sheets.length).toBe(1);
     tv.value = ATV;
     expect(n.watch[1]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY, notifyLogin: WATCH_NOTIFY_LOGIN });
+    // the paired TV is registered natively whatever the polling (session cookies go only there)
+    expect(n.paired).toEqual([null, { url: 'http://192.168.1.40:8095', token: TOKEN }]);
     // no site with the switch on: the phone stops listening to the TV
     setCloudflareBypass('rustorka', false);
     expect(n.watch[2]).toBeNull();
+    expect(n.paired.length).toBe(2);
     setCloudflareBypass('rustorka', true);
     expect(n.watch[3]).toEqual({ url: 'http://192.168.1.40:8095', token: TOKEN, notify: WATCH_NOTIFY, notifyLogin: WATCH_NOTIFY_LOGIN });
     // a live event
