@@ -2,10 +2,16 @@
 // each opening the torrent screen; «Смотреть на ТВ» / «Продолжить на ТВ» for the chosen season.
 // With the TMDB show found: a hero (backdrop, poster, years · rating · genres, overview), every season TMDB knows (the
 // ones missing from «Мои» dimmed, with «Найти раздачи»), and the chosen season's TMDB name and overview. Without TMDB
-// (no key, offline, no match) the simple layout stays, with no error shown.
+// (no key, offline, no match) the simple layout stays, with no error shown. The hero has the series' status pill; a
+// season still to come is a chip «Сезон 5 · с 3 мая» with «Напомнить» (a monitoring subscription for that season).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { lang, t, tp } from '../../../src/i18n';
-import { Icon } from '../ui/Icon';
+import { Icon, ICONS } from '../ui/Icon';
+import { SeriesPill } from '../ui/SeriesPill';
+import { showToast } from '../ui/toast';
+import { askNotifyOnce, monitorVersion, reloadMonitor } from '../monitor/ui';
+import { addSubscription, loadSubs, sameQuery } from '../../../src/monitor/subs';
+import { airDateText, upcomingSeasons, type Upcoming } from '../lib/seriesStatus';
 import { Poster, qualityBadge } from '../ui/Poster';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate, type MRoute } from '../nav';
@@ -143,6 +149,7 @@ function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
         <div class="m-tc-info">
           <h1 class="m-tc-title m-series-title">{card.title || libraryTitle(group.lead).title}</h1>
           {meta && <span class="m-muted m-small m-sh-meta">{meta}</span>}
+          <SeriesPill card={card} />
           <span class="m-muted m-small">{groupLabel(group)}</span>
         </div>
       </div>
@@ -177,6 +184,35 @@ function SeasonAbout({ id, number }: { id: number; number: number }) {
     <div class="m-sh-season-about">
       {name && <span class="m-small m-sh-season-name">{name}</span>}
       {data.overview && <span class="m-small m-muted m-sh-season-overview">{data.overview}</span>}
+    </div>
+  );
+}
+
+/** A season still to come: its day, and «Напомнить» (a subscription for it), or «Напоминание включено» when one exists. */
+function FutureSeason({ card, season }: { card: CatalogCard; season: Upcoming }) {
+  void monitorVersion.value; // re-read after a subscription is added
+  const query = torrentQuery(card, season.number);
+  const on = loadSubs().some((s) => sameQuery(s.query, query));
+  const remind = () => {
+    const first = loadSubs().length === 0;
+    const saved = addSubscription({ query: query, quality: '', sources: null, notify: true });
+    if (!saved) return;
+    if (first) void askNotifyOnce().catch(() => {});
+    reloadMonitor();
+    showToast(t('titleCard.wantDone'));
+  };
+  return (
+    <div class="m-sh-missing m-sh-future">
+      <p class="m-small">{t('series.seasonComes', { date: airDateText(season.airDate) })}</p>
+      {on ? (
+        <button type="button" class="m-btn m-btn-secondary" onClick={() => navigate({ name: 'news', seg: 'subs' })}>
+          {t('series.reminderOn')}
+        </button>
+      ) : (
+        <button type="button" class="m-btn m-btn-primary" onClick={remind}>
+          {t('series.remind')}
+        </button>
+      )}
     </div>
   );
 }
@@ -248,18 +284,22 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
     if (row && on) row.scrollLeft = Math.max(0, on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2);
   }, [!!card]);
   // TMDB's seasons (specials are not listed) and the ones of «Мои»; those TMDB has and «Мои» lacks are missing
+  // seasons still to come (dated later, or the next episode's season not started yet) that «Мои» lacks
   const tmdbSeasons = card ? card.seasons : [];
   const tmdbOf = (n: number): Season | undefined => tmdbSeasons.filter((x) => x.number === n)[0];
-  const missing = tmdbSeasons.map((x) => x.number).filter((n) => group.seasons.indexOf(n) < 0);
-  const chips = group.seasons.concat(missing).sort((a, b) => a - b);
+  const future = card ? upcomingSeasons(card).filter((u) => group.seasons.indexOf(u.number) < 0) : [];
+  const futureOf = (n: number): Upcoming | undefined => future.filter((u) => u.number === n)[0];
+  const missing = tmdbSeasons.map((x) => x.number).filter((n) => group.seasons.indexOf(n) < 0 && !futureOf(n));
+  const chips = group.seasons.concat(missing, future.map((u) => u.number)).sort((a, b) => a - b);
   // a season whose torrents were deleted (or a TMDB season not offered any more): the newest one left
   const season = chips.indexOf(chosen) >= 0 ? chosen : firstSeason(group);
   const isMissing = !!card && missing.indexOf(season) >= 0;
+  const coming = card ? futureOf(season) : undefined;
   const pick = (n: number) => {
     setChosen(n);
     chosenSeason.set(route, n);
   };
-  const rows = isMissing ? [] : seasonMembers(group, season);
+  const rows = isMissing || coming ? [] : seasonMembers(group, season);
   const lead = libraryTitle(group.lead);
   const info = season !== NO_SEASON ? tmdbOf(season) : undefined;
   const caption = info ? seasonCaption(info) : '';
@@ -303,6 +343,21 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
         <div class="m-chips m-tc-chips" ref={chipsRef}>
           {chips.map((n) => {
             const gap = missing.indexOf(n) >= 0;
+            const soon = futureOf(n);
+            if (soon) {
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  class={'m-chip m-chip-future' + (n === season ? ' on' : '')}
+                  aria-pressed={n === season}
+                  onClick={() => pick(n)}
+                >
+                  <Icon d={ICONS.clock} size={14} />
+                  {t('series.futureSeason', { n, date: airDateText(soon.airDate) })}
+                </button>
+              );
+            }
             return (
               <button
                 key={n}
@@ -324,7 +379,9 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
         </div>
       )}
       {caption && <span class="m-small m-muted m-sh-caption">{caption}</span>}
-      {isMissing && card ? (
+      {coming && card ? (
+        <FutureSeason card={card} season={coming} />
+      ) : isMissing && card ? (
         <div class="m-sh-missing">
           <p class="m-muted m-small">{t('series.notInLibrary')}</p>
           <button

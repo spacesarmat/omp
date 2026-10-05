@@ -72,6 +72,8 @@ export const ru = {
     day: '{d} {month}',
     dayTime: '{day} {time}',
     dayYear: '{day} {year}',
+    /** A short numeric day: «12.10». */
+    numeric: '{d}.{m}',
   },
   settings: {
     language: {
@@ -231,6 +233,18 @@ export const ru = {
     continue: 'Продолжить',
     notInLibrary: 'Этого сезона нет в каталоге',
     missingSeason: 'Сезон {n}, нет в каталоге',
+    statusAiring: 'Выходит',
+    nextEpisode: 'следующая серия {date}',
+    statusEnded: 'Завершён',
+    statusCanceled: 'Отменён',
+    statusProduction: 'В производстве',
+    statusSoon: 'Скоро новый сезон',
+    futureSeason: 'Сезон {n} · с {date}',
+    seasonComes: 'Сезон выйдет {date}',
+    remind: 'Напомнить',
+    reminderOn: 'Напоминание включено',
+    badgeNext: 'новая серия {date}',
+    badgeSeason: 'новый сезон',
   },
   donate: {
     codeExpired: 'Срок кода истёк',

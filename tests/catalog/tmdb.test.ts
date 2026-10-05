@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { endpointOf, noveltiesUrl, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery } from '../../src/catalog/tmdb';
+import { endpointOf, noveltiesUrl, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf } from '../../src/catalog/tmdb';
 import { applyLanguageSetting } from '../../src/i18n';
 import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
 
@@ -57,10 +57,54 @@ describe('sanitizers', () => {
   });
   it('a series card has its seasons without specials and the airing state', () => {
     const c = sanitizeCard(E, TV_CARD, 'tv')!;
-    expect(c.seasons).toEqual([{ number: 2, episodes: 10, year: 2026, aired: 6 }, { number: 1, episodes: 8, year: 2024, aired: 8 }]);
+    expect(c.seasons).toEqual([
+      { number: 2, episodes: 10, year: 2026, aired: 6, airDate: '2026-08-01' },
+      { number: 1, episodes: 8, year: 2024, aired: 8, airDate: '2024-03-01' },
+    ]);
     expect(c.airing).toBe(true);
     expect(c.cast.length).toBeLessThanOrEqual(8);
     expect(c.runtime).toBeGreaterThan(0);
+  });
+  it('a series card has its status, next episode and last air date', () => {
+    const c = sanitizeCard(E, { ...TV_CARD, status: ' Returning Series ', last_air_date: '2026-10-05' }, 'tv')!;
+    expect(c.status).toBe('returning');
+    expect(c.nextEpisode).toEqual({ season: 2, episode: 7, airDate: '2026-10-12' });
+    expect(c.lastAirDate).toBe('2026-10-05');
+    // nothing known: unknown, never invented
+    const bare = sanitizeCard(E, { ...TV_CARD, next_episode_to_air: null, seasons: [{ season_number: 1, episode_count: 3, air_date: null }] }, 'tv')!;
+    expect(bare.status).toBe('');
+    expect(bare.nextEpisode).toBeNull();
+    expect(bare.lastAirDate).toBe('');
+    expect(bare.seasons[0].airDate).toBe('');
+  });
+  it('maps the TMDB statuses to codes', () => {
+    expect(statusOf('Returning Series')).toBe('returning');
+    expect(statusOf('Ended')).toBe('ended');
+    expect(statusOf('Canceled')).toBe('canceled');
+    expect(statusOf('Cancelled')).toBe('canceled');
+    expect(statusOf('In Production')).toBe('production');
+    expect(statusOf('Planned')).toBe('planned');
+    expect(statusOf('Pilot')).toBe('planned');
+    expect(statusOf('Rumored')).toBe('');
+    expect(statusOf(5)).toBe('');
+    expect(statusOf(undefined)).toBe('');
+  });
+  it('validates the next episode and the dates', () => {
+    expect(nextEpisodeOf({ season_number: 3, episode_number: 1, air_date: ' 2027-05-03 ' })).toEqual({ season: 3, episode: 1, airDate: '2027-05-03' });
+    expect(nextEpisodeOf({ season_number: 3, episode_number: 1, air_date: 'soon' })).toEqual({ season: 3, episode: 1, airDate: '' });
+    expect(nextEpisodeOf({ season_number: 0, episode_number: 1 })).toBeNull();
+    expect(nextEpisodeOf({ season_number: 2, episode_number: -1 })).toBeNull();
+    expect(nextEpisodeOf({ season_number: '2', episode_number: 1 })).toBeNull();
+    expect(nextEpisodeOf([1, 2])).toBeNull();
+    expect(nextEpisodeOf('x')).toBeNull();
+    const c = sanitizeCard(E, { ...TV_CARD, last_air_date: '2026/10/05', seasons: [{ season_number: 1, episode_count: 3, air_date: '<b>' }] }, 'tv')!;
+    expect(c.lastAirDate).toBe('');
+    expect(c.seasons[0].airDate).toBe('');
+  });
+  it('a film card has no series fields to speak of', () => {
+    const c = sanitizeCard(E, { ...MOVIE_CARD, status: 'Released', next_episode_to_air: { season_number: 1, episode_number: 1 } }, 'movie')!;
+    expect(c.status).toBe('');
+    expect(c.nextEpisode).toBeNull();
   });
   it('a film card', () => {
     const c = sanitizeCard(E, MOVIE_CARD, 'movie')!;

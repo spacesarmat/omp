@@ -125,6 +125,12 @@ export function findGroup(list: Torrent[], key: string): SeriesGroup | null {
   return members.length ? makeGroup(key, members) : null;
 }
 
+/** A lone series torrent as a group of one (its TMDB lookup and tile badge); null for a film. */
+export function singleGroup(tor: Torrent): SeriesGroup | null {
+  const key = seriesKey(tor);
+  return key ? makeGroup(key, [tor]) : null;
+}
+
 /** The torrents of one season (a pack of seasons is listed under each of them). */
 export function seasonMembers(g: SeriesGroup, season: number): Torrent[] {
   return g.members.filter((m) => seasonKeys(m).indexOf(season) >= 0);

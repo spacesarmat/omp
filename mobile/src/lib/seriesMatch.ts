@@ -1,6 +1,7 @@
 // The series screen: the TMDB show of a library series, found like the release posters are (a TMDB search for the
 // poster query of the title, the year preferred) and kept in memory per series key and language, so a revisit is instant.
 // A failed lookup (offline, no key) is not kept; a search with no show is.
+import { signal } from '@preact/signals';
 import { lang } from '../../../src/i18n';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { findShow, pickShow as pick } from './tmdbShow';
@@ -49,7 +50,57 @@ export function matchSeries(g: SeriesGroup): Promise<CatalogCard | null> {
   );
 }
 
+// «Мои» tiles: lookups of the VISIBLE series cards only, at most 2 at a time, one per series key and language.
+// A failed lookup (offline) is not retried for a while; a found card or «no show» is in `matches` for good.
+const MAX_LOOKUPS = 2;
+const RETRY_MS = 10 * 60 * 1000;
+let running = 0;
+let generation = 0;
+const waiting: { key: string; group: SeriesGroup }[] = [];
+const pending = new Set<string>();
+const failedAt = new Map<string, number>();
+
+/** Bumped when a tile lookup ends: the tiles read `cachedSeriesMatch` again. */
+export const seriesMatchVersion = signal(0);
+
+function pump(): void {
+  while (running < MAX_LOOKUPS && waiting.length) {
+    const job = waiting.shift()!;
+    running++;
+    const gen = generation;
+    const done = (ok: boolean) => {
+      if (gen !== generation) return;
+      running--;
+      pending.delete(job.key);
+      if (!ok) failedAt.set(job.key, Date.now());
+      seriesMatchVersion.value++;
+      pump();
+    };
+    matchSeries(job.group).then(
+      () => done(true),
+      () => done(false),
+    );
+  }
+}
+
+/** A tile came into view: look its series up unless it is known, queued or failed lately. */
+export function requestSeriesMatch(g: SeriesGroup): void {
+  if (cachedSeriesMatch(g.key) !== undefined) return;
+  const key = cacheKey(g.key);
+  if (pending.has(key)) return;
+  const failed = failedAt.get(key);
+  if (failed !== undefined && Date.now() - failed < RETRY_MS) return;
+  pending.add(key);
+  waiting.push({ key, group: g });
+  pump();
+}
+
 /** Tests: forget every match. */
 export function resetSeriesMatches(): void {
   matches.clear();
+  waiting.length = 0;
+  pending.clear();
+  failedAt.clear();
+  running = 0;
+  generation++;
 }

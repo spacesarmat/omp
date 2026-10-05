@@ -32,6 +32,7 @@ import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
 import { Discover } from './catalog/Discover';
 import { usePinchStep } from '../ui/usePinchStep';
 import { SeriesMenu } from '../ui/SeriesMenu';
+import { SeriesTileBadge } from '../ui/SeriesTileBadge';
 import { groupLabel, groupLibrary, groupSize, itemHashes, type LibraryItem, type SeriesGroup } from '../lib/seriesGroups';
 
 const POLL_MS = 15000;
@@ -683,6 +684,7 @@ export function Library() {
                             <span class="m-card-title"><GroupTitle g={it} /></span>
                             <span class="m-muted m-small m-vrow-meta">
                               <span>{formatBytes(groupSize(it))}</span>
+                              <SeriesTileBadge group={it} />
                             </span>
                           </span>
                         </button>
@@ -704,6 +706,7 @@ export function Library() {
                             <span>{formatBytes(t.torrent_size || 0)}</span>
                             {q && <span class="m-badge-inline">{q}</span>}
                             {eps && <span>{eps}</span>}
+                            <SeriesTileBadge tor={t} />
                           </span>
                         </span>
                       </button>
@@ -721,6 +724,7 @@ export function Library() {
                       <button type="button" class={'m-crow' + (it.kind === 'series' ? ' m-series-card' : '')} {...pressProps(it)}>
                         {mark(it)}
                         <span class="m-crow-title">{it.kind === 'series' ? <GroupTitle g={it} /> : <ShortTitle tor={it.tor} />}</span>
+                        {it.kind === 'series' ? <SeriesTileBadge group={it} /> : <SeriesTileBadge tor={it.tor} />}
                         <span class="m-muted m-small m-crow-size">{formatBytes(it.kind === 'series' ? groupSize(it) : it.tor.torrent_size || 0)}</span>
                       </button>
                       {moreBtn(it)}
@@ -739,6 +743,7 @@ export function Library() {
                       <Poster torrent={tor} morphKey={k} badge={g ? groupLabel(g) : undefined} />
                       {mark(it)}
                       <span class="m-card-title">{g ? <GroupTitle g={g} /> : <ShortTitle tor={tor} />}</span>
+                      {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
                       {view === 'large' && <span class="m-muted m-small">{formatBytes(g ? groupSize(g) : tor.torrent_size || 0)}</span>}
                     </button>
                   );

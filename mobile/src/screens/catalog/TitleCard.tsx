@@ -1,7 +1,9 @@
 // «Обзор» → a film or series card: TMDB details, «Найти раздачи» (the whole title or one season) and «Хочу посмотреть».
-// A series has season chips; the chosen season shows its episodes and «Найти раздачи на сезон» / «Открыть в медиатеке».
+// A series has its status pill («Выходит · следующая серия …») and season chips; the chosen season shows its episodes and «Найти раздачи на сезон» / «Открыть в медиатеке».
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { t, tp, fmtDuration, fmtDate } from '../../../../src/i18n';
+import { t, tp, fmtDuration } from '../../../../src/i18n';
+import { airDateText } from '../../lib/seriesStatus';
+import { SeriesPill } from '../../ui/SeriesPill';
 import { goBack, navigate, currentRoute, type MRoute } from '../../nav';
 import { Icon } from '../../ui/Icon';
 import { torrents } from '../../../../src/store/library';
@@ -50,15 +52,6 @@ export function defaultSeason(seasons: Season[]): number {
     if (s.aired > 0 && s.number > best) best = s.number;
   });
   return best || first || 1;
-}
-
-/** «8 авг.»; with the year when it is not this year. The local date of a TMDB 'YYYY-MM-DD'. */
-function airDateText(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!m) return '';
-  const d = new Date(+m[1], +m[2] - 1, +m[3]);
-  const day = fmtDate(d.getTime(), 'day');
-  return d.getFullYear() === new Date().getFullYear() ? day : t('date.dayYear', { day: day, year: d.getFullYear() });
 }
 
 /** The episodes of one season: a skeleton while loading, a small error with «Повторить», one overview open at a time. */
@@ -244,6 +237,7 @@ function Body({ card }: { card: CatalogCard }) {
         <div class="m-tc-info">
           <h1 class="m-tc-title">{card.title}</h1>
           <span class="m-muted m-small m-tc-meta">{metaText(card)}</span>
+          {card.kind === 'tv' && <SeriesPill card={card} />}
           {card.rating > 0 && <span class="m-tc-rating">{ratingText(card.rating) + ' TMDB'}</span>}
         </div>
       </div>

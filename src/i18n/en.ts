@@ -73,6 +73,7 @@ export const en: EnDict<typeof ru> = {
     day: '{month} {d}',
     dayTime: '{day}, {time}',
     dayYear: '{day}, {year}',
+    numeric: '{m}/{d}',
   },
   settings: {
     language: {
@@ -230,6 +231,18 @@ export const en: EnDict<typeof ru> = {
     continue: 'Continue',
     notInLibrary: 'This season is not in your library',
     missingSeason: 'Season {n}, not in your library',
+    statusAiring: 'Airing',
+    nextEpisode: 'next episode {date}',
+    statusEnded: 'Ended',
+    statusCanceled: 'Canceled',
+    statusProduction: 'In production',
+    statusSoon: 'New season soon',
+    futureSeason: 'Season {n} · from {date}',
+    seasonComes: 'The season comes out {date}',
+    remind: 'Remind me',
+    reminderOn: 'Reminder on',
+    badgeNext: 'new episode {date}',
+    badgeSeason: 'new season',
   },
   donate: {
     codeExpired: 'The code has expired',
