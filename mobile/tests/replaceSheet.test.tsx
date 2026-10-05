@@ -7,6 +7,7 @@ vi.mock('../../src/monitor/replace', async (orig) => ({
   replaceWithResult: vi.fn(),
 }));
 
+import { applyLanguageSetting } from '../../src/i18n';
 import { ReplaceSheet } from '../src/ui/ReplaceSheet';
 import { toast } from '../src/ui/toast';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
@@ -153,5 +154,41 @@ describe('ReplaceSheet', () => {
     });
     await flush();
     expect(el.textContent).toContain('ещё 1 вариант ›');
+  });
+});
+
+describe('ReplaceSheet in English', () => {
+  afterEach(() => applyLanguageSetting('ru'));
+
+  it('shows the title, the notes and the buttons in English', async () => {
+    applyLanguageSetting('en');
+    await mount();
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Replace the release');
+    expect(el.querySelector('.m-rep-box .m-muted')!.textContent).toBe('Now');
+    expect(el.querySelector('.m-rep-box.new .m-accent')!.textContent).toBe('New · rutor · 820 seeds');
+    const moves = el.querySelector('.m-rep-moves')!.textContent!;
+    expect(moves).toContain('Watch history and stop positions carry over');
+    expect(moves).toContain('The “Skip” settings and the category carry over');
+    expect(moves).toContain('The old release is removed from the server');
+    expect(el.querySelector('.m-set-pick')!.textContent).toBe('Another release1 more option ›');
+    expect(Array.from(el.querySelectorAll('.m-marks-actions button')).map((b) => b.textContent)).toEqual(['Cancel', 'Replace']);
+    // everything but the tracker release titles and sizes is English
+    const own = [moves, el.querySelector('.m-sheet-title')!.textContent, el.querySelector('.m-set-pick')!.textContent, el.querySelector('.m-marks-actions')!.textContent];
+    expect(own.join(' ')).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('the watch variant and the failure line are English', async () => {
+    applyLanguageSetting('en');
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    close = vi.fn();
+    await act(async () => render(<ReplaceSheet finding={finding} thenWatch onClose={close} />, el));
+    await flush();
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Replace and watch');
+    expect(el.textContent).toContain('The new release replaces the old one first, then watching starts on the TV.');
+    replaceMock.mockResolvedValue({ ok: false, error: 'Could not replace the release.' });
+    click(byText('Replace and watch'));
+    await flush();
+    expect(el.querySelector('[role=alert]')!.textContent).toBe('Could not replace the release.');
   });
 });

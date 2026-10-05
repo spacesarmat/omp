@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Sheet } from './Sheet';
 import { errorMessage } from '../../../src/api/http';
+import { t } from '../../../src/i18n';
 
 const LEN = 4;
 
@@ -18,7 +19,7 @@ export function CodeSheet({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const cells = useRef<(HTMLInputElement | null)[]>([]);
-  const title = tvName + ' · Android TV';
+  const title = t('remote.code.title', { name: tvName });
   const complete = digits.every((d) => d !== '');
 
   const focus = (i: number) => cells.current[Math.max(0, Math.min(LEN - 1, i))]?.focus();
@@ -60,8 +61,8 @@ export function CodeSheet({
     <Sheet onClose={onCancel} label={title}>
       <form class="m-field m-code-form" onSubmit={submit}>
         <div class="m-sheet-title">{title}</div>
-        <p class="m-muted m-note">На телевизоре откройте OMP → Настройки → «Подключить телефон» и введите код с экрана.</p>
-        <div class="m-code" role="group" aria-label="Код с экрана телевизора">
+        <p class="m-muted m-note">{t('remote.code.note')}</p>
+        <div class="m-code" role="group" aria-label={t('remote.code.group')}>
           {digits.map((d, i) => (
             <input
               key={i}
@@ -72,7 +73,7 @@ export function CodeSheet({
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
-              aria-label={'Цифра ' + (i + 1)}
+              aria-label={t('remote.code.digit', { n: i + 1 })}
               value={d}
               onInput={(e) => {
                 const input = e.target as HTMLInputElement;
@@ -102,10 +103,10 @@ export function CodeSheet({
           </div>
         )}
         <button type="submit" class="m-btn m-btn-primary" disabled={!complete || busy}>
-          Подключить
+          {t('remote.code.connect')}
         </button>
         <button type="button" class="m-btn m-btn-text" onClick={onCancel}>
-          Отмена
+          {t('common.cancel')}
         </button>
       </form>
     </Sheet>

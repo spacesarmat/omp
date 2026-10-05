@@ -3,11 +3,12 @@ import { Clipboard } from '@capacitor/clipboard';
 import { Sheet } from './Sheet';
 import { showToast } from './toast';
 import { donateOpen, closeDonate, activeMethods, applySupportCode, activeSupportUntil, supportShared, supportThanks, type DonateMethod } from '../donate';
+import { t } from '../../../src/i18n';
 
 export interface DonateActions {
   openUrl(url: string): void;
   copy(text: string): Promise<unknown>;
-  /** Text of the clipboard («Вставить» of the support code). */
+  /** Text of the clipboard (the Paste button of the support code). */
   paste(): Promise<string>;
 }
 
@@ -33,13 +34,13 @@ function SupportCodeBox() {
   const [busy, setBusy] = useState(false);
   const paste = async () => {
     try {
-      const t = await actions.paste();
-      if (t) {
-        setCode(t.trim());
+      const text = await actions.paste();
+      if (text) {
+        setCode(text.trim());
         setError('');
-      } else showToast('Буфер обмена пуст');
+      } else showToast(t('donate.clipboardEmpty'));
     } catch (e) {
-      showToast('Не удалось вставить');
+      showToast(t('donate.pasteFailed'));
     }
   };
   const apply = async () => {
@@ -52,24 +53,24 @@ function SupportCodeBox() {
         setCode('');
       } else setError(r.error);
     } catch (e) {
-      setError('Код не подходит');
+      setError(t('donate.codeInvalid'));
     } finally {
       setBusy(false);
     }
   };
   return (
     <div class="m-support">
-      <div class="m-support-title">Уже поддержали?</div>
+      <div class="m-support-title">{t('donate.already')}</div>
       <div class="m-muted m-small m-support-text">
-        Код поддержки опубликован на Boosty для подписчиков и меняется каждый месяц. С кодом OMP не просит о поддержке ни на телефоне, ни на телевизорах.
+        {t('donate.codeText')}
       </div>
       <label class="m-support-label">
-        Код поддержки
+        {t('donate.codeLabel')}
         <input
           class="m-input m-support-input"
           type="text"
           value={code}
-          placeholder="OMP-ГГГГ-ММ-…"
+          placeholder={t('donate.codePlaceholder')}
           autocomplete="off"
           autocapitalize="off"
           spellcheck={false}
@@ -81,10 +82,10 @@ function SupportCodeBox() {
       </label>
       <div class="m-support-actions">
         <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void paste()}>
-          Вставить
+          {t('donate.paste')}
         </button>
         <button type="button" class="m-btn m-btn-primary m-btn-sm" disabled={busy || !code.trim()} onClick={() => void apply()}>
-          Применить
+          {t('donate.apply')}
         </button>
       </div>
       {error && (
@@ -105,16 +106,16 @@ export function DonateSheet({ methods }: { methods?: DonateMethod[] }) {
   const copy = async (address: string) => {
     try {
       await actions.copy(address);
-      showToast('Адрес скопирован');
+      showToast(t('donate.copied'));
     } catch (e) {
-      showToast('Не удалось скопировать');
+      showToast(t('donate.copyFailed'));
     }
   };
   return (
-    <Sheet label="Поддержать OMP" onClose={closeDonate}>
-      <div class="m-sheet-title">Поддержать OMP</div>
+    <Sheet label={t('donate.title')} onClose={closeDonate}>
+      <div class="m-sheet-title">{t('donate.title')}</div>
       <div class="m-sheet-scroll m-donate">
-        <p>OMP бесплатный и без рекламы. Если он вам полезен — можно поддержать разработку. Все функции остаются бесплатными.</p>
+        <p>{t('donate.intro')}</p>
         {list.map((m) =>
           m.id === 'crypto' ? (
             <div class="m-donate-crypto" key={m.id}>
@@ -125,15 +126,15 @@ export function DonateSheet({ methods }: { methods?: DonateMethod[] }) {
                     <span>{w.network}</span>
                     <span class="m-muted m-small m-donate-addr">{w.address}</span>
                   </div>
-                  <button type="button" class="m-btn m-btn-secondary m-btn-sm" aria-label={'Скопировать адрес ' + w.network} onClick={() => void copy(w.address)}>
-                    Скопировать
+                  <button type="button" class="m-btn m-btn-secondary m-btn-sm" aria-label={t('donate.copyAddress', { network: w.network })} onClick={() => void copy(w.address)}>
+                    {t('donate.copy')}
                   </button>
                 </div>
               ))}
             </div>
           ) : (
             <button type="button" class="m-btn m-btn-primary" key={m.id} onClick={() => actions.openUrl(m.url as string)}>
-              {'Поддержать на ' + m.title}
+              {t('donate.onMethod', { title: m.title })}
             </button>
           ),
         )}
@@ -145,7 +146,7 @@ export function DonateSheet({ methods }: { methods?: DonateMethod[] }) {
         )}
       </div>
       <button type="button" class="m-btn m-btn-secondary" onClick={closeDonate}>
-        Закрыть
+        {t('common.close')}
       </button>
     </Sheet>
   );

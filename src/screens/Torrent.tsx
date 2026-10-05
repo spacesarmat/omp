@@ -95,7 +95,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   };
 
   const remove = () => {
-    confirmDialog(t('torrent.deleteAsk'), t('tv.delete')).then((ok) => {
+    confirmDialog(t('torrent.deleteAsk'), t('common.delete')).then((ok) => {
       if (!ok) return;
       c.remove(hash).then(
         () => {
@@ -162,7 +162,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
             {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onPress={() => play(target, targetPos || undefined)} />}
             {queue.length > 0 && <Button label={t('playlist.title')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? displayTitle(tor) : '' })} />}
             <Button label={t('torrent.resetViewed')} onPress={resetViewed} />
-            <Button label={t('tv.delete')} onPress={remove} />
+            <Button label={t('common.delete')} onPress={remove} />
           </FocusGroup>
         </div>
       </div>

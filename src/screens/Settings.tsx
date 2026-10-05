@@ -154,7 +154,7 @@ export function SettingsScreen() {
 
   return (
     <FocusGroup focusKey="SETTINGS" className="screen settings">
-      <h1>{t('tv.topbar.settings')}</h1>
+      <h1>{t('common.settings')}</h1>
       <ChoiceRow
         focusKey="set-language"
         label={t('settings.language.title')}
@@ -189,7 +189,7 @@ export function SettingsScreen() {
       <ChoiceRow label={t('tvSettings.autoNext')} value={s.autoNext} options={onOff()} onChange={(v) => updateSettings({ autoNext: v })} />
       <ChoiceRow label={t('tvSettings.showStats')} value={s.showStats} options={onOff()} onChange={(v) => updateSettings({ showStats: v })} />
 
-      <h2>{t('tvSettings.subtitles')}</h2>
+      <h2>{t('common.subtitles')}</h2>
       <ChoiceRow label={t('tvSettings.subSize')} value={s.subSize} options={subSizeOptions()} onChange={(v) => updateSettings({ subSize: v })} />
       <ChoiceRow label={t('tvSettings.subColor')} value={s.subColor} options={subColorOptions()} onChange={(v) => updateSettings({ subColor: v })} />
       <ChoiceRow label={t('tvSettings.subBackground')} value={s.subBackground} options={onOff()} onChange={(v) => updateSettings({ subBackground: v })} />

@@ -51,10 +51,10 @@ export function UpdateDialog() {
       <FocusGroup key={info.version} focusKey="UPDATE-DIALOG" className="dialog update-dialog" boundary autoFocus>
         <div class="dialog-title">{t('update.available', { version: info.version })}</div>
         {info.notes.length > 0 && <ul class="update-notes">{info.notes.slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>}
-        <div class="muted update-current">{t('tv.updateDialog.current', { version: APP_VERSION })}</div>
+        <div class="muted update-current">{t('update.current', { version: APP_VERSION })}</div>
         <div class="row update-actions">
           <Button label={t('tv.updateDialog.update')} className="primary" onPress={() => { dismissPrompt(); navigate({ name: 'update' }); }} />
-          <Button label={t('tv.updateDialog.later')} onPress={later} />
+          <Button label={t('common.later')} onPress={later} />
           <Button label={t('tv.updateDialog.skip')} onPress={() => { skipVersion(info.version); restore(); }} />
         </div>
       </FocusGroup>

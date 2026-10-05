@@ -62,7 +62,7 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
     const u = username.trim();
     const pw = pass.current;
     if (!u || !pw) {
-      setError(t('tv.login.enterBoth'));
+      setError(t('common.enterCredentials'));
       return;
     }
     setError('');
@@ -126,9 +126,9 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
     <div class="dialog-backdrop">
       <FocusGroup focusKey="LOGIN-DIALOG" className="dialog login-dialog" boundary>
         <div class="dialog-title">{title}</div>
-        <div class="login-label">{t('tv.login.user')}</div>
+        <div class="login-label">{t('common.login')}</div>
         <TextInput focusKey="login-user" value={username} onChange={setUsername} />
-        <div class="login-label">{t('tv.login.password')}</div>
+        <div class="login-label">{t('common.password')}</div>
         <TextInput
           focusKey="login-pass"
           type="password"
@@ -150,8 +150,8 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
           </div>
         )}
         <div class="login-actions">
-          <Button focusKey="login-cancel" label={t('tv.cancel')} onPress={close} />
-          <Button focusKey="login-ok" className="primary" label={busy ? t('tv.login.signingIn') : t('tv.login.signIn')} onPress={submit} />
+          <Button focusKey="login-cancel" label={t('common.cancel')} onPress={close} />
+          <Button focusKey="login-ok" className="primary" label={busy ? t('common.signingIn') : t('common.signIn')} onPress={submit} />
         </div>
       </FocusGroup>
     </div>

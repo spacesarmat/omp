@@ -428,7 +428,7 @@ export function SourcesScreen({
                   <Button
                     focusKey={'src-login-' + s.id}
                     className="src-login"
-                    label={loggedIn(s) ? t('tvSources.signOut') : t('tv.login.signIn')}
+                    label={loggedIn(s) ? t('tvSources.signOut') : t('common.signIn')}
                     onPress={() => (loggedIn(s) ? logout(s) : setLoginFor(s))}
                   />
                 )}
@@ -452,7 +452,7 @@ export function SourcesScreen({
                   <Button
                     focusKey={'src-login-' + s.id}
                     className="src-login"
-                    label={loggedIn(s) ? t('tvSources.signOut') : t('tv.login.signIn')}
+                    label={loggedIn(s) ? t('tvSources.signOut') : t('common.signIn')}
                     onPress={() => (loggedIn(s) ? logout(s) : setLoginFor(s))}
                   />
                 )}

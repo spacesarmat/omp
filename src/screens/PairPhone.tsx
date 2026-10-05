@@ -157,7 +157,7 @@ function AndroidTvPair() {
       </div>
       {srv && <p class="muted">{t('pair.qrPassword')}</p>}
       <div class="row">
-        <Button focusKey="pair-back" label={t('pair.done')} onPress={() => goBack()} />
+        <Button focusKey="pair-back" label={t('common.done')} onPress={() => goBack()} />
         <Button focusKey="pair-new-code" label={t('pair.newCode')} onPress={() => setGeneration((n) => n + 1)} />
       </div>
     </FocusGroup>
@@ -186,7 +186,7 @@ function LgPair() {
         </div>
       )}
       <div class="row">
-        <Button focusKey="pair-back" label={t('pair.done')} onPress={() => goBack()} />
+        <Button focusKey="pair-back" label={t('common.done')} onPress={() => goBack()} />
       </div>
     </FocusGroup>
   );

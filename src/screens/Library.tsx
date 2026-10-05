@@ -92,7 +92,7 @@ export function LibraryScreen() {
 
   const removeTorrent = (hash: string) => {
     const tor = torrents.value.find((x) => x.hash === hash);
-    confirmDialog(t('catalog.deleteAsk', { title: tor ? displayTitle(tor) : hash }), t('tv.delete')).then((ok) => {
+    confirmDialog(t('catalog.deleteAsk', { title: tor ? displayTitle(tor) : hash }), t('common.delete')).then((ok) => {
       if (!ok || !c) return;
       c.remove(hash).then(
         () => { torrents.value = torrents.value.filter((x) => x.hash !== hash); setSel(null); toast(t('catalog.torrentDeleted')); },
@@ -161,7 +161,7 @@ export function LibraryScreen() {
           <div class="catalog-off-title">{t('catalog.unavailable')}</div>
           <div class="catalog-off-reason">{catalogReason(activeServer.value!.name, online)}</div>
           <FocusGroup focusKey="ERROR-ACTIONS" className="actions" autoFocus>
-            <Button label={t('catalog.retry')} onPress={() => load()} />
+            <Button label={t('common.retry')} onPress={() => load()} />
             <Button label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
           </FocusGroup>
           <div class="catalog-off-hint">{catalogHint()}</div>
@@ -204,7 +204,7 @@ export function LibraryScreen() {
       {error && (
         <FocusGroup focusKey="LIB-BANNER" className="banner-error banner-row">
           <span class="banner-text">{cachedBanner(torrentsAt.value)}</span>
-          <Button label={t('catalog.retry')} onPress={() => load()} onFocused={() => setSel(null)} />
+          <Button label={t('common.retry')} onPress={() => load()} onFocused={() => setSel(null)} />
         </FocusGroup>
       )}
       {!loaded && <Spinner text={t('catalog.loading')} />}

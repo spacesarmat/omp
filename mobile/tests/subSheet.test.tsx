@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
+import { applyLanguageSetting } from '../../src/i18n';
 import { SubSheet, parseGb, parseSeeds } from '../src/ui/SubSheet';
 import { SubFindings } from '../src/screens/SubFindings';
 import { currentRoute, navigate, resetTo } from '../src/nav';
@@ -222,5 +223,52 @@ describe('SubFindings', () => {
     setSourceOn('fake', true);
     mount({ id: 'nope' });
     expect(el.textContent).toContain('Подписка удалена');
+  });
+});
+
+describe('SubSheet in English', () => {
+  afterEach(() => applyLanguageSetting('ru'));
+
+  it('shows the form, the errors and the sources picker in English', () => {
+    applyLanguageSetting('en');
+    sheet();
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Subscription');
+    const form = el.querySelector('.m-sub-form')!.textContent!;
+    for (const w of ['What to search for', 'Quality', 'Minimum seeds', 'Size up to, GB', 'Sources', 'all enabled', 'Notify', 'about every new release']) {
+      expect(form).toContain(w);
+    }
+    expect(el.querySelector('#m-sub-size')!.getAttribute('placeholder')).toBe('no limit');
+    expect(form).not.toMatch(/[А-Яа-яЁё]/);
+    expect(Array.from(el.querySelectorAll('.m-marks-actions button')).map((b) => b.textContent)).toEqual(['Cancel', 'Save']);
+    click(byText('Save'));
+    expect(error()).toBe('Enter what to search for');
+    type('m-sub-query', 'Dune');
+    type('m-sub-seeds', 'x');
+    click(byText('Save'));
+    expect(error()).toBe('Seeds: a whole number from 1, or leave the field empty');
+    type('m-sub-seeds', '');
+    type('m-sub-size', '0');
+    click(byText('Save'));
+    expect(error()).toBe('Size: a number above zero, for example 20, or leave the field empty');
+    click(el.querySelector('.m-set-pick'));
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Sources');
+    expect(el.querySelector('.m-opt-name')!.textContent).toBe('All enabled');
+    expect(byText('Done')).toBeTruthy();
+  });
+
+  it('toasts, the delete question and the sources count are English', async () => {
+    applyLanguageSetting('en');
+    const close = vi.fn();
+    sheet({ onClose: close });
+    type('m-sub-query', 'Dune');
+    click(byText('Save'));
+    await flush();
+    expect(toast.value).toBe('Subscription created');
+    const [s] = loadSubs();
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    sheet({ sub: s });
+    click(byText('Delete'));
+    expect(ask).toHaveBeenCalledWith('Delete the subscription “Dune”?');
+    ask.mockRestore();
   });
 });

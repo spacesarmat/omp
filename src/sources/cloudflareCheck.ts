@@ -15,7 +15,7 @@ import type { Source } from './types';
 
 export const sheetTitle = (): string => t('cloudflare.sheetTitle');
 export const sheetNoteTv = (): string => t('cloudflare.sheetNoteTv');
-export const cancelText = (): string => t('cloudflare.cancel');
+export const cancelText = (): string => t('common.cancel');
 export const tvText = (): string => t('cloudflare.tvText');
 export const tvPhone = (): string => t('cloudflare.tvPhone');
 export const tvRemote = (): string => t('cloudflare.tvRemote');

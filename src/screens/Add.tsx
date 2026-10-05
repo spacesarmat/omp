@@ -176,7 +176,7 @@ export function AddScreen() {
       <h2>{t('add.linkHeading')}</h2>
       <div class="row">
         <TextInput focusKey="add-link" value={link} onChange={setLink} placeholder="magnet:?xt=urn:btih:…" onSubmit={() => add({ link })} />
-        <Button label={t('add.add')} onPress={() => add({ link })} disabled={busy} />
+        <Button label={t('common.add')} onPress={() => add({ link })} disabled={busy} />
       </div>
       <h2>{unified ? t('add.searchBySources') : t('add.search')}</h2>
       <div class="row">

@@ -54,7 +54,7 @@ export function WhatsNewDialog() {
               <ul class="update-notes">{e.items.map((n, j) => <li key={j}>{n}</li>)}</ul>
             </Focusable>
           ))}
-          {w.entries.length === 0 && <div class="muted">{t('tv.whatsNewEmpty')}</div>}
+          {w.entries.length === 0 && <div class="muted">{t('whatsNew.empty')}</div>}
         </div>
         <div class="row update-actions">
           <Button focusKey="whatsnew-ok" label="OK" className="primary" onPress={close} />

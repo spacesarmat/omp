@@ -27,7 +27,7 @@ export const browserCloudflare = (): string => t('sources.browser.cloudflare');
 /** The state of a site signed in through the browser. */
 export const browserDone = (): string => t('sources.browser.done');
 export const browserDoneTitle = (): string => t('sources.browser.doneTitle');
-export const browserCancel = (): string => t('sources.browser.cancel');
+export const browserCancel = (): string => t('common.cancel');
 export const loginOnPhone = (): string => t('sources.browser.loginOnPhone');
 export const loginByRemote = (): string => t('sources.browser.loginByRemote');
 export const browserTvText = (): string => t('sources.browser.tvText');

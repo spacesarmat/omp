@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Sheet } from './Sheet';
+import { t } from '../../../src/i18n';
 
 /** Bottom sheet for renaming a saved TV or server; empty input means "restore the default". */
 export function RenameSheet({
@@ -35,10 +36,10 @@ export function RenameSheet({
         />
         <div class="m-sheet-row">
           <button type="button" class="m-btn m-btn-secondary" onClick={onCancel}>
-            Отмена
+            {t('common.cancel')}
           </button>
           <button type="submit" class="m-btn m-btn-primary">
-            Сохранить
+            {t('common.save')}
           </button>
         </div>
       </form>

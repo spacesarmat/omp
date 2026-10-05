@@ -139,8 +139,8 @@ export function ConnectScreen() {
           </Focusable>
           {advanced && (
             <div class="row">
-              <TextInput value={user} onChange={setUser} placeholder={t('connect.user')} />
-              <TextInput value={password} onChange={setPassword} placeholder={t('connect.password')} type="password" />
+              <TextInput value={user} onChange={setUser} placeholder={t('common.login')} />
+              <TextInput value={password} onChange={setPassword} placeholder={t('common.password')} type="password" />
             </div>
           )}
           <div class="row">

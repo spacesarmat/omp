@@ -5,6 +5,7 @@ import { dismissPrompt, skipVersion } from '../../../src/store/updates';
 import { APP_VERSION } from '../../../src/version';
 import { apkFor, updateTitle } from '../../../src/lib/updateInfo';
 import type { ApkAbi, UpdateInfo } from '../../../src/lib/updateInfo';
+import { t, fmtNumber } from '../../../src/i18n';
 
 export type ApkInstaller = (
   url: string,
@@ -30,11 +31,11 @@ export function setAbiKeyReader(fn: AbiKeyReader | null): void {
 export function describeInstallError(e: unknown): string {
   const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : '';
   if (/[А-Яа-яЁё]/.test(msg)) return msg;
-  return 'Не удалось установить обновление' + (msg ? ': ' + msg : '');
+  return t('update.installFailed') + (msg ? ': ' + msg : '');
 }
 
 function formatMb(bytes: number): string {
-  return (bytes / 1048576).toFixed(1).replace('.', ',') + ' МБ';
+  return fmtNumber(bytes / 1048576, 1) + ' ' + t('common.mb');
 }
 
 export function UpdateSheet({ info }: { info: UpdateInfo }) {
@@ -89,10 +90,10 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
 
   const locked = busy || launching;
   return (
-    <Sheet label="Обновление" onClose={() => !locked && dismissPrompt()} onBack={() => !busyRef.current && dismissPrompt()}>
+    <Sheet label={t('update.sheetLabel')} onClose={() => !locked && dismissPrompt()} onBack={() => !busyRef.current && dismissPrompt()}>
       <div class="m-sheet-title">{updateTitle(info.version, APP_VERSION)}</div>
       <div class="m-muted m-small">
-        Сейчас установлена {APP_VERSION}
+        {t('update.current', { version: APP_VERSION })}
         {size > 0 ? ' · ' + formatMb(size) : ''}
       </div>
       {info.notes.length > 0 && (
@@ -104,30 +105,30 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
       )}
       {busy && (
         <div class="m-field">
-          <div>Скачивание…{pct !== null ? ' ' + pct + '%' : ''}</div>
+          <div>{pct !== null ? t('update.hb.downloadingPct', { p: pct }) : t('update.hb.downloading')}</div>
           <span class="m-bar-track">
             <span class="m-bar-fill" style={{ width: (pct ?? 0) + '%' }} />
           </span>
         </div>
       )}
-      {launching && <div>Запуск установки…</div>}
+      {launching && <div>{t('update.launching')}</div>}
       {error && (
         <div class="m-error" role="alert">
           {error}
         </div>
       )}
       <button type="button" class="m-btn m-btn-primary" disabled={locked} onClick={() => void install()}>
-        Установить
+        {t('common.install')}
       </button>
       <div class="m-sheet-row">
         <button type="button" class="m-btn m-btn-secondary" disabled={locked} onClick={dismissPrompt}>
-          Позже
+          {t('common.later')}
         </button>
         <button type="button" class="m-btn m-btn-secondary" disabled={locked} onClick={() => skipVersion(info.version)}>
-          Пропустить
+          {t('update.skip')}
         </button>
       </div>
-      <div class="m-muted m-small">Android попросит разрешить установку из этого приложения — один раз.</div>
+      <div class="m-muted m-small">{t('update.permission')}</div>
     </Sheet>
   );
 }

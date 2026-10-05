@@ -74,7 +74,7 @@ export function PlayerError(p: { message: string; probe: FfprobeResult | null; o
       <ErrorView
         message={p.message + (details ? '\n\n' + details : '')}
         actions={[
-          { label: t('player.retry'), onPress: p.onRetry },
+          { label: t('common.retry'), onPress: p.onRetry },
           { label: t('player.back'), onPress: p.onBack },
         ]}
       />

@@ -457,7 +457,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
           chooseAudio(v, audio, i);
         });
       } else if (kind === 'subs') {
-        choose(t('tvPlayer.subs'), menu, subChoice).then((ch) => {
+        choose(t('common.subtitles'), menu, subChoice).then((ch) => {
           if (ch === null) return;
           userTracks.current = true;
           applySubChoice(ch);

@@ -3,6 +3,7 @@ import { Sheet } from './Sheet';
 import { whatsNew, closeWhatsNew, markWhatsNewShown } from '../../../src/store/whatsNew';
 import { CHANGELOG_URL } from '../../../src/lib/changelogData';
 import { activeMethods, openDonate } from '../donate';
+import { t } from '../../../src/i18n';
 
 /** «Что нового»: opened from Settings or once after an update; state lives in the whatsNew signal. */
 export function WhatsNewSheet() {
@@ -12,7 +13,7 @@ export function WhatsNewSheet() {
   }, [w ? w.title : '']);
   if (!w) return null;
   return (
-    <Sheet label="Что нового" onClose={closeWhatsNew}>
+    <Sheet label={t('whatsNew.title')} onClose={closeWhatsNew}>
       <div class="m-sheet-title">{w.title}</div>
       <div class="m-whatsnew m-sheet-scroll">
         {w.entries.map((e) => (
@@ -25,10 +26,10 @@ export function WhatsNewSheet() {
             </ul>
           </section>
         ))}
-        {w.entries.length === 0 && <div class="m-muted">Список изменений недоступен</div>}
+        {w.entries.length === 0 && <div class="m-muted">{t('whatsNew.empty')}</div>}
       </div>
       <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(CHANGELOG_URL, '_system')}>
-        Все изменения на GitHub
+        {t('whatsNew.allChanges')}
       </button>
       {activeMethods().length > 0 && (
         <button
@@ -39,11 +40,11 @@ export function WhatsNewSheet() {
             openDonate();
           }}
         >
-          Поддержать OMP
+          {t('donate.title')}
         </button>
       )}
       <button type="button" class="m-btn m-btn-primary" onClick={closeWhatsNew}>
-        Закрыть
+        {t('common.close')}
       </button>
     </Sheet>
   );

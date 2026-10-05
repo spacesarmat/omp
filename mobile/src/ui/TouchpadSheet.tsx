@@ -1,5 +1,6 @@
 import { Sheet } from './Sheet';
 import { touchpad, updateTouchpad } from '../tv/touchpad';
+import { t } from '../../../src/i18n';
 
 function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
   return (
@@ -13,61 +14,61 @@ function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
 export function TouchpadSheet({ onClose }: { onClose: () => void }) {
   const s = touchpad.value;
   return (
-    <Sheet onClose={onClose} label="Настройки тачпада">
-      <div class="m-sheet-title">Тачпад</div>
+    <Sheet onClose={onClose} label={t('remote.touchpad.label')}>
+      <div class="m-sheet-title">{t('remote.touchpad.title')}</div>
       <div class="m-tp-group">
         <div class="m-tp-head">
-          <span class="m-tp-label">Скорость курсора</span>
-          <span class="m-muted m-small">{s.speed + ' из 5'}</span>
+          <span class="m-tp-label">{t('remote.touchpad.speed')}</span>
+          <span class="m-muted m-small">{t('remote.touchpad.speedOf', { n: s.speed })}</span>
         </div>
-        <div class="m-tp-steps" role="radiogroup" aria-label="Скорость курсора">
+        <div class="m-tp-steps" role="radiogroup" aria-label={t('remote.touchpad.speed')}>
           {[1, 2, 3, 4, 5].map((n) => (
             <button
               key={n}
               type="button"
               role="radio"
               aria-checked={s.speed === n}
-              aria-label={'Скорость ' + n}
+              aria-label={t('remote.touchpad.speedN', { n })}
               class={'m-tp-step' + (n <= s.speed ? ' on' : '')}
               onClick={() => updateTouchpad({ speed: n })}
             />
           ))}
         </div>
         <div class="m-tp-ends m-muted m-small">
-          <span>Медленно</span>
-          <span>Быстро</span>
+          <span>{t('remote.touchpad.slow')}</span>
+          <span>{t('remote.touchpad.fast')}</span>
         </div>
       </div>
       <div class="m-tp-row">
         <div class="m-tp-text">
-          <span class="m-tp-label">Ускорение</span>
-          <span class="m-muted m-small">Быстрое движение пальца сдвигает курсор дальше</span>
+          <span class="m-tp-label">{t('remote.touchpad.accel')}</span>
+          <span class="m-muted m-small">{t('remote.touchpad.accelHint')}</span>
         </div>
-        <Switch on={s.accel} label="Ускорение" onToggle={() => updateTouchpad({ accel: !s.accel })} />
+        <Switch on={s.accel} label={t('remote.touchpad.accel')} onToggle={() => updateTouchpad({ accel: !s.accel })} />
       </div>
       <div class="m-tp-row">
         <div class="m-tp-text">
-          <span class="m-tp-label">Касание = щелчок</span>
-          <span class="m-muted m-small">Короткое касание тачпада нажимает OK</span>
+          <span class="m-tp-label">{t('remote.touchpad.tap')}</span>
+          <span class="m-muted m-small">{t('remote.touchpad.tapHint')}</span>
         </div>
-        <Switch on={s.tapClick} label="Касание = щелчок" onToggle={() => updateTouchpad({ tapClick: !s.tapClick })} />
+        <Switch on={s.tapClick} label={t('remote.touchpad.tap')} onToggle={() => updateTouchpad({ tapClick: !s.tapClick })} />
       </div>
       <div class="m-tp-row">
         <div class="m-tp-text">
-          <span class="m-tp-label">Обратная прокрутка</span>
-          <span class="m-muted m-small">Если страница на ТВ едет не в ту сторону</span>
+          <span class="m-tp-label">{t('remote.touchpad.invert')}</span>
+          <span class="m-muted m-small">{t('remote.touchpad.invertHint')}</span>
         </div>
-        <Switch on={s.invertScroll} label="Обратная прокрутка" onToggle={() => updateTouchpad({ invertScroll: !s.invertScroll })} />
+        <Switch on={s.invertScroll} label={t('remote.touchpad.invert')} onToggle={() => updateTouchpad({ invertScroll: !s.invertScroll })} />
       </div>
       <div class="m-tp-row">
         <div class="m-tp-text">
-          <span class="m-tp-label">Полоса прокрутки</span>
-          <span class="m-muted m-small">Справа на тачпаде: ведите пальцем вверх или вниз</span>
+          <span class="m-tp-label">{t('remote.touchpad.strip')}</span>
+          <span class="m-muted m-small">{t('remote.touchpad.stripHint')}</span>
         </div>
-        <Switch on={s.scrollStrip} label="Полоса прокрутки" onToggle={() => updateTouchpad({ scrollStrip: !s.scrollStrip })} />
+        <Switch on={s.scrollStrip} label={t('remote.touchpad.strip')} onToggle={() => updateTouchpad({ scrollStrip: !s.scrollStrip })} />
       </div>
       <button type="button" class="m-btn m-btn-primary" onClick={onClose}>
-        Готово
+        {t('common.done')}
       </button>
     </Sheet>
   );

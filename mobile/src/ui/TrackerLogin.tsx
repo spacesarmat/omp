@@ -7,6 +7,7 @@ import { isCloudflare, jackettHint } from '../../../src/sources/view';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { browserSuggestion } from '../../../src/sources/browserLogin';
 import { BrowserLoginButton } from './BrowserLoginButton';
+import { t } from '../../../src/i18n';
 
 const LOCK = 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3';
 
@@ -58,7 +59,7 @@ export function TrackerLogin({
     const u = username.trim();
     const p = pass.current ? pass.current.value : '';
     if (!u || !p) {
-      setError('Введите логин и пароль');
+      setError(t('common.enterCredentials'));
       return;
     }
     setError('');
@@ -81,13 +82,13 @@ export function TrackerLogin({
     );
   };
 
-  const title = 'Вход на ' + source.name;
+  const title = t('common.signInTo', { site: source.name });
   return (
     <Sheet label={title} onClose={close}>
       <form class="m-field-group" onSubmit={submit}>
         <div class="m-sheet-title">{title}</div>
         <div class="m-field">
-          <label for="m-login-user">Логин</label>
+          <label for="m-login-user">{t('common.login')}</label>
           <input
             id="m-login-user"
             name="username"
@@ -95,18 +96,18 @@ export function TrackerLogin({
             type="text"
             autocomplete="username"
             autocapitalize="off"
-            placeholder={'ваш логин на ' + source.name}
+            placeholder={t('sources.login.userPlaceholder', { site: source.name })}
             value={username}
             onInput={(e) => setUsername((e.target as HTMLInputElement).value)}
           />
         </div>
         <div class="m-field">
-          <label for="m-login-pass">Пароль</label>
+          <label for="m-login-pass">{t('common.password')}</label>
           <input id="m-login-pass" name="password" class="m-input" type="password" autocomplete="current-password" ref={pass} />
         </div>
         <div class="m-lock-note">
           <Icon d={LOCK} size={18} />
-          <span>{'Логин и пароль хранятся только на этом телефоне в зашифрованном виде и отправляются только на ' + source.name + '.'}</span>
+          <span>{t('sources.login.storedNote', { site: source.name })}</span>
         </div>
         {error && (
           <div class="m-error" role="alert">
@@ -125,7 +126,7 @@ export function TrackerLogin({
                   navigate({ name: 'faq' });
                 }}
               >
-                Вопросы и ответы
+                {t('common.faq')}
               </button>
             </div>
           </div>
@@ -142,10 +143,10 @@ export function TrackerLogin({
         />
         <div class="m-marks-actions">
           <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={close}>
-            Отмена
+            {t('common.cancel')}
           </button>
           <button type="submit" class="m-btn m-btn-primary" disabled={busy}>
-            {busy ? 'Вхожу…' : 'Войти'}
+            {busy ? t('common.signingIn') : t('common.signIn')}
           </button>
         </div>
       </form>

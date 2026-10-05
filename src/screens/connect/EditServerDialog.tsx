@@ -33,7 +33,7 @@ export function EditServerDialog(p: { server: SavedServer; onClose: () => void }
   };
 
   const remove = () => {
-    confirmDialog(t('connect.deleteAsk', { name: p.server.name }), t('tv.delete')).then((ok) => {
+    confirmDialog(t('connect.deleteAsk', { name: p.server.name }), t('common.delete')).then((ok) => {
       if (!ok) return;
       removeServer(p.server.id);
       p.onClose();
@@ -50,19 +50,19 @@ export function EditServerDialog(p: { server: SavedServer; onClose: () => void }
         <TextInput value={url} onChange={setUrl} placeholder="192.168.1.191:8090" type="url" />
         <div class="row">
           <div class="grow">
-            <label class="field-label">{t('connect.user')}</label>
+            <label class="field-label">{t('common.login')}</label>
             <TextInput value={user} onChange={setUser} placeholder={t('connect.none')} />
           </div>
           <div class="grow">
-            <label class="field-label">{t('connect.password')}</label>
+            <label class="field-label">{t('common.password')}</label>
             <TextInput value={password} onChange={setPassword} placeholder={t('connect.none')} type="password" />
           </div>
         </div>
         <div class="muted small">{t('connect.authNote')}</div>
         <div class="row edit-actions">
-          <Button label={t('tv.save')} className="primary grow" onPress={save} />
-          <Button label={t('tv.cancel')} onPress={p.onClose} />
-          <Button label={t('tv.delete')} className="danger" onPress={remove} />
+          <Button label={t('common.save')} className="primary grow" onPress={save} />
+          <Button label={t('common.cancel')} onPress={p.onClose} />
+          <Button label={t('common.delete')} className="danger" onPress={remove} />
         </div>
       </FocusGroup>
     </div>

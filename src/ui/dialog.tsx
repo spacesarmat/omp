@@ -35,7 +35,7 @@ export function choose<T>(title: string, options: { label: string; value: T }[],
 export function confirmDialog(text: string, okLabel = t('tv.yes')): Promise<boolean> {
   return choose(text, [
     { label: okLabel, value: true },
-    { label: t('tv.cancel'), value: false },
+    { label: t('common.cancel'), value: false },
   ]).then((v) => v === true);
 }
 

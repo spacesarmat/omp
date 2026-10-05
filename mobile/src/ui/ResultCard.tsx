@@ -3,10 +3,11 @@ import { addCategoryLabel } from '../../../src/lib/categoryGuess';
 import { resultDate, seedsText, sourceBadge, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import type { RowBusy } from '../addResult';
+import { t } from '../../../src/i18n';
 
 /** «18 GB · 152 сида · сегодня · ещё в Torznab». */
 export function resultMeta(r: SourceResult): string {
-  const more = r.sources && r.sources.length ? 'ещё в ' + r.sources.map(sourceName).join(', ') : '';
+  const more = r.sources && r.sources.length ? t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }) : '';
   return [r.Size, seedsText(r.Seed || 0), resultDate(r), more].filter(Boolean).join(' · ');
 }
 
@@ -35,32 +36,32 @@ export function ResultCard(p: {
       </div>
       {p.busy === 'link' && (
         <div class="m-muted m-small" role="status">
-          Получаю ссылку…
+          {t('add.gettingLink')}
         </div>
       )}
       {p.children}
       <div class="m-result-actions">
-        <button type="button" class="m-chip" aria-label={'Категория: ' + label + ', ' + r.Title} onClick={p.onCategory}>
+        <button type="button" class="m-chip" aria-label={t('add.categoryOf', { label, title: r.Title })} onClick={p.onCategory}>
           {label + ' ▾'}
         </button>
         <span class="m-grow" />
         <button
           type="button"
           class="m-btn m-btn-secondary m-btn-sm"
-          aria-label={'Добавить на сервер: ' + r.Title}
+          aria-label={t('add.addToServer', { title: r.Title })}
           disabled={!!p.busy}
           onClick={p.onAdd}
         >
-          Добавить
+          {t('common.add')}
         </button>
         <button
           type="button"
           class="m-btn m-btn-primary m-btn-sm"
-          aria-label={'Добавить и смотреть на ТВ: ' + r.Title}
+          aria-label={t('add.addAndWatch', { title: r.Title })}
           disabled={!!p.busy}
           onClick={p.onWatch}
         >
-          На ТВ
+          {t('add.onTv')}
         </button>
       </div>
     </div>

@@ -60,7 +60,7 @@ function ApkInstall({ info }: { info: UpdateInfo }) {
   } else if (job && job.done) {
     statusText = t('updateScreen.confirmInstall');
   }
-  const label = job && job.error ? t('updateScreen.retry') : job && job.done ? t('updateScreen.installAgain') : t('updateScreen.downloadInstall');
+  const label = job && job.error ? t('common.retry') : job && job.done ? t('updateScreen.installAgain') : t('updateScreen.downloadInstall');
 
   return (
     <section class="update-block">
@@ -184,7 +184,7 @@ export function UpdateScreen() {
           {status && status.stage === 'download' && status.progress !== undefined && <ProgressBar ratio={status.progress / 100} />}
           {error && <div class="banner-error">{error}</div>}
           <div class="row update-actions">
-            <Button focusKey="upd-install" label={error ? t('updateScreen.retry') : t('updateScreen.install')} className="primary" onPress={install} disabled={busy} />
+            <Button focusKey="upd-install" label={error ? t('common.retry') : t('common.install')} className="primary" onPress={install} disabled={busy} />
           </div>
         </section>
       )}

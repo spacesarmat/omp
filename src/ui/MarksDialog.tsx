@@ -131,7 +131,7 @@ export function MarksDialog(p: { subtitle: string; prefs: TvMarks; onSave: (m: T
           <Button
             focusKey="marks-save"
             className="primary"
-            label={busy ? t('tv.marks.saving') : t('tv.save')}
+            label={busy ? t('tv.marks.saving') : t('common.save')}
             onPress={() => write(cur.current)}
           />
         </div>
