@@ -1,12 +1,15 @@
 // The background check (mobile/monitor.html), run by Android's WorkManager in a hidden WebView on the app's own
 // origin, so it reads the same localStorage (subscriptions, findings, servers, settings) as the app.
-// A check: subscriptions → new episodes of the library series → the «Новое» feed, each only while time is left.
-// A notification button: «Добавить» a subscription finding / «Заменить» a series torrent.
+// A check: subscriptions → the library (new episodes of the series, then better releases of the films) → the «Новое»
+// feed, each only while time is left.
+// A notification button: «Добавить» a subscription finding / «Заменить» a series or film torrent.
 import { errorMessage } from '../../../src/api/http';
 import { t, tp } from '../../../src/i18n';
 import type { Torrent } from '../../../src/api/types';
 import { log, flushLog } from '../../../src/lib/log';
 import { guessCategory } from '../../../src/lib/categoryGuess';
+import { posterQuery } from '../../../src/lib/posterSearch';
+import { checkBetterQuality, dueFilms, pruneBetterChecked } from '../../../src/monitor/better';
 import { checkSubscription, type CheckOptions } from '../../../src/monitor/check';
 import { parseEpisodeRange } from '../../../src/monitor/episodes';
 import { feedFresh, storeFeedRefresh } from '../../../src/monitor/feedCache';
@@ -14,7 +17,7 @@ import { checkNewEpisodes, isWatchedSeries, seriesQuery, type LibraryTorrent } f
 import { replaceWithResult, type ReplaceClient } from '../../../src/monitor/replace';
 import { loadMonitorSettings, saveLastRun, type MonitorActionResult, type MonitorSummary } from '../../../src/monitor/settings';
 import { loadFound, loadSubs, markFindingsSeen, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
-import { EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
+import { BETTER_ID, EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
 import { feedAll, type FeedAllOptions } from '../../../src/sources/feed';
 import { createSecretStore, createSourceHttp } from '../../../src/sources/http';
 import { FEED_CATEGORIES, type SourceContext } from '../../../src/sources/types';
@@ -23,6 +26,7 @@ import { loadJson, saveJson } from '../../../src/store/storage';
 import type { MonitorAction, MonitorHost, MonitorNotification } from './host';
 import { mergeJournal, type JournalItem } from './journal';
 import { seenEntry } from '../../../src/monitor/match';
+import { qualityText } from './text';
 
 /** The TorrServer calls the page needs (TorrServerClient fits). */
 export interface MonitorClient extends ReplaceClient {
@@ -50,6 +54,8 @@ export const EPISODE_MARGIN_MS = 35_000;
 export const FEED_MARGIN_MS = 25_000;
 /** The run is wrapped up this long before the deadline. */
 export const FINISH_MARGIN_MS = 8_000;
+/** No film check starts later than this before the deadline. */
+export const BETTER_MARGIN_MS = 35_000;
 const AFTER_ADD_MS = 15_000;
 /** Next library series to check: big libraries are covered over several runs. */
 export const EPISODE_CURSOR_KEY = 'tsp.monitorEpisodeCursor';
@@ -96,6 +102,21 @@ export function episodeNotification(f: Finding): MonitorNotification {
   return { channel: 'episodes', id: 'ep:' + e.torrentHash, subId: EPISODES_ID, key: f.key, title, text, action: 'replace' };
 }
 
+/** «Вышло в лучшем качестве» / «Северный ветер · 4K WEB-DL · у вас 1080p WEB-DL». */
+export function betterNotification(f: Finding): MonitorNotification {
+  const b = f.better!;
+  const name = posterQuery(b.torrentTitle) || b.torrentTitle;
+  return {
+    channel: 'better',
+    id: 'better:' + b.torrentHash,
+    subId: BETTER_ID,
+    key: f.key,
+    title: t('notify.betterTitle'),
+    text: t('notify.betterText', { name, got: qualityText(b.got), have: qualityText(b.have) }),
+    action: 'replace',
+  };
+}
+
 /** SourceHttp / secrets over the host; the page never writes secrets. */
 export function hostContext(host: MonitorHost, client: MonitorClient | null): SourceContext {
   const readOnly = () => Promise.reject(new Error(t('notify.readOnly')));
@@ -129,16 +150,18 @@ function emptySummary(at: number, kind: MonitorSummary['kind']): MonitorSummary 
 /** Runs one notification button; never rejects. */
 export async function runAction(deps: PageDeps, a: MonitorAction): Promise<MonitorActionResult> {
   const f = loadFound().filter((x) => x.subId === a.subId && x.key === a.key)[0];
-  if (!f || (a.kind === 'replace' && !f.episodes)) return { ok: false, message: t('notify.gone') };
+  // the library torrent «Заменить» replaces: a series with new episodes or a film in better quality
+  const libHash = f ? (f.episodes ? f.episodes.torrentHash : f.better ? f.better.torrentHash : '') : '';
+  if (!f || (a.kind === 'replace' && !libHash)) return { ok: false, message: t('notify.gone') };
   const title = f.result.Title;
   const c = deps.client();
   if (!c) return { ok: false, message: t('errors.noServerSelected'), title };
   const ctx = hostContext(deps.host, c);
   if (a.kind === 'replace') {
-    const r = await replaceWithResult(c, f.episodes!.torrentHash, f.result, ctx);
+    const r = await replaceWithResult(c, libHash, f.result, ctx);
     if (!r.ok) return { ok: false, message: r.error, title };
-    removeFindings(EPISODES_ID, f.key);
-    await persist(deps, [{ s: EPISODES_ID, k: f.key, a: 'replace' }]);
+    removeFindings(f.subId, f.key);
+    await persist(deps, [{ s: f.subId, k: f.key, a: 'replace' }]);
     return { ok: true, message: t('notify.replaced'), title };
   }
   try {
@@ -209,8 +232,8 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
   s.answered = Object.keys(answered).length;
   s.asked = Object.keys(asked).length;
 
-  // new episodes of the library series, one series at a time
-  if (settings.episodes && left() >= EPISODE_MARGIN_MS) {
+  // the library: new episodes of the series, then better releases of the films, one torrent at a time
+  if ((settings.episodes || settings.better) && left() >= EPISODE_MARGIN_MS) {
     if (!c) s.error = t('errors.noServerSelected');
     else {
       let list: Torrent[] | null = null;
@@ -224,20 +247,35 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
         list.forEach((t) => (have[(t.hash || '').toLowerCase()] = true));
         // cards of torrents deleted from the server can no longer be replaced or switched off
         pruneEpisodeFindings((h) => have[(h || '').toLowerCase()] === true);
+        pruneBetterChecked((h) => have[h] === true);
       }
-      const watched = (list || []).filter((t) => isWatchedSeries(t as LibraryTorrent));
-      const start = watched.length ? cursor() % watched.length : 0;
-      let done = 0;
-      for (; done < watched.length && left() >= EPISODE_MARGIN_MS; done++) {
-        const t = watched[(start + done) % watched.length];
-        const found = await checkNewEpisodes(ctx, [t], deps.check);
-        for (const f of found) {
-          s.found++;
-          await persist(deps, [{ s: EPISODES_ID, e: f.key }]);
-          await notify(episodeNotification(f));
+      if (settings.episodes) {
+        const watched = (list || []).filter((t) => isWatchedSeries(t as LibraryTorrent));
+        const start = watched.length ? cursor() % watched.length : 0;
+        let done = 0;
+        for (; done < watched.length && left() >= EPISODE_MARGIN_MS; done++) {
+          const t = watched[(start + done) % watched.length];
+          const found = await checkNewEpisodes(ctx, [t], deps.check);
+          for (const f of found) {
+            s.found++;
+            await persist(deps, [{ s: EPISODES_ID, e: f.key }]);
+            await notify(episodeNotification(f));
+          }
+        }
+        if (watched.length) saveJson(EPISODE_CURSOR_KEY, (start + done) % watched.length);
+      }
+      if (list && settings.better) {
+        // the films not searched for the longest come first; each one at most once a day (tsp.betterChecked)
+        for (const film of dueFilms(list as LibraryTorrent[], now())) {
+          if (left() < BETTER_MARGIN_MS) break;
+          const found = await checkBetterQuality(ctx, [film], { ...deps.check, now: now() });
+          for (const f of found) {
+            s.found++;
+            await persist(deps, [{ s: BETTER_ID, e: f.key }]);
+            await notify(betterNotification(f));
+          }
         }
       }
-      if (watched.length) saveJson(EPISODE_CURSOR_KEY, (start + done) % watched.length);
     }
   }
 

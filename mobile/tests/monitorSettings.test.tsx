@@ -54,6 +54,26 @@ describe('«Мониторинг»', () => {
     expect(el.textContent).toContain('Android может откладывать фоновые проверки ради батареи');
   });
 
+  it('«Лучшее качество фильмов» is on by default and saved', async () => {
+    await mount();
+    expect(sw('Лучшее качество фильмов').getAttribute('aria-checked')).toBe('true');
+    expect(el.textContent).toContain('раз в сутки для фильмов из каталога');
+    click(sw('Лучшее качество фильмов'));
+    expect(loadMonitorSettings().better).toBe(false);
+    expect(sw('Лучшее качество фильмов').getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('the films switch in English', async () => {
+    applyLanguageSetting('en');
+    try {
+      await mount();
+      expect(sw('Better quality of films')).toBeTruthy();
+      expect(el.textContent).toContain('once a day for films from the catalog');
+    } finally {
+      applyLanguageSetting('ru');
+    }
+  });
+
   it('switches save and reschedule; switching on asks for notifications once', async () => {
     saveMonitorSettings({ enabled: false });
     await mount();

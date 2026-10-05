@@ -54,7 +54,17 @@ class MonitorPlanTest {
     fun channelNames() {
         assertEquals(MonitorIds.CHANNEL_SUBS, MonitorIds.channel("subs"))
         assertEquals(MonitorIds.CHANNEL_EPISODES, MonitorIds.channel("episodes"))
+        assertEquals(MonitorIds.CHANNEL_BETTER, MonitorIds.channel("better"))
         assertNull(MonitorIds.channel("other"))
         assertNull(MonitorIds.channel(null))
+    }
+
+    @Test
+    fun groupsAndSummariesPerChannel() {
+        assertEquals(MonitorIds.GROUP_SUBS, MonitorIds.group(MonitorIds.CHANNEL_SUBS))
+        assertEquals(MonitorIds.GROUP_EPISODES, MonitorIds.group(MonitorIds.CHANNEL_EPISODES))
+        assertEquals(MonitorIds.GROUP_BETTER, MonitorIds.group(MonitorIds.CHANNEL_BETTER))
+        assertEquals(MonitorIds.SUMMARY_BETTER, MonitorIds.summary(MonitorIds.CHANNEL_BETTER))
+        assertEquals(3, MonitorIds.CHANNELS.map { MonitorIds.summary(it) }.toSet().size)
     }
 }

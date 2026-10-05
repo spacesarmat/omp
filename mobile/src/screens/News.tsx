@@ -9,7 +9,7 @@ import { useResultRows } from '../ui/useResultRows';
 import { navigate } from '../nav';
 import { monitorNative } from '../monitor/native';
 import { askNotifyOnce, lastCheck, monitorDoneCount, monitorVersion, reloadMonitor, useMonitorStatus } from '../monitor/ui';
-import { checkedLine, clock, dayWord, episodesLine, freshText, subRule } from '../monitor/text';
+import { betterLine, checkedLine, clock, dayWord, episodesLine, freshText, subRule } from '../monitor/text';
 import { phoneSourceContext } from '../searchContext';
 import { onlyAndroid } from '../platform/native';
 import { client } from '../../../src/store/servers';
@@ -28,7 +28,7 @@ import { FEED_FRESH_MS, feedFresh, loadFeed, storeFeedRefresh } from '../../../s
 import { findingsOf, loadSubs, markFindingsSeen, removeFindings, unseenCount } from '../../../src/monitor/subs';
 import { libraryRange } from '../../../src/monitor/newEpisodes';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
-import { EPISODES_ID, type Finding } from '../../../src/monitor/types';
+import { BETTER_ID, EPISODES_ID, type Finding } from '../../../src/monitor/types';
 
 type Seg = 'feed' | 'subs';
 
@@ -205,12 +205,14 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
   const rows = useResultRows();
   const subs = loadSubs();
   const eps = findingsOf(EPISODES_ID);
+  const better = findingsOf(BETTER_ID);
   const settings = loadMonitorSettings();
 
-  // the cards are on screen: the new episodes count as looked at
+  // the cards are on screen: new episodes and better releases count as looked at
   useEffect(() => {
-    if (unseenCount(EPISODES_ID) > 0) {
+    if (unseenCount(EPISODES_ID) > 0 || unseenCount(BETTER_ID) > 0) {
       markFindingsSeen(EPISODES_ID);
+      markFindingsSeen(BETTER_ID);
       reloadMonitor();
     }
   }, [monitorVersion.value]);
@@ -255,6 +257,12 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
     } catch (e) {
       showToast(errorMessage(e));
     }
+  };
+
+  // «Скрыть»: the card goes; its rank stays seen, so only a higher rank of the film is reported again
+  const hide = (f: Finding) => {
+    removeFindings(BETTER_ID, f.key);
+    reloadMonitor();
   };
 
   return (
@@ -320,6 +328,35 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
           ? t('news.epsOn')
           : t('news.epsOff')}
       </div>
+      <div class="m-set-label">{t('news.betterHead')}</div>
+      {better.map((f) => {
+        const name = shortTitle(f.better!.torrentTitle);
+        const hl = !!finding && f.key === finding;
+        return (
+          <div key={f.key} class={'m-ep-card' + (hl ? ' m-hl' : '')} data-better="" data-highlight={hl ? '' : undefined}>
+            <div class="m-ep-card-title">{name}</div>
+            <div class="m-accent m-small">{betterLine(f.better!)}</div>
+            <div class="m-muted m-small">{f.result.Title}</div>
+            {hl && prompt && (
+              <WatchPrompt title={shortTitle(f.result.Title)} onDismiss={() => setPrompt(false)} onWatch={() => replaceAndWatch(f)} />
+            )}
+            <div class="m-result-actions">
+              <button
+                type="button"
+                class="m-btn m-btn-primary m-btn-sm"
+                aria-label={t('news.replaceAria', { title: name })}
+                onClick={() => setReplace({ f, watch: false })}
+              >
+                {t('news.replace')}
+              </button>
+              <button type="button" class="m-btn m-btn-secondary m-btn-sm" aria-label={t('news.hideAria', { title: name })} onClick={() => hide(f)}>
+                {t('common.hide')}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      <div class="m-muted m-small">{settings.better ? t('news.betterOn') : t('news.betterOff')}</div>
       <button type="button" class="m-link" onClick={() => navigate({ name: 'monitor' })}>
         {t('news.monitorSettings')}
       </button>

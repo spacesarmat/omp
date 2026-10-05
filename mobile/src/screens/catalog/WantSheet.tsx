@@ -18,6 +18,8 @@ function defaultQuality(): SubQuality {
 
 export function WantSheet({ card, onClose }: { card: CatalogCard; onClose: () => void }) {
   const [quality, setQuality] = useState<SubQuality>(defaultQuality);
+  // «Только лучшее качество»: on here, since a title is wanted once, in the best quality that comes out
+  const [better, setBetter] = useState(true);
   const options: { id: SubQuality; label: string }[] = [
     { id: '', label: t('monitor.anyQuality') },
     { id: '1080', label: '1080p' },
@@ -26,7 +28,7 @@ export function WantSheet({ card, onClose }: { card: CatalogCard; onClose: () =>
 
   const subscribe = () => {
     const first = loadSubs().length === 0;
-    const saved = addSubscription({ query: torrentQuery(card), quality, sources: null, notify: true });
+    const saved = addSubscription({ query: torrentQuery(card), quality, sources: null, notify: true, better });
     if (saved) {
       if (first) void askNotifyOnce().catch(() => {});
       reloadMonitor();
@@ -49,6 +51,22 @@ export function WantSheet({ card, onClose }: { card: CatalogCard; onClose: () =>
             {o.label}
           </button>
         ))}
+      </div>
+      <div class="m-skip-row">
+        <span class="m-skip-text">
+          {t('monitor.sub.better')}
+          <span class="m-muted m-small">{t('monitor.sub.betterHint')}</span>
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={better}
+          aria-label={t('monitor.sub.better')}
+          class={'m-switch' + (better ? ' on' : '')}
+          onClick={() => setBetter(!better)}
+        >
+          <span class="m-switch-knob" />
+        </button>
       </div>
       <button type="button" class="m-btn m-btn-primary" onClick={subscribe}>
         {t('add.subscribe')}
