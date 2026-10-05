@@ -25,13 +25,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Bump OMP when TorrServer has a new release
-        id: bump
+          cache: npm
+      # applies the update to the working tree only: nothing is committed, tagged or pushed until the checks below pass
+      - name: Apply the TorrServer update
+        id: apply
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          echo "release=false" >> "$GITHUB_OUTPUT"
+          echo "changed=false" >> "$GITHUB_OUTPUT"
           gh api repos/YouROK/TorrServer/releases/latest > "$RUNNER_TEMP/latest.json"
           LATEST=$(jq -r '.tag_name // empty' "$RUNNER_TEMP/latest.json")
           CURRENT=$(tr -d '[:space:]' < torrserver.version)
@@ -51,6 +53,29 @@ jobs:
             exit 0
           fi
           VERSION=$(node scripts/torrserver-bump.mjs "$LATEST" "$RUNNER_TEMP/latest.json")
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      # the same checks the release runs (plus the type checks): a failing update leaves no commit, version bump or tag
+      - name: Install dependencies
+        if: steps.apply.outputs.changed == 'true'
+        run: npm ci
+      - name: Test the update
+        if: steps.apply.outputs.changed == 'true'
+        run: npm test
+      - name: Type-check the update
+        if: steps.apply.outputs.changed == 'true'
+        run: |
+          npx tsc --noEmit -p .
+          npx tsc --noEmit -p mobile
+      - name: Commit, tag and push the update
+        id: bump
+        if: steps.apply.outputs.changed == 'true'
+        env:
+          LATEST: ${{ steps.apply.outputs.latest }}
+          VERSION: ${{ steps.apply.outputs.version }}
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add torrserver.version android/app/src/main/res/raw/torrserver.json package.json package-lock.json webos/appinfo.json CHANGELOG.md
