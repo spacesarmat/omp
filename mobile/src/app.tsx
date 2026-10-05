@@ -44,6 +44,7 @@ import { installTabSwipe } from './ui/tabSwipe';
 import { News } from './screens/News';
 import { SubFindings } from './screens/SubFindings';
 import { Monitor } from './screens/Monitor';
+import { TitleCard } from './screens/catalog/TitleCard';
 import { monitorNative } from './monitor/native';
 import { reloadLog } from '../../src/lib/log';
 import { Fragment } from 'preact';
@@ -217,17 +218,19 @@ export function App() {
 
   const route = currentRoute.value;
   const prompt = updatePrompt.value;
-  const showNav = TABS.includes(route.name);
+  const tabRoot = TABS.includes(route.name);
+  // a «Обзор» title card keeps the bottom tabs with «Каталог» highlighted
+  const showNav = tabRoot || route.name === 'title';
   // swipe left / right between the bottom tabs
   useEffect(() => {
-    if (!showNav) return;
+    if (!tabRoot) return;
     return installTabSwipe({
       tabs: TABS,
       current: () => currentRoute.value.name,
       screen: () => document.querySelector<HTMLElement>('.m-screen'),
       go: (tab) => switchTab({ name: tab } as MRoute),
     });
-  }, [showNav]);
+  }, [tabRoot]);
   const showMini = (route.name === 'library' || route.name === 'remote') && linkStatus.value !== 'none';
   // a language change remounts the whole UI (t() does not subscribe components to the language)
   return (
@@ -270,17 +273,19 @@ export function App() {
         <ServerSettings url={route.url} />
       ) : route.name === 'remote' ? (
         <Remote />
-      ) : route.name === 'title' ? null : (
+      ) : route.name === 'title' ? (
+        <TitleCard key={route.kind + ':' + route.id} kind={route.kind} id={route.id} />
+      ) : (
         <Settings />
       )}
-      {prompt && showNav && <UpdateSheet info={prompt} />}
+      {prompt && tabRoot && <UpdateSheet info={prompt} />}
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
-      {showNav && !prompt && <WhatsNewSheet />}
-      {showNav && <DonateSheet />}
+      {tabRoot && !prompt && <WhatsNewSheet />}
+      {tabRoot && <DonateSheet />}
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}
-      {showNav && <NavBar active={route.name as Tab} />}
+      {showNav && <NavBar active={route.name === 'title' ? 'library' : (route.name as Tab)} />}
     </Fragment>
   );
 }

@@ -355,6 +355,36 @@ button, .m-btn {
 .m-srch-rating { color: var(--accent); font-weight: 700; }
 .m-srch-lib { color: #8FE39A; font-weight: 700; }
 .m-srch-trackers { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 14px; background: var(--panel); }
+.m-tc { padding-top: 0; }
+.m-tc-backdrop { position: relative; height: calc(190px + env(safe-area-inset-top)); margin: 0 -16px; overflow: hidden; background: linear-gradient(160deg, #2A2F3D, #14161C); }
+.m-tc-backdrop img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.m-tc-backdrop::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 17, 21, 0) 45%, var(--bg, #0F1115)); pointer-events: none; }
+.m-tc-back { position: absolute; z-index: 1; top: calc(env(safe-area-inset-top) + 10px); left: 16px; background: rgba(15, 17, 21, 0.7); }
+.m-tc-body { position: relative; display: flex; flex-direction: column; gap: 16px; margin-top: -72px; }
+.m-tc-head { display: flex; gap: 14px; align-items: flex-end; }
+.m-tc-poster { flex: none; display: block; width: 110px; height: 165px; border-radius: 12px; background: var(--panel); object-fit: cover; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); }
+.m-tc-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding-bottom: 4px; }
+.m-tc-title { margin: 0; font-size: 20px; line-height: 1.2; overflow-wrap: anywhere; }
+.m-tc-rating { color: var(--accent); font-weight: 700; font-size: 14px; }
+.m-tc-skel .m-tc-poster, .m-tc-skel .m-disc-skel-line { animation: m-disc-pulse 1.2s ease-in-out infinite; }
+.m-tc-skel .m-tc-info { flex: 1; }
+.m-tc-actions { display: flex; flex-direction: column; gap: 8px; }
+.m-tc-about { display: flex; flex-direction: column; align-items: flex-start; }
+.m-tc-overview { margin: 0; line-height: 1.45; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.m-tc-overview.open { display: block; -webkit-line-clamp: unset; }
+.m-tc-more { padding: 0; color: var(--accent); }
+.m-tc-section h2 { margin: 0 0 10px; font-size: 16px; }
+.m-tc-cast { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; }
+.m-tc-cast::-webkit-scrollbar { display: none; }
+.m-tc-person { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 76px; text-align: center; }
+.m-tc-person img, .m-tc-initial { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: var(--panel); }
+.m-tc-initial { display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: var(--muted); }
+.m-tc-person-name { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-tc-seasons { display: flex; flex-direction: column; gap: 8px; }
+.m-tc-season { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 12px; background: var(--panel); }
+.m-tc-season-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.m-tc-season-name { font-weight: 700; }
+.m-tc-season-state { color: #8FE39A; font-weight: 700; }
 .m-set-attr { margin: 4px 0 0; text-align: center; }
 .m-bar-track { display: block; height: 6px; border-radius: 3px; background: #2A2F3A; overflow: hidden; }
 .m-bar-track.thin { height: 4px; border-radius: 2px; }

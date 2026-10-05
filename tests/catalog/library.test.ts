@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { libraryKey, libraryIndex, inLibrary } from '../../src/catalog/library';
+import { libraryKey, libraryIndex, inLibrary, seasonIndex, inLibrarySeason } from '../../src/catalog/library';
 
 describe('library matching', () => {
   it('libraryKey normalises case, yo, punctuation and adds the year', () => {
@@ -21,5 +21,33 @@ describe('library matching', () => {
   it('does not match another year', () => {
     const idx = libraryIndex([{ title: 'Северный ветер (2019)' }]);
     expect(inLibrary(idx, { title: 'Северный ветер', original: 'North Wind', year: 2026 })).toBe(false);
+  });
+});
+
+describe('season matching', () => {
+  const show = { title: 'Ледяной перевал', original: 'Frost Pass' };
+
+  it('a torrent of season 2 marks only season 2', () => {
+    const idx = seasonIndex([{ title: 'Ледяной перевал / Frost Pass (2025) 2 сезон WEB-DL 1080p' }]);
+    expect(inLibrarySeason(idx, show, 2)).toBe(true);
+    expect(inLibrarySeason(idx, show, 1)).toBe(false);
+    expect(inLibrarySeason(idx, show, 3)).toBe(false);
+  });
+
+  it('a torrent without a season or a year marks none', () => {
+    const idx = seasonIndex([{ title: 'Ледяной перевал WEB-DL 1080p' }]);
+    expect(idx.size).toBe(0);
+    expect(inLibrarySeason(idx, show, 1)).toBe(false);
+  });
+
+  it('a season range marks each season in it', () => {
+    const idx = seasonIndex([{ title: 'Ледяной перевал / Сезоны: 1-3 (2024-2026) WEB-DL' }]);
+    expect([1, 2, 3, 4].map((n) => inLibrarySeason(idx, show, n))).toEqual([true, true, true, false]);
+  });
+
+  it('matches by the original name and an S02 mark; another series does not match', () => {
+    const idx = seasonIndex([{ title: 'Frost Pass S02 1080p' }]);
+    expect(inLibrarySeason(idx, show, 2)).toBe(true);
+    expect(inLibrarySeason(idx, { title: 'Тёплый перевал', original: 'Warm Pass' }, 2)).toBe(false);
   });
 });

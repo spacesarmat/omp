@@ -113,6 +113,19 @@ export function sameSearch(a: Subscription, b: Subscription | null): boolean {
   return !!b && searchOf(a) === searchOf(b);
 }
 
+// ye as a char code: the guard strips regex literals but not string literals.
+const YE = String.fromCharCode(0x435);
+
+function queryKey(q: string): string {
+  return cleanQuery(q).toLowerCase().replace(/ё/g, YE);
+}
+
+/** Two search queries are the same ignoring case, yo / ye and extra spaces («Слежу» on a catalog card). */
+export function sameQuery(a: string, b: string): boolean {
+  const k = queryKey(a);
+  return !!k && k === queryKey(b);
+}
+
 /**
  * «Изменить»: merges `patch` (an undefined minSeeds / maxSizeGb clears it); null when unknown or the query is empty.
  * A new query, quality, seeds, size or sources forgets the seen results: the next check is silent, like the first.

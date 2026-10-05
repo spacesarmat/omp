@@ -8,7 +8,8 @@ import { torrents } from '../../../../src/store/library';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
 import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
 import type { CatalogTitle, Kind } from '../../../../src/catalog/tmdb';
-import { phoneCatalog, OFFLINE_TITLE, OFFLINE_TEXT, NOKEY_TEXT } from '../../catalog/phoneCatalog';
+import { phoneCatalog } from '../../catalog/phoneCatalog';
+import { CatalogError } from './CatalogError';
 
 type Filter = Kind | 'all';
 
@@ -135,23 +136,13 @@ export function Discover() {
         ))}
       </div>
       {error ? (
-        <div class="m-disc-error" role="alert">
-          <p class="m-disc-error-title">{t(OFFLINE_TITLE)}</p>
-          <p class="m-muted">{t(error === 'nokey' ? NOKEY_TEXT : OFFLINE_TEXT)}</p>
-          <div class="m-disc-error-actions">
-            <button type="button" class="m-btn m-btn-primary" onClick={() => {
-                fresh.current = true;
-                setReload((n) => n + 1);
-              }}>
-              {t('common.retry')}
-            </button>
-            {error === 'nokey' && (
-              <button type="button" class="m-btn m-btn-secondary" onClick={() => navigate({ name: 'faq', q: 'tmdb-key' })}>
-                {t('discover.howToKey')}
-              </button>
-            )}
-          </div>
-        </div>
+        <CatalogError
+          code={error}
+          onRetry={() => {
+            fresh.current = true;
+            setReload((n) => n + 1);
+          }}
+        />
       ) : !feed ? (
         <div class="m-disc-grid" aria-busy="true">
           {Array.from({ length: SKELETONS }, (_, i) => (

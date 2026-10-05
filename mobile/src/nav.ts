@@ -28,7 +28,7 @@ export type MRoute =
   /** «Источники поиска» → FlareSolverr. */
   | { name: 'flaresolverr' }
   | { name: 'sourceSite'; id: string }
-  /** A TMDB title card from «Обзор» (the screen comes in Task 8). */
+  /** A TMDB title card from «Обзор» (`TitleCard`). */
   | { name: 'title'; kind: 'movie' | 'tv'; id: number };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);

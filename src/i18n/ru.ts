@@ -1035,6 +1035,19 @@ export const ru = {
     trackerAsk: 'Нужна конкретная раздача?',
     trackerSearch: 'Искать «{q}» на трекерах',
   },
+  titleCard: {
+    findTorrents: 'Найти раздачи',
+    want: 'Хочу посмотреть',
+    followingMovie: 'Слежу за фильмом',
+    followingSeries: 'Слежу за серией',
+    more: 'Ещё',
+    cast: 'В ролях',
+    seasons: 'Сезоны',
+    /** A season row heading (English «Season {n}»); filters.season is the lowercase chip, catalog.querySeason the query word. */
+    season: '{n} сезон',
+    airing: 'выходит: {a} из {b}',
+    find: 'Найти',
+  },
   catalog: {
     querySeason: '{n} сезон',
     deleteAsk: 'Удалить «{title}»?',
