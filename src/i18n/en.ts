@@ -12,7 +12,6 @@ export const en: EnDict<typeof ru> = {
     rusSubs: 'Rus subs',
     season: 'season {n}',
     fullSeason: 'full season',
-    gb: 'GB',
     from: 'from',
     to: 'to',
   },

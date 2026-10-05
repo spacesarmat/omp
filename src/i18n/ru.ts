@@ -9,7 +9,6 @@ export const ru = {
     rusSubs: 'рус. субтитры',
     season: '{n} сезон',
     fullSeason: 'полный сезон',
-    gb: 'ГБ',
     from: 'от',
     to: 'до',
   },

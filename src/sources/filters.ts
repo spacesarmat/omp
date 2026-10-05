@@ -131,7 +131,7 @@ export function filterChips(f: SearchFilters): string[] {
   if (f.source.length) out.push(f.source.map((s) => SOURCE_LABEL[s]).join(', '));
   if (f.hideCam) out.push(t('filters.noCam'));
   if (f.minGb || f.maxGb) {
-    out.push((f.minGb ? t('filters.from') + ' ' + f.minGb + ' ' : '') + (f.maxGb ? t('filters.to') + ' ' + f.maxGb + ' ' : '') + t('filters.gb'));
+    out.push((f.minGb ? t('filters.from') + ' ' + f.minGb + ' ' : '') + (f.maxGb ? t('filters.to') + ' ' + f.maxGb + ' ' : '') + t('common.gb'));
   }
   if (f.minSeeds) out.push(t('filters.seeds', { n: f.minSeeds }));
   if (f.voice.length) out.push(f.voice.map(voiceLabel).join(', '));
