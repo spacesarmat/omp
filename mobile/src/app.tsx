@@ -25,7 +25,7 @@ import { autostartLocal, watchLocalServer } from './server/localServer';
 import { Remote } from './screens/Remote';
 import { NowPlaying } from './screens/NowPlaying';
 import { MiniPlayer } from './ui/MiniPlayer';
-import { Settings, runUpdateCheck } from './screens/Settings';
+import { Settings, runUpdateCheck, phoneFeedUrl } from './screens/Settings';
 import { ServerSettings } from './screens/ServerSettings';
 import { UpdateSheet } from './ui/UpdateSheet';
 import { runBack } from './ui/backStack';
@@ -37,7 +37,6 @@ import { checkWhatsNew } from '../../src/store/whatsNew';
 import { CHANGELOG } from '../../src/lib/changelogData';
 import { APP_VERSION } from '../../src/version';
 import { updatePrompt } from '../../src/store/updates';
-import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
 import { tvState, warmUp, cancelWarmUp } from './tv/tvClient';
 import { activeTv } from './tv/tvStore';
 import { startPlayerLink, attachIfOmpForeground, linkStatus } from './tv/playerLink';
@@ -199,7 +198,7 @@ export function App() {
   // background update check 3 s after start (cheap GET; honours the setting and the 6 h interval)
   useEffect(() => {
     const t = setTimeout(() => {
-      void runUpdateCheck({ manual: false, url: ANDROID_UPDATE_URL }).catch(() => {});
+      void runUpdateCheck({ manual: false, url: phoneFeedUrl() }).catch(() => {});
     }, 3000);
     return () => clearTimeout(t);
   }, []);

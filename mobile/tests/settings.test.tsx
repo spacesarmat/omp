@@ -5,7 +5,7 @@ import { Settings, setUpdateChecker } from '../src/screens/Settings';
 import { currentRoute, resetTo } from '../src/nav';
 import { settings, updateSettings } from '../../src/store/settings';
 import { addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
-import { ANDROID_UPDATE_URL } from '../../src/lib/updateInfo';
+import { ANDROID_UPDATE_URL, ANDROID_BETA_UPDATE_URL } from '../../src/lib/updateInfo';
 import { APP_VERSION } from '../../src/version';
 import { whatsNew, closeWhatsNew } from '../../src/store/whatsNew';
 import { toast } from '../src/ui/toast';
@@ -78,6 +78,23 @@ describe('Settings', () => {
     resetTo({ name: 'settings' });
     await act(async () => btn(el, 'Выбрать').click());
     expect(currentRoute.value.name).toBe('tv');
+  });
+
+  it('«Получать бета-версии» switches the check to the beta APK feed', async () => {
+    const urls: (string | undefined)[] = [];
+    setUpdateChecker(async (o) => {
+      urls.push(o.url);
+      return 'latest';
+    });
+    const el = mount();
+    const sw = el.querySelector('[data-row="beta"] [role="switch"]') as HTMLButtonElement;
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    await act(async () => sw.click());
+    expect(settings.value.betaUpdates).toBe(true);
+    await act(async () => btn(el, 'Проверить обновления').click());
+    await act(async () => {});
+    expect(urls).toEqual([ANDROID_BETA_UPDATE_URL]);
+    updateSettings({ betaUpdates: false });
   });
 
   it('manual check uses the Android feed and toasts the result', async () => {

@@ -94,7 +94,7 @@ describe('UpdateScreen', () => {
     await until(() => host.textContent!.indexOf('Открыть Homebrew Channel') >= 0);
     await tick();
     await tick();
-    expect(host.textContent).toContain('доступна 9.9.9');
+    expect(host.textContent).toContain('Доступна версия 9.9.9');
     expect(host.textContent).toContain('Первое');
     expect(host.textContent).not.toContain('Установить сейчас');
     expect(host.textContent).toContain('Открыть Homebrew Channel');
@@ -216,7 +216,7 @@ describe('UpdateScreen on Android TV', () => {
   it('offers only the APK download, no Homebrew/computer methods and no luna calls', async () => {
     const host = await mount();
     await tick();
-    expect(host.textContent).toContain('доступна 9.9.9');
+    expect(host.textContent).toContain('Доступна версия 9.9.9');
     expect(host.textContent).toContain('Скачать и установить');
     expect(host.textContent).not.toContain('Homebrew');
     expect(host.textContent).not.toContain('С компьютера');

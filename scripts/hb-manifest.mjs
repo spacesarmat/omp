@@ -1,4 +1,4 @@
-// CI: node scripts/hb-manifest.mjs <tag> <path-to-ipk> [apk...] → build/hb/{<id>.manifest.json, apps.json, update.json, full_description.html, update-android.json (with apks)}
+// CI: node scripts/hb-manifest.mjs <tag> <path-to-ipk> [apk...] → build/hb/{<id>.manifest.json, apps.json, update.json, full_description.html, update-android.json (with apks), update-beta.json, update-android-beta.json}
 // apks: the universal OMP-x.y.z.apk (required for the Android feed) plus per-ABI OMP-x.y.z-arm64.apk / -armv7.apk
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -35,6 +35,8 @@ copyFileSync(fullDescription, 'build/hb/full_description.html');
 writeFileSync(`build/hb/${APP_ID}.manifest.json`, JSON.stringify(manifest, null, 2));
 writeFileSync('build/hb/apps.json', JSON.stringify(apps, null, 2));
 writeFileSync('build/hb/update.json', JSON.stringify(update, null, 2));
+// the beta channel reads these: a release rewrites them too, so beta testers get the release once it is newer
+writeFileSync('build/hb/update-beta.json', JSON.stringify(update, null, 2));
 if (apkSet) {
   const apk = apkSet.universal;
   const apkBuf = readFileSync(apk);
@@ -53,5 +55,6 @@ if (apkSet) {
     abis,
   });
   writeFileSync('build/hb/update-android.json', JSON.stringify(androidUpdate, null, 2));
+  writeFileSync('build/hb/update-android-beta.json', JSON.stringify(androidUpdate, null, 2));
 }
 console.log(`build/hb ready for ${tag} (sha256 ${sha256})`);

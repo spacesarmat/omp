@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeUpdateInfo, UPDATE_URL, ANDROID_UPDATE_URL, HB_REPO_URL, RELEASES_URL, HB_SITE_URL } from '../../src/lib/updateInfo';
+import { sanitizeUpdateInfo, UPDATE_URL, ANDROID_UPDATE_URL, HB_REPO_URL, RELEASES_URL, HB_SITE_URL, updateFeedUrl, updateTitle } from '../../src/lib/updateInfo';
 
 const HASH = 'a'.repeat(64);
 const good = {
@@ -48,5 +48,25 @@ describe('sanitizeUpdateInfo', () => {
     expect(UPDATE_URL).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update.json');
     expect(HB_REPO_URL).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/apps.json');
     expect(HB_SITE_URL).toBe('https://www.webosbrew.org/');
+  });
+});
+
+describe('beta feeds and titles', () => {
+  it('picks the feed by platform and the beta switch', () => {
+    const B = 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/';
+    expect(updateFeedUrl(true, false)).toBe(B + 'update-android.json');
+    expect(updateFeedUrl(true, true)).toBe(B + 'update-android-beta.json');
+    expect(updateFeedUrl(false, false)).toBe(B + 'update.json');
+    expect(updateFeedUrl(false, true)).toBe(B + 'update-beta.json');
+  });
+  it('accepts a beta version in the feed', () => {
+    const v = sanitizeUpdateInfo({ version: '0.16.0-beta.1', ipkUrl: 'https://x/a.ipk', ipkHash: 'a'.repeat(64) });
+    expect(v && v.version).toBe('0.16.0-beta.1');
+    expect(sanitizeUpdateInfo({ version: '0.16.0-rc1', ipkUrl: 'https://x/a.ipk', ipkHash: 'a'.repeat(64) })).toBeNull();
+  });
+  it('titles a beta, a release over a beta and a plain update', () => {
+    expect(updateTitle('0.16.0-beta.2', '0.15.3')).toBe('Доступна бета 0.16.0-beta.2');
+    expect(updateTitle('0.16.0', '0.16.0-beta.2')).toBe('Вышла OMP 0.16.0 — она заменит бету');
+    expect(updateTitle('0.15.4', '0.15.3')).toBe('Доступна версия 0.15.4');
   });
 });

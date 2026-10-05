@@ -3,7 +3,7 @@ import { Sheet } from './Sheet';
 import { native } from '../platform/native';
 import { dismissPrompt, skipVersion } from '../../../src/store/updates';
 import { APP_VERSION } from '../../../src/version';
-import { apkFor } from '../../../src/lib/updateInfo';
+import { apkFor, updateTitle } from '../../../src/lib/updateInfo';
 import type { ApkAbi, UpdateInfo } from '../../../src/lib/updateInfo';
 
 export type ApkInstaller = (
@@ -90,7 +90,7 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
   const locked = busy || launching;
   return (
     <Sheet label="Обновление" onClose={() => !locked && dismissPrompt()} onBack={() => !busyRef.current && dismissPrompt()}>
-      <div class="m-sheet-title">Доступна версия {info.version}</div>
+      <div class="m-sheet-title">{updateTitle(info.version, APP_VERSION)}</div>
       <div class="m-muted m-small">
         Сейчас установлена {APP_VERSION}
         {size > 0 ? ' · ' + formatMb(size) : ''}

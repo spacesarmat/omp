@@ -27,7 +27,8 @@ import { tvOmpVersions, tvNeedsUpdate, tvOpensUpdate, openUpdateOnTv, type TvOmp
 import { errorMessage } from '../../../src/api/http';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { checkForUpdate, type CheckResult } from '../../../src/store/updates';
-import { ANDROID_UPDATE_URL } from '../../../src/lib/updateInfo';
+import { updateFeedUrl } from '../../../src/lib/updateInfo';
+import { isBetaVersion } from '../../../src/lib/version';
 import { APP_VERSION } from '../../../src/version';
 import { CHANGELOG } from '../../../src/lib/changelogData';
 import { openWhatsNew } from '../../../src/store/whatsNew';
@@ -46,6 +47,16 @@ export function setUpdateChecker(fn: Checker | null): void {
 export function runUpdateCheck(o: { manual: boolean; url?: string }): Promise<CheckResult> {
   return (checker ?? checkForUpdate)(o);
 }
+
+/** The phone's APK feed: the beta one with «Получать бета-версии». */
+export function phoneFeedUrl(): string {
+  return updateFeedUrl(true, settings.value.betaUpdates);
+}
+
+/** Under «Получать бета-версии». */
+export const BETA_HINT = 'Новые функции раньше всех. Могут быть ошибки. Когда выйдет основная версия, она заменит бету';
+/** The badge next to a beta version. */
+export const BETA_BADGE = 'Бета';
 
 const PROJECT_URL = 'https://github.com/spacesarmat/omp';
 const TORRSERVER_SOURCE_URL = 'https://github.com/YouROK/TorrServer/tree/' + TORRSERVER_VERSION;
@@ -253,7 +264,7 @@ export function Settings() {
   const monitor = loadMonitorSettings();
 
   async function check() {
-    const r = await runUpdateCheck({ manual: true, url: ANDROID_UPDATE_URL }).catch((): CheckResult => 'error');
+    const r = await runUpdateCheck({ manual: true, url: phoneFeedUrl() }).catch((): CheckResult => 'error');
     if (r === 'error') showToast('Не удалось проверить обновления');
     else if (r === 'latest') showToast('У вас последняя версия');
   }
@@ -266,7 +277,10 @@ export function Settings() {
         <div class="m-set-label">Обновление</div>
         <button type="button" class="m-set-row m-set-row-btn" onClick={() => openWhatsNew(CHANGELOG, APP_VERSION)}>
           <span>Версия</span>
-          <span class="m-muted">{APP_VERSION} · Что нового ›</span>
+          <span class="m-muted">
+            {APP_VERSION}
+            {isBetaVersion(APP_VERSION) && <span class="m-badge-beta">{BETA_BADGE}</span>} · Что нового ›
+          </span>
         </button>
         <button type="button" class="m-btn m-btn-secondary" onClick={() => void check()}>
           Проверить обновления
@@ -283,6 +297,17 @@ export function Settings() {
           >
             <span class="m-switch-knob" />
           </button>
+        </div>
+        <div class="m-set-row" data-row="beta">
+          <div class="m-set-text">
+            <span>Получать бета-версии</span>
+            <span class="m-small m-muted">{BETA_HINT}</span>
+          </div>
+          <Switch
+            on={settings.value.betaUpdates}
+            label="Получать бета-версии"
+            onToggle={() => updateSettings({ betaUpdates: !settings.value.betaUpdates })}
+          />
         </div>
       </section>
       {localServer.value.supported && <LocalServerSection />}

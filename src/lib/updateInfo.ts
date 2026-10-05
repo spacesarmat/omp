@@ -1,6 +1,17 @@
+import { isBetaVersion } from './version';
+
 const FEED_BASE = 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/';
 export const UPDATE_URL = FEED_BASE + 'update.json';
 export const ANDROID_UPDATE_URL = FEED_BASE + 'update-android.json';
+/** The beta channel: the newest beta, or the release when it is newer (a release rewrites them too). */
+export const BETA_UPDATE_URL = FEED_BASE + 'update-beta.json';
+export const ANDROID_BETA_UPDATE_URL = FEED_BASE + 'update-android-beta.json';
+
+/** The feed this device reads: the APK one on Android, the ipk one on LG; the beta pair with «Получать бета-версии». */
+export function updateFeedUrl(android: boolean, beta: boolean): string {
+  if (android) return beta ? ANDROID_BETA_UPDATE_URL : ANDROID_UPDATE_URL;
+  return beta ? BETA_UPDATE_URL : UPDATE_URL;
+}
 export const HB_REPO_URL = FEED_BASE + 'apps.json';
 export const RELEASES_URL = 'https://github.com/spacesarmat/omp/releases/latest';
 export const HB_SITE_URL = 'https://www.webosbrew.org/';
@@ -31,7 +42,7 @@ export interface UpdateInfo {
   releaseUrl: string;
 }
 
-const VERSION = /^[0-9]+(\.[0-9]+){1,3}$/;
+const VERSION = /^[0-9]+(\.[0-9]+){1,3}(-beta\.[0-9]+)?$/;
 const SHA256 = /^[0-9a-f]{64}$/i;
 const isHttps = (v: unknown): v is string => typeof v === 'string' && v.indexOf('https://') === 0;
 const positiveSize = (v: unknown): number => (typeof v === 'number' && isFinite(v) && v > 0 ? v : 0);
@@ -77,4 +88,14 @@ export function sanitizeUpdateInfo(v: unknown): UpdateInfo | null {
   const apks = sanitizeApks(o.apks);
   if (apks) info.apks = apks;
   return info;
+}
+
+/**
+ * The title of an offered update: «Доступна бета 0.16.0-beta.2», «Вышла OMP 0.16.0 — она заменит бету» (a release
+ * over an installed beta), else «Доступна версия 0.15.4».
+ */
+export function updateTitle(version: string, installed: string): string {
+  if (isBetaVersion(version)) return 'Доступна бета ' + version;
+  if (isBetaVersion(installed)) return 'Вышла OMP ' + version + ' — она заменит бету';
+  return 'Доступна версия ' + version;
 }

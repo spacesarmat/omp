@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { latestUpdate, checkForUpdate, dismissPrompt } from '../store/updates';
-import { HB_REPO_URL, HB_SITE_URL, RELEASES_URL } from '../lib/updateInfo';
+import { HB_REPO_URL, HB_SITE_URL, RELEASES_URL, updateTitle } from '../lib/updateInfo';
+import { isBetaVersion } from '../lib/version';
+import { settings, updateSettings } from '../store/settings';
 import { hbPresence, hbHasRoot, openHbChannel, hbInstall, InstallStatus, HbPresence } from '../platform/hbchannel';
 import { APP_VERSION } from '../version';
 import { CHANGELOG } from '../lib/changelogData';
@@ -144,7 +146,11 @@ export function UpdateScreen() {
   return (
     <FocusGroup focusKey="UPDATE" className="screen update">
       <h1>Обновление OMP</h1>
-      <div class="muted">{info ? 'Установлена ' + APP_VERSION + ' → доступна ' + info.version : 'Установлена ' + APP_VERSION}</div>
+      {info && <div class="update-title">{updateTitle(info.version, APP_VERSION)}</div>}
+      <div class="muted">
+        {'Установлена ' + APP_VERSION}
+        {isBetaVersion(APP_VERSION) && <span class="badge-beta">Бета</span>}
+      </div>
       {!info && (
         <div class="row update-actions">
           <Button focusKey="upd-check" label={checking ? 'Проверка…' : 'Проверить обновления'} onPress={check} disabled={checking} />
@@ -152,7 +158,18 @@ export function UpdateScreen() {
       )}
       <div class="row update-actions">
         <Button focusKey="upd-whatsnew" label="Что нового" onPress={() => openWhatsNew(CHANGELOG, APP_VERSION)} />
+        <Button
+          focusKey="upd-beta"
+          label={'Бета-версии: ' + (settings.value.betaUpdates ? 'включены' : 'выключены')}
+          onPress={() => {
+            updateSettings({ betaUpdates: !settings.value.betaUpdates });
+            // the other feed decides what is offered now
+            latestUpdate.value = null;
+            check();
+          }}
+        />
       </div>
+      <div class="muted">Бета — новые функции раньше всех, могут быть ошибки. Основная версия заменит бету сама</div>
       {info && info.notes.length > 0 && (
         <ul class="update-notes">{info.notes.slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>
       )}
