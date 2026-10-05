@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   BROWSER_HINT,
   browserSignedIn,
+  browserSuggestion,
+  BROWSER_CAPTCHA,
+  BROWSER_CLOUDFLARE,
   browserKey,
   browserOutcome,
   canLoginOnPhone,
@@ -187,6 +190,14 @@ describe('requests and answers', () => {
       expect(r.retry).toBe('Проверить ещё раз');
     }
     expect(browserSignedIn('rutracker')).toBe('Вход в rutracker выполнен');
+  });
+
+  it('suggests the browser login for a captcha and for a Cloudflare check OMP could not pass', () => {
+    expect(browserSuggestion(new Error('rutracker просит капчу — нажмите «Войти через браузер»'))).toBe(BROWSER_CAPTCHA);
+    const cf = Object.assign(new Error('Сайт закрыт проверкой Cloudflare — пройти её не удалось'), { code: 'cloudflare' });
+    expect(browserSuggestion(cf)).toBe(BROWSER_CLOUDFLARE);
+    expect(browserSuggestion(Object.assign(new Error('x'), { code: 'cloudflare-interactive' }))).toBe(BROWSER_CLOUDFLARE);
+    expect(browserSuggestion(new Error('Неверный логин или пароль'))).toBe('');
   });
 
   it('native answers are read strictly', () => {

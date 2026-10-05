@@ -10,7 +10,7 @@ import { getSource } from '../../../src/sources/registry';
 import { clearHealth, isCloudflareBypassOn, isSourceOn, onCloudflareBypassChange, setCloudflareBypass, setHealth, setSourceOn } from '../../../src/sources/store';
 import { BYPASS_LABEL, BYPASS_WARNING, clearanceText } from '../../../src/sources/cloudflareCheck';
 import { LOGIN_SITES, SESSION_SITES, transferLogins, transferSessions } from '../../../src/sources/transfer';
-import { BROWSER_DONE_TITLE, isCaptchaError } from '../../../src/sources/browserLogin';
+import { BROWSER_DONE_TITLE, browserSuggestion } from '../../../src/sources/browserLogin';
 import { BrowserLoginButton } from '../ui/BrowserLoginButton';
 import { allSources } from '../../../src/sources/registry';
 import type { Source, SourceContext } from '../../../src/sources/types';
@@ -36,7 +36,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
   const [logged, setLogged] = useState<boolean | null>(null);
   // the current login is a browser session («Вход выполнен в браузере», no password)
   const [browser, setBrowser] = useState(false);
-  const [captcha, setCaptcha] = useState(false);
+  const [suggest, setSuggest] = useState('');
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -77,7 +77,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
       return;
     }
     setError('');
-    setCaptcha(false);
+    setSuggest('');
     setBusy(true);
     source.login(u, p, ctx()).then(
       () => {
@@ -96,8 +96,8 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
         if (!alive.current) return;
         setBusy(false);
         setError(errorMessage(err));
-        // a captcha: «Войти через браузер» is suggested right under the form
-        setCaptcha(isCaptchaError(err));
+        // a captcha or a Cloudflare check: «Войти через браузер» is suggested right under the form
+        setSuggest(browserSuggestion(err));
       },
     );
   };
@@ -108,7 +108,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
     setLogged(true);
     setBrowser(true);
     setError('');
-    setCaptcha(false);
+    setSuggest('');
     setUsername('');
     setSourceOn(source.id, true);
     clearHealth(source.id);
@@ -212,7 +212,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
               <button type="submit" class="m-btn m-btn-primary" disabled={busy || logged === null}>
                 {busy ? 'Вхожу…' : 'Войти'}
               </button>
-              <BrowserLoginButton source={source} ctx={ctx} captcha={captcha} disabled={busy || logged === null} onDone={browserDone} />
+              <BrowserLoginButton source={source} ctx={ctx} suggest={suggest} disabled={busy || logged === null} onDone={browserDone} />
             </>
           )}
         </form>

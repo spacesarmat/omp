@@ -5,6 +5,7 @@
 // has no saved password: its `<id>.browser` marker says «вход выполнен в браузере», «Выйти» forgets the session.
 // The platforms register their way of showing the page (mobile/src/browserLogin.ts, src/sources/cloudflareTv.ts);
 // LG has none. All the Russian copy lives here. Shared by the phone and the TV bundles: Chromium 53 rules, no platform imports.
+import { cloudflareFailure } from './cloudflare';
 import { RUTRACKER_CAPTCHA } from './rutrackerText';
 import { siteLoginCode, siteLoginKeys } from './siteLoginText';
 import type { SecretStore, SourceContext } from './types';
@@ -22,6 +23,8 @@ export const BROWSER_RETRY = 'Проверить ещё раз';
 export const BROWSER_SIGNED_IN = 'Вход в %s выполнен';
 /** Shown under a form login that hit a captcha. */
 export const BROWSER_CAPTCHA = 'Сайт просит капчу — войдите через браузер';
+/** Shown under a form login that Cloudflare stopped (the browser page passes the check itself). */
+export const BROWSER_CLOUDFLARE = 'Сайт закрыт проверкой Cloudflare — войдите через браузер';
 /** The state of a site signed in through the browser. */
 export const BROWSER_DONE = 'вход выполнен в браузере';
 export const BROWSER_DONE_TITLE = 'Вход выполнен в браузере';
@@ -242,6 +245,16 @@ export function canLoginOnPhone(): boolean {
 export function isCaptchaError(e: unknown): boolean {
   if (siteLoginCode(e) === 'captcha') return true;
   return e instanceof Error && e.message === RUTRACKER_CAPTCHA;
+}
+
+/**
+ * A form login the browser login gets past: a captcha, or a Cloudflare check OMP could not pass on its own (the
+ * browser page shows it, the person ticks it). The suggestion shown above «Войти через браузер», '' for anything else.
+ */
+export function browserSuggestion(e: unknown): string {
+  if (isCaptchaError(e)) return BROWSER_CAPTCHA;
+  if (cloudflareFailure(e)) return BROWSER_CLOUDFLARE;
+  return '';
 }
 
 /** The marker of a site signed in through the browser (Keystore, js: namespace; the TV's transfer writes it natively). */
