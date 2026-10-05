@@ -5,6 +5,7 @@ import { torrents } from '../../src/store/library';
 import { saveSupport, type JournalClient } from '../../src/store/journal';
 import { supportOfList } from '../../src/lib/journal';
 import { journalSupportUntil, noteSupportUntil } from '../../src/store/support';
+import { t } from '../../src/i18n';
 import { verifySupportCode, type CodeCheck } from './supportCode';
 
 // «Поддержать OMP» on the phone: the methods and the support code are shared with the TV (src/lib/donate.ts).
@@ -145,9 +146,5 @@ export async function applySupportCode(text: string, now: number = Date.now()): 
  * server has the mark (`shared`).
  */
 export function supportThanks(until: number, shared: boolean): string {
-  return (
-    'Спасибо! Просьбы о поддержке скрыты до ' +
-    supportEndText(until) +
-    (shared ? ' на телефоне и телевизорах.' : ' на этом телефоне; телевизоры узнают, когда телефон подключится к серверу.')
-  );
+  return t(shared ? 'donate.thanksShared' : 'donate.thanksLocal', { until: supportEndText(until) });
 }

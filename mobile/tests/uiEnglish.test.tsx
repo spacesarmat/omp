@@ -23,7 +23,7 @@ import { donateOpen, closeDonate } from '../src/donate';
 import { nowPlaying } from '../src/tv/playerLink';
 import { linkStatus } from '../src/tv/playerLink';
 import { saveTv, setActiveTv, reloadTvs } from '../src/tv/tvStore';
-import { TV_NO_OMP } from '../src/tv/tvClient';
+import { tvNoOmp } from '../src/tv/tvClient';
 import type { PlayerState } from '../../src/phone/protocol';
 import type { Source, SourceResult } from '../../src/sources/types';
 
@@ -95,7 +95,7 @@ describe('phone shared UI in English', () => {
   });
 
   it('LaunchError offers the install guide in English', () => {
-    mount(<LaunchError message={TV_NO_OMP} />);
+    mount(<LaunchError message={tvNoOmp()} />);
     expect(buttons()).toEqual(['How to install OMP on the TV']);
   });
 

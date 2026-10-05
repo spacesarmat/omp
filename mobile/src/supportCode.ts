@@ -3,12 +3,13 @@
 // WebCrypto at all (Chrome 90 has no Ed25519 there). The TV bundle never imports this file.
 import { hashes, verify } from '@noble/ed25519';
 import { sha512 } from '@noble/hashes/sha2.js';
+import { t } from '../../src/i18n';
 import { parseSupportCode, supportMessage, supportUntil, SUPPORT_PUBLIC_KEY } from '../../src/lib/donate';
 
 hashes.sha512 = sha512;
 
-export const CODE_BAD = 'Код не подходит';
-export const CODE_EXPIRED = 'Срок кода истёк';
+export const codeBad = () => t('donate.codeInvalid');
+export const codeExpired = () => t('donate.codeExpired');
 
 export type CodeCheck = { ok: true; month: string; until: number } | { ok: false; error: string };
 
@@ -42,18 +43,18 @@ export async function verifySupportCode(text: string, now: number = Date.now(), 
   const code = parseSupportCode(text);
   const sig = code ? fromBase64Url(code.sig) : null;
   const key = fromBase64Url(publicKey);
-  if (!code || !sig || sig.length !== 64 || !key || key.length !== 32) return { ok: false, error: CODE_BAD };
+  if (!code || !sig || sig.length !== 64 || !key || key.length !== 32) return { ok: false, error: codeBad() };
   let valid = false;
   try {
     valid = verify(sig, ascii(supportMessage(code.month)), key);
   } catch (e) {
     valid = false;
   }
-  if (!valid) return { ok: false, error: CODE_BAD };
+  if (!valid) return { ok: false, error: codeBad() };
   const until = supportUntil(code.year, code.mon);
   const d = new Date(now);
   const nextMonth = d.getFullYear() * 12 + d.getMonth() + 1; // months since year 0, 0-based: the next month
-  if (code.year * 12 + code.mon - 1 > nextMonth) return { ok: false, error: CODE_BAD };
-  if (until <= now) return { ok: false, error: CODE_EXPIRED };
+  if (code.year * 12 + code.mon - 1 > nextMonth) return { ok: false, error: codeBad() };
+  if (until <= now) return { ok: false, error: codeExpired() };
   return { ok: true, month: code.month, until };
 }

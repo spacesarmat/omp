@@ -1,10 +1,10 @@
-import { TV_NO_OMP, tvState } from '../src/tv/tvClient';
+import { tvNoOmp, tvState } from '../src/tv/tvClient';
 import { settings, updateSettings } from '../../src/store/settings';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
-import { setWatchActions, NO_WIFI } from '../src/watch';
+import { setWatchActions, noWifi } from '../src/watch';
 import { localServer, setLocalServerDeps } from '../src/server/localServer';
 import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
@@ -340,7 +340,7 @@ describe('Library', () => {
   it('history play with no OMP on the TV offers the install guide', async () => {
     saveProgress('h1', 2, 100, 3000);
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn().mockRejectedValue(new Error(TV_NO_OMP)), remoteDelayMs: 0 });
+    setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn().mockRejectedValue(new Error(tvNoOmp())), remoteDelayMs: 0 });
     mount();
     await flush();
     act(() => tab('История').click());
@@ -365,7 +365,7 @@ describe('Library', () => {
     await flush();
     act(() => byText('Сначала')!.click());
     await flush();
-    expect(el.textContent).toContain(NO_WIFI);
+    expect(el.textContent).toContain(noWifi());
     expect(report).not.toHaveBeenCalled();
     expect(launch).not.toHaveBeenCalled();
   });

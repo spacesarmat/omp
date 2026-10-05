@@ -25,13 +25,13 @@ import {
   sessionIp,
   warmUp,
   cancelWarmUp,
-  TV_FORGOT,
-  TV_NO_ANSWER,
-  ATV_BACKGROUND,
-  PAIR_BAD_CODE,
-  PAIR_EXPIRED,
-  ATV_REJECTED,
-  ATV_ERROR,
+  tvForgot,
+  tvNoAnswer,
+  atvBackground,
+  pairBadCode,
+  pairExpired,
+  atvRejected,
+  atvError,
   type TvTransport,
 } from '../src/tv/tvClient';
 import { tvs, activeTv, saveTv, reloadTvs, type SavedTv } from '../src/tv/tvStore';
@@ -115,23 +115,23 @@ describe('Android TV transport', () => {
 
   it('a TV that forgot the phone ends in an error asking to pair again', async () => {
     info.paired = false;
-    await expect(connectTv(ATV)).rejects.toThrow(TV_FORGOT);
+    await expect(connectTv(ATV)).rejects.toThrow(tvForgot());
     expect(tvState.value).toBe('error');
     expect(tvError.value).toBe('Телевизор забыл этот телефон — подключитесь заново кодом');
   });
 
   it('an unreachable TV is «Телевизор не отвечает»', async () => {
     route = () => Promise.reject(new TypeError('Failed to fetch'));
-    await expect(connectTv(ATV)).rejects.toThrow(TV_NO_ANSWER);
+    await expect(connectTv(ATV)).rejects.toThrow(tvNoAnswer());
     expect(tvState.value).toBe('error');
-    expect(tvError.value).toBe(TV_NO_ANSWER);
+    expect(tvError.value).toBe(tvNoAnswer());
   });
 
   it('gives up on a silent TV after 5 s', async () => {
     vi.useFakeTimers();
     route = () => new Promise(() => {});
     const p = connectTv(ATV);
-    const done = expect(p).rejects.toThrow(TV_NO_ANSWER);
+    const done = expect(p).rejects.toThrow(tvNoAnswer());
     await vi.advanceTimersByTimeAsync(5000);
     await done;
     expect(tvState.value).toBe('error');
@@ -159,7 +159,7 @@ describe('Android TV transport', () => {
     expect(toast.value).toBe('');
     await vi.advanceTimersByTimeAsync(3000);
     expect(toast.value).toBe('Откройте OMP на телевизоре — Android не даёт вывести его на экран из фона');
-    expect(ATV_BACKGROUND).toBe(toast.value);
+    expect(atvBackground()).toBe(toast.value);
   });
 
   it('no warning when OMP came to the front', async () => {
@@ -206,15 +206,15 @@ describe('Android TV transport', () => {
     saveTv(ATV);
     await connectTv(ATV);
     route = (c) => (c.method === 'POST' ? { status: 401, body: '{"error":"unauthorized"}' } : null);
-    await expect(pressButton('UP')).rejects.toThrow(TV_FORGOT);
+    await expect(pressButton('UP')).rejects.toThrow(tvForgot());
     expect(tvState.value).toBe('error');
-    expect(tvError.value).toBe(TV_FORGOT);
+    expect(tvError.value).toBe(tvForgot());
   });
 
   it('a forgetful TV drops the saved token (the next tap asks for a code)', async () => {
     saveTv(ATV);
     info.paired = false;
-    await expect(connectTv(activeTv.value!)).rejects.toThrow(TV_FORGOT);
+    await expect(connectTv(activeTv.value!)).rejects.toThrow(tvForgot());
     expect(tvs.value[0].token).toBeUndefined();
     expect(tvs.value[0].kind).toBe('atv');
   });
@@ -223,7 +223,7 @@ describe('Android TV transport', () => {
     saveTv(ATV);
     await connectTv(ATV);
     route = (c) => (c.method === 'POST' ? { status: 401, body: '{"error":"unauthorized"}' } : null);
-    await expect(pressButton('UP')).rejects.toThrow(TV_FORGOT);
+    await expect(pressButton('UP')).rejects.toThrow(tvForgot());
     expect(activeTv.value?.token).toBeUndefined();
   });
 
@@ -231,12 +231,12 @@ describe('Android TV transport', () => {
     saveTv(ATV);
     await connectTv(ATV);
     route = (c) => (c.method === 'POST' ? { status: 400, body: '{"error":"bad_request"}' } : null);
-    await expect(pressButton('UP')).rejects.toThrow(ATV_REJECTED);
-    expect(ATV_REJECTED).toBe('Телевизор отклонил запрос');
+    await expect(pressButton('UP')).rejects.toThrow(atvRejected());
+    expect(atvRejected()).toBe('Телевизор отклонил запрос');
     route = (c) => (c.method === 'POST' ? { status: 500, body: '{"error":"internal"}' } : null);
     const e = await pressButton('UP').catch((x: Error) => x);
-    expect((e as Error).message).toBe(ATV_ERROR);
-    expect(ATV_ERROR).toBe('Телевизор ответил ошибкой');
+    expect((e as Error).message).toBe(atvError());
+    expect(atvError()).toBe('Телевизор ответил ошибкой');
     expect((e as Error).message).not.toMatch(/internal|500|bad_request|400/);
   });
 
@@ -268,7 +268,7 @@ describe('Android TV transport', () => {
     info.paired = false;
     await warmUp();
     expect(calls.filter((c) => c.url === BASE + '/omp/info')).toHaveLength(1);
-    expect(tvError.value).toBe(TV_FORGOT);
+    expect(tvError.value).toBe(tvForgot());
   });
 
   it('warm-up retries an unreachable TV', async () => {
@@ -310,20 +310,20 @@ describe('pairing with an Android TV', () => {
 
   it('a wrong code is «Неверный код»', async () => {
     route = (c) => (c.url === BASE + '/omp/pair' ? { status: 403, body: '{"error":"bad_code"}' } : null);
-    await expect(pairAtv(FOUND, '1111')).rejects.toThrow(PAIR_BAD_CODE);
-    expect(PAIR_BAD_CODE).toBe('Неверный код');
+    await expect(pairAtv(FOUND, '1111')).rejects.toThrow(pairBadCode());
+    expect(pairBadCode()).toBe('Неверный код');
     expect(tvs.value).toEqual([]);
   });
 
   it('an expired code asks for a new one', async () => {
     route = (c) => (c.url === BASE + '/omp/pair' ? { status: 403, body: '{"error":"expired"}' } : null);
-    await expect(pairAtv(FOUND, '1111')).rejects.toThrow(PAIR_EXPIRED);
-    expect(PAIR_EXPIRED).toBe('Код устарел — нажмите «Новый код» на телевизоре');
+    await expect(pairAtv(FOUND, '1111')).rejects.toThrow(pairExpired());
+    expect(pairExpired()).toBe('Код устарел — нажмите «Новый код» на телевизоре');
   });
 
   it('an unreachable TV is «Телевизор не отвечает»', async () => {
     route = () => Promise.reject(new TypeError('x'));
-    await expect(pairAtv(FOUND, '1111')).rejects.toThrow(TV_NO_ANSWER);
+    await expect(pairAtv(FOUND, '1111')).rejects.toThrow(tvNoAnswer());
   });
 
   it('other pairing answers are Russian, never a raw code', async () => {
@@ -346,12 +346,12 @@ describe('pairing with an Android TV', () => {
     expect(tvs.value[0]).toMatchObject({ ip: '192.168.1.40', kind: 'atv', token: TOKEN });
     expect(activeTv.value?.ip).toBe('192.168.1.40');
     expect(tvState.value).toBe('error');
-    expect(tvError.value).toBe(TV_NO_ANSWER);
+    expect(tvError.value).toBe(tvNoAnswer());
   });
 
   it('re-pairing a forgotten TV uses the new token', async () => {
     saveTv({ ...ATV, token: 'ffffffffffffffffffffffffffffffff' });
-    await expect(connectTv(activeTv.value!)).rejects.toThrow(TV_FORGOT);
+    await expect(connectTv(activeTv.value!)).rejects.toThrow(tvForgot());
     route = (c) => (c.url === BASE + '/omp/pair' ? { body: JSON.stringify({ token: TOKEN }) } : null);
     await pairAtv(FOUND, '0482');
     expect(tvState.value).toBe('connected');

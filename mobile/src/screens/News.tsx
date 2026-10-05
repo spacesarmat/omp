@@ -11,7 +11,7 @@ import { monitorNative } from '../monitor/native';
 import { askNotifyOnce, lastCheck, monitorDoneCount, monitorVersion, reloadMonitor, useMonitorStatus } from '../monitor/ui';
 import { checkedLine, clock, dayWord, episodesLine, freshText, subRule } from '../monitor/text';
 import { phoneSourceContext } from '../searchContext';
-import { ONLY_ANDROID } from '../platform/native';
+import { onlyAndroid } from '../platform/native';
 import { client } from '../../../src/store/servers';
 import { activeTv } from '../tv/tvStore';
 import { torrents } from '../../../src/store/library';
@@ -366,7 +366,7 @@ export function News({ seg, finding, watch }: { seg?: Seg; finding?: string; wat
   const fresh = unseenCount();
 
   const runNow = () => {
-    if (!monitorNative.available) return showToast(ONLY_ANDROID);
+    if (!monitorNative.available) return showToast(onlyAndroid());
     setRunning(true);
     monitorNative.runNow().then(
       () => showToast(t('news.runToast')),

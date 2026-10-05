@@ -1,5 +1,4 @@
 import { applyLanguageSetting } from '../../src/i18n';
-import { backupFileName, backupWarning } from '../src/lib/backup';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -196,9 +195,7 @@ describe('Backup screen', () => {
 
 describe('Backup screen in English', () => {
   beforeEach(() => applyLanguageSetting('en'));
-  afterEach(() => applyLanguageSetting('ru'));
-  // the file name and the warning come from src lib/backup (still Russian until that file is migrated)
-  const clean = (el: HTMLElement) => el.textContent!.replace(backupFileName(NOW), '').replace(backupWarning(), '');
+
 
   it('lists what is saved and offers save and restore', () => {
     fake();
@@ -212,7 +209,7 @@ describe('Backup screen in English', () => {
     expect(btn(el, 'Restore from a file…')).toBeTruthy();
     expect(el.querySelector('[aria-label="Backup file"]')).toBeTruthy();
     expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
-    expect(clean(el)).not.toMatch(/[А-Яа-яЁё]/);
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 
   it('a share failure without a message is reported in English', async () => {

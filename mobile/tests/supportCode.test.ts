@@ -9,7 +9,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 // @ts-ignore node builtin
 import { join } from 'node:path';
-import { verifySupportCode, fromBase64Url, CODE_BAD, CODE_EXPIRED } from '../src/supportCode';
+import { verifySupportCode, fromBase64Url, codeBad, codeExpired } from '../src/supportCode';
 import { supportCode, publicKeyOf } from '../../scripts/donate-lib.mjs';
 import { supportActive, supportUntil, SUPPORT_MAX_AHEAD_MS } from '../../src/lib/donate';
 
@@ -28,12 +28,12 @@ describe('support code check (phone)', () => {
   });
 
   it('a past month has expired (except during the grace days), a later one does not fit', async () => {
-    expect(await verifySupportCode(supportCode('2026-08', PEM), NOW, PUB)).toEqual({ ok: false, error: CODE_EXPIRED });
+    expect(await verifySupportCode(supportCode('2026-08', PEM), NOW, PUB)).toEqual({ ok: false, error: codeExpired() });
     // 2 October: the September code is still in its grace days
     expect((await verifySupportCode(supportCode('2026-09', PEM), new Date(2026, 9, 2).getTime(), PUB)).ok).toBe(true);
-    expect(await verifySupportCode(supportCode('2026-09', PEM), NOW, PUB)).toEqual({ ok: false, error: CODE_EXPIRED });
-    expect(await verifySupportCode(supportCode('2026-12', PEM), NOW, PUB)).toEqual({ ok: false, error: CODE_BAD });
-    expect(await verifySupportCode(supportCode('2027-10', PEM), NOW, PUB)).toEqual({ ok: false, error: CODE_BAD });
+    expect(await verifySupportCode(supportCode('2026-09', PEM), NOW, PUB)).toEqual({ ok: false, error: codeExpired() });
+    expect(await verifySupportCode(supportCode('2026-12', PEM), NOW, PUB)).toEqual({ ok: false, error: codeBad() });
+    expect(await verifySupportCode(supportCode('2027-10', PEM), NOW, PUB)).toEqual({ ok: false, error: codeBad() });
     // December → January across the year
     expect((await verifySupportCode(supportCode('2027-01', PEM), new Date(2026, 11, 20).getTime(), PUB)).ok).toBe(true);
   });
@@ -41,22 +41,22 @@ describe('support code check (phone)', () => {
   it('rejects a bad signature: another month, another key, a changed character', async () => {
     const code = supportCode('2026-10', PEM);
     const otherMonth = 'OMP-2026-11-' + code.slice('OMP-2026-10-'.length);
-    expect(await verifySupportCode(otherMonth, NOW, PUB)).toEqual({ ok: false, error: CODE_BAD });
+    expect(await verifySupportCode(otherMonth, NOW, PUB)).toEqual({ ok: false, error: codeBad() });
     const { privateKey: other } = generateKeyPairSync('ed25519');
     const foreign = supportCode('2026-10', other.export({ format: 'pem', type: 'pkcs8' }).toString());
-    expect(await verifySupportCode(foreign, NOW, PUB)).toEqual({ ok: false, error: CODE_BAD });
+    expect(await verifySupportCode(foreign, NOW, PUB)).toEqual({ ok: false, error: codeBad() });
     const last = code.charAt(code.length - 5);
     const flipped = code.slice(0, -5) + (last === 'A' ? 'B' : 'A') + code.slice(-4);
-    expect(await verifySupportCode(flipped, NOW, PUB)).toEqual({ ok: false, error: CODE_BAD });
+    expect(await verifySupportCode(flipped, NOW, PUB)).toEqual({ ok: false, error: codeBad() });
     // a code made with the test key does not pass the real key
-    expect(await verifySupportCode(code, NOW)).toEqual({ ok: false, error: CODE_BAD });
+    expect(await verifySupportCode(code, NOW)).toEqual({ ok: false, error: codeBad() });
   });
 
   it('rejects malformed input', async () => {
     for (const t of ['', 'привет', 'OMP-2026-10-', 'OMP-2026-10-abc', 'OMP-2026-1-' + 'A'.repeat(86)]) {
-      expect(await verifySupportCode(t, NOW, PUB)).toEqual({ ok: false, error: CODE_BAD });
+      expect(await verifySupportCode(t, NOW, PUB)).toEqual({ ok: false, error: codeBad() });
     }
-    expect(await verifySupportCode(supportCode('2026-10', PEM), NOW, 'not-a-key')).toEqual({ ok: false, error: CODE_BAD });
+    expect(await verifySupportCode(supportCode('2026-10', PEM), NOW, 'not-a-key')).toEqual({ ok: false, error: codeBad() });
   });
 
   it('spaces around a pasted code are fine', async () => {
@@ -74,18 +74,18 @@ describe('month boundaries', () => {
   it('December → January: the January code is accepted in December, the December code until 4 January', async () => {
     const dec15 = new Date(2026, 11, 15, 12).getTime();
     expect(await verifySupportCode(supportCode('2027-01', PEM), dec15, PUB)).toEqual({ ok: true, month: '2027-01', until: supportUntil(2027, 1) });
-    expect(await verifySupportCode(supportCode('2027-02', PEM), dec15, PUB)).toEqual({ ok: false, error: CODE_BAD });
+    expect(await verifySupportCode(supportCode('2027-02', PEM), dec15, PUB)).toEqual({ ok: false, error: codeBad() });
     const dec = await verifySupportCode(supportCode('2026-12', PEM), dec15, PUB);
     expect(dec).toEqual({ ok: true, month: '2026-12', until: new Date(2027, 0, 4).getTime() });
     expect((await verifySupportCode(supportCode('2026-12', PEM), new Date(2027, 0, 3, 23).getTime(), PUB)).ok).toBe(true);
-    expect(await verifySupportCode(supportCode('2026-12', PEM), new Date(2027, 0, 4).getTime(), PUB)).toEqual({ ok: false, error: CODE_EXPIRED });
+    expect(await verifySupportCode(supportCode('2026-12', PEM), new Date(2027, 0, 4).getTime(), PUB)).toEqual({ ok: false, error: codeExpired() });
   });
 
   it('grace edges: valid until the last millisecond before the end, expired at the end', async () => {
     const until = supportUntil(2026, 10);
     expect(until).toBe(new Date(2026, 10, 4).getTime());
     expect((await verifySupportCode(supportCode('2026-10', PEM), until - 1, PUB)).ok).toBe(true);
-    expect(await verifySupportCode(supportCode('2026-10', PEM), until, PUB)).toEqual({ ok: false, error: CODE_EXPIRED });
+    expect(await verifySupportCode(supportCode('2026-10', PEM), until, PUB)).toEqual({ ok: false, error: codeExpired() });
     expect(supportActive(until, until - 1)).toBe(true);
     expect(supportActive(until, until)).toBe(false);
   });

@@ -3,6 +3,7 @@
 import { native, type FoundTv, type FoundCastTv, type FoundOmpTv, type OmpNativeApi } from '../platform/native';
 import { tvs, type SavedTv } from '../tv/tvStore';
 import { log } from '../../../src/lib/log';
+import { t } from '../../../src/i18n';
 
 export type InstallNative = Pick<OmpNativeApi, 'discoverTvs' | 'discoverCastTvs' | 'discoverOmpTvs' | 'probePorts' | 'stopDiscovery'>;
 
@@ -131,17 +132,17 @@ export function searchDevices(onUpdate: (list: InstallDevice[]) => void, timeout
     onUpdate(list);
     return list;
   };
-  const run = <T>(p: () => Promise<T[]>, what: string, put: (v: T[]) => void) =>
+  const run = <T>(p: () => Promise<T[]>, what: () => string, put: (v: T[]) => void) =>
     p().then(
       (v) => {
         put(v);
         emit();
       },
-      () => log('warn', 'install', 'Поиск ' + what + ' не удался'),
+      () => log('warn', 'install', t('install.run.searchFailed', { what: what() })),
     );
   return Promise.all([
-    run(() => n.discoverTvs(timeoutMs), 'LG', (v) => (found.lg = v)),
-    run(() => n.discoverCastTvs(timeoutMs, group), 'Android TV', (v) => (found.cast = v)),
-    run(() => n.discoverOmpTvs(timeoutMs, group), 'OMP на Android TV', (v) => (found.omp = v)),
+    run(() => n.discoverTvs(timeoutMs), () => 'LG', (v) => (found.lg = v)),
+    run(() => n.discoverCastTvs(timeoutMs, group), () => 'Android TV', (v) => (found.cast = v)),
+    run(() => n.discoverOmpTvs(timeoutMs, group), () => t('install.run.searchOmpAtv'), (v) => (found.omp = v)),
   ]).then(emit);
 }

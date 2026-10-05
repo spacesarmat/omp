@@ -1,7 +1,7 @@
 // Monitoring calls of the OmpNative plugin (android/.../OmpNativePlugin.kt, section «monitoring»): the WorkManager
 // schedule, «Проверить сейчас», the last run, the notification permission and links from notifications.
 import type { PluginListenerHandle } from '@capacitor/core';
-import { rawPlugin, ONLY_ANDROID } from '../platform/native';
+import { rawPlugin, onlyAndroid } from '../platform/native';
 import { sanitizeSummary, type MonitorSummary } from '../../../src/monitor/settings';
 
 export type NotifyPermission = 'granted' | 'denied' | 'prompt';
@@ -112,7 +112,7 @@ function listen(add: () => Promise<PluginListenerHandle>): () => void {
 }
 
 export function createMonitorNative(plugin: MonitorPlugin | null): MonitorNative {
-  const unavailable = (): Promise<never> => Promise.reject(new Error(ONLY_ANDROID));
+  const unavailable = (): Promise<never> => Promise.reject(new Error(onlyAndroid()));
   return {
     available: !!plugin,
     schedule: (o) => (plugin ? plugin.monitorSchedule(o).then(() => undefined) : unavailable()),

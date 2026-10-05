@@ -13,7 +13,7 @@ import type { FoundOmpTv } from '../platform/native';
 import {
   tvState,
   tvError,
-  TV_FORGOT,
+  tvForgot,
   pairAtv,
   tvWaking,
   warmUp,
@@ -421,7 +421,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
   const [kbd, setKbd] = useState(false);
   const [coding, setCoding] = useState(false);
   // the TV forgot this phone (its token was dropped): pair again by the code
-  const forgot = !tv.token || (state === 'error' && tvError.value === TV_FORGOT);
+  const forgot = !tv.token || (state === 'error' && tvError.value === tvForgot());
   const found: FoundOmpTv = { ip: tv.ip, port: tv.ctlPort || ATV_PORT, name: tv.defaultName ?? tv.name, version: '' };
   const press = (n: RemoteButton) => {
     vibrate();
@@ -449,7 +449,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
       <p class="m-remote-note">{t('remote.atvNote')}</p>
       {forgot && (
         <div class="m-remote-forgot">
-          <div class="m-hint-warn">{TV_FORGOT}</div>
+          <div class="m-hint-warn">{tvForgot()}</div>
           <button type="button" class="m-btn m-btn-primary" onClick={() => setCoding(true)}>
             {t('remote.pairAgain')}
           </button>

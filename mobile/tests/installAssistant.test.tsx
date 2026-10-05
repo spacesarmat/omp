@@ -777,9 +777,9 @@ describe('Install assistant in English', () => {
     expect(el.textContent).toContain('OLED55C1RLA · webOS 6.0 · no root — install through Developer Mode');
     expect(el.querySelectorAll('.m-install-step').length).toBe(6);
     expect(button(el, 'Install OMP and Homebrew Channel')).toBeTruthy();
-    // the install box is migrated in the next task: only the steps and the notes are checked here
-    const own = Array.from(el.querySelectorAll('.m-install-steps, .m-hint-warn, .m-bar')).map((n) => n.textContent).join('\n');
-    expect(own).not.toMatch(CYR);
+    expect(el.textContent).toContain('Code (Passphrase) from the Developer Mode app');
+    expect(el.textContent).toContain('With Homebrew Channel');
+    expect(el.textContent).not.toMatch(CYR);
   });
 
   it('Android TV: the update on a saved TV without a pairing explains what to do', async () => {

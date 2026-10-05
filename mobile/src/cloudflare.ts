@@ -10,6 +10,7 @@ import { effect, signal } from '@preact/signals';
 import { native, type OmpNativeApi, type TvCloudflareRequest } from './platform/native';
 import { activeTv, isAtv, ATV_PORT, type SavedTv } from './tv/tvStore';
 import { showToast } from './ui/toast';
+import { t } from '../../src/i18n';
 import { log } from '../../src/lib/log';
 import { logCloudflare } from '../../src/sources/cloudflare';
 import { isSourceOn, onCloudflareBypassChange, onHealthChange } from '../../src/sources/store';
@@ -135,18 +136,18 @@ export function tvLoginSource(r: TvCloudflareRequest, list: Source[] = allSource
 function handleTvLogin(r: TvCloudflareRequest, deps: PhoneCloudflareDeps): Promise<void> {
   const source = tvLoginSource(r);
   if (!source) {
-    log('warn', 'tv', 'Вход: телевизор попросил вход для неизвестного сайта — отклонено');
+    log('warn', 'tv', t('cloudflare.logLoginUnknown'));
     return deps.native.cloudflareDecline(r.id).then(undefined, () => undefined);
   }
   const tv = deps.tv();
-  const req = phoneLoginRequest(source.browserSpec!(), { id: r.id, tv: tv ? tv.name : 'Телевизор' });
+  const req = phoneLoginRequest(source.browserSpec!(), { id: r.id, tv: tv ? tv.name : t('history.tv') });
   return deps.native.siteBrowserLogin(req).then(
     (res) => {
       const x = browserOutcome(res);
       if (x.done) return;
       if (x.result === 'ok') {
-        if (x.sent) log('info', 'tv', 'Вход через браузер передан на телевизор · ' + source.name);
-        else log('warn', 'tv', 'Вход через браузер не передан на телевизор · ' + source.name);
+        if (x.sent) log('info', 'tv', t('cloudflare.logBrowserSent', { site: source.name }));
+        else log('warn', 'tv', t('cloudflare.logBrowserNotSent', { site: source.name }));
         deps.toast(x.sent ? browserSentTv() : browserNotSentTv());
       } else if (x.result === 'busy') deps.toast(browserBusy());
       else if (x.result === 'failed') deps.toast(browserFailed());
@@ -179,11 +180,11 @@ export function handleTvRequest(r: TvCloudflareRequest, deps: PhoneCloudflareDep
   if (r.kind === 'login') return handleTvLogin(r, deps);
   const source = tvRequestSource(r.url);
   if (!source) {
-    log('warn', 'tv', 'Cloudflare: телевизор попросил проверку для неизвестного сайта — отклонено');
+    log('warn', 'tv', t('cloudflare.logCheckUnknown'));
     return deps.native.cloudflareDecline(r.id).then(undefined, () => undefined);
   }
   const tv = deps.tv();
-  const req = phoneCheckRequest({ name: source.name, url: r.url }, { id: r.id, tv: tv ? tv.name : 'Телевизор' });
+  const req = phoneCheckRequest({ name: source.name, url: r.url }, { id: r.id, tv: tv ? tv.name : t('history.tv') });
   return deps.native.cloudflareVisible(req).then(
     (res) => {
       // the TV passed it itself meanwhile: nothing to say
@@ -192,7 +193,7 @@ export function handleTvRequest(r: TvCloudflareRequest, deps: PhoneCloudflareDep
       if (x === 'solved') {
         const sent = !!res && res.sent === true;
         if (sent) logCloudflare('passed', source.name);
-        else log('warn', 'tv', 'Cloudflare: разрешение не передано на телевизор · ' + source.name);
+        else log('warn', 'tv', t('cloudflare.logNotSent', { site: source.name }));
         deps.toast(sent ? sentToTv() : notSentToTv());
       } else if (x === 'busy') deps.toast(checkBusy());
       else if (x === 'failed') deps.toast(checkFailed());

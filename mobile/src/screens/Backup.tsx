@@ -7,7 +7,7 @@ import { native } from '../platform/native';
 import { log } from '../../../src/lib/log';
 import {
   BACKUP_MAX_BYTES,
-  ERR_TOO_BIG,
+  errTooBig,
   applyBackup,
   backupFileName,
   backupWarning,
@@ -86,7 +86,7 @@ export function Backup() {
     if (!file) return;
     setError('');
     if (file.size > BACKUP_MAX_BYTES) {
-      setError(ERR_TOO_BIG);
+      setError(errTooBig());
       return;
     }
     let text: string;

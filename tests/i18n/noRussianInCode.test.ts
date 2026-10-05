@@ -6,23 +6,6 @@ import { join } from 'node:path';
 
 /** Files still to migrate (each migration task removes its own; Task 14 leaves it empty). */
 const PENDING: string[] = [
-  'mobile/src/addResult.ts',
-  'mobile/src/cloudflare.ts',
-  'mobile/src/donate.ts',
-  'mobile/src/install/InstallBox.tsx',
-  'mobile/src/install/devices.ts',
-  'mobile/src/install/facts.ts',
-  'mobile/src/install/installer.ts',
-  'mobile/src/install/session.ts',
-  'mobile/src/lib/backup.ts',
-  'mobile/src/main.tsx',
-  'mobile/src/platform/native.ts',
-  'mobile/src/platform/qr.ts',
-  'mobile/src/server/localServer.ts',
-  'mobile/src/supportCode.ts',
-  'mobile/src/tv/ssap.ts',
-  'mobile/src/tv/tvClient.ts',
-  'mobile/src/watch.ts',
 ];
 /** Not copy: tracker parsers and patterns (reason each). */
 const ALLOWLIST: { [file: string]: string } = {
@@ -33,6 +16,7 @@ const ALLOWLIST: { [file: string]: string } = {
   'src/lib/librarySearch.ts': 'title matching (ё→е normalization)',
   'src/lib/tracks.ts': 'language names in their own language and audio-language tokens of file names (parsing)',
   'src/monitor/episodes.ts': 'tracker page parsing (season/episode patterns in tracker titles)',
+  'mobile/src/tv/ssap.ts': 'LG pairing protocol: the signed localizedAppNames block copied verbatim from lgtv2 (its signature covers it)',
   'mobile/src/screens/Faq.tsx': 'FAQ search normalization (ё→е)',
   'src/sources/bigfangroup.ts': 'tracker page parsing (the site «nothing found» text)',
   'src/sources/html.ts': 'tracker page parsing (relative dates «вчера»)',

@@ -1,5 +1,5 @@
 import { applyLanguageSetting } from '../../src/i18n';
-import { TV_NO_OMP } from '../src/tv/tvClient';
+import { tvNoOmp } from '../src/tv/tvClient';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -238,7 +238,7 @@ describe('Add', () => {
 
   it('«Добавить и смотреть на ТВ» with no OMP offers the install guide', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
-    setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn().mockRejectedValue(new Error(TV_NO_OMP)), remoteDelayMs: 0 });
+    setWatchActions({ ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn().mockRejectedValue(new Error(tvNoOmp())), remoteDelayMs: 0 });
     vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
     vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
     mount();

@@ -3,6 +3,7 @@
 // SSAP lives in src/tv.
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
+import { t } from '../../../src/i18n';
 import { log } from '../../../src/lib/log';
 import type { HttpResponse, SecretStore, SourceHttp } from '../../../src/sources/types';
 import type { ApkAbi, UpdateInfo } from '../../../src/lib/updateInfo';
@@ -261,7 +262,7 @@ interface OmpNativePlugin {
   addListener(event: 'localServerDownload', cb: (e: Partial<LocalDownloadProgress>) => void): Promise<PluginListenerHandle>;
 }
 
-export const ONLY_ANDROID = 'Доступно только в приложении Android';
+export const onlyAndroid = () => t('errors.onlyAndroid');
 
 const available = Capacitor.isNativePlatform();
 const plugin = available ? registerPlugin<OmpNativePlugin>('OmpNative') : null;
@@ -272,7 +273,7 @@ export function rawPlugin(): unknown {
 }
 
 function unavailable(): Promise<never> {
-  return Promise.reject(new Error(ONLY_ANDROID));
+  return Promise.reject(new Error(onlyAndroid()));
 }
 
 /** Subscribes via the async addListener; the returned sync unsubscribe works before it settles too. */
@@ -300,7 +301,7 @@ function logged<T>(name: string, p: Promise<T>): Promise<T> {
   return p.then(
     (v) => v,
     (e) => {
-      log('error', 'app', 'Нативный вызов ' + name + ': ' + (e && typeof e.message === 'string' ? e.message : 'ошибка'));
+      log('error', 'app', t('errors.nativeCall', { name: name, message: e && typeof e.message === 'string' ? e.message : t('errors.nativeFailed') }));
       throw e;
     },
   );
@@ -339,7 +340,7 @@ function serverInfo(r: Partial<LocalServerInfo> | null | undefined): LocalServer
 
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const ATV_PORT = 8095;
-const PHONE = 'Телефон';
+const phoneFallback = () => t('history.phone');
 
 /** Well-formed entries only, one per IP. */
 function ompTvs(v: unknown): FoundOmpTv[] {
@@ -416,12 +417,12 @@ export const native: OmpNativeApi = {
   },
 
   async phoneName() {
-    if (!plugin) return PHONE;
+    if (!plugin) return phoneFallback();
     try {
       const r = await plugin.phoneName();
-      return text(r?.name?.trim()) ?? PHONE;
+      return text(r?.name?.trim()) ?? phoneFallback();
     } catch {
-      return PHONE;
+      return phoneFallback();
     }
   },
 

@@ -4,7 +4,7 @@ import { goBack } from '../nav';
 import { Sheet } from '../ui/Sheet';
 import { showToast } from '../ui/toast';
 import { Icon } from '../ui/Icon';
-import { LOCAL_URL, LOCAL_NAME } from '../server/localServer';
+import { LOCAL_URL, localName } from '../server/localServer';
 import { client, activeServer } from '../../../src/store/servers';
 import { torrents, findPosters } from '../../../src/store/library';
 import { TorrServerClient } from '../../../src/api/torrserver';
@@ -36,7 +36,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   const active = client.value;
   // an explicit url edits that server without switching the active one
   const c = useMemo(() => (url ? new TorrServerClient({ url }) : active), [url, active ? active.baseUrl : '']);
-  const server = url ? { name: url === LOCAL_URL ? LOCAL_NAME : url } : activeServer.value;
+  const server = url ? { name: url === LOCAL_URL ? localName() : url } : activeServer.value;
   const [srv, setSrv] = useState<Sets | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<NumField | null>(null);

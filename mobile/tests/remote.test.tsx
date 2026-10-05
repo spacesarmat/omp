@@ -5,7 +5,7 @@ import { act } from 'preact/test-utils';
 import { Remote, setRemoteActions } from '../src/screens/Remote';
 import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv, setActiveTv } from '../src/tv/tvStore';
-import { tvWaking, tvState, tvError, TV_FORGOT } from '../src/tv/tvClient';
+import { tvWaking, tvState, tvError, tvForgot } from '../src/tv/tvClient';
 import { toast } from '../src/ui/toast';
 import { nowPlaying, lastSeen } from '../src/tv/playerLink';
 import { reloadTouchpad, updateTouchpad, touchpad, cursorGain, sanitizeTouchpad, TOUCHPAD_DEFAULTS } from '../src/tv/touchpad';
@@ -582,10 +582,10 @@ describe('Remote for Android TV', () => {
   it('a forgetful TV offers «Подключить заново»: the code sheet pairs again', async () => {
     mount();
     act(() => {
-      tvError.value = TV_FORGOT;
+      tvError.value = tvForgot();
       tvState.value = 'error';
     });
-    expect(el.querySelector('.m-remote-forgot')!.textContent).toContain(TV_FORGOT);
+    expect(el.querySelector('.m-remote-forgot')!.textContent).toContain(tvForgot());
     click(text('Подключить заново'));
     const d = document.querySelector('[role="dialog"]') as HTMLElement;
     expect(d.textContent).toContain('Гостиная · Android TV');
@@ -733,11 +733,11 @@ describe('Remote in English', () => {
     noCyrillicLabels();
   });
 
-  it('Android TV: «Connect again» (the «forgot» message is Task 10b tvClient copy)', () => {
+  it('Android TV: «Connect again» (including the «forgot» message)', () => {
     saveTv({ ip: '192.168.1.40', name: 'Living room', kind: 'atv' });
     mount();
     expect(byBtn('Connect again')).toBeTruthy();
-    expect(el.textContent!.replace(TV_FORGOT, '')).not.toMatch(/[А-Яа-яЁё]/);
+    expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 });
 
