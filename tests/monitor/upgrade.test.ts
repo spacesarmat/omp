@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { betterSeriesReleases, carryProgress, findUpgrades, pickUpgrades, upgradeKind, upgradeQuery } from '../../src/monitor/upgrade';
+import { betterSeriesReleases, carryProgress, findUpgrades, isLowSeeds, pickUpgrades, seasonsCovered, upgradeKind, upgradeQuery } from '../../src/monitor/upgrade';
 import type { LibraryTorrent } from '../../src/monitor/newEpisodes';
 import type { SearchFn } from '../../src/monitor/check';
 import type { SourceContext, SourceResult } from '../../src/sources/types';
@@ -109,6 +109,36 @@ describe('series', () => {
   it('a release with more episodes than ours counts', () => {
     const t = series('Дом дракона [S02E01-04 из 08] (2024) WEB-DL 1080p');
     expect(pickUpgrades(t, [res('Дом дракона [S02E01-08 из 08] (2024) WEB-DL 2160p')]).length).toBe(1);
+  });
+});
+
+describe('few seeds and wider packs', () => {
+  it('releases with fewer than 5 seeds go after every healthy one, whatever their rank', () => {
+    const list = [
+      res('Северный ветер (2026) 2160p Remux', { Seed: 2 }),
+      res('Северный ветер (2026) BDRip 1080p', { Seed: 5 }),
+      res('Северный ветер (2026) 2160p WEB-DL', { Seed: 4 }),
+      res('Северный ветер (2026) 2160p WEB-DL', { Seed: 60 }),
+    ];
+    expect(pickUpgrades(film(), list).map((r) => r.Title + '|' + r.Seed)).toEqual([
+      'Северный ветер (2026) 2160p WEB-DL|60',
+      'Северный ветер (2026) BDRip 1080p|5',
+      'Северный ветер (2026) 2160p Remux|2',
+      'Северный ветер (2026) 2160p WEB-DL|4',
+    ]);
+    expect(isLowSeeds({ Seed: 4 })).toBe(true);
+    expect(isLowSeeds({ Seed: 5 })).toBe(false);
+  });
+
+  it('a pack of more seasons stays a candidate and says which seasons it holds', () => {
+    const t = series();
+    const pack = res('Дом дракона / House of the Dragon (2024) Сезоны 1-3 WEB-DL 2160p');
+    const all = res('Дом дракона / House of the Dragon: все сезоны (2022-2024) Remux 2160p');
+    const one = res('Дом дракона [S02E01-08 из 08] (2024) Remux 2160p');
+    expect(pickUpgrades(t, [pack, all, one]).length).toBe(3);
+    expect(seasonsCovered(t, pack)).toEqual({ from: 1, to: 3 });
+    expect(seasonsCovered(t, all)).toEqual({ all: true });
+    expect(seasonsCovered(t, one)).toBe(null);
   });
 });
 

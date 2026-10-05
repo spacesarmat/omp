@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
-import { replaceTorrent, replaceWithResult, mapFiles, mapJournal, type ReplaceClient } from '../../src/monitor/replace';
+import { replaceAbort, replaceTorrent, replaceWithResult, mapFiles, mapJournal, type ReplaceClient } from '../../src/monitor/replace';
 import { torrents } from '../../src/store/library';
+import { registerSource, unregisterSource } from '../../src/sources/registry';
+import { loginRequired } from '../../src/sources/types';
 import { parseData } from '../../src/lib/journal';
 import type { Torrent } from '../../src/api/types';
 
@@ -284,7 +286,7 @@ describe('replaceTorrent', () => {
     const s = setup({ failAdd: true });
     torrents.value = [{ ...s.old }];
     const r = await replaceTorrent(s.c, 'oldhash', 'magnet:x');
-    expect(r).toEqual({ ok: false, error: 'Не удалось добавить новую раздачу.' });
+    expect(r).toEqual({ ok: false, error: 'Не удалось добавить новую раздачу.', cause: 'other' });
     expect(s.calls).toEqual(['add']);
     expect(torrents.value.map((t) => t.hash)).toEqual(['oldhash']);
   });
@@ -327,7 +329,7 @@ describe('replaceTorrent', () => {
     const s = setup();
     const c = { ...s.c, add: vi.fn(() => Promise.resolve({ ...s.old })) } as ReplaceClient;
     const r = await replaceTorrent(c, 'oldhash', 'magnet:x');
-    expect(r).toEqual({ ok: false, error: 'Это та же раздача, заменять нечего.' });
+    expect(r).toEqual({ ok: false, error: 'Это та же раздача, заменять нечего.', cause: 'other' });
     expect(s.calls).toEqual([]);
     expect(Object.keys(s.server)).toEqual(['oldhash']);
   });
@@ -340,7 +342,7 @@ describe('replaceTorrent', () => {
       const s = setup();
       const c = { ...s.c, add: vi.fn(() => Promise.resolve({ ...s.old })) } as ReplaceClient;
       const r = await replaceTorrent(c, 'oldhash', 'magnet:x');
-      expect(r).toEqual({ ok: false, error: 'This is the same torrent, nothing to replace.' });
+      expect(r).toEqual({ ok: false, error: 'This is the same torrent, nothing to replace.', cause: 'other' });
       const s2 = setup();
       const r2 = await replaceTorrent(s2.c, 'nohash', 'magnet:x');
       expect(r2.ok).toBe(false);
@@ -351,7 +353,7 @@ describe('replaceTorrent', () => {
   it('refuses an unknown old torrent before adding anything', async () => {
     const s = setup();
     const r = await replaceTorrent(s.c, 'nope', 'magnet:x');
-    expect(r).toEqual({ ok: false, error: 'Раздача не найдена на сервере.' });
+    expect(r).toEqual({ ok: false, error: 'Раздача не найдена на сервере.', cause: 'other' });
     expect(s.calls).toEqual([]);
   });
 
@@ -366,9 +368,104 @@ describe('replaceTorrent', () => {
     const s = setup({ failRemoveOld: true });
     torrents.value = [{ ...s.old }];
     const r = await replaceTorrent(s.c, 'oldhash', 'magnet:x');
-    expect(r).toEqual({ ok: false, error: 'Новая раздача добавлена, но старую удалить не удалось.' });
+    expect(r).toEqual({ ok: false, error: 'Новая раздача добавлена, но старую удалить не удалось.', cause: 'both' });
     expect(Object.keys(s.server).sort()).toEqual(['newhash', 'oldhash']);
     expect(torrents.value.map((t) => t.hash).sort()).toEqual(['newhash', 'oldhash']);
     expect(parseData(s.server.newhash.data)!.journal).toHaveLength(2);
+  });
+});
+
+describe('replaceTorrent · stopping and causes', () => {
+  const NEW = 'a'.repeat(40);
+  const MAGNET = 'magnet:?xt=urn:btih:' + NEW + '&dn=x';
+
+  it('an add that times out while TorrServer goes on: the torrent it added is taken back; cause timeout', async () => {
+    const s = setup({ fresh: { hash: NEW } });
+    (s.c.add as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      s.calls.push('add');
+      s.server[NEW] = { ...s.fresh };
+      return Promise.reject(Object.assign(new Error('Timeout'), { kind: 'timeout' }));
+    });
+    const r = await replaceTorrent(s.c, 'oldhash', MAGNET);
+    expect(r).toMatchObject({ ok: false, cause: 'timeout' });
+    expect(s.calls).toEqual(['add', 'rem:' + NEW]);
+    expect(Object.keys(s.server)).toEqual(['oldhash']);
+  });
+
+  it('no file list in time: cause timeout, the new torrent is removed', async () => {
+    vi.useFakeTimers();
+    try {
+      const s = setup({ failInfo: 'hang' });
+      const p = replaceTorrent(s.c, 'oldhash', 'magnet:x', { timeoutMs: 1000 });
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(await p).toMatchObject({ ok: false, cause: 'timeout' });
+      expect(Object.keys(s.server)).toEqual(['oldhash']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('«Отмена» while waiting: stops at once, removes the new torrent, keeps the old one', async () => {
+    const s = setup({ failInfo: 'hang' });
+    const ab = replaceAbort();
+    const p = replaceTorrent(s.c, 'oldhash', 'magnet:x', { abort: ab });
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(s.server.newhash).toBeTruthy();
+    ab.abort();
+    expect(await p).toMatchObject({ ok: false, cause: 'cancelled' });
+    expect(s.calls).toContain('rem:newhash');
+    expect(Object.keys(s.server)).toEqual(['oldhash']);
+  });
+
+  it('«Отмена» before the add answers: the torrent added late is taken back', async () => {
+    const s = setup();
+    let answer: (t: Torrent) => void = () => undefined;
+    (s.c.add as ReturnType<typeof vi.fn>).mockImplementation(
+      () =>
+        new Promise<Torrent>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const ab = replaceAbort();
+    const p = replaceTorrent(s.c, 'oldhash', 'magnet:x', { abort: ab });
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    ab.abort();
+    expect(await p).toMatchObject({ ok: false, cause: 'cancelled' });
+    s.server.newhash = { ...s.fresh };
+    answer({ ...s.fresh });
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(s.calls).toContain('rem:newhash');
+    expect(Object.keys(s.server)).toEqual(['oldhash']);
+  });
+
+  it('the deadline stops the whole wait as a timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const s = setup({ failInfo: 'hang' });
+      const p = replaceTorrent(s.c, 'oldhash', 'magnet:x', { deadlineMs: 45000 });
+      await vi.advanceTimersByTimeAsync(45001);
+      expect(await p).toMatchObject({ ok: false, cause: 'timeout' });
+      expect(Object.keys(s.server)).toEqual(['oldhash']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a site that wants a login: cause login, nothing added', async () => {
+    registerSource({ id: 'locked', name: 'Kinozal', kind: 'builtin', search: () => Promise.resolve([]), resolve: () => Promise.reject(loginRequired()) });
+    try {
+      const s = setup();
+      const ctx = { http: { get: () => Promise.reject(new Error('no')), post: () => Promise.reject(new Error('no')), clearCookies: () => Promise.resolve() }, client: null };
+      const r = await replaceWithResult(
+        s.c,
+        'oldhash',
+        { Title: 'x', Categories: '', Size: '', CreateDate: '', Tracker: '', Link: '', Magnet: '', Hash: '', Peer: 0, Seed: 1, source: 'locked' },
+        ctx,
+      );
+      expect(r).toMatchObject({ ok: false, cause: 'login' });
+      expect(s.calls).toEqual([]);
+    } finally {
+      unregisterSource('locked');
+    }
   });
 });
