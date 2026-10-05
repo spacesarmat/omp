@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { LocalServer } from '../src/screens/LocalServer';
+import { TORRSERVER_VERSION } from '../src/server/torrserverVersion';
 import { setLocalServerDeps, localServer, reloadLocalServerSettings } from '../src/server/localServer';
 import { currentRoute, resetTo } from '../src/nav';
 import { activeServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
@@ -76,7 +77,8 @@ describe('LocalServer screen', () => {
     await flush();
     const text = el.textContent!;
     expect(text).toContain('TorrServer на телефоне');
-    expect(text).toContain('Подготовка сервера MatriX.145.1');
+    // the pinned version (torrserver.version), not a literal: the TorrServer update bumps it
+    expect(text).toContain('Подготовка сервера ' + TORRSERVER_VERSION);
     expect(text).toContain('Запуск в фоне');
     expect(text).toContain('Проверка связи');
     expect(text).toContain('Подключение OMP');
