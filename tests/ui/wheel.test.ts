@@ -42,6 +42,53 @@ describe('findScrollTarget', () => {
   });
 });
 
+// NB: must stay above the confirmDialog test below, which leaves a dialog open for the rest of the file
+function box(cls: string, scrollHeight: number, clientHeight: number, scrollTop = 0): HTMLElement {
+  const el = document.createElement('div');
+  el.className = cls;
+  el.style.overflowY = 'auto';
+  Object.defineProperty(el, 'scrollHeight', { value: scrollHeight, configurable: true });
+  Object.defineProperty(el, 'clientHeight', { value: clientHeight, configurable: true });
+  el.scrollTop = scrollTop;
+  return el;
+}
+
+describe('wheel inside a dialog', () => {
+  it('a list at its bottom inside a dialog does not hand the scroll to the screen behind', () => {
+    const screen = box('screen', 2000, 800, 0);
+    const backdrop = document.createElement('div');
+    backdrop.className = 'dialog-backdrop';
+    const list = box('whatsnew-list', 600, 300, 300); // at the bottom
+    backdrop.appendChild(list);
+    document.body.appendChild(screen);
+    document.body.appendChild(backdrop);
+    expect(findScrollTarget(list, 40)).toBeNull();
+    expect(findScrollTarget(list, -40)).toBe(list);
+  });
+
+  it('outside dialogs the screen is still the fallback', () => {
+    const screen = box('screen', 2000, 800, 0);
+    const card = document.createElement('div');
+    screen.appendChild(card);
+    document.body.appendChild(screen);
+    expect(findScrollTarget(card, 40)).toBe(screen);
+  });
+
+  it('a wheel over an open dialog is consumed even when nothing scrolls', () => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'dialog-backdrop';
+    const list = box('whatsnew-list', 600, 300, 300);
+    backdrop.appendChild(list);
+    document.body.appendChild(box('screen', 2000, 800, 0));
+    document.body.appendChild(backdrop);
+    const off = installWheelScroll();
+    const e = new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true });
+    list.dispatchEvent(e);
+    off();
+    expect(e.defaultPrevented).toBe(true);
+  });
+});
+
 describe('installWheelScroll', () => {
   it('scrolls the screen by deltaY and prevents default', () => {
     const screen = scrollable();
