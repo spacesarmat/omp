@@ -22,17 +22,25 @@ beforeEach(() => {
 
 describe('monitor settings', () => {
   it('defaults: on, every 3 hours, Wi-Fi only, new episodes watched', () => {
-    expect(loadMonitorSettings()).toEqual({ enabled: true, hours: 3, wifiOnly: true, episodes: true });
+    expect(loadMonitorSettings()).toEqual({ enabled: true, hours: 3, wifiOnly: true, episodes: true, better: true });
     expect(DEFAULT_MONITOR.hours).toBe(3);
   });
 
   it('saves a patch; bad values fall back', () => {
-    expect(saveMonitorSettings({ hours: 6, wifiOnly: false })).toEqual({ enabled: true, hours: 6, wifiOnly: false, episodes: true });
+    expect(saveMonitorSettings({ hours: 6, wifiOnly: false })).toEqual({ enabled: true, hours: 6, wifiOnly: false, episodes: true, better: true });
     expect(loadMonitorSettings().hours).toBe(6);
     localStorage.setItem(MONITOR_KEY, JSON.stringify({ enabled: 'yes', hours: 5, episodes: false }));
-    expect(loadMonitorSettings()).toEqual({ enabled: true, hours: 3, wifiOnly: true, episodes: false });
+    expect(loadMonitorSettings()).toEqual({ enabled: true, hours: 3, wifiOnly: true, episodes: false, better: true });
     localStorage.setItem(MONITOR_KEY, '{broken');
     expect(loadMonitorSettings()).toEqual(DEFAULT_MONITOR);
+  });
+
+  it('«Лучшее качество фильмов» is on by default and saved', () => {
+    expect(loadMonitorSettings().better).toBe(true);
+    expect(saveMonitorSettings({ better: false }).better).toBe(false);
+    expect(loadMonitorSettings()).toMatchObject({ episodes: true, better: false });
+    localStorage.setItem(MONITOR_KEY, JSON.stringify({ better: 'no' }));
+    expect(loadMonitorSettings().better).toBe(true);
   });
 
   it('last run round trip and sanitizing', () => {

@@ -1,10 +1,12 @@
 // Checking subscriptions: the unified search over the subscription's sources, its filters, then the results not seen
+// before. A «Только лучшее качество» subscription reports only the best new result above the best rank it reported
 // before. The first check of a subscription (and the first answer of each source) only remembers what is there.
 // Chromium 53 safe.
 import { searchAll, SOURCE_TIMEOUT_MS, type SearchAllOptions, type SearchHandle } from '../sources/search';
 import type { Source, SourceContext, SourceResult } from '../sources/types';
 import { filterForSubscription, isSeen, resultKeys, seenEntry, seenIndex } from './match';
-import { addFindings, getSubscription, loadSubs, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
+import { qualityRank } from './quality';
+import { addFindings, bestRank, getSubscription, hasBestRank, loadSubs, rememberBestRank, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
 import type { Finding, Subscription } from './types';
 
 /** searchAll or a test double. */
@@ -74,6 +76,39 @@ function sourcesOf(r: SourceResult): string[] {
   return [r.source].concat(r.sources || []);
 }
 
+/** The highest quality rank among `list` (-1 for an empty one). */
+function topRank(list: SourceResult[]): number {
+  let max = -1;
+  list.forEach((r) => {
+    const rank = qualityRank(r.Title);
+    if (rank > max) max = rank;
+  });
+  return max;
+}
+
+/**
+ * «Только лучшее качество»: the one best new result (rank, then seeds) above the floor, which is the highest rank among
+ * the stored best rank and every result seen before (a better release already listed is not news). Without a stored
+ * rank (-1 is a rank: nothing was listed yet) (the flag was just switched on) nothing is reported: the caller stores the current best rank.
+ */
+function bestOnly(subId: string, fresh: SourceResult[], known: SourceResult[]): SourceResult[] {
+  if (!hasBestRank(subId)) return [];
+  const stored = bestRank(subId);
+  const floor = Math.max(stored, topRank(known));
+  let pick: SourceResult | null = null;
+  let pickRank = -1;
+  for (let i = 0; i < fresh.length; i++) {
+    const r = fresh[i];
+    const rank = qualityRank(r.Title);
+    if (rank <= floor) continue;
+    if (!pick || rank > pickRank || (rank === pickRank && (r.Seed || 0) > (pick.Seed || 0))) {
+      pick = r;
+      pickRank = rank;
+    }
+  }
+  return pick ? [pick] : [];
+}
+
 /**
  * Checks one subscription (see the file comment); never rejects. A source answering for the first time is silent too:
  * a result only it lists is remembered, not reported.
@@ -91,12 +126,15 @@ export function checkSubscription(ctx: SourceContext, sub: Subscription, opts?: 
       const known = seenSources(sub.id);
       const index = seenIndex(seen);
       const at = o.now === undefined ? Date.now() : o.now;
-      base.findings = matched
-        .filter((r) => !isSeen(r, index) && sourcesOf(r).some((id) => known.indexOf(id) >= 0))
-        .map((r) => ({ subId: sub.id, key: resultKeys(r)[0], result: r, at }));
+      const isNew = (r: SourceResult) => !isSeen(r, index) && sourcesOf(r).some((id) => known.indexOf(id) >= 0);
+      let fresh = matched.filter(isNew);
+      if (sub.better) fresh = bestOnly(sub.id, fresh, matched.filter((r) => !isNew(r)));
+      base.findings = fresh.map((r) => ({ subId: sub.id, key: resultKeys(r)[0], result: r, at }));
       addFindings(base.findings);
     }
     rememberSeen(sub.id, matched.map(seenEntry), out.answered);
+    // the first check (and the first one after the flag was switched on) stores the best rank listed now, silently
+    if (sub.better) rememberBestRank(sub.id, topRank(matched));
     return base;
   });
 }

@@ -18,9 +18,11 @@ export interface MonitorSettings {
   wifiOnly: boolean;
   /** «Следить за новыми сериями». */
   episodes: boolean;
+  /** «Лучшее качество фильмов». */
+  better: boolean;
 }
 
-export const DEFAULT_MONITOR: MonitorSettings = { enabled: true, hours: 3, wifiOnly: true, episodes: true };
+export const DEFAULT_MONITOR: MonitorSettings = { enabled: true, hours: 3, wifiOnly: true, episodes: true, better: true };
 
 export function sanitizeMonitorSettings(v: unknown): MonitorSettings {
   const o = isObject(v) ? v : {};
@@ -30,6 +32,7 @@ export function sanitizeMonitorSettings(v: unknown): MonitorSettings {
     hours,
     wifiOnly: typeof o.wifiOnly === 'boolean' ? o.wifiOnly : DEFAULT_MONITOR.wifiOnly,
     episodes: typeof o.episodes === 'boolean' ? o.episodes : DEFAULT_MONITOR.episodes,
+    better: typeof o.better === 'boolean' ? o.better : DEFAULT_MONITOR.better,
   };
 }
 
@@ -45,6 +48,7 @@ export function saveMonitorSettings(patch: Partial<MonitorSettings>): MonitorSet
     hours: patch.hours !== undefined ? patch.hours : cur.hours,
     wifiOnly: patch.wifiOnly !== undefined ? patch.wifiOnly : cur.wifiOnly,
     episodes: patch.episodes !== undefined ? patch.episodes : cur.episodes,
+    better: patch.better !== undefined ? patch.better : cur.better,
   });
   saveJson(MONITOR_KEY, next);
   return next;
@@ -64,7 +68,7 @@ export interface MonitorSummary {
   /** Unix ms of the start. */
   at: number;
   kind: 'check' | 'action';
-  /** New findings (subscriptions + new episodes). */
+  /** New findings (subscriptions + new episodes + better quality). */
   found: number;
   /** Notifications shown. */
   notified: number;

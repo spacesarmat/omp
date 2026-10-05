@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { recordWatch, forgetWatch, loadSkip, saveSkip, loadWatch, saveWatch, type JournalClient } from '../../src/store/journal';
+import { recordWatch, forgetWatch, loadSkip, saveSkip, loadWatch, saveWatch, loadQualityWatch, saveQualityWatch, type JournalClient } from '../../src/store/journal';
 import { torrents } from '../../src/store/library';
 import { journalOf } from '../../src/lib/journal';
 import type { Torrent } from '../../src/api/types';
@@ -201,5 +201,22 @@ describe('loadSkip / saveSkip', () => {
     const s = fakeServer({ data: JSON.stringify({ omp: { v: 1, h: [], s: { i: true, c: false } } }) });
     await saveSkip(s.c, { hash: 'h' }, { i: true });
     expect(s.c.setData).not.toHaveBeenCalled();
+  });
+
+  it('loadQualityWatch / saveQualityWatch switch omp.q and leave omp.w alone', async () => {
+    const entry = { f: 1, t: 30, d: 100, at: T0, src: 'tv' };
+    const s = fakeServer({ category: 'movie', data: JSON.stringify({ lampa: 1, omp: { v: 1, h: [entry], w: false } }) });
+    expect(await loadQualityWatch(s.c, 'h')).toBe(true);
+    expect(await loadQualityWatch(s.c, 'nope')).toBe(true);
+    expect(await saveQualityWatch(s.c, { hash: 'h' }, false)).toBe(false);
+    expect(JSON.parse(s.t.data!)).toEqual({ lampa: 1, omp: { v: 1, h: [entry], w: false, q: false } });
+    expect(await loadQualityWatch(s.c, 'h')).toBe(false);
+    expect(await loadWatch(s.c, 'h')).toBe(false);
+    const writes = s.sets.length;
+    expect(await saveQualityWatch(s.c, { hash: 'h' }, false)).toBe(false);
+    expect(s.sets.length).toBe(writes);
+    expect(await saveQualityWatch(s.c, { hash: 'h' }, true)).toBe(true);
+    expect(JSON.parse(s.t.data!).omp).toEqual({ v: 1, h: [entry], w: false });
+    await expect(saveQualityWatch(s.c, { hash: 'nope' }, false)).rejects.toThrow('Раздачи нет на сервере');
   });
 });

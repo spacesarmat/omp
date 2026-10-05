@@ -3,7 +3,7 @@
 // the background page and the app write the same keys from different JS contexts. Chromium 53 safe.
 import { isObject, loadJson, saveJson } from '../store/storage';
 import type { SourceResult } from '../sources/types';
-import { EPISODES_ID, type EpisodesInfo, type Finding, type SubQuality, type Subscription, type SubscriptionInput } from './types';
+import { BETTER_ID, EPISODES_ID, type BetterInfo, type EpisodesInfo, type Finding, type SubQuality, type Subscription, type SubscriptionInput } from './types';
 
 export const SUBS_KEY = 'tsp.subs';
 export const SEEN_KEY = 'tsp.subsSeen';
@@ -61,6 +61,7 @@ export function sanitizeSubscription(v: unknown): Subscription | null {
   if (seeds !== null && seeds >= 1) out.minSeeds = Math.floor(seeds);
   const size = finite(v.maxSizeGb);
   if (size !== null && size > 0) out.maxSizeGb = size;
+  if (v.better === true) out.better = true;
   return out;
 }
 
@@ -158,12 +159,14 @@ export function removeSubscription(id: string): void {
 }
 
 // --- seen results
-// tsp.subsSeen: { [subId]: { k: entries, s: source ids that have answered } }. An entry is one result: its seen keys
+// tsp.subsSeen: { [subId]: { k: entries, s: source ids that have answered, b?: best rank reported by a «Только лучшее качество» subscription } }. An entry is one result: its seen keys
 // joined by '|' (see match.ts seenEntry). Every entry of the latest check is kept, older ones fill up to SEEN_MAX.
 
 interface SeenRecord {
   k: string[];
   s: string[];
+  /** Best quality rank reported («Только лучшее качество»). */
+  b?: number;
 }
 
 function loadSeen(): { [subId: string]: SeenRecord } {
@@ -172,7 +175,12 @@ function loadSeen(): { [subId: string]: SeenRecord } {
   Object.keys(v).forEach((id) => {
     const r = v[id];
     if (Array.isArray(r)) out[id] = { k: strings(r).slice(0, SEEN_HARD_MAX), s: [] };
-    else if (isObject(r) && Array.isArray(r.k)) out[id] = { k: strings(r.k).slice(0, SEEN_HARD_MAX), s: strings(r.s) };
+    else if (isObject(r) && Array.isArray(r.k)) {
+      const rec: SeenRecord = { k: strings(r.k).slice(0, SEEN_HARD_MAX), s: strings(r.s) };
+      const b = finite(r.b);
+      if (b !== null && b >= -1) rec.b = b;
+      out[id] = rec;
+    }
   });
   return out;
 }
@@ -204,7 +212,7 @@ export function rememberSeen(subId: string, entries: string[], sources?: string[
   const old = prev.k.filter((k) => !index[k]);
   const k = fresh.concat(old.slice(0, Math.max(0, SEEN_MAX - fresh.length)));
   const s = prev.s.concat(strings(sources).filter((id) => prev.s.indexOf(id) < 0));
-  seen[subId] = { k, s };
+  seen[subId] = prev.b !== undefined ? { k, s, b: prev.b } : { k, s };
   saveJson(SEEN_KEY, seen);
 }
 
@@ -213,6 +221,30 @@ export function forgetSeen(subId: string): void {
   const seen = loadSeen();
   if (!seen[subId]) return;
   delete seen[subId];
+  saveJson(SEEN_KEY, seen);
+}
+
+/** A best rank is stored (-1 included: nothing was listed at the first check) — the flag has been through a check. */
+export function hasBestRank(subId: string): boolean {
+  const r = loadSeen()[subId];
+  return !!r && r.b !== undefined;
+}
+
+/** The best quality rank reported by a «Только лучшее качество» subscription; -1 when none is stored (or nothing was listed). */
+export function bestRank(subId: string): number {
+  const r = loadSeen()[subId];
+  return r && r.b !== undefined ? r.b : -1;
+}
+
+/**
+ * Raises the reported rank (never lowers it). Lives in the seen record: a new query or filters (forgetSeen) reset it.
+ * A no-op before the first check (no record yet: that check is silent anyway).
+ */
+export function rememberBestRank(subId: string, rank: number): void {
+  const seen = loadSeen();
+  const prev = seen[subId];
+  if (!prev || (prev.b !== undefined && prev.b >= rank)) return;
+  seen[subId] = { k: prev.k, s: prev.s, b: rank };
   saveJson(SEEN_KEY, seen);
 }
 
@@ -266,6 +298,13 @@ function sanitizeEpisodes(v: unknown): EpisodesInfo | null {
   return e;
 }
 
+function sanitizeBetter(v: unknown): BetterInfo | null {
+  if (!isObject(v)) return null;
+  const hash = str(v.torrentHash);
+  if (!hash) return null;
+  return { torrentHash: hash, torrentTitle: str(v.torrentTitle), have: str(v.have), got: str(v.got) };
+}
+
 export function sanitizeFinding(v: unknown): Finding | null {
   if (!isObject(v)) return null;
   const subId = str(v.subId);
@@ -279,6 +318,11 @@ export function sanitizeFinding(v: unknown): Finding | null {
     const e = sanitizeEpisodes(v.episodes);
     if (!e) return null;
     f.episodes = e;
+  }
+  if (subId === BETTER_ID) {
+    const b = sanitizeBetter(v.better);
+    if (!b) return null;
+    f.better = b;
   }
   return f;
 }
@@ -307,7 +351,10 @@ function sameCard(a: Finding, b: Finding): boolean {
   if (a.subId !== b.subId) return false;
   if (a.key === b.key) return true;
   // one card per library torrent: a newer release replaces the older one
-  return !!a.episodes && !!b.episodes && a.episodes.torrentHash === b.episodes.torrentHash;
+  return (
+    (!!a.episodes && !!b.episodes && a.episodes.torrentHash === b.episodes.torrentHash) ||
+    (!!a.better && !!b.better && a.better.torrentHash === b.better.torrentHash)
+  );
 }
 
 /** Adds findings (a finding with the same key — or of the same library torrent — is replaced), newest first. */
@@ -339,10 +386,14 @@ export function removeFindings(subId: string, key?: string): void {
   if (left.length !== all.length) saveFound(left);
 }
 
-/** Drops the new-episodes cards of library torrents for which `keep(hash)` is false (the torrent is gone). */
+/** Drops the new-episodes and better-quality cards of library torrents for which `keep(hash)` is false (gone). */
 export function pruneEpisodeFindings(keep: (hash: string) => boolean): void {
   const all = loadFound();
-  const left = all.filter((f) => f.subId !== EPISODES_ID || !f.episodes || keep(f.episodes.torrentHash));
+  const left = all.filter((f) => {
+    if (f.subId === EPISODES_ID && f.episodes) return keep(f.episodes.torrentHash);
+    if (f.subId === BETTER_ID && f.better) return keep(f.better.torrentHash);
+    return true;
+  });
   if (left.length !== all.length) saveFound(left);
 }
 

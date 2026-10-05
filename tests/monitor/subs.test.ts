@@ -23,8 +23,10 @@ import {
   markFindingsSeen,
   removeFindings,
   unseenCount,
+  bestRank,
+  rememberBestRank,
 } from '../../src/monitor/subs';
-import { EPISODES_ID, type Finding } from '../../src/monitor/types';
+import { BETTER_ID, EPISODES_ID, type Finding } from '../../src/monitor/types';
 import type { SourceResult } from '../../src/sources/types';
 
 function res(Title: string, extra?: Partial<SourceResult>): SourceResult {
@@ -242,5 +244,51 @@ describe('pruneEpisodeFindings', () => {
     pruneEpisodeFindings((h) => h === 'a');
     expect(findingsOf(EPISODES_ID).map((f) => f.episodes!.torrentHash)).toEqual(['a']);
     expect(findingsOf('s1')).toHaveLength(1);
+  });
+});
+
+describe('«Лучшее качество»', () => {
+  it('a subscription keeps `better` only when true', () => {
+    expect(sanitizeSubscription({ id: 'a', query: 'q', better: true })!.better).toBe(true);
+    expect(sanitizeSubscription({ id: 'a', query: 'q', better: 'yes' })).not.toHaveProperty('better');
+    expect(sanitizeSubscription({ id: 'a', query: 'q', better: false })).not.toHaveProperty('better');
+    const s = addSubscription({ query: 'Северный ветер', quality: '', sources: null, notify: true, better: true }, 1)!;
+    expect(s.better).toBe(true);
+    expect(updateSubscription(s.id, { better: false })).not.toHaveProperty('better');
+  });
+
+  it('the best rank lives in the seen record: kept by rememberSeen, only raised, forgotten with it', () => {
+    expect(bestRank('s1')).toBe(-1);
+    rememberBestRank('s1', 22);
+    expect(bestRank('s1')).toBe(-1); // before the first check there is no record to keep it in
+    rememberSeen('s1', ['a']);
+    rememberBestRank('s1', 22);
+    rememberBestRank('s1', 12);
+    expect(bestRank('s1')).toBe(22);
+    rememberSeen('s1', ['b'], ['rutor']);
+    expect(bestRank('s1')).toBe(22);
+    expect(seenKeys('s1')).toEqual(['b', 'a']);
+    forgetSeen('s1');
+    expect(bestRank('s1')).toBe(-1);
+  });
+
+  it('better findings: sanitized, one card per film, pruned with the library', () => {
+    const b = (hash: string, rank: number): Finding => ({
+      subId: BETTER_ID,
+      key: hash + ':' + rank,
+      at: rank,
+      result: res('Северный ветер (2026) 2160p WEB-DL'),
+      better: { torrentHash: hash, torrentTitle: 'Северный ветер (2026) WEB-DL 1080p', have: '1080p WEB-DL', got: '4K WEB-DL' },
+    });
+    addFindings([b('a', 31), b('c', 31)]);
+    addFindings([b('a', 32)]);
+    expect(findingsOf(BETTER_ID).map((f) => f.key)).toEqual(['a:32', 'c:31']);
+    expect(findingsOf(BETTER_ID)[0].better).toEqual(b('a', 32).better);
+    // a better finding without its info is dropped on load
+    const stored = JSON.parse(localStorage.getItem(FOUND_KEY)!);
+    localStorage.setItem(FOUND_KEY, JSON.stringify(stored.concat([{ subId: BETTER_ID, key: 'x:1', at: 1, result: { Title: 'T', source: 'rutor' } }])));
+    expect(findingsOf(BETTER_ID)).toHaveLength(2);
+    pruneEpisodeFindings((h) => h === 'a');
+    expect(findingsOf(BETTER_ID).map((f) => f.key)).toEqual(['a:32']);
   });
 });
