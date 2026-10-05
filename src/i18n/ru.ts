@@ -526,7 +526,7 @@ export const ru = {
     today: 'сегодня',
     yesterday: 'вчера',
     seeds: { one: '{n} сид', few: '{n} сида', many: '{n} сидов' },
-    jackettHint: 'Сайт закрыт защитой Cloudflare? Для Kinozal и rustorka включите обход в «Источниках поиска», другие трекеры подключайте через Jackett или Prowlarr — как, в «Вопросах и ответах».',
+    jackettHint: 'Сайт закрыт проверкой Cloudflare? Войдите на нём через браузер (кнопка «Войти» у сайта в «Источниках поиска») или подключите его через Jackett, Prowlarr или FlareSolverr — как, в «Вопросах и ответах».',
     sort: {
       seeds: 'По сидам',
       date: 'По дате',
@@ -550,6 +550,13 @@ export const ru = {
       off: 'выключен',
       error: 'ошибка',
       errorDetail: 'ошибка: {detail}',
+      behindCf: 'за Cloudflare',
+    },
+    cfHint: {
+      login: 'Войдите через браузер — кнопка «Войти»',
+      again: 'Войдите через браузер заново — «Выйти», затем «Войти»',
+      jackett: 'Подключите {name} через Jackett, Prowlarr или FlareSolverr',
+      how: 'Как',
     },
     site: {
       error: 'Сайт ответил ошибкой {status}',
@@ -674,6 +681,7 @@ export const ru = {
       notFound: 'Источник не найден',
       searchOn: 'Искать на {name}',
       loginNote: 'Без входа сайт не отдаёт .torrent. Пароль хранится в зашифрованном хранилище телефона.',
+      loginNoteOptional: 'Вход не обязателен: он помогает пройти проверку Cloudflare. Пароль хранится в зашифрованном хранилище телефона.',
       sendLogin: 'Передать вход на телевизор',
       sending: 'Передаю…',
       loginSent: 'Вход на {name} передан на телевизор',
@@ -1321,7 +1329,7 @@ export const ru = {
   tvSources: {
     tsRutor: 'rutor (поиск TorrServer)',
     intro: 'Jackett и Prowlarr ищут напрямую. Без них поиск идёт через TorrServer.',
-    phoneHow: 'На телефоне: OMP → Настройки → Источники поиска → «Передать на телевизор». Подключения к Jackett и Prowlarr, входы на сайты (rutracker, Kinozal, rustorka) и проверку Cloudflare тоже можно передать — ключи и пароли не вводятся пультом.',
+    phoneHow: 'На телефоне: OMP → Настройки → Источники поиска → «Передать на телевизор». Подключения к Jackett и Prowlarr, входы на сайты (rutracker, Kinozal, rustorka, NNM-Club) и проверку Cloudflare тоже можно передать — ключи и пароли не вводятся пультом.',
     noIndexers: 'Подключите Jackett или Prowlarr на телефоне и передайте на телевизор.',
     noTransfers: 'Передач с телефона ещё не было',
     lastTransfer: 'Последняя передача: {day} {time} · «{phone}»',

@@ -6,8 +6,8 @@ import { goBack, navigate } from '../nav';
 import { phoneSourceContext } from '../searchContext';
 import { errorMessage } from '../../../src/api/http';
 import { builtinSources, torrServerSources } from '../../../src/sources/registry';
-import { clearHealth, getHealth, isSourceOn, onHealthChange, setHealth, setSourceOn } from '../../../src/sources/store';
-import { healthText, isCloudflare, jackettHint, type HealthLine } from '../../../src/sources/view';
+import { clearHealth, getHealth, isSourceOn, onHealthChange, setCloudflareBypass, setHealth, setSourceOn } from '../../../src/sources/store';
+import { cloudflareHint, healthText, isCloudflare, jackettHint, withCloudflareNote, type CloudflareHint, type HealthLine } from '../../../src/sources/view';
 import { browserDone } from '../../../src/sources/browserLogin';
 import type { Source, SourceContext } from '../../../src/sources/types';
 import { allSources } from '../../../src/sources/registry';
@@ -365,24 +365,31 @@ function label(s: Source): string {
   return s.name;
 }
 
+/** The FAQ question behind «Как» under a site Cloudflare stopped: Jackett and Prowlarr (FlareSolverr in them). */
+export const CF_HOW_Q = 'jackett';
+
 function SourceRow({
   source,
   note,
+  hint,
   login,
   onToggle,
   onOpen,
 }: {
   source: Source;
   note: HealthLine | null;
+  /** The site's own short hint when its last search hit Cloudflare (cloudflareHint). */
+  hint?: CloudflareHint | null;
   login?: { loggedIn: boolean; onLogin: () => void; onLogout: () => void };
   onToggle: () => void;
-  /** A site behind Cloudflare: its own screen (Cloudflare switch, warning). */
+  /** A site behind Cloudflare: its own screen (password login, «Передать вход на телевизор», the bypass switch). */
   onOpen?: () => void;
 }) {
   const on = isSourceOn(source);
   const name = label(source);
+  // the row and its hint are a column: the hint always starts below the row, whatever the height of the note
   return (
-    <>
+    <div class="m-src-item">
       <div class="m-src-row" data-source={source.id}>
         <span class="m-src-name">
           <span>{name}</span>
@@ -407,12 +414,17 @@ function SourceRow({
           <span class="m-switch-knob" />
         </button>
       </div>
-      {note && isCloudflare(note.text) && (
-        <div class="m-src-hint" data-hint="jackett">
-          {jackettHint()}
+      {hint && (
+        <div class="m-src-hint" data-hint="cloudflare">
+          <span>{hint.text}</span>
+          {hint.how && (
+            <button type="button" class="m-link" data-how={source.id} onClick={() => navigate({ name: 'faq', q: CF_HOW_Q })}>
+              {t('sources.cfHint.how')}
+            </button>
+          )}
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -429,10 +441,8 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   const [browser, setBrowser] = useState<Record<string, boolean>>({});
   const [loginFor, setLoginFor] = useState<Source | null>(null);
   const ts = torrServerSources();
-  // the Jackett / Prowlarr sources have their own section; the sites behind Cloudflare too
+  // one list of the built-in sites (the sites behind Cloudflare included); Jackett / Prowlarr have their own section
   const all = builtinSources().filter((s) => s.kind !== 'indexer');
-  const builtins = all.filter((s) => s.cloudflare !== true);
-  const cfSites = all.filter((s) => s.cloudflare === true);
   const torznabNote = torznabHiddenText(!ts.some((s) => s.id === 'ts-torznab'));
 
   // the phone listens to the TV's «Войти на телефоне» while this screen is open (and a while after)
@@ -446,7 +456,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
     const offFlareUrl = onFlareChange(() => alive && rerender());
     if (flareSolverrUrl() && !flareStatus()) refreshFlareStatus(ctx().http).then(undefined, () => undefined);
     all
-      .filter((s) => s.needsLogin && s.loggedIn)
+      .filter((s) => !!s.loggedIn)
       .forEach((s) => {
         s.loggedIn!(ctx()).then(
           (v) => alive && setLogged((m) => ({ ...m, [s.id]: v })),
@@ -475,13 +485,19 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
 
   const loggedIn = (s: Source) => !!logged[s.id];
 
-  const noteOf = (s: Source): HealthLine | null => {
+  const baseNote = (s: Source): HealthLine | null => {
     if (s.needsLogin && s.login && !loggedIn(s)) return { text: t('sources.state.login'), tone: 'muted' };
     const h = getHealth(s.id);
     // signed in, no search since: say only what is known
-    if (s.needsLogin && s.login && !h) return { text: browser[s.id] ? browserDone() : t('tvSources.loggedInDone'), tone: 'muted' };
+    if (s.login && loggedIn(s) && !h) return { text: browser[s.id] ? browserDone() : t('tvSources.loggedInDone'), tone: 'muted' };
     return healthText(h);
   };
+
+  const noteOf = (s: Source): HealthLine | null => (s.cloudflare === true ? withCloudflareNote(baseNote(s)) : baseNote(s));
+
+  // the site's own way past Cloudflare, under its row (the general hint stays at the bottom of the screen)
+  const hintOf = (s: Source, note: HealthLine | null): CloudflareHint | null =>
+    note && note.tone === 'bad' && isCloudflare(note.text) ? cloudflareHint(s, loggedIn(s)) : null;
 
   const logout = (s: Source) => {
     if (!s.logout) return;
@@ -489,7 +505,9 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
       () => {
         setLogged((m) => ({ ...m, [s.id]: false }));
         setBrowser((m) => ({ ...m, [s.id]: false }));
-        setHealth(s.id, { state: 'login', at: Date.now() });
+        // an optional login (NNM-Club) leaves no «нужен вход» behind
+        if (s.needsLogin) setHealth(s.id, { state: 'login', at: Date.now() });
+        else clearHealth(s.id);
       },
       (e) => showToast(errorMessage(e)),
     );
@@ -501,6 +519,8 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
     setBrowser((m) => ({ ...m, [s.id]: !!viaBrowser }));
     // signed in: the source takes part in the search; its real state comes with the next search
     setSourceOn(s.id, true);
+    // a browser session got past the check in the page: the site's requests pass it too from now on
+    if (viaBrowser && s.cloudflare === true) setCloudflareBypass(s.id, true);
     clearHealth(s.id);
   };
 
@@ -532,42 +552,28 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
           )}
         </div>
       </section>
-      {builtins.length > 0 && (
-        <section class="m-set-group">
+      {all.length > 0 && (
+        <section class="m-set-group" data-group="builtin">
           <div class="m-set-label">{t('sources.screen.builtin')}</div>
           <div class="m-set-card m-src-card">
-            {builtins.map((s) => (
-              <SourceRow
-                key={s.id}
-                source={s}
-                note={noteOf(s)}
-                login={
-                  s.needsLogin && s.login
-                    ? {
-                        loggedIn: loggedIn(s),
-                        onLogin: () => setLoginFor(s),
-                        onLogout: () => logout(s),
-                      }
-                    : undefined
-                }
-                onToggle={() => toggle(s)}
-                onOpen={s.cloudflare === true ? () => navigate({ name: 'sourceSite', id: s.id }) : undefined}
-              />
-            ))}
+            {all.map((s) => {
+              const note = noteOf(s);
+              return (
+                <SourceRow
+                  key={s.id}
+                  source={s}
+                  note={note}
+                  hint={hintOf(s, note)}
+                  login={s.login ? { loggedIn: loggedIn(s), onLogin: () => setLoginFor(s), onLogout: () => logout(s) } : undefined}
+                  onToggle={() => toggle(s)}
+                  onOpen={s.cloudflare === true ? () => navigate({ name: 'sourceSite', id: s.id }) : undefined}
+                />
+              );
+            })}
           </div>
         </section>
       )}
-      {cfSites.length > 0 && (
-        <section class="m-set-group" data-group="cloudflare">
-          <div class="m-set-label">{t('tvSources.cfSites')}</div>
-          <div class="m-set-card m-src-card">
-            {cfSites.map((s) => (
-              <SourceRow key={s.id} source={s} note={noteOf(s)} onToggle={() => toggle(s)} onOpen={() => navigate({ name: 'sourceSite', id: s.id })} />
-            ))}
-          </div>
-        </section>
-      )}
-      <div class="m-hint-warn">
+      <div class="m-hint-warn" data-hint="general">
         {jackettHint()}
         <div>
           <button type="button" class="m-link" onClick={() => navigate({ name: 'faq' })}>

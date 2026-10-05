@@ -1,5 +1,5 @@
-// «Нет аккаунта?»: the registration page of a site that needs an account (rutracker, Kinozal, rustorka). Pure.
-// The paths are the engines' registration forms: rutracker and rustorka are phpBB-style (profile.php?mode=register),
+// «Нет аккаунта?»: the registration page of a site that needs an account (rutracker, Kinozal, rustorka, NNM-Club). Pure.
+// The paths are the engines' registration forms: rutracker, rustorka and NNM-Club are phpBB-style (profile.php?mode=register),
 // Kinozal is TBDev (signup.php). A mirror host (Kinozal) comes from the caller; a bare host name only.
 import { urlHost } from './mirrors';
 
@@ -15,6 +15,7 @@ export function registrationUrl(sourceId: string, activeHost?: string): string |
   if (sourceId === 'rutracker') return 'https://rutracker.org/forum/profile.php?mode=register';
   if (sourceId === 'kinozal') return 'https://' + cleanHost(activeHost, 'kinozal.tv') + '/signup.php';
   if (sourceId === 'rustorka') return 'https://' + cleanHost(activeHost, 'rustorka.com') + '/forum/profile.php?mode=register';
+  if (sourceId === 'nnmclub') return 'https://nnmclub.to/forum/profile.php?mode=register';
   return null;
 }
 

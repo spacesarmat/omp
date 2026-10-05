@@ -97,7 +97,7 @@ export interface Source {
   siteUrl?: string;
   /** Every root of a site with mirrors (siteUrl is the active one): a TV check request may name any of them. */
   siteUrls?: string[];
-  /** Sources with needsLogin: sign in; the credentials go to ctx.secrets only. Rejects in Russian. */
+  /** Sites with an account (needsLogin, or an optional one like NNM-Club): sign in; the credentials go to ctx.secrets only. Rejects in Russian. */
   login?(username: string, password: string, ctx: SourceContext): Promise<void>;
   /** Forgets the site cookies and the saved credentials. */
   logout?(ctx: SourceContext): Promise<void>;

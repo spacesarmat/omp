@@ -9,6 +9,7 @@ import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth, setCloudflareBypass, setSourceOn } from '../../src/sources/store';
 import { siteLoginFromPhone } from '../../src/sources/transfer';
 import { kinozal } from '../../src/sources/kinozal';
+import { nnmclub } from '../../src/sources/nnmclub';
 import { resetMirrors } from '../../src/sources/mirrors';
 import { fakeSite, fixture, page, type FakeSite, type HttpCall } from '../sources/fakeSite';
 import { browserCaptcha, browserLoginText, loginOnPhone, setBrowserLoginPlatform } from '../../src/sources/browserLogin';
@@ -70,6 +71,25 @@ afterEach(() => {
 });
 
 describe('Android TV: Kinozal login', () => {
+  it('NNM-Club (an optional login) has «Войти» / «Выйти» on its row and never says «нужен вход»', async () => {
+    registerSource(nnmclub);
+    site = fakeSite(kinozalSite, { 'nnmclub.username': 'nnm', 'nnmclub.password': PASSWORD });
+    try {
+      await mount(screen());
+      expect(line('nnmclub').textContent).not.toContain('нужен вход');
+      click(byText('Выйти', line('nnmclub'))!);
+      click(Array.from(host.querySelectorAll('.dialog-option')).find((n) => n.textContent === 'Выйти')!);
+      await flush();
+      expect(site.secrets).toEqual({});
+      expect(line('nnmclub').textContent).not.toContain('нужен вход');
+      expect(line('nnmclub').textContent).toContain('ищет без обхода Cloudflare');
+      click(byText('Войти', line('nnmclub'))!);
+      expect((host.querySelector('.login-dialog') as HTMLElement).textContent).toContain('Вход на NNM-Club');
+    } finally {
+      unregisterSource('nnmclub');
+    }
+  });
+
   it('the generic login dialog signs in to Kinozal (wrong password first) and «Выйти» forgets it', async () => {
     await mount(screen());
     expect(line('kinozal').textContent).toContain('нужен вход');

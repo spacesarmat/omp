@@ -221,6 +221,6 @@ describe('TV search on Android TV: focus and stale searches', () => {
     await flush();
     const hint = host.querySelector('.search-hint')!;
     expect(hint.textContent).toContain('rutracker: Сайт закрыт проверкой браузера (Cloudflare)');
-    expect(hint.textContent).toContain('через Jackett или Prowlarr');
+    expect(hint.textContent).toContain('через Jackett, Prowlarr или FlareSolverr');
   });
 });

@@ -153,7 +153,7 @@ export function SourcesScreen({
 
   const checkLogins = (alive: () => boolean) => {
     builtins
-      .filter((s) => s.needsLogin && s.loggedIn)
+      .filter((s) => !!s.loggedIn)
       .forEach((s) => {
         s.loggedIn!(ctx()).then(
           (v) => {
@@ -300,7 +300,9 @@ export function SourcesScreen({
         () => {
           setLogged((m) => ({ ...m, [s.id]: false }));
           setBrowser((m) => ({ ...m, [s.id]: false }));
-          setHealth(s.id, { state: 'login', at: Date.now() });
+          // an optional login (NNM-Club) leaves no «нужен вход» behind
+          if (s.needsLogin) setHealth(s.id, { state: 'login', at: Date.now() });
+          else clearHealth(s.id);
           forgetFromPhone(s);
           toast(t('tvSources.signedOut', { name: s.name }));
         },
@@ -407,10 +409,10 @@ export function SourcesScreen({
           {cfSites.length > 0 && <div class="src-group">{t('tvSources.cfSites')}</div>}
           {cfSites.map((s) => {
             const on = siteOn(s);
-            const login = !!(s.needsLogin && s.login);
+            const login = !!s.login;
             const base = tvSiteNote(isCloudflareBypassOn(s), needsCheck(s), until[s.id] === undefined ? null : until[s.id], now());
             let note = base;
-            if (login && !loggedIn(s)) note = { text: t('sources.state.login'), tone: 'muted' };
+            if (login && s.needsLogin && !loggedIn(s)) note = { text: t('sources.state.login'), tone: 'muted' };
             else if (!isSourceOn(s)) note = { text: t('sources.state.off'), tone: 'muted' };
             else if (!isCloudflareBypassOn(s)) note = { text: t('tvSources.cfNoBypass'), tone: 'muted' };
             // mockup: «обход Cloudflare · вход передан с телефона»
