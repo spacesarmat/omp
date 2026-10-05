@@ -153,6 +153,8 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const [rowCat, setRowCatState] = useState<Record<string, string>>(memo.rowCat);
   const [catSheet, setCatSheet] = useState<string | null>(null);
   const [subSheet, setSubSheet] = useState(false);
+  // collapsed to one link under the search; opened at once when the screen comes with a link
+  const [magnetOpen, setMagnetOpen] = useState(!!link);
   void monitorVersion.value;
   const [pending, setPending] = useState<Record<string, RowBusy>>(() => Object.fromEntries(memo.busy));
   const [alive] = useState({ v: true });
@@ -201,7 +203,10 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     };
   }, []);
   useEffect(() => {
-    if (link) changeValue(link);
+    if (link) {
+      changeValue(link);
+      setMagnetOpen(true);
+    }
   }, [link]);
 
   // replacing a link by a different one forgets the category picked for the previous one
@@ -398,6 +403,46 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           {sortLabel + ' ▾'}
         </button>
       </div>
+      {/* the magnet: a compact link under the search; the field opens in place (a shared link opens it at once) */}
+      {magnetOpen ? (
+        <div class="m-add-magnet" data-magnet-block>
+          <div class="m-add-row" data-magnet-row>
+            <input
+              class="m-input m-lib-search"
+              aria-label={t('add.magnetLabel')}
+              placeholder={t('add.magnetLabel')}
+              value={value}
+              onInput={(e) => changeValue((e.target as HTMLInputElement).value)}
+            />
+            <button type="button" class="m-btn m-btn-primary m-btn-sm" disabled={busy} onClick={onAdd}>
+              {t('common.add')}
+            </button>
+          </div>
+          {/* the category matters only for a link about to be added: the chips come once one is entered */}
+          {linkEntered && (
+            <div class="m-chips" role="group" aria-label={t('add.category')} data-magnet-category style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+              <span class="m-muted m-small">{t('add.category') + ':'}</span>
+              {addCategories().map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  class={'m-chip' + (magnetCategory === c.id ? ' on' : '')}
+                  aria-pressed={magnetCategory === c.id}
+                  onClick={() => setPicked(c.id)}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {error && <div class="m-error">{error}</div>}
+          <div class="m-muted m-small">{t('add.magnetHint')}</div>
+        </div>
+      ) : (
+        <button type="button" class="m-link m-add-magnet-link" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>
+          {t('add.byMagnet')}
+        </button>
+      )}
       {memo.handle && memo.searched && (
         <SubscribePlate query={memo.searched} onSubscribe={() => setSubSheet(true)} />
       )}
@@ -442,37 +487,6 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           );
         })}
       </div>
-      <div class="m-add-row m-add-magnet" data-magnet-row>
-        <input
-          class="m-input m-lib-search"
-          aria-label={t('add.magnetLabel')}
-          placeholder={t('add.magnetLabel')}
-          value={value}
-          onInput={(e) => changeValue((e.target as HTMLInputElement).value)}
-        />
-        <button type="button" class="m-btn m-btn-primary m-btn-sm" disabled={busy} onClick={onAdd}>
-          {t('common.add')}
-        </button>
-      </div>
-      {/* the category matters only for a link about to be added: the chips come once one is entered */}
-      {linkEntered && (
-        <div class="m-chips" role="group" aria-label={t('add.category')} data-magnet-category style={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <span class="m-muted m-small">{t('add.category') + ':'}</span>
-          {addCategories().map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              class={'m-chip' + (magnetCategory === c.id ? ' on' : '')}
-              aria-pressed={magnetCategory === c.id}
-              onClick={() => setPicked(c.id)}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-      )}
-      {error && <div class="m-error">{error}</div>}
-      <div class="m-muted m-small">{t('add.magnetHint')}</div>
       {sheet === 'sources' && (
         <Sheet label={t('add.sourcesSheet')} onClose={() => setSheet(null)}>
           <div class="m-sheet-title">{t('add.sourcesSheet')}</div>

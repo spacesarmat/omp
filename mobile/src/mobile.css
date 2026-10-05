@@ -1096,6 +1096,7 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-screen-head { min-height: 44px; margin-top: 24px; }
 .m-head-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 22px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-head-btn:disabled { opacity: 0.6; }
-/* «Добавить»: the magnet row sits under the search block */
-.m-add-magnet { margin-top: 8px; }
+/* «Добавить»: the magnet is a compact link under the search field and chips; tapped, the field opens in place */
+.m-add-magnet { display: flex; flex-direction: column; gap: 10px; }
+.m-add-magnet-link { align-self: flex-start; min-height: 44px; padding: 0; color: var(--accent); font-size: 15px; font-weight: 600; text-align: left; }
 .m-add-magnet .m-input { height: 44px; font-size: 15px; }
