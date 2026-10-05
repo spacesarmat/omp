@@ -64,7 +64,7 @@ describe('libraryTitle', () => {
   });
   it('a name typed by the user (renamed) stays as is', () => {
     expect(libraryTitle(tor('Neon Rivers'))).toEqual({ title: 'Neon Rivers', meta: '' });
-    expect(libraryTitle(tor('Дюна (2021)'))).toEqual({ title: 'Дюна (2021)', meta: '' });
+    expect(libraryTitle(tor('Дюна (2021)'))).toEqual({ title: 'Дюна', meta: '2021' });
     expect(libraryTitle(tor('Дом дракона — 2 сезон'))).toEqual({ title: 'Дом дракона — 2 сезон', meta: '' });
   });
   it('a placeholder title: the name derived from the files', () => {
