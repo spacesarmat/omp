@@ -15,6 +15,11 @@ import type { CatalogClient } from '../../src/catalog/client';
 import { sourceHttp } from '../src/platform/native';
 import type { CatalogTitle, Kind } from '../../src/catalog/tmdb';
 import type { Torrent } from '../../src/api/types';
+import type { DiscoverQuery } from '../../src/catalog/discoverQuery';
+// @ts-ignore node builtins
+import { readFileSync } from 'node:fs';
+// @ts-ignore
+import { join } from 'node:path';
 
 const MOVIE: CatalogTitle = { kind: 'movie', id: 11, title: 'Полуночный архив', original: 'Midnight Archive', year: 2026, poster: 'https://img.test/t/p/w300/a.jpg', rating: 7.4 };
 const MOVIE2: CatalogTitle = { kind: 'movie', id: 12, title: 'Clockwork Harbor', original: 'Clockwork Harbor', year: 2025, poster: '', rating: 0 };
@@ -28,6 +33,7 @@ function codeError(code: string): Error {
 }
 
 type Novelties = CatalogClient['novelties'];
+let queries: DiscoverQuery[] = [];
 
 function fake(impl?: Novelties) {
   const novelties = vi.fn<Novelties>(
@@ -39,8 +45,14 @@ function fake(impl?: Novelties) {
         return Promise.resolve({ items: [MOVIE, SHOW, MOVIE2], pages: 2 });
       }),
   );
+  // the screen asks discover(kind, query, page); the mock records (kind, page), the query goes to `queries`
+  queries = [];
   const c: CatalogClient = {
-    novelties,
+    novelties: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
+    discover: (kind, query, page) => {
+      queries.push(query);
+      return novelties(kind, page);
+    },
     search: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
     card: vi.fn(() => Promise.reject(codeError('bad'))),
     season: vi.fn(() => Promise.reject(codeError('bad'))),
@@ -225,7 +237,7 @@ describe('Discover («Новинки»)', () => {
     const nov = fake();
     mount(<Discover />);
     await flush();
-    const chips = Array.from(el.querySelectorAll('.m-disc-chips button')) as HTMLButtonElement[];
+    const chips = Array.from(el.querySelectorAll('.m-disc-chips button[aria-pressed]')) as HTMLButtonElement[];
     expect(chips.map((b) => b.textContent)).toEqual(['Все', 'Фильмы', 'Сериалы']);
     expect(chips[0].getAttribute('aria-pressed')).toBe('true');
     act(() => chips[2].click());
@@ -332,7 +344,7 @@ describe('Discover («Новинки»)', () => {
       await flush();
       expect(el.querySelector('h2')!.textContent).toBe('New releases');
       expect(el.textContent).toContain('from the TMDB catalog');
-      expect(Array.from(el.querySelectorAll('.m-disc-chips button')).map((b) => b.textContent)).toEqual(['All', 'Movies', 'Series']);
+      expect(Array.from(el.querySelectorAll('.m-disc-chips button[aria-pressed]')).map((b) => b.textContent)).toEqual(['All', 'Movies', 'Series']);
       const ts = tiles();
       expect(ts[0].querySelector('.m-disc-rating')!.textContent).toBe('★ 7.4');
       expect(ts[0].textContent).toContain('Movie');
@@ -457,6 +469,211 @@ describe('«Обзор» comes back as it was', () => {
     await flush();
     // nothing was kept from a failed load: the next visit asks again
     expect(nov).toHaveBeenCalledWith('all', 1);
+  });
+});
+
+describe('«Обзор»: sort, filters, title and year', () => {
+  const stored = () => JSON.parse(localStorage.getItem('tsp.discoverQuery') || 'null');
+  const sortBtn = () => el.querySelector('.m-disc-head .m-sort') as HTMLButtonElement;
+  const filtersBtn = () => el.querySelector('.m-disc-filters') as HTMLButtonElement;
+  const sheet = () => document.querySelector('.m-sheet') as HTMLElement | null;
+  const inSheet = (text: string) => Array.from(sheet()!.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === text) as HTMLButtonElement;
+
+  it('under each poster: the type and the year («Фильм · 2026»), the type alone without a year', async () => {
+    fake(() => Promise.resolve({ items: [MOVIE, SHOW, { ...MOVIE2, year: 0 }], pages: 1 }));
+    mount(<Discover />);
+    await flush();
+    expect(tiles().map((b) => b.querySelector('.m-disc-meta')!.textContent)).toEqual(['Фильм · 2026', 'Сериал · 2026', 'Фильм']);
+    expect(tiles()[0].querySelector('.m-disc-title')!.textContent).toBe('Полуночный архив');
+  });
+
+  it('the title is clamped to exactly two lines (no third line peeking out), also with 3 posters per row', () => {
+    const css = readFileSync(join('mobile', 'src', 'mobile.css'), 'utf8');
+    const rule = (sel: string) => {
+      const i = css.indexOf(sel + ' {');
+      expect(i).toBeGreaterThanOrEqual(0);
+      return css.slice(i, css.indexOf('}', i));
+    };
+    const two = rule('.m-disc-tile .m-disc-title');
+    expect(two).toContain('-webkit-line-clamp: 2');
+    expect(two).toContain('display: -webkit-box');
+    expect(two).toContain('overflow: hidden');
+    expect(two).toContain('line-height: 19px');
+    expect(two).toContain('max-height: 38px');
+    expect(two).toContain('flex: none');
+    const three = rule('.m-cols-3 .m-disc-tile .m-disc-title');
+    expect(three).toContain('line-height: 16px');
+    expect(three).toContain('max-height: 32px');
+    expect(three).toContain('min-height: 32px');
+  });
+
+  it('default «Популярные»; the sort sheet picks «По рейтингу»: kept, page 1 fetched again, scrolled to the top', async () => {
+    let top = 0;
+    const root = document.documentElement;
+    Object.defineProperty(root, 'scrollTop', { configurable: true, get: () => top, set: (v: number) => (top = v) });
+    try {
+      const nov = fake();
+      mount(<Discover />);
+      await flush();
+      expect(queries[0].sort).toBe('popular');
+      expect(sortBtn().getAttribute('aria-label')).toBe('Сортировка: Популярные');
+      top = 800;
+      act(() => sortBtn().click());
+      expect(Array.from(sheet()!.querySelectorAll('.m-opt')).map((b) => b.textContent)).toEqual(['Популярные', 'По рейтингу', 'По дате выхода', 'Самые ожидаемые']);
+      expect(inSheet('Популярные').getAttribute('aria-pressed')).toBe('true');
+      nov.mockClear();
+      act(() => inSheet('По рейтингу').click());
+      await flush();
+      expect(sheet()).toBeNull();
+      expect(nov).toHaveBeenCalledWith('all', 1);
+      expect(queries[queries.length - 1].sort).toBe('rating');
+      expect(stored().sort).toBe('rating');
+      expect(top).toBe(0);
+      expect(sortBtn().getAttribute('aria-label')).toBe('Сортировка: По рейтингу');
+      // the same sort again: nothing new
+      nov.mockClear();
+      act(() => sortBtn().click());
+      act(() => inSheet('По рейтингу').click());
+      await flush();
+      expect(nov).not.toHaveBeenCalled();
+    } finally {
+      delete (root as unknown as { scrollTop?: number }).scrollTop;
+    }
+  });
+
+  it('the filters sheet: genre, year, country, rating; applied on «Показать» as «Фильтры · N»', async () => {
+    const nov = fake();
+    mount(<Discover />);
+    await flush();
+    expect(filtersBtn().textContent).toBe('Фильтры');
+    act(() => filtersBtn().click());
+    const labels = Array.from(sheet()!.querySelectorAll('.m-filter-label')).map((x) => x.textContent);
+    expect(labels).toEqual(['Жанр', 'Год', 'Страна / язык', 'Мин. рейтинг']);
+    // «Все»: series genres are offered too
+    expect(inSheet('Ток-шоу')).toBeTruthy();
+    nov.mockClear();
+    act(() => inSheet('Драма').click());
+    act(() => inSheet('Комедия').click());
+    act(() => inSheet('Прошлый').click());
+    act(() => inSheet('Корея').click());
+    act(() => inSheet('7+').click());
+    await flush();
+    // nothing is asked while the sheet is open
+    expect(nov).not.toHaveBeenCalled();
+    act(() => inSheet('Показать').click());
+    await flush();
+    expect(sheet()).toBeNull();
+    expect(nov).toHaveBeenCalledTimes(1);
+    const q = queries[queries.length - 1];
+    expect(q).toEqual({ sort: 'popular', genres: ['drama', 'comedy'], year: 'last', from: 0, to: 0, country: 'KR', rating: 7 });
+    expect(stored()).toEqual(q);
+    expect(filtersBtn().textContent).toBe('Фильтры · 5');
+    expect(filtersBtn().className).toContain('on');
+
+    // «Сбросить» keeps the sort, clears the filters
+    act(() => filtersBtn().click());
+    act(() => (sheet()!.querySelector('.m-sheet-head .m-link-btn') as HTMLButtonElement).click());
+    act(() => inSheet('Показать').click());
+    await flush();
+    expect(stored()).toEqual({ sort: 'popular', genres: [], year: 'any', from: 0, to: 0, country: '', rating: 0 });
+    expect(filtersBtn().textContent).toBe('Фильтры');
+  });
+
+  it('a year range from–to', async () => {
+    fake();
+    mount(<Discover />);
+    await flush();
+    act(() => filtersBtn().click());
+    act(() => inSheet('Диапазон').click());
+    const inputs = sheet()!.querySelectorAll('.m-filter-size input');
+    expect(inputs.length).toBe(2);
+    act(() => {
+      (inputs[0] as HTMLInputElement).value = '1990';
+      inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => {
+      (inputs[1] as HTMLInputElement).value = '1999';
+      inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => inSheet('Показать').click());
+    await flush();
+    expect(stored()).toMatchObject({ year: 'range', from: 1990, to: 1999 });
+  });
+
+  it('«Фильмы»: only film genres, plus a chosen series one so it can be turned off', async () => {
+    localStorage.setItem('tsp.discoverQuery', JSON.stringify({ genres: ['talk'] }));
+    fake();
+    mount(<Discover />);
+    await flush();
+    act(() => button('Фильмы')!.click());
+    await flush();
+    act(() => filtersBtn().click());
+    expect(inSheet('Ужасы')).toBeTruthy();
+    expect(inSheet('Новости')).toBeUndefined();
+    expect(inSheet('Ток-шоу').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('the kept sort and filters are used on the next launch; junk is sanitized', async () => {
+    localStorage.setItem('tsp.discoverQuery', JSON.stringify({ sort: 'upcoming', genres: ['war', 'bogus'], rating: 99 }));
+    fake();
+    mount(<Discover />);
+    await flush();
+    expect(queries[0]).toEqual({ sort: 'upcoming', genres: ['war'], year: 'any', from: 0, to: 0, country: '', rating: 0 });
+    expect(sortBtn().getAttribute('aria-label')).toBe('Сортировка: Самые ожидаемые');
+    expect(filtersBtn().textContent).toBe('Фильтры · 1');
+  });
+
+  it('the kept feed is keyed on the sort and filters: changed ones fetch again on return', async () => {
+    for (const s of servers.value.slice()) removeServer(s.id);
+    setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+    const nov = fake();
+    mount(<Discover />);
+    await flush();
+    act(() => render(null, el));
+    nov.mockClear();
+    // same query: kept, no request
+    mount(<Discover />);
+    await flush();
+    expect(nov).not.toHaveBeenCalled();
+    act(() => render(null, el));
+    // the query changed meanwhile (e.g. restored from a backup): fetched again
+    localStorage.setItem('tsp.discoverQuery', JSON.stringify({ sort: 'date' }));
+    mount(<Discover />);
+    await flush();
+    expect(nov).toHaveBeenCalledWith('all', 1);
+    expect(queries[queries.length - 1].sort).toBe('date');
+  });
+
+  it('an empty answer says so', async () => {
+    fake(() => Promise.resolve({ items: [], pages: 0 }));
+    mount(<Discover />);
+    await flush();
+    expect(el.querySelector('.m-disc-empty')!.textContent).toBe('Ничего не нашлось');
+  });
+
+  it('English: sort sheet, filters sheet and the year line', async () => {
+    applyLanguageSetting('en');
+    try {
+      fake();
+      mount(<Discover />);
+      await flush();
+      expect(tiles()[0].querySelector('.m-disc-meta')!.textContent).toBe('Movie · 2026');
+      expect(tiles()[1].querySelector('.m-disc-meta')!.textContent).toBe('Series · 2026');
+      expect(sortBtn().getAttribute('aria-label')).toBe('Sort: Popular');
+      act(() => sortBtn().click());
+      expect(Array.from(sheet()!.querySelectorAll('.m-opt')).map((b) => b.textContent)).toEqual(['Popular', 'Top rated', 'Newest', 'Most anticipated']);
+      act(() => inSheet('Top rated').click());
+      await flush();
+      expect(filtersBtn().textContent).toBe('Filters');
+      act(() => filtersBtn().click());
+      expect(Array.from(sheet()!.querySelectorAll('.m-filter-label')).map((x) => x.textContent)).toEqual(['Genre', 'Year', 'Country / language', 'Min. rating']);
+      act(() => inSheet('Drama').click());
+      act(() => inSheet('Show').click());
+      await flush();
+      expect(filtersBtn().textContent).toBe('Filters · 1');
+    } finally {
+      applyLanguageSetting('ru');
+    }
   });
 });
 

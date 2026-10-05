@@ -66,6 +66,7 @@ function fake(impl: Card, season?: SeasonFn) {
   seasonCalls = vi.fn<SeasonFn>(season || ((_id, n) => Promise.resolve(seasonOf(n))));
   setCatalogClientForTests({
     novelties: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
+    discover: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
     search: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
     card,
     season: seasonCalls,

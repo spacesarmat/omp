@@ -1,9 +1,9 @@
-// «Обзор» → «Новинки»: the TMDB novelties feed (movies and series), marked when already in the library.
+// «Обзор»: the TMDB feed (movies and series) with its sort and filters, marked when already in the library.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { t } from '../../../../src/i18n';
-import { Icon } from '../../ui/Icon';
+import { Icon, ICONS } from '../../ui/Icon';
 import { CatalogSearch, ratingText } from './CatalogSearch';
-import { navigate } from '../../nav';
+import { navigate, scrollToTop } from '../../nav';
 import { torrents } from '../../../../src/store/library';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
 import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
@@ -12,6 +12,9 @@ import { CatalogError } from './CatalogError';
 import { readDiscover, saveDiscover, type Feed, type Filter } from './discoverCache';
 import { readDiscoverCols, saveDiscoverCols, type DiscoverCols } from './discoverCols';
 import { usePinchStep } from '../../ui/usePinchStep';
+import { discoverQueryKey, discoverFilterCount, sanitizeDiscoverQuery, type DiscoverQuery } from '../../../../src/catalog/discoverQuery';
+import { loadDiscoverQuery, saveDiscoverQuery } from './discoverQueryStore';
+import { DiscoverSortSheet, DiscoverFiltersSheet, sortName } from './DiscoverSheets';
 
 const SKELETONS = 6;
 
@@ -26,8 +29,12 @@ function chips(): { id: Filter; label: string }[] {
 }
 
 export function Discover() {
+  // the sort and the filters, kept across launches; the feed is keyed on them
+  const [query, setQuery] = useState<DiscoverQuery>(loadDiscoverQuery);
+  const qkey = discoverQueryKey(query);
+  const [sheet, setSheet] = useState<'sort' | 'filters' | null>(null);
   // back from a title card (or another tab): the chip, the loaded pages and the open search come back as they were
-  const kept = useMemo(() => readDiscover(), []);
+  const kept = useMemo(() => readDiscover(qkey), []);
   const [filter, setFilter] = useState<Filter>(kept ? kept.filter : 'all');
   const [feed, setFeed] = useState<Feed | null>(kept ? kept.feed : null);
   const [error, setError] = useState<CatalogErrorCode | null>(null);
@@ -76,7 +83,7 @@ export function Discover() {
     const reread = fresh.current;
     fresh.current = false;
     phoneCatalog(reread)
-      .then((c) => c.novelties(filter, 1))
+      .then((c) => c.discover(filter, query, 1))
       .then(
         (r) => {
           if (gen.current === my) setFeed({ items: r.items, page: 1, pages: r.pages });
@@ -85,7 +92,7 @@ export function Discover() {
           if (gen.current === my) setError(catalogErrorCode(e));
         },
       );
-  }, [filter, reload]);
+  }, [filter, reload, qkey]);
 
   const loadMore = () => {
     if (!feed || moreBusy || feed.page >= feed.pages) return;
@@ -94,7 +101,7 @@ export function Discover() {
     setMoreBusy(true);
     setMoreFailed(false);
     phoneCatalog()
-      .then((c) => c.novelties(filter, next))
+      .then((c) => c.discover(filter, query, next))
       .then(
         (r) => {
           if (gen.current !== my) return;
@@ -113,7 +120,17 @@ export function Discover() {
         },
       );
   };
-  useEffect(() => saveDiscover({ filter, feed }), [filter, feed]);
+  useEffect(() => saveDiscover({ filter, feed, query: qkey }), [filter, feed, qkey]);
+
+  /** New sort or filters: kept for the next launch, page 1 fetched again from the top. */
+  const applyQuery = (next: DiscoverQuery) => {
+    const q = sanitizeDiscoverQuery(next);
+    if (discoverQueryKey(q) === qkey) return;
+    saveDiscoverQuery(q);
+    setQuery(q);
+    scrollToTop();
+  };
+  const nFilters = discoverFilterCount(query);
 
   const loadMoreRef = useRef(loadMore);
   loadMoreRef.current = loadMore;
@@ -148,6 +165,15 @@ export function Discover() {
       <div class="m-disc-head">
         <h2>{t('discover.novelties')}</h2>
         <span class="m-muted m-small m-grow">{t('discover.fromTmdb')}</span>
+        <button
+          type="button"
+          class="m-icon-btn m-sort"
+          aria-label={t('discover.sortAria', { name: sortName(query.sort) })}
+          aria-haspopup="dialog"
+          onClick={() => setSheet('sort')}
+        >
+          <Icon d={ICONS.sort} size={20} />
+        </button>
         <button type="button" class="m-btn m-btn-secondary m-btn-sm" aria-label={t('add.search')} onClick={() => {
             saveDiscover({ search: { text: '', items: null } });
             setSearching(true);
@@ -167,6 +193,9 @@ export function Discover() {
             {c.label}
           </button>
         ))}
+        <button type="button" class={'m-hfilter m-disc-filters' + (nFilters ? ' on' : '')} aria-haspopup="dialog" onClick={() => setSheet('filters')}>
+          {nFilters ? t('filters.title') + ' · ' + nFilters : t('filters.title')}
+        </button>
       </div>
       {error ? (
         <CatalogError
@@ -185,6 +214,8 @@ export function Discover() {
             </div>
           ))}
         </div>
+      ) : feed.items.length === 0 ? (
+        <p class="m-muted m-disc-empty">{t('discover.nothingFound')}</p>
       ) : (
         <>
           <div class={gridClass}>
@@ -206,8 +237,10 @@ export function Discover() {
                   {x.rating > 0 && <span class="m-disc-rating">{ratingText(x.rating)}</span>}
                   {inLibrary(index, x) && <span class="m-disc-badge">{t('discover.inLibrary')}</span>}
                 </span>
-                <span class="m-card-title">{x.title}</span>
-                <span class="m-muted m-small">{x.kind === 'tv' ? t('discover.series') : t('library.movie')}</span>
+                <span class="m-card-title m-disc-title">{x.title}</span>
+                <span class="m-muted m-small m-disc-meta">
+                  {(x.kind === 'tv' ? t('discover.series') : t('library.movie')) + (x.year ? ' · ' + x.year : '')}
+                </span>
               </button>
             ))}
           </div>
@@ -223,6 +256,26 @@ export function Discover() {
         </>
       )}
       <p class="m-muted m-small m-disc-foot">{t('discover.attribution')}</p>
+      {sheet === 'sort' && (
+        <DiscoverSortSheet
+          value={query.sort}
+          onPick={(s) => {
+            setSheet(null);
+            applyQuery({ ...query, sort: s });
+          }}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {sheet === 'filters' && (
+        <DiscoverFiltersSheet
+          value={query}
+          kind={filter}
+          onClose={(q) => {
+            setSheet(null);
+            applyQuery({ ...q, sort: query.sort });
+          }}
+        />
+      )}
     </div>
   );
 }
