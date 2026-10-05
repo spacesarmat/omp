@@ -1360,8 +1360,6 @@ export const en: EnDict<typeof ru> = {
       tapHint: 'A short tap on the touchpad presses OK',
       invert: 'Reverse scrolling',
       invertHint: 'If the page on the TV scrolls the wrong way',
-      strip: 'Scroll strip',
-      stripHint: 'On the right of the touchpad: slide a finger up or down',
     },
     tracks: {
       label: 'Audio and subtitles',
@@ -1397,7 +1395,6 @@ export const en: EnDict<typeof ru> = {
       error: 'no connection',
     },
     atvLine: 'Android TV · {state}',
-    scrollStrip: 'Scroll',
     touchpadArea: 'Swipe with a finger · two fingers scroll',
     typeLabel: 'Typing on the TV',
     typePlaceholder: 'Type — the text goes to the TV',

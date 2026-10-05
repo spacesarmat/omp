@@ -1369,8 +1369,6 @@ export const ru = {
       tapHint: 'Короткое касание тачпада нажимает OK',
       invert: 'Обратная прокрутка',
       invertHint: 'Если страница на ТВ едет не в ту сторону',
-      strip: 'Полоса прокрутки',
-      stripHint: 'Справа на тачпаде: ведите пальцем вверх или вниз',
     },
     tracks: {
       label: 'Звук и субтитры',
@@ -1406,7 +1404,6 @@ export const ru = {
       error: 'нет связи',
     },
     atvLine: 'Android TV · {state}',
-    scrollStrip: 'Прокрутка',
     touchpadArea: 'Проведите пальцем · двумя — прокрутка',
     typeLabel: 'Ввод на телевизоре',
     typePlaceholder: 'Печатайте — текст уйдёт на ТВ',
