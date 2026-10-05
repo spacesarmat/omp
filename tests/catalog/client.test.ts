@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { createCatalogClient, catalogErrorCode, CACHE_KEY } from '../../src/catalog/client';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createCatalogClient, catalogErrorCode, flushCatalogCache, CACHE_KEY, CACHE_BUDGET_CHARS } from '../../src/catalog/client';
 import { applyLanguageSetting } from '../../src/i18n';
 import type { TmdbEndpoint } from '../../src/catalog/tmdb';
 import type { SourceHttp } from '../../src/sources/types';
@@ -37,6 +37,7 @@ function failure(p: Promise<unknown>): Promise<Error> {
 }
 
 beforeEach(() => { localStorage.clear(); applyLanguageSetting('ru'); });
+afterEach(() => { flushCatalogCache(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('catalog client', () => {
   it('interleaves movies and series for all', async () => {
@@ -94,6 +95,7 @@ describe('catalog client', () => {
     now += 2 * 60 * 60 * 1000;
     await c.season(202, 2);
     expect(f.urls.length).toBe(4);
+    flushCatalogCache();
     const raw = localStorage.getItem(CACHE_KEY) || '';
     expect(raw.indexOf('still_path')).toBe(-1);
     expect(raw.indexOf('SECRETKEY')).toBe(-1);
@@ -124,6 +126,7 @@ describe('catalog client', () => {
     const f = fake();
     const c = createCatalogClient(E, f.http, { today: () => '2026-10-05' });
     await c.novelties('movie', 1);
+    flushCatalogCache();
     const raw = localStorage.getItem(CACHE_KEY) || '';
     expect(raw.length).toBeGreaterThan(2);
     expect(raw.indexOf('SECRETKEY')).toBe(-1);
@@ -135,6 +138,7 @@ describe('catalog client', () => {
     const c = createCatalogClient(E, f.http, { today: () => '2026-10-05' });
     await c.novelties('movie', 1);
     await c.card('movie', 101);
+    flushCatalogCache();
     const stored = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
     const keys = Object.keys(stored);
     expect(keys.length).toBe(2);
@@ -176,7 +180,85 @@ describe('catalog client', () => {
     let now = 1;
     const c = createCatalogClient(E, f.http, { now: () => now });
     for (let i = 0; i < 230; i++) { now += 1; await c.search('q' + i, 1); }
+    flushCatalogCache();
     const stored = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
     expect(Object.keys(stored).length).toBe(200);
+  });
+  it('writes the cache once per burst of requests (debounced)', async () => {
+    vi.useFakeTimers();
+    const set = vi.spyOn(Storage.prototype, 'setItem');
+    const f = fake();
+    const c = createCatalogClient(E, f.http);
+    for (let i = 0; i < 5; i++) await c.search('q' + i, 1);
+    expect(set.mock.calls.filter((a) => a[0] === CACHE_KEY)).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(set.mock.calls.filter((a) => a[0] === CACHE_KEY)).toHaveLength(1);
+    expect(Object.keys(JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'))).toHaveLength(5);
+  });
+
+  it('keeps the stored JSON within the budget, evicting the least recently used', async () => {
+    const big = 'я'.repeat(Math.floor(CACHE_BUDGET_CHARS / 10));
+    const f = fake();
+    f.answer = () => ({ status: 200, text: JSON.stringify({ results: [{ media_type: 'movie', id: 1, title: big, poster_path: '/p.jpg', release_date: '2026-01-01' }], total_pages: 1 }) });
+    let now = 1000;
+    const c = createCatalogClient(E, f.http, { now: () => now });
+    for (let i = 0; i < 4; i++) { now += 10; await c.search('q' + i, 1); }
+    // q0 is used again: q1 is now the least recently used
+    now += 10;
+    await c.search('q0', 1);
+    expect(f.urls).toHaveLength(4);
+    now += 10;
+    await c.search('q4', 1);
+    flushCatalogCache();
+    const raw = localStorage.getItem(CACHE_KEY) || '';
+    expect(raw.length).toBeLessThanOrEqual(CACHE_BUDGET_CHARS);
+    const keys = Object.keys(JSON.parse(raw)).map((k) => (k.match(/query=([^&]+)/) || [])[1]);
+    expect(keys).toContain('q0');
+    expect(keys).toContain('q4');
+    expect(keys).not.toContain('q1');
+    // the evicted one is fetched again, the kept ones are not
+    now += 10;
+    await c.search('q1', 1);
+    await c.search('q0', 1);
+    expect(f.urls).toHaveLength(6);
+  });
+
+  it('a failed save (quota) drops the stored cache and keeps working from memory', async () => {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ old: { at: 1, data: {} } }));
+    const real = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
+      if (k === CACHE_KEY) throw new Error('QuotaExceededError');
+      real.call(this, k, v);
+    });
+    const f = fake();
+    const c = createCatalogClient(E, f.http, { today: () => '2026-10-05' });
+    await c.novelties('movie', 1);
+    flushCatalogCache();
+    expect(localStorage.getItem(CACHE_KEY)).toBeNull();
+    const again = await c.novelties('movie', 1);
+    expect(again.items.length).toBeGreaterThan(0);
+    expect(f.urls).toHaveLength(1);
+    // this client does not try to save again
+    await c.search('x', 1);
+    flushCatalogCache();
+    expect(localStorage.getItem(CACHE_KEY)).toBeNull();
+  });
+
+  it('the stored cache keeps the language in the key: a new client serves each language its own answer', async () => {
+    const f = fake();
+    const c = createCatalogClient(E, f.http, { today: () => '2026-10-05' });
+    await c.novelties('movie', 1);
+    applyLanguageSetting('en');
+    await c.novelties('movie', 1);
+    flushCatalogCache();
+    const keys = Object.keys(JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'));
+    expect(keys.filter((k) => k.indexOf('language=ru-RU') >= 0)).toHaveLength(1);
+    expect(keys.filter((k) => k.indexOf('language=en-US') >= 0)).toHaveLength(1);
+    const g = fake();
+    const d = createCatalogClient(E, g.http, { today: () => '2026-10-05' });
+    await d.novelties('movie', 1);
+    applyLanguageSetting('ru');
+    await d.novelties('movie', 1);
+    expect(g.urls).toHaveLength(0);
   });
 });
