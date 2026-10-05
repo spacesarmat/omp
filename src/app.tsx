@@ -19,7 +19,7 @@ import { PairPhoneScreen } from './screens/PairPhone';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { WhatsNewDialog, shouldShowWhatsNew } from './ui/WhatsNewDialog';
 import { checkWhatsNew, whatsNew } from './store/whatsNew';
-import { CHANGELOG } from './lib/changelogData';
+import { getChangelog } from './lib/changelogData';
 import { APP_VERSION } from './version';
 import { checkForUpdate, updatePrompt } from './store/updates';
 import { platformKind } from './platform/env';
@@ -104,7 +104,7 @@ export function App() {
     const t = setTimeout(() => { checkForUpdate({ manual: false }); }, 3000);
     return () => clearTimeout(t);
   }, []);
-  useEffect(() => { checkWhatsNew(CHANGELOG, APP_VERSION); }, []);
+  useEffect(() => { checkWhatsNew(getChangelog(), APP_VERSION); }, []);
   const r = currentRoute.value;
   // opened by the user (Update screen) shows anywhere; the automatic one waits for the update prompt, the player and pairing
   const wn = whatsNew.value;
