@@ -40,7 +40,7 @@ beforeEach(() => { localStorage.clear(); applyLanguageSetting('ru'); });
 afterEach(() => { flushCatalogCache(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('catalog client', () => {
-  it('a series card cached before the status fields still loads from the cache: they read as unknown', async () => {
+  it('a series card cached before the status fields is fetched again, so the status shows at once', async () => {
     const f = fake();
     f.answer = (url) => (url.indexOf('tv/202') >= 0 ? { status: 200, text: JSON.stringify({ ...TV_CARD, status: 'Returning Series' }) } : { status: 404, text: '{}' });
     const fresh = await createCatalogClient(E, f.http).card('tv', 202);
@@ -59,12 +59,10 @@ describe('catalog client', () => {
     localStorage.setItem(CACHE_KEY, JSON.stringify(stored));
     resetCatalogCache();
     const old = await createCatalogClient(E, f.http).card('tv', 202);
-    expect(f.urls).toHaveLength(1);
+    expect(f.urls).toHaveLength(2);
     expect(old.title).toBe(fresh.title);
-    expect(old.seasons.map((s) => s.number)).toEqual([2, 1]);
-    expect(old.status).toBeUndefined();
-    expect(old.nextEpisode).toBeUndefined();
-    expect(old.seasons[0].airDate).toBeUndefined();
+    expect(old.status).toBe('returning');
+    expect(old.nextEpisode).toEqual({ season: 2, episode: 7, airDate: '2026-10-12' });
   });
 
   it('interleaves movies and series for all', async () => {

@@ -181,10 +181,11 @@ export function createCatalogClient(
   }
 
   /** The sanitized answer for the URL (only that is cached, never the raw body): from the cache while fresh, else fetched. */
-  function fetchJson<T>(url: string, ttl: number, parse: (raw: unknown) => T): Promise<T> {
+  function fetchJson<T>(url: string, ttl: number, parse: (raw: unknown) => T, current?: (data: T) => boolean): Promise<T> {
     const key = cacheKeyOf(url);
     const hit = mem[key];
-    if (hit && now() - hit.at < ttl && now() >= hit.at) {
+    // `current`: a stored answer of an older shape (fields added since) is fetched again
+    if (hit && now() - hit.at < ttl && now() >= hit.at && (!current || current(hit.data as T))) {
       hit.used = now();
       clock = now;
       scheduleSave();
@@ -263,7 +264,7 @@ export function createCatalogClient(
         const c = sanitizeCard(e, raw, kind);
         if (!c) throw fail('bad');
         return c;
-      });
+      }, (c) => kind !== 'tv' || (c as { status?: unknown }).status !== undefined);
     },
     season(id, n) {
       let e: TmdbEndpoint;
