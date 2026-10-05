@@ -130,7 +130,7 @@ describe('«Новое» · Лента', () => {
     );
     await mount();
     expect(calls).toEqual(['movie']);
-    const titles = Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+    const titles = Array.from(el.querySelectorAll('.m-result-card')).map((n) => n.getAttribute('data-title'));
     expect(titles).toEqual(['Свежий фильм 2160p', 'Старый фильм 1080p']);
     expect(el.querySelector('.m-news-status')!.textContent).toContain('Свежее с Ленточный · обновлено в');
     expect(loadFeed('movie')!.results).toHaveLength(2);
@@ -159,7 +159,7 @@ describe('«Новое» · Лента', () => {
     expect(calls).toEqual(['movie', 'tv']);
     expect(el.querySelectorAll('.m-result')).toHaveLength(2);
     click(byText('1080p+'));
-    const titles = Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+    const titles = Array.from(el.querySelectorAll('.m-result-card')).map((n) => n.getAttribute('data-title'));
     expect(titles).toEqual(['Сериал 1080p']);
   });
 
@@ -190,7 +190,7 @@ describe('«Новое» · Лента', () => {
     saveFeed('movie', [row({ Title: 'С другого', source: 'other', Hash: 'd'.repeat(40), date: 100 }), row({ Title: 'Старый ленточный', Hash: 'e'.repeat(40), date: 50 })], Date.now() - 3600000, ['other', 'feedy']);
     try {
       await mount();
-      const titles = Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+      const titles = Array.from(el.querySelectorAll('.m-result-card')).map((n) => n.getAttribute('data-title'));
       expect(titles).toEqual(['Свежий', 'С другого']);
       expect(loadFeed('movie')!.sources).toEqual(['feedy', 'other']);
       expect(el.querySelector('.m-news-status')!.textContent).toContain('Свежее с Ленточный, Другой');

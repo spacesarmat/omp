@@ -4,6 +4,7 @@ import { resultDate, seedsText, sourceBadge, sourceName } from '../../../src/sou
 import type { SourceResult } from '../../../src/sources/types';
 import type { RowBusy } from '../addResult';
 import { t } from '../../../src/i18n';
+import { RawTitle, ReleaseChips, ReleaseName, ResultThumb, hasRawLine } from './ReleaseRow';
 
 /** «18 GB · 152 сида · сегодня · ещё в Torznab». */
 export function resultMeta(r: SourceResult): string {
@@ -11,7 +12,10 @@ export function resultMeta(r: SourceResult): string {
   return [r.Size, seedsText(r.Seed || 0), resultDate(r), more].filter(Boolean).join(' · ');
 }
 
-/** A found release: badge, size · seeds · date, the category ▾, «Добавить» and «На ТВ». */
+/**
+ * A found release: the poster, the short title and its meta, quality chips, the full tracker title, badge,
+ * size · seeds · date, the category ▾, «Добавить» and «На ТВ».
+ */
 export function ResultCard(p: {
   r: SourceResult;
   category: string;
@@ -27,12 +31,19 @@ export function ResultCard(p: {
   const { r } = p;
   const label = addCategoryLabel(p.category);
   return (
-    <div class={'m-result m-result-card' + (p.highlight ? ' m-hl' : '')} data-highlight={p.highlight ? '' : undefined}>
-      <div class="m-result-title">{r.Title}</div>
-      <div class="m-result-meta m-small">
-        {p.flag && <span class="m-flag">{p.flag}</span>}
-        <span class="m-src-badge">{sourceBadge(r)}</span>
-        <span class="m-muted">{resultMeta(r)}</span>
+    <div class={'m-result m-result-card' + (p.highlight ? ' m-hl' : '')} data-title={r.Title} data-highlight={p.highlight ? '' : undefined}>
+      <div class="m-rel-top">
+        <ResultThumb title={r.Title} />
+        <div class="m-rel-text">
+          <ReleaseName raw={r.Title} />
+          <ReleaseChips raw={r.Title} />
+          {hasRawLine(r.Title) && <RawTitle raw={r.Title} />}
+          <div class="m-result-meta m-small">
+            {p.flag && <span class="m-flag">{p.flag}</span>}
+            <span class="m-src-badge">{sourceBadge(r)}</span>
+            <span class="m-muted">{resultMeta(r)}</span>
+          </div>
+        </div>
       </div>
       {p.busy === 'link' && (
         <div class="m-muted m-small" role="status">

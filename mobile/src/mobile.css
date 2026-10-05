@@ -872,6 +872,12 @@ button, .m-btn {
 .m-src-badge { padding: 2px 8px; border-radius: 6px; background: #252A35; color: var(--text); font-weight: 700; }
 .m-result-actions { display: flex; align-items: center; gap: 8px; }
 .m-result-actions .m-btn { flex-shrink: 0; }
+.m-rel-top { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.m-rel-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.m-rel-thumb { width: 48px; min-width: 48px; height: 72px; border-radius: 8px; flex-shrink: 0; }
+.m-rel-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.m-raw-title { display: block; width: 100%; padding: 0; border: 0; background: none; text-align: left; font-family: inherit; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.m-raw-title.open { white-space: normal; overflow-wrap: anywhere; }
 .m-src-item { display: flex; flex-direction: column; flex-shrink: 0; }
 /* every row: the same height and padding; the right side is only two fixed columns — › (or its empty slot) and the switch */
 .m-src-row { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 6px 0; box-sizing: border-box; flex-shrink: 0; }

@@ -7,6 +7,7 @@ import { Icon, ICONS } from '../ui/Icon';
 import { SubSheet } from '../ui/SubSheet';
 import { ReplaceSheet, libraryTorrentOf } from '../ui/ReplaceSheet';
 import { useResultRows } from '../ui/useResultRows';
+import { RawTitle, ReleaseChips, ResultThumb } from '../ui/ReleaseRow';
 import { navigate } from '../nav';
 import { monitorNative } from '../monitor/native';
 import { askNotifyOnce, lastCheck, monitorDoneCount, monitorVersion, reloadMonitor, useMonitorStatus } from '../monitor/ui';
@@ -350,9 +351,15 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
         const hl = !!finding && f.key === finding;
         return (
           <div key={f.key} class={'m-ep-card' + (hl ? ' m-hl' : '')} data-highlight={hl ? '' : undefined}>
-            <div class="m-ep-card-title">{shortTitle(e.torrentTitle) + ' · ' + t('library.season', { n: e.season })}</div>
-            <div class="m-accent m-small">{episodesLine(e, have && have.from !== undefined ? have.from : 1)}</div>
-            <div class="m-muted m-small">{f.result.Title}</div>
+            <div class="m-rel-top">
+              <ResultThumb title={e.torrentTitle} poster={tor ? tor.poster : undefined} />
+              <div class="m-rel-text">
+                <div class="m-ep-card-title">{shortTitle(e.torrentTitle) + ' · ' + t('library.season', { n: e.season })}</div>
+                <div class="m-accent m-small">{episodesLine(e, have && have.from !== undefined ? have.from : 1)}</div>
+                <ReleaseChips raw={f.result.Title} />
+                <RawTitle raw={f.result.Title} />
+              </div>
+            </div>
             {hl && prompt && (
               <WatchPrompt title={shortTitle(f.result.Title)} onDismiss={() => setPrompt(false)} onWatch={() => replaceAndWatch(f)} />
             )}
@@ -386,11 +393,17 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       {better.map((f) => {
         const name = shortTitle(f.better!.torrentTitle);
         const hl = !!finding && f.key === finding;
+        const tor = libraryTorrentOf(f);
         return (
           <div key={f.key} class={'m-ep-card' + (hl ? ' m-hl' : '')} data-better="" data-highlight={hl ? '' : undefined}>
-            <div class="m-ep-card-title">{name}</div>
-            <div class="m-accent m-small">{betterLine(f.better!)}</div>
-            <div class="m-muted m-small">{f.result.Title}</div>
+            <div class="m-rel-top">
+              <ResultThumb title={f.better!.torrentTitle} poster={tor ? tor.poster : undefined} />
+              <div class="m-rel-text">
+                <div class="m-ep-card-title">{name}</div>
+                <div class="m-accent m-small">{betterLine(f.better!)}</div>
+                <RawTitle raw={f.result.Title} />
+              </div>
+            </div>
             {hl && prompt && (
               <WatchPrompt title={shortTitle(f.result.Title)} onDismiss={() => setPrompt(false)} onWatch={() => replaceAndWatch(f)} />
             )}

@@ -502,7 +502,7 @@ describe('Add unified search', () => {
     mount();
     search('x');
     await flush();
-    const titles = () => Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+    const titles = () => Array.from(el.querySelectorAll('.m-result-card')).map((n) => n.getAttribute('data-title'));
     expect(titles()).toEqual(['Small 2160p', 'Old 720p', 'Big 1080p']);
     pickFilter('1080p');
     expect(titles()).toEqual(['Big 1080p']);
@@ -539,7 +539,7 @@ describe('Add unified search: stable rows', () => {
   function row(p: Partial<SourceResult>): SourceResult {
     return { Title: 'Film 1080p', Categories: '', Size: '18 GB', CreateDate: '', Tracker: 'F', Link: '', Magnet: '', Hash: '', Peer: 0, Seed: 10, source: 'fake', ...p };
   }
-  const titles = () => Array.from(el.querySelectorAll('.m-result-title')).map((n) => n.textContent);
+  const titles = () => Array.from(el.querySelectorAll('.m-result-card')).map((n) => n.getAttribute('data-title'));
   let late: (v: SourceResult[]) => void = () => {};
 
   beforeEach(() => {
