@@ -1026,6 +1026,18 @@ export const en: EnDict<typeof ru> = {
     trackerAsk: 'Need a specific release?',
     trackerSearch: 'Search “{q}” on trackers',
   },
+  titleCard: {
+    findTorrents: 'Find torrents',
+    want: 'Want to watch',
+    followingMovie: 'Following this film',
+    followingSeries: 'Following this series',
+    more: 'More',
+    cast: 'Cast',
+    seasons: 'Seasons',
+    season: 'Season {n}',
+    airing: 'airing: {a} of {b}',
+    find: 'Find',
+  },
   catalog: {
     querySeason: 'season {n}',
     deleteAsk: 'Delete "{title}"?',
