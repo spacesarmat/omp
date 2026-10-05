@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 // @ts-ignore
 import { join } from 'node:path';
-import { postRelease } from '../../scripts/telegram-post.mjs';
+import { postRelease, replacePhoto } from '../../scripts/telegram-post.mjs';
 import { UPLOAD_MAX } from '../../scripts/telegram-lib.mjs';
 
 const TOKEN = '123:SECRET-TOKEN';
@@ -85,5 +85,23 @@ describe('postRelease', () => {
     }
     expect(msg).toBe('Telegram sendPhoto: network error');
     expect(msg).not.toContain(TOKEN);
+  });
+});
+
+describe('replacePhoto', () => {
+  it('swaps the picture of a posted release and keeps its caption and buttons', async () => {
+    const root = setup({});
+    mkdirSync(join(root, 'docs/screenshots'), { recursive: true });
+    writeFileSync(join(root, 'docs/screenshots/release-1.2.3.png'), 'cover');
+    const calls: Call[] = [];
+    await replacePhoto({ tag: 'v1.2.3', messageId: 8, root, token: TOKEN, chat: '@omp', fetch: fakeFetch(calls) as any, log: () => {} });
+    expect(names(calls)).toEqual(['editMessageMedia']);
+    const f = calls[0].form;
+    expect(f.get('message_id')).toBe('8');
+    const media = JSON.parse(f.get('media') as string);
+    expect(media).toMatchObject({ type: 'photo', media: 'attach://photo', parse_mode: 'HTML' });
+    expect(media.caption).toContain('Первое');
+    expect(JSON.parse(f.get('reply_markup') as string).inline_keyboard.length).toBeGreaterThan(0);
+    expect((f.get('photo') as File).name).toBe('release-1.2.3.png');
   });
 });
