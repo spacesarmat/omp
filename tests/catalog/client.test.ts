@@ -270,4 +270,34 @@ describe('catalog client', () => {
     await createCatalogClient(E, f.http, { now: () => at }).novelties('movie', 1);
     expect(f.urls[0]).toContain('2026-10-06');
   });
+  it('two clients one after another share the cache: both entries survive the save', async () => {
+    vi.useFakeTimers();
+    const f = fake();
+    const a = createCatalogClient(E, f.http, { today: () => '2026-10-05' });
+    await a.novelties('movie', 1);
+    const b = createCatalogClient(E, f.http, { today: () => '2026-10-05' });
+    await b.card('movie', 101);
+    // the old client's answer is served by the new one
+    await b.novelties('movie', 1);
+    expect(f.urls).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(5000);
+    const keys = Object.keys(JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'));
+    expect(keys.filter((k) => k.indexOf('discover') >= 0)).toHaveLength(1);
+    expect(keys.filter((k) => k.indexOf('movie/101') >= 0)).toHaveLength(1);
+  });
+
+  it('a hidden page or pagehide writes the pending save at once', async () => {
+    vi.useFakeTimers();
+    const f = fake();
+    const c = createCatalogClient(E, f.http, { today: () => '2026-10-05' });
+    await c.novelties('movie', 1);
+    expect(localStorage.getItem(CACHE_KEY)).toBeNull();
+    const vis = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(Object.keys(JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'))).toHaveLength(1);
+    vis.mockReturnValue('visible');
+    await c.card('movie', 101);
+    window.dispatchEvent(new Event('pagehide'));
+    expect(Object.keys(JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'))).toHaveLength(2);
+  });
 });

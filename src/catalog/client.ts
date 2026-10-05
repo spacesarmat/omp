@@ -3,7 +3,8 @@
 // The stored cache (tsp.tmdbCache) shares the origin's localStorage with the monitoring stores, so it is bounded: at
 // most MAX_ENTRIES entries and CACHE_BUDGET_CHARS characters of JSON, the least recently used evicted first; entries
 // older than the longest TTL are dropped. Writes are debounced (SAVE_DELAY_MS). A write the storage refuses (quota)
-// removes the key and that client's cache stays in memory only.
+// removes the key and the cache stays in memory only. One cache (memory map and debounced save) serves every
+// client of the page; a hidden or closing page writes it at once.
 import type { SourceHttp } from '../sources/types';
 import { loadJson, isObject } from '../store/storage';
 import {
@@ -33,8 +34,92 @@ const TIMEOUT_MS = 15000;
 /** `at`: fetched (the TTL counts from it); `used`: last served (the eviction order). */
 interface Entry { at: number; used: number; data: unknown; }
 
-/** Pending debounced saves, run by flushCatalogCache. */
-const pending: Array<() => void> = [];
+// One cache for every client of the page (each «Обзор» visit makes a new client): one map, one debounced save of the
+// whole map, so an older client can never write over newer answers.
+let mem: { [k: string]: Entry } = {};
+/** Serialized length of each entry with its key. */
+let size: { [k: string]: number } = {};
+let loaded = false;
+let timer: ReturnType<typeof setTimeout> | null = null;
+/** The storage refused a write: the cache stays in memory only for the rest of the page's life. */
+let storageOff = false;
+/** The clock of the last client that touched the cache (tests pass their own). */
+let clock: () => number = function () { return Date.now(); };
+let listening = false;
+
+function put(key: string, e: Entry): void {
+  mem[key] = e;
+  size[key] = JSON.stringify(key).length + JSON.stringify(e).length + 1;
+}
+
+function drop(key: string): void {
+  delete mem[key];
+  delete size[key];
+}
+
+function load(): void {
+  if (loaded) return;
+  loaded = true;
+  const stored = loadJson<{ [k: string]: Entry }>(CACHE_KEY, {}, isObject);
+  Object.keys(stored).forEach((k) => {
+    const v = stored[k];
+    if (v && typeof v === 'object' && typeof v.at === 'number') put(k, { at: v.at, used: typeof v.used === 'number' ? v.used : v.at, data: v.data });
+  });
+}
+
+/** Expired entries out; then the least recently used until within MAX_ENTRIES and CACHE_BUDGET_CHARS. */
+function evict(): void {
+  const t = clock();
+  Object.keys(mem).forEach((k) => {
+    const at = mem[k].at;
+    if (t - at >= CARD_TTL || t < at) drop(k);
+  });
+  const keys = Object.keys(mem).sort((x, y) => mem[y].used - mem[x].used);
+  let total = 2;
+  keys.forEach((k, i) => {
+    if (i < MAX_ENTRIES && total + size[k] <= CACHE_BUDGET_CHARS) total += size[k];
+    else drop(k);
+  });
+}
+
+function save(): void {
+  if (timer !== null) clearTimeout(timer);
+  timer = null;
+  if (storageOff) return;
+  evict();
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(mem));
+  } catch (e) {
+    // storage full: the other stores need the room more; the cache goes on in memory
+    storageOff = true;
+    try {
+      localStorage.removeItem(CACHE_KEY);
+    } catch (e2) {
+      /* storage unavailable */
+    }
+  }
+}
+
+function scheduleSave(): void {
+  if (storageOff || timer !== null) return;
+  timer = setTimeout(save, SAVE_DELAY_MS);
+}
+
+/** A page going to the background or away may be killed: the pending write goes now. */
+function listen(): void {
+  if (listening) return;
+  listening = true;
+  try {
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') flushCatalogCache();
+    });
+    window.addEventListener('pagehide', function () {
+      flushCatalogCache();
+    });
+  } catch (e) {
+    /* no document (a worker): the debounced write still runs */
+  }
+}
 
 /** The local calendar date YYYY-MM-DD: «Обзор» novelties are released up to the person's today, not UTC's. */
 export function localDate(ms: number): string {
@@ -43,12 +128,19 @@ export function localDate(ms: number): string {
   return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate());
 }
 
-/** Runs the pending cache writes now (tests; a page about to close). */
+/** Writes the pending cache save now (a hidden or closing page; tests). */
 export function flushCatalogCache(): void {
-  const list = pending.splice(0, pending.length);
-  list.forEach((save) => save());
+  if (timer !== null) save();
 }
 
+/** Tests: the pending save is written, then the memory is forgotten and read from storage again on the next client. */
+export function resetCatalogCache(): void {
+  flushCatalogCache();
+  mem = {};
+  size = {};
+  loaded = false;
+  storageOff = false;
+}
 
 function fail(code: CatalogErrorCode): Error {
   const e = new Error('catalog:' + code);
@@ -73,71 +165,12 @@ export function createCatalogClient(
 ): CatalogClient {
   const now = opts && opts.now ? opts.now : function () { return Date.now(); };
   const today = opts && opts.today ? opts.today : function () { return localDate(now()); };
-  const mem: { [k: string]: Entry } = {};
-  /** Serialized length of each entry with its key. */
-  const size: { [k: string]: number } = {};
-  const stored = loadJson<{ [k: string]: Entry }>(CACHE_KEY, {}, isObject);
-  Object.keys(stored).forEach((k) => {
-    const v = stored[k];
-    if (v && typeof v === 'object' && typeof v.at === 'number') put(k, { at: v.at, used: typeof v.used === 'number' ? v.used : v.at, data: v.data });
-  });
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  /** The storage refused a write: this client keeps its cache in memory only. */
-  let storageOff = false;
-
-  function put(key: string, e: Entry): void {
-    mem[key] = e;
-    size[key] = JSON.stringify(key).length + JSON.stringify(e).length + 1;
-  }
-
-  function drop(key: string): void {
-    delete mem[key];
-    delete size[key];
-  }
-
-  /** Expired entries out; then the least recently used until within MAX_ENTRIES and CACHE_BUDGET_CHARS. */
-  function evict(): void {
-    const t = now();
-    let keys = Object.keys(mem);
-    keys.forEach((k) => {
-      const at = mem[k].at;
-      if (t - at >= CARD_TTL || t < at) drop(k);
-    });
-    keys = Object.keys(mem).sort((a, b) => mem[b].used - mem[a].used);
-    let total = 2;
-    keys.forEach((k, i) => {
-      if (i < MAX_ENTRIES && total + size[k] <= CACHE_BUDGET_CHARS) total += size[k];
-      else drop(k);
-    });
-  }
-
-  function save(): void {
-    if (timer !== null) clearTimeout(timer);
-    timer = null;
-    const i = pending.indexOf(save);
-    if (i >= 0) pending.splice(i, 1);
-    if (storageOff) return;
-    evict();
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(mem));
-    } catch (e) {
-      // storage full: the other stores need the room more; the cache goes on in memory
-      storageOff = true;
-      try {
-        localStorage.removeItem(CACHE_KEY);
-      } catch (e2) {
-        /* storage unavailable */
-      }
-    }
-  }
-
-  function scheduleSave(): void {
-    if (storageOff || timer !== null) return;
-    pending.push(save);
-    timer = setTimeout(save, SAVE_DELAY_MS);
-  }
+  clock = now;
+  load();
+  listen();
 
   function remember(key: string, data: unknown): void {
+    clock = now;
     const t = now();
     put(key, { at: t, used: t, data: data });
     evict();
@@ -150,6 +183,7 @@ export function createCatalogClient(
     const hit = mem[key];
     if (hit && now() - hit.at < ttl && now() >= hit.at) {
       hit.used = now();
+      clock = now;
       scheduleSave();
       return Promise.resolve(hit.data as T);
     }
