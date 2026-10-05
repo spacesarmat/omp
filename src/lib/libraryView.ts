@@ -23,6 +23,16 @@ export function nextView(v: LibraryView): LibraryView {
   return list[(indexOfView(v) + 1) % list.length].value;
 }
 
+// smallest to biggest: what a two-finger pinch steps through (spread = bigger)
+const BY_SIZE: LibraryView[] = ['compact', 'list', 'small', 'large'];
+
+/** One step bigger (dir 1) or smaller (dir -1); the ends of the range stay put. */
+export function zoomView(v: LibraryView, dir: 1 | -1): LibraryView {
+  const i = BY_SIZE.indexOf(v);
+  if (i < 0) return v;
+  return BY_SIZE[Math.max(0, Math.min(BY_SIZE.length - 1, i + dir))];
+}
+
 export function viewLabel(v: LibraryView): string {
   return viewOptions()[indexOfView(v)].label;
 }
