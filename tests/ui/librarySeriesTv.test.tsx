@@ -102,4 +102,18 @@ describe('LibraryScreen on the TV: short titles and series tiles', () => {
     expect(pill).not.toBeNull();
     expect(pill!.textContent).toBe(t('series.statusAiring'));
   });
+  it('groups a series whose English name comes after the brackets (Star Trek) into one tile', async () => {
+    const fixture = [
+      { hash: 'r3', title: 'Звёздный путь: Странные новые миры (3 сезон: 1-10 серии) / Star Trek: Strange New Worlds / 2025 / 4K', category: 'tv', timestamp: 5, data: file('S03E01.mkv') },
+      { hash: 'e2', title: 'Star Trek: Strange New Worlds / S2E1-10 of 10 [2023, WEB-DL 2160p]', category: 'tv', timestamp: 9, data: file('S02E01.mkv') },
+      { hash: 'e4', title: 'Star Trek: Strange New Worlds / S4E1-10 of 10 [2026, WEB-DL 2160p]', category: 'tv', timestamp: 8, data: file('S04E01.mkv') },
+    ];
+    mockFetch((url) => ({ body: url.indexOf('/torrents') >= 0 ? JSON.stringify(fixture) : '[]' }));
+    torrents.value = fixture as any;
+    const host = mount();
+    await flush();
+    const tiles = host.querySelectorAll('.tile-series');
+    expect(tiles).toHaveLength(1);
+    expect(tiles[0].querySelector('.tile-count')!.textContent).toBe('3');
+  });
 });

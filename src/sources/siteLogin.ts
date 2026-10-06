@@ -6,10 +6,10 @@
 // site's active mirror (mirrors.ts) with the site's options (siteOptions: the Cloudflare pass while its switch is on).
 // Chromium 53 safe.
 import { parseHtml } from './html';
-import { checkLoginPage, checkPage, siteOptions } from './site';
+import { checkLoginPage, checkSessionPage, hasLoginForm, logPageSigns, siteOptions } from './site';
 import { createBrowserLogin, type BrowserCheck, type BrowserOutcome, type BrowserSpec } from './browserLogin';
 import { siteEmpty, siteNoStore, siteLoginCode, siteLoginError, siteLoginKeys } from './siteLoginText';
-import { loginRequired } from './types';
+import { isLoginRequired, loginRequired } from './types';
 import type { SiteHosts } from './mirrors';
 import type { HttpOptions, HttpResponse, SecretStore, Source, SourceContext } from './types';
 
@@ -96,10 +96,22 @@ export function createSiteLogin(cfg: SiteLoginConfig): SiteLogin {
     adopt: (url) => cfg.hosts.adopt(url),
   });
 
-  const load = (ctx: SourceContext, path: string, extra?: HttpOptions) =>
+  /** The answer asks to sign in: the login page (any mirror) or a login form. */
+  const signedOut = (res: HttpResponse): boolean =>
+    (!!cfg.stillOnLogin && cfg.stillOnLogin(res)) ||
+    urlIsPath(res, cfg.loginPath) ||
+    urlIsPath(res, cfg.browser.loginPath) ||
+    hasLoginForm(res.text);
+
+  // a login page (an inline Turnstile on its form included) comes back for the sign-in again; Cloudflare's own page is
+  // challenge(). `seen` gets every answer (the journal line of a «нужен вход»).
+  const load = (ctx: SourceContext, path: string, extra?: HttpOptions, seen?: (res: HttpResponse) => void) =>
     cfg.hosts
       .get(ctx, path, opts(extra))
-      .then(checkPage)
+      .then((res) => {
+        if (seen) seen(res);
+        return checkSessionPage(res, signedOut, name);
+      })
       .then((res) => ({ res, doc: parseHtml(res.text) }));
 
   /**
@@ -111,7 +123,7 @@ export function createSiteLogin(cfg: SiteLoginConfig): SiteLogin {
     cfg.hosts
       .post(ctx, cfg.loginPath, cfg.form(username, password), opts(cfg.formCharset ? { formCharset: cfg.formCharset } : undefined))
       // an inline Turnstile on the login form is a captcha (the browser login), not a Cloudflare block
-      .then((res) => checkLoginPage(res, cfg.hasCaptcha, () => siteLoginError('captcha', name)))
+      .then((res) => checkLoginPage(res, cfg.hasCaptcha, () => siteLoginError('captcha', name), name))
       .then((res) => {
         const doc = parseHtml(res.text);
         if (cfg.hasCaptcha(doc)) throw siteLoginError('captcha', name);
@@ -183,16 +195,25 @@ export function createSiteLogin(cfg: SiteLoginConfig): SiteLogin {
     },
     savedLogin,
     sessionDoc(ctx, path, extra) {
-      return load(ctx, path, extra).then((p) => {
-        if (cfg.signedIn(p.res, p.doc)) return p;
-        // signed out, or another mirror (its own jar): one sign-in again on the active mirror
-        return signInAgain(ctx)
-          .then(() => load(ctx, path, extra))
-          .then((again) => {
-            if (!cfg.signedIn(again.res, again.doc)) throw loginRequired();
-            return again;
-          });
-      });
+      let last: HttpResponse | null = null;
+      const seen = (res: HttpResponse) => {
+        last = res;
+      };
+      return load(ctx, path, extra, seen)
+        .then((p) => {
+          if (cfg.signedIn(p.res, p.doc)) return p;
+          // signed out, or another mirror (its own jar): one sign-in again on the active mirror
+          return signInAgain(ctx)
+            .then(() => load(ctx, path, extra, seen))
+            .then((again) => {
+              if (!cfg.signedIn(again.res, again.doc)) throw loginRequired();
+              return again;
+            });
+        })
+        .then(undefined, (e: unknown) => {
+          if (isLoginRequired(e)) logPageSigns(name, 'login', last);
+          throw e;
+        });
     },
     signInAgain,
     browserLogin: (ctx, o) => browser.login(ctx, o),

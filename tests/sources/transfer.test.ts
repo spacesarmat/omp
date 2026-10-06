@@ -52,8 +52,8 @@ describe('transfer payload (phone)', () => {
   it('carries every switch and the login only when given', () => {
     setSourceOn('nnmclub', false);
     const p = buildTransferPayload(KNOWN, null);
-    // rutracker needs a login: off by default
-    expect(p).toEqual({ v: 1, sources: { 'ts-rutor': true, rutor: true, nnmclub: false, rutracker: false } });
+    // rutracker needs a login: off by default; it is behind Cloudflare, so its switch (off) travels too
+    expect(p).toEqual({ v: 1, sources: { 'ts-rutor': true, rutor: true, nnmclub: false, rutracker: false }, cloudflare: { rutracker: false } });
     const withLogin = buildTransferPayload(KNOWN, { username: ' test-user ', password: PASSWORD });
     expect(withLogin.rutracker).toEqual({ username: 'test-user', password: PASSWORD });
     expect(validateTransferPayload(withLogin)).toEqual(withLogin);

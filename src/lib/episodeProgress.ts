@@ -2,7 +2,7 @@
 // Its progress is kept per torrent hash and file index; this reads the copies together, so watching S04E01 in one
 // release marks it (or offers its position) in the others. Only reading: nothing stored or sent to TorrServer changes.
 // Films, torrents of other series and files without SxxEyy are never mixed in. Pure: the progress comes from `reader`.
-import { seriesNames } from '../monitor/newEpisodes';
+import { seriesNameVariants } from '../monitor/newEpisodes';
 import { guessCategory } from './categoryGuess';
 import { displayTitle, torrentFiles } from './torrentName';
 import { parseEpisode, playableFiles } from './episodes';
@@ -84,7 +84,7 @@ function buildIndex(list: Torrent[]): Index {
   const owner: { [name: string]: number } = {};
   const named: boolean[] = [];
   list.forEach(function (t, i) {
-    const names = isSeriesTorrent(t) ? seriesNames(displayTitle(t)) : [];
+    const names = isSeriesTorrent(t) ? seriesNameVariants(displayTitle(t)) : [];
     named.push(names.length > 0);
     names.forEach(function (n) {
       if (owner[n] === undefined) owner[n] = i;

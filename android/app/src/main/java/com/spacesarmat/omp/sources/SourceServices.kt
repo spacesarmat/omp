@@ -66,10 +66,11 @@ data class HttpSpec(
             return out
         }
 
-        /** { status, url, text } as both callers answer it. */
+        /** { status, url, text, cloudflare?, cfMitigated? } as both callers answer it. */
         fun reply(r: SiteHttp.Response): JSONObject {
             val o = JSONObject().put("status", r.status).put("url", r.url).put("text", r.text)
             if (r.cloudflare != null) o.put("cloudflare", r.cloudflare)
+            if (r.mitigated != null) o.put("cfMitigated", r.mitigated)
             return o
         }
     }
