@@ -7,6 +7,7 @@ import { installWheelScroll } from './ui/wheel';
 import { DialogHost, confirmDialog, dialogOpen } from './ui/dialog';
 import { ToastHost } from './ui/toast';
 import { ConnectScreen } from './screens/Connect';
+import { SeriesScreen } from './screens/Series';
 import { LibraryScreen } from './screens/Library';
 import { TorrentScreen } from './screens/Torrent';
 import { PlayerScreen } from './screens/Player';
@@ -56,6 +57,8 @@ function renderRoute(r: Route) {
       return <LibraryScreen />;
     case 'torrent':
       return <TorrentScreen hash={r.hash} />;
+    case 'series':
+      return <SeriesScreen seriesKey={r.key} season={r.season} />;
     case 'player':
       return platformKind() === 'androidtv'
         ? <NativePlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} from={r.from} />

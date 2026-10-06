@@ -26,8 +26,8 @@ describe('TorrentViews', () => {
     expect(tiles[0].querySelector('.art-title')!.textContent).toBe('Signal One');
     const badges = Array.prototype.map.call(tiles[0].querySelectorAll('.badge'), (e: Element) => e.textContent);
     expect(badges).toEqual(['4K', 'HEVC', 'WEB-DL']);
-    expect(tiles[0].querySelector('.tile-title')!.textContent).toBe(list[0].title);
-    expect(tiles[0].querySelector('.tile-meta')!.textContent).toBe('9.8 GB');
+    expect(tiles[0].querySelector('.tile-title')!.textContent).toBe('Signal One');
+    expect(tiles[0].querySelector('.tile-meta')!.textContent).toBe('2026');
   });
   it('small tiles: one badge, no size line', () => {
     const { host } = mount('small');

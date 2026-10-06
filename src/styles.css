@@ -225,6 +225,17 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .tile-large .tile-title { font-size: 22px; line-height: 28px; height: 84px; -webkit-line-clamp: 3; }
 .tile-small .tile-title { margin-top: 8px; font-size: 17px; line-height: 22px; height: 44px; -webkit-line-clamp: 2; }
 .tile-meta { font-size: 18px; color: var(--muted); margin-top: 4px; }
+.tile .tile-count { position: absolute; top: 12px; right: 12px; min-width: 28px; padding: 2px 9px; border-radius: 7px; background: rgba(15, 17, 21, .8); color: var(--text); font-size: 16px; font-weight: 700; text-align: center; }
+.series-pill { position: absolute; left: 12px; bottom: 12px; padding: 3px 11px; border-radius: 8px; background: #3a3f4b; color: #fff; font-size: 16px; font-weight: 700; }
+.tile-small .series-pill { left: 8px; bottom: 8px; font-size: 14px; padding: 2px 8px; }
+.series-pill-inline { position: static; display: inline-block; margin-top: 6px; }
+.crow .series-pill-inline { margin: 0 18px 0 0; }
+.series-pill.pill-airing { background: #1f6f43; color: #e9fff1; }
+.series-pill.pill-ended { background: #3a3f4b; color: #fff; }
+.series-pill.pill-canceled { background: #8a2a2d; color: #fff; }
+.series-pill.pill-soon { background: var(--accent); color: #0f1115; }
+.lrow-meta { font-size: 20px; color: var(--muted); margin-top: 2px; }
+.crow-meta { color: var(--muted); font-weight: 400; }
 .views-rows { padding-top: 4px; }
 .lrow { display: flex; align-items: center; height: 92px; padding: 0 22px; margin-bottom: 10px; border-radius: 14px; background: var(--panel); }
 .lrow.focused { background: var(--panel2); transform: none; }

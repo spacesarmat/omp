@@ -1,4 +1,4 @@
-import { t } from '../i18n';
+import { t, tp } from '../i18n';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { client, activeServer } from '../store/servers';
@@ -25,6 +25,7 @@ import { TopBar } from '../ui/TopBar';
 import { TorrentViews } from './library/TorrentViews';
 import { HistoryGrid, HistoryEntry, HistoryFilterRow } from './library/HistoryGrid';
 import { displayTitle } from '../lib/torrentName';
+import type { SeriesGroup } from '../lib/seriesGroups';
 
 export function LibraryScreen() {
   const c = client.value;
@@ -39,8 +40,8 @@ export function LibraryScreen() {
   const [loaded, setLoaded] = useState(torrents.value.length > 0);
   // card under focus: a torrent, or a history entry when fileIndex is set
   // (a ref: focus moves must not re-render the whole catalog)
-  const selRef = useRef<{ hash: string; fileIndex?: number } | null>(null);
-  const setSel = (v: { hash: string; fileIndex?: number } | null) => { selRef.current = v; };
+  const selRef = useRef<{ hash: string; fileIndex?: number; group?: SeriesGroup } | null>(null);
+  const setSel = (v: { hash: string; fileIndex?: number; group?: SeriesGroup } | null) => { selRef.current = v; };
   progressVersion.value; // re-render when progress changes
   serverViewed.value;
 
@@ -101,6 +102,17 @@ export function LibraryScreen() {
     });
   };
 
+  const removeSeries = (g: SeriesGroup) => {
+    confirmDialog(tp('series.deleteSeries', g.members.length), t('common.delete')).then((ok) => {
+      if (!ok || !c) return;
+      const hashes = g.members.map((m) => m.hash);
+      Promise.all(hashes.map((h) => c.remove(h))).then(
+        () => { torrents.value = torrents.value.filter((x) => hashes.indexOf(x.hash) < 0); setSel(null); toast(t('catalog.torrentDeleted')); },
+        (e) => toast(errorMessage(e), 'error'),
+      );
+    });
+  };
+
   const removeHistory = (hash: string, fileIndex: number) => {
     confirmDialog(t('catalog.removeFromHistoryAsk'), t('catalog.removeFromHistory')).then((ok) => {
       if (!ok || !c) return;
@@ -119,6 +131,7 @@ export function LibraryScreen() {
     const sel = selRef.current;
     if (a === 'red' && sel) {
       if (sel.fileIndex !== undefined) removeHistory(sel.hash, sel.fileIndex);
+      else if (sel.group) removeSeries(sel.group);
       else removeTorrent(sel.hash);
       return true;
     }
@@ -223,8 +236,10 @@ export function LibraryScreen() {
         <TorrentViews
           view={s.libraryView}
           list={list}
+          group={tab === 'all' || tab === 'tv'}
+          onOpenSeries={(g) => navigate({ name: 'series', key: g.key })}
           onOpen={(t) => navigate({ name: 'torrent', hash: t.hash })}
-          onFocused={(t) => setSel({ hash: t.hash })}
+          onFocused={(x) => setSel('kind' in x ? { hash: x.lead.hash, group: x } : { hash: x.hash })}
         />
       )}
       {empty && <div class="empty">{empty}</div>}

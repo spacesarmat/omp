@@ -6,6 +6,7 @@ export type Route =
   | { name: 'connect' }
   | { name: 'library' }
   | { name: 'torrent'; hash: string }
+  | { name: 'series'; key: string; season?: number }
   | { name: 'player'; queue: PlayItem[]; index: number; startAt?: number; from?: string }
   | { name: 'add' }
   | { name: 'playlist'; url?: string; title?: string }
