@@ -132,4 +132,27 @@ describe('deviceFor', () => {
     // a manual entry of another kind wins over the remembered one
     expect(deviceFor('192.168.1.79', 'lg').kind).toBe('lg');
   });
+
+  it('a brand picked by hand names the bare device and overrides the remembered one', () => {
+    expect(deviceFor('192.168.1.80', 'atv', 'sber')).toEqual({ ip: '192.168.1.80', name: 'Сбер 192.168.1.80', kind: 'atv', brand: 'sber', online: false });
+    rememberDevice({ ip: '192.168.1.81', name: 'MIBOX4', kind: 'atv', brand: 'xiaomi', online: true });
+    expect(deviceFor('192.168.1.81', 'atv').brand).toBe('xiaomi');
+    expect(deviceFor('192.168.1.81', 'atv', 'yandex').brand).toBe('yandex');
+    // a brand never sticks to LG
+    expect(deviceFor('192.168.1.82', 'lg', 'sber').brand).toBeUndefined();
+  });
+});
+
+describe('mergeDevices — brands', () => {
+  it('tags Xiaomi from the cast model and Sber/Yandex from the OMP name', () => {
+    const list = mergeDevices(
+      {
+        cast: [{ ip: '192.168.1.20', name: 'Гостиная', model: 'MIBOX4' } as any],
+        omp: [{ ip: '192.168.1.21', name: 'SberBox Top', port: 8095 } as any, { ip: '192.168.1.22', name: 'Яндекс ТВ', port: 8095 } as any],
+      },
+      [],
+    );
+    expect(list.map((d) => d.brand)).toEqual(['xiaomi', 'sber', 'yandex']);
+    expect(mergeDevices({ cast: [{ ip: '192.168.1.23', name: 'TV', model: 'BRAVIA 4K VH2' } as any] }, [])[0].brand).toBeUndefined();
+  });
 });

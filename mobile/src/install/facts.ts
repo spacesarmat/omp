@@ -85,6 +85,7 @@ export async function atvFacts(d: InstallDevice): Promise<AtvFacts> {
   const facts: AtvFacts = { kind: 'atv', name: d.name, ip: d.ip, ompVersion: omp, latest };
   if (d.model) facts.model = d.model;
   if (d.cast) facts.cast = d.cast;
+  if (d.brand) facts.brand = d.brand;
   return facts;
 }
 

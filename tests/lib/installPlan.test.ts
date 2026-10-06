@@ -13,6 +13,11 @@ import {
   ROOT_CHECK_URL,
   FAQ_LG_DEVMODE,
   FAQ_SAMSUNG,
+  FAQ_XIAOMI,
+  FAQ_SBER,
+  FAQ_YANDEX,
+  SBER_APPS_URL,
+  atvBrand,
   type LgFacts,
   type AtvFacts,
 } from '../../src/lib/installPlan';
@@ -304,6 +309,74 @@ describe('installPlan — Android TV', () => {
   });
 });
 
+describe('atvBrand', () => {
+  it('recognises Xiaomi, Sber and Yandex names and models', () => {
+    for (const m of ['MIBOX4', 'Mi Box S', 'MiTV-AXSO0', 'Xiaomi TV Box S', 'Mi TV P1', 'Redmi Smart TV']) expect(atvBrand(m), m).toBe('xiaomi');
+    for (const m of ['SberBox', 'SberBox Top', 'Салют ТВ', 'Телевизор Сбер']) expect(atvBrand(m), m).toBe('sber');
+    for (const m of ['Яндекс ТВ Станция', 'Yandex Module', 'YaOS TV']) expect(atvBrand(m), m).toBe('yandex');
+    for (const m of ['Chromecast HD', 'BRAVIA 4K VH2', 'Google TV', 'Hisense UMI', undefined]) expect(atvBrand(m), String(m)).toBeUndefined();
+    expect(atvBrand(undefined, 'MIBOX3')).toBe('xiaomi');
+  });
+});
+
+describe('installPlan — Xiaomi, Sber, Yandex', () => {
+  it('Xiaomi: the adb path with Xiaomi menu paths, the manual way, the phone pairing and its FAQ', () => {
+    const p = installPlan(atv({ brand: 'xiaomi', model: 'MIBOX4' }));
+    expect(p.kind).toBe('atv-adb');
+    expect(p.steps.map((s) => s.id)).toEqual(['devopts', 'debug', 'install', 'phone']);
+    expect(p.steps[0].text).toContain('Настройки устройства');
+    expect(p.steps[0].text).toContain('Сборка ОС Android TV');
+    expect(p.steps[3].text).toContain('«Подключить телефон»');
+    expect(p.steps[3].text).toContain('4 цифр');
+    expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: null });
+    expect(p.actions[0]).toEqual({ id: 'install', label: 'Установить OMP', primary: true });
+    expect(p.actions.find((a) => a.faq === FAQ_XIAOMI)).toBeDefined();
+    const notes = p.notes.join(' ');
+    expect(notes).toContain('Безопасность и ограничения → Неизвестные источники');
+    expect(notes).toContain('Android 8');
+    expect(notes).not.toContain('только встроенный Chromecast');
+  });
+
+  it('Sber: upload via apps.sber.ru/my, unknown sources, phone pairing; adb only as an option', () => {
+    const p = installPlan(atv({ brand: 'sber', model: undefined, cast: undefined, name: 'SberBox' }));
+    expect(p.kind).toBe('atv-sideload');
+    expect(p.subtitle).toBe('Сбер · ставим APK вручную');
+    expect(p.steps.map((s) => s.id)).toEqual(['apk', 'upload', 'unknown', 'phone']);
+    expect(states(p)).toEqual(['current', 'todo', 'todo', 'todo']);
+    expect(p.steps[1].text).toContain('apps.sber.ru/my');
+    expect(p.steps[1].text).toContain('«Загруженные»');
+    expect(p.steps[2].text).toContain('неизвестных источников');
+    expect(p.steps[3].text).toContain('«Подключить телефон»');
+    expect(p.actions[0]).toMatchObject({ id: 'link', url: SBER_APPS_URL });
+    expect(p.actions.find((a) => a.id === 'install')!.primary).toBeFalsy();
+    expect(p.actions.find((a) => a.faq === FAQ_SBER)).toBeDefined();
+    expect(p.notes.join(' ')).toContain('SberStudio');
+    expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: null });
+  });
+
+  it('Yandex: USB and the file manager, the subscription limit, no install from the phone', () => {
+    const p = installPlan(atv({ brand: 'yandex', model: undefined, cast: undefined }));
+    expect(p.kind).toBe('atv-sideload');
+    expect(p.subtitle).toBe('Яндекс · ставим APK вручную');
+    expect(p.steps.map((s) => s.id)).toEqual(['apk', 'usb', 'files', 'phone']);
+    expect(p.steps[2].text).toContain('«Файловый менеджер»');
+    expect(p.steps[3].text).toContain('«Подключить телефон»');
+    expect(p.install).toBeUndefined();
+    expect(ids(p)).toEqual(['faq']);
+    expect(p.actions[0].faq).toBe(FAQ_YANDEX);
+    const notes = p.notes.join(' ');
+    expect(notes).toContain('по подписке');
+    expect(notes).toContain('Для разработчиков');
+  });
+
+  it('OMP already there: the usual installed view whatever the brand', () => {
+    for (const brand of ['xiaomi', 'sber', 'yandex'] as const) {
+      const p = installPlan(atv({ brand, ompVersion: '0.17.0', latest: '0.17.0' }));
+      expect(p.kind, brand).toBe('atv-installed');
+    }
+  });
+});
+
 describe('installPlan — Samsung', () => {
   it('is not supported yet', () => {
     const p = installPlan({ kind: 'samsung', name: 'Samsung', ip: '192.168.1.3' });
@@ -322,6 +395,9 @@ describe('FAQ links', () => {
       installPlan(lg()),
       installPlan(atv()),
       installPlan(atv({ cast: 'chromecast' })),
+      installPlan(atv({ brand: 'xiaomi' })),
+      installPlan(atv({ brand: 'sber' })),
+      installPlan(atv({ brand: 'yandex' })),
       installPlan({ kind: 'samsung', name: 'S', ip: '1.1.1.1' }),
     ];
     for (const p of plans) for (const a of p.actions) if (a.id === 'faq') expect(resolveFaqLink(a.faq), a.faq).not.toBeNull();

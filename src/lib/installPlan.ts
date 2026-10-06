@@ -17,8 +17,42 @@ export const ADB_PORT = 5555;
 export const ROOT_CHECK_URL = 'https://cani.rootmy.tv';
 export const LG_DEV_ACCOUNT_URL = 'https://webostv.developer.lge.com';
 
-export { FAQ_LG_DEVMODE, FAQ_LG_HBC, FAQ_LG_ROOT, FAQ_LG_VERSION, FAQ_ATV_ADB, FAQ_ATV_BOXES, FAQ_SAMSUNG } from './faqLinks';
-import { FAQ_LG_DEVMODE, FAQ_LG_VERSION, FAQ_LG_HBC, FAQ_ATV_ADB, FAQ_ATV_BOXES, FAQ_SAMSUNG } from './faqLinks';
+export {
+  FAQ_LG_DEVMODE,
+  FAQ_LG_HBC,
+  FAQ_LG_ROOT,
+  FAQ_LG_VERSION,
+  FAQ_ATV_ADB,
+  FAQ_ATV_BOXES,
+  FAQ_SAMSUNG,
+  FAQ_XIAOMI,
+  FAQ_SBER,
+  FAQ_YANDEX,
+} from './faqLinks';
+import { FAQ_LG_DEVMODE, FAQ_LG_VERSION, FAQ_LG_HBC, FAQ_ATV_ADB, FAQ_ATV_BOXES, FAQ_SAMSUNG, FAQ_XIAOMI, FAQ_SBER, FAQ_YANDEX } from './faqLinks';
+
+/** Sber's page where an APK is uploaded under the same Sber ID and then installed from the TV catalog. */
+export const SBER_APPS_URL = 'https://apps.sber.ru/my';
+
+// ---- Android-based brands ----
+
+/**
+ * Android-based TVs and boxes whose install path differs from plain Android TV: Xiaomi (Android TV / Google TV,
+ * PatchWall), Sber (Салют ТВ / StarOS on SberBox and partner TVs), Yandex (YaOS on ТВ Станция, partner TVs and
+ * the Module). Sber and YaOS are AOSP without Google Play and usually without the developer menu.
+ */
+export type AtvBrand = 'xiaomi' | 'sber' | 'yandex';
+
+export const ATV_BRANDS: AtvBrand[] = ['xiaomi', 'sber', 'yandex'];
+
+/** The brand from a cast/NSD name or model («MIBOX4», «Mi TV Stick», «SberBox Top», «Яндекс ТВ»…); undefined otherwise. */
+export function atvBrand(...names: Array<string | undefined>): AtvBrand | undefined {
+  const s = names.filter(Boolean).join(' ');
+  if (/xiaomi|redmi|\bmi[\s-]?box|\bmi[\s-]?tv|patchwall/i.test(s)) return 'xiaomi';
+  if (/sber|сбер|салют|salute|staros/i.test(s)) return 'sber';
+  if (/yandex|яндекс|\byaos\b/i.test(s)) return 'yandex';
+  return undefined;
+}
 
 // ---- webOS version ----
 
@@ -183,6 +217,8 @@ export interface AtvFacts {
   abi?: string;
   /** Newest OMP APK from the update feed. */
   latest?: string | null;
+  /** Xiaomi, Sber or Yandex: brand-specific steps (from the name/model, or picked in the manual entry). */
+  brand?: AtvBrand;
 }
 
 export interface SamsungFacts {
@@ -204,6 +240,7 @@ export type PlanKind =
   | 'lg-devmode'
   | 'atv-installed'
   | 'atv-adb'
+  | 'atv-sideload'
   | 'atv-unsupported'
   | 'samsung-unsupported';
 
@@ -452,8 +489,50 @@ const plainChromecastNote = () => t('install.plan.chromecastNote');
 /** Found over cast: TVs with only a built-in Chromecast advertise the same service. */
 const castOnlyNote = () => t('install.plan.castOnlyNote');
 
+const phoneStep = () => ({ id: 'phone', title: t('install.plan.phoneTitle'), text: t('install.plan.phoneText'), done: false });
+const apkStep = () => ({ id: 'apk', title: t('install.plan.apkTitle'), text: t('install.plan.apkText'), done: false });
+
+/** Sber (Салют ТВ) and Yandex (YaOS): AOSP without Google Play, the APK goes in by hand. */
+function sideloadPlan(f: AtvFacts, brand: 'sber' | 'yandex'): InstallPlan {
+  const model = f.model || (brand === 'sber' ? t('install.brand.sber') : t('install.brand.yandex'));
+  const android = androidLabel(f.sdkInt);
+  if (brand === 'sber') {
+    return {
+      kind: 'atv-sideload',
+      title: f.name,
+      subtitle: join([model, android, t('install.plan.sideloadSubtitle')]),
+      steps: withProgress([
+        apkStep(),
+        { id: 'upload', title: t('install.plan.sberUploadTitle'), text: t('install.plan.sberUploadText'), done: false },
+        { id: 'unknown', title: t('install.plan.unknownTitle'), text: t('install.plan.sberUnknownText'), done: false },
+        phoneStep(),
+      ]),
+      actions: [
+        { id: 'link', label: t('install.plan.sberSite'), url: SBER_APPS_URL, primary: true },
+        { id: 'install', label: t('install.plan.installOmp') },
+        { id: 'faq', label: t('install.plan.sberFaq'), faq: FAQ_SBER },
+      ],
+      notes: [t('install.plan.sberAdbNote')],
+      install: { method: 'atv-adb', ip: f.ip, wireless: null },
+    };
+  }
+  return {
+    kind: 'atv-sideload',
+    title: f.name,
+    subtitle: join([model, android, t('install.plan.sideloadSubtitle')]),
+    steps: withProgress([
+      apkStep(),
+      { id: 'usb', title: t('install.plan.yandexUsbTitle'), text: t('install.plan.yandexUsbText'), done: false },
+      { id: 'files', title: t('install.plan.installTitle'), text: t('install.plan.yandexInstallText'), done: false },
+      phoneStep(),
+    ]),
+    actions: [{ id: 'faq', label: t('install.plan.yandexFaq'), faq: FAQ_YANDEX }],
+    notes: [t('install.plan.yandexNoAdbNote'), t('install.plan.yandexSubscriptionNote')],
+  };
+}
+
 function atvPlan(f: AtvFacts): InstallPlan {
-  const model = f.model || 'Android TV';
+  const model = f.model || (f.brand === 'xiaomi' ? 'Xiaomi' : 'Android TV');
   const android = androidLabel(f.sdkInt);
   const arch = f.abi ? (isArm64(f.abi) ? 'arm64' : f.abi) : null;
 
@@ -484,6 +563,9 @@ function atvPlan(f: AtvFacts): InstallPlan {
     };
   }
 
+  if (f.brand === 'sber' || f.brand === 'yandex') return sideloadPlan(f, f.brand);
+  const xiaomi = f.brand === 'xiaomi';
+
   const wireless = typeof f.sdkInt === 'number' ? f.sdkInt >= WIRELESS_DEBUG_SDK : null;
   // the phone installs over adb on port 5555; Android 11+ pairing by code («Беспроводная отладка») is not supported
   const debug =
@@ -500,7 +582,7 @@ function atvPlan(f: AtvFacts): InstallPlan {
       {
         id: 'devopts',
         title: t('install.plan.devOptsTitle'),
-        text: t('install.plan.devOptsText'),
+        text: xiaomi ? t('install.plan.xiaomiDevOpts') : t('install.plan.devOptsText'),
         done: false,
       },
       { id: 'debug', title: debug.title, text: debug.text, done: false },
@@ -510,12 +592,15 @@ function atvPlan(f: AtvFacts): InstallPlan {
         text: t('install.plan.adbInstallText'),
         done: false,
       },
+      ...(xiaomi ? [phoneStep()] : []),
     ]),
     actions: [
       { id: 'install', label: t('install.plan.installOmp'), primary: true },
+      ...(xiaomi ? [{ id: 'faq' as const, label: t('install.plan.xiaomiFaq'), faq: FAQ_XIAOMI }] : []),
       { id: 'faq', label: t('install.plan.adbFaq'), faq: FAQ_ATV_ADB },
     ],
-    notes: (f.cast === 'tv' ? [castOnlyNote()] : [])
+    notes: (xiaomi ? [t('install.plan.xiaomiSideload'), t('install.plan.xiaomiOld')] : [])
+      .concat(f.cast === 'tv' && !xiaomi ? [castOnlyNote()] : [])
       .concat(/^chromecast$/i.test((f.model || '').trim()) ? [plainChromecastNote()] : [])
       .concat(arch === 'arm64' ? [] : [abiNote(f.abi)]),
     install: { method: 'atv-adb', ip: f.ip, wireless },
