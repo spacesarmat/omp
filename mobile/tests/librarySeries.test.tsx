@@ -155,6 +155,32 @@ describe('series grouping', () => {
     expect(findGroup([RU3, EN4, RU4, EN2], groups[0].key)!.members.length).toBe(4);
     expect(findGroup([EN4, RU3, EN2, RU4], seriesKey(RU3))!.members.length).toBe(4);
   });
+
+  it('a rutracker title with «(3 сезон…)» before its English name joins English-only releases on its own', () => {
+    const RU3: Torrent = {
+      hash: 'r3',
+      title: 'Звёздный путь: Странные новые миры (3 сезон: 1-10 серии) / Star Trek: Strange New Worlds / 2025 / 6 x ПМ, ЛМ, СТ / 4K, HEVC, HDR, DV / Hybrid (2160p)',
+      category: 'tv',
+      stat: 3,
+      timestamp: 5,
+      data: files(['S03E01.mkv']),
+    };
+    const EN2: Torrent = { hash: 'e2', title: 'Star Trek: Strange New Worlds / S2E1-10 of 10 [2023, WEB-DL 2160p]', category: 'tv', stat: 3, timestamp: 9, data: files(['S02E01.mkv']) };
+    const EN4: Torrent = { hash: 'e4', title: 'Star Trek: Strange New Worlds / S4E1-10 of 10 [2026, WEB-DL 2160p]', category: 'tv', stat: 3, timestamp: 8, data: files(['S04E01.mkv']) };
+    const groups = groupLibrary([EN2, RU3, M1, EN4]).filter((x) => x.kind === 'series') as SeriesGroup[];
+    expect(groups.length).toBe(1);
+    expect(groups[0].members.map((m) => m.hash)).toEqual(['e2', 'r3', 'e4']);
+    expect(groups[0].seasons).toEqual([2, 3, 4]);
+    expect(groups[0].named.hash).toBe('r3');
+  });
+
+  it('series sharing only the year and the release details are not merged', () => {
+    const A: Torrent = { hash: 'a', title: 'Первый сериал / First Show / 2024 / WEB-DL 1080p', category: 'tv', stat: 3, data: files(['S01E01.mkv']) };
+    const B: Torrent = { hash: 'b', title: 'Второй сериал / Second Show / 2024 / WEB-DL 1080p', category: 'tv', stat: 3, data: files(['S01E01.mkv']) };
+    const C: Torrent = { hash: 'c', title: 'Third Show / 2024 / WEB-DL 1080p', category: 'tv', stat: 3, data: files(['S01E01.mkv']) };
+    const items = groupLibrary([A, B, C]);
+    expect(items.map((x) => x.kind)).toEqual(['torrent', 'torrent', 'torrent']);
+  });
 });
 
 describe('Library series card', () => {
