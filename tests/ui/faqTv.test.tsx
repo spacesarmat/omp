@@ -145,6 +145,37 @@ describe('TV FAQ layout', () => {
   });
 });
 
+describe('FAQ glyphs for the TV font', () => {
+  it('turns the non-breaking hyphen and rare spaces into plain characters', async () => {
+    const { tvGlyphs } = await import('../../src/screens/Faq');
+    expect(tvGlyphs('Wi\u2011Fi')).toBe('Wi-Fi');
+    expect(tvGlyphs('CH\u2212 a\u2009b\u202Fc\u00ADd\u200Be')).toBe('CH- a b cde');
+  });
+
+  it('no FAQ text on the screen keeps a non-breaking hyphen', async () => {
+    const withNbh = lgItems().filter((it) => {
+      const v = itemFor(it, 'lg');
+      return (v.q + JSON.stringify(v.short) + JSON.stringify(v.more)).indexOf('\u2011') >= 0;
+    });
+    expect(withNbh.length).toBeGreaterThan(0);
+    mount(h(FaqScreen, {}));
+    await flush();
+    // every section: switch through them all and check the rendered rows and the last answer
+    const secs = lgSections();
+    for (let i = 0; i < secs.length; i++) {
+      expect(host.textContent || '').not.toMatch(/[\u2011\u2212\u2009\u202F]/);
+      const qs = host.querySelectorAll('.faq-q');
+      for (let j = 0; j < qs.length; j++) {
+        await act(async () => { setFocus(qs[j].getAttribute('data-fk')!); });
+        await flush();
+        expect(host.querySelector('.faq-answer')!.textContent || '').not.toMatch(/[\u2011\u2212\u2009\u202F]/);
+      }
+      await press(39, 'ArrowRight');
+      await flush();
+    }
+  });
+});
+
 describe('FAQ link extraction', () => {
   it('drops trailing punctuation from the QR payload', async () => {
     const { firstUrl } = await import('../../src/screens/Faq');

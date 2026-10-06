@@ -12,8 +12,16 @@ const STEP_RE = /^(\d+)\.\s+/;
 /** Inner padding of the question panel: a focused row keeps this much room to the panel edge. */
 export const LIST_PAD = 18;
 
+/**
+ * Text for the TV font: the LG system font has no non-breaking hyphen (U+2011, shown as a box in «Wi\u2011Fi») and may lack
+ * other rare glyphs the shared FAQ texts use for the phone; they become plain hyphens and spaces, invisible ones go.
+ */
+export function tvGlyphs(s: string): string {
+  return s.replace(/[\u2010\u2011\u2212]/g, '-').replace(/[\u2009\u200A\u202F]/g, ' ').replace(/[\u00AD\u200B\u2060]/g, '');
+}
+
 function lineText(l: FaqLine): string {
-  return typeof l === 'string' ? l : l.text + ' ' + l.url;
+  return tvGlyphs(typeof l === 'string' ? l : l.text + ' ' + l.url);
 }
 
 /** The first URL in the answer: an explicit link line, or a URL inside a text line. */
@@ -140,13 +148,13 @@ export function FaqScreen() {
               onArrow={onArrow}
               onFocused={() => { setCur(it.id); showRow(it.id); }}
             >
-              {itemFor(it, device).q}
+              {tvGlyphs(itemFor(it, device).q)}
             </Focusable>
           ))}
         </FocusGroup>
       </div>
       <section class="faq-answer">
-        {view && <h2>{view.q}</h2>}
+        {view && <h2>{tvGlyphs(view.q)}</h2>}
         {view && (
           <div class="faq-body">
             <Blocks lines={view.short} cls="faq-short" prefix="s" />
