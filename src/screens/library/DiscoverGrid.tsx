@@ -1,7 +1,7 @@
 // TV «Обзор»: the TMDB feed (films and series) with the kind switch, the sort and the filters (one choose() each),
 // a title search, and the posters marked when already in the library. OK opens the title card.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
+import { setFocus, doesFocusableExist, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { t, lang, type Key } from '../../i18n';
 import { activeCatalog } from '../../catalog/activeCatalog';
 import { catalogErrorCode, type CatalogErrorCode } from '../../catalog/client';
@@ -24,9 +24,15 @@ import { askText } from '../../ui/TextDialog';
 import { useKeys } from '../../ui/keys';
 import { navigate } from '../../ui/nav';
 import { tvGlyphs } from '../../ui/tvText';
+import { scrollToShow } from '../../ui/focus';
+import { focusedRow, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
 
 /** Posters per row (the CSS widths match). */
 export const DISCOVER_COLS = 8;
+/** The height of a row of posters with the title and the gap under it, px. */
+const DISCOVER_ROW_PX = 380;
+/** Inner margin of the chip bar: a focused chip keeps this much room to the bar's edge. */
+const BAR_PAD = 24;
 
 // every sort needs a label: a new DiscoverSort fails tsc here instead of t(undefined) on the TV
 const SORT_KEYS: { [s in DiscoverSort]: Key } = {
@@ -124,6 +130,22 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   const focused = useRef<CatalogTitle | null>(null);
   const list = torrents.value;
   const index = useMemo(() => libraryIndex(list), [list]);
+  // the bar does not wrap: it scrolls sideways so the focused chip is whole, with a margin
+  const barRef = useRef<HTMLDivElement>(null);
+  const showChip = (key: string) => {
+    const box = barRef.current;
+    const el = box ? (box.querySelector('[data-fk="' + key + '"]') as HTMLElement | null) : null;
+    if (!box || !el) return;
+    box.scrollLeft = scrollToShow(box.scrollLeft, box.clientWidth, el.offsetLeft, el.offsetWidth, BAR_PAD);
+  };
+  // posters further than about 3 screens from the focused row are let go (webOS 4 memory)
+  const [focusRow, setFocusRow] = useState(0);
+  const rowRef = useRef(0);
+  const setRow = (r: number) => {
+    if (r === rowRef.current) return;
+    rowRef.current = r;
+    setFocusRow(r);
+  };
 
   useEffect(() => {
     if (restored.current) {
@@ -303,7 +325,13 @@ export function DiscoverGrid(p: DiscoverGridProps) {
 
   const leaveTile = () => {
     focused.current = null;
+    setRow(0);
     if (p.onFocused) p.onFocused();
+  };
+  /** A chip of the bar got the focus. */
+  const onChip = (key: string) => () => {
+    showChip(key);
+    leaveTile();
   };
 
   /** A feed kind chip: leaves «Хочу» and shows that feed (with its open search, if any). */
@@ -325,9 +353,23 @@ export function DiscoverGrid(p: DiscoverGridProps) {
 
   const shown = isWant ? wantTitles() : search ? search.items : feed ? feed.items : null;
   const shownError = isWant ? null : search ? searchError : error;
+  const keep = keepRows(DISCOVER_ROW_PX);
+  // another list (kind, search, the want list, a new page): the window follows the focused poster where it is now
+  const shownKeys = shown ? shown.map(tileKey) : [];
+  const shownId = shownKeys.join('|');
+  useEffect(() => {
+    let cur = '';
+    try {
+      cur = getCurrentFocusKey() || '';
+    } catch (e) {
+      cur = '';
+    }
+    setRow(focusedRow(shownKeys, cur, DISCOVER_COLS));
+  }, [shownId]);
 
   return (
     <div class="discover">
+      <div class="disc-bar-box" ref={barRef}>
       <FocusGroup focusKey="DISC-BAR" className="disc-bar" preferredChildFocusKey={isWant ? 'disc-kind-want' : 'disc-kind-' + kind}>
         <div class="disc-kinds">
           {kinds().map((k) => (
@@ -336,30 +378,30 @@ export function DiscoverGrid(p: DiscoverGridProps) {
               focusKey={'disc-kind-' + k.id}
               className={'disc-kind' + (!isWant && kind === k.id ? ' active' : '')}
               onPress={() => pickKind(k.id)}
-              onFocused={() => { pickKind(k.id); leaveTile(); }}
+              onFocused={() => { pickKind(k.id); onChip('disc-kind-' + k.id)(); }}
             >
               {k.label}
             </Focusable>
           ))}
         </div>
         {/* under «Хочу» the filters stay in place, dimmed and inert, so the focus still passes along the bar */}
-        <Focusable focusKey="disc-sort" className={'disc-btn disc-btn-sort' + dim} onPress={feedOnly(() => pickSort())} onFocused={leaveTile}>
+        <Focusable focusKey="disc-sort" className={'disc-btn disc-btn-sort' + dim} onPress={feedOnly(() => pickSort())} onFocused={onChip('disc-sort')}>
           {t('discover.sortAria', { name: sortName(query.sort) })}
         </Focusable>
-        <Focusable focusKey="disc-genre" className={'disc-btn' + dim} onPress={feedOnly(pickGenre)} onFocused={leaveTile}>
+        <Focusable focusKey="disc-genre" className={'disc-btn' + dim} onPress={feedOnly(pickGenre)} onFocused={onChip('disc-genre')}>
           {t('tv.discover.genreValue', { name: genreLabel(query) })}
         </Focusable>
-        <Focusable focusKey="disc-year" className={'disc-btn' + dim} onPress={feedOnly(pickYear)} onFocused={leaveTile}>
+        <Focusable focusKey="disc-year" className={'disc-btn' + dim} onPress={feedOnly(pickYear)} onFocused={onChip('disc-year')}>
           {t('tv.discover.yearValue', { name: yearName(query) })}
         </Focusable>
-        <Focusable focusKey="disc-country" className={'disc-btn' + dim} onPress={feedOnly(pickCountry)} onFocused={leaveTile}>
+        <Focusable focusKey="disc-country" className={'disc-btn' + dim} onPress={feedOnly(pickCountry)} onFocused={onChip('disc-country')}>
           {t('tv.discover.countryValue', { name: query.country ? countryName(query.country) : t('tv.discover.anyCountry') })}
         </Focusable>
-        <Focusable focusKey="disc-rating" className={'disc-btn' + dim} onPress={feedOnly(pickRating)} onFocused={leaveTile}>
+        <Focusable focusKey="disc-rating" className={'disc-btn' + dim} onPress={feedOnly(pickRating)} onFocused={onChip('disc-rating')}>
           {t('tv.discover.ratingValue', { name: ratingName(query.rating) })}
         </Focusable>
         <div class="spacer" />
-        <Focusable focusKey="disc-find" className={'disc-btn disc-find' + dim} onPress={feedOnly(askSearch)} onFocused={leaveTile}>
+        <Focusable focusKey="disc-find" className={'disc-btn disc-find' + dim} onPress={feedOnly(askSearch)} onFocused={onChip('disc-find')}>
           <Icon name="search" size={26} class="disc-find-icon" />
           {t('tv.discover.find')}
         </Focusable>
@@ -367,11 +409,12 @@ export function DiscoverGrid(p: DiscoverGridProps) {
           focusKey="disc-kind-want"
           className={'disc-kind disc-kind-want' + (isWant ? ' active' : '')}
           onPress={() => setWant(!isWant)}
-          onFocused={leaveTile}
+          onFocused={onChip('disc-kind-want')}
         >
           {t('tv.want.tab')}
         </Focusable>
       </FocusGroup>
+      </div>
       {isWant ? (
         <div class="disc-sub">{t('tv.want.subtitle')}</div>
       ) : search ? (
@@ -405,12 +448,13 @@ export function DiscoverGrid(p: DiscoverGridProps) {
               onPress={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
               onFocused={() => {
                 if (p.onFocused) p.onFocused();
+                setRow(rowOf(i, DISCOVER_COLS));
                 focused.current = x;
                 if (!isWant && !search && i >= lastRowStart(shown.length)) loadMore();
               }}
             >
               <div class="disc-poster">
-                {x.poster ? <img src={x.poster} alt="" /> : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(x.title)}</div>}
+                {x.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={x.poster} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(x.title)}</div>}
                 {x.rating > 0 && <span class="disc-rating">{ratingText(x.rating)}</span>}
                 {wantedFn(x.kind, x.id) ? (
                   <span class="disc-mark disc-mark-want">{t('tv.discover.wantMark')}</span>
