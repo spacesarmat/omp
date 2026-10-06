@@ -29,7 +29,9 @@ import { isHotChip, releaseChips, releaseTitle } from '../sources/releaseRow';
 import { sortTvResults, stableTvOrder, type TvSortKey } from '../sources/tvSort';
 import { posterKey, requestPoster } from '../catalog/resultPosters';
 import { phoneLink } from '../phone/phoneStore';
-import { PhoneRpcError } from '../phone/rpc';
+import { PhoneRpcError, phoneRpc } from '../phone/rpc';
+import { rememberSourceNames } from '../sources/sourceNames';
+import { resultSizeText } from '../sources/resultSize';
 import { resolveTvResult, startTvSearch, type TvResult } from '../phone/phoneSearch';
 import type { RpcFailure } from '../phone/rpcTypes';
 import { tvGlyphs } from '../ui/tvText';
@@ -43,6 +45,29 @@ interface Prog {
   total: number;
   pending: string[];
   failed: string[];
+  /** Phone sites that failed for a reason the person can fix on the phone (sign-in, code page, Cloudflare). */
+  reasons: { id: string; code: ReasonCode }[];
+}
+
+type ReasonCode = 'login' | 'ipban' | 'cloudflare';
+
+/** The failures the phone gave a reason for: shown as a per-site note instead of the did-not-answer list. */
+export function phoneReasons(list: RpcFailure[]): { id: string; code: ReasonCode }[] {
+  const out: { id: string; code: ReasonCode }[] = [];
+  list.forEach((f) => {
+    // TorrServer's own sources (the fallback) have nothing to fix on the phone
+    if (!f || f.id === 'phone' || f.id.indexOf('ts-') === 0) return;
+    if (f.code === 'login' || f.code === 'ipban' || f.code === 'cloudflare') out.push({ id: f.id, code: f.code });
+  });
+  return out;
+}
+
+/** The per-site note, e.g. RuTracker needs a sign-in on the phone, torrent.by wants its code entered there. */
+export function reasonText(r: { id: string; code: ReasonCode }): string {
+  const name = { name: sourceName(r.id) };
+  if (r.code === 'login') return t('search.reason.login', name);
+  if (r.code === 'ipban') return t('search.reason.ipban', name);
+  return t('search.reason.cloudflare', name);
 }
 
 /** What the screen reads from a search: the TV's TvSearchHandle, or Android TV's SearchHandle. */
@@ -103,7 +128,7 @@ function DetailsDialog({ r, onAdd, onClose }: { r: TvResult; onAdd: () => void; 
     setFocus('search-details-add');
   }, []);
   const names = [r.source].concat(r.sources || []).filter(Boolean).map(sourceName).join(', ');
-  const meta = [r.Size, t('add.seeds', { n: r.Seed || 0 }), t('add.peers', { n: r.Peer || 0 }), resultDate(r), names].filter(Boolean).join(' · ');
+  const meta = [resultSizeText(r), t('add.seeds', { n: r.Seed || 0 }), t('add.peers', { n: r.Peer || 0 }), resultDate(r), names].filter(Boolean).join(' · ');
   return (
     <div
       class="dialog-backdrop search-details-backdrop"
@@ -154,6 +179,9 @@ export function AddScreen() {
   const [rowErr, setRowErr] = useState<{ [key: string]: string }>({});
   const [focusedKey, setFocusedKey] = useState('');
   const [details, setDetails] = useState<TvResult | null>(null);
+  // the phone's site names («RuTracker», «NNM-Club»): asked once per screen, a re-render shows them
+  const namesAsked = useRef(false);
+  const [, setNamesRev] = useState(0);
 
   const stop = () => {
     seq.current++;
@@ -235,8 +263,10 @@ export function AddScreen() {
   const sync = (h: Handle) => {
     if (!alive.current || handle.current !== h) return;
     setRows(h.results());
-    const failed = h.failed().filter((id) => id !== 'phone');
-    setProg({ answered: h.answered().length, total: h.sourceIds.length, pending: h.pending(), failed: failed });
+    const reasons = h.failures ? phoneReasons(h.failures()) : [];
+    const explained = reasons.map((r) => r.id);
+    const failed = h.failed().filter((id) => id !== 'phone' && explained.indexOf(id) < 0);
+    setProg({ answered: h.answered().length, total: h.sourceIds.length, pending: h.pending(), failed: failed, reasons: reasons });
     // the phone stopped answering mid-search: TorrServer took over
     const lost = h.failures ? h.failures().some((f) => f.id === 'phone') : false;
     if (lost) {
@@ -275,6 +305,23 @@ export function AddScreen() {
     begin(h);
   };
 
+  // the names the phone gives its sites: asked once a phone search runs, again on the next search after a failure
+  const askNames = () => {
+    if (namesAsked.current || !phoneLink.value) return;
+    namesAsked.current = true;
+    phoneRpc<unknown>('sources').then(
+      (r) => {
+        const list = r && typeof r === 'object' ? (r as { sources?: unknown }).sources : null;
+        if (!Array.isArray(list)) return;
+        rememberSourceNames(list.filter((x) => !!x && typeof x === 'object' && typeof x.id === 'string' && typeof x.name === 'string'));
+        if (alive.current) setNamesRev((n) => n + 1);
+      },
+      () => {
+        namesAsked.current = false;
+      },
+    );
+  };
+
   const searchTv = (q: string) => {
     stop();
     const mine = seq.current;
@@ -291,6 +338,7 @@ export function AddScreen() {
       setStarting(false);
       setNote(start.note);
       setBy(start.handle.by);
+      if (start.handle.by === 'phone' && !start.note) askNames();
       const h = start.handle;
       unsub.current = h.subscribe(() => sync(h));
       begin(h);
@@ -418,6 +466,11 @@ export function AddScreen() {
           {prog && <Button focusKey="search-sort" className="search-sort" label={t('search.sortLabel', { v: sortName() })} onPress={pickSort} />}
         </div>
       )}
+      {prog && prog.reasons.length > 0 && (
+        <div class="search-note search-note-warn" data-hint="phone-sites">
+          {tvGlyphs(prog.reasons.map(reasonText).join(' · '))}
+        </div>
+      )}
       {blocked.length > 0 && (
         <div class="search-progress search-hint">
           {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ') + '. ' + jackettHint()}
@@ -460,7 +513,7 @@ export function AddScreen() {
                   {rowErr[key] && <div class="search-row-error" role="alert">{rowErr[key]}</div>}
                 </div>
                 <div class="search-side">
-                  <div class="search-size">{[r.Size, '↑' + (r.Seed || 0)].filter(Boolean).join(' · ')}</div>
+                  <div class="search-size">{[resultSizeText(r), '↑' + (r.Seed || 0)].filter(Boolean).join(' · ')}</div>
                   <div class="search-src">
                     <span class="src-badge">{tvGlyphs(sourceBadge(r))}</span>
                     {also && <span class="search-also">{also}</span>}

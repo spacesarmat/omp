@@ -18,6 +18,8 @@ import { setRpcTransport, phoneStatus } from '../../src/phone/rpc';
 import { savePhoneLink, forgetPhoneLink } from '../../src/phone/phoneStore';
 import { setPosterLookup } from '../../src/catalog/resultPosters';
 import { mockFetch } from '../helpers/fetchMock';
+import { lang } from '../../src/i18n';
+import { resetSourceNames } from '../../src/sources/sourceNames';
 
 const PH = { url: 'http://192.168.1.20:8097', token: 'b'.repeat(32), name: 'Pixel' };
 const HASH = 'c'.repeat(40);
@@ -132,6 +134,8 @@ afterEach(() => {
   document.body.innerHTML = '';
   setRpcTransport(null);
   forgetPhoneLink();
+  resetSourceNames();
+  lang.value = 'ru';
   phoneStatus.value = 'unknown';
   unregisterSource('rutor-ph');
   torrents.value = [];
@@ -158,7 +162,7 @@ describe('TV search through the phone', () => {
     expect(chips).toContain('HDR');
     expect(first.querySelector('.search-chip.hot')!.textContent).toBe('4K');
     expect(first.textContent).toContain('ещё на Rutor');
-    expect(first.textContent).toContain('10 GB · ↑50');
+    expect(first.textContent).toContain('10,0 ГБ · ↑50');
     expect(first.querySelector('.search-inlib')).toBeNull();
     // the other row is in the library (hash matched case-insensitively)
     expect(host.querySelectorAll('.search-result')[1].querySelector('.search-inlib')!.textContent).toBe('уже в медиатеке');
@@ -309,5 +313,82 @@ describe('TV search through the phone', () => {
     act(() => render(null, host));
     await step(10);
     expect(calls.filter((c) => c.method === 'searchCancel').map((c) => c.params)).toEqual([{ handle: 'h9' }]);
+  });
+});
+
+describe('TV search: names, sizes and the reasons of the phone sites', () => {
+  it('shows display names in the chips, the progress line and the failed list, asking the phone for its names once', async () => {
+    useScript({
+      sources: [{ sources: [{ id: 'jackett-1', name: 'Jackett · home', on: true, state: 'ok' }] }],
+      search: [{ handle: 'h5', sourceIds: ['rutor', 'rustorka', 'rutracker', 'jackett-1', 'kinozal'] }],
+      searchPoll: [
+        { rev: 1, done: false, pending: ['kinozal'], answered: ['rutor'], failed: [], results: [phoneRow('1', RAW_HD, 5, { source: 'rutor', sources: ['rustorka', 'jackett-1'] })] },
+        { rev: 1, done: true, pending: [], answered: ['rutor', 'rustorka', 'jackett-1'], failed: [{ id: 'rutracker', message: 'x' }, { id: 'kinozal', message: 'y' }] },
+      ],
+    });
+    mount();
+    await searchDune();
+    const row = host.querySelector('.search-result')!;
+    expect(row.querySelector('.src-badge')!.textContent).toBe('Rutor');
+    expect(row.textContent).toContain('ещё на Rustorka, Jackett · home');
+    await step(1000);
+    expect(host.querySelector('.search-progress')!.textContent).toContain('не ответили: RuTracker, Kinozal');
+    // a second search does not ask again
+    await searchDune();
+    expect(calls.filter((c) => c.method === 'sources')).toHaveLength(1);
+  });
+
+  it('the sizes are in the UI language', async () => {
+    useScript({
+      search: [{ handle: 'h6', sourceIds: ['rutor'] }],
+      searchPoll: [{ rev: 2, done: true, pending: [], answered: ['rutor'], failed: [], results: [phoneRow('1', RAW_HD, 7, { Size: '69.35 GB' })] }],
+    });
+    mount();
+    await searchDune();
+    expect(host.querySelector('.search-size')!.textContent).toBe('69,4 ГБ · ↑7');
+    act(() => render(null, host));
+    lang.value = 'en';
+    mount();
+    typeQuery('Dune');
+    act(() => (host.querySelector('[data-fk="add-go"]') as HTMLElement).click());
+    await step(2000);
+    expect(host.querySelector('.search-size')!.textContent).toBe('69.4 GB · ↑7');
+  });
+
+  it('a site that needs a sign-in, a code or a check on the phone says so instead of «не ответили»', async () => {
+    useScript({
+      search: [{ handle: 'h7', sourceIds: ['rutracker', 'torrentby', 'kinozal', 'nnmclub', 'rutor'] }],
+      searchPoll: [
+        {
+          rev: 2,
+          done: true,
+          pending: [],
+          answered: ['rutor'],
+          failed: [
+            { id: 'rutracker', message: 'm', code: 'login' },
+            { id: 'torrentby', message: 'm', code: 'ipban' },
+            { id: 'kinozal', message: 'm', code: 'cloudflare' },
+            { id: 'nnmclub', message: 'timeout' },
+          ],
+          results: [phoneRow('1', RAW_HD, 7, { source: 'rutor' })],
+        },
+      ],
+    });
+    mount();
+    await searchDune();
+    const note = host.querySelector('[data-hint="phone-sites"]')!;
+    expect(note.textContent).toBe('RuTracker: нужен вход на телефоне · torrent.by: введите код на телефоне · Kinozal: пройдите проверку на телефоне');
+    const progress = host.querySelector('.search-progress')!.textContent!;
+    expect(progress).toContain('не ответили: NNM-Club');
+    expect(progress).not.toContain('RuTracker');
+    act(() => render(null, host));
+    lang.value = 'en';
+    mount();
+    typeQuery('Dune');
+    act(() => (host.querySelector('[data-fk="add-go"]') as HTMLElement).click());
+    await step(2000);
+    expect(host.querySelector('[data-hint="phone-sites"]')!.textContent).toBe(
+      'RuTracker: sign in on the phone · torrent.by: enter the code on the phone · Kinozal: pass the check on the phone',
+    );
   });
 });

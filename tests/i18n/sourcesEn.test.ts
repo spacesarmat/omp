@@ -124,7 +124,7 @@ describe('search sources in English', () => {
 
   it('sites: sign-in and page errors', async () => {
     expect(rutrackerBadLogin()).toBe('Wrong username or password');
-    expect(rutrackerCaptcha()).toBe('rutracker asks for a captcha — tap “Sign in with browser”');
+    expect(rutrackerCaptcha()).toBe('RuTracker asks for a captcha — tap “Sign in with browser”');
     expect(siteBadLogin()).toBe('Wrong username or password');
     expect(siteCaptcha('Kinozal')).toBe('Kinozal asks for a captcha — tap “Sign in with browser”');
     expect(siteLoginError('captcha', 'Kinozal').message).toBe(siteCaptcha('Kinozal'));

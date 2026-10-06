@@ -5,14 +5,14 @@
 
 /** id → name of every built-in parser, as in its Source definition. */
 export const BUILTIN_SOURCE_NAMES: { [id: string]: string } = {
-  rutor: 'rutor',
+  rutor: 'Rutor',
   nnmclub: 'NNM-Club',
   anidub: 'Anidub',
   bigfangroup: 'BigFANGroup',
   torrentby: 'torrent.by',
-  rutracker: 'rutracker',
+  rutracker: 'RuTracker',
   kinozal: 'Kinozal',
-  rustorka: 'rustorka',
+  rustorka: 'Rustorka',
 };
 
 let fromPhone: { [id: string]: string } = {};

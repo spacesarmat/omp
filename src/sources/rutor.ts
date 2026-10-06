@@ -38,7 +38,7 @@ function parse(doc: Document, base: string): SourceResult[] {
 
 export const rutor: Source = {
   id: 'rutor',
-  name: 'rutor',
+  name: 'Rutor',
   kind: 'builtin',
   search(query: string, ctx: SourceContext) {
     return loadDoc(ctx, BASE + '/search/0/0/000/0/' + encodeURIComponent(query)).then((p) => parse(p.doc, p.res.url || BASE));

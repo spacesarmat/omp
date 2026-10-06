@@ -148,7 +148,7 @@ describe('notification texts', () => {
       subId: sub.id,
       key: 'k1',
       title: 'Дюна 2160p: 2 новые раздачи',
-      text: DUNE + ' · 41 ГБ · 1200 сидов · rutor',
+      text: DUNE + ' · 41 ГБ · 1200 сидов · Rutor',
       action: 'add',
     });
     expect(subNotification({ ...sub, quality: '' }, [f('k')]).title).toBe('Дюна: 1 новая раздача');
@@ -169,7 +169,7 @@ describe('notification texts', () => {
       subId: EPISODES_ID,
       key: 'h:1:10',
       title: 'Starbound Frontier: вышли серии 9–10',
-      text: 'Новая раздача на rutor: серии 1–10 из 10. У вас 1–8.',
+      text: 'Новая раздача на Rutor: серии 1–10 из 10. У вас 1–8.',
       action: 'replace',
     });
     const one = { ...f, episodes: { ...f.episodes!, haveTo: 9 } };
@@ -330,7 +330,7 @@ describe('notification texts in English', () => {
     };
     const n = episodeNotification(ep);
     expect(n.title).toBe('Starbound Frontier: episodes 9–10 are out');
-    expect(n.text).toBe('New torrent on rutor: episodes 1–10 of 10. You have 1–8.');
+    expect(n.text).toBe('New torrent on Rutor: episodes 1–10 of 10. You have 1–8.');
     expect(n.title + n.text).not.toMatch(/[А-Яа-яЁё]/);
     // a button with no saved finding and no server
     const host = fakeHost({ action: { kind: 'add', subId: 'nope', key: 'nope' } });

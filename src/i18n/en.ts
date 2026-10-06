@@ -1448,6 +1448,12 @@ export const en: EnDict<typeof ru> = {
     phoneSlow: 'The phone did not answer — try again',
     expired: 'The results are out of date — search again',
     details: 'Release details',
+    /** A phone site that failed for a reason fixed on the phone: shown instead of «did not answer». */
+    reason: {
+      login: '{name}: sign in on the phone',
+      ipban: '{name}: enter the code on the phone',
+      cloudflare: '{name}: pass the check on the phone',
+    },
     hints: 'OK — add and watch · blue — release details · Back — to the library',
   },
   phoneSources: {

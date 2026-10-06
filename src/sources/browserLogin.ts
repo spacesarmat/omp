@@ -354,7 +354,9 @@ export function createBrowserLogin(site: BrowserSite): BrowserLogin {
     expired(secrets) {
       if (!secrets) return Promise.resolve(false);
       return secrets.get(key).then(
-        (v) => (v === '1' ? secrets.delete(key).then(() => true) : false),
+        // a read-only store (the phone's TV search page) cannot drop the marker: the session is still gone, so the
+        // caller reports a needed sign-in rather than failing with the store error
+        (v) => (v === '1' ? secrets.delete(key).then(() => true, () => true) : false),
         () => false,
       );
     },

@@ -27,3 +27,19 @@ describe('source names without the parsers registered (LG)', () => {
     expect(sourceName('jackett-1')).toBe('Jackett · home');
   });
 });
+
+describe('display names of every built-in site', () => {
+  it('are the sites own spellings, not ids', () => {
+    expect(BUILTIN_SOURCE_NAMES).toEqual({
+      rutor: 'Rutor',
+      nnmclub: 'NNM-Club',
+      anidub: 'Anidub',
+      bigfangroup: 'BigFANGroup',
+      torrentby: 'torrent.by',
+      rutracker: 'RuTracker',
+      kinozal: 'Kinozal',
+      rustorka: 'Rustorka',
+    });
+    expect(['rutor', 'rutracker', 'rustorka'].map(sourceName)).toEqual(['Rutor', 'RuTracker', 'Rustorka']);
+  });
+});

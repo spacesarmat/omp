@@ -1471,6 +1471,12 @@ export const ru = {
     phoneSlow: 'Телефон не ответил — попробуйте ещё раз',
     expired: 'Результаты устарели — найдите ещё раз',
     details: 'Подробнее о раздаче',
+    /** A phone site that failed for a reason fixed on the phone: shown instead of «не ответили». */
+    reason: {
+      login: '{name}: нужен вход на телефоне',
+      ipban: '{name}: введите код на телефоне',
+      cloudflare: '{name}: пройдите проверку на телефоне',
+    },
     hints: 'ОК — добавить и смотреть · синяя — подробнее о раздаче · Назад — к медиатеке',
   },
   phoneSources: {

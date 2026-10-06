@@ -100,8 +100,8 @@ describe('phone «Источники поиска»: one list, sign-in on the ro
     expect(el.querySelector('[data-group="cloudflare"]')).toBeNull();
     expect(el.textContent).not.toContain('Сайты за Cloudflare');
     const group = el.querySelector('[data-group="builtin"]') as HTMLElement;
-    for (const name of ['Kinozal', 'rustorka', 'NNM-Club', 'Anidub']) expect(group.contains(sw(name))).toBe(true);
-    for (const name of ['Kinozal', 'rustorka', 'NNM-Club']) expect(inRow(name, 'Войти')).toBeTruthy();
+    for (const name of ['Kinozal', 'Rustorka', 'NNM-Club', 'Anidub']) expect(group.contains(sw(name))).toBe(true);
+    for (const name of ['Kinozal', 'Rustorka', 'NNM-Club']) expect(inRow(name, 'Войти')).toBeTruthy();
     expect(inRow('Anidub', 'Войти')).toBeUndefined();
     expect(row('NNM-Club').querySelector('[data-open="nnmclub"]')).toBeTruthy();
     expect(row('Anidub').querySelector('[data-open]')).toBeNull();
@@ -131,7 +131,7 @@ describe('phone «Источники поиска»: one list, sign-in on the ro
     expect(hint('Kinozal')).toBeNull();
     const other = hint('Anidub')!;
     expect(other.querySelector('span')!.textContent).toBe('Подключите Anidub через Jackett, Prowlarr или FlareSolverr');
-    for (const name of ['Kinozal', 'rustorka']) expect(other.textContent).not.toContain(name);
+    for (const name of ['Kinozal', 'Rustorka']) expect(other.textContent).not.toContain(name);
     click(Array.from(other.querySelectorAll('button')).find((b) => b.textContent === 'Как')!);
     expect(currentRoute.value).toEqual({ name: 'faq', q: 'jackett' });
   });
@@ -150,7 +150,7 @@ describe('phone «Источники поиска»: one list, sign-in on the ro
     expect(general.length).toBe(1);
     const text = general[0].textContent || '';
     expect(text).toContain('Сайт закрыт проверкой Cloudflare? Войдите на нём через браузер');
-    for (const name of ['Kinozal', 'rustorka', 'NNM-Club', 'rutracker']) expect(text).not.toContain(name);
+    for (const name of ['Kinozal', 'Rustorka', 'NNM-Club', 'rutracker']) expect(text).not.toContain(name);
     expect((el.textContent || '').split('Сайт закрыт проверкой Cloudflare?').length).toBe(2);
     expect(general[0]).toBe(el.querySelector('[data-route="sources"]')!.lastElementChild);
   });
@@ -245,7 +245,7 @@ const rutrackerFake: Source = {
   loggedIn: () => Promise.resolve(false),
 };
 
-const LOGIN_NAMES = ['rutracker', 'Kinozal', 'rustorka', 'NNM-Club'];
+const LOGIN_NAMES = ['rutracker', 'Kinozal', 'Rustorka', 'NNM-Club'];
 const rows = () => Array.from(el.querySelectorAll('[data-route="sources"] .m-src-row[data-source]')) as HTMLElement[];
 const links = (r: HTMLElement) => Array.from(r.querySelectorAll('.m-src-status .m-src-link')) as HTMLButtonElement[];
 
@@ -335,7 +335,7 @@ describe('phone «Источники поиска»: one row style', () => {
     expect(faq.textContent).toBe('Вопросы и ответы');
     const text = general.querySelector('span')!.textContent || '';
     expect(text.split(/[.?!](\s|$)/).filter((x) => x && x.trim()).length).toBeLessThanOrEqual(2);
-    for (const name of ['Kinozal', 'rustorka', 'NNM-Club', 'rutracker', 'Anidub']) expect(text).not.toContain(name);
+    for (const name of ['Kinozal', 'Rustorka', 'NNM-Club', 'rutracker', 'Anidub']) expect(text).not.toContain(name);
   });
 });
 
