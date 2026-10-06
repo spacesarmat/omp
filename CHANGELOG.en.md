@@ -2,6 +2,14 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.18.0-beta.1
+
+- TV (LG and Android TV): library tiles show short titles instead of the tracker string; a series is one tile with its TMDB status («Airing», «Ended», «Cancelled») and the number of torrents
+- Header icons show their name when selected; the hint bar no longer covers the last row
+- A new series screen: a TMDB backdrop, overview, status with the next episode date, seasons switched with the remote, episode names, progress. «Watch» continues where you stopped and asks «Continue / From the start», «Torrents · N» opens the series' torrents
+- On the torrent screen you can rename a torrent and pick another poster from TMDB
+- «Help» in Settings: answers to common questions right on the TV, links shown as QR codes
+
 ## 0.17.0-beta.3
 
 - «Mine»: a series torrent titled only in English («Star Trek: Strange New Worlds / S2…») now joins the card of the torrents titled «Russian / Original»; the card takes its title from the torrent named in both languages

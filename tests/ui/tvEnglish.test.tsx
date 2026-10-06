@@ -11,6 +11,12 @@ import { UpdateScreen } from '../../src/screens/Update';
 import { SourcesScreen } from '../../src/screens/Sources';
 import { AddScreen } from '../../src/screens/Add';
 import { PlaylistScreen } from '../../src/screens/Playlist';
+import { SeriesScreen } from '../../src/screens/Series';
+import { FaqScreen } from '../../src/screens/Faq';
+import { setCatalogProvider } from '../../src/catalog/activeCatalog';
+import { resetSeriesMatches } from '../../src/lib/seriesMatch';
+import { resetEpisodeNames } from '../../src/lib/episodeNames';
+import { seriesKey } from '../../src/lib/seriesGroups';
 import { PairPhoneScreen } from '../../src/screens/PairPhone';
 import { MarksDialog } from '../../src/ui/MarksDialog';
 import { UpdateDialog } from '../../src/ui/UpdateDialog';
@@ -155,6 +161,60 @@ describe('TV screens in English', () => {
     expect(text).toContain('Season 2');
     expect(text).toContain('OK — watch');
     expect(text).toContain('Back — to the library');
+    expect(text).not.toMatch(CYR);
+  });
+
+  it('Series screen', async () => {
+    const seasonT = (n: number) => ({
+      hash: 'q' + n, title: 'Dark Matter S0' + n + ' 1080p WEB-DL', category: 'tv', timestamp: n, torrent_size: 4e9,
+      file_stats: [1, 2].map((e) => ({ id: e, path: 'Dark.Matter.S0' + n + 'E0' + e + '.1080p.mkv', length: 2e9 })),
+    });
+    const fixture = [seasonT(1), seasonT(2)];
+    const card = {
+      id: 1, kind: 'tv', title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6, backdrop: '',
+      genres: ['Sci-Fi'], runtime: 50, overview: 'A show', cast: [], airing: true, status: 'returning',
+      seasons: [
+        { number: 1, episodes: 9, year: 2024, aired: 9, airDate: '2024-05-08' },
+        { number: 2, episodes: 10, year: 2026, aired: 2, airDate: '2026-01-01' },
+        { number: 3, episodes: 0, year: 2099, aired: 0, airDate: '2099-01-01' },
+      ],
+      nextEpisode: { season: 3, episode: 1, airDate: '2099-01-01' },
+    };
+    const stub: any = {
+      search: () => Promise.resolve({ items: [{ id: 1, kind: 'tv', title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6 }], pages: 1 }),
+      card: () => Promise.resolve(card),
+      season: (_id: number, n: number) => Promise.resolve({ number: n, name: '', airDate: '', overview: '', episodes: [
+        { n: 1, title: 'Pilot', airDate: '2024-05-08', runtime: 50, overview: '' },
+        { n: 2, title: 'Second', airDate: '2024-05-15', runtime: 50, overview: '' },
+      ] }),
+    };
+    setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+    mockFetch((url) => ({ body: url.indexOf('/torrents') >= 0 ? JSON.stringify(fixture) : '[]' }));
+    resetSeriesMatches();
+    resetEpisodeNames();
+    setCatalogProvider(() => Promise.resolve(stub));
+    torrents.value = fixture as any;
+    const key = seriesKey(fixture[0] as any);
+    routeStack.value = [{ name: 'library' }, { name: 'series', key }];
+    mount(h(SeriesScreen, { seriesKey: key }));
+    await flush();
+    const text = host.textContent || '';
+    expect(text).toContain('Dark Matter');
+    expect(text).toContain('Airing');
+    expect(text).toContain('Season 1');
+    expect(text).toContain('Torrents · 1');
+    expect(text).toContain('Watch S02E01');
+    expect(text).toContain('next episode');
+    expect(text).not.toMatch(CYR);
+    setCatalogProvider(null);
+  });
+
+  it('Help (FAQ)', async () => {
+    mount(h(FaqScreen, {}));
+    await flush();
+    const text = host.textContent || '';
+    expect(host.querySelectorAll('.faq-list .list-item').length).toBeGreaterThan(0);
+    expect(text).toContain('Questions and answers');
     expect(text).not.toMatch(CYR);
   });
 
