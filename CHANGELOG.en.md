@@ -4,6 +4,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## 0.18.0-beta.3
 
+- [phone] «Search for the TV» in Settings: the phone searches torrents for the LG TV in the background, even with OMP closed, with a quiet status-bar icon
 - [lg] The LG TV searches torrent sites through the phone (RuTracker, NNM-Club, Kinozal and others, with your sign-ins), even when OMP is closed on the phone; the phone gets a «Search for the TV» switch and a quiet notification
 - [lg] A new search screen on the TV: quality badges, posters, sorting, «also on ...», «already in the library»
 - [lg] «Search sources» on LG: the phone's sites with their state and switches
