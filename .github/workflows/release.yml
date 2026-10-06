@@ -40,6 +40,12 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
+      # newer runner images leave less free disk; packaging three APKs with libvlc needs a few GB
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/node_modules/@*/cli "$AGENT_TOOLSDIRECTORY/CodeQL" || true
+          df -h /
       - name: Build signed Android APKs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,7 +62,7 @@ jobs:
           export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/omp.jks"
           VERSION=$(node -p "require('./package.json').version")
           npm run android:sync
-          (cd android && ./gradlew assembleRelease)
+          (cd android && ./gradlew assembleRelease --stacktrace) || { df -h /; exit 1; }
           OUT=android/app/build/outputs/apk/release
           cp "$OUT/app-universal-release.apk" "build/OMP-${VERSION}.apk"
           cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64.apk"
