@@ -74,6 +74,13 @@ export const ru = {
     dayYear: '{day} {year}',
     /** A short numeric day: «12.10». */
     numeric: '{d}.{m}',
+    /** Short weekday names from Sunday, space-separated. */
+    weekdays: 'Вс Пн Вт Ср Чт Пт Сб',
+    /** «Ср 8 окт.». */
+    weekdayDay: '{wd} {day}',
+    today: 'Сегодня',
+    tomorrow: 'Завтра',
+    yesterday: 'Вчера',
   },
   settings: {
     language: {
@@ -245,6 +252,9 @@ export const ru = {
     reminderOn: 'Напоминание включено',
     badgeNext: 'новая серия {date}',
     badgeSeason: 'новый сезон',
+    seasonReleases: { one: '{n} раздача этого сезона', few: '{n} раздачи этого сезона', many: '{n} раздач этого сезона' },
+    files: { one: '{n} файл', few: '{n} файла', many: '{n} файлов' },
+    alreadyHave: 'Такая раздача уже есть: {info}',
     keepOnly: 'Оставить только эту',
     keepOnlyAsk: {
       one: 'Удалить другую раздачу {season}-го сезона ({n})?',
@@ -289,6 +299,7 @@ export const ru = {
     notSet: 'не заданы',
   },
   log: {
+    categoryFixed: 'Категория исправлена: {title} → {category}',
     info: 'ИНФО',
     warn: 'ВНИМАНИЕ',
     error: 'ОШИБКА',
@@ -1122,6 +1133,11 @@ export const ru = {
     sortRating: 'По рейтингу',
     sortDate: 'По дате выхода',
     sortUpcoming: 'Самые ожидаемые',
+    sortDigitalSoon: 'Скоро в цифре',
+    tileDigital: 'в цифре {date}',
+    tileCinema: 'в кино с {date}',
+    tileEpisode: 'новая серия {date}',
+    tileSeason: '{n} сезон — {date}',
     genre: 'Жанр',
     year: 'Год',
     yearAny: 'Любой',
@@ -1189,6 +1205,11 @@ export const ru = {
     openInLibrary: 'Открыть в медиатеке',
     episodesError: 'Не удалось загрузить серии',
     noEpisodes: 'Серий пока нет',
+    releasesAria: 'Даты выхода',
+    releaseCinema: 'Кино: {date}',
+    releaseDigital: 'Цифра: {date}',
+    releaseDisc: 'Диск: {date}',
+    nextEpisodes: 'Ближайшие серии',
   },
   catalog: {
     querySeason: '{n} сезон',
@@ -1382,6 +1403,8 @@ export const ru = {
     badLink: 'Вставьте magnet-ссылку или хеш из 40 символов',
     magnetLabel: 'Magnet-ссылка или хеш',
     byMagnet: 'Добавить по magnet-ссылке',
+    openSourceSettings: 'Открыть настройки {name}',
+    fixHint: 'Войдите на сайте или включите обход проверки — это на его странице.',
     sourcesAll: 'Все источники · {n}',
     sourcesSome: 'Источники · {n}',
     magnetHint: 'Ссылки magnet из браузера открываются в OMP сами — через «Поделиться».',
@@ -1772,6 +1795,17 @@ export const ru = {
     sortName: 'по имени',
     sortAdded: 'по дате добавления',
     subFirstCheck: 'Первая проверка: OMP запомнил, что уже есть, — о новых раздачах сообщит дальше',
+    calendar: 'Календарь',
+    calAired: 'вышла',
+    calToday: 'сегодня',
+    calWatch: 'Смотреть',
+    calFind: 'Найти',
+    calWatchAria: 'Смотреть найденную раздачу: {title}',
+    calFindAria: 'Найти раздачи: {title}',
+    calLoading: 'Собираю расписание…',
+    calEmpty: 'В ближайшие 30 дней новых серий нет',
+    calHint: 'Календарь собирается из сериалов в «Моих» и из подписок на сериалы, которые нашлись в TMDB.',
+    calRefreshing: 'Обновляю календарь',
   },
   now: {
     collapse: 'Свернуть',

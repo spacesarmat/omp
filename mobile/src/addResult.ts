@@ -3,10 +3,15 @@
 // the torrent is added to the active server and its poster looked up.
 import { client } from '../../src/store/servers';
 import { rememberAdded } from '../../src/store/library';
+import { recordAutoCategory } from '../../src/lib/categoryCheck';
+import { saveCategoryPicked } from '../../src/store/journal';
 import { resolveLink } from '../../src/sources/view';
 import type { SourceResult } from '../../src/sources/types';
+import type { Torrent } from '../../src/api/types';
 import { phoneSourceContext } from './searchContext';
 import { t } from '../../src/i18n';
+import { alreadyHaveText } from './lib/duplicates';
+import { showToast } from './ui/toast';
 
 /** Row state while adding: taking the link from the release page, then adding. */
 export type RowBusy = 'link' | 'add';
@@ -18,7 +23,7 @@ export type RowBusy = 'link' | 'add';
 export async function addSearchResult(
   r: SourceResult,
   category: string,
-  o?: { onStep?: (s: RowBusy) => void; alive?: () => boolean },
+  o?: { onStep?: (s: RowBusy) => void; alive?: () => boolean; picked?: boolean },
 ): Promise<string | null> {
   const c = client.value;
   if (!c) throw new Error(t('errors.noServerSelected'));
@@ -28,5 +33,23 @@ export async function addSearchResult(
   o?.onStep?.('add');
   const added = await c.add({ link: l, title: r.Title, category });
   void rememberAdded(c, added, r.Title);
+  afterAdd(c, added, !!(o && o.picked), category);
+  noteAlreadyHave(added.hash, r.Title, category);
   return added.hash;
+}
+
+/**
+ * After an add: a category picked by hand is marked (omp.cm) so the automatic check leaves it; OMP's own guess is
+ * recorded as such, so the check (on a later library refresh, once the files are known) may correct only that.
+ */
+export function afterAdd(c: NonNullable<typeof client.value>, added: Torrent, picked: boolean, category: string): void {
+  if (!added || !added.hash) return;
+  if (picked) void saveCategoryPicked(c, added).catch(() => undefined);
+  else recordAutoCategory(added.hash, category);
+}
+
+/** The release is already in «Мои» (the same season of the series, or the same film): a toast says so, nothing more. */
+export function noteAlreadyHave(hash: string, title: string, category?: string): void {
+  const text = alreadyHaveText(hash, title, category);
+  if (text) showToast(text);
 }

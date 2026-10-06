@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { contentsText } from '../lib/releaseContents';
 import { t, tp } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
 import { Poster, qualityBadge } from '../ui/Poster';
@@ -68,10 +69,9 @@ function GroupTitle({ g }: { g: SeriesGroup }) {
 const itemKey = (it: LibraryItem) => (it.kind === 'torrent' ? it.tor.hash : 'g:' + it.key);
 const hashesOf = (it: LibraryItem) => (it.kind === 'torrent' ? [it.tor.hash] : it.members.map((m) => m.hash));
 
+/** «18 серий» (from the file names, «1-2 серия» counted as two), else «16 файлов»; '' for a film. */
 function episodesText(tor: Torrent): string {
-  const n = playableFiles(filesOf(tor)).length;
-  if (n < 2) return '';
-  return tp('library.episodes', n);
+  return contentsText(tor);
 }
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0 6 6 0 0 0-12 0zM21 21l-5-5';

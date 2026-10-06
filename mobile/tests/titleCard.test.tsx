@@ -256,7 +256,7 @@ describe('TitleCard: series', () => {
     expect(head().querySelector('.m-tc-season-sub')!.textContent).toBe('2026 · 10 серий');
     expect(state()).toBe('выходит: 4 из 10');
     expect(seasonCalls).toHaveBeenCalledTimes(1);
-    expect(seasonCalls).toHaveBeenCalledWith(21, 3);
+    expect(seasonCalls).toHaveBeenCalledWith(21, 3, { full: true });
   });
 
   it('default chip: the last season with aired episodes, else the first', () => {

@@ -7,7 +7,7 @@ export type MRoute =
   | { name: 'connect' }
   | { name: 'library' }
   /** «Новое»: `seg` opens a segment, `finding` highlights a new-episodes card, `watch` readies «Смотреть на ТВ» for it. */
-  | { name: 'news'; seg?: 'feed' | 'subs'; finding?: string; watch?: boolean }
+  | { name: 'news'; seg?: 'feed' | 'subs' | 'calendar'; finding?: string; watch?: boolean }
   /** Findings of one subscription. */
   | { name: 'subFindings'; id: string; finding?: string; watch?: boolean }
   /** «Настройки» → «Мониторинг». */

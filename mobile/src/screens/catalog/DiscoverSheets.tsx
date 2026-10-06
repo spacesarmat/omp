@@ -13,6 +13,7 @@ const SORT_KEYS: { [s: string]: Key } = {
   rating: 'discover.sortRating',
   date: 'discover.sortDate',
   upcoming: 'discover.sortUpcoming',
+  digitalSoon: 'discover.sortDigitalSoon',
 };
 
 export function sortName(s: DiscoverSort): string {
@@ -104,24 +105,26 @@ export function DiscoverFiltersSheet({
             {genres.map((g) => <Chip key={g} on={q.genres.indexOf(g) >= 0} label={genreName(g)} onClick={() => toggle(g)} />)}
           </div>
         </div>
-        <div class="m-filter-group" data-group="year">
-          <span class="m-filter-label">{t('discover.year')}</span>
-          <div class="m-chips" style={{ flexWrap: 'wrap' }}>
-            {years.map(([y, k]) => <Chip key={y} on={q.year === y} label={t(k)} onClick={() => set({ year: y })} />)}
-          </div>
-          {q.year === 'range' && (
-            <div class="m-filter-size">
-              <label>
-                {t('filters.from')}
-                <input inputMode="numeric" maxLength={4} value={from} placeholder="1990" onInput={(e) => setFrom((e.target as HTMLInputElement).value)} />
-              </label>
-              <label>
-                {t('filters.to')}
-                <input inputMode="numeric" maxLength={4} value={to} placeholder={String(new Date().getFullYear())} onInput={(e) => setTo((e.target as HTMLInputElement).value)} />
-              </label>
+        {q.sort !== 'digitalSoon' && (
+          <div class="m-filter-group" data-group="year">
+            <span class="m-filter-label">{t('discover.year')}</span>
+            <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+              {years.map(([y, k]) => <Chip key={y} on={q.year === y} label={t(k)} onClick={() => set({ year: y })} />)}
             </div>
+            {q.year === 'range' && (
+              <div class="m-filter-size">
+                <label>
+                  {t('filters.from')}
+                  <input inputMode="numeric" maxLength={4} value={from} placeholder="1990" onInput={(e) => setFrom((e.target as HTMLInputElement).value)} />
+                </label>
+                <label>
+                  {t('filters.to')}
+                  <input inputMode="numeric" maxLength={4} value={to} placeholder={String(new Date().getFullYear())} onInput={(e) => setTo((e.target as HTMLInputElement).value)} />
+                </label>
+              </div>
           )}
         </div>
+        )}
         <div class="m-filter-group" data-group="country">
           <span class="m-filter-label">{t('discover.country')}</span>
           <div class="m-chips" style={{ flexWrap: 'wrap' }}>

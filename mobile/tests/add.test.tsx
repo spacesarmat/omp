@@ -5,7 +5,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Add, normalizeLink, resetAddSearch } from '../src/screens/Add';
 import { setWatchActions } from '../src/watch';
-import { currentRoute, resetTo } from '../src/nav';
+import { currentRoute, goBack, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { toast } from '../src/ui/toast';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
@@ -15,6 +15,7 @@ import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/store';
 import type { Source, SourceResult } from '../../src/sources/types';
 import { ipBanError } from '../../src/sources/ipBan';
+import { loginRequired } from '../../src/sources/types';
 
 async function flush() {
   await act(async () => {
@@ -741,8 +742,61 @@ describe('Add unified search: stable rows', () => {
     await flush();
     const hint = el.querySelector('[data-hint="jackett"]')!;
     expect(hint.textContent).toContain('rutracker: Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже');
-    expect(hint.textContent).toContain('через Jackett, Prowlarr или FlareSolverr');
+    expect(hint.textContent).toContain('Войдите на сайте или включите обход проверки');
     expect(hint.textContent).not.toContain('Фейк-2');
+  });
+
+  describe('a way to the settings of a failed source', () => {
+    const fixButtons = () => Array.from(el.querySelectorAll('[data-fix-source]')) as HTMLElement[];
+
+    it('a Cloudflare block opens the site screen of that source and Back keeps the results', async () => {
+      registerSource({ id: 'fake', name: 'NNM-Club', kind: 'builtin', cloudflare: true, search: () => Promise.reject(new Error('Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже')) });
+      registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => Promise.resolve([row({ source: 'fake2', Title: 'Kept 1080p', detailUrl: 'https://g.example/k' })]) });
+      resetTo({ name: 'add' });
+      mount();
+      search('x');
+      await flush();
+      const b = fixButtons();
+      expect(b.length).toBe(1);
+      expect(b[0].textContent).toBe('Открыть настройки NNM-Club');
+      expect(el.querySelector('[data-hint="jackett"]')!.contains(b[0])).toBe(true);
+      click(b[0]);
+      expect(currentRoute.value).toEqual({ name: 'sourceSite', id: 'fake' });
+      goBack();
+      act(() => render(null, el));
+      act(() => render(<Add />, el));
+      await flush();
+      expect((el.querySelector('input[aria-label="Поиск по источникам"]') as HTMLInputElement).value).toBe('x');
+      expect(el.querySelectorAll('.m-result-card').length).toBe(1);
+    });
+
+    it('a lost sign-in opens the site screen too', async () => {
+      registerSource({ id: 'fake', name: 'RuTracker', kind: 'builtin', login: { url: 'https://rt.example/login' } as any, search: () => Promise.reject(loginRequired()) });
+      mount();
+      search('x');
+      await flush();
+      const b = fixButtons();
+      expect(b.map((x) => x.textContent)).toEqual(['Открыть настройки RuTracker']);
+      click(b[0]);
+      expect(currentRoute.value).toEqual({ name: 'sourceSite', id: 'fake' });
+    });
+
+    it('a source without a site screen links to the sources list', async () => {
+      registerSource({ id: 'fake', name: 'Indexer', kind: 'builtin', search: () => Promise.reject(new Error('Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже')) });
+      mount();
+      search('x');
+      await flush();
+      click(fixButtons()[0]);
+      expect(currentRoute.value).toEqual({ name: 'sources' });
+    });
+
+    it('a plain timeout shows no button', async () => {
+      registerSource({ id: 'fake', name: 'Тихий', kind: 'builtin', search: () => Promise.reject(new Error('Сайт не отвечает')) });
+      mount();
+      search('x');
+      await flush();
+      expect(fixButtons().length).toBe(0);
+    });
   });
 
   it('a site asking for a verification code: its own message, not the Jackett hint', async () => {
@@ -750,7 +804,7 @@ describe('Add unified search: stable rows', () => {
     mount();
     search('x');
     await flush();
-    expect(el.querySelector('[data-hint="ipban"]')!.textContent).toBe('torrent.by просит ввести проверочный код');
+    expect(el.querySelector('[data-hint="ipban"]')!.textContent).toBe('torrent.by просит ввести проверочный кодОткрыть настройки torrent.by');
     expect(el.querySelector('[data-hint="jackett"]')).toBeNull();
   });
 

@@ -478,7 +478,7 @@ describe('News in English', () => {
     });
     await mount();
     expect(el.querySelector('h1')!.textContent).toBe('New');
-    expect(Array.from(el.querySelectorAll('[role=tab]')).map((b) => b.textContent)).toEqual(['Feed', 'Subscriptions']);
+    expect(Array.from(el.querySelectorAll('[role=tab]')).map((b) => b.textContent)).toEqual(['Feed', 'Subscriptions', 'Calendar']);
     expect(Array.from(el.querySelectorAll('.m-chips')[0].querySelectorAll('.m-chip')).map((b) => b.textContent)).toEqual(['Movies', 'Series', 'Anime', '1080p+']);
     expect(el.querySelector('.m-news-status .m-grow')!.textContent).toMatch(/^Latest from Feedy · updated at \d\d:\d\d$/);
     expect(byText('Refresh')).toBeTruthy();

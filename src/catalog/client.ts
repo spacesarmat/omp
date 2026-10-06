@@ -8,7 +8,7 @@
 import type { SourceHttp } from '../sources/types';
 import { loadJson, isObject } from '../store/storage';
 import {
-  noveltiesUrl, discoverUrl, searchUrl, cardUrl, seasonUrl, sanitizeList, sanitizeCard, sanitizeSeason,
+  releaseRegions, noveltiesUrl, discoverUrl, searchUrl, cardUrl, seasonUrl, sanitizeList, sanitizeCard, sanitizeSeason,
   type Kind, type CatalogTitle, type CatalogCard, type SeasonDetails, type TmdbEndpoint,
 } from './tmdb';
 import type { DiscoverQuery } from './discoverQuery';
@@ -20,10 +20,18 @@ export interface CatalogClient {
   /** «Обзор» with its sort and filters; 'all' merges a page of films and a page of series. */
   discover(kind: Kind | 'all', query: DiscoverQuery, page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
   search(q: string, page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
-  card(kind: Kind, id: number): Promise<CatalogCard>;
+  card(kind: Kind, id: number, opts?: FetchOpts): Promise<CatalogCard>;
   /** A season of a series with its episodes (cached like cards). */
-  season(id: number, n: number): Promise<SeasonDetails>;
+  season(id: number, n: number, opts?: SeasonOpts): Promise<SeasonDetails>;
 }
+
+/**
+ * `force`: fetched again even when cached (pull to refresh); `store: false`: kept out of the shared cache (bulk
+ * lookups such as the «Обзор» tile labels keep their own small projection).
+ */
+export interface FetchOpts { force?: boolean; store?: boolean; }
+/** `full`: the episode overviews are needed (a season restored from storage has none). */
+export interface SeasonOpts extends FetchOpts { full?: boolean; }
 
 export const CACHE_KEY = 'tsp.tmdbCache';
 const LIST_TTL = 15 * 60 * 1000;
@@ -31,7 +39,12 @@ const CARD_TTL = 24 * 60 * 60 * 1000;
 const MAX_ENTRIES = 200;
 /** The stored JSON at most, in characters (Chromium keeps them as UTF-16: about 1 MB). */
 export const CACHE_BUDGET_CHARS = 512 * 1024;
+/** The memory cache at most: larger than the stored one (storage is the scarce part), still bounded. */
+export const MEM_MAX_ENTRIES = 800;
+export const MEM_BUDGET_CHARS = 4 * 1024 * 1024;
 const SAVE_DELAY_MS = 2000;
+/** «Скоро в цифре»: a page with fewer films than this is filled from the next region. */
+export const DIGITAL_FILL_MIN = 10;
 const TIMEOUT_MS = 15000;
 
 /** `at`: fetched (the TTL counts from it); `used`: last served (the eviction order). */
@@ -70,7 +83,7 @@ function load(): void {
   });
 }
 
-/** Expired entries out; then the least recently used until within MAX_ENTRIES and CACHE_BUDGET_CHARS. */
+/** Expired entries out of memory; then the least recently used until within the memory bounds. */
 function evict(): void {
   const t = clock();
   Object.keys(mem).forEach((k) => {
@@ -80,9 +93,36 @@ function evict(): void {
   const keys = Object.keys(mem).sort((x, y) => mem[y].used - mem[x].used);
   let total = 2;
   keys.forEach((k, i) => {
-    if (i < MAX_ENTRIES && total + size[k] <= CACHE_BUDGET_CHARS) total += size[k];
+    if (i < MEM_MAX_ENTRIES && total + size[k] <= MEM_BUDGET_CHARS) total += size[k];
     else drop(k);
   });
+}
+
+/** A season as stored: without the episode overviews (only the title card shows them; it asks `full`). */
+function storedData(key: string, data: unknown): unknown {
+  if (key.indexOf('/season/') < 0 || !data || typeof data !== 'object') return data;
+  const d = data as SeasonDetails;
+  if (!Array.isArray(d.episodes)) return data;
+  return { ...d, lite: true, episodes: d.episodes.map((e) => ({ n: e.n, title: e.title, airDate: e.airDate, runtime: e.runtime, overview: '' })) };
+}
+
+/** The stored part of the memory cache: the most recently used within MAX_ENTRIES and CACHE_BUDGET_CHARS. */
+function storedPart(): { [k: string]: Entry } {
+  const out: { [k: string]: Entry } = {};
+  const keys = Object.keys(mem).sort((x, y) => mem[y].used - mem[x].used);
+  let total = 2;
+  let n = 0;
+  keys.forEach((k) => {
+    if (n >= MAX_ENTRIES) return;
+    const e = mem[k];
+    const entry: Entry = { at: e.at, used: e.used, data: storedData(k, e.data) };
+    const len = JSON.stringify(k).length + JSON.stringify(entry).length + 1;
+    if (total + len > CACHE_BUDGET_CHARS) return;
+    total += len;
+    n++;
+    out[k] = entry;
+  });
+  return out;
 }
 
 function save(): void {
@@ -91,7 +131,7 @@ function save(): void {
   if (storageOff) return;
   evict();
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(mem));
+    localStorage.setItem(CACHE_KEY, JSON.stringify(storedPart()));
   } catch (e) {
     // storage full: the other stores need the room more; the cache goes on in memory
     storageOff = true;
@@ -181,9 +221,10 @@ export function createCatalogClient(
   }
 
   /** The sanitized answer for the URL (only that is cached, never the raw body): from the cache while fresh, else fetched. */
-  function fetchJson<T>(url: string, ttl: number, parse: (raw: unknown) => T, current?: (data: T) => boolean): Promise<T> {
+  function fetchJson<T>(url: string, ttl: number, parse: (raw: unknown) => T, current?: (data: T) => boolean, o?: FetchOpts): Promise<T> {
     const key = cacheKeyOf(url);
-    const hit = mem[key];
+    const hit = o && o.force ? undefined : mem[key];
+    const store = !(o && o.store === false);
     // `current`: a stored answer of an older shape (fields added since) is fetched again
     if (hit && now() - hit.at < ttl && now() >= hit.at && (!current || current(hit.data as T))) {
       hit.used = now();
@@ -205,7 +246,7 @@ export function createCatalogClient(
           throw fail('blocked');
         }
         const out = parse(data);
-        remember(key, out);
+        if (store) remember(key, out);
         return out;
       },
       () => { throw fail('offline'); },
@@ -245,10 +286,26 @@ export function createCatalogClient(
       let e: TmdbEndpoint;
       try { e = need(); } catch (err) { return Promise.reject(err); }
       const d = today();
-      const one = (k: Kind) => {
-        const u = discoverUrl(e, k, query, page, d);
+      const one = (k: Kind, region?: string) => {
+        const u = discoverUrl(e, k, query, page, d, region);
         return u ? list(u, k) : Promise.resolve({ items: [] as CatalogTitle[], pages: 0 });
       };
+      // «Скоро в цифре» is about films only: every kind chip shows films. TMDB knows few digital dates of some regions
+      // (Russia): a thin page of the UI language's region is filled from the next region (the US), like the cards are
+      if (query.sort === 'digitalSoon') {
+        const regions = releaseRegions();
+        return one('movie', regions[0]).then((r) => {
+          if (r.items.length >= DIGITAL_FILL_MIN || regions.length < 2) return r;
+          return one('movie', regions[1]).then(
+            (more) => {
+              const seen: { [id: number]: boolean } = {};
+              r.items.forEach((x) => { seen[x.id] = true; });
+              return { items: r.items.concat(more.items.filter((x) => !seen[x.id])), pages: Math.max(r.pages, more.pages) };
+            },
+            () => r,
+          );
+        });
+      }
       if (kind !== 'all') return one(kind);
       return Promise.all([one('movie'), one('tv')]).then(merge);
     },
@@ -257,23 +314,24 @@ export function createCatalogClient(
       try { e = need(); } catch (err) { return Promise.reject(err); }
       return list(searchUrl(e, q, page), null);
     },
-    card(kind, id) {
+    card(kind, id, opts) {
       let e: TmdbEndpoint;
       try { e = need(); } catch (err) { return Promise.reject(err); }
       return fetchJson(cardUrl(e, kind, id), CARD_TTL, (raw) => {
         const c = sanitizeCard(e, raw, kind);
         if (!c) throw fail('bad');
         return c;
-      }, (c) => kind !== 'tv' || (c as { status?: unknown }).status !== undefined);
+      }, (c) => (kind === 'tv' ? (c as { status?: unknown }).status !== undefined : (c as { releases?: unknown }).releases !== undefined), opts);
     },
-    season(id, n) {
+    season(id, n, opts) {
       let e: TmdbEndpoint;
       try { e = need(); } catch (err) { return Promise.reject(err); }
+      const full = !!(opts && opts.full);
       return fetchJson(seasonUrl(e, id, n), CARD_TTL, (raw) => {
         const s = sanitizeSeason(raw, n);
         if (!s) throw fail('bad');
         return s;
-      });
+      }, (s) => !full || !(s as { lite?: boolean }).lite, opts);
     },
   };
 }

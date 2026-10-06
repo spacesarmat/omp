@@ -2,6 +2,16 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.17.0-beta.6
+
+- «New» → «Calendar»: the episodes of the next 30 days by day («Today», «Tomorrow», «Thu, Oct 8») for the series in «Mine» and series subscriptions; the ones out in the last 3 days are marked «out» — «Watch» when monitoring already found a release, «Find» otherwise; pull down to refresh
+- «Discover»: dates on the tiles — «digital Nov 12», «in cinemas since Oct 3», «new episode Oct 8», «season 2 — Nov 15»
+- «Discover»: a new «Coming to digital» sort — films released digitally in the next 60 days
+- Film card: «Cinemas · Digital · Disc» release dates (the ones to come highlighted); series card: «Upcoming episodes» with dates
+- «Add»: when a site is behind a Cloudflare check, lost its sign-in or fails its certificate, the warning has an «Open … settings» button that goes straight to that site's page with «Sign in» and the check bypass
+- Several releases of one thing: on the series screen, a season with two or more releases shows each one's quality, episode (or file) count and size — a tap opens the release menu; after an add OMP says «Already in the library: 4K · 9.7 GB» (films too). OMP never deletes anything by itself. A release with episode files filed under «Movies» joins its series card
+- The torrent category is checked automatically: a series with episodes filed under «Movies» moves to «Series», an album to «Music», an empty category is filled; a category picked by hand in «Add» is never changed; each fix is a line in the log
+
 ## 0.17.0-beta.5
 
 - «Remote», «Buttons» mode, like an LG remote: D-pad, colour keys (red, green, yellow, blue), round «Back», «Home», «Menu», a volume rocker, «Pause» with ±10 s and a «Keyboard / Mute» rocker; the colour keys and «Mute» work on LG TVs

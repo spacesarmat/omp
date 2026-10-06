@@ -147,6 +147,9 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.firstRun', // when this install was first used: per device
   'tsp.donateCard', // the «Поддержать» card was closed
   'tsp.tmdbCache', // «Обзор»: cache of TMDB answers
+  'tsp.seriesTmdb', // series → TMDB show matches (a week)
+  'tsp.subTmdb', // subscription → TMDB show matches (a week)
+  'tsp.categoryAuto', // categories OMP set itself at an add (the automatic check may correct only those)
   'tsp.sourcePause', // background requests to a site paused after its code page: per device, an hour
 ];
 

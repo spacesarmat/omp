@@ -2,7 +2,7 @@
 // TMDB /discover parameters they become. Pure; the URL is built by tmdb.ts.
 import type { Kind } from './tmdb';
 
-export type DiscoverSort = 'popular' | 'rating' | 'date' | 'upcoming';
+export type DiscoverSort = 'popular' | 'rating' | 'date' | 'upcoming' | 'digitalSoon';
 export type DiscoverYear = 'any' | 'this' | 'last' | 'range';
 
 export interface DiscoverQuery {
@@ -19,7 +19,9 @@ export interface DiscoverQuery {
   rating: number;
 }
 
-export const DISCOVER_SORTS: DiscoverSort[] = ['popular', 'rating', 'date', 'upcoming'];
+export const DISCOVER_SORTS: DiscoverSort[] = ['popular', 'rating', 'date', 'upcoming', 'digitalSoon'];
+/** «Скоро в цифре»: digital releases from today up to this many days ahead. */
+export const DIGITAL_SOON_DAYS = 60;
 export const DISCOVER_RATINGS = [0, 6, 7, 8];
 export const DISCOVER_COUNTRIES = ['RU', 'US', 'GB', 'KR', 'JP', 'FR', 'DE', 'ES', 'IT', 'IN', 'TR', 'CN'];
 
@@ -100,19 +102,25 @@ export function discoverQueryKey(q: DiscoverQuery): string {
 
 /** «Фильтры · N»: the chosen genres plus one per other set filter. */
 export function discoverFilterCount(q: DiscoverQuery): number {
-  return q.genres.length + (q.year !== 'any' ? 1 : 0) + (q.country ? 1 : 0) + (q.rating ? 1 : 0);
+  // «Скоро в цифре» has its own dates: the year filter does not apply and does not count
+  const year = q.year !== 'any' && q.sort !== 'digitalSoon';
+  return q.genres.length + (year ? 1 : 0) + (q.country ? 1 : 0) + (q.rating ? 1 : 0);
 }
 
 function pad2(n: number): string {
   return (n < 10 ? '0' : '') + n;
 }
 
-/** 'YYYY-MM-DD' + 1 day. */
-function nextDay(today: string): string {
+/** 'YYYY-MM-DD' + `days` days (negative: back). */
+export function addDays(today: string, days: number): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(today);
   if (!m) return today;
-  const d = new Date(+m[1], +m[2] - 1, +m[3] + 1);
+  const d = new Date(+m[1], +m[2] - 1, +m[3] + days);
   return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+}
+
+function nextDay(today: string): string {
+  return addDays(today, 1);
 }
 
 function uniq(list: number[]): number[] {
@@ -123,8 +131,10 @@ function uniq(list: number[]): number[] {
  * The /discover/{kind} parameters of the query (page and language are added by the URL builder); null when the kind
  * has none of the chosen genres (that kind gives nothing). `today` is the local 'YYYY-MM-DD'.
  */
-export function discoverParams(kind: Kind, q: DiscoverQuery, today: string): { [k: string]: string | number } | null {
+export function discoverParams(kind: Kind, q: DiscoverQuery, today: string, region?: string): { [k: string]: string | number } | null {
   const p: { [k: string]: string | number } = { include_adult: 'false' };
+  // «Скоро в цифре»: films with a digital release in the region from today up to DIGITAL_SOON_DAYS ahead, soonest first
+  if (q.sort === 'digitalSoon' && kind !== 'movie') return null;
   const field = kind === 'movie' ? 'primary_release_date' : 'first_air_date';
   const chosen = uniq(q.genres.map((g) => {
     const x = genreOf(g);
@@ -138,6 +148,19 @@ export function discoverParams(kind: Kind, q: DiscoverQuery, today: string): { [
   }
 
   let votes = 0;
+  if (q.sort === 'digitalSoon') {
+    p.with_release_type = 4;
+    p.region = region || 'RU';
+    p.sort_by = 'primary_release_date.asc';
+    p['release_date.gte'] = today;
+    p['release_date.lte'] = addDays(today, DIGITAL_SOON_DAYS);
+    if (q.rating) {
+      p['vote_average.gte'] = q.rating;
+      p['vote_count.gte'] = 50;
+    }
+    if (q.country) p.with_origin_country = q.country;
+    return p;
+  }
   if (q.sort === 'popular' || q.sort === 'upcoming') p.sort_by = 'popularity.desc';
   else if (q.sort === 'rating') {
     p.sort_by = 'vote_average.desc';
