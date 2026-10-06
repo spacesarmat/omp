@@ -58,9 +58,11 @@ describe('TopBar expanding icons', () => {
     await act(() => { render(h(TopBar as any, props), host); });
     expect(host.querySelector('.icon-btn-label')).toBeNull();
     await act(() => { setFocus('lib-btn-sort'); });
+    await act(() => Promise.resolve());
     const sort = host.querySelector('[data-fk="lib-btn-sort"]')!;
     expect(sort.querySelector('.icon-btn-label')!.textContent).toBe('Сортировка: По размеру');
     await act(() => { setFocus('lib-btn-add'); });
+    await act(() => Promise.resolve());
     expect(sort.querySelector('.icon-btn-label')).toBeNull();
     expect(host.querySelector('[data-fk="lib-btn-add"] .icon-btn-label')!.textContent).toBe('Добавить');
     expect(host.querySelectorAll('.icon-btn-label').length).toBe(1);
