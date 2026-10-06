@@ -441,10 +441,13 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .marks-backdrop { position: fixed; }
 
 /* FAQ */
-.faq-cols { display: flex; align-items: flex-start; }
-.faq-list { width: 46%; margin-right: 40px; }
+/* the page itself does not scroll here: the list and the answer each scroll in a column of fixed height (Chromium 53 has no sticky) */
+.faq-cols { display: flex; align-items: stretch; height: calc(100vh - 290px); }
+.faq-list { width: 46%; margin-right: 40px; height: 100%; overflow-y: auto; overflow-x: hidden; }
+.faq-list::-webkit-scrollbar { display: none; }
 .faq-section h3 { margin: 24px 0 12px; color: var(--muted); font-size: 24px; }
-.faq-answer { flex: 1; padding-bottom: 120px; font-size: 26px; }
+.faq-answer { flex: 1; height: 100%; overflow-y: auto; font-size: 26px; }
+.faq-answer::-webkit-scrollbar { display: none; }
 .faq-answer h2 { margin-top: 0; }
 .faq-line { margin: 0 0 12px; line-height: 1.4; word-break: break-word; }
 .faq-more { color: var(--muted); }

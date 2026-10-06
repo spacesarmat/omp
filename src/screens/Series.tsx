@@ -391,7 +391,7 @@ export function SeriesScreen({ seriesKey, season }: { seriesKey: string; season?
   const group = useMemo(() => findGroup(list, seriesKey), [list, seriesKey]);
   useEffect(() => {
     if (group) return;
-    toast(t('series.gone'));
+    toast(t('series.goneTv'));
     goBack();
   }, [!!group]);
   return (

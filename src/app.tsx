@@ -5,7 +5,7 @@ import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { installWheelScroll } from './ui/wheel';
 import { DialogHost, confirmDialog, dialogOpen } from './ui/dialog';
-import { TextDialogHost } from './ui/TextDialog';
+import { TextDialogHost, textDialogOpen } from './ui/TextDialog';
 import { ToastHost } from './ui/toast';
 import { ConnectScreen } from './screens/Connect';
 import { SeriesScreen } from './screens/Series';
@@ -115,11 +115,12 @@ export function App() {
   const r = currentRoute.value;
   // opened by the user (Update screen) shows anywhere; the automatic one waits for the update prompt, the player and pairing
   const wn = whatsNew.value;
-  const showWhatsNew = !!wn && !dialogOpen.value && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value));
+  const anyDialog = dialogOpen.value || textDialogOpen.value;
+  const showWhatsNew = !!wn && !anyDialog && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value));
   return (
     <div class="app" key={lang.value}>
       <div class="screen-host" key={routeKey(r)}>{renderRoute(r)}</div>
-      {shouldShowUpdateDialog(r.name) && !dialogOpen.value && <UpdateDialog />}
+      {shouldShowUpdateDialog(r.name) && !anyDialog && <UpdateDialog />}
       {showWhatsNew && <WhatsNewDialog />}
       <DialogHost />
       <TextDialogHost />

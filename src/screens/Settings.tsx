@@ -170,7 +170,7 @@ export function SettingsScreen() {
         </div>
         <Button focusKey="set-server" label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
         <Button focusKey="set-pair" label={t('pair.title')} onPress={() => navigate({ name: 'pairPhone' })} />
-        <Button focusKey="set-faq" label={t('common.faq')} onPress={() => navigate({ name: 'faq' })} />
+        <Button focusKey="set-faq" label={t('tvSettings.help')} onPress={() => navigate({ name: 'faq' })} />
       </div>
       {platformKind() === 'androidtv' && (
         <div class="row">

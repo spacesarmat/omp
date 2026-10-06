@@ -8,6 +8,9 @@ vi.mock('../../src/platform/env', () => ({ platformKind: () => 'webos' }));
 import { FaqScreen } from '../../src/screens/Faq';
 import { SettingsScreen } from '../../src/screens/Settings';
 import { FAQ, itemFor } from '../../src/faq/faq';
+// @ts-ignore node builtin, no @types/node in this project
+import { readFileSync } from 'node:fs';
+import { t } from '../../src/i18n';
 import { routeStack, currentRoute, goBack } from '../../src/ui/nav';
 
 beforeAll(() => {
@@ -36,9 +39,13 @@ describe('TV FAQ', () => {
     mount(h(FaqScreen, {}));
     await flush();
     expect(host.querySelector('[data-fk="faq-lg-devmode"]')).toBeTruthy();
-    const phoneOnly = FAQ.filter((it) => it.devices.indexOf('lg') < 0)[0];
+    const phoneOnly = FAQ.filter((it) => it.devices.indexOf('lg') < 0 && it.devices.indexOf('common') < 0)[0];
     expect(host.querySelector('[data-fk="faq-' + phoneOnly.id + '"]')).toBeNull();
-    expect(host.querySelectorAll('.faq-list .list-item').length).toBe(FAQ.filter((it) => it.devices.indexOf('lg') >= 0).length);
+    // general questions show too, phone features sharing the general tag do not
+    expect(host.querySelector('[data-fk="faq-torrserver"]')).toBeTruthy();
+    expect(host.querySelector('[data-fk="faq-backup"]')).toBeNull();
+    const shown = FAQ.filter((it) => it.devices.indexOf('lg') >= 0 || (it.devices.indexOf('common') >= 0 && it.devices.indexOf('phone') < 0));
+    expect(host.querySelectorAll('.faq-list .list-item').length).toBe(shown.length);
   });
 
   it('shows a QR when the focused answer has a link, and none otherwise', async () => {
@@ -66,6 +73,19 @@ describe('TV FAQ', () => {
     expect(currentRoute.value.name).toBe('faq');
     goBack();
     expect(currentRoute.value.name).toBe('settings');
+  });
+});
+
+describe('TV FAQ layout', () => {
+  it('the list is its own fixed-height scroller and the title is the Help key', async () => {
+    const css = readFileSync('src/styles.css', 'utf8');
+    expect(/\.faq-cols \{[^}]*height: calc\(/.test(css)).toBe(true);
+    expect(/\.faq-list \{[^}]*overflow-y: auto/.test(css)).toBe(true);
+    expect(/\.faq-answer \{[^}]*overflow-y: auto/.test(css)).toBe(true);
+    mount(h(FaqScreen, {}));
+    await flush();
+    expect(host.querySelector('.faq-cols > .faq-list')).toBeTruthy();
+    expect(host.querySelector('h1')!.textContent).toBe(t('tvSettings.help'));
   });
 });
 

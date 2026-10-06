@@ -214,7 +214,7 @@ describe('TV screens in English', () => {
     await flush();
     const text = host.textContent || '';
     expect(host.querySelectorAll('.faq-list .list-item').length).toBeGreaterThan(0);
-    expect(text).toContain('Questions and answers');
+    expect(text).toContain('Help');
     expect(text).not.toMatch(CYR);
   });
 

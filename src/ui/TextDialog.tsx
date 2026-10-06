@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { signal } from '@preact/signals';
+import { signal, computed } from '@preact/signals';
 import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { FocusGroup, Button, TextInput } from './components';
 import { useKeys } from './keys';
@@ -15,6 +15,9 @@ interface TextState {
 }
 
 const state = signal<TextState | null>(null);
+
+/** True while the text dialog is on screen (the app's generic dialog flag does not cover it). */
+export const textDialogOpen = computed(() => state.value !== null);
 let seq = 0;
 
 /** A modal with one text field: resolves the typed text on OK / Enter, null on Cancel / Back. Needs TextDialogHost mounted. */

@@ -230,6 +230,7 @@ export const ru = {
     deleteSeries: { one: 'Удалить сериал ({n} раздача)', few: 'Удалить сериал ({n} раздачи)', many: 'Удалить сериал ({n} раздач)' },
     noSeason: 'Без сезона',
     gone: 'Этого сериала больше нет в «Моих».',
+    goneTv: 'Сериала больше нет в медиатеке',
     continue: 'Продолжить',
     notInLibrary: 'Этого сезона нет в каталоге',
     missingSeason: 'Сезон {n}, нет в каталоге',
@@ -257,7 +258,7 @@ export const ru = {
     markedWatched: 'Серия отмечена просмотренной',
     hintOk: 'OK — смотреть',
     hintSeasons: '◀ ▶ — сезоны',
-    hintWatched: 'просмотрено',
+    hintWatched: 'отметить просмотренной',
     hintBack: 'Назад — к библиотеке',
   },
   donate: {
@@ -1425,6 +1426,7 @@ export const ru = {
     pc2: 'Установите его через webOS Dev Manager (Windows/macOS/Linux) или командой ares-install.',
   },
   tvSettings: {
+    help: 'Справка',
     player: 'Плеер',
     engineIntro: 'Чем показывать видео на этом телевизоре.',
     engineNote: 'Для отдельной раздачи плеер меняется в меню плеера — «Сменить плеер».',

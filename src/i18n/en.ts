@@ -228,6 +228,7 @@ export const en: EnDict<typeof ru> = {
     deleteSeries: { one: 'Delete series ({n} torrent)', other: 'Delete series ({n} torrents)' },
     noSeason: 'No season',
     gone: 'This series is no longer in Mine.',
+    goneTv: 'This series is no longer in the library',
     continue: 'Continue',
     notInLibrary: 'This season is not in your library',
     missingSeason: 'Season {n}, not in your library',
@@ -1413,6 +1414,7 @@ export const en: EnDict<typeof ru> = {
     pc2: 'Install it with webOS Dev Manager (Windows/macOS/Linux) or the ares-install command.',
   },
   tvSettings: {
+    help: 'Help',
     player: 'Player',
     engineIntro: 'What plays the video on this TV.',
     engineNote: 'For a single torrent, the player is changed in the player menu — "Change player".',

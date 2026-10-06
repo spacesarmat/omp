@@ -26,9 +26,15 @@ function deviceNow(): Device {
   return platformKind() === 'androidtv' ? 'atv' : 'lg';
 }
 
+/** The TV's own device, plus general questions (but not phone features that only share the general tag). */
+export function shownOnTv(it: FaqItem, device: Device): boolean {
+  if (it.devices.indexOf(device) >= 0) return true;
+  return it.devices.indexOf('common') >= 0 && it.devices.indexOf('phone') < 0;
+}
+
 export function FaqScreen() {
   const device = deviceNow();
-  const items = FAQ.filter((it) => it.devices.indexOf(device) >= 0);
+  const items = FAQ.filter((it) => shownOnTv(it, device));
   const [cur, setCur] = useState<string>(items.length ? items[0].id : '');
   const sel: FaqItem | undefined = items.filter((it) => it.id === cur)[0] || items[0];
   const view = sel ? itemFor(sel, device) : null;
@@ -37,7 +43,7 @@ export function FaqScreen() {
 
   return (
     <FocusGroup focusKey="FAQ" className="screen faq">
-      <h1>{t('common.faq')}</h1>
+      <h1>{t('tvSettings.help')}</h1>
       <div class="faq-cols">
         <FocusGroup focusKey="FAQ-LIST" className="faq-list" autoFocus>
           {SECTIONS.map((s) => {

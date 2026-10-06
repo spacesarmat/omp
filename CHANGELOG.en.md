@@ -4,7 +4,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## 0.18.0-beta.1
 
-- TV (LG and Android TV): library tiles show short titles instead of the tracker string; a series is one tile with its TMDB status («Airing», «Ended», «Cancelled») and the number of torrents
+- TV (LG and Android TV): library tiles show short titles instead of the tracker string; a series is one tile with its TMDB status («Airing», «Ended», «Canceled») and the number of torrents
 - Header icons show their name when selected; the hint bar no longer covers the last row
 - A new series screen: a TMDB backdrop, overview, status with the next episode date, seasons switched with the remote, episode names, progress. «Watch» continues where you stopped and asks «Continue / From the start», «Torrents · N» opens the series' torrents
 - On the torrent screen you can rename a torrent and pick another poster from TMDB
