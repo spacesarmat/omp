@@ -1084,6 +1084,19 @@ export const en: EnDict<typeof ru> = {
       hintDown: 'Down — seasons and cast',
       hintBack: 'Back — to "Discover"',
     },
+    // «В лучшем качестве» on the torrent and series screens
+    better: {
+      title: 'In better quality',
+      current: 'now in the library',
+      ask: 'Replace the release? {from} → {to}',
+      addNear: 'Add alongside',
+      follow: 'Watch for better quality',
+      followPhone: 'in OMP on the phone',
+      note: '"Replace" removes the old release; watch history and positions move to the new one',
+      which: 'Which release to upgrade?',
+      hintOk: 'OK — pick a release',
+      hintBack: 'Back — close',
+    },
   },
   connect: {
     enterAddress: 'Enter the server address',

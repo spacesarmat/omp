@@ -8,7 +8,7 @@ import { TorrentFile, baseName, groupBySeason, playableFiles, episodeLabel } fro
 import { formatBytes, formatDuration, formatSpeed } from '../lib/format';
 import { parseReleaseInfo, releaseBadges } from '../lib/releaseInfo';
 import { buildTorrentQueue } from '../player/queue';
-import { navigate, goBack } from '../ui/nav';
+import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
 import { restoreFocus } from '../ui/focus';
@@ -23,6 +23,7 @@ import { useKeys } from '../ui/keys';
 import { useSkip, firstPlayableId } from '../lib/useSkip';
 import { skipStatus } from '../lib/skipMarks';
 import { MarksDialog } from '../ui/MarksDialog';
+import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { displayTitle } from '../lib/torrentName';
 import { t } from '../i18n';
@@ -90,6 +91,9 @@ export function TorrentScreen({ hash }: { hash: string }) {
     setMarksOpen(false);
     setTimeout(() => setFocus('skip-status'), 0);
   };
+
+  const [betterOpen, setBetterOpen] = useState(false);
+  const upgradable = useMemo(() => (tor && files.length ? canUpgrade(tor, files) : false), [tor ? tor.hash : '', tor ? tor.title : '', tor ? tor.category : '', files]);
 
   useEffect(() => {
     restoreFocus('TORRENT-ACTIONS');
@@ -213,6 +217,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
           <FocusGroup focusKey="TORRENT-ACTIONS" className="row" preferredChildFocusKey="torrent-play">
             {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onPress={() => play(target, targetPos || undefined)} />}
             {queue.length > 0 && <Button label={t('playlist.title')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? displayTitle(tor) : '' })} />}
+            {upgradable && <Button focusKey="torrent-better" label={t('torrent.better.find')} onPress={() => setBetterOpen(true)} />}
             <Button label={t('torrent.resetViewed')} onPress={resetViewed} />
             <Button label={t('torrent.rename.title')} onPress={rename} />
             <Button label={t('torrent.poster.other')} onPress={otherPoster} />
@@ -246,6 +251,18 @@ export function TorrentScreen({ hash }: { hash: string }) {
           prefs={{ mi: skip.prefs.mi || null, mc: skip.prefs.mc || null }}
           onSave={(m) => skip.save({ mi: m.mi, mc: m.mc }, false)}
           onClose={closeMarks}
+        />
+      )}
+      {betterOpen && tor && (
+        <BetterDialog
+          torrent={tor}
+          files={files}
+          onReplaced={(h) => {
+            setBetterOpen(false);
+            // the hash changed: the screen of the new torrent takes this one's place
+            replaceRoute({ name: 'torrent', hash: h });
+          }}
+          onClose={() => setBetterOpen(false)}
         />
       )}
       {loadingInfo && <Spinner text={t('torrent.gettingFiles')} />}

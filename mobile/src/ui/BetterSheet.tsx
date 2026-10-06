@@ -19,7 +19,6 @@ import {
   carryProgress,
   findUpgrades,
   isLowSeeds,
-  seasonsCovered,
   upgradeQuery,
   type UpgradeOutcome,
 } from '../../../src/monitor/upgrade';
@@ -27,7 +26,10 @@ import { getSource } from '../../../src/sources/registry';
 import { resultKey, seedsText, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import type { LibraryTorrent } from '../../../src/monitor/newEpisodes';
+import { coverageNote, failureOf, qualityOrUnknown, type Failure } from '../../../src/monitor/upgradeText';
 import type { Torrent } from '../../../src/api/types';
+
+export { failureOf };
 
 const FILES_TIMEOUT_MS = 10000;
 /** The longest the sheet waits for a replace before it gives up as a timeout. */
@@ -35,17 +37,6 @@ export const REPLACE_WAIT_MS = 45000;
 
 function sameHash(a: string, b: string): boolean {
   return (a || '').toLowerCase() === (b || '').toLowerCase();
-}
-
-function qualityOrUnknown(title: string): string {
-  return qualityLabel(title) || t('torrent.better.unknown');
-}
-
-/** «сезоны 1–3» / «все сезоны» when a series candidate holds more than the torrent's season. */
-function coverageNote(lib: LibraryTorrent, r: SourceResult): string {
-  const s = seasonsCovered(lib, r);
-  if (!s) return '';
-  return 'all' in s ? t('torrent.better.allSeasons') : t('torrent.better.seasons', { from: s.from, to: s.to });
 }
 
 /** «18,2 ГБ · 940 сидов · rutor · сезоны 1–3». */
@@ -58,23 +49,6 @@ function dropFindingsOf(hash: string): void {
   const h = hash.toLowerCase();
   findingsOf(BETTER_ID).forEach((f) => f.better && f.better.torrentHash === h && removeFindings(BETTER_ID, f.key));
   findingsOf(EPISODES_ID).forEach((f) => f.episodes && f.episodes.torrentHash === h && removeFindings(EPISODES_ID, f.key));
-}
-
-interface Failure {
-  text: string;
-  /** The site to sign in to («Войти»), for a login / link failure. */
-  source?: string;
-}
-
-/** The text for a failed replace: what went wrong, and that the user's torrent is untouched. */
-export function failureOf(res: Extract<ReplaceResult, { ok: false }>, r: SourceResult): Failure {
-  if (res.cause === 'timeout') return { text: t('torrent.better.failTimeout') };
-  if (res.cause === 'login' || res.cause === 'link') {
-    return { text: t('torrent.better.failLogin', { site: sourceName(r.source) }), source: r.source };
-  }
-  // both torrents are kept: the message says so itself
-  if (res.cause === 'both') return { text: res.error };
-  return { text: [res.error, t('torrent.better.untouched')].filter(Boolean).join(' ') };
 }
 
 /**

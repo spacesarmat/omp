@@ -36,6 +36,8 @@ import { restoreFocus, scrollToShow } from '../ui/focus';
 import { choose } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
+import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
+import { tvGlyphs } from '../ui/tvText';
 import { Poster } from './library/Poster';
 import { SeriesPill } from './library/SeriesTile';
 
@@ -278,6 +280,20 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   const target = nextRow(rows);
   const members = seasonMembers(group, season);
   const releases = members.length ? members : group.members;
+  // «В лучшем качестве»: the chosen season's torrents the upgrade search can handle
+  const upgradable = members.filter((m) => canUpgrade(m, c.files(m)));
+  const [better, setBetter] = useState<Torrent | null>(null);
+  const openBetter = () => {
+    if (upgradable.length === 1) {
+      setBetter(upgradable[0]);
+      return;
+    }
+    const options = upgradable.map((m) => ({ label: tvGlyphs(libraryTitle(m).title) + ' · ' + formatBytes(m.torrent_size || 0), value: m.hash }));
+    choose(t('tv.better.which'), options).then((hash) => {
+      const m = upgradable.filter((x) => x.hash === hash)[0];
+      if (m) setBetter(m);
+    });
+  };
 
   useEffect(() => {
     refreshViewed(c);
@@ -374,6 +390,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
               />
             )}
             <Button focusKey="series-releases" label={t('series.releasesBtn', { n: releases.length })} onPress={openReleases} />
+            {upgradable.length > 0 && <Button focusKey="series-better" label={t('torrent.better.find')} onPress={openBetter} />}
             <Button focusKey="series-follow" label={t('series.follow')} onPress={() => toast(t('series.watchOnPhone'))} />
           </FocusGroup>
         </div>
@@ -457,6 +474,15 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             <Button focusKey="series-find" label={t('titleCard.findTorrents')} onPress={findMissing} />
           </FocusGroup>
         </div>
+      )}
+      {better && (
+        <BetterDialog
+          torrent={better}
+          files={c.files(better)}
+          // the series screen stays: the group picks up the new torrent from the refreshed list
+          onReplaced={() => setBetter(null)}
+          onClose={() => setBetter(null)}
+        />
       )}
       <div class="hints">
         {t('series.hintOk')} · {t('series.hintSeasons')} · <KeyDot color="red" /> {t('series.hintWatched')} · {t('series.hintBack')}

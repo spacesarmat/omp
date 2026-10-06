@@ -532,3 +532,30 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .tc-initials { font-size: 34px; font-weight: 700; color: var(--muted); }
 .tc-person-name { font-size: 22px; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .tc-person-role { margin-top: 4px; font-size: 19px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* «В лучшем качестве» (torrent and series screens) */
+.better-backdrop { position: fixed; }
+.better-dialog { width: 1400px; max-width: 1400px; max-height: 960px; padding: 44px 52px; }
+.better-title { font-size: 42px; font-weight: 700; margin-bottom: 14px; }
+.better-current { font-size: 25px; color: var(--muted); margin-bottom: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.better-current b { color: var(--text); font-weight: 500; }
+.better-failure { font-size: 23px; }
+.better-wait, .better-empty { padding: 10px 0 20px; }
+.better-wait .button, .better-empty .button { display: inline-block; margin-top: 18px; }
+.better-list { max-height: 520px; overflow-y: auto; padding: 4px; }
+.better-row { display: flex; align-items: center; padding: 16px 24px; margin-bottom: 12px; border-radius: 14px; background: #11141a; }
+.better-row.focused { transform: none; background: var(--panel2); box-shadow: 0 0 0 4px var(--focus); }
+.better-main { flex: 1; min-width: 0; }
+.better-tags { margin-bottom: 8px; white-space: nowrap; overflow: hidden; }
+.better-tag { display: inline-block; font-size: 19px; font-weight: 700; padding: 3px 12px; margin-right: 10px; border-radius: 8px; background: var(--panel2); color: var(--text); }
+.better-row.focused .better-tag { background: #323846; }
+.better-tag.hot, .better-row.focused .better-tag.hot { background: var(--accent); color: var(--bg); }
+.better-tag.warn, .better-row.focused .better-tag.warn { background: rgba(229, 72, 77, .25); color: #ffb4b6; }
+.better-name { font-size: 23px; color: #c3c8d4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.better-meta { width: 380px; margin-left: 24px; font-size: 22px; color: var(--muted); text-align: right; flex-shrink: 0; }
+.better-busy { font-size: 22px; margin: 6px 0 4px; }
+.better-follow { display: flex; align-items: center; margin-top: 20px; opacity: .55; font-size: 23px; }
+.better-follow-label { margin-right: 14px; }
+.better-follow-note { flex: 1; font-size: 21px; }
+.better-note { font-size: 21px; margin-top: 12px; }
+.better-hints { font-size: 21px; margin-top: 8px; }
