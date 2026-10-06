@@ -133,6 +133,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private val tick = object : Runnable {
         override fun run() {
             session.tick()
+            checkVlcStart()
             checkSkips()
             preloadNext()
             render()
@@ -324,6 +325,29 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         }
 
         override fun message(text: String) = showMessage(text, false)
+    }
+
+    private val vlcStart = VlcStartWatch()
+
+    /** VLC meant to play that does not get going in 20 s: «VLC не справляется» with «Вернуться к встроенному» / «Ждать». */
+    private fun checkVlcStart() {
+        if (!::switcher.isInitialized) return
+        val e = engine
+        val playing = switcher.kind == EngineKind.VLC && e.playWhenReady && session.error == null && dialog?.isShowing != true
+        if (!vlcStart.tick(playing, Pair(e, session.index), e.positionMs, SystemClock.elapsedRealtime())) return
+        Log.w(TAG, "VLC has not started in ${VlcStartWatch.LIMIT_MS / 1000} s")
+        dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
+            .setTitle(I18n.s("player.vlcStuck"))
+            .setPositiveButton(I18n.s("player.vlcStuckBack")) { d, _ ->
+                d.dismiss()
+                switcher.backToBuiltin()
+            }
+            .setNegativeButton(I18n.s("player.vlcStuckWait")) { d, _ ->
+                d.dismiss()
+                vlcStart.waitMore()
+            }
+            .setOnCancelListener { vlcStart.waitMore() }
+            .show()
     }
 
     override fun engineFailed(kind: ErrorKind, detail: String, beforeFirstFrame: Boolean): Boolean =

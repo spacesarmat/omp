@@ -114,6 +114,16 @@ class EngineSwitcher(private val host: Host, val vlcAvailable: Boolean) {
         switchTo(chooser.toggle(), SwitchReason.MANUAL)
     }
 
+    /**
+     * «VLC не справляется» → «Вернуться к встроенному»: the item continues on Media3 at the same place, VLC is
+     * released, and no automatic switch brings VLC back for this run.
+     */
+    fun backToBuiltin(): Boolean {
+        if (kind != EngineKind.VLC) return false
+        chooser.fallBack(EngineKind.MEDIA3)
+        return switchTo(EngineKind.MEDIA3, SwitchReason.MANUAL)
+    }
+
     /** The current item continues on [k] at the same position; false when nothing changed. */
     fun switchTo(k: EngineKind, reason: SwitchReason): Boolean {
         if (host.finishing || k == kind) return false
