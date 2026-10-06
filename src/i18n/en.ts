@@ -296,6 +296,7 @@ export const en: EnDict<typeof ru> = {
     notSet: 'not set',
   },
   log: {
+    categoryFixed: 'Category fixed: {title} → {category}',
     info: 'INFO',
     warn: 'WARNING',
     error: 'ERROR',

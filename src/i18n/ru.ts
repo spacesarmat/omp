@@ -306,6 +306,7 @@ export const ru = {
     notSet: 'не заданы',
   },
   log: {
+    categoryFixed: 'Категория исправлена: {title} → {category}',
     info: 'ИНФО',
     warn: 'ВНИМАНИЕ',
     error: 'ОШИБКА',

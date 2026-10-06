@@ -122,6 +122,18 @@ export class TorrServerClient {
   }
 
   /**
+   * Sets the category; title and poster go back as they are (`set` overwrites them) and an empty `data` keeps the
+   * stored one. Nothing is written without a title (TorrServer would fetch the metadata itself).
+   */
+  setCategory(tor: Pick<Torrent, 'hash' | 'title' | 'poster'> & { name?: string }, category: string): Promise<void> {
+    const title = tor.title || tor.name || '';
+    if (!title) return Promise.resolve();
+    return this.call<unknown>('/torrents', {
+      body: { action: 'set', hash: tor.hash, title, poster: tor.poster || '', category, data: '' },
+    }).then(() => undefined);
+  }
+
+  /**
    * Sets the title. `set` replaces poster and category too, so the torrent is read again right before the write and
    * its current ones go back (the passed ones are used when the read fails). An empty `data` keeps the stored one.
    */

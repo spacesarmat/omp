@@ -4,6 +4,7 @@
 // (TorrServer's own file list, Lampa, …) and is kept as is; a `data` that is not a JSON object is never touched.
 // `w: false` (v0.13) = don't watch for new episodes; a top-level `omp` key, so v0.12 clients keep it (they drop unknown
 // fields inside `s`).
+// `cm: true` (v0.17) = the category was picked by hand: the automatic category check never changes it.
 // `q: false` (v0.17) = don't watch the film for a better release («Следить за качеством» off); a top-level `omp` key like `w`.
 // `d: { until }` (v0.14.1) = a support code was applied on a phone: the TVs hide the «Поддержать» card until then
 // (Unix ms). Only the end time is ever written, never the code; any torrent of the server may carry it, the latest wins.
@@ -212,6 +213,25 @@ export function withQualityWatch(obj: { [k: string]: unknown }, watch: boolean):
   const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
   if (watch) delete omp.q;
   else omp.q = false;
+  out[JOURNAL_KEY] = omp;
+  return out;
+}
+
+/** The category was picked by hand (omp.cm true): the automatic category check leaves it. */
+export function categoryPicked(data: string | undefined | null): boolean {
+  const p = parseData(data);
+  if (!p) return false;
+  const o = p.obj[JOURNAL_KEY];
+  return isPlainObject(o) && o.cm === true;
+}
+
+/** A copy of `obj` with omp.cm set (true) or removed (false); write it with serializeData. */
+export function withCategoryPicked(obj: { [k: string]: unknown }, picked: boolean): { [k: string]: unknown } {
+  const out: { [k: string]: unknown } = { ...obj };
+  const old = obj[JOURNAL_KEY];
+  const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
+  if (picked) omp.cm = true;
+  else delete omp.cm;
   out[JOURNAL_KEY] = omp;
   return out;
 }

@@ -1,3 +1,4 @@
+import { checkCategories } from '../store/library';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { client } from '../store/servers';
 import type { SearchSource } from '../api/torrserver';
@@ -70,6 +71,8 @@ export function AddScreen() {
     setBusyText(t('add.wait'));
     c.add({ link: p.link, title: p.title, category: p.category }).then(
       (tt) => {
+        // the automatic category check looks at the title now; the files come with the library refresh
+        void checkCategories(c, [tt]);
         if (!alive.current) return;
         toast(t('add.added', { title: tt.title || p.title || tt.hash }));
         replaceRoute({ name: 'torrent', hash: tt.hash });

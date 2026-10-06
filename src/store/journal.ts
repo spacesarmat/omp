@@ -2,7 +2,7 @@
 // the torrent list first (another device may have written meanwhile) and every failure is swallowed: the journal must
 // never break playback.
 import type { Torrent } from '../api/types';
-import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, watchesBetterQuality, withQualityWatch, withWatch, supportOfList, withSupport, journalOf } from '../lib/journal';
+import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, watchesBetterQuality, withQualityWatch, categoryPicked, withCategoryPicked, withWatch, supportOfList, withSupport, journalOf } from '../lib/journal';
 import { torrents } from './library';
 import { noteSupport } from './support';
 import { SUPPORT_MAX_AHEAD_MS } from '../lib/donate';
@@ -204,6 +204,11 @@ export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watc
 /** «Следить за качеством» of a film: false writes omp.q: false, true removes it. Rejects on failure. */
 export function saveQualityWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watch: boolean): Promise<boolean> {
   return saveFlag(c, torrent, watch, { read: watchesBetterQuality, write: withQualityWatch });
+}
+
+/** The category was picked by hand: writes omp.cm, so the automatic category check leaves it. Rejects on failure. */
+export function saveCategoryPicked(c: JournalClient, torrent: Pick<Torrent, 'hash'>): Promise<boolean> {
+  return saveFlag(c, torrent, true, { read: categoryPicked, write: withCategoryPicked });
 }
 
 /** Last watch-journal activity of a torrent (0: never played through OMP). */

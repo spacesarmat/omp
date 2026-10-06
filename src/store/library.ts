@@ -5,6 +5,7 @@ import type { LibraryTab } from '../lib/libraryView';
 import { attachPoster, fillPosters, type FillResult, type PosterClient } from '../lib/autoPoster';
 import { displayTitle } from '../lib/torrentName';
 import { fixPlaceholderTitles, type TitleClient } from '../lib/titleFix';
+import { fixCategories, type CategoryClient } from '../lib/categoryCheck';
 import { t } from '../i18n';
 
 const KEY = 'tsp.torrents';
@@ -58,7 +59,21 @@ export function repairTitles(c: TitleClient, list: Torrent[]): void {
   });
 }
 
-export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<TitleClient>): Promise<Torrent[]> {
+/**
+ * The automatic category check of the torrents not looked at yet (a «Фильмы» release with 18 episode files becomes
+ * «Сериалы»); the shown list is patched when the server took it.
+ */
+export function checkCategories(c: CategoryClient, list: Torrent[]): Promise<void> {
+  const my = gen;
+  return fixCategories(c, list).then((done) => {
+    if (my !== gen || !done.length) return;
+    const by: { [h: string]: string } = {};
+    done.forEach((d) => { by[d.hash] = d.category; });
+    torrents.value = torrents.value.map((x) => (by[x.hash] !== undefined ? { ...x, category: by[x.hash] } : x));
+  });
+}
+
+export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<TitleClient> & Partial<CategoryClient>): Promise<Torrent[]> {
   if (inflight) return inflight;
   const my = gen;
   inflight = c.list().then(
@@ -77,6 +92,7 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<Titl
         })),
       );
       if (c.setTitle) repairTitles(c as TitleClient, sorted);
+      if (c.setCategory) void checkCategories(c as CategoryClient, sorted);
       return sorted;
     },
     (e) => {
