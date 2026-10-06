@@ -1,6 +1,8 @@
 // The methods of the TV search server (android/.../rpc/PhoneRpcService.kt): the TV asks the phone's sources through the
 // hidden page mobile/rpc.html. Pure: every input comes from `deps`, the store and the view helpers; tested in
 // mobile/tests/rpcHandler.test.ts. The wire shapes below are what the TV parses.
+import { t } from '../../../src/i18n';
+import { isStashedFile, takeStashedFile } from '../../../src/api/torrentFiles';
 import { searchAll } from '../../../src/sources/search';
 import { getHealth, isSourceOn, reloadSourcePrefs, setSourceOn } from '../../../src/sources/store';
 import { isCloudflare, resolveLink, resultDate, resultKey, sortResults } from '../../../src/sources/view';
@@ -19,6 +21,7 @@ export interface RpcSource {
 
 /** A trimmed SourceResult: no Link, no detailUrl (the TV never fetches the phone's pages). */
 export interface RpcResult {
+  /** Opaque id of the row within its search (never a URL); `resolve` takes it. */
   key: string;
   Title: string;
   Size: string;
@@ -27,7 +30,7 @@ export interface RpcResult {
   Peer: number;
   Tracker: string;
   CreateDate: string;
-  /** dd.mm.yyyy of the release. */
+  /** dd.mm.yyyy of the release: a display string, unlike SourceResult.date (unix ms). Sort by CreateDate. */
   date?: string;
   Categories: string;
   Magnet: string;
@@ -39,7 +42,8 @@ export interface RpcResult {
 export interface RpcFailure {
   id: string;
   message: string;
-  code?: 'ipban' | 'tls' | 'cloudflare';
+  /** 'login': the source needs a sign-in on the phone. */
+  code?: 'ipban' | 'tls' | 'cloudflare' | 'login';
 }
 
 export interface RpcPoll {
@@ -92,6 +96,9 @@ interface Live {
   search: SearchHandle;
   rev: number;
   used: number;
+  /** resultKey(row) -> opaque key, and back: the TV never sees a row's URLs. */
+  keys: Map<string, string>;
+  rows: Map<string, string>;
   resolving: Map<string, Resolving>;
 }
 
@@ -122,12 +129,26 @@ function randomId(): string {
 }
 
 const searchable = (s: Source): boolean => s.kind !== 'torrserver';
+/** What the TV's own TorrServer can add: a magnet, or an http(s) .torrent link it downloads itself. */
+const ADDABLE = /^(magnet:\?|https?:\/\/)/i;
+
+/** The opaque key of a row of `h`, made on first sight and kept for the life of the search. */
+function opaqueKey(h: Live, r: SourceResult): string {
+  const real = resultKey(r);
+  let k = h.keys.get(real);
+  if (!k) {
+    k = (h.keys.size + 1).toString(36);
+    h.keys.set(real, k);
+    h.rows.set(k, real);
+  }
+  return k;
+}
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const num = (v: unknown): number => (typeof v === 'number' && isFinite(v) ? v : 0);
 
-export function toRpcResult(r: SourceResult): RpcResult {
+export function toRpcResult(r: SourceResult, key: string): RpcResult {
   const out: RpcResult = {
-    key: resultKey(r),
+    key,
     Title: str(r.Title),
     Size: str(r.Size),
     Seed: num(r.Seed),
@@ -151,6 +172,7 @@ function failure(id: string): RpcFailure {
   const message = (h && h.message) || '';
   const out: RpcFailure = { id, message };
   if (h && h.code) out.code = h.code;
+  else if (h && h.state === 'login') out.code = 'login';
   else if (isCloudflare(message)) out.code = 'cloudflare';
   return out;
 }
@@ -262,7 +284,7 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
       }
       let id = randomId();
       while (handles.has(id)) id = randomId();
-      const entry: Live = { id, search: null as unknown as SearchHandle, rev: 1, used: deps.now(), resolving: new Map() };
+      const entry: Live = { id, search: null as unknown as SearchHandle, rev: 1, used: deps.now(), keys: new Map(), rows: new Map(), resolving: new Map() };
       const bump = () => {
         entry.rev++;
       };
@@ -288,7 +310,7 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
         answered: s.answered().slice(),
         failed: s.failed().map(failure),
       };
-      if (p.rev !== h.rev) out.results = sortResults(s.results(), 'seeds').slice(0, MAX_RESULTS).map(toRpcResult);
+      if (p.rev !== h.rev) out.results = sortResults(s.results(), 'seeds').slice(0, MAX_RESULTS).map((r) => toRpcResult(r, opaqueKey(h, r)));
       return out;
     },
 
@@ -304,6 +326,8 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
       const id = p.id;
       const s = deps.sources().filter((x) => x.id === id)[0];
       if (!s || !searchable(s)) throw bad('id');
+      // setSourceOn saves the whole prefs object: re-read it first, or the app's changes since the last read are undone
+      reloadSourcePrefs();
       setSourceOn(id, p.on);
       return { on: p.on };
     },
@@ -315,7 +339,8 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
       let r = h.resolving.get(key);
       if (!r) {
         // only a row this phone found in this search: the TV cannot make the phone fetch an address of its choice
-        const row = h.search.results().filter((x) => resultKey(x) === key)[0];
+        const real = h.rows.get(key);
+        const row = real === undefined ? undefined : h.search.results().filter((x) => resultKey(x) === real)[0];
         if (!row) throw bad('key');
         let started: Promise<string>;
         try {
@@ -326,8 +351,21 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
         const entry: Resolving = { state: 'pending', promise: Promise.resolve() };
         entry.promise = started.then(
           (link) => {
+            if (typeof link === 'string' && isStashedFile(link)) {
+              // a .torrent the phone downloaded itself (rustorka, kinozal, an indexer): its bytes stay in this page,
+              // the TV's TorrServer cannot add it
+              takeStashedFile(link);
+              entry.state = 'error';
+              entry.message = t('sources.tvFileOnly');
+              return;
+            }
+            if (typeof link !== 'string' || !ADDABLE.test(link.trim())) {
+              entry.state = 'error';
+              entry.message = t('sources.cannotGetLink');
+              return;
+            }
             entry.state = 'ok';
-            entry.link = link;
+            entry.link = link.trim();
           },
           (e: unknown) => {
             entry.state = 'error';
@@ -343,7 +381,11 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
         if (timer !== undefined) clearTimeout(timer);
       }
       if (r.state === 'ok') return { link: r.link };
-      if (r.state === 'error') throw new RpcError('failed', r.message);
+      if (r.state === 'error') {
+        // the next call tries again (the person may have signed in on the phone meanwhile)
+        h.resolving.delete(key);
+        throw new RpcError('failed', r.message);
+      }
       return { pending: true };
     },
   };

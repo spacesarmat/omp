@@ -573,6 +573,7 @@ export const en: EnDict<typeof ru> = {
     sourceFallback: 'source',
     cannotGetLink: 'Could not get the torrent link',
     noLink: 'The result has no link',
+    tvFileOnly: 'This release comes only as a .torrent file: add it from the phone',
     defaultPhone: 'Phone',
     today: 'today',
     yesterday: 'yesterday',

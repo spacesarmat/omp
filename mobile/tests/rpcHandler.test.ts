@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createRpcHandler, RpcError, MAX_RESULTS } from '../src/rpc/handler';
 import { setSourceOn, reloadSourcePrefs, setHealth, resetHealth } from '../../src/sources/store';
+import { stashFile, takeStashedFile } from '../../src/api/torrentFiles';
 
 const src = (id: string, extra = {}) => ({ id, name: id, kind: 'builtin', search: vi.fn(), ...extra }) as never;
 const ts = { id: 'ts-rutor', name: 'Rutor', kind: 'torrserver', search: vi.fn() } as never;
@@ -162,6 +163,88 @@ describe('rpc handler: states, handles and failures', () => {
       { id: 'kinozal', message: 'Cloudflare', code: 'cloudflare' },
     ]);
     resetHealth();
+  });
+
+  it('setSourceEnabled keeps the changes the app made after the page read the switches', async () => {
+    reloadSourcePrefs(); // the page's copy: what the store held when it loaded
+    // the app (another WebView) changes switches meanwhile
+    localStorage.setItem('tsp.sources', JSON.stringify({ nnmclub: { on: false }, kinozal: { on: true, cloudflareBypass: true } }));
+    await createRpcHandler(deps()).dispatch('setSourceEnabled', { id: 'rutracker', on: true });
+    const saved = JSON.parse(localStorage.getItem('tsp.sources') || '{}');
+    expect(saved).toEqual({ nnmclub: { on: false }, kinozal: { on: true, cloudflareBypass: true }, rutracker: { on: true } });
+    localStorage.removeItem('tsp.sources');
+    reloadSourcePrefs();
+  });
+
+  it('keys are opaque: no row URL leaves the phone, and only the opaque key resolves', async () => {
+    const f = fakeSearch([row(1), row(2)]);
+    const resolve = vi.fn(() => Promise.resolve('magnet:?xt=urn:btih:' + 'c'.repeat(40)));
+    const rpc = createRpcHandler(deps({ search: f.search, resolve }));
+    const { handle } = (await rpc.dispatch('search', { query: 'Dune' })) as { handle: string };
+    f.fire();
+    const p1 = (await rpc.dispatch('searchPoll', { handle })) as { results: { key: string }[] };
+    const text = JSON.stringify(p1);
+    expect(text).not.toContain('https://');
+    const keys = p1.results.map((r) => r.key);
+    expect(new Set(keys).size).toBe(2);
+    // the same rows keep their keys on the next poll
+    const p2 = (await rpc.dispatch('searchPoll', { handle, rev: -1 })) as { results: { key: string }[] };
+    expect(p2.results.map((r) => r.key)).toEqual(keys);
+    await expect(rpc.dispatch('resolve', { handle, key: 'https://nnm/t=1' })).rejects.toMatchObject({ code: 'bad_request' });
+    expect(await rpc.dispatch('resolve', { handle, key: keys[0] })).toEqual({ link: 'magnet:?xt=urn:btih:' + 'c'.repeat(40) });
+    expect((resolve.mock.calls[0] as unknown as [{ Title: string }])[0].Title).toBe('Dune 2'); // sorted by seeds
+  });
+
+  it('a .torrent kept on the phone is not handed to the TV', async () => {
+    const f = fakeSearch([row(1)]);
+    let link = '';
+    const rpc = createRpcHandler(
+      deps({
+        search: f.search,
+        resolve: () => {
+          link = stashFile(new Uint8Array([100, 101]));
+          return Promise.resolve(link);
+        },
+      }),
+    );
+    const { handle } = (await rpc.dispatch('search', { query: 'Dune' })) as { handle: string };
+    const key = ((await rpc.dispatch('searchPoll', { handle })) as { results: { key: string }[] }).results[0].key;
+    const err = await rpc.dispatch('resolve', { handle, key }).then(
+      () => null,
+      (e: RpcError) => e,
+    );
+    expect(err).toMatchObject({ code: 'failed' });
+    expect(err!.message).toContain('.torrent');
+    expect(err!.message).not.toContain('omp-file');
+    expect(takeStashedFile(link)).toBeNull(); // the bytes were dropped
+  });
+
+  it('a link TorrServer cannot add is refused', async () => {
+    const f = fakeSearch([row(1)]);
+    const rpc = createRpcHandler(deps({ search: f.search, resolve: () => Promise.resolve('ftp://x/y') }));
+    const { handle } = (await rpc.dispatch('search', { query: 'Dune' })) as { handle: string };
+    const key = ((await rpc.dispatch('searchPoll', { handle })) as { results: { key: string }[] }).results[0].key;
+    await expect(rpc.dispatch('resolve', { handle, key })).rejects.toMatchObject({ code: 'failed' });
+  });
+
+  it('a login failure carries the code login', async () => {
+    setHealth('rutracker', { state: 'login', at: 1, message: 'Sign-in needed' });
+    const h = { sourceIds: ['rutracker'], results: () => [], pending: () => [], answered: () => [], failed: () => ['rutracker'], done: Promise.resolve(), cancel: vi.fn() };
+    const rpc = createRpcHandler(deps({ search: () => h }));
+    const { handle } = (await rpc.dispatch('search', { query: 'Dune' })) as { handle: string };
+    expect(((await rpc.dispatch('searchPoll', { handle })) as { failed: unknown[] }).failed).toEqual([{ id: 'rutracker', message: 'Sign-in needed', code: 'login' }]);
+    resetHealth();
+  });
+
+  it('a failed resolve gives failed with the message and is tried again next time', async () => {
+    const f = fakeSearch([row(1)]);
+    const again = vi.fn(() => Promise.reject(new Error('no link')));
+    const rpc2 = createRpcHandler(deps({ search: f.search, resolve: again }));
+    const h2 = ((await rpc2.dispatch('search', { query: 'Dune' })) as { handle: string }).handle;
+    const k2 = ((await rpc2.dispatch('searchPoll', { handle: h2 })) as { results: { key: string }[] }).results[0].key;
+    await expect(rpc2.dispatch('resolve', { handle: h2, key: k2 })).rejects.toMatchObject({ code: 'failed' });
+    await expect(rpc2.dispatch('resolve', { handle: h2, key: k2 })).rejects.toMatchObject({ code: 'failed' });
+    expect(again).toHaveBeenCalledTimes(2);
   });
 
   it('a failed resolve gives failed with the message', async () => {

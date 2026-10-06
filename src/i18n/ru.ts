@@ -585,6 +585,7 @@ export const ru = {
     sourceFallback: 'источник',
     cannotGetLink: 'Не удалось получить ссылку на раздачу',
     noLink: 'У результата нет ссылки',
+    tvFileOnly: 'Эта раздача есть только файлом .torrent: добавьте её с телефона',
     defaultPhone: 'Телефон',
     today: 'сегодня',
     yesterday: 'вчера',
