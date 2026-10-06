@@ -24,6 +24,15 @@ describe('tvGlyphs', () => {
     expect(bad.map((c) => c.charCodeAt(0).toString(16))).toEqual([]);
   });
 
+  it('maps look-alike slashes and drops lacking arrows and symbols', () => {
+    expect(tvGlyphs('a\u29F8b\u2215c\u2044d\uFF0Fe')).toBe('a/b/c/d/e');
+    expect(tvGlyphs('a\u29F9b\uFF3Cc')).toBe('a\\b\\c');
+    expect(tvGlyphs('a\u2934b \u2B50 c')).toBe('a b c');
+    expect(tvGlyphs('\u2190 \u2191 \u2192 \u2193')).toBe('\u2190 \u2191 \u2192 \u2193');
+    expect(tvGlyphs('\u041F\u043E\u0432\u0435\u043B\u0438\u0442\u0435\u043B\u044C \u0434\u0443\u0445\u043E\u0432 1-2 \u0441\u0435\u0440\u0438\u044F [4\u041A] \u29F8 \u0417\u0430\u043A\u043B\u0438\u043D\u0430\u0442\u0435\u043B\u0438 \u0434\u0443\u0445\u043E\u0432 [-235953120_456239231].mp4'))
+      .toBe('\u041F\u043E\u0432\u0435\u043B\u0438\u0442\u0435\u043B\u044C \u0434\u0443\u0445\u043E\u0432 1-2 \u0441\u0435\u0440\u0438\u044F [4\u041A] / \u0417\u0430\u043A\u043B\u0438\u043D\u0430\u0442\u0435\u043B\u0438 \u0434\u0443\u0445\u043E\u0432 [-235953120_456239231].mp4');
+  });
+
   it('keeps the old swaps', () => {
     expect(tvGlyphs('Wi\u2011Fi \u2010 CH\u2212')).toBe('Wi-Fi - CH-');
     expect(tvGlyphs('a\u2009b\u200Ac\u202Fd')).toBe('a b c d');
