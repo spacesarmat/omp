@@ -147,6 +147,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.firstRun', // when this install was first used: per device
   'tsp.donateCard', // the «Поддержать» card was closed
   'tsp.tmdbCache', // «Обзор»: cache of TMDB answers
+  'tsp.tvDiscoverQuery', // TV «Обзор»: sort and filters of the TV, never on the phone
   'tsp.sourcePause', // background requests to a site paused after its code page: per device, an hour
 ];
 

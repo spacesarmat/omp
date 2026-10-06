@@ -1,6 +1,7 @@
 import { signal, computed } from '@preact/signals';
 import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import type { PlayItem } from '../player/types';
+import type { Kind } from '../catalog/tmdb';
 
 export type Route =
   | { name: 'connect' }
@@ -14,7 +15,8 @@ export type Route =
   | { name: 'update' }
   | { name: 'sources' }
   | { name: 'pairPhone' }
-  | { name: 'faq' };
+  | { name: 'faq' }
+  | { name: 'title'; kind: Kind; id: number };
 
 export const routeStack = signal<Route[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);

@@ -473,3 +473,39 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .faq-qr-sub { font-size: 22px; color: var(--muted); margin-top: 6px; }
 .faq .hints { font-size: 24px; }
 .faq-phone { flex-shrink: 0; margin-top: 24px; font-size: 24px; color: var(--muted); }
+
+/* «Обзор» (TV): kind switch, sort and filters, the TMDB poster grid */
+.disc-bar { display: flex; align-items: center; padding-top: 8px; }
+.disc-bar > * { margin-right: 14px; }
+.disc-bar > *:last-child { margin-right: 0; }
+.disc-kinds { display: flex; padding: 4px; border-radius: 14px; background: var(--panel); }
+.disc-kind { padding: 10px 22px; border-radius: 10px; color: var(--muted); font-size: 24px; font-weight: 500; }
+.disc-kind.active { background: var(--text); color: #0f1115; }
+.disc-kind.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
+.disc-btn { display: flex; align-items: center; padding: 14px 22px; border-radius: 14px; background: var(--panel); color: var(--text); font-size: 24px; white-space: nowrap; }
+.disc-btn.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
+.disc-find-icon { margin-right: 10px; }
+.disc-sub { display: flex; align-items: center; min-height: 54px; margin: 22px 0 18px; font-size: 26px; color: var(--muted); }
+.disc-results .disc-sub-text { color: var(--text); margin-right: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1300px; }
+.disc-results .button { padding: 10px 24px; font-size: 24px; }
+.disc-grid { display: flex; flex-wrap: wrap; margin-right: -28px; }
+.disc-tile { width: 192px; margin: 0 28px 28px 0; border-radius: 14px; }
+.disc-tile.focused { box-shadow: none; transform: scale(1.06); transform-origin: top center; }
+.disc-tile.focused .disc-poster { box-shadow: 0 0 0 5px var(--focus); }
+.disc-poster { position: relative; width: 192px; height: 288px; border-radius: 14px; overflow: hidden; background: var(--panel2); }
+.disc-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.disc-ph { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; padding: 14px 14px 18px; font-size: 22px; font-weight: 700; line-height: 1.15; color: #fff; overflow: hidden; }
+.disc-ph-0 { background: #2b3a55; }
+.disc-ph-1 { background: #4a2e3a; }
+.disc-ph-2 { background: #2f4a3a; }
+.disc-ph-3 { background: #4a3f2a; }
+.disc-rating { position: absolute; top: 10px; left: 10px; padding: 3px 9px; border-radius: 8px; background: rgba(15, 17, 21, .82); color: var(--accent); font-size: 18px; font-weight: 700; }
+.disc-mark { position: absolute; top: 10px; right: 10px; padding: 3px 9px; border-radius: 8px; background: rgba(15, 17, 21, .82); color: var(--text); font-size: 16px; font-weight: 700; }
+.disc-mark-want { background: var(--accent); color: #0f1115; }
+.disc-title { margin-top: 12px; font-size: 21px; font-weight: 500; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.disc-meta { margin-top: 4px; font-size: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.disc-error { padding: 80px 0; text-align: center; }
+.disc-error-text { max-width: 1200px; margin: 0 auto 36px; font-size: 28px; color: var(--muted); }
+.disc-error .actions { display: flex; justify-content: center; }
+.disc-more { display: flex; align-items: center; padding: 12px 0 24px; color: var(--muted); }
+.disc-more > span { margin-right: 20px; }

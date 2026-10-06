@@ -6,19 +6,15 @@ import { platformKind } from '../platform/env';
 import { FAQ, SECTIONS, itemFor, type Device, type FaqItem, type FaqLine, type SectionId } from '../faq/faq';
 import { t } from '../i18n';
 import { scrollToShow } from '../ui/focus';
+import { tvGlyphs } from '../ui/tvText';
 
 const URL_RE = /https?:\/\/[^\s)]+/;
 const STEP_RE = /^(\d+)\.\s+/;
 /** Inner padding of the question panel: a focused row keeps this much room to the panel edge. */
 export const LIST_PAD = 18;
 
-/**
- * Text for the TV font: the LG system font has no non-breaking hyphen (U+2011, shown as a box in «Wi\u2011Fi») and may lack
- * other rare glyphs the shared FAQ texts use for the phone; they become plain hyphens and spaces, invisible ones go.
- */
-export function tvGlyphs(s: string): string {
-  return s.replace(/[\u2010\u2011\u2212]/g, '-').replace(/[\u2009\u200A\u202F]/g, ' ').replace(/[\u00AD\u200B\u2060]/g, '');
-}
+// the shared FAQ texts are written for the phone: tvGlyphs (src/ui/tvText.ts) swaps glyphs the LG font lacks
+export { tvGlyphs };
 
 function lineText(l: FaqLine): string {
   return tvGlyphs(typeof l === 'string' ? l : l.text + ' ' + l.url);

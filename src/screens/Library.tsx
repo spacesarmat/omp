@@ -24,6 +24,7 @@ import { useKeys } from '../ui/keys';
 import { TopBar } from '../ui/TopBar';
 import { TorrentViews } from './library/TorrentViews';
 import { HistoryGrid, HistoryEntry, HistoryFilterRow } from './library/HistoryGrid';
+import { DiscoverGrid } from './library/DiscoverGrid';
 import { displayTitle } from '../lib/torrentName';
 import type { SeriesGroup } from '../lib/seriesGroups';
 
@@ -76,9 +77,13 @@ export function LibraryScreen() {
     };
   }, [c]);
 
-  const showingError = !!error && !torrents.value.length;
+  const isDiscover = tab === 'discover';
+  // «Обзор» reads TMDB, not the server list: it stays usable when the list failed
+  const showingError = !!error && !torrents.value.length && !isDiscover;
   useEffect(() => {
-    if (loaded && !showingError) restoreFocus(torrents.value.length ? 'LIB-GRID' : 'tab-' + libraryTab.value);
+    if (!loaded || showingError) return;
+    if (libraryTab.value === 'discover') restoreFocus('tab-discover');
+    else restoreFocus(torrents.value.length ? 'LIB-GRID' : 'tab-' + libraryTab.value);
   }, [loaded, showingError]);
 
   useEffect(() => {
@@ -127,6 +132,8 @@ export function LibraryScreen() {
   };
 
   useKeys((a) => {
+    // «Обзор» has its own keys (DiscoverGrid)
+    if (tab === 'discover') return false;
     if (a === 'back' && searchOpen) { closeSearch(); return true; }
     const sel = selRef.current;
     if (a === 'red' && sel) {
@@ -144,6 +151,7 @@ export function LibraryScreen() {
   const hfilter = s.historyFilter;
   const tv = torrents.value;
   const { list, history } = useMemo(() => {
+    if (isDiscover) return { list: [] as Torrent[], history: [] as HistoryEntry[] };
     if (isHistory) {
       const all = buildHistory(tv, hfilter, continueWatching(tv, 40), getLocalProgress, 40, { src: 'tv' });
       const match = filterTorrents(all.map((e) => e.torrent), query);
@@ -151,7 +159,7 @@ export function LibraryScreen() {
     }
     const inTab = tv.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
     return { list: sortTorrents(filterTorrents(inTab, query), sort), history: [] as HistoryEntry[] };
-  }, [tv, tab, query, sort, isHistory, hfilter, progressVersion.value, serverViewed.value]);
+  }, [tv, tab, query, sort, isHistory, isDiscover, hfilter,progressVersion.value, serverViewed.value]);
 
   if (!c) return null;
 
@@ -187,7 +195,7 @@ export function LibraryScreen() {
   const searching = !!query.trim();
 
   let empty: string | null = null;
-  if (loaded && !count) {
+  if (loaded && !count && !isDiscover) {
     if (searching) empty = t('catalog.nothingFound');
     else if (isHistory && hfilter !== 'all') empty = hfilter === 'phone' ? t('catalog.nothingFromPhone') : t('catalog.nothingFromTv');
     else if (isHistory) empty = t('catalog.historyEmpty');
@@ -208,7 +216,7 @@ export function LibraryScreen() {
         onSort={() => updateSettings({ librarySort: nextSort(s.librarySort) })}
         onFocused={() => setSel(null)}
       />
-      {searchOpen && (
+      {searchOpen && !isDiscover && (
         <FocusGroup focusKey="LIB-SEARCH" className="search-row">
           <TextInput focusKey="lib-search" value={query} onChange={setQuery} placeholder={t('catalog.searchPlaceholder')} onFocused={() => setSel(null)} />
           <div class="search-count">{searching ? t('catalog.found', { n: count }) : t('catalog.typePart')}</div>
@@ -220,9 +228,17 @@ export function LibraryScreen() {
           <Button label={t('common.retry')} onPress={() => load()} onFocused={() => setSel(null)} />
         </FocusGroup>
       )}
-      {!loaded && <Spinner text={t('catalog.loading')} />}
+      {!loaded && !isDiscover && <Spinner text={t('catalog.loading')} />}
       {isHistory && <HistoryFilterRow value={hfilter} onChange={(f) => updateSettings({ historyFilter: f })} onFocused={() => setSel(null)} />}
-      {isHistory ? (
+      {isDiscover ? (
+        <DiscoverGrid
+          onFocused={() => setSel(null)}
+          onBack={() => {
+            setTab('all');
+            if (doesFocusableExist('tab-all')) setFocus('tab-all');
+          }}
+        />
+      ) : isHistory ? (
         <HistoryGrid
           entries={history}
           filePath={(e) => {
@@ -243,9 +259,15 @@ export function LibraryScreen() {
         />
       )}
       {empty && <div class="empty">{empty}</div>}
-      <div class="hints">
-        {isHistory ? t('catalog.okContinue') : t('catalog.okOpen')} · <KeyDot color="red" /> {isHistory ? t('catalog.removeFromHistoryKey') : t('catalog.deleteKey')} · <KeyDot color="blue" /> {t('catalog.settingsKey')} · {searchOpen ? t('catalog.backCloseSearch') : t('catalog.backExit')}
-      </div>
+      {isDiscover ? (
+        <div class="hints">
+          {t('tv.discover.okCard')} · <KeyDot color="yellow" /> {t('tv.discover.wantKey')} · <KeyDot color="blue" /> {t('tv.discover.filtersKey')} · {t('tv.discover.backLibrary')}
+        </div>
+      ) : (
+        <div class="hints">
+          {isHistory ? t('catalog.okContinue') : t('catalog.okOpen')} · <KeyDot color="red" /> {isHistory ? t('catalog.removeFromHistoryKey') : t('catalog.deleteKey')} · <KeyDot color="blue" /> {t('catalog.settingsKey')} · {searchOpen ? t('catalog.backCloseSearch') : t('catalog.backExit')}
+        </div>
+      )}
     </FocusGroup>
   );
 }

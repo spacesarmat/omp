@@ -27,7 +27,7 @@ describe('TopBar', () => {
   it('renders tabs with history first and marks the active one', () => {
     const { host } = mount({ tab: 'tv' });
     const tabs = Array.prototype.map.call(host.querySelectorAll('.tab'), (e: Element) => e.textContent);
-    expect(tabs).toEqual(['История', 'Все', 'Фильмы', 'Сериалы', 'Музыка', 'Прочее']);
+    expect(tabs).toEqual(['История', 'Обзор', 'Все', 'Фильмы', 'Сериалы', 'Музыка', 'Прочее']);
     expect(host.querySelector('.tab.active')!.textContent).toBe('Сериалы');
   });
   it('labels icon buttons with the current view and sort', () => {
