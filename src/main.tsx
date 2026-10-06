@@ -10,6 +10,14 @@ import { platformKind } from './platform/env';
 import { installErrorHooks, log, logStart } from './lib/log';
 import { t } from './i18n';
 
+// Preact schedules renders with queueMicrotask (Chrome 71+); the LG build polyfills it, an old Android TV WebView does not
+const w = window as unknown as { queueMicrotask?: (cb: () => void) => void };
+if (typeof w.queueMicrotask !== 'function') {
+  w.queueMicrotask = (cb) => {
+    Promise.resolve().then(cb).catch((e) => setTimeout(() => { throw e; }));
+  };
+}
+
 init({ debug: false, visualDebug: false });
 
 installErrorHooks();

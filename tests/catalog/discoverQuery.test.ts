@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { discoverUrl, type TmdbEndpoint } from '../../src/catalog/tmdb';
+import { discoverUrl, sanitizeList, type CatalogTitle, type TmdbEndpoint } from '../../src/catalog/tmdb';
 import { createCatalogClient, flushCatalogCache, resetCatalogCache } from '../../src/catalog/client';
 import {
-  DEFAULT_DISCOVER_QUERY, sanitizeDiscoverQuery, discoverQueryKey, discoverFilterCount, genresFor, GENRES,
+  DEFAULT_DISCOVER_QUERY, sanitizeDiscoverQuery, discoverQueryKey, discoverFilterCount, genresFor, GENRES, digitalSoonItems,
   type DiscoverQuery,
 } from '../../src/catalog/discoverQuery';
 import { applyLanguageSetting } from '../../src/i18n';
@@ -199,5 +199,28 @@ describe('client.discover', () => {
     await c.discover('movie', Q({ sort: 'rating' }), 1);
     await c.discover('movie', Q({ rating: 7 }), 1);
     expect(urls.length).toBe(3);
+  });
+});
+
+describe('«Скоро в цифре» items', () => {
+  const item = (id: number, digital: string | undefined, popularity: number): CatalogTitle => ({
+    kind: 'movie', id: id, title: 'F' + id, original: 'F' + id, year: 0, poster: '', rating: 0, digital: digital, popularity: popularity,
+  });
+
+  it('keeps the dated films of the window (today to +60 days), soonest first, the more popular first on one day', () => {
+    const out = digitalSoonItems([
+      item(1, '2026-10-16', 5), item(2, '2026-10-09', 1), item(3, '', 9), item(4, undefined, 9), item(5, '2026-10-05', 9),
+      item(6, '2026-12-06', 9), item(7, '2026-10-09', 4), item(8, '2026-10-06', 0), item(9, '2026-12-05', 0), item(2, '2026-10-07', 9),
+    ], TODAY);
+    expect(out.map((x) => x.id)).toEqual([8, 7, 2, 1, 9]);
+  });
+
+  it("a dated list keeps release_date as the digital date and popularity; its year is not the film's", () => {
+    const raw = { results: [{ id: 1, title: 'Marie Antoinette', release_date: '2026-11-06', popularity: 12.5 }, { id: 2, title: 'X', release_date: 'junk' }], total_pages: 2 };
+    const dated = sanitizeList(E, raw, 'movie', true).items;
+    expect(dated.map((x) => [x.digital, x.popularity, x.year])).toEqual([['2026-11-06', 12.5, 0], ['', 0, 0]]);
+    const plain = sanitizeList(E, raw, 'movie').items[0];
+    expect(plain.year).toBe(2026);
+    expect(plain.digital).toBeUndefined();
   });
 });

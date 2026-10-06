@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { contentsTextOf } from '../lib/releaseContents';
-import { t, tp, fmtDuration } from '../../../src/i18n';
+import { t, tp, fmtDuration, fmtSize } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
@@ -23,11 +23,11 @@ import type { Torrent as TorrentT } from '../../../src/api/types';
 import { sharedRatio, sharedResume } from '../lib/sharedProgress';
 import { errorMessage } from '../../../src/api/http';
 import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../../../src/lib/episodes';
-import { formatBytes, formatDuration } from '../../../src/lib/format';
+import { formatDuration } from '../../../src/lib/format';
 import { useSkip, firstPlayableId } from '../../../src/lib/useSkip';
 import { parseMark, skipStatus } from '../../../src/lib/skipMarks';
 import type { SkipPrefs } from '../../../src/lib/journal';
-import { posterColor, shortTitle } from '../../../src/lib/libraryView';
+import { libraryTitle, posterColor, shortTitle } from '../../../src/lib/libraryView';
 import { loadQualityWatch, loadWatch, saveQualityWatch, saveWatch } from '../../../src/store/journal';
 import { isLibraryFilm } from '../../../src/monitor/better';
 import { isWatchedSeries } from '../../../src/monitor/newEpisodes';
@@ -39,9 +39,10 @@ import { reloadMonitor } from '../monitor/ui';
 import { deleteTorrents, watchTarget } from '../lib/torrentActions';
 import { displayTitle } from '../../../src/lib/torrentName';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
-import { torrentQuery, type Episode } from '../../../src/catalog/tmdb';
+import { torrentQuery } from '../../../src/catalog/tmdb';
 import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../lib/seriesGroups';
-import { cleanFileName, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
+import { comingEpisodes, realEpisodeName, seasonEpisodes, showOf, type EpisodeMap, type ShowInfo } from '../lib/episodeNames';
+import { airDateText, isoDay } from '../lib/seriesStatus';
 
 const BACK = 'M15 5l-7 7 7 7';
 const IMAGE = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 3-3L20 17M15.5 9.5h.01';
@@ -65,7 +66,6 @@ function fileTitle(f: TorrentFile): string {
   return stripExt(baseName(f.path));
 }
 
-type EpisodeMap = { [season: number]: { [ep: number]: Episode } };
 
 /**
  * The TMDB show of a series torrent and the names of the seasons its files belong to. Never blocks: null / {} until
@@ -115,7 +115,8 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
   );
 
   const code = fileCode(file);
-  const head = [code, fileTitle(file), formatBytes(file.length)].filter(Boolean);
+  // the episode code (a film: its short name) and the size, never the file name
+  const head = [code || libraryTitle(torrent).title, fmtSize(file.length)].filter(Boolean);
 
   const onTv = async () => {
     if (!tv) {
@@ -482,11 +483,18 @@ export function Torrent({ hash }: { hash: string }) {
   const first = files[0];
   const season = first ? parseEpisode(first.path).season : null;
   const hasEpisodes = files.length > 1;
+  // the last episode of each season here, then what TMDB announces after it (the same season data as the names)
+  const lastOf: { [season: number]: number } = {};
+  files.forEach((f) => {
+    const pe = parseEpisode(f.path);
+    if (pe.season !== null && pe.episode !== null && (lastOf[pe.season] === undefined || pe.episode > lastOf[pe.season])) lastOf[pe.season] = pe.episode;
+  });
+  const coming = hasEpisodes ? comingEpisodes(lastOf, tmdb.eps, isoDay(Date.now())) : [];
   const peers = tor.total_peers || tor.active_peers || 0;
   const meta = [
     season !== null ? t('library.season', { n: season }) : '',
     hasEpisodes ? contentsTextOf(allFiles) : '',
-    tor.torrent_size ? formatBytes(tor.torrent_size) : '',
+    tor.torrent_size ? fmtSize(tor.torrent_size) : '',
     peers ? tp('torrent.screen.peerCount', peers) : '',
   ].filter(Boolean);
 
@@ -695,14 +703,15 @@ export function Torrent({ hash }: { hash: string }) {
                       <span class="m-bar-fill" style={{ width: pct + '%' }} />
                     </span>
                   </span>
-                  <span class="m-muted m-small">{formatBytes(f.length)}</span>
+                  <span class="m-muted m-small">{fmtSize(f.length)}</span>
                 </button>
               );
             }
-            // an episode: «1. Name  45 min» from TMDB (else «Episode 1»); the label, the clean file name and the size below
+            // an episode: «1. Name  45 min» from TMDB (else «Episode 1»); the label and the size below (not the file name)
             const ep = pe.season !== null && tmdb.eps[pe.season] ? tmdb.eps[pe.season][pe.episode] : undefined;
-            const name = ep && ep.title ? pe.episode + '. ' + ep.title : t('library.episode', { n: pe.episode });
-            const sub = [fileCode(f), cleanFileName(fileTitle(f)), formatBytes(f.length)].filter(Boolean).join(' · ');
+            const real = ep ? realEpisodeName(ep.title) : '';
+            const name = real ? pe.episode + '. ' + real : t('library.episode', { n: pe.episode });
+            const sub = [fileCode(f), fmtSize(f.length)].filter(Boolean).join(' · ');
             return (
               <button type="button" class="m-ep m-ep-named" key={f.id} onClick={() => setSheet(f)}>
                 <span class="m-ep-text">
@@ -718,6 +727,16 @@ export function Torrent({ hash }: { hash: string }) {
               </button>
             );
           })}
+          {/* the episodes TMDB announces after the last one here: muted, not tappable */}
+          {coming.map((e) => (
+            <div class="m-ep m-ep-named m-ep-coming" key={'coming:' + e.season + ':' + e.episode} data-coming={e.season + ':' + e.episode} aria-disabled="true">
+              <span class="m-ep-text">
+                <span class="m-ep-name">
+                  {(e.name ? e.episode + '. ' + e.name : t('library.episode', { n: e.episode })) + ' · ' + t('torrent.screen.episodeComes', { date: airDateText(e.airDate) })}
+                </span>
+              </span>
+            </div>
+          ))}
         </div>
       </div>
       {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}

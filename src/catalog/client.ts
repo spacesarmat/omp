@@ -11,7 +11,7 @@ import {
   releaseRegions, noveltiesUrl, discoverUrl, searchUrl, cardUrl, seasonUrl, sanitizeList, sanitizeCard, sanitizeSeason,
   type Kind, type CatalogTitle, type CatalogCard, type SeasonDetails, type TmdbEndpoint,
 } from './tmdb';
-import type { DiscoverQuery } from './discoverQuery';
+import { digitalSoonItems, type DiscoverQuery } from './discoverQuery';
 
 export type CatalogErrorCode = 'offline' | 'nokey' | 'blocked' | 'bad';
 
@@ -269,9 +269,9 @@ export function createCatalogClient(
     return { items: items, pages: Math.max(r[0].pages, r[1].pages) };
   }
 
-  function list(url: string, kind: Kind | null): Promise<{ items: CatalogTitle[]; pages: number }> {
+  function list(url: string, kind: Kind | null, dated?: boolean): Promise<{ items: CatalogTitle[]; pages: number }> {
     const e = need();
-    return fetchJson(url, LIST_TTL, (raw) => sanitizeList(e, raw, kind));
+    return fetchJson(url, LIST_TTL, (raw) => sanitizeList(e, raw, kind, dated));
   }
 
   return {
@@ -288,21 +288,19 @@ export function createCatalogClient(
       const d = today();
       const one = (k: Kind, region?: string) => {
         const u = discoverUrl(e, k, query, page, d, region);
-        return u ? list(u, k) : Promise.resolve({ items: [] as CatalogTitle[], pages: 0 });
+        return u ? list(u, k, query.sort === 'digitalSoon') : Promise.resolve({ items: [] as CatalogTitle[], pages: 0 });
       };
       // «Скоро в цифре» is about films only: every kind chip shows films. TMDB knows few digital dates of some regions
-      // (Russia): a thin page of the UI language's region is filled from the next region (the US), like the cards are
+      // (Russia): a thin page of the UI language's region is filled from the next region (the US), like the cards are.
+      // Each item carries the digital date TMDB matched; the page keeps the dated ones within the window, by that date
       if (query.sort === 'digitalSoon') {
         const regions = releaseRegions();
         return one('movie', regions[0]).then((r) => {
-          if (r.items.length >= DIGITAL_FILL_MIN || regions.length < 2) return r;
+          const own = { items: digitalSoonItems(r.items, d), pages: r.pages };
+          if (own.items.length >= DIGITAL_FILL_MIN || regions.length < 2) return own;
           return one('movie', regions[1]).then(
-            (more) => {
-              const seen: { [id: number]: boolean } = {};
-              r.items.forEach((x) => { seen[x.id] = true; });
-              return { items: r.items.concat(more.items.filter((x) => !seen[x.id])), pages: Math.max(r.pages, more.pages) };
-            },
-            () => r,
+            (more) => ({ items: digitalSoonItems(r.items.concat(more.items), d), pages: Math.max(r.pages, more.pages) }),
+            () => own,
           );
         });
       }

@@ -72,8 +72,6 @@ export const ru = {
     day: '{d} {month}',
     dayTime: '{day} {time}',
     dayYear: '{day} {year}',
-    /** A short numeric day: «12.10». */
-    numeric: '{d}.{m}',
     /** Short weekday names from Sunday, space-separated. */
     weekdays: 'Вс Пн Вт Ср Чт Пт Сб',
     /** «Ср 8 окт.». */
@@ -580,6 +578,9 @@ export const ru = {
     yesterday: 'вчера',
     seeds: { one: '{n} сид', few: '{n} сида', many: '{n} сидов' },
     jackettHint: 'Сайт закрыт проверкой Cloudflare? Войдите на нём через браузер (кнопка «Войти» у сайта в «Источниках поиска») или подключите его через Jackett, Prowlarr или FlareSolverr — как, в «Вопросах и ответах».',
+    /** The TV search under sites behind Cloudflare: one sentence, the error itself not repeated. */
+    cloudflareTvOne: '{name} закрыт проверкой Cloudflare — войдите на него на телефоне в «Источниках поиска»',
+    cloudflareTvMany: '{names} закрыты проверкой Cloudflare — войдите на них на телефоне в «Источниках поиска»',
     sort: {
       seeds: 'По сидам',
       date: 'По дате',
@@ -809,9 +810,9 @@ export const ru = {
       noTrackers: 'В индексаторе нет настроенных трекеров',
       removeAsk: 'Удалить подключение? Ключ тоже будет удалён с телефона.',
       changeKey: 'Изменить ключ',
-      inTsKey: 'в настройках TorrServer — ключ есть',
-      inTsNeedKey: 'в настройках TorrServer — нужен API-ключ',
-      foundNeedKey: 'найден в сети — нужен API-ключ',
+      inTsKey: 'ключ из TorrServer',
+      inTsNeedKey: 'из TorrServer · нужен ключ',
+      foundNeedKey: 'в сети · нужен ключ',
       scanningBoth: 'Ищу Jackett и Prowlarr в сети…',
       addButton: 'Добавить Jackett или Prowlarr',
     },
@@ -1059,6 +1060,9 @@ export const ru = {
   },
   connect: {
     enterAddress: 'Введите адрес сервера',
+    /** The server did not answer: «Не удалось подключиться к 192.168.1.191:8090 — проверьте адрес и порт». */
+    unreachable: 'Не удалось подключиться к {host} — проверьте адрес и порт',
+    unreachableWhy: 'Не удалось подключиться к {host}: {error}',
     connected: 'Подключено: {version}',
     noServersFound: 'Серверы TorrServer не найдены',
     history: 'История серверов',
@@ -1315,6 +1319,8 @@ export const ru = {
       notFound: 'Раздача не найдена',
       continueOnTv: 'Продолжить на ТВ · {ep}с {time}',
       episodesHead: 'Серии',
+      /** A muted row after the last episode: «7. Пирамида · выйдет 8 окт.». */
+      episodeComes: 'выйдет {date}',
       filesHead: 'Файлы',
       watchOnPhone: 'Смотреть на телефоне',
       skipIntroSwitch: 'Пропускать заставку',

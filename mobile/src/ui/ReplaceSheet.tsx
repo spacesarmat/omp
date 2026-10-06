@@ -4,12 +4,11 @@ import { Icon } from './Icon';
 import { showToast } from './toast';
 import { qualityBadge } from './Poster';
 import { rangeText } from '../monitor/text';
-import { t, tp } from '../../../src/i18n';
+import { fmtSize, t, tp } from '../../../src/i18n';
 import { reloadMonitor } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
 import { client } from '../../../src/store/servers';
 import { torrents, refreshTorrents } from '../../../src/store/library';
-import { formatBytes } from '../../../src/lib/format';
 import { shortTitle } from '../../../src/lib/libraryView';
 import { findBetter } from '../../../src/monitor/better';
 import { findNewEpisodes } from '../../../src/monitor/newEpisodes';
@@ -91,7 +90,7 @@ export function ReplaceSheet({
 
   const name = shortTitle(torrentTitle || (old ? displayTitle(old) : ''));
   const oldTitle = old ? displayTitle(old) || torrentTitle : torrentTitle;
-  const oldSize = old && old.torrent_size ? formatBytes(old.torrent_size) : '';
+  const oldSize = old && old.torrent_size ? fmtSize(old.torrent_size) : '';
 
   const replace = async () => {
     const c = client.value;

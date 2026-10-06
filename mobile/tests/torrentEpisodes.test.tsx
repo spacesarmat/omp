@@ -107,11 +107,39 @@ describe('Torrent: TMDB episode names', () => {
     expect(c.season).toHaveBeenCalledWith(7, 2);
     expect(mainLine(0)).toContain('1. Landfall');
     expect(mainLine(0)).toContain('45 мин');
+    // the code and the size, never the release file name
     const sub = rows()[0].querySelector('.m-ep-sub')!.textContent!;
-    expect(sub).toContain('S02E01');
-    expect(sub).toContain('Starbound Frontier S02E01 1080p Ru Ultradox');
-    expect(sub).toContain('GB');
+    expect(sub).toBe('S02E01 · 1,8 ГБ');
+    expect(sub).not.toContain('Ultradox');
     expect(rows()[0].querySelector('.m-bar-track')).toBeTruthy();
+  });
+
+  it('a placeholder name («Эпизод 2») reads «Серия 2»', async () => {
+    setCatalogClientForTests(fake([2], [ep(1, 'Landfall'), ep(2, 'Эпизод 2')]));
+    mount();
+    await flush();
+    expect(mainLine(1)).toBe('Серия 2 ' + '45 мин');
+  });
+
+  it('after the last episode: the announced ones as muted rows, «4. Пирамида · выйдет 8 окт.», not tappable', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 6, 12));
+    try {
+      const dated = (n: number, t: string, airDate: string) => ({ ...ep(n, t), airDate });
+      setCatalogClientForTests(
+        fake([2], [ep(1, 'Landfall'), ep(2, 'Dark Orbit'), dated(3, 'Drift', '2026-09-20'), dated(4, 'Пирамида', '2026-10-08'), dated(5, 'Эпизод 5', '2026-10-15'), ep(6, 'Undated')]),
+      );
+      mount();
+      await flush();
+      const coming = Array.from(el.querySelectorAll('.m-ep-coming'));
+      expect(coming.map((r) => r.textContent)).toEqual(['4. Пирамида · выйдет 8 окт.', 'Серия 5 · выйдет 15 окт.']);
+      expect(coming.every((r) => r.tagName === 'DIV' && r.getAttribute('aria-disabled') === 'true')).toBe(true);
+      // after the torrent's own rows
+      const all = rows();
+      expect(all.indexOf(coming[0])).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('falls back to «Серия N» without TMDB', async () => {

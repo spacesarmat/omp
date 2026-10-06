@@ -1,17 +1,36 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
-import { parseChangelog } from '../../src/lib/changelog';
-import { CHANGELOG, CHANGELOG_EN, getChangelog, mergeChangelog } from '../../src/lib/changelogData';
+import { forPlatform, parseChangelog } from '../../src/lib/changelog';
+import { CHANGELOG, CHANGELOG_EN, getChangelog, mergeChangelog, setChangelogPlatform } from '../../src/lib/changelogData';
 
-afterEach(() => applyLanguageSetting('ru'));
+afterEach(() => {
+  applyLanguageSetting('ru');
+  setChangelogPlatform('tv');
+});
 
 describe('changelogData', () => {
-  it('Russian UI gets the Russian entries', () => {
-    expect(getChangelog()).toBe(CHANGELOG);
+  it('Russian UI gets the Russian entries, the TV ones by default', () => {
+    expect(getChangelog()).toEqual(forPlatform(CHANGELOG, 'tv'));
+    expect(getChangelog()).toBe(getChangelog());
+  });
+
+  it('the TV never shows a «[phone]» bullet, the phone never a «[tv]» one; no marker is shown', () => {
+    const tv = getChangelog();
+    setChangelogPlatform('phone');
+    const phone = getChangelog();
+    const all = (l: typeof tv) => l.map((e) => e.items.join('\n')).join('\n');
+    expect(all(tv)).not.toMatch(/\[(tv|phone)\]/);
+    expect(all(phone)).not.toMatch(/\[(tv|phone)\]/);
+    // the phone-only 0.17.0 betas: the calendar is on the phone only
+    expect(all(phone)).toContain('«Новое» → «Календарь»');
+    expect(all(tv)).not.toContain('«Новое» → «Календарь»');
+    const raw = CHANGELOG.filter((e) => e.version === '0.17.0-beta.6')[0].items;
+    expect(raw.some((i) => /^\[phone\] /.test(i))).toBe(true);
   });
 
   it('English UI gets the English entries, Russian where a version is not translated', () => {
     applyLanguageSetting('en');
+    setChangelogPlatform('phone');
     const list = getChangelog();
     expect(list.map((e) => e.version)).toEqual(CHANGELOG.map((e) => e.version));
     const en = CHANGELOG_EN.map((e) => e.version);

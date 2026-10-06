@@ -7,7 +7,15 @@ import { discoverParams, type DiscoverQuery } from './discoverQuery';
 
 export type Kind = 'movie' | 'tv';
 
-export interface CatalogTitle { kind: Kind; id: number; title: string; original: string; year: number; poster: string; rating: number; }
+/**
+ * `digital` and `popularity` are set on «Скоро в цифре» items only (see sanitizeList's `dated`): the digital release
+ * date TMDB matched in the region ('YYYY-MM-DD') and TMDB's popularity, for the order. Such items have `year` 0: the
+ * date of that answer is the regional digital one, not the film's year (the tile takes the year from the card).
+ */
+export interface CatalogTitle {
+  kind: Kind; id: number; title: string; original: string; year: number; poster: string; rating: number;
+  digital?: string; popularity?: number;
+}
 export interface Person { name: string; photo: string; role: string; }
 /** `airDate`: 'YYYY-MM-DD' or '' (absent in cards cached before 0.17.0-beta.2: unknown). */
 export interface Season { number: number; episodes: number; year: number; aired: number; airDate?: string; }
@@ -129,7 +137,12 @@ function titleOf(e: TmdbEndpoint, o: { [k: string]: unknown }, kind: Kind): Cata
   };
 }
 
-export function sanitizeList(e: TmdbEndpoint, raw: unknown, kind: Kind | null): { items: CatalogTitle[]; pages: number } {
+/**
+ * A TMDB list answer. `dated`: a /discover answer asked with region + with_release_type, whose release_date is «the
+ * first date based on your query» (TMDB's discover docs), i.e. the regional date of that release type: it is kept as
+ * `digital` and is not the film's year.
+ */
+export function sanitizeList(e: TmdbEndpoint, raw: unknown, kind: Kind | null, dated?: boolean): { items: CatalogTitle[]; pages: number } {
   const o = raw && typeof raw === 'object' ? (raw as { [k: string]: unknown }) : null;
   if (!o || !Array.isArray(o.results)) return { items: [], pages: 0 };
   const items: CatalogTitle[] = [];
@@ -139,7 +152,13 @@ export function sanitizeList(e: TmdbEndpoint, raw: unknown, kind: Kind | null): 
     const k: Kind | null = kind || (x.media_type === 'movie' ? 'movie' : x.media_type === 'tv' ? 'tv' : null);
     if (!k) return;
     const t = titleOf(e, x, k);
-    if (t) items.push(t);
+    if (!t) return;
+    if (dated) {
+      t.digital = date(str(x.release_date).slice(0, 10));
+      t.popularity = n(x.popularity);
+      t.year = 0;
+    }
+    items.push(t);
   });
   return { items: items, pages: Math.min(500, Math.max(0, Math.floor(n(o.total_pages)))) };
 }

@@ -71,7 +71,13 @@ class EngineChooser(val mode: EngineMode, val vlcAvailable: Boolean = true) {
      * on-screen text).
      */
     fun onError(kind: ErrorKind, firstFrame: Boolean, detail: String = ""): Boolean {
-        if (!auto || current != EngineKind.MEDIA3 || firstFrame) return false
+        if (!auto || current != EngineKind.MEDIA3) return false
+        // Media3 ran out of memory (a stream too big for a small heap): VLC continues at the same place, even mid-play
+        if (detail == OUT_OF_MEMORY) {
+            current = EngineKind.VLC
+            return true
+        }
+        if (firstFrame) return false
         if (kind != ErrorKind.UNSUPPORTED_FORMAT && kind != ErrorKind.DECODER && detail != DECODING_FAILED) return false
         current = EngineKind.VLC
         return true
@@ -106,6 +112,9 @@ class EngineChooser(val mode: EngineMode, val vlcAvailable: Boolean = true) {
 
         /** Media3's PlaybackException code name of a decoder that failed while decoding. */
         const val DECODING_FAILED = "ERROR_CODE_DECODING_FAILED"
+
+        /** The error detail of a Media3 failure caused by an OutOfMemoryError. */
+        const val OUT_OF_MEMORY = "OUT_OF_MEMORY"
 
         /** libVLC has no native libraries for this device (menu row, message, TV settings). */
         val VLC_UNAVAILABLE_TEXT: String get() = I18n.s("player.vlcUnavailable")

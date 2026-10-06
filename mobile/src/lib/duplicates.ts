@@ -14,6 +14,12 @@ import { groupLibrary, isSeries, seasonMembers, type SeriesGroup } from './serie
 
 export { contentsText };
 
+/** A release named for its menu: «Повелитель духов · 4K WEB-DL» (the series name, then the release's quality). */
+export function releaseName(tor: Torrent, name: string): string {
+  const own = shortTitle(displayTitle(tor));
+  return [name || own, qualityLabel(displayTitle(tor))].filter(Boolean).join(' · ');
+}
+
 /** «4K WEB-DL · 18 серий · 9,7 ГБ» (the parts known). */
 export function releaseLine(tor: Torrent, withContents = true): string {
   return [

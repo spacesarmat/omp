@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
-import { ResultCard } from '../src/ui/ResultCard';
+import { ResultCard, resultMeta } from '../src/ui/ResultCard';
 import { releaseChips, releaseTitle } from '../src/ui/ReleaseRow';
 import { MAX_RUNNING, posterKey, setPosterLookupForTests } from '../src/ui/resultPosters';
 import type { SourceResult } from '../../src/sources/types';
@@ -77,6 +77,15 @@ afterEach(() => {
   act(() => render(null, el));
   delete (globalThis as unknown as { IntersectionObserver?: unknown }).IntersectionObserver;
   setPosterLookupForTests(null);
+});
+
+describe('seeds on a card', () => {
+  it('shown when known; a feed row without seed data (0) says nothing of them', () => {
+    mount([res('Film A (2026) 1080p', 1), { ...res('Film B (2026) 1080p', 2), Seed: 0 }]);
+    const metas = Array.from(el.querySelectorAll('.m-rc-meta-text')).map((n) => n.textContent);
+    expect(metas).toEqual(['10 GB · 5 сидов', '10 GB']);
+    expect(resultMeta({ ...res('Film B', 3), Seed: 0 })).not.toContain('сид');
+  });
 });
 
 describe('found release rows', () => {

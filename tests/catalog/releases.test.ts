@@ -111,7 +111,7 @@ describe('«Скоро в цифре»', () => {
     expect(p.with_release_type).toBe('4');
     expect(p['release_date.gte']).toBe('2026-10-06');
     expect(p['release_date.lte']).toBe('2026-12-05');
-    expect(p.sort_by).toBe('primary_release_date.asc');
+    expect(p.sort_by).toBe('release_date.asc');
     expect(p.region).toBe('RU');
     expect(p['primary_release_date.gte']).toBeUndefined();
     expect(p['vote_count.gte']).toBeUndefined();
@@ -133,7 +133,7 @@ describe('«Скоро в цифре»', () => {
     const http: SourceHttp = {
       get: (url) => {
         urls.push(url);
-        return Promise.resolve({ status: 200, url: url, text: JSON.stringify({ results: [{ id: 1, title: 'A', release_date: '2026-01-01' }], total_pages: 1 }) });
+        return Promise.resolve({ status: 200, url: url, text: JSON.stringify({ results: [{ id: 1, title: 'A', release_date: '2026-10-20' }], total_pages: 1 }) });
       },
       post: () => Promise.reject(new Error('no')),
       clearCookies: () => Promise.resolve(),

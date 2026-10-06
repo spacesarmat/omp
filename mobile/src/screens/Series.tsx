@@ -5,7 +5,7 @@
 // (no key, offline, no match) the simple layout stays, with no error shown. The hero has the series' status pill; a
 // season still to come is a chip «Сезон 5 · с 3 мая» with «Напомнить» (a monitoring subscription for that season).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { lang, t, tp } from '../../../src/i18n';
+import { fmtSize, lang, t, tp } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
 import { SeriesPill } from '../ui/SeriesPill';
 import { showToast } from '../ui/toast';
@@ -24,13 +24,12 @@ import { activeTv } from '../tv/tvStore';
 import { torrents } from '../../../src/store/library';
 import { continueWatching, getLocalProgress, progressVersion, serverViewed } from '../../../src/store/progress';
 import { libraryTitle, positionLabel } from '../../../src/lib/libraryView';
-import { formatBytes } from '../../../src/lib/format';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
 import { displayTitle } from '../../../src/lib/torrentName';
 import type { Torrent } from '../../../src/api/types';
 import { findGroup, groupLabel, NO_SEASON, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
-import { releaseLine } from '../lib/duplicates';
+import { releaseLine, releaseName } from '../lib/duplicates';
 import { contentsText } from '../lib/releaseContents';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
@@ -294,7 +293,7 @@ function Row({ tor, onWatch, onMenu }: { tor: Torrent; onWatch: (tor: Torrent) =
             {s.meta && <span class="m-title-meta">{' · ' + s.meta}</span>}
           </span>
           <span class="m-muted m-small m-vrow-meta">
-            <span>{formatBytes(tor.torrent_size || 0)}</span>
+            <span>{fmtSize(tor.torrent_size || 0)}</span>
             {q && <span class="m-badge-inline">{q}</span>}
             {contents && <span>{contents}</span>}
           </span>
@@ -508,7 +507,14 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
         </>
       )}
       {menuFor && (
-        <TorrentMenu tor={menuFor} onClose={() => setMenuFor(null)} onWatchTv={watch} extra={keepOnly(menuFor)} />
+        <TorrentMenu
+          tor={menuFor}
+          // the release by name: «Оставить только эту» must say which one stays
+          heading={releaseName(menuFor, card && card.title ? card.title : lead.title)}
+          onClose={() => setMenuFor(null)}
+          onWatchTv={watch}
+          extra={keepOnly(menuFor)}
+        />
       )}
       {launch.sheet}
     </>

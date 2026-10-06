@@ -115,6 +115,8 @@ button, .m-btn {
 .m-btn-primary { background: var(--accent); color: var(--bg); font-size: 17px; font-weight: 700; }
 .m-btn-secondary { background: var(--panel-2); color: var(--text); }
 .m-btn-text { border: none; background: none; color: var(--muted); font-size: 14px; font-weight: 600; padding: 0 12px; }
+/* a text link that acts («Открыть настройки NNM-Club», «Как установить FlareSolverr»): the accent of the app's links,
+   never faint grey */
 .m-link {
   align-self: flex-start;
   display: flex;
@@ -122,9 +124,11 @@ button, .m-btn {
   gap: 8px;
   border: none;
   background: none;
-  color: var(--muted);
+  color: var(--accent);
   font-size: 15px;
+  font-weight: 600;
 }
+.m-link:disabled { opacity: 0.6; }
 .m-icon-btn {
   display: flex;
   align-items: center;
@@ -237,6 +241,8 @@ button, .m-btn {
 }
 .m-tab.on { background: var(--accent); color: var(--bg); }
 .m-empty { padding: 24px 0; text-align: center; }
+/* the button under a centred heading and text sits in the middle too («Подключить ТВ» on «Пульт») */
+.m-empty .m-btn { margin: 0 auto; }
 .m-library { overflow-x: hidden; }
 .m-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
 .m-grid.m-view-small { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; }
@@ -257,6 +263,10 @@ button, .m-btn {
 .m-crow { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0; border: none; border-bottom: 1px solid #252A35; background: none; text-align: left; color: inherit; min-width: 0; }
 .m-crow-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-crow-size { flex-shrink: 0; }
+/* a tile's season, episodes or year: under the name (on a compact row: after it), never in it */
+.m-crow-meta { flex: 0 1 auto; max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-card-meta { font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-view-small .m-card-meta { font-size: 11px; line-height: 14px; }
 .m-card { display: flex; flex-direction: column; gap: 4px; padding: 0; border: none; background: none; text-align: left; min-width: 0; }
 .m-card-title {
   margin-top: 4px;
@@ -526,6 +536,8 @@ button, .m-btn {
 .m-ep-code { width: 58px; flex-shrink: 0; font-size: 14px; font-weight: 700; color: var(--accent); }
 .m-ep-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .m-ep-name { font-size: 14px; overflow-wrap: anywhere; }
+/* an announced episode not in the torrent yet: a quiet outline, no panel, not tappable */
+.m-ep-coming { min-height: 44px; box-sizing: border-box; background: none; border: 1px dashed #2A2F3A; color: var(--muted); }
 
 /* ---- sheet ---- */
 .m-sheet-host { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; justify-content: flex-end; }
@@ -751,6 +763,8 @@ button, .m-btn {
 
 /* Settings + update sheet */
 .m-screen[data-route='settings'] { display: flex; flex-direction: column; gap: 20px; }
+/* «Источники поиска»: the sections spaced like «Настройки», a label never right under the card above it */
+.m-screen[data-route='sources'] { display: flex; flex-direction: column; gap: 20px; }
 .m-set-group { display: flex; flex-direction: column; gap: 10px; }
 .m-set-label { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .m-set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 4px 14px; border-radius: 12px; background: var(--panel); }
@@ -1019,7 +1033,8 @@ button, .m-btn {
 .m-idx-actions .m-note { flex: 1 1 100%; }
 .m-idx-found { padding: 6px 14px; }
 .m-idx-found .m-btn { flex-shrink: 0; }
-.m-idx-add-btn { height: 44px; border: 1px dashed #3A3F4B; border-radius: 12px; background: none; color: #C9CEDA; font-size: 14px; font-weight: 700; }
+.m-idx-add-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 44px; padding: 8px 12px; border: 1px dashed #3A3F4B; border-radius: 12px; background: none; color: #C9CEDA; font-size: 14px; font-weight: 700; }
+.m-idx-add-scan { color: var(--muted); font-size: 12px; font-weight: 500; }
 .m-idx-pick { display: flex; align-items: center; gap: 12px; padding: 12px; border: none; border-radius: 14px; background: var(--panel-2); color: var(--text); text-align: left; }
 .m-idx-pick.on { box-shadow: inset 0 0 0 2px var(--accent); }
 .m-idx-scan { align-self: flex-start; }
@@ -1206,7 +1221,8 @@ button, .m-btn {
 .m-skip-toggle .m-skip-title { font-size: 16px; }
 
 /* soft keyboard open: the tab bar and the mini player step aside, the toast drops to the bottom */
-/* the status bar is transparent (edge to edge): a scrim under it keeps the clock readable over scrolled posters */
+/* the status bar is transparent (edge to edge): a scrim under it keeps the clock readable over scrolled content.
+   Opaque: at 0.88 the bright status lines and switches of the settings subpages («Источники поиска») showed through */
 body::before {
   content: '';
   position: fixed;
@@ -1214,7 +1230,7 @@ body::before {
   left: 0;
   right: 0;
   height: env(safe-area-inset-top);
-  background: rgba(15, 17, 21, 0.88);
+  background: var(--bg);
   z-index: 9;
   pointer-events: none;
 }

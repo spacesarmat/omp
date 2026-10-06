@@ -222,8 +222,13 @@ describe('series screen', () => {
     expect(info.textContent).toContain('2 раздачи этого сезона');
     const lines = Array.from(info.querySelectorAll('[data-dup-line]')).map((b) => b.textContent);
     expect(lines).toEqual(expect.arrayContaining(['1080p WEB-DL · 18 серий · 5,4 ГБ', '4K WEB-DL · 18 серий · 9,7 ГБ']));
+    // the release rows say the size the same way as the info row
+    const sizes = Array.from(el.querySelectorAll('.m-series-row .m-vrow-meta > span:first-child')).map((s) => s.textContent);
+    expect(sizes.sort()).toEqual(['5,4 ГБ', '9,7 ГБ']);
     const line = Array.from(info.querySelectorAll('[data-dup-line]')).find((b) => (b.textContent || '').indexOf('1080p') === 0) as HTMLButtonElement;
     act(() => line.click());
+    // the menu names the release
+    expect(document.querySelector('.m-sheet-title')!.textContent).toMatch(/ · 1080p WEB-DL$/);
     // only the normal manual actions of a release (deleting asks its own confirm)
     const options = Array.from(document.querySelectorAll('.m-opt')).map((b) => (b.textContent || '').trim());
     expect(options).toEqual(['Открыть', 'Переименовать', 'Оставить только эту', 'Удалить']);

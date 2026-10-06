@@ -17,7 +17,7 @@ import { onSearchFailure, type CheckedHosts } from '../sources/cloudflareCheck';
 import type { SearchHandle } from '../sources/search';
 import { getHealth } from '../sources/store';
 import { ipBanTvHint } from '../sources/ipBan';
-import { ipBanNote, isCloudflare, jackettHint, progressText, resolveLink, resultDate, resultKey, sortResults, sourceBadge, sourceName, stableOrder } from '../sources/view';
+import { cloudflareTvNote, ipBanNote, isCloudflare, progressText, resolveLink, resultDate, resultKey, sortResults, sourceBadge, sourceName, stableOrder } from '../sources/view';
 import type { SourceResult } from '../sources/types';
 
 const SOURCES: { value: SearchSource; label: string }[] = [
@@ -206,7 +206,7 @@ export function AddScreen() {
       )}
       {unified && blocked.length > 0 && (
         <div class="search-progress search-hint">
-          {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ') + '. ' + jackettHint()}
+          {cloudflareTvNote(blocked.map(sourceName))}
         </div>
       )}
       {unified && banned.length > 0 && (

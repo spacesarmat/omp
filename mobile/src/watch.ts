@@ -20,6 +20,7 @@ import { recordWatch } from '../../src/store/journal';
 import type { Torrent } from '../../src/api/types';
 import { baseName, type TorrentFile } from '../../src/lib/episodes';
 import { t as tr } from '../../src/i18n';
+import { launchLabel } from './lib/playingNames';
 
 export interface WatchOnTvParams {
   server: string;
@@ -205,16 +206,23 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
     [],
   );
 
-  const ask = (s: TvLaunchStep, label: string, tv: string) =>
+  // the sheet names the episode cleanly («S02E01», then «S02E01 · Спокойная жизнь» once TMDB tells), never a file name
+  const ask = (s: TvLaunchStep, o: TvLaunchOpts, tv: string) =>
     new Promise<Answer>((resolve) => {
+      let open = true;
+      const answer = (v: Answer) => {
+        open = false;
+        if (alive.v) setStep(null);
+        resolve(v);
+      };
+      const label = launchLabel(o.hash, o.file, o.label, (named) => {
+        if (open && alive.v) setStep((cur) => (cur && cur.answer === answer ? { ...cur, label: named } : cur));
+      });
       setStep({
         ...s,
         label,
         tv,
-        answer: (v) => {
-          if (alive.v) setStep(null);
-          resolve(v);
-        },
+        answer,
       });
     });
 
@@ -240,14 +248,14 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
     try {
       const version = await actions.ompVersion();
       if (version && compareVersions(version, CONTROL_MIN_VERSION) < 0) {
-        if ((await ask({ kind: 'oldTv', version }, o.label, tv.name)) !== 'go') return;
+        if ((await ask({ kind: 'oldTv', version }, o, tv.name)) !== 'go') return;
         landing = 'remote';
       }
       let t: number | undefined;
       if (o.file !== undefined) {
         t = 0;
         if (o.at !== undefined && o.at >= 1) {
-          const choice = await ask({ kind: 'resume', at: o.at, duration: o.duration }, o.label, tv.name);
+          const choice = await ask({ kind: 'resume', at: o.at, duration: o.duration }, o, tv.name);
           if (choice === null) return;
           if (choice === 'resume') t = o.at;
         }

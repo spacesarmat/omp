@@ -73,7 +73,6 @@ export const en: EnDict<typeof ru> = {
     day: '{month} {d}',
     dayTime: '{day}, {time}',
     dayYear: '{day}, {year}',
-    numeric: '{m}/{d}',
     /** Short weekday names from Sunday, space-separated. */
     weekdays: 'Sun Mon Tue Wed Thu Fri Sat',
     /** «Wed, Oct 8». */
@@ -568,6 +567,8 @@ export const en: EnDict<typeof ru> = {
     yesterday: 'yesterday',
     seeds: { one: '{n} seed', other: '{n} seeds' },
     jackettHint: 'Is the site blocked by Cloudflare? Sign in to it with the browser (the “Sign in” button next to the site in “Search sources”) or connect it through Jackett, Prowlarr or FlareSolverr — see “Questions and answers” for how.',
+    cloudflareTvOne: '{name} is behind a Cloudflare check — sign in to it on the phone in “Search sources”',
+    cloudflareTvMany: '{names} are behind a Cloudflare check — sign in to them on the phone in “Search sources”',
     sort: {
       seeds: 'By seeds',
       date: 'By date',
@@ -790,9 +791,9 @@ export const en: EnDict<typeof ru> = {
       noTrackers: 'The indexer has no trackers set up',
       removeAsk: 'Remove the connection? The key will also be deleted from the phone.',
       changeKey: 'Change the key',
-      inTsKey: 'in the TorrServer settings — has a key',
-      inTsNeedKey: 'in the TorrServer settings — needs an API key',
-      foundNeedKey: 'found on the network — needs an API key',
+      inTsKey: 'key from TorrServer',
+      inTsNeedKey: 'from TorrServer · needs a key',
+      foundNeedKey: 'on the network · needs a key',
       scanningBoth: 'Searching the network for Jackett and Prowlarr…',
       addButton: 'Add Jackett or Prowlarr',
     },
@@ -1039,6 +1040,8 @@ export const en: EnDict<typeof ru> = {
   },
   connect: {
     enterAddress: 'Enter the server address',
+    unreachable: 'Could not connect to {host} — check the address and the port',
+    unreachableWhy: 'Could not connect to {host}: {error}',
     connected: 'Connected: {version}',
     noServersFound: 'No TorrServer servers found',
     history: 'Server history',
@@ -1295,6 +1298,7 @@ export const en: EnDict<typeof ru> = {
       notFound: 'Torrent not found',
       continueOnTv: 'Continue on TV · {ep}from {time}',
       episodesHead: 'Episodes',
+      episodeComes: 'out {date}',
       filesHead: 'Files',
       watchOnPhone: 'Watch on the phone',
       skipIntroSwitch: 'Skip the intro',

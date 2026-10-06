@@ -1,7 +1,7 @@
 // A series' state from its TMDB card: the status pill («Выходит · следующая серия 12 окт.», «Завершён», «Отменён»,
 // «В производстве», «Скоро новый сезон»), the seasons still to come and the small badge of a «Мои» tile.
 // Cards cached before these fields existed have none of them: unknown, so no pill and no badge from them.
-import { fmtDate, t } from '../../../src/i18n';
+import { fmtDay, t } from '../../../src/i18n';
 import type { CatalogCard } from '../../../src/catalog/tmdb';
 
 export type PillTone = 'airing' | 'ended' | 'canceled' | 'soon';
@@ -31,8 +31,7 @@ function localDate(iso: string): Date | null {
 export function airDateText(iso: string, now: number = Date.now()): string {
   const d = localDate(iso);
   if (!d) return '';
-  const day = fmtDate(d.getTime(), 'day');
-  return d.getFullYear() === new Date(now).getFullYear() ? day : t('date.dayYear', { day: day, year: d.getFullYear() });
+  return fmtDay(d.getTime(), now);
 }
 
 /** Whole days from today to `iso` (negative in the past); NaN for a bad date. */
@@ -84,7 +83,7 @@ export function seriesPill(card: CatalogCard, now: number = Date.now()): StatusP
 }
 
 /**
- * The badge of a «Мои» tile: «новая серия 12.10» when the next episode is within 30 days, else «новый сезон» when TMDB
+ * The badge of a «Мои» tile: «новая серия 12 окт.» when the next episode is within 30 days, else «новый сезон» when TMDB
  * has a released season newer than the newest one of the library; '' otherwise.
  */
 export function tileBadge(card: CatalogCard, librarySeasons: number[], now: number = Date.now()): string {
@@ -92,10 +91,7 @@ export function tileBadge(card: CatalogCard, librarySeasons: number[], now: numb
   const ne = upcomingEpisode(card, now);
   if (ne) {
     const days = daysUntil(ne.airDate, now);
-    const d = localDate(ne.airDate);
-    if (d && days >= 0 && days <= BADGE_DAYS) {
-      return t('series.badgeNext', { date: t('date.numeric', { d: pad(d.getDate()), m: pad(d.getMonth() + 1) }) });
-    }
+    if (days >= 0 && days <= BADGE_DAYS) return t('series.badgeNext', { date: airDateText(ne.airDate, now) });
   }
   const newest = librarySeasons.reduce((m, s) => Math.max(m, s), 0);
   if (!newest) return '';

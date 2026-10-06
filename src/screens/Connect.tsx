@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { servers, addServer, setActiveServer, SavedServer } from '../store/servers';
 import { TorrServerClient } from '../api/torrserver';
-import { errorMessage } from '../api/http';
+import { apiError, errorMessage, isApiError } from '../api/http';
 import { discover, candidateSubnets, getLocalIp, FoundServer } from '../api/discovery';
 import { resetTo, routeStack } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
@@ -15,6 +15,33 @@ import { Logo } from '../ui/Logo';
 import { ServerHistory } from './connect/ServerHistory';
 import { EditServerDialog } from './connect/EditServerDialog';
 
+/** A server that neither answers nor refuses is given up after this long. */
+export const CONNECT_TIMEOUT_MS = 10000;
+
+/** The server's /echo, or a timeout error after `ms` whatever the transport does (an old WebView may never settle). */
+export function connectEcho(client: TorrServerClient, ms: number): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const timer = setTimeout(() => reject(apiError('timeout', 'Timeout')), ms);
+    client.echo().then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
+/** «Не удалось подключиться к 192.168.1.191:8090 — проверьте адрес и порт»; a server that answered wrongly says how. */
+export function connectErrorText(baseUrl: string, e: unknown): string {
+  const host = baseUrl.replace(/^https?:\/\//i, '');
+  if (isApiError(e) && (e.kind === 'http' || e.kind === 'parse')) return t('connect.unreachableWhy', { host: host, error: errorMessage(e) });
+  return t('connect.unreachable', { host: host });
+}
+
 export function ConnectScreen() {
   const alive = useRef(true);
   const scanId = useRef(0);
@@ -23,6 +50,7 @@ export function ConnectScreen() {
   const [password, setPassword] = useState('');
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const [scan, setScan] = useState<{ done: number; total: number } | null>(null);
   const [found, setFound] = useState<FoundServer[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -62,8 +90,10 @@ export function ConnectScreen() {
     }
     cancelScan();
     const cfg = { url: address, user: user || undefined, password: password || undefined };
+    const client = new TorrServerClient(cfg);
     setBusy(true);
-    new TorrServerClient(cfg).echo().then(
+    setError('');
+    connectEcho(client, CONNECT_TIMEOUT_MS).then(
       (v) => {
         if (!alive.current) return;
         toast(t('connect.connected', { version: v }));
@@ -72,7 +102,11 @@ export function ConnectScreen() {
       (e) => {
         if (!alive.current) return;
         setBusy(false);
-        toast(errorMessage(e), 'error');
+        const text = connectErrorText(client.baseUrl, e);
+        setError(text);
+        toast(text, 'error');
+        // the button stays focused: OK tries again
+        if (doesFocusableExist('connect-btn')) setFocus('connect-btn');
       },
     );
   };
@@ -144,9 +178,15 @@ export function ConnectScreen() {
             </div>
           )}
           <div class="row">
-            <Button label={busy ? t('connect.connecting') : t('connect.connect')} className="primary grow" onPress={() => connect()} disabled={busy} />
+            {/* never disabled while connecting: a disabled item would lose the focus; connect() ignores a second OK */}
+            <Button focusKey="connect-btn" label={busy ? t('connect.connecting') : t('connect.connect')} className="primary grow" onPress={() => connect()} />
             <Button icon="search" label={t('connect.scan')} onPress={scanNetwork} disabled={!!scan} />
           </div>
+          {error && !busy && (
+            <div class="connect-error" role="alert">
+              {error}
+            </div>
+          )}
         </div>
         {scan && <Spinner text={t('connect.scanning', { pct: Math.round((scan.done * 100) / scan.total) })} />}
         {found.map((f) => (

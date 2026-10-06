@@ -16,7 +16,8 @@ export function changelogNotes(md, version) {
     }
     if (!on) continue;
     const m = /^\s*[-*]\s+(.*\S)\s*$/.exec(line);
-    if (m) out.push(m[1]);
+    // «[tv]» / «[phone]» say which app shows a bullet in «Что нового»; release notes list them all, unmarked
+    if (m) out.push(m[1].replace(/^\[(tv|phone)\]\s*/i, ''));
   }
   return out;
 }

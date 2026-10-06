@@ -1,6 +1,6 @@
 // «Обзор»: the sort and the filters of the TMDB feed (genre, year, country, minimum rating), their sanitizer and the
 // TMDB /discover parameters they become. Pure; the URL is built by tmdb.ts.
-import type { Kind } from './tmdb';
+import type { CatalogTitle, Kind } from './tmdb';
 
 export type DiscoverSort = 'popular' | 'rating' | 'date' | 'upcoming' | 'digitalSoon';
 export type DiscoverYear = 'any' | 'this' | 'last' | 'range';
@@ -151,7 +151,10 @@ export function discoverParams(kind: Kind, q: DiscoverQuery, today: string, regi
   if (q.sort === 'digitalSoon') {
     p.with_release_type = 4;
     p.region = region || 'RU';
-    p.sort_by = 'primary_release_date.asc';
+    // release_date.* (not primary_release_date.*) is the date of the region and release type asked: sort on it. The
+    // client sorts each page again by that date anyway (another region's page is merged in), so a TMDB that ignored
+    // this sort (popularity.desc then) would still give dated pages in order
+    p.sort_by = 'release_date.asc';
     p['release_date.gte'] = today;
     p['release_date.lte'] = addDays(today, DIGITAL_SOON_DAYS);
     if (q.rating) {
@@ -198,4 +201,28 @@ export function discoverParams(kind: Kind, q: DiscoverQuery, today: string, regi
 
   if (q.country) p.with_origin_country = q.country;
   return p;
+}
+
+/**
+ * «Скоро в цифре»: the films of one page (the region's, plus the next region's when filled) with a known digital date
+ * from today up to DIGITAL_SOON_DAYS ahead, soonest first, the more popular first on one day; one entry per film (the
+ * first region's date wins). Only within a page: TMDB pages each region on its own, so a later page may hold a date
+ * earlier than the last one of the page before (it is appended, never merged into the shown ones).
+ */
+export function digitalSoonItems(items: CatalogTitle[], today: string): CatalogTitle[] {
+  const last = addDays(today, DIGITAL_SOON_DAYS);
+  const seen: { [id: number]: boolean } = {};
+  const out = items.filter((x) => {
+    const d = x.digital;
+    if (!d || d < today || d > last || seen[x.id]) return false;
+    seen[x.id] = true;
+    return true;
+  });
+  out.sort((a, b) => {
+    const da = a.digital as string;
+    const db = b.digital as string;
+    if (da !== db) return da < db ? -1 : 1;
+    return (b.popularity || 0) - (a.popularity || 0) || a.id - b.id;
+  });
+  return out;
 }

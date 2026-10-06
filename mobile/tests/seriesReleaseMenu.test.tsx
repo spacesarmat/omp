@@ -143,6 +143,8 @@ describe('release menu on the series screen', () => {
     expect(rowHashes().sort()).toEqual(['p12', 's2a', 's2b']);
     longPress(rowMain('s2a'));
     expect(options()).toEqual(['Открыть', 'Переименовать', 'Оставить только эту', 'Удалить']);
+    // the sheet names the release that stays: the series name and the release's quality
+    expect(document.querySelector('.m-sheet-title')!.textContent).toBe('Тёмная материя · 4K WEB-DL');
     act(() => option('Оставить только эту')!.click());
     await flush();
     expect(window.confirm).toHaveBeenCalledWith('Удалить другую раздачу 2-го сезона (1)?');

@@ -79,6 +79,14 @@ describe('Remote without a TV', () => {
     click(text('Подключить ТВ'));
     expect(currentRoute.value).toEqual({ name: 'tv' });
   });
+
+  it('the button is centred under the centred heading and text', () => {
+    mount();
+    expect(text('Подключить ТВ').parentElement!.classList.contains('m-empty')).toBe(true);
+    const css = readFileSync(join('mobile', 'src', 'mobile.css'), 'utf8').replace(/\r\n/g, '\n');
+    expect(css).toMatch(/\n\.m-empty \{[^}]*text-align: center/);
+    expect(css).toMatch(/\n\.m-empty \.m-btn \{[^}]*margin: 0 auto/);
+  });
 });
 
 describe('Remote header and layout', () => {

@@ -29,7 +29,7 @@ import { checkForUpdate, type CheckResult } from '../../../src/store/updates';
 import { updateFeedUrl } from '../../../src/lib/updateInfo';
 import { isBetaVersion } from '../../../src/lib/version';
 import { APP_VERSION } from '../../../src/version';
-import { getChangelog } from '../../../src/lib/changelogData';
+import { phoneChangelog } from '../lib/phoneChangelog';
 import { openWhatsNew } from '../../../src/store/whatsNew';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { hoursText } from '../monitor/text';
@@ -326,7 +326,7 @@ export function Settings() {
       {/* updates first: the version and the check are what people look for most here */}
       <section class="m-set-group">
         <div class="m-set-label">{t('update.sheetLabel')}</div>
-        <button type="button" class="m-set-row m-set-row-btn" onClick={() => openWhatsNew(getChangelog(), APP_VERSION)}>
+        <button type="button" class="m-set-row m-set-row-btn" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>
           <span>{t('settings.version')}</span>
           <span class="m-muted">
             {APP_VERSION}

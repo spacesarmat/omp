@@ -127,3 +127,10 @@ export function fmtDate(ms: number, style: 'day' | 'dayTime'): string {
   if (style === 'day') return day;
   return t('date.dayTime', { day: day, time: pad(d.getHours()) + ':' + pad(d.getMinutes()) });
 }
+
+/** The one short day label: «5 окт.» / «Oct 5», with the year when it is not the year of `now` («9 янв. 2025»). */
+export function fmtDay(ms: number, now: number = Date.now()): string {
+  const y = new Date(ms).getFullYear();
+  const day = fmtDate(ms, 'day');
+  return y === new Date(now).getFullYear() ? day : t('date.dayYear', { day: day, year: y });
+}

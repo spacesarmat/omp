@@ -208,18 +208,35 @@ describe('series grouping', () => {
 });
 
 describe('Library series card', () => {
-  it('shows one card «Тёмная материя · 2 сезона» with the seasons badge, in every view', async () => {
+  it('shows one card «Тёмная материя» with the seasons badge, in every view; the count never in the name', async () => {
     mount();
     await flush();
     expect(cards().length).toBe(4);
     const card = seriesCard()!;
-    expect(card.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя · 2 сезона');
+    expect(card.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
     expect(card.querySelector('.m-badge')!.textContent).toBe('2 сезона');
-    for (const v of ['small', 'list', 'compact'] as const) {
+    act(() => updateSettings({ libraryView: 'small' }));
+    expect(seriesCard()!.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
+    for (const v of ['list', 'compact'] as const) {
       act(() => updateSettings({ libraryView: v }));
       expect(cards().length).toBe(4);
-      expect(seriesCard()!.textContent).toContain('Тёмная материя · 2 сезона');
+      // no poster badge in a row: the count is on the line beside the name
+      expect(seriesCard()!.querySelector(v === 'list' ? '.m-card-title' : '.m-crow-title')!.textContent).toBe('Тёмная материя');
+      expect(seriesCard()!.querySelector('.m-tile-meta')!.textContent).toBe('2 сезона');
     }
+  });
+
+  it('two releases of one season: «2 раздачи» on the badge only, not «· 2 раздачи» in the name', async () => {
+    const R1: Torrent = { hash: 'r1', title: 'Повелитель духов / Spirit Lord [S01] 1080p WEB-DL', category: 'tv', stat: 3, torrent_size: GB, timestamp: 8, data: files(['S01E01.mkv']) };
+    const R2: Torrent = { hash: 'r2', title: 'Повелитель духов / Spirit Lord [S01] 2160p WEB-DL', category: 'tv', stat: 3, torrent_size: GB, timestamp: 7, data: files(['S01E01.mkv']) };
+    serverList = [R1, R2];
+    torrents.value = [R1, R2];
+    mount();
+    await flush();
+    const card = seriesCard()!;
+    expect(card.querySelector('.m-badge')!.textContent).toBe('2 раздачи');
+    expect(card.querySelector('.m-card-title')!.textContent).toBe('Повелитель духов');
+    expect(card.textContent).not.toContain('· 2 раздачи');
   });
 
   it('groups in «Сериалы» too, but not in «Фильмы»', async () => {
@@ -287,11 +304,12 @@ describe('Library series card', () => {
     expect(removeSpy.mock.calls.map((c: unknown[]) => c[0] as string).sort()).toEqual(['s1', 's2']);
   });
 
-  it('English: «Dark matter · 2 seasons» and the menu item', async () => {
+  it('English: «2 seasons» on the badge and the menu item', async () => {
     applyLanguageSetting('en');
     mount();
     await flush();
-    expect(seriesCard()!.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя · 2 seasons');
+    expect(seriesCard()!.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
+    expect(seriesCard()!.querySelector('.m-badge')!.textContent).toBe('2 seasons');
     longPress(seriesCard()!);
     expect(btn('Delete series (2 torrents)')).toBeTruthy();
   });
@@ -314,7 +332,7 @@ describe('Series screen', () => {
     act(() => (el.querySelectorAll('.m-chip')[0] as HTMLElement).click());
     const rows = Array.from(el.querySelectorAll('.m-series-row'));
     expect(rows.map((r) => r.getAttribute('data-hash'))).toEqual(['s1']);
-    expect(rows[0].textContent).toContain('4.0');
+    expect(rows[0].textContent).toContain('4,0 ГБ');
     act(() => (rows[0].querySelector('.m-hrow-main') as HTMLElement).click());
     expect(currentRoute.value).toEqual({ name: 'torrent', hash: 's1' });
   });

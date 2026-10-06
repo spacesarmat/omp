@@ -9,15 +9,14 @@ import { EPISODES_ID, type Finding } from '../../../src/monitor/types';
 import { navigate } from '../nav';
 import { monitorVersion } from '../monitor/ui';
 import { CatalogError } from './catalog/CatalogError';
-import { airDateText } from '../lib/seriesStatus';
-import { episodeCode } from '../lib/releaseDates';
-import { calendarState, findingFor, groupByDay, loadCalendar, STALE_MS, type CalEntry } from '../lib/calendar';
+import { calendarState, dayRows, episodesCode, groupByDay, loadCalendar, rowFinding, rowLine, STALE_MS, type CalRow } from '../lib/calendar';
 import { usePullRefresh, PullArea } from '../ui/PullRefresh';
 
-function chipText(e: CalEntry): string {
-  if (e.status === 'aired') return t('news.calAired');
-  if (e.status === 'today') return t('news.calToday');
-  return airDateText(e.airDate);
+/** The chip of an episode out already: «вышла», «сегодня»; none for one to come (the day header has the date). */
+function chipText(r: CalRow): string {
+  if (r.status === 'aired') return t('news.calAired');
+  if (r.status === 'today') return t('news.calToday');
+  return '';
 }
 
 function openFinding(f: Finding): void {
@@ -25,13 +24,14 @@ function openFinding(f: Finding): void {
   else navigate({ name: 'subFindings', id: f.subId, finding: f.key });
 }
 
-function Row({ e, findings }: { e: CalEntry; findings: Finding[] }) {
+function Row({ e, findings }: { e: CalRow; findings: Finding[] }) {
   const card = e.show.card;
   const out = e.status !== 'future';
-  const found = out ? findingFor(e, findings) : null;
-  const line = episodeCode(e.season, e.episode) + (e.name ? ' · ' + e.name : '');
+  const found = out ? rowFinding(e, findings) : null;
+  const code = episodesCode(e.season, e.episodes);
+  const chip = chipText(e);
   return (
-    <div class="m-cal-row" data-cal-row={card.id + ':' + e.season + ':' + e.episode}>
+    <div class="m-cal-row" data-cal-row={card.id + ':' + e.season + ':' + e.episodes.join(',')}>
       <button type="button" class="m-cal-open" onClick={() => navigate({ name: 'title', kind: 'tv', id: card.id })}>
         {card.poster ? (
           <img class="m-cal-poster" src={card.poster} alt="" width={40} height={60} loading="lazy" />
@@ -40,17 +40,17 @@ function Row({ e, findings }: { e: CalEntry; findings: Finding[] }) {
         )}
         <span class="m-cal-text">
           <span class="m-cal-title">{card.title}</span>
-          <span class="m-small m-muted m-cal-ep">{line}</span>
+          <span class="m-small m-muted m-cal-ep">{rowLine(e)}</span>
         </span>
       </button>
-      <span class="m-cal-side">
-        <span class={'m-cal-chip m-cal-' + e.status}>{chipText(e)}</span>
-        {out &&
-          (found ? (
+      {out && (
+        <span class="m-cal-side">
+          {chip && <span class={'m-cal-chip m-cal-' + e.status}>{chip}</span>}
+          {found ? (
             <button
               type="button"
               class="m-btn m-btn-primary m-btn-sm"
-              aria-label={t('news.calWatchAria', { title: card.title + ' ' + episodeCode(e.season, e.episode) })}
+              aria-label={t('news.calWatchAria', { title: card.title + ' ' + code })}
               onClick={() => openFinding(found)}
             >
               {t('news.calWatch')}
@@ -59,13 +59,14 @@ function Row({ e, findings }: { e: CalEntry; findings: Finding[] }) {
             <button
               type="button"
               class="m-btn m-btn-secondary m-btn-sm"
-              aria-label={t('news.calFindAria', { title: card.title + ' ' + episodeCode(e.season, e.episode) })}
+              aria-label={t('news.calFindAria', { title: card.title + ' ' + code })}
               onClick={() => navigate({ name: 'add', query: torrentQuery(card, e.season), run: true })}
             >
               {t('news.calFind')}
             </button>
-          ))}
-      </span>
+          )}
+        </span>
+      )}
     </div>
   );
 }
@@ -98,8 +99,8 @@ export function Calendar() {
         {days.map((d) => (
           <section key={d.iso} class="m-cal-day" data-cal-day={d.iso}>
             <div class="m-set-label">{d.label}</div>
-            {d.entries.map((e) => (
-              <Row key={e.show.card.id + ':' + e.season + ':' + e.episode} e={e} findings={findings} />
+            {dayRows(d.entries).map((r) => (
+              <Row key={r.show.card.id + ':' + r.season + ':' + r.episodes.join(',')} e={r} findings={findings} />
             ))}
           </section>
         ))}

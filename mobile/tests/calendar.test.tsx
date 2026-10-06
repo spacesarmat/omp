@@ -4,8 +4,8 @@ import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
 import { Calendar } from '../src/screens/Calendar';
 import {
-  calendarEntries, calendarSeasons, calendarState, findingFor, followable, groupByDay, loadCalendar, pool, resetCalendar,
-  type CalShow,
+  calendarEntries, calendarSeasons, calendarState, dayRows, episodesCode, findingFor, followable, groupByDay, loadCalendar, pool,
+  realEpisodeName, resetCalendar, rowFinding, rowLine, type CalEntry, type CalShow,
 } from '../src/lib/calendar';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetSeriesMatches } from '../src/lib/seriesMatch';
@@ -189,6 +189,43 @@ describe('calendar data', () => {
     expect(findingFor(aired, [notCovered])).toBeNull();
   });
 
+  it('placeholder episode names («Эпизод 7», «Episode 7», «Серия 7») are no names', () => {
+    ['Эпизод 7', 'эпизод 12', 'Episode 7', 'EPISODE 3', 'Серия 7', 'Серия7', ' Episode 10 '].forEach((n) => expect(realEpisodeName(n)).toBe(''));
+    ['Глава 4', 'Episode 7: Return', 'Пилот', 'Серия 7 и 8'].forEach((n) => expect(realEpisodeName(n)).toBe(n));
+  });
+
+  it('episode codes: one, consecutive, apart, both', () => {
+    expect(episodesCode(13, [7])).toBe('S13E07');
+    expect(episodesCode(13, [8, 7])).toBe('S13E07–E08');
+    expect(episodesCode(13, [7, 8, 9])).toBe('S13E07–E09');
+    expect(episodesCode(13, [7, 9])).toBe('S13E07, E09');
+    expect(episodesCode(2, [1, 2, 4])).toBe('S02E01–E02, E04');
+  });
+
+  it('the episodes of a day of one show and season make one row; the name only for a lone episode with a real one', () => {
+    const named = (n: number, name: string, card: CatalogCard = FROST, s = 13): CalEntry =>
+      ({ show: show(card), season: s, episode: n, name: name, airDate: '2026-10-08', status: 'future' });
+    const rows = dayRows([named(7, 'Эпизод 7'), named(8, 'Возвращение'), named(1, 'Начало', HARBOR, 1), named(9, 'Серия 9')]);
+    expect(rows.map(rowLine)).toEqual(['S13E07–E09', 'S01E01 · Начало']);
+    expect(rowLine(dayRows([named(7, 'Эпизод 7')])[0])).toBe('S13E07');
+    expect(rowLine(dayRows([named(7, 'Episode 7')])[0])).toBe('S13E07');
+    expect(rowLine(dayRows([named(7, 'Возвращение')])[0])).toBe('S13E07 · Возвращение');
+    expect(rowLine(dayRows([named(7, ''), named(9, '')])[0])).toBe('S13E07, E09');
+    // another season of the same show stays its own row
+    expect(dayRows([named(7, ''), named(1, '', FROST, 14)]).length).toBe(2);
+  });
+
+  it('a merged row finds the finding of any of its episodes', () => {
+    const s = show(FROST, { hashes: [HASH], subIds: [] });
+    const e = (n: number): CalEntry => ({ show: s, season: 3, episode: n, name: '', airDate: '2026-10-04', status: 'aired' });
+    const f: Finding = {
+      subId: EPISODES_ID, key: HASH + ':3:5', result: result('Ледяной перевал S03E05'), at: 5,
+      episodes: { torrentHash: HASH, torrentTitle: TOR.title, season: 3, haveTo: 4, from: 5, to: 5 },
+    };
+    expect(rowFinding(dayRows([e(4), e(5)])[0], [f])).toBe(f);
+    expect(rowFinding(dayRows([e(4)])[0], [f])).toBeNull();
+  });
+
   it('pool runs at most `limit` at a time and ends after every task, failures included', async () => {
     let now = 0;
     let max = 0;
@@ -240,7 +277,7 @@ describe('gathering', () => {
 });
 
 describe('the «Календарь» tab', () => {
-  it('rows by day: poster, title, «S03E05 · name», the chip; «Смотреть» opens the finding, «Найти» the season search', async () => {
+  it('rows by day: poster, title, «S03E05 · name», «вышла» / «сегодня» but no date chip; «Смотреть» opens the finding, «Найти» the season search', async () => {
     fake();
     torrents.value = [TOR];
     const sub = addSubscription({ query: 'Тихая гавань', quality: '', sources: null, notify: true })!;
@@ -260,7 +297,8 @@ describe('the «Календарь» tab', () => {
     const today = days[1].querySelector('.m-cal-row')!;
     expect(today.querySelector('.m-cal-chip')!.textContent).toBe('сегодня');
     const future = days[2].querySelector('.m-cal-row')!;
-    expect(future.querySelector('.m-cal-chip')!.textContent).toBe('8 окт.');
+    expect(future.querySelector('.m-cal-chip')).toBeNull();
+    expect(future.querySelector('.m-cal-side')).toBeNull();
     expect(future.querySelector('button.m-btn')).toBeNull();
 
     act(() => button('Смотреть', first)!.click());

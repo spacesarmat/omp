@@ -136,4 +136,20 @@ class EngineChooserTest {
         assertFalse(c.onError(ErrorKind.OTHER, firstFrame = false, detail = "ERROR_CODE_UNSPECIFIED"))
         assertTrue(c.onError(ErrorKind.OTHER, firstFrame = false, detail = EngineChooser.DECODING_FAILED))
     }
+
+    @Test
+    fun outOfMemoryMovesToVlcEvenMidPlayButOnlyInAuto() {
+        val c = EngineChooser(EngineMode.AUTO)
+        c.initial(false)
+        assertTrue(c.onError(ErrorKind.OTHER, firstFrame = true, detail = EngineChooser.OUT_OF_MEMORY))
+        assertEquals(EngineKind.VLC, c.current)
+        // once: VLC is not left again
+        assertFalse(c.onError(ErrorKind.OTHER, firstFrame = true, detail = EngineChooser.OUT_OF_MEMORY))
+        val builtin = EngineChooser(EngineMode.BUILTIN)
+        builtin.initial(false)
+        assertFalse(builtin.onError(ErrorKind.OTHER, firstFrame = true, detail = EngineChooser.OUT_OF_MEMORY))
+        val noVlc = EngineChooser(EngineMode.AUTO, vlcAvailable = false)
+        noVlc.initial(false)
+        assertFalse(noVlc.onError(ErrorKind.OTHER, firstFrame = true, detail = EngineChooser.OUT_OF_MEMORY))
+    }
 }
