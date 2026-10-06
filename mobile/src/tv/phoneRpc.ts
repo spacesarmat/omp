@@ -26,13 +26,16 @@ let started = false;
 
 /** How the address reaches an LG that already shows OMP (injected by main.tsx; keeps this module out of an import cycle). */
 export interface PhoneRpcDeps {
-  /** An LG TV is connected now. */
-  lgConnected: () => boolean;
+  /**
+   * The LG TV connected now (its IP), null while none is (or the active TV is an Android TV). Read inside an effect:
+   * a switch of the active TV to an LG and an LG reconnect hand the address over again.
+   */
+  connectedLg: () => string | null;
   /** Re-sends the launch params (with `phone`) when OMP is in the TV foreground; never rejects. */
   reattach: () => Promise<void>;
 }
 
-const noDeps: PhoneRpcDeps = { lgConnected: () => false, reattach: () => Promise.resolve() };
+const noDeps: PhoneRpcDeps = { connectedLg: () => null, reattach: () => Promise.resolve() };
 let deps: PhoneRpcDeps = noDeps;
 
 /** A service that is not up yet is asked again this often, at most [STARTING_TRIES] times. */
@@ -61,24 +64,33 @@ function settle(gen: number, info: RpcInfo | null): void {
 
 const keyOf = (p: { url: string; token: string }): string => p.url + ' ' + p.token;
 
-/** The address an LG launch carried last (set by launchOnTv), so a change is handed over once. */
-let sentKey: string | null = null;
-/** The address a hand-over was tried for, and how many times (an attach in flight can launch with the old one). */
+/** The address the last launch of each LG carried (by the TV's IP, set by launchOnTv), so it is handed over once. */
+const sentKeys: { [tv: string]: string } = {};
+/** The TV and address a hand-over was tried for, and how many times (an attach in flight can launch with the old one). */
 let triedKey: string | null = null;
 let tries = 0;
 let delivering = false;
+/** The LG connected when the hand-over last looked; a new one (or a reconnect) gets fresh tries. */
+let lastLg: string | null = null;
 
-/** launchOnTv reports the `phone` an LG launch carried (null: none). */
-export function markPhoneSent(p: { url: string; token: string } | null): void {
-  sentKey = p ? keyOf(p) : null;
+/** launchOnTv reports the `phone` a launch of the LG at `tv` carried (null: none). */
+export function markPhoneSent(tv: string, p: { url: string; token: string } | null): void {
+  if (p) sentKeys[tv] = keyOf(p);
+  else delete sentKeys[tv];
 }
 
-/** Hands a changed address (new token, port or Wi-Fi IP) to a connected LG that shows OMP. */
+/**
+ * Hands the address to the connected LG when it shows OMP and has not got this one yet: a changed address (new
+ * token, port or Wi-Fi IP), a switch of the active TV to an LG, an LG reconnect.
+ */
 function deliver(): void {
   const p = phoneParam();
   if (!p) return;
-  const key = keyOf(p);
-  if (key === sentKey || !deps.lgConnected()) return;
+  const tv = deps.connectedLg();
+  if (!tv) return;
+  const addr = keyOf(p);
+  if (sentKeys[tv] === addr) return;
+  const key = tv + ' ' + addr;
   if (key !== triedKey) {
     triedKey = key;
     tries = 0;
@@ -145,9 +157,16 @@ export function initPhoneRpc(d?: PhoneRpcDeps): void {
     void apply(on);
     if (on) askNotifications();
   });
-  // the TV keeps the address of the last launch: a new token (switch off and on), port or IP is handed over again
+  // the TV keeps the address of the last launch: a new token (switch off and on), port or IP is handed over again,
+  // and so is the address to an LG that becomes the connected TV (a switch in «Пульт», a reconnect) without it
   effect(() => {
-    if (!rpcInfo.value) return;
+    const info = rpcInfo.value;
+    const tv = deps.connectedLg();
+    if (tv !== lastLg) {
+      lastLg = tv;
+      triedKey = null;
+    }
+    if (!info || !tv) return;
     untracked(deliver);
   });
   // a new Wi-Fi address while the app was in the background

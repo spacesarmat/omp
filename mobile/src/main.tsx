@@ -12,7 +12,7 @@ import { t } from '../../src/i18n';
 import { startKeyboardWatch } from './ui/keyboard';
 import { initPhoneRpc } from './tv/phoneRpc';
 import { attachIfOmpForeground } from './tv/playerLink';
-import { tvState, tvKind } from './tv/tvClient';
+import { tvState, tvKind, sessionIp } from './tv/tvClient';
 
 installErrorHooks();
 startKeyboardWatch();
@@ -23,7 +23,7 @@ logStart(t('history.phone'));
 registerBuiltinSources();
 // TV search: keeps the phone's TV search server in step with the switch (on by default once a TV is saved)
 initPhoneRpc({
-  lgConnected: () => tvState.value === 'connected' && tvKind() !== 'atv',
+  connectedLg: () => (tvState.value === 'connected' && tvKind() !== 'atv' ? sessionIp.value : null),
   reattach: attachIfOmpForeground,
 });
 

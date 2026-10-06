@@ -1,4 +1,5 @@
-// The phone hands a changed search address (token, port, Wi-Fi IP) to a connected LG that shows OMP.
+// The phone hands its search address to a connected LG that shows OMP: a changed one (token, port, Wi-Fi IP), and
+// the current one to an LG that becomes the connected TV; each LG gets the same address once.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { RpcInfo } from '../src/platform/native';
 
@@ -11,26 +12,38 @@ const flush = async () => {
 
 interface Launch {
   report?: string;
+  tv?: string;
   phone: { url: string; token: string; name: string } | null;
 }
 
-async function setup(o: { connected?: boolean; first?: RpcInfo; gate?: Promise<void> } = {}) {
+const LG_IP = '192.168.1.50';
+const ATV_IP = '192.168.1.60';
+
+async function setup(o: { connected?: boolean; first?: RpcInfo; gate?: Promise<void>; active?: 'lg' | 'atv' } = {}) {
   vi.resetModules();
   localStorage.clear();
+  // the same module instance as the code under test (resetModules gives it a fresh one)
+  const { signal } = await import('@preact/signals');
   const nat = await import('../src/platform/native');
   const store = await import('../src/tv/tvStore');
   const rpc = await import('../src/tv/phoneRpc');
   const link = await import('../src/tv/playerLink');
-  store.tvs.value = [{ ip: '192.168.1.50', name: 'LG' }];
+  store.tvs.value = [{ ip: LG_IP, name: 'LG' }];
+  // the active TV, as tvClient sees it once connected (the phone's TV switcher changes it)
+  const active = signal<{ ip: string; kind: 'lg' | 'atv' }>(o.active === 'atv' ? { ip: ATV_IP, kind: 'atv' } : { ip: LG_IP, kind: 'lg' });
+  const atvAttaches: string[] = [];
   const set = vi.spyOn(nat.native, 'rpcSetEnabled').mockResolvedValue(o.first || INFO);
   const info = vi.spyOn(nat.native, 'rpcInfo').mockResolvedValue(INFO);
   const launches: Launch[] = [];
   let gate = o.gate || null;
   link.setPlayerLinkDeps({
     now: () => 1000,
-    tvIp: () => '192.168.1.50',
+    tvIp: () => active.value.ip,
     tvFailed: () => false,
-    tvKind: () => 'lg',
+    tvKind: () => active.value.kind,
+    attachOnTv: async (url: string) => {
+      atvAttaches.push(url);
+    },
     foregroundAppId: async () => OMP,
     // as tvClient.launchOnTv: reads the address when the launch starts, marks it sent once the TV answered
     launchOnTv: async (p: object) => {
@@ -40,8 +53,8 @@ async function setup(o: { connected?: boolean; first?: RpcInfo; gate?: Promise<v
         gate = null;
         await g;
       }
-      launches.push({ ...(p as { report?: string }), phone });
-      rpc.markPhoneSent(phone);
+      launches.push({ ...(p as { report?: string }), phone, tv: active.value.ip });
+      rpc.markPhoneSent(active.value.ip, phone);
     },
     native: {
       startPlayerServer: async () => 'http://192.168.1.2:8123/',
@@ -50,7 +63,17 @@ async function setup(o: { connected?: boolean; first?: RpcInfo; gate?: Promise<v
     } as any,
   });
   const connected = o.connected !== false;
-  return { rpc, link, set, info, launches, init: () => rpc.initPhoneRpc({ lgConnected: () => connected, reattach: link.attachIfOmpForeground }) };
+  const connectedLg = () => (connected && active.value.kind === 'lg' ? active.value.ip : null);
+  return {
+    rpc,
+    link,
+    set,
+    info,
+    launches,
+    atvAttaches,
+    active,
+    init: () => rpc.initPhoneRpc({ connectedLg, reattach: link.attachIfOmpForeground }),
+  };
 }
 
 afterEach(() => {
@@ -123,5 +146,48 @@ describe('phone address hand-over', () => {
     await flush();
     expect(s.launches).toHaveLength(0);
     expect(s.rpc.phoneParam()).not.toBeNull();
+  });
+
+  it('switching the active TV from Android TV to an LG that shows OMP hands the address over once', async () => {
+    const s = await setup({ active: 'atv' });
+    s.init();
+    await flush();
+    // Android TV searches with its own sources: it never gets the address
+    expect(s.launches).toHaveLength(0);
+    expect(s.rpc.phoneParam()).not.toBeNull();
+    // «Пульт» → the TV switcher: the LG becomes the active TV and connects
+    s.active.value = { ip: LG_IP, kind: 'lg' };
+    await flush();
+    expect(s.launches.map((l) => [l.tv, l.phone && l.phone.url])).toEqual([[LG_IP, url(INFO)]]);
+    // the LG reconnects (or the user switches away and back): the same address is not sent to it again
+    s.active.value = { ip: ATV_IP, kind: 'atv' };
+    await flush();
+    s.active.value = { ip: LG_IP, kind: 'lg' };
+    await flush();
+    expect(s.launches).toHaveLength(1);
+  });
+
+  it("a switch to the LG together with the app's connect-time attach still launches once", async () => {
+    const s = await setup({ active: 'atv' });
+    s.init();
+    await flush();
+    s.active.value = { ip: LG_IP, kind: 'lg' };
+    const attach = s.link.attachIfOmpForeground();
+    await attach;
+    await flush();
+    expect(s.launches.map((l) => [l.tv, l.phone && l.phone.url])).toEqual([[LG_IP, url(INFO)]]);
+  });
+
+  it('the sent address is kept per TV: another LG gets it too', async () => {
+    const s = await setup();
+    s.init();
+    await flush();
+    expect(s.launches.map((l) => l.tv)).toEqual([LG_IP]);
+    s.active.value = { ip: '192.168.1.51', kind: 'lg' };
+    await flush();
+    expect(s.launches.map((l) => l.tv)).toEqual([LG_IP, '192.168.1.51']);
+    s.active.value = { ip: LG_IP, kind: 'lg' };
+    await flush();
+    expect(s.launches).toHaveLength(2);
   });
 });
