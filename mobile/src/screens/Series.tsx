@@ -19,9 +19,10 @@ import { filesOf, useTvLaunch } from '../watch';
 import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
 import { TorrentMenu, type TorrentMenuItem } from '../ui/TorrentMenu';
 import { client } from '../../../src/store/servers';
+import { sharedProgress, sharedResume } from '../lib/sharedProgress';
 import { activeTv } from '../tv/tvStore';
 import { torrents } from '../../../src/store/library';
-import { continueWatching, getLocalProgress, progressVersion, resumePosition, serverViewed } from '../../../src/store/progress';
+import { continueWatching, getLocalProgress, progressVersion, serverViewed } from '../../../src/store/progress';
 import { libraryTitle, positionLabel } from '../../../src/lib/libraryView';
 import { formatBytes } from '../../../src/lib/format';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
@@ -275,8 +276,10 @@ function Row({ tor, onWatch, onMenu }: { tor: Torrent; onWatch: (tor: Torrent) =
   const s = libraryTitle(tor);
   const files = playableFiles(filesOf(tor));
   const target = watchTarget(tor.hash, files);
-  const at = target ? resumePosition(tor.hash, target.id) : 0;
-  const duration = target ? getLocalProgress(tor.hash, target.id)?.duration || 0 : 0;
+  // the episode's progress, also from the same episode in another release of the series
+  const shared = target ? sharedProgress(tor.hash, target.id) : null;
+  const at = shared ? shared.position : 0;
+  const duration = target && shared ? getLocalProgress(tor.hash, target.id)?.duration || shared.duration : 0;
   const q = qualityBadge(displayTitle(tor));
   return (
     <div class="m-hrow m-series-row" data-hash={tor.hash}>
@@ -370,7 +373,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
     void launch.start({
       hash: tor.hash,
       file: target.id,
-      at: resumePosition(tor.hash, target.id),
+      at: sharedResume(tor.hash, target.id),
       duration: getLocalProgress(tor.hash, target.id)?.duration || undefined,
       label: [episodeLabel(target.path), stripExt(baseName(target.path))].filter(Boolean).join(' · '),
       onError: setError,
@@ -403,7 +406,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
 
   const main = rows.length ? seasonTarget(rows) : null;
   const mainFile = main ? watchTarget(main.hash, playableFiles(filesOf(main))) : undefined;
-  const mainAt = main && mainFile ? resumePosition(main.hash, mainFile.id) : 0;
+  const mainAt = main && mainFile ? sharedResume(main.hash, mainFile.id) : 0;
 
   return (
     <>

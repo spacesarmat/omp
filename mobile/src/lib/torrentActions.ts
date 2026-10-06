@@ -6,11 +6,36 @@ import { showToast } from '../ui/toast';
 import { t } from '../../../src/i18n';
 import { continueWatching } from '../../../src/store/progress';
 import type { TorrentFile } from '../../../src/lib/episodes';
+import { episodeCopies, seriesSiblings } from '../../../src/lib/episodeProgress';
+import { sharedWatched } from './sharedProgress';
 
-/** Where «Смотреть на ТВ» continues: the latest started file of the torrent, else the first playable one (none: undefined). */
+/**
+ * Where «Смотреть на ТВ» continues: the latest started episode of the torrent, also when it was started in another
+ * release of the series (the same SxxEyy here); else the first episode not watched in any release once some are;
+ * else the first playable file (none: undefined).
+ */
 export function watchTarget(hash: string, playable: TorrentFile[]): TorrentFile | undefined {
-  const last = continueWatching(torrents.value, 1000).find((e) => e.torrent.hash === hash);
-  return (last && playable.find((f) => f.id === last.fileIndex)) || playable[0];
+  const list = torrents.value;
+  const recent = continueWatching(list, 1000);
+  const tor = list.find((x) => x.hash === hash);
+  const siblings = tor ? seriesSiblings(list, tor).map((x) => x.hash) : [hash];
+  for (const e of recent) {
+    if (e.torrent.hash === hash) {
+      const own = playable.find((f) => f.id === e.fileIndex);
+      if (own) return own;
+      continue;
+    }
+    if (siblings.indexOf(e.torrent.hash) < 0) continue;
+    const same = playable.find((f) =>
+      episodeCopies(list, hash, f.id).some((c) => c.hash === e.torrent.hash && c.fileIndex === e.fileIndex),
+    );
+    if (same) return same;
+  }
+  if (playable.some((f) => sharedWatched(hash, f.id))) {
+    const next = playable.find((f) => !sharedWatched(hash, f.id));
+    if (next) return next;
+  }
+  return playable[0];
 }
 
 export interface DeleteResult {
