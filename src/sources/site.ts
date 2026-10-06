@@ -4,6 +4,7 @@ import { badUrl } from './http';
 import { stashFile } from '../api/torrentFiles';
 import { infohashFromMagnet, parseHtml } from './html';
 import { isCloudflareBypassOn } from './store';
+import { log } from '../lib/log';
 import type { HttpOptions, HttpResponse, Source, SourceContext, SourceResult } from './types';
 
 export const challenge = (): string => t('sources.site.challenge');
@@ -26,16 +27,87 @@ export function isCloudflareInterstitial(text: string): boolean {
  * challenges.cloudflare.com, which checkPage would call a Cloudflare block) is `captcha()`'s error; anything else goes
  * through checkPage.
  */
-export function checkLoginPage(res: HttpResponse, hasCaptcha: (doc: Document) => boolean, captcha: () => Error): HttpResponse {
+export function checkLoginPage(
+  res: HttpResponse,
+  hasCaptcha: (doc: Document) => boolean,
+  captcha: () => Error,
+  site?: string,
+): HttpResponse {
   if (isChallenge(res.text) && !isCloudflareInterstitial(res.text) && hasCaptcha(parseHtml(res.text))) throw captcha();
-  return checkPage(res);
+  return checkPage(res, site);
 }
 
-/** The response as a page, or a Russian error (Cloudflare check, HTTP error status). */
-export function checkPage(res: HttpResponse): HttpResponse {
-  if (isChallenge(res.text)) throw new Error(challenge());
+/**
+ * The response as a page, or a Russian error (Cloudflare check, HTTP error status). `site`: the source's name; a
+ * Cloudflare error is then written to the journal with the page's signs (logPageSigns).
+ */
+export function checkPage(res: HttpResponse, site?: string): HttpResponse {
+  if (isChallenge(res.text)) {
+    if (typeof site === 'string' && site) logPageSigns(site, 'cloudflare', res);
+    throw new Error(challenge());
+  }
   if (res.status < 200 || res.status >= 400) throw new Error(t('sources.site.error', { status: res.status }));
   return res;
+}
+
+/** The answer's cf-mitigated header (the native http passes it), '' when there is none. */
+export function cfMitigated(res: HttpResponse): string {
+  const v = typeof res.cfMitigated === 'string' ? res.cfMitigated.trim().toLowerCase() : '';
+  return /^[a-z_-]{1,20}$/.test(v) ? v : '';
+}
+
+/** Cloudflare's own check page (its title / markers, or cf-mitigated: challenge), not a page with an inline Turnstile. */
+export function isCloudflareBlock(res: HttpResponse): boolean {
+  return isCloudflareInterstitial(res.text) || cfMitigated(res) === 'challenge';
+}
+
+/** A sign-in form on the page (a password field or the forum engines' login fields). */
+export function hasLoginForm(text: string): boolean {
+  return /<input[^>]+(?:type=["']?password\b|name=["']?login_(?:username|password)\b)/i.test(text);
+}
+
+/**
+ * A page that needs the session. Cloudflare's own check page is challenge(); a sign-in page (`signedOut`: the login URL
+ * or a login form), even one with an inline Turnstile on its form, comes back as is, so the caller signs in again or
+ * asks for a login («нужен вход»); anything else goes through checkPage. `site`: the source's name for the journal.
+ */
+export function checkSessionPage(res: HttpResponse, signedOut: (res: HttpResponse) => boolean, site: string): HttpResponse {
+  if (isCloudflareBlock(res)) {
+    logPageSigns(site, 'cloudflare', res);
+    throw new Error(challenge());
+  }
+  if (res.status < 500 && signedOut(res)) return res;
+  return checkPage(res, site);
+}
+
+/** Host and path of a URL, without the query and the fragment ('' when it is not http(s)). */
+export function hostPath(url: string): string {
+  const m = /^https?:\/\/([^/?#:@]+)(?::\d+)?([^?#]*)/i.exec(url || '');
+  return m ? m[1].toLowerCase() + (m[2] || '/') : '';
+}
+
+/**
+ * Journal line of a page a source could not use (a Cloudflare block or «нужен вход»): the HTTP status, the final host and
+ * path (no query) and whether it has a login form, Cloudflare's check page, a Turnstile, the cf-mitigated header. Never
+ * cookies, tokens, user names or the body.
+ */
+export function logPageSigns(site: string, verdict: 'cloudflare' | 'login', res: HttpResponse | null): void {
+  if (!res) return;
+  const yes = (b: boolean) => t(b ? 'sources.site.signsYes' : 'sources.site.signsNo');
+  log(
+    'warn',
+    'search',
+    t('sources.site.signs', {
+      site,
+      verdict: t(verdict === 'cloudflare' ? 'sources.site.signsCloudflare' : 'sources.site.signsLogin'),
+      status: res.status,
+      where: hostPath(res.url) || '-',
+      form: yes(hasLoginForm(res.text)),
+      check: yes(isCloudflareInterstitial(res.text)),
+      turnstile: yes(res.text.indexOf('challenges.cloudflare.com') >= 0),
+      mitigated: cfMitigated(res) || '-',
+    }),
+  );
 }
 
 /**

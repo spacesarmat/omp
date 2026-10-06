@@ -79,6 +79,69 @@ export function seriesNames(title: string): string[] {
   return out;
 }
 
+// release details in a title part: resolution, quality, codecs, HDR, audio and voice-over marks («6 x ПМ, ЛМ, СТ»)
+const RELEASE_INFO =
+  /(?:^|[^0-9a-zа-яё])(?:\d{3,4}[pi]|[248]k|uhd|hevc|hdr(?:10)?|dv|dovi|sdr|web[\s-]?dl(?:rip)?|web[\s-]?rip|bd[\s-]?rip|hd[\s-]?rip|dvd[\s-]?rip|blu[\s-]?ray|bd[\s-]?remux|remux|hdtv|[xh][\s.]?26[45]|avc|e?ac3|aac|dts|mvo|dvo|avo|subs?|hybrid|пм|лм|ст|дб|дубляж|субтитры|(?:много|двух|одно)голос\S*)(?![0-9a-zа-яё])/i;
+// a part that is only the year
+const YEAR_PART = /^\s*(?:19|20)\d\d\s*$/;
+// a part (or a normalized name) that is only the season and episodes: «S4E1-10 of 10», «S02», «s4e1 10 of 10»
+const EPISODE_PART = /^\s*s\d{1,2}(?:e\d{1,4})?(?:\s*[-–]?\s*(?:s\d{1,2})?e?\d{1,4})?(?:\s+(?:of|из)\s+\d+)?\s*$/i;
+
+function letterCount(n: string): number {
+  return n.replace(/[^a-zа-я]/g, '').length;
+}
+
+function withoutGroups(title: string): string {
+  let t = title || '';
+  for (let i = 0; i < 5; i++) {
+    const next = t.replace(/\([^()]*\)/g, ' ').replace(/\[[^[\]]*\]/g, ' ');
+    if (next === t) break;
+    t = next;
+  }
+  return t;
+}
+
+/** A seriesNames entry that is not a name: the year, the episodes or release details («2024», «web dl 1080p»). */
+function isNoise(n: string): boolean {
+  if (YEAR_PART.test(n) || EPISODE_PART.test(n)) return true;
+  const m = RELEASE_INFO.exec(n);
+  return !!m && m.index === 0;
+}
+
+/**
+ * Every name variant of a series for telling its releases in the library (grouping, shared progress): the title and
+ * the original title, i.e. the first two parts between «/», both before the first (...) or [...] (as seriesNames
+ * reads them) and with every such group removed («Звёздный путь (3 сезон) / Star Trek / 2025 / 4K»). Later parts
+ * (network, language, edition: «AMC», «Rus, Eng») are never names, nor are the year, episodes or release details.
+ */
+export function seriesNameVariants(title: string): string[] {
+  const out: string[] = [];
+  const add = (n: string) => {
+    if (n && out.indexOf(n) < 0) out.push(n);
+  };
+  head(title)
+    .split('/')
+    .slice(0, 2)
+    .forEach((p) => {
+      const n = normalizeTitle(cleanName(p));
+      if (n.length >= 2 && !isNoise(n)) add(n);
+    });
+  let t = withoutGroups(title);
+  const bar = t.indexOf('|');
+  if (bar >= 0) t = t.slice(0, bar);
+  const parts = t.split('/');
+  for (let i = 0; i < parts.length && i < 2; i++) {
+    const p = parts[i];
+    if (YEAR_PART.test(p)) break;
+    if (EPISODE_PART.test(p)) continue;
+    const info = RELEASE_INFO.exec(p);
+    const n = normalizeTitle(cleanName(info ? p.slice(0, info.index) : p));
+    if (letterCount(n) >= 3 && !isNoise(n)) add(n);
+    if (info) break;
+  }
+  return out;
+}
+
 const BY = /(?:^|\s)(?:от|by)\s+([^|[\]()]+)/gi;
 
 /** Release groups named in the title: «от Aleksan55», «by VLDeshka», «| Даблин»; normalized, 3+ letters. */

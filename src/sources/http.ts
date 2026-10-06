@@ -31,12 +31,15 @@ function isHttpUrl(url: string): boolean {
 }
 
 function response(r: unknown, url: string): HttpResponse {
-  const o = r && typeof r === 'object' ? (r as { status?: unknown; url?: unknown; text?: unknown }) : {};
-  return {
+  const o = r && typeof r === 'object' ? (r as { status?: unknown; url?: unknown; text?: unknown; cfMitigated?: unknown }) : {};
+  const res: HttpResponse = {
     status: typeof o.status === 'number' ? o.status : 0,
     url: typeof o.url === 'string' && o.url ? o.url : url,
     text: typeof o.text === 'string' ? o.text : '',
   };
+  // the cf-mitigated header, for the journal's diagnostics only
+  if (typeof o.cfMitigated === 'string' && o.cfMitigated) res.cfMitigated = o.cfMitigated;
+  return res;
 }
 
 function withOptions(req: NativeHttpRequest, opts: HttpOptions | undefined, flare: () => string | null): NativeHttpRequest {

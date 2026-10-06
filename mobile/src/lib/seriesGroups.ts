@@ -1,13 +1,13 @@
 // «Мои»: the torrents of one series (its seasons, or several releases) shown as one card. The key is the series name
 // (the first title variant, normalized) of a torrent in the «Сериалы» category, or guessed as one; films never group.
 import type { Torrent } from '../../../src/api/types';
-import { seriesNames } from '../../../src/monitor/newEpisodes';
+import { seriesNameVariants } from '../../../src/monitor/newEpisodes';
 import { parseEpisodeRange } from '../../../src/monitor/episodes';
 import { guessCategory } from '../../../src/lib/categoryGuess';
 import { displayTitle } from '../../../src/lib/torrentName';
 import { parseEpisode, playableFiles } from '../../../src/lib/episodes';
 import { filterTorrents } from '../../../src/lib/librarySearch';
-import { tp } from '../../../src/i18n';
+import { lang, tp } from '../../../src/i18n';
 import { filesOf } from '../watch';
 
 /** Season 0: the torrent says nothing about its season. */
@@ -22,7 +22,7 @@ export interface SeriesGroup {
   seasons: number[];
   /** The newest season's torrent: its poster stands for the group. */
   lead: Torrent;
-  /** The member whose title names the series best (most name variants, e.g. «Русское / Original»): the group's title. */
+  /** The group's title: a member named first in the UI language, else with the most name variants, else the newest season. */
   named: Torrent;
 }
 
@@ -43,8 +43,8 @@ export function isSeries(tor: Torrent): boolean {
 /** The grouping key of a series torrent; '' for a film or a title with no name. */
 export function seriesKey(tor: Torrent): string {
   if (!isSeries(tor)) return '';
-  // seriesNames are lowercased with the yo letter read as e (normalizeTitle)
-  const names = seriesNames(displayTitle(tor));
+  // the names are lowercased with the yo letter read as e (normalizeTitle)
+  const names = seriesNameVariants(displayTitle(tor));
   return names.length ? names[0] : '';
 }
 
@@ -87,11 +87,15 @@ function makeGroup(key: string, members: Torrent[]): SeriesGroup {
     if (a > b || (a === b && (m.timestamp || 0) > (lead.timestamp || 0))) lead = m;
   });
   seasons.sort((a, b) => a - b);
+  // the title: first named in the UI language's script, then with the most name variants, then the newest season
   let named = lead;
+  let own = ownScript(lead);
   let most = namesOf(lead).length;
   members.forEach((m) => {
+    const o = ownScript(m);
     const n = namesOf(m).length;
-    if (n > most) {
+    if (o !== own ? o : n !== most ? n > most : lastSeason(m) > lastSeason(named)) {
+      own = o;
       most = n;
       named = m;
     }
@@ -99,9 +103,15 @@ function makeGroup(key: string, members: Torrent[]): SeriesGroup {
   return { kind: 'series', key, members, seasons, lead, named };
 }
 
+/** The torrent's first name is in the script of the UI language (Cyrillic for Russian, Latin for English). */
+function ownScript(tor: Torrent): boolean {
+  const first = namesOf(tor)[0] || '';
+  return lang.value === 'ru' ? /[а-я]/.test(first) : /[a-z]/.test(first);
+}
+
 /** Every name variant of a series torrent («Звёздный путь…», «Star Trek…»); [] for a film. */
 function namesOf(tor: Torrent): string[] {
-  return isSeries(tor) ? seriesNames(displayTitle(tor)) : [];
+  return isSeries(tor) ? seriesNameVariants(displayTitle(tor)) : [];
 }
 
 /**

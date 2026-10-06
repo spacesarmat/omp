@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   seriesQuery,
   seriesNames,
+  seriesNameVariants,
   releaseGroups,
   libraryRange,
   isWatchedSeries,
@@ -66,6 +67,32 @@ describe('series names', () => {
     expect(seriesNames('Дом дракона 1-8 серии (2024) 1080p')).toEqual(['дом дракона']);
     // the whole name, not the first four words
     expect(seriesNames('Очень длинное название сериала про жизнь / Серии 1-8 из 10')).toEqual(['очень длинное название сериала про жизнь']);
+  });
+
+  it('seriesNameVariants also reads the names after a (...) group, up to the year or the release details', () => {
+    const SNW = 'star trek strange new worlds';
+    expect(
+      seriesNameVariants(
+        'Звёздный путь: Странные новые миры (3 сезон: 1-10 серии) / Star Trek: Strange New Worlds / 2025 / 6 x ПМ, ЛМ, СТ / 4K, HEVC, HDR, DV / Hybrid (2160p)',
+      ),
+    ).toEqual(['звездный путь странные новые миры', SNW]);
+    // the season / episodes part is not a name
+    expect(seriesNameVariants('Star Trek: Strange New Worlds / S2E1-10 of 10 [2023, WEB-DL 2160p]')).toEqual([SNW]);
+    expect(seriesNameVariants('Star Trek: Strange New Worlds / S4E1-10 of 10 [2026, WEB-DL 2160p]')).toEqual([SNW]);
+    expect(seriesNameVariants('Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 9 (Джейсон Аллен) [2025, WEB-DL 1080p]')).toEqual([
+      'темная материя',
+      'dark matter',
+    ]);
+    // the year and the release details are never names
+    expect(seriesNameVariants('Сериал Один / Show One / 2024 / WEB-DL 1080p')).toEqual(['сериал один', 'show one']);
+    expect(seriesNameVariants('Show Two / WEB-DL 1080p / 2024')).toEqual(['show two']);
+    // a film: the same names as seriesNames
+    const film = 'Дюна: Часть вторая / Dune: Part Two (2024) WEB-DL 2160p';
+    expect(seriesNameVariants(film)).toEqual(seriesNames(film));
+    expect(seriesNameVariants('House.of.the.Dragon.S03E01-08.2160p')).toEqual(['house of the dragon']);
+    // only the title and the original title: the network, languages and edition after them are not names
+    expect(seriesNameVariants('Ходячие мертвецы (Сезон 1) / The Walking Dead / AMC / 2010')).toEqual(['ходячие мертвецы', 'the walking dead']);
+    expect(seriesNameVariants('Шерлок / Sherlock / BBC / Rus, Eng / Полная версия')).toEqual(['шерлок', 'sherlock']);
   });
 
   it('releaseGroups reads «от …», «by …» and the parts after |', () => {

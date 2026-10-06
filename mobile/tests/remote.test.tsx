@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// @ts-ignore node builtins
+import { readFileSync } from 'node:fs';
+// @ts-ignore
+import { join } from 'node:path';
 import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -108,22 +112,43 @@ describe('Remote header and layout', () => {
     });
   });
 
-  it('buttons mode: side keys around the d-pad, Home/Menu, the media row', () => {
+  it('buttons mode (Magic Remote): d-pad, colour keys, Back/Home/Menu, volume · play · keyboard/mute', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     mount();
-    const sides = Array.from(el.querySelectorAll('.m-rb-top .m-side'));
-    expect(sides.length).toBe(2);
-    expect(Array.from(sides[0].querySelectorAll('button')).map((b) => b.getAttribute('aria-label'))).toEqual(['Клавиатура', 'Назад']);
-    expect(Array.from(sides[1].querySelectorAll('button')).map((b) => b.getAttribute('aria-label'))).toEqual(['Громче', 'Тише']);
-    expect(el.querySelector('.m-rb-top .m-dpad-wrap')).toBeTruthy();
-    expect(Array.from(el.querySelectorAll('.m-rb-two button')).map((b) => b.getAttribute('aria-label'))).toEqual(['Домой', 'Меню']);
-    expect(el.querySelectorAll('.m-rb-media button').length).toBe(5);
+    const rb = el.querySelector('.m-rb')!;
+    expect(Array.from(rb.children).map((c) => c.className)).toEqual(['m-stage m-rb-pad', 'm-rb-colors', 'm-rb-round', 'm-rb-bottom']);
+    expect(rb.querySelector('.m-rb-pad .m-dpad-wrap')).toBeTruthy();
+    const labels = (sel: string) => Array.from(rb.querySelectorAll(sel)).map((b) => b.getAttribute('aria-label'));
+    expect(labels('.m-rb-colors button')).toEqual(['Красная кнопка', 'Зелёная кнопка', 'Жёлтая кнопка', 'Синяя кнопка']);
+    expect(labels('.m-rb-round button')).toEqual(['Назад', 'Домой', 'Меню']);
+    expect(Array.from(rb.querySelectorAll('.m-rkey-cap')).map((c) => c.textContent)).toEqual(['Назад', 'Домой', 'Меню']);
+    const rockers = Array.from(rb.querySelectorAll('.m-rb-bottom .m-rocker'));
+    expect(rockers.length).toBe(2);
+    expect(Array.from(rockers[0].querySelectorAll('button')).map((b) => b.getAttribute('aria-label'))).toEqual(['Громче', 'Тише']);
+    expect(rockers[0].querySelector('.m-rocker-cap')!.textContent).toBe('Громк.');
+    expect(Array.from(rockers[1].querySelectorAll('button')).map((b) => b.getAttribute('aria-label'))).toEqual(['Клавиатура', 'Без звука']);
+    expect(rockers[1].querySelector('.m-rocker-cap')!.textContent).toBe('Клав.');
+    expect(labels('.m-rb-play button')).toEqual(['Пауза', 'Назад на 10 с', 'Вперёд на 10 с']);
+    expect(rb.querySelector('.m-rb-media')).toBeNull();
     click(lbl('Громче'));
     expect(a.volume).toHaveBeenLastCalledWith('up');
     click(lbl('Назад'));
     expect(a.pressButton).toHaveBeenLastCalledWith('BACK');
+    click(lbl('Меню'));
+    expect(a.pressButton).toHaveBeenLastCalledWith('MENU');
     click(lbl('Клавиатура'));
+    expect(lbl('Клавиатура').getAttribute('aria-pressed')).toBe('true');
     expect(el.querySelector('input[aria-label="Ввод на телевизоре"]')).toBeTruthy();
+    // the keyboard field keeps the whole layout
+    expect(el.querySelectorAll('.m-rb-colors button').length).toBe(4);
+  });
+
+  it('buttons mode: the colour keys send RED/GREEN/YELLOW/BLUE, the mute key sends MUTE', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    for (const l of ['Красная кнопка', 'Зелёная кнопка', 'Жёлтая кнопка', 'Синяя кнопка', 'Без звука']) click(lbl(l));
+    expect(a.pressButton.mock.calls).toEqual([['RED'], ['GREEN'], ['YELLOW'], ['BLUE'], ['MUTE']]);
+    expect(a.volume).not.toHaveBeenCalled();
   });
 
   it('touchpad mode: the pad, then Back/Home/Menu/Keyboard, the media row and the volume bar', () => {
@@ -165,8 +190,22 @@ describe('Remote with a TV', () => {
     expect(a.pressButton).toHaveBeenLastCalledWith('HOME');
   });
 
-  it('media row mapping and play/pause toggle', async () => {
+  it('play/pause toggle and ±10 s in buttons mode', async () => {
     mount();
+    click(lbl('Назад на 10 с'));
+    expect(a.pressButton).toHaveBeenLastCalledWith('REWIND');
+    click(lbl('Вперёд на 10 с'));
+    expect(a.pressButton).toHaveBeenLastCalledWith('FASTFORWARD');
+    click(lbl('Пауза'));
+    expect(a.pressButton).toHaveBeenLastCalledWith('PAUSE');
+    await flush();
+    click(lbl('Воспроизвести'));
+    expect(a.pressButton).toHaveBeenLastCalledWith('PLAY');
+  });
+
+  it('media row mapping and play/pause toggle (touchpad mode)', async () => {
+    mount();
+    click(text('Тачпад'));
     click(lbl('Назад на 10 с'));
     expect(a.pressButton).toHaveBeenLastCalledWith('REWIND');
     click(lbl('Пред. серия'));
@@ -662,6 +701,32 @@ describe('Remote for Android TV', () => {
   });
 });
 
+describe('buttons mode fits the phone height (mobile.css)', () => {
+  const css = readFileSync(join('mobile', 'src', 'mobile.css'), 'utf8').replace(/\r\n/g, '\n');
+  const rule = (sel: string) => {
+    const i = css.indexOf('\n' + sel + ' {');
+    expect(i, sel).toBeGreaterThanOrEqual(0);
+    return css.slice(i, css.indexOf('}', i));
+  };
+
+  it('the area is a scrolling size container and the keys are sized from its height', () => {
+    const rb = rule('.m-rb');
+    expect(rb).toContain('container-type: size');
+    expect(rb).toContain('overflow-y: auto');
+    for (const v of ['--dp', '--pill', '--rnd', '--rk', '--play', '--seek-h']) expect(rb).toMatch(new RegExp(v + ': clamp\\([^;]*cqh'));
+    expect(rule('.m-dpad-wrap')).toContain('var(--dp');
+    expect(rule('.m-rkey-btn')).toContain('var(--rnd)');
+    expect(rule('.m-rocker')).toContain('var(--rk)');
+    expect(rule('.m-rb-playbtn')).toContain('var(--play)');
+    expect(rule('.m-ckey')).toContain('var(--pill)');
+  });
+
+  it('no row is pinned to its full size, captions go on short phones', () => {
+    expect(css).not.toMatch(/\.m-rb > \* \{[^}]*flex-shrink: 0/);
+    expect(css).toMatch(/@media \(max-height: 700px\) \{\n {2}\.m-rkey-cap \{ display: none; \}/);
+  });
+});
+
 describe('touchpad settings maths', () => {
   it('sanitizer: defaults and clamping', () => {
     expect(sanitizeTouchpad(null)).toEqual(TOUCHPAD_DEFAULTS);
@@ -708,13 +773,17 @@ describe('Remote in English', () => {
     });
     expect(el.querySelector('.m-remote-state')!.textContent).toBe('Connected');
     expect(Array.from(el.querySelectorAll('[role=tab]')).map((b) => b.textContent)).toEqual(['Buttons', 'Touchpad']);
-    for (const l of ['Touchpad settings', 'Turn off the TV', 'Up', 'Down', 'Left', 'Right', 'Back', 'Home', 'Menu', 'Back 10 s', 'Prev. episode', 'Pause', 'Next episode', 'Forward 10 s', 'Quieter', 'Keyboard', 'Louder']) {
+    for (const l of ['Touchpad settings', 'Turn off the TV', 'Up', 'Down', 'Left', 'Right', 'Back', 'Home', 'Menu', 'Back 10 s', 'Pause', 'Forward 10 s', 'Quieter', 'Keyboard', 'Louder', 'Mute', 'Red button', 'Green button', 'Yellow button', 'Blue button']) {
       expect(lbl(l), l).toBeTruthy();
     }
+    expect(el.querySelector('.m-rocker-cap')!.textContent).toBe('Vol.');
     click(lbl('Pause'));
     return flush().then(() => {
       expect(lbl('Play')).toBeTruthy();
       noCyrillic();
+      noCyrillicLabels();
+      click(text('Touchpad'));
+      for (const l of ['Prev. episode', 'Next episode']) expect(lbl(l), l).toBeTruthy();
       noCyrillicLabels();
     });
   });

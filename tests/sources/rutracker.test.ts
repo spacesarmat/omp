@@ -1,8 +1,26 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { rutracker, rutrackerCaptcha } from '../../src/sources/rutracker';
 import { isLoginRequired } from '../../src/sources/types';
+import { reloadSourcePrefs, setCloudflareBypass } from '../../src/sources/store';
+import { createSourceHttp } from '../../src/sources/http';
+import { clearLog, logEntries } from '../../src/lib/log';
 import { fakeSite, fixture, page, CLOUDFLARE } from './fakeSite';
 import type { HttpCall } from './fakeSite';
+
+beforeEach(() => {
+  localStorage.removeItem('tsp.sources');
+  reloadSourcePrefs();
+  clearLog();
+});
+
+/** The login page rutracker redirects to without a session: its form carries a Turnstile from challenges.cloudflare.com. */
+const LOGIN_TURNSTILE =
+  '<!DOCTYPE html><html><head><title>rutracker.org</title>' +
+  '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script></head><body>' +
+  '<form action="login.php" method="post"><input type="text" name="login_username"><input type="password" name="login_password">' +
+  '<div class="cf-turnstile" data-sitekey="0x4AAAAAAA"></div><input type="submit" name="login"></form></body></html>';
+
+const journal = () => logEntries().map((e) => e.x);
 
 const LOGIN_URL = 'https://rutracker.org/forum/login.php';
 const SEARCH_URL = 'https://rutracker.org/forum/tracker.php?nm=';
@@ -149,6 +167,86 @@ describe('rutracker', () => {
     const site = fakeSite((c) => page(CLOUDFLARE, c.url, 403), CREDS);
     await expect(rutracker.search('x', site.ctx)).rejects.toThrow('Сайт закрыт проверкой браузера (Cloudflare)');
     expect(site.calls).toHaveLength(1);
+  });
+
+  it('is behind Cloudflare: the site switch, the visible check and the clearance status apply', () => {
+    expect(rutracker.cloudflare).toBe(true);
+    expect(rutracker.siteUrl).toBe('https://rutracker.org/');
+  });
+
+  it('a signed-in search carries the site options and writes nothing to the journal', async () => {
+    const site = fakeSite(server({ signedIn: true }), CREDS);
+    expect(await rutracker.search('x', site.ctx)).toHaveLength(2);
+    expect(site.calls.map((c) => c.opts)).toEqual([{ siteName: 'rutracker' }]);
+    setCloudflareBypass('rutracker', true);
+    const on = fakeSite(server({ signedIn: true }), CREDS);
+    expect(await rutracker.search('x', on.ctx)).toHaveLength(2);
+    expect(on.calls.map((c) => c.opts)).toEqual([{ siteName: 'rutracker', cloudflare: true }]);
+    expect(journal()).toEqual([]);
+  });
+
+  it('a login page with an inline Turnstile is «нужен вход», not a Cloudflare block', async () => {
+    const toLogin = (c: HttpCall) => page(LOGIN_TURNSTILE, c.method === 'POST' ? LOGIN_URL : LOGIN_URL + '?redirect=tracker.php%3Fnm%3Dx');
+    // no saved login (or an expired browser session): the screen offers «Войти»
+    const bare = fakeSite(toLogin);
+    const e = await rutracker.search('x', bare.ctx).then(() => null, (err: unknown) => err);
+    expect(isLoginRequired(e)).toBe(true);
+    expect(bare.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    // a saved login signs in once; the Turnstile on the answer is a captcha → «нужен вход» too
+    const saved = fakeSite(toLogin, CREDS);
+    const e2 = await rutracker.search('x', saved.ctx).then(() => null, (err: unknown) => err);
+    expect(isLoginRequired(e2)).toBe(true);
+    expect(saved.calls.map((c) => c.method)).toEqual(['GET', 'POST']);
+    const lines = journal();
+    expect(lines.length).toBeGreaterThan(0);
+    const line = lines[lines.length - 1];
+    expect(line).toContain('rutracker (нужен вход)');
+    expect(line).toContain('HTTP 200');
+    expect(line).toContain('rutracker.org/forum/login.php');
+    expect(line).toContain('форма входа: да');
+    expect(line).toContain('страница проверки: нет');
+    expect(line).toContain('Turnstile: да');
+    expect(line).not.toContain('redirect');
+    expect(lines.join('\n')).not.toContain('Cloudflare');
+  });
+
+  it('Cloudflare\'s own check page passes the Cloudflare options and is a challenge error with a journal line', async () => {
+    setCloudflareBypass('rutracker', true);
+    const site = fakeSite((c) => ({ ...page(CLOUDFLARE, c.url, 403), cfMitigated: 'challenge' }), CREDS);
+    await expect(rutracker.search('x', site.ctx)).rejects.toThrow('Сайт закрыт проверкой браузера (Cloudflare)');
+    expect(site.calls).toHaveLength(1);
+    expect(site.calls[0].opts).toEqual({ siteName: 'rutracker', cloudflare: true });
+    const line = journal().join('\n');
+    expect(line).toContain('rutracker (проверка Cloudflare)');
+    expect(line).toContain('HTTP 403');
+    expect(line).toContain('rutracker.org/forum/tracker.php');
+    expect(line).toContain('страница проверки: да');
+    expect(line).toContain('cf-mitigated: challenge');
+    expect(line).not.toContain('nm=');
+  });
+
+  it('the journal line has the status and the signs but no cookies, tokens, user names or the body', async () => {
+    // the native answer, through the real SourceHttp: the cf-mitigated header reaches the page
+    const http = createSourceHttp(
+      (req) =>
+        Promise.resolve({
+          status: 403,
+          url: req.url.replace('nm=x', 'nm=x&sid=SECRETSID'),
+          text: CLOUDFLARE + '<!-- Set-Cookie: bb_session=SECRETCOOKIE; cf_clearance=SECRETCLEAR; test-user -->',
+          cfMitigated: 'challenge',
+        }),
+      undefined,
+      () => null,
+    );
+    const site = fakeSite(() => page('', ''), CREDS);
+    site.ctx.http = http;
+    await expect(rutracker.search('x', site.ctx)).rejects.toThrow('Сайт закрыт проверкой браузера (Cloudflare)');
+    const all = journal().join('\n');
+    expect(all).toContain('HTTP 403');
+    expect(all).toContain('cf-mitigated: challenge');
+    for (const secret of ['SECRETSID', 'SECRETCOOKIE', 'SECRETCLEAR', 'bb_session', 'cf_clearance', 'test-user', 'test-pass', 'Just a moment']) {
+      expect(all).not.toContain(secret);
+    }
   });
 
   it('takes the magnet from the release page, signing in again if needed', async () => {
