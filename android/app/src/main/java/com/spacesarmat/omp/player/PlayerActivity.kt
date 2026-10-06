@@ -108,6 +108,11 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         toastShown = false
         render()
     }
+    /** The phone badge fades out BADGE_MS after the last phone command (it never stays on screen). */
+    private val hideBadge = Runnable {
+        badge.animate().cancel()
+        badge.animate().alpha(0f).setDuration(BADGE_FADE_MS).withEndAction { badge.visibility = View.GONE }.start()
+    }
     private val hideControls = Runnable {
         controlsShown = false
         render()
@@ -799,7 +804,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             "BACK" -> KeyEvent.KEYCODE_BACK
             else -> return
         }
-        badge.visibility = View.VISIBLE
+        flashBadge()
         if (dialog?.isShowing == true) {
             // the track list moves its own focus: a real key event into our window (off the UI thread)
             Thread {
@@ -819,11 +824,23 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         close()
     }
 
+    /** A phone key or command arrived: the badge fades in (or stays) and hides BADGE_MS after the last one. */
+    private fun flashBadge() {
+        handler.removeCallbacks(hideBadge)
+        badge.animate().cancel()
+        if (badge.visibility != View.VISIBLE) {
+            badge.alpha = 0f
+            badge.visibility = View.VISIBLE
+        }
+        badge.animate().alpha(1f).setDuration(BADGE_FADE_MS).start()
+        handler.postDelayed(hideBadge, BADGE_MS)
+    }
+
     // ---- phone commands (src/phone/protocol.ts Cmd) ----
 
     fun applyCommand(cmd: JSONObject) {
         if (isFinishing || !::session.isInitialized) return
-        badge.visibility = View.VISIBLE
+        flashBadge()
         val dur = durationMs()
         when (cmd.optString("type")) {
             "play" -> if (!engine.playWhenReady) {
@@ -944,6 +961,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         /** «Заставка пропущена · Вернуть» (SKIP_TOAST_MS of src/player/chapters.ts), other messages. */
         private const val SKIP_TOAST_MS = 5000L
         private const val MESSAGE_MS = 3000L
+        /** The phone badge: on screen after the last phone command, and its fade. */
+        private const val BADGE_MS = 3000L
+        private const val BADGE_FADE_MS = 200L
         private const val TEXT_COLOR = 0xFFE8EAF0.toInt()
         private const val ERROR_COLOR = 0xFFFF8A80.toInt()
 
