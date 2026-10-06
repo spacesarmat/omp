@@ -1168,7 +1168,7 @@ button, .m-btn {
 .m-install-dev-icon.ok { color: #8FE39A; }
 .m-install-dev-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .m-install-dev-name { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
-.m-install-manual { height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
+.m-install-manual { min-height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
 .m-install-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .m-install-step { display: flex; gap: 12px; padding: 12px; border-radius: 14px; background: var(--panel); }
 .m-install-step.current { background: #3A3320; }
@@ -1339,3 +1339,14 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-dup-hint { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel); }
 .m-dup-hint span { flex: 1; min-width: 0; }
 .m-dup-line { display: block; margin-top: 4px; color: var(--muted); text-align: left; }
+
+/* ---- robustness for long words, narrow screens and a large system font: only what does not fit changes ---- */
+/* sub-screen titles («Установить OMP на телевизор») shrink beside the back button and wrap */
+.m-bar-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.m-link, .m-add-magnet-link { max-width: 100%; overflow-wrap: anywhere; }
+/* a tile's «новая серия …» and a series' status pill never get wider than the tile / the title column */
+.m-new-badge, .m-status-pill { max-width: 100%; white-space: normal; }
+/* the remote on a narrow screen: key labels end in «…» (the icons stay), OK follows the size of the pad */
+.m-key { padding-left: 0; padding-right: 0; }
+.m-key-label { min-width: 0; overflow: clip; overflow-clip-margin: 3px; text-overflow: ellipsis; white-space: nowrap; }
+.m-dpad-ok { padding: 0; font-size: min(20px, calc(var(--dp, 240px) * 0.132)); white-space: nowrap; }
