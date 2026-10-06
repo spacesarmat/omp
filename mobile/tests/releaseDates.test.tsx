@@ -4,7 +4,7 @@ import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
 import { tileLabel, digitalSoonLabel, tileYear, releaseParts, upcomingEpisodes, nextEpisodeSeasons, dayHeader, episodeCode } from '../src/lib/releaseDates';
 import { TitleCard } from '../src/screens/catalog/TitleCard';
-import { TileWhen } from '../src/screens/catalog/Discover';
+import { TileTitle, TileWhen } from '../src/screens/catalog/Discover';
 import { resetTileCards } from '../src/catalog/tileCards';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetTo, navigate } from '../src/nav';
@@ -252,6 +252,28 @@ describe('«Обзор» tile labels', () => {
     await flush();
     expect(c.card).toHaveBeenCalledTimes(2);
     expect(Array.from(el.querySelectorAll('.m-disc-when')).map((x) => x.textContent)).toEqual(['в цифре 12 нояб.', 'новая серия 8 окт.']);
+  });
+
+  it('a tile without a date keeps no line for it; a title in Chinese shows the card\'s English one once the card is known', async () => {
+    vi.stubGlobal('IntersectionObserver', FakeObserver);
+    fake(() => Promise.resolve({ ...film({}), id: 11, title: 'Renegade Immortal' }));
+    const x = { kind: 'movie' as const, id: 11, title: '仙逆剧场版：弑仙之战', original: '仙逆剧场版：弑仙之战', year: 2025, poster: '', rating: 0 };
+    mount(
+      <button class="m-disc-tile">
+        <span class="m-disc-title"><TileTitle x={x} /></span>
+        <TileWhen kind="movie" id={11} />
+      </button>,
+    );
+    await flush();
+    expect(el.querySelector('.m-disc-title')!.textContent).toBe('仙逆剧场版：弑仙之战');
+    expect(el.querySelector('.m-disc-when')!.classList.contains('m-disc-when-none')).toBe(true);
+    // never the centred 24px-padded empty state
+    expect(el.querySelector('.m-disc-when')!.classList.contains('m-empty')).toBe(false);
+    await act(async () => {
+      observers.forEach((o) => o.cb([{ isIntersecting: true, target: o.el } as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
+    });
+    await flush();
+    expect(el.querySelector('.m-disc-title')!.textContent).toBe('Renegade Immortal');
   });
 
   it('a «Скоро в цифре» tile shows its matched digital date at once, even when the card has none upcoming', async () => {

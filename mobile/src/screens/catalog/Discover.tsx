@@ -17,7 +17,7 @@ import { loadDiscoverQuery, saveDiscoverQuery } from './discoverQueryStore';
 import { DiscoverSortSheet, DiscoverFiltersSheet, sortName } from './DiscoverSheets';
 import { cachedTileCard, cancelTileCards, leaveTileCard, requestTileCard, tileCardVersion } from '../../catalog/tileCards';
 import { digitalSoonLabel, tileLabel, tileYear } from '../../lib/releaseDates';
-import type { CatalogTitle, Kind } from '../../../../src/catalog/tmdb';
+import { readableTitle, type CatalogTitle, type Kind } from '../../../../src/catalog/tmdb';
 
 const SKELETONS = 6;
 
@@ -59,10 +59,21 @@ export function TileWhen({ kind, id, digital }: { kind: Kind; id: number; digita
   }, [kind, id, unknown]);
   const text = digital ? digitalSoonLabel(digital) : card ? tileLabel(card) : '';
   return (
-    <span ref={ref} class={'m-small m-accent m-disc-when' + (text ? '' : ' m-empty')} data-when={text ? '' : undefined}>
+    <span ref={ref} class={'m-small m-accent m-disc-when' + (text ? '' : ' m-disc-when-none')} data-when={text ? '' : undefined}>
       {text}
     </span>
   );
+}
+
+/**
+ * The tile title: the list's one, or — when that is in a script a Russian or English user cannot read («仙逆剧场版») —
+ * the card's (the English translation), once the card asked for the tile's date is known. No request of its own.
+ */
+export function TileTitle({ x }: { x: CatalogTitle }) {
+  void tileCardVersion.value;
+  if (readableTitle(x.title)) return <>{x.title}</>;
+  const card = cachedTileCard(x.kind, x.id);
+  return <>{card && readableTitle(card.title) ? card.title : x.title}</>;
 }
 
 /** «Фильм · 2006»: a «Скоро в цифре» item takes its year from the card (none until known). */
@@ -287,7 +298,9 @@ export function Discover() {
                   {x.rating > 0 && <span class="m-disc-rating">{ratingText(x.rating)}</span>}
                   {inLibrary(index, x) && <span class="m-disc-badge">{t('discover.inLibrary')}</span>}
                 </span>
-                <span class="m-card-title m-disc-title">{x.title}</span>
+                <span class="m-card-title m-disc-title">
+                  <TileTitle x={x} />
+                </span>
                 <TileMeta x={x} />
                 <TileWhen kind={x.kind} id={x.id} digital={x.digital} />
               </button>

@@ -63,8 +63,8 @@ describe('film release dates', () => {
   });
 
   it('a film card asks release_dates and carries `releases`; a series card does not', () => {
-    expect(params(cardUrl(E, 'movie', 101)).append_to_response).toBe('credits,release_dates');
-    expect(params(cardUrl(E, 'tv', 202)).append_to_response).toBe('credits');
+    expect(params(cardUrl(E, 'movie', 101)).append_to_response).toBe('credits,release_dates,translations');
+    expect(params(cardUrl(E, 'tv', 202)).append_to_response).toBe('credits,translations');
     const film = sanitizeCard(E, { ...MOVIE_CARD, release_dates: RELEASES }, 'movie')!;
     expect(film.releases).toEqual({ theatrical: '2026-10-02', digital: '2026-11-12', physical: '2026-12-20' });
     // no release_dates at all: known to be unknown (an empty object, not a missing field)

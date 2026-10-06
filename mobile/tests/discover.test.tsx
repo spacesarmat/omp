@@ -504,7 +504,11 @@ describe('«Обзор»: sort, filters, title and year', () => {
     const three = rule('.m-cols-3 .m-disc-tile .m-disc-title');
     expect(three).toContain('line-height: 16px');
     expect(three).toContain('max-height: 32px');
-    expect(three).toContain('min-height: 32px');
+    expect(three).toContain('min-height: 0');
+    // no two lines kept for a one-line title, no date line kept without a date (no 24px .m-empty padding either)
+    expect(two).toContain('min-height: 0');
+    expect(rule('.m-disc-when-none')).toContain('display: none');
+    expect(rule('.m-disc-when')).not.toContain('min-height');
   });
 
   it('default «Популярные»; the sort sheet picks «По рейтингу»: kept, page 1 fetched again, scrolled to the top', async () => {
