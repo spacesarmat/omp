@@ -1,4 +1,4 @@
-import { checkCategories } from '../store/library';
+import { recordAutoCategory } from '../lib/categoryCheck';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { client } from '../store/servers';
 import type { SearchSource } from '../api/torrserver';
@@ -71,8 +71,8 @@ export function AddScreen() {
     setBusyText(t('add.wait'));
     c.add({ link: p.link, title: p.title, category: p.category }).then(
       (tt) => {
-        // the automatic category check looks at the title now; the files come with the library refresh
-        void checkCategories(c, [tt]);
+        // the category is OMP's own choice here: the automatic check (on a later refresh) may correct it
+        recordAutoCategory(tt.hash, p.category || '');
         if (!alive.current) return;
         toast(t('add.added', { title: tt.title || p.title || tt.hash }));
         replaceRoute({ name: 'torrent', hash: tt.hash });

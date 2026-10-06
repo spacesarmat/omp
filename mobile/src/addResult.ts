@@ -2,7 +2,8 @@
 // release page when the row has none (nnmclub, rutracker; Anidub and BigFANGroup give an http(s) .torrent link), then
 // the torrent is added to the active server and its poster looked up.
 import { client } from '../../src/store/servers';
-import { checkCategories, rememberAdded } from '../../src/store/library';
+import { rememberAdded } from '../../src/store/library';
+import { recordAutoCategory } from '../../src/lib/categoryCheck';
 import { saveCategoryPicked } from '../../src/store/journal';
 import { resolveLink } from '../../src/sources/view';
 import type { SourceResult } from '../../src/sources/types';
@@ -31,18 +32,18 @@ export async function addSearchResult(
   o?.onStep?.('add');
   const added = await c.add({ link: l, title: r.Title, category });
   void rememberAdded(c, added, r.Title);
-  afterAdd(c, added, !!(o && o.picked));
+  afterAdd(c, added, !!(o && o.picked), category);
   // a duplicate of a release already in «Мои»: offer to keep the better one
   checkAddedDuplicate(added.hash, r.Title, category);
   return added.hash;
 }
 
 /**
- * After an add: a category picked by hand is marked (omp.cm) so the automatic check leaves it; otherwise the check
- * looks at the title now (the files come later, with the library refresh).
+ * After an add: a category picked by hand is marked (omp.cm) so the automatic check leaves it; OMP's own guess is
+ * recorded as such, so the check (on a later library refresh, once the files are known) may correct only that.
  */
-export function afterAdd(c: NonNullable<typeof client.value>, added: Torrent, picked: boolean): void {
+export function afterAdd(c: NonNullable<typeof client.value>, added: Torrent, picked: boolean, category: string): void {
   if (!added || !added.hash) return;
   if (picked) void saveCategoryPicked(c, added).catch(() => undefined);
-  else void checkCategories(c, [added]);
+  else recordAutoCategory(added.hash, category);
 }
