@@ -1059,10 +1059,18 @@ export const en: EnDict<typeof ru> = {
       results: 'Results: {q}',
       resetSearch: 'Clear search',
       wantMark: 'Want',
+      wantEmpty: 'The list is empty. The yellow key on a poster adds a film or a series.',
       okCard: 'OK — details',
       wantKey: 'want to watch',
       filtersKey: 'filters',
       backLibrary: 'Back — to the library',
+    },
+    want: {
+      tab: 'Want',
+      subtitle: 'Saved by you: the yellow key adds and removes',
+      added: 'Added to Want to watch.',
+      hint: 'OMP on the phone will report new releases in later versions.',
+      removed: 'Removed from Want to watch.',
     },
     // the title card of a film or a series opened from "Discover"
     title: {

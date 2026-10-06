@@ -16,6 +16,7 @@ import {
   type DiscoverKind, type DiscoverFeed, type DiscoverSearch,
 } from '../../store/discover';
 import { torrents } from '../../store/library';
+import { isWanted, wantAction, wantTitles, wantList } from '../../store/wantList';
 import { FocusGroup, Focusable, Button, Spinner } from '../../ui/components';
 import { Icon } from '../../ui/icons';
 import { choose } from '../../ui/dialog';
@@ -52,11 +53,12 @@ export function ratingText(r: number): string {
   return '★ ' + (lang.peek() === 'en' ? s : s.replace('.', ','));
 }
 
-function kinds(): { id: DiscoverKind; label: string }[] {
+function kinds(): { id: DiscoverKind | 'want'; label: string }[] {
   return [
     { id: 'all', label: t('common.all') },
     { id: 'movie', label: t('category.movie') },
     { id: 'tv', label: t('category.tv') },
+    { id: 'want', label: t('tv.want.tab') },
   ];
 }
 
@@ -82,9 +84,9 @@ export function lastRowStart(n: number, cols: number = DISCOVER_COLS): number {
 }
 
 export interface DiscoverGridProps {
-  /** «Хочу посмотреть» mark of a title (the TV list comes with its own task; none until then). */
+  /** «Хочу посмотреть» mark of a title (the TV list by default). */
   wanted?: (kind: string, id: number) => boolean;
-  /** Yellow key on a tile. */
+  /** Yellow key on a tile (adds to / removes from the TV list by default). */
   onWant?: (x: CatalogTitle) => void;
   /** Focus moved to an element of the tab. */
   onFocused?: () => void;
@@ -100,7 +102,9 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     const k = readDiscoverState();
     return k && k.qkey === qkey ? k : null;
   }, []);
-  const [kind, setKind] = useState<DiscoverKind>(kept ? kept.kind : 'all');
+  const [kind, setKind] = useState<DiscoverKind | 'want'>(kept ? kept.kind : 'all');
+  const isWant = kind === 'want';
+  const wantedFn = p.wanted || isWanted;
   const [feed, setFeed] = useState<DiscoverFeed | null>(kept ? kept.feed : null);
   const [error, setError] = useState<CatalogErrorCode | null>(null);
   const [moreFailed, setMoreFailed] = useState(false);
@@ -118,6 +122,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   const index = useMemo(() => libraryIndex(list), [list]);
 
   useEffect(() => {
+    if (kind === 'want') return;
     if (restored.current) {
       restored.current = false;
       return;
@@ -128,7 +133,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     setMoreFailed(false);
     moreBusy.current = false;
     activeCatalog()
-      .then((c) => c.discover(kind, query, 1))
+      .then((c) => c.discover(kind as DiscoverKind, query, 1))
       .then(
         (r) => {
           if (gen.current === my) setFeed({ items: r.items, page: 1, pages: r.pages });
@@ -139,7 +144,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
       );
   }, [kind, qkey, reload]);
 
-  useEffect(() => saveDiscoverState({ kind: kind, qkey: qkey, feed: feed, search: search }), [kind, qkey, feed, search]);
+  useEffect(() => saveDiscoverState({ kind: isWant ? 'all' : (kind as DiscoverKind), qkey: qkey, feed: feed, search: search }), [kind, qkey, feed, search]);
 
   useEffect(() => {
     if (!focusResults.current || !search || !search.items) return;
@@ -155,7 +160,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     moreBusy.current = true;
     setMoreFailed(false);
     activeCatalog()
-      .then((c) => c.discover(kind, query, next))
+      .then((c) => c.discover(kind as DiscoverKind, query, next))
       .then(
         (r) => {
           if (gen.current !== my) return;
@@ -226,7 +231,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   };
 
   const pickGenre = () => {
-    const ids = genresFor(kind);
+    const ids = genresFor(isWant ? 'all' : (kind as DiscoverKind));
     // a genre chosen under another kind stays in the list, so it can be turned off
     query.genres.forEach((g) => { if (ids.indexOf(g) < 0) ids.push(g); });
     const options = [{ label: t('discover.yearAny'), value: '' }].concat(ids.map((g) => ({ label: genreName(g), value: g })));
@@ -260,7 +265,20 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   useKeys((a) => {
     if (a === 'yellow') {
       const x = focused.current;
-      if (x && p.onWant) p.onWant(x);
+      if (x) {
+        // a tile of the «Хочу» list leaves with the key: the focus goes to its neighbour
+        const at = isWant ? wantTitles().findIndex((y) => y.kind === x.kind && y.id === x.id) : -1;
+        if (p.onWant) p.onWant(x);
+        else wantAction(x);
+        if (isWant) {
+          focused.current = null;
+          setTimeout(() => {
+            const cur = wantTitles();
+            const k = cur.length ? tileKey(cur[Math.min(Math.max(0, at), cur.length - 1)]) : 'disc-kind-want';
+            if (doesFocusableExist(k)) setFocus(k);
+          }, 0);
+        }
+      }
       return true;
     }
     if (a === 'blue') {
@@ -285,8 +303,8 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     else setReload((n) => n + 1);
   };
 
-  const shown = search ? search.items : feed ? feed.items : null;
-  const shownError = search ? searchError : error;
+  const shown = isWant ? wantTitles() : search ? search.items : feed ? feed.items : null;
+  const shownError = isWant ? null : search ? searchError : error;
 
   return (
     <div class="discover">
@@ -325,7 +343,9 @@ export function DiscoverGrid(p: DiscoverGridProps) {
           {t('tv.discover.find')}
         </Focusable>
       </FocusGroup>
-      {search ? (
+      {isWant ? (
+        <div class="disc-sub">{t('tv.want.subtitle')}</div>
+      ) : search ? (
         <FocusGroup focusKey="DISC-SEARCH" className="disc-sub disc-results">
           <span class="disc-sub-text">{tvGlyphs(t('tv.discover.results', { q: search.q }))}</span>
           <Button focusKey="disc-reset" label={t('tv.discover.resetSearch')} onPress={resetSearch} onFocused={leaveTile} />
@@ -344,7 +364,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
       ) : !shown ? (
         <Spinner text={t('catalog.loading')} />
       ) : !shown.length ? (
-        <div class="empty">{t('discover.nothingFound')}</div>
+        <div class="empty">{isWant ? t('tv.discover.wantEmpty') : t('discover.nothingFound')}</div>
       ) : (
         <FocusGroup focusKey="DISC-GRID" className="disc-grid">
           {shown.map((x, i) => (
@@ -357,13 +377,13 @@ export function DiscoverGrid(p: DiscoverGridProps) {
               onFocused={() => {
                 if (p.onFocused) p.onFocused();
                 focused.current = x;
-                if (!search && i >= lastRowStart(shown.length)) loadMore();
+                if (!isWant && !search && i >= lastRowStart(shown.length)) loadMore();
               }}
             >
               <div class="disc-poster">
                 {x.poster ? <img src={x.poster} alt="" /> : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(x.title)}</div>}
                 {x.rating > 0 && <span class="disc-rating">{ratingText(x.rating)}</span>}
-                {p.wanted && p.wanted(x.kind, x.id) ? (
+                {wantedFn(x.kind, x.id) ? (
                   <span class="disc-mark disc-mark-want">{t('tv.discover.wantMark')}</span>
                 ) : inLibrary(index, x) ? (
                   <span class="disc-mark">{t('discover.inLibrary')}</span>
@@ -375,7 +395,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
           ))}
         </FocusGroup>
       )}
-      {!search && moreFailed && (
+      {!isWant && !search && moreFailed && (
         <FocusGroup focusKey="DISC-MORE" className="disc-more">
           <span>{t('discover.pageFailed')}</span>
           <Button focusKey="disc-more-retry" label={t('common.retry')} onPress={loadMore} onFocused={leaveTile} />

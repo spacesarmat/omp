@@ -12,6 +12,7 @@ import { libraryIndex, inLibrary, seasonIndex, librarySeasonHash } from '../cata
 import { torrentQuery, type CatalogCard, type Kind, type Person } from '../catalog/tmdb';
 import type { Torrent } from '../api/types';
 import { torrents } from '../store/library';
+import { isWanted, wantAction } from '../store/wantList';
 import { findGroup, seriesKey } from '../lib/seriesGroups';
 import { airDateText, seriesPill } from '../lib/seriesStatus';
 import { FocusGroup, Focusable, Button, Spinner } from '../ui/components';
@@ -140,9 +141,9 @@ function CastRow({ cast }: { cast: Person[] }) {
 }
 
 export interface TitleWantProps {
-  /** The title is on the TV «Хочу посмотреть» list (filled in by the list's own task; never until then). */
+  /** The title is on the TV «Хочу посмотреть» list (the TV list by default). */
   wanted?: (kind: Kind, id: number) => boolean;
-  /** «Хочу посмотреть» / «В списке» pressed (a no-op until the list exists). */
+  /** «Хочу посмотреть» / «В списке» pressed (toggles the TV list by default). */
   onWant?: (card: CatalogCard) => void;
 }
 
@@ -166,9 +167,9 @@ function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
       if (tor) navigate(openTarget(list, tor, c.n));
     }
   };
-  const wanted = want.wanted ? want.wanted(card.kind, card.id) : false;
+  const wanted = (want.wanted || isWanted)(card.kind, card.id);
   const pressWant = () => {
-    if (want.onWant) want.onWant(card);
+    (want.onWant || wantAction)(card);
     setTick((n) => n + 1); // the list may have changed: the label follows
   };
 

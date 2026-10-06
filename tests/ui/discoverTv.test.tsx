@@ -12,6 +12,8 @@ import { currentRoute, routeStack } from '../../src/ui/nav';
 import { mockFetch } from '../helpers/fetchMock';
 import { setCatalogProvider } from '../../src/catalog/activeCatalog';
 import { resetDiscoverState, TV_DISCOVER_QUERY_KEY } from '../../src/store/discover';
+import { wantList, toggleWant } from '../../src/store/wantList';
+import { dispatchKey } from '../../src/ui/keys';
 import { lastRowStart } from '../../src/screens/library/DiscoverGrid';
 
 const fixture = [
@@ -46,6 +48,7 @@ beforeEach(() => {
   setActiveServer(a.id);
   resetLibrary();
   resetDiscoverState();
+  wantList.value = [];
   stub = {
     discover: vi.fn((_kind: string, _q: unknown, n: number) => Promise.resolve(page(n))),
     search: vi.fn(() => Promise.resolve({ items: [title(99, { title: 'Дюна' })], pages: 1 })),
@@ -194,5 +197,22 @@ describe('TV «Обзор» tab', () => {
     stub.discover = vi.fn(() => Promise.reject(Object.assign(new Error('nokey'), { code: 'nokey' })));
     const host = await mount();
     expect(text(host.querySelector('.disc-error'))).toContain('Нет ключа TMDB');
+  });
+
+  it('marks wanted titles, toggles with the yellow key and lists them under «Хочу»', async () => {
+    toggleWant({ kind: 'tv', id: 101, title: 'Фильм 1', year: 2021, poster: '' });
+    const host = await mount();
+    const tiles = host.querySelectorAll('.disc-tile');
+    expect(text(tiles[1].querySelector('.disc-mark'))).toBe('Хочу');
+    await act(() => { setFocus('disc-movie-102'); });
+    await flush();
+    await act(async () => { dispatchKey('yellow', new KeyboardEvent('keydown')); });
+    expect(wantList.value.map((w) => w.id)).toEqual([102, 101]);
+    await act(() => { setFocus('disc-kind-want'); });
+    await flush();
+    const want = host.querySelectorAll('.disc-tile');
+    expect(want).toHaveLength(2);
+    expect(text(want[0].querySelector('.disc-title'))).toBe('Фильм 2');
+    expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Хочу');
   });
 });
