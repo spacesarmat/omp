@@ -86,7 +86,8 @@ describe('TV torrent screen', () => {
   });
 
   it('shows no symbols the TV font lacks in the title and file rows', () => {
-    expect(host.querySelector('h1')!.textContent).toBe('Повелитель духов [4K] Заклинатели духов');
+    expect(host.querySelector('h1')!.textContent).toBe('Повелитель духов');
+    expect(host.querySelector('.torrent-raw')!.textContent).toBe('Повелитель духов [4K] Заклинатели духов');
     const names = Array.prototype.slice.call(host.querySelectorAll('.file-row .name')).map((e: Element) => e.textContent);
     expect(names.length).toBe(2);
     names.forEach((n: string | null) => expect(n).not.toMatch(/[\u2758\u25B8]/));

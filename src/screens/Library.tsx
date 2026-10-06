@@ -261,7 +261,7 @@ export function LibraryScreen() {
       {empty && <div class="empty">{empty}</div>}
       {isDiscover ? (
         <div class="hints">
-          {t('tv.discover.okCard')} · <KeyDot color="yellow" /> {t('tv.discover.wantKey')} · <KeyDot color="blue" /> {t('tv.discover.filtersKey')} · {t('tv.discover.backLibrary')}
+          {t('tv.discover.okCard')} · <KeyDot color="yellow" /> {t('tv.discover.wantKey')} · <KeyDot color="blue" /> {t('tv.discover.sortKey')} · {t('tv.discover.backLibrary')}
         </div>
       ) : (
         <div class="hints">

@@ -151,7 +151,7 @@ describe('TV torrent card · marks dialog', () => {
     expect(host.querySelector('.marks-dialog')).toBeNull();
     act(() => row('Заставка и титры').click());
     expect(host.querySelector('.marks-dialog')).not.toBeNull();
-    expect(host.querySelector('.marks-sub')!.textContent).toContain('Starbound Frontier S02 1080p');
+    expect(host.querySelector('.marks-sub')!.textContent).toContain('Starbound Frontier');
     expect(Array.prototype.map.call(host.querySelectorAll('.marks-value'), (e: Element) => e.textContent)).toEqual(['0:45', '2:15', '1:30']);
     press('back');
     expect(host.querySelector('.marks-dialog')).toBeNull();

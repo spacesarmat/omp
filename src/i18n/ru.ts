@@ -32,6 +32,10 @@ export const ru = {
     gb: 'ГБ',
     mb: 'МБ',
     mbps: 'МБ/с',
+    /** Byte units from bytes up, space-separated: «12 КБ», «1,4 ГБ». */
+    units: 'Б КБ МБ ГБ ТБ',
+    /** A speed: «1,2 МБ/с». */
+    perSec: '{v}/с',
     hour: 'ч',
     min: 'мин',
     sec: 'с',
@@ -1086,7 +1090,7 @@ export const ru = {
       wantEmpty: 'Список пуст. Жёлтая кнопка на постере добавляет фильм или сериал.',
       okCard: 'ОК — карточка',
       wantKey: 'хочу посмотреть',
-      filtersKey: 'фильтры',
+      sortKey: 'сортировка',
       backLibrary: 'Назад — к медиатеке',
       // the TV has no «Мои» tab: the phone texts point there
       offlineText: 'TMDB не отвечает из этой сети. Укажите зеркало TMDB в настройках TorrServer или попробуйте позже.',
@@ -1354,7 +1358,19 @@ export const ru = {
     noMedia: 'В торренте нет видео- или аудиофайлов',
     other: 'Другое',
     hintOk: 'OK — смотреть',
+    hintSelect: 'OK — выбрать',
+    hintToggle: 'OK — переключить',
+    hintMarks: 'OK — задать метки',
     hintDelete: 'удалить торрент',
+    /** TorrServer's torrent states (its stat / stat_string). */
+    stat: {
+      added: 'Добавлен',
+      info: 'Загружается',
+      preload: 'Предзагрузка',
+      working: 'Работает',
+      closed: 'Остановлен',
+      db: 'В базе',
+    },
     hintBack: 'Назад — к библиотеке',
     resume: {
       label: 'Откуда смотреть',

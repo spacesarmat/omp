@@ -84,7 +84,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .torrent-actions { position: relative; overflow: hidden; margin: -12px -12px 4px; padding: 12px; }
 .torrent-actions-row { margin-bottom: 0; flex-wrap: nowrap; }
 .torrent-actions-row > * { flex-shrink: 0; }
-.torrent-head h1 { font-size: 44px; margin-bottom: 16px; }
+.torrent-head h1 { font-size: 44px; margin-bottom: 16px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+/* the raw release name under the clean one: small, muted, two lines at most */
+.torrent-raw { margin: -8px 0 14px; font-size: 22px; line-height: 30px; max-height: 60px; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-word; }
 .skip-block { margin: 8px 0 28px; padding: 20px 22px; border-radius: 18px; background: var(--panel); }
 .skip-head { display: flex; align-items: baseline; margin-bottom: 8px; }
 .skip-title { font-size: 28px; font-weight: 700; margin-right: 16px; }
@@ -257,7 +259,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .art-badges { position: absolute; top: 12px; left: 12px; display: flex; }
 .art-badges .badge { background: rgba(15, 17, 21, .8); }
 /* same reserved title height on every tile keeps rows aligned (spec §3) */
-.tile-title { margin-top: 12px; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
+/* one weight for every tile name: 600 rendered bold for some names and regular for others on the LG (no such face for every script) */
+.tile-title { margin-top: 12px; font-weight: normal; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
 .tile-large .tile-title { font-size: 22px; line-height: 28px; height: 84px; -webkit-line-clamp: 3; }
 .tile-small .tile-title { margin-top: 8px; font-size: 17px; line-height: 22px; height: 44px; -webkit-line-clamp: 2; }
 .tile-meta { font-size: 18px; color: var(--muted); margin-top: 4px; }
@@ -480,18 +483,20 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .faq-phone { flex-shrink: 0; margin-top: 24px; font-size: 24px; color: var(--muted); }
 
 /* «Обзор» (TV): kind switch, sort and filters, the TMDB poster grid */
-.disc-bar { display: flex; align-items: center; padding-top: 8px; }
-.disc-bar > * { margin-right: 14px; }
+/* the bar does not wrap: it scrolls sideways to the focused chip (DiscoverGrid) */
+.disc-bar-box { overflow: hidden; margin: 0 -12px; padding: 0 12px; }
+.disc-bar { display: flex; flex-wrap: nowrap; align-items: center; padding-top: 8px; }
+.disc-bar > * { margin-right: 12px; flex-shrink: 0; }
 .disc-bar > *:last-child { margin-right: 0; }
 .disc-kinds { display: flex; padding: 4px; border-radius: 14px; background: var(--panel); }
-.disc-kind { padding: 10px 22px; border-radius: 10px; color: var(--muted); font-size: 24px; font-weight: 500; }
+.disc-kind { padding: 10px 18px; border-radius: 10px; color: var(--muted); font-size: 24px; font-weight: 500; }
 .disc-kind.active { background: var(--text); color: #0f1115; }
 .disc-kind.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
-.disc-btn { display: flex; align-items: center; padding: 14px 22px; border-radius: 14px; background: var(--panel); color: var(--text); font-size: 24px; white-space: nowrap; }
+.disc-btn { display: flex; align-items: center; padding: 14px 18px; border-radius: 14px; background: var(--panel); color: var(--text); font-size: 24px; white-space: nowrap; }
 .disc-btn.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
 .disc-find-icon { margin-right: 10px; }
 /* «Хочу» sits alone at the right end of the bar, a chip like the kind switch */
-.disc-kind-want { flex-shrink: 0; padding: 14px 24px; border-radius: 14px; background: var(--panel); white-space: nowrap; }
+.disc-kind-want { flex-shrink: 0; padding: 14px 20px; border-radius: 14px; background: var(--panel); white-space: nowrap; }
 /* the filters under «Хочу»: still focusable (the remote passes through), but inert */
 .disc-btn.dim { opacity: 0.4; }
 .disc-btn.dim.focused { opacity: 0.7; }
@@ -512,7 +517,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .disc-rating { position: absolute; top: 10px; left: 10px; padding: 3px 9px; border-radius: 8px; background: rgba(15, 17, 21, .82); color: var(--accent); font-size: 18px; font-weight: 700; }
 .disc-mark { position: absolute; top: 10px; right: 10px; padding: 3px 9px; border-radius: 8px; background: rgba(15, 17, 21, .82); color: var(--text); font-size: 16px; font-weight: 700; }
 .disc-mark-want { background: var(--accent); color: #0f1115; }
-.disc-title { margin-top: 12px; font-size: 21px; font-weight: 500; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.disc-title { margin-top: 12px; font-size: 21px; font-weight: normal; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .disc-meta { margin-top: 4px; font-size: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .disc-error { padding: 80px 0; text-align: center; }
 .disc-error-text { max-width: 1200px; margin: 0 auto 36px; font-size: 28px; color: var(--muted); }
