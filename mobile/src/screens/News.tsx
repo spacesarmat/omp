@@ -32,9 +32,10 @@ import { findingsOf, loadSubs, markFindingsSeen, removeFindings, unseenCount } f
 import { libraryRange } from '../../../src/monitor/newEpisodes';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { BETTER_ID, EPISODES_ID, type Finding } from '../../../src/monitor/types';
+import { Calendar } from './Calendar';
 import { filterSubs, loadSubsSort, matchFindings, saveSubsSort, sortLabel, sortSubs, SUBS_SORTS, type SubsSort } from '../monitor/subsView';
 
-type Seg = 'feed' | 'subs';
+type Seg = 'feed' | 'subs' | 'calendar';
 
 /** «Checking…» ends after this even without monitorDone (the background run is capped at 3 minutes). */
 export const RUN_MAX_MS = 3 * 60 * 1000 + 15000;
@@ -503,8 +504,11 @@ export function News({ seg, finding, watch }: { seg?: Seg; finding?: string; wat
         <button type="button" role="tab" aria-selected={current === 'subs'} class={current === 'subs' ? 'on' : ''} onClick={() => pick('subs')}>
           {fresh > 0 ? t('news.subsFresh', { fresh: freshText(fresh) }) : t('news.subs')}
         </button>
+        <button type="button" role="tab" aria-selected={current === 'calendar'} class={current === 'calendar' ? 'on' : ''} onClick={() => pick('calendar')}>
+          {t('news.calendar')}
+        </button>
       </div>
-      {current === 'feed' ? <Feed /> : <Subs finding={finding} watch={watch} running={running} />}
+      {current === 'feed' ? <Feed /> : current === 'calendar' ? <Calendar /> : <Subs finding={finding} watch={watch} running={running} />}
     </div>
   );
 }

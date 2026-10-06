@@ -16,6 +16,7 @@ import { torrentQuery, type CatalogCard, type Kind, type Season, type SeasonDeta
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import { ratingText } from './CatalogSearch';
+import { episodeCode, nextEpisodeSeasons, releaseParts, upcomingEpisodes } from '../../lib/releaseDates';
 
 const BACK = 'M15 5l-7 7l7 7';
 
@@ -194,6 +195,61 @@ function Seasons({ card, index, find }: { card: CatalogCard; index: Map<string, 
   );
 }
 
+/** A film's «Кино: 3 окт. · Цифра: 12 нояб. · Диск: 20 дек.»: the known dates, the ones to come accented. */
+function ReleaseLine({ card }: { card: CatalogCard }) {
+  const parts = releaseParts(card);
+  if (!parts.length) return null;
+  return (
+    <p class="m-small m-tc-releases" aria-label={t('titleCard.releasesAria')}>
+      {parts.map((p, i) => (
+        <span key={i}>
+          {i > 0 && <span class="m-muted">{' · '}</span>}
+          <span class={p.future ? 'm-accent' : ''} data-future={p.future ? '' : undefined}>
+            {p.text}
+          </span>
+        </span>
+      ))}
+    </p>
+  );
+}
+
+/** «Ближайшие серии»: up to 3 next episodes with their dates (the season of the next episode is read for them). */
+function NextEpisodes({ card }: { card: CatalogCard }) {
+  const numbers = useMemo(() => nextEpisodeSeasons(card), [card]);
+  const [seasons, setSeasons] = useState<SeasonDetails[]>([]);
+  useEffect(() => {
+    let alive = true;
+    setSeasons([]);
+    if (!numbers.length) return;
+    phoneCatalog()
+      .then((c) => Promise.all(numbers.map((n) => c.season(card.id, n).then((x) => x, () => null))))
+      .then(
+        (list) => {
+          if (alive) setSeasons(list.filter((x): x is SeasonDetails => !!x));
+        },
+        () => undefined,
+      );
+    return () => {
+      alive = false;
+    };
+  }, [card.id, numbers.join(',')]);
+  const list = upcomingEpisodes(card, seasons);
+  if (!list.length) return null;
+  return (
+    <section class="m-tc-section m-tc-next">
+      <h2>{t('titleCard.nextEpisodes')}</h2>
+      <div class="m-tc-episodes">
+        {list.map((e) => (
+          <div key={e.season + ':' + e.episode} class="m-tc-next-row">
+            <span class="m-tc-next-ep">{episodeCode(e.season, e.episode) + (e.title ? ' · ' + e.title : '')}</span>
+            <span class="m-small m-accent m-tc-next-date">{airDateText(e.airDate)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Overview({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   const [clamped, setClamped] = useState(false);
@@ -241,6 +297,7 @@ function Body({ card }: { card: CatalogCard }) {
           {card.rating > 0 && <span class="m-tc-rating">{ratingText(card.rating) + ' TMDB'}</span>}
         </div>
       </div>
+      {card.kind === 'movie' && <ReleaseLine card={card} />}
       <div class="m-tc-actions">
         <button type="button" class="m-btn m-btn-primary" onClick={() => find()}>
           {t('titleCard.findTorrents')}
@@ -277,6 +334,7 @@ function Body({ card }: { card: CatalogCard }) {
           </div>
         </section>
       )}
+      {card.kind === 'tv' && <NextEpisodes card={card} />}
       {card.kind === 'tv' && card.seasons.length > 0 && <Seasons card={card} index={index} find={find} />}
     </>
   );

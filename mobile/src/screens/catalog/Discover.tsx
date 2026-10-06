@@ -15,6 +15,9 @@ import { usePinchStep } from '../../ui/usePinchStep';
 import { discoverQueryKey, discoverFilterCount, sanitizeDiscoverQuery, type DiscoverQuery } from '../../../../src/catalog/discoverQuery';
 import { loadDiscoverQuery, saveDiscoverQuery } from './discoverQueryStore';
 import { DiscoverSortSheet, DiscoverFiltersSheet, sortName } from './DiscoverSheets';
+import { cachedTileCard, requestTileCard, tileCardVersion } from '../../catalog/tileCards';
+import { tileLabel } from '../../lib/releaseDates';
+import type { Kind } from '../../../../src/catalog/tmdb';
 
 const SKELETONS = 6;
 
@@ -26,6 +29,36 @@ function chips(): { id: Filter; label: string }[] {
     { id: 'movie', label: t('category.movie') },
     { id: 'tv', label: t('category.tv') },
   ];
+}
+
+/**
+ * The date label of a tile («в цифре 12 нояб.», «новая серия 8 окт.»): the tile's card is asked for once the tile
+ * comes into view; nothing until it is known.
+ */
+export function TileWhen({ kind, id }: { kind: Kind; id: number }) {
+  void tileCardVersion.value;
+  const ref = useRef<HTMLSpanElement>(null);
+  const card = cachedTileCard(kind, id);
+  const unknown = card === undefined;
+  useEffect(() => {
+    const node = ref.current;
+    if (!unknown || !node || typeof IntersectionObserver === 'undefined') return;
+    // the label is empty until known: the tile it sits in is what comes into view
+    const target = node.parentElement || node;
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      io.disconnect();
+      requestTileCard(kind, id);
+    });
+    io.observe(target);
+    return () => io.disconnect();
+  }, [kind, id, unknown]);
+  const text = card ? tileLabel(card) : '';
+  return (
+    <span ref={ref} class={'m-small m-accent m-disc-when' + (text ? '' : ' m-empty')} data-when={text ? '' : undefined}>
+      {text}
+    </span>
+  );
 }
 
 export function Discover() {
@@ -241,6 +274,7 @@ export function Discover() {
                 <span class="m-muted m-small m-disc-meta">
                   {(x.kind === 'tv' ? t('discover.series') : t('library.movie')) + (x.year ? ' · ' + x.year : '')}
                 </span>
+                <TileWhen kind={x.kind} id={x.id} />
               </button>
             ))}
           </div>
