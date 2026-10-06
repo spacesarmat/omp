@@ -2,9 +2,80 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## 0.17.0-beta.9
+## 0.17.0
 
-- [phone] The install assistant and «Questions and answers»: how to install OMP on Xiaomi, Sber and Yandex TVs and boxes
+- [phone] «Discover» in «Catalog»: new films and series from TMDB, sorting and filters
+- [phone] «Mine»: one series, one card; the series screen with its status and episode names
+- [phone] An episode «Calendar» and digital release dates on tiles and cards
+- [phone] «Find in better quality» for films and series: replacing in place keeps your watch positions
+- [phone] A new LG-style «Remote»: D-pad, colour keys, volume, «Back», «Home», «Menu»
+- [phone] Search filters for torrents: resolution, HDR, source, voice-over, subtitles, season
+- [phone] Install assistant and FAQ: how to put OMP on Xiaomi, Sber and Yandex TVs and boxes
+
+### Catalog and «Discover»
+
+- [phone] Two-finger zoom in «Catalog» and «Discover» (2, 3 or 4 posters per row): one step per gesture with a smooth transition — cards move to their new places and the text stays sharp
+- [phone] «Catalog»: delete from the menu on a long press, with several torrents selectable at once
+- [phone] Scrolling: «Back» and the tabs return to the same place; on the TV the focus returns to the item you left, and scrolling inside a window no longer scrolls the screen behind it
+- [phone] «Back»: on other tabs it opens «Catalog», in «Discover» it goes to «Mine», on «Mine» a second press minimizes OMP
+- [phone] Tab header: one compact row on all tabs; the status bar (clock, battery) no longer blends into the posters while scrolling
+- [phone] «Discover» in «Catalog»: the «Mine / Discover» switch shows new films and series from TMDB, with search by title. A card has the description, the rating and the cast, and a series has season chips with the list of episodes. «Find torrents» (for a film or a season) searches your sources, «Open in library» leads to what you already have, «Want to watch» subscribes you to a torrent in «New». It needs a TMDB key in the TorrServer settings (or its mirror)
+- [phone] «Discover»: sorting (popular, by rating, by release date, most anticipated) and filters (genre, year, country, minimum rating); talk shows, news and reality are hidden by default; type and year under the poster, long titles neatly cut at two lines; after you come back from a card, «Discover» stays where it was
+
+### Dates and «Calendar»
+
+- [phone] «New» → «Calendar»: the episodes of the next 30 days by day for the series in «Mine» and subscriptions; several episodes of a day in one row «S13E07–E08»; the ones out are marked «out» — «Watch» or «Find»
+- [phone] «Discover»: dates on the tiles — «digital Nov 12», «in cinemas since Oct 3», «new episode Oct 8»; the «Digital soon» sort lists films by their digital date in the next 60 days
+- [phone] Film card: «Cinema · Digital · Disc» with dates; series card: «Upcoming episodes»; the series screen shows announced episodes as muted rows «7. Pyramid · out Oct 8»
+- [phone] A release's category is checked by itself: a series in «Films» moves to «Series», an album to «Music»
+
+### Android TV and boxes
+
+- [tv] Boxes with an old system WebView (for example Dune HD) no longer open on a blank screen, and the remote moves the focus
+- [tv] 4K on boxes with little memory no longer stops after 10 seconds; if VLC cannot start a file, the player offers to go back to the built-in one
+- [tv] A clear error for a wrong TorrServer address; a box names itself «maker model» instead of a code
+- [tv] «What's new» lists only what concerns this device
+- [tv] The colour keys of a box remote work as on LG; before an update OMP explains where to allow the install and continues it by itself when you come back
+
+### Mine and series
+
+- [phone] «Mine»: short, readable titles instead of the tracker string («Dark Matter · season 2 · episodes 1–6 of 10»), a compact header — the «Mine / Discover» switch shares a row with the buttons, smaller chips
+- [phone] «Mine»: a series' seasons are grouped into one card, by any of their names, including torrents titled only in English or with the English name after brackets («Russian name (season 3…) / Star Trek…»); different series sharing a network or a voice-over («/ AMC», «/ BBC») stay apart; the card takes its name in the interface language (English in English, Russian in Russian)
+- [phone] The torrent card is compact: poster, three lines, round ＋ and ▶TV; details, category and the full title are in a sheet on tap
+- [phone] The series screen: a TMDB backdrop, years · rating · genres, overview, seasons with episode count and year, missing seasons with «Find torrents»
+- [phone] Series screen: a long press on a torrent — «Open», «Watch on TV», «Rename», «Delete» and «Keep only this one» (deletes the season's other torrents, never multi-season packs)
+- [phone] Watching an episode counts in every torrent of the series: watched S04E01 in 1080p — it is marked in 4K too, and «Watch on TV» goes on with the next one
+- [phone] Torrent screen: episode names from TMDB, season chips to switch seasons; «Skip» is folded into one row, and there is a single «Monitoring» block
+- [phone] «Find in better quality» for films and series: a warning when seeds are few, a note for multi-season packs, clear reasons when it fails, «Cancel»; replacing in place keeps your watch positions
+
+### Search and sources
+
+- Search filters for torrents: resolution, HDR, source, «Hide camrips», size, seeds, voice-over, Russian subtitles, season
+- «Add»: search first, the magnet link is tucked behind «Add by magnet link» under it and opens the field in place
+- «Search sources»: one row style — only › and the switch on the right, «Sign in» and «Sign out» as a link in the status line; «Sign in» right on the site row (Kinozal, rustorka, NNM-Club), rutracker gets its site screen too (including «Send the sign-in to the TV»); one list of sites, short hints under a site that Cloudflare has blocked. «No account? Sign up» on the phone, a QR code on the TV
+- Browser sign-in on NNM-Club: an ad on the site's page no longer pulls the sign-in window away — taps on the fields work and the keyboard opens; the sign-in page fits the screen width and can be zoomed with two fingers
+- torrent.by: works on the phone (the site leaves out an intermediate certificate, OMP now carries it itself; a certificate error says «Site certificate error» instead of «not responding»); a clear message when it has blocked your IP and an «Enter the code» button; fewer background requests
+- rutracker: a lost sign-in now asks to «Sign in» instead of «The site is closed by a browser check»; rutracker can pass the Cloudflare check like Kinozal and NNM-Club; the log shows why a site failed (response code, sign-in or check page)
+- In the FAQ: «What is «Discover»», «Search filters for torrents», «Better quality», «torrent.by asks for a code»; the answers about Cloudflare, sign-in and accounts are updated (NNM-Club too)
+
+### New and monitoring
+
+- [phone] «Better quality»: for subscriptions («Better quality only») and for films from the catalog OMP reports when a torrent in better quality is out. «Replace» right from the notification; a «Better quality» section in «New»; switches in «Monitoring», in the subscription and in the film card
+- [phone] Subscriptions: search over subscriptions and found torrents, sorting, «Check now» for a single subscription; «Monitoring settings» is the gear in the «New» header and a button at the bottom
+- [phone] «New»: the buttons are round, refresh replaces «Check now», and monitoring is a separate icon; in «New» and in search results: short titles, quality badges and posters
+
+### Remote
+
+- [phone] «Remote» connects to the last TV by itself, says when a TV does not answer, and switches between several TVs and boxes with one tap
+- [phone] «Remote», «Buttons» mode, like an LG remote: D-pad, colour keys (red, green, yellow, blue), round «Back», «Home», «Menu», a volume rocker, «Pause» with ±10 s and a «Keyboard / Mute» rocker; the colour keys and «Mute» work on LG TVs. The header matches the other tabs («Remote», the TV name and state); in «Touchpad» mode the pad takes the free space, with «Back · Home · Menu · Keyboard», playback keys and volume below
+- [phone] The touchpad has no scroll strip: scrolling the page on the TV is a two-finger scroll
+
+### Fixes
+
+- Content no longer hides under the tab bar, the bar hides while the keyboard is open and stays above the cards
+- «Name (2026)» in «Mine» reads «Name · 2026»; the series screen opens on the requested season
+- In the English interface a series badge in «Mine» could say «new season» instead of the next episode date — the series was searched on TMDB by its Russian name
+- The chips of the chosen filters in «Add» («4K», «seeds ≥ 20») centre their text like the others
 
 ## 0.17.0-beta.8
 

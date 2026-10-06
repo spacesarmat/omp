@@ -40,8 +40,8 @@ describe('changelogData', () => {
       if (en.indexOf(e.version) >= 0) expect(e.items).not.toEqual(ru.items);
       else expect(e.items).toEqual(ru.items);
     });
-    const beta1 = list.filter((e) => e.version === '0.17.0-beta.1')[0];
-    expect(beta1.items.join(' ')).not.toMatch(/[А-Яа-яЁё]/);
+    const beta = list.filter((e) => e.version === '0.17.0-beta.3')[0];
+    expect(beta.items.join(' ')).not.toMatch(/[А-Яа-яЁё]/);
   });
 
   it('mergeChangelog falls back to the Russian entry for a missing version', () => {
