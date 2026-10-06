@@ -245,6 +245,8 @@ export function createCatalogClient(
       let e: TmdbEndpoint;
       try { e = need(); } catch (err) { return Promise.reject(err); }
       const d = today();
+      // «Скоро в цифре» is about films only: every kind chip shows films
+      if (query.sort === 'digitalSoon') kind = 'movie';
       const one = (k: Kind) => {
         const u = discoverUrl(e, k, query, page, d);
         return u ? list(u, k) : Promise.resolve({ items: [] as CatalogTitle[], pages: 0 });
@@ -264,7 +266,7 @@ export function createCatalogClient(
         const c = sanitizeCard(e, raw, kind);
         if (!c) throw fail('bad');
         return c;
-      }, (c) => kind !== 'tv' || (c as { status?: unknown }).status !== undefined);
+      }, (c) => (kind === 'tv' ? (c as { status?: unknown }).status !== undefined : (c as { releases?: unknown }).releases !== undefined));
     },
     season(id, n) {
       let e: TmdbEndpoint;

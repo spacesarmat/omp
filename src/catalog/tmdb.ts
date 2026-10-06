@@ -15,6 +15,8 @@ export interface Season { number: number; episodes: number; year: number; aired:
 export type SeriesStatus = 'returning' | 'ended' | 'canceled' | 'production' | 'planned' | '';
 /** TMDB's next_episode_to_air: `airDate` is 'YYYY-MM-DD' or '' when not dated yet. */
 export interface NextEpisode { season: number; episode: number; airDate: string; }
+/** A film's release dates in the user's region, each 'YYYY-MM-DD' (absent: unknown). */
+export interface Releases { theatrical?: string; digital?: string; physical?: string; }
 /**
  * `status`, `nextEpisode` and `lastAirDate` are optional: cards cached before 0.17.0-beta.2 have none of them, and
  * missing reads as unknown ('' / null / '').
@@ -22,6 +24,8 @@ export interface NextEpisode { season: number; episode: number; airDate: string;
 export interface CatalogCard extends CatalogTitle {
   backdrop: string; genres: string[]; runtime: number; overview: string; cast: Person[]; seasons: Season[]; airing: boolean;
   status?: SeriesStatus; nextEpisode?: NextEpisode | null; lastAirDate?: string;
+  /** Films only; absent in film cards cached before 0.17.0-beta.6 (they are fetched again). */
+  releases?: Releases;
 }
 export interface TmdbEndpoint { base: string; key: string; images: string; }
 export interface Episode { n: number; title: string; airDate: string; runtime: number; overview: string; }
@@ -62,7 +66,7 @@ export function noveltiesUrl(e: TmdbEndpoint, kind: Kind, page: number, today: s
 
 /** «Обзор» with its sort and filters: /discover/{kind}; null when the kind has none of the chosen genres. */
 export function discoverUrl(e: TmdbEndpoint, kind: Kind, query: DiscoverQuery, page: number, today: string): string | null {
-  const p = discoverParams(kind, query, today);
+  const p = discoverParams(kind, query, today, discoverRegion());
   if (!p) return null;
   p.page = page;
   return url(e, 'discover/' + kind, p);
@@ -73,7 +77,20 @@ export function searchUrl(e: TmdbEndpoint, query: string, page: number): string 
 }
 
 export function cardUrl(e: TmdbEndpoint, kind: Kind, id: number): string {
-  return url(e, kind + '/' + id, { append_to_response: 'credits', include_image_language: lang.peek() === 'en' ? 'en,null' : 'ru,null,en' });
+  return url(e, kind + '/' + id, {
+    append_to_response: kind === 'movie' ? 'credits,release_dates' : 'credits',
+    include_image_language: lang.peek() === 'en' ? 'en,null' : 'ru,null,en',
+  });
+}
+
+/** The regions whose release dates count, in order: the Russian UI takes Russia's and then the US', English the US'. */
+export function releaseRegions(uiLang: string = lang.peek()): string[] {
+  return uiLang === 'en' ? ['US'] : ['RU', 'US'];
+}
+
+/** The TMDB discover region of the UI language. */
+export function discoverRegion(uiLang: string = lang.peek()): string {
+  return releaseRegions(uiLang)[0];
 }
 
 export function seasonUrl(e: TmdbEndpoint, id: number, season: number): string {
@@ -167,7 +184,59 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
     status: kind === 'tv' ? statusOf(o.status) : '',
     nextEpisode: kind === 'tv' ? nextEpisodeOf(o.next_episode_to_air) : null,
     lastAirDate: kind === 'tv' ? date(o.last_air_date) : '',
+    releases: kind === 'movie' ? releasesOf(o.release_dates, releaseRegions()) : undefined,
   };
+}
+
+/** The earliest date of each TMDB release type in one region's list. */
+function regionDates(list: unknown): { [type: number]: string } {
+  const out: { [type: number]: string } = {};
+  if (!Array.isArray(list)) return out;
+  (list as unknown[]).forEach((r) => {
+    const x = r && typeof r === 'object' ? (r as { [k: string]: unknown }) : null;
+    if (!x) return;
+    const type = Math.floor(n(x.type));
+    const d = date(str(x.release_date).slice(0, 10));
+    if (!type || !d) return;
+    if (!out[type] || d < out[type]) out[type] = d;
+  });
+  return out;
+}
+
+/**
+ * A film's release dates (TMDB release_dates: 3 theatrical, 2 limited when there is no 3, 4 digital, 5 physical):
+ * each date from the first of `regions` that has it; the earliest date of a type within a region.
+ */
+export function releasesOf(raw: unknown, regions: string[]): Releases {
+  const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { [k: string]: unknown }) : null;
+  const results = o && Array.isArray(o.results) ? (o.results as unknown[]) : [];
+  const byRegion: { [code: string]: { [type: number]: string } } = {};
+  results.forEach((r) => {
+    const x = r && typeof r === 'object' ? (r as { [k: string]: unknown }) : null;
+    const code = x ? str(x.iso_3166_1).toUpperCase() : '';
+    if (x && code && regions.indexOf(code) >= 0) byRegion[code] = regionDates(x.release_dates);
+  });
+  const out: Releases = {};
+  const pick = (types: number[]): string => {
+    for (let i = 0; i < regions.length; i++) {
+      const d = byRegion[regions[i]];
+      if (!d) continue;
+      for (let j = 0; j < types.length; j++) if (d[types[j]]) return d[types[j]];
+    }
+    return '';
+  };
+  // a region's limited release stands for its theatrical one only when it has none
+  let theatrical = '';
+  for (let i = 0; i < regions.length && !theatrical; i++) {
+    const d = byRegion[regions[i]];
+    if (d) theatrical = d[3] || d[2] || '';
+  }
+  const digital = pick([4]);
+  const physical = pick([5]);
+  if (theatrical) out.theatrical = theatrical;
+  if (digital) out.digital = digital;
+  if (physical) out.physical = physical;
+  return out;
 }
 
 const STATUSES: { [k: string]: SeriesStatus } = {
