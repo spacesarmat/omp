@@ -8,53 +8,9 @@ import { getHealth, isSourceOn, reloadSourcePrefs, setSourceOn } from '../../../
 import { isCloudflare, resolveLink, resultDate, resultKey, sortResults } from '../../../src/sources/view';
 import type { SearchHandle } from '../../../src/sources/search';
 import type { Source, SourceContext, SourceResult } from '../../../src/sources/types';
+import type { RpcFailure, RpcPoll, RpcResult, RpcSource, RpcSourceState } from '../../../src/phone/rpcTypes';
 
-export type RpcSourceState = 'ok' | 'loggedIn' | 'login' | 'cloudflare' | 'error' | 'off' | 'unknown';
-
-export interface RpcSource {
-  id: string;
-  name: string;
-  on: boolean;
-  state: RpcSourceState;
-  message?: string;
-}
-
-/** A trimmed SourceResult: no Link, no detailUrl (the TV never fetches the phone's pages). */
-export interface RpcResult {
-  /** Opaque id of the row within its search (never a URL); `resolve` takes it. */
-  key: string;
-  Title: string;
-  Size: string;
-  sizeBytes?: number;
-  Seed: number;
-  Peer: number;
-  Tracker: string;
-  CreateDate: string;
-  /** dd.mm.yyyy of the release: a display string, unlike SourceResult.date (unix ms). Sort by CreateDate. */
-  date?: string;
-  Categories: string;
-  Magnet: string;
-  Hash: string;
-  source: string;
-  sources?: string[];
-}
-
-export interface RpcFailure {
-  id: string;
-  message: string;
-  /** 'login': the source needs a sign-in on the phone. */
-  code?: 'ipban' | 'tls' | 'cloudflare' | 'login';
-}
-
-export interface RpcPoll {
-  rev: number;
-  done: boolean;
-  pending: string[];
-  answered: string[];
-  failed: RpcFailure[];
-  /** Only when `rev` differs from the one the TV sent. */
-  results?: RpcResult[];
-}
+export type { RpcSource, RpcSourceState, RpcResult, RpcFailure, RpcPoll } from '../../../src/phone/rpcTypes';
 
 export interface RpcDeps {
   sources(): Source[];
