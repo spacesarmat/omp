@@ -1038,6 +1038,8 @@ export const en: EnDict<typeof ru> = {
   },
   connect: {
     enterAddress: 'Enter the server address',
+    unreachable: 'Could not connect to {host} — check the address and the port',
+    unreachableWhy: 'Could not connect to {host}: {error}',
     connected: 'Connected: {version}',
     noServersFound: 'No TorrServer servers found',
     history: 'Server history',

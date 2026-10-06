@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
-import { ConnectScreen } from '../../src/screens/Connect';
+import { ConnectScreen, CONNECT_TIMEOUT_MS, connectEcho, connectErrorText } from '../../src/screens/Connect';
+import type { TorrServerClient } from '../../src/api/torrserver';
 import { servers, activeServerId, addServer } from '../../src/store/servers';
 import { mockFetch } from '../helpers/fetchMock';
 
@@ -50,5 +51,47 @@ describe('ConnectScreen', () => {
     await Promise.resolve();
     expect(host.querySelector('.edit-server .dialog-title')!.textContent).toBe('Изменить сервер');
     expect((host.querySelector('.edit-server input') as HTMLInputElement).value).toBe('Дача');
+  });
+});
+
+describe('ConnectScreen: a server that does not answer', () => {
+  const flush = async () => {
+    for (let r = 0; r < 4; r++) {
+      for (let i = 0; i < 30; i++) await Promise.resolve();
+      await new Promise((res) => setTimeout(res, 0));
+    }
+  };
+  it('says which address failed under the buttons; the button stays enabled', async () => {
+    mockFetch(() => Promise.reject(new TypeError('Failed to fetch')));
+    const host = mount();
+    const input = host.querySelector('.connect-card input') as HTMLInputElement;
+    input.value = '192.168.1.191:8090';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await flush();
+    const btn = () => host.querySelector('[data-fk="connect-btn"], .button.primary') as HTMLElement;
+    btn().click();
+    await flush();
+    expect(host.querySelector('.connect-error')!.textContent).toBe('Не удалось подключиться к 192.168.1.191:8090 — проверьте адрес и порт');
+    expect(btn().textContent).toBe('Подключиться');
+    expect(btn().className).not.toContain('disabled');
+    expect(servers.value).toHaveLength(0);
+  });
+
+  it('a server that never answers is given up with a timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const client = { echo: () => new Promise<string>(() => undefined) } as unknown as TorrServerClient;
+      const seen = connectEcho(client, CONNECT_TIMEOUT_MS).then(
+        () => 'ok',
+        (e: { kind?: string }) => e.kind,
+      );
+      vi.advanceTimersByTime(CONNECT_TIMEOUT_MS);
+      expect(await seen).toBe('timeout');
+      expect(connectErrorText('http://10.0.0.5:8091', { kind: 'timeout', message: 'Timeout' })).toBe(
+        'Не удалось подключиться к 10.0.0.5:8091 — проверьте адрес и порт',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1057,6 +1057,9 @@ export const ru = {
   },
   connect: {
     enterAddress: 'Введите адрес сервера',
+    /** The server did not answer: «Не удалось подключиться к 192.168.1.191:8090 — проверьте адрес и порт». */
+    unreachable: 'Не удалось подключиться к {host} — проверьте адрес и порт',
+    unreachableWhy: 'Не удалось подключиться к {host}: {error}',
     connected: 'Подключено: {version}',
     noServersFound: 'Серверы TorrServer не найдены',
     history: 'История серверов',
