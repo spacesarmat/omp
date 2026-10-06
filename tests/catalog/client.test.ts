@@ -221,7 +221,7 @@ describe('catalog client', () => {
     expect(Object.keys(JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'))).toHaveLength(5);
   });
 
-  it('keeps the stored JSON within the budget, evicting the least recently used', async () => {
+  it('keeps the stored JSON within the budget, leaving out the least recently used', async () => {
     const big = 'я'.repeat(Math.floor(CACHE_BUDGET_CHARS / 10));
     const f = fake();
     f.answer = () => ({ status: 200, text: JSON.stringify({ results: [{ media_type: 'movie', id: 1, title: big, poster_path: '/p.jpg', release_date: '2026-01-01' }], total_pages: 1 }) });
@@ -241,11 +241,17 @@ describe('catalog client', () => {
     expect(keys).toContain('q0');
     expect(keys).toContain('q4');
     expect(keys).not.toContain('q1');
-    // the evicted one is fetched again, the kept ones are not
+    // memory is not capped by the storage budget: q1 is still served this session
     now += 10;
     await c.search('q1', 1);
-    await c.search('q0', 1);
-    expect(f.urls).toHaveLength(6);
+    expect(f.urls).toHaveLength(5);
+    // used again, it is stored again (another one is left out) and a restart serves it from storage
+    resetCatalogCache();
+    expect((localStorage.getItem(CACHE_KEY) || '').length).toBeLessThanOrEqual(CACHE_BUDGET_CHARS);
+    const d = createCatalogClient(E, f.http, { now: () => now });
+    await d.search('q1', 1);
+    await d.search('q0', 1);
+    expect(f.urls).toHaveLength(5);
   });
 
   it('a failed save (quota) drops the stored cache and keeps working from memory', async () => {

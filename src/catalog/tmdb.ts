@@ -65,8 +65,8 @@ export function noveltiesUrl(e: TmdbEndpoint, kind: Kind, page: number, today: s
 }
 
 /** «Обзор» with its sort and filters: /discover/{kind}; null when the kind has none of the chosen genres. */
-export function discoverUrl(e: TmdbEndpoint, kind: Kind, query: DiscoverQuery, page: number, today: string): string | null {
-  const p = discoverParams(kind, query, today, discoverRegion());
+export function discoverUrl(e: TmdbEndpoint, kind: Kind, query: DiscoverQuery, page: number, today: string, region?: string): string | null {
+  const p = discoverParams(kind, query, today, region || discoverRegion());
   if (!p) return null;
   p.page = page;
   return url(e, 'discover/' + kind, p);

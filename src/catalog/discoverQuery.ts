@@ -102,7 +102,9 @@ export function discoverQueryKey(q: DiscoverQuery): string {
 
 /** «Фильтры · N»: the chosen genres plus one per other set filter. */
 export function discoverFilterCount(q: DiscoverQuery): number {
-  return q.genres.length + (q.year !== 'any' ? 1 : 0) + (q.country ? 1 : 0) + (q.rating ? 1 : 0);
+  // «Скоро в цифре» has its own dates: the year filter does not apply and does not count
+  const year = q.year !== 'any' && q.sort !== 'digitalSoon';
+  return q.genres.length + (year ? 1 : 0) + (q.country ? 1 : 0) + (q.rating ? 1 : 0);
 }
 
 function pad2(n: number): string {
