@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { latestUpdate, checkForUpdate, dismissPrompt } from '../store/updates';
-import { HB_REPO_URL, HB_SITE_URL, RELEASES_URL, updateTitle } from '../lib/updateInfo';
+import { HB_REPO_URL, HB_SITE_URL, RELEASES_URL, updateNotes, updateTitle } from '../lib/updateInfo';
 import { isBetaVersion } from '../lib/version';
 import { settings, updateSettings } from '../store/settings';
 import { hbPresence, hbHasRoot, openHbChannel, hbInstall, InstallStatus, HbPresence } from '../platform/hbchannel';
@@ -171,8 +171,8 @@ export function UpdateScreen() {
         />
       </div>
       <div class="muted">{t('updateScreen.betaNote')}</div>
-      {info && info.notes.length > 0 && (
-        <ul class="update-notes">{info.notes.slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>
+      {info && updateNotes(info, 'tv').length > 0 && (
+        <ul class="update-notes">{updateNotes(info, 'tv').slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>
       )}
 
       {info && android && <ApkInstall info={info} />}

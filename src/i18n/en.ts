@@ -138,6 +138,7 @@ export const en: EnDict<typeof ru> = {
   },
   update: {
     beta: 'Beta {version} available',
+    fixes: 'Fixes and improvements',
     replacesBeta: 'OMP {version} is out and replaces the beta',
     available: 'Version {version} available',
     installFailed: 'Could not install the update',

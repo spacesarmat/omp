@@ -39,8 +39,30 @@ export interface UpdateInfo {
    * see ApkAbi.kt) and falls back to ipkUrl. Absent when the feed has no valid per-ABI entry.
    */
   apks?: Partial<Record<ApkAbi, ApkFile>>;
+  /** For apps before 0.17.0: the TV's bullets (or «Исправления и улучшения»), never a phone-only one. */
   notes: string[];
+  /** Feeds from 0.17.0 on: the bullets per platform, no markers; an empty list means «Исправления и улучшения». */
+  notesTv?: string[];
+  notesPhone?: string[];
   releaseUrl: string;
+}
+
+const noteList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((n): n is string => typeof n === 'string' && !!n.trim()) : []);
+
+/**
+ * The notes of an update as this app shows them: the platform's own list when the feed has it («Исправления и
+ * улучшения» when it is empty), else `notes` of an older feed; a stray «[tv]» / «[phone]» marker is never shown.
+ */
+export function updateNotes(info: UpdateInfo, platform: 'tv' | 'phone'): string[] {
+  const own = platform === 'tv' ? info.notesTv : info.notesPhone;
+  const list = own !== undefined ? own : info.notes;
+  const out: string[] = [];
+  list.forEach((n) => {
+    const m = /^\[(tv|phone)\]\s*/i.exec(n);
+    if (m && m[1].toLowerCase() !== platform) return;
+    out.push(m ? n.slice(m[0].length) : n);
+  });
+  return !out.length && own !== undefined ? [t('update.fixes')] : out;
 }
 
 const VERSION = /^[0-9]+(\.[0-9]+){1,3}(-beta\.[0-9]+)?$/;
@@ -83,9 +105,11 @@ export function sanitizeUpdateInfo(v: unknown): UpdateInfo | null {
     ipkUrl: o.ipkUrl,
     ipkHash: o.ipkHash.toLowerCase(),
     ipkSize: positiveSize(o.ipkSize),
-    notes: Array.isArray(o.notes) ? o.notes.filter((n): n is string => typeof n === 'string' && !!n.trim()) : [],
+    notes: noteList(o.notes),
     releaseUrl: isHttps(o.releaseUrl) ? o.releaseUrl : RELEASES_URL,
   };
+  if (Array.isArray(o.notesTv)) info.notesTv = noteList(o.notesTv);
+  if (Array.isArray(o.notesPhone)) info.notesPhone = noteList(o.notesPhone);
   const apks = sanitizeApks(o.apks);
   if (apks) info.apks = apks;
   return info;

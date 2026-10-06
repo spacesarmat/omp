@@ -137,6 +137,8 @@ export const ru = {
   },
   update: {
     beta: 'Доступна бета {version}',
+    /** An update with no bullet for this app. */
+    fixes: 'Исправления и улучшения',
     replacesBeta: 'Вышла OMP {version} — она заменит бету',
     available: 'Доступна версия {version}',
     installFailed: 'Не удалось установить обновление',

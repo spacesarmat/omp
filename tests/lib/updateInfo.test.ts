@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeUpdateInfo, UPDATE_URL, ANDROID_UPDATE_URL, HB_REPO_URL, RELEASES_URL, HB_SITE_URL, updateFeedUrl, updateTitle } from '../../src/lib/updateInfo';
+import { sanitizeUpdateInfo, UPDATE_URL, ANDROID_UPDATE_URL, HB_REPO_URL, RELEASES_URL, HB_SITE_URL, updateFeedUrl, updateNotes, updateTitle } from '../../src/lib/updateInfo';
 
 const HASH = 'a'.repeat(64);
 const good = {
@@ -48,6 +48,23 @@ describe('sanitizeUpdateInfo', () => {
     expect(UPDATE_URL).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update.json');
     expect(HB_REPO_URL).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/apps.json');
     expect(HB_SITE_URL).toBe('https://www.webosbrew.org/');
+  });
+});
+
+describe('update notes per platform', () => {
+  it('the platform list when the feed has one, «Исправления и улучшения» when it is empty', () => {
+    const info = sanitizeUpdateInfo({ ...good, notes: ['Пульт'], notesTv: ['Пульт', 5], notesPhone: [] })!;
+    expect(info.notesTv).toEqual(['Пульт']);
+    expect(updateNotes(info, 'tv')).toEqual(['Пульт']);
+    expect(updateNotes(info, 'phone')).toEqual(['Исправления и улучшения']);
+  });
+
+  it('an older feed: its `notes`, a stray marker of the other platform dropped and none shown', () => {
+    const info = sanitizeUpdateInfo({ ...good, notes: ['[phone] Календарь', '[tv] Пульт', 'Общее'] })!;
+    expect(info.notesTv).toBeUndefined();
+    expect(updateNotes(info, 'tv')).toEqual(['Пульт', 'Общее']);
+    expect(updateNotes(info, 'phone')).toEqual(['Календарь', 'Общее']);
+    expect(updateNotes(sanitizeUpdateInfo({ ...good, notes: [] })!, 'tv')).toEqual([]);
   });
 });
 

@@ -3,7 +3,7 @@ import { Sheet } from './Sheet';
 import { native } from '../platform/native';
 import { dismissPrompt, skipVersion } from '../../../src/store/updates';
 import { APP_VERSION } from '../../../src/version';
-import { apkFor, updateTitle } from '../../../src/lib/updateInfo';
+import { apkFor, updateNotes, updateTitle } from '../../../src/lib/updateInfo';
 import type { ApkAbi, UpdateInfo } from '../../../src/lib/updateInfo';
 import { t, fmtNumber } from '../../../src/i18n';
 
@@ -98,9 +98,9 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
         {t('update.current', { version: APP_VERSION })}
         {size > 0 ? ' · ' + formatMb(size) : ''}
       </div>
-      {info.notes.length > 0 && (
+      {updateNotes(info, 'phone').length > 0 && (
         <ul class="m-notes m-sheet-scroll">
-          {info.notes.slice(0, 8).map((n) => (
+          {updateNotes(info, 'phone').slice(0, 8).map((n) => (
             <li key={n}>{n}</li>
           ))}
         </ul>

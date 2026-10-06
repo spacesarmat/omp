@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { APP_ID, buildAndroidUpdate, buildHomebrew, changelogNotes, splitApks } from './hb-lib.mjs';
+import { APP_ID, buildAndroidUpdate, buildHomebrew, changelogNotes, feedNotes, splitApks } from './hb-lib.mjs';
 
 const [tag, ipk, ...apkPaths] = process.argv.slice(2);
 if (!tag || !ipk) throw new Error('usage: node scripts/hb-manifest.mjs <tag> <ipk> [apk...]');
@@ -13,8 +13,11 @@ if (tag !== `v${version}`) throw new Error(`tag ${tag} does not match package.js
 
 const buf = readFileSync(ipk);
 const sha256 = createHash('sha256').update(buf).digest('hex');
-const notes = changelogNotes(readFileSync('CHANGELOG.md', 'utf8'), version);
-if (!notes.length) throw new Error(`CHANGELOG.md has no notes for ${version}`);
+const md = readFileSync('CHANGELOG.md', 'utf8');
+const all = changelogNotes(md, version);
+// per platform for the apps that read notesTv / notesPhone; `notes` (older apps) never has a phone-only bullet
+const { notes, notesTv, notesPhone } = feedNotes(md, version);
+if (!all.length) throw new Error(`CHANGELOG.md has no notes for ${version}`);
 
 const { manifest, apps, update } = buildHomebrew({
   tag,
@@ -25,6 +28,8 @@ const { manifest, apps, update } = buildHomebrew({
   title: 'OMP',
   description: 'Open Movie Player — media player for your own TorrServer',
   notes,
+  notesTv,
+  notesPhone,
 });
 
 const fullDescription = 'docs/homebrew/full_description.html';
@@ -52,6 +57,8 @@ if (apkSet) {
     sha256: createHash('sha256').update(apkBuf).digest('hex'),
     size: apkBuf.length,
     notes,
+    notesTv,
+    notesPhone,
     abis,
   });
   writeFileSync('build/hb/update-android.json', JSON.stringify(androidUpdate, null, 2));
