@@ -33,11 +33,31 @@ export interface SingleItem {
 
 export type LibraryItem = SingleItem | SeriesGroup;
 
-/** A series by its category, or by its title when the category is not set. */
+/**
+ * Clear signs of episodes: a season with episodes or a range of several episodes in the title («S1E1-18», «E01-E18»,
+ * «[1-18]»), or several playable files with episode numbers. A film with one file never has them.
+ */
+export function hasEpisodes(tor: Torrent): boolean {
+  const r = parseEpisodeRange(displayTitle(tor));
+  if (r.to !== undefined && (r.season !== undefined || (r.from !== undefined && r.to - r.from >= 2))) return true;
+  const eps: number[] = [];
+  playableFiles(filesOf(tor)).forEach((f) => {
+    const e = parseEpisode(f.path);
+    const k = (e.season || 0) * 10000 + (e.episode === null ? -1 : e.episode);
+    if (e.episode !== null && eps.indexOf(k) < 0) eps.push(k);
+  });
+  return eps.length >= 2;
+}
+
+/**
+ * A series by its category, or by its title when the category is not set. A «Фильмы» torrent with clear episodes
+ * («E01-E18», 18 episode files) is a series all the same: the category was guessed wrong.
+ */
 export function isSeries(tor: Torrent): boolean {
   if (tor.category === 'tv') return true;
-  if (tor.category === 'movie' || tor.category === 'music') return false;
-  return guessCategory(displayTitle(tor)) === 'tv';
+  if (tor.category === 'music') return false;
+  if (tor.category === 'movie') return hasEpisodes(tor);
+  return guessCategory(displayTitle(tor)) === 'tv' || hasEpisodes(tor);
 }
 
 /** The grouping key of a series torrent; '' for a film or a title with no name. */
@@ -62,6 +82,8 @@ export function seasonsOf(tor: Torrent): number[] {
     const s = parseEpisode(f.path).season;
     if (s !== null && out.indexOf(s) < 0) out.push(s);
   });
+  // «E01-E18» with no season anywhere: the first season (the way such releases are numbered)
+  if (!out.length && r.to !== undefined && r.from !== undefined && r.to > r.from) out.push(1);
   return out.sort((a, b) => a - b);
 }
 

@@ -1292,3 +1292,9 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-cal-chip { padding: 2px 8px; border-radius: 10px; background: var(--panel-2); color: var(--muted); font-size: 12px; white-space: nowrap; }
 .m-cal-chip.m-cal-aired, .m-cal-chip.m-cal-today { background: var(--accent); color: var(--bg); font-weight: 700; }
 .m-cal-empty { display: flex; flex-direction: column; gap: 6px; }
+
+/* duplicate releases */
+.m-dup-text { margin: 0; line-height: 1.45; }
+.m-sheet-actions { display: flex; flex-direction: column; gap: 8px; }
+.m-dup-hint { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel); }
+.m-dup-hint span { flex: 1; min-width: 0; }

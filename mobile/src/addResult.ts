@@ -7,6 +7,7 @@ import { resolveLink } from '../../src/sources/view';
 import type { SourceResult } from '../../src/sources/types';
 import { phoneSourceContext } from './searchContext';
 import { t } from '../../src/i18n';
+import { checkAddedDuplicate } from './lib/duplicates';
 
 /** Row state while adding: taking the link from the release page, then adding. */
 export type RowBusy = 'link' | 'add';
@@ -28,5 +29,7 @@ export async function addSearchResult(
   o?.onStep?.('add');
   const added = await c.add({ link: l, title: r.Title, category });
   void rememberAdded(c, added, r.Title);
+  // a duplicate of a release already in «Мои»: offer to keep the better one
+  checkAddedDuplicate(added.hash, r.Title, category);
   return added.hash;
 }

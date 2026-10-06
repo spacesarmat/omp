@@ -9,6 +9,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - «Discover»: a new «Coming to digital» sort — films released digitally in the next 60 days
 - Film card: «Cinemas · Digital · Disc» release dates (the ones to come highlighted); series card: «Upcoming episodes» with dates
 - «Add»: when a site is behind a Cloudflare check, lost its sign-in or fails its certificate, the warning has an «Open … settings» button that goes straight to that site's page with «Sign in» and the check bypass
+- Duplicate releases: when a new release repeats one you already have (the same episodes or the same film), OMP offers to keep the better quality one — the watch history moves to it; the series screen shows «A duplicate in worse quality — keep the better one»; a release with episodes («E01-E18», many episode files) filed under «Movies» joins its series card
 
 ## 0.17.0-beta.5
 

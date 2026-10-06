@@ -63,6 +63,11 @@ export interface ReplaceOptions {
    * Without it the old torrent's title is used; the title is never empty.
    */
   title?: string;
+  /**
+   * The new torrent is already in the library (a duplicate of the old one): it keeps its own title, poster and
+   * category, the old ones only fill what it lacks.
+   */
+  keepOwn?: boolean;
 }
 
 export type ReplaceResult = { ok: true; hash: string } | { ok: false; error: string; cause?: ReplaceCause };
@@ -217,6 +222,7 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
   const newTitle = ((opts && opts.title) || '').trim();
   const abort = opts && opts.abort;
   const deadlineMs = opts && opts.deadlineMs ? opts.deadlineMs : 0;
+  const keepOwn = !!(opts && opts.keepOwn);
   let added: Torrent | null = null;
   let preexisting = false;
   // the wait was stopped («Отмена» or the deadline): nothing goes on, a torrent added late is taken back
@@ -236,7 +242,11 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
 
   const prepare = (old: Torrent, oldParsed: NonNullable<ReturnType<typeof parseData>>, all: Torrent[]): Promise<Prepared> =>
     c
-      .add({ link, title: newTitle || keptTitle(old), poster: old.poster || '', category: old.category || '' })
+      .add(
+        keepOwn
+          ? { link, title: newTitle || keptTitle(old) }
+          : { link, title: newTitle || keptTitle(old), poster: old.poster || '', category: old.category || '' },
+      )
       .then(
         (t) => t,
         (e) => {
@@ -301,9 +311,11 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
         const obj: { [k: string]: unknown } = { ...base.obj };
         if (oldOmp || newOmp) obj[JOURNAL_KEY] = { ...(newOmp || {}), ...(oldOmp || {}), v: JOURNAL_VERSION };
         const skip = oldParsed.skip || base.skip;
-        const title = newTitle || keptTitle(old) || listed.title || listed.name || x.info.title || '';
-        const poster = old.poster || listed.poster || '';
-        const category = old.category || listed.category || '';
+        const title = keepOwn
+          ? newTitle || keptTitle(listed) || listed.name || x.info.title || keptTitle(old)
+          : newTitle || keptTitle(old) || listed.title || listed.name || x.info.title || '';
+        const poster = keepOwn ? listed.poster || old.poster || '' : old.poster || listed.poster || '';
+        const category = keepOwn ? listed.category || old.category || '' : old.category || listed.category || '';
         const data = serializeData(obj, journal, skip);
         const done: Torrent = { ...listed, title, poster, category, data };
         const carried = !!oldOmp || journal.length > 0 || !!skip;

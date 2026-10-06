@@ -32,6 +32,7 @@ import { UpdateSheet } from './ui/UpdateSheet';
 import { runBack } from './ui/backStack';
 import { WhatsNewSheet } from './ui/WhatsNewSheet';
 import { DonateSheet } from './ui/DonateSheet';
+import { DuplicateSheet } from './ui/DuplicateSheet';
 import { syncSupport, localSupportUntil } from './donate';
 import { torrents } from '../../src/store/library';
 import { checkWhatsNew } from '../../src/store/whatsNew';
@@ -317,6 +318,7 @@ export function App() {
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
       {tabRoot && !prompt && <WhatsNewSheet />}
       {tabRoot && <DonateSheet />}
+      <DuplicateSheet />
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}

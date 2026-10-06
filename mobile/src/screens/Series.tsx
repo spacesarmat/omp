@@ -30,6 +30,7 @@ import { displayTitle } from '../../../src/lib/torrentName';
 import type { Torrent } from '../../../src/api/types';
 import { findGroup, groupLabel, NO_SEASON, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
+import { dropWorse, worseInSeason } from '../lib/duplicates';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { ratingText } from './catalog/CatalogSearch';
@@ -404,6 +405,23 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
     ];
   };
 
+  // «Есть дубль в худшем качестве»: each release a better one of the season fully covers may go (history moves over)
+  const worse = rows.length > 1 ? worseInSeason(group, season) : [];
+  const [dropping, setDropping] = useState(false);
+  const keepBetter = async () => {
+    const c = client.value;
+    if (!c || dropping || !worse.length) return;
+    if (!window.confirm(tp('series.dupHintAsk', worse.length))) return;
+    setDropping(true);
+    let failed = '';
+    for (const w of worse) {
+      const r = await dropWorse(c, w.worse, w.better);
+      if (!r.ok && !failed) failed = r.error;
+    }
+    setDropping(false);
+    showToast(failed || t('library.deletedN', { n: worse.length }));
+  };
+
   const main = rows.length ? seasonTarget(rows) : null;
   const mainFile = main ? watchTarget(main.hash, playableFiles(filesOf(main))) : undefined;
   const mainAt = main && mainFile ? sharedResume(main.hash, mainFile.id) : 0;
@@ -485,6 +503,14 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
             </div>
           )}
           {error && <LaunchError message={error} class="m-hint-warn" />}
+          {worse.length > 0 && (
+            <div class="m-dup-hint m-small" data-dup-hint>
+              <span>{t('series.dupHint')}</span>
+              <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={dropping} onClick={() => void keepBetter()}>
+                {t('series.dupHintButton')}
+              </button>
+            </div>
+          )}
           <div class="m-list m-series-rows">
             {rows.map((tor) => (
               <Row key={tor.hash} tor={tor} onWatch={watch} onMenu={setMenuFor} />
