@@ -9,10 +9,13 @@ import { runLaunchParams } from './launchActions';
 import { platformKind } from './platform/env';
 import { installErrorHooks, log, logStart } from './lib/log';
 import { t } from './i18n';
+import { setCatalogProvider } from './catalog/activeCatalog';
+import { tvCatalog } from './catalog/tvCatalog';
 
 init({ debug: false, visualDebug: false });
 
 installErrorHooks();
+setCatalogProvider(() => tvCatalog());
 logStart(platformKind() === 'androidtv' ? 'Android TV' : 'LG webOS');
 
 function start(): void {
