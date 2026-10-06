@@ -28,7 +28,7 @@ import { useSkip, firstPlayableId } from '../lib/useSkip';
 import { skipStatus } from '../lib/skipMarks';
 import { MarksDialog } from '../ui/MarksDialog';
 import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
-import { setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { displayTitle } from '../lib/torrentName';
 import { t } from '../i18n';
 import { tvGlyphs } from '../ui/tvText';
@@ -53,6 +53,9 @@ export function headerNames(tor: Torrent, list: Torrent[]): { name: string; raw:
   const raw = displayTitle(tor);
   return { name: name, raw: raw && raw !== name ? raw : '' };
 }
+
+/** The action buttons the row's fallback focus can land on while the files load (all but Watch). */
+const AUTO_ACTIONS = ['TORRENT-ACTIONS', 'torrent-reset', 'torrent-rename', 'torrent-poster', 'torrent-delete', 'torrent-better'];
 
 export function TorrentScreen({ hash }: { hash: string }) {
   const c = client.value!;
@@ -134,7 +137,23 @@ export function TorrentScreen({ hash }: { hash: string }) {
   const [betterOpen, setBetterOpen] = useState(false);
   const upgradable = useMemo(() => (tor && files.length ? canUpgrade(tor, files) : false), [tor ? tor.hash : '', tor ? tor.title : '', tor ? tor.category : '', files]);
 
+  // a torrent just added has no files yet: Watch is not there, so the row's first button (Reset viewed)
+  // takes the focus, and refocusing the row later returns to that last child. When the files arrive and the person has
+  // not moved, the cursor goes to Watch, as the search hint (OK adds and watches) promises.
+  const filesAtMount = useRef(files.length > 0);
+  const keyPressed = useRef(false);
   useEffect(() => {
+    const onKey = () => {
+      keyPressed.current = true;
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
+  useEffect(() => {
+    if (files.length > 0 && !filesAtMount.current && !keyPressed.current && AUTO_ACTIONS.indexOf(getCurrentFocusKey() || '') >= 0) {
+      setFocus('torrent-play');
+      return;
+    }
     restoreFocus('TORRENT-ACTIONS');
   }, [files.length > 0]);
 
