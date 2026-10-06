@@ -18,8 +18,8 @@ export interface RpcDeps {
   now(): number;
   search?: typeof searchAll;
   resolve?: typeof resolveLink;
-  /** Checks one subscription now (`subCheck`); absent: `subCheck` fails. */
-  checkSubscription?: (sub: Subscription) => Promise<unknown>;
+  /** Checks one subscription now over `from` (`subCheck`); absent: `subCheck` fails. */
+  checkSubscription?: (sub: Subscription, from: Source[]) => Promise<unknown>;
 }
 
 export type RpcErrorCode = 'bad_request' | 'unknown_method' | 'expired' | 'failed';
@@ -88,7 +88,7 @@ function randomId(): string {
   return out;
 }
 
-const searchable = (s: Source): boolean => s.kind !== 'torrserver';
+export const searchable = (s: Source): boolean => s.kind !== 'torrserver';
 /** What the TV's own TorrServer can add: a magnet, or an http(s) .torrent link it downloads itself. */
 const ADDABLE = /^(magnet:\?|https?:\/\/)/i;
 

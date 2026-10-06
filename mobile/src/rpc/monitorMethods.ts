@@ -12,10 +12,11 @@ import {
   sameQuery,
   updateSubscription,
 } from '../../../src/monitor/subs';
+import { reloadSourcePrefs } from '../../../src/sources/store';
 import { loadLastRun } from '../../../src/monitor/settings';
 import { BETTER_ID, EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
 import type { RpcFeed, RpcFinding, RpcFindingKind, RpcSub } from '../../../src/phone/rpcTypes';
-import { bad, MAX_QUERY, RpcError, toRpcResult, type Params, type Resolving, type ResolveRow, type RpcDeps } from './handler';
+import { bad, MAX_QUERY, RpcError, searchable, toRpcResult, type Params, type Resolving, type ResolveRow, type RpcDeps } from './handler';
 
 /** Subscriptions with a `subCheck` running (module-level: one RPC page serves one TV at a time, but a check outlives a handler). */
 const checking: { [id: string]: true } = {};
@@ -108,7 +109,9 @@ export function monitorMethods(kit: { deps: RpcDeps; resolveRow: ResolveRow }): 
       };
       let run: Promise<unknown>;
       try {
-        run = Promise.resolve(check(sub));
+        // like `search`: the app may have switched sources or added an indexer since this page started
+        reloadSourcePrefs();
+        run = Promise.resolve(check(sub, deps.sources().filter(searchable)));
       } catch (e) {
         run = Promise.reject(e);
       }
@@ -129,7 +132,9 @@ export function monitorMethods(kit: { deps: RpcDeps; resolveRow: ResolveRow }): 
     },
 
     subRemove(p) {
-      removeSubscription(idParam(p));
+      const id = idParam(p);
+      // only a real subscription: the reserved ids (EPISODES_ID, BETTER_ID) would wipe those findings
+      if (getSubscription(id)) removeSubscription(id);
       return { removed: true };
     },
 

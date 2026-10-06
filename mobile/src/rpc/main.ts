@@ -31,7 +31,7 @@ if (port) {
     },
     ctx: () => ctx,
     now: () => Date.now(),
-    checkSubscription: (sub) => checkSubscription(ctx, sub),
+    checkSubscription: (sub, from) => checkSubscription(ctx, sub, { from }),
   });
   bridge.serve(handler.dispatch);
 }
