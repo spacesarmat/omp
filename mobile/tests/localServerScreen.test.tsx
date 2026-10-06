@@ -5,7 +5,7 @@ import { act } from 'preact/test-utils';
 import { LocalServer } from '../src/screens/LocalServer';
 import { TORRSERVER_VERSION } from '../src/server/torrserverVersion';
 import { setLocalServerDeps, localServer, reloadLocalServerSettings } from '../src/server/localServer';
-import { currentRoute, resetTo } from '../src/nav';
+import { currentRoute, resetTo, navigate } from '../src/nav';
 import { activeServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
 
 async function flush() {
@@ -94,7 +94,7 @@ describe('LocalServer screen', () => {
   });
 
   function downloadDeps(
-    over: { binary?: 'missing' | 'outdated'; fail?: { message: string; code: string } | null; mobileData?: boolean } = {},
+    over: { binary?: 'missing' | 'outdated'; fail?: { message: string; code: string } | null; mobileData?: boolean; bytes?: number | null } = {},
   ) {
     const calls: string[] = [];
     let binary: string = over.binary ?? 'missing';
@@ -112,7 +112,7 @@ describe('LocalServer screen', () => {
           supported: true,
           running,
           binary,
-          downloadBytes: 64174032,
+          ...(over.bytes === null ? {} : { downloadBytes: over.bytes ?? 64174032 }),
           pinVersion: 'MatriX.146',
           ...(running ? { version: 'MatriX.146', ip: '192.168.1.50' } : {}),
           ...(downloading ? { downloading: true, downloadPercent: percent } : {}),
@@ -186,9 +186,15 @@ describe('LocalServer screen', () => {
     await flush();
     expect(d.calls).toContain('download');
     await act(async () => d.progress({ phase: 'download', percent: 42 }));
-    expect(el.textContent).toContain('Скачивание TorrServer MatriX.146 · 42%');
-    expect(el.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('42');
+    const first = el.querySelector('.m-step')!;
+    // the title stays on one line: the percentage lives under the bar only
+    expect(first.querySelector('.m-step-label')!.textContent).toBe('Скачивание TorrServer MatriX.146');
+    expect(el.textContent).not.toContain('· 42%');
+    // the bar sits inside the card, under the current step, with the size line under it
+    expect(first.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('42');
+    expect(first.querySelector('.m-step-sub')!.textContent).toBe('42% · 26 из 61 МБ');
     expect(button(el, 'Отмена')).toBeTruthy();
+    expect(button(el, 'Отмена')!.closest('.m-local-actions')).toBeTruthy();
     await act(async () => d.progress({ phase: 'verify' }));
     expect(el.textContent).toContain('Проверка файла TorrServer MatriX.146');
     expect(button(el, 'Отмена')).toBeUndefined();
@@ -262,14 +268,71 @@ describe('LocalServer screen', () => {
     const el2 = mount();
     await flush();
     expect(button(el2, 'Скачать TorrServer (~61 МБ)')).toBeUndefined();
-    expect(el2.textContent).toContain('Скачивание TorrServer MatriX.146 · 30%');
+    expect(el2.querySelector('.m-step-label')!.textContent).toBe('Скачивание TorrServer MatriX.146');
+    expect(el2.querySelector('.m-step-sub')!.textContent).toBe('30% · 18 из 61 МБ');
     await act(async () => d.progress({ phase: 'download', percent: 70 }));
-    expect(el2.textContent).toContain('· 70%');
+    expect(el2.querySelector('.m-step-sub')!.textContent).toBe('70% · 43 из 61 МБ');
     await act(async () => d.finish());
     await flush();
     expect(el2.textContent).toContain('Открыть каталог');
     // one start only: the first (left) screen did not start the server after the download
     expect(d.calls.filter((c) => c === 'start')).toHaveLength(1);
+  });
+
+  it('without a known size the line under the bar is the percentage only', async () => {
+    const d = downloadDeps({ bytes: null });
+    setLocalServerDeps(d.deps);
+    const el = mount();
+    await flush();
+    await act(async () => button(el, 'Скачать TorrServer')!.click());
+    await flush();
+    await act(async () => d.progress({ phase: 'download', percent: 39 }));
+    expect(el.querySelector('.m-step-sub')!.textContent).toBe('39%');
+    expect(el.querySelector('.m-step-label')!.textContent).toBe('Скачивание TorrServer MatriX.146');
+  });
+
+  it('step icons: a check when done, a spinner for the current step, numbers for the next ones', async () => {
+    const d = downloadDeps();
+    setLocalServerDeps(d.deps);
+    const el = mount();
+    await flush();
+    await act(async () => button(el, 'Скачать TorrServer (~61 МБ)')!.click());
+    await flush();
+    await act(async () => d.progress({ phase: 'download', percent: 10 }));
+    const steps = Array.from(el.querySelectorAll('.m-step'));
+    expect(steps.map((s) => s.getAttribute('data-state'))).toEqual(['run', 'wait', 'wait', 'wait']);
+    expect(steps[0].querySelector('.m-step-dot svg.m-spin')).toBeTruthy();
+    expect(steps.slice(1).map((s) => s.querySelector('.m-step-dot')!.textContent)).toEqual(['2', '3', '4']);
+    expect(steps[1].querySelector('.m-step-dot svg')).toBeNull();
+    await act(async () => d.finish());
+    await flush();
+    for (const s of Array.from(el.querySelectorAll('.m-step'))) {
+      expect(s.getAttribute('data-state')).toBe('ok');
+      expect(s.querySelector('.m-step-dot svg')).toBeTruthy();
+      expect(s.querySelector('.m-step-num')).toBeNull();
+    }
+    expect(el.querySelector('.m-spin')).toBeNull();
+  });
+
+  it('has a subpage header with «Назад»', async () => {
+    navigate({ name: 'localServer' });
+    setLocalServerDeps(deps());
+    const el = mount();
+    await flush();
+    const bar = el.querySelector('.m-bar')!;
+    expect(bar.querySelector('h1')!.textContent).toBe('TorrServer на телефоне');
+    const back = bar.querySelector('button[aria-label="Назад"]') as HTMLButtonElement;
+    expect(back).toBeTruthy();
+    await act(async () => back.click());
+    expect(currentRoute.value.name).toBe('connect');
+  });
+
+  it('the offer screen has the same header', async () => {
+    setLocalServerDeps(downloadDeps().deps);
+    const el = mount();
+    await flush();
+    expect(el.querySelector('.m-bar h1')!.textContent).toBe('TorrServer на телефоне');
+    expect(el.querySelector('.m-bar button[aria-label="Назад"]')).toBeTruthy();
   });
 
   it('a download finished after leaving the screen starts nothing', async () => {
@@ -308,6 +371,13 @@ describe('LocalServer screen', () => {
     await flush();
     expect(el.querySelector('.m-error')?.textContent).toBe('Сервер не отвечает');
     expect(el.querySelector('.m-step.fail')?.textContent).toContain('Проверка связи');
+    // the red mark and the error text under the failed step; the earlier steps done, the last one numbered
+    const fail = el.querySelector('.m-step.fail')!;
+    expect(fail.querySelector('.m-step-dot svg')).toBeTruthy();
+    expect(fail.querySelector('.m-step-error')!.textContent).toBe('Сервер не отвечает');
+    expect(Array.from(el.querySelectorAll('.m-step')).map((s) => s.getAttribute('data-state'))).toEqual(['ok', 'ok', 'fail', 'wait']);
+    expect(el.querySelectorAll('.m-step')[3].querySelector('.m-step-dot')!.textContent).toBe('4');
+    expect(button(el, 'Повторить')!.closest('.m-local-actions')).toBeTruthy();
     expect(el.textContent).not.toContain('Открыть каталог');
     const retry = Array.from(el.querySelectorAll('button')).find((b) => b.textContent === 'Повторить')!;
     await act(async () => retry.click());
