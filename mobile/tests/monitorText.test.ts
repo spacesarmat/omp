@@ -32,7 +32,7 @@ describe('monitoring texts', () => {
   it('subscription conditions', () => {
     expect(subRule({ id: 'a', query: 'q', quality: '2160', sources: null, notify: true, createdAt: 0, minSeeds: 20 })).toBe('Все источники · 2160p · от 20 сидов');
     expect(subRule({ id: 'a', query: 'q', quality: '1080', sources: ['nnmclub'], notify: false, createdAt: 0, maxSizeGb: 8.5, minSeeds: 1 })).toBe(
-      'nnmclub · от 1080p · от 1 сида · до 8,5 ГБ · без уведомлений',
+      'NNM-Club · от 1080p · от 1 сида · до 8,5 ГБ · без уведомлений',
     );
     expect(subRule({ id: 'a', query: 'q', quality: '', sources: null, notify: true, createdAt: 0 })).toBe('Все источники · любое качество');
   });

@@ -12,7 +12,7 @@ import { mapSearchCategory } from '../lib/category';
 import { posterColor } from '../lib/libraryView';
 import { currentRoute, navigate, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
-import { restoreFocus } from '../ui/focus';
+import { restoreFocus, scrollIntoViewSafe } from '../ui/focus';
 import { useKeys } from '../ui/keys';
 import { choose } from '../ui/dialog';
 import { askText } from '../ui/TextDialog';
@@ -139,6 +139,9 @@ export function AddScreen() {
   const seq = useRef(0);
   // row order on screen while results stream in: shown rows keep their places under the cursor
   const order = useRef<string[]>([]);
+  // the order the last render showed, and the place of a focused row that this render drops (-1: none)
+  const shown = useRef<string[]>([]);
+  const refocus = useRef(-1);
   const [query, setQuery] = useState(p.query || '');
   const [rows, setRows] = useState<TvResult[] | null>(null);
   const [prog, setProg] = useState<Prog | null>(null);
@@ -327,6 +330,31 @@ export function AddScreen() {
   const streaming = !!prog && prog.pending.length > 0;
   const sorted = rows ? (streaming ? stableTvOrder(order.current, rows, sortKey) : sortTvResults(rows, sortKey)) : [];
   order.current = sorted.map(resultKey);
+  // the focused row left the list (a phone row TorrServer also found, after the fallback): the cursor goes to the row
+  // now at its place, or to the search line when the list is empty (applied after the commit, below)
+  const curFocus = getCurrentFocusKey() || '';
+  if (curFocus.indexOf('res-') === 0) {
+    const gone = curFocus.slice(4);
+    const at = shown.current.indexOf(gone);
+    if (at >= 0 && order.current.indexOf(gone) < 0) refocus.current = at;
+  }
+  shown.current = order.current;
+  useEffect(() => {
+    const at = refocus.current;
+    if (at < 0) return;
+    refocus.current = -1;
+    const list = order.current;
+    if (!list.length) setFocus('add-query');
+    else setFocus('res-' + list[Math.min(at, list.length - 1)]);
+  });
+  // the full sort when streaming ends can move the focused row: keep it on screen
+  useEffect(() => {
+    if (streaming) return;
+    const fk = getCurrentFocusKey() || '';
+    if (fk.indexOf('res-') !== 0) return;
+    const nodes = document.querySelectorAll('.search-result');
+    for (let i = 0; i < nodes.length; i++) if (nodes[i].getAttribute('data-fk') === fk) scrollIntoViewSafe(nodes[i]);
+  }, [streaming]);
 
   // blue on a row: the release details
   useKeys((a) => {
@@ -451,7 +479,7 @@ export function AddScreen() {
           onClose={closeDetails}
           onAdd={() => {
             const r = details;
-            setDetails(null);
+            closeDetails();
             addResult(r);
           }}
         />

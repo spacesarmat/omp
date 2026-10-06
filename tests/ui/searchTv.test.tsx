@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
-import { init, setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { init, setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 
 const askTextMock = vi.hoisted(() => vi.fn());
 vi.mock('../../src/ui/TextDialog', async (orig) => ({ ...(await orig<object>()), askText: askTextMock }));
@@ -246,6 +246,45 @@ describe('TV search through the phone', () => {
     expect(host.querySelector('.search-details')).toBeNull();
     expect(calls.filter((c) => c.method === 'resolve').map((c) => c.params)).toEqual([{ handle: 'h1', key: '1' }]);
     expect(addCalls().map((b) => b.link)).toEqual([MAG]);
+  });
+
+  it('LG shows the display names of the phone sites', async () => {
+    useScript({
+      search: [{ handle: 'h3', sourceIds: ['rutracker', 'nnmclub'] }],
+      searchPoll: [
+        { rev: 1, done: false, pending: ['nnmclub'], answered: ['rutracker'], failed: [], results: [phoneRow('1', RAW_HD, 5, { sources: ['nnmclub', 'torrentby'] })] },
+      ],
+    });
+    mount();
+    await searchDune();
+    expect(host.querySelector('.search-result')!.textContent).toContain('ещё на NNM-Club, torrent.by');
+    expect(host.querySelector('.search-progress')!.textContent).toContain('NNM-Club');
+  });
+
+  it('the focused phone row dropped after the fallback hands the cursor to the row at its place', async () => {
+    useScript({
+      search: [{ handle: 'h4', sourceIds: ['rutracker'] }],
+      searchPoll: [
+        { rev: 1, done: false, pending: ['rutracker'], answered: [], failed: [], results: [phoneRow('1', RAW_4K, 5, { Hash: HASH }), phoneRow('2', RAW_HD, 3)] },
+        new Error('network'),
+      ],
+    });
+    mount();
+    typeQuery('Dune');
+    act(() => button('Искать').click());
+    await step(900);
+    expect(rowTitles()).toEqual([RAW_4K, RAW_HD]);
+    act(() => setFocus('res-phone:h4:1'));
+    await step(10);
+    expect(getCurrentFocusKey()).toBe('res-phone:h4:1');
+    // two failed polls: TorrServer takes over and finds the same hash, the focused phone row goes
+    await step(3000);
+    await step(10);
+    expect(rowTitles()).not.toContain(RAW_4K);
+    const fk = getCurrentFocusKey();
+    expect(fk.indexOf('res-')).toBe(0);
+    expect(host.querySelector('.search-result.focused')).not.toBeNull();
+    expect(fk).toBe(host.querySelectorAll('.search-result')[0].getAttribute('data-fk'));
   });
 
   it('«Magnet или ссылка» adds the typed link', async () => {

@@ -3,6 +3,7 @@
 import { fmtNumber, t as tr, tp } from '../i18n';
 import { parseDate, parseSize } from './html';
 import { getSource } from './registry';
+import { knownSourceName } from './sourceNames';
 import { ipBanText, sourcePaused } from './ipBan';
 import { getHealth } from './store';
 import { isTlsMessage, tlsText } from './tls';
@@ -103,7 +104,8 @@ export function sortResults(list: SourceResult[], key: SortKey): SourceResult[] 
 
 export function sourceName(id: string): string {
   const s = getSource(id);
-  return s ? s.name : id;
+  // not registered here (LG: the phone's sites): the phone's or the built-in name
+  return s ? s.name : knownSourceName(id) || id;
 }
 
 export interface Progress {

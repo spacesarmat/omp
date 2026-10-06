@@ -1455,7 +1455,6 @@ export const en: EnDict<typeof ru> = {
     seeds: 'seeds {n}',
     peers: 'peers {n}',
     alsoIn: 'also in {names}',
-    typeHint: 'It is easier to type with the phone keyboard in the LG ThinQ app',
     onTv: 'On TV',
     category: 'Category',
     categoryOf: 'Category: {label}, {title}',

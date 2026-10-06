@@ -1475,7 +1475,6 @@ export const ru = {
     seeds: 'сиды {n}',
     peers: 'пиры {n}',
     alsoIn: 'ещё в {names}',
-    typeHint: 'Текст удобно вводить с клавиатуры телефона в приложении LG ThinQ',
     onTv: 'На ТВ',
     category: 'Категория',
     categoryOf: 'Категория: {label}, {title}',
