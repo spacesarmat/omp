@@ -2,6 +2,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.18.0-beta.3
+
+- The LG TV searches torrent sites through the phone (RuTracker, NNM-Club, Kinozal and others, with your sign-ins), even when OMP is closed on the phone; the phone gets a «Search for the TV» switch and a quiet notification
+- A new search screen on the TV: quality badges, posters, sorting, «also on ...», «already in the library»
+- «Search sources» on LG: the phone's sites with their state and switches
+- Without a phone the TV searches through TorrServer (Rutor, Jackett) and says so
+
 ## 0.18.0-beta.2
 
 - On the TV: the «Discover» tab shows new releases from TMDB with sort and filters (genre, year, country, rating), title search and an «In the library» mark on the ones you already have

@@ -37,6 +37,11 @@ import { resetDiscoverState } from '../../src/store/discover';
 import { wantList } from '../../src/store/wantList';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { mockFetch } from '../helpers/fetchMock';
+import { PhoneSourcesScreen } from '../../src/screens/PhoneSources';
+import { setRpcTransport, phoneStatus } from '../../src/phone/rpc';
+import { savePhoneLink, forgetPhoneLink } from '../../src/phone/phoneStore';
+import { resetSourceNames } from '../../src/sources/sourceNames';
+import { resetTo } from '../../src/ui/nav';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth } from '../../src/sources/store';
 import type { Source } from '../../src/sources/types';
@@ -436,6 +441,89 @@ describe('TV screens in English', () => {
     expect(buttons(host)).toContain('Sources');
     expect(text).toContain('OK — add and watch');
     expect(text).not.toMatch(CYR);
+  });
+
+  describe('search through the phone', () => {
+    const PH = { url: 'http://192.168.1.20:8097', token: 'a'.repeat(32), name: 'Pixel' };
+    const row = { key: '1', Title: 'Dune 2021 2160p HDR', Size: '10 GB', Seed: 50, Peer: 3, Tracker: 'RuTracker', CreateDate: '2024-03-01', date: '01.03.2024', Categories: '', Magnet: '', Hash: '', source: 'rutracker' };
+    const typeAndSearch = async () => {
+      const q = host.querySelector('input') as HTMLInputElement;
+      act(() => {
+        q.value = 'Dune';
+        q.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      const go = Array.prototype.slice.call(host.querySelectorAll('.button')).filter((b: HTMLElement) => b.textContent === 'Search')[0] as HTMLElement;
+      act(() => go.click());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+    };
+    afterEach(() => {
+      setRpcTransport(null);
+      forgetPhoneLink();
+      phoneStatus.value = 'unknown';
+      resetSourceNames();
+      vi.useRealTimers();
+    });
+
+    it('the search screen: the phone path', async () => {
+      vi.useFakeTimers();
+      setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+      savePhoneLink(PH);
+      setRpcTransport((_u, body) => {
+        const m = JSON.parse(body).method;
+        const result = m === 'search'
+          ? { handle: 'h1', sourceIds: ['rutracker'] }
+          : { rev: 1, done: true, pending: [], answered: ['rutracker'], failed: [], results: [row] };
+        return Promise.resolve(JSON.stringify({ ok: true, result }));
+      });
+      mount(h(AddScreen, {}));
+      await typeAndSearch();
+      const text = host.textContent || '';
+      expect(text).toContain('Pixel');
+      expect(host.querySelector('.search-result')).not.toBeNull();
+      expect(text).toContain('Sort: quality');
+      expect(text.replace(/Dune 2021 2160p HDR/g, '')).not.toMatch(CYR);
+    });
+
+    it('the search screen: the phone does not answer', async () => {
+      vi.useFakeTimers();
+      setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+      savePhoneLink(PH);
+      setRpcTransport(() => Promise.reject(new Error('network')));
+      mount(h(AddScreen, {}));
+      await typeAndSearch();
+      const note = host.querySelector('.search-note-warn');
+      expect(note).not.toBeNull();
+      expect(note!.textContent).toContain('The phone does not answer');
+      expect(host.textContent).not.toMatch(CYR);
+    });
+
+    it('PhoneSourcesScreen: online', async () => {
+      savePhoneLink(PH);
+      resetTo({ name: 'settings' });
+      setRpcTransport(() => Promise.resolve(JSON.stringify({ ok: true, result: { sources: [
+        { id: 'rutracker', name: 'RuTracker', on: true, state: 'loggedIn' },
+        { id: 'kinozal', name: 'Kinozal', on: true, state: 'cloudflare' },
+        { id: 'nnmclub', name: 'NNM-Club', on: false, state: 'off' },
+      ] } })));
+      mount(h(PhoneSourcesScreen, {}));
+      await flush();
+      const text = host.textContent || '';
+      expect(text).toContain('Sites are searched by phone Pixel');
+      expect(text).toContain('connected');
+      expect(text).toContain('signed in');
+      expect(text).toContain('Rutor, Jackett');
+      expect(text).not.toMatch(CYR);
+    });
+
+    it('PhoneSourcesScreen: no phone', async () => {
+      resetTo({ name: 'settings' });
+      mount(h(PhoneSourcesScreen, {}));
+      await flush();
+      expect(host.textContent).toContain('Rutor, Jackett');
+      expect(host.textContent).not.toMatch(CYR);
+    });
   });
 
   it('Playlist', async () => {

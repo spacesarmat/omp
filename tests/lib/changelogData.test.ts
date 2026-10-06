@@ -21,8 +21,8 @@ describe('changelogData', () => {
       if (en.indexOf(e.version) >= 0) expect(e.items).not.toEqual(ru.items);
       else expect(e.items).toEqual(ru.items);
     });
-    const v0160 = list.filter((e) => e.version === '0.16.0')[0];
-    expect(v0160.items[0]).toMatch(/^English: the whole app/);
+    const v0170 = list.filter((e) => e.version === '0.17.0-beta.1')[0];
+    expect(v0170.items[0]).toMatch(/^“Discover” in “Catalog”/);
   });
 
   it('mergeChangelog falls back to the Russian entry for a missing version', () => {
