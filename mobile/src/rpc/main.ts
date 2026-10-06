@@ -3,6 +3,7 @@
 // the stored language (tsp.settings) is applied when the settings store loads, before any text is built
 import '../../../src/store/settings';
 import { t } from '../../../src/i18n';
+import { checkSubscription } from '../../../src/monitor/check';
 import { registerBuiltinSources } from '../../../src/sources/builtin';
 import { createSecretStore, createSourceHttp } from '../../../src/sources/http';
 import { reloadIndexers } from '../../../src/sources/indexerStore';
@@ -30,6 +31,7 @@ if (port) {
     },
     ctx: () => ctx,
     now: () => Date.now(),
+    checkSubscription: (sub) => checkSubscription(ctx, sub),
   });
   bridge.serve(handler.dispatch);
 }

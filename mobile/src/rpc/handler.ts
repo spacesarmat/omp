@@ -6,6 +6,8 @@ import { isStashedFile, takeStashedFile } from '../../../src/api/torrentFiles';
 import { searchAll } from '../../../src/sources/search';
 import { getHealth, isSourceOn, reloadSourcePrefs, setSourceOn } from '../../../src/sources/store';
 import { isCloudflare, resolveLink, resultDate, resultKey, sortResults } from '../../../src/sources/view';
+import type { Subscription } from '../../../src/monitor/types';
+import { monitorMethods } from './monitorMethods';
 import type { SearchHandle } from '../../../src/sources/search';
 import type { Source, SourceContext, SourceResult } from '../../../src/sources/types';
 import type { RpcFailure, RpcPoll, RpcResult, RpcSource, RpcSourceState } from '../../../src/phone/rpcTypes';
@@ -16,6 +18,8 @@ export interface RpcDeps {
   now(): number;
   search?: typeof searchAll;
   resolve?: typeof resolveLink;
+  /** Checks one subscription now (`subCheck`); absent: `subCheck` fails. */
+  checkSubscription?: (sub: Subscription) => Promise<unknown>;
 }
 
 export type RpcErrorCode = 'bad_request' | 'unknown_method' | 'expired' | 'failed';
@@ -38,7 +42,7 @@ export const SOURCES_WAIT_MS = 3_500;
 export const MAX_QUERY = 200;
 const SWEEP_MS = 60_000;
 
-interface Resolving {
+export interface Resolving {
   promise: Promise<void>;
   state: 'pending' | 'ok' | 'error';
   link?: string;
@@ -56,13 +60,15 @@ interface Live {
   resolving: Map<string, Resolving>;
 }
 
-type Params = { [k: string]: unknown };
+export type Params = { [k: string]: unknown };
+export type ResolveAnswer = { link: string } | { pending: true };
+export type ResolveRow = (cache: Map<string, Resolving>, key: string, find: () => SourceResult | undefined) => Promise<ResolveAnswer>;
 
 function asParams(v: unknown): Params {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Params) : {};
 }
 
-function bad(message: string): RpcError {
+export function bad(message: string): RpcError {
   return new RpcError('bad_request', message);
 }
 
@@ -206,6 +212,63 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
     return h;
   };
 
+  /**
+   * The link of `row` for the TV: answers within RESOLVE_WAIT_MS with `{link}`, or `{pending:true}` while the phone is
+   * still fetching it (the TV asks again). `cache` keeps the fetch between calls; `find` is asked only on the first
+   * call and must return a row this phone found (undefined is a bad key).
+   */
+  const resolveRow = async (cache: Map<string, Resolving>, key: string, find: () => SourceResult | undefined): Promise<ResolveAnswer> => {
+    let r = cache.get(key);
+    if (!r) {
+      const row = find();
+      if (!row) throw bad('key');
+      let started: Promise<string>;
+      try {
+        started = Promise.resolve(resolve(row, deps.ctx()));
+      } catch (e) {
+        started = Promise.reject(e);
+      }
+      const entry: Resolving = { state: 'pending', promise: Promise.resolve() };
+      entry.promise = started.then(
+        (link) => {
+          if (typeof link === 'string' && isStashedFile(link)) {
+            // a .torrent the phone downloaded itself (rustorka, kinozal, an indexer): its bytes stay in this page,
+            // the TV's TorrServer cannot add it
+            takeStashedFile(link);
+            entry.state = 'error';
+            entry.message = t('sources.tvFileOnly');
+            return;
+          }
+          if (typeof link !== 'string' || !ADDABLE.test(link.trim())) {
+            entry.state = 'error';
+            entry.message = t('sources.cannotGetLink');
+            return;
+          }
+          entry.state = 'ok';
+          entry.link = link.trim();
+        },
+        (e: unknown) => {
+          entry.state = 'error';
+          entry.message = errorText(e);
+        },
+      );
+      cache.set(key, entry);
+      r = entry;
+    }
+    if (r.state === 'pending') {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([r.promise, new Promise<void>((res) => (timer = setTimeout(res, RESOLVE_WAIT_MS)))]);
+      if (timer !== undefined) clearTimeout(timer);
+    }
+    if (r.state === 'ok') return { link: r.link! };
+    if (r.state === 'error') {
+      // the next call tries again (the person may have signed in on the phone meanwhile)
+      cache.delete(key);
+      throw new RpcError('failed', r.message);
+    }
+    return { pending: true };
+  };
+
   const methods: { [name: string]: (p: Params) => Promise<unknown> | unknown } = {
     async sources() {
       reloadSourcePrefs();
@@ -286,62 +349,18 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
       return { on: p.on };
     },
 
-    async resolve(p) {
+    resolve(p) {
       const h = live(p);
       if (typeof p.key !== 'string' || !p.key) throw bad('key');
       const key = p.key;
-      let r = h.resolving.get(key);
-      if (!r) {
-        // only a row this phone found in this search: the TV cannot make the phone fetch an address of its choice
+      // only a row this phone found in this search: the TV cannot make the phone fetch an address of its choice
+      return resolveRow(h.resolving, key, () => {
         const real = h.rows.get(key);
-        const row = real === undefined ? undefined : h.search.results().filter((x) => resultKey(x) === real)[0];
-        if (!row) throw bad('key');
-        let started: Promise<string>;
-        try {
-          started = Promise.resolve(resolve(row, deps.ctx()));
-        } catch (e) {
-          started = Promise.reject(e);
-        }
-        const entry: Resolving = { state: 'pending', promise: Promise.resolve() };
-        entry.promise = started.then(
-          (link) => {
-            if (typeof link === 'string' && isStashedFile(link)) {
-              // a .torrent the phone downloaded itself (rustorka, kinozal, an indexer): its bytes stay in this page,
-              // the TV's TorrServer cannot add it
-              takeStashedFile(link);
-              entry.state = 'error';
-              entry.message = t('sources.tvFileOnly');
-              return;
-            }
-            if (typeof link !== 'string' || !ADDABLE.test(link.trim())) {
-              entry.state = 'error';
-              entry.message = t('sources.cannotGetLink');
-              return;
-            }
-            entry.state = 'ok';
-            entry.link = link.trim();
-          },
-          (e: unknown) => {
-            entry.state = 'error';
-            entry.message = errorText(e);
-          },
-        );
-        h.resolving.set(key, entry);
-        r = entry;
-      }
-      if (r.state === 'pending') {
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        await Promise.race([r.promise, new Promise<void>((res) => (timer = setTimeout(res, RESOLVE_WAIT_MS)))]);
-        if (timer !== undefined) clearTimeout(timer);
-      }
-      if (r.state === 'ok') return { link: r.link };
-      if (r.state === 'error') {
-        // the next call tries again (the person may have signed in on the phone meanwhile)
-        h.resolving.delete(key);
-        throw new RpcError('failed', r.message);
-      }
-      return { pending: true };
+        return real === undefined ? undefined : h.search.results().filter((x) => resultKey(x) === real)[0];
+      });
     },
+
+    ...monitorMethods({ deps, resolveRow }),
   };
 
   return {
