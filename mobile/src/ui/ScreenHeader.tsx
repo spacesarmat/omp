@@ -3,12 +3,20 @@ import { Icon } from './Icon';
 
 /**
  * The top row of a bottom-tab screen («Новое», «Добавить», «Пульт», «Настройки»): the title in a small display size,
- * then the round 44px icon buttons on the right (the same look as the TV button of «Мои»).
+ * then the round 44px icon buttons on the right (the same look as the TV button of «Мои»). `subtitle`: a muted line under
+ * the title («Пульт»: the TV and its state).
  */
-export function ScreenHeader({ title, children }: { title: string; children?: ComponentChildren }) {
+export function ScreenHeader({ title, subtitle, children }: { title: string; subtitle?: ComponentChildren; children?: ComponentChildren }) {
   return (
     <div class="m-lib-head m-screen-head">
-      <h1 class="m-head-title">{title}</h1>
+      {subtitle ? (
+        <div class="m-head-text">
+          <h1 class="m-head-title">{title}</h1>
+          <div class="m-head-sub">{subtitle}</div>
+        </div>
+      ) : (
+        <h1 class="m-head-title">{title}</h1>
+      )}
       {children}
     </div>
   );

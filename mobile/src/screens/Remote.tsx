@@ -100,6 +100,12 @@ const VOL_UP = 'M4 10v4h4l5 4V6L8 10zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11
 const TUNE = 'M4 7h9M17 7h3M4 17h3M11 17h9M15 4v6M9 14v6';
 const KEYBOARD = 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10';
 
+/** The TV's name without the maker prefixes LG puts first: «[LG] webOS TV OLED55C9PLA» → «OLED55C9PLA». */
+export function shortTvName(name: string): string {
+  const short = (name || '').replace(/^\s*\[LG\]\s*/i, '').replace(/^webOS TV\s*/i, '').trim();
+  return short || name;
+}
+
 const stateText = (s: string): string => {
   const map: Record<string, string> = {
     idle: t('remote.state.idle'),
@@ -511,14 +517,49 @@ export function Remote() {
       <Icon d={d} size={22} />
     </button>
   );
+  const shownState = tvWaking.value && state !== 'connected' && state !== 'pairing' ? stateText('connecting') : stateText(state);
+  const backKey = (
+    <button type="button" class="m-key m-key-icon" aria-label={t('common.back')} onClick={() => press('BACK')}>
+      <Icon d={BACK} size={22} />
+    </button>
+  );
+  const keyboardKey = (
+    <button type="button" class="m-key m-key-icon" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
+      <Icon d={KEYBOARD} size={22} />
+    </button>
+  );
+  const homeKey = (
+    <button type="button" class="m-key" aria-label={t('remote.home')} onClick={() => press('HOME')}>
+      <Icon d={HOME} size={20} /> {t('remote.home')}
+    </button>
+  );
+  const menuKey = (
+    <button type="button" class="m-key" aria-label={t('remote.menu')} onClick={() => press('MENU')}>
+      <Icon d={MENU} size={20} /> {t('remote.menu')}
+    </button>
+  );
+  const mediaRow = (
+    <div class="m-rb-row m-rb-media">
+      {media(t('remote.back10s'), REW10, () => press('REWIND'))}
+      {media(t('remote.prevEpisode'), PREV, () => press('CHANNELDOWN'))}
+      {media(playing ? t('remote.mini.pause') : t('remote.playBtn'), playing ? PAUSE : PLAY, togglePlay, true)}
+      {media(t('remote.nextEpisode'), NEXT, () => press('CHANNELUP'))}
+      {media(t('remote.fwd10s'), FF10, () => press('FASTFORWARD'))}
+    </div>
+  );
 
   return (
     <div class={screenClass(kbd)} data-route="remote">
-      <div class="m-lib-head">
-        <div class="m-remote-name">
-          <span class="m-remote-title">{tv.name}</span>
-          <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{tvWaking.value && state !== 'connected' && state !== 'pairing' ? stateText('connecting') : stateText(state)}</span>
-        </div>
+      <ScreenHeader
+        title={t('nav.remote')}
+        subtitle={
+          <span title={tv.name}>
+            <span class="m-remote-title">{shortTvName(tv.name)}</span>
+            {' · '}
+            <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{shownState}</span>
+          </span>
+        }
+      >
         <button type="button" class="m-tvchip m-head-btn" aria-label={t('remote.touchpad.label')} onClick={() => setTuning(true)}>
           <Icon d={TUNE} />
         </button>
@@ -531,7 +572,7 @@ export function Remote() {
         >
           <Icon d={POWER} />
         </button>
-      </div>
+      </ScreenHeader>
       <div class="m-seg" role="tablist">
         <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>
           {t('remote.buttons')}
@@ -541,41 +582,56 @@ export function Remote() {
         </button>
       </div>
       {mode === 'buttons' ? (
-        <div class="m-stage">
-          <DPad press={press} />
+        <div class="m-rb">
+          <div class="m-stage m-rb-top">
+            <div class="m-side">
+              <button type="button" class="m-side-btn" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
+                <Icon d={KEYBOARD} size={24} />
+                <span class="m-side-cap">{t('remote.kbdShort')}</span>
+              </button>
+              <button type="button" class="m-side-btn" aria-label={t('common.back')} onClick={() => press('BACK')}>
+                <Icon d={BACK} size={24} />
+                <span class="m-side-cap">{t('common.back')}</span>
+              </button>
+            </div>
+            <DPad press={press} />
+            <div class="m-side">
+              <button type="button" class="m-side-btn" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
+                <span class="m-side-sign">+</span>
+              </button>
+              <span class="m-side-cap">{t('remote.volShort')}</span>
+              <button type="button" class="m-side-btn" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
+                <span class="m-side-sign">−</span>
+              </button>
+            </div>
+          </div>
+          <div class="m-rb-row m-rb-two">
+            {homeKey}
+            {menuKey}
+          </div>
+          {mediaRow}
         </div>
       ) : (
-        <Touchpad />
+        <div class="m-rt">
+          <Touchpad />
+          <div class="m-rb-row m-rt-keys">
+            {backKey}
+            {homeKey}
+            {menuKey}
+            {keyboardKey}
+          </div>
+          {mediaRow}
+          <div class="m-vol m-rt-vol">
+            <button type="button" class="m-key" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
+              −
+            </button>
+            <span class="m-vol-label">{t('remote.volume')}</span>
+            <button type="button" class="m-key" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
+              +
+            </button>
+          </div>
+        </div>
       )}
-      <div class="m-keyrow">
-        <button type="button" class="m-key" aria-label={t('common.back')} onClick={() => press('BACK')}>
-          <Icon d={BACK} size={20} /> {t('common.back')}
-        </button>
-        <button type="button" class="m-key" aria-label={t('remote.home')} onClick={() => press('HOME')}>
-          <Icon d={HOME} size={20} /> {t('remote.home')}
-        </button>
-        <button type="button" class="m-key" aria-label={t('remote.menu')} onClick={() => press('MENU')}>
-          <Icon d={MENU} size={20} /> {t('remote.menu')}
-        </button>
-      </div>
-      <div class="m-keyrow">
-        {media(t('remote.back10s'), REW10, () => press('REWIND'))}
-        {media(t('remote.prevEpisode'), PREV, () => press('CHANNELDOWN'))}
-        {media(playing ? t('remote.mini.pause') : t('remote.playBtn'), playing ? PAUSE : PLAY, togglePlay, true)}
-        {media(t('remote.nextEpisode'), NEXT, () => press('CHANNELUP'))}
-        {media(t('remote.fwd10s'), FF10, () => press('FASTFORWARD'))}
-      </div>
-      <div class="m-keyrow">
-        <button type="button" class="m-key" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
-          <Icon d={VOL_DOWN} size={20} /> −
-        </button>
-        <button type="button" class="m-key" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
-          <Icon d={KEYBOARD} size={20} /> {t('remote.keyboard')}
-        </button>
-        <button type="button" class="m-key" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
-          <Icon d={VOL_UP} size={20} /> +
-        </button>
-      </div>
       {kbd && <TvKeyboard />}
       {tuning && <TouchpadSheet onClose={() => setTuning(false)} />}
     </div>

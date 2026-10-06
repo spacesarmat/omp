@@ -614,26 +614,55 @@ button, .m-btn {
 .m-remote {
   --m-used-mini: 0px;
   --m-remote-gap: 12px;
-  --dp: min(240px, 32vh);
-  gap: 10px;
+  /* the d-pad: at most 240px, the width left by the two 58px side keys, a share of the height */
+  --dp: min(240px, calc(100vw - 152px), 32vh);
+  gap: 14px;
   min-height: 0;
   /* --m-remote-gap: room between the last row and the bottom menu / the mini-player */
-  height: calc(100vh - var(--m-nav-reserve) -var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
-  height: calc(100dvh - var(--m-nav-reserve) -var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
-  padding: calc(env(safe-area-inset-top) + 8px) 16px 0;
+  height: calc(100vh - var(--m-nav-reserve) - var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
+  height: calc(100dvh - var(--m-nav-reserve) - var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
+  padding: env(safe-area-inset-top) 16px 0;
   /* safety valve: controls are never clipped on short screens, landscape or with the soft keyboard */
   overflow-x: hidden;
   overflow-y: auto;
 }
+/* the mini-player sits 8px above the menu and is --m-mini-h tall */
+.m-remote.mini { --m-used-mini: calc(var(--m-mini-h) + 8px); --dp: min(240px, calc(100vw - 152px), 27vh); }
+.m-remote.kbd { --dp: min(240px, calc(100vw - 152px), 24vh); }
+.m-remote.mini.kbd { --dp: min(240px, calc(100vw - 152px), 20vh); }
+/* Android TV: its own head row (no screen header) */
+.m-remote > .m-lib-head:not(.m-screen-head) { margin-top: 8px; }
+.m-head-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.m-head-sub { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-head-sub .m-remote-title { font-size: inherit; font-weight: inherit; }
+/* «Кнопки» / «Тачпад»: the controls fill the room between the switch and the tab bar */
+.m-remote > .m-rb, .m-remote > .m-rt { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.m-rb { justify-content: space-evenly; gap: 10px; }
+.m-rb-top { justify-content: space-between; }
+.m-side { width: 58px; height: calc(var(--dp) + 30px); flex-shrink: 0; display: flex; flex-direction: column; align-items: center; border-radius: 20px; background: var(--panel); }
+.m-side-btn { flex: 1 1 0; width: 100%; min-height: 0; border: none; background: none; color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.m-side-cap { font-size: 11px; color: var(--muted); }
+.m-side-sign { font-size: 28px; line-height: 1; }
+.m-rb-row { display: grid; gap: 10px; flex-shrink: 0; }
+.m-rb-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.m-rb-media { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.m-rt-keys { grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr) 64px; }
+.m-rt { gap: 14px; }
+/* the touchpad takes what is left: a smaller phone shrinks it, not the keys */
+.m-rt > .m-touchpad { flex: 1 1 0; height: auto; min-height: 100px; }
+.m-remote .m-rb-row .m-key, .m-remote .m-rb-row .m-media { height: 60px; }
+.m-rt > .m-rt-vol { flex: 0 0 auto; height: 60px; border-radius: 16px; }
+.m-rt > .m-rt-vol .m-key { height: 60px; font-size: 26px; }
+@media (max-height: 700px) {
+  .m-rt { gap: 10px; }
+  .m-remote .m-rb-row .m-key, .m-remote .m-rb-row .m-media, .m-rt > .m-rt-vol, .m-rt > .m-rt-vol .m-key { height: 52px; }
+}
 @media (max-height: 560px) {
   .m-remote { gap: 6px; }
-  .m-remote .m-key, .m-remote .m-media { height: 40px; }
-  .m-remote > .m-touchpad { min-height: 90px; }
+  .m-remote .m-key, .m-remote .m-media,
+  .m-remote .m-rb-row .m-key, .m-remote .m-rb-row .m-media, .m-rt > .m-rt-vol, .m-rt > .m-rt-vol .m-key { height: 40px; }
+  .m-remote > .m-touchpad, .m-rt > .m-touchpad { min-height: 90px; }
 }
-/* the mini-player sits 8px above the menu and is --m-mini-h tall */
-.m-remote.mini { --m-used-mini: calc(var(--m-mini-h) + 8px); --dp: min(240px, 27vh); }
-.m-remote.kbd { --dp: min(240px, 24vh); }
-.m-remote.mini.kbd { --dp: min(240px, 20vh); }
 .m-remote > * { flex-shrink: 0; }
 .m-remote > .m-stage { flex: 1 1 0; min-height: var(--dp); }
 .m-remote > .m-touchpad { flex: 1 1 0; min-height: 120px; }

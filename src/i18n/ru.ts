@@ -1590,6 +1590,8 @@ export const ru = {
     volDown: 'Тише',
     volUp: 'Громче',
     volShort: 'Громк.',
+    volume: 'Громкость',
+    kbdShort: 'Клав.',
     noTvTitle: 'Подключите телевизор',
     noTvText: 'Чтобы управлять ТВ с телефона, сначала подключите его.',
     noTvButton: 'Подключить ТВ',

@@ -1570,6 +1570,8 @@ export const en: EnDict<typeof ru> = {
     volDown: 'Quieter',
     volUp: 'Louder',
     volShort: 'Vol.',
+    volume: 'Volume',
+    kbdShort: 'Keys',
     noTvTitle: 'Connect a TV',
     noTvText: 'To control the TV from the phone, connect it first.',
     noTvButton: 'Connect a TV',
