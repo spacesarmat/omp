@@ -261,6 +261,10 @@ export const en: EnDict<typeof ru> = {
     hintSeasons: '◀ ▶ — seasons',
     hintWatched: 'mark watched',
     hintBack: 'Back — to the library',
+    notInMedia: 'This season is not in the library',
+    notInMediaShort: 'not in the library',
+    soonTv: 'soon',
+    dateUnknown: 'The release date is not known yet',
   },
   donate: {
     codeExpired: 'The code has expired',

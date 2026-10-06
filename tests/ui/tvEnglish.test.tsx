@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
-import { init } from '@noriginmedia/norigin-spatial-navigation';
+import { init, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { applyLanguageSetting } from '../../src/i18n';
 import { ConnectScreen } from '../../src/screens/Connect';
 import { LibraryScreen } from '../../src/screens/Library';
@@ -206,6 +206,49 @@ describe('TV screens in English', () => {
     expect(text).toContain('Watch S02E01');
     expect(text).toContain('next episode');
     expect(text).not.toMatch(CYR);
+    setCatalogProvider(null);
+  });
+
+  it('Series screen: missing and announced seasons', async () => {
+    const tor = {
+      hash: 'q2', title: 'Dark Matter S02 1080p WEB-DL', category: 'tv', timestamp: 2, torrent_size: 4e9,
+      file_stats: [1, 2].map((e) => ({ id: e, path: 'Dark.Matter.S02E0' + e + '.1080p.mkv', length: 2e9 })),
+    };
+    const card = {
+      id: 1, kind: 'tv', title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6, backdrop: '',
+      genres: ['Sci-Fi'], runtime: 50, overview: 'A show', cast: [], airing: false, status: 'returning',
+      seasons: [
+        { number: 1, episodes: 9, year: 2024, aired: 9, airDate: '2024-05-08' },
+        { number: 2, episodes: 10, year: 2026, aired: 10, airDate: '2026-01-01' },
+        { number: 3, episodes: 0, year: 0, aired: 0 },
+      ],
+    };
+    const stub: any = {
+      search: () => Promise.resolve({ items: [{ id: 1, kind: 'tv', title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6 }], pages: 1 }),
+      card: () => Promise.resolve(card),
+      season: (_id: number, n: number) => Promise.resolve({ number: n, name: '', airDate: '', overview: '', episodes: [] }),
+    };
+    setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+    mockFetch((url) => ({ body: url.indexOf('/torrents') >= 0 ? JSON.stringify([tor]) : '[]' }));
+    resetSeriesMatches();
+    resetEpisodeNames();
+    setCatalogProvider(() => Promise.resolve(stub));
+    torrents.value = [tor] as any;
+    const key = seriesKey(tor as any);
+    routeStack.value = [{ name: 'library' }, { name: 'series', key }];
+    mount(h(SeriesScreen, { seriesKey: key }));
+    await flush();
+    expect(host.textContent || '').toContain('+ Season 1');
+    expect(host.textContent || '').toContain('not in the library');
+    expect(host.textContent || '').toContain('soon');
+    await act(async () => { setFocus('season-1'); });
+    await flush();
+    expect(host.textContent || '').toContain('This season is not in the library');
+    expect(buttons(host)).toContain('Find torrents');
+    await act(async () => { setFocus('season-3'); });
+    await flush();
+    expect(host.textContent || '').toContain('The release date is not known yet');
+    expect(noRussian(host)).not.toMatch(CYR);
     setCatalogProvider(null);
   });
 

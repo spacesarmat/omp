@@ -1,9 +1,10 @@
 // «Мои» → a series on the TV: the TMDB hero (backdrop, poster, status pill, year · rating · genres, overview),
-// «Смотреть SxxEyy» / «Раздачи · N» / «Следить за сериями», a row of season chips (focusing one shows it; seasons
-// still to come are dashed) and the chosen season's episodes with their TMDB names. Without TMDB (no key, offline,
+// «Смотреть SxxEyy» / «Раздачи · N» / «Следить за сериями», a row of season chips (focusing one shows it; with TMDB
+// every season of the show: released ones the library lacks are dashed «+ Сезон N» with «Найти раздачи», seasons
+// still to come are dashed with their date) and the chosen season's episodes with their TMDB names. Without TMDB (no key, offline,
 // no match) the library's poster and title stay and the episodes keep their file names.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
+import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { client } from '../store/servers';
 import { torrents } from '../store/library';
 import {
@@ -18,11 +19,11 @@ import {
   serverViewed,
 } from '../store/progress';
 import type { Torrent } from '../api/types';
-import type { CatalogCard, Episode } from '../catalog/tmdb';
+import { torrentQuery, type CatalogCard, type Episode } from '../catalog/tmdb';
 import { lang, t, fmtNumber } from '../i18n';
 import { findGroup, groupLabel, NO_SEASON, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
-import { airDateText, isoDay, seriesPill, upcomingSeasons } from '../lib/seriesStatus';
+import { airDateText, isoDay, seriesPill, upcomingSeasons, type Upcoming } from '../lib/seriesStatus';
 import { cleanFileName, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
 import { baseName, naturalCompare, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../lib/episodes';
 import { formatBytes } from '../lib/format';
@@ -140,6 +141,29 @@ function heroMeta(card: CatalogCard): string {
     .join(' · ');
 }
 
+/**
+ * The TMDB seasons the library lacks (specials skipped): `missing` are released (dated today or earlier, with aired
+ * episodes, or undated but older than the newest library season), `future` are still to come (dated later, the next
+ * episode's season not started yet, or undated and newer than the library's); `airDate` is '' when not known.
+ */
+export function seasonPlan(card: CatalogCard | null, library: number[], now: number): { missing: number[]; future: Upcoming[] } {
+  if (!card) return { missing: [], future: [] };
+  const today = isoDay(now);
+  const future = upcomingSeasons(card, now).filter((u) => library.indexOf(u.number) < 0);
+  const newest = library.reduce((m, n) => (n !== NO_SEASON && n > m ? n : m), 0);
+  const missing: number[] = [];
+  card.seasons.forEach((s) => {
+    const n = s.number;
+    if (n <= 0 || library.indexOf(n) >= 0 || missing.indexOf(n) >= 0 || future.some((u) => u.number === n)) return;
+    const released = s.airDate ? s.airDate <= today : s.aired > 0 || n < newest;
+    if (released) missing.push(n);
+    else future.push({ number: n, airDate: '' });
+  });
+  missing.sort((a, b) => a - b);
+  future.sort((a, b) => a.number - b.number);
+  return { missing: missing, future: future };
+}
+
 /** The TMDB card of the series: at once from memory on a revisit, else once the lookup ends; null without one. */
 function useSeriesCard(group: SeriesGroup): CatalogCard | null {
   const l = lang.value;
@@ -200,8 +224,10 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   const card = useSeriesCard(group);
   const now = Date.now();
 
-  const future = card ? upcomingSeasons(card, now).filter((u) => group.seasons.indexOf(u.number) < 0) : [];
-  const chips = group.seasons.concat(future.map((u) => u.number)).sort((a, b) => a - b);
+  const plan = seasonPlan(card, group.seasons, now);
+  const future = plan.future;
+  const missing = plan.missing;
+  const chips = group.seasons.concat(missing, future.map((u) => u.number)).sort((a, b) => a - b);
   const remembered = chosenSeason.get(route);
   const [chosen, setChosen] = useState(() =>
     remembered !== undefined ? remembered : asked !== undefined && group.seasons.indexOf(asked) >= 0 ? asked : firstSeason(group),
@@ -277,6 +303,13 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
     .filter((e) => !have[e.n] && !!e.airDate && e.airDate > today)
     .sort((a, b) => a.n - b.n);
   const futureSeason = future.filter((u) => u.number === season)[0];
+  const isMissing = missing.indexOf(season) >= 0;
+  // the search for a missing season; the chip keeps the focus to come back to
+  const findMissing = () => {
+    if (!card) return;
+    setFocus('season-' + season);
+    navigate({ name: 'add', query: torrentQuery(card, season), run: true });
+  };
 
   return (
     <>
@@ -314,8 +347,10 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
         <FocusGroup focusKey="SERIES-SEASONS" className="series-seasons" preferredChildFocusKey={'season-' + season}>
           {chips.map((n) => {
             const soon = future.filter((u) => u.number === n)[0];
+            const gap = missing.indexOf(n) >= 0;
             let sub: string;
-            if (soon) sub = t('series.seasonComes', { date: airDateText(soon.airDate, now) });
+            if (soon) sub = soon.airDate ? t('series.seasonComes', { date: airDateText(soon.airDate, now) }) : t('series.soonTv');
+            else if (gap) sub = t('series.notInMediaShort');
             else {
               const list = n === season ? rows : seasonRows(group, n);
               const done = list.filter((r) => isWatched(r.tor.hash, r.file.id)).length;
@@ -325,12 +360,12 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
               <Focusable
                 key={n}
                 focusKey={'season-' + n}
-                className={'season-chip' + (soon ? ' chip-future' : '') + (n === season ? ' on' : '')}
+                className={'season-chip' + (soon ? ' chip-future' : '') + (gap ? ' chip-future chip-missing' : '') + (n === season ? ' on' : '')}
                 role="button"
                 onFocused={() => pick(n)}
                 onPress={() => pick(n)}
               >
-                <div class="chip-name">{n === NO_SEASON ? t('series.noSeason') : t('library.season', { n })}</div>
+                <div class="chip-name">{(gap ? '+ ' : '') + (n === NO_SEASON ? t('series.noSeason') : t('library.season', { n }))}</div>
                 <div class="chip-sub">{sub}</div>
               </Focusable>
             );
@@ -371,7 +406,17 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
         ))}
       </FocusGroup>
       {!rows.length && !coming.length && futureSeason && (
-        <div class="empty">{t('series.seasonComes', { date: airDateText(futureSeason.airDate, now) })}</div>
+        <div class="empty">
+          {futureSeason.airDate ? t('series.seasonComes', { date: airDateText(futureSeason.airDate, now) }) : t('series.dateUnknown')}
+        </div>
+      )}
+      {isMissing && card && (
+        <div class="series-missing">
+          <div class="muted">{t('series.notInMedia')}</div>
+          <FocusGroup focusKey="SERIES-MISSING" className="row">
+            <Button focusKey="series-find" label={t('titleCard.findTorrents')} onPress={findMissing} />
+          </FocusGroup>
+        </div>
       )}
       <div class="hints">
         {t('series.hintOk')} · {t('series.hintSeasons')} · <KeyDot color="red" /> {t('series.hintWatched')} · {t('series.hintBack')}

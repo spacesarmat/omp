@@ -9,6 +9,7 @@ import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth } from '../../src/sources/store';
 import { ipBanError } from '../../src/sources/ipBan';
 import type { SearchResult } from '../../src/api/types';
+import { routeStack } from '../../src/ui/nav';
 import type { SourceResult } from '../../src/sources/types';
 
 const w = window as unknown as { Capacitor?: unknown };
@@ -63,6 +64,17 @@ afterEach(() => {
 });
 
 describe('TV search', () => {
+  it('a route with a query and run prefills the search and starts it at once', async () => {
+    const s = vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue([tsRow]);
+    routeStack.value = [{ name: 'library' }, { name: 'add', query: 'Starbound 1 сезон', run: true }];
+    mount();
+    await flush();
+    expect((host.querySelectorAll('input')[1] as HTMLInputElement).value).toBe('Starbound 1 сезон');
+    expect(s).toHaveBeenCalledWith('Starbound 1 сезон', 'rutor');
+    expect(host.querySelectorAll('.list-item')).toHaveLength(1);
+    routeStack.value = [{ name: 'connect' }];
+  });
+
   it('LG: TorrServer search with the source choice, built-ins untouched', async () => {
     const fake = vi.fn(() => Promise.resolve([fakeRow({})]));
     registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: fake });

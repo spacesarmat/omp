@@ -271,6 +271,10 @@ export const ru = {
     hintSeasons: '◀ ▶ — сезоны',
     hintWatched: 'отметить просмотренной',
     hintBack: 'Назад — к библиотеке',
+    notInMedia: 'Этого сезона нет в медиатеке',
+    notInMediaShort: 'нет в медиатеке',
+    soonTv: 'скоро',
+    dateUnknown: 'Дата выхода пока неизвестна',
   },
   donate: {
     codeExpired: 'Срок кода истёк',

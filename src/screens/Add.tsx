@@ -4,7 +4,7 @@ import type { SearchSource } from '../api/torrserver';
 import type { SearchResult } from '../api/types';
 import { errorMessage } from '../api/http';
 import { mapSearchCategory } from '../lib/category';
-import { replaceRoute } from '../ui/nav';
+import { currentRoute, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, ChoiceRow, Spinner } from '../ui/components';
 import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
@@ -41,6 +41,9 @@ function unifiedMeta(r: SourceResult): string {
 }
 
 export function AddScreen() {
+  // the route's `query` prefills the search; with `run` the search starts at once (a missing season of a series)
+  const route = currentRoute.peek();
+  const p = route.name === 'add' ? route : { query: undefined, run: undefined };
   const c = client.value!;
   // Android TV searches every source at once (spec «Общий поиск»); LG keeps the TorrServer search
   const unified = platformKind() === 'androidtv';
@@ -49,7 +52,7 @@ export function AddScreen() {
   // row order on screen while results stream in: shown rows keep their places under the cursor
   const order = useRef<string[]>([]);
   const [link, setLink] = useState('');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(p.query || '');
   const [source, setSource] = useState<SearchSource>('rutor');
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [rows, setRows] = useState<SourceResult[] | null>(null);
@@ -59,6 +62,7 @@ export function AddScreen() {
 
   useEffect(() => {
     restoreFocus('ADD');
+    if (p.run && p.query && p.query.trim()) search(p.query);
     return () => {
       alive.current = false;
       if (handle.current) handle.current.cancel();
@@ -141,9 +145,9 @@ export function AddScreen() {
     });
   };
 
-  const search = () => {
+  const search = (text?: string) => {
     if (busy) return;
-    const q = query.trim();
+    const q = (typeof text === 'string' ? text : query).trim();
     if (!q) return;
     if (unified) {
       searchUnified(q);
@@ -183,9 +187,9 @@ export function AddScreen() {
       </div>
       <h2>{unified ? t('add.searchBySources') : t('add.search')}</h2>
       <div class="row">
-        <TextInput value={query} onChange={setQuery} placeholder={t('add.queryPlaceholder')} onSubmit={search} />
+        <TextInput value={query} onChange={setQuery} placeholder={t('add.queryPlaceholder')} onSubmit={() => search()} />
         {!unified && <ChoiceRow label={t('add.source')} value={source} options={SOURCES} onChange={setSource} />}
-        <Button label={t('add.go')} onPress={search} disabled={busy} />
+        <Button label={t('add.go')} onPress={() => search()} disabled={busy} />
       </div>
       {busy && <Spinner text={busyText} />}
       {unified && prog && (

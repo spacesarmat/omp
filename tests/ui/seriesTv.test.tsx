@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
-import { init, setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { init, setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 
 vi.mock('../../src/store/progress', async (orig) => ({
   ...(await orig<typeof import('../../src/store/progress')>()),
@@ -223,5 +223,64 @@ describe('TV series screen', () => {
     expect(host.querySelector('.season-chip.focused')!.getAttribute('data-fk')).toBe('season-2');
     expect(host.querySelector('.season-chip.on')!.getAttribute('data-fk')).toBe('season-2');
     expect(text(host.querySelector('.ep-row .ep'))).toBe('S02E01');
+  });
+
+  describe('every season of the TMDB card', () => {
+    const allSeasons = card.seasons.concat({ number: 4, episodes: 0, year: 0, aired: 0 } as any);
+    beforeEach(() => {
+      // the library has season 2 only: season 1 is missing, 3 is dated later, 4 is announced without a date
+      card.seasons = allSeasons;
+      torrents.value = [fixture[1], fixture[2]] as any;
+      key = seriesKey(fixture[1] as any);
+      routeStack.value = [{ name: 'library' }, { name: 'series', key }];
+    });
+    afterEach(() => {
+      card.seasons = allSeasons.slice(0, 3);
+    });
+
+    it('shows a missing chip, the library season and the seasons to come', async () => {
+      const host = await mount();
+      const chips = host.querySelectorAll('.season-chip');
+      expect(Array.prototype.map.call(chips, (c: Element) => c.getAttribute('data-fk'))).toEqual(['season-1', 'season-2', 'season-3', 'season-4']);
+      expect(chips[0].classList.contains('chip-missing')).toBe(true);
+      expect(text(chips[0].querySelector('.chip-name'))).toBe('+ Сезон 1');
+      expect(text(chips[0].querySelector('.chip-sub'))).toBe('нет в медиатеке');
+      expect(chips[1].classList.contains('chip-future')).toBe(false);
+      expect(chips[2].classList.contains('chip-future')).toBe(true);
+      expect(text(chips[2].querySelector('.chip-sub'))).toContain('Сезон выйдет');
+      expect(text(chips[3].querySelector('.chip-name'))).toBe('Сезон 4');
+      expect(text(chips[3].querySelector('.chip-sub'))).toBe('скоро');
+    });
+
+    it('a missing season offers «Найти раздачи», which searches for that season', async () => {
+      const host = await mount();
+      act(() => setFocus('season-1'));
+      await flush();
+      expect(host.querySelectorAll('.ep-row')).toHaveLength(0);
+      expect(text(host.querySelector('.series-missing .muted'))).toBe('Этого сезона нет в медиатеке');
+      const btn = host.querySelector('[data-fk="series-find"]') as HTMLElement;
+      expect(text(btn)).toBe('Найти раздачи');
+      act(() => setFocus('series-find'));
+      act(() => { btn.click(); });
+      await flush();
+      const r = currentRoute.value as any;
+      expect(r.name).toBe('add');
+      expect(r.query).toBe('Тёмная материя 1 сезон');
+      expect(r.run).toBe(true);
+      // Back returns to the season chip
+      expect(getCurrentFocusKey()).toBe('season-1');
+    });
+
+    it('a season to come shows its date or «unknown» and no search button', async () => {
+      const host = await mount();
+      act(() => setFocus('season-3'));
+      await flush();
+      expect(host.querySelector('[data-fk="series-find"]')).toBeNull();
+      expect(text(host.querySelector('.empty'))).toContain('Сезон выйдет');
+      act(() => setFocus('season-4'));
+      await flush();
+      expect(host.querySelector('[data-fk="series-find"]')).toBeNull();
+      expect(text(host.querySelector('.empty'))).toBe('Дата выхода пока неизвестна');
+    });
   });
 });

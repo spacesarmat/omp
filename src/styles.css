@@ -120,6 +120,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .season-chip.chip-future { background: transparent; border: 2px dashed #5a6070; }
 .season-chip.chip-future.on { border-color: var(--accent); }
 .season-chip.chip-future.focused { background: var(--accent); border-style: solid; }
+.series-missing { padding: 24px 0; font-size: 26px; }
+.series-missing .row { margin-top: 20px; }
 .ep-row .size { width: 220px; }
 .ep-future { opacity: .45; }
 .ep-future.focused { opacity: .75; }
