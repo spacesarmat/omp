@@ -180,6 +180,10 @@ describe('TV search through the phone', () => {
     expect(res.map((c) => c.params)).toEqual([{ handle: 'h1', key: '2' }]);
     expect(addCalls().map((b) => b.link)).toEqual([MAG]);
     expect(currentRoute.value).toEqual({ name: 'torrent', hash: HASH });
+    // the category is OMP's own pick: the automatic check may correct it later
+    const auto = JSON.parse(localStorage.getItem('tsp.categoryAuto') || '{}');
+    expect(Object.prototype.hasOwnProperty.call(auto, HASH.toLowerCase())).toBe(true);
+    expect(auto[HASH.toLowerCase()]).toBe(addCalls()[0].category || '');
   });
 
   it('a release the phone cannot give as a link shows its message on the row', async () => {

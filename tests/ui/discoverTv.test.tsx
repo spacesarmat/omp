@@ -132,6 +132,15 @@ describe('TV «Обзор» tab', () => {
     expect(text(host.querySelector('[data-fk="disc-sort"]'))).toBe('Сортировка: По рейтингу');
   });
 
+  it('offers «Скоро в цифре» among the sorts and queries it', async () => {
+    const host = await mount();
+    await click(host.querySelector('[data-fk="disc-sort"]')!);
+    await click(byText(document.body, '.dialog-option', 'Скоро в цифре'));
+    const last = stub.discover.mock.calls[stub.discover.mock.calls.length - 1];
+    expect(last[1].sort).toBe('digitalSoon');
+    expect(text(host.querySelector('[data-fk="disc-sort"]'))).toBe('Сортировка: Скоро в цифре');
+  });
+
   it('sets one genre and the minimum rating', async () => {
     const host = await mount();
     await click(host.querySelector('[data-fk="disc-genre"]')!);
