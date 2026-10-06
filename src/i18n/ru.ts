@@ -273,6 +273,8 @@ export const ru = {
     hintBack: 'Назад — к библиотеке',
     notInMedia: 'Этого сезона нет в медиатеке',
     notInMediaShort: 'нет в медиатеке',
+    notInMediaRange: 'Этих сезонов нет в медиатеке',
+    seasonsRange: 'Сезоны {a}–{b}',
     soonTv: 'скоро',
     dateUnknown: 'Дата выхода пока неизвестна',
   },

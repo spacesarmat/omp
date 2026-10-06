@@ -18,6 +18,19 @@ export function scrollIntoViewSafe(el: Element | null): void {
   if (over > 0) box.scrollTop += over;
 }
 
+/**
+ * The scroll offset of a container that shows a whole item (start, size along the axis) with `pad` around it, or the
+ * current offset when it is already fully visible; an item at the start (within `pad`) gives 0.
+ */
+export function scrollToShow(scroll: number, view: number, start: number, size: number, pad: number): number {
+  const from = start - pad;
+  if (from <= 0) return 0;
+  if (from < scroll) return from;
+  const end = start + size + pad;
+  if (end > scroll + view) return Math.max(0, end - view);
+  return scroll;
+}
+
 /** How long a screen whose rows arrive later still gets the remembered focus. */
 export const FOCUS_RESTORE_MS = 1500;
 const RETRY_MS = 100;

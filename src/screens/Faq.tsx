@@ -5,6 +5,7 @@ import { Qr } from '../ui/Qr';
 import { platformKind } from '../platform/env';
 import { FAQ, SECTIONS, itemFor, type Device, type FaqItem, type FaqLine, type SectionId } from '../faq/faq';
 import { t } from '../i18n';
+import { scrollToShow } from '../ui/focus';
 
 const URL_RE = /https?:\/\/[^\s)]+/;
 const STEP_RE = /^(\d+)\.\s+/;
@@ -36,18 +37,8 @@ export function shownOnTv(it: FaqItem, device: Device): boolean {
   return it.devices.indexOf('common') >= 0 && it.devices.indexOf('phone') < 0;
 }
 
-/**
- * The list's scrollTop that shows the whole focused row with the panel padding around it, or the current one when
- * the row is already fully visible. The first row (at the padding) gives 0, so no half row sits above it.
- */
-export function rowScrollTop(scrollTop: number, viewH: number, rowTop: number, rowH: number, pad: number): number {
-  const top = rowTop - pad;
-  if (top <= 0) return 0;
-  if (top < scrollTop) return top;
-  const bottom = rowTop + rowH + pad;
-  if (bottom > scrollTop + viewH) return Math.max(0, bottom - viewH);
-  return scrollTop;
-}
+/** The list's scrollTop that shows the whole focused row with the panel padding (the first row gives 0). */
+export const rowScrollTop = scrollToShow;
 
 type Block = { kind: 'p'; text: string } | { kind: 'ol'; start: number; items: string[] };
 

@@ -19,6 +19,8 @@ import { setCatalogProvider } from '../../src/catalog/activeCatalog';
 import { resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { resetEpisodeNames } from '../../src/lib/episodeNames';
 import { seriesKey } from '../../src/lib/seriesGroups';
+// @ts-ignore node builtin, no @types/node in this project
+import { readFileSync } from 'node:fs';
 
 const files = (n: number) =>
   [1, 2].map((e) => ({ id: e, path: 'Dark.Matter.S0' + n + 'E0' + e + '.1080p.mkv', length: 2e9 }));
@@ -281,6 +283,82 @@ describe('TV series screen', () => {
       await flush();
       expect(host.querySelector('[data-fk="series-find"]')).toBeNull();
       expect(text(host.querySelector('.empty'))).toBe('Дата выхода пока неизвестна');
+    });
+  });
+
+  describe('seasons row: numbering and runs', () => {
+    const saved = card.seasons;
+    const tmdb = (last: number) =>
+      Array.apply(null, Array(last)).map((_x: unknown, i: number) => ({ number: i + 1, episodes: 10, year: 2010, aired: 10, airDate: '2010-01-01' }));
+    const libSeason = (n: number) => ({
+      ...season(2),
+      hash: 'L' + n,
+      title: 'Тёмная материя / Dark Matter / Сезон: ' + n + ' / Серии: 1-2 из 9 (2024) WEB-DL 1080p',
+      file_stats: [1, 2].map((e) => ({ id: e, path: 'Dark.Matter.S' + (n < 10 ? '0' : '') + n + 'E0' + e + '.1080p.mkv', length: 2e9 })),
+    });
+    const useLibrary = (n: number) => {
+      const tor = libSeason(n);
+      torrents.value = [tor] as any;
+      key = seriesKey(tor as any);
+      routeStack.value = [{ name: 'library' }, { name: 'series', key }];
+    };
+    const fks = (host: HTMLElement) => Array.prototype.map.call(host.querySelectorAll('.season-chip'), (c: Element) => c.getAttribute('data-fk'));
+    afterEach(() => {
+      card.seasons = saved;
+    });
+
+    it('another numbering (library S14, TMDB 1–11) offers no missing seasons', async () => {
+      card.seasons = tmdb(11) as any;
+      useLibrary(14);
+      const host = await mount();
+      expect(fks(host)).toEqual(['season-14']);
+      expect(host.querySelector('.chip-missing')).toBeNull();
+    });
+
+    it('a run of 4 or more missing seasons is one chip that searches its first season', async () => {
+      card.seasons = tmdb(9) as any;
+      useLibrary(9);
+      const host = await mount();
+      expect(fks(host)).toEqual(['season-1', 'season-9']);
+      const chip = host.querySelector('[data-fk="season-1"]')!;
+      expect(text(chip.querySelector('.chip-name'))).toBe('+ Сезоны 1–8');
+      expect(text(chip.querySelector('.chip-sub'))).toBe('нет в медиатеке');
+      act(() => setFocus('season-1'));
+      await flush();
+      expect(text(host.querySelector('.series-missing .muted'))).toBe('Этих сезонов нет в медиатеке');
+      act(() => { (host.querySelector('[data-fk="series-find"]') as HTMLElement).click(); });
+      await flush();
+      expect((currentRoute.value as any).query).toBe('Тёмная материя 1 сезон');
+    });
+
+    it('a run of 2 missing seasons stays two chips', async () => {
+      card.seasons = tmdb(3) as any;
+      useLibrary(3);
+      const host = await mount();
+      expect(fks(host)).toEqual(['season-1', 'season-2', 'season-3']);
+      expect(text(host.querySelector('[data-fk="season-2"] .chip-name'))).toBe('+ Сезон 2');
+    });
+
+    it('the row does not wrap and scrolls the focused chip into view', async () => {
+      const css = readFileSync('src/styles.css', 'utf8');
+      expect(/\.series-seasons \{[^}]*overflow: hidden/.test(css)).toBe(true);
+      expect(/\.series-seasons-row \{[^}]*flex-wrap: nowrap[^}]*white-space: nowrap/.test(css)).toBe(true);
+      expect(/\.series-seasons \{[^}]*flex-wrap: wrap/.test(css)).toBe(false);
+      card.seasons = tmdb(9) as any;
+      useLibrary(9);
+      const host = await mount();
+      const box = host.querySelector('.series-seasons') as HTMLElement;
+      let left = 0;
+      Object.defineProperty(box, 'scrollLeft', { get: () => left, set: (v: number) => { left = v; }, configurable: true });
+      Object.defineProperty(box, 'clientWidth', { get: () => 600 });
+      const chip = host.querySelector('[data-fk="season-9"]') as HTMLElement;
+      Object.defineProperty(chip, 'offsetLeft', { get: () => 900 });
+      Object.defineProperty(chip, 'offsetWidth', { get: () => 220 });
+      act(() => setFocus('season-1'));
+      await flush();
+      act(() => setFocus('season-9'));
+      await flush();
+      expect(left).toBe(900 + 220 + 24 - 600);
     });
   });
 });

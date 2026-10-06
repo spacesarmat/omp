@@ -32,7 +32,7 @@ import { buildTorrentQueue } from '../player/queue';
 import { currentRoute, goBack, navigate, type Route } from '../ui/nav';
 import { FocusGroup, Focusable, Button, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { restoreFocus } from '../ui/focus';
+import { restoreFocus, scrollToShow } from '../ui/focus';
 import { choose } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
@@ -161,8 +161,32 @@ export function seasonPlan(card: CatalogCard | null, library: number[], now: num
   });
   missing.sort((a, b) => a - b);
   future.sort((a, b) => a.number - b.number);
-  return { missing: missing, future: future };
+  // a library season TMDB does not list (another numbering, e.g. a tracker's «season 14» of a show TMDB splits into
+  // 11): the gaps say nothing then, so no season is offered as missing
+  const known = card.seasons.map((s) => s.number);
+  const otherNumbering = known.length > 0 && library.some((n) => n !== NO_SEASON && known.indexOf(n) < 0);
+  return { missing: otherNumbering ? [] : missing, future: future };
 }
+
+/** Runs of this many consecutive missing seasons or more share one chip. */
+export const RUN_MIN = 4;
+
+/** The missing seasons grouped into chips: the first season of each chip → its last (itself for a single season). */
+export function missingChips(missing: number[]): { [first: number]: number } {
+  const out: { [first: number]: number } = {};
+  let i = 0;
+  while (i < missing.length) {
+    let j = i;
+    while (j + 1 < missing.length && missing[j + 1] === missing[j] + 1) j++;
+    if (j - i + 1 >= RUN_MIN) out[missing[i]] = missing[j];
+    else for (let k = i; k <= j; k++) out[missing[k]] = missing[k];
+    i = j + 1;
+  }
+  return out;
+}
+
+/** Inner margin of the seasons row: a focused chip keeps this much room to the row's edge. */
+const CHIP_PAD = 24;
 
 /** The TMDB card of the series: at once from memory on a revisit, else once the lookup ends; null without one. */
 function useSeriesCard(group: SeriesGroup): CatalogCard | null {
@@ -227,7 +251,17 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   const plan = seasonPlan(card, group.seasons, now);
   const future = plan.future;
   const missing = plan.missing;
-  const chips = group.seasons.concat(missing, future.map((u) => u.number)).sort((a, b) => a - b);
+  const gaps = missingChips(missing);
+  const gapFirsts = Object.keys(gaps).map((k) => +k);
+  const chips = group.seasons.concat(gapFirsts, future.map((u) => u.number)).sort((a, b) => a - b);
+  const seasonsRef = useRef<HTMLDivElement>(null);
+  // the row does not wrap: it scrolls sideways so the focused chip is whole, with a margin
+  const showChip = (n: number) => {
+    const box = seasonsRef.current;
+    const chip = box ? (box.querySelector('[data-fk="season-' + n + '"]') as HTMLElement | null) : null;
+    if (!box || !chip) return;
+    box.scrollLeft = scrollToShow(box.scrollLeft, box.clientWidth, chip.offsetLeft, chip.offsetWidth, CHIP_PAD);
+  };
   const remembered = chosenSeason.get(route);
   const [chosen, setChosen] = useState(() =>
     remembered !== undefined ? remembered : asked !== undefined && group.seasons.indexOf(asked) >= 0 ? asked : firstSeason(group),
@@ -303,7 +337,8 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
     .filter((e) => !have[e.n] && !!e.airDate && e.airDate > today)
     .sort((a, b) => a.n - b.n);
   const futureSeason = future.filter((u) => u.number === season)[0];
-  const isMissing = missing.indexOf(season) >= 0;
+  const isMissing = gapFirsts.indexOf(season) >= 0;
+  const runLast = isMissing ? gaps[season] : season;
   // the search for a missing season; the chip keeps the focus to come back to
   const findMissing = () => {
     if (!card) return;
@@ -344,10 +379,12 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
         </div>
       </div>
       {chips.length > 0 && (
-        <FocusGroup focusKey="SERIES-SEASONS" className="series-seasons" preferredChildFocusKey={'season-' + season}>
+        <div class="series-seasons" ref={seasonsRef}>
+        <FocusGroup focusKey="SERIES-SEASONS" className="series-seasons-row" preferredChildFocusKey={'season-' + season}>
           {chips.map((n) => {
             const soon = future.filter((u) => u.number === n)[0];
-            const gap = missing.indexOf(n) >= 0;
+            const gap = gapFirsts.indexOf(n) >= 0;
+            const last = gap ? gaps[n] : n;
             let sub: string;
             if (soon) sub = soon.airDate ? t('series.seasonComes', { date: airDateText(soon.airDate, now) }) : t('series.soonTv');
             else if (gap) sub = t('series.notInMediaShort');
@@ -362,15 +399,18 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
                 focusKey={'season-' + n}
                 className={'season-chip' + (soon ? ' chip-future' : '') + (gap ? ' chip-future chip-missing' : '') + (n === season ? ' on' : '')}
                 role="button"
-                onFocused={() => pick(n)}
+                onFocused={() => { pick(n); showChip(n); }}
                 onPress={() => pick(n)}
               >
-                <div class="chip-name">{(gap ? '+ ' : '') + (n === NO_SEASON ? t('series.noSeason') : t('library.season', { n }))}</div>
+                <div class="chip-name">
+                  {(gap ? '+ ' : '') + (n === NO_SEASON ? t('series.noSeason') : last > n ? t('series.seasonsRange', { a: n, b: last }) : t('library.season', { n }))}
+                </div>
                 <div class="chip-sub">{sub}</div>
               </Focusable>
             );
           })}
         </FocusGroup>
+        </div>
       )}
       <FocusGroup focusKey="SERIES-EPISODES" className="series-episodes">
         {rows.map((r) => {
@@ -412,7 +452,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       )}
       {isMissing && card && (
         <div class="series-missing">
-          <div class="muted">{t('series.notInMedia')}</div>
+          <div class="muted">{runLast > season ? t('series.notInMediaRange') : t('series.notInMedia')}</div>
           <FocusGroup focusKey="SERIES-MISSING" className="row">
             <Button focusKey="series-find" label={t('titleCard.findTorrents')} onPress={findMissing} />
           </FocusGroup>

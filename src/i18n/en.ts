@@ -263,6 +263,8 @@ export const en: EnDict<typeof ru> = {
     hintBack: 'Back — to the library',
     notInMedia: 'This season is not in the library',
     notInMediaShort: 'not in the library',
+    notInMediaRange: 'These seasons are not in the library',
+    seasonsRange: 'Seasons {a}–{b}',
     soonTv: 'soon',
     dateUnknown: 'The release date is not known yet',
   },
