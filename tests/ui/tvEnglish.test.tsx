@@ -31,6 +31,10 @@ import { resetSettings } from '../../src/store/settings';
 import { updatePrompt, latestUpdate } from '../../src/store/updates';
 import { whatsNew, closeWhatsNew } from '../../src/store/whatsNew';
 import { routeStack } from '../../src/ui/nav';
+import { TitleCardScreen } from '../../src/screens/TitleCard';
+import { libraryTab } from '../../src/store/library';
+import { resetDiscoverState } from '../../src/store/discover';
+import { wantList } from '../../src/store/wantList';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { mockFetch } from '../helpers/fetchMock';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
@@ -250,6 +254,97 @@ describe('TV screens in English', () => {
     expect(host.textContent || '').toContain('The release date is not known yet');
     expect(noRussian(host)).not.toMatch(CYR);
     setCatalogProvider(null);
+  });
+
+  it('Library: the discover tab', async () => {
+    setActiveServer(addServer({ url: '10.0.0.2' }).id);
+    torrents.value = [];
+    resetDiscoverState();
+    wantList.value = [];
+    libraryTab.value = 'discover';
+    const stub: any = {
+      discover: () => Promise.resolve({ items: [{ kind: 'tv', id: 1, title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6 }], pages: 1 }),
+      search: () => Promise.resolve({ items: [], pages: 1 }),
+    };
+    setCatalogProvider(() => Promise.resolve(stub));
+    try {
+      mount(h(LibraryScreen, {}));
+      await flush();
+      const text = host.textContent || '';
+      expect(host.querySelectorAll('.disc-tile').length).toBe(1);
+      expect(text).toContain('Dark Matter');
+      expect(text).toContain('2024 · Series');
+      expect(text).toContain('OK — details');
+      expect(text).not.toMatch(CYR);
+      const aria = Array.prototype.map.call(host.querySelectorAll('[aria-label]'), (e: Element) => e.getAttribute('aria-label')).join('|');
+      expect(aria).not.toMatch(CYR);
+    } finally {
+      libraryTab.value = 'all';
+      setCatalogProvider(null);
+    }
+  });
+
+  it('Title card', async () => {
+    setActiveServer(addServer({ url: '10.0.0.2' }).id);
+    torrents.value = [];
+    resetDiscoverState();
+    const card = {
+      kind: 'tv', id: 1, title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6, backdrop: '',
+      genres: ['Sci-Fi'], runtime: 50, overview: 'A show', airing: true, status: 'returning',
+      cast: [{ name: 'Jane Roe', photo: '', role: 'Captain' }],
+      seasons: [
+        { number: 2, episodes: 10, year: 2026, aired: 2, airDate: '2026-01-01' },
+        { number: 1, episodes: 9, year: 2024, aired: 9, airDate: '2024-05-08' },
+        { number: 3, episodes: 0, year: 0, aired: 0 },
+      ],
+      nextEpisode: { season: 2, episode: 3, airDate: '2099-01-01' },
+    };
+    setCatalogProvider(() => Promise.resolve({ card: () => Promise.resolve(card), discover: () => Promise.resolve({ items: [], pages: 1 }) } as any));
+    routeStack.value = [{ name: 'library' }, { name: 'title', kind: 'tv', id: 1 }];
+    try {
+      mount(h(TitleCardScreen as any, { kind: 'tv', id: 1 }));
+      await flush();
+      const text = host.textContent || '';
+      expect(text).toContain('Dark Matter');
+      expect(text).toContain('Jane Roe');
+      expect(text).toContain('Season 1');
+      expect(text).toContain('Find torrents');
+      expect(text).toContain('Want to watch');
+      expect(noRussian(host)).not.toMatch(CYR);
+      const aria = Array.prototype.map.call(host.querySelectorAll('[aria-label]'), (e: Element) => e.getAttribute('aria-label')).join('|');
+      expect(aria).not.toMatch(CYR);
+    } finally {
+      setCatalogProvider(null);
+    }
+  });
+
+  it('Better quality dialog', async () => {
+    const H = 'a'.repeat(40);
+    const film = { hash: H, title: 'Dune: Part Two (2024) WEB-DL 1080p', category: 'movie', stat: 3, torrent_size: 8.9e9, file_stats: [{ id: 1, path: 'Dune.Part.Two.2024.1080p.WEB-DL.mkv', length: 8.9e9 }] };
+    const res = (title: string, seed: number, hash: string) => ({ Title: title, Categories: 'Movies', Size: '20 GB', CreateDate: '', Tracker: 'rutor', Link: '', Magnet: 'magnet:?xt=urn:btih:' + hash, Hash: hash, Peer: 0, Seed: seed });
+    setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+    torrents.value = [film as any];
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(film as any);
+    vi.spyOn(TorrServerClient.prototype, 'viewedList').mockResolvedValue([]);
+    vi.spyOn(TorrServerClient.prototype, 'probe').mockResolvedValue({ streams: [] } as any);
+    vi.spyOn(TorrServerClient.prototype, 'search').mockImplementation((_q: string, src: string) =>
+      Promise.resolve(src === 'rutor' ? [res('Dune: Part Two (2024) UHD BDRemux 2160p HDR', 42, 'd'.repeat(40))] : []) as any);
+    setCatalogProvider(() => Promise.reject(Object.assign(new Error('offline'), { code: 'offline' })));
+    try {
+      mount(h('div', {}, h(TorrentScreen, { hash: H }), h(DialogHost, {})));
+      await flush();
+      const find = Array.prototype.filter.call(host.querySelectorAll('.button'), (b: Element) => b.textContent === 'Find in better quality')[0] as HTMLElement;
+      expect(find).toBeTruthy();
+      act(() => find.click());
+      await flush();
+      await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+      await flush();
+      expect(host.querySelector('.better-dialog .dialog-title')!.textContent).toBe('In better quality');
+      expect(host.querySelectorAll('.better-row').length).toBe(1);
+      expect(noRussian(host)).not.toMatch(CYR);
+    } finally {
+      setCatalogProvider(null);
+    }
   });
 
   it('Help (FAQ)', async () => {

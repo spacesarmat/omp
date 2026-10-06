@@ -2,6 +2,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.18.0-beta.2
+
+- On the TV: the «Discover» tab shows new releases from TMDB with sort and filters (genre, year, country, rating), title search and an «In the library» mark on the ones you already have
+- A title card for films and series: overview, rating, cast, seasons with «Find torrents», «Open in the library»
+- The «Want to watch» list on the TV: the yellow key on a tile adds to it, the «Want» filter shows it
+- «In better quality» on the torrent and series screens: finds a better release and replaces the old one keeping watch positions, or adds it alongside
+
 ## 0.18.0-beta.1
 
 - TV (LG and Android TV): library tiles show short titles instead of the tracker string; a series is one tile with its TMDB status («Airing», «Ended», «Canceled») and the number of torrents
