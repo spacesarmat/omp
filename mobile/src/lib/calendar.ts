@@ -116,6 +116,88 @@ export function groupByDay(entries: CalEntry[], now: number = Date.now()): CalDa
   return days;
 }
 
+/** «Эпизод 7», «Episode 7», «Серия 7»: TMDB's stand-in for an episode with no name yet. */
+const PLACEHOLDER_NAME = /^(\u044d\u043f\u0438\u0437\u043e\u0434|episode|\u0441\u0435\u0440\u0438\u044f)\s*\d+$/i;
+
+/** The episode's real name: '' for none or a placeholder («Эпизод 7»). */
+export function realEpisodeName(name: string): string {
+  const n = (name || '').trim();
+  return PLACEHOLDER_NAME.test(n) ? '' : n;
+}
+
+/** One row of a day: a show's episodes of one season aired that day. */
+export interface CalRow {
+  show: CalShow;
+  season: number;
+  /** The episode numbers, ascending. */
+  episodes: number[];
+  /** The episode's real name; '' when there is none or the row has several episodes. */
+  name: string;
+  airDate: string;
+  status: CalStatus;
+  /** The row's entries, one per episode. */
+  entries: CalEntry[];
+}
+
+function two(n: number): string {
+  return (n < 10 ? '0' : '') + n;
+}
+
+/**
+ * The episodes of a season as one code: «S13E07», «S13E07–E08» (consecutive), «S13E07, E09» (apart),
+ * «S13E07–E08, E10» (both).
+ */
+export function episodesCode(season: number, episodes: number[]): string {
+  const eps = episodes.slice().sort((a, b) => a - b);
+  const runs: string[] = [];
+  let i = 0;
+  while (i < eps.length) {
+    let j = i;
+    while (j + 1 < eps.length && eps[j + 1] === eps[j] + 1) j++;
+    runs.push('E' + two(eps[i]) + (j > i ? '–E' + two(eps[j]) : ''));
+    i = j + 1;
+  }
+  return 'S' + two(season) + runs.join(', ');
+}
+
+/** A day's entries as rows: the episodes of one show and season merged, the order of the entries kept. */
+export function dayRows(entries: CalEntry[]): CalRow[] {
+  const rows: CalRow[] = [];
+  const at: { [k: string]: CalRow } = {};
+  entries.forEach((e) => {
+    const k = e.show.card.id + ':' + e.season + ':' + e.airDate;
+    const row = at[k];
+    if (row) {
+      if (row.episodes.indexOf(e.episode) < 0) {
+        row.episodes.push(e.episode);
+        row.entries.push(e);
+      }
+      return;
+    }
+    rows.push((at[k] = { show: e.show, season: e.season, episodes: [e.episode], name: '', airDate: e.airDate, status: e.status, entries: [e] }));
+  });
+  rows.forEach((r) => {
+    r.episodes.sort((a, b) => a - b);
+    r.name = r.entries.length === 1 ? realEpisodeName(r.entries[0].name) : '';
+  });
+  return rows;
+}
+
+/** The row's line: «S13E07 · name», «S13E07–E08». */
+export function rowLine(row: CalRow): string {
+  return episodesCode(row.season, row.episodes) + (row.name ? ' · ' + row.name : '');
+}
+
+/** The newest finding that has one of the row's episodes; null if none. */
+export function rowFinding(row: CalRow, findings: Finding[]): Finding | null {
+  let best: Finding | null = null;
+  row.entries.forEach((e) => {
+    const f = findingFor(e, findings);
+    if (f && (!best || f.at > best.at)) best = f;
+  });
+  return best;
+}
+
 function covers(from: number | undefined, to: number | undefined, episode: number): boolean {
   if (to === undefined) return false;
   return (from === undefined ? to : from) <= episode && episode <= to;
