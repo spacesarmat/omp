@@ -1,0 +1,9 @@
+{
+  "name": "omp-tizen-test",
+  "version": "0.0.1",
+  "description": "OMP test build for Samsung TV (TizenBrew): playback test and the TV app",
+  "packageType": "app",
+  "appName": "OMP (test)",
+  "appPath": "app/launcher.html",
+  "keys": ["MediaPlayPause", "MediaPlay", "MediaPause", "MediaStop", "MediaFastForward", "MediaRewind", "ColorF0Red", "ColorF1Green", "ColorF2Yellow", "ColorF3Blue", "ChannelUp", "ChannelDown"]
+}

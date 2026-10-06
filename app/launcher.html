@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>OMP spike</title>
+<style>
+  body { margin: 0; background: #0f1115; color: #eee; font: 40px sans-serif; display: flex; height: 100vh; align-items: center; justify-content: center; gap: 60px; }
+  a { color: #eee; padding: 30px 60px; border: 4px solid #333; border-radius: 16px; text-decoration: none; }
+  a:focus { border-color: #4da3ff; outline: none; background: #1b2633; }
+</style>
+</head>
+<body>
+  <a id="omp" href="index.html" tabindex="0">OMP</a>
+  <a id="test" href="playtest.html" tabindex="0">Playback test</a>
+<script>
+  var links = [document.getElementById('omp'), document.getElementById('test')];
+  var i = 1; links[i].focus(); var auto = setTimeout(function(){ location.href='playtest.html'; }, 4000); document.addEventListener('keydown', function(){ clearTimeout(auto); }, true);
+  document.addEventListener('keydown', function (e) {
+    if (e.keyCode === 37 || e.keyCode === 39) { i = 1 - i; links[i].focus(); }
+    else if (e.keyCode === 13) { location.href = links[i].getAttribute('href'); }
+    else if (e.keyCode === 10009) { try { tizen.application.getCurrentApplication().exit(); } catch (x) {} }
+  });
+</script>
+</body>
+</html>

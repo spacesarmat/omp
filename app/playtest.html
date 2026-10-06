@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>OMP playback test</title>
+<script src="$WEBAPIS/webapis/webapis.js"></script>
+<style>
+  body { margin: 0; background: #000; color: #ddd; font: 22px monospace; }
+  video, #av { position: absolute; left: 1100px; top: 40px; width: 780px; height: 440px; background: #111; }
+  #log { position: absolute; left: 30px; top: 30px; width: 1040px; height: 1020px; overflow: hidden; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<object id="av" type="application/avplayer"></object>
+<video id="v" muted></video>
+<div id="log"></div>
+<script>
+// Standalone spike page (not OMP). Plays a few real TorrServer files via <video> and webapis.avplay,
+// prints what happens and POSTs every line to a listener on the PC (tizen/listener.mjs, port 18080).
+var TS = 'http://192.168.1.191:5665';
+var SINK = 'http://192.168.1.121:18080/log';
+// pick: 'largest' or a file id. Hashes are from the user's TorrServer list.
+var CASES = [
+  { tag: 'MKV HEVC 1080p',            hash: '3eddfca39de0be8c56138d1ec4f3b2dafbb477de', pick: 1 },
+  { tag: 'MKV 1080p ColdFilm (AC3?)',  hash: '497c7df6c372cf6c5f9a147b908d88a5e11e071a', pick: 'largest' },
+  { tag: 'MKV x265 2160p SDR',         hash: '0e9eb8e4d7fdc3c8b5c7cfa7ea099bbbc8721511', pick: 'largest' },
+  { tag: 'MKV 2160p HDR10/DV WEB-DL',  hash: 'df20323f6955ff3a791c03c780b4a3cef517db47', pick: 'largest' },
+  { tag: 'BDMV UHD HDR remux (m2ts)',  hash: 'ee21944bce37ea71cb0ae46b91fbe4c2aadb9fbd', pick: 'largest' }
+];
+
+var logEl = document.getElementById('log');
+function log(s) {
+  logEl.textContent += s + '\n';
+  if (logEl.textContent.length > 6000) logEl.textContent = logEl.textContent.slice(-6000);
+  try { var x = new XMLHttpRequest(); x.open('POST', SINK, true); x.setRequestHeader('Content-Type', 'text/plain'); x.send(s); } catch (e) { /* sink is optional */ }
+}
+function post(path, body, cb) {
+  var x = new XMLHttpRequest();
+  x.open('POST', TS + path, true);
+  x.setRequestHeader('Content-Type', 'application/json');
+  x.onload = function () { try { cb(null, JSON.parse(x.responseText)); } catch (e) { cb(e); } };
+  x.onerror = function () { cb(new Error('xhr ' + x.status)); };
+  x.send(JSON.stringify(body));
+}
+function base(p) { var i = p.lastIndexOf('/'); return i >= 0 ? p.slice(i + 1) : p; }
+
+function resolve(c, cb) {
+  // read-only: "get" returns the torrent with file_stats; nothing is added or removed
+  post('/torrents', { action: 'get', hash: c.hash }, function (err, t) {
+    if (err || !t) return cb(err || new Error('no torrent'));
+    var files = t.file_stats || [];
+    var f = null;
+    for (var i = 0; i < files.length; i++) {
+      if (c.pick === 'largest') { if (!f || files[i].length > f.length) f = files[i]; }
+      else if (files[i].id === c.pick) f = files[i];
+    }
+    if (!f) return cb(new Error('no file (torrent not loaded yet?) files=' + files.length));
+    cb(null, TS + '/stream/' + encodeURIComponent(base(f.path)) + '?link=' + c.hash + '&index=' + f.id + '&play', f);
+  });
+}
+
+function trackInfo(v) {
+  var a = v.audioTracks, t = v.textTracks, out = [];
+  out.push('audioTracks=' + (a ? a.length : 'n/a'));
+  if (a) for (var i = 0; i < a.length; i++) out.push('  a' + i + ' lang=' + a[i].language + ' label=' + a[i].label + ' enabled=' + a[i].enabled);
+  out.push('textTracks=' + (t ? t.length : 'n/a'));
+  if (t) for (var j = 0; j < t.length; j++) out.push('  t' + j + ' kind=' + t[j].kind + ' lang=' + t[j].language + ' label=' + t[j].label);
+  out.push('videoTracks=' + (v.videoTracks ? v.videoTracks.length : 'n/a'));
+  return out.join('\n');
+}
+
+function testVideo(c, url, done) {
+  var v = document.getElementById('v');
+  var finished = false, t0 = Date.now();
+  function end(res) {
+    if (finished) return; finished = true;
+    clearTimeout(timer);
+    log('[video] ' + c.tag + ': ' + res + ' after ' + (Date.now() - t0) + 'ms');
+    log('[video] ' + trackInfo(v));
+    v.pause(); v.removeAttribute('src'); try { v.load(); } catch (e) { /* ignore */ }
+    setTimeout(done, 1500);
+  }
+  var timer = setTimeout(function () { end('TIMEOUT (readyState=' + v.readyState + ' networkState=' + v.networkState + ')'); }, 60000);
+  v.onloadedmetadata = function () { log('[video] metadata ' + v.videoWidth + 'x' + v.videoHeight + ' dur=' + Math.round(v.duration)); };
+  v.onerror = function () { end('ERROR code=' + (v.error && v.error.code) + ' msg=' + (v.error && v.error.message)); };
+  v.ontimeupdate = function () { if (v.currentTime > 3) end('PLAYING ok t=' + v.currentTime.toFixed(1) + ' ' + v.videoWidth + 'x' + v.videoHeight); };
+  v.src = url;
+  var p = v.play(); if (p && p.catch) p.catch(function (e) { log('[video] play() rejected: ' + e); });
+}
+
+function testAvplay(c, url, done) {
+  if (!window.webapis || !webapis.avplay) { log('[avplay] webapis.avplay not available'); return done(); }
+  var av = webapis.avplay, finished = false, t0 = Date.now();
+  function end(res) {
+    if (finished) return; finished = true;
+    clearTimeout(timer);
+    log('[avplay] ' + c.tag + ': ' + res + ' after ' + (Date.now() - t0) + 'ms');
+    try { av.stop(); } catch (e) { /* ignore */ }
+    try { av.close(); } catch (e) { /* ignore */ }
+    setTimeout(done, 1500);
+  }
+  var timer = setTimeout(function () { end('TIMEOUT state=' + safe(function () { return av.getState(); })); }, 60000);
+  function safe(f) { try { return f(); } catch (e) { return 'ERR ' + e.name + ': ' + e.message; } }
+  try {
+    av.open(url);
+    av.setDisplayRect(1100, 520, 780, 440);
+    av.setListener({
+      onbufferingstart: function () { log('[avplay] buffering…'); },
+      onerror: function (e) { end('ERROR ' + e); },
+      onevent: function (type, data) { log('[avplay] event ' + type + ' ' + data); },
+      oncurrentplaytime: function (ms) { if (ms > 3000) end('PLAYING ok t=' + ms + 'ms'); }
+    });
+    av.prepareAsync(function () {
+      log('[avplay] prepared, duration=' + safe(function () { return av.getDuration(); }));
+      var info = safe(function () { return av.getTotalTrackInfo(); });
+      if (info && info.length) {
+        for (var i = 0; i < info.length; i++) log('[avplay] track ' + info[i].index + ' ' + info[i].type + ' ' + info[i].extra_info);
+      } else log('[avplay] getTotalTrackInfo: ' + info);
+      av.play();
+    }, function (e) { end('prepare ERROR ' + e); });
+  } catch (e) { end('EXCEPTION ' + e.name + ': ' + e.message); }
+}
+
+function run(i) {
+  if (i >= CASES.length) { log('== done'); return; }
+  var c = CASES[i];
+  log('== ' + c.tag);
+  resolve(c, function (err, url, f) {
+    if (err) { log('resolve failed: ' + err.message); return run(i + 1); }
+    log('file: ' + f.path + ' (' + (f.length / 1073741824).toFixed(2) + ' GB)');
+    testVideo(c, url, function () { testAvplay(c, url, function () { run(i + 1); }); });
+  });
+}
+
+log('UA: ' + navigator.userAgent);
+try { log('firmware: ' + webapis.productinfo.getFirmware() + ' model: ' + webapis.productinfo.getModel()); } catch (e) { log('productinfo n/a'); }
+try { log('UHD: ' + webapis.productinfo.isUdPanelSupported() + ' HDR: ' + (webapis.avinfo && webapis.avinfo.isHdrTvSupport && webapis.avinfo.isHdrTvSupport())); } catch (e) { /* ignore */ }
+['video/mp4; codecs="hvc1"', 'video/mp4; codecs="hev1.2.4.L153"', 'video/x-matroska', 'video/webm; codecs="vp9"', 'audio/ac3', 'audio/eac3', 'audio/mp4; codecs="ec-3"'].forEach(function (m) {
+  log('canPlayType ' + m + ' = "' + document.getElementById('v').canPlayType(m) + '"');
+});
+document.addEventListener('keydown', function (e) { if (e.keyCode === 10009) history.back(); });
+run(0);
+</script>
+</body>
+</html>
