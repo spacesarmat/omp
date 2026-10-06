@@ -1313,6 +1313,8 @@ export const ru = {
       notFound: 'Раздача не найдена',
       continueOnTv: 'Продолжить на ТВ · {ep}с {time}',
       episodesHead: 'Серии',
+      /** A muted row after the last episode: «7. Пирамида · выйдет 8 окт.». */
+      episodeComes: 'выйдет {date}',
       filesHead: 'Файлы',
       watchOnPhone: 'Смотреть на телефоне',
       skipIntroSwitch: 'Пропускать заставку',

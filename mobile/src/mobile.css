@@ -530,6 +530,8 @@ button, .m-btn {
 .m-ep-code { width: 58px; flex-shrink: 0; font-size: 14px; font-weight: 700; color: var(--accent); }
 .m-ep-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .m-ep-name { font-size: 14px; overflow-wrap: anywhere; }
+/* an announced episode not in the torrent yet: a quiet outline, no panel, not tappable */
+.m-ep-coming { min-height: 44px; box-sizing: border-box; background: none; border: 1px dashed #2A2F3A; color: var(--muted); }
 
 /* ---- sheet ---- */
 .m-sheet-host { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; justify-content: flex-end; }

@@ -17,7 +17,10 @@ import { phoneCatalog } from '../catalog/phoneCatalog';
 import { groupLibrary, singleGroup, type SeriesGroup } from './seriesGroups';
 import { knownOver, matchSeries } from './seriesMatch';
 import { isoDay, upcomingSeasons } from './seriesStatus';
+import { realEpisodeName } from './episodeNames';
 import { dayHeader } from './releaseDates';
+
+export { realEpisodeName };
 
 /** Days ahead the calendar shows. */
 export const AHEAD_DAYS = 30;
@@ -114,15 +117,6 @@ export function groupByDay(entries: CalEntry[], now: number = Date.now()): CalDa
     else days.push({ iso: e.airDate, label: dayHeader(e.airDate, now), entries: [e] });
   });
   return days;
-}
-
-/** «Эпизод 7», «Episode 7», «Серия 7»: TMDB's stand-in for an episode with no name yet. */
-const PLACEHOLDER_NAME = /^(\u044d\u043f\u0438\u0437\u043e\u0434|episode|\u0441\u0435\u0440\u0438\u044f)\s*\d+$/i;
-
-/** The episode's real name: '' for none or a placeholder («Эпизод 7»). */
-export function realEpisodeName(name: string): string {
-  const n = (name || '').trim();
-  return PLACEHOLDER_NAME.test(n) ? '' : n;
 }
 
 /** One row of a day: a show's episodes of one season aired that day. */

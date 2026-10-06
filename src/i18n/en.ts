@@ -1294,6 +1294,7 @@ export const en: EnDict<typeof ru> = {
       notFound: 'Torrent not found',
       continueOnTv: 'Continue on TV · {ep}from {time}',
       episodesHead: 'Episodes',
+      episodeComes: 'out {date}',
       filesHead: 'Files',
       watchOnPhone: 'Watch on the phone',
       skipIntroSwitch: 'Skip the intro',
