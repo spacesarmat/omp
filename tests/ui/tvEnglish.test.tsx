@@ -44,6 +44,8 @@ import { resetSourceNames } from '../../src/sources/sourceNames';
 import { resetTo } from '../../src/ui/nav';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth } from '../../src/sources/store';
+import { newsSeg, resetNewsCache } from '../../src/screens/library/NewsTv';
+import { newsUnseen } from '../../src/phone/monitor';
 import type { Source } from '../../src/sources/types';
 
 const CYR = /[А-Яа-яЁё]/;
@@ -523,6 +525,85 @@ describe('TV screens in English', () => {
       await flush();
       expect(host.textContent).toContain('Rutor, Jackett');
       expect(host.textContent).not.toMatch(CYR);
+    });
+  });
+
+  describe('the «New» tab', () => {
+    const PH = { url: 'http://192.168.1.20:8097', token: 'a'.repeat(32), name: 'Pixel' };
+    const res = (key: string, Title: string) => ({ key, Title, Size: '8 GB', Seed: 30, Peer: 2, Tracker: 'rutracker', CreateDate: '', Categories: '', Magnet: '', Hash: '', source: 'rutracker' });
+    const findings = [
+      { subId: 'episodes', key: 'a:1', kind: 'episodes', at: 300, seen: false, title: 'Foundation', result: res('a:1', 'Foundation S02 1080p'), episodes: { torrentHash: 'd'.repeat(40), season: 2, to: 5 } },
+      { subId: 's1', key: 'k7', kind: 'sub', at: 100, seen: true, title: 'Dune', result: res('k7', 'Dune Prophecy 720p') },
+      { subId: 'better', key: 'b:3', kind: 'better', at: 200, seen: false, title: 'Dune Part Two', result: res('b:3', 'Dune Part Two 2160p'), better: { torrentHash: 'a'.repeat(40), have: '1080p', got: '4K' } },
+    ];
+    const subs = [
+      { id: 's1', query: 'Dune', quality: '1080p', notify: true, better: false, unseen: 2, checking: false },
+      { id: 's2', query: 'Severance', quality: 'any', notify: false, better: true, unseen: 0, checking: false },
+    ];
+    const useRpc = () => setRpcTransport((_u, body) => {
+      const m = JSON.parse(body).method;
+      const result = m === 'feed' ? { findings, lastRun: 1 } : m === 'subs' ? { subs } : { ok: true };
+      return Promise.resolve(JSON.stringify({ ok: true, result }));
+    });
+    beforeEach(() => {
+      setActiveServer(addServer({ url: '10.0.0.2' }).id);
+      torrents.value = [];
+      resetNewsCache();
+      newsSeg.value = 'feed';
+      newsUnseen.value = 0;
+      libraryTab.value = 'news';
+    });
+    afterEach(() => {
+      libraryTab.value = 'all';
+      newsSeg.value = 'feed';
+      setRpcTransport(null);
+      forgetPhoneLink();
+      phoneStatus.value = 'unknown';
+      resetNewsCache();
+    });
+
+    it('findings segment', async () => {
+      savePhoneLink(PH);
+      useRpc();
+      mount(h(LibraryScreen, {}));
+      await flush();
+      const text = host.textContent || '';
+      expect(text).toContain('Findings');
+      expect(text).toContain('Subscriptions');
+      expect(text).toContain('Phone Pixel');
+      expect(text).toContain('New episode S02E05');
+      expect(text).toContain('Better quality: 1080p → 4K');
+      expect(text).toContain('Subscription «Dune»');
+      expect(text).toContain('OK — watch');
+      expect(text).not.toMatch(CYR);
+    });
+
+    it('subscriptions segment', async () => {
+      savePhoneLink(PH);
+      useRpc();
+      newsSeg.value = 'subs';
+      mount(h(LibraryScreen, {}));
+      await flush();
+      const text = host.textContent || '';
+      expect(text).toContain('Dune');
+      expect(text).toContain('Severance');
+      expect(text).toContain('2 new');
+      expect(text).toContain('any quality');
+      expect(text).toContain('Notify');
+      expect(text).toContain('In better quality');
+      expect(text).toContain('Check now');
+      expect(text).toContain('Remove');
+      expect(text).toContain('Find a subscription');
+      expect(text).toContain('OK — toggle or choose');
+      expect(text).not.toMatch(CYR);
+    });
+
+    it('no phone', async () => {
+      mount(h(LibraryScreen, {}));
+      await flush();
+      const text = host.textContent || '';
+      expect(text).toContain('run by OMP on the phone');
+      expect(text).not.toMatch(CYR);
     });
   });
 

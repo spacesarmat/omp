@@ -47,3 +47,42 @@ export interface RpcPoll {
   /** Only when `rev` differs from the one the TV sent. */
   results?: RpcResult[];
 }
+
+// --- monitoring (the new-findings feed and subscriptions on the TV)
+
+export type RpcFindingKind = 'episodes' | 'better' | 'sub';
+
+export interface RpcFinding {
+  subId: string;
+  key: string;
+  kind: RpcFindingKind;
+  /** Found at, unix ms. */
+  at: number;
+  seen: boolean;
+  /** The same fields as a search row; `key` is the finding key (`findingLink` takes subId + key). */
+  result: RpcResult;
+  /** The subscription query, or the library torrent title for episodes / better. */
+  title: string;
+  episodes?: { torrentHash: string; season: number; from?: number; to: number };
+  better?: { torrentHash: string; have: string; got: string };
+}
+
+export interface RpcSub {
+  id: string;
+  query: string;
+  quality: '' | '720' | '1080' | '2160';
+  notify: boolean;
+  better: boolean;
+  /** Findings not looked at yet. */
+  unseen: number;
+  /** A `subCheck` of it is running. */
+  checking: boolean;
+  createdAt: number;
+}
+
+export interface RpcFeed {
+  /** Newest first, at most FOUND_MAX. */
+  findings: RpcFinding[];
+  /** Unix ms of the last background check, null before the first. */
+  lastRun: number | null;
+}

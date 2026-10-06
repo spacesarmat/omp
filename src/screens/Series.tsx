@@ -41,6 +41,10 @@ import { tvGlyphs } from '../ui/tvText';
 import { qualityOrUnknown } from '../monitor/upgradeText';
 import { displayTitle } from '../lib/torrentName';
 import { Poster } from './library/Poster';
+import { loadWatch, saveWatch } from '../store/journal';
+import { watchesNewEpisodes } from '../lib/journal';
+import { phoneLink } from '../phone/phoneStore';
+import { errorMessage } from '../api/http';
 import { SeriesPill } from './library/SeriesTile';
 
 // the chosen season of each open series screen (its route entry): kept while the player or a torrent is on top
@@ -246,6 +250,40 @@ function useEpisodes(group: SeriesGroup, season: number): { [n: number]: Episode
   return eps;
 }
 
+/**
+ * «Следить за сериями» of the whole series: on while every torrent of the group is watched (omp.w in TorrServer, read by
+ * OMP on the phone). Starts from the library copy, then reads TorrServer; a switch writes every torrent.
+ */
+function useFollow(group: SeriesGroup): [boolean, () => void] {
+  const c = client.value!;
+  const hashes = group.members.map((m) => m.hash).join(',');
+  const [on, setOn] = useState(() => group.members.every((m) => watchesNewEpisodes(m.data)));
+  const live = useRef(true);
+  const read = () =>
+    Promise.all(group.members.map((m) => loadWatch(c, m.hash))).then(
+      (list) => {
+        if (live.current) setOn(list.every(Boolean));
+      },
+      () => undefined,
+    );
+  useEffect(() => {
+    live.current = true;
+    void read();
+    return () => {
+      live.current = false;
+    };
+  }, [hashes]);
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    Promise.all(group.members.map((m) => saveWatch(c, m, next))).catch((e) => {
+      toast(errorMessage(e), 'error');
+      void read();
+    });
+  };
+  return [on, toggle];
+}
+
 function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   const c = client.value!;
   const route = useMemo(() => currentRoute.peek(), []);
@@ -277,6 +315,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
     chosenSeason.set(route, n);
   };
   const eps = useEpisodes(group, season);
+  const [follow, toggleFollow] = useFollow(group);
 
   const rows = seasonRows(group, season); // progress decides which copy of an episode is shown
   const target = nextRow(rows);
@@ -393,8 +432,14 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             )}
             <Button focusKey="series-releases" label={t('series.releasesBtn', { n: releases.length })} onPress={openReleases} />
             {upgradable.length > 0 && <Button focusKey="series-better" label={t('torrent.better.find')} onPress={openBetter} />}
-            <Button focusKey="series-follow" label={t('series.follow')} onPress={() => toast(t('series.watchOnPhone'))} />
+            <Focusable focusKey="series-follow" className="button series-follow" role="button" onPress={toggleFollow}>
+              {t('series.follow') + ': '}
+              <span class="series-follow-state" role="switch" aria-label={t('series.follow')} aria-checked={follow}>
+                {t(follow ? 'series.followOn' : 'series.followOff')}
+              </span>
+            </Focusable>
           </FocusGroup>
+          {!phoneLink.value && <div class="muted series-follow-note">{t('series.followNote')}</div>}
         </div>
       </div>
       {chips.length > 0 && (

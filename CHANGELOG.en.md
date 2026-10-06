@@ -2,6 +2,14 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.18.0-beta.4
+
+- [tv] «New» on the TV: OMP's findings from the phone, with new episodes, better quality and torrents for subscriptions; new episodes replace the old season torrent right away, «Replace» swaps in the better one — watch positions are kept
+- [tv] «Subscriptions» on the TV: check now, notify on/off, «in better quality», remove
+- [tv] «Follow new episodes» and «follow better quality» work right from the TV; «Want to watch» on the TV becomes an OMP subscription on the phone
+- [atv] The «Control from the phone» badge in the Android TV player now shows briefly on a phone command instead of all the time
+- [phone] The TV sees the phone's subscriptions and findings (through «Search for the TV»)
+
 ## 0.18.0-beta.3
 
 - [phone] «Search for the TV» in Settings: the phone searches torrents for the LG TV in the background, even with OMP closed, with a quiet status-bar icon

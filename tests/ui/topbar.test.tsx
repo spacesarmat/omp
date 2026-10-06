@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { render, h } from 'preact';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { TopBar } from '../../src/ui/TopBar';
+import { newsUnseen } from '../../src/phone/monitor';
 
 beforeAll(() => {
   init({ debug: false, visualDebug: false });
@@ -27,8 +28,25 @@ describe('TopBar', () => {
   it('renders tabs with history first and marks the active one', () => {
     const { host } = mount({ tab: 'tv' });
     const tabs = Array.prototype.map.call(host.querySelectorAll('.tab'), (e: Element) => e.textContent);
-    expect(tabs).toEqual(['История', 'Обзор', 'Все', 'Фильмы', 'Сериалы', 'Музыка', 'Прочее']);
+    expect(tabs).toEqual(['История', 'Новое', 'Обзор', 'Все', 'Фильмы', 'Сериалы', 'Музыка', 'Прочее']);
     expect(host.querySelector('.tab.active')!.textContent).toBe('Сериалы');
+  });
+  it('shows the unseen findings count on «Новое» only when there are some', () => {
+    newsUnseen.value = 0;
+    let host = mount().host;
+    expect(host.querySelector('.tab-badge')).toBeNull();
+    document.body.innerHTML = '';
+    newsUnseen.value = 120;
+    host = mount().host;
+    expect(host.querySelector('[data-fk="tab-news"] .tab-badge')!.textContent).toBe('99+');
+    newsUnseen.value = 0;
+  });
+  it('«Новое» has no library search, view or sort', () => {
+    const { host } = mount({ tab: 'news' });
+    const buttons = host.querySelectorAll('.icon-button');
+    expect(buttons[0].className).toContain('disabled');
+    expect(buttons[1].className).toContain('disabled');
+    expect(buttons[2].className).toContain('disabled');
   });
   it('labels icon buttons with the current view and sort', () => {
     const { host } = mount({ view: 'list', sort: 'size' });

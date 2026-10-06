@@ -159,6 +159,15 @@ class RpcRouteTest {
     }
 
     @Test
+    fun monitorMethodsAreAllowed() {
+        listOf("feed", "subs", "subCheck", "subSet", "subRemove", "wantAdd", "findingLink", "findingsSeen").forEach {
+            assertTrue(it, it in RpcRoute.METHODS)
+        }
+        assertFalse("subsDelete" in RpcRoute.METHODS)
+        assertEquals("unknown_method", errorCode(post(goodPath, """{"method":"subsDelete","params":{}}""")))
+    }
+
+    @Test
     fun malformedBodyIsBadRequest() {
         val r = post(goodPath, "not json")
         assertTrue(r.startsWith("HTTP/1.1 200"))

@@ -1,10 +1,13 @@
-// TV «Хочу посмотреть»: titles saved from «Обзор» and the title card. Lives on the TV only for now (a later version
-// hands it to the phone's monitoring). Newest first, at most WANT_MAX items; bad storage is ignored.
+// TV «Хочу посмотреть»: titles saved from «Обзор» and the title card. The TV keeps its own list; adding a title also
+// asks OMP on the phone (when linked) to watch for its releases. Newest first, at most WANT_MAX items; bad storage is
+// ignored.
 import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
 import { t } from '../i18n';
 import { toast } from '../ui/toast';
-import type { CatalogTitle, Kind } from '../catalog/tmdb';
+import { torrentQuery, type CatalogTitle, type Kind } from '../catalog/tmdb';
+import { phoneLink } from '../phone/phoneStore';
+import { phoneWantAdd } from '../phone/monitor';
 
 export const WANT_KEY = 'tsp.tvWant';
 export const WANT_MAX = 500;
@@ -64,9 +67,21 @@ export function wantTitles(): CatalogTitle[] {
   return wantList.value.map((w) => ({ kind: w.kind, id: w.id, title: w.title, original: '', year: w.year, poster: w.poster, rating: 0 }));
 }
 
-/** Toggle with the toast on add. */
+/**
+ * Toggle with a toast. Adding also hands the title to the phone (the same query as «Найти раздачи» of the card); the
+ * toast waits for its answer. Removing touches only the TV list: the phone's subscription stays.
+ */
 export function wantAction(x: CatalogTitle): boolean {
   const on = toggleWant(x);
-  toast(on ? t('tv.want.added') + ' ' + t('tv.want.hint') : t('tv.want.removed'));
+  if (!on) {
+    toast(t('tv.want.removed'));
+    return on;
+  }
+  const local = () => toast(t('tv.want.added') + ' ' + t('tv.want.connectPhone'));
+  if (!phoneLink.value) {
+    local();
+    return on;
+  }
+  phoneWantAdd(torrentQuery(x)).then(() => toast(t('tv.want.addedPhone')), local);
   return on;
 }

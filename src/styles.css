@@ -150,6 +150,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .series-meta { font-size: 26px; margin-bottom: 14px; }
 .series-overview { max-width: 1000px; margin: 0 0 24px; font-size: 25px; line-height: 1.4; color: #c9cdd8; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .series-actions { margin-top: 8px; }
+.series-follow-state { margin-left: 8px; font-weight: 700; }
+.series-follow-note { font-size: 21px; margin-top: 12px; }
 /* one row that scrolls sideways (the focused chip is kept whole); the padding keeps the focus ring unclipped */
 .series-seasons { position: relative; overflow: hidden; margin: 0 -12px 12px; padding: 12px; }
 .series-seasons-row { display: flex; flex-wrap: nowrap; white-space: nowrap; }
@@ -550,6 +552,36 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .disc-sub { display: flex; align-items: center; min-height: 54px; margin: 22px 0 18px; font-size: 26px; color: var(--muted); }
 .disc-results .disc-sub-text { color: var(--text); margin-right: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1300px; }
 .disc-results .button { padding: 10px 24px; font-size: 24px; }
+/* TV «Новое»: findings from OMP on the phone */
+.tab-badge { display: inline-block; min-width: 18px; margin-left: 10px; padding: 1px 8px; border-radius: 14px; background: var(--accent); color: #0f1115; font-size: 18px; font-weight: 700; line-height: 26px; text-align: center; }
+.tab.focused .tab-badge { background: #0f1115; color: var(--accent); }
+.news-head { display: flex; align-items: center; min-height: 64px; margin: 8px 0 22px; }
+.news-segs > * { margin-right: 4px; }
+.news-segs > *:last-child { margin-right: 0; }
+.news-phone { display: flex; align-items: center; font-size: 24px; color: var(--muted); white-space: nowrap; }
+.news-phone-name { white-space: pre; }
+.news-card { max-width: 1240px; padding: 32px 36px; border-radius: 18px; background: var(--panel); }
+.news-card-text { font-size: 28px; line-height: 1.4; color: var(--text); }
+.news-card-text.src-note-bad { color: #ff8a80; }
+.news-card .actions { margin-top: 24px; }
+.news-dot { display: inline-block; vertical-align: middle; width: 14px; height: 14px; margin-right: 14px; border-radius: 7px; background: var(--accent); }
+.news-kind { margin-top: 6px; font-size: 23px; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.news-new { margin-top: 6px; color: var(--accent); font-weight: 700; }
+/* TV «Подписки»: the phone subscriptions */
+.news-subs-top { margin-bottom: 20px; }
+.news-sub { display: flex; align-items: center; margin-bottom: 14px; padding: 16px 22px; border-radius: 16px; background: var(--panel); }
+.news-sub-info { flex: 1; min-width: 0; margin-right: 20px; }
+.news-sub-line1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 28px; }
+.news-sub-line1 .search-chip { margin-left: 14px; }
+.news-sub-actions { display: flex; align-items: center; flex-shrink: 0; }
+.news-sub-actions > * { margin-right: 14px; }
+.news-sub-actions > *:last-child { margin-right: 0; }
+.news-sub-switch { display: flex; align-items: center; padding: 8px 14px; border-radius: 30px; }
+.news-sub-switch.focused { background: var(--panel2); box-shadow: 0 0 0 4px var(--focus); }
+.news-sub-label { margin-right: 12px; font-size: 22px; color: var(--muted); white-space: nowrap; }
+.news-sub-switch.focused .news-sub-label { color: var(--text); }
+.news-sub-actions .button { padding: 12px 22px; font-size: 22px; }
+.news-sub-checking { color: var(--accent); }
 .disc-grid { display: flex; flex-wrap: wrap; margin-right: -28px; }
 .disc-tile { width: 192px; margin: 0 28px 28px 0; border-radius: 14px; }
 .disc-tile.focused { box-shadow: none; transform: scale(1.06); transform-origin: top center; }
@@ -616,8 +648,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .better-name { font-size: 23px; color: #c3c8d4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .better-meta { width: 380px; margin-left: 24px; font-size: 22px; color: var(--muted); text-align: right; flex-shrink: 0; }
 .better-busy { font-size: 22px; margin: 6px 0 4px; }
-.better-follow { display: flex; align-items: center; margin-top: 20px; opacity: .55; font-size: 23px; }
-.better-follow-label { margin-right: 14px; }
-.better-follow-note { flex: 1; font-size: 21px; }
+.better-follow { display: flex; align-items: center; margin-top: 16px; min-height: 58px; padding: 0 16px; border-radius: 12px; font-size: 23px; }
+.better-follow.focused { background: var(--panel2); transform: none; }
+.better-follow-label { flex: 1; margin-right: 14px; }
+.better-follow-note { font-size: 21px; margin: 4px 16px 0; }
 .better-note { font-size: 21px; margin-top: 12px; }
 .better-hints { font-size: 21px; margin-top: 8px; }

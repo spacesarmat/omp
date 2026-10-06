@@ -23,7 +23,10 @@ class RpcRoute(
     private val allowed: (InetAddress?) -> Boolean = LanAddress::allowed,
 ) {
     companion object {
-        val METHODS = setOf("sources", "search", "searchPoll", "searchCancel", "setSourceEnabled", "resolve")
+        val METHODS = setOf(
+            "sources", "search", "searchPoll", "searchCancel", "setSourceEnabled", "resolve",
+            "feed", "subs", "subCheck", "subSet", "subRemove", "wantAdd", "findingLink", "findingsSeen",
+        )
         const val MAX_RESPONSE = 1_000_000
         private const val NOT_FOUND = "{}"
 

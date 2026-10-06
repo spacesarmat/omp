@@ -25,6 +25,9 @@ import { TopBar } from '../ui/TopBar';
 import { TorrentViews } from './library/TorrentViews';
 import { HistoryGrid, HistoryEntry, HistoryFilterRow } from './library/HistoryGrid';
 import { DiscoverGrid } from './library/DiscoverGrid';
+import { NewsTv, newsSeg } from './library/NewsTv';
+import { phoneLink } from '../phone/phoneStore';
+import { phoneFeed } from '../phone/monitor';
 import { displayTitle } from '../lib/torrentName';
 import type { SeriesGroup } from '../lib/seriesGroups';
 
@@ -69,6 +72,8 @@ export function LibraryScreen() {
     }
     let dead = false;
     load(() => dead);
+    // the count on the «Новое» tab (the tab itself asks the phone when it is open)
+    if (phoneLink.peek() && libraryTab.peek() !== 'news') phoneFeed().catch(() => undefined);
     // picks up torrents added from a phone via the TorrServer web UI
     const timer = setInterval(() => load(() => dead), 10000);
     return () => {
@@ -77,12 +82,14 @@ export function LibraryScreen() {
     };
   }, [c]);
 
-  const isDiscover = tab === 'discover';
-  // «Обзор» reads TMDB, not the server list: it stays usable when the list failed
+  const isNews = tab === 'news';
+  // «Обзор» reads TMDB and «Новое» the phone, not the server list: they stay usable when the list failed (and neither
+  // shows the library search, its spinner or its empty note)
+  const isDiscover = tab === 'discover' || isNews;
   const showingError = !!error && !torrents.value.length && !isDiscover;
   useEffect(() => {
     if (!loaded || showingError) return;
-    if (libraryTab.value === 'discover') restoreFocus('tab-discover');
+    if (libraryTab.value === 'discover' || libraryTab.value === 'news') restoreFocus('tab-' + libraryTab.value);
     else restoreFocus(torrents.value.length ? 'LIB-GRID' : 'tab-' + libraryTab.value);
   }, [loaded, showingError]);
 
@@ -133,7 +140,7 @@ export function LibraryScreen() {
 
   useKeys((a) => {
     // «Обзор» has its own keys (DiscoverGrid)
-    if (tab === 'discover') return false;
+    if (tab === 'discover' || tab === 'news') return false;
     if (a === 'back' && searchOpen) { closeSearch(); return true; }
     const sel = selRef.current;
     if (a === 'red' && sel) {
@@ -230,7 +237,15 @@ export function LibraryScreen() {
       )}
       {!loaded && !isDiscover && <Spinner text={t('catalog.loading')} />}
       {isHistory && <HistoryFilterRow value={hfilter} onChange={(f) => updateSettings({ historyFilter: f })} onFocused={() => setSel(null)} />}
-      {isDiscover ? (
+      {isNews ? (
+        <NewsTv
+          onFocused={() => setSel(null)}
+          onBack={() => {
+            setTab('all');
+            if (doesFocusableExist('tab-all')) setFocus('tab-all');
+          }}
+        />
+      ) : isDiscover ? (
         <DiscoverGrid
           onFocused={() => setSel(null)}
           onBack={() => {
@@ -259,7 +274,9 @@ export function LibraryScreen() {
         />
       )}
       {empty && <div class="empty">{empty}</div>}
-      {isDiscover ? (
+      {isNews ? (
+        <div class="hints">{t(newsSeg.value === 'subs' && phoneLink.value ? 'tv.subs.hints' : 'tv.news.hints')}</div>
+      ) : isDiscover ? (
         <div class="hints">
           {t('tv.discover.okCard')} · <KeyDot color="yellow" /> {t('tv.discover.wantKey')} · <KeyDot color="blue" /> {t('tv.discover.sortKey')} · {t('tv.discover.backLibrary')}
         </div>

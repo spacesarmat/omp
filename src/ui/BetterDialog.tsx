@@ -3,6 +3,7 @@
 // on a row asks «Заменить» / «Добавить рядом» / «Отмена». «Заменить» replaces the torrent in place (history, skip
 // settings, category and this TV's watch positions carry over); «Добавить рядом» adds the release and keeps the old one.
 // Back closes the dialog (stopping the search) or stops a running replace. Keys under the dialog are blocked.
+// «Следить за лучшим качеством» switches omp.q of the torrent in TorrServer (OMP on the phone reads it).
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { doesFocusableExist, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { FocusGroup, Focusable, Button, Spinner } from './components';
@@ -13,7 +14,7 @@ import { navigate } from './nav';
 import { tvGlyphs } from './tvText';
 import { t } from '../i18n';
 import { client } from '../store/servers';
-import { torrents, refreshTorrents } from '../store/library';
+import { refreshTorrents } from '../store/library';
 import { errorMessage } from '../api/http';
 import type { Torrent } from '../api/types';
 import type { TorrentFile } from '../lib/episodes';
@@ -22,16 +23,16 @@ import { shortTitle } from '../lib/libraryView';
 import { displayTitle } from '../lib/torrentName';
 import type { LibraryTorrent } from '../monitor/newEpisodes';
 import { qualityLabel } from '../monitor/quality';
-import { replaceAbort, replaceWithResult, type ReplaceAbort, type ReplaceResult } from '../monitor/replace';
-import { carryProgress, findUpgrades, isLowSeeds, upgradeKind, upgradeQuery, type UpgradeOutcome } from '../monitor/upgrade';
+import { replaceAbort, type ReplaceAbort } from '../monitor/replace';
+import { replaceOnTv } from '../monitor/replaceTv';
+import { findUpgrades, isLowSeeds, upgradeKind, upgradeQuery, type UpgradeOutcome } from '../monitor/upgrade';
 import { coverageNote, failureOf, qualityOrUnknown } from '../monitor/upgradeText';
 import { resolveLink, resultKey, seedsText, sourceName } from '../sources/view';
 import { tvSourceContext } from '../sources/tvContext';
+import { loadQualityWatch, saveQualityWatch } from '../store/journal';
+import { watchesBetterQuality } from '../lib/journal';
+import { phoneLink } from '../phone/phoneStore';
 import type { SourceResult } from '../sources/types';
-
-const FILES_TIMEOUT_MS = 10000;
-/** The longest the dialog waits for a replace before it gives up as a timeout. */
-export const TV_REPLACE_WAIT_MS = 45000;
 
 /** The torrent as the upgrade search sees it. */
 export function upgradeTarget(tor: Torrent, files: TorrentFile[]): LibraryTorrent {
@@ -41,10 +42,6 @@ export function upgradeTarget(tor: Torrent, files: TorrentFile[]): LibraryTorren
 /** True when «В лучшем качестве» is offered for the torrent (a film, or a series with a known season). */
 export function canUpgrade(tor: Torrent, files: TorrentFile[]): boolean {
   return upgradeKind(upgradeTarget(tor, files)) !== null;
-}
-
-function sameHash(a: string, b: string): boolean {
-  return (a || '').toLowerCase() === (b || '').toLowerCase();
 }
 
 type BetterChoice = 'replace' | 'add' | 'cancel';
@@ -77,6 +74,31 @@ export function BetterDialog(p: {
   const replaced = useRef(false);
   const afterReplace = useRef(p.focusAfterReplace);
   afterReplace.current = p.focusAfterReplace;
+  const [follow, setFollow] = useState(() => watchesBetterQuality(p.torrent.data));
+  const readFollow = () => {
+    const c = client.value;
+    if (!c) return;
+    loadQualityWatch(c, p.torrent.hash).then(
+      (on) => {
+        if (alive.current) setFollow(on);
+      },
+      () => undefined,
+    );
+  };
+  useEffect(readFollow, []);
+  const toggleFollow = () => {
+    const c = client.value;
+    if (!c) {
+      toast(t('errors.noServerSelected'), 'error');
+      return;
+    }
+    const next = !follow;
+    setFollow(next);
+    saveQualityWatch(c, p.torrent, next).catch((e) => {
+      toast(tvGlyphs(errorMessage(e)), 'error');
+      readFollow();
+    });
+  };
 
   useEffect(() => {
     const prev = getCurrentFocusKey() || '';
@@ -131,26 +153,6 @@ export function BetterDialog(p: {
     return 'spatial';
   }, 50);
 
-  const newFilesOf = (hash: string): Promise<TorrentFile[]> => {
-    const c = client.value;
-    const listed = torrents.value.filter((x) => sameHash(x.hash, hash))[0];
-    if (listed && c && c.files(listed).length) return Promise.resolve(c.files(listed));
-    if (!c) return Promise.resolve([]);
-    return new Promise<TorrentFile[]>((resolve) => {
-      const timer = setTimeout(() => resolve([]), FILES_TIMEOUT_MS);
-      c.loadInfo(hash).then(
-        (i) => {
-          clearTimeout(timer);
-          resolve(c.files(i));
-        },
-        () => {
-          clearTimeout(timer);
-          resolve([]);
-        },
-      );
-    });
-  };
-
   const replace = (r: SourceResult) => {
     const c = client.value;
     if (!c) {
@@ -161,37 +163,21 @@ export function BetterDialog(p: {
     setRunning(ab);
     runRef.current = ab;
     setFailure('');
-    replaceWithResult(c, p.torrent.hash, r, tvSourceContext(), {
-      abort: ab,
-      timeoutMs: TV_REPLACE_WAIT_MS,
-      deadlineMs: TV_REPLACE_WAIT_MS,
-    })
-      .catch((): ReplaceResult => ({ ok: false, error: t('monitor.replace.failed') }))
-      .then((res) => {
-        if (res.ok) {
-          return newFilesOf(res.hash).then((fresh) => {
-            try {
-              carryProgress(p.torrent.hash, p.files, res.hash, fresh);
-            } catch (e) {
-              // the replace itself is done: losing the positions must not leave the dialog stuck
-              console.warn('carryProgress failed', e);
-            }
-            runRef.current = null;
-            replaced.current = true;
-            void refreshTorrents(c).catch(() => undefined);
-            toast(t('monitor.replaceSheet.replaced', { title: tvGlyphs(shortTitle(r.Title)) }));
-            // a late replace (the dialog already closed) must not replace whatever route is on top now
-            if (!alive.current) return;
-            setRunning(null);
-            p.onReplaced(res.hash);
-          });
-        }
-        runRef.current = null;
-        if (res.cause === 'both') void refreshTorrents(c).catch(() => undefined);
+    replaceOnTv(c, p.torrent.hash, p.files, r, ab).then((res) => {
+      runRef.current = null;
+      if (res.ok) {
+        replaced.current = true;
+        toast(t('monitor.replaceSheet.replaced', { title: tvGlyphs(shortTitle(r.Title)) }));
+        // a late replace (the dialog already closed) must not replace whatever route is on top now
         if (!alive.current) return;
         setRunning(null);
-        if (res.cause !== 'cancelled') setFailure(tvGlyphs(failureOf(res, r).text));
-      });
+        p.onReplaced(res.hash);
+        return;
+      }
+      if (!alive.current) return;
+      setRunning(null);
+      if (res.cause !== 'cancelled') setFailure(tvGlyphs(failureOf(res, r).text));
+    });
   };
 
   const addNear = (r: SourceResult) => {
@@ -315,11 +301,11 @@ export function BetterDialog(p: {
             {t(waitNote ? 'tv.better.addingWait' : 'tv.better.adding')}
           </div>
         )}
-        <div class="better-follow" aria-disabled="true">
+        <Focusable focusKey="better-follow" className="better-follow" role="button" onPress={toggleFollow}>
           <span class="better-follow-label">{t('tv.better.follow')}</span>
-          <span class="muted better-follow-note">{t('tv.better.followPhone')}</span>
-          <span class="skip-switch better-follow-switch" role="switch" aria-checked={false} aria-disabled="true" />
-        </div>
+          <span class={'skip-switch better-follow-switch' + (follow ? ' on' : '')} role="switch" aria-label={t('tv.better.follow')} aria-checked={follow} />
+        </Focusable>
+        {!phoneLink.value && <div class="muted better-follow-note">{t('tv.better.followNote')}</div>}
         <div class="better-note muted">{t('tv.better.note')}</div>
         <div class="better-hints muted">{t('tv.better.hintOk') + ' · ' + t('tv.better.hintBack')}</div>
       </FocusGroup>
