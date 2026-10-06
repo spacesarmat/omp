@@ -609,7 +609,7 @@ describe('Remote for Android TV', () => {
     tvState.value = 'idle';
   });
 
-  it('the LG «Кнопки» layout: the «Пульт» header with the name and state, colour keys, Назад · Домой · Меню; no power, touchpad, channels', () => {
+  it('the LG «Кнопки» layout: the «Пульт» header with the name and state, colour keys, Назад · Домой · Меню; no power or channel keys', () => {
     mount();
     act(() => {
       tvState.value = 'connected';
@@ -621,10 +621,51 @@ describe('Remote for Android TV', () => {
     expect(el.querySelectorAll('[data-atv-remote] .m-ckey')).toHaveLength(4);
     expect(Array.from(el.querySelectorAll('.m-rkey-cap')).map((x) => x.textContent)).toEqual(['Назад', 'Домой', 'Меню']);
     expect(el.querySelector('.m-power')).toBeNull();
-    expect(el.textContent).not.toContain('Тачпад');
+    expect(Array.from(el.querySelectorAll('.m-seg [role=tab]')).map((b) => b.textContent)).toEqual(['Кнопки', 'Тачпад']);
     expect(lbl('След. серия')).toBeNull();
     expect(lbl('Пред. серия')).toBeNull();
     expect(a.warmUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('«Тачпад»: a swipe sends arrows, a tap OK, a long press Menu; the keys under the pad as on LG', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    mount();
+    click(text('Тачпад'));
+    const pad = el.querySelector('[data-atv-pad]')!;
+    expect(lbl('Назад')).toBeTruthy();
+    expect(lbl('Меню')).toBeTruthy();
+    expect(lbl('Клавиатура')).toBeTruthy();
+    // a swipe right, 100 px slowly
+    ptr(pad, 'pointerdown', 10, 10);
+    for (let i = 1; i <= 5; i++) {
+      vi.advanceTimersByTime(100);
+      ptr(pad, 'pointermove', 10 + i * 20, 10);
+    }
+    ptr(pad, 'pointerup', 110, 10);
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(a.pressButton.mock.calls.map((c) => c[0])).toEqual(['RIGHT', 'RIGHT']);
+    a.pressButton.mockClear();
+    // a tap
+    ptr(pad, 'pointerdown', 50, 50);
+    vi.advanceTimersByTime(100);
+    ptr(pad, 'pointerup', 50, 50);
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(a.pressButton.mock.calls.map((c) => c[0])).toEqual(['ENTER']);
+    a.pressButton.mockClear();
+    // a long press: Menu while held, nothing on release
+    ptr(pad, 'pointerdown', 50, 50);
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+    ptr(pad, 'pointerup', 50, 50);
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(a.pressButton.mock.calls.map((c) => c[0])).toEqual(['MENU']);
   });
 
   it('colour keys and «Меню» go to the box; «Домой» opens the OMP catalog', () => {

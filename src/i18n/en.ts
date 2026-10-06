@@ -1617,6 +1617,7 @@ export const en: EnDict<typeof ru> = {
     },
     atvLine: 'Android TV · {state}',
     touchpadArea: 'Swipe with a finger · two fingers scroll',
+    atvPadArea: 'Swipe — arrows · tap — OK · hold — Menu · two fingers — scroll',
     typeLabel: 'Typing on the TV',
     typePlaceholder: 'Type — the text goes to the TV',
     up: 'Up',

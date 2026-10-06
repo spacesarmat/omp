@@ -32,6 +32,7 @@ import {
   pressAtvKey,
 } from '../tv/tvClient';
 import type { RemoteButton } from '../tv/ssap';
+import { KeyPump, LONG_PRESS_MS, PadArrows, pressKey, TAP_SLOP as PAD_SLOP } from '../tv/atvPad';
 import { errorMessage } from '../../../src/api/http';
 import { vibrate } from '../ui/vibrate';
 import { ScreenHeader } from '../ui/ScreenHeader';
@@ -439,6 +440,100 @@ const atvStateText = (s: string): string => {
   return map[s] || s;
 };
 
+/**
+ * «Тачпад» for Android TV: the box has no pointer, so a swipe sends arrows, a two-finger swipe Up / Down, a tap OK and a
+ * long press Menu (src/tv/atvPad.ts), one key at a time over /omp/key.
+ */
+function AtvTouchpad() {
+  const pump = useRef<KeyPump<RemoteButton> | null>(null);
+  if (!pump.current) pump.current = new KeyPump<RemoteButton>((k) => act.pressButton(k), 4, fail);
+  const arrows = useRef(new PadArrows());
+  const pts = useRef<{ [id: number]: { x: number; y: number } }>({});
+  const g = useRef<{ id: number; sx: number; sy: number; t0: number; last: number; moved: boolean; two: boolean; long: boolean } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearTimer = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(() => clearTimer, []);
+  const send = (keys: RemoteButton[]) => {
+    if (keys.length) pump.current!.push(keys);
+  };
+  const end = (e: PointerEvent) => {
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    delete pts.current[e.pointerId];
+    const s = g.current;
+    if (!s || Object.keys(pts.current).length) return;
+    clearTimer();
+    g.current = null;
+    arrows.current.reset();
+    if (e.type !== 'pointerup' || s.two) return;
+    const k = pressKey(s.moved, Date.now() - s.t0, s.long);
+    if (k) {
+      vibrate();
+      send([k]);
+    }
+  };
+  return (
+    <div
+      class="m-touchpad"
+      role="application"
+      aria-label={t('remote.touchpad.title')}
+      data-atv-pad
+      style={{ touchAction: 'none' }}
+      onPointerDown={(e) => {
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        pts.current[e.pointerId] = { x: e.clientX, y: e.clientY };
+        const s = g.current;
+        if (s) {
+          // a second finger: a scroll from now on, never a tap or a long press
+          s.two = true;
+          s.moved = true;
+          clearTimer();
+          return;
+        }
+        const now = Date.now();
+        g.current = { id: e.pointerId, sx: e.clientX, sy: e.clientY, t0: now, last: now, moved: false, two: false, long: false };
+        clearTimer();
+        timer.current = setTimeout(() => {
+          const c = g.current;
+          if (!c || c.moved || c.two) return;
+          c.long = true;
+          vibrate();
+          send(['MENU']);
+        }, LONG_PRESS_MS);
+      }}
+      onPointerMove={(e) => {
+        const s = g.current;
+        const p = pts.current[e.pointerId];
+        if (!s || !p) return;
+        const dx = e.clientX - p.x;
+        const dy = e.clientY - p.y;
+        p.x = e.clientX;
+        p.y = e.clientY;
+        const now = Date.now();
+        const dt = now - s.last;
+        s.last = now;
+        if (s.two) {
+          // the fingers' mean travel: each moving finger gives half of it with two fingers down
+          send(arrows.current.scroll(dy / Math.max(1, Object.keys(pts.current).length), dt));
+          return;
+        }
+        if (e.pointerId !== s.id || s.long) return;
+        if (!s.moved && Math.abs(e.clientX - s.sx) + Math.abs(e.clientY - s.sy) > PAD_SLOP) {
+          s.moved = true;
+          clearTimer();
+        }
+        if (s.moved) send(arrows.current.move(dx, dy, dt));
+      }}
+      onPointerUp={end}
+      onPointerCancel={end}
+    >
+      <span class="m-muted m-small">{t('remote.atvPadArea')}</span>
+    </div>
+  );
+}
+
 /** A round key with its caption under it (the LG «Кнопки» look). */
 function atvRoundKey(label: string, d: string, onClick: () => void) {
   return (
@@ -458,6 +553,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
   const [coding, setCoding] = useState(false);
+  const [mode, setMode] = useState<'buttons' | 'touchpad'>('buttons');
   // the TV forgot this phone (its token was dropped): pair again by the code
   const forgot = !tv.token || (state === 'error' && tvError.value === tvForgot());
   const found: FoundOmpTv = { ip: tv.ip, port: tv.ctlPort || ATV_PORT, name: tv.defaultName ?? tv.name, version: '' };
@@ -495,7 +591,43 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           </button>
         </div>
       )}
-      {/* the layout of the LG «Кнопки» remote: what OMP on Android TV cannot do (power, pointer, channels) is left out */}
+      <div class="m-seg" role="tablist">
+        <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>
+          {t('remote.buttons')}
+        </button>
+        <button type="button" role="tab" aria-selected={mode === 'touchpad'} class={mode === 'touchpad' ? 'on' : ''} onClick={() => setMode('touchpad')}>
+          {t('remote.touchpad.title')}
+        </button>
+      </div>
+      {mode === 'touchpad' ? (
+        <div class="m-rt" data-atv-remote>
+          <AtvTouchpad />
+          <div class="m-rb-row m-rt-keys">
+            <button type="button" class="m-key" aria-label={t('common.back')} onClick={() => press('BACK')}>
+              <Icon d={BACK} size={22} />
+            </button>
+            <button type="button" class="m-key" aria-label={t('remote.home')} onClick={() => ompKey('CATALOG')}>
+              <Icon d={HOME} size={20} /> {t('remote.home')}
+            </button>
+            <button type="button" class="m-key" aria-label={t('remote.menu')} onClick={() => press('MENU')}>
+              <Icon d={MENU} size={20} /> {t('remote.menu')}
+            </button>
+            <button type="button" class="m-key" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
+              <Icon d={KEYBOARD} size={22} />
+            </button>
+          </div>
+          <div class="m-vol m-rt-vol">
+            <button type="button" class="m-key" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
+              −
+            </button>
+            <span class="m-vol-label">{t('remote.volume')}</span>
+            <button type="button" class="m-key" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
+              +
+            </button>
+          </div>
+        </div>
+      ) : (
+      /* the layout of the LG «Кнопки» remote: what OMP on Android TV cannot do (power, pointer, channels) is left out */
       <div class="m-rb" data-atv-remote>
         <div class="m-stage m-rb-pad">
           <DPad press={press} />
@@ -535,6 +667,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           </div>
         </div>
       </div>
+      )}
       {kbd && <TvKeyboard />}
       {coding && (
         <CodeSheet
