@@ -6,7 +6,7 @@ import { client } from '../../../src/store/servers';
 import { qualityLabel } from '../../../src/monitor/quality';
 import { shortTitle } from '../../../src/lib/libraryView';
 import { displayTitle } from '../../../src/lib/torrentName';
-import { dropWorse, dupOffer } from '../lib/duplicates';
+import { dropLine, dropWorse, dupOffer } from '../lib/duplicates';
 import { deleteTorrents, reportDeleted } from '../lib/torrentActions';
 import { Sheet } from './Sheet';
 import { showToast } from './toast';
@@ -46,6 +46,10 @@ export function DuplicateSheet() {
     <Sheet label={t('series.dupTitle')} onClose={close}>
       <div class="m-sheet-title">{t('series.dupTitle')}</div>
       <p class="m-dup-text">{text}</p>
+      {/* exactly what goes and what stays, with the episode counts */}
+      <p class="m-dup-line m-small" data-dup-line>
+        {offer.drop === 'old' ? dropLine(offer.old, offer.fresh) : dropLine(offer.fresh, offer.old)}
+      </p>
       <div class="m-sheet-actions">
         <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={() => void drop()}>
           {offer.drop === 'old' ? t('series.dupDropOld') : t('series.dupDropNew')}

@@ -256,6 +256,7 @@ export const en: EnDict<typeof ru> = {
     dupDropOld: 'Delete the old one',
     dupDropNew: 'Delete the new one',
     dupKeepBoth: 'Keep both',
+    dupDropLine: 'Delete {drop}, keep {keep}',
     dupDone: 'Kept the {quality} release',
     dupHint: 'A duplicate in worse quality — keep the better one',
     dupHintButton: 'Keep the better one',

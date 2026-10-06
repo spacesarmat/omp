@@ -258,6 +258,7 @@ export const ru = {
     dupDropOld: 'Удалить старую',
     dupDropNew: 'Удалить новую',
     dupKeepBoth: 'Оставить обе',
+    dupDropLine: 'Удалить {drop}, оставить {keep}',
     dupDone: 'Оставлена раздача {quality}',
     dupHint: 'Есть дубль в худшем качестве — оставить лучшую',
     dupHintButton: 'Оставить лучшую',

@@ -1298,3 +1298,4 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-sheet-actions { display: flex; flex-direction: column; gap: 8px; }
 .m-dup-hint { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel); }
 .m-dup-hint span { flex: 1; min-width: 0; }
+.m-dup-line { display: block; margin-top: 4px; color: var(--muted); }

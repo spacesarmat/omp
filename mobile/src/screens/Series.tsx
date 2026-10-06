@@ -30,7 +30,7 @@ import { displayTitle } from '../../../src/lib/torrentName';
 import type { Torrent } from '../../../src/api/types';
 import { findGroup, groupLabel, NO_SEASON, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
-import { dropWorse, worseInSeason } from '../lib/duplicates';
+import { dropLine, dropWorse, worseInSeason } from '../lib/duplicates';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { ratingText } from './catalog/CatalogSearch';
@@ -411,7 +411,8 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   const keepBetter = async () => {
     const c = client.value;
     if (!c || dropping || !worse.length) return;
-    if (!window.confirm(tp('series.dupHintAsk', worse.length))) return;
+    const lines = worse.map((w) => dropLine(w.worse, w.better));
+    if (!window.confirm(tp('series.dupHintAsk', worse.length) + '\n' + lines.join('\n'))) return;
     setDropping(true);
     let failed = '';
     for (const w of worse) {
@@ -505,7 +506,14 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           {error && <LaunchError message={error} class="m-hint-warn" />}
           {worse.length > 0 && (
             <div class="m-dup-hint m-small" data-dup-hint>
-              <span>{t('series.dupHint')}</span>
+              <span>
+                {t('series.dupHint')}
+                {worse.map((w) => (
+                  <span key={w.worse.hash} class="m-muted m-dup-line" data-dup-line>
+                    {dropLine(w.worse, w.better)}
+                  </span>
+                ))}
+              </span>
               <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={dropping} onClick={() => void keepBetter()}>
                 {t('series.dupHintButton')}
               </button>

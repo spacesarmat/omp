@@ -9,7 +9,7 @@ import { parseEpisode, playableFiles } from '../../../src/lib/episodes';
 import { filterTorrents } from '../../../src/lib/librarySearch';
 import { lang, tp } from '../../../src/i18n';
 import { filesOf } from '../watch';
-import { fileEpisodes, filesHaveEpisodes } from '../../../src/lib/categoryCheck';
+import { fileEpisodes, filesHaveEpisodes, hasMainVideo, titleHasEpisodes } from '../../../src/lib/categoryCheck';
 
 /** Season 0: the torrent says nothing about its season. */
 export const NO_SEASON = 0;
@@ -50,7 +50,26 @@ export function isSeries(tor: Torrent): boolean {
   if (tor.category === 'tv') return true;
   if (tor.category === 'music') return false;
   if (tor.category === 'movie') return hasEpisodes(tor);
-  return guessCategory(displayTitle(tor)) === 'tv' || hasEpisodes(tor);
+  const files = filesOf(tor);
+  // the files decide once known: episodes, or one main video (a film named «Сезон охоты 2»)
+  if (files.length) return hasEpisodes(tor) || (titleSaysSeries(displayTitle(tor)) && !hasMainVideo(files));
+  return titleSaysSeries(displayTitle(tor));
+}
+
+/**
+ * The title says «series» with a real mark: S02 / S02E05 / 2x05, «2 сезон» / «сезон 2» / «Season 2», «серии», «сериал»,
+ * «episode». A word next to something else («Сезон охоты 2») is no mark.
+ */
+const SERIES_MARK = /(?:^|[^a-z0-9])s\d{1,2}(?:e\d{1,3})?(?![0-9])|(?:^|[^0-9])\d{1,2}x\d{1,3}(?![0-9])|\d{1,2}\s*(?:-?(?:й|ый))?\s*сезон|сериал|серии|серия|\bseries\b|\bepisodes?\b/i;
+/** «Сезон 2», «Season 2», «2nd Season»: also a film's name («Open Season 2 (2008)»), so only without a year. */
+const WEAK_SEASON = /сезон[ыа]?\s*\d|season\s*\d|\d{1,2}(?:st|nd|rd|th)?\s*season/i;
+const YEAR = /(?:^|[^0-9])(?:19|20)\d\d(?![0-9])/;
+
+export function titleSaysSeries(title: string): boolean {
+  const t = title || '';
+  if (titleHasEpisodes(t)) return true;
+  if (guessCategory(t) !== 'tv') return false;
+  return SERIES_MARK.test(t) || (WEAK_SEASON.test(t) && !YEAR.test(t));
 }
 
 /** The grouping key of a series torrent; '' for a film or a title with no name. */
