@@ -72,7 +72,7 @@ function seasonRows(g: SeriesGroup, season: number): FileRow[] {
       out.push({ tor: m, file: f, episode: e.episode, code: episodeCode(s, e.episode) });
     });
   });
-  return out.sort((a, b) => {
+  return dedupe(out).sort((a, b) => {
     if (a.episode !== b.episode) {
       if (a.episode === null) return 1;
       if (b.episode === null) return -1;
@@ -80,6 +80,33 @@ function seasonRows(g: SeriesGroup, season: number): FileRow[] {
     }
     return naturalCompare(a.file.path, b.file.path);
   });
+}
+
+const hasProgress = (r: FileRow) => isWatched(r.tor.hash, r.file.id) || resumePosition(r.tor.hash, r.file.id) > 0;
+
+/**
+ * One row per episode when several torrents hold the same season: the copy with progress (watched or started) wins,
+ * else the newest torrent's. Files without an episode number all stay.
+ */
+function dedupe(rows: FileRow[]): FileRow[] {
+  const best: { [n: number]: FileRow } = {};
+  const out: FileRow[] = [];
+  rows.forEach((r) => {
+    if (r.episode === null) {
+      out.push(r);
+      return;
+    }
+    const cur = best[r.episode];
+    if (!cur) {
+      best[r.episode] = r;
+      return;
+    }
+    const a = hasProgress(r);
+    const b = hasProgress(cur);
+    if ((a && !b) || (a === b && (r.tor.timestamp || 0) > (cur.tor.timestamp || 0))) best[r.episode] = r;
+  });
+  Object.keys(best).forEach((k) => out.push(best[+k]));
+  return out;
 }
 
 /** The season shown first: the one watched last, else the newest. */
@@ -187,7 +214,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   };
   const eps = useEpisodes(group, season);
 
-  const rows = useMemo(() => seasonRows(group, season), [group, season]);
+  const rows = seasonRows(group, season); // progress decides which copy of an episode is shown
   const target = nextRow(rows);
   const members = seasonMembers(group, season);
   const releases = members.length ? members : group.members;
@@ -284,7 +311,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
         </div>
       </div>
       {chips.length > 0 && (
-        <FocusGroup focusKey="SERIES-SEASONS" className="series-seasons">
+        <FocusGroup focusKey="SERIES-SEASONS" className="series-seasons" preferredChildFocusKey={'season-' + season}>
           {chips.map((n) => {
             const soon = future.filter((u) => u.number === n)[0];
             let sub: string;

@@ -13,7 +13,7 @@ import { servers, activeServerId, addServer, setActiveServer } from '../../src/s
 import { torrents, resetLibrary } from '../../src/store/library';
 import { currentRoute, routeStack } from '../../src/ui/nav';
 import { dispatchKey } from '../../src/ui/keys';
-import { markWatched } from '../../src/store/progress';
+import { markWatched, saveProgress } from '../../src/store/progress';
 import { mockFetch } from '../helpers/fetchMock';
 import { setCatalogProvider } from '../../src/catalog/activeCatalog';
 import { resetSeriesMatches } from '../../src/lib/seriesMatch';
@@ -190,5 +190,38 @@ describe('TV series screen', () => {
     act(() => { dispatchKey('red', new KeyboardEvent('keydown')); });
     await flush();
     expect(markWatched).toHaveBeenCalledWith('s2', 2);
+  });
+
+  it('shows one row per episode when two torrents hold the same season', async () => {
+    const other = { ...season(2), hash: 's2b', timestamp: 5 };
+    torrents.value = (fixture as any[]).concat(other) as any;
+    // S02E01 watched in the older release: that copy stays; S02E02 comes from the newer one
+    saveProgress('s2', 1, 100, 100);
+    const host = await mount(2);
+    const rows = host.querySelectorAll('.ep-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].getAttribute('data-fk')).toBe('ep-s2-1');
+    expect(rows[1].getAttribute('data-fk')).toBe('ep-s2b-2');
+    const chip = host.querySelector('[data-fk="season-2"]')!;
+    expect(text(chip.querySelector('.chip-sub'))).toBe('1 из 2');
+    const watch = host.querySelector('[data-fk="series-watch"]') as HTMLElement;
+    expect(text(watch)).toContain('S02E02');
+    act(() => { watch.click(); });
+    await flush();
+    const r = currentRoute.value as any;
+    expect(r.name).toBe('player');
+    expect(r.queue[r.index].hash).toBe('s2b');
+    expect(r.queue[r.index].fileIndex).toBe(2);
+  });
+
+  it('keeps the chosen season when focus moves into the seasons row', async () => {
+    const host = await mount(2);
+    act(() => setFocus('series-watch'));
+    await flush();
+    act(() => setFocus('SERIES-SEASONS'));
+    await flush();
+    expect(host.querySelector('.season-chip.focused')!.getAttribute('data-fk')).toBe('season-2');
+    expect(host.querySelector('.season-chip.on')!.getAttribute('data-fk')).toBe('season-2');
+    expect(text(host.querySelector('.ep-row .ep'))).toBe('S02E01');
   });
 });
