@@ -81,7 +81,7 @@ class MainActivity : BridgeActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (!tvMode) return super.dispatchKeyEvent(event)
-        val code = WEB_KEYS[event.keyCode] ?: return super.dispatchKeyEvent(event)
+        val code = TvKeys.webCode(event.keyCode) ?: return super.dispatchKeyEvent(event)
         val web = bridge?.webView ?: return super.dispatchKeyEvent(event)
         if (event.action == KeyEvent.ACTION_DOWN) web.evaluateJavascript(jsKey(code), null)
         return true
@@ -102,24 +102,6 @@ class MainActivity : BridgeActivity() {
 
     companion object {
         private const val BACK_CODE = 461
-
-        /**
-         * Media key → webOS key code understood by the TV interface (src/platform/keys.ts).
-         * Back is not here: it goes through the OnBackPressed callback only.
-         */
-        private val WEB_KEYS = mapOf(
-            KeyEvent.KEYCODE_MEDIA_PLAY to 415,
-            KeyEvent.KEYCODE_MEDIA_PAUSE to 19,
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE to 179,
-            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD to 417,
-            KeyEvent.KEYCODE_MEDIA_REWIND to 412,
-            // CH+ / CH− are Page Up / Page Down (33 / 34): chapters in the player; ⏭ / ⏮ are next / previous episode
-            KeyEvent.KEYCODE_CHANNEL_UP to 33,
-            KeyEvent.KEYCODE_CHANNEL_DOWN to 34,
-            KeyEvent.KEYCODE_MEDIA_NEXT to 78,
-            KeyEvent.KEYCODE_MEDIA_PREVIOUS to 80,
-            KeyEvent.KEYCODE_MEDIA_STOP to 413,
-        )
 
         /** window.__ompKey (src/platform/androidKeys.ts) answers true when the page handled the key. */
         private fun jsKey(code: Int) = "(function(){return !!(window.__ompKey && window.__ompKey($code));})()"
