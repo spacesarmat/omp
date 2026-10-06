@@ -106,7 +106,8 @@ describe('Library', () => {
     await flush();
     const cards = el.querySelectorAll('.m-grid .m-card');
     expect(cards.length).toBe(3);
-    expect(cards[0].querySelector('.m-card-title')!.textContent).toBe('Starbound Frontier · 2 сезон');
+    expect(cards[0].querySelector('.m-card-title')!.textContent).toBe('Starbound Frontier');
+    expect(cards[0].querySelector('.m-card-meta')!.textContent).toBe('2 сезон');
     expect(cards[0].textContent).toContain('2.0 GB');
     expect(cards[1].querySelector('.m-badge')!.textContent).toBe('4K');
   });
@@ -133,7 +134,7 @@ describe('Library', () => {
     expect(seg.parentElement).toBe(head);
   });
 
-  it('shows short titles with a meta line in every view and in the search results', async () => {
+  it('shows short titles, the season and episodes on the line under them, in every view and in the search results', async () => {
     const list: Torrent[] = [
       { hash: 's1', title: 'Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 10 (Алик Сахаров) [2026, США, WEB-DL 1080p]', category: 'tv', stat: 3, torrent_size: 3, timestamp: 3 },
       { hash: 's2', title: 'Человек-паук: Новый день / Spider-Man: Brand New Day (2026) WEB-DL 1080p', category: 'movie', stat: 3, torrent_size: 2, timestamp: 2 },
@@ -142,14 +143,15 @@ describe('Library', () => {
     torrents.value = list;
     listSpy.mockResolvedValue(list);
     updateSettings({ librarySort: 'new' });
-    const want = ['Темная материя · 2 сезон · серии 1–6 из 10', 'Человек-паук: Новый день · 2026', 'Мой любимый фильм'];
+    const want = ['Темная материя', 'Человек-паук: Новый день', 'Мой любимый фильм'];
     for (const view of ['large', 'small', 'list', 'compact'] as const) {
       updateSettings({ libraryView: view });
       mount();
       await flush();
       const sel = view === 'compact' ? '.m-crow-title' : '.m-card-title';
       expect(Array.from(el.querySelectorAll(sel)).map((n) => n.textContent), view).toEqual(want);
-      expect(el.querySelector('.m-title-meta')!.textContent).toBe(' · 2 сезон · серии 1–6 из 10');
+      expect(Array.from(el.querySelectorAll('.m-tile-meta')).map((n) => n.textContent), view).toEqual(['2 сезон · серии 1–6 из 10', '2026']);
+      expect(el.querySelector('.m-title-meta'), view).toBeNull();
       act(() => render(null, el));
     }
     updateSettings({ libraryView: 'large' });
@@ -157,7 +159,7 @@ describe('Library', () => {
     libraryQuery.value = 'spider';
     mount();
     await flush();
-    expect(Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent)).toEqual(['Человек-паук: Новый день · 2026']);
+    expect(Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent)).toEqual(['Человек-паук: Новый день']);
   });
 
   it('English: the meta line is translated', async () => {
@@ -170,7 +172,8 @@ describe('Library', () => {
     onTestFinished(() => applyLanguageSetting('ru'));
     mount();
     await flush();
-    expect(el.querySelector('.m-card-title')!.textContent).toBe('Темная материя · season 2 · episodes 1–6 of 10');
+    expect(el.querySelector('.m-card-title')!.textContent).toBe('Темная материя');
+    expect(el.querySelector('.m-card-meta')!.textContent).toBe('season 2 · episodes 1–6 of 10');
     expect(Array.from(el.querySelectorAll('.m-lib-head [role=tab]')).map((b) => b.textContent)).toEqual(['Mine', 'Discover']);
   });
 

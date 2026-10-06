@@ -197,14 +197,14 @@ describe('seasons to come and tile badges', () => {
     expect(upcomingSeasons({ ...SHOW, nextEpisode: { season: 2, episode: 7, airDate: '2026-10-12' } }, NOW)).toEqual([]);
   });
 
-  it('«новая серия 12.10» within 30 days, else «новый сезон» for a released season the library lacks', () => {
-    expect(tileBadge({ ...SHOW, nextEpisode: { season: 2, episode: 7, airDate: '2026-10-12' } }, [1, 2], NOW)).toBe('новая серия 12.10');
+  it('«новая серия 12 окт.» (the date like the calendar and «Обзор» tiles) within 30 days, else «новый сезон» for a released season the library lacks', () => {
+    expect(tileBadge({ ...SHOW, nextEpisode: { season: 2, episode: 7, airDate: '2026-10-12' } }, [1, 2], NOW)).toBe('новая серия 12 окт.');
     expect(tileBadge({ ...SHOW, nextEpisode: { season: 3, episode: 1, airDate: '2026-12-12' } }, [1, 2], NOW)).toBe('');
     expect(tileBadge(STAR_SHOW, [2], NOW)).toBe('новый сезон');
     expect(tileBadge(STAR_SHOW, [3], NOW)).toBe('');
     expect(tileBadge(STAR_SHOW, [0], NOW)).toBe('');
     applyLanguageSetting('en');
-    expect(tileBadge({ ...SHOW, nextEpisode: { season: 2, episode: 7, airDate: '2026-10-12' } }, [1, 2], NOW)).toBe('new episode 10/12');
+    expect(tileBadge({ ...SHOW, nextEpisode: { season: 2, episode: 7, airDate: '2026-10-12' } }, [1, 2], NOW)).toBe('new episode Oct 12');
     expect(tileBadge(STAR_SHOW, [2], NOW)).toBe('new season');
   });
 });
@@ -323,12 +323,42 @@ describe('«Мои» tiles', () => {
     mount(<Library />);
     await flush();
     expect(badges()).toEqual([
-      { anchor: 'g:' + darkKey(), text: 'новая серия 12.10' },
+      { anchor: 'g:' + darkKey(), text: 'новая серия 12 окт.' },
       { anchor: 'st', text: '' },
     ]);
     // no film badge, and no lookup for the tile not in view
     expect(search).toHaveBeenCalledTimes(1);
     expect(cachedSeriesMatch('starbound frontier')).toBeUndefined();
+  });
+
+  it('a matched series tile is named by TMDB; its season and episodes go under the name, never into it', async () => {
+    const LONE: Torrent = {
+      hash: 'dm', title: 'Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 10 (Алик Сахаров) [2024, США, WEB-DL 1080p]',
+      category: 'tv', stat: 3, torrent_size: GB, timestamp: 9, data: files(['S02E01.mkv', 'S02E02.mkv']),
+    };
+    torrents.value = [LONE];
+    vi.spyOn(TorrServerClient.prototype, 'list').mockImplementation(async () => [LONE]);
+    fake(SHOW);
+    mount(<Library />);
+    await flush();
+    const tile = () => el!.querySelector('[data-anchor="dm"]')!;
+    // not matched yet: the short name from the torrent title
+    expect(tile().querySelector('.m-card-title')!.textContent).toBe('Темная материя');
+    expect(tile().querySelector('.m-card-meta')!.textContent).toBe('2 сезон · серии 1–6 из 10');
+    act(() => showTile((e) => e.getAttribute('data-anchor') === 'dm'));
+    await flush();
+    expect(tile().querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
+    expect(tile().querySelector('.m-card-meta')!.textContent).toBe('2 сезон · серии 1–6 из 10');
+    // the grouped series card too: the TMDB name, the count only on the poster badge
+    torrents.value = [S1, S2];
+    vi.spyOn(TorrServerClient.prototype, 'list').mockImplementation(async () => [S1, S2]);
+    await matchSeries(darkGroup());
+    act(() => render(null, el!));
+    mount(<Library />);
+    await flush();
+    const card = el!.querySelector('.m-series-card')!;
+    expect(card.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
+    expect(card.querySelector('.m-card-meta')).toBeNull();
   });
 
   it('a tile in view is looked up once, then shows its badge', async () => {

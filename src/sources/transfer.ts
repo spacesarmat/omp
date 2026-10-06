@@ -26,7 +26,7 @@ import { clearHealth, getHealth, isCloudflareBypassOn, isSourceOn, setCloudflare
 import { normalizeFlareUrl, setFlareSolverrUrl } from './flareStore';
 import type { SecretStore, Source, SourceContext, SourceHealth } from './types';
 import { updateSettings } from '../store/settings';
-import { t } from '../i18n';
+import { fmtDay, t } from '../i18n';
 import type { Lang } from '../i18n';
 
 export const TRANSFER_PATH = '/omp/sources';
@@ -739,7 +739,7 @@ function two(n: number): string {
   return (n < 10 ? '0' : '') + n;
 }
 
-/** «сегодня» / «вчера» / «03.10.2026» and «18:40» of a transfer, in local time. */
+/** «сегодня» / «вчера» / «30 сент.» (with the year from another year) and «18:40» of a transfer, in local time. */
 export function transferWhen(at: number, now: number = Date.now()): { day: string; time: string } {
   const d = new Date(at);
   const today = new Date(now);
@@ -750,6 +750,6 @@ export function transferWhen(at: number, now: number = Date.now()): { day: strin
       ? t('sources.today')
       : at >= start - 86400000 && at < start
         ? t('sources.yesterday')
-        : two(d.getDate()) + '.' + two(d.getMonth() + 1) + '.' + d.getFullYear();
+        : fmtDay(at, now);
   return { day, time: two(d.getHours()) + ':' + two(d.getMinutes()) };
 }

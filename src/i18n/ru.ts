@@ -72,8 +72,6 @@ export const ru = {
     day: '{d} {month}',
     dayTime: '{day} {time}',
     dayYear: '{day} {year}',
-    /** A short numeric day: «12.10». */
-    numeric: '{d}.{m}',
     /** Short weekday names from Sunday, space-separated. */
     weekdays: 'Вс Пн Вт Ср Чт Пт Сб',
     /** «Ср 8 окт.». */

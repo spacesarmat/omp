@@ -257,6 +257,10 @@ button, .m-btn {
 .m-crow { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0; border: none; border-bottom: 1px solid #252A35; background: none; text-align: left; color: inherit; min-width: 0; }
 .m-crow-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-crow-size { flex-shrink: 0; }
+/* a tile's season, episodes or year: under the name (on a compact row: after it), never in it */
+.m-crow-meta { flex: 0 1 auto; max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-card-meta { font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-view-small .m-card-meta { font-size: 11px; line-height: 14px; }
 .m-card { display: flex; flex-direction: column; gap: 4px; padding: 0; border: none; background: none; text-align: left; min-width: 0; }
 .m-card-title {
   margin-top: 4px;

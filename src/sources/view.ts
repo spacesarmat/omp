@@ -1,6 +1,6 @@
 // Unified search on screen: row keys, quality filter, sorting, the progress line, source states and the link to add.
 // Shared by the phone and the Android TV bundle: Chromium 53 rules (no Object.values/entries, regex without u).
-import { fmtNumber, t as tr, tp } from '../i18n';
+import { fmtDay, fmtNumber, t as tr, tp } from '../i18n';
 import { parseDate, parseSize } from './html';
 import { getSource } from './registry';
 import { ipBanText, sourcePaused } from './ipBan';
@@ -179,16 +179,10 @@ export function withCloudflareNote(note: HealthLine | null): HealthLine {
   return { text: note.text + ' · ' + cf, tone: note.tone };
 }
 
-function two(n: number): string {
-  return (n < 10 ? '0' : '') + n;
-}
-
-/** dd.mm.yyyy of the release, '' when unknown. */
-export function resultDate(r: SourceResult): string {
+/** The release day («3 окт.», «9 янв. 2025» from another year), '' when unknown. */
+export function resultDate(r: SourceResult, now: number = Date.now()): string {
   const t = dateOf(r);
-  if (!t) return '';
-  const d = new Date(t);
-  return two(d.getDate()) + '.' + two(d.getMonth() + 1) + '.' + d.getFullYear();
+  return t ? fmtDay(t, now) : '';
 }
 
 const ADDABLE = /^(magnet:\?|https?:\/\/)/i;

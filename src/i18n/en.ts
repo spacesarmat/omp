@@ -73,7 +73,6 @@ export const en: EnDict<typeof ru> = {
     day: '{month} {d}',
     dayTime: '{day}, {time}',
     dayYear: '{day}, {year}',
-    numeric: '{m}/{d}',
     /** Short weekday names from Sunday, space-separated. */
     weekdays: 'Sun Mon Tue Wed Thu Fri Sat',
     /** «Wed, Oct 8». */

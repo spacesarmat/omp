@@ -169,9 +169,9 @@ describe('names and dates', () => {
     expect(sourceName('ts-rutor')).toBe('rutor (TorrServer)');
     expect(sourceName('nope')).toBe('nope');
   });
-  it('date as dd.mm.yyyy from date or CreateDate', () => {
-    expect(resultDate(res({ date: new Date(2026, 9, 3, 12).getTime() }))).toBe('03.10.2026');
-    expect(resultDate(res({ CreateDate: '2025-01-09T10:00:00Z' }))).toBe('09.01.2025');
+  it('the release day like every other date label: «3 окт.», «9 янв. 2025» from another year', () => {
+    expect(resultDate(res({ date: new Date(2026, 9, 3, 12).getTime() }), new Date(2026, 9, 6).getTime())).toBe('3 окт.');
+    expect(resultDate(res({ CreateDate: '2025-01-09T10:00:00Z' }), new Date(2026, 9, 6).getTime())).toBe('9 янв. 2025');
     expect(resultDate(res({}))).toBe('');
   });
   it('the general hint names no site', () => {
