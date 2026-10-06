@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs, renameTv, normalizeMac, clearTvToken } from '../src/tv/tvStore';
+import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs, renameTv, normalizeMac, clearTvToken, pickActiveTv } from '../src/tv/tvStore';
 
 beforeEach(() => {
   localStorage.clear();
@@ -203,5 +203,39 @@ describe('mac', () => {
     expect(tvs.value[0].token).toBe(t2);
     reloadTvs();
     expect(tvs.value[0]).toMatchObject({ kind: 'atv', token: t2, ctlPort: 8095 });
+  });
+});
+
+describe('the TV the remote uses', () => {
+  const LG = { ip: '192.168.1.156', name: 'LG', clientKey: 'k', usedAt: 100 };
+  const DUNE = { ip: '192.168.1.191', name: 'Dune', kind: 'atv' as const, token: 'a'.repeat(32), usedAt: 200 };
+  const OLD = { ip: '192.168.1.7', name: 'Old' };
+
+  it('the active one; else the last used saved one; else the first; none only without saved TVs', () => {
+    expect(pickActiveTv([LG, DUNE], LG.ip)).toBe(LG);
+    // the active IP names no saved TV (replaced) or none is set (install assistant): the last used one
+    expect(pickActiveTv([LG, DUNE], '10.0.0.1')).toBe(DUNE);
+    expect(pickActiveTv([LG, DUNE], null)).toBe(DUNE);
+    expect(pickActiveTv([OLD, LG], null)).toBe(LG);
+    expect(pickActiveTv([OLD], null)).toBe(OLD);
+    expect(pickActiveTv([], null)).toBeNull();
+  });
+
+  it('a TV saved without being made active (install assistant) is still the remote\'s TV, and keeps its key', () => {
+    saveTv({ ip: LG.ip, name: 'LG', clientKey: 'k' }, { keepActive: true });
+    expect(activeTvIp.value).toBeNull();
+    expect(activeTv.value).toMatchObject({ ip: LG.ip, clientKey: 'k' });
+  });
+
+  it('making a TV active stamps it as used; the stamp survives a reload and an update of the TV', () => {
+    saveTv({ ip: LG.ip, name: 'LG', clientKey: 'k' });
+    saveTv({ ip: DUNE.ip, name: 'Dune', kind: 'atv', token: DUNE.token });
+    setActiveTv(DUNE.ip, 500);
+    saveTv({ ip: DUNE.ip, name: 'Dune HD', kind: 'atv' });
+    expect(tvs.value[1]).toMatchObject({ usedAt: 500, token: DUNE.token });
+    // the active value lost (as after a restore naming a TV that is gone): the Dune, last used, is the remote's TV
+    localStorage.setItem('tsp.activeTv', JSON.stringify('10.0.0.9'));
+    reloadTvs();
+    expect(activeTv.value).toMatchObject({ ip: DUNE.ip, token: DUNE.token });
   });
 });

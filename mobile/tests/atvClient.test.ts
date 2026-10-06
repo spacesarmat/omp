@@ -302,7 +302,7 @@ describe('pairing with an Android TV', () => {
     await pairAtv(FOUND, '0482');
     expect(posts('/omp/pair')).toEqual([{ code: '0482', phone: 'Телефон' }]);
     expect(tvs.value).toEqual([
-      { ip: '192.168.1.40', name: 'Гостиная', defaultName: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095 },
+      { ip: '192.168.1.40', name: 'Гостиная', defaultName: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095, usedAt: expect.any(Number) },
     ]);
     expect(activeTv.value?.ip).toBe('192.168.1.40');
     expect(tvState.value).toBe('connected');
