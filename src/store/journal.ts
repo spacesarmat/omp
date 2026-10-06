@@ -2,8 +2,8 @@
 // the torrent list first (another device may have written meanwhile) and every failure is swallowed: the journal must
 // never break playback.
 import type { Torrent } from '../api/types';
-import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, watchesBetterQuality, withQualityWatch, categoryPicked, withCategoryPicked, withWatch, supportOfList, withSupport, journalOf } from '../lib/journal';
-import { torrents } from './library';
+import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, watchesBetterQuality, withQualityWatch, categoryPicked, withCategoryPicked, withCategoryAuto, withWatch, supportOfList, withSupport, journalOf } from '../lib/journal';
+import { setCategoryWriter, torrents } from './library';
 import { noteSupport } from './support';
 import { SUPPORT_MAX_AHEAD_MS } from '../lib/donate';
 import { t } from '../i18n';
@@ -210,6 +210,38 @@ export function saveQualityWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'
 export function saveCategoryPicked(c: JournalClient, torrent: Pick<Torrent, 'hash'>): Promise<boolean> {
   return saveFlag(c, torrent, true, { read: categoryPicked, write: withCategoryPicked });
 }
+
+/**
+ * The automatic category check's write: in this torrent's write queue (after any pending journal write), from the list
+ * (never `get`, which wakes an idle torrent and may answer from a stale copy). Its current title, poster and data go
+ * back with the new category and omp.ca; a `data` that is empty or not JSON is sent empty (the stored one stays).
+ * Rejects when the torrent is gone or the server refuses.
+ */
+export function saveCategoryAuto(c: JournalClient, hash: string, category: string): Promise<void> {
+  const prev = chains[hash] || Promise.resolve();
+  const run = prev.then(() =>
+    c.list().then((all) => {
+      const tor = torrentOf(all, hash);
+      if (!tor) throw new Error(t('errors.torrentMissing'));
+      const parsed = tor.data && tor.data.trim() ? parseData(tor.data) : null;
+      const data = parsed ? serializeData(withCategoryAuto(parsed.obj, category), parsed.journal, parsed.skip) : '';
+      return c.setData({ ...tor, category }, data).then(() => {
+        torrents.value = torrents.value.map((x) => (x.hash === tor.hash ? { ...x, category, data: data || x.data } : x));
+      });
+    }),
+  );
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  chains[hash] = tail;
+  tail.then(() => {
+    if (chains[hash] === tail) delete chains[hash];
+  });
+  return run;
+}
+
+setCategoryWriter(saveCategoryAuto);
 
 /** Last watch-journal activity of a torrent (0: never played through OMP). */
 function lastActivity(data: string | undefined): number {

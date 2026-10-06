@@ -374,6 +374,18 @@ describe('replaceTorrent', () => {
     expect(omp.fut).toEqual({ a: 1 });
   });
 
+  it("keepOwn: the old release's category marks (cm, ca) stay with it", async () => {
+    const oldData = dataOf(OLD_FILES, { omp: { v: 1, h: [{ f: 1, t: 10, d: 1400, at: T0, src: 'tv' }], cm: true, ca: 'movie' } });
+    const s = setup({ existing: true, old: { data: oldData }, fresh: { category: 'tv' } });
+    const c = { ...s.c, add: vi.fn(() => Promise.resolve({ ...s.server.newhash })) } as ReplaceClient;
+    const r = await replaceTorrent(c, 'oldhash', 'magnet:?xt=urn:btih:newhash', { keepOwn: true });
+    expect(r.ok).toBe(true);
+    const omp = parseData(s.server.newhash.data)!.obj.omp as { [k: string]: unknown };
+    expect(omp.cm).toBeUndefined();
+    expect(omp.ca).toBeUndefined();
+    expect(s.server.newhash.category).toBe('tv');
+  });
+
   it('the same torrent is refused without removing anything', async () => {
     const s = setup();
     const c = { ...s.c, add: vi.fn(() => Promise.resolve({ ...s.old })) } as ReplaceClient;

@@ -2,7 +2,6 @@ import { request, apiError, HttpOptions } from './http';
 import { isStashedFile, takeStashedFile } from './torrentFiles';
 import type { Torrent, CacheState, ViewedEntry, SearchResult, FfprobeResult, ServerSettings, TmdbConfig } from './types';
 import type { TorrentFile } from '../lib/episodes';
-import { parseData, serializeData, withCategoryAuto } from '../lib/journal';
 import { t } from '../i18n';
 
 export interface ServerConfig {
@@ -120,28 +119,6 @@ export class TorrServerClient {
     return this.call<unknown>('/torrents', {
       body: { action: 'set', hash: t.hash, title: t.title || t.name || '', poster, category: t.category || '', data: '' },
     }).then(() => undefined);
-  }
-
-  /**
-   * Sets the category and records it as OMP's own (omp.ca in `data`). `set` overwrites title, poster and data, so the
-   * torrent is read again right before the write and its current ones go back (the passed title and poster when the
-   * read fails; then, and for a `data` that is empty or not JSON, `data` goes empty, which keeps the stored one).
-   * Nothing is written without a title (TorrServer would fetch the metadata itself).
-   */
-  setCategory(tor: Pick<Torrent, 'hash' | 'title' | 'poster'> & { name?: string }, category: string): Promise<void> {
-    return this.get(tor.hash).then(
-      (cur) => (cur && cur.hash ? cur : null),
-      () => null,
-    ).then((cur) => {
-      const title = (cur && (cur.title || cur.name)) || tor.title || tor.name || '';
-      if (!title) return undefined;
-      const poster = cur ? cur.poster || '' : tor.poster || '';
-      const parsed = cur && cur.data && cur.data.trim() ? parseData(cur.data) : null;
-      const data = parsed ? serializeData(withCategoryAuto(parsed.obj, category), parsed.journal, parsed.skip) : '';
-      return this.call<unknown>('/torrents', {
-        body: { action: 'set', hash: tor.hash, title, poster, category, data },
-      }).then(() => undefined);
-    });
   }
 
   /**

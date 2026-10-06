@@ -328,8 +328,14 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
         const newOmp = plainObject(base.obj[JOURNAL_KEY]);
         const obj: { [k: string]: unknown } = { ...base.obj };
         if (oldOmp || newOmp) {
+          // the old release's category marks (cm: picked by hand, ca: set by OMP) belong to its own category
+          const oldKept: { [k: string]: unknown } = { ...(oldOmp || {}) };
+          if (keepOwn) {
+            delete oldKept.cm;
+            delete oldKept.ca;
+          }
           obj[JOURNAL_KEY] = keepOwn
-            ? { ...(oldOmp || {}), ...(newOmp || {}), v: JOURNAL_VERSION }
+            ? { ...oldKept, ...(newOmp || {}), v: JOURNAL_VERSION }
             : { ...(newOmp || {}), ...(oldOmp || {}), v: JOURNAL_VERSION };
         }
         const skip = keepOwn ? base.skip || oldParsed.skip : oldParsed.skip || base.skip;

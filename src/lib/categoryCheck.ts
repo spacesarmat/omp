@@ -17,7 +17,7 @@ import { t } from '../i18n';
 const MUSIC_EXT = /\.(mp3|flac|m4a|ogg|opus|wav|ape)$/i;
 const BRACKET_NUM = /\[(\d{1,3})\]/;
 /** «Show - 07 [1080p].mkv», the usual anime naming. */
-const DASH_NUM = /\s-\s(\d{1,3})(?:v\d)?(?=[\s.\[(]|$)/;
+const DASH_NUM = /\s-\s(\d{1,3})(?!\.\d)(?:v\d)?(?=[\s.\[(]|$)/;
 /** One video of at least this share of the size is the film (the rest: extras, samples). */
 const MAIN_SHARE = 0.7;
 /** Episode files are of comparable size: at least this share of the median video. */
@@ -30,11 +30,13 @@ function sizeOf(f: TorrentFile): number {
 }
 
 /** «S01E01-E02», «S01E01-02». */
-const SE_RANGE = /s(\d{1,2})[ ._-]?e(\d{1,3})[ ._]?-[ ._]?e?(\d{1,3})(?![0-9])/i;
+const SE_RANGE = /s(\d{1,2})[ ._-]?e(\d{1,3})[ ._]?-[ ._]?(?:s\d{1,2}[ ._-]?)?e?(\d{1,3})(?![0-9])/i;
 /** «E01-E02», «EP 1-2», «ep01-02». */
 const E_RANGE = /(?:^|[^a-z])(?:ep?|episode)[ ._]?(\d{1,3})[ ._]?-[ ._]?(?:ep?)?[ ._]?(\d{1,3})(?![0-9])/i;
 /** «1-2 серия», «01-02 серии». */
 const WORD_RANGE = /(?:^|[^0-9])(\d{1,3})[ ._]?-[ ._]?(\d{1,3})[ ._]*(?:серия|серии|серий)/i;
+/** «Серии 01-02», «серия 1-2». */
+const WORD_FIRST_RANGE = /(?:серии|серия|серий)[ ._]*(\d{1,3})[ ._]?-[ ._]?(\d{1,3})(?![0-9])/i;
 /** «[01-02]», «- 01-02 [». */
 const BRACKET_RANGE = /(?:\[|\s-\s)(\d{1,3})-(\d{1,3})(?=[\]\s.\[(]|$)/;
 /** «5 серия». */
@@ -62,7 +64,7 @@ export function fileEpisodes(path: string): { season: number | null; episodes: n
     const eps = span(+m[2], +m[3]);
     if (eps) return { season: +m[1], episodes: eps };
   }
-  const ranges = [E_RANGE, WORD_RANGE, BRACKET_RANGE];
+  const ranges = [E_RANGE, WORD_RANGE, WORD_FIRST_RANGE, BRACKET_RANGE];
   for (let i = 0; i < ranges.length; i++) {
     m = ranges[i].exec(name);
     const eps = m ? span(+m[1], +m[2]) : null;
@@ -197,7 +199,7 @@ export function categoryFix(tor: Torrent, files?: TorrentFile[]): AddCategory | 
 }
 
 export interface CategoryClient {
-  /** Writes the category and records it as OMP's own (omp.ca); title, poster and data are read again first. */
+  /** Writes the category and records it as OMP's own (omp.ca); the torrent is read again first (store/journal). */
   setCategory(tor: Pick<Torrent, 'hash' | 'title' | 'poster'> & { name?: string }, category: string): Promise<void>;
 }
 
@@ -236,6 +238,8 @@ export function fixCategories(c: CategoryClient, list: Torrent[], now: number = 
       c.setCategory(tor, next).then(
         () => {
           done.push({ hash: tor.hash, category: next });
+          // OMP's own now (also when the data could not carry omp.ca): the user's next change is left alone
+          recordAutoCategory(tor.hash, next);
           log('info', 'app', t('log.categoryFixed', { title: shortTitle(displayTitle(tor)), category: addCategoryLabel(next) }));
         },
         // refused: stays checked, not asked again on every poll of this session

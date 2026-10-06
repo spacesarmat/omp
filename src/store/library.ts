@@ -73,7 +73,19 @@ export function checkCategories(c: CategoryClient, list: Torrent[]): Promise<voi
   });
 }
 
-export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<TitleClient> & Partial<CategoryClient>): Promise<Torrent[]> {
+/** How the automatic category check writes (registered by store/journal: through its per-torrent write queue). */
+export type CategoryWriter = (c: CategoryWriteClient, hash: string, category: string) => Promise<void>;
+export interface CategoryWriteClient {
+  list(): Promise<Torrent[]>;
+  setData(t: Pick<Torrent, 'hash' | 'title' | 'poster' | 'category'>, data: string): Promise<void>;
+}
+let categoryWriter: CategoryWriter | null = null;
+
+export function setCategoryWriter(w: CategoryWriter | null): void {
+  categoryWriter = w;
+}
+
+export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<TitleClient> & Partial<CategoryWriteClient>): Promise<Torrent[]> {
   if (inflight) return inflight;
   const my = gen;
   inflight = c.list().then(
@@ -92,7 +104,11 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<Titl
         })),
       );
       if (c.setTitle) repairTitles(c as TitleClient, sorted);
-      if (c.setCategory) void checkCategories(c as CategoryClient, sorted);
+      const w = categoryWriter;
+      if (w && c.setData) {
+        const wc = c as CategoryWriteClient;
+        void checkCategories({ setCategory: (tor, cat) => w(wc, tor.hash, cat) }, sorted);
+      }
       return sorted;
     },
     (e) => {

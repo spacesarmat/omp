@@ -3,11 +3,9 @@ import {
   categoryFix, decideCategory, fileEpisodes, fixCategories, recordAutoCategory, resetCategoryCheck, titleHasEpisodes, FRESH_ADD_MS,
 } from '../../src/lib/categoryCheck';
 import { categoryAuto, categoryPicked, withCategoryAuto, withCategoryPicked, serializeData } from '../../src/lib/journal';
-import { saveCategoryPicked } from '../../src/store/journal';
-import { checkCategories, refreshTorrents, resetLibrary, torrents } from '../../src/store/library';
-import { TorrServerClient } from '../../src/api/torrserver';
+import { recordWatch, saveCategoryAuto, saveCategoryPicked } from '../../src/store/journal';
+import { refreshTorrents, resetLibrary, torrents } from '../../src/store/library';
 import { logEntries, clearLog } from '../../src/lib/log';
-import { mockFetch } from '../helpers/fetchMock';
 import type { Torrent } from '../../src/api/types';
 import type { TorrentFile } from '../../src/lib/episodes';
 
@@ -148,42 +146,88 @@ describe('fixing', () => {
     expect(failing).toHaveBeenCalledTimes(1);
   });
 
-  it('the library refresh fixes and patches the shown list', async () => {
-    resetLibrary();
+  it('a fix is recorded as OMP\'s own even when the data cannot carry omp.ca, so the user\'s next change is kept', async () => {
     const setCategory = vi.fn(() => Promise.resolve());
-    await refreshTorrents({ list: () => Promise.resolve([SPIRIT, FILM]), setCategory });
-    for (let i = 0; i < 20; i++) await Promise.resolve();
-    await checkCategories({ setCategory }, []);
-    expect(setCategory).toHaveBeenCalledTimes(2);
+    const bare: Torrent = { ...FILM, hash: 'd'.repeat(40), category: '' };
+    await fixCategories({ setCategory }, [bare], NOW);
+    expect(setCategory).toHaveBeenCalledWith(bare, 'movie');
+    resetCategoryCheck();
+    // the user moved it to «Сериалы»: OMP's record says «Фильмы», so it is left alone
+    expect(categoryFix({ ...bare, category: 'tv' })).toBeNull();
+    // a refused write records nothing
+    const failing = vi.fn(() => Promise.reject(new Error('x')));
+    const other: Torrent = { ...FILM, hash: 'e'.repeat(40), category: '' };
+    await fixCategories({ setCategory: failing }, [other], NOW);
+    expect(categoryFix({ ...other, category: 'movie' })).toBeNull();
+  });
+
+  it('the library refresh fixes through the journal queue and patches the shown list', async () => {
+    resetLibrary();
+    const server: { [h: string]: Torrent } = { [SPIRIT.hash]: { ...SPIRIT }, [FILM.hash]: { ...FILM } };
+    const setData = vi.fn((tor: Torrent, data: string) => {
+      server[tor.hash] = { ...server[tor.hash], ...tor, data: data || server[tor.hash].data };
+      return Promise.resolve();
+    });
+    const list = () => Promise.resolve(Object.keys(server).map((h) => ({ ...server[h] })));
+    await refreshTorrents({ list, setData });
+    for (let i = 0; i < 40; i++) await Promise.resolve();
+    expect(setData).toHaveBeenCalledTimes(2);
+    expect(server[SPIRIT.hash].category).toBe('tv');
+    expect(categoryAuto(server[SPIRIT.hash].data)).toBe('tv');
     expect(torrents.value.filter((x) => x.hash === SPIRIT.hash)[0].category).toBe('tv');
   });
 });
 
 describe('the server writes', () => {
-  const c = new TorrServerClient({ url: '192.168.1.191:5665' });
-
-  it('setCategory reads the torrent again: its current title, poster and data go back, with omp.ca', async () => {
+  it('reads the torrent from the list right before the write: its current title, poster and data go back, with omp.ca', async () => {
     const current = { ...SPIRIT, title: 'Renamed meanwhile', poster: 'http://p/new.jpg', data: dataOf(SPIRIT_FILES, { v: 1, h: [{ f: 1, t: 50, d: 1400, at: 1, src: 'tv' }] }) };
-    const fn = mockFetch((url, init) => {
-      const body = JSON.parse(init.body);
-      return { body: body.action === 'get' ? JSON.stringify(current) : '' };
-    });
-    await c.setCategory({ hash: SPIRIT.hash, title: SPIRIT.title, poster: SPIRIT.poster }, 'tv');
-    const set = fn.mock.calls.map((x: unknown[]) => JSON.parse((x[1] as { body: string }).body)).filter((b: { action: string }) => b.action === 'set')[0];
-    expect(set.title).toBe('Renamed meanwhile');
-    expect(set.poster).toBe('http://p/new.jpg');
-    expect(set.category).toBe('tv');
-    expect(categoryAuto(set.data)).toBe('tv');
-    const back = JSON.parse(set.data);
+    const setData = vi.fn(() => Promise.resolve());
+    await saveCategoryAuto({ list: () => Promise.resolve([current]), setData }, SPIRIT.hash, 'tv');
+    const [tor, data] = setData.mock.calls[0] as unknown as [Torrent, string];
+    expect(tor.title).toBe('Renamed meanwhile');
+    expect(tor.poster).toBe('http://p/new.jpg');
+    expect(tor.category).toBe('tv');
+    expect(categoryAuto(data)).toBe('tv');
+    const back = JSON.parse(data);
     expect(back.omp.h).toHaveLength(1);
     expect(back.TorrServer.Files).toHaveLength(18);
   });
 
-  it('a failed read falls back to the passed title and poster and keeps the stored data', async () => {
-    const fn = mockFetch((url, init) => (JSON.parse(init.body).action === 'get' ? { status: 500, body: '' } : { body: '' }));
-    await c.setCategory({ hash: SPIRIT.hash, title: SPIRIT.title, poster: SPIRIT.poster }, 'tv');
-    const set = fn.mock.calls.map((x: unknown[]) => JSON.parse((x[1] as { body: string }).body)).filter((b: { action: string }) => b.action === 'set')[0];
-    expect(set).toEqual({ action: 'set', hash: SPIRIT.hash, title: SPIRIT.title, poster: 'http://p/spirit.jpg', category: 'tv', data: '' });
+  it('empty data is sent empty (the stored one stays); a gone torrent rejects', async () => {
+    const setData = vi.fn(() => Promise.resolve());
+    await saveCategoryAuto({ list: () => Promise.resolve([{ ...SPIRIT, data: '' }]), setData }, SPIRIT.hash, 'tv');
+    expect((setData.mock.calls[0] as unknown as [Torrent, string])[1]).toBe('');
+    await expect(saveCategoryAuto({ list: () => Promise.resolve([]), setData }, SPIRIT.hash, 'tv')).rejects.toBeTruthy();
+  });
+
+  it('runs after a pending journal write of the same torrent: the history entry is not lost', async () => {
+    let stored: Torrent = { ...SPIRIT, data: dataOf(SPIRIT_FILES, { v: 1, h: [] }) };
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    let first = true;
+    const c = {
+      list: () => Promise.resolve([{ ...stored }]),
+      setData: vi.fn((tor: Torrent, data: string) => {
+        const write = () => {
+          stored = { ...stored, ...tor, data: data || stored.data };
+        };
+        if (first) {
+          first = false;
+          return gate.then(write);
+        }
+        write();
+        return Promise.resolve();
+      }),
+    };
+    const watch = recordWatch(c, SPIRIT.hash, { f: 2, t: 300, d: 1400, src: 'phone' }, 5);
+    const cat = saveCategoryAuto(c, SPIRIT.hash, 'tv');
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    release();
+    await watch;
+    await cat;
+    expect(stored.category).toBe('tv');
+    expect(JSON.parse(stored.data!).omp.h).toHaveLength(1);
+    expect(categoryAuto(stored.data)).toBe('tv');
   });
 
   it('a manual pick is stored as omp.cm, the history and other keys kept', async () => {
