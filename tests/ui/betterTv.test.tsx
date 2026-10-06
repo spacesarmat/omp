@@ -26,6 +26,7 @@ import { replaceWithResult } from '../../src/monitor/replace';
 import { findUpgrades, carryProgress } from '../../src/monitor/upgrade';
 import { seriesKey } from '../../src/lib/seriesGroups';
 import type { SearchResult, Torrent } from '../../src/api/types';
+import { savePhoneLink, forgetPhoneLink } from '../../src/phone/phoneStore';
 
 beforeAll(() => {
   init({ debug: false, visualDebug: false });
@@ -135,8 +136,41 @@ describe('TV «В лучшем качестве»', () => {
     expect(names[2]).toContain('BDRip 1080p');
     expect(rows()[0].querySelector('.better-meta')!.textContent).toContain('20 GB');
     expect(rows()[0].className).toContain('focused');
-    // the follow switch is shown, disabled, pointing to the phone
-    expect(host.querySelector('.better-follow')!.textContent).toContain('в OMP на телефоне');
+    // the follow switch is on by default; without a phone a note says who reports
+    expect(host.querySelector('.better-follow [role="switch"]')!.getAttribute('aria-checked')).toBe('true');
+    expect(host.querySelector('.better-follow-note')!.textContent).toBe('Сообщать о лучшем качестве будет OMP на телефоне');
+  });
+
+  it('«Следить за лучшим качеством» is a switch: OK writes omp.q and keeps the focus', async () => {
+    const setData = vi.spyOn(TorrServerClient.prototype, 'setData').mockImplementation((tor: any, data: string) => {
+      torrents.value = torrents.value.map((x) => (x.hash === tor.hash ? { ...x, data } : x));
+      return Promise.resolve();
+    });
+    await openOnTorrent();
+    const sw = () => host.querySelector('[data-fk="better-follow"] [role="switch"]')!;
+    expect(sw().getAttribute('aria-checked')).toBe('true');
+    act(() => setFocus('better-follow'));
+    await click(host.querySelector('[data-fk="better-follow"]')!);
+    await flush();
+    expect(setData).toHaveBeenCalledTimes(1);
+    expect(setData.mock.calls[0][0].hash).toBe(H);
+    expect(JSON.parse(setData.mock.calls[0][1] as string).omp.q).toBe(false);
+    expect(sw().getAttribute('aria-checked')).toBe('false');
+    expect(getCurrentFocusKey()).toBe('better-follow');
+    await click(host.querySelector('[data-fk="better-follow"]')!);
+    await flush();
+    expect(setData).toHaveBeenCalledTimes(2);
+    expect((JSON.parse(setData.mock.calls[1][1] as string).omp || {}).q).toBeUndefined();
+    expect(sw().getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('«Следить за лучшим качеством» shows the stored state; no note with a linked phone', async () => {
+    torrents.value = [{ ...film, data: JSON.stringify({ omp: { q: false } }) }];
+    savePhoneLink({ url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Phone' });
+    await openOnTorrent();
+    expect(host.querySelector('[data-fk="better-follow"] [role="switch"]')!.getAttribute('aria-checked')).toBe('false');
+    expect(host.querySelector('.better-follow-note')).toBeNull();
+    forgetPhoneLink();
   });
 
   it('replaces the torrent and opens the new one', async () => {

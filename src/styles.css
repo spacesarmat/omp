@@ -150,6 +150,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .series-meta { font-size: 26px; margin-bottom: 14px; }
 .series-overview { max-width: 1000px; margin: 0 0 24px; font-size: 25px; line-height: 1.4; color: #c9cdd8; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .series-actions { margin-top: 8px; }
+.series-follow-state { margin-left: 8px; font-weight: 700; }
+.series-follow-note { font-size: 21px; margin-top: 12px; }
 /* one row that scrolls sideways (the focused chip is kept whole); the padding keeps the focus ring unclipped */
 .series-seasons { position: relative; overflow: hidden; margin: 0 -12px 12px; padding: 12px; }
 .series-seasons-row { display: flex; flex-wrap: nowrap; white-space: nowrap; }
@@ -646,8 +648,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .better-name { font-size: 23px; color: #c3c8d4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .better-meta { width: 380px; margin-left: 24px; font-size: 22px; color: var(--muted); text-align: right; flex-shrink: 0; }
 .better-busy { font-size: 22px; margin: 6px 0 4px; }
-.better-follow { display: flex; align-items: center; margin-top: 20px; opacity: .55; font-size: 23px; }
-.better-follow-label { margin-right: 14px; }
-.better-follow-note { flex: 1; font-size: 21px; }
+.better-follow { display: flex; align-items: center; margin-top: 16px; min-height: 58px; padding: 0 16px; border-radius: 12px; font-size: 23px; }
+.better-follow.focused { background: var(--panel2); transform: none; }
+.better-follow-label { flex: 1; margin-right: 14px; }
+.better-follow-note { font-size: 21px; margin: 4px 16px 0; }
 .better-note { font-size: 21px; margin-top: 12px; }
 .better-hints { font-size: 21px; margin-top: 8px; }

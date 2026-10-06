@@ -3,6 +3,7 @@
 // on a row asks «Заменить» / «Добавить рядом» / «Отмена». «Заменить» replaces the torrent in place (history, skip
 // settings, category and this TV's watch positions carry over); «Добавить рядом» adds the release and keeps the old one.
 // Back closes the dialog (stopping the search) or stops a running replace. Keys under the dialog are blocked.
+// «Следить за лучшим качеством» switches omp.q of the torrent in TorrServer (OMP on the phone reads it).
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { doesFocusableExist, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { FocusGroup, Focusable, Button, Spinner } from './components';
@@ -28,6 +29,9 @@ import { findUpgrades, isLowSeeds, upgradeKind, upgradeQuery, type UpgradeOutcom
 import { coverageNote, failureOf, qualityOrUnknown } from '../monitor/upgradeText';
 import { resolveLink, resultKey, seedsText, sourceName } from '../sources/view';
 import { tvSourceContext } from '../sources/tvContext';
+import { loadQualityWatch, saveQualityWatch } from '../store/journal';
+import { watchesBetterQuality } from '../lib/journal';
+import { phoneLink } from '../phone/phoneStore';
 import type { SourceResult } from '../sources/types';
 
 /** The torrent as the upgrade search sees it. */
@@ -70,6 +74,31 @@ export function BetterDialog(p: {
   const replaced = useRef(false);
   const afterReplace = useRef(p.focusAfterReplace);
   afterReplace.current = p.focusAfterReplace;
+  const [follow, setFollow] = useState(() => watchesBetterQuality(p.torrent.data));
+  const readFollow = () => {
+    const c = client.value;
+    if (!c) return;
+    loadQualityWatch(c, p.torrent.hash).then(
+      (on) => {
+        if (alive.current) setFollow(on);
+      },
+      () => undefined,
+    );
+  };
+  useEffect(readFollow, []);
+  const toggleFollow = () => {
+    const c = client.value;
+    if (!c) {
+      toast(t('errors.noServerSelected'), 'error');
+      return;
+    }
+    const next = !follow;
+    setFollow(next);
+    saveQualityWatch(c, p.torrent, next).catch((e) => {
+      toast(tvGlyphs(errorMessage(e)), 'error');
+      readFollow();
+    });
+  };
 
   useEffect(() => {
     const prev = getCurrentFocusKey() || '';
@@ -272,11 +301,11 @@ export function BetterDialog(p: {
             {t(waitNote ? 'tv.better.addingWait' : 'tv.better.adding')}
           </div>
         )}
-        <div class="better-follow" aria-disabled="true">
+        <Focusable focusKey="better-follow" className="better-follow" role="button" onPress={toggleFollow}>
           <span class="better-follow-label">{t('tv.better.follow')}</span>
-          <span class="muted better-follow-note">{t('tv.better.followPhone')}</span>
-          <span class="skip-switch better-follow-switch" role="switch" aria-checked={false} aria-disabled="true" />
-        </div>
+          <span class={'skip-switch better-follow-switch' + (follow ? ' on' : '')} role="switch" aria-label={t('tv.better.follow')} aria-checked={follow} />
+        </Focusable>
+        {!phoneLink.value && <div class="muted better-follow-note">{t('tv.better.followNote')}</div>}
         <div class="better-note muted">{t('tv.better.note')}</div>
         <div class="better-hints muted">{t('tv.better.hintOk') + ' · ' + t('tv.better.hintBack')}</div>
       </FocusGroup>

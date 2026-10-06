@@ -19,6 +19,7 @@ import { setCatalogProvider } from '../../src/catalog/activeCatalog';
 import { resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { resetEpisodeNames } from '../../src/lib/episodeNames';
 import { seriesKey } from '../../src/lib/seriesGroups';
+import { savePhoneLink, forgetPhoneLink } from '../../src/phone/phoneStore';
 // @ts-ignore node builtin, no @types/node in this project
 import { readFileSync } from 'node:fs';
 
@@ -126,6 +127,65 @@ async function mount(season?: number) {
 const text = (el: Element | null) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
 
 describe('TV series screen', () => {
+  describe('«Следить за сериями»', () => {
+    afterEach(() => forgetPhoneLink());
+
+    // a TorrServer that keeps the data of each torrent and records every «set»
+    function server(data: { [hash: string]: string }) {
+      const sets: { hash: string; data: string }[] = [];
+      mockFetch((url, init) => {
+        if (url.indexOf('/torrents') < 0) return { body: '[]' };
+        const b = JSON.parse(init.body || '{}');
+        if (b.action === 'set') {
+          sets.push({ hash: b.hash, data: b.data });
+          data[b.hash] = b.data;
+          return { body: '{}' };
+        }
+        return { body: JSON.stringify(fixture.map((x) => ({ ...x, data: data[x.hash] || '' }))) };
+      });
+      return sets;
+    }
+    const press = async (host: HTMLElement) => {
+      act(() => { (host.querySelector('[data-fk="series-follow"]') as HTMLElement).click(); });
+      await flush();
+    };
+
+    it('is a switch, on by default, that writes omp.w for every torrent of the series', async () => {
+      const sets = server({});
+      const host = await mount(2);
+      const btn = host.querySelector('[data-fk="series-follow"]') as HTMLElement;
+      expect(text(btn)).toBe('Следить за сериями: вкл');
+      expect(btn.querySelector('[role="switch"]')!.getAttribute('aria-checked')).toBe('true');
+      await press(host);
+      expect(text(btn)).toBe('Следить за сериями: выкл');
+      expect(sets.map((x) => x.hash).sort()).toEqual(['s1', 's2']);
+      sets.forEach((x) => expect(JSON.parse(x.data).omp.w).toBe(false));
+      await press(host);
+      expect(text(btn)).toBe('Следить за сериями: вкл');
+      expect(sets.length).toBe(4);
+      sets.slice(2).forEach((x) => expect((JSON.parse(x.data).omp || {}).w).toBeUndefined());
+    });
+
+    it('shows the stored state and keeps the focus on the switch', async () => {
+      server({ s1: JSON.stringify({ omp: { w: false } }), s2: JSON.stringify({ omp: { w: false } }) });
+      const host = await mount(2);
+      expect(text(host.querySelector('[data-fk="series-follow"]'))).toBe('Следить за сериями: выкл');
+      act(() => setFocus('series-follow'));
+      await press(host);
+      expect(getCurrentFocusKey()).toBe('series-follow');
+      expect(text(host.querySelector('[data-fk="series-follow"]'))).toBe('Следить за сериями: вкл');
+    });
+
+    it('the phone note shows only without a linked phone', async () => {
+      server({});
+      const host = await mount(2);
+      expect(text(host.querySelector('.series-follow-note'))).toBe('Сообщать о новых сериях будет OMP на телефоне');
+      savePhoneLink({ url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Phone' });
+      await flush();
+      expect(host.querySelector('.series-follow-note')).toBeNull();
+    });
+  });
+
   it('shows the TMDB title and the status pill', async () => {
     const host = await mount();
     expect(text(host.querySelector('.series-hero h1'))).toBe('Тёмная материя');
