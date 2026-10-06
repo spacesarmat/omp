@@ -213,8 +213,11 @@ describe('TV screens in English', () => {
     mount(h(FaqScreen, {}));
     await flush();
     const text = host.textContent || '';
-    expect(host.querySelectorAll('.faq-list .list-item').length).toBeGreaterThan(0);
+    expect(host.querySelectorAll('.faq-list .faq-q').length).toBeGreaterThan(0);
     expect(text).toContain('Help');
+    expect(text).toContain('Installation');
+    expect(text).toContain('◀ ▶ — section');
+    expect(host.querySelector('.hints')!.textContent).toBe('▲ ▼ — question · ◀ ▶ — section · Back — to settings');
     expect(text).not.toMatch(CYR);
   });
 

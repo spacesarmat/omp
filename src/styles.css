@@ -441,15 +441,29 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .marks-backdrop { position: fixed; }
 
 /* FAQ */
-/* the page itself does not scroll here: the list and the answer each scroll in a column of fixed height (Chromium 53 has no sticky) */
-.faq-cols { display: flex; align-items: stretch; height: calc(100vh - 290px); }
-.faq-list { width: 46%; margin-right: 40px; height: 100%; overflow-y: auto; overflow-x: hidden; }
+/* a fixed 1920x1080 layout: the page does not scroll, only the question list does (Chromium 53 has no sticky) */
+.screen.faq { overflow: hidden; }
+.faq h1 { position: absolute; left: 80px; top: 44px; margin: 0; font-size: 52px; }
+.faq-chips { position: absolute; left: 80px; right: 80px; top: 132px; display: flex; align-items: center; }
+.faq-chip { font-size: 24px; padding: 10px 24px; border-radius: 24px; margin-right: 12px; background: var(--panel); color: var(--muted); white-space: nowrap; }
+.faq-chip.on { background: var(--text); color: var(--bg); font-weight: 700; }
+.faq-chips-hint { font-size: 22px; color: var(--muted); white-space: nowrap; }
+.faq-list { position: absolute; left: 80px; top: 224px; width: 700px; bottom: 120px; padding: 18px; background: #13161c; border-radius: 18px; overflow-y: auto; overflow-x: hidden; }
 .faq-list::-webkit-scrollbar { display: none; }
-.faq-section h3 { margin: 24px 0 12px; color: var(--muted); font-size: 24px; }
-.faq-answer { flex: 1; height: 100%; overflow-y: auto; font-size: 26px; }
-.faq-answer::-webkit-scrollbar { display: none; }
-.faq-answer h2 { margin-top: 0; }
-.faq-line { margin: 0 0 12px; line-height: 1.4; word-break: break-word; }
-.faq-more { color: var(--muted); }
-.faq-qr { margin-top: 24px; }
-.faq-qr .qr { display: block; margin-bottom: 12px; }
+.faq-q { font-size: 26px; line-height: 1.3; padding: 16px 22px; border-radius: 12px; margin-bottom: 8px; color: #c3c8d4; }
+.faq-q.focused { transform: none; background: var(--panel2); color: var(--text); box-shadow: inset 0 0 0 3px var(--focus); font-weight: 500; }
+.faq-answer { position: absolute; left: 820px; right: 80px; top: 224px; bottom: 120px; padding: 40px 48px; background: var(--panel); border-radius: 18px; display: flex; flex-direction: column; }
+.faq-answer h2 { flex-shrink: 0; margin: 0 0 22px; font-size: 38px; font-weight: 700; color: #ffffff; line-height: 1.2; }
+.faq-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.faq-body::-webkit-scrollbar { display: none; }
+.faq-short { font-size: 28px; line-height: 1.5; }
+.faq-more { font-size: 26px; line-height: 1.5; color: #b6bccb; margin-top: 22px; }
+.faq-line { margin: 0 0 10px; word-break: break-word; }
+.faq-steps { margin: 0 0 10px; padding-left: 34px; }
+.faq-steps li { margin-bottom: 10px; word-break: break-word; }
+.faq-qr { flex-shrink: 0; display: flex; align-items: center; margin-top: 24px; }
+.faq-qr .qr { display: block; flex-shrink: 0; width: 200px; height: 200px; background: #ffffff; border-radius: 12px; margin-right: 28px; }
+.faq-qr-title { font-size: 26px; font-weight: 500; }
+.faq-qr-sub { font-size: 22px; color: var(--muted); margin-top: 6px; }
+.faq .hints { font-size: 24px; }
+.faq-phone { flex-shrink: 0; margin-top: 24px; font-size: 24px; color: var(--muted); }

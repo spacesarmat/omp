@@ -1683,7 +1683,11 @@ export const en: EnDict<typeof ru> = {
     sec: { install: 'Installation', connect: 'Connecting', player: 'Player', trouble: 'If something does not work', setup: 'Search and setup', about: 'About the project', log: 'Log and backup', news: 'New and subscriptions' },
     fromTv: 'Chosen by the connected TV · {name}',
     hintBack: 'Back — to settings',
+    hintQuestion: '▲ ▼ — question',
+    hintSection: '◀ ▶ — section',
     scanToOpen: 'Point your phone camera to open the link',
+    qrCaption: 'Link from the answer',
+    fullOnPhone: 'The full answer is in OMP on the phone',
   },
   localServer: {
     name: 'This phone',
