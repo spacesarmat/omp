@@ -609,22 +609,31 @@ describe('Remote for Android TV', () => {
     tvState.value = 'idle';
   });
 
-  it('shows the name, «Android TV · подключён» and the note; no power, touchpad, channels', () => {
+  it('the LG «Кнопки» layout: the «Пульт» header with the name and state, colour keys, Назад · Домой · Меню; no power, touchpad, channels', () => {
     mount();
     act(() => {
       tvState.value = 'connected';
     });
+    expect(el.querySelector('.m-head-title')!.textContent).toBe('Пульт');
     expect(el.querySelector('.m-remote-title')!.textContent).toBe('Гостиная');
     expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · подключён');
-    expect(el.querySelector('.m-remote-note')!.textContent).toBe(
-      'Пульт управляет OMP на телевизоре. Включение ТВ и другие приложения — пультом от телевизора.',
-    );
+    expect(el.querySelector('[data-atv-remote] .m-rb-pad')).toBeTruthy();
+    expect(el.querySelectorAll('[data-atv-remote] .m-ckey')).toHaveLength(4);
+    expect(Array.from(el.querySelectorAll('.m-rkey-cap')).map((x) => x.textContent)).toEqual(['Назад', 'Домой', 'Меню']);
     expect(el.querySelector('.m-power')).toBeNull();
     expect(el.textContent).not.toContain('Тачпад');
     expect(lbl('След. серия')).toBeNull();
     expect(lbl('Пред. серия')).toBeNull();
-    expect(lbl('Домой')).toBeNull();
     expect(a.warmUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('colour keys and «Меню» go to the box; «Домой» opens the OMP catalog', () => {
+    mount();
+    for (const l of ['Красная кнопка', 'Зелёная кнопка', 'Жёлтая кнопка', 'Синяя кнопка']) click(lbl(l));
+    click(lbl('Меню'));
+    expect(a.pressButton.mock.calls).toEqual([['RED'], ['GREEN'], ['YELLOW'], ['BLUE'], ['MENU']]);
+    click(lbl('Домой'));
+    expect(a.pressAtvKey.mock.calls).toEqual([['CATALOG']]);
   });
 
   it('shows the connection state for Android TV', () => {
@@ -635,15 +644,15 @@ describe('Remote for Android TV', () => {
     expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · нет связи');
   });
 
-  it('d-pad, OK, Назад, Каталог, Сейчас играет and volume', () => {
+  it('d-pad, OK, Назад, Домой, Сейчас играет and volume', () => {
     mount();
     click(lbl('Вверх'));
     click(lbl('Влево'));
     click(text('OK'));
-    click(text('Назад'));
+    click(lbl('Назад'));
     expect(a.pressButton.mock.calls).toEqual([['UP'], ['LEFT'], ['ENTER'], ['BACK']]);
-    click(text('Каталог'));
-    click(text('Сейчас играет'));
+    click(lbl('Домой'));
+    click(lbl('Сейчас играет'));
     expect(a.pressAtvKey.mock.calls).toEqual([['CATALOG'], ['NOWPLAYING']]);
     click(lbl('Громче'));
     click(lbl('Тише'));
@@ -704,7 +713,7 @@ describe('Remote for Android TV', () => {
   it('a failed key shows a toast', async () => {
     a.pressAtvKey.mockRejectedValue(new Error('Телевизор не отвечает'));
     mount();
-    click(text('Каталог'));
+    click(lbl('Домой'));
     await flush();
     expect(toast.value).toBe('Телевизор не отвечает');
   });
@@ -841,10 +850,9 @@ describe('Remote in English', () => {
       tvState.value = 'connected';
     });
     expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · connected');
-    expect(el.querySelector('.m-remote-note')!.textContent).toBe('The remote controls OMP on the TV. Turning the TV on and other apps — with the TV’s own remote.');
-    expect(Array.from(el.querySelectorAll('.m-keyrow')[0].querySelectorAll('button')).map((b) => (b.textContent || '').trim())).toEqual(['Back', 'Catalog', 'Now playing']);
-    expect(el.querySelector('.m-vol-label')!.textContent).toBe('Vol.');
-    for (const l of ['Keyboard', 'Quieter', 'Louder', 'Up', 'Down', 'Left', 'Right']) expect(lbl(l), l).toBeTruthy();
+    expect(el.querySelector('.m-head-title')!.textContent).toBe('Remote');
+    expect(Array.from(el.querySelectorAll('.m-rkey-cap')).map((x) => x.textContent)).toEqual(['Back', 'Home', 'Menu']);
+    for (const l of ['Keyboard', 'Quieter', 'Louder', 'Up', 'Down', 'Left', 'Right', 'Now playing', 'Red button', 'Blue button']) expect(lbl(l), l).toBeTruthy();
     act(() => {
       tvState.value = 'error';
     });

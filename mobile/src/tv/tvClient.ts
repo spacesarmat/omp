@@ -783,7 +783,8 @@ interface AtvSession {
 }
 
 /** Keys the OMP control server accepts from the shared remote buttons. */
-const ATV_KEYS: RemoteButton[] = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'ENTER', 'BACK'];
+// the colour keys and «Меню» reach OMP on the box as the LG codes 403–406 and 457 (src/platform/androidRemote.ts)
+const ATV_KEYS: RemoteButton[] = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'ENTER', 'BACK', 'MENU', 'RED', 'GREEN', 'YELLOW', 'BLUE'];
 const ATV_TIMEOUT = 5000;
 /** Android brings OMP to the front asynchronously (and may refuse to from the background). */
 const ATV_FOREGROUND_CHECK_MS = 2500;

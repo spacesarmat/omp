@@ -195,6 +195,12 @@ describe('Android TV transport', () => {
     expect(posts('/omp/text')).toEqual([{ text: 'Дюна' }, { delete: 2 }, { enter: true }]);
   });
 
+  it('the colour keys and «Меню» go to /omp/key as well', async () => {
+    saveTv(ATV);
+    for (const k of ['RED', 'GREEN', 'YELLOW', 'BLUE', 'MENU'] as const) await pressButton(k);
+    expect(posts('/omp/key')).toEqual([{ name: 'RED' }, { name: 'GREEN' }, { name: 'YELLOW' }, { name: 'BLUE' }, { name: 'MENU' }]);
+  });
+
   it('LG-only actions are refused for Android TV', async () => {
     saveTv(ATV);
     await expect(pressButton('HOME')).rejects.toThrow('Недоступно на Android TV');

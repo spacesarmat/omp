@@ -1623,7 +1623,6 @@ export const en: EnDict<typeof ru> = {
     left: 'Left',
     right: 'Right',
     down: 'Down',
-    atvNote: 'The remote controls OMP on the TV. Turning the TV on and other apps — with the TV’s own remote.',
     pairAgain: 'Connect again',
     nowPlaying: 'Now playing',
     keyboard: 'Keyboard',

@@ -84,6 +84,7 @@ class ControlRouterTest {
         assertEquals(listOf("paired:Pixel"), calls)
         assertEquals(200, req("POST", "/omp/key", "{\"name\":\"ENTER\"}", t).status)
         assertEquals(400, req("POST", "/omp/key", "{\"name\":\"POWER\"}", t).status)
+        for (k in listOf("RED", "GREEN", "YELLOW", "BLUE", "MENU")) assertEquals(200, req("POST", "/omp/key", "{\"name\":\"$k\"}", t).status)
         assertEquals(405, req("GET", "/omp/key", "", t).status)
         assertEquals(400, req("POST", "/omp/key", "nope", t).status)
         assertEquals(200, req("POST", "/omp/volume", "{\"dir\":\"down\"}", t).status)
@@ -94,7 +95,7 @@ class ControlRouterTest {
         assertEquals(200, req("POST", "/omp/launch", "{\"params\":{\"torrent\":\"abc\"}}", t).status)
         assertEquals(400, req("POST", "/omp/launch", "{\"params\":\"x\"}", t).status)
         assertEquals(
-            listOf("paired:Pixel", "key:ENTER", "volume:false", "text:{\"delete\":2}", "attach:http://10.0.0.5:4000/omp/a", "launch:{\"torrent\":\"abc\"}"),
+            listOf("paired:Pixel", "key:ENTER", "key:RED", "key:GREEN", "key:YELLOW", "key:BLUE", "key:MENU", "volume:false", "text:{\"delete\":2}", "attach:http://10.0.0.5:4000/omp/a", "launch:{\"torrent\":\"abc\"}"),
             calls,
         )
     }

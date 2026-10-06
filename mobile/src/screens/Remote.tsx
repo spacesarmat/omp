@@ -439,7 +439,21 @@ const atvStateText = (s: string): string => {
   return map[s] || s;
 };
 
-/** Remote for OMP on Android TV (spec item 9): no power, touchpad or channel keys. */
+/** A round key with its caption under it (the LG «Кнопки» look). */
+function atvRoundKey(label: string, d: string, onClick: () => void) {
+  return (
+    <div class="m-rkey">
+      <button type="button" class="m-rkey-btn" aria-label={label} onClick={onClick}>
+        <Icon d={d} size={24} />
+      </button>
+      <span class="m-rkey-cap" aria-hidden="true">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/** Remote for OMP on Android TV: the LG «Кнопки» layout without power, touchpad, channel and media keys. */
 function AtvRemote({ tv }: { tv: SavedTv }) {
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
@@ -462,15 +476,16 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
   const shown = tvWaking.value && state !== 'connected' ? 'connecting' : state;
   return (
     <div class={screenClass(kbd)} data-route="remote">
-      <div class="m-lib-head">
-        <div class="m-remote-name">
-          <TvSwitch tv={tv} live={atvStateText(shown)} class="m-remote-title" />
-          <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>
-            {t('remote.atvLine', { state: atvStateText(shown) })}
+      <ScreenHeader
+        title={t('nav.remote')}
+        subtitle={
+          <span title={tv.name}>
+            <TvSwitch tv={tv} live={atvStateText(shown)} class="m-remote-title" />
+            {' · '}
+            <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{t('remote.atvLine', { state: atvStateText(shown) })}</span>
           </span>
-        </div>
-      </div>
-      <p class="m-remote-note">{t('remote.atvNote')}</p>
+        }
+      />
       {!forgot && <NoAnswer tv={tv} />}
       {forgot && (
         <div class="m-remote-forgot">
@@ -480,32 +495,44 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           </button>
         </div>
       )}
-      <div class="m-stage">
-        <DPad press={press} />
-      </div>
-      <div class="m-keyrow">
-        <button type="button" class="m-key" onClick={() => press('BACK')}>
-          <Icon d={BACK} size={20} /> {t('common.back')}
-        </button>
-        <button type="button" class="m-key" onClick={() => ompKey('CATALOG')}>
-          {t('nav.library')}
-        </button>
-        <button type="button" class="m-key" onClick={() => ompKey('NOWPLAYING')}>
-          {t('remote.nowPlaying')}
-        </button>
-      </div>
-      <div class="m-keyrow">
-        <button type="button" class="m-key" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
-          <Icon d={KEYBOARD} size={20} /> {t('remote.keyboard')}
-        </button>
-        <div class="m-vol">
-          <button type="button" class="m-key" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
-            −
-          </button>
-          <span class="m-vol-label">{t('remote.volShort')}</span>
-          <button type="button" class="m-key" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
-            +
-          </button>
+      {/* the layout of the LG «Кнопки» remote: what OMP on Android TV cannot do (power, pointer, channels) is left out */}
+      <div class="m-rb" data-atv-remote>
+        <div class="m-stage m-rb-pad">
+          <DPad press={press} />
+        </div>
+        <div class="m-rb-colors">
+          {COLOR_KEYS.map(([n, label]) => (
+            <button key={n} type="button" class={'m-ckey m-ckey-' + n.toLowerCase()} aria-label={label()} onClick={() => press(n)} />
+          ))}
+        </div>
+        <div class="m-rb-round">
+          {atvRoundKey(t('common.back'), BACK, () => press('BACK'))}
+          {/* «Домой» on Android TV: the OMP catalog */}
+          {atvRoundKey(t('remote.home'), HOME, () => ompKey('CATALOG'))}
+          {atvRoundKey(t('remote.menu'), MENU, () => press('MENU'))}
+        </div>
+        <div class="m-rb-bottom">
+          <div class="m-rocker">
+            <button type="button" class="m-rocker-btn" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
+              <span class="m-rocker-sign">+</span>
+            </button>
+            <span class="m-rocker-cap">{t('remote.volShort')}</span>
+            <button type="button" class="m-rocker-btn" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
+              <span class="m-rocker-sign">−</span>
+            </button>
+          </div>
+          <div class="m-rb-play">
+            <button type="button" class="m-rb-playbtn" aria-label={t('remote.nowPlaying')} onClick={() => ompKey('NOWPLAYING')}>
+              <Icon d={PLAY} size={26} />
+            </button>
+            <span class="m-rocker-cap">{t('remote.nowPlaying')}</span>
+          </div>
+          <div class="m-rocker">
+            <button type="button" class="m-rocker-btn" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
+              <Icon d={KEYBOARD} size={24} />
+            </button>
+            <span class="m-rocker-cap">{t('remote.kbdShort')}</span>
+          </div>
         </div>
       </div>
       {kbd && <TvKeyboard />}
