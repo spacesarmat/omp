@@ -1,11 +1,26 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parseChangelog, releasesUpTo } from '../../src/lib/changelog';
+import { forPlatform, itemPlatform, parseChangelog, releasesUpTo, stripPlatform } from '../../src/lib/changelog';
 import { checkWhatsNew, whatsNew, openWhatsNew, closeWhatsNew, SEEN_KEY } from '../../src/store/whatsNew';
 import { CHANGELOG } from '../../src/lib/changelogData';
 import { APP_VERSION } from '../../src/version';
 import { markWhatsNewShown } from '../../src/store/whatsNew';
 
 const TEXT = '# Изменения\n\n## 0.2.0\n\n- Первое\n- Второе\n\n## 0.10.0\r\n\r\n- Новое\r\n\n## мусор\n- не версия\n\n## 0.1.0\n- Старое\n\n## 0.0.9\n\nбез пунктов\n';
+
+describe('platform markers', () => {
+  const MD = '## 0.3.0\n- [phone] Календарь\n- Общее\n- [tv] Пульт на ТВ\n- [TV] Ещё для ТВ\n\n## 0.2.0\n- [phone] Только телефон\n';
+  it('each app keeps the unmarked bullets and its own, without the marker; an emptied version goes', () => {
+    const list = parseChangelog(MD);
+    expect(itemPlatform(list[0].items[0])).toBe('phone');
+    expect(itemPlatform(list[0].items[1])).toBe('');
+    expect(stripPlatform('[tv] Пульт')).toBe('Пульт');
+    expect(forPlatform(list, 'phone')).toEqual([
+      { version: '0.3.0', items: ['Календарь', 'Общее'] },
+      { version: '0.2.0', items: ['Только телефон'] },
+    ]);
+    expect(forPlatform(list, 'tv')).toEqual([{ version: '0.3.0', items: ['Общее', 'Пульт на ТВ', 'Ещё для ТВ'] }]);
+  });
+});
 
 describe('parseChangelog', () => {
   it('parses versions newest first with bullets, skipping malformed sections', () => {

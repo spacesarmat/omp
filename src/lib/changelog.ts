@@ -31,6 +31,38 @@ export function parseChangelog(text: string): ChangelogEntry[] {
   return res;
 }
 
+/** Where the app runs: a bullet marked «- [tv] …» shows on the TV only, «- [phone] …» on the phone only. */
+export type ChangelogPlatform = 'tv' | 'phone';
+
+const PLATFORM_MARK = /^\[(tv|phone)\]\s*/i;
+
+/** The platform a bullet is marked for; '' for an unmarked one (both). */
+export function itemPlatform(item: string): '' | ChangelogPlatform {
+  const m = PLATFORM_MARK.exec(item);
+  return m ? (m[1].toLowerCase() as ChangelogPlatform) : '';
+}
+
+/** The bullet without its platform marker. */
+export function stripPlatform(item: string): string {
+  return item.replace(PLATFORM_MARK, '');
+}
+
+/**
+ * The entries as one platform shows them: the unmarked bullets and its own, without the markers; a version left with
+ * nothing is dropped.
+ */
+export function forPlatform(list: ChangelogEntry[], platform: ChangelogPlatform): ChangelogEntry[] {
+  const out: ChangelogEntry[] = [];
+  list.forEach((e) => {
+    const items = e.items.filter((i) => {
+      const p = itemPlatform(i);
+      return !p || p === platform;
+    }).map(stripPlatform);
+    if (items.length) out.push({ version: e.version, items: items });
+  });
+  return out;
+}
+
 /** Up to `max` newest entries that are not newer than `version` (the running build). */
 export function releasesUpTo(list: ChangelogEntry[], version: string, max = 6): ChangelogEntry[] {
   return list.filter((e) => compareVersions(e.version, version) <= 0).slice(0, max);

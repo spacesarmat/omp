@@ -35,7 +35,7 @@ import { DonateSheet } from './ui/DonateSheet';
 import { syncSupport, localSupportUntil } from './donate';
 import { torrents } from '../../src/store/library';
 import { checkWhatsNew } from '../../src/store/whatsNew';
-import { getChangelog } from '../../src/lib/changelogData';
+import { phoneChangelog } from './lib/phoneChangelog';
 import { APP_VERSION } from '../../src/version';
 import { updatePrompt } from '../../src/store/updates';
 import { tvState, warmUp, cancelWarmUp } from './tv/tvClient';
@@ -238,7 +238,7 @@ export function App() {
 
   // «Что нового» once after an update
   useEffect(() => {
-    checkWhatsNew(getChangelog(), APP_VERSION);
+    checkWhatsNew(phoneChangelog(), APP_VERSION);
   }, []);
 
   // background update check 3 s after start (cheap GET; honours the setting and the 6 h interval)

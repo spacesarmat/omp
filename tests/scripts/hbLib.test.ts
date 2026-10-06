@@ -11,6 +11,9 @@ describe('hb-lib', () => {
     expect(changelogNotes(MD, '0.4.0')).toEqual([]);
     expect(changelogNotes(MD.replace(/\n/g, '\r\n'), '0.6.0')).toHaveLength(2);
   });
+  it('release notes list every bullet without the «[phone]» / «[tv]» markers', () => {
+    expect(changelogNotes('## 0.7.0\n- [phone] Календарь\n- [tv] Пульт\n- Общее\n', '0.7.0')).toEqual(['Календарь', 'Пульт', 'Общее']);
+  });
   it('builds manifest, repository and update feed', () => {
     const sha = 'e'.repeat(64);
     const r = buildHomebrew({
