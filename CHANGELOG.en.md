@@ -2,7 +2,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## 0.18.1
+## 0.18.2
 
 - Updates are checked at every OMP launch and when you come back to the app (before: at most once in 6 hours, so a new version could stay unnoticed for long)
 - While an update is not installed, «Settings» carries a dot, and Settings shows a button with the new version instead of «Check for updates», also after «Later»
