@@ -27,7 +27,7 @@ import {
 } from '../src/tv/tvClient';
 import { tvs, saveTv, reloadTvs, setActiveTv } from '../src/tv/tvStore';
 import { native } from '../src/platform/native';
-import { setTvSearch } from '../src/tv/phoneRpc';
+import { setTvSearch, initPhoneRpc, rpcInfo } from '../src/tv/phoneRpc';
 
 const TV = { ip: '192.168.1.5', name: 'LG' };
 
@@ -403,6 +403,16 @@ describe('tvClient commands', () => {
     });
     fake.emit({ type: 'response', id: req.id, payload: { returnValue: true } });
     await p;
+    // the launch marked this address as handed over: the same one read again is not re-sent
+    const reattach = vi.fn(() => Promise.resolve());
+    initPhoneRpc({ lgConnected: () => true, reattach });
+    rpcInfo.value = { ...info };
+    await flush();
+    expect(reattach).not.toHaveBeenCalled();
+    rpcInfo.value = { ...info, token: 'e'.repeat(32) };
+    await flush();
+    // a try and one retry (this stub never launches, so the address stays unsent), then it stops
+    expect(reattach).toHaveBeenCalledTimes(2);
     await setTvSearch(false);
     p = launchOnTv({ report: 'http://192.168.1.20:8098/x' });
     await flush();

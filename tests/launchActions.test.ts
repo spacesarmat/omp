@@ -26,6 +26,12 @@ describe('runLaunchParams', () => {
     expect(phoneLink.value && phoneLink.value.url).toBe(PH.url);
     expect(JSON.parse(localStorage.getItem('tsp.phoneLink') || '{}').token).toBe(PH.token);
   });
+  it('does not store a phone address outside the LAN', () => {
+    forgetPhoneLink();
+    runLaunchParams({ phone: { url: 'http://203.0.113.9:8097', token: PH.token, name: 'x' } });
+    expect(phoneLink.value).toBeNull();
+    expect(localStorage.getItem('tsp.phoneLink')).toBeNull();
+  });
   it('stores the phone link even when the rest of the params is invalid', () => {
     forgetPhoneLink();
     runLaunchParams({ phone: PH, torrent: 'nothash' });

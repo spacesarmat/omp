@@ -90,6 +90,13 @@ describe('phoneRpc', () => {
     expect(phoneParam()).toBeNull();
   });
 
+  it('hands over no address while the server is not running', async () => {
+    vi.spyOn(native, 'rpcSetEnabled').mockResolvedValue({ ...INFO, running: false });
+    vi.spyOn(native, 'rpcInfo').mockResolvedValue({ ...INFO, running: false });
+    await setTvSearch(true);
+    expect(phoneParam()).toBeNull();
+  });
+
   it('re-reads the address when the app comes back', async () => {
     vi.spyOn(native, 'rpcSetEnabled').mockResolvedValue(INFO);
     await setTvSearch(true);

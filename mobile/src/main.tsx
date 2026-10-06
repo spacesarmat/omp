@@ -11,6 +11,8 @@ import { ensureFirstRun } from './donate';
 import { t } from '../../src/i18n';
 import { startKeyboardWatch } from './ui/keyboard';
 import { initPhoneRpc } from './tv/phoneRpc';
+import { attachIfOmpForeground } from './tv/playerLink';
+import { tvState, tvKind } from './tv/tvClient';
 
 installErrorHooks();
 startKeyboardWatch();
@@ -20,7 +22,10 @@ logStart(t('history.phone'));
 // the phone app runs on Android: the built-in tracker parsers work through its native http
 registerBuiltinSources();
 // TV search: keeps the phone's TV search server in step with the switch (on by default once a TV is saved)
-initPhoneRpc();
+initPhoneRpc({
+  lgConnected: () => tvState.value === 'connected' && tvKind() !== 'atv',
+  reattach: attachIfOmpForeground,
+});
 
 // the TV may switch a source on or off through the search server's page (mobile/rpc.html): re-read the switches when
 // that page writes them and when the app comes back to the foreground

@@ -4,7 +4,7 @@ import { signal, effect } from '@preact/signals';
 import { native, type OmpNativeApi, type FoundOmpTv } from '../platform/native';
 import { activeTv, saveTv, setActiveTv, clearTvToken, normalizeMac, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
 import { showToast } from '../ui/toast';
-import { phoneParam } from './phoneRpc';
+import { phoneParam, markPhoneSent } from './phoneRpc';
 import { log } from '../../../src/lib/log';
 import { lang, t } from '../../../src/i18n';
 import { isRutrackerResult, TRANSFER_PATH, type RutrackerResult, type TransferPayload } from '../../../src/sources/transfer';
@@ -549,6 +549,7 @@ export async function launchOnTv(params: object): Promise<void> {
   const phone = phoneParam();
   try {
     await request('ssap://system.launcher/launch', launchOmpPayload(phone ? { ...params, phone } : params));
+    markPhoneSent(phone);
   } catch (e) {
     if (!(e instanceof TvAnswerError)) throw e;
     throw new Error(/no such app|not found|not exist|404|-101/i.test(e.raw) ? tvNoOmp() : tvLaunchFailed());
