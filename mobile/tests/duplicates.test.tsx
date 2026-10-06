@@ -6,6 +6,7 @@ import { act } from 'preact/test-utils';
 import { groupLibrary, isSeries, seasonMembers, type SeriesGroup } from '../src/lib/seriesGroups';
 import { alreadyHaveText, contentsText, filmKeys, releaseLine, sameReleases } from '../src/lib/duplicates';
 import { fileEpisodes } from '../../src/lib/categoryCheck';
+import { contentsTextOf, episodeCountOf } from '../src/lib/releaseContents';
 import { Series } from '../src/screens/Series';
 import { addSearchResult } from '../src/addResult';
 import { navigate, resetTo } from '../src/nav';
@@ -147,6 +148,16 @@ describe('episode file names', () => {
 });
 
 describe('what a release holds, for showing', () => {
+  it('the same count for every label: episodes from the file names, else files', () => {
+    const list = (names: string[]) => names.map((p, i) => ({ id: i + 1, path: p, length: 500 * MB }));
+    expect(contentsTextOf(list(['A 1-2 серия.mkv', 'A 3 серия.mkv']))).toBe('3 серии');
+    expect(contentsTextOf(list(['Show.S01E01E02.mkv', 'Show.S01E03.mkv']))).toBe('3 серии');
+    expect(contentsTextOf(list(['Show.S01E01.mkv', 'Show.Finale.mkv']))).toBe('2 файла');
+    expect(contentsTextOf(list(['Film.mkv']))).toBe('');
+    expect(episodeCountOf(list(['Show.S01E01-E08.mkv', 'Show.S01E09.mkv']))).toBe(9);
+  });
+
+
   it('episodes when every video names them, else files; samples aside', () => {
     expect(contentsText(SPIRIT_2160)).toBe('18 серий');
     expect(contentsText(SPIRIT_1080)).toBe('18 серий');
@@ -213,9 +224,18 @@ describe('series screen', () => {
     expect(lines).toEqual(expect.arrayContaining(['1080p WEB-DL · 18 серий · 5,4 ГБ', '4K WEB-DL · 18 серий · 9,7 ГБ']));
     const line = Array.from(info.querySelectorAll('[data-dup-line]')).find((b) => (b.textContent || '').indexOf('1080p') === 0) as HTMLButtonElement;
     act(() => line.click());
+    // only the normal manual actions of a release (deleting asks its own confirm)
     const options = Array.from(document.querySelectorAll('.m-opt')).map((b) => (b.textContent || '').trim());
-    expect(options).toContain('Удалить');
+    expect(options).toEqual(['Открыть', 'Переименовать', 'Оставить только эту', 'Удалить']);
     expect(removeSpy).not.toHaveBeenCalled();
+  });
+
+  it('the release rows count episodes like the info row: 16 files of the 4K release hold 18 episodes', async () => {
+    await open([SPIRIT_1080, SPIRIT_2160], 1);
+    const meta = (hash: string) => el.querySelector('.m-series-row[data-hash="' + hash + '"] .m-vrow-meta')!.textContent || '';
+    expect(meta(SPIRIT_2160.hash)).toContain('18 серий');
+    expect(meta(SPIRIT_2160.hash)).not.toContain('16');
+    expect(meta(SPIRIT_1080.hash)).toContain('18 серий');
   });
 
   it('one release of the season: no info row', async () => {

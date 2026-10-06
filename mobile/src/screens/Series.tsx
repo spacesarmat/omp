@@ -31,6 +31,7 @@ import type { Torrent } from '../../../src/api/types';
 import { findGroup, groupLabel, NO_SEASON, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
 import { releaseLine } from '../lib/duplicates';
+import { contentsText } from '../lib/releaseContents';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { ratingText } from './catalog/CatalogSearch';
@@ -282,6 +283,7 @@ function Row({ tor, onWatch, onMenu }: { tor: Torrent; onWatch: (tor: Torrent) =
   const at = shared ? shared.position : 0;
   const duration = target && shared ? getLocalProgress(tor.hash, target.id)?.duration || shared.duration : 0;
   const q = qualityBadge(displayTitle(tor));
+  const contents = contentsText(tor);
   return (
     <div class="m-hrow m-series-row" data-hash={tor.hash}>
       <button type="button" class="m-hrow-main" {...press}>
@@ -294,7 +296,7 @@ function Row({ tor, onWatch, onMenu }: { tor: Torrent; onWatch: (tor: Torrent) =
           <span class="m-muted m-small m-vrow-meta">
             <span>{formatBytes(tor.torrent_size || 0)}</span>
             {q && <span class="m-badge-inline">{q}</span>}
-            {files.length > 1 && <span>{tp('library.episodes', files.length)}</span>}
+            {contents && <span>{contents}</span>}
           </span>
           {at > 0 && (
             <>

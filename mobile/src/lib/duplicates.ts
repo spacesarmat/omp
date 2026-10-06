@@ -7,38 +7,12 @@ import { libraryKey } from '../../../src/catalog/library';
 import { titleCore } from '../../../src/lib/posterSearch';
 import { displayTitle } from '../../../src/lib/torrentName';
 import { shortTitle } from '../../../src/lib/libraryView';
-import { baseName, fileKind } from '../../../src/lib/episodes';
-import { fileEpisodes } from '../../../src/lib/categoryCheck';
+import { contentsText } from './releaseContents';
 import { torrents } from '../../../src/store/library';
-import { fmtSize, t, tp } from '../../../src/i18n';
-import { filesOf } from '../watch';
+import { fmtSize, t } from '../../../src/i18n';
 import { groupLibrary, isSeries, seasonMembers, type SeriesGroup } from './seriesGroups';
 
-/** Samples and trailers are no episodes. */
-const SAMPLE = /(?:^|[^a-z])(?:sample|trailer)(?:[^a-z]|$)/i;
-
-/**
- * What the files hold, for showing: «18 серий» when every video names its episodes (episodes counted once), else
- * «16 файлов»; '' for a film or when the files are not known.
- */
-export function contentsText(tor: Torrent): string {
-  const videos = filesOf(tor).filter((f) => fileKind(f.path) === 'video' && !SAMPLE.test(baseName(f.path)));
-  if (videos.length < 2) return '';
-  const seen: string[] = [];
-  let all = true;
-  videos.forEach((f) => {
-    const e = fileEpisodes(f.path);
-    if (!e) {
-      all = false;
-      return;
-    }
-    e.episodes.forEach((n) => {
-      const k = (e.season === null ? 0 : e.season) + ':' + n;
-      if (seen.indexOf(k) < 0) seen.push(k);
-    });
-  });
-  return all && seen.length ? tp('library.episodes', seen.length) : tp('series.files', videos.length);
-}
+export { contentsText };
 
 /** «4K WEB-DL · 18 серий · 9,7 ГБ» (the parts known). */
 export function releaseLine(tor: Torrent, withContents = true): string {

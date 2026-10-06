@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { contentsTextOf } from '../lib/releaseContents';
 import { t, tp, fmtDuration } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
@@ -484,7 +485,7 @@ export function Torrent({ hash }: { hash: string }) {
   const peers = tor.total_peers || tor.active_peers || 0;
   const meta = [
     season !== null ? t('library.season', { n: season }) : '',
-    hasEpisodes ? tp('library.episodes', files.length) : '',
+    hasEpisodes ? contentsTextOf(allFiles) : '',
     tor.torrent_size ? formatBytes(tor.torrent_size) : '',
     peers ? tp('torrent.screen.peerCount', peers) : '',
   ].filter(Boolean);
