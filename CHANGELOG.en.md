@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.17.0-beta.9
+
+- [phone] The install assistant and «Questions and answers»: how to install OMP on Xiaomi, Sber and Yandex TVs and boxes
+
 ## 0.17.0-beta.8
 
 - [phone] «Remote» connects to the last TV by itself: a TV that is saved but not selected (after the install assistant or a settings restore) no longer needs a trip to «Settings → TV»
