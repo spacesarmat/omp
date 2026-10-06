@@ -21,6 +21,8 @@ export interface OmpNativeTvPlugin {
   localIpv4(): Promise<{ ip?: string | null }>;
   /** apks: the feed's per-ABI APKs; the plugin picks the device's one, url/sha256 (universal) otherwise. */
   downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<unknown>;
+  /** «Установка неизвестных приложений» is allowed for OMP (APKs from 0.17.0). */
+  canInstallApks?(): Promise<{ granted?: unknown }>;
   /** Starts the native Media3 player (PlayerActivity); resolves once it is launched. */
   playNative(o: object): Promise<unknown>;
   /** A phone command (src/phone/protocol.ts Cmd) for the open native player. */
@@ -104,6 +106,7 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
   return {
     localIpv4: () => np.call(cap, NAME, 'localIpv4', {}),
     downloadAndInstallApk: (o) => np.call(cap, NAME, 'downloadAndInstallApk', o),
+    canInstallApks: () => np.call(cap, NAME, 'canInstallApks', {}),
     playNative: (o) => np.call(cap, NAME, 'playNative', o),
     nativePlayerCommand: (o) => np.call(cap, NAME, 'nativePlayerCommand', o),
     pairingCode: () => np.call(cap, NAME, 'pairingCode', {}),
@@ -249,6 +252,16 @@ export function installApk(url: string, sha256: string, onProgress: (percent: nu
         throw new Error(describeApkError(e));
       },
     );
+}
+
+/** OMP may install APKs (true when it cannot be told: nothing to explain then). */
+export function apkInstallPermitted(): Promise<boolean> {
+  const p = nativePlugin();
+  if (!p || typeof p.canInstallApks !== 'function') return Promise.resolve(true);
+  return p.canInstallApks().then(
+    (r) => !(r && r.granted === false),
+    () => true,
+  );
 }
 
 /** When the stored Cloudflare clearance of the site at url ends; null without one, outside the APK or on a failure. */

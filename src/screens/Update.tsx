@@ -13,7 +13,8 @@ import { Qr } from '../ui/Qr';
 import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
 import { platformKind } from '../platform/env';
-import { installApk } from '../platform/androidNative';
+import { apkInstallPermitted, installApk } from '../platform/androidNative';
+import { confirmDialog } from '../ui/dialog';
 import { t } from '../i18n';
 import type { UpdateInfo } from '../lib/updateInfo';
 
@@ -42,7 +43,17 @@ function ApkInstall({ info }: { info: UpdateInfo }) {
     if (cur && cur.version === version) apkJob.value = { ...cur, ...p };
   };
 
+  // before Android's «unknown apps» page (on some boxes the list of all apps): what to do there
   const install = () => {
+    if (apkJob.value && apkJob.value.running) return;
+    apkInstallPermitted()
+      .then((granted) => (granted ? true : confirmDialog(t('update.allowHint'), t('update.allowGo'))))
+      .then((go) => {
+        if (go) startInstall();
+      });
+  };
+
+  const startInstall = () => {
     if (apkJob.value && apkJob.value.running) return;
     const version = info.version;
     startedHere.current = true;

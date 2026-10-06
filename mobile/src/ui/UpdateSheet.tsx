@@ -28,6 +28,14 @@ export function setAbiKeyReader(fn: AbiKeyReader | null): void {
   abiKeyReader = fn;
 }
 
+export type InstallPermission = () => Promise<boolean>;
+let installPermission: InstallPermission | null = null;
+
+/** Replaces the «unknown apps» permission query (tests); null restores the native one. */
+export function setInstallPermission(fn: InstallPermission | null): void {
+  installPermission = fn;
+}
+
 export function describeInstallError(e: unknown): string {
   const m = e && typeof e === 'object' ? (e as { message?: unknown }).message : e;
   const msg = typeof m === 'string' ? m : '';
@@ -68,8 +76,26 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
     return () => clearTimeout(t);
   }, [launching]);
 
-  async function install() {
+  // the permission is not given yet: what Android is about to ask, before its page opens
+  const [asking, setAsking] = useState(false);
+
+  async function install(explained = false) {
     if (running.current) return;
+    running.current = true;
+    if (!explained) {
+      let granted = true;
+      try {
+        granted = await (installPermission ?? native.canInstallApks.bind(native))();
+      } catch {
+        granted = true;
+      }
+      if (!granted) {
+        running.current = false;
+        setAsking(true);
+        return;
+      }
+    }
+    setAsking(false);
     running.current = true;
     setError('');
     setPct(null);
@@ -119,9 +145,21 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
           {error}
         </div>
       )}
-      <button type="button" class="m-btn m-btn-primary" disabled={locked} onClick={() => void install()}>
-        {t('common.install')}
-      </button>
+      {asking ? (
+        <div class="m-field" data-allow-hint role="alertdialog" aria-label={t('update.allowHint')}>
+          <div class="m-hint-warn">{t('update.allowHint')}</div>
+          <button type="button" class="m-btn m-btn-primary" onClick={() => void install(true)}>
+            {t('update.allowGo')}
+          </button>
+          <button type="button" class="m-btn m-btn-secondary" onClick={() => setAsking(false)}>
+            {t('common.cancel')}
+          </button>
+        </div>
+      ) : (
+        <button type="button" class="m-btn m-btn-primary" disabled={locked} onClick={() => void install()}>
+          {t('common.install')}
+        </button>
+      )}
       <div class="m-sheet-row">
         <button type="button" class="m-btn m-btn-secondary" disabled={locked} onClick={dismissPrompt}>
           {t('common.later')}

@@ -139,6 +139,8 @@ export const en: EnDict<typeof ru> = {
   update: {
     beta: 'Beta {version} available',
     fixes: 'Fixes and improvements',
+    allowHint: 'Android will ask to allow installs: find OMP in the list, turn the switch on and press Back — the install continues',
+    allowGo: 'Continue',
     replacesBeta: 'OMP {version} is out and replaces the beta',
     available: 'Version {version} available',
     installFailed: 'Could not install the update',

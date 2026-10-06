@@ -139,6 +139,9 @@ export const ru = {
     beta: 'Доступна бета {version}',
     /** An update with no bullet for this app. */
     fixes: 'Исправления и улучшения',
+    /** Before Android's «Установка неизвестных приложений» page (on some boxes the list of all apps). */
+    allowHint: 'Android попросит разрешить установку: найдите OMP в списке, включите переключатель и нажмите «Назад» — установка продолжится',
+    allowGo: 'Продолжить',
     replacesBeta: 'Вышла OMP {version} — она заменит бету',
     available: 'Доступна версия {version}',
     installFailed: 'Не удалось установить обновление',
