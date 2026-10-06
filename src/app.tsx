@@ -26,7 +26,7 @@ import { WhatsNewDialog, shouldShowWhatsNew } from './ui/WhatsNewDialog';
 import { checkWhatsNew, whatsNew } from './store/whatsNew';
 import { getChangelog } from './lib/changelogData';
 import { APP_VERSION } from './version';
-import { checkForUpdate, updatePrompt } from './store/updates';
+import { checkForUpdate, installUpdateChecks, updatePrompt } from './store/updates';
 import { platformKind } from './platform/env';
 import { installAndroidKeyBridge } from './platform/androidKeys';
 import { installAndroidRemote } from './platform/androidRemote';
@@ -114,10 +114,7 @@ export function App() {
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidScale() : undefined), []);
   // the native copy follows the page's language (Android TV only: LG has no plugin)
   useEffect(() => (platformKind() === 'androidtv' ? syncNativeLanguage() : undefined), []);
-  useEffect(() => {
-    const t = setTimeout(() => { checkForUpdate({ manual: false }); }, 3000);
-    return () => clearTimeout(t);
-  }, []);
+  useEffect(() => installUpdateChecks((gap) => { checkForUpdate({ manual: false, minIntervalMs: gap }); }), []);
   useEffect(() => { checkWhatsNew(getChangelog(), APP_VERSION); }, []);
   const r = currentRoute.value;
   // opened by the user (Update screen) shows anywhere; the automatic one waits for the update prompt, the player and pairing

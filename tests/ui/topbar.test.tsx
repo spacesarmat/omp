@@ -3,6 +3,7 @@ import { render, h } from 'preact';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { TopBar } from '../../src/ui/TopBar';
 import { newsUnseen } from '../../src/phone/monitor';
+import { latestUpdate } from '../../src/store/updates';
 
 beforeAll(() => {
   init({ debug: false, visualDebug: false });
@@ -40,6 +41,17 @@ describe('TopBar', () => {
     host = mount().host;
     expect(host.querySelector('[data-fk="tab-news"] .tab-badge')!.textContent).toBe('99+');
     newsUnseen.value = 0;
+  });
+  it('a found update puts a dot on «Настройки» only', () => {
+    latestUpdate.value = null;
+    let host = mount().host;
+    expect(host.querySelector('.icon-dot')).toBeNull();
+    document.body.innerHTML = '';
+    latestUpdate.value = { version: '9.0.0', ipkUrl: 'https://x/a.ipk', ipkHash: 'b'.repeat(64), ipkSize: 1, notes: [], releaseUrl: 'https://x/r' };
+    host = mount().host;
+    expect(host.querySelectorAll('.icon-dot')).toHaveLength(1);
+    expect(host.querySelector('[data-fk="lib-btn-settings"] .icon-dot')).not.toBeNull();
+    latestUpdate.value = null;
   });
   it('«Новое» has no library search, view or sort', () => {
     const { host } = mount({ tab: 'news' });

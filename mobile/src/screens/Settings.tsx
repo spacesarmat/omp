@@ -26,8 +26,8 @@ import { tvSearchOn, setTvSearch } from '../tv/phoneRpc';
 import { tvOmpVersions, tvNeedsUpdate, tvOpensUpdate, openUpdateOnTv, type TvOmp } from '../tv/tvUpdate';
 import { errorMessage } from '../../../src/api/http';
 import { settings, updateSettings } from '../../../src/store/settings';
-import { checkForUpdate, type CheckResult } from '../../../src/store/updates';
-import { updateFeedUrl } from '../../../src/lib/updateInfo';
+import { checkForUpdate, latestUpdate, updatePrompt, type CheckResult } from '../../../src/store/updates';
+import { updateFeedUrl, updateTitle } from '../../../src/lib/updateInfo';
 import { isBetaVersion } from '../../../src/lib/version';
 import { APP_VERSION } from '../../../src/version';
 import { phoneChangelog } from '../lib/phoneChangelog';
@@ -40,7 +40,7 @@ import { fmtSize, t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
 
-type Checker = (o: { manual: boolean; url?: string }) => Promise<CheckResult>;
+type Checker = (o: { manual: boolean; url?: string; minIntervalMs?: number }) => Promise<CheckResult>;
 let checker: Checker | null = null;
 
 /** Replaces the update check (tests); null restores the real one. */
@@ -48,7 +48,7 @@ export function setUpdateChecker(fn: Checker | null): void {
   checker = fn;
 }
 
-export function runUpdateCheck(o: { manual: boolean; url?: string }): Promise<CheckResult> {
+export function runUpdateCheck(o: { manual: boolean; url?: string; minIntervalMs?: number }): Promise<CheckResult> {
   return (checker ?? checkForUpdate)(o);
 }
 
@@ -348,9 +348,16 @@ export function Settings() {
             {isBetaVersion(APP_VERSION) && <span class="m-badge-beta">{betaBadge()}</span>} · {t('whatsNew.title')} ›
           </span>
         </button>
-        <button type="button" class="m-btn m-btn-secondary" onClick={() => void check()}>
-          {t('updateScreen.check')}
-        </button>
+        {/* a found update stays offered here until it is installed, also after «Позже» */}
+        {latestUpdate.value ? (
+          <button type="button" class="m-btn m-btn-primary" data-row="update-available" onClick={() => (updatePrompt.value = latestUpdate.value)}>
+            {updateTitle(latestUpdate.value.version, APP_VERSION)}
+          </button>
+        ) : (
+          <button type="button" class="m-btn m-btn-secondary" onClick={() => void check()}>
+            {t('updateScreen.check')}
+          </button>
+        )}
         <div class="m-set-row">
           <span>{t('tvSettings.updateOnStart')}</span>
           <button

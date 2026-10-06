@@ -1079,6 +1079,8 @@ button, .m-btn {
   position: absolute; top: 0; right: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
   background: var(--accent); color: var(--bg); font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
 }
+/* an update is waiting: a dot on «Настройки» until it is installed */
+.m-nav-dot { position: absolute; top: 2px; right: 10px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
 .m-screen[data-route='news'], .m-screen[data-route='subFindings'], .m-screen[data-route='monitor'] { display: flex; flex-direction: column; gap: 12px; }
 .m-screen[data-route='news'] .m-seg button { min-height: 40px; }
 .m-news-status { display: flex; align-items: center; gap: 8px; }

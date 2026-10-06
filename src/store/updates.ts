@@ -8,7 +8,8 @@ import { platformKind } from '../platform/env';
 import { APP_VERSION } from '../version';
 
 const KEY = 'tsp.update';
-export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+/** The least time between automatic checks when OMP comes back to the screen; a launch always checks. */
+export const CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
 interface UpdateState {
   lastCheck: number;
@@ -38,10 +39,11 @@ export function reloadUpdateState(): void {
 
 export type CheckResult = 'update' | 'latest' | 'error' | 'skipped';
 
-export function checkForUpdate(opts: { manual: boolean; now?: number; current?: string; url?: string }): Promise<CheckResult> {
+export function checkForUpdate(opts: { manual: boolean; now?: number; current?: string; url?: string; minIntervalMs?: number }): Promise<CheckResult> {
   const now = opts.now === undefined ? Date.now() : opts.now;
   const current = opts.current === undefined ? APP_VERSION : opts.current;
-  if (!opts.manual && (!settings.value.updateCheck || (state.lastCheck <= now && now - state.lastCheck < CHECK_INTERVAL_MS))) {
+  const gap = opts.minIntervalMs === undefined ? CHECK_INTERVAL_MS : opts.minIntervalMs;
+  if (!opts.manual && (!settings.value.updateCheck || (state.lastCheck <= now && now - state.lastCheck < gap))) {
     return Promise.resolve<CheckResult>('skipped');
   }
   // cache-buster: GitHub raw and the WebView keep the feed for up to 5 minutes after a release
@@ -63,6 +65,22 @@ export function checkForUpdate(opts: { manual: boolean; now?: number; current?: 
     },
     (): CheckResult => 'error',
   );
+}
+
+/**
+ * The automatic check: at once (a launch always asks the feed), then each time OMP comes back to the screen, at most
+ * once per CHECK_INTERVAL_MS (Android keeps the app in memory, so a «launch» is often a return). Returns the cleanup.
+ */
+export function installUpdateChecks(run: (minIntervalMs: number) => void, delayMs = 3000): () => void {
+  const timer = setTimeout(() => run(0), delayMs);
+  const onShow = () => {
+    if (!document.hidden) run(CHECK_INTERVAL_MS);
+  };
+  document.addEventListener('visibilitychange', onShow);
+  return () => {
+    clearTimeout(timer);
+    document.removeEventListener('visibilitychange', onShow);
+  };
 }
 
 export function skipVersion(version: string): void {

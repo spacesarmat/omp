@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mockFetch } from '../helpers/fetchMock';
 import {
   checkForUpdate, skipVersion, dismissPrompt, reloadUpdateState, sanitizeUpdateState,
-  latestUpdate, updatePrompt, CHECK_INTERVAL_MS,
+  latestUpdate, updatePrompt, CHECK_INTERVAL_MS, installUpdateChecks,
 } from '../../src/store/updates';
 import { updateSettings, resetSettings } from '../../src/store/settings';
 
@@ -32,7 +32,7 @@ describe('checkForUpdate', () => {
     expect(updatePrompt.value).toBeNull();
     expect(latestUpdate.value).not.toBeNull();
   });
-  it('respects the 6-hour interval and the setting, manual ignores both', async () => {
+  it('respects the 1-hour interval and the setting, manual ignores both', async () => {
     const f = mockFetch(() => ({ body: feed('0.6.1') }));
     await checkForUpdate({ manual: false, now: NOW, current: '0.6.0' });
     expect(await checkForUpdate({ manual: false, now: NOW + CHECK_INTERVAL_MS - 1, current: '0.6.0' })).toBe('skipped');
@@ -42,6 +42,28 @@ describe('checkForUpdate', () => {
     expect(await checkForUpdate({ manual: true, now: NOW + 1, current: '0.6.0' })).toBe('update');
     expect(f).toHaveBeenCalledTimes(2);
     expect(f.mock.calls[1][0]).toBe('https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/update.json?t=' + (NOW + 1));
+  });
+  it('a launch (minIntervalMs 0) always asks the feed, even right after a check', async () => {
+    const f = mockFetch(() => ({ body: feed('0.6.1') }));
+    await checkForUpdate({ manual: false, now: NOW, current: '0.6.0' });
+    expect(await checkForUpdate({ manual: false, now: NOW + 1, current: '0.6.0', minIntervalMs: 0 })).toBe('update');
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+  it('installUpdateChecks: at once with no interval, then on each return to the screen with the hourly one', () => {
+    vi.useFakeTimers();
+    try {
+      const gaps: number[] = [];
+      const stop = installUpdateChecks((g) => gaps.push(g), 3000);
+      vi.advanceTimersByTime(3000);
+      expect(gaps).toEqual([0]);
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(gaps).toEqual([0, CHECK_INTERVAL_MS]);
+      stop();
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(gaps).toEqual([0, CHECK_INTERVAL_MS]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it('checks again when lastCheck is in the future (TV clock went back)', async () => {
     const f = mockFetch(() => ({ body: feed('0.6.1') }));

@@ -15,7 +15,7 @@ import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { latestUpdate, checkForUpdate } from '../store/updates';
 import { openHbChannel } from '../platform/hbchannel';
-import { HB_REPO_URL } from '../lib/updateInfo';
+import { HB_REPO_URL, updateTitle } from '../lib/updateInfo';
 import { platformKind } from '../platform/env';
 import { logEntries, clearLog, logVersion, logTime, levelLabel, areaLabel } from '../lib/log';
 import { cacheOptions, preloadOptions, readaheadOptions, connsOptions, rateOptions, disconnectOptions, withCurrent } from '../lib/serverSettingsOptions';
@@ -234,7 +234,7 @@ export function SettingsScreen() {
       </div>
       <ChoiceRow focusKey="set-updateOnStart" label={t('tvSettings.updateOnStart')} value={s.updateCheck} options={onOff()} onChange={(v) => updateSettings({ updateCheck: v })} />
       <div class="row" style={{ marginTop: '16px' }}>
-        <Button focusKey="set-update" label={t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} />
+        <Button focusKey="set-update" label={latestUpdate.value ? updateTitle(latestUpdate.value.version, APP_VERSION) : t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} />
         {platformKind() !== 'androidtv' && (
           <Button
             focusKey="set-addHbRepo"

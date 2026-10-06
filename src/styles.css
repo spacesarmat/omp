@@ -255,7 +255,10 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .topbar > *:last-child { margin-right: 0; }
 .topbar .logo { margin-right: 14px; }
 .topbar-brand { font-size: 30px; font-weight: 800; letter-spacing: 2px; margin-right: 26px; }
-.icon-button { display: flex; align-items: center; justify-content: center; min-width: 60px; height: 60px; padding: 0 16px; border-radius: 14px; background: #1f232b; }
+.icon-button { position: relative; display: flex; align-items: center; justify-content: center; min-width: 60px; height: 60px; padding: 0 16px; border-radius: 14px; background: #1f232b; }
+/* an update is waiting: a dot on «Настройки» until it is installed */
+.icon-dot { position: absolute; top: 8px; right: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+.icon-button.focused .icon-dot { background: #0f1115; }
 .icon-btn-label { margin-left: 10px; font-size: 22px; font-weight: 700; white-space: nowrap; }
 .icon-button.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: scale(1.06); }
 .screen::-webkit-scrollbar { display: none; }
