@@ -32,10 +32,11 @@ describe('changelogData', () => {
     // the phone-only 0.17.0 betas: the calendar is on the phone only
     expect(all(phone)).toContain('«Новое» → «Календарь»');
     expect(all(tv)).not.toContain('«Новое» → «Календарь»');
-    // the 0.18.0 betas: TV screens only; the search through the phone (0.18.0-beta.3) is the LG's alone
-    expect(tv.map((e) => e.version)).toContain('0.18.0-beta.1');
-    expect(tv.filter((e) => e.version === '0.18.0-beta.3')[0].items).toHaveLength(4);
-    expect(phone.filter((e) => e.version === '0.18.0-beta.3')[0].items).toHaveLength(1);
+    // 0.18.0: mostly TV screens; the phone sees only its own «Search for the TV» bullets
+    expect(tv.map((e) => e.version)).toContain('0.18.0');
+    expect(all(tv)).toContain('Телевизор LG ищет раздачи');
+    expect(all(phone)).not.toContain('Телевизор LG ищет раздачи');
+    expect(phone.filter((e) => e.version === '0.18.0')[0].items).toHaveLength(3);
     const raw = CHANGELOG.filter((e) => e.version === '0.17.0-beta.6')[0].items;
     expect(raw.some((i) => /^\[phone\] /.test(i))).toBe(true);
   });
@@ -50,12 +51,13 @@ describe('changelogData', () => {
     expect(all(lg)).toContain('Телевизор LG ищет раздачи');
     expect(all(atv)).not.toContain('Телевизор LG ищет раздачи');
     expect(all(atv)).not.toContain('Новый экран поиска на ТВ');
-    expect(atv.map((e) => e.version)).not.toContain('0.18.0-beta.3');
-    expect(atv.map((e) => e.version)).toContain('0.18.0-beta.2');
+    expect(atv.map((e) => e.version)).toContain('0.18.0');
+    expect(all(atv)).toContain('Значок «Управление с телефона»');
+    expect(all(lg)).not.toContain('Значок «Управление с телефона»');
     expect(all(atv)).not.toMatch(/\[(tv|lg|atv|phone)\]/i);
-    // the raw 0.18.0-beta.3 bullets carry the LG marker
-    expect(CHANGELOG.filter((e) => e.version === '0.18.0-beta.3')[0].items.filter((i) => /^\[lg\] /.test(i))).toHaveLength(4);
-    expect(CHANGELOG_EN.filter((e) => e.version === '0.18.0-beta.3')[0].items.filter((i) => /^\[lg\] /.test(i))).toHaveLength(4);
+    // the raw 0.18.0 bullets carry the LG marker (the highlight and the four search bullets)
+    expect(CHANGELOG.filter((e) => e.version === '0.18.0')[0].items.filter((i) => /^\[lg\] /.test(i))).toHaveLength(5);
+    expect(CHANGELOG_EN.filter((e) => e.version === '0.18.0')[0].items.filter((i) => /^\[lg\] /.test(i))).toHaveLength(5);
   });
 
   it('English UI gets the English entries, Russian where a version is not translated', () => {

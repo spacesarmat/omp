@@ -2,15 +2,30 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## 0.18.0-beta.4
+## 0.18.0
 
-- [tv] «New» on the TV: OMP's findings from the phone, with new episodes, better quality and torrents for subscriptions; new episodes replace the old season torrent right away, «Replace» swaps in the better one — watch positions are kept
-- [tv] «Subscriptions» on the TV: check now, notify on/off, «in better quality», remove
-- [tv] «Follow new episodes» and «follow better quality» work right from the TV; «Want to watch» on the TV becomes an OMP subscription on the phone
-- [atv] The «Control from the phone» badge in the Android TV player now shows briefly on a phone command instead of all the time
-- [phone] The TV sees the phone's subscriptions and findings (through «Search for the TV»)
+- [tv] The TV library works like the phone's: short titles, a series is one tile, a series screen with the TMDB overview, status and episode names
+- [tv] «Discover» on the TV: new releases from TMDB, film and series cards, «Want to watch» and «In better quality»
+- [lg] The LG TV searches torrent sites through the phone: RuTracker, NNM-Club, Kinozal and others, with your sign-ins
+- [tv] «New» and «Subscriptions» on the TV: OMP's findings from the phone — new episodes, better quality, torrents for subscriptions
+- [phone] «Search for the TV»: the phone searches torrents and watches subscriptions for the TV in the background
 
-## 0.18.0-beta.3
+### Library and series on the TV
+
+- [tv] TV (LG and Android TV): library tiles show short titles instead of the tracker string; a series is one tile with its TMDB status («Airing», «Ended», «Canceled») and the number of torrents
+- [tv] Header icons show their name when selected; the hint bar no longer covers the last row
+- [tv] A new series screen: a TMDB backdrop, overview, status with the next episode date, seasons switched with the remote, episode names, progress. «Watch» continues where you stopped and asks «Continue / From the start», «Torrents · N» opens the series' torrents
+- [tv] On the torrent screen you can rename a torrent and pick another poster from TMDB
+- [tv] «Help» in Settings: answers to common questions right on the TV, links shown as QR codes
+
+### «Discover» and «Want to watch»
+
+- [tv] On the TV: the «Discover» tab shows new releases from TMDB with sort and filters (genre, year, country, rating), title search and an «In the library» mark on the ones you already have
+- [tv] A title card for films and series: overview, rating, cast, seasons with «Find torrents», «Open in the library»
+- [tv] The «Want to watch» list on the TV: the yellow key on a tile adds to it, the «Want» filter shows it
+- [tv] «In better quality» on the torrent and series screens: finds a better release and replaces the old one keeping watch positions, or adds it alongside
+
+### Torrent search through the phone
 
 - [phone] «Search for the TV» in Settings: the phone searches torrents for the LG TV in the background, even with OMP closed, with a quiet status-bar icon
 - [lg] The LG TV searches torrent sites through the phone (RuTracker, NNM-Club, Kinozal and others, with your sign-ins), even when OMP is closed on the phone; the phone gets a «Search for the TV» switch and a quiet notification
@@ -18,20 +33,13 @@ The English translation covers the latest versions only; the full history (in Ru
 - [lg] «Search sources» on LG: the phone's sites with their state and switches
 - [lg] Without a phone the TV searches through TorrServer (Rutor, Jackett) and says so
 
-## 0.18.0-beta.2
+### «New» and subscriptions
 
-- [tv] On the TV: the «Discover» tab shows new releases from TMDB with sort and filters (genre, year, country, rating), title search and an «In the library» mark on the ones you already have
-- [tv] A title card for films and series: overview, rating, cast, seasons with «Find torrents», «Open in the library»
-- [tv] The «Want to watch» list on the TV: the yellow key on a tile adds to it, the «Want» filter shows it
-- [tv] «In better quality» on the torrent and series screens: finds a better release and replaces the old one keeping watch positions, or adds it alongside
-
-## 0.18.0-beta.1
-
-- [tv] TV (LG and Android TV): library tiles show short titles instead of the tracker string; a series is one tile with its TMDB status («Airing», «Ended», «Canceled») and the number of torrents
-- [tv] Header icons show their name when selected; the hint bar no longer covers the last row
-- [tv] A new series screen: a TMDB backdrop, overview, status with the next episode date, seasons switched with the remote, episode names, progress. «Watch» continues where you stopped and asks «Continue / From the start», «Torrents · N» opens the series' torrents
-- [tv] On the torrent screen you can rename a torrent and pick another poster from TMDB
-- [tv] «Help» in Settings: answers to common questions right on the TV, links shown as QR codes
+- [tv] «New» on the TV: OMP's findings from the phone, with new episodes, better quality and torrents for subscriptions; new episodes replace the old season torrent right away, «Replace» swaps in the better one — watch positions are kept
+- [tv] «Subscriptions» on the TV: check now, notify on/off, «in better quality», remove
+- [tv] «Follow new episodes» and «follow better quality» work right from the TV; «Want to watch» on the TV becomes an OMP subscription on the phone
+- [atv] The «Control from the phone» badge in the Android TV player now shows briefly on a phone command instead of all the time
+- [phone] The TV sees the phone's subscriptions and findings (through «Search for the TV»)
 
 ## 0.17.0
 
