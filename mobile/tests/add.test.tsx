@@ -145,6 +145,17 @@ describe('Add', () => {
     expect(el.querySelector('[data-result-details]')!.textContent).toContain('ещё в Torznab');
   });
 
+  it('a submitted search hides the keyboard: the field loses focus', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
+    mount();
+    const input = el.querySelector('input[aria-label="Поиск по источникам"]') as HTMLInputElement;
+    act(() => input.focus());
+    expect(document.activeElement).toBe(input);
+    search('starbound');
+    await flush();
+    expect(document.activeElement).not.toBe(input);
+  });
+
   it('opens with a ready query and runs the search once on mount (route query + run)', async () => {
     const s = vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue(results);
     document.body.innerHTML = '<div id="app"></div>';

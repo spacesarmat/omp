@@ -304,6 +304,9 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     e?.preventDefault();
     const q = query.trim();
     if (!q) return;
+    // the keyboard goes away: the results are what to look at now
+    const focused = document.activeElement as HTMLElement | null;
+    if (focused && focused.tagName === 'INPUT') focused.blur();
     runSearch(q, {});
   };
 

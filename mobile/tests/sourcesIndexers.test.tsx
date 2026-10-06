@@ -281,6 +281,14 @@ describe('phone «Индексаторы»', () => {
     expect(rule('body::before')).toMatch(/background:\s*var\(--bg\)/);
   });
 
+  it('text links («Как установить FlareSolverr», «Открыть настройки NNM-Club») use the accent, not faint grey', () => {
+    const css = (readFileSync('mobile/src/mobile.css', 'utf8') as string).replace(/\r\n/g, '\n');
+    const i = css.indexOf('\n.m-link {');
+    const rule = css.slice(i, css.indexOf('}', i));
+    expect(rule).toMatch(/color:\s*var\(--accent\)/);
+    expect(rule).not.toMatch(/var\(--muted\)/);
+  });
+
   it('the network scan shows inside the add button, not as a loose line between the cards', async () => {
     let finish: (v: { ip: string; port: number }[]) => void = () => undefined;
     document.body.innerHTML = '<div id="app"></div>';

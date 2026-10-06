@@ -115,6 +115,8 @@ button, .m-btn {
 .m-btn-primary { background: var(--accent); color: var(--bg); font-size: 17px; font-weight: 700; }
 .m-btn-secondary { background: var(--panel-2); color: var(--text); }
 .m-btn-text { border: none; background: none; color: var(--muted); font-size: 14px; font-weight: 600; padding: 0 12px; }
+/* a text link that acts («Открыть настройки NNM-Club», «Как установить FlareSolverr»): the accent of the app's links,
+   never faint grey */
 .m-link {
   align-self: flex-start;
   display: flex;
@@ -122,9 +124,11 @@ button, .m-btn {
   gap: 8px;
   border: none;
   background: none;
-  color: var(--muted);
+  color: var(--accent);
   font-size: 15px;
+  font-weight: 600;
 }
+.m-link:disabled { opacity: 0.6; }
 .m-icon-btn {
   display: flex;
   align-items: center;
@@ -237,6 +241,8 @@ button, .m-btn {
 }
 .m-tab.on { background: var(--accent); color: var(--bg); }
 .m-empty { padding: 24px 0; text-align: center; }
+/* the button under a centred heading and text sits in the middle too («Подключить ТВ» on «Пульт») */
+.m-empty .m-btn { margin: 0 auto; }
 .m-library { overflow-x: hidden; }
 .m-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
 .m-grid.m-view-small { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; }
