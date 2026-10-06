@@ -3,7 +3,10 @@ import { render, h } from 'preact';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { TopBar } from '../../src/ui/TopBar';
 
-beforeAll(() => init({ debug: false, visualDebug: false }));
+beforeAll(() => {
+  init({ debug: false, visualDebug: false });
+  (Element.prototype as any).scrollIntoView = () => undefined;
+});
 
 function mount(over: Record<string, unknown> = {}) {
   const host = document.createElement('div');
@@ -29,7 +32,7 @@ describe('TopBar', () => {
   });
   it('labels icon buttons with the current view and sort', () => {
     const { host } = mount({ view: 'list', sort: 'size' });
-    const labels = Array.prototype.map.call(host.querySelectorAll('.icon-button-label'), (e: Element) => e.textContent);
+    const labels = Array.prototype.map.call(host.querySelectorAll('.icon-button'), (e: Element) => e.getAttribute('aria-label'));
     expect(labels).toEqual(['Поиск', 'Вид: Список', 'Сортировка: По размеру', 'Добавить', 'Плейлисты', 'Настройки']);
   });
   it('fires actions on click and disables the view button on history', () => {
@@ -42,5 +45,25 @@ describe('TopBar', () => {
     expect(buttons[1].className).toContain('disabled');
     (buttons[1] as HTMLElement).click();
     expect(props.onView).not.toHaveBeenCalled();
+  });
+});
+
+describe('TopBar expanding icons', () => {
+  it('shows the label only on the focused icon button', async () => {
+    const { act } = await import('preact/test-utils');
+    const { setFocus } = await import('@noriginmedia/norigin-spatial-navigation');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const props = { tab: 'all', onTab: vi.fn(), view: 'large', sort: 'size', searchOpen: false, onSearch: vi.fn(), onView: vi.fn(), onSort: vi.fn(), onFocused: vi.fn() };
+    await act(() => { render(h(TopBar as any, props), host); });
+    expect(host.querySelector('.icon-btn-label')).toBeNull();
+    await act(() => { setFocus('lib-btn-sort'); });
+    const sort = host.querySelector('[data-fk="lib-btn-sort"]')!;
+    expect(sort.querySelector('.icon-btn-label')!.textContent).toBe('Сортировка: По размеру');
+    await act(() => { setFocus('lib-btn-add'); });
+    expect(sort.querySelector('.icon-btn-label')).toBeNull();
+    expect(host.querySelector('[data-fk="lib-btn-add"] .icon-btn-label')!.textContent).toBe('Добавить');
+    expect(host.querySelectorAll('.icon-btn-label').length).toBe(1);
+    await act(() => { render(null, host); });
   });
 });

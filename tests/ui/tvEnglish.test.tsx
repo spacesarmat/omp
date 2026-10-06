@@ -126,7 +126,7 @@ describe('TV screens in English', () => {
 
   it('TopBar labels', () => {
     mount(h(TopBar, { tab: 'all', onTab: () => undefined, view: 'large', sort: 'new', searchOpen: false, onSearch: () => undefined, onView: () => undefined, onSort: () => undefined, onFocused: () => undefined }));
-    const labels = Array.prototype.map.call(host.querySelectorAll('.icon-button-label'), (e: Element) => e.textContent).join('|');
+    const labels = Array.prototype.map.call(host.querySelectorAll('.icon-button'), (e: Element) => e.getAttribute('aria-label')).join('|');
     expect(labels).toContain('Search');
     expect(labels).toContain('Add');
     expect(labels).toContain('Playlists');

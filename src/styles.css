@@ -72,7 +72,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .progress { height: 8px; background: rgba(255, 255, 255, .15); border-radius: 4px; overflow: hidden; margin-top: 10px; }
 .progress-fill { height: 100%; background: var(--accent); }
 
-.hints { position: fixed; left: 0; right: 0; bottom: 0; padding: 20px 80px; background: var(--bg); color: var(--muted); font-size: 22px; z-index: 5; }
+.hints { position: fixed; left: 0; right: 0; bottom: 0; height: 96px; box-sizing: border-box; padding: 0 80px; display: flex; align-items: center; background: var(--bg); border-top: 1px solid #1f232c; color: var(--muted); font-size: 22px; z-index: 5; }
 .empty { color: var(--muted); padding: 60px 0; text-align: center; }
 .banner-error { background: rgba(229, 72, 77, .2); color: #ffb4b6; padding: 14px 24px; border-radius: 10px; margin-bottom: 16px; }
 
@@ -183,9 +183,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .topbar .logo { margin-right: 14px; }
 .topbar-brand { font-size: 30px; font-weight: 800; letter-spacing: 2px; margin-right: 26px; }
 .icon-button { display: flex; align-items: center; justify-content: center; min-width: 60px; height: 60px; padding: 0 16px; border-radius: 14px; background: #1f232b; }
-.icon-button-label { display: none; margin-left: 10px; font-size: 22px; font-weight: 700; white-space: nowrap; }
-.icon-button.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
-.icon-button.focused .icon-button-label { display: inline; }
+.icon-btn-label { margin-left: 10px; font-size: 22px; font-weight: 700; white-space: nowrap; }
+.icon-button.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: scale(1.06); }
 .screen::-webkit-scrollbar { display: none; }
 
 .art { position: relative; overflow: hidden; border-radius: 16px; display: flex; align-items: flex-end; flex-shrink: 0; }

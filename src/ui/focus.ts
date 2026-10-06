@@ -2,11 +2,20 @@ import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navi
 import { takeSavedFocus, screenFocusables, currentRoute } from './nav';
 import type { SavedFocus } from './nav';
 
+/** Height of the hint band pinned to the bottom of the screen; a focused element must end above it. */
+export const HINTS_HEIGHT = 96;
+
 export function scrollIntoViewSafe(el: Element | null): void {
   if (!el) return;
   const anyEl = el as any;
   if (typeof anyEl.scrollIntoViewIfNeeded === 'function') anyEl.scrollIntoViewIfNeeded(false);
   else el.scrollIntoView(false);
+  // the hint band covers the bottom of the scrolling screen: lift the element clear of it
+  let box: HTMLElement | null = el.parentElement;
+  while (box && !(box.classList && box.classList.contains('screen'))) box = box.parentElement;
+  if (!box || !box.querySelector('.hints')) return;
+  const over = el.getBoundingClientRect().bottom - (box.getBoundingClientRect().bottom - HINTS_HEIGHT);
+  if (over > 0) box.scrollTop += over;
 }
 
 /** How long a screen whose rows arrive later still gets the remembered focus. */
