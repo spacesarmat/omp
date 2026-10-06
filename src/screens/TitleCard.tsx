@@ -267,7 +267,7 @@ export function TitleCardScreen(p: { kind: Kind; id: number } & TitleWantProps) 
       {error ? (
         <div class="disc-error">
           <div class="catalog-off-title">{t('discover.offlineTitle')}</div>
-          <div class="disc-error-text">{t(error === 'nokey' ? 'discover.nokeyText' : 'discover.offlineText')}</div>
+          <div class="disc-error-text">{t(error === 'nokey' ? 'tv.discover.nokeyText' : 'tv.discover.offlineText')}</div>
           <FocusGroup focusKey="TITLE-ERROR" className="actions">
             <Button focusKey="title-retry" label={t('common.retry')} onPress={() => setReload((n) => n + 1)} />
           </FocusGroup>

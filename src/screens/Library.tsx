@@ -222,7 +222,7 @@ export function LibraryScreen() {
           <div class="search-count">{searching ? t('catalog.found', { n: count }) : t('catalog.typePart')}</div>
         </FocusGroup>
       )}
-      {error && (
+      {error && !isDiscover && (
         <FocusGroup focusKey="LIB-BANNER" className="banner-error banner-row">
           <span class="banner-text">{cachedBanner(torrentsAt.value)}</span>
           <Button label={t('common.retry')} onPress={() => load()} onFocused={() => setSel(null)} />

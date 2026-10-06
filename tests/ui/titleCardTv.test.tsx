@@ -179,6 +179,7 @@ describe('TV title card', () => {
     stub.card = vi.fn(() => Promise.reject(Object.assign(new Error('offline'), { code: 'offline' })));
     const host = await mount('movie', 7);
     expect(text(host.querySelector('.disc-error'))).toContain('TMDB не отвечает');
+    expect(text(host.querySelector('.disc-error'))).not.toContain('Мои'); // the TV has no «Мои» tab
     stub.card = vi.fn(() => Promise.resolve(film));
     await click(host.querySelector('[data-fk="title-retry"]')!);
     expect(text(host.querySelector('.series-info h1'))).toBe('Тихий сигнал');

@@ -1064,6 +1064,9 @@ export const en: EnDict<typeof ru> = {
       wantKey: 'want to watch',
       filtersKey: 'filters',
       backLibrary: 'Back — to the library',
+      // the TV has no “Mine” tab: the phone texts point there
+      offlineText: 'TMDB does not respond from this network. Set a TMDB mirror in the TorrServer settings or try again later.',
+      nokeyText: 'No TMDB key. Add it in the TorrServer settings (TMDB → API key).',
     },
     want: {
       tab: 'Want',

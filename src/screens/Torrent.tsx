@@ -160,7 +160,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
             );
           });
         },
-        (e) => toast(t(catalogErrorCode(e) === 'nokey' ? 'discover.nokeyText' : 'discover.offlineText'), 'error'),
+        (e) => toast(t(catalogErrorCode(e) === 'nokey' ? 'tv.discover.nokeyText' : 'tv.discover.offlineText'), 'error'),
       );
   };
 

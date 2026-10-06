@@ -1084,6 +1084,9 @@ export const ru = {
       wantKey: 'хочу посмотреть',
       filtersKey: 'фильтры',
       backLibrary: 'Назад — к медиатеке',
+      // the TV has no «Мои» tab: the phone texts point there
+      offlineText: 'TMDB не отвечает из этой сети. Укажите зеркало TMDB в настройках TorrServer или попробуйте позже.',
+      nokeyText: 'Нет ключа TMDB. Добавьте его в настройках TorrServer (TMDB → API key).',
     },
     want: {
       tab: 'Хочу',
