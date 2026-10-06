@@ -8,8 +8,8 @@ import { displayTitle } from '../ui/displayTitle';
 import { episodeLabel, parseEpisode } from '../../../src/lib/episodes';
 import { libraryTitle } from '../../../src/lib/libraryView';
 import { parseTorrentData } from '../../../src/api/torrserver';
-import { groupLibrary, singleGroup } from '../../../src/lib/seriesGroups';
-import { cachedSeriesMatch, seriesMatchVersion } from '../../../src/lib/seriesMatch';
+import { seriesMatchVersion } from '../../../src/lib/seriesMatch';
+import { torrentName as cleanTorrentName } from '../../../src/lib/cleanNames';
 import { realEpisodeName, seasonEpisodes, showOf } from '../../../src/lib/episodeNames';
 import { torrents } from '../../../src/store/library';
 
@@ -21,22 +21,9 @@ export function libraryTorrent(hash: string, list: Torrent[] = torrents.peek()):
   return h ? list.filter((x) => x.hash.toLowerCase() === h)[0] : undefined;
 }
 
-/** The series key the tiles match TMDB with: the group's in «Мои», else the lone torrent's; '' for a film. */
-function seriesKeyOf(tor: Torrent, list: Torrent[]): string {
-  const items = groupLibrary(list);
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
-    if (it.kind === 'series' && it.members.some((m) => m.hash === tor.hash)) return it.key;
-  }
-  const g = singleGroup(tor);
-  return g ? g.key : '';
-}
-
-/** The name of a torrent: the TMDB show's once matched, else the short title («Тёмная материя»). */
+/** The name of a torrent: the TMDB show's once matched, else the short title («Тёмная материя»); the TV's rule. */
 export function torrentName(tor: Torrent, list: Torrent[] = torrents.peek()): string {
-  const key = seriesKeyOf(tor, list);
-  const card = key ? cachedSeriesMatch(key) : null;
-  return card && card.title ? card.title : libraryTitle(tor).title;
+  return cleanTorrentName(tor, list);
 }
 
 /** The path of a file of the torrent; '' when the list has no such file. */
