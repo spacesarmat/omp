@@ -243,6 +243,9 @@ export const en: EnDict<typeof ru> = {
     reminderOn: 'Reminder on',
     badgeNext: 'new episode {date}',
     badgeSeason: 'new season',
+    keepOnly: 'Keep only this one',
+    keepOnlyAsk: { one: 'Delete the other torrent of season {season} ({n})?', other: 'Delete the other torrents of season {season} ({n})?' },
+    keepOnlyAskNoSeason: { one: 'Delete the other torrent with no season ({n})?', other: 'Delete the other torrents with no season ({n})?' },
   },
   donate: {
     codeExpired: 'The code has expired',
