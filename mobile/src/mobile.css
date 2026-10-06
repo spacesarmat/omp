@@ -637,19 +637,30 @@ button, .m-btn {
 .m-head-sub .m-remote-title { font-size: inherit; font-weight: inherit; }
 /* «Кнопки» / «Тачпад»: the controls fill the room between the switch and the tab bar */
 .m-remote > .m-rb, .m-remote > .m-rt { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
-/* «Кнопки» (Magic Remote): d-pad, colour keys, Back/Home/Menu, then volume · play · keyboard/mute, spread evenly */
+/* «Кнопки» (Magic Remote): d-pad, colour keys, Back/Home/Menu, then volume · play · keyboard/mute, spread evenly.
+   The area is a size container: every key is sized from its real height (cqh), so the rows fit between the switch
+   and the tab bar on any phone (mini-player and keyboard field included); below ~130px of room it scrolls. */
 .m-rb {
-  --dp: min(230px, calc(100vw - 64px), 30vh);
-  --rk: clamp(100px, 18vh, 150px);
-  --rnd: clamp(46px, 7.6vh, 64px);
-  justify-content: space-evenly; gap: 8px;
+  container-type: size;
+  overflow-x: hidden;
+  overflow-y: auto;
+  --dp: min(230px, calc(100vw - 64px), 32vh);
+  --dp: clamp(40px, min(calc(100cqw - 64px), 42cqh), 230px);
+  --pill: clamp(10px, 4.4cqh, 26px);
+  --rnd: clamp(24px, 11cqh, 64px);
+  --rk: clamp(44px, 26cqh, 150px);
+  --play: clamp(28px, 12.3cqh, 72px);
+  --seek-h: clamp(18px, 6.8cqh, 40px);
+  --seek-w: clamp(30px, 8.2cqh, 48px);
+  --play-gap: clamp(3px, 1.7cqh, 10px);
 }
-.m-remote.mini .m-rb { --dp: min(230px, calc(100vw - 64px), 25vh); --rk: clamp(96px, 15vh, 150px); }
-.m-remote.kbd .m-rb { --dp: min(230px, calc(100vw - 64px), 21vh); --rk: clamp(96px, 14vh, 150px); --rnd: clamp(44px, 6.4vh, 64px); }
-.m-remote.mini.kbd .m-rb { --dp: min(230px, calc(100vw - 64px), 17vh); --rk: clamp(90px, 12vh, 150px); }
-.m-rb > * { flex-shrink: 0; }
+/* space-evenly through auto margins: when the rows cannot fit they collapse to 0 and the area scrolls from the top */
+.m-rb > * { margin-top: auto; }
+.m-rb > :last-child { margin-bottom: auto; }
+/* the least room between rows (cq units resolve against .m-rb only on its children) */
+.m-rb > * + * { padding-top: clamp(2px, 1.4cqh, 8px); }
 .m-rb-colors { display: flex; justify-content: center; gap: 16px; }
-.m-ckey { flex: 0 1 64px; min-width: 0; height: 26px; min-height: 0; padding: 0; border: none; border-radius: 13px; }
+.m-ckey { flex: 0 1 64px; min-width: 0; height: var(--pill); min-height: 0; padding: 0; border: none; border-radius: 13px; }
 .m-ckey-red { background: #E5484D; }
 .m-ckey-green { background: #3FB950; }
 .m-ckey-yellow { background: #F5B700; }
@@ -658,16 +669,25 @@ button, .m-btn {
 .m-rkey { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .m-rkey-btn { width: var(--rnd); height: var(--rnd); min-width: 0; min-height: 0; padding: 0; border: none; border-radius: 50%; background: var(--panel); color: var(--text); display: flex; align-items: center; justify-content: center; }
 .m-rkey-cap, .m-rocker-cap { font-size: 12px; color: var(--muted); }
-.m-rb-bottom { display: flex; justify-content: space-between; align-items: center; margin: 0 24px; }
-.m-rocker { width: 70px; height: var(--rk); padding: 6px 0; box-sizing: border-box; border-radius: 35px; background: var(--panel); display: flex; flex-direction: column; align-items: center; }
+.m-rb-bottom { display: flex; justify-content: space-between; align-items: center; margin-left: 24px; margin-right: 24px; }
+.m-rocker { width: 70px; height: var(--rk); padding: 4px 0; box-sizing: border-box; border-radius: 35px; background: var(--panel); display: flex; flex-direction: column; align-items: center; }
 .m-rocker-btn { flex: 1 1 0; width: 100%; min-height: 0; padding: 0; border: none; background: none; color: var(--text); display: flex; align-items: center; justify-content: center; }
 .m-rocker-btn[aria-pressed='true'] { color: var(--accent); }
-.m-rocker-cap { font-size: 11px; }
+.m-rocker-cap { font-size: 11px; line-height: 1.2; }
 .m-rocker-sign { font-size: 26px; line-height: 1; }
-.m-rb-play { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.m-rb-playbtn { width: 72px; height: 72px; min-height: 0; padding: 0; border: none; border-radius: 50%; background: var(--accent); color: var(--bg); display: flex; align-items: center; justify-content: center; }
+.m-rb-play { display: flex; flex-direction: column; align-items: center; gap: var(--play-gap); }
+.m-rb-playbtn { width: var(--play); height: var(--play); min-height: 0; padding: 0; border: none; border-radius: 50%; background: var(--accent); color: var(--bg); display: flex; align-items: center; justify-content: center; }
 .m-rb-seek { display: flex; gap: 8px; }
-.m-rb-seekbtn { width: 48px; height: 40px; min-height: 0; padding: 0; border: none; border-radius: 12px; background: var(--panel); color: var(--text); display: flex; align-items: center; justify-content: center; }
+.m-rb-seekbtn { width: var(--seek-w); height: var(--seek-h); min-height: 0; padding: 0; border: none; border-radius: 12px; background: var(--panel); color: var(--text); display: flex; align-items: center; justify-content: center; }
+/* short phones: the round keys drop their captions, the colour pills get narrower */
+@media (max-height: 700px) {
+  .m-rkey-cap { display: none; }
+  .m-ckey { flex-basis: 52px; }
+}
+/* very little room (mini-player and keyboard field on a short phone): the rockers drop their captions */
+@container (max-height: 240px) {
+  .m-rocker-cap { display: none; }
+}
 .m-rb-row { display: grid; gap: 10px; flex-shrink: 0; }
 .m-rb-media { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .m-rt-keys { grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr) 64px; }

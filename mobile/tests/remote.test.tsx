@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// @ts-ignore node builtins
+import { readFileSync } from 'node:fs';
+// @ts-ignore
+import { join } from 'node:path';
 import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -694,6 +698,32 @@ describe('Remote for Android TV', () => {
     click(text('Каталог'));
     await flush();
     expect(toast.value).toBe('Телевизор не отвечает');
+  });
+});
+
+describe('buttons mode fits the phone height (mobile.css)', () => {
+  const css = readFileSync(join('mobile', 'src', 'mobile.css'), 'utf8').replace(/\r\n/g, '\n');
+  const rule = (sel: string) => {
+    const i = css.indexOf('\n' + sel + ' {');
+    expect(i, sel).toBeGreaterThanOrEqual(0);
+    return css.slice(i, css.indexOf('}', i));
+  };
+
+  it('the area is a scrolling size container and the keys are sized from its height', () => {
+    const rb = rule('.m-rb');
+    expect(rb).toContain('container-type: size');
+    expect(rb).toContain('overflow-y: auto');
+    for (const v of ['--dp', '--pill', '--rnd', '--rk', '--play', '--seek-h']) expect(rb).toMatch(new RegExp(v + ': clamp\\([^;]*cqh'));
+    expect(rule('.m-dpad-wrap')).toContain('var(--dp');
+    expect(rule('.m-rkey-btn')).toContain('var(--rnd)');
+    expect(rule('.m-rocker')).toContain('var(--rk)');
+    expect(rule('.m-rb-playbtn')).toContain('var(--play)');
+    expect(rule('.m-ckey')).toContain('var(--pill)');
+  });
+
+  it('no row is pinned to its full size, captions go on short phones', () => {
+    expect(css).not.toMatch(/\.m-rb > \* \{[^}]*flex-shrink: 0/);
+    expect(css).toMatch(/@media \(max-height: 700px\) \{\n {2}\.m-rkey-cap \{ display: none; \}/);
   });
 });
 
