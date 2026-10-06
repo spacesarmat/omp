@@ -1,4 +1,4 @@
-import { lang, t } from '../../src/i18n';
+import { lang, t } from '../i18n';
 import { FAQ_RU } from './faq.ru';
 import { FAQ_EN } from './faq.en';
 

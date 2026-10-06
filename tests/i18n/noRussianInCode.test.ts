@@ -11,7 +11,7 @@ const PENDING: string[] = [
 const ALLOWLIST: { [file: string]: string } = {
   'src/i18n/ru.ts': 'the Russian dictionary',
   'src/i18n/languageNames.ts': 'language names in their own language',
-  'mobile/src/faq.ru.ts': 'Russian FAQ texts',
+  'src/faq/faq.ru.ts': 'Russian FAQ texts',
   'src/lib/faqLinks.ts': 'FAQ link keys: legacy Russian question texts resolved to item ids by OLD_Q_LINKS (language-independent)',
   'src/lib/librarySearch.ts': 'title matching (ё→е normalization)',
   'src/lib/tracks.ts': 'language names in their own language and audio-language tokens of file names (parsing)',

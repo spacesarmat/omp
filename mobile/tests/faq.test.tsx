@@ -4,7 +4,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Faq, highlightFaq, normalizeFaq, searchFaq } from '../src/screens/Faq';
 import { Settings } from '../src/screens/Settings';
-import { DEVICES, FAQ, OLD_Q_LINKS, SECTIONS, itemFor, resolveFaqLink, type FaqLine } from '../src/faq';
+import { DEVICES, FAQ, OLD_Q_LINKS, SECTIONS, itemFor, resolveFaqLink, type FaqLine } from '../../src/faq/faq';
 import { currentRoute, resetTo, routeStack } from '../src/nav';
 import { HB_REPO_URL, RELEASES_URL } from '../../src/lib/updateInfo';
 import { localServer } from '../src/server/localServer';

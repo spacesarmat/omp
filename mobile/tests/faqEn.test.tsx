@@ -3,9 +3,9 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
 import { Faq, searchFaq } from '../src/screens/Faq';
-import { FAQ, DEVICES, SECTIONS, faqText, resolveFaqLink, type FaqLine } from '../src/faq';
-import { FAQ_RU } from '../src/faq.ru';
-import { FAQ_EN } from '../src/faq.en';
+import { FAQ, DEVICES, SECTIONS, faqText, resolveFaqLink, type FaqLine } from '../../src/faq/faq';
+import { FAQ_RU } from '../../src/faq/faq.ru';
+import { FAQ_EN } from '../../src/faq/faq.en';
 import { FAQ_ATV_ADB, FAQ_LG_DEVMODE, FAQ_SAMSUNG } from '../../src/lib/installPlan';
 import { resetTo } from '../src/nav';
 

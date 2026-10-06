@@ -16,6 +16,7 @@ import { NativePlayerScreen } from './screens/NativePlayer';
 import { AddScreen } from './screens/Add';
 import { PlaylistScreen } from './screens/Playlist';
 import { SettingsScreen } from './screens/Settings';
+import { FaqScreen } from './screens/Faq';
 import { UpdateScreen } from './screens/Update';
 import { PairPhoneScreen } from './screens/PairPhone';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
@@ -70,6 +71,8 @@ function renderRoute(r: Route) {
       return <PlaylistScreen url={r.url} title={r.title} />;
     case 'settings':
       return <SettingsScreen />;
+    case 'faq':
+      return <FaqScreen />;
     case 'pairPhone':
       return <PairPhoneScreen />;
     case 'update':

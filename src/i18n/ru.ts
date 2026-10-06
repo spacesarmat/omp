@@ -1686,6 +1686,7 @@ export const ru = {
     dev: { lg: 'Телевизор LG', atv: 'Android TV', phone: 'Телефон', server: 'TorrServer', common: 'Общее' },
     sec: { install: 'Установка', connect: 'Подключение', player: 'Плеер', trouble: 'Если что-то не работает', setup: 'Поиск и настройка', about: 'О проекте', log: 'Журнал и резервная копия', news: 'Новое и подписки' },
     fromTv: 'Выбрано по подключённому телевизору · {name}',
+    scanToOpen: 'Наведите камеру телефона, чтобы открыть ссылку',
   },
   localServer: {
     name: 'Этот телефон',

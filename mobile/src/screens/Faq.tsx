@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { goBack } from '../nav';
-import { DEVICES, FAQ, SECTIONS, itemFor, resolveFaqLink, type Device, type FaqItem, type FaqLine } from '../faq';
+import { DEVICES, FAQ, SECTIONS, itemFor, resolveFaqLink, type Device, type FaqItem, type FaqLine } from '../../../src/faq/faq';
 import { activeTv } from '../tv/tvStore';
 import { loadJson, saveJson } from '../../../src/store/storage';
 

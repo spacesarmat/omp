@@ -13,7 +13,8 @@ export type Route =
   | { name: 'settings' }
   | { name: 'update' }
   | { name: 'sources' }
-  | { name: 'pairPhone' };
+  | { name: 'pairPhone' }
+  | { name: 'faq' };
 
 export const routeStack = signal<Route[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);

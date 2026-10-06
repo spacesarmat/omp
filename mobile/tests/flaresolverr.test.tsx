@@ -5,7 +5,7 @@ import { act } from 'preact/test-utils';
 import { FlareSolverr, addressRemoved } from '../src/screens/FlareSolverr';
 import { Sources } from '../src/screens/Sources';
 import { currentRoute, resetTo } from '../src/nav';
-import { FLARESOLVERR_Q } from '../src/faq';
+import { FLARESOLVERR_Q } from '../../src/faq/faq';
 import { flareSolverrUrl, setFlareSolverrUrl } from '../../src/sources/flareStore';
 import { flareIntro, flareNoWifi, flareNotAnswering, flareNotFound, setFlareStatus } from '../../src/sources/flaresolverr';
 import type { LanScan } from '../../src/sources/indexerDiscovery';

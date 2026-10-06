@@ -1,4 +1,4 @@
-import { HB_REPO_URL, RELEASES_URL } from '../../src/lib/updateInfo';
+import { HB_REPO_URL, RELEASES_URL } from '../lib/updateInfo';
 import type { Device, FaqLine, FaqText } from './faq';
 
 // The Russian FAQ texts, keyed by item id (the structure — sections, devices — is in faq.ts).

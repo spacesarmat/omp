@@ -16,7 +16,7 @@ import {
   type LgFacts,
   type AtvFacts,
 } from '../../src/lib/installPlan';
-import { resolveFaqLink } from '../../mobile/src/faq';
+import { resolveFaqLink } from '../../src/faq/faq';
 
 const lg = (o: Partial<LgFacts> = {}): LgFacts => ({
   kind: 'lg',
