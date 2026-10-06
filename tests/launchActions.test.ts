@@ -6,6 +6,7 @@ import { servers, activeServerId, addServer, setActiveServer } from '../src/stor
 import { routeStack } from '../src/ui/nav';
 import { settings, resetSettings } from '../src/store/settings';
 import { lang } from '../src/i18n';
+import { phoneLink, forgetPhoneLink } from '../src/phone/phoneStore';
 
 const HASH = 'abcdef0123456789abcdef0123456789abcdef01';
 const top = () => routeStack.value[routeStack.value.length - 1];
@@ -18,6 +19,18 @@ beforeEach(() => {
 });
 
 describe('runLaunchParams', () => {
+  const PH = { url: 'http://192.168.1.20:8097', token: 'a'.repeat(32), name: 'Samsung SM-G998B' };
+  it('stores the phone link from launch params', () => {
+    forgetPhoneLink();
+    runLaunchParams(JSON.stringify({ phone: PH }));
+    expect(phoneLink.value && phoneLink.value.url).toBe(PH.url);
+    expect(JSON.parse(localStorage.getItem('tsp.phoneLink') || '{}').token).toBe(PH.token);
+  });
+  it('stores the phone link even when the rest of the params is invalid', () => {
+    forgetPhoneLink();
+    runLaunchParams({ phone: PH, torrent: 'nothash' });
+    expect(phoneLink.value && phoneLink.value.token).toBe(PH.token);
+  });
   it('open=update opens the update screen and checks the feed', () => {
     const seen: string[] = [];
     mockFetch((u) => {

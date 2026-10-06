@@ -27,6 +27,7 @@ import {
 } from '../src/tv/tvClient';
 import { tvs, saveTv, reloadTvs, setActiveTv } from '../src/tv/tvStore';
 import { native } from '../src/platform/native';
+import { setTvSearch } from '../src/tv/phoneRpc';
 
 const TV = { ip: '192.168.1.5', name: 'LG' };
 
@@ -383,6 +384,30 @@ describe('tvClient commands', () => {
     await flush();
     const req = fake.sent[fake.sent.length - 1];
     expect(req.payload).toEqual({ id: 'com.spacesarmat.torrplayer', params: { torrent: 'h', lang: 'en' } });
+    fake.emit({ type: 'response', id: req.id, payload: { returnValue: true } });
+    await p;
+  });
+
+  it('LG launch params carry the phone search address while the TV search is on', async () => {
+    const info = { running: true, ip: '192.168.1.20', port: 8097, token: 'c'.repeat(32), name: 'Pixel' };
+    vi.spyOn(native, 'rpcSetEnabled').mockResolvedValue(info);
+    await setTvSearch(true);
+    await connected(fake);
+    applyLanguageSetting('en');
+    let p = launchOnTv({ torrent: 'h' });
+    await flush();
+    let req = fake.sent[fake.sent.length - 1];
+    expect(req.payload).toEqual({
+      id: 'com.spacesarmat.torrplayer',
+      params: { torrent: 'h', lang: 'en', phone: { url: 'http://192.168.1.20:8097', token: 'c'.repeat(32), name: 'Pixel' } },
+    });
+    fake.emit({ type: 'response', id: req.id, payload: { returnValue: true } });
+    await p;
+    await setTvSearch(false);
+    p = launchOnTv({ report: 'http://192.168.1.20:8098/x' });
+    await flush();
+    req = fake.sent[fake.sent.length - 1];
+    expect(req.payload).toEqual({ id: 'com.spacesarmat.torrplayer', params: { report: 'http://192.168.1.20:8098/x', lang: 'en' } });
     fake.emit({ type: 'response', id: req.id, payload: { returnValue: true } });
     await p;
   });

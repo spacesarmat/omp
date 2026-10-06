@@ -4,6 +4,7 @@ import { signal, effect } from '@preact/signals';
 import { native, type OmpNativeApi, type FoundOmpTv } from '../platform/native';
 import { activeTv, saveTv, setActiveTv, clearTvToken, normalizeMac, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
 import { showToast } from '../ui/toast';
+import { phoneParam } from './phoneRpc';
 import { log } from '../../../src/lib/log';
 import { lang, t } from '../../../src/i18n';
 import { isRutrackerResult, TRANSFER_PATH, type RutrackerResult, type TransferPayload } from '../../../src/sources/transfer';
@@ -534,7 +535,9 @@ export function warmUp(): Promise<void> {
 
 /**
  * Opens OMP on the TV with launch params (LG: system.launcher, Android TV: /omp/launch). Every launch carries the
- * phone's resolved UI language as `lang`: the TV stores it as its own language (an older OMP ignores it).
+ * phone's resolved UI language as `lang`: the TV stores it as its own language (an older OMP ignores it). An LG launch
+ * also carries `phone`, the address of this phone's search server, while the TV search switch is on; Android TV
+ * searches with its own sources, so it does not get it.
  */
 export async function launchOnTv(params: object): Promise<void> {
   params = { ...params, lang: lang.value };
@@ -543,8 +546,9 @@ export async function launchOnTv(params: object): Promise<void> {
     checkForeground();
     return;
   }
+  const phone = phoneParam();
   try {
-    await request('ssap://system.launcher/launch', launchOmpPayload(params));
+    await request('ssap://system.launcher/launch', launchOmpPayload(phone ? { ...params, phone } : params));
   } catch (e) {
     if (!(e instanceof TvAnswerError)) throw e;
     throw new Error(/no such app|not found|not exist|404|-101/i.test(e.raw) ? tvNoOmp() : tvLaunchFailed());

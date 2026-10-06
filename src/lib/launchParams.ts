@@ -1,7 +1,16 @@
+import { sanitizePhoneLink } from '../phone/phoneStore';
+
 export type LaunchAction =
   | { kind: 'play'; url: string; title: string }
   | { kind: 'torrent'; hash: string; file?: number; t?: number; from?: string }
   | { kind: 'magnet'; link: string };
+
+/** The phone search server's address (`PhoneLink` without `at`). */
+export interface PhoneAddress {
+  url: string;
+  token: string;
+  name: string;
+}
 
 export interface LaunchPlan {
   server?: string;
@@ -11,6 +20,8 @@ export interface LaunchPlan {
   open?: 'update';
   /** The phone's resolved UI language: the TV stores it as its own language setting. */
   lang?: 'ru' | 'en';
+  /** Where the TV reaches the phone's site search (its OMP app with the TV search switch on). */
+  phone?: PhoneAddress;
   invalid: boolean;
 }
 
@@ -88,6 +99,11 @@ export function parseLaunchParams(raw: unknown): LaunchPlan | null {
   if (o.open === 'update') plan.open = 'update';
   // an unknown language is ignored the same way
   if (o.lang === 'ru' || o.lang === 'en') plan.lang = o.lang;
-  if (!plan.server && !plan.action && !plan.report && !plan.open && !plan.lang && !plan.invalid) return null;
+  // a bad phone address is dropped without invalidating the launch: an older or newer phone must never break it
+  if (has('phone')) {
+    const ph = sanitizePhoneLink(o.phone, 0);
+    if (ph) plan.phone = { url: ph.url, token: ph.token, name: ph.name };
+  }
+  if (!plan.server && !plan.action && !plan.report && !plan.open && !plan.lang && !plan.phone && !plan.invalid) return null;
   return plan;
 }

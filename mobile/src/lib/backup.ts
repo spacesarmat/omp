@@ -150,6 +150,8 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.tvWant', // TV «Хочу посмотреть»: lives on the TV only (a later version hands it to the phone)
   'tsp.tvDiscoverQuery', // TV «Обзор»: sort and filters of the TV, never on the phone
   'tsp.sourcePause', // background requests to a site paused after its code page: per device, an hour
+  'tsp.tvSearchService', // the TV search switch: it runs this phone's own server, per device
+  'tsp.phoneLink', // TV: the address and token of the phone that serves its search, per device
 ];
 
 function readRaw(key: string): unknown {

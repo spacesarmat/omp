@@ -16,6 +16,8 @@ import { activeServer } from '../../src/store/servers';
 import * as tvUpdate from '../src/tv/tvUpdate';
 import { tvState } from '../src/tv/tvClient';
 import { saveTv, reloadTvs } from '../src/tv/tvStore';
+import { native } from '../src/platform/native';
+import { tvSearchOn } from '../src/tv/phoneRpc';
 
 function mount(): HTMLElement {
   document.body.innerHTML = '<div id="app"></div>';
@@ -46,6 +48,24 @@ afterEach(() => {
 });
 
 describe('Settings', () => {
+  it('the TV search row switches the phone search server off', async () => {
+    const set = vi.spyOn(native, 'rpcSetEnabled').mockResolvedValue(null);
+    saveTv({ ip: '192.168.1.50', name: 'LG' });
+    const el = mount();
+    const row = el.querySelector('[data-row="tv-search-service"]') as HTMLElement;
+    expect(row.textContent).toContain('Поиск для телевизора');
+    expect(row.textContent).toContain('В шторке будет тихое уведомление');
+    const sw = row.querySelector('[role="switch"]') as HTMLButtonElement;
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+    await act(async () => {
+      sw.click();
+    });
+    expect(set).toHaveBeenLastCalledWith(false);
+    expect(tvSearchOn.value).toBe(false);
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    expect(row.textContent).toContain('Выключено — телевизор ищет только через TorrServer (Rutor, Jackett)');
+  });
+
   it('the update block comes first', () => {
     const el = mount();
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);

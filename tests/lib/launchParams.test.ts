@@ -98,4 +98,13 @@ describe('lang param', () => {
     expect(parseLaunchParams({ lang: 5, torrent: HASH })!.lang).toBeUndefined();
     expect(parseLaunchParams({ lang: 5, torrent: HASH })!.invalid).toBe(false);
   });
+  const PH = { url: 'http://192.168.1.20:8097', token: 'a'.repeat(32), name: 'Samsung SM-G998B' };
+  it('accepts the phone address', () => {
+    expect(parseLaunchParams({ phone: PH })).toEqual({ invalid: false, phone: PH });
+  });
+  it('ignores a bad phone address without invalidating', () => {
+    expect(parseLaunchParams({ phone: { ...PH, token: 'x' }, lang: 'en' })).toEqual({ invalid: false, lang: 'en' });
+    expect(parseLaunchParams({ phone: { ...PH, url: 'https://evil.example/' } })).toBeNull();
+    expect(parseLaunchParams({ phone: 'garbage', torrent: HASH })).toEqual({ invalid: false, action: { kind: 'torrent', hash: HASH.toLowerCase() } });
+  });
 });
