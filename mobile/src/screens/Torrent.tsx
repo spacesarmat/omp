@@ -27,7 +27,7 @@ import { formatDuration } from '../../../src/lib/format';
 import { useSkip, firstPlayableId } from '../../../src/lib/useSkip';
 import { parseMark, skipStatus } from '../../../src/lib/skipMarks';
 import type { SkipPrefs } from '../../../src/lib/journal';
-import { posterColor, shortTitle } from '../../../src/lib/libraryView';
+import { libraryTitle, posterColor, shortTitle } from '../../../src/lib/libraryView';
 import { loadQualityWatch, loadWatch, saveQualityWatch, saveWatch } from '../../../src/store/journal';
 import { isLibraryFilm } from '../../../src/monitor/better';
 import { isWatchedSeries } from '../../../src/monitor/newEpisodes';
@@ -115,7 +115,8 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
   );
 
   const code = fileCode(file);
-  const head = [code, fileTitle(file), fmtSize(file.length)].filter(Boolean);
+  // the episode code (a film: its short name) and the size, never the file name
+  const head = [code || libraryTitle(torrent).title, fmtSize(file.length)].filter(Boolean);
 
   const onTv = async () => {
     if (!tv) {

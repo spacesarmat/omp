@@ -473,7 +473,8 @@ describe('TV launch flow', () => {
     saveProgress('abc', 4, 500, 3000);
     await open1();
     const dlg = el.querySelectorAll('[role=dialog]')[1];
-    expect(dlg.textContent).toContain('S02E04 · Show.S02E04 · на LG OLED');
+    // the episode code and the TV, never the file name
+    expect(dlg.querySelector('.m-muted')!.textContent).toBe('S02E04 · на LG OLED');
     expect(dlg.textContent).toContain('Осталось 42 мин');
     click(byText('Сначала'));
     await flush();
