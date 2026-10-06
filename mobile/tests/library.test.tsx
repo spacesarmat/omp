@@ -1,6 +1,8 @@
 import { tvNoOmp, tvState } from '../src/tv/tvClient';
 import { settings, updateSettings } from '../../src/store/settings';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
+// @ts-ignore node builtins
+import { readFileSync } from 'node:fs';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
@@ -160,6 +162,39 @@ describe('Library', () => {
     mount();
     await flush();
     expect(Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent)).toEqual(['Человек-паук: Новый день']);
+  });
+
+  it('list rows: the name on its own first line, the meta, the badge and the size on the second; the separator under the whole row', async () => {
+    const list: Torrent[] = [
+      { hash: 's1', title: 'Американская история преступлений / American Crime Story / Сезон: 1 / Серии: 1-10 из 10 [2016, WEB-DL 1080p]', category: 'tv', stat: 3, torrent_size: 3 * 1024 ** 3, timestamp: 3 },
+    ];
+    torrents.value = list;
+    listSpy.mockResolvedValue(list);
+    updateSettings({ libraryView: 'compact' });
+    mount();
+    await flush();
+    const row = el.querySelector('.m-clist .m-crow')!;
+    const main = row.querySelector('.m-crow-main')!;
+    expect(main.children[0].classList.contains('m-crow-title')).toBe(true);
+    expect(main.querySelector('.m-crow-title')!.textContent).toBe('Американская история преступлений');
+    const sub = main.querySelector('.m-crow-sub')!;
+    expect(Array.from(sub.children).map((c) => c.className.split(' ').filter((x) => /^m-(crow-meta|new-badge|crow-size)$/.test(x))[0])).toEqual([
+      'm-crow-meta',
+      'm-new-badge',
+      'm-crow-size',
+    ]);
+    // nothing of the second line sits next to the name
+    expect(row.querySelector(':scope > .m-crow-size, :scope > .m-new-badge, :scope > .m-crow-meta')).toBeNull();
+    const css = (readFileSync('mobile/src/mobile.css', 'utf8') as string).replace(/\r\n/g, '\n');
+    const rule = (sel: string) => {
+      const i = css.indexOf('\n' + sel + ' {');
+      return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
+    };
+    expect(rule('.m-clist > .m-row-wrap')).toMatch(/border-bottom:/);
+    expect(rule('.m-crow')).not.toMatch(/border-bottom:\s*1px/);
+    expect(rule('.m-crow')).not.toMatch(/(^|[^-])height:\s*48px/);
+    expect(rule('.m-crow-title')).toMatch(/-webkit-line-clamp:\s*2/);
+    expect(rule('.m-crow-size')).toMatch(/margin-left:\s*auto/);
   });
 
   it('English: the meta line is translated', async () => {
