@@ -95,8 +95,6 @@ const PAUSE = 'M8 5v14M16 5v14';
 const PLAY = 'M7 5l12 7-12 7z';
 const NEXT = 'M6 6l9 6-9 6zM18 6v12';
 const FF10 = 'M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4';
-const VOL_DOWN = 'M4 10v4h4l5 4V6L8 10z';
-const VOL_UP = 'M4 10v4h4l5 4V6L8 10zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11';
 const TUNE = 'M4 7h9M17 7h3M4 17h3M11 17h9M15 4v6M9 14v6';
 const KEYBOARD = 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10';
 
@@ -519,12 +517,12 @@ export function Remote() {
   );
   const shownState = tvWaking.value && state !== 'connected' && state !== 'pairing' ? stateText('connecting') : stateText(state);
   const backKey = (
-    <button type="button" class="m-key m-key-icon" aria-label={t('common.back')} onClick={() => press('BACK')}>
+    <button type="button" class="m-key" aria-label={t('common.back')} onClick={() => press('BACK')}>
       <Icon d={BACK} size={22} />
     </button>
   );
   const keyboardKey = (
-    <button type="button" class="m-key m-key-icon" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
+    <button type="button" class="m-key" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
       <Icon d={KEYBOARD} size={22} />
     </button>
   );

@@ -59,6 +59,29 @@ describe('episodeProgress', () => {
     expect(episodeProgress(LIST, 'uhd', 1, older).position).toBe(900);
   });
 
+  it('a watched mark wins over a position unless the position is strictly newer than a known watched time', () => {
+    // the file's own server mark (no time) beats an older local position of a sibling
+    expect(episodeProgress(LIST, 'uhd', 1, reader({ 'hd:2': { time: 1200, duration: 3600, updated: 5 } }, { 'uhd:1': undefined }))).toMatchObject({ watched: true, position: 0 });
+    // a sibling's server mark beats a local position too: it has no time to compare
+    expect(episodeProgress(LIST, 'uhd', 1, reader({ 'uhd:1': { time: 1200, duration: 3600, updated: 5 } }, { 'hd:2': undefined })).watched).toBe(true);
+    // a known watched time: a strictly newer position wins, an older or equal one does not
+    const newer = reader({ 'hd:2': { time: 3500, duration: 3600, updated: 5 }, 'uhd:1': { time: 1200, duration: 3600, updated: 6 } });
+    expect(episodeProgress(LIST, 'hd', 2, newer)).toMatchObject({ watched: false, position: 1200 });
+    const same = reader({ 'hd:2': { time: 3500, duration: 3600, updated: 6 }, 'uhd:1': { time: 1200, duration: 3600, updated: 6 } });
+    expect(episodeProgress(LIST, 'uhd', 1, same).watched).toBe(true);
+  });
+
+  it('a tie in time: the file\'s own record wins', () => {
+    const r = reader({ 'uhd:1': { time: 600, duration: 3600, updated: 4 }, 'hd:2': { time: 900, duration: 3600, updated: 4 } });
+    expect(episodeProgress(LIST, 'uhd', 1, r).position).toBe(600);
+    expect(episodeProgress(LIST, 'hd', 2, r).position).toBe(900);
+  });
+
+  it('an English-only release listed before the bilingual one still joins the series', () => {
+    const list = [EN, OTHER, UHD, HD];
+    expect(episodeCopies(list, 'en', 1).map((c) => c.hash).sort()).toEqual(['en', 'hd', 'uhd']);
+  });
+
   it('a position past the file\'s own known duration is dropped', () => {
     const r = reader({
       'uhd:1': { time: 0, duration: 1200, updated: 1 },
