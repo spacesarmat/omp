@@ -6,7 +6,7 @@ vi.mock('../../src/version', () => ({ APP_VERSION: '0.15.5' }));
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
-import { UpdateSheet, setApkInstaller, setAbiKeyReader, describeInstallError } from '../src/ui/UpdateSheet';
+import { UpdateSheet, setApkInstaller, setAbiKeyReader, setInstallPermission, describeInstallError } from '../src/ui/UpdateSheet';
 import { updatePrompt } from '../../src/store/updates';
 import type { UpdateInfo } from '../../src/lib/updateInfo';
 
@@ -33,6 +33,7 @@ beforeEach(() => {
   updatePrompt.value = info;
   setApkInstaller(null);
   setAbiKeyReader(null);
+  setInstallPermission(null);
 });
 
 const apks = {
@@ -200,5 +201,43 @@ describe('UpdateSheet in English', () => {
     expect(el.querySelector('.m-error')!.textContent).toBe('Could not download the update (HTTP 404)');
     expect(describeInstallError({ message: 'Allow installs from OMP and try again', code: 'omp' })).toBe('Allow installs from OMP and try again');
     expect(describeInstallError(new Error('boom'))).toBe('Could not install the update: boom');
+  });
+});
+
+describe('«unknown apps» permission', () => {
+  it('not given yet: what Android will ask first, the install only after «Продолжить»', async () => {
+    setInstallPermission(() => Promise.resolve(false));
+    const calls: string[] = [];
+    setApkInstaller((url) => {
+      calls.push(url);
+      return Promise.resolve();
+    });
+    const el = mount();
+    await act(async () => btn(el, 'Установить').click());
+    expect(el.querySelector('[data-allow-hint]')!.textContent).toContain(
+      'Android попросит разрешить установку: найдите OMP в списке, включите переключатель и нажмите «Назад» — установка продолжится',
+    );
+    expect(calls).toEqual([]);
+    await act(async () => btn(el, 'Продолжить').click());
+    expect(calls).toEqual([info.ipkUrl]);
+    expect(el.querySelector('[data-allow-hint]')).toBeNull();
+  });
+
+  it('«Отмена» closes the hint without installing; with the permission no hint at all', async () => {
+    setInstallPermission(() => Promise.resolve(false));
+    const calls: string[] = [];
+    setApkInstaller((url) => {
+      calls.push(url);
+      return Promise.resolve();
+    });
+    const el = mount();
+    await act(async () => btn(el, 'Установить').click());
+    await act(async () => btn(el, 'Отмена').click());
+    expect(el.querySelector('[data-allow-hint]')).toBeNull();
+    expect(calls).toEqual([]);
+    setInstallPermission(() => Promise.resolve(true));
+    await act(async () => btn(el, 'Установить').click());
+    expect(el.querySelector('[data-allow-hint]')).toBeNull();
+    expect(calls).toEqual([info.ipkUrl]);
   });
 });

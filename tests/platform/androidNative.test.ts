@@ -35,7 +35,14 @@ describe('nativePlugin', () => {
   it('prefers a registered Plugins.OmpNative', async () => {
     const plugin = { localIpv4: vi.fn(() => Promise.resolve({ ip: '10.0.0.7' })), downloadAndInstallApk: vi.fn(), addListener: vi.fn() };
     w.Capacitor = { getPlatform: () => 'android', Plugins: { OmpNative: plugin }, nativePromise: vi.fn() };
-    expect(nativePlugin()).toBe(plugin);
+    const p = nativePlugin()!;
+    // the registered plugin, with addListener wrapped: an old WebView hands back a handle, not a promise
+    expect(Object.getPrototypeOf(p)).toBe(plugin);
+    expect(p.localIpv4).toBe(plugin.localIpv4);
+    plugin.addListener.mockReturnValue({ remove: () => undefined });
+    const handle = p.addListener('x' as never, () => undefined);
+    expect(typeof (handle as Promise<unknown>).then).toBe('function');
+    expect(plugin.addListener).toHaveBeenCalledWith('x', expect.any(Function));
     expect(await nativeLocalIp()).toBe('10.0.0.7');
   });
   it('falls back to the bare native bridge', async () => {

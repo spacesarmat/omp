@@ -104,6 +104,13 @@ interface TextInputProps {
   type?: 'text' | 'password' | 'url';
 }
 
+/**
+ * An address field asks the keyboard for its URL layout (digits, «.», «:» and «/» on the first page where the keyboard
+ * has one) in Latin letters, with no capitals or corrections. Plain attributes: Chrome 53 (LG) ignores the ones it
+ * does not know.
+ */
+const URL_KEYBOARD: { [k: string]: string } = { inputmode: 'url', autocapitalize: 'off', autocorrect: 'off', autocomplete: 'off', spellcheck: 'false', lang: 'en' };
+
 /** Spatial-nav item that opens the system keyboard (TV or LG ThinQ phone keyboard) on OK. */
 export function TextInput(p: TextInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -128,6 +135,7 @@ export function TextInput(p: TextInputProps) {
       <input
         ref={inputRef}
         type={(p.type || 'text') as 'text'}
+        {...(p.type === 'url' ? URL_KEYBOARD : {})}
         value={p.value}
         placeholder={p.placeholder}
         onInput={(e) => p.onChange((e.target as HTMLInputElement).value)}

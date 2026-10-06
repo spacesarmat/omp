@@ -10,6 +10,7 @@ import { formatDuration } from '../../../src/lib/format';
 import { displayTitle } from '../ui/displayTitle';
 import { chapterIndexAt, chapterLabel, chapterStepIndex, type Chapter } from '../../../src/player/chapters';
 import { hasPosterImage, playerPosterStyle } from '../ui/playerPoster';
+import { usePlayingNames } from '../lib/playingNames';
 
 const HOLD_MS = 1500;
 const HOLD_NEAR_S = 3;
@@ -40,6 +41,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
   const [held, setHeld] = useState<{ t: number; seen: number; at: number } | null>(null);
   const [tracks, setTracks] = useState(false);
   const s = nowPlaying.value;
+  const names = usePlayingNames(s);
   const status = linkStatus.value;
   const empty = !s || status === 'none';
   useEffect(() => {
@@ -125,11 +127,11 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     <div class="m-screen m-now" data-route="nowPlaying">
       {head}
       <div class="m-now-poster" style={playerPosterStyle(s)}>
-        {!hasPosterImage(s) && displayTitle(s.title)}
+        {!hasPosterImage(s) && names.title}
       </div>
       <div class="m-now-titles">
-        <div class="m-now-title">{displayTitle(s.title)}</div>
-        <div class="m-now-sub">{s.subtitle}</div>
+        <div class="m-now-title">{names.title}</div>
+        {names.sub && <div class="m-now-sub">{names.sub}</div>}
       </div>
       <div class="m-now-seek">
         <div class="m-seek">

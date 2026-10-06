@@ -6,7 +6,7 @@ import { Faq, searchFaq } from '../src/screens/Faq';
 import { FAQ, DEVICES, SECTIONS, faqText, resolveFaqLink, type FaqLine } from '../../src/faq/faq';
 import { FAQ_RU } from '../../src/faq/faq.ru';
 import { FAQ_EN } from '../../src/faq/faq.en';
-import { FAQ_ATV_ADB, FAQ_LG_DEVMODE, FAQ_SAMSUNG } from '../../src/lib/installPlan';
+import { FAQ_ATV_ADB, FAQ_LG_DEVMODE, FAQ_SAMSUNG, FAQ_XIAOMI, FAQ_SBER, FAQ_YANDEX } from '../../src/lib/installPlan';
 import { resetTo } from '../src/nav';
 
 function mount(ui: preact.VNode): HTMLElement {
@@ -56,6 +56,17 @@ describe('English FAQ', () => {
     }
   });
 
+  it('has the brand questions with the English pairing wording', () => {
+    for (const id of ['xiaomi', 'sber', 'yandex']) {
+      const x = faqText(id);
+      expect(x.short.map((l) => (typeof l === 'string' ? l : l.text)).join(' '), id).toContain('Settings → “Connect a phone”');
+      expect(x.short.join(' '), id).toContain('4-digit code');
+    }
+    expect(faqText('xiaomi').q).toBe('Install on Xiaomi (Mi Box, Mi TV)');
+    expect(faqText('sber').short.join(' ')).toContain('apps.sber.ru/my');
+    expect((faqText('yandex').more || []).join(' ')).toContain('subscription');
+  });
+
   it('has no Cyrillic', () => {
     for (const id of Object.keys(FAQ_EN)) for (const s of all(FAQ_EN[id])) expect(/[А-Яа-яЁё]/.test(s), id + ': ' + s).toBe(false);
   });
@@ -87,6 +98,9 @@ describe('English FAQ', () => {
     expect(resolveFaqLink(FAQ_LG_DEVMODE)).toEqual({ id: 'lg-devmode', device: 'lg' });
     expect(resolveFaqLink(FAQ_ATV_ADB)).toEqual({ id: 'atv-adb', device: 'atv' });
     expect(resolveFaqLink(FAQ_SAMSUNG)).toEqual({ id: 'samsung', device: 'common' });
+    expect(resolveFaqLink(FAQ_XIAOMI)).toEqual({ id: 'xiaomi', device: 'atv' });
+    expect(resolveFaqLink(FAQ_SBER)).toEqual({ id: 'sber', device: 'atv' });
+    expect(resolveFaqLink(FAQ_YANDEX)).toEqual({ id: 'yandex', device: 'atv' });
     const el = mount(<Faq q={FAQ_LG_DEVMODE} />);
     expect(el.querySelector('.m-faq-item.open .m-faq-q')!.textContent).toContain('Install without root');
   });

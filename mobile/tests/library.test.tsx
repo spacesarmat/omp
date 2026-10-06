@@ -1,6 +1,8 @@
 import { tvNoOmp, tvState } from '../src/tv/tvClient';
 import { settings, updateSettings } from '../../src/store/settings';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
+// @ts-ignore node builtins
+import { readFileSync } from 'node:fs';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
@@ -106,8 +108,9 @@ describe('Library', () => {
     await flush();
     const cards = el.querySelectorAll('.m-grid .m-card');
     expect(cards.length).toBe(3);
-    expect(cards[0].querySelector('.m-card-title')!.textContent).toBe('Starbound Frontier · 2 сезон');
-    expect(cards[0].textContent).toContain('2.0 GB');
+    expect(cards[0].querySelector('.m-card-title')!.textContent).toBe('Starbound Frontier');
+    expect(cards[0].querySelector('.m-card-meta')!.textContent).toBe('2 сезон');
+    expect(cards[0].textContent).toContain('2,0 ГБ');
     expect(cards[1].querySelector('.m-badge')!.textContent).toBe('4K');
   });
 
@@ -133,7 +136,7 @@ describe('Library', () => {
     expect(seg.parentElement).toBe(head);
   });
 
-  it('shows short titles with a meta line in every view and in the search results', async () => {
+  it('shows short titles, the season and episodes on the line under them, in every view and in the search results', async () => {
     const list: Torrent[] = [
       { hash: 's1', title: 'Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 10 (Алик Сахаров) [2026, США, WEB-DL 1080p]', category: 'tv', stat: 3, torrent_size: 3, timestamp: 3 },
       { hash: 's2', title: 'Человек-паук: Новый день / Spider-Man: Brand New Day (2026) WEB-DL 1080p', category: 'movie', stat: 3, torrent_size: 2, timestamp: 2 },
@@ -142,14 +145,15 @@ describe('Library', () => {
     torrents.value = list;
     listSpy.mockResolvedValue(list);
     updateSettings({ librarySort: 'new' });
-    const want = ['Темная материя · 2 сезон · серии 1–6 из 10', 'Человек-паук: Новый день · 2026', 'Мой любимый фильм'];
+    const want = ['Темная материя', 'Человек-паук: Новый день', 'Мой любимый фильм'];
     for (const view of ['large', 'small', 'list', 'compact'] as const) {
       updateSettings({ libraryView: view });
       mount();
       await flush();
       const sel = view === 'compact' ? '.m-crow-title' : '.m-card-title';
       expect(Array.from(el.querySelectorAll(sel)).map((n) => n.textContent), view).toEqual(want);
-      expect(el.querySelector('.m-title-meta')!.textContent).toBe(' · 2 сезон · серии 1–6 из 10');
+      expect(Array.from(el.querySelectorAll('.m-tile-meta')).map((n) => n.textContent), view).toEqual(['2 сезон · серии 1–6 из 10', '2026']);
+      expect(el.querySelector('.m-title-meta'), view).toBeNull();
       act(() => render(null, el));
     }
     updateSettings({ libraryView: 'large' });
@@ -157,7 +161,40 @@ describe('Library', () => {
     libraryQuery.value = 'spider';
     mount();
     await flush();
-    expect(Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent)).toEqual(['Человек-паук: Новый день · 2026']);
+    expect(Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent)).toEqual(['Человек-паук: Новый день']);
+  });
+
+  it('list rows: the name on its own first line, the meta, the badge and the size on the second; the separator under the whole row', async () => {
+    const list: Torrent[] = [
+      { hash: 's1', title: 'Американская история преступлений / American Crime Story / Сезон: 1 / Серии: 1-10 из 10 [2016, WEB-DL 1080p]', category: 'tv', stat: 3, torrent_size: 3 * 1024 ** 3, timestamp: 3 },
+    ];
+    torrents.value = list;
+    listSpy.mockResolvedValue(list);
+    updateSettings({ libraryView: 'compact' });
+    mount();
+    await flush();
+    const row = el.querySelector('.m-clist .m-crow')!;
+    const main = row.querySelector('.m-crow-main')!;
+    expect(main.children[0].classList.contains('m-crow-title')).toBe(true);
+    expect(main.querySelector('.m-crow-title')!.textContent).toBe('Американская история преступлений');
+    const sub = main.querySelector('.m-crow-sub')!;
+    expect(Array.from(sub.children).map((c) => c.className.split(' ').filter((x) => /^m-(crow-meta|new-badge|crow-size)$/.test(x))[0])).toEqual([
+      'm-crow-meta',
+      'm-new-badge',
+      'm-crow-size',
+    ]);
+    // nothing of the second line sits next to the name
+    expect(row.querySelector(':scope > .m-crow-size, :scope > .m-new-badge, :scope > .m-crow-meta')).toBeNull();
+    const css = (readFileSync('mobile/src/mobile.css', 'utf8') as string).replace(/\r\n/g, '\n');
+    const rule = (sel: string) => {
+      const i = css.indexOf('\n' + sel + ' {');
+      return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
+    };
+    expect(rule('.m-clist > .m-row-wrap')).toMatch(/border-bottom:/);
+    expect(rule('.m-crow')).not.toMatch(/border-bottom:\s*1px/);
+    expect(rule('.m-crow')).not.toMatch(/(^|[^-])height:\s*48px/);
+    expect(rule('.m-crow-title')).toMatch(/-webkit-line-clamp:\s*2/);
+    expect(rule('.m-crow-size')).toMatch(/margin-left:\s*auto/);
   });
 
   it('English: the meta line is translated', async () => {
@@ -170,7 +207,8 @@ describe('Library', () => {
     onTestFinished(() => applyLanguageSetting('ru'));
     mount();
     await flush();
-    expect(el.querySelector('.m-card-title')!.textContent).toBe('Темная материя · season 2 · episodes 1–6 of 10');
+    expect(el.querySelector('.m-card-title')!.textContent).toBe('Темная материя');
+    expect(el.querySelector('.m-card-meta')!.textContent).toBe('season 2 · episodes 1–6 of 10');
     expect(Array.from(el.querySelectorAll('.m-lib-head [role=tab]')).map((b) => b.textContent)).toEqual(['Mine', 'Discover']);
   });
 
@@ -568,7 +606,7 @@ describe('Library', () => {
     const rows = el.querySelectorAll('.m-vrow');
     expect(rows.length).toBe(3);
     expect(rows[0].querySelector('.m-poster')).toBeTruthy();
-    expect(rows[0].textContent).toContain('2.0 GB');
+    expect(rows[0].textContent).toContain('2,0 ГБ');
     expect(rows[0].querySelector('.m-badge-inline')!.textContent).toBe('1080p');
     expect(rows[0].textContent).toContain('2 серии');
     act(() => (rows[1] as HTMLElement).click());
@@ -578,7 +616,7 @@ describe('Library', () => {
     const crows = el.querySelectorAll('.m-crow');
     expect(crows.length).toBe(3);
     expect(crows[0].querySelector('.m-poster')).toBeNull();
-    expect(crows[0].querySelector('.m-crow-size')!.textContent).toBe('2.0 GB');
+    expect(crows[0].querySelector('.m-crow-size')!.textContent).toBe('2,0 ГБ');
     act(() => chip().click());
     expect(settings.value.libraryView).toBe('large');
     act(() => tab('История').click());

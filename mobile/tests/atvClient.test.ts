@@ -25,6 +25,7 @@ import {
   sessionIp,
   warmUp,
   cancelWarmUp,
+  setAtvRediscover,
   tvForgot,
   tvNoAnswer,
   atvBackground,
@@ -194,6 +195,12 @@ describe('Android TV transport', () => {
     expect(posts('/omp/text')).toEqual([{ text: 'Дюна' }, { delete: 2 }, { enter: true }]);
   });
 
+  it('the colour keys and «Меню» go to /omp/key as well', async () => {
+    saveTv(ATV);
+    for (const k of ['RED', 'GREEN', 'YELLOW', 'BLUE', 'MENU'] as const) await pressButton(k);
+    expect(posts('/omp/key')).toEqual([{ name: 'RED' }, { name: 'GREEN' }, { name: 'YELLOW' }, { name: 'BLUE' }, { name: 'MENU' }]);
+  });
+
   it('LG-only actions are refused for Android TV', async () => {
     saveTv(ATV);
     await expect(pressButton('HOME')).rejects.toThrow('Недоступно на Android TV');
@@ -282,6 +289,30 @@ describe('Android TV transport', () => {
     expect(tvState.value).toBe('connected');
   });
 
+  it('warm-up: a TV that moved to another port (8095 taken) is found by NSD and its saved port follows', async () => {
+    saveTv(ATV);
+    const moved = 'http://192.168.1.40:8097';
+    route = (c) => {
+      if (c.url.indexOf(BASE) === 0) return Promise.reject(new TypeError('refused'));
+      if (c.url === moved + '/omp/info') return { body: JSON.stringify({ ...info, paired: c.auth === 'Bearer ' + TOKEN }) };
+      return null;
+    };
+    const looks: number[] = [];
+    setAtvRediscover((ms) => {
+      looks.push(ms);
+      return Promise.resolve([{ ip: '192.168.1.40', port: 8097, name: 'Гостиная', version: '0.17.0' }]);
+    });
+    try {
+      await warmUp();
+      expect(looks).toHaveLength(1);
+      expect(tvs.value[0].ctlPort).toBe(8097);
+      expect(calls.some((c) => c.url === moved + '/omp/info')).toBe(true);
+      expect(tvState.value).toBe('connected');
+    } finally {
+      setAtvRediscover(null);
+    }
+  });
+
   it('switching to an LG TV drops the Android TV session', async () => {
     await connectTv(ATV);
     const lg: string[] = [];
@@ -302,7 +333,7 @@ describe('pairing with an Android TV', () => {
     await pairAtv(FOUND, '0482');
     expect(posts('/omp/pair')).toEqual([{ code: '0482', phone: 'Телефон' }]);
     expect(tvs.value).toEqual([
-      { ip: '192.168.1.40', name: 'Гостиная', defaultName: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095 },
+      { ip: '192.168.1.40', name: 'Гостиная', defaultName: 'Гостиная', kind: 'atv', token: TOKEN, ctlPort: 8095, usedAt: expect.any(Number) },
     ]);
     expect(activeTv.value?.ip).toBe('192.168.1.40');
     expect(tvState.value).toBe('connected');

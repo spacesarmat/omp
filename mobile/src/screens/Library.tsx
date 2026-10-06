@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { t, tp } from '../../../src/i18n';
+import { contentsText } from '../lib/releaseContents';
+import { fmtSize, t, tp } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
 import { Poster, qualityBadge } from '../ui/Poster';
 import { Logo } from '../../../src/ui/Logo';
@@ -21,7 +22,6 @@ import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
 import { libraryTabs, nextView, BY_SIZE, viewLabel, episodeLine, positionLabel, remainingLabel, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
-import { formatBytes } from '../../../src/lib/format';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
@@ -34,7 +34,8 @@ import { Discover } from './catalog/Discover';
 import { usePinchStep } from '../ui/usePinchStep';
 import { SeriesMenu } from '../ui/SeriesMenu';
 import { SeriesTileBadge } from '../ui/SeriesTileBadge';
-import { groupLabel, groupLibrary, groupSize, itemHashes, type LibraryItem, type SeriesGroup } from '../../../src/lib/seriesGroups';
+import { groupLabel, groupLibrary, groupSize, itemHashes, singleGroup, type LibraryItem, type SeriesGroup } from '../../../src/lib/seriesGroups';
+import { cachedSeriesMatch, seriesMatchVersion } from '../../../src/lib/seriesMatch';
 
 const POLL_MS = 15000;
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
@@ -55,23 +56,28 @@ function ShortTitle({ tor }: { tor: Torrent }) {
   );
 }
 
-// a series card: the newest season's name and the count of its seasons
-function GroupTitle({ g }: { g: SeriesGroup }) {
-  return (
-    <>
-      {libraryTitle(g.named).title}
-      <span class="m-title-meta">{' · ' + groupLabel(g)}</span>
-    </>
-  );
+/**
+ * A «Мои» tile's name: the TMDB show's once the series is matched (the name the series screen shows), else the short
+ * name from the torrent title. Never the season, episodes or the count of releases: those go on the line under it.
+ */
+function TileName({ tor, g }: { tor: Torrent; g?: SeriesGroup | null }) {
+  void seriesMatchVersion.value;
+  const s = useMemo(() => g || singleGroup(tor), [g, tor]);
+  const card = s ? cachedSeriesMatch(s.key) : null;
+  return <>{card && card.title ? card.title : libraryTitle(g ? g.named : tor).title}</>;
+}
+
+/** The line under a tile's name: «2 сезон · серии 1–6 из 10» or the year; for a series card «2 сезона», «2 раздачи». */
+function tileMeta(tor: Torrent, g?: SeriesGroup | null): string {
+  return g ? groupLabel(g) : libraryTitle(tor).meta;
 }
 
 const itemKey = (it: LibraryItem) => (it.kind === 'torrent' ? it.tor.hash : 'g:' + it.key);
 const hashesOf = (it: LibraryItem) => (it.kind === 'torrent' ? [it.tor.hash] : it.members.map((m) => m.hash));
 
+/** «18 серий» (from the file names, «1-2 серия» counted as two), else «16 файлов»; '' for a film. */
 function episodesText(tor: Torrent): string {
-  const n = playableFiles(filesOf(tor)).length;
-  if (n < 2) return '';
-  return tp('library.episodes', n);
+  return contentsText(tor);
 }
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0 6 6 0 0 0-12 0zM21 21l-5-5';
@@ -682,9 +688,10 @@ export function Library() {
                           <Poster torrent={it.lead} class="m-poster-row" morphKey={k} />
                           {mark(it)}
                           <span class="m-vrow-text">
-                            <span class="m-card-title"><GroupTitle g={it} /></span>
+                            <span class="m-card-title"><TileName tor={it.named} g={it} /></span>
                             <span class="m-muted m-small m-vrow-meta">
-                              <span>{formatBytes(groupSize(it))}</span>
+                              <span class="m-tile-meta">{tileMeta(it.named, it)}</span>
+                              <span>{fmtSize(groupSize(it))}</span>
                               <SeriesTileBadge group={it} />
                             </span>
                           </span>
@@ -696,15 +703,17 @@ export function Library() {
                   const t = it.tor;
                   const eps = episodesText(t);
                   const q = qualityBadge(titleOf(t));
+                  const meta = tileMeta(t);
                   return (
                     <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
                       <button type="button" class="m-vrow" {...pressProps(it)}>
                         <Poster torrent={t} class="m-poster-row" morphKey={k} />
                         {mark(it)}
                         <span class="m-vrow-text">
-                          <span class="m-card-title"><ShortTitle tor={t} /></span>
+                          <span class="m-card-title"><TileName tor={t} /></span>
                           <span class="m-muted m-small m-vrow-meta">
-                            <span>{formatBytes(t.torrent_size || 0)}</span>
+                            {meta && <span class="m-tile-meta">{meta}</span>}
+                            <span>{fmtSize(t.torrent_size || 0)}</span>
                             {q && <span class="m-badge-inline">{q}</span>}
                             {eps && <span>{eps}</span>}
                             <SeriesTileBadge tor={t} />
@@ -720,13 +729,22 @@ export function Library() {
               <div class="m-vlist m-clist">
                 {shown.map((it) => {
                   const k = itemKey(it);
+                  const g = it.kind === 'series' ? it : null;
+                  const tor = it.kind === 'series' ? it.named : it.tor;
+                  const meta = tileMeta(tor, g);
                   return (
                     <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
-                      <button type="button" class={'m-crow' + (it.kind === 'series' ? ' m-series-card' : '')} {...pressProps(it)}>
+                      <button type="button" class={'m-crow' + (g ? ' m-series-card' : '')} {...pressProps(it)}>
                         {mark(it)}
-                        <span class="m-crow-title">{it.kind === 'series' ? <GroupTitle g={it} /> : <ShortTitle tor={it.tor} />}</span>
-                        {it.kind === 'series' ? <SeriesTileBadge group={it} /> : <SeriesTileBadge tor={it.tor} />}
-                        <span class="m-muted m-small m-crow-size">{formatBytes(it.kind === 'series' ? groupSize(it) : it.tor.torrent_size || 0)}</span>
+                        {/* two lines: the whole first for the name (up to two lines), the meta, the badge and the size under it */}
+                        <span class="m-crow-main">
+                          <span class="m-crow-title"><TileName tor={tor} g={g} /></span>
+                          <span class="m-crow-sub">
+                            {meta && <span class="m-muted m-small m-crow-meta m-tile-meta">{meta}</span>}
+                            {it.kind === 'series' ? <SeriesTileBadge group={it} /> : <SeriesTileBadge tor={it.tor} />}
+                            <span class="m-muted m-small m-crow-size">{fmtSize(it.kind === 'series' ? groupSize(it) : it.tor.torrent_size || 0)}</span>
+                          </span>
+                        </span>
                       </button>
                       {moreBtn(it)}
                     </div>
@@ -739,13 +757,16 @@ export function Library() {
                   const k = itemKey(it);
                   const g = it.kind === 'series' ? it : null;
                   const tor = it.kind === 'series' ? it.lead : it.tor;
+                  const meta = g ? '' : tileMeta(tor);
                   return (
                     <button type="button" class={'m-card' + (g ? ' m-series-card' : '') + sel(it)} key={k} data-anchor={k} {...pressProps(it)}>
                       <Poster torrent={tor} morphKey={k} badge={g ? groupLabel(g) : undefined} />
                       {mark(it)}
-                      <span class="m-card-title">{g ? <GroupTitle g={g} /> : <ShortTitle tor={tor} />}</span>
+                      <span class="m-card-title"><TileName tor={g ? g.named : tor} g={g} /></span>
+                      {/* a series card has its count on the poster badge */}
+                      {meta && <span class="m-muted m-card-meta m-tile-meta">{meta}</span>}
                       {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
-                      {view === 'large' && <span class="m-muted m-small">{formatBytes(g ? groupSize(g) : tor.torrent_size || 0)}</span>}
+                      {view === 'large' && <span class="m-muted m-small">{fmtSize(g ? groupSize(g) : tor.torrent_size || 0)}</span>}
                     </button>
                   );
                 })}

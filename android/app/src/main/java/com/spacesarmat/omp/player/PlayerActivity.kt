@@ -3,6 +3,7 @@ package com.spacesarmat.omp.player
 import com.spacesarmat.omp.I18n
 
 import android.app.Instrumentation
+import android.content.DialogInterface
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
@@ -133,6 +134,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private val tick = object : Runnable {
         override fun run() {
             session.tick()
+            checkVlcStart()
             checkSkips()
             preloadNext()
             render()
@@ -325,6 +327,44 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
         override fun message(text: String) = showMessage(text, false)
     }
+
+    private val vlcStart = VlcStartWatch()
+
+    /** VLC meant to play that does not get going in 20 s: «VLC не справляется» with «Вернуться к встроенному» / «Ждать». */
+    private fun checkVlcStart() {
+        if (!::switcher.isInitialized) return
+        val e = engine
+        val vlc = switcher.kind == EngineKind.VLC
+        val playing = vlc && e.playWhenReady && session.error == null && dialog?.isShowing != true
+        val due = vlcStart.tick(playing, Pair(e, session.index), e.positionMs, SystemClock.elapsedRealtime())
+        // the engine left VLC (a switch, a new run) or VLC got going: the prompt goes away, never over working playback
+        val open = vlcPrompt
+        if (open != null && (!open.isShowing || vlcStart.promptStale(vlc))) {
+            if (open.isShowing) open.dismiss()
+            vlcPrompt = null
+        }
+        if (!due) return
+        Log.w(TAG, "VLC has not started in ${VlcStartWatch.LIMIT_MS / 1000} s")
+        val prompt = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
+            .setTitle(I18n.s("player.vlcStuck"))
+            .setPositiveButton(I18n.s("player.vlcStuckBack")) { d, _ ->
+                d.dismiss()
+                switcher.backToBuiltin()
+            }
+            .setNegativeButton(I18n.s("player.vlcStuckWait")) { d, _ ->
+                d.dismiss()
+                vlcStart.waitMore()
+            }
+            .setOnCancelListener { vlcStart.waitMore() }
+            .show()
+        // OK on the remote goes back to the built-in player: it is the one that plays
+        prompt.getButton(DialogInterface.BUTTON_POSITIVE)?.requestFocus()
+        dialog = prompt
+        vlcPrompt = prompt
+    }
+
+    /** The open «VLC не справляется» prompt; null when none. */
+    private var vlcPrompt: AlertDialog? = null
 
     override fun engineFailed(kind: ErrorKind, detail: String, beforeFirstFrame: Boolean): Boolean =
         ::switcher.isInitialized && switcher.engineFailed(kind, detail, beforeFirstFrame)

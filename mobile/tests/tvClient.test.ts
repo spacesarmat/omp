@@ -165,7 +165,7 @@ describe('tvClient connection', () => {
     fake.emit({ type: 'registered', id: reg.id, payload: { 'client-key': 'K' } });
     await p;
     expect(tvState.value).toBe('connected');
-    expect(tvs.value).toEqual([{ ip: '192.168.1.5', name: 'LG', defaultName: 'LG', clientKey: 'K', port: 3001 }]);
+    expect(tvs.value).toEqual([{ ip: '192.168.1.5', name: 'LG', defaultName: 'LG', clientKey: 'K', port: 3001, usedAt: expect.any(Number) }]);
   });
 
   it('passes the saved port and stores the port that opened', async () => {
@@ -358,7 +358,7 @@ describe('tvClient connection', () => {
     fake.emit({ type: 'registered', id: fake.lastRegister.id, payload: { 'client-key': 'K2' } });
     await second;
     expect(tvState.value).toBe('connected');
-    expect(tvs.value).toEqual([{ ip: '192.168.1.6', name: 'LG 2', defaultName: 'LG 2', clientKey: 'K2', port: 3001 }]);
+    expect(tvs.value).toEqual([{ ip: '192.168.1.6', name: 'LG 2', defaultName: 'LG 2', clientKey: 'K2', port: 3001, usedAt: expect.any(Number) }]);
   });
 });
 

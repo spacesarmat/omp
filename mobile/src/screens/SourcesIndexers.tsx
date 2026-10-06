@@ -295,6 +295,97 @@ export function IndexerAddSheet({
   );
 }
 
+/** A found Jackett / Prowlarr not connected yet: its status line and what its button does. */
+export interface FoundCardState {
+  note: string;
+  tone: 'ok' | 'warn' | 'bad';
+  /** The key is known (from the TorrServer settings): the button checks and connects right here. */
+  connects: boolean;
+  button: string;
+}
+
+/**
+ * The status line and the button of a found indexer: with the key from the TorrServer settings «ключ из TorrServer»
+ * and «Подключить» (it checks and connects in place); without one, or once that key failed, where it was found with
+ * «нужен ключ» (or the failure) and «Ввести ключ» (the add sheet).
+ */
+export function foundCardState(c: { torrserver: boolean; tsKey?: string }, failed = ''): FoundCardState {
+  if (c.tsKey && !failed) return { note: t('sources.idx.inTsKey'), tone: 'ok', connects: true, button: t('remote.code.connect') };
+  if (failed) return { note: failed, tone: 'bad', connects: false, button: t('sources.idx.enterKey') };
+  return { note: c.torrserver ? t('sources.idx.inTsNeedKey') : t('sources.idx.foundNeedKey'), tone: 'warn', connects: false, button: t('sources.idx.enterKey') };
+}
+
+/** Checks a found indexer with the key from the TorrServer settings and saves the connection; the result line. */
+export function connectFound(c: IndexerCandidate, sc: SourceContext, now: () => number): Promise<string> {
+  const base = normalizeIndexerUrl(c.url);
+  const key = c.tsKey || '';
+  if (!base) return Promise.reject(new Error(indexerBadUrl()));
+  if (!key) return Promise.reject(new Error(indexerNoKey()));
+  const kindP: Promise<IndexerKind | null> = c.kind
+    ? Promise.resolve(c.kind)
+    : identifyIndexer(base, sc.http).then((k) => k || kindByPort(base), () => kindByPort(base));
+  let saved: IndexerKind = 'jackett';
+  return kindP
+    .then((k) => {
+      if (!k) throw new Error(unknownKind());
+      saved = k;
+      return checkIndexer({ kind: k, url: base }, key, sc.http, now);
+    })
+    .then((st) => {
+      if (st.state !== 'ok') throw new Error(st.message || t('sources.idx.connectFailed'));
+      return saveIndexer({ kind: saved, url: base, apiKey: key }, sc.secrets).then((conn) => {
+        setIndexerStatus(conn.id, st);
+        log('info', 'search', t('sources.idx.logConnected', { kind: kindLabel(saved) }));
+        return successText(saved, st);
+      });
+    });
+}
+
+function FoundCard({ c, ctx, now, onKey, onConnected }: { c: IndexerCandidate; ctx: () => SourceContext; now: () => number; onKey: (withKey: boolean) => void; onConnected: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState('');
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
+  const st = foundCardState(c, failed);
+  const press = () => {
+    if (busy) return;
+    if (!st.connects) {
+      onKey(!failed);
+      return;
+    }
+    setBusy(true);
+    connectFound(c, ctx(), now).then(
+      () => {
+        if (alive.current) setBusy(false);
+        onConnected();
+      },
+      (err: unknown) => {
+        if (!alive.current) return;
+        setBusy(false);
+        setFailed(err instanceof Error && err.message ? err.message : t('sources.idx.connectFailed'));
+      },
+    );
+  };
+  return (
+    <div class="m-set-card m-idx-found" data-candidate={c.host}>
+      <div class="m-src-row">
+        <span class="m-src-name">
+          <span class="m-idx-title">{(c.kind ? kindLabel(c.kind) : t('sources.idx.either')) + ' · ' + hostOf(c.url)}</span>
+          <span class={'m-src-note ' + st.tone}>{st.note}</span>
+        </span>
+        <button type="button" class={'m-btn m-btn-sm ' + (st.connects ? 'm-btn-primary' : 'm-btn-secondary')} disabled={busy} onClick={press}>
+          {busy ? t('news.checking') : st.button}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function existingId(kind: IndexerKind, url: string): string {
   const c = indexerConnections().filter((x) => x.kind === kind && x.url === url)[0];
   return c ? c.id : '';
@@ -523,23 +614,24 @@ export function IndexerSection({ ctx, env, onChange }: { ctx: () => SourceContex
         />
       ))}
       {loose.map((c) => (
-        <div class="m-set-card m-idx-found" key={c.host} data-candidate={c.host}>
-          <div class="m-src-row">
-            <span class="m-src-name">
-              <span class="m-idx-title">{(c.kind ? kindLabel(c.kind) : t('sources.idx.either')) + ' · ' + hostOf(c.url)}</span>
-              <span class={'m-src-note ' + (c.tsKey ? 'ok' : 'warn')}>
-                {c.torrserver ? (c.tsKey ? t('sources.idx.inTsKey') : t('sources.idx.inTsNeedKey')) : t('sources.idx.foundNeedKey')}
-              </span>
-            </span>
-            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => setSheet({ kind: c.kind, url: c.url, tsKey: c.tsKey })}>
-              {t('remote.code.connect')}
-            </button>
-          </div>
-        </div>
+        <FoundCard
+          key={c.host}
+          c={c}
+          ctx={ctx}
+          now={e.current.now}
+          // a key that failed is not offered again: the sheet asks for one
+          onKey={(withKey) => setSheet({ kind: c.kind, url: c.url, tsKey: withKey ? c.tsKey : undefined })}
+          onConnected={onChange}
+        />
       ))}
-      {scanning && <div class="m-note m-muted">{t('sources.idx.scanningBoth')}</div>}
-      <button type="button" class="m-idx-add-btn" onClick={() => setSheet(null)}>
-        {t('sources.idx.addButton')}
+      {/* the network scan says so inside the add button, not as a loose line between the cards */}
+      <button type="button" class="m-idx-add-btn" aria-busy={scanning} onClick={() => setSheet(null)}>
+        <span>{t('sources.idx.addButton')}</span>
+        {scanning && (
+          <span class="m-idx-add-scan" role="status">
+            {t('sources.idx.scanningBoth')}
+          </span>
+        )}
       </button>
       {sheet !== false && (
         <IndexerAddSheet

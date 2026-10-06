@@ -18,7 +18,7 @@ import {
 import { LG_OMP_APP_ID } from '../../../src/lib/installPlan';
 import { RenameSheet } from '../ui/RenameSheet';
 import { CodeSheet } from '../ui/CodeSheet';
-import { tvs, activeTv, forgetTv, renameTv, ATV_PORT, type SavedTv, type TvKind } from '../tv/tvStore';
+import { tvs, activeTv, forgetTv, renameTv, updateAtvPorts, ATV_PORT, type SavedTv, type TvKind } from '../tv/tvStore';
 
 type Discoverer = (timeoutMs: number) => Promise<FoundTv[]>;
 type AtvDiscoverer = (timeoutMs: number) => Promise<FoundOmpTv[]>;
@@ -90,7 +90,12 @@ export function Tv() {
       .then((r) => alive && setFound(r))
       .catch(() => {});
     const atv = (atvDiscoverer ?? ((ms: number) => native.discoverOmpTvs(ms)))(SEARCH_MS)
-      .then((r) => alive && setFoundAtv(r))
+      .then((r) => {
+        if (!alive) return;
+        // a saved Android TV that answers on another port now (8095 taken on the box): its saved port follows
+        updateAtvPorts(r);
+        setFoundAtv(r);
+      })
       .catch(() => {});
     Promise.all([lg, atv]).then(() => alive && setSearching(false));
     return () => {

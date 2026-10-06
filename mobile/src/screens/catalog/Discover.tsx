@@ -15,6 +15,9 @@ import { usePinchStep } from '../../ui/usePinchStep';
 import { discoverQueryKey, discoverFilterCount, sanitizeDiscoverQuery, type DiscoverQuery } from '../../../../src/catalog/discoverQuery';
 import { loadDiscoverQuery, saveDiscoverQuery } from './discoverQueryStore';
 import { DiscoverSortSheet, DiscoverFiltersSheet, sortName } from './DiscoverSheets';
+import { cachedTileCard, cancelTileCards, leaveTileCard, requestTileCard, tileCardVersion } from '../../catalog/tileCards';
+import { digitalSoonLabel, tileLabel, tileYear } from '../../lib/releaseDates';
+import { readableTitle, type CatalogTitle, type Kind } from '../../../../src/catalog/tmdb';
 
 const SKELETONS = 6;
 
@@ -28,7 +31,65 @@ function chips(): { id: Filter; label: string }[] {
   ];
 }
 
+/**
+ * The date label of a tile («в цифре 12 нояб.», «новая серия 8 окт.»): the tile's card is asked for once the tile
+ * comes into view; nothing until it is known. A «Скоро в цифре» item brings its `digital` date: shown at once (the
+ * card is still asked for: the tile's year comes from it).
+ */
+export function TileWhen({ kind, id, digital }: { kind: Kind; id: number; digital?: string }) {
+  void tileCardVersion.value;
+  const ref = useRef<HTMLSpanElement>(null);
+  const card = cachedTileCard(kind, id);
+  const unknown = card === undefined;
+  useEffect(() => {
+    const node = ref.current;
+    if (!unknown || !node || typeof IntersectionObserver === 'undefined') return;
+    // the label is empty until known: the tile it sits in is what comes into view
+    const target = node.parentElement || node;
+    // in view: queued (the latest first); out of view before its turn: dropped from the queue
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) requestTileCard(kind, id);
+      else leaveTileCard(kind, id);
+    });
+    io.observe(target);
+    return () => {
+      io.disconnect();
+      leaveTileCard(kind, id);
+    };
+  }, [kind, id, unknown]);
+  const text = digital ? digitalSoonLabel(digital) : card ? tileLabel(card) : '';
+  return (
+    <span ref={ref} class={'m-small m-accent m-disc-when' + (text ? '' : ' m-disc-when-none')} data-when={text ? '' : undefined}>
+      {text}
+    </span>
+  );
+}
+
+/**
+ * The tile title: the list's one, or — when that is in a script a Russian or English user cannot read («仙逆剧场版») —
+ * the card's (the English translation), once the card asked for the tile's date is known. No request of its own.
+ */
+export function TileTitle({ x }: { x: CatalogTitle }) {
+  void tileCardVersion.value;
+  if (readableTitle(x.title)) return <>{x.title}</>;
+  const card = cachedTileCard(x.kind, x.id);
+  return <>{card && readableTitle(card.title) ? card.title : x.title}</>;
+}
+
+/** «Фильм · 2006»: a «Скоро в цифре» item takes its year from the card (none until known). */
+function TileMeta({ x }: { x: CatalogTitle }) {
+  void tileCardVersion.value;
+  const year = tileYear(x, x.digital === undefined ? undefined : cachedTileCard(x.kind, x.id));
+  return (
+    <span class="m-muted m-small m-disc-meta">
+      {(x.kind === 'tv' ? t('discover.series') : t('library.movie')) + (year ? ' · ' + year : '')}
+    </span>
+  );
+}
+
 export function Discover() {
+  // leaving «Обзор»: the queued tile cards are not fetched any more
+  useEffect(() => () => cancelTileCards(), []);
   // the sort and the filters, kept across launches; the feed is keyed on them
   const [query, setQuery] = useState<DiscoverQuery>(loadDiscoverQuery);
   const qkey = discoverQueryKey(query);
@@ -237,10 +298,11 @@ export function Discover() {
                   {x.rating > 0 && <span class="m-disc-rating">{ratingText(x.rating)}</span>}
                   {inLibrary(index, x) && <span class="m-disc-badge">{t('discover.inLibrary')}</span>}
                 </span>
-                <span class="m-card-title m-disc-title">{x.title}</span>
-                <span class="m-muted m-small m-disc-meta">
-                  {(x.kind === 'tv' ? t('discover.series') : t('library.movie')) + (x.year ? ' · ' + x.year : '')}
+                <span class="m-card-title m-disc-title">
+                  <TileTitle x={x} />
                 </span>
+                <TileMeta x={x} />
+                <TileWhen kind={x.kind} id={x.id} digital={x.digital} />
               </button>
             ))}
           </div>

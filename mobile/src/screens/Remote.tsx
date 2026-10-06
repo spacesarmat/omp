@@ -4,7 +4,8 @@ import { native } from '../platform/native';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { navigate } from '../nav';
-import { activeTv, ATV_PORT, type SavedTv } from '../tv/tvStore';
+import { activeTv, ATV_PORT, isAtv, setActiveTv, tvs, type SavedTv } from '../tv/tvStore';
+import { Sheet } from '../ui/Sheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
 import { touchpad, cursorGain, scrollFactor } from '../tv/touchpad';
@@ -17,6 +18,8 @@ import {
   pairAtv,
   tvWaking,
   warmUp,
+  cancelWarmUp,
+  connectTv,
   pressButton,
   moveCursor,
   click,
@@ -29,6 +32,7 @@ import {
   pressAtvKey,
 } from '../tv/tvClient';
 import type { RemoteButton } from '../tv/ssap';
+import { KeyPump, LONG_PRESS_MS, PadArrows, pressKey, TAP_SLOP as PAD_SLOP } from '../tv/atvPad';
 import { errorMessage } from '../../../src/api/http';
 import { vibrate } from '../ui/vibrate';
 import { ScreenHeader } from '../ui/ScreenHeader';
@@ -49,6 +53,8 @@ export interface RemoteActions {
   pairAtv: (found: FoundOmpTv, code: string) => Promise<void>;
   wakeOnLan: (mac: string, ip: string) => Promise<void>;
   warmUp: () => Promise<void>;
+  /** Makes a saved TV the active one and connects with its saved key or token. */
+  switchTv: (tv: SavedTv) => Promise<void>;
   confirm: (text: string) => boolean;
 }
 
@@ -66,6 +72,12 @@ const defaults: RemoteActions = {
   pairAtv,
   wakeOnLan: (mac, ip) => native.wakeOnLan(mac, ip),
   warmUp,
+  switchTv: (tv) => {
+    // the saved key or token is reused: no pairing again
+    cancelWarmUp();
+    setActiveTv(tv.ip);
+    return connectTv(tv).catch(() => {});
+  },
   confirm: (t) => window.confirm(t),
 };
 
@@ -123,6 +135,67 @@ const stateText = (s: string): string => {
   };
   return map[s] || s;
 };
+
+/** A saved TV that does not answer: the reason and «Повторить», never the setup screen. */
+function NoAnswer({ tv }: { tv: SavedTv }) {
+  if (tvState.value !== 'error' || tvWaking.value) return null;
+  return (
+    <div class="m-remote-noanswer" data-no-answer>
+      <div class="m-hint-warn" role="status">
+        {t('remote.noAnswerTv', { name: shortTvName(tv.name) })}
+      </div>
+      <button type="button" class="m-btn m-btn-secondary" onClick={() => void act.warmUp()}>
+        {t('common.retry')}
+      </button>
+    </div>
+  );
+}
+
+/** The state line of a saved TV in the switcher: the live one for the current TV, else saved / needs a code. */
+function savedState(tv: SavedTv, current: SavedTv, live: string): string {
+  if (tv.ip === current.ip) return live;
+  return isAtv(tv) && !tv.token ? t('remote.tvNeedsCode') : t('remote.tvSaved');
+}
+
+/**
+ * The TV's name in the header; with more than one saved TV it opens a sheet of them (with their state) and one tap
+ * switches, reusing the saved LG key or Android TV token.
+ */
+function TvSwitch({ tv, live, class: cls }: { tv: SavedTv; live: string; class: string }) {
+  const [open, setOpen] = useState(false);
+  const list = tvs.value;
+  if (list.length < 2) return <span class={cls}>{shortTvName(tv.name)}</span>;
+  return (
+    <>
+      <button type="button" class={cls + ' m-remote-switch'} aria-haspopup="dialog" aria-label={t('remote.switchTv') + ': ' + tv.name} onClick={() => setOpen(true)}>
+        {shortTvName(tv.name)} ▾
+      </button>
+      {open && (
+        <Sheet label={t('remote.switchTitle')} onClose={() => setOpen(false)}>
+          <div class="m-sheet-title">{t('remote.switchTitle')}</div>
+          {list.map((x) => (
+            <button
+              key={x.ip}
+              type="button"
+              class={'m-opt' + (x.ip === tv.ip ? ' on' : '')}
+              data-switch-tv={x.ip}
+              aria-pressed={x.ip === tv.ip}
+              onClick={() => {
+                setOpen(false);
+                if (x.ip !== tv.ip) void act.switchTv(x);
+              }}
+            >
+              <span class="m-opt-text">
+                <span class="m-opt-name">{shortTvName(x.name)}</span>
+                <span class="m-opt-sub">{x.ip + ' · ' + savedState(x, tv, live)}</span>
+              </span>
+            </button>
+          ))}
+        </Sheet>
+      )}
+    </>
+  );
+}
 
 interface Gesture {
   /** Last position sent (the cursor delta is measured from it). */
@@ -367,12 +440,142 @@ const atvStateText = (s: string): string => {
   return map[s] || s;
 };
 
-/** Remote for OMP on Android TV (spec item 9): no power, touchpad or channel keys. */
+/**
+ * «Тачпад» for Android TV: the box has no pointer, so a swipe sends arrows, a two-finger swipe Up / Down, a tap OK and a
+ * long press Menu (src/tv/atvPad.ts), one key at a time over /omp/key.
+ */
+const PAD_FEEDBACK: { [k: string]: string } = { UP: '↑', DOWN: '↓', LEFT: '←', RIGHT: '→', ENTER: 'OK' };
+
+function AtvTouchpad() {
+  const pump = useRef<KeyPump<RemoteButton> | null>(null);
+  if (!pump.current) pump.current = new KeyPump<RemoteButton>((k) => act.pressButton(k), 4, fail);
+  const arrows = useRef(new PadArrows());
+  const pts = useRef<{ [id: number]: { x: number; y: number } }>({});
+  const g = useRef<{ id: number; sx: number; sy: number; t0: number; last: number; moved: boolean; two: boolean; long: boolean } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearTimer = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  const [fb, setFb] = useState<{ text: string; n: number } | null>(null);
+  const fbTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      clearTimer();
+      if (fbTimer.current) clearTimeout(fbTimer.current);
+    },
+    [],
+  );
+  const send = (keys: RemoteButton[]) => {
+    if (!keys.length) return;
+    pump.current!.push(keys);
+    const text = PAD_FEEDBACK[keys[keys.length - 1]] ?? (keys[keys.length - 1] === 'MENU' ? t('remote.menu') : '');
+    if (!text) return;
+    // the last key sent shows in the pad centre and fades within ~300 ms (the CSS animation restarts on each new n)
+    setFb((p) => ({ text, n: (p?.n ?? 0) + 1 }));
+    if (fbTimer.current) clearTimeout(fbTimer.current);
+    fbTimer.current = setTimeout(() => setFb(null), 300);
+  };
+  const end = (e: PointerEvent) => {
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    delete pts.current[e.pointerId];
+    const s = g.current;
+    if (!s || Object.keys(pts.current).length) return;
+    clearTimer();
+    g.current = null;
+    arrows.current.reset();
+    if (e.type !== 'pointerup' || s.two) return;
+    const k = pressKey(s.moved, Date.now() - s.t0, s.long);
+    if (k) {
+      vibrate();
+      send([k]);
+    }
+  };
+  return (
+    <div
+      class="m-touchpad"
+      role="application"
+      aria-label={t('remote.touchpad.title')}
+      data-atv-pad
+      style={{ touchAction: 'none' }}
+      onPointerDown={(e) => {
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        pts.current[e.pointerId] = { x: e.clientX, y: e.clientY };
+        const s = g.current;
+        if (s) {
+          // a second finger: a scroll from now on, never a tap or a long press
+          s.two = true;
+          s.moved = true;
+          clearTimer();
+          return;
+        }
+        const now = Date.now();
+        g.current = { id: e.pointerId, sx: e.clientX, sy: e.clientY, t0: now, last: now, moved: false, two: false, long: false };
+        clearTimer();
+        timer.current = setTimeout(() => {
+          const c = g.current;
+          if (!c || c.moved || c.two) return;
+          c.long = true;
+          vibrate();
+          send(['MENU']);
+        }, LONG_PRESS_MS);
+      }}
+      onPointerMove={(e) => {
+        const s = g.current;
+        const p = pts.current[e.pointerId];
+        if (!s || !p) return;
+        const dx = e.clientX - p.x;
+        const dy = e.clientY - p.y;
+        p.x = e.clientX;
+        p.y = e.clientY;
+        const now = Date.now();
+        const dt = now - s.last;
+        s.last = now;
+        if (s.two) {
+          // the fingers' mean travel: each moving finger gives half of it with two fingers down
+          send(arrows.current.scroll(dy / Math.max(1, Object.keys(pts.current).length), dt));
+          return;
+        }
+        if (e.pointerId !== s.id || s.long) return;
+        if (!s.moved && Math.abs(e.clientX - s.sx) + Math.abs(e.clientY - s.sy) > PAD_SLOP) {
+          s.moved = true;
+          clearTimer();
+        }
+        if (s.moved) send(arrows.current.move(dx, dy, dt));
+      }}
+      onPointerUp={end}
+      onPointerCancel={end}
+    >
+      <span class="m-muted m-small">{t('remote.atvPadArea')}</span>
+      {fb && (
+        <span class="m-pad-fb" key={fb.n} data-pad-feedback aria-hidden="true">
+          {fb.text}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** A round key with its caption under it (the LG «Кнопки» look). */
+function atvRoundKey(label: string, d: string, onClick: () => void) {
+  return (
+    <div class="m-rkey">
+      <button type="button" class="m-rkey-btn" aria-label={label} onClick={onClick}>
+        <Icon d={d} size={24} />
+      </button>
+      <span class="m-rkey-cap" aria-hidden="true">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/** Remote for OMP on Android TV: the LG «Кнопки» layout without power, touchpad, channel and media keys. */
 function AtvRemote({ tv }: { tv: SavedTv }) {
-  const name = tv.name;
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
   const [coding, setCoding] = useState(false);
+  const [mode, setMode] = useState<'buttons' | 'touchpad'>('buttons');
   // the TV forgot this phone (its token was dropped): pair again by the code
   const forgot = !tv.token || (state === 'error' && tvError.value === tvForgot());
   const found: FoundOmpTv = { ip: tv.ip, port: tv.ctlPort || ATV_PORT, name: tv.defaultName ?? tv.name, version: '' };
@@ -391,15 +594,17 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
   const shown = tvWaking.value && state !== 'connected' ? 'connecting' : state;
   return (
     <div class={screenClass(kbd)} data-route="remote">
-      <div class="m-lib-head">
-        <div class="m-remote-name">
-          <span class="m-remote-title">{name}</span>
-          <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>
-            {t('remote.atvLine', { state: atvStateText(shown) })}
+      <ScreenHeader
+        title={t('nav.remote')}
+        subtitle={
+          <span title={tv.name}>
+            <TvSwitch tv={tv} live={atvStateText(shown)} class="m-remote-title" />
+            {' · '}
+            <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{t('remote.atvLine', { state: atvStateText(shown) })}</span>
           </span>
-        </div>
-      </div>
-      <p class="m-remote-note">{t('remote.atvNote')}</p>
+        }
+      />
+      {!forgot && <NoAnswer tv={tv} />}
       {forgot && (
         <div class="m-remote-forgot">
           <div class="m-hint-warn">{tvForgot()}</div>
@@ -408,34 +613,83 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           </button>
         </div>
       )}
-      <div class="m-stage">
-        <DPad press={press} />
-      </div>
-      <div class="m-keyrow">
-        <button type="button" class="m-key" onClick={() => press('BACK')}>
-          <Icon d={BACK} size={20} /> {t('common.back')}
+      <div class="m-seg" role="tablist">
+        <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>
+          {t('remote.buttons')}
         </button>
-        <button type="button" class="m-key" onClick={() => ompKey('CATALOG')}>
-          {t('nav.library')}
-        </button>
-        <button type="button" class="m-key" onClick={() => ompKey('NOWPLAYING')}>
-          {t('remote.nowPlaying')}
+        <button type="button" role="tab" aria-selected={mode === 'touchpad'} class={mode === 'touchpad' ? 'on' : ''} onClick={() => setMode('touchpad')}>
+          {t('remote.swipes')}
         </button>
       </div>
-      <div class="m-keyrow">
-        <button type="button" class="m-key" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
-          <Icon d={KEYBOARD} size={20} /> {t('remote.keyboard')}
-        </button>
-        <div class="m-vol">
-          <button type="button" class="m-key" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
-            −
-          </button>
-          <span class="m-vol-label">{t('remote.volShort')}</span>
-          <button type="button" class="m-key" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
-            +
-          </button>
+      {mode === 'touchpad' ? (
+        <div class="m-rt" data-atv-remote>
+          <AtvTouchpad />
+          <div class="m-rb-row m-rt-keys">
+            <button type="button" class="m-key" aria-label={t('common.back')} onClick={() => press('BACK')}>
+              <Icon d={BACK} size={22} />
+            </button>
+            <button type="button" class="m-key" aria-label={t('remote.home')} onClick={() => ompKey('CATALOG')}>
+              <Icon d={HOME} size={20} /> {t('remote.home')}
+            </button>
+            <button type="button" class="m-key" aria-label={t('remote.menu')} onClick={() => press('MENU')}>
+              <Icon d={MENU} size={20} /> {t('remote.menu')}
+            </button>
+            <button type="button" class="m-key" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
+              <Icon d={KEYBOARD} size={22} />
+            </button>
+          </div>
+          <div class="m-vol m-rt-vol">
+            <button type="button" class="m-key" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
+              −
+            </button>
+            <span class="m-vol-label">{t('remote.volume')}</span>
+            <button type="button" class="m-key" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
+              +
+            </button>
+          </div>
+        </div>
+      ) : (
+      /* the layout of the LG «Кнопки» remote: what OMP on Android TV cannot do (power, pointer, channels) is left out */
+      <div class="m-rb" data-atv-remote>
+        <div class="m-stage m-rb-pad">
+          <DPad press={press} />
+        </div>
+        <div class="m-rb-colors">
+          {COLOR_KEYS.map(([n, label]) => (
+            <button key={n} type="button" class={'m-ckey m-ckey-' + n.toLowerCase()} aria-label={label()} onClick={() => press(n)} />
+          ))}
+        </div>
+        <div class="m-rb-round">
+          {atvRoundKey(t('common.back'), BACK, () => press('BACK'))}
+          {/* «Домой» on Android TV: the OMP catalog */}
+          {atvRoundKey(t('remote.home'), HOME, () => ompKey('CATALOG'))}
+          {atvRoundKey(t('remote.menu'), MENU, () => press('MENU'))}
+        </div>
+        <div class="m-rb-bottom">
+          <div class="m-rocker">
+            <button type="button" class="m-rocker-btn" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
+              <span class="m-rocker-sign">+</span>
+            </button>
+            <span class="m-rocker-cap">{t('remote.volShort')}</span>
+            <button type="button" class="m-rocker-btn" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
+              <span class="m-rocker-sign">−</span>
+            </button>
+          </div>
+          <div class="m-rb-play">
+            <button type="button" class="m-rb-playbtn" aria-label={t('remote.nowPlaying')} onClick={() => ompKey('NOWPLAYING')}>
+              <Icon d={PLAY} size={26} />
+            </button>
+            <span class="m-rocker-cap">{t('remote.nowPlaying')}</span>
+          </div>
+          <div class="m-rocker">
+            <button type="button" class="m-rocker-btn" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
+              <Icon d={KEYBOARD} size={24} />
+            </button>
+            <span class="m-rocker-cap">{t('remote.kbdShort')}</span>
+          </div>
         </div>
       </div>
+      )}
       {kbd && <TvKeyboard />}
       {coding && (
         <CodeSheet
@@ -569,7 +823,7 @@ export function Remote() {
         title={t('nav.remote')}
         subtitle={
           <span title={tv.name}>
-            <span class="m-remote-title">{shortTvName(tv.name)}</span>
+            <TvSwitch tv={tv} live={shownState} class="m-remote-title" />
             {' · '}
             <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{shownState}</span>
           </span>
@@ -588,6 +842,7 @@ export function Remote() {
           <Icon d={POWER} />
         </button>
       </ScreenHeader>
+      <NoAnswer tv={tv} />
       <div class="m-seg" role="tablist">
         <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>
           {t('remote.buttons')}

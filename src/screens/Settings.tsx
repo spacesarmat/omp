@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { settings, updateSettings, resetSettings } from '../store/settings';
-import { client, activeServer } from '../store/servers';
+import { client, activeServer, serverLabel } from '../store/servers';
 import type { ServerSettings } from '../api/types';
 import { errorMessage } from '../api/http';
 import { LANG_OPTIONS } from '../lib/tracks';
@@ -166,7 +166,7 @@ export function SettingsScreen() {
       <h2>{t('tvSettings.server')}</h2>
       <div class="row">
         <div class="grow">
-          {activeServer.value ? activeServer.value.name + ' · ' + activeServer.value.url.replace(/^https?:\/\//, '') : t('errors.noServerSelected')}
+          {activeServer.value ? serverLabel(activeServer.value) : t('errors.noServerSelected')}
         </div>
         <Button focusKey="set-server" label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
         <Button focusKey="set-pair" label={t('pair.title')} onPress={() => navigate({ name: 'pairPhone' })} />

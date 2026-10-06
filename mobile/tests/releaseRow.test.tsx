@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
-import { ResultCard } from '../src/ui/ResultCard';
+import { ResultCard, resultMeta, sizeText } from '../src/ui/ResultCard';
 import { releaseChips, releaseTitle } from '../src/ui/ReleaseRow';
 import { MAX_RUNNING, posterKey, setPosterLookupForTests } from '../src/ui/resultPosters';
 import type { SourceResult } from '../../src/sources/types';
@@ -79,6 +79,24 @@ afterEach(() => {
   setPosterLookupForTests(null);
 });
 
+describe('seeds on a card', () => {
+  it('shown when known; a feed row without seed data (0) says nothing of them', () => {
+    mount([res('Film A (2026) 1080p', 1), { ...res('Film B (2026) 1080p', 2), Seed: 0 }]);
+    const metas = Array.from(el.querySelectorAll('.m-rc-meta-text')).map((n) => n.textContent);
+    expect(metas).toEqual(['10,0 ГБ · 5 сидов', '10,0 ГБ']);
+    expect(resultMeta({ ...res('Film B', 3), Seed: 0 })).not.toContain('сид');
+  });
+
+  it('the tracker\'s size in the phone\'s one format: «1.45 GB» → «1,5 ГБ», unreadable text as it is', () => {
+    expect(sizeText({ ...res('A'), Size: '1.45 GB' })).toBe('1,5 ГБ');
+    expect(sizeText({ ...res('A'), Size: '70.2 GB' })).toBe('70,2 ГБ');
+    expect(sizeText({ ...res('A'), Size: '700 MB' })).toBe('700 МБ');
+    expect(sizeText({ ...res('A'), Size: '5,66 ГБ' })).toBe('5,7 ГБ');
+    expect(sizeText({ ...res('A'), Size: 'не указан' })).toBe('не указан');
+    expect(sizeText({ ...res('A'), Size: '' })).toBe('');
+  });
+});
+
 describe('found release rows', () => {
   it('show the short title with its meta; the full tracker title is in «Подробнее» (a tap on the card)', () => {
     mount([res(STAR_TREK)]);
@@ -121,7 +139,7 @@ describe('found release rows', () => {
     const card = el.querySelector('.m-rc')!;
     expect(card.querySelector('.m-rel-thumb')).toBeTruthy();
     expect(card.querySelector('.m-btn')).toBeNull();
-    expect(card.querySelector('.m-rc-meta')!.textContent).toContain('10 GB');
+    expect(card.querySelector('.m-rc-meta')!.textContent).toContain('10,0 ГБ');
     expect(card.querySelector('.m-rc-date')!.textContent).not.toBe('');
     const [plus, tv] = Array.from(card.querySelectorAll('.m-rc-btn')) as HTMLButtonElement[];
     expect(plus.getAttribute('aria-label')).toBe('Добавить на сервер: ' + r.Title);

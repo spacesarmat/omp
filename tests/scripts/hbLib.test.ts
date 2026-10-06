@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { changelogNotes, buildHomebrew, buildAndroidUpdate, apkAbi, splitApks, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
+import { changelogNotes, feedNotes, FIXES_NOTE, buildHomebrew, buildAndroidUpdate, apkAbi, splitApks, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
 import { sanitizeUpdateInfo } from '../../src/lib/updateInfo';
 
 const MD = '# Изменения\n\n## 0.6.0\n\n- Окно обновления\n* Параметры запуска\n\n## 0.5.0\n\n- Новый каталог\n';
@@ -10,6 +10,22 @@ describe('hb-lib', () => {
     expect(changelogNotes(MD, '0.5.0')).toEqual(['Новый каталог']);
     expect(changelogNotes(MD, '0.4.0')).toEqual([]);
     expect(changelogNotes(MD.replace(/\n/g, '\r\n'), '0.6.0')).toHaveLength(2);
+  });
+  it('release notes list every bullet without the «[phone]» / «[tv]» markers', () => {
+    expect(changelogNotes('## 0.7.0\n- [phone] Календарь\n- [tv] Пульт\n- Общее\n', '0.7.0')).toEqual(['Календарь', 'Пульт', 'Общее']);
+  });
+  it('feed notes per platform; `notes` for older apps is the TV list, never phone-only, never a marker', () => {
+    const md = '## 0.8.0\n- [phone] Календарь\n- [tv] Пульт\n- Общее\n\n## 0.7.0\n- [phone] Только телефон\n';
+    expect(changelogNotes(md, '0.8.0', 'tv')).toEqual(['Пульт', 'Общее']);
+    expect(changelogNotes(md, '0.8.0', 'phone')).toEqual(['Календарь', 'Общее']);
+    expect(feedNotes(md, '0.8.0')).toEqual({ notes: ['Пульт', 'Общее'], notesTv: ['Пульт', 'Общее'], notesPhone: ['Календарь', 'Общее'] });
+    expect(feedNotes(md, '0.7.0')).toEqual({ notes: [FIXES_NOTE], notesTv: [], notesPhone: ['Только телефон'] });
+    const f = feedNotes(md, '0.8.0');
+    const { update } = buildHomebrew({ tag: 'v0.8.0', version: '0.8.0', ipkName: 'a.ipk', sha256: 'a'.repeat(64), size: 1, title: 'OMP', description: 'd', ...f });
+    expect(update).toMatchObject(f);
+    const android = buildAndroidUpdate({ tag: 'v0.8.0', version: '0.8.0', apkName: 'OMP-0.8.0.apk', sha256: 'b'.repeat(64), size: 1, ...f });
+    expect(android).toMatchObject(f);
+    expect(JSON.stringify([update, android])).not.toMatch(/\[(tv|phone)\]/);
   });
   it('builds manifest, repository and update feed', () => {
     const sha = 'e'.repeat(64);

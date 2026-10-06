@@ -496,6 +496,24 @@ describe('Install assistant — more', () => {
     await flush();
     expect(steps.textContent).toContain('Samsung (Tizen) пока не поддерживается');
   });
+
+  it('manual Android TV: a brand can be picked and opens its own steps', async () => {
+    resetTo({ name: 'install' });
+    const el = mount(<InstallAssistant />);
+    await flush();
+    click(button(el, 'Ввести IP вручную'));
+    type(el.querySelector<HTMLInputElement>('#install-ip')!, '192.168.1.71');
+    expect(el.textContent).not.toContain('Яндекс');
+    click(button(el, 'Android TV'));
+    click(button(el, 'Яндекс'));
+    click(button(el, 'Показать шаги'));
+    expect(currentRoute.value).toEqual({ name: 'install', ip: '192.168.1.71', kind: 'atv', brand: 'yandex' });
+    const steps = mount(<InstallAssistant ip="192.168.1.71" kind="atv" brand="yandex" />);
+    await flush();
+    expect(steps.textContent).toContain('«Файловый менеджер»');
+    expect(steps.textContent).toContain('«Подключить телефон»');
+    expect(steps.textContent).toContain('по подписке');
+  });
 });
 
 /** Scripted phone installer: records requests, lets the test emit events and settle the install. */

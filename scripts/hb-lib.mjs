@@ -3,8 +3,14 @@ export const APP_ID = 'com.spacesarmat.torrplayer';
 export const REPO = 'spacesarmat/omp';
 export const FEED_BASE = `https://raw.githubusercontent.com/${REPO}/gh-pages/`;
 
-/** Bullet lines under "## <version>" in CHANGELOG.md. */
-export function changelogNotes(md, version) {
+/** The text of the update feed's `notes` when no bullet is left for the TV (old apps show `notes` as they are). */
+export const FIXES_NOTE = 'Исправления и улучшения';
+
+/**
+ * Bullet lines under "## <version>" in CHANGELOG.md, without the «[tv]» / «[phone]» markers. With `platform`
+ * ('tv' | 'phone'): the unmarked bullets and that platform's only.
+ */
+export function changelogNotes(md, version, platform) {
   const out = [];
   let on = false;
   for (const line of md.split(/\r?\n/)) {
@@ -16,12 +22,27 @@ export function changelogNotes(md, version) {
     }
     if (!on) continue;
     const m = /^\s*[-*]\s+(.*\S)\s*$/.exec(line);
-    if (m) out.push(m[1]);
+    // «[tv]» / «[phone]» say which app shows a bullet in «Что нового»; release notes list them all, unmarked
+    if (!m) continue;
+    const mark = /^\[(tv|phone)\]\s*/i.exec(m[1]);
+    if (platform && mark && mark[1].toLowerCase() !== platform) continue;
+    out.push(mark ? m[1].slice(mark[0].length) : m[1]);
   }
   return out;
 }
 
-export function buildHomebrew({ tag, version, ipkName, sha256, size, title, description, notes }) {
+/**
+ * The notes of an update feed: `notesTv` / `notesPhone` for the apps that read them (0.17.0 and later), and
+ * `notes` for older apps — the TV's bullets (the LG feed is read by TVs only; the APK one by the phone and Android
+ * TV alike), «Исправления и улучшения» when there is none. Never a marker.
+ */
+export function feedNotes(md, version) {
+  const notesTv = changelogNotes(md, version, 'tv');
+  const notesPhone = changelogNotes(md, version, 'phone');
+  return { notes: notesTv.length ? notesTv : [FIXES_NOTE], notesTv, notesPhone };
+}
+
+export function buildHomebrew({ tag, version, ipkName, sha256, size, title, description, notes, notesTv, notesPhone }) {
   const ipkUrl = `https://github.com/${REPO}/releases/download/${tag}/${ipkName}`;
   const iconUri = `https://raw.githubusercontent.com/${REPO}/main/webos/largeIcon.png`;
   const manifest = {
@@ -59,6 +80,8 @@ export function buildHomebrew({ tag, version, ipkName, sha256, size, title, desc
     notes,
     releaseUrl: `https://github.com/${REPO}/releases/tag/${tag}`,
   };
+  if (notesTv) update.notesTv = notesTv;
+  if (notesPhone) update.notesPhone = notesPhone;
   return { manifest, apps, update };
 }
 
@@ -95,7 +118,7 @@ export function splitApks(paths) {
  * these); `apks` lists the per-ABI APKs ({ arm64: { url, sha256, size }, armv7: … }) that newer clients pick by the
  * device ABI.
  */
-export function buildAndroidUpdate({ tag, version, apkName, sha256, size, notes, abis }) {
+export function buildAndroidUpdate({ tag, version, apkName, sha256, size, notes, notesTv, notesPhone, abis }) {
   const url = (name) => `https://github.com/${REPO}/releases/download/${tag}/${name}`;
   const out = {
     version,
@@ -110,6 +133,8 @@ export function buildAndroidUpdate({ tag, version, apkName, sha256, size, notes,
   }
   if (Object.keys(apks).length) out.apks = apks;
   out.notes = notes;
+  if (notesTv) out.notesTv = notesTv;
+  if (notesPhone) out.notesPhone = notesPhone;
   out.releaseUrl = `https://github.com/${REPO}/releases/tag/${tag}`;
   return out;
 }

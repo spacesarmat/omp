@@ -97,7 +97,7 @@ const button = (text: string) => Array.from(el.querySelectorAll('button')).find(
 const tiles = () => Array.from(el.querySelectorAll('.m-disc-grid button.m-disc-tile')) as HTMLButtonElement[];
 
 async function scrollToEnd() {
-  const live = observed.filter((o) => o.el);
+  const live = observed.filter((o) => o.el && o.el.classList.contains('m-disc-sentinel'));
   expect(live.length).toBe(1);
   await act(async () => {
     live[0].cb([{ isIntersecting: true, target: live[0].el } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
@@ -280,7 +280,7 @@ describe('Discover («Новинки»)', () => {
       'Полуночный архив 2026', 'Ледяной перевал 2026', 'Clockwork Harbor 2025', 'Stardust Ledger 2026',
     ]);
     // page 2 of 2: no sentinel any more
-    expect(observed.filter((o) => o.el).length).toBe(0);
+    expect(observed.filter((o) => o.el && o.el.classList.contains('m-disc-sentinel')).length).toBe(0);
     expect(nov).toHaveBeenCalledTimes(2);
   });
 
@@ -504,7 +504,11 @@ describe('«Обзор»: sort, filters, title and year', () => {
     const three = rule('.m-cols-3 .m-disc-tile .m-disc-title');
     expect(three).toContain('line-height: 16px');
     expect(three).toContain('max-height: 32px');
-    expect(three).toContain('min-height: 32px');
+    expect(three).toContain('min-height: 0');
+    // no two lines kept for a one-line title, no date line kept without a date (no 24px .m-empty padding either)
+    expect(two).toContain('min-height: 0');
+    expect(rule('.m-disc-when-none')).toContain('display: none');
+    expect(rule('.m-disc-when')).not.toContain('min-height');
   });
 
   it('default «Популярные»; the sort sheet picks «По рейтингу»: kept, page 1 fetched again, scrolled to the top', async () => {
@@ -519,7 +523,7 @@ describe('«Обзор»: sort, filters, title and year', () => {
       expect(sortBtn().getAttribute('aria-label')).toBe('Сортировка: Популярные');
       top = 800;
       act(() => sortBtn().click());
-      expect(Array.from(sheet()!.querySelectorAll('.m-opt')).map((b) => b.textContent)).toEqual(['Популярные', 'По рейтингу', 'По дате выхода', 'Самые ожидаемые']);
+      expect(Array.from(sheet()!.querySelectorAll('.m-opt')).map((b) => b.textContent)).toEqual(['Популярные', 'По рейтингу', 'По дате выхода', 'Самые ожидаемые', 'Скоро в цифре']);
       expect(inSheet('Популярные').getAttribute('aria-pressed')).toBe('true');
       nov.mockClear();
       act(() => inSheet('По рейтингу').click());
@@ -661,7 +665,7 @@ describe('«Обзор»: sort, filters, title and year', () => {
       expect(tiles()[1].querySelector('.m-disc-meta')!.textContent).toBe('Series · 2026');
       expect(sortBtn().getAttribute('aria-label')).toBe('Sort: Popular');
       act(() => sortBtn().click());
-      expect(Array.from(sheet()!.querySelectorAll('.m-opt')).map((b) => b.textContent)).toEqual(['Popular', 'Top rated', 'Newest', 'Most anticipated']);
+      expect(Array.from(sheet()!.querySelectorAll('.m-opt')).map((b) => b.textContent)).toEqual(['Popular', 'Top rated', 'Newest', 'Most anticipated', 'Coming to digital']);
       act(() => inSheet('Top rated').click());
       await flush();
       expect(filtersBtn().textContent).toBe('Filters');

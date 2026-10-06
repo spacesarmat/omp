@@ -229,17 +229,16 @@ describe('TV search on Android TV: focus and stale searches', () => {
     expect(host.querySelector('.search-progress')!.textContent).toBe('Найдено 1 · 3 из 3 источников ответили');
   });
 
-  it('a Cloudflare block shows the Jackett hint', async () => {
+  it('a Cloudflare block: one short sentence, the error not repeated', async () => {
     w.Capacitor = { getPlatform: () => 'android' };
-    registerSource({ id: 'fake', name: 'rutracker', kind: 'builtin', search: () => Promise.reject(new Error('Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже')) });
+    registerSource({ id: 'fake', name: 'NNM-Club', kind: 'builtin', search: () => Promise.reject(new Error('Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже')) });
     vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue([]);
     mount();
     typeQuery('x');
     act(() => button('Искать').click());
     await flush();
     const hint = host.querySelector('.search-hint')!;
-    expect(hint.textContent).toContain('rutracker: Сайт закрыт проверкой браузера (Cloudflare)');
-    expect(hint.textContent).toContain('через Jackett, Prowlarr или FlareSolverr');
+    expect(hint.textContent).toBe('NNM-Club закрыт проверкой Cloudflare — войдите на него на телефоне в «Источниках поиска»');
   });
 
   it('a site asking for a verification code says so and where to enter it', async () => {

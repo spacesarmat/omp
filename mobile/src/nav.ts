@@ -7,7 +7,7 @@ export type MRoute =
   | { name: 'connect' }
   | { name: 'library' }
   /** «Новое»: `seg` opens a segment, `finding` highlights a new-episodes card, `watch` readies «Смотреть на ТВ» for it. */
-  | { name: 'news'; seg?: 'feed' | 'subs'; finding?: string; watch?: boolean }
+  | { name: 'news'; seg?: 'feed' | 'subs' | 'calendar'; finding?: string; watch?: boolean }
   /** Findings of one subscription. */
   | { name: 'subFindings'; id: string; finding?: string; watch?: boolean }
   /** «Настройки» → «Мониторинг». */
@@ -24,7 +24,7 @@ export type MRoute =
   /** `q` opens that question. */
   | { name: 'faq'; q?: string }
   /** «Установить OMP на телевизор»: the device list, or the steps for the device at `ip`. */
-  | { name: 'install'; ip?: string; kind?: 'lg' | 'atv' | 'samsung' }
+  | { name: 'install'; ip?: string; kind?: 'lg' | 'atv' | 'samsung'; brand?: 'xiaomi' | 'sber' | 'yandex' }
   | { name: 'log' }
   | { name: 'backup' }
   | { name: 'sources' }

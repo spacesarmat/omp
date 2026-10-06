@@ -244,7 +244,7 @@ describe('TV search through the phone', () => {
     expect(dlg.querySelector('.dialog-title')!.textContent).toBe('Подробнее о раздаче');
     expect(dlg.querySelector('.search-details-title')!.textContent).toBe(RAW_HD);
     expect(dlg.textContent).toContain('сиды 300');
-    expect(dlg.textContent).toContain('01.03.2024');
+    expect(dlg.textContent).toContain('1 мар. 2024');
     act(() => (dlg.querySelector('.button') as HTMLElement).click());
     await step(100);
     expect(host.querySelector('.search-details')).toBeNull();

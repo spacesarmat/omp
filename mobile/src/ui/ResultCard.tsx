@@ -3,15 +3,27 @@ import { addCategories } from '../../../src/lib/categoryGuess';
 import { resultDate, seedsText, sourceBadge, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import type { RowBusy } from '../addResult';
-import { t } from '../../../src/i18n';
+import { fmtSize, t } from '../../../src/i18n';
+import { parseSize } from '../../../src/sources/html';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 import { ReleaseChips, ReleaseName, ResultThumb } from './ReleaseRow';
 
+/** The size in the phone's one format («1,5 ГБ»), whatever the tracker wrote («1.45 GB»); as written when unreadable. */
+export function sizeText(r: SourceResult): string {
+  const b = parseSize(r.Size);
+  return b && b > 0 ? fmtSize(b) : r.Size || '';
+}
+
+/** «152 сида» when the count is known; '' for 0, which is what a feed without seed data gives. */
+export function knownSeeds(r: SourceResult): string {
+  return r.Seed > 0 ? seedsText(r.Seed) : '';
+}
+
 /** «18 GB · 152 сида · сегодня · ещё в Torznab». */
 export function resultMeta(r: SourceResult): string {
   const more = r.sources && r.sources.length ? t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }) : '';
-  return [r.Size, seedsText(r.Seed || 0), resultDate(r), more].filter(Boolean).join(' · ');
+  return [sizeText(r), knownSeeds(r), resultDate(r), more].filter(Boolean).join(' · ');
 }
 
 const PLUS = 'M12 5v14M5 12h14';
@@ -56,7 +68,7 @@ export function ResultCard(p: {
           <div class="m-rc-meta m-small m-muted">
             {p.flag && <span class="m-flag">{p.flag}</span>}
             <span class="m-src-badge">{sourceBadge(r)}</span>
-            <span class="m-rc-meta-text">{[r.Size, seedsText(r.Seed || 0)].filter(Boolean).join(' · ')}</span>
+            <span class="m-rc-meta-text">{[sizeText(r), knownSeeds(r)].filter(Boolean).join(' · ')}</span>
           </div>
           <div class="m-rc-bottom">
             {p.busy === 'link' ? (

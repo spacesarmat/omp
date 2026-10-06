@@ -1,9 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { endpointOf, noveltiesUrl, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf } from '../../src/catalog/tmdb';
+import { endpointOf, noveltiesUrl, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle } from '../../src/catalog/tmdb';
 import { applyLanguageSetting } from '../../src/i18n';
 import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
 
 const E = endpointOf({ APIKey: 'k1', APIURL: 'api.tmdb.mirror.test', ImageURLRu: 'img.mirror.test' }, 'fallback')!;
+
+describe('titles a Russian or English user can read', () => {
+  it('Latin and Cyrillic read, Chinese, Korean and Japanese do not', () => {
+    expect(readableTitle('Тёмная материя')).toBe(true);
+    expect(readableTitle('Dark Matter')).toBe(true);
+    expect(readableTitle('Amélie')).toBe(true);
+    expect(readableTitle('仙逆剧场版：弑仙之战')).toBe(false);
+    expect(readableTitle('오징어 게임')).toBe(false);
+    expect(readableTitle('2046')).toBe(false);
+  });
+
+  it('a list title in another script falls back to a readable original; a card to its English translation', () => {
+    const list = sanitizeList(E, { results: [{ id: 1, title: '寄生虫', original_title: 'Parasite', release_date: '2019-05-30' }, { id: 2, title: '仙逆剧场版', original_title: '仙逆剧场版', release_date: '2025-01-01' }] }, 'movie');
+    expect(list.items.map((x) => x.title)).toEqual(['Parasite', '仙逆剧场版']);
+    const raw = {
+      id: 2, title: '仙逆剧场版：弑仙之战', original_title: '仙逆剧场版：弑仙之战', release_date: '2025-01-01',
+      translations: { translations: [
+        { iso_639_1: 'zh', iso_3166_1: 'CN', data: { title: '仙逆' } },
+        { iso_639_1: 'en', iso_3166_1: 'GB', data: { title: 'Renegade Immortal (UK)' } },
+        { iso_639_1: 'en', iso_3166_1: 'US', data: { title: 'Renegade Immortal: The Battle' } },
+      ] },
+    };
+    expect(sanitizeCard(E, raw, 'movie')!.title).toBe('Renegade Immortal: The Battle');
+    expect(englishTitle({ translations: { translations: [{ iso_639_1: 'en', data: { name: '' } }] } }, 'tv')).toBe('');
+    // a readable title is kept as it is
+    expect(sanitizeCard(E, { ...raw, title: 'Бессмертный' }, 'movie')!.title).toBe('Бессмертный');
+  });
+});
 
 describe('endpoint', () => {
   it('prefers the server config, falls back to the built-in key, none without a key', () => {

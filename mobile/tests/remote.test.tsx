@@ -29,6 +29,7 @@ const a = {
   wakeOnLan: vi.fn(),
   pairAtv: vi.fn(),
   warmUp: vi.fn(),
+  switchTv: vi.fn(),
   confirm: vi.fn(),
 };
 
@@ -78,6 +79,14 @@ describe('Remote without a TV', () => {
     expect(el.textContent).toContain('Подключите телевизор');
     click(text('Подключить ТВ'));
     expect(currentRoute.value).toEqual({ name: 'tv' });
+  });
+
+  it('the button is centred under the centred heading and text', () => {
+    mount();
+    expect(text('Подключить ТВ').parentElement!.classList.contains('m-empty')).toBe(true);
+    const css = readFileSync(join('mobile', 'src', 'mobile.css'), 'utf8').replace(/\r\n/g, '\n');
+    expect(css).toMatch(/\n\.m-empty \{[^}]*text-align: center/);
+    expect(css).toMatch(/\n\.m-empty \.m-btn \{[^}]*margin: 0 auto/);
   });
 });
 
@@ -600,22 +609,111 @@ describe('Remote for Android TV', () => {
     tvState.value = 'idle';
   });
 
-  it('shows the name, «Android TV · подключён» and the note; no power, touchpad, channels', () => {
+  it('the LG «Кнопки» layout: the «Пульт» header with the name and state, colour keys, Назад · Домой · Меню; no power or channel keys', () => {
     mount();
     act(() => {
       tvState.value = 'connected';
     });
+    expect(el.querySelector('.m-head-title')!.textContent).toBe('Пульт');
     expect(el.querySelector('.m-remote-title')!.textContent).toBe('Гостиная');
     expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · подключён');
-    expect(el.querySelector('.m-remote-note')!.textContent).toBe(
-      'Пульт управляет OMP на телевизоре. Включение ТВ и другие приложения — пультом от телевизора.',
-    );
+    expect(el.querySelector('[data-atv-remote] .m-rb-pad')).toBeTruthy();
+    expect(el.querySelectorAll('[data-atv-remote] .m-ckey')).toHaveLength(4);
+    expect(Array.from(el.querySelectorAll('.m-rkey-cap')).map((x) => x.textContent)).toEqual(['Назад', 'Домой', 'Меню']);
     expect(el.querySelector('.m-power')).toBeNull();
-    expect(el.textContent).not.toContain('Тачпад');
+    expect(Array.from(el.querySelectorAll('.m-seg [role=tab]')).map((b) => b.textContent)).toEqual(['Кнопки', 'Свайпы']);
     expect(lbl('След. серия')).toBeNull();
     expect(lbl('Пред. серия')).toBeNull();
-    expect(lbl('Домой')).toBeNull();
     expect(a.warmUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('«Тачпад»: a swipe sends arrows, a tap OK, a long press Menu; the keys under the pad as on LG', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    mount();
+    click(text('Свайпы'));
+    const pad = el.querySelector('[data-atv-pad]')!;
+    expect(lbl('Назад')).toBeTruthy();
+    expect(lbl('Меню')).toBeTruthy();
+    expect(lbl('Клавиатура')).toBeTruthy();
+    // a swipe right, 100 px slowly
+    ptr(pad, 'pointerdown', 10, 10);
+    for (let i = 1; i <= 5; i++) {
+      vi.advanceTimersByTime(100);
+      ptr(pad, 'pointermove', 10 + i * 20, 10);
+    }
+    ptr(pad, 'pointerup', 110, 10);
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(a.pressButton.mock.calls.map((c) => c[0])).toEqual(['RIGHT', 'RIGHT']);
+    a.pressButton.mockClear();
+    // a tap
+    ptr(pad, 'pointerdown', 50, 50);
+    vi.advanceTimersByTime(100);
+    ptr(pad, 'pointerup', 50, 50);
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(a.pressButton.mock.calls.map((c) => c[0])).toEqual(['ENTER']);
+    a.pressButton.mockClear();
+    // a long press: Menu while held, nothing on release
+    ptr(pad, 'pointerdown', 50, 50);
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+    ptr(pad, 'pointerup', 50, 50);
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(a.pressButton.mock.calls.map((c) => c[0])).toEqual(['MENU']);
+  });
+
+  it('«Свайпы» pad: the ATV hint, and a large chevron / OK / Меню shows in the pad after each gesture', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    mount();
+    expect(text('Тачпад')).toBeFalsy();
+    click(text('Свайпы'));
+    const pad = el.querySelector('[data-atv-pad]')!;
+    expect(pad.textContent).toContain('Проведите — выделение на ТВ двигается по пунктам · касание — OK · удержание — Меню · двумя — прокрутка');
+    const fb = () => pad.querySelector('[data-pad-feedback]');
+    expect(fb()).toBeNull();
+    ptr(pad, 'pointerdown', 10, 10);
+    for (let i = 1; i <= 5; i++) {
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      ptr(pad, 'pointermove', 10 + i * 20, 10);
+    }
+    expect(fb()!.textContent).toBe('→');
+    act(() => {
+      vi.advanceTimersByTime(350);
+    });
+    expect(fb()).toBeNull();
+    ptr(pad, 'pointerup', 110, 10);
+    ptr(pad, 'pointerdown', 50, 50);
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    ptr(pad, 'pointerup', 50, 50);
+    expect(fb()!.textContent).toBe('OK');
+    act(() => {
+      vi.advanceTimersByTime(350);
+    });
+    ptr(pad, 'pointerdown', 50, 50);
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+    expect(fb()!.textContent).toBe('Меню');
+    ptr(pad, 'pointerup', 50, 50);
+  });
+
+  it('colour keys and «Меню» go to the box; «Домой» opens the OMP catalog', () => {
+    mount();
+    for (const l of ['Красная кнопка', 'Зелёная кнопка', 'Жёлтая кнопка', 'Синяя кнопка']) click(lbl(l));
+    click(lbl('Меню'));
+    expect(a.pressButton.mock.calls).toEqual([['RED'], ['GREEN'], ['YELLOW'], ['BLUE'], ['MENU']]);
+    click(lbl('Домой'));
+    expect(a.pressAtvKey.mock.calls).toEqual([['CATALOG']]);
   });
 
   it('shows the connection state for Android TV', () => {
@@ -626,15 +724,15 @@ describe('Remote for Android TV', () => {
     expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · нет связи');
   });
 
-  it('d-pad, OK, Назад, Каталог, Сейчас играет and volume', () => {
+  it('d-pad, OK, Назад, Домой, Сейчас играет and volume', () => {
     mount();
     click(lbl('Вверх'));
     click(lbl('Влево'));
     click(text('OK'));
-    click(text('Назад'));
+    click(lbl('Назад'));
     expect(a.pressButton.mock.calls).toEqual([['UP'], ['LEFT'], ['ENTER'], ['BACK']]);
-    click(text('Каталог'));
-    click(text('Сейчас играет'));
+    click(lbl('Домой'));
+    click(lbl('Сейчас играет'));
     expect(a.pressAtvKey.mock.calls).toEqual([['CATALOG'], ['NOWPLAYING']]);
     click(lbl('Громче'));
     click(lbl('Тише'));
@@ -695,7 +793,7 @@ describe('Remote for Android TV', () => {
   it('a failed key shows a toast', async () => {
     a.pressAtvKey.mockRejectedValue(new Error('Телевизор не отвечает'));
     mount();
-    click(text('Каталог'));
+    click(lbl('Домой'));
     await flush();
     expect(toast.value).toBe('Телевизор не отвечает');
   });
@@ -832,10 +930,9 @@ describe('Remote in English', () => {
       tvState.value = 'connected';
     });
     expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · connected');
-    expect(el.querySelector('.m-remote-note')!.textContent).toBe('The remote controls OMP on the TV. Turning the TV on and other apps — with the TV’s own remote.');
-    expect(Array.from(el.querySelectorAll('.m-keyrow')[0].querySelectorAll('button')).map((b) => (b.textContent || '').trim())).toEqual(['Back', 'Catalog', 'Now playing']);
-    expect(el.querySelector('.m-vol-label')!.textContent).toBe('Vol.');
-    for (const l of ['Keyboard', 'Quieter', 'Louder', 'Up', 'Down', 'Left', 'Right']) expect(lbl(l), l).toBeTruthy();
+    expect(el.querySelector('.m-head-title')!.textContent).toBe('Remote');
+    expect(Array.from(el.querySelectorAll('.m-rkey-cap')).map((x) => x.textContent)).toEqual(['Back', 'Home', 'Menu']);
+    for (const l of ['Keyboard', 'Quieter', 'Louder', 'Up', 'Down', 'Left', 'Right', 'Now playing', 'Red button', 'Blue button']) expect(lbl(l), l).toBeTruthy();
     act(() => {
       tvState.value = 'error';
     });
@@ -855,3 +952,60 @@ describe('Remote in English', () => {
 function byBtn(t: string) {
   return Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === t);
 }
+
+describe('Remote remembers the saved TVs', () => {
+  it('a saved TV that is not marked active (install assistant, an update) is used and connected, not the setup screen', () => {
+    localStorage.setItem('tsp.tvs', JSON.stringify([{ ip: '192.168.1.156', name: '[LG] webOS TV OLED55C9PLA', clientKey: 'k' }]));
+    localStorage.removeItem('tsp.activeTv');
+    reloadTvs();
+    mount();
+    expect(el.textContent).not.toContain('Подключите телевизор');
+    expect(el.textContent).toContain('OLED55C9PLA');
+    expect(a.warmUp).toHaveBeenCalled();
+  });
+
+  it('a TV that does not answer: «… не отвечает — включите ТВ» and «Повторить»', () => {
+    saveTv({ ip: '192.168.1.156', name: '[LG] webOS TV OLED55C9PLA', clientKey: 'k' });
+    mount();
+    act(() => {
+      tvState.value = 'error';
+    });
+    expect(el.querySelector('[data-no-answer]')!.textContent).toContain('OLED55C9PLA не отвечает — включите ТВ');
+    a.warmUp.mockClear();
+    click(byBtn('Повторить')!);
+    expect(a.warmUp).toHaveBeenCalledTimes(1);
+    act(() => {
+      tvState.value = 'connected';
+    });
+    expect(el.querySelector('[data-no-answer]')).toBeNull();
+    act(() => {
+      tvState.value = 'idle';
+    });
+  });
+
+  it('several saved TVs: the name opens a sheet with their state, one tap switches with the saved key', () => {
+    saveTv({ ip: '192.168.1.156', name: 'LG OLED', clientKey: 'k' });
+    saveTv({ ip: '192.168.1.191', name: 'Dune HD', kind: 'atv', token: 'a'.repeat(32), ctlPort: 8095 });
+    saveTv({ ip: '192.168.1.192', name: 'Box', kind: 'atv' });
+    setActiveTv('192.168.1.156');
+    mount();
+    const sw = el.querySelector('.m-remote-switch') as HTMLElement;
+    expect(sw.textContent).toContain('LG OLED');
+    click(sw);
+    const rows = Array.from(document.querySelectorAll('[data-switch-tv]')) as HTMLElement[];
+    expect(rows.map((r) => r.querySelector('.m-opt-sub')!.textContent)).toEqual([
+      expect.stringMatching(/^192\.168\.1\.156 · /),
+      '192.168.1.191 · сохранён',
+      '192.168.1.192 · нужен код',
+    ]);
+    click(rows[1]);
+    expect(a.switchTv).toHaveBeenCalledWith(expect.objectContaining({ ip: '192.168.1.191', token: 'a'.repeat(32) }));
+    expect(document.querySelector('[data-switch-tv]')).toBeNull();
+  });
+
+  it('one saved TV: its name is plain text, no switcher', () => {
+    saveTv({ ip: '192.168.1.156', name: 'LG OLED', clientKey: 'k' });
+    mount();
+    expect(el.querySelector('.m-remote-switch')).toBeNull();
+  });
+});

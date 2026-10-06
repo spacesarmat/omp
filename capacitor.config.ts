@@ -6,7 +6,8 @@ const config: CapacitorConfig = {
   // plugin calls carry tracker passwords and cookies: never log them (the default logs every debuggable build)
   loggingBehavior: 'none',
   webDir: 'dist-mobile',
-  android: { allowMixedContent: true },
+  // the phone UI never zooms as a page (MainActivity / PhoneWebZoom and the viewport meta say the same)
+  android: { allowMixedContent: true, zoomEnabled: false },
   server: { androidScheme: 'http', cleartext: true },
 };
 

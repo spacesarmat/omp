@@ -116,6 +116,33 @@ class EngineSwitcherTest {
     }
 
     @Test
+    fun outOfMemoryMidPlayMovesToVlcAtTheSamePlace() {
+        val rig = Rig().start(request())
+        val media3 = rig.host.engine(0)
+        media3.listener?.onFirstFrame()
+        media3.positionMs = 10_000
+        media3.listener?.onError(ErrorKind.OTHER, EngineChooser.OUT_OF_MEMORY)
+        rig.host.runPosted()
+        assertEquals(EngineKind.VLC, rig.sw.kind)
+        assertTrue(media3.released)
+        assertEquals(10_000L, rig.host.engine(1).opened.single().second)
+    }
+
+    @Test
+    fun vlcThatDoesNotCopeGoesBackToBuiltinAndIsReleased() {
+        val rig = Rig().start(request(engine = EngineMode.VLC))
+        val vlc = rig.host.engine(0)
+        vlc.positionMs = 27_000
+        assertTrue(rig.sw.backToBuiltin())
+        assertEquals(EngineKind.MEDIA3, rig.sw.kind)
+        assertTrue(vlc.released)
+        assertEquals(27_000L, rig.host.engine(1).opened.single().second)
+        assertEquals(listOf(EngineKind.MEDIA3 to SwitchReason.MANUAL), rig.host.switched)
+        // nothing to go back from on Media3
+        assertFalse(rig.sw.backToBuiltin())
+    }
+
+    @Test
     fun media3DecodingFailedKeepsItsTextButSwitchesBeforeTheFirstFrame() {
         val rig = Rig().start(request())
         rig.host.engine(0).listener?.onError(ErrorKind.OTHER, EngineChooser.DECODING_FAILED)

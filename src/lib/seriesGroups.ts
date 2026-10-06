@@ -9,6 +9,7 @@ import { parseEpisode, playableFiles } from './episodes';
 import { filterTorrents } from './librarySearch';
 import { lang, tp } from '../i18n';
 import { parseTorrentData } from '../api/torrserver';
+import { fileEpisodes, filesHaveEpisodes, hasMainVideo, titleHasEpisodes } from './categoryCheck';
 
 function filesOf(t: Torrent) {
   return t.file_stats && t.file_stats.length ? t.file_stats : parseTorrentData(t.data);
@@ -37,11 +38,42 @@ export interface SingleItem {
 
 export type LibraryItem = SingleItem | SeriesGroup;
 
-/** A series by its category, or by its title when the category is not set. */
+/**
+ * Clear signs of episodes in the FILES: 3+ episode files of comparable size and no main video (a film with numbered
+ * extras, a concert or a film titled «Сезон охоты 2» never qualifies). The title alone never does.
+ */
+export function hasEpisodes(tor: Torrent): boolean {
+  return filesHaveEpisodes(filesOf(tor));
+}
+
+/**
+ * A series by its category, or by its title when the category is not set. A «Фильмы» torrent with clear episodes
+ * («E01-E18», 18 episode files) is a series all the same: the category was guessed wrong.
+ */
 export function isSeries(tor: Torrent): boolean {
   if (tor.category === 'tv') return true;
-  if (tor.category === 'movie' || tor.category === 'music') return false;
-  return guessCategory(displayTitle(tor)) === 'tv';
+  if (tor.category === 'music') return false;
+  if (tor.category === 'movie') return hasEpisodes(tor);
+  const files = filesOf(tor);
+  // the files decide once known: episodes, or one main video (a film named «Сезон охоты 2»)
+  if (files.length) return hasEpisodes(tor) || (titleSaysSeries(displayTitle(tor)) && !hasMainVideo(files));
+  return titleSaysSeries(displayTitle(tor));
+}
+
+/**
+ * The title says «series» with a real mark: S02 / S02E05 / 2x05, «2 сезон» / «сезон 2» / «Season 2», «серии», «сериал»,
+ * «episode». A word next to something else («Сезон охоты 2») is no mark.
+ */
+const SERIES_MARK = /(?:^|[^a-z0-9])s\d{1,2}(?:e\d{1,3})?(?![0-9])|(?:^|[^0-9])\d{1,2}x\d{1,3}(?![0-9])|\d{1,2}\s*(?:-?(?:й|ый))?\s*сезон|сериал|серии|серия|\bseries\b|\bepisodes?\b/i;
+/** «Сезон 2», «Season 2», «2nd Season»: also a film's name («Open Season 2 (2008)»), so only without a year. */
+const WEAK_SEASON = /сезон[ыа]?\s*\d|season\s*\d|\d{1,2}(?:st|nd|rd|th)?\s*season/i;
+const YEAR = /(?:^|[^0-9])(?:19|20)\d\d(?![0-9])/;
+
+export function titleSaysSeries(title: string): boolean {
+  const t = title || '';
+  if (titleHasEpisodes(t)) return true;
+  if (guessCategory(t) !== 'tv') return false;
+  return SERIES_MARK.test(t) || (WEAK_SEASON.test(t) && !YEAR.test(t));
 }
 
 /** The grouping key of a series torrent; '' for a film or a title with no name. */
@@ -66,7 +98,27 @@ export function seasonsOf(tor: Torrent): number[] {
     const s = parseEpisode(f.path).season;
     if (s !== null && out.indexOf(s) < 0) out.push(s);
   });
+  // «E01-E18» with no season anywhere: the first season (the way such releases are numbered)
+  if (!out.length && r.to !== undefined && r.from !== undefined && r.to > r.from) out.push(1);
   return out.sort((a, b) => a - b);
+}
+
+/** The release names episodes (in its title or files) but no season. */
+function seasonlessEpisodes(tor: Torrent): boolean {
+  const r = parseEpisodeRange(displayTitle(tor));
+  if (r.to !== undefined) return true;
+  return playableFiles(filesOf(tor)).some((f) => !!fileEpisodes(f.path));
+}
+
+/**
+ * The seasons of a group member: its own, else season 1 when it is a release of episodes with no season and another
+ * member has season 1 (anime «E01-E18» next to «S1E1-18»); else NO_SEASON.
+ */
+function memberSeasons(members: Torrent[], tor: Torrent): number[] {
+  const own = seasonKeys(tor);
+  if (own.length !== 1 || own[0] !== NO_SEASON) return own;
+  const first = members.some((m) => m !== tor && seasonsOf(m).indexOf(1) >= 0);
+  return first && seasonlessEpisodes(tor) ? [1] : own;
 }
 
 function seasonKeys(tor: Torrent): number[] {
@@ -83,7 +135,7 @@ function makeGroup(key: string, members: Torrent[]): SeriesGroup {
   const seasons: number[] = [];
   let lead = members[0];
   members.forEach((m) => {
-    seasonKeys(m).forEach((s) => {
+    memberSeasons(members, m).forEach((s) => {
       if (seasons.indexOf(s) < 0) seasons.push(s);
     });
     const a = lastSeason(m);
@@ -200,7 +252,7 @@ export function singleGroup(tor: Torrent): SeriesGroup | null {
 
 /** The torrents of one season (a pack of seasons is listed under each of them). */
 export function seasonMembers(g: SeriesGroup, season: number): Torrent[] {
-  return g.members.filter((m) => seasonKeys(m).indexOf(season) >= 0);
+  return g.members.filter((m) => memberSeasons(g.members, m).indexOf(season) >= 0);
 }
 
 /**
@@ -208,7 +260,7 @@ export function seasonMembers(g: SeriesGroup, season: number): Torrent[] {
  * (deleting it would take that season away too).
  */
 export function otherSeasonReleases(g: SeriesGroup, season: number, keep: Torrent): Torrent[] {
-  return seasonMembers(g, season).filter((m) => m.hash !== keep.hash && seasonKeys(m).every((s) => s === season));
+  return seasonMembers(g, season).filter((m) => m.hash !== keep.hash && memberSeasons(g.members, m).every((s) => s === season));
 }
 
 /** Every torrent hash of the cards. */

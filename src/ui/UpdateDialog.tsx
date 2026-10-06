@@ -3,6 +3,7 @@ import { useRef } from 'preact/hooks';
 import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { updatePrompt, skipVersion, dismissPrompt } from '../store/updates';
 import { APP_VERSION } from '../version';
+import { updateNotes } from '../lib/updateInfo';
 import { FocusGroup, Button } from './components';
 import { useKeys } from './keys';
 import { navigate } from './nav';
@@ -50,7 +51,7 @@ export function UpdateDialog() {
     <div class="dialog-backdrop">
       <FocusGroup key={info.version} focusKey="UPDATE-DIALOG" className="dialog update-dialog" boundary autoFocus>
         <div class="dialog-title">{t('update.available', { version: info.version })}</div>
-        {info.notes.length > 0 && <ul class="update-notes">{info.notes.slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>}
+        {updateNotes(info, 'tv').length > 0 && <ul class="update-notes">{updateNotes(info, 'tv').slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>}
         <div class="muted update-current">{t('update.current', { version: APP_VERSION })}</div>
         <div class="row update-actions">
           <Button label={t('tv.updateDialog.update')} className="primary" onPress={() => { dismissPrompt(); navigate({ name: 'update' }); }} />

@@ -191,7 +191,8 @@ describe('transferWhen', () => {
     const now = new Date(2026, 9, 3, 20, 0).getTime();
     expect(transferWhen(new Date(2026, 9, 3, 18, 40).getTime(), now)).toEqual({ day: 'сегодня', time: '18:40' });
     expect(transferWhen(new Date(2026, 9, 2, 9, 5).getTime(), now)).toEqual({ day: 'вчера', time: '09:05' });
-    expect(transferWhen(new Date(2026, 8, 30, 7, 0).getTime(), now)).toEqual({ day: '30.09.2026', time: '07:00' });
+    expect(transferWhen(new Date(2026, 8, 30, 7, 0).getTime(), now)).toEqual({ day: '30 сент.', time: '07:00' });
+    expect(transferWhen(new Date(2025, 0, 9, 7, 0).getTime(), now).day).toBe('9 янв. 2025');
   });
 });
 

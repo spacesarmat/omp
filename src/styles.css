@@ -336,6 +336,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .link-toggle .icon { margin-right: 10px; }
 .link-toggle.focused { transform: none; color: var(--text); }
 .connect-hint { margin-top: 28px; text-align: center; color: var(--muted); font-size: 20px; line-height: 1.5; }
+/* the server did not answer: said under the buttons until the next try */
+.connect-error { margin-top: 20px; padding: 14px 18px; border-radius: 12px; background: rgba(229, 72, 77, .16); color: #ff9a9d; font-size: 22px; line-height: 1.4; }
 .history-btn { position: absolute; top: 44px; right: 80px; display: flex; align-items: center; padding: 14px 26px; border-radius: 14px; background: var(--panel2); font-size: 24px; font-weight: 600; z-index: 3; }
 .history-btn > .icon:first-child { margin-right: 12px; }
 .history-chevron { margin-left: 12px; }

@@ -40,6 +40,7 @@ const SORT_KEYS: { [s in DiscoverSort]: Key } = {
   rating: 'discover.sortRating',
   date: 'discover.sortDate',
   upcoming: 'discover.sortUpcoming',
+  digitalSoon: 'discover.sortDigitalSoon',
 };
 
 export function sortName(s: DiscoverSort): string {

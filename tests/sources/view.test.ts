@@ -9,6 +9,7 @@ import {
   resolveLink,
   sourceName,
   resultDate,
+  cloudflareTvNote,
   jackettHint,
   stableOrder,
   seedsText,
@@ -169,15 +170,20 @@ describe('names and dates', () => {
     expect(sourceName('ts-rutor')).toBe('rutor (TorrServer)');
     expect(sourceName('nope')).toBe('nope');
   });
-  it('date as dd.mm.yyyy from date or CreateDate', () => {
-    expect(resultDate(res({ date: new Date(2026, 9, 3, 12).getTime() }))).toBe('03.10.2026');
-    expect(resultDate(res({ CreateDate: '2025-01-09T10:00:00Z' }))).toBe('09.01.2025');
+  it('the release day like every other date label: «3 окт.», «9 янв. 2025» from another year', () => {
+    expect(resultDate(res({ date: new Date(2026, 9, 3, 12).getTime() }), new Date(2026, 9, 6).getTime())).toBe('3 окт.');
+    expect(resultDate(res({ CreateDate: '2025-01-09T10:00:00Z' }), new Date(2026, 9, 6).getTime())).toBe('9 янв. 2025');
     expect(resultDate(res({}))).toBe('');
   });
   it('the general hint names no site', () => {
     expect(jackettHint()).toBe(
       'Сайт закрыт проверкой Cloudflare? Войдите на нём через браузер (кнопка «Войти» у сайта в «Источниках поиска») или подключите его через Jackett, Prowlarr или FlareSolverr — как, в «Вопросах и ответах».',
     );
+  });
+  it('the TV note under sites behind Cloudflare: one sentence, no error repeated', () => {
+    expect(cloudflareTvNote(['NNM-Club'])).toBe('NNM-Club закрыт проверкой Cloudflare — войдите на него на телефоне в «Источниках поиска»');
+    expect(cloudflareTvNote(['NNM-Club', 'Kinozal'])).toBe('NNM-Club, Kinozal закрыты проверкой Cloudflare — войдите на них на телефоне в «Источниках поиска»');
+    expect(cloudflareTvNote([])).toBe('');
   });
   it('the short Cloudflare hint of a site and the «Cloudflare» note', () => {
     const browser = () => Promise.resolve({ result: 'ok' as const });
@@ -198,6 +204,8 @@ describe('names and dates', () => {
       expect(withCloudflareNote({ text: 'sign-in needed', tone: 'muted' }).text).toBe('sign-in needed · Cloudflare');
       expect(jackettHint()).toMatch(/^Is the site blocked by Cloudflare\? Sign in to it with the browser/);
       expect(jackettHint() + cloudflareHint({ name: 'Anidub' }, false).text).not.toMatch(/[А-Яа-яЁё]/);
+      expect(cloudflareTvNote(['NNM-Club'])).toBe('NNM-Club is behind a Cloudflare check — sign in to it on the phone in “Search sources”');
+      expect(cloudflareTvNote(['NNM-Club', 'Kinozal'])).toBe('NNM-Club, Kinozal are behind a Cloudflare check — sign in to them on the phone in “Search sources”');
     } finally {
       applyLanguageSetting('ru');
     }

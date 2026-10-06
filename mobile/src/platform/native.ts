@@ -120,6 +120,8 @@ export interface OmpNativeApi {
   downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void>;
   /** Feed key of this device's APK (Build.SUPPORTED_ABIS[0]: arm64 / armv7); null = universal. */
   deviceAbiKey(): Promise<ApkAbi | null>;
+  /** «Установка неизвестных приложений» is allowed for OMP (true when it cannot be told: nothing to explain). */
+  canInstallApks(): Promise<boolean>;
   takePendingMagnet(): Promise<string | null>;
   onMagnet(cb: (link: string) => void): () => void;
   /** Starts the server (idempotent) on the interface that reaches tvIp; resolves the report URL. */
@@ -236,6 +238,7 @@ interface OmpNativePlugin {
   openExternal(o: { url: string; mime: string }): Promise<void>;
   downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<void>;
   deviceAbiKey(): Promise<{ key?: unknown }>;
+  canInstallApks?(): Promise<{ granted?: unknown }>;
   takePendingMagnet(): Promise<{ link?: string | null }>;
   startPlayerServer(o: { tvIp: string }): Promise<{ url: string }>;
   stopPlayerServer(): Promise<void>;
@@ -522,6 +525,16 @@ export const native: OmpNativeApi = {
     if (!plugin) return unavailable();
     const r = await plugin.deviceAbiKey();
     return r && (r.key === 'arm64' || r.key === 'armv7') ? r.key : null;
+  },
+
+  async canInstallApks() {
+    if (!plugin || typeof plugin.canInstallApks !== 'function') return true;
+    try {
+      const r = await plugin.canInstallApks();
+      return !(r && r.granted === false);
+    } catch {
+      return true;
+    }
   },
 
   async takePendingMagnet() {

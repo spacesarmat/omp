@@ -104,11 +104,11 @@ describe('installAndroidRemote', () => {
     const f = await install();
     const log = keyLog();
     try {
-      for (const name of ['UP', 'DOWN', 'LEFT', 'RIGHT', 'ENTER', 'BACK', 'POWER']) f.emit('remoteKey', { name });
+      for (const name of ['UP', 'DOWN', 'LEFT', 'RIGHT', 'ENTER', 'BACK', 'POWER', 'RED', 'GREEN', 'YELLOW', 'BLUE', 'MENU']) f.emit('remoteKey', { name });
     } finally {
       log.stop();
     }
-    expect(log.codes).toEqual([38, 40, 37, 39, 13, 461]);
+    expect(log.codes).toEqual([38, 40, 37, 39, 13, 461, 403, 404, 405, 406, 457]);
   });
 
   it('CATALOG resets to the library (connect without a server)', async () => {

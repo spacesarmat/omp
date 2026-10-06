@@ -9,6 +9,7 @@ import { client } from '../store/servers';
 import { torrents } from '../store/library';
 import { errorMessage } from '../api/http';
 import { mapSearchCategory } from '../lib/category';
+import { recordAutoCategory } from '../lib/categoryCheck';
 import { posterColor } from '../lib/libraryView';
 import { currentRoute, navigate, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
@@ -24,7 +25,7 @@ import { searchAll } from '../sources/search';
 import { onSearchFailure, type CheckedHosts } from '../sources/cloudflareCheck';
 import { getHealth } from '../sources/store';
 import { ipBanTvHint } from '../sources/ipBan';
-import { ipBanNote, isCloudflare, jackettHint, progressText, resultDate, resultKey, sortLabels, sourceBadge, sourceName, type SortKey } from '../sources/view';
+import { ipBanNote, cloudflareTvNote, isCloudflare, progressText, resultDate, resultKey, sortLabels, sourceBadge, sourceName, type SortKey } from '../sources/view';
 import { isHotChip, releaseChips, releaseTitle } from '../sources/releaseRow';
 import { sortTvResults, stableTvOrder, type TvSortKey } from '../sources/tvSort';
 import { posterKey, requestPoster } from '../catalog/resultPosters';
@@ -205,6 +206,8 @@ export function AddScreen() {
     setBusyText(t('add.wait'));
     c.add({ link: a.link, title: a.title, category: a.category }).then(
       (tt) => {
+        // the category is OMP's own choice here: the automatic check (on a later refresh) may correct it
+        recordAutoCategory(tt.hash, a.category || '');
         if (!alive.current) return;
         toast(t('add.added', { title: tt.title || a.title || tt.hash }));
         replaceRoute({ name: 'torrent', hash: tt.hash });
@@ -484,7 +487,7 @@ export function AddScreen() {
       )}
       {blocked.length > 0 && (
         <div class="search-progress search-hint">
-          {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ') + '. ' + jackettHint()}
+          {cloudflareTvNote(blocked.map(sourceName))}
         </div>
       )}
       {banned.length > 0 && (

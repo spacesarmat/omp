@@ -87,7 +87,7 @@ describe('Torrent', () => {
     mount();
     await flush();
     expect(el.querySelector('.m-thead-title')!.textContent).toBe('Starbound Frontier');
-    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 4 серии · 18.0 GB · 12 пиров');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 4 серии · 18,0 ГБ · 12 пиров');
     const rows = el.querySelectorAll('.m-ep');
     expect(rows.length).toBe(4);
     expect(rows[2].textContent).toContain('S02E03');
@@ -473,7 +473,8 @@ describe('TV launch flow', () => {
     saveProgress('abc', 4, 500, 3000);
     await open1();
     const dlg = el.querySelectorAll('[role=dialog]')[1];
-    expect(dlg.textContent).toContain('S02E04 · Show.S02E04 · на LG OLED');
+    // the episode code and the TV, never the file name
+    expect(dlg.querySelector('.m-muted')!.textContent).toBe('S02E04 · на LG OLED');
     expect(dlg.textContent).toContain('Осталось 42 мин');
     click(byText('Сначала'));
     await flush();

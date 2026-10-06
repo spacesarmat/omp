@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Sheet } from './Sheet';
 import { showToast } from './toast';
-import { t } from '../../../src/i18n';
+import { fmtSize, t } from '../../../src/i18n';
 import { navigate } from '../nav';
 import { reloadMonitor } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
 import { client } from '../../../src/store/servers';
 import { torrents, refreshTorrents } from '../../../src/store/library';
-import { formatBytes } from '../../../src/lib/format';
 import { shortTitle } from '../../../src/lib/libraryView';
 import { displayTitle } from '../../../src/lib/torrentName';
 import type { TorrentFile } from '../../../src/lib/episodes';
@@ -162,7 +161,7 @@ export function BetterSheet({
   };
 
   if (picked) {
-    const oldSize = torrent.torrent_size ? formatBytes(torrent.torrent_size) : '';
+    const oldSize = torrent.torrent_size ? fmtSize(torrent.torrent_size) : '';
     const covered = coverageNote(lib, picked);
     return (
       <Sheet label={t('monitor.replaceSheet.title')} onClose={cancel}>

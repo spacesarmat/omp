@@ -24,6 +24,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer
 import androidx.media3.decoder.ffmpeg.FfmpegLibrary
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.Renderer
@@ -68,7 +69,15 @@ class Media3Engine(private val context: Context) : PlayerEngine {
         val auth = ResolvingDataSource.Factory(http) { spec -> withBasicAuth(spec) }
         val sources = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, auth))
         val attrs = AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build()
+        // the buffer fits the heap: the default (≈131 MB for video) does not fit a 128 MB box and 4K died of OOM
+        val cap = PlayerBuffer.capBytes(PlayerBuffer.memoryClassMb(context))
+        val load = DefaultLoadControl.Builder()
+            .setTargetBufferBytes(cap)
+            .setPrioritizeTimeOverSizeThresholds(false)
+            .build()
+        Log.i(TAG, "buffer cap ${cap / (1024 * 1024)} MB")
         val p = ExoPlayer.Builder(context, OmpRenderers(context))
+            .setLoadControl(load)
             .setMediaSourceFactory(sources)
             .setAudioAttributes(attrs, true)
             .setHandleAudioBecomingNoisy(true)
@@ -102,7 +111,8 @@ class Media3Engine(private val context: Context) : PlayerEngine {
             }
 
             override fun onPlayerError(e: PlaybackException) {
-                listener?.onError(errorKind(e.errorCode), e.errorCodeName)
+                // out of memory (wrapped in a source error): «Авто» may still move the item to VLC
+                listener?.onError(errorKind(e.errorCode), if (PlayerBuffer.causedByOom(e)) EngineChooser.OUT_OF_MEMORY else e.errorCodeName)
             }
         })
         return p

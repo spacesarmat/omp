@@ -24,6 +24,7 @@ import {
   summarizeBackup,
   summaryLines,
 } from '../src/lib/backup';
+import { activeTv, reloadTvs } from '../src/tv/tvStore';
 
 const NOW = new Date(2026, 9, 3, 12, 0, 0).getTime();
 const put = (k: string, v: unknown) => localStorage.setItem(k, JSON.stringify(v));
@@ -413,5 +414,32 @@ describe("hardening", () => {
     const text = serializeBackup(collectBackup(NOW));
     expect(text.length).toBeGreaterThan(1024 * 1024);
     expect(parseBackup(text).ok).toBe(true);
+  });
+});
+
+describe('saved TVs in a copy', () => {
+  it('the LG key and the Android TV token go into the copy like the server password, and come back paired', () => {
+    const lg = { ...TV_LG, usedAt: 100 };
+    const atv = { ...TV_ATV, usedAt: 200 };
+    put('tsp.tvs', [lg, atv]);
+    put('tsp.activeTv', atv.ip);
+    const text = serializeBackup(collectBackup(NOW));
+    localStorage.clear();
+    const r = parseBackup(text);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    applyBackup(r.backup);
+    expect(get('tsp.tvs')).toEqual([lg, atv]);
+    reloadTvs();
+    expect(activeTv.value).toMatchObject({ ip: atv.ip, token: TV_ATV.token });
+  });
+
+  it('a copy whose active TV is not in it still gives the remote a TV: the last used one', () => {
+    const r = parseBackup(file({ 'tsp.tvs': [{ ...TV_LG, usedAt: 300 }, TV_ATV], 'tsp.activeTv': '9.9.9.9' }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    applyBackup(r.backup);
+    reloadTvs();
+    expect(activeTv.value).toMatchObject({ ip: TV_LG.ip, clientKey: TV_LG.clientKey });
   });
 });

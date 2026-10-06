@@ -18,10 +18,11 @@ import { onSearchFailure, type CheckedHosts } from '../../../src/sources/cloudfl
 import { allSources } from '../../../src/sources/registry';
 import { enabledSources } from '../../../src/sources/store';
 import { getHealth } from '../../../src/sources/store';
+import { getSource } from '../../../src/sources/registry';
+import { isTlsMessage, tlsText } from '../../../src/sources/tls';
 import {
   ipBanNote,
   isCloudflare,
-  jackettHint,
   progressText,
   resultKey,
   sortResults,
@@ -36,7 +37,7 @@ import { applyFilters, activeFilterCount, filterChips, parseRelease, subQualityO
 import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
 import { ResultCard } from '../ui/ResultCard';
 import { SubSheet } from '../ui/SubSheet';
-import { addSearchResult, type RowBusy } from '../addResult';
+import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../addResult';
 import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
 
@@ -65,6 +66,40 @@ function SubscribePlate({ query, onSubscribe }: { query: string; onSubscribe: ()
           {t('add.subscribe')}
         </button>
       )}
+    </div>
+  );
+}
+
+/** What the person can fix on the site's screen after a failed search: the line to show, '' when nothing (a plain timeout). */
+function fixKind(id: string): string {
+  const h = getHealth(id);
+  if (!h || h.state === 'ok') return '';
+  if (h.state === 'login') return t('sources.state.login');
+  if (isCloudflare(h.message)) return h.message || '';
+  if (h.code === 'ipban') return ipBanNote(id);
+  if (h.code === 'tls' || isTlsMessage(h.message)) return tlsText();
+  return '';
+}
+
+/** One «Открыть настройки …» button per source: its site screen, or the list when the source has none. */
+function FixLinks({ ids }: { ids: string[] }) {
+  return (
+    <div class="m-hint-links">
+      {ids.map((id) => {
+        const src = getSource(id);
+        const site = !!src && (!!src.login || src.cloudflare === true);
+        return (
+          <button
+            key={id}
+            type="button"
+            class="m-link"
+            data-fix-source={id}
+            onClick={() => navigate(site ? { name: 'sourceSite', id } : { name: 'sources' })}
+          >
+            {t('add.openSourceSettings', { name: sourceName(id) })}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -231,6 +266,8 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     }
     const added = await c.add({ link: l, title: magnetName(l) || undefined, category: magnetCategory });
     void rememberAdded(c, added, magnetName(l));
+    afterAdd(c, added, picked !== null, magnetCategory);
+    noteAlreadyHave(added.hash, added.title || magnetName(l), magnetCategory);
     return added.hash;
   };
 
@@ -267,6 +304,9 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     e?.preventDefault();
     const q = query.trim();
     if (!q) return;
+    // the keyboard goes away: the results are what to look at now
+    const focused = document.activeElement as HTMLElement | null;
+    if (focused && focused.tagName === 'INPUT') focused.blur();
     runSearch(q, {});
   };
 
@@ -333,7 +373,11 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     }
     setSearchError('');
     try {
-      const hash = await addSearchResult(r, categoryOfRow(r), { onStep: (s) => markRow(key, s), alive: () => alive.v });
+      const hash = await addSearchResult(r, categoryOfRow(r), {
+        onStep: (s) => markRow(key, s),
+        alive: () => alive.v,
+        picked: rowCat[key] !== undefined,
+      });
       if (!hash || !alive.v) return;
       if (!watch) {
         showToast(t('notify.added'));
@@ -362,6 +406,9 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
   // a site that showed its code page: its own message («torrent.by просит ввести проверочный код»)
   const banned = prog ? prog.failed.map(ipBanNote).filter((x) => !!x) : [];
+  // sign-in lost or a certificate problem: no card of their own before, the person fixes them on the site's screen too
+  const others = prog ? prog.failed.filter((id) => !blocked.includes(id) && !ipBanNote(id) && fixKind(id) !== '') : [];
+  const bannedIds = prog ? prog.failed.filter((id) => !!ipBanNote(id)) : [];
   const sortLabel = sortLabels().filter((s) => s.key === sort)[0].label;
 
   return (
@@ -459,12 +506,20 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
       {blocked.length > 0 && (
         <div class="m-hint-warn" data-hint="jackett">
           {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ')}
-          <div>{jackettHint()}</div>
+          <div>{t('add.fixHint')}</div>
+          <FixLinks ids={blocked} />
         </div>
       )}
       {banned.length > 0 && (
         <div class="m-hint-warn" data-hint="ipban">
           {banned.join('; ')}
+          <FixLinks ids={bannedIds} />
+        </div>
+      )}
+      {others.length > 0 && (
+        <div class="m-hint-warn" data-hint="fix">
+          {others.map((id) => sourceName(id) + ': ' + fixKind(id)).join('; ')}
+          <FixLinks ids={others} />
         </div>
       )}
       {searchError && <LaunchError message={searchError} />}

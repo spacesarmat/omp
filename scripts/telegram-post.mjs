@@ -1,8 +1,10 @@
 // Posts a release to the Telegram channel: photo + changelog + buttons, then every build file as a reply
 // (files over the bot limit, or that Telegram refuses, are linked in a closing reply instead).
+// A stable release with docs/screenshots/release-<version>/ goes as a photo album (cover + screenshots, changelog on
+// the first photo), then the files and a short message with the buttons, both as replies to the first photo.
 // Usage (release workflow): node scripts/telegram-post.mjs <tag> [build dir, default build]
 // Env: TELEGRAM_BOT_TOKEN (secret), TELEGRAM_CHAT_ID (@channel or id). Without them it does nothing.
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { changelogNotes } from './hb-lib.mjs';
@@ -89,13 +91,32 @@ function releasePost(tag, root, log) {
   const cover = join(root, `docs/screenshots/release-${version}.png`);
   if (!existsSync(cover)) log(`Telegram: no release cover ${basename(cover)} (scripts/release-cover.mjs), using a screenshot`);
   const photo = [cover, join(root, 'docs/screenshots/library-large.png'), join(root, 'assets/telegram/omp-telegram.png')].find((p) => existsSync(p));
-  return { version, caption: buildCaption(version, notes), keyboard, photo };
+  return { version, caption: buildCaption(version, notes), keyboard, photo, album: albumPhotos(root, version, photo) };
 }
 
-export async function postRelease({ tag, dir = 'build', root = '.', token, chat, fetch: doFetch = fetch, log = console.log, pause = sleep }) {
-  const call = caller(token, doFetch);
-  const { version, caption, keyboard, photo } = releasePost(tag, root, log);
+/** Telegram takes at most 10 items in one album. */
+export const ALBUM_MAX = 10;
+/** Text of the reply that carries the buttons under an album (an album cannot have an inline keyboard). */
+export const BUTTONS_TEXT = 'Скачать и подробности:';
 
+const imageType = (name) => (/\.jpe?g$/i.test(name) ? 'image/jpeg' : 'image/png');
+
+/**
+ * Pictures of the album of a stable release: the cover, then the live screenshots of
+ * docs/screenshots/release-<version>/ by file name, at most ALBUM_MAX. Null for a pre-release (version with «-»)
+ * or when the folder is missing or holds no pictures: the release is then posted as a single photo.
+ */
+function albumPhotos(root, version, cover) {
+  if (version.includes('-')) return null;
+  const folder = join(root, `docs/screenshots/release-${version}`);
+  if (!existsSync(folder) || !statSync(folder).isDirectory()) return null;
+  const shots = readdirSync(folder).filter((n) => /\.(png|jpe?g)$/i.test(n)).sort().map((n) => join(folder, n));
+  if (!shots.length) return null;
+  return [cover, ...shots].slice(0, ALBUM_MAX);
+}
+
+/** Posts the release as one photo with the caption and the buttons. Resolves to the message id. */
+async function sendSinglePhoto(call, chat, { caption, keyboard, photo }) {
   const post = new FormData();
   post.set('chat_id', chat);
   post.set('caption', caption);
@@ -103,10 +124,61 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
   post.set('reply_markup', JSON.stringify(keyboard));
   post.set('photo', new Blob([readFileSync(photo)], { type: 'image/png' }), basename(photo));
   const msg = await call('sendPhoto', post);
-  log(`Telegram: posted ${version}`);
-  await pinPost(call, chat, msg.message_id, log, pause);
+  return msg.message_id;
+}
 
-  return sendFiles({ call, chat, replyTo: msg.message_id, tag, version, dir, log });
+/** Posts the release as a photo album with the caption on the first photo. Resolves to the first message id. */
+async function sendAlbum(call, chat, { caption, album }) {
+  const form = new FormData();
+  form.set('chat_id', chat);
+  form.set('media', JSON.stringify(album.map((p, i) => ({
+    type: 'photo',
+    media: `attach://photo${i}`,
+    ...(i === 0 ? { caption, parse_mode: 'HTML' } : {}),
+  }))));
+  album.forEach((p, i) => form.set(`photo${i}`, new Blob([readFileSync(p)], { type: imageType(p) }), basename(p)));
+  const msgs = await call('sendMediaGroup', form);
+  return msgs[0].message_id;
+}
+
+export async function postRelease({ tag, dir = 'build', root = '.', token, chat, fetch: doFetch = fetch, log = console.log, pause = sleep }) {
+  const call = caller(token, doFetch);
+  const post = releasePost(tag, root, log);
+  const { version, keyboard, album } = post;
+
+  // a stable release with live screenshots goes as an album, the buttons then follow in a reply of their own
+  let postId;
+  let buttons = false;
+  if (album) {
+    try {
+      postId = await sendAlbum(call, chat, post);
+      buttons = true;
+      log(`Telegram: posted ${version} as an album of ${album.length} photos`);
+    } catch (e) {
+      log(`${e.message}, posting a single photo instead`);
+    }
+  }
+  if (postId === undefined) {
+    postId = await sendSinglePhoto(call, chat, post);
+    log(`Telegram: posted ${version}`);
+  }
+  await pinPost(call, chat, postId, log, pause);
+
+  const failed = await sendFiles({ call, chat, replyTo: postId, tag, version, dir, log });
+  if (buttons) {
+    const form = new FormData();
+    form.set('chat_id', chat);
+    form.set('text', BUTTONS_TEXT);
+    form.set('reply_parameters', JSON.stringify({ message_id: postId }));
+    form.set('reply_markup', JSON.stringify(keyboard));
+    try {
+      await call('sendMessage', form);
+      log('Telegram: posted the buttons');
+    } catch (e) {
+      log(`${e.message} (the buttons were not posted)`);
+    }
+  }
+  return failed;
 }
 
 /**
@@ -233,15 +305,19 @@ export async function repostFiles({ tag, messageId, deleteIds = [], dir = 'build
   return failed;
 }
 
-/** Replaces the picture of an already posted release (caption and buttons are sent again: Telegram drops them otherwise) and pins it. */
+/**
+ * Replaces the picture of an already posted release (caption and buttons are sent again: Telegram drops them
+ * otherwise) and pins it. For an album release `messageId` is the first photo (the cover): only it is replaced, and
+ * no buttons are sent (an album message cannot carry them; they live in the separate reply).
+ */
 export async function replacePhoto({ tag, messageId, root = '.', token, chat, fetch: doFetch = fetch, log = console.log, pause = sleep }) {
   const call = caller(token, doFetch);
-  const { version, caption, keyboard, photo } = releasePost(tag, root, log);
+  const { version, caption, keyboard, photo, album } = releasePost(tag, root, log);
   const form = new FormData();
   form.set('chat_id', chat);
   form.set('message_id', String(messageId));
   form.set('media', JSON.stringify({ type: 'photo', media: 'attach://photo', caption, parse_mode: 'HTML' }));
-  form.set('reply_markup', JSON.stringify(keyboard));
+  if (!album) form.set('reply_markup', JSON.stringify(keyboard));
   form.set('photo', new Blob([readFileSync(photo)], { type: 'image/png' }), basename(photo));
   await call('editMessageMedia', form);
   log(`Telegram: replaced the picture of ${version} (message ${messageId})`);

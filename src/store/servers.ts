@@ -36,6 +36,22 @@ function persist() {
   saveJson(ACTIVE_KEY, activeServerId.value);
 }
 
+/** «192.168.1.191:5665» from «http://192.168.1.191:5665/»: no scheme, no trailing slash. */
+export function serverHost(url: string): string {
+  return (url || '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+}
+
+/**
+ * One line for a server: «Дом · 192.168.1.191:5665», or the address alone when the name is that address (a server
+ * never renamed is named after it, with or without the scheme and a trailing slash).
+ */
+export function serverLabel(s: { name: string; url: string }): string {
+  const host = serverHost(s.url);
+  const name = (s.name || '').trim();
+  if (!name || serverHost(name).toLowerCase() === host.toLowerCase()) return host;
+  return name + ' · ' + host;
+}
+
 export function addServer(input: { name?: string; url: string; user?: string; password?: string }): SavedServer {
   const url = normalizeServerUrl(input.url);
   const name = input.name || url.replace(/^https?:\/\//, '');

@@ -1,6 +1,6 @@
 // Unified search on screen: row keys, quality filter, sorting, the progress line, source states and the link to add.
 // Shared by the phone and the Android TV bundle: Chromium 53 rules (no Object.values/entries, regex without u).
-import { fmtNumber, t as tr, tp } from '../i18n';
+import { fmtDay, fmtNumber, t as tr, tp } from '../i18n';
 import { parseDate, parseSize } from './html';
 import { getSource } from './registry';
 import { knownSourceName } from './sourceNames';
@@ -10,6 +10,12 @@ import { isTlsMessage, tlsText } from './tls';
 import type { Source, SourceContext, SourceHealth, SourceResult } from './types';
 
 export const jackettHint = (): string => tr('sources.jackettHint');
+
+/** The TV search under sites behind Cloudflare, one short sentence: «NNM-Club закрыт проверкой Cloudflare — …». */
+export function cloudflareTvNote(names: string[]): string {
+  if (!names.length) return '';
+  return names.length === 1 ? tr('sources.cloudflareTvOne', { name: names[0] }) : tr('sources.cloudflareTvMany', { names: names.join(', ') });
+}
 
 /**
  * Row key: two torrents of one release can share a title (Anidub, BigFANGroup), their pages differ.
@@ -181,16 +187,10 @@ export function withCloudflareNote(note: HealthLine | null): HealthLine {
   return { text: note.text + ' · ' + cf, tone: note.tone };
 }
 
-function two(n: number): string {
-  return (n < 10 ? '0' : '') + n;
-}
-
-/** dd.mm.yyyy of the release, '' when unknown. */
-export function resultDate(r: SourceResult): string {
+/** The release day («3 окт.», «9 янв. 2025» from another year), '' when unknown. */
+export function resultDate(r: SourceResult, now: number = Date.now()): string {
   const t = dateOf(r);
-  if (!t) return '';
-  const d = new Date(t);
-  return two(d.getDate()) + '.' + two(d.getMonth() + 1) + '.' + d.getFullYear();
+  return t ? fmtDay(t, now) : '';
 }
 
 const ADDABLE = /^(magnet:\?|https?:\/\/)/i;

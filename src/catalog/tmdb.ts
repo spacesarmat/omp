@@ -7,7 +7,15 @@ import { discoverParams, type DiscoverQuery } from './discoverQuery';
 
 export type Kind = 'movie' | 'tv';
 
-export interface CatalogTitle { kind: Kind; id: number; title: string; original: string; year: number; poster: string; rating: number; }
+/**
+ * `digital` and `popularity` are set on «Скоро в цифре» items only (see sanitizeList's `dated`): the digital release
+ * date TMDB matched in the region ('YYYY-MM-DD') and TMDB's popularity, for the order. Such items have `year` 0: the
+ * date of that answer is the regional digital one, not the film's year (the tile takes the year from the card).
+ */
+export interface CatalogTitle {
+  kind: Kind; id: number; title: string; original: string; year: number; poster: string; rating: number;
+  digital?: string; popularity?: number;
+}
 export interface Person { name: string; photo: string; role: string; }
 /** `airDate`: 'YYYY-MM-DD' or '' (absent in cards cached before 0.17.0-beta.2: unknown). */
 export interface Season { number: number; episodes: number; year: number; aired: number; airDate?: string; }
@@ -15,6 +23,8 @@ export interface Season { number: number; episodes: number; year: number; aired:
 export type SeriesStatus = 'returning' | 'ended' | 'canceled' | 'production' | 'planned' | '';
 /** TMDB's next_episode_to_air: `airDate` is 'YYYY-MM-DD' or '' when not dated yet. */
 export interface NextEpisode { season: number; episode: number; airDate: string; }
+/** A film's release dates in the user's region, each 'YYYY-MM-DD' (absent: unknown). */
+export interface Releases { theatrical?: string; digital?: string; physical?: string; }
 /**
  * `status`, `nextEpisode` and `lastAirDate` are optional: cards cached before 0.17.0-beta.2 have none of them, and
  * missing reads as unknown ('' / null / '').
@@ -22,6 +32,8 @@ export interface NextEpisode { season: number; episode: number; airDate: string;
 export interface CatalogCard extends CatalogTitle {
   backdrop: string; genres: string[]; runtime: number; overview: string; cast: Person[]; seasons: Season[]; airing: boolean;
   status?: SeriesStatus; nextEpisode?: NextEpisode | null; lastAirDate?: string;
+  /** Films only; absent in film cards cached before 0.17.0-beta.6 (they are fetched again). */
+  releases?: Releases;
 }
 export interface TmdbEndpoint { base: string; key: string; images: string; }
 export interface Episode { n: number; title: string; airDate: string; runtime: number; overview: string; }
@@ -61,8 +73,8 @@ export function noveltiesUrl(e: TmdbEndpoint, kind: Kind, page: number, today: s
 }
 
 /** «Обзор» with its sort and filters: /discover/{kind}; null when the kind has none of the chosen genres. */
-export function discoverUrl(e: TmdbEndpoint, kind: Kind, query: DiscoverQuery, page: number, today: string): string | null {
-  const p = discoverParams(kind, query, today);
+export function discoverUrl(e: TmdbEndpoint, kind: Kind, query: DiscoverQuery, page: number, today: string, region?: string): string | null {
+  const p = discoverParams(kind, query, today, region || discoverRegion());
   if (!p) return null;
   p.page = page;
   return url(e, 'discover/' + kind, p);
@@ -73,7 +85,21 @@ export function searchUrl(e: TmdbEndpoint, query: string, page: number): string 
 }
 
 export function cardUrl(e: TmdbEndpoint, kind: Kind, id: number): string {
-  return url(e, kind + '/' + id, { append_to_response: 'credits', include_image_language: lang.peek() === 'en' ? 'en,null' : 'ru,null,en' });
+  return url(e, kind + '/' + id, {
+    // translations: the English title of a title with no Russian (or Latin) one, in the request made anyway
+    append_to_response: kind === 'movie' ? 'credits,release_dates,translations' : 'credits,translations',
+    include_image_language: lang.peek() === 'en' ? 'en,null' : 'ru,null,en',
+  });
+}
+
+/** The regions whose release dates count, in order: the Russian UI takes Russia's and then the US', English the US'. */
+export function releaseRegions(uiLang: string = lang.peek()): string[] {
+  return uiLang === 'en' ? ['US'] : ['RU', 'US'];
+}
+
+/** The TMDB discover region of the UI language. */
+export function discoverRegion(uiLang: string = lang.peek()): string {
+  return releaseRegions(uiLang)[0];
 }
 
 export function seasonUrl(e: TmdbEndpoint, id: number, season: number): string {
@@ -98,12 +124,24 @@ function n(v: unknown): number {
   return typeof v === 'number' && isFinite(v) ? v : 0;
 }
 
+// a Latin (with its accented letters) or a Cyrillic letter; built from codes so the source stays ASCII
+const READABLE = new RegExp(
+  '[A-Za-z' + String.fromCharCode(0xc0) + '-' + String.fromCharCode(0x24f) + String.fromCharCode(0x400) + '-' + String.fromCharCode(0x4ff) + ']',
+);
+
+/** The title reads for a Russian or English user: it has Latin or Cyrillic letters (not only Chinese, Korean, …). */
+export function readableTitle(s: string): boolean {
+  return READABLE.test(s || '');
+}
+
 function titleOf(e: TmdbEndpoint, o: { [k: string]: unknown }, kind: Kind): CatalogTitle | null {
   const id = n(o.id);
   if (!id) return null;
-  const title = str(kind === 'movie' ? o.title : o.name);
+  let title = str(kind === 'movie' ? o.title : o.name);
   const original = str(kind === 'movie' ? o.original_title : o.original_name);
   if (!title && !original) return null;
+  // no Russian title: TMDB gives the original («仙逆剧场版»); an original in Latin letters reads better
+  if (!readableTitle(title) && readableTitle(original)) title = original;
   return {
     kind: kind, id: id, title: title || original, original: original || title,
     year: year(kind === 'movie' ? o.release_date : o.first_air_date),
@@ -112,7 +150,12 @@ function titleOf(e: TmdbEndpoint, o: { [k: string]: unknown }, kind: Kind): Cata
   };
 }
 
-export function sanitizeList(e: TmdbEndpoint, raw: unknown, kind: Kind | null): { items: CatalogTitle[]; pages: number } {
+/**
+ * A TMDB list answer. `dated`: a /discover answer asked with region + with_release_type, whose release_date is «the
+ * first date based on your query» (TMDB's discover docs), i.e. the regional date of that release type: it is kept as
+ * `digital` and is not the film's year.
+ */
+export function sanitizeList(e: TmdbEndpoint, raw: unknown, kind: Kind | null, dated?: boolean): { items: CatalogTitle[]; pages: number } {
   const o = raw && typeof raw === 'object' ? (raw as { [k: string]: unknown }) : null;
   if (!o || !Array.isArray(o.results)) return { items: [], pages: 0 };
   const items: CatalogTitle[] = [];
@@ -122,9 +165,31 @@ export function sanitizeList(e: TmdbEndpoint, raw: unknown, kind: Kind | null): 
     const k: Kind | null = kind || (x.media_type === 'movie' ? 'movie' : x.media_type === 'tv' ? 'tv' : null);
     if (!k) return;
     const t = titleOf(e, x, k);
-    if (t) items.push(t);
+    if (!t) return;
+    if (dated) {
+      t.digital = date(str(x.release_date).slice(0, 10));
+      t.popularity = n(x.popularity);
+      t.year = 0;
+    }
+    items.push(t);
   });
   return { items: items, pages: Math.min(500, Math.max(0, Math.floor(n(o.total_pages)))) };
+}
+
+/** The en title of a card answer's translations (en-US first); '' when there is none or it is not readable. */
+export function englishTitle(o: { [k: string]: unknown }, kind: Kind): string {
+  const tr = o.translations && typeof o.translations === 'object' ? (o.translations as { translations?: unknown }).translations : null;
+  if (!Array.isArray(tr)) return '';
+  let best = '';
+  (tr as unknown[]).forEach((x) => {
+    const r = (x || {}) as { [k: string]: unknown };
+    if (r.iso_639_1 !== 'en') return;
+    const d = (r.data || {}) as { [k: string]: unknown };
+    const s = str(kind === 'movie' ? d.title : d.name);
+    if (!s || !readableTitle(s)) return;
+    if (!best || r.iso_3166_1 === 'US') best = s;
+  });
+  return best;
 }
 
 export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): CatalogCard | null {
@@ -132,6 +197,11 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
   if (!o) return null;
   const t = titleOf(e, o, kind);
   if (!t) return null;
+  // still not readable: the English translation of the same answer (append_to_response=translations)
+  if (!readableTitle(t.title)) {
+    const en = englishTitle(o, kind);
+    if (en) t.title = en;
+  }
   const genres = Array.isArray(o.genres) ? (o.genres as unknown[]).map((g) => str(g && (g as { name?: unknown }).name)).filter(Boolean) : [];
   const runtimes = Array.isArray(o.episode_run_time) ? (o.episode_run_time as unknown[]).map(n).filter(Boolean) : [];
   const credits = o.credits && typeof o.credits === 'object' ? (o.credits as { cast?: unknown }).cast : null;
@@ -167,7 +237,59 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
     status: kind === 'tv' ? statusOf(o.status) : '',
     nextEpisode: kind === 'tv' ? nextEpisodeOf(o.next_episode_to_air) : null,
     lastAirDate: kind === 'tv' ? date(o.last_air_date) : '',
+    releases: kind === 'movie' ? releasesOf(o.release_dates, releaseRegions()) : undefined,
   };
+}
+
+/** The earliest date of each TMDB release type in one region's list. */
+function regionDates(list: unknown): { [type: number]: string } {
+  const out: { [type: number]: string } = {};
+  if (!Array.isArray(list)) return out;
+  (list as unknown[]).forEach((r) => {
+    const x = r && typeof r === 'object' ? (r as { [k: string]: unknown }) : null;
+    if (!x) return;
+    const type = Math.floor(n(x.type));
+    const d = date(str(x.release_date).slice(0, 10));
+    if (!type || !d) return;
+    if (!out[type] || d < out[type]) out[type] = d;
+  });
+  return out;
+}
+
+/**
+ * A film's release dates (TMDB release_dates: 3 theatrical, 2 limited when there is no 3, 4 digital, 5 physical):
+ * each date from the first of `regions` that has it; the earliest date of a type within a region.
+ */
+export function releasesOf(raw: unknown, regions: string[]): Releases {
+  const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { [k: string]: unknown }) : null;
+  const results = o && Array.isArray(o.results) ? (o.results as unknown[]) : [];
+  const byRegion: { [code: string]: { [type: number]: string } } = {};
+  results.forEach((r) => {
+    const x = r && typeof r === 'object' ? (r as { [k: string]: unknown }) : null;
+    const code = x ? str(x.iso_3166_1).toUpperCase() : '';
+    if (x && code && regions.indexOf(code) >= 0) byRegion[code] = regionDates(x.release_dates);
+  });
+  const out: Releases = {};
+  const pick = (types: number[]): string => {
+    for (let i = 0; i < regions.length; i++) {
+      const d = byRegion[regions[i]];
+      if (!d) continue;
+      for (let j = 0; j < types.length; j++) if (d[types[j]]) return d[types[j]];
+    }
+    return '';
+  };
+  // a region's limited release stands for its theatrical one only when it has none
+  let theatrical = '';
+  for (let i = 0; i < regions.length && !theatrical; i++) {
+    const d = byRegion[regions[i]];
+    if (d) theatrical = d[3] || d[2] || '';
+  }
+  const digital = pick([4]);
+  const physical = pick([5]);
+  if (theatrical) out.theatrical = theatrical;
+  if (digital) out.digital = digital;
+  if (physical) out.physical = physical;
+  return out;
 }
 
 const STATUSES: { [k: string]: SeriesStatus } = {

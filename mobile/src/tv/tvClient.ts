@@ -2,7 +2,7 @@
 // Android TV with OMP (`kind: 'atv'`): HTTP to its control server (`/omp/*`, bearer token from code pairing).
 import { signal, effect } from '@preact/signals';
 import { native, type OmpNativeApi, type FoundOmpTv } from '../platform/native';
-import { activeTv, saveTv, setActiveTv, clearTvToken, normalizeMac, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
+import { activeTv, saveTv, setActiveTv, clearTvToken, normalizeMac, updateAtvPorts, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
 import { showToast } from '../ui/toast';
 import { phoneParam, markPhoneSent } from './phoneRpc';
 import { log } from '../../../src/lib/log';
@@ -58,6 +58,15 @@ export const tvWaking = signal(false);
 
 const WARM_RETRY_MS = 1500;
 const WARM_LIMIT_MS = 30000;
+/** How long a warm-up looks for an Android TV that moved to another port. */
+const REDISCOVER_MS = 3000;
+
+let rediscoverAtv: (ms: number) => Promise<FoundOmpTv[]> = (ms) => native.discoverOmpTvs(ms);
+
+/** Replaces the NSD look of the warm-up (tests); null restores the native one. */
+export function setAtvRediscover(fn: ((ms: number) => Promise<FoundOmpTv[]>) | null): void {
+  rediscoverAtv = fn || ((ms) => native.discoverOmpTvs(ms));
+}
 const QUEUE_MAX = 10;
 const QUEUE_TTL_MS = 15000;
 
@@ -473,10 +482,11 @@ export function cancelWarmUp(): void {
  */
 export function warmUp(): Promise<void> {
   if (warming) return warming;
-  const tv = activeTv.value;
-  if (!tv || tvState.value === 'connected' || tvState.value === 'connecting' || tvState.value === 'pairing') {
+  const first = activeTv.value;
+  if (!first || tvState.value === 'connected' || tvState.value === 'connecting' || tvState.value === 'pairing') {
     return Promise.resolve();
   }
+  let tv: SavedTv = first;
   let stopped = false;
   let wake: (() => void) | null = null;
   const stop = () => {
@@ -497,6 +507,8 @@ export function warmUp(): Promise<void> {
     if (ip && ip !== tv.ip) stop();
   });
   const started = Date.now();
+  // an Android TV that does not answer may have moved to another port (8095 taken): one NSD look, then retry
+  let rediscovered = false;
   let p!: Promise<void>;
   p = (async () => {
     try {
@@ -507,6 +519,20 @@ export function warmUp(): Promise<void> {
         } catch (e) {
           // only a new pairing code helps
           if (e instanceof Error && e.message === tvForgot()) return;
+        }
+        if (tv.kind === 'atv' && !rediscovered && !stopped) {
+          rediscovered = true;
+          try {
+            if (updateAtvPorts(await rediscoverAtv(REDISCOVER_MS))) {
+              const cur = activeTv.value;
+              if (cur && cur.ip === tv.ip) {
+                tv = cur;
+                continue;
+              }
+            }
+          } catch {
+            // no NSD: retry on the saved port
+          }
         }
         if (stopped || pairing || Date.now() - started + WARM_RETRY_MS > WARM_LIMIT_MS) return;
         tvWaking.value = true;
@@ -762,7 +788,8 @@ interface AtvSession {
 }
 
 /** Keys the OMP control server accepts from the shared remote buttons. */
-const ATV_KEYS: RemoteButton[] = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'ENTER', 'BACK'];
+// the colour keys and «Меню» reach OMP on the box as the LG codes 403–406 and 457 (src/platform/androidRemote.ts)
+const ATV_KEYS: RemoteButton[] = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'ENTER', 'BACK', 'MENU', 'RED', 'GREEN', 'YELLOW', 'BLUE'];
 const ATV_TIMEOUT = 5000;
 /** Android brings OMP to the front asynchronously (and may refuse to from the background). */
 const ATV_FOREGROUND_CHECK_MS = 2500;

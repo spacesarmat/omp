@@ -43,8 +43,11 @@ export function TorrentMenu({
   onSelect,
   onWatchTv,
   extra,
+  heading,
 }: {
   tor: Torrent;
+  /** The sheet's title when the short title does not tell the release apart («Повелитель духов · 4K WEB-DL»). */
+  heading?: string;
   onClose: () => void;
   onSelect?: (hash: string) => void;
   /** Runs the launch outside the menu (it closes at once), so its toast and the jump to the remote survive. */
@@ -103,8 +106,8 @@ export function TorrentMenu({
   if (renaming) return <TorrentRenameSheet initial={title} onSave={rename} onClose={() => { setRenaming(false); onClose(); }} />;
 
   return (
-    <Sheet label={shortTitle(title)} onClose={onClose}>
-      <div class="m-sheet-title">{shortTitle(title)}</div>
+    <Sheet label={heading || shortTitle(title)} onClose={onClose}>
+      <div class="m-sheet-title">{heading || shortTitle(title)}</div>
       <button type="button" class="m-opt" disabled={busy} onClick={open}>
         <Icon d={OPEN} size={22} />
         <span class="m-opt-name">{t('common.open')}</span>
