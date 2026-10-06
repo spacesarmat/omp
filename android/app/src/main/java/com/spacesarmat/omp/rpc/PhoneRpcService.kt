@@ -139,9 +139,12 @@ class PhoneRpcService : Service() {
 
     private fun notification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
+        // LOW (not MIN) keeps the status-bar icon; a channel's importance is fixed once created, hence the new id
         try {
-            // LOW (not MIN) keeps the status-bar icon; a channel's importance is fixed once created, hence the new id
             nm?.deleteNotificationChannel(OLD_CHANNEL)
+        } catch (_: Exception) {
+        }
+        try {
             nm?.createNotificationChannel(
                 NotificationChannel(CHANNEL, I18n.s("rpc.channel"), NotificationManager.IMPORTANCE_LOW).apply {
                     setShowBadge(false)

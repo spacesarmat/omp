@@ -16,6 +16,30 @@ afterEach(() => {
 });
 
 describe('phoneRpc', () => {
+  it('an Android TV alone does not turn it on: no prompt and no service', async () => {
+    vi.resetModules();
+    const nat = await import('../src/platform/native');
+    const mon = await import('../src/monitor/native');
+    const store = await import('../src/tv/tvStore');
+    const rpc = await import('../src/tv/phoneRpc');
+    const set = vi.spyOn(nat.native, 'rpcSetEnabled').mockResolvedValue(INFO);
+    const perm = vi.spyOn(mon.monitorNative, 'notifyPermission').mockResolvedValue('prompt');
+    const ask = vi.spyOn(mon.monitorNative, 'requestNotifyPermission').mockResolvedValue('granted');
+    store.tvs.value = [{ ip: '192.168.1.60', name: 'Sony', kind: 'atv', token: 'd'.repeat(32) }];
+    expect(rpc.tvSearchOn.value).toBe(false);
+    rpc.initPhoneRpc();
+    await flush();
+    expect(set.mock.calls.every((c) => c[0] === false)).toBe(true);
+    expect(perm).not.toHaveBeenCalled();
+    expect(ask).not.toHaveBeenCalled();
+    expect(rpc.phoneParam()).toBeNull();
+    // an LG next to it turns it on
+    store.tvs.value = store.tvs.value.concat([{ ip: '192.168.1.50', name: 'LG' }]);
+    expect(rpc.tvSearchOn.value).toBe(true);
+    await flush();
+    expect(set).toHaveBeenLastCalledWith(true);
+  });
+
   it('defaults to on once a TV is saved and can be turned off', async () => {
     const set = vi.spyOn(native, 'rpcSetEnabled').mockResolvedValue(INFO);
     tvs.value = [];

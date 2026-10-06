@@ -10,8 +10,10 @@ export const TV_SEARCH_KEY = 'tsp.tvSearchService';
 
 const stored = signal<boolean | null>(loadJson<boolean | null>(TV_SEARCH_KEY, null, (v) => typeof v === 'boolean'));
 
-/** The stored choice; while there is none, on as soon as a TV is saved. */
-export const tvSearchOn: ReadonlySignal<boolean> = computed(() => (stored.value === null ? tvs.value.length > 0 : stored.value));
+/** The stored choice; while there is none, on as soon as an LG TV is saved (Android TV searches with its own sources). */
+export const tvSearchOn: ReadonlySignal<boolean> = computed(() =>
+  stored.value === null ? tvs.value.some((t) => t.kind !== 'atv') : stored.value,
+);
 
 /** What the service reported last; null while off or unknown. */
 export const rpcInfo = signal<RpcInfo | null>(null);
