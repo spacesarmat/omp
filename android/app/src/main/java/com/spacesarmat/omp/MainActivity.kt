@@ -36,6 +36,9 @@ class MainActivity : BridgeActivity() {
             onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() = pageBack()
             })
+        } else {
+            // the phone UI is laid out for the screen: a pinch never zooms the page (see PhoneWebZoom)
+            bridge?.webView?.settings?.let { PhoneWebZoom.disable(it) }
         }
     }
 
