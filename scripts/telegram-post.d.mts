@@ -1,3 +1,5 @@
+export const ALBUM_MAX: number;
+export const BUTTONS_TEXT: string;
 export function postRelease(p: {
   tag: string;
   dir?: string;

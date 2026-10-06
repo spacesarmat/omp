@@ -15,7 +15,7 @@ on:
         description: Release tag, e.g. v0.15.0
         required: true
       message_id:
-        description: Id of the release post (picture, files)
+        description: Id of the release post (picture, files); for an album post, the id of its first photo
         required: false
         default: ''
       ids:
