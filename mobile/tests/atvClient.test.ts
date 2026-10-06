@@ -25,6 +25,7 @@ import {
   sessionIp,
   warmUp,
   cancelWarmUp,
+  setAtvRediscover,
   tvForgot,
   tvNoAnswer,
   atvBackground,
@@ -280,6 +281,30 @@ describe('Android TV transport', () => {
     await vi.advanceTimersByTimeAsync(2000);
     await p;
     expect(tvState.value).toBe('connected');
+  });
+
+  it('warm-up: a TV that moved to another port (8095 taken) is found by NSD and its saved port follows', async () => {
+    saveTv(ATV);
+    const moved = 'http://192.168.1.40:8097';
+    route = (c) => {
+      if (c.url.indexOf(BASE) === 0) return Promise.reject(new TypeError('refused'));
+      if (c.url === moved + '/omp/info') return { body: JSON.stringify({ ...info, paired: c.auth === 'Bearer ' + TOKEN }) };
+      return null;
+    };
+    const looks: number[] = [];
+    setAtvRediscover((ms) => {
+      looks.push(ms);
+      return Promise.resolve([{ ip: '192.168.1.40', port: 8097, name: 'Гостиная', version: '0.17.0' }]);
+    });
+    try {
+      await warmUp();
+      expect(looks).toHaveLength(1);
+      expect(tvs.value[0].ctlPort).toBe(8097);
+      expect(calls.some((c) => c.url === moved + '/omp/info')).toBe(true);
+      expect(tvState.value).toBe('connected');
+    } finally {
+      setAtvRediscover(null);
+    }
   });
 
   it('switching to an LG TV drops the Android TV session', async () => {

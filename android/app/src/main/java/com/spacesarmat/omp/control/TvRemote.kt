@@ -100,7 +100,13 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         { root, cookies, ua, until -> SourceServices.get(context).importClearance(root, cookies, ua, until) },
         paired = { pairing.anyPaired() },
     )
-    private val server = ControlServer(PORT, router::precheck) { router.route(it) }
+    /** The control server on the first free port of [PORTS]; null until started. */
+    private var server: ControlServer? = null
+
+    /** The port the control server listens on (advertised in NSD); 0 when not running. */
+    @Volatile
+    var port = 0
+        private set
     private val main = Handler(Looper.getMainLooper())
     private var nsdListener: NsdManager.RegistrationListener? = null
 
@@ -117,12 +123,18 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         I18n.load(context)
         // a staged login left by a process that died mid-transfer is never verified: drop it
         inbox.dropStaged()
-        try {
-            server.start()
-        } catch (e: IOException) {
-            Log.w(TAG, "control server not started: ${e.message}")
+        // 8095 may be taken (another OMP build on the same box): the next free one of 8096–8099, advertised in NSD
+        val bound = ControlPorts.bindFirst(PORTS) { p ->
+            val s = ControlServer(p, router::precheck) { router.route(it) }
+            s.start()
+            s
+        }
+        if (bound == null) {
+            Log.w(TAG, "control server not started: ports ${PORTS.first()}–${PORTS.last()} taken")
             return
         }
+        server = bound.second
+        port = bound.first
         running = true
         registerNsd()
     }
@@ -130,7 +142,9 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
     fun stop() {
         running = false
         unregisterNsd()
-        server.stop()
+        server?.stop()
+        server = null
+        port = 0
     }
 
     /** Name of this TV as the phone sees it: the NSD name, else Settings → device name, else the model. */
@@ -158,7 +172,7 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         val info = NsdServiceInfo().apply {
             serviceName = deviceName()
             serviceType = SERVICE_TYPE
-            port = PORT
+            port = this@TvRemote.port
             setAttribute("v", version())
         }
         val listener = object : NsdManager.RegistrationListener {
@@ -287,6 +301,9 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
 
     companion object {
         const val PORT = 8095
+
+        /** The control server tries these in order. */
+        val PORTS = listOf(8095, 8096, 8097, 8098, 8099)
         const val SERVICE_TYPE = "_omp._tcp"
         private const val TAG = "OmpRemote"
     }

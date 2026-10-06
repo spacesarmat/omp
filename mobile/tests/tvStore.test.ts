@@ -1,5 +1,26 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs, renameTv, normalizeMac, clearTvToken, pickActiveTv } from '../src/tv/tvStore';
+import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs, renameTv, normalizeMac, clearTvToken, pickActiveTv, updateAtvPorts } from '../src/tv/tvStore';
+
+describe('Android TV control port', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    reloadTvs();
+  });
+
+  it('a saved Android TV takes the port it advertises now; LG TVs and unknown IPs are left alone', () => {
+    const token = 'a'.repeat(32);
+    saveTv({ ip: '192.168.1.191', name: 'Dune', kind: 'atv', token, ctlPort: 8095 });
+    saveTv({ ip: '192.168.1.156', name: 'LG', clientKey: 'k' });
+    expect(updateAtvPorts([{ ip: '192.168.1.191', port: 8095 }])).toBe(false);
+    expect(updateAtvPorts([{ ip: '192.168.1.191', port: 8096 }, { ip: '192.168.1.156', port: 8099 }, { ip: '10.0.0.9', port: 8097 }])).toBe(true);
+    expect(tvs.value[0]).toMatchObject({ ip: '192.168.1.191', ctlPort: 8096, token });
+    expect(tvs.value[1].ctlPort).toBeUndefined();
+    reloadTvs();
+    expect(tvs.value[0].ctlPort).toBe(8096);
+    // a bad port is ignored
+    expect(updateAtvPorts([{ ip: '192.168.1.191', port: 0 }])).toBe(false);
+  });
+});
 
 beforeEach(() => {
   localStorage.clear();
