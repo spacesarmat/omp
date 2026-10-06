@@ -3,8 +3,8 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Series, heroMeta } from '../src/screens/Series';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
-import { resetSeriesMatches, pickShow } from '../src/lib/seriesMatch';
-import { findGroup, groupLibrary, type SeriesGroup } from '../src/lib/seriesGroups';
+import { resetSeriesMatches, pickShow } from '../../src/lib/seriesMatch';
+import { findGroup, groupLibrary, type SeriesGroup } from '../../src/lib/seriesGroups';
 import { currentRoute, navigate, resetTo } from '../src/nav';
 import { torrents } from '../../src/store/library';
 import { reloadProgress, serverViewed } from '../../src/store/progress';
@@ -207,7 +207,7 @@ describe('series screen without TMDB', () => {
   });
 
   it('the local name finds nothing: the original name is tried next', async () => {
-    const { findShow } = await import('../src/lib/tmdbShow');
+    const { findShow } = await import('../../src/lib/tmdbShow');
     const show = { ...FOUND[0], kind: 'tv' as const };
     const s = vi.fn((q: string) => Promise.resolve({ items: q.indexOf('Star Trek') === 0 ? [show] : [] }));
     const hit = await findShow({ search: s }, 'Звездный путь: Странные новые миры / Star Trek: Strange New Worlds / Сезон: 4', 0);
@@ -216,7 +216,7 @@ describe('series screen without TMDB', () => {
   });
 
   it('in English the original name is searched first: a Russian name finds another show of that name there', async () => {
-    const { findShow, showQueries } = await import('../src/lib/tmdbShow');
+    const { findShow, showQueries } = await import('../../src/lib/tmdbShow');
     const title = 'Тёмная материя / Dark Matter / Сезон: 2 / Серии: 1-8 из 10 [2026, WEB-DL 1080p]';
     // TMDB in en-US: the Russian name is only an alternative title of the 2015 show (ended, 3 seasons)
     const old = { kind: 'tv' as const, id: 62425, title: 'Dark Matter', original: 'Dark Matter', year: 2015, poster: '', rating: 7 };

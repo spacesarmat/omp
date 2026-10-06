@@ -228,7 +228,7 @@ describe('phone: «Источники поиска» with the sites behind Cloud
     expect(el.querySelector('[data-group="cloudflare"]')).toBeNull();
     const group = el.querySelector('[data-group="builtin"]') as HTMLElement;
     expect(group.textContent).toContain('Kinozal');
-    expect(group.textContent).toContain('rustorka');
+    expect(group.textContent).toContain('Rustorka');
     expect(group.querySelector('[data-source="rustorka"]')!.textContent).toContain('нужен вход · Cloudflare · Войти');
     expect(el.textContent).toContain(withLoginsLabel(['Kinozal', 'rutracker']));
     act(() => btn('Передать на телевизор')!.click());

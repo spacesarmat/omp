@@ -217,7 +217,7 @@ describe('requests and answers', () => {
   });
 
   it('suggests the browser login for a captcha and for a Cloudflare check OMP could not pass', () => {
-    expect(browserSuggestion(new Error('rutracker просит капчу — нажмите «Войти через браузер»'))).toBe(browserCaptcha());
+    expect(browserSuggestion(new Error('RuTracker просит капчу — нажмите «Войти через браузер»'))).toBe(browserCaptcha());
     const cf = Object.assign(new Error('Сайт закрыт проверкой Cloudflare — пройти её не удалось'), { code: 'cloudflare' });
     expect(browserSuggestion(cf)).toBe(browserCloudflare());
     expect(browserSuggestion(Object.assign(new Error('x'), { code: 'cloudflare-interactive' }))).toBe(browserCloudflare());

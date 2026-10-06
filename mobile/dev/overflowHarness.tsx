@@ -8,7 +8,7 @@ import { resetTo, switchTab, type MRoute } from '../src/nav';
 import { setCatalogClientForTests, setCatalogMode } from '../src/catalog/phoneCatalog';
 import { saveTv } from '../src/tv/tvStore';
 import { nowPlaying, lastSeen } from '../src/tv/playerLink';
-import { groupLibrary } from '../src/lib/seriesGroups';
+import { groupLibrary } from '../../src/lib/seriesGroups';
 import { applyLanguageSetting } from '../../src/i18n';
 import { addServer, setActiveServer } from '../../src/store/servers';
 import { torrents } from '../../src/store/library';

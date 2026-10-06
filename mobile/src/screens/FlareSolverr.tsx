@@ -4,7 +4,7 @@ import { Icon } from '../ui/Icon';
 import { goBack, navigate } from '../nav';
 import { phoneSourceContext } from '../searchContext';
 import { native } from '../platform/native';
-import { FLARESOLVERR_Q } from '../faq';
+import { FLARESOLVERR_Q } from '../../../src/faq/faq';
 import { flareSolverrUrl, normalizeFlareUrl, setFlareSolverrUrl } from '../../../src/sources/flareStore';
 import {
   flareBadAddress,

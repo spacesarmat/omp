@@ -1,18 +1,23 @@
 import { signal, computed } from '@preact/signals';
 import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import type { PlayItem } from '../player/types';
+import type { Kind } from '../catalog/tmdb';
 
 export type Route =
   | { name: 'connect' }
   | { name: 'library' }
   | { name: 'torrent'; hash: string }
+  | { name: 'series'; key: string; season?: number }
   | { name: 'player'; queue: PlayItem[]; index: number; startAt?: number; from?: string }
-  | { name: 'add' }
+  | { name: 'add'; query?: string; run?: boolean }
   | { name: 'playlist'; url?: string; title?: string }
   | { name: 'settings' }
   | { name: 'update' }
   | { name: 'sources' }
-  | { name: 'pairPhone' };
+  | { name: 'tsSources' }
+  | { name: 'pairPhone' }
+  | { name: 'faq' }
+  | { name: 'title'; kind: Kind; id: number };
 
 export const routeStack = signal<Route[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);

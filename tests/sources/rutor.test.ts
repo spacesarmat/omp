@@ -8,7 +8,7 @@ const GB = 1024 * MB;
 describe('rutor', () => {
   it('is a built-in source without login', () => {
     expect(rutor.id).toBe('rutor');
-    expect(rutor.name).toBe('rutor');
+    expect(rutor.name).toBe('Rutor');
     expect(rutor.kind).toBe('builtin');
     expect(rutor.needsLogin).toBeFalsy();
   });

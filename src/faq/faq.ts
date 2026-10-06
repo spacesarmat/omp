@@ -1,4 +1,4 @@
-import { lang, t } from '../../src/i18n';
+import { lang, t } from '../i18n';
 import { FAQ_RU } from './faq.ru';
 import { FAQ_EN } from './faq.en';
 
@@ -81,7 +81,11 @@ export function faqText(id: string): FaqText {
 export function itemFor(it: FaqItem, device: Device): FaqView {
   const x = faqText(it.id);
   const o = x.by && x.by[device];
-  return { q: (o && o.q) ?? x.q, short: (o && o.short) ?? x.short, more: (o && o.more) ?? x.more ?? [] };
+  return {
+    q: o && o.q !== undefined ? o.q : x.q,
+    short: o && o.short !== undefined ? o.short : x.short,
+    more: o && o.more !== undefined ? o.more : x.more !== undefined ? x.more : [],
+  };
 }
 
 interface FaqStruct {

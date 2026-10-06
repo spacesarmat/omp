@@ -5,18 +5,20 @@ import { navigate, openPlayer, resetTo } from './ui/nav';
 import { toast } from './ui/toast';
 import { buildTorrentQueue } from './player/queue';
 import { attachPhone } from './phone/link';
+import { savePhoneLink } from './phone/phoneStore';
 import { checkForUpdate, dismissPrompt } from './store/updates';
 import { magnetName } from './lib/categoryGuess';
 import { updateSettings } from './store/settings';
 import { t } from './i18n';
 
-/** Applies webOS launch params: {server}, {magnet}, {torrent[, file, t]}, {play, title}, {lang}. */
+/** Applies webOS launch params: {server}, {magnet}, {torrent[, file, t]}, {play, title}, {lang}, {phone}. */
 export function runLaunchParams(raw: unknown): void {
   const plan = parseLaunchParams(raw);
   if (!plan) return;
   // the phone sets the TV's language first, so whatever follows is shown in it
   if (plan.lang) updateSettings({ language: plan.lang });
   if (plan.report) attachPhone(plan.report);
+  if (plan.phone) savePhoneLink(plan.phone);
   if (plan.invalid) {
     toast(t('errors.badLaunchParams'), 'error');
     return;

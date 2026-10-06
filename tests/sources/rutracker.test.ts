@@ -46,7 +46,7 @@ function server(opts: { loginPage?: string; signedIn?: boolean } = {}) {
 describe('rutracker', () => {
   it('is a built-in source that needs a login', () => {
     expect(rutracker.id).toBe('rutracker');
-    expect(rutracker.name).toBe('rutracker');
+    expect(rutracker.name).toBe('RuTracker');
     expect(rutracker.kind).toBe('builtin');
     expect(rutracker.needsLogin).toBe(true);
   });
@@ -74,7 +74,7 @@ describe('rutracker', () => {
   it('detects a captcha and asks to sign in in the browser', async () => {
     const site = fakeSite(server({ loginPage: 'rutracker-login-captcha.html' }));
     await expect(rutracker.login!('u', 'p', site.ctx)).rejects.toThrow(rutrackerCaptcha());
-    expect(rutrackerCaptcha()).toBe('rutracker просит капчу — нажмите «Войти через браузер»');
+    expect(rutrackerCaptcha()).toBe('RuTracker просит капчу — нажмите «Войти через браузер»');
     expect(site.secrets).toEqual({});
   });
 
@@ -177,12 +177,21 @@ describe('rutracker', () => {
   it('a signed-in search carries the site options and writes nothing to the journal', async () => {
     const site = fakeSite(server({ signedIn: true }), CREDS);
     expect(await rutracker.search('x', site.ctx)).toHaveLength(2);
-    expect(site.calls.map((c) => c.opts)).toEqual([{ siteName: 'rutracker' }]);
+    expect(site.calls.map((c) => c.opts)).toEqual([{ siteName: 'RuTracker' }]);
     setCloudflareBypass('rutracker', true);
     const on = fakeSite(server({ signedIn: true }), CREDS);
     expect(await rutracker.search('x', on.ctx)).toHaveLength(2);
-    expect(on.calls.map((c) => c.opts)).toEqual([{ siteName: 'rutracker', cloudflare: true }]);
+    expect(on.calls.map((c) => c.opts)).toEqual([{ siteName: 'RuTracker', cloudflare: true }]);
     expect(journal()).toEqual([]);
+  });
+
+  it('an expired browser session on a read-only store (the TV search page) is a needed login, not the store error', async () => {
+    const toLogin = (c: HttpCall) => page(LOGIN_TURNSTILE, c.method === 'POST' ? LOGIN_URL : LOGIN_URL + '?redirect=tracker.php%3Fnm%3Dx');
+    const site = fakeSite(toLogin, { 'rutracker.browser': '1' });
+    const get = site.ctx.secrets!.get;
+    site.ctx.secrets = { get: get, set: () => Promise.reject(new Error('read-only')), delete: () => Promise.reject(new Error('read-only')) };
+    const e = await rutracker.search('x', site.ctx).then(() => null, (err: unknown) => err);
+    expect(isLoginRequired(e)).toBe(true);
   });
 
   it('a login page with an inline Turnstile is «нужен вход», not a Cloudflare block', async () => {
@@ -200,7 +209,7 @@ describe('rutracker', () => {
     const lines = journal();
     expect(lines.length).toBeGreaterThan(0);
     const line = lines[lines.length - 1];
-    expect(line).toContain('rutracker (нужен вход)');
+    expect(line).toContain('RuTracker (нужен вход)');
     expect(line).toContain('HTTP 200');
     expect(line).toContain('rutracker.org/forum/login.php');
     expect(line).toContain('форма входа: да');
@@ -215,9 +224,9 @@ describe('rutracker', () => {
     const site = fakeSite((c) => ({ ...page(CLOUDFLARE, c.url, 403), cfMitigated: 'challenge' }), CREDS);
     await expect(rutracker.search('x', site.ctx)).rejects.toThrow('Сайт закрыт проверкой браузера (Cloudflare)');
     expect(site.calls).toHaveLength(1);
-    expect(site.calls[0].opts).toEqual({ siteName: 'rutracker', cloudflare: true });
+    expect(site.calls[0].opts).toEqual({ siteName: 'RuTracker', cloudflare: true });
     const line = journal().join('\n');
-    expect(line).toContain('rutracker (проверка Cloudflare)');
+    expect(line).toContain('RuTracker (проверка Cloudflare)');
     expect(line).toContain('HTTP 403');
     expect(line).toContain('rutracker.org/forum/tracker.php');
     expect(line).toContain('страница проверки: да');

@@ -23,6 +23,7 @@ import { donateOpen, closeDonate } from '../src/donate';
 import { nowPlaying } from '../src/tv/playerLink';
 import { linkStatus } from '../src/tv/playerLink';
 import { saveTv, setActiveTv, reloadTvs } from '../src/tv/tvStore';
+import { Settings } from '../src/screens/Settings';
 import { tvNoOmp } from '../src/tv/tvClient';
 import type { PlayerState } from '../../src/phone/protocol';
 import type { Source, SourceResult } from '../../src/sources/types';
@@ -216,6 +217,16 @@ describe('phone shared UI in English', () => {
     setActiveTv('10.0.0.5');
     mount(<TvChip />);
     expect(labels()).toEqual(['TV “Living room” is not connected']);
+    reloadTvs();
+  });
+
+  it('Settings: the “Search for the TV” row', () => {
+    saveTv({ ip: '10.0.0.5', name: 'Living room' });
+    mount(<Settings />);
+    const row = el.querySelector('[data-row="tv-search-service"]') as HTMLElement;
+    expect(row.textContent).toContain('Search for the TV');
+    expect(row.textContent).toContain('A quiet notification stays in the shade');
+    expect(row.innerHTML).not.toMatch(CYR);
     reloadTvs();
   });
 

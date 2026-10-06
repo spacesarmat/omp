@@ -40,9 +40,9 @@ import { deleteTorrents, watchTarget } from '../lib/torrentActions';
 import { displayTitle } from '../../../src/lib/torrentName';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 import { torrentQuery } from '../../../src/catalog/tmdb';
-import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../lib/seriesGroups';
-import { comingEpisodes, realEpisodeName, seasonEpisodes, showOf, type EpisodeMap, type ShowInfo } from '../lib/episodeNames';
-import { airDateText, isoDay } from '../lib/seriesStatus';
+import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../../../src/lib/seriesGroups';
+import { comingEpisodes, realEpisodeName, seasonEpisodes, showOf, type EpisodeMap, type ShowInfo } from '../../../src/lib/episodeNames';
+import { airDateText, isoDay } from '../../../src/lib/seriesStatus';
 
 const BACK = 'M15 5l-7 7 7 7';
 const IMAGE = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 3-3L20 17M15.5 9.5h.01';

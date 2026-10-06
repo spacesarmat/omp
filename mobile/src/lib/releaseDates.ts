@@ -5,7 +5,7 @@
 import { t } from '../../../src/i18n';
 import { addDays } from '../../../src/catalog/discoverQuery';
 import type { CatalogCard, SeasonDetails } from '../../../src/catalog/tmdb';
-import { airDateText, isoDay, upcomingSeasons, BADGE_DAYS } from './seriesStatus';
+import { airDateText, isoDay, upcomingSeasons, BADGE_DAYS } from '../../../src/lib/seriesStatus';
 
 /** «в кино с …»: a theatrical release at most this many days ago, while the film has no digital one yet. */
 export const CINEMA_DAYS = 60;

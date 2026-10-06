@@ -2,6 +2,28 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.18.0-beta.3
+
+- The LG TV searches torrent sites through the phone (RuTracker, NNM-Club, Kinozal and others, with your sign-ins), even when OMP is closed on the phone; the phone gets a «Search for the TV» switch and a quiet notification
+- [tv] A new search screen on the TV: quality badges, posters, sorting, «also on ...», «already in the library»
+- [tv] «Search sources» on LG: the phone's sites with their state and switches
+- [tv] Without a phone the TV searches through TorrServer (Rutor, Jackett) and says so
+
+## 0.18.0-beta.2
+
+- [tv] On the TV: the «Discover» tab shows new releases from TMDB with sort and filters (genre, year, country, rating), title search and an «In the library» mark on the ones you already have
+- [tv] A title card for films and series: overview, rating, cast, seasons with «Find torrents», «Open in the library»
+- [tv] The «Want to watch» list on the TV: the yellow key on a tile adds to it, the «Want» filter shows it
+- [tv] «In better quality» on the torrent and series screens: finds a better release and replaces the old one keeping watch positions, or adds it alongside
+
+## 0.18.0-beta.1
+
+- [tv] TV (LG and Android TV): library tiles show short titles instead of the tracker string; a series is one tile with its TMDB status («Airing», «Ended», «Canceled») and the number of torrents
+- [tv] Header icons show their name when selected; the hint bar no longer covers the last row
+- [tv] A new series screen: a TMDB backdrop, overview, status with the next episode date, seasons switched with the remote, episode names, progress. «Watch» continues where you stopped and asks «Continue / From the start», «Torrents · N» opens the series' torrents
+- [tv] On the torrent screen you can rename a torrent and pick another poster from TMDB
+- [tv] «Help» in Settings: answers to common questions right on the TV, links shown as QR codes
+
 ## 0.17.0
 
 - [phone] «Discover» in «Catalog»: new films and series from TMDB, sorting and filters

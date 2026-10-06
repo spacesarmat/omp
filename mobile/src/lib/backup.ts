@@ -147,10 +147,14 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.firstRun', // when this install was first used: per device
   'tsp.donateCard', // the «Поддержать» card was closed
   'tsp.tmdbCache', // «Обзор»: cache of TMDB answers
+  'tsp.tvWant', // TV «Хочу посмотреть»: lives on the TV only (a later version hands it to the phone)
+  'tsp.tvDiscoverQuery', // TV «Обзор»: sort and filters of the TV, never on the phone
   'tsp.seriesTmdb', // series → TMDB show matches (a week)
   'tsp.subTmdb', // subscription → TMDB show matches (a week)
   'tsp.categoryAuto', // categories OMP set itself at an add (the automatic check may correct only those)
   'tsp.sourcePause', // background requests to a site paused after its code page: per device, an hour
+  'tsp.tvSearchService', // the TV search switch: it runs this phone's own server, per device
+  'tsp.phoneLink', // TV: the address and token of the phone that serves its search, per device
 ];
 
 function readRaw(key: string): unknown {

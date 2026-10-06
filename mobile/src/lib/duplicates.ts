@@ -10,7 +10,7 @@ import { shortTitle } from '../../../src/lib/libraryView';
 import { contentsText } from './releaseContents';
 import { torrents } from '../../../src/store/library';
 import { fmtSize, t } from '../../../src/i18n';
-import { groupLibrary, isSeries, seasonMembers, type SeriesGroup } from './seriesGroups';
+import { groupLibrary, isSeries, seasonMembers, type SeriesGroup } from '../../../src/lib/seriesGroups';
 
 export { contentsText };
 

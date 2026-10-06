@@ -22,6 +22,7 @@ import { showToast } from '../ui/toast';
 import { activeServer, addServer, servers } from '../../../src/store/servers';
 import { activeTv } from '../tv/tvStore';
 import { tvState } from '../tv/tvClient';
+import { tvSearchOn, setTvSearch } from '../tv/phoneRpc';
 import { tvOmpVersions, tvNeedsUpdate, tvOpensUpdate, openUpdateOnTv, type TvOmp } from '../tv/tvUpdate';
 import { errorMessage } from '../../../src/api/http';
 import { settings, updateSettings } from '../../../src/store/settings';
@@ -256,6 +257,20 @@ function LanguageRow() {
   );
 }
 
+/** The TV search switch: the TV searches torrent sites through this phone (PhoneRpcService). */
+function TvSearchRow() {
+  const on = tvSearchOn.value;
+  return (
+    <div class="m-set-row" data-row="tv-search-service">
+      <div class="m-set-text" style="flex-grow: 1">
+        <span>{t('settings.tvSearch')}</span>
+        <span class="m-muted m-small">{on ? t('settings.tvSearchHint') : t('settings.tvSearchOff')}</span>
+      </div>
+      <Switch on={on} label={t('settings.tvSearch')} onToggle={() => void setTvSearch(!on)} />
+    </div>
+  );
+}
+
 /** OMP version on the connected TV; an old one gets «Обновить на ТВ». */
 function TvOmpRow() {
   const connected = tvState.value === 'connected';
@@ -405,6 +420,7 @@ export function Settings() {
           </button>
         </div>
         <TvOmpRow />
+        <TvSearchRow />
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'install' })}>
           <span>{t('install.assistant.title')}</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />

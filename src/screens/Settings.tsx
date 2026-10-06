@@ -170,13 +170,12 @@ export function SettingsScreen() {
         </div>
         <Button focusKey="set-server" label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
         <Button focusKey="set-pair" label={t('pair.title')} onPress={() => navigate({ name: 'pairPhone' })} />
+        <Button focusKey="set-faq" label={t('tvSettings.help')} onPress={() => navigate({ name: 'faq' })} />
       </div>
-      {platformKind() === 'androidtv' && (
-        <div class="row">
-          <div class="grow muted">{t('tvSettings.sourcesNote')}</div>
-          <Button focusKey="set-sources" label={t('tvSettings.sources')} onPress={() => navigate({ name: 'sources' })} />
-        </div>
-      )}
+      <div class="row">
+        <div class="grow muted">{platformKind() === 'androidtv' ? t('tvSettings.sourcesNote') : t('phoneSources.settingsNote')}</div>
+        <Button focusKey="set-sources" label={t('tvSettings.sources')} onPress={() => navigate({ name: 'sources' })} />
+      </div>
 
       {platformKind() === 'androidtv' && <PlayerEngineSection />}
 

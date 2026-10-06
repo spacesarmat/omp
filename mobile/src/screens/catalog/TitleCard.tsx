@@ -2,7 +2,7 @@
 // A series has its status pill («Выходит · следующая серия …») and season chips; the chosen season shows its episodes and «Найти раздачи на сезон» / «Открыть в медиатеке».
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { t, tp, fmtDuration } from '../../../../src/i18n';
-import { airDateText } from '../../lib/seriesStatus';
+import { airDateText } from '../../../../src/lib/seriesStatus';
 import { SeriesPill } from '../../ui/SeriesPill';
 import { goBack, navigate, currentRoute, type MRoute } from '../../nav';
 import { Icon } from '../../ui/Icon';

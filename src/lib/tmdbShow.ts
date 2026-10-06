@@ -4,10 +4,10 @@
 // titles in the asked language (and alternative titles), so a Russian name searched in English can find only another
 // show of that name (Dark Matter 2015 for «Тёмная материя» instead of Dark Matter 2024).
 // Shared by the series screen and the episode names of the torrent screen.
-import { lang } from '../../../src/i18n';
-import { posterQuery, titleCore } from '../../../src/lib/posterSearch';
-import { seriesQuery } from '../../../src/monitor/newEpisodes';
-import type { CatalogTitle } from '../../../src/catalog/tmdb';
+import { lang } from '../i18n';
+import { posterQuery, titleCore } from './posterSearch';
+import { seriesQuery } from '../monitor/newEpisodes';
+import type { CatalogTitle } from '../catalog/tmdb';
 
 interface Searcher {
   search(query: string, page: number): Promise<{ items: CatalogTitle[] }>;

@@ -1,12 +1,12 @@
 // The torrent screen's TMDB episode names: the show of a series torrent is matched once per torrent (in memory),
 // its seasons are read through the cached, language-aware catalog client. Every failure means «no names»: the screen
 // then shows what it showed before.
-import type { Torrent } from '../../../src/api/types';
-import type { CatalogCard, Episode, SeasonDetails } from '../../../src/catalog/tmdb';
-import { yearOf } from '../../../src/monitor/newEpisodes';
+import type { Torrent } from '../api/types';
+import type { CatalogCard, Episode, SeasonDetails } from '../catalog/tmdb';
+import { yearOf } from '../monitor/newEpisodes';
 import { findShow } from './tmdbShow';
-import { displayTitle } from '../../../src/lib/torrentName';
-import { phoneCatalog } from '../catalog/phoneCatalog';
+import { displayTitle } from './torrentName';
+import { activeCatalog } from '../catalog/activeCatalog';
 
 export interface ShowInfo {
   id: number;
@@ -27,7 +27,7 @@ export function resetEpisodeNames(): void {
 
 async function match(tor: Torrent): Promise<ShowInfo | null> {
   const title = tor.title || displayTitle(tor);
-  const c = await phoneCatalog();
+  const c = await activeCatalog();
   const item = await findShow(c, title, yearOf(title) || 0);
   if (!item) return null;
   const hit = item;
@@ -67,7 +67,7 @@ export function showOf(tor: Torrent): Promise<ShowInfo | null> {
 /** The episodes of one season by number; empty when TMDB has none or cannot be reached. */
 export async function seasonEpisodes(show: ShowInfo, n: number): Promise<{ [ep: number]: Episode }> {
   try {
-    const d: SeasonDetails = await (await phoneCatalog()).season(show.id, n);
+    const d: SeasonDetails = await (await activeCatalog()).season(show.id, n);
     const out: { [ep: number]: Episode } = {};
     d.episodes.forEach((e) => {
       out[e.n] = e;
@@ -76,6 +76,11 @@ export async function seasonEpisodes(show: ShowInfo, n: number): Promise<{ [ep: 
   } catch {
     return {};
   }
+}
+
+/** «Star.Trek.S04E01.1080p» as a readable name: dots and underscores to spaces. */
+export function cleanFileName(name: string): string {
+  return name.replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 /** «Эпизод 7», «Episode 7», «Серия 7»: TMDB's stand-in for an episode with no name yet. */

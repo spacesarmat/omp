@@ -183,7 +183,7 @@ function parse(doc: Document, base: string): SourceResult[] {
 
 export const rutracker: Source = {
   id: 'rutracker',
-  name: 'rutracker',
+  name: 'RuTracker',
   kind: 'builtin',
   needsLogin: true,
   cloudflare: true,

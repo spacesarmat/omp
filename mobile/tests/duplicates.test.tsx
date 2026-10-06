@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { groupLibrary, isSeries, seasonMembers, type SeriesGroup } from '../src/lib/seriesGroups';
+import { groupLibrary, isSeries, seasonMembers, type SeriesGroup } from '../../src/lib/seriesGroups';
 import { alreadyHaveText, contentsText, filmKeys, releaseLine, sameReleases } from '../src/lib/duplicates';
 import { fileEpisodes } from '../../src/lib/categoryCheck';
 import { contentsTextOf, episodeCountOf } from '../src/lib/releaseContents';
@@ -16,7 +16,7 @@ import { addServer, setActiveServer, servers, removeServer } from '../../src/sto
 import { torrents } from '../../src/store/library';
 import { reloadProgress, serverViewed } from '../../src/store/progress';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
-import { resetSeriesMatches } from '../src/lib/seriesMatch';
+import { resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { Torrent } from '../../src/api/types';
 import type { SourceResult } from '../../src/sources/types';

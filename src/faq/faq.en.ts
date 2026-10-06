@@ -1,5 +1,5 @@
-import { HB_REPO_URL, RELEASES_URL } from '../../src/lib/updateInfo';
-import { SBER_APPS_URL } from '../../src/lib/installPlan';
+import { HB_REPO_URL, RELEASES_URL } from '../lib/updateInfo';
+import { SBER_APPS_URL } from '../lib/installPlan';
 import type { FaqLine, FaqText } from './faq';
 
 // The English FAQ texts, keyed by item id (same ids and the same number of lines as faq.ru.ts).

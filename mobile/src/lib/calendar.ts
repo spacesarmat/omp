@@ -14,10 +14,10 @@ import { loadJson, saveJson, isObject } from '../../../src/store/storage';
 import { EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
 import type { Torrent } from '../../../src/api/types';
 import { phoneCatalog } from '../catalog/phoneCatalog';
-import { groupLibrary, singleGroup, type SeriesGroup } from './seriesGroups';
-import { knownOver, matchSeries } from './seriesMatch';
-import { isoDay, upcomingSeasons } from './seriesStatus';
-import { realEpisodeName } from './episodeNames';
+import { groupLibrary, singleGroup, type SeriesGroup } from '../../../src/lib/seriesGroups';
+import { knownOver, matchSeries } from '../../../src/lib/seriesMatch';
+import { isoDay, upcomingSeasons } from '../../../src/lib/seriesStatus';
+import { realEpisodeName } from '../../../src/lib/episodeNames';
 import { dayHeader } from './releaseDates';
 
 export { realEpisodeName };

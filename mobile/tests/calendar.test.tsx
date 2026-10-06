@@ -8,7 +8,7 @@ import {
   realEpisodeName, resetCalendar, rowFinding, rowLine, type CalEntry, type CalShow,
 } from '../src/lib/calendar';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
-import { resetSeriesMatches } from '../src/lib/seriesMatch';
+import { resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { currentRoute, resetTo } from '../src/nav';
 import { torrents } from '../../src/store/library';
 import { addFindings, addSubscription, loadSubs } from '../../src/monitor/subs';

@@ -34,8 +34,8 @@ import { Discover } from './catalog/Discover';
 import { usePinchStep } from '../ui/usePinchStep';
 import { SeriesMenu } from '../ui/SeriesMenu';
 import { SeriesTileBadge } from '../ui/SeriesTileBadge';
-import { groupLabel, groupLibrary, groupSize, itemHashes, singleGroup, type LibraryItem, type SeriesGroup } from '../lib/seriesGroups';
-import { cachedSeriesMatch, seriesMatchVersion } from '../lib/seriesMatch';
+import { groupLabel, groupLibrary, groupSize, itemHashes, singleGroup, type LibraryItem, type SeriesGroup } from '../../../src/lib/seriesGroups';
+import { cachedSeriesMatch, seriesMatchVersion } from '../../../src/lib/seriesMatch';
 
 const POLL_MS = 15000;
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes

@@ -83,7 +83,7 @@ function signedOut(res: HttpResponse): boolean {
 
 export const rustorka: Source = {
   id: 'rustorka',
-  name: 'rustorka',
+  name: 'Rustorka',
   kind: 'builtin',
   needsLogin: true,
   cloudflare: true,

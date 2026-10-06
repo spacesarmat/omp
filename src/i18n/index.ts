@@ -106,6 +106,24 @@ export function fmtSize(bytes: number): string {
   return fmtNumber(bytes / GIB, 1) + ' ' + t('common.gb');
 }
 
+/** "0 B", "512 KB", "1.4 GB" in the UI language's units and decimal mark: binary steps, one decimal under 100. */
+export function fmtBytes(n: number): string {
+  const units = t('common.units').split(' ');
+  if (!isFinite(n) || n <= 0) return '0 ' + units[0];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return (i === 0 ? String(Math.round(v)) : fmtNumber(v, v >= 100 ? 0 : 1)) + ' ' + units[i];
+}
+
+/** A speed: "1.2 MB/s" in the UI language. */
+export function fmtSpeed(bytesPerSec: number): string {
+  return t('common.perSec', { v: fmtBytes(bytesPerSec) });
+}
+
 /** «1 ч 58 мин», «2 ч», «58 мин» / «1 h 58 min». */
 export function fmtDuration(minutes: number): string {
   const total = Math.max(0, Math.round(minutes));

@@ -106,7 +106,7 @@ describe('rustorka', () => {
     expect(link.indexOf('omp-file:')).toBe(0);
     expect(takeStashedFile(link)!.length).toBe(TORRENT.length);
     expect(site.calls.map((c) => c.url)).toEqual([FORUM + 'download.php?id=7001']);
-    expect(site.calls[0].opts).toEqual({ siteName: 'rustorka', responseCharset: 'iso-8859-1' });
+    expect(site.calls[0].opts).toEqual({ siteName: 'Rustorka', responseCharset: 'iso-8859-1' });
     await expect(rustorka.resolve!({ ...r, Link: 'https://evil.example/download.php?id=1' }, site.ctx)).rejects.toThrow('Неверный адрес');
     expect(isLoginRequired(await rustorka.resolve!(r, fakeSite(server({ signedIn: true })).ctx).then(() => null, (x: unknown) => x))).toBe(true);
   });

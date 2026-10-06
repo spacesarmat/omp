@@ -7,10 +7,11 @@ import { NowPlaying } from '../src/screens/NowPlaying';
 import { nowPlaying, lastSeen, setPlayerLinkDeps } from '../src/tv/playerLink';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
-import { resetEpisodeNames } from '../src/lib/episodeNames';
-import { matchSeries, resetSeriesMatches } from '../src/lib/seriesMatch';
-import { singleGroup } from '../src/lib/seriesGroups';
-import { episodeLine, launchLabel, looksLikeName } from '../src/lib/playingNames';
+import { resetEpisodeNames } from '../../src/lib/episodeNames';
+import { matchSeries, resetSeriesMatches } from '../../src/lib/seriesMatch';
+import { singleGroup } from '../../src/lib/seriesGroups';
+import { episodeLine, launchLabel, looksLikeName, torrentName } from '../src/lib/playingNames';
+import { torrentName as tvTorrentName } from '../../src/lib/cleanNames';
 import { miniTitle } from '../src/ui/MiniPlayer';
 import { torrents } from '../../src/store/library';
 import type { Torrent } from '../../src/api/types';
@@ -73,6 +74,15 @@ afterEach(() => {
 });
 
 describe('playing names', () => {
+  it('names a torrent as the TV does: the matched show, else the short title', async () => {
+    expect(torrentName(DARK)).toBe(tvTorrentName(DARK, torrents.value));
+    expect(torrentName(FILM)).toBe(tvTorrentName(FILM, torrents.value));
+    fake();
+    await matchSeries(singleGroup(DARK)!);
+    expect(torrentName(DARK)).toBe('Тёмная материя');
+    expect(tvTorrentName(DARK, torrents.value)).toBe('Тёмная материя');
+  });
+
   it('the episode line: the code and a real name only', () => {
     expect(episodeLine('S02E01', 'Спокойная жизнь')).toBe('S02E01 · Спокойная жизнь');
     expect(episodeLine('S02E02', 'Эпизод 2')).toBe('S02E02');

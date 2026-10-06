@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
-import { init } from '@noriginmedia/norigin-spatial-navigation';
+import { init, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { applyLanguageSetting } from '../../src/i18n';
 import { ConnectScreen } from '../../src/screens/Connect';
 import { LibraryScreen } from '../../src/screens/Library';
@@ -11,6 +11,12 @@ import { UpdateScreen } from '../../src/screens/Update';
 import { SourcesScreen } from '../../src/screens/Sources';
 import { AddScreen } from '../../src/screens/Add';
 import { PlaylistScreen } from '../../src/screens/Playlist';
+import { SeriesScreen } from '../../src/screens/Series';
+import { FaqScreen } from '../../src/screens/Faq';
+import { setCatalogProvider } from '../../src/catalog/activeCatalog';
+import { resetSeriesMatches } from '../../src/lib/seriesMatch';
+import { resetEpisodeNames } from '../../src/lib/episodeNames';
+import { seriesKey } from '../../src/lib/seriesGroups';
 import { PairPhoneScreen } from '../../src/screens/PairPhone';
 import { MarksDialog } from '../../src/ui/MarksDialog';
 import { UpdateDialog } from '../../src/ui/UpdateDialog';
@@ -25,8 +31,17 @@ import { resetSettings } from '../../src/store/settings';
 import { updatePrompt, latestUpdate } from '../../src/store/updates';
 import { whatsNew, closeWhatsNew } from '../../src/store/whatsNew';
 import { routeStack } from '../../src/ui/nav';
+import { TitleCardScreen } from '../../src/screens/TitleCard';
+import { libraryTab } from '../../src/store/library';
+import { resetDiscoverState } from '../../src/store/discover';
+import { wantList } from '../../src/store/wantList';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { mockFetch } from '../helpers/fetchMock';
+import { PhoneSourcesScreen } from '../../src/screens/PhoneSources';
+import { setRpcTransport, phoneStatus } from '../../src/phone/rpc';
+import { savePhoneLink, forgetPhoneLink } from '../../src/phone/phoneStore';
+import { resetSourceNames } from '../../src/sources/sourceNames';
+import { resetTo } from '../../src/ui/nav';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth } from '../../src/sources/store';
 import type { Source } from '../../src/sources/types';
@@ -126,9 +141,9 @@ describe('TV screens in English', () => {
 
   it('TopBar labels', () => {
     mount(h(TopBar, { tab: 'all', onTab: () => undefined, view: 'large', sort: 'new', searchOpen: false, onSearch: () => undefined, onView: () => undefined, onSort: () => undefined, onFocused: () => undefined }));
-    const labels = Array.prototype.map.call(host.querySelectorAll('.icon-button-label'), (e: Element) => e.textContent).join('|');
+    const labels = Array.prototype.map.call(host.querySelectorAll('.icon-button'), (e: Element) => e.getAttribute('aria-label')).join('|');
     expect(labels).toContain('Search');
-    expect(labels).toContain('Add');
+    expect(labels).toContain('Find a release');
     expect(labels).toContain('Playlists');
     expect(labels).toContain('Settings');
     expect(labels).not.toMatch(CYR);
@@ -155,6 +170,197 @@ describe('TV screens in English', () => {
     expect(text).toContain('Season 2');
     expect(text).toContain('OK — watch');
     expect(text).toContain('Back — to the library');
+    expect(text).not.toMatch(CYR);
+  });
+
+  it('Series screen', async () => {
+    const seasonT = (n: number) => ({
+      hash: 'q' + n, title: 'Dark Matter S0' + n + ' 1080p WEB-DL', category: 'tv', timestamp: n, torrent_size: 4e9,
+      file_stats: [1, 2].map((e) => ({ id: e, path: 'Dark.Matter.S0' + n + 'E0' + e + '.1080p.mkv', length: 2e9 })),
+    });
+    const fixture = [seasonT(1), seasonT(2)];
+    const card = {
+      id: 1, kind: 'tv', title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6, backdrop: '',
+      genres: ['Sci-Fi'], runtime: 50, overview: 'A show', cast: [], airing: true, status: 'returning',
+      seasons: [
+        { number: 1, episodes: 9, year: 2024, aired: 9, airDate: '2024-05-08' },
+        { number: 2, episodes: 10, year: 2026, aired: 2, airDate: '2026-01-01' },
+        { number: 3, episodes: 0, year: 2099, aired: 0, airDate: '2099-01-01' },
+      ],
+      nextEpisode: { season: 3, episode: 1, airDate: '2099-01-01' },
+    };
+    const stub: any = {
+      search: () => Promise.resolve({ items: [{ id: 1, kind: 'tv', title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6 }], pages: 1 }),
+      card: () => Promise.resolve(card),
+      season: (_id: number, n: number) => Promise.resolve({ number: n, name: '', airDate: '', overview: '', episodes: [
+        { n: 1, title: 'Pilot', airDate: '2024-05-08', runtime: 50, overview: '' },
+        { n: 2, title: 'Second', airDate: '2024-05-15', runtime: 50, overview: '' },
+      ] }),
+    };
+    setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+    mockFetch((url) => ({ body: url.indexOf('/torrents') >= 0 ? JSON.stringify(fixture) : '[]' }));
+    resetSeriesMatches();
+    resetEpisodeNames();
+    setCatalogProvider(() => Promise.resolve(stub));
+    torrents.value = fixture as any;
+    const key = seriesKey(fixture[0] as any);
+    routeStack.value = [{ name: 'library' }, { name: 'series', key }];
+    mount(h(SeriesScreen, { seriesKey: key }));
+    await flush();
+    const text = host.textContent || '';
+    expect(text).toContain('Dark Matter');
+    expect(text).toContain('Airing');
+    expect(text).toContain('Season 1');
+    expect(text).toContain('Torrents · 1');
+    expect(text).toContain('Watch S02E01');
+    expect(text).toContain('next episode');
+    expect(text).not.toMatch(CYR);
+    setCatalogProvider(null);
+  });
+
+  it('Series screen: missing and announced seasons', async () => {
+    const tor = {
+      hash: 'q2', title: 'Dark Matter S02 1080p WEB-DL', category: 'tv', timestamp: 2, torrent_size: 4e9,
+      file_stats: [1, 2].map((e) => ({ id: e, path: 'Dark.Matter.S02E0' + e + '.1080p.mkv', length: 2e9 })),
+    };
+    const card = {
+      id: 1, kind: 'tv', title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6, backdrop: '',
+      genres: ['Sci-Fi'], runtime: 50, overview: 'A show', cast: [], airing: false, status: 'returning',
+      seasons: [
+        { number: 1, episodes: 9, year: 2024, aired: 9, airDate: '2024-05-08' },
+        { number: 2, episodes: 10, year: 2026, aired: 10, airDate: '2026-01-01' },
+        { number: 3, episodes: 0, year: 0, aired: 0 },
+      ],
+    };
+    const stub: any = {
+      search: () => Promise.resolve({ items: [{ id: 1, kind: 'tv', title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6 }], pages: 1 }),
+      card: () => Promise.resolve(card),
+      season: (_id: number, n: number) => Promise.resolve({ number: n, name: '', airDate: '', overview: '', episodes: [] }),
+    };
+    setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+    mockFetch((url) => ({ body: url.indexOf('/torrents') >= 0 ? JSON.stringify([tor]) : '[]' }));
+    resetSeriesMatches();
+    resetEpisodeNames();
+    setCatalogProvider(() => Promise.resolve(stub));
+    torrents.value = [tor] as any;
+    const key = seriesKey(tor as any);
+    routeStack.value = [{ name: 'library' }, { name: 'series', key }];
+    mount(h(SeriesScreen, { seriesKey: key }));
+    await flush();
+    expect(host.textContent || '').toContain('+ Season 1');
+    expect(host.textContent || '').toContain('not in the library');
+    expect(host.textContent || '').toContain('soon');
+    await act(async () => { setFocus('season-1'); });
+    await flush();
+    expect(host.textContent || '').toContain('This season is not in the library');
+    expect(buttons(host)).toContain('Find torrents');
+    await act(async () => { setFocus('season-3'); });
+    await flush();
+    expect(host.textContent || '').toContain('The release date is not known yet');
+    expect(noRussian(host)).not.toMatch(CYR);
+    setCatalogProvider(null);
+  });
+
+  it('Library: the discover tab', async () => {
+    setActiveServer(addServer({ url: '10.0.0.2' }).id);
+    torrents.value = [];
+    resetDiscoverState();
+    wantList.value = [];
+    libraryTab.value = 'discover';
+    const stub: any = {
+      discover: () => Promise.resolve({ items: [{ kind: 'tv', id: 1, title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6 }], pages: 1 }),
+      search: () => Promise.resolve({ items: [], pages: 1 }),
+    };
+    setCatalogProvider(() => Promise.resolve(stub));
+    try {
+      mount(h(LibraryScreen, {}));
+      await flush();
+      const text = host.textContent || '';
+      expect(host.querySelectorAll('.disc-tile').length).toBe(1);
+      expect(text).toContain('Dark Matter');
+      expect(text).toContain('2024 · Series');
+      expect(text).toContain('OK — details');
+      expect(text).not.toMatch(CYR);
+      const aria = Array.prototype.map.call(host.querySelectorAll('[aria-label]'), (e: Element) => e.getAttribute('aria-label')).join('|');
+      expect(aria).not.toMatch(CYR);
+    } finally {
+      libraryTab.value = 'all';
+      setCatalogProvider(null);
+    }
+  });
+
+  it('Title card', async () => {
+    setActiveServer(addServer({ url: '10.0.0.2' }).id);
+    torrents.value = [];
+    resetDiscoverState();
+    const card = {
+      kind: 'tv', id: 1, title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6, backdrop: '',
+      genres: ['Sci-Fi'], runtime: 50, overview: 'A show', airing: true, status: 'returning',
+      cast: [{ name: 'Jane Roe', photo: '', role: 'Captain' }],
+      seasons: [
+        { number: 2, episodes: 10, year: 2026, aired: 2, airDate: '2026-01-01' },
+        { number: 1, episodes: 9, year: 2024, aired: 9, airDate: '2024-05-08' },
+        { number: 3, episodes: 0, year: 0, aired: 0 },
+      ],
+      nextEpisode: { season: 2, episode: 3, airDate: '2099-01-01' },
+    };
+    setCatalogProvider(() => Promise.resolve({ card: () => Promise.resolve(card), discover: () => Promise.resolve({ items: [], pages: 1 }) } as any));
+    routeStack.value = [{ name: 'library' }, { name: 'title', kind: 'tv', id: 1 }];
+    try {
+      mount(h(TitleCardScreen as any, { kind: 'tv', id: 1 }));
+      await flush();
+      const text = host.textContent || '';
+      expect(text).toContain('Dark Matter');
+      expect(text).toContain('Jane Roe');
+      expect(text).toContain('Season 1');
+      expect(text).toContain('Find torrents');
+      expect(text).toContain('Want to watch');
+      expect(noRussian(host)).not.toMatch(CYR);
+      const aria = Array.prototype.map.call(host.querySelectorAll('[aria-label]'), (e: Element) => e.getAttribute('aria-label')).join('|');
+      expect(aria).not.toMatch(CYR);
+    } finally {
+      setCatalogProvider(null);
+    }
+  });
+
+  it('Better quality dialog', async () => {
+    const H = 'a'.repeat(40);
+    const film = { hash: H, title: 'Dune: Part Two (2024) WEB-DL 1080p', category: 'movie', stat: 3, torrent_size: 8.9e9, file_stats: [{ id: 1, path: 'Dune.Part.Two.2024.1080p.WEB-DL.mkv', length: 8.9e9 }] };
+    const res = (title: string, seed: number, hash: string) => ({ Title: title, Categories: 'Movies', Size: '20 GB', CreateDate: '', Tracker: 'rutor', Link: '', Magnet: 'magnet:?xt=urn:btih:' + hash, Hash: hash, Peer: 0, Seed: seed });
+    setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+    torrents.value = [film as any];
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(film as any);
+    vi.spyOn(TorrServerClient.prototype, 'viewedList').mockResolvedValue([]);
+    vi.spyOn(TorrServerClient.prototype, 'probe').mockResolvedValue({ streams: [] } as any);
+    vi.spyOn(TorrServerClient.prototype, 'search').mockImplementation((_q: string, src: string) =>
+      Promise.resolve(src === 'rutor' ? [res('Dune: Part Two (2024) UHD BDRemux 2160p HDR', 42, 'd'.repeat(40))] : []) as any);
+    setCatalogProvider(() => Promise.reject(Object.assign(new Error('offline'), { code: 'offline' })));
+    try {
+      mount(h('div', {}, h(TorrentScreen, { hash: H }), h(DialogHost, {})));
+      await flush();
+      const find = Array.prototype.filter.call(host.querySelectorAll('.button'), (b: Element) => b.textContent === 'Find in better quality')[0] as HTMLElement;
+      expect(find).toBeTruthy();
+      act(() => find.click());
+      await flush();
+      await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+      await flush();
+      expect(host.querySelector('.better-dialog .dialog-title')!.textContent).toBe('In better quality');
+      expect(host.querySelectorAll('.better-row').length).toBe(1);
+      expect(noRussian(host)).not.toMatch(CYR);
+    } finally {
+      setCatalogProvider(null);
+    }
+  });
+
+  it('Help (FAQ)', async () => {
+    mount(h(FaqScreen, {}));
+    await flush();
+    const text = host.textContent || '';
+    expect(host.querySelectorAll('.faq-list .faq-q').length).toBeGreaterThan(0);
+    expect(text).toContain('Help');
+    expect(text).toContain('Installation');
+    expect(text).toContain('◀ ▶ — section');
+    expect(host.querySelector('.hints')!.textContent).toBe('▲ ▼ — question · ◀ ▶ — section · Back — to settings');
     expect(text).not.toMatch(CYR);
   });
 
@@ -229,11 +435,95 @@ describe('TV screens in English', () => {
     mount(h(AddScreen, {}));
     await flush();
     const text = host.textContent || '';
-    expect(text).toContain('Add a torrent');
-    expect(buttons(host)).toContain('Add');
+    expect(text).toContain('Find a release');
     expect(buttons(host)).toContain('Search');
-    expect(text).toContain('Source');
+    expect(buttons(host)).toContain('Magnet or link');
+    expect(buttons(host)).toContain('Sources');
+    expect(text).toContain('OK — add and watch');
     expect(text).not.toMatch(CYR);
+  });
+
+  describe('search through the phone', () => {
+    const PH = { url: 'http://192.168.1.20:8097', token: 'a'.repeat(32), name: 'Pixel' };
+    const row = { key: '1', Title: 'Dune 2021 2160p HDR', Size: '10 GB', Seed: 50, Peer: 3, Tracker: 'RuTracker', CreateDate: '2024-03-01', date: '01.03.2024', Categories: '', Magnet: '', Hash: '', source: 'rutracker' };
+    const typeAndSearch = async () => {
+      const q = host.querySelector('input') as HTMLInputElement;
+      act(() => {
+        q.value = 'Dune';
+        q.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      const go = Array.prototype.slice.call(host.querySelectorAll('.button')).filter((b: HTMLElement) => b.textContent === 'Search')[0] as HTMLElement;
+      act(() => go.click());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+    };
+    afterEach(() => {
+      setRpcTransport(null);
+      forgetPhoneLink();
+      phoneStatus.value = 'unknown';
+      resetSourceNames();
+      vi.useRealTimers();
+    });
+
+    it('the search screen: the phone path', async () => {
+      vi.useFakeTimers();
+      setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+      savePhoneLink(PH);
+      setRpcTransport((_u, body) => {
+        const m = JSON.parse(body).method;
+        const result = m === 'search'
+          ? { handle: 'h1', sourceIds: ['rutracker'] }
+          : { rev: 1, done: true, pending: [], answered: ['rutracker'], failed: [], results: [row] };
+        return Promise.resolve(JSON.stringify({ ok: true, result }));
+      });
+      mount(h(AddScreen, {}));
+      await typeAndSearch();
+      const text = host.textContent || '';
+      expect(text).toContain('Pixel');
+      expect(host.querySelector('.search-result')).not.toBeNull();
+      expect(text).toContain('Sort: quality');
+      expect(text.replace(/Dune 2021 2160p HDR/g, '')).not.toMatch(CYR);
+    });
+
+    it('the search screen: the phone does not answer', async () => {
+      vi.useFakeTimers();
+      setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+      savePhoneLink(PH);
+      setRpcTransport(() => Promise.reject(new Error('network')));
+      mount(h(AddScreen, {}));
+      await typeAndSearch();
+      const note = host.querySelector('.search-note-warn');
+      expect(note).not.toBeNull();
+      expect(note!.textContent).toContain('The phone does not answer');
+      expect(host.textContent).not.toMatch(CYR);
+    });
+
+    it('PhoneSourcesScreen: online', async () => {
+      savePhoneLink(PH);
+      resetTo({ name: 'settings' });
+      setRpcTransport(() => Promise.resolve(JSON.stringify({ ok: true, result: { sources: [
+        { id: 'rutracker', name: 'RuTracker', on: true, state: 'loggedIn' },
+        { id: 'kinozal', name: 'Kinozal', on: true, state: 'cloudflare' },
+        { id: 'nnmclub', name: 'NNM-Club', on: false, state: 'off' },
+      ] } })));
+      mount(h(PhoneSourcesScreen, {}));
+      await flush();
+      const text = host.textContent || '';
+      expect(text).toContain('Sites are searched by phone Pixel');
+      expect(text).toContain('connected');
+      expect(text).toContain('signed in');
+      expect(text).toContain('Rutor, Jackett');
+      expect(text).not.toMatch(CYR);
+    });
+
+    it('PhoneSourcesScreen: no phone', async () => {
+      resetTo({ name: 'settings' });
+      mount(h(PhoneSourcesScreen, {}));
+      await flush();
+      expect(host.textContent).toContain('Rutor, Jackett');
+      expect(host.textContent).not.toMatch(CYR);
+    });
   });
 
   it('Playlist', async () => {

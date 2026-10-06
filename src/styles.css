@@ -41,6 +41,38 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .list-item .src-badge { display: inline-block; margin-right: 12px; padding: 2px 10px; border-radius: 8px; background: var(--panel2); color: var(--text); font-weight: 700; }
 .search-progress { font-size: 24px; color: var(--muted); margin: 0 0 16px; }
 .search-hint { color: var(--accent); }
+/* «Найти раздачу» (mockup 6): search line, progress line with the sort chip, compact result rows */
+.search-top { display: flex; align-items: center; margin-bottom: 20px; }
+.search-top .text-input { flex: 1; margin: 0 20px 0 0; }
+.search-top .button { margin-right: 16px; }
+.search-top .button:last-child { margin-right: 0; }
+.search-note { font-size: 23px; color: var(--muted); margin: 0 0 10px; }
+.search-note-warn { color: var(--accent); }
+.search-status { display: flex; align-items: center; margin: 0 0 16px; }
+.search-status-text { flex: 1; min-width: 0; margin-right: 20px; font-size: 24px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-status .search-progress { margin: 0; }
+.search-sort { padding: 10px 24px; font-size: 24px; }
+.search-busy { position: fixed; left: 50%; bottom: 120px; margin-left: -300px; width: 600px; padding: 0 28px; background: var(--panel2); border-radius: 14px; z-index: 20; }
+.search-busy .spinner-wrap { padding: 16px 0; }
+.search-result { display: flex; align-items: center; padding: 12px 20px; margin-bottom: 10px; }
+.search-thumb { flex: none; width: 72px; height: 104px; border-radius: 8px; margin-right: 22px; background-color: var(--panel2); }
+.search-main { flex: 1; min-width: 0; margin-right: 24px; }
+.search-line1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-result .title { font-size: 28px; font-weight: 600; }
+.search-meta { font-size: 24px; color: var(--muted); }
+.search-chip { display: inline-block; vertical-align: middle; margin-left: 10px; padding: 2px 10px; border-radius: 8px; background: var(--panel2); color: var(--text); font-size: 18px; font-weight: 700; }
+.search-chip.hot { background: var(--accent); color: var(--bg); }
+.search-raw { margin-top: 6px; font-size: 21px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-row-error { margin-top: 6px; font-size: 21px; color: #ffb4b6; }
+.search-side { flex: none; width: 420px; text-align: right; font-size: 22px; color: var(--muted); }
+.search-size { font-size: 24px; color: var(--text); }
+.search-src { margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-src .src-badge { margin-right: 0; }
+.search-also { margin-left: 10px; }
+.search-inlib { margin-top: 6px; color: var(--ok); }
+.search-details-backdrop { position: fixed; }
+.search-details-title { font-size: 26px; line-height: 1.35; margin-bottom: 16px; word-wrap: break-word; }
+.search-details-meta { font-size: 23px; color: var(--muted); margin-bottom: 28px; }
 
 .text-input { flex: 1; background: var(--panel); border-radius: 12px; padding: 4px; margin-bottom: 16px; }
 .text-input.focused { transform: none; }
@@ -72,14 +104,21 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .progress { height: 8px; background: rgba(255, 255, 255, .15); border-radius: 4px; overflow: hidden; margin-top: 10px; }
 .progress-fill { height: 100%; background: var(--accent); }
 
-.hints { position: fixed; left: 0; right: 0; bottom: 0; padding: 20px 80px; background: var(--bg); color: var(--muted); font-size: 22px; z-index: 5; }
+.hints { position: fixed; left: 0; right: 0; bottom: 0; height: 96px; box-sizing: border-box; padding: 0 80px; display: flex; align-items: center; background: var(--bg); border-top: 1px solid #1f232c; color: var(--muted); font-size: 22px; z-index: 5; }
 .empty { color: var(--muted); padding: 60px 0; text-align: center; }
 .banner-error { background: rgba(229, 72, 77, .2); color: #ffb4b6; padding: 14px 24px; border-radius: 10px; margin-bottom: 16px; }
 
 .torrent-head { display: flex; margin-bottom: 24px; }
 .torrent-head img { width: 220px; height: 330px; object-fit: cover; border-radius: 14px; margin-right: 40px; background: var(--panel2); }
-.torrent-head .info { flex: 1; }
-.torrent-head h1 { font-size: 44px; margin-bottom: 16px; }
+.torrent-head .info { flex: 1; min-width: 0; }
+/* one row that scrolls sideways (the focused button is kept whole); the padding keeps the focus ring unclipped, the
+   negative margins keep the height of the plain row */
+.torrent-actions { position: relative; overflow: hidden; margin: -12px -12px 4px; padding: 12px; }
+.torrent-actions-row { margin-bottom: 0; flex-wrap: nowrap; }
+.torrent-actions-row > * { flex-shrink: 0; }
+.torrent-head h1 { font-size: 44px; margin-bottom: 16px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+/* the raw release name under the clean one: small, muted, two lines at most */
+.torrent-raw { margin: -8px 0 14px; font-size: 22px; line-height: 30px; max-height: 60px; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-word; }
 .skip-block { margin: 8px 0 28px; padding: 20px 22px; border-radius: 18px; background: var(--panel); }
 .skip-head { display: flex; align-items: baseline; margin-bottom: 8px; }
 .skip-title { font-size: 28px; font-weight: 700; margin-right: 16px; }
@@ -97,6 +136,38 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .file-row .size { width: 170px; text-align: right; color: var(--muted); }
 .file-row .check { width: 60px; text-align: center; color: var(--ok); }
 .file-row .bar { width: 160px; margin: 0 0 8px 20px; }
+.series-hero { position: relative; display: flex; align-items: flex-start; min-height: 470px; margin-bottom: 28px; }
+/* the backdrop ends with the hero: the seasons and episodes below sit on the plain background */
+.series-backdrop { position: absolute; top: -48px; right: -80px; bottom: 0; width: 1120px; overflow: hidden; }
+.series-backdrop img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.series-shade { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 17, 21, .72); background: linear-gradient(rgba(15, 17, 21, .72) 60%, #0f1115); }
+.series-poster { position: relative; flex-shrink: 0; width: 280px; height: 420px; margin-right: 44px; border-radius: 16px; overflow: hidden; background: var(--panel2); }
+.series-poster img, .series-poster .art { width: 100%; height: 100%; object-fit: cover; }
+.series-info { position: relative; flex: 1; min-width: 0; }
+.series-info h1 { font-size: 56px; margin: 8px 0 16px; }
+.series-status { margin-bottom: 12px; }
+.series-status .series-pill { font-size: 22px; padding: 5px 14px; margin: 0; }
+.series-meta { font-size: 26px; margin-bottom: 14px; }
+.series-overview { max-width: 1000px; margin: 0 0 24px; font-size: 25px; line-height: 1.4; color: #c9cdd8; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.series-actions { margin-top: 8px; }
+/* one row that scrolls sideways (the focused chip is kept whole); the padding keeps the focus ring unclipped */
+.series-seasons { position: relative; overflow: hidden; margin: 0 -12px 12px; padding: 12px; }
+.series-seasons-row { display: flex; flex-wrap: nowrap; white-space: nowrap; }
+.series-seasons-row .season-chip { flex-shrink: 0; }
+.season-chip { min-width: 190px; padding: 14px 24px; margin: 0 16px 16px 0; border-radius: 14px; background: var(--panel); border: 2px solid transparent; }
+.season-chip.on { background: var(--panel2); border-color: var(--accent); }
+.season-chip.focused { background: var(--accent); color: #0f1115; border-color: var(--accent); }
+.season-chip .chip-name { font-size: 26px; font-weight: 700; }
+.season-chip .chip-sub { font-size: 20px; color: var(--muted); margin-top: 4px; }
+.season-chip.focused .chip-sub { color: #3a3000; }
+.season-chip.chip-future { background: transparent; border: 2px dashed #5a6070; }
+.season-chip.chip-future.on { border-color: var(--accent); }
+.season-chip.chip-future.focused { background: var(--accent); border-style: solid; }
+.series-missing { padding: 24px 0; font-size: 26px; }
+.series-missing .row { margin-top: 20px; }
+.ep-row .size { width: 220px; }
+.ep-future { opacity: .45; }
+.ep-future.focused { opacity: .75; }
 
 .spinner-wrap { display: flex; align-items: center; padding: 24px 0; }
 .spinner { width: 48px; height: 48px; border: 5px solid rgba(255, 255, 255, .2); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-right: 20px; }
@@ -183,9 +254,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .topbar .logo { margin-right: 14px; }
 .topbar-brand { font-size: 30px; font-weight: 800; letter-spacing: 2px; margin-right: 26px; }
 .icon-button { display: flex; align-items: center; justify-content: center; min-width: 60px; height: 60px; padding: 0 16px; border-radius: 14px; background: #1f232b; }
-.icon-button-label { display: none; margin-left: 10px; font-size: 22px; font-weight: 700; white-space: nowrap; }
-.icon-button.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
-.icon-button.focused .icon-button-label { display: inline; }
+.icon-btn-label { margin-left: 10px; font-size: 22px; font-weight: 700; white-space: nowrap; }
+.icon-button.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: scale(1.06); }
 .screen::-webkit-scrollbar { display: none; }
 
 .art { position: relative; overflow: hidden; border-radius: 16px; display: flex; align-items: flex-end; flex-shrink: 0; }
@@ -221,10 +291,22 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .art-badges { position: absolute; top: 12px; left: 12px; display: flex; }
 .art-badges .badge { background: rgba(15, 17, 21, .8); }
 /* same reserved title height on every tile keeps rows aligned (spec §3) */
-.tile-title { margin-top: 12px; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
+/* one weight for every tile name: 600 rendered bold for some names and regular for others on the LG (no such face for every script) */
+.tile-title { margin-top: 12px; font-weight: normal; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
 .tile-large .tile-title { font-size: 22px; line-height: 28px; height: 84px; -webkit-line-clamp: 3; }
 .tile-small .tile-title { margin-top: 8px; font-size: 17px; line-height: 22px; height: 44px; -webkit-line-clamp: 2; }
 .tile-meta { font-size: 18px; color: var(--muted); margin-top: 4px; }
+.tile .tile-count { position: absolute; top: 12px; right: 12px; min-width: 28px; padding: 2px 9px; border-radius: 7px; background: rgba(15, 17, 21, .8); color: var(--text); font-size: 16px; font-weight: 700; text-align: center; }
+.series-pill { position: absolute; left: 12px; bottom: 12px; padding: 3px 11px; border-radius: 8px; background: #3a3f4b; color: #fff; font-size: 16px; font-weight: 700; }
+.tile-small .series-pill { left: 8px; bottom: 8px; font-size: 14px; padding: 2px 8px; }
+.series-pill-inline { position: static; display: inline-block; margin-top: 6px; }
+.crow .series-pill-inline { margin: 0 18px 0 0; }
+.series-pill.pill-airing { background: #1f6f43; color: #e9fff1; }
+.series-pill.pill-ended { background: #3a3f4b; color: #fff; }
+.series-pill.pill-canceled { background: #8a2a2d; color: #fff; }
+.series-pill.pill-soon { background: var(--accent); color: #0f1115; }
+.lrow-meta { font-size: 20px; color: var(--muted); margin-top: 2px; }
+.crow-meta { color: var(--muted); font-weight: 400; }
 .views-rows { padding-top: 4px; }
 .lrow { display: flex; align-items: center; height: 92px; padding: 0 22px; margin-bottom: 10px; border-radius: 14px; background: var(--panel); }
 .lrow.focused { background: var(--panel2); transform: none; }
@@ -371,6 +453,19 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .src-tracker { display: flex; align-items: center; min-height: 54px; padding: 0 21px; margin-bottom: 6px; border-radius: 15px; background: #14171d; font-size: 25px; }
 .src-tracker.focused { box-shadow: inset 0 0 0 3px var(--accent); transform: none; }
 .src-tracker-name { flex: 1; min-width: 0; margin-right: 18px; }
+
+/* LG «Источники поиска»: the phone's sites (no flex gap / inset: Chromium 53) */
+.psrc { padding-bottom: 120px; }
+.psrc .src-phone { margin-top: 0; }
+.psrc-card-head { display: flex; align-items: center; margin-bottom: 12px; }
+.psrc-card-title { flex: 1; min-width: 0; margin-bottom: 0; margin-right: 16px; }
+.psrc-pill { flex-shrink: 0; padding: 4px 16px; border-radius: 18px; font-size: 22px; background: var(--panel2); color: var(--muted); }
+.psrc-pill-ok { background: rgba(63, 185, 80, .18); color: #8fe39a; }
+.psrc-pill-bad { background: rgba(255, 138, 128, .16); color: #ff8a80; }
+.psrc-down { margin-top: 8px; }
+.psrc-down-text { font-size: 24px; line-height: 1.45; margin-bottom: 16px; }
+.psrc-forget { margin-top: 24px; }
+.psrc-forget .button { font-size: 24px; }
 .src-tracker span:last-child { font-size: 22px; }
 .src-tracker-info { padding: 6px 21px; font-size: 22px; color: var(--muted); }
 .login-dialog { width: 1050px; }
@@ -386,6 +481,12 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .login-actions .button:first-child { margin-right: 20px; }
 .login-browser { margin-bottom: 16px; }
 
+.text-dialog { width: 900px; min-width: 0; }
+.text-dialog .text-input { display: block; background: var(--panel2); }
+.text-dialog .text-input.focused { box-shadow: inset 0 0 0 4px var(--accent); }
+.text-dialog-actions { display: flex; margin-top: 24px; }
+.text-dialog-actions .button { flex: 1; text-align: center; }
+.text-dialog-actions .button:first-child { margin-right: 20px; }
 .marks-dialog { width: 900px; min-width: 0; }
 .marks-sub { font-size: 22px; color: var(--muted); margin: -14px 0 20px; }
 .marks-row { display: flex; align-items: center; height: 76px; padding: 0 20px; margin-bottom: 14px; border-radius: 14px; background: var(--panel2); font-size: 26px; }
@@ -399,3 +500,124 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .marks-actions .button { flex: 1; text-align: center; }
 .marks-actions .button:first-child { margin-right: 20px; }
 .marks-backdrop { position: fixed; }
+
+/* FAQ */
+/* a fixed 1920x1080 layout: the page does not scroll, only the question list does (Chromium 53 has no sticky) */
+.screen.faq { overflow: hidden; }
+.faq h1 { position: absolute; left: 80px; top: 44px; margin: 0; font-size: 52px; }
+.faq-chips { position: absolute; left: 80px; right: 80px; top: 132px; display: flex; align-items: center; }
+.faq-chip { font-size: 24px; padding: 10px 24px; border-radius: 24px; margin-right: 12px; background: var(--panel); color: var(--muted); white-space: nowrap; }
+.faq-chip.on { background: var(--text); color: var(--bg); font-weight: 700; }
+.faq-chips-hint { font-size: 22px; color: var(--muted); white-space: nowrap; }
+.faq-list { position: absolute; left: 80px; top: 224px; width: 700px; bottom: 120px; padding: 18px; background: #13161c; border-radius: 18px; overflow-y: auto; overflow-x: hidden; }
+.faq-list::-webkit-scrollbar { display: none; }
+.faq-q { font-size: 26px; line-height: 1.3; padding: 16px 22px; border-radius: 12px; margin-bottom: 8px; color: #c3c8d4; }
+.faq-q.focused { transform: none; background: var(--panel2); color: var(--text); box-shadow: inset 0 0 0 3px var(--focus); font-weight: 500; }
+.faq-answer { position: absolute; left: 820px; right: 80px; top: 224px; bottom: 120px; padding: 40px 48px; background: var(--panel); border-radius: 18px; display: flex; flex-direction: column; }
+.faq-answer h2 { flex-shrink: 0; margin: 0 0 22px; font-size: 38px; font-weight: 700; color: #ffffff; line-height: 1.2; }
+.faq-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.faq-body::-webkit-scrollbar { display: none; }
+.faq-short { font-size: 28px; line-height: 1.5; }
+.faq-more { font-size: 26px; line-height: 1.5; color: #b6bccb; margin-top: 22px; }
+.faq-line { margin: 0 0 10px; word-break: break-word; }
+.faq-steps { margin: 0 0 10px; padding-left: 34px; }
+.faq-steps li { margin-bottom: 10px; word-break: break-word; }
+.faq-qr { flex-shrink: 0; display: flex; align-items: center; margin-top: 24px; }
+.faq-qr .qr { display: block; flex-shrink: 0; width: 200px; height: 200px; background: #ffffff; border-radius: 12px; margin-right: 28px; }
+.faq-qr-title { font-size: 26px; font-weight: 500; }
+.faq-qr-sub { font-size: 22px; color: var(--muted); margin-top: 6px; }
+.faq .hints { font-size: 24px; }
+.faq-phone { flex-shrink: 0; margin-top: 24px; font-size: 24px; color: var(--muted); }
+
+/* «Обзор» (TV): kind switch, sort and filters, the TMDB poster grid */
+/* the bar does not wrap: it scrolls sideways to the focused chip (DiscoverGrid) */
+.disc-bar-box { overflow: hidden; margin: 0 -12px; padding: 0 12px; }
+.disc-bar { display: flex; flex-wrap: nowrap; align-items: center; padding-top: 8px; }
+.disc-bar > * { margin-right: 12px; flex-shrink: 0; }
+.disc-bar > *:last-child { margin-right: 0; }
+.disc-kinds { display: flex; padding: 4px; border-radius: 14px; background: var(--panel); }
+.disc-kind { padding: 10px 18px; border-radius: 10px; color: var(--muted); font-size: 24px; font-weight: 500; }
+.disc-kind.active { background: var(--text); color: #0f1115; }
+.disc-kind.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
+.disc-btn { display: flex; align-items: center; padding: 14px 18px; border-radius: 14px; background: var(--panel); color: var(--text); font-size: 24px; white-space: nowrap; }
+.disc-btn.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
+.disc-find-icon { margin-right: 10px; }
+/* «Хочу» sits alone at the right end of the bar, a chip like the kind switch */
+.disc-kind-want { flex-shrink: 0; padding: 14px 20px; border-radius: 14px; background: var(--panel); white-space: nowrap; }
+/* the filters under «Хочу»: still focusable (the remote passes through), but inert */
+.disc-btn.dim { opacity: 0.4; }
+.disc-btn.dim.focused { opacity: 0.7; }
+.disc-sub { display: flex; align-items: center; min-height: 54px; margin: 22px 0 18px; font-size: 26px; color: var(--muted); }
+.disc-results .disc-sub-text { color: var(--text); margin-right: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1300px; }
+.disc-results .button { padding: 10px 24px; font-size: 24px; }
+.disc-grid { display: flex; flex-wrap: wrap; margin-right: -28px; }
+.disc-tile { width: 192px; margin: 0 28px 28px 0; border-radius: 14px; }
+.disc-tile.focused { box-shadow: none; transform: scale(1.06); transform-origin: top center; }
+.disc-tile.focused .disc-poster { box-shadow: 0 0 0 5px var(--focus); }
+.disc-poster { position: relative; width: 192px; height: 288px; border-radius: 14px; overflow: hidden; background: var(--panel2); }
+.disc-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.disc-ph { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; padding: 14px 14px 18px; font-size: 22px; font-weight: 700; line-height: 1.15; color: #fff; overflow: hidden; }
+.disc-ph-0 { background: #2b3a55; }
+.disc-ph-1 { background: #4a2e3a; }
+.disc-ph-2 { background: #2f4a3a; }
+.disc-ph-3 { background: #4a3f2a; }
+.disc-rating { position: absolute; top: 10px; left: 10px; padding: 3px 9px; border-radius: 8px; background: rgba(15, 17, 21, .82); color: var(--accent); font-size: 18px; font-weight: 700; }
+.disc-mark { position: absolute; top: 10px; right: 10px; padding: 3px 9px; border-radius: 8px; background: rgba(15, 17, 21, .82); color: var(--text); font-size: 16px; font-weight: 700; }
+.disc-mark-want { background: var(--accent); color: #0f1115; }
+.disc-title { margin-top: 12px; font-size: 21px; font-weight: normal; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.disc-meta { margin-top: 4px; font-size: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.disc-error { padding: 80px 0; text-align: center; }
+.disc-error-text { max-width: 1200px; margin: 0 auto 36px; font-size: 28px; color: var(--muted); }
+.disc-error .actions { display: flex; justify-content: center; }
+.disc-more { display: flex; align-items: center; padding: 12px 0 24px; color: var(--muted); }
+.disc-more > span { margin-right: 20px; }
+
+/* TV title card («Обзор» → a film or a series): the series hero, season chips and the cast */
+.title-card .tc-hero { min-height: 450px; }
+.tc-original { margin: -6px 0 14px; font-size: 26px; color: var(--muted); }
+.tc-meta { display: flex; flex-wrap: wrap; align-items: center; margin-bottom: 16px; font-size: 26px; color: #c3c8d4; }
+.tc-meta > * { margin-right: 18px; }
+.tc-meta > span + span:before { content: '·'; margin-right: 18px; color: var(--muted); }
+.tc-meta .series-pill-inline { margin: 0 18px 0 0; padding: 5px 14px; font-size: 22px; }
+.tc-meta .series-pill-inline + span:before { content: none; }
+.tc-rating { color: var(--accent); font-weight: 700; }
+.tc-section { margin-bottom: 12px; }
+.tc-h2 { margin: 0 0 4px; font-size: 26px; font-weight: 500; color: var(--muted); }
+.tc-chip-library { background: var(--panel2); }
+.tc-scroll { position: relative; overflow: hidden; margin: 0 -12px; padding: 12px; }
+.tc-cast-row { display: flex; flex-wrap: nowrap; }
+.tc-person { flex-shrink: 0; width: 180px; margin-right: 24px; padding: 10px 0 12px; border-radius: 14px; text-align: center; }
+.tc-person.focused { background: var(--panel); box-shadow: none; transform: none; }
+.tc-photo { display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; margin: 0 auto 10px; border-radius: 48px; overflow: hidden; background: var(--panel2); }
+.tc-person.focused .tc-photo { box-shadow: 0 0 0 4px var(--focus); }
+.tc-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tc-initials { font-size: 34px; font-weight: 700; color: var(--muted); }
+.tc-person-name { font-size: 22px; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.tc-person-role { margin-top: 4px; font-size: 19px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* «В лучшем качестве» (torrent and series screens) */
+.better-backdrop { position: fixed; }
+.better-dialog { width: 1400px; max-width: 1400px; max-height: 960px; padding: 44px 52px; }
+.better-title { font-size: 42px; font-weight: 700; margin-bottom: 14px; }
+.better-current { font-size: 25px; color: var(--muted); margin-bottom: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.better-current b { color: var(--text); font-weight: 500; }
+.better-failure { font-size: 23px; }
+.better-wait, .better-empty { padding: 10px 0 20px; }
+.better-wait .button, .better-empty .button { display: inline-block; margin-top: 18px; }
+.better-list { max-height: 520px; overflow-y: auto; padding: 4px; }
+.better-row { display: flex; align-items: center; padding: 16px 24px; margin-bottom: 12px; border-radius: 14px; background: #11141a; }
+.better-row.focused { transform: none; background: var(--panel2); box-shadow: 0 0 0 4px var(--focus); }
+.better-main { flex: 1; min-width: 0; }
+.better-tags { margin-bottom: 8px; white-space: nowrap; overflow: hidden; }
+.better-tag { display: inline-block; font-size: 19px; font-weight: 700; padding: 3px 12px; margin-right: 10px; border-radius: 8px; background: var(--panel2); color: var(--text); }
+.better-row.focused .better-tag { background: #323846; }
+.better-tag.hot, .better-row.focused .better-tag.hot { background: var(--accent); color: var(--bg); }
+.better-tag.warn, .better-row.focused .better-tag.warn { background: rgba(229, 72, 77, .25); color: #ffb4b6; }
+.better-name { font-size: 23px; color: #c3c8d4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.better-meta { width: 380px; margin-left: 24px; font-size: 22px; color: var(--muted); text-align: right; flex-shrink: 0; }
+.better-busy { font-size: 22px; margin: 6px 0 4px; }
+.better-follow { display: flex; align-items: center; margin-top: 20px; opacity: .55; font-size: 23px; }
+.better-follow-label { margin-right: 14px; }
+.better-follow-note { flex: 1; font-size: 21px; }
+.better-note { font-size: 21px; margin-top: 12px; }
+.better-hints { font-size: 21px; margin-top: 8px; }

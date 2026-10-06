@@ -10,6 +10,7 @@ import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/compone
 import { restoreFocus } from '../ui/focus';
 import { favorites, isFavorite, toggleFavorite } from '../store/favorites';
 import { toast } from '../ui/toast';
+import { tvGlyphs } from '../ui/tvText';
 
 export function PlaylistScreen(p: { url?: string; title?: string }) {
   const c = client.value;
@@ -76,7 +77,7 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
 
   return (
     <FocusGroup focusKey="PLAYLIST" className="screen playlist">
-      <h1>{p.title || t('playlist.title')}</h1>
+      <h1>{tvGlyphs(p.title || t('playlist.title'))}</h1>
       {!p.url && (
         <div class="row">
           <TextInput focusKey="pl-url" value={url} onChange={setUrl} placeholder={t('playlist.urlPlaceholder')} type="url" onSubmit={() => load(url)} />
@@ -98,7 +99,7 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
           <h2>{t('playlist.favorites')}</h2>
           {favorites.value.map((f) => (
             <Focusable key={f.url} focusKey={'fav-' + f.url} className="list-item" onPress={() => navigate({ name: 'playlist', url: f.url, title: f.title })}>
-              <div class="title">{f.title}</div>
+              <div class="title">{tvGlyphs(f.title)}</div>
               <div class="meta">{f.url}</div>
             </Focusable>
           ))}
@@ -125,7 +126,7 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
               <div key={i}>
                 {e.group && (i === 0 || entries[i - 1].group !== e.group) && <h2>{e.group}</h2>}
                 <Focusable focusKey={'pl-' + i} className="list-item" onPress={() => e.isPlaylist ? navigate({ name: 'playlist', url: e.url, title: e.title }) : navigate({ name: 'player', queue, index: playableIndex })}>
-                  <div class="title">{e.title}</div>
+                  <div class="title">{tvGlyphs(e.title)}</div>
                   {e.duration > 0 && <div class="meta">{formatDuration(e.duration)}</div>}
                 </Focusable>
               </div>

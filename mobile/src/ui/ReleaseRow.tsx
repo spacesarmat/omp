@@ -2,30 +2,11 @@
 // quality chips, the full tracker title (one muted line, the whole of it on tap: people pick releases by it) and a
 // small poster that is looked up only once the row is on screen.
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { libraryTitle, posterColor, type LibraryTitle } from '../../../src/lib/libraryView';
-import { displayBadge, parseReleaseInfo } from '../../../src/lib/releaseInfo';
-import { parseRelease } from '../../../src/sources/filters';
-import { t } from '../../../src/i18n';
+import { posterColor } from '../../../src/lib/libraryView';
+import { releaseChips, releaseTitle } from '../../../src/sources/releaseRow';
 import { posterKey, requestPoster } from './resultPosters';
 
-/** «Звездный путь: Странные новые миры» + «1–4 сезоны · серии 1–40 из 40» from a tracker title. */
-export function releaseTitle(raw: string): LibraryTitle {
-  return libraryTitle({ hash: '', title: raw || '' });
-}
-
-/** Quality chips: resolution, HDR, source and voice-over, e.g. ['4K', 'HDR', 'WEB-DL', 'Дубляж']. */
-export function releaseChips(raw: string): string[] {
-  const info = parseReleaseInfo(raw || '');
-  const out: string[] = [];
-  if (info.resolution) out.push(displayBadge(info.resolution));
-  if (info.hdr) out.push(info.hdr);
-  if (info.source) out.push(info.source);
-  const r = parseRelease(raw || '');
-  if (r.dub) out.push(t('filters.dubChip'));
-  else if (r.mvo) out.push(t('filters.mvoChip'));
-  else if (r.original) out.push(t('filters.originalChip'));
-  return out;
-}
+export { releaseChips, releaseTitle };
 
 /** The short title with its « · meta» span. */
 export function ReleaseName({ raw, class: cls = 'm-result-title' }: { raw: string; class?: string }) {

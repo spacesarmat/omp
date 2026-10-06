@@ -24,6 +24,9 @@ describe('changelogData', () => {
     // the phone-only 0.17.0 betas: the calendar is on the phone only
     expect(all(phone)).toContain('«Новое» → «Календарь»');
     expect(all(tv)).not.toContain('«Новое» → «Календарь»');
+    // the 0.18.0 betas: TV screens only, besides the phone's «Поиск для телевизора»
+    expect(tv.map((e) => e.version)).toContain('0.18.0-beta.1');
+    expect(phone.filter((e) => e.version === '0.18.0-beta.3')[0].items).toHaveLength(1);
     const raw = CHANGELOG.filter((e) => e.version === '0.17.0-beta.6')[0].items;
     expect(raw.some((i) => /^\[phone\] /.test(i))).toBe(true);
   });
@@ -32,7 +35,9 @@ describe('changelogData', () => {
     applyLanguageSetting('en');
     setChangelogPlatform('phone');
     const list = getChangelog();
-    expect(list.map((e) => e.version)).toEqual(CHANGELOG.map((e) => e.version));
+    // a version with TV-only bullets alone (the 0.18.0 betas) is not on the phone
+    expect(list.map((e) => e.version)).toEqual(forPlatform(CHANGELOG, 'phone').map((e) => e.version));
+    expect(list.map((e) => e.version)).not.toContain('0.18.0-beta.2');
     const en = CHANGELOG_EN.map((e) => e.version);
     expect(en.length).toBeGreaterThanOrEqual(6);
     list.forEach((e) => {
@@ -40,8 +45,9 @@ describe('changelogData', () => {
       if (en.indexOf(e.version) >= 0) expect(e.items).not.toEqual(ru.items);
       else expect(e.items).toEqual(ru.items);
     });
-    const beta = list.filter((e) => e.version === '0.17.0-beta.3')[0];
-    expect(beta.items.join(' ')).not.toMatch(/[А-Яа-яЁё]/);
+    const release = list.filter((e) => e.version === '0.17.0')[0];
+    expect(release.items.join(' ')).not.toMatch(/[А-Яа-яЁё]/);
+    expect(CHANGELOG_EN.map((e) => e.items.join(' ')).join(' ')).not.toMatch(/[А-Яа-яЁё]/);
   });
 
   it('mergeChangelog falls back to the Russian entry for a missing version', () => {

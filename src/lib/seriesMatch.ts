@@ -2,12 +2,12 @@
 // poster query of the title, the year preferred) and kept in memory per series key and language, so a revisit is instant.
 // A failed lookup (offline, no key) is not kept; a search with no show is.
 import { signal } from '@preact/signals';
-import { loadJson, saveJson, isObject } from '../../../src/store/storage';
-import { lang } from '../../../src/i18n';
-import { phoneCatalog } from '../catalog/phoneCatalog';
+import { loadJson, saveJson, isObject } from '../store/storage';
+import { lang } from '../i18n';
+import { activeCatalog } from '../catalog/activeCatalog';
 import { findShow, pickShow as pick } from './tmdbShow';
-import { displayTitle, yearOf } from '../../../src/lib/torrentName';
-import type { CatalogCard, CatalogTitle } from '../../../src/catalog/tmdb';
+import { displayTitle, yearOf } from './torrentName';
+import type { CatalogCard, CatalogTitle } from '../catalog/tmdb';
 import type { SeriesGroup } from './seriesGroups';
 
 const matches = new Map<string, CatalogCard | null>();
@@ -82,7 +82,7 @@ export function matchSeries(g: SeriesGroup, opts?: { force?: boolean }): Promise
   // `force` (pull to refresh): the show found before, its card fetched again
   if (hit !== undefined && !(force && hit)) return Promise.resolve(hit);
   const known = savedOf(key);
-  return phoneCatalog().then((c) => {
+  return activeCatalog().then((c) => {
     if (known && known.id === 0) {
       matches.set(key, null);
       return null;

@@ -17,7 +17,7 @@ interface FocusableProps {
   role?: 'button' | 'group' | 'radio';
   /** aria-checked of a radio. */
   ariaChecked?: boolean;
-  children?: ComponentChildren;
+  children?: ComponentChildren | ((focused: boolean) => ComponentChildren);
 }
 
 export function Focusable(p: FocusableProps) {
@@ -43,7 +43,7 @@ export function Focusable(p: FocusableProps) {
       onMouseEnter={() => { if (!p.disabled) focusSelf(); }}
       onClick={() => { if (!p.disabled && p.onPress) p.onPress(); }}
     >
-      {p.children}
+      {typeof p.children === 'function' ? (p.children as (f: boolean) => ComponentChildren)(focused) : p.children}
     </div>
   );
 }
@@ -83,11 +83,13 @@ export function Button(p: { label: string; icon?: IconName; onPress: () => void;
   );
 }
 
-export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void }) {
+export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void; expand?: boolean }) {
   return (
-    <Focusable focusKey={p.focusKey} className="icon-button" onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused}>
-      <Icon name={p.icon} size={28} />
-      <span class="icon-button-label">{p.label}</span>
+    <Focusable focusKey={p.focusKey} className="icon-button" onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} ariaLabel={p.label} role="button">
+      {(focused: boolean) => [
+        <Icon key="i" name={p.icon} size={28} />,
+        p.expand && focused ? <span key="l" class="icon-btn-label">{p.label}</span> : null,
+      ]}
     </Focusable>
   );
 }

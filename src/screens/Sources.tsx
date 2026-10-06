@@ -29,6 +29,7 @@ import type { FlareStatus } from '../sources/flaresolverr';
 import type { LanScan } from '../sources/indexerDiscovery';
 import type { Source } from '../sources/types';
 import { t } from '../i18n';
+import { SourceSwitch } from '../ui/SourceSwitch';
 
 /** Names of the TorrServer sources (as on the phone). */
 const tsLabels = (): { [id: string]: string } => ({
@@ -50,13 +51,7 @@ function label(s: Source): string {
   return tsLabels()[s.id] || s.name;
 }
 
-function Switch(p: { on: boolean }) {
-  return (
-    <span class={'src-switch' + (p.on ? ' on' : '')}>
-      <span class="src-switch-knob" />
-    </span>
-  );
-}
+export { SourceSwitch };
 
 function Note(p: { note: HealthLine | null }) {
   if (!p.note) return null;
@@ -425,7 +420,7 @@ export function SourcesScreen({
                 {label(s)}
                 <Note note={healthText(getHealth(s.id))} />
               </span>
-              <Switch on={isSourceOn(s)} />
+              <SourceSwitch on={isSourceOn(s)} />
             </Focusable>
           ))}
           {torznabHiddenText(!ts.some((s) => s.id === 'ts-torznab')) && <div class="src-empty">{torznabHiddenText(true)}</div>}

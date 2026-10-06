@@ -27,6 +27,7 @@ import {
 } from '../src/tv/tvClient';
 import { tvs, saveTv, reloadTvs, setActiveTv } from '../src/tv/tvStore';
 import { native } from '../src/platform/native';
+import { setTvSearch, initPhoneRpc, rpcInfo } from '../src/tv/phoneRpc';
 
 const TV = { ip: '192.168.1.5', name: 'LG' };
 
@@ -383,6 +384,40 @@ describe('tvClient commands', () => {
     await flush();
     const req = fake.sent[fake.sent.length - 1];
     expect(req.payload).toEqual({ id: 'com.spacesarmat.torrplayer', params: { torrent: 'h', lang: 'en' } });
+    fake.emit({ type: 'response', id: req.id, payload: { returnValue: true } });
+    await p;
+  });
+
+  it('LG launch params carry the phone search address while the TV search is on', async () => {
+    const info = { running: true, ip: '192.168.1.20', port: 8097, token: 'c'.repeat(32), name: 'Pixel' };
+    vi.spyOn(native, 'rpcSetEnabled').mockResolvedValue(info);
+    await setTvSearch(true);
+    await connected(fake);
+    applyLanguageSetting('en');
+    let p = launchOnTv({ torrent: 'h' });
+    await flush();
+    let req = fake.sent[fake.sent.length - 1];
+    expect(req.payload).toEqual({
+      id: 'com.spacesarmat.torrplayer',
+      params: { torrent: 'h', lang: 'en', phone: { url: 'http://192.168.1.20:8097', token: 'c'.repeat(32), name: 'Pixel' } },
+    });
+    fake.emit({ type: 'response', id: req.id, payload: { returnValue: true } });
+    await p;
+    // the launch marked this address as handed over: the same one read again is not re-sent
+    const reattach = vi.fn(() => Promise.resolve());
+    initPhoneRpc({ lgConnected: () => true, reattach });
+    rpcInfo.value = { ...info };
+    await flush();
+    expect(reattach).not.toHaveBeenCalled();
+    rpcInfo.value = { ...info, token: 'e'.repeat(32) };
+    await flush();
+    // a try and one retry (this stub never launches, so the address stays unsent), then it stops
+    expect(reattach).toHaveBeenCalledTimes(2);
+    await setTvSearch(false);
+    p = launchOnTv({ report: 'http://192.168.1.20:8098/x' });
+    await flush();
+    req = fake.sent[fake.sent.length - 1];
+    expect(req.payload).toEqual({ id: 'com.spacesarmat.torrplayer', params: { report: 'http://192.168.1.20:8098/x', lang: 'en' } });
     fake.emit({ type: 'response', id: req.id, payload: { returnValue: true } });
     await p;
   });

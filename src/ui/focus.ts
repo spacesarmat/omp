@@ -2,11 +2,33 @@ import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navi
 import { takeSavedFocus, screenFocusables, currentRoute } from './nav';
 import type { SavedFocus } from './nav';
 
+/** Height of the hint band pinned to the bottom of the screen; a focused element must end above it. */
+export const HINTS_HEIGHT = 96;
+
 export function scrollIntoViewSafe(el: Element | null): void {
   if (!el) return;
   const anyEl = el as any;
   if (typeof anyEl.scrollIntoViewIfNeeded === 'function') anyEl.scrollIntoViewIfNeeded(false);
   else el.scrollIntoView(false);
+  // the hint band covers the bottom of the scrolling screen: lift the element clear of it
+  let box: HTMLElement | null = el.parentElement;
+  while (box && !(box.classList && box.classList.contains('screen'))) box = box.parentElement;
+  if (!box || !box.querySelector('.hints')) return;
+  const over = el.getBoundingClientRect().bottom - (box.getBoundingClientRect().bottom - HINTS_HEIGHT);
+  if (over > 0) box.scrollTop += over;
+}
+
+/**
+ * The scroll offset of a container that shows a whole item (start, size along the axis) with `pad` around it, or the
+ * current offset when it is already fully visible; an item at the start (within `pad`) gives 0.
+ */
+export function scrollToShow(scroll: number, view: number, start: number, size: number, pad: number): number {
+  const from = start - pad;
+  if (from <= 0) return 0;
+  if (from < scroll) return from;
+  const end = start + size + pad;
+  if (end > scroll + view) return Math.max(0, end - view);
+  return scroll;
 }
 
 /** How long a screen whose rows arrive later still gets the remembered focus. */

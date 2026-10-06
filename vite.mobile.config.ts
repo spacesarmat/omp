@@ -20,7 +20,8 @@ export default defineConfig({
     target: 'chrome90',
     rollupOptions: {
       // monitor.html: the hidden background page of the monitoring (android/.../monitor/MonitorHost.kt)
-      input: { main: resolve('mobile/index.html'), monitor: resolve('mobile/monitor.html') },
+      // rpc.html: the hidden page of the TV search server (android/.../rpc/RpcPageHost.kt)
+      input: { main: resolve('mobile/index.html'), monitor: resolve('mobile/monitor.html'), rpc: resolve('mobile/rpc.html') },
     },
   },
 });
