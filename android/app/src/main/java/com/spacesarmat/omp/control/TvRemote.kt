@@ -142,7 +142,7 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         } catch (_: RuntimeException) {
             null
         }
-        return n?.trim()?.ifEmpty { null } ?: Build.MODEL.orEmpty().ifEmpty { "Android TV" }
+        return TvName.choose(n, Build.MANUFACTURER, Build.BRAND, Build.MODEL)
     }
 
     private fun version(): String = try {
