@@ -174,6 +174,42 @@ describe('startTvSearch', () => {
     expect(count('searchPoll')).toBe(1);
   });
 
+  it('cancel after done keeps the phone search: no searchCancel, rows still resolve', async () => {
+    useScript({
+      search: [{ handle: 'h6', sourceIds: ['rutracker'] }],
+      searchPoll: [{ rev: 2, done: true, pending: [], answered: ['rutracker'], failed: [], results: [phoneRow('1', 'Dune 2021')] }],
+      searchCancel: [{}],
+      resolve: [{ link: 'magnet:?xt=urn:btih:' + HASH }],
+    });
+    const start = await startTvSearch('Dune');
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    await start.handle.done;
+    start.handle.cancel();
+    await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+    expect(count('searchCancel')).toBe(0);
+    expect(count('searchPoll')).toBe(1);
+    const row = start.handle.results()[0];
+    await expect(resolveTvResult(row)).resolves.toBe('magnet:?xt=urn:btih:' + HASH);
+    expect(calls.filter((c) => c.method === 'resolve').map((c) => c.params)).toEqual([{ handle: 'h6', key: '1' }]);
+  });
+
+  it('after the fallback a release found by both keeps only the TorrServer row', async () => {
+    useScript({
+      search: [{ handle: 'h7', sourceIds: ['rutracker', 'nnmclub'] }],
+      searchPoll: [
+        { rev: 2, done: false, pending: ['nnmclub'], answered: ['rutracker'], failed: [], results: [{ ...phoneRow('1', 'Dune 2021 phone'), Hash: HASH.toUpperCase() }, phoneRow('2', 'Dune 2021')] },
+        new Error('network'),
+        new Error('network'),
+      ],
+    });
+    const start = await startTvSearch('Dune');
+    await vi.advanceTimersByTimeAsync(POLL_MS * 3 + 10);
+    await start.handle.done;
+    const titles = start.handle.results().map((r) => r.Title).sort();
+    expect(titles).toEqual(['Dune 2021', 'Dune 2021 TS']);
+    expect(start.handle.results().filter((r) => r.Title === 'Dune 2021 TS')[0].via).toBeUndefined();
+  });
+
   it('phone source failures pass through with their codes', async () => {
     useScript({
       search: [{ handle: 'h5', sourceIds: ['rutracker', 'kinozal'] }],

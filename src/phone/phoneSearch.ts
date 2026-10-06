@@ -24,6 +24,11 @@ export interface TvSearchHandle {
   failed(): string[];
   failures(): RpcFailure[];
   done: Promise<void>;
+  /**
+   * Stops the search. While it still runs, the phone is told to drop it (`searchCancel`) and its rows can no longer
+   * be resolved. Once it has finished on its own, only the local state stops: the phone keeps the search (until its
+   * TTL or its limit of live searches), so the rows stay resolvable. Safe to call on unmount.
+   */
   cancel(): void;
   /** Called after every change; returns unsubscribe. */
   subscribe(cb: () => void): () => void;
@@ -254,7 +259,16 @@ function phoneHandle(query: string, started: SearchStarted): TvSearchHandle {
   return {
     by: 'phone',
     sourceIds: sourceIds,
-    results: () => (ts ? rows.concat(ts.results()) : rows.slice()),
+    results: () => {
+      if (!ts) return rows.slice();
+      // a release found by both: keep the TorrServer row (it has a magnet and resolves on the TV)
+      const theirs = ts.results();
+      const seen: { [hash: string]: boolean } = {};
+      theirs.forEach((r) => {
+        if (r.hash) seen[r.hash] = true;
+      });
+      return rows.filter((r) => !r.hash || !seen[r.hash]).concat(theirs);
+    },
     pending: () => (ts ? pending.concat(ts.pending()) : pending.slice()),
     answered: () => (ts ? answered.concat(ts.answered()) : answered.slice()),
     failed: () => (ts ? failed.concat(ts.failed()) : failed.slice()),
@@ -265,10 +279,13 @@ function phoneHandle(query: string, started: SearchStarted): TvSearchHandle {
       cancelled = true;
       if (timer !== null) clearTimeout(timer);
       timer = null;
-      phoneRpc('searchCancel', { handle: id }).then(
-        () => undefined,
-        () => undefined,
-      );
+      // a search that ended on its own (done, expired, or the fallback) stays on the phone: its rows still resolve
+      if (!over) {
+        phoneRpc('searchCancel', { handle: id }).then(
+          () => undefined,
+          () => undefined,
+        );
+      }
       if (ts) ts.cancel();
       over = true;
       finish();

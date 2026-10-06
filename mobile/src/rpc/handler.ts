@@ -10,8 +10,6 @@ import type { SearchHandle } from '../../../src/sources/search';
 import type { Source, SourceContext, SourceResult } from '../../../src/sources/types';
 import type { RpcFailure, RpcPoll, RpcResult, RpcSource, RpcSourceState } from '../../../src/phone/rpcTypes';
 
-export type { RpcSource, RpcSourceState, RpcResult, RpcFailure, RpcPoll } from '../../../src/phone/rpcTypes';
-
 export interface RpcDeps {
   sources(): Source[];
   ctx(): SourceContext;
