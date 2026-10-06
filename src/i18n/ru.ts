@@ -1382,6 +1382,8 @@ export const ru = {
     badLink: 'Вставьте magnet-ссылку или хеш из 40 символов',
     magnetLabel: 'Magnet-ссылка или хеш',
     byMagnet: 'Добавить по magnet-ссылке',
+    openSourceSettings: 'Открыть настройки {name}',
+    fixHint: 'Войдите на сайте или включите обход проверки — это на его странице.',
     sourcesAll: 'Все источники · {n}',
     sourcesSome: 'Источники · {n}',
     magnetHint: 'Ссылки magnet из браузера открываются в OMP сами — через «Поделиться».',
