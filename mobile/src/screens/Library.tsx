@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { contentsText } from '../lib/releaseContents';
-import { t, tp } from '../../../src/i18n';
+import { fmtSize, t, tp } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
 import { Poster, qualityBadge } from '../ui/Poster';
 import { Logo } from '../../../src/ui/Logo';
@@ -22,7 +22,6 @@ import { settings, updateSettings } from '../../../src/store/settings';
 import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
 import { libraryTabs, nextView, BY_SIZE, viewLabel, episodeLine, positionLabel, remainingLabel, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
-import { formatBytes } from '../../../src/lib/format';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
@@ -692,7 +691,7 @@ export function Library() {
                             <span class="m-card-title"><TileName tor={it.named} g={it} /></span>
                             <span class="m-muted m-small m-vrow-meta">
                               <span class="m-tile-meta">{tileMeta(it.named, it)}</span>
-                              <span>{formatBytes(groupSize(it))}</span>
+                              <span>{fmtSize(groupSize(it))}</span>
                               <SeriesTileBadge group={it} />
                             </span>
                           </span>
@@ -714,7 +713,7 @@ export function Library() {
                           <span class="m-card-title"><TileName tor={t} /></span>
                           <span class="m-muted m-small m-vrow-meta">
                             {meta && <span class="m-tile-meta">{meta}</span>}
-                            <span>{formatBytes(t.torrent_size || 0)}</span>
+                            <span>{fmtSize(t.torrent_size || 0)}</span>
                             {q && <span class="m-badge-inline">{q}</span>}
                             {eps && <span>{eps}</span>}
                             <SeriesTileBadge tor={t} />
@@ -740,7 +739,7 @@ export function Library() {
                         <span class="m-crow-title"><TileName tor={tor} g={g} /></span>
                         {meta && <span class="m-muted m-small m-crow-meta m-tile-meta">{meta}</span>}
                         {it.kind === 'series' ? <SeriesTileBadge group={it} /> : <SeriesTileBadge tor={it.tor} />}
-                        <span class="m-muted m-small m-crow-size">{formatBytes(it.kind === 'series' ? groupSize(it) : it.tor.torrent_size || 0)}</span>
+                        <span class="m-muted m-small m-crow-size">{fmtSize(it.kind === 'series' ? groupSize(it) : it.tor.torrent_size || 0)}</span>
                       </button>
                       {moreBtn(it)}
                     </div>
@@ -762,7 +761,7 @@ export function Library() {
                       {/* a series card has its count on the poster badge */}
                       {meta && <span class="m-muted m-card-meta m-tile-meta">{meta}</span>}
                       {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
-                      {view === 'large' && <span class="m-muted m-small">{formatBytes(g ? groupSize(g) : tor.torrent_size || 0)}</span>}
+                      {view === 'large' && <span class="m-muted m-small">{fmtSize(g ? groupSize(g) : tor.torrent_size || 0)}</span>}
                     </button>
                   );
                 })}

@@ -108,7 +108,7 @@ describe('Library', () => {
     expect(cards.length).toBe(3);
     expect(cards[0].querySelector('.m-card-title')!.textContent).toBe('Starbound Frontier');
     expect(cards[0].querySelector('.m-card-meta')!.textContent).toBe('2 сезон');
-    expect(cards[0].textContent).toContain('2.0 GB');
+    expect(cards[0].textContent).toContain('2,0 ГБ');
     expect(cards[1].querySelector('.m-badge')!.textContent).toBe('4K');
   });
 
@@ -571,7 +571,7 @@ describe('Library', () => {
     const rows = el.querySelectorAll('.m-vrow');
     expect(rows.length).toBe(3);
     expect(rows[0].querySelector('.m-poster')).toBeTruthy();
-    expect(rows[0].textContent).toContain('2.0 GB');
+    expect(rows[0].textContent).toContain('2,0 ГБ');
     expect(rows[0].querySelector('.m-badge-inline')!.textContent).toBe('1080p');
     expect(rows[0].textContent).toContain('2 серии');
     act(() => (rows[1] as HTMLElement).click());
@@ -581,7 +581,7 @@ describe('Library', () => {
     const crows = el.querySelectorAll('.m-crow');
     expect(crows.length).toBe(3);
     expect(crows[0].querySelector('.m-poster')).toBeNull();
-    expect(crows[0].querySelector('.m-crow-size')!.textContent).toBe('2.0 GB');
+    expect(crows[0].querySelector('.m-crow-size')!.textContent).toBe('2,0 ГБ');
     act(() => chip().click());
     expect(settings.value.libraryView).toBe('large');
     act(() => tab('История').click());

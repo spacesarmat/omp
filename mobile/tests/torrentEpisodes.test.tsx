@@ -13,7 +13,6 @@ import { torrents } from '../../src/store/library';
 import { reloadProgress, serverViewed } from '../../src/store/progress';
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { Torrent as T } from '../../src/api/types';
-import { formatBytes } from '../../src/lib/format';
 
 const files = (s: number, n: number) =>
   Array.from({ length: n }, (_, i) => ({
@@ -110,7 +109,7 @@ describe('Torrent: TMDB episode names', () => {
     expect(mainLine(0)).toContain('45 мин');
     // the code and the size, never the release file name
     const sub = rows()[0].querySelector('.m-ep-sub')!.textContent!;
-    expect(sub).toBe('S02E01 · ' + formatBytes(1900000000));
+    expect(sub).toBe('S02E01 · 1,8 ГБ');
     expect(sub).not.toContain('Ultradox');
     expect(rows()[0].querySelector('.m-bar-track')).toBeTruthy();
   });

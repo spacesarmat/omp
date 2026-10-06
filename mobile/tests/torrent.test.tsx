@@ -87,7 +87,7 @@ describe('Torrent', () => {
     mount();
     await flush();
     expect(el.querySelector('.m-thead-title')!.textContent).toBe('Starbound Frontier');
-    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 4 серии · 18.0 GB · 12 пиров');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 4 серии · 18,0 ГБ · 12 пиров');
     const rows = el.querySelectorAll('.m-ep');
     expect(rows.length).toBe(4);
     expect(rows[2].textContent).toContain('S02E03');

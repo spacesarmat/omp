@@ -332,7 +332,7 @@ describe('Series screen', () => {
     act(() => (el.querySelectorAll('.m-chip')[0] as HTMLElement).click());
     const rows = Array.from(el.querySelectorAll('.m-series-row'));
     expect(rows.map((r) => r.getAttribute('data-hash'))).toEqual(['s1']);
-    expect(rows[0].textContent).toContain('4.0');
+    expect(rows[0].textContent).toContain('4,0 ГБ');
     act(() => (rows[0].querySelector('.m-hrow-main') as HTMLElement).click());
     expect(currentRoute.value).toEqual({ name: 'torrent', hash: 's1' });
   });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { contentsTextOf } from '../lib/releaseContents';
-import { t, tp, fmtDuration } from '../../../src/i18n';
+import { t, tp, fmtDuration, fmtSize } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
@@ -23,7 +23,7 @@ import type { Torrent as TorrentT } from '../../../src/api/types';
 import { sharedRatio, sharedResume } from '../lib/sharedProgress';
 import { errorMessage } from '../../../src/api/http';
 import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../../../src/lib/episodes';
-import { formatBytes, formatDuration } from '../../../src/lib/format';
+import { formatDuration } from '../../../src/lib/format';
 import { useSkip, firstPlayableId } from '../../../src/lib/useSkip';
 import { parseMark, skipStatus } from '../../../src/lib/skipMarks';
 import type { SkipPrefs } from '../../../src/lib/journal';
@@ -115,7 +115,7 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
   );
 
   const code = fileCode(file);
-  const head = [code, fileTitle(file), formatBytes(file.length)].filter(Boolean);
+  const head = [code, fileTitle(file), fmtSize(file.length)].filter(Boolean);
 
   const onTv = async () => {
     if (!tv) {
@@ -493,7 +493,7 @@ export function Torrent({ hash }: { hash: string }) {
   const meta = [
     season !== null ? t('library.season', { n: season }) : '',
     hasEpisodes ? contentsTextOf(allFiles) : '',
-    tor.torrent_size ? formatBytes(tor.torrent_size) : '',
+    tor.torrent_size ? fmtSize(tor.torrent_size) : '',
     peers ? tp('torrent.screen.peerCount', peers) : '',
   ].filter(Boolean);
 
@@ -702,7 +702,7 @@ export function Torrent({ hash }: { hash: string }) {
                       <span class="m-bar-fill" style={{ width: pct + '%' }} />
                     </span>
                   </span>
-                  <span class="m-muted m-small">{formatBytes(f.length)}</span>
+                  <span class="m-muted m-small">{fmtSize(f.length)}</span>
                 </button>
               );
             }
@@ -710,7 +710,7 @@ export function Torrent({ hash }: { hash: string }) {
             const ep = pe.season !== null && tmdb.eps[pe.season] ? tmdb.eps[pe.season][pe.episode] : undefined;
             const real = ep ? realEpisodeName(ep.title) : '';
             const name = real ? pe.episode + '. ' + real : t('library.episode', { n: pe.episode });
-            const sub = [fileCode(f), formatBytes(f.length)].filter(Boolean).join(' · ');
+            const sub = [fileCode(f), fmtSize(f.length)].filter(Boolean).join(' · ');
             return (
               <button type="button" class="m-ep m-ep-named" key={f.id} onClick={() => setSheet(f)}>
                 <span class="m-ep-text">
