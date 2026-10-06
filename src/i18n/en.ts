@@ -1097,6 +1097,8 @@ export const en: EnDict<typeof ru> = {
       followPhone: 'in OMP on the phone',
       note: '"Replace" removes the old release; watch history and positions move to the new one',
       which: 'Which release to upgrade?',
+      adding: 'Adding the release…',
+      addingWait: 'The release is being added and cannot be stopped. The window will close by itself.',
       hintOk: 'OK — pick a release',
       hintBack: 'Back — close',
     },

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
-import { init } from '@noriginmedia/norigin-spatial-navigation';
+import { init, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 
 vi.mock('../../src/monitor/replace', async (orig) => {
   const actual = await orig<typeof import('../../src/monitor/replace')>();
@@ -9,7 +9,7 @@ vi.mock('../../src/monitor/replace', async (orig) => {
 });
 vi.mock('../../src/monitor/upgrade', async (orig) => {
   const actual = await orig<typeof import('../../src/monitor/upgrade')>();
-  return { ...actual, findUpgrades: vi.fn(actual.findUpgrades) };
+  return { ...actual, findUpgrades: vi.fn(actual.findUpgrades), carryProgress: vi.fn(actual.carryProgress) };
 });
 
 import { TorrentScreen } from '../../src/screens/Torrent';
@@ -23,7 +23,7 @@ import { torrents } from '../../src/store/library';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { setCatalogProvider } from '../../src/catalog/activeCatalog';
 import { replaceWithResult } from '../../src/monitor/replace';
-import { findUpgrades } from '../../src/monitor/upgrade';
+import { findUpgrades, carryProgress } from '../../src/monitor/upgrade';
 import { seriesKey } from '../../src/lib/seriesGroups';
 import type { SearchResult, Torrent } from '../../src/api/types';
 
@@ -101,6 +101,7 @@ afterEach(() => {
   setCatalogProvider(null);
   vi.restoreAllMocks();
   vi.mocked(replaceWithResult).mockReset();
+  vi.mocked(carryProgress).mockClear();
 });
 
 async function openOnTorrent() {
@@ -259,5 +260,104 @@ describe('TV «В лучшем качестве»', () => {
     expect(replaceWithResult).toHaveBeenCalledTimes(1);
     expect(currentRoute.value).toEqual({ name: 'series', key });
     expect(host.querySelector('.better-dialog')).toBeNull();
+  });
+  it('after a replace the focus goes to Play, not to the gone «Найти в лучшем качестве»', async () => {
+    vi.mocked(replaceWithResult).mockResolvedValue({ ok: true, hash: NEW });
+    mount(h(TorrentScreen, { hash: H }));
+    await flush();
+    // the remote opens the dialog from the focused button
+    act(() => setFocus('torrent-better'));
+    await click(btn('Найти в лучшем качестве'));
+    await flush();
+    await tick();
+    await click(rows()[0]);
+    await flush();
+    await click(btn('Заменить'));
+    await flush();
+    await tick();
+    await flush();
+    expect(host.querySelector('.better-dialog')).toBeNull();
+    expect(getCurrentFocusKey()).toBe('torrent-play');
+  });
+
+  it('a replace that ends after the dialog is gone does not touch the route', async () => {
+    let finish: (v: any) => void = () => {};
+    vi.mocked(replaceWithResult).mockImplementation(() => new Promise((r) => { finish = r; }));
+    await openOnTorrent();
+    await click(rows()[0]);
+    await flush();
+    await click(btn('Заменить'));
+    await flush();
+    expect(host.querySelector('.better-busy')).toBeTruthy();
+    // the screen goes away (e.g. the server switched) while the replace still runs
+    act(() => render(null, host));
+    routeStack.value = [{ name: 'library' }, { name: 'settings' } as any];
+    finish({ ok: true, hash: NEW });
+    await flush();
+    await tick();
+    await flush();
+    expect(currentRoute.value).toEqual({ name: 'settings' });
+  });
+
+  it('a failing position carry-over does not break the replace', async () => {
+    vi.mocked(replaceWithResult).mockResolvedValue({ ok: true, hash: NEW });
+    vi.mocked(carryProgress).mockImplementationOnce(() => { throw new Error('storage full'); });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await openOnTorrent();
+    await click(rows()[0]);
+    await flush();
+    await click(btn('Заменить'));
+    await flush();
+    await tick();
+    await flush();
+    expect(carryProgress).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalled();
+    expect(currentRoute.value).toEqual({ name: 'torrent', hash: NEW });
+    expect(host.querySelector('.better-dialog')).toBeNull();
+  });
+
+  it('«Добавить рядом» shows that it is busy, and Back during it says to wait', async () => {
+    let done: (v: any) => void = () => {};
+    vi.spyOn(TorrServerClient.prototype, 'add').mockImplementation(() => new Promise((r) => { done = r; }));
+    await openOnTorrent();
+    await click(rows()[1]);
+    await flush();
+    await click(btn('Добавить рядом'));
+    await flush();
+    expect(host.querySelector('.better-busy')!.textContent).toBe('Добавляем раздачу…');
+    await back();
+    await flush();
+    expect(host.querySelector('.better-dialog')).toBeTruthy();
+    expect(host.querySelector('.better-busy')!.textContent).toContain('остановить нельзя');
+    done({ hash: NEW, title: 'Dune 2160p' });
+    await flush();
+    expect(host.querySelector('.better-dialog')).toBeNull();
+    expect(currentRoute.value).toEqual({ name: 'torrent', hash: H });
+  });
+
+  it('on the series screen the «which release» choice shows the quality', async () => {
+    const mk = (hash: string, q: string, size: number): Torrent => ({
+      hash: hash,
+      title: 'Тёмная материя / Dark Matter / Сезон: 1 / Серии: 1-2 из 9 (2024) ' + q,
+      category: 'tv',
+      stat: 3,
+      timestamp: 1,
+      torrent_size: size,
+      file_stats: [1, 2].map((e) => ({ id: e, path: 'Dark.Matter.S01E0' + e + '.mkv', length: 2e9 })),
+    });
+    const a = mk(H, 'WEB-DL 720p', 4e9);
+    const b = mk('f'.repeat(40), 'WEB-DL 1080p', 4e9);
+    torrents.value = [a, b];
+    const key = seriesKey(a);
+    expect(seriesKey(b)).toBe(key);
+    routeStack.value = [{ name: 'library' }, { name: 'series', key }];
+    mount(h(SeriesScreen, { seriesKey: key }));
+    await flush();
+    await click(btn('Найти в лучшем качестве'));
+    await flush();
+    const labels = all('.dialog-option').map((o) => (o.textContent || '').trim());
+    expect(labels.length).toBe(2);
+    expect(labels.some((l) => l.indexOf('720p') >= 0)).toBe(true);
+    expect(labels.some((l) => l.indexOf('1080p') >= 0)).toBe(true);
   });
 });

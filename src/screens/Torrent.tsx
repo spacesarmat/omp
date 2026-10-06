@@ -263,6 +263,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
             replaceRoute({ name: 'torrent', hash: h });
           }}
           onClose={() => setBetterOpen(false)}
+          focusAfterReplace={['torrent-play']}
         />
       )}
       {loadingInfo && <Spinner text={t('torrent.gettingFiles')} />}

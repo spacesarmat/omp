@@ -56,6 +56,8 @@ export function BetterDialog(p: {
   /** After a successful replace, with the new torrent's hash; the parent closes the dialog. */
   onReplaced: (hash: string) => void;
   onClose: () => void;
+  /** Focus keys tried in order after a replace (the Play button), instead of going back to the opening button. */
+  focusAfterReplace?: string[];
 }) {
   const title = displayTitle(p.torrent);
   const lib = upgradeTarget(p.torrent, p.files);
@@ -64,12 +66,17 @@ export function BetterDialog(p: {
   const [failure, setFailure] = useState('');
   const [running, setRunning] = useState<ReplaceAbort | null>(null);
   const [adding, setAdding] = useState(false);
+  // Back pressed while «Добавить рядом» runs: it cannot be stopped, the busy line says to wait
+  const [waitNote, setWaitNote] = useState(false);
   const [search] = useState(() => findUpgrades(tvSourceContext(), lib));
   const alive = useRef(true);
   const busy = useRef(false);
   busy.current = !!running || adding;
   const runRef = useRef<ReplaceAbort | null>(null);
   runRef.current = running;
+  const replaced = useRef(false);
+  const afterReplace = useRef(p.focusAfterReplace);
+  afterReplace.current = p.focusAfterReplace;
 
   useEffect(() => {
     const prev = getCurrentFocusKey() || '';
@@ -85,8 +92,18 @@ export function BetterDialog(p: {
       alive.current = false;
       search.cancel();
       if (runRef.current) runRef.current.abort();
-      // back to the button that opened the dialog
+      // back to the button that opened the dialog; after a replace to Play (the old torrent is gone)
       setTimeout(() => {
+        if (replaced.current) {
+          const keys = afterReplace.current || [];
+          for (let i = 0; i < keys.length; i++) {
+            if (doesFocusableExist(keys[i])) {
+              setFocus(keys[i]);
+              return;
+            }
+          }
+          return;
+        }
         if (prev && doesFocusableExist(prev)) setFocus(prev);
       }, 0);
     };
@@ -97,7 +114,10 @@ export function BetterDialog(p: {
       runRef.current.abort();
       return;
     }
-    if (busy.current) return;
+    if (busy.current) {
+      setWaitNote(true);
+      return;
+    }
     search.cancel();
     p.onClose();
   };
@@ -150,11 +170,19 @@ export function BetterDialog(p: {
       .then((res) => {
         if (res.ok) {
           return newFilesOf(res.hash).then((fresh) => {
-            carryProgress(p.torrent.hash, p.files, res.hash, fresh);
+            try {
+              carryProgress(p.torrent.hash, p.files, res.hash, fresh);
+            } catch (e) {
+              // the replace itself is done: losing the positions must not leave the dialog stuck
+              console.warn('carryProgress failed', e);
+            }
             runRef.current = null;
+            replaced.current = true;
             void refreshTorrents(c).catch(() => undefined);
             toast(t('monitor.replaceSheet.replaced', { title: tvGlyphs(shortTitle(r.Title)) }));
-            if (alive.current) setRunning(null);
+            // a late replace (the dialog already closed) must not replace whatever route is on top now
+            if (!alive.current) return;
+            setRunning(null);
             p.onReplaced(res.hash);
           });
         }
@@ -173,6 +201,7 @@ export function BetterDialog(p: {
       return;
     }
     setAdding(true);
+    setWaitNote(false);
     setFailure('');
     resolveLink(r, tvSourceContext())
       .then((link) => c.add({ link, title: r.Title, category: p.torrent.category }))
@@ -187,6 +216,7 @@ export function BetterDialog(p: {
         (e) => {
           if (!alive.current) return;
           setAdding(false);
+          setWaitNote(false);
           setFailure(tvGlyphs(errorMessage(e)));
         },
       );
@@ -278,6 +308,11 @@ export function BetterDialog(p: {
         {running && (
           <div class="muted better-busy" role="status">
             {t('monitor.replaceSheet.busy')}
+          </div>
+        )}
+        {adding && (
+          <div class={'better-busy' + (waitNote ? '' : ' muted')} role="status">
+            {t(waitNote ? 'tv.better.addingWait' : 'tv.better.adding')}
           </div>
         )}
         <div class="better-follow" aria-disabled="true">

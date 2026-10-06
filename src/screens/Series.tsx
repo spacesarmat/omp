@@ -38,6 +38,8 @@ import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
 import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
 import { tvGlyphs } from '../ui/tvText';
+import { qualityOrUnknown } from '../monitor/upgradeText';
+import { displayTitle } from '../lib/torrentName';
 import { Poster } from './library/Poster';
 import { SeriesPill } from './library/SeriesTile';
 
@@ -288,7 +290,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       setBetter(upgradable[0]);
       return;
     }
-    const options = upgradable.map((m) => ({ label: tvGlyphs(libraryTitle(m).title) + ' · ' + formatBytes(m.torrent_size || 0), value: m.hash }));
+    const options = upgradable.map((m) => ({ label: [tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), formatBytes(m.torrent_size || 0)].join(' · '), value: m.hash }));
     choose(t('tv.better.which'), options).then((hash) => {
       const m = upgradable.filter((x) => x.hash === hash)[0];
       if (m) setBetter(m);
@@ -482,6 +484,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           // the series screen stays: the group picks up the new torrent from the refreshed list
           onReplaced={() => setBetter(null)}
           onClose={() => setBetter(null)}
+          focusAfterReplace={['series-watch', 'series-releases']}
         />
       )}
       <div class="hints">
