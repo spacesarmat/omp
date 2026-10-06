@@ -13,10 +13,12 @@ import { client } from '../../src/store/servers';
 import { errorMessage } from '../../src/api/http';
 import { compareVersions } from '../../src/lib/version';
 import { CONTROL_MIN_VERSION } from '../../src/phone/protocol';
-import { native } from './platform/native';
+import { native, type ExternalPlayerResult, type OpenPlayerOptions } from './platform/native';
 import { currentRoute, navigate, type MRoute } from './nav';
 import { parseTorrentData, type TorrServerClient } from '../../src/api/torrserver';
 import { recordWatch } from '../../src/store/journal';
+import { markWatched, MIN_RESUME } from '../../src/store/progress';
+import { saveItemProgress } from '../../src/player/progressSave';
 import type { Torrent } from '../../src/api/types';
 import { baseName, type TorrentFile } from '../../src/lib/episodes';
 import { t as tr } from '../../src/i18n';
@@ -70,6 +72,8 @@ export async function tvServerUrl(url: string): Promise<string> {
 export interface WatchActions {
   launchOnTv: (params: object) => Promise<void>;
   openExternal: (url: string, mime: string) => Promise<void>;
+  /** MX-compatible player for result; null: the app has no such method (fall back to openExternal). */
+  openPlayer: (o: OpenPlayerOptions) => Promise<ExternalPlayerResult | null>;
   copyText: (text: string) => Promise<void>;
   /** OMP version installed on the TV; null when unknown. */
   ompVersion: () => Promise<string | null>;
@@ -88,6 +92,7 @@ export interface WatchActions {
 const defaults: WatchActions = {
   launchOnTv: (p) => launchOnTv(p),
   openExternal: (url, mime) => native.openExternal(url, mime),
+  openPlayer: (o) => native.openPlayer(o),
   copyText: (text) => Clipboard.write({ string: text }),
   ompVersion: () => ompVersionOnTv(),
   reportUrl: () => reportUrl(),
@@ -127,6 +132,53 @@ export function recordPhoneWatch(c: TorrServerClient | null, hash: string, file:
       }),
     )
     .catch(() => undefined);
+}
+
+export interface PhoneWatch {
+  hash: string;
+  file: TorrentFile;
+  /** Clean episode name for the player's title. */
+  title: string;
+  /** Saved position, seconds (0: from the start). */
+  at: number;
+  /** Known duration, seconds (0: unknown). */
+  duration: number;
+}
+
+/**
+ * "Watch on the phone": the stream in another player, from the saved position; the position the player hands
+ * back is saved like the TV's (local + TorrServer, watch journal), the end marks the file watched.
+ * Older apps without openPlayer: the plain chooser as before. Rejects when no player could be opened.
+ */
+export async function watchOnPhone(c: TorrServerClient, t: Pick<Torrent, 'hash'>, w: PhoneWatch): Promise<void> {
+  const url = streamUrlFor(c, t, w.file);
+  const at = w.at >= MIN_RESUME ? Math.floor(w.at) : 0;
+  const r = await actions.openPlayer({ url, title: w.title, positionMs: at * 1000, mime: 'video/*' });
+  if (r === null) {
+    await actions.openExternal(url, 'video/*');
+    void recordPhoneWatch(c, w.hash, w.file.id, 0, w.duration);
+    return;
+  }
+  if (!r.returned) {
+    // the player tells nothing back (VLC and the like): the journal knows where it was started
+    void recordPhoneWatch(c, w.hash, w.file.id, at, w.duration);
+    return;
+  }
+  const dur = r.durationMs !== undefined && r.durationMs > 0 ? r.durationMs / 1000 : w.duration;
+  const item = { url, title: w.title, hash: w.hash, fileIndex: w.file.id };
+  if (r.ended) {
+    if (dur > 0) saveItemProgress(c, item, dur, dur, true);
+    else markWatched(w.hash, w.file.id);
+    void recordPhoneWatch(c, w.hash, w.file.id, dur, dur);
+    return;
+  }
+  const pos = r.positionMs !== undefined ? r.positionMs / 1000 : 0;
+  if (pos >= MIN_RESUME) {
+    if (dur > 0) saveItemProgress(c, item, pos, dur, true);
+    // no duration anywhere: only the server's resume point can be kept
+    else c.setViewed(w.hash, w.file.id, Math.floor(pos)).catch(() => undefined);
+  }
+  void recordPhoneWatch(c, w.hash, w.file.id, pos >= MIN_RESUME ? pos : at, dur);
 }
 
 export function filesOf(t: Torrent): TorrentFile[] {

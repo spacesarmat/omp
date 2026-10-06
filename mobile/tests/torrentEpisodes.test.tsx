@@ -81,7 +81,7 @@ beforeEach(() => {
   setActiveServer(addServer({ url: 'http://srv:8090' }).id);
   torrents.value = [s2];
   serverViewed.value = [];
-  setWatchActions({ recordWatch: vi.fn(), ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn(), openExternal: vi.fn(), copyText: vi.fn(), remoteDelayMs: 0 });
+  setWatchActions({ recordWatch: vi.fn(), ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn(), openExternal: vi.fn(), openPlayer: async () => null, copyText: vi.fn(), remoteDelayMs: 0 });
   resetTo({ name: 'library' });
   navigate({ name: 'torrent', hash: 'abc' });
   vi.spyOn(TorrServerClient.prototype, 'viewedList').mockResolvedValue([]);

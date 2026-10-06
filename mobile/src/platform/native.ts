@@ -83,6 +83,37 @@ export interface LocalDownloadProgress {
   percent?: number;
 }
 
+/** What an MX-compatible external player handed back (positions in ms); returned=false: nothing came back. */
+export interface ExternalPlayerResult {
+  returned: boolean;
+  positionMs?: number;
+  durationMs?: number;
+  ended?: boolean;
+}
+
+export interface OpenPlayerOptions {
+  url: string;
+  /** Shown by the player (the clean episode name). */
+  title: string;
+  /** Where to start, ms. */
+  positionMs: number;
+  mime?: string;
+}
+
+const nonNegative = (v: unknown): number | undefined => (typeof v === 'number' && isFinite(v) && v >= 0 ? v : undefined);
+
+/** Keeps the known, well-typed fields of the plugin's answer. */
+export function externalPlayerResult(r: unknown): ExternalPlayerResult {
+  const o = (r && typeof r === 'object' ? r : {}) as { [k: string]: unknown };
+  if (o.returned !== true) return { returned: false };
+  const out: ExternalPlayerResult = { returned: true, ended: o.ended === true };
+  const pos = nonNegative(o.positionMs);
+  const dur = nonNegative(o.durationMs);
+  if (pos !== undefined) out.positionMs = pos;
+  if (dur !== undefined) out.durationMs = dur;
+  return out;
+}
+
 export interface OmpNativeApi {
   available: boolean;
   discoverTvs(timeoutMs: number): Promise<FoundTv[]>;
@@ -116,6 +147,8 @@ export interface OmpNativeApi {
   /** Wake-on-LAN magic packet (broadcast + the /24 broadcast of `ip`), repeated 3 times. */
   wakeOnLan(mac: string, ip: string): Promise<void>;
   openExternal(url: string, mime: string): Promise<void>;
+  /** "Open in another player" for result: starts at the position, resolves with what the player handed back; null: an older app without it. */
+  openPlayer(o: OpenPlayerOptions): Promise<ExternalPlayerResult | null>;
   /** apks: the feed's per-ABI APKs, the plugin installs the device's one (url/sha256 = universal fallback). */
   downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void>;
   /** Feed key of this device's APK (Build.SUPPORTED_ABIS[0]: arm64 / armv7); null = universal. */
@@ -236,6 +269,7 @@ interface OmpNativePlugin {
   pointerSend(o: { frame: string }): Promise<void>;
   wakeOnLan(o: { mac: string; ip: string }): Promise<void>;
   openExternal(o: { url: string; mime: string }): Promise<void>;
+  openPlayer(o: OpenPlayerOptions): Promise<unknown>;
   downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<void>;
   deviceAbiKey(): Promise<{ key?: unknown }>;
   canInstallApks?(): Promise<{ granted?: unknown }>;
@@ -508,6 +542,14 @@ export const native: OmpNativeApi = {
   openExternal(url, mime) {
     if (!plugin) return unavailable();
     return logged('openExternal', plugin.openExternal({ url, mime }));
+  },
+
+  openPlayer(o) {
+    if (!plugin) return unavailable();
+    return plugin.openPlayer(o).then(externalPlayerResult, (e) => {
+      if (e && e.code === 'UNIMPLEMENTED') return null;
+      return logged('openPlayer', Promise.reject(e));
+    });
   },
 
   async downloadAndInstallApk(url, sha256, onProgress, apks) {

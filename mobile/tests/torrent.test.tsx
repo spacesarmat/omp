@@ -67,7 +67,7 @@ beforeEach(() => {
   open.mockReset().mockResolvedValue(undefined);
   copy.mockReset().mockResolvedValue(undefined);
   record.mockReset().mockResolvedValue(undefined);
-  setWatchActions({ recordWatch: record, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, openExternal: open, copyText: copy, remoteDelayMs: 0 });
+  setWatchActions({ recordWatch: record, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, openExternal: open, openPlayer: async () => null, copyText: copy, remoteDelayMs: 0 });
   resetTo({ name: 'library' });
   navigate({ name: 'torrent', hash: 'abc' });
   vi.spyOn(TorrServerClient.prototype, 'viewedList').mockResolvedValue([]);

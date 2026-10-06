@@ -12,6 +12,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
+import androidx.activity.result.ActivityResult
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
@@ -22,6 +23,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PermissionState
 import com.getcapacitor.PluginMethod
+import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
@@ -54,6 +56,7 @@ import com.spacesarmat.omp.install.failureOf
 import com.spacesarmat.omp.monitor.MonitorNotifier
 import com.spacesarmat.omp.monitor.MonitorPlan
 import com.spacesarmat.omp.monitor.MonitorScheduler
+import com.spacesarmat.omp.player.ExternalPlayer
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayRequest
 import com.spacesarmat.omp.player.PlayerActivity
@@ -770,6 +773,40 @@ class OmpNativePlugin : Plugin() {
         } catch (_: RuntimeException) {
             call.reject(I18n.s("plugin.openPlayerFailed"))
         }
+    }
+
+    /**
+     * Like [openExternal], but MX Player compatible and for result: starts at "positionMs" and resolves with the
+     * position the player hands back ({returned:false} when it hands nothing back).
+     */
+    @PluginMethod
+    fun openPlayer(call: PluginCall) {
+        val url = call.getString("url")?.trim().orEmpty()
+        if (url.isEmpty()) {
+            call.reject(I18n.s("plugin.noVideoUrl"))
+            return
+        }
+        val title = call.getString("title").orEmpty()
+        val position = call.getDouble("positionMs")?.toLong() ?: 0L
+        val intent = ExternalPlayer.intent(url, title, position, call.getString("mime"), I18n.s("plugin.openInPlayer"))
+        try {
+            startActivityForResult(call, intent, "onPlayerResult")
+        } catch (_: ActivityNotFoundException) {
+            call.reject(I18n.s("plugin.noVideoApp"))
+        } catch (_: RuntimeException) {
+            call.reject(I18n.s("plugin.openPlayerFailed"))
+        }
+    }
+
+    @ActivityCallback
+    private fun onPlayerResult(call: PluginCall?, result: ActivityResult) {
+        if (call == null) return
+        val r = try {
+            ExternalPlayer.parse(result.resultCode, result.data)
+        } catch (_: RuntimeException) {
+            ExternalPlayer.Result(false)
+        }
+        call.resolve(JSObject.fromJSONObject(r.toJson()))
     }
 
     /** Writes [text] to cache/logs/[name] and opens the system share sheet for it (FileProvider, text/plain).
