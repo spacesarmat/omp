@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { serverViewed } from '../../src/store/progress';
 import { torrents } from '../../src/store/library';
-import { servers, activeServerId, activeServer, client, addServer, removeServer, setActiveServer, requireClient, updateServer } from '../../src/store/servers';
+import { servers, activeServerId, activeServer, client, addServer, removeServer, setActiveServer, requireClient, updateServer, serverLabel, serverHost } from '../../src/store/servers';
 
 beforeEach(() => {
   localStorage.clear();
@@ -97,5 +97,16 @@ describe('updateServer', () => {
     expect(torrents.value).toEqual([]);
     expect(serverViewed.value).toEqual([]);
     expect(client.value!.baseUrl).toBe('http://h:9');
+  });
+});
+
+describe('serverLabel', () => {
+  it('a server named after its address is shown once; a real name with the address', () => {
+    expect(serverLabel({ name: '192.168.1.191:5665', url: 'http://192.168.1.191:5665' })).toBe('192.168.1.191:5665');
+    expect(serverLabel({ name: 'http://192.168.1.191:5665/', url: 'http://192.168.1.191:5665' })).toBe('192.168.1.191:5665');
+    expect(serverLabel({ name: '192.168.1.191:5665', url: 'https://192.168.1.191:5665/' })).toBe('192.168.1.191:5665');
+    expect(serverLabel({ name: 'Дом', url: 'http://192.168.1.191:5665' })).toBe('Дом · 192.168.1.191:5665');
+    expect(serverLabel({ name: '', url: 'http://10.0.0.2:8090' })).toBe('10.0.0.2:8090');
+    expect(serverHost('HTTP://Box.local:8090//')).toBe('Box.local:8090');
   });
 });
