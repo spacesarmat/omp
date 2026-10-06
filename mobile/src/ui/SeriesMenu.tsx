@@ -15,7 +15,7 @@ const TRASH = 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3';
 /** What a long press on a series card in «Мои» opens: open, select (all its torrents), delete the whole series. */
 export function SeriesMenu({ group, onClose, onSelect }: { group: SeriesGroup; onClose: () => void; onSelect?: (hashes: string[]) => void }) {
   const [busy, setBusy] = useState(false);
-  const title = libraryTitle(group.lead).title;
+  const title = libraryTitle(group.named).title;
   const n = group.members.length;
   const hashes = group.members.map((m) => m.hash);
 

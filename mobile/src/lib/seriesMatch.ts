@@ -37,7 +37,7 @@ export function matchSeries(g: SeriesGroup): Promise<CatalogCard | null> {
   const hit = matches.get(key);
   if (hit !== undefined) return Promise.resolve(hit);
   return phoneCatalog().then((c) =>
-    findShow(c, displayTitle(g.lead), groupYear(g)).then((show) => {
+    findShow(c, displayTitle(g.named), groupYear(g)).then((show) => {
       if (!show) {
         matches.set(key, null);
         return null;

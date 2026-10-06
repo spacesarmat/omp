@@ -2,6 +2,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.17.0-beta.3
+
+- «Mine»: a series torrent titled only in English («Star Trek: Strange New Worlds / S2…») now joins the card of the torrents titled «Russian / Original»; the card takes its title from the torrent named in both languages
+- The status bar (clock, battery) no longer blends into the posters while scrolling — a dark strip lies under it
+- Fixed: the chips of the chosen filters in «Add» («4K», «seeds ≥ 20») centre their text like the others
+
 ## 0.17.0-beta.2
 
 - «Discover»: sorting (popular, by rating, by release date, most anticipated) and filters (genre, year, country, minimum rating); talk shows, news and reality are hidden by default; type and year under the poster, long titles neatly cut at two lines; 2, 3 or 4 posters per row
