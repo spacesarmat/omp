@@ -185,6 +185,19 @@ describe('series grouping', () => {
     expect(findGroup([EN4, EN2, RU3], en[0].key)!.named.hash).toBe('r3');
   });
 
+  it('series sharing only the network after the original title are not merged', () => {
+    const tv = (hash: string, title: string): Torrent => ({ hash, title, category: 'tv', stat: 3, data: files(['S01E01.mkv']) });
+    const items = groupLibrary([
+      tv('twd', 'Ходячие мертвецы (Сезон 1) / The Walking Dead / AMC / 2010'),
+      tv('bb', 'Во все тяжкие (Сезон 1) / Breaking Bad / AMC / 2008'),
+      tv('sh', 'Шерлок (Сезон 1) / Sherlock / BBC / 2010'),
+      tv('ke', 'Убивая Еву (Сезон 2) / Killing Eve / BBC / 2019'),
+      tv('lr', 'Шерлок / Sherlock / BBC / Rus, Eng / Полная версия'),
+    ]);
+    // only the two Sherlock releases are one series
+    expect(items.map((x) => (x.kind === 'series' ? x.members.map((m) => m.hash).join('+') : x.tor.hash))).toEqual(['twd', 'bb', 'sh+lr', 'ke']);
+  });
+
   it('series sharing only the year and the release details are not merged', () => {
     const A: Torrent = { hash: 'a', title: 'Первый сериал / First Show / 2024 / WEB-DL 1080p', category: 'tv', stat: 3, data: files(['S01E01.mkv']) };
     const B: Torrent = { hash: 'b', title: 'Второй сериал / Second Show / 2024 / WEB-DL 1080p', category: 'tv', stat: 3, data: files(['S01E01.mkv']) };

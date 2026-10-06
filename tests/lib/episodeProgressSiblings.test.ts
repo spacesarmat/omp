@@ -23,4 +23,13 @@ describe('seriesSiblings', () => {
     expect(seriesSiblings(list, EN4).map((t) => t.hash)).toEqual(['r3', 'e2', 'e4']);
     expect(seriesSiblings(list, OTHER).map((t) => t.hash)).toEqual(['ot']);
   });
+
+  it('series sharing only the network after the original title are not siblings', () => {
+    const TWD = tv('twd', 'Ходячие мертвецы (Сезон 1) / The Walking Dead / AMC / 2010', ['S01E01.mkv']);
+    const BB = tv('bb', 'Во все тяжкие (Сезон 1) / Breaking Bad / AMC / 2008', ['S01E01.mkv']);
+    const SH = tv('sh', 'Шерлок (Сезон 1) / Sherlock / BBC / 2010', ['S01E01.mkv']);
+    const KD = tv('kd', 'Убивая Еву (Сезон 2) / Killing Eve / BBC / 2019', ['S02E01.mkv']);
+    const list = [TWD, BB, SH, KD];
+    list.forEach((t) => expect(seriesSiblings(list, t).map((x) => x.hash)).toEqual([t.hash]));
+  });
 });
