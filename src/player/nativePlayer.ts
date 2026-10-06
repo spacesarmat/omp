@@ -4,12 +4,12 @@ import { t } from '../i18n';
 import type { TorrServerClient } from '../api/torrserver';
 import type { OmpNativeTvPlugin, ListenerHandle } from '../platform/androidNative';
 import type { Cmd, PlayerState } from '../phone/protocol';
-import { episodeLabel } from '../lib/episodes';
 import { guessLangFromName } from '../lib/tracks';
 import { buildSnapshot } from './phoneBridge';
 import { saveItemProgress, LOCAL_SAVE_MS, REMOTE_SAVE_MS } from './progressSave';
 import { resumePosition } from '../store/progress';
 import type { PlayItem } from './types';
+import { itemHeading } from './heading';
 import type { WatchJournal } from './watchJournal';
 import type { FfprobeResult } from '../api/types';
 import type { SkipPrefs } from '../lib/journal';
@@ -80,13 +80,9 @@ export interface NativeClosed {
   duration: number;
 }
 
-/** «Раздача · S02E03 · Название» for the overlay (parts that repeat or are empty are left out). */
+/** "Series name · S02E03" for the overlay, a film's name: the clean names, never the file name or the tracker title. */
 export function nativeHeading(item: PlayItem): string {
-  const parts: string[] = [];
-  [item.torrentTitle || '', episodeLabel(item.title), item.title].forEach((p) => {
-    if (p && parts.indexOf(p) < 0) parts.push(p);
-  });
-  return parts.join(' · ');
+  return itemHeading(item);
 }
 
 /**

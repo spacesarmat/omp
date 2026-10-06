@@ -82,3 +82,12 @@ export async function seasonEpisodes(show: ShowInfo, n: number): Promise<{ [ep: 
 export function cleanFileName(name: string): string {
   return name.replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
+
+/** TMDB's stand-in for an episode with no name yet: "Episode 7" and its Russian forms. */
+const PLACEHOLDER_NAME = /^(\u044d\u043f\u0438\u0437\u043e\u0434|episode|\u0441\u0435\u0440\u0438\u044f)\s*\d+$/i;
+
+/** The episode's real name: '' for none or a placeholder ("Episode 7"). */
+export function realEpisodeName(name: string): string {
+  const n = (name || '').trim();
+  return PLACEHOLDER_NAME.test(n) ? '' : n;
+}
