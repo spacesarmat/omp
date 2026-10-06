@@ -12,7 +12,12 @@ import { navigate, goBack } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
 import { restoreFocus } from '../ui/focus';
-import { confirmDialog } from '../ui/dialog';
+import { confirmDialog, choose } from '../ui/dialog';
+import { askText } from '../ui/TextDialog';
+import { checkTitle, renameTorrent } from '../lib/renameTorrent';
+import { activeCatalog } from '../catalog/activeCatalog';
+import { catalogErrorCode } from '../catalog/client';
+import { libraryTitle } from '../lib/libraryView';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
 import { useSkip, firstPlayableId } from '../lib/useSkip';
@@ -108,6 +113,53 @@ export function TorrentScreen({ hash }: { hash: string }) {
     });
   };
 
+  const patch = (p: Partial<Torrent>) => {
+    setT((cur) => (cur ? { ...cur, ...p } : cur));
+    torrents.value = torrents.value.map((x) => (x.hash === hash ? { ...x, ...p } : x));
+  };
+
+  const rename = () => {
+    if (!tor) return;
+    askText(t('torrent.rename.title'), displayTitle(tor)).then((raw) => {
+      if (raw === null) return;
+      const v = checkTitle(raw);
+      if (!v.ok) {
+        toast(v.error, 'error');
+        return;
+      }
+      renameTorrent(c, tor, v.title).then(
+        (title) => patch({ title }),
+        () => toast(t('torrent.rename.saveFailed'), 'error'),
+      );
+    });
+  };
+
+  const otherPoster = () => {
+    if (!tor) return;
+    activeCatalog()
+      .then((cat) => cat.search(libraryTitle(tor).title, 1))
+      .then(
+        (r) => {
+          const opts = r.items
+            .filter((x) => !!x.poster)
+            .slice(0, 8)
+            .map((x) => ({ label: x.year ? x.title + ' · ' + x.year : x.title, value: x.poster }));
+          if (!opts.length) {
+            toast(t('torrent.poster.none'));
+            return;
+          }
+          return choose(t('torrent.poster.pick'), opts).then((url) => {
+            if (!url) return;
+            return c.setPoster(tor, url).then(
+              () => patch({ poster: url }),
+              (e) => toast(errorMessage(e), 'error'),
+            );
+          });
+        },
+        (e) => toast(t(catalogErrorCode(e) === 'nokey' ? 'discover.nokeyText' : 'discover.offlineText'), 'error'),
+      );
+  };
+
   const resetViewed = () => {
     confirmDialog(t('torrent.resetAsk'), t('tv.marks.reset')).then((ok) => {
       if (!ok) return;
@@ -162,6 +214,8 @@ export function TorrentScreen({ hash }: { hash: string }) {
             {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onPress={() => play(target, targetPos || undefined)} />}
             {queue.length > 0 && <Button label={t('playlist.title')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? displayTitle(tor) : '' })} />}
             <Button label={t('torrent.resetViewed')} onPress={resetViewed} />
+            <Button label={t('torrent.rename.title')} onPress={rename} />
+            <Button label={t('torrent.poster.other')} onPress={otherPoster} />
             <Button label={t('common.delete')} onPress={remove} />
           </FocusGroup>
         </div>

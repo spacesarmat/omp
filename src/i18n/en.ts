@@ -1269,6 +1269,11 @@ export const en: EnDict<typeof ru> = {
       restart: 'From the start',
       zero: 'From 00:00',
     },
+    poster: {
+      other: 'Another poster',
+      pick: 'Pick a poster',
+      none: 'No posters found',
+    },
     rename: {
       title: 'Rename',
       name: 'Title',

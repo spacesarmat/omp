@@ -5,6 +5,7 @@ import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { installWheelScroll } from './ui/wheel';
 import { DialogHost, confirmDialog, dialogOpen } from './ui/dialog';
+import { TextDialogHost } from './ui/TextDialog';
 import { ToastHost } from './ui/toast';
 import { ConnectScreen } from './screens/Connect';
 import { SeriesScreen } from './screens/Series';
@@ -118,6 +119,7 @@ export function App() {
       {shouldShowUpdateDialog(r.name) && !dialogOpen.value && <UpdateDialog />}
       {showWhatsNew && <WhatsNewDialog />}
       <DialogHost />
+      <TextDialogHost />
       <ToastHost />
     </div>
   );
