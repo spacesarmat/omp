@@ -7,6 +7,9 @@ import java.util.Locale
  * kinds and the track choice by preferences.
  */
 object VlcSupport {
+    /** The video layout has a size libVLC can draw into (attached at 0×0 it logs «Invalid surface size»). */
+    fun surfaceReady(width: Int, height: Int): Boolean = width > 0 && height > 0
+
     /** ISO 639-2/B codes Locale does not know as ISO3 (it knows the /T ones: «deu», «fra», «zho», …). */
     private val BIBLIOGRAPHIC = mapOf(
         "alb" to "sq", "arm" to "hy", "baq" to "eu", "bur" to "my", "chi" to "zh", "cze" to "cs", "dut" to "nl",

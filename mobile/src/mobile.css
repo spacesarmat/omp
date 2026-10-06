@@ -260,11 +260,17 @@ button, .m-btn {
 .m-vrow-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .m-badge-inline { padding: 1px 6px; border-radius: 6px; background: #252A35; color: var(--text, #fff); font-size: 11px; font-weight: 700; }
 .m-clist { gap: 0; }
-.m-crow { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0; border: none; border-bottom: 1px solid #252A35; background: none; text-align: left; color: inherit; min-width: 0; }
-.m-crow-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.m-crow-size { flex-shrink: 0; }
-/* a tile's season, episodes or year: under the name (on a compact row: after it), never in it */
-.m-crow-meta { flex: 0 1 auto; max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the list rows: the separator runs under the whole row, the «···» button included */
+.m-clist > .m-row-wrap { border-bottom: 1px solid #252A35; }
+.m-crow { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 0; border: none; background: none; text-align: left; color: inherit; min-width: 0; }
+/* two lines: the name on the whole first one (it wraps to two), then the meta, the badge and the size */
+.m-crow-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.m-crow-title { min-width: 0; overflow-wrap: anywhere; font-size: 14px; line-height: 19px; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m-crow-sub { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.m-crow-sub .m-new-badge { flex-shrink: 0; align-self: center; }
+.m-crow-size { flex-shrink: 0; margin-left: auto; padding-left: 8px; }
+/* a tile's season, episodes or year: under the name, never in it */
+.m-crow-meta { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-card-meta { font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-view-small .m-card-meta { font-size: 11px; line-height: 14px; }
 .m-card { display: flex; flex-direction: column; gap: 4px; padding: 0; border: none; background: none; text-align: left; min-width: 0; }
@@ -412,8 +418,9 @@ button, .m-btn {
 .m-cols-3 .m-card-title { font-size: 12px; line-height: 16px; }
 .m-disc-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 0; border: none; background: none; color: inherit; text-align: left; }
 /* the title: two lines at most, «…» on the second; the box is exactly two lines tall so no third line peeks out */
-.m-disc-tile .m-disc-title { flex: none; margin-top: 0; line-height: 19px; min-height: 38px; max-height: 38px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.m-cols-3 .m-disc-tile .m-disc-title { line-height: 16px; min-height: 32px; max-height: 32px; }
+/* the title takes the lines it needs (two at most): a grid row is as tall as its tallest tile, no more */
+.m-disc-tile .m-disc-title { flex: none; margin-top: 0; line-height: 19px; min-height: 0; max-height: 38px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m-cols-3 .m-disc-tile .m-disc-title { line-height: 16px; min-height: 0; max-height: 32px; }
 .m-disc-meta { flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* four per row (also carries m-cols-3): tighter gaps, smaller labels, a 14px two-line title clamp */
 .m-disc-grid.m-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 6px; }
@@ -423,7 +430,7 @@ button, .m-btn {
 .m-cols-4 .m-disc-badge { top: auto; bottom: 4px; }
 .m-cols-4 .m-card-title { font-size: 11px; line-height: 14px; }
 .m-cols-4 .m-disc-tile { gap: 2px; }
-.m-cols-4 .m-disc-tile .m-disc-title { line-height: 14px; min-height: 28px; max-height: 28px; }
+.m-cols-4 .m-disc-tile .m-disc-title { line-height: 14px; min-height: 0; max-height: 28px; }
 .m-cols-4 .m-disc-meta { font-size: 10px; }
 .m-disc-empty { margin: 24px 0; text-align: center; }
 .m-disc-head .m-sort { align-self: center; }
@@ -748,6 +755,8 @@ button, .m-btn {
 .m-dpad-right { left: 70%; top: 36.5%; }
 .m-dpad-ok { position: absolute; left: 30.8%; top: 30.8%; width: 38.4%; height: 38.4%; min-width: 0; min-height: 0; border: none; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 20px; font-weight: 800; }
 .m-touchpad { position: relative; height: 260px; border-radius: 20px; background: var(--panel); display: flex; align-items: center; justify-content: center; user-select: none; }
+.m-pad-fb { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 72px; font-weight: 800; line-height: 1; color: var(--accent); pointer-events: none; animation: m-pad-fb 300ms ease-out forwards; }
+@keyframes m-pad-fb { from { opacity: 0.95; } to { opacity: 0; } }
 .m-keyrow { display: flex; gap: 10px; }
 .m-key, .m-media {
   flex: 1 1 0;
@@ -889,15 +898,28 @@ button, .m-btn {
 .m-local-title { font-size: 17px; font-weight: 700; }
 .m-local-text { font-size: 14px; line-height: 1.45; color: #C9CEDA; }
 .m-or { text-align: center; }
-.m-steps { display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: 18px; background: var(--panel); }
-.m-step { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--muted); }
-.m-step-dot { width: 28px; height: 28px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: var(--panel-2); color: #5A6070; flex-shrink: 0; }
+.m-screen[data-route='localServer'] {
+  display: flex; flex-direction: column; gap: 16px;
+  /* no tab bar here: the actions sit at the bottom of the screen */
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+.m-steps { display: flex; flex-direction: column; gap: 16px; padding: 16px; border-radius: 16px; background: var(--panel); }
+.m-step { display: flex; align-items: flex-start; gap: 12px; font-size: 15px; line-height: 20px; color: var(--muted); }
+.m-step-dot { width: 28px; height: 28px; margin-top: -4px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: var(--panel-2); color: var(--muted); flex-shrink: 0; }
+.m-step-num { font-size: 13px; font-weight: 700; line-height: 1; }
+.m-step-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.m-step-label { overflow-wrap: anywhere; }
+.m-step-bar { margin-top: 2px; }
+.m-step-sub { font-size: 13px; line-height: 1.3; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.m-step-error { font-weight: 400; }
 .m-step.ok { color: var(--text); }
 .m-step.ok .m-step-dot { background: #1E2A1F; color: #8FE39A; }
 .m-step.run { color: var(--text); font-weight: 700; }
 .m-step.run .m-step-dot { background: #3A3320; color: var(--accent); }
 .m-step.fail { color: var(--text); font-weight: 700; }
 .m-step.fail .m-step-dot { background: #3A2020; color: #FF6B6B; }
+.m-local-actions { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+.m-local-actions .m-btn { width: 100%; }
 .m-addr-card { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; background: var(--panel); }
 .m-addr { font-size: 18px; font-weight: 700; letter-spacing: 0.01em; }
 .m-set-card { display: flex; flex-direction: column; gap: 14px; padding: 16px; border-radius: 16px; background: var(--panel); }
@@ -1148,7 +1170,7 @@ button, .m-btn {
 .m-install-dev-icon.ok { color: #8FE39A; }
 .m-install-dev-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .m-install-dev-name { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
-.m-install-manual { height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
+.m-install-manual { min-height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
 .m-install-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .m-install-step { display: flex; gap: 12px; padding: 12px; border-radius: 14px; background: var(--panel); }
 .m-install-step.current { background: #3A3320; }
@@ -1292,8 +1314,10 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-new-badge:empty { display: none; }
 
 /* release dates: «Обзор» tile label, title card lines (0.17.0-beta.6) */
-.m-disc-when { flex: none; min-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.m-cols-4 .m-disc-when { font-size: 10px; min-height: 13px; }
+.m-disc-when { flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* no date (yet): no line kept for it (it used to be .m-empty, which also padded it 24px top and bottom) */
+.m-disc-when-none { display: none; }
+.m-cols-4 .m-disc-when { font-size: 10px; }
 .m-tc-releases { margin: 0; line-height: 1.5; }
 .m-tc-next-row { display: flex; align-items: baseline; gap: 12px; padding: 10px 12px; }
 .m-tc-next-ep { flex: 1; min-width: 0; overflow-wrap: anywhere; }
@@ -1317,3 +1341,14 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-dup-hint { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel); }
 .m-dup-hint span { flex: 1; min-width: 0; }
 .m-dup-line { display: block; margin-top: 4px; color: var(--muted); text-align: left; }
+
+/* ---- robustness for long words, narrow screens and a large system font: only what does not fit changes ---- */
+/* sub-screen titles («Установить OMP на телевизор») shrink beside the back button and wrap */
+.m-bar-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.m-link, .m-add-magnet-link { max-width: 100%; overflow-wrap: anywhere; }
+/* a tile's «новая серия …» and a series' status pill never get wider than the tile / the title column */
+.m-new-badge, .m-status-pill { max-width: 100%; white-space: normal; }
+/* the remote on a narrow screen: key labels end in «…» (the icons stay), OK follows the size of the pad */
+.m-key { padding-left: 0; padding-right: 0; }
+.m-key-label { min-width: 0; overflow: clip; overflow-clip-margin: 3px; text-overflow: ellipsis; white-space: nowrap; }
+.m-dpad-ok { padding: 0; font-size: min(20px, calc(var(--dp, 240px) * 0.132)); white-space: nowrap; }

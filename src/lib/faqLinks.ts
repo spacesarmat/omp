@@ -9,3 +9,8 @@ export const FAQ_LG_VERSION = 'Подойдёт ли мой телевизор L
 export const FAQ_ATV_ADB = 'Как установить OMP на Android TV через adb?';
 export const FAQ_ATV_BOXES = 'На каких приставках работает OMP и встроенный TorrServer?';
 export const FAQ_SAMSUNG = 'Есть ли OMP для Samsung (Tizen)?';
+
+/** Brand questions (opened by item id; there were no old question texts for them). */
+export const FAQ_XIAOMI = 'xiaomi';
+export const FAQ_SBER = 'sber';
+export const FAQ_YANDEX = 'yandex';

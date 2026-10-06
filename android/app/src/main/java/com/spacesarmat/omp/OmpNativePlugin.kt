@@ -897,13 +897,58 @@ class OmpNativePlugin : Plugin() {
         val url = apk.url
         val sha = apk.sha256
         if (!ApkInstaller.canInstall(context)) {
+            // the system page «Установка неизвестных приложений»; the install goes on when the user comes back with
+            // the switch on (handleOnResume), else it ends with «Разрешите установку…»
             try {
                 ApkInstaller.openInstallPermissionSettings(context)
             } catch (_: RuntimeException) {
+                once.reject(I18n.s("plugin.allowInstall"), "omp")
+                return
             }
-            once.reject(I18n.s("plugin.allowInstall"), "omp")
+            permissionWait?.job?.reject(I18n.s("plugin.updateBusy"), "omp")
+            permissionWait = InstallPermissionWait(ApkJob(once, url, sha))
             return
         }
+        startApkInstall(ApkJob(once, url, sha))
+    }
+
+    private class ApkJob(val once: Once, val url: String, val sha: String) {
+        fun reject(message: String, code: String) = once.reject(message, code)
+    }
+
+    /** An install waiting for the «unknown apps» permission (main thread only). */
+    private var permissionWait: InstallPermissionWait<ApkJob>? = null
+
+    @PluginMethod
+    fun canInstallApks(call: PluginCall) {
+        call.resolve(JSObject().put("granted", ApkInstaller.canInstall(context)))
+    }
+
+    override fun handleOnPause() {
+        super.handleOnPause()
+        permissionWait?.onPause()
+    }
+
+    override fun handleOnResume() {
+        super.handleOnResume()
+        val w = permissionWait ?: return
+        when (w.onResume(ApkInstaller.canInstall(context))) {
+            InstallPermissionWait.Next.WAIT -> Unit
+            InstallPermissionWait.Next.INSTALL -> {
+                permissionWait = null
+                startApkInstall(w.job)
+            }
+            InstallPermissionWait.Next.GIVE_UP -> {
+                permissionWait = null
+                w.job.reject(I18n.s("plugin.allowInstall"), "omp")
+            }
+        }
+    }
+
+    private fun startApkInstall(job: ApkJob) {
+        val once = job.once
+        val url = job.url
+        val sha = job.sha
         if (!downloading.compareAndSet(false, true)) {
             once.reject(I18n.s("plugin.updateBusy"), "omp")
             return

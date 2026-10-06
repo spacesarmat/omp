@@ -151,6 +151,26 @@ export function saveTv(tv: SavedTv, opts: { keepActive?: boolean } = {}): void {
 }
 
 /** Android TV: drops a token the TV no longer accepts (only while it is still `token`), so the next tap asks for a code. */
+/**
+ * Android TVs found on the network (NSD `_omp._tcp`): a saved one at the same IP takes the port it advertises now —
+ * the TV moves to 8096–8099 when 8095 is taken. True when a saved TV changed.
+ */
+export function updateAtvPorts(found: { ip: string; port: number }[]): boolean {
+  let changed = false;
+  const next = tvs.value.map((t) => {
+    if (t.kind !== 'atv') return t;
+    const f = found.filter((x) => x.ip === t.ip)[0];
+    if (!f || !validPort(f.port) || (t.ctlPort || ATV_PORT) === f.port) return t;
+    changed = true;
+    return { ...t, ctlPort: f.port };
+  });
+  if (changed) {
+    tvs.value = next;
+    persist();
+  }
+  return changed;
+}
+
 export function clearTvToken(ip: string, token?: string): void {
   const cur = tvs.value.find((t) => t.ip === ip);
   if (!cur || !cur.token || (token !== undefined && cur.token !== token)) return;

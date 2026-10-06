@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.View
 import android.view.ViewGroup
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
@@ -112,7 +113,26 @@ class VlcEngine(library: VlcLibrary) : PlayerEngine {
         val v = VLCVideoLayout(container.context).apply { isFocusable = false }
         container.addView(v, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         layout = v
-        attachViews()
+        attachWhenSized()
+    }
+
+    /**
+     * The video output goes on once the layout has its size: attached at 0×0 (the view was just added, not laid out)
+     * libVLC logs «Invalid surface size» and on some boxes (Dune HD) never shows a picture.
+     */
+    private fun attachWhenSized() {
+        val v = layout ?: return
+        if (VlcSupport.surfaceReady(v.width, v.height)) {
+            attachViews()
+            return
+        }
+        v.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(view: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
+                if (!VlcSupport.surfaceReady(r - l, b - t)) return
+                view.removeOnLayoutChangeListener(this)
+                if (!released && layout === view) attachViews()
+            }
+        })
     }
 
     private fun attachViews() {
@@ -132,7 +152,7 @@ class VlcEngine(library: VlcLibrary) : PlayerEngine {
     }
 
     override fun hostStarted() {
-        if (!released) attachViews()
+        if (!released) attachWhenSized()
     }
 
     override fun setPreferences(prefs: TrackPrefs) {

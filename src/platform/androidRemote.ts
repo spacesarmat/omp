@@ -37,6 +37,12 @@ const KEY_CODES: { [name: string]: number } = {
   RIGHT: 39,
   ENTER: 13,
   BACK: BACK_KEY,
+  // the phone's colour keys and «Меню»: the LG codes (src/platform/keys.ts), as the box remote's (TvKeys.kt)
+  RED: 403,
+  GREEN: 404,
+  YELLOW: 405,
+  BLUE: 406,
+  MENU: 457,
 };
 
 function isObj(v: unknown): v is { [k: string]: unknown } {

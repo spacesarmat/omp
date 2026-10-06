@@ -8,6 +8,7 @@ import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { applyLanguageSetting } from '../../src/i18n';
 import { Qr } from '../../src/ui/Qr';
 import { UpdateScreen, apkJob } from '../../src/screens/Update';
+import { DialogHost } from '../../src/ui/dialog';
 import { latestUpdate } from '../../src/store/updates';
 import { whatsNew, closeWhatsNew } from '../../src/store/whatsNew';
 
@@ -191,8 +192,10 @@ describe('UpdateScreen on Android TV', () => {
   let settle: { resolve: () => void; reject: (e: unknown) => void } | null = null;
   let progress: ((d: any) => void) | null = null;
   let removed = 0;
+  let granted = true;
 
   beforeEach(() => {
+    granted = true;
     lunaCalls = 0;
     calls = [];
     settle = null;
@@ -204,6 +207,7 @@ describe('UpdateScreen on Android TV', () => {
       getPlatform: () => 'android',
       Plugins: {},
       nativePromise: (_p: string, method: string, o: any) => {
+        if (method === 'canInstallApks') return Promise.resolve({ granted });
         calls.push({ method, o });
         return new Promise<void>((resolve, reject) => { settle = { resolve, reject }; });
       },
@@ -245,6 +249,25 @@ describe('UpdateScreen on Android TV', () => {
     expect(removed).toBe(1);
     expect(installButton(host).textContent).toBe('Установить снова');
     expect(installButton(host).classList.contains('disabled')).toBe(false);
+  });
+
+  it('without the «unknown apps» permission: the hint first, the download only after «Продолжить»', async () => {
+    granted = false;
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    render(h('div', {}, h(UpdateScreen, {}), h(DialogHost, {})), host);
+    installButton(host).click();
+    await until(() => !!host.querySelector('.dialog-title'));
+    expect(host.querySelector('.dialog-title')!.textContent).toBe(
+      'Android попросит разрешить установку: найдите OMP в списке, включите переключатель и нажмите «Назад» — установка продолжится',
+    );
+    expect(calls).toHaveLength(0);
+    const go = Array.from(host.querySelectorAll('.dialog-option')).find((x) => x.textContent === 'Продолжить') as HTMLElement;
+    go.click();
+    await until(() => calls.length === 1);
+    expect(calls[0].method).toBe('downloadAndInstallApk');
+    settle!.resolve();
+    render(null, host);
   });
 
   it('passes the per-ABI APKs of the feed to the plugin', async () => {

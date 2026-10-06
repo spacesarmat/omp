@@ -24,7 +24,7 @@ export type MRoute =
   /** `q` opens that question. */
   | { name: 'faq'; q?: string }
   /** «Установить OMP на телевизор»: the device list, or the steps for the device at `ip`. */
-  | { name: 'install'; ip?: string; kind?: 'lg' | 'atv' | 'samsung' }
+  | { name: 'install'; ip?: string; kind?: 'lg' | 'atv' | 'samsung'; brand?: 'xiaomi' | 'sber' | 'yandex' }
   | { name: 'log' }
   | { name: 'backup' }
   | { name: 'sources' }

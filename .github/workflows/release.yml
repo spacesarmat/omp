@@ -110,6 +110,7 @@ jobs:
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
       # Telegram channel post (skipped without the bot token): every build as a reply; files over the 50 MB bot
       # limit are linked (and named in the log) so the owner can forward them by hand. A failure must not fail the release.
+      # A stable release whose docs/screenshots/release-<version>/ is in the tag checkout above goes as a photo album.
       - name: Post to Telegram
         # betas are not posted: the channel gets releases only
         if: ${{ !contains(inputs.tag || github.ref_name, '-beta.') }}

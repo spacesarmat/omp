@@ -127,6 +127,22 @@ describe('FAQ per-device content', () => {
     expect(deviceText('common')).toContain('Tizen');
   });
 
+  it('Xiaomi, Sber and Yandex: install questions under Android TV with the pairing by code', () => {
+    for (const id of ['xiaomi', 'sber', 'yandex']) {
+      const it = FAQ.find((i) => i.id === id)!;
+      expect(it.devices, id).toEqual(['atv']);
+      expect(it.section, id).toBe('install');
+      expect(viewText(id, 'atv'), id).toContain('Настройки → «Подключить телефон»');
+      expect(viewText(id, 'atv'), id).toContain('код из 4 цифр');
+    }
+    const x = viewText('xiaomi', 'atv');
+    for (const f of ['Downloader', 'Send Files to TV', 'Безопасность и ограничения → Неизвестные источники', 'Сборка ОС Android TV', 'PatchWall', 'Mi Box 3']) expect(x, f).toContain(f);
+    const s = viewText('sber', 'atv');
+    for (const f of ['apps.sber.ru/my', 'Сбер ID', '«Загруженные»', 'неизвестных источников', 'SberStudio', 'StarOS 1.71']) expect(s, f).toContain(f);
+    const y = viewText('yandex', 'atv');
+    for (const f of ['«Файловый менеджер»', 'FAT32', 'по подписке', 'Для разработчиков']) expect(y, f).toContain(f);
+  });
+
   it('LG views never show adb or Android TV install steps', () => {
     for (const id of ['helper', 'safety', 'after-install', 'phone-no-control', 'sources-transfer']) {
       if (!FAQ.find((i) => i.id === id)!.devices.includes('lg')) continue;

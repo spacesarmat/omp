@@ -1,4 +1,5 @@
 import { HB_REPO_URL, RELEASES_URL } from '../../src/lib/updateInfo';
+import { SBER_APPS_URL } from '../../src/lib/installPlan';
 import type { FaqLine, FaqText } from './faq';
 
 // The English FAQ texts, keyed by item id (same ids and the same number of lines as faq.ru.ts).
@@ -146,6 +147,55 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'The update feed in the app and the install assistant choose the APK for the device architecture themselves.',
       'All builds are also published in the OMP Telegram channel: files up to 50 MB are attached to the post, larger ones are given as a GitHub link.',
       TELEGRAM_LINK,
+      DOWNLOAD_LINK,
+    ],
+  },
+  'xiaomi': {
+    q: 'Install on Xiaomi (Mi Box, Mi TV)',
+    short: [
+      '1. From the phone: Settings → “Install OMP on the TV”. On the TV turn on developer mode (press “Build” 7 times in “About”) and “USB debugging” or “Network debugging” in “Developer options”.',
+      '2. Or by hand: “Downloader” or “Send Files to TV” from Google Play, or a USB drive.',
+      '3. Allow the install: Settings → Device Preferences (on Google TV: Apps) → Security & restrictions → Unknown sources.',
+      '4. After the install: in OMP on the TV open Settings → “Connect a phone” and enter the 4-digit code on the phone (“TV” → “Android TV”).',
+    ],
+    more: [
+      '“About”: on Android TV (Mi Box S, Mi TV Stick, Mi TV sets with PatchWall) it is Settings → Device Preferences → About → “Build”; on Google TV (Xiaomi TV Box S 2nd gen and newer) Settings → System → About → “Android TV OS build”. Item names depend on the firmware.',
+      'PatchWall is the Xiaomi launcher on top of Android TV: it opens the usual Android TV settings.',
+      'Google TV with Android 11 and newer may offer only “Wireless debugging” with a pairing code, which the phone assistant cannot do yet. Then install by hand or from a computer (see the question about adb).',
+      'OMP needs Android 8 or newer: Mi Box 3 (Android 6) will not do. The built-in TorrServer runs only on 64-bit devices (arm64).',
+      DOWNLOAD_LINK,
+    ],
+  },
+  'sber': {
+    q: 'Install on Sber (SberBox, Salute TV)',
+    short: [
+      '1. Download the universal OMP-<version>.apk from the release page on GitHub.',
+      '2. On apps.sber.ru/my sign in with the same Sber ID as on the TV, drop the APK and press “Save”.',
+      '3. On the TV: catalog → “My apps” → “Uploaded” → OMP. Another way: a USB drive and the file manager on the TV.',
+      '4. On the first install allow “Install from unknown sources”.',
+      '5. After the install: in OMP on the TV open Settings → “Connect a phone” and enter the 4-digit code on the phone (“TV” → “Android TV”).',
+    ],
+    more: [
+      'Salute TV (StarOS) on SberBox, SberBox Top and TVs with Salute TV is Android without Google Play: “Downloader” and “Send Files to TV” are usually not there. Uploading the APK via apps.sber.ru/my is simpler; Sber scans the file with an antivirus before the install.',
+      'The phone install assistant installs OMP over adb, and Sber devices turn debugging on only through SberStudio for developers (developers.sber.ru, StarOS 1.71 and newer). Without it, use the ways above.',
+      'The built-in TorrServer runs only on 64-bit devices (arm64); on others OMP works with a TorrServer on another device in the network.',
+      { text: 'apps.sber.ru/my: upload an APK', url: SBER_APPS_URL },
+      DOWNLOAD_LINK,
+    ],
+  },
+  'yandex': {
+    q: 'Install on Yandex (TV Station, YaOS, Module)',
+    short: [
+      '1. Download the universal OMP-<version>.apk from the release page on GitHub and copy it to a USB drive (FAT32).',
+      '2. Plug the drive into the TV or the Module. On the home screen: “Apps” → “File manager” → pick the APK.',
+      '3. If the TV asks about unknown sources, allow installs for the file manager.',
+      '4. After the install: in OMP on the TV open Settings → “Connect a phone” and enter the 4-digit code on the phone (“TV” → “Android TV”).',
+    ],
+    more: [
+      'YaOS is Android without Google Play. “Developer options” and network debugging are usually hidden there, so the phone install assistant cannot install OMP.',
+      'Without USB, a file manager that receives files over Wi-Fi from YaOS Store will do, if the store has one.',
+      'If the TV Station was bought on a subscription, APKs do not install and the “File manager” stays unavailable until the device is paid off.',
+      'The built-in TorrServer runs only on 64-bit devices (arm64); on others OMP works with a TorrServer on another device in the network.',
       DOWNLOAD_LINK,
     ],
   },

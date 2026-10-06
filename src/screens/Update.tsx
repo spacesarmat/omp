@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { latestUpdate, checkForUpdate, dismissPrompt } from '../store/updates';
-import { HB_REPO_URL, HB_SITE_URL, RELEASES_URL, updateTitle } from '../lib/updateInfo';
+import { HB_REPO_URL, HB_SITE_URL, RELEASES_URL, updateNotes, updateTitle } from '../lib/updateInfo';
 import { isBetaVersion } from '../lib/version';
 import { settings, updateSettings } from '../store/settings';
 import { hbPresence, hbHasRoot, openHbChannel, hbInstall, InstallStatus, HbPresence } from '../platform/hbchannel';
@@ -13,7 +13,8 @@ import { Qr } from '../ui/Qr';
 import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
 import { platformKind } from '../platform/env';
-import { installApk } from '../platform/androidNative';
+import { apkInstallPermitted, installApk } from '../platform/androidNative';
+import { confirmDialog } from '../ui/dialog';
 import { t } from '../i18n';
 import type { UpdateInfo } from '../lib/updateInfo';
 
@@ -42,7 +43,17 @@ function ApkInstall({ info }: { info: UpdateInfo }) {
     if (cur && cur.version === version) apkJob.value = { ...cur, ...p };
   };
 
+  // before Android's «unknown apps» page (on some boxes the list of all apps): what to do there
   const install = () => {
+    if (apkJob.value && apkJob.value.running) return;
+    apkInstallPermitted()
+      .then((granted) => (granted ? true : confirmDialog(t('update.allowHint'), t('update.allowGo'))))
+      .then((go) => {
+        if (go) startInstall();
+      });
+  };
+
+  const startInstall = () => {
     if (apkJob.value && apkJob.value.running) return;
     const version = info.version;
     startedHere.current = true;
@@ -171,8 +182,8 @@ export function UpdateScreen() {
         />
       </div>
       <div class="muted">{t('updateScreen.betaNote')}</div>
-      {info && info.notes.length > 0 && (
-        <ul class="update-notes">{info.notes.slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>
+      {info && updateNotes(info, 'tv').length > 0 && (
+        <ul class="update-notes">{updateNotes(info, 'tv').slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>
       )}
 
       {info && android && <ApkInstall info={info} />}

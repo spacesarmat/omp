@@ -86,7 +86,8 @@ export function searchUrl(e: TmdbEndpoint, query: string, page: number): string 
 
 export function cardUrl(e: TmdbEndpoint, kind: Kind, id: number): string {
   return url(e, kind + '/' + id, {
-    append_to_response: kind === 'movie' ? 'credits,release_dates' : 'credits',
+    // translations: the English title of a title with no Russian (or Latin) one, in the request made anyway
+    append_to_response: kind === 'movie' ? 'credits,release_dates,translations' : 'credits,translations',
     include_image_language: lang.peek() === 'en' ? 'en,null' : 'ru,null,en',
   });
 }
@@ -123,12 +124,24 @@ function n(v: unknown): number {
   return typeof v === 'number' && isFinite(v) ? v : 0;
 }
 
+// a Latin (with its accented letters) or a Cyrillic letter; built from codes so the source stays ASCII
+const READABLE = new RegExp(
+  '[A-Za-z' + String.fromCharCode(0xc0) + '-' + String.fromCharCode(0x24f) + String.fromCharCode(0x400) + '-' + String.fromCharCode(0x4ff) + ']',
+);
+
+/** The title reads for a Russian or English user: it has Latin or Cyrillic letters (not only Chinese, Korean, …). */
+export function readableTitle(s: string): boolean {
+  return READABLE.test(s || '');
+}
+
 function titleOf(e: TmdbEndpoint, o: { [k: string]: unknown }, kind: Kind): CatalogTitle | null {
   const id = n(o.id);
   if (!id) return null;
-  const title = str(kind === 'movie' ? o.title : o.name);
+  let title = str(kind === 'movie' ? o.title : o.name);
   const original = str(kind === 'movie' ? o.original_title : o.original_name);
   if (!title && !original) return null;
+  // no Russian title: TMDB gives the original («仙逆剧场版»); an original in Latin letters reads better
+  if (!readableTitle(title) && readableTitle(original)) title = original;
   return {
     kind: kind, id: id, title: title || original, original: original || title,
     year: year(kind === 'movie' ? o.release_date : o.first_air_date),
@@ -163,11 +176,32 @@ export function sanitizeList(e: TmdbEndpoint, raw: unknown, kind: Kind | null, d
   return { items: items, pages: Math.min(500, Math.max(0, Math.floor(n(o.total_pages)))) };
 }
 
+/** The en title of a card answer's translations (en-US first); '' when there is none or it is not readable. */
+export function englishTitle(o: { [k: string]: unknown }, kind: Kind): string {
+  const tr = o.translations && typeof o.translations === 'object' ? (o.translations as { translations?: unknown }).translations : null;
+  if (!Array.isArray(tr)) return '';
+  let best = '';
+  (tr as unknown[]).forEach((x) => {
+    const r = (x || {}) as { [k: string]: unknown };
+    if (r.iso_639_1 !== 'en') return;
+    const d = (r.data || {}) as { [k: string]: unknown };
+    const s = str(kind === 'movie' ? d.title : d.name);
+    if (!s || !readableTitle(s)) return;
+    if (!best || r.iso_3166_1 === 'US') best = s;
+  });
+  return best;
+}
+
 export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): CatalogCard | null {
   const o = raw && typeof raw === 'object' ? (raw as { [k: string]: unknown }) : null;
   if (!o) return null;
   const t = titleOf(e, o, kind);
   if (!t) return null;
+  // still not readable: the English translation of the same answer (append_to_response=translations)
+  if (!readableTitle(t.title)) {
+    const en = englishTitle(o, kind);
+    if (en) t.title = en;
+  }
   const genres = Array.isArray(o.genres) ? (o.genres as unknown[]).map((g) => str(g && (g as { name?: unknown }).name)).filter(Boolean) : [];
   const runtimes = Array.isArray(o.episode_run_time) ? (o.episode_run_time as unknown[]).map(n).filter(Boolean) : [];
   const credits = o.credits && typeof o.credits === 'object' ? (o.credits as { cast?: unknown }).cast : null;

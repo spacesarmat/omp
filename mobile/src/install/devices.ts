@@ -4,6 +4,7 @@ import { native, type FoundTv, type FoundCastTv, type FoundOmpTv, type OmpNative
 import { tvs, type SavedTv } from '../tv/tvStore';
 import { log } from '../../../src/lib/log';
 import { t } from '../../../src/i18n';
+import { atvBrand, type AtvBrand } from '../../../src/lib/installPlan';
 
 export type InstallNative = Pick<OmpNativeApi, 'discoverTvs' | 'discoverCastTvs' | 'discoverOmpTvs' | 'probePorts' | 'stopDiscovery'>;
 
@@ -26,6 +27,8 @@ export interface InstallDevice {
   name: string;
   kind: InstallDeviceKind;
   model?: string;
+  /** Android-based Xiaomi, Sber or Yandex device: brand-specific steps (from the name/model or the manual entry). */
+  brand?: AtvBrand;
   /** Android TV found by cast: 'chromecast' = a Chromecast that cannot install apps. */
   cast?: 'tv' | 'chromecast';
   /** OMP version announced over `_omp._tcp` (Android TV with OMP running). */
@@ -72,6 +75,8 @@ export function mergeDevices(found: Found, saved: SavedTv[]): InstallDevice[] {
     const s = savedAt(t.ip);
     const d: InstallDevice = { ip: t.ip, name: s?.name || t.name, kind: 'atv', cast: kind, online: true };
     if (t.model) d.model = t.model;
+    const brand = atvBrand(t.model, t.name);
+    if (brand) d.brand = brand;
     if (s) d.saved = true;
     out.push(d);
   }
@@ -86,13 +91,18 @@ export function mergeDevices(found: Found, saved: SavedTv[]): InstallDevice[] {
     }
     const s = savedAt(t.ip);
     const d: InstallDevice = { ip: t.ip, name: s?.name || t.name, kind: 'atv', online: true, ompPort: t.port };
+    const brand = atvBrand(t.name);
+    if (brand) d.brand = brand;
     if (t.version) d.ompVersion = t.version;
     if (s) d.saved = true;
     out.push(d);
   }
   for (const s of saved) {
     if (at(s.ip)) continue;
-    out.push({ ip: s.ip, name: s.name, kind: s.kind === 'atv' ? 'atv' : 'lg', saved: true, online: false });
+    const d: InstallDevice = { ip: s.ip, name: s.name, kind: s.kind === 'atv' ? 'atv' : 'lg', saved: true, online: false };
+    const brand = d.kind === 'atv' ? atvBrand(s.name) : undefined;
+    if (brand) d.brand = brand;
+    out.push(d);
   }
   return out;
 }
@@ -106,15 +116,27 @@ export function rememberDevice(d: InstallDevice): void {
 
 export const KIND_NAME: { [k in InstallDeviceKind]: string } = { lg: 'LG', atv: 'Android TV', samsung: 'Samsung' };
 
-/** The device for the steps screen: from the last search, else a saved TV, else a bare one of `kind`. */
-export function deviceFor(ip: string, kind?: InstallDeviceKind): InstallDevice {
+/** Brand names for the list and the manual entry. */
+export function brandName(b: AtvBrand): string {
+  return b === 'xiaomi' ? t('install.brand.xiaomi') : b === 'sber' ? t('install.brand.sber') : t('install.brand.yandex');
+}
+
+/** The device for the steps screen: from the last search, else a saved TV, else a bare one of `kind`; `brand` (Android TV) overrides the detected one. */
+export function deviceFor(ip: string, kind?: InstallDeviceKind, brand?: AtvBrand): InstallDevice {
+  const withBrand = (d: InstallDevice): InstallDevice => (brand && d.kind === 'atv' ? { ...d, brand } : d);
   const k = known.get(ip);
-  if (k && (!kind || k.kind === kind)) return k;
+  if (k && (!kind || k.kind === kind)) return withBrand(k);
   const s = tvs.value.find((t) => t.ip === ip);
   const savedKind: InstallDeviceKind = s?.kind === 'atv' ? 'atv' : 'lg';
-  if (s && (!kind || kind === savedKind)) return { ip, name: s.name, kind: savedKind, saved: true, online: false };
+  if (s && (!kind || kind === savedKind)) {
+    const d: InstallDevice = { ip, name: s.name, kind: savedKind, saved: true, online: false };
+    const found = savedKind === 'atv' ? atvBrand(s.name) : undefined;
+    if (found) d.brand = found;
+    return withBrand(d);
+  }
   const k2: InstallDeviceKind = kind || 'lg';
-  return { ip, name: KIND_NAME[k2] + ' ' + ip, kind: k2, online: false };
+  const name = (brand && k2 === 'atv' ? brandName(brand) : KIND_NAME[k2]) + ' ' + ip;
+  return withBrand({ ip, name, kind: k2, online: false });
 }
 
 export const SEARCH_MS = 4000;

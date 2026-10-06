@@ -24,9 +24,18 @@ class TvNameTest {
     }
 
     @Test
-    fun noMakerNorBrandGivesTheModel() {
-        assertEquals("tv175v", TvName.choose(null, "MediaTek", "Allwinner", "tv175v"))
-        assertEquals("tv175v", TvName.choose(null, "", "", "tv175v"))
+    fun noMakerNorBrandGivesAndroidTvWithTheModel() {
+        assertEquals("Android TV (tv175v)", TvName.choose(null, "MediaTek", "Allwinner", "tv175v"))
+        assertEquals("Android TV (tv175v)", TvName.choose(null, "", "", "tv175v"))
         assertEquals("Android TV", TvName.choose(null, null, null, null))
+    }
+
+    @Test
+    fun theDuneAsItReallyIs() {
+        // device_name is the model itself, brand «rtk», manufacturer Realtek: nothing friendly left
+        assertEquals("Android TV (tv175v)", TvName.choose("tv175v", "Realtek", "rtk", "tv175v"))
+        assertEquals("Android TV (tv175v)", TvName.choose("TV175V", "Realtek", "RTK", "tv175v"))
+        // a name the user set in Settings still wins
+        assertEquals("Спальня", TvName.choose("Спальня", "Realtek", "rtk", "tv175v"))
     }
 }

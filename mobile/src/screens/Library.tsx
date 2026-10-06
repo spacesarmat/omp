@@ -736,10 +736,15 @@ export function Library() {
                     <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
                       <button type="button" class={'m-crow' + (g ? ' m-series-card' : '')} {...pressProps(it)}>
                         {mark(it)}
-                        <span class="m-crow-title"><TileName tor={tor} g={g} /></span>
-                        {meta && <span class="m-muted m-small m-crow-meta m-tile-meta">{meta}</span>}
-                        {it.kind === 'series' ? <SeriesTileBadge group={it} /> : <SeriesTileBadge tor={it.tor} />}
-                        <span class="m-muted m-small m-crow-size">{fmtSize(it.kind === 'series' ? groupSize(it) : it.tor.torrent_size || 0)}</span>
+                        {/* two lines: the whole first for the name (up to two lines), the meta, the badge and the size under it */}
+                        <span class="m-crow-main">
+                          <span class="m-crow-title"><TileName tor={tor} g={g} /></span>
+                          <span class="m-crow-sub">
+                            {meta && <span class="m-muted m-small m-crow-meta m-tile-meta">{meta}</span>}
+                            {it.kind === 'series' ? <SeriesTileBadge group={it} /> : <SeriesTileBadge tor={it.tor} />}
+                            <span class="m-muted m-small m-crow-size">{fmtSize(it.kind === 'series' ? groupSize(it) : it.tor.torrent_size || 0)}</span>
+                          </span>
+                        </span>
                       </button>
                       {moreBtn(it)}
                     </div>
