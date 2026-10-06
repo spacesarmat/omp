@@ -1613,6 +1613,7 @@ export const ru = {
     library: 'Каталог',
     news: 'Новое',
     remote: 'Пульт',
+    backAgain: 'Нажмите «Назад» ещё раз, чтобы свернуть',
   },
   backup: {
     fileName: 'omp-копия-{date}.json',

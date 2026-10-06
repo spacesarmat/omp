@@ -6,7 +6,8 @@ import { activeServer, client } from '../../src/store/servers';
 import { refreshTorrents } from '../../src/store/library';
 import { native } from './platform/native';
 import { NavBar, TAB_IDS, type Tab } from './ui/NavBar';
-import { Toast } from './ui/toast';
+import { Toast, showToast } from './ui/toast';
+import { catalogMode, setCatalogMode } from './catalog/phoneCatalog';
 import { Connect } from './screens/Connect';
 import { Tv } from './screens/Tv';
 import { Faq } from './screens/Faq';
@@ -49,17 +50,48 @@ import { Series } from './screens/Series';
 import { monitorNative } from './monitor/native';
 import { reloadLog } from '../../src/lib/log';
 import { Fragment } from 'preact';
-import { lang, type Lang } from '../../src/i18n';
+import { lang, t, type Lang } from '../../src/i18n';
 import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
 import './mobile.css';
 
 const TABS: string[] = TAB_IDS;
 
+/** «Каталог»: a second Back within this long after the first one sends the app to the background. */
+export const BACK_AGAIN_MS = 2000;
+let firstBackAt = -Infinity;
+
+/** Tests: forget the first press. */
+export function resetBackPress(): void {
+  firstBackAt = -Infinity;
+}
+
+/**
+ * Android Back: an open sheet closes, a nested screen goes back; the root of another tab switches to «Каталог»
+ * (like its tab), «Обзор» to «Мои»; on «Мои» the first press asks for a second one, which (within 2 s) sends the
+ * app to the background instead of closing it.
+ */
 export function handleBack(): void {
   if (runBack()) return;
   if (goBack()) return;
+  const name = currentRoute.peek().name;
+  if (name !== 'library' && TABS.indexOf(name) >= 0) {
+    firstBackAt = -Infinity;
+    switchTab({ name: 'library' });
+    return;
+  }
+  if (name === 'library' && catalogMode.peek() !== 'mine') {
+    firstBackAt = -Infinity;
+    setCatalogMode('mine');
+    return;
+  }
+  const now = Date.now();
+  if (now - firstBackAt > BACK_AGAIN_MS) {
+    firstBackAt = now;
+    showToast(t('nav.backAgain'), BACK_AGAIN_MS);
+    return;
+  }
+  firstBackAt = -Infinity;
   try {
-    // tab roots: send the app to the background instead of closing it
     void Promise.resolve(CapApp.minimizeApp()).catch(() => {});
   } catch {
     /* not running inside Capacitor */

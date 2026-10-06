@@ -1593,6 +1593,7 @@ export const en: EnDict<typeof ru> = {
     library: 'Catalog',
     news: 'News',
     remote: 'Remote',
+    backAgain: 'Press Back again to minimize',
   },
   backup: {
     fileName: 'omp-backup-{date}.json',
