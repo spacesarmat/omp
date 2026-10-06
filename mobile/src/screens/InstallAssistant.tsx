@@ -5,12 +5,13 @@ import { goBack, navigate } from '../nav';
 import { showToast } from '../ui/toast';
 import { errorMessage } from '../../../src/api/http';
 import { HB_REPO_URL } from '../../../src/lib/updateInfo';
-import { installPlan, LG_HBC_APP_ID, type DeviceFacts, type InstallPlan, type PlanAction } from '../../../src/lib/installPlan';
+import { installPlan, ATV_BRANDS, LG_HBC_APP_ID, type AtvBrand, type DeviceFacts, type InstallPlan, type PlanAction } from '../../../src/lib/installPlan';
 import { compareVersions } from '../../../src/lib/version';
 import { connectTv, launchLgApp, sessionIp, tvState } from '../tv/tvClient';
 import { tvs } from '../tv/tvStore';
 import { latestOmpVersion, openUpdateOnTv, tvOpensUpdate } from '../tv/tvUpdate';
 import {
+  brandName,
   deviceFor,
   installNative,
   rememberDevice,
@@ -61,6 +62,8 @@ function Find() {
   const [manual, setManual] = useState(false);
   const [ip, setIp] = useState('');
   const [kind, setKind] = useState<InstallDeviceKind>('lg');
+  /** Android TV only: Xiaomi, Sber or Yandex get their own steps; null = another brand. */
+  const [brand, setBrand] = useState<AtvBrand | null>(null);
   const [formError, setFormError] = useState('');
   const [round, setRound] = useState(0);
   // this screen's NSD searches; leaving it stops only them, not a search of another screen
@@ -88,7 +91,7 @@ function Find() {
 
   function open(d: InstallDevice) {
     rememberDevice(d);
-    navigate({ name: 'install', ip: d.ip, kind: d.kind });
+    navigate({ name: 'install', ip: d.ip, kind: d.kind, brand: d.brand });
   }
 
   function submit(e: Event) {
@@ -100,15 +103,12 @@ function Find() {
     }
     const known = list.find((d) => d.ip === v && d.kind === kind);
     const saved = tvs.value.find((t) => t.ip === v);
-    open(
-      known || {
-        ip: v,
-        name: saved?.name || KIND_NAME[kind] + ' ' + v,
-        kind,
-        online: false,
-        saved: !!saved,
-      },
-    );
+    const picked = kind === 'atv' && brand ? brand : undefined;
+    const d: InstallDevice = known
+      ? { ...known }
+      : { ip: v, name: saved?.name || (picked ? brandName(picked) : KIND_NAME[kind]) + ' ' + v, kind, online: false, saved: !!saved };
+    if (picked) d.brand = picked;
+    open(d);
   }
 
   return (
@@ -127,7 +127,7 @@ function Find() {
               </span>
               <span class="m-install-dev-text">
                 <span class="m-install-dev-name">{d.name}</span>
-                <span class="m-muted m-small">{[d.model, d.kind === 'atv' ? 'Android TV' : 'LG webOS'].filter(Boolean).join(' · ')}</span>
+                <span class="m-muted m-small">{[d.model, d.kind === 'atv' ? (d.brand ? brandName(d.brand) : 'Android TV') : 'LG webOS'].filter(Boolean).join(' · ')}</span>
                 <span class={'m-small ' + (st.ok ? 'm-ok' : 'm-accent')}>{st.text}</span>
               </span>
               <span class="m-muted" aria-hidden="true">
@@ -168,6 +168,18 @@ function Find() {
               Samsung
             </button>
           </div>
+          {kind === 'atv' && (
+            <div class="m-seg" role="group" aria-label={t('install.assistant.brandLabel')}>
+              {ATV_BRANDS.map((b) => (
+                <button key={b} type="button" class={brand === b ? 'on' : ''} aria-pressed={brand === b} onClick={() => setBrand(b)}>
+                  {brandName(b)}
+                </button>
+              ))}
+              <button type="button" class={brand === null ? 'on' : ''} aria-pressed={brand === null} onClick={() => setBrand(null)}>
+                {t('install.assistant.brandOther')}
+              </button>
+            </div>
+          )}
           {formError && (
             <div class="m-error" role="alert">
               {formError}
@@ -187,8 +199,8 @@ function Find() {
   );
 }
 
-function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
-  const device = deviceFor(p.ip, p.kind);
+function Steps(p: { ip: string; kind?: InstallDeviceKind; brand?: AtvBrand }) {
+  const device = deviceFor(p.ip, p.kind, p.brand);
   const [facts, setFacts] = useState<DeviceFacts | null>(null);
   const [checking, setChecking] = useState(true);
   const [round, setRound] = useState(0);
@@ -408,6 +420,6 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind }) {
 }
 
 /** «Установить OMP на телевизор»: the device list, or the steps for one device (`ip`). */
-export function InstallAssistant(p: { ip?: string; kind?: InstallDeviceKind }) {
-  return p.ip ? <Steps ip={p.ip} kind={p.kind} /> : <Find />;
+export function InstallAssistant(p: { ip?: string; kind?: InstallDeviceKind; brand?: AtvBrand }) {
+  return p.ip ? <Steps ip={p.ip} kind={p.kind} brand={p.brand} /> : <Find />;
 }

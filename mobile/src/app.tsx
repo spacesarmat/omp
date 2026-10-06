@@ -275,7 +275,7 @@ export function App() {
       ) : route.name === 'faq' ? (
         <Faq q={route.q} />
       ) : route.name === 'install' ? (
-        <InstallAssistant key={route.ip ? 'steps:' + route.ip : 'find'} ip={route.ip} kind={route.kind} />
+        <InstallAssistant key={route.ip ? 'steps:' + route.ip : 'find'} ip={route.ip} kind={route.kind} brand={route.brand} />
       ) : route.name === 'log' ? (
         <Log />
       ) : route.name === 'backup' ? (
