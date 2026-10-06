@@ -30,6 +30,8 @@ class VlcStartWatch(private val limitMs: Long = LIMIT_MS, private val progressMs
         }
         val prev = lastNow
         lastNow = nowMs
+        // the position moving is the start, also while the prompt is up (the prompt then goes away: [promptStale])
+        if (startPos >= 0 && posMs - startPos >= progressMs) started = true
         if (!vlcPlaying || started || asked) return false
         if (startPos < 0) {
             startPos = posMs
@@ -44,6 +46,12 @@ class VlcStartWatch(private val limitMs: Long = LIMIT_MS, private val progressMs
         asked = true
         return true
     }
+
+    /** VLC got going: the watch is over. */
+    val isStarted: Boolean get() = started
+
+    /** An open «VLC не справляется» prompt has nothing to ask any more: the engine is not VLC or VLC got going. */
+    fun promptStale(vlcEngine: Boolean): Boolean = !vlcEngine || started
 
     /** «Ждать»: another [limitMs] before asking again. */
     fun waitMore() {

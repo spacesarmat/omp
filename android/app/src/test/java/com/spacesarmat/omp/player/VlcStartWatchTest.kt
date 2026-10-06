@@ -50,4 +50,27 @@ class VlcStartWatchTest {
         // another engine / item: the clock starts again
         assertFalse(run(w, "b", 42_500, 60_000, { 0L }))
     }
+
+    @Test
+    fun anOpenPromptGoesAwayWhenVlcGetsGoingOrTheEngineIsNoLongerVlc() {
+        val w = VlcStartWatch()
+        assertTrue(run(w, "a", 0, 21_000, { 27_000L }))
+        assertFalse(w.promptStale(vlcEngine = true))
+        // the prompt is up (VLC not «meant to play» for the watch), but the position moves: VLC started
+        w.tick(false, "a", 27_000, 22_000)
+        w.tick(false, "a", 29_000, 23_000)
+        assertTrue(w.isStarted)
+        assertTrue(w.promptStale(vlcEngine = true))
+        // Media3 took over (a switch, a new run): stale whatever VLC did
+        val m = VlcStartWatch()
+        assertTrue(run(m, "a", 0, 21_000, { 0L }))
+        assertTrue(m.promptStale(vlcEngine = false))
+    }
+
+    @Test
+    fun theVideoOutputWaitsForASizedSurface() {
+        assertFalse(VlcSupport.surfaceReady(0, 0))
+        assertFalse(VlcSupport.surfaceReady(1920, 0))
+        assertTrue(VlcSupport.surfaceReady(1920, 1080))
+    }
 }
