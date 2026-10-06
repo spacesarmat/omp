@@ -31,6 +31,16 @@ describe('ConnectScreen', () => {
     expect(host.querySelector('.history-btn')).toBeNull();
     expect(host.querySelectorAll('.connect-card input')).toHaveLength(1);
   });
+  it('the address field asks for the URL keyboard: Latin, no capitals or corrections', () => {
+    const host = mount();
+    const input = host.querySelector('.connect-card input') as HTMLInputElement;
+    expect(input.getAttribute('type')).toBe('url');
+    expect(input.getAttribute('inputmode')).toBe('url');
+    expect(input.getAttribute('autocapitalize')).toBe('off');
+    expect(input.getAttribute('autocorrect')).toBe('off');
+    expect(input.getAttribute('spellcheck')).toBe('false');
+    expect(input.getAttribute('lang')).toBe('en');
+  });
   it('reveals login and password under «Дополнительно»', async () => {
     const host = mount();
     (host.querySelector('.link-toggle') as HTMLElement).click();
