@@ -755,6 +755,8 @@ button, .m-btn {
 
 /* Settings + update sheet */
 .m-screen[data-route='settings'] { display: flex; flex-direction: column; gap: 20px; }
+/* «Источники поиска»: the sections spaced like «Настройки», a label never right under the card above it */
+.m-screen[data-route='sources'] { display: flex; flex-direction: column; gap: 20px; }
 .m-set-group { display: flex; flex-direction: column; gap: 10px; }
 .m-set-label { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .m-set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 4px 14px; border-radius: 12px; background: var(--panel); }
@@ -1023,7 +1025,8 @@ button, .m-btn {
 .m-idx-actions .m-note { flex: 1 1 100%; }
 .m-idx-found { padding: 6px 14px; }
 .m-idx-found .m-btn { flex-shrink: 0; }
-.m-idx-add-btn { height: 44px; border: 1px dashed #3A3F4B; border-radius: 12px; background: none; color: #C9CEDA; font-size: 14px; font-weight: 700; }
+.m-idx-add-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 44px; padding: 8px 12px; border: 1px dashed #3A3F4B; border-radius: 12px; background: none; color: #C9CEDA; font-size: 14px; font-weight: 700; }
+.m-idx-add-scan { color: var(--muted); font-size: 12px; font-weight: 500; }
 .m-idx-pick { display: flex; align-items: center; gap: 12px; padding: 12px; border: none; border-radius: 14px; background: var(--panel-2); color: var(--text); text-align: left; }
 .m-idx-pick.on { box-shadow: inset 0 0 0 2px var(--accent); }
 .m-idx-scan { align-self: flex-start; }
@@ -1210,7 +1213,8 @@ button, .m-btn {
 .m-skip-toggle .m-skip-title { font-size: 16px; }
 
 /* soft keyboard open: the tab bar and the mini player step aside, the toast drops to the bottom */
-/* the status bar is transparent (edge to edge): a scrim under it keeps the clock readable over scrolled posters */
+/* the status bar is transparent (edge to edge): a scrim under it keeps the clock readable over scrolled content.
+   Opaque: at 0.88 the bright status lines and switches of the settings subpages («Источники поиска») showed through */
 body::before {
   content: '';
   position: fixed;
@@ -1218,7 +1222,7 @@ body::before {
   left: 0;
   right: 0;
   height: env(safe-area-inset-top);
-  background: rgba(15, 17, 21, 0.88);
+  background: var(--bg);
   z-index: 9;
   pointer-events: none;
 }
