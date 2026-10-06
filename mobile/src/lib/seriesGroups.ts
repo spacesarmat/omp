@@ -20,8 +20,10 @@ export interface SeriesGroup {
   members: Torrent[];
   /** Every season the members cover, ascending (0 when one of them has none). */
   seasons: number[];
-  /** The newest season's torrent: its poster and its title stand for the group. */
+  /** The newest season's torrent: its poster stands for the group. */
   lead: Torrent;
+  /** The member whose title names the series best (most name variants, e.g. «Русское / Original»): the group's title. */
+  named: Torrent;
 }
 
 export interface SingleItem {
@@ -85,7 +87,16 @@ function makeGroup(key: string, members: Torrent[]): SeriesGroup {
     if (a > b || (a === b && (m.timestamp || 0) > (lead.timestamp || 0))) lead = m;
   });
   seasons.sort((a, b) => a - b);
-  return { kind: 'series', key, members, seasons, lead };
+  let named = lead;
+  let most = namesOf(lead).length;
+  members.forEach((m) => {
+    const n = namesOf(m).length;
+    if (n > most) {
+      most = n;
+      named = m;
+    }
+  });
+  return { kind: 'series', key, members, seasons, lead, named };
 }
 
 /** Every name variant of a series torrent («Звёздный путь…», «Star Trek…»); [] for a film. */

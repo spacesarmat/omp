@@ -147,7 +147,7 @@ function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
           <Poster torrent={group.lead} class="m-tc-poster m-sh-poster" />
         )}
         <div class="m-tc-info">
-          <h1 class="m-tc-title m-series-title">{card.title || libraryTitle(group.lead).title}</h1>
+          <h1 class="m-tc-title m-series-title">{card.title || libraryTitle(group.named).title}</h1>
           {meta && <span class="m-muted m-small m-sh-meta">{meta}</span>}
           <SeriesPill card={card} />
           <span class="m-muted m-small">{groupLabel(group)}</span>
@@ -300,7 +300,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
     chosenSeason.set(route, n);
   };
   const rows = isMissing || coming ? [] : seasonMembers(group, season);
-  const lead = libraryTitle(group.lead);
+  const lead = libraryTitle(group.named);
   const info = season !== NO_SEASON ? tmdbOf(season) : undefined;
   const caption = info ? seasonCaption(info) : '';
 

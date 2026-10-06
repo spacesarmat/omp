@@ -149,6 +149,8 @@ describe('series grouping', () => {
     expect(groups.length).toBe(1);
     expect(groups[0].members.map((m) => m.hash)).toEqual(['e2', 'r3', 'e4', 'r4']);
     expect(groups[0].seasons).toEqual([2, 3, 4]);
+    // the title comes from the release named in both languages, not the newest English-only one
+    expect(groups[0].named.hash).toBe('r4');
     // the series screen finds it by any of the names, in any order of the list
     expect(findGroup([RU3, EN4, RU4, EN2], groups[0].key)!.members.length).toBe(4);
     expect(findGroup([EN4, RU3, EN2, RU4], seriesKey(RU3))!.members.length).toBe(4);
