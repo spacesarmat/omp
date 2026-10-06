@@ -2,6 +2,24 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.17.0-beta.7
+
+- Android TV boxes with an old system WebView (for example Dune HD) no longer open OMP on a blank screen, and the remote moves the focus on them
+- 4K on boxes with little memory (128 MB per app) no longer stops after 10 seconds with «Could not play the video»; if memory still runs out, «Auto» continues the video in VLC at the same place
+- [tv] If VLC cannot start a file within 20 seconds, the player offers «Back to the built-in player» or waiting
+- [tv] Connecting to TorrServer: a wrong address or port shows «Could not connect to … — check the address and port» instead of nothing; the address field opens a Latin keyboard for addresses
+- [tv] A box names itself by the device name from its settings or «maker model», not a code like «tv175v»
+- [tv] A site behind a Cloudflare check in TV search is one short sentence: sign in on the phone in «Search sources»
+- «What's new» lists only what concerns this device: TV changes on the TV, phone changes on the phone
+- [phone] «Digital soon»: films are ordered by their digital date, every tile has a date, old films show their real year
+- [phone] «Calendar»: no repeated date on the right, no placeholder names like «Episode 7», several episodes of a day in one row «S13E07–E08»
+- [phone] «Mine»: series show a clean name («Dark Matter», season and episodes on the line below), no «· 2 releases» in the name; dates everywhere as «Oct 8»
+- [phone] Series screen: episodes show the code and size without the file name; announced episodes of the season follow as muted rows «7. Pyramid · out Oct 8»
+- [phone] «Now on TV», the mini player and «Where to watch?» name the series and the episode («Dark Matter · S02E01 · Quiet Life»), not the file
+- [phone] The release menu on a long press names the quality («Spirit Master · 4K WEB-DL»); sizes everywhere as «5.1 GB»
+- [phone] «Search sources»: spacing between sections, an opaque backing under the status bar, a clearer Jackett card («key from TorrServer» — «Connect» connects at once)
+- [phone] Small things: no «0 seeds» when the number is unknown; text links stand out; the keyboard closes after a search; the «Connect TV» button on «Remote» is centred
+
 ## 0.17.0-beta.6
 
 - [phone] «New» → «Calendar»: the episodes of the next 30 days by day («Today», «Tomorrow», «Thu, Oct 8») for the series in «Mine» and series subscriptions; the ones out in the last 3 days are marked «out» — «Watch» when monitoring already found a release, «Find» otherwise; pull down to refresh
