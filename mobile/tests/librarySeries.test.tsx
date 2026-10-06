@@ -11,6 +11,7 @@ import { addServer, setActiveServer, servers, removeServer } from '../../src/sto
 import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
 import { reloadProgress, saveProgress, serverViewed } from '../../src/store/progress';
 import { applyLanguageSetting } from '../../src/i18n';
+import { libraryTitle } from '../../src/lib/libraryView';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetSeriesMatches } from '../src/lib/seriesMatch';
 import { TorrServerClient } from '../../src/api/torrserver';
@@ -171,7 +172,17 @@ describe('series grouping', () => {
     expect(groups.length).toBe(1);
     expect(groups[0].members.map((m) => m.hash)).toEqual(['e2', 'r3', 'e4']);
     expect(groups[0].seasons).toEqual([2, 3, 4]);
+    // the card title follows the UI language: the Russian name in a Russian UI, the English one in an English UI
     expect(groups[0].named.hash).toBe('r3');
+    expect(libraryTitle(groups[0].named).title).toBe('Звёздный путь: Странные новые миры');
+    applyLanguageSetting('en');
+    const en = groupLibrary([EN2, RU3, M1, EN4]).filter((x) => x.kind === 'series') as SeriesGroup[];
+    expect(en[0].named.hash).toBe('e4');
+    expect(libraryTitle(en[0].named).title).toBe('Star Trek: Strange New Worlds');
+    // whatever the order of the list
+    expect(findGroup([RU3, EN4, EN2], en[0].key)!.named.hash).toBe('e4');
+    applyLanguageSetting('ru');
+    expect(findGroup([EN4, EN2, RU3], en[0].key)!.named.hash).toBe('r3');
   });
 
   it('series sharing only the year and the release details are not merged', () => {
