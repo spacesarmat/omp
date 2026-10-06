@@ -565,6 +565,21 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .news-dot { display: inline-block; vertical-align: middle; width: 14px; height: 14px; margin-right: 14px; border-radius: 7px; background: var(--accent); }
 .news-kind { margin-top: 6px; font-size: 23px; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .news-new { margin-top: 6px; color: var(--accent); font-weight: 700; }
+/* TV «Подписки»: the phone subscriptions */
+.news-subs-top { margin-bottom: 20px; }
+.news-sub { display: flex; align-items: center; margin-bottom: 14px; padding: 16px 22px; border-radius: 16px; background: var(--panel); }
+.news-sub-info { flex: 1; min-width: 0; margin-right: 20px; }
+.news-sub-line1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 28px; }
+.news-sub-line1 .search-chip { margin-left: 14px; }
+.news-sub-actions { display: flex; align-items: center; flex-shrink: 0; }
+.news-sub-actions > * { margin-right: 14px; }
+.news-sub-actions > *:last-child { margin-right: 0; }
+.news-sub-switch { display: flex; align-items: center; padding: 8px 14px; border-radius: 30px; }
+.news-sub-switch.focused { background: var(--panel2); box-shadow: 0 0 0 4px var(--focus); }
+.news-sub-label { margin-right: 12px; font-size: 22px; color: var(--muted); white-space: nowrap; }
+.news-sub-switch.focused .news-sub-label { color: var(--text); }
+.news-sub-actions .button { padding: 12px 22px; font-size: 22px; }
+.news-sub-checking { color: var(--accent); }
 .disc-grid { display: flex; flex-wrap: wrap; margin-right: -28px; }
 .disc-tile { width: 192px; margin: 0 28px 28px 0; border-radius: 14px; }
 .disc-tile.focused { box-shadow: none; transform: scale(1.06); transform-origin: top center; }

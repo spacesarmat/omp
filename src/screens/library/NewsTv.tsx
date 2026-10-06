@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
 import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
-import { t, type Key } from '../../i18n';
+import { t, tp, type Key } from '../../i18n';
 import { ru } from '../../i18n/ru';
 import { en } from '../../i18n/en';
 import { client } from '../../store/servers';
@@ -16,6 +16,8 @@ import { recordAutoCategory } from '../../lib/categoryCheck';
 import { shortTitle } from '../../lib/libraryView';
 import { FocusGroup, Focusable, Button, Spinner } from '../../ui/components';
 import { choose } from '../../ui/dialog';
+import { askText } from '../../ui/TextDialog';
+import { SourceSwitch } from '../../ui/SourceSwitch';
 import { toast } from '../../ui/toast';
 import { useKeys } from '../../ui/keys';
 import { navigate } from '../../ui/nav';
@@ -23,8 +25,17 @@ import { tvGlyphs } from '../../ui/tvText';
 import { phoneLink, type PhoneLink } from '../../phone/phoneStore';
 import { PhoneRpcError } from '../../phone/rpc';
 import { fromRpcResult, type TvResult } from '../../phone/phoneSearch';
-import { phoneFeed, phoneFindingLink, phoneFindingsSeen, newsUnseen } from '../../phone/monitor';
-import type { RpcFinding } from '../../phone/rpcTypes';
+import {
+  phoneFeed,
+  phoneFindingLink,
+  phoneFindingsSeen,
+  phoneSubs,
+  phoneSubCheck,
+  phoneSubSet,
+  phoneSubRemove,
+  newsUnseen,
+} from '../../phone/monitor';
+import type { RpcFinding, RpcSub } from '../../phone/rpcTypes';
 import { replaceWithLink } from '../../monitor/replaceTv';
 import { failureOf } from '../../monitor/upgradeText';
 import { isHotChip, releaseChips, releaseTitle } from '../../sources/releaseRow';
@@ -126,6 +137,7 @@ function cachedFor(link: PhoneLink | null): NewsRow[] | null {
 /** Test seam: forgets the kept feed. */
 export function resetNewsCache(): void {
   cached = null;
+  subsCached = null;
 }
 
 /** Marks the unseen findings among `rows` seen on the phone (one call per subscription). */
@@ -369,8 +381,7 @@ export function NewsTv(p: NewsTvProps) {
       </div>
     );
   } else if (seg === 'subs') {
-    // Task 4: the subscriptions
-    body = <div class="news-subs" />;
+    body = <SubsTv link={link} onFocused={onRow} />;
   } else if (status === 'offline' || status === 'error' || retrying) {
     body = (
       <div class="news-card">
@@ -451,6 +462,322 @@ export function NewsTv(p: NewsTvProps) {
         </div>
       )}
       {body}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Subscriptions: the phone's subscriptions. The switches and the buttons act on the phone at once; Check now
+// starts a check there and the list is asked again while any check runs.
+
+/** How often the list is asked again while a check runs, and for how long at most. Mutable for tests. */
+export const subsPoll = { gapMs: 2000, maxMs: 60000 };
+
+// the last list per phone: back on the segment the rows are there at once
+let subsCached: { url: string; subs: RpcSub[] } | null = null;
+
+function subsFor(link: PhoneLink | null): RpcSub[] | null {
+  return link && subsCached && subsCached.url === link.url ? subsCached.subs : null;
+}
+
+/** The subscriptions the phone gave, malformed ones dropped. */
+export function subsRows(list: unknown): RpcSub[] {
+  if (!Array.isArray(list)) return [];
+  return list.filter((x: RpcSub) => !!x && typeof x === 'object' && typeof x.id === 'string' && !!x.id && typeof x.query === 'string');
+}
+
+/** Lower case, yo as ye: the filter matches a query with yo typed with ye. */
+function foldText(s: string): string {
+  return (s || '').toLowerCase().replace(/\u0451/g, '\u0435');
+}
+
+/** The subscriptions whose query has `q` in it (case-insensitive, yo = ye). */
+export function filterSubs(list: RpcSub[], q: string): RpcSub[] {
+  const f = foldText(q.trim());
+  if (!f) return list;
+  return list.filter((x) => foldText(x.query).indexOf(f) >= 0);
+}
+
+/** 4K, 1080p, 720p, or any quality. */
+export function subQuality(q: RpcSub['quality']): string {
+  if (q === '2160') return '4K';
+  if (q === '1080' || q === '720') return q + 'p';
+  return t('tv.subs.anyQuality');
+}
+
+type SubPart = 'notify' | 'better' | 'check' | 'remove';
+const subKey = (id: string, part: SubPart) => 'news-sub-' + id + '-' + part;
+const FIND_KEY = 'news-subs-find';
+const SUBS_RETRY = 'news-subs-retry';
+
+function SubsTv(p: { link: PhoneLink; onFocused: () => void }) {
+  const [subs, setSubs] = useState<RpcSub[] | null>(() => subsFor(p.link));
+  const [status, setStatus] = useState<Status>('checking');
+  const [errText, setErrText] = useState('');
+  const [retrying, setRetrying] = useState(false);
+  const [filter, setFilter] = useState('');
+  const alive = useRef(true);
+  const seq = useRef(0);
+  const list = useRef<RpcSub[] | null>(subs);
+  const poll = useRef<{ timer: ReturnType<typeof setTimeout> | null; until: number }>({ timer: null, until: 0 });
+  // where the focus goes once the list is drawn (after a remove)
+  const focusNext = useRef('');
+
+  const put = (next: RpcSub[]) => {
+    list.current = next;
+    subsCached = { url: p.link.url, subs: next };
+    setSubs(next);
+  };
+
+  const stopPoll = () => {
+    if (poll.current.timer) clearTimeout(poll.current.timer);
+    poll.current.timer = null;
+  };
+
+  const anyChecking = (l: RpcSub[]) => l.some((x) => !!x.checking);
+
+  function schedule() {
+    if (poll.current.timer || !alive.current) return;
+    poll.current.timer = setTimeout(tick, subsPoll.gapMs);
+  }
+
+  function tick() {
+    poll.current.timer = null;
+    if (!alive.current) return;
+    phoneSubs().then(
+      (got) => {
+        if (!alive.current) return;
+        const next = subsRows(got);
+        put(next);
+        if (anyChecking(next) && Date.now() < poll.current.until) schedule();
+      },
+      () => {
+        if (alive.current && Date.now() < poll.current.until) schedule();
+      },
+    );
+  }
+
+  /** Asks the list again every 2 s while a check runs, for a minute at most. */
+  const startPoll = () => {
+    poll.current.until = Date.now() + subsPoll.maxMs;
+    schedule();
+  };
+
+  const load = () => {
+    const my = ++seq.current;
+    setStatus((s) => (s === 'online' ? s : 'checking'));
+    phoneSubs().then(
+      (got) => {
+        if (!alive.current || my !== seq.current) return;
+        setRetrying(false);
+        const next = subsRows(got);
+        put(next);
+        setStatus('online');
+        if (anyChecking(next)) startPoll();
+      },
+      (e) => {
+        if (!alive.current || my !== seq.current) return;
+        setRetrying(false);
+        if (isDown(e)) {
+          setStatus('offline');
+          return;
+        }
+        setErrText(newsError(e));
+        setStatus('error');
+      },
+    );
+  };
+
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      stopPoll();
+    };
+  }, []);
+
+  // a new phone starts over
+  useEffect(() => {
+    seq.current++;
+    stopPoll();
+    const c = subsFor(p.link);
+    list.current = c;
+    setSubs(c);
+    setRetrying(false);
+    load();
+  }, [p.link.url]);
+
+  const down = status === 'offline' || status === 'error' || retrying;
+  const shown = subs && !down ? filterSubs(subs, filter) : [];
+
+  // focus is never lost: after a remove it goes where the remove said, otherwise to what is on screen now
+  // (setFocus is queued: the target is kept until the focus is on screen again, so a render in between cannot
+  // send it to the first row instead)
+  useEffect(() => {
+    let cur = '';
+    try {
+      cur = getCurrentFocusKey() || '';
+    } catch (e) {
+      cur = '';
+    }
+    const want = focusNext.current;
+    if (want) {
+      if ((cur && onScreen(cur)) || !onScreen(want)) focusNext.current = '';
+      else {
+        setFocus(want);
+        return;
+      }
+    }
+    if (!cur || onScreen(cur)) return;
+    let fallback = SEG_KEYS.subs;
+    if (shown.length) fallback = subKey(shown[0].id, 'notify');
+    else if (onScreen(SUBS_RETRY)) fallback = SUBS_RETRY;
+    else if (onScreen(FIND_KEY)) fallback = FIND_KEY;
+    if (onScreen(fallback)) setFocus(fallback);
+  });
+
+  const replaceSub = (sub: RpcSub) => {
+    put((list.current || []).map((x) => (x.id === sub.id ? sub : x)));
+  };
+
+  const current = (id: string): RpcSub | undefined => (list.current || []).filter((x) => x.id === id)[0];
+
+  const toggle = (s: RpcSub, what: 'notify' | 'better') => {
+    const patch: { notify?: boolean; better?: boolean } = {};
+    patch[what] = !s[what];
+    phoneSubSet(s.id, patch).then(
+      (sub) => {
+        if (!alive.current) return;
+        if (sub && typeof sub.id === 'string') {
+          replaceSub(sub);
+          return;
+        }
+        const cur = current(s.id);
+        if (!cur) return;
+        const copy: RpcSub = { ...cur };
+        copy[what] = !s[what];
+        replaceSub(copy);
+      },
+      (e) => toast(newsError(e), 'error'),
+    );
+  };
+
+  const check = (s: RpcSub) => {
+    if (s.checking) return;
+    phoneSubCheck(s.id).then(
+      () => {
+        if (!alive.current) return;
+        const cur = current(s.id);
+        if (cur) replaceSub({ ...cur, checking: true });
+        startPoll();
+      },
+      (e) => toast(newsError(e), 'error'),
+    );
+  };
+
+  const remove = (s: RpcSub) => {
+    const name = tvGlyphs(s.query);
+    choose<boolean>(t('tv.subs.removeAsk', { name: name }), [
+      { label: t('tv.subs.remove'), value: true },
+      { label: t('common.cancel'), value: false },
+    ]).then((ok) => {
+      if (!ok || !alive.current) return;
+      phoneSubRemove(s.id).then(
+        () => {
+          if (!alive.current) return;
+          // the next row of the list as shown, else the one before, else the segment chip
+          const vis = filterSubs(list.current || [], filter);
+          let at = -1;
+          vis.forEach((x, i) => {
+            if (x.id === s.id) at = i;
+          });
+          const near = at >= 0 ? vis[at + 1] || vis[at - 1] : undefined;
+          focusNext.current = near ? subKey(near.id, 'notify') : SEG_KEYS.subs;
+          put((list.current || []).filter((x) => x.id !== s.id));
+          toast(t('tv.subs.removed', { name: name }));
+        },
+        (e) => toast(newsError(e), 'error'),
+      );
+    });
+  };
+
+  const find = () => {
+    askText(t('tv.subs.find'), filter, t('add.search')).then((v) => {
+      if (v === null || !alive.current) return;
+      setFilter(v.trim());
+    });
+  };
+
+  const retry = () => {
+    setRetrying(true);
+    load();
+  };
+
+  if (down) {
+    return (
+      <div class="news-card">
+        <div class="news-card-text src-note-bad">{status === 'error' ? errText : t('phoneSources.down')}</div>
+        <FocusGroup focusKey="NEWS-SUBS-RETRY" className="actions">
+          <Button focusKey={SUBS_RETRY} label={t('phoneSources.retry')} onPress={retry} onFocused={p.onFocused} />
+        </FocusGroup>
+      </div>
+    );
+  }
+  if (!subs) return <Spinner text={t('tv.news.loading')} />;
+  if (!subs.length) return <div class="empty news-subs-empty">{t('tv.subs.empty')}</div>;
+
+  const sw = (s: RpcSub, what: 'notify' | 'better') => (
+    <Focusable
+      focusKey={subKey(s.id, what)}
+      className="news-sub-switch"
+      role="button"
+      ariaLabel={t(what === 'notify' ? 'tv.subs.notify' : 'tv.subs.better')}
+      ariaChecked={s[what]}
+      onPress={() => toggle(s, what)}
+      onFocused={p.onFocused}
+    >
+      <span class="news-sub-label">{t(what === 'notify' ? 'tv.subs.notify' : 'tv.subs.better')}</span>
+      <SourceSwitch on={s[what]} />
+    </Focusable>
+  );
+
+  return (
+    <div class="news-subs">
+      <FocusGroup focusKey="NEWS-SUBS-FIND" className="news-subs-top">
+        <Button
+          focusKey={FIND_KEY}
+          icon="search"
+          label={filter ? t('tv.subs.findValue', { q: tvGlyphs(filter) }) : t('tv.subs.find')}
+          onPress={find}
+          onFocused={p.onFocused}
+        />
+      </FocusGroup>
+      {!shown.length && <div class="empty">{t('tv.subs.noMatch', { q: tvGlyphs(filter) })}</div>}
+      <FocusGroup focusKey="NEWS-SUBS" className="news-subs-list">
+        {shown.map((s) => (
+          <div key={s.id} class="news-sub" data-sub={s.id}>
+            <div class="news-sub-info">
+              <div class="news-sub-line1">
+                <span class="title">{tvGlyphs(s.query)}</span>
+                <span class="search-chip">{subQuality(s.quality)}</span>
+              </div>
+              {s.unseen > 0 && <div class="news-new news-sub-fresh">{tp('tv.subs.fresh', s.unseen)}</div>}
+            </div>
+            <FocusGroup focusKey={'NEWS-SUB-' + s.id} className="news-sub-actions">
+              {sw(s, 'notify')}
+              {sw(s, 'better')}
+              <Button
+                focusKey={subKey(s.id, 'check')}
+                className={s.checking ? 'news-sub-checking' : ''}
+                label={s.checking ? t('tv.subs.checking') : t('tv.subs.check')}
+                onPress={() => check(s)}
+                onFocused={p.onFocused}
+              />
+              <Button focusKey={subKey(s.id, 'remove')} className="danger" label={t('tv.subs.remove')} onPress={() => remove(s)} onFocused={p.onFocused} />
+            </FocusGroup>
+          </div>
+        ))}
+      </FocusGroup>
     </div>
   );
 }

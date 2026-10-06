@@ -9,7 +9,8 @@ vi.mock('../../src/monitor/replaceTv', async (orig) => {
 });
 
 import { LibraryScreen } from '../../src/screens/Library';
-import { newsSeg, resetNewsCache, newsError, kindLine } from '../../src/screens/library/NewsTv';
+import { newsSeg, resetNewsCache, newsError, kindLine, subsPoll, filterSubs, subQuality } from '../../src/screens/library/NewsTv';
+import { TextDialogHost } from '../../src/ui/TextDialog';
 import { DialogHost } from '../../src/ui/dialog';
 import { ToastHost } from '../../src/ui/toast';
 import { servers, activeServerId, addServer, setActiveServer } from '../../src/store/servers';
@@ -21,7 +22,7 @@ import { savePhoneLink, forgetPhoneLink } from '../../src/phone/phoneStore';
 import { newsUnseen } from '../../src/phone/monitor';
 import { replaceWithLink } from '../../src/monitor/replaceTv';
 import { mockFetch } from '../helpers/fetchMock';
-import type { RpcFinding, RpcResult } from '../../src/phone/rpcTypes';
+import type { RpcFinding, RpcResult, RpcSub } from '../../src/phone/rpcTypes';
 
 const PH = { url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Samsung SM-G998B' };
 const OLD = 'a'.repeat(40);
@@ -153,7 +154,7 @@ async function mount() {
   const host = document.createElement('div');
   hosts.push(host);
   document.body.appendChild(host);
-  act(() => { render(h('div', {}, h(LibraryScreen, {}), h(DialogHost, {}), h(ToastHost, {})), host); });
+  act(() => { render(h('div', {}, h(LibraryScreen, {}), h(DialogHost, {}), h(TextDialogHost, {}), h(ToastHost, {})), host); });
   await flush();
   return host;
 }
@@ -322,5 +323,206 @@ describe('news texts', () => {
       'Эта раздача есть только файлом .torrent: добавьте её с телефона',
     );
     expect(newsError(new PhoneRpcError('failed', 'Сайт не ответил'))).toBe('Сайт не ответил');
+  });
+});
+
+const SUBS: RpcSub[] = [
+  { id: 's1', query: 'Дюна', quality: '1080', notify: true, better: false, unseen: 2, checking: false, createdAt: 1 },
+  { id: 's2', query: 'Ёлки', quality: '', notify: false, better: true, unseen: 0, checking: false, createdAt: 2 },
+  { id: 's3', query: 'Основание', quality: '2160', notify: true, better: true, unseen: 1, checking: false, createdAt: 3 },
+];
+
+const subRows = (host: Element) => Array.prototype.slice.call(host.querySelectorAll('.news-sub')) as HTMLElement[];
+const subEl = (host: Element, id: string, part: string) => host.querySelector('[data-fk="news-sub-' + id + '-' + part + '"]') as HTMLElement;
+const inDialog = (label: string) =>
+  (Array.prototype.slice.call(document.querySelectorAll('.dialog-backdrop .dialog-option, .dialog-backdrop .button')) as HTMLElement[]).filter(
+    (b) => text(b) === label,
+  )[0];
+const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+// the list is asked after the feed: one macrotask more so everything has settled
+async function mountSubs() {
+  const host = await mount();
+  await act(() => pause(5));
+  await flush();
+  return host;
+}
+
+describe('TV «Подписки» segment', () => {
+  const gap = subsPoll.gapMs;
+  const max = subsPoll.maxMs;
+  beforeEach(() => {
+    newsSeg.value = 'subs';
+  });
+  afterEach(() => {
+    subsPoll.gapMs = gap;
+    subsPoll.maxMs = max;
+  });
+
+  it('shows the subscriptions with their quality, the new count and the switches', async () => {
+    useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: SUBS }] });
+    const host = await mountSubs();
+    const rows = subRows(host);
+    expect(rows.map((r) => text(r.querySelector('.title')))).toEqual(['Дюна', 'Ёлки', 'Основание']);
+    expect(rows.map((r) => text(r.querySelector('.search-chip')))).toEqual(['1080p', 'любое качество', '4K']);
+    expect(text(rows[0].querySelector('.news-sub-fresh'))).toBe('2 новых');
+    expect(rows[1].querySelector('.news-sub-fresh')).toBeNull();
+    expect(text(rows[2].querySelector('.news-sub-fresh'))).toBe('1 новая');
+    expect(text(subEl(host, 's1', 'notify'))).toBe('Сообщать');
+    expect(text(subEl(host, 's1', 'better'))).toBe('В лучшем качестве');
+    expect(subEl(host, 's1', 'notify').querySelector('.src-switch.on')).not.toBeNull();
+    expect(subEl(host, 's1', 'better').querySelector('.src-switch.on')).toBeNull();
+    expect(subEl(host, 's2', 'better').querySelector('.src-switch.on')).not.toBeNull();
+    expect(text(subEl(host, 's1', 'check'))).toBe('Проверить сейчас');
+    expect(text(subEl(host, 's1', 'remove'))).toBe('Удалить');
+    expect(text(host.querySelector('.hints'))).toBe('ОК — переключить или выбрать · Назад — к медиатеке');
+  });
+
+  it('an empty list says where subscriptions come from', async () => {
+    useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: [] }] });
+    const host = await mountSubs();
+    expect(text(host.querySelector('.news-subs-empty'))).toBe(
+      'Подписок пока нет — добавьте их на телефоне или кнопкой «Хочу посмотреть» в карточке',
+    );
+  });
+
+  it('a phone that does not answer: the note and «Повторить»', async () => {
+    useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [new Error('timeout'), { subs: SUBS }] });
+    const host = await mountSubs();
+    expect(text(host.querySelector('.news-card'))).toContain('Телефон не отвечает');
+    act(() => setFocus('news-subs-retry'));
+    await click(host.querySelector('[data-fk="news-subs-retry"]')!);
+    expect(subRows(host).length).toBe(3);
+    expect(getCurrentFocusKey()).toBe('news-sub-s1-notify');
+  });
+
+  it('«Сообщать» sends subSet {id, notify:false} and the row shows the answer', async () => {
+    useScript({
+      feed: [{ findings: [], lastRun: 1 }],
+      subs: [{ subs: SUBS }],
+      subSet: [{ sub: { ...SUBS[0], notify: false } }],
+    });
+    const host = await mountSubs();
+    await click(subEl(host, 's1', 'notify'));
+    expect(calls.filter((c) => c.method === 'subSet').map((c) => c.params)).toEqual([{ id: 's1', notify: false }]);
+    expect(subEl(host, 's1', 'notify').querySelector('.src-switch.on')).toBeNull();
+    expect(subEl(host, 's1', 'better').querySelector('.src-switch.on')).toBeNull();
+  });
+
+  it('«В лучшем качестве» sends subSet {id, better:true}', async () => {
+    useScript({
+      feed: [{ findings: [], lastRun: 1 }],
+      subs: [{ subs: SUBS }],
+      subSet: [{ sub: { ...SUBS[0], better: true } }],
+    });
+    const host = await mountSubs();
+    await click(subEl(host, 's1', 'better'));
+    expect(calls.filter((c) => c.method === 'subSet').map((c) => c.params)).toEqual([{ id: 's1', better: true }]);
+    expect(subEl(host, 's1', 'better').querySelector('.src-switch.on')).not.toBeNull();
+  });
+
+  it('«Проверить сейчас» shows «Проверяю…» until the phone says the check is over', async () => {
+    subsPoll.gapMs = 20;
+    const busy = SUBS.map((x) => (x.id === 's1' ? { ...x, checking: true } : x));
+    const done = SUBS.map((x) => (x.id === 's1' ? { ...x, unseen: 3 } : x));
+    useScript({
+      feed: [{ findings: [], lastRun: 1 }],
+      subs: [{ subs: SUBS }, { subs: busy }, { subs: done }],
+      subCheck: [{ started: true }],
+    });
+    const host = await mountSubs();
+    await click(subEl(host, 's1', 'check'));
+    expect(calls.filter((c) => c.method === 'subCheck').map((c) => c.params)).toEqual([{ id: 's1' }]);
+    expect(text(subEl(host, 's1', 'check'))).toBe('Проверяю…');
+    await act(() => pause(30));
+    await flush();
+    expect(text(subEl(host, 's1', 'check'))).toBe('Проверяю…');
+    await act(() => pause(30));
+    await flush();
+    expect(text(subEl(host, 's1', 'check'))).toBe('Проверить сейчас');
+    expect(text(subRows(host)[0].querySelector('.news-sub-fresh'))).toBe('3 новых');
+    // the check is over: the list is not asked again
+    const n = calls.filter((c) => c.method === 'subs').length;
+    await act(() => pause(60));
+    await flush();
+    expect(calls.filter((c) => c.method === 'subs').length).toBe(n);
+  });
+
+  it('the poll stops when the tab goes away', async () => {
+    subsPoll.gapMs = 20;
+    const busy = SUBS.map((x) => (x.id === 's1' ? { ...x, checking: true } : x));
+    useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: SUBS }, { subs: busy }], subCheck: [{ started: true }] });
+    const host = await mountSubs();
+    await click(subEl(host, 's1', 'check'));
+    act(() => { render(null, host); });
+    hosts.splice(hosts.indexOf(host), 1);
+    const n = calls.filter((c) => c.method === 'subs').length;
+    await pause(80);
+    expect(calls.filter((c) => c.method === 'subs').length).toBe(n);
+  });
+
+  it('«Удалить» asks, removes on the phone and moves the focus to the next row', async () => {
+    useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: SUBS }], subRemove: [{ removed: true }] });
+    const host = await mountSubs();
+    act(() => setFocus('news-sub-s1-remove'));
+    await flush();
+    await click(subEl(host, 's1', 'remove'));
+    expect(text(document.querySelector('.dialog-title'))).toBe('Удалить подписку «Дюна»?');
+    await click(inDialog('Удалить'));
+    expect(calls.filter((c) => c.method === 'subRemove').map((c) => c.params)).toEqual([{ id: 's1' }]);
+    expect(subRows(host).map((r) => text(r.querySelector('.title')))).toEqual(['Ёлки', 'Основание']);
+    expect(getCurrentFocusKey()).toBe('news-sub-s2-notify');
+  });
+
+  it('«Отмена» keeps the subscription and the focus', async () => {
+    useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: SUBS }], subRemove: [{ removed: true }] });
+    const host = await mountSubs();
+    act(() => setFocus('news-sub-s2-remove'));
+    await flush();
+    expect(getCurrentFocusKey()).toBe('news-sub-s2-remove');
+    await click(subEl(host, 's2', 'remove'));
+    await click(inDialog('Отмена'));
+    expect(calls.filter((c) => c.method === 'subRemove').length).toBe(0);
+    expect(subRows(host).length).toBe(3);
+    expect(getCurrentFocusKey()).toBe('news-sub-s2-remove');
+  });
+
+  it('removing the last row focuses the one before; the only one, the segment chip', async () => {
+    useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: SUBS.slice(1) }], subRemove: [{ removed: true }] });
+    const host = await mountSubs();
+    act(() => setFocus('news-sub-s3-remove'));
+    await flush();
+    await click(subEl(host, 's3', 'remove'));
+    await click(inDialog('Удалить'));
+    expect(getCurrentFocusKey()).toBe('news-sub-s2-notify');
+    await click(subEl(host, 's2', 'remove'));
+    await click(inDialog('Удалить'));
+    expect(subRows(host).length).toBe(0);
+    expect(getCurrentFocusKey()).toBe('news-seg-subs');
+  });
+
+  it('«Найти подписку» narrows the list (any case, ё = е)', async () => {
+    useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: SUBS }] });
+    const host = await mountSubs();
+    await click(host.querySelector('[data-fk="news-subs-find"]')!);
+    const input = document.body.querySelector('.text-dialog input') as HTMLInputElement;
+    act(() => { input.value = 'ЕЛК'; input.dispatchEvent(new Event('input', { bubbles: true })); });
+    await click(inDialog('Поиск'));
+    expect(subRows(host).map((r) => text(r.querySelector('.title')))).toEqual(['Ёлки']);
+    expect(text(host.querySelector('[data-fk="news-subs-find"]'))).toBe('Найти подписку: «ЕЛК»');
+  });
+});
+
+describe('subscription helpers', () => {
+  it('filterSubs: substring, case, ё = е; an empty filter keeps all', () => {
+    expect(filterSubs(SUBS, '  ').length).toBe(3);
+    expect(filterSubs(SUBS, 'осн').map((x) => x.id)).toEqual(['s3']);
+    expect(filterSubs(SUBS, 'ёлки').map((x) => x.id)).toEqual(['s2']);
+    expect(filterSubs([{ ...SUBS[0], query: 'Елки-палки' }], 'ЁЛКИ').length).toBe(1);
+    expect(filterSubs(SUBS, 'zzz')).toEqual([]);
+  });
+  it('subQuality', () => {
+    expect(subQuality('720')).toBe('720p');
+    expect(subQuality('2160')).toBe('4K');
+    expect(subQuality('')).toBe('любое качество');
   });
 });

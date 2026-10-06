@@ -25,7 +25,7 @@ import { TopBar } from '../ui/TopBar';
 import { TorrentViews } from './library/TorrentViews';
 import { HistoryGrid, HistoryEntry, HistoryFilterRow } from './library/HistoryGrid';
 import { DiscoverGrid } from './library/DiscoverGrid';
-import { NewsTv } from './library/NewsTv';
+import { NewsTv, newsSeg } from './library/NewsTv';
 import { phoneLink } from '../phone/phoneStore';
 import { phoneFeed } from '../phone/monitor';
 import { displayTitle } from '../lib/torrentName';
@@ -275,7 +275,7 @@ export function LibraryScreen() {
       )}
       {empty && <div class="empty">{empty}</div>}
       {isNews ? (
-        <div class="hints">{t('tv.news.hints')}</div>
+        <div class="hints">{t(newsSeg.value === 'subs' && phoneLink.value ? 'tv.subs.hints' : 'tv.news.hints')}</div>
       ) : isDiscover ? (
         <div class="hints">
           {t('tv.discover.okCard')} · <KeyDot color="yellow" /> {t('tv.discover.wantKey')} · <KeyDot color="blue" /> {t('tv.discover.sortKey')} · {t('tv.discover.backLibrary')}
