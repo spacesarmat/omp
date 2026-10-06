@@ -348,6 +348,32 @@ describe('replaceTorrent', () => {
     expect(j.map((e) => [e.f, e.t])).toEqual([[2, 100], [1, 1400]]);
   });
 
+  it('keepOwn: the kept release keeps its own history and settings, merged with the old one (newest per file and device)', async () => {
+    const own = dataOf(NEW_FILES, {
+      omp: {
+        v: 1,
+        h: [
+          { f: 1, t: 500, d: 1400, at: T0 + 10000, src: 'tv' },
+          { f: 3, t: 200, d: 1400, at: T0 - 100, src: 'phone', name: 'Pixel' },
+        ],
+        s: { i: false, c: true },
+        q: false,
+      },
+    });
+    const s = setup({ existing: true, fresh: { title: 'Show S01 1080p', category: 'tv', data: own } });
+    const c = { ...s.c, add: vi.fn(() => Promise.resolve({ ...s.server.newhash })) } as ReplaceClient;
+    const r = await replaceTorrent(c, 'oldhash', 'magnet:?xt=urn:btih:newhash', { keepOwn: true });
+    expect(r).toEqual({ ok: true, hash: 'newhash' });
+    const p = parseData(s.server.newhash.data)!;
+    expect(p.journal.map((e) => [e.f, e.t, e.src])).toEqual([[1, 500, 'tv'], [2, 100, 'phone'], [3, 200, 'phone']]);
+    const omp = p.obj.omp as { [k: string]: unknown };
+    // the kept release's own skip settings and flags win; the old one's other keys come along
+    expect(p.skip).toEqual({ i: false, c: true });
+    expect(omp.q).toBe(false);
+    expect(omp.w).toBe(false);
+    expect(omp.fut).toEqual({ a: 1 });
+  });
+
   it('the same torrent is refused without removing anything', async () => {
     const s = setup();
     const c = { ...s.c, add: vi.fn(() => Promise.resolve({ ...s.old })) } as ReplaceClient;
