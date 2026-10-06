@@ -1114,6 +1114,22 @@ export const en: EnDict<typeof ru> = {
       offlineText: 'TMDB does not respond from this network. Set a TMDB mirror in the TorrServer settings or try again later.',
       nokeyText: 'No TMDB key. Add it in the TorrServer settings (TMDB → API key).',
     },
+    // «Новое»: findings from OMP on the phone (new episodes, better quality, subscriptions)
+    news: {
+      tab: 'New',
+      findings: 'Findings',
+      subs: 'Subscriptions',
+      phone: 'Phone {name}',
+      noPhone: 'New findings and subscriptions are run by OMP on the phone. On the phone: Settings → TV → choose this TV, and «Search for the TV» turns on by itself.',
+      empty: 'Nothing new yet. OMP on the phone checks the library and the subscriptions in the background.',
+      loading: 'Asking the phone…',
+      episode: 'New episode {code}',
+      episodes: 'New episodes {code}',
+      better: 'Better quality: {from} → {to}',
+      sub: 'Subscription «{name}»',
+      newMark: 'new',
+      hints: 'OK — watch · Back — to the library',
+    },
     want: {
       tab: 'Want',
       subtitle: 'Saved by you: the yellow key adds and removes',

@@ -550,6 +550,21 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .disc-sub { display: flex; align-items: center; min-height: 54px; margin: 22px 0 18px; font-size: 26px; color: var(--muted); }
 .disc-results .disc-sub-text { color: var(--text); margin-right: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1300px; }
 .disc-results .button { padding: 10px 24px; font-size: 24px; }
+/* TV «Новое»: findings from OMP on the phone */
+.tab-badge { display: inline-block; min-width: 18px; margin-left: 10px; padding: 1px 8px; border-radius: 14px; background: var(--accent); color: #0f1115; font-size: 18px; font-weight: 700; line-height: 26px; text-align: center; }
+.tab.focused .tab-badge { background: #0f1115; color: var(--accent); }
+.news-head { display: flex; align-items: center; min-height: 64px; margin: 8px 0 22px; }
+.news-segs > * { margin-right: 4px; }
+.news-segs > *:last-child { margin-right: 0; }
+.news-phone { display: flex; align-items: center; font-size: 24px; color: var(--muted); white-space: nowrap; }
+.news-phone-name { white-space: pre; }
+.news-card { max-width: 1240px; padding: 32px 36px; border-radius: 18px; background: var(--panel); }
+.news-card-text { font-size: 28px; line-height: 1.4; color: var(--text); }
+.news-card-text.src-note-bad { color: #ff8a80; }
+.news-card .actions { margin-top: 24px; }
+.news-dot { display: inline-block; vertical-align: middle; width: 14px; height: 14px; margin-right: 14px; border-radius: 7px; background: var(--accent); }
+.news-kind { margin-top: 6px; font-size: 23px; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.news-new { margin-top: 6px; color: var(--accent); font-weight: 700; }
 .disc-grid { display: flex; flex-wrap: wrap; margin-right: -28px; }
 .disc-tile { width: 192px; margin: 0 28px 28px 0; border-radius: 14px; }
 .disc-tile.focused { box-shadow: none; transform: scale(1.06); transform-origin: top center; }

@@ -5,6 +5,7 @@ import { navigate } from './nav';
 import { t } from '../i18n';
 import { tvLibraryTabs, LibraryTab, LibraryView, viewLabel } from '../lib/libraryView';
 import { LibrarySort, sortLabel } from '../lib/librarySearch';
+import { newsUnseen } from '../phone/monitor';
 
 export interface TopBarProps {
   tab: LibraryTab;
@@ -20,8 +21,9 @@ export interface TopBarProps {
 
 export function TopBar(p: TopBarProps) {
   const listView = p.view === 'list' || p.view === 'compact';
-  // «Обзор» has its own sort and search under the header
-  const discover = p.tab === 'discover';
+  // «Обзор» and «Новое» have their own content under the header: no library search, view or sort
+  const discover = p.tab === 'discover' || p.tab === 'news';
+  const unseen = newsUnseen.value;
   return (
     <FocusGroup focusKey="LIB-HEADER" className="topbar">
       <Logo size={52} />
@@ -36,6 +38,7 @@ export function TopBar(p: TopBarProps) {
         >
           {tb.id === 'history' && <Icon name="history" size={24} class="tab-icon" />}
           {tb.label}
+          {tb.id === 'news' && unseen > 0 && <span class="tab-badge">{unseen > 99 ? '99+' : String(unseen)}</span>}
         </Focusable>
       ))}
       <div class="spacer" />

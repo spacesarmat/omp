@@ -90,14 +90,14 @@ const click = async (el: Element) => {
 };
 
 describe('TV «Обзор» tab', () => {
-  it('comes right after «История» in the header', () => {
+  it('comes after «История» and «Новое» in the header', () => {
     const host = document.createElement('div');
     hosts.push(host);
     document.body.appendChild(host);
     const props = { tab: 'discover', onTab: vi.fn(), view: 'large', sort: 'new', searchOpen: false, onSearch: vi.fn(), onView: vi.fn(), onSort: vi.fn(), onFocused: vi.fn() };
     act(() => { render(h(TopBar as any, props), host); });
     const tabs = Array.prototype.map.call(host.querySelectorAll('.tab'), (e: Element) => text(e)) as string[];
-    expect(tabs.slice(0, 3)).toEqual(['История', 'Обзор', 'Все']);
+    expect(tabs.slice(0, 4)).toEqual(['История', 'Новое', 'Обзор', 'Все']);
     expect(text(host.querySelector('.tab.active'))).toBe('Обзор');
   });
 

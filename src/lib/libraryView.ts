@@ -39,16 +39,21 @@ export function viewLabel(v: LibraryView): string {
   return viewOptions()[indexOfView(v)].label;
 }
 
-/** 'discover' is the TV «Обзор» tab (TMDB catalog); the phone has its own «Мои / Обзор» switch. */
-export type LibraryTab = 'history' | 'discover' | 'all' | Category;
+/** 'discover' is the TV «Обзор» tab (TMDB catalog); the phone has its own «Мои / Обзор» switch. 'news' is the TV
+ * «Новое» tab (findings from OMP on the phone). */
+export type LibraryTab = 'history' | 'news' | 'discover' | 'all' | Category;
 
 export const libraryTabs = (): { id: LibraryTab; label: string }[] =>
   [{ id: 'history' as LibraryTab, label: t('library.tabHistory') }].concat(categoryTabs());
 
-/** The TV tabs: «История», «Обзор», then the categories. */
+/** The TV tabs: «История», «Новое», «Обзор», then the categories. */
 export const tvLibraryTabs = (): { id: LibraryTab; label: string }[] => {
   const list = libraryTabs();
-  return list.slice(0, 1).concat([{ id: 'discover' as LibraryTab, label: t('discover.browse') }], list.slice(1));
+  const own: { id: LibraryTab; label: string }[] = [
+    { id: 'news', label: t('tv.news.tab') },
+    { id: 'discover', label: t('discover.browse') },
+  ];
+  return list.slice(0, 1).concat(own, list.slice(1));
 };
 
 export const POSTER_COLORS = ['#2B3A55', '#4A2E3A', '#2F4A3A', '#4A3F2A', '#3A2F55', '#2A4A4F'];

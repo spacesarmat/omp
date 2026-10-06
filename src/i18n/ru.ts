@@ -1138,6 +1138,22 @@ export const ru = {
       offlineText: 'TMDB не отвечает из этой сети. Укажите зеркало TMDB в настройках TorrServer или попробуйте позже.',
       nokeyText: 'Нет ключа TMDB. Добавьте его в настройках TorrServer (TMDB → API key).',
     },
+    // «Новое»: findings from OMP on the phone (new episodes, better quality, subscriptions)
+    news: {
+      tab: 'Новое',
+      findings: 'Находки',
+      subs: 'Подписки',
+      phone: 'Телефон {name}',
+      noPhone: 'Новое и подписки ведёт OMP на телефоне. На телефоне: Настройки → Телевизор → выберите этот ТВ — и «Поиск для телевизора» включится сам.',
+      empty: 'Пока ничего нового. OMP на телефоне проверяет медиатеку и подписки в фоне.',
+      loading: 'Спрашиваем телефон…',
+      episode: 'Новая серия {code}',
+      episodes: 'Новые серии {code}',
+      better: 'Лучше качество: {from} → {to}',
+      sub: 'Подписка «{name}»',
+      newMark: 'новое',
+      hints: 'ОК — смотреть · Назад — к медиатеке',
+    },
     want: {
       tab: 'Хочу',
       subtitle: 'Сохранённое вами: жёлтая кнопка добавляет и убирает',

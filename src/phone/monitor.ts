@@ -1,5 +1,6 @@
 // TV wrappers over the phone's monitor methods («Новое» feed, subscriptions, want, finding links).
 // Chromium 53: plain promises, no optional chaining.
+import { signal } from '@preact/signals';
 import { phoneRpc, PhoneRpcError } from './rpc';
 import type { RpcFeed, RpcSub } from './rpcTypes';
 
@@ -12,8 +13,15 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Findings not looked at yet, as of the last feed the phone gave (the «Новое» tab badge). */
+export const newsUnseen = signal(0);
+
 export function phoneFeed(): Promise<RpcFeed> {
-  return phoneRpc<RpcFeed>('feed');
+  return phoneRpc<RpcFeed>('feed').then((r) => {
+    const list = r && Array.isArray(r.findings) ? r.findings : [];
+    newsUnseen.value = list.filter((f) => !!f && f.seen === false).length;
+    return r;
+  });
 }
 
 export function phoneSubs(): Promise<RpcSub[]> {
