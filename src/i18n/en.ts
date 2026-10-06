@@ -244,6 +244,9 @@ export const en: EnDict<typeof ru> = {
     reminderOn: 'Reminder on',
     badgeNext: 'new episode {date}',
     badgeSeason: 'new season',
+    keepOnly: 'Keep only this one',
+    keepOnlyAsk: { one: 'Delete the other torrent of season {season} ({n})?', other: 'Delete the other torrents of season {season} ({n})?' },
+    keepOnlyAskNoSeason: { one: 'Delete the other torrent with no season ({n})?', other: 'Delete the other torrents with no season ({n})?' },
     // the TV series screen
     watchEp: 'Watch {code}',
     releasesBtn: 'Torrents · {n}',
@@ -1588,6 +1591,8 @@ export const en: EnDict<typeof ru> = {
     volDown: 'Quieter',
     volUp: 'Louder',
     volShort: 'Vol.',
+    volume: 'Volume',
+    kbdShort: 'Keys',
     noTvTitle: 'Connect a TV',
     noTvText: 'To control the TV from the phone, connect it first.',
     noTvButton: 'Connect a TV',
@@ -1611,6 +1616,7 @@ export const en: EnDict<typeof ru> = {
     library: 'Catalog',
     news: 'News',
     remote: 'Remote',
+    backAgain: 'Press Back again to minimize',
   },
   backup: {
     fileName: 'omp-backup-{date}.json',

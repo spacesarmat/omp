@@ -58,6 +58,12 @@ function serverEntry(hash: string, idx: number): ViewedEntry | null {
   return serverViewed.value.find((e) => e.hash === hash && e.file_index === idx) || null;
 }
 
+/** The two sources of a file's progress, for reading copies of one episode together (src/lib/episodeProgress). */
+export const progressReader = {
+  local: getLocalProgress,
+  server: serverEntry,
+};
+
 function ratio(p: Progress): number {
   return p.duration > 0 ? p.time / p.duration : 0;
 }

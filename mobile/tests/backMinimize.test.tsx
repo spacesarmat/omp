@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const hoisted = vi.hoisted(() => ({ minimize: vi.fn(async () => {}), exit: vi.fn(async () => {}) }));
 vi.mock('@capacitor/app', () => ({
@@ -9,20 +9,76 @@ vi.mock('@capacitor/app', () => ({
   },
 }));
 
-import { handleBack } from '../src/app';
+import { handleBack, resetBackPress } from '../src/app';
 import { currentRoute, resetTo, navigate } from '../src/nav';
+import { catalogMode, setCatalogMode } from '../src/catalog/phoneCatalog';
+import { toast } from '../src/ui/toast';
 
 beforeEach(() => {
+  vi.useFakeTimers();
   hoisted.minimize.mockClear();
   hoisted.exit.mockClear();
+  resetBackPress();
+  setCatalogMode('mine');
+  toast.value = '';
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** «Каталог» root: two presses within 2 s. */
+function backTwice() {
+  handleBack();
+  vi.advanceTimersByTime(500);
+  handleBack();
+}
+
 describe('Back on tab roots', () => {
-  it('minimizes the app instead of exiting', () => {
+  it('the root of another tab switches to «Каталог», like its tab', () => {
+    for (const name of ['news', 'add', 'remote', 'settings'] as const) {
+      resetTo({ name });
+      handleBack();
+      expect(currentRoute.value).toEqual({ name: 'library' });
+    }
+    expect(hoisted.minimize).not.toHaveBeenCalled();
+    expect(toast.value).toBe('');
+  });
+
+  it('«Обзор» switches to «Мои» first', () => {
     resetTo({ name: 'library' });
+    setCatalogMode('discover');
+    handleBack();
+    expect(catalogMode.value).toBe('mine');
+    expect(currentRoute.value.name).toBe('library');
+    expect(hoisted.minimize).not.toHaveBeenCalled();
+    expect(toast.value).toBe('');
+  });
+
+  it('one press on «Каталог»: only the toast', () => {
+    resetTo({ name: 'library' });
+    handleBack();
+    expect(toast.value).toBe('Нажмите «Назад» ещё раз, чтобы свернуть');
+    expect(hoisted.minimize).not.toHaveBeenCalled();
+  });
+
+  it('a second press within 2 s minimizes the app instead of exiting', () => {
+    resetTo({ name: 'library' });
+    handleBack();
+    vi.advanceTimersByTime(1900);
     handleBack();
     expect(hoisted.minimize).toHaveBeenCalledTimes(1);
     expect(hoisted.exit).not.toHaveBeenCalled();
+  });
+
+  it('a press after 2 s shows the toast again', () => {
+    resetTo({ name: 'library' });
+    handleBack();
+    vi.advanceTimersByTime(2500);
+    expect(toast.value).toBe('');
+    handleBack();
+    expect(toast.value).toBe('Нажмите «Назад» ещё раз, чтобы свернуть');
+    expect(hoisted.minimize).not.toHaveBeenCalled();
   });
 
   it('pops a nested screen first and does not minimize', () => {
@@ -40,13 +96,15 @@ describe('Back on tab roots', () => {
     expect(currentRoute.value.name).toBe('news');
     expect(hoisted.minimize).not.toHaveBeenCalled();
     handleBack();
+    expect(currentRoute.value.name).toBe('library');
+    backTwice();
     expect(hoisted.minimize).toHaveBeenCalledTimes(1);
   });
 
   it('survives minimizeApp rejecting', async () => {
     hoisted.minimize.mockRejectedValueOnce(new Error('no'));
-    resetTo({ name: 'settings' });
-    expect(() => handleBack()).not.toThrow();
+    resetTo({ name: 'library' });
+    expect(() => backTwice()).not.toThrow();
     await Promise.resolve();
   });
 });
@@ -70,6 +128,8 @@ describe('Back with something open on top', () => {
     expect(hoisted.minimize).not.toHaveBeenCalled();
     handleBack();
     expect(closed).toHaveBeenCalledTimes(1);
+    expect(currentRoute.value.name).toBe('library');
+    backTwice();
     expect(hoisted.minimize).toHaveBeenCalledTimes(1);
   });
 
@@ -112,7 +172,7 @@ describe('Back with something open on top', () => {
     expect(onClose).not.toHaveBeenCalled();
     act(() => render(null, el));
     resetTo({ name: 'library' });
-    handleBack();
+    backTwice();
     expect(hoisted.minimize).toHaveBeenCalledTimes(1);
   });
 });

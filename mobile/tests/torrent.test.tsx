@@ -110,6 +110,28 @@ describe('Torrent', () => {
     expect(record.mock.calls[0][2]).toEqual({ f: 3, t: 1394, d: 3600, src: 'phone', name: 'Телефон' });
   });
 
+  it('another release of the series: its watched episode shows as watched here, its position is offered here', async () => {
+    const uhd: T = {
+      hash: 'uhd',
+      title: 'Starbound Frontier S02 2160p WEB-DL',
+      category: 'tv',
+      stat: 3,
+      file_stats: ['Starbound.Frontier.S02E02.2160p.mkv', 'Starbound.Frontier.S02E01.2160p.mkv', 'Starbound.Frontier.S02E03.2160p.mkv'].map((p, i) => ({ id: i + 1, path: p, length: 4000000000 })),
+    };
+    const film: T = { hash: 'film', title: 'Starbound Frontier 2160p', category: 'movie', stat: 3, file_stats: [{ id: 1, path: 'S02E04.mkv', length: 1 }] };
+    torrents.value = [tor, uhd, film];
+    saveProgress('uhd', 1, 3500, 3600); // S02E02 watched in the 4K release
+    saveProgress('film', 1, 3500, 3600); // a film never counts
+    saveProgress('uhd', 3, 1394, 3600); // S02E03 started there
+    mount();
+    await flush();
+    const fills = Array.from(el.querySelectorAll('.m-ep .m-bar-fill')).map((n) => (n as HTMLElement).style.width);
+    expect(fills).toEqual(['0%', '100%', '39%', '0%']);
+    expect((el.querySelector('.m-btn-primary') as HTMLElement).textContent).toContain('Продолжить на ТВ · S02E03 с 23:14');
+    // nothing is written for this release
+    expect(localStorage.getItem('tsp.progress')).not.toContain('abc:');
+  });
+
   it('main button says «Смотреть на ТВ» with no history', async () => {
     mount();
     await flush();

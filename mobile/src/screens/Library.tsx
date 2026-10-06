@@ -5,6 +5,7 @@ import { Poster, qualityBadge } from '../ui/Poster';
 import { Logo } from '../../../src/ui/Logo';
 import { TvChip } from '../ui/TvChip';
 import { TorrentMenu } from '../ui/TorrentMenu';
+import { sharedResume } from '../lib/sharedProgress';
 import { useBackHandler } from '../ui/backStack';
 import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
 import { LaunchError } from '../ui/LaunchError';
@@ -404,7 +405,7 @@ export function Library() {
     void launch.start({
       hash: tor.hash,
       file: target.id,
-      at: resumePosition(tor.hash, target.id),
+      at: sharedResume(tor.hash, target.id),
       duration: getLocalProgress(tor.hash, target.id)?.duration || undefined,
       label: [episodeLabel(target.path), stripExt(baseName(target.path))].filter(Boolean).join(' · '),
       onError: setTvError,

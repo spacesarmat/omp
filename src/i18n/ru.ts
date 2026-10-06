@@ -246,6 +246,17 @@ export const ru = {
     reminderOn: 'Напоминание включено',
     badgeNext: 'новая серия {date}',
     badgeSeason: 'новый сезон',
+    keepOnly: 'Оставить только эту',
+    keepOnlyAsk: {
+      one: 'Удалить другую раздачу {season}-го сезона ({n})?',
+      few: 'Удалить остальные раздачи {season}-го сезона ({n})?',
+      many: 'Удалить остальные раздачи {season}-го сезона ({n})?',
+    },
+    keepOnlyAskNoSeason: {
+      one: 'Удалить другую раздачу без сезона ({n})?',
+      few: 'Удалить остальные раздачи без сезона ({n})?',
+      many: 'Удалить остальные раздачи без сезона ({n})?',
+    },
     // the TV series screen
     watchEp: 'Смотреть {code}',
     releasesBtn: 'Раздачи · {n}',
@@ -1600,6 +1611,8 @@ export const ru = {
     volDown: 'Тише',
     volUp: 'Громче',
     volShort: 'Громк.',
+    volume: 'Громкость',
+    kbdShort: 'Клав.',
     noTvTitle: 'Подключите телевизор',
     noTvText: 'Чтобы управлять ТВ с телефона, сначала подключите его.',
     noTvButton: 'Подключить ТВ',
@@ -1623,6 +1636,7 @@ export const ru = {
     library: 'Каталог',
     news: 'Новое',
     remote: 'Пульт',
+    backAgain: 'Нажмите «Назад» ещё раз, чтобы свернуть',
   },
   backup: {
     fileName: 'omp-копия-{date}.json',

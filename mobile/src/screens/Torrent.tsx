@@ -16,12 +16,10 @@ import {
   refreshViewed,
   progressVersion,
   serverViewed,
-  progressRatio,
-  isWatched,
-  resumePosition,
   getLocalProgress,
 } from '../../../src/store/progress';
 import type { Torrent as TorrentT } from '../../../src/api/types';
+import { sharedRatio, sharedResume } from '../lib/sharedProgress';
 import { errorMessage } from '../../../src/api/http';
 import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../../../src/lib/episodes';
 import { formatBytes, formatDuration } from '../../../src/lib/format';
@@ -128,7 +126,7 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
     await launch.start({
       hash: torrent.hash,
       file: file.id,
-      at: resumePosition(torrent.hash, file.id),
+      at: sharedResume(torrent.hash, file.id),
       duration: getLocalProgress(torrent.hash, file.id)?.duration || undefined,
       label: [code, fileTitle(file)].filter(Boolean).join(' · '),
       onBusy: setBusy,
@@ -493,7 +491,7 @@ export function Torrent({ hash }: { hash: string }) {
 
   // where to continue: the latest started file of this torrent, else the first one
   const target = watchTarget(hash, files);
-  const at = target ? resumePosition(hash, target.id) : 0;
+  const at = target ? sharedResume(hash, target.id) : 0;
   const targetCode = target ? fileCode(target) : '';
   const mainLabel = at > 0
     ? t('torrent.screen.continueOnTv', { ep: targetCode ? targetCode + ' ' : '', time: formatDuration(at) })
@@ -684,7 +682,7 @@ export function Torrent({ hash }: { hash: string }) {
         {files.length > 0 && <div class="m-section">{hasEpisodes ? t('torrent.screen.episodesHead') : t('torrent.screen.filesHead')}</div>}
         <div class="m-list m-eps">
           {files.map((f, i) => {
-            const pct = isWatched(hash, f.id) ? 100 : Math.round(progressRatio(hash, f.id) * 100);
+            const pct = Math.round(sharedRatio(hash, f.id) * 100);
             const pe = parseEpisode(f.path);
             if (pe.episode === null) {
               return (

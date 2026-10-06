@@ -193,6 +193,14 @@ export function seasonMembers(g: SeriesGroup, season: number): Torrent[] {
   return g.members.filter((m) => seasonKeys(m).indexOf(season) >= 0);
 }
 
+/**
+ * «Оставить только эту»: the other torrents of the season that may go. A pack that also holds another season stays
+ * (deleting it would take that season away too).
+ */
+export function otherSeasonReleases(g: SeriesGroup, season: number, keep: Torrent): Torrent[] {
+  return seasonMembers(g, season).filter((m) => m.hash !== keep.hash && seasonKeys(m).every((s) => s === season));
+}
+
 /** Every torrent hash of the cards. */
 export function itemHashes(items: LibraryItem[]): string[] {
   const out: string[] = [];
