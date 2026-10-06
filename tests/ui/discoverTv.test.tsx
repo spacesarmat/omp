@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
-import { init, setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { init, setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { LibraryScreen } from '../../src/screens/Library';
 import { TopBar } from '../../src/ui/TopBar';
 import { DialogHost } from '../../src/ui/dialog';
@@ -214,5 +214,62 @@ describe('TV «Обзор» tab', () => {
     expect(want).toHaveLength(2);
     expect(text(want[0].querySelector('.disc-title'))).toBe('Фильм 2');
     expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Хочу');
+  });
+
+  it('hides the search and the filters under «Хочу»', async () => {
+    const host = await mount();
+    await act(() => { setFocus('disc-kind-all'); }); // the focus of an earlier test may linger
+    await flush();
+    expect(host.querySelector('[data-fk="disc-find"]')).not.toBeNull();
+    await act(() => { setFocus('disc-kind-want'); });
+    await flush();
+    expect(host.querySelector('[data-fk="disc-find"]')).toBeNull();
+    expect(host.querySelector('[data-fk="disc-sort"]')).toBeNull();
+    expect(text(host.querySelector('.empty'))).toContain('Список пуст');
+  });
+
+  it('removes a title with yellow and focuses its neighbour, then the kind button when empty', async () => {
+    toggleWant({ kind: 'movie', id: 1, title: 'A', year: 2020, poster: '' });
+    toggleWant({ kind: 'movie', id: 2, title: 'B', year: 2020, poster: '' });
+    toggleWant({ kind: 'movie', id: 3, title: 'C', year: 2020, poster: '' });
+    const host = await mount();
+    await act(() => { setFocus('disc-kind-want'); });
+    await flush();
+    await act(() => { setFocus('disc-movie-2'); });
+    await flush();
+    await act(async () => { dispatchKey('yellow', new KeyboardEvent('keydown')); });
+    await new Promise((r) => setTimeout(r, 5));
+    await flush();
+    expect(wantList.value.map((w) => w.id)).toEqual([3, 1]);
+    expect(host.querySelectorAll('.disc-tile')).toHaveLength(2);
+    expect(getCurrentFocusKey()).toBe('disc-movie-1');
+    for (let n = 0; n < 2; n++) {
+      await act(async () => { dispatchKey('yellow', new KeyboardEvent('keydown')); });
+      await new Promise((r) => setTimeout(r, 5));
+      await flush();
+      if (n === 0) await act(() => { setFocus('disc-movie-3'); });
+    }
+    expect(wantList.value).toHaveLength(0);
+    expect(text(host.querySelector('.empty'))).toContain('Список пуст');
+  });
+
+  it('comes back to «Хочу» with the same tile after a title card', async () => {
+    toggleWant({ kind: 'movie', id: 1, title: 'A', year: 2020, poster: '' });
+    toggleWant({ kind: 'movie', id: 2, title: 'B', year: 2020, poster: '' });
+    let host = await mount();
+    await act(() => { setFocus('disc-kind-want'); });
+    await flush();
+    await act(() => { setFocus('disc-movie-1'); });
+    await flush();
+    await click(host.querySelector('[data-fk="disc-movie-1"]')!);
+    expect(currentRoute.value).toEqual({ name: 'title', kind: 'movie', id: 1 });
+    act(() => { render(null, host); });
+    routeStack.value = [{ name: 'library' }];
+    host = await mount();
+    expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Хочу');
+    const tiles = host.querySelectorAll('.disc-tile');
+    expect(tiles).toHaveLength(2);
+    expect(text(tiles[0].querySelector('.disc-title'))).toBe('B');
+    expect(getCurrentFocusKey()).toBe('disc-movie-1');
   });
 });

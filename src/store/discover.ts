@@ -20,7 +20,8 @@ export interface DiscoverSearch {
 }
 
 export interface DiscoverState {
-  kind: DiscoverKind;
+  /** 'want': the «Хочу» list (no feed of its own). */
+  kind: DiscoverKind | 'want';
   /** discoverQueryKey of the query the feed was loaded with. */
   qkey: string;
   feed: DiscoverFeed | null;

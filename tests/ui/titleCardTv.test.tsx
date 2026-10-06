@@ -1,3 +1,4 @@
+import { wantList } from '../../src/store/wantList';
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
@@ -204,5 +205,18 @@ describe('TV title card', () => {
     expect(currentRoute.value).toEqual({ name: 'library' });
     expect(stub.discover).toHaveBeenCalledTimes(1);
     expect(getCurrentFocusKey()).toBe('disc-movie-7');
+  });
+
+  it('toggles the TV list by default: «Хочу посмотреть» <-> «В списке»', async () => {
+    wantList.value = [];
+    const host = await mount('movie', 7);
+    const label = () => text(host.querySelector('[data-fk="title-want"]'));
+    expect(label()).toBe('★ Хочу посмотреть');
+    await click(host.querySelector('[data-fk="title-want"]')!);
+    expect(label()).toBe('В списке');
+    expect(wantList.value.map((w) => w.id)).toEqual([7]);
+    await click(host.querySelector('[data-fk="title-want"]')!);
+    expect(label()).toBe('★ Хочу посмотреть');
+    wantList.value = [];
   });
 });

@@ -16,7 +16,7 @@ import {
   type DiscoverKind, type DiscoverFeed, type DiscoverSearch,
 } from '../../store/discover';
 import { torrents } from '../../store/library';
-import { isWanted, wantAction, wantTitles, wantList } from '../../store/wantList';
+import { isWanted, wantAction, wantTitles } from '../../store/wantList';
 import { FocusGroup, Focusable, Button, Spinner } from '../../ui/components';
 import { Icon } from '../../ui/icons';
 import { choose } from '../../ui/dialog';
@@ -104,12 +104,14 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   }, []);
   const [kind, setKind] = useState<DiscoverKind | 'want'>(kept ? kept.kind : 'all');
   const isWant = kind === 'want';
+  // the kind the TMDB requests use («Хочу» has none)
+  const feedKind: DiscoverKind = kind === 'want' ? 'all' : kind;
   const wantedFn = p.wanted || isWanted;
   const [feed, setFeed] = useState<DiscoverFeed | null>(kept ? kept.feed : null);
   const [error, setError] = useState<CatalogErrorCode | null>(null);
   const [moreFailed, setMoreFailed] = useState(false);
   const [reload, setReload] = useState(0);
-  const [search, setSearch] = useState<DiscoverSearch | null>(kept ? kept.search : null);
+  const [search, setSearch] = useState<DiscoverSearch | null>(kept && kept.kind !== 'want' ? kept.search : null);
   const [searchError, setSearchError] = useState<CatalogErrorCode | null>(null);
   const restored = useRef(!!(kept && kept.feed));
   // the current request: answers of an older one (another kind, a retry) are dropped
@@ -133,7 +135,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     setMoreFailed(false);
     moreBusy.current = false;
     activeCatalog()
-      .then((c) => c.discover(kind as DiscoverKind, query, 1))
+      .then((c) => c.discover(feedKind, query, 1))
       .then(
         (r) => {
           if (gen.current === my) setFeed({ items: r.items, page: 1, pages: r.pages });
@@ -144,7 +146,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
       );
   }, [kind, qkey, reload]);
 
-  useEffect(() => saveDiscoverState({ kind: isWant ? 'all' : (kind as DiscoverKind), qkey: qkey, feed: feed, search: search }), [kind, qkey, feed, search]);
+  useEffect(() => saveDiscoverState({ kind: kind, qkey: qkey, feed: isWant ? null : feed, search: isWant ? null : search }), [kind, qkey, feed, search]);
 
   useEffect(() => {
     if (!focusResults.current || !search || !search.items) return;
@@ -160,7 +162,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     moreBusy.current = true;
     setMoreFailed(false);
     activeCatalog()
-      .then((c) => c.discover(kind as DiscoverKind, query, next))
+      .then((c) => c.discover(feedKind, query, next))
       .then(
         (r) => {
           if (gen.current !== my) return;
@@ -231,7 +233,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   };
 
   const pickGenre = () => {
-    const ids = genresFor(isWant ? 'all' : (kind as DiscoverKind));
+    const ids = genresFor(feedKind);
     // a genre chosen under another kind stays in the list, so it can be turned off
     query.genres.forEach((g) => { if (ids.indexOf(g) < 0) ids.push(g); });
     const options = [{ label: t('discover.yearAny'), value: '' }].concat(ids.map((g) => ({ label: genreName(g), value: g })));
@@ -282,11 +284,11 @@ export function DiscoverGrid(p: DiscoverGridProps) {
       return true;
     }
     if (a === 'blue') {
-      pickSort(true);
+      if (!isWant) pickSort(true);
       return true;
     }
     if (a === 'back') {
-      if (search) resetSearch();
+      if (search && !isWant) resetSearch();
       else p.onBack();
       return true;
     }
@@ -322,6 +324,8 @@ export function DiscoverGrid(p: DiscoverGridProps) {
             </Focusable>
           ))}
         </div>
+        {!isWant && (
+          <>
         <Focusable focusKey="disc-sort" className="disc-btn disc-btn-sort" onPress={() => pickSort()} onFocused={leaveTile}>
           {t('discover.sortAria', { name: sortName(query.sort) })}
         </Focusable>
@@ -337,11 +341,15 @@ export function DiscoverGrid(p: DiscoverGridProps) {
         <Focusable focusKey="disc-rating" className="disc-btn" onPress={pickRating} onFocused={leaveTile}>
           {t('tv.discover.ratingValue', { name: ratingName(query.rating) })}
         </Focusable>
+          </>
+        )}
         <div class="spacer" />
+        {!isWant && (
         <Focusable focusKey="disc-find" className="disc-btn disc-find" onPress={askSearch} onFocused={leaveTile}>
           <Icon name="search" size={26} class="disc-find-icon" />
           {t('tv.discover.find')}
         </Focusable>
+        )}
       </FocusGroup>
       {isWant ? (
         <div class="disc-sub">{t('tv.want.subtitle')}</div>
