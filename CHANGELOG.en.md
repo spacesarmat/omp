@@ -2,6 +2,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.17.0-beta.8
+
+- [phone] «Remote» connects to the last TV by itself: a TV that is saved but not selected (after the install assistant or a settings restore) no longer needs a trip to «Settings → TV»
+- [phone] When the TV does not answer, «Remote» says «… does not answer — turn the TV on» with «Retry»
+- [phone] Several TVs and boxes: tap the name in «Remote» for the saved list and switch with one tap, without pairing again
+
 ## 0.17.0-beta.7
 
 - Android TV boxes with an old system WebView (for example Dune HD) no longer open OMP on a blank screen, and the remote moves the focus on them
