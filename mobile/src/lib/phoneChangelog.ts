@@ -1,4 +1,4 @@
-// «Что нового» on the phone: the unmarked changelog bullets and the «[phone]» ones, never the TV-only «[tv]» ones.
+// «Что нового» on the phone: the unmarked changelog bullets and the «[phone]» ones, never the TV-only «[tv]» / «[lg]» / «[atv]» ones.
 import { getChangelog, setChangelogPlatform } from '../../../src/lib/changelogData';
 import type { ChangelogEntry } from '../../../src/lib/changelog';
 

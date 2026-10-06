@@ -6,7 +6,7 @@ import { isBetaVersion } from '../lib/version';
 import { settings, updateSettings } from '../store/settings';
 import { hbPresence, hbHasRoot, openHbChannel, hbInstall, InstallStatus, HbPresence } from '../platform/hbchannel';
 import { APP_VERSION } from '../version';
-import { getChangelog } from '../lib/changelogData';
+import { getChangelog, tvChangelogPlatform } from '../lib/changelogData';
 import { openWhatsNew } from '../store/whatsNew';
 import { FocusGroup, Button, ProgressBar } from '../ui/components';
 import { Qr } from '../ui/Qr';
@@ -182,8 +182,8 @@ export function UpdateScreen() {
         />
       </div>
       <div class="muted">{t('updateScreen.betaNote')}</div>
-      {info && updateNotes(info, 'tv').length > 0 && (
-        <ul class="update-notes">{updateNotes(info, 'tv').slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>
+      {info && updateNotes(info, tvChangelogPlatform()).length > 0 && (
+        <ul class="update-notes">{updateNotes(info, tvChangelogPlatform()).slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>
       )}
 
       {info && android && <ApkInstall info={info} />}

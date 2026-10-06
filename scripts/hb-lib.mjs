@@ -6,9 +6,16 @@ export const FEED_BASE = `https://raw.githubusercontent.com/${REPO}/gh-pages/`;
 /** The text of the update feed's `notes` when no bullet is left for the TV (old apps show `notes` as they are). */
 export const FIXES_NOTE = 'Исправления и улучшения';
 
+/** Whether a bullet marked `mark` ('' = unmarked) shows on `platform` ('lg' | 'atv' | 'phone'); «[tv]» is both TVs. */
+function markShownOn(mark, platform) {
+  if (!mark) return true;
+  if (mark === 'tv') return platform !== 'phone';
+  return mark === platform;
+}
+
 /**
- * Bullet lines under "## <version>" in CHANGELOG.md, without the «[tv]» / «[phone]» markers. With `platform`
- * ('tv' | 'phone'): the unmarked bullets and that platform's only.
+ * Bullet lines under "## <version>" in CHANGELOG.md, without the «[tv]» / «[lg]» / «[atv]» / «[phone]» markers.
+ * With `platform` ('lg' | 'atv' | 'phone'): the unmarked bullets and those that platform shows.
  */
 export function changelogNotes(md, version, platform) {
   const out = [];
@@ -22,22 +29,23 @@ export function changelogNotes(md, version, platform) {
     }
     if (!on) continue;
     const m = /^\s*[-*]\s+(.*\S)\s*$/.exec(line);
-    // «[tv]» / «[phone]» say which app shows a bullet in «Что нового»; release notes list them all, unmarked
+    // the markers say which app shows a bullet in «Что нового»; release notes list them all, unmarked
     if (!m) continue;
-    const mark = /^\[(tv|phone)\]\s*/i.exec(m[1]);
-    if (platform && mark && mark[1].toLowerCase() !== platform) continue;
+    const mark = /^\[(tv|lg|atv|phone)\]\s*/i.exec(m[1]);
+    if (platform && !markShownOn(mark ? mark[1].toLowerCase() : '', platform)) continue;
     out.push(mark ? m[1].slice(mark[0].length) : m[1]);
   }
   return out;
 }
 
 /**
- * The notes of an update feed: `notesTv` / `notesPhone` for the apps that read them (0.17.0 and later), and
- * `notes` for older apps — the TV's bullets (the LG feed is read by TVs only; the APK one by the phone and Android
- * TV alike), «Исправления и улучшения» when there is none. Never a marker.
+ * The notes of one update feed: `notesTv` / `notesPhone` for the apps that read them (0.17.0 and later), and
+ * `notes` for older apps — the TV's bullets, «Исправления и улучшения» when there is none. `tv` is the TV that reads
+ * the feed: 'lg' for update.json (LG TVs only), 'atv' for update-android.json (the phone and Android TV alike; the
+ * phone reads notesPhone). Never a marker.
  */
-export function feedNotes(md, version) {
-  const notesTv = changelogNotes(md, version, 'tv');
+export function feedNotes(md, version, tv) {
+  const notesTv = changelogNotes(md, version, tv);
   const notesPhone = changelogNotes(md, version, 'phone');
   return { notes: notesTv.length ? notesTv : [FIXES_NOTE], notesTv, notesPhone };
 }

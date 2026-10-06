@@ -1,16 +1,24 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
 import { forPlatform, parseChangelog } from '../../src/lib/changelog';
-import { CHANGELOG, CHANGELOG_EN, getChangelog, mergeChangelog, setChangelogPlatform } from '../../src/lib/changelogData';
+import { CHANGELOG, CHANGELOG_EN, getChangelog, mergeChangelog, setChangelogPlatform, tvChangelogPlatform } from '../../src/lib/changelogData';
+
+const asAndroidTv = (on: boolean) => {
+  const w = window as unknown as { Capacitor?: { getPlatform: () => string } };
+  if (on) w.Capacitor = { getPlatform: () => 'android' };
+  else delete w.Capacitor;
+};
 
 afterEach(() => {
   applyLanguageSetting('ru');
   setChangelogPlatform('tv');
+  asAndroidTv(false);
 });
 
 describe('changelogData', () => {
   it('Russian UI gets the Russian entries, the TV ones by default', () => {
-    expect(getChangelog()).toEqual(forPlatform(CHANGELOG, 'tv'));
+    expect(tvChangelogPlatform()).toBe('lg');
+    expect(getChangelog()).toEqual(forPlatform(CHANGELOG, 'lg'));
     expect(getChangelog()).toBe(getChangelog());
   });
 
@@ -19,16 +27,35 @@ describe('changelogData', () => {
     setChangelogPlatform('phone');
     const phone = getChangelog();
     const all = (l: typeof tv) => l.map((e) => e.items.join('\n')).join('\n');
-    expect(all(tv)).not.toMatch(/\[(tv|phone)\]/);
-    expect(all(phone)).not.toMatch(/\[(tv|phone)\]/);
+    expect(all(tv)).not.toMatch(/\[(tv|lg|atv|phone)\]/i);
+    expect(all(phone)).not.toMatch(/\[(tv|lg|atv|phone)\]/i);
     // the phone-only 0.17.0 betas: the calendar is on the phone only
     expect(all(phone)).toContain('«Новое» → «Календарь»');
     expect(all(tv)).not.toContain('«Новое» → «Календарь»');
-    // the 0.18.0 betas: TV screens only, besides the phone's «Поиск для телевизора»
+    // the 0.18.0 betas: TV screens only; the search through the phone (0.18.0-beta.3) is the LG's alone
     expect(tv.map((e) => e.version)).toContain('0.18.0-beta.1');
-    expect(phone.filter((e) => e.version === '0.18.0-beta.3')[0].items).toHaveLength(1);
+    expect(tv.filter((e) => e.version === '0.18.0-beta.3')[0].items).toHaveLength(4);
+    expect(phone.map((e) => e.version)).not.toContain('0.18.0-beta.3');
     const raw = CHANGELOG.filter((e) => e.version === '0.17.0-beta.6')[0].items;
     expect(raw.some((i) => /^\[phone\] /.test(i))).toBe(true);
+  });
+
+  it('Android TV shows the unmarked, «[tv]» and «[atv]» bullets, never the LG-only ones', () => {
+    const lg = getChangelog();
+    asAndroidTv(true);
+    expect(tvChangelogPlatform()).toBe('atv');
+    const atv = getChangelog();
+    expect(atv).toEqual(forPlatform(CHANGELOG, 'atv'));
+    const all = (l: typeof atv) => l.map((e) => e.items.join('\n')).join('\n');
+    expect(all(lg)).toContain('Телевизор LG ищет раздачи');
+    expect(all(atv)).not.toContain('Телевизор LG ищет раздачи');
+    expect(all(atv)).not.toContain('Новый экран поиска на ТВ');
+    expect(atv.map((e) => e.version)).not.toContain('0.18.0-beta.3');
+    expect(atv.map((e) => e.version)).toContain('0.18.0-beta.2');
+    expect(all(atv)).not.toMatch(/\[(tv|lg|atv|phone)\]/i);
+    // the raw 0.18.0-beta.3 bullets carry the LG marker
+    expect(CHANGELOG.filter((e) => e.version === '0.18.0-beta.3')[0].items.every((i) => /^\[lg\] /.test(i))).toBe(true);
+    expect(CHANGELOG_EN.filter((e) => e.version === '0.18.0-beta.3')[0].items.every((i) => /^\[lg\] /.test(i))).toBe(true);
   });
 
   it('English UI gets the English entries, Russian where a version is not translated', () => {

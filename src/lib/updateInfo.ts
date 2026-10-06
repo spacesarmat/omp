@@ -1,5 +1,7 @@
 import { isBetaVersion } from './version';
 import { t } from '../i18n';
+import { itemPlatform, markShownOn, stripPlatform } from './changelog';
+import type { ChangelogPlatform } from './changelog';
 
 const FEED_BASE = 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/';
 export const UPDATE_URL = FEED_BASE + 'update.json';
@@ -51,16 +53,17 @@ const noteList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((n): n i
 
 /**
  * The notes of an update as this app shows them: the platform's own list when the feed has it («Исправления и
- * улучшения» when it is empty), else `notes` of an older feed; a stray «[tv]» / «[phone]» marker is never shown.
+ * улучшения» when it is empty), else `notes` of an older feed; a stray marker of another platform drops the bullet
+ * and no marker is shown. 'tv' is either TV (a feed's notesTv is already for the TV that reads it).
  */
-export function updateNotes(info: UpdateInfo, platform: 'tv' | 'phone'): string[] {
-  const own = platform === 'tv' ? info.notesTv : info.notesPhone;
+export function updateNotes(info: UpdateInfo, platform: ChangelogPlatform | 'tv'): string[] {
+  const own = platform === 'phone' ? info.notesPhone : info.notesTv;
   const list = own !== undefined ? own : info.notes;
   const out: string[] = [];
   list.forEach((n) => {
-    const m = /^\[(tv|phone)\]\s*/i.exec(n);
-    if (m && m[1].toLowerCase() !== platform) return;
-    out.push(m ? n.slice(m[0].length) : n);
+    const mark = itemPlatform(n);
+    if (platform === 'tv' ? mark === 'phone' : !markShownOn(mark, platform)) return;
+    out.push(stripPlatform(n));
   });
   return !out.length && own !== undefined ? [t('update.fixes')] : out;
 }
