@@ -41,6 +41,21 @@ export function tileLabel(card: CatalogCard, now: number = Date.now()): string {
   return next ? t('discover.tileSeason', { n: next.number, date: airDateText(next.airDate, now) }) : '';
 }
 
+/**
+ * The label of a «Скоро в цифре» tile: the digital date the list matched (always known there, so the tile is never
+ * without a date; the card's own digital date is the region's earliest and may be an older release).
+ */
+export function digitalSoonLabel(iso: string, now: number = Date.now()): string {
+  const date = airDateText(iso, now);
+  return date ? t('discover.tileDigital', { date: date }) : '';
+}
+
+/** The year of a tile: a «Скоро в цифре» item's list year is the digital date's, so the card's year (0: unknown). */
+export function tileYear(x: { year: number; digital?: string }, card: CatalogCard | undefined): number {
+  if (x.digital === undefined) return x.year;
+  return card ? card.year : 0;
+}
+
 export interface ReleasePart { text: string; future: boolean; }
 
 /** A film card's release line, the known dates only: cinemas, digital, disc. */

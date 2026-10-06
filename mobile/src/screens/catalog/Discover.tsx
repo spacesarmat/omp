@@ -16,8 +16,8 @@ import { discoverQueryKey, discoverFilterCount, sanitizeDiscoverQuery, type Disc
 import { loadDiscoverQuery, saveDiscoverQuery } from './discoverQueryStore';
 import { DiscoverSortSheet, DiscoverFiltersSheet, sortName } from './DiscoverSheets';
 import { cachedTileCard, cancelTileCards, leaveTileCard, requestTileCard, tileCardVersion } from '../../catalog/tileCards';
-import { tileLabel } from '../../lib/releaseDates';
-import type { Kind } from '../../../../src/catalog/tmdb';
+import { digitalSoonLabel, tileLabel, tileYear } from '../../lib/releaseDates';
+import type { CatalogTitle, Kind } from '../../../../src/catalog/tmdb';
 
 const SKELETONS = 6;
 
@@ -33,9 +33,10 @@ function chips(): { id: Filter; label: string }[] {
 
 /**
  * The date label of a tile («в цифре 12 нояб.», «новая серия 8 окт.»): the tile's card is asked for once the tile
- * comes into view; nothing until it is known.
+ * comes into view; nothing until it is known. A «Скоро в цифре» item brings its `digital` date: shown at once (the
+ * card is still asked for: the tile's year comes from it).
  */
-export function TileWhen({ kind, id }: { kind: Kind; id: number }) {
+export function TileWhen({ kind, id, digital }: { kind: Kind; id: number; digital?: string }) {
   void tileCardVersion.value;
   const ref = useRef<HTMLSpanElement>(null);
   const card = cachedTileCard(kind, id);
@@ -56,10 +57,21 @@ export function TileWhen({ kind, id }: { kind: Kind; id: number }) {
       leaveTileCard(kind, id);
     };
   }, [kind, id, unknown]);
-  const text = card ? tileLabel(card) : '';
+  const text = digital ? digitalSoonLabel(digital) : card ? tileLabel(card) : '';
   return (
     <span ref={ref} class={'m-small m-accent m-disc-when' + (text ? '' : ' m-empty')} data-when={text ? '' : undefined}>
       {text}
+    </span>
+  );
+}
+
+/** «Фильм · 2006»: a «Скоро в цифре» item takes its year from the card (none until known). */
+function TileMeta({ x }: { x: CatalogTitle }) {
+  void tileCardVersion.value;
+  const year = tileYear(x, x.digital === undefined ? undefined : cachedTileCard(x.kind, x.id));
+  return (
+    <span class="m-muted m-small m-disc-meta">
+      {(x.kind === 'tv' ? t('discover.series') : t('library.movie')) + (year ? ' · ' + year : '')}
     </span>
   );
 }
@@ -276,10 +288,8 @@ export function Discover() {
                   {inLibrary(index, x) && <span class="m-disc-badge">{t('discover.inLibrary')}</span>}
                 </span>
                 <span class="m-card-title m-disc-title">{x.title}</span>
-                <span class="m-muted m-small m-disc-meta">
-                  {(x.kind === 'tv' ? t('discover.series') : t('library.movie')) + (x.year ? ' · ' + x.year : '')}
-                </span>
-                <TileWhen kind={x.kind} id={x.id} />
+                <TileMeta x={x} />
+                <TileWhen kind={x.kind} id={x.id} digital={x.digital} />
               </button>
             ))}
           </div>

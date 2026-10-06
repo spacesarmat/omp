@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
-import { tileLabel, releaseParts, upcomingEpisodes, nextEpisodeSeasons, dayHeader, episodeCode } from '../src/lib/releaseDates';
+import { tileLabel, digitalSoonLabel, tileYear, releaseParts, upcomingEpisodes, nextEpisodeSeasons, dayHeader, episodeCode } from '../src/lib/releaseDates';
 import { TitleCard } from '../src/screens/catalog/TitleCard';
 import { TileWhen } from '../src/screens/catalog/Discover';
 import { resetTileCards } from '../src/catalog/tileCards';
@@ -35,6 +35,23 @@ const show = (patch: Partial<CatalogCard>): CatalogCard => ({ ...SHOW, ...patch 
 function season(n: number, dates: string[]): SeasonDetails {
   return { number: n, name: '', airDate: '', overview: '', episodes: dates.map((d, i) => ({ n: i + 1, title: d ? 'Эпизод ' + (i + 1) : '', airDate: d, runtime: 0, overview: '' })) };
 }
+
+describe('«Скоро в цифре» tiles', () => {
+  beforeEach(() => applyLanguageSetting('ru'));
+
+  it('the label is the date the list matched, whatever the card says', () => {
+    expect(digitalSoonLabel('2026-10-16', NOW)).toBe('в цифре 16 окт.');
+    expect(digitalSoonLabel('', NOW)).toBe('');
+  });
+
+  it('the year comes from the card, none while unknown; other sorts keep the list year', () => {
+    const x = { year: 0, digital: '2026-11-06' };
+    expect(tileYear(x, undefined)).toBe(0);
+    expect(tileYear(x, { ...FILM, year: 2006 })).toBe(2006);
+    expect(tileYear({ year: 2024 }, undefined)).toBe(2024);
+    expect(tileYear({ year: 2024 }, { ...FILM, year: 2006 })).toBe(2024);
+  });
+});
 
 describe('tile labels', () => {
   it('films: a future digital date, else in cinemas within 60 days without a digital one, else nothing', () => {
@@ -235,6 +252,21 @@ describe('«Обзор» tile labels', () => {
     await flush();
     expect(c.card).toHaveBeenCalledTimes(2);
     expect(Array.from(el.querySelectorAll('.m-disc-when')).map((x) => x.textContent)).toEqual(['в цифре 12 нояб.', 'новая серия 8 окт.']);
+  });
+
+  it('a «Скоро в цифре» tile shows its matched digital date at once, even when the card has none upcoming', async () => {
+    vi.stubGlobal('IntersectionObserver', FakeObserver);
+    const c = fake(() => Promise.resolve(film({ digital: '2007-02-13' })));
+    mount(<button class="m-disc-tile"><TileWhen kind="movie" id={11} digital="2026-11-06" /></button>);
+    await flush();
+    expect(el.querySelector('.m-disc-when')!.textContent).toBe('в цифре 6 нояб.');
+    await act(async () => {
+      observers.forEach((o) => o.cb([{ isIntersecting: true, target: o.el } as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
+    });
+    await flush();
+    // the card is still asked for (the tile's year), and does not take the date away
+    expect(c.card).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('.m-disc-when')!.textContent).toBe('в цифре 6 нояб.');
   });
 
   it('at most 2 cards are asked at a time', async () => {

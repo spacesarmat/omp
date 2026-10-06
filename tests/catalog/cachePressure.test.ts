@@ -24,8 +24,13 @@ function http(answer: (url: string) => unknown): { http: SourceHttp; urls: strin
   };
 }
 
+/** Films digitally out on 7 October + (id mod 20) days: inside the «Скоро в цифре» window of 6 October, one id one date. */
 function films(from: number, n: number) {
-  return { results: Array.from({ length: n }, (_, i) => ({ id: from + i, title: 'F' + (from + i), release_date: '2026-01-01' })), total_pages: 1 };
+  const day = (id: number) => 7 + (id % 20);
+  return {
+    results: Array.from({ length: n }, (_, i) => ({ id: from + i, title: 'F' + (from + i), release_date: '2026-10-' + (day(from + i) < 10 ? '0' : '') + day(from + i) })),
+    total_pages: 1,
+  };
 }
 
 beforeEach(() => {
@@ -85,6 +90,36 @@ describe('«Скоро в цифре» regions', () => {
     const r = await c.discover('all', Q({ sort: 'digitalSoon' }), 1);
     expect(f.urls.map((u) => /region=(\w+)/.exec(u)![1])).toEqual(['RU', 'US']);
     expect(r.items.map((x) => x.id)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('the merged page is ordered by the digital date, ties by popularity; undated or out-of-window films are dropped', async () => {
+    const ru = { results: [
+      { id: 1, title: 'Tenzing', release_date: '2026-10-16', popularity: 5 },
+      { id: 2, title: 'Under Wraps', release_date: '2026-10-09', popularity: 1 },
+      { id: 3, title: 'Hurricane of Fun', release_date: '', popularity: 9 },
+      { id: 4, title: 'Old', release_date: '2026-10-01', popularity: 9 },
+      { id: 5, title: 'Far', release_date: '2026-12-06', popularity: 9 },
+    ], total_pages: 2 };
+    const us = { results: [
+      { id: 6, title: 'Radical Monarchs', release_date: '2026-10-13', popularity: 3 },
+      { id: 2, title: 'Under Wraps', release_date: '2026-10-02', popularity: 1 },
+      { id: 7, title: 'Norjack', release_date: '2026-10-09', popularity: 4 },
+      { id: 8, title: 'Edge', release_date: '2026-12-05', popularity: 0 },
+    ], total_pages: 3 };
+    const f = http((u) => (u.indexOf('region=RU') > 0 ? ru : us));
+    const r = await createCatalogClient(E, f.http, { today: () => '2026-10-06' }).discover('all', Q({ sort: 'digitalSoon' }), 1);
+    expect(r.items.map((x) => x.id + ':' + x.digital)).toEqual(['7:2026-10-09', '2:2026-10-09', '6:2026-10-13', '1:2026-10-16', '8:2026-12-05']);
+    // the list's release_date is the digital one, not the film's year
+    expect(r.items.every((x) => x.year === 0)).toBe(true);
+    expect(r.pages).toBe(3);
+  });
+
+  it('a Russian page thin after dropping the undated films is filled from the US', async () => {
+    const ru = { results: Array.from({ length: DIGITAL_FILL_MIN }, (_, i) => ({ id: i + 1, title: 'F', release_date: i ? '' : '2026-10-10' })), total_pages: 1 };
+    const f = http((u) => (u.indexOf('region=RU') > 0 ? ru : films(100, 2)));
+    const r = await createCatalogClient(E, f.http, { today: () => '2026-10-06' }).discover('movie', Q({ sort: 'digitalSoon' }), 1);
+    expect(f.urls).toHaveLength(2);
+    expect(r.items.map((x) => x.id)).toEqual([100, 101, 1]);
   });
 
   it('a full Russian page is kept as is; the English UI asks the US only', async () => {
