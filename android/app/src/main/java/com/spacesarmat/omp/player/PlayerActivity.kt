@@ -399,9 +399,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         audio.getOrNull(TrackOptions.selectedAudio(audio))?.label ?: I18n.s("player.default")
 
     /**
-     * The player menu ([PlayerMenu.rows]): the player choice, "open in another player", audio, subtitles, chapters
-     * (when the file has chapters) and the three mark rows (as on LG). The marks use the position at the time the
-     * menu opened.
+     * «Меню плеера»: «Аудио», «Субтитры», «Главы» (when the file has chapters) and the three «Отметить …» rows
+     * (as on LG). The marks use the position at the time the menu opened.
      */
     private fun openMenu() {
         if (dialog?.isShowing == true) return
@@ -414,36 +413,32 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val aSel = TrackOptions.selectedAudio(audio)
         val sSel = TrackOptions.selectedSub(subs)
         val chapters = skips.chapters(i)
-        val marks = markRows(skips.info(i), now, dur)
-        val rows = PlayerMenu.rows(chapters.size).map { row ->
-            when (row) {
-                MenuRow.SWITCHER -> switcher.menuRow() to { switcher.menuPressed() }
-                MenuRow.EXTERNAL -> I18n.s("player.externalRow") to { openExternal() }
-                MenuRow.AUDIO -> I18n.s("player.audioRow", "v" to selectedAudioLabel(audio)) to {
-                    if (audio.size >= 2) {
-                        dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-                            .setTitle(I18n.s("player.audio"))
-                            .setSingleChoiceItems(audio.map { it.label }.toTypedArray(), aSel) { d, n ->
-                                d.dismiss()
-                                session.selectAudio(n)
-                            }
-                            .show()
+        val rows = ArrayList<Pair<String, () -> Unit>>()
+        rows.add(switcher.menuRow() to { switcher.menuPressed() })
+        rows.add(I18n.s("player.audioRow", "v" to selectedAudioLabel(audio)) to {
+            if (audio.size >= 2) {
+                dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
+                    .setTitle(I18n.s("player.audio"))
+                    .setSingleChoiceItems(audio.map { it.label }.toTypedArray(), aSel) { d, n ->
+                        d.dismiss()
+                        session.selectAudio(n)
                     }
-                }
-                MenuRow.SUBS -> I18n.s("player.subsRow", "v" to sSel.label) to {
-                    dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-                        .setTitle(I18n.s("player.subs"))
-                        .setSingleChoiceItems(subs.map { it.label }.toTypedArray(), subs.indexOf(sSel)) { d, n ->
-                            d.dismiss()
-                            session.selectSub(subs[n].value)
-                        }
-                        .show()
-                }
-                MenuRow.CHAPTERS -> I18n.s("player.chaptersRow", "n" to chapters.size.toString()) to { openChapters(i, now) }
-                MenuRow.MARK_INTRO_START -> marks[0] to { emitMark(i, "intro-start", now, dur) }
-                MenuRow.MARK_INTRO_END -> marks[1] to { emitMark(i, "intro-end", now, dur) }
-                MenuRow.MARK_CREDITS -> marks[2] to { emitMark(i, "credits", now, dur) }
+                    .show()
             }
+        })
+        rows.add(I18n.s("player.subsRow", "v" to sSel.label) to {
+            dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
+                .setTitle(I18n.s("player.subs"))
+                .setSingleChoiceItems(subs.map { it.label }.toTypedArray(), subs.indexOf(sSel)) { d, n ->
+                    d.dismiss()
+                    session.selectSub(subs[n].value)
+                }
+                .show()
+        })
+        if (chapters.isNotEmpty()) rows.add(I18n.s("player.chaptersRow", "n" to chapters.size.toString()) to { openChapters(i, now) })
+        val marks = markRows(skips.info(i), now, dur)
+        listOf("intro-start", "intro-end", "credits").forEachIndexed { n, kind ->
+            rows.add(marks[n] to { emitMark(i, kind, now, dur) })
         }
         dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
             .setTitle(I18n.s("player.menu"))
@@ -795,16 +790,6 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         finish()
     }
 
-    /**
-     * "Open in another player" from the menu: the player closes with `external` in nativePlayerClosed; the page
-     * saves the position as usual and opens the chooser (openPlayer) for the item at that position.
-     */
-    private fun openExternal() {
-        if (isFinishing) return
-        emitClosed(replaced = false, external = true)
-        finish()
-    }
-
     // ---- phone remote (control/TvRemote.kt), UI thread ----
 
     /** A key from the phone remote (UP/DOWN/LEFT/RIGHT/ENTER/BACK) handled like the TV remote's key. */
@@ -945,13 +930,12 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         NativePlayerBridge.emit("nativePlayerState", o)
     }
 
-    private fun emitClosed(replaced: Boolean, external: Boolean = false) {
+    private fun emitClosed(replaced: Boolean) {
         if (closedSent || !::session.isInitialized) return
         closedSent = true
         commitPendingSeek()
         val o = base()
         if (replaced) o.put("replaced", true)
-        if (external) o.put("external", true)
         NativePlayerBridge.emit("nativePlayerClosed", o)
     }
 

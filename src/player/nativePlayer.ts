@@ -18,8 +18,6 @@ import { segmentsMessage, sanitizeNativeMark } from './nativeSkip';
 import { applyMark, chapterList } from './chapters';
 import { formatDuration } from '../lib/format';
 import { errorMessage } from '../api/http';
-import { toast } from '../ui/toast';
-import { openInOtherPlayer } from './externalPlayer';
 import { DONATE_QR } from '../ui/donateQr';
 import { DONATE_QR_LABEL } from '../lib/donate';
 import { log } from '../lib/log';
@@ -356,14 +354,6 @@ export class NativeSession {
     this.journalEnd();
     this.stop();
     const replaced = isObj(d) && d.replaced === true;
-    // "Open in another player" from the player menu: the chooser opens at the position the player closed at
-    const p = this.pos;
-    if (isObj(d) && d.external === true && p && this.queue[p.index]) {
-      openInOtherPlayer(this.plugin, this.client, this.queue[p.index], p.time, p.duration).then(
-        undefined,
-        (e) => toast(errorMessage(e), 'error'),
-      );
-    }
     if (this.hooks.onClosed) this.hooks.onClosed(c || this.pos || { index: 0, time: 0, duration: 0 }, replaced);
   }
 

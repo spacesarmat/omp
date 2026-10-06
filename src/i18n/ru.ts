@@ -1435,7 +1435,6 @@ export const ru = {
     continueFrom: 'Продолжить {ep}с {time}',
     watch: 'Смотреть',
     watchEp: 'Смотреть {ep}',
-    external: 'В другом плеере',
     peers: 'пиры {a}/{b}',
     resetViewed: 'Сбросить просмотр',
     skip: 'Пропуск',

@@ -9,7 +9,7 @@ import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { actions, filesOf, streamUrlFor, tvServerUrl, useTvLaunch, watchOnPhone } from '../watch';
+import { actions, filesOf, recordPhoneWatch, streamUrlFor, tvServerUrl, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { torrents, refreshTorrents, findPosters, repairTitles } from '../../../src/store/library';
@@ -43,7 +43,6 @@ import { torrentQuery } from '../../../src/catalog/tmdb';
 import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../../../src/lib/seriesGroups';
 import { comingEpisodes, realEpisodeName, seasonEpisodes, showOf, type EpisodeMap, type ShowInfo } from '../../../src/lib/episodeNames';
 import { airDateText, isoDay } from '../../../src/lib/seriesStatus';
-import { torrentName } from '../lib/playingNames';
 
 const BACK = 'M15 5l-7 7 7 7';
 const IMAGE = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 3-3L20 17M15.5 9.5h.01';
@@ -61,11 +60,6 @@ const SKIP_OPEN_KEY = 'tsp.ui.skipOpen';
 
 function fileCode(f: TorrentFile): string {
   return episodeLabel(f.path);
-}
-
-/** The other player's title: «Series · S02E03» or the film's name, never a file name or a tracker title. */
-function playerTitle(tor: TorrentT, f: TorrentFile): string {
-  return [torrentName(tor), fileCode(f)].filter(Boolean).join(' · ');
 }
 
 function fileTitle(f: TorrentFile): string {
@@ -145,13 +139,8 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
 
   const onPhone = async () => {
     try {
-      await watchOnPhone(c, torrent, {
-        hash: torrent.hash,
-        file,
-        title: playerTitle(torrent, file),
-        at: sharedResume(torrent.hash, file.id),
-        duration: getLocalProgress(torrent.hash, file.id)?.duration || 0,
-      });
+      await actions.openExternal(streamUrlFor(c, torrent, file), 'video/*');
+      void recordPhoneWatch(c, torrent.hash, file.id, 0, getLocalProgress(torrent.hash, file.id)?.duration || 0);
       if (alive.v) onClose();
     } catch (e) {
       if (alive.v) setStatus({ kind: 'error', text: errorMessage(e) });
@@ -537,13 +526,8 @@ export function Torrent({ hash }: { hash: string }) {
   const watchPhone = async () => {
     if (!target) return;
     try {
-      await watchOnPhone(c, tor, {
-        hash,
-        file: target,
-        title: playerTitle(tor, target),
-        at,
-        duration: getLocalProgress(hash, target.id)?.duration || 0,
-      });
+      await actions.openExternal(streamUrlFor(c, tor, target), 'video/*');
+      void recordPhoneWatch(c, hash, target.id, 0, getLocalProgress(hash, target.id)?.duration || 0);
     } catch (e) {
       setStatus(errorMessage(e));
     }
