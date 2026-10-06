@@ -574,6 +574,12 @@ button, .m-btn {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
+  /* a <span> chip (an active filter) centres its text like a <button> does */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
 .m-chip.on { background: var(--accent); color: var(--bg); font-weight: 700; }
 .m-chip-static { pointer-events: none; }
@@ -1126,6 +1132,19 @@ button, .m-btn {
 .m-skip-toggle .m-skip-title { font-size: 16px; }
 
 /* soft keyboard open: the tab bar and the mini player step aside, the toast drops to the bottom */
+/* the status bar is transparent (edge to edge): a scrim under it keeps the clock readable over scrolled posters */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  background: rgba(15, 17, 21, 0.88);
+  z-index: 9;
+  pointer-events: none;
+}
+
 html.m-kb-open { --m-nav-reserve: 0px; }
 html.m-kb-open .m-nav, html.m-kb-open .m-mini, html.m-kb-open .m-mini-pad { display: none; }
 html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom)); }

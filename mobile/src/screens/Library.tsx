@@ -58,7 +58,7 @@ function ShortTitle({ tor }: { tor: Torrent }) {
 function GroupTitle({ g }: { g: SeriesGroup }) {
   return (
     <>
-      {libraryTitle(g.lead).title}
+      {libraryTitle(g.named).title}
       <span class="m-title-meta">{' · ' + groupLabel(g)}</span>
     </>
   );
