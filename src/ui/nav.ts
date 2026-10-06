@@ -14,6 +14,7 @@ export type Route =
   | { name: 'settings' }
   | { name: 'update' }
   | { name: 'sources' }
+  | { name: 'tsSources' }
   | { name: 'pairPhone' }
   | { name: 'faq' }
   | { name: 'title'; kind: Kind; id: number };

@@ -235,11 +235,14 @@ describe('login note and Back', () => {
 });
 
 describe('Settings entry', () => {
-  it('opens the screen on Android TV only', async () => {
+  it('opens the screen on Android TV and on LG', async () => {
     resetTo({ name: 'settings' });
     await mount(h(SettingsScreen, {}));
-    expect(byText('Источники поиска')).toBeUndefined();
+    // LG: the same entry opens the phone's sites (PhoneSourcesScreen)
+    click(byText('Источники поиска')!);
+    expect(currentRoute.value.name).toBe('sources');
     act(() => render(null, host));
+    resetTo({ name: 'settings' });
     w.Capacitor = { getPlatform: () => 'android' };
     await mount(h(SettingsScreen, {}));
     click(byText('Источники поиска')!);

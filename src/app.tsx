@@ -20,6 +20,7 @@ import { FaqScreen } from './screens/Faq';
 import { UpdateScreen } from './screens/Update';
 import { PairPhoneScreen } from './screens/PairPhone';
 import { TitleCardScreen } from './screens/TitleCard';
+import { PhoneSourcesScreen } from './screens/PhoneSources';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { WhatsNewDialog, shouldShowWhatsNew } from './ui/WhatsNewDialog';
 import { checkWhatsNew, whatsNew } from './store/whatsNew';
@@ -33,7 +34,7 @@ import { installAndroidScale } from './platform/androidScale';
 import { syncNativeLanguage } from './platform/androidNative';
 
 /**
- * «Источники поиска» (Android TV only) is a separate chunk: its indexer status code stays out of the LG bundle.
+ * The Android TV search sources screen (on LG: the TorrServer sources) is a separate chunk: its indexer status code stays out of the main bundle.
  */
 function LazySources() {
   const [Screen, setScreen] = useState<ComponentType | null>(null);
@@ -81,8 +82,11 @@ function renderRoute(r: Route) {
     case 'title':
       return <TitleCardScreen kind={r.kind} id={r.id} />;
     case 'sources':
-      // built-in sites need the native http of the APK: Android TV only
-      return platformKind() === 'androidtv' ? <LazySources /> : null;
+      // LG: the phone searches the sites; Android TV: its own built-in sites (native http of the APK)
+      return platformKind() === 'webos' ? <PhoneSourcesScreen /> : <LazySources />;
+    case 'tsSources':
+      // the TorrServer sources (Rutor, Jackett) on their own screen, from the «without a phone» row on LG
+      return <LazySources />;
     default:
       return null;
   }

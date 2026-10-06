@@ -448,6 +448,19 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .src-tracker { display: flex; align-items: center; min-height: 54px; padding: 0 21px; margin-bottom: 6px; border-radius: 15px; background: #14171d; font-size: 25px; }
 .src-tracker.focused { box-shadow: inset 0 0 0 3px var(--accent); transform: none; }
 .src-tracker-name { flex: 1; min-width: 0; margin-right: 18px; }
+
+/* LG «Источники поиска»: the phone's sites (no flex gap / inset: Chromium 53) */
+.psrc { padding-bottom: 120px; }
+.psrc .src-phone { margin-top: 0; }
+.psrc-card-head { display: flex; align-items: center; margin-bottom: 12px; }
+.psrc-card-title { flex: 1; min-width: 0; margin-bottom: 0; margin-right: 16px; }
+.psrc-pill { flex-shrink: 0; padding: 4px 16px; border-radius: 18px; font-size: 22px; background: var(--panel2); color: var(--muted); }
+.psrc-pill-ok { background: rgba(63, 185, 80, .18); color: #8fe39a; }
+.psrc-pill-bad { background: rgba(255, 138, 128, .16); color: #ff8a80; }
+.psrc-down { margin-top: 8px; }
+.psrc-down-text { font-size: 24px; line-height: 1.45; margin-bottom: 16px; }
+.psrc-forget { margin-top: 24px; }
+.psrc-forget .button { font-size: 24px; }
 .src-tracker span:last-child { font-size: 22px; }
 .src-tracker-info { padding: 6px 21px; font-size: 22px; color: var(--muted); }
 .login-dialog { width: 1050px; }
