@@ -18,6 +18,7 @@ import { getHealth } from '../sources/store';
 import { ipBanTvHint } from '../sources/ipBan';
 import { ipBanNote, isCloudflare, jackettHint, progressText, resolveLink, resultDate, resultKey, sortResults, sourceBadge, sourceName, stableOrder } from '../sources/view';
 import type { SourceResult } from '../sources/types';
+import { tvGlyphs } from '../ui/tvText';
 
 const SOURCES: { value: SearchSource; label: string }[] = [
   { value: 'rutor', label: 'Rutor' },
@@ -220,7 +221,7 @@ export function AddScreen() {
           {sorted.map((r) => (
             // focus key from the row identity, not its place: rows stream in and the cursor must stay on its row
             <Focusable key={resultKey(r)} focusKey={'res-' + resultKey(r)} className="list-item" onPress={() => addResult(r)}>
-              <div class="title">{r.Title}</div>
+              <div class="title">{tvGlyphs(r.Title)}</div>
               <div class="meta">
                 <span class="src-badge">{sourceBadge(r)}</span>
                 {unifiedMeta(r)}
@@ -238,7 +239,7 @@ export function AddScreen() {
               className="list-item"
               onPress={() => add({ link: r.Magnet || r.Link, title: r.Title, category: mapSearchCategory(r.Categories) })}
             >
-              <div class="title">{r.Title}</div>
+              <div class="title">{tvGlyphs(r.Title)}</div>
               <div class="meta">
                 {r.Size} · {t('add.seeds', { n: r.Seed })} · {t('add.peers', { n: r.Peer })} · {r.Tracker}{r.CreateDate ? ' · ' + r.CreateDate.slice(0, 10) : ''}
               </div>

@@ -5,6 +5,7 @@ import { FocusGroup, Focusable, ProgressBar } from '../../ui/components';
 import { Icon } from '../../ui/icons';
 import { Poster } from './Poster';
 import { displayTitle } from '../../lib/torrentName';
+import { tvGlyphs } from '../../ui/tvText';
 
 export type HistoryEntry = HistoryItem;
 
@@ -51,8 +52,8 @@ export function HistoryGrid(p: {
           >
             <Poster t={t} />
             <div class="hcard-main">
-              <div class="hcard-title">{displayTitle(t)}</div>
-              <div class="hcard-ep">{episodeLine(p.filePath(e), categoryOf(t.category) === 'movie')}</div>
+              <div class="hcard-title">{tvGlyphs(displayTitle(t))}</div>
+              <div class="hcard-ep">{tvGlyphs(episodeLine(p.filePath(e), categoryOf(t.category) === 'movie'))}</div>
               <div class="hcard-time">
                 <span>{positionLabel(pr.time, pr.duration)}</span>
                 <span class="hcard-left">{remainingLabel(pr.time, pr.duration)}</span>

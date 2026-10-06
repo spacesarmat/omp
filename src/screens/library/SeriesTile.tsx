@@ -6,6 +6,7 @@ import { libraryTitle } from '../../lib/libraryView';
 import { groupLabel, type SeriesGroup } from '../../lib/seriesGroups';
 import { requestSeriesMatch, cachedSeriesMatch, seriesMatchVersion } from '../../lib/seriesMatch';
 import { seriesPill, type StatusPill } from '../../lib/seriesStatus';
+import { tvGlyphs } from '../../ui/tvText';
 
 /** The status of the series (null until TMDB answered, or when it has no such show); asks for the lookup once mounted. */
 export function useSeriesPill(g: SeriesGroup): StatusPill | null {
@@ -28,7 +29,7 @@ export function SeriesTile(p: { g: SeriesGroup; size: 'large' | 'small'; onOpen:
         {g.members.length >= 2 && <div class="tile-count">{g.members.length}</div>}
         {pill && <SeriesPill pill={pill} />}
       </Poster>
-      <div class="tile-title">{libraryTitle(g.named).title}</div>
+      <div class="tile-title">{tvGlyphs(libraryTitle(g.named).title)}</div>
       {p.size === 'large' && <div class="tile-meta">{groupLabel(g)}</div>}
     </Focusable>
   );

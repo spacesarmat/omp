@@ -78,7 +78,12 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 
 .torrent-head { display: flex; margin-bottom: 24px; }
 .torrent-head img { width: 220px; height: 330px; object-fit: cover; border-radius: 14px; margin-right: 40px; background: var(--panel2); }
-.torrent-head .info { flex: 1; }
+.torrent-head .info { flex: 1; min-width: 0; }
+/* one row that scrolls sideways (the focused button is kept whole); the padding keeps the focus ring unclipped, the
+   negative margins keep the height of the plain row */
+.torrent-actions { position: relative; overflow: hidden; margin: -12px -12px 4px; padding: 12px; }
+.torrent-actions-row { margin-bottom: 0; flex-wrap: nowrap; }
+.torrent-actions-row > * { flex-shrink: 0; }
 .torrent-head h1 { font-size: 44px; margin-bottom: 16px; }
 .skip-block { margin: 8px 0 28px; padding: 20px 22px; border-radius: 18px; background: var(--panel); }
 .skip-head { display: flex; align-items: baseline; margin-bottom: 8px; }

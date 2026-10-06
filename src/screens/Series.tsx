@@ -313,7 +313,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       navigate({ name: 'torrent', hash: releases[0].hash });
       return;
     }
-    const options = releases.map((m) => ({ label: libraryTitle(m).title + ' · ' + formatBytes(m.torrent_size || 0), value: m.hash }));
+    const options = releases.map((m) => ({ label: tvGlyphs(libraryTitle(m).title) + ' · ' + formatBytes(m.torrent_size || 0), value: m.hash }));
     choose(t('series.releasesTitle'), options).then((hash) => {
       if (hash) navigate({ name: 'torrent', hash });
     });
@@ -375,7 +375,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
         ) : null}
         <div class="series-poster">{card && card.poster ? <img src={card.poster} alt="" /> : <Poster t={group.lead} showTitle />}</div>
         <div class="series-info">
-          <h1>{title}</h1>
+          <h1>{tvGlyphs(title)}</h1>
           {pill && (
             <div class="series-status">
               <SeriesPill pill={pill} inline />
@@ -444,7 +444,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           return (
             <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item file-row ep-row" onPress={() => play(r)}>
               <span class="ep">{r.code}</span>
-              <span class="name">{name}</span>
+              <span class="name">{tvGlyphs(name)}</span>
               {!watched && ratio > 0 && (
                 <span class="bar">
                   <ProgressBar ratio={ratio} />
@@ -458,7 +458,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
         {coming.map((e) => (
           <Focusable key={'future-' + e.n} focusKey={'ep-future-' + season + '-' + e.n} className="list-item file-row ep-row ep-future">
             <span class="ep">{episodeCode(season, e.n)}</span>
-            <span class="name">{e.title}</span>
+            <span class="name">{tvGlyphs(e.title)}</span>
             <span class="size">{airDateText(e.airDate, now)}</span>
             <span class="check" />
           </Focusable>

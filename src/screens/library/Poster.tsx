@@ -3,6 +3,7 @@ import { useState } from 'preact/hooks';
 import type { Torrent } from '../../api/types';
 import { posterColor, shortTitle } from '../../lib/libraryView';
 import { displayTitle } from '../../lib/torrentName';
+import { tvGlyphs } from '../../ui/tvText';
 
 /** Torrent poster, or a colored placeholder with the short title when there is no image. */
 export function Poster(p: { t: Torrent; showTitle?: boolean; children?: ComponentChildren }) {
@@ -12,7 +13,7 @@ export function Poster(p: { t: Torrent; showTitle?: boolean; children?: Componen
   return (
     <div class="art" style={{ background: 'linear-gradient(160deg, ' + posterColor(t.hash) + ', #14161c)' }}>
       {img && <img src={t.poster} alt="" onError={() => setBroken(true)} />}
-      {!img && p.showTitle && <div class="art-title">{shortTitle(displayTitle(t))}</div>}
+      {!img && p.showTitle && <div class="art-title">{tvGlyphs(shortTitle(displayTitle(t)))}</div>}
       {p.children}
     </div>
   );

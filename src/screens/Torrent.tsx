@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { client } from '../store/servers';
 import { torrents } from '../store/library';
 import { getLocalProgress, progressVersion, serverViewed, refreshViewed, isWatched, resumePosition, progressRatio, clearProgress } from '../store/progress';
@@ -11,7 +11,7 @@ import { buildTorrentQueue } from '../player/queue';
 import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { restoreFocus } from '../ui/focus';
+import { restoreFocus, scrollToShow } from '../ui/focus';
 import { confirmDialog, choose } from '../ui/dialog';
 import { askText } from '../ui/TextDialog';
 import { checkTitle, renameTorrent } from '../lib/renameTorrent';
@@ -27,12 +27,17 @@ import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { displayTitle } from '../lib/torrentName';
 import { t } from '../i18n';
+import { tvGlyphs } from '../ui/tvText';
+
+/** Inner margin of the actions row: a focused button keeps this much room to the row's edge. */
+const ACTION_PAD = 24;
 
 export function TorrentScreen({ hash }: { hash: string }) {
   const c = client.value!;
   const cached = torrents.value.find((tor) => tor.hash === hash) || null;
   const [tor, setT] = useState<Torrent | null>(cached);
   const [files, setFiles] = useState<TorrentFile[]>(cached ? c.files(cached) : []);
+  const actionsRef = useRef<HTMLDivElement>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,12 +204,20 @@ export function TorrentScreen({ hash }: { hash: string }) {
     ? t('torrent.continueFrom', { ep: targetLabel ? targetLabel + ' ' : '', time: formatDuration(targetPos) })
     : targetLabel ? t('torrent.watchEp', { ep: targetLabel }) : t('torrent.watch');
 
+  // the action buttons do not wrap: the row scrolls sideways so the focused button is whole, with a margin
+  const showAction = (key: string) => {
+    const box = actionsRef.current;
+    const el = box ? (box.querySelector('[data-fk="' + key + '"]') as HTMLElement | null) : null;
+    if (!box || !el) return;
+    box.scrollLeft = scrollToShow(box.scrollLeft, box.clientWidth, el.offsetLeft, el.offsetWidth, ACTION_PAD);
+  };
+
   return (
     <FocusGroup focusKey="TORRENT" className="screen torrent">
       <div class="torrent-head">
         {tor && tor.poster ? <img src={tor.poster} alt="" /> : null}
         <div class="info">
-          <h1>{tor ? displayTitle(tor) : hash}</h1>
+          <h1>{tor ? tvGlyphs(displayTitle(tor)) : hash}</h1>
           <div class="muted">
             {tor && tor.torrent_size ? formatBytes(tor.torrent_size) + ' · ' : ''}
             {tor && tor.stat_string ? tor.stat_string : ''}
@@ -214,15 +227,17 @@ export function TorrentScreen({ hash }: { hash: string }) {
             const badges = releaseBadges(parseReleaseInfo(tor ? displayTitle(tor) : ''));
             return badges.length ? <div class="badges">{badges.map((x) => <span key={x} class="badge">{x}</span>)}</div> : null;
           })()}
-          <FocusGroup focusKey="TORRENT-ACTIONS" className="row" preferredChildFocusKey="torrent-play">
-            {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onPress={() => play(target, targetPos || undefined)} />}
-            {queue.length > 0 && <Button label={t('playlist.title')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? displayTitle(tor) : '' })} />}
-            {upgradable && <Button focusKey="torrent-better" label={t('torrent.better.find')} onPress={() => setBetterOpen(true)} />}
-            <Button label={t('torrent.resetViewed')} onPress={resetViewed} />
-            <Button label={t('torrent.rename.title')} onPress={rename} />
-            <Button label={t('torrent.poster.other')} onPress={otherPoster} />
-            <Button label={t('common.delete')} onPress={remove} />
-          </FocusGroup>
+          <div class="torrent-actions" ref={actionsRef}>
+            <FocusGroup focusKey="TORRENT-ACTIONS" className="row torrent-actions-row" preferredChildFocusKey="torrent-play">
+              {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onFocused={() => showAction('torrent-play')} onPress={() => play(target, targetPos || undefined)} />}
+              {queue.length > 0 && <Button focusKey="torrent-playlist" label={t('playlist.title')} onFocused={() => showAction('torrent-playlist')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? tvGlyphs(displayTitle(tor)) : '' })} />}
+              {upgradable && <Button focusKey="torrent-better" label={t('torrent.better.find')} onFocused={() => showAction('torrent-better')} onPress={() => setBetterOpen(true)} />}
+              <Button focusKey="torrent-reset" label={t('torrent.resetViewed')} onFocused={() => showAction('torrent-reset')} onPress={resetViewed} />
+              <Button focusKey="torrent-rename" label={t('torrent.rename.title')} onFocused={() => showAction('torrent-rename')} onPress={rename} />
+              <Button focusKey="torrent-poster" label={t('torrent.poster.other')} onFocused={() => showAction('torrent-poster')} onPress={otherPoster} />
+              <Button focusKey="torrent-delete" label={t('common.delete')} onFocused={() => showAction('torrent-delete')} onPress={remove} />
+            </FocusGroup>
+          </div>
         </div>
       </div>
       {queue.length > 0 && (
@@ -247,7 +262,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
       )}
       {marksOpen && (
         <MarksDialog
-          subtitle={t('torrent.marksSub', { title: tor ? displayTitle(tor) : '' })}
+          subtitle={t('torrent.marksSub', { title: tor ? tvGlyphs(displayTitle(tor)) : '' })}
           prefs={{ mi: skip.prefs.mi || null, mc: skip.prefs.mc || null }}
           onSave={(m) => skip.save({ mi: m.mi, mc: m.mc }, false)}
           onClose={closeMarks}
@@ -285,7 +300,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
                   onPress={() => play(queue.findIndex((q) => q.fileIndex === f.id))}
                 >
                   <span class="ep">{episodeLabel(f.path)}</span>
-                  <span class="name">{baseName(f.path)}</span>
+                  <span class="name">{tvGlyphs(baseName(f.path))}</span>
                   {!watched && ratio > 0 && <span class="bar"><ProgressBar ratio={ratio} /></span>}
                   <span class="size">{formatBytes(f.length)}</span>
                   <span class="check">{watched ? <Icon name="check" size={28} /> : null}</span>

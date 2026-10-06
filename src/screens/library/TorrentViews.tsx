@@ -10,6 +10,7 @@ import { libraryTitle } from '../../lib/libraryView';
 import { groupLibrary, groupLabel, groupSize, type SeriesGroup } from '../../lib/seriesGroups';
 import { useMemo } from 'preact/hooks';
 import { SeriesTile, useSeriesPill, SeriesPill } from './SeriesTile';
+import { tvGlyphs } from '../../ui/tvText';
 
 interface ItemProps {
   t: Torrent;
@@ -32,8 +33,8 @@ function categoryLabel(t: Torrent): string {
   return '';
 }
 
-const titleOf = (t: Torrent) => libraryTitle(t).title;
-const metaOf = (t: Torrent) => libraryTitle(t).meta;
+const titleOf = (t: Torrent) => tvGlyphs(libraryTitle(t).title);
+const metaOf = (t: Torrent) => tvGlyphs(libraryTitle(t).meta);
 
 function Tile(p: ItemProps & { size: 'large' | 'small' }) {
   const t = p.t;
@@ -82,7 +83,7 @@ function SeriesRow(p: { g: SeriesGroup; onOpen: (g: SeriesGroup) => void; onFocu
     <Focusable focusKey={'series-' + g.key} className="lrow" onPress={() => p.onOpen(g)} onFocused={() => p.onFocused(g)}>
       <Poster t={g.lead} />
       <div class="lrow-main">
-        <div class="lrow-title">{libraryTitle(g.named).title}</div>
+        <div class="lrow-title">{tvGlyphs(libraryTitle(g.named).title)}</div>
         <div class="lrow-meta">{groupLabel(g)}</div>
         {pill && <SeriesPill pill={pill} inline />}
       </div>
@@ -97,7 +98,7 @@ function SeriesCompact(p: { g: SeriesGroup; onOpen: (g: SeriesGroup) => void; on
   const pill = useSeriesPill(g);
   return (
     <Focusable focusKey={'series-' + g.key} className="crow" onPress={() => p.onOpen(g)} onFocused={() => p.onFocused(g)}>
-      <div class="crow-title">{libraryTitle(g.named).title}<span class="crow-meta">{' · ' + groupLabel(g)}</span></div>
+      <div class="crow-title">{tvGlyphs(libraryTitle(g.named).title)}<span class="crow-meta">{' · ' + groupLabel(g)}</span></div>
       {pill && <SeriesPill pill={pill} inline />}
       <div class="crow-size">{formatBytes(groupSize(g))}</div>
     </Focusable>
