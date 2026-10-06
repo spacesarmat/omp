@@ -14,24 +14,75 @@ import { addSubscription, loadSubs, sameQuery } from '../../../src/monitor/subs'
 import { airDateText, upcomingSeasons, type Upcoming } from '../lib/seriesStatus';
 import { Poster, qualityBadge } from '../ui/Poster';
 import { LaunchError } from '../ui/LaunchError';
-import { currentRoute, goBack, navigate, type MRoute } from '../nav';
+import { currentRoute, goBack, navigate, switchTab, type MRoute } from '../nav';
 import { filesOf, useTvLaunch } from '../watch';
-import { watchTarget } from '../lib/torrentActions';
+import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
+import { TorrentMenu, type TorrentMenuItem } from '../ui/TorrentMenu';
+import { client } from '../../../src/store/servers';
+import { sharedProgress, sharedResume } from '../lib/sharedProgress';
 import { activeTv } from '../tv/tvStore';
 import { torrents } from '../../../src/store/library';
-import { continueWatching, getLocalProgress, progressVersion, resumePosition, serverViewed } from '../../../src/store/progress';
+import { continueWatching, getLocalProgress, progressVersion, serverViewed } from '../../../src/store/progress';
 import { libraryTitle, positionLabel } from '../../../src/lib/libraryView';
 import { formatBytes } from '../../../src/lib/format';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
 import { displayTitle } from '../../../src/lib/torrentName';
 import type { Torrent } from '../../../src/api/types';
-import { findGroup, groupLabel, NO_SEASON, seasonMembers, type SeriesGroup } from '../lib/seriesGroups';
+import { findGroup, groupLabel, NO_SEASON, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { ratingText } from './catalog/CatalogSearch';
 
 const BACK = 'M15 5l-7 7l7 7';
+const KEEP = 'M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z';
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP = 10;
+
+/** A long press (500 ms without moving more than 10 px) or contextmenu runs `onLong`; the tap after it is swallowed. */
+function useLongPress(onLong: () => void, onTap: () => void) {
+  const p = useRef<{ timer: ReturnType<typeof setTimeout> | undefined; x: number; y: number; fired: boolean }>({
+    timer: undefined,
+    x: 0,
+    y: 0,
+    fired: false,
+  }).current;
+  const stop = () => {
+    clearTimeout(p.timer);
+    p.timer = undefined;
+  };
+  return {
+    onPointerDown: (e: PointerEvent) => {
+      stop();
+      p.fired = false;
+      p.x = e.clientX;
+      p.y = e.clientY;
+      p.timer = setTimeout(() => {
+        p.timer = undefined;
+        p.fired = true;
+        onLong();
+      }, LONG_PRESS_MS);
+    },
+    onPointerMove: (e: PointerEvent) => {
+      if (p.timer && Math.hypot(e.clientX - p.x, e.clientY - p.y) > LONG_PRESS_SLOP) stop();
+    },
+    onPointerUp: stop,
+    onPointerCancel: stop,
+    onContextMenu: (e: Event) => {
+      e.preventDefault();
+      stop();
+      p.fired = true;
+      onLong();
+    },
+    onClick: () => {
+      if (p.fired) {
+        p.fired = false;
+        return;
+      }
+      onTap();
+    },
+  };
+}
 
 // the chosen season of each open series screen (its route entry): kept through «Назад» from the torrent screen
 const chosenSeason = new WeakMap<MRoute, number>();
@@ -217,16 +268,22 @@ function FutureSeason({ card, season }: { card: CatalogCard; season: Upcoming })
   );
 }
 
-function Row({ tor, onWatch }: { tor: Torrent; onWatch: (tor: Torrent) => void }) {
+function Row({ tor, onWatch, onMenu }: { tor: Torrent; onWatch: (tor: Torrent) => void; onMenu: (tor: Torrent) => void }) {
+  const press = useLongPress(
+    () => onMenu(tor),
+    () => navigate({ name: 'torrent', hash: tor.hash }),
+  );
   const s = libraryTitle(tor);
   const files = playableFiles(filesOf(tor));
   const target = watchTarget(tor.hash, files);
-  const at = target ? resumePosition(tor.hash, target.id) : 0;
-  const duration = target ? getLocalProgress(tor.hash, target.id)?.duration || 0 : 0;
+  // the episode's progress, also from the same episode in another release of the series
+  const shared = target ? sharedProgress(tor.hash, target.id) : null;
+  const at = shared ? shared.position : 0;
+  const duration = target && shared ? getLocalProgress(tor.hash, target.id)?.duration || shared.duration : 0;
   const q = qualityBadge(displayTitle(tor));
   return (
     <div class="m-hrow m-series-row" data-hash={tor.hash}>
-      <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: tor.hash })}>
+      <button type="button" class="m-hrow-main" {...press}>
         <Poster torrent={tor} class="m-poster-mini" />
         <span class="m-hrow-text">
           <span class="m-hrow-title">
@@ -276,6 +333,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   const asked = route.name === 'series' && typeof route.season === 'number' ? route.season : undefined;
   const [chosen, setChosen] = useState(() => (remembered !== undefined ? remembered : asked !== undefined ? asked : firstSeason(group)));
   const [error, setError] = useState('');
+  const [menuFor, setMenuFor] = useState<Torrent | null>(null);
   const launch = useTvLaunch();
   const chipsRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -315,16 +373,40 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
     void launch.start({
       hash: tor.hash,
       file: target.id,
-      at: resumePosition(tor.hash, target.id),
+      at: sharedResume(tor.hash, target.id),
       duration: getLocalProgress(tor.hash, target.id)?.duration || undefined,
       label: [episodeLabel(target.path), stripExt(baseName(target.path))].filter(Boolean).join(' · '),
       onError: setError,
     });
   };
 
+  // «Оставить только эту»: the other releases of the shown season go (a pack holding another season stays)
+  const keepOnly = (tor: Torrent): TorrentMenuItem[] => {
+    const others = otherSeasonReleases(group, season, tor);
+    if (rows.length < 2 || !others.length) return [];
+    return [
+      {
+        label: t('series.keepOnly'),
+        icon: KEEP,
+        danger: true,
+        run: async () => {
+          const c = client.value;
+          if (!c) return false;
+          const ask =
+            season === NO_SEASON
+              ? tp('series.keepOnlyAskNoSeason', others.length)
+              : tp('series.keepOnlyAsk', others.length, { season: String(season) });
+          if (!window.confirm(ask)) return false;
+          reportDeleted(await deleteTorrents(c, others.map((m) => m.hash)));
+          return true;
+        },
+      },
+    ];
+  };
+
   const main = rows.length ? seasonTarget(rows) : null;
   const mainFile = main ? watchTarget(main.hash, playableFiles(filesOf(main))) : undefined;
-  const mainAt = main && mainFile ? resumePosition(main.hash, mainFile.id) : 0;
+  const mainAt = main && mainFile ? sharedResume(main.hash, mainFile.id) : 0;
 
   return (
     <>
@@ -405,10 +487,13 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           {error && <LaunchError message={error} class="m-hint-warn" />}
           <div class="m-list m-series-rows">
             {rows.map((tor) => (
-              <Row key={tor.hash} tor={tor} onWatch={watch} />
+              <Row key={tor.hash} tor={tor} onWatch={watch} onMenu={setMenuFor} />
             ))}
           </div>
         </>
+      )}
+      {menuFor && (
+        <TorrentMenu tor={menuFor} onClose={() => setMenuFor(null)} onWatchTv={watch} extra={keepOnly(menuFor)} />
       )}
       {launch.sheet}
     </>
@@ -422,6 +507,12 @@ export function Series({ seriesKey }: { seriesKey: string }) {
   const group = useMemo(() => findGroup(list, seriesKey), [list, seriesKey]);
   const card = useSeriesCard(group);
   const hero = !!(group && card);
+  // the last release of the series deleted here: back to the library (a series already gone on arrival says so)
+  const had = useRef(!!group);
+  useEffect(() => {
+    if (group) had.current = true;
+    else if (had.current && currentRoute.peek().name === 'series') switchTab({ name: 'library' });
+  }, [!!group]);
   return (
     <div class={'m-screen m-series' + (hero ? ' m-series-hero' : '')} data-route="series">
       {!hero && (

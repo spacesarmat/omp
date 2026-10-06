@@ -8,7 +8,7 @@ import { findGroup, groupLibrary, type SeriesGroup } from '../src/lib/seriesGrou
 import { currentRoute, navigate, resetTo } from '../src/nav';
 import { torrents } from '../../src/store/library';
 import { reloadProgress, serverViewed } from '../../src/store/progress';
-import { applyLanguageSetting } from '../../src/i18n';
+import { applyLanguageSetting, lang } from '../../src/i18n';
 import { torrentQuery, type CatalogCard, type CatalogTitle, type SeasonDetails } from '../../src/catalog/tmdb';
 import type { CatalogClient } from '../../src/catalog/client';
 import type { Torrent } from '../../src/api/types';
@@ -213,6 +213,25 @@ describe('series screen without TMDB', () => {
     const hit = await findShow({ search: s }, 'Звездный путь: Странные новые миры / Star Trek: Strange New Worlds / Сезон: 4', 0);
     expect(hit && hit.id).toBe(show.id);
     expect(s.mock.calls.map((c) => c[0])).toContain('Star Trek: Strange New Worlds');
+  });
+
+  it('in English the original name is searched first: a Russian name finds another show of that name there', async () => {
+    const { findShow, showQueries } = await import('../src/lib/tmdbShow');
+    const title = 'Тёмная материя / Dark Matter / Сезон: 2 / Серии: 1-8 из 10 [2026, WEB-DL 1080p]';
+    // TMDB in en-US: the Russian name is only an alternative title of the 2015 show (ended, 3 seasons)
+    const old = { kind: 'tv' as const, id: 62425, title: 'Dark Matter', original: 'Dark Matter', year: 2015, poster: '', rating: 7 };
+    const now = { kind: 'tv' as const, id: 196322, title: 'Dark Matter', original: 'Dark Matter', year: 2024, poster: '', rating: 8 };
+    const s = vi.fn((q: string) => Promise.resolve({ items: /[Ѐ-ӿ]/.test(q) ? [old] : [now, old] }));
+    expect(showQueries(title, 'ru')[0]).not.toBe('Dark Matter');
+    expect(showQueries(title, 'en')[0]).toBe('Dark Matter');
+    lang.value = 'en';
+    try {
+      const hit = await findShow({ search: s }, title, 2026);
+      expect(hit && hit.id).toBe(196322);
+      expect(s.mock.calls[0][0]).toBe('Dark Matter');
+    } finally {
+      lang.value = 'ru';
+    }
   });
 
   it('pickShow prefers a series of the year, else the first series, never a film', () => {

@@ -22,18 +22,34 @@ const PENCIL = 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4';
 const CHECK = 'M5 12.5l4.5 4.5L19 7';
 const TRASH = 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3';
 
-/** What a long press on a torrent in «Мои» opens: open, watch on the TV, rename, select, delete. */
+/**
+ * One more item of the menu, before «Удалить»: `run` resolves false when it did nothing (a confirm declined) and the
+ * menu stays open; otherwise the menu closes once it ends.
+ */
+export interface TorrentMenuItem {
+  label: string;
+  icon: string;
+  danger?: boolean;
+  run: () => Promise<boolean>;
+}
+
+/**
+ * What a long press on a torrent in «Мои» (and on a release of the series screen) opens: open, watch on the TV, rename,
+ * select (without `onSelect`: none), the `extra` items, delete.
+ */
 export function TorrentMenu({
   tor,
   onClose,
   onSelect,
   onWatchTv,
+  extra,
 }: {
   tor: Torrent;
   onClose: () => void;
   onSelect?: (hash: string) => void;
   /** Runs the launch outside the menu (it closes at once), so its toast and the jump to the remote survive. */
   onWatchTv?: (tor: Torrent) => void;
+  extra?: TorrentMenuItem[];
 }) {
   const tv = activeTv.value;
   const [renaming, setRenaming] = useState(false);
@@ -72,6 +88,18 @@ export function TorrentMenu({
     onClose();
   };
 
+  const runExtra = async (item: TorrentMenuItem) => {
+    if (busy) return;
+    setBusy(true);
+    let done = false;
+    try {
+      done = await item.run();
+    } finally {
+      setBusy(false);
+    }
+    if (done) onClose();
+  };
+
   if (renaming) return <TorrentRenameSheet initial={title} onSave={rename} onClose={() => { setRenaming(false); onClose(); }} />;
 
   return (
@@ -105,6 +133,12 @@ export function TorrentMenu({
           <span class="m-opt-name">{t('library.select')}</span>
         </button>
       )}
+      {(extra || []).map((item) => (
+        <button key={item.label} type="button" class={'m-opt' + (item.danger ? ' m-danger' : '')} disabled={busy} onClick={() => void runExtra(item)}>
+          <Icon d={item.icon} size={22} />
+          <span class="m-opt-name">{item.label}</span>
+        </button>
+      ))}
       <button type="button" class="m-opt m-danger" disabled={busy} onClick={() => void remove()}>
         <Icon d={TRASH} size={22} />
         <span class="m-opt-name">{t('common.delete')}</span>

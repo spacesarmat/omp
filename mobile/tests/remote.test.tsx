@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { Remote, setRemoteActions } from '../src/screens/Remote';
+import { Remote, setRemoteActions, shortTvName } from '../src/screens/Remote';
 import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv, setActiveTv } from '../src/tv/tvStore';
 import { tvWaking, tvState, tvError, tvForgot } from '../src/tv/tvClient';
@@ -74,6 +74,68 @@ describe('Remote without a TV', () => {
     expect(el.textContent).toContain('Подключите телевизор');
     click(text('Подключить ТВ'));
     expect(currentRoute.value).toEqual({ name: 'tv' });
+  });
+});
+
+describe('Remote header and layout', () => {
+  it('shortTvName drops «[LG] » and «webOS TV »', () => {
+    expect(shortTvName('[LG] webOS TV OLED55C9PLA')).toBe('OLED55C9PLA');
+    expect(shortTvName('webOS TV UN43')).toBe('UN43');
+    expect(shortTvName('Гостиная')).toBe('Гостиная');
+    expect(shortTvName('[LG] webOS TV ')).toBe('[LG] webOS TV ');
+  });
+
+  it('the no-TV state has the tab header', () => {
+    mount();
+    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Пульт');
+  });
+
+  it('the tab header: «Пульт», the short TV name with its state, the full name as the title', () => {
+    saveTv({ ip: '192.168.1.5', name: '[LG] webOS TV OLED55C9PLA' });
+    mount();
+    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Пульт');
+    const sub = el.querySelector('.m-screen-head .m-head-sub')!;
+    expect(sub.textContent).toBe('OLED55C9PLA · Не подключён');
+    expect(sub.querySelector('[title]')!.getAttribute('title')).toBe('[LG] webOS TV OLED55C9PLA');
+    act(() => {
+      tvState.value = 'connected';
+    });
+    expect(sub.querySelector('.m-remote-state.on')!.textContent).toBe('Подключён');
+    expect(el.querySelector('.m-screen-head [aria-label="Настройки тачпада"]')).toBeTruthy();
+    expect(el.querySelector('.m-screen-head .m-power')).toBeTruthy();
+    act(() => {
+      tvState.value = 'idle';
+    });
+  });
+
+  it('buttons mode: side keys around the d-pad, Home/Menu, the media row', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    const sides = Array.from(el.querySelectorAll('.m-rb-top .m-side'));
+    expect(sides.length).toBe(2);
+    expect(Array.from(sides[0].querySelectorAll('button')).map((b) => b.getAttribute('aria-label'))).toEqual(['Клавиатура', 'Назад']);
+    expect(Array.from(sides[1].querySelectorAll('button')).map((b) => b.getAttribute('aria-label'))).toEqual(['Громче', 'Тише']);
+    expect(el.querySelector('.m-rb-top .m-dpad-wrap')).toBeTruthy();
+    expect(Array.from(el.querySelectorAll('.m-rb-two button')).map((b) => b.getAttribute('aria-label'))).toEqual(['Домой', 'Меню']);
+    expect(el.querySelectorAll('.m-rb-media button').length).toBe(5);
+    click(lbl('Громче'));
+    expect(a.volume).toHaveBeenLastCalledWith('up');
+    click(lbl('Назад'));
+    expect(a.pressButton).toHaveBeenLastCalledWith('BACK');
+    click(lbl('Клавиатура'));
+    expect(el.querySelector('input[aria-label="Ввод на телевизоре"]')).toBeTruthy();
+  });
+
+  it('touchpad mode: the pad, then Back/Home/Menu/Keyboard, the media row and the volume bar', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    click(text('Тачпад'));
+    expect(el.querySelector('.m-rt > .m-touchpad')).toBeTruthy();
+    expect(Array.from(el.querySelectorAll('.m-rt-keys button')).map((b) => b.getAttribute('aria-label'))).toEqual(['Назад', 'Домой', 'Меню', 'Клавиатура']);
+    expect(el.querySelectorAll('.m-rt .m-rb-media button').length).toBe(5);
+    expect(el.querySelector('.m-rt-vol')!.textContent).toBe('−Громкость+');
+    click(lbl('Тише'));
+    expect(a.volume).toHaveBeenLastCalledWith('down');
   });
 });
 

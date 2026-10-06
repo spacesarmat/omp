@@ -1,6 +1,10 @@
 // The TMDB show of a series torrent: a tracker title holds the name in several variants («Русское / English / …»);
 // TMDB finds a show by its whole name, so each variant is tried in turn — the local one first, then the original —
-// and the short poster query last. Shared by the series screen and the episode names of the torrent screen.
+// and the short poster query last. In English the variants in Latin letters go first: TMDB matches a query against the
+// titles in the asked language (and alternative titles), so a Russian name searched in English can find only another
+// show of that name (Dark Matter 2015 for «Тёмная материя» instead of Dark Matter 2024).
+// Shared by the series screen and the episode names of the torrent screen.
+import { lang } from '../../../src/i18n';
 import { posterQuery, titleCore } from '../../../src/lib/posterSearch';
 import { seriesQuery } from '../../../src/monitor/newEpisodes';
 import type { CatalogTitle } from '../../../src/catalog/tmdb';
@@ -9,8 +13,10 @@ interface Searcher {
   search(query: string, page: number): Promise<{ items: CatalogTitle[] }>;
 }
 
-/** The queries to try for a series title, most specific first, without repeats. */
-export function showQueries(title: string): string[] {
+const CYRILLIC = /[Ѐ-ӿ]/;
+
+/** The queries to try for a series title, most specific first, without repeats; in English the Latin ones first. */
+export function showQueries(title: string, uiLang: string = lang.peek()): string[] {
   const out: string[] = [];
   const add = (q: string) => {
     const s = (q || '').trim();
@@ -21,7 +27,8 @@ export function showQueries(title: string): string[] {
   add(titleCore(parts[0]));
   if (parts[1]) add(titleCore(parts[1]));
   add(posterQuery(title));
-  return out;
+  if (uiLang !== 'en') return out;
+  return out.filter((q) => !CYRILLIC.test(q)).concat(out.filter((q) => CYRILLIC.test(q)));
 }
 
 /** A series of that year among the items, else the first series; films never match. */
