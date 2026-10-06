@@ -60,6 +60,13 @@ class PhoneRpcService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+        } else {
+            // a repeat start (the switch, or the notification permission just granted): post it again, so it shows
+            // once allowed and follows the current language
+            try {
+                getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification())
+            } catch (_: Exception) {
+            }
         }
         if (!config.enabled) {
             // turned off while a start was on its way
@@ -133,8 +140,10 @@ class PhoneRpcService : Service() {
     private fun notification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         try {
+            // LOW (not MIN) keeps the status-bar icon; a channel's importance is fixed once created, hence the new id
+            nm?.deleteNotificationChannel(OLD_CHANNEL)
             nm?.createNotificationChannel(
-                NotificationChannel(CHANNEL, I18n.s("rpc.channel"), NotificationManager.IMPORTANCE_MIN).apply {
+                NotificationChannel(CHANNEL, I18n.s("rpc.channel"), NotificationManager.IMPORTANCE_LOW).apply {
                     setShowBadge(false)
                     setSound(null, null)
                     enableVibration(false)
@@ -159,14 +168,16 @@ class PhoneRpcService : Service() {
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
 
     companion object {
-        private const val CHANNEL = "omp-rpc"
+        private const val CHANNEL = "omp-rpc-low"
+        /** The 0.18.0-beta.3 dev channel with IMPORTANCE_MIN (no status-bar icon); deleted on start. */
+        private const val OLD_CHANNEL = "omp-rpc"
         private const val NOTIFICATION_ID = 8097
         private const val RESTART_DELAY_MS = 2_000L
         private const val RESTART_WINDOW_MS = 10 * 60_000L
