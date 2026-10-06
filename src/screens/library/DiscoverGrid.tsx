@@ -28,7 +28,8 @@ import { tvGlyphs } from '../../ui/tvText';
 /** Posters per row (the CSS widths match). */
 export const DISCOVER_COLS = 8;
 
-const SORT_KEYS: { [s: string]: Key } = {
+// every sort needs a label: a new DiscoverSort fails tsc here instead of t(undefined) on the TV
+const SORT_KEYS: { [s in DiscoverSort]: Key } = {
   popular: 'discover.sortPopular',
   rating: 'discover.sortRating',
   date: 'discover.sortDate',
@@ -53,12 +54,13 @@ export function ratingText(r: number): string {
   return '★ ' + (lang.peek() === 'en' ? s : s.replace('.', ','));
 }
 
-function kinds(): { id: DiscoverKind | 'want'; label: string }[] {
+// the feed kinds select on focus; «Хочу» is a separate chip at the right end of the bar and selects on OK only,
+// so the remote can always pass along the bar
+function kinds(): { id: DiscoverKind; label: string }[] {
   return [
     { id: 'all', label: t('common.all') },
     { id: 'movie', label: t('category.movie') },
     { id: 'tv', label: t('category.tv') },
-    { id: 'want', label: t('tv.want.tab') },
   ];
 }
 
@@ -102,16 +104,16 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     const k = readDiscoverState();
     return k && k.qkey === qkey ? k : null;
   }, []);
-  const [kind, setKind] = useState<DiscoverKind | 'want'>(kept ? kept.kind : 'all');
-  const isWant = kind === 'want';
-  // the kind the TMDB requests use («Хочу» has none)
-  const feedKind: DiscoverKind = kind === 'want' ? 'all' : kind;
+  // the kind of the TMDB feed; it stays while the «Хочу» list is shown
+  const [kind, setKind] = useState<DiscoverKind>(kept ? kept.kind : 'all');
+  const [isWant, setWant] = useState<boolean>(kept ? kept.want : false);
+  const feedKind: DiscoverKind = kind;
   const wantedFn = p.wanted || isWanted;
   const [feed, setFeed] = useState<DiscoverFeed | null>(kept ? kept.feed : null);
   const [error, setError] = useState<CatalogErrorCode | null>(null);
   const [moreFailed, setMoreFailed] = useState(false);
   const [reload, setReload] = useState(0);
-  const [search, setSearch] = useState<DiscoverSearch | null>(kept && kept.kind !== 'want' ? kept.search : null);
+  const [search, setSearch] = useState<DiscoverSearch | null>(kept ? kept.search : null);
   const [searchError, setSearchError] = useState<CatalogErrorCode | null>(null);
   const restored = useRef(!!(kept && kept.feed));
   // the current request: answers of an older one (another kind, a retry) are dropped
@@ -124,7 +126,6 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   const index = useMemo(() => libraryIndex(list), [list]);
 
   useEffect(() => {
-    if (kind === 'want') return;
     if (restored.current) {
       restored.current = false;
       return;
@@ -146,7 +147,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
       );
   }, [kind, qkey, reload]);
 
-  useEffect(() => saveDiscoverState({ kind: kind, qkey: qkey, feed: isWant ? null : feed, search: isWant ? null : search }), [kind, qkey, feed, search]);
+  useEffect(() => saveDiscoverState({ kind: kind, want: isWant, qkey: qkey, feed: feed, search: search }), [kind, isWant, qkey, feed, search]);
 
   useEffect(() => {
     if (!focusResults.current || !search || !search.items) return;
@@ -208,6 +209,11 @@ export function DiscoverGrid(p: DiscoverGridProps) {
         },
       );
   };
+
+  // a search left before its results came (Back to the header, a title card) is asked again, not shown spinning
+  useEffect(() => {
+    if (kept && kept.search && !kept.search.items) runSearch(kept.search.q);
+  }, []);
 
   const askSearch = () => {
     askText(t('discover.searchLabel'), search ? search.q : '', t('add.search')).then((v) => {
@@ -300,6 +306,18 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     if (p.onFocused) p.onFocused();
   };
 
+  /** A feed kind chip: leaves «Хочу» and shows that feed (with its open search, if any). */
+  const pickKind = (k: DiscoverKind) => {
+    setWant(false);
+    setKind(k);
+  };
+
+  const dim = isWant ? ' dim' : '';
+  /** The filters and the search do nothing under «Хочу». */
+  const feedOnly = (f: () => void) => () => {
+    if (!isWant) f();
+  };
+
   const retry = () => {
     if (search) runSearch(search.q);
     else setReload((n) => n + 1);
@@ -310,46 +328,49 @@ export function DiscoverGrid(p: DiscoverGridProps) {
 
   return (
     <div class="discover">
-      <FocusGroup focusKey="DISC-BAR" className="disc-bar" preferredChildFocusKey={'disc-kind-' + kind}>
+      <FocusGroup focusKey="DISC-BAR" className="disc-bar" preferredChildFocusKey={isWant ? 'disc-kind-want' : 'disc-kind-' + kind}>
         <div class="disc-kinds">
           {kinds().map((k) => (
             <Focusable
               key={k.id}
               focusKey={'disc-kind-' + k.id}
-              className={'disc-kind' + (kind === k.id ? ' active' : '')}
-              onPress={() => setKind(k.id)}
-              onFocused={() => { setKind(k.id); leaveTile(); }}
+              className={'disc-kind' + (!isWant && kind === k.id ? ' active' : '')}
+              onPress={() => pickKind(k.id)}
+              onFocused={() => { pickKind(k.id); leaveTile(); }}
             >
               {k.label}
             </Focusable>
           ))}
         </div>
-        {!isWant && (
-          <>
-        <Focusable focusKey="disc-sort" className="disc-btn disc-btn-sort" onPress={() => pickSort()} onFocused={leaveTile}>
+        {/* under «Хочу» the filters stay in place, dimmed and inert, so the focus still passes along the bar */}
+        <Focusable focusKey="disc-sort" className={'disc-btn disc-btn-sort' + dim} onPress={feedOnly(() => pickSort())} onFocused={leaveTile}>
           {t('discover.sortAria', { name: sortName(query.sort) })}
         </Focusable>
-        <Focusable focusKey="disc-genre" className="disc-btn" onPress={pickGenre} onFocused={leaveTile}>
+        <Focusable focusKey="disc-genre" className={'disc-btn' + dim} onPress={feedOnly(pickGenre)} onFocused={leaveTile}>
           {t('tv.discover.genreValue', { name: genreLabel(query) })}
         </Focusable>
-        <Focusable focusKey="disc-year" className="disc-btn" onPress={pickYear} onFocused={leaveTile}>
+        <Focusable focusKey="disc-year" className={'disc-btn' + dim} onPress={feedOnly(pickYear)} onFocused={leaveTile}>
           {t('tv.discover.yearValue', { name: yearName(query) })}
         </Focusable>
-        <Focusable focusKey="disc-country" className="disc-btn" onPress={pickCountry} onFocused={leaveTile}>
+        <Focusable focusKey="disc-country" className={'disc-btn' + dim} onPress={feedOnly(pickCountry)} onFocused={leaveTile}>
           {t('tv.discover.countryValue', { name: query.country ? countryName(query.country) : t('tv.discover.anyCountry') })}
         </Focusable>
-        <Focusable focusKey="disc-rating" className="disc-btn" onPress={pickRating} onFocused={leaveTile}>
+        <Focusable focusKey="disc-rating" className={'disc-btn' + dim} onPress={feedOnly(pickRating)} onFocused={leaveTile}>
           {t('tv.discover.ratingValue', { name: ratingName(query.rating) })}
         </Focusable>
-          </>
-        )}
         <div class="spacer" />
-        {!isWant && (
-        <Focusable focusKey="disc-find" className="disc-btn disc-find" onPress={askSearch} onFocused={leaveTile}>
+        <Focusable focusKey="disc-find" className={'disc-btn disc-find' + dim} onPress={feedOnly(askSearch)} onFocused={leaveTile}>
           <Icon name="search" size={26} class="disc-find-icon" />
           {t('tv.discover.find')}
         </Focusable>
-        )}
+        <Focusable
+          focusKey="disc-kind-want"
+          className={'disc-kind disc-kind-want' + (isWant ? ' active' : '')}
+          onPress={() => setWant(!isWant)}
+          onFocused={leaveTile}
+        >
+          {t('tv.want.tab')}
+        </Focusable>
       </FocusGroup>
       {isWant ? (
         <div class="disc-sub">{t('tv.want.subtitle')}</div>
@@ -364,7 +385,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
       {shownError ? (
         <div class="disc-error">
           <div class="catalog-off-title">{t('discover.offlineTitle')}</div>
-          <div class="disc-error-text">{t(shownError === 'nokey' ? 'discover.nokeyText' : 'discover.offlineText')}</div>
+          <div class="disc-error-text">{t(shownError === 'nokey' ? 'tv.discover.nokeyText' : 'tv.discover.offlineText')}</div>
           <FocusGroup focusKey="DISC-ERROR" className="actions">
             <Button focusKey="disc-retry" label={t('common.retry')} onPress={retry} onFocused={leaveTile} />
           </FocusGroup>

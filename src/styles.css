@@ -485,6 +485,11 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .disc-btn { display: flex; align-items: center; padding: 14px 22px; border-radius: 14px; background: var(--panel); color: var(--text); font-size: 24px; white-space: nowrap; }
 .disc-btn.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: none; }
 .disc-find-icon { margin-right: 10px; }
+/* «Хочу» sits alone at the right end of the bar, a chip like the kind switch */
+.disc-kind-want { flex-shrink: 0; padding: 14px 24px; border-radius: 14px; background: var(--panel); white-space: nowrap; }
+/* the filters under «Хочу»: still focusable (the remote passes through), but inert */
+.disc-btn.dim { opacity: 0.4; }
+.disc-btn.dim.focused { opacity: 0.7; }
 .disc-sub { display: flex; align-items: center; min-height: 54px; margin: 22px 0 18px; font-size: 26px; color: var(--muted); }
 .disc-results .disc-sub-text { color: var(--text); margin-right: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1300px; }
 .disc-results .button { padding: 10px 24px; font-size: 24px; }

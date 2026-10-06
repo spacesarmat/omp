@@ -20,8 +20,10 @@ export interface DiscoverSearch {
 }
 
 export interface DiscoverState {
-  /** 'want': the «Хочу» list (no feed of its own). */
-  kind: DiscoverKind | 'want';
+  /** The kind of the TMDB feed (kept while the «Хочу» list is shown). */
+  kind: DiscoverKind;
+  /** The «Хочу» list is shown instead of the feed. */
+  want: boolean;
   /** discoverQueryKey of the query the feed was loaded with. */
   qkey: string;
   feed: DiscoverFeed | null;
@@ -49,7 +51,7 @@ export function readDiscoverState(now: number = Date.now()): DiscoverState | nul
 }
 
 export function saveDiscoverState(s: Omit<DiscoverState, 'at'>, now: number = Date.now()): void {
-  kept = { kind: s.kind, qkey: s.qkey, feed: s.feed, search: s.search, at: now };
+  kept = { kind: s.kind, want: s.want, qkey: s.qkey, feed: s.feed, search: s.search, at: now };
 }
 
 export function resetDiscoverState(): void {

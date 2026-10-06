@@ -187,6 +187,7 @@ describe('TV «Обзор» tab', () => {
     stub.discover = vi.fn(() => Promise.reject(Object.assign(new Error('offline'), { code: 'offline' })));
     const host = await mount();
     expect(text(host.querySelector('.disc-error'))).toContain('TMDB не отвечает');
+    expect(text(host.querySelector('.disc-error'))).not.toContain('Мои'); // the TV has no «Мои» tab
     stub.discover = vi.fn((_k: string, _q: unknown, n: number) => Promise.resolve(page(n)));
     await click(host.querySelector('[data-fk="disc-retry"]')!);
     expect(stub.discover).toHaveBeenCalledTimes(1);
@@ -197,6 +198,7 @@ describe('TV «Обзор» tab', () => {
     stub.discover = vi.fn(() => Promise.reject(Object.assign(new Error('nokey'), { code: 'nokey' })));
     const host = await mount();
     expect(text(host.querySelector('.disc-error'))).toContain('Нет ключа TMDB');
+    expect(text(host.querySelector('.disc-error'))).not.toContain('Мои');
   });
 
   it('marks wanted titles, toggles with the yellow key and lists them under «Хочу»', async () => {
@@ -208,24 +210,107 @@ describe('TV «Обзор» tab', () => {
     await flush();
     await act(async () => { dispatchKey('yellow', new KeyboardEvent('keydown')); });
     expect(wantList.value.map((w) => w.id)).toEqual([102, 101]);
-    await act(() => { setFocus('disc-kind-want'); });
-    await flush();
+    await click(host.querySelector('[data-fk="disc-kind-want"]')!);
     const want = host.querySelectorAll('.disc-tile');
     expect(want).toHaveLength(2);
     expect(text(want[0].querySelector('.disc-title'))).toBe('Фильм 2');
     expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Хочу');
   });
 
-  it('hides the search and the filters under «Хочу»', async () => {
+  // C1 of the beta.2 review: «Хочу» used to select on focus and hid every button to its right, so the remote
+  // could never reach the filters. jsdom has no layout, so the d-pad walk is simulated key by key in bar order.
+  const BAR = ['disc-kind-all', 'disc-kind-movie', 'disc-kind-tv', 'disc-sort', 'disc-genre', 'disc-year', 'disc-country', 'disc-rating', 'disc-find', 'disc-kind-want'];
+  const barKeys = (host: Element) =>
+    (Array.prototype.slice.call(host.querySelectorAll('.disc-bar [data-fk]')) as HTMLElement[]).map((e) => e.getAttribute('data-fk'));
+
+  async function walk(host: Element, keys: string[]) {
+    for (const k of keys) {
+      // every button is still there when the focus arrives, whatever the previous one switched
+      expect(host.querySelector('[data-fk="' + k + '"]')).not.toBeNull();
+      await act(() => { setFocus(k); });
+      await flush();
+      expect(getCurrentFocusKey()).toBe(k);
+      expect(barKeys(host)).toEqual(BAR);
+    }
+  }
+
+  it('keeps «Хочу» at the right end of the bar and every button reachable in both modes', async () => {
     const host = await mount();
-    await act(() => { setFocus('disc-kind-all'); }); // the focus of an earlier test may linger
-    await flush();
-    expect(host.querySelector('[data-fk="disc-find"]')).not.toBeNull();
-    await act(() => { setFocus('disc-kind-want'); });
-    await flush();
-    expect(host.querySelector('[data-fk="disc-find"]')).toBeNull();
-    expect(host.querySelector('[data-fk="disc-sort"]')).toBeNull();
+    expect(barKeys(host)).toEqual(BAR);
+    // feed mode, left to right: passing «Хочу» does not switch to it
+    await walk(host, BAR);
+    expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Сериалы'); // the last feed chip passed
+    expect(host.querySelectorAll('.disc-tile')).toHaveLength(16);
+    // OK switches
+    await click(host.querySelector('[data-fk="disc-kind-want"]')!);
+    expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Хочу');
     expect(text(host.querySelector('.empty'))).toContain('Список пуст');
+    // «Хочу» mode, right to left down to the filters: everything is there and dimmed, nothing switches back
+    await walk(host, BAR.slice(3).reverse());
+    expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Хочу');
+    ['disc-sort', 'disc-genre', 'disc-year', 'disc-country', 'disc-rating', 'disc-find'].forEach((k) => {
+      expect(host.querySelector('[data-fk="' + k + '"]')!.className).toContain('dim');
+    });
+    // a dimmed filter is inert under «Хочу»
+    await click(host.querySelector('[data-fk="disc-sort"]')!);
+    expect(document.body.querySelector('.dialog-option')).toBeNull();
+    // on to the feed chips: the first one reached switches back to the feed
+    await walk(host, ['disc-kind-tv', 'disc-kind-movie', 'disc-kind-all']);
+    expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Все');
+    expect(host.querySelector('[data-fk="disc-sort"]')!.className).not.toContain('dim');
+    // and the whole way right again
+    await walk(host, BAR);
+    expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Сериалы');
+  });
+
+  it('OK on «Хочу» under «Хочу» goes back to the feed', async () => {
+    const host = await mount();
+    await click(host.querySelector('[data-fk="disc-kind-want"]')!);
+    expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Хочу');
+    await click(host.querySelector('[data-fk="disc-kind-want"]')!);
+    expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Все');
+    expect(host.querySelectorAll('.disc-tile')).toHaveLength(16);
+  });
+
+  async function typeSearch(q: string) {
+    const input = document.body.querySelector('.text-dialog input') as HTMLInputElement;
+    act(() => { input.value = q; input.dispatchEvent(new Event('input', { bubbles: true })); });
+    await click(byText(document.body, '.button', 'Поиск'));
+  }
+
+  it('keeps the open search through «Хочу» and a title card', async () => {
+    let host = await mount();
+    await click(host.querySelector('[data-fk="disc-find"]')!);
+    await typeSearch('дюна');
+    await click(host.querySelector('[data-fk="disc-kind-want"]')!);
+    expect(host.querySelector('.disc-sub-text')).toBeNull();
+    act(() => { render(null, host); });
+    host = await mount();
+    expect(host.querySelector('.disc-kind.active')!.textContent).toBe('Хочу');
+    await click(host.querySelector('[data-fk="disc-kind-want"]')!);
+    expect(text(host.querySelector('.disc-sub-text'))).toBe('Результаты: дюна');
+    expect(text(host.querySelector('.disc-title'))).toBe('Дюна');
+    expect(stub.search).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks a search again that was left before its results came', async () => {
+    let answer: (v: unknown) => void = () => {};
+    stub.search = vi.fn(() => new Promise((r) => { answer = r; }));
+    let host = await mount();
+    await click(host.querySelector('[data-fk="disc-find"]')!);
+    await typeSearch('дюна');
+    expect(text(host.querySelector('.disc-sub-text'))).toBe('Результаты: дюна');
+    expect(host.querySelectorAll('.disc-tile')).toHaveLength(0);
+    act(() => { render(null, host); });
+    const late = answer;
+    stub.search = vi.fn(() => Promise.resolve({ items: [title(99, { title: 'Дюна' })], pages: 1 }));
+    host = await mount();
+    expect(stub.search).toHaveBeenCalledWith('дюна', 1);
+    expect(text(host.querySelector('.disc-sub-text'))).toBe('Результаты: дюна');
+    expect(host.querySelectorAll('.disc-tile')).toHaveLength(1);
+    late({ items: [], pages: 1 }); // the abandoned request answers late: nothing breaks
+    await flush();
+    expect(host.querySelectorAll('.disc-tile')).toHaveLength(1);
   });
 
   it('removes a title with yellow and focuses its neighbour, then the kind button when empty', async () => {
@@ -233,8 +318,7 @@ describe('TV «Обзор» tab', () => {
     toggleWant({ kind: 'movie', id: 2, title: 'B', year: 2020, poster: '' });
     toggleWant({ kind: 'movie', id: 3, title: 'C', year: 2020, poster: '' });
     const host = await mount();
-    await act(() => { setFocus('disc-kind-want'); });
-    await flush();
+    await click(host.querySelector('[data-fk="disc-kind-want"]')!);
     await act(() => { setFocus('disc-movie-2'); });
     await flush();
     await act(async () => { dispatchKey('yellow', new KeyboardEvent('keydown')); });
@@ -257,8 +341,7 @@ describe('TV «Обзор» tab', () => {
     toggleWant({ kind: 'movie', id: 1, title: 'A', year: 2020, poster: '' });
     toggleWant({ kind: 'movie', id: 2, title: 'B', year: 2020, poster: '' });
     let host = await mount();
-    await act(() => { setFocus('disc-kind-want'); });
-    await flush();
+    await click(host.querySelector('[data-fk="disc-kind-want"]')!);
     await act(() => { setFocus('disc-movie-1'); });
     await flush();
     await click(host.querySelector('[data-fk="disc-movie-1"]')!);
