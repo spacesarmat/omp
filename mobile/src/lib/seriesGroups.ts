@@ -9,6 +9,7 @@ import { parseEpisode, playableFiles } from '../../../src/lib/episodes';
 import { filterTorrents } from '../../../src/lib/librarySearch';
 import { lang, tp } from '../../../src/i18n';
 import { filesOf } from '../watch';
+import { fileEpisodes, filesHaveEpisodes } from '../../../src/lib/categoryCheck';
 
 /** Season 0: the torrent says nothing about its season. */
 export const NO_SEASON = 0;
@@ -34,19 +35,11 @@ export interface SingleItem {
 export type LibraryItem = SingleItem | SeriesGroup;
 
 /**
- * Clear signs of episodes: a season with episodes or a range of several episodes in the title («S1E1-18», «E01-E18»,
- * «[1-18]»), or several playable files with episode numbers. A film with one file never has them.
+ * Clear signs of episodes in the FILES: 3+ episode files of comparable size and no main video (a film with numbered
+ * extras, a concert or a film titled «Сезон охоты 2» never qualifies). The title alone never does.
  */
 export function hasEpisodes(tor: Torrent): boolean {
-  const r = parseEpisodeRange(displayTitle(tor));
-  if (r.to !== undefined && (r.season !== undefined || (r.from !== undefined && r.to - r.from >= 2))) return true;
-  const eps: number[] = [];
-  playableFiles(filesOf(tor)).forEach((f) => {
-    const e = parseEpisode(f.path);
-    const k = (e.season || 0) * 10000 + (e.episode === null ? -1 : e.episode);
-    if (e.episode !== null && eps.indexOf(k) < 0) eps.push(k);
-  });
-  return eps.length >= 2;
+  return filesHaveEpisodes(filesOf(tor));
 }
 
 /**
@@ -87,6 +80,24 @@ export function seasonsOf(tor: Torrent): number[] {
   return out.sort((a, b) => a - b);
 }
 
+/** The release names episodes (in its title or files) but no season. */
+function seasonlessEpisodes(tor: Torrent): boolean {
+  const r = parseEpisodeRange(displayTitle(tor));
+  if (r.to !== undefined) return true;
+  return playableFiles(filesOf(tor)).some((f) => !!fileEpisodes(f.path));
+}
+
+/**
+ * The seasons of a group member: its own, else season 1 when it is a release of episodes with no season and another
+ * member has season 1 (anime «E01-E18» next to «S1E1-18»); else NO_SEASON.
+ */
+function memberSeasons(members: Torrent[], tor: Torrent): number[] {
+  const own = seasonKeys(tor);
+  if (own.length !== 1 || own[0] !== NO_SEASON) return own;
+  const first = members.some((m) => m !== tor && seasonsOf(m).indexOf(1) >= 0);
+  return first && seasonlessEpisodes(tor) ? [1] : own;
+}
+
 function seasonKeys(tor: Torrent): number[] {
   const s = seasonsOf(tor);
   return s.length ? s : [NO_SEASON];
@@ -101,7 +112,7 @@ function makeGroup(key: string, members: Torrent[]): SeriesGroup {
   const seasons: number[] = [];
   let lead = members[0];
   members.forEach((m) => {
-    seasonKeys(m).forEach((s) => {
+    memberSeasons(members, m).forEach((s) => {
       if (seasons.indexOf(s) < 0) seasons.push(s);
     });
     const a = lastSeason(m);
@@ -218,7 +229,7 @@ export function singleGroup(tor: Torrent): SeriesGroup | null {
 
 /** The torrents of one season (a pack of seasons is listed under each of them). */
 export function seasonMembers(g: SeriesGroup, season: number): Torrent[] {
-  return g.members.filter((m) => seasonKeys(m).indexOf(season) >= 0);
+  return g.members.filter((m) => memberSeasons(g.members, m).indexOf(season) >= 0);
 }
 
 /**
@@ -226,7 +237,7 @@ export function seasonMembers(g: SeriesGroup, season: number): Torrent[] {
  * (deleting it would take that season away too).
  */
 export function otherSeasonReleases(g: SeriesGroup, season: number, keep: Torrent): Torrent[] {
-  return seasonMembers(g, season).filter((m) => m.hash !== keep.hash && seasonKeys(m).every((s) => s === season));
+  return seasonMembers(g, season).filter((m) => m.hash !== keep.hash && memberSeasons(g.members, m).every((s) => s === season));
 }
 
 /** Every torrent hash of the cards. */

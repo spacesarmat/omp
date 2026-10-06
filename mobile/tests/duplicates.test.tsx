@@ -9,7 +9,7 @@ vi.mock('../../src/monitor/replace', async (orig) => ({
 
 import { replaceTorrent } from '../../src/monitor/replace';
 import { groupLibrary, isSeries, type SeriesGroup } from '../src/lib/seriesGroups';
-import { coverage, covers, duplicatesOf, dupOffer, dupOfferFor, checkAddedDuplicate, worseInSeason } from '../src/lib/duplicates';
+import { coverage, covers, duplicatesOf, dupOffer, dupOfferFor, checkAddedDuplicate, filmKeys, worseInSeason } from '../src/lib/duplicates';
 import { DuplicateSheet } from '../src/ui/DuplicateSheet';
 import { Series } from '../src/screens/Series';
 import { addSearchResult } from '../src/addResult';
@@ -27,24 +27,38 @@ import type { SourceResult } from '../../src/sources/types';
 const GB = 1024 ** 3;
 const replaceMock = replaceTorrent as unknown as ReturnType<typeof vi.fn>;
 
-function files(names: string[]) {
-  return JSON.stringify({ TorrServer: { Files: names.map((p, i) => ({ id: i + 1, path: p, length: 1000 })) } });
+function files(names: string[], length = 1000) {
+  return JSON.stringify({ TorrServer: { Files: names.map((p, i) => ({ id: i + 1, path: p, length })) } });
 }
 function eps(prefix: string, n: number): string[] {
   return Array.from({ length: n }, (_, i) => prefix + (i < 9 ? '0' : '') + (i + 1) + '.mkv');
 }
 
-// the real pair from a user's server: the 1080p one was filed under «Фильмы»
+// the real pair from a user's server: the 1080p one (18 files) was filed under «Фильмы»; the 4K one has 16 files,
+// the first two holding two episodes each («1-2 серия», «3-4 серия»), so it has all 18
+const SPIRIT_1080_FILES = Array.from({ length: 18 }, (_, i) => 'Yu Ling Shi/Yu Ling Shi - ' + (i < 9 ? '0' : '') + (i + 1) + ' [AniLiberty] [1080p].mkv');
+const SPIRIT_2160_FILES = ['Повелитель духов 1-2 серия [4K] WEBRip.mkv', 'Повелитель духов 3-4 серия [4K] WEBRip.mkv'].concat(
+  Array.from({ length: 14 }, (_, i) => 'Повелитель духов ' + (i + 5) + ' серия [4K] WEBRip.mkv'),
+);
 const SPIRIT_1080: Torrent = {
   hash: 'a'.repeat(40), title: 'Повелитель духов / E01-E18 Yu Ling Shi - AniLiberty.TOP [WEB-DL 1080p][HEVC][1-18]',
-  category: 'movie', stat: 3, torrent_size: 5.4 * GB, timestamp: 1,
+  category: 'movie', stat: 3, torrent_size: 5.4 * GB, timestamp: 1, data: files(SPIRIT_1080_FILES, 300 * 1024 * 1024),
 };
 const SPIRIT_2160: Torrent = {
   hash: 'b'.repeat(40), title: 'Повелитель духов (S1E1-18 of 18) / Yu Ling Shi / B.King / Spirit Master (2026) WEBRip 2160p | AVC',
-  category: 'tv', stat: 3, torrent_size: 10.5 * GB, timestamp: 2,
+  category: 'tv', stat: 3, torrent_size: 10.5 * GB, timestamp: 2, data: files(SPIRIT_2160_FILES, 650 * 1024 * 1024),
+};
+// a 4K release whose 16 files hold episodes 1-16 only: it does not cover the 1080p one
+const SPIRIT_2160_16: Torrent = {
+  ...SPIRIT_2160, hash: 'e'.repeat(40),
+  data: files(Array.from({ length: 16 }, (_, i) => 'Повелитель духов ' + (i + 1) + ' серия [4K] WEBRip.mkv'), 650 * 1024 * 1024),
 };
 const S1_1080: Torrent = { hash: 'c1', title: 'Тёмная материя / Dark Matter [S01] 1080p WEB-DL', category: 'tv', stat: 3, torrent_size: 4 * GB, timestamp: 1, data: files(eps('S01E', 9)) };
-const S1_HALF_4K: Torrent = { hash: 'c2', title: 'Тёмная материя / Dark Matter [S01E01-05] 2160p WEB-DL', category: 'tv', stat: 3, torrent_size: 6 * GB, timestamp: 2 };
+const S1_HALF_4K: Torrent = { hash: 'c2', title: 'Тёмная материя / Dark Matter [S01E01-05] 2160p WEB-DL', category: 'tv', stat: 3, torrent_size: 6 * GB, timestamp: 2, data: files(eps('S01E', 5)) };
+// a season pack whose files are not known yet: nothing about it may be deleted
+const S1_4K_NOFILES: Torrent = { hash: 'c5', title: 'Тёмная материя / Dark Matter [Сезон 1] 2160p WEB-DL', category: 'tv', stat: 3, torrent_size: 9 * GB, timestamp: 5 };
+const WAR_HORSE: Torrent = { hash: 'w1', title: 'Боевой конь / War Horse (Стивен Спилберг / Steven Spielberg) [2011, драма, BDRip 1080p]', category: 'movie', stat: 3, torrent_size: 8 * GB, data: files(['War.Horse.mkv']) };
+const TINTIN: Torrent = { hash: 'w2', title: 'Приключения Тинтина / The Adventures of Tintin (Стивен Спилберг / Steven Spielberg) [2011, мультфильм, 2160p]', category: 'movie', stat: 3, torrent_size: 20 * GB, data: files(['Tintin.mkv']) };
 const S1_4K: Torrent = { hash: 'c3', title: 'Тёмная материя / Dark Matter [S01] 2160p WEB-DL', category: 'tv', stat: 3, torrent_size: 9 * GB, timestamp: 3, data: files(eps('S01E', 9)) };
 const S2_4K: Torrent = { hash: 'c4', title: 'Тёмная материя / Dark Matter [S02] 2160p WEB-DL', category: 'tv', stat: 3, torrent_size: 9 * GB, timestamp: 4, data: files(eps('S02E', 9)) };
 const FILM_1080: Torrent = { hash: 'f1', title: 'Дюна / Dune (2021) BDRip 1080p', category: 'movie', stat: 3, torrent_size: 8 * GB, timestamp: 1, data: files(['Dune.mkv']) };
@@ -105,8 +119,10 @@ afterEach(() => {
 });
 
 describe('grouping', () => {
-  it('«Повелитель духов»: the «Фильмы» release with E01-E18 is a series and joins the 2160p one', () => {
+  it('«Повелитель духов»: the «Фильмы» release with 18 episode files is a series and joins the 2160p one in season 1', () => {
     expect(isSeries(SPIRIT_1080)).toBe(true);
+    // its title alone does not make it a series
+    expect(isSeries({ ...SPIRIT_1080, data: '' })).toBe(false);
     const items = groupLibrary([SPIRIT_1080, SPIRIT_2160]);
     expect(items).toHaveLength(1);
     const g = items[0] as SeriesGroup;
@@ -117,14 +133,21 @@ describe('grouping', () => {
 
   it('a film with one file stays a film; 18 episode files under «Фильмы» make a series', () => {
     expect(isSeries(FILM_1080)).toBe(false);
+    const extras: Torrent = { hash: 'x', title: 'Дюна (2021)', category: 'movie', data: JSON.stringify({ TorrServer: { Files: [{ id: 1, path: 'Dune.mkv', length: 20 * GB }, { id: 2, path: 'Extras/Scene - 01.mkv', length: GB / 4 }, { id: 3, path: 'Extras/Scene - 02.mkv', length: GB / 4 }, { id: 4, path: 'Extras/Scene - 03.mkv', length: GB / 4 }] } }) } as Torrent;
+    expect(isSeries(extras)).toBe(false);
     const many: Torrent = { hash: 'm', title: 'Повелитель духов AniLiberty 1080p', category: 'movie', data: files(eps('Yu Ling Shi - E', 18)) } as Torrent;
     expect(isSeries(many)).toBe(true);
   });
 });
 
 describe('duplicate detection', () => {
-  it('the same episodes in one series are duplicates', () => {
-    expect(coverage(SPIRIT_1080)).toEqual(coverage(SPIRIT_2160));
+  it('coverage comes from the files only: «1-2 серия» holds two episodes; no files, no coverage', () => {
+    const all = Array.from({ length: 18 }, (_, i) => i + 1);
+    expect(coverage(SPIRIT_1080)![1].slice().sort((a, b) => a - b)).toEqual(all);
+    expect(coverage(SPIRIT_2160)![1].slice().sort((a, b) => a - b)).toEqual(all);
+    expect(coverage(SPIRIT_2160_16)![1]).toHaveLength(16);
+    expect(coverage({ ...SPIRIT_2160, data: '' })).toBeNull();
+    expect(coverage(S1_4K_NOFILES)).toBeNull();
     expect(duplicatesOf([SPIRIT_1080, SPIRIT_2160], SPIRIT_2160)).toEqual([SPIRIT_1080]);
   });
 
@@ -140,9 +163,24 @@ describe('duplicate detection', () => {
     expect(duplicatesOf([FILM_4K], FILM_1984)).toEqual([]);
   });
 
+  it('films: the director or cast segment never makes two films one («Боевой конь» and «Тинтин», Spielberg 2011)', () => {
+    expect(filmKeys(WAR_HORSE)).toHaveLength(2);
+    expect(filmKeys(WAR_HORSE).every((k) => k.endsWith('|2011') && k.indexOf('spielberg') < 0)).toBe(true);
+    expect(duplicatesOf([WAR_HORSE], TINTIN)).toEqual([]);
+    expect(dupOfferFor([WAR_HORSE, TINTIN], TINTIN)).toBeNull();
+    // the year comes from the release field, not from «1920x1080»
+    expect(filmKeys({ hash: 'd', title: 'Dune 1920x1080 (2021)' } as Torrent).every((k) => k.endsWith('|2021'))).toBe(true);
+  });
+
   it('the offer: drop the old worse one, or the new worse one; a worse superset is never dropped', () => {
+    // the 4K files prove all 18 episodes: the 1080p one may go
     expect(dupOfferFor([SPIRIT_1080, SPIRIT_2160], SPIRIT_2160)).toEqual({ drop: 'old', fresh: SPIRIT_2160, old: SPIRIT_1080 });
     expect(dupOfferFor([SPIRIT_1080, SPIRIT_2160], SPIRIT_1080)).toEqual({ drop: 'new', fresh: SPIRIT_1080, old: SPIRIT_2160 });
+    // a 4K one with episodes 1-16 does not cover the 1080p one (17, 18 would be lost): no offer either way
+    expect(dupOfferFor([SPIRIT_1080, SPIRIT_2160_16], SPIRIT_2160_16)).toBeNull();
+    expect(dupOfferFor([SPIRIT_1080, SPIRIT_2160_16], SPIRIT_1080)).toBeNull();
+    // files not known: a title saying «Сезон 1» never decides
+    expect(dupOfferFor([S1_1080, S1_4K_NOFILES], S1_4K_NOFILES)).toBeNull();
     // the 4K half season is better but lacks episodes 6-9 of the 1080p one: nothing to drop
     expect(dupOfferFor([S1_1080, S1_HALF_4K], S1_HALF_4K)).toBeNull();
     expect(dupOfferFor([FILM_1080, FILM_4K], FILM_4K)).toEqual({ drop: 'old', fresh: FILM_4K, old: FILM_1080 });
@@ -153,8 +191,13 @@ describe('after an add', () => {
   it('a better duplicate added from a search: «Удалить старую» replaces the old one, its history moves over', async () => {
     torrents.value = [SPIRIT_1080];
     serverList = [SPIRIT_1080];
-    vi.spyOn(TorrServerClient.prototype, 'add').mockImplementation(async () => ({ ...SPIRIT_2160 }));
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockImplementation(async () => ({ ...SPIRIT_2160, data: '' }));
     const r = { Title: SPIRIT_2160.title, Magnet: 'magnet:?xt=urn:btih:' + SPIRIT_2160.hash, Hash: SPIRIT_2160.hash, Link: '', Size: '', Categories: '', CreateDate: '', Tracker: '', Peer: 0, Seed: 1, source: 'x' } as SourceResult;
+    // the files are not known right after the add: no offer
+    await addSearchResult(r, 'tv');
+    expect(dupOffer.value).toBeNull();
+    torrents.value = [SPIRIT_1080];
+    add.mockImplementation(async () => ({ ...SPIRIT_2160 }));
     await addSearchResult(r, 'tv');
     mount(<DuplicateSheet />);
     expect(el.querySelector('.m-dup-text')!.textContent).toBe('Уже есть: Повелитель духов 1080p WEB-DL · 5,4 ГБ. Удалить её и оставить 4K WEB-DL?');
@@ -213,6 +256,15 @@ describe('series screen hint', () => {
     await flush();
     expect(window.confirm).toHaveBeenCalledWith('Удалить 1 раздачу в худшем качестве? История просмотра перейдёт в лучшую.');
     expect(replaceMock.mock.calls.map((c) => [c[1], c[2]])).toEqual([['c1', 'magnet:?xt=urn:btih:c3']]);
+  });
+
+  it('«Повелитель духов»: the 1080p release shows in season 1 with the 4K one; the hint only when the 4K files cover it', async () => {
+    await open([SPIRIT_1080, SPIRIT_2160_16], 1);
+    expect(Array.from(el.querySelectorAll('.m-series-row')).map((r) => r.getAttribute('data-hash'))).toEqual(expect.arrayContaining([SPIRIT_1080.hash, SPIRIT_2160_16.hash]));
+    expect(el.querySelector('[data-dup-hint]')).toBeNull();
+    act(() => render(null, el));
+    await open([SPIRIT_1080, SPIRIT_2160], 1);
+    expect(el.querySelector('[data-dup-hint]')).not.toBeNull();
   });
 
   it('no hint without a fully covered worse release; declining the confirm deletes nothing', async () => {
