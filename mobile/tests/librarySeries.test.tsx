@@ -5,14 +5,14 @@ import { Library } from '../src/screens/Library';
 import { Series } from '../src/screens/Series';
 import { currentRoute, navigate, resetTo } from '../src/nav';
 import { reloadTvs } from '../src/tv/tvStore';
-import { groupLibrary, findGroup, seriesKey, type SeriesGroup } from '../src/lib/seriesGroups';
+import { groupLibrary, findGroup, seriesKey, type SeriesGroup } from '../../src/lib/seriesGroups';
 import { updateSettings } from '../../src/store/settings';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
 import { reloadProgress, saveProgress, serverViewed } from '../../src/store/progress';
 import { applyLanguageSetting } from '../../src/i18n';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
-import { resetSeriesMatches } from '../src/lib/seriesMatch';
+import { resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { Torrent } from '../../src/api/types';
 

@@ -33,7 +33,7 @@ import { Discover } from './catalog/Discover';
 import { usePinchStep } from '../ui/usePinchStep';
 import { SeriesMenu } from '../ui/SeriesMenu';
 import { SeriesTileBadge } from '../ui/SeriesTileBadge';
-import { groupLabel, groupLibrary, groupSize, itemHashes, type LibraryItem, type SeriesGroup } from '../lib/seriesGroups';
+import { groupLabel, groupLibrary, groupSize, itemHashes, type LibraryItem, type SeriesGroup } from '../../../src/lib/seriesGroups';
 
 const POLL_MS = 15000;
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes

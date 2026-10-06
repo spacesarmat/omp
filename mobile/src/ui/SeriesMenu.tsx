@@ -6,7 +6,7 @@ import { navigate } from '../nav';
 import { deleteTorrents, reportDeleted } from '../lib/torrentActions';
 import { client } from '../../../src/store/servers';
 import { libraryTitle } from '../../../src/lib/libraryView';
-import type { SeriesGroup } from '../lib/seriesGroups';
+import type { SeriesGroup } from '../../../src/lib/seriesGroups';
 
 const OPEN = 'M9 6l6 6-6 6';
 const CHECK = 'M5 12.5l4.5 4.5L19 7';

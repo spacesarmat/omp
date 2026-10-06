@@ -6,6 +6,7 @@ import { createCatalogClient, type CatalogClient } from '../../../src/catalog/cl
 import { endpointOf } from '../../../src/catalog/tmdb';
 import { TMDB_FALLBACK_KEY } from '../../../src/catalog/fallbackKey';
 import type { Key } from '../../../src/i18n';
+import { setCatalogProvider } from '../../../src/catalog/activeCatalog';
 import { phoneSourceContext } from '../searchContext';
 
 export type CatalogMode = 'mine' | 'discover';
@@ -54,3 +55,5 @@ export function phoneCatalog(fresh?: boolean): Promise<CatalogClient> {
   cached = { server, client: p };
   return p;
 }
+
+setCatalogProvider(() => phoneCatalog());

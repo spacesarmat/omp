@@ -1,14 +1,18 @@
 // «Мои»: the torrents of one series (its seasons, or several releases) shown as one card. The key is the series name
 // (the first title variant, normalized) of a torrent in the «Сериалы» category, or guessed as one; films never group.
-import type { Torrent } from '../../../src/api/types';
-import { seriesNames } from '../../../src/monitor/newEpisodes';
-import { parseEpisodeRange } from '../../../src/monitor/episodes';
-import { guessCategory } from '../../../src/lib/categoryGuess';
-import { displayTitle } from '../../../src/lib/torrentName';
-import { parseEpisode, playableFiles } from '../../../src/lib/episodes';
-import { filterTorrents } from '../../../src/lib/librarySearch';
-import { tp } from '../../../src/i18n';
-import { filesOf } from '../watch';
+import type { Torrent } from '../api/types';
+import { seriesNames } from '../monitor/newEpisodes';
+import { parseEpisodeRange } from '../monitor/episodes';
+import { guessCategory } from './categoryGuess';
+import { displayTitle } from './torrentName';
+import { parseEpisode, playableFiles } from './episodes';
+import { filterTorrents } from './librarySearch';
+import { tp } from '../i18n';
+import { parseTorrentData } from '../api/torrserver';
+
+function filesOf(t: Torrent) {
+  return t.file_stats && t.file_stats.length ? t.file_stats : parseTorrentData(t.data);
+}
 
 /** Season 0: the torrent says nothing about its season. */
 export const NO_SEASON = 0;

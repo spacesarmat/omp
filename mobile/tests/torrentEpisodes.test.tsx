@@ -7,7 +7,7 @@ import { setWatchActions } from '../src/watch';
 import { currentRoute, resetTo, navigate } from '../src/nav';
 import { reloadTvs } from '../src/tv/tvStore';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
-import { resetEpisodeNames } from '../src/lib/episodeNames';
+import { resetEpisodeNames } from '../../src/lib/episodeNames';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { torrents } from '../../src/store/library';
 import { reloadProgress, serverViewed } from '../../src/store/progress';

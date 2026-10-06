@@ -3,9 +3,9 @@
 // (IntersectionObserver; the queue runs 2 at a time, one per series). Nothing without TMDB or a match.
 import { useEffect, useMemo, useRef } from 'preact/hooks';
 import { lang } from '../../../src/i18n';
-import { cachedSeriesMatch, requestSeriesMatch, seriesMatchVersion } from '../lib/seriesMatch';
-import { tileBadge } from '../lib/seriesStatus';
-import { singleGroup, type SeriesGroup } from '../lib/seriesGroups';
+import { cachedSeriesMatch, requestSeriesMatch, seriesMatchVersion } from '../../../src/lib/seriesMatch';
+import { tileBadge } from '../../../src/lib/seriesStatus';
+import { singleGroup, type SeriesGroup } from '../../../src/lib/seriesGroups';
 import type { Torrent } from '../../../src/api/types';
 
 export function SeriesTileBadge({ group, tor }: { group?: SeriesGroup; tor?: Torrent }) {

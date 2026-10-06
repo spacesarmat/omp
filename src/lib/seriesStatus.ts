@@ -1,8 +1,8 @@
 // A series' state from its TMDB card: the status pill («Выходит · следующая серия 12 окт.», «Завершён», «Отменён»,
 // «В производстве», «Скоро новый сезон»), the seasons still to come and the small badge of a «Мои» tile.
 // Cards cached before these fields existed have none of them: unknown, so no pill and no badge from them.
-import { fmtDate, t } from '../../../src/i18n';
-import type { CatalogCard } from '../../../src/catalog/tmdb';
+import { fmtDate, t } from '../i18n';
+import type { CatalogCard } from '../catalog/tmdb';
 
 export type PillTone = 'airing' | 'ended' | 'canceled' | 'soon';
 export interface StatusPill { tone: PillTone; text: string; }

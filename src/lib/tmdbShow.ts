@@ -1,9 +1,9 @@
 // The TMDB show of a series torrent: a tracker title holds the name in several variants («Русское / English / …»);
 // TMDB finds a show by its whole name, so each variant is tried in turn — the local one first, then the original —
 // and the short poster query last. Shared by the series screen and the episode names of the torrent screen.
-import { posterQuery, titleCore } from '../../../src/lib/posterSearch';
-import { seriesQuery } from '../../../src/monitor/newEpisodes';
-import type { CatalogTitle } from '../../../src/catalog/tmdb';
+import { posterQuery, titleCore } from './posterSearch';
+import { seriesQuery } from '../monitor/newEpisodes';
+import type { CatalogTitle } from '../catalog/tmdb';
 
 interface Searcher {
   search(query: string, page: number): Promise<{ items: CatalogTitle[] }>;

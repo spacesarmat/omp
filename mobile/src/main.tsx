@@ -1,5 +1,6 @@
 import { render } from 'preact';
 import { App } from './app';
+import './catalog/phoneCatalog'; // registers the catalog provider the shared series code uses
 import { resetTo } from './nav';
 import { activeServer } from '../../src/store/servers';
 import { installErrorHooks, logStart } from '../../src/lib/log';
