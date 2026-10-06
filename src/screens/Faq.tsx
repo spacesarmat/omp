@@ -12,12 +12,12 @@ function lineText(l: FaqLine): string {
 }
 
 /** The first URL in the answer: an explicit link line, or a URL inside a text line. */
-function firstUrl(lines: FaqLine[]): string | null {
+export function firstUrl(lines: FaqLine[]): string | null {
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
     if (typeof l !== 'string') return l.url;
     const m = URL_RE.exec(l);
-    if (m) return m[0];
+    if (m) return m[0].replace(/[.,;:!?)\]»”"']+$/, '');
   }
   return null;
 }
@@ -71,7 +71,7 @@ export function FaqScreen() {
           )}
         </div>
       </div>
-      <div class="hints">{t('torrent.hintBack')}</div>
+      <div class="hints">{t('faq.hintBack')}</div>
     </FocusGroup>
   );
 }

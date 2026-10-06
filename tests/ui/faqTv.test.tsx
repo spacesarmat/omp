@@ -68,3 +68,12 @@ describe('TV FAQ', () => {
     expect(currentRoute.value.name).toBe('settings');
   });
 });
+
+describe('FAQ link extraction', () => {
+  it('drops trailing punctuation from the QR payload', async () => {
+    const { firstUrl } = await import('../../src/screens/Faq');
+    expect(firstUrl(['Open https://example.com/a.'])).toBe('https://example.com/a');
+    expect(firstUrl(['(see https://example.com/a/b)'])).toBe('https://example.com/a/b');
+    expect(firstUrl(['x', { text: 'l', url: 'https://e.org/z' }])).toBe('https://e.org/z');
+  });
+});

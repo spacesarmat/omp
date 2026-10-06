@@ -1674,6 +1674,7 @@ export const en: EnDict<typeof ru> = {
     dev: { lg: 'LG TV', atv: 'Android TV', phone: 'Phone', server: 'TorrServer', common: 'General' },
     sec: { install: 'Installation', connect: 'Connecting', player: 'Player', trouble: 'If something does not work', setup: 'Search and setup', about: 'About the project', log: 'Log and backup', news: 'New and subscriptions' },
     fromTv: 'Chosen by the connected TV · {name}',
+    hintBack: 'Back — to settings',
     scanToOpen: 'Point your phone camera to open the link',
   },
   localServer: {

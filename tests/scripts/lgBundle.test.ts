@@ -72,7 +72,8 @@ describe('LG bundle', () => {
     expect(code.indexOf('tracker.php?nm=')).toBe(-1);
     expect(code.indexOf('rutor.info')).toBe(-1);
     expect(code.indexOf('takelogin.php')).toBe(-1);
-    expect(code.indexOf('rustorka.com')).toBe(-1);
+    // the rustorka domain itself appears in a FAQ link (the TV FAQ), so check a parser-only string
+    expect(code.indexOf('forum/login.php')).toBe(-1);
   });
 
   it('the Android TV entry loads the parsers with a dynamic import', () => {
