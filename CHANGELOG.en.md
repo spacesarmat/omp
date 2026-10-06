@@ -8,6 +8,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - «Discover»: dates on the tiles — «digital Nov 12», «in cinemas since Oct 3», «new episode Oct 8», «season 2 — Nov 15»
 - «Discover»: a new «Coming to digital» sort — films released digitally in the next 60 days
 - Film card: «Cinemas · Digital · Disc» release dates (the ones to come highlighted); series card: «Upcoming episodes» with dates
+- «Add»: when a site is behind a Cloudflare check, lost its sign-in or fails its certificate, the warning has an «Open … settings» button that goes straight to that site's page with «Sign in» and the check bypass
 
 ## 0.17.0-beta.5
 
