@@ -133,7 +133,12 @@ export function nativePlugin(): OmpNativeTvPlugin | null {
   if (!cap) return null;
   try {
     const p = cap.Plugins && cap.Plugins[NAME];
-    if (p && typeof p.localIpv4 === 'function') return p as OmpNativeTvPlugin;
+    if (p && typeof p.localIpv4 === 'function') {
+      // an old system WebView (Dune HD, WebView 66) gets a listener handle back, not a promise
+      const w = Object.create(p) as OmpNativeTvPlugin;
+      w.addListener = (event, cb) => Promise.resolve(p.addListener(event, cb));
+      return w;
+    }
     const bridged = fromBridge(cap);
     if (bridged) return bridged;
     if (typeof cap.registerPlugin === 'function') {
