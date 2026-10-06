@@ -37,8 +37,7 @@ import { applyFilters, activeFilterCount, filterChips, parseRelease, subQualityO
 import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
 import { ResultCard } from '../ui/ResultCard';
 import { SubSheet } from '../ui/SubSheet';
-import { addSearchResult, afterAdd, type RowBusy } from '../addResult';
-import { checkAddedDuplicate } from '../lib/duplicates';
+import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../addResult';
 import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
 
@@ -268,7 +267,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     const added = await c.add({ link: l, title: magnetName(l) || undefined, category: magnetCategory });
     void rememberAdded(c, added, magnetName(l));
     afterAdd(c, added, picked !== null, magnetCategory);
-    checkAddedDuplicate(added.hash, added.title || magnetName(l), magnetCategory);
+    noteAlreadyHave(added.hash, added.title || magnetName(l), magnetCategory);
     return added.hash;
   };
 

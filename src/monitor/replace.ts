@@ -63,11 +63,6 @@ export interface ReplaceOptions {
    * Without it the old torrent's title is used; the title is never empty.
    */
   title?: string;
-  /**
-   * The new torrent is already in the library (a duplicate of the old one): it keeps its own title, poster and
-   * category, the old ones only fill what it lacks.
-   */
-  keepOwn?: boolean;
 }
 
 export type ReplaceResult = { ok: true; hash: string } | { ok: false; error: string; cause?: ReplaceCause };
@@ -173,21 +168,6 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-/**
- * Two histories as one: one entry per file + source + device name, the newest wins; newest first, at most JOURNAL_MAX.
- */
-export function mergeJournals(a: JournalEntry[], b: JournalEntry[]): JournalEntry[] {
-  const out: JournalEntry[] = [];
-  a.concat(b)
-    .slice()
-    .sort((x, y) => y.at - x.at)
-    .forEach((e) => {
-      const dup = out.filter((x) => x.f === e.f && x.src === e.src && (x.name || '') === (e.name || ''))[0];
-      if (!dup) out.push(e);
-    });
-  return out.slice(0, JOURNAL_MAX);
-}
-
 /** A failure with the text for the user (a rejection of anything else becomes the generic text). */
 class Step {
   readonly msg: string;
@@ -237,7 +217,6 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
   const newTitle = ((opts && opts.title) || '').trim();
   const abort = opts && opts.abort;
   const deadlineMs = opts && opts.deadlineMs ? opts.deadlineMs : 0;
-  const keepOwn = !!(opts && opts.keepOwn);
   let added: Torrent | null = null;
   let preexisting = false;
   // the wait was stopped («Отмена» or the deadline): nothing goes on, a torrent added late is taken back
@@ -257,11 +236,7 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
 
   const prepare = (old: Torrent, oldParsed: NonNullable<ReturnType<typeof parseData>>, all: Torrent[]): Promise<Prepared> =>
     c
-      .add(
-        keepOwn
-          ? { link, title: newTitle || keptTitle(old) }
-          : { link, title: newTitle || keptTitle(old), poster: old.poster || '', category: old.category || '' },
-      )
+      .add({ link, title: newTitle || keptTitle(old), poster: old.poster || '', category: old.category || '' })
       .then(
         (t) => t,
         (e) => {
@@ -319,31 +294,16 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
         const newParsed = parseData(listed.data || x.info.data);
         if (!newParsed) return stop(tr('monitor.replace.newUnreadable'));
         const base = baseOf({ ...listed, file_stats: listed.file_stats || x.newFiles } as Torrent, newParsed);
-        const mapped = mapJournal(oldParsed.journal, mapFiles(x.oldFiles, x.newFiles));
-        // keepOwn: the kept release has its own history and settings — both histories are merged (the newest entry
-        // per file and device wins) and its own flags and skip settings win over the old one's
-        const journal = keepOwn ? mergeJournals(base.journal, mapped) : mapped;
+        const journal = mapJournal(oldParsed.journal, mapFiles(x.oldFiles, x.newFiles));
         // everything of the old `omp` (skip settings, omp.w, keys of newer versions) goes over; the history is rebuilt
         const oldOmp = plainObject(oldParsed.obj[JOURNAL_KEY]);
         const newOmp = plainObject(base.obj[JOURNAL_KEY]);
         const obj: { [k: string]: unknown } = { ...base.obj };
-        if (oldOmp || newOmp) {
-          // the old release's category marks (cm: picked by hand, ca: set by OMP) belong to its own category
-          const oldKept: { [k: string]: unknown } = { ...(oldOmp || {}) };
-          if (keepOwn) {
-            delete oldKept.cm;
-            delete oldKept.ca;
-          }
-          obj[JOURNAL_KEY] = keepOwn
-            ? { ...oldKept, ...(newOmp || {}), v: JOURNAL_VERSION }
-            : { ...(newOmp || {}), ...(oldOmp || {}), v: JOURNAL_VERSION };
-        }
-        const skip = keepOwn ? base.skip || oldParsed.skip : oldParsed.skip || base.skip;
-        const title = keepOwn
-          ? newTitle || keptTitle(listed) || listed.name || x.info.title || keptTitle(old)
-          : newTitle || keptTitle(old) || listed.title || listed.name || x.info.title || '';
-        const poster = keepOwn ? listed.poster || old.poster || '' : old.poster || listed.poster || '';
-        const category = keepOwn ? listed.category || old.category || '' : old.category || listed.category || '';
+        if (oldOmp || newOmp) obj[JOURNAL_KEY] = { ...(newOmp || {}), ...(oldOmp || {}), v: JOURNAL_VERSION };
+        const skip = oldParsed.skip || base.skip;
+        const title = newTitle || keptTitle(old) || listed.title || listed.name || x.info.title || '';
+        const poster = old.poster || listed.poster || '';
+        const category = old.category || listed.category || '';
         const data = serializeData(obj, journal, skip);
         const done: Torrent = { ...listed, title, poster, category, data };
         const carried = !!oldOmp || journal.length > 0 || !!skip;

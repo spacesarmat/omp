@@ -29,8 +29,14 @@ function sizeOf(f: TorrentFile): number {
   return typeof f.length === 'number' && f.length > 0 ? f.length : 0;
 }
 
-/** «S01E01-E02», «S01E01-02». */
+/** «S01E10-S02E01»: a range over two seasons (not guessed). */
+const CROSS_SEASON = /s(\d{1,2})[ ._-]?e\d{1,3}[ ._]?-[ ._]?s(\d{1,2})[ ._-]?e\d{1,3}(?![0-9])/i;
+/** «S01E01-E08», «S01E01-08», «S01E01-S01E08». */
 const SE_RANGE = /s(\d{1,2})[ ._-]?e(\d{1,3})[ ._]?-[ ._]?(?:s\d{1,2}[ ._-]?)?e?(\d{1,3})(?![0-9])/i;
+/** «S01E01E02», «S01E01+E02», «S01E01.E02». */
+const SE_MULTI = /s(\d{1,2})[ ._-]?e(\d{1,3})((?:[ ._+]?e\d{1,3})+)(?![0-9])/i;
+/** «E01E02», «E01+E02». */
+const E_MULTI = /(?:^|[^a-z])e(\d{1,3})((?:[ ._+]?e\d{1,3})+)(?![0-9])/i;
 /** «E01-E02», «EP 1-2», «ep01-02». */
 const E_RANGE = /(?:^|[^a-z])(?:ep?|episode)[ ._]?(\d{1,3})[ ._]?-[ ._]?(?:ep?)?[ ._]?(\d{1,3})(?![0-9])/i;
 /** «1-2 серия», «01-02 серии». */
@@ -41,10 +47,12 @@ const WORD_FIRST_RANGE = /(?:серии|серия|серий)[ ._]*(\d{1,3})[ .
 const BRACKET_RANGE = /(?:\[|\s-\s)(\d{1,3})-(\d{1,3})(?=[\]\s.\[(]|$)/;
 /** «5 серия». */
 const WORD_ONE = /(?:^|[^0-9-])(\d{1,3})[ ._]*серия/i;
+/** A fractional episode after an episode mark («E12.5», «Ep12.5», «- 12.5», «[12.5]»): not a whole episode. */
+const FRACTION = /(?:(?:^|[^a-z])(?:e|ep|episode)|s\d{1,2}e|\s-\s|\[)[ ._]?\d{1,3}\.\d(?![0-9])/i;
 /** Bracketed numbers that are picture heights, not episodes. */
 const NOT_EPISODE = [480, 576, 720];
 /** A range in one file holds at most this many episodes (a wider one is something else). */
-const MAX_IN_FILE = 6;
+const MAX_IN_FILE = 60;
 
 function span(from: number, to: number): number[] | null {
   if (!(to > from) || to - from + 1 > MAX_IN_FILE) return null;
@@ -53,21 +61,42 @@ function span(from: number, to: number): number[] | null {
   return out;
 }
 
+/** The episode numbers of «E02», «+E03», «.E04» after the first one. */
+function moreEpisodes(first: number, tail: string): number[] {
+  const out = [first];
+  const re = /e(\d{1,3})/gi;
+  let m = re.exec(tail);
+  while (m) {
+    if (out.indexOf(+m[1]) < 0) out.push(+m[1]);
+    m = re.exec(tail);
+  }
+  return out;
+}
+
 /**
- * The episodes a file name holds: one («S01E05», «EP05», «5 серия», «[05]», «- 05») or a range in one file («1-2 серия»,
- * «S01E01-E02», «E01-E02», «[01-02]»); null when none.
+ * The episodes a file name holds: one («S01E05», «EP05», «5 серия», «[05]», «- 05»), several («S01E01E02»,
+ * «S01E01+E02», «E01E02») or a range in one file («1-2 серия», «S01E01-E08», «S01E01-S01E08», «E01-E02», «[01-02]»);
+ * null when none or when it cannot be read for sure (a range over two seasons, a fractional episode «12.5»).
  */
 export function fileEpisodes(path: string): { season: number | null; episodes: number[] } | null {
   const name = baseName(path);
-  let m = SE_RANGE.exec(name);
+  if (FRACTION.test(name)) return null;
+  let m = CROSS_SEASON.exec(name);
+  if (m && +m[1] !== +m[2]) return null;
+  m = SE_RANGE.exec(name);
   if (m) {
     const eps = span(+m[2], +m[3]);
-    if (eps) return { season: +m[1], episodes: eps };
+    return eps ? { season: +m[1], episodes: eps } : null;
   }
+  m = SE_MULTI.exec(name);
+  if (m) return { season: +m[1], episodes: moreEpisodes(+m[2], m[3]) };
+  m = E_MULTI.exec(name);
+  if (m) return { season: parseEpisode(path).season, episodes: moreEpisodes(+m[1], m[2]) };
   const ranges = [E_RANGE, WORD_RANGE, WORD_FIRST_RANGE, BRACKET_RANGE];
   for (let i = 0; i < ranges.length; i++) {
     m = ranges[i].exec(name);
-    const eps = m ? span(+m[1], +m[2]) : null;
+    if (!m) continue;
+    const eps = span(+m[1], +m[2]);
     if (eps) return { season: parseEpisode(path).season, episodes: eps };
   }
   const e = parseEpisode(path);

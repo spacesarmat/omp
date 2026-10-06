@@ -10,7 +10,8 @@ import type { SourceResult } from '../../src/sources/types';
 import type { Torrent } from '../../src/api/types';
 import { phoneSourceContext } from './searchContext';
 import { t } from '../../src/i18n';
-import { checkAddedDuplicate } from './lib/duplicates';
+import { alreadyHaveText } from './lib/duplicates';
+import { showToast } from './ui/toast';
 
 /** Row state while adding: taking the link from the release page, then adding. */
 export type RowBusy = 'link' | 'add';
@@ -33,8 +34,7 @@ export async function addSearchResult(
   const added = await c.add({ link: l, title: r.Title, category });
   void rememberAdded(c, added, r.Title);
   afterAdd(c, added, !!(o && o.picked), category);
-  // a duplicate of a release already in «Мои»: offer to keep the better one
-  checkAddedDuplicate(added.hash, r.Title, category);
+  noteAlreadyHave(added.hash, r.Title, category);
   return added.hash;
 }
 
@@ -46,4 +46,10 @@ export function afterAdd(c: NonNullable<typeof client.value>, added: Torrent, pi
   if (!added || !added.hash) return;
   if (picked) void saveCategoryPicked(c, added).catch(() => undefined);
   else recordAutoCategory(added.hash, category);
+}
+
+/** The release is already in «Мои» (the same season of the series, or the same film): a toast says so, nothing more. */
+export function noteAlreadyHave(hash: string, title: string, category?: string): void {
+  const text = alreadyHaveText(hash, title, category);
+  if (text) showToast(text);
 }
