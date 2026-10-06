@@ -7,9 +7,9 @@ vi.mock('../../src/monitor/newEpisodes', async (orig) => {
   const m = await orig<typeof import('../../src/monitor/newEpisodes')>();
   return {
     ...m,
-    seriesNames: (title: string) => {
+    seriesNameVariants: (title: string) => {
       counted.calls++;
-      return m.seriesNames(title);
+      return m.seriesNameVariants(title);
     },
   };
 });
