@@ -109,23 +109,28 @@ function isNoise(n: string): boolean {
 }
 
 /**
- * Every name variant of a series for telling its releases in the library (grouping, shared progress): the
- * seriesNames ones and the parts between «/» outside of any (...) or [...] («Звёздный путь (3 сезон) / Star Trek /
- * 2025 / 4K»), up to the year or the release details, which are never names.
+ * Every name variant of a series for telling its releases in the library (grouping, shared progress): the title and
+ * the original title, i.e. the first two parts between «/», both before the first (...) or [...] (as seriesNames
+ * reads them) and with every such group removed («Звёздный путь (3 сезон) / Star Trek / 2025 / 4K»). Later parts
+ * (network, language, edition: «AMC», «Rus, Eng») are never names, nor are the year, episodes or release details.
  */
 export function seriesNameVariants(title: string): string[] {
   const out: string[] = [];
   const add = (n: string) => {
     if (n && out.indexOf(n) < 0) out.push(n);
   };
-  seriesNames(title).forEach((n) => {
-    if (!isNoise(n)) add(n);
-  });
+  head(title)
+    .split('/')
+    .slice(0, 2)
+    .forEach((p) => {
+      const n = normalizeTitle(cleanName(p));
+      if (n.length >= 2 && !isNoise(n)) add(n);
+    });
   let t = withoutGroups(title);
   const bar = t.indexOf('|');
   if (bar >= 0) t = t.slice(0, bar);
   const parts = t.split('/');
-  for (let i = 0; i < parts.length; i++) {
+  for (let i = 0; i < parts.length && i < 2; i++) {
     const p = parts[i];
     if (YEAR_PART.test(p)) break;
     if (EPISODE_PART.test(p)) continue;

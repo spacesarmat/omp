@@ -90,6 +90,9 @@ describe('series names', () => {
     const film = 'Дюна: Часть вторая / Dune: Part Two (2024) WEB-DL 2160p';
     expect(seriesNameVariants(film)).toEqual(seriesNames(film));
     expect(seriesNameVariants('House.of.the.Dragon.S03E01-08.2160p')).toEqual(['house of the dragon']);
+    // only the title and the original title: the network, languages and edition after them are not names
+    expect(seriesNameVariants('Ходячие мертвецы (Сезон 1) / The Walking Dead / AMC / 2010')).toEqual(['ходячие мертвецы', 'the walking dead']);
+    expect(seriesNameVariants('Шерлок / Sherlock / BBC / Rus, Eng / Полная версия')).toEqual(['шерлок', 'sherlock']);
   });
 
   it('releaseGroups reads «от …», «by …» and the parts after |', () => {
