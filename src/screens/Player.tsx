@@ -31,6 +31,8 @@ import { useNextEpisode } from '../player/useNextEpisode';
 import { useCacheStats } from '../player/useCacheStats';
 import { Controls } from '../player/Controls';
 import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner, UndoBanner, PlayerError } from '../player/Overlays';
+import { usePlayerHeading, itemHeading } from '../player/heading';
+import { tvGlyphs } from '../ui/tvText';
 import type { Cmd } from '../phone/protocol';
 import { goBack } from '../ui/nav';
 import { useKeys } from '../ui/keys';
@@ -54,6 +56,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const videoRef = useRef<HTMLVideoElement>(null);
   const [index, setIndex] = useState(startIndex);
   const item = queue[index];
+  // the title bar: the series name, the episode code and its TMDB name; a film's name
+  const heading = usePlayerHeading(item);
   const [readyFor, setReadyFor] = useState(-1);
   const ready = readyFor === index;
   const subReq = useRef(0);
@@ -618,13 +622,13 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       {statsOn && <StatsOverlay cache={cache} probe={probe} />}
       <DonateCard mode={donate} raised={donate === 'credits' && controls} />
       {next.countdown !== null && hasNext && (
-        <NextBanner seconds={next.countdown} title={queue[index + 1].title} onNext={goNext} />
+        <NextBanner seconds={next.countdown} title={tvGlyphs(itemHeading(queue[index + 1]))} onNext={goNext} />
       )}
       {showSkip && intro && <SkipBanner lift={donate === 'pause'} onSkip={() => { seekTo(introSkipTarget(intro, vs.duration)); setSkippedIntro(intro.start); }} />}
       {undo && next.countdown === null && <UndoBanner text={undo.text} lift={donate === 'pause'} onUndo={undoSkip} />}
       {(controls || vs.paused) && !vs.error && (
         <Controls
-          title={item.title}
+          title={tvGlyphs(heading)}
           time={vs.time}
           duration={vs.duration}
           paused={vs.paused}

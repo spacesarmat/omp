@@ -5,7 +5,11 @@ import { getLocalProgress, progressVersion, serverViewed, refreshViewed, isWatch
 import type { Torrent } from '../api/types';
 import { errorMessage } from '../api/http';
 import { TorrentFile, baseName, groupBySeason, playableFiles, episodeLabel } from '../lib/episodes';
-import { formatBytes, formatDuration, formatSpeed } from '../lib/format';
+import { formatDuration } from '../lib/format';
+import { fmtBytes } from '../i18n';
+import { statusLine } from '../lib/torrentStatus';
+import { seriesGroupOf, torrentName } from '../lib/cleanNames';
+import { requestSeriesMatch, seriesMatchVersion } from '../lib/seriesMatch';
 import { parseReleaseInfo, releaseBadges } from '../lib/releaseInfo';
 import { buildTorrentQueue } from '../player/queue';
 import { navigate, goBack, replaceRoute } from '../ui/nav';
@@ -32,6 +36,24 @@ import { tvGlyphs } from '../ui/tvText';
 /** Inner margin of the actions row: a focused button keeps this much room to the row's edge. */
 const ACTION_PAD = 24;
 
+/** The parts of the screen the hint bar follows. */
+export type TorrentArea = 'play' | 'actions' | 'skip' | 'marks' | 'files';
+
+/** What OK does in each part of the screen. */
+export function okHint(area: TorrentArea): string {
+  if (area === 'skip') return t('torrent.hintToggle');
+  if (area === 'marks') return t('torrent.hintMarks');
+  if (area === 'files' || area === 'play') return t('torrent.hintOk');
+  return t('torrent.hintSelect');
+}
+
+/** The header's name and the raw release name under it ('' when it adds nothing). */
+export function headerNames(tor: Torrent, list: Torrent[]): { name: string; raw: string } {
+  const name = torrentName(tor, list);
+  const raw = displayTitle(tor);
+  return { name: name, raw: raw && raw !== name ? raw : '' };
+}
+
 export function TorrentScreen({ hash }: { hash: string }) {
   const c = client.value!;
   const cached = torrents.value.find((tor) => tor.hash === hash) || null;
@@ -44,6 +66,18 @@ export function TorrentScreen({ hash }: { hash: string }) {
   // subscribe to progress changes
   progressVersion.value;
   serverViewed.value;
+  void seriesMatchVersion.value; // the TMDB name of the series, once looked up
+  const list = torrents.value;
+  const group = tor ? seriesGroupOf(tor, list) : null;
+  useEffect(() => {
+    if (group) requestSeriesMatch(group);
+  }, [group ? group.key : '']);
+  // the part of the screen in focus: the hint bar says what OK does there
+  const [area, setArea] = useState<TorrentArea>('play');
+  const enter = (a: TorrentArea) => {
+    if (a !== 'actions' && a !== 'play' && actionsRef.current) actionsRef.current.scrollLeft = 0;
+    setArea(a);
+  };
 
   useEffect(() => {
     let dead = false;
@@ -206,6 +240,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
 
   // the action buttons do not wrap: the row scrolls sideways so the focused button is whole, with a margin
   const showAction = (key: string) => {
+    setArea(key === 'torrent-play' ? 'play' : 'actions');
     const box = actionsRef.current;
     const el = box ? (box.querySelector('[data-fk="' + key + '"]') as HTMLElement | null) : null;
     if (!box || !el) return;
@@ -217,12 +252,14 @@ export function TorrentScreen({ hash }: { hash: string }) {
       <div class="torrent-head">
         {tor && tor.poster ? <img src={tor.poster} alt="" /> : null}
         <div class="info">
-          <h1>{tor ? tvGlyphs(displayTitle(tor)) : hash}</h1>
-          <div class="muted">
-            {tor && tor.torrent_size ? formatBytes(tor.torrent_size) + ' · ' : ''}
-            {tor && tor.stat_string ? tor.stat_string : ''}
-            {tor && tor.stat === 3 ? ' · ' + formatSpeed(tor.download_speed || 0) + ' · ' + t('torrent.peers', { a: tor.active_peers || 0, b: tor.total_peers || 0 }) : ''}
-          </div>
+          {(() => {
+            const n = tor ? headerNames(tor, list) : { name: hash, raw: '' };
+            return [
+              <h1 key="name">{tvGlyphs(n.name)}</h1>,
+              n.raw ? <div key="raw" class="torrent-raw">{tvGlyphs(n.raw)}</div> : null,
+            ];
+          })()}
+          <div class="muted torrent-status">{tor ? tvGlyphs(statusLine(tor)) : ''}</div>
           {(() => {
             const badges = releaseBadges(parseReleaseInfo(tor ? displayTitle(tor) : ''));
             return badges.length ? <div class="badges">{badges.map((x) => <span key={x} class="badge">{x}</span>)}</div> : null;
@@ -230,7 +267,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
           <div class="torrent-actions" ref={actionsRef}>
             <FocusGroup focusKey="TORRENT-ACTIONS" className="row torrent-actions-row" preferredChildFocusKey="torrent-play">
               {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onFocused={() => showAction('torrent-play')} onPress={() => play(target, targetPos || undefined)} />}
-              {queue.length > 0 && <Button focusKey="torrent-playlist" label={t('playlist.title')} onFocused={() => showAction('torrent-playlist')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? tvGlyphs(displayTitle(tor)) : '' })} />}
+              {queue.length > 0 && <Button focusKey="torrent-playlist" label={t('playlist.title')} onFocused={() => showAction('torrent-playlist')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? tvGlyphs(torrentName(tor, list)) : '' })} />}
               {upgradable && <Button focusKey="torrent-better" label={t('torrent.better.find')} onFocused={() => showAction('torrent-better')} onPress={() => setBetterOpen(true)} />}
               <Button focusKey="torrent-reset" label={t('torrent.resetViewed')} onFocused={() => showAction('torrent-reset')} onPress={resetViewed} />
               <Button focusKey="torrent-rename" label={t('torrent.rename.title')} onFocused={() => showAction('torrent-rename')} onPress={rename} />
@@ -246,15 +283,15 @@ export function TorrentScreen({ hash }: { hash: string }) {
             <span class="skip-title">{t('torrent.skip')}</span>
             <span class="muted">{t('torrent.skipSub')}</span>
           </div>
-          <Focusable focusKey="skip-intro" className="skip-row" onPress={() => toggleSkip('i')}>
+          <Focusable focusKey="skip-intro" className="skip-row" onPress={() => toggleSkip('i')} onFocused={() => enter('skip')}>
             <span class="skip-label">{t('torrent.skipIntro')}</span>
             <span class={'skip-switch' + (skip.prefs.i ? ' on' : '')} role="switch" aria-label={t('torrent.skipIntro')} aria-checked={skip.prefs.i} />
           </Focusable>
-          <Focusable focusKey="skip-credits" className="skip-row" onPress={() => toggleSkip('c')}>
+          <Focusable focusKey="skip-credits" className="skip-row" onPress={() => toggleSkip('c')} onFocused={() => enter('skip')}>
             <span class="skip-label">{t('torrent.skipCredits')}</span>
             <span class={'skip-switch' + (skip.prefs.c ? ' on' : '')} role="switch" aria-label={t('torrent.skipCreditsShort')} aria-checked={skip.prefs.c} />
           </Focusable>
-          <Focusable focusKey="skip-status" className="skip-row skip-status" role="button" ariaLabel={t('torrent.marksAria')} onPress={() => setMarksOpen(true)}>
+          <Focusable focusKey="skip-status" className="skip-row skip-status" role="button" ariaLabel={t('torrent.marksAria')} onPress={() => setMarksOpen(true)} onFocused={() => enter('marks')}>
             <span class="skip-label">{t('tv.marks.title')}</span>
             <span class="muted">{skipStatus(skip.hasChapters, skip.prefs)}</span>
           </Focusable>
@@ -262,7 +299,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
       )}
       {marksOpen && (
         <MarksDialog
-          subtitle={t('torrent.marksSub', { title: tor ? tvGlyphs(displayTitle(tor)) : '' })}
+          subtitle={t('torrent.marksSub', { title: tor ? tvGlyphs(torrentName(tor, list)) : '' })}
           prefs={{ mi: skip.prefs.mi || null, mc: skip.prefs.mc || null }}
           onSave={(m) => skip.save({ mi: m.mi, mc: m.mc }, false)}
           onClose={closeMarks}
@@ -298,11 +335,12 @@ export function TorrentScreen({ hash }: { hash: string }) {
                   focusKey={'file-' + f.id}
                   className="list-item file-row"
                   onPress={() => play(queue.findIndex((q) => q.fileIndex === f.id))}
+                  onFocused={() => enter('files')}
                 >
                   <span class="ep">{episodeLabel(f.path)}</span>
                   <span class="name">{tvGlyphs(baseName(f.path))}</span>
                   {!watched && ratio > 0 && <span class="bar"><ProgressBar ratio={ratio} /></span>}
-                  <span class="size">{formatBytes(f.length)}</span>
+                  <span class="size">{fmtBytes(f.length)}</span>
                   <span class="check">{watched ? <Icon name="check" size={28} /> : null}</span>
                 </Focusable>
               );
@@ -310,7 +348,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
           </section>
         ))}
       </FocusGroup>
-      <div class="hints">{t('torrent.hintOk')} · <KeyDot color="red" /> {t('torrent.hintDelete')} · {t('torrent.hintBack')}</div>
+      <div class="hints">{okHint(area)} · <KeyDot color="red" /> {t('torrent.hintDelete')} · {t('torrent.hintBack')}</div>
     </FocusGroup>
   );
 }
