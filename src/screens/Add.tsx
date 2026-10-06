@@ -32,6 +32,7 @@ import { phoneLink } from '../phone/phoneStore';
 import { PhoneRpcError, phoneRpc } from '../phone/rpc';
 import { rememberSourceNames } from '../sources/sourceNames';
 import { resultSizeText } from '../sources/resultSize';
+import { relevantRows } from '../sources/relevance';
 import { resolveTvResult, startTvSearch, type TvResult } from '../phone/phoneSearch';
 import type { RpcFailure } from '../phone/rpcTypes';
 import { tvGlyphs } from '../ui/tvText';
@@ -289,7 +290,7 @@ export function AddScreen() {
   // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
   const searchUnified = (q: string, asked: CheckedHosts = {}) => {
     stop();
-    const h: Handle = searchAll(q, {
+    const raw = searchAll(q, {
       ctx: tvSourceContext(),
       onResult: () => sync(h),
       onDone: (id, err) => {
@@ -302,6 +303,16 @@ export function AddScreen() {
         }
       },
     });
+    // a site that ignores the query (its latest list) brings nothing on the screen
+    const h: Handle = {
+      sourceIds: raw.sourceIds,
+      results: () => relevantRows(raw.results(), q),
+      pending: () => raw.pending(),
+      answered: () => raw.answered(),
+      failed: () => raw.failed(),
+      done: raw.done,
+      cancel: () => raw.cancel(),
+    };
     begin(h);
   };
 
@@ -486,6 +497,7 @@ export function AddScreen() {
           <Spinner text={busyText} />
         </div>
       )}
+      {rows && !sorted.length && prog && prog.total > 0 && !prog.pending.length && <div class="search-note" data-hint="nothing">{t('catalog.nothingFound')}</div>}
       {rows && (
         <FocusGroup focusKey="ADD-RESULTS" className="search-results">
           {sorted.map((r, i) => {

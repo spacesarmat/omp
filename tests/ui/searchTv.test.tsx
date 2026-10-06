@@ -392,3 +392,47 @@ describe('TV search: names, sizes and the reasons of the phone sites', () => {
     );
   });
 });
+
+describe('TV search: rows unrelated to the query', () => {
+  it('drops the latest-list rows of a site that ignores the query, and says nothing was found when none is left', async () => {
+    useScript({
+      search: [{ handle: 'h8', sourceIds: ['anidub', 'rutracker'] }],
+      searchPoll: [
+        {
+          rev: 2,
+          done: true,
+          pending: [],
+          answered: ['anidub', 'rutracker'],
+          failed: [],
+          results: [
+            phoneRow('1', 'Понедельник - день тяжелый / Getsuyoubi no Tawawa [TV] 1080p', 40, { source: 'anidub' }),
+            phoneRow('2', 'Виви: Песнь флюоритового глаза 1080p', 30, { source: 'anidub' }),
+            phoneRow('3', RAW_HD, 10),
+          ],
+        },
+      ],
+    });
+    mount();
+    typeQuery('Дюна 2021 720p');
+    act(() => button('Искать').click());
+    await step(2000);
+    expect(rowTitles()).toEqual([RAW_HD]);
+    expect(host.querySelector('[data-hint="nothing"]')).toBeNull();
+  });
+
+  it('only junk: «Ничего не найдено», no rows', async () => {
+    useScript({
+      search: [{ handle: 'h9', sourceIds: ['anidub'] }],
+      searchPoll: [
+        { rev: 2, done: true, pending: [], answered: ['anidub'], failed: [], results: [phoneRow('1', 'Виви: Песнь флюоритового глаза', 30, { source: 'anidub' })] },
+      ],
+    });
+    mount();
+    typeQuery('Дюна 2021 720p');
+    act(() => button('Искать').click());
+    await step(2000);
+    expect(rowTitles()).toEqual([]);
+    expect(host.querySelector('[data-hint="nothing"]')!.textContent).toBe('Ничего не найдено');
+  });
+});
+

@@ -11,6 +11,7 @@ import type { SourceResult } from '../sources/types';
 import { phoneLink } from './phoneStore';
 import { PhoneRpcError, phoneRpc } from './rpc';
 import type { RpcFailure, RpcPoll, RpcResult } from './rpcTypes';
+import { relevantRows } from '../sources/relevance';
 
 /** A row; `via` is set on the rows found by the phone (resolveTvResult asks the phone for their link). */
 export type TvResult = SourceResult & { via?: { handle: string; key: string } };
@@ -129,7 +130,8 @@ export function torrServerSearch(query: string): TvSearchHandle {
   return {
     by: 'torrserver',
     sourceIds: s.sourceIds,
-    results: () => s.results(),
+    // a site that ignores the query (its latest list) brings nothing on the screen
+    results: () => relevantRows(s.results(), query),
     pending: () => s.pending(),
     answered: () => s.answered(),
     failed: () => s.failed(),
@@ -260,14 +262,15 @@ function phoneHandle(query: string, started: SearchStarted): TvSearchHandle {
     by: 'phone',
     sourceIds: sourceIds,
     results: () => {
-      if (!ts) return rows.slice();
+      // the phone's rows without the ones that share no word with the query (TorrServer's are filtered by its handle)
+      if (!ts) return relevantRows(rows, query);
       // a release found by both: keep the TorrServer row (it has a magnet and resolves on the TV)
       const theirs = ts.results();
       const seen: { [hash: string]: boolean } = {};
       theirs.forEach((r) => {
         if (r.hash) seen[r.hash] = true;
       });
-      return rows.filter((r) => !r.hash || !seen[r.hash]).concat(theirs);
+      return relevantRows(rows, query).filter((r) => !r.hash || !seen[r.hash]).concat(theirs);
     },
     pending: () => (ts ? pending.concat(ts.pending()) : pending.slice()),
     answered: () => (ts ? answered.concat(ts.answered()) : answered.slice()),
