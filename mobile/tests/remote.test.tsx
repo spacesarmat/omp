@@ -621,7 +621,7 @@ describe('Remote for Android TV', () => {
     expect(el.querySelectorAll('[data-atv-remote] .m-ckey')).toHaveLength(4);
     expect(Array.from(el.querySelectorAll('.m-rkey-cap')).map((x) => x.textContent)).toEqual(['Назад', 'Домой', 'Меню']);
     expect(el.querySelector('.m-power')).toBeNull();
-    expect(Array.from(el.querySelectorAll('.m-seg [role=tab]')).map((b) => b.textContent)).toEqual(['Кнопки', 'Тачпад']);
+    expect(Array.from(el.querySelectorAll('.m-seg [role=tab]')).map((b) => b.textContent)).toEqual(['Кнопки', 'Свайпы']);
     expect(lbl('След. серия')).toBeNull();
     expect(lbl('Пред. серия')).toBeNull();
     expect(a.warmUp).toHaveBeenCalledTimes(1);
@@ -630,7 +630,7 @@ describe('Remote for Android TV', () => {
   it('«Тачпад»: a swipe sends arrows, a tap OK, a long press Menu; the keys under the pad as on LG', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     mount();
-    click(text('Тачпад'));
+    click(text('Свайпы'));
     const pad = el.querySelector('[data-atv-pad]')!;
     expect(lbl('Назад')).toBeTruthy();
     expect(lbl('Меню')).toBeTruthy();
@@ -666,6 +666,45 @@ describe('Remote for Android TV', () => {
       for (let i = 0; i < 10; i++) await Promise.resolve();
     });
     expect(a.pressButton.mock.calls.map((c) => c[0])).toEqual(['MENU']);
+  });
+
+  it('«Свайпы» pad: the ATV hint, and a large chevron / OK / Меню shows in the pad after each gesture', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    mount();
+    expect(text('Тачпад')).toBeFalsy();
+    click(text('Свайпы'));
+    const pad = el.querySelector('[data-atv-pad]')!;
+    expect(pad.textContent).toContain('Проведите — выделение на ТВ двигается по пунктам · касание — OK · удержание — Меню · двумя — прокрутка');
+    const fb = () => pad.querySelector('[data-pad-feedback]');
+    expect(fb()).toBeNull();
+    ptr(pad, 'pointerdown', 10, 10);
+    for (let i = 1; i <= 5; i++) {
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      ptr(pad, 'pointermove', 10 + i * 20, 10);
+    }
+    expect(fb()!.textContent).toBe('→');
+    act(() => {
+      vi.advanceTimersByTime(350);
+    });
+    expect(fb()).toBeNull();
+    ptr(pad, 'pointerup', 110, 10);
+    ptr(pad, 'pointerdown', 50, 50);
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    ptr(pad, 'pointerup', 50, 50);
+    expect(fb()!.textContent).toBe('OK');
+    act(() => {
+      vi.advanceTimersByTime(350);
+    });
+    ptr(pad, 'pointerdown', 50, 50);
+    act(() => {
+      vi.advanceTimersByTime(700);
+    });
+    expect(fb()!.textContent).toBe('Меню');
+    ptr(pad, 'pointerup', 50, 50);
   });
 
   it('colour keys and «Меню» go to the box; «Домой» opens the OMP catalog', () => {

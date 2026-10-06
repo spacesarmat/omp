@@ -1642,7 +1642,8 @@ export const ru = {
     atvLine: 'Android TV · {state}',
     touchpadArea: 'Проведите пальцем · двумя — прокрутка',
     /** Android TV: the pad sends keys. */
-    atvPadArea: 'Проведите — стрелки · касание — OK · удержание — Меню · двумя — прокрутка',
+    atvPadArea: 'Проведите — выделение на ТВ двигается по пунктам · касание — OK · удержание — Меню · двумя — прокрутка',
+    swipes: 'Свайпы',
     typeLabel: 'Ввод на телевизоре',
     typePlaceholder: 'Печатайте — текст уйдёт на ТВ',
     up: 'Вверх',

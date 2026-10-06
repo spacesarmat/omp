@@ -755,6 +755,8 @@ button, .m-btn {
 .m-dpad-right { left: 70%; top: 36.5%; }
 .m-dpad-ok { position: absolute; left: 30.8%; top: 30.8%; width: 38.4%; height: 38.4%; min-width: 0; min-height: 0; border: none; border-radius: 50%; background: var(--accent); color: var(--bg); font-size: 20px; font-weight: 800; }
 .m-touchpad { position: relative; height: 260px; border-radius: 20px; background: var(--panel); display: flex; align-items: center; justify-content: center; user-select: none; }
+.m-pad-fb { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 72px; font-weight: 800; line-height: 1; color: var(--accent); pointer-events: none; animation: m-pad-fb 300ms ease-out forwards; }
+@keyframes m-pad-fb { from { opacity: 0.95; } to { opacity: 0; } }
 .m-keyrow { display: flex; gap: 10px; }
 .m-key, .m-media {
   flex: 1 1 0;

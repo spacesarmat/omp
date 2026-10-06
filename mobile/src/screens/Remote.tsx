@@ -444,6 +444,8 @@ const atvStateText = (s: string): string => {
  * «Тачпад» for Android TV: the box has no pointer, so a swipe sends arrows, a two-finger swipe Up / Down, a tap OK and a
  * long press Menu (src/tv/atvPad.ts), one key at a time over /omp/key.
  */
+const PAD_FEEDBACK: { [k: string]: string } = { UP: '↑', DOWN: '↓', LEFT: '←', RIGHT: '→', ENTER: 'OK' };
+
 function AtvTouchpad() {
   const pump = useRef<KeyPump<RemoteButton> | null>(null);
   if (!pump.current) pump.current = new KeyPump<RemoteButton>((k) => act.pressButton(k), 4, fail);
@@ -455,9 +457,24 @@ function AtvTouchpad() {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
   };
-  useEffect(() => clearTimer, []);
+  const [fb, setFb] = useState<{ text: string; n: number } | null>(null);
+  const fbTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      clearTimer();
+      if (fbTimer.current) clearTimeout(fbTimer.current);
+    },
+    [],
+  );
   const send = (keys: RemoteButton[]) => {
-    if (keys.length) pump.current!.push(keys);
+    if (!keys.length) return;
+    pump.current!.push(keys);
+    const text = PAD_FEEDBACK[keys[keys.length - 1]] ?? (keys[keys.length - 1] === 'MENU' ? t('remote.menu') : '');
+    if (!text) return;
+    // the last key sent shows in the pad centre and fades within ~300 ms (the CSS animation restarts on each new n)
+    setFb((p) => ({ text, n: (p?.n ?? 0) + 1 }));
+    if (fbTimer.current) clearTimeout(fbTimer.current);
+    fbTimer.current = setTimeout(() => setFb(null), 300);
   };
   const end = (e: PointerEvent) => {
     (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
@@ -530,6 +547,11 @@ function AtvTouchpad() {
       onPointerCancel={end}
     >
       <span class="m-muted m-small">{t('remote.atvPadArea')}</span>
+      {fb && (
+        <span class="m-pad-fb" key={fb.n} data-pad-feedback aria-hidden="true">
+          {fb.text}
+        </span>
+      )}
     </div>
   );
 }
@@ -596,7 +618,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           {t('remote.buttons')}
         </button>
         <button type="button" role="tab" aria-selected={mode === 'touchpad'} class={mode === 'touchpad' ? 'on' : ''} onClick={() => setMode('touchpad')}>
-          {t('remote.touchpad.title')}
+          {t('remote.swipes')}
         </button>
       </div>
       {mode === 'touchpad' ? (
