@@ -10,6 +10,12 @@ import type { Source, SourceContext, SourceHealth, SourceResult } from './types'
 
 export const jackettHint = (): string => tr('sources.jackettHint');
 
+/** The TV search under sites behind Cloudflare, one short sentence: «NNM-Club закрыт проверкой Cloudflare — …». */
+export function cloudflareTvNote(names: string[]): string {
+  if (!names.length) return '';
+  return names.length === 1 ? tr('sources.cloudflareTvOne', { name: names[0] }) : tr('sources.cloudflareTvMany', { names: names.join(', ') });
+}
+
 /**
  * Row key: two torrents of one release can share a title (Anidub, BigFANGroup), their pages differ.
  * A merged row keeps the key of its first result (groupKey), whichever duplicate wins later.

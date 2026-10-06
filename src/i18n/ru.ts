@@ -578,6 +578,9 @@ export const ru = {
     yesterday: 'вчера',
     seeds: { one: '{n} сид', few: '{n} сида', many: '{n} сидов' },
     jackettHint: 'Сайт закрыт проверкой Cloudflare? Войдите на нём через браузер (кнопка «Войти» у сайта в «Источниках поиска») или подключите его через Jackett, Prowlarr или FlareSolverr — как, в «Вопросах и ответах».',
+    /** The TV search under sites behind Cloudflare: one sentence, the error itself not repeated. */
+    cloudflareTvOne: '{name} закрыт проверкой Cloudflare — войдите на него на телефоне в «Источниках поиска»',
+    cloudflareTvMany: '{names} закрыты проверкой Cloudflare — войдите на них на телефоне в «Источниках поиска»',
     sort: {
       seeds: 'По сидам',
       date: 'По дате',

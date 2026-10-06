@@ -567,6 +567,8 @@ export const en: EnDict<typeof ru> = {
     yesterday: 'yesterday',
     seeds: { one: '{n} seed', other: '{n} seeds' },
     jackettHint: 'Is the site blocked by Cloudflare? Sign in to it with the browser (the “Sign in” button next to the site in “Search sources”) or connect it through Jackett, Prowlarr or FlareSolverr — see “Questions and answers” for how.',
+    cloudflareTvOne: '{name} is behind a Cloudflare check — sign in to it on the phone in “Search sources”',
+    cloudflareTvMany: '{names} are behind a Cloudflare check — sign in to them on the phone in “Search sources”',
     sort: {
       seeds: 'By seeds',
       date: 'By date',
