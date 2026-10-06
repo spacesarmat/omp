@@ -11,6 +11,8 @@ export interface HttpResponse {
   url: string;
   /** Body decoded by its charset (windows-1251 and koi8-r included). */
   text: string;
+  /** The answer's cf-mitigated header ('challenge'), when the native http passed it. Diagnostics only. */
+  cfMitigated?: string;
 }
 
 export interface HttpOptions {

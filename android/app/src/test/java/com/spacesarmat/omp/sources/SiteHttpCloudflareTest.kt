@@ -243,6 +243,21 @@ class SiteHttpCloudflareTest {
         assertFalse(HttpSpec.reply(SiteHttp.Response(200, "https://a.example/", "")).has("cloudflare"))
     }
 
+    @Test
+    fun theCfMitigatedHeaderReachesThePageWithoutTheSwitch() {
+        site.enqueue(challenge())
+        val r = get(http(FakeSolver(CloudflareSolver.Result.SOLVED)), null)
+        assertEquals(403, r.status)
+        assertEquals("challenge", r.mitigated)
+        assertEquals("challenge", HttpSpec.reply(r).getString("cfMitigated"))
+        site.enqueue(page())
+        val plain = get(http(null), null)
+        assertNull(plain.mitigated)
+        assertFalse(HttpSpec.reply(plain).has("cfMitigated"))
+        assertNull(SiteHttp.mitigatedOf("bb_session=secret; path=/"))
+        assertEquals("challenge", SiteHttp.mitigatedOf(" Challenge "))
+    }
+
     private fun flareFor(host: String, until: Long? = null): String {
         val c = JSONObject().put("name", "cf_clearance").put("value", "from-flare").put("domain", host).put("path", "/")
         if (until != null) c.put("expires", until / 1000.0)

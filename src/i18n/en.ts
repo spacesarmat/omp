@@ -588,6 +588,11 @@ export const en: EnDict<typeof ru> = {
     site: {
       error: 'The site answered with error {status}',
       challenge: 'The site is behind a browser check (Cloudflare), try later',
+      signs: '{site} ({verdict}): HTTP {status} · {where} · login form: {form} · check page: {check} · Turnstile: {turnstile} · cf-mitigated: {mitigated}',
+      signsCloudflare: 'Cloudflare check',
+      signsLogin: 'sign-in needed',
+      signsYes: 'yes',
+      signsNo: 'no',
       parseError: 'Could not parse the site page',
       noMagnet: 'The torrent page has no magnet link',
       noTorrent: 'The torrent page has no torrent link',

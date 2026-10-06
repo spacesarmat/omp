@@ -30,8 +30,11 @@ class SiteHttp(
     /** The User-Agent without a per-host override (the WebView's own on Android, see [DefaultUserAgent]). */
     private val defaultAgent: () -> String = { USER_AGENT },
 ) {
-    /** [cloudflare]: how a Cloudflare check on the way was passed ([CloudflarePass.Outcome] in lower case), null when there was none. */
-    class Response(val status: Int, val url: String, val text: String, val cloudflare: String? = null)
+    /**
+     * [cloudflare]: how a Cloudflare check on the way was passed ([CloudflarePass.Outcome] in lower case), null when there was none.
+     * [mitigated]: the answer's `cf-mitigated` header (a short token such as `challenge`), for the journal's diagnostics only.
+     */
+    class Response(val status: Int, val url: String, val text: String, val cloudflare: String? = null, val mitigated: String? = null)
 
     /** A request for a site whose «Обходить проверку Cloudflare» is on; [flareSolverr] = the user's FlareSolverr, if any. */
     class CloudflareOptions(val flareSolverr: HttpUrl?)
@@ -107,7 +110,7 @@ class SiteHttp(
                 val again = exchange(b.build(), timeoutMs, forced, ownAgent)
                 if (detect(again) != CloudflareDetect.Kind.NONE) throw SiteHttpException(CF_FAILED, CODE_CLOUDFLARE)
                 val r = again.response
-                Response(r.status, r.url, r.text, outcome.name.lowercase())
+                Response(r.status, r.url, r.text, outcome.name.lowercase(), r.mitigated)
             }
             CloudflarePass.Outcome.INTERACTIVE -> throw SiteHttpException(CF_INTERACTIVE, CODE_CLOUDFLARE_INTERACTIVE)
             CloudflarePass.Outcome.FAILED -> throw SiteHttpException(CF_FAILED, CODE_CLOUDFLARE)
@@ -161,12 +164,14 @@ class SiteHttp(
     }
 
     private fun read(r: okhttp3.Response, forced: java.nio.charset.Charset?): Response {
-        val rb = r.body ?: return Response(r.code, r.request.url.toString(), "")
+        val mitigated = mitigatedOf(r.header("cf-mitigated"))
+        val rb = r.body ?: return Response(r.code, r.request.url.toString(), "", null, mitigated)
         if (rb.contentLength() > MAX_BYTES) throw SiteHttpException(TOO_LARGE)
         val source = rb.source()
         if (source.request(MAX_BYTES + 1)) throw SiteHttpException(TOO_LARGE)
         val bytes = source.buffer.readByteArray()
-        return Response(r.code, r.request.url.toString(), if (forced != null) String(bytes, forced) else BodyCharset.decode(bytes, r.header("Content-Type")))
+        val text = if (forced != null) String(bytes, forced) else BodyCharset.decode(bytes, r.header("Content-Type"))
+        return Response(r.code, r.request.url.toString(), text, null, mitigated)
     }
 
     companion object {
@@ -183,6 +188,11 @@ class SiteHttp(
         val TLS_ERROR: String get() = I18n.s("errors.siteTls")
         /** The site's certificate could not be verified (an incomplete chain, an unknown CA, a wrong host name). */
         const val CODE_TLS = "tls"
+
+        private val MITIGATED = Regex("[a-z_-]{1,20}")
+
+        /** The `cf-mitigated` header as a short lower-case token, null when it is missing or anything else. */
+        fun mitigatedOf(header: String?): String? = header?.trim()?.lowercase()?.takeIf { MITIGATED.matches(it) }
 
         /**
          * A failed exchange as the page sees it: a certificate the handshake could not verify gets its own message and

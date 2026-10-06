@@ -605,6 +605,11 @@ export const ru = {
     site: {
       error: 'Сайт ответил ошибкой {status}',
       challenge: 'Сайт закрыт проверкой браузера (Cloudflare), попробуйте позже',
+      signs: '{site} ({verdict}): HTTP {status} · {where} · форма входа: {form} · страница проверки: {check} · Turnstile: {turnstile} · cf-mitigated: {mitigated}',
+      signsCloudflare: 'проверка Cloudflare',
+      signsLogin: 'нужен вход',
+      signsYes: 'да',
+      signsNo: 'нет',
       parseError: 'Не удалось разобрать страницу сайта',
       noMagnet: 'На странице раздачи нет magnet-ссылки',
       noTorrent: 'На странице раздачи нет ссылки на торрент',

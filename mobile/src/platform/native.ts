@@ -599,6 +599,10 @@ export const native: OmpNativeApi = {
       text: typeof r?.text === 'string' ? r.text : '',
       // a passed Cloudflare check ('browser' | 'flaresolverr'): src/sources/http.ts logs it
       ...((r as { cloudflare?: unknown } | undefined)?.cloudflare ? { cloudflare: (r as { cloudflare?: unknown }).cloudflare } : {}),
+      // the cf-mitigated header: src/sources/site.ts writes it to the journal with a Cloudflare / login failure
+      ...(typeof (r as { cfMitigated?: unknown } | undefined)?.cfMitigated === 'string'
+        ? { cfMitigated: (r as { cfMitigated: string }).cfMitigated }
+        : {}),
     } as HttpResponse;
   },
 

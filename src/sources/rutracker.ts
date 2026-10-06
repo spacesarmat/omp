@@ -3,12 +3,15 @@
 // source signs in again once with the saved credentials, otherwise it rejects with loginRequired(). «Войти через
 // браузер» signs in with a browser session instead (browserLogin.ts): no password is stored then.
 // Selectors and the login form follow the open-source Jackett RuTracker indexer (not checked with a real account).
+// Behind Cloudflare like Kinozal: every request carries siteOptions (the Cloudflare pass while the site's switch is on).
+// The login page embeds a Turnstile widget on its form: a page that asks to sign in is «нужен вход», never a Cloudflare
+// block; only Cloudflare's own check page is (checkSessionPage).
 import { absUrl, parseHtml, parseSize, textOf } from './html';
-import { checkLoginPage, checkPage, magnetOf, makeResult, requireHost, toInt } from './site';
+import { checkLoginPage, checkSessionPage, hasLoginForm, logPageSigns, magnetOf, makeResult, requireHost, siteOptions, toInt } from './site';
 import { commonCaptcha } from './siteLogin';
 import { createBrowserLogin } from './browserLogin';
 import { rutrackerBadLogin, rutrackerCaptcha, rutrackerEmpty, rutrackerNoStore } from './rutrackerText';
-import { loginRequired } from './types';
+import { isLoginRequired, loginRequired } from './types';
 import type { HttpResponse, SecretStore, Source, SourceContext, SourceResult } from './types';
 
 const HOST = 'rutracker.org';
@@ -29,6 +32,11 @@ function signedIn(res: HttpResponse, doc: Document): boolean {
   return !!doc.getElementById('logged-in-username');
 }
 
+/** The answer asks to sign in: the login page (a redirect to it) or a login form. */
+function signedOut(res: HttpResponse): boolean {
+  return /\/forum\/login\.php/i.test(res.url) || hasLoginForm(res.text);
+}
+
 function hasCaptcha(doc: Document): boolean {
   return !!doc.querySelector('img[src*="/captcha/"], input[name="cap_sid"], input[name^="cap_code_"]');
 }
@@ -45,9 +53,9 @@ const browser = createBrowserLogin({
 /** POST to login.php; resolves when the answer is a signed-in page. Never stores anything. */
 function postLogin(username: string, password: string, ctx: SourceContext): Promise<void> {
   return ctx.http
-    .post(LOGIN_URL, { login_username: username, login_password: password, login: 'вход' }, { formCharset: 'windows-1251' })
+    .post(LOGIN_URL, { login_username: username, login_password: password, login: 'вход' }, siteOptions(rutracker, { formCharset: 'windows-1251' }))
     // an inline Turnstile on the login form is a captcha (the browser login), not a Cloudflare block
-    .then((res) => checkLoginPage(res, commonCaptcha, () => new Error(rutrackerCaptcha())))
+    .then((res) => checkLoginPage(res, commonCaptcha, () => new Error(rutrackerCaptcha()), rutracker.name))
     .then((res) => {
       const doc = parseHtml(res.text);
       if (signedIn(res, doc)) return;
@@ -114,20 +122,31 @@ function signInAgain(ctx: SourceContext): Promise<void> {
 
 /** A page that needs the session: signs in again once when it has expired. */
 function sessionDoc(ctx: SourceContext, url: string): Promise<{ res: HttpResponse; doc: Document }> {
+  // the last answer, for the journal line of a «нужен вход»
+  let last: HttpResponse | null = null;
   const load = () =>
     ctx.http
-      .get(url)
-      .then(checkPage)
+      .get(url, siteOptions(rutracker))
+      .then((res) => {
+        last = res;
+        // a login page (with its Turnstile) is returned for the sign-in below; Cloudflare's own page is challenge()
+        return checkSessionPage(res, signedOut, rutracker.name);
+      })
       .then((res) => ({ res, doc: parseHtml(res.text) }));
-  return load().then((p) => {
-    if (signedIn(p.res, p.doc)) return p;
-    return signInAgain(ctx)
-      .then(load)
-      .then((again) => {
-        if (!signedIn(again.res, again.doc)) throw loginRequired();
-        return again;
-      });
-  });
+  return load()
+    .then((p) => {
+      if (signedIn(p.res, p.doc)) return p;
+      return signInAgain(ctx)
+        .then(load)
+        .then((again) => {
+          if (!signedIn(again.res, again.doc)) throw loginRequired();
+          return again;
+        });
+    })
+    .then(undefined, (e: unknown) => {
+      if (isLoginRequired(e)) logPageSigns(rutracker.name, 'login', last);
+      throw e;
+    });
 }
 
 function parse(doc: Document, base: string): SourceResult[] {
@@ -167,6 +186,9 @@ export const rutracker: Source = {
   name: 'rutracker',
   kind: 'builtin',
   needsLogin: true,
+  cloudflare: true,
+  /** The site root (the visible check and the clearance status use it). */
+  siteUrl: 'https://' + HOST + '/',
   search(query: string, ctx: SourceContext) {
     return sessionDoc(ctx, SEARCH + encodeURIComponent(query)).then((p) => parse(p.doc, p.res.url || FORUM));
   },
