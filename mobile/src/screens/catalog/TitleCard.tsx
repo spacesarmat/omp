@@ -68,7 +68,7 @@ function SeasonEpisodes({ id, number }: { id: number; number: number }) {
     setFailed(false);
     setOpen(0);
     phoneCatalog()
-      .then((c) => c.season(id, number))
+      .then((c) => c.season(id, number, { full: true }))
       .then(
         (d) => {
           if (gen.current === my) setData(d);

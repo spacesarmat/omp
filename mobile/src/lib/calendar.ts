@@ -7,15 +7,15 @@ import { signal } from '@preact/signals';
 import { lang } from '../../../src/i18n';
 import { addDays } from '../../../src/catalog/discoverQuery';
 import { catalogErrorCode, type CatalogClient, type CatalogErrorCode } from '../../../src/catalog/client';
-import type { CatalogCard, SeasonDetails } from '../../../src/catalog/tmdb';
+import type { CatalogCard, CatalogTitle, SeasonDetails } from '../../../src/catalog/tmdb';
 import { parseEpisodeRange } from '../../../src/monitor/episodes';
-import { yearOf } from '../../../src/monitor/newEpisodes';
+import { seriesNames, seriesQuery, yearOf } from '../../../src/monitor/newEpisodes';
+import { loadJson, saveJson, isObject } from '../../../src/store/storage';
 import { EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
 import type { Torrent } from '../../../src/api/types';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { groupLibrary, singleGroup, type SeriesGroup } from './seriesGroups';
-import { matchSeries } from './seriesMatch';
-import { findShow, showQueries } from './tmdbShow';
+import { knownOver, matchSeries } from './seriesMatch';
 import { isoDay, upcomingSeasons } from './seriesStatus';
 import { dayHeader } from './releaseDates';
 
@@ -194,20 +194,86 @@ export function pool<T>(items: T[], limit: number, run: (x: T) => Promise<unknow
   });
 }
 
-/** The show of a subscription query: none when TMDB's best answer for it is a film. */
-function subShow(c: CatalogClient, query: string): Promise<CatalogCard | null> {
+/**
+ * The series name a subscription query stands for, or '' when it looks like a film (a year with no season or episode
+ * mark: «Formula 1 2024», «Дюна 2021») or has no name.
+ */
+export function subQueryName(query: string): string {
+  const q = (query || '').trim();
+  const r = parseEpisodeRange(q);
+  if (yearOf(q) && r.season === undefined && r.to === undefined) return '';
+  return seriesQuery(q) || '';
+}
+
+/** The show among the search items whose title or original title is the query's name (a TMDB show, not a film). */
+export function pickSubShow(items: CatalogTitle[], name: string): CatalogTitle | null {
+  const want = seriesNames(name);
+  if (!want.length) return null;
+  const top = items[0];
+  // the best answer is a film: the subscription is about the film
+  if (top && top.kind === 'movie') return null;
+  for (let i = 0; i < items.length; i++) {
+    const x = items[i];
+    if (x.kind !== 'tv') continue;
+    const names = seriesNames(x.title).concat(seriesNames(x.original));
+    if (names.some((n) => want.indexOf(n) >= 0)) return x;
+  }
+  return null;
+}
+
+// subscription query -> TMDB show id (0: none) with its status, kept for SUB_TTL across launches
+const SUB_KEY = 'tsp.subTmdb';
+const SUB_TTL = 7 * 24 * 60 * 60 * 1000;
+const SUB_MAX = 200;
+
+interface SubSaved { id: number; s: string; at: number; }
+
+function subSaved(): { [k: string]: SubSaved } {
+  const raw = loadJson<{ [k: string]: unknown }>(SUB_KEY, {}, isObject);
+  const out: { [k: string]: SubSaved } = {};
+  Object.keys(raw).forEach((k) => {
+    const v = raw[k] as { id?: unknown; s?: unknown; at?: unknown } | null;
+    if (v && typeof v.id === 'number' && typeof v.at === 'number') out[k] = { id: v.id, s: typeof v.s === 'string' ? v.s : '', at: v.at };
+  });
+  return out;
+}
+
+function subRemember(key: string, card: CatalogCard | null): void {
+  const map = subSaved();
+  map[key] = { id: card ? card.id : 0, s: card && card.status ? card.status : '', at: Date.now() };
+  const keys = Object.keys(map);
+  if (keys.length > SUB_MAX) keys.sort((a, b) => map[a].at - map[b].at).slice(0, keys.length - SUB_MAX).forEach((k) => delete map[k]);
+  saveJson(SUB_KEY, map);
+}
+
+/**
+ * The show of a subscription query: its name must be the show's title or original title; a film-like query or a film
+ * as TMDB's best answer gives none. One search, remembered for a week (a show known to be over is not asked again).
+ */
+function subShow(c: CatalogClient, query: string, force?: boolean): Promise<CatalogCard | null> {
   const key = lang.peek() + '|' + query.trim().toLowerCase();
   const hit = subShows.get(key);
-  if (hit !== undefined) return Promise.resolve(hit);
-  const first = showQueries(query)[0] || query;
+  if (hit !== undefined && !(force && hit)) return Promise.resolve(hit);
   const keep = (card: CatalogCard | null) => {
     subShows.set(key, card);
+    subRemember(key, card);
     return card;
   };
-  return c.search(first, 1).then((r) => {
-    const top = r.items[0];
-    if (top && top.kind === 'movie') return keep(null);
-    return findShow(c, query, yearOf(query) || 0).then((show) => (show ? c.card('tv', show.id).then(keep) : keep(null)));
+  const known = subSaved()[key];
+  const age = known ? Date.now() - known.at : -1;
+  const recent = known && age >= 0 && age < SUB_TTL ? known : null;
+  if (!hit && recent && (recent.id === 0 || recent.s === 'ended' || recent.s === 'canceled')) {
+    subShows.set(key, null);
+    return Promise.resolve(null);
+  }
+  const opts = force ? { force: true } : undefined;
+  if (hit) return c.card('tv', hit.id, opts).then(keep);
+  if (recent && recent.id) return c.card('tv', recent.id, opts).then(keep);
+  const name = subQueryName(query);
+  if (!name) return Promise.resolve(keep(null));
+  return c.search(name, 1).then((r) => {
+    const show = pickSubShow(r.items, name);
+    return show ? c.card('tv', show.id, opts).then(keep) : keep(null);
   });
 }
 
@@ -245,12 +311,17 @@ export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: bool
   return phoneCatalog(fresh).then(
     (c) => {
       const sources: Source[] = [];
-      librarySeries(list).forEach((g) => sources.push({ group: g }));
+      // a series known (from a match of the last week) to be over, or not on TMDB, is not asked again
+      librarySeries(list).forEach((g) => {
+        if (!knownOver(g.key)) sources.push({ group: g });
+      });
       subs.forEach((s) => sources.push({ sub: s }));
       const shows: { [id: number]: CalShow } = {};
       const order: number[] = [];
       const resolve = (src: Source): Promise<unknown> => {
-        const p = 'group' in src ? matchSeries(src.group) : subShow(c, src.sub.query);
+        // a newer gathering took over: nothing more is asked for this one
+        if (my !== generation) return Promise.resolve();
+        const p = 'group' in src ? matchSeries(src.group, { force: !!fresh }) : subShow(c, src.sub.query, !!fresh);
         return p.then((card) => {
           if (my !== generation || !card || !followable(card)) return;
           let show = shows[card.id];
@@ -269,12 +340,13 @@ export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: bool
       return pool(sources, MAX_LOOKUPS, resolve).then(() => {
         if (my !== generation) return;
         return pool(order, MAX_LOOKUPS, (id) => {
+          if (my !== generation) return Promise.resolve();
           const show = shows[id];
           const seasons: SeasonDetails[] = [];
           const numbers = calendarSeasons(show.card, now);
           let chain: Promise<unknown> = Promise.resolve();
           numbers.forEach((n) => {
-            chain = chain.then(() => c.season(show.card.id, n).then((s) => {
+            chain = chain.then(() => c.season(show.card.id, n, fresh ? { force: true } : undefined).then((s) => {
               seasons.push(s);
             }, fail));
           });

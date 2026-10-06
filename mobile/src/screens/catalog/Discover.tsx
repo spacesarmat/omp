@@ -15,7 +15,7 @@ import { usePinchStep } from '../../ui/usePinchStep';
 import { discoverQueryKey, discoverFilterCount, sanitizeDiscoverQuery, type DiscoverQuery } from '../../../../src/catalog/discoverQuery';
 import { loadDiscoverQuery, saveDiscoverQuery } from './discoverQueryStore';
 import { DiscoverSortSheet, DiscoverFiltersSheet, sortName } from './DiscoverSheets';
-import { cachedTileCard, requestTileCard, tileCardVersion } from '../../catalog/tileCards';
+import { cachedTileCard, cancelTileCards, leaveTileCard, requestTileCard, tileCardVersion } from '../../catalog/tileCards';
 import { tileLabel } from '../../lib/releaseDates';
 import type { Kind } from '../../../../src/catalog/tmdb';
 
@@ -45,13 +45,16 @@ export function TileWhen({ kind, id }: { kind: Kind; id: number }) {
     if (!unknown || !node || typeof IntersectionObserver === 'undefined') return;
     // the label is empty until known: the tile it sits in is what comes into view
     const target = node.parentElement || node;
+    // in view: queued (the latest first); out of view before its turn: dropped from the queue
     const io = new IntersectionObserver((entries) => {
-      if (!entries.some((e) => e.isIntersecting)) return;
-      io.disconnect();
-      requestTileCard(kind, id);
+      if (entries.some((e) => e.isIntersecting)) requestTileCard(kind, id);
+      else leaveTileCard(kind, id);
     });
     io.observe(target);
-    return () => io.disconnect();
+    return () => {
+      io.disconnect();
+      leaveTileCard(kind, id);
+    };
   }, [kind, id, unknown]);
   const text = card ? tileLabel(card) : '';
   return (
@@ -62,6 +65,8 @@ export function TileWhen({ kind, id }: { kind: Kind; id: number }) {
 }
 
 export function Discover() {
+  // leaving «Обзор»: the queued tile cards are not fetched any more
+  useEffect(() => () => cancelTileCards(), []);
   // the sort and the filters, kept across launches; the feed is keyed on them
   const [query, setQuery] = useState<DiscoverQuery>(loadDiscoverQuery);
   const qkey = discoverQueryKey(query);
