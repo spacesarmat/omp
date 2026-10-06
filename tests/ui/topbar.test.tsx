@@ -33,7 +33,7 @@ describe('TopBar', () => {
   it('labels icon buttons with the current view and sort', () => {
     const { host } = mount({ view: 'list', sort: 'size' });
     const labels = Array.prototype.map.call(host.querySelectorAll('.icon-button'), (e: Element) => e.getAttribute('aria-label'));
-    expect(labels).toEqual(['Поиск', 'Вид: Список', 'Сортировка: По размеру', 'Добавить', 'Плейлисты', 'Настройки']);
+    expect(labels).toEqual(['Поиск', 'Вид: Список', 'Сортировка: По размеру', 'Найти раздачу', 'Плейлисты', 'Настройки']);
   });
   it('fires actions on click and disables the view button on history', () => {
     const { host, props } = mount({ tab: 'history' });
@@ -64,7 +64,7 @@ describe('TopBar expanding icons', () => {
     await act(() => { setFocus('lib-btn-add'); });
     await act(() => Promise.resolve());
     expect(sort.querySelector('.icon-btn-label')).toBeNull();
-    expect(host.querySelector('[data-fk="lib-btn-add"] .icon-btn-label')!.textContent).toBe('Добавить');
+    expect(host.querySelector('[data-fk="lib-btn-add"] .icon-btn-label')!.textContent).toBe('Найти раздачу');
     expect(host.querySelectorAll('.icon-btn-label').length).toBe(1);
     await act(() => { render(null, host); });
   });

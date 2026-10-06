@@ -1,30 +1,42 @@
+// «Найти раздачу» (mockup 6), one screen for LG and Android TV: the search line with «Искать», «Magnet или ссылка»
+// and «Источники»; the progress line (who searches: the phone, TorrServer or Android TV's own sources) with the sort
+// chip; compact result rows (thumbnail, short title, quality chips, the raw title, size and seeds, the source, «уже в
+// медиатеке»). OK on a row resolves its link (through the phone for the phone's rows) and adds it; blue opens the
+// release details. Back leaves; the search is cancelled on unmount.
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { client } from '../store/servers';
-import type { SearchSource } from '../api/torrserver';
-import type { SearchResult } from '../api/types';
+import { torrents } from '../store/library';
 import { errorMessage } from '../api/http';
 import { mapSearchCategory } from '../lib/category';
-import { currentRoute, replaceRoute } from '../ui/nav';
-import { FocusGroup, Focusable, Button, TextInput, ChoiceRow, Spinner } from '../ui/components';
+import { posterColor } from '../lib/libraryView';
+import { currentRoute, navigate, replaceRoute } from '../ui/nav';
+import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
 import { restoreFocus } from '../ui/focus';
+import { useKeys } from '../ui/keys';
+import { choose } from '../ui/dialog';
+import { askText } from '../ui/TextDialog';
 import { toast } from '../ui/toast';
 import { t } from '../i18n';
 import { platformKind } from '../platform/env';
 import { tvSourceContext } from '../sources/tvContext';
 import { searchAll } from '../sources/search';
 import { onSearchFailure, type CheckedHosts } from '../sources/cloudflareCheck';
-import type { SearchHandle } from '../sources/search';
 import { getHealth } from '../sources/store';
 import { ipBanTvHint } from '../sources/ipBan';
-import { ipBanNote, isCloudflare, jackettHint, progressText, resolveLink, resultDate, resultKey, sortResults, sourceBadge, sourceName, stableOrder } from '../sources/view';
-import type { SourceResult } from '../sources/types';
+import { ipBanNote, isCloudflare, jackettHint, progressText, resultDate, resultKey, sortLabels, sourceBadge, sourceName, type SortKey } from '../sources/view';
+import { isHotChip, releaseChips, releaseTitle } from '../sources/releaseRow';
+import { sortTvResults, stableTvOrder, type TvSortKey } from '../sources/tvSort';
+import { posterKey, requestPoster } from '../catalog/resultPosters';
+import { phoneLink } from '../phone/phoneStore';
+import { PhoneRpcError } from '../phone/rpc';
+import { resolveTvResult, startTvSearch, type TvResult } from '../phone/phoneSearch';
+import type { RpcFailure } from '../phone/rpcTypes';
 import { tvGlyphs } from '../ui/tvText';
 
-const SOURCES: { value: SearchSource; label: string }[] = [
-  { value: 'rutor', label: 'Rutor' },
-  { value: 'torznab', label: 'Torznab (Jackett)' },
-];
-
+/** Rows whose posters are asked for at once; the rest only near the cursor. */
+const POSTER_FIRST = 12;
+const POSTER_NEAR = 4;
 
 interface Prog {
   answered: number;
@@ -33,12 +45,84 @@ interface Prog {
   failed: string[];
 }
 
-function unifiedMeta(r: SourceResult): string {
-  const parts = [r.Size, t('add.seeds', { n: r.Seed }), t('add.peers', { n: r.Peer })];
-  const d = resultDate(r);
-  if (d) parts.push(d);
-  if (r.sources && r.sources.length) parts.push(t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }));
-  return parts.filter(Boolean).join(' · ');
+/** What the screen reads from a search: the TV's TvSearchHandle, or Android TV's SearchHandle. */
+interface Handle {
+  sourceIds: string[];
+  results(): TvResult[];
+  pending(): string[];
+  answered(): string[];
+  failed(): string[];
+  failures?(): RpcFailure[];
+  done: Promise<void>;
+  cancel(): void;
+}
+
+type By = 'phone' | 'torrserver' | 'sources';
+type Note = '' | 'phoneDown' | 'noPhone';
+
+/** The message for a row whose link could not be had. */
+function resolveError(e: unknown): string {
+  if (e instanceof PhoneRpcError) {
+    if (e.code === 'timeout' || e.code === 'unreachable') return t('search.phoneSlow');
+    if (e.code === 'expired') return t('search.expired');
+  }
+  return errorMessage(e) || t('sources.cannotGetLink');
+}
+
+const cssUrl = (u: string) => u.replace(/["()\\\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+
+/** 72×104 poster: the colour block at once, the poster once `want` is set and the lookup answered. */
+function Thumb({ title, want }: { title: string; want: boolean }) {
+  const [url, setUrl] = useState('');
+  const cancel = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!want || cancel.current) return;
+    cancel.current = requestPoster(title, (u) => setUrl(/^https?:\/\//i.test(u) ? u : ''));
+  }, [want]);
+  useEffect(
+    () => () => {
+      if (cancel.current) cancel.current();
+    },
+    [],
+  );
+  const bg = 'linear-gradient(160deg, ' + posterColor(posterKey(title) || title || '?') + ', #14161C)';
+  const style = url ? 'background: url("' + cssUrl(url) + '") center / cover, ' + bg : 'background: ' + bg;
+  return <div class="search-thumb" style={style} data-poster-url={url || undefined} />;
+}
+
+function DetailsDialog({ r, onAdd, onClose }: { r: TvResult; onAdd: () => void; onClose: () => void }) {
+  // above the screen: Back closes, nothing reaches the screen under it
+  useKeys((a) => {
+    if (a === 'back') {
+      onClose();
+      return true;
+    }
+    return 'spatial';
+  }, 50);
+  useEffect(() => {
+    setFocus('search-details-add');
+  }, []);
+  const names = [r.source].concat(r.sources || []).filter(Boolean).map(sourceName).join(', ');
+  const meta = [r.Size, t('add.seeds', { n: r.Seed || 0 }), t('add.peers', { n: r.Peer || 0 }), resultDate(r), names].filter(Boolean).join(' · ');
+  return (
+    <div
+      class="dialog-backdrop search-details-backdrop"
+      onClick={(e) => {
+        if (e.target !== e.currentTarget) return;
+        e.stopPropagation();
+        onClose();
+      }}
+    >
+      <FocusGroup focusKey="SEARCH-DETAILS" className="dialog search-details" boundary>
+        <div class="dialog-title">{t('search.details')}</div>
+        <div class="search-details-title">{tvGlyphs(r.Title)}</div>
+        <div class="search-details-meta">{tvGlyphs(meta)}</div>
+        <div class="search-details-actions">
+          <Button focusKey="search-details-add" className="primary" label={t('common.add')} onPress={onAdd} />
+        </div>
+      </FocusGroup>
+    </div>
+  );
 }
 
 export function AddScreen() {
@@ -46,37 +130,51 @@ export function AddScreen() {
   const route = currentRoute.peek();
   const p = route.name === 'add' ? route : { query: undefined, run: undefined };
   const c = client.value!;
-  // Android TV searches every source at once (spec «Общий поиск»); LG keeps the TorrServer search
+  // Android TV searches its own sources; LG searches through the phone, else TorrServer
   const unified = platformKind() === 'androidtv';
   const alive = useRef(true);
-  const handle = useRef<SearchHandle | null>(null);
+  const handle = useRef<Handle | null>(null);
+  const unsub = useRef<(() => void) | null>(null);
+  // bumped by every search: a phone answer for an older search is dropped
+  const seq = useRef(0);
   // row order on screen while results stream in: shown rows keep their places under the cursor
   const order = useRef<string[]>([]);
-  const [link, setLink] = useState('');
   const [query, setQuery] = useState(p.query || '');
-  const [source, setSource] = useState<SearchSource>('rutor');
-  const [results, setResults] = useState<SearchResult[] | null>(null);
-  const [rows, setRows] = useState<SourceResult[] | null>(null);
+  const [rows, setRows] = useState<TvResult[] | null>(null);
   const [prog, setProg] = useState<Prog | null>(null);
+  const [by, setBy] = useState<By>(unified ? 'sources' : 'torrserver');
+  const [note, setNote] = useState<Note>('');
+  const [starting, setStarting] = useState(false);
+  const [sortKey, setSortKey] = useState<TvSortKey>('quality');
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState(t('add.wait'));
+  const [rowErr, setRowErr] = useState<{ [key: string]: string }>({});
+  const [focusedKey, setFocusedKey] = useState('');
+  const [details, setDetails] = useState<TvResult | null>(null);
+
+  const stop = () => {
+    seq.current++;
+    if (unsub.current) unsub.current();
+    unsub.current = null;
+    if (handle.current) handle.current.cancel();
+    handle.current = null;
+  };
 
   useEffect(() => {
-    restoreFocus('ADD');
+    restoreFocus('add-query');
     if (p.run && p.query && p.query.trim()) search(p.query);
     return () => {
       alive.current = false;
-      if (handle.current) handle.current.cancel();
-      handle.current = null;
+      stop();
     };
   }, []);
 
-  const doAdd = (p: { link: string; title?: string; category?: string }) => {
+  const doAdd = (a: { link: string; title?: string; category?: string }) => {
     setBusyText(t('add.wait'));
-    c.add({ link: p.link, title: p.title, category: p.category }).then(
+    c.add({ link: a.link, title: a.title, category: a.category }).then(
       (tt) => {
         if (!alive.current) return;
-        toast(t('add.added', { title: tt.title || p.title || tt.hash }));
+        toast(t('add.added', { title: tt.title || a.title || tt.hash }));
         replaceRoute({ name: 'torrent', hash: tt.hash });
       },
       (e) => {
@@ -87,23 +185,31 @@ export function AddScreen() {
     );
   };
 
-  const add = (p: { link: string; title?: string; category?: string }) => {
+  const add = (a: { link: string; title?: string; category?: string }) => {
     if (busy) return;
-    const l = p.link.trim();
+    const l = a.link.trim();
     if (!l) {
       toast(t('add.enterLink'), 'error');
       return;
     }
     setBusy(true);
-    doAdd({ link: l, title: p.title, category: p.category });
+    doAdd({ link: l, title: a.title, category: a.category });
   };
 
-  // nnmclub, rutracker: the magnet is on the release page; Anidub, BigFANGroup: an http(s) .torrent link
-  const addResult = (r: SourceResult) => {
+  const askLink = () => {
     if (busy) return;
+    askText(t('search.linkButton'), '', t('common.add')).then((v) => {
+      if (alive.current && v !== null) add({ link: v });
+    });
+  };
+
+  // a phone row asks the phone for its link (nnmclub, rutracker: the release page; a .torrent-only release fails)
+  const addResult = (r: TvResult) => {
+    if (busy) return;
+    const key = resultKey(r);
     setBusy(true);
-    setBusyText(t('add.gettingLink'));
-    resolveLink(r, tvSourceContext()).then(
+    setBusyText(t('search.resolving'));
+    resolveTvResult(r).then(
       (l) => {
         if (!alive.current) return;
         doAdd({ link: l, title: r.Title, category: mapSearchCategory(r.Categories) });
@@ -111,31 +217,32 @@ export function AddScreen() {
       (e) => {
         if (!alive.current) return;
         setBusy(false);
-        toast(errorMessage(e), 'error');
+        const msg = resolveError(e);
+        const next: { [key: string]: string } = {};
+        Object.keys(rowErr).forEach((k) => {
+          next[k] = rowErr[k];
+        });
+        next[key] = msg;
+        setRowErr(next);
+        toast(msg, 'error');
       },
     );
   };
 
-  const sync = (h: SearchHandle) => {
+  const sync = (h: Handle) => {
     if (!alive.current || handle.current !== h) return;
     setRows(h.results());
-    setProg({ answered: h.answered().length, total: h.sourceIds.length, pending: h.pending(), failed: h.failed() });
+    const failed = h.failed().filter((id) => id !== 'phone');
+    setProg({ answered: h.answered().length, total: h.sourceIds.length, pending: h.pending(), failed: failed });
+    // the phone stopped answering mid-search: TorrServer took over
+    const lost = h.failures ? h.failures().some((f) => f.id === 'phone') : false;
+    if (lost) {
+      setNote('phoneDown');
+      setBy('torrserver');
+    }
   };
 
-  // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
-  const searchUnified = (q: string, asked: CheckedHosts = {}) => {
-    if (handle.current) handle.current.cancel();
-    const h: SearchHandle = searchAll(q, {
-      ctx: tvSourceContext(),
-      onResult: () => sync(h),
-      onDone: (id, err) => {
-        sync(h);
-        // a site behind Cloudflare wants a person: the dialog opens, the search runs again once it is passed
-        if (err) onSearchFailure(id, err, asked, () => {
-          if (alive.current && handle.current === h) searchUnified(q, asked);
-        });
-      },
-    });
+  const begin = (h: Handle) => {
     handle.current = h;
     order.current = [];
     sync(h);
@@ -146,108 +253,209 @@ export function AddScreen() {
     });
   };
 
+  // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
+  const searchUnified = (q: string, asked: CheckedHosts = {}) => {
+    stop();
+    const h: Handle = searchAll(q, {
+      ctx: tvSourceContext(),
+      onResult: () => sync(h),
+      onDone: (id, err) => {
+        sync(h);
+        // a site behind Cloudflare wants a person: the dialog opens, the search runs again once it is passed
+        if (err) {
+          onSearchFailure(id, err, asked, () => {
+            if (alive.current && handle.current === h) searchUnified(q, asked);
+          });
+        }
+      },
+    });
+    begin(h);
+  };
+
+  const searchTv = (q: string) => {
+    stop();
+    const mine = seq.current;
+    setRows(null);
+    setProg(null);
+    setNote('');
+    setBy(phoneLink.value ? 'phone' : 'torrserver');
+    setStarting(true);
+    startTvSearch(q).then((start) => {
+      if (!alive.current || seq.current !== mine) {
+        start.handle.cancel();
+        return;
+      }
+      setStarting(false);
+      setNote(start.note);
+      setBy(start.handle.by);
+      const h = start.handle;
+      unsub.current = h.subscribe(() => sync(h));
+      begin(h);
+    });
+  };
+
   const search = (text?: string) => {
     if (busy) return;
     const q = (typeof text === 'string' ? text : query).trim();
     if (!q) return;
-    if (unified) {
-      searchUnified(q);
-      return;
-    }
-    setBusy(true);
-    setResults(null);
-    c.search(q, source).then(
-      (r) => {
-        if (!alive.current) return;
-        setBusy(false);
-        setResults(r);
-        if (!r.length) toast(t('catalog.nothingFound'));
-      },
-      (e) => {
-        if (!alive.current) return;
-        setBusy(false);
-        toast(errorMessage(e), 'error');
-      },
-    );
+    setRowErr({});
+    if (unified) searchUnified(q);
+    else searchTv(q);
+  };
+
+  const pickSort = () => {
+    const opts: { label: string; value: TvSortKey }[] = [{ label: t('search.sortByQuality'), value: 'quality' }];
+    const labels: { [k: string]: string } = {};
+    sortLabels().forEach((s) => {
+      labels[s.key] = s.label;
+    });
+    (['seeds', 'size', 'date'] as SortKey[]).forEach((k) => opts.push({ label: labels[k], value: k }));
+    choose(t('add.sort'), opts, sortKey).then((v) => {
+      if (!alive.current || v === null) return;
+      order.current = [];
+      setSortKey(v);
+    });
+  };
+
+  const sortName = (): string => {
+    if (sortKey === 'quality') return t('search.sortQuality');
+    const l = sortLabels().filter((s) => s.key === sortKey)[0];
+    const label = l ? l.label : sortKey;
+    return label.charAt(0).toLowerCase() + label.slice(1);
   };
 
   const streaming = !!prog && prog.pending.length > 0;
-  const sorted = rows ? (streaming ? stableOrder(order.current, rows, 'seeds') : sortResults(rows, 'seeds')) : [];
+  const sorted = rows ? (streaming ? stableTvOrder(order.current, rows, sortKey) : sortTvResults(rows, sortKey)) : [];
   order.current = sorted.map(resultKey);
-  const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
+
+  // blue on a row: the release details
+  useKeys((a) => {
+    if (a !== 'blue' || details) return false;
+    const fk = getCurrentFocusKey() || '';
+    if (fk.indexOf('res-') !== 0) return false;
+    const r = sorted.filter((x) => 'res-' + resultKey(x) === fk)[0];
+    if (!r) return false;
+    setDetails(r);
+    return true;
+  });
+
+  const closeDetails = () => {
+    const r = details;
+    setDetails(null);
+    if (r && doesFocusableExist('res-' + resultKey(r))) setFocus('res-' + resultKey(r));
+  };
+
+  const blocked = unified && prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
   // a site that showed its code page: its message, and where to enter the code (no browser on the TV)
-  const banned = prog ? prog.failed.map(ipBanNote).filter((x) => !!x) : [];
+  const banned = unified && prog ? prog.failed.map(ipBanNote).filter((x) => !!x) : [];
+
+  const inLibrary: { [hash: string]: boolean } = {};
+  torrents.value.forEach((x) => {
+    if (x.hash) inLibrary[x.hash.toLowerCase()] = true;
+  });
+
+  const phoneName = phoneLink.value ? phoneLink.value.name : '';
+  const byText = by === 'sources' ? t('search.bySources') : by === 'phone' ? t('search.byPhone', { name: phoneName }).trim() : t('search.byTorrServer');
+  const focusIdx = focusedKey ? order.current.indexOf(focusedKey) : -1;
 
   return (
-    <FocusGroup focusKey="ADD" className="screen add">
-      <h1>{t('add.title')}</h1>
-      <h2>{t('add.linkHeading')}</h2>
-      <div class="row">
-        <TextInput focusKey="add-link" value={link} onChange={setLink} placeholder="magnet:?xt=urn:btih:…" onSubmit={() => add({ link })} />
-        <Button label={t('common.add')} onPress={() => add({ link })} disabled={busy} />
+    <FocusGroup focusKey="ADD" className="screen add search-screen">
+      <h1>{t('add.findRelease')}</h1>
+      <div class="search-top">
+        <TextInput focusKey="add-query" value={query} onChange={setQuery} placeholder={t('add.queryPlaceholder')} onSubmit={() => search()} />
+        <Button focusKey="add-go" className="primary" label={t('add.go')} onPress={() => search()} disabled={busy} />
+        <Button focusKey="add-link" label={t('search.linkButton')} onPress={askLink} disabled={busy} />
+        <Button focusKey="add-sources" label={t('search.sources')} onPress={() => navigate({ name: 'sources' })} />
       </div>
-      <h2>{unified ? t('add.searchBySources') : t('add.search')}</h2>
-      <div class="row">
-        <TextInput value={query} onChange={setQuery} placeholder={t('add.queryPlaceholder')} onSubmit={() => search()} />
-        {!unified && <ChoiceRow label={t('add.source')} value={source} options={SOURCES} onChange={setSource} />}
-        <Button label={t('add.go')} onPress={() => search()} disabled={busy} />
-      </div>
-      {busy && <Spinner text={busyText} />}
-      {unified && prog && (
-        <div class="search-progress">
-          {prog.total
-            ? progressText({
-                found: sorted.length,
-                answered: prog.answered,
-                total: prog.total,
-                pending: prog.pending.map(sourceName),
-                failed: prog.failed.map(sourceName),
-              })
-            : t('add.noSources')}
+      {note === 'phoneDown' && <div class="search-note search-note-warn">{t('search.phoneDown')}</div>}
+      {note === 'noPhone' && !unified && <div class="search-note">{t('search.noPhone')}</div>}
+      {(prog || starting) && (
+        <div class="search-status">
+          <div class="search-status-text">
+            <span class="search-by">{byText + (prog ? ' · ' : '…')}</span>
+            {prog && (
+              <span class="search-progress">
+                {prog.total
+                  ? progressText({
+                      found: sorted.length,
+                      answered: prog.answered,
+                      total: prog.total,
+                      pending: prog.pending.map(sourceName),
+                      failed: prog.failed.map(sourceName),
+                    })
+                  : t('add.noSources')}
+              </span>
+            )}
+          </div>
+          {prog && <Button focusKey="search-sort" className="search-sort" label={t('search.sortLabel', { v: sortName() })} onPress={pickSort} />}
         </div>
       )}
-      {unified && blocked.length > 0 && (
+      {blocked.length > 0 && (
         <div class="search-progress search-hint">
           {blocked.map((id) => sourceName(id) + ': ' + (getHealth(id) || { message: '' }).message).join('; ') + '. ' + jackettHint()}
         </div>
       )}
-      {unified && banned.length > 0 && (
+      {banned.length > 0 && (
         <div class="search-progress search-hint" data-hint="ipban">
           {banned.join('; ') + '. ' + ipBanTvHint()}
         </div>
       )}
-      {unified && rows && (
-        <FocusGroup focusKey="ADD-RESULTS">
-          {sorted.map((r) => (
-            // focus key from the row identity, not its place: rows stream in and the cursor must stay on its row
-            <Focusable key={resultKey(r)} focusKey={'res-' + resultKey(r)} className="list-item" onPress={() => addResult(r)}>
-              <div class="title">{tvGlyphs(r.Title)}</div>
-              <div class="meta">
-                <span class="src-badge">{sourceBadge(r)}</span>
-                {unifiedMeta(r)}
-              </div>
-            </Focusable>
-          ))}
+      {busy && (
+        <div class="search-busy" role="status">
+          <Spinner text={busyText} />
+        </div>
+      )}
+      {rows && (
+        <FocusGroup focusKey="ADD-RESULTS" className="search-results">
+          {sorted.map((r, i) => {
+            const key = resultKey(r);
+            const s = releaseTitle(r.Title);
+            const chips = releaseChips(r.Title);
+            const hash = (r.hash || r.Hash || '').toLowerCase();
+            const also = r.sources && r.sources.length ? t('search.alsoOn', { list: r.sources.map(sourceName).join(', ') }) : '';
+            const want = i < POSTER_FIRST || (focusIdx >= 0 && Math.abs(i - focusIdx) <= POSTER_NEAR);
+            return (
+              // focus key from the row identity, not its place: rows stream in and the cursor must stay on its row
+              <Focusable key={key} focusKey={'res-' + key} className="list-item search-result" onPress={() => addResult(r)} onFocused={() => setFocusedKey(key)}>
+                <Thumb title={r.Title} want={want} />
+                <div class="search-main">
+                  <div class="search-line1">
+                    <span class="title">{tvGlyphs(s.title)}</span>
+                    {s.meta && <span class="search-meta">{' · ' + tvGlyphs(s.meta)}</span>}
+                    {chips.map((ch) => (
+                      <span key={ch} class={'search-chip' + (isHotChip(ch) ? ' hot' : '')}>
+                        {ch}
+                      </span>
+                    ))}
+                  </div>
+                  <div class="search-raw">{tvGlyphs(r.Title)}</div>
+                  {rowErr[key] && <div class="search-row-error" role="alert">{rowErr[key]}</div>}
+                </div>
+                <div class="search-side">
+                  <div class="search-size">{[r.Size, '↑' + (r.Seed || 0)].filter(Boolean).join(' · ')}</div>
+                  <div class="search-src">
+                    <span class="src-badge">{tvGlyphs(sourceBadge(r))}</span>
+                    {also && <span class="search-also">{also}</span>}
+                  </div>
+                  {hash && inLibrary[hash] && <div class="search-inlib">{t('search.inLibrary')}</div>}
+                </div>
+              </Focusable>
+            );
+          })}
         </FocusGroup>
       )}
-      {!unified && results && (
-        <FocusGroup focusKey="ADD-RESULTS">
-          {results.map((r, i) => (
-            <Focusable
-              key={i}
-              focusKey={'res-' + i}
-              className="list-item"
-              onPress={() => add({ link: r.Magnet || r.Link, title: r.Title, category: mapSearchCategory(r.Categories) })}
-            >
-              <div class="title">{tvGlyphs(r.Title)}</div>
-              <div class="meta">
-                {r.Size} · {t('add.seeds', { n: r.Seed })} · {t('add.peers', { n: r.Peer })} · {r.Tracker}{r.CreateDate ? ' · ' + r.CreateDate.slice(0, 10) : ''}
-              </div>
-            </Focusable>
-          ))}
-        </FocusGroup>
+      <div class="hints">{t('search.hints')}</div>
+      {details && (
+        <DetailsDialog
+          r={details}
+          onClose={closeDetails}
+          onAdd={() => {
+            const r = details;
+            setDetails(null);
+            addResult(r);
+          }}
+        />
       )}
-      {!unified && <div class="hints">{t('add.typeHint')}</div>}
     </FocusGroup>
   );
 }

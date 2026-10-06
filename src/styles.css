@@ -41,6 +41,38 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .list-item .src-badge { display: inline-block; margin-right: 12px; padding: 2px 10px; border-radius: 8px; background: var(--panel2); color: var(--text); font-weight: 700; }
 .search-progress { font-size: 24px; color: var(--muted); margin: 0 0 16px; }
 .search-hint { color: var(--accent); }
+/* «Найти раздачу» (mockup 6): search line, progress line with the sort chip, compact result rows */
+.search-top { display: flex; align-items: center; margin-bottom: 20px; }
+.search-top .text-input { flex: 1; margin: 0 20px 0 0; }
+.search-top .button { margin-right: 16px; }
+.search-top .button:last-child { margin-right: 0; }
+.search-note { font-size: 23px; color: var(--muted); margin: 0 0 10px; }
+.search-note-warn { color: var(--accent); }
+.search-status { display: flex; align-items: center; margin: 0 0 16px; }
+.search-status-text { flex: 1; min-width: 0; margin-right: 20px; font-size: 24px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-status .search-progress { margin: 0; }
+.search-sort { padding: 10px 24px; font-size: 24px; }
+.search-busy { position: fixed; left: 50%; bottom: 120px; margin-left: -300px; width: 600px; padding: 0 28px; background: var(--panel2); border-radius: 14px; z-index: 20; }
+.search-busy .spinner-wrap { padding: 16px 0; }
+.search-result { display: flex; align-items: center; padding: 12px 20px; margin-bottom: 10px; }
+.search-thumb { flex: none; width: 72px; height: 104px; border-radius: 8px; margin-right: 22px; background-color: var(--panel2); }
+.search-main { flex: 1; min-width: 0; margin-right: 24px; }
+.search-line1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-result .title { font-size: 28px; font-weight: 600; }
+.search-meta { font-size: 24px; color: var(--muted); }
+.search-chip { display: inline-block; vertical-align: middle; margin-left: 10px; padding: 2px 10px; border-radius: 8px; background: var(--panel2); color: var(--text); font-size: 18px; font-weight: 700; }
+.search-chip.hot { background: var(--accent); color: var(--bg); }
+.search-raw { margin-top: 6px; font-size: 21px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-row-error { margin-top: 6px; font-size: 21px; color: #ffb4b6; }
+.search-side { flex: none; width: 420px; text-align: right; font-size: 22px; color: var(--muted); }
+.search-size { font-size: 24px; color: var(--text); }
+.search-src { margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-src .src-badge { margin-right: 0; }
+.search-also { margin-left: 10px; }
+.search-inlib { margin-top: 6px; color: var(--ok); }
+.search-details-backdrop { position: fixed; }
+.search-details-title { font-size: 26px; line-height: 1.35; margin-bottom: 16px; word-wrap: break-word; }
+.search-details-meta { font-size: 23px; color: var(--muted); margin-bottom: 28px; }
 
 .text-input { flex: 1; background: var(--panel); border-radius: 12px; padding: 4px; margin-bottom: 16px; }
 .text-input.focused { transform: none; }

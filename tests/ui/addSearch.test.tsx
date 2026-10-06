@@ -33,7 +33,7 @@ function mount() {
 
 function typeQuery(v: string) {
   const inputs = host.querySelectorAll('input');
-  const q = inputs[1] as HTMLInputElement;
+  const q = inputs[0] as HTMLInputElement;
   act(() => {
     q.value = v;
     q.dispatchEvent(new Event('input', { bubbles: true }));
@@ -69,26 +69,30 @@ describe('TV search', () => {
     routeStack.value = [{ name: 'library' }, { name: 'add', query: 'Starbound 1 сезон', run: true }];
     mount();
     await flush();
-    expect((host.querySelectorAll('input')[1] as HTMLInputElement).value).toBe('Starbound 1 сезон');
+    expect((host.querySelectorAll('input')[0] as HTMLInputElement).value).toBe('Starbound 1 сезон');
     expect(s).toHaveBeenCalledWith('Starbound 1 сезон', 'rutor');
     expect(host.querySelectorAll('.list-item')).toHaveLength(1);
     routeStack.value = [{ name: 'connect' }];
   });
 
-  it('LG: TorrServer search with the source choice, built-ins untouched', async () => {
+  it('LG without a phone: TorrServer rutor and Torznab, the no-phone line, built-ins untouched', async () => {
     const fake = vi.fn(() => Promise.resolve([fakeRow({})]));
     registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: fake });
     const s = vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue([tsRow]);
     mount();
-    expect(host.querySelector('.choice-row')).not.toBeNull();
+    expect(host.querySelector('.choice-row')).toBeNull();
+    expect(host.querySelector('h1')!.textContent).toBe('Найти раздачу');
     typeQuery('starbound');
     act(() => button('Искать').click());
     await flush();
-    expect(s).toHaveBeenCalledTimes(1);
     expect(s).toHaveBeenCalledWith('starbound', 'rutor');
+    expect(s).toHaveBeenCalledWith('starbound', 'torznab');
     expect(fake).not.toHaveBeenCalled();
     expect(host.querySelectorAll('.list-item')).toHaveLength(1);
-    expect(host.querySelector('.search-progress')).toBeNull();
+    expect(host.querySelector('.search-note')!.textContent).toBe(
+      'Сайты ищет телефон с OMP — подключите его к этому телевизору. Сейчас ищем через TorrServer',
+    );
+    expect(host.querySelector('.search-by')!.textContent).toBe('Ищет TorrServer · ');
   });
 
   it('Android TV: unified search with source badges and the progress line', async () => {
@@ -112,7 +116,8 @@ describe('TV search', () => {
     // most seeds first
     expect(items[0].querySelector('.src-badge')!.textContent).toBe('Фейк');
     expect(items[1].querySelector('.src-badge')!.textContent).toBe('rutor (TorrServer)');
-    expect(items[1].textContent).toContain('ещё в Torznab');
+    expect(items[1].textContent).toContain('ещё на Torznab');
+    expect(host.querySelector('.search-by')!.textContent).toBe('Ищут источники · ');
     expect(host.querySelector('.search-progress')!.textContent).toBe('Найдено 2 · 3 из 3 источников ответили');
   });
 
@@ -130,7 +135,7 @@ describe('TV search', () => {
     act(() => (host.querySelector('.list-item') as HTMLElement).click());
     await flush();
     expect(magnet).toHaveBeenCalledWith('https://f.example/t=1', expect.anything());
-    expect(host.textContent).toContain('Получаю ссылку…');
+    expect(host.textContent).toContain('Получаем ссылку…');
     give(MAG);
     await flush();
     expect(add).toHaveBeenCalledWith(expect.objectContaining({ link: MAG, title: 'Северный ветер 2160p' }));

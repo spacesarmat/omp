@@ -138,7 +138,7 @@ describe('TV screens in English', () => {
     mount(h(TopBar, { tab: 'all', onTab: () => undefined, view: 'large', sort: 'new', searchOpen: false, onSearch: () => undefined, onView: () => undefined, onSort: () => undefined, onFocused: () => undefined }));
     const labels = Array.prototype.map.call(host.querySelectorAll('.icon-button'), (e: Element) => e.getAttribute('aria-label')).join('|');
     expect(labels).toContain('Search');
-    expect(labels).toContain('Add');
+    expect(labels).toContain('Find a release');
     expect(labels).toContain('Playlists');
     expect(labels).toContain('Settings');
     expect(labels).not.toMatch(CYR);
@@ -430,10 +430,11 @@ describe('TV screens in English', () => {
     mount(h(AddScreen, {}));
     await flush();
     const text = host.textContent || '';
-    expect(text).toContain('Add a torrent');
-    expect(buttons(host)).toContain('Add');
+    expect(text).toContain('Find a release');
     expect(buttons(host)).toContain('Search');
-    expect(text).toContain('Source');
+    expect(buttons(host)).toContain('Magnet or link');
+    expect(buttons(host)).toContain('Sources');
+    expect(text).toContain('OK — add and watch');
     expect(text).not.toMatch(CYR);
   });
 
