@@ -78,8 +78,8 @@ describe('NowPlaying', () => {
   it('renders title, subtitle, times and the TV name', () => {
     setState(state());
     mount(<NowPlaying volume={volume} />);
-    expect(el.textContent).toContain('Тишина в эфире');
-    expect(el.textContent).toContain('Starbound Frontier · S02E03');
+    expect(el.querySelector('.m-now-title')!.textContent).toBe('Starbound Frontier');
+    expect(el.querySelector('.m-now-sub')!.textContent).toBe('S02E03 · Тишина в эфире');
     expect(el.textContent).toContain('23:14');
     expect(el.textContent).toContain('−25:18');
     expect(el.textContent).toContain('СЕЙЧАС НА ТВ');
@@ -469,11 +469,25 @@ describe('mini-player in the shell', () => {
   });
 });
 
-describe('long file-name title', () => {
-  it('shows the cleaned title', () => {
-    setState(state({ title: 'Trudno.byt.bogom.S01.E07.2026.WEB-DL.1080p.ExKinoRay.mkv' }));
+describe('raw names from the TV', () => {
+  it('a file name and a tracker title: the short name, then only the episode code', () => {
+    setState(
+      state({
+        hash: 'nolib',
+        title: 'Dark.Matter.S02E01.1080p.WEB-DL.RGzsRutracker.mkv',
+        subtitle: 'Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 10 (Алик Сахаров) [2024, WEB-DL 1080p] · S02E01',
+      }),
+    );
     mount(<NowPlaying volume={volume} />);
-    expect(el.querySelector('.m-now-title')!.textContent).toBe('Trudno byt bogom S01 E07 2026 WEB-DL 1080p ExKinoRay');
+    expect(el.querySelector('.m-now-title')!.textContent).toBe('Темная материя');
+    expect(el.querySelector('.m-now-sub')!.textContent).toBe('S02E01');
+  });
+
+  it('a film: the title alone', () => {
+    setState(state({ hash: 'nolib', title: 'Quiet.Signal.2026.2160p.WEB-DL.mkv', subtitle: 'Тихий сигнал / Quiet Signal (2026) WEB-DL 2160p' }));
+    mount(<NowPlaying volume={volume} />);
+    expect(el.querySelector('.m-now-title')!.textContent).toBe('Тихий сигнал');
+    expect(el.querySelector('.m-now-sub')).toBeNull();
   });
 });
 
