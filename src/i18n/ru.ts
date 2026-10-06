@@ -1634,6 +1634,13 @@ export const ru = {
     noTvTitle: 'Подключите телевизор',
     noTvText: 'Чтобы управлять ТВ с телефона, сначала подключите его.',
     noTvButton: 'Подключить ТВ',
+    /** A saved TV that does not answer: «LG OLED55… не отвечает — включите ТВ» with «Повторить». */
+    noAnswerTv: '{name} не отвечает — включите ТВ',
+    /** The header switcher of several saved TVs. */
+    switchTv: 'Сменить телевизор',
+    switchTitle: 'Телевизоры',
+    tvSaved: 'сохранён',
+    tvNeedsCode: 'нужен код',
     turnOffAsk: 'Выключить {name}?',
     turnedOff: 'Телевизор выключается',
     needOnToConnect: 'Подключитесь к телевизору, когда он включён, — тогда его можно будет включать с телефона',

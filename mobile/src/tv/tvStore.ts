@@ -18,6 +18,8 @@ export interface SavedTv {
   token?: string;
   /** Android TV: control server port (default 8095); `port` stays the SSAP one. */
   ctlPort?: number;
+  /** When this TV was last made the active one (ms); the remote falls back to the latest one. */
+  usedAt?: number;
 }
 
 export type TvKind = 'lg' | 'atv';
@@ -59,6 +61,7 @@ export function sanitizeTvs(v: unknown): SavedTv[] {
     if (out.some((o) => o.ip === t.ip)) continue;
     const tv: SavedTv = { ip: t.ip, name: t.name };
     if (typeof t.defaultName === 'string' && t.defaultName) tv.defaultName = t.defaultName;
+    if (typeof t.usedAt === 'number' && t.usedAt > 0 && isFinite(t.usedAt)) tv.usedAt = t.usedAt;
     if (t.kind === 'atv') {
       tv.kind = 'atv';
       if (typeof t.token === 'string' && TOKEN.test(t.token)) tv.token = t.token;
@@ -83,7 +86,28 @@ function loadActive(): string | null {
 
 export const tvs = signal<SavedTv[]>(loadTvs());
 export const activeTvIp = signal<string | null>(loadActive());
-export const activeTv = computed(() => tvs.value.find((t) => t.ip === activeTvIp.value) || null);
+/**
+ * The TV the remote and «Смотреть на ТВ» use: the active one; when none is set or it names a TV that is not saved
+ * (a TV saved by the install assistant, which never makes a TV active, or an active one that was replaced), the
+ * last used saved TV, else the first saved. Null only when no TV is saved.
+ */
+export function pickActiveTv(list: SavedTv[], ip: string | null): SavedTv | null {
+  const exact = ip ? list.filter((t) => t.ip === ip)[0] : undefined;
+  if (exact) return exact;
+  let best: SavedTv | null = null;
+  list.forEach((t) => {
+    if (!best || (t.usedAt || 0) > (best.usedAt || 0)) best = t;
+  });
+  return best;
+}
+
+export const activeTv = computed(() => pickActiveTv(tvs.value, activeTvIp.value));
+
+/** An active TV is set and saved (not just the fallback of [activeTv]). */
+function hasActive(): boolean {
+  const ip = activeTvIp.value;
+  return !!ip && tvs.value.some((t) => t.ip === ip);
+}
 
 function persist() {
   saveJson(KEY, tvs.value);
@@ -104,6 +128,8 @@ export function saveTv(tv: SavedTv, opts: { keepActive?: boolean } = {}): void {
   const renamed = !!existing && existing.defaultName !== undefined && existing.name !== existing.defaultName;
   const name = renamed ? existing!.name : tv.name;
   const next: SavedTv = { ip: tv.ip, name, defaultName: renamed ? existing!.defaultName : tv.name };
+  const usedAt = tv.usedAt || (existing ? existing.usedAt : undefined);
+  if (usedAt) next.usedAt = usedAt;
   const kind = tv.kind ?? existing?.kind;
   if (kind === 'atv') {
     next.kind = 'atv';
@@ -120,7 +146,7 @@ export function saveTv(tv: SavedTv, opts: { keepActive?: boolean } = {}): void {
     if (mac) next.mac = mac;
   }
   tvs.value = existing ? tvs.value.map((t) => (t.ip === tv.ip ? next : t)) : tvs.value.concat(next);
-  if (!activeTv.value && !opts.keepActive) activeTvIp.value = tv.ip;
+  if (!hasActive() && !opts.keepActive) activeTvIp.value = tv.ip;
   persist();
 }
 
@@ -147,14 +173,15 @@ export function renameTv(ip: string, name: string): void {
   persist();
 }
 
-export function setActiveTv(ip: string): void {
+export function setActiveTv(ip: string, now: number = Date.now()): void {
   if (!tvs.value.some((t) => t.ip === ip)) return;
   activeTvIp.value = ip;
+  tvs.value = tvs.value.map((t) => (t.ip === ip ? { ...t, usedAt: now } : t));
   persist();
 }
 
 export function forgetTv(ip: string): void {
   tvs.value = tvs.value.filter((t) => t.ip !== ip);
-  if (activeTvIp.value === ip || !activeTv.value) activeTvIp.value = tvs.value[0]?.ip ?? null;
+  if (activeTvIp.value === ip || !hasActive()) activeTvIp.value = tvs.value[0]?.ip ?? null;
   persist();
 }

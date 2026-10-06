@@ -13,6 +13,7 @@ describe('the automatic «What\'s new» notice follows a language change', () =>
   it('its title and entries are rebuilt in English', () => {
     localStorage.clear();
     localStorage.setItem('tsp.x', '1');
+    setChangelogPlatform('phone');
     checkWhatsNew(getChangelog(), APP_VERSION);
     expect(whatsNew.value).not.toBeNull();
     expect(whatsNew.value!.title).toMatch(/Что нового/);

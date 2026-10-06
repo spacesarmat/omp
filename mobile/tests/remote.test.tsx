@@ -29,6 +29,7 @@ const a = {
   wakeOnLan: vi.fn(),
   pairAtv: vi.fn(),
   warmUp: vi.fn(),
+  switchTv: vi.fn(),
   confirm: vi.fn(),
 };
 
@@ -863,3 +864,60 @@ describe('Remote in English', () => {
 function byBtn(t: string) {
   return Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === t);
 }
+
+describe('Remote remembers the saved TVs', () => {
+  it('a saved TV that is not marked active (install assistant, an update) is used and connected, not the setup screen', () => {
+    localStorage.setItem('tsp.tvs', JSON.stringify([{ ip: '192.168.1.156', name: '[LG] webOS TV OLED55C9PLA', clientKey: 'k' }]));
+    localStorage.removeItem('tsp.activeTv');
+    reloadTvs();
+    mount();
+    expect(el.textContent).not.toContain('Подключите телевизор');
+    expect(el.textContent).toContain('OLED55C9PLA');
+    expect(a.warmUp).toHaveBeenCalled();
+  });
+
+  it('a TV that does not answer: «… не отвечает — включите ТВ» and «Повторить»', () => {
+    saveTv({ ip: '192.168.1.156', name: '[LG] webOS TV OLED55C9PLA', clientKey: 'k' });
+    mount();
+    act(() => {
+      tvState.value = 'error';
+    });
+    expect(el.querySelector('[data-no-answer]')!.textContent).toContain('OLED55C9PLA не отвечает — включите ТВ');
+    a.warmUp.mockClear();
+    click(byBtn('Повторить')!);
+    expect(a.warmUp).toHaveBeenCalledTimes(1);
+    act(() => {
+      tvState.value = 'connected';
+    });
+    expect(el.querySelector('[data-no-answer]')).toBeNull();
+    act(() => {
+      tvState.value = 'idle';
+    });
+  });
+
+  it('several saved TVs: the name opens a sheet with their state, one tap switches with the saved key', () => {
+    saveTv({ ip: '192.168.1.156', name: 'LG OLED', clientKey: 'k' });
+    saveTv({ ip: '192.168.1.191', name: 'Dune HD', kind: 'atv', token: 'a'.repeat(32), ctlPort: 8095 });
+    saveTv({ ip: '192.168.1.192', name: 'Box', kind: 'atv' });
+    setActiveTv('192.168.1.156');
+    mount();
+    const sw = el.querySelector('.m-remote-switch') as HTMLElement;
+    expect(sw.textContent).toContain('LG OLED');
+    click(sw);
+    const rows = Array.from(document.querySelectorAll('[data-switch-tv]')) as HTMLElement[];
+    expect(rows.map((r) => r.querySelector('.m-opt-sub')!.textContent)).toEqual([
+      expect.stringMatching(/^192\.168\.1\.156 · /),
+      '192.168.1.191 · сохранён',
+      '192.168.1.192 · нужен код',
+    ]);
+    click(rows[1]);
+    expect(a.switchTv).toHaveBeenCalledWith(expect.objectContaining({ ip: '192.168.1.191', token: 'a'.repeat(32) }));
+    expect(document.querySelector('[data-switch-tv]')).toBeNull();
+  });
+
+  it('one saved TV: its name is plain text, no switcher', () => {
+    saveTv({ ip: '192.168.1.156', name: 'LG OLED', clientKey: 'k' });
+    mount();
+    expect(el.querySelector('.m-remote-switch')).toBeNull();
+  });
+});

@@ -4,7 +4,8 @@ import { native } from '../platform/native';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { navigate } from '../nav';
-import { activeTv, ATV_PORT, type SavedTv } from '../tv/tvStore';
+import { activeTv, ATV_PORT, isAtv, setActiveTv, tvs, type SavedTv } from '../tv/tvStore';
+import { Sheet } from '../ui/Sheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
 import { touchpad, cursorGain, scrollFactor } from '../tv/touchpad';
@@ -17,6 +18,8 @@ import {
   pairAtv,
   tvWaking,
   warmUp,
+  cancelWarmUp,
+  connectTv,
   pressButton,
   moveCursor,
   click,
@@ -49,6 +52,8 @@ export interface RemoteActions {
   pairAtv: (found: FoundOmpTv, code: string) => Promise<void>;
   wakeOnLan: (mac: string, ip: string) => Promise<void>;
   warmUp: () => Promise<void>;
+  /** Makes a saved TV the active one and connects with its saved key or token. */
+  switchTv: (tv: SavedTv) => Promise<void>;
   confirm: (text: string) => boolean;
 }
 
@@ -66,6 +71,12 @@ const defaults: RemoteActions = {
   pairAtv,
   wakeOnLan: (mac, ip) => native.wakeOnLan(mac, ip),
   warmUp,
+  switchTv: (tv) => {
+    // the saved key or token is reused: no pairing again
+    cancelWarmUp();
+    setActiveTv(tv.ip);
+    return connectTv(tv).catch(() => {});
+  },
   confirm: (t) => window.confirm(t),
 };
 
@@ -123,6 +134,67 @@ const stateText = (s: string): string => {
   };
   return map[s] || s;
 };
+
+/** A saved TV that does not answer: the reason and «Повторить», never the setup screen. */
+function NoAnswer({ tv }: { tv: SavedTv }) {
+  if (tvState.value !== 'error' || tvWaking.value) return null;
+  return (
+    <div class="m-remote-noanswer" data-no-answer>
+      <div class="m-hint-warn" role="status">
+        {t('remote.noAnswerTv', { name: shortTvName(tv.name) })}
+      </div>
+      <button type="button" class="m-btn m-btn-secondary" onClick={() => void act.warmUp()}>
+        {t('common.retry')}
+      </button>
+    </div>
+  );
+}
+
+/** The state line of a saved TV in the switcher: the live one for the current TV, else saved / needs a code. */
+function savedState(tv: SavedTv, current: SavedTv, live: string): string {
+  if (tv.ip === current.ip) return live;
+  return isAtv(tv) && !tv.token ? t('remote.tvNeedsCode') : t('remote.tvSaved');
+}
+
+/**
+ * The TV's name in the header; with more than one saved TV it opens a sheet of them (with their state) and one tap
+ * switches, reusing the saved LG key or Android TV token.
+ */
+function TvSwitch({ tv, live, class: cls }: { tv: SavedTv; live: string; class: string }) {
+  const [open, setOpen] = useState(false);
+  const list = tvs.value;
+  if (list.length < 2) return <span class={cls}>{shortTvName(tv.name)}</span>;
+  return (
+    <>
+      <button type="button" class={cls + ' m-remote-switch'} aria-haspopup="dialog" aria-label={t('remote.switchTv') + ': ' + tv.name} onClick={() => setOpen(true)}>
+        {shortTvName(tv.name)} ▾
+      </button>
+      {open && (
+        <Sheet label={t('remote.switchTitle')} onClose={() => setOpen(false)}>
+          <div class="m-sheet-title">{t('remote.switchTitle')}</div>
+          {list.map((x) => (
+            <button
+              key={x.ip}
+              type="button"
+              class={'m-opt' + (x.ip === tv.ip ? ' on' : '')}
+              data-switch-tv={x.ip}
+              aria-pressed={x.ip === tv.ip}
+              onClick={() => {
+                setOpen(false);
+                if (x.ip !== tv.ip) void act.switchTv(x);
+              }}
+            >
+              <span class="m-opt-text">
+                <span class="m-opt-name">{shortTvName(x.name)}</span>
+                <span class="m-opt-sub">{x.ip + ' · ' + savedState(x, tv, live)}</span>
+              </span>
+            </button>
+          ))}
+        </Sheet>
+      )}
+    </>
+  );
+}
 
 interface Gesture {
   /** Last position sent (the cursor delta is measured from it). */
@@ -369,7 +441,6 @@ const atvStateText = (s: string): string => {
 
 /** Remote for OMP on Android TV (spec item 9): no power, touchpad or channel keys. */
 function AtvRemote({ tv }: { tv: SavedTv }) {
-  const name = tv.name;
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
   const [coding, setCoding] = useState(false);
@@ -393,13 +464,14 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
     <div class={screenClass(kbd)} data-route="remote">
       <div class="m-lib-head">
         <div class="m-remote-name">
-          <span class="m-remote-title">{name}</span>
+          <TvSwitch tv={tv} live={atvStateText(shown)} class="m-remote-title" />
           <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>
             {t('remote.atvLine', { state: atvStateText(shown) })}
           </span>
         </div>
       </div>
       <p class="m-remote-note">{t('remote.atvNote')}</p>
+      {!forgot && <NoAnswer tv={tv} />}
       {forgot && (
         <div class="m-remote-forgot">
           <div class="m-hint-warn">{tvForgot()}</div>
@@ -569,7 +641,7 @@ export function Remote() {
         title={t('nav.remote')}
         subtitle={
           <span title={tv.name}>
-            <span class="m-remote-title">{shortTvName(tv.name)}</span>
+            <TvSwitch tv={tv} live={shownState} class="m-remote-title" />
             {' · '}
             <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{shownState}</span>
           </span>
@@ -588,6 +660,7 @@ export function Remote() {
           <Icon d={POWER} />
         </button>
       </ScreenHeader>
+      <NoAnswer tv={tv} />
       <div class="m-seg" role="tablist">
         <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>
           {t('remote.buttons')}
