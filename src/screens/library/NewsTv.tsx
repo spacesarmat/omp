@@ -159,6 +159,13 @@ function markSeen(rows: NewsRow[]): void {
   });
 }
 
+/** The library torrent a finding replaces: the old season for new episodes, the current release for better quality. */
+function oldHashOf(f: NewsRow['f']): string {
+  if (f.better) return f.better.torrentHash;
+  if (f.episodes) return f.episodes.torrentHash;
+  return '';
+}
+
 type BetterChoice = 'replace' | 'add' | 'cancel';
 
 export interface NewsTvProps {
@@ -218,7 +225,8 @@ export function NewsTv(p: NewsTvProps) {
     };
   }, []);
 
-  // a new phone (or the same one forgotten) starts over; the feed is asked on open and every minute
+  // a new phone (or the same one forgotten) starts over; the feed is asked on open and every minute, and only while
+  // the findings are on screen: each load marks them seen on the phone
   useEffect(() => {
     seq.current++;
     setRows(cachedFor(link));
@@ -228,10 +236,11 @@ export function NewsTv(p: NewsTvProps) {
       setStatus('checking');
       return;
     }
+    if (seg !== 'feed') return;
     load();
     const timer = setInterval(load, NEWS_REFRESH_MS);
     return () => clearInterval(timer);
-  }, [link]);
+  }, [link, seg]);
 
   const shown = link && seg === 'feed' && (status === 'online' || status === 'checking') && rows ? rows : [];
 
@@ -300,11 +309,11 @@ export function NewsTv(p: NewsTvProps) {
       );
   };
 
-  /** Replaces the library torrent with the better release (the phone gives the link). */
+  /** Replaces the library torrent with the found release (the phone gives the link). */
   const replace = (x: NewsRow) => {
     const c = client.value;
-    const b = x.f.better;
-    if (!c || !b) {
+    const old = oldHashOf(x.f);
+    if (!c || !old) {
       toast(t('errors.noServerSelected'), 'error');
       return;
     }
@@ -313,7 +322,7 @@ export function NewsTv(p: NewsTvProps) {
     phoneFindingLink(x.f.subId, x.f.key).then(
       (l) => {
         if (alive.current) setBusy(t('monitor.replaceSheet.busy'));
-        return replaceWithLink(c, b.torrentHash, x.r, l).then((res) => {
+        return replaceWithLink(c, old, x.r, l).then((res) => {
           busyRef.current = false;
           if (!res.ok) {
             if (res.cause === 'cancelled') {
@@ -358,6 +367,8 @@ export function NewsTv(p: NewsTvProps) {
   const open = (x: NewsRow) => {
     if (busyRef.current) return;
     if (x.f.kind === 'better') better(x);
+    // new episodes take the old season's place, as on the phone: history, settings and positions move with it
+    else if (x.f.kind === 'episodes' && oldHashOf(x.f)) replace(x);
     else watch(x);
   };
 

@@ -235,19 +235,36 @@ describe('TV «Новое» tab', () => {
     expect(newsUnseen.value).toBe(0);
   });
 
-  it('OK on a new episode asks the phone for the link, adds it and opens the torrent', async () => {
+  it('OK on a new episode replaces the old season without asking and opens the new torrent', async () => {
+    useScript({
+      feed: [{ findings: FINDINGS, lastRun: 1 }],
+      findingsSeen: [{ ok: true }],
+      findingLink: [{ link: 'magnet:?xt=urn:btih:' + NEW }],
+    });
+    vi.mocked(replaceWithLink).mockResolvedValue({ ok: true, hash: NEW });
+    const host = await mount();
+    await click(rowOf(host, 'episodes', 'h1:2:5'));
+    expect(calls.filter((c) => c.method === 'findingLink').map((c) => c.params)).toEqual([{ subId: 'episodes', key: 'h1:2:5' }]);
+    expect(document.querySelector('.dialog-title')).toBeNull();
+    const args = vi.mocked(replaceWithLink).mock.calls[0];
+    expect(args[1]).toBe('d'.repeat(40));
+    expect(args[2].Title).toBe(FINDINGS[0].result.Title);
+    expect(args[3]).toBe('magnet:?xt=urn:btih:' + NEW);
+    expect(adds.length).toBe(0);
+    expect(currentRoute.value).toEqual({ name: 'torrent', hash: NEW });
+  });
+
+  it('OK on a subscription finding asks the phone for the link, adds it and opens the torrent', async () => {
     useScript({
       feed: [{ findings: FINDINGS, lastRun: 1 }],
       findingsSeen: [{ ok: true }],
       findingLink: [{ link: 'magnet:?xt=urn:btih:' + NEW }],
     });
     const host = await mount();
-    await click(rowOf(host, 'episodes', 'h1:2:5'));
-    expect(calls.filter((c) => c.method === 'findingLink').map((c) => c.params)).toEqual([{ subId: 'episodes', key: 'h1:2:5' }]);
+    await click(rowOf(host, 's1', 'k7'));
     expect(adds.length).toBe(1);
     expect(adds[0].link).toBe('magnet:?xt=urn:btih:' + NEW);
-    expect(adds[0].title).toBe(FINDINGS[0].result.Title);
-    expect(adds[0].category).toBe('tv');
+    expect(vi.mocked(replaceWithLink)).not.toHaveBeenCalled();
     expect(currentRoute.value).toEqual({ name: 'torrent', hash: ADDED });
   });
 
@@ -356,6 +373,14 @@ describe('TV «Подписки» segment', () => {
   afterEach(() => {
     subsPoll.gapMs = gap;
     subsPoll.maxMs = max;
+  });
+
+  it('the segment neither loads the findings nor marks them seen on the phone', async () => {
+    useScript({ feed: [{ findings: FINDINGS, lastRun: 1 }], findingsSeen: [{ ok: true }], subs: [{ subs: SUBS }] });
+    newsUnseen.value = 2;
+    await mountSubs();
+    expect(calls.filter((c) => c.method === 'feed' || c.method === 'findingsSeen').length).toBe(0);
+    expect(newsUnseen.value).toBe(2);
   });
 
   it('shows the subscriptions with their quality, the new count and the switches', async () => {
