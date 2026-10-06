@@ -1064,6 +1064,18 @@ export const en: EnDict<typeof ru> = {
       filtersKey: 'filters',
       backLibrary: 'Back — to the library',
     },
+    // the title card of a film or a series opened from "Discover"
+    title: {
+      inList: 'On the list',
+      seasonYear: 'Season {n} · {year}',
+      findShort: 'find torrents',
+      inLibrary: 'in library',
+      comes: 'out {date}',
+      announced: 'announced',
+      hintOk: 'OK — select',
+      hintDown: 'Down — seasons and cast',
+      hintBack: 'Back — to "Discover"',
+    },
   },
   connect: {
     enterAddress: 'Enter the server address',

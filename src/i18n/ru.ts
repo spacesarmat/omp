@@ -1084,6 +1084,18 @@ export const ru = {
       filtersKey: 'фильтры',
       backLibrary: 'Назад — к медиатеке',
     },
+    // the title card of a film or a series opened from «Обзор»
+    title: {
+      inList: 'В списке',
+      seasonYear: 'Сезон {n} · {year}',
+      findShort: 'найти раздачи',
+      inLibrary: 'в медиатеке',
+      comes: 'выйдет {date}',
+      announced: 'анонсирован',
+      hintOk: 'ОК — выбрать',
+      hintDown: 'Вниз — сезоны и актёры',
+      hintBack: 'Назад — к «Обзору»',
+    },
   },
   connect: {
     enterAddress: 'Введите адрес сервера',

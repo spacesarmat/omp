@@ -509,3 +509,26 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .disc-error .actions { display: flex; justify-content: center; }
 .disc-more { display: flex; align-items: center; padding: 12px 0 24px; color: var(--muted); }
 .disc-more > span { margin-right: 20px; }
+
+/* TV title card («Обзор» → a film or a series): the series hero, season chips and the cast */
+.title-card .tc-hero { min-height: 450px; }
+.tc-original { margin: -6px 0 14px; font-size: 26px; color: var(--muted); }
+.tc-meta { display: flex; flex-wrap: wrap; align-items: center; margin-bottom: 16px; font-size: 26px; color: #c3c8d4; }
+.tc-meta > * { margin-right: 18px; }
+.tc-meta > span + span:before { content: '·'; margin-right: 18px; color: var(--muted); }
+.tc-meta .series-pill-inline { margin: 0 18px 0 0; padding: 5px 14px; font-size: 22px; }
+.tc-meta .series-pill-inline + span:before { content: none; }
+.tc-rating { color: var(--accent); font-weight: 700; }
+.tc-section { margin-bottom: 12px; }
+.tc-h2 { margin: 0 0 4px; font-size: 26px; font-weight: 500; color: var(--muted); }
+.tc-chip-library { background: var(--panel2); }
+.tc-scroll { position: relative; overflow: hidden; margin: 0 -12px; padding: 12px; }
+.tc-cast-row { display: flex; flex-wrap: nowrap; }
+.tc-person { flex-shrink: 0; width: 180px; margin-right: 24px; padding: 10px 0 12px; border-radius: 14px; text-align: center; }
+.tc-person.focused { background: var(--panel); box-shadow: none; transform: none; }
+.tc-photo { display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; margin: 0 auto 10px; border-radius: 48px; overflow: hidden; background: var(--panel2); }
+.tc-person.focused .tc-photo { box-shadow: 0 0 0 4px var(--focus); }
+.tc-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tc-initials { font-size: 34px; font-weight: 700; color: var(--muted); }
+.tc-person-name { font-size: 22px; line-height: 1.2; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.tc-person-role { margin-top: 4px; font-size: 19px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
