@@ -6,7 +6,8 @@ import { Settings, setUpdateChecker } from '../src/screens/Settings';
 import { currentRoute, resetTo } from '../src/nav';
 import { settings, updateSettings } from '../../src/store/settings';
 import { addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
-import { ANDROID_UPDATE_URL, ANDROID_BETA_UPDATE_URL } from '../../src/lib/updateInfo';
+import { ANDROID_UPDATE_URL, ANDROID_BETA_UPDATE_URL, type UpdateInfo } from '../../src/lib/updateInfo';
+import { latestUpdate, updatePrompt } from '../../src/store/updates';
 import { APP_VERSION } from '../../src/version';
 import { whatsNew, closeWhatsNew } from '../../src/store/whatsNew';
 import { toast } from '../src/ui/toast';
@@ -136,6 +137,22 @@ describe('Settings', () => {
     await act(async () => btn(el, 'Проверить обновления').click());
     await act(async () => {});
     expect(toast.value).toBe('Не удалось проверить обновления');
+  });
+
+  it('a found update stays offered in place of the check button, also after «Позже»', async () => {
+    latestUpdate.value = { version: '9.0.0', ipkUrl: 'https://github.com/spacesarmat/omp/releases/download/v9.0.0/a.apk', ipkHash: 'b'.repeat(64), ipkSize: 1, notes: [], releaseUrl: 'https://example.com/r' } as UpdateInfo;
+    updatePrompt.value = null;
+    try {
+      const el = mount();
+      const row = el.querySelector<HTMLButtonElement>('[data-row="update-available"]')!;
+      expect(row.textContent).toContain('9.0.0');
+      expect(btn(el, 'Проверить обновления')).toBeUndefined();
+      await act(async () => row.click());
+      expect(updatePrompt.value!.version).toBe('9.0.0');
+    } finally {
+      latestUpdate.value = null;
+      updatePrompt.value = null;
+    }
   });
 
   it('toggles check on start', async () => {

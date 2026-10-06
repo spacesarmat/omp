@@ -37,7 +37,7 @@ import { torrents } from '../../src/store/library';
 import { checkWhatsNew } from '../../src/store/whatsNew';
 import { phoneChangelog } from './lib/phoneChangelog';
 import { APP_VERSION } from '../../src/version';
-import { updatePrompt } from '../../src/store/updates';
+import { updatePrompt, installUpdateChecks } from '../../src/store/updates';
 import { tvState, warmUp, cancelWarmUp } from './tv/tvClient';
 import { activeTv } from './tv/tvStore';
 import { startPlayerLink, attachIfOmpForeground, linkStatus } from './tv/playerLink';
@@ -241,13 +241,11 @@ export function App() {
     checkWhatsNew(phoneChangelog(), APP_VERSION);
   }, []);
 
-  // background update check 3 s after start (cheap GET; honours the setting and the 6 h interval)
-  useEffect(() => {
-    const t = setTimeout(() => {
-      void runUpdateCheck({ manual: false, url: phoneFeedUrl() }).catch(() => {});
-    }, 3000);
-    return () => clearTimeout(t);
-  }, []);
+  // background update check 3 s after start and on each return to OMP (at most hourly); honours the setting
+  useEffect(
+    () => installUpdateChecks((gap) => void runUpdateCheck({ manual: false, url: phoneFeedUrl(), minIntervalMs: gap }).catch(() => {})),
+    [],
+  );
 
   const route = currentRoute.value;
   const prompt = updatePrompt.value;

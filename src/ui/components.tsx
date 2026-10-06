@@ -83,12 +83,13 @@ export function Button(p: { label: string; icon?: IconName; onPress: () => void;
   );
 }
 
-export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void; expand?: boolean }) {
+export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void; expand?: boolean; dot?: boolean }) {
   return (
     <Focusable focusKey={p.focusKey} className="icon-button" onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} ariaLabel={p.label} role="button">
       {(focused: boolean) => [
         <Icon key="i" name={p.icon} size={28} />,
         p.expand && focused ? <span key="l" class="icon-btn-label">{p.label}</span> : null,
+        p.dot ? <span key="d" class="icon-dot" /> : null,
       ]}
     </Focusable>
   );

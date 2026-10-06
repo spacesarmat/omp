@@ -3,6 +3,7 @@ import { switchTab } from '../nav';
 import { newsBadge } from '../monitor/ui';
 import { freshText } from '../monitor/text';
 import { t } from '../../../src/i18n';
+import { latestUpdate } from '../../../src/store/updates';
 
 export type Tab = 'library' | 'news' | 'add' | 'remote' | 'settings';
 
@@ -43,6 +44,7 @@ export function NavBar({ active }: { active: Tab }) {
           >
             <span class="m-nav-pill">
               <Icon d={t.d} />
+              {t.id === 'settings' && latestUpdate.value && <span class="m-nav-dot" aria-hidden="true" />}
               {n > 0 && (
                 <span class="m-nav-badge" aria-hidden="true">
                   {n > 99 ? '99+' : n}
