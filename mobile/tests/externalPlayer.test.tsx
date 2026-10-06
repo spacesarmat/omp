@@ -137,6 +137,24 @@ describe('«Смотреть на телефоне» in another player', () => {
     expect(el.textContent).toContain('Нет приложения для просмотра видео');
   });
 
+  it('a second tap while the player is open starts nothing', async () => {
+    let finish: (v: unknown) => void = () => undefined;
+    openPlayer.mockImplementation(() => new Promise((r) => { finish = r; }));
+    mount();
+    await flush();
+    act(() => byText('Смотреть на телефоне')!.click());
+    act(() => byText('Смотреть на телефоне')!.click());
+    await flush();
+    expect(openPlayer).toHaveBeenCalledTimes(1);
+    await act(async () => { finish({ returned: false }); });
+    await flush();
+    act(() => byText('Смотреть на телефоне')!.click());
+    await flush();
+    expect(openPlayer).toHaveBeenCalledTimes(2);
+    await act(async () => { finish({ returned: false }); });
+    await flush();
+  });
+
   it('the «На телефоне» option of an episode uses the same path', async () => {
     openPlayer.mockResolvedValue({ returned: true, positionMs: 60_000, durationMs: 2_400_000 });
     mount();

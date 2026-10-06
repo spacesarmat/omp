@@ -25,6 +25,11 @@ export interface OmpNativeTvPlugin {
   canInstallApks?(): Promise<{ granted?: unknown }>;
   /** Starts the native Media3 player (PlayerActivity); resolves once it is launched. */
   playNative(o: object): Promise<unknown>;
+  /**
+   * "In another player": the chooser of installed players (MX Player compatible) at positionMs; resolves with what the
+   * player handed back { returned, positionMs?, durationMs?, ended? } (returned false: nothing came back).
+   */
+  openPlayer?(o: { url: string; title: string; positionMs: number; mime?: string }): Promise<unknown>;
   /** A phone command (src/phone/protocol.ts Cmd) for the open native player. */
   nativePlayerCommand(o: { cmd: object }): Promise<unknown>;
   /** Phone remote: a new 4-digit pairing code (the previous one stops working), expiresAt in epoch ms. */
@@ -109,6 +114,7 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     canInstallApks: () => np.call(cap, NAME, 'canInstallApks', {}),
     playNative: (o) => np.call(cap, NAME, 'playNative', o),
     nativePlayerCommand: (o) => np.call(cap, NAME, 'nativePlayerCommand', o),
+    openPlayer: (o) => np.call(cap, NAME, 'openPlayer', o),
     pairingCode: () => np.call(cap, NAME, 'pairingCode', {}),
     tvName: () => np.call(cap, NAME, 'tvName', {}),
     clearPairingCode: () => np.call(cap, NAME, 'clearPairingCode', {}),

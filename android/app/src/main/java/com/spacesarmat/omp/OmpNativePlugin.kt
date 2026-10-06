@@ -98,7 +98,7 @@ import org.json.JSONObject
  * callbacks arrive on OkHttp threads. Events: tvMessage { json }, tvClosed { reason },
  * apkProgress { percent }, magnetReceived { link }, playerMessage { body }, monitorOpen { url }, monitorDone { summary? },
  * localServerState { running, error? }, localServerDownload { percent? , phase: download|verify }, nativePlayerState { session, index, time, duration, paused, buffering,
- * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced? } (native player on Android TV);
+ * audio, subs }, nativePlayerClosed { session, index, time, duration, replaced?, external? } (native player on Android TV);
  * phone remote on Android TV ([TvRemote]): remoteLaunch { params }, remoteAttach { report, lang? }, remoteKey { name },
  * remoteText { text | delete | enter }, phonePaired { phone }, remoteSources { id, sources, rutracker, phone }.
  * Install assistant ([com.spacesarmat.omp.install]): installProgress { phase, item, percent?, version? }.
@@ -807,6 +807,8 @@ class OmpNativePlugin : Plugin() {
             ExternalPlayer.Result(false)
         }
         call.resolve(JSObject.fromJSONObject(r.toJson()))
+        // startActivityForResult saved the call in the bridge: release it, or one call leaks per use
+        call.release(bridge)
     }
 
     /** Writes [text] to cache/logs/[name] and opens the system share sheet for it (FileProvider, text/plain).

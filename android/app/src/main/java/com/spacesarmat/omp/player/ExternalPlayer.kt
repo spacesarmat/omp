@@ -54,11 +54,14 @@ object ExternalPlayer {
         return Intent.createChooser(view, chooserTitle)
     }
 
-    /** Reads "position", "duration" (Int or Long, ms) and "end_by"; nothing usable → returned = false. */
+    /**
+     * Reads "position", "duration" (Int or Long, ms) and "end_by" (MX Player, Just Player, mpv), with VLC's
+     * "extra_position" / "extra_duration" as fallbacks; nothing usable → returned = false.
+     */
     fun parseExtras(resultCode: Int, extras: Map<String, Any?>?): Result {
         if (extras == null) return Result(false)
-        val position = millis(extras["position"])
-        val duration = millis(extras["duration"])
+        val position = millis(extras["position"]) ?: millis(extras["extra_position"])
+        val duration = millis(extras["duration"]) ?: millis(extras["extra_duration"])
         val ended = extras["end_by"] == END_COMPLETED
         if (position == null && !ended) return Result(false)
         return Result(true, position, duration, ended)
@@ -67,12 +70,14 @@ object ExternalPlayer {
     fun parse(resultCode: Int, data: Intent?): Result {
         val b = data?.extras ?: return Result(false)
         val map = HashMap<String, Any?>()
-        for (k in listOf("position", "duration", "end_by")) {
+        for (k in KEYS) {
             @Suppress("DEPRECATION")
             if (b.containsKey(k)) map[k] = b.get(k)
         }
         return parseExtras(resultCode, map)
     }
+
+    private val KEYS = listOf("position", "duration", "end_by", "extra_position", "extra_duration")
 
     private fun millis(v: Any?): Long? = when (v) {
         is Int -> v.toLong()

@@ -32,6 +32,9 @@ import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navi
 import { displayTitle } from '../lib/torrentName';
 import { t } from '../i18n';
 import { tvGlyphs } from '../ui/tvText';
+import { platformKind } from '../platform/env';
+import { nativePlugin } from '../platform/androidNative';
+import { openInOtherPlayer } from '../player/externalPlayer';
 
 /** Inner margin of the actions row: a focused button keeps this much room to the row's edge. */
 const ACTION_PAD = 24;
@@ -55,7 +58,7 @@ export function headerNames(tor: Torrent, list: Torrent[]): { name: string; raw:
 }
 
 /** The action buttons the row's fallback focus can land on while the files load (all but Watch). */
-const AUTO_ACTIONS = ['TORRENT-ACTIONS', 'torrent-reset', 'torrent-rename', 'torrent-poster', 'torrent-delete', 'torrent-better'];
+const AUTO_ACTIONS = ['TORRENT-ACTIONS', 'torrent-external', 'torrent-reset', 'torrent-rename', 'torrent-poster', 'torrent-delete', 'torrent-better'];
 
 export function TorrentScreen({ hash }: { hash: string }) {
   const c = client.value!;
@@ -257,6 +260,20 @@ export function TorrentScreen({ hash }: { hash: string }) {
     ? t('torrent.continueFrom', { ep: targetLabel ? targetLabel + ' ' : '', time: formatDuration(targetPos) })
     : targetLabel ? t('torrent.watchEp', { ep: targetLabel }) : t('torrent.watch');
 
+  // Android TV: the same file at the same position in another installed player; the position it hands back is saved
+  const android = platformKind() === 'androidtv';
+  const playElsewhere = () => {
+    const item = queue[target];
+    const plugin = nativePlugin();
+    if (!item) return;
+    if (!plugin) {
+      toast(t('nativePlayer.unavailable'), 'error');
+      return;
+    }
+    const lp = getLocalProgress(hash, item.fileIndex!);
+    openInOtherPlayer(plugin, c, item, targetPos, lp ? lp.duration : 0).then(undefined, (e) => toast(errorMessage(e), 'error'));
+  };
+
   // the action buttons do not wrap: the row scrolls sideways so the focused button is whole, with a margin
   const showAction = (key: string) => {
     setArea(key === 'torrent-play' ? 'play' : 'actions');
@@ -286,6 +303,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
           <div class="torrent-actions" ref={actionsRef}>
             <FocusGroup focusKey="TORRENT-ACTIONS" className="row torrent-actions-row" preferredChildFocusKey="torrent-play">
               {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onFocused={() => showAction('torrent-play')} onPress={() => play(target, targetPos || undefined)} />}
+              {android && queue.length > 0 && <Button focusKey="torrent-external" label={t('torrent.external')} onFocused={() => showAction('torrent-external')} onPress={playElsewhere} />}
               {queue.length > 0 && <Button focusKey="torrent-playlist" label={t('playlist.title')} onFocused={() => showAction('torrent-playlist')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? tvGlyphs(torrentName(tor, list)) : '' })} />}
               {upgradable && <Button focusKey="torrent-better" label={t('torrent.better.find')} onFocused={() => showAction('torrent-better')} onPress={() => setBetterOpen(true)} />}
               <Button focusKey="torrent-reset" label={t('torrent.resetViewed')} onFocused={() => showAction('torrent-reset')} onPress={resetViewed} />

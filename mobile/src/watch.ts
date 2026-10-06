@@ -151,6 +151,19 @@ export interface PhoneWatch {
  * Older apps without openPlayer: the plain chooser as before. Rejects when no player could be opened.
  */
 export async function watchOnPhone(c: TorrServerClient, t: Pick<Torrent, 'hash'>, w: PhoneWatch): Promise<void> {
+  // a second tap while the chooser / player is open does nothing: the native side keeps only one pending call
+  if (phoneWatchBusy) return;
+  phoneWatchBusy = true;
+  try {
+    await watchOnPhoneOnce(c, t, w);
+  } finally {
+    phoneWatchBusy = false;
+  }
+}
+
+let phoneWatchBusy = false;
+
+async function watchOnPhoneOnce(c: TorrServerClient, t: Pick<Torrent, 'hash'>, w: PhoneWatch): Promise<void> {
   const url = streamUrlFor(c, t, w.file);
   const at = w.at >= MIN_RESUME ? Math.floor(w.at) : 0;
   const r = await actions.openPlayer({ url, title: w.title, positionMs: at * 1000, mime: 'video/*' });

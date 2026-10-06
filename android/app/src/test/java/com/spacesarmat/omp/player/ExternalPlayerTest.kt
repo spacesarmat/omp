@@ -46,6 +46,19 @@ class ExternalPlayerTest {
     }
 
     @Test
+    fun vlcExtraKeysAreTheFallback() {
+        val v = ExternalPlayer.parseExtras(-1, mapOf("extra_position" to 61_000L, "extra_duration" to 2_400_000L))
+        assertTrue(v.returned)
+        assertEquals(61_000L, v.positionMs)
+        assertEquals(2_400_000L, v.durationMs)
+        // the MX keys win when both are there
+        val both = ExternalPlayer.parseExtras(-1, mapOf("position" to 5_000, "extra_position" to 9_000L, "extra_duration" to 100_000L))
+        assertEquals(5_000L, both.positionMs)
+        assertEquals(100_000L, both.durationMs)
+        assertFalse(ExternalPlayer.parseExtras(-1, mapOf("extra_position" to -1L)).returned)
+    }
+
+    @Test
     fun playbackCompletionMeansEnded() {
         val r = ExternalPlayer.parseExtras(-1, mapOf("end_by" to "playback_completion", "duration" to 2_400_000))
         assertTrue(r.returned)

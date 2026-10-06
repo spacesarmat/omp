@@ -215,6 +215,41 @@ describe('NativeSession', () => {
     expect(rec.mock.calls.slice(1).map((x) => [x[1].f, x[1].t, x[1].d])).toEqual([[1, 159, 1000], [2, 3, 900], [2, 400, 900]]);
   });
 
+  it('closed from the menu row «Открыть в другом плеере»: the chooser opens there and its position is saved', async () => {
+    const f = fakePlugin();
+    const { c, setViewed } = fakeClient();
+    let finish: (v: unknown) => void = () => undefined;
+    const openPlayer = vi.fn((_o: any) => new Promise((r) => { finish = r; }));
+    (f.plugin as any).openPlayer = openPlayer;
+    const closed = vi.fn();
+    const s = track(new NativeSession(f.plugin, c, queue, { onClosed: closed }));
+    await s.start(opts);
+    f.emit('nativePlayerState', state({ index: 1, time: 300, duration: 2400 }));
+    f.emit('nativePlayerClosed', { index: 1, time: 320.4, duration: 2400, external: true });
+    expect(closed).toHaveBeenCalledWith({ index: 1, time: 320.4, duration: 2400 }, false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(openPlayer).toHaveBeenCalledTimes(1);
+    expect(openPlayer.mock.calls[0][0]).toEqual({
+      url: 'http://u:p@h:1/stream/e2.mkv?link=' + H1 + '&index=2&play', title: 'Show · S01E02', positionMs: 320_000, mime: 'video/*',
+    });
+    setViewed.mockClear();
+    finish({ returned: true, positionMs: 1_500_000, durationMs: 2_400_000, ended: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getLocalProgress(H1, 2)!.time).toBe(1500);
+    expect(setViewed).toHaveBeenCalledWith(H1, 2, 1500);
+  });
+
+  it('a plain close does not open another player', async () => {
+    const f = fakePlugin();
+    const openPlayer = vi.fn(() => Promise.resolve({ returned: false }));
+    (f.plugin as any).openPlayer = openPlayer;
+    const s = track(new NativeSession(f.plugin, null, queue, {}));
+    await s.start(opts);
+    f.emit('nativePlayerClosed', { index: 0, time: 320, duration: 1000 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(openPlayer).not.toHaveBeenCalled();
+  });
+
   it('closed: final save, listeners removed, hook called; later events ignored', async () => {
     const f = fakePlugin();
     const { c, setViewed } = fakeClient();

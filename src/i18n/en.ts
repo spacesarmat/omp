@@ -1409,6 +1409,7 @@ export const en: EnDict<typeof ru> = {
     continueFrom: 'Resume {ep}from {time}',
     watch: 'Watch',
     watchEp: 'Watch {ep}',
+    external: 'In another player',
     peers: 'peers {a}/{b}',
     resetViewed: 'Reset progress',
     skip: 'Skip',
