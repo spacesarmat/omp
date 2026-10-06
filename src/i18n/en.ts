@@ -1379,6 +1379,8 @@ export const en: EnDict<typeof ru> = {
     badLink: 'Paste a magnet link or a 40-character hash',
     magnetLabel: 'Magnet link or hash',
     byMagnet: 'Add by magnet link',
+    openSourceSettings: 'Open {name} settings',
+    fixHint: 'Sign in on the site or turn on the check bypass — both are on its page.',
     sourcesAll: 'All sources · {n}',
     sourcesSome: 'Sources · {n}',
     magnetHint: 'Magnet links from the browser open in OMP on their own — via “Share”.',
