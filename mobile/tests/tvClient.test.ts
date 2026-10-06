@@ -405,7 +405,7 @@ describe('tvClient commands', () => {
     await p;
     // the launch marked this address as handed over: the same one read again is not re-sent
     const reattach = vi.fn(() => Promise.resolve());
-    initPhoneRpc({ lgConnected: () => true, reattach });
+    initPhoneRpc({ connectedLg: () => TV.ip, reattach });
     rpcInfo.value = { ...info };
     await flush();
     expect(reattach).not.toHaveBeenCalled();

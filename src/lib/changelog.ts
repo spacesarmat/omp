@@ -31,15 +31,28 @@ export function parseChangelog(text: string): ChangelogEntry[] {
   return res;
 }
 
-/** Where the app runs: a bullet marked «- [tv] …» shows on the TV only, «- [phone] …» on the phone only. */
-export type ChangelogPlatform = 'tv' | 'phone';
+/**
+ * A bullet's marker: «- [tv] …» shows on both TVs, «- [lg] …» on LG webOS only, «- [atv] …» on Android TV only,
+ * «- [phone] …» on the phone only; an unmarked bullet shows everywhere.
+ */
+export type ChangelogMark = 'tv' | 'lg' | 'atv' | 'phone';
 
-const PLATFORM_MARK = /^\[(tv|phone)\]\s*/i;
+/** Where «Что нового» runs: the LG TV (webOS), Android TV or the phone. */
+export type ChangelogPlatform = 'lg' | 'atv' | 'phone';
 
-/** The platform a bullet is marked for; '' for an unmarked one (both). */
-export function itemPlatform(item: string): '' | ChangelogPlatform {
+const PLATFORM_MARK = /^\[(tv|lg|atv|phone)\]\s*/i;
+
+/** The marker of a bullet; '' for an unmarked one (every platform). */
+export function itemPlatform(item: string): '' | ChangelogMark {
   const m = PLATFORM_MARK.exec(item);
-  return m ? (m[1].toLowerCase() as ChangelogPlatform) : '';
+  return m ? (m[1].toLowerCase() as ChangelogMark) : '';
+}
+
+/** Whether a bullet with this marker shows on the platform: unmarked everywhere, «[tv]» on both TVs. */
+export function markShownOn(mark: '' | ChangelogMark, platform: ChangelogPlatform): boolean {
+  if (!mark) return true;
+  if (mark === 'tv') return platform !== 'phone';
+  return mark === platform;
 }
 
 /** The bullet without its platform marker. */
@@ -48,16 +61,13 @@ export function stripPlatform(item: string): string {
 }
 
 /**
- * The entries as one platform shows them: the unmarked bullets and its own, without the markers; a version left with
- * nothing is dropped.
+ * The entries as one platform shows them: the unmarked bullets and those marked for it, without the markers; a
+ * version left with nothing is dropped.
  */
 export function forPlatform(list: ChangelogEntry[], platform: ChangelogPlatform): ChangelogEntry[] {
   const out: ChangelogEntry[] = [];
   list.forEach((e) => {
-    const items = e.items.filter((i) => {
-      const p = itemPlatform(i);
-      return !p || p === platform;
-    }).map(stripPlatform);
+    const items = e.items.filter((i) => markShownOn(itemPlatform(i), platform)).map(stripPlatform);
     if (items.length) out.push({ version: e.version, items: items });
   });
   return out;

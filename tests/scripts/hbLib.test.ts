@@ -11,22 +11,41 @@ describe('hb-lib', () => {
     expect(changelogNotes(MD, '0.4.0')).toEqual([]);
     expect(changelogNotes(MD.replace(/\n/g, '\r\n'), '0.6.0')).toHaveLength(2);
   });
-  it('release notes list every bullet without the «[phone]» / «[tv]» markers', () => {
-    expect(changelogNotes('## 0.7.0\n- [phone] Календарь\n- [tv] Пульт\n- Общее\n', '0.7.0')).toEqual(['Календарь', 'Пульт', 'Общее']);
+  it('release notes list every bullet without the «[phone]» / «[tv]» / «[lg]» / «[atv]» markers', () => {
+    expect(changelogNotes('## 0.7.0\n- [phone] Календарь\n- [tv] Пульт\n- [lg] Поиск\n- [atv] Кнопки\n- Общее\n', '0.7.0')).toEqual(['Календарь', 'Пульт', 'Поиск', 'Кнопки', 'Общее']);
   });
   it('feed notes per platform; `notes` for older apps is the TV list, never phone-only, never a marker', () => {
     const md = '## 0.8.0\n- [phone] Календарь\n- [tv] Пульт\n- Общее\n\n## 0.7.0\n- [phone] Только телефон\n';
-    expect(changelogNotes(md, '0.8.0', 'tv')).toEqual(['Пульт', 'Общее']);
+    expect(changelogNotes(md, '0.8.0', 'lg')).toEqual(['Пульт', 'Общее']);
     expect(changelogNotes(md, '0.8.0', 'phone')).toEqual(['Календарь', 'Общее']);
-    expect(feedNotes(md, '0.8.0')).toEqual({ notes: ['Пульт', 'Общее'], notesTv: ['Пульт', 'Общее'], notesPhone: ['Календарь', 'Общее'] });
-    expect(feedNotes(md, '0.7.0')).toEqual({ notes: [FIXES_NOTE], notesTv: [], notesPhone: ['Только телефон'] });
-    const f = feedNotes(md, '0.8.0');
+    expect(feedNotes(md, '0.8.0', 'lg')).toEqual({ notes: ['Пульт', 'Общее'], notesTv: ['Пульт', 'Общее'], notesPhone: ['Календарь', 'Общее'] });
+    expect(feedNotes(md, '0.7.0', 'lg')).toEqual({ notes: [FIXES_NOTE], notesTv: [], notesPhone: ['Только телефон'] });
+    const f = feedNotes(md, '0.8.0', 'lg');
     const { update } = buildHomebrew({ tag: 'v0.8.0', version: '0.8.0', ipkName: 'a.ipk', sha256: 'a'.repeat(64), size: 1, title: 'OMP', description: 'd', ...f });
     expect(update).toMatchObject(f);
     const android = buildAndroidUpdate({ tag: 'v0.8.0', version: '0.8.0', apkName: 'OMP-0.8.0.apk', sha256: 'b'.repeat(64), size: 1, ...f });
     expect(android).toMatchObject(f);
     expect(JSON.stringify([update, android])).not.toMatch(/\[(tv|phone)\]/);
   });
+  it('the LG feed lists the LG bullets as its TV notes, the Android feed the Android TV ones', () => {
+    const md = '## 0.9.0\n- Общее\n- [tv] Оба ТВ\n- [lg] Поиск через телефон\n- [atv] Только Android TV\n- [phone] Телефон\n\n## 0.8.9\n- [lg] Только LG\n';
+    const lg = feedNotes(md, '0.9.0', 'lg');
+    const atv = feedNotes(md, '0.9.0', 'atv');
+    expect(lg.notesTv).toEqual(['Общее', 'Оба ТВ', 'Поиск через телефон']);
+    expect(atv.notesTv).toEqual(['Общее', 'Оба ТВ', 'Только Android TV']);
+    expect(lg.notesPhone).toEqual(['Общее', 'Телефон']);
+    expect(atv.notesPhone).toEqual(['Общее', 'Телефон']);
+    // older apps read `notes`: each feed's own TV list, never another platform's bullet
+    expect(lg.notes).toEqual(lg.notesTv);
+    expect(atv.notes).toEqual(atv.notesTv);
+    expect(feedNotes(md, '0.8.9', 'atv')).toEqual({ notes: [FIXES_NOTE], notesTv: [], notesPhone: [] });
+    expect(feedNotes(md, '0.8.9', 'lg').notesTv).toEqual(['Только LG']);
+    const { update } = buildHomebrew({ tag: 'v0.9.0', version: '0.9.0', ipkName: 'a.ipk', sha256: 'a'.repeat(64), size: 1, title: 'OMP', description: 'd', ...lg });
+    const android = buildAndroidUpdate({ tag: 'v0.9.0', version: '0.9.0', apkName: 'OMP-0.9.0.apk', sha256: 'b'.repeat(64), size: 1, ...atv });
+    expect(JSON.stringify([update, android])).not.toMatch(/\[(tv|lg|atv|phone)\]/i);
+    expect(sanitizeUpdateInfo(android)!.notesTv).toEqual(['Общее', 'Оба ТВ', 'Только Android TV']);
+  });
+
   it('builds manifest, repository and update feed', () => {
     const sha = 'e'.repeat(64);
     const r = buildHomebrew({

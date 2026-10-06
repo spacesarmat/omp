@@ -18,7 +18,21 @@ describe('platform markers', () => {
       { version: '0.3.0', items: ['Календарь', 'Общее'] },
       { version: '0.2.0', items: ['Только телефон'] },
     ]);
-    expect(forPlatform(list, 'tv')).toEqual([{ version: '0.3.0', items: ['Общее', 'Пульт на ТВ', 'Ещё для ТВ'] }]);
+    expect(forPlatform(list, 'lg')).toEqual([{ version: '0.3.0', items: ['Общее', 'Пульт на ТВ', 'Ещё для ТВ'] }]);
+    expect(forPlatform(list, 'atv')).toEqual([{ version: '0.3.0', items: ['Общее', 'Пульт на ТВ', 'Ещё для ТВ'] }]);
+  });
+
+  it('«[lg]» shows on the LG only, «[atv]» on Android TV only, «[tv]» on both TVs; the phone gets none of them', () => {
+    const list = parseChangelog('## 0.4.0\n- Общее\n- [tv] Оба ТВ\n- [lg] Поиск через телефон\n- [ATV] Только Android TV\n- [phone] Телефон\n\n## 0.3.9\n- [lg] Только LG\n');
+    expect(itemPlatform(list[0].items[2])).toBe('lg');
+    expect(itemPlatform(list[0].items[3])).toBe('atv');
+    expect(stripPlatform('[atv] Пульт')).toBe('Пульт');
+    expect(forPlatform(list, 'lg')).toEqual([
+      { version: '0.4.0', items: ['Общее', 'Оба ТВ', 'Поиск через телефон'] },
+      { version: '0.3.9', items: ['Только LG'] },
+    ]);
+    expect(forPlatform(list, 'atv')).toEqual([{ version: '0.4.0', items: ['Общее', 'Оба ТВ', 'Только Android TV'] }]);
+    expect(forPlatform(list, 'phone')).toEqual([{ version: '0.4.0', items: ['Общее', 'Телефон'] }]);
   });
 });
 

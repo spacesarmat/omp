@@ -574,8 +574,9 @@ export async function launchOnTv(params: object): Promise<void> {
   }
   const phone = phoneParam();
   try {
+    const tv = session ? session.tv.ip : null;
     await request('ssap://system.launcher/launch', launchOmpPayload(phone ? { ...params, phone } : params));
-    markPhoneSent(phone);
+    if (tv) markPhoneSent(tv, phone);
   } catch (e) {
     if (!(e instanceof TvAnswerError)) throw e;
     throw new Error(/no such app|not found|not exist|404|-101/i.test(e.raw) ? tvNoOmp() : tvLaunchFailed());

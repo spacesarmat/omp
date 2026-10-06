@@ -66,6 +66,16 @@ describe('update notes per platform', () => {
     expect(updateNotes(info, 'phone')).toEqual(['Календарь', 'Общее']);
     expect(updateNotes(sanitizeUpdateInfo({ ...good, notes: [] })!, 'tv')).toEqual([]);
   });
+
+  it('a stray «[lg]» / «[atv]» marker: the bullet shows on its own TV only, and never with the marker', () => {
+    const info = sanitizeUpdateInfo({ ...good, notes: ['[lg] Поиск', '[atv] Кнопки', '[tv] Пульт', '[phone] Календарь', 'Общее'] })!;
+    expect(updateNotes(info, 'lg')).toEqual(['Поиск', 'Пульт', 'Общее']);
+    expect(updateNotes(info, 'atv')).toEqual(['Кнопки', 'Пульт', 'Общее']);
+    expect(updateNotes(info, 'phone')).toEqual(['Календарь', 'Общее']);
+    const fresh = sanitizeUpdateInfo({ ...good, notes: ['x'], notesTv: ['Пульт'], notesPhone: [] })!;
+    expect(updateNotes(fresh, 'atv')).toEqual(['Пульт']);
+    expect(updateNotes(fresh, 'lg')).toEqual(['Пульт']);
+  });
 });
 
 describe('beta feeds and titles', () => {

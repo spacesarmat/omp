@@ -15,8 +15,10 @@ const buf = readFileSync(ipk);
 const sha256 = createHash('sha256').update(buf).digest('hex');
 const md = readFileSync('CHANGELOG.md', 'utf8');
 const all = changelogNotes(md, version);
-// per platform for the apps that read notesTv / notesPhone; `notes` (older apps) never has a phone-only bullet
-const { notes, notesTv, notesPhone } = feedNotes(md, version);
+// per platform for the apps that read notesTv / notesPhone; `notes` (older apps) never has a phone-only bullet.
+// update.json is read by LG TVs only, update-android.json by the phone and Android TV: each feed's TV list is its own
+const lgNotes = feedNotes(md, version, 'lg');
+const androidNotes = feedNotes(md, version, 'atv');
 if (!all.length) throw new Error(`CHANGELOG.md has no notes for ${version}`);
 
 const { manifest, apps, update } = buildHomebrew({
@@ -27,9 +29,7 @@ const { manifest, apps, update } = buildHomebrew({
   size: buf.length,
   title: 'OMP',
   description: 'Open Movie Player — media player for your own TorrServer',
-  notes,
-  notesTv,
-  notesPhone,
+  ...lgNotes,
 });
 
 const fullDescription = 'docs/homebrew/full_description.html';
@@ -56,9 +56,7 @@ if (apkSet) {
     apkName: basename(apk),
     sha256: createHash('sha256').update(apkBuf).digest('hex'),
     size: apkBuf.length,
-    notes,
-    notesTv,
-    notesPhone,
+    ...androidNotes,
     abis,
   });
   writeFileSync('build/hb/update-android.json', JSON.stringify(androidUpdate, null, 2));

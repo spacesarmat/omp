@@ -14,7 +14,8 @@ describe('the automatic «What\'s new» notice follows a language change', () =>
     localStorage.clear();
     localStorage.setItem('tsp.x', '1');
     setChangelogPlatform('phone');
-    checkWhatsNew(getChangelog(), APP_VERSION);
+    // 0.17.0: the 0.18.0 betas have no bullet for the phone (TV screens and the LG's search through the phone)
+    checkWhatsNew(getChangelog(), '0.17.0');
     expect(whatsNew.value).not.toBeNull();
     expect(whatsNew.value!.title).toMatch(/Что нового/);
     applyLanguageSetting('en');
@@ -29,9 +30,23 @@ describe('the automatic «What\'s new» notice follows a language change', () =>
     checkWhatsNew(getChangelog(), APP_VERSION);
     applyLanguageSetting('en');
     const items = (whatsNew.value ? whatsNew.value.entries : []).map((e) => e.items.join('\n')).join('\n');
-    expect(items).not.toMatch(/\[(tv|phone)\]/);
+    expect(items).not.toMatch(/\[(tv|lg|atv|phone)\]/i);
     expect(items).not.toContain('Calendar');
     expect(items).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('on Android TV the rebuilt entries keep its own bullets: none of the LG-only search through the phone', () => {
+    localStorage.clear();
+    localStorage.setItem('tsp.x', '1');
+    setChangelogPlatform('atv');
+    checkWhatsNew(getChangelog(), APP_VERSION);
+    applyLanguageSetting('en');
+    const items = (whatsNew.value ? whatsNew.value.entries : []).map((e) => e.items.join('\n')).join('\n');
+    expect(items).not.toMatch(/\[(tv|lg|atv|phone)\]/i);
+    expect(items).not.toContain('The LG TV searches torrent sites');
+    expect(items).not.toContain('Search sources');
+    expect(items).not.toMatch(/[А-Яа-яЁё]/);
+    setChangelogPlatform('tv');
   });
 
   it('the English changelog has no Cyrillic in any bullet', () => {
