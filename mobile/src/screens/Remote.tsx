@@ -97,6 +97,15 @@ const NEXT = 'M6 6l9 6-9 6zM18 6v12';
 const FF10 = 'M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4';
 const TUNE = 'M4 7h9M17 7h3M4 17h3M11 17h9M15 4v6M9 14v6';
 const KEYBOARD = 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10';
+const MUTE = 'M11 5L6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6';
+
+/** The four colour keys of the TV remote, left to right (webOS pointer-socket button names). */
+const COLOR_KEYS: ReadonlyArray<readonly ['RED' | 'GREEN' | 'YELLOW' | 'BLUE', () => string]> = [
+  ['RED', () => t('remote.red')],
+  ['GREEN', () => t('remote.green')],
+  ['YELLOW', () => t('remote.yellow')],
+  ['BLUE', () => t('remote.blue')],
+];
 
 /** The TV's name without the maker prefixes LG puts first: «[LG] webOS TV OLED55C9PLA» → «OLED55C9PLA». */
 export function shortTvName(name: string): string {
@@ -515,6 +524,14 @@ export function Remote() {
       <Icon d={d} size={22} />
     </button>
   );
+  const roundKey = (label: string, d: string, onClick: () => void) => (
+    <div class="m-rkey">
+      <button type="button" class="m-rkey-btn" aria-label={label} onClick={onClick}>
+        <Icon d={d} size={24} />
+      </button>
+      <span class="m-rkey-cap" aria-hidden="true">{label}</span>
+    </div>
+  );
   const shownState = tvWaking.value && state !== 'connected' && state !== 'pairing' ? stateText('connecting') : stateText(state);
   const backKey = (
     <button type="button" class="m-key" aria-label={t('common.back')} onClick={() => press('BACK')}>
@@ -581,33 +598,57 @@ export function Remote() {
       </div>
       {mode === 'buttons' ? (
         <div class="m-rb">
-          <div class="m-stage m-rb-top">
-            <div class="m-side">
-              <button type="button" class="m-side-btn" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
-                <Icon d={KEYBOARD} size={24} />
-                <span class="m-side-cap">{t('remote.kbdShort')}</span>
-              </button>
-              <button type="button" class="m-side-btn" aria-label={t('common.back')} onClick={() => press('BACK')}>
-                <Icon d={BACK} size={24} />
-                <span class="m-side-cap">{t('common.back')}</span>
-              </button>
-            </div>
+          <div class="m-stage m-rb-pad">
             <DPad press={press} />
-            <div class="m-side">
-              <button type="button" class="m-side-btn" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
-                <span class="m-side-sign">+</span>
+          </div>
+          <div class="m-rb-colors">
+            {COLOR_KEYS.map(([name, label]) => (
+              <button key={name} type="button" class={'m-ckey m-ckey-' + name.toLowerCase()} aria-label={label()} onClick={() => press(name)} />
+            ))}
+          </div>
+          <div class="m-rb-round">
+            {roundKey(t('common.back'), BACK, () => press('BACK'))}
+            {roundKey(t('remote.home'), HOME, () => press('HOME'))}
+            {roundKey(t('remote.menu'), MENU, () => press('MENU'))}
+          </div>
+          <div class="m-rb-bottom">
+            <div class="m-rocker">
+              <button type="button" class="m-rocker-btn" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
+                <span class="m-rocker-sign">+</span>
               </button>
-              <span class="m-side-cap">{t('remote.volShort')}</span>
-              <button type="button" class="m-side-btn" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
-                <span class="m-side-sign">−</span>
+              <span class="m-rocker-cap">{t('remote.volShort')}</span>
+              <button type="button" class="m-rocker-btn" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
+                <span class="m-rocker-sign">−</span>
+              </button>
+            </div>
+            <div class="m-rb-play">
+              <button
+                type="button"
+                class="m-rb-playbtn"
+                aria-label={playing ? t('remote.mini.pause') : t('remote.playBtn')}
+                onClick={togglePlay}
+              >
+                <Icon d={playing ? PAUSE : PLAY} size={26} />
+              </button>
+              <div class="m-rb-seek">
+                <button type="button" class="m-rb-seekbtn" aria-label={t('remote.back10s')} onClick={() => press('REWIND')}>
+                  <Icon d={REW10} size={20} />
+                </button>
+                <button type="button" class="m-rb-seekbtn" aria-label={t('remote.fwd10s')} onClick={() => press('FASTFORWARD')}>
+                  <Icon d={FF10} size={20} />
+                </button>
+              </div>
+            </div>
+            <div class="m-rocker">
+              <button type="button" class="m-rocker-btn" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
+                <Icon d={KEYBOARD} size={24} />
+              </button>
+              <span class="m-rocker-cap">{t('remote.kbdShort')}</span>
+              <button type="button" class="m-rocker-btn" aria-label={t('remote.mute')} onClick={() => press('MUTE')}>
+                <Icon d={MUTE} size={24} />
               </button>
             </div>
           </div>
-          <div class="m-rb-row m-rb-two">
-            {homeKey}
-            {menuKey}
-          </div>
-          {mediaRow}
         </div>
       ) : (
         <div class="m-rt">

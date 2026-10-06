@@ -14,7 +14,12 @@ export type RemoteButton =
   | 'REWIND'
   | 'FASTFORWARD'
   | 'CHANNELUP'
-  | 'CHANNELDOWN';
+  | 'CHANNELDOWN'
+  | 'RED'
+  | 'GREEN'
+  | 'YELLOW'
+  | 'BLUE'
+  | 'MUTE';
 
 export const OMP_TV_APP_ID = 'com.spacesarmat.torrplayer';
 
