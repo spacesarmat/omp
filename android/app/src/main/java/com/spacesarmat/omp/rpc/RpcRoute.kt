@@ -10,12 +10,16 @@ import org.json.JSONObject
 
 /**
  * The only route of the phone RPC server: `POST /omp/<token>/rpc` with `{"method","params"}` from a LAN client.
- * A wrong path, a wrong token or a non-LAN client gets 404 `{}` before the body is read; every handled call is
+ * A wrong path, a wrong token, a non-LAN client or a connection that arrived on an interface other than the phone's
+ * Wi-Fi / Ethernet / hotspot ([arrivedOnLan], so CGNAT 10/8 peers on mobile data are refused) gets 404 `{}` before the
+ * body is read; every handled call is
  * HTTP 200 with `{"ok":true,"result":…}` or `{"ok":false,"error":{"code","message"?}}`.
  */
 class RpcRoute(
     private val token: () -> String,
     private val dispatcher: () -> RpcDispatcher?,
+    /** The phone's own address the request arrived on is a LAN interface address (see [LanAddress.arrivedOn]). */
+    private val arrivedOnLan: (InetAddress?) -> Boolean,
     private val allowed: (InetAddress?) -> Boolean = LanAddress::allowed,
 ) {
     companion object {
@@ -32,6 +36,7 @@ class RpcRoute(
 
     fun precheck(head: ControlHead): ControlResponse? = when {
         !allowed(head.remote) -> ControlResponse(404, NOT_FOUND)
+        !arrivedOnLan(head.local) -> ControlResponse(404, NOT_FOUND)
         !pathMatches(head.path) -> ControlResponse(404, NOT_FOUND)
         head.method != "POST" -> ControlResponse(405, failure("bad_request"))
         head.length > ControlServer.MAX_BODY -> ControlResponse(413, failure("bad_request"))
@@ -40,7 +45,7 @@ class RpcRoute(
 
     fun route(req: ControlRequest): ControlResponse {
         val length = req.body.toByteArray(Charsets.UTF_8).size.toLong()
-        precheck(ControlHead(req.method, req.path, req.token, req.contentType, length, req.remote))?.let { return it }
+        precheck(ControlHead(req.method, req.path, req.token, req.contentType, length, req.remote, req.local))?.let { return it }
         val o = try {
             JSONObject(req.body)
         } catch (_: Exception) {

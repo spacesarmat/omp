@@ -61,6 +61,17 @@ export interface LocalServerInfo {
   error?: string;
 }
 
+/** The phone's TV search server (PhoneRpcService): the address the TV calls. Never logged (the token is a credential). */
+export interface RpcInfo {
+  running: boolean;
+  /** Wi-Fi IPv4 of the phone; null without Wi-Fi. */
+  ip: string | null;
+  port: number;
+  token: string;
+  /** Phone model, e.g. «Samsung SM-G998B». */
+  name: string;
+}
+
 export interface LocalServerState {
   running: boolean;
   error?: string;
@@ -136,6 +147,10 @@ export interface OmpNativeApi {
   clearLocalServerCache(): Promise<void>;
   /** Wi-Fi IPv4 of the phone; null without Wi-Fi or off-device. */
   localIpv4(): Promise<string | null>;
+  /** TV search on (foreground service) or off (stops it and revokes the token); null off-device or when off. */
+  rpcSetEnabled(on: boolean): Promise<RpcInfo | null>;
+  /** The TV search address; null off-device or when off. */
+  rpcInfo(): Promise<RpcInfo | null>;
   onLocalServerState(cb: (state: LocalServerState) => void): () => void;
   /** Search sources: HTTP without CORS, browser User-Agent, cookies per site, body decoded by charset. */
   http(req: NativeHttpRequest): Promise<HttpResponse>;
@@ -233,6 +248,8 @@ interface OmpNativePlugin {
   localServerCache(): Promise<{ usedBytes?: number }>;
   clearLocalServerCache(): Promise<{ usedBytes?: number }>;
   localIpv4(): Promise<{ ip?: string | null }>;
+  rpcSetEnabled(o: { on: boolean }): Promise<Partial<RpcInfo> & { enabled?: boolean }>;
+  rpcInfo(): Promise<Partial<RpcInfo> & { enabled?: boolean }>;
   http(o: NativeHttpRequest): Promise<Partial<HttpResponse>>;
   httpClearCookies(o: { url: string }): Promise<void>;
   secretGet(o: { key: string }): Promise<{ value?: string | null }>;
@@ -317,6 +334,18 @@ function parse(json: string): any {
 
 function text(v: unknown): string | undefined {
   return typeof v === 'string' && v !== '' ? v : undefined;
+}
+
+const RPC_TOKEN = /^[0-9a-f]{32}$/;
+
+/** null when the TV search is off or the answer is malformed. */
+function rpcInfo(r: (Partial<RpcInfo> & { enabled?: boolean }) | null | undefined): RpcInfo | null {
+  if (!r || r.enabled !== true) return null;
+  const port = r.port;
+  if (typeof port !== 'number' || !Number.isInteger(port) || port <= 0 || port > 65535) return null;
+  if (typeof r.token !== 'string' || !RPC_TOKEN.test(r.token)) return null;
+  const ip = typeof r.ip === 'string' && IPV4.test(r.ip) ? r.ip : null;
+  return { running: r.running === true, ip, port, token: r.token, name: text(r.name)?.slice(0, 60) ?? phoneFallback() };
 }
 
 function serverInfo(r: Partial<LocalServerInfo> | null | undefined): LocalServerInfo {
@@ -576,6 +605,16 @@ export const native: OmpNativeApi = {
     if (!plugin) return null;
     const r = await plugin.localIpv4();
     return text(r.ip) ?? null;
+  },
+
+  async rpcSetEnabled(on) {
+    if (!plugin) return null;
+    return rpcInfo(await logged('rpcSetEnabled', plugin.rpcSetEnabled({ on })));
+  },
+
+  async rpcInfo() {
+    if (!plugin) return null;
+    return rpcInfo(await plugin.rpcInfo());
   },
 
   onLocalServerState(cb) {

@@ -1,13 +1,17 @@
 package com.spacesarmat.omp.rpc
 
+import com.spacesarmat.omp.control.ControlHead
 import com.spacesarmat.omp.control.ControlResponse
 import com.spacesarmat.omp.control.ControlServer
 import java.net.InetAddress
 import java.net.Socket
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,7 +27,11 @@ class RpcRouteTest {
     private lateinit var dispatcher: RpcDispatcher
     private var server: ControlServer? = null
 
-    private fun start(allowed: (InetAddress?) -> Boolean = { true }, page: Boolean = true): ControlServer {
+    private fun start(
+        allowed: (InetAddress?) -> Boolean = { true },
+        page: Boolean = true,
+        arrivedOnLan: (InetAddress?) -> Boolean = { true },
+    ): ControlServer {
         dispatcher = RpcDispatcher({ msg ->
             if (page) {
                 val o = JSONObject(msg)
@@ -32,8 +40,8 @@ class RpcRouteTest {
             }
             page
         }, waitMs = 300)
-        val route = RpcRoute({ token }, { dispatcher }, allowed)
-        val s = ControlServer(0, route::precheck, cors = route::cors) { handled++; route.route(it) }
+        val route = RpcRoute({ token }, { dispatcher }, arrivedOnLan, allowed)
+        val s = ControlServer(0, route::precheck, cors = route::cors, workers = RpcDispatcher.MAX_WAITING) { handled++; route.route(it) }
         s.start()
         server = s
         return s
@@ -86,6 +94,63 @@ class RpcRouteTest {
         start(allowed = LanAddress::allowed)
         assertTrue(post(goodPath, body).startsWith("HTTP/1.1 404"))
         assertEquals(0, handled)
+    }
+
+    @Test
+    fun connectionNotOnTheLanInterfaceIsRefused() {
+        var seen: InetAddress? = null
+        start(arrivedOnLan = { seen = it; false })
+        val r = post(goodPath, body)
+        assertTrue(r, r.startsWith("HTTP/1.1 404"))
+        assertEquals("{}", r.substringAfter("\r\n\r\n"))
+        assertEquals(0, handled)
+        // the server hands the route the phone's own address the connection arrived on
+        assertEquals(InetAddress.getByName("127.0.0.1"), seen)
+    }
+
+    @Test
+    fun cgnatPeerOnMobileDataIsRefused() {
+        // 10/8 passes the client check, but the connection arrived on the mobile interface (rmnet), not on Wi-Fi
+        val wifi = listOf(InetAddress.getByName("192.168.1.20"))
+        val route = RpcRoute({ token }, { null }, { LanAddress.arrivedOn(it, wifi) })
+        val path = goodPath
+        val mobile = ControlHead("POST", path, null, "text/plain", 10, InetAddress.getByName("10.64.3.9"), InetAddress.getByName("10.200.0.5"))
+        assertEquals(404, route.precheck(mobile)!!.status)
+        val lan = ControlHead("POST", path, null, "text/plain", 10, InetAddress.getByName("10.64.3.9"), InetAddress.getByName("192.168.1.20"))
+        assertNull(route.precheck(lan))
+        val noLocal = ControlHead("POST", path, null, "text/plain", 10, InetAddress.getByName("192.168.1.7"), null)
+        assertEquals(404, route.precheck(noLocal)!!.status)
+    }
+
+    @Test
+    fun eightCallsWaitAtOnce() {
+        val inside = CountDownLatch(RpcDispatcher.MAX_WAITING)
+        val release = CountDownLatch(1)
+        val s = ControlServer(0, workers = RpcDispatcher.MAX_WAITING) {
+            inside.countDown()
+            release.await(5, TimeUnit.SECONDS)
+            ControlResponse(200, "{}")
+        }
+        s.start()
+        val clients = (1..RpcDispatcher.MAX_WAITING).map {
+            Thread {
+                try {
+                    Socket("127.0.0.1", s.localPort).use { sock ->
+                        sock.soTimeout = 6_000
+                        sock.getOutputStream().write("POST /x HTTP/1.1\r\nContent-Length: 0\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
+                        sock.getInputStream().readBytes()
+                    }
+                } catch (_: Exception) {
+                }
+            }.apply { start() }
+        }
+        try {
+            assertTrue("all calls run at once", inside.await(3, TimeUnit.SECONDS))
+        } finally {
+            release.countDown()
+            clients.forEach { it.join(6_000) }
+            s.stop()
+        }
     }
 
     @Test

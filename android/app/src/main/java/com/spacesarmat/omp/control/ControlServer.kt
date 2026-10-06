@@ -23,6 +23,8 @@ class ControlRequest(
     val contentType: String? = null,
     /** The client's address (LAN checks of the phone RPC server). */
     val remote: InetAddress? = null,
+    /** The phone's own address the connection arrived on (the phone RPC server refuses mobile-data interfaces). */
+    val local: InetAddress? = null,
 )
 
 /** The request line and headers, before the body is read ([ControlServer] precheck). */
@@ -33,6 +35,7 @@ class ControlHead(
     val contentType: String?,
     val length: Long,
     val remote: InetAddress? = null,
+    val local: InetAddress? = null,
 )
 
 /** The answer: HTTP status and a JSON body. */
@@ -41,7 +44,7 @@ class ControlResponse(val status: Int, val json: String)
 /**
  * Minimal HTTP/1.1 server of the phone remote on Android TV (`/omp/...`, see the spec «Управление с телефона»),
  * bound to all interfaces on [port]. One request per connection, body ≤ [MAX_BODY], read timeout, one accept
- * thread plus at most [WORKERS] connection threads (daemons). Routing and auth live in [handler].
+ * thread plus at most [workers] connection threads (daemons, [WORKERS] by default). Routing and auth live in [handler].
  */
 class ControlServer(
     private val port: Int,
@@ -49,6 +52,8 @@ class ControlServer(
     private val precheck: (ControlHead) -> ControlResponse? = { null },
     /** The Access-Control-Allow-Origin value for a request's Origin; null = no CORS grant. */
     private val cors: (origin: String?) -> String? = ::phoneCors,
+    /** Connection threads; the phone RPC server matches its dispatcher's limit of waiting calls. */
+    private val workers: Int = WORKERS,
     private val handler: (ControlRequest) -> ControlResponse,
 ) {
     private class Running(val socket: ServerSocket, val workers: ThreadPoolExecutor)
@@ -67,11 +72,11 @@ class ControlServer(
             closeQuietly(server)
             throw e
         }
-        val workers = ThreadPoolExecutor(
-            WORKERS, WORKERS, 30, TimeUnit.SECONDS, ArrayBlockingQueue(BACKLOG),
+        val pool = ThreadPoolExecutor(
+            workers, workers, 30, TimeUnit.SECONDS, ArrayBlockingQueue(BACKLOG),
         ) { r -> Thread(r, "omp-control-conn").apply { isDaemon = true } }
-        workers.allowCoreThreadTimeOut(true)
-        val run = Running(server, workers)
+        pool.allowCoreThreadTimeOut(true)
+        val run = Running(server, pool)
         running = run
         Thread({ acceptLoop(run) }, "omp-control-accept").apply {
             isDaemon = true
@@ -111,6 +116,7 @@ class ControlServer(
         try {
             client.soTimeout = READ_TIMEOUT_MS
             val remote: InetAddress? = client.inetAddress
+            val local: InetAddress? = client.localAddress
             val out = client.getOutputStream()
             // a slow sender (one byte per read timeout) is cut at the overall deadline
             val input = BufferedInputStream(DeadlineInput(client, System.nanoTime() + REQUEST_DEADLINE_MS * 1_000_000))
@@ -151,11 +157,11 @@ class ControlServer(
                 length < 0 -> respond(out, 400, error("bad_request"), origin)
                 else -> {
                     val early = try {
-                        precheck(ControlHead(method, path, token, contentType, length, remote))
+                        precheck(ControlHead(method, path, token, contentType, length, remote, local))
                     } catch (_: Exception) {
                         ControlResponse(500, error("internal"))
                     }
-                    if (early != null) respond(out, early.status, early.json, origin) else readAndHandle(out, input, method, path, token, contentType, length, origin, remote)
+                    if (early != null) respond(out, early.status, early.json, origin) else readAndHandle(out, input, method, path, token, contentType, length, origin, remote, local)
                 }
             }
         } catch (_: Exception) {
@@ -175,13 +181,14 @@ class ControlServer(
         length: Long,
         origin: String?,
         remote: InetAddress?,
+        local: InetAddress?,
     ) {
         when {
             length > MAX_BODY -> respond(out, 413, error("too_large"), origin)
             else -> {
                 val body = readBody(input, length.toInt()) ?: return
                 val res = try {
-                    handler(ControlRequest(method, path, token, String(body, Charsets.UTF_8), contentType, remote))
+                    handler(ControlRequest(method, path, token, String(body, Charsets.UTF_8), contentType, remote, local))
                 } catch (_: Exception) {
                     ControlResponse(500, error("internal"))
                 }
@@ -218,7 +225,7 @@ class ControlServer(
 
     companion object {
         const val MAX_BODY = 65_536L
-        private const val WORKERS = 4
+        const val WORKERS = 4
         private const val BACKLOG = 16
         private const val MAX_LINE = 8_192
         private const val MAX_HEADERS = 100

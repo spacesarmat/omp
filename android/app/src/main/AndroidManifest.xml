@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -79,6 +80,26 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Local TorrServer for streaming to TV" />
         </service>
+
+        <!-- TV search: the phone answers torrent searches of the LG TV (rpc/PhoneRpcService) -->
+        <service
+            android:name=".rpc.PhoneRpcService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Answers torrent searches from the user's TV on the local network" />
+        </service>
+
+        <!-- TV search: start the service again after a reboot or an update when it is on -->
+        <receiver
+            android:name=".rpc.RpcBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- monitoring: «Добавить» / «Заменить» buttons of the notifications (MonitorNotifier) -->
         <receiver

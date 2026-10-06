@@ -57,6 +57,9 @@ import com.spacesarmat.omp.monitor.MonitorScheduler
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayRequest
 import com.spacesarmat.omp.player.PlayerActivity
+import com.spacesarmat.omp.rpc.PhoneRpcService
+import com.spacesarmat.omp.rpc.RpcConfig
+import com.spacesarmat.omp.rpc.SharedRpcPrefs
 import com.spacesarmat.omp.sources.CheckTarget
 import com.spacesarmat.omp.sources.CheckTexts
 import com.spacesarmat.omp.sources.BrowserLogin
@@ -144,6 +147,11 @@ class OmpNativePlugin : Plugin() {
             remote = r
             // binding a local port and NSD registration (async) are quick; synchronous so stop() never races start()
             r.start()
+        }
+        // TV search on, but its service is not running (force-stopped, or a boot start the system refused)
+        try {
+            if (PhoneRpcService.runningPort < 0 && RpcConfig(SharedRpcPrefs(context)).enabled) PhoneRpcService.start(context)
+        } catch (_: Exception) {
         }
         // a magnet that arrived before the bridge was ready
         synchronized(magnetLock) { pendingMagnet }?.let { emitMagnet(it) }
@@ -432,14 +440,75 @@ class OmpNativePlugin : Plugin() {
     /** Phone model for the TV's list of paired phones, e.g. «Google Pixel 7». */
     @PluginMethod
     fun phoneName(call: PluginCall) {
+        call.resolve(JSObject().put("name", deviceName()))
+    }
+
+    private fun deviceName(): String {
         val maker = Build.MANUFACTURER.orEmpty().trim()
         val model = Build.MODEL.orEmpty().trim()
-        val name = when {
+        return when {
             model.isEmpty() -> maker
             maker.isEmpty() || model.startsWith(maker, ignoreCase = true) -> model
             else -> maker.replaceFirstChar { it.uppercase() } + " " + model
         }
-        call.resolve(JSObject().put("name", name))
+    }
+
+    // ---- TV search: the phone RPC server ([PhoneRpcService]) ----
+
+    /**
+     * Turns the TV search on (stores the switch, starts the foreground service) or off (stops it and deletes the
+     * token, so TVs that knew the old address are revoked). Resolves like [rpcInfo].
+     */
+    @PluginMethod
+    fun rpcSetEnabled(call: PluginCall) {
+        val once = Once(call)
+        val on = call.getBoolean("on") ?: run {
+            once.reject(I18n.s("errors.badRequest"))
+            return
+        }
+        io.execute {
+            try {
+                val config = RpcConfig(SharedRpcPrefs(context))
+                config.setEnabled(on)
+                if (on) {
+                    PhoneRpcService.start(context)
+                    // wait briefly for the bind, so the answer carries the real port and running = true
+                    val until = System.currentTimeMillis() + RPC_START_WAIT_MS
+                    while (PhoneRpcService.runningPort < 0 && System.currentTimeMillis() < until) Thread.sleep(50)
+                } else {
+                    PhoneRpcService.stop(context)
+                }
+                once.resolve(rpcInfoOf(config))
+            } catch (_: Exception) {
+                once.reject(I18n.s("plugin.stateFailed"))
+            }
+        }
+    }
+
+    /** `{enabled:false}` when the TV search is off; else the address the TVs use. Never logs the token. */
+    @PluginMethod
+    fun rpcInfo(call: PluginCall) {
+        val once = Once(call)
+        io.execute {
+            try {
+                once.resolve(rpcInfoOf(RpcConfig(SharedRpcPrefs(context))))
+            } catch (_: Exception) {
+                once.reject(I18n.s("plugin.stateFailed"))
+            }
+        }
+    }
+
+    private fun rpcInfoOf(config: RpcConfig): JSObject {
+        if (!config.enabled) return JSObject().put("enabled", false)
+        val bound = PhoneRpcService.runningPort
+        val o = JSObject()
+            .put("enabled", true)
+            .put("running", bound > 0)
+            .put("port", if (bound > 0) bound else config.port())
+            .put("token", config.token())
+            .put("name", deviceName().take(60))
+        LocalTorrServer.wifiIpv4(context)?.let { o.put("ip", it) }
+        return o
     }
 
     // ---- main TV socket ----
@@ -1712,6 +1781,7 @@ class OmpNativePlugin : Plugin() {
         private val NOT_DOWNLOADED: String get() = I18n.s("plugin.downloadFirst")
         private val SECRETS_FAILED: String get() = SourceServices.SECRETS_FAILED
         private const val PREFS = "omp-native"
+        private const val RPC_START_WAIT_MS = 3_000L
         private const val CACHE_SET = "torrserverCacheConfigured"
         /** The page's UI language (ru | en) in [PREFS]. */
         const val LANG_KEY = "omp.lang"

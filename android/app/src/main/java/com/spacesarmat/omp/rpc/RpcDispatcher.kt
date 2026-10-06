@@ -39,7 +39,7 @@ class RpcDispatcher(private val send: (String) -> Boolean, private val waitMs: L
         val future = CompletableFuture<RpcOutcome>()
         pending[id] = future
         try {
-            val msg = JSONObject().put("rpc", id).put("method", method).put("params", params).toString()
+            val msg = RpcProtocol.request(id, method, params)
             val posted = try {
                 send(msg)
             } catch (_: Exception) {

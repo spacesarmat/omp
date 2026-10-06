@@ -202,6 +202,9 @@ object I18n {
         "tv.noAddr" to "нет адреса",
         "tv.closed" to "Телевизор закрыл соединение",
         "tv.lost" to "Связь с телевизором потеряна",
+        "rpc.channel" to "Поиск для телевизора",
+        "rpc.title" to "OMP: поиск для телевизора",
+        "rpc.text" to "Телевизор ищет раздачи через этот телефон",
     )
 
     private val EN: Map<String, String> = mapOf(
@@ -365,5 +368,8 @@ object I18n {
         "tv.noAddr" to "no address",
         "tv.closed" to "The TV closed the connection",
         "tv.lost" to "Connection to the TV lost",
+        "rpc.channel" to "Search for the TV",
+        "rpc.title" to "OMP: search for the TV",
+        "rpc.text" to "Your TV searches torrent sites through this phone",
     )
 }

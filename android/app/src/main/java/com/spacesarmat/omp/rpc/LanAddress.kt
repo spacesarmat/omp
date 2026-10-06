@@ -20,6 +20,26 @@ object LanAddress {
         }
     }
 
+    /**
+     * True when [local], the phone's address a connection arrived on, is one of [lan] (the addresses of its Wi-Fi,
+     * Ethernet or hotspot interfaces). A carrier's CGNAT can hand out 10/8 on mobile data, where the client address
+     * alone passes [allowed]; such a connection arrives on the mobile interface and is refused here.
+     */
+    fun arrivedOn(local: InetAddress?, lan: Collection<InetAddress>): Boolean {
+        val l = plain(local ?: return false) ?: return false
+        return lan.any { a -> plain(a)?.let { it.contentEquals(l) } == true }
+    }
+
+    /** The address bytes, with IPv4-mapped IPv6 as 4 bytes; null for an odd length. */
+    private fun plain(a: InetAddress): ByteArray? {
+        val b = a.address
+        return when (b.size) {
+            4 -> b
+            16 -> if (mapped(b)) b.copyOfRange(12, 16) else b
+            else -> null
+        }
+    }
+
     private fun v4(b: ByteArray): Boolean {
         val o0 = b[0].toInt() and 0xff
         val o1 = b[1].toInt() and 0xff

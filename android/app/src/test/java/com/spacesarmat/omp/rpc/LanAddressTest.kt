@@ -14,4 +14,16 @@ class LanAddressTest {
             .forEach { assertFalse(it, LanAddress.allowed(InetAddress.getByName(it))) }
         assertFalse(LanAddress.allowed(null))
     }
+
+    @Test
+    fun arrivedOnTheLanInterface() {
+        val lan = listOf(InetAddress.getByName("192.168.1.20"), InetAddress.getByName("fe80::1"))
+        assertTrue(LanAddress.arrivedOn(InetAddress.getByName("192.168.1.20"), lan))
+        assertTrue(LanAddress.arrivedOn(InetAddress.getByName("::ffff:192.168.1.20"), lan))
+        assertTrue(LanAddress.arrivedOn(InetAddress.getByName("fe80::1"), lan))
+        // CGNAT 10/8 on mobile data: a private-looking address, but not the Wi-Fi one
+        assertFalse(LanAddress.arrivedOn(InetAddress.getByName("10.200.0.5"), lan))
+        assertFalse(LanAddress.arrivedOn(null, lan))
+        assertFalse(LanAddress.arrivedOn(InetAddress.getByName("192.168.1.20"), emptyList()))
+    }
 }

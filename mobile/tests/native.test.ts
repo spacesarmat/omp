@@ -13,6 +13,11 @@ describe('native plugin wrapper outside Android', () => {
     expect(await native.probePorts('192.168.1.5', [9922], 500)).toEqual([]);
   });
 
+  it('rpc wrappers are null off-device', async () => {
+    expect(await native.rpcInfo()).toBeNull();
+    expect(await native.rpcSetEnabled(true)).toBeNull();
+  });
+
   it('names the phone «Телефон»', async () => {
     expect(await native.phoneName()).toBe('Телефон');
   });
