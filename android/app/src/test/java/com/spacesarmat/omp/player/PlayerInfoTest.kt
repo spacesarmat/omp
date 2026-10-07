@@ -81,70 +81,83 @@ class PlayerInfoTest {
         assertEquals("", PlayerInfoText.fileName("http://h:1/video.mkv"))
         assertEquals("HEVC", PlayerInfoText.videoCodec("video/hevc"))
         assertEquals("HEVC", PlayerInfoText.videoCodec("hevc"))
-        assertEquals("H.264", PlayerInfoText.videoCodec("h264"))
+        assertEquals("AVC", PlayerInfoText.videoCodec("h264"))
         assertEquals("AV1", PlayerInfoText.videoCodec("video/av01"))
-        assertEquals("Dolby Vision", PlayerInfoText.videoCodec("video/dolby-vision"))
+        // Dolby Vision: the base codec, DV only as the HDR mark
+        assertEquals("HEVC", PlayerInfoText.videoCodec("video/dolby-vision", "dvhe.08.06"))
+        assertEquals("HEVC", PlayerInfoText.videoCodec("video/dolby-vision", "dvh1.05.06"))
+        assertEquals("HEVC", PlayerInfoText.videoCodec("video/dolby-vision", null))
+        assertEquals("AV1", PlayerInfoText.videoCodec("video/dolby-vision", "dav1.10.09"))
+        assertEquals("AVC", PlayerInfoText.videoCodec("video/dolby-vision", "dvav.09.05"))
+        assertEquals("HEVC", PlayerInfoText.videoCodec("dvhe"))
+        assertEquals("DV", PlayerInfoText.hdrMark("Dolby Vision"))
+        assertEquals("HDR10", PlayerInfoText.hdrMark("HDR10"))
         assertEquals("", PlayerInfoText.videoCodec(null))
     }
 
     @Test
     fun panelInRussian() {
-        val media = EngineMediaInfo("HEVC", 3840, 2160, "HDR10", 15_000_000, passthrough = true, bufferedMs = 25_500)
-        val audio = EngineTrack("a1", "rus", "HDRezka", "E-AC3", 6, selected = true)
-        val stats = TorrentStats(7, 8, 21, 2_202_010.0, 0.0, 125829120L, 52428800L, 209715200L)
-        val p = PlayerInfoText.panel("Тёмная материя · S01E02", "Dark.Matter.S01E02.mkv", media, audio, stats)
-        assertEquals("Тёмная материя · S01E02", p.title)
-        assertEquals("Dark.Matter.S01E02.mkv", p.file)
+        val media = EngineMediaInfo("HEVC", 3832, 1600, "Dolby Vision", 15_100_000, passthrough = true, bufferedMs = 17_500)
+        val audio = EngineTrack("a1", "rus", "HDRezka", "AC3", 6, selected = true)
+        val stats = TorrentStats(9, 11, 40, 3_250_586.0, 4_096.0, 547_356_672L, 52428800L, 1073741824L)
+        val p = PlayerInfoText.panel("Сериал · S04E02", media, audio, stats)
+        assertEquals("S04E02", p.title)
+        assertEquals("DV", p.hdr)
+        assertEquals("HEVC · 3832×1600", p.chip)
         assertEquals(
-            listOf(
-                InfoRow("Видео", "HEVC · 3840×2160 · HDR10 · 15 Мбит/с"),
-                InfoRow("Звук", "E-AC3 · 5.1 · напрямую на ресивер"),
-                InfoRow("Раздача", "7 сидов · 8 пиров из 21 · ↓ 2,1 МБ/с · ↑ 0"),
-                InfoRow("Буфер", "TorrServer 120 МБ · плеер 25 с"),
-            ),
-            p.rows,
+            listOf(InfoTile("Сиды / пиры", "9 / 11", ""), InfoTile("Загрузка", "3,1", "МБ/с"), InfoTile("Битрейт", "15,1", "Мбит/с")),
+            p.tiles,
         )
+        assertEquals("AC3 5.1 · на ресивер", p.sound)
+        assertEquals("522 МБ · 17 с", p.buffer)
+        assertEquals(17.5 / 30, p.bufferFill, 1e-9)
     }
 
     @Test
-    fun pluralsAndRates() {
-        assertEquals("1 сид", PlayerInfoText.plural("info.seeds", 1))
-        assertEquals("3 сида", PlayerInfoText.plural("info.seeds", 3))
-        assertEquals("11 сидов", PlayerInfoText.plural("info.seeds", 11))
-        assertEquals("22 пира", PlayerInfoText.plural("info.peers", 22))
-        assertEquals("0", PlayerInfoText.rate(0.0))
-        assertEquals("350 КБ/с", PlayerInfoText.rate(358_400.0))
+    fun titlesAndUnits() {
+        assertEquals("S04E02", PlayerInfoText.shortTitle("Тёмная материя · s04e02"))
+        assertEquals("Фильм (2024)", PlayerInfoText.shortTitle("Фильм (2024)"))
+        assertEquals("0" to "КБ/с", PlayerInfoText.rateParts(0.0))
+        assertEquals("350" to "КБ/с", PlayerInfoText.rateParts(358_400.0))
+        assertEquals("120" to "Мбит/с", PlayerInfoText.bitrateParts(120_000_000))
         I18n.lang = "en"
-        assertEquals("1 seed", PlayerInfoText.plural("info.seeds", 1))
-        assertEquals("3 seeds", PlayerInfoText.plural("info.seeds", 3))
+        assertEquals("3.1" to "MB/s", PlayerInfoText.rateParts(3_250_586.0))
     }
 
     @Test
-    fun unknownPartsAreLeftOut() {
-        val p = PlayerInfoText.panel("Film", "Film", EngineMediaInfo(), EngineTrack("a", null, null), null)
-        assertEquals("", p.file)
-        assertEquals(listOf(InfoRow("Раздача", "нет данных")), p.rows)
-        val decoded = PlayerInfoText.panel("", "", EngineMediaInfo(passthrough = false), EngineTrack("a", "eng", null, "DTS", 0), TorrentStats())
-        assertTrue(decoded.rows.contains(InfoRow("Звук", "DTS · декодируется")))
-        assertTrue(decoded.rows.contains(InfoRow("Раздача", "0 сидов · 0 пиров · ↓ 0 · ↑ 0")))
-        // no buffer known: no buffer row; the cache counts when there is no preload
-        assertTrue(decoded.rows.none { it.label == "Буфер" })
-        val cache = PlayerInfoText.panel("", "", EngineMediaInfo(), null, TorrentStats(cacheFilled = 1024))
-        assertTrue(cache.rows.contains(InfoRow("Буфер", "TorrServer 1,0 КБ")))
+    fun unknownPartsShowADash() {
+        val p = PlayerInfoText.panel("Film", EngineMediaInfo(), EngineTrack("a", null, null), null)
+        assertEquals("Film", p.title)
+        assertEquals("", p.hdr)
+        assertEquals("", p.chip)
+        assertEquals(listOf("—", "—", "—"), p.tiles.map { it.value })
+        assertEquals("—", p.sound)
+        assertEquals("—", p.buffer)
+        assertEquals(0.0, p.bufferFill, 0.0)
+        val decoded = PlayerInfoText.panel("", EngineMediaInfo(passthrough = false), EngineTrack("a", "eng", null, "DTS", 0), TorrentStats())
+        assertEquals("DTS · декодируется", decoded.sound)
+        assertEquals("0 / 0", decoded.tiles[0].value)
+        // no player buffer: TorrServer's preload against its cache fills the bar
+        val server = PlayerInfoText.panel("", EngineMediaInfo(), null, TorrentStats(preloaded = 256, cacheCapacity = 1024))
+        assertEquals(0.25, server.bufferFill, 1e-9)
+        assertEquals("256 Б", server.buffer)
+        // a long buffer fills the bar, no more
+        assertEquals(1.0, PlayerInfoText.panel("", EngineMediaInfo(bufferedMs = 90_000), null, null).bufferFill, 0.0)
     }
 
     @Test
     fun englishHasNoCyrillic() {
         I18n.lang = "en"
         val p = PlayerInfoText.panel(
-            "", "a.mkv", EngineMediaInfo("HEVC", 1920, 1080, "HLG", 8_000_000, false, 1_000), EngineTrack("a", "eng", null, "AC3", 2),
+            "Show · S01E02", EngineMediaInfo("HEVC", 1920, 1080, "HLG", 8_000_000, false, 1_000), EngineTrack("a", "eng", null, "AC3", 2),
             TorrentStats(1, 2, 3, 1e6, 0.0, 2048, 1024, 4096),
         )
-        assertTrue(p.rows.contains(InfoRow("Video", "HEVC · 1920×1080 · HLG · 8.0 Mbit/s")))
-        assertTrue(p.rows.contains(InfoRow("Torrent", "1 seed · 2 peers of 3 · ↓ 977 KB/s · ↑ 0")))
-        assertTrue(p.rows.contains(InfoRow("Buffer", "TorrServer 2.0 KB · player 1 s")))
+        assertEquals(listOf("Seeds / peers", "Download", "Bitrate"), p.tiles.map { it.label })
+        assertEquals("AC3 2.0 · decoded", p.sound)
+        assertEquals("2.0 KB · 1 s", p.buffer)
         val cyr = Regex("[\\u0400-\\u04FF]")
-        p.rows.forEach { assertNull(it.toString(), cyr.find(it.label + it.value)) }
+        (p.tiles.flatMap { listOf(it.label, it.value, it.unit) } + listOf(p.title, p.chip, p.sound, p.buffer, I18n.s("info.audio"), I18n.s("info.buffer")))
+            .forEach { assertNull(it, cyr.find(it)) }
     }
 
     @Test
@@ -157,7 +170,7 @@ class PlayerInfoTest {
         // TorrServer stops answering: «нет данных», not the last numbers
         s.answer(H, null)
         assertNull(s.stats)
-        assertEquals(listOf(InfoRow("Раздача", "нет данных")), PlayerInfoText.panel("", "", EngineMediaInfo(), null, s.stats).rows)
+        assertEquals("—", PlayerInfoText.panel("", EngineMediaInfo(), null, s.stats).tiles[0].value)
         // a late answer for another torrent is ignored
         s.answer(H, good)
         s.forTorrent("b".repeat(40))

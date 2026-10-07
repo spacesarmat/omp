@@ -113,7 +113,7 @@ object TorrServerStats {
     }
 }
 
-/** The text of the «Инфо» panel (Info / yellow key): one fact per line, readable from the sofa. Pure. */
+/** The «Инфо» panel (Info / yellow key): what it shows, every part one short line. Pure. */
 object PlayerInfoText {
     /** The file name of a TorrServer stream URL (`/stream/<name>?…`), decoded; '' when there is none. */
     fun fileName(streamUrl: String): String {
@@ -132,115 +132,148 @@ object PlayerInfoText {
         }
     }
 
-    /** «HEVC», «H.264», «AV1»… from a Media3 MIME type or a VLC fourcc; '' when unknown. */
-    fun videoCodec(mimeOrFourcc: String?): String = when (mimeOrFourcc?.trim()?.lowercase(Locale.ROOT)) {
-        "video/hevc", "hevc", "h265", "hvc1", "hev1" -> "HEVC"
-        "video/avc", "h264", "avc1", "avc" -> "H.264"
-        "video/av01", "av01", "av1" -> "AV1"
-        "video/x-vnd.on2.vp9", "vp90", "vp9" -> "VP9"
-        "video/x-vnd.on2.vp8", "vp80", "vp8" -> "VP8"
-        "video/mpeg2", "mpgv", "mp2v", "mpeg2" -> "MPEG-2"
-        "video/mp4v-es", "mp4v", "xvid", "divx" -> "MPEG-4"
-        "video/wvc1", "wvc1", "vc1", "vc-1" -> "VC-1"
-        "video/dolby-vision", "dvhe", "dvh1", "dav1" -> "Dolby Vision"
-        else -> mimeOrFourcc?.substringAfter('/')?.uppercase(Locale.ROOT).orEmpty()
+    /**
+     * «HEVC», «AVC», «AV1»… from a Media3 MIME type (with its `codecs` string) or a VLC fourcc; '' when unknown. A
+     * Dolby Vision stream gives its base codec (dvhe / dvh1 → HEVC, dav1 → AV1, dvav / dva1 → AVC): DV is its HDR
+     * mark ([hdrOf]), never the codec too.
+     */
+    fun videoCodec(mimeOrFourcc: String?, codecs: String? = null): String {
+        val m = mimeOrFourcc?.trim()?.lowercase(Locale.ROOT).orEmpty()
+        if (m == "video/dolby-vision" || m in DV_FOURCC) {
+            val c = (codecs ?: "").trim().lowercase(Locale.ROOT).substringBefore('.')
+            return when {
+                c in DV_HEVC || m in DV_HEVC -> "HEVC"
+                c == "dav1" || m == "dav1" -> "AV1"
+                c in DV_AVC || m in DV_AVC -> "AVC"
+                else -> "HEVC"
+            }
+        }
+        return when (m) {
+            "video/hevc", "hevc", "h265", "hvc1", "hev1" -> "HEVC"
+            "video/avc", "h264", "avc1", "avc" -> "AVC"
+            "video/av01", "av01", "av1" -> "AV1"
+            "video/x-vnd.on2.vp9", "vp90", "vp9" -> "VP9"
+            "video/x-vnd.on2.vp8", "vp80", "vp8" -> "VP8"
+            "video/mpeg2", "mpgv", "mp2v", "mpeg2" -> "MPEG-2"
+            "video/mp4v-es", "mp4v", "xvid", "divx" -> "MPEG-4"
+            "video/wvc1", "wvc1", "vc1", "vc-1" -> "VC-1"
+            "" -> ""
+            else -> m.substringAfter('/').uppercase(Locale.ROOT)
+        }
+    }
+
+    private val DV_HEVC = setOf("dvhe", "dvh1")
+    private val DV_AVC = setOf("dvav", "dva1")
+    private val DV_FOURCC = DV_HEVC + DV_AVC + "dav1"
+
+    /** The short HDR mark of the chip: «DV», «HDR10», «HLG»; '' for SDR. */
+    fun hdrMark(hdr: String): String = if (hdr == "Dolby Vision") "DV" else hdr
+
+    private fun num(v: Double, decimals: Boolean): String {
+        val s = if (decimals) String.format(Locale.ROOT, "%.1f", v) else String.format(Locale.ROOT, "%.0f", v)
+        return if (I18n.lang == "en") s else s.replace('.', ',')
     }
 
     /** «1,2 МБ» style sizes (B, KB, MB, GB). */
     fun bytes(n: Long): String {
+        val (v, u) = bytesParts(n.toDouble())
+        return "$v $u"
+    }
+
+    /** A size as value and unit: («3,1», «МБ»). */
+    private fun bytesParts(n: Double): Pair<String, String> {
         val units = listOf("info.b", "info.kb", "info.mb", "info.gb")
-        var v = n.toDouble().coerceAtLeast(0.0)
+        var v = n.coerceAtLeast(0.0)
         var u = 0
         while (v >= 1024 && u < units.size - 1) {
             v /= 1024
             u++
         }
-        val num = if (u == 0 || v >= 100) String.format(Locale.ROOT, "%.0f", v) else String.format(Locale.ROOT, "%.1f", v)
-        return (if (I18n.lang == "en") num else num.replace('.', ',')) + " " + I18n.s(units[u])
+        return num(v, u > 0 && v < 100) to I18n.s(units[u])
     }
 
-    /** «5,4 Мбит/с» from bytes per second (the video bitrate). */
-    fun speed(bytesPerSec: Double): String {
-        val mbit = bytesPerSec * 8 / 1_000_000
-        val num = if (mbit >= 10) String.format(Locale.ROOT, "%.0f", mbit) else String.format(Locale.ROOT, "%.1f", mbit)
-        return I18n.s("info.mbps", "v" to if (I18n.lang == "en") num else num.replace('.', ','))
+    /** A transfer rate (bytes per second) as value and unit: («3,1», «МБ/с»), («0», «КБ/с») for nothing. */
+    fun rateParts(bytesPerSec: Double): Pair<String, String> {
+        if (bytesPerSec < 1) return "0" to I18n.s("info.perSec", "v" to I18n.s("info.kb"))
+        val (v, u) = bytesParts(bytesPerSec)
+        return v to I18n.s("info.perSec", "v" to u)
     }
 
-    private fun bitrate(bps: Long): String = speed(bps / 8.0)
-
-    /** «2,1 МБ/с», «350 КБ/с», «0» for nothing: a transfer rate in bytes per second. */
-    fun rate(bytesPerSec: Double): String {
-        if (bytesPerSec < 1) return "0"
-        return I18n.s("info.perSec", "v" to bytes(bytesPerSec.toLong()))
+    /** A bitrate (bit/s) as value and unit: («15,1», «Мбит/с»). */
+    fun bitrateParts(bps: Long): Pair<String, String> {
+        val mbit = bps / 1_000_000.0
+        return num(mbit, mbit < 100) to I18n.s("info.mbit")
     }
 
-    /** «1 сид», «3 сида», «7 сидов» (ru); «1 seed», «7 seeds» (en). Keys `<key>.one/few/many`. */
-    fun plural(key: String, n: Int): String {
-        val form = if (I18n.lang == "en") {
-            if (n == 1) "one" else "many"
-        } else {
-            val m10 = n % 10
-            val m100 = n % 100
-            when {
-                m10 == 1 && m100 != 11 -> "one"
-                m10 in 2..4 && m100 !in 12..14 -> "few"
-                else -> "many"
-            }
-        }
-        return I18n.s("$key.$form", "n" to n.toString())
-    }
+    private val EPISODE = Regex("\\bS\\d{1,2}E\\d{1,3}(?:-E?\\d{1,3})?\\b", RegexOption.IGNORE_CASE)
+
+    /** The header's short title: the episode code («S04E02») when the title has one, else the title. */
+    fun shortTitle(title: String): String = EPISODE.find(title)?.value?.uppercase(Locale.ROOT) ?: title
+
+    /** How full the buffer bar is: the player's seconds ahead against [BUFFER_TARGET_S], else TorrServer's preload against its cache. */
+    const val BUFFER_TARGET_S = 30.0
 
     /**
-     * The panel: the title (and the file when it says something else), then rows «label — value»: the video (codec ·
-     * size · HDR · bitrate), the sound (codec · channels · passthrough), the torrent in one row (seeds · peers ·
-     * ↓ speed · ↑ speed), the buffer (TorrServer preload / cache · the player's own). Unknown parts are left out;
-     * stats null: «нет данных» for the torrent.
+     * The panel («variant B»): a header (short title; chip HDR mark + codec + size), three tiles (seeds / peers,
+     * download, bitrate; «—» when unknown), the sound line, the buffer (bar + «522 МБ · 17 с»). Pure.
      */
-    fun panel(title: String, file: String, media: EngineMediaInfo, audio: EngineTrack?, stats: TorrentStats?): InfoPanel {
-        val rows = ArrayList<InfoRow>()
-        val video = ArrayList<String>()
-        if (media.videoCodec.isNotEmpty()) video.add(media.videoCodec)
-        if (media.width > 0 && media.height > 0) video.add("${media.width}×${media.height}")
-        if (media.hdr.isNotEmpty()) video.add(media.hdr)
-        if (media.bitrate > 0) video.add(bitrate(media.bitrate))
-        if (video.isNotEmpty()) rows.add(InfoRow(I18n.s("info.video"), video.joinToString(" · ")))
+    fun panel(title: String, media: EngineMediaInfo, audio: EngineTrack?, stats: TorrentStats?): InfoPanel {
+        val chip = ArrayList<String>()
+        if (media.videoCodec.isNotEmpty()) chip.add(media.videoCodec)
+        if (media.width > 0 && media.height > 0) chip.add("${media.width}×${media.height}")
+        val none = "—" to ""
+        val seeds = if (stats == null) none else "${stats.seeders} / ${stats.activePeers}" to ""
+        val down = if (stats == null) none else rateParts(stats.downSpeed)
+        val rate = if (media.bitrate > 0) bitrateParts(media.bitrate) else none
+        val sound = ArrayList<String>()
         if (audio != null) {
-            val a = ArrayList<String>()
-            if (audio.codec.isNotEmpty()) a.add(audio.codec)
-            TrackOptions.channels(audio.channels).takeIf { it.isNotEmpty() }?.let { a.add(it) }
+            if (audio.codec.isNotEmpty()) sound.add(audio.codec)
+            TrackOptions.channels(audio.channels).takeIf { it.isNotEmpty() }?.let { sound.add(it) }
+        }
+        val soundText = (if (sound.isEmpty()) "" else sound.joinToString(" ")) +
             when (media.passthrough) {
-                true -> a.add(I18n.s("info.passthrough"))
-                false -> a.add(I18n.s("info.decoded"))
-                null -> Unit
+                true -> (if (sound.isEmpty()) "" else " · ") + I18n.s("info.passthrough")
+                false -> (if (sound.isEmpty()) "" else " · ") + I18n.s("info.decoded")
+                null -> ""
             }
-            if (a.isNotEmpty()) rows.add(InfoRow(I18n.s("info.audio"), a.joinToString(" · ")))
+        val server = stats?.let { if (it.preloaded > 0) it.preloaded else it.cacheFilled } ?: 0L
+        val bufferParts = ArrayList<String>()
+        if (server > 0) bufferParts.add(bytes(server))
+        if (media.bufferedMs >= 0) bufferParts.add(I18n.s("info.seconds", "v" to (media.bufferedMs / 1000).toString()))
+        val fill = when {
+            media.bufferedMs >= 0 -> (media.bufferedMs / 1000.0 / BUFFER_TARGET_S).coerceIn(0.0, 1.0)
+            stats != null && stats.preloaded > 0 && stats.cacheCapacity > 0 -> (stats.preloaded.toDouble() / stats.cacheCapacity).coerceIn(0.0, 1.0)
+            else -> 0.0
         }
-        val buffer = ArrayList<String>()
-        if (stats == null) {
-            rows.add(InfoRow(I18n.s("info.torrent"), I18n.s("info.noData")))
-        } else {
-            val peers = plural("info.peers", stats.activePeers) +
-                if (stats.totalPeers > stats.activePeers) " " + I18n.s("info.ofTotal", "n" to stats.totalPeers.toString()) else ""
-            rows.add(
-                InfoRow(
-                    I18n.s("info.torrent"),
-                    listOf(plural("info.seeds", stats.seeders), peers, "↓ " + rate(stats.downSpeed), "↑ " + rate(stats.upSpeed)).joinToString(" · "),
-                ),
-            )
-            val ahead = if (stats.preloaded > 0) stats.preloaded else stats.cacheFilled
-            if (ahead > 0) buffer.add(I18n.s("info.bufferServer", "v" to bytes(ahead)))
-        }
-        if (media.bufferedMs >= 0) buffer.add(I18n.s("info.bufferPlayer", "v" to (media.bufferedMs / 1000).toString()))
-        if (buffer.isNotEmpty()) rows.add(InfoRow(I18n.s("info.buffer"), buffer.joinToString(" · ")))
-        return InfoPanel(title, if (file != title) file else "", rows)
+        return InfoPanel(
+            title = shortTitle(title),
+            hdr = hdrMark(media.hdr),
+            chip = chip.joinToString(" · "),
+            tiles = listOf(
+                InfoTile(I18n.s("info.seedsPeers"), seeds.first, seeds.second),
+                InfoTile(I18n.s("info.download"), down.first, down.second),
+                InfoTile(I18n.s("info.bitrate"), rate.first, rate.second),
+            ),
+            sound = soundText.ifEmpty { "—" },
+            bufferFill = fill,
+            buffer = if (bufferParts.isEmpty()) "—" else bufferParts.joinToString(" · "),
+        )
     }
 }
 
-/** One row of the «Инфо» panel: a muted label and its value. */
-data class InfoRow(val label: String, val value: String)
+/** A tile of the «Инфо» panel: a small muted label, the value (tabular digits) and its unit. */
+data class InfoTile(val label: String, val value: String, val unit: String)
 
-/** The «Инфо» panel: the title, the file name ('' when it is the title or unknown) and the rows. */
-data class InfoPanel(val title: String, val file: String, val rows: List<InfoRow>)
+/** The «Инфо» panel: header (title, HDR mark, chip), tiles, the sound line, the buffer bar (0..1) and its text. */
+data class InfoPanel(
+    val title: String,
+    val hdr: String,
+    val chip: String,
+    val tiles: List<InfoTile>,
+    val sound: String,
+    val bufferFill: Double,
+    val buffer: String,
+)
 
 /**
  * The torrent statistics shown in «Инфо»: only for the torrent of the current item, cleared when its fetch fails

@@ -282,6 +282,7 @@ class VlcEngine(library: VlcLibrary) : PlayerEngine {
         val v = info.values.firstOrNull { it.type == IMedia.Track.Type.Video } as? IMedia.VideoTrack ?: return EngineMediaInfo()
         return EngineMediaInfo(
             videoCodec = PlayerInfoText.videoCodec(v.codec),
+            hdr = if (v.codec?.trim()?.lowercase() in setOf("dvhe", "dvh1", "dav1", "dvav", "dva1")) "Dolby Vision" else "",
             width = v.width.coerceAtLeast(0),
             height = v.height.coerceAtLeast(0),
             bitrate = v.bitrate.toLong().coerceAtLeast(0L),

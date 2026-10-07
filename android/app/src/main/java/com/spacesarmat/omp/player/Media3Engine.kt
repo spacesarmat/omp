@@ -204,7 +204,7 @@ class Media3Engine(private val context: Context) : PlayerEngine {
         val v = exo.videoFormat
         val ahead = exo.bufferedPosition - exo.currentPosition
         return EngineMediaInfo(
-            videoCodec = PlayerInfoText.videoCodec(v?.sampleMimeType),
+            videoCodec = PlayerInfoText.videoCodec(v?.sampleMimeType, v?.codecs),
             width = v?.width?.takeIf { it > 0 } ?: 0,
             height = v?.height?.takeIf { it > 0 } ?: 0,
             hdr = if (v == null) "" else hdrOf(v.sampleMimeType, v.colorInfo?.colorTransfer),

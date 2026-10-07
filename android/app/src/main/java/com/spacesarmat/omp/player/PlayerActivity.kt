@@ -11,10 +11,8 @@ import android.os.Bundle
 import android.text.Spannable
 import android.text.SpannableString
 import android.text.SpannableStringBuilder
-import android.text.style.LeadingMarginSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
-import android.text.style.TabStopSpan
 import android.graphics.Typeface
 import android.text.style.ForegroundColorSpan
 import android.os.Handler
@@ -28,6 +26,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
@@ -97,7 +96,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private lateinit var donateText: TextView
     private lateinit var donateLink: TextView
     private lateinit var engineName: TextView
-    private lateinit var infoView: TextView
+    private lateinit var infoView: View
+
+    /** The three tiles of «Инфо»: label and value views. */
+    private val infoTiles = ArrayList<Pair<TextView, TextView>>()
 
     /** «Инфо» is on screen (Info / yellow key; Back closes it; playback goes on). */
     private var infoShown = false
@@ -224,6 +226,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         donateLink = findViewById(R.id.player_donate_link)
         engineName = findViewById(R.id.player_engine)
         infoView = findViewById(R.id.player_info)
+        buildInfoTiles()
         findViewById<TextView>(R.id.player_badge).text = I18n.s("player.res.phoneBadge")
         btnNext.text = I18n.s("player.res.next")
         btnSkip.text = I18n.s("player.res.skipIntro")
@@ -661,39 +664,58 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         if (!infoShown || !::session.isInitialized || isDestroyed) return
         val item = session.item() ?: return
         val audio = engine.audioTracks().firstOrNull { it.selected }
-        val panel = PlayerInfoText.panel(item.title, PlayerInfoText.fileName(item.url), engine.mediaInfo(), audio, infoStats.stats)
-        infoView.text = infoText(panel)
+        showInfoPanel(PlayerInfoText.panel(item.title, engine.mediaInfo(), audio, infoStats.stats))
     }
 
-    /**
-     * «Инфо» like the other player panels: the title a little larger, the file muted, then two columns — muted labels,
-     * white values (a wrapped value stays in its column). About a third of the screen wide.
-     */
-    private fun infoText(p: InfoPanel): CharSequence {
-        val paint = infoView.paint
-        val gap = 12 * resources.displayMetrics.density
-        val column = (p.rows.maxOfOrNull { paint.measureText(it.label) } ?: 0f) + gap
-        val maxWidth = (resources.displayMetrics.widthPixels * INFO_WIDTH).toInt()
-        if (infoView.maxWidth != maxWidth) infoView.maxWidth = maxWidth
-        val out = SpannableStringBuilder()
-        fun line(text: CharSequence, vararg spans: Any) {
-            if (out.isNotEmpty()) out.append('\n')
-            val start = out.length
-            out.append(text)
-            spans.forEach { out.setSpan(it, start, out.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE) }
+    /** Builds the three tiles of «Инфо» once (layout/player_info_tile.xml), with a gap between them. */
+    private fun buildInfoTiles() {
+        val row = findViewById<LinearLayout>(R.id.player_info_tiles)
+        val gap = (8 * resources.displayMetrics.density).toInt()
+        repeat(3) { n ->
+            val tile = layoutInflater.inflate(R.layout.player_info_tile, row, false)
+            if (n > 0) (tile.layoutParams as LinearLayout.LayoutParams).marginStart = gap
+            row.addView(tile)
+            infoTiles.add(tile.findViewById<TextView>(R.id.player_info_tile_label) to tile.findViewById(R.id.player_info_tile_value))
         }
-        if (p.title.isNotEmpty()) line(p.title, RelativeSizeSpan(16f / 14f), StyleSpan(Typeface.BOLD))
-        if (p.file.isNotEmpty()) line(p.file, ForegroundColorSpan(INFO_MUTED), RelativeSizeSpan(13f / 14f))
-        for (r in p.rows) {
-            if (out.isNotEmpty()) out.append('\n')
-            val start = out.length
-            out.append(r.label)
-            out.setSpan(ForegroundColorSpan(INFO_MUTED), start, out.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-            out.append('\t').append(r.value)
-            out.setSpan(TabStopSpan.Standard(column.toInt()), start, out.length, Spannable.SPAN_PARAGRAPH)
-            out.setSpan(LeadingMarginSpan.Standard(0, column.toInt()), start, out.length, Spannable.SPAN_PARAGRAPH)
+        findViewById<TextView>(R.id.player_info_buffer_label).text = I18n.s("info.buffer")
+    }
+
+    /** «Инфо» («variant B»): 40% of the screen wide, every text on one line. */
+    private fun showInfoPanel(p: InfoPanel) {
+        val width = (resources.displayMetrics.widthPixels * INFO_WIDTH).toInt()
+        if (infoView.layoutParams.width != width) {
+            infoView.layoutParams = infoView.layoutParams.apply { this.width = width }
         }
-        return out
+        findViewById<TextView>(R.id.player_info_title).text = p.title
+        val chip = SpannableStringBuilder()
+        if (p.hdr.isNotEmpty()) {
+            chip.append(p.hdr)
+            chip.setSpan(ForegroundColorSpan(INFO_ACCENT), 0, chip.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            chip.setSpan(StyleSpan(Typeface.BOLD), 0, chip.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (p.chip.isNotEmpty()) chip.append(" · ")
+        }
+        chip.append(p.chip)
+        val chipView = findViewById<TextView>(R.id.player_info_chip)
+        chipView.text = chip
+        chipView.visibility = if (chip.isEmpty()) View.GONE else View.VISIBLE
+        p.tiles.forEachIndexed { n, t ->
+            val (label, value) = infoTiles.getOrNull(n) ?: return@forEachIndexed
+            label.text = t.label
+            val v = SpannableStringBuilder(t.value)
+            if (t.unit.isNotEmpty()) {
+                val start = v.length
+                v.append(" ").append(t.unit)
+                v.setSpan(RelativeSizeSpan(0.7f), start, v.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                v.setSpan(ForegroundColorSpan(INFO_MUTED), start, v.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            value.text = v
+        }
+        val sound = SpannableStringBuilder(I18n.s("info.audio"))
+        sound.setSpan(ForegroundColorSpan(INFO_MUTED), 0, sound.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sound.append("  ").append(p.sound)
+        findViewById<TextView>(R.id.player_info_sound).text = sound
+        findViewById<ProgressBar>(R.id.player_info_buffer_bar).progress = (p.bufferFill * 1000).toInt()
+        findViewById<TextView>(R.id.player_info_buffer).text = p.buffer
     }
 
     private fun onBack() {
@@ -1170,9 +1192,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         private const val HIDE_MS = 4000L
         /** «Инфо» refresh period. */
         private const val INFO_REFRESH_MS = 1000L
-        /** «Инфо»: at most this share of the screen width; muted label colour (as the hint line). */
-        private const val INFO_WIDTH = 0.33f
+        /** «Инфо»: this share of the screen width; muted label colour (as the hint line); the accent (HDR mark). */
+        private const val INFO_WIDTH = 0.40f
         private const val INFO_MUTED = 0xFF9AA1B2.toInt()
+        private const val INFO_ACCENT = 0xFFF5B700.toInt()
         private const val SKIP_HIDDEN_SHIFT_DP = 150f
         /** «Поддержать»: bottom margin on pause (above the controls) and in the credits; the skip button lift. */
         private const val DONATE_PAUSE_BOTTOM_DP = 210f
