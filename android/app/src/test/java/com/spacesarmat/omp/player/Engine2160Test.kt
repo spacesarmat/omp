@@ -122,6 +122,14 @@ class Engine2160Test {
     }
 
     @Test
+    fun reopenOnlyWhenNightSoundGoesOffAfterTouchingAudio() {
+        assertTrue(Engine2160.needsReopen(nightOn = false, touched = true))
+        assertTrue(!Engine2160.needsReopen(nightOn = false, touched = false))
+        assertTrue(!Engine2160.needsReopen(nightOn = true, touched = false))
+        assertTrue(!Engine2160.needsReopen(nightOn = true, touched = true))
+    }
+
+    @Test
     fun onlyThe2160EngineHasNightSound() {
         assertNull(FakeEngine().nightMode)
     }
