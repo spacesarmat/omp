@@ -129,8 +129,18 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
           if (!pkg) return false;
           const io = skipIo(c);
           const prefs = io && first.hash ? io.load(first.hash).catch(() => null) : Promise.resolve(null);
+          // the watch journal («История») like the built-in player: the start, then where the user stopped
+          journal.start(first, pos, dur);
           return prefs.then((p) => play2160(plugin, c, queue, index, pos, p, dur)).then(
-            () => { leave(); return true; },
+            (saved) => {
+              if (saved) {
+                // another item of the playlist: its own entry
+                if (saved.item !== first) journal.start(saved.item, 0, saved.duration);
+                journal.end(saved.item, saved.time, saved.duration);
+              } else journal.end(first, pos, dur);
+              leave();
+              return true;
+            },
             (e) => { if (!cancelled) { toast(failText(e), 'error'); leave(); } return true; },
           );
         }).then((handled) => { if (!handled && !cancelled) startBuiltin(); });

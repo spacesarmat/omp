@@ -4,8 +4,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## 0.19.0-beta.1
 
-- [tv] Cast and directors on «Discover» cards and on the series and movie screens: press one to open the filmography; titles already in «Mine» are highlighted and come first, with an «In the library» filter
-- [phone] Cast and directors on «Discover» cards and on the series and movie screens: tap one to open the filmography; titles already in «Mine» are highlighted and come first, with an «In the library» filter
+- [tv] Cast and directors on «Discover» cards and on the series and movie screens: press one to open the filmography; titles already in «Mine» are highlighted and come first, with an «In library» filter
+- [phone] Cast and directors on «Discover» cards and on the series and movie screens: tap one to open the filmography; titles already in «Mine» are highlighted and come first, with an «In library» filter
 - [atv] 2160 Player as the video player (Settings → «Video player»): resumes where you stopped, skips intros and credits, plays all episodes of the torrent
 - [phone] «Watch on the phone» through 2160 Player when chosen in Settings: the watch position comes back to OMP
 

@@ -2,7 +2,7 @@
 // has) or the torrent of a film. Shared by the TV card, the phone card and the filmography. Pure.
 import type { Torrent } from '../api/types';
 import { findGroup, seriesKey } from '../lib/seriesGroups';
-import { libraryIndex, inLibrary, seasonIndex, librarySeasonHash } from './library';
+import { libraryIndex, inLibrary, seasonIndex, librarySeasonHash, seriesNames, inLibrarySeries } from './library';
 import type { CatalogTitle, Kind } from './tmdb';
 
 export type LibraryTarget = { kind: 'series'; key: string; season?: number } | { kind: 'torrent'; hash: string };
@@ -37,12 +37,9 @@ export function libraryTargetOf(list: Torrent[], title: Named): LibraryTarget | 
   return target(list, title.kind === 'tv' ? seasonIndex(list) : new Map(), title);
 }
 
-/** A check «the library has it», the indexes built once for the whole list. */
+/** A check «the library has it», the indexes built once for the whole list (a series counts by any season of it). */
 export function ownedChecker(list: Torrent[]): (c: CatalogTitle) => boolean {
   const owned = libraryIndex(list);
-  const seasons = seasonIndex(list);
-  return (c) => {
-    if (inLibrary(owned, c)) return true;
-    return c.kind === 'tv' && target(list, seasons, c) !== null;
-  };
+  const names = seriesNames(seasonIndex(list));
+  return (c) => inLibrary(owned, c) || (c.kind === 'tv' && inLibrarySeries(names, c));
 }

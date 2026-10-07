@@ -22,6 +22,10 @@ describe('segmentsText', () => {
     expect(segmentsText(null, 2700)).toBe('');
     expect(segmentsText({ i: true, c: true }, 2700)).toBe('');
   });
+  it('credits only for a single item', () => {
+    expect(segmentsText({ i: true, c: true, mi: [30, 95], mc: 120 }, 2700, false)).toBe('intro:30000-95000');
+    expect(segmentsText({ i: true, c: true, mi: [30, 95], mc: 120 }, 2700, true)).toBe('intro:30000-95000;credits:2580000-');
+  });
   it('credits need a known duration', () => {
     expect(segmentsText({ i: true, c: true, mi: [30, 95], mc: 120 }, 0)).toBe('intro:30000-95000');
     expect(segmentsText({ i: false, c: true, mc: 120 }, 0)).toBe('');
@@ -47,9 +51,24 @@ describe('saveP2160Result', () => {
     saveP2160Result(null, queue, 0, { returned: true, ended: true, durationMs: 1200000, url: queue[1].url }, 0);
     expect(isWatched(H, 2)).toBe(true);
   });
-  it('unknown url falls back to the start item', () => {
-    saveP2160Result(null, queue, 0, { returned: true, positionMs: 300000, durationMs: 1000000, url: 'http://x/y' }, 0);
+  it('matches by the link and index params when the url differs', () => {
+    const u = 'http://u:p@other:8090/stream/x.mkv?index=2&link=' + H.toUpperCase() + '&play';
+    saveP2160Result(null, queue, 0, { returned: true, positionMs: 300000, durationMs: 1000000, url: u }, 0);
+    expect(getLocalProgress(H, 2)!.time).toBe(300);
+    expect(getLocalProgress(H, 1)).toBeNull();
+  });
+  it('unknown url in a queue of several saves nothing', () => {
+    expect(saveP2160Result(null, queue, 0, { returned: true, positionMs: 300000, durationMs: 1000000, url: 'http://x/y' }, 0)).toBeNull();
+    expect(getLocalProgress(H, 1)).toBeNull();
+    expect(getLocalProgress(H, 2)).toBeNull();
+  });
+  it('unknown url with a single item saves to it', () => {
+    saveP2160Result(null, [queue[0]], 0, { returned: true, positionMs: 300000, durationMs: 1000000, url: 'http://x/y' }, 0);
     expect(getLocalProgress(H, 1)!.time).toBe(300);
+  });
+  it('no url: the start item', () => {
+    saveP2160Result(null, queue, 1, { returned: true, positionMs: 300000, durationMs: 1000000 }, 0);
+    expect(getLocalProgress(H, 2)!.time).toBe(300);
   });
   it('returned:false saves nothing', () => {
     saveP2160Result(null, queue, 0, { returned: false }, 0);
@@ -72,7 +91,7 @@ describe('play2160', () => {
     expect(o.start).toBe(1);
     expect(o.fromStart).toBe(true);
     expect(o.positionMs).toBe(0);
-    expect(o.segments).toBe('intro:1000-2000');
+    expect(o.segments).toBe('intro:1000-2000'); // two items: no credits
     await play2160(plugin, null, queue, 1, 5, null, 0); // busy: nothing
     expect(open2160).toHaveBeenCalledTimes(1);
     done({ returned: true, positionMs: 100000, durationMs: 900000, url: queue[1].url });

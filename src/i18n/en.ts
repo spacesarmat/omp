@@ -1336,7 +1336,7 @@ export const en: EnDict<typeof ru> = {
     ownedEmpty: 'No films with {name} in the library',
     acting: 'Acting',
     directing: 'Directing',
-    hints: 'OK — open · Yellow — "Want to watch" · Back — to the title',
+    hints: 'OK — open · Yellow — "Want to watch" · Back — go back',
   },
   titleCard: {
     findTorrents: 'Find torrents',

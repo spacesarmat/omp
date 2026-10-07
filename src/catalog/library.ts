@@ -90,6 +90,18 @@ export function librarySeasonHash(idx: Map<string, string>, t: { title: string; 
   return '';
 }
 
+/** The series names ('name' of the 'name|N' keys) that have a season in the index. */
+export function seriesNames(idx: Map<string, string>): Set<string> {
+  const out = new Set<string>();
+  idx.forEach((_h, k) => { out.add(k.slice(0, k.lastIndexOf('|'))); });
+  return out;
+}
+
+/** True when the series (its title or original name) has any season in the names of seriesNames. */
+export function inLibrarySeries(names: Set<string>, t: { title: string; original: string }): boolean {
+  return (!!t.title && names.has(nameKey(t.title))) || (!!t.original && names.has(nameKey(t.original)));
+}
+
 /** True when season N of the series (its title or original name) is in the season index. */
 export function inLibrarySeason(idx: { has(k: string): boolean }, t: { title: string; original: string }, season: number): boolean {
   const names = [t.title, t.original];

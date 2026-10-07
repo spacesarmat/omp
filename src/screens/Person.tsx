@@ -114,7 +114,7 @@ function Body({ card }: { card: PersonCard }) {
         </div>
       </FocusGroup>
       {items.length === 0 ? (
-        <div class="empty">{onlyOwned ? tvGlyphs(t('person.ownedEmpty', { name: card.name })) : t('discover.nothingFound')}</div>
+        <div class="empty">{onlyOwned ? tvGlyphs(t('person.ownedEmpty', { name: card.name })) : tvGlyphs(t('discover.nothingFound'))}</div>
       ) : (
         <FocusGroup focusKey="PERSON-GRID" className="disc-grid">
           {items.map((x, i) => {
@@ -136,9 +136,9 @@ function Body({ card }: { card: PersonCard }) {
                   {c.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={c.poster} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (c.id % 4)}>{tvGlyphs(c.title)}</div>}
                   {c.rating > 0 && <span class="disc-rating">{ratingText(c.rating)}</span>}
                   {isWanted(c.kind, c.id) ? (
-                    <span class="disc-mark disc-mark-want">{t('tv.discover.wantMark')}</span>
+                    <span class="disc-mark disc-mark-want">{tvGlyphs(t('tv.discover.wantMark'))}</span>
                   ) : x.owned ? (
-                    <span class="disc-mark">{t('discover.inLibrary')}</span>
+                    <span class="disc-mark">{tvGlyphs(t('discover.inLibrary'))}</span>
                   ) : null}
                 </div>
                 <div class="disc-title">{tvGlyphs(c.title)}</div>
@@ -194,7 +194,7 @@ export function PersonScreen(p: { id: number; name?: string }) {
       ) : (
         <Body card={card} />
       )}
-      <div class="hints">{t('person.hints')}</div>
+      <div class="hints">{tvGlyphs(t('person.hints'))}</div>
     </FocusGroup>
   );
 }

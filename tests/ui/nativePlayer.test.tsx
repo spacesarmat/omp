@@ -10,6 +10,12 @@ import { saveProgress, reloadProgress, getLocalProgress } from '../../src/store/
 import { attachPhone, detachPhone, setLinkTransport } from '../../src/phone/link';
 import type { PlayItem } from '../../src/player/types';
 
+const recorded: { hash: string; entry: any }[] = [];
+vi.mock('../../src/store/journal', async (orig) => ({
+  ...(await orig<typeof import('../../src/store/journal')>()),
+  recordWatch: (_c: unknown, hash: string, entry: any) => { recorded.push({ hash, entry }); return Promise.resolve(); },
+}));
+
 const H = 'b'.repeat(40);
 const queue: PlayItem[] = [{ url: 'http://h:1/stream/f.mkv?link=' + H + '&index=3&play', title: 'Фильм', hash: H, fileIndex: 3 }];
 const w = window as unknown as { Capacitor?: unknown };
@@ -88,6 +94,19 @@ describe('NativePlayerScreen with 2160 Player', () => {
     expect(f.plugin.playNative).not.toHaveBeenCalled();
     await until(() => routeStack.value.length === 1);
     expect(getLocalProgress(H, 3)!.time).toBe(60);
+    resetSettings();
+    await unmount(host);
+  });
+  it('writes the watch journal: the start, then the position handed back', async () => {
+    recorded.length = 0;
+    updateSettings({ videoPlayer: 'p2160' });
+    const f = fakeCapacitor();
+    const host = mount(h(NativePlayerScreen, { queue, index: 0 }));
+    await until(() => (f.plugin as any).open2160.mock.calls.length === 1);
+    await until(() => recorded.length >= 2);
+    expect(recorded[0].hash).toBe(H);
+    expect(recorded[0].entry).toMatchObject({ f: 3, t: 0, src: 'tv' });
+    expect(recorded[1].entry).toMatchObject({ f: 3, t: 60, d: 1200, src: 'tv' });
     resetSettings();
     await unmount(host);
   });

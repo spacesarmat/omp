@@ -38,3 +38,34 @@ describe('ownedChecker', () => {
     expect(owned(asTitle(nope))).toBe(false);
   });
 });
+
+describe('ownedChecker on a big library', () => {
+  it('agrees with libraryTargetOf for every credit (300 torrents x 120 credits)', () => {
+    const big: Torrent[] = [];
+    for (let i = 0; i < 300; i++) {
+      big.push({
+        hash: 'h' + i,
+        title: i % 2 ? 'Сериал' + i + ' / Show' + i + ' (' + ((i % 5) + 1) + ' сезон) 2020 WEB-DL' : 'Фильм' + i + ' / Film' + i + ' (2019) 1080p',
+      } as Torrent);
+    }
+    const credits: CatalogTitle[] = [];
+    for (let i = 0; i < 120; i++) {
+      const n = i * 3; // every third is in the library for sure, the rest mostly not
+      credits.push(asTitle({
+        kind: i % 2 ? 'tv' : 'movie',
+        title: (i % 2 ? 'Сериал' : 'Фильм') + n,
+        original: (i % 2 ? 'Show' : 'Film') + n,
+        year: i % 2 ? 2024 : 2019,
+      }));
+    }
+    const owned = ownedChecker(big);
+    let hits = 0;
+    credits.forEach((c) => {
+      const expected = libraryTargetOf(big, c) !== null;
+      if (expected) hits++;
+      expect(owned(c)).toBe(expected);
+    });
+    expect(hits).toBeGreaterThan(5);
+    expect(hits).toBeLessThan(credits.length);
+  });
+});
