@@ -178,6 +178,34 @@ describe('series screen with TMDB', () => {
   });
 });
 
+describe('series screen · cast', () => {
+  it('lists the cast after the season rows; a tap opens the person', async () => {
+    fake();
+    card.mockImplementation(() =>
+      Promise.resolve({
+        ...SHOW,
+        cast: [
+          { id: 7, name: 'Джоэл Эдгертон', photo: '', role: 'Джейсон', job: 'cast' as const },
+          { id: 8, name: 'Блейк Крауч', photo: '', role: '', job: 'creator' as const },
+        ],
+      }),
+    );
+    mount();
+    await flush();
+    expect(el.querySelector('.m-tc-section h2')!.textContent).toBe('В ролях');
+    const people = el.querySelectorAll('.m-tc-person');
+    expect(people[0].textContent).toContain('Блейк Крауч');
+    act(() => (people[1] as HTMLElement).click());
+    expect(currentRoute.value).toMatchObject({ name: 'person', id: 7, label: 'Джоэл Эдгертон' });
+  });
+  it('is absent without a cast', async () => {
+    fake();
+    mount();
+    await flush();
+    expect(el.querySelector('.m-tc-cast')).toBeNull();
+  });
+});
+
 describe('series screen without TMDB', () => {
   it('offline: the simple layout, no hero box, no error', async () => {
     fake({ fail: true });

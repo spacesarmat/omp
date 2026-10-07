@@ -15,7 +15,7 @@ export function libraryKey(title: string, year: number): string {
   return s + '|' + year;
 }
 
-function yearOf(title: string): number {
+export function yearOf(title: string): number {
   const re = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])/;
   const m = re.exec(title || '');
   return m ? +m[1] : 0;

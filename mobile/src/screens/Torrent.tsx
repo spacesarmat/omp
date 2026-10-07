@@ -2,6 +2,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { contentsTextOf } from '../lib/releaseContents';
 import { t, tp, fmtDuration, fmtSize } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
+import { CastStrip } from '../ui/CastStrip';
+import { useMovieCard } from '../../../src/lib/useMovieCard';
 import { Sheet } from '../ui/Sheet';
 import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
 import { qualityBadge, posterStyle } from '../ui/Poster';
@@ -310,6 +312,7 @@ export function Torrent({ hash }: { hash: string }) {
   // a torrent just added may not be in the list yet: ask the server for it
   const [fetched, setFetched] = useState<TorrentT | null | undefined>(undefined);
   const tor = listed || fetched || undefined;
+  const movie = useMovieCard(tor);
   const [loaded, setLoaded] = useState<TorrentT | null>(null);
   const [sheet, setSheet] = useState<TorrentFile | null>(null);
   const [status, setStatus] = useState('');
@@ -739,6 +742,7 @@ export function Torrent({ hash }: { hash: string }) {
           ))}
         </div>
       </div>
+      {movie && <CastStrip cast={movie.cast} />}
       {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
       {betterOpen && <BetterSheet torrent={tor} files={allFiles} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}

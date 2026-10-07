@@ -32,6 +32,7 @@ import { cachedSeriesMatch, matchSeries } from '../../../src/lib/seriesMatch';
 import { releaseLine, releaseName } from '../lib/duplicates';
 import { contentsText } from '../lib/releaseContents';
 import { phoneCatalog } from '../catalog/phoneCatalog';
+import { CastStrip } from '../ui/CastStrip';
 import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { ratingText } from './catalog/CatalogSearch';
 
@@ -506,6 +507,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           </div>
         </>
       )}
+      {card && <CastStrip cast={card.cast} />}
       {menuFor && (
         <TorrentMenu
           tor={menuFor}

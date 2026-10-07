@@ -10,21 +10,19 @@ import { activeCatalog } from '../catalog/activeCatalog';
 import { catalogErrorCode, type CatalogErrorCode } from '../catalog/client';
 import { seasonIndex, librarySeasonHash } from '../catalog/library';
 import { libraryTargetOf, torrentTarget, type LibraryTarget } from '../catalog/libraryTarget';
-import { torrentQuery, CAST_LIMIT, type CatalogCard, type Kind, type Person } from '../catalog/tmdb';
+import { torrentQuery, type CatalogCard, type Kind } from '../catalog/tmdb';
 import type { Torrent } from '../api/types';
 import { torrents } from '../store/library';
 import { isWanted, wantAction } from '../store/wantList';
 import { airDateText, seriesPill } from '../lib/seriesStatus';
 import { FocusGroup, Focusable, Button, Spinner } from '../ui/components';
-import { restoreFocus, scrollToShow } from '../ui/focus';
+import { restoreFocus } from '../ui/focus';
 import { navigate, type Route } from '../ui/nav';
 import { tvGlyphs } from '../ui/tvText';
+import { CastRow, initials, showInRow } from '../ui/CastRow';
 import { seasonPlan } from './Series';
 import { SeriesPill } from './library/SeriesTile';
 import { ratingText } from './library/DiscoverGrid';
-
-/** Inner margin of the rows that scroll sideways: a focused item keeps this much room to the row's edge. */
-const ROW_PAD = 24;
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -37,16 +35,6 @@ export function titleMeta(card: CatalogCard): string[] {
     card.kind === 'tv' ? (seasons ? tp('series.seasons', seasons) : '') : card.runtime > 0 ? fmtDuration(card.runtime) : '',
     genres,
   ].filter(Boolean);
-}
-
-/** «СЧ» for «Сидни Чандлер»: the first letters of the first two words. */
-export function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join('');
 }
 
 /** The route of a library target. */
@@ -91,43 +79,6 @@ export function seasonChips(card: CatalogCard, list: Torrent[], now: number): Ch
     if (have[n]) return { n: n, name: name, sub: [count, t('tv.title.inLibrary')].filter(Boolean).join(' · '), state: 'library', hash: have[n] };
     return { n: n, name: name, sub: [count, t('tv.title.findShort')].filter(Boolean).join(' · '), state: 'missing', hash: '' };
   });
-}
-
-/** A row that does not wrap: it scrolls sideways so the focused item is whole. */
-function showInRow(row: HTMLElement | null, key: string): void {
-  const el = row ? (row.querySelector('[data-fk="' + key + '"]') as HTMLElement | null) : null;
-  if (!row || !el) return;
-  row.scrollLeft = scrollToShow(row.scrollLeft, row.clientWidth, el.offsetLeft, el.offsetWidth, ROW_PAD);
-}
-
-function CastRow({ cast }: { cast: Person[] }) {
-  const rowRef = useRef<HTMLDivElement>(null);
-  // the directors or creators come first, then up to CAST_LIMIT actors
-  const heads = cast.filter((p) => p.job !== 'cast');
-  const shown = heads.concat(cast.filter((p) => p.job === 'cast').slice(0, CAST_LIMIT));
-  const roleOf = (p: Person) => (p.job === 'director' ? t('titleCard.director') : p.job === 'creator' ? t('titleCard.creator') : p.role);
-  return (
-    <section class="tc-section">
-      <h2 class="tc-h2">{t('titleCard.cast')}</h2>
-      <div class="tc-scroll" ref={rowRef}>
-        <FocusGroup focusKey="TITLE-CAST" className="tc-cast-row">
-          {shown.map((p, i) => (
-            <Focusable
-              key={i}
-              focusKey={'title-cast-' + i}
-              className="tc-person"
-              onPress={() => navigate({ name: 'person', id: p.id, label: p.name })}
-              onFocused={() => showInRow(rowRef.current, 'title-cast-' + i)}
-            >
-              <div class="tc-photo">{p.photo ? <img src={p.photo} alt="" /> : <span class="tc-initials">{tvGlyphs(initials(p.name))}</span>}</div>
-              <div class="tc-person-name">{tvGlyphs(p.name)}</div>
-              {roleOf(p) ? <div class="tc-person-role">{tvGlyphs(roleOf(p))}</div> : null}
-            </Focusable>
-          ))}
-        </FocusGroup>
-      </div>
-    </section>
-  );
 }
 
 export interface TitleWantProps {
@@ -224,7 +175,7 @@ function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
           </div>
         </section>
       )}
-      {card.cast.length > 0 && <CastRow cast={card.cast} />}
+      {card.cast.length > 0 && <CastRow cast={card.cast} groupKey="TITLE-CAST" focusPrefix="title-cast-" />}
     </>
   );
 }
@@ -277,3 +228,5 @@ export function TitleCardScreen(p: { kind: Kind; id: number } & TitleWantProps) 
     </FocusGroup>
   );
 }
+
+export { initials };
