@@ -1,3 +1,4 @@
+import { resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { tvNoOmp } from '../src/tv/tvClient';
 import { applyLanguageSetting } from '../../src/i18n';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
@@ -753,12 +754,25 @@ describe('Torrent · cast', () => {
     await flush();
     expect(el.querySelector('.m-tc-cast-ph')).toBeNull();
   });
-  it('never looks a series up', async () => {
-    const search = vi.fn();
-    fakeCatalog(search, vi.fn());
+  const tvHit = { items: [{ kind: 'tv', id: 5, title: 'x', original: 'x', year: 2024, poster: '', rating: 0 }], pages: 1 };
+  it('a single-torrent series lists the cast of its matched series card, before the skip block', async () => {
+    resetSeriesMatches();
+    const card = vi.fn(() => Promise.resolve({ kind: 'tv', id: 5, title: 'x', cast }));
+    fakeCatalog(vi.fn(() => Promise.resolve(tvHit)), card);
     mount();
     await flush();
-    expect(search).not.toHaveBeenCalled();
+    expect(card).toHaveBeenCalledWith('tv', 5);
+    expect(el.querySelector('.m-tc-section h2')!.textContent).toBe('В ролях');
+    expect(el.querySelectorAll('.m-tc-person').length).toBe(2);
+    const skip = el.querySelector('[data-block="skip"]')!;
+    expect(el.querySelector('.m-tc-section')!.compareDocumentPosition(skip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+  it('a series with no TMDB match shows no cast block', async () => {
+    resetSeriesMatches();
+    fakeCatalog(vi.fn(() => Promise.resolve({ items: [], pages: 1 })), vi.fn());
+    mount();
+    await flush();
     expect(el.querySelector('.m-tc-cast')).toBeNull();
+    expect(el.querySelector('.m-tc-cast-ph')).toBeNull();
   });
 });
