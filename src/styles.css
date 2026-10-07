@@ -123,7 +123,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .torrent-actions-row > * { flex-shrink: 0; }
 .torrent-head h1 { font-size: 44px; margin-bottom: 16px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 /* the raw release name under the clean one: small, muted, two lines at most */
-.torrent-raw { margin: -8px 0 14px; font-size: 22px; line-height: 30px; max-height: 60px; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-word; }
+/* one line: a wrapped release name left a stray «WEB-DL 10» on the second line */
+.torrent-raw { margin: -8px 0 14px; font-size: 22px; line-height: 30px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .skip-block { margin: 8px 0 28px; padding: 20px 22px; border-radius: 18px; background: var(--panel); }
 .skip-head { display: flex; align-items: baseline; margin-bottom: 8px; }
 .skip-title { font-size: 28px; font-weight: 700; margin-right: 16px; }

@@ -49,7 +49,7 @@ import { phoneLink } from '../phone/phoneStore';
 import { errorMessage } from '../api/http';
 import { SeriesPill } from './library/SeriesTile';
 import { CastRow } from '../ui/CastRow';
-import { ComingRows } from '../ui/ComingRows';
+import { ComingRows, revealComing } from '../ui/ComingRows';
 import { useSeriesDub } from '../ui/seriesDub';
 
 // the chosen season of each open series screen (its route entry): kept while the player or a torrent is on top
@@ -513,7 +513,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
         </div>
       )}
       <FocusGroup focusKey="SERIES-EPISODES" className="series-episodes">
-        {rows.map((r) => {
+        {rows.map((r, i) => {
           const hash = r.tor.hash;
           const watched = isWatched(hash, r.file.id);
           const ratio = progressRatio(hash, r.file.id);
@@ -523,7 +523,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           const ep = r.episode !== null ? eps[r.episode] : undefined;
           const name = ep && ep.title ? ep.title : cleanFileName(stripExt(baseName(r.file.path)));
           return (
-            <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item file-row ep-row" onPress={() => play(r)}>
+            <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item file-row ep-row" onPress={() => play(r)} onFocused={i === rows.length - 1 && coming.length ? () => revealComing() : undefined}>
               <span class="ep">{r.code}</span>
               <span class="name">{tvGlyphs(name)}</span>
               {!watched && ratio > 0 && (

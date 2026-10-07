@@ -34,7 +34,7 @@ import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navi
 import { displayTitle } from '../lib/torrentName';
 import { t } from '../i18n';
 import { tvGlyphs } from '../ui/tvText';
-import { ComingRows } from '../ui/ComingRows';
+import { ComingRows, revealComing } from '../ui/ComingRows';
 import { comingEpisodes, lastEpisodes } from '../lib/episodeNames';
 import { useTmdbEpisodes } from '../lib/useTmdbEpisodes';
 import { isSeries } from '../lib/seriesGroups';
@@ -362,7 +362,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
         {groups.map((g) => (
           <section key={String(g.season)}>
             {(groups.length > 1 || g.season !== null) && <h2>{g.season !== null ? t('library.season', { n: g.season }) : t('torrent.other')}</h2>}
-            {g.files.map((f) => {
+            {g.files.map((f, i) => {
               const watched = isWatched(hash, f.id);
               const ratio = progressRatio(hash, f.id);
               return (
@@ -371,7 +371,10 @@ export function TorrentScreen({ hash }: { hash: string }) {
                   focusKey={'file-' + f.id}
                   className="list-item file-row"
                   onPress={() => play(queue.findIndex((q) => q.fileIndex === f.id))}
-                  onFocused={() => enter('files')}
+                  onFocused={() => {
+                    enter('files');
+                    if (i === g.files.length - 1 && g.season !== null) revealComing(g.season);
+                  }}
                 >
                   <span class="ep">{episodeLabel(f.path)}</span>
                   <span class="name">{tvGlyphs(baseName(f.path))}</span>
