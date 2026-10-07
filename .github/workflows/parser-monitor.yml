@@ -67,7 +67,8 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh label create parser-monitor --color d93f0b --description "Монитор парсеров: сайт трекера изменился" --force
+        run: |
+          gh label create parser-monitor --color d93f0b --description "Монитор парсеров: сайт трекера изменился" --force
       - name: Issues and Telegram
         if: ${{ !inputs.dry_run }}
         env:
