@@ -644,6 +644,7 @@ export function Torrent({ hash }: { hash: string }) {
           {t('torrent.screen.watchOnPhone')}
         </button>
         {status && <LaunchError message={status} />}
+        {movie && <CastStrip cast={movie.cast} />}
         {files.length > 0 && (
           <div class="m-skip" data-block="skip">
             <button type="button" class="m-skip-row m-skip-open m-skip-toggle" aria-expanded={skipOpen} onClick={toggleSkipOpen}>
@@ -752,7 +753,6 @@ export function Torrent({ hash }: { hash: string }) {
           ))}
         </div>
       </div>
-      {movie && <CastStrip cast={movie.cast} />}
       {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
       {betterOpen && <BetterSheet torrent={tor} files={allFiles} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}

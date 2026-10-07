@@ -721,6 +721,17 @@ describe('Torrent · cast', () => {
     click(people[1]);
     expect(currentRoute.value).toMatchObject({ name: 'person', id: 7, label: 'Джоэл Эдгертон' });
   });
+  it('sits right after the watch buttons, before the skip block', async () => {
+    const search = vi.fn(() => Promise.resolve({ items: [{ kind: 'movie', id: 3, title: 'x', original: 'x', year: 2023, poster: '', rating: 0 }], pages: 1 }));
+    fakeCatalog(search, vi.fn(() => Promise.resolve({ kind: 'movie', id: 3, cast })));
+    mountFilm(filmTor('pf3'));
+    await flush();
+    const cast_ = el.querySelector('.m-tc-section')!;
+    const skip = el.querySelector('[data-block="skip"]')!;
+    expect(skip).not.toBeNull();
+    expect(cast_.compareDocumentPosition(skip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(cast_.closest('.m-tbody')).not.toBeNull();
+  });
   it('shows nothing when TMDB has no such film', async () => {
     const search = vi.fn(() => Promise.resolve({ items: [], pages: 1 }));
     fakeCatalog(search, vi.fn());

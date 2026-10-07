@@ -7,12 +7,13 @@ import { filmography, personJobs, type FilmSort } from '../../../../src/catalog/
 import { libraryTargetOf, ownedChecker } from '../../../../src/catalog/libraryTarget';
 import type { Credit, PersonCard } from '../../../../src/catalog/tmdb';
 import { torrents } from '../../../../src/store/library';
-import { phoneCatalog } from '../../catalog/phoneCatalog';
-import { goBack, navigate, type MRoute } from '../../nav';
-import { Icon } from '../../ui/Icon';
+import { phoneCatalog, setCatalogMode, type CatalogMode } from '../../catalog/phoneCatalog';
+import { goBack, navigate, switchTab, type MRoute } from '../../nav';
+import { Icon, ICONS } from '../../ui/Icon';
 import { CatalogError } from './CatalogError';
 import { ratingText } from './CatalogSearch';
 import { TileTitle, TileWhen } from './Discover';
+import { Overview } from './TitleCard';
 import { readDiscoverCols } from './discoverCols';
 
 const BACK = 'M15 5l-7 7l7 7';
@@ -53,6 +54,25 @@ function Segment({ items, value }: { items: { id: string; label: string; press: 
   );
 }
 
+/** The «Мои / Обзор» switch of «Каталог» with «Обзор» on: a tap opens that mode's root. */
+function ModeSwitch() {
+  const go = (m: CatalogMode) => {
+    setCatalogMode(m);
+    switchTab({ name: 'library' });
+  };
+  return (
+    <div class="m-lib-head m-person-switch">
+      <div class="m-seg" role="tablist" aria-label={t('nav.library')}>
+        {(['mine', 'discover'] as const).map((m) => (
+          <button key={m} type="button" role="tab" aria-selected={m === 'discover'} class={'m-seg-btn' + (m === 'discover' ? ' on' : '')} onClick={() => go(m)}>
+            {m === 'mine' ? t('discover.mine') : t('discover.browse')}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Body({ card }: { card: PersonCard }) {
   const jobs = personJobs(card);
   const [job, setJob] = useState<Job>(jobs[0] || 'acting');
@@ -68,7 +88,7 @@ function Body({ card }: { card: PersonCard }) {
     <>
       <div class="m-person-head">
         {card.photo ? (
-          <img class="m-person-photo" src={card.photo} alt="" width={64} height={64} />
+          <img class="m-person-photo" src={card.photo} alt="" width={96} height={96} />
         ) : (
           <span class="m-person-photo m-tc-initial" aria-hidden="true">
             {card.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('')}
@@ -80,6 +100,7 @@ function Body({ card }: { card: PersonCard }) {
           {years && <span class="m-small m-muted m-person-years">{years}</span>}
         </div>
       </div>
+      {card.bio && <Overview text={card.bio} />}
       {jobs.length > 1 && (
         <Segment
           value={job}
@@ -89,20 +110,23 @@ function Body({ card }: { card: PersonCard }) {
           ]}
         />
       )}
-      <Segment
-        value={onlyOwned ? 'owned' : 'all'}
-        items={[
-          { id: 'all', label: t('person.all'), press: () => setOnlyOwned(false) },
-          { id: 'owned', label: t('person.owned'), press: () => setOnlyOwned(true) },
-        ]}
-      />
-      <Segment
-        value={sort}
-        items={[
-          { id: 'popular', label: t('person.sortPopular'), press: () => setSort('popular') },
-          { id: 'year', label: t('person.sortYear'), press: () => setSort('year') },
-        ]}
-      />
+      <div class="m-person-filters">
+        <Segment
+          value={onlyOwned ? 'owned' : 'all'}
+          items={[
+            { id: 'all', label: t('person.all'), press: () => setOnlyOwned(false) },
+            { id: 'owned', label: t('person.owned'), press: () => setOnlyOwned(true) },
+          ]}
+        />
+        <button
+          type="button"
+          class="m-icon-btn m-sort"
+          aria-label={t('discover.sortAria', { name: sort === 'year' ? t('person.sortYear') : t('person.sortPopular') })}
+          onClick={() => setSort(sort === 'year' ? 'popular' : 'year')}
+        >
+          <Icon d={ICONS.sort} size={20} />
+        </button>
+      </div>
       {items.length === 0 ? (
         <p class="m-muted m-disc-empty">{onlyOwned ? t('person.ownedEmpty', { name: card.name }) : t('discover.nothingFound')}</p>
       ) : (
@@ -164,12 +188,13 @@ export function Person({ id, label }: { id: number; label?: string }) {
   }, [id, reload]);
 
   return (
-    <div class="m-screen m-person" data-route="person">
+    <div class="m-screen m-person m-library" data-route="person">
       <div class="m-bar">
         <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
       </div>
+      <ModeSwitch />
       {error ? (
         <CatalogError
           code={error}

@@ -251,7 +251,7 @@ function NextEpisodes({ card }: { card: CatalogCard }) {
   );
 }
 
-function Overview({ text }: { text: string }) {
+export function Overview({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   const [clamped, setClamped] = useState(false);
   const ref = useRef<HTMLParagraphElement>(null);

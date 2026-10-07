@@ -452,9 +452,14 @@ button, .m-btn {
 /* «Человек» */
 .m-person { display: flex; flex-direction: column; gap: 14px; }
 .m-person-head { display: flex; align-items: center; gap: 14px; }
-.m-person-photo { flex: none; width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: var(--panel); }
+.m-person-photo { flex: none; width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: var(--panel); }
 .m-person-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .m-person-name { margin: 0; font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+.m-person-photo.m-tc-initial { width: 96px; height: 96px; font-size: 32px; }
+.m-person-filters { display: flex; align-items: center; gap: 8px; }
+.m-person-filters .m-disc-chips { flex: 1 1 auto; min-width: 0; }
+.m-person-filters .m-sort { flex: none; }
+.m-person-switch { margin: 0; }
 .m-person-owned .m-disc-poster { box-shadow: 0 0 0 2px var(--accent); }
 .m-person-roles { min-height: 1em; }
 .m-disc-more { padding: 10px 14px; border-radius: 12px; background: var(--panel); font-size: 14px; }
