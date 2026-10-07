@@ -19,7 +19,10 @@ data class QueueItem(
     val assSubs: Boolean = false,
 )
 
-/** playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn, engine?, donate? }). */
+/**
+ * playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn, engine?, donate?,
+ * audioPick?, subPick? }) — the picks: [{ l?, g?, off? }].
+ */
 data class PlayRequest(
     val queue: List<QueueItem>,
     val index: Int,
@@ -35,8 +38,17 @@ data class PlayRequest(
     val donate: DonateQr? = null,
     /** «Плеер» of the TV settings, or this torrent's own choice from the player menu. */
     val engine: EngineMode = EngineMode.AUTO,
+    /**
+     * «Озвучка»: the start order of the audio track (series dub by title → the torrent's own choice → series language →
+     * settings), walked on every item; empty: the engine's language preference alone.
+     */
+    val audioPick: List<TrackPick> = emptyList(),
+    /** The same for subtitles (a step may turn them off). */
+    val subPick: List<TrackPick> = emptyList(),
 ) {
     companion object {
+        const val LABEL_MAX = 200
+
         /** Null when the queue is empty or malformed. */
         fun parse(o: JSONObject): PlayRequest? {
             val arr = o.optJSONArray("queue") ?: return null
@@ -77,6 +89,8 @@ data class PlayRequest(
                 session = if (o.opt("session") is Number) o.optLong("session") else null,
                 donate = DonateQr.parse(o.optJSONObject("donate")),
                 engine = EngineMode.parse(o.optString("engine")),
+                audioPick = TrackPick.parseList(o.optJSONArray("audioPick")),
+                subPick = TrackPick.parseList(o.optJSONArray("subPick")),
             )
         }
     }
@@ -84,7 +98,7 @@ data class PlayRequest(
 
 /**
  * Link between OmpNativePlugin (page side) and the open PlayerActivity: the request to play, the events to
- * the page (`nativePlayerState`, `nativePlayerClosed`, `nativePlayerMark`) and the phone commands to the player.
+ * the page (`nativePlayerState`, `nativePlayerClosed`, `nativePlayerMark`, `nativePlayerTrack`) and the phone commands to the player.
  */
 object NativePlayerBridge {
     @Volatile

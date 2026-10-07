@@ -17,6 +17,8 @@ import { t, lang } from '../i18n';
 import { donateCardEnabled } from '../player/DonateCard';
 import { journalSupportActive } from '../store/support';
 import { getTrackPref } from '../store/trackPrefs';
+import { seriesTracksFor } from '../store/seriesTracks';
+import { nativeTrackStart } from '../player/trackPrefs';
 import { p2160Package, play2160 } from '../player/player2160';
 import { getLocalProgress } from '../store/progress';
 import { engineFor, knownProbe } from '../player/nativeEngine';
@@ -104,9 +106,11 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
       const donate = donateCardEnabled(journalSupportActive());
       // a support mark read later (the skip settings' list) hides the card in the open player
       if (donate) unwatch = effect(() => { if (journalSupportActive()) run.hideDonate(); });
+      const firstHash = queue[index].hash;
       run.start({
         index, startAt: pos, seekStep: s.seekStep, autoNext: s.autoNext,
-        audioLang: s.audioLang, subLang: s.subLang, subtitlesOn: s.subtitlesOn,
+        // «Озвучка» of the series (else the torrent's own choice, else the settings): by title, then language
+        ...nativeTrackStart(seriesTracksFor(firstHash), firstHash ? getTrackPref(firstHash) : null, s),
         donate,
         // «Плеер»: the torrent's choice from the player menu wins over the setting
         engine: engineFor(s.playerEngine, queue[index].hash ? getTrackPref(queue[index].hash!) : null),

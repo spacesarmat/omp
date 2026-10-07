@@ -14,15 +14,15 @@ const probe: FfprobeResult = {
 describe('trackOptions', () => {
   it('builds audio options from probe', () => {
     expect(audioOptions(probe, null)).toEqual([
-      { label: 'EN · AC3 5.1', language: 'en', isDefault: false },
-      { label: 'RU · AAC 2.0', language: 'ru', isDefault: true },
+      { label: 'EN · AC3 5.1', language: 'en', isDefault: false, channels: 6 },
+      { label: 'RU · AAC 2.0', language: 'ru', isDefault: true, channels: 2 },
     ]);
     expect(defaultAudioIndex(audioOptions(probe, null))).toBe(1);
     expect(defaultAudioIndex([])).toBe(0);
   });
   it('falls back to video.audioTracks', () => {
     const video = { audioTracks: [{ language: 'ru', label: 'Dub' }] } as unknown as HTMLVideoElement;
-    expect(audioOptions(null, video)).toEqual([{ label: 'Dub (ru)', language: 'ru', isDefault: false }]);
+    expect(audioOptions(null, video)).toEqual([{ label: 'Dub (ru)', language: 'ru', isDefault: false, title: 'Dub' }]);
   });
   it('builds subtitle menu', () => {
     const emb = embeddedSubOptions(probe, null);
@@ -49,8 +49,8 @@ describe('trackOptions', () => {
       ],
     } as unknown as HTMLVideoElement;
     expect(audioOptions(probe, video)).toEqual([
-      { label: 'EN · AC3 5.1', language: 'en', isDefault: false },
-      { label: 'RU · AAC 2.0', language: 'ru', isDefault: true },
+      { label: 'EN · AC3 5.1', language: 'en', isDefault: false, channels: 6 },
+      { label: 'RU · AAC 2.0', language: 'ru', isDefault: true, channels: 2 },
     ]);
   });
   it('aligns audio counts: probe has 2, video has 1 → use video options', () => {
@@ -62,7 +62,7 @@ describe('trackOptions', () => {
       ],
     };
     expect(audioOptions(probeWith2Audio, video)).toEqual([
-      { label: 'Dub (ru)', language: 'ru', isDefault: false },
+      { label: 'Dub (ru)', language: 'ru', isDefault: false, title: 'Dub' },
     ]);
   });
   it('aligns subtitle counts: probe has 1, video.textTracks empty → use probe', () => {

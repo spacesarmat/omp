@@ -61,6 +61,8 @@ export interface FfprobeStream {
   width?: number;
   height?: number;
   color_transfer?: string;
+  /** Bit/s, as ffprobe gives it (a string). */
+  bit_rate?: string;
   disposition?: { default?: number; forced?: number };
   tags?: { [k: string]: string };
 }

@@ -8,6 +8,13 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.SpannableStringBuilder
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
+import android.graphics.Typeface
+import android.text.style.ForegroundColorSpan
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -19,6 +26,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
@@ -88,6 +96,27 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private lateinit var donateText: TextView
     private lateinit var donateLink: TextView
     private lateinit var engineName: TextView
+    private lateinit var infoView: View
+
+    /** The three tiles of «Инфо»: label and value views. */
+    private val infoTiles = ArrayList<Pair<TextView, TextView>>()
+
+    /** «Инфо» is on screen (Info / yellow key; Back closes it; playback goes on). */
+    private var infoShown = false
+
+    /** The TorrServer statistics of the torrent playing (InfoStatsState), and whether a request is out. */
+    private val infoStats = InfoStatsState()
+    private var infoFetching = false
+
+    /** «Инфо» refresh: once a second while shown (TorrServer asked in the background). */
+    private val infoTick = object : Runnable {
+        override fun run() {
+            if (!infoShown) return
+            fetchInfoStats()
+            renderInfo()
+            handler.postDelayed(this, INFO_REFRESH_MS)
+        }
+    }
     /** The page said a support code is known: no card for the rest of this run. */
     private var donateHidden = false
     private var donateShown = DonateQr.NONE
@@ -98,6 +127,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private val seeker = SeekAccumulator({ SystemClock.uptimeMillis() })
     private var ticks = 0
     private var dialog: AlertDialog? = null
+
+    /** The colour key whose window [dialog] is (audio list, subtitles list, menu); null for another list. */
+    private var dialogKey: ColorAction? = null
     private val skips = SkipState()
     /** «Заставка пропущена · Вернуть» on screen: the intro start OK returns to. */
     private var undoStart: Long? = null
@@ -193,6 +225,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         donateText = findViewById(R.id.player_donate_text)
         donateLink = findViewById(R.id.player_donate_link)
         engineName = findViewById(R.id.player_engine)
+        infoView = findViewById(R.id.player_info)
+        buildInfoTiles()
         findViewById<TextView>(R.id.player_badge).text = I18n.s("player.res.phoneBadge")
         btnNext.text = I18n.s("player.res.next")
         btnSkip.text = I18n.s("player.res.skipIntro")
@@ -217,6 +251,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         if (::session.isInitialized) {
             engine.hostStarted()
             handler.post(tick)
+            if (infoShown) handler.post(infoTick)
         }
     }
 
@@ -244,6 +279,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     override fun onStop() {
         super.onStop()
         handler.removeCallbacks(tick)
+        handler.removeCallbacks(infoTick)
         if (::session.isInitialized) {
             if (!isFinishing) engine.pause()
             engine.hostStopped()
@@ -380,6 +416,37 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         switcher.assSubsKnown(i)
     }
 
+    /**
+     * nativePlayerTrack { session, index, kind: "audio", label, lang, channels, seen: [{ l, g, c }] } or
+     * { session, index, kind: "subs", off, label?, lang? }: a track picked by hand, remembered by the page for the
+     * whole series («Озвучка»).
+     */
+    override fun trackChosen(choice: TrackChoice) {
+        if (closedSent) return
+        val o = JSObject()
+        runId?.let { o.put("session", it) }
+        o.put("index", index())
+        o.put("kind", if (choice.audio) "audio" else "subs")
+        if (!choice.audio) o.put("off", choice.off)
+        if (!choice.off) {
+            o.put("label", choice.label)
+            o.put("lang", choice.lang)
+        }
+        if (choice.audio) {
+            if (choice.channels > 0) o.put("channels", choice.channels)
+            val seen = JSArray()
+            choice.seen.forEach { d ->
+                val s = JSObject()
+                s.put("l", d.label)
+                s.put("g", d.lang)
+                if (d.channels > 0) s.put("c", d.channels)
+                seen.put(s)
+            }
+            o.put("seen", seen)
+        }
+        NativePlayerBridge.emit("nativePlayerTrack", o)
+    }
+
     /** nativePlayerEngine { session, index, engine: "builtin" | "vlc", reason }: the page logs / remembers it. */
     private fun emitEngine(kind: EngineKind, reason: SwitchReason) {
         if (closedSent) return
@@ -410,57 +477,73 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val dur = durationMs()
         val audio = session.audioOptions()
         val subs = session.subOptions()
-        val aSel = TrackOptions.selectedAudio(audio)
         val sSel = TrackOptions.selectedSub(subs)
         val chapters = skips.chapters(i)
         val rows = ArrayList<Pair<String, () -> Unit>>()
         rows.add(switcher.menuRow() to { switcher.menuPressed() })
-        rows.add(I18n.s("player.audioRow", "v" to selectedAudioLabel(audio)) to {
-            if (audio.size >= 2) {
-                dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-                    .setTitle(I18n.s("player.audio"))
-                    .setSingleChoiceItems(audio.map { it.label }.toTypedArray(), aSel) { d, n ->
-                        d.dismiss()
-                        session.selectAudio(n)
-                    }
-                    .show()
-            }
-        })
-        rows.add(I18n.s("player.subsRow", "v" to sSel.label) to {
-            dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-                .setTitle(I18n.s("player.subs"))
-                .setSingleChoiceItems(subs.map { it.label }.toTypedArray(), subs.indexOf(sSel)) { d, n ->
-                    d.dismiss()
-                    session.selectSub(subs[n].value)
-                }
-                .show()
-        })
+        rows.add(I18n.s("player.audioRow", "v" to selectedAudioLabel(audio)) to { openAudioList() })
+        rows.add(I18n.s("player.subsRow", "v" to sSel.label) to { openSubsList() })
         if (chapters.isNotEmpty()) rows.add(I18n.s("player.chaptersRow", "n" to chapters.size.toString()) to { openChapters(i, now) })
         val marks = markRows(skips.info(i), now, dur)
         listOf("intro-start", "intro-end", "credits").forEachIndexed { n, kind ->
             rows.add(marks[n] to { emitMark(i, kind, now, dur) })
         }
-        dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-            .setTitle(I18n.s("player.menu"))
-            .setItems(rows.map { it.first }.toTypedArray()) { _, which -> rows.getOrNull(which)?.second?.invoke() }
-            .show()
+        val menu = withColorKeys(
+            AlertDialog.Builder(this, R.style.OmpPlayerDialog)
+                .setTitle(I18n.s("player.menu"))
+                .setItems(rows.map { it.first }.toTypedArray()) { _, which -> rows.getOrNull(which)?.second?.invoke() }
+                .create(),
+            ColorAction.MENU,
+        )
+        menu.show()
+        dialog = menu
+        dialogKey = ColorAction.MENU
     }
 
     /** «Главы»: «время · название», the current one checked; a choice seeks to its start. */
     private fun openChapters(item: Int, now: Long) {
         val list = skips.chapters(item)
         if (list.isEmpty() || item != index()) return
-        dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-            .setTitle(I18n.s("player.chapters"))
-            .setSingleChoiceItems(Chapters.rows(list).toTypedArray(), Chapters.indexAt(list, now)) { d, n ->
-                d.dismiss()
-                if (item == index()) {
-                    seekToMs(list[n].startMs)
-                    showControls()
-                    changed()
-                }
+        showList(I18n.s("player.chapters"), Chapters.rows(list), Chapters.indexAt(list, now), null) { n ->
+            if (item == index()) {
+                seekToMs(list[n].startMs)
+                showControls()
+                changed()
             }
-            .show()
+        }
+    }
+
+    /** «Аудио» (the menu row, the red key): the tracks, the playing one checked; one track is listed too. */
+    private fun openAudioList() {
+        val audio = session.audioOptions()
+        if (audio.isEmpty()) return
+        showList(I18n.s("player.audio"), audio.map { it.label }, TrackOptions.selectedAudio(audio), ColorAction.AUDIO) { n -> session.selectAudio(n) }
+    }
+
+    /** «Субтитры» (the menu row, the green key): «Выкл», the tracks and files, the current one checked. */
+    private fun openSubsList() {
+        val subs = session.subOptions()
+        showList(I18n.s("player.subs"), subs.map { it.label }, subs.indexOf(TrackOptions.selectedSub(subs)), ColorAction.SUBS) { n ->
+            session.selectSub(subs[n].value)
+        }
+    }
+
+    /**
+     * A single-choice list whose every pick closes it, the checked row included ([ListPick]): the dialog's own item
+     * listener is replaced, as the single-choice one of AlertDialog does not close on the checked row everywhere.
+     */
+    private fun showList(title: String, labels: List<String>, checked: Int, key: ColorAction?, onPick: (Int) -> Unit): AlertDialog {
+        val d = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
+            .setTitle(title)
+            .setSingleChoiceItems(labels.toTypedArray(), checked, null)
+            .create()
+        withColorKeys(d, key)
+        d.show()
+        val pick = ListPick(labels.size, { d.dismiss() }, onPick)
+        d.listView?.setOnItemClickListener { _, _, n, _ -> pick.click(n) }
+        dialog = d
+        dialogKey = key
+        return d
     }
 
     /** «Отметить …»: the page applies the mark (applyMark), saves it and answers with a message and new segments. */
@@ -479,12 +562,19 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
-        if (code == KeyEvent.KEYCODE_BACK || code !in HANDLED_KEYS) return super.dispatchKeyEvent(event)
-        if (event.action == KeyEvent.ACTION_DOWN) onKey(code)
+        if (code == KeyEvent.KEYCODE_BACK || (code !in HANDLED_KEYS && ColorKeys.actionFor(code) == null)) return super.dispatchKeyEvent(event)
+        if (event.action != KeyEvent.ACTION_DOWN) return true
+        // colour keys and Info once per press: holding Yellow must not flip «Инфо» at the repeat rate
+        if (ColorKeys.actionFor(code) != null && !colorKeyActs(event.repeatCount)) return true
+        onKey(code)
         return true
     }
 
     private fun onKey(code: Int) {
+        ColorKeys.actionFor(code)?.let {
+            colorKey(it)
+            return
+        }
         when (code) {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> when {
                 flow.countdown >= 0 -> playNext()
@@ -508,7 +598,131 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         }
     }
 
+    /** Colour keys and Info: Red the audio list, Green the subtitles list, Yellow / Info «Инфо», Blue the menu. */
+    private fun colorKey(action: ColorAction) {
+        when (action) {
+            ColorAction.AUDIO -> openAudioList()
+            ColorAction.SUBS -> openSubsList()
+            ColorAction.INFO -> toggleInfo()
+            ColorAction.MENU -> openMenu()
+        }
+    }
+
+    /**
+     * The colour keys inside a player list or the menu (the dialog has its own window, the activity gets no keys):
+     * the dialog closes; its own key only closes it (Red on the audio list), Blue only closes, another key then does
+     * its action ([ColorKeys.inDialog]).
+     */
+    private fun withColorKeys(d: AlertDialog, key: ColorAction?): AlertDialog {
+        d.setOnKeyListener { dlg, code, e ->
+            val action = ColorKeys.actionFor(code) ?: return@setOnKeyListener false
+            if (e.action == KeyEvent.ACTION_DOWN && colorKeyActs(e.repeatCount)) {
+                dlg.dismiss()
+                ColorKeys.inDialog(action, key)?.let { a -> handler.post { colorKey(a) } }
+            }
+            true
+        }
+        return d
+    }
+
+    // ---- «Инфо» ----
+
+    /** Shows / hides the «Инфо» panel; it refreshes once a second while shown and never pauses playback. */
+    private fun toggleInfo() {
+        infoShown = !infoShown
+        handler.removeCallbacks(infoTick)
+        if (infoShown) {
+            infoView.visibility = View.VISIBLE
+            handler.post(infoTick)
+        } else {
+            infoView.visibility = View.GONE
+            infoStats.closed()
+        }
+    }
+
+    /** One /cache request at a time for the torrent of the current item (TorrServerStats); the answer is kept. */
+    private fun fetchInfoStats() {
+        val r = session.item()?.url?.let { TorrServerStats.request(it) }
+        // not a TorrServer stream: no numbers (not the previous item's)
+        infoStats.forTorrent(r?.hash)
+        if (r == null || infoFetching) return
+        infoFetching = true
+        val t = Thread {
+            val s = TorrServerStats.fetch(r)
+            handler.post {
+                infoFetching = false
+                // a failed fetch clears the numbers: «нет данных», never frozen ones
+                infoStats.answer(r.hash, s)
+                if (infoShown) renderInfo()
+            }
+        }
+        t.isDaemon = true
+        t.start()
+    }
+
+    private fun renderInfo() {
+        if (!infoShown || !::session.isInitialized || isDestroyed) return
+        val item = session.item() ?: return
+        val audio = engine.audioTracks().firstOrNull { it.selected }
+        showInfoPanel(PlayerInfoText.panel(item.title, engine.mediaInfo(), audio, infoStats.stats))
+    }
+
+    /** Builds the three tiles of «Инфо» once (layout/player_info_tile.xml), with a gap between them. */
+    private fun buildInfoTiles() {
+        val row = findViewById<LinearLayout>(R.id.player_info_tiles)
+        val gap = (8 * resources.displayMetrics.density).toInt()
+        repeat(3) { n ->
+            val tile = layoutInflater.inflate(R.layout.player_info_tile, row, false)
+            if (n > 0) (tile.layoutParams as LinearLayout.LayoutParams).marginStart = gap
+            row.addView(tile)
+            infoTiles.add(tile.findViewById<TextView>(R.id.player_info_tile_label) to tile.findViewById(R.id.player_info_tile_value))
+        }
+        findViewById<TextView>(R.id.player_info_buffer_label).text = I18n.s("info.buffer")
+    }
+
+    /** «Инфо» («variant B»): 40% of the screen wide, every text on one line. */
+    private fun showInfoPanel(p: InfoPanel) {
+        val width = (resources.displayMetrics.widthPixels * INFO_WIDTH).toInt()
+        if (infoView.layoutParams.width != width) {
+            infoView.layoutParams = infoView.layoutParams.apply { this.width = width }
+        }
+        findViewById<TextView>(R.id.player_info_title).text = p.title
+        val chip = SpannableStringBuilder()
+        if (p.hdr.isNotEmpty()) {
+            chip.append(p.hdr)
+            chip.setSpan(ForegroundColorSpan(INFO_ACCENT), 0, chip.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            chip.setSpan(StyleSpan(Typeface.BOLD), 0, chip.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (p.chip.isNotEmpty()) chip.append(" · ")
+        }
+        chip.append(p.chip)
+        val chipView = findViewById<TextView>(R.id.player_info_chip)
+        chipView.text = chip
+        chipView.visibility = if (chip.isEmpty()) View.GONE else View.VISIBLE
+        p.tiles.forEachIndexed { n, t ->
+            val (label, value) = infoTiles.getOrNull(n) ?: return@forEachIndexed
+            label.text = t.label
+            val v = SpannableStringBuilder(t.value)
+            if (t.unit.isNotEmpty()) {
+                val start = v.length
+                v.append(" ").append(t.unit)
+                v.setSpan(RelativeSizeSpan(0.7f), start, v.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                v.setSpan(ForegroundColorSpan(INFO_MUTED), start, v.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            value.text = v
+        }
+        val sound = SpannableStringBuilder(I18n.s("info.audio"))
+        sound.setSpan(ForegroundColorSpan(INFO_MUTED), 0, sound.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sound.append("  ").append(p.sound)
+        findViewById<TextView>(R.id.player_info_sound).text = sound
+        findViewById<ProgressBar>(R.id.player_info_buffer_bar).progress = (p.bufferFill * 1000).toInt()
+        findViewById<TextView>(R.id.player_info_buffer).text = p.buffer
+    }
+
     private fun onBack() {
+        if (infoShown) {
+            toggleInfo()
+            return
+        }
         if (flow.countdown >= 0) {
             if (flow.creditsCountdown) skips.dismissCountdown()
             cancelCountdown()
@@ -792,7 +1006,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     // ---- phone remote (control/TvRemote.kt), UI thread ----
 
-    /** A key from the phone remote (UP/DOWN/LEFT/RIGHT/ENTER/BACK) handled like the TV remote's key. */
+    /**
+     * A key from the phone remote handled like the TV remote's key: UP/DOWN/LEFT/RIGHT/ENTER/BACK, MENU, INFO and the
+     * colour keys RED/GREEN/YELLOW/BLUE (ColorKeys.remoteCode).
+     */
     fun remoteKey(name: String) {
         if (isFinishing || !::session.isInitialized) return
         val code = when (name) {
@@ -802,9 +1019,16 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             "RIGHT" -> KeyEvent.KEYCODE_DPAD_RIGHT
             "ENTER" -> KeyEvent.KEYCODE_DPAD_CENTER
             "BACK" -> KeyEvent.KEYCODE_BACK
-            else -> return
+            else -> ColorKeys.remoteCode(name) ?: return
         }
         flashBadge()
+        val color = ColorKeys.actionFor(code)
+        if (color != null && dialog?.isShowing == true) {
+            // a colour key from the phone over a list: as on the TV remote (closes it, then its action)
+            dialog?.dismiss()
+            ColorKeys.inDialog(color, dialogKey)?.let { colorKey(it) }
+            return
+        }
         if (dialog?.isShowing == true) {
             // the track list moves its own focus: a real key event into our window (off the UI thread)
             Thread {
@@ -891,7 +1115,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                 if (cur.isNotEmpty()) title.text = item.title + " · " + cur
             }
             ticksView.setTicks(Chapters.ticks(chapters, dur))
-            hint.text = I18n.s(if (chapters.isNotEmpty()) "player.res.hintChapters" else "player.res.hint")
+            hint.text = hintText(chapters.isNotEmpty())
             engineName.text = switcher.kind.label
         }
         toastBox.visibility = if (toastShown) View.VISIBLE else View.GONE
@@ -910,6 +1134,21 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val e = session.errorText()
         errorBox.visibility = if (e != null) View.VISIBLE else View.GONE
         if (e != null) errorText.text = e
+    }
+
+    /** The key hint line and, under it, the colour keys with coloured dots. */
+    private fun hintText(chapters: Boolean): CharSequence {
+        val base = I18n.s(if (chapters) "player.res.hintChapters" else "player.res.hint")
+        val c = ColorKeys.hint()
+        val out = SpannableString(base + "\n" + c.text)
+        var from = base.length + 1
+        for (color in c.dots) {
+            val at = out.indexOf('\u25CF', from)
+            if (at < 0) break
+            out.setSpan(ForegroundColorSpan(color), at, at + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            from = at + 1
+        }
+        return out
     }
 
     // ---- events to the page ----
@@ -951,6 +1190,12 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     companion object {
         private const val TAG = "OmpPlayer"
         private const val HIDE_MS = 4000L
+        /** «Инфо» refresh period. */
+        private const val INFO_REFRESH_MS = 1000L
+        /** «Инфо»: this share of the screen width; muted label colour (as the hint line); the accent (HDR mark). */
+        private const val INFO_WIDTH = 0.40f
+        private const val INFO_MUTED = 0xFF9AA1B2.toInt()
+        private const val INFO_ACCENT = 0xFFF5B700.toInt()
         private const val SKIP_HIDDEN_SHIFT_DP = 150f
         /** «Поддержать»: bottom margin on pause (above the controls) and in the credits; the skip button lift. */
         private const val DONATE_PAUSE_BOTTOM_DP = 210f
@@ -975,6 +1220,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT,
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_MEDIA_PREVIOUS, KeyEvent.KEYCODE_CHANNEL_DOWN,
             KeyEvent.KEYCODE_MEDIA_STOP, KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN,
+            KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_PROG_RED, KeyEvent.KEYCODE_PROG_GREEN, KeyEvent.KEYCODE_PROG_YELLOW,
+            KeyEvent.KEYCODE_PROG_BLUE,
         )
 
         fun clock(ms: Long): String = formatClock(ms)

@@ -18,6 +18,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -28,6 +29,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioRendererEventListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
@@ -84,6 +86,11 @@ class Media3Engine(private val context: Context) : PlayerEngine {
             .build()
         // the end of an item pauses (the UI decides: countdown or close)
         p.pauseAtEndOfMediaItems = true
+        p.addAnalyticsListener(object : AnalyticsListener {
+            override fun onAudioTrackInitialized(eventTime: AnalyticsListener.EventTime, audioTrackConfig: AudioSink.AudioTrackConfig) {
+                outputEncoding = audioTrackConfig.encoding
+            }
+        })
         p.addListener(object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) ended()
@@ -189,6 +196,23 @@ class Media3Engine(private val context: Context) : PlayerEngine {
     override fun audioTracks(): List<EngineTrack> = tracksOf(C.TRACK_TYPE_AUDIO)
 
     override fun subtitleTracks(): List<EngineTrack> = tracksOf(C.TRACK_TYPE_TEXT)
+
+    /** The encoding of the audio output (AnalyticsListener): a non-PCM one means passthrough over HDMI. */
+    private var outputEncoding: Int? = null
+
+    override fun mediaInfo(): EngineMediaInfo {
+        val v = exo.videoFormat
+        val ahead = exo.bufferedPosition - exo.currentPosition
+        return EngineMediaInfo(
+            videoCodec = PlayerInfoText.videoCodec(v?.sampleMimeType, v?.codecs),
+            width = v?.width?.takeIf { it > 0 } ?: 0,
+            height = v?.height?.takeIf { it > 0 } ?: 0,
+            hdr = if (v == null) "" else hdrOf(v.sampleMimeType, v.colorInfo?.colorTransfer),
+            bitrate = (v?.bitrate?.takeIf { it > 0 } ?: v?.averageBitrate?.takeIf { it > 0 } ?: 0).toLong(),
+            passthrough = outputEncoding?.let { !Util.isEncodingLinearPcm(it) },
+            bufferedMs = if (ahead >= 0) ahead else -1,
+        )
+    }
 
     /** Supported groups of [type]; the id is the group's place in currentTracks («g<n>»). */
     private fun tracksOf(type: Int): List<EngineTrack> {
@@ -323,6 +347,14 @@ class Media3Engine(private val context: Context) : PlayerEngine {
             selected = selected,
             external = formatId?.let { EXTERNAL_RE.find(it) }?.groupValues?.get(1)?.toIntOrNull(),
         )
+
+        /** «HDR10», «HLG», «Dolby Vision» from the video MIME type and its colour transfer; '' for SDR / unknown. */
+        fun hdrOf(mime: String?, transfer: Int?): String = when {
+            mime == MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision"
+            transfer == C.COLOR_TRANSFER_ST2084 -> "HDR10"
+            transfer == C.COLOR_TRANSFER_HLG -> "HLG"
+            else -> ""
+        }
 
         fun codecName(mime: String?): String = when (mime) {
             MimeTypes.AUDIO_AC3 -> "AC3"

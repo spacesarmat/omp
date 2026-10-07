@@ -197,7 +197,7 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
             "/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume", "/omp/sources",
             CloudflareProtocol.POLL, CloudflareProtocol.ANSWER,
         )
-        val KEYS = setOf("UP", "DOWN", "LEFT", "RIGHT", "ENTER", "BACK", "CATALOG", "NOWPLAYING", "MENU", "RED", "GREEN", "YELLOW", "BLUE")
+        val KEYS = setOf("UP", "DOWN", "LEFT", "RIGHT", "ENTER", "BACK", "CATALOG", "NOWPLAYING", "MENU", "INFO", "RED", "GREEN", "YELLOW", "BLUE")
         /** UI languages of OMP (the phone sends its resolved one). */
         val LANGS = setOf("ru", "en")
         private val REPORT = Regex("^http://.+", RegexOption.IGNORE_CASE)

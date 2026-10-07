@@ -10,6 +10,20 @@ data class AudioOption(val track: EngineTrack, val label: String)
 /** A subtitle choice: `value` «off», «e<n>» (embedded) or «x<n>» (the item's file n), as subtitleMenu on LG. */
 data class SubOption(val value: String, val label: String, val track: EngineTrack?)
 
+/**
+ * A track picked by hand (menu or phone), sent to the page as `nativePlayerTrack`: audio (title, language and the
+ * dubs of the file), subtitles off, or subtitles by title (file name) and language.
+ */
+data class TrackChoice(
+    val audio: Boolean,
+    val off: Boolean = false,
+    val label: String = "",
+    val lang: String = "",
+    /** Audio: the channel count of the track (0: unknown), shown with the dub on the series screen. */
+    val channels: Int = 0,
+    val seen: List<SeenDub> = emptyList(),
+)
+
 /** What the page gets in `nativePlayerState` / `nativePlayerClosed` (times in seconds). */
 data class PlayerSnapshot(
     val index: Int,
@@ -104,6 +118,9 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
          * takes over (it moves the item to another engine with [switchEngine]) and no error is shown.
          */
         fun engineFailed(kind: ErrorKind, detail: String, beforeFirstFrame: Boolean): Boolean = false
+
+        /** A track was picked by hand: the page remembers it for the series («Озвучка»). */
+        fun trackChosen(choice: TrackChoice) {}
     }
 
     /** The engine playing now ([switchEngine] replaces it). */
@@ -116,6 +133,16 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
 
     var request: PlayRequest? = null
         private set
+
+    /**
+     * «Озвучка»: the start order of the audio and subtitle tracks on each item opened, from the request and then from
+     * the user's own choices in this run (title, else language; subtitles off stay off). Applied once per item, when
+     * the engine lists its tracks.
+     */
+    private var audioPicks: List<TrackPick> = emptyList()
+    private var subPicks: List<TrackPick> = emptyList()
+    private var wantAudio = false
+    private var wantSub = false
 
     /** Current queue item. */
     var index = 0
@@ -166,6 +193,10 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
         firstFrame = false
         pendingAudio = null
         pendingSub = null
+        audioPicks = r.audioPick
+        subPicks = r.subPick
+        wantAudio = true
+        wantSub = true
         engine.setPreferences(TrackPrefs(r.audioLang, r.subLang, r.subtitlesOn))
         engine.open(media(r.queue[index]), r.startAtMs)
     }
@@ -188,6 +219,8 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
         pendingAudio = carried?.first
         // a file of the previous item means nothing here: its language is in the preferences
         pendingSub = carried?.second?.takeIf { it.external == null }
+        wantAudio = pendingAudio == null
+        wantSub = pendingSub == null
         engine.open(media(r.queue[i]), start)
         return true
     }
@@ -239,6 +272,8 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
         val (audio, sub) = adopt(next, r)
         pendingAudio = audio
         pendingSub = sub
+        wantAudio = audio == null && wantAudio
+        wantSub = sub == null && wantSub
         next.open(media(r.queue[index]), pos)
         if (!playing) next.pause()
     }
@@ -266,6 +301,34 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
         }
     }
 
+    /**
+     * «Озвучка» on the item just opened: the first step of the start order that finds a track (or turns the subtitles
+     * off) decides. Without steps the engine's language preferences stay.
+     */
+    private fun applyWanted() {
+        if (wantAudio && pendingAudio == null) {
+            val list = engine.audioTracks()
+            if (list.isNotEmpty()) {
+                wantAudio = false
+                val t = list.getOrNull(DubMatch.pickAudio(list, audioPicks))
+                if (t != null && !t.selected) engine.selectAudio(t.id)
+            }
+        }
+        if (wantSub && pendingSub == null) {
+            val list = engine.subtitleTracks()
+            if (list.isNotEmpty()) {
+                wantSub = false
+                val n = DubMatch.pickSub(list, item()?.subtitles ?: emptyList(), subPicks)
+                if (n == DubMatch.OFF) {
+                    if (list.any { it.selected }) engine.selectSubtitle(null)
+                } else {
+                    val t = list.getOrNull(n)
+                    if (t != null && !t.selected) engine.selectSubtitle(t.id)
+                }
+            }
+        }
+    }
+
     /** Resume point of item [i] (as it would be used when going there). */
     fun resumeOf(i: Int): Long = resume.getOrElse(i) { 0L }
 
@@ -286,20 +349,38 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
 
     fun subOptions(): List<SubOption> = TrackOptions.subs(engine.subtitleTracks(), item()?.subtitles ?: emptyList())
 
-    /** «audio» of the phone / the menu: option [i] of [audioOptions]. */
+    /** «audio» of the phone / the menu: option [i] of [audioOptions]; the page remembers it for the series. */
     fun selectAudio(i: Int) {
-        val o = audioOptions().getOrNull(i) ?: return
+        val all = audioOptions()
+        val o = all.getOrNull(i) ?: return
         engine.selectAudio(o.track.id)
+        val label = DubMatch.title(o.track.label)
+        val lang = o.track.language?.takeIf { it != "und" }.orEmpty()
+        // the next items of this run: the same dub, else the same language (also for an untitled track)
+        audioPicks = TrackPick.of(label, lang)
+        wantAudio = false
+        ui.trackChosen(TrackChoice(audio = true, label = label, lang = lang, channels = o.track.channels, seen = DubMatch.seen(all.map { it.track })))
     }
 
-    /** «subs» of the phone / the menu: a [SubOption.value]. */
+    /** «subs» of the phone / the menu: a [SubOption.value]; the page remembers it for the series. */
     fun selectSub(value: String) {
         if (value == "off") {
             engine.selectSubtitle(null)
+            // the next items of this run start without subtitles too
+            subPicks = listOf(TrackPick(off = true))
+            wantSub = false
+            ui.trackChosen(TrackChoice(audio = false, off = true))
             return
         }
         val t = subOptions().firstOrNull { it.value == value }?.track ?: return
         engine.selectSubtitle(t.id)
+        val files = item()?.subtitles ?: emptyList()
+        val label = DubMatch.titleOf(t, files).trim()
+        val lang = DubMatch.langOf(t, files)
+        // the next items of this run: the same subtitles by title (same language), else by language
+        subPicks = TrackPick.of(label, lang)
+        wantSub = false
+        ui.trackChosen(TrackChoice(audio = false, label = label, lang = lang))
     }
 
     fun snapshot(): PlayerSnapshot {
@@ -337,6 +418,7 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
 
     override fun onTracksChanged() {
         applyPending()
+        applyWanted()
         ui.changed()
     }
 

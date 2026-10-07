@@ -47,6 +47,7 @@ import { phoneLink } from '../phone/phoneStore';
 import { errorMessage } from '../api/http';
 import { SeriesPill } from './library/SeriesTile';
 import { CastRow } from '../ui/CastRow';
+import { useSeriesDub } from '../ui/seriesDub';
 
 // the chosen season of each open series screen (its route entry): kept while the player or a torrent is on top
 const chosenSeason = new WeakMap<Route, number>();
@@ -317,6 +318,15 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   };
   const eps = useEpisodes(group, season);
   const [follow, toggleFollow] = useFollow(group);
+  // «Озвучка»: the dub remembered for the whole series from the players
+  const dub = useSeriesDub(group.members, c);
+  const openDub = () => {
+    const options = dub.choices.map((o) => ({ label: tvGlyphs(o.label), value: o.value }));
+    choose(t('series.dubTitle'), options, dub.value).then((v) => {
+      if (v === null) return;
+      dub.pick(v).catch((e) => toast(errorMessage(e), 'error'));
+    });
+  };
 
   const rows = seasonRows(group, season); // progress decides which copy of an episode is shown
   const target = nextRow(rows);
@@ -438,6 +448,10 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
               <span class="series-follow-state" role="switch" aria-label={t('series.follow')} aria-checked={follow}>
                 {t(follow ? 'series.followOn' : 'series.followOff')}
               </span>
+            </Focusable>
+            <Focusable focusKey="series-dub" className="button series-dub" role="button" onPress={openDub}>
+              {t('series.dub') + ': '}
+              <span class="series-follow-state series-dub-value">{tvGlyphs(dub.text)}</span>
             </Focusable>
           </FocusGroup>
           {!phoneLink.value && <div class="muted series-follow-note">{t('series.followNote')}</div>}
