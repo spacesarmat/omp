@@ -7,6 +7,8 @@
 // `cm: true` (v0.17) = the category was picked by hand: the automatic category check never changes it.
 // `ca` (v0.17) = the category the automatic check set itself: only that (or an empty one) may be corrected again.
 // `q: false` (v0.17) = don't watch the film for a better release («Следить за качеством» off); a top-level `omp` key like `w`.
+// `a: { at, l?, g?, s?, k? }` (v0.19) = the series' default dub («Озвучка») picked by hand in a player; the newest one
+// among the torrents of a series wins (src/lib/seriesTracks.ts).
 // `d: { until }` (v0.14.1) = a support code was applied on a phone: the TVs hide the «Поддержать» card until then
 // (Unix ms). Only the end time is ever written, never the code; any torrent of the server may carry it, the latest wins.
 

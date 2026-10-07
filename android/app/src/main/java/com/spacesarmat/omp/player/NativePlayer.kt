@@ -19,7 +19,10 @@ data class QueueItem(
     val assSubs: Boolean = false,
 )
 
-/** playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn, engine?, donate? }). */
+/**
+ * playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn, engine?, donate?,
+ * dubLabel?, subLabel? }).
+ */
 data class PlayRequest(
     val queue: List<QueueItem>,
     val index: Int,
@@ -35,8 +38,14 @@ data class PlayRequest(
     val donate: DonateQr? = null,
     /** «Плеер» of the TV settings, or this torrent's own choice from the player menu. */
     val engine: EngineMode = EngineMode.AUTO,
+    /** «Озвучка» of the series: the audio track with this title is picked before [audioLang] (empty: none). */
+    val dubLabel: String = "",
+    /** The subtitles with this title (or file name) are picked before [subLang] (empty: none). */
+    val subLabel: String = "",
 ) {
     companion object {
+        const val LABEL_MAX = 200
+
         /** Null when the queue is empty or malformed. */
         fun parse(o: JSONObject): PlayRequest? {
             val arr = o.optJSONArray("queue") ?: return null
@@ -77,6 +86,8 @@ data class PlayRequest(
                 session = if (o.opt("session") is Number) o.optLong("session") else null,
                 donate = DonateQr.parse(o.optJSONObject("donate")),
                 engine = EngineMode.parse(o.optString("engine")),
+                dubLabel = o.optString("dubLabel").trim().take(LABEL_MAX),
+                subLabel = o.optString("subLabel").trim().take(LABEL_MAX),
             )
         }
     }
@@ -84,7 +95,7 @@ data class PlayRequest(
 
 /**
  * Link between OmpNativePlugin (page side) and the open PlayerActivity: the request to play, the events to
- * the page (`nativePlayerState`, `nativePlayerClosed`, `nativePlayerMark`) and the phone commands to the player.
+ * the page (`nativePlayerState`, `nativePlayerClosed`, `nativePlayerMark`, `nativePlayerTrack`) and the phone commands to the player.
  */
 object NativePlayerBridge {
     @Volatile

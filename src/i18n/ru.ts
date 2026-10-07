@@ -285,6 +285,13 @@ export const ru = {
     followOn: 'вкл',
     followOff: 'выкл',
     followNote: 'Сообщать о новых сериях будет OMP на телефоне',
+    // «Озвучка» of the series: the track picked by hand in a player, for every season (TV and phone)
+    dub: 'Озвучка',
+    dubDefault: 'по умолчанию',
+    dubTitle: 'Озвучка сериала',
+    dubReset: 'По умолчанию (сбросить)',
+    dubChange: 'Сменить',
+    dubNote: 'Запоминается при выборе дорожки в плеере — для всех сезонов, общая для ТВ и телефона',
     watchedAll: 'просмотрен',
     progressOf: '{done} из {total}',
     left: 'осталось {n} мин',

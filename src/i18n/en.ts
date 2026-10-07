@@ -272,6 +272,13 @@ export const en: EnDict<typeof ru> = {
     followOn: 'on',
     followOff: 'off',
     followNote: 'OMP on the phone will report new episodes',
+    // «Озвучка» of the series: the track picked by hand in a player, for every season (TV and phone)
+    dub: 'Audio',
+    dubDefault: 'default',
+    dubTitle: 'Series audio',
+    dubReset: 'Default (reset)',
+    dubChange: 'Change',
+    dubNote: 'Remembered when you pick a track in the player, for every season, shared by the TV and the phone',
     watchedAll: 'watched',
     progressOf: '{done} of {total}',
     left: '{n} min left',

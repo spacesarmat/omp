@@ -7,7 +7,8 @@ import { decideStart } from '../player/resume';
 import type { FfprobeResult } from '../api/types';
 import { errorMessage } from '../api/http';
 import { getTrackPref, saveTrackPref } from '../store/trackPrefs';
-import { pickAudio, pickSub, subPrefFromChoice } from '../player/trackPrefs';
+import { pickAudioFor, pickSubFor, subPrefFromChoice, seriesAudioFromChoice, seriesSubFromChoice } from '../player/trackPrefs';
+import { seriesTracksFor, rememberSeriesTracks } from '../store/seriesTracks';
 import { parseSubtitles, decodeText, Cue } from '../lib/subtitles';
 import { selectAudioTrack, selectTextTrack } from '../platform/webosMedia';
 import type { PlayItem } from '../player/types';
@@ -16,7 +17,7 @@ import { tapZone, TapDetector, SeekStreak } from '../player/pointerTaps';
 import type { TapZone } from '../player/pointerTaps';
 import { Icon } from '../ui/icons';
 import type { IconName } from '../ui/icons';
-import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
+import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex, type TrackOption } from '../player/trackOptions';
 import { chapterList, chapterLabel, chapterIndexAt, chapterTarget, skipSegments, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS } from '../player/chapters';
 import type { MarkKind } from '../player/chapters';
 import type { SkipPrefs } from '../lib/journal';
@@ -388,11 +389,23 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     );
   };
 
-  const chooseAudio = (v: HTMLVideoElement, audio: { label: string; language: string }[], i: number) => {
+  // a choice by hand: for this torrent (locally) and for the whole series («Озвучка», the journal on TorrServer)
+  const chooseAudio = (v: HTMLVideoElement, audio: TrackOption[], i: number) => {
     userTracks.current = true;
     setAudioIdx(i);
     selectAudioTrack(v, i);
-    if (item.hash) saveTrackPref(item.hash, { audioLang: audio[i].language, audioLabel: audio[i].label });
+    if (!item.hash) return;
+    saveTrackPref(item.hash, { audioLang: audio[i].language, audioLabel: audio[i].label });
+    void rememberSeriesTracks(c, item.hash, seriesAudioFromChoice(audio, i));
+  };
+
+  const chooseSubs = (v: HTMLVideoElement, choice: string) => {
+    userTracks.current = true;
+    applySubChoice(choice);
+    if (!item.hash) return;
+    const embedded = embeddedSubOptions(probeRef.current, v);
+    saveTrackPref(item.hash, { sub: subPrefFromChoice(choice, embedded, item.subtitles || []) });
+    void rememberSeriesTracks(c, item.hash, { s: seriesSubFromChoice(choice, embedded, item.subtitles || []) });
   };
 
   const applyDefaultTracks = () => {
@@ -400,13 +413,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     if (!v || userTracks.current) return;
     const s = settings.value;
     const pref = item.hash ? getTrackPref(item.hash) : null;
+    const series = seriesTracksFor(item.hash);
     const audio = audioOptions(probeRef.current, v);
-    const ai = pickAudio(audio, pref, s.audioLang);
+    const ai = pickAudioFor(audio, series, pref, s.audioLang);
     if (ai >= 0) {
       setAudioIdx(ai);
       if (ai !== defaultAudioIndex(audio)) selectAudioTrack(v, ai);
     }
-    applySubChoice(pickSub(embeddedSubOptions(probeRef.current, v), item.subtitles || [], pref, s));
+    applySubChoice(pickSubFor(embeddedSubOptions(probeRef.current, v), item.subtitles || [], series, pref, s));
   };
 
   // ffprobe often arrives after metadata: re-apply language defaults
@@ -463,9 +477,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       } else if (kind === 'subs') {
         choose(t('common.subtitles'), menu, subChoice).then((ch) => {
           if (ch === null) return;
-          userTracks.current = true;
-          applySubChoice(ch);
-          if (item.hash) saveTrackPref(item.hash, { sub: subPrefFromChoice(ch, embeddedSubOptions(probe, v), item.subtitles || []) });
+          chooseSubs(v, ch);
         });
       } else if (kind === 'size') {
         choose(t('tvPlayer.subSize'), subSizeOptions(), settings.value.subSize).then((size) => { if (size) updateSettings({ subSize: size }); });
@@ -506,11 +518,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
         chapterStarts: chapterList(probeRef.current).map((c) => c.start),
         toggle: togglePause, seekTo, next: goNext, prev: goPrev,
         audio: (i) => chooseAudio(v, audio, i),
-        subs: (value) => {
-          userTracks.current = true;
-          applySubChoice(value);
-          if (item.hash) saveTrackPref(item.hash, { sub: subPrefFromChoice(value, embeddedSubOptions(probeRef.current, v), item.subtitles || []) });
-        },
+        subs: (value) => chooseSubs(v, value),
       });
       postSoon();
     },

@@ -380,6 +380,35 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         switcher.assSubsKnown(i)
     }
 
+    /**
+     * nativePlayerTrack { session, index, kind: "audio", label, lang, seen: [{ l, g }] } or
+     * { session, index, kind: "subs", off, label?, lang? }: a track picked by hand, remembered by the page for the
+     * whole series («Озвучка»).
+     */
+    override fun trackChosen(choice: TrackChoice) {
+        if (closedSent) return
+        val o = JSObject()
+        runId?.let { o.put("session", it) }
+        o.put("index", index())
+        o.put("kind", if (choice.audio) "audio" else "subs")
+        if (!choice.audio) o.put("off", choice.off)
+        if (!choice.off) {
+            o.put("label", choice.label)
+            o.put("lang", choice.lang)
+        }
+        if (choice.audio) {
+            val seen = JSArray()
+            choice.seen.forEach { (l, g) ->
+                val s = JSObject()
+                s.put("l", l)
+                s.put("g", g)
+                seen.put(s)
+            }
+            o.put("seen", seen)
+        }
+        NativePlayerBridge.emit("nativePlayerTrack", o)
+    }
+
     /** nativePlayerEngine { session, index, engine: "builtin" | "vlc", reason }: the page logs / remembers it. */
     private fun emitEngine(kind: EngineKind, reason: SwitchReason) {
         if (closedSent) return

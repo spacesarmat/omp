@@ -22,7 +22,7 @@ describe('trackOptions', () => {
   });
   it('falls back to video.audioTracks', () => {
     const video = { audioTracks: [{ language: 'ru', label: 'Dub' }] } as unknown as HTMLVideoElement;
-    expect(audioOptions(null, video)).toEqual([{ label: 'Dub (ru)', language: 'ru', isDefault: false }]);
+    expect(audioOptions(null, video)).toEqual([{ label: 'Dub (ru)', language: 'ru', isDefault: false, title: 'Dub' }]);
   });
   it('builds subtitle menu', () => {
     const emb = embeddedSubOptions(probe, null);
@@ -62,7 +62,7 @@ describe('trackOptions', () => {
       ],
     };
     expect(audioOptions(probeWith2Audio, video)).toEqual([
-      { label: 'Dub (ru)', language: 'ru', isDefault: false },
+      { label: 'Dub (ru)', language: 'ru', isDefault: false, title: 'Dub' },
     ]);
   });
   it('aligns subtitle counts: probe has 1, video.textTracks empty → use probe', () => {
