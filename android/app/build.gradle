@@ -71,6 +71,10 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    // a beta (version x.y.z-beta.N) gets a BETA band on the icon and the TV banner; releases keep the plain ones
+    if (pkg.version.contains('-')) {
+        sourceSets.release.res.srcDirs += 'src/beta/res'
+    }
 }
 
 kotlin {

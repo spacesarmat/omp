@@ -9,6 +9,7 @@ vi.mock('../../src/store/progress', async (orig) => ({
 }));
 
 import { SeriesScreen } from '../../src/screens/Series';
+import { DialogHost } from '../../src/ui/dialog';
 import { servers, activeServerId, addServer, setActiveServer } from '../../src/store/servers';
 import { torrents, resetLibrary } from '../../src/store/library';
 import { currentRoute, routeStack } from '../../src/ui/nav';
@@ -449,5 +450,94 @@ describe('TV series screen', () => {
       await flush();
       expect(left).toBe(900 + 220 + 24 - 600);
     });
+  });
+});
+
+describe('TV series screen: «Озвучка»', () => {
+  // a TorrServer that keeps the data of each torrent and records every «set»
+  function server(data: { [hash: string]: string }) {
+    const sets: { hash: string; data: string }[] = [];
+    mockFetch((url, init) => {
+      if (url.indexOf('/torrents') < 0) return { body: '[]' };
+      const b = JSON.parse(init.body || '{}');
+      if (b.action === 'set') {
+        sets.push({ hash: b.hash, data: b.data });
+        data[b.hash] = b.data;
+        return { body: '{}' };
+      }
+      return { body: JSON.stringify(fixture.map((x) => ({ ...x, data: data[x.hash] || '' }))) };
+    });
+    return sets;
+  }
+  async function mountWithDialogs(data: { [hash: string]: string }) {
+    torrents.value = fixture.map((x) => ({ ...x, data: data[x.hash] || '' })) as any;
+    const host = document.createElement('div');
+    hosts.push(host);
+    document.body.appendChild(host);
+    act(() => { render(h('div', {}, h(SeriesScreen, { seriesKey: key, season: 2 }), h(DialogHost, {})), host); });
+    await flush();
+    return host;
+  }
+  const rec = (a: object) => JSON.stringify({ omp: { v: 1, h: [], a } });
+  const options = (host: HTMLElement) => Array.from(host.querySelectorAll('.dialog-option')).map((o) => text(o));
+  const open = async (host: HTMLElement) => {
+    act(() => { (host.querySelector('[data-fk="series-dub"]') as HTMLElement).click(); });
+    await flush();
+  };
+  const pick = async (host: HTMLElement, n: number) => {
+    act(() => { (host.querySelectorAll('.dialog-option')[n] as HTMLElement).click(); });
+    await flush();
+  };
+
+  it('says «по умолчанию» when nothing is remembered; the list has only the reset', async () => {
+    server({});
+    const host = await mountWithDialogs({});
+    expect(text(host.querySelector('[data-fk="series-dub"]'))).toBe('Озвучка: по умолчанию');
+    await open(host);
+    expect(options(host)).toEqual(['По умолчанию (сбросить)']);
+  });
+
+  it('shows the dub chosen on any season and switches to another seen one, written to TorrServer', async () => {
+    const data = { s1: rec({ at: 5, l: 'LostFilm', g: 'ru', s: 'off', k: [{ l: 'LostFilm', g: 'ru' }, { l: 'HDrezka Studio', g: 'ru' }] }) };
+    const sets = server(data);
+    const host = await mountWithDialogs(data);
+    expect(text(host.querySelector('[data-fk="series-dub"]'))).toBe('Озвучка: LostFilm');
+    await open(host);
+    expect(options(host)).toEqual(['LostFilm · Русский', 'HDrezka Studio · Русский', 'По умолчанию (сбросить)']);
+    await pick(host, 1);
+    expect(sets.map((x) => x.hash)).toEqual(['s1']);
+    expect(JSON.parse(sets[0].data).omp.a).toMatchObject({ l: 'HDrezka Studio', g: 'ru', s: 'off' });
+    expect(text(host.querySelector('[data-fk="series-dub"]'))).toBe('Озвучка: HDrezka Studio');
+  });
+
+  it('shows the channels with the dub, in the button and the list', async () => {
+    const data = { s1: rec({ at: 5, l: 'HDRezka', g: 'ru', c: '5.1', k: [{ l: 'HDRezka', g: 'ru', c: '5.1' }, { l: 'LostFilm', g: 'ru', c: '2.0' }] }) };
+    server(data);
+    const host = await mountWithDialogs(data);
+    expect(text(host.querySelector('[data-fk="series-dub"]'))).toBe('Озвучка: HDRezka · 5.1');
+    await open(host);
+    expect(options(host)).toEqual(['HDRezka · 5.1 · Русский', 'LostFilm · стерео · Русский', 'По умолчанию (сбросить)']);
+  });
+
+  it('a language picked without a dub title is shown and marked current in the list', async () => {
+    const data = { s1: rec({ at: 5, g: 'ru', k: [{ l: 'LostFilm', g: 'ru' }] }) };
+    server(data);
+    const host = await mountWithDialogs(data);
+    expect(text(host.querySelector('[data-fk="series-dub"]'))).toBe('Озвучка: Русский');
+    await open(host);
+    expect(options(host)).toEqual(['Русский', 'LostFilm · Русский', 'По умолчанию (сбросить)']);
+    expect(text(host.querySelector('.dialog-option.current'))).toBe('Русский');
+  });
+
+  it('«По умолчанию (сбросить)» resets the series, keeping the dubs seen', async () => {
+    const data = { s2: rec({ at: 5, l: 'LostFilm', g: 'ru', k: [{ l: 'LostFilm', g: 'ru' }] }) };
+    const sets = server(data);
+    const host = await mountWithDialogs(data);
+    await open(host);
+    await pick(host, 1);
+    const a = JSON.parse(sets[0].data).omp.a;
+    expect(a.l).toBeUndefined();
+    expect(a.k).toEqual([{ l: 'LostFilm', g: 'ru' }]);
+    expect(text(host.querySelector('[data-fk="series-dub"]'))).toBe('Озвучка: по умолчанию');
   });
 });

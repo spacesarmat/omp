@@ -7,6 +7,7 @@ import { setCategoryWriter, torrents } from './library';
 import { noteSupport } from './support';
 import { SUPPORT_MAX_AHEAD_MS } from '../lib/donate';
 import { t } from '../i18n';
+import { newestSeriesTracks, nextSeriesTracks, withSeriesTracks, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
 
 export interface JournalClient {
   list(): Promise<Torrent[]>;
@@ -242,6 +243,41 @@ export function saveCategoryAuto(c: JournalClient, hash: string, category: strin
 }
 
 setCategoryWriter(saveCategoryAuto);
+
+/**
+ * «Озвучка» of a series: the next record (from the newest one among `members` on the server, so an audio choice keeps
+ * the subtitles chosen on another torrent) written as omp.a of torrent `hash`; the history, the skip settings and every
+ * other key of `data` are kept. Resolves with the record written; rejects on failure (the series screen shows it, the
+ * players swallow it).
+ */
+export function saveSeriesTracks(c: JournalClient, hash: string, members: string[], patch: SeriesTracksPatch, now: number = Date.now()): Promise<SeriesTracks> {
+  const prev = chains[hash] || Promise.resolve();
+  const run = prev.then(() =>
+    c.list().then((all) => {
+      const tor = torrentOf(all, hash);
+      if (!tor) throw new Error(t('errors.torrentMissing'));
+      const parsed = parseData(tor.data);
+      if (!parsed) throw new Error(t('errors.notJson'));
+      const own = members.map((h) => torrentOf(all, h)).filter((x): x is Torrent => !!x);
+      const rec = nextSeriesTracks(newestSeriesTracks(own.concat([tor])), patch, now);
+      const base = baseOf(tor, parsed);
+      const data = serializeData(withSeriesTracks(base.obj, rec), base.journal, base.skip);
+      return c.setData(tor, data).then(() => {
+        patchLibrary(tor.hash, data);
+        return rec;
+      });
+    }),
+  );
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  chains[hash] = tail;
+  tail.then(() => {
+    if (chains[hash] === tail) delete chains[hash];
+  });
+  return run;
+}
 
 /** Last watch-journal activity of a torrent (0: never played through OMP). */
 function lastActivity(data: string | undefined): number {

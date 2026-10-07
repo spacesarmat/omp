@@ -138,6 +138,9 @@
             android:textSize="13sp" />
     </LinearLayout>
 
+    <!-- «Инфо» (Info / yellow key): layout/player_info.xml -->
+    <include layout="@layout/player_info" />
+
     <!-- «Заставка пропущена · Вернуть», «Титры пропущены», results of the marks (mockup TvMarks) -->
     <LinearLayout
         android:id="@+id/player_toast"

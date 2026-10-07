@@ -2,6 +2,17 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.19.0-beta.4
+
+- [tv] Default dub per series: OMP remembers the dub picked in the player and uses it for the next episodes and the series' other releases; shown and changeable on the series screen («Dub: HDRezka · 5.1»)
+- [phone] The series dub on the series screen: the same as picked on the TV, with channels (stereo / 5.1), can be changed or reset
+- [tv] Colour keys in the player: red — dub, green — subtitles, yellow — Info, blue — menu; pressing again closes the window; they work from the phone remote too
+- [tv] Info in the player (yellow or Info): HDR and codec, seeds and peers, download speed, bitrate, sound, buffer — refreshed every second
+- [atv] The dub, subtitle and chapter lists close on any pick, the current item too
+- [tv] The name of the device OMP runs on under the logo
+- [tv] The series screen buttons wrap to a second row instead of running off the screen
+- Betas have a blue BETA band on the icon
+
 ## 0.19.0-beta.3
 
 - [tv] «Cast» on the torrent screen of a series that has a single torrent in the library (for example «Dark Matter»)

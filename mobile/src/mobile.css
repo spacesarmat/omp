@@ -1313,6 +1313,9 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-chip.m-chip-missing.on { opacity: 0.85; }
 .m-chip-plus { margin-right: 4px; font-weight: 700; }
 .m-sh-caption { margin-top: -4px; }
+.m-series-dub { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
+.m-series-dub-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.m-series-dub-chips { flex-wrap: wrap; }
 .m-sh-missing { display: flex; flex-direction: column; gap: 8px; }
 .m-sh-missing p { margin: 0; }
 .m-sh-season-about { display: flex; flex-direction: column; gap: 2px; }

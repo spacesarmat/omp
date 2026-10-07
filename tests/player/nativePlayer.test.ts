@@ -141,7 +141,7 @@ describe('NativeSession', () => {
     f.plugin.addListener.mockImplementation((e: string) => { order.push('listen:' + e); return Promise.resolve({ remove: () => undefined }); });
     f.plugin.playNative.mockImplementation(() => { order.push('play'); return Promise.resolve(); });
     await track(new NativeSession(f.plugin, c, queue)).start(opts);
-    expect(order).toEqual(['listen:nativePlayerState', 'listen:nativePlayerClosed', 'listen:nativePlayerMark', 'listen:nativePlayerEngine', 'play']);
+    expect(order).toEqual(['listen:nativePlayerState', 'listen:nativePlayerClosed', 'listen:nativePlayerMark', 'listen:nativePlayerEngine', 'listen:nativePlayerTrack', 'play']);
     const arg = f.plugin.playNative.mock.calls[0][0];
     expect(typeof arg.session).toBe('number');
     expect(arg).toEqual({
@@ -226,7 +226,7 @@ describe('NativeSession', () => {
     expect(closed).toHaveBeenCalledWith({ index: 0, time: 320.4, duration: 1000 }, false);
     expect(getLocalProgress(H1, 1)!.time).toBe(320.4);
     expect(setViewed).toHaveBeenCalledWith(H1, 1, 320);
-    expect(f.removed.sort()).toEqual(['nativePlayerClosed', 'nativePlayerEngine', 'nativePlayerMark', 'nativePlayerState']);
+    expect(f.removed.sort()).toEqual(['nativePlayerClosed', 'nativePlayerEngine', 'nativePlayerMark', 'nativePlayerState', 'nativePlayerTrack']);
     expect(s.snapshot()).toBeNull();
     setViewed.mockClear();
     await vi.advanceTimersByTimeAsync(30000);
@@ -312,7 +312,7 @@ describe('NativeSession', () => {
     expect(getLocalProgress(H1, 1)!.time).toBe(333);
     expect(setViewed).toHaveBeenCalledWith(H1, 1, 333);
     expect(closed).not.toHaveBeenCalled();
-    expect(f.removed.length).toBe(4);
+    expect(f.removed.length).toBe(5);
     expect(nativePlayerOpen()).toBe(false);
   });
 
@@ -323,7 +323,7 @@ describe('NativeSession', () => {
     s.detach();
     await p;
     expect(f.plugin.playNative).not.toHaveBeenCalled();
-    expect(f.removed.length).toBe(4);
+    expect(f.removed.length).toBe(5);
     expect(nativePlayerOpen()).toBe(false);
   });
 
@@ -332,7 +332,7 @@ describe('NativeSession', () => {
     f.plugin.playNative.mockImplementation(() => Promise.reject({ message: 'Нет плеера' }));
     const s = track(new NativeSession(f.plugin, null, queue));
     await expect(s.start(opts)).rejects.toEqual({ message: 'Нет плеера' });
-    expect(f.removed.length).toBe(4);
+    expect(f.removed.length).toBe(5);
   });
 
   it('dispose before the listeners resolve still removes them', async () => {
@@ -341,7 +341,7 @@ describe('NativeSession', () => {
     const p = s.start(opts);
     s.dispose();
     await p;
-    expect(f.removed.length).toBe(4);
+    expect(f.removed.length).toBe(5);
     expect(f.plugin.playNative).not.toHaveBeenCalled();
   });
 
@@ -532,5 +532,53 @@ describe('player engine (VLC / Авто)', () => {
     expect(getTrackPref(H1)).toEqual({ engine: 'builtin' });
     saveTrackPref(H1, { audioLang: 'en' });
     expect(getTrackPref(H1)).toEqual({ engine: 'builtin', audioLang: 'en' });
+  });
+
+  it('sends the start order of audio and subtitles with playNative (only when there is one)', async () => {
+    const f = fakePlugin();
+    const audioPick = [{ l: 'LostFilm' }, { g: 'ru' }];
+    const subPick = [{ l: 'Signs', g: 'ru' }, { off: true as const }];
+    await track(new NativeSession(f.plugin, null, queue)).start({ ...opts, audioPick, subPick, subtitlesOn: true });
+    const arg = f.plugin.playNative.mock.calls[0][0];
+    expect(arg.audioPick).toEqual(audioPick);
+    expect(arg.subPick).toEqual(subPick);
+    const g = fakePlugin();
+    await track(new NativeSession(g.plugin, null, queue)).start({ ...opts, audioPick: [] });
+    expect('audioPick' in g.plugin.playNative.mock.calls[0][0]).toBe(false);
+    expect('subPick' in g.plugin.playNative.mock.calls[0][0]).toBe(false);
+  });
+
+  it('a track picked by hand in the player is remembered for the torrent and the whole series', async () => {
+    const f = fakePlugin();
+    const saver = vi.fn((_h: string, _p: any) => Promise.resolve());
+    await track(new NativeSession(f.plugin, null, queue, {}, null, null, null, saver)).start(opts);
+    const sid = f.plugin.playNative.mock.calls[0][0].session;
+    f.emit('nativePlayerTrack', {
+      session: sid, index: 1, kind: 'audio', label: 'LostFilm', lang: 'rus',
+      seen: [{ l: 'LostFilm', g: 'rus' }, { l: 'Original', g: 'eng' }, { l: 'lostfilm', g: 'rus' }, 5],
+    });
+    expect(getTrackPref(H1)).toEqual({ audioLang: 'ru', audioLabel: 'LostFilm' });
+    expect(saver).toHaveBeenLastCalledWith(H1, { l: 'LostFilm', g: 'ru', k: [{ l: 'LostFilm', g: 'ru' }, { l: 'Original', g: 'en' }] });
+    // the channels of the track and of the dubs seen go along (display on the series screen)
+    f.emit('nativePlayerTrack', {
+      session: sid, index: 1, kind: 'audio', label: 'HDRezka', lang: 'rus', channels: 6,
+      seen: [{ l: 'HDRezka', g: 'rus', c: 6 }, { l: 'Original', g: 'eng', c: 2 }, { l: 'Kubik', g: 'eng', c: 'bad' }],
+    });
+    expect(saver).toHaveBeenLastCalledWith(H1, {
+      l: 'HDRezka', g: 'ru', c: '5.1',
+      k: [{ l: 'HDRezka', g: 'ru', c: '5.1' }, { l: 'Original', g: 'en', c: '2.0' }, { l: 'Kubik', g: 'en' }],
+    });
+    f.emit('nativePlayerTrack', { session: sid, index: 0, kind: 'subs', off: true });
+    expect(getTrackPref(H1)!.sub).toBe('off');
+    expect(saver).toHaveBeenLastCalledWith(H1, { s: 'off' });
+    f.emit('nativePlayerTrack', { session: sid, index: 0, kind: 'subs', off: false, label: 'rus', lang: 'ru' });
+    expect(getTrackPref(H1)!.sub).toEqual({ lang: 'ru', label: 'rus' });
+    expect(saver).toHaveBeenLastCalledWith(H1, { s: { l: 'rus', g: 'ru' } });
+    // other runs, unknown items and malformed events are ignored
+    saver.mockClear();
+    f.emit('nativePlayerTrack', { session: sid + 1, index: 0, kind: 'audio', label: 'X', lang: 'en' });
+    f.emit('nativePlayerTrack', { session: sid, index: 9, kind: 'audio', label: 'X', lang: 'en' });
+    f.emit('nativePlayerTrack', { session: sid, index: 0, kind: 'video' });
+    expect(saver).not.toHaveBeenCalled();
   });
 });

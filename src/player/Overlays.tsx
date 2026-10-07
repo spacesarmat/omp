@@ -3,14 +3,48 @@ import type { CacheState, FfprobeResult } from '../api/types';
 import { cueAt, Cue } from '../lib/subtitles';
 import { formatSpeed } from '../lib/format';
 import { settings } from '../store/settings';
-import { statsLines } from './stats';
+import { videoSummary, type InfoPanel } from './infoPanel';
+import { tvGlyphs } from '../ui/tvText';
 import { Spinner, ErrorView } from '../ui/components';
 
-export function StatsOverlay(p: { cache: CacheState | null; probe: FfprobeResult | null }) {
-  const lines = statsLines(p.cache, p.probe);
+/**
+ * «Инфо» (Yellow / Info), the panel of the Android TV player: header (episode; HDR mark · codec · size), three tiles,
+ * the sound, the buffer bar. Every text is one line (cut with an ellipsis).
+ */
+export function InfoOverlay(p: { panel: InfoPanel }) {
+  const d = p.panel;
   return (
-    <div class="player-stats">
-      {lines.length ? lines.map((l) => <div key={l}>{l}</div>) : <div>{t('player.noData')}</div>}
+    <div class="player-info">
+      <div class="pi-head">
+        <span class="pi-title">{tvGlyphs(d.title)}</span>
+        {(d.hdr || d.chip) && (
+          <span class="pi-chip">
+            {d.hdr && <b class="pi-hdr">{d.hdr}</b>}
+            {d.hdr && d.chip ? ' · ' : ''}
+            {d.chip}
+          </span>
+        )}
+      </div>
+      <div class="pi-tiles">
+        {d.tiles.map((x) => (
+          <div class="pi-tile" key={x.label}>
+            <div class="pi-label">{x.label}</div>
+            <div class="pi-value">
+              {x.value}
+              {x.unit && <span class="pi-unit"> {x.unit}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div class="pi-line">
+        <span class="pi-label-inline">{t('player.info.sound')}</span>
+        {d.sound}
+      </div>
+      <div class="pi-line pi-buffer">
+        <span class="pi-label-inline">{t('player.info.buffer')}</span>
+        <span class="pi-bar"><span class="pi-bar-fill" style={{ width: Math.round(d.bufferFill * 100) + '%' }} /></span>
+        <span class="pi-num">{d.buffer}</span>
+      </div>
     </div>
   );
 }
@@ -68,7 +102,7 @@ export function UndoBanner(p: { text: string; onUndo: () => void; lift?: boolean
 }
 
 export function PlayerError(p: { message: string; probe: FfprobeResult | null; onRetry: () => void; onBack: () => void }) {
-  const details = statsLines(null, p.probe).join('\n');
+  const details = videoSummary(p.probe);
   return (
     <div class="player-error" onClick={(e) => e.stopPropagation()}>
       <ErrorView

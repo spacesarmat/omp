@@ -7,7 +7,8 @@ import { decideStart } from '../player/resume';
 import type { FfprobeResult } from '../api/types';
 import { errorMessage } from '../api/http';
 import { getTrackPref, saveTrackPref } from '../store/trackPrefs';
-import { pickAudio, pickSub, subPrefFromChoice } from '../player/trackPrefs';
+import { pickAudioFor, pickSubFor, subPrefFromChoice, seriesAudioFromChoice, seriesSubFromChoice } from '../player/trackPrefs';
+import { seriesTracksFor, rememberSeriesTracks } from '../store/seriesTracks';
 import { parseSubtitles, decodeText, Cue } from '../lib/subtitles';
 import { selectAudioTrack, selectTextTrack } from '../platform/webosMedia';
 import type { PlayItem } from '../player/types';
@@ -16,7 +17,7 @@ import { tapZone, TapDetector, SeekStreak } from '../player/pointerTaps';
 import type { TapZone } from '../player/pointerTaps';
 import { Icon } from '../ui/icons';
 import type { IconName } from '../ui/icons';
-import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
+import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex, type TrackOption } from '../player/trackOptions';
 import { chapterList, chapterLabel, chapterIndexAt, chapterTarget, skipSegments, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS } from '../player/chapters';
 import type { MarkKind } from '../player/chapters';
 import type { SkipPrefs } from '../lib/journal';
@@ -29,14 +30,16 @@ import { recordWatch, loadSkip, saveSkip } from '../store/journal';
 import { getLocalProgress } from '../store/progress';
 import { useNextEpisode } from '../player/useNextEpisode';
 import { useCacheStats } from '../player/useCacheStats';
+import { infoPanel, bufferedAhead } from '../player/infoPanel';
 import { Controls } from '../player/Controls';
-import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner, UndoBanner, PlayerError } from '../player/Overlays';
+import { InfoOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner, UndoBanner, PlayerError } from '../player/Overlays';
 import { usePlayerHeading, itemHeading } from '../player/heading';
 import { tvGlyphs } from '../ui/tvText';
 import type { Cmd } from '../phone/protocol';
 import { goBack } from '../ui/nav';
 import { useKeys } from '../ui/keys';
-import { choose, dialogOpen } from '../ui/dialog';
+import { colorKeyCommand, colorKeyOverWindow, WEB_NIGHT_SOUND, type ColorKeyCommand, type ColorWindow } from '../player/colorKeys';
+import { choose, dialogOpen, dismissDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { setPlayerBridge, postSoon } from '../phone/link';
 import { buildSnapshot, liveTiming, runCmd } from '../player/phoneBridge';
@@ -64,7 +67,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const [reloadKey, setReloadKey] = useState(0);
   const [probe, setProbe] = useState<FfprobeResult | null>(null);
   const [controls, setControls] = useState(true);
-  const [statsOn, setStatsOn] = useState(settings.value.showStats);
+  // «Инфо» (Yellow / Info; Back closes it); «Статистика потока при запуске» opens it with the player
+  const [infoOn, setInfoOn] = useState(settings.value.showStats);
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
   const [audioIdx, setAudioIdx] = useState(-1);
   const [subChoice, setSubChoice] = useState('off');
@@ -176,7 +180,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   }, [vs.time, ready, prefs, probe]);
 
 
-  const cache = useCacheStats(c, item.hash, statsOn || (ready && vs.buffering));
+  const cache = useCacheStats(c, item.hash, infoOn || (ready && vs.buffering));
 
   const hideGate = useRef({ paused: true, buffering: true, seeking: false, error: false });
   hideGate.current = { paused: vs.paused, buffering: vs.buffering, seeking: seekTarget !== null, error: !!vs.error };
@@ -388,11 +392,23 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     );
   };
 
-  const chooseAudio = (v: HTMLVideoElement, audio: { label: string; language: string }[], i: number) => {
+  // a choice by hand: for this torrent (locally) and for the whole series («Озвучка», the journal on TorrServer)
+  const chooseAudio = (v: HTMLVideoElement, audio: TrackOption[], i: number) => {
     userTracks.current = true;
     setAudioIdx(i);
     selectAudioTrack(v, i);
-    if (item.hash) saveTrackPref(item.hash, { audioLang: audio[i].language, audioLabel: audio[i].label });
+    if (!item.hash) return;
+    saveTrackPref(item.hash, { audioLang: audio[i].language, audioLabel: audio[i].label });
+    void rememberSeriesTracks(c, item.hash, seriesAudioFromChoice(audio, i));
+  };
+
+  const chooseSubs = (v: HTMLVideoElement, choice: string) => {
+    userTracks.current = true;
+    applySubChoice(choice);
+    if (!item.hash) return;
+    const embedded = embeddedSubOptions(probeRef.current, v);
+    saveTrackPref(item.hash, { sub: subPrefFromChoice(choice, embedded, item.subtitles || []) });
+    void rememberSeriesTracks(c, item.hash, { s: seriesSubFromChoice(choice, embedded, item.subtitles || []) });
   };
 
   const applyDefaultTracks = () => {
@@ -400,13 +416,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     if (!v || userTracks.current) return;
     const s = settings.value;
     const pref = item.hash ? getTrackPref(item.hash) : null;
+    const series = seriesTracksFor(item.hash);
     const audio = audioOptions(probeRef.current, v);
-    const ai = pickAudio(audio, pref, s.audioLang);
+    const ai = pickAudioFor(audio, series, pref, s.audioLang);
     if (ai >= 0) {
       setAudioIdx(ai);
       if (ai !== defaultAudioIndex(audio)) selectAudioTrack(v, ai);
     }
-    applySubChoice(pickSub(embeddedSubOptions(probeRef.current, v), item.subtitles || [], pref, s));
+    applySubChoice(pickSubFor(embeddedSubOptions(probeRef.current, v), item.subtitles || [], series, pref, s));
   };
 
   // ffprobe often arrives after metadata: re-apply language defaults
@@ -422,6 +439,42 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       try { v.currentTime = startPos.current; } catch (e) { /* not seekable yet */ }
     }
     applyDefaultTracks();
+  };
+
+  // the player window on screen (audio list, subtitles list, menu): its colour key closes it again
+  const openWindow = useRef<ColorWindow | null>(null);
+  const chooseIn = <T,>(win: ColorWindow, title: string, options: { label: string; value: T }[], current?: T): Promise<T | null> => {
+    openWindow.current = win;
+    return choose(title, options, current).then((v) => {
+      if (openWindow.current === win) openWindow.current = null;
+      return v;
+    });
+  };
+
+  // «Аудио» of the menu and the red key: a pick is saved for the torrent and the series («Озвучка»)
+  const openAudioList = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const audio = audioOptions(probeRef.current, v);
+    if (audio.length < 2) {
+      toast(t('tvPlayer.noOtherAudio'));
+      return;
+    }
+    chooseIn('audio', t('tvPlayer.audio'), audio.map((a, i) => ({ label: a.label, value: i })), audioIdx).then((i) => {
+      if (i === null) return;
+      chooseAudio(v, audio, i);
+    });
+  };
+
+  // «Субтитры» of the menu and the green key
+  const openSubsList = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const menu = subtitleMenu(embeddedSubOptions(probeRef.current, v), item.subtitles || []);
+    chooseIn('subs', t('common.subtitles'), menu, subChoice).then((ch) => {
+      if (ch === null) return;
+      chooseSubs(v, ch);
+    });
   };
 
   const openTrackMenu = () => {
@@ -446,28 +499,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       { label: t('tvPlayer.markIntroEndRow', { v: (pendingIntro.current !== null ? t('tvPlayer.pendingStart', { t: formatDuration(pendingIntro.current) }) : '') + t('tvPlayer.atNow', { t: formatDuration(now) }) }), value: 'mark-intro-end' },
       { label: t('tvPlayer.markCreditsRow', { v: credits }), value: 'mark-credits' },
     );
-    choose(t('tvPlayer.menuTitle'), root).then((kind) => {
+    chooseIn('menu', t('tvPlayer.menuTitle'), root).then((kind) => {
       if (kind === 'chapters') openChapters();
       else if (kind === 'mark-intro-start') mark('intro-start', now);
       else if (kind === 'mark-intro-end') mark('intro-end', now);
       else if (kind === 'mark-credits') mark('credits', now);
-      if (kind === 'audio') {
-        if (audio.length < 2) {
-          toast(t('tvPlayer.noOtherAudio'));
-          return;
-        }
-        choose(t('tvPlayer.audio'), audio.map((a, i) => ({ label: a.label, value: i })), audioIdx).then((i) => {
-          if (i === null) return;
-          chooseAudio(v, audio, i);
-        });
-      } else if (kind === 'subs') {
-        choose(t('common.subtitles'), menu, subChoice).then((ch) => {
-          if (ch === null) return;
-          userTracks.current = true;
-          applySubChoice(ch);
-          if (item.hash) saveTrackPref(item.hash, { sub: subPrefFromChoice(ch, embeddedSubOptions(probe, v), item.subtitles || []) });
-        });
-      } else if (kind === 'size') {
+      if (kind === 'audio') openAudioList();
+      else if (kind === 'subs') openSubsList();
+      else if (kind === 'size') {
         choose(t('tvPlayer.subSize'), subSizeOptions(), settings.value.subSize).then((size) => { if (size) updateSettings({ subSize: size }); });
       } else if (kind === 'offset') {
         choose(t('tvPlayer.offset'), subtitleOffsetOptions(), subOffset).then((off) => { if (off !== null) setSubOffset(off); });
@@ -506,11 +545,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
         chapterStarts: chapterList(probeRef.current).map((c) => c.start),
         toggle: togglePause, seekTo, next: goNext, prev: goPrev,
         audio: (i) => chooseAudio(v, audio, i),
-        subs: (value) => {
-          userTracks.current = true;
-          applySubChoice(value);
-          if (item.hash) saveTrackPref(item.hash, { sub: subPrefFromChoice(value, embeddedSubOptions(probeRef.current, v), item.subtitles || []) });
-        },
+        subs: (value) => chooseSubs(v, value),
       });
       postSoon();
     },
@@ -533,6 +568,26 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     setReloadKey(reloadKey + 1);
   };
 
+  const runColor = (color: ColorKeyCommand) => {
+    if (color === 'audio') openAudioList();
+    else if (color === 'subs') openSubsList();
+    else if (color === 'menu') openTrackMenu();
+    else setInfoOn((on) => !on);
+  };
+
+  // above the dialog (which takes every key while open): a colour key over the player's own window closes it,
+  // its own key only closes (Red over the audio list), another one then opens its own
+  useKeys((a) => {
+    const win = openWindow.current;
+    if (!win || !dialogOpen.value) return false;
+    const color = colorKeyCommand(a, WEB_NIGHT_SOUND);
+    if (!color) return false;
+    dismissDialog();
+    const next = colorKeyOverWindow(color, win);
+    if (next) runColor(next);
+    return true;
+  }, 110);
+
   useKeys((a) => {
     if (vs.error) return false; // error view buttons use spatial navigation
     lastKeyAt.current = Date.now();
@@ -548,6 +603,12 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     if (showSkip && intro) {
       if (a === 'enter') { seekTo(introSkipTarget(intro, vs.duration)); setSkippedIntro(intro.start); return true; }
       if (a === 'back') { setSkippedIntro(intro.start); return true; }
+    }
+    // colour keys, as in the Android TV player: audio, subtitles, statistics (no night sound here), menu
+    const color = colorKeyCommand(a, WEB_NIGHT_SOUND);
+    if (color) {
+      runColor(color);
+      return true;
     }
     switch (a) {
       case 'enter':
@@ -576,15 +637,13 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
         seek(1);
         return true;
       case 'up':
-      case 'yellow':
         openTrackMenu();
         return true;
       case 'down':
         showControls();
         return true;
-      case 'green':
       case 'info':
-        setStatsOn(!statsOn);
+        setInfoOn(!infoOn);
         return true;
       case 'chup':
       case 'chdown':
@@ -601,6 +660,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
         goPrev();
         return true;
       case 'back':
+        if (infoOn) {
+          setInfoOn(false);
+          return true;
+        }
         if (controls && !vs.paused) {
           setControls(false);
           return true;
@@ -619,7 +682,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
       {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}
       {ready && vs.buffering && !vs.error && <BufferingOverlay cache={cache} />}
-      {statsOn && <StatsOverlay cache={cache} probe={probe} />}
+      {infoOn && (
+        <InfoOverlay panel={infoPanel({ title: heading, probe, audioIndex: audioIdx, cache, bufferedSec: bufferedAhead(videoRef.current) })} />
+      )}
       <DonateCard mode={donate} raised={donate === 'credits' && controls} />
       {next.countdown !== null && hasNext && (
         <NextBanner seconds={next.countdown} title={tvGlyphs(itemHeading(queue[index + 1]))} onNext={goNext} />
