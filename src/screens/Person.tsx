@@ -15,7 +15,7 @@ import { isWanted, wantAction } from '../store/wantList';
 import { FocusGroup, Focusable, Button, Spinner } from '../ui/components';
 import { useKeys } from '../ui/keys';
 import { navigate } from '../ui/nav';
-import { choose } from '../ui/dialog';
+import { textDialog } from '../ui/dialog';
 import { tvGlyphs } from '../ui/tvText';
 import { focusedRow, keepRows, keepsImage, rowOf } from '../lib/gridWindow';
 import { DISCOVER_COLS, ratingText } from './library/DiscoverGrid';
@@ -104,15 +104,17 @@ function Body({ card }: { card: PersonCard }) {
         <div class="person-info">
           <div class="person-crumb">{tvGlyphs(t('person.crumb'))}</div>
           <h1 class="person-name">{tvGlyphs(card.name)}</h1>
-          <div class="person-job">{tvGlyphs(jobText(card, job))}</div>
-          {years ? <div class="person-years">{tvGlyphs(years)}</div> : null}
+          <div class="person-job">
+            {tvGlyphs(jobText(card, job))}
+            {years ? <span class="person-years">{' · ' + tvGlyphs(years)}</span> : null}
+          </div>
           {card.bio ? (
             <div class="person-bio" ref={bioRef}>
               {tvGlyphs(card.bio)}
             </div>
           ) : null}
           {bioMore && (
-            <Focusable focusKey="person-bio-more" className="person-more" role="button" onPress={() => choose(tvGlyphs(card.bio), [{ label: t('common.close'), value: true }])} onFocused={leaveTile}>
+            <Focusable focusKey="person-bio-more" className="person-more" role="button" onPress={() => textDialog(tvGlyphs(card.name), tvGlyphs(card.bio), t('common.close'))} onFocused={leaveTile}>
               {t('person.more')}
             </Focusable>
           )}

@@ -183,6 +183,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .dialog-backdrop { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, .6); display: flex; align-items: center; justify-content: center; z-index: 50; }
 .dialog { min-width: 720px; max-width: 1200px; max-height: 900px; overflow-y: auto; background: var(--panel); border-radius: 18px; padding: 40px; }
 .dialog-title { font-size: 34px; margin-bottom: 24px; }
+.dialog-body { max-height: 560px; overflow-y: auto; margin-bottom: 24px; font-size: 26px; line-height: 1.45; color: #c9cdd8; }
 .dialog-option { padding: 18px 24px; border-radius: 10px; margin-bottom: 8px; }
 .dialog-option.current { color: var(--accent); }
 .dialog-option.focused { background: var(--accent); color: #0f1115; transform: none; box-shadow: none; }
@@ -642,7 +643,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .person-more.focused { background: var(--panel2); color: var(--text); }
 .person-name { margin: 0 0 8px; font-size: 52px; font-weight: 700; }
 .person-job { font-size: 28px; color: var(--accent); }
-.person-years { margin-top: 6px; font-size: 24px; color: var(--muted); }
+.person-years { font-size: 24px; color: var(--muted); }
 .person-bar { display: flex; flex-wrap: nowrap; align-items: center; margin-bottom: 20px; }
 .person-bar > * { margin-right: 28px; }
 .disc-tile.person-owned .disc-poster { box-shadow: 0 0 0 4px var(--accent); }
