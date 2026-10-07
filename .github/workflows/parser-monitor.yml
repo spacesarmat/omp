@@ -1,7 +1,8 @@
 # Parser monitor: every 12 hours the app's real tracker parsers (src/sources) run against the live sites from a
 # GitHub runner. A source BROKEN two runs in a row gets an issue «Парсер X сломан» (label parser-monitor) and a
 # Telegram message to the admin; it is closed with a message when it works again. Mondays: a weekly summary.
-# State between runs: parser-monitor.json on the monitor-state branch. See docs/parser-monitor.md.
+# State between runs: parser-monitor.json on the monitor-state branch. A manual run with «notify» (the admin bot's
+# /check, ops/admin-bot) also sends its table to the admin's Telegram when it finishes. See docs/parser-monitor.md.
 name: Parser monitor
 on:
   schedule:
@@ -20,6 +21,10 @@ on:
         description: Only these sources, comma-separated ids (e.g. rutor,anidub); empty = all
         required: false
         default: ''
+      notify:
+        description: Send this run's table to the admin's Telegram when it finishes (the admin bot's /check)
+        type: boolean
+        default: false
 permissions:
   contents: write
   issues: write
@@ -94,6 +99,15 @@ jobs:
           if git diff --cached --quiet; then echo "state unchanged"; exit 0; fi
           git commit -q -m "parser monitor state"
           git push origin HEAD:monitor-state
+      - name: Report to the admin
+        # a manual run asked by the admin bot (/check): the table, or «failed» when the check crashed
+        if: ${{ always() && inputs.notify }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          MONITOR_TG_CHAT: ${{ vars.MONITOR_TG_CHAT || '536445442' }}
+          MONITOR_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MONITOR_DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+        run: node scripts/parser-monitor/notify.mjs monitor-out/report.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
