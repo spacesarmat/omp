@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { endpointOf, noveltiesUrl, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson } from '../../src/catalog/tmdb';
+import { endpointOf, noveltiesUrl, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson, personBioUrl } from '../../src/catalog/tmdb';
 import { applyLanguageSetting } from '../../src/i18n';
 import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
 
@@ -236,6 +236,17 @@ describe('people', () => {
     cast.push({ ...tv(2, 'Himself'), id: 2 });
     const p = sanitizePerson(E, { id: 5, name: 'N', combined_credits: { cast, crew: [] } })!;
     expect(p.acting.map((c) => [c.id, c.roles])).toEqual([[1, ['Selfridge']], [2, ['Doctor']]]);
+  });
+  it('sanitizePerson: keeps the biography trimmed, empty when absent', () => {
+    expect(sanitizePerson(E, { id: 5, name: 'N', biography: '  Born in Rome.\n\nActor.  ' })!.bio).toBe('Born in Rome.\n\nActor.');
+    expect(sanitizePerson(E, { id: 5, name: 'N' })!.bio).toBe('');
+    expect(sanitizePerson(E, { id: 5, name: 'N', biography: 7 })!.bio).toBe('');
+  });
+  it('personBioUrl: the plain person in English, no credits appended', () => {
+    const u = personBioUrl(E, 5);
+    expect(u).toContain('/person/5?');
+    expect(u).toContain('language=en-US');
+    expect(u).not.toContain('append_to_response');
   });
   it('sanitizePerson: null without id or name', () => {
     expect(sanitizePerson(E, { id: 5 })).toBeNull();

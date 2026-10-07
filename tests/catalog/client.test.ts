@@ -104,7 +104,7 @@ describe('catalog client', () => {
   it('person(): asks combined_credits and caches for 24 hours', async () => {
     const f = fake();
     const base = f.answer;
-    f.answer = (url) => (url.indexOf('person/5') >= 0 ? { status: 200, text: JSON.stringify({ id: 5, name: 'N', combined_credits: { cast: [], crew: [] } }) } : base(url));
+    f.answer = (url) => (url.indexOf('person/5') >= 0 ? { status: 200, text: JSON.stringify({ id: 5, name: 'N', biography: 'Bio', combined_credits: { cast: [], crew: [] } }) } : base(url));
     let now = 1000;
     const c = createCatalogClient(E, f.http, { now: () => now });
     const p = await c.person(5);
@@ -117,6 +117,45 @@ describe('catalog client', () => {
     now += 2 * 60 * 60 * 1000;
     await c.person(5);
     expect(f.urls.length).toBe(2);
+  });
+
+  describe('person(): biography', () => {
+    const person = (bio: string) => ({ status: 200, text: JSON.stringify({ id: 5, name: 'N', biography: bio, combined_credits: { cast: [], crew: [] } }) });
+    it('ru with an empty biography asks the English one and takes it, both cached', async () => {
+      const f = fake();
+      f.answer = (url) => person(url.indexOf('language=en-US') >= 0 ? ' English bio ' : '');
+      let now = 1000;
+      const c = createCatalogClient(E, f.http, { now: () => now });
+      expect((await c.person(5)).bio).toBe('English bio');
+      expect(f.urls).toHaveLength(2);
+      expect(f.urls[0]).toContain('language=ru-RU');
+      expect(f.urls[1]).toContain('language=en-US');
+      expect(f.urls[1]).not.toContain('append_to_response');
+      now += 60 * 1000;
+      expect((await c.person(5)).bio).toBe('English bio');
+      expect(f.urls).toHaveLength(2);
+    });
+    it('ru with a biography makes no second request', async () => {
+      const f = fake();
+      f.answer = () => person('Русская биография');
+      const p = await createCatalogClient(E, f.http).person(5);
+      expect(p.bio).toBe('Русская биография');
+      expect(f.urls).toHaveLength(1);
+    });
+    it('a failing English fallback keeps an empty biography', async () => {
+      const f = fake();
+      f.answer = (url) => (url.indexOf('language=en-US') >= 0 ? 'reject' : person(''));
+      const p = await createCatalogClient(E, f.http).person(5);
+      expect(p.bio).toBe('');
+      expect(p.name).toBe('N');
+    });
+    it('the English UI with an empty biography makes no second request', async () => {
+      applyLanguageSetting('en');
+      const f = fake();
+      f.answer = () => person('');
+      expect((await createCatalogClient(E, f.http).person(5)).bio).toBe('');
+      expect(f.urls).toHaveLength(1);
+    });
   });
 
   it('caches seasons for 24 hours, per season and language, sanitized only', async () => {

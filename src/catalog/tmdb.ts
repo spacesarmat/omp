@@ -25,6 +25,8 @@ export const CAST_LIMIT = 15;
 export interface Credit extends CatalogTitle { roles: string[]; genreIds: number[]; date: string; }
 export interface PersonCard {
   id: number; name: string; photo: string; birth: string; death: string;
+  /** TMDB's biography, trimmed; '' when TMDB has none in the language (the client may fill it in English). */
+  bio: string;
   known: 'acting' | 'directing' | 'other'; acting: Credit[]; directing: Credit[];
 }
 /** `airDate`: 'YYYY-MM-DD' or '' (absent in cards cached before 0.17.0-beta.2: unknown). */
@@ -114,6 +116,11 @@ export function discoverRegion(uiLang: string = lang.peek()): string {
 
 export function personUrl(e: TmdbEndpoint, id: number): string {
   return url(e, 'person/' + id, { append_to_response: 'combined_credits' });
+}
+
+/** The plain person in English (no credits): the biography fallback of a person TMDB has no text for in the UI language. */
+export function personBioUrl(e: TmdbEndpoint, id: number): string {
+  return url(e, 'person/' + id, { language: 'en-US' });
 }
 
 export function seasonUrl(e: TmdbEndpoint, id: number, season: number): string {
@@ -275,6 +282,11 @@ function isSelfRole(character: string): boolean {
   return /^(self|himself|herself)\s*-/.test(c);
 }
 
+/** The biography of a plain person answer (personBioUrl): '' when absent. */
+export function sanitizePersonBio(raw: unknown): string {
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? str((raw as { [k: string]: unknown }).biography) : '';
+}
+
 /** A person with the filmography: combined_credits' cast as acting, crew directors (and series creators) as directing. */
 export function sanitizePerson(e: TmdbEndpoint, raw: unknown): PersonCard | null {
   const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { [k: string]: unknown }) : null;
@@ -313,6 +325,7 @@ export function sanitizePerson(e: TmdbEndpoint, raw: unknown): PersonCard | null
   const dept = str(o.known_for_department);
   return {
     id: id, name: name, photo: imageUrl(e, o.profile_path, 'w300'), birth: date(o.birthday), death: date(o.deathday),
+    bio: str(o.biography),
     known: dept === 'Acting' ? 'acting' : dept === 'Directing' ? 'directing' : 'other',
     acting: collect(cc.cast, (x) => { const ch = str(x.character); return isSelfRole(ch) ? null : ch; }),
     directing: collect(cc.crew, (x, kind) => (x.job === 'Director' || (kind === 'tv' && x.job === 'Creator') ? '' : null)),

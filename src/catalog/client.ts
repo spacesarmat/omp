@@ -7,8 +7,9 @@
 // client of the page; a hidden or closing page writes it at once.
 import type { SourceHttp } from '../sources/types';
 import { loadJson, isObject } from '../store/storage';
+import { lang } from '../i18n';
 import {
-  releaseRegions, noveltiesUrl, discoverUrl, searchUrl, cardUrl, personUrl, seasonUrl, sanitizeList, sanitizeCard, sanitizePerson, sanitizeSeason,
+  releaseRegions, noveltiesUrl, discoverUrl, searchUrl, cardUrl, personUrl, personBioUrl, seasonUrl, sanitizeList, sanitizeCard, sanitizePerson, sanitizePersonBio, sanitizeSeason,
   type Kind, type CatalogTitle, type CatalogCard, type PersonCard, type SeasonDetails, type TmdbEndpoint,
 } from './tmdb';
 import { digitalSoonItems, type DiscoverQuery } from './discoverQuery';
@@ -332,7 +333,15 @@ export function createCatalogClient(
         const p = sanitizePerson(e, raw);
         if (!p) throw fail('bad');
         return p;
-      }, undefined, opts);
+        // persons cached before 0.19.0-beta.2 have no biography
+      }, (p) => typeof (p as PersonCard).bio === 'string', opts).then((p) => {
+        if (p.bio || lang.peek() === 'en') return p;
+        // TMDB has no biography in the UI language: the English one, if it can be had
+        return fetchJson(personBioUrl(e, id), CARD_TTL, sanitizePersonBio, undefined, opts).then(
+          (bio) => (bio ? { ...p, bio: bio } : p),
+          () => p,
+        );
+      });
     },
     season(id, n, opts) {
       let e: TmdbEndpoint;

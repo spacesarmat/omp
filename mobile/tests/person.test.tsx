@@ -14,7 +14,7 @@ const credit = (kind: string, id: number, title: string, year: number, over: Rec
 });
 
 const CARD = {
-  id: 7, name: 'Иван Режиссёров', photo: '', birth: '1970-05-01', death: '', known: 'acting',
+  id: 7, name: 'Иван Режиссёров', photo: '', birth: '1970-05-01', death: '', bio: '', known: 'acting',
   acting: [
     credit('movie', 11, 'Другой фильм', 2022, { popularity: 50, roles: ['Пётр', 'Голос'] }),
     credit('movie', 10, 'Тихий сигнал', 2024, { original: 'Quiet Signal', popularity: 5, roles: ['Лев'] }),

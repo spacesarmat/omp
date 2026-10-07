@@ -330,7 +330,7 @@ describe('TV screens in English', () => {
     setActiveServer(addServer({ url: '10.0.0.2' }).id);
     torrents.value = [];
     const credit = { kind: 'movie', id: 5, title: 'Heat', original: 'Heat', year: 1995, poster: '', rating: 8, roles: ['Neil'], genreIds: [18], date: '1995-12-15', popularity: 9 };
-    const person = { id: 3, name: 'Al Pacino', photo: '', birth: '1940-04-25', death: '', known: 'acting', acting: [credit], directing: [credit] };
+    const person = { id: 3, name: 'Al Pacino', photo: '', birth: '1940-04-25', death: '', bio: '', known: 'acting', acting: [credit], directing: [credit] };
     setCatalogProvider(() => Promise.resolve({ person: () => Promise.resolve(person) } as any));
     try {
       mount(h(PersonScreen as any, { id: 3 }));
