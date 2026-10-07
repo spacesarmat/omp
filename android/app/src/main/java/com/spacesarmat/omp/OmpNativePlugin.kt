@@ -776,7 +776,7 @@ class OmpNativePlugin : Plugin() {
 
     /**
      * Phone: plays the queue in 2160 Player's screen inside OMP (player-core's Player2160Activity, in-process) for
-     * result; resolves like open2160 ({returned:false} if nothing came back).
+     * result; resolves like open2160 ({returned:false} if nothing came back). `background` = «Звук в фоне».
      */
     @PluginMethod
     fun playEmbedded2160(call: PluginCall) {
@@ -784,7 +784,7 @@ class OmpNativePlugin : Plugin() {
         val position = call.getDouble("positionMs")?.toLong() ?: 0L
         val plan = Embedded2160.plan(items, start, position, call.getBoolean("fromStart") ?: false, call.getString("segments").orEmpty())
         try {
-            Embedded2160.enablePlaybackService(context)
+            Embedded2160.applyBackground(context, Embedded2160.backgroundOn(TvMode.isTv(context), call.getBoolean("background") ?: false))
             startActivityForResult(call, Embedded2160.intent(context, plan), "on2160Result")
         } catch (_: RuntimeException) {
             call.release(bridge)

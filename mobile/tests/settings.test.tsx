@@ -19,6 +19,7 @@ import { tvState } from '../src/tv/tvClient';
 import { saveTv, reloadTvs } from '../src/tv/tvStore';
 import { native } from '../src/platform/native';
 import { tvSearchOn } from '../src/tv/phoneRpc';
+import { monitorNative } from '../src/monitor/native';
 
 function mount(): HTMLElement {
   document.body.innerHTML = '<div id="app"></div>';
@@ -649,5 +650,59 @@ describe('Settings: «Плеер для видео»', () => {
     expect(sanitizeSettings({ videoPlayer: 'builtin' }).phonePlayer).toBe('embedded');
     expect(sanitizeSettings({ videoPlayer: 'p2160', phonePlayer: 'chooser' }).phonePlayer).toBe('chooser');
     expect(sanitizeSettings({ phonePlayer: 'vlc' }).phonePlayer).toBe('embedded');
+  });
+
+  it('«Звук в фоне» is off by default and keeps only a boolean', () => {
+    expect(DEFAULT_SETTINGS.backgroundAudio).toBe(false);
+    expect(sanitizeSettings({}).backgroundAudio).toBe(false);
+    expect(sanitizeSettings({ backgroundAudio: true }).backgroundAudio).toBe(true);
+    expect(sanitizeSettings({ backgroundAudio: 'yes' }).backgroundAudio).toBe(false);
+  });
+
+  it('«Звук в фоне»: under «Встроенный» only; turning it on asks for notifications, a refusal is explained', async () => {
+    vi.spyOn(native, 'player2160').mockResolvedValue('pkg');
+    const was = monitorNative.available;
+    monitorNative.available = true;
+    vi.spyOn(monitorNative, 'notifyPermission').mockResolvedValue('prompt');
+    const ask = vi.spyOn(monitorNative, 'requestNotifyPermission').mockResolvedValue('denied');
+    try {
+      const el = mount();
+      await flushAll();
+      const row = () => el.querySelector('[data-row="background-audio"]');
+      expect(row()!.textContent).toContain('Звук в фоне');
+      expect(row()!.textContent).toContain('Расходует батарею и трафик');
+      const sw = row()!.querySelector('[role="switch"]') as HTMLElement;
+      expect(sw.getAttribute('aria-checked')).toBe('false');
+      act(() => sw.click());
+      await flushAll();
+      expect(settings.value.backgroundAudio).toBe(true);
+      expect(ask).toHaveBeenCalledTimes(1);
+      expect(row()!.querySelector('[data-row="background-audio-denied"]')!.textContent).toContain('без управления в шторке');
+      act(() => (row()!.querySelector('[role="switch"]') as HTMLElement).click());
+      await flushAll();
+      expect(settings.value.backgroundAudio).toBe(false);
+      expect(ask).toHaveBeenCalledTimes(1);
+      expect(row()!.querySelector('[data-row="background-audio-denied"]')).toBeNull();
+      act(() => updateSettings({ phonePlayer: 'chooser' }));
+      expect(row()).toBeNull();
+    } finally {
+      monitorNative.available = was;
+      updateSettings({ backgroundAudio: false });
+    }
+  });
+
+  it('«Background audio» in English', async () => {
+    vi.spyOn(native, 'player2160').mockResolvedValue('pkg');
+    applyLanguageSetting('en');
+    try {
+      const el = mount();
+      await flushAll();
+      const row = el.querySelector('[data-row="background-audio"]') as HTMLElement;
+      expect(row.textContent).toContain('Background audio');
+      expect(row.textContent).toContain('Uses battery and data');
+      expect(/[а-яё]/i.test(row.textContent!)).toBe(false);
+    } finally {
+      applyLanguageSetting('ru');
+    }
   });
 });

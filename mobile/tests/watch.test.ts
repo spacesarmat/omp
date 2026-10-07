@@ -147,12 +147,23 @@ describe('watchOnPhone', () => {
     const o = a.playEmbedded2160.mock.calls[0][0];
     expect(o.items).toHaveLength(3);
     expect(o.start).toBe(1);
-    expect(o).toMatchObject({ positionMs: 125000, fromStart: false });
+    expect(o).toMatchObject({ positionMs: 125000, fromStart: false, background: false });
     expect(a.open2160).not.toHaveBeenCalled();
     expect(a.player2160).not.toHaveBeenCalled();
     expect(a.openExternal).not.toHaveBeenCalled();
     expect(getLocalProgress('abc', 3)).toMatchObject({ time: 600, duration: 2400 });
     expect(a.recordWatch.mock.calls[0][2]).toMatchObject({ f: 2, t: 125, src: 'phone' });
+    done();
+  });
+
+  it('«Звук в фоне» goes with the embedded queue', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ phonePlayer: 'embedded', backgroundAudio: true });
+    await watchOnPhone(c, tor as any, w(2, 0));
+    expect(a.playEmbedded2160.mock.calls[0][0]).toMatchObject({ background: true });
+    updateSettings({ backgroundAudio: false });
     done();
   });
 

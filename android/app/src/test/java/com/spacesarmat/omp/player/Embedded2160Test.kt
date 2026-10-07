@@ -60,4 +60,12 @@ class Embedded2160Test {
         assertEquals(2, Embedded2160.plan(three, 7, 0, true, "").startIndex)
         assertEquals(0, Embedded2160.plan(three, -1, 0, true, "").startIndex)
     }
+
+    @Test
+    fun backgroundServiceOnlyOnAPhoneWithTheSettingOn() {
+        assertEquals(true, Embedded2160.backgroundOn(isTv = false, setting = true))
+        assertEquals(false, Embedded2160.backgroundOn(isTv = false, setting = false))
+        assertEquals(false, Embedded2160.backgroundOn(isTv = true, setting = true))
+        assertEquals(false, Embedded2160.backgroundOn(isTv = true, setting = false))
+    }
 }

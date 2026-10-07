@@ -90,6 +90,8 @@ export interface Open2160Options {
   positionMs: number;
   fromStart: boolean;
   segments: string;
+  /** playEmbedded2160 only: «Звук в фоне» (the phone's media service and sound with the screen off). */
+  background?: boolean;
 }
 
 export interface OmpNativeApi {

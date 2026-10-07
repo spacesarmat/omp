@@ -37,6 +37,7 @@ import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
 import { native } from '../platform/native';
+import { monitorNative } from '../monitor/native';
 import { P2160_RELEASES_URL } from '../../../src/player/player2160';
 import { fmtSize, t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
@@ -295,7 +296,42 @@ function VideoPlayerRow() {
         </button>
       )}
       <p class="m-muted m-small">{t('player.p2160NotePhone')}</p>
+      {cur === 'embedded' && <BackgroundAudioRow />}
     </section>
+  );
+}
+
+/**
+ * «Звук в фоне» for the built-in (embedded 2160) player. Turning it on asks for notifications (Android 13+): without
+ * them the sound still plays in the background, only the controls in the shade are missing.
+ */
+function BackgroundAudioRow() {
+  const on = settings.value.backgroundAudio;
+  const [denied, setDenied] = useState(false);
+  useEffect(() => {
+    if (!on || !monitorNative.available) return;
+    let alive = true;
+    monitorNative.notifyPermission().then((p) => alive && setDenied(p === 'denied'));
+    return () => {
+      alive = false;
+    };
+  }, [on]);
+  const toggle = () => {
+    updateSettings({ backgroundAudio: !on });
+    if (on || !monitorNative.available) return;
+    void monitorNative.notifyPermission().then((before) =>
+      before === 'granted' ? setDenied(false) : monitorNative.requestNotifyPermission().then((now) => setDenied(now === 'denied')),
+    );
+  };
+  return (
+    <div class="m-set-row" data-row="background-audio">
+      <div class="m-set-text" style="flex-grow: 1">
+        <span>{t('player.backgroundAudio')}</span>
+        <span class="m-muted m-small">{t('player.backgroundAudioHint')}</span>
+        {on && denied && <span class="m-muted m-small" data-row="background-audio-denied">{t('player.backgroundAudioNoNotify')}</span>}
+      </div>
+      <Switch on={on} label={t('player.backgroundAudio')} onToggle={toggle} />
+    </div>
   );
 }
 

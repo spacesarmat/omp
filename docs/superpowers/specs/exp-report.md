@@ -310,3 +310,25 @@ Submodule `android/vendor/2160player` is at upstream 68d31c8 (0.1.5). Engine2160
 - Removed: the dummy intro/credits segments (`QUIET_SEGMENTS`) and the ResumeStore delete hack. The data-source close fix comes with 0.1.5.
 - FFmpeg software video decoder: `PlayerConfig` has no switch for it, so unsupported hardware video formats do not yet fall back to VLC through this route (needs an upstream option).
 - Phone (embedded `Player2160Activity`): `PlayerConfig` is global (`Player2160.config`) or a controller constructor argument, with no intent extra, so the phone keeps 2160's own defaults. Setting the global would also change the TV engine's defaults and the phone's behaviour; OMP passes explicit start positions, which win over history anyway.
+
+## «Звук в фоне» (phone, embedded 2160 player)
+
+New phone setting `backgroundAudio` (default **off**), a switch «Звук в фоне» / "Background audio" under «Плеер для видео» (shown only for «Встроенный»), with a hint that it uses battery and data.
+
+- **Off** (default): PiP only, as the caller described the stage-4 baseline. `PlaybackService` is now switched **off** again before each embedded start, so phones that had it enabled by stage 4's «on at first use» go back to no notification / no background service. 2160's `backgroundPlayback` is set to `false`, so closing the PiP window or turning the screen off pauses the video.
+- **On**: before the start, `Embedded2160.applyBackground` enables `PlaybackService` (`setComponentEnabledSetting(…, DONT_KILL_APP)`, only when the state differs) and sets 2160's `Settings.backgroundPlayback = true`. 2160 documents this flag for background video (API.md §15.4): `Player2160Activity.onStop` calls `setInBackground(true)` instead of pausing, so the sound goes on with the screen off and after the PiP window is closed. Media3's notification, the lock-screen card and headset/Bluetooth buttons come from 2160's MediaSession through the service.
+- **Never on Android TV**: `Embedded2160.backgroundOn(isTv, setting) = setting && !isTv` (pure, unit-tested), with `TvMode.isTv` (UI mode TELEVISION or leanback). The manifest keeps `enabled="false" exported="false"`, and Engine2160 does not touch the setting.
+- OMP owns 2160's «Фоновое воспроизведение» on the phone: it is rewritten on every embedded start. A change made inside 2160's own panel lasts until the next start from OMP. 2160's `backgroundAudio` (audio-only files) is left as it is.
+- **Notifications** (Android 13+): turning the switch on asks for POST_NOTIFICATIONS (the existing plugin permission alias, as the monitor and TV search do). If refused, the setting still works (sound in the background) without the controls in the shade, and the row says so.
+- **Result**: unchanged. «Назад» in the player → `finishWithResult` → OMP saves the position. `release()` (ViewModel `onCleared`) stops the service and removes the notification.
+- Plugin: `playEmbedded2160` takes `background: boolean` (the page sends `settings.backgroundAudio`).
+
+Verification: `npx vitest run` 316 files / 3527 tests passed. New tests cover the default/sanitize, the row (only under «Встроенный», the permission request on turn-on, the refusal note, English with no Cyrillic) and `background` in the embedded call. `tsc --noEmit` passed for the root and mobile. `testDebugUnitTest` 516 tests, 0 failures (+1: `backgroundServiceOnlyOnAPhoneWithTheSettingOn`). `npm run android:debug` BUILD SUCCESSFUL; the merged manifest still has `PlaybackService` `enabled="false" exported="false"`.
+
+Device checks (S21):
+1. **Off**: Home → PiP; closing PiP or screen off → pause; no notification. `dumpsys package com.spacesarmat.omp | grep -A2 disabledComponents` lists PlaybackService.
+2. **On**: the notification appears; screen off keeps the sound for 10+ min (foreground service, no kill). Closing PiP keeps the sound. Notification/lock screen/BT headset play-pause work. Tapping the notification returns to the player. «Назад» → the notification goes away and the position is saved.
+3. **On**, notifications denied: the sound plays with the screen off, and the row shows the note.
+4. **Pause from the notification and swipe it away**: the service stops. The position is still saved only on «Назад» in the player (2160's rule).
+5. **Swiping OMP away in Recents while the sound plays**: 2160's `onTaskRemoved` keeps the service while `playWhenReady`. The sound may go on with no activity, and no result reaches OMP. Check this; if it happens, it needs an upstream option (stop on task removal).
+6. **Dune**: no PlaybackService running (`dumpsys activity services com.spacesarmat.omp`), whatever the phone setting is.

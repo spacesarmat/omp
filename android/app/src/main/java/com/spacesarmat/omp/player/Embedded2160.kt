@@ -8,6 +8,7 @@ import android.net.Uri
 import tv.p2160.core.api.MediaEntry
 import tv.p2160.core.api.PlaybackRequest
 import tv.p2160.core.api.SkipSegment
+import tv.p2160.core.settings.PlayerSettings
 import tv.p2160.core.api.Player2160 as P2160
 
 /**
@@ -16,7 +17,7 @@ import tv.p2160.core.api.Player2160 as P2160
  * app's ([Player2160.parse]), so the page saves it the same way.
  */
 object Embedded2160 {
-    /** player-core's media session service: declared disabled in OMP's manifest, switched on here (phone only). */
+    /** player-core's media session service: declared disabled in OMP's manifest, switched by «Звук в фоне» (phone only). */
     const val PLAYBACK_SERVICE = "tv.p2160.core.engine.PlaybackService"
     private const val USER_AGENT = "OMP"
 
@@ -68,17 +69,27 @@ object Embedded2160 {
     fun intent(context: Context, plan: Plan): Intent = P2160.PlayContract().createIntent(context, request(plan))
 
     /**
-     * Turns player-core's PlaybackService on (once; kept across restarts): the notification with controls, lock
-     * screen and headset buttons, and a foreground service while audio (or video with 2160's «background playback»)
-     * plays with the screen off. It stays off on Android TV, where Engine2160 does not need it.
+     * «Звук в фоне»: player-core's PlaybackService (notification with controls, lock screen, headset/Bluetooth
+     * buttons, the foreground service that keeps sound playing with the screen off) runs only on a phone with the
+     * setting on. Android TV never gets it (Engine2160 starts it in runCatching and does without it). Pure.
      */
-    fun enablePlaybackService(context: Context) {
+    fun backgroundOn(isTv: Boolean, setting: Boolean): Boolean = setting && !isTv
+
+    /**
+     * Applies [on] before the embedded screen starts: enables or disables PlaybackService (declared disabled in OMP's
+     * manifest; DONT_KILL_APP; only when it differs) and sets 2160's «background playback» to match, so that video
+     * keeps playing as sound after Home → closing the PiP window or with the screen off. Off = PiP only, as before.
+     */
+    fun applyBackground(context: Context, on: Boolean) {
         val pm = context.packageManager
         val cn = ComponentName(context, PLAYBACK_SERVICE)
+        val wanted = if (on) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
         runCatching {
-            if (pm.getComponentEnabledSetting(cn) != PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
-                pm.setComponentEnabledSetting(cn, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP)
-            }
+            if (pm.getComponentEnabledSetting(cn) != wanted) pm.setComponentEnabledSetting(cn, wanted, PackageManager.DONT_KILL_APP)
+        }
+        runCatching {
+            val settings = PlayerSettings.get(context)
+            if (settings.current.backgroundPlayback != on) settings.update { it.copy(backgroundPlayback = on) }
         }
     }
 }

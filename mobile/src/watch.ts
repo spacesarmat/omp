@@ -166,7 +166,7 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
   const at = w.at >= MIN_RESUME ? Math.floor(w.at) : 0;
   const mode = settings.value.phonePlayer;
   let open: ((o: Open2160Options) => Promise<unknown>) | null = null;
-  if (mode === 'embedded' && (await actions.embedded2160().catch(() => false))) open = (o) => actions.playEmbedded2160(o);
+  if (mode === 'embedded' && (await actions.embedded2160().catch(() => false))) open = (o) => actions.playEmbedded2160({ ...o, background: settings.value.backgroundAudio });
   else if (mode === 'p2160' && (await actions.player2160().catch(() => null))) open = (o) => actions.open2160(o);
   if (open) {
     const files = playableFiles(filesOf(t));

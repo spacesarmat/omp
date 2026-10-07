@@ -34,6 +34,11 @@ export interface AppSettings {
    * chooser. Its own key: the TV's `videoPlayer` 'builtin' is OMP's player there, but meant the chooser on the phone.
    */
   phonePlayer: PhonePlayer;
+  /**
+   * Phone, «Встроенный» player: «Звук в фоне» — 2160's media service (notification, lock screen, headset buttons)
+   * and sound with the screen off / after the PiP window is closed. Off: PiP only. Never on the TV.
+   */
+  backgroundAudio: boolean;
   /** UI language: 'system' follows the device (ru/uk/be/kk → Russian, else English). */
   language: LanguageSetting;
 }
@@ -57,6 +62,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   playerEngine: 'auto',
   videoPlayer: 'builtin',
   phonePlayer: 'embedded',
+  backgroundAudio: false,
   language: 'system',
 };
 

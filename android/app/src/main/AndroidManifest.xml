@@ -127,7 +127,8 @@
         <!-- From 2160 player-core: its MediaSessionService (notification with controls, lock screen, headset, background
              play). Not exported (player-core exports it to other apps and car/watch controllers; OMP does not need that:
              its own notification binds in-process). Disabled here: the TV engine (Engine2160) starts it in runCatching and
-             does without it; the phone's embedded 2160 screen switches it on at first use (Embedded2160.enablePlaybackService). -->
+             does without it; on the phone «Звук в фоне» switches it on or off before the embedded 2160 screen starts
+             (Embedded2160.applyBackground). -->
         <service
             android:name="tv.p2160.core.engine.PlaybackService"
             android:enabled="false"
