@@ -156,7 +156,15 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         } catch (_: RuntimeException) {
             null
         }
-        return TvName.choose(n, Build.MANUFACTURER, Build.BRAND, Build.MODEL)
+        return TvName.choose(n, Build.MANUFACTURER, Build.BRAND, Build.MODEL, vendorHint())
+    }
+
+    /** «Dune HD» when the Dune shell is installed (listed in the manifest's <queries> for Android 11+ visibility). */
+    private fun vendorHint(): String? = try {
+        context.packageManager.getPackageInfo(TvName.DUNE_SHELL, 0)
+        TvName.DUNE_NAME
+    } catch (_: Exception) {
+        null
     }
 
     private fun version(): String = try {
