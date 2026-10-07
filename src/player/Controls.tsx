@@ -32,7 +32,7 @@ export function PlayerHints(p: { chapters: boolean }) {
     <span class="player-hints">
       <span class="player-hint"><KeyDot color="red" />{t('player.keyAudio')}</span>
       <span class="player-hint"><KeyDot color="green" />{t('player.keySubs')}</span>
-      <span class="player-hint"><KeyDot color="yellow" />{t('player.keyStats')}</span>
+      <span class="player-hint"><KeyDot color="yellow" />{t('player.keyInfo')}</span>
       <span class="player-hint"><KeyDot color="blue" />{t('player.keyMenu')}</span>
       <span class="player-hint">{p.chapters ? t('player.hintsChapters') : t('player.hintsEpisodes')}</span>
     </span>

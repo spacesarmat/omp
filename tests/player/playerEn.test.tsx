@@ -5,10 +5,10 @@ import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { applyLanguageSetting } from '../../src/i18n';
 import { Controls } from '../../src/player/Controls';
 import { DonateCard } from '../../src/player/DonateCard';
-import { StatsOverlay, BufferingOverlay, NextBanner, SkipBanner, UndoBanner, PlayerError } from '../../src/player/Overlays';
+import { InfoOverlay, BufferingOverlay, NextBanner, SkipBanner, UndoBanner, PlayerError } from '../../src/player/Overlays';
 import { applyMark, chapterLabel } from '../../src/player/chapters';
 import { playerEngineOptions, vlcUnavailable, engineLogText } from '../../src/player/nativeEngine';
-import { statsLines } from '../../src/player/stats';
+import { infoPanel } from '../../src/player/infoPanel';
 import { formatOffset, subSizeOptions } from '../../src/player/subtitleOffset';
 import { subtitleMenu } from '../../src/player/trackOptions';
 import { mediaErrorText } from '../../src/player/useVideoState';
@@ -47,7 +47,7 @@ describe('player in English', () => {
     expect(s).toContain('Chapter 1 “Intro”');
     expect(s).toContain('Audio');
     expect(s).toContain('Subtitles');
-    expect(s).toContain('Stats');
+    expect(s).toContain('Info');
     expect(s).toContain('CH± — chapters');
     expect(CYR.test(s)).toBe(false);
     const e = text(<Controls {...base} chapters={[]} chapterIdx={-1} />);
@@ -60,14 +60,14 @@ describe('player in English', () => {
       text(<NextBanner seconds={5} title="S01E02" onNext={noop} />),
       text(<SkipBanner onSkip={noop} />),
       text(<UndoBanner text="Intro skipped" onUndo={noop} />),
-      text(<StatsOverlay cache={null} probe={null} />),
+      text(<InfoOverlay panel={infoPanel({ title: 'Show · S01E02', probe: null, audioIndex: -1, cache: null, bufferedSec: null })} />),
       text(<BufferingOverlay cache={null} />),
       text(<PlayerError message="x" probe={null} onRetry={noop} onBack={noop} />),
     ];
     expect(all[0]).toContain('Next episode in 5 s');
     expect(all[1]).toContain('Skip intro');
     expect(all[2]).toBe('Intro skipped · UndoOK — undo');
-    expect(all[3]).toBe('No data');
+    expect(all[3]).toBe('S01E02Seeds / peers—Download—Bitrate—Audio—Buffer—');
     expect(all[4]).toContain('Buffering…');
     expect(all[5]).toContain('Retry');
     expect(all[5]).toContain('Back');
@@ -101,10 +101,10 @@ describe('player in English', () => {
     expect(playerEngineOptions()[0].name).toBe('Auto');
     expect(push(vlcUnavailable())).toBe('VLC is not available on this device');
     expect(push(engineLogText({ index: 0, engine: 'vlc', reason: 'ass' }) || '')).toBe('player: switching to VLC (ASS subtitles)');
-    const lines = statsLines({ Capacity: 100, Filled: 50, PiecesLength: 1, PiecesCount: 1, Torrent: { download_speed: 1048576, active_peers: 3, total_peers: 7, connected_seeders: 2 } } as any, null);
-    expect(lines[0]).toBe('Speed: 1.0 MB/s');
-    expect(lines[1]).toBe('Peers: 3 / 7 (seeds 2)');
-    strings.push(...lines);
+    const panel = infoPanel({ title: '', probe: null, audioIndex: -1, cache: { Capacity: 100, Filled: 50, PiecesLength: 1, PiecesCount: 1, Torrent: { download_speed: 1048576, active_peers: 3, total_peers: 7, connected_seeders: 2 } } as any, bufferedSec: 4 });
+    expect(panel.tiles.map((x) => x.value + ' ' + x.unit)).toEqual(['2 / 3 ', '1.0 MB/s', '— ']);
+    expect(panel.buffer).toBe('50 B · 4 s');
+    strings.push(...panel.tiles.map((x) => x.label + x.unit), panel.buffer);
     expect(push(mediaErrorText(null))).toBe('Unknown playback error');
     expect(push(mediaErrorText({ code: 4 } as MediaError))).toBe('The TV does not support this format or codec');
     expect(strings.filter((s) => CYR.test(s))).toEqual([]);

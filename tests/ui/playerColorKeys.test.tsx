@@ -168,18 +168,69 @@ describe('colour keys of the TV player', () => {
     await until(() => title() === 'Аудио');
     // yellow over a list: closes it and toggles the statistics
     key('yellow');
-    await until(() => title() === null && !!host.querySelector('.player-stats'));
+    await until(() => title() === null && !!host.querySelector('.player-info'));
   });
 
   it('yellow toggles the statistics (no night sound on LG), blue opens the player menu', async () => {
     const host = await open();
-    expect(host.querySelector('.player-stats')).toBeNull();
+    expect(host.querySelector('.player-info')).toBeNull();
     key('yellow');
-    await until(() => !!host.querySelector('.player-stats'));
+    await until(() => !!host.querySelector('.player-info'));
     key('yellow');
-    await until(() => !host.querySelector('.player-stats'));
+    await until(() => !host.querySelector('.player-info'));
     key('blue');
     await until(() => title() === 'Меню плеера');
+  });
+});
+
+describe('«Инфо» in the LG player', () => {
+  const panel = () => document.querySelector('.player-info');
+  const txt = (sel: string) => Array.prototype.map.call(document.querySelectorAll('.player-info ' + sel), (e: Element) => (e.textContent || '').trim()) as string[];
+
+  it('Yellow and Info toggle it, Back closes it, playback goes on; tiles from TorrServer, a dash after a failed fetch', async () => {
+    let fail = false;
+    const cacheSpy = vi.spyOn(TorrServerClient.prototype, 'cache').mockImplementation(() =>
+      fail
+        ? Promise.reject(new Error('down'))
+        : Promise.resolve({ Capacity: 1024 * 1024 * 1024, Filled: 1, PiecesLength: 1, PiecesCount: 1, Torrent: { hash: H, title: 't', stat: 3, connected_seeders: 9, active_peers: 11, download_speed: 3250586, preloaded_bytes: 547356672 } } as any),
+    );
+    const host = await open();
+    const video = host.querySelector('video') as HTMLVideoElement;
+    const pause = vi.fn();
+    video.pause = pause as any;
+    expect(panel()).toBeNull();
+    key('yellow');
+    await until(() => !!panel() && txt('.pi-value')[0] === '9 / 11');
+    expect(txt('.pi-label')).toEqual(['Сиды / пиры', 'Загрузка', 'Битрейт']);
+    expect(txt('.pi-value')[1]).toBe('3,1 МБ/с');
+    expect(txt('.pi-value')[2]).toBe('—');
+    expect(txt('.pi-chip')).toEqual(['AVC']);
+    expect(txt('.pi-line')[0]).toBe('ЗвукAC3 5.1');
+    expect(txt('.pi-num')[0]).toContain('522 МБ');
+    // TorrServer stops answering: a dash, not the old numbers (refreshed once a second)
+    fail = true;
+    await until(() => txt('.pi-value')[0] === '—');
+    key('yellow');
+    await until(() => !panel());
+    key('info');
+    await until(() => !!panel());
+    key('back');
+    await until(() => !panel());
+    expect(pause).not.toHaveBeenCalled();
+    expect(document.querySelector('video')).not.toBeNull();
+    cacheSpy.mockRestore();
+  });
+
+  it('every text on one line, a panel 40% wide at 1920', () => {
+    const css = readFileSync('src/styles.css', 'utf8');
+    expect(/\.player-info \{[^}]*right: 60px[^}]*width: 768px/.test(css)).toBe(true);
+    ['.pi-title', '.pi-chip', '.pi-label', '.pi-value', '.pi-line', '.pi-num'].forEach((c) => {
+      const rule = new RegExp('(?:^|\\n)\\.player-info \\' + c + ' \\{([^}]*)\\}').exec(css)![1];
+      expect(rule).toContain('white-space: nowrap');
+      expect(rule).toContain('text-overflow: ellipsis');
+    });
+    // Chromium 53: flex with margins, no `gap`
+    expect(/\.player-info[^{]*\{[^}]*\bgap:/.test(css)).toBe(false);
   });
 });
 
@@ -190,7 +241,7 @@ describe('hint line', () => {
     const host = mount(h(PlayerHints, { chapters: false }));
     expect(host.querySelectorAll('.keydot circle').length).toBe(4);
     expect(Array.prototype.map.call(host.querySelectorAll('.keydot circle'), (c: Element) => c.getAttribute('fill')).length).toBe(4);
-    expect(text(host)).toBe('АудиоСубтитрыСтатистикаМенюCH± — серии');
+    expect(text(host)).toBe('АудиоСубтитрыИнфоМенюCH± — серии');
     const chapters = mount(h(PlayerHints, { chapters: true }));
     expect(text(chapters)).toContain('CH± — главы');
     // at most ~50 characters: fits one line at 1920 next to the buttons
@@ -200,7 +251,7 @@ describe('hint line', () => {
   it('English', () => {
     applyLanguageSetting('en');
     const host = mount(h(PlayerHints, { chapters: true }));
-    expect(text(host)).toBe('AudioSubtitlesStatsMenuCH± — chapters');
+    expect(text(host)).toBe('AudioSubtitlesInfoMenuCH± — chapters');
   });
 
   it('never wraps: one line, cut with an ellipsis at worst', () => {

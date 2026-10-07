@@ -30,8 +30,9 @@ import { recordWatch, loadSkip, saveSkip } from '../store/journal';
 import { getLocalProgress } from '../store/progress';
 import { useNextEpisode } from '../player/useNextEpisode';
 import { useCacheStats } from '../player/useCacheStats';
+import { infoPanel, bufferedAhead } from '../player/infoPanel';
 import { Controls } from '../player/Controls';
-import { StatsOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner, UndoBanner, PlayerError } from '../player/Overlays';
+import { InfoOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner, UndoBanner, PlayerError } from '../player/Overlays';
 import { usePlayerHeading, itemHeading } from '../player/heading';
 import { tvGlyphs } from '../ui/tvText';
 import type { Cmd } from '../phone/protocol';
@@ -66,7 +67,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const [reloadKey, setReloadKey] = useState(0);
   const [probe, setProbe] = useState<FfprobeResult | null>(null);
   const [controls, setControls] = useState(true);
-  const [statsOn, setStatsOn] = useState(settings.value.showStats);
+  // «Инфо» (Yellow / Info; Back closes it); «Статистика потока при запуске» opens it with the player
+  const [infoOn, setInfoOn] = useState(settings.value.showStats);
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
   const [audioIdx, setAudioIdx] = useState(-1);
   const [subChoice, setSubChoice] = useState('off');
@@ -178,7 +180,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   }, [vs.time, ready, prefs, probe]);
 
 
-  const cache = useCacheStats(c, item.hash, statsOn || (ready && vs.buffering));
+  const cache = useCacheStats(c, item.hash, infoOn || (ready && vs.buffering));
 
   const hideGate = useRef({ paused: true, buffering: true, seeking: false, error: false });
   hideGate.current = { paused: vs.paused, buffering: vs.buffering, seeking: seekTarget !== null, error: !!vs.error };
@@ -570,7 +572,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     if (color === 'audio') openAudioList();
     else if (color === 'subs') openSubsList();
     else if (color === 'menu') openTrackMenu();
-    else setStatsOn((on) => !on);
+    else setInfoOn((on) => !on);
   };
 
   // above the dialog (which takes every key while open): a colour key over the player's own window closes it,
@@ -641,7 +643,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
         showControls();
         return true;
       case 'info':
-        setStatsOn(!statsOn);
+        setInfoOn(!infoOn);
         return true;
       case 'chup':
       case 'chdown':
@@ -658,6 +660,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
         goPrev();
         return true;
       case 'back':
+        if (infoOn) {
+          setInfoOn(false);
+          return true;
+        }
         if (controls && !vs.paused) {
           setControls(false);
           return true;
@@ -676,7 +682,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
       {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}
       {ready && vs.buffering && !vs.error && <BufferingOverlay cache={cache} />}
-      {statsOn && <StatsOverlay cache={cache} probe={probe} />}
+      {infoOn && (
+        <InfoOverlay panel={infoPanel({ title: heading, probe, audioIndex: audioIdx, cache, bufferedSec: bufferedAhead(videoRef.current) })} />
+      )}
       <DonateCard mode={donate} raised={donate === 'credits' && controls} />
       {next.countdown !== null && hasNext && (
         <NextBanner seconds={next.countdown} title={tvGlyphs(itemHeading(queue[index + 1]))} onNext={goNext} />
