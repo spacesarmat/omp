@@ -34,7 +34,7 @@ import com.spacesarmat.omp.control.AppForeground
 import org.json.JSONObject
 
 /**
- * Native player on Android TV (Media3 ExoPlayer or libVLC) with the OMP overlay: title, progress, time, «Пауза»,
+ * Native player on Android TV (2160 Player's engine or libVLC) with the OMP overlay: title, progress, time, «Пауза»,
  * «Аудио: …», «Субтитры: …», «Следующая серия», key hints and the «Управление с телефона» badge.
  * Keys: ◀/▶ seek by the settings step with the LG arrow rule ([SeekAccumulator]: ×(1 + repeats/4) up to ×6,
  * one seek 700 ms after the last press),
@@ -45,7 +45,7 @@ import org.json.JSONObject
  * intro with «Вернуть», credits auto skip to the next item (as the LG player).
  * «Поддержать» ([DonateQr], sent with playNative): a QR card on pause and during the credits, purely visual.
  * Moving to another item starts it from its resume point (queue `resume`, updated when an item is left).
- * Events go to the page through [NativePlayerBridge]. Playback goes through a [PlayerEngine] ([Media3Engine] or
+ * Events go to the page through [NativePlayerBridge]. Playback goes through a [PlayerEngine] ([Engine2160] or
  * [VlcEngine], picked by [EngineChooser]: «Плеер» setting / the torrent's choice, «Авто» moves to VLC on a format
  * error before the first frame or ASS subtitles) driven by [PlayerSession] (queue, resume points, error, tracks).
  */
@@ -308,7 +308,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                     return null
                 }
             } else {
-                Media3Engine(this@PlayerActivity)
+                Engine2160(this@PlayerActivity)
             }
             e.attach(findViewById<ViewGroup>(R.id.player_video))
             return e
@@ -399,8 +399,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         audio.getOrNull(TrackOptions.selectedAudio(audio))?.label ?: I18n.s("player.default")
 
     /**
-     * «Меню плеера»: «Аудио», «Субтитры», «Главы» (when the file has chapters) and the three «Отметить …» rows
-     * (as on LG). The marks use the position at the time the menu opened.
+     * «Меню плеера»: «Аудио», «Субтитры», «Ночной звук» (engines that have it), «Главы» (when the file has chapters)
+     * and the three «Отметить …» rows (as on LG). The marks use the position at the time the menu opened.
      */
     private fun openMenu() {
         if (dialog?.isShowing == true) return
@@ -435,6 +435,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                 }
                 .show()
         })
+        engine.nightMode?.let { on ->
+            rows.add(I18n.s("player.nightRow", "v" to I18n.s(if (on) "player.on" else "player.off")) to { engine.setNightMode(!on) })
+        }
         if (chapters.isNotEmpty()) rows.add(I18n.s("player.chaptersRow", "n" to chapters.size.toString()) to { openChapters(i, now) })
         val marks = markRows(skips.info(i), now, dur)
         listOf("intro-start", "intro-end", "credits").forEachIndexed { n, kind ->

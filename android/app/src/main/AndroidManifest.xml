@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <queries>
         <package android:name="tv.p2160.player" />
@@ -123,5 +124,16 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+        <!-- From 2160 player-core: its MediaSessionService (notification, background play, exported to other apps).
+             OMP's player runs in its own activity and pauses on stop; the controller starts the service in runCatching,
+             so it is not needed. -->
+        <service
+            android:name="tv.p2160.core.engine.PlaybackService"
+            tools:node="remove" />
+
+        <!-- From media3-session 1.11 (pulled in by player-core), exported; OMP does not use it. -->
+        <activity
+            android:name="androidx.media3.session.BluetoothValidationActivity"
+            tools:node="remove" />
     </application>
 </manifest>
