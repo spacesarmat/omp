@@ -52,6 +52,13 @@ class ColorKeysTest {
     }
 
     @Test
+    fun aHeldKeyActsOnce() {
+        assertTrue(colorKeyActs(0))
+        assertTrue(!colorKeyActs(1))
+        assertTrue(!colorKeyActs(12))
+    }
+
+    @Test
     fun hintHasADotPerKey() {
         val h = ColorKeys.hint()
         assertEquals("● аудио · ● субтитры · ● инфо · ● меню", h.text)

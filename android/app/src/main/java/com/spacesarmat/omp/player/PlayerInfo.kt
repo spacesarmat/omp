@@ -208,3 +208,32 @@ object PlayerInfoText {
         return out
     }
 }
+
+/**
+ * The torrent statistics shown in «Инфо»: only for the torrent of the current item, cleared when its fetch fails
+ * («нет данных», never frozen numbers), when the item is not a TorrServer stream and when the panel closes.
+ */
+class InfoStatsState {
+    var stats: TorrentStats? = null
+        private set
+    private var hash: String? = null
+
+    /** The current item's torrent ([h] null: not a TorrServer stream); another torrent drops the old numbers. */
+    fun forTorrent(h: String?) {
+        if (h != hash) {
+            hash = h
+            stats = null
+        }
+    }
+
+    /** An answer for torrent [h] (null: the fetch failed): applies only to the current torrent. */
+    fun answer(h: String, s: TorrentStats?) {
+        if (h == hash) stats = s
+    }
+
+    /** The panel closed: reopening starts without stale numbers. */
+    fun closed() {
+        hash = null
+        stats = null
+    }
+}

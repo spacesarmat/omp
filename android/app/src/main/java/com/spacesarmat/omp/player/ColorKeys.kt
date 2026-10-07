@@ -51,3 +51,6 @@ object ColorKeys {
         return ColorHint(parts.joinToString(" · ") { "● $it" }, listOf(RED, GREEN, YELLOW, BLUE))
     }
 }
+
+/** Colour keys and Info act once per press: the auto-repeat of a held key is swallowed (as for the menu). */
+fun colorKeyActs(repeatCount: Int): Boolean = repeatCount == 0

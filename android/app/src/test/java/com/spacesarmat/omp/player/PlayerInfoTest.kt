@@ -131,6 +131,37 @@ class PlayerInfoTest {
     }
 
     @Test
+    fun statsAreNeverStale() {
+        val s = InfoStatsState()
+        val good = TorrentStats(5, 10, 20)
+        s.forTorrent(H)
+        s.answer(H, good)
+        assertEquals(good, s.stats)
+        // TorrServer stops answering: «нет данных», not the last numbers
+        s.answer(H, null)
+        assertNull(s.stats)
+        assertEquals(listOf("Торрент: нет данных"), PlayerInfoText.lines("", "", EngineMediaInfo(), null, s.stats))
+        // a late answer for another torrent is ignored
+        s.answer(H, good)
+        s.forTorrent("b".repeat(40))
+        assertNull(s.stats)
+        s.answer(H, good)
+        assertNull(s.stats)
+        // an item that is not a TorrServer stream: no numbers of the previous one
+        s.answer("b".repeat(40), good)
+        assertEquals(good, s.stats)
+        s.forTorrent(null)
+        assertNull(s.stats)
+        // closing the panel: reopening starts empty, even for the same torrent
+        s.forTorrent(H)
+        s.answer(H, good)
+        s.closed()
+        assertNull(s.stats)
+        s.forTorrent(H)
+        assertNull(s.stats)
+    }
+
+    @Test
     fun hdrKinds() {
         assertEquals("HDR10", Media3Engine.hdrOf("video/hevc", androidx.media3.common.C.COLOR_TRANSFER_ST2084))
         assertEquals("HLG", Media3Engine.hdrOf("video/hevc", androidx.media3.common.C.COLOR_TRANSFER_HLG))

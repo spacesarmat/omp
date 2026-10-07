@@ -96,11 +96,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     /** «Инфо» is on screen (Info / yellow key; Back closes it; playback goes on). */
     private var infoShown = false
 
-    /** The latest TorrServer statistics of the torrent playing, and whether a request is out. */
-    @Volatile
-    private var infoStats: TorrentStats? = null
-    private var infoStatsFor: String? = null
-    @Volatile
+    /** The TorrServer statistics of the torrent playing (InfoStatsState), and whether a request is out. */
+    private val infoStats = InfoStatsState()
     private var infoFetching = false
 
     /** «Инфо» refresh: once a second while shown (TorrServer asked in the background). */
@@ -551,7 +548,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
         if (code == KeyEvent.KEYCODE_BACK || (code !in HANDLED_KEYS && ColorKeys.actionFor(code) == null)) return super.dispatchKeyEvent(event)
-        if (event.action == KeyEvent.ACTION_DOWN) onKey(code)
+        if (event.action != KeyEvent.ACTION_DOWN) return true
+        // colour keys and Info once per press: holding Yellow must not flip «Инфо» at the repeat rate
+        if (ColorKeys.actionFor(code) != null && !colorKeyActs(event.repeatCount)) return true
+        onKey(code)
         return true
     }
 
@@ -600,7 +600,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private fun withColorKeys(d: AlertDialog): AlertDialog {
         d.setOnKeyListener { dlg, code, e ->
             val action = ColorKeys.actionFor(code) ?: return@setOnKeyListener false
-            if (e.action == KeyEvent.ACTION_DOWN) {
+            if (e.action == KeyEvent.ACTION_DOWN && colorKeyActs(e.repeatCount)) {
                 dlg.dismiss()
                 ColorKeys.inDialog(action)?.let { a -> handler.post { colorKey(a) } }
             }
@@ -620,24 +620,23 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             handler.post(infoTick)
         } else {
             infoView.visibility = View.GONE
+            infoStats.closed()
         }
     }
 
     /** One /cache request at a time for the torrent of the current item (TorrServerStats); the answer is kept. */
     private fun fetchInfoStats() {
-        val url = session.item()?.url ?: return
-        val r = TorrServerStats.request(url) ?: return
-        if (infoStatsFor != r.hash) {
-            infoStatsFor = r.hash
-            infoStats = null
-        }
-        if (infoFetching) return
+        val r = session.item()?.url?.let { TorrServerStats.request(it) }
+        // not a TorrServer stream: no numbers (not the previous item's)
+        infoStats.forTorrent(r?.hash)
+        if (r == null || infoFetching) return
         infoFetching = true
         val t = Thread {
             val s = TorrServerStats.fetch(r)
             handler.post {
                 infoFetching = false
-                if (infoStatsFor == r.hash && s != null) infoStats = s
+                // a failed fetch clears the numbers: «нет данных», never frozen ones
+                infoStats.answer(r.hash, s)
                 if (infoShown) renderInfo()
             }
         }
@@ -649,7 +648,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         if (!infoShown || !::session.isInitialized || isDestroyed) return
         val item = session.item() ?: return
         val audio = engine.audioTracks().firstOrNull { it.selected }
-        val lines = PlayerInfoText.lines(item.title, PlayerInfoText.fileName(item.url), engine.mediaInfo(), audio, infoStats)
+        val lines = PlayerInfoText.lines(item.title, PlayerInfoText.fileName(item.url), engine.mediaInfo(), audio, infoStats.stats)
         infoView.text = lines.joinToString("\n")
     }
 
@@ -941,7 +940,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     // ---- phone remote (control/TvRemote.kt), UI thread ----
 
-    /** A key from the phone remote (UP/DOWN/LEFT/RIGHT/ENTER/BACK) handled like the TV remote's key. */
+    /**
+     * A key from the phone remote handled like the TV remote's key: UP/DOWN/LEFT/RIGHT/ENTER/BACK, MENU, INFO and the
+     * colour keys RED/GREEN/YELLOW/BLUE (ColorKeys.remoteCode).
+     */
     fun remoteKey(name: String) {
         if (isFinishing || !::session.isInitialized) return
         val code = when (name) {
