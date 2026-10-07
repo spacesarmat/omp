@@ -8,6 +8,7 @@
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
+    "monitor:parsers": "vitest run --config vitest.monitor.config.ts",
     "icons": "node scripts/render-icons.mjs",
     "gen:donate-qr": "node scripts/gen-donate-qr.mjs",
     "donate:code": "node scripts/donate-code.mjs",
