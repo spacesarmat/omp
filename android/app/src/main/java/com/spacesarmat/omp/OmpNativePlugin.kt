@@ -12,6 +12,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
+import androidx.activity.result.ActivityResult
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
@@ -22,6 +23,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PermissionState
 import com.getcapacitor.PluginMethod
+import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
@@ -56,6 +58,7 @@ import com.spacesarmat.omp.monitor.MonitorPlan
 import com.spacesarmat.omp.monitor.MonitorScheduler
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayRequest
+import com.spacesarmat.omp.player.Player2160
 import com.spacesarmat.omp.player.PlayerActivity
 import com.spacesarmat.omp.rpc.PhoneRpcService
 import com.spacesarmat.omp.rpc.RpcConfig
@@ -749,6 +752,57 @@ class OmpNativePlugin : Plugin() {
     }
 
     // ---- external player ----
+
+    /** Which 2160 Player package is installed, or null. */
+    @PluginMethod
+    fun player2160(call: PluginCall) {
+        call.resolve(JSObject().put("package", Player2160.installed(context.packageManager)))
+    }
+
+    /** Opens 2160 Player on a playlist for result: resolves with where playback stopped ({returned:false} if nothing). */
+    @PluginMethod
+    fun open2160(call: PluginCall) {
+        val pkg = Player2160.installed(context.packageManager)
+        if (pkg == null) {
+            call.reject(I18n.s("plugin.p2160Missing"))
+            return
+        }
+        val arr = call.getArray("items")
+        val items = ArrayList<Player2160.Item>()
+        if (arr != null) for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val url = o.optString("url").trim()
+            if (url.isNotEmpty()) items.add(Player2160.Item(url, o.optString("title")))
+        }
+        if (items.isEmpty()) {
+            call.reject(I18n.s("plugin.noVideoUrl"))
+            return
+        }
+        val start = (call.getInt("start") ?: 0).coerceIn(0, items.lastIndex)
+        val position = call.getDouble("positionMs")?.toLong() ?: 0L
+        val spec = Player2160.spec(items, start, position, call.getBoolean("fromStart") ?: false, call.getString("segments").orEmpty())
+        val intent = Player2160.intent(pkg, spec, items.map { it.url })
+        try {
+            startActivityForResult(call, intent, "on2160Result")
+        } catch (_: ActivityNotFoundException) {
+            call.reject(I18n.s("plugin.p2160Missing"))
+        } catch (_: RuntimeException) {
+            call.reject(I18n.s("plugin.openPlayerFailed"))
+        }
+    }
+
+    @ActivityCallback
+    private fun on2160Result(call: PluginCall?, result: ActivityResult) {
+        if (call == null) return
+        val r = try {
+            Player2160.parse(result.resultCode, result.data)
+        } catch (_: RuntimeException) {
+            Player2160.Result(false)
+        }
+        call.resolve(JSObject.fromJSONObject(r.toJson()))
+        // startActivityForResult saved the call in the bridge: release it, or one call leaks per use
+        call.release(bridge)
+    }
 
     @PluginMethod
     fun openExternal(call: PluginCall) {
