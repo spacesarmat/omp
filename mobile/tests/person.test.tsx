@@ -73,6 +73,18 @@ afterEach(() => {
 });
 
 describe('phone person screen', () => {
+  it('the root keeps m-library and m-person, and the Мои/Обзор switch has the Discover header classes', async () => {
+    mount(<Person id={7} label="Иван Режиссёров" />);
+    await flush();
+    const root = el.querySelector('[data-route="person"]')!;
+    expect(root.classList.contains('m-library')).toBe(true);
+    expect(root.classList.contains('m-person')).toBe(true);
+    const head = root.querySelector('.m-lib-head')!;
+    const seg = head.querySelector('.m-seg')!;
+    expect(seg.getAttribute('role')).toBe('tablist');
+    const btns = [...seg.querySelectorAll('.m-seg-btn')];
+    expect(btns.map((b) => b.className)).toEqual(['m-seg-btn', 'm-seg-btn on']);
+  });
   it('shows the name, the job and the years', async () => {
     mount(<Person id={7} label="Иван Режиссёров" />);
     await flush();

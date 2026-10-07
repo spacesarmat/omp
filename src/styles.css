@@ -183,7 +183,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .dialog-backdrop { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, .6); display: flex; align-items: center; justify-content: center; z-index: 50; }
 .dialog { min-width: 720px; max-width: 1200px; max-height: 900px; overflow-y: auto; background: var(--panel); border-radius: 18px; padding: 40px; }
 .dialog-title { font-size: 34px; margin-bottom: 24px; }
-.dialog-body { max-height: 560px; overflow-y: auto; margin-bottom: 24px; font-size: 26px; line-height: 1.45; color: #c9cdd8; }
+.dialog-body { white-space: pre-line; max-height: 560px; overflow-y: auto; margin-bottom: 24px; font-size: 26px; line-height: 1.45; color: #c9cdd8; }
 .dialog-option { padding: 18px 24px; border-radius: 10px; margin-bottom: 8px; }
 .dialog-option.current { color: var(--accent); }
 .dialog-option.focused { background: var(--accent); color: #0f1115; transform: none; box-shadow: none; }
@@ -620,6 +620,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .tc-section { margin-bottom: 12px; }
 .tc-h2 { margin: 0 0 4px; font-size: 26px; font-weight: 500; color: var(--muted); }
 .tc-chip-library { background: var(--panel2); }
+.tc-cast-ph { height: 250px; }
 .tc-scroll { position: relative; overflow: hidden; margin: 0 -12px; padding: 12px; }
 .tc-cast-row { display: flex; flex-wrap: nowrap; }
 .tc-person { flex-shrink: 0; width: 180px; margin-right: 24px; padding: 10px 0 12px; border-radius: 14px; text-align: center; }
@@ -638,7 +639,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .person-photo .tc-initials { font-size: 60px; }
 .person-info { flex: 1; min-width: 0; }
 .person-crumb { margin-bottom: 4px; font-size: 22px; color: var(--muted); }
-.person-bio { max-width: 1100px; margin-top: 12px; font-size: 24px; line-height: 1.4; color: #c9cdd8; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.person-bio { white-space: pre-line; max-width: 1100px; margin-top: 12px; font-size: 24px; line-height: 1.4; color: #c9cdd8; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .person-more { display: inline-block; margin-top: 8px; padding: 6px 18px; border-radius: 12px; font-size: 22px; color: var(--accent); }
 .person-more.focused { background: var(--panel2); color: var(--text); }
 .person-name { margin: 0 0 8px; font-size: 52px; font-weight: 700; }

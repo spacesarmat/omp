@@ -115,7 +115,7 @@ function Body({ card }: { card: PersonCard }) {
           ) : null}
           {bioMore && (
             <Focusable focusKey="person-bio-more" className="person-more" role="button" onPress={() => textDialog(tvGlyphs(card.name), tvGlyphs(card.bio), t('common.close'))} onFocused={leaveTile}>
-              {t('person.more')}
+              {tvGlyphs(t('person.more'))}
             </Focusable>
           )}
         </div>
@@ -211,14 +211,14 @@ export function PersonScreen(p: { id: number; name?: string }) {
     <FocusGroup focusKey="PERSON" className="screen person">
       {error ? (
         <div class="disc-error">
-          <div class="catalog-off-title">{t('discover.offlineTitle')}</div>
-          <div class="disc-error-text">{t(error === 'nokey' ? 'tv.discover.nokeyText' : 'tv.discover.offlineText')}</div>
+          <div class="catalog-off-title">{tvGlyphs(t('discover.offlineTitle'))}</div>
+          <div class="disc-error-text">{tvGlyphs(t(error === 'nokey' ? 'tv.discover.nokeyText' : 'tv.discover.offlineText'))}</div>
           <FocusGroup focusKey="PERSON-ERROR" className="actions">
-            <Button focusKey="person-retry" label={t('common.retry')} onPress={() => setReload((n) => n + 1)} />
+            <Button focusKey="person-retry" label={tvGlyphs(t('common.retry'))} onPress={() => setReload((n) => n + 1)} />
           </FocusGroup>
         </div>
       ) : !card ? (
-        <Spinner text={t('catalog.loading')} />
+        <Spinner text={tvGlyphs(t('catalog.loading'))} />
       ) : (
         <Body card={card} />
       )}

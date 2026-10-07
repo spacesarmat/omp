@@ -148,6 +148,12 @@ export function requestSeriesMatch(g: SeriesGroup): void {
   pump();
 }
 
+/** The lookup of this series failed lately (offline, no key): no card is coming soon. */
+export function seriesMatchFailed(key: string): boolean {
+  const failed = failedAt.get(cacheKey(key));
+  return failed !== undefined && Date.now() - failed < RETRY_MS;
+}
+
 /** Tests: forget every match. */
 export function resetSeriesMatches(): void {
   matches.clear();

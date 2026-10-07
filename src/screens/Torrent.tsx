@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { useMovieCard } from '../lib/useMovieCard';
+import { useTorrentCast } from '../lib/useTorrentCast';
 import { CastRow } from '../ui/CastRow';
 import { client } from '../store/servers';
 import { torrents } from '../store/library';
@@ -74,7 +74,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   void seriesMatchVersion.value; // the TMDB name of the series, once looked up
   const list = torrents.value;
   const group = tor ? seriesGroupOf(tor, list) : null;
-  const movie = useMovieCard(tor);
+  const { card: movie, pending: moviePending } = useTorrentCast(tor);
   useEffect(() => {
     if (group) requestSeriesMatch(group);
   }, [group ? group.key : '']);
@@ -299,6 +299,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
           </div>
         </div>
       </div>
+      {moviePending && !movie && <div class="tc-section tc-cast-ph" aria-hidden="true" />}
       {movie && movie.cast.length > 0 && <CastRow cast={movie.cast} groupKey="TORRENT-CAST" focusPrefix="torrent-cast-" />}
       {queue.length > 0 && (
         <FocusGroup focusKey="TORRENT-SKIP" className="skip-block">

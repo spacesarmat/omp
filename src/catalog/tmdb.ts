@@ -136,6 +136,11 @@ function str(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
 }
 
+/** A biography: lines trimmed on the right, CRLF as LF, a run of blank lines as one, so «pre-line» shows clean paragraphs. */
+export function bioText(v: unknown): string {
+  return str(v).replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+}
+
 function year(v: unknown): number {
   const m = /^(\d{4})/.exec(str(v));
   return m ? +m[1] : 0;
@@ -284,7 +289,7 @@ function isSelfRole(character: string): boolean {
 
 /** The biography of a plain person answer (personBioUrl): '' when absent. */
 export function sanitizePersonBio(raw: unknown): string {
-  return raw && typeof raw === 'object' && !Array.isArray(raw) ? str((raw as { [k: string]: unknown }).biography) : '';
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? bioText((raw as { [k: string]: unknown }).biography) : '';
 }
 
 /** A person with the filmography: combined_credits' cast as acting, crew directors (and series creators) as directing. */
@@ -325,7 +330,7 @@ export function sanitizePerson(e: TmdbEndpoint, raw: unknown): PersonCard | null
   const dept = str(o.known_for_department);
   return {
     id: id, name: name, photo: imageUrl(e, o.profile_path, 'w300'), birth: date(o.birthday), death: date(o.deathday),
-    bio: str(o.biography),
+    bio: bioText(o.biography),
     known: dept === 'Acting' ? 'acting' : dept === 'Directing' ? 'directing' : 'other',
     acting: collect(cc.cast, (x) => { const ch = str(x.character); return isSelfRole(ch) ? null : ch; }),
     directing: collect(cc.crew, (x, kind) => (x.job === 'Director' || (kind === 'tv' && x.job === 'Creator') ? '' : null)),

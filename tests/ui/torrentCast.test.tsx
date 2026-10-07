@@ -7,6 +7,7 @@ import { servers, addServer, setActiveServer, removeServer } from '../../src/sto
 import { torrents } from '../../src/store/library';
 import { currentRoute, routeStack } from '../../src/ui/nav';
 import { setCatalogProvider } from '../../src/catalog/activeCatalog';
+import { resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { Torrent } from '../../src/api/types';
 
@@ -54,6 +55,7 @@ beforeEach(() => {
   vi.spyOn(TorrServerClient.prototype, 'viewedList').mockResolvedValue([]);
   vi.spyOn(TorrServerClient.prototype, 'probe').mockResolvedValue(null);
   routeStack.value = [{ name: 'library' }, { name: 'torrent', hash: 'x' }];
+  resetSeriesMatches();
   search.mockReset();
   card.mockReset();
   setCatalogProvider(() => Promise.resolve({ search, card } as any));
@@ -91,10 +93,42 @@ describe('TV torrent screen · «В ролях»', () => {
     expect(search).toHaveBeenCalled();
     expect(host.querySelector('.tc-cast-row')).toBeNull();
   });
-  it('never looks a series up', async () => {
+  it('reserves the row while the film is looked up (no text, not focusable) and drops it when TMDB answers', async () => {
+    let done!: (v: unknown) => void;
+    search.mockReturnValue(new Promise((r) => { done = r; }));
+    await mount(film('film4', 'Ждущий фильм'));
+    const ph = host.querySelector('.tc-cast-ph') as HTMLElement;
+    expect(ph).not.toBeNull();
+    expect(ph.textContent).toBe('');
+    expect(ph.hasAttribute('data-fk')).toBe(false);
+    await act(async () => { done({ items: [], pages: 1 }); });
+    await flush();
+    expect(host.querySelector('.tc-cast-ph')).toBeNull();
+  });
+  const tvHit = { items: [{ kind: 'tv', id: 5, title: 'Тёмная материя', original: 'Dark Matter', year: 2024, poster: '', rating: 0 }], pages: 1 };
+  it('a single-torrent series shows the cast of its matched series card, right under the buttons', async () => {
+    search.mockResolvedValue(tvHit);
+    card.mockResolvedValue({ kind: 'tv', id: 5, title: 'Тёмная материя', cast });
+    await mount(series);
+    expect(card).toHaveBeenCalledWith('tv', 5);
+    expect(card).not.toHaveBeenCalledWith('movie', expect.anything());
+    expect(host.querySelector('.tc-h2')!.textContent).toBe('В ролях');
+    expect(host.querySelector('[data-fk="torrent-cast-0"]')).not.toBeNull();
+    expect(!!(host.querySelector('.torrent-head')!.compareDocumentPosition(host.querySelector('.tc-cast-row')!) & 4)).toBe(true);
+  });
+  it('a series with no TMDB match shows no cast block and no placeholder', async () => {
     search.mockResolvedValue({ items: [], pages: 1 });
     await mount(series);
-    expect(card).not.toHaveBeenCalledWith('movie', expect.anything());
     expect(host.querySelector('.tc-cast-row')).toBeNull();
+    expect(host.querySelector('.tc-cast-ph')).toBeNull();
+  });
+  it('reserves the row while the series is matched', async () => {
+    let done!: (v: unknown) => void;
+    search.mockReturnValue(new Promise((r) => { done = r; }));
+    await mount(series);
+    expect(host.querySelector('.tc-cast-ph')).not.toBeNull();
+    await act(async () => { done({ items: [], pages: 1 }); });
+    await flush();
+    expect(host.querySelector('.tc-cast-ph')).toBeNull();
   });
 });

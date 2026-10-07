@@ -3,7 +3,7 @@ import { contentsTextOf } from '../lib/releaseContents';
 import { t, tp, fmtDuration, fmtSize } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { CastStrip } from '../ui/CastStrip';
-import { useMovieCard } from '../../../src/lib/useMovieCard';
+import { useTorrentCast } from '../../../src/lib/useTorrentCast';
 import { Sheet } from '../ui/Sheet';
 import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
 import { qualityBadge, posterStyle } from '../ui/Poster';
@@ -317,7 +317,7 @@ export function Torrent({ hash }: { hash: string }) {
   // a torrent just added may not be in the list yet: ask the server for it
   const [fetched, setFetched] = useState<TorrentT | null | undefined>(undefined);
   const tor = listed || fetched || undefined;
-  const movie = useMovieCard(tor);
+  const { card: movie, pending: moviePending } = useTorrentCast(tor);
   const [loaded, setLoaded] = useState<TorrentT | null>(null);
   const [sheet, setSheet] = useState<TorrentFile | null>(null);
   const [status, setStatus] = useState('');
@@ -644,6 +644,7 @@ export function Torrent({ hash }: { hash: string }) {
           {t('torrent.screen.watchOnPhone')}
         </button>
         {status && <LaunchError message={status} />}
+        {moviePending && !movie && <div class="m-tc-section m-tc-cast-ph" aria-hidden="true" />}
         {movie && <CastStrip cast={movie.cast} />}
         {files.length > 0 && (
           <div class="m-skip" data-block="skip">

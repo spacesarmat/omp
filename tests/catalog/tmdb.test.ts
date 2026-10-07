@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+// @ts-ignore node builtins
+import { readFileSync } from 'node:fs';
 import { endpointOf, noveltiesUrl, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson, personBioUrl } from '../../src/catalog/tmdb';
 import { applyLanguageSetting } from '../../src/i18n';
 import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
@@ -236,6 +238,16 @@ describe('people', () => {
     cast.push({ ...tv(2, 'Himself'), id: 2 });
     const p = sanitizePerson(E, { id: 5, name: 'N', combined_credits: { cast, crew: [] } })!;
     expect(p.acting.map((c) => [c.id, c.roles])).toEqual([[1, ['Selfridge']], [2, ['Doctor']]]);
+  });
+  it('sanitizePerson: keeps paragraphs, trims line ends, collapses 3+ newlines', () => {
+    expect(sanitizePerson(E, { id: 5, name: 'N', biography: 'A. \r\n\r\n\r\n\nB.  \nC.' })!.bio).toBe('A.\n\nB.\nC.');
+  });
+  it('biography blocks keep paragraph breaks (pre-line) on the TV bio, the TV dialog and the phone overview', () => {
+    const tv = readFileSync('src/styles.css', 'utf8');
+    const ph = readFileSync('mobile/src/mobile.css', 'utf8');
+    expect(/\.person-bio \{[^}]*white-space: pre-line/.test(tv)).toBe(true);
+    expect(/\.dialog-body \{[^}]*white-space: pre-line/.test(tv)).toBe(true);
+    expect(/\.m-tc-overview\.open \{[^}]*white-space: pre-line/.test(ph)).toBe(true);
   });
   it('sanitizePerson: keeps the biography trimmed, empty when absent', () => {
     expect(sanitizePerson(E, { id: 5, name: 'N', biography: '  Born in Rome.\n\nActor.  ' })!.bio).toBe('Born in Rome.\n\nActor.');

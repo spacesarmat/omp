@@ -52,7 +52,7 @@ const catalog = {
     if (low.indexOf('dark matter') >= 0 || low.indexOf('материя') >= 0) return Promise.resolve({ items: [{ kind: 'tv', id: 2, title: 'Тёмная материя', original: 'Dark Matter', year: 2024, poster: '', rating: 7 }], pages: 1 });
     return Promise.resolve({ items: [], pages: 1 });
   }),
-  card: vi.fn((_k: string, id: number) => Promise.resolve({ kind: 'tv', id: id, title: id === 1 ? 'Американская история ужасов' : 'Тёмная материя', original: '', year: 2011, seasons: [] })),
+  card: vi.fn((_k: string, id: number) => Promise.resolve({ kind: 'tv', id: id, title: id === 1 ? 'Американская история ужасов' : 'Тёмная материя', original: '', year: 2011, seasons: [], cast: [] })),
   season: vi.fn((_id: number, n: number) => Promise.resolve({ episodes: n === 2 ? [{ n: 1, title: 'Спокойная жизнь' }] : n === 13 ? [{ n: 1, title: 'Начало' }] : [] })),
   discover: vi.fn(),
 };
