@@ -120,6 +120,7 @@ const STRUCT: FaqStruct[] = [
   { id: 'safety', section: 'install', devices: ['lg', 'atv', 'phone'] },
   { id: 'lg-connect', section: 'connect', devices: ['lg', 'phone'] },
   { id: 'atv-connect', section: 'connect', devices: ['atv', 'phone'] },
+  { id: 'xiaomi-connect', section: 'connect', devices: ['atv'] },
   { id: 'wake', section: 'connect', devices: ['lg', 'phone'] },
   { id: 'skip', section: 'player', devices: ['lg', 'atv', 'phone'] },
   { id: 'sound-subs', section: 'player', devices: ['phone', 'lg', 'atv'] },
