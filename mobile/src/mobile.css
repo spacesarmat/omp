@@ -451,6 +451,8 @@ button, .m-btn {
 
 /* «Человек» */
 .m-person { display: flex; flex-direction: column; gap: 14px; overflow-x: hidden; }
+/* m-library brings the compact «Мои | Обзор» switch styles and a 24px top gap; the person back bar sits at the plain screen top like on the series screen */
+.m-library.m-person { padding-top: env(safe-area-inset-top); }
 .m-person-head { display: flex; align-items: center; gap: 14px; }
 .m-person-photo { flex: none; width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: var(--panel); }
 .m-person-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

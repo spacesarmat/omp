@@ -187,7 +187,7 @@ export function Person({ id, label }: { id: number; label?: string }) {
   }, [id, reload]);
 
   return (
-    <div class="m-screen m-person" data-route="person">
+    <div class="m-screen m-library m-person" data-route="person">
       <div class="m-bar">
         <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
