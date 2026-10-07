@@ -8,6 +8,9 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -476,10 +479,14 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         listOf("intro-start", "intro-end", "credits").forEachIndexed { n, kind ->
             rows.add(marks[n] to { emitMark(i, kind, now, dur) })
         }
-        dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-            .setTitle(I18n.s("player.menu"))
-            .setItems(rows.map { it.first }.toTypedArray()) { _, which -> rows.getOrNull(which)?.second?.invoke() }
-            .show()
+        val menu = withColorKeys(
+            AlertDialog.Builder(this, R.style.OmpPlayerDialog)
+                .setTitle(I18n.s("player.menu"))
+                .setItems(rows.map { it.first }.toTypedArray()) { _, which -> rows.getOrNull(which)?.second?.invoke() }
+                .create(),
+        )
+        menu.show()
+        dialog = menu
     }
 
     /** «Главы»: «время · название», the current one checked; a choice seeks to its start. */
@@ -519,6 +526,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             .setTitle(title)
             .setSingleChoiceItems(labels.toTypedArray(), checked, null)
             .create()
+        withColorKeys(d)
         d.show()
         val pick = ListPick(labels.size, { d.dismiss() }, onPick)
         d.listView?.setOnItemClickListener { _, _, n, _ -> pick.click(n) }
@@ -542,12 +550,16 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
-        if (code == KeyEvent.KEYCODE_BACK || code !in HANDLED_KEYS) return super.dispatchKeyEvent(event)
+        if (code == KeyEvent.KEYCODE_BACK || (code !in HANDLED_KEYS && ColorKeys.actionFor(code) == null)) return super.dispatchKeyEvent(event)
         if (event.action == KeyEvent.ACTION_DOWN) onKey(code)
         return true
     }
 
     private fun onKey(code: Int) {
+        ColorKeys.actionFor(code)?.let {
+            colorKey(it)
+            return
+        }
         when (code) {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> when {
                 flow.countdown >= 0 -> playNext()
@@ -568,8 +580,33 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> chapterKey(1)
             KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> chapterKey(-1)
             KeyEvent.KEYCODE_MEDIA_STOP -> close()
-            KeyEvent.KEYCODE_INFO -> toggleInfo()
         }
+    }
+
+    /** Colour keys and Info: Red the audio list, Green the subtitles list, Yellow / Info «Инфо», Blue the menu. */
+    private fun colorKey(action: ColorAction) {
+        when (action) {
+            ColorAction.AUDIO -> openAudioList()
+            ColorAction.SUBS -> openSubsList()
+            ColorAction.INFO -> toggleInfo()
+            ColorAction.MENU -> openMenu()
+        }
+    }
+
+    /**
+     * The colour keys inside a player list or the menu (the dialog has its own window, the activity gets no keys):
+     * the dialog closes, then the key does its action (Blue only closes the menu).
+     */
+    private fun withColorKeys(d: AlertDialog): AlertDialog {
+        d.setOnKeyListener { dlg, code, e ->
+            val action = ColorKeys.actionFor(code) ?: return@setOnKeyListener false
+            if (e.action == KeyEvent.ACTION_DOWN) {
+                dlg.dismiss()
+                ColorKeys.inDialog(action)?.let { a -> handler.post { colorKey(a) } }
+            }
+            true
+        }
+        return d
     }
 
     // ---- «Инфо» ----
@@ -914,10 +951,16 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             "RIGHT" -> KeyEvent.KEYCODE_DPAD_RIGHT
             "ENTER" -> KeyEvent.KEYCODE_DPAD_CENTER
             "BACK" -> KeyEvent.KEYCODE_BACK
-            "INFO" -> KeyEvent.KEYCODE_INFO
-            else -> return
+            else -> ColorKeys.remoteCode(name) ?: return
         }
         flashBadge()
+        val color = ColorKeys.actionFor(code)
+        if (color != null && dialog?.isShowing == true) {
+            // a colour key from the phone over a list: as on the TV remote (closes it, then its action)
+            dialog?.dismiss()
+            ColorKeys.inDialog(color)?.let { colorKey(it) }
+            return
+        }
         if (dialog?.isShowing == true) {
             // the track list moves its own focus: a real key event into our window (off the UI thread)
             Thread {
@@ -1004,7 +1047,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                 if (cur.isNotEmpty()) title.text = item.title + " · " + cur
             }
             ticksView.setTicks(Chapters.ticks(chapters, dur))
-            hint.text = I18n.s(if (chapters.isNotEmpty()) "player.res.hintChapters" else "player.res.hint")
+            hint.text = hintText(chapters.isNotEmpty())
             engineName.text = switcher.kind.label
         }
         toastBox.visibility = if (toastShown) View.VISIBLE else View.GONE
@@ -1023,6 +1066,21 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val e = session.errorText()
         errorBox.visibility = if (e != null) View.VISIBLE else View.GONE
         if (e != null) errorText.text = e
+    }
+
+    /** The key hint line and, under it, the colour keys with coloured dots. */
+    private fun hintText(chapters: Boolean): CharSequence {
+        val base = I18n.s(if (chapters) "player.res.hintChapters" else "player.res.hint")
+        val c = ColorKeys.hint()
+        val out = SpannableString(base + "\n" + c.text)
+        var from = base.length + 1
+        for (color in c.dots) {
+            val at = out.indexOf('\u25CF', from)
+            if (at < 0) break
+            out.setSpan(ForegroundColorSpan(color), at, at + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            from = at + 1
+        }
+        return out
     }
 
     // ---- events to the page ----
@@ -1090,7 +1148,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT,
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_MEDIA_PREVIOUS, KeyEvent.KEYCODE_CHANNEL_DOWN,
             KeyEvent.KEYCODE_MEDIA_STOP, KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN,
-            KeyEvent.KEYCODE_INFO,
+            KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_PROG_RED, KeyEvent.KEYCODE_PROG_GREEN, KeyEvent.KEYCODE_PROG_YELLOW,
+            KeyEvent.KEYCODE_PROG_BLUE,
         )
 
         fun clock(ms: Long): String = formatClock(ms)
