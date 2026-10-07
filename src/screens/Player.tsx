@@ -37,6 +37,7 @@ import { tvGlyphs } from '../ui/tvText';
 import type { Cmd } from '../phone/protocol';
 import { goBack } from '../ui/nav';
 import { useKeys } from '../ui/keys';
+import { colorKeyCommand, WEB_NIGHT_SOUND } from '../player/colorKeys';
 import { choose, dialogOpen } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { setPlayerBridge, postSoon } from '../phone/link';
@@ -438,6 +439,32 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     applyDefaultTracks();
   };
 
+  // «Аудио» of the menu and the red key: a pick is saved for the torrent and the series («Озвучка»)
+  const openAudioList = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const audio = audioOptions(probeRef.current, v);
+    if (audio.length < 2) {
+      toast(t('tvPlayer.noOtherAudio'));
+      return;
+    }
+    choose(t('tvPlayer.audio'), audio.map((a, i) => ({ label: a.label, value: i })), audioIdx).then((i) => {
+      if (i === null) return;
+      chooseAudio(v, audio, i);
+    });
+  };
+
+  // «Субтитры» of the menu and the green key
+  const openSubsList = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const menu = subtitleMenu(embeddedSubOptions(probeRef.current, v), item.subtitles || []);
+    choose(t('common.subtitles'), menu, subChoice).then((ch) => {
+      if (ch === null) return;
+      chooseSubs(v, ch);
+    });
+  };
+
   const openTrackMenu = () => {
     const v = videoRef.current;
     if (!v) return;
@@ -465,21 +492,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       else if (kind === 'mark-intro-start') mark('intro-start', now);
       else if (kind === 'mark-intro-end') mark('intro-end', now);
       else if (kind === 'mark-credits') mark('credits', now);
-      if (kind === 'audio') {
-        if (audio.length < 2) {
-          toast(t('tvPlayer.noOtherAudio'));
-          return;
-        }
-        choose(t('tvPlayer.audio'), audio.map((a, i) => ({ label: a.label, value: i })), audioIdx).then((i) => {
-          if (i === null) return;
-          chooseAudio(v, audio, i);
-        });
-      } else if (kind === 'subs') {
-        choose(t('common.subtitles'), menu, subChoice).then((ch) => {
-          if (ch === null) return;
-          chooseSubs(v, ch);
-        });
-      } else if (kind === 'size') {
+      if (kind === 'audio') openAudioList();
+      else if (kind === 'subs') openSubsList();
+      else if (kind === 'size') {
         choose(t('tvPlayer.subSize'), subSizeOptions(), settings.value.subSize).then((size) => { if (size) updateSettings({ subSize: size }); });
       } else if (kind === 'offset') {
         choose(t('tvPlayer.offset'), subtitleOffsetOptions(), subOffset).then((off) => { if (off !== null) setSubOffset(off); });
@@ -557,6 +572,15 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       if (a === 'enter') { seekTo(introSkipTarget(intro, vs.duration)); setSkippedIntro(intro.start); return true; }
       if (a === 'back') { setSkippedIntro(intro.start); return true; }
     }
+    // colour keys, as in the Android TV player: audio, subtitles, statistics (no night sound here), menu
+    const color = colorKeyCommand(a, WEB_NIGHT_SOUND);
+    if (color) {
+      if (color === 'audio') openAudioList();
+      else if (color === 'subs') openSubsList();
+      else if (color === 'menu') openTrackMenu();
+      else setStatsOn(!statsOn);
+      return true;
+    }
     switch (a) {
       case 'enter':
       case 'playpause':
@@ -584,13 +608,11 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
         seek(1);
         return true;
       case 'up':
-      case 'yellow':
         openTrackMenu();
         return true;
       case 'down':
         showControls();
         return true;
-      case 'green':
       case 'info':
         setStatsOn(!statsOn);
         return true;

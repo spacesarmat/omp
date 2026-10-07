@@ -23,6 +23,22 @@ interface ControlsProps {
   onChapters: () => void;
 }
 
+/**
+ * The hint line: the four colour keys (colorKeyCommand: audio, subtitles, statistics, menu) and CH± (chapters, else
+ * episodes). Short enough for one line at 1920 next to the buttons; it never wraps (cut with an ellipsis at worst).
+ */
+export function PlayerHints(p: { chapters: boolean }) {
+  return (
+    <span class="player-hints">
+      <span class="player-hint"><KeyDot color="red" />{t('player.keyAudio')}</span>
+      <span class="player-hint"><KeyDot color="green" />{t('player.keySubs')}</span>
+      <span class="player-hint"><KeyDot color="yellow" />{t('player.keyStats')}</span>
+      <span class="player-hint"><KeyDot color="blue" />{t('player.keyMenu')}</span>
+      <span class="player-hint">{p.chapters ? t('player.hintsChapters') : t('player.hintsEpisodes')}</span>
+    </span>
+  );
+}
+
 /** Bottom bar. Keys are handled by the player; mouse handlers serve Magic Remote / ThinQ pointer. */
 export function Controls(p: ControlsProps) {
   const shown = p.seekTarget !== null ? p.seekTarget : p.time;
@@ -49,7 +65,7 @@ export function Controls(p: ControlsProps) {
         <span class="player-btn" onClick={p.onTracks}><Icon name="tracks" size={28} /> {t('player.menu')}</span>
         {p.chapters.length > 0 && <span class="player-btn" onClick={p.onChapters}>{t('player.chapters')}</span>}
         <div class="spacer" />
-        <span class="player-hints">{t('player.hintsHead')}<KeyDot color="green" />{t('player.hintsStats')}{p.chapters.length > 0 ? t('player.hintsChapters') : t('player.hintsEpisodes')}</span>
+        <PlayerHints chapters={p.chapters.length > 0} />
       </div>
     </div>
   );

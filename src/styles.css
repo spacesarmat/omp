@@ -210,7 +210,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .player-row { display: flex; align-items: center; margin-top: 18px; font-size: 26px; }
 .player-row > * { margin-right: 24px; }
 .player-btn { padding: 8px 20px; border-radius: 8px; background: rgba(255, 255, 255, .12); cursor: pointer; }
-.player-hints { color: var(--muted); font-size: 22px; }
+.player-hints { color: var(--muted); font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex-shrink: 1; }
+.player-hint { margin-left: 18px; }
+.player-hint .keydot { vertical-align: -4px; margin-right: 4px; }
 .player-stats { position: absolute; top: 40px; left: 60px; background: rgba(0, 0, 0, .7); padding: 20px 28px; border-radius: 12px; font-size: 24px; line-height: 1.5; }
 .player-buffer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; }
 .subtitles { position: absolute; left: 10%; right: 10%; bottom: 80px; text-align: center; white-space: pre-line; }

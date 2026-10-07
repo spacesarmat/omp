@@ -45,8 +45,10 @@ describe('player in English', () => {
     expect(s).toContain('Menu');
     expect(s).toContain('Chapters');
     expect(s).toContain('Chapter 1 “Intro”');
-    expect(s).toContain('Left/Right — seek');
-    expect(s).toContain('CH− · CH+ — adjacent chapter');
+    expect(s).toContain('Audio');
+    expect(s).toContain('Subtitles');
+    expect(s).toContain('Stats');
+    expect(s).toContain('CH± — chapters');
     expect(CYR.test(s)).toBe(false);
     const e = text(<Controls {...base} chapters={[]} chapterIdx={-1} />);
     expect(e).toContain('CH± — episodes');
