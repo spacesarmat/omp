@@ -277,6 +277,17 @@ class VlcEngine(library: VlcLibrary) : PlayerEngine {
         }
     }
 
+    /** The video track of the media (libVLC 3 has no HDR transfer info nor the audio output mode: left out). */
+    override fun mediaInfo(): EngineMediaInfo {
+        val v = info.values.firstOrNull { it.type == IMedia.Track.Type.Video } as? IMedia.VideoTrack ?: return EngineMediaInfo()
+        return EngineMediaInfo(
+            videoCodec = PlayerInfoText.videoCodec(v.codec),
+            width = v.width.coerceAtLeast(0),
+            height = v.height.coerceAtLeast(0),
+            bitrate = v.bitrate.toLong().coerceAtLeast(0L),
+        )
+    }
+
     override fun subtitleTracks(): List<EngineTrack> {
         if (!played) return emptyList()
         val files = item?.subtitles ?: emptyList()

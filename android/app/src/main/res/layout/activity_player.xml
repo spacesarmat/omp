@@ -138,6 +138,25 @@
             android:textSize="13sp" />
     </LinearLayout>
 
+    <!-- «Инфо» (Info / yellow key, PlayerInfoText): file, video, audio, torrent; large enough to read from the sofa -->
+    <TextView
+        android:id="@+id/player_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="72dp"
+        android:layout_marginEnd="48dp"
+        android:background="@drawable/player_panel"
+        android:lineSpacingExtra="6dp"
+        android:maxWidth="560dp"
+        android:paddingStart="22dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="22dp"
+        android:paddingBottom="16dp"
+        android:textColor="#E8EAF0"
+        android:textSize="19sp"
+        android:visibility="gone" />
+
     <!-- «Заставка пропущена · Вернуть», «Титры пропущены», results of the marks (mockup TvMarks) -->
     <LinearLayout
         android:id="@+id/player_toast"

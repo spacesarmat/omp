@@ -88,6 +88,27 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private lateinit var donateText: TextView
     private lateinit var donateLink: TextView
     private lateinit var engineName: TextView
+    private lateinit var infoView: TextView
+
+    /** «Инфо» is on screen (Info / yellow key; Back closes it; playback goes on). */
+    private var infoShown = false
+
+    /** The latest TorrServer statistics of the torrent playing, and whether a request is out. */
+    @Volatile
+    private var infoStats: TorrentStats? = null
+    private var infoStatsFor: String? = null
+    @Volatile
+    private var infoFetching = false
+
+    /** «Инфо» refresh: once a second while shown (TorrServer asked in the background). */
+    private val infoTick = object : Runnable {
+        override fun run() {
+            if (!infoShown) return
+            fetchInfoStats()
+            renderInfo()
+            handler.postDelayed(this, INFO_REFRESH_MS)
+        }
+    }
     /** The page said a support code is known: no card for the rest of this run. */
     private var donateHidden = false
     private var donateShown = DonateQr.NONE
@@ -193,6 +214,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         donateText = findViewById(R.id.player_donate_text)
         donateLink = findViewById(R.id.player_donate_link)
         engineName = findViewById(R.id.player_engine)
+        infoView = findViewById(R.id.player_info)
         findViewById<TextView>(R.id.player_badge).text = I18n.s("player.res.phoneBadge")
         btnNext.text = I18n.s("player.res.next")
         btnSkip.text = I18n.s("player.res.skipIntro")
@@ -217,6 +239,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         if (::session.isInitialized) {
             engine.hostStarted()
             handler.post(tick)
+            if (infoShown) handler.post(infoTick)
         }
     }
 
@@ -244,6 +267,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     override fun onStop() {
         super.onStop()
         handler.removeCallbacks(tick)
+        handler.removeCallbacks(infoTick)
         if (::session.isInitialized) {
             if (!isFinishing) engine.pause()
             engine.hostStopped()
@@ -544,10 +568,59 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> chapterKey(1)
             KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> chapterKey(-1)
             KeyEvent.KEYCODE_MEDIA_STOP -> close()
+            KeyEvent.KEYCODE_INFO -> toggleInfo()
         }
     }
 
+    // ---- «Инфо» ----
+
+    /** Shows / hides the «Инфо» panel; it refreshes once a second while shown and never pauses playback. */
+    private fun toggleInfo() {
+        infoShown = !infoShown
+        handler.removeCallbacks(infoTick)
+        if (infoShown) {
+            infoView.visibility = View.VISIBLE
+            handler.post(infoTick)
+        } else {
+            infoView.visibility = View.GONE
+        }
+    }
+
+    /** One /cache request at a time for the torrent of the current item (TorrServerStats); the answer is kept. */
+    private fun fetchInfoStats() {
+        val url = session.item()?.url ?: return
+        val r = TorrServerStats.request(url) ?: return
+        if (infoStatsFor != r.hash) {
+            infoStatsFor = r.hash
+            infoStats = null
+        }
+        if (infoFetching) return
+        infoFetching = true
+        val t = Thread {
+            val s = TorrServerStats.fetch(r)
+            handler.post {
+                infoFetching = false
+                if (infoStatsFor == r.hash && s != null) infoStats = s
+                if (infoShown) renderInfo()
+            }
+        }
+        t.isDaemon = true
+        t.start()
+    }
+
+    private fun renderInfo() {
+        if (!infoShown || !::session.isInitialized || isDestroyed) return
+        val item = session.item() ?: return
+        val audio = engine.audioTracks().firstOrNull { it.selected }
+        val lines = PlayerInfoText.lines(item.title, PlayerInfoText.fileName(item.url), engine.mediaInfo(), audio, infoStats)
+        infoView.text = lines.joinToString("\n")
+    }
+
     private fun onBack() {
+        if (infoShown) {
+            toggleInfo()
+            return
+        }
         if (flow.countdown >= 0) {
             if (flow.creditsCountdown) skips.dismissCountdown()
             cancelCountdown()
@@ -841,6 +914,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             "RIGHT" -> KeyEvent.KEYCODE_DPAD_RIGHT
             "ENTER" -> KeyEvent.KEYCODE_DPAD_CENTER
             "BACK" -> KeyEvent.KEYCODE_BACK
+            "INFO" -> KeyEvent.KEYCODE_INFO
             else -> return
         }
         flashBadge()
@@ -990,6 +1064,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     companion object {
         private const val TAG = "OmpPlayer"
         private const val HIDE_MS = 4000L
+        /** «Инфо» refresh period. */
+        private const val INFO_REFRESH_MS = 1000L
         private const val SKIP_HIDDEN_SHIFT_DP = 150f
         /** «Поддержать»: bottom margin on pause (above the controls) and in the credits; the skip button lift. */
         private const val DONATE_PAUSE_BOTTOM_DP = 210f
@@ -1014,6 +1090,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT,
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_MEDIA_PREVIOUS, KeyEvent.KEYCODE_CHANNEL_DOWN,
             KeyEvent.KEYCODE_MEDIA_STOP, KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN,
+            KeyEvent.KEYCODE_INFO,
         )
 
         fun clock(ms: Long): String = formatClock(ms)
