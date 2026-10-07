@@ -475,6 +475,22 @@ describe('sameQuery', () => {
   });
 });
 
+describe('TitleCard: people', () => {
+  it('lists the directors first with their job, and a tap opens the person', async () => {
+    serve({
+      ...FILM,
+      cast: [{ id: 9, name: 'Пётр Режиссёров', photo: '', role: '', job: 'director' }, ...FILM.cast],
+    });
+    mount(<TitleCard kind="movie" id={11} />);
+    await flush();
+    const people = Array.from(el.querySelectorAll('button.m-tc-person')) as HTMLButtonElement[];
+    expect(people.map((p) => p.querySelector('.m-tc-person-name')!.textContent)).toEqual(['Пётр Режиссёров', 'Ольга Тестова', 'Иван Пробный']);
+    expect(people[0].textContent).toContain('Режиссёр');
+    act(() => people[1].click());
+    expect(currentRoute.value).toEqual({ name: 'person', id: 1, label: 'Ольга Тестова' });
+  });
+});
+
 describe('TitleCard in the app', () => {
   it('renders the card for the route with «Каталог» highlighted', async () => {
     serve(FILM);

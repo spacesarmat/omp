@@ -448,6 +448,15 @@ button, .m-btn {
 .m-disc-skel-line { display: block; width: 70%; height: 14px; margin-top: 6px; border-radius: 6px; background: var(--panel); }
 @keyframes m-disc-pulse { 50% { opacity: 0.55; } }
 .m-disc-sentinel { height: 1px; }
+
+/* «Человек» */
+.m-person { display: flex; flex-direction: column; gap: 14px; }
+.m-person-head { display: flex; align-items: center; gap: 14px; }
+.m-person-photo { flex: none; width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: var(--panel); }
+.m-person-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.m-person-name { margin: 0; font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+.m-person-owned .m-disc-poster { box-shadow: 0 0 0 2px var(--accent); }
+.m-person-roles { min-height: 1em; }
 .m-disc-more { padding: 10px 14px; border-radius: 12px; background: var(--panel); font-size: 14px; }
 .m-disc-error { display: flex; flex-direction: column; gap: 10px; padding: 18px 16px; border-radius: 16px; background: var(--panel); }
 .m-disc-error p { margin: 0; line-height: 1.45; }
@@ -487,6 +496,7 @@ button, .m-btn {
 .m-tc-person { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 76px; text-align: center; }
 .m-tc-person img, .m-tc-initial { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: var(--panel); }
 .m-tc-initial { display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: var(--muted); }
+.m-tc-person { padding: 0; border: none; background: none; color: inherit; font: inherit; }
 .m-tc-person-name { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* series card: season chips (swipe to scroll), the chosen season, its buttons and episodes */
 .m-tc-chips { overflow-x: auto; scrollbar-width: none; margin: 0 -16px 12px; padding: 0 16px; }

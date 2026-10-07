@@ -12,7 +12,7 @@ import { monitorVersion } from '../../monitor/ui';
 import { WantSheet } from './WantSheet';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
 import { seasonIndex, librarySeasonHash } from '../../../../src/catalog/library';
-import { torrentQuery, type CatalogCard, type Kind, type Season, type SeasonDetails } from '../../../../src/catalog/tmdb';
+import { torrentQuery, type CatalogCard, type Kind, type Person, type Season, type SeasonDetails } from '../../../../src/catalog/tmdb';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import { ratingText } from './CatalogSearch';
@@ -282,6 +282,9 @@ function Body({ card }: { card: CatalogCard }) {
   void monitorVersion.value;
   const following = loadSubs().some((s) => sameQuery(s.query, query));
   const find = (season?: number) => navigate({ name: 'add', query: torrentQuery(card, season), run: true });
+  // the directors or creators come first, then the actors
+  const cast = card.cast.filter((p) => p.job !== 'cast').concat(card.cast.filter((p) => p.job === 'cast'));
+  const roleOf = (p: Person) => (p.job === 'director' ? t('titleCard.director') : p.job === 'creator' ? t('titleCard.creator') : p.role);
   return (
     <>
       <div class="m-tc-head">
@@ -318,8 +321,8 @@ function Body({ card }: { card: CatalogCard }) {
         <section class="m-tc-section">
           <h2>{t('titleCard.cast')}</h2>
           <div class="m-tc-cast">
-            {card.cast.map((p, i) => (
-              <div key={i} class="m-tc-person">
+            {cast.map((p, i) => (
+              <button key={i} type="button" class="m-tc-person" onClick={() => navigate({ name: 'person', id: p.id, label: p.name })}>
                 {p.photo ? (
                   <img src={p.photo} alt="" width={64} height={64} loading="lazy" />
                 ) : (
@@ -328,8 +331,8 @@ function Body({ card }: { card: CatalogCard }) {
                   </span>
                 )}
                 <span class="m-small m-tc-person-name">{p.name}</span>
-                {p.role && <span class="m-small m-muted m-tc-person-name">{p.role}</span>}
-              </div>
+                {roleOf(p) && <span class="m-small m-muted m-tc-person-name">{roleOf(p)}</span>}
+              </button>
             ))}
           </div>
         </section>
