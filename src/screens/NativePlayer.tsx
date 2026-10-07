@@ -141,7 +141,7 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
               leave();
               return true;
             },
-            (e) => { if (!cancelled) { toast(failText(e), 'error'); leave(); } return true; },
+            (e) => { journal.end(first, pos, dur); if (!cancelled) { toast(failText(e), 'error'); leave(); } return true; },
           );
         }).then((handled) => { if (!handled && !cancelled) startBuiltin(); });
         return;

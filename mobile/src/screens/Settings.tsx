@@ -281,7 +281,7 @@ function VideoPlayerRow() {
       </div>
       <div class="m-seg" role="group" aria-label={t('player.videoPlayer')}>
         <button type="button" class={cur === 'builtin' ? 'on' : ''} aria-pressed={cur === 'builtin'} onClick={() => updateSettings({ videoPlayer: 'builtin' })}>
-          {t('player.builtinPlayer')}
+          {t('player.builtinPlayerPhone')}
         </button>
         <button
           type="button"
@@ -298,7 +298,7 @@ function VideoPlayerRow() {
           {t('player.p2160Missing')}
         </button>
       )}
-      <p class="m-muted m-small">{t('player.p2160Note')}</p>
+      <p class="m-muted m-small">{t('player.p2160NotePhone')}</p>
     </section>
   );
 }

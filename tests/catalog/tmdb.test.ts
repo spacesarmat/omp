@@ -226,8 +226,16 @@ describe('people', () => {
       },
     })!;
     expect(p).toMatchObject({ id: 5, name: 'N', birth: '1970-10-08', death: '', known: 'acting' });
-    expect(p.acting.map((c) => [c.id, c.roles])).toEqual([[1, ['A', 'B']], [2, ['Self']]]);
+    expect(p.acting.map((c) => [c.id, c.roles])).toEqual([[1, ['A', 'B']]]);
     expect(p.directing.map((c) => c.id)).toEqual([3]);
+  });
+  it('sanitizePerson: appearances as oneself are left out, a credit with a real role stays', () => {
+    const tv = (id: number, character: string) => ({ id, media_type: 'tv', name: 'T' + id, first_air_date: '2010-01-01', character, genre_ids: [] });
+    const selfs = ['Self', ' himself ', 'HERSELF', 'Themselves', 'Self - Host', 'Himself - Guest', 'Herself - Winner', 'Self (uncredited)', 'Himself (archive footage)', 'Камео', 'В роли самого себя', 'В роли самой себя'];
+    const cast = selfs.map((c, i) => tv(100 + i, c)).concat([tv(1, 'Selfridge'), tv(2, 'Doctor')]);
+    cast.push({ ...tv(2, 'Himself'), id: 2 });
+    const p = sanitizePerson(E, { id: 5, name: 'N', combined_credits: { cast, crew: [] } })!;
+    expect(p.acting.map((c) => [c.id, c.roles])).toEqual([[1, ['Selfridge']], [2, ['Doctor']]]);
   });
   it('sanitizePerson: null without id or name', () => {
     expect(sanitizePerson(E, { id: 5 })).toBeNull();

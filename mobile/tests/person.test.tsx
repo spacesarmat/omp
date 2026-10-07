@@ -162,6 +162,14 @@ describe('phone person screen', () => {
     expect(text(el.querySelector('.m-person-name'))).toBe('Иван Режиссёров');
   });
 
+  it('the name is in the head block only: the m-bar has just the back button', async () => {
+    mount(<Person id={7} label="Иван Режиссёров" />);
+    await flush();
+    expect(el.querySelector('.m-bar-title')).toBeNull();
+    expect(el.querySelectorAll('.m-bar > *').length).toBe(1);
+    expect(el.textContent!.split('Иван Режиссёров').length - 1).toBe(1);
+  });
+
   it('has the back button at the left of an m-bar and it goes back', async () => {
     mount(<Person id={7} label="Иван Режиссёров" />);
     await flush();

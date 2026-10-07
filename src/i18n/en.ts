@@ -1002,6 +1002,8 @@ export const en: EnDict<typeof ru> = {
     builtinPlayer: 'Built-in',
     p2160: '2160 Player',
     p2160Missing: 'not installed - download it from GitHub',
+    builtinPlayerPhone: 'Android chooser',
+    p2160NotePhone: 'Without 2160 Player the video opens in the app you pick',
     p2160Note: 'The support QR and phone control only work in the built-in player',
     off: 'Off',
     chapterN: 'Chapter {n}',
@@ -1336,7 +1338,7 @@ export const en: EnDict<typeof ru> = {
     ownedEmpty: 'No films with {name} in the library',
     acting: 'Acting',
     directing: 'Directing',
-    hints: 'OK — open · Yellow — "Want to watch" · Back — go back',
+    hints: 'OK — open · Yellow — "Want to watch" · Back — return',
   },
   titleCard: {
     findTorrents: 'Find torrents',

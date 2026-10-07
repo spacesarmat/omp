@@ -110,6 +110,20 @@ describe('NativePlayerScreen with 2160 Player', () => {
     resetSettings();
     await unmount(host);
   });
+  it('a 2160 error ends the journal entry at the start position', async () => {
+    recorded.length = 0;
+    updateSettings({ videoPlayer: 'p2160' });
+    const f = fakeCapacitor();
+    (f.plugin as any).open2160 = vi.fn(() => Promise.reject(new Error('boom')));
+    const host = mount(h(NativePlayerScreen, { queue, index: 0, startAt: 30 }));
+    await until(() => recorded.length >= 2);
+    expect(recorded[0].entry).toMatchObject({ f: 3, t: 30 });
+    expect(recorded[1].hash).toBe(H);
+    expect(recorded[1].entry).toMatchObject({ f: 3, t: 30 });
+    await until(() => routeStack.value.length === 1);
+    resetSettings();
+    await unmount(host);
+  });
   it('not installed: the built-in player starts', async () => {
     updateSettings({ videoPlayer: 'p2160' });
     const f = fakeCapacitor();

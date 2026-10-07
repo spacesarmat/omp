@@ -268,6 +268,13 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
   };
 }
 
+/** An appearance as oneself (TMDB character «Self», «Himself - Host», «(archive footage)» ...): not a role, left out of the filmography. */
+function isSelfRole(character: string): boolean {
+  const c = character.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+  if (/^(self|himself|herself|themselves|камео|в роли самого себя|в роли самой себя)$/.test(c)) return true;
+  return /^(self|himself|herself)\s*-/.test(c);
+}
+
 /** A person with the filmography: combined_credits' cast as acting, crew directors (and series creators) as directing. */
 export function sanitizePerson(e: TmdbEndpoint, raw: unknown): PersonCard | null {
   const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { [k: string]: unknown }) : null;
@@ -307,7 +314,7 @@ export function sanitizePerson(e: TmdbEndpoint, raw: unknown): PersonCard | null
   return {
     id: id, name: name, photo: imageUrl(e, o.profile_path, 'w300'), birth: date(o.birthday), death: date(o.deathday),
     known: dept === 'Acting' ? 'acting' : dept === 'Directing' ? 'directing' : 'other',
-    acting: collect(cc.cast, (x) => str(x.character)),
+    acting: collect(cc.cast, (x) => { const ch = str(x.character); return isSelfRole(ch) ? null : ch; }),
     directing: collect(cc.crew, (x, kind) => (x.job === 'Director' || (kind === 'tv' && x.job === 'Creator') ? '' : null)),
   };
 }

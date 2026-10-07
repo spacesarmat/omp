@@ -169,7 +169,6 @@ export function Person({ id, label }: { id: number; label?: string }) {
         <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
-        <h1 class="m-bar-title">{(card && card.name) || label || ''}</h1>
       </div>
       {error ? (
         <CatalogError

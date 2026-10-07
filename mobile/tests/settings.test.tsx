@@ -613,7 +613,7 @@ describe('Settings: «Плеер для видео»', () => {
     await flushAll();
     const row = el.querySelector('[data-row="video-player"]')!;
     const [b, p] = Array.from(row.querySelectorAll('.m-seg button')) as HTMLButtonElement[];
-    expect(b.textContent).toBe('Встроенный');
+    expect(b.textContent).toBe('Выбор Android');
     expect(p.textContent).toBe('2160 Player');
     expect(p.disabled).toBe(false);
     expect(row.querySelector('[data-row="p2160-missing"]')).toBeNull();
@@ -621,7 +621,7 @@ describe('Settings: «Плеер для видео»', () => {
     expect(settings.value.videoPlayer).toBe('p2160');
     act(() => b.click());
     expect(settings.value.videoPlayer).toBe('builtin');
-    expect(row.textContent).toContain('QR поддержки');
+    expect(row.textContent).toContain('Без 2160 Player видео откроется в приложении, которое вы выберете');
   });
 
   it('not installed: 2160 is disabled and the link opens the release page', async () => {
