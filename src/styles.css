@@ -174,8 +174,10 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .series-missing { padding: 24px 0; font-size: 26px; }
 .series-missing .row { margin-top: 20px; }
 .ep-row .size { width: 220px; }
-.ep-future { opacity: .45; }
-.ep-future.focused { opacity: .75; }
+/* an announced episode after the last one here: dashed and muted, never focused */
+.ep-coming { background: transparent; border: 2px dashed #3a3f4b; color: var(--muted); }
+.ep-coming .ep { color: var(--muted); }
+.ep-coming .size { width: 300px; }
 
 .spinner-wrap { display: flex; align-items: center; padding: 24px 0; }
 .spinner { width: 48px; height: 48px; border: 5px solid rgba(255, 255, 255, .2); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-right: 20px; }

@@ -7,6 +7,8 @@ import { yearOf } from '../monitor/newEpisodes';
 import { findShow } from './tmdbShow';
 import { displayTitle } from './torrentName';
 import { activeCatalog } from '../catalog/activeCatalog';
+import { t } from '../i18n';
+import { airDateText } from './seriesStatus';
 
 export interface ShowInfo {
   id: number;
@@ -119,4 +121,24 @@ export function comingEpisodes(have: { [season: number]: number }, eps: EpisodeM
         });
     });
   return out;
+}
+
+/** The title of an announced episode beside its code (the TV row): «Пирамида», or «Серия 8» without a real name. */
+export function comingEpisodeTitle(e: ComingEpisode): string {
+  return e.name || t('library.episode', { n: e.episode });
+}
+
+/** The name of an announced episode: «7. Пирамида», or «Серия 8» while TMDB has no real name for it. */
+export function comingEpisodeName(e: ComingEpisode): string {
+  return e.name ? e.episode + '. ' + e.name : comingEpisodeTitle(e);
+}
+
+/** «выйдет 8 окт.». */
+export function comingEpisodeDate(e: ComingEpisode, now: number = Date.now()): string {
+  return t('torrent.screen.episodeComes', { date: airDateText(e.airDate, now) });
+}
+
+/** The text of an announced episode's muted row: «7. Пирамида · выйдет 8 окт.», «Серия 8 · выйдет 15 окт.». */
+export function comingEpisodeText(e: ComingEpisode, now: number = Date.now()): string {
+  return comingEpisodeName(e) + ' · ' + comingEpisodeDate(e, now);
 }
