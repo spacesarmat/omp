@@ -2,6 +2,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.19.0-beta.6
+
+- [tv] A TorrServer address typed with the TV keyboard is cleaned of look-alike characters (full-width colon and digits, no-break and invisible spaces, a comma for a dot, a Cyrillic "o" in an IP); if it is still wrong, OMP names the invalid character instead of trying to connect
+- [phone] The server address is cleaned of invisible and full-width characters on connect; an invalid character is named in the error
+- [atv] When TorrServer does not answer or is not found and a VPN is running on the TV, OMP suggests excluding OMP from the VPN or turning on local network bypass; without a VPN it mentions always-on VPN with blocked connections
+- [tv] New FAQ question "The TV cannot reach TorrServer but the phone can"
+
 ## 0.19.0-beta.5
 
 - FAQ: a new question "Connect the phone to a Xiaomi TV" (the code, the same Wi-Fi without isolation, OMP must be running, VPN) and a step-by-step phone install for Xiaomi

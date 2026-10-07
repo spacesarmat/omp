@@ -6,7 +6,7 @@ import { forPlatform, parseChangelog } from './changelog';
 import type { ChangelogEntry, ChangelogPlatform } from './changelog';
 
 /** The latest versions only: the full history is on GitHub. Bullets keep their «[tv]» / «[lg]» / «[atv]» / «[phone]» markers here. */
-export const CHANGELOG = parseChangelog(raw).slice(0, 8);
+export const CHANGELOG = parseChangelog(raw).slice(0, 12);
 export const CHANGELOG_EN = parseChangelog(rawEn);
 export const CHANGELOG_URL = 'https://github.com/spacesarmat/omp/blob/main/CHANGELOG.md';
 

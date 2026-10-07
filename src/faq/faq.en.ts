@@ -411,6 +411,32 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'Android 10 and newer does not let OMP come to the screen from the background by itself: if nothing appeared after “Watch on TV”, open OMP on the TV with the remote.',
     ],
   },
+  'tv-no-server': {
+    q: 'The TV cannot reach TorrServer but the phone can',
+    short: [
+      '1. The TV keyboard may type look-alike characters (a full-width colon, a comma for a dot, a space). Type the address without the port or press “Find on network”.',
+      '2. A VPN on the TV (Happ, v2rayNG…): exclude OMP from the VPN (split tunnelling) or turn on local network bypass (Bypass LAN).',
+      '3. “Always-on VPN” together with “Block connections without VPN” close the local network even while the VPN is off — turn them off or remove the VPN app and restart the TV.',
+      '4. A guest Wi‑Fi network and client isolation in the router separate the TV from the server — connect the TV to the main network.',
+    ],
+    more: [
+      'OMP fixes look-alike characters from the TV keyboard itself, and if the address is still wrong it shows which character is invalid.',
+      'If a VPN is running, on Android TV the connect screen says so under the error.',
+      '“Always-on VPN”: Settings → Network & Internet → VPN → the gear next to the app. If there is no such item, remove the VPN app.',
+    ],
+    by: {
+      lg: {
+        short: [
+          '1. The TV keyboard may type look-alike characters (a full-width colon, a comma for a dot, a space). Type the address without the port or press “Find on network”.',
+          '2. A guest Wi‑Fi network and client isolation in the router separate the TV from the server — connect the TV to the main network.',
+        ],
+        more: [
+          'OMP fixes look-alike characters from the TV keyboard itself, and if the address is still wrong it shows which character is invalid.',
+          'It is easier to type the address with the phone keyboard in LG ThinQ.',
+        ],
+      },
+    },
+  },
   'wake': {
     q: 'Turn on the TV from the phone',
     short: [

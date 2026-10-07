@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { ConnectScreen, CONNECT_TIMEOUT_MS, connectEcho, connectErrorText } from '../../src/screens/Connect';
@@ -103,5 +103,77 @@ describe('ConnectScreen: a server that does not answer', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('ConnectScreen: a typed address with look-alikes, the VPN hint', () => {
+  const flush = async () => {
+    for (let r = 0; r < 4; r++) {
+      for (let i = 0; i < 30; i++) await Promise.resolve();
+      await new Promise((res) => setTimeout(res, 0));
+    }
+  };
+  const w = window as unknown as { Capacitor?: unknown };
+  afterEach(() => { delete w.Capacitor; });
+  const type = async (host: HTMLElement, text: string) => {
+    const input = host.querySelector('.connect-card input') as HTMLInputElement;
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await flush();
+    (host.querySelector('.button.primary') as HTMLElement).click();
+    await flush();
+    return input;
+  };
+  const androidTv = (vpnState?: () => Promise<unknown>) => {
+    const plugin: Record<string, unknown> = { localIpv4: () => Promise.resolve({ ip: null }), addListener: () => Promise.resolve({ remove() {} }) };
+    if (vpnState) plugin.vpnState = vpnState;
+    w.Capacitor = { getPlatform: () => 'android', Plugins: { OmpNative: plugin } };
+  };
+
+  it('a full-width colon and an NBSP are cleaned: it connects and the field shows the clean address', async () => {
+    const seen: string[] = [];
+    mockFetch((u: string) => { seen.push(u); return { body: 'MatriX.145.1' }; });
+    const host = mount();
+    const input = await type(host, '192.168.1.124\uFF1A8090\u00A0');
+    expect(seen[0]).toBe('http://192.168.1.124:8090/echo');
+    expect(input.value).toBe('192.168.1.124:8090');
+    expect(servers.value.map((s) => s.url)).toEqual(['http://192.168.1.124:8090']);
+  });
+
+  it('a character no address has is named and nothing is requested', async () => {
+    const seen: string[] = [];
+    mockFetch((u: string) => { seen.push(u); return { body: 'x' }; });
+    const host = mount();
+    await type(host, '192.168.1.124;8090');
+    expect(host.querySelector('.connect-error')!.textContent).toBe('В адресе есть недопустимый символ: «;»');
+    expect(seen).toHaveLength(0);
+  });
+
+  it('Android TV with a VPN: the failure says to exclude OMP or bypass the LAN', async () => {
+    mockFetch(() => Promise.reject(new TypeError('Failed to fetch')));
+    androidTv(() => Promise.resolve({ active: true }));
+    const host = mount();
+    await type(host, '192.168.1.124:8090');
+    expect(host.querySelector('.connect-net-hint')!.textContent).toContain('На телевизоре работает VPN');
+  });
+
+  it('Android TV without a VPN: the always-on / block note', async () => {
+    mockFetch(() => Promise.reject(new TypeError('Failed to fetch')));
+    androidTv(() => Promise.resolve({ active: false }));
+    const host = mount();
+    await type(host, '192.168.1.124:8090');
+    expect(host.querySelector('.connect-net-hint')!.textContent).toContain('Блокировать соединения без VPN');
+  });
+
+  it('LG (no plugin) and an APK without vpnState: no hint', async () => {
+    mockFetch(() => Promise.reject(new TypeError('Failed to fetch')));
+    let host = mount();
+    await type(host, '192.168.1.124:8090');
+    expect(host.querySelector('.connect-error')).not.toBeNull();
+    expect(host.querySelector('.connect-net-hint')).toBeNull();
+    androidTv();
+    host = mount();
+    await type(host, '192.168.1.124:8090');
+    expect(host.querySelector('.connect-net-hint')).toBeNull();
   });
 });
