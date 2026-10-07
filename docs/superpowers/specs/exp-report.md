@@ -332,3 +332,23 @@ Device checks (S21):
 4. **Pause from the notification and swipe it away**: the service stops. The position is still saved only on «Назад» in the player (2160's rule).
 5. **Swiping OMP away in Recents while the sound plays**: 2160's `onTaskRemoved` keeps the service while `playWhenReady`. The sound may go on with no activity, and no result reaches OMP. Check this; if it happens, it needs an upstream option (stop on task removal).
 6. **Dune**: no PlaybackService running (`dumpsys activity services com.spacesarmat.omp`), whatever the phone setting is.
+
+## Merge of 0.19.0-beta.4
+
+`origin/main` (c37c469, 0.19.0-beta.4) merged into `exp/2160-engine`; the submodule pin stays `android/vendor/2160player` = v0.2.1.
+
+Conflicts and how they were resolved:
+
+- `Media3Engine.kt` (modify/delete): stays deleted. Its beta.4 addition, `mediaInfo()` for «Инфо», is now in `Engine2160`: it reads the controller's ExoPlayer `videoFormat` (codec via `PlayerInfoText.videoCodec`, size, HDR, bitrate), `bufferedPosition − currentPosition` (only after the items are loaded), and passthrough from an `AnalyticsListener.onAudioTrackInitialized` encoding (non-PCM = passthrough), reset per item. `hdrOf` moved to `Engine2160`'s companion; `PlayerInfoTest` calls `Engine2160.hdrOf` (the test itself is kept).
+- `ColorKeys.kt` / `ColorKeysTest.kt` (add/add): main's model (lists, `inDialog` toggle, `remoteCode`, `colorKeyActs` auto-repeat guard) plus exp's night sound: Red → audio list, Green → subtitles list, Yellow → `NIGHT` (toggle with an overlay label; «Ночной звук недоступен» on VLC), Blue → menu, Info → «Инфо» (new `ColorAction.INFO` only on `KEYCODE_INFO`). Exp's track cycling (`nextAudio`/`nextSub`, `audioLabel`/`subsLabel`) and its tests were dropped: Red/Green now open the lists as on main.
+- `PlayerActivity.kt`: main's menu (`openAudioList`/`openSubsList`/`showList`/`withColorKeys`, ListPick) plus exp's «Ночной звук» row; exp's `showMenu` dropped (`withColorKeys` covers the Blue key); main's repeat guard in `dispatchKeyEvent`; hint `ColorKeys.hint(engine.nightMode != null)`. Duplicate Spannable imports removed.
+- `I18n.kt` (auto-merged, but each map had duplicate `player.res.hint*` keys): one set left; `hintYellow` = «ночной звук» / "night sound", new `hintInfo` = «Info — инфо» / "Info — info". The hint row: «● аудио · ● субтитры · ● ночной звук · ● меню · Info — инфо» (no yellow entry on VLC).
+- Series dub picks (`PlayerSession` / `DubMatch`) merged without conflicts: they go through `PlayerEngine.selectAudio/selectSubtitle(id)`, which `Engine2160` implements with track overrides.
+
+Verification: `npx vitest run` 321 files / 3584 tests passed; `tsc --noEmit` passed for root and mobile; `testDebugUnitTest` 544 tests, 0 failures; `npm run android:debug` BUILD SUCCESSFUL.
+
+Device checks (Android TV):
+1. Yellow toggles night sound (label on the overlay, menu row updates); Info opens/closes «Инфо»; holding either acts once; Red/Green/Blue open/toggle their windows, another colour key over a list closes it and does its own action.
+2. «Инфо» with Engine2160: codec / resolution / HDR (HDR10, DV file falling back to its HDR10 base layer shows HDR10), bitrate (often 0 → hidden for MKV), buffer seconds, «на ресивер» with AC3/DTS passthrough and «декодируется» after night sound is on (the audio track re-initialises).
+3. Series default dub: the second episode of a series starts with the dub chosen in the first (audio and subtitles), including external subtitle files.
+4. Phone embedded 2160 player does not use `PlayerSession`, so the series dub picks do not apply there (as with external players on main).

@@ -58,6 +58,11 @@ export function confirmDialog(text: string, okLabel = t('tv.yes')): Promise<bool
   ]).then((v) => v === true);
 }
 
+/** Closes the open dialog as Back would (its promise resolves with null); nothing when none is open. */
+export function dismissDialog(): void {
+  close(null);
+}
+
 function close(v: unknown) {
   const d = dialog.value;
   if (!d) return;

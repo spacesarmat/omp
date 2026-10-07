@@ -17,7 +17,10 @@ import androidx.media3.common.Timeline
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import tv.p2160.core.api.ExternalSubtitle
@@ -73,6 +76,15 @@ class Engine2160(private val context: Context) : PlayerEngine {
     private var externalHashes: Map<Int, Int> = emptyMap()
 
     private val player: ExoPlayer? get() = controller?.player
+
+    /** The encoding of the audio output of the open item (AnalyticsListener): a non-PCM one means passthrough over HDMI. */
+    private var outputEncoding: Int? = null
+
+    private val analytics = object : AnalyticsListener {
+        override fun onAudioTrackInitialized(eventTime: AnalyticsListener.EventTime, audioTrackConfig: AudioSink.AudioTrackConfig) {
+            outputEncoding = audioTrackConfig.encoding
+        }
+    }
 
     private val events = object : Player.Listener {
         override fun onTimelineChanged(timeline: Timeline, reason: Int) {
@@ -199,6 +211,7 @@ class Engine2160(private val context: Context) : PlayerEngine {
         controller = c
         val p = c.player
         p.addListener(events)
+        p.addAnalyticsListener(analytics)
         // the end of an item pauses (the UI decides: countdown or close)
         p.pauseAtEndOfMediaItems = true
         applyTrackPrefs(p)
@@ -246,6 +259,25 @@ class Engine2160(private val context: Context) : PlayerEngine {
     override fun audioTracks(): List<EngineTrack> = tracksOf(C.TRACK_TYPE_AUDIO)
 
     override fun subtitleTracks(): List<EngineTrack> = tracksOf(C.TRACK_TYPE_TEXT)
+
+    /**
+     * The «Инфо» panel's numbers from the controller's ExoPlayer: the playing video format, passthrough from the
+     * audio output's encoding (night sound decodes: PCM), the buffer ahead of the position.
+     */
+    override fun mediaInfo(): EngineMediaInfo {
+        val p = player ?: return EngineMediaInfo()
+        val v = p.videoFormat
+        val ahead = p.bufferedPosition - p.currentPosition
+        return EngineMediaInfo(
+            videoCodec = PlayerInfoText.videoCodec(v?.sampleMimeType, v?.codecs),
+            width = v?.width?.takeIf { it > 0 } ?: 0,
+            height = v?.height?.takeIf { it > 0 } ?: 0,
+            hdr = if (v == null) "" else hdrOf(v.sampleMimeType, v.colorInfo?.colorTransfer),
+            bitrate = (v?.bitrate?.takeIf { it > 0 } ?: v?.averageBitrate?.takeIf { it > 0 } ?: 0).toLong(),
+            passthrough = outputEncoding?.let { !Util.isEncodingLinearPcm(it) },
+            bufferedMs = if (loaded && ahead >= 0) ahead else -1,
+        )
+    }
 
     /** Supported groups of [type]; the id is the group's place in currentTracks («g<n>»). */
     private fun tracksOf(type: Int): List<EngineTrack> {
@@ -305,8 +337,10 @@ class Engine2160(private val context: Context) : PlayerEngine {
     private fun closeController() {
         val c = controller ?: return
         controller = null
+        outputEncoding = null
         view?.player = null
         c.player.removeListener(events)
+        c.player.removeAnalyticsListener(analytics)
         main.removeCallbacksAndMessages(null)
         c.release()
     }
@@ -384,6 +418,14 @@ class Engine2160(private val context: Context) : PlayerEngine {
             selected = selected,
             external = external,
         )
+
+        /** «HDR10», «HLG», «Dolby Vision» from the video MIME type and its colour transfer; '' for SDR / unknown. */
+        fun hdrOf(mime: String?, transfer: Int?): String = when {
+            mime == MimeTypes.VIDEO_DOLBY_VISION -> "Dolby Vision"
+            transfer == C.COLOR_TRANSFER_ST2084 -> "HDR10"
+            transfer == C.COLOR_TRANSFER_HLG -> "HLG"
+            else -> ""
+        }
 
         fun codecName(mime: String?): String = when (mime) {
             MimeTypes.AUDIO_AC3 -> "AC3"

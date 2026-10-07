@@ -353,4 +353,62 @@ describe('Series screen', () => {
     mount(<Series seriesKey="nothing here" />);
     expect(el.textContent).toContain('Этого сериала больше нет');
   });
+
+  describe('«Озвучка»', () => {
+    const withDub = (tor: Torrent, a: object): Torrent => ({ ...tor, data: JSON.stringify({ ...JSON.parse(tor.data!), omp: { v: 1, h: [], a } }) });
+    let sets: { hash: string; data: string }[];
+    beforeEach(() => {
+      sets = [];
+      vi.spyOn(TorrServerClient.prototype, 'setData').mockImplementation(async (t: { hash: string }, data: string) => {
+        sets.push({ hash: t.hash, data });
+        serverList = serverList.map((x) => (x.hash === t.hash ? { ...x, data } : x));
+      });
+    });
+    const value = () => (el.querySelector('[data-dub-value]')!.textContent || '').trim();
+    const choices = () => Array.from(el.querySelectorAll('[data-dub-choice]')).map((b) => (b.textContent || '').trim());
+
+    it('shows the channels with the dub («HDRezka · 5.1»)', async () => {
+      const s1 = withDub(S1, { at: 5, l: 'HDRezka', g: 'ru', c: '5.1', k: [{ l: 'HDRezka', g: 'ru', c: '5.1' }, { l: 'LostFilm', g: 'ru', c: '2.0' }] });
+      serverList = [s1, S2, STAR, M1, M2];
+      torrents.value = serverList;
+      navigate({ name: 'series', key: key() });
+      mount(<Series seriesKey={key()} />);
+      expect(value()).toBe('HDRezka · 5.1');
+      act(() => btn('Сменить')!.click());
+      expect(choices()).toEqual(['HDRezka · 5.1 · Русский', 'LostFilm · стерео · Русский', 'По умолчанию (сбросить)']);
+    });
+
+    it('«по умолчанию» when nothing is remembered; «Сменить» offers only the reset', async () => {
+      navigate({ name: 'series', key: key() });
+      mount(<Series seriesKey={key()} />);
+      expect(value()).toBe('по умолчанию');
+      act(() => btn('Сменить')!.click());
+      expect(choices()).toEqual(['По умолчанию (сбросить)']);
+      expect(el.textContent).toContain('общая для ТВ и телефона');
+    });
+
+    it('shows the dub picked on the TV for any season, switches to another seen one and resets', async () => {
+      const s1 = withDub(S1, { at: 5, l: 'LostFilm', g: 'ru', k: [{ l: 'LostFilm', g: 'ru' }, { l: 'HDrezka Studio', g: 'ru' }] });
+      serverList = [s1, S2, STAR, M1, M2];
+      torrents.value = serverList;
+      navigate({ name: 'series', key: key() });
+      mount(<Series seriesKey={key()} />);
+      expect(value()).toBe('LostFilm');
+      act(() => btn('Сменить')!.click());
+      expect(choices()).toEqual(['LostFilm · Русский', 'HDrezka Studio · Русский', 'По умолчанию (сбросить)']);
+      expect(el.querySelector('[data-dub-choice].on')!.textContent).toBe('LostFilm · Русский');
+      act(() => (el.querySelector('[data-dub-choice="k1"]') as HTMLElement).click());
+      await flush();
+      expect(sets.map((x) => x.hash)).toEqual(['s1']);
+      expect(JSON.parse(sets[0].data).omp.a).toMatchObject({ l: 'HDrezka Studio', g: 'ru' });
+      // the rest of the torrent's data stays
+      expect(JSON.parse(sets[0].data).TorrServer.Files).toHaveLength(2);
+      expect(value()).toBe('HDrezka Studio');
+      act(() => btn('Сменить')!.click());
+      act(() => (el.querySelector('[data-dub-choice="reset"]') as HTMLElement).click());
+      await flush();
+      expect(JSON.parse(sets[1].data).omp.a.l).toBeUndefined();
+      expect(value()).toBe('по умолчанию');
+    });
+  });
 });

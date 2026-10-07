@@ -35,6 +35,8 @@ import { phoneCatalog } from '../catalog/phoneCatalog';
 import { CastStrip } from '../ui/CastStrip';
 import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { ratingText } from './catalog/CatalogSearch';
+import { useSeriesDub } from '../../../src/ui/seriesDub';
+import { errorMessage } from '../../../src/api/http';
 
 const BACK = 'M15 5l-7 7l7 7';
 const KEEP = 'M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z';
@@ -329,6 +331,51 @@ function Row({ tor, onWatch, onMenu }: { tor: Torrent; onWatch: (tor: Torrent) =
   );
 }
 
+/**
+ * «Озвучка: LostFilm» of the whole series (every season, shared with the TV through TorrServer): remembered when a
+ * track is picked in a player; «Сменить» lists the dubs seen in the series' files and «По умолчанию (сбросить)».
+ */
+function DubRow({ group }: { group: SeriesGroup }) {
+  const dub = useSeriesDub(group.members, client.value);
+  const [open, setOpen] = useState(false);
+  const pick = (value: string) => {
+    setOpen(false);
+    dub.pick(value).catch((e) => showToast(errorMessage(e)));
+  };
+  return (
+    <div class="m-series-dub" data-series-dub>
+      <div class="m-series-dub-line">
+        <span class="m-small">
+          {t('series.dub') + ': '}
+          <b data-dub-value>{dub.text}</b>
+        </span>
+        <button type="button" class="m-btn-text" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {t('series.dubChange')}
+        </button>
+      </div>
+      {open && (
+        <>
+          <div class="m-chips m-series-dub-chips">
+            {dub.choices.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                class={'m-chip' + (o.value === dub.value ? ' on' : '')}
+                aria-pressed={o.value === dub.value}
+                data-dub-choice={o.value}
+                onClick={() => pick(o.value)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <span class="m-small m-muted">{t('series.dubNote')}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null }) {
   const route = useMemo(() => currentRoute.peek(), []);
   const remembered = chosenSeason.get(route);
@@ -424,6 +471,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           </div>
         </div>
       )}
+      <DubRow group={group} />
       {chips.length > 1 && (
         <div class="m-chips m-tc-chips" ref={chipsRef}>
           {chips.map((n) => {

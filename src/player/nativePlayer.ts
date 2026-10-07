@@ -4,7 +4,10 @@ import { t } from '../i18n';
 import type { TorrServerClient } from '../api/torrserver';
 import type { OmpNativeTvPlugin, ListenerHandle } from '../platform/androidNative';
 import type { Cmd, PlayerState } from '../phone/protocol';
-import { guessLangFromName } from '../lib/tracks';
+import { guessLangFromName, normalizeLang } from '../lib/tracks';
+import { channelLayout, mergeSeen, type SeriesSub, type SeriesTracksPatch } from '../lib/seriesTracks';
+import { rememberSeriesTracks } from '../store/seriesTracks';
+import type { NativeTrackPick } from './trackPrefs';
 import { buildSnapshot } from './phoneBridge';
 import { saveItemProgress, LOCAL_SAVE_MS, REMOTE_SAVE_MS } from './progressSave';
 import { resumePosition } from '../store/progress';
@@ -49,7 +52,47 @@ export interface NativeStartOptions {
   donate?: boolean;
   /** «Плеер»: the setting, or the torrent's own choice (engineFor). */
   engine?: PlayerEngineSetting;
+  /**
+   * «Озвучка» start order (nativeTrackStart): series dub by title → the torrent's own choice → series language →
+   * settings, walked by the player on every item; absent: the engine's language preference alone.
+   */
+  audioPick?: NativeTrackPick[];
+  /** The same for subtitles (a step may turn them off). */
+  subPick?: NativeTrackPick[];
 }
+
+/** `nativePlayerTrack` from the player: an audio or subtitle track picked by hand (menu or phone). */
+export type NativeTrackEvent =
+  | { index: number; kind: 'audio'; lang: string; label: string; channels: string; seen: SeriesSub[] }
+  | { index: number; kind: 'subs'; off: true }
+  | { index: number; kind: 'subs'; off: false; lang: string; label: string };
+
+function text(v: unknown): string {
+  return typeof v === 'string' ? v.trim().slice(0, 200) : '';
+}
+
+export function sanitizeNativeTrack(v: unknown): NativeTrackEvent | null {
+  if (!isObj(v)) return null;
+  const i = idx(v.index);
+  if (i === null) return null;
+  if (v.kind === 'audio') {
+    const seen = Array.isArray(v.seen)
+      ? mergeSeen(
+          v.seen.filter(isObj).map((x: Record<string, unknown>) => ({ l: text(x.l), g: normalizeLang(text(x.g)), c: channelLayout(num(x.c)) })),
+          undefined,
+        )
+      : [];
+    return { index: i, kind: 'audio', lang: normalizeLang(text(v.lang)), label: text(v.label), channels: channelLayout(num(v.channels)), seen };
+  }
+  if (v.kind === 'subs') {
+    if (v.off === true) return { index: i, kind: 'subs', off: true };
+    return { index: i, kind: 'subs', off: false, lang: normalizeLang(text(v.lang)), label: text(v.label) };
+  }
+  return null;
+}
+
+/** Writes a series choice («Озвучка») for the torrent `hash`; never rejects. */
+export type SeriesTrackSaver = (hash: string, patch: SeriesTracksPatch) => Promise<void>;
 
 /** The «Поддержать» card of the native player: QR rows («1» dark, no quiet zone) and the short link. */
 export interface NativeDonate {
@@ -220,6 +263,7 @@ export class NativeSession {
   private readonly sent: { [index: number]: string } = {};
   private donateOff = false;
   private opts: NativeStartOptions | null = null;
+  private readonly seriesSaver: SeriesTrackSaver;
 
   constructor(
     plugin: OmpNativeTvPlugin,
@@ -229,6 +273,7 @@ export class NativeSession {
     journal: WatchJournal | null = null,
     probeOf: ProbeLoader | null = null,
     skipIo: SkipIo | null = null,
+    seriesSaver: SeriesTrackSaver | null = null,
   ) {
     this.plugin = plugin;
     this.client = client;
@@ -237,6 +282,7 @@ export class NativeSession {
     this.journal = journal;
     this.probeOf = probeOf;
     this.skipIo = skipIo;
+    this.seriesSaver = seriesSaver || ((hash, patch) => rememberSeriesTracks(client, hash, patch));
   }
 
   start(o: NativeStartOptions): Promise<void> {
@@ -250,6 +296,7 @@ export class NativeSession {
       this.plugin.addListener('nativePlayerClosed', (d) => this.onClosed(d)).then(keep),
       this.plugin.addListener('nativePlayerMark', (d) => this.onMark(d)).then(keep),
       this.plugin.addListener('nativePlayerEngine', (d) => this.onEngine(d)).then(keep),
+      this.plugin.addListener('nativePlayerTrack', (d) => this.onTrack(d)).then(keep),
     ])
       .then(() => {
         if (this.done) return undefined;
@@ -264,6 +311,8 @@ export class NativeSession {
         return this.plugin.playNative({
           ...(donate ? { donate } : {}),
           ...(o.engine ? { engine: o.engine } : {}),
+          ...(o.audioPick && o.audioPick.length ? { audioPick: o.audioPick } : {}),
+          ...(o.subPick && o.subPick.length ? { subPick: o.subPick } : {}),
           queue,
           index: o.index,
           startAt: o.startAt,
@@ -492,6 +541,27 @@ export class NativeSession {
     const text = engineLogText(e);
     if (text) log('warn', 'tv', text);
     if (e.reason === 'manual' && item.hash) saveTrackPref(item.hash, { engine: e.engine });
+  }
+
+  /**
+   * A track picked by hand in the player: remembered for the torrent (locally, as on LG) and for the whole series
+   * («Озвучка», the watch journal), so the next episode, season or torrent of the series starts with it.
+   */
+  private onTrack(d: unknown): void {
+    if (this.done || foreign(d, this.sid)) return;
+    const e = sanitizeNativeTrack(d);
+    const item = e && this.queue[e.index];
+    if (!e || !item || !item.hash) return;
+    if (e.kind === 'audio') {
+      saveTrackPref(item.hash, { audioLang: e.lang, audioLabel: e.label });
+      void this.seriesSaver(item.hash, e.channels ? { l: e.label, g: e.lang, c: e.channels, k: e.seen } : { l: e.label, g: e.lang, k: e.seen });
+    } else if (e.off) {
+      saveTrackPref(item.hash, { sub: 'off' });
+      void this.seriesSaver(item.hash, { s: 'off' });
+    } else {
+      saveTrackPref(item.hash, { sub: { lang: e.lang, label: e.label } });
+      void this.seriesSaver(item.hash, { s: { l: e.label, g: e.lang } });
+    }
   }
 
   /** Watch journal: the current item is left at its last position. */

@@ -51,6 +51,9 @@ interface PlayerEngine {
     /** Subtitle tracks the engine can show: embedded ones in file order, then the item's files ([EngineTrack.external]). */
     fun subtitleTracks(): List<EngineTrack>
 
+    /** Video format, passthrough and buffer of the open item for the «Инфо» panel; empty where the engine cannot tell. */
+    fun mediaInfo(): EngineMediaInfo = EngineMediaInfo()
+
     /** [id] of one of [audioTracks]. */
     fun selectAudio(id: String)
 
