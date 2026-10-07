@@ -24,7 +24,6 @@ import tv.p2160.core.api.ExternalSubtitle
 import tv.p2160.core.api.MediaEntry
 import tv.p2160.core.api.PlaybackRequest
 import tv.p2160.core.api.PlayerConfig
-import tv.p2160.core.settings.NightSchedule
 import tv.p2160.core.engine.PlayerController
 import tv.p2160.core.settings.PlayerSettings
 import java.util.Base64
@@ -60,21 +59,6 @@ class Engine2160(private val context: Context) : PlayerEngine {
 
     /** The start position of the open item. */
     private var openStart = 0L
-
-    /** The open item, to build its controller again (night sound turned off). */
-    private var currentMedia: EngineMedia? = null
-
-    /**
-     * The current controller's audio went through night sound: created with it on, or switched on later (then
-     * 2160 moves passthrough to decoding, and turning it off does not move it back).
-     */
-    private var nightTouched = false
-
-    /** Audio and subtitle choice carried over a rebuild, applied once the new items are in the player. */
-    private var carryAudio: String? = null
-    private var carrySub: String? = null
-    private var carryTextOff = false
-    private var carry = false
 
     private var prefs = TrackPrefs("", "", true)
 
@@ -141,13 +125,6 @@ class Engine2160(private val context: Context) : PlayerEngine {
         val p = player ?: return
         pendingSeek?.let { p.seekTo(it) }
         pendingSeek = null
-        if (carry) {
-            carry = false
-            carryAudio?.let(::selectAudio)
-            if (carryTextOff) selectSubtitle(null) else carrySub?.let(::selectSubtitle)
-            carryAudio = null
-            carrySub = null
-        }
         if (!wantPlay) p.pause()
     }
 
@@ -196,13 +173,8 @@ class Engine2160(private val context: Context) : PlayerEngine {
         closeController()
         endSent = false
         frameSent = false
-        wantPlay = true
-        build(media, startMs)
-    }
-
-    private fun build(media: EngineMedia, startMs: Long) {
-        currentMedia = media
         loaded = false
+        wantPlay = true
         val start = startMs.coerceAtLeast(0L)
         openStart = start
         pendingSeek = null
@@ -225,7 +197,6 @@ class Engine2160(private val context: Context) : PlayerEngine {
         )
         val c = PlayerController(app, request, config(PlayerBuffer.memoryClassMb(app)))
         controller = c
-        nightTouched = settings.current.nightModeAt(NightSchedule.nowMinute())
         val p = c.player
         p.addListener(events)
         // the end of an item pauses (the UI decides: countdown or close)
@@ -328,27 +299,7 @@ class Engine2160(private val context: Context) : PlayerEngine {
      */
     override fun setNightMode(on: Boolean) {
         settings.update { it.copy(nightMode = on) }
-        val before = nightTouched
         controller?.setNightMode(on)
-        if (on) nightTouched = true
-        // turning it on moves passthrough to decoding by itself; turning it off does not move it back: the item
-        // is built again at the same place (a short gap in the sound), the new controller starts without night sound
-        else if (needsReopen(on, before)) reopen()
-    }
-
-    /** The open item again at the current position: same play state, audio and subtitle choice, no new «first frame». */
-    private fun reopen() {
-        val media = currentMedia ?: return
-        val p = player ?: return
-        val pos = positionMs
-        val play = p.playWhenReady
-        carryAudio = audioTracks().firstOrNull { it.selected }?.id
-        carryTextOff = textOff
-        carrySub = subtitleTracks().firstOrNull { it.selected }?.id
-        carry = true
-        closeController()
-        wantPlay = play
-        build(media, pos)
     }
 
     private fun closeController() {
@@ -388,12 +339,6 @@ class Engine2160(private val context: Context) : PlayerEngine {
             restoreFromHistory = false,
             saveHistory = false,
         )
-
-        /**
-         * Passthrough only returns with a fresh controller: needed when night sound goes off after it had touched
-         * this controller's audio. Turning it on is handled by 2160 itself on the fly.
-         */
-        fun needsReopen(nightOn: Boolean, touched: Boolean): Boolean = !nightOn && touched
 
         /** The controller's id of an external subtitle ends with «:<hash of its Uri>» («ext:0:-12345»). */
         fun externalIndex(formatId: String?, hashes: Map<Int, Int>): Int? {
