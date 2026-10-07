@@ -281,8 +281,11 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 /* an update is waiting: a dot on «Настройки» until it is installed */
 .icon-dot { position: absolute; top: 8px; right: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
 .icon-button.focused .icon-dot { background: #0f1115; }
-.icon-btn-label { margin-left: 10px; font-size: 22px; font-weight: 700; white-space: nowrap; }
-.icon-button.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: scale(1.06); }
+.icon-button.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: scale(1.06); z-index: 30; }
+/* the focused button's label: a chip under it that moves nothing; the edge buttons pin it to their edge to stay on screen */
+.icon-btn-label { position: absolute; top: 100%; left: 50%; margin-top: 10px; padding: 5px 14px; border-radius: 10px; background: var(--panel2); border: 1px solid rgba(255, 255, 255, .12); color: #fff; font-size: 21px; line-height: 28px; font-weight: 700; white-space: nowrap; pointer-events: none; z-index: 30; -webkit-transform: translateX(-50%); transform: translateX(-50%); }
+.icon-btn-label--end { left: auto; right: 0; -webkit-transform: none; transform: none; }
+.icon-btn-label--start { left: 0; -webkit-transform: none; transform: none; }
 .screen::-webkit-scrollbar { display: none; }
 
 .art { position: relative; overflow: hidden; border-radius: 16px; display: flex; align-items: flex-end; flex-shrink: 0; }
