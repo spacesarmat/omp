@@ -10,6 +10,12 @@ import android.graphics.drawable.BitmapDrawable
 import android.os.Bundle
 import android.text.Spannable
 import android.text.SpannableString
+import android.text.SpannableStringBuilder
+import android.text.style.LeadingMarginSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
+import android.text.style.TabStopSpan
+import android.graphics.Typeface
 import android.text.style.ForegroundColorSpan
 import android.os.Handler
 import android.os.Looper
@@ -648,8 +654,39 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         if (!infoShown || !::session.isInitialized || isDestroyed) return
         val item = session.item() ?: return
         val audio = engine.audioTracks().firstOrNull { it.selected }
-        val lines = PlayerInfoText.lines(item.title, PlayerInfoText.fileName(item.url), engine.mediaInfo(), audio, infoStats.stats)
-        infoView.text = lines.joinToString("\n")
+        val panel = PlayerInfoText.panel(item.title, PlayerInfoText.fileName(item.url), engine.mediaInfo(), audio, infoStats.stats)
+        infoView.text = infoText(panel)
+    }
+
+    /**
+     * «Инфо» like the other player panels: the title a little larger, the file muted, then two columns — muted labels,
+     * white values (a wrapped value stays in its column). About a third of the screen wide.
+     */
+    private fun infoText(p: InfoPanel): CharSequence {
+        val paint = infoView.paint
+        val gap = 12 * resources.displayMetrics.density
+        val column = (p.rows.maxOfOrNull { paint.measureText(it.label) } ?: 0f) + gap
+        val maxWidth = (resources.displayMetrics.widthPixels * INFO_WIDTH).toInt()
+        if (infoView.maxWidth != maxWidth) infoView.maxWidth = maxWidth
+        val out = SpannableStringBuilder()
+        fun line(text: CharSequence, vararg spans: Any) {
+            if (out.isNotEmpty()) out.append('\n')
+            val start = out.length
+            out.append(text)
+            spans.forEach { out.setSpan(it, start, out.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE) }
+        }
+        if (p.title.isNotEmpty()) line(p.title, RelativeSizeSpan(16f / 14f), StyleSpan(Typeface.BOLD))
+        if (p.file.isNotEmpty()) line(p.file, ForegroundColorSpan(INFO_MUTED), RelativeSizeSpan(13f / 14f))
+        for (r in p.rows) {
+            if (out.isNotEmpty()) out.append('\n')
+            val start = out.length
+            out.append(r.label)
+            out.setSpan(ForegroundColorSpan(INFO_MUTED), start, out.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            out.append('\t').append(r.value)
+            out.setSpan(TabStopSpan.Standard(column.toInt()), start, out.length, Spannable.SPAN_PARAGRAPH)
+            out.setSpan(LeadingMarginSpan.Standard(0, column.toInt()), start, out.length, Spannable.SPAN_PARAGRAPH)
+        }
+        return out
     }
 
     private fun onBack() {
@@ -1126,6 +1163,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         private const val HIDE_MS = 4000L
         /** «Инфо» refresh period. */
         private const val INFO_REFRESH_MS = 1000L
+        /** «Инфо»: at most this share of the screen width; muted label colour (as the hint line). */
+        private const val INFO_WIDTH = 0.33f
+        private const val INFO_MUTED = 0xFF9AA1B2.toInt()
         private const val SKIP_HIDDEN_SHIFT_DP = 150f
         /** «Поддержать»: bottom margin on pause (above the controls) and in the credits; the skip button lift. */
         private const val DONATE_PAUSE_BOTTOM_DP = 210f

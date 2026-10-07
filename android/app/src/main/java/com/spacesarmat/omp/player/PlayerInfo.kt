@@ -159,30 +159,51 @@ object PlayerInfoText {
         return (if (I18n.lang == "en") num else num.replace('.', ',')) + " " + I18n.s(units[u])
     }
 
-    /** «5,4 Мбит/с» from bytes per second. */
+    /** «5,4 Мбит/с» from bytes per second (the video bitrate). */
     fun speed(bytesPerSec: Double): String {
         val mbit = bytesPerSec * 8 / 1_000_000
-        val num = if (mbit >= 100) String.format(Locale.ROOT, "%.0f", mbit) else String.format(Locale.ROOT, "%.1f", mbit)
+        val num = if (mbit >= 10) String.format(Locale.ROOT, "%.0f", mbit) else String.format(Locale.ROOT, "%.1f", mbit)
         return I18n.s("info.mbps", "v" to if (I18n.lang == "en") num else num.replace('.', ','))
     }
 
     private fun bitrate(bps: Long): String = speed(bps / 8.0)
 
+    /** «2,1 МБ/с», «350 КБ/с», «0» for nothing: a transfer rate in bytes per second. */
+    fun rate(bytesPerSec: Double): String {
+        if (bytesPerSec < 1) return "0"
+        return I18n.s("info.perSec", "v" to bytes(bytesPerSec.toLong()))
+    }
+
+    /** «1 сид», «3 сида», «7 сидов» (ru); «1 seed», «7 seeds» (en). Keys `<key>.one/few/many`. */
+    fun plural(key: String, n: Int): String {
+        val form = if (I18n.lang == "en") {
+            if (n == 1) "one" else "many"
+        } else {
+            val m10 = n % 10
+            val m100 = n % 100
+            when {
+                m10 == 1 && m100 != 11 -> "one"
+                m10 in 2..4 && m100 !in 12..14 -> "few"
+                else -> "many"
+            }
+        }
+        return I18n.s("$key.$form", "n" to n.toString())
+    }
+
     /**
-     * The lines: the title and the file, the video (codec · size · HDR · bitrate), the audio (codec · channels ·
-     * passthrough), the torrent (seeders / peers, down / up speed), the buffer ahead (TorrServer preload and cache,
-     * the player's own buffer). Unknown parts are left out; stats null: «нет данных» for the torrent.
+     * The panel: the title (and the file when it says something else), then rows «label — value»: the video (codec ·
+     * size · HDR · bitrate), the sound (codec · channels · passthrough), the torrent in one row (seeds · peers ·
+     * ↓ speed · ↑ speed), the buffer (TorrServer preload / cache · the player's own). Unknown parts are left out;
+     * stats null: «нет данных» for the torrent.
      */
-    fun lines(title: String, file: String, media: EngineMediaInfo, audio: EngineTrack?, stats: TorrentStats?): List<String> {
-        val out = ArrayList<String>()
-        if (title.isNotEmpty()) out.add(title)
-        if (file.isNotEmpty() && file != title) out.add(file)
+    fun panel(title: String, file: String, media: EngineMediaInfo, audio: EngineTrack?, stats: TorrentStats?): InfoPanel {
+        val rows = ArrayList<InfoRow>()
         val video = ArrayList<String>()
         if (media.videoCodec.isNotEmpty()) video.add(media.videoCodec)
         if (media.width > 0 && media.height > 0) video.add("${media.width}×${media.height}")
         if (media.hdr.isNotEmpty()) video.add(media.hdr)
         if (media.bitrate > 0) video.add(bitrate(media.bitrate))
-        if (video.isNotEmpty()) out.add(I18n.s("info.video", "v" to video.joinToString(" · ")))
+        if (video.isNotEmpty()) rows.add(InfoRow(I18n.s("info.video"), video.joinToString(" · ")))
         if (audio != null) {
             val a = ArrayList<String>()
             if (audio.codec.isNotEmpty()) a.add(audio.codec)
@@ -192,22 +213,34 @@ object PlayerInfoText {
                 false -> a.add(I18n.s("info.decoded"))
                 null -> Unit
             }
-            if (a.isNotEmpty()) out.add(I18n.s("info.audio", "v" to a.joinToString(" · ")))
+            if (a.isNotEmpty()) rows.add(InfoRow(I18n.s("info.audio"), a.joinToString(" · ")))
         }
+        val buffer = ArrayList<String>()
         if (stats == null) {
-            out.add(I18n.s("info.torrent", "v" to I18n.s("info.noData")))
+            rows.add(InfoRow(I18n.s("info.torrent"), I18n.s("info.noData")))
         } else {
-            out.add(I18n.s("info.peers", "seeds" to stats.seeders.toString(), "active" to stats.activePeers.toString(), "total" to stats.totalPeers.toString()))
-            out.add(I18n.s("info.speed", "down" to speed(stats.downSpeed), "up" to speed(stats.upSpeed)))
-            val ahead = ArrayList<String>()
-            if (stats.preloaded > 0) ahead.add(I18n.s("info.preloaded", "v" to bytes(stats.preloaded)))
-            if (stats.cacheCapacity > 0) ahead.add(I18n.s("info.cache", "filled" to bytes(stats.cacheFilled), "cap" to bytes(stats.cacheCapacity)))
-            if (ahead.isNotEmpty()) out.add(ahead.joinToString(" · "))
+            val peers = plural("info.peers", stats.activePeers) +
+                if (stats.totalPeers > stats.activePeers) " " + I18n.s("info.ofTotal", "n" to stats.totalPeers.toString()) else ""
+            rows.add(
+                InfoRow(
+                    I18n.s("info.torrent"),
+                    listOf(plural("info.seeds", stats.seeders), peers, "↓ " + rate(stats.downSpeed), "↑ " + rate(stats.upSpeed)).joinToString(" · "),
+                ),
+            )
+            val ahead = if (stats.preloaded > 0) stats.preloaded else stats.cacheFilled
+            if (ahead > 0) buffer.add(I18n.s("info.bufferServer", "v" to bytes(ahead)))
         }
-        if (media.bufferedMs >= 0) out.add(I18n.s("info.buffer", "v" to (media.bufferedMs / 1000).toString()))
-        return out
+        if (media.bufferedMs >= 0) buffer.add(I18n.s("info.bufferPlayer", "v" to (media.bufferedMs / 1000).toString()))
+        if (buffer.isNotEmpty()) rows.add(InfoRow(I18n.s("info.buffer"), buffer.joinToString(" · ")))
+        return InfoPanel(title, if (file != title) file else "", rows)
     }
 }
+
+/** One row of the «Инфо» panel: a muted label and its value. */
+data class InfoRow(val label: String, val value: String)
+
+/** The «Инфо» panel: the title, the file name ('' when it is the title or unknown) and the rows. */
+data class InfoPanel(val title: String, val file: String, val rows: List<InfoRow>)
 
 /**
  * The torrent statistics shown in «Инфо»: only for the torrent of the current item, cleared when its fetch fails
