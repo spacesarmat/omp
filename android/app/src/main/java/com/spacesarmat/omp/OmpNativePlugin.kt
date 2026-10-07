@@ -924,6 +924,21 @@ class OmpNativePlugin : Plugin() {
         call.resolve()
     }
 
+    /**
+     * Back from the phone remote that no screen took (the library root): the app closes, as the box remote's Back
+     * does there (MainActivity.pageBack finishes when the page does not handle it).
+     */
+    @PluginMethod
+    fun appBack(call: PluginCall) {
+        val a = activity
+        if (a == null) {
+            call.resolve()
+            return
+        }
+        a.runOnUiThread { a.finish() }
+        call.resolve()
+    }
+
     /** The TV name the phone sees (the registered NSD name): { name }. */
     @PluginMethod
     fun tvName(call: PluginCall) {
