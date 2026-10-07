@@ -295,6 +295,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 
 .art { position: relative; overflow: hidden; border-radius: 16px; display: flex; align-items: flex-end; flex-shrink: 0; }
 .art img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+/* the LG's Chromium 53 drops the parent's rounded clip while a focused card scales: the picture keeps its own corners */
+.art img, .disc-poster img, .series-poster img { border-radius: inherit; }
 .art-title { position: relative; font-weight: 800; color: rgba(255, 255, 255, .85); line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 .history-grid { display: flex; flex-wrap: wrap; margin-right: -40px; padding-top: 8px; }
 .hcard { display: flex; width: 860px; height: 200px; margin: 0 40px 28px 0; padding: 16px; border-radius: 18px; background: var(--panel); }
