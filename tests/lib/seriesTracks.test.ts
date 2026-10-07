@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   sanitizeSeriesTracks, seriesTracksOf, newestSeriesTracks, nextSeriesTracks, isReset, sameDub, normDub, dubOf, findDub,
-  seenDubs, withSeriesTracks,
+  seenDubs, withSeriesTracks, isCodecLabel, torrentChoicesCount,
 } from '../../src/lib/seriesTracks';
 import { serializeData, parseData, withWatch } from '../../src/lib/journal';
 
@@ -30,6 +30,24 @@ describe('dub labels', () => {
     expect(dubOf({ label: 'RU · AC3 2.0 · HDrezka Studio' })).toBe('HDrezka Studio');
     expect(dubOf({ label: 'EN · DTS 5.1' })).toBe('');
     expect(dubOf({ label: 'Dub (ru)' })).toBe('Dub');
+  });
+
+  it('a codec or format name is never a dub or subtitle title', () => {
+    ['SUBRIP', 'srt', 'ASS', 'SSA', 'PGS', 'HDMV_PGS_SUBTITLE', 'VobSub', 'dvd_subtitle', 'WEBVTT', 'TX3G', 'MOV_TEXT', 'DVB_SUB',
+      'dvb_subtitle', 'PCM_S16LE 2.0', 'PCM_S24LE', 'AC3 5.1', 'E-AC3', 'DTS-HD MA', 'TrueHD Atmos 7.1', 'AAC stereo', 'FLAC']
+      .forEach((s) => expect(isCodecLabel(s)).toBe(true));
+    ['LostFilm', 'Forced', 'Надписи', 'HDrezka Studio', ''].forEach((s) => expect(isCodecLabel(s)).toBe(false));
+    // untitled tracks: the describeTrack label leaves nothing
+    expect(dubOf({ label: 'RU · SUBRIP' })).toBe('');
+    expect(dubOf({ label: 'RU · PCM_S16LE 2.0' })).toBe('');
+    expect(dubOf({ label: 'EN · HDMV_PGS_SUBTITLE' })).toBe('');
+    expect(dubOf({ title: 'SUBRIP', label: 'RU · SUBRIP · SUBRIP' })).toBe('');
+    // stored or seen titles that are codec names are dropped
+    expect(sanitizeSeriesTracks({ at: 1, l: 'PCM_S16LE', g: 'ru', s: { l: 'SUBRIP', g: 'ru' }, k: [{ l: 'AC3 5.1', g: 'ru' }, { l: 'LostFilm', g: 'ru' }] }))
+      .toEqual({ at: 1, g: 'ru', s: { l: '', g: 'ru' }, k: [{ l: 'LostFilm', g: 'ru' }] });
+    expect(nextSeriesTracks(null, { l: 'PCM_S16LE 2.0', g: 'ru', k: [{ l: 'SUBRIP', g: 'ru' }] }, 5)).toEqual({ at: 5, g: 'ru' });
+    expect(nextSeriesTracks(null, { s: { l: 'SUBRIP', g: 'ru' } }, 5)).toEqual({ at: 5, s: { l: '', g: 'ru' } });
+    expect(seenDubs([{ label: 'RU · PCM_S16LE 2.0', language: 'ru' }, { title: 'LostFilm', language: 'ru' }])).toEqual([{ l: 'LostFilm', g: 'ru' }]);
   });
 
   it('find a track by dub, -1 when none', () => {
@@ -81,10 +99,23 @@ describe('series records', () => {
     expect(subs.l).toBe('HDrezka Studio');
     expect(subs.s).toEqual({ l: 'Надписи', g: 'ru' });
     const reset = nextSeriesTracks(subs, 'reset', 4);
-    expect(reset).toEqual({ at: 4, k: audio.k });
+    expect(reset).toEqual({ at: 4, k: audio.k, x: true });
     expect(isReset(reset)).toBe(true);
     expect(isReset(subs)).toBe(false);
     expect(isReset(null)).toBe(false);
+  });
+
+  it('a reset is remembered by every later record: the torrents\' older choices no longer count', () => {
+    const reset = nextSeriesTracks({ at: 1, l: 'LostFilm', g: 'ru' }, 'reset', 2);
+    expect(torrentChoicesCount(reset)).toBe(false);
+    const subsOnly = nextSeriesTracks(reset, { s: { l: 'Signs', g: 'ru' } }, 3);
+    expect(subsOnly.x).toBe(true);
+    expect(isReset(subsOnly)).toBe(false);
+    expect(torrentChoicesCount(subsOnly)).toBe(false);
+    expect(nextSeriesTracks(subsOnly, { l: 'LostFilm', g: 'ru' }, 4).x).toBe(true);
+    expect(torrentChoicesCount(null)).toBe(true);
+    expect(torrentChoicesCount({ at: 1, l: 'LostFilm' })).toBe(true);
+    expect(sanitizeSeriesTracks({ at: 1, x: true })).toEqual({ at: 1, x: true });
   });
 
   it('lives in omp.a and survives the other journal writes', () => {

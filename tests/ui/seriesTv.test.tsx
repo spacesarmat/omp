@@ -510,6 +510,16 @@ describe('TV series screen: «Озвучка»', () => {
     expect(text(host.querySelector('[data-fk="series-dub"]'))).toBe('Озвучка: HDrezka Studio');
   });
 
+  it('a language picked without a dub title is shown and marked current in the list', async () => {
+    const data = { s1: rec({ at: 5, g: 'ru', k: [{ l: 'LostFilm', g: 'ru' }] }) };
+    server(data);
+    const host = await mountWithDialogs(data);
+    expect(text(host.querySelector('[data-fk="series-dub"]'))).toBe('Озвучка: Русский');
+    await open(host);
+    expect(options(host)).toEqual(['Русский', 'LostFilm · Русский', 'По умолчанию (сбросить)']);
+    expect(text(host.querySelector('.dialog-option.current'))).toBe('Русский');
+  });
+
   it('«По умолчанию (сбросить)» resets the series, keeping the dubs seen', async () => {
     const data = { s2: rec({ at: 5, l: 'LostFilm', g: 'ru', k: [{ l: 'LostFilm', g: 'ru' }] }) };
     const sets = server(data);

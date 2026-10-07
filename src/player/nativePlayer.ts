@@ -7,6 +7,7 @@ import type { Cmd, PlayerState } from '../phone/protocol';
 import { guessLangFromName, normalizeLang } from '../lib/tracks';
 import { mergeSeen, type SeriesSub, type SeriesTracksPatch } from '../lib/seriesTracks';
 import { rememberSeriesTracks } from '../store/seriesTracks';
+import type { NativeTrackPick } from './trackPrefs';
 import { buildSnapshot } from './phoneBridge';
 import { saveItemProgress, LOCAL_SAVE_MS, REMOTE_SAVE_MS } from './progressSave';
 import { resumePosition } from '../store/progress';
@@ -51,10 +52,13 @@ export interface NativeStartOptions {
   donate?: boolean;
   /** «Плеер»: the setting, or the torrent's own choice (engineFor). */
   engine?: PlayerEngineSetting;
-  /** «Озвучка» of the series (or the torrent's own choice): the audio track with this title is picked before the language. */
-  dubLabel?: string;
-  /** The subtitles with this title (or file name) are picked before the language. */
-  subLabel?: string;
+  /**
+   * «Озвучка» start order (nativeTrackStart): series dub by title → the torrent's own choice → series language →
+   * settings, walked by the player on every item; absent: the engine's language preference alone.
+   */
+  audioPick?: NativeTrackPick[];
+  /** The same for subtitles (a step may turn them off). */
+  subPick?: NativeTrackPick[];
 }
 
 /** `nativePlayerTrack` from the player: an audio or subtitle track picked by hand (menu or phone). */
@@ -304,8 +308,8 @@ export class NativeSession {
         return this.plugin.playNative({
           ...(donate ? { donate } : {}),
           ...(o.engine ? { engine: o.engine } : {}),
-          ...(o.dubLabel ? { dubLabel: o.dubLabel } : {}),
-          ...(o.subLabel ? { subLabel: o.subLabel } : {}),
+          ...(o.audioPick && o.audioPick.length ? { audioPick: o.audioPick } : {}),
+          ...(o.subPick && o.subPick.length ? { subPick: o.subPick } : {}),
           queue,
           index: o.index,
           startAt: o.startAt,

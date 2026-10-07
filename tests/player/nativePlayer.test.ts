@@ -534,16 +534,18 @@ describe('player engine (VLC / Авто)', () => {
     expect(getTrackPref(H1)).toEqual({ engine: 'builtin', audioLang: 'en' });
   });
 
-  it('sends the series dub and subtitle titles with playNative (only when there are some)', async () => {
+  it('sends the start order of audio and subtitles with playNative (only when there is one)', async () => {
     const f = fakePlugin();
-    await track(new NativeSession(f.plugin, null, queue)).start({ ...opts, dubLabel: 'LostFilm', subLabel: 'Signs', subtitlesOn: true });
+    const audioPick = [{ l: 'LostFilm' }, { g: 'ru' }];
+    const subPick = [{ l: 'Signs', g: 'ru' }, { off: true as const }];
+    await track(new NativeSession(f.plugin, null, queue)).start({ ...opts, audioPick, subPick, subtitlesOn: true });
     const arg = f.plugin.playNative.mock.calls[0][0];
-    expect(arg.dubLabel).toBe('LostFilm');
-    expect(arg.subLabel).toBe('Signs');
+    expect(arg.audioPick).toEqual(audioPick);
+    expect(arg.subPick).toEqual(subPick);
     const g = fakePlugin();
-    await track(new NativeSession(g.plugin, null, queue)).start({ ...opts, dubLabel: '' });
-    expect('dubLabel' in g.plugin.playNative.mock.calls[0][0]).toBe(false);
-    expect('subLabel' in g.plugin.playNative.mock.calls[0][0]).toBe(false);
+    await track(new NativeSession(g.plugin, null, queue)).start({ ...opts, audioPick: [] });
+    expect('audioPick' in g.plugin.playNative.mock.calls[0][0]).toBe(false);
+    expect('subPick' in g.plugin.playNative.mock.calls[0][0]).toBe(false);
   });
 
   it('a track picked by hand in the player is remembered for the torrent and the whole series', async () => {

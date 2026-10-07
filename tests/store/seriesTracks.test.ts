@@ -68,7 +68,7 @@ describe('saveSeriesTracks', () => {
     expect(s1.lampa).toBe(1);
     expect(s1.omp.h).toHaveLength(1);
     expect(s1.omp.s).toEqual({ i: true, c: false });
-    expect(s1.omp.a).toEqual({ at: 200, k: out.k });
+    expect(s1.omp.a).toEqual({ at: 200, k: out.k, x: true });
   });
 
   it('rejects when the torrent is gone or its data is not JSON', async () => {

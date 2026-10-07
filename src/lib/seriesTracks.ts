@@ -23,6 +23,11 @@ export interface SeriesTracks {
   s?: 'off' | SeriesSub;
   /** Dubs seen in the series' files (the choices on the series screen), newest first. */
   k?: SeriesSub[];
+  /**
+   * The series was reset («По умолчанию») once: the torrents' own older choices (src/store/trackPrefs.ts) no longer
+   * count, also after a later choice of only audio or only subtitles. Kept by every later record.
+   */
+  x?: true;
 }
 
 export type SeriesTracksPatch = { l?: string; g?: string; s?: 'off' | SeriesSub; k?: SeriesSub[] } | 'reset';
@@ -40,7 +45,7 @@ function str(v: unknown): string {
 
 function sub(v: unknown): SeriesSub | null {
   if (!isObj(v)) return null;
-  const l = str(v.l);
+  const l = titleText(v.l);
   const g = str(v.g);
   return l || g ? { l, g } : null;
 }
@@ -51,7 +56,7 @@ export function sanitizeSeriesTracks(v: unknown): SeriesTracks | null {
   const at = typeof v.at === 'number' && isFinite(v.at) && v.at > 0 ? v.at : 0;
   if (!at) return null;
   const out: SeriesTracks = { at };
-  const l = str(v.l);
+  const l = titleText(v.l);
   const g = str(v.g);
   if (l) out.l = l;
   if (g) out.g = g;
@@ -68,6 +73,7 @@ export function sanitizeSeriesTracks(v: unknown): SeriesTracks | null {
     });
     if (k.length) out.k = k.slice(0, SEEN_MAX);
   }
+  if (v.x === true) out.x = true;
   return out;
 }
 
@@ -88,6 +94,11 @@ export function newestSeriesTracks(members: { data?: string }[]): SeriesTracks |
   return best;
 }
 
+/** The torrents' own choices still count: no record, or one made before any reset of the series. */
+export function torrentChoicesCount(r: SeriesTracks | null): boolean {
+  return !r || (!r.x && !isReset(r));
+}
+
 /** The record says «по умолчанию»: a reset (or nothing chosen). */
 export function isReset(r: SeriesTracks | null): boolean {
   return !!r && !r.l && !r.g && !r.s;
@@ -97,7 +108,8 @@ export function isReset(r: SeriesTracks | null): boolean {
 export function mergeSeen(add: SeriesSub[] | undefined, old: SeriesSub[] | undefined): SeriesSub[] {
   const out: SeriesSub[] = [];
   (add || []).concat(old || []).forEach((s) => {
-    if (s && s.l && !out.some((y) => sameDub(y.l, s.l))) out.push({ l: s.l.slice(0, LABEL_MAX), g: s.g || '' });
+    const l = s ? titleText(s.l) : '';
+    if (l && !out.some((y) => sameDub(y.l, l))) out.push({ l, g: s.g || '' });
   });
   return out.slice(0, SEEN_MAX);
 }
@@ -111,17 +123,19 @@ export function nextSeriesTracks(base: SeriesTracks | null, patch: SeriesTracksP
   const seenAdd: SeriesSub[] = [];
   if (patch !== 'reset') {
     const audio = patch.l !== undefined || patch.g !== undefined;
-    const l = audio ? str(patch.l) : base && base.l ? base.l : '';
+    const l = audio ? titleText(patch.l) : base && base.l ? base.l : '';
     const g = audio ? str(patch.g) : base && base.g ? base.g : '';
     if (l) out.l = l;
     if (g) out.g = g;
-    const s = patch.s !== undefined ? patch.s : base ? base.s : undefined;
+    const s0 = patch.s !== undefined ? patch.s : base ? base.s : undefined;
+    const s = s0 && s0 !== 'off' ? sub(s0) : s0;
     if (s) out.s = s;
     if (audio && l) seenAdd.push({ l, g });
     if (patch.k) patch.k.forEach((x) => seenAdd.push(x));
   }
   const k = mergeSeen(seenAdd, base ? base.k : undefined);
   if (k.length) out.k = k;
+  if (patch === 'reset' || (base && base.x)) out.x = true;
   return out;
 }
 
@@ -161,8 +175,17 @@ export function sameDub(a: string | undefined | null, b: string | undefined | nu
   return (' ' + long + ' ').indexOf(' ' + short + ' ') >= 0;
 }
 
-const CODEC = /^(?:e-?ac-?3|ac-?3|aac|dts(?:-?hd)?(?: ma)?|truehd|flac|opus|mp3|mp2|pcm|vorbis|atmos|ddp?(?:\+)?|dd)(?:\s+(?:\d\.\d|mono|stereo|\d+ch))?$/i;
-const CHANNELS = /^(?:\d\.\d|mono|stereo|\d+ch)$/i;
+/** Audio / subtitle codec, format and channel words: a title made only of them names no dub. */
+const CODEC_WORD = /^(?:aac|he|lc|ac3|eac3|ec3|e|ac|dts|hd|ma|es|x|truehd|thd|mlp|flac|alac|opus|mp3|mp2|mpeg|lpcm|pcm|pcm_[a-z0-9_]+|vorbis|atmos|dd|ddp|dd\+|wma|wmapro|amr|subrip|srt|ass|ssa|pgs|hdmv_pgs_subtitle|sup|vobsub|dvd_subtitle|dvdsub|dvb_subtitle|dvb_sub|dvbsub|dvb_teletext|webvtt|vtt|tx3g|mov_text|text|eia_608|cc|mono|stereo|surround|\d\.\d|\d+ch|\d+(?:k|kbps)|\d+(?:hz|khz)|\d+bit)$/;
+
+/**
+ * The text is only codec / format names (and channels): «SUBRIP», «PCM_S16LE 2.0», «AC3 5.1», «DTS-HD MA» — no dub.
+ * Such a text is never stored as a dub or subtitle title nor offered on the series screen.
+ */
+export function isCodecLabel(s: string | undefined | null): boolean {
+  const words = (s || '').toLowerCase().split(/[\s·|/,()\-]+/).filter(Boolean);
+  return words.length > 0 && words.every((w) => CODEC_WORD.test(w));
+}
 
 function isLangWord(s: string): boolean {
   const k = s.toLowerCase().trim();
@@ -177,10 +200,16 @@ const LANG_WORD = /^(?:русский|английский|украинский|
  */
 export function dubOf(track: { title?: string; label?: string }): string {
   const own = (track.title || '').trim();
-  if (own) return own.slice(0, LABEL_MAX);
+  if (own) return isCodecLabel(own) ? '' : own.slice(0, LABEL_MAX);
   const label = (track.label || '').replace(/\s*\([a-z]{2,3}\)\s*$/i, '');
-  const parts = label.split(/\s+·\s+/).map((p) => p.trim()).filter((p) => p && !isLangWord(p) && !CODEC.test(p) && !CHANNELS.test(p));
+  const parts = label.split(/\s+·\s+/).map((p) => p.trim()).filter((p) => p && !isLangWord(p) && !isCodecLabel(p));
   return parts.join(' · ').slice(0, LABEL_MAX);
+}
+
+/** A stored title, or '' when it is only a codec name. */
+function titleText(v: unknown): string {
+  const s = str(v);
+  return isCodecLabel(s) ? '' : s;
 }
 
 /** Index of the track with the dub `label`; -1 when none. */

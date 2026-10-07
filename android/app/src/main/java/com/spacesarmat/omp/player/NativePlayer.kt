@@ -21,7 +21,7 @@ data class QueueItem(
 
 /**
  * playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn, engine?, donate?,
- * dubLabel?, subLabel? }).
+ * audioPick?, subPick? }) — the picks: [{ l?, g?, off? }].
  */
 data class PlayRequest(
     val queue: List<QueueItem>,
@@ -38,10 +38,13 @@ data class PlayRequest(
     val donate: DonateQr? = null,
     /** «Плеер» of the TV settings, or this torrent's own choice from the player menu. */
     val engine: EngineMode = EngineMode.AUTO,
-    /** «Озвучка» of the series: the audio track with this title is picked before [audioLang] (empty: none). */
-    val dubLabel: String = "",
-    /** The subtitles with this title (or file name) are picked before [subLang] (empty: none). */
-    val subLabel: String = "",
+    /**
+     * «Озвучка»: the start order of the audio track (series dub by title → the torrent's own choice → series language →
+     * settings), walked on every item; empty: the engine's language preference alone.
+     */
+    val audioPick: List<TrackPick> = emptyList(),
+    /** The same for subtitles (a step may turn them off). */
+    val subPick: List<TrackPick> = emptyList(),
 ) {
     companion object {
         const val LABEL_MAX = 200
@@ -86,8 +89,8 @@ data class PlayRequest(
                 session = if (o.opt("session") is Number) o.optLong("session") else null,
                 donate = DonateQr.parse(o.optJSONObject("donate")),
                 engine = EngineMode.parse(o.optString("engine")),
-                dubLabel = o.optString("dubLabel").trim().take(LABEL_MAX),
-                subLabel = o.optString("subLabel").trim().take(LABEL_MAX),
+                audioPick = TrackPick.parseList(o.optJSONArray("audioPick")),
+                subPick = TrackPick.parseList(o.optJSONArray("subPick")),
             )
         }
     }
