@@ -2,6 +2,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.19.0-beta.3
+
+- [tv] «Cast» on the torrent screen of a series that has a single torrent in the library (for example «Dark Matter»)
+- [phone] «Cast» on the torrent screen of a series that has a single torrent in the library (for example «Dark Matter»)
+- [tv] Biographies keep their paragraphs; the screen no longer jumps while «Cast» loads
+- [phone] Biographies keep their paragraphs, no extra gap at the top of the person screen; the screen no longer jumps while «Cast» loads
+
 ## 0.19.0-beta.2
 
 - [tv] Cast and director screen: biography, filters in one row, opens in «Discover»; «Cast» on the series and movie screens sits right under the buttons

@@ -29,7 +29,7 @@ describe('changelogData', () => {
     const all = (l: typeof tv) => l.map((e) => e.items.join('\n')).join('\n');
     expect(all(tv)).not.toMatch(/\[(tv|lg|atv|phone)\]/i);
     expect(all(phone)).not.toMatch(/\[(tv|lg|atv|phone)\]/i);
-    // the phone-only 0.17.0 betas: the calendar is on the phone only
+    // 0.17.0 calendar bullet: phone only
     expect(all(phone)).toContain('«Новое» → «Календарь»');
     expect(all(tv)).not.toContain('«Новое» → «Календарь»');
     // 0.18.0: mostly TV screens; the phone sees only its own «Search for the TV» bullets
@@ -37,7 +37,7 @@ describe('changelogData', () => {
     expect(all(tv)).toContain('Телевизор LG ищет раздачи');
     expect(all(phone)).not.toContain('Телевизор LG ищет раздачи');
     expect(phone.filter((e) => e.version === '0.18.0')[0].items).toHaveLength(3);
-    const raw = CHANGELOG.filter((e) => e.version === '0.17.0-beta.6')[0].items;
+    const raw = CHANGELOG.filter((e) => e.version === '0.19.0-beta.2')[0].items;
     expect(raw.some((i) => /^\[phone\] /.test(i))).toBe(true);
   });
 
