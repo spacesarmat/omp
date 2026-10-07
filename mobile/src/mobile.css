@@ -1379,3 +1379,31 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-key { padding-left: 0; padding-right: 0; }
 .m-key-label { min-width: 0; overflow: clip; overflow-clip-margin: 3px; text-overflow: ellipsis; white-space: nowrap; }
 .m-dpad-ok { padding: 0; font-size: min(20px, calc(var(--dp, 240px) * 0.132)); white-space: nowrap; }
+
+/* OMP's address keypad: docked at the bottom like a keyboard while the address field is active */
+:root { --m-keypad-h: 324px; }
+.m-addr-row { display: flex; gap: 8px; }
+.m-addr-input { flex: 1 1 auto; min-width: 0; }
+.m-addr-input--open { border-color: var(--accent); }
+.m-addr-switch { flex: none; min-width: 64px; padding: 0 12px; border: 2px solid var(--panel-2); border-radius: 12px; background: var(--panel); color: var(--text); font-family: inherit; font-size: 16px; font-weight: 700; }
+.m-keypad {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  padding: 12px 8px calc(12px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
+  padding-right: calc(8px + env(safe-area-inset-right));
+  background: var(--panel); border-top: 1px solid var(--panel-2); box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.m-kp-key {
+  height: 52px; min-height: 52px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 0 4px; border: none; border-radius: 12px; background: var(--panel-2); color: var(--text);
+  font-family: inherit; font-size: 24px; font-weight: 600; touch-action: manipulation;
+}
+.m-kp-key:active { background: #3A3F4C; }
+.m-kp-key--http, .m-kp-key--https { font-size: 15px; }
+.m-kp-small { font-size: 12px; }
+.m-kp-key--submit { grid-column: 1 / -1; font-size: 17px; }
+.m-kp-key--submit.m-btn-primary { background: var(--accent); color: #0F1115; }
+html.m-keypad-open { --m-nav-reserve: var(--m-keypad-h); }
+html.m-keypad-open .m-nav, html.m-keypad-open .m-mini, html.m-keypad-open .m-mini-pad { display: none; }
+html.m-keypad-open .m-toast-host { bottom: calc(var(--m-keypad-h) + 16px + env(safe-area-inset-bottom)); }

@@ -372,6 +372,22 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .link-toggle { display: inline-flex; align-items: center; padding: 8px 12px; margin: 0 0 16px -12px; border-radius: 10px; color: var(--muted); font-size: 22px; }
 .link-toggle .icon { margin-right: 10px; }
 .link-toggle.focused { transform: none; color: var(--text); }
+.address-input input { cursor: pointer; }
+.address-input.open { box-shadow: inset 0 0 0 3px var(--accent); }
+/* OMP's address keypad: flex rows with margins (no grid / flex gap in Chromium 53) */
+.keypad { margin: -4px 0 20px; }
+.kp-row { display: flex; margin-bottom: 12px; }
+.kp-key { flex: 1 1 0; width: 0; margin-right: 12px; height: 76px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: var(--panel2); font-size: 32px; white-space: nowrap; }
+.kp-key:last-child { margin-right: 0; }
+.kp-key .icon + .kp-key-small { margin-left: 10px; }
+.kp-key-small { font-size: 22px; }
+.kp-key--http, .kp-key--https { font-size: 24px; }
+.kp-key.primary { background: var(--accent); color: #0f1115; font-weight: 700; font-size: 28px; }
+.kp-key.focused { background: var(--accent); color: #0f1115; box-shadow: 0 0 0 4px var(--focus); transform: scale(1.04); }
+.kp-hint { font-size: 20px; }
+.address-field--system { margin-bottom: 16px; }
+.address-field--system .text-input { margin-bottom: 0; }
+.kp-switch { padding: 16px 24px; }
 .connect-hint { margin-top: 28px; text-align: center; color: var(--muted); font-size: 20px; line-height: 1.5; }
 /* the server did not answer: said under the buttons until the next try */
 .connect-error { margin-top: 20px; padding: 14px 18px; border-radius: 12px; background: rgba(229, 72, 77, .16); color: #ff9a9d; font-size: 22px; line-height: 1.4; }

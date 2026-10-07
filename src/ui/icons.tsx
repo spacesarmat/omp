@@ -3,7 +3,7 @@ import type { ComponentChildren } from 'preact';
 export type IconName =
   | 'play' | 'pause' | 'prev' | 'next' | 'back10' | 'fwd10' | 'tracks' | 'stats' | 'history' | 'search'
   | 'plus' | 'settings' | 'grid' | 'list' | 'check' | 'star' | 'chevronLeft' | 'chevronRight'
-  | 'sort' | 'playlist' | 'pencil' | 'chevronDown' | 'chevronUp' | 'tv' | 'phone';
+  | 'sort' | 'playlist' | 'pencil' | 'chevronDown' | 'chevronUp' | 'tv' | 'phone' | 'backspace' | 'keyboard';
 
 const LINE: any = { fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
 const SOLID: any = { fill: 'currentColor', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linejoin': 'round' };
@@ -34,6 +34,8 @@ const BODIES: { [K in IconName]: () => ComponentChildren } = {
   chevronUp: () => <path d="M6 15l6-6 6 6" {...LINE}></path>,
   tv: () => <path d="M3 5h18v11H3zM8 20h8" {...LINE}></path>,
   phone: () => <path d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2" {...LINE}></path>,
+  backspace: () => <path d="M9 5h11v14H9l-6-7zM12 9l6 6M18 9l-6 6" {...LINE}></path>,
+  keyboard: () => <g {...LINE}><rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"></path></g>,
 };
 
 export const ICON_NAMES = Object.keys(BODIES) as IconName[];

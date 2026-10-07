@@ -1302,6 +1302,19 @@ export const ru = {
     serverName: 'Название сервера',
     addedToast: 'Сервер «{name}» добавлен',
   },
+  /** OMP's own keypad for the server address (the connect screen, the server editor). */
+  keypad: {
+    /** The key that erases the character before the caret (its accessible name; it shows an icon). */
+    backspace: 'Стереть',
+    /** Switches to the system keyboard for a host name. */
+    keyboard: 'Клавиатура',
+    /** Back from the system keyboard to the keypad (button by the field; its accessible name). */
+    toKeypad: 'Цифровая клавиатура OMP',
+    toKeypadShort: '123',
+    done: 'Готово',
+    /** TV, under the keypad. */
+    tvHint: 'Цифры можно набирать кнопками пульта · Назад — скрыть клавиатуру',
+  },
   discover: {
     mine: 'Мои',
     browse: 'Обзор',

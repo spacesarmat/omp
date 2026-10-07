@@ -1273,6 +1273,14 @@ export const en: EnDict<typeof ru> = {
     serverName: 'Server name',
     addedToast: 'Server “{name}” added',
   },
+  keypad: {
+    backspace: 'Erase',
+    keyboard: 'Keyboard',
+    toKeypad: 'OMP number pad',
+    toKeypadShort: '123',
+    done: 'Done',
+    tvHint: 'Digits can be typed with the remote’s number keys · Back hides the pad',
+  },
   discover: {
     mine: 'Mine',
     browse: 'Discover',

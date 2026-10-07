@@ -115,7 +115,7 @@ interface TextInputProps {
  * has one) in Latin letters, with no capitals or corrections. Plain attributes: Chrome 53 (LG) ignores the ones it
  * does not know.
  */
-const URL_KEYBOARD: { [k: string]: string } = { inputmode: 'url', autocapitalize: 'off', autocorrect: 'off', autocomplete: 'off', spellcheck: 'false', lang: 'en' };
+export const URL_KEYBOARD: { [k: string]: string } = { inputmode: 'url', autocapitalize: 'off', autocorrect: 'off', autocomplete: 'off', spellcheck: 'false', lang: 'en' };
 
 /** Spatial-nav item that opens the system keyboard (TV or LG ThinQ phone keyboard) on OK. */
 export function TextInput(p: TextInputProps) {
