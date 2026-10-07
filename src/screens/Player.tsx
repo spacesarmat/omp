@@ -37,8 +37,8 @@ import { tvGlyphs } from '../ui/tvText';
 import type { Cmd } from '../phone/protocol';
 import { goBack } from '../ui/nav';
 import { useKeys } from '../ui/keys';
-import { colorKeyCommand, WEB_NIGHT_SOUND } from '../player/colorKeys';
-import { choose, dialogOpen } from '../ui/dialog';
+import { colorKeyCommand, colorKeyOverWindow, WEB_NIGHT_SOUND, type ColorKeyCommand, type ColorWindow } from '../player/colorKeys';
+import { choose, dialogOpen, dismissDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { setPlayerBridge, postSoon } from '../phone/link';
 import { buildSnapshot, liveTiming, runCmd } from '../player/phoneBridge';
@@ -439,6 +439,16 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     applyDefaultTracks();
   };
 
+  // the player window on screen (audio list, subtitles list, menu): its colour key closes it again
+  const openWindow = useRef<ColorWindow | null>(null);
+  const chooseIn = <T,>(win: ColorWindow, title: string, options: { label: string; value: T }[], current?: T): Promise<T | null> => {
+    openWindow.current = win;
+    return choose(title, options, current).then((v) => {
+      if (openWindow.current === win) openWindow.current = null;
+      return v;
+    });
+  };
+
   // «Аудио» of the menu and the red key: a pick is saved for the torrent and the series («Озвучка»)
   const openAudioList = () => {
     const v = videoRef.current;
@@ -448,7 +458,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       toast(t('tvPlayer.noOtherAudio'));
       return;
     }
-    choose(t('tvPlayer.audio'), audio.map((a, i) => ({ label: a.label, value: i })), audioIdx).then((i) => {
+    chooseIn('audio', t('tvPlayer.audio'), audio.map((a, i) => ({ label: a.label, value: i })), audioIdx).then((i) => {
       if (i === null) return;
       chooseAudio(v, audio, i);
     });
@@ -459,7 +469,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     const v = videoRef.current;
     if (!v) return;
     const menu = subtitleMenu(embeddedSubOptions(probeRef.current, v), item.subtitles || []);
-    choose(t('common.subtitles'), menu, subChoice).then((ch) => {
+    chooseIn('subs', t('common.subtitles'), menu, subChoice).then((ch) => {
       if (ch === null) return;
       chooseSubs(v, ch);
     });
@@ -487,7 +497,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       { label: t('tvPlayer.markIntroEndRow', { v: (pendingIntro.current !== null ? t('tvPlayer.pendingStart', { t: formatDuration(pendingIntro.current) }) : '') + t('tvPlayer.atNow', { t: formatDuration(now) }) }), value: 'mark-intro-end' },
       { label: t('tvPlayer.markCreditsRow', { v: credits }), value: 'mark-credits' },
     );
-    choose(t('tvPlayer.menuTitle'), root).then((kind) => {
+    chooseIn('menu', t('tvPlayer.menuTitle'), root).then((kind) => {
       if (kind === 'chapters') openChapters();
       else if (kind === 'mark-intro-start') mark('intro-start', now);
       else if (kind === 'mark-intro-end') mark('intro-end', now);
@@ -556,6 +566,26 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     setReloadKey(reloadKey + 1);
   };
 
+  const runColor = (color: ColorKeyCommand) => {
+    if (color === 'audio') openAudioList();
+    else if (color === 'subs') openSubsList();
+    else if (color === 'menu') openTrackMenu();
+    else setStatsOn((on) => !on);
+  };
+
+  // above the dialog (which takes every key while open): a colour key over the player's own window closes it,
+  // its own key only closes (Red over the audio list), another one then opens its own
+  useKeys((a) => {
+    const win = openWindow.current;
+    if (!win || !dialogOpen.value) return false;
+    const color = colorKeyCommand(a, WEB_NIGHT_SOUND);
+    if (!color) return false;
+    dismissDialog();
+    const next = colorKeyOverWindow(color, win);
+    if (next) runColor(next);
+    return true;
+  }, 110);
+
   useKeys((a) => {
     if (vs.error) return false; // error view buttons use spatial navigation
     lastKeyAt.current = Date.now();
@@ -575,10 +605,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     // colour keys, as in the Android TV player: audio, subtitles, statistics (no night sound here), menu
     const color = colorKeyCommand(a, WEB_NIGHT_SOUND);
     if (color) {
-      if (color === 'audio') openAudioList();
-      else if (color === 'subs') openSubsList();
-      else if (color === 'menu') openTrackMenu();
-      else setStatsOn(!statsOn);
+      runColor(color);
       return true;
     }
     switch (a) {

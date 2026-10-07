@@ -15,7 +15,7 @@ vi.mock('../../src/store/seriesTracks', async (orig) => ({
 
 import { PlayerScreen } from '../../src/screens/Player';
 import { PlayerHints } from '../../src/player/Controls';
-import { colorKeyCommand } from '../../src/player/colorKeys';
+import { colorKeyCommand, colorKeyOverWindow } from '../../src/player/colorKeys';
 import { DialogHost } from '../../src/ui/dialog';
 import { ToastHost } from '../../src/ui/toast';
 import { dispatchKey } from '../../src/ui/keys';
@@ -124,6 +124,51 @@ describe('colour keys of the TV player', () => {
     options()[1].click();
     await until(() => (rememberSeriesTracks as any).mock.calls.length === 1);
     expect(rememberSeriesTracks).toHaveBeenCalledWith(expect.anything(), H, { s: { l: 'Надписи', g: 'ru' } });
+  });
+
+  it('a key over its own window closes it; another key closes it and opens its own', () => {
+    expect(colorKeyOverWindow('audio', 'audio')).toBeNull();
+    expect(colorKeyOverWindow('subs', 'subs')).toBeNull();
+    expect(colorKeyOverWindow('menu', 'menu')).toBeNull();
+    expect(colorKeyOverWindow('menu', 'audio')).toBeNull();
+    expect(colorKeyOverWindow('audio', 'subs')).toBe('audio');
+    expect(colorKeyOverWindow('subs', 'menu')).toBe('subs');
+    expect(colorKeyOverWindow('stats', 'audio')).toBe('stats');
+  });
+
+  it('red closes the audio list it opened; red over the list opened from the menu closes it too', async () => {
+    await open();
+    key('red');
+    await until(() => title() === 'Аудио');
+    key('red');
+    await until(() => title() === null);
+    key('blue');
+    await until(() => title() === 'Меню плеера');
+    options()[0].click(); // «Аудио: …»
+    await until(() => title() === 'Аудио');
+    key('red');
+    await until(() => title() === null);
+    expect(rememberSeriesTracks).not.toHaveBeenCalled();
+  });
+
+  it('green closes the subtitles list; blue closes the menu; another key switches lists', async () => {
+    const host = await open();
+    key('green');
+    await until(() => title() === 'Субтитры');
+    key('green');
+    await until(() => title() === null);
+    key('blue');
+    await until(() => title() === 'Меню плеера');
+    key('blue');
+    await until(() => title() === null);
+    // red over the subtitles list: closes it and opens the audio list
+    key('green');
+    await until(() => title() === 'Субтитры');
+    key('red');
+    await until(() => title() === 'Аудио');
+    // yellow over a list: closes it and toggles the statistics
+    key('yellow');
+    await until(() => title() === null && !!host.querySelector('.player-stats'));
   });
 
   it('yellow toggles the statistics (no night sound on LG), blue opens the player menu', async () => {

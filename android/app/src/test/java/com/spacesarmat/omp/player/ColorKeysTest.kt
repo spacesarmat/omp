@@ -44,11 +44,23 @@ class ColorKeysTest {
     }
 
     @Test
-    fun overAnOpenListBlueOnlyClosesOthersAct() {
-        assertNull(ColorKeys.inDialog(ColorAction.MENU))
-        assertEquals(ColorAction.AUDIO, ColorKeys.inDialog(ColorAction.AUDIO))
-        assertEquals(ColorAction.SUBS, ColorKeys.inDialog(ColorAction.SUBS))
-        assertEquals(ColorAction.INFO, ColorKeys.inDialog(ColorAction.INFO))
+    fun aKeyClosesItsOwnWindow() {
+        // Red over the audio list (opened by Red or from the menu): only closes it
+        assertNull(ColorKeys.inDialog(ColorAction.AUDIO, ColorAction.AUDIO))
+        assertNull(ColorKeys.inDialog(ColorAction.SUBS, ColorAction.SUBS))
+        assertNull(ColorKeys.inDialog(ColorAction.MENU, ColorAction.MENU))
+    }
+
+    @Test
+    fun anotherKeyClosesAndOpensItsOwn() {
+        assertEquals(ColorAction.AUDIO, ColorKeys.inDialog(ColorAction.AUDIO, ColorAction.SUBS))
+        assertEquals(ColorAction.SUBS, ColorKeys.inDialog(ColorAction.SUBS, ColorAction.AUDIO))
+        assertEquals(ColorAction.SUBS, ColorKeys.inDialog(ColorAction.SUBS, ColorAction.MENU))
+        assertEquals(ColorAction.INFO, ColorKeys.inDialog(ColorAction.INFO, ColorAction.AUDIO))
+        assertEquals(ColorAction.AUDIO, ColorKeys.inDialog(ColorAction.AUDIO, null))
+        // Blue over a list only closes it, as before
+        assertNull(ColorKeys.inDialog(ColorAction.MENU, ColorAction.AUDIO))
+        assertNull(ColorKeys.inDialog(ColorAction.MENU, null))
     }
 
     @Test

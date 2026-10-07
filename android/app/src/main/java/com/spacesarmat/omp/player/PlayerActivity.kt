@@ -125,6 +125,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private val seeker = SeekAccumulator({ SystemClock.uptimeMillis() })
     private var ticks = 0
     private var dialog: AlertDialog? = null
+
+    /** The colour key whose window [dialog] is (audio list, subtitles list, menu); null for another list. */
+    private var dialogKey: ColorAction? = null
     private val skips = SkipState()
     /** «Заставка пропущена · Вернуть» on screen: the intro start OK returns to. */
     private var undoStart: Long? = null
@@ -487,16 +490,18 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                 .setTitle(I18n.s("player.menu"))
                 .setItems(rows.map { it.first }.toTypedArray()) { _, which -> rows.getOrNull(which)?.second?.invoke() }
                 .create(),
+            ColorAction.MENU,
         )
         menu.show()
         dialog = menu
+        dialogKey = ColorAction.MENU
     }
 
     /** «Главы»: «время · название», the current one checked; a choice seeks to its start. */
     private fun openChapters(item: Int, now: Long) {
         val list = skips.chapters(item)
         if (list.isEmpty() || item != index()) return
-        showList(I18n.s("player.chapters"), Chapters.rows(list), Chapters.indexAt(list, now)) { n ->
+        showList(I18n.s("player.chapters"), Chapters.rows(list), Chapters.indexAt(list, now), null) { n ->
             if (item == index()) {
                 seekToMs(list[n].startMs)
                 showControls()
@@ -509,13 +514,13 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private fun openAudioList() {
         val audio = session.audioOptions()
         if (audio.isEmpty()) return
-        showList(I18n.s("player.audio"), audio.map { it.label }, TrackOptions.selectedAudio(audio)) { n -> session.selectAudio(n) }
+        showList(I18n.s("player.audio"), audio.map { it.label }, TrackOptions.selectedAudio(audio), ColorAction.AUDIO) { n -> session.selectAudio(n) }
     }
 
     /** «Субтитры» (the menu row, the green key): «Выкл», the tracks and files, the current one checked. */
     private fun openSubsList() {
         val subs = session.subOptions()
-        showList(I18n.s("player.subs"), subs.map { it.label }, subs.indexOf(TrackOptions.selectedSub(subs))) { n ->
+        showList(I18n.s("player.subs"), subs.map { it.label }, subs.indexOf(TrackOptions.selectedSub(subs)), ColorAction.SUBS) { n ->
             session.selectSub(subs[n].value)
         }
     }
@@ -524,16 +529,17 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
      * A single-choice list whose every pick closes it, the checked row included ([ListPick]): the dialog's own item
      * listener is replaced, as the single-choice one of AlertDialog does not close on the checked row everywhere.
      */
-    private fun showList(title: String, labels: List<String>, checked: Int, onPick: (Int) -> Unit): AlertDialog {
+    private fun showList(title: String, labels: List<String>, checked: Int, key: ColorAction?, onPick: (Int) -> Unit): AlertDialog {
         val d = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
             .setTitle(title)
             .setSingleChoiceItems(labels.toTypedArray(), checked, null)
             .create()
-        withColorKeys(d)
+        withColorKeys(d, key)
         d.show()
         val pick = ListPick(labels.size, { d.dismiss() }, onPick)
         d.listView?.setOnItemClickListener { _, _, n, _ -> pick.click(n) }
         dialog = d
+        dialogKey = key
         return d
     }
 
@@ -601,14 +607,15 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     /**
      * The colour keys inside a player list or the menu (the dialog has its own window, the activity gets no keys):
-     * the dialog closes, then the key does its action (Blue only closes the menu).
+     * the dialog closes; its own key only closes it (Red on the audio list), Blue only closes, another key then does
+     * its action ([ColorKeys.inDialog]).
      */
-    private fun withColorKeys(d: AlertDialog): AlertDialog {
+    private fun withColorKeys(d: AlertDialog, key: ColorAction?): AlertDialog {
         d.setOnKeyListener { dlg, code, e ->
             val action = ColorKeys.actionFor(code) ?: return@setOnKeyListener false
             if (e.action == KeyEvent.ACTION_DOWN && colorKeyActs(e.repeatCount)) {
                 dlg.dismiss()
-                ColorKeys.inDialog(action)?.let { a -> handler.post { colorKey(a) } }
+                ColorKeys.inDialog(action, key)?.let { a -> handler.post { colorKey(a) } }
             }
             true
         }
@@ -997,7 +1004,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         if (color != null && dialog?.isShowing == true) {
             // a colour key from the phone over a list: as on the TV remote (closes it, then its action)
             dialog?.dismiss()
-            ColorKeys.inDialog(color)?.let { colorKey(it) }
+            ColorKeys.inDialog(color, dialogKey)?.let { colorKey(it) }
             return
         }
         if (dialog?.isShowing == true) {

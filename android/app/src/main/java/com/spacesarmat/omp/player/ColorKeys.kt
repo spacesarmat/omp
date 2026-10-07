@@ -40,10 +40,13 @@ object ColorKeys {
     }
 
     /**
-     * A colour key while a player list or the menu is open: it closes it; Blue only closes (it toggles the menu),
-     * the others then do their own action (Red on the subtitles list opens the audio list).
+     * A colour key while a player list or the menu is open ([open]: the key whose window it is — the audio list for
+     * Red, the subtitles list for Green, the menu for Blue; null for another list such as the chapters): it always
+     * closes it. Its own key only closes (a toggle: Red closes the audio list it opened); Blue only closes, as before;
+     * another colour key then does its own action (Red on the subtitles list opens the audio list).
      */
-    fun inDialog(action: ColorAction): ColorAction? = if (action == ColorAction.MENU) null else action
+    fun inDialog(action: ColorAction, open: ColorAction?): ColorAction? =
+        if (action == ColorAction.MENU || action == open) null else action
 
     /** «● аудио · ● субтитры · ● инфо · ● меню». */
     fun hint(): ColorHint {
