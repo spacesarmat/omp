@@ -1,7 +1,8 @@
 // «Мои» → a series on the TV: the TMDB hero (backdrop, poster, status pill, year · rating · genres, overview),
 // «Смотреть SxxEyy» / «Раздачи · N» / «Следить за сериями», a row of season chips (focusing one shows it; with TMDB
 // every season of the show: released ones the library lacks are dashed «+ Сезон N» with «Найти раздачи», seasons
-// still to come are dashed with their date) and the chosen season's episodes with their TMDB names. Without TMDB (no key, offline,
+// still to come are dashed with their date) and the chosen season's episodes with their TMDB names, then the announced
+// ones not out yet as dashed muted rows the focus skips («S02E08 Пирамида · выйдет 8 окт.»). Without TMDB (no key, offline,
 // no match) the library's poster and title stay and the episodes keep their file names.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
@@ -24,7 +25,7 @@ import { lang, t, fmtNumber } from '../i18n';
 import { findGroup, groupLabel, NO_SEASON, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
 import { airDateText, isoDay, seriesPill, upcomingSeasons, type Upcoming } from '../lib/seriesStatus';
-import { cleanFileName, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
+import { cleanFileName, comingEpisodeDate, comingEpisodeTitle, comingEpisodes, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
 import { baseName, naturalCompare, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../lib/episodes';
 import { formatBytes } from '../lib/format';
 import { libraryTitle } from '../lib/libraryView';
@@ -394,16 +395,13 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   const meta = card ? heroMeta(card) : groupLabel(group);
   const title = card && card.title ? card.title : libraryTitle(group.named).title;
 
-  // TMDB episodes of the season still to come that no file has
-  const have: { [n: number]: boolean } = {};
-  rows.forEach((r) => {
-    if (r.episode !== null) have[r.episode] = true;
-  });
-  const today = isoDay(now);
-  const coming = Object.keys(eps)
-    .map((k) => eps[+k])
-    .filter((e) => !have[e.n] && !!e.airDate && e.airDate > today)
-    .sort((a, b) => a.n - b.n);
+  // the TMDB episodes announced after the season's last one here (dated today or later), as on the phone; a season
+  // whose files carry no episode numbers cannot be placed, so it gets none
+  const numbered = rows.filter((r) => r.episode !== null);
+  const coming =
+    season !== NO_SEASON && (numbered.length || !rows.length)
+      ? comingEpisodes({ [season]: numbered.reduce((m, r) => Math.max(m, r.episode as number), 0) }, { [season]: eps }, isoDay(now))
+      : [];
   const futureSeason = future.filter((u) => u.number === season)[0];
   const isMissing = gapFirsts.indexOf(season) >= 0;
   const runLast = isMissing ? gaps[season] : season;
@@ -516,13 +514,14 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             </Focusable>
           );
         })}
+        {/* the episodes announced after the last one here: muted and dashed, not focusable, no OK */}
         {coming.map((e) => (
-          <Focusable key={'future-' + e.n} focusKey={'ep-future-' + season + '-' + e.n} className="list-item file-row ep-row ep-future">
-            <span class="ep">{episodeCode(season, e.n)}</span>
-            <span class="name">{tvGlyphs(e.title)}</span>
-            <span class="size">{airDateText(e.airDate, now)}</span>
+          <div key={'coming-' + e.episode} class="list-item file-row ep-row ep-coming" data-coming={e.season + ':' + e.episode} aria-disabled="true">
+            <span class="ep">{episodeCode(e.season, e.episode)}</span>
+            <span class="name">{tvGlyphs(comingEpisodeTitle(e))}</span>
+            <span class="size">{tvGlyphs(comingEpisodeDate(e, now))}</span>
             <span class="check" />
-          </Focusable>
+          </div>
         ))}
       </FocusGroup>
       {!rows.length && !coming.length && futureSeason && (
