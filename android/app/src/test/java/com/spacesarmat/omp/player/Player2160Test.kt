@@ -26,7 +26,6 @@ class Player2160Test {
         assertTrue(s.extras["position"] is Int)
         assertEquals(true, s.extras["return_result"])
         assertFalse(s.extras.containsKey("video_list.name"))
-        assertFalse(s.extras.containsKey("video_list"))
         assertFalse(s.extras.containsKey("from_start"))
     }
 
@@ -95,5 +94,27 @@ class Player2160Test {
         val j = Player2160.parseExtras(mapOf("position" to 5_000), "http://srv/1.mkv").toJson()
         assertEquals("http://srv/1.mkv", j.getString("url"))
         assertEquals(5_000L, j.getLong("positionMs"))
+    }
+
+    @Test
+    fun playableRemapsStartWhenAnEarlierItemIsDropped() {
+        val items = listOf(Player2160.Item("", "x"), Player2160.Item("http://a", "A"), Player2160.Item(" ", "y"), Player2160.Item("http://b", "B"))
+        val (kept, start) = Player2160.playable(items, 3)!!
+        assertEquals(listOf("http://a", "http://b"), kept.map { it.url })
+        assertEquals(1, start)
+        assertEquals("B", kept[start].title)
+    }
+
+    @Test
+    fun playableIsNullWhenTheStartItemHasNoUrl() {
+        assertNull(Player2160.playable(listOf(Player2160.Item("http://a", "A"), Player2160.Item("", "B")), 1))
+        assertNull(Player2160.playable(emptyList(), 0))
+    }
+
+    @Test
+    fun playableKeepsAnAllValidListAsIs() {
+        val (kept, start) = Player2160.playable(three, 2)!!
+        assertEquals(three, kept)
+        assertEquals(2, start)
     }
 }

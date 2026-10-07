@@ -51,6 +51,15 @@ object Player2160 {
         }
     }
 
+    /** Drops items without a url keeping the order; start is remapped to the start item's new index, null when it has none. */
+    fun playable(items: List<Item>, start: Int): Pair<List<Item>, Int>? {
+        val cur = items.getOrNull(start) ?: return null
+        if (cur.url.isBlank()) return null
+        val kept = items.filter { it.url.isNotBlank() }.map { it.copy(url = it.url.trim()) }
+        val idx = items.subList(0, start).count { it.url.isNotBlank() }
+        return kept to idx
+    }
+
     fun spec(items: List<Item>, start: Int, positionMs: Long, fromStart: Boolean, segments: String): Spec {
         val cur = items[start.coerceIn(0, items.lastIndex)]
         val extras = LinkedHashMap<String, Any>()

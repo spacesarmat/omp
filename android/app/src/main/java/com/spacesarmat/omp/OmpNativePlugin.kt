@@ -768,25 +768,25 @@ class OmpNativePlugin : Plugin() {
             return
         }
         val arr = call.getArray("items")
-        val items = ArrayList<Player2160.Item>()
+        val raw = ArrayList<Player2160.Item>()
         if (arr != null) for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i) ?: continue
-            val url = o.optString("url").trim()
-            if (url.isNotEmpty()) items.add(Player2160.Item(url, o.optString("title")))
+            val o = arr.optJSONObject(i)
+            raw.add(Player2160.Item(o?.optString("url").orEmpty(), o?.optString("title").orEmpty()))
         }
-        if (items.isEmpty()) {
+        val (items, start) = Player2160.playable(raw, call.getInt("start") ?: 0) ?: run {
             call.reject(I18n.s("plugin.noVideoUrl"))
             return
         }
-        val start = (call.getInt("start") ?: 0).coerceIn(0, items.lastIndex)
         val position = call.getDouble("positionMs")?.toLong() ?: 0L
         val spec = Player2160.spec(items, start, position, call.getBoolean("fromStart") ?: false, call.getString("segments").orEmpty())
         val intent = Player2160.intent(pkg, spec, items.map { it.url })
         try {
             startActivityForResult(call, intent, "on2160Result")
         } catch (_: ActivityNotFoundException) {
+            call.release(bridge)
             call.reject(I18n.s("plugin.p2160Missing"))
         } catch (_: RuntimeException) {
+            call.release(bridge)
             call.reject(I18n.s("plugin.openPlayerFailed"))
         }
     }
