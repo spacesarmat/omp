@@ -140,8 +140,55 @@ describe('TV person screen', () => {
     torrents.value = [];
     const host = await mount();
     expect(keys(host)).toEqual(['person-tile-movie-11', 'person-tile-tv-12', 'person-tile-movie-10']);
-    await click(host.querySelector('[data-fk="person-sort-year"]')!);
+    expect(text(host.querySelector('[data-fk="person-sort"]'))).toContain('Популярные');
+    await click(host.querySelector('[data-fk="person-sort"]')!);
     expect(keys(host)).toEqual(['person-tile-movie-10', 'person-tile-movie-11', 'person-tile-tv-12']);
+    expect(text(host.querySelector('[data-fk="person-sort"]'))).toContain('По году');
+    await click(host.querySelector('[data-fk="person-sort"]')!);
+    expect(keys(host)).toEqual(['person-tile-movie-11', 'person-tile-tv-12', 'person-tile-movie-10']);
+  });
+
+  it('shows the «Обзор ›» label above the name', async () => {
+    const host = await mount();
+    expect(text(host.querySelector('.person-crumb'))).toBe('Обзор ›');
+  });
+
+  it('the job label follows the selected job', async () => {
+    stub.person = vi.fn(() => Promise.resolve({ ...card, directing: [credit('movie', 30, 'Режиссура', 2019)] }));
+    const host = await mount();
+    expect(text(host.querySelector('.person-job'))).toBe('Актёр');
+    await click(host.querySelector('[data-fk="person-job-directing"]')!);
+    expect(text(host.querySelector('.person-job'))).toBe('Режиссёр');
+  });
+
+  describe('biography', () => {
+    const long = 'Родился в маленьком городе. '.repeat(20);
+    it('no bio, no block', async () => {
+      const host = await mount();
+      expect(host.querySelector('.person-bio')).toBeNull();
+      expect(host.querySelector('[data-fk="person-bio-more"]')).toBeNull();
+    });
+    it('a short bio is shown with no «Ещё»', async () => {
+      stub.person = vi.fn(() => Promise.resolve({ ...card, bio: 'Коротко о нём.' }));
+      const host = await mount();
+      expect(text(host.querySelector('.person-bio'))).toBe('Коротко о нём.');
+      expect(host.querySelector('[data-fk="person-bio-more"]')).toBeNull();
+    });
+    it('a long bio is clamped; «Ещё» opens the dialog with the full text', async () => {
+      stub.person = vi.fn(() => Promise.resolve({ ...card, bio: long }));
+      const host = await mount();
+      expect(host.querySelector('.person-bio')).not.toBeNull();
+      const more = host.querySelector('[data-fk="person-bio-more"]')!;
+      expect(text(more)).toBe('Ещё');
+      const { DialogHost } = await import('../../src/ui/dialog');
+      const dh = document.createElement('div');
+      hosts.push(dh);
+      document.body.appendChild(dh);
+      act(() => { render(h(DialogHost as any, {}), dh); });
+      await click(more);
+      expect(text(document.querySelector('.dialog-title'))).toContain('Родился в маленьком городе.');
+      expect(text(document.querySelector('.dialog-title')).length).toBeGreaterThan(300);
+    });
   });
 
   it('shows the job chips only when the person has both', async () => {

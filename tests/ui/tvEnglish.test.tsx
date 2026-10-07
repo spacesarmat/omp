@@ -340,7 +340,7 @@ describe('TV screens in English', () => {
       expect(text).toContain('Actor');
       expect(text).toContain('born 1940');
       expect(text).toContain('Acting');
-      expect(text).toContain('By year');
+      expect(text).toContain('Popular');
       expect(text).toContain('Yellow');
       expect(noRussian(host)).not.toMatch(CYR);
       const aria = Array.prototype.map.call(host.querySelectorAll('[aria-label]'), (e: Element) => e.getAttribute('aria-label')).join('|');

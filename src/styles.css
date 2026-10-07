@@ -631,10 +631,15 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .tc-person-role { margin-top: 4px; font-size: 19px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* TV person screen: the head, the chip bar and the filmography grid (the tiles are «Обзор»'s) */
-.person-head { display: flex; align-items: center; margin-bottom: 20px; }
-.person-photo { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 180px; height: 180px; margin-right: 36px; border-radius: 90px; overflow: hidden; background: var(--panel2); }
+.person-head { display: flex; align-items: flex-start; margin-bottom: 20px; }
+.person-photo { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 220px; height: 220px; margin-right: 36px; border-radius: 110px; overflow: hidden; background: var(--panel2); }
 .person-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .person-photo .tc-initials { font-size: 60px; }
+.person-info { flex: 1; min-width: 0; }
+.person-crumb { margin-bottom: 4px; font-size: 22px; color: var(--muted); }
+.person-bio { max-width: 1100px; margin-top: 12px; font-size: 24px; line-height: 1.4; color: #c9cdd8; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.person-more { display: inline-block; margin-top: 8px; padding: 6px 18px; border-radius: 12px; font-size: 22px; color: var(--accent); }
+.person-more.focused { background: var(--panel2); color: var(--text); }
 .person-name { margin: 0 0 8px; font-size: 52px; font-weight: 700; }
 .person-job { font-size: 28px; color: var(--accent); }
 .person-years { margin-top: 6px; font-size: 24px; color: var(--muted); }

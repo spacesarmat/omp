@@ -133,7 +133,7 @@ describe('TV series screen', () => {
       { id: 7, name: 'Джоэл Эдгертон', photo: '', role: 'Джейсон', job: 'cast' },
       { id: 8, name: 'Блейк Крауч', photo: '', role: '', job: 'creator' },
     ];
-    it('is a row after the seasons and episodes, OK on a person opens the person screen', async () => {
+    it('is a row, OK on a person opens the person screen', async () => {
       stub.card = () => Promise.resolve({ ...card, cast });
       const host = await mount(2);
       expect(host.querySelector(".tc-cast-row")).not.toBeNull();
@@ -141,6 +141,13 @@ describe('TV series screen', () => {
       expect(text(host.querySelector('[data-fk="series-cast-0"]'))).toContain('Блейк Крауч');
       act(() => { (host.querySelector('[data-fk="series-cast-1"]') as HTMLElement).click(); });
       expect(currentRoute.value).toEqual({ name: 'person', id: 7, label: 'Джоэл Эдгертон' });
+    });
+    it('sits right under the action buttons, before the seasons and episodes', async () => {
+      stub.card = () => Promise.resolve({ ...card, cast });
+      const host = await mount(2);
+      const after = (a: string, b: string) => !!(host.querySelector(a)!.compareDocumentPosition(host.querySelector(b)!) & 4);
+      expect(after('.series-hero', '.tc-cast-row')).toBe(true);
+      expect(after('.tc-cast-row', '.series-episodes')).toBe(true);
     });
     it('is absent without a cast', async () => {
       stub.card = () => Promise.resolve(card);

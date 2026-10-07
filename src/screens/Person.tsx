@@ -15,6 +15,7 @@ import { isWanted, wantAction } from '../store/wantList';
 import { FocusGroup, Focusable, Button, Spinner } from '../ui/components';
 import { useKeys } from '../ui/keys';
 import { navigate } from '../ui/nav';
+import { choose } from '../ui/dialog';
 import { tvGlyphs } from '../ui/tvText';
 import { focusedRow, keepRows, keepsImage, rowOf } from '../lib/gridWindow';
 import { DISCOVER_COLS, ratingText } from './library/DiscoverGrid';
@@ -22,6 +23,8 @@ import { initials, routeOf } from './TitleCard';
 
 /** The height of a row of posters with the title and the gap under it, px (as in «Обзор»). */
 const ROW_PX = 380;
+/** A biography longer than this gets «Ещё» even if the clamp does not cut it. */
+const BIO_LONG = 300;
 
 type Job = 'acting' | 'directing';
 
@@ -54,6 +57,13 @@ function Body({ card }: { card: PersonCard }) {
   const focused = useRef<Credit | null>(null);
   const [focusRow, setFocusRow] = useState(0);
   const keep = keepRows(ROW_PX);
+  const bioRef = useRef<HTMLDivElement>(null);
+  const [bioCut, setBioCut] = useState(false);
+  useEffect(() => {
+    const el = bioRef.current;
+    setBioCut(!!el && el.scrollHeight > el.clientHeight + 1);
+  }, [card.bio]);
+  const bioMore = !!card.bio && (bioCut || card.bio.length > BIO_LONG);
 
   useEffect(() => {
     // the first tile; «Все» when there is nothing to open
@@ -92,9 +102,20 @@ function Body({ card }: { card: PersonCard }) {
       <div class="person-head">
         <div class="person-photo">{card.photo ? <img src={card.photo} alt="" /> : <span class="tc-initials">{tvGlyphs(initials(card.name))}</span>}</div>
         <div class="person-info">
+          <div class="person-crumb">{tvGlyphs(t('person.crumb'))}</div>
           <h1 class="person-name">{tvGlyphs(card.name)}</h1>
-          <div class="person-job">{tvGlyphs(jobText(card, jobs[0] || 'acting'))}</div>
+          <div class="person-job">{tvGlyphs(jobText(card, job))}</div>
           {years ? <div class="person-years">{tvGlyphs(years)}</div> : null}
+          {card.bio ? (
+            <div class="person-bio" ref={bioRef}>
+              {tvGlyphs(card.bio)}
+            </div>
+          ) : null}
+          {bioMore && (
+            <Focusable focusKey="person-bio-more" className="person-more" role="button" onPress={() => choose(tvGlyphs(card.bio), [{ label: t('common.close'), value: true }])} onFocused={leaveTile}>
+              {t('person.more')}
+            </Focusable>
+          )}
         </div>
       </div>
       <FocusGroup focusKey="PERSON-BAR" className="person-bar">
@@ -108,10 +129,15 @@ function Body({ card }: { card: PersonCard }) {
           {chip('person-filter-all', t('person.all'), !onlyOwned, () => setOnlyOwned(false))}
           {chip('person-filter-owned', t('person.owned'), onlyOwned, () => setOnlyOwned(true))}
         </div>
-        <div class="disc-kinds">
-          {chip('person-sort-popular', t('person.sortPopular'), sort === 'popular', () => setSort('popular'))}
-          {chip('person-sort-year', t('person.sortYear'), sort === 'year', () => setSort('year'))}
-        </div>
+        <Focusable
+          focusKey="person-sort"
+          className="disc-kind person-sort"
+          role="button"
+          onPress={() => setSort(sort === 'popular' ? 'year' : 'popular')}
+          onFocused={leaveTile}
+        >
+          {tvGlyphs(t(sort === 'popular' ? 'person.sortPopular' : 'person.sortYear')) + ' ↕'}
+        </Focusable>
       </FocusGroup>
       {items.length === 0 ? (
         <div class="empty">{onlyOwned ? tvGlyphs(t('person.ownedEmpty', { name: card.name })) : tvGlyphs(t('discover.nothingFound'))}</div>

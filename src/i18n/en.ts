@@ -1335,6 +1335,8 @@ export const en: EnDict<typeof ru> = {
     owned: 'In library',
     sortPopular: 'Popular',
     sortYear: 'By year',
+    more: 'More',
+    crumb: 'Discover ›',
     ownedEmpty: 'No films with {name} in the library',
     acting: 'Acting',
     directing: 'Directing',

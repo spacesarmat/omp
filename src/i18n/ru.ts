@@ -1361,6 +1361,8 @@ export const ru = {
     owned: 'В медиатеке',
     sortPopular: 'Популярные',
     sortYear: 'По году',
+    more: 'Ещё',
+    crumb: 'Обзор ›',
     ownedEmpty: 'В медиатеке нет фильмов с {name}',
     acting: 'Актёрские работы',
     directing: 'Режиссёрские работы',
