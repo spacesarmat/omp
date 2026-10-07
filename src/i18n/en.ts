@@ -1889,6 +1889,7 @@ export const en: EnDict<typeof ru> = {
     switchTv: 'Switch the TV',
     switchTitle: 'TVs',
     tvSaved: 'saved',
+    renameTv: 'Rename',
     tvNeedsCode: 'needs a code',
     turnOffAsk: 'Turn off {name}?',
     turnedOff: 'The TV is turning off',
@@ -2108,6 +2109,7 @@ export const en: EnDict<typeof ru> = {
     manualIp: 'Enter the TV’s IP address',
     tip: 'The phone remembers the TV: next time “Watch on TV” and the remote work right away. To turn the TV on from the phone, enable on the TV: General → Devices → “Mobile TV On” (or “Turn on via Wi‑Fi”).',
     renameTitle: 'TV name',
+    resetName: 'Restore the TV’s own name',
     unnamed: 'TV {ip}',
   },
   serverSettings: {

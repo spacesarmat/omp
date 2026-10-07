@@ -4,7 +4,9 @@ import { native } from '../platform/native';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { navigate } from '../nav';
-import { activeTv, ATV_PORT, isAtv, setActiveTv, tvs, type SavedTv } from '../tv/tvStore';
+import { activeTv, ATV_PORT, isAtv, isTvRenamed, setActiveTv, tvs, type SavedTv } from '../tv/tvStore';
+import { TvRenameSheet } from '../ui/TvRenameSheet';
+import { useLongPress } from '../ui/longPress';
 import { Sheet } from '../ui/Sheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
@@ -125,6 +127,11 @@ export function shortTvName(name: string): string {
   return short || name;
 }
 
+/** A saved TV's name as the remote shows it: the user's own name as typed, else the TV's name without LG prefixes. */
+export function tvDisplayName(tv: SavedTv): string {
+  return isTvRenamed(tv) ? tv.name : shortTvName(tv.name);
+}
+
 const stateText = (s: string): string => {
   const map: Record<string, string> = {
     idle: t('remote.state.idle'),
@@ -142,7 +149,7 @@ function NoAnswer({ tv }: { tv: SavedTv }) {
   return (
     <div class="m-remote-noanswer" data-no-answer>
       <div class="m-hint-warn" role="status">
-        {t('remote.noAnswerTv', { name: shortTvName(tv.name) })}
+        {t('remote.noAnswerTv', { name: tvDisplayName(tv) })}
       </div>
       <button type="button" class="m-btn m-btn-secondary" onClick={() => void act.warmUp()}>
         {t('common.retry')}
@@ -163,13 +170,38 @@ function savedState(tv: SavedTv, current: SavedTv, live: string): string {
  */
 function TvSwitch({ tv, live, class: cls }: { tv: SavedTv; live: string; class: string }) {
   const [open, setOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const list = tvs.value;
-  if (list.length < 2) return <span class={cls}>{shortTvName(tv.name)}</span>;
+  const multi = list.length >= 2;
+  // a long press on the name renames the TV (on the phone only) and never switches it
+  const press = useLongPress(
+    () => {
+      vibrate();
+      setOpen(false);
+      setRenaming(true);
+    },
+    () => {
+      if (multi) setOpen(true);
+    },
+  );
+  const name = tvDisplayName(tv);
+  const sheet = renaming && <TvRenameSheet tv={tv} onClose={() => setRenaming(false)} />;
+  if (!multi) {
+    return (
+      <>
+        <span class={cls} data-tv-name {...press}>
+          {name}
+        </span>
+        {sheet}
+      </>
+    );
+  }
   return (
     <>
-      <button type="button" class={cls + ' m-remote-switch'} aria-haspopup="dialog" aria-label={t('remote.switchTv') + ': ' + tv.name} onClick={() => setOpen(true)}>
-        {shortTvName(tv.name)} ▾
+      <button type="button" class={cls + ' m-remote-switch'} data-tv-name aria-haspopup="dialog" aria-label={t('remote.switchTv') + ': ' + tv.name} {...press}>
+        {name} ▾
       </button>
+      {sheet}
       {open && (
         <Sheet label={t('remote.switchTitle')} onClose={() => setOpen(false)}>
           <div class="m-sheet-title">{t('remote.switchTitle')}</div>
@@ -186,11 +218,25 @@ function TvSwitch({ tv, live, class: cls }: { tv: SavedTv; live: string; class: 
               }}
             >
               <span class="m-opt-text">
-                <span class="m-opt-name">{shortTvName(x.name)}</span>
+                <span class="m-opt-name">{tvDisplayName(x)}</span>
                 <span class="m-opt-sub">{x.ip + ' · ' + savedState(x, tv, live)}</span>
               </span>
             </button>
           ))}
+          <button
+            type="button"
+            class="m-opt"
+            data-rename-tv
+            onClick={() => {
+              setOpen(false);
+              setRenaming(true);
+            }}
+          >
+            <span class="m-opt-text">
+              <span class="m-opt-name">{t('remote.renameTv')}</span>
+              <span class="m-opt-sub">{name}</span>
+            </span>
+          </button>
         </Sheet>
       )}
     </>

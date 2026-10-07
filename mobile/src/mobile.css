@@ -755,6 +755,8 @@ button, .m-btn {
 .m-remote-title { font-size: 20px; font-weight: 700; }
 /* several saved TVs: the name opens the switcher (a link-like button, 44px tall to tap) */
 .m-remote-switch { min-height: 44px; min-width: 0; padding: 0; border: none; background: none; color: inherit; font: inherit; text-align: left; }
+/* long press on the TV name renames it: no text selection or system callout */
+[data-tv-name] { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
 /* a saved TV that does not answer: the reason and «Повторить» */
 .m-remote-noanswer { display: flex; flex-direction: column; gap: 8px; }
 .m-remote-state { font-size: 13px; color: var(--muted); }

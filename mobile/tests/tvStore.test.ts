@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs, renameTv, normalizeMac, clearTvToken, pickActiveTv, updateAtvPorts } from '../src/tv/tvStore';
+import { tvs, activeTvIp, activeTv, saveTv, forgetTv, setActiveTv, sanitizeTvs, reloadTvs, renameTv, isTvRenamed, resetTvName, normalizeMac, clearTvToken, pickActiveTv, updateAtvPorts } from '../src/tv/tvStore';
 
 describe('Android TV control port', () => {
   beforeEach(() => {
@@ -126,6 +126,28 @@ describe('tvStore', () => {
     expect(tvs.value[0].name).toBe('Гостиная');
     expect(tvs.value[0].defaultName).toBe('[LG] webOS TV');
     expect(tvs.value[0].clientKey).toBe('k2');
+  });
+
+  it('a phone-side name per TV: isTvRenamed, resetTvName, kept by IP with an Android TV token through a reload', () => {
+    const token = 'b'.repeat(32);
+    saveTv({ ip: '192.168.1.40', name: 'Dune HD', kind: 'atv', token, ctlPort: 8095 });
+    saveTv({ ip: '192.168.1.5', name: '[LG] webOS TV', clientKey: 'k' });
+    expect(isTvRenamed(tvs.value[0])).toBe(false);
+    renameTv('192.168.1.40', 'Кухня');
+    expect(isTvRenamed(tvs.value[0])).toBe(true);
+    expect(isTvRenamed(tvs.value[1])).toBe(false);
+    reloadTvs();
+    expect(tvs.value[0]).toMatchObject({ ip: '192.168.1.40', name: 'Кухня', defaultName: 'Dune HD', kind: 'atv', token });
+    expect(tvs.value[1].name).toBe('[LG] webOS TV');
+    // typing the TV's own name is no alias
+    renameTv('192.168.1.40', 'Dune HD');
+    expect(isTvRenamed(tvs.value[0])).toBe(false);
+    renameTv('192.168.1.40', 'Кухня');
+    resetTvName('192.168.1.40');
+    expect(tvs.value[0].name).toBe('Dune HD');
+    expect(isTvRenamed(tvs.value[0])).toBe(false);
+    expect(JSON.parse(localStorage.getItem('tsp.tvs')!)[0].name).toBe('Dune HD');
+    expect(isTvRenamed(null)).toBe(false);
   });
 
   it('keeps following the discovered name while not renamed', () => {
