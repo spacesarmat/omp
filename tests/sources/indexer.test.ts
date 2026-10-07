@@ -106,8 +106,8 @@ describe('parseTorznab', () => {
 
 describe('parseProwlarr', () => {
   const json = JSON.stringify([
-    { title: 'Тестовый фильм (2020)', indexer: 'RuTor', protocol: 'torrent', size: 3221225472, seeders: 40, leechers: 5, publishDate: '2026-10-03T07:00:00Z', infoHash: H1.toUpperCase(), magnetUrl: 'magnet:?xt=urn:btih:' + H1, infoUrl: 'https://t.example/2', guid: 'https://t.example/2' },
-    { title: 'Hash only', indexer: 'Other', protocol: 'torrent', infoHash: H2, seeders: 1 },
+    { title: 'Тестовый фильм (2020)', indexer: 'RuTor', protocol: 'torrent', size: 3221225472, seeders: 40, leechers: 5, publishDate: '2026-10-03T07:00:00Z', infoHash: H1.toUpperCase(), magnetUrl: 'magnet:?xt=urn:btih:' + H1, infoUrl: 'https://t.example/2', guid: 'https://t.example/2', categories: [{ id: 2000, name: 'Movies' }, { id: 100001, name: 'Фильмы' }, { id: 2000 }, { name: 'x' }] },
+    { title: 'Hash only', indexer: 'Other', protocol: 'torrent', infoHash: H2, seeders: 1, categories: 'bad' },
     { title: 'Guid is a magnet', protocol: 'torrent', guid: 'magnet:?xt=urn:btih:' + H2, downloadUrl: 'http://p/dl' },
     { title: 'Download link only', indexer: 'D', protocol: 'torrent', downloadUrl: 'http://127.0.0.1:9696/1/download?apikey=' + KEY },
     { title: 'A usenet release', protocol: 'usenet', downloadUrl: 'http://p/nzb' },
@@ -137,6 +137,11 @@ describe('parseProwlarr', () => {
     expect(list[2].hash).toBe(H2);
     expect(list[3].Link).toContain('/1/download');
     expect(list[3].Tracker).toBe('Prowlarr · D');
+  });
+
+  it('keeps the Torznab ids of the categories (the kind of the release)', () => {
+    expect(list[0].Categories).toBe('2000, 100001');
+    expect(list[1].Categories).toBe('');
   });
 
   it('rejects a non-array answer', () => {
