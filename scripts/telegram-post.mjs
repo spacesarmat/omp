@@ -46,11 +46,31 @@ async function pinPost(call, chat, messageId, log, pause) {
   await deletePinNotice(call, chat, messageId, log, pause);
 }
 
+/** Log line when the admin bot's webhook is on: the bot deletes the notice itself. */
+export const WEBHOOK_NOTICE_LOG = 'Telegram: a webhook is set (admin bot, ops/admin-bot): it deletes the pin notice, getUpdates skipped';
+
+/** True when a webhook is set for the bot: getUpdates then fails (409) and the webhook owner gets the updates. */
+async function webhookActive(call) {
+  try {
+    const info = await call('getWebhookInfo', new FormData());
+    return !!(info && info.url);
+  } catch {
+    // unknown: try getUpdates as before
+    return false;
+  }
+}
+
 /**
  * Deletes the «… pinned a message» line Telegram adds to the channel. The Bot API does not return its id, so it is
  * looked up in the bot's channel updates (the service post whose pinned_message is our post).
+ * When the admin bot (ops/admin-bot, a Cloudflare Worker) has its webhook on this bot, getUpdates is unavailable: the
+ * Worker receives the service post itself and deletes it, so here it only logs and returns.
  */
 async function deletePinNotice(call, chat, messageId, log, pause) {
+  if (await webhookActive(call)) {
+    log(WEBHOOK_NOTICE_LOG);
+    return;
+  }
   for (let attempt = 0; attempt < 5; attempt++) {
     if (attempt) await pause(1500);
     let updates;
@@ -59,7 +79,8 @@ async function deletePinNotice(call, chat, messageId, log, pause) {
       form.set('allowed_updates', JSON.stringify(['channel_post']));
       updates = await call('getUpdates', form);
     } catch (e) {
-      log(`${e.message} (pin notice left in the channel)`);
+      // 409 Conflict: a webhook was set in the meantime, its owner deletes the notice
+      log(/\b409\b/.test(e.message) ? WEBHOOK_NOTICE_LOG : `${e.message} (pin notice left in the channel)`);
       return;
     }
     const notice = updates.map((u) => u.channel_post).find((p) => p && p.pinned_message && p.pinned_message.message_id === messageId);

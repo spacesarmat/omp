@@ -16,5 +16,5 @@
       "react-dom": ["./node_modules/preact/compat/"]
     }
   },
-  "include": ["src", "tests", "mobile", "scripts/parser-monitor"]
+  "include": ["src", "tests", "mobile", "scripts/parser-monitor", "ops/admin-bot"]
 }

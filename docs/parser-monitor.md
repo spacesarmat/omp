@@ -71,7 +71,11 @@ RuTracker, Kinozal, Rustorka. Jackett/Prowlarr и поиск самого TorrSe
 
 - На GitHub: Actions → **Parser monitor** → Run workflow. Флажки: `summary` — прислать недельную сводку сейчас,
   `dry_run` — только проверить (без issue, Telegram и сохранения состояния), `sources` — только эти источники
-  (`rutor,anidub`).
+  (`rutor,anidub`), `notify` — когда запуск закончится, прислать его таблицу администратору в Telegram (даже если
+  проверка упала — тогда «❌ не дошла до конца» со ссылкой).
+- Из Telegram: админ-бот (`ops/admin-bot/`), команда `/check` или `/check rutor` — запускает этот workflow с
+  `notify=true`; таблицу присылает сам workflow (шаг «Report to the admin», `scripts/parser-monitor/notify.mjs`):
+  Cloudflare Worker не может ждать 5–40 минут запуска. `/status` показывает последнюю сохранённую таблицу.
 - Локально: `npm run monitor:parsers` (сеть нужна, issue и Telegram не трогает). Переменные окружения:
   `MONITOR_SOURCES=rutor,anidub`, логины из таблицы выше, `MONITOR_OUT` — папка вывода.
 
@@ -89,5 +93,17 @@ RuTracker, Kinozal, Rustorka. Jackett/Prowlarr и поиск самого TorrSe
 - BLOCKED с раннеров GitHub — обычное дело для сайтов за Cloudflare (RuTracker, Kinozal, Rustorka, NNM-Club) и для
   torrent.by с его баном IP: это не поломка, у пользователей на телефоне те же сайты могут работать.
 
+## torrent.by и TLS
+
+torrent.by отдаёт только свой сертификат, без промежуточного Let's Encrypt YE1. Браузер дотягивает его сам (AIA),
+Node — нет, поэтому на раннере каждый запрос падал с `UNABLE_TO_VERIFY_LEAF_SIGNATURE` и до парсера дело не доходило.
+Теперь для torrent.by (и только для него) монитор доверяет тем же промежуточным YE1–YE3, что лежат в Android-приложении
+(`android/app/src/main/res/raw/letsencrypt_ye.crt`, см. `network_security_config.xml`): `scripts/parser-monitor/tlsFetch.mjs`
+ходит туда через `node:https` с `ca` = корни Node + этот файл и `allowPartialTrustChain` (их корня ISRG Root YE
+в Node пока нет). Сертификат сайта по-прежнему проверяется полностью: подпись, имя, срок. `NODE_EXTRA_CA_CERTS` не
+подходит: он доверяет файлу для всех сайтов и не разрешает неполную цепочку. Остальные сайты — обычный `fetch`.
+Если torrent.by когда-нибудь сменит промежуточный сертификат на не-YE, обновить файл в `res/raw` (он общий).
+
 Код: `scripts/parser-monitor/` — `logic.ts` (чистая логика), `probes.ts` (проверки источников), `nodeHttp.ts`
-(http для Node: куки, перенаправления, windows-1251), `run.live.ts` (запуск), `alerts.mjs` (issue и Telegram).
+(http для Node: куки, перенаправления, windows-1251), `tlsFetch.mjs` (цепочка torrent.by), `run.live.ts` (запуск),
+`alerts.mjs` (issue и Telegram), `notify.mjs` + `telegramTable.mjs` (таблица в Telegram по `notify`).

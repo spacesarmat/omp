@@ -1,0 +1,22 @@
+# OMP admin bot (Cloudflare Worker). Setup step by step: README.md in this folder.
+# No account id here: `wrangler login` picks your account (or set CLOUDFLARE_ACCOUNT_ID in the environment).
+name = "omp-admin-bot"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+# the only chat the bot answers (your private chat with the bot = your Telegram user id)
+ADMIN_CHAT_ID = "536445442"
+# the repository the commands read and the /check workflow runs in
+GITHUB_REPO = "spacesarmat/omp"
+# the OMP channel (the same as the repository variable TELEGRAM_CHAT_ID): the bot deletes its «pinned a message»
+# notices; empty = the bot never touches the channel
+CHANNEL_ID = "@ompplyaer"
+# optional: the bot's @username without @, so commands written to other bots in a group are ignored
+BOT_USERNAME = ""
+
+# Secrets (never in this file): set each with `npx wrangler secret put <NAME>`
+#   TELEGRAM_BOT_TOKEN — the OMP bot's token (the same as the repository secret TELEGRAM_BOT_TOKEN)
+#   GH_TOKEN           — fine-grained GitHub token, see README.md for the exact permissions
+#   WEBHOOK_SECRET     — any random string (A-Z a-z 0-9 _ -, up to 256); Telegram sends it with every update
