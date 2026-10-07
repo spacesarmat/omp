@@ -10,7 +10,7 @@ import { activeCatalog } from '../catalog/activeCatalog';
 import { catalogErrorCode, type CatalogErrorCode } from '../catalog/client';
 import { seasonIndex, librarySeasonHash } from '../catalog/library';
 import { libraryTargetOf, torrentTarget, type LibraryTarget } from '../catalog/libraryTarget';
-import { torrentQuery, type CatalogCard, type Kind, type Person } from '../catalog/tmdb';
+import { torrentQuery, CAST_LIMIT, type CatalogCard, type Kind, type Person } from '../catalog/tmdb';
 import type { Torrent } from '../api/types';
 import { torrents } from '../store/library';
 import { isWanted, wantAction } from '../store/wantList';
@@ -22,9 +22,6 @@ import { tvGlyphs } from '../ui/tvText';
 import { seasonPlan } from './Series';
 import { SeriesPill } from './library/SeriesTile';
 import { ratingText } from './library/DiscoverGrid';
-
-/** People shown in the cast row. */
-export const CAST_MAX = 8;
 
 /** Inner margin of the rows that scroll sideways: a focused item keeps this much room to the row's edge. */
 const ROW_PAD = 24;
@@ -53,7 +50,7 @@ export function initials(name: string): string {
 }
 
 /** The route of a library target. */
-function routeOf(t: LibraryTarget): Route {
+export function routeOf(t: LibraryTarget): Route {
   if (t.kind === 'torrent') return { name: 'torrent', hash: t.hash };
   return t.season ? { name: 'series', key: t.key, season: t.season } : { name: 'series', key: t.key };
 }
@@ -105,16 +102,26 @@ function showInRow(row: HTMLElement | null, key: string): void {
 
 function CastRow({ cast }: { cast: Person[] }) {
   const rowRef = useRef<HTMLDivElement>(null);
+  // the directors or creators come first, then up to CAST_LIMIT actors
+  const heads = cast.filter((p) => p.job !== 'cast');
+  const shown = heads.concat(cast.filter((p) => p.job === 'cast').slice(0, CAST_LIMIT));
+  const roleOf = (p: Person) => (p.job === 'director' ? t('titleCard.director') : p.job === 'creator' ? t('titleCard.creator') : p.role);
   return (
     <section class="tc-section">
       <h2 class="tc-h2">{t('titleCard.cast')}</h2>
       <div class="tc-scroll" ref={rowRef}>
         <FocusGroup focusKey="TITLE-CAST" className="tc-cast-row">
-          {cast.slice(0, CAST_MAX).map((p, i) => (
-            <Focusable key={i} focusKey={'title-cast-' + i} className="tc-person" onFocused={() => showInRow(rowRef.current, 'title-cast-' + i)}>
+          {shown.map((p, i) => (
+            <Focusable
+              key={i}
+              focusKey={'title-cast-' + i}
+              className="tc-person"
+              onPress={() => navigate({ name: 'person', id: p.id, label: p.name })}
+              onFocused={() => showInRow(rowRef.current, 'title-cast-' + i)}
+            >
               <div class="tc-photo">{p.photo ? <img src={p.photo} alt="" /> : <span class="tc-initials">{tvGlyphs(initials(p.name))}</span>}</div>
               <div class="tc-person-name">{tvGlyphs(p.name)}</div>
-              {p.role ? <div class="tc-person-role">{tvGlyphs(p.role)}</div> : null}
+              {roleOf(p) ? <div class="tc-person-role">{tvGlyphs(roleOf(p))}</div> : null}
             </Focusable>
           ))}
         </FocusGroup>

@@ -19,7 +19,8 @@ const fixture = [
   { hash: 'f1', title: 'Тихий сигнал / Quiet Signal (2024) 2160p', category: 'movie', timestamp: 1 },
 ];
 
-const person = (i: number) => ({ name: 'Актёр Номер' + i, photo: i === 0 ? 'http://img/a0.jpg' : '', role: 'Роль ' + i });
+const person = (i: number) => ({ id: 100 + i, name: 'Актёр Номер' + i, photo: i === 0 ? 'http://img/a0.jpg' : '', role: 'Роль ' + i, job: 'cast' });
+const director = { id: 7, name: 'Dir', photo: '', role: '', job: 'director' };
 
 const film = {
   kind: 'movie', id: 7, title: 'Тихий сигнал', original: 'Quiet Signal', year: 2024, poster: 'http://img/p.jpg', rating: 7.84,
@@ -126,15 +127,34 @@ describe('TV title card', () => {
     expect(host.querySelector('[data-fk="title-open"]')).toBeNull();
   });
 
-  it('lists the cast: up to 8, with a photo or the initials', async () => {
+  it('lists the cast: the director first, up to 15 actors, with a photo or the initials', async () => {
+    cards['movie:7'] = { ...film, cast: [director].concat([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map(person) as any) };
     const host = await mount('movie', 7);
     const people = host.querySelectorAll('.tc-person');
-    expect(people).toHaveLength(8);
-    expect(people[0].querySelector('img')!.getAttribute('src')).toBe('http://img/a0.jpg');
-    expect(text(people[1].querySelector('.tc-initials'))).toBe('АН');
-    expect(text(people[1].querySelector('.tc-person-name'))).toBe('Актёр Номер1');
-    expect(text(people[1].querySelector('.tc-person-role'))).toBe('Роль 1');
+    expect(people).toHaveLength(16);
+    expect(text(people[0].querySelector('.tc-person-name'))).toBe('Dir');
+    expect(text(people[0].querySelector('.tc-person-role'))).toBe('Режиссёр');
+    expect(people[1].querySelector('img')!.getAttribute('src')).toBe('http://img/a0.jpg');
+    expect(text(people[2].querySelector('.tc-initials'))).toBe('АН');
+    expect(text(people[2].querySelector('.tc-person-name'))).toBe('Актёр Номер1');
+    expect(text(people[2].querySelector('.tc-person-role'))).toBe('Роль 1');
     expect(initials('Сидни Чандлер')).toBe('СЧ');
+    cards['movie:7'] = film;
+  });
+
+  it('shows «Создатель» for the creator of a series', async () => {
+    cards['tv:1'] = { ...series, cast: [{ ...director, job: 'creator' }] };
+    const host = await mount('tv', 1);
+    expect(text(host.querySelector('.tc-person-role'))).toBe('Создатель');
+    cards['tv:1'] = series;
+  });
+
+  it('OK on a person opens the person screen', async () => {
+    cards['movie:7'] = { ...film, cast: [director, person(0)] };
+    const host = await mount('movie', 7);
+    await click(host.querySelector('[data-fk="title-cast-0"]')!);
+    expect(currentRoute.value).toEqual({ name: 'person', id: 7, label: 'Dir' });
+    cards['movie:7'] = film;
   });
 
   it('shows a series with its pill and the seasons in their states', async () => {

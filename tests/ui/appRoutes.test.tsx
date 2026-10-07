@@ -4,6 +4,7 @@ import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { App } from '../../src/app';
 import { routeStack, openPlayer, routeKey } from '../../src/ui/nav';
 import { servers, activeServerId } from '../../src/store/servers';
+import { setCatalogProvider } from '../../src/catalog/activeCatalog';
 import { reloadProgress } from '../../src/store/progress';
 import type { PlayItem } from '../../src/player/types';
 
@@ -84,6 +85,19 @@ describe('App route host', () => {
     openPlayer({ name: 'player', queue: q2, index: 0 });
     await until(() => !!app.querySelector('video') && app.querySelector('video')!.getAttribute('src') === q2[0].url);
     expect(app.querySelector('video')).not.toBe(first);
+  });
+});
+
+describe('App person route', () => {
+  it('renders the person screen for the person route', async () => {
+    const stub = { person: vi.fn(() => Promise.resolve({ id: 7, name: 'Иван Тест', photo: '', birth: '', death: '', known: 'acting', acting: [], directing: [] })) };
+    setCatalogProvider(() => Promise.resolve(stub as any));
+    routeStack.value = [{ name: 'library' }, { name: 'person', id: 7, label: 'Иван Тест' }];
+    const app = mountApp();
+    await until(() => !!app.querySelector('.person-name'));
+    expect(stub.person).toHaveBeenCalledWith(7);
+    expect(app.querySelector('.person-name')!.textContent).toBe('Иван Тест');
+    setCatalogProvider(null);
   });
 });
 

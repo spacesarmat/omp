@@ -20,6 +20,7 @@ import { FaqScreen } from './screens/Faq';
 import { UpdateScreen } from './screens/Update';
 import { PairPhoneScreen } from './screens/PairPhone';
 import { TitleCardScreen } from './screens/TitleCard';
+import { PersonScreen } from './screens/Person';
 import { PhoneSourcesScreen } from './screens/PhoneSources';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { WhatsNewDialog, shouldShowWhatsNew } from './ui/WhatsNewDialog';
@@ -81,6 +82,8 @@ function renderRoute(r: Route) {
       return <UpdateScreen />;
     case 'title':
       return <TitleCardScreen kind={r.kind} id={r.id} />;
+    case 'person':
+      return <PersonScreen id={r.id} name={r.label} />;
     case 'sources':
       // LG: the phone searches the sites; Android TV: its own built-in sites (native http of the APK)
       return platformKind() === 'webos' ? <PhoneSourcesScreen /> : <LazySources />;
