@@ -17,7 +17,7 @@ import { buildTorrentQueue } from '../player/queue';
 import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { restoreFocus, scrollToShow } from '../ui/focus';
+import { restoreFocus, scrollScreenToTop, scrollToShow } from '../ui/focus';
 import { confirmDialog, choose } from '../ui/dialog';
 import { askText } from '../ui/TextDialog';
 import { checkTitle, renameTorrent } from '../lib/renameTorrent';
@@ -278,6 +278,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
     const box = actionsRef.current;
     const el = box ? (box.querySelector('[data-fk="' + key + '"]') as HTMLElement | null) : null;
     if (!box || !el) return;
+    scrollScreenToTop(box);
     box.scrollLeft = scrollToShow(box.scrollLeft, box.clientWidth, el.offsetLeft, el.offsetWidth, ACTION_PAD);
   };
 

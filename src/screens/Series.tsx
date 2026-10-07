@@ -33,7 +33,7 @@ import { buildTorrentQueue } from '../player/queue';
 import { currentRoute, goBack, navigate, type Route } from '../ui/nav';
 import { FocusGroup, Focusable, Button, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { restoreFocus, scrollToShow } from '../ui/focus';
+import { restoreFocus, scrollScreenToTop, scrollToShow } from '../ui/focus';
 import { choose } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
@@ -444,19 +444,22 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             {target && (
               <Button
                 focusKey="series-watch"
+                onFocused={toTop}
                 label={target.code ? t('series.watchEp', { code: target.code }) : t('torrent.watch')}
                 onPress={() => play(target)}
               />
             )}
-            <Button focusKey="series-releases" label={t('series.releasesBtn', { n: releases.length })} onPress={openReleases} />
-            {upgradable.length > 0 && <Button focusKey="series-better" label={t('torrent.better.find')} onPress={openBetter} />}
-            <Focusable focusKey="series-follow" className="button series-follow" role="button" onPress={toggleFollow}>
+            <Button focusKey="series-releases"
+                onFocused={toTop} label={t('series.releasesBtn', { n: releases.length })} onPress={openReleases} />
+            {upgradable.length > 0 && <Button focusKey="series-better"
+                onFocused={toTop} label={t('torrent.better.find')} onPress={openBetter} />}
+            <Focusable focusKey="series-follow" onFocused={toTop} className="button series-follow" role="button" onPress={toggleFollow}>
               {t('series.follow') + ': '}
               <span class="series-follow-state" role="switch" aria-label={t('series.follow')} aria-checked={follow}>
                 {t(follow ? 'series.followOn' : 'series.followOff')}
               </span>
             </Focusable>
-            <Focusable focusKey="series-dub" className="button series-dub" role="button" onPress={openDub}>
+            <Focusable focusKey="series-dub" onFocused={toTop} className="button series-dub" role="button" onPress={openDub}>
               {t('series.dub') + ': '}
               <span class="series-follow-state series-dub-value">{tvGlyphs(dub.text)}</span>
             </Focusable>
@@ -572,6 +575,9 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
 function rowKey(r: FileRow): string {
   return 'ep-' + r.tor.hash + '-' + r.file.id;
 }
+
+/** A button in the top row took the focus: the screen goes back to the top so the whole header shows. */
+const toTop = () => scrollScreenToTop(document.querySelector('.series-actions'));
 
 export function SeriesScreen({ seriesKey, season }: { seriesKey: string; season?: number }) {
   progressVersion.value; // re-render when the progress changes
