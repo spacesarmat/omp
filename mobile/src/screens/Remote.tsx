@@ -38,6 +38,25 @@ import { KeyPump, LONG_PRESS_MS, PadArrows, pressKey, TAP_SLOP as PAD_SLOP } fro
 import { errorMessage } from '../../../src/api/http';
 import { vibrate } from '../ui/vibrate';
 import { ScreenHeader } from '../ui/ScreenHeader';
+import { BoxCodeSheet } from '../ui/BoxCodeSheet';
+import {
+  boxActive,
+  boxError,
+  boxIp,
+  boxKeyCode,
+  boxState,
+  boxVia,
+  cancelBoxCode,
+  connectBox,
+  disableBox,
+  enableBox,
+  sendBoxKey,
+  sendBoxText,
+  submitBoxCode,
+  syncBox,
+  type BoxKey,
+  type BoxState,
+} from '../tv/boxRemote';
 
 export interface RemoteActions {
   pressButton: (name: RemoteButton) => Promise<void>;
@@ -397,8 +416,18 @@ function screenClass(kbd: boolean): string {
 
 const fail = (e: unknown) => showToast(errorMessage(e));
 
+/** Where the keyboard field types: OMP's channel by default. */
+interface Typing {
+  type: (text: string) => Promise<void>;
+  del: (n: number) => Promise<void>;
+  enter: () => Promise<void>;
+}
+
+const ompTyping = (): Typing => ({ type: (x) => act.typeText(x), del: (n) => act.deleteText(n), enter: () => act.sendEnter() });
+
 /** Text field whose edits are mirrored into the focused field on the TV. */
-function TvKeyboard() {
+function TvKeyboard({ typing }: { typing?: Typing }) {
+  const io = typing || ompTyping();
   const sent = useRef('');
   const composing = useRef(false);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -416,8 +445,8 @@ function TvKeyboard() {
     // serialised so rapid edits reach the TV in order
     queue.current = queue.current.then(async () => {
       try {
-        if (del) await act.deleteText(del);
-        if (add) await act.typeText(add);
+        if (del) await io.del(del);
+        if (add) await io.type(add);
       } catch (e) {
         fail(e);
       }
@@ -444,9 +473,9 @@ function TvKeyboard() {
           e.preventDefault();
           sent.current = '';
           if (field.current) field.current.value = '';
-          queue.current = queue.current.then(() => act.sendEnter()).catch(fail);
+          queue.current = queue.current.then(() => io.enter()).catch(fail);
         } else if (e.key === 'Backspace' && !sent.current) {
-          queue.current = queue.current.then(() => act.deleteText(1)).catch(fail);
+          queue.current = queue.current.then(() => io.del(1)).catch(fail);
         }
       }}
     />
@@ -492,9 +521,11 @@ const atvStateText = (s: string): string => {
  */
 const PAD_FEEDBACK: { [k: string]: string } = { UP: '↑', DOWN: '↓', LEFT: '←', RIGHT: '→', ENTER: 'OK' };
 
-function AtvTouchpad() {
+function AtvTouchpad({ press }: { press: (k: RemoteButton) => Promise<void> }) {
+  const latest = useRef(press);
+  latest.current = press;
   const pump = useRef<KeyPump<RemoteButton> | null>(null);
-  if (!pump.current) pump.current = new KeyPump<RemoteButton>((k) => act.pressButton(k), 4, fail);
+  if (!pump.current) pump.current = new KeyPump<RemoteButton>((k) => latest.current(k), 4, fail);
   const arrows = useRef(new PadArrows());
   const pts = useRef<{ [id: number]: { x: number; y: number } }>({});
   const g = useRef<{ id: number; sx: number; sy: number; t0: number; last: number; moved: boolean; two: boolean; long: boolean } | null>(null);
@@ -616,7 +647,80 @@ function atvRoundKey(label: string, d: string, onClick: () => void) {
   );
 }
 
-/** Remote for OMP on Android TV: the LG «Кнопки» layout without power, touchpad, channel and media keys. */
+const SETTINGS = 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.9-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z';
+const PLAYPAUSE = 'M4 5l9 7-9 7zM16 5v14M20 5v14';
+
+/** The box channel's state for this TV (another TV's state does not count). */
+function boxStateOf(tv: SavedTv): BoxState {
+  if (!tv.box?.on) return 'off';
+  return boxIp.value === tv.ip ? boxState.value : 'idle';
+}
+
+function boxStatusText(st: BoxState): string {
+  switch (st) {
+    case 'connected':
+      return boxVia.value === 'adb' ? t('remote.box.viaAdb') : t('remote.box.viaGoogle');
+    case 'connecting':
+      return t('remote.box.connecting');
+    case 'code':
+      return t('remote.box.code');
+    case 'confirm':
+      return t('remote.box.confirm');
+    case 'off':
+      return t('remote.box.hint');
+    default:
+      return t('remote.box.idle');
+  }
+}
+
+/**
+ * «Управлять приставкой»: the switch, the transport in use, and what the setup needs (the code from the TV, network
+ * debugging, the answer to «Разрешить отладку?»).
+ */
+function BoxRow({ tv }: { tv: SavedTv }) {
+  const st = boxStateOf(tv);
+  const on = st !== 'off';
+  const toggle = () => {
+    vibrate();
+    if (on) disableBox(tv);
+    else void enableBox(tv);
+  };
+  const retry = () => void connectBox(tv, { setup: true });
+  return (
+    <>
+      <div class="m-box-row" data-box-row data-box-state={st}>
+        <span class="m-box-text">
+          <span class="m-box-title">{t('remote.box.title')}</span>
+          <span class={'m-box-sub' + (st === 'connected' ? ' on' : '')} data-box-status>
+            {boxStatusText(st)}
+          </span>
+        </span>
+        <button type="button" role="switch" aria-checked={on} aria-label={t('remote.box.title')} class={'m-switch' + (on ? ' on' : '')} onClick={toggle}>
+          <span class="m-switch-knob" />
+        </button>
+      </div>
+      {st === 'confirm' && <p class="m-muted m-note m-box-note">{t('remote.box.confirmHint')}</p>}
+      {(st === 'adbHelp' || st === 'error') && (
+        <div class="m-remote-noanswer" data-box-problem>
+          <div class="m-hint-warn" role="status">
+            {boxError.value && <div>{boxError.value}</div>}
+            {st === 'adbHelp' && <div>{t('remote.box.adbHelp')}</div>}
+          </div>
+          <button type="button" class="m-btn m-btn-secondary" onClick={retry}>
+            {st === 'adbHelp' ? t('remote.box.retry') : t('remote.box.connect')}
+          </button>
+        </div>
+      )}
+      {st === 'code' && <BoxCodeSheet onSubmit={(code) => submitBoxCode(tv, code)} onCancel={cancelBoxCode} />}
+    </>
+  );
+}
+
+/**
+ * Remote for OMP on Android TV: the LG «Кнопки» layout without power, touchpad and channel keys. With «Управлять
+ * приставкой» connected every key goes to the whole box (system Home, volume, other apps; OMP gets them too), and
+ * Settings, mute and media keys appear; OMP's channel keeps text, «Сейчас играет» and the player.
+ */
 function AtvRemote({ tv }: { tv: SavedTv }) {
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
@@ -625,18 +729,49 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
   // the TV forgot this phone (its token was dropped): pair again by the code
   const forgot = !tv.token || (state === 'error' && tvError.value === tvForgot());
   const found: FoundOmpTv = { ip: tv.ip, port: tv.ctlPort || ATV_PORT, name: tv.defaultName ?? tv.name, version: '' };
+  const boxOn = !!tv.box?.on;
+  const box = boxActive(tv);
+  useEffect(() => {
+    syncBox(tv);
+  }, [tv.ip, boxOn]);
+  /** A key through the box channel when it is up; a switched-on box that dropped reconnects meanwhile. */
+  const send = (n: RemoteButton): Promise<void> => {
+    if (box && boxKeyCode(n) !== null) return sendBoxKey(tv, n as BoxKey);
+    if (boxOn && boxStateOf(tv) === 'idle') syncBox(tv);
+    return act.pressButton(n);
+  };
   const press = (n: RemoteButton) => {
     vibrate();
-    act.pressButton(n).catch(fail);
+    send(n).catch(fail);
+  };
+  const boxKey = (k: BoxKey) => {
+    vibrate();
+    sendBoxKey(tv, k).catch(fail);
   };
   const ompKey = (n: 'CATALOG' | 'NOWPLAYING') => {
     vibrate();
     act.pressAtvKey(n).catch(fail);
   };
+  // «Домой»: the box's Home screen through the box channel, else the OMP catalog
+  const home = () => (box ? boxKey('HOME') : ompKey('CATALOG'));
   const vol = (dir: 'up' | 'down') => {
+    if (box) return boxKey(dir === 'up' ? 'VOLUMEUP' : 'VOLUMEDOWN');
     vibrate();
     act.volume(dir).catch(fail);
   };
+  // without OMP's channel the keyboard types over adb (printable ASCII only)
+  const boxTyping: Typing | undefined =
+    box && boxVia.value === 'adb' && state !== 'connected'
+      ? {
+          type: async (x) => {
+            await sendBoxText(tv, x);
+          },
+          del: async (n) => {
+            for (let i = 0; i < n; i++) await sendBoxKey(tv, 'DEL');
+          },
+          enter: () => sendBoxKey(tv, 'RETURN'),
+        }
+      : undefined;
   const shown = tvWaking.value && state !== 'connected' ? 'connecting' : state;
   return (
     <div class={screenClass(kbd)} data-route="remote">
@@ -650,8 +785,8 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           </span>
         }
       />
-      {!forgot && <NoAnswer tv={tv} />}
-      {forgot && (
+      {!forgot && !box && <NoAnswer tv={tv} />}
+      {forgot && !box && (
         <div class="m-remote-forgot">
           <div class="m-hint-warn">{tvForgot()}</div>
           <button type="button" class="m-btn m-btn-primary" onClick={() => setCoding(true)}>
@@ -659,6 +794,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           </button>
         </div>
       )}
+      <BoxRow tv={tv} />
       <div class="m-seg" role="tablist">
         <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>
           {t('remote.buttons')}
@@ -669,12 +805,12 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
       </div>
       {mode === 'touchpad' ? (
         <div class="m-rt" data-atv-remote>
-          <AtvTouchpad />
+          <AtvTouchpad press={send} />
           <div class="m-rb-row m-rt-keys">
             <button type="button" class="m-key" aria-label={t('common.back')} onClick={() => press('BACK')}>
               <Icon d={BACK} size={22} />
             </button>
-            <button type="button" class="m-key" aria-label={t('remote.home')} onClick={() => ompKey('CATALOG')}>
+            <button type="button" class="m-key" aria-label={t('remote.home')} onClick={home}>
               <Icon d={HOME} size={20} /> {t('remote.home')}
             </button>
             <button type="button" class="m-key" aria-label={t('remote.menu')} onClick={() => press('MENU')}>
@@ -696,7 +832,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
         </div>
       ) : (
       /* the layout of the LG «Кнопки» remote: what OMP on Android TV cannot do (power, pointer, channels) is left out */
-      <div class="m-rb" data-atv-remote>
+      <div class="m-rb" data-atv-remote data-box-keys={box ? '' : undefined}>
         <div class="m-stage m-rb-pad">
           <DPad press={press} />
         </div>
@@ -707,9 +843,10 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
         </div>
         <div class="m-rb-round">
           {atvRoundKey(t('common.back'), BACK, () => press('BACK'))}
-          {/* «Домой» on Android TV: the OMP catalog */}
-          {atvRoundKey(t('remote.home'), HOME, () => ompKey('CATALOG'))}
+          {/* «Домой»: the box's Home screen with the box channel, else the OMP catalog */}
+          {atvRoundKey(t('remote.home'), HOME, home)}
           {atvRoundKey(t('remote.menu'), MENU, () => press('MENU'))}
+          {box && atvRoundKey(t('remote.box.settings'), SETTINGS, () => boxKey('SETTINGS'))}
         </div>
         <div class="m-rb-bottom">
           <div class="m-rocker">
@@ -725,18 +862,37 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
             <button type="button" class="m-rb-playbtn" aria-label={t('remote.nowPlaying')} onClick={() => ompKey('NOWPLAYING')}>
               <Icon d={PLAY} size={26} />
             </button>
-            <span class="m-rocker-cap">{t('remote.nowPlaying')}</span>
+            {box ? (
+              <div class="m-rb-seek">
+                <button type="button" class="m-rb-seekbtn" aria-label={t('remote.box.prev')} onClick={() => boxKey('PREV')}>
+                  <Icon d={PREV} size={18} />
+                </button>
+                <button type="button" class="m-rb-seekbtn" aria-label={t('remote.box.playPause')} onClick={() => boxKey('PLAYPAUSE')}>
+                  <Icon d={PLAYPAUSE} size={18} />
+                </button>
+                <button type="button" class="m-rb-seekbtn" aria-label={t('remote.box.next')} onClick={() => boxKey('NEXT')}>
+                  <Icon d={NEXT} size={18} />
+                </button>
+              </div>
+            ) : (
+              <span class="m-rocker-cap">{t('remote.nowPlaying')}</span>
+            )}
           </div>
           <div class="m-rocker">
             <button type="button" class="m-rocker-btn" aria-label={t('remote.keyboard')} aria-pressed={kbd} onClick={() => setKbd(!kbd)}>
               <Icon d={KEYBOARD} size={24} />
             </button>
             <span class="m-rocker-cap">{t('remote.kbdShort')}</span>
+            {box && (
+              <button type="button" class="m-rocker-btn" aria-label={t('remote.mute')} onClick={() => boxKey('MUTE')}>
+                <Icon d={MUTE} size={24} />
+              </button>
+            )}
           </div>
         </div>
       </div>
       )}
-      {kbd && <TvKeyboard />}
+      {kbd && <TvKeyboard typing={boxTyping} />}
       {coding && (
         <CodeSheet
           tvName={found.name}

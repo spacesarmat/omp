@@ -760,6 +760,13 @@ button, .m-btn {
 /* a saved TV that does not answer: the reason and «Повторить» */
 .m-remote-noanswer { display: flex; flex-direction: column; gap: 8px; }
 .m-remote-state { font-size: 13px; color: var(--muted); }
+.m-box-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 4px 0 12px; border-radius: 14px; background: var(--panel); }
+.m-box-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.m-box-title { font-size: 14px; font-weight: 600; }
+.m-box-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-box-sub.on { color: #8FE39A; }
+.m-remote .m-box-note { margin: 0; font-size: 12px; }
+.m-box-code { text-align: center; font-size: 26px; letter-spacing: 0.3em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
 .m-remote-state.on { color: #8FE39A; }
 .m-power.on { background: #1F3A27; color: #3FB950; }
 .m-power { width: 44px; height: 44px; border: none; border-radius: 22px; background: #3A2224; color: #FF9EA2; display: flex; align-items: center; justify-content: center; }
