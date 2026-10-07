@@ -153,14 +153,21 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'xiaomi': {
     q: 'Install on Xiaomi (Mi Box, Mi TV)',
     short: [
-      '1. From the phone: Settings → “Install OMP on the TV”. On the TV turn on developer mode (press “Build” 7 times in “About”) and “USB debugging” or “Network debugging” in “Developer options”.',
+      '1. From the phone: on the TV turn on developer mode and “Network debugging”, then on the phone Settings → “Install OMP on the TV” (step by step under “More”).',
       '2. Or by hand: “Downloader” or “Send Files to TV” from Google Play, or a USB drive.',
-      '3. Allow the install: Settings → Device Preferences (on Google TV: Apps) → Security & restrictions → Unknown sources.',
+      '3. For a manual install allow: Settings → Device Preferences (on Google TV: Apps) → Security & restrictions → Unknown sources.',
       '4. After the install: in OMP on the TV open Settings → “Connect a phone” and enter the 4-digit code on the phone (“TV” → “Android TV”).',
     ],
     more: [
-      '“About”: on Android TV (Mi Box S, Mi TV Stick, Mi TV sets with PatchWall) it is Settings → Device Preferences → About → “Build”; on Google TV (Xiaomi TV Box S 2nd gen and newer) Settings → System → About → “Android TV OS build”. Item names depend on the firmware.',
-      'PatchWall is the Xiaomi launcher on top of Android TV: it opens the usual Android TV settings.',
+      'From the phone (install assistant), step by step:',
+      '1. Developer mode. Android TV (Mi Box S, Mi TV Stick, Mi TV sets with PatchWall): Settings → Device Preferences → About → press “Build” 7 times. Google TV (Xiaomi TV Box S 2nd gen and newer): Settings → System → About → press “Android TV OS build” 7 times.',
+      '2. Debugging. Open “Developer options” (Android TV: Settings → Device Preferences → Developer options; Google TV: Settings → System → Developer options) and turn on “USB debugging” and “Network debugging” (ADB over network) if there is such an item.',
+      '3. The TV IP: on most firmware Settings → Network & Internet → your Wi-Fi network → IP address, or “About” → “Status”.',
+      '4. On the phone: Settings → “Install OMP on the TV”. The assistant looks for TVs itself; if the Xiaomi is not in the list, tap “Enter the IP manually”: the IP address, type “Android TV”, brand “Xiaomi”, then “Show the steps”.',
+      '5. Tap “Install OMP”. “Allow USB debugging?” appears on the TV — tick “Always allow from this computer” and choose “Allow”.',
+      '6. The phone downloads OMP from GitHub, checks it and installs it — wait for “OMP installed”.',
+      '7. Turn off “Network debugging” (the question “Security: network debugging”) and connect the phone by code (the question “Connect the phone to a Xiaomi TV”).',
+      'Item names depend on the firmware. PatchWall is the Xiaomi launcher on top of Android TV: it opens the usual Android TV settings.',
       'Google TV with Android 11 and newer may offer only “Wireless debugging” with a pairing code, which the phone assistant cannot do yet. Then install by hand or from a computer (see the question about adb).',
       'OMP needs Android 8 or newer: Mi Box 3 (Android 6) will not do. The built-in TorrServer runs only on 64-bit devices (arm64).',
       DOWNLOAD_LINK,
@@ -383,7 +390,52 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       '1. On the TV open OMP: Settings → “Connect a phone” — a 4-digit code appears.',
       '2. On the phone: “TV” → choose “Android TV” → enter the code.',
     ],
+    more: ['The phone does not see the TV — tips about the network, VPN and memory cleaning are in the question “Connect the phone to a Xiaomi TV”: they fit any Android TV.'],
     by: { atv: { q: 'Connect the phone to the TV' } },
+  },
+  'xiaomi-connect': {
+    q: 'Connect the phone to a Xiaomi TV',
+    short: [
+      '1. On the TV open OMP: Settings → “Connect a phone” — a 4-digit code appears.',
+      '2. On the phone: “TV” → choose your Xiaomi (marked “Android TV”) → enter the code.',
+      '3. The phone and the TV are in the same Wi-Fi network: not a guest one, with “client isolation” (AP isolation) off in the router.',
+      'The phone does not see the TV — open OMP on the TV again and turn off VPN on the TV.',
+    ],
+    more: [
+      'The phone finds Android TV by a search in the home network (mDNS): OMP on the TV announces itself while it is running. Entering the IP by hand on the “TV” screen works only for LG — Android TV has to be found.',
+      'The remote works while OMP is open or in the background on the TV; when OMP is closed, the phone does not see it. Memory cleaning and boosters in PatchWall or power saving may close OMP in the background — then open OMP again.',
+      'The code is valid for 5 minutes and only while the “Connect a phone” screen is open. After 5 wrong tries it is used up — press “New code”.',
+      'The phone remembers the TV: later “Watch on TV” and the remote work without a code. If the TV forgot the phone, connect by code again.',
+      'Network: a guest network is usually isolated from the home one. On some routers devices on the 2.4 and 5 GHz bands are separated by isolation — connect the phone and the TV to the same band or turn the isolation off.',
+      'A VPN on the TV (and sometimes on the phone) may take the traffic out of the home network — turn it off.',
+      'Android 10 and newer does not let OMP come to the screen from the background by itself: if nothing appeared after “Watch on TV”, open OMP on the TV with the remote.',
+    ],
+  },
+  'tv-no-server': {
+    q: 'The TV cannot reach TorrServer but the phone can',
+    short: [
+      '1. The TV keyboard may type look-alike characters (a full-width colon, a comma for a dot, a space). Type the address without the port or press “Find on network”.',
+      '2. A VPN on the TV (Happ, v2rayNG…): exclude OMP from the VPN (split tunnelling) or turn on local network bypass (Bypass LAN).',
+      '3. “Always-on VPN” together with “Block connections without VPN” close the local network even while the VPN is off — turn them off or remove the VPN app and restart the TV.',
+      '4. A guest Wi‑Fi network and client isolation in the router separate the TV from the server — connect the TV to the main network.',
+    ],
+    more: [
+      'OMP fixes look-alike characters from the TV keyboard itself, and if the address is still wrong it shows which character is invalid.',
+      'If a VPN is running, on Android TV the connect screen says so under the error.',
+      '“Always-on VPN”: Settings → Network & Internet → VPN → the gear next to the app. If there is no such item, remove the VPN app.',
+    ],
+    by: {
+      lg: {
+        short: [
+          '1. The TV keyboard may type look-alike characters (a full-width colon, a comma for a dot, a space). Type the address without the port or press “Find on network”.',
+          '2. A guest Wi‑Fi network and client isolation in the router separate the TV from the server — connect the TV to the main network.',
+        ],
+        more: [
+          'OMP fixes look-alike characters from the TV keyboard itself, and if the address is still wrong it shows which character is invalid.',
+          'It is easier to type the address with the phone keyboard in LG ThinQ.',
+        ],
+      },
+    },
   },
   'wake': {
     q: 'Turn on the TV from the phone',

@@ -11,6 +11,8 @@ import { Icon } from '../ui/icons';
 import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
 import { platformKind } from '../platform/env';
+import { nativeVpnState } from '../platform/androidNative';
+import { addressErrorText, addressForField, checkServerAddress } from '../api/serverAddress';
 import { Logo } from '../ui/Logo';
 import { ServerHistory } from './connect/ServerHistory';
 import { EditServerDialog } from './connect/EditServerDialog';
@@ -42,6 +44,17 @@ export function connectErrorText(baseUrl: string, e: unknown): string {
   return t('connect.unreachable', { host: host });
 }
 
+/** No server answered (a failed connect, an empty scan): VPN on → the VPN line; Android TV without one → the lockdown note. */
+export function networkHint(vpn: { active: boolean } | null): string {
+  if (!vpn) return '';
+  return vpn.active ? t('connect.vpnHint') : t('connect.lockdownHint');
+}
+
+/** The server never answered (not a wrong answer): the network, not the server, may be the cause. */
+function noAnswer(e: unknown): boolean {
+  return !(isApiError(e) && (e.kind === 'http' || e.kind === 'parse'));
+}
+
 export function ConnectScreen() {
   const alive = useRef(true);
   const scanId = useRef(0);
@@ -51,6 +64,8 @@ export function ConnectScreen() {
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [netHint, setNetHint] = useState('');
+  const attempt = useRef(0);
   const [scan, setScan] = useState<{ done: number; total: number } | null>(null);
   const [found, setFound] = useState<FoundServer[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -89,7 +104,18 @@ export function ConnectScreen() {
       return;
     }
     cancelScan();
-    const cfg = { url: address, user: user || undefined, password: password || undefined };
+    setNetHint('');
+    const checked = checkServerAddress(address);
+    if (!checked.ok) {
+      const text = addressErrorText(checked.bad);
+      setError(text);
+      toast(text, 'error');
+      return;
+    }
+    // the field shows what is tried: «１９２．１６８…：８０９０» becomes 192.168.1.124:8090
+    if (address === url) setUrl(addressForField(checked.url));
+    const my = ++attempt.current;
+    const cfg = { url: checked.url, user: user || undefined, password: password || undefined };
     const client = new TorrServerClient(cfg);
     setBusy(true);
     setError('');
@@ -105,14 +131,23 @@ export function ConnectScreen() {
         const text = connectErrorText(client.baseUrl, e);
         setError(text);
         toast(text, 'error');
+        if (noAnswer(e)) showNetHint(() => attempt.current === my);
         // the button stays focused: OK tries again
         if (doesFocusableExist('connect-btn')) setFocus('connect-btn');
       },
     );
   };
 
+  /** The VPN / lockdown line under the error (Android TV only; LG has no vpnState). */
+  const showNetHint = (current: () => boolean) => {
+    nativeVpnState().then((v) => {
+      if (alive.current && current()) setNetHint(networkHint(v));
+    });
+  };
+
   const scanNetwork = () => {
     const my = ++scanId.current;
+    setNetHint('');
     setFound([]);
     setScan({ done: 0, total: 1 });
     getLocalIp()
@@ -127,7 +162,10 @@ export function ConnectScreen() {
       .then((list) => {
         if (!alive.current || scanId.current !== my) return;
         setScan(null);
-        if (!list.length) toast(t('connect.noServersFound'), 'error');
+        if (!list.length) {
+          toast(t('connect.noServersFound'), 'error');
+          showNetHint(() => scanId.current === my);
+        }
       })
       .catch((e) => {
         if (!alive.current || scanId.current !== my) return;
@@ -182,9 +220,10 @@ export function ConnectScreen() {
             <Button focusKey="connect-btn" label={busy ? t('connect.connecting') : t('connect.connect')} className="primary grow" onPress={() => connect()} />
             <Button icon="search" label={t('connect.scan')} onPress={scanNetwork} disabled={!!scan} />
           </div>
-          {error && !busy && (
+          {(error || netHint) && !busy && (
             <div class="connect-error" role="alert">
-              {error}
+              {error && <div>{error}</div>}
+              {netHint && <div class="connect-net-hint">{netHint}</div>}
             </div>
           )}
         </div>

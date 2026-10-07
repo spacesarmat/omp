@@ -81,6 +81,8 @@ export interface OmpNativeTvPlugin {
   player2160?(): Promise<{ package: string | null }>;
   /** Opens the playlist in 2160 Player; resolves with { returned, positionMs?, durationMs?, ended?, url? } when it closes. */
   open2160?(o: { items: { url: string; title: string }[]; start: number; positionMs: number; fromStart: boolean; segments: string }): Promise<unknown>;
+  /** OMP's traffic goes through a VPN (the active network has TRANSPORT_VPN); missing in an older APK. */
+  vpnState?(): Promise<{ active?: unknown; lockdown?: unknown }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
@@ -132,6 +134,7 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     setLanguage: (o) => np.call(cap, NAME, 'setLanguage', o),
     player2160: () => np.call(cap, NAME, 'player2160', {}),
     open2160: (o) => np.call(cap, NAME, 'open2160', o),
+    vpnState: () => np.call(cap, NAME, 'vpnState', {}),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }
@@ -166,6 +169,16 @@ export function nativeLocalIp(): Promise<string | null> {
   if (!p) return Promise.resolve(null);
   return p.localIpv4().then(
     (r) => (r && typeof r.ip === 'string' && r.ip ? r.ip : null),
+    () => null,
+  );
+}
+
+/** Whether OMP's traffic goes through a VPN on Android TV; null outside the APK (LG) or in an APK without the method. */
+export function nativeVpnState(): Promise<{ active: boolean } | null> {
+  const p = nativePlugin();
+  if (!p || typeof p.vpnState !== 'function') return Promise.resolve(null);
+  return p.vpnState().then(
+    (r) => (r && typeof r.active === 'boolean' ? { active: r.active } : null),
     () => null,
   );
 }

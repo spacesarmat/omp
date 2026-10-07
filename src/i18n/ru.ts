@@ -1249,6 +1249,13 @@ export const ru = {
     /** The server did not answer: «Не удалось подключиться к 192.168.1.191:8090 — проверьте адрес и порт». */
     unreachable: 'Не удалось подключиться к {host} — проверьте адрес и порт',
     unreachableWhy: 'Не удалось подключиться к {host}: {error}',
+    /** The typed address still has a character no address can have (a TV keyboard look-alike): it is shown. */
+    badChar: 'В адресе есть недопустимый символ: «{char}»',
+    badAddress: 'Неверный адрес сервера — пример: 192.168.1.191:8090',
+    /** Android TV, the connection failed or the scan found nothing while OMP's traffic goes through a VPN. */
+    vpnHint: 'На телевизоре работает VPN — исключите OMP из VPN или включите обход локальной сети (Bypass LAN)',
+    /** Android TV, nothing reachable and no VPN active. */
+    lockdownHint: 'Если на телевизоре установлен VPN с «Постоянной VPN» и «Блокировать соединения без VPN», локальная сеть закрыта даже при выключенном VPN',
     connected: 'Подключено: {version}',
     noServersFound: 'Серверы TorrServer не найдены',
     history: 'История серверов',
