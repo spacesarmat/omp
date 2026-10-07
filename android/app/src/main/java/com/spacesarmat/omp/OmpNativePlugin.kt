@@ -27,6 +27,10 @@ import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import com.spacesarmat.omp.box.BoxBridge
+import com.spacesarmat.omp.box.BoxCodes
+import com.spacesarmat.omp.box.BoxFailure
+import com.spacesarmat.omp.box.BoxRemote
 import com.spacesarmat.omp.control.AppForeground
 import com.spacesarmat.omp.control.CloudflareProtocol
 import com.spacesarmat.omp.control.CloudflareRelay
@@ -171,6 +175,14 @@ class OmpNativePlugin : Plugin() {
         player.stop()
         remote?.stop()
         remote = null
+        // closing a TLS socket writes to it: not on the main thread
+        synchronized(lock) { boxRemote }?.let { b ->
+            Thread {
+                b.pairCancel()
+                b.disconnect()
+            }.start()
+        }
+        boxKeys.shutdownNow()
         // blocking socket I/O ignores interrupts: close the install's sockets so it ends now
         installCancel?.cancel()
         io.shutdownNow()
@@ -395,6 +407,106 @@ class OmpNativePlugin : Plugin() {
     fun installCancel(call: PluginCall) {
         installCancel?.cancel()
         call.resolve()
+    }
+
+    // ---- phone remote: the whole Android TV box ([BoxRemote]) ----
+
+    private var boxRemote: BoxRemote? = null
+    private val box: BoxRemote get() = synchronized(lock) { boxRemote ?: makeBox().also { boxRemote = it } }
+
+    private fun makeBox(): BoxRemote =
+        BoxBridge.create(context, deviceName(), adbIdentities(), object : BoxRemote.Events {
+            override fun closed(via: String) {
+                notifyListeners("boxClosed", JSObject().put("via", via))
+            }
+
+            override fun volume(level: Int, max: Int, muted: Boolean) {
+                notifyListeners("boxVolume", JSObject().put("level", level).put("max", max).put("muted", muted))
+            }
+        })
+
+    // key presses go out in order on one thread; connecting and pairing never wait behind them
+    private val boxKeys: ExecutorService = Executors.newSingleThreadExecutor()
+
+    /** Runs [work] off the main thread for a box call with a private-IPv4 `ip`; BoxFailure → its code. */
+    private fun boxCall(call: PluginCall, needIp: Boolean, exec: ExecutorService = io, work: (String) -> JSObject?) {
+        val once = Once(call)
+        val ip = call.getString("ip")?.trim().orEmpty()
+        if (needIp && !PortProbe.isPrivateIpv4(ip)) {
+            once.reject(BoxCodes.FAILED, BoxCodes.FAILED)
+            return
+        }
+        exec.execute {
+            try {
+                once.resolve(work(ip))
+            } catch (e: BoxFailure) {
+                once.reject(e.code, e.code)
+            } catch (e: Throwable) {
+                once.reject(BoxCodes.FAILED, BoxCodes.FAILED)
+            }
+        }
+    }
+
+    /** { ip } → { google, adb, via? }: which box services answer, and the channel already up for this box. */
+    @PluginMethod
+    fun boxProbe(call: PluginCall) = boxCall(call, true) { ip ->
+        val p = box.probe(ip)
+        val o = JSObject().put("google", p.google).put("adb", p.adb)
+        box.current(ip)?.let { o.put("via", it) }
+        o
+    }
+
+    /** { ip, via: google | adb } → { via }; adb may wait for «Разрешить отладку?» on the TV. */
+    @PluginMethod
+    fun boxConnect(call: PluginCall) {
+        val via = call.getString("via").orEmpty()
+        boxCall(call, true) { ip -> JSObject().put("via", box.connect(ip, via)) }
+    }
+
+    /** { ip }: the TV shows a pairing code. */
+    @PluginMethod
+    fun boxPairStart(call: PluginCall) = boxCall(call, true) { ip ->
+        box.pairStart(ip)
+        null
+    }
+
+    /** { ip, code } → { via: google }: pairs and connects. */
+    @PluginMethod
+    fun boxPairFinish(call: PluginCall) {
+        val code = call.getString("code").orEmpty()
+        boxCall(call, true) { ip -> JSObject().put("via", box.pairFinish(ip, code)) }
+    }
+
+    @PluginMethod
+    fun boxPairCancel(call: PluginCall) = boxCall(call, false) {
+        box.pairCancel()
+        null
+    }
+
+    /** { code: Android KeyEvent code, long? } through the connected box channel. */
+    @PluginMethod
+    fun boxKey(call: PluginCall) {
+        val code = call.getInt("code") ?: -1
+        val long = call.getBoolean("long", false) == true
+        boxCall(call, false, boxKeys) {
+            if (code !in 1..400) throw BoxFailure(BoxCodes.FAILED)
+            box.key(code, long)
+            null
+        }
+    }
+
+    /** { text } → { typed }: typed into the box's focused field (adb only; false over the Google channel). */
+    @PluginMethod
+    fun boxText(call: PluginCall) {
+        val text = call.getString("text").orEmpty().take(500)
+        boxCall(call, false, boxKeys) { JSObject().put("typed", box.text(text)) }
+    }
+
+    @PluginMethod
+    fun boxDisconnect(call: PluginCall) = boxCall(call, false) {
+        box.pairCancel()
+        box.disconnect()
+        null
     }
 
     /**
