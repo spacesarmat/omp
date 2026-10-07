@@ -213,3 +213,85 @@ Setting «Плеер» = «Встроенный» unless noted. Check `adb logca
 15. **TorrServer with auth** (user:password): video and external subtitles play.
 16. **Blu-ray ISO** from a torrent (if the page sends it): plays the main title.
 17. **Leaving the app** (Home) during playback: playback pauses; back in the app, it resumes correctly; no notification / no background sound.
+
+## Stage 4: «Смотреть на телефоне» in 2160 Player's screen inside OMP (phone)
+
+Date: 2026-10-07. Commit `feat(phone): watch on the phone in the embedded 2160 player`. Submodule unchanged (0.1.4, `02b23ba`).
+
+### What was done
+- **Setting.** New key `phonePlayer: 'embedded' | 'p2160' | 'chooser'`, default **`'embedded'`**. «Плеер для видео» on the phone has three options: «Встроенный» / "Built-in", «2160 Player (приложение)» / "2160 Player (app)" (disabled, with the GitHub link, when the app is missing, as before), and «Выбор Android» / "Android chooser". The note under the row explains all three.
+  - Why a new key and not a third value of `videoPlayer`: on the TV, `videoPlayer: 'builtin'` means OMP's player, but on the phone the same value meant the chooser. The settings object is also saved whole, so a stored `'builtin'` can't tell "chosen" from "default". The TV keeps `videoPlayer` unchanged.
+  - Migration (in `sanitizeSettings`): when no valid `phonePlayer` is stored, it becomes `'p2160'` if the phone had `videoPlayer: 'p2160'`, otherwise `'embedded'`. A phone that had the chooser (the old default) moves to «Встроенный» once.
+- **Routing** (`mobile/src/watch.ts` `watchOnPhone`):
+  - `embedded`, and this APK has the screen → `playEmbedded2160`.
+  - `p2160`, and the app is installed → `open2160` (as before).
+  - Otherwise → the chooser (`openExternal`, as before).
+  
+  Both 2160 paths share the queue: all playable files of the torrent, the start index, the saved position and the «Пропуск» marks. Both go through `play2160` → `saveP2160Result`, and both record the watch-journal start (`recordPhoneWatch`) the same way.
+  - Whether the APK has the screen comes from the existing `player2160()` plugin answer, which now also carries `embedded: true`. An older APK (or the browser, or tests) answers without it. The phone then goes to the chooser **before** anything is recorded, so the journal gets one entry (t = 0), not two. `native.playEmbedded2160` also resolves `null` on `UNIMPLEMENTED`.
+- **Kotlin.** New `OmpNativePlugin.playEmbedded2160` takes the same payload as `open2160`: `items {url,title}[]`, `start`, `positionMs`, `fromStart`, `segments`. The queue parsing is shared with `open2160` (`queue2160`). New `player/Embedded2160.kt`:
+  - `plan(...)` (pure, unit-tested):
+    - Credentials are removed from every URL and become one `Authorization: Basic` header (`Engine2160.splitCredentials`, as on the TV), because Media3 does not send URL user info. `User-Agent: OMP` is added.
+    - Titles are trimmed; a blank title falls back to 2160's file name.
+    - The **start position is always explicit** (0 = from the start, never `null`), so 2160's own resume point never overrides OMP's.
+    - The «Пропуск» marks go to the start item (`SkipSegment.parseList`), as on the app path.
+  - `intent(...)` = `Player2160.PlayContract().createIntent(context, request)`. This is the library's explicit intent to `tv.p2160.core.Player2160Activity` in OMP's own package, with `returnResult = true`. `exported="false"` is fine because the launch is in-process. Capacitor's `startActivityForResult` launches it.
+  - The answer goes through the **existing** `on2160Result` callback and `Player2160.parse`. The embedded activity answers in the same MX format as the app (`IntentApi.buildResult`: `data`, `position`, `duration`, `end_by`). The returned URL has no credentials, so it equals the page's queue URL exactly.
+- **2160's own settings are left as the user sets them inside the player.**
+  - OMP's phone has no audio or subtitle language settings: `audioLang`/`subLang` are TV settings and only hold the defaults on the phone.
+  - 2160's defaults are already `["ru"]` for both.
+  - 2160 has its own settings panel and remembers the user's track choices ("smart tracks").
+  - Writing OMP's values on every start would overwrite what the user picks in 2160 and gain nothing.
+
+### PlaybackService: back, not exported, off until the phone needs it
+`Player2160Activity` works without the service: as noted in stage 3, starting a component that isn't declared doesn't throw. But without it the phone has:
+- no notification with controls, no lock-screen card, no headset buttons;
+- no foreground service behind the activity's own background rule. Audio-only items keep playing after `onStop`, and video does too with 2160's «background playback». The system may then freeze or kill the process mid-play.
+
+So the service is back in the merged manifest:
+- `android:exported="false"` (`tools:replace`). Other apps, Android Auto/Wear and media resumption can't bind to it. OMP's own media notification connects in-process. The library's intent filters remain, which is harmless on a non-exported service.
+- `android:enabled="false"`. `Embedded2160.enablePlaybackService` switches it on at the first `playEmbedded2160` (`setComponentEnabledSetting(…, DONT_KILL_APP)`), and it stays on afterwards on that phone. Nothing enables it on Android TV, so Engine2160 behaves as in stage 3 (no notification, no service).
+- `BluetoothValidationActivity` stays removed. `FOREGROUND_SERVICE_MEDIA_PLAYBACK` is now used.
+
+### Verification
+- `npx vitest run`: **316 files, 3523 tests passed** (+6). New tests:
+  - the phone row: three options, the default, the disabled app option, the migration;
+  - `watchOnPhone`: embedded → `playEmbedded2160` with the stop saved; no embedded screen → chooser with a single journal entry; off-device → chooser; an embedded rejection reaches the caller;
+  - the torrent card: «Смотреть на телефоне» → embedded;
+  - `native.embedded2160`/`playEmbedded2160` off-device.
+- `tsc --noEmit` (root) and `tsc --noEmit -p mobile`: clean.
+- `node scripts/gradle.mjs testDebugUnitTest`: **510 tests, 0 failures** (+5 in `Embedded2160Test`): credentials → one Basic header and clean URLs; only the User-Agent when there are no credentials; titles; explicit start position, including the clamp; start index and segments.
+- `npm run android:debug`: **BUILD SUCCESSFUL**.
+  - The merged manifest has `PlaybackService` with `enabled="false" exported="false"`, `Player2160Activity` with `exported="false"`, and no `BluetoothValidationActivity`.
+  - `Embedded2160` is in the arm64 dex. APK sizes are the same as in stage 3.
+  - `capacitor.build.gradle` / `capacitor.settings.gradle` restored.
+- Not done: device checks (S21), CI, release build.
+
+### Notes and limits
+- **Later items of the queue** start where 2160 itself last left them, not from OMP's saved positions. 2160 keeps those in its `ResumeStore`, now in OMP's data (`p2160_resume.db`). Only the start item gets OMP's position, the same as with the 2160 Player app. OMP still saves where the user stops, for whichever item it was.
+- 2160's **sound-based intro search** runs here for episode-like file names, so the phone decodes up to 10 minutes of audio a second time over the network. This is 2160's own screen, so it was not suppressed (the TV engine suppresses it). If it hurts on slow torrents, pass placeholder segments as on the TV, or wait for an upstream switch (stage 3, Gap 3).
+- The result comes back only when the user presses «Назад» in the player (2160's rule). If the player is closed from Recents, or the system kills OMP while the player is open, nothing is saved. The 2160 Player app behaves the same way.
+- The phone remote and «Сейчас играет» on the phone know nothing about this playback, because it is local, not on the TV.
+- The migration moves phones that had the chooser to «Встроенный» once; users can switch back in Settings.
+
+### Phone device checklist (S21, `adb -s R5CR102C5AA`)
+Settings → «Плеер для видео» = «Встроенный» unless noted. Watch `adb logcat -s OmpNative OmpPlayer AndroidRuntime` as you go.
+1. **Settings row**: a fresh install shows «Встроенный» selected. With the 2160 app missing, «2160 Player (приложение)» is disabled and the link opens GitHub. The English UI shows "Built-in" / "2160 Player (app)" / "Android chooser" and the English note.
+2. **Start**: torrent card → «Смотреть на телефоне» opens 2160's screen inside OMP: no chooser, no app switch in Recents, landscape for 16:9, system bars hidden. The title is the episode heading.
+3. **Resume**: an episode with a saved position starts there. One without starts at 0, with no jump to an older 2160 position.
+4. **Back → saved**: stop at ~10 min and press «Назад». OMP is back on the same screen. The progress bar/«Продолжить» shows the position, TorrServer `/viewed` is updated, and «История» has the phone entry.
+5. **Playlist**: start S01E02 of a series, go to S01E03 inside 2160 (next button or autoplay), stop, press «Назад». The progress is saved for S01E03, not S01E02.
+6. **End**: watch to the end (or seek to the end). The item is marked watched.
+7. **TorrServer with auth** (user:password): the video plays (Basic header) and subtitles inside the file work. The saved position lands on the right item.
+8. **Skip marks**: in a series with «Пропуск» intro marks, 2160 offers «Пропустить» at the marked intro.
+9. **Notification/lock screen**: the media notification appears during playback. Play/pause work from it, from the lock screen and from Bluetooth headphones. It disappears after «Назад».
+10. **Home / screen off**:
+    - Home while playing → PiP. Closing PiP → the video pauses (default 2160 settings). Screen off → pause.
+    - With 2160 «Фоновое воспроизведение» on, sound keeps playing with the screen off (foreground service, no kill after a few minutes).
+    - An audio-only file keeps playing in the background.
+11. **Rotation / PiP return**: rotate, enter and leave PiP. Playback continues, and «Назад» still returns the position.
+12. **2160 settings**: change the audio/subtitle language, theme and subtitle style inside the player, then reopen it from OMP. The changes are kept (OMP does not overwrite them).
+13. **«2160 Player (приложение)»** with the app installed: it opens the separate app as before, and the position comes back.
+14. **«Выбор Android»**: the system chooser opens as before.
+15. **Codecs**: passthrough doesn't matter on the phone, but check that AC3/DTS/TrueHD files play with sound (FFmpeg decode), plus HEVC 10-bit 4K and Dolby Vision p7 (HDR10 base layer).
+16. **Android TV unaffected**: on the Dune, the built-in player (Engine2160) shows no notification and no `PlaybackService` runs (`adb shell dumpsys activity services com.spacesarmat.omp`).
