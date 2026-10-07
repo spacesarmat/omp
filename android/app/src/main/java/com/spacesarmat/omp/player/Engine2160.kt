@@ -23,10 +23,8 @@ import androidx.media3.ui.PlayerView
 import tv.p2160.core.api.ExternalSubtitle
 import tv.p2160.core.api.MediaEntry
 import tv.p2160.core.api.PlaybackRequest
-import tv.p2160.core.api.SegmentType
-import tv.p2160.core.api.SkipSegment
+import tv.p2160.core.api.PlayerConfig
 import tv.p2160.core.engine.PlayerController
-import tv.p2160.core.resume.ResumeStore
 import tv.p2160.core.settings.PlayerSettings
 import java.util.Base64
 import java.util.Locale
@@ -36,9 +34,9 @@ import java.util.Locale
  * and video fallbacks of nextlib, AC3/E-AC3/DTS/TrueHD passthrough guarded against TVs that cannot open it,
  * «Ночной звук», Dolby Vision fallback to the HDR10 base layer, M2TS and Blu-ray ISO routing, cp1251 subtitle
  * files re-encoded to UTF-8. One controller per opened item (its API plays one request); OMP's own UI, queue,
- * skips and resume points stay above it, so 2160's own features that would compete with them are kept quiet:
- * its history entry for the item is dropped (no restored tracks, speed or position), and the sound-based intro
- * search is suppressed with placeholder segments ([QUIET_SEGMENTS]). The video goes to a Media3 [PlayerView]
+ * skips and resume points stay above it, so 2160's own features that would compete with them are kept quiet
+ * through its [PlayerConfig] ([config]): no history (nothing restored or saved), no sound-based intro search,
+ * no chapter reading (OMP has its own), the buffer capped by the app's heap, OMP's HTTP timeouts. The video goes to a Media3 [PlayerView]
  * bound to the controller's player (its subtitle layer draws the cues, as before).
  */
 @OptIn(UnstableApi::class)
@@ -51,7 +49,6 @@ class Engine2160(private val context: Context) : PlayerEngine {
 
     private var controller: PlayerController? = null
     private var view: PlayerView? = null
-    private var resumeKey: String? = null
 
     /** The open item's media items are in the player (the controller sets them after a short async build). */
     private var loaded = false
@@ -193,16 +190,12 @@ class Engine2160(private val context: Context) : PlayerEngine {
             hashes[su.hashCode()] = n
         }
         externalHashes = hashes
-        // 2160's history of this file would restore its own tracks, speed and subtitle delay over OMP's choices
-        val key = ResumeStore.keyFor(uri)
-        resumeKey = key
-        forgetHistory(key)
         val request = PlaybackRequest(
-            items = listOf(MediaEntry(uri, title = null, subtitles = subs, segments = QUIET_SEGMENTS)),
+            items = listOf(MediaEntry(uri, title = null, subtitles = subs)),
             startPositionMs = start,
             headers = headers,
         )
-        val c = PlayerController(app, request)
+        val c = PlayerController(app, request, config(PlayerBuffer.memoryClassMb(app)))
         controller = c
         val p = c.player
         p.addListener(events)
@@ -316,16 +309,6 @@ class Engine2160(private val context: Context) : PlayerEngine {
         c.player.removeListener(events)
         main.removeCallbacksAndMessages(null)
         c.release()
-        resumeKey?.let(::forgetHistory)
-        resumeKey = null
-    }
-
-    private fun forgetHistory(key: String) {
-        try {
-            ResumeStore.get(app).delete(key)
-        } catch (e: RuntimeException) {
-            Log.w(TAG, "2160 history: ${e.javaClass.simpleName}")
-        }
     }
 
     override fun release() {
@@ -343,13 +326,18 @@ class Engine2160(private val context: Context) : PlayerEngine {
         private const val USER_AGENT = "OMP"
 
         /**
-         * Intro and credits «known» far beyond any position: the controller then skips its sound-based search
-         * (it would decode the first 10 minutes of the item over the network from TorrServer a second time) and
-         * never auto-skips them. OMP's own skips ([Skips]) decide.
+         * 2160's engine settings for OMP: the buffer capped by the heap ([PlayerBuffer], 16-64 MB), OMP's earlier
+         * HTTP timeouts, and 2160's own history, intro search and chapter reading off (OMP keeps its resume points,
+         * skips and chapters; explicit start positions and subtitle selections work regardless).
          */
-        val QUIET_SEGMENTS: List<SkipSegment> = listOf(
-            SkipSegment(SegmentType.INTRO, Long.MAX_VALUE / 2, Long.MAX_VALUE / 2 + 1),
-            SkipSegment(SegmentType.CREDITS, Long.MAX_VALUE / 2, Long.MAX_VALUE / 2 + 1),
+        fun config(memoryClassMb: Int) = PlayerConfig(
+            bufferTargetBytes = PlayerBuffer.capBytes(memoryClassMb),
+            connectTimeoutMs = 30_000,
+            readTimeoutMs = 60_000,
+            introDetection = false,
+            readChapters = false,
+            restoreFromHistory = false,
+            saveHistory = false,
         )
 
         /** The controller's id of an external subtitle ends with «:<hash of its Uri>» («ext:0:-12345»). */

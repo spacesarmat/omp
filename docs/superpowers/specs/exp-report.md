@@ -299,3 +299,14 @@ Settings → «Плеер для видео» = «Встроенный» unless 
 ## Audio note (Dune, Realtek, Android 9)
 
 If OMP is killed (force-stop, crash, low-memory kill) during AC-3/DTS passthrough, the box keeps a stuck passthrough output until reboot or HDMI replug. Passthrough then fails (`Cannot create AudioTrack`) and the decoded fallback is inaudible. Engine2160's audio setup matches the old Media3Engine; on a clean box AC-3 passthrough plays with sound (confirmed by ear). Test procedure: never force-stop during passthrough; exit with Back. Open question: whether a normal Back exit can leave the output stuck (to be checked after a manual reboot).
+
+## 2160 0.1.5 (PlayerConfig)
+
+Submodule `android/vendor/2160player` is at upstream 68d31c8 (0.1.5). Engine2160 now passes a `PlayerConfig` to its `PlayerController` (`Engine2160.config`) instead of the stage-3 workarounds:
+
+- Buffer cap `bufferTargetBytes` = `PlayerBuffer.capBytes(memoryClass)` (a quarter of the heap, 16-64 MB: the old Media3Engine rule).
+- HTTP timeouts 30 s connect / 60 s read (OMP's previous values).
+- `introDetection = false`, `restoreFromHistory = false`, `saveHistory = false`; `readChapters = false` (OMP draws chapter ticks from its own data; Engine2160 never read the controller's chapters).
+- Removed: the dummy intro/credits segments (`QUIET_SEGMENTS`) and the ResumeStore delete hack. The data-source close fix comes with 0.1.5.
+- FFmpeg software video decoder: `PlayerConfig` has no switch for it, so unsupported hardware video formats do not yet fall back to VLC through this route (needs an upstream option).
+- Phone (embedded `Player2160Activity`): `PlayerConfig` is global (`Player2160.config`) or a controller constructor argument, with no intent extra, so the phone keeps 2160's own defaults. Setting the global would also change the TV engine's defaults and the phone's behaviour; OMP passes explicit start positions, which win over history anyway.

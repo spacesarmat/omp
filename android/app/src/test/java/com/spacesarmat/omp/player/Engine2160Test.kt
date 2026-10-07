@@ -111,12 +111,14 @@ class Engine2160Test {
     }
 
     @Test
-    fun quietSegmentsAreNeverReached() {
-        val ten = 10L * 3600_000
-        assertEquals(2, Engine2160.QUIET_SEGMENTS.size)
-        for (s in Engine2160.QUIET_SEGMENTS) {
-            for (pos in listOf(0L, 60_000L, ten)) assertTrue(!s.contains(pos, ten))
-        }
+    fun configQuietsOwnFeaturesAndCapsTheBuffer() {
+        val c = Engine2160.config(128)
+        assertEquals(32 * 1024 * 1024, c.bufferTargetBytes)
+        assertEquals(64 * 1024 * 1024, Engine2160.config(512).bufferTargetBytes)
+        assertEquals(16 * 1024 * 1024, Engine2160.config(0).bufferTargetBytes)
+        assertEquals(30_000, c.connectTimeoutMs)
+        assertEquals(60_000, c.readTimeoutMs)
+        assertTrue(!c.introDetection && !c.readChapters && !c.restoreFromHistory && !c.saveHistory)
     }
 
     @Test
