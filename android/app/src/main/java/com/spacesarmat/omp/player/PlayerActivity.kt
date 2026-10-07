@@ -7,6 +7,9 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -423,7 +426,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                         d.dismiss()
                         session.selectAudio(n)
                     }
-                    .show()
+                    .showMenu()
             }
         })
         rows.add(I18n.s("player.subsRow", "v" to sSel.label) to {
@@ -433,7 +436,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                     d.dismiss()
                     session.selectSub(subs[n].value)
                 }
-                .show()
+                .showMenu()
         })
         engine.nightMode?.let { on ->
             rows.add(I18n.s("player.nightRow", "v" to I18n.s(if (on) "player.on" else "player.off")) to { engine.setNightMode(!on) })
@@ -446,7 +449,60 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
             .setTitle(I18n.s("player.menu"))
             .setItems(rows.map { it.first }.toTypedArray()) { _, which -> rows.getOrNull(which)?.second?.invoke() }
-            .show()
+            .showMenu()
+    }
+
+    /** Shows the dialog; the blue key of the remote closes it (the dialog has its own window, the activity gets no keys). */
+    private fun AlertDialog.Builder.showMenu(): AlertDialog {
+        val d = create()
+        d.setOnKeyListener { dlg, code, e ->
+            val blue = ColorKeys.actionFor(code) == ColorAction.MENU
+            if (blue && e.action == KeyEvent.ACTION_DOWN) dlg.dismiss()
+            blue
+        }
+        d.show()
+        return d
+    }
+
+    /**
+     * Colour keys: red the next audio track, green the next subtitle choice (off, tracks, off), yellow «Ночной звук»
+     * (engines that have it), blue the menu. The result is a short label on the overlay (works paused and with the
+     * controls hidden).
+     */
+    private fun colorKey(action: ColorAction) {
+        when (action) {
+            ColorAction.AUDIO -> {
+                val audio = session.audioOptions()
+                val n = ColorKeys.nextAudio(audio)
+                if (n == null) {
+                    showMessage(ColorKeys.audioLabel(selectedAudioLabel(audio)), false)
+                } else {
+                    session.selectAudio(n)
+                    showMessage(ColorKeys.audioLabel(audio[n].label), false)
+                }
+            }
+            ColorAction.SUBS -> {
+                val subs = session.subOptions()
+                val next = ColorKeys.nextSub(subs)
+                if (next == null) {
+                    showMessage(ColorKeys.subsLabel(TrackOptions.selectedSub(subs).label), false)
+                } else {
+                    session.selectSub(next.value)
+                    showMessage(ColorKeys.subsLabel(next.label), false)
+                }
+            }
+            ColorAction.NIGHT -> {
+                val on = engine.nightMode
+                if (on == null) {
+                    showMessage(ColorKeys.nightUnavailable(), false)
+                } else {
+                    engine.setNightMode(!on)
+                    showMessage(ColorKeys.nightLabel(!on), false)
+                }
+            }
+            ColorAction.MENU -> openMenu()
+        }
+        changed()
     }
 
     /** «Главы»: «время · название», the current one checked; a choice seeks to its start. */
@@ -482,12 +538,16 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
-        if (code == KeyEvent.KEYCODE_BACK || code !in HANDLED_KEYS) return super.dispatchKeyEvent(event)
+        if (code == KeyEvent.KEYCODE_BACK || (code !in HANDLED_KEYS && ColorKeys.actionFor(code) == null)) return super.dispatchKeyEvent(event)
         if (event.action == KeyEvent.ACTION_DOWN) onKey(code)
         return true
     }
 
     private fun onKey(code: Int) {
+        ColorKeys.actionFor(code)?.let {
+            colorKey(it)
+            return
+        }
         when (code) {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> when {
                 flow.countdown >= 0 -> playNext()
@@ -894,7 +954,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                 if (cur.isNotEmpty()) title.text = item.title + " · " + cur
             }
             ticksView.setTicks(Chapters.ticks(chapters, dur))
-            hint.text = I18n.s(if (chapters.isNotEmpty()) "player.res.hintChapters" else "player.res.hint")
+            hint.text = hintText(chapters.isNotEmpty())
             engineName.text = switcher.kind.label
         }
         toastBox.visibility = if (toastShown) View.VISIBLE else View.GONE
@@ -913,6 +973,21 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val e = session.errorText()
         errorBox.visibility = if (e != null) View.VISIBLE else View.GONE
         if (e != null) errorText.text = e
+    }
+
+    /** The key hint line and, under it, the colour keys with coloured dots (night sound only where the engine has it). */
+    private fun hintText(chapters: Boolean): CharSequence {
+        val base = I18n.s(if (chapters) "player.res.hintChapters" else "player.res.hint")
+        val c = ColorKeys.hint(engine.nightMode != null)
+        val out = SpannableString(base + "\n" + c.text)
+        var from = base.length + 1
+        for (color in c.dots) {
+            val at = out.indexOf('\u25CF', from)
+            if (at < 0) break
+            out.setSpan(ForegroundColorSpan(color), at, at + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            from = at + 1
+        }
+        return out
     }
 
     // ---- events to the page ----
