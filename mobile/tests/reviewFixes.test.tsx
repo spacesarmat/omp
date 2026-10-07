@@ -20,7 +20,7 @@ const NOW = new Date(2026, 9, 6, 12).getTime();
 function card(id: number, patch?: Partial<CatalogCard>): CatalogCard {
   return {
     kind: 'tv', id, title: 'Show ' + id, original: 'Show ' + id, year: 2024, poster: '', rating: 0, backdrop: 'b', genres: ['g'],
-    runtime: 0, overview: 'long overview', cast: [{ name: 'A', photo: '', role: '' }], seasons: [], airing: true, status: 'returning',
+    runtime: 0, overview: 'long overview', cast: [{ id: 1, name: 'A', photo: '', role: '', job: 'cast' }], seasons: [], airing: true, status: 'returning',
     nextEpisode: { season: 1, episode: 2, airDate: '2026-10-08' }, lastAirDate: '', ...patch,
   };
 }

@@ -21,7 +21,7 @@ export const MULTI = {
 
 export const MOVIE_CARD = {
   ...NORTH_WIND, genres: [{ id: 18, name: 'драма' }], runtime: 112,
-  credits: { cast: [{ name: 'Анна Вестова', character: 'Мария', profile_path: '/a.jpg' }, { name: 'Пётр Лесной', character: 'Капитан', profile_path: null }] },
+  credits: { cast: [{ id: 501, name: 'Анна Вестова', character: 'Мария', profile_path: '/a.jpg' }, { id: 502, name: 'Пётр Лесной', character: 'Капитан', profile_path: null }] },
 };
 
 export const TV_CARD = {
@@ -33,7 +33,7 @@ export const TV_CARD = {
   ],
   last_episode_to_air: { season_number: 2, episode_number: 6 },
   next_episode_to_air: { season_number: 2, episode_number: 7, air_date: '2026-10-12' },
-  credits: { cast: Array.from({ length: 12 }, (_, i) => ({ name: 'Актёр ' + (i + 1), character: 'Роль ' + (i + 1), profile_path: '/c' + i + '.jpg' })) },
+  credits: { cast: Array.from({ length: 12 }, (_, i) => ({ id: 600 + i, name: 'Актёр ' + (i + 1), character: 'Роль ' + (i + 1), profile_path: '/c' + i + '.jpg' })) },
 };
 
 export const TV_SEASON = {

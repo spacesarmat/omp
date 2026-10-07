@@ -18,8 +18,8 @@ const FILM: CatalogCard = {
   poster: 'https://img.test/t/p/w300/a.jpg', rating: 7.4, backdrop: 'https://img.test/t/p/w780/b.jpg',
   genres: ['драма'], runtime: 118, overview: 'Архивариус находит письмо, которого не было.',
   cast: [
-    { name: 'Ольга Тестова', photo: 'https://img.test/t/p/w185/p.jpg', role: 'Вера' },
-    { name: 'Иван Пробный', photo: '', role: 'Архивариус' },
+    { id: 1, name: 'Ольга Тестова', photo: 'https://img.test/t/p/w185/p.jpg', role: 'Вера', job: 'cast' },
+    { id: 2, name: 'Иван Пробный', photo: '', role: 'Архивариус', job: 'cast' },
   ],
   seasons: [], airing: false,
 };
@@ -511,7 +511,7 @@ describe('TitleCard in English', () => {
       expect(episodes()[2].querySelector('.m-tc-ep-title')!.textContent).toBe('Episode 3');
       act(() => render(null, el));
       saveSubs([{ id: 's1', query: 'Frost Pass', quality: '', sources: null, notify: true, createdAt: 1 }]);
-      serve({ ...FILM, title: 'Midnight Archive', genres: ['drama'], cast: [{ name: 'Olga Test', photo: '', role: '' }] });
+      serve({ ...FILM, title: 'Midnight Archive', genres: ['drama'], cast: [{ id: 3, name: 'Olga Test', photo: '', role: '', job: 'cast' }] });
       mount(<TitleCard kind="movie" id={11} />);
       await flush();
       expect(el.querySelector('.m-tc-meta')!.textContent).toBe('2026 · drama · 1 h 58 min');

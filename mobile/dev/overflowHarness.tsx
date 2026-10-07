@@ -54,7 +54,7 @@ const CARDS: { [id: number]: CatalogCard } = {
   22: {
     kind: 'tv', id: 22, title: 'Тёмная материя', original: 'Dark Matter', year: 2024, poster: '', rating: 7.6, backdrop: '',
     genres: ['фантастика', 'драма', 'триллер', 'детектив'], runtime: 50, overview: 'Физик просыпается в чужой жизни, где его жена никогда не выходила за него замуж, а сын никогда не рождался. Он пытается вернуться домой сквозь бесконечные версии своей жизни.',
-    cast: [{ name: 'Джоэл Эдгертон', photo: '', role: 'Джейсон Дессен' }, { name: 'Дженнифер Коннелли', photo: '', role: 'Дэниела' }, { name: 'Элис Брага', photo: '', role: 'Аманда' }],
+    cast: [{ id: 1, name: 'Джоэл Эдгертон', photo: '', role: 'Джейсон Дессен', job: 'cast' }, { id: 2, name: 'Дженнифер Коннелли', photo: '', role: 'Дэниела', job: 'cast' }, { id: 3, name: 'Элис Брага', photo: '', role: 'Аманда', job: 'cast' }],
     seasons: [{ number: 3, episodes: 10, year: 2026, aired: 2, airDate: '2026-09-01' }, { number: 2, episodes: 10, year: 2025, aired: 10 }, { number: 1, episodes: 9, year: 2024, aired: 9 }],
     airing: true, status: 'returning', nextEpisode: { season: 3, episode: 3, airDate: new Date(now + 2 * DAY).toISOString().slice(0, 10) },
   },
@@ -97,6 +97,7 @@ const catalog: CatalogClient = {
   },
   card: (_k, id) => (CARDS[id] ? Promise.resolve(CARDS[id]) : Promise.reject(new Error('catalog:bad'))),
   season: (id, n) => Promise.resolve(season(id, n)),
+  person: () => Promise.reject(new Error('catalog:bad')),
 };
 
 const HASH = 'c'.repeat(40);
