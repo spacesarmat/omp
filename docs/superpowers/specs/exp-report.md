@@ -1,9 +1,11 @@
-# Experimental branch, stage 1: OMP on the 2160player toolchain
+# Experimental branch `exp/2160-engine`: stage reports
+
+## Stage 1: OMP on the 2160player toolchain
 
 Date: 2026-10-07. Branch `exp/2160-engine`. Commit `build(android): AGP 9.4, Kotlin 2.4, compileSdk 37`.
 Design: `2026-10-07-exp-2160-engine-design.md`. The target versions come from `spacesarmat/2160player` `gradle/libs.versions.toml` and its wrapper.
 
-## Versions
+### Versions
 
 | | before | after |
 |---|---|---|
@@ -21,7 +23,7 @@ The Kotlin plugin version is still set on the buildscript classpath. AGP 9 uses 
 ### Why targetSdk stays 36
 Android 17 (API 37) brings local network protection. An app that targets 37 needs the new runtime permission `android.permission.ACCESS_LOCAL_NETWORK` (it is in the android-37 platform, `since="37.0"`) before it can reach LAN addresses. Almost everything OMP does is on the LAN: TorrServer, SSDP/multicast discovery, SSH to the LG TV, adb to Android TV and the phone remote. Moving to targetSdk 37 would need a permission request flow and UX, so it is not a toolchain change, and LAN access would break on Android 17 devices without it. 2160player itself also ships `targetSdk = 36`. compileSdk 37 is all that the Compose 1.12 and core 1.19 dependencies of player-core need (stage 2).
 
-## Changes in OMP's own files
+### Changes in OMP's own files
 - `android/build.gradle`: AGP 9.4.1 and KGP 2.4.20 on the classpath.
 - `android/app/build.gradle`:
   - `apply plugin: 'org.jetbrains.kotlin.android'` is removed. AGP 9 fails with "The 'org.jetbrains.kotlin.android' plugin is no longer required for Kotlin support since AGP 9.0". `kotlin { compilerOptions { jvmTarget = JVM_21 } }` stays as it is and still works with built-in Kotlin.
@@ -34,7 +36,7 @@ Android 17 (API 37) brings local network protection. An app that targets 37 need
 - `.github/workflows/ci.yml` and `release.yml`: `setup-android` now installs `platform-tools platforms;android-37.0 build-tools;36.0.0` explicitly. Before, it installed only `platform-tools` and relied on AGP auto-download. Java stays at temurin 21. CI was not run.
 - `scripts/gradle.mjs`: only the comment and message that named Gradle 8.14 are changed. The JDK 21..24 selection is the same.
 
-## Capacitor plugins
+### Capacitor plugins
 Modules: `capacitor-android` (@capacitor/android 8.x), `capacitor-mlkit-barcode-scanning`, `capacitor-app`, `capacitor-clipboard`, and the generated `capacitor-cordova-android-plugins`.
 
 **No plugin issue needs a fix.** All five modules configure and compile under AGP 9.4.1, Gradle 9.6.0 and compileSdk 37 without patches:
@@ -47,7 +49,7 @@ No change to `node_modules`, no patch-package, no `subprojects {}` overrides. `c
 
 Remaining deprecations, which are warnings only and will become errors in **Gradle 10**: "Implicit lookup of properties in parent projects". Every plugin `build.gradle` (and OMP's `app/build.gradle`, for `$androidxAppCompatVersion` etc.) reads the root `ext` versions without a `rootProject.ext.` prefix. Gradle 9.x is fine with this. Capacitor will have to update its templates before Gradle 10.
 
-## Verification
+### Verification
 - `npm run android:debug` (cap sync + `assembleDebug`): **BUILD SUCCESSFUL**, from a clean build too.
 - `node scripts/gradle.mjs testDebugUnitTest`: **499 tests, 0 failures, 0 skipped**. Same as before the change (499).
 - `npx vitest run`: **316 files, 3517 tests passed**.
@@ -55,7 +57,7 @@ Remaining deprecations, which are warnings only and will become errors in **Grad
 - Debug APK badging: `compileSdkVersion='37'`, `targetSdkVersion:'36'`, versionCode 1900.
 - Not done: no device checks on Dune or S21 (the controller does these), and CI was not run.
 
-## APK sizes (debug, bytes)
+### APK sizes (debug, bytes)
 
 | APK | AGP 8.13 | AGP 9.4 | diff |
 |---|---|---|---|
@@ -67,10 +69,64 @@ Remaining deprecations, which are warnings only and will become errors in **Grad
 - dex grows by about 135 KB. Kotlin 2.4 generates different code, and the classes are split into 17 dex files instead of 16.
 - Release with the debug key, for reference: arm64 35.6 MB, armv7 33.5 MB, universal 58.6 MB.
 
-## Risks and notes
+### Risks and notes
 - **targetSdk 37 is postponed.** It needs `ACCESS_LOCAL_NETWORK` handling (runtime request, fallback UX) and a review of the other API 37 behaviour changes. This is a separate task.
 - **Gradle 10** will turn the implicit parent-property lookup into an error, in the Capacitor plugin templates and in OMP's `app/build.gradle`. Not urgent on Gradle 9.6.
 - **Kotlin 2.4** compiles OMP's code without errors. There are new warnings only, such as `UNEXHAUSTIVE_WHEN_BASED_ON_JAVA_ANNOTATIONS` and `PLATFORM_CLASS_MAPPED_TO_KOTLIN`. Runtime behaviour is covered by the unit tests, but not yet by a device check.
 - `libc++_shared.so` is now stripped on arm64. This is expected to be harmless (symbols only), but libVLC, ExoPlayer FFmpeg and ML Kit should be smoke-tested on the S21 and Dune.
 - CI now relies on `platforms;android-37.0` being available to `sdkmanager` on the runner. The package id matches the local SDK's `package.xml`.
 - `org.gradle.jvmargs` is still `-Xmx1536m`. Debug and release built fine. Stage 2 (player-core) needs `-Xmx4g`, as the spike found.
+
+## Stage 2: 2160 Player's player-core in OMP
+
+Date: 2026-10-07. Commit `build(android): include 2160 player-core, Media3 1.11, nextlib FFmpeg`.
+Spike on the old toolchain: `C:\Users\ANDYBUM\omp-spike\SPIKE-2160-EMBED.md`. No 2160player source or build file is changed: since stage 1 OMP is on its toolchain.
+
+### Changes
+- **Submodule** `android/vendor/2160player` → `https://github.com/spacesarmat/2160player.git`, branch `main` (`.gitmodules` has `branch = main`), pinned at `88d2b4c`. Update with `git submodule update --remote android/vendor/2160player` and commit the new pointer.
+- `android/settings.gradle`: `includeBuild('vendor/2160player')` with `substitute(module('tv.p2160:player-core')).using(project(':player-core'))` (EMBEDDING.md 1b). The included build uses its own version catalog and `gradle.properties`.
+  - It fails early with a clear message when the submodule is not checked out.
+  - Android SDK: the included build reads `ANDROID_HOME`/`ANDROID_SDK_ROOT` (set by `scripts/gradle.mjs` locally and by `setup-android` in CI) or its own `local.properties`. When only OMP's `android/local.properties` exists (Android Studio), settings copies its `sdk.dir` into `vendor/2160player/local.properties`, which is gitignored upstream, so the submodule stays clean.
+- `android/app/build.gradle`:
+  - `implementation 'tv.p2160:player-core:0.1.0'` (the version player-core's build declares by default).
+  - `media3-exoplayer` and `media3-ui` 1.8.0 → **1.11.1** (2160's catalog). player-core exposes `media3-exoplayer` as `api`, so it would be 1.11.1 anyway.
+  - `org.jellyfin.media3:media3-ffmpeg-decoder:1.8.0+1` → `io.github.anilbeesetti:nextlib-media3ext:1.11.1-0.16.0` (2160's catalog). It is a direct dependency because player-core has nextlib as `implementation`.
+  - `packaging.jniLibs.pickFirsts += ['**/libavcodec.so','**/libavutil.so','**/libswscale.so','**/libswresample.so']`.
+- `Media3Engine.kt`: the two FFmpeg imports move to `io.github.anilbeesetti.nextlib.media3ext.ffdecoder.{FfmpegAudioRenderer,FfmpegLibrary}`; same constructor `(Handler, AudioRendererEventListener, AudioSink)` and `isAvailable()`. KDoc updated. Compiles without warnings on Media3 1.11.1.
+- `android/gradle.properties`: `org.gradle.jvmargs=-Xmx4g` (other flags unchanged).
+- No Compose plugin in OMP: launching `Player2160` from Kotlin does not need it.
+- CI (`ci.yml` android job, `release.yml`): `actions/checkout` with `submodules: recursive`. `setup-java` installs Temurin **17 and 21** (21 last, so it stays the default for Gradle), and Gradle runs with `-Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64`: player-core declares `kotlin { jvmToolchain(17) }` and there is no toolchain resolver plugin, so Gradle must find a local JDK 17 (locally it auto-detects Adoptium 17). The web `build` job in `ci.yml` runs no Gradle and is left without submodules. CI was not run.
+
+### Merged manifest (debug) additions from player-core and its dependencies
+- `<application android:usesCleartextTraffic="true">`. No effect: OMP's `networkSecurityConfig` takes precedence (API 24+), and it already permits cleartext.
+- `CHANGE_WIFI_MULTICAST_STATE`: OMP already declares it. Nothing new.
+- **New** permission `FOREGROUND_SERVICE_MEDIA_PLAYBACK` (`FOREGROUND_SERVICE` already present).
+- `tv.p2160.core.Player2160Activity`: `exported="false"`, `singleTop`, PiP, theme `Theme.P2160.Player`.
+- **New** `tv.p2160.core.engine.PlaybackService`: `exported="true"`, `foregroundServiceType="mediaPlayback"`, intent filters `androidx.media3.session.MediaSessionService` and `android.media.browse.MediaBrowserService`. Other apps (and Android Auto/system media controls) can bind to it; it only matters while a 2160 session is running.
+- **New** `androidx.media3.session.BluetoothValidationActivity` (`exported="true"`, from media3-session 1.11).
+
+### Verification
+- `npm run android:debug`: **BUILD SUCCESSFUL** (1 m 27 s). No errors; 9 Kotlin deprecation warnings inside player-core (upstream), none in OMP's code. `capacitor.build.gradle` and `capacitor.settings.gradle` restored afterwards.
+- `node scripts/gradle.mjs testDebugUnitTest` (OMP's `:app`): **499 tests, 0 failures, 0 errors, 0 skipped**.
+- `npx vitest run`: **316 files, 3517 tests passed**.
+- Not done: release build, device checks, CI.
+
+### APK sizes (debug, bytes)
+
+| APK | stage 1 | stage 2 | diff |
+|---|---|---|---|
+| arm64 (`app-arm64-v8a-debug.apk`) | 39 768 247 | 68 029 448 | +28.26 MB |
+| armv7 (`app-armeabi-v7a-debug.apk`) | 37 498 857 | 65 453 843 | +27.95 MB |
+| universal (`app-universal-debug.apk`) | 63 913 688 | 108 048 793 | +44.14 MB |
+
+- arm64 now has 30.9 MB of dex and 30.6 MB of native libraries (compressed). The new native libraries are nextlib's `libavcodec`, `libavformat`, `libavutil`, `libswscale`, `libswresample`, `libmedia3ext`, `libmediainfo` and `libandroidx.graphics.path`; Jellyfin's `libffmpegJNI.so` is gone.
+- The growth is about 2.3 MB per ABI more than in the spike (+25.9 MB): upstream player-core here is on Compose 1.12 / core 1.19 / lifecycle 2.11 and has newer commits.
+- Release has `minifyEnabled false`, so it grows by about the same.
+
+### Risks and notes
+- **Device regression is needed** for OMP's own Media3 engine (1.8 → 1.11: track overrides, audio sink/passthrough, buffer cap on 128 MB boxes, subtitles) and for the FFmpeg switch (DTS/TrueHD/AC3 decode and downmix through nextlib instead of Jellyfin).
+- **Licence notes**: `README.md` / `README.en.md` third-party lists still name the Jellyfin FFmpeg decoder; they should name nextlib (GPL-3.0) and 2160 Player (GPL-3.0) and the FFmpeg configure flags of nextlib's build before anything leaves the experimental branch.
+- **Exported `PlaybackService`** from player-core (see above). If OMP does not want background playback / external controllers for the 2160 engine, it can be removed in OMP's manifest with `tools:node="remove"`.
+- **Submodule follows `main`**: `git submodule update --remote` pulls whatever upstream has; a toolchain or Compose bump there can break OMP's build. The committed pointer pins a known-good commit.
+- **CI**: needs the JDK 17 toolchain (handled as above) and 4 GB of Gradle heap; the composite build also configures 2160's `app`, `source-torrent` and `embed-demo` projects (not built). Both untested on runners.
+- **Size**: +28 MB per ABI. Options stay as in the spike: R8, or trimming player-core (`material-icons-extended`, rtsp, smoothstreaming, session).
