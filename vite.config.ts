@@ -42,7 +42,7 @@ export default defineConfig({
     pool: 'vmThreads',
     // pins the Russian UI (and a Russian browser language) so the assertions stay in Russian
     setupFiles: ['tests/setup/i18n.ts'],
-    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx', 'mobile/tests/**/*.test.{ts,tsx}'],
+    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx', 'mobile/tests/**/*.test.{ts,tsx}', 'ops/*/test/**/*.test.ts'],
     alias: {
       react: 'preact/compat',
       'react-dom': 'preact/compat',

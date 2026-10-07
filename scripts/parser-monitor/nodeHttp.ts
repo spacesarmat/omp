@@ -1,9 +1,11 @@
 // SourceHttp for Node (the parser monitor): what the native Android http does for the parsers — a browser User-Agent,
-// cookies per site, redirects followed with the final URL, the body decoded by its charset (windows-1251 / koi8-r
+// cookies per site, redirects followed with the final URL, torrent.by's incomplete TLS chain completed as on Android, the body decoded by its charset (windows-1251 / koi8-r
 // included), forms in windows-1251. No Cloudflare pass. Every answer is remembered (`last`) so the monitor can tell a
 // block from a broken parser.
 import { encodeWin1251 } from '../../src/sources/html';
 import type { HttpOptions, HttpResponse, SourceHttp } from '../../src/sources/types';
+// torrent.by: its TLS chain needs the Let's Encrypt YE intermediates the Android app bundles (see tlsFetch.mjs)
+import { monitorFetch } from './tlsFetch.mjs';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 export const DEFAULT_TIMEOUT_MS = 25000;
@@ -139,7 +141,7 @@ export function createNodeHttp(defaultTimeoutMs: number = DEFAULT_TIMEOUT_MS): N
       if (body !== undefined) headers['Content-Type'] = 'application/x-www-form-urlencoded';
       let res: Response;
       try {
-        res = await fetch(current, { method: m, headers, body, redirect: 'manual', signal: AbortSignal.timeout(Math.max(1000, deadline - Date.now())) });
+        res = await monitorFetch(current, { method: m, headers, body, redirect: 'manual', signal: AbortSignal.timeout(Math.max(1000, deadline - Date.now())) });
       } catch (e) {
         const name = e && typeof e === 'object' ? (e as { name?: string }).name : '';
         const cause = e && typeof e === 'object' ? (e as { cause?: { code?: string; message?: string } }).cause : undefined;
