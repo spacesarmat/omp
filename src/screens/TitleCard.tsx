@@ -8,12 +8,12 @@ import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navi
 import { t, tp, fmtDuration } from '../i18n';
 import { activeCatalog } from '../catalog/activeCatalog';
 import { catalogErrorCode, type CatalogErrorCode } from '../catalog/client';
-import { libraryIndex, inLibrary, seasonIndex, librarySeasonHash } from '../catalog/library';
+import { seasonIndex, librarySeasonHash } from '../catalog/library';
+import { libraryTargetOf, torrentTarget, type LibraryTarget } from '../catalog/libraryTarget';
 import { torrentQuery, type CatalogCard, type Kind, type Person } from '../catalog/tmdb';
 import type { Torrent } from '../api/types';
 import { torrents } from '../store/library';
 import { isWanted, wantAction } from '../store/wantList';
-import { findGroup, seriesKey } from '../lib/seriesGroups';
 import { airDateText, seriesPill } from '../lib/seriesStatus';
 import { FocusGroup, Focusable, Button, Spinner } from '../ui/components';
 import { restoreFocus, scrollToShow } from '../ui/focus';
@@ -52,27 +52,10 @@ export function initials(name: string): string {
     .join('');
 }
 
-/** The library screen of a torrent: its series screen (on `season` when given) for a series, else the torrent. */
-function openTarget(list: Torrent[], tor: Torrent, season?: number): Route {
-  const key = seriesKey(tor);
-  const g = key ? findGroup(list, key) : null;
-  if (g) return season ? { name: 'series', key: g.key, season: season } : { name: 'series', key: g.key };
-  return { name: 'torrent', hash: tor.hash };
-}
-
-/** Where «Открыть в медиатеке» goes; null when the library has nothing of the title. */
-export function libraryTarget(list: Torrent[], card: CatalogCard): Route | null {
-  if (card.kind === 'tv') {
-    const idx = seasonIndex(list);
-    const numbers = card.seasons.map((s) => s.number).sort((a, b) => b - a);
-    for (let i = 0; i < numbers.length; i++) {
-      const hash = librarySeasonHash(idx, card, numbers[i]);
-      const tor = hash ? list.filter((x) => x.hash === hash)[0] : undefined;
-      if (tor) return openTarget(list, tor);
-    }
-  }
-  const hit = list.filter((x) => inLibrary(libraryIndex([x]), card))[0];
-  return hit ? openTarget(list, hit) : null;
+/** The route of a library target. */
+function routeOf(t: LibraryTarget): Route {
+  if (t.kind === 'torrent') return { name: 'torrent', hash: t.hash };
+  return t.season ? { name: 'series', key: t.key, season: t.season } : { name: 'series', key: t.key };
 }
 
 interface Chip {
@@ -150,7 +133,11 @@ export interface TitleWantProps {
 function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
   const list = torrents.value;
   const now = Date.now();
-  const target = useMemo(() => libraryTarget(list, card), [list, card]);
+  const target = useMemo(() => {
+    const t = libraryTargetOf(list, card);
+    // the hero opens the series itself, not a season (the chips do)
+    return t ? routeOf(t.kind === 'series' ? { kind: 'series', key: t.key } : t) : null;
+  }, [list, card]);
   const chips = useMemo(() => (card.kind === 'tv' ? seasonChips(card, list, now) : []), [list, card]);
   const seasonsRef = useRef<HTMLDivElement>(null);
   const [, setTick] = useState(0);
@@ -164,7 +151,7 @@ function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
     if (c.state === 'missing') find(c.n);
     else if (c.state === 'library') {
       const tor = list.filter((x) => x.hash === c.hash)[0];
-      if (tor) navigate(openTarget(list, tor, c.n));
+      if (tor) navigate(routeOf(torrentTarget(list, tor, c.n)));
     }
   };
   const wanted = (want.wanted || isWanted)(card.kind, card.id);
