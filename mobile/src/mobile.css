@@ -1030,6 +1030,9 @@ button, .m-btn {
 .m-rc .m-result-title { font-size: 14px; line-height: 1.25; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .m-rc .m-rel-chips { flex-wrap: nowrap; overflow: hidden; }
 .m-rc .m-rel-chips .m-badge-inline { flex-shrink: 0; font-size: 10px; line-height: 14px; }
+/* «Фильм» / «Сериал · S02 · 1–8 из 8»: a quality chip with a frame */
+.m-kind-badge { background: none; box-shadow: inset 0 0 0 1px #3A4150; }
+.m-search-kinds { margin: 4px 0 8px; }
 .m-rc-meta { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; font-size: 12px; line-height: 16px; }
 .m-rc-meta .m-src-badge, .m-rc-meta .m-flag { flex-shrink: 0; padding: 0 6px; border-radius: 5px; }
 .m-rc-meta-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }

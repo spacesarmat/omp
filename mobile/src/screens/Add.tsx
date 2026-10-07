@@ -40,6 +40,8 @@ import { SubSheet } from '../ui/SubSheet';
 import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../addResult';
 import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
+import { filterByKind, getKindFilter, setKindFilter, type KindFilter } from '../../../src/lib/releaseKind';
+import { kindFilterOptions } from '../../../src/sources/releaseRow';
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5';
 const CHECK = 'M5 12l5 5l9-10';
@@ -179,6 +181,8 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const [chosen, setChosenState] = useState<string[] | null>(memo.chosen);
   const [filters, setFiltersState] = useState<SearchFilters>(memo.filters);
   const [sort, setSortState] = useState<SortKey>(memo.sort);
+  // «Все / Фильмы / Сериалы»: kept while the app runs
+  const [kindF, setKindState] = useState<KindFilter>(getKindFilter());
   const [rows, setRows] = useState<SourceResult[] | null>(memo.handle ? memo.handle.results() : null);
   const [prog, setProg] = useState<Prog | null>(memo.handle ? progOf(memo.handle) : null);
   const [searching, setSearching] = useState(memo.handle ? memo.handle.pending().length > 0 : false);
@@ -215,6 +219,11 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     memo.sort = v;
     memo.order = [];
     setSortState(v);
+  };
+  const setKind = (v: KindFilter) => {
+    setKindFilter(v);
+    memo.order = [];
+    setKindState(v);
   };
   const setRowCat = (v: Record<string, string>) => {
     memo.rowCat = v;
@@ -398,7 +407,11 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
 
   // while sources still answer, rows on screen keep their places (no row moves under the finger);
   // the full sort comes when the search ends
-  const filtered = rows ? applyFilters(rows, filters) : [];
+  // a release of unknown kind shows only under «Все»
+  const matching = rows ? applyFilters(rows, filters) : [];
+  const filtered = filterByKind(matching, kindF);
+  // nothing of the chosen kind, though the search found something: say so, not «Ничего не найдено»
+  const kindEmpty = kindF !== 'all' && matching.length > 0;
   const visible = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
   memo.order = visible.map(resultKey);
   const seasons = Array.from(new Set((rows || []).reduce((a: number[], r) => a.concat(parseRelease(r.Title).seasons), []))).sort((a, b) => a - b).slice(0, 12);
@@ -523,7 +536,26 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
         </div>
       )}
       {searchError && <LaunchError message={searchError} />}
-      {!searching && prog && prog.total > 0 && visible.length === 0 && <div class="m-muted">{t('catalog.nothingFound')}</div>}
+      {rows && (
+        <div class="m-seg m-search-kinds" role="group" aria-label={t('search.kind.filterLabel')} data-kind-filter="">
+          {kindFilterOptions().map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              class={'m-seg-btn' + (kindF === o.id ? ' on' : '')}
+              aria-pressed={kindF === o.id}
+              onClick={() => setKind(o.id)}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {!searching && prog && prog.total > 0 && visible.length === 0 && (
+        <div class="m-muted" data-empty={kindEmpty ? 'kind' : 'all'}>
+          {kindEmpty ? t('search.kind.none') : t('catalog.nothingFound')}
+        </div>
+      )}
       <div class="m-results">
         {visible.map((r) => {
           const k = resultKey(r);
