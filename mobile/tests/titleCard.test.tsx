@@ -481,6 +481,15 @@ describe('TitleCard: people', () => {
       ...FILM,
       cast: [{ id: 9, name: 'Пётр Режиссёров', photo: '', role: '', job: 'director' }, ...FILM.cast],
     });
+    // a person with no job is an actor, not a head
+    serve({ ...FILM, cast: [{ id: 5, name: 'Без Роли', photo: '', role: 'Х' } as never, { id: 9, name: 'Пётр Режиссёров', photo: '', role: '', job: 'director' }] });
+    mount(<TitleCard kind="movie" id={11} />);
+    await flush();
+    expect(Array.from(el.querySelectorAll('button.m-tc-person')).map((p) => p.querySelector('.m-tc-person-name')!.textContent)).toEqual(['Пётр Режиссёров', 'Без Роли']);
+    serve({
+      ...FILM,
+      cast: [{ id: 9, name: 'Пётр Режиссёров', photo: '', role: '', job: 'director' }, ...FILM.cast],
+    });
     mount(<TitleCard kind="movie" id={11} />);
     await flush();
     const people = Array.from(el.querySelectorAll('button.m-tc-person')) as HTMLButtonElement[];

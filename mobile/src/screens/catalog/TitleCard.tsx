@@ -283,7 +283,8 @@ function Body({ card }: { card: CatalogCard }) {
   const following = loadSubs().some((s) => sameQuery(s.query, query));
   const find = (season?: number) => navigate({ name: 'add', query: torrentQuery(card, season), run: true });
   // the directors or creators come first, then the actors
-  const cast = card.cast.filter((p) => p.job !== 'cast').concat(card.cast.filter((p) => p.job === 'cast'));
+  const isHead = (p: Person) => p.job === 'director' || p.job === 'creator';
+  const cast = card.cast.filter(isHead).concat(card.cast.filter((p) => !isHead(p)));
   const roleOf = (p: Person) => (p.job === 'director' ? t('titleCard.director') : p.job === 'creator' ? t('titleCard.creator') : p.role);
   return (
     <>

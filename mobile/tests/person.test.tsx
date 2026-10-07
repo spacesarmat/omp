@@ -162,6 +162,15 @@ describe('phone person screen', () => {
     expect(text(el.querySelector('.m-person-name'))).toBe('Иван Режиссёров');
   });
 
+  it('has the back button at the left of an m-bar and it goes back', async () => {
+    mount(<Person id={7} label="Иван Режиссёров" />);
+    await flush();
+    const back = el.querySelector('.m-bar > .m-icon-btn:first-child') as HTMLButtonElement;
+    expect(back.getAttribute('aria-label')).toBe('Назад');
+    act(() => back.click());
+    expect(currentRoute.value).toEqual({ name: 'library' });
+  });
+
   it('in the app: renders for the route with «Каталог» highlighted', async () => {
     mount(<App />);
     await flush();

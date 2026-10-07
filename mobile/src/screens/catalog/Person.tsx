@@ -9,7 +9,7 @@ import type { Credit, PersonCard } from '../../../../src/catalog/tmdb';
 import { torrents } from '../../../../src/store/library';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { goBack, navigate, type MRoute } from '../../nav';
-import { ScreenHeader, HeadButton } from '../../ui/ScreenHeader';
+import { Icon } from '../../ui/Icon';
 import { CatalogError } from './CatalogError';
 import { ratingText } from './CatalogSearch';
 import { TileTitle, TileWhen } from './Discover';
@@ -165,9 +165,12 @@ export function Person({ id, label }: { id: number; label?: string }) {
 
   return (
     <div class="m-screen m-person" data-route="person">
-      <ScreenHeader title={(card && card.name) || label || ''}>
-        <HeadButton d={BACK} label={t('common.back')} onClick={() => goBack()} />
-      </ScreenHeader>
+      <div class="m-bar">
+        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+          <Icon d={BACK} />
+        </button>
+        <h1 class="m-bar-title">{(card && card.name) || label || ''}</h1>
+      </div>
       {error ? (
         <CatalogError
           code={error}
