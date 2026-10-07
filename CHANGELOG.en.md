@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.19.0-beta.5
+
+- FAQ: a new question "Connect the phone to a Xiaomi TV" (the code, the same Wi-Fi without isolation, OMP must be running, VPN) and a step-by-step phone install for Xiaomi
+
 ## 0.19.0-beta.4
 
 - [tv] Default dub per series: OMP remembers the dub picked in the player and uses it for the next episodes and the series' other releases; shown and changeable on the series screen («Dub: HDRezka · 5.1»)
