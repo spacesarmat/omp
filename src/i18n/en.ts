@@ -998,6 +998,11 @@ export const en: EnDict<typeof ru> = {
     logError: '. {error}',
   },
   player: {
+    videoPlayer: 'Video player',
+    builtinPlayer: 'Built-in',
+    p2160: '2160 Player',
+    p2160Missing: 'not installed - download it from GitHub',
+    p2160Note: 'The support QR and phone control only work in the built-in player',
     off: 'Off',
     chapterN: 'Chapter {n}',
     chapterTitled: 'Chapter {n} “{title}”',

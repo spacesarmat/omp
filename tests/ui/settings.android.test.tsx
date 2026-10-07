@@ -71,3 +71,35 @@ describe('SettingsScreen «Плеер»', () => {
     expect(settings.value.playerEngine).toBe('auto');
   });
 });
+
+describe('SettingsScreen «Плеер для видео»', () => {
+  const cap = (pkg: string | null) => {
+    w.Capacitor = {
+      getPlatform: () => 'android',
+      Plugins: { OmpNative: { localIpv4: () => Promise.resolve({}), vlcAvailable: () => Promise.resolve({ available: true }), player2160: () => Promise.resolve({ package: pkg }) } },
+    };
+  };
+  const settle = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); await new Promise((r) => setTimeout(r, 20)); };
+  const rowOf = (host: HTMLElement) => Array.from(host.querySelectorAll('.choice-row')).find((e) => (e.textContent || '').indexOf('Плеер для видео') >= 0) as HTMLElement;
+  it('webOS: no row', () => {
+    const host = mount();
+    expect(host.textContent).not.toContain('Плеер для видео');
+  });
+  it('not installed: marked «не установлен» and not selectable', async () => {
+    cap(null);
+    const host = mount();
+    await settle();
+    expect(host.textContent).toContain('не установлен');
+    expect(host.querySelector('svg.qr')).not.toBeNull();
+    rowOf(host).click();
+    expect(settings.value.videoPlayer).toBe('builtin');
+  });
+  it('installed: a press selects 2160 Player', async () => {
+    cap('tv.p2160.player');
+    const host = mount();
+    await settle();
+    expect(host.textContent).not.toContain('не установлен');
+    rowOf(host).click();
+    expect(settings.value.videoPlayer).toBe('p2160');
+  });
+});

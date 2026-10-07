@@ -17,6 +17,8 @@ import { t, lang } from '../i18n';
 import { donateCardEnabled } from '../player/DonateCard';
 import { journalSupportActive } from '../store/support';
 import { getTrackPref } from '../store/trackPrefs';
+import { p2160Package, play2160 } from '../player/player2160';
+import { getLocalProgress } from '../store/progress';
 import { engineFor, knownProbe } from '../player/nativeEngine';
 
 interface Props {
@@ -83,6 +85,7 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
       const s = settings.value;
       const c = client.value;
       const journal = new WatchJournal((h, e) => { recordWatch(c, h, e); }, journalSource(from));
+      const startBuiltin = () => {
       const run = new NativeSession(plugin, c, queue, {
         onState: (st, prev) => {
           if (!prev || prev.index !== st.index) setCurrent(st.index);
@@ -117,6 +120,23 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
           leave();
         },
       );
+      };
+      if (s.videoPlayer === 'p2160') {
+        const first = queue[index];
+        const dur = first.hash && first.fileIndex !== undefined ? (getLocalProgress(first.hash, first.fileIndex) || { duration: 0 }).duration : 0;
+        // 2160 Player when installed (else the built-in one): the position it hands back is saved, then back
+        p2160Package(plugin).then((pkg) => {
+          if (!pkg) return false;
+          const io = skipIo(c);
+          const prefs = io && first.hash ? io.load(first.hash).catch(() => null) : Promise.resolve(null);
+          return prefs.then((p) => play2160(plugin, c, queue, index, pos, p, dur)).then(
+            () => { leave(); return true; },
+            (e) => { if (!cancelled) { toast(failText(e), 'error'); leave(); } return true; },
+          );
+        }).then((handled) => { if (!handled && !cancelled) startBuiltin(); });
+        return;
+      }
+      startBuiltin();
     });
     return () => {
       cancelled = true;

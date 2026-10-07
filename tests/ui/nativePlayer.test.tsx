@@ -5,6 +5,7 @@ import { NativePlayerScreen } from '../../src/screens/NativePlayer';
 import { DialogHost } from '../../src/ui/dialog';
 import { routeStack, resetTo, navigate } from '../../src/ui/nav';
 import { servers, activeServerId } from '../../src/store/servers';
+import { resetSettings, updateSettings } from '../../src/store/settings';
 import { saveProgress, reloadProgress, getLocalProgress } from '../../src/store/progress';
 import { attachPhone, detachPhone, setLinkTransport } from '../../src/phone/link';
 import type { PlayItem } from '../../src/player/types';
@@ -18,6 +19,8 @@ function fakeCapacitor() {
   const listeners: { [e: string]: ((d: any) => void)[] } = {};
   const plugin = {
     localIpv4: vi.fn(() => Promise.resolve({ ip: null })),
+    player2160: vi.fn(() => Promise.resolve({ package: 'tv.p2160.player' })),
+    open2160: vi.fn((_o: any) => Promise.resolve({ returned: true, positionMs: 60000, durationMs: 1200000, url: queue[0].url })),
     downloadAndInstallApk: vi.fn(),
     playNative: vi.fn((_o: any) => Promise.resolve()),
     nativePlayerCommand: vi.fn((_o: any) => Promise.resolve()),
@@ -70,6 +73,34 @@ afterEach(() => {
   delete w.Capacitor;
   detachPhone();
   setLinkTransport(null);
+});
+
+describe('NativePlayerScreen with 2160 Player', () => {
+  it('launches 2160 Player instead of the native session and goes back', async () => {
+    updateSettings({ videoPlayer: 'p2160' });
+    const f = fakeCapacitor();
+    const host = mount(h(NativePlayerScreen, { queue, index: 0 }));
+    await until(() => (f.plugin as any).open2160.mock.calls.length === 1);
+    const o = (f.plugin as any).open2160.mock.calls[0][0];
+    expect(o.items[0].title).toBeTruthy();
+    expect(o.start).toBe(0);
+    expect(typeof o.segments).toBe('string');
+    expect(f.plugin.playNative).not.toHaveBeenCalled();
+    await until(() => routeStack.value.length === 1);
+    expect(getLocalProgress(H, 3)!.time).toBe(60);
+    resetSettings();
+    await unmount(host);
+  });
+  it('not installed: the built-in player starts', async () => {
+    updateSettings({ videoPlayer: 'p2160' });
+    const f = fakeCapacitor();
+    (f.plugin as any).player2160 = vi.fn(() => Promise.resolve({ package: null }));
+    const host = mount(h(NativePlayerScreen, { queue, index: 0 }));
+    await until(() => f.plugin.playNative.mock.calls.length === 1);
+    expect((f.plugin as any).open2160).not.toHaveBeenCalled();
+    resetSettings();
+    await unmount(host);
+  });
 });
 
 describe('NativePlayerScreen (Android TV)', () => {

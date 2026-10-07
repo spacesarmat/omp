@@ -1022,6 +1022,11 @@ export const ru = {
     logError: '. {error}',
   },
   player: {
+    videoPlayer: 'Плеер для видео',
+    builtinPlayer: 'Встроенный',
+    p2160: '2160 Player',
+    p2160Missing: 'не установлен — скачайте с GitHub',
+    p2160Note: 'QR поддержки и управление с телефона работают только во встроенном плеере',
     off: 'Выкл',
     chapterN: 'Глава {n}',
     chapterTitled: 'Глава {n} «{title}»',
