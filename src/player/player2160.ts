@@ -23,7 +23,7 @@ export interface P2160Result {
 }
 
 /** The installed 2160 Player package, null when it is missing or the plugin cannot tell. */
-export function p2160Package(plugin: OmpNativeTvPlugin | null): Promise<string | null> {
+export function p2160Package(plugin: Pick<OmpNativeTvPlugin, 'player2160'> | null): Promise<string | null> {
   if (!plugin || typeof plugin.player2160 !== 'function') return Promise.resolve(null);
   return Promise.resolve().then(() => plugin.player2160!()).then(
     (r) => (r && typeof r.package === 'string' && r.package ? r.package : null),
@@ -99,7 +99,7 @@ let busy = false;
  * hands back. A call while one is open does nothing; rejects with the plugin's (native, translated) error.
  */
 export function play2160(
-  plugin: OmpNativeTvPlugin,
+  plugin: Pick<OmpNativeTvPlugin, 'open2160'>,
   c: TorrServerClient | null,
   queue: PlayItem[],
   index: number,

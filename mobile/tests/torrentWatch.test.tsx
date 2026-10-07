@@ -16,6 +16,9 @@ import { toast } from '../src/ui/toast';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { torrents } from '../../src/store/library';
 import { reloadProgress, serverViewed } from '../../src/store/progress';
+import { setWatchActions } from '../src/watch';
+import { settings, updateSettings } from '../../src/store/settings';
+import { getLocalProgress } from '../../src/store/progress';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { loadWatch, saveWatch } from '../../src/store/journal';
 import { addFindings, findingsOf } from '../../src/monitor/subs';
@@ -139,5 +142,60 @@ describe('phone torrent card · one «Мониторинг» card', () => {
     } finally {
       applyLanguageSetting('ru');
     }
+  });
+});
+
+describe('phone torrent card · «Смотреть на телефоне»', () => {
+  const open2160 = vi.fn();
+  const openExternal = vi.fn();
+  const player2160 = vi.fn();
+  const byText = (t: string) => Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').includes(t));
+  beforeEach(() => {
+    localStorage.setItem('tsp.ui.skipOpen', 'true');
+    open2160.mockReset().mockResolvedValue({ returned: false });
+    openExternal.mockReset().mockResolvedValue(undefined);
+    player2160.mockReset().mockResolvedValue('com.spacesarmat.player2160');
+    setWatchActions({ open2160, openExternal, player2160, recordWatch: vi.fn().mockResolvedValue(undefined), phoneName: async () => 'Pixel' });
+    updateSettings({ videoPlayer: 'p2160' });
+  });
+  afterEach(() => {
+    setWatchActions(null);
+    updateSettings({ videoPlayer: 'builtin' });
+  });
+
+  it('with 2160 Player: all playable files, the start index, and where the user stopped is saved', async () => {
+    const url = (i: number) => 'http://srv:8090/stream/Show.S02E0' + i + '.mkv?link=' + HASH + '&index=' + i + '&play';
+    open2160.mockResolvedValue({ returned: true, positionMs: 600000, durationMs: 2400000, url: url(2) });
+    await mount(series);
+    click(byText('Смотреть на телефоне') as Element);
+    await flush();
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(open2160).toHaveBeenCalledTimes(1);
+    const o = open2160.mock.calls[0][0];
+    expect(o.items.map((i: { url: string }) => i.url)).toEqual([url(1), url(2)]);
+    expect(o.start).toBe(0);
+    expect(o.fromStart).toBe(true);
+    expect(getLocalProgress(HASH, 2)).toMatchObject({ time: 600, duration: 2400 });
+    expect(getLocalProgress(HASH, 1)).toBeNull();
+  });
+
+  it('with the setting off the system chooser opens as before', async () => {
+    updateSettings({ videoPlayer: 'builtin' });
+    await mount(series);
+    click(byText('Смотреть на телефоне') as Element);
+    await flush();
+    expect(open2160).not.toHaveBeenCalled();
+    expect(openExternal).toHaveBeenCalledTimes(1);
+    expect(openExternal.mock.calls[0][1]).toBe('video/*');
+  });
+
+  it('2160 Player not installed: falls back to the chooser', async () => {
+    player2160.mockResolvedValue(null);
+    await mount(series);
+    click(byText('Смотреть на телефоне') as Element);
+    await flush();
+    expect(open2160).not.toHaveBeenCalled();
+    expect(openExternal).toHaveBeenCalledTimes(1);
+    expect(settings.value.videoPlayer).toBe('p2160');
   });
 });

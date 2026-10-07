@@ -602,3 +602,36 @@ describe('Settings in English', () => {
     noCyrillic(el);
   });
 });
+
+describe('Settings: «Плеер для видео»', () => {
+  const flushAll = () => act(async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); });
+  afterEach(() => updateSettings({ videoPlayer: 'builtin' }));
+
+  it('2160 Player installed: both options work and the choice is kept', async () => {
+    vi.spyOn(native, 'player2160').mockResolvedValue('pkg');
+    const el = mount();
+    await flushAll();
+    const row = el.querySelector('[data-row="video-player"]')!;
+    const [b, p] = Array.from(row.querySelectorAll('.m-seg button')) as HTMLButtonElement[];
+    expect(b.textContent).toBe('Встроенный');
+    expect(p.textContent).toBe('2160 Player');
+    expect(p.disabled).toBe(false);
+    expect(row.querySelector('[data-row="p2160-missing"]')).toBeNull();
+    act(() => p.click());
+    expect(settings.value.videoPlayer).toBe('p2160');
+    act(() => b.click());
+    expect(settings.value.videoPlayer).toBe('builtin');
+    expect(row.textContent).toContain('QR поддержки');
+  });
+
+  it('not installed: 2160 is disabled and the link opens the release page', async () => {
+    vi.spyOn(native, 'player2160').mockResolvedValue(null);
+    const win = vi.spyOn(window, 'open').mockReturnValue(null);
+    const el = mount();
+    await flushAll();
+    const row = el.querySelector('[data-row="video-player"]')!;
+    expect((row.querySelectorAll('.m-seg button')[1] as HTMLButtonElement).disabled).toBe(true);
+    act(() => (row.querySelector('[data-row="p2160-missing"]') as HTMLElement).click());
+    expect(win).toHaveBeenCalledWith('https://github.com/spacesarmat/2160player/releases/latest', '_system');
+  });
+});

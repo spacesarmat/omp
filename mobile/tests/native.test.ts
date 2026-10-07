@@ -343,3 +343,10 @@ describe('sources http and secrets outside Android', () => {
     await expect(secrets.delete('k')).rejects.toThrow(onlyAndroid());
   });
 });
+
+describe('native 2160 Player off-device', () => {
+  it('is not installed and open2160 rejects', async () => {
+    expect(await native.player2160()).toBeNull();
+    await expect(native.open2160({ items: [], start: 0, positionMs: 0, fromStart: true, segments: '' })).rejects.toThrow(onlyAndroid());
+  });
+});

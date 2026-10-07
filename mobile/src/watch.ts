@@ -13,12 +13,16 @@ import { client } from '../../src/store/servers';
 import { errorMessage } from '../../src/api/http';
 import { compareVersions } from '../../src/lib/version';
 import { CONTROL_MIN_VERSION } from '../../src/phone/protocol';
-import { native } from './platform/native';
+import { native, type Open2160Options } from './platform/native';
 import { currentRoute, navigate, type MRoute } from './nav';
 import { parseTorrentData, type TorrServerClient } from '../../src/api/torrserver';
-import { recordWatch } from '../../src/store/journal';
+import { loadSkip, recordWatch } from '../../src/store/journal';
+import { play2160 } from '../../src/player/player2160';
+import type { PlayItem } from '../../src/player/types';
+import { MIN_RESUME } from '../../src/store/progress';
+import { settings } from '../../src/store/settings';
 import type { Torrent } from '../../src/api/types';
-import { baseName, type TorrentFile } from '../../src/lib/episodes';
+import { baseName, playableFiles, type TorrentFile } from '../../src/lib/episodes';
 import { t as tr } from '../../src/i18n';
 import { launchLabel } from './lib/playingNames';
 
@@ -71,6 +75,10 @@ export interface WatchActions {
   launchOnTv: (params: object) => Promise<void>;
   openExternal: (url: string, mime: string) => Promise<void>;
   copyText: (text: string) => Promise<void>;
+  /** Installed 2160 Player package; null when missing. */
+  player2160: () => Promise<string | null>;
+  /** Opens a queue in 2160 Player; null: an older app without it. */
+  open2160: (o: Open2160Options) => Promise<unknown>;
   /** OMP version installed on the TV; null when unknown. */
   ompVersion: () => Promise<string | null>;
   /** URL the TV posts player state to; null when unavailable. */
@@ -89,6 +97,8 @@ const defaults: WatchActions = {
   launchOnTv: (p) => launchOnTv(p),
   openExternal: (url, mime) => native.openExternal(url, mime),
   copyText: (text) => Clipboard.write({ string: text }),
+  player2160: () => native.player2160(),
+  open2160: (o) => native.open2160(o),
   ompVersion: () => ompVersionOnTv(),
   reportUrl: () => reportUrl(),
   localIpv4: () => native.localIpv4(),
@@ -127,6 +137,47 @@ export function recordPhoneWatch(c: TorrServerClient | null, hash: string, file:
       }),
     )
     .catch(() => undefined);
+}
+
+export interface PhoneWatch {
+  hash: string;
+  file: TorrentFile;
+  /** Clean episode name (the player's title when the library does not know the file). */
+  title: string;
+  /** Saved position, seconds (0: from the start). */
+  at: number;
+  /** Known duration, seconds (0: unknown). */
+  duration: number;
+}
+
+/**
+ * «Смотреть на телефоне»: with «Плеер для видео» = 2160 Player (installed) the playable files of the torrent go to it
+ * from the saved position, and where the user stopped is saved like the built-in players' progress; otherwise the stream
+ * goes to the system chooser as before. Rejects when no player could be opened.
+ */
+export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatch): Promise<void> {
+  const at = w.at >= MIN_RESUME ? Math.floor(w.at) : 0;
+  const pkg = settings.value.videoPlayer === 'p2160' ? await actions.player2160().catch(() => null) : null;
+  if (pkg) {
+    const files = playableFiles(filesOf(t));
+    let start = files.findIndex((f) => f.id === w.file.id);
+    if (start < 0) {
+      files.unshift(w.file);
+      start = 0;
+    }
+    const queue: PlayItem[] = files.map((f) => ({
+      url: streamUrlFor(c, t, f, false),
+      title: f.id === w.file.id ? w.title : baseName(f.path),
+      hash: w.hash,
+      fileIndex: f.id,
+    }));
+    const skip = await loadSkip(c, w.hash).catch(() => null);
+    void recordPhoneWatch(c, w.hash, w.file.id, at, w.duration);
+    await play2160({ open2160: (o) => actions.open2160(o) }, c, queue, start, at, skip, w.duration);
+    return;
+  }
+  await actions.openExternal(streamUrlFor(c, t, w.file), 'video/*');
+  void recordPhoneWatch(c, w.hash, w.file.id, 0, w.duration);
 }
 
 export function filesOf(t: Torrent): TorrentFile[] {

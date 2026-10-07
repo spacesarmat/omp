@@ -11,7 +11,7 @@ import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { actions, filesOf, recordPhoneWatch, streamUrlFor, tvServerUrl, useTvLaunch } from '../watch';
+import { actions, filesOf, streamUrlFor, tvServerUrl, useTvLaunch, watchOnPhone } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { torrents, refreshTorrents, findPosters, repairTitles } from '../../../src/store/library';
@@ -141,8 +141,13 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
 
   const onPhone = async () => {
     try {
-      await actions.openExternal(streamUrlFor(c, torrent, file), 'video/*');
-      void recordPhoneWatch(c, torrent.hash, file.id, 0, getLocalProgress(torrent.hash, file.id)?.duration || 0);
+      await watchOnPhone(c, torrent, {
+        hash: torrent.hash,
+        file,
+        title: fileTitle(file),
+        at: sharedResume(torrent.hash, file.id),
+        duration: getLocalProgress(torrent.hash, file.id)?.duration || 0,
+      });
       if (alive.v) onClose();
     } catch (e) {
       if (alive.v) setStatus({ kind: 'error', text: errorMessage(e) });
@@ -529,8 +534,13 @@ export function Torrent({ hash }: { hash: string }) {
   const watchPhone = async () => {
     if (!target) return;
     try {
-      await actions.openExternal(streamUrlFor(c, tor, target), 'video/*');
-      void recordPhoneWatch(c, hash, target.id, 0, getLocalProgress(hash, target.id)?.duration || 0);
+      await watchOnPhone(c, tor, {
+        hash,
+        file: target,
+        title: fileTitle(target),
+        at,
+        duration: getLocalProgress(hash, target.id)?.duration || 0,
+      });
     } catch (e) {
       setStatus(errorMessage(e));
     }

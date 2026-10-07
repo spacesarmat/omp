@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { lanServerUrl, tvServerUrl, noWifi, setWatchActions, watchOnTvParams, streamUrlFor, isNoOmp, openInstallGuide, OMP_INSTALL_URL, recordPhoneWatch } from '../src/watch';
+import { lanServerUrl, tvServerUrl, noWifi, setWatchActions, watchOnTvParams, streamUrlFor, isNoOmp, openInstallGuide, OMP_INSTALL_URL, recordPhoneWatch, watchOnPhone } from '../src/watch';
+import { updateSettings } from '../../src/store/settings';
+import { getLocalProgress, reloadProgress } from '../../src/store/progress';
 import { tvNoOmp } from '../src/tv/tvClient';
 import { TorrServerClient } from '../../src/api/torrserver';
 
@@ -107,5 +109,72 @@ describe('watch journal from the phone', () => {
     await expect(recordPhoneWatch(c, 'abc', 2, 0, 0)).resolves.toBeUndefined();
     await expect(recordPhoneWatch(null, 'abc', 2, 0, 0)).resolves.toBeUndefined();
     setWatchActions(null);
+  });
+});
+
+describe('watchOnPhone', () => {
+  const c = new TorrServerClient({ url: 'http://h:8090' });
+  const tor = { hash: 'abc', title: 'Show S01', file_stats: [1, 2, 3].map((i) => ({ id: i, path: 'Show.S01E0' + i + '.mkv', length: 1e9 })) };
+  const w = (id: number, at = 0) => ({ hash: 'abc', file: tor.file_stats[id - 1], title: 'S01E0' + id, at, duration: 0 });
+  const mk = () => ({
+    open2160: vi.fn().mockResolvedValue({ returned: false }),
+    openExternal: vi.fn().mockResolvedValue(undefined),
+    player2160: vi.fn().mockResolvedValue('pkg'),
+    recordWatch: vi.fn().mockResolvedValue(undefined),
+    phoneName: async () => 'P',
+  });
+  const reset = () => {
+    localStorage.clear();
+    reloadProgress();
+    vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
+    vi.spyOn(TorrServerClient.prototype, 'setViewed').mockResolvedValue(undefined);
+  };
+  const done = () => {
+    setWatchActions(null);
+    updateSettings({ videoPlayer: 'builtin' });
+    vi.restoreAllMocks();
+  };
+
+  it('2160 Player: queue, start index, resume position; the stop on another item is saved for it', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ videoPlayer: 'p2160' });
+    a.open2160.mockResolvedValue({ returned: true, positionMs: 600000, durationMs: 2400000, url: 'http://h:8090/stream/Show.S01E03.mkv?link=abc&index=3&play' });
+    await watchOnPhone(c, tor as any, w(2, 125.7));
+    const o = a.open2160.mock.calls[0][0];
+    expect(o.items).toHaveLength(3);
+    expect(o.start).toBe(1);
+    expect(o).toMatchObject({ positionMs: 125000, fromStart: false });
+    expect(a.openExternal).not.toHaveBeenCalled();
+    expect(getLocalProgress('abc', 3)).toMatchObject({ time: 600, duration: 2400 });
+    expect(getLocalProgress('abc', 2)).toBeNull();
+    expect(a.recordWatch.mock.calls[0][2]).toMatchObject({ f: 2, t: 125, src: 'phone' });
+    done();
+  });
+
+  it('the plugin rejection reaches the caller', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ videoPlayer: 'p2160' });
+    a.open2160.mockRejectedValue(new Error('нет ссылки'));
+    await expect(watchOnPhone(c, tor as any, w(1))).rejects.toThrow('нет ссылки');
+    done();
+  });
+
+  it('builtin setting or a missing player goes through openExternal', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    await watchOnPhone(c, tor as any, w(1));
+    expect(a.open2160).not.toHaveBeenCalled();
+    expect(a.openExternal).toHaveBeenCalledTimes(1);
+    updateSettings({ videoPlayer: 'p2160' });
+    a.player2160.mockResolvedValue(null);
+    await watchOnPhone(c, tor as any, w(1));
+    expect(a.open2160).not.toHaveBeenCalled();
+    expect(a.openExternal).toHaveBeenCalledTimes(2);
+    done();
   });
 });
