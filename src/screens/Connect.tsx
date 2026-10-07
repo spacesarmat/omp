@@ -14,6 +14,7 @@ import { platformKind } from '../platform/env';
 import { nativeVpnState } from '../platform/androidNative';
 import { addressErrorText, addressForField, checkServerAddress } from '../api/serverAddress';
 import { Logo } from '../ui/Logo';
+import { AddressField } from '../ui/AddressField';
 import { ServerHistory } from './connect/ServerHistory';
 import { EditServerDialog } from './connect/EditServerDialog';
 
@@ -204,7 +205,7 @@ export function ConnectScreen() {
         </div>
         <div class="connect-card">
           <label class="field-label">{t('connect.address')}</label>
-          <TextInput focusKey="connect-url" value={url} onChange={setUrl} placeholder={t('connect.addressPlaceholder')} type="url" onSubmit={() => connect()} />
+          <AddressField focusKey="connect-url" value={url} onChange={setUrl} placeholder={t('connect.addressPlaceholder')} submitLabel={t('connect.connect')} onSubmit={() => connect()} />
           <Focusable focusKey="connect-advanced" className="link-toggle" onPress={() => setAdvanced(!advanced)}>
             <Icon name={advanced ? 'chevronUp' : 'chevronDown'} size={22} />
             {t('connect.advanced')}
