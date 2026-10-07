@@ -1,5 +1,5 @@
 apply plugin: 'com.android.application'
-apply plugin: 'org.jetbrains.kotlin.android'
+// Kotlin: built into AGP 9 (the org.jetbrains.kotlin.android plugin is no longer applied)
 
 // version comes from the root package.json: versionCode = major*10000 + minor*100 + patch
 def pkg = new groovy.json.JsonSlurper().parse(file('../../package.json'))
@@ -15,11 +15,11 @@ android {
         versionCode vMajor * 10000 + vMinor * 100 + vPatch
         versionName pkg.version
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        aaptOptions {
-             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
-             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
-        }
+    }
+    androidResources {
+        // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+        // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+        ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
     signingConfigs {
         release {
@@ -39,10 +39,10 @@ android {
     // (res/raw/torrserver.json, see LocalTorrServer / TorrServerBinary), on any arm64 phone whatever the split.
     splits {
         abi {
-            enable true
+            enable = true
             reset()
             include 'arm64-v8a', 'armeabi-v7a'
-            universalApk true
+            universalApk = true
         }
     }
     // the universal APK carries only the two ARM ABIs (libVLC also ships x86/x86_64 libraries)
@@ -68,7 +68,7 @@ android {
                 }
             }
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }

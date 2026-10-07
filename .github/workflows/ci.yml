@@ -47,7 +47,7 @@ jobs:
           cache: gradle
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools'
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       - name: Sync the web app into the Android project
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
