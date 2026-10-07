@@ -381,7 +381,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     }
 
     /**
-     * nativePlayerTrack { session, index, kind: "audio", label, lang, seen: [{ l, g }] } or
+     * nativePlayerTrack { session, index, kind: "audio", label, lang, channels, seen: [{ l, g, c }] } or
      * { session, index, kind: "subs", off, label?, lang? }: a track picked by hand, remembered by the page for the
      * whole series («Озвучка»).
      */
@@ -397,11 +397,13 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             o.put("lang", choice.lang)
         }
         if (choice.audio) {
+            if (choice.channels > 0) o.put("channels", choice.channels)
             val seen = JSArray()
-            choice.seen.forEach { (l, g) ->
+            choice.seen.forEach { d ->
                 val s = JSObject()
-                s.put("l", l)
-                s.put("g", g)
+                s.put("l", d.label)
+                s.put("g", d.lang)
+                if (d.channels > 0) s.put("c", d.channels)
                 seen.put(s)
             }
             o.put("seen", seen)

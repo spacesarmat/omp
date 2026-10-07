@@ -41,7 +41,7 @@ class DubMatchTest {
         assertFalse(DubMatch.isCodecLabel("LostFilm"))
         assertFalse(DubMatch.isCodecLabel("Forced"))
         assertFalse(DubMatch.isCodecLabel(""))
-        assertEquals(listOf("LostFilm" to "rus"), DubMatch.seen(listOf(EngineTrack("p", "rus", "PCM_S24LE"), EngineTrack("l", "rus", "LostFilm"))))
+        assertEquals(listOf(SeenDub("LostFilm", "rus", 6)), DubMatch.seen(listOf(EngineTrack("p", "rus", "PCM_S24LE"), EngineTrack("l", "rus", "LostFilm", "AC3", 6))))
     }
 
     @Test
@@ -198,6 +198,9 @@ class DubMatchTest {
         assertEquals("Original", a.label)
         assertEquals("eng", a.lang)
         assertEquals(3, a.seen.size)
+        // the channels go with the dub (display on the series screen)
+        assertEquals(6, a.channels)
+        assertEquals(listOf(SeenDub("Дубляж", "rus", 6), SeenDub("MVO | LostFilm", "rus", 2), SeenDub("Original", "eng", 6)), a.seen)
         // the next episode starts with the dub picked by hand
         assertTrue(session.goTo(1))
         engine.selectedAudioId = null

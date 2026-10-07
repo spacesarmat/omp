@@ -559,6 +559,15 @@ describe('player engine (VLC / Авто)', () => {
     });
     expect(getTrackPref(H1)).toEqual({ audioLang: 'ru', audioLabel: 'LostFilm' });
     expect(saver).toHaveBeenLastCalledWith(H1, { l: 'LostFilm', g: 'ru', k: [{ l: 'LostFilm', g: 'ru' }, { l: 'Original', g: 'en' }] });
+    // the channels of the track and of the dubs seen go along (display on the series screen)
+    f.emit('nativePlayerTrack', {
+      session: sid, index: 1, kind: 'audio', label: 'HDRezka', lang: 'rus', channels: 6,
+      seen: [{ l: 'HDRezka', g: 'rus', c: 6 }, { l: 'Original', g: 'eng', c: 2 }, { l: 'Kubik', g: 'eng', c: 'bad' }],
+    });
+    expect(saver).toHaveBeenLastCalledWith(H1, {
+      l: 'HDRezka', g: 'ru', c: '5.1',
+      k: [{ l: 'HDRezka', g: 'ru', c: '5.1' }, { l: 'Original', g: 'en', c: '2.0' }, { l: 'Kubik', g: 'en' }],
+    });
     f.emit('nativePlayerTrack', { session: sid, index: 0, kind: 'subs', off: true });
     expect(getTrackPref(H1)!.sub).toBe('off');
     expect(saver).toHaveBeenLastCalledWith(H1, { s: 'off' });

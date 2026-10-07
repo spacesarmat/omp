@@ -19,7 +19,9 @@ data class TrackChoice(
     val off: Boolean = false,
     val label: String = "",
     val lang: String = "",
-    val seen: List<Pair<String, String>> = emptyList(),
+    /** Audio: the channel count of the track (0: unknown), shown with the dub on the series screen. */
+    val channels: Int = 0,
+    val seen: List<SeenDub> = emptyList(),
 )
 
 /** What the page gets in `nativePlayerState` / `nativePlayerClosed` (times in seconds). */
@@ -357,7 +359,7 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
         // the next items of this run: the same dub, else the same language (also for an untitled track)
         audioPicks = TrackPick.of(label, lang)
         wantAudio = false
-        ui.trackChosen(TrackChoice(audio = true, label = label, lang = lang, seen = DubMatch.seen(all.map { it.track })))
+        ui.trackChosen(TrackChoice(audio = true, label = label, lang = lang, channels = o.track.channels, seen = DubMatch.seen(all.map { it.track })))
     }
 
     /** «subs» of the phone / the menu: a [SubOption.value]; the page remembers it for the series. */

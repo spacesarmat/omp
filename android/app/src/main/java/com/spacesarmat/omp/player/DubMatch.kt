@@ -146,14 +146,20 @@ object DubMatch {
     fun langOf(t: EngineTrack, files: List<SubFile>): String =
         t.language?.takeIf { it.isNotEmpty() && it != "und" } ?: t.external?.let { files.getOrNull(it)?.lang }.orEmpty()
 
-    /** The dubs of a file (title + language, titled tracks only, no codec names, no repeats): the series screen's choices. */
-    fun seen(tracks: List<EngineTrack>): List<Pair<String, String>> {
-        val out = ArrayList<Pair<String, String>>()
+    /**
+     * The dubs of a file (title + language + channel count, titled tracks only, no codec names, no repeats): the
+     * series screen's choices («HDRezka · 5.1»).
+     */
+    fun seen(tracks: List<EngineTrack>): List<SeenDub> {
+        val out = ArrayList<SeenDub>()
         for (t in tracks) {
             val l = title(t.label)
-            if (l.isEmpty() || out.any { same(it.first, l) }) continue
-            out.add(l to t.language.orEmpty())
+            if (l.isEmpty() || out.any { same(it.label, l) }) continue
+            out.add(SeenDub(l, t.language.orEmpty(), t.channels))
         }
         return out
     }
 }
+
+/** A dub of a file for the series screen: its title, language and channel count (0: unknown; display only). */
+data class SeenDub(val label: String, val lang: String, val channels: Int = 0)

@@ -3,7 +3,7 @@ import type { TrackOption } from './trackOptions';
 import type { ExternalSub } from './types';
 import { defaultSubChoice } from './trackOptions';
 import { pickTrack, findLang, guessLangFromName, normalizeLang } from '../lib/tracks';
-import { dubOf, findDub, sameDub, seenDubs, torrentChoicesCount, type SeriesSub, type SeriesTracks } from '../lib/seriesTracks';
+import { channelLayout, dubOf, findDub, sameDub, seenDubs, torrentChoicesCount, type SeriesSub, type SeriesTracks } from '../lib/seriesTracks';
 
 export function pickAudio(audio: TrackOption[], pref: TrackPref | null, fallbackLang: string): number {
   if (pref) {
@@ -147,9 +147,12 @@ export function seriesSubFromChoice(choice: string, embedded: TrackOption[], ext
 }
 
 /** The series' audio record of a menu choice: the dub label (none when only a codec), the language, the file's dubs. */
-export function seriesAudioFromChoice(audio: TrackOption[], i: number): { l: string; g: string; k: SeriesSub[] } {
+export function seriesAudioFromChoice(audio: TrackOption[], i: number): { l: string; g: string; c?: string; k: SeriesSub[] } {
   const a = audio[i];
-  return { l: a ? dubOf(a) : '', g: a ? a.language || '' : '', k: seenDubs(audio) };
+  const out: { l: string; g: string; c?: string; k: SeriesSub[] } = { l: a ? dubOf(a) : '', g: a ? a.language || '' : '', k: seenDubs(audio) };
+  const c = a ? channelLayout(a.channels) : '';
+  if (c) out.c = c;
+  return out;
 }
 
 /**

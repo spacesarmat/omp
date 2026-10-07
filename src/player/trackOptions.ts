@@ -10,12 +10,18 @@ export interface TrackOption {
   isDefault: boolean;
   /** The track's own title (the dub: «LostFilm»), '' when the file has none. */
   title?: string;
+  /** Audio channels (ffprobe), for the «Озвучка» row of the series screen; absent when unknown. */
+  channels?: number;
 }
 
 function fromProbe(probe: FfprobeResult | null, kind: 'audio' | 'subtitle'): TrackOption[] {
   return tracksFromProbe(probe)
     .filter((t) => t.kind === kind)
-    .map((t) => ({ label: describeTrack(t), language: t.language, isDefault: t.isDefault, title: t.title || undefined }));
+    .map((t) => {
+      const o: TrackOption = { label: describeTrack(t), language: t.language, isDefault: t.isDefault, title: t.title || undefined };
+      if (t.channels) o.channels = t.channels;
+      return o;
+    });
 }
 
 function fromVideo(list: { language: string; label: string }[]): TrackOption[] {

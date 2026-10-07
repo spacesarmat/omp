@@ -10,6 +10,8 @@ export interface SeriesSub {
   l: string;
   /** Language code, '' when unknown. */
   g: string;
+  /** Audio only: the channel layout of the dub («5.1», «2.0»), shown next to its name; absent when unknown. */
+  c?: string;
 }
 
 export interface SeriesTracks {
@@ -19,6 +21,11 @@ export interface SeriesTracks {
   l?: string;
   /** Audio language code («ru»). */
   g?: string;
+  /**
+   * The channel layout of the chosen dub («5.1», «2.0»; v0.19 beta.4): display only («HDRezka · 5.1»), never used to
+   * pick a track. Absent in older records.
+   */
+  c?: string;
   /** Subtitles: off, or a track by title + language. */
   s?: 'off' | SeriesSub;
   /** Dubs seen in the series' files (the choices on the series screen), newest first. */
@@ -30,7 +37,7 @@ export interface SeriesTracks {
   x?: true;
 }
 
-export type SeriesTracksPatch = { l?: string; g?: string; s?: 'off' | SeriesSub; k?: SeriesSub[] } | 'reset';
+export type SeriesTracksPatch = { l?: string; g?: string; c?: string; s?: 'off' | SeriesSub; k?: SeriesSub[] } | 'reset';
 
 export const LABEL_MAX = 80;
 export const SEEN_MAX = 12;
@@ -50,6 +57,29 @@ function sub(v: unknown): SeriesSub | null {
   return l || g ? { l, g } : null;
 }
 
+/** A dub seen in the files: title, language and the channel layout when known. */
+function seenSub(v: unknown): SeriesSub | null {
+  const s = sub(v);
+  if (!s || !s.l) return null;
+  const c = isObj(v) ? channelsText(v.c) : '';
+  return c ? { l: s.l, g: s.g, c } : s;
+}
+
+/** A stored channel layout («5.1», «2.0», «7.1», «6ch»); '' when absent or malformed. */
+export function channelsText(v: unknown): string {
+  return typeof v === 'string' && /^(?:\d\.\d|\d{1,2}ch)$/.test(v) ? v : '';
+}
+
+/** The channel layout of a channel count: 1 → «1.0», 2 → «2.0», 6 → «5.1», 8 → «7.1», others «<n>ch»; '' when unknown. */
+export function channelLayout(n: number | undefined | null): string {
+  if (!n || n <= 0 || n !== Math.floor(n) || n > 32) return '';
+  if (n === 1) return '1.0';
+  if (n === 2) return '2.0';
+  if (n === 6) return '5.1';
+  if (n === 8) return '7.1';
+  return n + 'ch';
+}
+
 /** A stored record, or null when absent or malformed (no time). */
 export function sanitizeSeriesTracks(v: unknown): SeriesTracks | null {
   if (!isObj(v)) return null;
@@ -60,6 +90,8 @@ export function sanitizeSeriesTracks(v: unknown): SeriesTracks | null {
   const g = str(v.g);
   if (l) out.l = l;
   if (g) out.g = g;
+  const c = l ? channelsText(v.c) : '';
+  if (c) out.c = c;
   if (v.s === 'off') out.s = 'off';
   else {
     const s = sub(v.s);
@@ -68,8 +100,8 @@ export function sanitizeSeriesTracks(v: unknown): SeriesTracks | null {
   if (v.k instanceof Array) {
     const k: SeriesSub[] = [];
     v.k.forEach((x) => {
-      const s = sub(x);
-      if (s && s.l && !k.some((y) => sameDub(y.l, s.l))) k.push(s);
+      const s = seenSub(x);
+      if (s && !k.some((y) => sameDub(y.l, s.l))) k.push(s);
     });
     if (k.length) out.k = k.slice(0, SEEN_MAX);
   }
@@ -109,7 +141,15 @@ export function mergeSeen(add: SeriesSub[] | undefined, old: SeriesSub[] | undef
   const out: SeriesSub[] = [];
   (add || []).concat(old || []).forEach((s) => {
     const l = s ? titleText(s.l) : '';
-    if (l && !out.some((y) => sameDub(y.l, l))) out.push({ l, g: s.g || '' });
+    if (!l) return;
+    const c = channelsText(s.c);
+    const had = out.filter((y) => sameDub(y.l, l))[0];
+    // a newer sighting without channels keeps the layout an older one knew
+    if (had) {
+      if (!had.c && c) had.c = c;
+      return;
+    }
+    out.push(c ? { l, g: s.g || '', c } : { l, g: s.g || '' });
   });
   return out.slice(0, SEEN_MAX);
 }
@@ -127,10 +167,12 @@ export function nextSeriesTracks(base: SeriesTracks | null, patch: SeriesTracksP
     const g = audio ? str(patch.g) : base && base.g ? base.g : '';
     if (l) out.l = l;
     if (g) out.g = g;
+    const c = audio ? (l ? channelsText(patch.c) : '') : base && base.l && base.c ? base.c : '';
+    if (c) out.c = c;
     const s0 = patch.s !== undefined ? patch.s : base ? base.s : undefined;
     const s = s0 && s0 !== 'off' ? sub(s0) : s0;
     if (s) out.s = s;
-    if (audio && l) seenAdd.push({ l, g });
+    if (audio && l) seenAdd.push(c ? { l, g, c } : { l, g });
     if (patch.k) patch.k.forEach((x) => seenAdd.push(x));
   }
   const k = mergeSeen(seenAdd, base ? base.k : undefined);
@@ -220,9 +262,12 @@ export function findDub(tracks: { title?: string; label?: string }[], label: str
 }
 
 /** The seen dubs of a track list (label + language), for the series screen's choices. */
-export function seenDubs(tracks: { title?: string; label?: string; language?: string }[]): SeriesSub[] {
+export function seenDubs(tracks: { title?: string; label?: string; language?: string; channels?: number }[]): SeriesSub[] {
   return mergeSeen(
-    tracks.map((t) => ({ l: dubOf(t), g: normalizeLang(t.language) })),
+    tracks.map((t) => {
+      const c = channelLayout(t.channels);
+      return c ? { l: dubOf(t), g: normalizeLang(t.language), c } : { l: dubOf(t), g: normalizeLang(t.language) };
+    }),
     undefined,
   );
 }

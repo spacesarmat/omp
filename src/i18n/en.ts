@@ -275,6 +275,8 @@ export const en: EnDict<typeof ru> = {
     // «Озвучка» of the series: the track picked by hand in a player, for every season (TV and phone)
     dub: 'Audio',
     dubDefault: 'default',
+    dubStereo: 'stereo',
+    dubMono: 'mono',
     dubTitle: 'Series audio',
     dubReset: 'Default (reset)',
     dubChange: 'Change',

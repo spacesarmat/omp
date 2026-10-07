@@ -5,7 +5,7 @@ import type { TorrServerClient } from '../api/torrserver';
 import type { OmpNativeTvPlugin, ListenerHandle } from '../platform/androidNative';
 import type { Cmd, PlayerState } from '../phone/protocol';
 import { guessLangFromName, normalizeLang } from '../lib/tracks';
-import { mergeSeen, type SeriesSub, type SeriesTracksPatch } from '../lib/seriesTracks';
+import { channelLayout, mergeSeen, type SeriesSub, type SeriesTracksPatch } from '../lib/seriesTracks';
 import { rememberSeriesTracks } from '../store/seriesTracks';
 import type { NativeTrackPick } from './trackPrefs';
 import { buildSnapshot } from './phoneBridge';
@@ -63,7 +63,7 @@ export interface NativeStartOptions {
 
 /** `nativePlayerTrack` from the player: an audio or subtitle track picked by hand (menu or phone). */
 export type NativeTrackEvent =
-  | { index: number; kind: 'audio'; lang: string; label: string; seen: SeriesSub[] }
+  | { index: number; kind: 'audio'; lang: string; label: string; channels: string; seen: SeriesSub[] }
   | { index: number; kind: 'subs'; off: true }
   | { index: number; kind: 'subs'; off: false; lang: string; label: string };
 
@@ -77,9 +77,12 @@ export function sanitizeNativeTrack(v: unknown): NativeTrackEvent | null {
   if (i === null) return null;
   if (v.kind === 'audio') {
     const seen = Array.isArray(v.seen)
-      ? mergeSeen(v.seen.filter(isObj).map((x: Record<string, unknown>) => ({ l: text(x.l), g: normalizeLang(text(x.g)) })), undefined)
+      ? mergeSeen(
+          v.seen.filter(isObj).map((x: Record<string, unknown>) => ({ l: text(x.l), g: normalizeLang(text(x.g)), c: channelLayout(num(x.c)) })),
+          undefined,
+        )
       : [];
-    return { index: i, kind: 'audio', lang: normalizeLang(text(v.lang)), label: text(v.label), seen };
+    return { index: i, kind: 'audio', lang: normalizeLang(text(v.lang)), label: text(v.label), channels: channelLayout(num(v.channels)), seen };
   }
   if (v.kind === 'subs') {
     if (v.off === true) return { index: i, kind: 'subs', off: true };
@@ -551,7 +554,7 @@ export class NativeSession {
     if (!e || !item || !item.hash) return;
     if (e.kind === 'audio') {
       saveTrackPref(item.hash, { audioLang: e.lang, audioLabel: e.label });
-      void this.seriesSaver(item.hash, { l: e.label, g: e.lang, k: e.seen });
+      void this.seriesSaver(item.hash, e.channels ? { l: e.label, g: e.lang, c: e.channels, k: e.seen } : { l: e.label, g: e.lang, k: e.seen });
     } else if (e.off) {
       saveTrackPref(item.hash, { sub: 'off' });
       void this.seriesSaver(item.hash, { s: 'off' });

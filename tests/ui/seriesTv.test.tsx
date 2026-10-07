@@ -510,6 +510,15 @@ describe('TV series screen: «Озвучка»', () => {
     expect(text(host.querySelector('[data-fk="series-dub"]'))).toBe('Озвучка: HDrezka Studio');
   });
 
+  it('shows the channels with the dub, in the button and the list', async () => {
+    const data = { s1: rec({ at: 5, l: 'HDRezka', g: 'ru', c: '5.1', k: [{ l: 'HDRezka', g: 'ru', c: '5.1' }, { l: 'LostFilm', g: 'ru', c: '2.0' }] }) };
+    server(data);
+    const host = await mountWithDialogs(data);
+    expect(text(host.querySelector('[data-fk="series-dub"]'))).toBe('Озвучка: HDRezka · 5.1');
+    await open(host);
+    expect(options(host)).toEqual(['HDRezka · 5.1 · Русский', 'LostFilm · стерео · Русский', 'По умолчанию (сбросить)']);
+  });
+
   it('a language picked without a dub title is shown and marked current in the list', async () => {
     const data = { s1: rec({ at: 5, g: 'ru', k: [{ l: 'LostFilm', g: 'ru' }] }) };
     server(data);

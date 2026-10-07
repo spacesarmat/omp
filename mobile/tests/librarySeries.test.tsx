@@ -367,6 +367,17 @@ describe('Series screen', () => {
     const value = () => (el.querySelector('[data-dub-value]')!.textContent || '').trim();
     const choices = () => Array.from(el.querySelectorAll('[data-dub-choice]')).map((b) => (b.textContent || '').trim());
 
+    it('shows the channels with the dub («HDRezka · 5.1»)', async () => {
+      const s1 = withDub(S1, { at: 5, l: 'HDRezka', g: 'ru', c: '5.1', k: [{ l: 'HDRezka', g: 'ru', c: '5.1' }, { l: 'LostFilm', g: 'ru', c: '2.0' }] });
+      serverList = [s1, S2, STAR, M1, M2];
+      torrents.value = serverList;
+      navigate({ name: 'series', key: key() });
+      mount(<Series seriesKey={key()} />);
+      expect(value()).toBe('HDRezka · 5.1');
+      act(() => btn('Сменить')!.click());
+      expect(choices()).toEqual(['HDRezka · 5.1 · Русский', 'LostFilm · стерео · Русский', 'По умолчанию (сбросить)']);
+    });
+
     it('«по умолчанию» when nothing is remembered; «Сменить» offers only the reset', async () => {
       navigate({ name: 'series', key: key() });
       mount(<Series seriesKey={key()} />);

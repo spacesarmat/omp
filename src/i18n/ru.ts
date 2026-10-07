@@ -288,6 +288,8 @@ export const ru = {
     // «Озвучка» of the series: the track picked by hand in a player, for every season (TV and phone)
     dub: 'Озвучка',
     dubDefault: 'по умолчанию',
+    dubStereo: 'стерео',
+    dubMono: 'моно',
     dubTitle: 'Озвучка сериала',
     dubReset: 'По умолчанию (сбросить)',
     dubChange: 'Сменить',

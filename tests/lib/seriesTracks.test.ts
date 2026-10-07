@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   sanitizeSeriesTracks, seriesTracksOf, newestSeriesTracks, nextSeriesTracks, isReset, sameDub, normDub, dubOf, findDub,
-  seenDubs, withSeriesTracks, isCodecLabel, torrentChoicesCount,
+  seenDubs, withSeriesTracks, isCodecLabel, torrentChoicesCount, channelLayout, mergeSeen,
 } from '../../src/lib/seriesTracks';
 import { serializeData, parseData, withWatch } from '../../src/lib/journal';
 
@@ -116,6 +116,30 @@ describe('series records', () => {
     expect(torrentChoicesCount(null)).toBe(true);
     expect(torrentChoicesCount({ at: 1, l: 'LostFilm' })).toBe(true);
     expect(sanitizeSeriesTracks({ at: 1, x: true })).toEqual({ at: 1, x: true });
+  });
+
+  it('the channel layout of a dub is remembered for display; records without it still read', () => {
+    expect(channelLayout(6)).toBe('5.1');
+    expect(channelLayout(2)).toBe('2.0');
+    expect(channelLayout(8)).toBe('7.1');
+    expect(channelLayout(1)).toBe('1.0');
+    expect(channelLayout(3)).toBe('3ch');
+    expect(channelLayout(0)).toBe('');
+    expect(channelLayout(undefined)).toBe('');
+    // older records: no `c` anywhere
+    expect(sanitizeSeriesTracks({ at: 1, l: 'LostFilm', g: 'ru', k: [{ l: 'LostFilm', g: 'ru' }] })).toEqual({ at: 1, l: 'LostFilm', g: 'ru', k: [{ l: 'LostFilm', g: 'ru' }] });
+    // new ones: `c` with the dub and the seen ones; malformed dropped, never on subtitles or without a dub
+    expect(sanitizeSeriesTracks({ at: 1, l: 'HDRezka', g: 'ru', c: '5.1', s: { l: 'Signs', g: 'ru', c: '2.0' }, k: [{ l: 'HDRezka', g: 'ru', c: '5.1' }, { l: 'LostFilm', g: 'ru', c: 'x' }] }))
+      .toEqual({ at: 1, l: 'HDRezka', g: 'ru', c: '5.1', s: { l: 'Signs', g: 'ru' }, k: [{ l: 'HDRezka', g: 'ru', c: '5.1' }, { l: 'LostFilm', g: 'ru' }] });
+    expect(sanitizeSeriesTracks({ at: 1, g: 'ru', c: '5.1' })).toEqual({ at: 1, g: 'ru' });
+    // an audio choice stores it, a subtitle choice keeps it, the seen list fills it in
+    const a = nextSeriesTracks(null, { l: 'HDRezka', g: 'ru', c: '5.1', k: [{ l: 'HDRezka', g: 'ru' }, { l: 'LostFilm', g: 'ru', c: '2.0' }] }, 2);
+    expect(a).toEqual({ at: 2, l: 'HDRezka', g: 'ru', c: '5.1', k: [{ l: 'HDRezka', g: 'ru', c: '5.1' }, { l: 'LostFilm', g: 'ru', c: '2.0' }] });
+    expect(nextSeriesTracks(a, { s: 'off' }, 3).c).toBe('5.1');
+    expect(nextSeriesTracks(a, { l: 'LostFilm', g: 'ru' }, 4).c).toBeUndefined();
+    expect(mergeSeen([{ l: 'LostFilm', g: 'ru' }], [{ l: 'lostfilm', g: 'ru', c: '2.0' }])).toEqual([{ l: 'LostFilm', g: 'ru', c: '2.0' }]);
+    expect(seenDubs([{ title: 'HDRezka', language: 'rus', channels: 6 }, { title: 'Original', language: 'eng' }]))
+      .toEqual([{ l: 'HDRezka', g: 'ru', c: '5.1' }, { l: 'Original', g: 'en' }]);
   });
 
   it('lives in omp.a and survives the other journal writes', () => {
