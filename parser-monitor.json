@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "updated": "2026-10-07T21:57:02.151Z",
+  "sources": {
+    "rutor": {
+      "status": "OK",
+      "streak": 1,
+      "since": "2026-10-07T21:57:02.151Z",
+      "alerted": false,
+      "detail": "100 / 99 / 100 результатов"
+    },
+    "nnmclub": {
+      "status": "OK",
+      "streak": 1,
+      "since": "2026-10-07T21:57:02.151Z",
+      "alerted": false,
+      "detail": "50 / 50 / 50 результатов"
+    },
+    "anidub": {
+      "status": "OK",
+      "streak": 1,
+      "since": "2026-10-07T21:57:02.151Z",
+      "alerted": false,
+      "detail": "29 / 32 результатов"
+    },
+    "bigfangroup": {
+      "status": "OK",
+      "streak": 1,
+      "since": "2026-10-07T21:57:02.151Z",
+      "alerted": false,
+      "detail": "30 / 25 / 19 результатов"
+    },
+    "torrentby": {
+      "status": "BLOCKED",
+      "streak": 1,
+      "since": "2026-10-07T21:57:02.151Z",
+      "alerted": false,
+      "detail": "сеть недоступна: UNABLE_TO_VERIFY_LEAF_SIGNATURE"
+    },
+    "rutracker": {
+      "status": "BLOCKED",
+      "streak": 1,
+      "since": "2026-10-07T21:57:02.151Z",
+      "alerted": false,
+      "detail": "проверка Cloudflare (HTTP 403)"
+    },
+    "kinozal": {
+      "status": "BLOCKED",
+      "streak": 1,
+      "since": "2026-10-07T21:57:02.151Z",
+      "alerted": false,
+      "detail": "проверка Cloudflare (HTTP 403)"
+    },
+    "rustorka": {
+      "status": "BLOCKED",
+      "streak": 1,
+      "since": "2026-10-07T21:57:02.151Z",
+      "alerted": false,
+      "detail": "проверка Cloudflare (HTTP 403)"
+    }
+  },
+  "summaryWeek": "2026-W41"
+}
