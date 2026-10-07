@@ -1,4 +1,4 @@
-// Phone search: the kind badge of each result and the «Все / Фильмы / Сериалы» filter.
+// Phone search: the kind badge of each result, the «Все / Фильмы / Сериалы» filter and «Смотреть на телефоне».
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -138,3 +138,72 @@ describe('phone search: kind badge and filter', () => {
   });
 });
 
+describe('phone search: «Смотреть на телефоне»', () => {
+  const file = (id: number, path: string) => ({ id, path, length: 1000 });
+
+  it('adds the release and plays its one file on the phone (the system chooser by default)', async () => {
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue({ hash: HASH, file_stats: [file(1, 'Dune.2021.mkv'), file(2, 'Dune.srt')] } as any);
+    const loadInfo = vi.spyOn(TorrServerClient.prototype, 'loadInfo');
+    expect(settings.value.videoPlayer).toBe('builtin');
+    mount();
+    await search('dune');
+    click(phoneButton(FILM));
+    await flush();
+    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, title: FILM, category: 'movie' });
+    expect(loadInfo).not.toHaveBeenCalled();
+    expect(openExternal).toHaveBeenCalledTimes(1);
+    expect(openExternal.mock.calls[0][0]).toBe('http://srv:8090/stream/Dune.2021.mkv?link=' + HASH + '&index=1&play');
+    expect(openExternal.mock.calls[0][1]).toBe('video/*');
+    expect(currentRoute.value).toEqual({ name: 'add' });
+  });
+
+  it('waits for the files when TorrServer has no metadata yet, and respects the 2160 Player setting', async () => {
+    const open2160 = vi.fn().mockResolvedValue({ returned: false });
+    setWatchActions({ openExternal, open2160, player2160: async () => 'com.spacesarmat.player2160', recordWatch: vi.fn().mockResolvedValue(undefined), phoneName: async () => 'Pixel' });
+    updateSettings({ videoPlayer: 'p2160' });
+    try {
+      vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+      vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue({ hash: HASH } as any);
+      const loadInfo = vi.spyOn(TorrServerClient.prototype, 'loadInfo').mockResolvedValue({ hash: HASH, file_stats: [file(0, 'Dune.mkv')] } as any);
+      mount();
+      await search('dune');
+      click(phoneButton(FILM));
+      await flush();
+      await flush();
+      expect(loadInfo).toHaveBeenCalledWith(HASH);
+      expect(openExternal).not.toHaveBeenCalled();
+      expect(open2160).toHaveBeenCalledTimes(1);
+    } finally {
+      updateSettings({ videoPlayer: 'builtin' });
+    }
+  });
+
+  it('several playable files (a series): the torrent screen opens to choose, nothing plays', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: 'b'.repeat(40) } as any);
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue({
+      hash: 'b'.repeat(40),
+      file_stats: [file(1, 'Prophecy.S01E01.mkv'), file(2, 'Prophecy.S01E02.mkv')],
+    } as any);
+    mount();
+    await search('dune');
+    // also in the card's details sheet
+    click(card(SERIES).querySelector('.m-rc-open')!);
+    click(Array.from(el.querySelectorAll('.m-sheet-row button')).find((b) => b.textContent === 'На телефоне')!);
+    await flush();
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'b'.repeat(40) });
+  });
+
+  it('an error is shown under the search like the TV path; the row is free again', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    vi.spyOn(TorrServerClient.prototype, 'get').mockRejectedValue(new Error('Сервер не ответил'));
+    mount();
+    await search('dune');
+    click(phoneButton(FILM));
+    await flush();
+    expect(el.querySelector('.m-error')!.textContent).toContain('Сервер не ответил');
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(phoneButton(FILM).disabled).toBe(false);
+  });
+});

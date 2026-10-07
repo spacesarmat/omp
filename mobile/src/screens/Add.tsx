@@ -9,7 +9,7 @@ import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { useTvLaunch } from '../watch';
+import { useTvLaunch, watchAddedOnPhone } from '../watch';
 import { client } from '../../../src/store/servers';
 import { rememberAdded } from '../../../src/store/library';
 import { errorMessage } from '../../../src/api/http';
@@ -368,10 +368,11 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     if (alive.v) setPending(Object.fromEntries(pendingRef.current));
   };
 
-  const addResult = async (r: SourceResult, watch: boolean) => {
+  // 'tv': add and play on the TV; 'phone': add and play here (one file), else the torrent screen to choose
+  const addResult = async (r: SourceResult, watch: false | 'tv' | 'phone') => {
     const key = resultKey(r);
     if (pendingRef.current.has(key)) return;
-    if (watch && !tv) {
+    if (watch === 'tv' && !tv) {
       navigate({ name: 'tv' });
       return;
     }
@@ -390,6 +391,11 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
       if (!hash || !alive.v) return;
       if (!watch) {
         showToast(t('notify.added'));
+        return;
+      }
+      if (watch === 'phone') {
+        markRow(key, 'add');
+        await watchAddedOnPhone(c, hash);
         return;
       }
       await launch.start({
@@ -567,7 +573,8 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
               busy={pending[k]}
               onCategory={(id) => setRowCat({ ...memo.rowCat, [k]: id })}
               onAdd={() => void addResult(r, false)}
-              onWatch={() => void addResult(r, true)}
+              onWatch={() => void addResult(r, 'tv')}
+              onPhone={() => void addResult(r, 'phone')}
             />
           );
         })}

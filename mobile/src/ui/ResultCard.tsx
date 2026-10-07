@@ -30,13 +30,15 @@ export function resultMeta(r: SourceResult): string {
 const PLUS = 'M12 5v14M5 12h14';
 /** A screen with ▶ in it: «На ТВ». */
 const TV_PLAY = 'M3 4h18v13H3zM8 21h8M10 8l5 2.5-5 2.5z';
+/** A phone with ▶ in it: «На телефоне». */
+const PHONE_PLAY = 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 9l4 2.5-4 2.5z';
 
 const pageLink = (r: SourceResult): string => (/^https?:\/\//i.test(r.detailUrl || '') ? r.detailUrl! : '');
 
 /**
  * A found release, compact: the poster down the whole card; the short title with its meta, quality chips,
- * «source · size · seeds», the date with the round «＋» and «▶ ТВ». A tap on the card opens «Подробнее»: the full
- * tracker title, the category, the same two actions as full buttons and «Открыть на сайте».
+ * «source · size · seeds», the date with the round «＋», «▶ телефон» (when onPhone is given) and «▶ ТВ». A tap on the
+ * card opens «Подробнее»: the full tracker title, the category, the same actions as full buttons and «Открыть на сайте».
  * The first chip is the kind of the release («Фильм», «Сериал · S02 · 1–8 из 8»), none when it is unknown.
  */
 export function ResultCard(p: {
@@ -50,6 +52,8 @@ export function ResultCard(p: {
   onCategory: (id: string) => void;
   onAdd: () => void;
   onWatch: () => void;
+  /** «Смотреть на телефоне»: add, then play on this phone. No button without it. */
+  onPhone?: () => void;
 }) {
   const { r } = p;
   const [open, setOpen] = useState(false);
@@ -90,6 +94,17 @@ export function ResultCard(p: {
             >
               <Icon d={PLUS} size={22} />
             </button>
+            {p.onPhone && (
+              <button
+                type="button"
+                class="m-rc-btn m-rc-btn-phone"
+                aria-label={t('add.addAndWatchPhone', { title: r.Title })}
+                disabled={!!p.busy}
+                onClick={p.onPhone}
+              >
+                <Icon d={PHONE_PLAY} size={22} />
+              </button>
+            )}
             <button
               type="button"
               class="m-rc-btn m-rc-btn-tv"
@@ -144,6 +159,11 @@ export function ResultCard(p: {
             <button type="button" class="m-btn m-btn-secondary" disabled={!!p.busy} onClick={act(p.onAdd)}>
               {t('common.add')}
             </button>
+            {p.onPhone && (
+              <button type="button" class="m-btn m-btn-secondary" disabled={!!p.busy} onClick={act(p.onPhone)}>
+                {t('add.onPhone')}
+              </button>
+            )}
             <button type="button" class="m-btn m-btn-primary" disabled={!!p.busy} onClick={act(p.onWatch)}>
               {t('add.onTv')}
             </button>
