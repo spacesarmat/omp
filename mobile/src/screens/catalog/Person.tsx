@@ -96,8 +96,7 @@ function Body({ card }: { card: PersonCard }) {
         )}
         <div class="m-person-info">
           <h2 class="m-person-name">{card.name}</h2>
-          <span class="m-small m-muted m-person-job">{jobText(card, jobs[0] || 'acting')}</span>
-          {years && <span class="m-small m-muted m-person-years">{years}</span>}
+          <span class="m-small m-muted m-person-job">{[jobText(card, jobs[0] || 'acting'), years].filter(Boolean).join(' · ')}</span>
         </div>
       </div>
       {card.bio && <Overview text={card.bio} />}

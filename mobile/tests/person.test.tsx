@@ -78,8 +78,8 @@ describe('phone person screen', () => {
     await flush();
     expect(person).toHaveBeenCalledWith(7);
     expect(text(el.querySelector('.m-person-name'))).toBe('Иван Режиссёров');
-    expect(text(el.querySelector('.m-person-job'))).toBe('Актёр');
-    expect(text(el.querySelector('.m-person-years'))).toBe('род. 1970');
+    expect(text(el.querySelector('.m-person-job'))).toBe('Актёр · род. 1970');
+    expect(el.querySelector('.m-person-years')).toBeNull();
     expect(text(el.querySelector('.m-tc-initial'))).toBe('ИР');
   });
 
@@ -137,7 +137,7 @@ describe('phone person screen', () => {
     serve({ ...CARD, known: 'directing', directing: [credit('movie', 30, 'Режиссура', 2019)] });
     mount(<Person id={7} />);
     await flush();
-    expect(text(el.querySelector('.m-person-job'))).toBe('Режиссёр');
+    expect(text(el.querySelector('.m-person-job'))).toBe('Режиссёр · род. 1970');
     expect(ids()).toEqual(['movie:30']);
     await click(btn('Актёрские работы'));
     expect(ids()).toHaveLength(3);
@@ -245,5 +245,16 @@ describe('phone person screen', () => {
     await flush();
     expect(text(el.querySelector('.m-person-name'))).toBe('Иван Режиссёров');
     expect(text(el.querySelector('.m-nav-item.on'))).toBe('Каталог');
+  });
+
+  it('Back from a person opened over a series screen returns to that series screen', async () => {
+    resetTo({ name: 'library' });
+    navigate({ name: 'series', key: 'k1' });
+    navigate({ name: 'person', id: 7 });
+    mount(<App />);
+    await flush();
+    expect(text(el.querySelector('.m-nav-item.on'))).toBe('Каталог');
+    await click(el.querySelector('.m-bar > .m-icon-btn:first-child')!);
+    expect(currentRoute.value).toEqual({ name: 'series', key: 'k1' });
   });
 });
