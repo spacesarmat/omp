@@ -3,3 +3,26 @@ include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
 
 apply from: 'capacitor.settings.gradle'
+
+// 2160 Player's player-core (experimental 2160 engine), built from the git submodule android/vendor/2160player
+// (`git submodule update --init --recursive`) as a composite build with its own version catalog.
+// The included build finds the Android SDK through ANDROID_HOME/ANDROID_SDK_ROOT or its own local.properties;
+// when only OMP's android/local.properties exists (Android Studio), its sdk.dir is copied there (gitignored upstream).
+def p2160 = file('vendor/2160player')
+if (!new File(p2160, 'settings.gradle.kts').exists()) {
+    throw new GradleException('android/vendor/2160player is empty: run `git submodule update --init --recursive`')
+}
+def p2160Local = new File(p2160, 'local.properties')
+def ompLocal = file('local.properties')
+if (!p2160Local.exists() && ompLocal.exists()) {
+    def sdk = new Properties()
+    ompLocal.withInputStream { sdk.load(it) }
+    if (sdk.getProperty('sdk.dir')) {
+        p2160Local.text = 'sdk.dir=' + sdk.getProperty('sdk.dir').replace('\\', '/') + '\n'
+    }
+}
+includeBuild(p2160) {
+    dependencySubstitution {
+        substitute(module('tv.p2160:player-core')).using(project(':player-core'))
+    }
+}

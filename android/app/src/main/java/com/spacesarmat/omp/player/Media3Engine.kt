@@ -22,8 +22,6 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
-import androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer
-import androidx.media3.decoder.ffmpeg.FfmpegLibrary
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -35,11 +33,13 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.video.VideoRendererEventListener
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegAudioRenderer
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegLibrary
 import java.util.Locale
 
 /**
  * [PlayerEngine] on Media3 ExoPlayer. Audio the device cannot decode (DTS, TrueHD, AC3/E-AC3 on boxes without
- * those decoders) goes through the FFmpeg decoder of org.jellyfin.media3:media3-ffmpeg-decoder ([OmpRenderers]);
+ * those decoders) goes through the FFmpeg decoder of nextlib (io.github.anilbeesetti:nextlib-media3ext) ([OmpRenderers]);
  * AC3/E-AC3/DTS still go out as passthrough over HDMI when the device reports support. Video always uses the
  * device decoders.
  */

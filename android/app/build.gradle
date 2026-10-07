@@ -49,6 +49,8 @@ android {
     packaging {
         jniLibs {
             excludes += ['lib/x86/**', 'lib/x86_64/**']
+            // nextlib-media3ext and nextlib-mediainfo (player-core) both ship the FFmpeg shared libraries
+            pickFirsts += ['**/libavcodec.so', '**/libavutil.so', '**/libswscale.so', '**/libswresample.so']
         }
     }
     buildTypes {
@@ -91,12 +93,17 @@ dependencies {
     implementation 'androidx.work:work-runtime-ktx:2.10.3'
     implementation "androidx.webkit:webkit:$androidxWebkitVersion"
     // native player on Android TV (player/PlayerActivity.kt)
-    implementation 'androidx.media3:media3-exoplayer:1.8.0'
-    implementation 'androidx.media3:media3-ui:1.8.0'
+    // Media3 is aligned with 2160 Player's player-core (it exposes media3-exoplayer as api), see the version
+    // catalog in vendor/2160player/gradle/libs.versions.toml
+    implementation 'androidx.media3:media3-exoplayer:1.11.1'
+    implementation 'androidx.media3:media3-ui:1.11.1'
     // FFmpeg audio decoders for Media3 (DTS, AC3/E-AC3, TrueHD…) when the box has no hardware decoder; enabled in
-    // v0.15 Task 3. Jellyfin's build is GPL-3.0 (compatible with OMP's GPL-3.0); its FFmpeg is configured without
-    // --enable-gpl / nonfree (LGPL decoders only). Must match the Media3 version above.
-    implementation 'org.jellyfin.media3:media3-ffmpeg-decoder:1.8.0+1'
+    // v0.15 Task 3. nextlib (GPL-3.0, compatible with OMP's GPL-3.0), the same build player-core uses; it must be a
+    // direct dependency because player-core has it as implementation. Its version follows Media3 (1.11.1-x).
+    implementation 'io.github.anilbeesetti:nextlib-media3ext:1.11.1-0.16.0'
+    // 2160 Player engine (experimental, exp/2160-engine): built from the submodule through includeBuild in
+    // settings.gradle, which substitutes this coordinate with project(':player-core')
+    implementation 'tv.p2160:player-core:0.1.0'
     // second player engine on Android TV (LGPL-2.1), used from v0.15 Task 4
     implementation 'org.videolan.android:libvlc-all:3.7.7'
     // install assistant: LG Developer Mode over SSH (BSD-3-Clause) and Android TV over adb (Apache-2.0), see install/

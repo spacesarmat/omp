@@ -1,0 +1,4 @@
+[submodule "android/vendor/2160player"]
+	path = android/vendor/2160player
+	url = https://github.com/spacesarmat/2160player.git
+	branch = main
