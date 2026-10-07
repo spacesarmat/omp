@@ -295,3 +295,7 @@ Settings → «Плеер для видео» = «Встроенный» unless 
 14. **«Выбор Android»**: the system chooser opens as before.
 15. **Codecs**: passthrough doesn't matter on the phone, but check that AC3/DTS/TrueHD files play with sound (FFmpeg decode), plus HEVC 10-bit 4K and Dolby Vision p7 (HDR10 base layer).
 16. **Android TV unaffected**: on the Dune, the built-in player (Engine2160) shows no notification and no `PlaybackService` runs (`adb shell dumpsys activity services com.spacesarmat.omp`).
+
+## Audio note (Dune, Realtek, Android 9)
+
+If OMP is killed (force-stop, crash, low-memory kill) during AC-3/DTS passthrough, the box keeps a stuck passthrough output until reboot or HDMI replug. Passthrough then fails (`Cannot create AudioTrack`) and the decoded fallback is inaudible. Engine2160's audio setup matches the old Media3Engine; on a clean box AC-3 passthrough plays with sound (confirmed by ear). Test procedure: never force-stop during passthrough; exit with Back. Open question: whether a normal Back exit can leave the output stuck (to be checked after a manual reboot).
