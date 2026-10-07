@@ -193,6 +193,16 @@ export function renameTv(ip: string, name: string): void {
   persist();
 }
 
+/** The user gave this TV a name of its own on the phone (the alias in `name`; the TV's own one is `defaultName`). */
+export function isTvRenamed(tv: SavedTv | null | undefined): boolean {
+  return !!tv && tv.defaultName !== undefined && tv.name !== tv.defaultName;
+}
+
+/** Drops the phone-side name: the TV is shown by its own name again. */
+export function resetTvName(ip: string): void {
+  renameTv(ip, '');
+}
+
 export function setActiveTv(ip: string, now: number = Date.now()): void {
   if (!tvs.value.some((t) => t.ip === ip)) return;
   activeTvIp.value = ip;

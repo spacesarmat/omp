@@ -4,7 +4,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Tv, setTvDiscoverer } from '../src/screens/Tv';
 import { setTransport, tvState, tvError, type TvTransport } from '../src/tv/tvClient';
-import { tvs, saveTv, reloadTvs, activeTvIp } from '../src/tv/tvStore';
+import { tvs, saveTv, reloadTvs, activeTvIp, renameTv } from '../src/tv/tvStore';
 import { currentRoute, resetTo, navigate } from '../src/nav';
 import { native } from '../src/platform/native';
 
@@ -116,6 +116,24 @@ describe('Tv screen', () => {
     await act(async () => { i2.dispatchEvent(new Event('input', { bubbles: true })); });
     await act(async () => { btn(d2, 'Сохранить').click(); });
     expect(tvs.value[0].name).toBe('LG в спальне');
+  });
+
+  it('a renamed TV: the list shows the alias with the TV’s own name; «Вернуть имя телевизора» only while renamed', async () => {
+    saveTv({ ip: '192.168.1.57', name: 'LG в спальне', clientKey: 'k' });
+    renameTv('192.168.1.57', 'Детская');
+    const el = mount();
+    await flush();
+    const row = Array.from(el.querySelectorAll('.m-tv')).find((r) => (r.textContent || '').indexOf('192.168.1.57') >= 0)!;
+    expect(row.querySelector('.m-server-name')!.textContent).toBe('Детская');
+    expect(row.textContent).toContain('LG в спальне · 192.168.1.57');
+    await act(async () => (el.querySelector('[aria-label="Переименовать Детская"]') as HTMLButtonElement).click());
+    const dlg = document.querySelector('[role="dialog"]') as HTMLElement;
+    expect((dlg.querySelector('input') as HTMLInputElement).value).toBe('Детская');
+    await act(async () => { btn(dlg, 'Вернуть имя телевизора').click(); });
+    expect(tvs.value[0].name).toBe('LG в спальне');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => (el.querySelector('[aria-label="Переименовать LG в спальне"]') as HTMLButtonElement).click());
+    expect(document.querySelector('[data-rename-reset]')).toBeNull();
   });
 
   it('cancel leaves the name alone and discovered TVs have no rename button', async () => {

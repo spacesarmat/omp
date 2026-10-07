@@ -8,11 +8,14 @@ export function RenameSheet({
   value,
   onSave,
   onCancel,
+  reset,
 }: {
   title: string;
   value: string;
   onSave: (name: string) => void;
   onCancel: () => void;
+  /** Shown when a name of the user's own is set: a button that drops it. */
+  reset?: { label: string; onReset: () => void };
 }) {
   const [text, setText] = useState(value);
   function submit(e: Event) {
@@ -42,6 +45,11 @@ export function RenameSheet({
             {t('common.save')}
           </button>
         </div>
+        {reset && (
+          <button type="button" class="m-link" data-rename-reset onClick={reset.onReset}>
+            {reset.label}
+          </button>
+        )}
       </form>
     </Sheet>
   );
