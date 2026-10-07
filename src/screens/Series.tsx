@@ -443,6 +443,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           {!phoneLink.value && <div class="muted series-follow-note">{t('series.followNote')}</div>}
         </div>
       </div>
+      {card && card.cast.length > 0 && <CastRow cast={card.cast} groupKey="SERIES-CAST" focusPrefix="series-cast-" />}
       {chips.length > 0 && (
         <div class="series-seasons" ref={seasonsRef}>
         <FocusGroup focusKey="SERIES-SEASONS" className="series-seasons-row" preferredChildFocusKey={'season-' + season}>
@@ -523,7 +524,6 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           </FocusGroup>
         </div>
       )}
-      {card && card.cast.length > 0 && <CastRow cast={card.cast} groupKey="SERIES-CAST" focusPrefix="series-cast-" />}
       {better && (
         <BetterDialog
           torrent={better}

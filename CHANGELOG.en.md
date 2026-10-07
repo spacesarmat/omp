@@ -2,6 +2,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.19.0-beta.2
+
+- [tv] Cast and director screen: biography, filters in one row, opens in «Discover»; «Cast» on the series and movie screens sits right under the buttons
+- [phone] Cast and director screen: biography, filters in one row, opens in «Discover»; «Cast» on the series and movie screens sits right under the buttons, with proper margins
+
 ## 0.19.0-beta.1
 
 - [tv] Cast and directors on «Discover» cards and on the series and movie screens: press one to open the filmography; titles already in «Mine» are highlighted and come first, with an «In library» filter

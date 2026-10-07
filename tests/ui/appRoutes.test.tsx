@@ -90,7 +90,7 @@ describe('App route host', () => {
 
 describe('App person route', () => {
   it('renders the person screen for the person route', async () => {
-    const stub = { person: vi.fn(() => Promise.resolve({ id: 7, name: 'Иван Тест', photo: '', birth: '', death: '', known: 'acting', acting: [], directing: [] })) };
+    const stub = { person: vi.fn(() => Promise.resolve({ id: 7, name: 'Иван Тест', photo: '', birth: '', death: '', bio: '', known: 'acting', acting: [], directing: [] })) };
     setCatalogProvider(() => Promise.resolve(stub as any));
     routeStack.value = [{ name: 'library' }, { name: 'person', id: 7, label: 'Иван Тест' }];
     const app = mountApp();

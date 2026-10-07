@@ -299,6 +299,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
           </div>
         </div>
       </div>
+      {movie && movie.cast.length > 0 && <CastRow cast={movie.cast} groupKey="TORRENT-CAST" focusPrefix="torrent-cast-" />}
       {queue.length > 0 && (
         <FocusGroup focusKey="TORRENT-SKIP" className="skip-block">
           <div class="skip-head">
@@ -370,7 +371,6 @@ export function TorrentScreen({ hash }: { hash: string }) {
           </section>
         ))}
       </FocusGroup>
-      {movie && movie.cast.length > 0 && <CastRow cast={movie.cast} groupKey="TORRENT-CAST" focusPrefix="torrent-cast-" />}
       <div class="hints">{okHint(area)} · <KeyDot color="red" /> {t('torrent.hintDelete')} · {t('torrent.hintBack')}</div>
     </FocusGroup>
   );

@@ -76,6 +76,15 @@ describe('TV torrent screen · «В ролях»', () => {
     act(() => { (host.querySelector('[data-fk="torrent-cast-1"]') as HTMLElement).click(); });
     expect(currentRoute.value).toEqual({ name: 'person', id: 7, label: 'Джоэл Эдгертон' });
   });
+  it('sits right under the action buttons, before the skip block and the files', async () => {
+    search.mockResolvedValue({ items: [{ kind: 'movie', id: 3, title: 'x', original: 'x', year: 2023, poster: '', rating: 0 }], pages: 1 });
+    card.mockResolvedValue({ kind: 'movie', id: 3, cast });
+    await mount(film('film3'));
+    const after = (a: string, b: string) => !!(host.querySelector(a)!.compareDocumentPosition(host.querySelector(b)!) & 4);
+    expect(after('.torrent-head', '.tc-cast-row')).toBe(true);
+    expect(after('.tc-cast-row', '.skip-block')).toBe(true);
+    expect(after('.tc-cast-row', '[data-fk="file-1"]')).toBe(true);
+  });
   it('shows nothing when TMDB has no such film', async () => {
     search.mockResolvedValue({ items: [], pages: 1 });
     await mount(film('film2', 'Пустой фильм'));

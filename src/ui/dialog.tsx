@@ -7,6 +7,8 @@ import { useKeys } from './keys';
 interface DialogState {
   id: number;
   title: string;
+  /** Long text under the title; Up/Down scroll it while the dialog is open. */
+  body?: string;
   options: { label: string; value: unknown }[];
   current?: unknown;
   resolve: (v: unknown) => void;
@@ -32,6 +34,23 @@ export function choose<T>(title: string, options: { label: string; value: T }[],
   });
 }
 
+/** A dialog with a long text (the title and the body); resolves when closed. */
+export function textDialog(title: string, body: string, closeLabel: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (dialog.value) dialog.value.resolve(null);
+    dialog.value = {
+      id: ++dialogSeq,
+      title,
+      body,
+      options: [{ label: closeLabel, value: true }],
+      resolve: () => resolve(),
+      prevFocus: getCurrentFocusKey() || undefined,
+    };
+  });
+}
+
+const BODY_STEP = 160;
+
 export function confirmDialog(text: string, okLabel = t('tv.yes')): Promise<boolean> {
   return choose(text, [
     { label: okLabel, value: true },
@@ -55,6 +74,13 @@ export function DialogHost() {
       close(null);
       return true;
     }
+    if (dialog.value.body && (a === 'up' || a === 'down')) {
+      const el = document.querySelector('.dialog-body') as HTMLElement | null;
+      if (el) {
+        el.scrollTop += a === 'down' ? BODY_STEP : -BODY_STEP;
+        return true;
+      }
+    }
     return 'spatial';
   }, 100);
   const d = dialog.value;
@@ -73,6 +99,7 @@ export function DialogHost() {
     >
       <FocusGroup key={d.id} focusKey={'DIALOG-' + d.id} className="dialog" boundary autoFocus preferredChildFocusKey={preferred}>
         <div class="dialog-title">{d.title}</div>
+        {d.body ? <div class="dialog-body">{d.body}</div> : null}
         {d.options.map((o, i) => (
           <Focusable
             key={i}

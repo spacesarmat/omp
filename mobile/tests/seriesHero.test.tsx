@@ -198,6 +198,17 @@ describe('series screen · cast', () => {
     act(() => (people[1] as HTMLElement).click());
     expect(currentRoute.value).toMatchObject({ name: 'person', id: 7, label: 'Джоэл Эдгертон' });
   });
+  it('sits before the season rows, right after the watch button', async () => {
+    fake();
+    card.mockImplementation(() => Promise.resolve({ ...SHOW, cast: [{ id: 7, name: 'Джоэл Эдгертон', photo: '', role: 'Джейсон', job: 'cast' as const }] }));
+    mount();
+    await flush();
+    const cast = el.querySelector('.m-tc-section')!;
+    const rows = el.querySelector('.m-series-rows')!;
+    expect(cast.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const actions = el.querySelector('.m-tc-season-actions');
+    if (actions) expect(actions.compareDocumentPosition(cast) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
   it('is absent without a cast', async () => {
     fake();
     mount();

@@ -19,7 +19,7 @@ const credit = (kind: string, id: number, title: string, year: number, over: Rec
 });
 
 const card = {
-  id: 7, name: 'Иван Режиссёров', photo: '', birth: '1970-05-01', death: '', known: 'acting',
+  id: 7, name: 'Иван Режиссёров', photo: '', birth: '1970-05-01', death: '', bio: '', known: 'acting',
   acting: [
     credit('movie', 11, 'Другой фильм', 2022, { popularity: 50, roles: ['Пётр', 'Голос'] }),
     credit('movie', 10, 'Тихий сигнал', 2024, { original: 'Quiet Signal', popularity: 5, roles: ['Лев'] }),
@@ -80,15 +80,14 @@ describe('TV person screen', () => {
     const host = await mount();
     expect(stub.person).toHaveBeenCalledWith(7);
     expect(text(host.querySelector('.person-name'))).toBe('Иван Режиссёров');
-    expect(text(host.querySelector('.person-job'))).toBe('Актёр');
-    expect(text(host.querySelector('.person-years'))).toBe('род. 1970');
+    expect(text(host.querySelector('.person-job'))).toBe('Актёр · род. 1970');
     expect(text(host.querySelector('.tc-initials'))).toBe('ИР');
   });
 
   it('shows the years of a person who has died', async () => {
     stub.person = vi.fn(() => Promise.resolve({ ...card, death: '2010-02-03' }));
     const host = await mount();
-    expect(text(host.querySelector('.person-years'))).toBe('1970–2010');
+    expect(text(host.querySelector('.person-job'))).toBe('Актёр · 1970–2010');
   });
 
   it('lists the library title first, marked, with the roles in the meta line', async () => {
@@ -140,8 +139,59 @@ describe('TV person screen', () => {
     torrents.value = [];
     const host = await mount();
     expect(keys(host)).toEqual(['person-tile-movie-11', 'person-tile-tv-12', 'person-tile-movie-10']);
-    await click(host.querySelector('[data-fk="person-sort-year"]')!);
+    expect(text(host.querySelector('[data-fk="person-sort"]'))).toContain('Популярные');
+    await click(host.querySelector('[data-fk="person-sort"]')!);
     expect(keys(host)).toEqual(['person-tile-movie-10', 'person-tile-movie-11', 'person-tile-tv-12']);
+    expect(text(host.querySelector('[data-fk="person-sort"]'))).toContain('По году');
+    await click(host.querySelector('[data-fk="person-sort"]')!);
+    expect(keys(host)).toEqual(['person-tile-movie-11', 'person-tile-tv-12', 'person-tile-movie-10']);
+  });
+
+  it('shows the «Обзор ›» label above the name', async () => {
+    const host = await mount();
+    expect(text(host.querySelector('.person-crumb'))).toBe('Обзор ›');
+  });
+
+  it('the job label follows the selected job', async () => {
+    stub.person = vi.fn(() => Promise.resolve({ ...card, directing: [credit('movie', 30, 'Режиссура', 2019)] }));
+    const host = await mount();
+    expect(text(host.querySelector('.person-job'))).toBe('Актёр · род. 1970');
+    await click(host.querySelector('[data-fk="person-job-directing"]')!);
+    expect(text(host.querySelector('.person-job'))).toBe('Режиссёр · род. 1970');
+  });
+
+  describe('biography', () => {
+    const long = 'Родился в маленьком городе. '.repeat(20);
+    it('no bio, no block', async () => {
+      const host = await mount();
+      expect(host.querySelector('.person-bio')).toBeNull();
+      expect(host.querySelector('[data-fk="person-bio-more"]')).toBeNull();
+    });
+    it('a short bio is shown with no «Ещё»', async () => {
+      stub.person = vi.fn(() => Promise.resolve({ ...card, bio: 'Коротко о нём.' }));
+      const host = await mount();
+      expect(text(host.querySelector('.person-bio'))).toBe('Коротко о нём.');
+      expect(host.querySelector('[data-fk="person-bio-more"]')).toBeNull();
+    });
+    it('a long bio is clamped; «Ещё» opens the dialog with the full text', async () => {
+      stub.person = vi.fn(() => Promise.resolve({ ...card, bio: long }));
+      const host = await mount();
+      expect(host.querySelector('.person-bio')).not.toBeNull();
+      const more = host.querySelector('[data-fk="person-bio-more"]')!;
+      expect(text(more)).toBe('Ещё');
+      const { DialogHost } = await import('../../src/ui/dialog');
+      const dh = document.createElement('div');
+      hosts.push(dh);
+      document.body.appendChild(dh);
+      act(() => { render(h(DialogHost as any, {}), dh); });
+      await click(more);
+      expect(text(document.querySelector('.dialog-title'))).toBe('Иван Режиссёров');
+      expect(text(document.querySelector('.dialog-body'))).toBe(long.trim());
+      const body = document.querySelector('.dialog-body') as HTMLElement;
+      expect(body.scrollTop).toBe(0);
+      await act(() => { dispatchKey('down', new KeyboardEvent('keydown')); });
+      expect(body.scrollTop).toBeGreaterThan(0);
+    });
   });
 
   it('shows the job chips only when the person has both', async () => {
@@ -150,7 +200,7 @@ describe('TV person screen', () => {
     stub.person = vi.fn(() => Promise.resolve({ ...card, known: 'directing', directing: [credit('movie', 30, 'Режиссура', 2019)] }));
     host = await mount();
     expect(host.querySelector('[data-fk="person-job-directing"]')).not.toBeNull();
-    expect(text(host.querySelector('.person-job'))).toBe('Режиссёр');
+    expect(text(host.querySelector('.person-job'))).toBe('Режиссёр · род. 1970');
     expect(keys(host)).toEqual(['person-tile-movie-30']);
     await click(host.querySelector('[data-fk="person-job-acting"]')!);
     expect(keys(host)).toHaveLength(3);

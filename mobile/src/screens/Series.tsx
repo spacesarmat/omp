@@ -465,7 +465,10 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
       )}
       {caption && <span class="m-small m-muted m-sh-caption">{caption}</span>}
       {coming && card ? (
-        <FutureSeason card={card} season={coming} />
+        <>
+          <FutureSeason card={card} season={coming} />
+          <CastStrip cast={card.cast} />
+        </>
       ) : isMissing && card ? (
         <div class="m-sh-missing">
           <p class="m-muted m-small">{t('series.notInLibrary')}</p>
@@ -476,6 +479,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           >
             {t('titleCard.findTorrents')}
           </button>
+          <CastStrip cast={card.cast} />
         </div>
       ) : (
         <>
@@ -488,6 +492,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
             </div>
           )}
           {error && <LaunchError message={error} class="m-hint-warn" />}
+          {card && <CastStrip cast={card.cast} />}
           {rows.length > 1 && (
             <div class="m-dup-hint m-small" data-dup-info>
               <span>
@@ -507,7 +512,6 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           </div>
         </>
       )}
-      {card && <CastStrip cast={card.cast} />}
       {menuFor && (
         <TorrentMenu
           tor={menuFor}
