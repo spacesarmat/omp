@@ -294,8 +294,10 @@ export const ru = {
     dubReset: 'По умолчанию (сбросить)',
     dubChange: 'Сменить',
     dubNote: 'Запоминается при выборе дорожки в плеере — для всех сезонов, общая для ТВ и телефона',
-    watchedAll: 'просмотрен',
-    progressOf: '{done} из {total}',
+    // a season chip's sub-line: what the release has (of what TMDB lists), then how much is watched
+    episodesOf: { one: '{have} из {n} серии', few: '{have} из {n} серий', many: '{have} из {n} серий' },
+    watchedSome: 'смотрели {n}',
+    watchedEvery: 'просмотрено',
     left: 'осталось {n} мин',
     markedWatched: 'Серия отмечена просмотренной',
     hintOk: 'OK — смотреть',

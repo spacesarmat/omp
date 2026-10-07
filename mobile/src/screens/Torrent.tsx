@@ -43,7 +43,8 @@ import { displayTitle } from '../../../src/lib/torrentName';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 import { torrentQuery } from '../../../src/catalog/tmdb';
 import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../../../src/lib/seriesGroups';
-import { comingEpisodes, comingEpisodeText, realEpisodeName, seasonEpisodes, showOf, type EpisodeMap, type ShowInfo } from '../../../src/lib/episodeNames';
+import { comingEpisodes, comingEpisodeText, lastEpisodes, realEpisodeName } from '../../../src/lib/episodeNames';
+import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
 import { isoDay } from '../../../src/lib/seriesStatus';
 
 const BACK = 'M15 5l-7 7 7 7';
@@ -68,38 +69,6 @@ function fileTitle(f: TorrentFile): string {
   return stripExt(baseName(f.path));
 }
 
-
-/**
- * The TMDB show of a series torrent and the names of the seasons its files belong to. Never blocks: null / {} until
- * the data arrives (and for good when TMDB cannot be reached).
- */
-function useTmdb(tor: TorrentT | undefined, seasons: number[], enabled: boolean): { show: ShowInfo | null; eps: EpisodeMap } {
-  const [show, setShow] = useState<ShowInfo | null>(null);
-  const [eps, setEps] = useState<EpisodeMap>({});
-  const hash = tor ? tor.hash : '';
-  useEffect(() => {
-    setShow(null);
-    if (!tor || !enabled) return;
-    let alive = true;
-    showOf(tor).then((s) => alive && setShow(s));
-    return () => {
-      alive = false;
-    };
-  }, [hash, enabled]);
-  const wanted = seasons.join(',');
-  useEffect(() => {
-    setEps({});
-    if (!show || !wanted) return;
-    let alive = true;
-    seasons.forEach((n) => {
-      seasonEpisodes(show, n).then((m) => alive && setEps((cur) => ({ ...cur, [n]: m })));
-    });
-    return () => {
-      alive = false;
-    };
-  }, [show, wanted]);
-  return { show, eps };
-}
 
 function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: TorrentFile; onClose: () => void }) {
   const c = client.value!;
@@ -347,7 +316,7 @@ export function Torrent({ hash }: { hash: string }) {
   const fileSeasons = playableFiles(allFiles)
     .map((f) => parseEpisode(f.path).season)
     .filter((n, i, a): n is number => n !== null && a.indexOf(n) === i);
-  const tmdb = useTmdb(tor, fileSeasons, !!tor && isSeries(tor) && fileSeasons.length > 0);
+  const tmdb = useTmdbEpisodes(tor, fileSeasons, !!tor && isSeries(tor) && fileSeasons.length > 0);
   // file list comes from the list entry; load it from the server if the entry has none
   useEffect(() => {
     if (!c || !tor || own.length) return;
@@ -492,12 +461,7 @@ export function Torrent({ hash }: { hash: string }) {
   const season = first ? parseEpisode(first.path).season : null;
   const hasEpisodes = files.length > 1;
   // the last episode of each season here, then what TMDB announces after it (the same season data as the names)
-  const lastOf: { [season: number]: number } = {};
-  files.forEach((f) => {
-    const pe = parseEpisode(f.path);
-    if (pe.season !== null && pe.episode !== null && (lastOf[pe.season] === undefined || pe.episode > lastOf[pe.season])) lastOf[pe.season] = pe.episode;
-  });
-  const coming = hasEpisodes ? comingEpisodes(lastOf, tmdb.eps, isoDay(Date.now())) : [];
+  const coming = hasEpisodes ? comingEpisodes(lastEpisodes(files), tmdb.eps, isoDay(Date.now())) : [];
   const peers = tor.total_peers || tor.active_peers || 0;
   const meta = [
     season !== null ? t('library.season', { n: season }) : '',

@@ -281,8 +281,10 @@ export const en: EnDict<typeof ru> = {
     dubReset: 'Default (reset)',
     dubChange: 'Change',
     dubNote: 'Remembered when you pick a track in the player, for every season, shared by the TV and the phone',
-    watchedAll: 'watched',
-    progressOf: '{done} of {total}',
+    // a season chip's sub-line: what the release has (of what TMDB lists), then how much is watched
+    episodesOf: { one: '{have} of {n} episode', other: '{have} of {n} episodes' },
+    watchedSome: 'watched {n}',
+    watchedEvery: 'watched',
     left: '{n} min left',
     markedWatched: 'Episode marked as watched',
     hintOk: 'OK — watch',

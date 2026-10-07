@@ -25,7 +25,7 @@ import { lang, t, fmtNumber } from '../i18n';
 import { findGroup, groupLabel, NO_SEASON, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
 import { airDateText, isoDay, seriesPill, upcomingSeasons, type Upcoming } from '../lib/seriesStatus';
-import { cleanFileName, comingEpisodeDate, comingEpisodeTitle, comingEpisodes, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
+import { cleanFileName, comingEpisodes, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
 import { baseName, naturalCompare, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../lib/episodes';
 import { formatBytes } from '../lib/format';
 import { libraryTitle } from '../lib/libraryView';
@@ -39,6 +39,7 @@ import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
 import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
 import { tvGlyphs } from '../ui/tvText';
+import { seasonChipSub, type SeasonChipSub } from '../lib/seasonChip';
 import { qualityOrUnknown } from '../monitor/upgradeText';
 import { displayTitle } from '../lib/torrentName';
 import { Poster } from './library/Poster';
@@ -48,6 +49,7 @@ import { phoneLink } from '../phone/phoneStore';
 import { errorMessage } from '../api/http';
 import { SeriesPill } from './library/SeriesTile';
 import { CastRow } from '../ui/CastRow';
+import { ComingRows } from '../ui/ComingRows';
 import { useSeriesDub } from '../ui/seriesDub';
 
 // the chosen season of each open series screen (its route entry): kept while the player or a torrent is on top
@@ -66,6 +68,13 @@ const pad = (n: number) => (n < 10 ? '0' : '') + n;
 function episodeCode(season: number | null, episode: number | null): string {
   if (episode === null) return '';
   return (season !== null && season !== NO_SEASON ? 'S' + pad(season) : '') + 'E' + pad(episode);
+}
+
+/** The episodes TMDB lists for a season: the card's count, or the loaded season's episodes when they are more; 0 unknown. */
+export function tmdbEpisodeCount(card: CatalogCard | null, season: number, eps: { [n: number]: Episode } | null): number {
+  const s = card ? card.seasons.filter((x) => x.number === season)[0] : undefined;
+  const listed = eps ? Object.keys(eps).length : 0;
+  return Math.max(s ? s.episodes : 0, listed);
 }
 
 /** The playable files of one season across its torrents, by episode. */
@@ -463,13 +472,15 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             const soon = future.filter((u) => u.number === n)[0];
             const gap = gapFirsts.indexOf(n) >= 0;
             const last = gap ? gaps[n] : n;
-            let sub: string;
+            let sub = '';
+            let have: SeasonChipSub | null = null;
             if (soon) sub = soon.airDate ? t('series.seasonComes', { date: airDateText(soon.airDate, now) }) : t('series.soonTv');
             else if (gap) sub = t('series.notInMediaShort');
             else {
+              // what is there first, then the watched part: «6 из 10 серий · смотрели 1»
               const list = n === season ? rows : seasonRows(group, n);
               const done = list.filter((r) => isWatched(r.tor.hash, r.file.id)).length;
-              sub = list.length && done === list.length ? t('series.watchedAll') : t('series.progressOf', { done, total: list.length });
+              have = seasonChipSub(list.length, tmdbEpisodeCount(card, n, n === season ? eps : null), done);
             }
             return (
               <Focusable
@@ -483,7 +494,18 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
                 <div class="chip-name">
                   {(gap ? '+ ' : '') + (n === NO_SEASON ? t('series.noSeason') : last > n ? t('series.seasonsRange', { a: n, b: last }) : t('library.season', { n }))}
                 </div>
-                <div class="chip-sub">{sub}</div>
+                <div class="chip-sub">
+                  {have ? (
+                    <>
+                      {have.episodes}
+                      {have.watched ? ' · ' : ''}
+                      {have.all ? <Icon name="check" size={20} class="chip-check" /> : null}
+                      {have.watched}
+                    </>
+                  ) : (
+                    sub
+                  )}
+                </div>
               </Focusable>
             );
           })}
@@ -515,14 +537,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           );
         })}
         {/* the episodes announced after the last one here: muted and dashed, not focusable, no OK */}
-        {coming.map((e) => (
-          <div key={'coming-' + e.episode} class="list-item file-row ep-row ep-coming" data-coming={e.season + ':' + e.episode} aria-disabled="true">
-            <span class="ep">{episodeCode(e.season, e.episode)}</span>
-            <span class="name">{tvGlyphs(comingEpisodeTitle(e))}</span>
-            <span class="size">{tvGlyphs(comingEpisodeDate(e, now))}</span>
-            <span class="check" />
-          </div>
-        ))}
+        <ComingRows list={coming} now={now} />
       </FocusGroup>
       {!rows.length && !coming.length && futureSeason && (
         <div class="empty">

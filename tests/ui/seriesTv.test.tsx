@@ -295,7 +295,7 @@ describe('TV series screen', () => {
     expect(rows[0].getAttribute('data-fk')).toBe('ep-s2-1');
     expect(rows[1].getAttribute('data-fk')).toBe('ep-s2b-2');
     const chip = host.querySelector('[data-fk="season-2"]')!;
-    expect(text(chip.querySelector('.chip-sub'))).toBe('1 из 2');
+    expect(text(chip.querySelector('.chip-sub'))).toBe('2 из 10 серий · смотрели 1');
     const watch = host.querySelector('[data-fk="series-watch"]') as HTMLElement;
     expect(text(watch)).toContain('S02E02');
     act(() => { watch.click(); });
@@ -614,3 +614,33 @@ describe('TV series screen: episodes still to come', () => {
     expect(coming(host)).toHaveLength(0);
   });
 });
+﻿
+describe('TV series screen: the season chips say what is there, then what is watched', () => {
+  const sub = (host: HTMLElement, n: number) => host.querySelector('[data-fk="season-' + n + '"] .chip-sub') as HTMLElement;
+
+  it('«2 из 9 серий» while TMDB lists more than the release; «· смотрели 1» once one is watched', async () => {
+    saveProgress('s2', 1, 100, 100);
+    const host = await mount(2);
+    expect(text(sub(host, 1))).toBe('2 из 9 серий');
+    expect(text(sub(host, 2))).toBe('2 из 10 серий · смотрели 1');
+    expect(sub(host, 2).querySelector('.icon')).toBeNull();
+  });
+
+  it('without TMDB: the release count; every episode watched: a check icon and «просмотрено»', async () => {
+    stub.card = () => Promise.reject(new Error('offline'));
+    const plainSeason = stub.season;
+    stub.season = () => Promise.reject(new Error('offline'));
+    saveProgress('s1', 1, 100, 100);
+    saveProgress('s1', 2, 100, 100);
+    try {
+      const host = await mount(2);
+      // (season 2's progress is the previous test's: the progress store outlives localStorage.clear)
+      expect(text(sub(host, 2))).toMatch(/^2 серии( · |$)/);
+      expect(text(sub(host, 1))).toBe('2 серии · просмотрено');
+      expect(sub(host, 1).querySelector('.icon.chip-check')).not.toBeNull();
+    } finally {
+      stub.season = plainSeason;
+    }
+  });
+});
+

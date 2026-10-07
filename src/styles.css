@@ -168,6 +168,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .season-chip .chip-name { font-size: 26px; font-weight: 700; }
 .season-chip .chip-sub { font-size: 20px; color: var(--muted); margin-top: 4px; }
 .season-chip.focused .chip-sub { color: #3a3000; }
+.season-chip .chip-check { margin: -3px 4px 0 0; }
 .season-chip.chip-future { background: transparent; border: 2px dashed #5a6070; }
 .season-chip.chip-future.on { border-color: var(--accent); }
 .season-chip.chip-future.focused { background: var(--accent); border-style: solid; }

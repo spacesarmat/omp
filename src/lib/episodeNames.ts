@@ -9,6 +9,7 @@ import { displayTitle } from './torrentName';
 import { activeCatalog } from '../catalog/activeCatalog';
 import { t } from '../i18n';
 import { airDateText } from './seriesStatus';
+import { parseEpisode, type TorrentFile } from './episodes';
 
 export interface ShowInfo {
   id: number;
@@ -120,6 +121,16 @@ export function comingEpisodes(have: { [season: number]: number }, eps: EpisodeM
           if (n > have[s] && e.airDate && e.airDate >= today) out.push({ season: s, episode: n, name: realEpisodeName(e.title), airDate: e.airDate });
         });
     });
+  return out;
+}
+
+/** The last episode number of each season among the files (what `comingEpisodes` counts from). */
+export function lastEpisodes(files: TorrentFile[]): { [season: number]: number } {
+  const out: { [season: number]: number } = {};
+  files.forEach((f) => {
+    const pe = parseEpisode(f.path);
+    if (pe.season !== null && pe.episode !== null && (out[pe.season] === undefined || pe.episode > out[pe.season])) out[pe.season] = pe.episode;
+  });
   return out;
 }
 

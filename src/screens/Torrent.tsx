@@ -34,6 +34,11 @@ import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navi
 import { displayTitle } from '../lib/torrentName';
 import { t } from '../i18n';
 import { tvGlyphs } from '../ui/tvText';
+import { ComingRows } from '../ui/ComingRows';
+import { comingEpisodes, lastEpisodes } from '../lib/episodeNames';
+import { useTmdbEpisodes } from '../lib/useTmdbEpisodes';
+import { isSeries } from '../lib/seriesGroups';
+import { isoDay } from '../lib/seriesStatus';
 
 /** Inner margin of the actions row: a focused button keeps this much room to the row's edge. */
 const ACTION_PAD = 24;
@@ -125,6 +130,13 @@ export function TorrentScreen({ hash }: { hash: string }) {
 
   const queue = useMemo(() => (tor ? buildTorrentQueue(c, tor, files) : []), [tor ? tor.hash : '', files]);
   const groups = useMemo(() => groupBySeason(playableFiles(files)), [files]);
+  // a series matched to TMDB: the episodes announced after the last one here, as dashed rows the focus skips (as on the
+  // phone's torrent screen and the TV series screen)
+  const playable = groups.reduce((acc: TorrentFile[], g) => acc.concat(g.files), []);
+  const fileSeasons = groups.map((g) => g.season).filter((n): n is number => n !== null);
+  const tmdb = useTmdbEpisodes(tor, fileSeasons, !!tor && isSeries(tor) && fileSeasons.length > 0);
+  const now = Date.now();
+  const coming = playable.length > 1 ? comingEpisodes(lastEpisodes(playable), tmdb.eps, isoDay(now)) : [];
 
   const skip = useSkip(c, hash, firstPlayableId(files));
   const toggleSkip = (key: 'i' | 'c') => {
@@ -369,6 +381,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
                 </Focusable>
               );
             })}
+            {g.season !== null && <ComingRows list={coming.filter((e) => e.season === g.season)} now={now} />}
           </section>
         ))}
       </FocusGroup>
