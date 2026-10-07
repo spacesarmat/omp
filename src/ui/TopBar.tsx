@@ -7,6 +7,9 @@ import { tvLibraryTabs, LibraryTab, LibraryView, viewLabel } from '../lib/librar
 import { LibrarySort, sortLabel } from '../lib/librarySearch';
 import { newsUnseen } from '../phone/monitor';
 import { latestUpdate } from '../store/updates';
+import { useEffect } from 'preact/hooks';
+import { deviceName, loadDeviceName } from '../platform/deviceName';
+import { tvGlyphs } from './tvText';
 
 export interface TopBarProps {
   tab: LibraryTab;
@@ -25,10 +28,16 @@ export function TopBar(p: TopBarProps) {
   // «Обзор» and «Новое» have their own content under the header: no library search, view or sort
   const discover = p.tab === 'discover' || p.tab === 'news';
   const unseen = newsUnseen.value;
+  useEffect(() => { void loadDeviceName(); }, []);
+  const device = deviceName.value;
   return (
     <FocusGroup focusKey="LIB-HEADER" className="topbar">
-      <Logo size={52} />
-      <span class="topbar-brand">OMP</span>
+      <div class="topbar-home">
+        <Logo size={52} />
+        <span class="topbar-brand">OMP</span>
+        {/* the TV's name under the logo: absolutely placed, so the bar keeps its height and the tabs their place */}
+        {device && <span class="topbar-device" title={device}>{tvGlyphs(device)}</span>}
+      </div>
       {tvLibraryTabs().map((tb) => (
         <Focusable
           key={tb.id}
