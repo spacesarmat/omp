@@ -130,3 +130,86 @@ Spike on the old toolchain: `C:\Users\ANDYBUM\omp-spike\SPIKE-2160-EMBED.md`. No
 - **Submodule follows `main`**: `git submodule update --remote` pulls whatever upstream has; a toolchain or Compose bump there can break OMP's build. The committed pointer pins a known-good commit.
 - **CI**: needs the JDK 17 toolchain (handled as above) and 4 GB of Gradle heap; the composite build also configures 2160's `app`, `source-torrent` and `embed-demo` projects (not built). Both untested on runners.
 - **Size**: +28 MB per ABI. Options stay as in the spike: R8, or trimming player-core (`material-icons-extended`, rtsp, smoothstreaming, session).
+
+## Stage 3: 2160 engine under OMP's player screen (Android TV)
+
+Date: 2026-10-07. Commit `feat(atv): 2160 engine under OMP's player screen`. Submodule unchanged (`88d2b4c`).
+
+OMP's player screen is unchanged: `PlayerActivity`, overlay, menus, DonateCard QR, `ChapterTicksView`, `Skips.kt`, `PlayerFlow`/`PlayerSession`, phone remote, progress/journal events, `EngineChooser`/`EngineSwitcher` and the VLC fallback. Only the engine under it changed.
+
+### What was done
+- New `player/Engine2160.kt` (`PlayerEngine`) on top of `tv.p2160.core.engine.PlayerController`. The controller plays one `PlaybackRequest`, so the engine creates **one controller per `open()`** and releases the previous one first.
+- `EngineChooser`/`EngineSwitcher`: the "builtin" kind (`EngineKind.MEDIA3`, wire `"builtin"`; the setting `playerEngine` 'auto'|'builtin'|'vlc' is unchanged) now creates `Engine2160` in `PlayerActivity.engineHost.create`. The enum name stays `MEDIA3`: the 2160 engine is Media3 ExoPlayer underneath, and renaming would only churn the switcher and its tests. A KDoc note says so.
+- **`Media3Engine.kt` is removed**, and `Media3EngineTest` becomes `Engine2160Test`. Engine2160 covers everything Media3Engine did (table below), and all tests pass. The old engine is still in git history (`523103d`).
+- `PlayerEngine` gets two optional members, `nightMode: Boolean?` (null = the engine has none, so VLC and `FakeEngine` don't need changes) and `setNightMode(on)`.
+
+### What maps to what
+
+| OMP `PlayerEngine` | Engine2160 / 2160 |
+|---|---|
+| `attach(container)` | A Media3 `PlayerView` as before (no controller UI, no buffering spinner, FIT, black shutter, not focusable). It is bound to `controller.player` on every `open`. Subtitles (text, ASS as Media3 cues, PGS bitmaps) are drawn by its `SubtitleView`, as before. 2160's Compose `PlayerScreen` is not used. |
+| `open(media, startMs)` | `PlayerController(app, PlaybackRequest(items = [MediaEntry(uri, subtitles, segments)], startPositionMs = startMs, headers))`. Then on its ExoPlayer: our listener, `pauseAtEndOfMediaItems = true`, the track preferences, and `playWhenReady = true`. The controller builds the media item asynchronously (title/subtitle IO), so until the items are in the player: `positionMs` reports the requested start, `seekTo`/`pause` are queued and applied right after the controller's own start seek (posted). |
+| credentials `user:pass@` in the URL | `Engine2160.splitCredentials`: the URL without them plus `Authorization: Basic …` in `PlaybackRequest.headers`. 2160 sends the headers with the stream and the subtitle downloads. `User-Agent: OMP` as before. |
+| `play`/`pause`/`seekTo`/`retry` | `player.play()` / `player.pause()` / `player.seekTo()` / `controller.retry()` (clears its error, then `prepare()` and `play()`). |
+| `positionMs`/`durationMs`/`playWhenReady`/`isBuffering` | The ExoPlayer, the same as Media3Engine. |
+| `onReady`/`onFirstFrame`/`onBuffering`/`onPlayingChanged`/`onTracksChanged`/`onEnded` | The same `Player.Listener` logic as Media3Engine: first frame, or READY for audio-only; end once, as a pause at the end or STATE_ENDED. |
+| `onError(kind, detail)` | `Engine2160.errorKind` is the same table as before. The detail is `errorCodeName`, or `OUT_OF_MEMORY` (`PlayerBuffer.causedByOom`), so `EngineChooser.onError` behaves as before (DECODING_FAILED, OOM). **New:** errors that the controller's own listener has already recovered are not reported. Its listener runs first and calls `prepare()` (AUDIO_TRACK_INIT_FAILED with passthrough → decode instead; BEHIND_LIVE_WINDOW). The engine sees `player.playerError == null` and skips the report, so a TV that claims AC3/DTS output and cannot open it no longer sends the item to VLC. |
+| `audioTracks`/`subtitleTracks` | Supported groups of `currentTracks` with ids `g<n>`, codec names and channels as before (+ `PCM`, DTS:X). External files are recognised by the controller's format id `ext:<item>:<uri hash>` → index in `EngineMedia.subtitles` (`Engine2160.externalIndex`). |
+| `selectAudio`/`selectSubtitle` | `TrackSelectionOverride` on the controller's player, the same as before. It does not go through `controller.select()`, so no "habit" is recorded. |
+| `setPreferences(TrackPrefs)` | Replaces 2160's selector languages (its settings default to `["ru"]`) with OMP's: preferred audio/subtitle language, overrides cleared, text disabled when subtitles are off. "Subtitles off" carries over to the next items as with Media3Engine. |
+| external subtitles (`SubFile`) | `ExternalSubtitle(uri, name = "<label>.<ext>", language)`, only srt/ass/ssa/vtt as before. 2160 takes the MIME from the name's extension and the label from the rest. Bonus: 2160 downloads the file first and re-encodes cp1251 to UTF-8. |
+| memory buffer cap (`PlayerBuffer.capBytes`) | **Not possible**, see Gaps. |
+| passthrough / audio sink / FFmpeg fallback | 2160's `PlayerFactory`: `NextRenderersFactory` with `EXTENSION_RENDERER_MODE_ON` (MediaCodec first, nextlib FFmpeg after, same order as OMP's `OmpRenderers`), decoder fallback, `DefaultAudioSink` (float off) wrapped in `GuardedAudioSink`, audio attributes MOVIE + focus, becoming-noisy. Differences: 2160 also adds nextlib's **FFmpeg video** renderer after MediaCodec (OMP excluded it), and it lets tracks exceed the reported renderer capabilities. |
+| `hostStopped`/`hostStarted` | Nothing to do (as before). `PlayerActivity` pauses the engine on stop. |
+| `release()` | Our listener removed, view unbound and removed, `controller.release()` (it releases the ExoPlayer, the FFmpeg analyzer and the MediaSession). |
+
+### Keeping 2160's own features out of OMP's way
+- **History/resume**: the controller saves progress to its `ResumeStore` every ~5 s and restores tracks, speed and subtitle delay from it. The engine deletes the item's entry (`ResumeStore.keyFor(uri)`) before creating the controller and after releasing it. OMP's resume points (journal) stay the only ones, and `startPositionMs` is always explicit (0 = from the start).
+- **Smart track habits**: they are applied only when a habit exists, and habits are recorded only through `controller.select()`/`disableSubtitles()`, which OMP never calls. Our `setPreferences` runs after the controller's own selector setup anyway.
+- **Sound-based intro detection** (`IntroDetector`): for any file whose name looks like an episode (S01E02…), 15 s after start it would decode the first 10 minutes of audio a second time over the network from TorrServer. The engine passes `QUIET_SEGMENTS`: INTRO and CREDITS at `Long.MAX_VALUE/2`, which no position reaches, so the controller treats both as "known", skips the search, and never auto-skips. OMP's `Skips.kt` decides as before. This is a workaround; an upstream option would be cleaner (see Gaps).
+- **Chapters**: the controller still opens the URL once with FFmpeg (`MediaAnalyzer.chapters`) to read chapters for its own state. That is one extra short HTTP read at start; OMP ignores the result (chapters come from the page).
+- 2160 `Settings` (process-wide prefs `p2160_settings`) are not changed, except `nightMode` through the new menu row.
+
+### 2160 features exposed / not exposed
+- **Exposed: «Ночной звук»** (dynamic range compression + dialogue lift, §16). One text row in the existing player menu: «Ночной звук: Вкл/Выкл» / «Night sound: On/Off» (new I18n keys `player.nightRow`, `player.on`), shown only for engines with `nightMode != null`. Selecting it toggles `controller.setNightMode()` now and persists `Settings.nightMode` for the next items and runs (then multichannel is also downmixed to stereo at controller start). While it is on, **passthrough is off** (the receiver gets PCM), and turning it off restores passthrough only from the next item.
+- **Free, no UI**: Dolby Vision without a decoder → HDR10 base layer (§15.5); M2TS/Blu-ray extractor (TrueHD, LPCM, DTS-HD, PGS); **Blu-ray ISO** when the URL's last path segment ends in `.iso` (TorrServer `/stream/Film.iso?...`, Range requests with our headers). Whether the page ever sends an `.iso` to the native player is not checked here (later). BDMV folders over HTTP are not supported by 2160.
+- **Not exposed (would need new UI or conflicts with OMP)**: 2160's PlayerScreen and panels, subtitle style/size, subtitle delay, secondary subtitles, speed, video track/quality choice, resize modes, decoder preference (HARDWARE/FFMPEG), night schedule, `report()` warnings (software 4K decoding, DV without decoder, HDR on SDR), smart tracks, manual intro/credits marks, sound-based intro detection, MediaSession/background playback. Candidates for later: the decoder preference ("always FFmpeg" helps boxes with green screen) and the warnings as an OMP message.
+
+### Manifest
+Removed from the merged manifest with `tools:node="remove"` in OMP's `AndroidManifest.xml`:
+- `tv.p2160.core.engine.PlaybackService` (exported MediaSessionService). Engine2160 does not need it: `PlaybackSessions.attach` starts it inside `runCatching`, and `startService` of an undeclared component returns null without throwing. The MediaSession itself is still created (media keys go to the activity first). This also affects stage 4 (`Player2160Activity` on the phone): there is no notification controls/background playback there unless it is put back.
+- `androidx.media3.session.BluetoothValidationActivity` (exported, media3-session 1.11).
+- Kept: `Player2160Activity` (`exported="false"`, for stage 4) and the permission `FOREGROUND_SERVICE_MEDIA_PLAYBACK` (now unused; harmless, can be removed the same way).
+
+### Verification
+- `node scripts/gradle.mjs testDebugUnitTest`: **505 tests, 0 failures, 0 errors, 0 skipped** (499 − 4 Media3Engine + 10 Engine2160: error kinds, codec names, track mapping, external subtitle index by URI hash, subtitle names/MIME, credentials → Basic header, percent decoding, quiet segments, night sound only on the 2160 engine). `EngineChooserTest`/`EngineSwitcherTest`/`PlayerSessionTest` unchanged and green.
+- `npm run android:debug`: **BUILD SUCCESSFUL**, no warnings in OMP's code. `capacitor.build.gradle` / `capacitor.settings.gradle` restored. The merged manifest has no `PlaybackService` or `BluetoothValidationActivity`. The arm64 dex has `Engine2160` and no `Media3Engine`.
+- APK sizes (debug): arm64 68 029 448, armv7 65 453 843, universal 108 048 793 bytes. The same as stage 2.
+- `npx vitest run`: **316 files, 3517 tests passed**.
+- Not done: device checks (controller, Dune), CI, release build.
+
+### Gaps in 2160's API (upstream requests; not blocking this stage)
+1. **No buffer/LoadControl setting.** `PlayerFactory` uses the default `DefaultLoadControl` (≈131 MB video target). OMP capped it at a quarter of the heap (16–64 MB) because 4K on a 128 MB-heap Dune died of OOM. OMP has `largeHeap="true"`; on boxes where that is still small, "Авто" moves the item to VLC on OOM even mid-play (unchanged logic), and "Встроенный" shows the error. Needed upstream: e.g. `PlayerController(context, request, options)` with `targetBufferBytes`, or a `Settings`/request field.
+2. **HTTP timeouts are fixed at 15 s connect / 20 s read** (OMP used 30 s / 60 s). A torrent that takes over 20 s to deliver its first bytes may now fail with NETWORK (OMP shows the error; no VLC switch for NETWORK). Needed upstream: configurable timeouts (same options object).
+3. **No switch for intro detection / chapter analysis** (worked around with `QUIET_SEGMENTS`; chapters are still read once). Needed upstream: e.g. `PlaybackRequest.analyze = false`.
+4. 2160 adds nextlib's **FFmpeg video** renderer after MediaCodec. A file the box cannot decode in hardware (e.g. 10-bit HEVC 4K on a weak SoC) may now be decoded in software instead of failing over to VLC. Check on the Dune; if it is bad, upstream should allow excluding software video (or `DecoderPreference.HARDWARE` for video only).
+
+### Device test checklist (Dune, Android 9, 32-bit Realtek → LG TV → AV receiver)
+Setting «Плеер» = «Встроенный» unless noted. Check `adb logcat -s OmpPlayer` as you go.
+1. **Passthrough**: AC3 5.1, E-AC3 (incl. Atmos/JOC), DTS, DTS-HD MA, TrueHD (Atmos). The receiver shows the bitstream format where the box/TV chain allows it; otherwise there is sound via decode (no error, no VLC switch). Note any "recovered by the engine: ERROR_CODE_AUDIO_TRACK_INIT_FAILED" in the log.
+2. **Night sound**: menu → «Ночной звук: Выкл» → select: the receiver switches to PCM, loud scenes are quieter. Turn it off; the next episode is passthrough again. The setting survives closing and reopening the player.
+3. **HDR10 / HLG / Dolby Vision** (profile 5, profile 7/8 remux): the TV switches to HDR/DV; DV p7 plays as HDR10 (base layer).
+4. **4K HEVC 10-bit high bitrate** for 10+ minutes: no OOM (largeHeap), no stutter; look for the FFmpeg video renderer in the log (software decoding).
+5. **Track switching**: audio ↔ audio during playback (incl. passthrough ↔ PCM track); subtitle on/off/embedded/external; the menu labels («Русский · Дубляж · AC3 5.1», «… (файл)»).
+6. **Subtitles**: SRT (UTF-8 and cp1251), ASS/SSA (styled; in «Авто» ASS still moves to VLC as before), PGS (Blu-ray remux), VTT; external files from the torrent; preferred languages from the TV settings; "subtitles off" carries to the next episode.
+7. **Seek**: ◀/▶ accumulation, seek during start-up (right after opening), seek near the end, chapter keys (CH+/CH−).
+8. **Resume**: start from a saved resume point; close and reopen; position reported to the page («История»), no jump to an old 2160 position.
+9. **Next episode**: countdown at the end/credits, autoplay of the next item, ⏭/⏮, resume of the next item.
+10. **Skip intro/credits**: «Пропустить заставку», auto skip with «Вернуть», credits → next item; nothing skips by itself beyond OMP's logic.
+11. **Phone remote**: play/pause/seek/skip/next from the phone; state on the phone stays in sync.
+12. **Donate QR** on pause and during the credits (also right after opening, it must not flash).
+13. **VLC fallback**: «Авто» + a file the built-in engine cannot open (e.g. a codec the box lacks and FFmpeg does not cover, or a broken container) → "Встроенный плеер не открыл этот файл — включён VLC", same position; menu «Плеер: … → сменить» both ways; «VLC не справляется» → «Вернуться к встроенному».
+14. **Slow torrent start** (few peers): the start waits instead of failing (20 s read timeout, Gap 2).
+15. **TorrServer with auth** (user:password): video and external subtitles play.
+16. **Blu-ray ISO** from a torrent (if the page sends it): plays the main title.
+17. **Leaving the app** (Home) during playback: playback pauses; back in the app, it resumes correctly; no notification / no background sound.
