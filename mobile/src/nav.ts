@@ -35,7 +35,9 @@ export type MRoute =
   | { name: 'title'; kind: 'movie' | 'tv'; id: number }
   /** «Мои» → the torrents of one series (`key` from seriesGroups), by season. */
   /** `season` is the season to open first (the series screen falls back to its own pick without it). */
-  | { name: 'series'; key: string; season?: number };
+  | { name: 'series'; key: string; season?: number }
+  /** A person's filmography from the cast of a title card; `label` is the name shown while it loads. */
+  | { name: 'person'; id: number; label?: string };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);

@@ -25,6 +25,8 @@ export interface AppSettings {
   historyFilter: HistoryFilter;
   /** Android TV: «Плеер» — Авто / Встроенный / VLC. */
   playerEngine: PlayerEngineSetting;
+  /** Android TV: «Плеер для видео» — built-in or 2160 Player (when installed). */
+  videoPlayer: 'builtin' | 'p2160';
   /** UI language: 'system' follows the device (ru/uk/be/kk → Russian, else English). */
   language: LanguageSetting;
 }
@@ -46,6 +48,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   betaUpdates: false,
   historyFilter: 'all',
   playerEngine: 'auto',
+  videoPlayer: 'builtin',
   language: 'system',
 };
 
@@ -68,6 +71,7 @@ export function sanitizeSettings(v: unknown): AppSettings {
   if (['new', 'title', 'size'].indexOf(out.librarySort) < 0) out.librarySort = DEFAULT_SETTINGS.librarySort;
   if (!isHistoryFilter(out.historyFilter)) out.historyFilter = DEFAULT_SETTINGS.historyFilter;
   if (['auto', 'builtin', 'vlc'].indexOf(out.playerEngine) < 0) out.playerEngine = DEFAULT_SETTINGS.playerEngine;
+  if (['builtin', 'p2160'].indexOf(out.videoPlayer) < 0) out.videoPlayer = DEFAULT_SETTINGS.videoPlayer;
   if (['system', 'ru', 'en'].indexOf(out.language) < 0) out.language = DEFAULT_SETTINGS.language;
   return out;
 }

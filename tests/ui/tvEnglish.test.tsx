@@ -32,6 +32,7 @@ import { updatePrompt, latestUpdate } from '../../src/store/updates';
 import { whatsNew, closeWhatsNew } from '../../src/store/whatsNew';
 import { routeStack } from '../../src/ui/nav';
 import { TitleCardScreen } from '../../src/screens/TitleCard';
+import { PersonScreen } from '../../src/screens/Person';
 import { libraryTab } from '../../src/store/library';
 import { resetDiscoverState } from '../../src/store/discover';
 import { wantList } from '../../src/store/wantList';
@@ -317,6 +318,30 @@ describe('TV screens in English', () => {
       expect(text).toContain('Season 1');
       expect(text).toContain('Find torrents');
       expect(text).toContain('Want to watch');
+      expect(noRussian(host)).not.toMatch(CYR);
+      const aria = Array.prototype.map.call(host.querySelectorAll('[aria-label]'), (e: Element) => e.getAttribute('aria-label')).join('|');
+      expect(aria).not.toMatch(CYR);
+    } finally {
+      setCatalogProvider(null);
+    }
+  });
+
+  it('Person screen', async () => {
+    setActiveServer(addServer({ url: '10.0.0.2' }).id);
+    torrents.value = [];
+    const credit = { kind: 'movie', id: 5, title: 'Heat', original: 'Heat', year: 1995, poster: '', rating: 8, roles: ['Neil'], genreIds: [18], date: '1995-12-15', popularity: 9 };
+    const person = { id: 3, name: 'Al Pacino', photo: '', birth: '1940-04-25', death: '', known: 'acting', acting: [credit], directing: [credit] };
+    setCatalogProvider(() => Promise.resolve({ person: () => Promise.resolve(person) } as any));
+    try {
+      mount(h(PersonScreen as any, { id: 3 }));
+      await flush();
+      const text = host.textContent || '';
+      expect(text).toContain('Al Pacino');
+      expect(text).toContain('Actor');
+      expect(text).toContain('born 1940');
+      expect(text).toContain('Acting');
+      expect(text).toContain('By year');
+      expect(text).toContain('Yellow');
       expect(noRussian(host)).not.toMatch(CYR);
       const aria = Array.prototype.map.call(host.querySelectorAll('[aria-label]'), (e: Element) => e.getAttribute('aria-label')).join('|');
       expect(aria).not.toMatch(CYR);

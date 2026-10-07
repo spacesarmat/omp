@@ -8,8 +8,8 @@
 import type { SourceHttp } from '../sources/types';
 import { loadJson, isObject } from '../store/storage';
 import {
-  releaseRegions, noveltiesUrl, discoverUrl, searchUrl, cardUrl, seasonUrl, sanitizeList, sanitizeCard, sanitizeSeason,
-  type Kind, type CatalogTitle, type CatalogCard, type SeasonDetails, type TmdbEndpoint,
+  releaseRegions, noveltiesUrl, discoverUrl, searchUrl, cardUrl, personUrl, seasonUrl, sanitizeList, sanitizeCard, sanitizePerson, sanitizeSeason,
+  type Kind, type CatalogTitle, type CatalogCard, type PersonCard, type SeasonDetails, type TmdbEndpoint,
 } from './tmdb';
 import { digitalSoonItems, type DiscoverQuery } from './discoverQuery';
 
@@ -21,6 +21,8 @@ export interface CatalogClient {
   discover(kind: Kind | 'all', query: DiscoverQuery, page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
   search(q: string, page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
   card(kind: Kind, id: number, opts?: FetchOpts): Promise<CatalogCard>;
+  /** A person with the filmography (cached like cards). */
+  person(id: number, opts?: FetchOpts): Promise<PersonCard>;
   /** A season of a series with its episodes (cached like cards). */
   season(id: number, n: number, opts?: SeasonOpts): Promise<SeasonDetails>;
 }
@@ -319,7 +321,18 @@ export function createCatalogClient(
         const c = sanitizeCard(e, raw, kind);
         if (!c) throw fail('bad');
         return c;
-      }, (c) => (kind === 'tv' ? (c as { status?: unknown }).status !== undefined : (c as { releases?: unknown }).releases !== undefined), opts);
+      }, (c) => (kind === 'tv' ? (c as { status?: unknown }).status !== undefined : (c as { releases?: unknown }).releases !== undefined)
+        // cards cached before 0.19.0-beta.1 have people without a TMDB id
+        && (c as CatalogCard).cast.every((p) => typeof p.id === 'number'), opts);
+    },
+    person(id, opts) {
+      let e: TmdbEndpoint;
+      try { e = need(); } catch (err) { return Promise.reject(err); }
+      return fetchJson(personUrl(e, id), CARD_TTL, (raw) => {
+        const p = sanitizePerson(e, raw);
+        if (!p) throw fail('bad');
+        return p;
+      }, undefined, opts);
     },
     season(id, n, opts) {
       let e: TmdbEndpoint;

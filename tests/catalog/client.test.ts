@@ -101,6 +101,24 @@ describe('catalog client', () => {
     expect(f.urls.length).toBe(2);
   });
 
+  it('person(): asks combined_credits and caches for 24 hours', async () => {
+    const f = fake();
+    const base = f.answer;
+    f.answer = (url) => (url.indexOf('person/5') >= 0 ? { status: 200, text: JSON.stringify({ id: 5, name: 'N', combined_credits: { cast: [], crew: [] } }) } : base(url));
+    let now = 1000;
+    const c = createCatalogClient(E, f.http, { now: () => now });
+    const p = await c.person(5);
+    expect(p.name).toBe('N');
+    expect(f.urls[0]).toContain('/person/5?');
+    expect(f.urls[0]).toContain('append_to_response=combined_credits');
+    now += 23 * 60 * 60 * 1000;
+    await c.person(5);
+    expect(f.urls.length).toBe(1);
+    now += 2 * 60 * 60 * 1000;
+    await c.person(5);
+    expect(f.urls.length).toBe(2);
+  });
+
   it('caches seasons for 24 hours, per season and language, sanitized only', async () => {
     const f = fake();
     let now = 1000;

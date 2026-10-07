@@ -8,26 +8,21 @@ import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navi
 import { t, tp, fmtDuration } from '../i18n';
 import { activeCatalog } from '../catalog/activeCatalog';
 import { catalogErrorCode, type CatalogErrorCode } from '../catalog/client';
-import { libraryIndex, inLibrary, seasonIndex, librarySeasonHash } from '../catalog/library';
-import { torrentQuery, type CatalogCard, type Kind, type Person } from '../catalog/tmdb';
+import { seasonIndex, librarySeasonHash } from '../catalog/library';
+import { libraryTargetOf, torrentTarget, type LibraryTarget } from '../catalog/libraryTarget';
+import { torrentQuery, type CatalogCard, type Kind } from '../catalog/tmdb';
 import type { Torrent } from '../api/types';
 import { torrents } from '../store/library';
 import { isWanted, wantAction } from '../store/wantList';
-import { findGroup, seriesKey } from '../lib/seriesGroups';
 import { airDateText, seriesPill } from '../lib/seriesStatus';
 import { FocusGroup, Focusable, Button, Spinner } from '../ui/components';
-import { restoreFocus, scrollToShow } from '../ui/focus';
+import { restoreFocus } from '../ui/focus';
 import { navigate, type Route } from '../ui/nav';
 import { tvGlyphs } from '../ui/tvText';
+import { CastRow, initials, showInRow } from '../ui/CastRow';
 import { seasonPlan } from './Series';
 import { SeriesPill } from './library/SeriesTile';
 import { ratingText } from './library/DiscoverGrid';
-
-/** People shown in the cast row. */
-export const CAST_MAX = 8;
-
-/** Inner margin of the rows that scroll sideways: a focused item keeps this much room to the row's edge. */
-const ROW_PAD = 24;
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -42,37 +37,10 @@ export function titleMeta(card: CatalogCard): string[] {
   ].filter(Boolean);
 }
 
-/** «СЧ» for «Сидни Чандлер»: the first letters of the first two words. */
-export function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w.charAt(0).toUpperCase())
-    .join('');
-}
-
-/** The library screen of a torrent: its series screen (on `season` when given) for a series, else the torrent. */
-function openTarget(list: Torrent[], tor: Torrent, season?: number): Route {
-  const key = seriesKey(tor);
-  const g = key ? findGroup(list, key) : null;
-  if (g) return season ? { name: 'series', key: g.key, season: season } : { name: 'series', key: g.key };
-  return { name: 'torrent', hash: tor.hash };
-}
-
-/** Where «Открыть в медиатеке» goes; null when the library has nothing of the title. */
-export function libraryTarget(list: Torrent[], card: CatalogCard): Route | null {
-  if (card.kind === 'tv') {
-    const idx = seasonIndex(list);
-    const numbers = card.seasons.map((s) => s.number).sort((a, b) => b - a);
-    for (let i = 0; i < numbers.length; i++) {
-      const hash = librarySeasonHash(idx, card, numbers[i]);
-      const tor = hash ? list.filter((x) => x.hash === hash)[0] : undefined;
-      if (tor) return openTarget(list, tor);
-    }
-  }
-  const hit = list.filter((x) => inLibrary(libraryIndex([x]), card))[0];
-  return hit ? openTarget(list, hit) : null;
+/** The route of a library target. */
+export function routeOf(t: LibraryTarget): Route {
+  if (t.kind === 'torrent') return { name: 'torrent', hash: t.hash };
+  return t.season ? { name: 'series', key: t.key, season: t.season } : { name: 'series', key: t.key };
 }
 
 interface Chip {
@@ -113,33 +81,6 @@ export function seasonChips(card: CatalogCard, list: Torrent[], now: number): Ch
   });
 }
 
-/** A row that does not wrap: it scrolls sideways so the focused item is whole. */
-function showInRow(row: HTMLElement | null, key: string): void {
-  const el = row ? (row.querySelector('[data-fk="' + key + '"]') as HTMLElement | null) : null;
-  if (!row || !el) return;
-  row.scrollLeft = scrollToShow(row.scrollLeft, row.clientWidth, el.offsetLeft, el.offsetWidth, ROW_PAD);
-}
-
-function CastRow({ cast }: { cast: Person[] }) {
-  const rowRef = useRef<HTMLDivElement>(null);
-  return (
-    <section class="tc-section">
-      <h2 class="tc-h2">{t('titleCard.cast')}</h2>
-      <div class="tc-scroll" ref={rowRef}>
-        <FocusGroup focusKey="TITLE-CAST" className="tc-cast-row">
-          {cast.slice(0, CAST_MAX).map((p, i) => (
-            <Focusable key={i} focusKey={'title-cast-' + i} className="tc-person" onFocused={() => showInRow(rowRef.current, 'title-cast-' + i)}>
-              <div class="tc-photo">{p.photo ? <img src={p.photo} alt="" /> : <span class="tc-initials">{tvGlyphs(initials(p.name))}</span>}</div>
-              <div class="tc-person-name">{tvGlyphs(p.name)}</div>
-              {p.role ? <div class="tc-person-role">{tvGlyphs(p.role)}</div> : null}
-            </Focusable>
-          ))}
-        </FocusGroup>
-      </div>
-    </section>
-  );
-}
-
 export interface TitleWantProps {
   /** The title is on the TV «Хочу посмотреть» list (the TV list by default). */
   wanted?: (kind: Kind, id: number) => boolean;
@@ -150,7 +91,11 @@ export interface TitleWantProps {
 function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
   const list = torrents.value;
   const now = Date.now();
-  const target = useMemo(() => libraryTarget(list, card), [list, card]);
+  const target = useMemo(() => {
+    const t = libraryTargetOf(list, card);
+    // the hero opens the series itself, not a season (the chips do)
+    return t ? routeOf(t.kind === 'series' ? { kind: 'series', key: t.key } : t) : null;
+  }, [list, card]);
   const chips = useMemo(() => (card.kind === 'tv' ? seasonChips(card, list, now) : []), [list, card]);
   const seasonsRef = useRef<HTMLDivElement>(null);
   const [, setTick] = useState(0);
@@ -164,7 +109,7 @@ function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
     if (c.state === 'missing') find(c.n);
     else if (c.state === 'library') {
       const tor = list.filter((x) => x.hash === c.hash)[0];
-      if (tor) navigate(openTarget(list, tor, c.n));
+      if (tor) navigate(routeOf(torrentTarget(list, tor, c.n)));
     }
   };
   const wanted = (want.wanted || isWanted)(card.kind, card.id);
@@ -230,7 +175,7 @@ function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
           </div>
         </section>
       )}
-      {card.cast.length > 0 && <CastRow cast={card.cast} />}
+      {card.cast.length > 0 && <CastRow cast={card.cast} groupKey="TITLE-CAST" focusPrefix="title-cast-" />}
     </>
   );
 }
@@ -283,3 +228,5 @@ export function TitleCardScreen(p: { kind: Kind; id: number } & TitleWantProps) 
     </FocusGroup>
   );
 }
+
+export { initials };

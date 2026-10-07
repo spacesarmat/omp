@@ -2,6 +2,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { contentsTextOf } from '../lib/releaseContents';
 import { t, tp, fmtDuration, fmtSize } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
+import { CastStrip } from '../ui/CastStrip';
+import { useMovieCard } from '../../../src/lib/useMovieCard';
 import { Sheet } from '../ui/Sheet';
 import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
 import { qualityBadge, posterStyle } from '../ui/Poster';
@@ -9,7 +11,7 @@ import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { actions, filesOf, recordPhoneWatch, streamUrlFor, tvServerUrl, useTvLaunch } from '../watch';
+import { actions, filesOf, streamUrlFor, tvServerUrl, useTvLaunch, watchOnPhone } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { torrents, refreshTorrents, findPosters, repairTitles } from '../../../src/store/library';
@@ -139,8 +141,13 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
 
   const onPhone = async () => {
     try {
-      await actions.openExternal(streamUrlFor(c, torrent, file), 'video/*');
-      void recordPhoneWatch(c, torrent.hash, file.id, 0, getLocalProgress(torrent.hash, file.id)?.duration || 0);
+      await watchOnPhone(c, torrent, {
+        hash: torrent.hash,
+        file,
+        title: fileTitle(file),
+        at: sharedResume(torrent.hash, file.id),
+        duration: getLocalProgress(torrent.hash, file.id)?.duration || 0,
+      });
       if (alive.v) onClose();
     } catch (e) {
       if (alive.v) setStatus({ kind: 'error', text: errorMessage(e) });
@@ -310,6 +317,7 @@ export function Torrent({ hash }: { hash: string }) {
   // a torrent just added may not be in the list yet: ask the server for it
   const [fetched, setFetched] = useState<TorrentT | null | undefined>(undefined);
   const tor = listed || fetched || undefined;
+  const movie = useMovieCard(tor);
   const [loaded, setLoaded] = useState<TorrentT | null>(null);
   const [sheet, setSheet] = useState<TorrentFile | null>(null);
   const [status, setStatus] = useState('');
@@ -526,8 +534,13 @@ export function Torrent({ hash }: { hash: string }) {
   const watchPhone = async () => {
     if (!target) return;
     try {
-      await actions.openExternal(streamUrlFor(c, tor, target), 'video/*');
-      void recordPhoneWatch(c, hash, target.id, 0, getLocalProgress(hash, target.id)?.duration || 0);
+      await watchOnPhone(c, tor, {
+        hash,
+        file: target,
+        title: fileTitle(target),
+        at,
+        duration: getLocalProgress(hash, target.id)?.duration || 0,
+      });
     } catch (e) {
       setStatus(errorMessage(e));
     }
@@ -739,6 +752,7 @@ export function Torrent({ hash }: { hash: string }) {
           ))}
         </div>
       </div>
+      {movie && <CastStrip cast={movie.cast} />}
       {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
       {betterOpen && <BetterSheet torrent={tor} files={allFiles} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}

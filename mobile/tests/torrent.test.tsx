@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Torrent } from '../src/screens/Torrent';
+import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { setWatchActions } from '../src/watch';
 import { currentRoute, resetTo, navigate } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
@@ -686,5 +687,54 @@ describe('Torrent in English', () => {
     expect(el.textContent).toContain('Torrent not found');
     expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
     noCyrillic();
+  });
+});
+
+describe('Torrent · cast', () => {
+  const cast = [
+    { id: 7, name: 'Джоэл Эдгертон', photo: '', role: 'Джейсон', job: 'cast' as const },
+    { id: 8, name: 'Блейк Крауч', photo: '', role: '', job: 'director' as const },
+  ];
+  const filmTor = (hash: string, name = 'Тихий сигнал'): T => ({ hash, title: name + ' / Quiet Signal (2023) BDRip 1080p', category: 'movie', stat: 3, file_stats: [{ id: 1, path: 'Quiet.Signal.2023.mkv', length: 1e9 }] });
+  const fakeCatalog = (search: ReturnType<typeof vi.fn>, card: ReturnType<typeof vi.fn>) =>
+    setCatalogClientForTests({ novelties: vi.fn(), discover: vi.fn(), search, card } as any);
+  afterEach(() => setCatalogClientForTests(null));
+
+  function mountFilm(tor: T) {
+    torrents.value = [tor];
+    navigate({ name: 'torrent', hash: tor.hash });
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<Torrent hash={tor.hash} />, el));
+  }
+
+  it('lists the cast of a film that TMDB knows; a tap opens the person', async () => {
+    const search = vi.fn(() => Promise.resolve({ items: [{ kind: 'movie', id: 3, title: 'x', original: 'x', year: 2023, poster: '', rating: 0 }], pages: 1 }));
+    const card = vi.fn(() => Promise.resolve({ kind: 'movie', id: 3, cast }));
+    fakeCatalog(search, card);
+    mountFilm(filmTor('pf1'));
+    await flush();
+    expect(search).toHaveBeenCalledWith('Тихий сигнал', 1);
+    expect(el.querySelector('.m-tc-section h2')!.textContent).toBe('В ролях');
+    const people = el.querySelectorAll('.m-tc-person');
+    expect(people[0].textContent).toContain('Блейк Крауч');
+    click(people[1]);
+    expect(currentRoute.value).toMatchObject({ name: 'person', id: 7, label: 'Джоэл Эдгертон' });
+  });
+  it('shows nothing when TMDB has no such film', async () => {
+    const search = vi.fn(() => Promise.resolve({ items: [], pages: 1 }));
+    fakeCatalog(search, vi.fn());
+    mountFilm(filmTor('pf2', 'Пустой фильм'));
+    await flush();
+    expect(search).toHaveBeenCalled();
+    expect(el.querySelector('.m-tc-cast')).toBeNull();
+  });
+  it('never looks a series up', async () => {
+    const search = vi.fn();
+    fakeCatalog(search, vi.fn());
+    mount();
+    await flush();
+    expect(search).not.toHaveBeenCalled();
+    expect(el.querySelector('.m-tc-cast')).toBeNull();
   });
 });

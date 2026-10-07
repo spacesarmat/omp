@@ -10,6 +10,9 @@ import { navigate } from '../ui/nav';
 import { FocusGroup, ChoiceRow, onOff, Button, Focusable } from '../ui/components';
 import { playerEngineOptions, vlcUnavailable, vlcAvailable } from '../player/nativeEngine';
 import { nativePlugin } from '../platform/androidNative';
+import { p2160Package, P2160_RELEASES_URL } from '../player/player2160';
+import { Qr } from '../ui/Qr';
+import { tvGlyphs } from '../ui/tvText';
 import { restoreFocus } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
@@ -74,6 +77,35 @@ function PlayerEngineSection() {
         );
       })}
       <div class="muted engine-note">{t('tvSettings.engineNote')}</div>
+    </div>
+  );
+}
+
+/** Android TV: «Плеер для видео» — the built-in player or 2160 Player (offered only when installed; else a QR to get it). */
+function VideoPlayerSection() {
+  const cur = settings.value.videoPlayer;
+  const [pkg, setPkg] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    p2160Package(nativePlugin()).then((p) => { if (live) setPkg(p); });
+    return () => { live = false; };
+  }, []);
+  const missing = pkg === null;
+  return (
+    <div class="engine-block">
+      <ChoiceRow
+        focusKey="set-videoPlayer"
+        label={t('player.videoPlayer')}
+        value={cur}
+        options={[
+          { value: 'builtin' as const, label: t('player.builtinPlayer') },
+          { value: 'p2160' as const, label: t('player.p2160') },
+        ]}
+        onChange={(v) => { if (v === 'builtin' || !missing) updateSettings({ videoPlayer: v }); }}
+      />
+      {missing && <div class="muted engine-note">{tvGlyphs(t('player.p2160') + ' — ' + t('player.p2160Missing'))}</div>}
+      {missing && <div class="row"><Qr text={P2160_RELEASES_URL} size={160} /></div>}
+      <div class="muted engine-note">{tvGlyphs(t('player.p2160Note'))}</div>
     </div>
   );
 }
@@ -178,6 +210,7 @@ export function SettingsScreen() {
       </div>
 
       {platformKind() === 'androidtv' && <PlayerEngineSection />}
+      {platformKind() === 'androidtv' && <VideoPlayerSection />}
 
       <h2>{t('tvSettings.playback')}</h2>
       <ChoiceRow focusKey="set-audio" label={t('tvSettings.audioLang')} value={s.audioLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ audioLang: v })} />

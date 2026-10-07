@@ -17,7 +17,9 @@ export type Route =
   | { name: 'tsSources' }
   | { name: 'pairPhone' }
   | { name: 'faq' }
-  | { name: 'title'; kind: Kind; id: number };
+  | { name: 'title'; kind: Kind; id: number }
+  // `label`: the person's name (not `name`: that is the route's tag)
+  | { name: 'person'; id: number; label?: string };
 
 export const routeStack = signal<Route[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);

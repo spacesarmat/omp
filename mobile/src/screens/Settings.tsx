@@ -36,6 +36,8 @@ import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
+import { native } from '../platform/native';
+import { P2160_RELEASES_URL } from '../../../src/player/player2160';
 import { fmtSize, t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
@@ -257,6 +259,50 @@ function LanguageRow() {
   );
 }
 
+/** «Плеер для видео»: the built-in one or 2160 Player (needs the app installed on this phone). */
+function VideoPlayerRow() {
+  const cur = settings.value.videoPlayer;
+  const [pkg, setPkg] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    native.player2160().then(
+      (p) => alive && setPkg(p),
+      () => alive && setPkg(null),
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const missing = pkg === null;
+  return (
+    <section class="m-set-group" data-row="video-player">
+      <div class="m-set-row">
+        <span>{t('player.videoPlayer')}</span>
+      </div>
+      <div class="m-seg" role="group" aria-label={t('player.videoPlayer')}>
+        <button type="button" class={cur === 'builtin' ? 'on' : ''} aria-pressed={cur === 'builtin'} onClick={() => updateSettings({ videoPlayer: 'builtin' })}>
+          {t('player.builtinPlayerPhone')}
+        </button>
+        <button
+          type="button"
+          class={cur === 'p2160' ? 'on' : ''}
+          aria-pressed={cur === 'p2160'}
+          disabled={missing}
+          onClick={() => updateSettings({ videoPlayer: 'p2160' })}
+        >
+          {t('player.p2160')}
+        </button>
+      </div>
+      {missing && (
+        <button type="button" class="m-link" data-row="p2160-missing" onClick={() => window.open(P2160_RELEASES_URL, '_system')}>
+          {t('player.p2160Missing')}
+        </button>
+      )}
+      <p class="m-muted m-small">{t('player.p2160NotePhone')}</p>
+    </section>
+  );
+}
+
 /** The TV search switch: the TV searches torrent sites through this phone (PhoneRpcService). */
 function TvSearchRow() {
   const on = tvSearchOn.value;
@@ -386,6 +432,7 @@ export function Settings() {
       <section class="m-set-group">
         <LanguageRow />
       </section>
+      <VideoPlayerRow />
       {localServer.value.supported && <LocalServerSection />}
       <section class="m-set-group">
         <div class="m-set-label">{t('tvSettings.server')}</div>

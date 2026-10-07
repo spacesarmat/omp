@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useMovieCard } from '../lib/useMovieCard';
+import { CastRow } from '../ui/CastRow';
 import { client } from '../store/servers';
 import { torrents } from '../store/library';
 import { getLocalProgress, progressVersion, serverViewed, refreshViewed, isWatched, resumePosition, progressRatio, clearProgress } from '../store/progress';
@@ -72,6 +74,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   void seriesMatchVersion.value; // the TMDB name of the series, once looked up
   const list = torrents.value;
   const group = tor ? seriesGroupOf(tor, list) : null;
+  const movie = useMovieCard(tor);
   useEffect(() => {
     if (group) requestSeriesMatch(group);
   }, [group ? group.key : '']);
@@ -367,6 +370,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
           </section>
         ))}
       </FocusGroup>
+      {movie && movie.cast.length > 0 && <CastRow cast={movie.cast} groupKey="TORRENT-CAST" focusPrefix="torrent-cast-" />}
       <div class="hints">{okHint(area)} · <KeyDot color="red" /> {t('torrent.hintDelete')} · {t('torrent.hintBack')}</div>
     </FocusGroup>
   );

@@ -46,6 +46,7 @@ import { watchesNewEpisodes } from '../lib/journal';
 import { phoneLink } from '../phone/phoneStore';
 import { errorMessage } from '../api/http';
 import { SeriesPill } from './library/SeriesTile';
+import { CastRow } from '../ui/CastRow';
 
 // the chosen season of each open series screen (its route entry): kept while the player or a torrent is on top
 const chosenSeason = new WeakMap<Route, number>();
@@ -522,6 +523,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           </FocusGroup>
         </div>
       )}
+      {card && card.cast.length > 0 && <CastRow cast={card.cast} groupKey="SERIES-CAST" focusPrefix="series-cast-" />}
       {better && (
         <BetterDialog
           torrent={better}

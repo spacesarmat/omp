@@ -18,8 +18,8 @@ const FILM: CatalogCard = {
   poster: 'https://img.test/t/p/w300/a.jpg', rating: 7.4, backdrop: 'https://img.test/t/p/w780/b.jpg',
   genres: ['драма'], runtime: 118, overview: 'Архивариус находит письмо, которого не было.',
   cast: [
-    { name: 'Ольга Тестова', photo: 'https://img.test/t/p/w185/p.jpg', role: 'Вера' },
-    { name: 'Иван Пробный', photo: '', role: 'Архивариус' },
+    { id: 1, name: 'Ольга Тестова', photo: 'https://img.test/t/p/w185/p.jpg', role: 'Вера', job: 'cast' },
+    { id: 2, name: 'Иван Пробный', photo: '', role: 'Архивариус', job: 'cast' },
   ],
   seasons: [], airing: false,
 };
@@ -475,6 +475,31 @@ describe('sameQuery', () => {
   });
 });
 
+describe('TitleCard: people', () => {
+  it('lists the directors first with their job, and a tap opens the person', async () => {
+    serve({
+      ...FILM,
+      cast: [{ id: 9, name: 'Пётр Режиссёров', photo: '', role: '', job: 'director' }, ...FILM.cast],
+    });
+    // a person with no job is an actor, not a head
+    serve({ ...FILM, cast: [{ id: 5, name: 'Без Роли', photo: '', role: 'Х' } as never, { id: 9, name: 'Пётр Режиссёров', photo: '', role: '', job: 'director' }] });
+    mount(<TitleCard kind="movie" id={11} />);
+    await flush();
+    expect(Array.from(el.querySelectorAll('button.m-tc-person')).map((p) => p.querySelector('.m-tc-person-name')!.textContent)).toEqual(['Пётр Режиссёров', 'Без Роли']);
+    serve({
+      ...FILM,
+      cast: [{ id: 9, name: 'Пётр Режиссёров', photo: '', role: '', job: 'director' }, ...FILM.cast],
+    });
+    mount(<TitleCard kind="movie" id={11} />);
+    await flush();
+    const people = Array.from(el.querySelectorAll('button.m-tc-person')) as HTMLButtonElement[];
+    expect(people.map((p) => p.querySelector('.m-tc-person-name')!.textContent)).toEqual(['Пётр Режиссёров', 'Ольга Тестова', 'Иван Пробный']);
+    expect(people[0].textContent).toContain('Режиссёр');
+    act(() => people[1].click());
+    expect(currentRoute.value).toEqual({ name: 'person', id: 1, label: 'Ольга Тестова' });
+  });
+});
+
 describe('TitleCard in the app', () => {
   it('renders the card for the route with «Каталог» highlighted', async () => {
     serve(FILM);
@@ -511,7 +536,7 @@ describe('TitleCard in English', () => {
       expect(episodes()[2].querySelector('.m-tc-ep-title')!.textContent).toBe('Episode 3');
       act(() => render(null, el));
       saveSubs([{ id: 's1', query: 'Frost Pass', quality: '', sources: null, notify: true, createdAt: 1 }]);
-      serve({ ...FILM, title: 'Midnight Archive', genres: ['drama'], cast: [{ name: 'Olga Test', photo: '', role: '' }] });
+      serve({ ...FILM, title: 'Midnight Archive', genres: ['drama'], cast: [{ id: 3, name: 'Olga Test', photo: '', role: '', job: 'cast' }] });
       mount(<TitleCard kind="movie" id={11} />);
       await flush();
       expect(el.querySelector('.m-tc-meta')!.textContent).toBe('2026 · drama · 1 h 58 min');

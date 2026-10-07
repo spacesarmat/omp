@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { endpointOf, noveltiesUrl, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle } from '../../src/catalog/tmdb';
+import { endpointOf, noveltiesUrl, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson } from '../../src/catalog/tmdb';
 import { applyLanguageSetting } from '../../src/i18n';
 import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
 
@@ -90,7 +90,7 @@ describe('sanitizers', () => {
       { number: 1, episodes: 8, year: 2024, aired: 8, airDate: '2024-03-01' },
     ]);
     expect(c.airing).toBe(true);
-    expect(c.cast.length).toBeLessThanOrEqual(8);
+    expect(c.cast.length).toBe(12);
     expect(c.runtime).toBeGreaterThan(0);
   });
   it('a series card has its status, next episode and last air date', () => {
@@ -195,5 +195,50 @@ describe('torrent query', () => {
     expect(torrentQuery({ title: 'Орбитальная станция', original: 'Orbit Station', year: 2024, kind: 'tv' })).toBe('Орбитальная станция');
     expect(torrentQuery({ title: 'Орбитальная станция', original: 'Orbit Station', year: 2024, kind: 'tv' }, 2)).toBe('Орбитальная станция 2 сезон');
     expect(torrentQuery({ title: '', original: 'Orbit Station', year: 2024, kind: 'tv' })).toBe('Orbit Station');
+  });
+});
+
+describe('people', () => {
+  it('card people: directors first, then up to 15 actors, all with TMDB ids', () => {
+    const raw = { ...MOVIE_CARD, credits: {
+      cast: Array.from({ length: 20 }, (_, i) => ({ id: 100 + i, name: 'A' + i, character: 'R' + i, profile_path: '/p' + i + '.jpg' })),
+      crew: [{ id: 7, name: 'Dir', job: 'Director', profile_path: null }, { id: 8, name: 'Writer', job: 'Writer' }],
+    } };
+    const c = sanitizeCard(E, raw, 'movie')!;
+    expect(c.cast[0]).toEqual({ id: 7, name: 'Dir', photo: '', role: '', job: 'director' });
+    expect(c.cast.filter((p) => p.job === 'cast')).toHaveLength(15);
+    expect(c.cast[1]).toMatchObject({ id: 100, name: 'A0', role: 'R0', job: 'cast' });
+  });
+  it('tv card: creators from created_by', () => {
+    const c = sanitizeCard(E, { ...TV_CARD, created_by: [{ id: 9, name: 'Cr', profile_path: '/c.jpg' }], credits: { cast: [] } }, 'tv')!;
+    expect(c.cast).toEqual([{ id: 9, name: 'Cr', photo: imageUrl(E, '/c.jpg', 'w185'), role: '', job: 'creator' }]);
+  });
+  it('sanitizePerson: merges roles, splits acting and directing', () => {
+    const p = sanitizePerson(E, {
+      id: 5, name: 'N', profile_path: '/n.jpg', birthday: '1970-10-08', deathday: null, known_for_department: 'Acting',
+      combined_credits: {
+        cast: [
+          { id: 1, media_type: 'movie', title: 'F', original_title: 'F', release_date: '2001-02-03', character: 'A', popularity: 9, vote_average: 7, poster_path: '/f.jpg', genre_ids: [18] },
+          { id: 1, media_type: 'movie', title: 'F', original_title: 'F', release_date: '2001-02-03', character: 'B', popularity: 9, vote_average: 7, poster_path: '/f.jpg', genre_ids: [18] },
+          { id: 2, media_type: 'tv', name: 'Talk', original_name: 'Talk', first_air_date: '2010-01-01', character: 'Self', genre_ids: [10767] },
+        ],
+        crew: [{ id: 3, media_type: 'movie', title: 'D', release_date: '2015-01-01', job: 'Director', genre_ids: [] }, { id: 4, media_type: 'movie', title: 'W', job: 'Writer' }],
+      },
+    })!;
+    expect(p).toMatchObject({ id: 5, name: 'N', birth: '1970-10-08', death: '', known: 'acting' });
+    expect(p.acting.map((c) => [c.id, c.roles])).toEqual([[1, ['A', 'B']]]);
+    expect(p.directing.map((c) => c.id)).toEqual([3]);
+  });
+  it('sanitizePerson: appearances as oneself are left out, a credit with a real role stays', () => {
+    const tv = (id: number, character: string) => ({ id, media_type: 'tv', name: 'T' + id, first_air_date: '2010-01-01', character, genre_ids: [] });
+    const selfs = ['Self', ' himself ', 'HERSELF', 'Themselves', 'Self - Host', 'Himself - Guest', 'Herself - Winner', 'Self (uncredited)', 'Himself (archive footage)', 'Камео', 'В роли самого себя', 'В роли самой себя'];
+    const cast = selfs.map((c, i) => tv(100 + i, c)).concat([tv(1, 'Selfridge'), tv(2, 'Doctor')]);
+    cast.push({ ...tv(2, 'Himself'), id: 2 });
+    const p = sanitizePerson(E, { id: 5, name: 'N', combined_credits: { cast, crew: [] } })!;
+    expect(p.acting.map((c) => [c.id, c.roles])).toEqual([[1, ['Selfridge']], [2, ['Doctor']]]);
+  });
+  it('sanitizePerson: null without id or name', () => {
+    expect(sanitizePerson(E, { id: 5 })).toBeNull();
+    expect(sanitizePerson(E, { name: 'X' })).toBeNull();
   });
 });

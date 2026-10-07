@@ -104,6 +104,7 @@ beforeEach(() => {
 
 const hosts: HTMLElement[] = [];
 afterEach(() => {
+  stub.card = () => Promise.resolve(card);
   while (hosts.length) {
     const host = hosts.pop()!;
     act(() => { render(null, host); });
@@ -127,6 +128,27 @@ async function mount(season?: number) {
 const text = (el: Element | null) => (el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : '');
 
 describe('TV series screen', () => {
+  describe('«В ролях»', () => {
+    const cast = [
+      { id: 7, name: 'Джоэл Эдгертон', photo: '', role: 'Джейсон', job: 'cast' },
+      { id: 8, name: 'Блейк Крауч', photo: '', role: '', job: 'creator' },
+    ];
+    it('is a row after the seasons and episodes, OK on a person opens the person screen', async () => {
+      stub.card = () => Promise.resolve({ ...card, cast });
+      const host = await mount(2);
+      expect(host.querySelector(".tc-cast-row")).not.toBeNull();
+      expect(text(host.querySelector('.tc-h2'))).toBe('В ролях');
+      expect(text(host.querySelector('[data-fk="series-cast-0"]'))).toContain('Блейк Крауч');
+      act(() => { (host.querySelector('[data-fk="series-cast-1"]') as HTMLElement).click(); });
+      expect(currentRoute.value).toEqual({ name: 'person', id: 7, label: 'Джоэл Эдгертон' });
+    });
+    it('is absent without a cast', async () => {
+      stub.card = () => Promise.resolve(card);
+      const host = await mount(2);
+      expect(host.querySelector(".tc-cast-row")).toBeNull();
+    });
+  });
+
   describe('«Следить за сериями»', () => {
     afterEach(() => forgetPhoneLink());
 

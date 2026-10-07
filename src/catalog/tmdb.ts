@@ -16,7 +16,17 @@ export interface CatalogTitle {
   kind: Kind; id: number; title: string; original: string; year: number; poster: string; rating: number;
   digital?: string; popularity?: number;
 }
-export interface Person { name: string; photo: string; role: string; }
+export type PersonJob = 'cast' | 'director' | 'creator';
+/** `id`: the TMDB person id (opens the person's filmography); `job`: why the person is on the card. */
+export interface Person { id: number; name: string; photo: string; role: string; job: PersonJob; }
+/** Actors on a card, after its directors or creators. */
+export const CAST_LIMIT = 15;
+/** One title of a person's filmography; `roles` are the merged character names (empty for crew credits). */
+export interface Credit extends CatalogTitle { roles: string[]; genreIds: number[]; date: string; }
+export interface PersonCard {
+  id: number; name: string; photo: string; birth: string; death: string;
+  known: 'acting' | 'directing' | 'other'; acting: Credit[]; directing: Credit[];
+}
 /** `airDate`: 'YYYY-MM-DD' or '' (absent in cards cached before 0.17.0-beta.2: unknown). */
 export interface Season { number: number; episodes: number; year: number; aired: number; airDate?: string; }
 /** A series' state, language-neutral: '' when TMDB says nothing known (or a card cached without it). */
@@ -102,6 +112,10 @@ export function discoverRegion(uiLang: string = lang.peek()): string {
   return releaseRegions(uiLang)[0];
 }
 
+export function personUrl(e: TmdbEndpoint, id: number): string {
+  return url(e, 'person/' + id, { append_to_response: 'combined_credits' });
+}
+
 export function seasonUrl(e: TmdbEndpoint, id: number, season: number): string {
   return url(e, 'tv/' + id + '/season/' + season, {});
 }
@@ -132,6 +146,10 @@ const READABLE = new RegExp(
 /** The title reads for a Russian or English user: it has Latin or Cyrillic letters (not only Chinese, Korean, …). */
 export function readableTitle(s: string): boolean {
   return READABLE.test(s || '');
+}
+
+function personOf(e: TmdbEndpoint, x: { [k: string]: unknown }, job: PersonJob, role: string): Person {
+  return { id: n(x.id), name: str(x.name), photo: imageUrl(e, x.profile_path, 'w185'), role: role, job: job };
 }
 
 function titleOf(e: TmdbEndpoint, o: { [k: string]: unknown }, kind: Kind): CatalogTitle | null {
@@ -204,13 +222,22 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
   }
   const genres = Array.isArray(o.genres) ? (o.genres as unknown[]).map((g) => str(g && (g as { name?: unknown }).name)).filter(Boolean) : [];
   const runtimes = Array.isArray(o.episode_run_time) ? (o.episode_run_time as unknown[]).map(n).filter(Boolean) : [];
-  const credits = o.credits && typeof o.credits === 'object' ? (o.credits as { cast?: unknown }).cast : null;
-  const cast: Person[] = Array.isArray(credits)
-    ? (credits as unknown[]).slice(0, 8).map((c) => {
-        const x = (c || {}) as { [k: string]: unknown };
-        return { name: str(x.name), photo: imageUrl(e, x.profile_path, 'w185'), role: str(x.character) };
-      }).filter((p) => !!p.name)
-    : [];
+  const credits = o.credits && typeof o.credits === 'object' ? (o.credits as { [k: string]: unknown }) : {};
+  const eachObj = (list: unknown, f: (x: { [k: string]: unknown }) => void) => {
+    if (Array.isArray(list)) (list as unknown[]).forEach((c) => { if (c && typeof c === 'object') f(c as { [k: string]: unknown }); });
+  };
+  const valid = (p: Person) => !!p.name && p.id > 0;
+  // directors (films) or creators (series) first, then the actors
+  const heads: Person[] = [];
+  const addHead = (x: { [k: string]: unknown }, job: PersonJob) => {
+    const p = personOf(e, x, job, '');
+    if (valid(p) && !heads.some((h) => h.id === p.id)) heads.push(p);
+  };
+  if (kind === 'movie') eachObj(credits.crew, (x) => { if (x.job === 'Director') addHead(x, 'director'); });
+  else eachObj(o.created_by, (x) => addHead(x, 'creator'));
+  const actors: Person[] = [];
+  eachObj(credits.cast, (x) => { actors.push(personOf(e, x, 'cast', str(x.character))); });
+  const cast: Person[] = heads.concat(actors.filter(valid).slice(0, CAST_LIMIT));
   const last = o.last_episode_to_air && typeof o.last_episode_to_air === 'object' ? (o.last_episode_to_air as { [k: string]: unknown }) : null;
   const lastSeason = last ? n(last.season_number) : 0;
   const lastEp = last ? n(last.episode_number) : 0;
@@ -238,6 +265,57 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
     nextEpisode: kind === 'tv' ? nextEpisodeOf(o.next_episode_to_air) : null,
     lastAirDate: kind === 'tv' ? date(o.last_air_date) : '',
     releases: kind === 'movie' ? releasesOf(o.release_dates, releaseRegions()) : undefined,
+  };
+}
+
+/** An appearance as oneself (TMDB character «Self», «Himself - Host», «(archive footage)» ...): not a role, left out of the filmography. */
+function isSelfRole(character: string): boolean {
+  const c = character.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+  if (/^(self|himself|herself|themselves|камео|в роли самого себя|в роли самой себя)$/.test(c)) return true;
+  return /^(self|himself|herself)\s*-/.test(c);
+}
+
+/** A person with the filmography: combined_credits' cast as acting, crew directors (and series creators) as directing. */
+export function sanitizePerson(e: TmdbEndpoint, raw: unknown): PersonCard | null {
+  const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { [k: string]: unknown }) : null;
+  if (!o) return null;
+  const id = n(o.id);
+  const name = str(o.name);
+  if (id <= 0 || !name) return null;
+  const cc = o.combined_credits && typeof o.combined_credits === 'object' ? (o.combined_credits as { [k: string]: unknown }) : {};
+  // `take`: the role of the credit ('' for crew), null to skip it
+  const collect = (list: unknown, take: (x: { [k: string]: unknown }, kind: Kind) => string | null): Credit[] => {
+    const out: Credit[] = [];
+    const byKey: { [k: string]: Credit } = {};
+    if (!Array.isArray(list)) return out;
+    (list as unknown[]).forEach((r) => {
+      const x = r && typeof r === 'object' ? (r as { [k: string]: unknown }) : null;
+      const kind: Kind | null = x ? (x.media_type === 'movie' ? 'movie' : x.media_type === 'tv' ? 'tv' : null) : null;
+      if (!x || !kind) return;
+      const role = take(x, kind);
+      if (role === null) return;
+      const t = titleOf(e, x, kind);
+      if (!t) return;
+      const key = kind + ':' + t.id;
+      let c = byKey[key];
+      if (!c) {
+        c = {
+          ...t, popularity: n(x.popularity), roles: [], date: date(kind === 'movie' ? x.release_date : x.first_air_date),
+          genreIds: Array.isArray(x.genre_ids) ? (x.genre_ids as unknown[]).filter((g): g is number => typeof g === 'number') : [],
+        };
+        byKey[key] = c;
+        out.push(c);
+      }
+      if (role && c.roles.indexOf(role) < 0) c.roles.push(role);
+    });
+    return out;
+  };
+  const dept = str(o.known_for_department);
+  return {
+    id: id, name: name, photo: imageUrl(e, o.profile_path, 'w300'), birth: date(o.birthday), death: date(o.deathday),
+    known: dept === 'Acting' ? 'acting' : dept === 'Directing' ? 'directing' : 'other',
+    acting: collect(cc.cast, (x) => { const ch = str(x.character); return isSelfRole(ch) ? null : ch; }),
+    directing: collect(cc.crew, (x, kind) => (x.job === 'Director' || (kind === 'tv' && x.job === 'Creator') ? '' : null)),
   };
 }
 

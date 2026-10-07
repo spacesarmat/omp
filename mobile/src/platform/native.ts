@@ -5,6 +5,7 @@ import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
 import { t } from '../../../src/i18n';
 import { log } from '../../../src/lib/log';
+import { sanitizeP2160, type P2160Result } from '../../../src/player/player2160';
 import type { HttpResponse, SecretStore, SourceHttp } from '../../../src/sources/types';
 import type { ApkAbi, UpdateInfo } from '../../../src/lib/updateInfo';
 import type { CloudflareVisibleRequest } from '../../../src/sources/cloudflareCheck';
@@ -83,6 +84,14 @@ export interface LocalDownloadProgress {
   percent?: number;
 }
 
+export interface Open2160Options {
+  items: { url: string; title: string }[];
+  start: number;
+  positionMs: number;
+  fromStart: boolean;
+  segments: string;
+}
+
 export interface OmpNativeApi {
   available: boolean;
   discoverTvs(timeoutMs: number): Promise<FoundTv[]>;
@@ -116,6 +125,10 @@ export interface OmpNativeApi {
   /** Wake-on-LAN magic packet (broadcast + the /24 broadcast of `ip`), repeated 3 times. */
   wakeOnLan(mac: string, ip: string): Promise<void>;
   openExternal(url: string, mime: string): Promise<void>;
+  /** The installed 2160 Player package; null when it is missing, the app is older or off-device. */
+  player2160(): Promise<string | null>;
+  /** Opens the queue in 2160 Player; resolves with what it handed back (null: an older app without it). */
+  open2160(o: Open2160Options): Promise<P2160Result | null>;
   /** apks: the feed's per-ABI APKs, the plugin installs the device's one (url/sha256 = universal fallback). */
   downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void>;
   /** Feed key of this device's APK (Build.SUPPORTED_ABIS[0]: arm64 / armv7); null = universal. */
@@ -236,6 +249,8 @@ interface OmpNativePlugin {
   pointerSend(o: { frame: string }): Promise<void>;
   wakeOnLan(o: { mac: string; ip: string }): Promise<void>;
   openExternal(o: { url: string; mime: string }): Promise<void>;
+  player2160?(): Promise<{ package?: unknown }>;
+  open2160?(o: Open2160Options): Promise<unknown>;
   downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<void>;
   deviceAbiKey(): Promise<{ key?: unknown }>;
   canInstallApks?(): Promise<{ granted?: unknown }>;
@@ -508,6 +523,25 @@ export const native: OmpNativeApi = {
   openExternal(url, mime) {
     if (!plugin) return unavailable();
     return logged('openExternal', plugin.openExternal({ url, mime }));
+  },
+
+  async player2160() {
+    if (!plugin || typeof plugin.player2160 !== 'function') return null;
+    try {
+      const r = await plugin.player2160();
+      return r && typeof r.package === 'string' && r.package ? r.package : null;
+    } catch {
+      return null;
+    }
+  },
+
+  open2160(o) {
+    if (!plugin) return unavailable();
+    if (typeof plugin.open2160 !== 'function') return Promise.resolve(null);
+    return plugin.open2160(o).then(sanitizeP2160, (e) => {
+      if (e && e.code === 'UNIMPLEMENTED') return null;
+      return logged('open2160', Promise.reject(e));
+    });
   },
 
   async downloadAndInstallApk(url, sha256, onProgress, apks) {

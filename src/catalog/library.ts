@@ -15,7 +15,7 @@ export function libraryKey(title: string, year: number): string {
   return s + '|' + year;
 }
 
-function yearOf(title: string): number {
+export function yearOf(title: string): number {
   const re = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])/;
   const m = re.exec(title || '');
   return m ? +m[1] : 0;
@@ -88,6 +88,18 @@ export function librarySeasonHash(idx: Map<string, string>, t: { title: string; 
     if (k && idx.has(k)) return idx.get(k) || '';
   }
   return '';
+}
+
+/** The series names ('name' of the 'name|N' keys) that have a season in the index. */
+export function seriesNames(idx: Map<string, string>): Set<string> {
+  const out = new Set<string>();
+  idx.forEach((_h, k) => { out.add(k.slice(0, k.lastIndexOf('|'))); });
+  return out;
+}
+
+/** True when the series (its title or original name) has any season in the names of seriesNames. */
+export function inLibrarySeries(names: Set<string>, t: { title: string; original: string }): boolean {
+  return (!!t.title && names.has(nameKey(t.title))) || (!!t.original && names.has(nameKey(t.original)));
 }
 
 /** True when season N of the series (its title or original name) is in the season index. */

@@ -6,6 +6,7 @@ import { airDateText } from '../../../../src/lib/seriesStatus';
 import { SeriesPill } from '../../ui/SeriesPill';
 import { goBack, navigate, currentRoute, type MRoute } from '../../nav';
 import { Icon } from '../../ui/Icon';
+import { CastStrip } from '../../ui/CastStrip';
 import { torrents } from '../../../../src/store/library';
 import { loadSubs, sameQuery } from '../../../../src/monitor/subs';
 import { monitorVersion } from '../../monitor/ui';
@@ -314,26 +315,7 @@ function Body({ card }: { card: CatalogCard }) {
       </div>
       {wanting && <WantSheet card={card} onClose={() => setWanting(false)} />}
       {card.overview && <Overview text={card.overview} />}
-      {card.cast.length > 0 && (
-        <section class="m-tc-section">
-          <h2>{t('titleCard.cast')}</h2>
-          <div class="m-tc-cast">
-            {card.cast.map((p, i) => (
-              <div key={i} class="m-tc-person">
-                {p.photo ? (
-                  <img src={p.photo} alt="" width={64} height={64} loading="lazy" />
-                ) : (
-                  <span class="m-tc-initial" aria-hidden="true">
-                    {p.name.charAt(0).toUpperCase()}
-                  </span>
-                )}
-                <span class="m-small m-tc-person-name">{p.name}</span>
-                {p.role && <span class="m-small m-muted m-tc-person-name">{p.role}</span>}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      <CastStrip cast={card.cast} />
       {card.kind === 'tv' && <NextEpisodes card={card} />}
       {card.kind === 'tv' && card.seasons.length > 0 && <Seasons card={card} index={index} find={find} />}
     </>

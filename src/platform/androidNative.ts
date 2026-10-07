@@ -77,6 +77,10 @@ export interface OmpNativeTvPlugin {
   siteSessionPending(o: { site: string; check: BrowserCheck }): Promise<{ ok?: boolean; host?: string }>;
   /** The page's resolved UI language for the native copy (SharedPreferences `omp.lang`); missing in an older APK. */
   setLanguage?(o: { lang: string }): Promise<unknown>;
+  /** The installed 2160 Player package, null when it is not installed; missing in an older APK. */
+  player2160?(): Promise<{ package: string | null }>;
+  /** Opens the playlist in 2160 Player; resolves with { returned, positionMs?, durationMs?, ended?, url? } when it closes. */
+  open2160?(o: { items: { url: string; title: string }[]; start: number; positionMs: number; fromStart: boolean; segments: string }): Promise<unknown>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
@@ -126,6 +130,8 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     siteBrowserLogin: (o) => np.call(cap, NAME, 'siteBrowserLogin', o),
     siteSessionPending: (o) => np.call(cap, NAME, 'siteSessionPending', o),
     setLanguage: (o) => np.call(cap, NAME, 'setLanguage', o),
+    player2160: () => np.call(cap, NAME, 'player2160', {}),
+    open2160: (o) => np.call(cap, NAME, 'open2160', o),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }
