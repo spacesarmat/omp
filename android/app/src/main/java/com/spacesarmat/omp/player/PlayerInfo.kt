@@ -1,6 +1,7 @@
 package com.spacesarmat.omp.player
 
 import com.spacesarmat.omp.I18n
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URI
@@ -35,6 +36,8 @@ data class TorrentStats(
     val preloaded: Long = 0,
     val cacheFilled: Long = 0,
     val cacheCapacity: Long = 0,
+    /** Size of the stream's file in bytes (`file_stats` of the torrent), 0 when unknown. */
+    val fileLength: Long = 0,
 )
 
 /**
@@ -42,8 +45,19 @@ data class TorrentStats(
  * (POST /cache { action: "get", hash }, src/api/torrserver.ts cache()). Pure parts plus a blocking fetch.
  */
 object TorrServerStats {
-    /** The request for a stream URL: the /cache URL (no credentials), the Basic header (or null) and the hash. */
-    data class Request(val url: String, val authorization: String?, val hash: String)
+    /**
+     * The request for a stream URL: the /cache URL (no credentials), the Basic header (or null), the hash and the
+     * file id of the stream (`index=`, null when the URL has none).
+     */
+    data class Request(val url: String, val authorization: String?, val hash: String, val index: Int? = null) {
+        /** TorrServer's ffprobe of the stream's file (`GET /ffp/<hash>/<index>`, as the LG player asks it); null without a file id. */
+        val probeUrl: String?
+            get() = index?.let { url.removeSuffix("/cache") + "/ffp/" + hash + "/" + it }
+
+        /** The file of the stream, for per-item caches: «<hash>/<index>». */
+        val fileKey: String
+            get() = hash + "/" + (index ?: "")
+    }
 
     /** Null for a URL that is not a TorrServer stream (`…/stream…?link=<hash>`). */
     fun request(streamUrl: String): Request? {
@@ -57,7 +71,9 @@ object TorrServerStats {
         val path = u.rawPath ?: return null
         val at = path.indexOf("/stream")
         if (at < 0) return null
-        val link = (u.rawQuery ?: "").split('&').firstOrNull { it.startsWith("link=") }?.substringAfter('=') ?: return null
+        val query = (u.rawQuery ?: "").split('&')
+        val link = query.firstOrNull { it.startsWith("link=") }?.substringAfter('=') ?: return null
+        val index = query.firstOrNull { it.startsWith("index=") }?.substringAfter('=')?.toIntOrNull()
         val hash = decode(link).trim()
         if (hash.isEmpty()) return null
         val host = u.rawAuthority?.substringAfter('@') ?: return null
@@ -66,13 +82,13 @@ object TorrServerStats {
             val pass = decode(info.substringAfter(':', ""))
             "Basic " + Base64.getEncoder().encodeToString("$user:$pass".toByteArray(Charsets.UTF_8))
         }
-        return Request("$scheme://$host${path.substring(0, at)}/cache", auth, hash)
+        return Request("$scheme://$host${path.substring(0, at)}/cache", auth, hash, index)
     }
 
     private fun decode(s: String): String = URLDecoder.decode(s.replace("+", "%2B"), "UTF-8")
 
-    /** The answer of /cache; null when it is not an object. */
-    fun parse(body: String): TorrentStats? {
+    /** The answer of /cache; null when it is not an object. [index]: the stream's file id, for its size. */
+    fun parse(body: String, index: Int? = null): TorrentStats? {
         val o = try {
             JSONObject(body)
         } catch (_: Exception) {
@@ -88,7 +104,19 @@ object TorrServerStats {
             preloaded = t.optLong("preloaded_bytes", 0L),
             cacheFilled = o.optLong("Filled", 0L),
             cacheCapacity = o.optLong("Capacity", 0L),
+            fileLength = fileLength(t.optJSONArray("file_stats"), index),
         )
+    }
+
+    /** The length of file [index] in `file_stats` ([{id, path, length}]); the only file when there is no id. 0: unknown. */
+    private fun fileLength(files: JSONArray?, index: Int?): Long {
+        if (files == null || files.length() == 0) return 0
+        val f = if (index == null) {
+            if (files.length() == 1) files.optJSONObject(0) else null
+        } else {
+            (0 until files.length()).mapNotNull { files.optJSONObject(it) }.firstOrNull { it.optInt("id", -1) == index }
+        }
+        return f?.optLong("length", 0L)?.coerceAtLeast(0L) ?: 0L
     }
 
     /** Asks TorrServer (blocking, off the UI thread); null on any failure. */
@@ -104,7 +132,56 @@ object TorrServerStats {
             c.setRequestProperty("User-Agent", "OMP")
             r.authorization?.let { c.setRequestProperty("Authorization", it) }
             c.outputStream.use { it.write(JSONObject().put("action", "get").put("hash", r.hash).toString().toByteArray(Charsets.UTF_8)) }
-            if (c.responseCode !in 200..299) null else parse(c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+            if (c.responseCode !in 200..299) null else parse(c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }, r.index)
+        } catch (_: Exception) {
+            null
+        } finally {
+            c?.disconnect()
+        }
+    }
+
+    /**
+     * The bitrate (bit/s) TorrServer's ffprobe gives for the stream's file, as the LG player's «Инфо» reads it: the
+     * video stream's `bit_rate`, else its `BPS` tag (MKV statistics tags, «BPS» / «BPS-eng»), else the container's
+     * `format.bit_rate`. 0 when ffprobe has none; null when the answer is not an object.
+     */
+    fun probeBitrate(body: String): Long? {
+        val o = try {
+            JSONObject(body)
+        } catch (_: Exception) {
+            return null
+        }
+        val streams = o.optJSONArray("streams")
+        val video = (0 until (streams?.length() ?: 0)).mapNotNull { streams?.optJSONObject(it) }.firstOrNull {
+            it.optString("codec_type") == "video" && it.optJSONObject("disposition")?.optInt("attached_pic", 0) != 1
+        }
+        if (video != null) {
+            positive(video.optString("bit_rate"))?.let { return it }
+            val tags = video.optJSONObject("tags")
+            if (tags != null) {
+                val key = tags.keys().asSequence().firstOrNull { k -> k.equals("BPS", true) || k.startsWith("BPS-", true) }
+                if (key != null) positive(tags.optString(key))?.let { return it }
+            }
+        }
+        return positive(o.optJSONObject("format")?.optString("bit_rate")) ?: 0L
+    }
+
+    private fun positive(s: String?): Long? = s?.trim()?.toLongOrNull()?.takeIf { it > 0 }
+
+    /**
+     * Asks TorrServer's ffprobe for the bitrate (blocking, off the UI thread; slow on a cold torrent, so a long read
+     * timeout); 0 when ffprobe has none, null on any failure or without a file id.
+     */
+    fun fetchProbeBitrate(r: Request): Long? {
+        val url = r.probeUrl ?: return null
+        var c: HttpURLConnection? = null
+        return try {
+            c = URL(url).openConnection() as HttpURLConnection
+            c.connectTimeout = 3_000
+            c.readTimeout = 30_000
+            c.setRequestProperty("User-Agent", "OMP")
+            r.authorization?.let { c.setRequestProperty("Authorization", it) }
+            if (c.responseCode !in 200..299) null else probeBitrate(c.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
         } catch (_: Exception) {
             null
         } finally {
@@ -112,6 +189,9 @@ object TorrServerStats {
         }
     }
 }
+
+/** The bitrate the «Инфо» tile shows (bit/s) and whether it is the file's average (size × 8 / duration, shown «≈»). */
+data class InfoBitrate(val bps: Long, val approximate: Boolean)
 
 /** The «Инфо» panel (Info / yellow key): what it shows, every part one short line. Pure. */
 object PlayerInfoText {
@@ -205,6 +285,31 @@ object PlayerInfoText {
         return num(mbit, mbit < 100) to I18n.s("info.mbit")
     }
 
+    /**
+     * The bitrate of the tile, engine-agnostic: the engine's (its video format), else TorrServer's ffprobe (exact, as
+     * on LG), else the file's average — size × 8 / duration — marked approximate; null: unknown («—»).
+     */
+    fun bitrate(engineBps: Long, probeBps: Long, fileBytes: Long, durationMs: Long): InfoBitrate? = when {
+        engineBps > 0 -> InfoBitrate(engineBps, false)
+        probeBps > 0 -> InfoBitrate(probeBps, false)
+        fileBytes > 0 && durationMs >= 1_000 -> InfoBitrate(fileBytes * 8 * 1000 / durationMs, true).takeIf { it.bps > 0 }
+        else -> null
+    }
+
+    /**
+     * The tile's value and unit for [b]: («15,1», «Мбит/с»); an average «≈15» (whole Mbit/s from 10 up: the tile is
+     * narrow and the average is no more precise than that), «≈8,4» below; («—», «») when unknown.
+     */
+    fun bitrateTile(b: InfoBitrate?): Pair<String, String> {
+        if (b == null) return "—" to ""
+        if (!b.approximate) return bitrateParts(b.bps)
+        val mbit = b.bps / 1_000_000.0
+        return APPROX + num(mbit, mbit < 10) to I18n.s("info.mbit")
+    }
+
+    /** The mark of an approximate value (the activity draws it small). */
+    const val APPROX = "≈"
+
     private val EPISODE = Regex("\\bS\\d{1,2}E\\d{1,3}(?:-E?\\d{1,3})?\\b", RegexOption.IGNORE_CASE)
 
     /** The header's short title: the episode code («S04E02») when the title has one, else the title. */
@@ -215,16 +320,24 @@ object PlayerInfoText {
 
     /**
      * The panel («variant B»): a header (short title; chip HDR mark + codec + size), three tiles (seeds / peers,
-     * download, bitrate; «—» when unknown), the sound line, the buffer (bar + «522 МБ · 17 с»). Pure.
+     * download, bitrate ([bitrate]); «—» when unknown), the sound line, the buffer (bar + «522 МБ · 17 с»). Pure.
      */
-    fun panel(title: String, media: EngineMediaInfo, audio: EngineTrack?, stats: TorrentStats?): InfoPanel {
+    fun panel(
+        title: String,
+        media: EngineMediaInfo,
+        audio: EngineTrack?,
+        stats: TorrentStats?,
+        probeBps: Long = 0,
+        fileBytes: Long = 0,
+        durationMs: Long = 0,
+    ): InfoPanel {
         val chip = ArrayList<String>()
         if (media.videoCodec.isNotEmpty()) chip.add(media.videoCodec)
         if (media.width > 0 && media.height > 0) chip.add("${media.width}×${media.height}")
         val none = "—" to ""
         val seeds = if (stats == null) none else "${stats.seeders} / ${stats.activePeers}" to ""
         val down = if (stats == null) none else rateParts(stats.downSpeed)
-        val rate = if (media.bitrate > 0) bitrateParts(media.bitrate) else none
+        val rate = bitrateTile(bitrate(media.bitrate, probeBps, fileBytes, durationMs))
         val sound = ArrayList<String>()
         if (audio != null) {
             if (audio.codec.isNotEmpty()) sound.add(audio.codec)
@@ -284,22 +397,65 @@ class InfoStatsState {
         private set
     private var hash: String? = null
 
-    /** The current item's torrent ([h] null: not a TorrServer stream); another torrent drops the old numbers. */
-    fun forTorrent(h: String?) {
+    /**
+     * What does not change while the item plays, cached per file («<hash>/<index>») and kept when the panel closes:
+     * its size (from `file_stats`) and TorrServer's ffprobe bitrate (null: not known yet). Another item drops them.
+     */
+    private var file: String? = null
+    var fileBytes: Long = 0
+        private set
+    var probeBps: Long? = null
+        private set
+    private var probing = false
+    private var probeTries = 0
+
+    /**
+     * The current item's torrent ([h] null: not a TorrServer stream) and its file ([fileKey], see
+     * [TorrServerStats.Request.fileKey]); another torrent drops the old numbers, another file its size and ffprobe.
+     */
+    fun forTorrent(h: String?, fileKey: String? = h) {
         if (h != hash) {
             hash = h
             stats = null
+        }
+        if (fileKey != file) {
+            file = fileKey
+            fileBytes = 0
+            probeBps = null
+            probing = false
+            probeTries = 0
         }
     }
 
     /** An answer for torrent [h] (null: the fetch failed): applies only to the current torrent. */
     fun answer(h: String, s: TorrentStats?) {
-        if (h == hash) stats = s
+        if (h != hash) return
+        stats = s
+        if (s != null && s.fileLength > 0) fileBytes = s.fileLength
     }
 
-    /** The panel closed: reopening starts without stale numbers. */
+    /** True once per file (a second try when ffprobe fails): ask ffprobe now, then give [probeAnswer]. */
+    fun probeDue(): Boolean {
+        if (file == null || probeBps != null || probing || probeTries >= PROBE_TRIES) return false
+        probing = true
+        probeTries++
+        return true
+    }
+
+    /** ffprobe's bitrate for [fileKey] (0: it has none; null: the request failed); a late answer for another file is ignored. */
+    fun probeAnswer(fileKey: String, bps: Long?) {
+        if (fileKey != file) return
+        probing = false
+        if (bps != null) probeBps = bps
+    }
+
+    /** The panel closed: reopening starts without stale numbers (the file's size and ffprobe stay: they do not change). */
     fun closed() {
         hash = null
         stats = null
+    }
+
+    private companion object {
+        const val PROBE_TRIES = 2
     }
 }
