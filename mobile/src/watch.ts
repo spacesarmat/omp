@@ -79,6 +79,10 @@ export interface WatchActions {
   player2160: () => Promise<string | null>;
   /** Opens a queue in 2160 Player; null: an older app without it. */
   open2160: (o: Open2160Options) => Promise<unknown>;
+  /** True when this app carries 2160 Player's screen (playEmbedded2160). */
+  embedded2160: () => Promise<boolean>;
+  /** Plays a queue in 2160 Player's screen inside OMP; null: an older app without it. */
+  playEmbedded2160: (o: Open2160Options) => Promise<unknown>;
   /** OMP version installed on the TV; null when unknown. */
   ompVersion: () => Promise<string | null>;
   /** URL the TV posts player state to; null when unavailable. */
@@ -99,6 +103,8 @@ const defaults: WatchActions = {
   copyText: (text) => Clipboard.write({ string: text }),
   player2160: () => native.player2160(),
   open2160: (o) => native.open2160(o),
+  embedded2160: () => native.embedded2160(),
+  playEmbedded2160: (o) => native.playEmbedded2160(o),
   ompVersion: () => ompVersionOnTv(),
   reportUrl: () => reportUrl(),
   localIpv4: () => native.localIpv4(),
@@ -151,14 +157,18 @@ export interface PhoneWatch {
 }
 
 /**
- * «Смотреть на телефоне»: with «Плеер для видео» = 2160 Player (installed) the playable files of the torrent go to it
- * from the saved position, and where the user stopped is saved like the built-in players' progress; otherwise the stream
- * goes to the system chooser as before. Rejects when no player could be opened.
+ * «Смотреть на телефоне», by «Плеер для видео» (phonePlayer): «Встроенный» plays the torrent's playable files in 2160
+ * Player's screen inside OMP, «2160 Player (приложение)» in the installed app — both from the saved position, and where
+ * the user stopped is saved like the built-in players' progress. «Выбор Android», an app without the embedded screen
+ * or a missing 2160 Player app: the stream goes to the system chooser. Rejects when no player could be opened.
  */
 export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatch): Promise<void> {
   const at = w.at >= MIN_RESUME ? Math.floor(w.at) : 0;
-  const pkg = settings.value.videoPlayer === 'p2160' ? await actions.player2160().catch(() => null) : null;
-  if (pkg) {
+  const mode = settings.value.phonePlayer;
+  let open: ((o: Open2160Options) => Promise<unknown>) | null = null;
+  if (mode === 'embedded' && (await actions.embedded2160().catch(() => false))) open = (o) => actions.playEmbedded2160(o);
+  else if (mode === 'p2160' && (await actions.player2160().catch(() => null))) open = (o) => actions.open2160(o);
+  if (open) {
     const files = playableFiles(filesOf(t));
     let start = files.findIndex((f) => f.id === w.file.id);
     if (start < 0) {
@@ -173,7 +183,7 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
     }));
     const skip = await loadSkip(c, w.hash).catch(() => null);
     void recordPhoneWatch(c, w.hash, w.file.id, at, w.duration);
-    await play2160({ open2160: (o) => actions.open2160(o) }, c, queue, start, at, skip, w.duration);
+    await play2160({ open2160: open }, c, queue, start, at, skip, w.duration);
     return;
   }
   await actions.openExternal(streamUrlFor(c, t, w.file), 'video/*');

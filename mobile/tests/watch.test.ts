@@ -118,6 +118,8 @@ describe('watchOnPhone', () => {
   const w = (id: number, at = 0) => ({ hash: 'abc', file: tor.file_stats[id - 1], title: 'S01E0' + id, at, duration: 0 });
   const mk = () => ({
     open2160: vi.fn().mockResolvedValue({ returned: false }),
+    embedded2160: vi.fn().mockResolvedValue(true),
+    playEmbedded2160: vi.fn().mockResolvedValue({ returned: false }),
     openExternal: vi.fn().mockResolvedValue(undefined),
     player2160: vi.fn().mockResolvedValue('pkg'),
     recordWatch: vi.fn().mockResolvedValue(undefined),
@@ -131,15 +133,59 @@ describe('watchOnPhone', () => {
   };
   const done = () => {
     setWatchActions(null);
-    updateSettings({ videoPlayer: 'builtin' });
+    updateSettings({ phonePlayer: 'embedded' });
     vi.restoreAllMocks();
   };
 
-  it('2160 Player: queue, start index, resume position; the stop on another item is saved for it', async () => {
+  it('«Встроенный» (the default): the queue goes to the embedded 2160 screen; the stop is saved like with the app', async () => {
     reset();
     const a = mk();
     setWatchActions(a);
-    updateSettings({ videoPlayer: 'p2160' });
+    updateSettings({ phonePlayer: 'embedded' });
+    a.playEmbedded2160.mockResolvedValue({ returned: true, positionMs: 600000, durationMs: 2400000, url: 'http://h:8090/stream/Show.S01E03.mkv?link=abc&index=3&play' });
+    await watchOnPhone(c, tor as any, w(2, 125.7));
+    const o = a.playEmbedded2160.mock.calls[0][0];
+    expect(o.items).toHaveLength(3);
+    expect(o.start).toBe(1);
+    expect(o).toMatchObject({ positionMs: 125000, fromStart: false });
+    expect(a.open2160).not.toHaveBeenCalled();
+    expect(a.player2160).not.toHaveBeenCalled();
+    expect(a.openExternal).not.toHaveBeenCalled();
+    expect(getLocalProgress('abc', 3)).toMatchObject({ time: 600, duration: 2400 });
+    expect(a.recordWatch.mock.calls[0][2]).toMatchObject({ f: 2, t: 125, src: 'phone' });
+    done();
+  });
+
+  it('«Встроенный» in an app without the embedded screen falls back to the chooser', async () => {
+    reset();
+    const a = mk();
+    a.embedded2160.mockResolvedValue(false);
+    setWatchActions(a);
+    await watchOnPhone(c, tor as any, w(1, 300));
+    expect(a.playEmbedded2160).not.toHaveBeenCalled();
+    expect(a.openExternal).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(a.recordWatch).toHaveBeenCalledTimes(1));
+    expect(a.recordWatch.mock.calls[0][2]).toMatchObject({ f: 1, t: 0 });
+    a.embedded2160.mockRejectedValue(new Error('x'));
+    await watchOnPhone(c, tor as any, w(1));
+    expect(a.openExternal).toHaveBeenCalledTimes(2);
+    done();
+  });
+
+  it('«Встроенный» off-device (no plugin method): the real actions fall back to the chooser', async () => {
+    reset();
+    const openExternal = vi.fn().mockResolvedValue(undefined);
+    setWatchActions({ openExternal, recordWatch: vi.fn().mockResolvedValue(undefined), phoneName: async () => 'P' });
+    await watchOnPhone(c, tor as any, w(1));
+    expect(openExternal).toHaveBeenCalledTimes(1);
+    done();
+  });
+
+  it('2160 Player (app): queue, start index, resume position; the stop on another item is saved for it', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ phonePlayer: 'p2160' });
     a.open2160.mockResolvedValue({ returned: true, positionMs: 600000, durationMs: 2400000, url: 'http://h:8090/stream/Show.S01E03.mkv?link=abc&index=3&play' });
     await watchOnPhone(c, tor as any, w(2, 125.7));
     const o = a.open2160.mock.calls[0][0];
@@ -147,6 +193,7 @@ describe('watchOnPhone', () => {
     expect(o.start).toBe(1);
     expect(o).toMatchObject({ positionMs: 125000, fromStart: false });
     expect(a.openExternal).not.toHaveBeenCalled();
+    expect(a.playEmbedded2160).not.toHaveBeenCalled();
     expect(getLocalProgress('abc', 3)).toMatchObject({ time: 600, duration: 2400 });
     expect(getLocalProgress('abc', 2)).toBeNull();
     expect(a.recordWatch.mock.calls[0][2]).toMatchObject({ f: 2, t: 125, src: 'phone' });
@@ -157,23 +204,29 @@ describe('watchOnPhone', () => {
     reset();
     const a = mk();
     setWatchActions(a);
-    updateSettings({ videoPlayer: 'p2160' });
+    updateSettings({ phonePlayer: 'p2160' });
     a.open2160.mockRejectedValue(new Error('нет ссылки'));
     await expect(watchOnPhone(c, tor as any, w(1))).rejects.toThrow('нет ссылки');
+    updateSettings({ phonePlayer: 'embedded' });
+    a.playEmbedded2160.mockRejectedValue(new Error('не открылся'));
+    await expect(watchOnPhone(c, tor as any, w(1))).rejects.toThrow('не открылся');
     done();
   });
 
-  it('builtin setting or a missing player goes through openExternal', async () => {
+  it('«Выбор Android» or a missing 2160 Player app goes through openExternal', async () => {
     reset();
     const a = mk();
     setWatchActions(a);
+    updateSettings({ phonePlayer: 'chooser' });
     await watchOnPhone(c, tor as any, w(1));
     expect(a.open2160).not.toHaveBeenCalled();
+    expect(a.playEmbedded2160).not.toHaveBeenCalled();
     expect(a.openExternal).toHaveBeenCalledTimes(1);
-    updateSettings({ videoPlayer: 'p2160' });
+    updateSettings({ phonePlayer: 'p2160' });
     a.player2160.mockResolvedValue(null);
     await watchOnPhone(c, tor as any, w(1));
     expect(a.open2160).not.toHaveBeenCalled();
+    expect(a.playEmbedded2160).not.toHaveBeenCalled();
     expect(a.openExternal).toHaveBeenCalledTimes(2);
     done();
   });

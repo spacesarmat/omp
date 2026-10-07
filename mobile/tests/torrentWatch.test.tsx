@@ -156,11 +156,11 @@ describe('phone torrent card · «Смотреть на телефоне»', () 
     openExternal.mockReset().mockResolvedValue(undefined);
     player2160.mockReset().mockResolvedValue('com.spacesarmat.player2160');
     setWatchActions({ open2160, openExternal, player2160, recordWatch: vi.fn().mockResolvedValue(undefined), phoneName: async () => 'Pixel' });
-    updateSettings({ videoPlayer: 'p2160' });
+    updateSettings({ phonePlayer: 'p2160' });
   });
   afterEach(() => {
     setWatchActions(null);
-    updateSettings({ videoPlayer: 'builtin' });
+    updateSettings({ phonePlayer: 'embedded' });
   });
 
   it('with 2160 Player: all playable files, the start index, and where the user stopped is saved', async () => {
@@ -179,14 +179,27 @@ describe('phone torrent card · «Смотреть на телефоне»', () 
     expect(getLocalProgress(HASH, 1)).toBeNull();
   });
 
-  it('with the setting off the system chooser opens as before', async () => {
-    updateSettings({ videoPlayer: 'builtin' });
+  it('with «Выбор Android» the system chooser opens as before', async () => {
+    updateSettings({ phonePlayer: 'chooser' });
     await mount(series);
     click(byText('Смотреть на телефоне') as Element);
     await flush();
     expect(open2160).not.toHaveBeenCalled();
     expect(openExternal).toHaveBeenCalledTimes(1);
     expect(openExternal.mock.calls[0][1]).toBe('video/*');
+  });
+
+  it('«Встроенный»: the embedded 2160 screen gets the queue', async () => {
+    const playEmbedded2160 = vi.fn().mockResolvedValue({ returned: false });
+    setWatchActions({ open2160, openExternal, player2160, embedded2160: async () => true, playEmbedded2160, recordWatch: vi.fn().mockResolvedValue(undefined), phoneName: async () => 'Pixel' });
+    updateSettings({ phonePlayer: 'embedded' });
+    await mount(series);
+    click(byText('Смотреть на телефоне') as Element);
+    await flush();
+    expect(playEmbedded2160).toHaveBeenCalledTimes(1);
+    expect(playEmbedded2160.mock.calls[0][0].items).toHaveLength(2);
+    expect(open2160).not.toHaveBeenCalled();
+    expect(openExternal).not.toHaveBeenCalled();
   });
 
   it('2160 Player not installed: falls back to the chooser', async () => {
@@ -196,6 +209,6 @@ describe('phone torrent card · «Смотреть на телефоне»', () 
     await flush();
     expect(open2160).not.toHaveBeenCalled();
     expect(openExternal).toHaveBeenCalledTimes(1);
-    expect(settings.value.videoPlayer).toBe('p2160');
+    expect(settings.value.phonePlayer).toBe('p2160');
   });
 });

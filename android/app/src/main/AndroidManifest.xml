@@ -124,12 +124,15 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
-        <!-- From 2160 player-core: its MediaSessionService (notification, background play, exported to other apps).
-             OMP's player runs in its own activity and pauses on stop; the controller starts the service in runCatching,
-             so it is not needed. -->
+        <!-- From 2160 player-core: its MediaSessionService (notification with controls, lock screen, headset, background
+             play). Not exported (player-core exports it to other apps and car/watch controllers; OMP does not need that:
+             its own notification binds in-process). Disabled here: the TV engine (Engine2160) starts it in runCatching and
+             does without it; the phone's embedded 2160 screen switches it on at first use (Embedded2160.enablePlaybackService). -->
         <service
             android:name="tv.p2160.core.engine.PlaybackService"
-            tools:node="remove" />
+            android:enabled="false"
+            android:exported="false"
+            tools:replace="android:exported" />
 
         <!-- From media3-session 1.11 (pulled in by player-core), exported; OMP does not use it. -->
         <activity

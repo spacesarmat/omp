@@ -6,6 +6,8 @@ import { isHistoryFilter, type HistoryFilter } from '../lib/history';
 import type { PlayerEngineSetting } from '../player/nativeEngine';
 import { applyLanguageSetting, type LanguageSetting } from '../i18n';
 
+export type PhonePlayer = 'embedded' | 'p2160' | 'chooser';
+
 export interface AppSettings {
   audioLang: string;
   subLang: string;
@@ -27,6 +29,11 @@ export interface AppSettings {
   playerEngine: PlayerEngineSetting;
   /** Android TV: «Плеер для видео» — built-in or 2160 Player (when installed). */
   videoPlayer: 'builtin' | 'p2160';
+  /**
+   * Phone: «Плеер для видео» — 2160 Player's screen inside OMP («Встроенный»), the 2160 Player app, or the Android
+   * chooser. Its own key: the TV's `videoPlayer` 'builtin' is OMP's player there, but meant the chooser on the phone.
+   */
+  phonePlayer: PhonePlayer;
   /** UI language: 'system' follows the device (ru/uk/be/kk → Russian, else English). */
   language: LanguageSetting;
 }
@@ -49,6 +56,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   historyFilter: 'all',
   playerEngine: 'auto',
   videoPlayer: 'builtin',
+  phonePlayer: 'embedded',
   language: 'system',
 };
 
@@ -72,6 +80,10 @@ export function sanitizeSettings(v: unknown): AppSettings {
   if (!isHistoryFilter(out.historyFilter)) out.historyFilter = DEFAULT_SETTINGS.historyFilter;
   if (['auto', 'builtin', 'vlc'].indexOf(out.playerEngine) < 0) out.playerEngine = DEFAULT_SETTINGS.playerEngine;
   if (['builtin', 'p2160'].indexOf(out.videoPlayer) < 0) out.videoPlayer = DEFAULT_SETTINGS.videoPlayer;
+  // before phonePlayer the phone kept its choice in videoPlayer: 2160 Player stays, the chooser moves to «Встроенный»
+  if (['embedded', 'p2160', 'chooser'].indexOf(v.phonePlayer as string) < 0) {
+    out.phonePlayer = out.videoPlayer === 'p2160' ? 'p2160' : DEFAULT_SETTINGS.phonePlayer;
+  }
   if (['system', 'ru', 'en'].indexOf(out.language) < 0) out.language = DEFAULT_SETTINGS.language;
   return out;
 }

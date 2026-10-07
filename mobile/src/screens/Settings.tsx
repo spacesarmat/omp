@@ -25,7 +25,7 @@ import { tvState } from '../tv/tvClient';
 import { tvSearchOn, setTvSearch } from '../tv/phoneRpc';
 import { tvOmpVersions, tvNeedsUpdate, tvOpensUpdate, openUpdateOnTv, type TvOmp } from '../tv/tvUpdate';
 import { errorMessage } from '../../../src/api/http';
-import { settings, updateSettings } from '../../../src/store/settings';
+import { settings, updateSettings, type PhonePlayer } from '../../../src/store/settings';
 import { checkForUpdate, latestUpdate, updatePrompt, type CheckResult } from '../../../src/store/updates';
 import { updateFeedUrl, updateTitle } from '../../../src/lib/updateInfo';
 import { isBetaVersion } from '../../../src/lib/version';
@@ -259,9 +259,9 @@ function LanguageRow() {
   );
 }
 
-/** «Плеер для видео»: the built-in one or 2160 Player (needs the app installed on this phone). */
+/** «Плеер для видео»: 2160 Player's screen inside OMP, the 2160 Player app (needs it installed) or the Android chooser. */
 function VideoPlayerRow() {
-  const cur = settings.value.videoPlayer;
+  const cur = settings.value.phonePlayer;
   const [pkg, setPkg] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     let alive = true;
@@ -274,24 +274,20 @@ function VideoPlayerRow() {
     };
   }, []);
   const missing = pkg === null;
+  const opt = (v: PhonePlayer, label: string, disabled = false) => (
+    <button type="button" class={cur === v ? 'on' : ''} aria-pressed={cur === v} disabled={disabled} onClick={() => updateSettings({ phonePlayer: v })}>
+      {label}
+    </button>
+  );
   return (
     <section class="m-set-group" data-row="video-player">
       <div class="m-set-row">
         <span>{t('player.videoPlayer')}</span>
       </div>
       <div class="m-seg" role="group" aria-label={t('player.videoPlayer')}>
-        <button type="button" class={cur === 'builtin' ? 'on' : ''} aria-pressed={cur === 'builtin'} onClick={() => updateSettings({ videoPlayer: 'builtin' })}>
-          {t('player.builtinPlayerPhone')}
-        </button>
-        <button
-          type="button"
-          class={cur === 'p2160' ? 'on' : ''}
-          aria-pressed={cur === 'p2160'}
-          disabled={missing}
-          onClick={() => updateSettings({ videoPlayer: 'p2160' })}
-        >
-          {t('player.p2160')}
-        </button>
+        {opt('embedded', t('player.embeddedPlayerPhone'))}
+        {opt('p2160', t('player.p2160AppPhone'), missing)}
+        {opt('chooser', t('player.builtinPlayerPhone'))}
       </div>
       {missing && (
         <button type="button" class="m-link" data-row="p2160-missing" onClick={() => window.open(P2160_RELEASES_URL, '_system')}>

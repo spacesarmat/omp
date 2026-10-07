@@ -349,4 +349,8 @@ describe('native 2160 Player off-device', () => {
     expect(await native.player2160()).toBeNull();
     await expect(native.open2160({ items: [], start: 0, positionMs: 0, fromStart: true, segments: '' })).rejects.toThrow(onlyAndroid());
   });
+  it('has no embedded screen: playEmbedded2160 resolves null (the caller falls back to the chooser)', async () => {
+    expect(await native.embedded2160()).toBe(false);
+    expect(await native.playEmbedded2160({ items: [], start: 0, positionMs: 0, fromStart: true, segments: '' })).toBeNull();
+  });
 });

@@ -4,7 +4,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Settings, setUpdateChecker } from '../src/screens/Settings';
 import { currentRoute, resetTo } from '../src/nav';
-import { settings, updateSettings } from '../../src/store/settings';
+import { settings, updateSettings, sanitizeSettings, DEFAULT_SETTINGS } from '../../src/store/settings';
 import { addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
 import { ANDROID_UPDATE_URL, ANDROID_BETA_UPDATE_URL, type UpdateInfo } from '../../src/lib/updateInfo';
 import { latestUpdate, updatePrompt } from '../../src/store/updates';
@@ -605,33 +605,49 @@ describe('Settings in English', () => {
 
 describe('Settings: «Плеер для видео»', () => {
   const flushAll = () => act(async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); });
-  afterEach(() => updateSettings({ videoPlayer: 'builtin' }));
+  afterEach(() => updateSettings({ phonePlayer: 'embedded' }));
 
-  it('2160 Player installed: both options work and the choice is kept', async () => {
+  it('«Встроенный» is the default; all three options work and the choice is kept', async () => {
     vi.spyOn(native, 'player2160').mockResolvedValue('pkg');
+    expect(DEFAULT_SETTINGS.phonePlayer).toBe('embedded');
     const el = mount();
     await flushAll();
     const row = el.querySelector('[data-row="video-player"]')!;
-    const [b, p] = Array.from(row.querySelectorAll('.m-seg button')) as HTMLButtonElement[];
+    const [e, p, b] = Array.from(row.querySelectorAll('.m-seg button')) as HTMLButtonElement[];
+    expect(e.textContent).toBe('Встроенный');
+    expect(p.textContent).toBe('2160 Player (приложение)');
     expect(b.textContent).toBe('Выбор Android');
-    expect(p.textContent).toBe('2160 Player');
+    expect(e.getAttribute('aria-pressed')).toBe('true');
     expect(p.disabled).toBe(false);
     expect(row.querySelector('[data-row="p2160-missing"]')).toBeNull();
     act(() => p.click());
-    expect(settings.value.videoPlayer).toBe('p2160');
+    expect(settings.value.phonePlayer).toBe('p2160');
     act(() => b.click());
+    expect(settings.value.phonePlayer).toBe('chooser');
+    act(() => e.click());
+    expect(settings.value.phonePlayer).toBe('embedded');
+    // the TV's own setting is not touched
     expect(settings.value.videoPlayer).toBe('builtin');
-    expect(row.textContent).toContain('Без 2160 Player видео откроется в приложении, которое вы выберете');
+    expect(row.textContent).toContain('Встроенный — экран 2160 Player прямо в OMP');
+    expect(row.textContent).toContain('«Выбор Android» откроет видео в приложении, которое вы выберете');
   });
 
-  it('not installed: 2160 is disabled and the link opens the release page', async () => {
+  it('not installed: only the app option is disabled and the link opens the release page', async () => {
     vi.spyOn(native, 'player2160').mockResolvedValue(null);
     const win = vi.spyOn(window, 'open').mockReturnValue(null);
     const el = mount();
     await flushAll();
     const row = el.querySelector('[data-row="video-player"]')!;
-    expect((row.querySelectorAll('.m-seg button')[1] as HTMLButtonElement).disabled).toBe(true);
+    const btns = Array.from(row.querySelectorAll('.m-seg button')) as HTMLButtonElement[];
+    expect(btns.map((x) => x.disabled)).toEqual([false, true, false]);
     act(() => (row.querySelector('[data-row="p2160-missing"]') as HTMLElement).click());
     expect(win).toHaveBeenCalledWith('https://github.com/spacesarmat/2160player/releases/latest', '_system');
+  });
+
+  it('a phone that chose 2160 Player before keeps it; the old chooser default becomes «Встроенный»', () => {
+    expect(sanitizeSettings({ videoPlayer: 'p2160' }).phonePlayer).toBe('p2160');
+    expect(sanitizeSettings({ videoPlayer: 'builtin' }).phonePlayer).toBe('embedded');
+    expect(sanitizeSettings({ videoPlayer: 'p2160', phonePlayer: 'chooser' }).phonePlayer).toBe('chooser');
+    expect(sanitizeSettings({ phonePlayer: 'vlc' }).phonePlayer).toBe('embedded');
   });
 });
