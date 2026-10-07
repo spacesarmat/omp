@@ -441,31 +441,12 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val dur = durationMs()
         val audio = session.audioOptions()
         val subs = session.subOptions()
-        val aSel = TrackOptions.selectedAudio(audio)
         val sSel = TrackOptions.selectedSub(subs)
         val chapters = skips.chapters(i)
         val rows = ArrayList<Pair<String, () -> Unit>>()
         rows.add(switcher.menuRow() to { switcher.menuPressed() })
-        rows.add(I18n.s("player.audioRow", "v" to selectedAudioLabel(audio)) to {
-            if (audio.size >= 2) {
-                dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-                    .setTitle(I18n.s("player.audio"))
-                    .setSingleChoiceItems(audio.map { it.label }.toTypedArray(), aSel) { d, n ->
-                        d.dismiss()
-                        session.selectAudio(n)
-                    }
-                    .show()
-            }
-        })
-        rows.add(I18n.s("player.subsRow", "v" to sSel.label) to {
-            dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-                .setTitle(I18n.s("player.subs"))
-                .setSingleChoiceItems(subs.map { it.label }.toTypedArray(), subs.indexOf(sSel)) { d, n ->
-                    d.dismiss()
-                    session.selectSub(subs[n].value)
-                }
-                .show()
-        })
+        rows.add(I18n.s("player.audioRow", "v" to selectedAudioLabel(audio)) to { openAudioList() })
+        rows.add(I18n.s("player.subsRow", "v" to sSel.label) to { openSubsList() })
         if (chapters.isNotEmpty()) rows.add(I18n.s("player.chaptersRow", "n" to chapters.size.toString()) to { openChapters(i, now) })
         val marks = markRows(skips.info(i), now, dur)
         listOf("intro-start", "intro-end", "credits").forEachIndexed { n, kind ->
@@ -481,17 +462,44 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private fun openChapters(item: Int, now: Long) {
         val list = skips.chapters(item)
         if (list.isEmpty() || item != index()) return
-        dialog = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-            .setTitle(I18n.s("player.chapters"))
-            .setSingleChoiceItems(Chapters.rows(list).toTypedArray(), Chapters.indexAt(list, now)) { d, n ->
-                d.dismiss()
-                if (item == index()) {
-                    seekToMs(list[n].startMs)
-                    showControls()
-                    changed()
-                }
+        showList(I18n.s("player.chapters"), Chapters.rows(list), Chapters.indexAt(list, now)) { n ->
+            if (item == index()) {
+                seekToMs(list[n].startMs)
+                showControls()
+                changed()
             }
-            .show()
+        }
+    }
+
+    /** «Аудио» (the menu row, the red key): the tracks, the playing one checked; one track is listed too. */
+    private fun openAudioList() {
+        val audio = session.audioOptions()
+        if (audio.isEmpty()) return
+        showList(I18n.s("player.audio"), audio.map { it.label }, TrackOptions.selectedAudio(audio)) { n -> session.selectAudio(n) }
+    }
+
+    /** «Субтитры» (the menu row, the green key): «Выкл», the tracks and files, the current one checked. */
+    private fun openSubsList() {
+        val subs = session.subOptions()
+        showList(I18n.s("player.subs"), subs.map { it.label }, subs.indexOf(TrackOptions.selectedSub(subs))) { n ->
+            session.selectSub(subs[n].value)
+        }
+    }
+
+    /**
+     * A single-choice list whose every pick closes it, the checked row included ([ListPick]): the dialog's own item
+     * listener is replaced, as the single-choice one of AlertDialog does not close on the checked row everywhere.
+     */
+    private fun showList(title: String, labels: List<String>, checked: Int, onPick: (Int) -> Unit): AlertDialog {
+        val d = AlertDialog.Builder(this, R.style.OmpPlayerDialog)
+            .setTitle(title)
+            .setSingleChoiceItems(labels.toTypedArray(), checked, null)
+            .create()
+        d.show()
+        val pick = ListPick(labels.size, { d.dismiss() }, onPick)
+        d.listView?.setOnItemClickListener { _, _, n, _ -> pick.click(n) }
+        dialog = d
+        return d
     }
 
     /** «Отметить …»: the page applies the mark (applyMark), saves it and answers with a message and new segments. */
