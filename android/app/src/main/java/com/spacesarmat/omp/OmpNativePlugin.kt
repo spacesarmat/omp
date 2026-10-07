@@ -1232,6 +1232,15 @@ class OmpNativePlugin : Plugin() {
         call.resolve(JSObject().put("ip", LocalTorrServer.wifiIpv4(context) ?: JSONObject.NULL))
     }
 
+    /**
+     * { active }: OMP's own traffic goes through a VPN (the active network has TRANSPORT_VPN). An app excluded from the
+     * VPN sees its Wi-Fi/Ethernet here. Always-on / lockdown is not readable by apps, so it is never reported.
+     */
+    @PluginMethod
+    fun vpnState(call: PluginCall) {
+        call.resolve(JSObject().put("active", LocalTorrServer.vpnOnActiveNetwork(context)))
+    }
+
     private fun localInfo(): JSObject {
         val o = JSObject()
         val supported = LocalTorrServer.supported()

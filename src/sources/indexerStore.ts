@@ -3,6 +3,7 @@
 // Chromium 53 safe (shared by the phone and the TV bundles).
 import { isObject, loadJson, saveJson } from '../store/storage';
 import { t } from '../i18n';
+import { cleanAddressText } from '../api/serverAddress';
 import type { SecretStore } from './types';
 
 export const INDEXERS_KEY = 'tsp.indexers';
@@ -29,7 +30,7 @@ export function indexerKeyName(id: string): string {
 /** http(s) address cleaned of credentials, query, hash and trailing slashes; null when it is not an address. */
 export function normalizeIndexerUrl(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
-  const s = raw.trim();
+  const s = cleanAddressText(raw, { innerSpaces: true });
   if (s.length > 200 || !/^https?:\/\/[^\s/?#@]+(?::\d{1,5})?(?:\/[^\s?#]*)?$/i.test(s.replace(/[?#].*$/, ''))) return null;
   const base = s.replace(/[?#].*$/, '').replace(/\/+$/, '');
   const m = /^(https?):\/\/([^/]+)(\/.*)?$/i.exec(base);

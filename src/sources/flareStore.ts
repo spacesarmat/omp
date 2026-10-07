@@ -2,6 +2,7 @@
 // tsp.flaresolverr { url } — an address only, never cookies. Storage only, so the TV bundle's native http can read it
 // without pulling the screens in. Chromium 53 safe.
 import { isObject, loadJson, saveJson } from '../store/storage';
+import { cleanAddressText } from '../api/serverAddress';
 
 export const FLARE_KEY = 'tsp.flaresolverr';
 export const FLARE_PORT = 8191;
@@ -12,7 +13,7 @@ export const FLARE_PORT = 8191;
  */
 export function normalizeFlareUrl(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
-  let s = raw.trim().replace(/[?#].*$/, '').replace(/\/+$/, '');
+  let s = cleanAddressText(raw, { innerSpaces: true }).replace(/[?#].*$/, '').replace(/\/+$/, '');
   if (!s || s.length > 200) return null;
   const bare = !/^[a-z][a-z0-9+.-]*:\/\//i.test(s);
   if (bare) s = 'http://' + s;

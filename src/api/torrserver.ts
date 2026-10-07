@@ -3,6 +3,7 @@ import { isStashedFile, takeStashedFile } from './torrentFiles';
 import type { Torrent, CacheState, ViewedEntry, SearchResult, FfprobeResult, ServerSettings, TmdbConfig } from './types';
 import type { TorrentFile } from '../lib/episodes';
 import { t } from '../i18n';
+import { checkServerAddress, cleanAddressText } from './serverAddress';
 
 export interface ServerConfig {
   url: string;
@@ -12,8 +13,11 @@ export interface ServerConfig {
 
 export type SearchSource = 'rutor' | 'torznab';
 
+/** The address used for requests: cleaned (serverAddress.ts); an address the check rejects keeps the old rules. */
 export function normalizeServerUrl(input: string): string {
-  let u = input.trim().replace(/\/+$/, '');
+  const c = checkServerAddress(input);
+  if (c.ok) return c.url;
+  let u = cleanAddressText(input).replace(/\/+$/, '');
   if (!/^https?:\/\//i.test(u)) {
     u = 'http://' + u;
     if (!/:\d+$/.test(u)) u += ':8090';

@@ -59,6 +59,9 @@ afterEach(() => {
   localServer.value = { supported: false, running: false };
 });
 
+/** «192.168.1.10：8090» + NBSP, as a TV keyboard types it. */
+const FULLWIDTH_ADDR = '192.168.1.10\uFF1A8090\u00A0';
+
 describe('Connect screen', () => {
   it('shows the shared logo', () => {
     const el = mount();
@@ -85,6 +88,23 @@ describe('Connect screen', () => {
     expect(el.querySelector('.m-error')?.textContent).toBeTruthy();
     expect(currentRoute.value.name).toBe('connect');
     expect(servers.value).toHaveLength(0);
+  });
+
+  it('cleans a full-width colon and an NBSP into the field; names a character no address has', async () => {
+    const f = mockFetch(() => ({ status: 500, body: 'x' }));
+    const el = mount();
+    const input = el.querySelector<HTMLInputElement>('#addr')!;
+    type(input, FULLWIDTH_ADDR);
+    await act(async () => btn(el, 'Подключиться').click());
+    await flush();
+    expect(String(f.mock.calls[0][0]).startsWith('http://192.168.1.10:8090/echo')).toBe(true);
+    expect(input.value).toBe('192.168.1.10:8090');
+    f.mockClear();
+    type(input, '192.168.1.10;8090');
+    await act(async () => btn(el, 'Подключиться').click());
+    await flush();
+    expect(el.querySelector('.m-error')?.textContent).toBe('В адресе есть недопустимый символ: «;»');
+    expect(f).not.toHaveBeenCalled();
   });
 
   it('saves login and password from the collapsible block', async () => {

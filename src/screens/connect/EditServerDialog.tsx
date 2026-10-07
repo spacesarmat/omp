@@ -5,6 +5,7 @@ import { useKeys } from '../../ui/keys';
 import { confirmDialog } from '../../ui/dialog';
 import { toast } from '../../ui/toast';
 import { t } from '../../i18n';
+import { addressErrorText, addressForField, checkServerAddress } from '../../api/serverAddress';
 
 export function EditServerDialog(p: { server: SavedServer; onClose: () => void }) {
   const [name, setName] = useState(p.server.name);
@@ -23,7 +24,13 @@ export function EditServerDialog(p: { server: SavedServer; onClose: () => void }
       toast(t('connect.enterAddress'), 'error');
       return;
     }
-    const r = updateServer(p.server.id, { name, url, user, password });
+    const checked = checkServerAddress(url);
+    if (!checked.ok) {
+      toast(addressErrorText(checked.bad), 'error');
+      return;
+    }
+    setUrl(addressForField(checked.url));
+    const r = updateServer(p.server.id, { name, url: checked.url, user, password });
     if (r === 'duplicate') {
       toast(t('connect.duplicate'), 'error');
       return;

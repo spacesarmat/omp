@@ -11,6 +11,7 @@ import { scanPairQr } from '../platform/qr';
 import { RenameSheet } from '../ui/RenameSheet';
 import { servers, addServer, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
+import { addressErrorText, addressForField, checkServerAddress } from '../../../src/api/serverAddress';
 import { errorMessage, isApiError } from '../../../src/api/http';
 import { discover, candidateSubnets, subnetOf, DEFAULT_PORTS, type FoundServer } from '../../../src/api/discovery';
 import { native } from '../platform/native';
@@ -146,7 +147,14 @@ export function Connect() {
       setError(t('connect.enterAddress'));
       return;
     }
-    void enter({ url: addr, user: auth && user.trim() ? user.trim() : undefined, password: auth && pass ? pass : undefined });
+    const checked = checkServerAddress(addr);
+    if (!checked.ok) {
+      setError(addressErrorText(checked.bad));
+      return;
+    }
+    // the field shows the cleaned address (a pasted NBSP or a full-width colon is gone)
+    setAddr(addressForField(checked.url));
+    void enter({ url: checked.url, user: auth && user.trim() ? user.trim() : undefined, password: auth && pass ? pass : undefined });
   }
 
   async function scan() {

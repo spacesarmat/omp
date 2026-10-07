@@ -482,6 +482,17 @@ object LocalTorrServer {
         }
     }
 
+    /** The network this app's traffic uses is a VPN (false for an app the VPN excludes, or on failure). */
+    fun vpnOnActiveNetwork(ctx: Context): Boolean {
+        return try {
+            val cm = ctx.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager?
+            val net = cm?.activeNetwork ?: return false
+            cm.getNetworkCapabilities(net)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     // ---- notification text ----
 
     private val numLocale: Locale get() = if (I18n.lang == "en") Locale.US else Locale.forLanguageTag("ru")
