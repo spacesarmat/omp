@@ -149,7 +149,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .series-status .series-pill { font-size: 22px; padding: 5px 14px; margin: 0; }
 .series-meta { font-size: 26px; margin-bottom: 14px; }
 .series-overview { max-width: 1000px; margin: 0 0 24px; font-size: 25px; line-height: 1.4; color: #c9cdd8; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-.series-actions { margin-top: 8px; }
+.series-actions { margin-top: 8px; flex-wrap: wrap; margin-bottom: 0; }
+.series-actions > * { margin-bottom: 16px; }
 .series-follow-state { margin-left: 8px; font-weight: 700; }
 .series-follow-note { font-size: 21px; margin-top: 12px; }
 /* one row that scrolls sideways (the focused chip is kept whole); the padding keeps the focus ring unclipped */

@@ -193,7 +193,8 @@ export function nativeTrackStart(
   if (audio.length) {
     audio.push({ g: s.audioLang });
     out.audioPick = audio;
-    out.audioLang = audio.filter((p) => !!p.g)[0].g || s.audioLang;
+    const lang = audio.filter((p) => !!p.g)[0];
+    out.audioLang = lang && lang.g ? lang.g : s.audioLang;
   }
 
   const subs: NativeTrackPick[] = [];
