@@ -1597,6 +1597,19 @@ export const en: EnDict<typeof ru> = {
       cloudflare: '{name}: pass the check on the phone',
     },
     hints: 'OK — add and watch · blue — release details · Back — to the library',
+    /** The kind badge of a result and the «All / Movies / Series» filter above the results (TV and phone). */
+    kind: {
+      movie: 'Movie',
+      series: 'Series',
+      episodes: '{from}–{to}',
+      episodesOf: '{from}–{to} of {total}',
+      episode: 'ep. {n}',
+      filterLabel: 'Release kind',
+      all: 'All',
+      movies: 'Movies',
+      seriesMany: 'Series',
+      none: 'No releases of this kind — choose “All”',
+    },
   },
   phoneSources: {
     title: 'Search sources',
@@ -1668,6 +1681,8 @@ export const en: EnDict<typeof ru> = {
     sort: 'Sort',
     detailsOf: 'Details: {title}',
     openOnSite: 'Open on the site',
+    onPhone: 'On the phone',
+    addAndWatchPhone: 'Add and watch on the phone: {title}',
   },
   updateScreen: {
     title: 'OMP update',

@@ -19,11 +19,17 @@ export function ReleaseName({ raw, class: cls = 'm-result-title' }: { raw: strin
   );
 }
 
-export function ReleaseChips({ raw }: { raw: string }) {
+/** The quality chips; `kind` («Фильм», «Сериал · S02 · 1–8 из 8») comes first, framed. */
+export function ReleaseChips({ raw, kind }: { raw: string; kind?: string }) {
   const chips = releaseChips(raw);
-  if (!chips.length) return null;
+  if (!chips.length && !kind) return null;
   return (
     <div class="m-rel-chips">
+      {kind && (
+        <span class="m-badge-inline m-kind-badge" data-kind-badge="">
+          {kind}
+        </span>
+      )}
       {chips.map((c) => (
         <span key={c} class="m-badge-inline">
           {c}

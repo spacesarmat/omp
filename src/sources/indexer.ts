@@ -202,6 +202,17 @@ function nonNeg(v: unknown): number | undefined {
   return typeof v === 'number' && isFinite(v) && v >= 0 ? Math.round(v) : undefined;
 }
 
+/** Prowlarr's `categories` ([{ id: 5000, name: 'TV' }, …]) → the Torznab ids, as Jackett's rows have them («5000, 5040»). */
+function prowlarrCategories(v: unknown): string {
+  if (!Array.isArray(v)) return '';
+  const ids: string[] = [];
+  v.forEach((c) => {
+    const id = c && typeof c === 'object' ? (c as { id?: unknown }).id : undefined;
+    if (typeof id === 'number' && isFinite(id) && ids.indexOf(String(id)) < 0) ids.push(String(id));
+  });
+  return ids.join(', ');
+}
+
 /** Prowlarr /api/v1/search JSON → results of source `sourceId` (usenet rows are skipped). */
 export function parseProwlarr(text: string, sourceId: string): SourceResult[] {
   let data: unknown;
@@ -231,6 +242,7 @@ export function parseProwlarr(text: string, sourceId: string): SourceResult[] {
       hash: /^[0-9a-f]{40}$/.test(hashRaw) ? hashRaw : undefined,
       torrent: str(o.downloadUrl),
       detailUrl: str(o.infoUrl),
+      categories: prowlarrCategories(o.categories),
     });
     if (r) out.push(r);
   });

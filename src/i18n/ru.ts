@@ -1628,6 +1628,19 @@ export const ru = {
       cloudflare: '{name}: пройдите проверку на телефоне',
     },
     hints: 'ОК — добавить и смотреть · синяя — подробнее о раздаче · Назад — к медиатеке',
+    /** The kind badge of a result and the «Все / Фильмы / Сериалы» filter above the results (TV and phone). */
+    kind: {
+      movie: 'Фильм',
+      series: 'Сериал',
+      episodes: '{from}–{to}',
+      episodesOf: '{from}–{to} из {total}',
+      episode: 'серия {n}',
+      filterLabel: 'Тип раздачи',
+      all: 'Все',
+      movies: 'Фильмы',
+      seriesMany: 'Сериалы',
+      none: 'Нет раздач этого типа — выберите «Все»',
+    },
   },
   phoneSources: {
     title: 'Источники поиска',
@@ -1699,6 +1712,8 @@ export const ru = {
     sort: 'Сортировка',
     detailsOf: 'Подробнее: {title}',
     openOnSite: 'Открыть на сайте',
+    onPhone: 'На телефоне',
+    addAndWatchPhone: 'Добавить и смотреть на телефоне: {title}',
   },
   updateScreen: {
     title: 'Обновление OMP',
