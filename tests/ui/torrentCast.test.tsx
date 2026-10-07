@@ -91,6 +91,22 @@ describe('TV torrent screen · «В ролях»', () => {
     expect(search).toHaveBeenCalled();
     expect(host.querySelector('.tc-cast-row')).toBeNull();
   });
+  it('reserves the row while the film is looked up (no text, not focusable) and drops it when TMDB answers', async () => {
+    let done!: (v: unknown) => void;
+    search.mockReturnValue(new Promise((r) => { done = r; }));
+    await mount(film('film4', 'Ждущий фильм'));
+    const ph = host.querySelector('.tc-cast-ph') as HTMLElement;
+    expect(ph).not.toBeNull();
+    expect(ph.textContent).toBe('');
+    expect(ph.hasAttribute('data-fk')).toBe(false);
+    await act(async () => { done({ items: [], pages: 1 }); });
+    await flush();
+    expect(host.querySelector('.tc-cast-ph')).toBeNull();
+  });
+  it('no placeholder for a series', async () => {
+    await mount(series);
+    expect(host.querySelector('.tc-cast-ph')).toBeNull();
+  });
   it('never looks a series up', async () => {
     search.mockResolvedValue({ items: [], pages: 1 });
     await mount(series);

@@ -73,6 +73,12 @@ afterEach(() => {
 });
 
 describe('phone person screen', () => {
+  it('the screen root has no m-library class, so the back bar sits at the same top as on the series screen', async () => {
+    mount(<Person id={7} label="Иван Режиссёров" />);
+    await flush();
+    const root = el.querySelector('[data-route="person"]')!;
+    expect(root.classList.contains('m-library')).toBe(false);
+  });
   it('shows the name, the job and the years', async () => {
     mount(<Person id={7} label="Иван Режиссёров" />);
     await flush();

@@ -740,6 +740,19 @@ describe('Torrent · cast', () => {
     expect(search).toHaveBeenCalled();
     expect(el.querySelector('.m-tc-cast')).toBeNull();
   });
+  it('reserves the cast row while the film is looked up, then drops it when nothing matches', async () => {
+    let done!: (v: unknown) => void;
+    const search = vi.fn(() => new Promise((r) => { done = r; }));
+    fakeCatalog(search, vi.fn());
+    mountFilm(filmTor('pf4', 'Ждущий фильм'));
+    await flush();
+    const ph = el.querySelector('.m-tc-cast-ph') as HTMLElement;
+    expect(ph).not.toBeNull();
+    expect(ph.textContent).toBe('');
+    await act(async () => { done({ items: [], pages: 1 }); });
+    await flush();
+    expect(el.querySelector('.m-tc-cast-ph')).toBeNull();
+  });
   it('never looks a series up', async () => {
     const search = vi.fn();
     fakeCatalog(search, vi.fn());
