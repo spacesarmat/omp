@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- test builds (package .test) next to the released app: a name and icons that tell them apart -->
+    <string name="app_name">OMP Test</string>
+    <string name="title_activity_main">OMP Test</string>
+</resources>
