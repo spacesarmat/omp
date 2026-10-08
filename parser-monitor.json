@@ -1,59 +1,59 @@
 {
   "version": 1,
-  "updated": "2026-10-07T21:57:02.151Z",
+  "updated": "2026-10-08T06:00:28.459Z",
   "sources": {
     "rutor": {
       "status": "OK",
-      "streak": 1,
+      "streak": 2,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "100 / 99 / 100 результатов"
     },
     "nnmclub": {
       "status": "OK",
-      "streak": 1,
+      "streak": 2,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "50 / 50 / 50 результатов"
     },
     "anidub": {
       "status": "OK",
-      "streak": 1,
+      "streak": 2,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "29 / 32 результатов"
     },
     "bigfangroup": {
       "status": "OK",
-      "streak": 1,
+      "streak": 2,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "30 / 25 / 19 результатов"
     },
     "torrentby": {
-      "status": "BLOCKED",
+      "status": "BROKEN",
       "streak": 1,
-      "since": "2026-10-07T21:57:02.151Z",
+      "since": "2026-10-08T06:00:28.459Z",
       "alerted": false,
-      "detail": "сеть недоступна: UNABLE_TO_VERIFY_LEAF_SIGNATURE"
+      "detail": "поиск «Джентльмены»: не хватает полей: сиды (полных строк 100%)"
     },
     "rutracker": {
       "status": "BLOCKED",
-      "streak": 1,
+      "streak": 2,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "проверка Cloudflare (HTTP 403)"
     },
     "kinozal": {
       "status": "BLOCKED",
-      "streak": 1,
+      "streak": 2,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "проверка Cloudflare (HTTP 403)"
     },
     "rustorka": {
       "status": "BLOCKED",
-      "streak": 1,
+      "streak": 2,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "проверка Cloudflare (HTTP 403)"
