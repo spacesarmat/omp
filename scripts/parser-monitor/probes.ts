@@ -130,7 +130,8 @@ export function probes(): Probe[] {
     },
     {
       source: torrentby,
-      queries: MOVIES,
+      // a Russian tracker: its search finds the Russian title, not «Interstellar»
+      queries: ['Джентльмены', 'Интерстеллар', 'Во все тяжкие'],
       rules: { minResults: 3, category: 'none', link: 'magnet', seedsAny: true },
       markers: ['torrents_table', 'text-to-find'],
       link: listMagnet,
