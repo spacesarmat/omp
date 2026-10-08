@@ -16,6 +16,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tv] The TorrServer address has OMP's own keypad (digits, ".", ":", http://, https://) and is cleaned of TV-keyboard look-alikes; Android TV hints about a VPN when no server answers
 - [phone] The server address has OMP's own keypad docked at the bottom
 - [atv] 2160 Player as the video player (Settings, Video player): with the resume point, skipped intros and all episodes of the release
+- [tv] Discover cards and the series screen: the backdrop spans the top of the screen with soft fades
 - [tv] The device name under the logo ("Dune HD", the TV's name); top bar button labels show as a chip under the button
 - FAQ: connecting and installing on Xiaomi, "The TV cannot reach TorrServer but the phone can"; betas have a BETA band on the icon
 
