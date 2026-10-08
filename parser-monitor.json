@@ -1,7 +1,15 @@
 {
   "version": 1,
-  "updated": "2026-10-08T13:27:35.848Z",
+  "updated": "2026-10-08T13:38:33.361Z",
   "sources": {
+    "torrentby": {
+      "status": "BROKEN",
+      "streak": 3,
+      "since": "2026-10-08T06:00:28.459Z",
+      "alerted": true,
+      "signature": "too-few",
+      "detail": "поиск «Интерстеллар»: результатов 0, нужно не меньше 3"
+    },
     "rutor": {
       "status": "OK",
       "streak": 4,
@@ -29,14 +37,6 @@
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "30 / 25 / 19 результатов"
-    },
-    "torrentby": {
-      "status": "BROKEN",
-      "streak": 2,
-      "since": "2026-10-08T06:00:28.459Z",
-      "alerted": true,
-      "signature": "too-few",
-      "detail": "поиск «Interstellar»: результатов 0, нужно не меньше 3"
     },
     "rutracker": {
       "status": "BLOCKED",
