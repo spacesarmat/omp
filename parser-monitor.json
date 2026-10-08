@@ -1,14 +1,13 @@
 {
   "version": 1,
-  "updated": "2026-10-08T13:38:33.361Z",
+  "updated": "2026-10-08T13:44:08.957Z",
   "sources": {
     "torrentby": {
-      "status": "BROKEN",
-      "streak": 3,
-      "since": "2026-10-08T06:00:28.459Z",
-      "alerted": true,
-      "signature": "too-few",
-      "detail": "поиск «Интерстеллар»: результатов 0, нужно не меньше 3"
+      "status": "OK",
+      "streak": 1,
+      "since": "2026-10-08T13:44:08.957Z",
+      "alerted": false,
+      "detail": "20 / 25 / 13 результатов"
     },
     "rutor": {
       "status": "OK",
