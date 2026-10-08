@@ -20,6 +20,21 @@ export interface SavedTv {
   ctlPort?: number;
   /** When this TV was last made the active one (ms); the remote falls back to the latest one. */
   usedAt?: number;
+  /** Android TV: «Управлять приставкой» — the remote drives the whole box; `via` is the transport that worked. */
+  box?: BoxSetting;
+}
+
+/** The box channel of an Android TV: the switch and the transport that connected last time. */
+export interface BoxSetting {
+  on: boolean;
+  via?: 'google' | 'adb';
+}
+
+function sanitizeBox(v: unknown): BoxSetting | undefined {
+  if (!isObject(v) || typeof v.on !== 'boolean') return undefined;
+  const box: BoxSetting = { on: v.on };
+  if (v.via === 'google' || v.via === 'adb') box.via = v.via;
+  return box;
 }
 
 export type TvKind = 'lg' | 'atv';
@@ -66,6 +81,8 @@ export function sanitizeTvs(v: unknown): SavedTv[] {
       tv.kind = 'atv';
       if (typeof t.token === 'string' && TOKEN.test(t.token)) tv.token = t.token;
       if (validPort(t.ctlPort)) tv.ctlPort = t.ctlPort;
+      const box = sanitizeBox(t.box);
+      if (box) tv.box = box;
     } else {
       if (typeof t.clientKey === 'string' && t.clientKey) tv.clientKey = t.clientKey;
       if (t.port === 3000 || t.port === 3001) tv.port = t.port;
@@ -137,6 +154,8 @@ export function saveTv(tv: SavedTv, opts: { keepActive?: boolean } = {}): void {
     if (token) next.token = token;
     const ctlPort = tv.ctlPort ?? existing?.ctlPort;
     if (ctlPort) next.ctlPort = ctlPort;
+    const box = tv.box ?? existing?.box;
+    if (box) next.box = box;
   } else {
     const clientKey = tv.clientKey || existing?.clientKey;
     if (clientKey) next.clientKey = clientKey;
@@ -183,6 +202,16 @@ export function clearTvToken(ip: string, token?: string): void {
   persist();
 }
 
+/** Android TV: stores the box switch / transport of a saved TV. */
+export function setTvBox(ip: string, box: BoxSetting): void {
+  const cur = tvs.value.find((t) => t.ip === ip);
+  if (!cur || cur.kind !== 'atv') return;
+  const next: BoxSetting = { on: box.on };
+  if (box.via) next.via = box.via;
+  tvs.value = tvs.value.map((t) => (t.ip === ip ? { ...t, box: next } : t));
+  persist();
+}
+
 /** Gives a saved TV a user name (trimmed, max 40); blank restores the discovered one. */
 export function renameTv(ip: string, name: string): void {
   const cur = tvs.value.find((t) => t.ip === ip);
@@ -191,6 +220,16 @@ export function renameTv(ip: string, name: string): void {
   const next = name.trim().slice(0, MAX_NAME).trim() || def;
   tvs.value = tvs.value.map((t) => (t.ip === ip ? { ...t, name: next, defaultName: def } : t));
   persist();
+}
+
+/** The user gave this TV a name of its own on the phone (the alias in `name`; the TV's own one is `defaultName`). */
+export function isTvRenamed(tv: SavedTv | null | undefined): boolean {
+  return !!tv && tv.defaultName !== undefined && tv.name !== tv.defaultName;
+}
+
+/** Drops the phone-side name: the TV is shown by its own name again. */
+export function resetTvName(ip: string): void {
+  renameTv(ip, '');
 }
 
 export function setActiveTv(ip: string, now: number = Date.now()): void {

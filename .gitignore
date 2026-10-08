@@ -23,3 +23,7 @@ android/app/src/main/jniLibs/
 *.jks
 *.keystore
 dist-test/
+monitor-out/
+# the admin bot (ops/admin-bot): wrangler cache, local secrets
+.wrangler/
+.dev.vars

@@ -294,8 +294,10 @@ export const ru = {
     dubReset: 'По умолчанию (сбросить)',
     dubChange: 'Сменить',
     dubNote: 'Запоминается при выборе дорожки в плеере — для всех сезонов, общая для ТВ и телефона',
-    watchedAll: 'просмотрен',
-    progressOf: '{done} из {total}',
+    // a season chip's sub-line: what the release has (of what TMDB lists), then how much is watched
+    episodesOf: { one: '{have} из {n} серии', few: '{have} из {n} серий', many: '{have} из {n} серий' },
+    watchedSome: 'смотрели {n}',
+    watchedEvery: 'просмотрено',
     left: 'осталось {n} мин',
     markedWatched: 'Серия отмечена просмотренной',
     hintOk: 'OK — смотреть',
@@ -1307,6 +1309,19 @@ export const ru = {
     serverName: 'Название сервера',
     addedToast: 'Сервер «{name}» добавлен',
   },
+  /** OMP's own keypad for the server address (the connect screen, the server editor). */
+  keypad: {
+    /** The key that erases the character before the caret (its accessible name; it shows an icon). */
+    backspace: 'Стереть',
+    /** Switches to the system keyboard for a host name. */
+    keyboard: 'Клавиатура',
+    /** Back from the system keyboard to the keypad (button by the field; its accessible name). */
+    toKeypad: 'Цифровая клавиатура OMP',
+    toKeypadShort: '123',
+    done: 'Готово',
+    /** TV, under the keypad. */
+    tvHint: 'Цифры можно набирать кнопками пульта · Назад — скрыть клавиатуру',
+  },
   discover: {
     mine: 'Мои',
     browse: 'Обзор',
@@ -1633,6 +1648,19 @@ export const ru = {
       cloudflare: '{name}: пройдите проверку на телефоне',
     },
     hints: 'ОК — добавить и смотреть · синяя — подробнее о раздаче · Назад — к медиатеке',
+    /** The kind badge of a result and the «Все / Фильмы / Сериалы» filter above the results (TV and phone). */
+    kind: {
+      movie: 'Фильм',
+      series: 'Сериал',
+      episodes: '{from}–{to}',
+      episodesOf: '{from}–{to} из {total}',
+      episode: 'серия {n}',
+      filterLabel: 'Тип раздачи',
+      all: 'Все',
+      movies: 'Фильмы',
+      seriesMany: 'Сериалы',
+      none: 'Нет раздач этого типа — выберите «Все»',
+    },
   },
   phoneSources: {
     title: 'Источники поиска',
@@ -1704,6 +1732,8 @@ export const ru = {
     sort: 'Сортировка',
     detailsOf: 'Подробнее: {title}',
     openOnSite: 'Открыть на сайте',
+    onPhone: 'На телефоне',
+    addAndWatchPhone: 'Добавить и смотреть на телефоне: {title}',
   },
   updateScreen: {
     title: 'Обновление OMP',
@@ -1928,6 +1958,7 @@ export const ru = {
     switchTv: 'Сменить телевизор',
     switchTitle: 'Телевизоры',
     tvSaved: 'сохранён',
+    renameTv: 'Переименовать',
     tvNeedsCode: 'нужен код',
     turnOffAsk: 'Выключить {name}?',
     turnedOff: 'Телевизор выключается',
@@ -1943,6 +1974,40 @@ export const ru = {
     nextEpisode: 'След. серия',
     playBtn: 'Воспроизвести',
     fwd10s: 'Вперёд на 10 с',
+    /** «Управлять приставкой»: the remote drives the whole Android TV box. */
+    box: {
+      title: 'Управлять приставкой',
+      hint: 'Кнопки, «Домой» и громкость управляют всей приставкой, не только OMP',
+      viaGoogle: 'через Google TV Remote',
+      viaAdb: 'через отладку по сети',
+      idle: 'не подключено',
+      connecting: 'подключение…',
+      code: 'введите код с ТВ',
+      confirm: 'подтвердите на ТВ',
+      connect: 'Подключить',
+      retry: 'Проверить снова',
+      adbHelp:
+        'На приставке включите отладку по сети: Настройки → Об устройстве → 7 раз «Сборка» → Для разработчиков → Отладка по сети. Затем нажмите «Проверить снова».',
+      confirmHint: 'Если на телевизоре появится «Разрешить отладку?» — отметьте «Всегда разрешать» и нажмите OK.',
+      codeTitle: 'Введите код с экрана телевизора',
+      codeNote: '6 знаков: цифры и буквы A–F.',
+      codeLabel: 'Код с экрана телевизора',
+      settings: 'Настройки',
+      playPause: 'Пауза / воспроизведение',
+      prev: 'Предыдущий',
+      next: 'Следующий',
+      err: {
+        unreachable: 'Приставка не отвечает — проверьте, что она включена и в той же сети',
+        noService: 'На приставке нет ни Google TV Remote, ни отладки по сети',
+        needPairing: 'Приставка не знает этот телефон — нажмите «Подключить» и введите код с экрана',
+        badCode: 'Код неверный — проверьте код на экране телевизора',
+        rejected: 'Подключение отклонено на телевизоре',
+        adbClosed: 'Отладка по сети на приставке выключена',
+        authTimeout: 'На телевизоре не подтвердили «Разрешить отладку?»',
+        notConnected: 'Приставка не подключена',
+        failed: 'Связь с приставкой прервалась',
+      },
+    },
   },
   nav: {
     sections: 'Разделы',
@@ -2147,6 +2212,7 @@ export const ru = {
     manualIp: 'Ввести IP-адрес телевизора',
     tip: 'Телефон запомнит телевизор: в следующий раз «Смотреть на ТВ» и пульт заработают сразу. Чтобы включать телевизор с телефона, на ТВ включите: Общие → Устройства → «Включение мобильного ТВ» (или «Включение через Wi‑Fi»).',
     renameTitle: 'Название телевизора',
+    resetName: 'Вернуть имя телевизора',
     unnamed: 'Телевизор {ip}',
   },
   serverSettings: {

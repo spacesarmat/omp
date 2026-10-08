@@ -38,4 +38,16 @@ class TvNameTest {
         // a name the user set in Settings still wins
         assertEquals("Спальня", TvName.choose("Спальня", "Realtek", "rtk", "tv175v"))
     }
+
+    @Test
+    fun theDuneShellNamesTheBox() {
+        // no user name (device_name is the model itself), Dune shell installed: «Dune HD»
+        assertEquals("Dune HD", TvName.choose("tv175v", "Realtek", "rtk", "tv175v", TvName.DUNE_NAME))
+        assertEquals("Dune HD", TvName.choose(null, "Realtek", "rtk", "tv175v", "Dune HD"))
+        // a name the user set still wins over the hint
+        assertEquals("Спальня", TvName.choose("Спальня", "Realtek", "rtk", "tv175v", TvName.DUNE_NAME))
+        // a blank hint changes nothing
+        assertEquals("Android TV (tv175v)", TvName.choose("tv175v", "Realtek", "rtk", "tv175v", " "))
+        assertEquals("Xiaomi MiTV-AXSO0", TvName.choose(null, "Xiaomi", "Xiaomi", "MiTV-AXSO0", null))
+    }
 }

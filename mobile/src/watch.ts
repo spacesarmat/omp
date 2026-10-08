@@ -19,10 +19,11 @@ import { parseTorrentData, type TorrServerClient } from '../../src/api/torrserve
 import { loadSkip, recordWatch } from '../../src/store/journal';
 import { play2160 } from '../../src/player/player2160';
 import type { PlayItem } from '../../src/player/types';
-import { MIN_RESUME } from '../../src/store/progress';
+import { MIN_RESUME, getLocalProgress } from '../../src/store/progress';
 import { settings } from '../../src/store/settings';
 import type { Torrent } from '../../src/api/types';
-import { baseName, playableFiles, type TorrentFile } from '../../src/lib/episodes';
+import { baseName, playableFiles, stripExt, type TorrentFile } from '../../src/lib/episodes';
+import { sharedResume } from './lib/sharedProgress';
 import { t as tr } from '../../src/i18n';
 import { launchLabel } from './lib/playingNames';
 
@@ -188,6 +189,31 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
   }
   await actions.openExternal(streamUrlFor(c, t, w.file), 'video/*');
   void recordPhoneWatch(c, w.hash, w.file.id, 0, w.duration);
+}
+
+/**
+ * «Смотреть на телефоне» of a release just added (search results): the files are waited for (TorrServer loads the
+ * metadata); one playable file plays on this phone with watchOnPhone (the phone's player setting); several (a series, a
+ * film with extras) or none open the torrent screen to choose, as «Добавить и смотреть на ТВ» leaves the choice to the
+ * TV's torrent screen. Resolves what happened; rejects with the error to show.
+ */
+export async function watchAddedOnPhone(c: TorrServerClient, hash: string): Promise<'played' | 'opened'> {
+  let tor = await c.get(hash);
+  if (!c.files(tor).length) tor = await c.loadInfo(hash);
+  const files = playableFiles(c.files(tor));
+  if (files.length !== 1) {
+    navigate({ name: 'torrent', hash });
+    return 'opened';
+  }
+  const f = files[0];
+  await watchOnPhone(c, tor, {
+    hash,
+    file: f,
+    title: stripExt(baseName(f.path)),
+    at: sharedResume(hash, f.id),
+    duration: getLocalProgress(hash, f.id)?.duration || 0,
+  });
+  return 'played';
 }
 
 export function filesOf(t: Torrent): TorrentFile[] {

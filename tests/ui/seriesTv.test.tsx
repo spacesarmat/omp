@@ -295,7 +295,7 @@ describe('TV series screen', () => {
     expect(rows[0].getAttribute('data-fk')).toBe('ep-s2-1');
     expect(rows[1].getAttribute('data-fk')).toBe('ep-s2b-2');
     const chip = host.querySelector('[data-fk="season-2"]')!;
-    expect(text(chip.querySelector('.chip-sub'))).toBe('1 из 2');
+    expect(text(chip.querySelector('.chip-sub'))).toBe('2 из 10 серий · смотрели 1');
     const watch = host.querySelector('[data-fk="series-watch"]') as HTMLElement;
     expect(text(watch)).toContain('S02E02');
     act(() => { watch.click(); });
@@ -541,3 +541,106 @@ describe('TV series screen: «Озвучка»', () => {
     expect(text(host.querySelector('[data-fk="series-dub"]'))).toBe('Озвучка: по умолчанию');
   });
 });
+
+describe('TV series screen: episodes still to come', () => {
+  const plainSeason = stub.season;
+  const dated = (n: number, title: string, airDate: string) => ({ n, title, airDate, runtime: 50, overview: '' });
+  const withEpisodes = (list: ReturnType<typeof dated>[]) => {
+    stub.season = (_id: number, n: number) => Promise.resolve({ number: n, name: '', airDate: '', overview: '', episodes: list });
+  };
+  afterEach(() => {
+    stub.season = plainSeason;
+  });
+  const coming = (host: HTMLElement) => Array.prototype.slice.call(host.querySelectorAll('.series-episodes .ep-coming')) as HTMLElement[];
+
+  it('after the last episode: dashed muted rows «S02E04 Пирамида · выйдет …», «Серия 5» without a name', async () => {
+    withEpisodes([
+      dated(1, 'Пилот', '2024-05-08'),
+      dated(2, 'Второй', '2024-05-15'),
+      dated(3, 'Пропущенная', '2024-05-22'), // out already, just not in the release: no placeholder
+      dated(4, 'Пирамида', '2099-01-08'),
+      dated(5, 'Эпизод 5', '2099-01-15'),
+      dated(6, 'Без даты', ''),
+    ]);
+    const host = await mount(2);
+    const rows = Array.prototype.slice.call(host.querySelectorAll('.series-episodes .ep-row')) as HTMLElement[];
+    expect(rows.map((r) => text(r.querySelector('.ep')))).toEqual(['S02E01', 'S02E02', 'S02E04', 'S02E05']);
+    const c = coming(host);
+    expect(c).toHaveLength(2);
+    expect(rows.indexOf(c[0])).toBe(2);
+    expect(text(c[0].querySelector('.name'))).toBe('Пирамида');
+    expect(text(c[0].querySelector('.size'))).toMatch(/^выйдет \d+ янв/);
+    expect(text(c[1].querySelector('.name'))).toBe('Серия 5');
+    expect(c.every((r) => r.tagName === 'DIV' && !r.hasAttribute('data-fk') && r.getAttribute('aria-disabled') === 'true')).toBe(true);
+    // OK on it does nothing
+    const before = currentRoute.value;
+    act(() => { c[0].click(); });
+    await flush();
+    expect(currentRoute.value).toBe(before);
+    // the dashed, muted look (Chromium 53: a plain dashed border)
+    const css = readFileSync('src/styles.css', 'utf8') as string;
+    expect(css).toMatch(/\.ep-coming \{[^}]*border: 2px dashed/);
+    expect(css).toMatch(/\.ep-coming \{[^}]*color: var\(--muted\)/);
+  });
+
+  it('Down from the last real episode does not land on them', async () => {
+    withEpisodes([dated(1, 'Пилот', '2024-05-08'), dated(2, 'Второй', '2024-05-15'), dated(3, 'Пирамида', '2099-01-08')]);
+    const host = await mount(2);
+    act(() => setFocus('ep-s2-2'));
+    await flush();
+    await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 40, key: 'ArrowDown', bubbles: true } as KeyboardEventInit)); });
+    await flush();
+    const k = getCurrentFocusKey();
+    expect(k).toBeTruthy();
+    expect(host.querySelector('[data-fk="' + k + '"]')).not.toBeNull();
+    expect(host.querySelector('.ep-coming.focused')).toBeNull();
+  });
+
+  it('an episode out in the release is a normal row, with no placeholder for it', async () => {
+    withEpisodes([dated(1, 'Пилот', '2024-05-08'), dated(2, 'Второй', '2099-01-01'), dated(3, 'Пирамида', '2099-01-08')]);
+    const host = await mount(2);
+    expect(host.querySelector('[data-fk="ep-s2-2"]')).not.toBeNull();
+    expect(coming(host).map((r) => text(r.querySelector('.ep')))).toEqual(['S02E03']);
+  });
+
+  it('none without TMDB dates or without TMDB at all', async () => {
+    withEpisodes([dated(1, 'Пилот', '2024-05-08'), dated(2, 'Второй', '2024-05-15'), dated(3, 'Пирамида', '')]);
+    let host = await mount(2);
+    expect(coming(host)).toHaveLength(0);
+    expect(host.querySelectorAll('.series-episodes .ep-row')).toHaveLength(2);
+    stub.season = () => Promise.reject(new Error('offline'));
+    resetEpisodeNames();
+    host = await mount(2);
+    expect(coming(host)).toHaveLength(0);
+  });
+});
+﻿
+describe('TV series screen: the season chips say what is there, then what is watched', () => {
+  const sub = (host: HTMLElement, n: number) => host.querySelector('[data-fk="season-' + n + '"] .chip-sub') as HTMLElement;
+
+  it('«2 из 9 серий» while TMDB lists more than the release; «· смотрели 1» once one is watched', async () => {
+    saveProgress('s2', 1, 100, 100);
+    const host = await mount(2);
+    expect(text(sub(host, 1))).toBe('2 из 9 серий');
+    expect(text(sub(host, 2))).toBe('2 из 10 серий · смотрели 1');
+    expect(sub(host, 2).querySelector('.icon')).toBeNull();
+  });
+
+  it('without TMDB: the release count; every episode watched: a check icon and «просмотрено»', async () => {
+    stub.card = () => Promise.reject(new Error('offline'));
+    const plainSeason = stub.season;
+    stub.season = () => Promise.reject(new Error('offline'));
+    saveProgress('s1', 1, 100, 100);
+    saveProgress('s1', 2, 100, 100);
+    try {
+      const host = await mount(2);
+      // (season 2's progress is the previous test's: the progress store outlives localStorage.clear)
+      expect(text(sub(host, 2))).toMatch(/^2 серии( · |$)/);
+      expect(text(sub(host, 1))).toBe('2 серии · просмотрено');
+      expect(sub(host, 1).querySelector('.icon.chip-check')).not.toBeNull();
+    } finally {
+      stub.season = plainSeason;
+    }
+  });
+});
+

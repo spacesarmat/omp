@@ -1,0 +1,116 @@
+# Parser monitor: every 12 hours the app's real tracker parsers (src/sources) run against the live sites from a
+# GitHub runner. A source BROKEN two runs in a row gets an issue «Парсер X сломан» (label parser-monitor) and a
+# Telegram message to the admin; it is closed with a message when it works again. Mondays: a weekly summary.
+# State between runs: parser-monitor.json on the monitor-state branch. A manual run with «notify» (the admin bot's
+# /check, ops/admin-bot) also sends its table to the admin's Telegram when it finishes. See docs/parser-monitor.md.
+name: Parser monitor
+on:
+  schedule:
+    - cron: '17 */12 * * *'
+  workflow_dispatch:
+    inputs:
+      summary:
+        description: Send the weekly Telegram summary now
+        type: boolean
+        default: false
+      dry_run:
+        description: Only check and show the table (no issues, no Telegram, state not saved)
+        type: boolean
+        default: false
+      sources:
+        description: Only these sources, comma-separated ids (e.g. rutor,anidub); empty = all
+        required: false
+        default: ''
+      notify:
+        description: Send this run's table to the admin's Telegram when it finishes (the admin bot's /check)
+        type: boolean
+        default: false
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: parser-monitor
+  cancel-in-progress: false
+jobs:
+  monitor:
+    # forks do not alert anyone
+    if: github.repository == 'spacesarmat/omp'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Load the previous state
+        run: |
+          mkdir -p monitor-out
+          if git fetch --depth=1 origin monitor-state 2>/dev/null && git show FETCH_HEAD:parser-monitor.json > monitor-out/parser-monitor.json 2>/dev/null; then
+            echo "state loaded"
+          else
+            rm -f monitor-out/parser-monitor.json
+            echo "no saved state yet"
+          fi
+      - name: Check the parsers
+        env:
+          RUTRACKER_LOGIN: ${{ secrets.RUTRACKER_LOGIN }}
+          RUTRACKER_PASSWORD: ${{ secrets.RUTRACKER_PASSWORD }}
+          KINOZAL_LOGIN: ${{ secrets.KINOZAL_LOGIN }}
+          KINOZAL_PASSWORD: ${{ secrets.KINOZAL_PASSWORD }}
+          RUSTORKA_LOGIN: ${{ secrets.RUSTORKA_LOGIN }}
+          RUSTORKA_PASSWORD: ${{ secrets.RUSTORKA_PASSWORD }}
+          MONITOR_SUMMARY: ${{ inputs.summary && 'true' || 'false' }}
+          MONITOR_SOURCES: ${{ inputs.sources }}
+          MONITOR_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: npm run monitor:parsers
+      - name: Job summary
+        if: always()
+        run: if [ -f monitor-out/summary.md ]; then cat monitor-out/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Label
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create parser-monitor --color d93f0b --description "Монитор парсеров: сайт трекера изменился" --force
+      - name: Issues and Telegram
+        if: ${{ !inputs.dry_run }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          # the admin's private chat; the repository variable overrides it (a chat id is not a secret)
+          MONITOR_TG_CHAT: ${{ vars.MONITOR_TG_CHAT || '536445442' }}
+        run: node scripts/parser-monitor/alerts.mjs monitor-out/actions.json
+      - name: Save the state
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          dir="$RUNNER_TEMP/monitor-state"
+          if git fetch --depth=1 origin monitor-state 2>/dev/null; then
+            git worktree add -B monitor-state "$dir" FETCH_HEAD
+          else
+            git worktree add --orphan -b monitor-state "$dir"
+          fi
+          cp monitor-out/parser-monitor.json "$dir/parser-monitor.json"
+          cd "$dir"
+          git add parser-monitor.json
+          if git diff --cached --quiet; then echo "state unchanged"; exit 0; fi
+          git commit -q -m "parser monitor state"
+          git push origin HEAD:monitor-state
+      - name: Report to the admin
+        # a manual run asked by the admin bot (/check): the table, or «failed» when the check crashed
+        if: ${{ always() && inputs.notify }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          MONITOR_TG_CHAT: ${{ vars.MONITOR_TG_CHAT || '536445442' }}
+          MONITOR_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MONITOR_DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+        run: node scripts/parser-monitor/notify.mjs monitor-out/report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parser-monitor
+          path: monitor-out/
+          retention-days: 14

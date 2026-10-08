@@ -17,7 +17,7 @@ import { buildTorrentQueue } from '../player/queue';
 import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { restoreFocus, scrollToShow } from '../ui/focus';
+import { restoreFocus, scrollScreenToTop, scrollToShow } from '../ui/focus';
 import { confirmDialog, choose } from '../ui/dialog';
 import { askText } from '../ui/TextDialog';
 import { checkTitle, renameTorrent } from '../lib/renameTorrent';
@@ -34,6 +34,11 @@ import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navi
 import { displayTitle } from '../lib/torrentName';
 import { t } from '../i18n';
 import { tvGlyphs } from '../ui/tvText';
+import { ComingRows, revealComing } from '../ui/ComingRows';
+import { comingEpisodes, lastEpisodes } from '../lib/episodeNames';
+import { useTmdbEpisodes } from '../lib/useTmdbEpisodes';
+import { isSeries } from '../lib/seriesGroups';
+import { isoDay } from '../lib/seriesStatus';
 
 /** Inner margin of the actions row: a focused button keeps this much room to the row's edge. */
 const ACTION_PAD = 24;
@@ -125,6 +130,13 @@ export function TorrentScreen({ hash }: { hash: string }) {
 
   const queue = useMemo(() => (tor ? buildTorrentQueue(c, tor, files) : []), [tor ? tor.hash : '', files]);
   const groups = useMemo(() => groupBySeason(playableFiles(files)), [files]);
+  // a series matched to TMDB: the episodes announced after the last one here, as dashed rows the focus skips (as on the
+  // phone's torrent screen and the TV series screen)
+  const playable = groups.reduce((acc: TorrentFile[], g) => acc.concat(g.files), []);
+  const fileSeasons = groups.map((g) => g.season).filter((n): n is number => n !== null);
+  const tmdb = useTmdbEpisodes(tor, fileSeasons, !!tor && isSeries(tor) && fileSeasons.length > 0);
+  const now = Date.now();
+  const coming = playable.length > 1 ? comingEpisodes(lastEpisodes(playable), tmdb.eps, isoDay(now)) : [];
 
   const skip = useSkip(c, hash, firstPlayableId(files));
   const toggleSkip = (key: 'i' | 'c') => {
@@ -266,6 +278,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
     const box = actionsRef.current;
     const el = box ? (box.querySelector('[data-fk="' + key + '"]') as HTMLElement | null) : null;
     if (!box || !el) return;
+    scrollScreenToTop(box);
     box.scrollLeft = scrollToShow(box.scrollLeft, box.clientWidth, el.offsetLeft, el.offsetWidth, ACTION_PAD);
   };
 
@@ -350,7 +363,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
         {groups.map((g) => (
           <section key={String(g.season)}>
             {(groups.length > 1 || g.season !== null) && <h2>{g.season !== null ? t('library.season', { n: g.season }) : t('torrent.other')}</h2>}
-            {g.files.map((f) => {
+            {g.files.map((f, i) => {
               const watched = isWatched(hash, f.id);
               const ratio = progressRatio(hash, f.id);
               return (
@@ -359,7 +372,10 @@ export function TorrentScreen({ hash }: { hash: string }) {
                   focusKey={'file-' + f.id}
                   className="list-item file-row"
                   onPress={() => play(queue.findIndex((q) => q.fileIndex === f.id))}
-                  onFocused={() => enter('files')}
+                  onFocused={() => {
+                    enter('files');
+                    if (i === g.files.length - 1 && g.season !== null) revealComing(g.season);
+                  }}
                 >
                   <span class="ep">{episodeLabel(f.path)}</span>
                   <span class="name">{tvGlyphs(baseName(f.path))}</span>
@@ -369,6 +385,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
                 </Focusable>
               );
             })}
+            {g.season !== null && <ComingRows list={coming.filter((e) => e.season === g.season)} now={now} />}
           </section>
         ))}
       </FocusGroup>

@@ -9,6 +9,7 @@ import { activeTv } from '../tv/tvStore';
 import { attachIfOmpForeground } from '../tv/playerLink';
 import { scanPairQr } from '../platform/qr';
 import { RenameSheet } from '../ui/RenameSheet';
+import { AddressInput } from '../ui/AddressInput';
 import { servers, addServer, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
 import { addressErrorText, addressForField, checkServerAddress } from '../../../src/api/serverAddress';
@@ -140,8 +141,8 @@ export function Connect() {
     }
   }
 
-  function submit(e: Event) {
-    e.preventDefault();
+  function submit(e?: Event) {
+    if (e) e.preventDefault();
     if (busy) return;
     if (!addr.trim()) {
       setError(t('connect.enterAddress'));
@@ -268,16 +269,13 @@ export function Connect() {
       <h1 class="m-title">{t('connect.pageTitle')}</h1>
       <div class="m-field">
         <label for="addr">{t('connect.serverAddress')}</label>
-        <input
+        <AddressInput
           id="addr"
-          class="m-input"
-          type="text"
-          inputMode="url"
-          autoCapitalize="off"
-          autoCorrect="off"
           placeholder="192.168.1.10:8090"
           value={addr}
-          onInput={(e) => setAddr((e.target as HTMLInputElement).value)}
+          onChange={setAddr}
+          submitLabel={busy ? t('connect.connectingMe') : t('connect.connect')}
+          onSubmit={() => submit()}
         />
         {error && (
           <div class="m-error" role="alert">

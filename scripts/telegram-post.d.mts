@@ -1,5 +1,6 @@
 export const ALBUM_MAX: number;
 export const BUTTONS_TEXT: string;
+export const WEBHOOK_NOTICE_LOG: string;
 export function postRelease(p: {
   tag: string;
   dir?: string;

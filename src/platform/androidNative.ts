@@ -33,6 +33,8 @@ export interface OmpNativeTvPlugin {
   clearPairingCode(): Promise<unknown>;
   /** Phone remote: the TV name the phone sees (the registered NSD name). */
   tvName(): Promise<{ name: string }>;
+  /** Phone remote Back that no screen took: the app closes like with the box remote's Back (older APKs lack it). */
+  appBack?(): Promise<unknown>;
   /** Search sources: HTTP without CORS, cookies per site, body decoded by charset. */
   http(o: NativeHttpRequest): Promise<{ status: number; url: string; text: string }>;
   /** Forgets the cookies of the site of url. */
@@ -117,6 +119,7 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     nativePlayerCommand: (o) => np.call(cap, NAME, 'nativePlayerCommand', o),
     pairingCode: () => np.call(cap, NAME, 'pairingCode', {}),
     tvName: () => np.call(cap, NAME, 'tvName', {}),
+    appBack: () => np.call(cap, NAME, 'appBack', {}),
     clearPairingCode: () => np.call(cap, NAME, 'clearPairingCode', {}),
     http: (o) => np.call(cap, NAME, 'http', o),
     httpClearCookies: (o) => np.call(cap, NAME, 'httpClearCookies', o),

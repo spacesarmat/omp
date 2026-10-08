@@ -5,6 +5,8 @@
     <queries>
         <package android:name="tv.p2160.player" />
         <package android:name="tv.p2160.player.debug" />
+        <!-- the Dune HD shell: names the TV «Dune HD» (its build props say only Realtek / rtk / tv175v) -->
+        <package android:name="com.dunehd.shell" />
     </queries>
 
     <!-- Permissions -->

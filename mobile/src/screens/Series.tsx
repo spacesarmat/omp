@@ -7,6 +7,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { fmtSize, lang, t, tp } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
+import { useLongPress } from '../ui/longPress';
 import { SeriesPill } from '../ui/SeriesPill';
 import { showToast } from '../ui/toast';
 import { askNotifyOnce, monitorVersion, reloadMonitor } from '../monitor/ui';
@@ -40,54 +41,6 @@ import { errorMessage } from '../../../src/api/http';
 
 const BACK = 'M15 5l-7 7l7 7';
 const KEEP = 'M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z';
-const LONG_PRESS_MS = 500;
-const LONG_PRESS_SLOP = 10;
-
-/** A long press (500 ms without moving more than 10 px) or contextmenu runs `onLong`; the tap after it is swallowed. */
-function useLongPress(onLong: () => void, onTap: () => void) {
-  const p = useRef<{ timer: ReturnType<typeof setTimeout> | undefined; x: number; y: number; fired: boolean }>({
-    timer: undefined,
-    x: 0,
-    y: 0,
-    fired: false,
-  }).current;
-  const stop = () => {
-    clearTimeout(p.timer);
-    p.timer = undefined;
-  };
-  return {
-    onPointerDown: (e: PointerEvent) => {
-      stop();
-      p.fired = false;
-      p.x = e.clientX;
-      p.y = e.clientY;
-      p.timer = setTimeout(() => {
-        p.timer = undefined;
-        p.fired = true;
-        onLong();
-      }, LONG_PRESS_MS);
-    },
-    onPointerMove: (e: PointerEvent) => {
-      if (p.timer && Math.hypot(e.clientX - p.x, e.clientY - p.y) > LONG_PRESS_SLOP) stop();
-    },
-    onPointerUp: stop,
-    onPointerCancel: stop,
-    onContextMenu: (e: Event) => {
-      e.preventDefault();
-      stop();
-      p.fired = true;
-      onLong();
-    },
-    onClick: () => {
-      if (p.fired) {
-        p.fired = false;
-        return;
-      }
-      onTap();
-    },
-  };
-}
-
 // the chosen season of each open series screen (its route entry): kept through «Назад» from the torrent screen
 const chosenSeason = new WeakMap<MRoute, number>();
 

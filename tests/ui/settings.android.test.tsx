@@ -80,6 +80,11 @@ describe('SettingsScreen «Плеер для видео»', () => {
     };
   };
   const settle = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); await new Promise((r) => setTimeout(r, 20)); };
+  // the 2160 Player check is async: wait for its result (a loaded CI runner can take longer than a fixed pause)
+  const until = async (ok: () => boolean, ms = 3000) => {
+    const end = Date.now() + ms;
+    while (!ok() && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+  };
   const rowOf = (host: HTMLElement) => Array.from(host.querySelectorAll('.choice-row')).find((e) => (e.textContent || '').indexOf('Плеер для видео') >= 0) as HTMLElement;
   it('webOS: no row', () => {
     const host = mount();
@@ -88,7 +93,7 @@ describe('SettingsScreen «Плеер для видео»', () => {
   it('not installed: marked «не установлен» and not selectable', async () => {
     cap(null);
     const host = mount();
-    await settle();
+    await until(() => (host.textContent || '').indexOf('не установлен') >= 0);
     expect(host.textContent).toContain('не установлен');
     expect(host.querySelector('svg.qr')).not.toBeNull();
     rowOf(host).click();
@@ -99,7 +104,11 @@ describe('SettingsScreen «Плеер для видео»', () => {
     const host = mount();
     await settle();
     expect(host.textContent).not.toContain('не установлен');
-    rowOf(host).click();
+    // selectable once the check has answered
+    await until(() => {
+      rowOf(host).click();
+      return settings.value.videoPlayer === 'p2160';
+    });
     expect(settings.value.videoPlayer).toBe('p2160');
   });
 });

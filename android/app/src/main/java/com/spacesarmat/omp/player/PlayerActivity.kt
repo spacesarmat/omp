@@ -660,7 +660,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private fun fetchInfoStats() {
         val r = session.item()?.url?.let { TorrServerStats.request(it) }
         // not a TorrServer stream: no numbers (not the previous item's)
-        infoStats.forTorrent(r?.hash)
+        infoStats.forTorrent(r?.hash, r?.fileKey)
+        // ffprobe only when the engine has no bitrate of its own
+        if (r != null && r.probeUrl != null && engine.mediaInfo().bitrate <= 0 && infoStats.probeDue()) fetchInfoProbe(r)
         if (r == null || infoFetching) return
         infoFetching = true
         val t = Thread {
@@ -676,11 +678,31 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         t.start()
     }
 
+    /**
+     * TorrServer's ffprobe of the current file, once per item, in the background (slow on a cold torrent: the tile
+     * shows «—» meanwhile, nothing waits for it): the bitrate when the engine reports none, as on LG.
+     */
+    private fun fetchInfoProbe(r: TorrServerStats.Request) {
+        val t = Thread {
+            val bps = TorrServerStats.fetchProbeBitrate(r)
+            handler.post {
+                infoStats.probeAnswer(r.fileKey, bps)
+                if (infoShown) renderInfo()
+            }
+        }
+        t.isDaemon = true
+        t.start()
+    }
+
     private fun renderInfo() {
         if (!infoShown || !::session.isInitialized || isDestroyed) return
         val item = session.item() ?: return
         val audio = engine.audioTracks().firstOrNull { it.selected }
-        showInfoPanel(PlayerInfoText.panel(item.title, engine.mediaInfo(), audio, infoStats.stats))
+        val p = PlayerInfoText.panel(
+            item.title, engine.mediaInfo(), audio, infoStats.stats,
+            probeBps = infoStats.probeBps ?: 0, fileBytes = infoStats.fileBytes, durationMs = durationMs(),
+        )
+        showInfoPanel(p)
     }
 
     /** Builds the three tiles of «Инфо» once (layout/player_info_tile.xml), with a gap between them. */
@@ -718,6 +740,12 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             val (label, value) = infoTiles.getOrNull(n) ?: return@forEachIndexed
             label.text = t.label
             val v = SpannableStringBuilder(t.value)
+            // an approximate value («≈15»): the mark small and muted, the tile stays one line
+            if (t.value.startsWith(PlayerInfoText.APPROX)) {
+                val end = PlayerInfoText.APPROX.length
+                v.setSpan(RelativeSizeSpan(0.7f), 0, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                v.setSpan(ForegroundColorSpan(INFO_MUTED), 0, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
             if (t.unit.isNotEmpty()) {
                 val start = v.length
                 v.append(" ").append(t.unit)

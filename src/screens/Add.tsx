@@ -26,7 +26,8 @@ import { onSearchFailure, type CheckedHosts } from '../sources/cloudflareCheck';
 import { getHealth } from '../sources/store';
 import { ipBanTvHint } from '../sources/ipBan';
 import { ipBanNote, cloudflareTvNote, isCloudflare, progressText, resultDate, resultKey, sortLabels, sourceBadge, sourceName, type SortKey } from '../sources/view';
-import { isHotChip, releaseChips, releaseTitle } from '../sources/releaseRow';
+import { isHotChip, kindFilterOptions, releaseChips, releaseTitle, resultKindLabel } from '../sources/releaseRow';
+import { filterByKind, getKindFilter, setKindFilter, type KindFilter } from '../lib/releaseKind';
 import { sortTvResults, stableTvOrder, type TvSortKey } from '../sources/tvSort';
 import { posterKey, requestPoster } from '../catalog/resultPosters';
 import { phoneLink } from '../phone/phoneStore';
@@ -176,6 +177,8 @@ export function AddScreen() {
   const [note, setNote] = useState<Note>('');
   const [starting, setStarting] = useState(false);
   const [sortKey, setSortKey] = useState<TvSortKey>('quality');
+  // «Все / Фильмы / Сериалы»: kept while the app runs
+  const [kindF, setKindF] = useState<KindFilter>(getKindFilter());
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState(t('add.wait'));
   const [rowErr, setRowErr] = useState<{ [key: string]: string }>({});
@@ -390,7 +393,15 @@ export function AddScreen() {
   };
 
   const streaming = !!prog && prog.pending.length > 0;
-  const sorted = rows ? (streaming ? stableTvOrder(order.current, rows, sortKey) : sortTvResults(rows, sortKey)) : [];
+  const pickKind = (f: KindFilter) => {
+    if (f === kindF) return;
+    setKindFilter(f);
+    order.current = [];
+    setKindF(f);
+  };
+  // a release of unknown kind shows only under «Все»
+  const pool = rows ? filterByKind(rows, kindF) : null;
+  const sorted = pool ? (streaming ? stableTvOrder(order.current, pool, sortKey) : sortTvResults(pool, sortKey)) : [];
   order.current = sorted.map(resultKey);
   // the focused row left the list (a phone row TorrServer also found, after the fallback): the cursor goes to the row
   // now at its place, or to the search line when the list is empty (applied after the commit, below)
@@ -477,6 +488,20 @@ export function AddScreen() {
               </span>
             )}
           </div>
+          {prog && (
+            <FocusGroup focusKey="SEARCH-KIND" className="disc-kinds search-kinds" preferredChildFocusKey={'search-kind-' + kindF}>
+              {kindFilterOptions().map((o) => (
+                <Focusable
+                  key={o.id}
+                  focusKey={'search-kind-' + o.id}
+                  className={'disc-kind' + (kindF === o.id ? ' active' : '')}
+                  onPress={() => pickKind(o.id)}
+                >
+                  {o.label}
+                </Focusable>
+              ))}
+            </FocusGroup>
+          )}
           {prog && <Button focusKey="search-sort" className="search-sort" label={t('search.sortLabel', { v: sortName() })} onPress={pickSort} />}
         </div>
       )}
@@ -500,13 +525,15 @@ export function AddScreen() {
           <Spinner text={busyText} />
         </div>
       )}
-      {rows && !sorted.length && prog && prog.total > 0 && !prog.pending.length && <div class="search-note" data-hint="nothing">{t('catalog.nothingFound')}</div>}
+      {rows && !sorted.length && (kindF === 'all' || !rows.length) && prog && prog.total > 0 && !prog.pending.length && <div class="search-note" data-hint="nothing">{t('catalog.nothingFound')}</div>}
+      {rows && rows.length > 0 && !sorted.length && kindF !== 'all' && <div class="search-note" data-hint="no-kind">{t('search.kind.none')}</div>}
       {rows && (
         <FocusGroup focusKey="ADD-RESULTS" className="search-results">
           {sorted.map((r, i) => {
             const key = resultKey(r);
             const s = releaseTitle(r.Title);
             const chips = releaseChips(r.Title);
+            const kind = resultKindLabel(r);
             const hash = (r.hash || r.Hash || '').toLowerCase();
             const also = r.sources && r.sources.length ? t('search.alsoOn', { list: r.sources.map(sourceName).join(', ') }) : '';
             const want = i < POSTER_FIRST || (focusIdx >= 0 && Math.abs(i - focusIdx) <= POSTER_NEAR);
@@ -518,6 +545,7 @@ export function AddScreen() {
                   <div class="search-line1">
                     <span class="title">{tvGlyphs(s.title)}</span>
                     {s.meta && <span class="search-meta">{' · ' + tvGlyphs(s.meta)}</span>}
+                    {kind && <span class="search-chip search-kind">{tvGlyphs(kind)}</span>}
                     {chips.map((ch) => (
                       <span key={ch} class={'search-chip' + (isHotChip(ch) ? ' hot' : '')}>
                         {ch}

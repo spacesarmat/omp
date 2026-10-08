@@ -8,7 +8,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Remote, setRemoteActions, shortTvName } from '../src/screens/Remote';
 import { currentRoute, resetTo } from '../src/nav';
-import { reloadTvs, saveTv, setActiveTv } from '../src/tv/tvStore';
+import { reloadTvs, renameTv, saveTv, setActiveTv, tvs } from '../src/tv/tvStore';
 import { tvWaking, tvState, tvError, tvForgot } from '../src/tv/tvClient';
 import { toast } from '../src/ui/toast';
 import { nowPlaying, lastSeen } from '../src/tv/playerLink';
@@ -1007,5 +1007,101 @@ describe('Remote remembers the saved TVs', () => {
     saveTv({ ip: '192.168.1.156', name: 'LG OLED', clientKey: 'k' });
     mount();
     expect(el.querySelector('.m-remote-switch')).toBeNull();
+  });
+});
+
+describe('Remote: renaming the TV', () => {
+  const nameEl = () => el.querySelector('[data-tv-name]') as HTMLElement;
+  const dialog = () => document.querySelector('[role="dialog"]') as HTMLElement | null;
+  function longPress(n: Element) {
+    vi.useFakeTimers();
+    ptr(n, 'pointerdown', 10, 10);
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+    ptr(n, 'pointerup', 10, 10);
+    // the click that ends the long press must not run the tap action
+    click(n);
+    vi.useRealTimers();
+  }
+  function type(d: HTMLElement, v: string) {
+    const i = d.querySelector('input') as HTMLInputElement;
+    i.value = v;
+    act(() => {
+      i.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+  const dlgBtn = (d: HTMLElement, label: string) => Array.from(d.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === label)!;
+
+  it('one TV: a long press on the name opens the rename sheet prefilled; save shows the alias in the header and the no-answer line', () => {
+    saveTv({ ip: '192.168.1.156', name: '[LG] webOS TV OLED55C9PLA', clientKey: 'k' });
+    mount();
+    expect(nameEl().textContent).toBe('OLED55C9PLA');
+    click(nameEl());
+    expect(dialog()).toBeNull();
+    longPress(nameEl());
+    const d = dialog()!;
+    expect(d.textContent).toContain('Название телевизора');
+    expect((d.querySelector('input') as HTMLInputElement).value).toBe('[LG] webOS TV OLED55C9PLA');
+    expect(d.querySelector('[data-rename-reset]')).toBeNull();
+    type(d, '  [LG] Гостиная  ');
+    click(dlgBtn(d, 'Сохранить'));
+    expect(dialog()).toBeNull();
+    // the user's name is shown as typed (no LG prefix stripping)
+    expect(nameEl().textContent).toBe('[LG] Гостиная');
+    act(() => {
+      tvState.value = 'error';
+    });
+    expect(el.querySelector('[data-no-answer]')!.textContent).toContain('[LG] Гостиная не отвечает');
+    act(() => {
+      tvState.value = 'idle';
+    });
+  });
+
+  it('«Вернуть имя телевизора» and an empty name restore the TV’s own name; «Отмена» keeps the alias', () => {
+    saveTv({ ip: '192.168.1.40', name: 'Dune HD', kind: 'atv', token: 'c'.repeat(32) });
+    mount();
+    longPress(nameEl());
+    type(dialog()!, 'Кухня');
+    click(dlgBtn(dialog()!, 'Сохранить'));
+    expect(nameEl().textContent).toBe('Кухня');
+    longPress(nameEl());
+    type(dialog()!, 'Спальня');
+    click(dlgBtn(dialog()!, 'Отмена'));
+    expect(nameEl().textContent).toBe('Кухня');
+    longPress(nameEl());
+    click(dlgBtn(dialog()!, 'Вернуть имя телевизора'));
+    expect(nameEl().textContent).toBe('Dune HD');
+    longPress(nameEl());
+    type(dialog()!, 'Кухня');
+    click(dlgBtn(dialog()!, 'Сохранить'));
+    longPress(nameEl());
+    type(dialog()!, '   ');
+    click(dlgBtn(dialog()!, 'Сохранить'));
+    expect(nameEl().textContent).toBe('Dune HD');
+  });
+
+  it('several TVs: a tap opens the switcher, a long press renames without opening it; the switcher has «Переименовать» and shows aliases', () => {
+    saveTv({ ip: '192.168.1.156', name: 'LG OLED', clientKey: 'k' });
+    saveTv({ ip: '192.168.1.191', name: 'Dune HD', kind: 'atv', token: 'a'.repeat(32), ctlPort: 8095 });
+    renameTv('192.168.1.191', 'Кухня');
+    setActiveTv('192.168.1.156');
+    mount();
+    longPress(nameEl());
+    expect(document.querySelector('[data-switch-tv]')).toBeNull();
+    expect(dialog()!.textContent).toContain('Название телевизора');
+    click(dlgBtn(dialog()!, 'Отмена'));
+    expect(a.switchTv).not.toHaveBeenCalled();
+    click(nameEl());
+    const names = Array.from(document.querySelectorAll('[data-switch-tv] .m-opt-name')).map((x) => x.textContent);
+    expect(names).toEqual(['LG OLED', 'Кухня']);
+    click(document.querySelector('[data-rename-tv]')!);
+    expect(document.querySelector('[data-switch-tv]')).toBeNull();
+    const d = dialog()!;
+    expect((d.querySelector('input') as HTMLInputElement).value).toBe('LG OLED');
+    type(d, 'Гостиная');
+    click(dlgBtn(d, 'Сохранить'));
+    expect(nameEl().textContent).toBe('Гостиная ▾');
+    expect(tvs.value.find((x) => x.ip === '192.168.1.156')!.name).toBe('Гостиная');
   });
 });

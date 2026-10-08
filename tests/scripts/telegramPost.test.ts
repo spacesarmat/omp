@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 // @ts-ignore
 import { join } from 'node:path';
-import { postRelease, replacePhoto, repostFiles, ALBUM_MAX, BUTTONS_TEXT } from '../../scripts/telegram-post.mjs';
+import { postRelease, replacePhoto, repostFiles, ALBUM_MAX, BUTTONS_TEXT, WEBHOOK_NOTICE_LOG } from '../../scripts/telegram-post.mjs';
 import { UPLOAD_MAX } from '../../scripts/telegram-lib.mjs';
 
 const TOKEN = '123:SECRET-TOKEN';
@@ -23,13 +23,13 @@ function setup(sizes: Record<string, number>) {
 }
 
 type Call = { method: string; form: FormData };
-// the pin notice lookup (getUpdates, delete of notice 999) goes to `side`, so `calls` keeps the release flow only
+// the pin notice lookup (getWebhookInfo, getUpdates, delete of notice 999) goes to `side`, so `calls` keeps the release flow only
 const NOTICE = 999;
 function fakeFetch(calls: Call[], fail: (method: string, form: FormData) => Response | Error | null = () => null, side: Call[] = []) {
   let pinned = 0;
   return async (url: string, init: { body: FormData }) => {
     const method = url.split('/').pop() as string;
-    const notice = method === 'getUpdates' || (method === 'deleteMessages' && init.body.get('message_ids') === `[${NOTICE}]`);
+    const notice = method === 'getUpdates' || method === 'getWebhookInfo' || (method === 'deleteMessages' && init.body.get('message_ids') === `[${NOTICE}]`);
     (notice ? side : calls).push({ method, form: init.body });
     const f = fail(method, init.body);
     if (f instanceof Error) throw f;
@@ -39,6 +39,8 @@ function fakeFetch(calls: Call[], fail: (method: string, form: FormData) => Resp
     const result =
       method === 'sendMediaGroup'
         ? JSON.parse(String(init.body.get('media'))).map((_: unknown, i: number) => ({ message_id: 50 + i }))
+        : method === 'getWebhookInfo'
+        ? { url: '' }
         : method === 'getUpdates'
         ? init.body.get('offset') ? [] : [{ update_id: 40, channel_post: { message_id: 5 } }, { update_id: 41, channel_post: { message_id: NOTICE, pinned_message: { message_id: pinned } } }]
         : doc ? { message_id: 100 + calls.length, document: { file_id: 'id:' + doc.name } } : { message_id: 7 };
@@ -277,8 +279,8 @@ describe('pin notice', () => {
     const side: Call[] = [];
     const logs: string[] = [];
     await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, () => null, side) as any, log: (s: string) => logs.push(s) });
-    expect(side.map((c) => c.method)).toEqual(['getUpdates', 'getUpdates', 'deleteMessages']);
-    expect(side[1].form.get('offset')).toBe('42');
+    expect(side.map((c) => c.method)).toEqual(['getWebhookInfo', 'getUpdates', 'getUpdates', 'deleteMessages']);
+    expect(side[2].form.get('offset')).toBe('42');
     expect(logs).toContain(`Telegram: deleted the pin notice ${NOTICE}`);
   });
 
@@ -293,5 +295,31 @@ describe('pin notice', () => {
     expect(side.filter((c) => c.method === 'getUpdates')).toHaveLength(5);
     expect(pauses).toHaveLength(4);
     expect(logs).toContain('Telegram: pin notice not found, left in the channel');
+  });
+
+  it('skips getUpdates when the admin bot has a webhook on the bot (the Worker deletes the notice)', async () => {
+    const root = setup({});
+    const calls: Call[] = [];
+    const side: Call[] = [];
+    const logs: string[] = [];
+    const hook = (m: string) => (m === 'getWebhookInfo' ? new Response(JSON.stringify({ ok: true, result: { url: 'https://omp-admin-bot.example.workers.dev/' } }), { status: 200 }) : null);
+    await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, hook, side) as any, log: (s: string) => logs.push(s) });
+    expect(side.map((c) => c.method)).toEqual(['getWebhookInfo']);
+    expect(logs).toContain(WEBHOOK_NOTICE_LOG);
+    // the release itself is unchanged
+    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage']);
+  });
+
+  it('treats a 409 from getUpdates as «a webhook is on» and goes on with the release', async () => {
+    const root = setup({});
+    const calls: Call[] = [];
+    const side: Call[] = [];
+    const logs: string[] = [];
+    const conflict = (m: string) =>
+      m === 'getUpdates' ? new Response(JSON.stringify({ ok: false, description: "Conflict: can't use getUpdates method while webhook is active" }), { status: 409 }) : null;
+    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, conflict, side) as any, log: (s: string) => logs.push(s) });
+    expect(failed).toBe(0);
+    expect(side.map((c) => c.method)).toEqual(['getWebhookInfo', 'getUpdates']);
+    expect(logs).toContain(WEBHOOK_NOTICE_LOG);
   });
 });

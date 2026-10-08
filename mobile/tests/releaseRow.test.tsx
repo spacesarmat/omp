@@ -167,7 +167,8 @@ describe('found release rows', () => {
     expect(releaseChips('Дюна')).toEqual([]);
     mount([res('Северный ветер (2026) WEB-DL 2160p HDR | Дубляж')]);
     const chips = Array.from(el.querySelectorAll('.m-rel-chips .m-badge-inline')).map((n) => n.textContent);
-    expect(chips).toEqual(['4K', 'HDR', 'WEB-DL', 'Дубляж']);
+    // the kind of the release comes first (a year and no series marks: a film)
+    expect(chips).toEqual(['Фильм', '4K', 'HDR', 'WEB-DL', 'Дубляж']);
   });
 
   it('a poster is asked for only once the row is on screen, and is shown then', async () => {

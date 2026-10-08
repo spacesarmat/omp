@@ -1,6 +1,6 @@
 {
   "name": "omp",
-  "version": "0.19.0-beta.6",
+  "version": "0.19.0",
   "private": true,
   "type": "module",
   "description": "Media player for LG webOS TVs backed by TorrServer",
@@ -8,6 +8,7 @@
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
+    "monitor:parsers": "vitest run --config vitest.monitor.config.ts",
     "icons": "node scripts/render-icons.mjs",
     "gen:donate-qr": "node scripts/gen-donate-qr.mjs",
     "donate:code": "node scripts/donate-code.mjs",
@@ -19,6 +20,7 @@
     "dev:mobile": "vite --config vite.mobile.config.ts --host",
     "build:mobile": "tsc --noEmit && vite build --config vite.mobile.config.ts && vite build --config vite.tv-android.config.ts",
     "check:torrserver": "node scripts/torrserver-pin.mjs",
+    "admin-bot:webhook": "node ops/admin-bot/scripts/webhook.mjs",
     "android:sync": "npm run check:torrserver && npm run build:mobile && npx cap sync android && node scripts/strip-flatdir.mjs",
     "android:debug": "npm run android:sync && node scripts/gradle.mjs assembleDebug"
   },
