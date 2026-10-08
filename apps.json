@@ -1,0 +1,28 @@
+{
+  "packages": [
+    {
+      "id": "com.spacesarmat.torrplayer",
+      "title": "OMP",
+      "iconUri": "https://raw.githubusercontent.com/spacesarmat/omp/main/webos/largeIcon.png",
+      "manifestUrl": "https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/com.spacesarmat.torrplayer.manifest.json",
+      "manifest": {
+        "id": "com.spacesarmat.torrplayer",
+        "version": "0.19.0",
+        "type": "web",
+        "title": "OMP",
+        "appDescription": "Open Movie Player — media player for your own TorrServer",
+        "iconUri": "https://raw.githubusercontent.com/spacesarmat/omp/main/webos/largeIcon.png",
+        "sourceUrl": "https://github.com/spacesarmat/omp",
+        "rootRequired": false,
+        "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.19.0/OMP-0.19.0-webOS.ipk",
+        "ipkHash": {
+          "sha256": "eee7e79eef6ca4f24f4de8effd2d53fd155e2daed671c4ee345800963a66d5d2"
+        },
+        "ipkSize": 376902
+      },
+      "pool": "main",
+      "shortDescription": "Open Movie Player — media player for your own TorrServer",
+      "fullDescriptionUrl": "full_description.html"
+    }
+  ]
+}
