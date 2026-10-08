@@ -6,7 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [atv] A new engine for the built-in player: 2160 Player inside OMP. 4K and HDR; Dolby Vision on a box without a Dolby Vision decoder plays as HDR10. AC3, E-AC3, DTS and TrueHD go to the receiver as they are, and when the TV does not accept them they are decoded, with no switch to VLC. More formats: Blu-ray M2TS remuxes (TrueHD, LPCM, DTS-HD), and video the box cannot decode in hardware is decoded in software. VLC and the Auto mode stay. The APK is about 20 MB larger for it (the universal one 30 MB)
 - [atv] Night sound on the yellow key and in the player menu: loud scenes are quieter, dialogue is clearer. While it is on the sound is stereo; turn it off and the receiver gets multichannel again. The choice is remembered
-- [atv] The player's Info panel is on the remote's Info key (yellow now turns night sound on and off)
+- [atv] The player's Info panel is on the remote's Info key and in the player menu (yellow now turns night sound on and off)
 - [phone] "Watch on the phone" opens the built-in 2160 Player screen right inside OMP: from the resume point, with the Skip marks, all episodes of the release and the next episode, and picture-in-picture. Video player: "Built-in" (the default), "2160 Player (app)" or "Android chooser". The APK is about 20 MB larger for it (the universal one 30 MB)
 - [phone] "Background audio" under Video player: the sound keeps playing with the screen off and after the picture-in-picture window is closed, with controls in the notification shade and on the lock screen. Off by default
 

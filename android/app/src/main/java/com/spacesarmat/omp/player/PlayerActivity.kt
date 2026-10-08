@@ -486,6 +486,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         engine.nightMode?.let { on ->
             rows.add(ColorKeys.nightLabel(on) to { engine.setNightMode(!on) })
         }
+        // «Инфо» also from the menu: many box remotes have no Info key, and yellow is night sound with this engine
+        rows.add(I18n.s("player.infoRow") to { if (!infoShown) toggleInfo() })
         if (chapters.isNotEmpty()) rows.add(I18n.s("player.chaptersRow", "n" to chapters.size.toString()) to { openChapters(i, now) })
         val marks = markRows(skips.info(i), now, dur)
         listOf("intro-start", "intro-end", "credits").forEachIndexed { n, kind ->
