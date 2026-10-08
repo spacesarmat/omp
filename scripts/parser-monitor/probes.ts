@@ -130,8 +130,8 @@ export function probes(): Probe[] {
     },
     {
       source: torrentby,
-      // a Russian tracker: its search finds the Russian title, not «Interstellar»
-      queries: ['Джентльмены', 'Интерстеллар', 'Во все тяжкие'],
+      // a small Belarusian tracker: titles it surely has (it has no «Interstellar» / «Во все тяжкие» releases)
+      queries: ['Джентльмены', 'Аватар', 'Ведьмак'],
       rules: { minResults: 3, category: 'none', link: 'magnet', seedsAny: true },
       markers: ['torrents_table', 'text-to-find'],
       link: listMagnet,
