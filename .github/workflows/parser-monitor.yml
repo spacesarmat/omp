@@ -43,7 +43,16 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # the monitor needs no install scripts or audit; a hung npm (seen once: it never exited after installing) gets
+      # its own short limit and one retry instead of eating the job's 45 minutes
+      - name: Install
+        timeout-minutes: 12
+        run: |
+          for i in 1 2; do
+            timeout 300 npm ci --ignore-scripts --no-audit --no-fund && exit 0
+            echo "npm ci did not finish (try $i)"
+          done
+          exit 1
       - name: Load the previous state
         run: |
           mkdir -p monitor-out
