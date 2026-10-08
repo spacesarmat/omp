@@ -37,7 +37,7 @@ describe('changelogData', () => {
     expect(all(tv)).toContain('Телевизор LG ищет раздачи');
     expect(all(phone)).not.toContain('Телевизор LG ищет раздачи');
     expect(phone.filter((e) => e.version === '0.18.0')[0].items).toHaveLength(3);
-    const raw = CHANGELOG.filter((e) => e.version === '0.19.0-beta.2')[0].items;
+    const raw = CHANGELOG.filter((e) => e.version === '0.19.0')[0].items;
     expect(raw.some((i) => /^\[phone\] /.test(i))).toBe(true);
   });
 
