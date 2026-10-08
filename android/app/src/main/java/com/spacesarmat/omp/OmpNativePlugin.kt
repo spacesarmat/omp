@@ -60,6 +60,7 @@ import com.spacesarmat.omp.install.failureOf
 import com.spacesarmat.omp.monitor.MonitorNotifier
 import com.spacesarmat.omp.monitor.MonitorPlan
 import com.spacesarmat.omp.monitor.MonitorScheduler
+import com.spacesarmat.omp.player.Embedded2160
 import com.spacesarmat.omp.player.NativePlayerBridge
 import com.spacesarmat.omp.player.PlayRequest
 import com.spacesarmat.omp.player.Player2160
@@ -865,10 +866,42 @@ class OmpNativePlugin : Plugin() {
 
     // ---- external player ----
 
-    /** Which 2160 Player package is installed, or null. */
+    /** Which 2160 Player package is installed, or null; embedded: this app carries 2160's screen (playEmbedded2160). */
     @PluginMethod
     fun player2160(call: PluginCall) {
-        call.resolve(JSObject().put("package", Player2160.installed(context.packageManager)))
+        call.resolve(JSObject().put("package", Player2160.installed(context.packageManager)).put("embedded", true))
+    }
+
+    /** The queue of open2160's items/start/positionMs/fromStart/segments; null (call rejected) when the start item has no url. */
+    private fun queue2160(call: PluginCall): Pair<List<Player2160.Item>, Int>? {
+        val arr = call.getArray("items")
+        val raw = ArrayList<Player2160.Item>()
+        if (arr != null) for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i)
+            raw.add(Player2160.Item(o?.optString("url").orEmpty(), o?.optString("title").orEmpty()))
+        }
+        return Player2160.playable(raw, call.getInt("start") ?: 0) ?: run {
+            call.reject(I18n.s("plugin.noVideoUrl"))
+            null
+        }
+    }
+
+    /**
+     * Phone: plays the queue in 2160 Player's screen inside OMP (player-core's Player2160Activity, in-process) for
+     * result; resolves like open2160 ({returned:false} if nothing came back). `background` = «Звук в фоне».
+     */
+    @PluginMethod
+    fun playEmbedded2160(call: PluginCall) {
+        val (items, start) = queue2160(call) ?: return
+        val position = call.getDouble("positionMs")?.toLong() ?: 0L
+        val plan = Embedded2160.plan(items, start, position, call.getBoolean("fromStart") ?: false, call.getString("segments").orEmpty())
+        try {
+            Embedded2160.applyBackground(context, Embedded2160.backgroundOn(TvMode.isTv(context), call.getBoolean("background") ?: false))
+            startActivityForResult(call, Embedded2160.intent(context, plan), "on2160Result")
+        } catch (_: RuntimeException) {
+            call.release(bridge)
+            call.reject(I18n.s("plugin.openPlayerFailed"))
+        }
     }
 
     /** Opens 2160 Player on a playlist for result: resolves with where playback stopped ({returned:false} if nothing). */
@@ -879,16 +912,7 @@ class OmpNativePlugin : Plugin() {
             call.reject(I18n.s("plugin.p2160Missing"))
             return
         }
-        val arr = call.getArray("items")
-        val raw = ArrayList<Player2160.Item>()
-        if (arr != null) for (i in 0 until arr.length()) {
-            val o = arr.optJSONObject(i)
-            raw.add(Player2160.Item(o?.optString("url").orEmpty(), o?.optString("title").orEmpty()))
-        }
-        val (items, start) = Player2160.playable(raw, call.getInt("start") ?: 0) ?: run {
-            call.reject(I18n.s("plugin.noVideoUrl"))
-            return
-        }
+        val (items, start) = queue2160(call) ?: return
         val position = call.getDouble("positionMs")?.toLong() ?: 0L
         val spec = Player2160.spec(items, start, position, call.getBoolean("fromStart") ?: false, call.getString("segments").orEmpty())
         val intent = Player2160.intent(pkg, spec, items.map { it.url })

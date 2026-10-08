@@ -22,6 +22,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
+          # android/vendor/2160player (2160 Player's player-core, included build in android/settings.gradle)
+          submodules: recursive
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -36,10 +38,13 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          # 17 for the player-core toolchain (jvmToolchain(17) in the submodule), 21 (last = default) for Gradle
+          java-version: |
+            17
+            21
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools'
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       # newer runner images leave less free disk; packaging three APKs with libvlc needs a few GB
       - name: Free disk space
         run: |
@@ -62,7 +67,7 @@ jobs:
           export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/omp.jks"
           VERSION=$(node -p "require('./package.json').version")
           npm run android:sync
-          (cd android && ./gradlew assembleRelease --stacktrace) || { df -h /; exit 1; }
+          (cd android && ./gradlew -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 assembleRelease --stacktrace) || { df -h /; exit 1; }
           OUT=android/app/build/outputs/apk/release
           cp "$OUT/app-universal-release.apk" "build/OMP-${VERSION}.apk"
           cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64.apk"

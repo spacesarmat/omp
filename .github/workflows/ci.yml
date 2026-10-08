@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, 'feat/**']
+    branches: [main, 'feat/**', 'exp/**']
   pull_request:
 
 concurrency:
@@ -35,6 +35,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # android/vendor/2160player (2160 Player's player-core, included build in android/settings.gradle)
+          submodules: recursive
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -43,16 +46,19 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          # 17 for the player-core toolchain (jvmToolchain(17) in the submodule), 21 (last = default) for Gradle
+          java-version: |
+            17
+            21
           cache: gradle
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools'
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       - name: Sync the web app into the Android project
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run android:sync
       - name: Build and test
-        run: (cd android && ./gradlew assembleDebug testDebugUnitTest)
+        run: (cd android && ./gradlew -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 assembleDebug testDebugUnitTest)
       - name: APK size per ABI
         run: ls -l android/app/build/outputs/apk/debug/*.apk

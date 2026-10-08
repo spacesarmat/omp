@@ -161,7 +161,8 @@ describe('phone search: «Смотреть на телефоне»', () => {
   it('waits for the files when TorrServer has no metadata yet, and respects the 2160 Player setting', async () => {
     const open2160 = vi.fn().mockResolvedValue({ returned: false });
     setWatchActions({ openExternal, open2160, player2160: async () => 'com.spacesarmat.player2160', recordWatch: vi.fn().mockResolvedValue(undefined), phoneName: async () => 'Pixel' });
-    updateSettings({ videoPlayer: 'p2160' });
+    // the phone's choice is «phonePlayer» on the 2160-engine branch («videoPlayer» is the TV's)
+    updateSettings({ videoPlayer: 'p2160', phonePlayer: 'p2160' });
     try {
       vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
       vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue({ hash: HASH } as any);
@@ -175,7 +176,7 @@ describe('phone search: «Смотреть на телефоне»', () => {
       expect(openExternal).not.toHaveBeenCalled();
       expect(open2160).toHaveBeenCalledTimes(1);
     } finally {
-      updateSettings({ videoPlayer: 'builtin' });
+      updateSettings({ videoPlayer: 'builtin', phonePlayer: 'embedded' });
     }
   });
 

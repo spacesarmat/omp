@@ -4,7 +4,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Settings, setUpdateChecker } from '../src/screens/Settings';
 import { currentRoute, resetTo } from '../src/nav';
-import { settings, updateSettings } from '../../src/store/settings';
+import { settings, updateSettings, sanitizeSettings, DEFAULT_SETTINGS } from '../../src/store/settings';
 import { addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
 import { ANDROID_UPDATE_URL, ANDROID_BETA_UPDATE_URL, type UpdateInfo } from '../../src/lib/updateInfo';
 import { latestUpdate, updatePrompt } from '../../src/store/updates';
@@ -19,6 +19,7 @@ import { tvState } from '../src/tv/tvClient';
 import { saveTv, reloadTvs } from '../src/tv/tvStore';
 import { native } from '../src/platform/native';
 import { tvSearchOn } from '../src/tv/phoneRpc';
+import { monitorNative } from '../src/monitor/native';
 
 function mount(): HTMLElement {
   document.body.innerHTML = '<div id="app"></div>';
@@ -605,33 +606,103 @@ describe('Settings in English', () => {
 
 describe('Settings: «Плеер для видео»', () => {
   const flushAll = () => act(async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); });
-  afterEach(() => updateSettings({ videoPlayer: 'builtin' }));
+  afterEach(() => updateSettings({ phonePlayer: 'embedded' }));
 
-  it('2160 Player installed: both options work and the choice is kept', async () => {
+  it('«Встроенный» is the default; all three options work and the choice is kept', async () => {
     vi.spyOn(native, 'player2160').mockResolvedValue('pkg');
+    expect(DEFAULT_SETTINGS.phonePlayer).toBe('embedded');
     const el = mount();
     await flushAll();
     const row = el.querySelector('[data-row="video-player"]')!;
-    const [b, p] = Array.from(row.querySelectorAll('.m-seg button')) as HTMLButtonElement[];
+    const [e, p, b] = Array.from(row.querySelectorAll('.m-seg button')) as HTMLButtonElement[];
+    expect(e.textContent).toBe('Встроенный');
+    expect(p.textContent).toBe('2160 Player (приложение)');
     expect(b.textContent).toBe('Выбор Android');
-    expect(p.textContent).toBe('2160 Player');
+    expect(e.getAttribute('aria-pressed')).toBe('true');
     expect(p.disabled).toBe(false);
     expect(row.querySelector('[data-row="p2160-missing"]')).toBeNull();
     act(() => p.click());
-    expect(settings.value.videoPlayer).toBe('p2160');
+    expect(settings.value.phonePlayer).toBe('p2160');
     act(() => b.click());
+    expect(settings.value.phonePlayer).toBe('chooser');
+    act(() => e.click());
+    expect(settings.value.phonePlayer).toBe('embedded');
+    // the TV's own setting is not touched
     expect(settings.value.videoPlayer).toBe('builtin');
-    expect(row.textContent).toContain('Без 2160 Player видео откроется в приложении, которое вы выберете');
+    expect(row.textContent).toContain('Встроенный — экран 2160 Player прямо в OMP');
+    expect(row.textContent).toContain('«Выбор Android» откроет видео в приложении, которое вы выберете');
   });
 
-  it('not installed: 2160 is disabled and the link opens the release page', async () => {
+  it('not installed: only the app option is disabled and the link opens the release page', async () => {
     vi.spyOn(native, 'player2160').mockResolvedValue(null);
     const win = vi.spyOn(window, 'open').mockReturnValue(null);
     const el = mount();
     await flushAll();
     const row = el.querySelector('[data-row="video-player"]')!;
-    expect((row.querySelectorAll('.m-seg button')[1] as HTMLButtonElement).disabled).toBe(true);
+    const btns = Array.from(row.querySelectorAll('.m-seg button')) as HTMLButtonElement[];
+    expect(btns.map((x) => x.disabled)).toEqual([false, true, false]);
     act(() => (row.querySelector('[data-row="p2160-missing"]') as HTMLElement).click());
     expect(win).toHaveBeenCalledWith('https://github.com/spacesarmat/2160player/releases/latest', '_system');
+  });
+
+  it('a phone that chose 2160 Player before keeps it; the old chooser default becomes «Встроенный»', () => {
+    expect(sanitizeSettings({ videoPlayer: 'p2160' }).phonePlayer).toBe('p2160');
+    expect(sanitizeSettings({ videoPlayer: 'builtin' }).phonePlayer).toBe('embedded');
+    expect(sanitizeSettings({ videoPlayer: 'p2160', phonePlayer: 'chooser' }).phonePlayer).toBe('chooser');
+    expect(sanitizeSettings({ phonePlayer: 'vlc' }).phonePlayer).toBe('embedded');
+  });
+
+  it('«Звук в фоне» is off by default and keeps only a boolean', () => {
+    expect(DEFAULT_SETTINGS.backgroundAudio).toBe(false);
+    expect(sanitizeSettings({}).backgroundAudio).toBe(false);
+    expect(sanitizeSettings({ backgroundAudio: true }).backgroundAudio).toBe(true);
+    expect(sanitizeSettings({ backgroundAudio: 'yes' }).backgroundAudio).toBe(false);
+  });
+
+  it('«Звук в фоне»: under «Встроенный» only; turning it on asks for notifications, a refusal is explained', async () => {
+    vi.spyOn(native, 'player2160').mockResolvedValue('pkg');
+    const was = monitorNative.available;
+    monitorNative.available = true;
+    vi.spyOn(monitorNative, 'notifyPermission').mockResolvedValue('prompt');
+    const ask = vi.spyOn(monitorNative, 'requestNotifyPermission').mockResolvedValue('denied');
+    try {
+      const el = mount();
+      await flushAll();
+      const row = () => el.querySelector('[data-row="background-audio"]');
+      expect(row()!.textContent).toContain('Звук в фоне');
+      expect(row()!.textContent).toContain('Расходует батарею и трафик');
+      const sw = row()!.querySelector('[role="switch"]') as HTMLElement;
+      expect(sw.getAttribute('aria-checked')).toBe('false');
+      act(() => sw.click());
+      await flushAll();
+      expect(settings.value.backgroundAudio).toBe(true);
+      expect(ask).toHaveBeenCalledTimes(1);
+      expect(row()!.querySelector('[data-row="background-audio-denied"]')!.textContent).toContain('без управления в шторке');
+      act(() => (row()!.querySelector('[role="switch"]') as HTMLElement).click());
+      await flushAll();
+      expect(settings.value.backgroundAudio).toBe(false);
+      expect(ask).toHaveBeenCalledTimes(1);
+      expect(row()!.querySelector('[data-row="background-audio-denied"]')).toBeNull();
+      act(() => updateSettings({ phonePlayer: 'chooser' }));
+      expect(row()).toBeNull();
+    } finally {
+      monitorNative.available = was;
+      updateSettings({ backgroundAudio: false });
+    }
+  });
+
+  it('«Background audio» in English', async () => {
+    vi.spyOn(native, 'player2160').mockResolvedValue('pkg');
+    applyLanguageSetting('en');
+    try {
+      const el = mount();
+      await flushAll();
+      const row = el.querySelector('[data-row="background-audio"]') as HTMLElement;
+      expect(row.textContent).toContain('Background audio');
+      expect(row.textContent).toContain('Uses battery and data');
+      expect(/[а-яё]/i.test(row.textContent!)).toBe(false);
+    } finally {
+      applyLanguageSetting('ru');
+    }
   });
 });

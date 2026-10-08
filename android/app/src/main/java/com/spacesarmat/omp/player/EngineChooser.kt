@@ -2,7 +2,10 @@ package com.spacesarmat.omp.player
 
 import com.spacesarmat.omp.I18n
 
-/** The two engines behind the player UI. [wire] is the value the page stores, [label] the name on screen. */
+/**
+ * The two engines behind the player UI. [wire] is the value the page stores, [label] the name on screen.
+ * [MEDIA3] is «Встроенный»: 2160 Player's engine ([Engine2160], Media3 ExoPlayer underneath).
+ */
 enum class EngineKind(val wire: String, private val text: String?) {
     MEDIA3("builtin", null),
     VLC("vlc", "VLC"),

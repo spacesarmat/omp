@@ -343,8 +343,9 @@ The install assistant in the Android app uses third-party libraries:
 
 The player on Android TV:
 
-- [AndroidX Media3](https://github.com/androidx/media) (ExoPlayer): the built-in player; Apache License 2.0.
+- [2160 Player](https://github.com/spacesarmat/2160player) (the `player-core` module, built from source as the git submodule `android/vendor/2160player`): the engine of the built-in player on Android TV and the "Watch on the phone" screen; GNU GPL v3. It brings [smbj](https://github.com/hierynomus/smbj) (Apache License 2.0) and [smbj-rpc](https://github.com/rapid7/smbj-rpc) (BSD 3-Clause).
+- [AndroidX Media3](https://github.com/androidx/media) 1.11 (ExoPlayer, UI, MediaSession): the base of the 2160 Player engine; Apache License 2.0. The 2160 Player screen uses [Jetpack Compose](https://developer.android.com/jetpack/compose), Apache License 2.0.
 - [libVLC for Android](https://code.videolan.org/videolan/libvlcjni) (`org.videolan.android:libvlc-all`): the second player engine; GNU LGPL 2.1. The library is linked unmodified, and its sources are at the link.
-- [FFmpeg decoder for Media3](https://github.com/jellyfin/jellyfin-androidx-media) (`org.jellyfin.media3:media3-ffmpeg-decoder`, the Jellyfin build): DTS, AC3/E-AC3, TrueHD audio without a hardware decoder; GNU GPL v3 (which is why OMP as a whole is distributed under GPL-3.0). The [FFmpeg](https://ffmpeg.org/) inside it is built without GPL parts (only LGPL 2.1+ decoders).
+- [NextLib](https://github.com/anilbeesetti/nextlib) (`io.github.anilbeesetti:nextlib-media3ext` and `nextlib-mediainfo` 1.11.1-0.16.0): the FFmpeg extension of Media3 that 2160 Player decodes audio (DTS, AC3/E-AC3, TrueHD and more) and video with when there is no hardware decoder; GNU GPL v3 (as is 2160 Player, which is why OMP as a whole is distributed under GPL-3.0). The [FFmpeg](https://ffmpeg.org/) inside it is built without GPL parts (`--enable-version3`, no `--enable-gpl` or `--enable-nonfree`: libraries under LGPL v3 or later), with [dav1d](https://code.videolan.org/videolan/dav1d) (BSD 2-Clause) and [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) (Apache License 2.0).
 
 [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) (MIT) is a separate program on your server; OMP does not include it and only calls it over the network.

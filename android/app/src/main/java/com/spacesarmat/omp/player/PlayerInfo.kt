@@ -193,7 +193,7 @@ object TorrServerStats {
 /** The bitrate the «Инфо» tile shows (bit/s) and whether it is the file's average (size × 8 / duration, shown «≈»). */
 data class InfoBitrate(val bps: Long, val approximate: Boolean)
 
-/** The «Инфо» panel (Info / yellow key): what it shows, every part one short line. Pure. */
+/** The «Инфо» panel (Info key; yellow is night sound on the 2160 engine): what it shows, every part one short line. Pure. */
 object PlayerInfoText {
     /** The file name of a TorrServer stream URL (`/stream/<name>?…`), decoded; '' when there is none. */
     fun fileName(streamUrl: String): String {

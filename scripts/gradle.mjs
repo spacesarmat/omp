@@ -21,7 +21,7 @@ function javaMajor(home) {
   return parseMajor((r.stderr || '') + (r.stdout || ''));
 }
 
-// Gradle 8.14.x runs on Java 21..24 (25 is not supported); Capacitor 8 needs 21+
+// OMP builds with JDK 21 (CI too); Capacitor 8 and AGP 9 need 21+; 21..24 are accepted
 const fits = (n) => n >= 21 && n <= 24;
 
 function globDirs(base, prefix) {
@@ -67,7 +67,7 @@ for (const c of candidates()) {
 if (!jdk) {
   console.error(
     'Нужна Java 21–24 (JDK 21 LTS). Установите Temurin 21: winget install EclipseAdoptium.Temurin.21.JDK\n' +
-      'Java 21-24 (JDK 21 LTS) is required; Gradle 8.14 cannot run on Java 25 or on 17 or older. ' +
+      'Java 21-24 (JDK 21 LTS) is required; Capacitor 8 and AGP 9 cannot build on 17 or older. ' +
       'Install Temurin 21 and/or set JAVA_HOME.',
   );
   process.exit(1);

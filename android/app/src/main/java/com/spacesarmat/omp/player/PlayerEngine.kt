@@ -3,7 +3,7 @@ package com.spacesarmat.omp.player
 import android.view.ViewGroup
 
 /**
- * A playback engine behind the OMP player UI (Media3 today, libVLC next). The engine plays one queue item at a
+ * A playback engine behind the OMP player UI (2160 Player's engine, libVLC). The engine plays one queue item at a
  * time: the queue, resume points, chapters, skips, the countdown and the overlay live above it ([PlayerSession],
  * [PlayerActivity]) and do not know which engine runs. All calls and callbacks happen on the main thread.
  */
@@ -59,6 +59,12 @@ interface PlayerEngine {
 
     /** [id] of one of [subtitleTracks]; null turns subtitles off. */
     fun selectSubtitle(id: String?)
+
+    /** «Ночной звук» (dynamic range compression, dialogue lift) on or off; null when the engine has none (VLC). */
+    val nightMode: Boolean? get() = null
+
+    /** Turns «Ночной звук» on or off (only when [nightMode] is not null). */
+    fun setNightMode(on: Boolean) {}
 
     /** The activity was stopped (its video surface goes away); libVLC detaches its views. */
     fun hostStopped() {}

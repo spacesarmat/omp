@@ -42,7 +42,7 @@ import com.spacesarmat.omp.control.AppForeground
 import org.json.JSONObject
 
 /**
- * Native player on Android TV (Media3 ExoPlayer or libVLC) with the OMP overlay: title, progress, time, «Пауза»,
+ * Native player on Android TV (2160 Player's engine or libVLC) with the OMP overlay: title, progress, time, «Пауза»,
  * «Аудио: …», «Субтитры: …», «Следующая серия», key hints and the «Управление с телефона» badge.
  * Keys: ◀/▶ seek by the settings step with the LG arrow rule ([SeekAccumulator]: ×(1 + repeats/4) up to ×6,
  * one seek 700 ms after the last press),
@@ -53,7 +53,7 @@ import org.json.JSONObject
  * intro with «Вернуть», credits auto skip to the next item (as the LG player).
  * «Поддержать» ([DonateQr], sent with playNative): a QR card on pause and during the credits, purely visual.
  * Moving to another item starts it from its resume point (queue `resume`, updated when an item is left).
- * Events go to the page through [NativePlayerBridge]. Playback goes through a [PlayerEngine] ([Media3Engine] or
+ * Events go to the page through [NativePlayerBridge]. Playback goes through a [PlayerEngine] ([Engine2160] or
  * [VlcEngine], picked by [EngineChooser]: «Плеер» setting / the torrent's choice, «Авто» moves to VLC on a format
  * error before the first frame or ASS subtitles) driven by [PlayerSession] (queue, resume points, error, tracks).
  */
@@ -101,7 +101,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     /** The three tiles of «Инфо»: label and value views. */
     private val infoTiles = ArrayList<Pair<TextView, TextView>>()
 
-    /** «Инфо» is on screen (Info / yellow key; Back closes it; playback goes on). */
+    /** «Инфо» is on screen (Info key; Back closes it; playback goes on). */
     private var infoShown = false
 
     /** The TorrServer statistics of the torrent playing (InfoStatsState), and whether a request is out. */
@@ -344,7 +344,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                     return null
                 }
             } else {
-                Media3Engine(this@PlayerActivity)
+                Engine2160(this@PlayerActivity)
             }
             e.attach(findViewById<ViewGroup>(R.id.player_video))
             return e
@@ -466,8 +466,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         audio.getOrNull(TrackOptions.selectedAudio(audio))?.label ?: I18n.s("player.default")
 
     /**
-     * «Меню плеера»: «Аудио», «Субтитры», «Главы» (when the file has chapters) and the three «Отметить …» rows
-     * (as on LG). The marks use the position at the time the menu opened.
+     * «Меню плеера»: «Аудио», «Субтитры», «Ночной звук» (engines that have it), «Главы» (when the file has chapters)
+     * and the three «Отметить …» rows (as on LG). The marks use the position at the time the menu opened.
      */
     private fun openMenu() {
         if (dialog?.isShowing == true) return
@@ -483,6 +483,11 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         rows.add(switcher.menuRow() to { switcher.menuPressed() })
         rows.add(I18n.s("player.audioRow", "v" to selectedAudioLabel(audio)) to { openAudioList() })
         rows.add(I18n.s("player.subsRow", "v" to sSel.label) to { openSubsList() })
+        engine.nightMode?.let { on ->
+            rows.add(ColorKeys.nightLabel(on) to { engine.setNightMode(!on) })
+        }
+        // «Инфо» also from the menu: many box remotes have no Info key, and yellow is night sound with this engine
+        rows.add(I18n.s("player.infoRow") to { if (!infoShown) toggleInfo() })
         if (chapters.isNotEmpty()) rows.add(I18n.s("player.chaptersRow", "n" to chapters.size.toString()) to { openChapters(i, now) })
         val marks = markRows(skips.info(i), now, dur)
         listOf("intro-start", "intro-end", "credits").forEachIndexed { n, kind ->
@@ -564,7 +569,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val code = event.keyCode
         if (code == KeyEvent.KEYCODE_BACK || (code !in HANDLED_KEYS && ColorKeys.actionFor(code) == null)) return super.dispatchKeyEvent(event)
         if (event.action != KeyEvent.ACTION_DOWN) return true
-        // colour keys and Info once per press: holding Yellow must not flip «Инфо» at the repeat rate
+        // colour keys and Info once per press: holding Yellow or Info must not flip night sound or «Инфо» at the repeat rate
         if (ColorKeys.actionFor(code) != null && !colorKeyActs(event.repeatCount)) return true
         onKey(code)
         return true
@@ -598,11 +603,24 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         }
     }
 
-    /** Colour keys and Info: Red the audio list, Green the subtitles list, Yellow / Info «Инфо», Blue the menu. */
+    /**
+     * Colour keys and Info: Red the audio list, Green the subtitles list, Yellow «Ночной звук» (engines that have
+     * it; a short label on the overlay), Blue the menu, Info «Инфо».
+     */
     private fun colorKey(action: ColorAction) {
         when (action) {
             ColorAction.AUDIO -> openAudioList()
             ColorAction.SUBS -> openSubsList()
+            ColorAction.NIGHT -> {
+                val on = engine.nightMode
+                if (on == null) {
+                    showMessage(ColorKeys.nightUnavailable(), false)
+                } else {
+                    engine.setNightMode(!on)
+                    showMessage(ColorKeys.nightLabel(!on), false)
+                }
+                changed()
+            }
             ColorAction.INFO -> toggleInfo()
             ColorAction.MENU -> openMenu()
         }
@@ -1164,10 +1182,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         if (e != null) errorText.text = e
     }
 
-    /** The key hint line and, under it, the colour keys with coloured dots. */
+    /** The key hint line and, under it, the colour keys with coloured dots (night sound only where the engine has it). */
     private fun hintText(chapters: Boolean): CharSequence {
         val base = I18n.s(if (chapters) "player.res.hintChapters" else "player.res.hint")
-        val c = ColorKeys.hint()
+        val c = ColorKeys.hint(engine.nightMode != null)
         val out = SpannableString(base + "\n" + c.text)
         var from = base.length + 1
         for (color in c.dots) {

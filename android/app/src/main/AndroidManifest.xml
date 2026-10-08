@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <queries>
         <package android:name="tv.p2160.player" />
@@ -125,5 +126,20 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+        <!-- From 2160 player-core: its MediaSessionService (notification with controls, lock screen, headset, background
+             play). Not exported (player-core exports it to other apps and car/watch controllers; OMP does not need that:
+             its own notification binds in-process). Disabled here: the TV engine (Engine2160) starts it in runCatching and
+             does without it; on the phone «Звук в фоне» switches it on or off before the embedded 2160 screen starts
+             (Embedded2160.applyBackground). -->
+        <service
+            android:name="tv.p2160.core.engine.PlaybackService"
+            android:enabled="false"
+            android:exported="false"
+            tools:replace="android:exported" />
+
+        <!-- From media3-session 1.11 (pulled in by player-core), exported; OMP does not use it. -->
+        <activity
+            android:name="androidx.media3.session.BluetoothValidationActivity"
+            tools:node="remove" />
     </application>
 </manifest>

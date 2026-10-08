@@ -325,10 +325,10 @@ class PlayerInfoTest {
 
     @Test
     fun hdrKinds() {
-        assertEquals("HDR10", Media3Engine.hdrOf("video/hevc", androidx.media3.common.C.COLOR_TRANSFER_ST2084))
-        assertEquals("HLG", Media3Engine.hdrOf("video/hevc", androidx.media3.common.C.COLOR_TRANSFER_HLG))
-        assertEquals("Dolby Vision", Media3Engine.hdrOf("video/dolby-vision", null))
-        assertEquals("", Media3Engine.hdrOf("video/avc", androidx.media3.common.C.COLOR_TRANSFER_SDR))
-        assertEquals("", Media3Engine.hdrOf(null, null))
+        assertEquals("HDR10", Engine2160.hdrOf("video/hevc", androidx.media3.common.C.COLOR_TRANSFER_ST2084))
+        assertEquals("HLG", Engine2160.hdrOf("video/hevc", androidx.media3.common.C.COLOR_TRANSFER_HLG))
+        assertEquals("Dolby Vision", Engine2160.hdrOf("video/dolby-vision", null))
+        assertEquals("", Engine2160.hdrOf("video/avc", androidx.media3.common.C.COLOR_TRANSFER_SDR))
+        assertEquals("", Engine2160.hdrOf(null, null))
     }
 }
