@@ -1,59 +1,60 @@
 {
   "version": 1,
-  "updated": "2026-10-08T13:25:21.920Z",
+  "updated": "2026-10-08T13:27:35.848Z",
   "sources": {
     "rutor": {
       "status": "OK",
-      "streak": 3,
+      "streak": 4,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "100 / 99 / 100 результатов"
     },
     "nnmclub": {
       "status": "OK",
-      "streak": 2,
+      "streak": 3,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "50 / 50 / 50 результатов"
     },
     "anidub": {
       "status": "OK",
-      "streak": 2,
+      "streak": 3,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "29 / 32 результатов"
     },
     "bigfangroup": {
       "status": "OK",
-      "streak": 2,
+      "streak": 3,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "30 / 25 / 19 результатов"
     },
     "torrentby": {
       "status": "BROKEN",
-      "streak": 1,
+      "streak": 2,
       "since": "2026-10-08T06:00:28.459Z",
-      "alerted": false,
-      "detail": "поиск «Джентльмены»: не хватает полей: сиды (полных строк 100%)"
+      "alerted": true,
+      "signature": "too-few",
+      "detail": "поиск «Interstellar»: результатов 0, нужно не меньше 3"
     },
     "rutracker": {
       "status": "BLOCKED",
-      "streak": 2,
+      "streak": 3,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "проверка Cloudflare (HTTP 403)"
     },
     "kinozal": {
       "status": "BLOCKED",
-      "streak": 2,
+      "streak": 3,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "проверка Cloudflare (HTTP 403)"
     },
     "rustorka": {
       "status": "BLOCKED",
-      "streak": 2,
+      "streak": 3,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "проверка Cloudflare (HTTP 403)"
