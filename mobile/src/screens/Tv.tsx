@@ -16,9 +16,9 @@ import {
   tvForgot,
 } from '../tv/tvClient';
 import { LG_OMP_APP_ID } from '../../../src/lib/installPlan';
-import { RenameSheet } from '../ui/RenameSheet';
+import { TvRenameSheet } from '../ui/TvRenameSheet';
 import { CodeSheet } from '../ui/CodeSheet';
-import { tvs, activeTv, forgetTv, renameTv, updateAtvPorts, ATV_PORT, type SavedTv, type TvKind } from '../tv/tvStore';
+import { tvs, activeTv, forgetTv, isTvRenamed, updateAtvPorts, ATV_PORT, type SavedTv, type TvKind } from '../tv/tvStore';
 
 type Discoverer = (timeoutMs: number) => Promise<FoundTv[]>;
 type AtvDiscoverer = (timeoutMs: number) => Promise<FoundOmpTv[]>;
@@ -108,7 +108,9 @@ export function Tv() {
   const rows: Row[] = savedList.map((sv) => {
     const kind: TvKind = sv.kind === 'atv' ? 'atv' : 'lg';
     const atv = kind === 'atv' ? foundAtv.find((f) => f.ip === sv.ip) : undefined;
-    const meta = atv && atv.version ? ompMeta(sv.ip, atv.version) : t('tvScreen.savedMeta', { ip: sv.ip });
+    // a TV renamed on the phone also shows its own name, so it can still be told apart on the network
+    const own = isTvRenamed(sv) ? sv.defaultName + ' · ' : '';
+    const meta = own + (atv && atv.version ? ompMeta(sv.ip, atv.version) : t('tvScreen.savedMeta', { ip: sv.ip }));
     return { ip: sv.ip, name: sv.name, meta, kind, saved: sv, atv };
   });
   for (const f of foundAtv) {
@@ -290,17 +292,7 @@ export function Tv() {
       {coding && (
         <CodeSheet tvName={coding.name} onSubmit={(code) => pair(coding, code)} onCancel={() => setCoding(null)} />
       )}
-      {renaming && (
-        <RenameSheet
-          title={t('tvScreen.renameTitle')}
-          value={renaming.name}
-          onSave={(n) => {
-            renameTv(renaming.ip, n);
-            setRenaming(null);
-          }}
-          onCancel={() => setRenaming(null)}
-        />
-      )}
+      {renaming && <TvRenameSheet tv={renaming} onClose={() => setRenaming(null)} />}
     </div>
   );
 }

@@ -142,7 +142,13 @@ export function applyRemoteKey(d: unknown): void {
     return;
   }
   const code = KEY_CODES[name];
-  if (code !== undefined) sendKey(code);
+  if (code === undefined) return;
+  const handled = sendKey(code);
+  // Back at the library root: no screen takes it, so the app closes — as the box remote's Back does there
+  if (!handled && code === BACK_KEY) {
+    const p = nativePlugin();
+    if (p && p.appBack) p.appBack().catch(() => undefined);
+  }
 }
 
 /** remoteAttach { report, lang? }: the «Сейчас играет» link (same check as the launch param) and the phone's language. */

@@ -78,7 +78,7 @@ describe('TopBar', () => {
   });
 });
 
-describe('TopBar expanding icons', () => {
+describe('TopBar icon labels', () => {
   it('shows the label only on the focused icon button', async () => {
     const { act } = await import('preact/test-utils');
     const { setFocus } = await import('@noriginmedia/norigin-spatial-navigation');
@@ -96,6 +96,33 @@ describe('TopBar expanding icons', () => {
     expect(sort.querySelector('.icon-btn-label')).toBeNull();
     expect(host.querySelector('[data-fk="lib-btn-add"] .icon-btn-label')!.textContent).toBe('Найти раздачу');
     expect(host.querySelectorAll('.icon-btn-label').length).toBe(1);
+    // the button does not grow: the icon stays its only flow child besides the absolutely placed chip
+    expect(host.querySelector('[data-fk="lib-btn-add"] .icon-btn-label')!.className).toBe('icon-btn-label');
     await act(() => { render(null, host); });
+  });
+  it('pins the labels of the last buttons to their right edge and keeps the update dot', async () => {
+    const { act } = await import('preact/test-utils');
+    const { setFocus } = await import('@noriginmedia/norigin-spatial-navigation');
+    latestUpdate.value = { version: '9.0.0', ipkUrl: 'https://x/a.ipk', ipkHash: 'b'.repeat(64), ipkSize: 1, notes: [], releaseUrl: 'https://x/r' };
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const props = { tab: 'all', onTab: vi.fn(), view: 'large', sort: 'size', searchOpen: false, onSearch: vi.fn(), onView: vi.fn(), onSort: vi.fn(), onFocused: vi.fn() };
+    await act(() => { render(h(TopBar as any, props), host); });
+    await act(() => { setFocus('lib-btn-settings'); });
+    await act(() => Promise.resolve());
+    const settings = host.querySelector('[data-fk="lib-btn-settings"]')!;
+    const label = settings.querySelector('.icon-btn-label')!;
+    expect(label.textContent).toBe('Настройки');
+    expect(label.classList.contains('icon-btn-label--end')).toBe(true);
+    expect(settings.querySelector('.icon-dot')).not.toBeNull();
+    await act(() => { setFocus('lib-btn-playlist'); });
+    await act(() => Promise.resolve());
+    expect(host.querySelector('[data-fk="lib-btn-playlist"] .icon-btn-label--end')!.textContent).toBe('Плейлисты');
+    expect(host.querySelectorAll('.icon-btn-label').length).toBe(1);
+    await act(() => { setFocus('lib-btn-sort'); });
+    await act(() => Promise.resolve());
+    expect(host.querySelector('[data-fk="lib-btn-sort"] .icon-btn-label')!.className).toBe('icon-btn-label');
+    await act(() => { render(null, host); });
+    latestUpdate.value = null;
   });
 });

@@ -1,7 +1,8 @@
 // «Мои» → a series on the TV: the TMDB hero (backdrop, poster, status pill, year · rating · genres, overview),
 // «Смотреть SxxEyy» / «Раздачи · N» / «Следить за сериями», a row of season chips (focusing one shows it; with TMDB
 // every season of the show: released ones the library lacks are dashed «+ Сезон N» with «Найти раздачи», seasons
-// still to come are dashed with their date) and the chosen season's episodes with their TMDB names. Without TMDB (no key, offline,
+// still to come are dashed with their date) and the chosen season's episodes with their TMDB names, then the announced
+// ones not out yet as dashed muted rows the focus skips («S02E08 Пирамида · выйдет 8 окт.»). Without TMDB (no key, offline,
 // no match) the library's poster and title stay and the episodes keep their file names.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
@@ -24,7 +25,7 @@ import { lang, t, fmtNumber } from '../i18n';
 import { findGroup, groupLabel, NO_SEASON, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
 import { airDateText, isoDay, seriesPill, upcomingSeasons, type Upcoming } from '../lib/seriesStatus';
-import { cleanFileName, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
+import { cleanFileName, comingEpisodes, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
 import { baseName, naturalCompare, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../lib/episodes';
 import { formatBytes } from '../lib/format';
 import { libraryTitle } from '../lib/libraryView';
@@ -32,12 +33,13 @@ import { buildTorrentQueue } from '../player/queue';
 import { currentRoute, goBack, navigate, type Route } from '../ui/nav';
 import { FocusGroup, Focusable, Button, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { restoreFocus, scrollToShow } from '../ui/focus';
+import { restoreFocus, scrollScreenToTop, scrollToShow } from '../ui/focus';
 import { choose } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
 import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
 import { tvGlyphs } from '../ui/tvText';
+import { seasonChipSub, type SeasonChipSub } from '../lib/seasonChip';
 import { qualityOrUnknown } from '../monitor/upgradeText';
 import { displayTitle } from '../lib/torrentName';
 import { Poster } from './library/Poster';
@@ -47,6 +49,7 @@ import { phoneLink } from '../phone/phoneStore';
 import { errorMessage } from '../api/http';
 import { SeriesPill } from './library/SeriesTile';
 import { CastRow } from '../ui/CastRow';
+import { ComingRows, revealComing } from '../ui/ComingRows';
 import { useSeriesDub } from '../ui/seriesDub';
 
 // the chosen season of each open series screen (its route entry): kept while the player or a torrent is on top
@@ -65,6 +68,13 @@ const pad = (n: number) => (n < 10 ? '0' : '') + n;
 function episodeCode(season: number | null, episode: number | null): string {
   if (episode === null) return '';
   return (season !== null && season !== NO_SEASON ? 'S' + pad(season) : '') + 'E' + pad(episode);
+}
+
+/** The episodes TMDB lists for a season: the card's count, or the loaded season's episodes when they are more; 0 unknown. */
+export function tmdbEpisodeCount(card: CatalogCard | null, season: number, eps: { [n: number]: Episode } | null): number {
+  const s = card ? card.seasons.filter((x) => x.number === season)[0] : undefined;
+  const listed = eps ? Object.keys(eps).length : 0;
+  return Math.max(s ? s.episodes : 0, listed);
 }
 
 /** The playable files of one season across its torrents, by episode. */
@@ -394,16 +404,13 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   const meta = card ? heroMeta(card) : groupLabel(group);
   const title = card && card.title ? card.title : libraryTitle(group.named).title;
 
-  // TMDB episodes of the season still to come that no file has
-  const have: { [n: number]: boolean } = {};
-  rows.forEach((r) => {
-    if (r.episode !== null) have[r.episode] = true;
-  });
-  const today = isoDay(now);
-  const coming = Object.keys(eps)
-    .map((k) => eps[+k])
-    .filter((e) => !have[e.n] && !!e.airDate && e.airDate > today)
-    .sort((a, b) => a.n - b.n);
+  // the TMDB episodes announced after the season's last one here (dated today or later), as on the phone; a season
+  // whose files carry no episode numbers cannot be placed, so it gets none
+  const numbered = rows.filter((r) => r.episode !== null);
+  const coming =
+    season !== NO_SEASON && (numbered.length || !rows.length)
+      ? comingEpisodes({ [season]: numbered.reduce((m, r) => Math.max(m, r.episode as number), 0) }, { [season]: eps }, isoDay(now))
+      : [];
   const futureSeason = future.filter((u) => u.number === season)[0];
   const isMissing = gapFirsts.indexOf(season) >= 0;
   const runLast = isMissing ? gaps[season] : season;
@@ -437,19 +444,22 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             {target && (
               <Button
                 focusKey="series-watch"
+                onFocused={toTop}
                 label={target.code ? t('series.watchEp', { code: target.code }) : t('torrent.watch')}
                 onPress={() => play(target)}
               />
             )}
-            <Button focusKey="series-releases" label={t('series.releasesBtn', { n: releases.length })} onPress={openReleases} />
-            {upgradable.length > 0 && <Button focusKey="series-better" label={t('torrent.better.find')} onPress={openBetter} />}
-            <Focusable focusKey="series-follow" className="button series-follow" role="button" onPress={toggleFollow}>
+            <Button focusKey="series-releases"
+                onFocused={toTop} label={t('series.releasesBtn', { n: releases.length })} onPress={openReleases} />
+            {upgradable.length > 0 && <Button focusKey="series-better"
+                onFocused={toTop} label={t('torrent.better.find')} onPress={openBetter} />}
+            <Focusable focusKey="series-follow" onFocused={toTop} className="button series-follow" role="button" onPress={toggleFollow}>
               {t('series.follow') + ': '}
               <span class="series-follow-state" role="switch" aria-label={t('series.follow')} aria-checked={follow}>
                 {t(follow ? 'series.followOn' : 'series.followOff')}
               </span>
             </Focusable>
-            <Focusable focusKey="series-dub" className="button series-dub" role="button" onPress={openDub}>
+            <Focusable focusKey="series-dub" onFocused={toTop} className="button series-dub" role="button" onPress={openDub}>
               {t('series.dub') + ': '}
               <span class="series-follow-state series-dub-value">{tvGlyphs(dub.text)}</span>
             </Focusable>
@@ -465,13 +475,15 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             const soon = future.filter((u) => u.number === n)[0];
             const gap = gapFirsts.indexOf(n) >= 0;
             const last = gap ? gaps[n] : n;
-            let sub: string;
+            let sub = '';
+            let have: SeasonChipSub | null = null;
             if (soon) sub = soon.airDate ? t('series.seasonComes', { date: airDateText(soon.airDate, now) }) : t('series.soonTv');
             else if (gap) sub = t('series.notInMediaShort');
             else {
+              // what is there first, then the watched part: «6 из 10 серий · смотрели 1»
               const list = n === season ? rows : seasonRows(group, n);
               const done = list.filter((r) => isWatched(r.tor.hash, r.file.id)).length;
-              sub = list.length && done === list.length ? t('series.watchedAll') : t('series.progressOf', { done, total: list.length });
+              have = seasonChipSub(list.length, tmdbEpisodeCount(card, n, n === season ? eps : null), done);
             }
             return (
               <Focusable
@@ -485,7 +497,18 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
                 <div class="chip-name">
                   {(gap ? '+ ' : '') + (n === NO_SEASON ? t('series.noSeason') : last > n ? t('series.seasonsRange', { a: n, b: last }) : t('library.season', { n }))}
                 </div>
-                <div class="chip-sub">{sub}</div>
+                <div class="chip-sub">
+                  {have ? (
+                    <>
+                      {have.episodes}
+                      {have.watched ? ' · ' : ''}
+                      {have.all ? <Icon name="check" size={20} class="chip-check" /> : null}
+                      {have.watched}
+                    </>
+                  ) : (
+                    sub
+                  )}
+                </div>
               </Focusable>
             );
           })}
@@ -493,7 +516,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
         </div>
       )}
       <FocusGroup focusKey="SERIES-EPISODES" className="series-episodes">
-        {rows.map((r) => {
+        {rows.map((r, i) => {
           const hash = r.tor.hash;
           const watched = isWatched(hash, r.file.id);
           const ratio = progressRatio(hash, r.file.id);
@@ -503,7 +526,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           const ep = r.episode !== null ? eps[r.episode] : undefined;
           const name = ep && ep.title ? ep.title : cleanFileName(stripExt(baseName(r.file.path)));
           return (
-            <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item file-row ep-row" onPress={() => play(r)}>
+            <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item file-row ep-row" onPress={() => play(r)} onFocused={i === rows.length - 1 && coming.length ? () => revealComing() : undefined}>
               <span class="ep">{r.code}</span>
               <span class="name">{tvGlyphs(name)}</span>
               {!watched && ratio > 0 && (
@@ -516,14 +539,8 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             </Focusable>
           );
         })}
-        {coming.map((e) => (
-          <Focusable key={'future-' + e.n} focusKey={'ep-future-' + season + '-' + e.n} className="list-item file-row ep-row ep-future">
-            <span class="ep">{episodeCode(season, e.n)}</span>
-            <span class="name">{tvGlyphs(e.title)}</span>
-            <span class="size">{airDateText(e.airDate, now)}</span>
-            <span class="check" />
-          </Focusable>
-        ))}
+        {/* the episodes announced after the last one here: muted and dashed, not focusable, no OK */}
+        <ComingRows list={coming} now={now} />
       </FocusGroup>
       {!rows.length && !coming.length && futureSeason && (
         <div class="empty">
@@ -558,6 +575,9 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
 function rowKey(r: FileRow): string {
   return 'ep-' + r.tor.hash + '-' + r.file.id;
 }
+
+/** A button in the top row took the focus: the screen goes back to the top so the whole header shows. */
+const toTop = () => scrollScreenToTop(document.querySelector('.series-actions'));
 
 export function SeriesScreen({ seriesKey, season }: { seriesKey: string; season?: number }) {
   progressVersion.value; // re-render when the progress changes

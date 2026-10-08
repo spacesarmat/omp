@@ -20,6 +20,7 @@ import { setPosterLookup } from '../../src/catalog/resultPosters';
 import { mockFetch } from '../helpers/fetchMock';
 import { lang } from '../../src/i18n';
 import { resetSourceNames } from '../../src/sources/sourceNames';
+import { setKindFilter } from '../../src/lib/releaseKind';
 
 const PH = { url: 'http://192.168.1.20:8097', token: 'b'.repeat(32), name: 'Pixel' };
 const HASH = 'c'.repeat(40);
@@ -394,6 +395,78 @@ describe('TV search: names, sizes and the reasons of the phone sites', () => {
     expect(host.querySelector('[data-hint="phone-sites"]')!.textContent).toBe(
       'RuTracker: sign in on the phone · torrent.by: enter the code on the phone · Kinozal: pass the check on the phone',
     );
+  });
+});
+
+describe('TV search: film / series', () => {
+  const SERIES = 'Дюна: Пророчество / Dune: Prophecy / Сезон: 1 / Серии: 1-6 из 6 [2024, WEB-DL 1080p]';
+  const BARE = 'Dune 1080p WEB-DL';
+  const KINDS = {
+    search: [{ handle: 'hk', sourceIds: ['rutracker'] }],
+    searchPoll: [
+      {
+        rev: 2,
+        done: true,
+        pending: [],
+        answered: ['rutracker'],
+        failed: [],
+        results: [phoneRow('1', RAW_HD, 30), phoneRow('2', SERIES, 20), phoneRow('3', BARE, 10)],
+      },
+    ],
+  };
+  const kindButtons = () => Array.prototype.slice.call(host.querySelectorAll('.search-kinds .disc-kind')) as HTMLElement[];
+  const kindButton = (label: string) => kindButtons().filter((b) => b.textContent === label)[0];
+  const badgeOf = (raw: string) => {
+    const row = Array.prototype.filter.call(host.querySelectorAll('.search-result'), (n: Element) => n.querySelector('.search-raw')!.textContent === raw)[0] as Element;
+    const b = row.querySelector('.search-kind');
+    return b ? b.textContent : null;
+  };
+
+  afterEach(() => setKindFilter('all'));
+
+  it('each row has its kind badge; nothing for an unknown kind', async () => {
+    useScript(KINDS);
+    mount();
+    await searchDune();
+    expect(badgeOf(RAW_HD)).toBe('Фильм');
+    expect(badgeOf(SERIES)).toBe('Сериал · S01 · 1–6 из 6');
+    expect(badgeOf(BARE)).toBeNull();
+  });
+
+  it('«Все / Фильмы / Сериалы» before the sort chip filters the rows; the unknown kind only under «Все»; kept for the session', async () => {
+    useScript(KINDS);
+    mount();
+    await searchDune();
+    expect(kindButtons().map((b) => b.textContent)).toEqual(['Все', 'Фильмы', 'Сериалы']);
+    expect(kindButton('Все').className).toContain('active');
+    expect(rowTitles().length).toBe(3);
+    act(() => kindButton('Сериалы').click());
+    expect(rowTitles()).toEqual([SERIES]);
+    expect(kindButton('Сериалы').className).toContain('active');
+    expect(host.querySelector('.search-progress')!.textContent).toContain('1');
+    act(() => kindButton('Фильмы').click());
+    expect(rowTitles()).toEqual([RAW_HD]);
+    // focusable with the remote: the spatial navigation knows the three
+    act(() => setFocus('search-kind-series'));
+    await step(10);
+    expect(getCurrentFocusKey()).toBe('search-kind-series');
+    expect(kindButton('Сериалы').className).toContain('focused');
+    // the screen again: the filter is still «Фильмы»
+    act(() => render(null, host));
+    mount();
+    await searchDune();
+    expect(kindButton('Фильмы').className).toContain('active');
+    expect(rowTitles()).toEqual([RAW_HD]);
+  });
+
+  it('a filter with no rows says so instead of «Ничего не найдено»', async () => {
+    useScript({ ...KINDS, searchPoll: [{ ...KINDS.searchPoll[0], results: [phoneRow('1', RAW_HD, 30)] }] });
+    mount();
+    await searchDune();
+    act(() => kindButton('Сериалы').click());
+    expect(rowTitles()).toEqual([]);
+    expect(host.querySelector('[data-hint="nothing"]')).toBeNull();
+    expect(host.querySelector('[data-hint="no-kind"]')!.textContent).toBe('Нет раздач этого типа — выберите «Все»');
   });
 });
 

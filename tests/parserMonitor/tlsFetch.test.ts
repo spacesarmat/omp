@@ -23,7 +23,8 @@ describe('parser monitor TLS', () => {
 });
 
 describe('parser monitor workflow', () => {
-  const yml = readFileSync('.github/workflows/parser-monitor.yml', 'utf8');
+  // a Windows checkout has CRLF line ends
+  const yml = readFileSync('.github/workflows/parser-monitor.yml', 'utf8').split('\r\n').join('\n');
 
   it('has the notify input the admin bot\'s /check sets', () => {
     expect(yml).toMatch(/\n      notify:\n        description: [^\n]+\n        type: boolean\n        default: false\n/);

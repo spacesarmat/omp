@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { updateServer, removeServer, SavedServer } from '../../store/servers';
 import { FocusGroup, Button, TextInput } from '../../ui/components';
 import { useKeys } from '../../ui/keys';
+import { AddressField } from '../../ui/AddressField';
 import { confirmDialog } from '../../ui/dialog';
 import { toast } from '../../ui/toast';
 import { t } from '../../i18n';
@@ -54,7 +55,7 @@ export function EditServerDialog(p: { server: SavedServer; onClose: () => void }
         <label class="field-label">{t('connect.name')}</label>
         <TextInput focusKey="edit-name" value={name} onChange={setName} placeholder={t('connect.namePlaceholder')} />
         <label class="field-label">{t('connect.addressShort')}</label>
-        <TextInput value={url} onChange={setUrl} placeholder="192.168.1.191:8090" type="url" />
+        <AddressField focusKey="edit-url" value={url} onChange={setUrl} placeholder="192.168.1.191:8090" />
         <div class="row">
           <div class="grow">
             <label class="field-label">{t('common.login')}</label>

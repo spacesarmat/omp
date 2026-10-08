@@ -83,12 +83,17 @@ export function Button(p: { label: string; icon?: IconName; onPress: () => void;
   );
 }
 
-export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void; expand?: boolean; dot?: boolean }) {
+/**
+ * A square icon button. With `expand` the focused button shows its label as a chip under it: absolutely placed, so the
+ * button keeps its width and the bar its height. `labelEdge` pins the chip to the button's start or end edge instead of
+ * centering it, for the buttons at the screen's edges, so the chip never runs off the screen.
+ */
+export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void; expand?: boolean; labelEdge?: 'start' | 'end'; dot?: boolean }) {
   return (
     <Focusable focusKey={p.focusKey} className="icon-button" onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} ariaLabel={p.label} role="button">
       {(focused: boolean) => [
         <Icon key="i" name={p.icon} size={28} />,
-        p.expand && focused ? <span key="l" class="icon-btn-label">{p.label}</span> : null,
+        p.expand && focused ? <span key="l" class={'icon-btn-label' + (p.labelEdge ? ' icon-btn-label--' + p.labelEdge : '')}>{p.label}</span> : null,
         p.dot ? <span key="d" class="icon-dot" /> : null,
       ]}
     </Focusable>
@@ -110,7 +115,7 @@ interface TextInputProps {
  * has one) in Latin letters, with no capitals or corrections. Plain attributes: Chrome 53 (LG) ignores the ones it
  * does not know.
  */
-const URL_KEYBOARD: { [k: string]: string } = { inputmode: 'url', autocapitalize: 'off', autocorrect: 'off', autocomplete: 'off', spellcheck: 'false', lang: 'en' };
+export const URL_KEYBOARD: { [k: string]: string } = { inputmode: 'url', autocapitalize: 'off', autocorrect: 'off', autocomplete: 'off', spellcheck: 'false', lang: 'en' };
 
 /** Spatial-nav item that opens the system keyboard (TV or LG ThinQ phone keyboard) on OK. */
 export function TextInput(p: TextInputProps) {

@@ -860,9 +860,10 @@ describe('Add unified search: stable rows', () => {
     const round = Array.from(card.querySelectorAll('.m-rc-btn'));
     expect(round.map((b) => b.getAttribute('aria-label'))).toEqual([
       'Добавить на сервер: Дюна / Dune (2021) WEB-DL 1080p MVO',
+      'Добавить и смотреть на телефоне: Дюна / Dune (2021) WEB-DL 1080p MVO',
       'Добавить и смотреть на ТВ: Дюна / Dune (2021) WEB-DL 1080p MVO',
     ]);
-    expect(round[1].classList.contains('m-rc-btn-tv')).toBe(true);
+    expect(round[2].classList.contains('m-rc-btn-tv')).toBe(true);
     expect(el.querySelector('[role=dialog]')).toBeNull();
     openDetails(0);
     const sheet = el.querySelector('[role=dialog]')!;

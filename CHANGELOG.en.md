@@ -2,6 +2,23 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.19.0-beta.7
+
+- [phone] Android TV remote: a "Control the box" switch: keys, Home, volume, Settings and media keys drive the whole box (via Google TV Remote with the code from the screen, or via network debugging); OMP still gets them
+- [phone] Rename a TV: long-press its name on the Remote screen, Rename in the TV switcher or the pencil on the TV screen; "Restore the TV's own name" brings it back
+- [tv] "Find a release": each result shows "Movie" or "Series · S02 · 1–8 of 8", with an "All / Movies / Series" switch above the list
+- [phone] Release search: a "Movie" / "Series · S02 · 1–8 of 8" badge and an "All / Movies / Series" filter; found releases get "Watch on the phone"
+- [tv] The TorrServer address has OMP's own keypad: digits, ".", ":", backspace, http:// and https://; the remote's number keys type digits, "Keyboard" switches to the system keyboard
+- [phone] The server address has OMP's own keypad docked at the bottom: digits, ".", ":", http:// and https://; "Keyboard" switches to the system keyboard, "123" back
+- [tv] Series and release screens: after the last episode of a season, the announced episodes ("S02E08 Pyramid · out Oct 8"); the screen scrolls to them from the last episode
+- [tv] Season chips show what is there first, then progress: "10 episodes · watched 1", "6 of 10 episodes", "watched"
+- [tv] Top bar button labels show as a chip under the button; the button no longer stretches or runs off the screen
+- [tv] The device name under the logo; a Dune HD box is called "Dune HD" (on the phone too)
+- [atv] Info: the bitrate comes from TorrServer's file analysis when the player does not report it, else the file's average with an approximate mark
+- [atv] Back on the phone remote at the home screen closes OMP, like the box remote
+- [tv] The "Continue" button row scrolls the screen back to the top; the release name under the title is one line
+- [lg] Poster corners stay rounded while a focused card scales
+
 ## 0.19.0-beta.6
 
 - [tv] A TorrServer address typed with the TV keyboard is cleaned of look-alike characters (full-width colon and digits, no-break and invisible spaces, a comma for a dot, a Cyrillic "o" in an IP); if it is still wrong, OMP names the invalid character instead of trying to connect

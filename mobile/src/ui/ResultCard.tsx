@@ -8,6 +8,7 @@ import { parseSize } from '../../../src/sources/html';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 import { ReleaseChips, ReleaseName, ResultThumb } from './ReleaseRow';
+import { resultKindLabel } from '../../../src/sources/releaseRow';
 
 /** The size in the phone's one format («1,5 ГБ»), whatever the tracker wrote («1.45 GB»); as written when unreadable. */
 export function sizeText(r: SourceResult): string {
@@ -29,13 +30,16 @@ export function resultMeta(r: SourceResult): string {
 const PLUS = 'M12 5v14M5 12h14';
 /** A screen with ▶ in it: «На ТВ». */
 const TV_PLAY = 'M3 4h18v13H3zM8 21h8M10 8l5 2.5-5 2.5z';
+/** A phone with ▶ in it: «На телефоне». */
+const PHONE_PLAY = 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 9l4 2.5-4 2.5z';
 
 const pageLink = (r: SourceResult): string => (/^https?:\/\//i.test(r.detailUrl || '') ? r.detailUrl! : '');
 
 /**
  * A found release, compact: the poster down the whole card; the short title with its meta, quality chips,
- * «source · size · seeds», the date with the round «＋» and «▶ ТВ». A tap on the card opens «Подробнее»: the full
- * tracker title, the category, the same two actions as full buttons and «Открыть на сайте».
+ * «source · size · seeds», the date with the round «＋», «▶ телефон» (when onPhone is given) and «▶ ТВ». A tap on the
+ * card opens «Подробнее»: the full tracker title, the category, the same actions as full buttons and «Открыть на сайте».
+ * The first chip is the kind of the release («Фильм», «Сериал · S02 · 1–8 из 8»), none when it is unknown.
  */
 export function ResultCard(p: {
   r: SourceResult;
@@ -48,11 +52,14 @@ export function ResultCard(p: {
   onCategory: (id: string) => void;
   onAdd: () => void;
   onWatch: () => void;
+  /** «Смотреть на телефоне»: add, then play on this phone. No button without it. */
+  onPhone?: () => void;
 }) {
   const { r } = p;
   const [open, setOpen] = useState(false);
   const link = pageLink(r);
   const date = resultDate(r);
+  const kind = resultKindLabel(r);
   const act = (f: () => void) => () => {
     setOpen(false);
     f();
@@ -64,7 +71,7 @@ export function ResultCard(p: {
         <ResultThumb title={r.Title} />
         <div class="m-rc-text">
           <ReleaseName raw={r.Title} />
-          <ReleaseChips raw={r.Title} />
+          <ReleaseChips raw={r.Title} kind={kind} />
           <div class="m-rc-meta m-small m-muted">
             {p.flag && <span class="m-flag">{p.flag}</span>}
             <span class="m-src-badge">{sourceBadge(r)}</span>
@@ -87,6 +94,17 @@ export function ResultCard(p: {
             >
               <Icon d={PLUS} size={22} />
             </button>
+            {p.onPhone && (
+              <button
+                type="button"
+                class="m-rc-btn m-rc-btn-phone"
+                aria-label={t('add.addAndWatchPhone', { title: r.Title })}
+                disabled={!!p.busy}
+                onClick={p.onPhone}
+              >
+                <Icon d={PHONE_PLAY} size={22} />
+              </button>
+            )}
             <button
               type="button"
               class="m-rc-btn m-rc-btn-tv"
@@ -103,7 +121,7 @@ export function ResultCard(p: {
         <Sheet label={t('common.more')} onClose={() => setOpen(false)}>
           <div class="m-sheet-scroll m-rc-sheet" data-result-details="">
             <ReleaseName raw={r.Title} class="m-rc-sheet-title" />
-            <ReleaseChips raw={r.Title} />
+            <ReleaseChips raw={r.Title} kind={kind} />
             <div class="m-rc-raw m-small m-muted" data-raw-title="">
               {r.Title}
             </div>
@@ -141,6 +159,11 @@ export function ResultCard(p: {
             <button type="button" class="m-btn m-btn-secondary" disabled={!!p.busy} onClick={act(p.onAdd)}>
               {t('common.add')}
             </button>
+            {p.onPhone && (
+              <button type="button" class="m-btn m-btn-secondary" disabled={!!p.busy} onClick={act(p.onPhone)}>
+                {t('add.onPhone')}
+              </button>
+            )}
             <button type="button" class="m-btn m-btn-primary" disabled={!!p.busy} onClick={act(p.onWatch)}>
               {t('add.onTv')}
             </button>

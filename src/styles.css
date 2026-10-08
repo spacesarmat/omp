@@ -52,6 +52,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .search-status-text { flex: 1; min-width: 0; margin-right: 20px; font-size: 24px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .search-status .search-progress { margin: 0; }
 .search-sort { padding: 10px 24px; font-size: 24px; }
+/* «Все / Фильмы / Сериалы» before the sort chip: the kind switch of «Обзор» */
+.search-kinds { flex: none; margin-right: 16px; }
+.search-kinds .disc-kind { padding: 8px 18px; }
 .search-busy { position: fixed; left: 50%; bottom: 120px; margin-left: -300px; width: 600px; padding: 0 28px; background: var(--panel2); border-radius: 14px; z-index: 20; }
 .search-busy .spinner-wrap { padding: 16px 0; }
 .search-result { display: flex; align-items: center; padding: 12px 20px; margin-bottom: 10px; }
@@ -62,6 +65,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .search-meta { font-size: 24px; color: var(--muted); }
 .search-chip { display: inline-block; vertical-align: middle; margin-left: 10px; padding: 2px 10px; border-radius: 8px; background: var(--panel2); color: var(--text); font-size: 18px; font-weight: 700; }
 .search-chip.hot { background: var(--accent); color: var(--bg); }
+/* «Фильм» / «Сериал · S02 · 1–8 из 8»: a quality chip with a frame */
+.search-chip.search-kind { background: none; box-shadow: inset 0 0 0 2px var(--panel2); }
 .search-raw { margin-top: 6px; font-size: 21px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .search-row-error { margin-top: 6px; font-size: 21px; color: #ffb4b6; }
 .search-side { flex: none; width: 420px; text-align: right; font-size: 22px; color: var(--muted); }
@@ -118,7 +123,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .torrent-actions-row > * { flex-shrink: 0; }
 .torrent-head h1 { font-size: 44px; margin-bottom: 16px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 /* the raw release name under the clean one: small, muted, two lines at most */
-.torrent-raw { margin: -8px 0 14px; font-size: 22px; line-height: 30px; max-height: 60px; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-word; }
+/* one line: a wrapped release name left a stray «WEB-DL 10» on the second line */
+.torrent-raw { margin: -8px 0 14px; font-size: 22px; line-height: 30px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .skip-block { margin: 8px 0 28px; padding: 20px 22px; border-radius: 18px; background: var(--panel); }
 .skip-head { display: flex; align-items: baseline; margin-bottom: 8px; }
 .skip-title { font-size: 28px; font-weight: 700; margin-right: 16px; }
@@ -163,14 +169,17 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .season-chip .chip-name { font-size: 26px; font-weight: 700; }
 .season-chip .chip-sub { font-size: 20px; color: var(--muted); margin-top: 4px; }
 .season-chip.focused .chip-sub { color: #3a3000; }
+.season-chip .chip-check { margin: -3px 4px 0 0; }
 .season-chip.chip-future { background: transparent; border: 2px dashed #5a6070; }
 .season-chip.chip-future.on { border-color: var(--accent); }
 .season-chip.chip-future.focused { background: var(--accent); border-style: solid; }
 .series-missing { padding: 24px 0; font-size: 26px; }
 .series-missing .row { margin-top: 20px; }
 .ep-row .size { width: 220px; }
-.ep-future { opacity: .45; }
-.ep-future.focused { opacity: .75; }
+/* an announced episode after the last one here: dashed and muted, never focused */
+.ep-coming { background: transparent; border: 2px dashed #3a3f4b; color: var(--muted); }
+.ep-coming .ep { color: var(--muted); }
+.ep-coming .size { width: 300px; }
 
 .spinner-wrap { display: flex; align-items: center; padding: 24px 0; }
 .spinner { width: 48px; height: 48px; border: 5px solid rgba(255, 255, 255, .2); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-right: 20px; }
@@ -281,12 +290,17 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 /* an update is waiting: a dot on «Настройки» until it is installed */
 .icon-dot { position: absolute; top: 8px; right: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
 .icon-button.focused .icon-dot { background: #0f1115; }
-.icon-btn-label { margin-left: 10px; font-size: 22px; font-weight: 700; white-space: nowrap; }
-.icon-button.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: scale(1.06); }
+.icon-button.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: scale(1.06); z-index: 30; }
+/* the focused button's label: a chip under it that moves nothing; the edge buttons pin it to their edge to stay on screen */
+.icon-btn-label { position: absolute; top: 100%; left: 50%; margin-top: 10px; padding: 5px 14px; border-radius: 10px; background: var(--panel2); border: 1px solid rgba(255, 255, 255, .12); color: #fff; font-size: 21px; line-height: 28px; font-weight: 700; white-space: nowrap; pointer-events: none; z-index: 30; -webkit-transform: translateX(-50%); transform: translateX(-50%); }
+.icon-btn-label--end { left: auto; right: 0; -webkit-transform: none; transform: none; }
+.icon-btn-label--start { left: 0; -webkit-transform: none; transform: none; }
 .screen::-webkit-scrollbar { display: none; }
 
 .art { position: relative; overflow: hidden; border-radius: 16px; display: flex; align-items: flex-end; flex-shrink: 0; }
 .art img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+/* the LG's Chromium 53 drops the parent's rounded clip while a focused card scales: the picture keeps its own corners */
+.art img, .disc-poster img, .series-poster img { border-radius: inherit; }
 .art-title { position: relative; font-weight: 800; color: rgba(255, 255, 255, .85); line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 .history-grid { display: flex; flex-wrap: wrap; margin-right: -40px; padding-top: 8px; }
 .hcard { display: flex; width: 860px; height: 200px; margin: 0 40px 28px 0; padding: 16px; border-radius: 18px; background: var(--panel); }
@@ -362,6 +376,22 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .link-toggle { display: inline-flex; align-items: center; padding: 8px 12px; margin: 0 0 16px -12px; border-radius: 10px; color: var(--muted); font-size: 22px; }
 .link-toggle .icon { margin-right: 10px; }
 .link-toggle.focused { transform: none; color: var(--text); }
+.address-input input { cursor: pointer; }
+.address-input.open { box-shadow: inset 0 0 0 3px var(--accent); }
+/* OMP's address keypad: flex rows with margins (no grid / flex gap in Chromium 53) */
+.keypad { margin: -4px 0 20px; }
+.kp-row { display: flex; margin-bottom: 12px; }
+.kp-key { flex: 1 1 0; width: 0; margin-right: 12px; height: 76px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: var(--panel2); font-size: 32px; white-space: nowrap; }
+.kp-key:last-child { margin-right: 0; }
+.kp-key .icon + .kp-key-small { margin-left: 10px; }
+.kp-key-small { font-size: 22px; }
+.kp-key--http, .kp-key--https { font-size: 24px; }
+.kp-key.primary { background: var(--accent); color: #0f1115; font-weight: 700; font-size: 28px; }
+.kp-key.focused { background: var(--accent); color: #0f1115; box-shadow: 0 0 0 4px var(--focus); transform: scale(1.04); }
+.kp-hint { font-size: 20px; }
+.address-field--system { margin-bottom: 16px; }
+.address-field--system .text-input { margin-bottom: 0; }
+.kp-switch { padding: 16px 24px; }
 .connect-hint { margin-top: 28px; text-align: center; color: var(--muted); font-size: 20px; line-height: 1.5; }
 /* the server did not answer: said under the buttons until the next try */
 .connect-error { margin-top: 20px; padding: 14px 18px; border-radius: 12px; background: rgba(229, 72, 77, .16); color: #ff9a9d; font-size: 22px; line-height: 1.4; }

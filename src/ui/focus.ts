@@ -18,6 +18,21 @@ export function scrollIntoViewSafe(el: Element | null): void {
   if (over > 0) box.scrollTop += over;
 }
 
+/** The screen that scrolls around an element (`.screen`), or null. */
+function screenOf(el: Element | null): HTMLElement | null {
+  let box: HTMLElement | null = el ? el.parentElement : null;
+  while (box && !(box.classList && box.classList.contains('screen'))) box = box.parentElement;
+  return box;
+}
+
+/** The first row of buttons under a header took the focus: show the whole header too (the screen back at the top). */
+export function scrollScreenToTop(el: Element | null): void {
+  setTimeout(() => {
+    const box = screenOf(el);
+    if (box) box.scrollTop = 0;
+  }, 0);
+}
+
 /**
  * The scroll offset of a container that shows a whole item (start, size along the axis) with `pad` around it, or the
  * current offset when it is already fully visible; an item at the start (within `pad`) gives 0.

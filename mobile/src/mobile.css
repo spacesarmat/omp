@@ -755,9 +755,18 @@ button, .m-btn {
 .m-remote-title { font-size: 20px; font-weight: 700; }
 /* several saved TVs: the name opens the switcher (a link-like button, 44px tall to tap) */
 .m-remote-switch { min-height: 44px; min-width: 0; padding: 0; border: none; background: none; color: inherit; font: inherit; text-align: left; }
+/* long press on the TV name renames it: no text selection or system callout */
+[data-tv-name] { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
 /* a saved TV that does not answer: the reason and «Повторить» */
 .m-remote-noanswer { display: flex; flex-direction: column; gap: 8px; }
 .m-remote-state { font-size: 13px; color: var(--muted); }
+.m-box-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 4px 0 12px; border-radius: 14px; background: var(--panel); }
+.m-box-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.m-box-title { font-size: 14px; font-weight: 600; }
+.m-box-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-box-sub.on { color: #8FE39A; }
+.m-remote .m-box-note { margin: 0; font-size: 12px; }
+.m-box-code { text-align: center; font-size: 26px; letter-spacing: 0.3em; text-transform: uppercase; font-variant-numeric: tabular-nums; }
 .m-remote-state.on { color: #8FE39A; }
 .m-power.on { background: #1F3A27; color: #3FB950; }
 .m-power { width: 44px; height: 44px; border: none; border-radius: 22px; background: #3A2224; color: #FF9EA2; display: flex; align-items: center; justify-content: center; }
@@ -1030,6 +1039,9 @@ button, .m-btn {
 .m-rc .m-result-title { font-size: 14px; line-height: 1.25; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .m-rc .m-rel-chips { flex-wrap: nowrap; overflow: hidden; }
 .m-rc .m-rel-chips .m-badge-inline { flex-shrink: 0; font-size: 10px; line-height: 14px; }
+/* «Фильм» / «Сериал · S02 · 1–8 из 8»: a quality chip with a frame */
+.m-kind-badge { background: none; box-shadow: inset 0 0 0 1px #3A4150; }
+.m-search-kinds { margin: 4px 0 8px; }
 .m-rc-meta { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; font-size: 12px; line-height: 16px; }
 .m-rc-meta .m-src-badge, .m-rc-meta .m-flag { flex-shrink: 0; padding: 0 6px; border-radius: 5px; }
 .m-rc-meta-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -1374,3 +1386,31 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-key { padding-left: 0; padding-right: 0; }
 .m-key-label { min-width: 0; overflow: clip; overflow-clip-margin: 3px; text-overflow: ellipsis; white-space: nowrap; }
 .m-dpad-ok { padding: 0; font-size: min(20px, calc(var(--dp, 240px) * 0.132)); white-space: nowrap; }
+
+/* OMP's address keypad: docked at the bottom like a keyboard while the address field is active */
+:root { --m-keypad-h: 324px; }
+.m-addr-row { display: flex; gap: 8px; }
+.m-addr-input { flex: 1 1 auto; min-width: 0; }
+.m-addr-input--open { border-color: var(--accent); }
+.m-addr-switch { flex: none; min-width: 64px; padding: 0 12px; border: 2px solid var(--panel-2); border-radius: 12px; background: var(--panel); color: var(--text); font-family: inherit; font-size: 16px; font-weight: 700; }
+.m-keypad {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  padding: 12px 8px calc(12px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
+  padding-right: calc(8px + env(safe-area-inset-right));
+  background: var(--panel); border-top: 1px solid var(--panel-2); box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.m-kp-key {
+  height: 52px; min-height: 52px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 0 4px; border: none; border-radius: 12px; background: var(--panel-2); color: var(--text);
+  font-family: inherit; font-size: 24px; font-weight: 600; touch-action: manipulation;
+}
+.m-kp-key:active { background: #3A3F4C; }
+.m-kp-key--http, .m-kp-key--https { font-size: 15px; }
+.m-kp-small { font-size: 12px; }
+.m-kp-key--submit { grid-column: 1 / -1; font-size: 17px; }
+.m-kp-key--submit.m-btn-primary { background: var(--accent); color: #0F1115; }
+html.m-keypad-open { --m-nav-reserve: var(--m-keypad-h); }
+html.m-keypad-open .m-nav, html.m-keypad-open .m-mini, html.m-keypad-open .m-mini-pad { display: none; }
+html.m-keypad-open .m-toast-host { bottom: calc(var(--m-keypad-h) + 16px + env(safe-area-inset-bottom)); }
