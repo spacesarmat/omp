@@ -2,63 +2,22 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## 0.19.0-beta.7
+## 0.19.0
 
-- [phone] Android TV remote: a "Control the box" switch: keys, Home, volume, Settings and media keys drive the whole box (via Google TV Remote with the code from the screen, or via network debugging); OMP still gets them
-- [phone] Rename a TV: long-press its name on the Remote screen, Rename in the TV switcher or the pencil on the TV screen; "Restore the TV's own name" brings it back
-- [tv] "Find a release": each result shows "Movie" or "Series · S02 · 1–8 of 8", with an "All / Movies / Series" switch above the list
-- [phone] Release search: a "Movie" / "Series · S02 · 1–8 of 8" badge and an "All / Movies / Series" filter; found releases get "Watch on the phone"
-- [tv] The TorrServer address has OMP's own keypad: digits, ".", ":", backspace, http:// and https://; the remote's number keys type digits, "Keyboard" switches to the system keyboard
-- [phone] The server address has OMP's own keypad docked at the bottom: digits, ".", ":", http:// and https://; "Keyboard" switches to the system keyboard, "123" back
-- [tv] Series and release screens: after the last episode of a season, the announced episodes ("S02E08 Pyramid · out Oct 8"); the screen scrolls to them from the last episode
-- [tv] Season chips show what is there first, then progress: "10 episodes · watched 1", "6 of 10 episodes", "watched"
-- [tv] Top bar button labels show as a chip under the button; the button no longer stretches or runs off the screen
-- [tv] The device name under the logo; a Dune HD box is called "Dune HD" (on the phone too)
-- [atv] Info: the bitrate comes from TorrServer's file analysis when the player does not report it, else the file's average with an approximate mark
-- [atv] Back on the phone remote at the home screen closes OMP, like the box remote
-- [tv] The "Continue" button row scrolls the screen back to the top; the release name under the title is one line
-- [lg] Poster corners stay rounded while a focused card scales
-
-## 0.19.0-beta.6
-
-- [tv] A TorrServer address typed with the TV keyboard is cleaned of look-alike characters (full-width colon and digits, no-break and invisible spaces, a comma for a dot, a Cyrillic "o" in an IP); if it is still wrong, OMP names the invalid character instead of trying to connect
-- [phone] The server address is cleaned of invisible and full-width characters on connect; an invalid character is named in the error
-- [atv] When TorrServer does not answer or is not found and a VPN is running on the TV, OMP suggests excluding OMP from the VPN or turning on local network bypass; without a VPN it mentions always-on VPN with blocked connections
-- [tv] New FAQ question "The TV cannot reach TorrServer but the phone can"
-
-## 0.19.0-beta.5
-
-- FAQ: a new question "Connect the phone to a Xiaomi TV" (the code, the same Wi-Fi without isolation, OMP must be running, VPN) and a step-by-step phone install for Xiaomi
-
-## 0.19.0-beta.4
-
-- [tv] Default dub per series: OMP remembers the dub picked in the player and uses it for the next episodes and the series' other releases; shown and changeable on the series screen («Dub: HDRezka · 5.1»)
-- [phone] The series dub on the series screen: the same as picked on the TV, with channels (stereo / 5.1), can be changed or reset
-- [tv] Colour keys in the player: red — dub, green — subtitles, yellow — Info, blue — menu; pressing again closes the window; they work from the phone remote too
-- [tv] Info in the player (yellow or Info): HDR and codec, seeds and peers, download speed, bitrate, sound, buffer — refreshed every second
-- [atv] The dub, subtitle and chapter lists close on any pick, the current item too
-- [tv] The name of the device OMP runs on under the logo
-- [tv] The series screen buttons wrap to a second row instead of running off the screen
-- Betas have a blue BETA band on the icon
-
-## 0.19.0-beta.3
-
-- [tv] «Cast» on the torrent screen of a series that has a single torrent in the library (for example «Dark Matter»)
-- [phone] «Cast» on the torrent screen of a series that has a single torrent in the library (for example «Dark Matter»)
-- [tv] Biographies keep their paragraphs; the screen no longer jumps while «Cast» loads
-- [phone] Biographies keep their paragraphs, no extra gap at the top of the person screen; the screen no longer jumps while «Cast» loads
-
-## 0.19.0-beta.2
-
-- [tv] Cast and director screen: biography, filters in one row, opens in «Discover»; «Cast» on the series and movie screens sits right under the buttons
-- [phone] Cast and director screen: biography, filters in one row, opens in «Discover»; «Cast» on the series and movie screens sits right under the buttons, with proper margins
-
-## 0.19.0-beta.1
-
-- [tv] Cast and directors on «Discover» cards and on the series and movie screens: press one to open the filmography; titles already in «Mine» are highlighted and come first, with an «In library» filter
-- [phone] Cast and directors on «Discover» cards and on the series and movie screens: tap one to open the filmography; titles already in «Mine» are highlighted and come first, with an «In library» filter
-- [atv] 2160 Player as the video player (Settings → «Video player»): resumes where you stopped, skips intros and credits, plays all episodes of the torrent
-- [phone] «Watch on the phone» through 2160 Player when chosen in Settings: the watch position comes back to OMP
+- [tv] Cast and directors on Discover cards and the series and movie screens: press one for the filmography with a biography; titles already in Library are highlighted, with an «In library» filter
+- [phone] Cast and directors with filmography and biography, on Discover and on the series and movie screens in Library
+- [tv] Default dub per series: OMP remembers the dub picked in the player for the next episodes; shown and changeable on the series screen ("Dub: HDRezka · 5.1")
+- [tv] Colour keys in the player: red for dub, green for subtitles, yellow for Info, blue for the menu; the Info panel shows HDR, codec, seeds, speed, bitrate and buffer
+- [phone] The Android TV remote drives the whole box: Home, volume, menu and media keys, via Google TV Remote with the code from the screen or via network debugging
+- [phone] Rename a TV by long-pressing its name on the Remote screen
+- [tv] Release search: "Movie" / "Series · S02 · 1–8 of 8" badges and an "All / Movies / Series" filter
+- [phone] Release search: badges and the "All / Movies / Series" filter, and "Watch on the phone" on found releases
+- [tv] Series and release screens: the announced episodes after the last one ("S02E08 · out Oct 8"); season chips read "10 episodes · watched 1"
+- [tv] The TorrServer address has OMP's own keypad (digits, ".", ":", http://, https://) and is cleaned of TV-keyboard look-alikes; Android TV hints about a VPN when no server answers
+- [phone] The server address has OMP's own keypad docked at the bottom
+- [atv] 2160 Player as the video player (Settings, Video player): with the resume point, skipped intros and all episodes of the release
+- [tv] The device name under the logo ("Dune HD", the TV's name); top bar button labels show as a chip under the button
+- FAQ: connecting and installing on Xiaomi, "The TV cannot reach TorrServer but the phone can"; betas have a BETA band on the icon
 
 ## 0.18.2
 
