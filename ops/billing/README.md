@@ -26,8 +26,44 @@ node src/server.mjs
 6. Выпусти код подписки в панели.
 7. В приложении в `src/billing/config.ts` поставь `BILLING_ORIGIN = 'http://IP-NAS:8787'`, собери тестовый APK, введи код в «Источники поиска».
 
-Jackett с хоста не торчит наружу — к нему ходит только контейнер billing. Когда пойдём «в мир», этот же стек переедет на VPS или за туннель, а `BILLING_ORIGIN` сменится на публичный HTTPS.
+Jackett с хоста не торчит наружу — к нему ходит только контейнер billing.
+
+## Публичный HTTPS — Cloudflare Tunnel
+
+Стек на NAS остаётся как есть: `cloudflared` шарит сеть с `omp-billing` и проксирует наружу. Порты роутера не открываем.
+
+1. Домен в [Cloudflare](https://dash.cloudflare.com/) (бесплатный план ок).
+2. **Zero Trust** → **Networks** → **Tunnels** → **Create a tunnel** → Cloudflared → имя `omp-billing`.
+3. Скопируй **token** (установка Docker). В Public Hostname:
+   - Subdomain: например `billing`
+   - Domain: твой домен
+   - Type: HTTP
+   - URL: `http://127.0.0.1:8787`  
+     (туннель в том же network namespace, что и billing — см. `network_mode: service:omp-billing`)
+4. На NAS создай файл `/DATA/AppData/omp-billing/.env`:
+
+```
+CLOUDFLARE_TUNNEL_TOKEN=eyJh...длинный_токен...
+```
+
+5. Обнови compose на NAS и подними туннель (profile `tunnel`, иначе только локальный `:8787`):
+
+```
+# скопируй ops/billing → /DATA/AppData/omp-billing/app
+docker compose -f /DATA/AppData/omp-billing/app/docker-compose.yml \
+  --env-file /DATA/AppData/omp-billing/.env \
+  --profile tunnel up -d
+```
+
+6. Проверь: `https://billing.<домен>/health` → `{"ok":true}`, админка `/admin`.
+7. В панели **publicOrigin** = `https://billing.<домен>`.
+8. В приложении `src/billing/config.ts`: `BILLING_ORIGIN = 'https://billing.<домен>'`.
+9. ЮMoney HTTP-уведомления: `https://billing.<домен>/v1/yoomoney`.
+
+Без profile `tunnel` / без токена наружу ничего не торчит — LAN `:8787` как раньше. Токен в git не коммить.
+
+Пример файла: `env.tunnel.example`.
 
 ## Настройки панели
 
-Токен бота, кошелёк и секрет уведомлений [ЮMoney](https://yoomoney.ru/), адрес Jackett, API-ключ и цены. Уведомления ЮMoney (после выхода в интернет): `https://<сервер>/v1/yoomoney`.
+Токен бота, кошелёк и секрет уведомлений [ЮMoney](https://yoomoney.ru/), адрес Jackett, API-ключ и цены. Уведомления ЮMoney: `https://<твой-tunnel-хост>/v1/yoomoney`.
