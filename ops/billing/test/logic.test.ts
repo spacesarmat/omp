@@ -4,6 +4,7 @@ import { restoreJackett, stripJackett } from '../src/jackett.mjs';
 import {
   accountCard,
   activate,
+  adminDashboard,
   adminFind,
   applyPayment,
   confirmDeviceLink,
@@ -163,6 +164,21 @@ describe('admin account card', () => {
     expect(byId.codes).toHaveLength(1);
     const granted = grantDays(start.state, { accountId: start.account, days: 2, now: NOW });
     expect(granted.result.paidUntil).toBeGreaterThan(NOW + 30 * 24 * 60 * 60 * 1000);
+  });
+});
+
+describe('admin dashboard', () => {
+  it('lists config alerts and payment events', () => {
+    const start = paid();
+    const paidState = applyPayment(start.state, {
+      operationId: 'op-dash',
+      label: 'new:' + start.account,
+      amount: '100.00',
+      now: NOW + 5000,
+    }).state;
+    const dash = adminDashboard(paidState, NOW + 5000);
+    expect(dash.alerts.some((a) => a.text.indexOf('Jackett') >= 0 || a.text.indexOf('бота') >= 0)).toBe(true);
+    expect(dash.events.some((e) => e.kind === 'pay')).toBe(true);
   });
 });
 

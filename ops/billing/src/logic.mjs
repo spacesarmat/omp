@@ -324,6 +324,91 @@ export function adminSummary(state, now) {
   return { accounts: state.accounts.length, active, promos, bound, fails };
 }
 
+/**
+ * Home dashboard: recent events + operational alerts.
+ * @returns {{ events: { at, kind, text, accountId }[], alerts: { level, text }[] }}
+ */
+export function adminDashboard(state, now) {
+  const events = [];
+  for (let i = 0; i < state.payments.length; i++) {
+    const p = state.payments[i];
+    const label = String(p.label || '');
+    let accountId = '';
+    if (label.indexOf('new:') === 0) accountId = label.slice(4);
+    else if (label.indexOf('sub:') === 0 || label.indexOf('dev:') === 0) {
+      const sub = state.subscriptions.find((s) => s.id === label.slice(4));
+      accountId = sub ? sub.accountId : '';
+    }
+    events.push({
+      at: p.at || 0,
+      kind: 'pay',
+      text: 'Оплата ' + (p.amount || '') + ' · ' + label,
+      accountId,
+    });
+  }
+  for (let i = 0; i < (state.promos || []).length; i++) {
+    const promo = state.promos[i];
+    for (let u = 0; u < (promo.uses || []).length; u++) {
+      const use = promo.uses[u];
+      events.push({
+        at: use.at || 0,
+        kind: 'promo',
+        text: 'Промо ' + promo.code + ' (+' + promo.days + ' дн.)',
+        accountId: use.accountId || '',
+      });
+    }
+  }
+  for (let i = 0; i < state.attempts.length; i++) {
+    const a = state.attempts[i];
+    if (a.ok) {
+      const code = state.codes.find((c) => c.deviceId === a.deviceId);
+      const sub = code ? state.subscriptions.find((s) => s.id === code.subscriptionId) : null;
+      events.push({
+        at: a.at || 0,
+        kind: 'activate',
+        text: 'Активация · устройство ' + String(a.deviceId || '').slice(0, 8) + '…',
+        accountId: sub ? sub.accountId : '',
+      });
+    } else {
+      events.push({
+        at: a.at || 0,
+        kind: 'fail',
+        text: 'Отказ: ' + (a.reason || '?') + ' · ' + String(a.deviceId || '').slice(0, 8) + '…',
+        accountId: '',
+      });
+    }
+  }
+  events.sort((a, b) => b.at - a.at);
+  const feed = events.slice(0, 40);
+
+  const alerts = [];
+  const s = state.settings || {};
+  if (!s.botToken) alerts.push({ level: 'bad', text: 'Не задан токен бота Telegram' });
+  if (!s.jackettUrl) alerts.push({ level: 'bad', text: 'Не задан адрес Jackett' });
+  if (!s.jackettApiKey) alerts.push({ level: 'bad', text: 'Не задан API-ключ Jackett' });
+  if (Number(s.priceRub) > 0 && !s.yoomoneyWallet) alerts.push({ level: 'bad', text: 'Цена задана, но кошелёк ЮMoney пуст' });
+  if (!s.publicOrigin) alerts.push({ level: 'warn', text: 'publicOrigin пуст — ссылки «Открыть в OMP» в боте без http' });
+  if (!String(s.adminTelegramIds || '').trim()) alerts.push({ level: 'warn', text: 'Нет adminTelegramIds — админ-кабинет в боте недоступен' });
+
+  const soon = now + 2 * DAY;
+  const expiring = state.subscriptions.filter((sub) => sub.paidUntil > now && sub.paidUntil <= soon);
+  for (let i = 0; i < expiring.length; i++) {
+    const sub = expiring[i];
+    const acc = findAccount(state, sub.accountId);
+    const who = acc ? acc.telegramId || acc.email || acc.id : sub.accountId;
+    alerts.push({
+      level: 'warn',
+      text: 'Истекает ' + new Date(sub.paidUntil).toISOString().slice(0, 10) + ': ' + who,
+      accountId: sub.accountId,
+    });
+  }
+
+  const failsDay = state.attempts.filter((a) => !a.ok && a.at > now - DAY).length;
+  if (failsDay >= 5) alerts.push({ level: 'bad', text: 'Отказов ввода кода за сутки: ' + failsDay });
+
+  return { events: feed, alerts };
+}
+
 export function adminFind(state, query, now) {
   const q = String(query || '').trim();
   if (!q) return null;

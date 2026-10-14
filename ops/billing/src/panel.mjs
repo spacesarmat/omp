@@ -1,3 +1,5 @@
+import { adminDashboard } from './logic.mjs';
+
 export function esc(s) {
   return String(s === undefined || s === null ? '' : s)
     .replace(/&/g, '&amp;')
@@ -39,6 +41,14 @@ const CSS = `
   .search input { margin: 0; }
   .search button { margin: 0; white-space: nowrap; }
   a.link { color: #F5B700; }
+  .alert { padding: 10px 12px; border-radius: 8px; margin: 0 0 8px; font-size: 14px; }
+  .alert.bad { background: #3a1518; border-left: 4px solid #E5484D; }
+  .alert.warn { background: #2a2410; border-left: 4px solid #F5B700; }
+  .pill { display: inline-block; font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #252A35; color: #9AA1B2; margin-right: 6px; text-transform: uppercase; }
+  .pill.pay { color: #3FB950; }
+  .pill.promo { color: #F5B700; }
+  .pill.activate { color: #79b8ff; }
+  .pill.fail { color: #E5484D; }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; color: #9AA1B2; font-weight: 600; font-size: 13px; padding: 8px 6px; border-bottom: 1px solid #252A35; }
   td { padding: 10px 6px; border-top: 1px solid #252A35; vertical-align: top; font-size: 14px; }
@@ -396,6 +406,56 @@ export function homePage(state, extra) {
     )
     .join('');
 
+  const dash = adminDashboard(state, now);
+  const alertBlock =
+    dash.alerts.length === 0
+      ? '<p class="muted">Алертов нет</p>'
+      : dash.alerts
+          .map((a) => {
+            const body = a.accountId
+              ? '<a class="link" href="/admin/user?id=' + encodeURIComponent(a.accountId) + '">' + esc(a.text) + '</a>'
+              : esc(a.text);
+            return '<div class="alert ' + (a.level === 'bad' ? 'bad' : 'warn') + '">' + body + '</div>';
+          })
+          .join('');
+
+  const quickPromos =
+    '<div class="card"><p class="muted" style="margin-top:0">Шаблоны — сразу создают промокод</p><div class="row-actions">' +
+    '<form method="post" action="/admin/promo">' +
+    csrf +
+    '<input type="hidden" name="days" value="1"><input type="hidden" name="maxUses" value="10">' +
+    '<button class="inline" type="submit">1 день × 10</button></form>' +
+    '<form method="post" action="/admin/promo">' +
+    csrf +
+    '<input type="hidden" name="days" value="7"><input type="hidden" name="maxUses" value="1">' +
+    '<button class="inline" type="submit">7 дней × 1</button></form>' +
+    '<form method="post" action="/admin/promo">' +
+    csrf +
+    '<input type="hidden" name="days" value="1"><input type="hidden" name="maxUses" value="1">' +
+    '<button class="inline ghost" type="submit">1 день × 1</button></form>' +
+    '</div></div>';
+
+  const feedRows = dash.events
+    .map((e) => {
+      const who = e.accountId
+        ? '<a class="link" href="/admin/user?id=' + encodeURIComponent(e.accountId) + '">карточка</a>'
+        : '<span class="muted">—</span>';
+      return (
+        '<tr><td class="muted">' +
+        esc(when(e.at)) +
+        '</td><td><span class="pill ' +
+        esc(e.kind) +
+        '">' +
+        esc(e.kind) +
+        '</span>' +
+        esc(e.text) +
+        '</td><td>' +
+        who +
+        '</td></tr>'
+      );
+    })
+    .join('');
+
   return page(
     'OMP',
     '<h1>OMP — подписки</h1>' +
@@ -417,10 +477,19 @@ export function homePage(state, extra) {
       (s.periodDays || 30) +
       ' дн.</span></div>' +
       '</div>' +
-      '<nav><a href="#find">Найти</a><a href="#issue">Выдать код</a><a href="#promos">Промокоды</a><a href="#subs">Подписки</a><a href="#settings">Настройки</a><a href="#fails">Отказы</a></nav>' +
+      '<nav><a href="#find">Найти</a><a href="#alerts">Алерты</a><a href="#feed">Лента</a><a href="#quick">Промо</a><a href="#issue">Выдать код</a><a href="#promos">Все промо</a><a href="#subs">Подписки</a><a href="#settings">Настройки</a><a href="#fails">Отказы</a></nav>' +
       '<section id="find"><h2>Найти пользователя</h2>' +
       searchForm(csrf, extra.q || '') +
       '</section>' +
+      '<section id="alerts"><h2>Алерты</h2><div class="card">' +
+      alertBlock +
+      '</div></section>' +
+      '<section id="quick"><h2>Быстрые промокоды</h2>' +
+      quickPromos +
+      '</section>' +
+      '<section id="feed"><h2>Лента событий</h2><div class="card"><table><tr><th>Когда</th><th>Событие</th><th></th></tr>' +
+      (feedRows || '<tr><td colspan="3" class="muted">Пока пусто</td></tr>') +
+      '</table></div></section>' +
       '<section id="issue"><h2>Выдать код активации</h2>' +
       issue +
       '</section>' +
