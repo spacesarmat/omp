@@ -5,15 +5,8 @@ import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 // @ts-ignore node builtin
 import { tmpdir } from 'node:os';
-// @ts-ignore plain .mjs
-import {
-  assertChangelogText,
-  decodeUtf8Strict,
-  latestSectionBody,
-  prependChangelogSection,
-  readChangelogUtf8,
-  writeUtf8Lf,
-} from '../../scripts/changelog-encoding.mjs';
+// @ts-ignore plain .mjs, no declarations
+import { assertChangelogText, decodeUtf8Strict, latestSectionBody, prependChangelogSection, readChangelogUtf8, writeUtf8Lf } from '../../scripts/changelog-encoding.mjs';
 
 describe('changelog encoding', () => {
   it('real CHANGELOG.md is strict UTF-8 with Cyrillic in the latest section', () => {
@@ -31,12 +24,12 @@ describe('changelog encoding', () => {
 
   it('rejects cp1251 bytes that broke beta.8', () => {
     // "то" in Windows-1251 is f2 ee — invalid as UTF-8
-    const cp1251 = Buffer.from([0x23, 0x20, 0xf2, 0xee, 0x0a]);
+    const cp1251 = new Uint8Array([0x23, 0x20, 0xf2, 0xee, 0x0a]);
     expect(() => decodeUtf8Strict(cp1251, 'cp1251')).toThrow(/not valid UTF-8/);
   });
 
   it('rejects a UTF-8 BOM and U+FFFD', () => {
-    const bom = Buffer.from([0xef, 0xbb, 0xbf, 0x23, 0x20, 0x6f, 0x6b]);
+    const bom = new Uint8Array([0xef, 0xbb, 0xbf, 0x23, 0x20, 0x6f, 0x6b]);
     expect(() => decodeUtf8Strict(bom, 'bom')).toThrow(/BOM/);
     expect(() => assertChangelogText('bad\uFFFD', 'x')).toThrow(/U\+FFFD/);
   });

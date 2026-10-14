@@ -80,7 +80,7 @@ describe('NowPlaying swipes', () => {
     const s: PlayerState = {
       hash: 'h', file: 1, title: 'Ледяной перевал', subtitle: 'S01E01',
       time: 10, duration: 1000, paused: false, buffering: false,
-      audio: { list: ['Русский'], sel: 0 }, subs: { list: [], sel: 'off' },
+      audio: { list: ['Русский'], sel: 0 }, subs: { list: [], sel: 'off' }, next: null,
     };
     nowPlaying.value = s;
     lastSeen.value = 100000;
@@ -119,7 +119,6 @@ describe('NowPlaying swipes', () => {
     await act(async () => {
       for (let i = 0; i < 30; i++) await Promise.resolve();
     });
-    expect(launch).toHaveBeenCalled();
-    expect(launch.mock.calls[0][0].file).toBe(2);
+    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ file: 2 }));
   });
 });

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { t, tp, fmtDuration } from '../../../../src/i18n';
 import { formatBytes } from '../../../../src/lib/format';
-import { baseName, parseEpisode, stripExt } from '../../../../src/lib/episodes';
+import { baseName, episodeLabel, parseEpisode, stripExt } from '../../../../src/lib/episodes';
 import { airDateText, isoDay } from '../../../../src/lib/seriesStatus';
 import { getLocalProgress } from '../../../../src/store/progress';
 import { torrents } from '../../../../src/store/library';
@@ -13,7 +13,6 @@ import { artKey, artVersion, pickedArt, saveArt } from '../../catalog/artPick';
 import { goBack, navigate } from '../../nav';
 import { Icon } from '../../ui/Icon';
 import { activeTv } from '../../tv/tvStore';
-import { episodeLabel } from '../../lib/torrentActions';
 import { useTvLaunch } from '../../watch';
 import { LaunchError } from '../../ui/LaunchError';
 import { CatalogError } from './CatalogError';

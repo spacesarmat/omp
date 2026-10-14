@@ -2,6 +2,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.16
+
+- same as beta.15 (release failed: typecheck)
+- [phone] Watch on TV labels the episode S01E01 again
+
 ## 0.20.0-beta.15
 
 - same as beta.13–14 (release failed: the in-app changelog window dropped 0.17.0)

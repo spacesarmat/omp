@@ -30,8 +30,7 @@ export function seriesLibraryHash(list: Torrent[], card: CatalogCard, season: nu
 
 /** A playable file of the series (one season when `season` is set). Null when the library has none. */
 export function seriesWatchSpot(list: Torrent[], card: CatalogCard, season: number | null): WatchSpot | null {
-  let best: WatchSpot | null = null;
-  let first: { spot: WatchSpot; sn: number; ep: number } | null = null;
+  const found: { best: WatchSpot | null; first: { spot: WatchSpot; sn: number; ep: number } | null } = { best: null, first: null };
   hashesOf(list, card, season).forEach((hash) => {
     const tor = list.filter((t) => t.hash === hash)[0];
     if (!tor) return;
@@ -42,11 +41,12 @@ export function seriesWatchSpot(list: Torrent[], card: CatalogCard, season: numb
       const ep = parsed.episode !== null ? parsed.episode : 0;
       const at = sharedResume(hash, file.id);
       const spot = { hash, file, at };
-      if (at > 0 && (!best || at > best.at)) best = spot;
-      if (!first || sn < first.sn || (sn === first.sn && ep < first.ep)) first = { spot, sn, ep };
+      const first = found.first;
+      if (at > 0 && (!found.best || at > found.best.at)) found.best = spot;
+      if (!first || sn < first.sn || (sn === first.sn && ep < first.ep)) found.first = { spot, sn, ep };
     });
   });
-  return best || (first ? first.spot : null);
+  return found.best || (found.first ? found.first.spot : null);
 }
 
 /** File size of each episode number in one season (the largest file when several torrents have it). */
