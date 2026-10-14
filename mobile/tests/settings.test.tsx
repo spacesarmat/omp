@@ -68,14 +68,15 @@ describe('Settings', () => {
     expect(row.textContent).toContain('Выключено — телевизор ищет только через TorrServer (Rutor, Jackett)');
   });
 
-  it('the update block comes first', () => {
+  it('sources come first; about stays last', () => {
     const el = mount();
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
-    expect(labels[0]).toBe('Обновление');
+    expect(labels[0]).toBe('Источники поиска');
     expect(labels[labels.length - 1]).toBe('О приложении');
-    const first = el.querySelector('.m-set-group')!;
-    expect(first.textContent).toContain('Проверить обновления');
-    expect(first.textContent).toContain('Проверять обновления при запуске');
+    expect(labels).toContain('Обновление');
+    const update = Array.from(el.querySelectorAll('.m-set-group')).find((g) => g.textContent!.indexOf('Обновление') === 0)!;
+    expect(update.textContent).toContain('Проверить обновления');
+    expect(update.textContent).toContain('Проверять обновления при запуске');
   });
 
   it('tap on «Версия» opens «Что нового» with the latest versions', async () => {
@@ -158,7 +159,7 @@ describe('Settings', () => {
 
   it('toggles check on start', async () => {
     const el = mount();
-    const sw = el.querySelector<HTMLElement>('[role="switch"]')!;
+    const sw = el.querySelector<HTMLElement>('[role="switch"][aria-label="Проверять обновления при запуске"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('true');
     await act(async () => sw.click());
     expect(settings.value.updateCheck).toBe(false);
@@ -521,7 +522,7 @@ describe('Settings in English', () => {
     const el = mount();
     expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Settings');
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
-    expect(labels).toEqual(['Update', 'Server', 'TV', 'About']);
+    expect(labels).toEqual(['Search sources', 'TV', 'Server', 'Update', 'About']);
     const text = el.textContent!;
     for (const w of ['Version', 'What’s new', 'Check for updates', 'Check for updates on start', 'Get beta versions', 'Not chosen', 'Change', 'Choose', 'Search sources', 'Monitoring', 'Install OMP on the TV', 'Questions and answers', 'Backup', 'Error log', 'Project page']) {
       expect(text, w).toContain(w);

@@ -229,11 +229,11 @@ describe('Sources screen', () => {
 });
 
 describe('Settings → «Источники поиска»', () => {
-  it('opens the sources screen; updates stay first', async () => {
+  it('opens the sources screen; sources stay first', async () => {
     localServer.value = { supported: false, running: false };
     await mount(<Settings />);
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
-    expect(labels[0]).toBe('Обновление');
+    expect(labels[0]).toBe('Источники поиска');
     const b = Array.from(el.querySelectorAll('button')).find((x) => (x.textContent || '').indexOf('Источники поиска') >= 0)!;
     click(b);
     expect(currentRoute.value).toEqual({ name: 'sources' });
