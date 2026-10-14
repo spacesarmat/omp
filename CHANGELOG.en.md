@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.3
+
+- [phone] OMP Jackett: enter a subscription code and search through the server with no address or key on the phone; a link to the @OMPBILLINGBOT bot for payment and the code
+
 ## 0.20.0-beta.2
 
 - [phone] The built-in player keeps the screen on while a video is playing

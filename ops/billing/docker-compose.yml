@@ -1,0 +1,29 @@
+# Local / NAS: phone reaches billing on :8787. Jackett stays on the docker network only.
+# In the panel set Jackett URL to http://jackett:9117 (service name, not 127.0.0.1).
+services:
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Moscow
+    volumes:
+      - ./jackett-config:/config
+    # no host ports: only the billing container talks to Jackett
+  billing:
+    image: node:24-bookworm-slim
+    restart: unless-stopped
+    working_dir: /app
+    command: ["sh", "-c", "npm install --omit=dev && node src/server.mjs"]
+    environment:
+      - PORT=8787
+      - BILLING_DATA=/data/state.json
+      - BILLING_JACKETT_URL=http://jackett:9117
+    volumes:
+      - ./:/app
+      - ./data:/data
+    ports:
+      - "8787:8787"
+    depends_on:
+      - jackett

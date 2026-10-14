@@ -1,0 +1,12 @@
+{
+  "name": "omp-billing",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --import tsx --test test/logic.test.ts"
+  },
+  "dependencies": {
+    "nodemailer": "^7.0.6"
+  }
+}

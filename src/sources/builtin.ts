@@ -5,6 +5,7 @@
 import { anidub } from './anidub';
 import { bigfangroup } from './bigfangroup';
 import { startIndexerSources } from './indexer';
+import { startOmpJackett } from './ompJackett';
 import { nnmclub } from './nnmclub';
 import { registerSource } from './registry';
 import { rutor } from './rutor';
@@ -24,4 +25,5 @@ export function registerBuiltinSources(): void {
   builtinParsers().forEach(registerSource);
   // Jackett / Prowlarr connections: one source each, and the path selection against ts-torznab
   startIndexerSources();
+  startOmpJackett();
 }

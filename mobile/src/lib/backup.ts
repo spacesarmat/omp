@@ -156,6 +156,8 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.sourcePause', // background requests to a site paused after its code page: per device, an hour
   'tsp.tvSearchService', // the TV search switch: it runs this phone's own server, per device
   'tsp.phoneLink', // TV: the address and token of the phone that serves its search, per device
+  'tsp.billingDevice', // paid Jackett: install id, per device
+  'tsp.billingSession', // paid Jackett: session token, never in a copy
 ];
 
 function readRaw(key: string): unknown {
