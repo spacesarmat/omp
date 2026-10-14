@@ -36,6 +36,8 @@ export function emptyState() {
     promos: [],
     /** Pending phone↔Telegram link tokens from the app. */
     links: [],
+    /** Admin panel action log. */
+    audit: [],
     outbox: [],
   };
 }
@@ -56,6 +58,7 @@ export function readState(file) {
       webhooks: Array.isArray(parsed.webhooks) ? parsed.webhooks : [],
       promos: Array.isArray(parsed.promos) ? parsed.promos : [],
       links: Array.isArray(parsed.links) ? parsed.links : [],
+      audit: Array.isArray(parsed.audit) ? parsed.audit : [],
       outbox: Array.isArray(parsed.outbox) ? parsed.outbox : [],
     };
   } catch (e) {

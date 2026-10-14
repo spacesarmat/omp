@@ -8,6 +8,7 @@ import {
   createPromo,
   createSubscription,
   grantDays,
+  logAudit,
   logWebhook,
   openAccount,
   openAppUrl,
@@ -42,8 +43,36 @@ function cookie(req, name) {
 function adminOf(req) {
   const id = cookie(req, 'omp_admin');
   const row = sessions.get(id);
-  if (!row || row.exp < Date.now()) return null;
+  if (!row || row.exp < Date.now()) {
+    if (row) sessions.delete(id);
+    return null;
+  }
+  row.lastSeen = Date.now();
+  row.id = id;
   return row;
+}
+
+function listSessions() {
+  const now = Date.now();
+  const out = [];
+  for (const [id, row] of sessions) {
+    if (row.exp < now) {
+      sessions.delete(id);
+      continue;
+    }
+    out.push({
+      id,
+      createdAt: row.createdAt || 0,
+      lastSeen: row.lastSeen || row.createdAt || 0,
+      exp: row.exp,
+    });
+  }
+  out.sort((a, b) => b.lastSeen - a.lastSeen);
+  return out;
+}
+
+function audit(file, action, detail) {
+  return updateState(file, (state) => ({ state: logAudit(state, { action, detail, now: Date.now() }) }));
 }
 
 async function readBody(req) {
@@ -131,14 +160,33 @@ export function createApp(file, fetchImpl) {
       if (req.method === 'GET' && (path === '/admin' || path === '/admin/')) {
         const admin = adminOf(req);
         if (!admin) return send(res, 200, loginPage(''), { 'content-type': 'text/html; charset=utf-8' });
+        const sid = cookie(req, 'omp_admin');
         const code = admin.flash || '';
         const promo = admin.flashPromo || '';
         const flash = admin.flashText || '';
         const err = admin.flashError || '';
-        if (code || promo || flash || err) sessions.set(cookie(req, 'omp_admin'), { csrf: admin.csrf, exp: admin.exp });
-        return send(res, 200, homePage(readState(file), { csrf: admin.csrf, code, promo, flash, error: err }), {
-          'content-type': 'text/html; charset=utf-8',
-        });
+        if (code || promo || flash || err) {
+          sessions.set(sid, {
+            csrf: admin.csrf,
+            exp: admin.exp,
+            createdAt: admin.createdAt,
+            lastSeen: Date.now(),
+          });
+        }
+        return send(
+          res,
+          200,
+          homePage(readState(file), {
+            csrf: admin.csrf,
+            code,
+            promo,
+            flash,
+            error: err,
+            sessions: listSessions(),
+            sessionId: sid,
+          }),
+          { 'content-type': 'text/html; charset=utf-8' },
+        );
       }
       if (req.method === 'GET' && path === '/admin/user') {
         const admin = adminOf(req);
@@ -181,11 +229,14 @@ export function createApp(file, fetchImpl) {
         const body = await readBody(req);
         const state = readState(file);
         if (!passwordMatches(body.password || '', state.settings.adminSalt, state.settings.adminHash)) {
+          await audit(file, 'login_fail', 'bad password');
           return send(res, 401, loginPage('Неверный пароль'), { 'content-type': 'text/html; charset=utf-8' });
         }
         const id = randomId() + randomId();
         const csrf = randomId();
-        sessions.set(id, { csrf, exp: Date.now() + 12 * 60 * 60 * 1000 });
+        const now = Date.now();
+        sessions.set(id, { csrf, exp: now + 12 * 60 * 60 * 1000, createdAt: now, lastSeen: now });
+        await audit(file, 'login', 'ok');
         res.setHeader('set-cookie', 'omp_admin=' + id + '; HttpOnly; SameSite=Lax; Path=/');
         res.writeHead(302, { location: '/admin' });
         return res.end();
@@ -313,14 +364,76 @@ export function createApp(file, fetchImpl) {
           await updateState(file, (state) => ({ state: revokePromo(state, body.promoId || '') }));
         }
         if (path === '/admin/unbind') {
-          await updateState(file, (state) => ({ state: unbindCode(state, body.codeId || '') }));
+          await updateState(file, (state) => ({
+            state: logAudit(unbindCode(state, body.codeId || ''), {
+              action: 'unbind',
+              detail: body.codeId || '',
+              now: Date.now(),
+            }),
+          }));
           flashText = 'Устройство сброшено, выдан новый код';
           if (body.accountId) redirectTo = '/admin/user?id=' + encodeURIComponent(body.accountId);
         }
+        if (path === '/admin/password') {
+          const state = readState(file);
+          if (!passwordMatches(body.current || '', state.settings.adminSalt, state.settings.adminHash)) {
+            flashError = 'Текущий пароль неверный';
+            redirectTo = '/admin#security';
+          } else if (!body.next || body.next !== body.next2 || String(body.next).length < 6) {
+            flashError = 'Новый пароль: минимум 6 символов и совпадение';
+            redirectTo = '/admin#security';
+          } else {
+            const hashed = hashPassword(body.next);
+            await updateState(file, (s) => ({
+              state: logAudit(
+                {
+                  ...s,
+                  settings: { ...s.settings, adminHash: hashed.hash, adminSalt: hashed.salt },
+                },
+                { action: 'password_change', detail: 'ok', now: Date.now() },
+              ),
+            }));
+            const keep = cookie(req, 'omp_admin');
+            for (const [id] of sessions) {
+              if (id !== keep) sessions.delete(id);
+            }
+            flashText = 'Пароль сменён, другие сессии завершены';
+            redirectTo = '/admin#security';
+          }
+        }
+        if (path === '/admin/logout') {
+          const sid = cookie(req, 'omp_admin');
+          sessions.delete(sid);
+          await audit(file, 'logout', sid.slice(0, 8));
+          res.setHeader('set-cookie', 'omp_admin=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+          res.writeHead(302, { location: '/admin' });
+          return res.end();
+        }
+        if (path === '/admin/session-revoke') {
+          const target = body.sessionId || '';
+          const sid = cookie(req, 'omp_admin');
+          if (target && target !== sid) {
+            sessions.delete(target);
+            await audit(file, 'session_revoke', target.slice(0, 8));
+            flashText = 'Сессия завершена';
+          }
+          redirectTo = '/admin#security';
+        }
+        if (path === '/admin/grant' && !flashError && flashText) {
+          await audit(file, 'grant', (body.accountId || '') + ' ' + flashText);
+        }
+        if (path === '/admin/promo' && flashPromo) {
+          await audit(file, 'promo_create', flashPromo);
+        }
+        if (path === '/admin/message' && flashText.indexOf('отправлено') >= 0) {
+          await audit(file, 'message', body.accountId || '');
+        }
         res.writeHead(302, { location: redirectTo });
         if (flashed || flashPromo || flashText || flashError) {
-          sessions.set(cookie(req, 'omp_admin'), {
-            ...admin,
+          const sid = cookie(req, 'omp_admin');
+          const cur = sessions.get(sid) || admin;
+          sessions.set(sid, {
+            ...cur,
             flash: flashed,
             flashPromo,
             flashText,

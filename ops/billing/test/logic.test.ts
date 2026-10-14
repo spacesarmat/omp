@@ -12,6 +12,7 @@ import {
   createSubscription,
   financeReport,
   grantDays,
+  logAudit,
   openAccount,
   openAppUrl,
   paymentsCsv,
@@ -181,6 +182,14 @@ describe('admin dashboard', () => {
     const dash = adminDashboard(paidState, NOW + 5000);
     expect(dash.alerts.some((a) => a.text.indexOf('Jackett') >= 0 || a.text.indexOf('бота') >= 0)).toBe(true);
     expect(dash.events.some((e) => e.kind === 'pay')).toBe(true);
+  });
+});
+
+describe('audit', () => {
+  it('appends admin actions', () => {
+    const next = logAudit(emptyState(), { action: 'grant', detail: '+7', now: NOW });
+    expect(next.audit).toHaveLength(1);
+    expect(next.audit[0].action).toBe('grant');
   });
 });
 

@@ -154,6 +154,15 @@ export function logWebhook(state, row) {
   return { ...state, webhooks };
 }
 
+const AUDIT_CAP = 200;
+
+/** Append an admin panel action (password change, grant, unbind, …). */
+export function logAudit(state, { action, detail, now }) {
+  const row = { at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
+  const audit = (state.audit || []).concat([row]).slice(-AUDIT_CAP);
+  return { ...state, audit };
+}
+
 export function applyPayment(state, { operationId, label, amount, now }) {
   if (!operationId || seenPayment(state, operationId)) {
     return {

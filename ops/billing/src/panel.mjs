@@ -25,11 +25,11 @@ const CSS = `
   label { display: block; color: #9AA1B2; font-size: 13px; margin: 10px 0 4px; }
   input, select { width: 100%; box-sizing: border-box; background: #252A35; color: #E8EAF0; border: 0; border-radius: 8px; padding: 10px 12px; }
   .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
-  @media (max-width: 640px) { .fields { grid-template-columns: 1fr; } }
-  button { background: #F5B700; color: #0F1115; border: 0; border-radius: 8px; padding: 10px 14px; font-weight: 700; margin-top: 12px; cursor: pointer; }
+  button { background: #F5B700; color: #0F1115; border: 0; border-radius: 8px; padding: 12px 16px; font-weight: 700; margin-top: 12px; cursor: pointer; min-height: 44px; }
   button.ghost { background: #252A35; color: #E8EAF0; }
-  button.inline { margin: 0 6px 0 0; padding: 8px 10px; font-size: 13px; }
-  .row-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  button.inline { margin: 0; padding: 10px 12px; font-size: 13px; min-height: 40px; }
+  button.copy { margin: 0 0 0 6px; padding: 4px 8px; font-size: 12px; min-height: 28px; vertical-align: middle; }
+  .row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .row-actions form { background: none; padding: 0; margin: 0; display: inline; }
   .muted { color: #9AA1B2; }
   .ok { color: #3FB950; }
@@ -49,15 +49,61 @@ const CSS = `
   .pill.promo { color: #F5B700; }
   .pill.activate { color: #79b8ff; }
   .pill.fail { color: #E5484D; }
-  table { width: 100%; border-collapse: collapse; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+  .filters button { margin: 0; background: #252A35; color: #E8EAF0; }
+  .filters button.on { background: #F5B700; color: #0F1115; }
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; min-width: 480px; }
   th { text-align: left; color: #9AA1B2; font-weight: 600; font-size: 13px; padding: 8px 6px; border-bottom: 1px solid #252A35; }
   td { padding: 10px 6px; border-top: 1px solid #252A35; vertical-align: top; font-size: 14px; }
   .kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin: 0 0 12px; font-size: 14px; }
   .kv span { color: #9AA1B2; }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #F5B700; color: #0F1115; padding: 10px 16px; border-radius: 8px; font-weight: 700; display: none; z-index: 9; }
+  @media (max-width: 640px) {
+    main { padding: 16px 12px 80px; }
+    h1 { font-size: 20px; }
+    .fields { grid-template-columns: 1fr; }
+    .search { flex-direction: column; align-items: stretch; }
+    .kv { grid-template-columns: 1fr; gap: 2px 0; }
+    .kv span { margin-top: 8px; }
+    nav a { flex: 1 1 calc(50% - 8px); text-align: center; padding: 12px 8px; }
+    .stat b { font-size: 20px; }
+    button { width: 100%; }
+    .row-actions button, .filters button, button.inline, button.copy { width: auto; }
+  }
+`;
+
+const SCRIPT = `
+<script>
+(function(){
+  function toast(t){var el=document.getElementById('toast');if(!el)return;el.textContent=t;el.style.display='block';clearTimeout(el._t);el._t=setTimeout(function(){el.style.display='none';},1400);}
+  document.addEventListener('click',function(e){
+    var btn=e.target.closest('[data-copy]');
+    if(btn){var v=btn.getAttribute('data-copy')||'';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v).then(function(){toast('Скопировано');}).catch(function(){toast(v);});}else{toast(v);}return;}
+    var f=e.target.closest('[data-filter]');
+    if(f){var table=document.getElementById(f.getAttribute('data-table')||'subs-table');if(!table)return;var mode=f.getAttribute('data-filter');var group=f.parentNode.querySelectorAll('[data-filter]');for(var i=0;i<group.length;i++)group[i].classList.toggle('on',group[i]===f);var rows=table.querySelectorAll('tbody tr[data-status]');for(var r=0;r<rows.length;r++){var st=rows[r].getAttribute('data-status')||'';rows[r].style.display=(mode==='all'||st.indexOf(mode)>=0)?'':'none';}}
+  });
+})();
+</script>
 `;
 
 function page(title, body) {
-  return '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + esc(title) + '</title><style>' + CSS + '</style><main>' + body + '</main>';
+  return (
+    '<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<title>' +
+    esc(title) +
+    '</title><style>' +
+    CSS +
+    '</style><main>' +
+    body +
+    '</main><div id="toast"></div>' +
+    SCRIPT
+  );
+}
+
+function copyBtn(text) {
+  if (!text) return '';
+  return '<button type="button" class="ghost copy" data-copy="' + esc(text) + '" title="Копировать">копировать</button>';
 }
 
 export function loginPage(error) {
@@ -113,13 +159,13 @@ export function userCardHtml(state, card, extra) {
 
   const codeRows = (card.codes || [])
     .map((c) => {
+      const go = c.plain && origin ? origin + '/go/' + encodeURIComponent(c.plain) : '';
       const plain = c.plain
         ? '<span class="code" style="font-size:15px">' +
           esc(c.plain) +
-          '</span>' +
-          (origin
-            ? ' <a class="link" href="' + esc(origin + '/go/' + encodeURIComponent(c.plain)) + '" target="_blank" rel="noopener">Открыть в OMP</a>'
-            : '')
+          '</span> ' +
+          copyBtn(c.plain) +
+          (go ? ' <a class="link" href="' + esc(go) + '" target="_blank" rel="noopener">Открыть в OMP</a> ' + copyBtn(go) : '')
         : '<span class="muted">скрыт после привязки</span>';
       const device = c.deviceId ? esc(c.deviceId.slice(0, 8)) + '…' : '<span class="muted">свободен</span>';
       const reset =
@@ -198,12 +244,16 @@ export function userCardHtml(state, card, extra) {
     '<div class="kv">' +
     '<span>Telegram</span><div>' +
     esc(a.telegramId || '—') +
+    (a.telegramId ? ' ' + copyBtn(a.telegramId) : '') +
     '</div>' +
     '<span>Почта</span><div>' +
     esc(a.email || '—') +
+    (a.email ? ' ' + copyBtn(a.email) : '') +
     '</div>' +
     '<span>Account id</span><div class="muted">' +
     esc(a.id) +
+    ' ' +
+    copyBtn(a.id) +
     '</div>' +
     '<span>Создан</span><div class="muted">' +
     esc(when(a.createdAt)) +
@@ -225,8 +275,14 @@ export function userCardHtml(state, card, extra) {
     (card.reveal
       ? '<p class="flash">Свободный код: <span class="code">' +
         esc(card.reveal.code) +
-        '</span>' +
-        (origin ? ' · <a class="link" href="' + esc(origin + '/go/' + encodeURIComponent(card.reveal.code)) + '" target="_blank" rel="noopener">Открыть в OMP</a>' : '') +
+        '</span> ' +
+        copyBtn(card.reveal.code) +
+        (origin
+          ? ' · <a class="link" href="' +
+            esc(origin + '/go/' + encodeURIComponent(card.reveal.code)) +
+            '" target="_blank" rel="noopener">Открыть в OMP</a> ' +
+            copyBtn(origin + '/go/' + encodeURIComponent(card.reveal.code))
+          : '') +
         '</p>'
       : '') +
     '</div>' +
@@ -269,10 +325,16 @@ export function homePage(state, extra) {
   const bound = state.codes.filter((c) => !c.revoked && c.deviceId).length;
   const flash =
     (extra && extra.code
-      ? '<p class="card flash">Код активации: <span class="code">' + esc(extra.code) + '</span></p>'
+      ? '<p class="card flash">Код активации: <span class="code">' + esc(extra.code) + '</span> ' + copyBtn(extra.code) + '</p>'
       : '') +
     (extra && extra.promo
-      ? '<p class="card flash">Промокод: <span class="code">' + esc(extra.promo) + '</span> — в боте кнопка «Промокод» или /promo ' + esc(extra.promo) + '</p>'
+      ? '<p class="card flash">Промокод: <span class="code">' +
+        esc(extra.promo) +
+        '</span> ' +
+        copyBtn(extra.promo) +
+        ' — в боте «Промокод» или /promo ' +
+        esc(extra.promo) +
+        '</p>'
       : '') +
     (extra && extra.flash ? '<p class="card flash">' + esc(extra.flash) + '</p>' : '') +
     (extra && extra.error ? '<p class="bad">' + esc(extra.error) + '</p>' : '');
@@ -368,6 +430,10 @@ export function homePage(state, extra) {
       const account = state.accounts.find((a) => a.id === sub.accountId);
       const who = account ? account.email || account.telegramId || account.id : sub.accountId;
       const codes = state.codes.filter((c) => c.subscriptionId === sub.id && !c.revoked);
+      const hasBound = codes.some((c) => c.deviceId);
+      const hasFree = codes.some((c) => !c.deviceId);
+      const status =
+        (sub.paidUntil > now ? 'active' : 'expired') + (hasBound ? ' bound' : '') + (hasFree || !codes.length ? ' unbound' : '');
       const devices = codes
         .map((c) => {
           const bound = c.deviceId ? c.deviceId.slice(0, 8) + '…' : '<span class="muted">не вводили</span>';
@@ -377,18 +443,104 @@ export function homePage(state, extra) {
             csrf +
             '<input type="hidden" name="codeId" value="' +
             esc(c.id) +
-            '"><button class="ghost">Сбросить</button></form>'
+            '"><button class="ghost inline">Сбросить</button></form>'
           );
         })
         .join('<br>');
       const until = new Date(sub.paidUntil).toISOString().slice(0, 10);
       const live = sub.paidUntil > now ? '<span class="ok">' + until + '</span>' : '<span class="bad">' + until + '</span>';
       const whoLink = account
-        ? '<a class="link" href="/admin/user?id=' + encodeURIComponent(account.id) + '">' + esc(who) + '</a>'
+        ? '<a class="link" href="/admin/user?id=' + encodeURIComponent(account.id) + '">' + esc(who) + '</a>' +
+          (account.telegramId ? ' ' + copyBtn(account.telegramId) : '')
         : esc(who);
-      return '<tr><td>' + whoLink + '</td><td>' + live + '</td><td>' + codes.length + ' / ' + sub.deviceLimit + '</td><td>' + devices + '</td></tr>';
+      return (
+        '<tr data-status="' +
+        esc(status) +
+        '"><td>' +
+        whoLink +
+        '</td><td>' +
+        live +
+        '</td><td>' +
+        codes.length +
+        ' / ' +
+        sub.deviceLimit +
+        '</td><td>' +
+        devices +
+        '</td></tr>'
+      );
     })
     .join('');
+
+  const subFilters =
+    '<div class="filters" id="subs-filters">' +
+    '<button type="button" class="on" data-filter="all" data-table="subs-table">Все</button>' +
+    '<button type="button" data-filter="active" data-table="subs-table">Активные</button>' +
+    '<button type="button" data-filter="expired" data-table="subs-table">Истекшие</button>' +
+    '<button type="button" data-filter="unbound" data-table="subs-table">Без устройства</button>' +
+    '<button type="button" data-filter="bound" data-table="subs-table">С устройством</button>' +
+    '</div>';
+
+  const sessionRows = ((extra && extra.sessions) || [])
+    .map((s) => {
+      const cur = s.id === (extra && extra.sessionId) ? ' <span class="ok">текущая</span>' : '';
+      const kill =
+        s.id === (extra && extra.sessionId)
+          ? ''
+          : '<form method="post" action="/admin/session-revoke">' +
+            csrf +
+            '<input type="hidden" name="sessionId" value="' +
+            esc(s.id) +
+            '"><button type="submit" class="ghost inline">Завершить</button></form>';
+      return (
+        '<tr><td class="muted">' +
+        esc(s.id.slice(0, 8)) +
+        '…' +
+        cur +
+        '</td><td class="muted">' +
+        esc(when(s.createdAt)) +
+        '</td><td class="muted">' +
+        esc(when(s.lastSeen)) +
+        '</td><td>' +
+        kill +
+        '</td></tr>'
+      );
+    })
+    .join('');
+
+  const auditRows = (state.audit || [])
+    .slice()
+    .reverse()
+    .slice(0, 40)
+    .map(
+      (a) =>
+        '<tr><td class="muted">' +
+        esc(when(a.at)) +
+        '</td><td>' +
+        esc(a.action) +
+        '</td><td>' +
+        esc(a.detail) +
+        '</td></tr>',
+    )
+    .join('');
+
+  const security =
+    '<div class="card"><h2 style="margin-top:0">Смена пароля</h2>' +
+    '<form method="post" action="/admin/password">' +
+    csrf +
+    field('current', 'Текущий пароль', '', 'password') +
+    field('next', 'Новый пароль', '', 'password') +
+    field('next2', 'Повтор нового пароля', '', 'password') +
+    '<button type="submit">Сменить пароль</button></form></div>' +
+    '<div class="card"><h2 style="margin-top:0">Сессии</h2>' +
+    '<form method="post" action="/admin/logout">' +
+    csrf +
+    '<button type="submit" class="ghost">Выйти из этой сессии</button></form>' +
+    '<div class="scroll"><table><tr><th>Id</th><th>Создана</th><th>Активность</th><th></th></tr>' +
+    (sessionRows || '<tr><td colspan="4" class="muted">Нет сессий</td></tr>') +
+    '</table></div></div>' +
+    '<div class="card"><h2 style="margin-top:0">Аудит действий</h2><div class="scroll"><table><tr><th>Когда</th><th>Действие</th><th>Детали</th></tr>' +
+    (auditRows || '<tr><td colspan="3" class="muted">Пока пусто</td></tr>') +
+    '</table></div></div>';
 
   const fails = state.attempts
     .filter((a) => !a.ok)
@@ -541,7 +693,7 @@ export function homePage(state, extra) {
       (s.periodDays || 30) +
       ' дн.</span></div>' +
       '</div>' +
-      '<nav><a href="#find">Найти</a><a href="#alerts">Алерты</a><a href="#finance">Финансы</a><a href="#feed">Лента</a><a href="#quick">Промо</a><a href="#issue">Выдать код</a><a href="#promos">Все промо</a><a href="#subs">Подписки</a><a href="#settings">Настройки</a><a href="#fails">Отказы</a></nav>' +
+      '<nav><a href="#find">Найти</a><a href="#alerts">Алерты</a><a href="#finance">Финансы</a><a href="#feed">Лента</a><a href="#quick">Промо</a><a href="#issue">Выдать код</a><a href="#promos">Все промо</a><a href="#subs">Подписки</a><a href="#security">Безопасность</a><a href="#settings">Настройки</a><a href="#fails">Отказы</a></nav>' +
       '<section id="find"><h2>Найти пользователя</h2>' +
       searchForm(csrf, extra.q || '') +
       '</section>' +
@@ -565,13 +717,18 @@ export function homePage(state, extra) {
       '<div class="card"><table><tr><th>Код</th><th>Срок</th><th>Использовано</th><th>Кто</th><th></th></tr>' +
       (promoRows || '<tr><td colspan="5" class="muted">Пока нет промокодов</td></tr>') +
       '</table></div></section>' +
-      '<section id="subs"><h2>Кто подключён</h2><div class="card"><table><tr><th>Аккаунт</th><th>До</th><th>Коды</th><th>Устройства</th></tr>' +
+      '<section id="subs"><h2>Кто подключён</h2>' +
+      subFilters +
+      '<div class="card scroll"><table id="subs-table"><thead><tr><th>Аккаунт</th><th>До</th><th>Коды</th><th>Устройства</th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="4" class="muted">Пока пусто</td></tr>') +
-      '</table></div></section>' +
+      '</tbody></table></div></section>' +
+      '<section id="security"><h2>Безопасность</h2>' +
+      security +
+      '</section>' +
       '<section id="settings"><h2>Цены, бот, Jackett, ЮMoney</h2>' +
       settings +
       '</section>' +
-      '<section id="fails"><h2>Чужие попытки ввода кода</h2><div class="card"><table><tr><th>Причина</th><th>Устройство</th><th>Когда</th></tr>' +
+      '<section id="fails"><h2>Чужие попытки ввода кода</h2><div class="card scroll"><table><tr><th>Причина</th><th>Устройство</th><th>Когда</th></tr>' +
       (fails || '<tr><td colspan="3" class="muted">Пока нет</td></tr>') +
       '</table></div></section>',
   );
