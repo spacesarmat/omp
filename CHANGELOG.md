@@ -1,5 +1,11 @@
 # Изменения
 
+## 0.20.0-beta.10
+
+- [phone] Jackett OMP: дата подписки подтягивается с сервера после выдачи дней в админке
+- [phone] Billing: сначала https://billing.omp-player.online, если недоступен — LAN NAS
+- [ops] Админ React+shadcn; алерты снова всегда видны; Cloudflare Tunnel (HTTP/2) под omp-player.online
+
 ## 0.20.0-beta.9
 
 - то же, что beta.7–8 (в beta.8 битая кириллица в описании обновления)

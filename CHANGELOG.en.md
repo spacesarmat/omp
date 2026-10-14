@@ -2,6 +2,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.10
+
+- [phone] Jackett OMP: subscription end date refreshes from the server after admin grants days
+- [phone] Billing: prefer https://billing.omp-player.online, fall back to the NAS on LAN
+- [ops] React+shadcn admin; alerts always visible; Cloudflare Tunnel (HTTP/2) for omp-player.online
+
 ## 0.20.0-beta.9
 
 - same as beta.7–8 (beta.8 had broken Cyrillic in the update notes)
