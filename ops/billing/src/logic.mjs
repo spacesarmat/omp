@@ -193,4 +193,76 @@ export function priceText(settings) {
   return { days, price, extra };
 }
 
+/** Promo text: letters and digits, 4–24 chars. Shown as entered (uppercased). */
+export function normalizePromo(code) {
+  return String(code || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+export function createPromo(state, { code, days, maxUses, now }) {
+  const plain = normalizePromo(code) || normalizeCode(randomCode());
+  if (plain.length < 4 || plain.length > 24) return { state, result: { error: 'bad_promo' } };
+  if (state.promos.some((p) => !p.revoked && p.code === plain)) return { state, result: { error: 'exists' } };
+  const row = {
+    id: randomId(),
+    code: plain,
+    days: days > 0 ? Math.floor(days) : 1,
+    maxUses: maxUses > 0 ? Math.floor(maxUses) : 1,
+    createdAt: now,
+    revoked: false,
+    uses: [],
+  };
+  return { state: { ...state, promos: state.promos.concat([row]) }, result: { promo: row } };
+}
+
+export function revokePromo(state, promoId) {
+  return {
+    ...state,
+    promos: state.promos.map((p) => (p.id === promoId ? { ...p, revoked: true } : p)),
+  };
+}
+
+/**
+ * Redeems a promo in the bot: +days on the subscription (or a new one) and a fresh device activation code.
+ * The same account cannot redeem the same promo twice.
+ */
+export function redeemPromo(state, { code, accountId, now }) {
+  const plain = normalizePromo(code);
+  if (!plain || !findAccount(state, accountId)) return { state, result: { error: 'bad_promo' } };
+  const promo = state.promos.find((p) => !p.revoked && p.code === plain);
+  if (!promo) return { state, result: { error: 'bad_promo' } };
+  if (promo.uses.some((u) => u.accountId === accountId)) return { state, result: { error: 'already' } };
+  if (promo.uses.length >= promo.maxUses) return { state, result: { error: 'exhausted' } };
+
+  const existing = anySub(state, accountId);
+  let next = state;
+  let subscriptionId = '';
+  let activationCode = '';
+  let paidUntil = 0;
+
+  if (existing) {
+    const from = Math.max(existing.paidUntil, now);
+    paidUntil = from + promo.days * DAY;
+    const subscriptions = next.subscriptions.map((s) => (s.id === existing.id ? { ...s, paidUntil } : s));
+    const issued = issue({ ...next, subscriptions }, existing.id, now);
+    next = issued.state;
+    subscriptionId = existing.id;
+    activationCode = issued.code;
+  } else {
+    const created = createSubscription(next, { accountId, now, days: promo.days });
+    next = created.state;
+    subscriptionId = created.result.subscriptionId;
+    activationCode = created.result.code;
+    paidUntil = created.result.paidUntil;
+  }
+
+  const use = { accountId, at: now, subscriptionId, code: activationCode };
+  const promos = next.promos.map((p) => (p.id === promo.id ? { ...p, uses: p.uses.concat([use]) } : p));
+  return {
+    state: { ...next, promos },
+    result: { kind: 'promo', code: activationCode, paidUntil, days: promo.days, promoCode: promo.code },
+  };
+}
+
 export { liveSub };

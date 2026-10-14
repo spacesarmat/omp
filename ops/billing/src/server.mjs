@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { activate, applyPayment, createSubscription, openAccount, sessionOk, unbindCode } from './logic.mjs';
+import { activate, applyPayment, createPromo, createSubscription, openAccount, revokePromo, sessionOk, unbindCode } from './logic.mjs';
 import { botReply, telegramOf } from './bot.mjs';
 import { hashPassword, passwordMatches, randomCode, randomId } from './crypto.mjs';
 import { jackettSearchUrl, restoreJackett, stripJackett } from './jackett.mjs';
@@ -55,12 +55,14 @@ function json(res, status, value) {
   send(res, status, JSON.stringify(value), { 'content-type': 'application/json; charset=utf-8' });
 }
 
-async function telegramSend(token, chatId, text, fetchImpl) {
+async function telegramSend(token, chatId, text, fetchImpl, keyboard) {
   if (!token || !chatId) return false;
+  const body = { chat_id: chatId, text, disable_web_page_preview: true };
+  if (keyboard) body.reply_markup = keyboard;
   const res = await fetchImpl('https://api.telegram.org/bot' + token + '/sendMessage', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify(body),
   });
   return res.ok;
 }
@@ -90,8 +92,9 @@ export function createApp(file, fetchImpl) {
         const admin = adminOf(req);
         if (!admin) return send(res, 200, loginPage(''), { 'content-type': 'text/html; charset=utf-8' });
         const code = admin.flash || '';
-        if (code) sessions.set(cookie(req, 'omp_admin'), { csrf: admin.csrf, exp: admin.exp });
-        return send(res, 200, homePage(readState(file), { csrf: admin.csrf, code }), { 'content-type': 'text/html; charset=utf-8' });
+        const promo = admin.flashPromo || '';
+        if (code || promo) sessions.set(cookie(req, 'omp_admin'), { csrf: admin.csrf, exp: admin.exp });
+        return send(res, 200, homePage(readState(file), { csrf: admin.csrf, code, promo }), { 'content-type': 'text/html; charset=utf-8' });
       }
       if (req.method === 'POST' && path === '/admin/login') {
         const body = await readBody(req);
@@ -139,6 +142,7 @@ export function createApp(file, fetchImpl) {
           });
         }
         let flashed = '';
+        let flashPromo = '';
         if (path === '/admin/issue') {
           const result = await updateState(file, (state) => {
             const opened = openAccount(state, { email: body.email, telegramId: body.telegramId, now: Date.now() });
@@ -155,11 +159,25 @@ export function createApp(file, fetchImpl) {
             await sendMail(fresh.settings, { to: result.account.email, subject: 'Код Jackett OMP', text });
           }
         }
+        if (path === '/admin/promo') {
+          const result = await updateState(file, (state) =>
+            createPromo(state, {
+              code: body.code,
+              days: Number(body.days) || 1,
+              maxUses: Number(body.maxUses) || 1,
+              now: Date.now(),
+            }),
+          );
+          if (result.promo) flashPromo = result.promo.code;
+        }
+        if (path === '/admin/promo-revoke') {
+          await updateState(file, (state) => ({ state: revokePromo(state, body.promoId || '') }));
+        }
         if (path === '/admin/unbind') {
           await updateState(file, (state) => ({ state: unbindCode(state, body.codeId || '') }));
         }
         res.writeHead(302, { location: '/admin' });
-        if (flashed) sessions.set(cookie(req, 'omp_admin'), { ...admin, flash: flashed });
+        if (flashed || flashPromo) sessions.set(cookie(req, 'omp_admin'), { ...admin, flash: flashed, flashPromo });
         return res.end();
       }
       if (req.method === 'POST' && path === '/v1/activate') {
@@ -218,6 +236,8 @@ export function listen(file, port, fetchImpl) {
 
 export async function pollBot(file, fetchImpl) {
   let offset = 0;
+  /** chatId → waiting for a promo code in the next message */
+  const awaitingPromo = new Map();
   const net = fetchImpl || fetch;
   for (;;) {
     const state = readState(file);
@@ -240,11 +260,18 @@ export async function pollBot(file, fetchImpl) {
       offset = u.update_id + 1;
       const msg = u.message;
       if (!msg || !msg.chat) continue;
+      const chatId = String(msg.chat.id);
+      const waiting = awaitingPromo.has(chatId);
       const replied = await updateState(file, (cur) => {
-        const out = botReply(cur, { chatId: msg.chat.id, text: msg.text || '', now: Date.now() });
+        const out = botReply(cur, { chatId, text: msg.text || '', now: Date.now(), awaitingPromo: waiting });
         return { state: out.state, result: out.messages };
       });
-      for (let m = 0; m < replied.length; m++) await telegramSend(token, replied[m].chatId, replied[m].text, net);
+      awaitingPromo.delete(chatId);
+      for (let m = 0; m < replied.length; m++) {
+        const row = replied[m];
+        if (row.awaitPromo) awaitingPromo.set(chatId, true);
+        await telegramSend(token, row.chatId, row.text, net, row.keyboard);
+      }
     }
   }
 }

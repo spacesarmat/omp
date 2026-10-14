@@ -26,6 +26,7 @@ export function emptyState() {
     sessions: [],
     attempts: [],
     payments: [],
+    promos: [],
     outbox: [],
   };
 }
@@ -43,6 +44,7 @@ export function readState(file) {
       sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
       attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [],
       payments: Array.isArray(parsed.payments) ? parsed.payments : [],
+      promos: Array.isArray(parsed.promos) ? parsed.promos : [],
       outbox: Array.isArray(parsed.outbox) ? parsed.outbox : [],
     };
   } catch (e) {

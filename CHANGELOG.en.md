@@ -2,9 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## 0.20.0-beta.3
+## 0.20.0-beta.4
 
 - [phone] OMP Jackett: enter a subscription code and search through the server with no address or key on the phone; a link to the @OMPBILLINGBOT bot for payment and the code
+- [ops] @OMPBILLINGBOT: Status, Subscribe, Renew, Promo, Code, Help buttons; 1-day promos; admin panel with promos and summary
 
 ## 0.20.0-beta.2
 
