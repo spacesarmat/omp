@@ -1,7 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN } from '../../src/billing/config';
 import { billingSession, deviceId, saveBillingSession } from '../../src/billing/session';
-import { activateCode, clearBilling, OMP_JACKETT_ID, ompJackettSource, startOmpJackett, syncOmpJackett } from '../../src/sources/ompJackett';
+import {
+  activateCode,
+  clearBilling,
+  fetchBillingAccount,
+  OMP_JACKETT_ID,
+  ompJackettSource,
+  startOmpJackett,
+  syncOmpJackett,
+} from '../../src/sources/ompJackett';
 import { getSource, unregisterSource } from '../../src/sources/registry';
 import { fakeSite, page } from './fakeSite';
 
@@ -70,5 +78,16 @@ describe('omp Jackett source', () => {
     clearBilling();
     syncOmpJackett();
     expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+  });
+
+  it('syncs paidUntil from /v1/me after admin grant', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 1e12 });
+    const site = fakeSite((c) =>
+      page(JSON.stringify({ telegramId: '1', paidUntil: 2e12, active: true, deviceLimit: 1 }), c.url),
+    );
+    const acc = await fetchBillingAccount(site.ctx);
+    expect(acc?.paidUntil).toBe(2e12);
+    expect(billingSession()?.paidUntil).toBe(2e12);
+    expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/me');
   });
 });

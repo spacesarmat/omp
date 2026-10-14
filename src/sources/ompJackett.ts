@@ -104,12 +104,22 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
   if (session) headers.Authorization = 'Bearer ' + session.token;
   return ctx.http.get(BILLING_ORIGIN + '/v1/me', { headers, timeoutMs: 12000 }).then(
     (res) => {
+      if (res.status === 403 || res.status === 401) {
+        if (session) clearBilling();
+        return null;
+      }
       if (res.status === 404) return null;
       const body = parseBody<MeBody>(res.text);
       if (res.status < 200 || res.status >= 300) return null;
+      const paidUntil = body.paidUntil || 0;
+      // Admin/bot may extend paidUntil; keep local session date in sync with the server.
+      if (session && typeof paidUntil === 'number' && paidUntil !== session.paidUntil) {
+        saveBillingSession({ token: session.token, paidUntil });
+        emitBillingChange();
+      }
       return {
         telegramId: body.telegramId || '',
-        paidUntil: body.paidUntil || 0,
+        paidUntil,
         active: !!body.active,
         deviceLimit: body.deviceLimit || 0,
       };

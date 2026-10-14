@@ -167,7 +167,11 @@ export function OmpJackettCard() {
 
         {session && session.token ? (
           <>
-            <div class="m-src-row">{t('sources.billing.connected', { date: day(session.paidUntil) })}</div>
+            <div class="m-src-row">
+              {t('sources.billing.connected', {
+                date: day((account && account.paidUntil) || session.paidUntil),
+              })}
+            </div>
             <button
               type="button"
               class="m-btn m-btn-secondary"
