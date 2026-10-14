@@ -3,6 +3,7 @@
  * Local NAS test: http://IP-NAS:8787 (same Wi‑Fi as the phone).
  * Public release: https://… on the VPS / tunnel.
  */
+/** Local NAS (LAN). Public HTTPS needs own domain + Cloudflare Tunnel profile `tunnel`. */
 export const BILLING_ORIGIN = 'http://192.168.1.191:8787';
 
 /** Telegram bot for buying and managing the subscription. */

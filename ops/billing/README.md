@@ -64,6 +64,16 @@ docker compose -f /DATA/AppData/omp-billing/app/docker-compose.yml \
 
 Пример файла: `env.tunnel.example`.
 
+### Временно без своего домена — trycloudflare.com
+
+```
+docker compose -f /DATA/AppData/omp-billing/app/docker-compose.yml \
+  --profile quick up -d
+docker logs omp-billing-quick 2>&1 | grep trycloudflare
+```
+
+В логах будет `https://….trycloudflare.com`. URL **меняется** при recreate. На части сетей (в т.ч. этот NAS) quick tunnel отвечает **CF 530/1033** — тогда нужен **свой домен** + profile `tunnel` (уже поднят на NAS).
+
 ## Настройки панели
 
 Токен бота, кошелёк и секрет уведомлений [ЮMoney](https://yoomoney.ru/), адрес Jackett, API-ключ и цены. Уведомления ЮMoney: `https://<твой-tunnel-хост>/v1/yoomoney`.
