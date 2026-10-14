@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { contentsTextOf } from '../lib/releaseContents';
-import { t, tp, fmtDuration, fmtSize } from '../../../src/i18n';
+import { t, fmtDuration, fmtSize } from '../../../src/i18n';
+import { swarmText } from '../../../src/lib/torrentStatus';
 import { Icon } from '../ui/Icon';
 import { CastStrip } from '../ui/CastStrip';
 import { useTorrentCast } from '../../../src/lib/useTorrentCast';
@@ -462,12 +463,13 @@ export function Torrent({ hash }: { hash: string }) {
   const hasEpisodes = files.length > 1;
   // the last episode of each season here, then what TMDB announces after it (the same season data as the names)
   const coming = hasEpisodes ? comingEpisodes(lastEpisodes(files), tmdb.eps, isoDay(Date.now())) : [];
-  const peers = tor.total_peers || tor.active_peers || 0;
+  const seasonArt = tmdb.show && season !== null ? tmdb.show.seasonPosters[season] || tmdb.show.poster : '';
+  const art = tor.poster || !seasonArt ? tor : { ...tor, poster: seasonArt };
   const meta = [
     season !== null ? t('library.season', { n: season }) : '',
     hasEpisodes ? contentsTextOf(allFiles) : '',
     tor.torrent_size ? fmtSize(tor.torrent_size) : '',
-    peers ? tp('torrent.screen.peerCount', peers) : '',
+    swarmText(tor),
   ].filter(Boolean);
 
   // where to continue: the latest started file of this torrent, else the first one
@@ -547,7 +549,7 @@ export function Torrent({ hash }: { hash: string }) {
 
   return (
     <div class="m-screen m-torrent" data-route="torrent">
-      <div class="m-thead" style={posterStyle(tor) + '; --poster: ' + posterColor(hash)}>
+      <div class="m-thead" style={posterStyle(art) + '; --poster: ' + posterColor(hash)}>
         <div class="m-thead-bar">
           <button type="button" class="m-icon-btn m-glass" aria-label={t('common.back')} onClick={() => goBack()}>
             <Icon d={BACK} size={20} />

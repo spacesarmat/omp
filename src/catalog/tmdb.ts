@@ -29,8 +29,8 @@ export interface PersonCard {
   bio: string;
   known: 'acting' | 'directing' | 'other'; acting: Credit[]; directing: Credit[];
 }
-/** `airDate`: 'YYYY-MM-DD' or '' (absent in cards cached before 0.17.0-beta.2: unknown). */
-export interface Season { number: number; episodes: number; year: number; aired: number; airDate?: string; }
+/** `airDate`: 'YYYY-MM-DD' or '' (absent in cards cached before 0.17.0-beta.2: unknown). `poster` is the season's own image ('' or absent when TMDB has none, including cards cached before it was kept). */
+export interface Season { number: number; episodes: number; year: number; aired: number; airDate?: string; poster?: string; }
 /** A series' state, language-neutral: '' when TMDB says nothing known (or a card cached without it). */
 export type SeriesStatus = 'returning' | 'ended' | 'canceled' | 'production' | 'planned' | '';
 /** TMDB's next_episode_to_air: `airDate` is 'YYYY-MM-DD' or '' when not dated yet. */
@@ -261,6 +261,7 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
         return {
           number: num, episodes: eps, year: year(x.air_date), aired: num < lastSeason ? eps : num === lastSeason ? Math.min(eps, lastEp) : 0,
           airDate: date(x.air_date),
+          poster: imageUrl(e, x.poster_path, 'w300'),
         };
       }).filter((s) => s.number > 0).sort((a, b) => b.number - a.number)
     : [];

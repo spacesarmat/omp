@@ -16,7 +16,7 @@ import { addressErrorText, addressForField, checkServerAddress } from '../../../
 import { errorMessage, isApiError } from '../../../src/api/http';
 import { discover, candidateSubnets, subnetOf, DEFAULT_PORTS, type FoundServer } from '../../../src/api/discovery';
 import { native } from '../platform/native';
-import { localServer, refreshLocalServer } from '../server/localServer';
+import { localServer, refreshLocalServer, startLocal, localName, LOCAL_URL } from '../server/localServer';
 
 type ServerScanner = (isCancelled: () => boolean) => Promise<FoundServer[]>;
 let scanner: ServerScanner | null = null;
@@ -85,6 +85,7 @@ export function Connect() {
   const [scanState, setScanState] = useState<'idle' | 'scanning' | 'done'>('idle');
   const [found, setFound] = useState<FoundServer[]>([]);
   const [netFail, setNetFail] = useState(false);
+  const [startError, setStartError] = useState('');
 
   useEffect(() => {
     checkAll(servers.value);
@@ -158,6 +159,20 @@ export function Connect() {
     void enter({ url: checked.url, user: auth && user.trim() ? user.trim() : undefined, password: auth && pass ? pass : undefined });
   }
 
+  async function startStopped() {
+    if (busy) return;
+    setBusy(true);
+    setStartError('');
+    setError('');
+    await startLocal();
+    if (localServer.value.error) {
+      setStartError(localServer.value.error);
+      setBusy(false);
+      return;
+    }
+    await enter({ name: localName(), url: LOCAL_URL });
+  }
+
   async function scan() {
     if (busy) return;
     setError('');
@@ -196,6 +211,11 @@ export function Connect() {
 
   const list = servers.value;
   const emptyScan = scanState === 'done' && found.length === 0;
+  const info = localServer.value;
+  // a binary is on the phone, the process is not running: it can be started without a download
+  const installedStopped = info.supported && !info.running && (info.binary === 'ready' || info.binary === 'outdated');
+  // the scan found no TorrServer, and there is nothing on the phone to start
+  const offerInstall = emptyScan && info.supported && !info.running && !installedStopped;
   return (
     <form class="m-screen m-connect" onSubmit={submit}>
       <div class="m-brand">
@@ -234,22 +254,41 @@ export function Connect() {
           </div>
         </>
       )}
-      {auto && emptyScan && (
+      {installedStopped && (
+        <div class="m-local-card" data-local="start">
+          <div class="m-local-head">
+            <span class="m-local-icon">
+              <Icon d={PHONE} size={24} />
+            </span>
+            <div class="m-local-title">{t('connect.localTitle')}</div>
+          </div>
+          <div class="m-local-text">{t('connect.stoppedText')}</div>
+          {startError && (
+            <div class="m-error" role="alert">
+              {startError}
+            </div>
+          )}
+          <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={() => void startStopped()}>
+            {busy ? t('connect.starting') : t('connect.startStopped')}
+          </button>
+        </div>
+      )}
+      {offerInstall && (
         <>
           <div class="m-hint-info m-muted">
             <Icon d={INFO} size={18} />
             {t('connect.nothingOnNet')}
           </div>
-          <div class="m-local-card">
+          <div class="m-local-card" data-local="install">
             <div class="m-local-head">
               <span class="m-local-icon">
                 <Icon d={PHONE} size={24} />
               </span>
-              <div class="m-local-title">{t('connect.localTitle')}</div>
+              <div class="m-local-title">{t('connect.installTitle')}</div>
             </div>
-            <div class="m-local-text">{t('connect.localText')}</div>
+            <div class="m-local-text">{t('connect.installText')}</div>
             <button type="button" class="m-btn m-btn-primary" onClick={() => navigate({ name: 'localServer' })}>
-              {t('connect.localStart')}
+              {t('connect.installBtn')}
             </button>
           </div>
           <div class="m-muted m-small m-or">{t('connect.or')}</div>

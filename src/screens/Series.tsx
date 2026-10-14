@@ -40,6 +40,7 @@ import { useKeys } from '../ui/keys';
 import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
 import { tvGlyphs } from '../ui/tvText';
 import { seasonChipSub, type SeasonChipSub } from '../lib/seasonChip';
+import { swarmText } from '../lib/torrentStatus';
 import { qualityOrUnknown } from '../monitor/upgradeText';
 import { displayTitle } from '../lib/torrentName';
 import { Poster } from './library/Poster';
@@ -515,6 +516,12 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
         </FocusGroup>
         </div>
       )}
+      {members.map((m) => {
+        const swarm = swarmText(m);
+        if (!swarm) return null;
+        const who = members.length > 1 ? qualityOrUnknown(displayTitle(m)) : '';
+        return <div class="muted series-swarm" key={m.hash}>{who ? who + ' · ' + swarm : swarm}</div>;
+      })}
       <FocusGroup focusKey="SERIES-EPISODES" className="series-episodes">
         {rows.map((r, i) => {
           const hash = r.tor.hash;

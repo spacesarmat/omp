@@ -3,7 +3,7 @@
 // src/lib/journal.ts), so the TV and the phone share it; the series' record is the newest one among its torrents.
 // A record without l / g / s is a reset («по умолчанию»): the newest one wins like any other. Pure.
 import { normalizeLang } from './tracks';
-import { JOURNAL_KEY, parseData } from './journal';
+import { JOURNAL_KEY, parseData, withOmp } from './journal';
 
 export interface SeriesSub {
   /** Track title (or subtitle file name). */
@@ -183,12 +183,9 @@ export function nextSeriesTracks(base: SeriesTracks | null, patch: SeriesTracksP
 
 /** A copy of `obj` with omp.a set to `rec`; write it with serializeData (which keeps `a`). */
 export function withSeriesTracks(obj: { [k: string]: unknown }, rec: SeriesTracks): { [k: string]: unknown } {
-  const out: { [k: string]: unknown } = { ...obj };
-  const old = obj[JOURNAL_KEY];
-  const omp: { [k: string]: unknown } = isObj(old) ? { ...old } : { v: 1, h: [] };
-  omp.a = rec;
-  out[JOURNAL_KEY] = omp;
-  return out;
+  return withOmp(obj, (omp) => {
+    omp.a = rec;
+  });
 }
 
 // ---- dub labels ----

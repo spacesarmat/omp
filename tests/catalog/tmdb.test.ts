@@ -88,9 +88,11 @@ describe('sanitizers', () => {
   it('a series card has its seasons without specials and the airing state', () => {
     const c = sanitizeCard(E, TV_CARD, 'tv')!;
     expect(c.seasons).toEqual([
-      { number: 2, episodes: 10, year: 2026, aired: 6, airDate: '2026-08-01' },
-      { number: 1, episodes: 8, year: 2024, aired: 8, airDate: '2024-03-01' },
+      { number: 2, episodes: 10, year: 2026, aired: 6, airDate: '2026-08-01', poster: '' },
+      { number: 1, episodes: 8, year: 2024, aired: 8, airDate: '2024-03-01', poster: '' },
     ]);
+    const withPoster = sanitizeCard(E, { ...TV_CARD, seasons: [{ season_number: 1, episode_count: 8, air_date: '2024-03-01', poster_path: '/s1.jpg' }] }, 'tv')!;
+    expect(withPoster.seasons[0].poster).toBe('https://img.mirror.test/t/p/w300/s1.jpg');
     expect(c.airing).toBe(true);
     expect(c.cast.length).toBe(12);
     expect(c.runtime).toBeGreaterThan(0);

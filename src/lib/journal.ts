@@ -182,61 +182,65 @@ export function serializeData(obj: { [k: string]: unknown }, journal: JournalEnt
   return JSON.stringify(out);
 }
 
+/** True when the stored `omp` bag has `key` set to `value`. Missing or unreadable data is false. */
+function ompIs(data: string | undefined | null, key: string, value: unknown): boolean {
+  const p = parseData(data);
+  if (!p) return false;
+  const o = p.obj[JOURNAL_KEY];
+  return isPlainObject(o) && o[key] === value;
+}
+
+/**
+ * A shallow copy of `obj` whose `omp` bag `edit` changes. Keys already in the bag stay;
+ * a missing bag starts as `{ v, h: [] }`. Write the result with serializeData.
+ */
+export function withOmp(
+  obj: { [k: string]: unknown },
+  edit: (omp: { [k: string]: unknown }) => void,
+): { [k: string]: unknown } {
+  const old = obj[JOURNAL_KEY];
+  const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
+  edit(omp);
+  return { ...obj, [JOURNAL_KEY]: omp };
+}
+
 /** New episodes of the torrent are watched: true unless «Следить за новыми сериями» was switched off (omp.w false). */
 export function watchesNewEpisodes(data: string | undefined | null): boolean {
-  const p = parseData(data);
-  if (!p) return true;
-  const o = p.obj[JOURNAL_KEY];
-  return !(isPlainObject(o) && o.w === false);
+  return !ompIs(data, 'w', false);
 }
 
 /** A copy of `obj` with omp.w set (false) or removed (true); write it with serializeData. */
 export function withWatch(obj: { [k: string]: unknown }, watch: boolean): { [k: string]: unknown } {
-  const out: { [k: string]: unknown } = { ...obj };
-  const old = obj[JOURNAL_KEY];
-  const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
-  if (watch) delete omp.w;
-  else omp.w = false;
-  out[JOURNAL_KEY] = omp;
-  return out;
+  return withOmp(obj, (omp) => {
+    if (watch) delete omp.w;
+    else omp.w = false;
+  });
 }
 
 /** Better releases of the film are watched: true unless «Следить за качеством» was switched off (omp.q false). */
 export function watchesBetterQuality(data: string | undefined | null): boolean {
-  const p = parseData(data);
-  if (!p) return true;
-  const o = p.obj[JOURNAL_KEY];
-  return !(isPlainObject(o) && o.q === false);
+  return !ompIs(data, 'q', false);
 }
 
 /** A copy of `obj` with omp.q set (false) or removed (true); write it with serializeData. */
 export function withQualityWatch(obj: { [k: string]: unknown }, watch: boolean): { [k: string]: unknown } {
-  const out: { [k: string]: unknown } = { ...obj };
-  const old = obj[JOURNAL_KEY];
-  const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
-  if (watch) delete omp.q;
-  else omp.q = false;
-  out[JOURNAL_KEY] = omp;
-  return out;
+  return withOmp(obj, (omp) => {
+    if (watch) delete omp.q;
+    else omp.q = false;
+  });
 }
 
 /** The category was picked by hand (omp.cm true): the automatic category check leaves it. */
 export function categoryPicked(data: string | undefined | null): boolean {
-  const p = parseData(data);
-  if (!p) return false;
-  const o = p.obj[JOURNAL_KEY];
-  return isPlainObject(o) && o.cm === true;
+  return ompIs(data, 'cm', true);
 }
 
 /** A copy of `obj` with omp.cm set (true) or removed (false); write it with serializeData. */
 export function withCategoryPicked(obj: { [k: string]: unknown }, picked: boolean): { [k: string]: unknown } {
-  const out: { [k: string]: unknown } = { ...obj };
-  const old = obj[JOURNAL_KEY];
-  const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
-  if (picked) omp.cm = true;
-  else delete omp.cm;
-  out[JOURNAL_KEY] = omp;
-  return out;
+  return withOmp(obj, (omp) => {
+    if (picked) omp.cm = true;
+    else delete omp.cm;
+  });
 }
 
 /** The category OMP set itself (omp.ca), or null when it never did. */
@@ -249,12 +253,9 @@ export function categoryAuto(data: string | undefined | null): string | null {
 
 /** A copy of `obj` with omp.ca (the category OMP set); write it with serializeData. */
 export function withCategoryAuto(obj: { [k: string]: unknown }, category: string): { [k: string]: unknown } {
-  const out: { [k: string]: unknown } = { ...obj };
-  const old = obj[JOURNAL_KEY];
-  const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
-  omp.ca = category;
-  out[JOURNAL_KEY] = omp;
-  return out;
+  return withOmp(obj, (omp) => {
+    omp.ca = category;
+  });
 }
 
 /** `omp.d.until` of a torrent's data; 0 when there is none. */
@@ -281,10 +282,7 @@ export function supportOfList(list: { data?: string }[] | null | undefined, ceil
 
 /** A copy of `obj` with omp.d set to { until }; write it with serializeData. */
 export function withSupport(obj: { [k: string]: unknown }, until: number): { [k: string]: unknown } {
-  const out: { [k: string]: unknown } = { ...obj };
-  const old = obj[JOURNAL_KEY];
-  const omp: { [k: string]: unknown } = isPlainObject(old) ? { ...old } : { v: JOURNAL_VERSION, h: [] };
-  omp.d = { ...(isPlainObject(omp.d) ? omp.d : {}), until: Math.floor(until) };
-  out[JOURNAL_KEY] = omp;
-  return out;
+  return withOmp(obj, (omp) => {
+    omp.d = { ...(isPlainObject(omp.d) ? omp.d : {}), until: Math.floor(until) };
+  });
 }

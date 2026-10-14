@@ -2,6 +2,15 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.2
+
+- [phone] The built-in player keeps the screen on while a video is playing
+- [phone] The season card and the release card always show the current seeds and peers, including zeros
+- [tv] The series screen shows the current seeds and peers of the release under the season
+- [phone] A long release title fits the header: the header grows with the text, up to six lines
+- [phone] When a release has no poster of its own, the season shows the season or series poster from TMDB
+- [phone] On the server screen, a TorrServer that is installed on the phone but stopped can be started. When the network scan finds nothing, OMP offers to install TorrServer on this device
+
 ## 0.20.0-beta.1
 
 - [atv] A new engine for the built-in player: 2160 Player inside OMP. 4K and HDR; Dolby Vision on a box without a Dolby Vision decoder plays as HDR10. AC3, E-AC3, DTS and TrueHD go to the receiver as they are, and when the TV does not accept them they are decoded, with no switch to VLC. More formats: Blu-ray M2TS remuxes (TrueHD, LPCM, DTS-HD), and video the box cannot decode in hardware is decoded in software. VLC and the Auto mode stay. The APK is about 20 MB larger for it (the universal one 30 MB)

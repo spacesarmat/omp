@@ -543,15 +543,15 @@ button, .m-btn {
 
 /* ---- torrent ---- */
 .m-torrent { padding: 0 0 calc(var(--m-nav-reserve) + 24px + env(safe-area-inset-bottom)); gap: 0; }
-.m-thead { position: relative; height: 300px; padding: calc(env(safe-area-inset-top) + 24px) 16px 0; }
+.m-thead { position: relative; display: flex; flex-direction: column; min-height: 300px; padding: calc(env(safe-area-inset-top) + 24px) 16px 16px; }
 .m-thead::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 17, 21, 0.1), var(--bg) 96%); }
-.m-thead-bar, .m-thead-info { position: relative; }
+.m-thead-bar, .m-thead-info { position: relative; flex-shrink: 0; }
 .m-thead-bar { display: flex; justify-content: space-between; }
 .m-thead-actions { display: flex; gap: 8px; }
 .m-glass { background: rgba(15, 17, 21, 0.6); }
 .m-danger { color: #FF9EA2; }
-.m-thead-info { position: absolute; left: 16px; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
-.m-thead-title { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 24px; line-height: 1.15; overflow-wrap: anywhere; }
+.m-thead-info { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+.m-thead-title { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 24px; line-height: 1.15; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
 .m-thead-meta { font-size: 14px; color: #C9CEDA; }
 .m-tbody { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
 .m-btn-sm { height: 46px; font-size: 15px; }
