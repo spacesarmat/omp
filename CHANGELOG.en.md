@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.8
+
+- same as beta.7 (release did not build: Settings section-order tests)
+
 ## 0.20.0-beta.7
 
 - [ops] Admin panel on Preact + Pico; SQLite storage (migrates from state.json)
