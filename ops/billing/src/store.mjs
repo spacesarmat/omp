@@ -31,6 +31,8 @@ export function emptyState() {
     sessions: [],
     attempts: [],
     payments: [],
+    /** Rejected / problem YooMoney notifications (signature, duplicate, …). */
+    webhooks: [],
     promos: [],
     /** Pending phone↔Telegram link tokens from the app. */
     links: [],
@@ -51,6 +53,7 @@ export function readState(file) {
       sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
       attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [],
       payments: Array.isArray(parsed.payments) ? parsed.payments : [],
+      webhooks: Array.isArray(parsed.webhooks) ? parsed.webhooks : [],
       promos: Array.isArray(parsed.promos) ? parsed.promos : [],
       links: Array.isArray(parsed.links) ? parsed.links : [],
       outbox: Array.isArray(parsed.outbox) ? parsed.outbox : [],

@@ -147,31 +147,59 @@ function seenPayment(state, operationId) {
   return state.payments.some((p) => p.operationId === operationId);
 }
 
+const WEBHOOK_CAP = 200;
+
+export function logWebhook(state, row) {
+  const webhooks = (state.webhooks || []).concat([row]).slice(-WEBHOOK_CAP);
+  return { ...state, webhooks };
+}
+
 export function applyPayment(state, { operationId, label, amount, now }) {
-  if (!operationId || seenPayment(state, operationId)) return { state, result: { duplicate: true } };
-  const payments = state.payments.concat([{ operationId, label, amount, at: now }]);
-  const base = { ...state, payments };
+  if (!operationId || seenPayment(state, operationId)) {
+    return {
+      state: logWebhook(state, { kind: 'duplicate', operationId: operationId || '', label: label || '', amount: amount || '', at: now }),
+      result: { duplicate: true },
+    };
+  }
   const mark = String(label || '');
   const days = state.settings.periodDays || 30;
+  const row = { operationId, label: mark, amount, at: now };
+
   if (mark.indexOf('sub:') === 0) {
     const id = mark.slice(4);
-    const subscriptions = base.subscriptions.map((s) => {
+    const sub = state.subscriptions.find((s) => s.id === id);
+    if (!sub) {
+      const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+      return { state: { ...state, payments }, result: { error: 'bad_label' } };
+    }
+    const subscriptions = state.subscriptions.map((s) => {
       if (s.id !== id) return s;
       const from = Math.max(s.paidUntil, now);
       return { ...s, paidUntil: from + days * DAY };
     });
-    const sub = subscriptions.find((s) => s.id === id);
-    return { state: { ...base, subscriptions }, result: { kind: 'renew', subscriptionId: id, paidUntil: sub ? sub.paidUntil : 0 } };
+    const next = subscriptions.find((s) => s.id === id);
+    return {
+      state: { ...state, payments: state.payments.concat([row]), subscriptions },
+      result: { kind: 'renew', subscriptionId: id, paidUntil: next ? next.paidUntil : 0 },
+    };
   }
   if (mark.indexOf('dev:') === 0) {
     const id = mark.slice(4);
-    const subscriptions = base.subscriptions.map((s) => (s.id === id ? { ...s, deviceLimit: s.deviceLimit + 1 } : s));
-    const issued = issue({ ...base, subscriptions }, id, now);
+    if (!state.subscriptions.find((s) => s.id === id)) {
+      const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+      return { state: { ...state, payments }, result: { error: 'bad_label' } };
+    }
+    const subscriptions = state.subscriptions.map((s) => (s.id === id ? { ...s, deviceLimit: s.deviceLimit + 1 } : s));
+    const issued = issue({ ...state, payments: state.payments.concat([row]), subscriptions }, id, now);
     return { state: issued.state, result: { kind: 'device', subscriptionId: id, code: issued.code } };
   }
   if (mark.indexOf('new:') === 0) {
     const accountId = mark.slice(4);
-    if (!findAccount(base, accountId)) return { state: base, result: { error: 'bad_label' } };
+    if (!findAccount(state, accountId)) {
+      const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+      return { state: { ...state, payments }, result: { error: 'bad_label' } };
+    }
+    const base = { ...state, payments: state.payments.concat([row]) };
     const existing = anySub(base, accountId);
     if (existing) {
       const subscriptions = base.subscriptions.map((s) => {
@@ -185,7 +213,116 @@ export function applyPayment(state, { operationId, label, amount, now }) {
     const created = createSubscription(base, { accountId, now, days });
     return { state: created.state, result: { kind: 'new', ...created.result } };
   }
-  return { state: base, result: { error: 'bad_label' } };
+  const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+  return { state: { ...state, payments }, result: { error: 'bad_label' } };
+}
+
+function money(amount) {
+  const n = Number(String(amount || '').replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function resolvePaymentAccount(state, label) {
+  const mark = String(label || '');
+  if (mark.indexOf('new:') === 0) {
+    const id = mark.slice(4);
+    return findAccount(state, id) ? { accountId: id } : { problem: 'no_account' };
+  }
+  if (mark.indexOf('sub:') === 0 || mark.indexOf('dev:') === 0) {
+    const sub = state.subscriptions.find((s) => s.id === mark.slice(4));
+    return sub ? { accountId: sub.accountId } : { problem: 'no_subscription' };
+  }
+  return { problem: 'bad_label' };
+}
+
+/** Payments list + day/week/month totals + problem rows for the admin finance section. */
+export function financeReport(state, now) {
+  const dayFrom = now - DAY;
+  const weekFrom = now - 7 * DAY;
+  const monthFrom = now - 30 * DAY;
+  const okPay = (p) => !p.error;
+  const sumFrom = (from) =>
+    state.payments.filter((p) => okPay(p) && p.at >= from).reduce((acc, p) => acc + money(p.amount), 0);
+  const countFrom = (from) => state.payments.filter((p) => okPay(p) && p.at >= from).length;
+
+  const payments = state.payments
+    .slice()
+    .reverse()
+    .slice(0, 100)
+    .map((p) => {
+      const resolved = resolvePaymentAccount(state, p.label);
+      const acc = resolved.accountId ? findAccount(state, resolved.accountId) : null;
+      return {
+        ...p,
+        accountId: resolved.accountId || '',
+        who: acc ? acc.telegramId || acc.email || acc.id : '',
+        problem: p.error || resolved.problem || '',
+      };
+    });
+
+  const problems = [];
+  for (let i = 0; i < state.payments.length; i++) {
+    const p = state.payments[i];
+    const resolved = resolvePaymentAccount(state, p.label);
+    const err = p.error || resolved.problem;
+    if (!err) continue;
+    problems.push({
+      at: p.at || 0,
+      kind: err,
+      text: (p.amount || '') + ' · ' + (p.label || '') + ' · ' + (p.operationId || '').slice(0, 12),
+      operationId: p.operationId || '',
+    });
+  }
+  for (let i = 0; i < (state.webhooks || []).length; i++) {
+    const w = state.webhooks[i];
+    problems.push({
+      at: w.at || 0,
+      kind: w.kind || 'webhook',
+      text: (w.amount || '') + ' · ' + (w.label || '') + ' · ' + String(w.operationId || '').slice(0, 12),
+      operationId: w.operationId || '',
+    });
+  }
+  problems.sort((a, b) => b.at - a.at);
+
+  return {
+    summary: {
+      day: { sum: sumFrom(dayFrom), count: countFrom(dayFrom) },
+      week: { sum: sumFrom(weekFrom), count: countFrom(weekFrom) },
+      month: { sum: sumFrom(monthFrom), count: countFrom(monthFrom) },
+      total: {
+        sum: state.payments.filter(okPay).reduce((acc, p) => acc + money(p.amount), 0),
+        count: state.payments.filter(okPay).length,
+      },
+    },
+    payments,
+    problems: problems.slice(0, 50),
+  };
+}
+
+/** CSV of successful payments in [from, to] (ms). */
+export function paymentsCsv(state, from, to) {
+  const lines = ['at,amount,label,operationId,accountId,telegramId'];
+  const rows = state.payments
+    .filter((p) => !p.error && p.at >= from && p.at <= to)
+    .slice()
+    .sort((a, b) => a.at - b.at);
+  for (let i = 0; i < rows.length; i++) {
+    const p = rows[i];
+    const resolved = resolvePaymentAccount(state, p.label);
+    const acc = resolved.accountId ? findAccount(state, resolved.accountId) : null;
+    const cell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    lines.push(
+      [
+        cell(new Date(p.at).toISOString()),
+        cell(p.amount),
+        cell(p.label),
+        cell(p.operationId),
+        cell(resolved.accountId || ''),
+        cell(acc ? acc.telegramId || '' : ''),
+      ].join(','),
+    );
+  }
+  return lines.join('\n') + '\n';
 }
 
 export function openAccount(state, { email, telegramId, now }) {

@@ -1,4 +1,4 @@
-import { adminDashboard } from './logic.mjs';
+import { adminDashboard, financeReport } from './logic.mjs';
 
 export function esc(s) {
   return String(s === undefined || s === null ? '' : s)
@@ -407,6 +407,70 @@ export function homePage(state, extra) {
     .join('');
 
   const dash = adminDashboard(state, now);
+  const fin = financeReport(state, now);
+  const rub = (n) => (Math.round(n * 100) / 100).toFixed(0) + ' ₽';
+  const financeBlock =
+    '<div class="grid">' +
+    '<div class="stat"><b>' +
+    rub(fin.summary.day.sum) +
+    '</b><span>сутки · ' +
+    fin.summary.day.count +
+    ' шт.</span></div>' +
+    '<div class="stat"><b>' +
+    rub(fin.summary.week.sum) +
+    '</b><span>7 дней · ' +
+    fin.summary.week.count +
+    ' шт.</span></div>' +
+    '<div class="stat"><b>' +
+    rub(fin.summary.month.sum) +
+    '</b><span>30 дней · ' +
+    fin.summary.month.count +
+    ' шт.</span></div>' +
+    '<div class="stat"><b>' +
+    rub(fin.summary.total.sum) +
+    '</b><span>всего · ' +
+    fin.summary.total.count +
+    ' шт.</span></div>' +
+    '</div>' +
+    '<p><a class="link" href="/admin/finance.csv">Скачать CSV за 30 дней</a></p>' +
+    '<div class="card"><h2 style="margin-top:0">Платежи</h2><table><tr><th>Когда</th><th>Сумма</th><th>Label</th><th>Аккаунт</th><th>Статус</th></tr>' +
+    (fin.payments
+      .map((p) => {
+        const who = p.accountId
+          ? '<a class="link" href="/admin/user?id=' + encodeURIComponent(p.accountId) + '">' + esc(p.who || p.accountId.slice(0, 8)) + '</a>'
+          : '<span class="muted">—</span>';
+        const st = p.problem ? '<span class="bad">' + esc(p.problem) + '</span>' : '<span class="ok">ok</span>';
+        return (
+          '<tr><td class="muted">' +
+          esc(when(p.at)) +
+          '</td><td>' +
+          esc(p.amount || '') +
+          '</td><td>' +
+          esc(p.label || '') +
+          '</td><td>' +
+          who +
+          '</td><td>' +
+          st +
+          '</td></tr>'
+        );
+      })
+      .join('') || '<tr><td colspan="5" class="muted">Пока нет платежей</td></tr>') +
+    '</table></div>' +
+    '<div class="card"><h2 style="margin-top:0">Проблемы</h2><table><tr><th>Когда</th><th>Тип</th><th>Детали</th></tr>' +
+    (fin.problems
+      .map(
+        (p) =>
+          '<tr><td class="muted">' +
+          esc(when(p.at)) +
+          '</td><td><span class="bad">' +
+          esc(p.kind) +
+          '</span></td><td>' +
+          esc(p.text) +
+          '</td></tr>',
+      )
+      .join('') || '<tr><td colspan="3" class="muted">Проблем нет</td></tr>') +
+    '</table></div>';
+
   const alertBlock =
     dash.alerts.length === 0
       ? '<p class="muted">Алертов нет</p>'
@@ -477,13 +541,16 @@ export function homePage(state, extra) {
       (s.periodDays || 30) +
       ' дн.</span></div>' +
       '</div>' +
-      '<nav><a href="#find">Найти</a><a href="#alerts">Алерты</a><a href="#feed">Лента</a><a href="#quick">Промо</a><a href="#issue">Выдать код</a><a href="#promos">Все промо</a><a href="#subs">Подписки</a><a href="#settings">Настройки</a><a href="#fails">Отказы</a></nav>' +
+      '<nav><a href="#find">Найти</a><a href="#alerts">Алерты</a><a href="#finance">Финансы</a><a href="#feed">Лента</a><a href="#quick">Промо</a><a href="#issue">Выдать код</a><a href="#promos">Все промо</a><a href="#subs">Подписки</a><a href="#settings">Настройки</a><a href="#fails">Отказы</a></nav>' +
       '<section id="find"><h2>Найти пользователя</h2>' +
       searchForm(csrf, extra.q || '') +
       '</section>' +
       '<section id="alerts"><h2>Алерты</h2><div class="card">' +
       alertBlock +
       '</div></section>' +
+      '<section id="finance"><h2>Финансы</h2>' +
+      financeBlock +
+      '</section>' +
       '<section id="quick"><h2>Быстрые промокоды</h2>' +
       quickPromos +
       '</section>' +

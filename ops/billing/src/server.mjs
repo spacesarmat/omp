@@ -8,8 +8,10 @@ import {
   createPromo,
   createSubscription,
   grantDays,
+  logWebhook,
   openAccount,
   openAppUrl,
+  paymentsCsv,
   revokePromo,
   sessionOk,
   startDeviceLink,
@@ -162,6 +164,18 @@ export function createApp(file, fetchImpl) {
           userPage(state, card, { csrf: admin.csrf, code, flash, error: err }),
           { 'content-type': 'text/html; charset=utf-8' },
         );
+      }
+      if (req.method === 'GET' && path === '/admin/finance.csv') {
+        const admin = adminOf(req);
+        if (!admin) return send(res, 401, 'login required');
+        const now = Date.now();
+        const from = Number(url.searchParams.get('from')) || now - 30 * 24 * 60 * 60 * 1000;
+        const to = Number(url.searchParams.get('to')) || now;
+        const csv = paymentsCsv(readState(file), from, to);
+        return send(res, 200, csv, {
+          'content-type': 'text/csv; charset=utf-8',
+          'content-disposition': 'attachment; filename="omp-payments.csv"',
+        });
       }
       if (req.method === 'POST' && path === '/admin/login') {
         const body = await readBody(req);
@@ -382,9 +396,21 @@ export function createApp(file, fetchImpl) {
       if (req.method === 'POST' && path === '/v1/yoomoney') {
         const body = await readBody(req);
         const state = readState(file);
-        if (!notificationOk(body, state.settings.yoomoneySecret)) return send(res, 400, 'bad signature');
+        const now = Date.now();
+        if (!notificationOk(body, state.settings.yoomoneySecret)) {
+          await updateState(file, (cur) => ({
+            state: logWebhook(cur, {
+              kind: 'bad_signature',
+              operationId: body.operation_id || '',
+              label: body.label || '',
+              amount: body.amount || '',
+              at: now,
+            }),
+          }));
+          return send(res, 400, 'bad signature');
+        }
         const applied = await updateState(file, (cur) =>
-          applyPayment(cur, { operationId: body.operation_id, label: body.label, amount: body.amount, now: Date.now() }),
+          applyPayment(cur, { operationId: body.operation_id, label: body.label, amount: body.amount, now }),
         );
         if (!applied.duplicate && !applied.error) await tellPayment(readState(file), applied, net);
         return send(res, 200, 'ok');

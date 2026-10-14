@@ -10,9 +10,11 @@ import {
   confirmDeviceLink,
   createPromo,
   createSubscription,
+  financeReport,
   grantDays,
   openAccount,
   openAppUrl,
+  paymentsCsv,
   redeemPromo,
   startDeviceLink,
 } from '../src/logic.mjs';
@@ -179,6 +181,31 @@ describe('admin dashboard', () => {
     const dash = adminDashboard(paidState, NOW + 5000);
     expect(dash.alerts.some((a) => a.text.indexOf('Jackett') >= 0 || a.text.indexOf('бота') >= 0)).toBe(true);
     expect(dash.events.some((e) => e.kind === 'pay')).toBe(true);
+  });
+});
+
+describe('finance', () => {
+  it('sums payments, flags bad labels, and exports csv', () => {
+    const start = paid();
+    let state = applyPayment(start.state, {
+      operationId: 'op-ok',
+      label: 'new:' + start.account,
+      amount: '150.00',
+      now: NOW + 1000,
+    }).state;
+    const bad = applyPayment(state, { operationId: 'op-bad', label: 'new:missing', amount: '10.00', now: NOW + 2000 });
+    expect(bad.result.error).toBe('bad_label');
+    state = bad.state;
+    const dup = applyPayment(state, { operationId: 'op-ok', label: 'new:' + start.account, amount: '150.00', now: NOW + 3000 });
+    expect(dup.result.duplicate).toBe(true);
+    state = dup.state;
+    const fin = financeReport(state, NOW + 3000);
+    expect(fin.summary.total.sum).toBe(150);
+    expect(fin.problems.some((p) => p.kind === 'bad_label')).toBe(true);
+    expect(fin.problems.some((p) => p.kind === 'duplicate')).toBe(true);
+    const csv = paymentsCsv(state, NOW, NOW + 4000);
+    expect(csv).toContain('op-ok');
+    expect(csv).not.toContain('op-bad');
   });
 });
 
