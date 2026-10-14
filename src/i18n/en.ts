@@ -768,6 +768,10 @@ export const en: EnDict<typeof ru> = {
       down: 'The subscription server is not responding',
       bot: 'Subscription and code — in the @{name} bot',
       openBot: 'Open the bot',
+      linkTelegram: 'Link Telegram',
+      linking: 'Opening the bot…',
+      linked: 'Telegram: {id}',
+      codeFromLink: 'Code from the link is filled in — tap Connect',
     },
     indexer: {
       badKey: 'Wrong API key',

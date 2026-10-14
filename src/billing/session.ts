@@ -2,10 +2,18 @@ import { loadJson, saveJson } from '../store/storage';
 
 const DEVICE_KEY = 'tsp.billingDevice';
 const SESSION_KEY = 'tsp.billingSession';
+const PENDING_CODE_KEY = 'tsp.billingPendingCode';
 
 export interface BillingSession {
   token: string;
   paidUntil: number;
+}
+
+export interface BillingAccount {
+  telegramId: string;
+  paidUntil: number;
+  active: boolean;
+  deviceLimit: number;
 }
 
 function hex(bytes: Uint8Array): string {
@@ -54,4 +62,14 @@ export function onBillingChange(fn: Listener): () => void {
 
 export function emitBillingChange(): void {
   for (let i = 0; i < listeners.length; i++) listeners[i]();
+}
+
+/** Code arrived via omp:// deep link before the Sources screen opened. */
+export function pendingBillingCode(): string {
+  return loadJson<string>(PENDING_CODE_KEY, '', (v) => typeof v === 'string' && v.length > 0);
+}
+
+export function setPendingBillingCode(code: string | null): void {
+  saveJson(PENDING_CODE_KEY, code || '');
+  emitBillingChange();
 }

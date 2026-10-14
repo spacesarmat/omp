@@ -2,7 +2,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.5
+
+- [phone] Link Telegram to the device and a subscription cabinet; a code from the bot opens OMP and fills itself in (`omp://billing`)
+- [ops] User and admin cabinets in @OMPBILLINGBOT; «Open in OMP» link; OMP Billing tile in ZimaOS
+
 ## 0.20.0-beta.4
+
 
 - [phone] OMP Jackett: enter a subscription code and search through the server with no address or key on the phone; a link to the @OMPBILLINGBOT bot for payment and the code
 - [ops] @OMPBILLINGBOT: Status, Subscribe, Renew, Promo, Code, Help buttons; 1-day promos; admin panel with promos and summary

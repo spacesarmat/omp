@@ -1,7 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { botReply } from '../src/bot.mjs';
 import { restoreJackett, stripJackett } from '../src/jackett.mjs';
-import { activate, applyPayment, createPromo, createSubscription, openAccount, redeemPromo } from '../src/logic.mjs';
+import {
+  activate,
+  applyPayment,
+  confirmDeviceLink,
+  createPromo,
+  createSubscription,
+  grantDays,
+  openAccount,
+  openAppUrl,
+  redeemPromo,
+  startDeviceLink,
+} from '../src/logic.mjs';
 import { emptyState } from '../src/store.mjs';
 import { notificationHash, notificationOk } from '../src/yoomoney.mjs';
 
@@ -75,28 +86,68 @@ describe('Jackett proxy', () => {
 });
 
 describe('bot', () => {
-  it('shows the pay link from the Подписка button and attaches the keyboard', () => {
+  it('shows the pay link from the Подписка button and attaches the cabinet keyboard', () => {
     const state = emptyState();
     state.settings.yoomoneyWallet = '41001';
     state.settings.priceRub = 100;
     const out = botReply(state, { chatId: 7, text: 'Подписка', now: NOW });
     expect(out.messages[0].text).toContain('https://yoomoney.ru/quickpay/confirm?');
     expect(out.messages[0].text).toContain('label=new%3A');
-    expect(out.messages[0].keyboard.keyboard[0][0].text).toBe('Статус');
+    expect(out.messages[0].keyboard.keyboard[0][0].text).toBe('Кабинет');
   });
 
   it('asks for a promo code, then redeems the next message', () => {
     let state = emptyState();
+    state.settings.publicOrigin = 'http://192.168.1.191:8787';
     const made = createPromo(state, { code: 'DEMO1', days: 1, maxUses: 1, now: NOW });
     state = made.state;
     const ask = botReply(state, { chatId: 9, text: 'Промокод', now: NOW });
-    expect(ask.messages[0].awaitPromo).toBe(true);
-    const out = botReply(ask.state, { chatId: 9, text: 'DEMO1', now: NOW, awaitingPromo: true });
+    expect(ask.messages[0].await).toEqual({ kind: 'promo' });
+    const out = botReply(ask.state, { chatId: 9, text: 'DEMO1', now: NOW, awaiting: { kind: 'promo' } });
     expect(out.messages[0].text).toContain('Промокод принят');
     expect(out.messages[0].text).toMatch(/[A-Z2-9]{4}-[A-Z2-9]{4}/);
+    expect(out.messages[0].text).toContain('http://192.168.1.191:8787/go/');
+    expect(out.messages[0].inline.inline_keyboard[0][0].url).toContain('/go/');
     expect(out.state.promos[0].uses).toHaveLength(1);
     const again = botReply(out.state, { chatId: 9, text: '/promo DEMO1', now: NOW + 1000 });
     expect(again.messages[0].text).toContain('уже активировали');
+  });
+
+  it('confirms a phone link from /start link_TOKEN', () => {
+    const device = 'a'.repeat(32);
+    const started = startDeviceLink(emptyState(), { deviceId: device, now: NOW });
+    const out = botReply(started.state, {
+      chatId: 55,
+      text: '/start link_' + started.result.token,
+      now: NOW + 1000,
+    });
+    expect(out.messages[0].text).toContain('привязан');
+    const acc = out.state.accounts.find((a: { telegramId: string }) => a.telegramId === '55');
+    expect(acc.linkedDevices).toContain(device);
+  });
+
+  it('opens the admin cabinet only for listed telegram ids', () => {
+    const state = emptyState();
+    state.settings.adminTelegramIds = '99';
+    const denied = botReply(state, { chatId: 1, text: 'Админ', now: NOW });
+    expect(denied.messages[0].text).toContain('Нет доступа');
+    const ok = botReply(state, { chatId: 99, text: 'Админ', now: NOW });
+    expect(ok.messages[0].text).toContain('Админ-кабинет');
+    expect(ok.messages[0].keyboard.keyboard[0][0].text).toBe('Сводка');
+  });
+});
+
+describe('device link and grant', () => {
+  it('binds a device to telegram and grants days with a revealable code', () => {
+    const device = 'b'.repeat(32);
+    const started = startDeviceLink(emptyState(), { deviceId: device, now: NOW });
+    const linked = confirmDeviceLink(started.state, { token: started.result.token, telegramId: '77', now: NOW });
+    expect(linked.result.ok).toBe(true);
+    const granted = grantDays(linked.state, { telegramId: '77', days: 3, now: NOW });
+    expect(granted.result.code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    expect(openAppUrl('http://nas:8787', granted.result.code)).toContain('/go/');
+    const act = activate(granted.state, { code: granted.result.code, deviceId: device, now: NOW });
+    expect(act.result.token).toBeTruthy();
   });
 });
 

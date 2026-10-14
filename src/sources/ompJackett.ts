@@ -2,7 +2,15 @@
 // install and proxies Torznab. The Jackett address and API key never reach the phone or the TV.
 import { stashFile } from '../api/torrentFiles';
 import { BILLING_ORIGIN } from '../billing/config';
-import { billingSession, deviceId, emitBillingChange, onBillingChange, saveBillingSession, type BillingSession } from '../billing/session';
+import {
+  billingSession,
+  deviceId,
+  emitBillingChange,
+  onBillingChange,
+  saveBillingSession,
+  type BillingAccount,
+  type BillingSession,
+} from '../billing/session';
 import { t } from '../i18n';
 import { parseTorznab } from './indexer';
 import { registerSource, unregisterSource } from './registry';
@@ -16,11 +24,25 @@ interface ActivateBody {
   paidUntil?: number;
 }
 
-function parseBody(text: string): ActivateBody {
+interface LinkStartBody {
+  error?: string;
+  deepLink?: string;
+  expiresAt?: number;
+}
+
+interface MeBody {
+  error?: string;
+  telegramId?: string;
+  paidUntil?: number;
+  active?: boolean;
+  deviceLimit?: number;
+}
+
+function parseBody<T extends object>(text: string): T {
   try {
-    return JSON.parse(text) as ActivateBody;
+    return JSON.parse(text) as T;
   } catch (e) {
-    return {};
+    return {} as T;
   }
 }
 
@@ -32,7 +54,7 @@ export function clearBilling(): void {
 export function activateCode(ctx: SourceContext, code: string): Promise<BillingSession> {
   return ctx.http.post(BILLING_ORIGIN + '/v1/activate', { code: code, deviceId: deviceId() }, { timeoutMs: 15000 }).then(
     (res) => {
-      const body = parseBody(res.text);
+      const body = parseBody<ActivateBody>(res.text);
       if (res.status === 409 || body.error === 'other_device') throw new Error(t('sources.billing.otherDevice'));
       if (body.error === 'expired') throw new Error(t('sources.billing.expired'));
       if (!body.token) throw new Error(t('sources.billing.badCode'));
@@ -44,6 +66,40 @@ export function activateCode(ctx: SourceContext, code: string): Promise<BillingS
     () => {
       throw new Error(t('sources.billing.down'));
     },
+  );
+}
+
+/** Opens Telegram with a one-time link token so the bot can bind this install. */
+export function startTelegramLink(ctx: SourceContext): Promise<string> {
+  return ctx.http.post(BILLING_ORIGIN + '/v1/link/start', { deviceId: deviceId() }, { timeoutMs: 15000 }).then(
+    (res) => {
+      const body = parseBody<LinkStartBody>(res.text);
+      if (!body.deepLink) throw new Error(t('sources.billing.down'));
+      return body.deepLink;
+    },
+    () => {
+      throw new Error(t('sources.billing.down'));
+    },
+  );
+}
+
+export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount | null> {
+  const session = billingSession();
+  const headers: { [name: string]: string } = { 'X-Device-Id': deviceId() };
+  if (session) headers.Authorization = 'Bearer ' + session.token;
+  return ctx.http.get(BILLING_ORIGIN + '/v1/me', { headers, timeoutMs: 12000 }).then(
+    (res) => {
+      if (res.status === 404) return null;
+      const body = parseBody<MeBody>(res.text);
+      if (res.status < 200 || res.status >= 300) return null;
+      return {
+        telegramId: body.telegramId || '',
+        paidUntil: body.paidUntil || 0,
+        active: !!body.active,
+        deviceLimit: body.deviceLimit || 0,
+      };
+    },
+    () => null,
   );
 }
 

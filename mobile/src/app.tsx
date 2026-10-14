@@ -1,6 +1,8 @@
 import { useEffect } from 'preact/hooks';
 import { effect } from '@preact/signals';
 import { App as CapApp } from '@capacitor/app';
+import { parseBillingDeepLink } from '../../src/billing/deepLink';
+import { setPendingBillingCode } from '../../src/billing/session';
 import { currentRoute, goBack, switchTab, setPendingLink, type MRoute } from './nav';
 import { activeServer, client } from '../../src/store/servers';
 import { refreshTorrents } from '../../src/store/library';
@@ -192,6 +194,38 @@ export function App() {
       /* native layer unavailable */
     }
     return () => off?.();
+  }, []);
+
+  // omp://billing?code=… from the Telegram bot (cold start + while running)
+  useEffect(() => {
+    function intakeBilling(url: string): void {
+      const code = parseBillingDeepLink(url);
+      if (!code) return;
+      setPendingBillingCode(code);
+      showToast(t('sources.billing.codeFromLink'));
+      if (currentRoute.value.name !== 'sources') switchTab({ name: 'sources' });
+    }
+    let remove: (() => void) | undefined;
+    let cancelled = false;
+    try {
+      void CapApp.getLaunchUrl()
+        .then((res) => {
+          if (res && res.url) intakeBilling(res.url);
+        })
+        .catch(() => {});
+      CapApp.addListener('appUrlOpen', (ev) => intakeBilling(ev.url))
+        .then((h) => {
+          if (cancelled) void h.remove();
+          else remove = () => void h.remove();
+        })
+        .catch(() => {});
+    } catch {
+      /* browser without Capacitor */
+    }
+    return () => {
+      cancelled = true;
+      if (remove) remove();
+    };
   }, []);
 
   // monitoring: (re)schedule the background check with the saved settings (idempotent), follow finished background

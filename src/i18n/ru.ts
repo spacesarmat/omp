@@ -791,6 +791,10 @@ export const ru = {
       down: 'Сервер подписки не отвечает',
       bot: 'Подписка и код — в боте @{name}',
       openBot: 'Открыть бота',
+      linkTelegram: 'Привязать Telegram',
+      linking: 'Открываю бота…',
+      linked: 'Telegram: {id}',
+      codeFromLink: 'Код из ссылки подставлен — нажмите «Подключить»',
     },
     indexer: {
       badKey: 'Неверный API-ключ',

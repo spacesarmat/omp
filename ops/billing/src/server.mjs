@@ -1,7 +1,21 @@
 import { createServer } from 'node:http';
-import { activate, applyPayment, createPromo, createSubscription, openAccount, revokePromo, sessionOk, unbindCode } from './logic.mjs';
-import { botReply, telegramOf } from './bot.mjs';
+import {
+  accountByDevice,
+  activate,
+  applyPayment,
+  createPromo,
+  createSubscription,
+  openAccount,
+  openAppUrl,
+  revokePromo,
+  sessionOk,
+  startDeviceLink,
+  subscriptionView,
+  unbindCode,
+} from './logic.mjs';
+import { botDeepLink, botReply, telegramOf } from './bot.mjs';
 import { hashPassword, passwordMatches, randomCode, randomId } from './crypto.mjs';
+import { goPage } from './go.mjs';
 import { jackettSearchUrl, restoreJackett, stripJackett } from './jackett.mjs';
 import { sendMail } from './mail.mjs';
 import { homePage, loginPage } from './panel.mjs';
@@ -55,10 +69,12 @@ function json(res, status, value) {
   send(res, status, JSON.stringify(value), { 'content-type': 'application/json; charset=utf-8' });
 }
 
-async function telegramSend(token, chatId, text, fetchImpl, keyboard) {
+async function telegramSend(token, chatId, text, fetchImpl, opts) {
   if (!token || !chatId) return false;
   const body = { chat_id: chatId, text, disable_web_page_preview: true };
-  if (keyboard) body.reply_markup = keyboard;
+  if (opts && opts.parseMode) body.parse_mode = opts.parseMode;
+  if (opts && opts.inline) body.reply_markup = opts.inline;
+  else if (opts && opts.keyboard) body.reply_markup = opts.keyboard;
   const res = await fetchImpl('https://api.telegram.org/bot' + token + '/sendMessage', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -73,12 +89,27 @@ function tellPayment(state, result, fetchImpl) {
     : '';
   const chat = telegramOf(state, accountId);
   if (!chat) return Promise.resolve();
+  const origin = state.settings.publicOrigin || '';
   let text = '';
-  if (result.kind === 'new' && result.code) text = 'Код Jackett OMP: ' + result.code + '\nВведите его в OMP на телефоне. На другом устройстве он не сработает.';
-  if (result.kind === 'device' && result.code) text = 'Код для нового устройства: ' + result.code;
+  let inline = null;
+  if (result.kind === 'new' && result.code) {
+    const link = openAppUrl(origin, result.code);
+    text =
+      'Код Jackett OMP: `' +
+      result.code +
+      '`\n' +
+      link +
+      '\nДолгое нажатие на код — копировать.';
+    if (link.indexOf('http') === 0) inline = { inline_keyboard: [[{ text: 'Открыть в OMP', url: link }]] };
+  }
+  if (result.kind === 'device' && result.code) {
+    const link = openAppUrl(origin, result.code);
+    text = 'Код для нового устройства: `' + result.code + '`\n' + link;
+    if (link.indexOf('http') === 0) inline = { inline_keyboard: [[{ text: 'Открыть в OMP', url: link }]] };
+  }
   if (result.kind === 'renew') text = 'Подписка продлена до ' + new Date(result.paidUntil).toISOString().slice(0, 10);
   if (!text) return Promise.resolve();
-  return telegramSend(state.settings.botToken, chat, text, fetchImpl);
+  return telegramSend(state.settings.botToken, chat, text, fetchImpl, { parseMode: 'Markdown', inline });
 }
 
 export function createApp(file, fetchImpl) {
@@ -88,6 +119,10 @@ export function createApp(file, fetchImpl) {
     const path = url.pathname;
     try {
       if (req.method === 'GET' && path === '/health') return json(res, 200, { ok: true });
+      if (req.method === 'GET' && path.indexOf('/go/') === 0) {
+        const code = decodeURIComponent(path.slice(4));
+        return send(res, 200, goPage(code), { 'content-type': 'text/html; charset=utf-8' });
+      }
       if (req.method === 'GET' && (path === '/admin' || path === '/admin/')) {
         const admin = adminOf(req);
         if (!admin) return send(res, 200, loginPage(''), { 'content-type': 'text/html; charset=utf-8' });
@@ -125,6 +160,9 @@ export function createApp(file, fetchImpl) {
                 settings: {
                   ...state.settings,
                   botToken: body.botToken || '',
+                  botUsername: (body.botUsername || 'OMPBILLINGBOT').replace(/^@/, ''),
+                  publicOrigin: (body.publicOrigin || '').replace(/\/+$/, ''),
+                  adminTelegramIds: body.adminTelegramIds || '',
                   yoomoneyWallet: body.yoomoneyWallet || '',
                   yoomoneySecret: body.yoomoneySecret || '',
                   jackettUrl: (body.jackettUrl || '').replace(/\/+$/, ''),
@@ -186,6 +224,41 @@ export function createApp(file, fetchImpl) {
         if (result.error) return json(res, result.error === 'other_device' ? 409 : 403, result);
         return json(res, 200, { token: result.token, paidUntil: result.paidUntil });
       }
+      if (req.method === 'POST' && path === '/v1/link/start') {
+        const body = await readBody(req);
+        const result = await updateState(file, (state) => startDeviceLink(state, { deviceId: body.deviceId, now: Date.now() }));
+        if (result.error) return json(res, 400, result);
+        const state = readState(file);
+        const deepLink = botDeepLink(state.settings, 'link_' + result.token);
+        return json(res, 200, { token: result.token, deepLink, expiresAt: result.expiresAt });
+      }
+      if (req.method === 'GET' && path === '/v1/me') {
+        const device = String(req.headers['x-device-id'] || url.searchParams.get('deviceId') || '');
+        const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+        const state = readState(file);
+        const now = Date.now();
+        let account = null;
+        let paidUntil = 0;
+        let active = false;
+        if (token) {
+          const sess = sessionOk(state, { token, deviceId: device, now });
+          if (sess) {
+            account = state.accounts.find((a) => a.id === sess.subscription.accountId) || null;
+            paidUntil = sess.subscription.paidUntil;
+            active = paidUntil > now;
+          }
+        }
+        if (!account) account = accountByDevice(state, device);
+        if (!account) return json(res, 404, { error: 'not_linked' });
+        const view = subscriptionView(state, account.id, now);
+        return json(res, 200, {
+          telegramId: account.telegramId || '',
+          paidUntil: view ? view.paidUntil : paidUntil,
+          active: view ? view.active : active,
+          deviceLimit: view ? view.deviceLimit : 0,
+          devices: view ? view.devices.map((d) => ({ bound: d.bound, deviceId: d.bound ? (d.deviceId || '').slice(0, 8) : '' })) : [],
+        });
+      }
       if (req.method === 'POST' && path === '/v1/search') {
         const body = await readBody(req);
         const deviceId = req.headers['x-device-id'] || body.deviceId;
@@ -236,8 +309,8 @@ export function listen(file, port, fetchImpl) {
 
 export async function pollBot(file, fetchImpl) {
   let offset = 0;
-  /** chatId → waiting for a promo code in the next message */
-  const awaitingPromo = new Map();
+  /** chatId → { kind } waiting for the next free-text reply */
+  const awaiting = new Map();
   const net = fetchImpl || fetch;
   for (;;) {
     const state = readState(file);
@@ -261,16 +334,20 @@ export async function pollBot(file, fetchImpl) {
       const msg = u.message;
       if (!msg || !msg.chat) continue;
       const chatId = String(msg.chat.id);
-      const waiting = awaitingPromo.has(chatId);
+      const wait = awaiting.get(chatId) || null;
       const replied = await updateState(file, (cur) => {
-        const out = botReply(cur, { chatId, text: msg.text || '', now: Date.now(), awaitingPromo: waiting });
+        const out = botReply(cur, { chatId, text: msg.text || '', now: Date.now(), awaiting: wait });
         return { state: out.state, result: out.messages };
       });
-      awaitingPromo.delete(chatId);
+      awaiting.delete(chatId);
       for (let m = 0; m < replied.length; m++) {
         const row = replied[m];
-        if (row.awaitPromo) awaitingPromo.set(chatId, true);
-        await telegramSend(token, row.chatId, row.text, net, row.keyboard);
+        if (row.await) awaiting.set(chatId, row.await);
+        await telegramSend(token, row.chatId, row.text, net, {
+          keyboard: row.keyboard,
+          inline: row.inline,
+          parseMode: row.parseMode,
+        });
       }
     }
   }
@@ -286,9 +363,19 @@ export function dataFile() {
 export async function ensureAdmin(file) {
   const state = readState(file);
   const jackettUrl = process.env.BILLING_JACKETT_URL || '';
+  const publicOrigin = process.env.BILLING_PUBLIC_ORIGIN || '';
   if (state.settings.adminHash) {
-    if (jackettUrl && !state.settings.jackettUrl) {
-      await updateState(file, (s) => ({ state: { ...s, settings: { ...s.settings, jackettUrl } } }));
+    if ((jackettUrl && !state.settings.jackettUrl) || (publicOrigin && !state.settings.publicOrigin)) {
+      await updateState(file, (s) => ({
+        state: {
+          ...s,
+          settings: {
+            ...s.settings,
+            jackettUrl: s.settings.jackettUrl || jackettUrl,
+            publicOrigin: s.settings.publicOrigin || publicOrigin,
+          },
+        },
+      }));
     }
     return '';
   }
@@ -302,6 +389,7 @@ export async function ensureAdmin(file) {
         adminHash: hashed.hash,
         adminSalt: hashed.salt,
         jackettUrl: s.settings.jackettUrl || jackettUrl,
+        publicOrigin: s.settings.publicOrigin || publicOrigin,
       },
     },
   }));

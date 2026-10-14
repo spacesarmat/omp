@@ -74,6 +74,9 @@ export function homePage(state, extra) {
     '<div class="fields">' +
     '<div>' +
     field('botToken', 'Токен бота Telegram', s.botToken) +
+    field('botUsername', 'Username бота без @', s.botUsername || 'OMPBILLINGBOT') +
+    field('publicOrigin', 'Публичный URL сервера (http://IP:8787)', s.publicOrigin || '') +
+    field('adminTelegramIds', 'Telegram id админов через запятую', s.adminTelegramIds || '') +
     field('yoomoneyWallet', 'Кошелёк ЮMoney', s.yoomoneyWallet) +
     field('yoomoneySecret', 'Секрет уведомлений ЮMoney', s.yoomoneySecret) +
     field('jackettUrl', 'Адрес Jackett', s.jackettUrl) +

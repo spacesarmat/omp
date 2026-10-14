@@ -45,12 +45,44 @@ function issue(state, subscriptionId, now) {
     id: randomId(),
     subscriptionId,
     hash: codeHash(plain),
+    /** Kept until the code is bound so the bot can show / deep-link it again. */
+    plain,
     deviceId: '',
     boundAt: 0,
     createdAt: now,
     revoked: false,
   };
   return { state: { ...state, codes: state.codes.concat([row]) }, code: plain, codeId: row.id };
+}
+
+/** XXXX-XXXX from a normalized or dashed code. */
+export function formatCode(code) {
+  const n = normalizeCode(code);
+  if (n.length !== 8) return String(code || '');
+  return n.slice(0, 4) + '-' + n.slice(4);
+}
+
+/** Custom scheme that opens OMP and fills the subscription code. */
+export function appSchemeUrl(code) {
+  return 'omp://billing?code=' + encodeURIComponent(formatCode(code));
+}
+
+/** HTTPS page that redirects into the app (Telegram-friendly). */
+export function openAppUrl(origin, code) {
+  const base = String(origin || '').replace(/\/+$/, '');
+  if (!base) return appSchemeUrl(code);
+  return base + '/go/' + encodeURIComponent(formatCode(code));
+}
+
+export function isAdminChat(settings, chatId) {
+  const raw = String((settings && settings.adminTelegramIds) || '');
+  if (!raw.trim()) return false;
+  const id = String(chatId);
+  return raw
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .some((s) => s === id);
 }
 
 export function createSubscription(state, { accountId, now, days }) {
@@ -79,10 +111,23 @@ export function activate(state, { code, deviceId, now }) {
   if (row.deviceId && row.deviceId !== deviceId) {
     return fail('other_device', attempt(state, { at: now, hash, deviceId, ok: false, reason: 'other_device' }));
   }
-  const codes = state.codes.map((c) => (c.id === row.id && !c.deviceId ? { ...c, deviceId, boundAt: now } : c));
+  const codes = state.codes.map((c) =>
+    c.id === row.id && !c.deviceId ? { ...c, deviceId, boundAt: now, plain: '' } : c.id === row.id ? { ...c, plain: '' } : c,
+  );
   const token = randomId() + randomId();
   const sessions = state.sessions.filter((s) => s.codeId !== row.id).concat([{ codeId: row.id, hash: sha256(token), createdAt: now }]);
-  const next = attempt({ ...state, codes, sessions }, { at: now, hash, deviceId, ok: true, reason: 'ok' });
+  let next = attempt({ ...state, codes, sessions }, { at: now, hash, deviceId, ok: true, reason: 'ok' });
+  // Keep the phone↔Telegram link in sync when the code belongs to a TG account.
+  const account = findAccount(next, sub.accountId);
+  if (account) {
+    const linked = Array.isArray(account.linkedDevices) ? account.linkedDevices : [];
+    if (linked.indexOf(deviceId) < 0) {
+      const accounts = next.accounts.map((a) =>
+        a.id === account.id ? { ...a, linkedDevices: linked.concat([deviceId]) } : a,
+      );
+      next = { ...next, accounts };
+    }
+  }
   return { state: next, result: { token, paidUntil: sub.paidUntil, codeId: row.id } };
 }
 
@@ -158,11 +203,147 @@ export function openAccount(state, { email, telegramId, now }) {
 }
 
 export function unbindCode(state, codeId) {
+  const row = state.codes.find((c) => c.id === codeId);
+  const deviceId = row && row.deviceId ? row.deviceId : '';
+  let accounts = state.accounts;
+  if (deviceId) {
+    accounts = state.accounts.map((a) => {
+      const linked = Array.isArray(a.linkedDevices) ? a.linkedDevices.filter((d) => d !== deviceId) : [];
+      return linked.length === (a.linkedDevices || []).length ? a : { ...a, linkedDevices: linked };
+    });
+  }
+  // Plaintext was cleared on activate — mint a fresh code for the same slot.
+  const plain = randomCode();
   return {
     ...state,
-    codes: state.codes.map((c) => (c.id === codeId ? { ...c, deviceId: '', boundAt: 0 } : c)),
+    accounts,
+    codes: state.codes.map((c) =>
+      c.id === codeId ? { ...c, deviceId: '', boundAt: 0, plain, hash: codeHash(plain) } : c,
+    ),
     sessions: state.sessions.filter((s) => s.codeId !== codeId),
   };
+}
+
+/** Unbind every code slot tied to this device for the account (user self-service). */
+export function unbindDevice(state, { accountId, deviceId }) {
+  if (!deviceOk(deviceId) || !findAccount(state, accountId)) return state;
+  const mine = state.codes.filter((c) => {
+    if (c.deviceId !== deviceId || c.revoked) return false;
+    const sub = state.subscriptions.find((s) => s.id === c.subscriptionId);
+    return sub && sub.accountId === accountId;
+  });
+  let next = state;
+  for (let i = 0; i < mine.length; i++) next = unbindCode(next, mine[i].id);
+  return next;
+}
+
+export function startDeviceLink(state, { deviceId, now }) {
+  if (!deviceOk(deviceId)) return { state, result: { error: 'bad_device' } };
+  const token = randomId() + randomId();
+  const fresh = (state.links || []).filter((l) => !l.usedAt && l.expiresAt > now);
+  const links = fresh.concat([{ token, deviceId, createdAt: now, expiresAt: now + 10 * 60 * 1000, usedAt: 0, accountId: '' }]).slice(-80);
+  return { state: { ...state, links }, result: { token, expiresAt: now + 10 * 60 * 1000 } };
+}
+
+export function confirmDeviceLink(state, { token, telegramId, now }) {
+  const key = String(token || '').trim().toLowerCase();
+  if (!key) return { state, result: { error: 'bad_link' } };
+  const link = (state.links || []).find((l) => l.token === key && !l.usedAt && l.expiresAt > now);
+  if (!link) return { state, result: { error: 'bad_link' } };
+  const ensured = ensureTelegramAccount(state, telegramId, now);
+  let cur = ensured.state;
+  const account = ensured.account;
+  const linked = Array.isArray(account.linkedDevices) ? account.linkedDevices.slice() : [];
+  if (linked.indexOf(link.deviceId) < 0) linked.push(link.deviceId);
+  const accounts = cur.accounts.map((a) => (a.id === account.id ? { ...a, linkedDevices: linked } : a));
+  const links = cur.links.map((l) => (l.token === key ? { ...l, usedAt: now, accountId: account.id } : l));
+  return {
+    state: { ...cur, accounts, links },
+    result: { ok: true, deviceId: link.deviceId, accountId: account.id },
+  };
+}
+
+export function accountByDevice(state, deviceId) {
+  if (!deviceOk(deviceId)) return null;
+  const viaLink = state.accounts.find((a) => Array.isArray(a.linkedDevices) && a.linkedDevices.indexOf(deviceId) >= 0);
+  if (viaLink) return viaLink;
+  const code = state.codes.find((c) => c.deviceId === deviceId && !c.revoked);
+  if (!code) return null;
+  const sub = state.subscriptions.find((s) => s.id === code.subscriptionId);
+  return sub ? findAccount(state, sub.accountId) : null;
+}
+
+/** Unbound activation code still showable in the bot (has plaintext). */
+export function revealableCode(state, accountId) {
+  const sub = anySub(state, accountId);
+  if (!sub) return null;
+  const row = state.codes.find((c) => c.subscriptionId === sub.id && !c.revoked && !c.deviceId && c.plain);
+  return row ? { code: row.plain, codeId: row.id } : null;
+}
+
+export function grantDays(state, { telegramId, days, now }) {
+  const n = days > 0 ? Math.floor(days) : 0;
+  if (!n || !telegramId) return { state, result: { error: 'bad_args' } };
+  const opened = ensureTelegramAccount(state, telegramId, now);
+  let cur = opened.state;
+  const existing = anySub(cur, opened.account.id);
+  if (existing) {
+    const from = Math.max(existing.paidUntil, now);
+    const paidUntil = from + n * DAY;
+    const subscriptions = cur.subscriptions.map((s) => (s.id === existing.id ? { ...s, paidUntil } : s));
+    const issued = issue({ ...cur, subscriptions }, existing.id, now);
+    return {
+      state: issued.state,
+      result: { kind: 'grant', code: issued.code, paidUntil, days: n, accountId: opened.account.id },
+    };
+  }
+  const created = createSubscription(cur, { accountId: opened.account.id, now, days: n });
+  return {
+    state: created.state,
+    result: {
+      kind: 'grant',
+      code: created.result.code,
+      paidUntil: created.result.paidUntil,
+      days: n,
+      accountId: opened.account.id,
+    },
+  };
+}
+
+export function adminSummary(state, now) {
+  const active = state.subscriptions.filter((s) => s.paidUntil > now).length;
+  const promos = (state.promos || []).filter((p) => !p.revoked).length;
+  const bound = state.codes.filter((c) => !c.revoked && c.deviceId).length;
+  const fails = state.attempts.filter((a) => !a.ok && a.at > now - DAY).length;
+  return { accounts: state.accounts.length, active, promos, bound, fails };
+}
+
+export function adminFind(state, query, now) {
+  const q = String(query || '').trim();
+  if (!q) return null;
+  let account = accountByTelegram(state, q);
+  if (!account && /^[a-f0-9]{6,}$/i.test(q)) {
+    account = state.accounts.find((a) => Array.isArray(a.linkedDevices) && a.linkedDevices.some((d) => d.indexOf(q.toLowerCase()) === 0)) || null;
+    if (!account) {
+      const code = state.codes.find((c) => c.deviceId && c.deviceId.indexOf(q.toLowerCase()) === 0);
+      if (code) {
+        const sub = state.subscriptions.find((s) => s.id === code.subscriptionId);
+        account = sub ? findAccount(state, sub.accountId) : null;
+      }
+    }
+  }
+  if (!account) {
+    const hash = codeHash(q);
+    if (hash) {
+      const row = state.codes.find((c) => c.hash === hash);
+      if (row) {
+        const sub = state.subscriptions.find((s) => s.id === row.subscriptionId);
+        account = sub ? findAccount(state, sub.accountId) : null;
+      }
+    }
+  }
+  if (!account) return null;
+  return { account, sub: subscriptionView(state, account.id, now), reveal: revealableCode(state, account.id) };
 }
 
 export function revokeCode(state, codeId) {

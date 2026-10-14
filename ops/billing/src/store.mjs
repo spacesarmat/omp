@@ -7,6 +7,11 @@ export function emptyState() {
       adminHash: '',
       adminSalt: '',
       botToken: '',
+      botUsername: 'OMPBILLINGBOT',
+      /** Public base URL of this server (for /go/… links in Telegram). */
+      publicOrigin: '',
+      /** Comma-separated Telegram chat ids that get the admin cabinet. */
+      adminTelegramIds: '',
       yoomoneyWallet: '',
       yoomoneySecret: '',
       jackettUrl: '',
@@ -27,6 +32,8 @@ export function emptyState() {
     attempts: [],
     payments: [],
     promos: [],
+    /** Pending phone↔Telegram link tokens from the app. */
+    links: [],
     outbox: [],
   };
 }
@@ -45,6 +52,7 @@ export function readState(file) {
       attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [],
       payments: Array.isArray(parsed.payments) ? parsed.payments : [],
       promos: Array.isArray(parsed.promos) ? parsed.promos : [],
+      links: Array.isArray(parsed.links) ? parsed.links : [],
       outbox: Array.isArray(parsed.outbox) ? parsed.outbox : [],
     };
   } catch (e) {

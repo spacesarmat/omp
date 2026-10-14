@@ -1,29 +1,75 @@
-# Local / NAS: phone reaches billing on :8787. Jackett stays on the docker network only.
-# In the panel set Jackett URL to http://jackett:9117 (service name, not 127.0.0.1).
+# Custom app for ZimaOS / CasaOS. Uses the Jackett already on the NAS (port 9117).
+# Install:
+#   1. Copy ops/billing → /DATA/AppData/omp-billing/app
+#   2. Stop any manual omp-billing container
+#   3. casaos-cli app-management install -f /DATA/AppData/omp-billing/docker-compose.yml
+name: omp-billing
 services:
-  jackett:
-    image: lscr.io/linuxserver/jackett:latest
-    restart: unless-stopped
+  omp-billing:
+    cpu_shares: 90
+    container_name: omp-billing
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 64M
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Moscow
-    volumes:
-      - ./jackett-config:/config
-    # no host ports: only the billing container talks to Jackett
-  billing:
+      PORT: "8787"
+      BILLING_DATA: /data/state.json
+      # host gateway on Docker bridge — existing Jackett on the NAS
+      BILLING_JACKETT_URL: http://host.docker.internal:9117
+      TZ: Europe/Moscow
     image: node:24-bookworm-slim
-    restart: unless-stopped
     working_dir: /app
-    command: ["sh", "-c", "npm install --omit=dev && node src/server.mjs"]
-    environment:
-      - PORT=8787
-      - BILLING_DATA=/data/state.json
-      - BILLING_JACKETT_URL=http://jackett:9117
-    volumes:
-      - ./:/app
-      - ./data:/data
+    command:
+      - /app/start.sh
+    labels:
+      icon: https://cdn.jsdelivr.net/gh/spacesarmat/omp@refactor/code/assets/icon.svg
+    network_mode: bridge
+    extra_hosts:
+      - host.docker.internal:host-gateway
     ports:
-      - "8787:8787"
-    depends_on:
-      - jackett
+      - target: 8787
+        published: "8787"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: /DATA/AppData/omp-billing/app
+        target: /app
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /DATA/AppData/omp-billing/data
+        target: /data
+        bind:
+          create_host_path: true
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  author: spacesarmat
+  category: Networking
+  description:
+    en_US: OMP subscription admin panel and Jackett search proxy. Jackett stays on the NAS; phones only talk to this API.
+    ru_RU: Админ-панель подписок OMP и прокси поиска в Jackett. Jackett остаётся на NAS; телефон ходит только в этот API.
+  developer: OMP
+  hostname: ""
+  icon: https://cdn.jsdelivr.net/gh/spacesarmat/omp@refactor/code/assets/icon.svg
+  id: com.spacesarmat.omp-billing
+  index: /admin
+  is_uncontrolled: false
+  main: omp-billing
+  port_map: "8787"
+  scheme: http
+  store_app_id: omp-billing
+  tagline:
+    en_US: OMP paid Jackett access
+    ru_RU: Платный Jackett для OMP
+  title:
+    custom: OMP Billing
+    en_US: OMP Billing
+    ru_RU: OMP Billing
+  version: 0.20.0
+  update_at: "2026-10-14"

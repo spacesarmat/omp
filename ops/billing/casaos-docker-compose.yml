@@ -1,6 +1,8 @@
 # Custom app for ZimaOS / CasaOS. Uses the Jackett already on the NAS (port 9117).
-# Install: copy ops/billing into /DATA/AppData/omp-billing/app, then import this compose
-# or: docker compose -f casaos-docker-compose.yml up -d
+# Install:
+#   1. Copy ops/billing → /DATA/AppData/omp-billing/app
+#   2. Stop any manual omp-billing container
+#   3. casaos-cli app-management install -f /DATA/AppData/omp-billing/docker-compose.yml
 name: omp-billing
 services:
   omp-billing:
@@ -22,6 +24,8 @@ services:
     working_dir: /app
     command:
       - /app/start.sh
+    labels:
+      icon: https://cdn.jsdelivr.net/gh/spacesarmat/omp@refactor/code/assets/icon.svg
     network_mode: bridge
     extra_hosts:
       - host.docker.internal:host-gateway
@@ -34,31 +38,38 @@ services:
       - type: bind
         source: /DATA/AppData/omp-billing/app
         target: /app
+        bind:
+          create_host_path: true
       - type: bind
         source: /DATA/AppData/omp-billing/data
         target: /data
+        bind:
+          create_host_path: true
 x-casaos:
   architectures:
     - amd64
     - arm64
-  author: OMP
-  category: Network
+  author: spacesarmat
+  category: Networking
   description:
-    en_us: OMP subscription panel and Jackett search proxy. Jackett stays on the NAS; phones only talk to this API.
-    ru_ru: Панель подписок OMP и прокси поиска в Jackett. Jackett остаётся на NAS; телефон ходит только в этот API.
+    en_US: OMP subscription admin panel and Jackett search proxy. Jackett stays on the NAS; phones only talk to this API.
+    ru_RU: Админ-панель подписок OMP и прокси поиска в Jackett. Jackett остаётся на NAS; телефон ходит только в этот API.
   developer: OMP
   hostname: ""
-  icon: ""
+  icon: https://cdn.jsdelivr.net/gh/spacesarmat/omp@refactor/code/assets/icon.svg
   id: com.spacesarmat.omp-billing
   index: /admin
-  is_uncontrolled: true
+  is_uncontrolled: false
   main: omp-billing
   port_map: "8787"
   scheme: http
   store_app_id: omp-billing
   tagline:
-    en_us: OMP paid Jackett access
-    ru_ru: Платный Jackett для OMP
+    en_US: OMP paid Jackett access
+    ru_RU: Платный Jackett для OMP
   title:
     custom: OMP Billing
-    en_us: OMP Billing
+    en_US: OMP Billing
+    ru_RU: OMP Billing
+  version: 0.20.0
+  update_at: "2026-10-14"
