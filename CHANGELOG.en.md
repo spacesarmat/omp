@@ -2,10 +2,15 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## 0.20.0-beta.5
+## 0.20.0-beta.6
 
 - [phone] Link Telegram to the device and a subscription cabinet; a code from the bot opens OMP and fills itself in (`omp://billing`)
 - [ops] User and admin cabinets in @OMPBILLINGBOT; «Open in OMP» link; OMP Billing tile in ZimaOS
+- [phone] A deep-link subscription code is excluded from the settings backup
+
+## 0.20.0-beta.5
+
+- same as beta.6 (release did not build: backup allowlist test)
 
 ## 0.20.0-beta.4
 

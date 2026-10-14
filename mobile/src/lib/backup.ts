@@ -158,6 +158,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.phoneLink', // TV: the address and token of the phone that serves its search, per device
   'tsp.billingDevice', // paid Jackett: install id, per device
   'tsp.billingSession', // paid Jackett: session token, never in a copy
+  'tsp.billingPendingCode', // paid Jackett: code from omp:// deep link, per device
 ];
 
 function readRaw(key: string): unknown {
