@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.11
+
+- same as beta.10 (release failed: CHANGELOG/backup tests)
+
 ## 0.20.0-beta.10
 
 - [phone] Jackett OMP: subscription end date refreshes from the server after admin grants days

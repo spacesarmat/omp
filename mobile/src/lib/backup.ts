@@ -159,6 +159,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.billingDevice', // paid Jackett: install id, per device
   'tsp.billingSession', // paid Jackett: session token, never in a copy
   'tsp.billingPendingCode', // paid Jackett: code from omp:// deep link, per device
+  'tsp.billingOrigin', // paid Jackett: last working public/LAN origin, per device
 ];
 
 function readRaw(key: string): unknown {
