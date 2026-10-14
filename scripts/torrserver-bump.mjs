@@ -4,6 +4,7 @@
 // answer for the tag) the release is fetched; GITHUB_TOKEN is used when set.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseVersionFile, bumpPatch, insertChangelog, setRootVersion, pinFromRelease, formatPin, PIN_PATH } from './torrserver-lib.mjs';
+import { readChangelogUtf8, writeUtf8Lf } from './changelog-encoding.mjs';
 
 const tag = parseVersionFile(process.argv[2] || '');
 const read = (f) => readFileSync(f, 'utf8');
@@ -30,5 +31,5 @@ writeFileSync(PIN_PATH, pin);
 writeFileSync('package.json', setRootVersion(read('package.json'), next));
 writeFileSync('package-lock.json', setRootVersion(read('package-lock.json'), next, true));
 writeFileSync('webos/appinfo.json', setRootVersion(read('webos/appinfo.json'), next));
-writeFileSync('CHANGELOG.md', insertChangelog(read('CHANGELOG.md'), next, tag));
+writeUtf8Lf('CHANGELOG.md', insertChangelog(readChangelogUtf8('CHANGELOG.md', { russian: true }), next, tag));
 console.log(next);

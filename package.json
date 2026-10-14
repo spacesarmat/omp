@@ -15,6 +15,7 @@
     "screenshots": "node scripts/screenshots.mjs",
     "package": "npm run build && node scripts/package.mjs",
     "check:boot": "node scripts/boot-check.mjs",
+    "check:changelog": "node scripts/check-changelog-encoding.mjs",
     "tv:install": "node scripts/tv.mjs install",
     "tv:launch": "node scripts/tv.mjs launch",
     "dev:mobile": "vite --config vite.mobile.config.ts --host",
