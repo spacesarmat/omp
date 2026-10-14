@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.15
+
+- same as beta.13–14 (release failed: the in-app changelog window dropped 0.17.0)
+
 ## 0.20.0-beta.14
 
 - same as beta.13 (release failed: card and Telegram tests)
