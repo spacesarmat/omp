@@ -16,7 +16,7 @@ services:
           memory: 64M
     environment:
       PORT: "8787"
-      BILLING_DATA: /data/state.json
+      BILLING_DATA: /data/billing.db
       # host gateway on Docker bridge — existing Jackett on the NAS
       BILLING_JACKETT_URL: http://host.docker.internal:9117
       TZ: Europe/Moscow

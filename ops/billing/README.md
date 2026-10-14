@@ -1,11 +1,12 @@
 # Подписки OMP и Jackett
 
-Панель, бот Telegram и API, через которое телефон ищет в Jackett. Ключ Jackett на телефон не уходит.
+Панель (Preact + Pico), бот Telegram и API, через которое телефон ищет в Jackett. Ключ Jackett на телефон не уходит. Состояние — SQLite (`billing.db`; старый `state.json` мигрирует сам).
 
 ## Локально на ПК
 
 ```
 cd ops/billing
+npm run build:admin   # один раз после правок admin/
 node src/server.mjs
 ```
 

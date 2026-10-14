@@ -770,7 +770,11 @@ export const en: EnDict<typeof ru> = {
       openBot: 'Open the bot',
       linkTelegram: 'Link Telegram',
       linking: 'Opening the bot…',
-      linked: 'Telegram: {id}',
+      linked: 'linked · {id}',
+      unlinkTelegram: 'Unlink',
+      unlinking: 'Unlinking…',
+      telegramTitle: 'Telegram',
+      telegramHint: 'Get the code and manage the subscription in the bot',
       codeFromLink: 'Code from the link is filled in — tap Connect',
     },
     indexer: {

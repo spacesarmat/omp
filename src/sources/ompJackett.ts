@@ -83,6 +83,21 @@ export function startTelegramLink(ctx: SourceContext): Promise<string> {
   );
 }
 
+/** Unlinks this install from the Telegram account on the billing server. */
+export function clearTelegramLink(ctx: SourceContext): Promise<void> {
+  return ctx.http
+    .post(BILLING_ORIGIN + '/v1/link/clear', { deviceId: deviceId() }, { headers: { 'X-Device-Id': deviceId() }, timeoutMs: 12000 })
+    .then(
+      (res) => {
+        if (res.status === 404) return;
+        if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
+      },
+      () => {
+        throw new Error(t('sources.billing.down'));
+      },
+    );
+}
+
 export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount | null> {
   const session = billingSession();
   const headers: { [name: string]: string } = { 'X-Device-Id': deviceId() };

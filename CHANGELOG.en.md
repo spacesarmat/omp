@@ -2,6 +2,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.7
+
+- [ops] Admin panel on Preact + Pico; SQLite storage (migrates from state.json)
+- [phone] Jackett OMP shows Telegram link status and can unlink
+- [phone] Settings: sources and TV first, then server, player, and updates
+
 ## 0.20.0-beta.6
 
 - [phone] Link Telegram to the device and a subscription cabinet; a code from the bot opens OMP and fills itself in (`omp://billing`)

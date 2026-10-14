@@ -8,7 +8,13 @@ import {
   type BillingAccount,
 } from '../../../src/billing/session';
 import { t } from '../../../src/i18n';
-import { activateCode, clearBilling, fetchBillingAccount, startTelegramLink } from '../../../src/sources/ompJackett';
+import {
+  activateCode,
+  clearBilling,
+  clearTelegramLink,
+  fetchBillingAccount,
+  startTelegramLink,
+} from '../../../src/sources/ompJackett';
 import { phoneSourceContext } from '../searchContext';
 
 function day(ms: number): string {
@@ -27,6 +33,10 @@ export function OmpJackettCard() {
   const [account, setAccount] = useState<BillingAccount | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
 
+  async function refreshAccount() {
+    setAccount(await fetchBillingAccount(phoneSourceContext()));
+  }
+
   useEffect(() => {
     async function applyPending(raw: string) {
       setCode(raw);
@@ -38,7 +48,7 @@ export function OmpJackettCard() {
         setSession(row);
         setCode('');
         setPendingBillingCode(null);
-        setAccount(await fetchBillingAccount(phoneSourceContext()));
+        await refreshAccount();
       } catch (e) {
         setError(e instanceof Error ? e.message : t('sources.billing.down'));
       } finally {
@@ -52,11 +62,17 @@ export function OmpJackettCard() {
       const next = pendingBillingCode();
       if (next && !billingSession()) void applyPending(next);
       else if (next) setCode(next);
+      else void refreshAccount();
     });
   }, []);
 
   useEffect(() => {
-    void fetchBillingAccount(phoneSourceContext()).then(setAccount);
+    void refreshAccount();
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void refreshAccount();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
   }, [session]);
 
   async function connect(fromCode?: string) {
@@ -70,7 +86,7 @@ export function OmpJackettCard() {
       setSession(row);
       setCode('');
       setPendingBillingCode(null);
-      setAccount(await fetchBillingAccount(phoneSourceContext()));
+      await refreshAccount();
     } catch (e) {
       setError(e instanceof Error ? e.message : t('sources.billing.down'));
     } finally {
@@ -85,6 +101,7 @@ export function OmpJackettCard() {
     try {
       const deepLink = await startTelegramLink(phoneSourceContext());
       window.open(deepLink, '_system');
+      window.setTimeout(() => void refreshAccount(), 2500);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('sources.billing.down'));
     } finally {
@@ -92,21 +109,62 @@ export function OmpJackettCard() {
     }
   }
 
+  async function unlinkTelegram() {
+    if (linkBusy) return;
+    setLinkBusy(true);
+    setError('');
+    try {
+      await clearTelegramLink(phoneSourceContext());
+      setAccount((prev) => (prev ? { ...prev, telegramId: '' } : prev));
+      await refreshAccount();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('sources.billing.down'));
+    } finally {
+      setLinkBusy(false);
+    }
+  }
+
+  const linked = !!(account && account.telegramId);
+
   return (
     <section class="m-set-group" data-billing="jackett">
       <div class="m-set-label">{t('sources.billing.title')}</div>
       <div class="m-set-card m-src-card">
         <div class="m-src-row m-note m-muted">{t('sources.billing.text')}</div>
+
+        <div class="m-src-row" data-row="billing-telegram">
+          <div class="m-set-text" style="flex-grow: 1">
+            <span>{t('sources.billing.telegramTitle')}</span>
+            {linked ? (
+              <span class="m-small m-accent" data-telegram="linked">
+                {t('sources.billing.linked', { id: account!.telegramId })}
+              </span>
+            ) : (
+              <span class="m-small m-muted">{t('sources.billing.telegramHint')}</span>
+            )}
+          </div>
+        </div>
+        {linked ? (
+          <div class="m-src-row" style="gap: 8px; flex-wrap: wrap">
+            <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
+              {t('sources.billing.openBot')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary" disabled={linkBusy} onClick={() => void unlinkTelegram()}>
+              {linkBusy ? t('sources.billing.unlinking') : t('sources.billing.unlinkTelegram')}
+            </button>
+          </div>
+        ) : (
+          <div class="m-src-row" style="gap: 8px; flex-wrap: wrap">
+            <button type="button" class="m-btn m-btn-primary" disabled={linkBusy} onClick={() => void linkTelegram()}>
+              {linkBusy ? t('sources.billing.linking') : t('sources.billing.linkTelegram')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
+              {t('sources.billing.openBot')}
+            </button>
+          </div>
+        )}
         <div class="m-src-row m-note m-muted">{t('sources.billing.bot', { name: BILLING_BOT })}</div>
-        <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
-          {t('sources.billing.openBot')}
-        </button>
-        <button type="button" class="m-btn m-btn-secondary" disabled={linkBusy} onClick={() => void linkTelegram()}>
-          {linkBusy ? t('sources.billing.linking') : t('sources.billing.linkTelegram')}
-        </button>
-        {account && account.telegramId ? (
-          <div class="m-src-row m-note">{t('sources.billing.linked', { id: account.telegramId })}</div>
-        ) : null}
+
         {session && session.token ? (
           <>
             <div class="m-src-row">{t('sources.billing.connected', { date: day(session.paidUntil) })}</div>

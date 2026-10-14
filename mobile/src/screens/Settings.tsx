@@ -416,7 +416,68 @@ export function Settings() {
   return (
     <div class="m-screen" data-route="settings">
       <ScreenHeader title={t('common.settings')} />
-      {/* updates first: the version and the check are what people look for most here */}
+
+      {/* 1. Everyday: sources (Jackett/Telegram) + monitor */}
+      <section class="m-set-group">
+        <div class="m-set-label">{t('tvSettings.sources')}</div>
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'sources' })}>
+          <span>{t('tvSettings.sources')}</span>
+          <Icon d="M9 6l6 6l-6 6" size={20} />
+        </button>
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'monitor' })}>
+          <span>{t('monitor.title')}</span>
+          <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>
+        </button>
+      </section>
+
+      {/* 2. TV */}
+      <section class="m-set-group">
+        <div class="m-set-label">{t('history.tv')}</div>
+        <div class="m-set-row">
+          <div class="m-set-text">
+            <span>{tv ? tv.name : t('settings.notChosen')}</span>
+            {tv && <span class="m-muted m-small">{tv.ip}</span>}
+          </div>
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'tv' })}>
+            {t('settings.choose')}
+          </button>
+        </div>
+        <TvOmpRow />
+        <TvSearchRow />
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'install' })}>
+          <span>{t('install.assistant.title')}</span>
+          <Icon d="M9 6l6 6l-6 6" size={20} />
+        </button>
+      </section>
+
+      {/* 3. TorrServer */}
+      <section class="m-set-group">
+        <div class="m-set-label">{t('tvSettings.server')}</div>
+        <div class="m-set-row">
+          <div class="m-set-text">
+            <span>{server ? server.name : t('settings.notChosen')}</span>
+            {server && <span class="m-muted m-small">{server.url}</span>}
+          </div>
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'connect' })}>
+            {t('settings.change')}
+          </button>
+        </div>
+        {server && (
+          <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'serverSettings' })}>
+            <span>{t('serverSettings.title')}</span>
+            <Icon d="M9 6l6 6l-6 6" size={20} />
+          </button>
+        )}
+      </section>
+      {localServer.value.supported && <LocalServerSection />}
+
+      {/* 4. Player + language */}
+      <VideoPlayerRow />
+      <section class="m-set-group">
+        <LanguageRow />
+      </section>
+
+      {/* 5. Updates */}
       <section class="m-set-group">
         <div class="m-set-label">{t('update.sheetLabel')}</div>
         <button type="button" class="m-set-row m-set-row-btn" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>
@@ -426,7 +487,6 @@ export function Settings() {
             {isBetaVersion(APP_VERSION) && <span class="m-badge-beta">{betaBadge()}</span>} · {t('whatsNew.title')} ›
           </span>
         </button>
-        {/* a found update stays offered here until it is installed, also after «Позже» */}
         {latestUpdate.value ? (
           <button type="button" class="m-btn m-btn-primary" data-row="update-available" onClick={() => (updatePrompt.value = latestUpdate.value)}>
             {updateTitle(latestUpdate.value.version, APP_VERSION)}
@@ -461,65 +521,14 @@ export function Settings() {
           />
         </div>
       </section>
+
+      {/* 6. Help & about */}
       <section class="m-set-group">
-        <LanguageRow />
-      </section>
-      <VideoPlayerRow />
-      {localServer.value.supported && <LocalServerSection />}
-      <section class="m-set-group">
-        <div class="m-set-label">{t('tvSettings.server')}</div>
-        <div class="m-set-row">
-          <div class="m-set-text">
-            <span>{server ? server.name : t('settings.notChosen')}</span>
-            {server && <span class="m-muted m-small">{server.url}</span>}
-          </div>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'connect' })}>
-            {t('settings.change')}
-          </button>
-        </div>
-        {server && (
-          <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'serverSettings' })}>
-            <span>{t('serverSettings.title')}</span>
-            <Icon d="M9 6l6 6l-6 6" size={20} />
-          </button>
-        )}
-      </section>
-      <section class="m-set-group">
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'sources' })}>
-          <span>{t('tvSettings.sources')}</span>
-          <Icon d="M9 6l6 6l-6 6" size={20} />
-        </button>
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'monitor' })}>
-          <span>{t('monitor.title')}</span>
-          <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>
-        </button>
-      </section>
-      <section class="m-set-group">
-        <div class="m-set-label">{t('history.tv')}</div>
-        <div class="m-set-row">
-          <div class="m-set-text">
-            <span>{tv ? tv.name : t('settings.notChosen')}</span>
-            {tv && <span class="m-muted m-small">{tv.ip}</span>}
-          </div>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'tv' })}>
-            {t('settings.choose')}
-          </button>
-        </div>
-        <TvOmpRow />
-        <TvSearchRow />
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'install' })}>
-          <span>{t('install.assistant.title')}</span>
-          <Icon d="M9 6l6 6l-6 6" size={20} />
-        </button>
-      </section>
-      <section class="m-set-group">
+        <div class="m-set-label">{t('tvSettings.about')}</div>
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'faq' })}>
           <span>{t('common.faq')}</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />
         </button>
-      </section>
-      <section class="m-set-group">
-        <div class="m-set-label">{t('tvSettings.about')}</div>
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'backup' })}>
           <span>{t('backup.title')}</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />

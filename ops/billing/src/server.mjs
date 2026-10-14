@@ -1,4 +1,8 @@
 import { createServer } from 'node:http';
+import { existsSync, readFileSync } from 'node:fs';
+import { extname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { homePayload, userPayload } from './adminApi.mjs';
 import {
   accountByDevice,
   accountCard,
@@ -18,6 +22,7 @@ import {
   startDeviceLink,
   subscriptionView,
   unbindCode,
+  unlinkDeviceTelegram,
 } from './logic.mjs';
 import { botDeepLink, botReply, telegramOf } from './bot.mjs';
 import { hashPassword, passwordMatches, randomCode, randomId } from './crypto.mjs';
@@ -25,8 +30,46 @@ import { goPage } from './go.mjs';
 import { jackettSearchUrl, restoreJackett, stripJackett } from './jackett.mjs';
 import { sendMail } from './mail.mjs';
 import { homePage, loginPage, userPage } from './panel.mjs';
-import { readState, updateState } from './store.mjs';
+import { readState, resolveDbPath, updateState } from './store.mjs';
 import { notificationOk } from './yoomoney.mjs';
+
+const PUBLIC_DIR = fileURLToPath(new URL('../public', import.meta.url));
+const SPA_INDEX = join(PUBLIC_DIR, 'index.html');
+
+function wantsJson(req) {
+  const accept = String(req.headers.accept || '');
+  const type = String(req.headers['content-type'] || '');
+  return accept.indexOf('application/json') >= 0 || type.indexOf('application/json') >= 0;
+}
+
+function mimeFor(file) {
+  const ext = extname(file);
+  if (ext === '.js') return 'application/javascript; charset=utf-8';
+  if (ext === '.css') return 'text/css; charset=utf-8';
+  if (ext === '.svg') return 'image/svg+xml';
+  if (ext === '.html') return 'text/html; charset=utf-8';
+  if (ext === '.json') return 'application/json; charset=utf-8';
+  if (ext === '.woff2') return 'font/woff2';
+  return 'application/octet-stream';
+}
+
+function serveSpa(res) {
+  if (!existsSync(SPA_INDEX)) return false;
+  send(res, 200, readFileSync(SPA_INDEX), { 'content-type': 'text/html; charset=utf-8' });
+  return true;
+}
+
+function servePublic(path, res) {
+  if (path.indexOf('/admin/assets/') !== 0 && path !== '/admin/' && path !== '/admin') return false;
+  if (!existsSync(PUBLIC_DIR)) return false;
+  if (path === '/admin' || path === '/admin/') return serveSpa(res);
+  const rel = path.replace(/^\/admin\//, '');
+  if (rel.indexOf('..') >= 0) return false;
+  const file = join(PUBLIC_DIR, rel);
+  if (!file.startsWith(PUBLIC_DIR) || !existsSync(file)) return false;
+  send(res, 200, readFileSync(file), { 'content-type': mimeFor(file) });
+  return true;
+}
 
 const sessions = new Map();
 
@@ -69,6 +112,22 @@ function listSessions() {
   }
   out.sort((a, b) => b.lastSeen - a.lastSeen);
   return out;
+}
+
+function takeFlash(admin, sid) {
+  const code = admin.flash || '';
+  const promo = admin.flashPromo || '';
+  const flash = admin.flashText || '';
+  const error = admin.flashError || '';
+  if (code || promo || flash || error) {
+    sessions.set(sid, {
+      csrf: admin.csrf,
+      exp: admin.exp,
+      createdAt: admin.createdAt,
+      lastSeen: Date.now(),
+    });
+  }
+  return { code, promo, flash, error };
 }
 
 function audit(file, action, detail) {
@@ -157,31 +216,51 @@ export function createApp(file, fetchImpl) {
         const code = decodeURIComponent(path.slice(4));
         return send(res, 200, goPage(code), { 'content-type': 'text/html; charset=utf-8' });
       }
+      if (req.method === 'GET' && path.indexOf('/admin/assets/') === 0) {
+        if (servePublic(path, res)) return;
+        return send(res, 404, 'not found');
+      }
+      if (req.method === 'GET' && path === '/admin/api/home') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const sid = cookie(req, 'omp_admin');
+        const flash = takeFlash(admin, sid);
+        return json(
+          res,
+          200,
+          homePayload(readState(file), file, {
+            csrf: admin.csrf,
+            sessionId: sid,
+            ...flash,
+            sessions: listSessions(),
+          }),
+        );
+      }
+      if (req.method === 'GET' && path === '/admin/api/user') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const id = url.searchParams.get('id') || '';
+        const sid = cookie(req, 'omp_admin');
+        const flash = takeFlash(admin, sid);
+        const payload = userPayload(readState(file), id, { csrf: admin.csrf, ...flash });
+        if (!payload) return json(res, 404, { error: 'not_found' });
+        return json(res, 200, payload);
+      }
       if (req.method === 'GET' && (path === '/admin' || path === '/admin/')) {
         const admin = adminOf(req);
-        if (!admin) return send(res, 200, loginPage(''), { 'content-type': 'text/html; charset=utf-8' });
-        const sid = cookie(req, 'omp_admin');
-        const code = admin.flash || '';
-        const promo = admin.flashPromo || '';
-        const flash = admin.flashText || '';
-        const err = admin.flashError || '';
-        if (code || promo || flash || err) {
-          sessions.set(sid, {
-            csrf: admin.csrf,
-            exp: admin.exp,
-            createdAt: admin.createdAt,
-            lastSeen: Date.now(),
-          });
+        if (!admin) {
+          if (existsSync(SPA_INDEX)) return serveSpa(res);
+          return send(res, 200, loginPage(''), { 'content-type': 'text/html; charset=utf-8' });
         }
+        if (existsSync(SPA_INDEX)) return serveSpa(res);
+        const sid = cookie(req, 'omp_admin');
+        const flash = takeFlash(admin, sid);
         return send(
           res,
           200,
           homePage(readState(file), {
             csrf: admin.csrf,
-            code,
-            promo,
-            flash,
-            error: err,
+            ...flash,
             sessions: listSessions(),
             sessionId: sid,
           }),
@@ -190,7 +269,14 @@ export function createApp(file, fetchImpl) {
       }
       if (req.method === 'GET' && path === '/admin/user') {
         const admin = adminOf(req);
-        if (!admin) return send(res, 200, loginPage(''), { 'content-type': 'text/html; charset=utf-8' });
+        if (!admin) {
+          if (existsSync(SPA_INDEX)) return serveSpa(res);
+          return send(res, 200, loginPage(''), { 'content-type': 'text/html; charset=utf-8' });
+        }
+        if (existsSync(SPA_INDEX)) {
+          res.writeHead(302, { location: '/admin/?id=' + encodeURIComponent(url.searchParams.get('id') || '') });
+          return res.end();
+        }
         const id = url.searchParams.get('id') || '';
         const state = readState(file);
         const card = accountCard(state, id, Date.now());
@@ -202,14 +288,11 @@ export function createApp(file, fetchImpl) {
             { 'content-type': 'text/html; charset=utf-8' },
           );
         }
-        const code = admin.flash || '';
-        const flash = admin.flashText || '';
-        const err = admin.flashError || '';
-        if (code || flash || err) sessions.set(cookie(req, 'omp_admin'), { csrf: admin.csrf, exp: admin.exp });
+        const flash = takeFlash(admin, cookie(req, 'omp_admin'));
         return send(
           res,
           200,
-          userPage(state, card, { csrf: admin.csrf, code, flash, error: err }),
+          userPage(state, card, { csrf: admin.csrf, ...flash }),
           { 'content-type': 'text/html; charset=utf-8' },
         );
       }
@@ -230,6 +313,7 @@ export function createApp(file, fetchImpl) {
         const state = readState(file);
         if (!passwordMatches(body.password || '', state.settings.adminSalt, state.settings.adminHash)) {
           await audit(file, 'login_fail', 'bad password');
+          if (wantsJson(req)) return json(res, 401, { ok: false, error: 'Неверный пароль' });
           return send(res, 401, loginPage('Неверный пароль'), { 'content-type': 'text/html; charset=utf-8' });
         }
         const id = randomId() + randomId();
@@ -238,6 +322,7 @@ export function createApp(file, fetchImpl) {
         sessions.set(id, { csrf, exp: now + 12 * 60 * 60 * 1000, createdAt: now, lastSeen: now });
         await audit(file, 'login', 'ok');
         res.setHeader('set-cookie', 'omp_admin=' + id + '; HttpOnly; SameSite=Lax; Path=/');
+        if (wantsJson(req)) return json(res, 200, { ok: true });
         res.writeHead(302, { location: '/admin' });
         return res.end();
       }
@@ -284,11 +369,13 @@ export function createApp(file, fetchImpl) {
         if (path === '/admin/find') {
           const found = adminFind(readState(file), body.q || '', Date.now());
           if (found) {
-            res.writeHead(302, { location: '/admin/user?id=' + encodeURIComponent(found.account.id) });
+            redirectTo = '/admin/?id=' + encodeURIComponent(found.account.id);
+            if (wantsJson(req)) return json(res, 200, { ok: true, redirect: redirectTo });
+            res.writeHead(302, { location: redirectTo });
             return res.end();
           }
           flashError = 'Никого не нашли по «' + (body.q || '') + '»';
-          redirectTo = '/admin';
+          redirectTo = '/admin/';
         }
         if (path === '/admin/issue') {
           const result = await updateState(file, (state) => {
@@ -305,7 +392,7 @@ export function createApp(file, fetchImpl) {
           if (body.channel === 'email' && result.account.email) {
             await sendMail(fresh.settings, { to: result.account.email, subject: 'Код Jackett OMP', text });
           }
-          if (result.account && result.account.id) redirectTo = '/admin/user?id=' + encodeURIComponent(result.account.id);
+          if (result.account && result.account.id) redirectTo = '/admin/?id=' + encodeURIComponent(result.account.id);
         }
         if (path === '/admin/grant') {
           const days =
@@ -336,7 +423,7 @@ export function createApp(file, fetchImpl) {
               );
             }
           }
-          if (body.accountId) redirectTo = '/admin/user?id=' + encodeURIComponent(body.accountId);
+          if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/message') {
           const state = readState(file);
@@ -347,7 +434,7 @@ export function createApp(file, fetchImpl) {
             const ok = await telegramSend(state.settings.botToken, acc.telegramId, text, net);
             flashText = ok ? 'Сообщение отправлено' : 'Telegram не принял сообщение';
           }
-          if (body.accountId) redirectTo = '/admin/user?id=' + encodeURIComponent(body.accountId);
+          if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/promo') {
           const result = await updateState(file, (state) =>
@@ -372,7 +459,7 @@ export function createApp(file, fetchImpl) {
             }),
           }));
           flashText = 'Устройство сброшено, выдан новый код';
-          if (body.accountId) redirectTo = '/admin/user?id=' + encodeURIComponent(body.accountId);
+          if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/password') {
           const state = readState(file);
@@ -406,7 +493,8 @@ export function createApp(file, fetchImpl) {
           sessions.delete(sid);
           await audit(file, 'logout', sid.slice(0, 8));
           res.setHeader('set-cookie', 'omp_admin=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
-          res.writeHead(302, { location: '/admin' });
+          if (wantsJson(req)) return json(res, 200, { ok: true, redirect: '/admin/' });
+          res.writeHead(302, { location: '/admin/' });
           return res.end();
         }
         if (path === '/admin/session-revoke') {
@@ -428,7 +516,6 @@ export function createApp(file, fetchImpl) {
         if (path === '/admin/message' && flashText.indexOf('отправлено') >= 0) {
           await audit(file, 'message', body.accountId || '');
         }
-        res.writeHead(302, { location: redirectTo });
         if (flashed || flashPromo || flashText || flashError) {
           const sid = cookie(req, 'omp_admin');
           const cur = sessions.get(sid) || admin;
@@ -440,6 +527,14 @@ export function createApp(file, fetchImpl) {
             flashError,
           });
         }
+        if (wantsJson(req)) {
+          return json(res, 200, {
+            ok: !flashError,
+            redirect: redirectTo,
+            flash: { code: flashed, promo: flashPromo, text: flashText, error: flashError },
+          });
+        }
+        res.writeHead(302, { location: redirectTo });
         return res.end();
       }
       if (req.method === 'POST' && path === '/v1/activate') {
@@ -455,6 +550,13 @@ export function createApp(file, fetchImpl) {
         const state = readState(file);
         const deepLink = botDeepLink(state.settings, 'link_' + result.token);
         return json(res, 200, { token: result.token, deepLink, expiresAt: result.expiresAt });
+      }
+      if (req.method === 'POST' && path === '/v1/link/clear') {
+        const body = await readBody(req);
+        const deviceId = String(req.headers['x-device-id'] || body.deviceId || '');
+        const result = await updateState(file, (state) => unlinkDeviceTelegram(state, { deviceId, now: Date.now() }));
+        if (result.error) return json(res, result.error === 'not_linked' ? 404 : 400, result);
+        return json(res, 200, result);
       }
       if (req.method === 'GET' && path === '/v1/me') {
         const device = String(req.headers['x-device-id'] || url.searchParams.get('deviceId') || '');
@@ -549,50 +651,58 @@ export async function pollBot(file, fetchImpl) {
   const awaiting = new Map();
   const net = fetchImpl || fetch;
   for (;;) {
-    const state = readState(file);
-    const token = state.settings.botToken;
-    if (!token) {
-      await new Promise((r) => setTimeout(r, 5000));
-      continue;
-    }
-    let updates = [];
     try {
-      const res = await net('https://api.telegram.org/bot' + token + '/getUpdates?timeout=25&offset=' + offset);
-      const data = await res.json();
-      updates = data.ok ? data.result : [];
+      const state = readState(file);
+      const token = state.settings.botToken;
+      if (!token) {
+        await new Promise((r) => setTimeout(r, 5000));
+        continue;
+      }
+      let updates = [];
+      try {
+        const res = await net('https://api.telegram.org/bot' + token + '/getUpdates?timeout=25&offset=' + offset);
+        const data = await res.json();
+        updates = data.ok ? data.result : [];
+      } catch (e) {
+        await new Promise((r) => setTimeout(r, 5000));
+        continue;
+      }
+      for (let i = 0; i < updates.length; i++) {
+        const u = updates[i];
+        offset = u.update_id + 1;
+        const msg = u.message;
+        if (!msg || !msg.chat) continue;
+        const chatId = String(msg.chat.id);
+        const wait = awaiting.get(chatId) || null;
+        const replied = await updateState(file, (cur) => {
+          const out = botReply(cur, { chatId, text: msg.text || '', now: Date.now(), awaiting: wait });
+          return { state: out.state, result: out.messages };
+        });
+        awaiting.delete(chatId);
+        for (let m = 0; m < replied.length; m++) {
+          const row = replied[m];
+          if (row.await) awaiting.set(chatId, row.await);
+          try {
+            await telegramSend(token, row.chatId, row.text, net, {
+              keyboard: row.keyboard,
+              inline: row.inline,
+              parseMode: row.parseMode,
+            });
+          } catch (e) {
+            /* Telegram unreachable from NAS — keep polling */
+          }
+        }
+      }
     } catch (e) {
       await new Promise((r) => setTimeout(r, 5000));
-      continue;
-    }
-    for (let i = 0; i < updates.length; i++) {
-      const u = updates[i];
-      offset = u.update_id + 1;
-      const msg = u.message;
-      if (!msg || !msg.chat) continue;
-      const chatId = String(msg.chat.id);
-      const wait = awaiting.get(chatId) || null;
-      const replied = await updateState(file, (cur) => {
-        const out = botReply(cur, { chatId, text: msg.text || '', now: Date.now(), awaiting: wait });
-        return { state: out.state, result: out.messages };
-      });
-      awaiting.delete(chatId);
-      for (let m = 0; m < replied.length; m++) {
-        const row = replied[m];
-        if (row.await) awaiting.set(chatId, row.await);
-        await telegramSend(token, row.chatId, row.text, net, {
-          keyboard: row.keyboard,
-          inline: row.inline,
-          parseMode: row.parseMode,
-        });
-      }
     }
   }
 }
 
 export function dataFile() {
   const fromEnv = process.env.BILLING_DATA;
-  if (fromEnv) return fromEnv;
-  const path = new URL('../data/state.json', import.meta.url).pathname;
+  if (fromEnv) return resolveDbPath(fromEnv);
+  const path = new URL('../data/billing.db', import.meta.url).pathname;
   return path.replace(/^\/([A-Za-z]:)/, '$1');
 }
 

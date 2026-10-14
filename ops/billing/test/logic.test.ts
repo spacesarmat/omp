@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { botReply } from '../src/bot.mjs';
 import { restoreJackett, stripJackett } from '../src/jackett.mjs';
 import {
@@ -18,8 +21,9 @@ import {
   paymentsCsv,
   redeemPromo,
   startDeviceLink,
+  unlinkDeviceTelegram,
 } from '../src/logic.mjs';
-import { emptyState } from '../src/store.mjs';
+import { emptyState, readState, resolveDbPath, writeState } from '../src/store.mjs';
 import { notificationHash, notificationOk } from '../src/yoomoney.mjs';
 
 const NOW = Date.parse('2026-10-14T12:00:00Z');
@@ -226,5 +230,35 @@ describe('promos', () => {
     expect(out.result.error).toBeUndefined();
     expect(out.result.paidUntil).toBe(NOW + 31 * 24 * 60 * 60 * 1000);
     expect(out.result.code).toBeTruthy();
+  });
+});
+
+describe('sqlite store', () => {
+  it('migrates state.json and round-trips', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'omp-bill-'));
+    const jsonFile = join(dir, 'state.json');
+    const start = paid();
+    writeFileSync(jsonFile, JSON.stringify(start.state));
+    const db = resolveDbPath(jsonFile);
+    const loaded = readState(jsonFile);
+    expect(loaded.accounts).toHaveLength(1);
+    expect(db.endsWith('.db')).toBe(true);
+    writeState(db, { ...loaded, settings: { ...loaded.settings, priceRub: 199 } });
+    expect(readState(db).settings.priceRub).toBe(199);
+  });
+});
+
+describe('telegram unlink', () => {
+  it('clears telegramId when the last device unlinks', () => {
+    const device = 'd'.repeat(32);
+    let state = emptyState();
+    const link = startDeviceLink(state, { deviceId: device, now: NOW });
+    state = link.state;
+    const confirmed = confirmDeviceLink(state, { token: link.result.token, telegramId: '99', now: NOW });
+    state = confirmed.state;
+    expect(state.accounts[0].telegramId).toBe('99');
+    const out = unlinkDeviceTelegram(state, { deviceId: device, now: NOW + 1 });
+    expect(out.result.ok).toBe(true);
+    expect(out.state.accounts[0].telegramId).toBe('');
   });
 });

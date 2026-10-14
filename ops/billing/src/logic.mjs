@@ -419,6 +419,27 @@ export function accountByDevice(state, deviceId) {
   return sub ? findAccount(state, sub.accountId) : null;
 }
 
+/** Drop this device from the account's Telegram link list (keeps telegramId on the account). */
+export function unlinkDeviceTelegram(state, { deviceId, now }) {
+  if (!deviceOk(deviceId)) return { state, result: { error: 'bad_device' } };
+  const account = accountByDevice(state, deviceId);
+  if (!account) return { state, result: { error: 'not_linked' } };
+  const linked = (Array.isArray(account.linkedDevices) ? account.linkedDevices : []).filter((d) => d !== deviceId);
+  const accounts = state.accounts.map((a) => (a.id === account.id ? { ...a, linkedDevices: linked } : a));
+  const stillLinked = linked.length > 0;
+  // If no devices left on this TG account, clear telegramId so the phone can re-bind cleanly.
+  const nextAccounts = stillLinked
+    ? accounts
+    : accounts.map((a) => (a.id === account.id ? { ...a, telegramId: '' } : a));
+  return {
+    state: logAudit(
+      { ...state, accounts: nextAccounts },
+      { action: 'tg_unlink', detail: account.id + ' ' + deviceId.slice(0, 8), now: now || Date.now() },
+    ),
+    result: { ok: true, telegramId: stillLinked ? account.telegramId || '' : '' },
+  };
+}
+
 /** Unbound activation code still showable in the bot (has plaintext). */
 export function revealableCode(state, accountId) {
   const sub = anySub(state, accountId);

@@ -1,3 +1,4 @@
 data/
 node_modules/
+admin/node_modules/
 jackett-config/

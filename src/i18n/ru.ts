@@ -793,7 +793,11 @@ export const ru = {
       openBot: 'Открыть бота',
       linkTelegram: 'Привязать Telegram',
       linking: 'Открываю бота…',
-      linked: 'Telegram: {id}',
+      linked: 'привязан · {id}',
+      unlinkTelegram: 'Отвязать',
+      unlinking: 'Отвязываю…',
+      telegramTitle: 'Telegram',
+      telegramHint: 'Чтобы получать код и управлять подпиской в боте',
       codeFromLink: 'Код из ссылки подставлен — нажмите «Подключить»',
     },
     indexer: {
