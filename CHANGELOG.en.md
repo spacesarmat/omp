@@ -2,9 +2,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.9
+
+- same as beta.7–8 (beta.8 had broken Cyrillic in the update notes)
+
 ## 0.20.0-beta.8
 
-- same as beta.7 (release did not build: Settings section-order tests)
+- same as beta.7 (release built, but the What’s new text had a bad encoding)
 
 ## 0.20.0-beta.7
 
