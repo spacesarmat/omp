@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 import { homePayload, userPayload } from './adminApi.mjs';
 import {
   accountByDevice,
-  accountCard,
   activate,
   adminFind,
   applyPayment,
@@ -29,7 +28,7 @@ import { hashPassword, passwordMatches, randomCode, randomId } from './crypto.mj
 import { goPage } from './go.mjs';
 import { jackettSearchUrl, restoreJackett, stripJackett } from './jackett.mjs';
 import { sendMail } from './mail.mjs';
-import { homePage, loginPage, userPage } from './panel.mjs';
+import { loginPage } from './panel.mjs';
 import { readState, resolveDbPath, updateState } from './store.mjs';
 import { notificationOk } from './yoomoney.mjs';
 
@@ -247,54 +246,13 @@ export function createApp(file, fetchImpl) {
         return json(res, 200, payload);
       }
       if (req.method === 'GET' && (path === '/admin' || path === '/admin/')) {
-        const admin = adminOf(req);
-        if (!admin) {
-          if (existsSync(SPA_INDEX)) return serveSpa(res);
-          return send(res, 200, loginPage(''), { 'content-type': 'text/html; charset=utf-8' });
-        }
         if (existsSync(SPA_INDEX)) return serveSpa(res);
-        const sid = cookie(req, 'omp_admin');
-        const flash = takeFlash(admin, sid);
-        return send(
-          res,
-          200,
-          homePage(readState(file), {
-            csrf: admin.csrf,
-            ...flash,
-            sessions: listSessions(),
-            sessionId: sid,
-          }),
-          { 'content-type': 'text/html; charset=utf-8' },
-        );
+        return send(res, 200, loginPage(adminOf(req) ? '' : ''), { 'content-type': 'text/html; charset=utf-8' });
       }
       if (req.method === 'GET' && path === '/admin/user') {
-        const admin = adminOf(req);
-        if (!admin) {
-          if (existsSync(SPA_INDEX)) return serveSpa(res);
-          return send(res, 200, loginPage(''), { 'content-type': 'text/html; charset=utf-8' });
-        }
-        if (existsSync(SPA_INDEX)) {
-          res.writeHead(302, { location: '/admin/?id=' + encodeURIComponent(url.searchParams.get('id') || '') });
-          return res.end();
-        }
         const id = url.searchParams.get('id') || '';
-        const state = readState(file);
-        const card = accountCard(state, id, Date.now());
-        if (!card) {
-          return send(
-            res,
-            200,
-            homePage(state, { csrf: admin.csrf, error: 'Пользователь не найден', q: id }),
-            { 'content-type': 'text/html; charset=utf-8' },
-          );
-        }
-        const flash = takeFlash(admin, cookie(req, 'omp_admin'));
-        return send(
-          res,
-          200,
-          userPage(state, card, { csrf: admin.csrf, ...flash }),
-          { 'content-type': 'text/html; charset=utf-8' },
-        );
+        res.writeHead(302, { location: '/admin/?id=' + encodeURIComponent(id) });
+        return res.end();
       }
       if (req.method === 'GET' && path === '/admin/finance.csv') {
         const admin = adminOf(req);
