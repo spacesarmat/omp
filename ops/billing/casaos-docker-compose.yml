@@ -64,6 +64,8 @@ services:
     command:
       - tunnel
       - --no-autoupdate
+      - --protocol
+      - http2
       - run
     deploy:
       resources:
