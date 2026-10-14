@@ -30,49 +30,33 @@ Jackett с хоста не торчит наружу — к нему ходит 
 
 ## Публичный HTTPS — Cloudflare Tunnel
 
-Стек на NAS остаётся как есть: `cloudflared` шарит сеть с `omp-billing` и проксирует наружу. Порты роутера не открываем.
+Домен: **omp-player.online** → хост **`https://billing.omp-player.online`**.  
+Туннель `omp-billing` на NAS (profile `tunnel`) уже есть. Порты роутера не открываем.
 
-1. Домен в [Cloudflare](https://dash.cloudflare.com/) (бесплатный план ок).
-2. **Zero Trust** → **Networks** → **Tunnels** → **Create a tunnel** → Cloudflared → имя `omp-billing`.
-3. Скопируй **token** (установка Docker). В Public Hostname:
-   - Subdomain: например `billing`
-   - Domain: твой домен
-   - Type: HTTP
-   - URL: `http://127.0.0.1:8787`  
-     (туннель в том же network namespace, что и billing — см. `network_mode: service:omp-billing`)
-4. На NAS создай файл `/DATA/AppData/omp-billing/.env`:
+### Когда NS Cloudflare станут Active
+
+1. Zero Trust → **Networks** → **Tunnels** → `omp-billing` → **Public Hostname** → Add:
+   - Subdomain: `billing`
+   - Domain: `omp-player.online`
+   - Type: **HTTP**
+   - URL: `http://127.0.0.1:8787`
+2. Проверка: `https://billing.omp-player.online/health` → `{"ok":true}`
+3. В панели **publicOrigin** = `https://billing.omp-player.online` (если ещё не так)
+4. ЮMoney: `https://billing.omp-player.online/v1/yoomoney`
+
+### Локально и из мира
+
+- Админка в LAN всегда: `http://192.168.1.191:8787/admin`
+- Приложение пробует `https://billing.omp-player.online`, при недоступности (DNS ещё не встал) — `http://192.168.1.191:8787`
+- Пока NS не Active: LAN и коды работают; кнопки бота с https-ссылками заработают после DNS
+
+Токен туннеля: `/DATA/AppData/omp-billing/.env` (`CLOUDFLARE_TUNNEL_TOKEN=…`). В git не коммитить. Пример: `env.tunnel.example`.
 
 ```
-CLOUDFLARE_TUNNEL_TOKEN=eyJh...длинный_токен...
-```
-
-5. Обнови compose на NAS и подними туннель (profile `tunnel`, иначе только локальный `:8787`):
-
-```
-# скопируй ops/billing → /DATA/AppData/omp-billing/app
 docker compose -f /DATA/AppData/omp-billing/app/docker-compose.yml \
   --env-file /DATA/AppData/omp-billing/.env \
   --profile tunnel up -d
 ```
-
-6. Проверь: `https://billing.<домен>/health` → `{"ok":true}`, админка `/admin`.
-7. В панели **publicOrigin** = `https://billing.<домен>`.
-8. В приложении `src/billing/config.ts`: `BILLING_ORIGIN = 'https://billing.<домен>'`.
-9. ЮMoney HTTP-уведомления: `https://billing.<домен>/v1/yoomoney`.
-
-Без profile `tunnel` / без токена наружу ничего не торчит — LAN `:8787` как раньше. Токен в git не коммить.
-
-Пример файла: `env.tunnel.example`.
-
-### Временно без своего домена — trycloudflare.com
-
-```
-docker compose -f /DATA/AppData/omp-billing/app/docker-compose.yml \
-  --profile quick up -d
-docker logs omp-billing-quick 2>&1 | grep trycloudflare
-```
-
-В логах будет `https://….trycloudflare.com`. URL **меняется** при recreate. На части сетей (в т.ч. этот NAS) quick tunnel отвечает **CF 530/1033** — тогда нужен **свой домен** + profile `tunnel` (уже поднят на NAS).
 
 ## Настройки панели
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { BILLING_ORIGIN } from '../../src/billing/config';
+import { BILLING_ORIGIN, BILLING_ORIGIN_LAN, rememberBillingOrigin } from '../../src/billing/config';
 import { billingSession, deviceId, saveBillingSession } from '../../src/billing/session';
 import {
   activateCode,
@@ -23,6 +23,7 @@ const RSS =
 describe('omp Jackett source', () => {
   beforeEach(() => {
     localStorage.clear();
+    rememberBillingOrigin(BILLING_ORIGIN);
     unregisterSource(OMP_JACKETT_ID);
   });
   afterEach(() => {
@@ -89,5 +90,18 @@ describe('omp Jackett source', () => {
     expect(acc?.paidUntil).toBe(2e12);
     expect(billingSession()?.paidUntil).toBe(2e12);
     expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/me');
+  });
+
+  it('falls back to LAN when the public host is unreachable', async () => {
+    localStorage.clear();
+    const site = fakeSite((c) => {
+      if (c.url.indexOf(BILLING_ORIGIN_LAN) === 0) {
+        return page(JSON.stringify({ token: 'tok-lan', paidUntil: 2e12 }), c.url);
+      }
+      return Promise.reject(new Error('dns down'));
+    });
+    const row = await activateCode(site.ctx, 'ABCD-EFGH');
+    expect(row.token).toBe('tok-lan');
+    expect(site.calls.some((c) => c.url === BILLING_ORIGIN_LAN + '/v1/activate')).toBe(true);
   });
 });

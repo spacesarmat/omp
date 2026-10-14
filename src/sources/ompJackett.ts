@@ -1,7 +1,7 @@
 // Paid Jackett on the OMP server. The phone sends a subscription code once; the server binds it to this
 // install and proxies Torznab. The Jackett address and API key never reach the phone or the TV.
 import { stashFile } from '../api/torrentFiles';
-import { BILLING_ORIGIN } from '../billing/config';
+import { billingGet, billingPost } from '../billing/client';
 import {
   billingSession,
   deviceId,
@@ -52,7 +52,7 @@ export function clearBilling(): void {
 }
 
 export function activateCode(ctx: SourceContext, code: string): Promise<BillingSession> {
-  return ctx.http.post(BILLING_ORIGIN + '/v1/activate', { code: code, deviceId: deviceId() }, { timeoutMs: 15000 }).then(
+  return billingPost(ctx, '/v1/activate', { code: code, deviceId: deviceId() }, { timeoutMs: 15000 }).then(
     (res) => {
       const body = parseBody<ActivateBody>(res.text);
       if (res.status === 409 || body.error === 'other_device') throw new Error(t('sources.billing.otherDevice'));
@@ -71,7 +71,7 @@ export function activateCode(ctx: SourceContext, code: string): Promise<BillingS
 
 /** Opens Telegram with a one-time link token so the bot can bind this install. */
 export function startTelegramLink(ctx: SourceContext): Promise<string> {
-  return ctx.http.post(BILLING_ORIGIN + '/v1/link/start', { deviceId: deviceId() }, { timeoutMs: 15000 }).then(
+  return billingPost(ctx, '/v1/link/start', { deviceId: deviceId() }, { timeoutMs: 15000 }).then(
     (res) => {
       const body = parseBody<LinkStartBody>(res.text);
       if (!body.deepLink) throw new Error(t('sources.billing.down'));
@@ -85,24 +85,25 @@ export function startTelegramLink(ctx: SourceContext): Promise<string> {
 
 /** Unlinks this install from the Telegram account on the billing server. */
 export function clearTelegramLink(ctx: SourceContext): Promise<void> {
-  return ctx.http
-    .post(BILLING_ORIGIN + '/v1/link/clear', { deviceId: deviceId() }, { headers: { 'X-Device-Id': deviceId() }, timeoutMs: 12000 })
-    .then(
-      (res) => {
-        if (res.status === 404) return;
-        if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
-      },
-      () => {
-        throw new Error(t('sources.billing.down'));
-      },
-    );
+  return billingPost(ctx, '/v1/link/clear', { deviceId: deviceId() }, {
+    headers: { 'X-Device-Id': deviceId() },
+    timeoutMs: 12000,
+  }).then(
+    (res) => {
+      if (res.status === 404) return;
+      if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
+    },
+    () => {
+      throw new Error(t('sources.billing.down'));
+    },
+  );
 }
 
 export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount | null> {
   const session = billingSession();
   const headers: { [name: string]: string } = { 'X-Device-Id': deviceId() };
   if (session) headers.Authorization = 'Bearer ' + session.token;
-  return ctx.http.get(BILLING_ORIGIN + '/v1/me', { headers, timeoutMs: 12000 }).then(
+  return billingGet(ctx, '/v1/me', { headers, timeoutMs: 12000 }).then(
     (res) => {
       if (res.status === 403 || res.status === 401) {
         if (session) clearBilling();
@@ -146,7 +147,7 @@ export function ompJackettSource(): Source {
     search(query: string, ctx: SourceContext): Promise<SourceResult[]> {
       const session = billingSession();
       if (!session) return Promise.reject(new Error(t('sources.billing.badCode')));
-      return ctx.http.post(BILLING_ORIGIN + '/v1/search', { q: query }, { headers: authHeaders(session), timeoutMs: 20000 }).then(
+      return billingPost(ctx, '/v1/search', { q: query }, { headers: authHeaders(session), timeoutMs: 20000 }).then(
         (res) => {
           if (res.status === 403) throw new Error(t('sources.billing.expired'));
           if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
@@ -161,17 +162,19 @@ export function ompJackettSource(): Source {
       const session = billingSession();
       const link = r.Link || '';
       if (!session || link.indexOf('omp-fetch:') !== 0) return Promise.reject(new Error(t('sources.billing.down')));
-      return ctx.http
-        .post(BILLING_ORIGIN + '/v1/torrent', { link: link }, { headers: authHeaders(session), timeoutMs: 30000, responseCharset: 'iso-8859-1' })
-        .then(
-          (res) => {
-            if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd') throw new Error(t('sources.billing.down'));
-            return stashFile(bytesOf(res.text));
-          },
-          () => {
-            throw new Error(t('sources.billing.down'));
-          },
-        );
+      return billingPost(ctx, '/v1/torrent', { link: link }, {
+        headers: authHeaders(session),
+        timeoutMs: 30000,
+        responseCharset: 'iso-8859-1',
+      }).then(
+        (res) => {
+          if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd') throw new Error(t('sources.billing.down'));
+          return stashFile(bytesOf(res.text));
+        },
+        () => {
+          throw new Error(t('sources.billing.down'));
+        },
+      );
     },
   };
 }

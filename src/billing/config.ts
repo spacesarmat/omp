@@ -1,10 +1,34 @@
 /**
  * Subscription server. The Jackett address and API key stay there.
- * Local NAS test: http://IP-NAS:8787 (same Wi‑Fi as the phone).
- * Public release: https://… on the VPS / tunnel.
+ *
+ * Public: Cloudflare Tunnel → https://billing.omp-player.online
+ * LAN fallback: http://NAS:8787 while DNS/tunnel is not ready (same Wi‑Fi).
  */
-/** Local NAS (LAN). Public HTTPS needs own domain + Cloudflare Tunnel profile `tunnel`. */
-export const BILLING_ORIGIN = 'http://192.168.1.191:8787';
+import { loadJson, saveJson } from '../store/storage';
+
+export const BILLING_ORIGIN_PUBLIC = 'https://billing.omp-player.online';
+export const BILLING_ORIGIN_LAN = 'http://192.168.1.191:8787';
+
+/** Canonical public origin (bot /go links, production). */
+export const BILLING_ORIGIN = BILLING_ORIGIN_PUBLIC;
+
+const ORIGIN_PREF_KEY = 'tsp.billingOrigin';
+
+function isKnownOrigin(v: string): boolean {
+  return v === BILLING_ORIGIN_PUBLIC || v === BILLING_ORIGIN_LAN;
+}
+
+/** Origins to try: last successful first, then the other. */
+export function billingOrigins(): string[] {
+  const last = loadJson<string>(ORIGIN_PREF_KEY, '', (v) => typeof v === 'string' && isKnownOrigin(v));
+  if (last === BILLING_ORIGIN_LAN) return [BILLING_ORIGIN_LAN, BILLING_ORIGIN_PUBLIC];
+  return [BILLING_ORIGIN_PUBLIC, BILLING_ORIGIN_LAN];
+}
+
+export function rememberBillingOrigin(origin: string): void {
+  if (!isKnownOrigin(origin)) return;
+  saveJson(ORIGIN_PREF_KEY, origin);
+}
 
 /** Telegram bot for buying and managing the subscription. */
 export const BILLING_BOT = 'OMPBILLINGBOT';
