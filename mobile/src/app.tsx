@@ -48,6 +48,7 @@ import { News } from './screens/News';
 import { SubFindings } from './screens/SubFindings';
 import { Monitor } from './screens/Monitor';
 import { TitleCard } from './screens/catalog/TitleCard';
+import { SeasonCard } from './screens/catalog/SeasonCard';
 import { Series } from './screens/Series';
 import { Person } from './screens/catalog/Person';
 import { monitorNative } from './monitor/native';
@@ -286,7 +287,7 @@ export function App() {
   const prompt = updatePrompt.value;
   const tabRoot = TABS.includes(route.name);
   // a «Обзор» title card keeps the bottom tabs with «Каталог» highlighted
-  const showNav = tabRoot || route.name === 'title' || route.name === 'series' || route.name === 'person';
+  const showNav = tabRoot || route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person';
   // swipe left / right between the bottom tabs
   useEffect(() => {
     if (!tabRoot) return;
@@ -345,6 +346,8 @@ export function App() {
         <Person key={route.id} id={route.id} label={route.label} />
       ) : route.name === 'title' ? (
         <TitleCard key={route.kind + ':' + route.id} kind={route.kind} id={route.id} />
+      ) : route.name === 'seasonCard' ? (
+        <SeasonCard key={route.id + ':' + route.season} id={route.id} season={route.season} />
       ) : (
         <Settings />
       )}
@@ -355,7 +358,7 @@ export function App() {
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}
-      {showNav && <NavBar active={route.name === 'title' || route.name === 'series' || route.name === 'person' ? 'library' : (route.name as Tab)} />}
+      {showNav && <NavBar active={route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person' ? 'library' : (route.name as Tab)} />}
     </Fragment>
   );
 }

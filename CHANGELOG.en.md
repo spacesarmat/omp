@@ -2,6 +2,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.13
+
+- [phone] Series card in Discover: dates and status, all genres, Watch on TV, creators and cast apart, each season on its own screen, similar titles, poster choice
+- [phone] Season card: its own poster, episodes with file size or air date, a progress bar
+- [phone] Now on TV: swipe down opens the remote, swipe up the episodes of this release, swipe an episode sideways to play it on the TV
+
 ## 0.20.0-beta.12
 
 - same as beta.10–11 (release failed: billingPost type)

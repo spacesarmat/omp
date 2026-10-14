@@ -502,6 +502,8 @@ describe('pinch in «Обзор»', () => {
       card: vi.fn(() => Promise.reject(new Error('x'))),
       season: vi.fn(() => Promise.reject(new Error('x'))),
       person: vi.fn(() => Promise.reject(new Error('x'))),
+      similar: vi.fn(() => Promise.resolve([])),
+      posters: vi.fn(() => Promise.resolve([])),
     };
     setCatalogClientForTests(c);
   });

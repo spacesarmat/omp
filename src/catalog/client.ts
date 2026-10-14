@@ -9,7 +9,8 @@ import type { SourceHttp } from '../sources/types';
 import { loadJson, isObject } from '../store/storage';
 import { lang } from '../i18n';
 import {
-  releaseRegions, noveltiesUrl, discoverUrl, searchUrl, cardUrl, personUrl, personBioUrl, seasonUrl, sanitizeList, sanitizeCard, sanitizePerson, sanitizePersonBio, sanitizeSeason,
+  releaseRegions, noveltiesUrl, discoverUrl, searchUrl, cardUrl, personUrl, personBioUrl, seasonUrl, similarUrl, postersUrl,
+  sanitizeList, sanitizeCard, sanitizePerson, sanitizePersonBio, sanitizeSeason, sanitizeSimilar, sanitizePosters,
   type Kind, type CatalogTitle, type CatalogCard, type PersonCard, type SeasonDetails, type TmdbEndpoint,
 } from './tmdb';
 import { digitalSoonItems, type DiscoverQuery } from './discoverQuery';
@@ -26,6 +27,10 @@ export interface CatalogClient {
   person(id: number, opts?: FetchOpts): Promise<PersonCard>;
   /** A season of a series with its episodes (cached like cards). */
   season(id: number, n: number, opts?: SeasonOpts): Promise<SeasonDetails>;
+  /** Recommendations of a title. */
+  similar(kind: Kind, id: number): Promise<CatalogTitle[]>;
+  /** Poster variants of a title, or of one season. */
+  posters(kind: Kind, id: number, season?: number): Promise<string[]>;
 }
 
 /**
@@ -352,6 +357,16 @@ export function createCatalogClient(
         if (!s) throw fail('bad');
         return s;
       }, (s) => !full || !(s as { lite?: boolean }).lite, opts);
+    },
+    similar(kind, id) {
+      let e: TmdbEndpoint;
+      try { e = need(); } catch (err) { return Promise.reject(err); }
+      return fetchJson(similarUrl(e, kind, id), LIST_TTL, (raw) => sanitizeSimilar(e, raw, kind));
+    },
+    posters(kind, id, season) {
+      let e: TmdbEndpoint;
+      try { e = need(); } catch (err) { return Promise.reject(err); }
+      return fetchJson(postersUrl(e, kind, id, season), CARD_TTL, (raw) => sanitizePosters(e, raw));
     },
   };
 }

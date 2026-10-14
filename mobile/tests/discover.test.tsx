@@ -57,6 +57,8 @@ function fake(impl?: Novelties) {
     card: vi.fn(() => Promise.reject(codeError('bad'))),
     season: vi.fn(() => Promise.reject(codeError('bad'))),
     person: vi.fn(() => Promise.reject(codeError('bad'))),
+    similar: vi.fn(() => Promise.resolve([])),
+    posters: vi.fn(() => Promise.resolve([])),
   };
   setCatalogClientForTests(c);
   return novelties;

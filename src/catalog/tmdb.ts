@@ -44,6 +44,8 @@ export interface Releases { theatrical?: string; digital?: string; physical?: st
 export interface CatalogCard extends CatalogTitle {
   backdrop: string; genres: string[]; runtime: number; overview: string; cast: Person[]; seasons: Season[]; airing: boolean;
   status?: SeriesStatus; nextEpisode?: NextEpisode | null; lastAirDate?: string;
+  /** First air date 'YYYY-MM-DD' (series). Absent on cards cached before it was kept. */
+  firstAirDate?: string;
   /** Films only; absent in film cards cached before 0.17.0-beta.6 (they are fetched again). */
   releases?: Releases;
 }
@@ -127,6 +129,17 @@ export function seasonUrl(e: TmdbEndpoint, id: number, season: number): string {
   return url(e, 'tv/' + id + '/season/' + season, {});
 }
 
+/** Recommendations of a title (films for a film, series for a series). */
+export function similarUrl(e: TmdbEndpoint, kind: Kind, id: number): string {
+  return url(e, kind + '/' + id + '/recommendations', { page: 1 });
+}
+
+/** Poster file paths of a title, or of one season when `season` is set. */
+export function postersUrl(e: TmdbEndpoint, kind: Kind, id: number, season?: number): string {
+  const path = season ? 'tv/' + id + '/season/' + season + '/images' : kind + '/' + id + '/images';
+  return url(e, path, { include_image_language: lang.peek() === 'en' ? 'en,null' : 'ru,null,en' });
+}
+
 export function imageUrl(e: TmdbEndpoint, path: unknown, size: 'w300' | 'w780' | 'w185'): string {
   if (typeof path !== 'string' || !/^\/?[A-Za-z0-9_.-]+$/.test(path)) return '';
   return e.images + '/t/p/' + size + (path.charAt(0) === '/' ? path : '/' + path);
@@ -206,6 +219,37 @@ export function sanitizeList(e: TmdbEndpoint, raw: unknown, kind: Kind | null, d
   return { items: items, pages: Math.min(500, Math.max(0, Math.floor(n(o.total_pages)))) };
 }
 
+/** Recommendation tiles. An item without media_type keeps `kind`. */
+export function sanitizeSimilar(e: TmdbEndpoint, raw: unknown, kind: Kind): CatalogTitle[] {
+  const o = raw && typeof raw === 'object' ? (raw as { [k: string]: unknown }) : null;
+  const list = o && Array.isArray(o.results) ? (o.results as unknown[]) : [];
+  const out: CatalogTitle[] = [];
+  list.forEach((r) => {
+    const x = r && typeof r === 'object' ? (r as { [k: string]: unknown }) : null;
+    if (!x) return;
+    const k: Kind = x.media_type === 'movie' ? 'movie' : x.media_type === 'tv' ? 'tv' : kind;
+    const t = titleOf(e, x, k);
+    if (t && out.length < 20) out.push(t);
+  });
+  return out;
+}
+
+/** Poster URLs from a TMDB images answer, language posters first, at most 12. */
+export function sanitizePosters(e: TmdbEndpoint, raw: unknown): string[] {
+  const o = raw && typeof raw === 'object' ? (raw as { [k: string]: unknown }) : null;
+  const list = o && Array.isArray(o.posters) ? (o.posters as unknown[]) : [];
+  const ranked = list
+    .map((r) => (r && typeof r === 'object' ? (r as { [k: string]: unknown }) : null))
+    .filter((x): x is { [k: string]: unknown } => !!x)
+    .sort((a, b) => n(b.vote_average) - n(a.vote_average));
+  const out: string[] = [];
+  ranked.forEach((x) => {
+    const u = imageUrl(e, x.file_path, 'w300');
+    if (u && out.indexOf(u) < 0 && out.length < 12) out.push(u);
+  });
+  return out;
+}
+
 /** The en title of a card answer's translations (en-US first); '' when there is none or it is not readable. */
 export function englishTitle(o: { [k: string]: unknown }, kind: Kind): string {
   const tr = o.translations && typeof o.translations === 'object' ? (o.translations as { translations?: unknown }).translations : null;
@@ -277,6 +321,7 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
     status: kind === 'tv' ? statusOf(o.status) : '',
     nextEpisode: kind === 'tv' ? nextEpisodeOf(o.next_episode_to_air) : null,
     lastAirDate: kind === 'tv' ? date(o.last_air_date) : '',
+    firstAirDate: kind === 'tv' ? date(o.first_air_date) : '',
     releases: kind === 'movie' ? releasesOf(o.release_dates, releaseRegions()) : undefined,
   };
 }

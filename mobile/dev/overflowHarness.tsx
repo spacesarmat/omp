@@ -98,6 +98,8 @@ const catalog: CatalogClient = {
   card: (_k, id) => (CARDS[id] ? Promise.resolve(CARDS[id]) : Promise.reject(new Error('catalog:bad'))),
   season: (id, n) => Promise.resolve(season(id, n)),
   person: () => Promise.reject(new Error('catalog:bad')),
+  similar: () => Promise.resolve([]),
+  posters: () => Promise.resolve([]),
 };
 
 const HASH = 'c'.repeat(40);

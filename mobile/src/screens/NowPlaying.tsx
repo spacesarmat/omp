@@ -11,6 +11,8 @@ import { displayTitle } from '../ui/displayTitle';
 import { chapterIndexAt, chapterLabel, chapterStepIndex, type Chapter } from '../../../src/player/chapters';
 import { hasPosterImage, playerPosterStyle } from '../ui/playerPoster';
 import { usePlayingNames } from '../lib/playingNames';
+import { Remote } from './Remote';
+import { NowDeck } from './nowPager';
 
 const HOLD_MS = 1500;
 const HOLD_NEAR_S = 3;
@@ -124,6 +126,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
   };
   const left = s.duration > 0 ? '−' + formatDuration(Math.max(0, s.duration - shown)) : '';
   return (
+    <NowDeck hash={s.hash} fileId={s.file} remote={<Remote />}>
     <div class="m-screen m-now" data-route="nowPlaying">
       {head}
       <div class="m-now-poster" style={playerPosterStyle(s)}>
@@ -288,5 +291,6 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
         />
       )}
     </div>
+    </NowDeck>
   );
 }

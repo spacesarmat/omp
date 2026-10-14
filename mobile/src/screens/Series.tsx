@@ -34,6 +34,7 @@ import { releaseLine, releaseName } from '../lib/duplicates';
 import { contentsText } from '../lib/releaseContents';
 import { swarmText } from '../../../src/lib/torrentStatus';
 import { phoneCatalog } from '../catalog/phoneCatalog';
+import { artKey, artVersion, pickedArt } from '../catalog/artPick';
 import { CastStrip } from '../ui/CastStrip';
 import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { ratingText } from './catalog/CatalogSearch';
@@ -141,6 +142,8 @@ function HeroOverview({ text }: { text: string }) {
 
 function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
   const meta = heroMeta(card);
+  void artVersion.value;
+  const poster = pickedArt(artKey(card.id)) || card.poster;
   return (
     <>
       <div class="m-tc-backdrop m-sh-backdrop">
@@ -150,8 +153,8 @@ function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
         </button>
       </div>
       <div class="m-tc-head m-sh-head">
-        {card.poster ? (
-          <img class="m-tc-poster m-sh-poster" src={card.poster} alt="" width={96} height={144} />
+        {poster ? (
+          <img class="m-tc-poster m-sh-poster" src={poster} alt="" width={96} height={144} />
         ) : (
           <Poster torrent={group.lead} class="m-tc-poster m-sh-poster" />
         )}

@@ -492,6 +492,25 @@ button, .m-btn {
 .m-tc-skel .m-tc-poster, .m-tc-skel .m-disc-skel-line { animation: m-disc-pulse 1.2s ease-in-out infinite; }
 .m-tc-skel .m-tc-info { flex: 1; }
 .m-tc-actions { display: flex; flex-direction: column; gap: 8px; }
+.m-tc-actions-row { flex-direction: row; }
+.m-tc-actions-row .m-btn { flex: 1; min-width: 0; }
+.m-art-btn { flex: none; padding: 0; border: none; background: none; color: inherit; }
+.m-tc-genres { overflow-wrap: anywhere; }
+.m-tc-seasons { display: flex; flex-direction: column; gap: 8px; }
+.m-tc-season-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px; border: none; border-radius: 12px; background: var(--panel); color: inherit; font: inherit; text-align: left; }
+.m-tc-season-row img, .m-tc-season-ph { flex: none; width: 46px; height: 69px; border-radius: 6px; object-fit: cover; background: var(--panel-2, #1C2028); }
+.m-tc-season-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.m-tc-similar { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+.m-tc-similar::-webkit-scrollbar { display: none; }
+.m-tc-similar-item { flex: none; display: flex; flex-direction: column; gap: 4px; width: 92px; padding: 0; border: none; background: none; color: inherit; font: inherit; text-align: left; }
+.m-tc-similar-item img { width: 92px; height: 138px; border-radius: 8px; object-fit: cover; background: var(--panel); }
+.m-tc-similar-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.m-art-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.m-art-pick { padding: 0; border: 2px solid transparent; border-radius: 8px; background: none; }
+.m-art-pick.on { border-color: var(--accent); }
+.m-art-pick img { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; }
+.m-tc-ep { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; }
+.m-tc-ep.future { opacity: 0.72; }
 .m-tc-about { display: flex; flex-direction: column; align-items: flex-start; }
 .m-tc-overview { margin: 0; line-height: 1.45; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .m-tc-overview.open { display: block; -webkit-line-clamp: unset; white-space: pre-line; }
@@ -824,6 +843,16 @@ button, .m-btn {
 .m-dialog-text { font-size: 15px; line-height: 1.45; color: #C9CEDA; }
 
 /* ---- now playing ---- */
+.m-now-deck { height: 100vh; height: 100dvh; overflow: hidden; }
+.m-now-track { will-change: transform; }
+.m-now-track.anim { transition: transform .28s ease; }
+.m-now-pane { height: 100vh; height: 100dvh; overflow-x: hidden; overflow-y: auto; }
+.m-now-deck .m-now-pane > .m-screen { min-height: 100%; }
+.m-now-eps { display: flex; flex-direction: column; gap: 8px; padding: calc(env(safe-area-inset-top) + 16px) 16px 24px; }
+.m-now-eps h2 { margin: 0 0 4px; font-size: 20px; }
+.m-now-ep { min-height: 52px; padding: 10px 14px; border-radius: 12px; background: var(--panel); touch-action: pan-y; }
+.m-now-ep.on { background: #3A3320; color: var(--accent); }
+.m-now-ep-title { display: block; overflow-wrap: anywhere; }
 .m-now { max-width: 100%; overflow-x: hidden; display: flex; flex-direction: column; gap: 20px; padding-top: calc(env(safe-area-inset-top) + 16px); padding-bottom: 24px; }
 .m-now-head { display: flex; align-items: center; gap: 10px; }
 .m-now-status { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
