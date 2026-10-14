@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { botReply } from '../src/bot.mjs';
 import { restoreJackett, stripJackett } from '../src/jackett.mjs';
 import {
+  accountCard,
   activate,
+  adminFind,
   applyPayment,
   confirmDeviceLink,
   createPromo,
@@ -148,6 +150,19 @@ describe('device link and grant', () => {
     expect(openAppUrl('http://nas:8787', granted.result.code)).toContain('/go/');
     const act = activate(granted.state, { code: granted.result.code, deviceId: device, now: NOW });
     expect(act.result.token).toBeTruthy();
+  });
+});
+
+describe('admin account card', () => {
+  it('finds by telegram and builds a card with codes and history hooks', () => {
+    const start = paid();
+    const card = adminFind(start.state, '42', NOW);
+    expect(card.account.telegramId).toBe('42');
+    expect(card.reveal.code).toBe(start.code);
+    const byId = accountCard(start.state, start.account, NOW);
+    expect(byId.codes).toHaveLength(1);
+    const granted = grantDays(start.state, { accountId: start.account, days: 2, now: NOW });
+    expect(granted.result.paidUntil).toBeGreaterThan(NOW + 30 * 24 * 60 * 60 * 1000);
   });
 });
 

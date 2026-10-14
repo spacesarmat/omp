@@ -1,10 +1,13 @@
 import { createServer } from 'node:http';
 import {
   accountByDevice,
+  accountCard,
   activate,
+  adminFind,
   applyPayment,
   createPromo,
   createSubscription,
+  grantDays,
   openAccount,
   openAppUrl,
   revokePromo,
@@ -18,7 +21,7 @@ import { hashPassword, passwordMatches, randomCode, randomId } from './crypto.mj
 import { goPage } from './go.mjs';
 import { jackettSearchUrl, restoreJackett, stripJackett } from './jackett.mjs';
 import { sendMail } from './mail.mjs';
-import { homePage, loginPage } from './panel.mjs';
+import { homePage, loginPage, userPage } from './panel.mjs';
 import { readState, updateState } from './store.mjs';
 import { notificationOk } from './yoomoney.mjs';
 
@@ -128,8 +131,37 @@ export function createApp(file, fetchImpl) {
         if (!admin) return send(res, 200, loginPage(''), { 'content-type': 'text/html; charset=utf-8' });
         const code = admin.flash || '';
         const promo = admin.flashPromo || '';
-        if (code || promo) sessions.set(cookie(req, 'omp_admin'), { csrf: admin.csrf, exp: admin.exp });
-        return send(res, 200, homePage(readState(file), { csrf: admin.csrf, code, promo }), { 'content-type': 'text/html; charset=utf-8' });
+        const flash = admin.flashText || '';
+        const err = admin.flashError || '';
+        if (code || promo || flash || err) sessions.set(cookie(req, 'omp_admin'), { csrf: admin.csrf, exp: admin.exp });
+        return send(res, 200, homePage(readState(file), { csrf: admin.csrf, code, promo, flash, error: err }), {
+          'content-type': 'text/html; charset=utf-8',
+        });
+      }
+      if (req.method === 'GET' && path === '/admin/user') {
+        const admin = adminOf(req);
+        if (!admin) return send(res, 200, loginPage(''), { 'content-type': 'text/html; charset=utf-8' });
+        const id = url.searchParams.get('id') || '';
+        const state = readState(file);
+        const card = accountCard(state, id, Date.now());
+        if (!card) {
+          return send(
+            res,
+            200,
+            homePage(state, { csrf: admin.csrf, error: 'Пользователь не найден', q: id }),
+            { 'content-type': 'text/html; charset=utf-8' },
+          );
+        }
+        const code = admin.flash || '';
+        const flash = admin.flashText || '';
+        const err = admin.flashError || '';
+        if (code || flash || err) sessions.set(cookie(req, 'omp_admin'), { csrf: admin.csrf, exp: admin.exp });
+        return send(
+          res,
+          200,
+          userPage(state, card, { csrf: admin.csrf, code, flash, error: err }),
+          { 'content-type': 'text/html; charset=utf-8' },
+        );
       }
       if (req.method === 'POST' && path === '/admin/login') {
         const body = await readBody(req);
@@ -181,6 +213,18 @@ export function createApp(file, fetchImpl) {
         }
         let flashed = '';
         let flashPromo = '';
+        let flashText = '';
+        let flashError = '';
+        let redirectTo = '/admin';
+        if (path === '/admin/find') {
+          const found = adminFind(readState(file), body.q || '', Date.now());
+          if (found) {
+            res.writeHead(302, { location: '/admin/user?id=' + encodeURIComponent(found.account.id) });
+            return res.end();
+          }
+          flashError = 'Никого не нашли по «' + (body.q || '') + '»';
+          redirectTo = '/admin';
+        }
         if (path === '/admin/issue') {
           const result = await updateState(file, (state) => {
             const opened = openAccount(state, { email: body.email, telegramId: body.telegramId, now: Date.now() });
@@ -196,6 +240,49 @@ export function createApp(file, fetchImpl) {
           if (body.channel === 'email' && result.account.email) {
             await sendMail(fresh.settings, { to: result.account.email, subject: 'Код Jackett OMP', text });
           }
+          if (result.account && result.account.id) redirectTo = '/admin/user?id=' + encodeURIComponent(result.account.id);
+        }
+        if (path === '/admin/grant') {
+          const days =
+            body.days === 'custom' ? Number(body.daysCustom) || 0 : Number(body.days) || 0;
+          const result = await updateState(file, (state) =>
+            grantDays(state, { accountId: body.accountId, telegramId: body.telegramId, days, now: Date.now() }),
+          );
+          if (result.error) flashError = 'Не удалось выдать дни';
+          else {
+            flashed = result.code || '';
+            flashText = 'Выдано +' + result.days + ' дн. до ' + new Date(result.paidUntil).toISOString().slice(0, 10);
+            const fresh = readState(file);
+            const acc = fresh.accounts.find((a) => a.id === result.accountId);
+            if (acc && acc.telegramId && result.code) {
+              const link = openAppUrl(fresh.settings.publicOrigin || '', result.code);
+              await telegramSend(
+                fresh.settings.botToken,
+                acc.telegramId,
+                'Админ выдал +' + result.days + ' дн.\nКод: `' + result.code + '`\n' + link,
+                net,
+                {
+                  parseMode: 'Markdown',
+                  inline:
+                    link.indexOf('http') === 0
+                      ? { inline_keyboard: [[{ text: 'Открыть в OMP', url: link }]] }
+                      : null,
+                },
+              );
+            }
+          }
+          if (body.accountId) redirectTo = '/admin/user?id=' + encodeURIComponent(body.accountId);
+        }
+        if (path === '/admin/message') {
+          const state = readState(file);
+          const acc = state.accounts.find((a) => a.id === body.accountId);
+          const text = String(body.text || '').trim();
+          if (!acc || !acc.telegramId || !text) flashError = 'Нет Telegram или пустой текст';
+          else {
+            const ok = await telegramSend(state.settings.botToken, acc.telegramId, text, net);
+            flashText = ok ? 'Сообщение отправлено' : 'Telegram не принял сообщение';
+          }
+          if (body.accountId) redirectTo = '/admin/user?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/promo') {
           const result = await updateState(file, (state) =>
@@ -213,9 +300,19 @@ export function createApp(file, fetchImpl) {
         }
         if (path === '/admin/unbind') {
           await updateState(file, (state) => ({ state: unbindCode(state, body.codeId || '') }));
+          flashText = 'Устройство сброшено, выдан новый код';
+          if (body.accountId) redirectTo = '/admin/user?id=' + encodeURIComponent(body.accountId);
         }
-        res.writeHead(302, { location: '/admin' });
-        if (flashed || flashPromo) sessions.set(cookie(req, 'omp_admin'), { ...admin, flash: flashed, flashPromo });
+        res.writeHead(302, { location: redirectTo });
+        if (flashed || flashPromo || flashText || flashError) {
+          sessions.set(cookie(req, 'omp_admin'), {
+            ...admin,
+            flash: flashed,
+            flashPromo,
+            flashText,
+            flashError,
+          });
+        }
         return res.end();
       }
       if (req.method === 'POST' && path === '/v1/activate') {

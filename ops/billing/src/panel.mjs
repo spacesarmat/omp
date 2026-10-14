@@ -26,14 +26,24 @@ const CSS = `
   @media (max-width: 640px) { .fields { grid-template-columns: 1fr; } }
   button { background: #F5B700; color: #0F1115; border: 0; border-radius: 8px; padding: 10px 14px; font-weight: 700; margin-top: 12px; cursor: pointer; }
   button.ghost { background: #252A35; color: #E8EAF0; }
+  button.inline { margin: 0 6px 0 0; padding: 8px 10px; font-size: 13px; }
+  .row-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .row-actions form { background: none; padding: 0; margin: 0; display: inline; }
   .muted { color: #9AA1B2; }
   .ok { color: #3FB950; }
   .bad { color: #E5484D; }
   .flash { background: #252A35; border-left: 4px solid #F5B700; }
   .code { font: 20px/1.2 ui-monospace, Consolas, monospace; letter-spacing: 0.08em; }
+  .search { display: flex; gap: 8px; align-items: end; }
+  .search label { flex: 1; margin: 0; }
+  .search input { margin: 0; }
+  .search button { margin: 0; white-space: nowrap; }
+  a.link { color: #F5B700; }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; color: #9AA1B2; font-weight: 600; font-size: 13px; padding: 8px 6px; border-bottom: 1px solid #252A35; }
   td { padding: 10px 6px; border-top: 1px solid #252A35; vertical-align: top; font-size: 14px; }
+  .kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin: 0 0 12px; font-size: 14px; }
+  .kv span { color: #9AA1B2; }
 `;
 
 function page(title, body) {
@@ -52,6 +62,195 @@ function field(name, label, value, type) {
   return '<label>' + esc(label) + '</label><input name="' + esc(name) + '" type="' + (type || 'text') + '" value="' + esc(value) + '">';
 }
 
+function when(ms) {
+  if (!ms) return '—';
+  return new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
+}
+
+function searchForm(csrf, q) {
+  return (
+    '<form class="card search" method="post" action="/admin/find">' +
+    csrf +
+    '<label>Найти пользователя<input name="q" value="' +
+    esc(q || '') +
+    '" placeholder="Telegram id, код XXXX-XXXX, device, email" autofocus></label>' +
+    '<button>Найти</button></form>'
+  );
+}
+
+/** Card for one account: profile, subscription, codes, history, Telegram message. */
+export function userCardHtml(state, card, extra) {
+  const csrf = '<input type="hidden" name="csrf" value="' + esc(extra.csrf) + '">';
+  const a = card.account;
+  const sub = card.sub;
+  const origin = (state.settings.publicOrigin || '').replace(/\/+$/, '');
+  const until = sub ? new Date(sub.paidUntil).toISOString().slice(0, 10) : '—';
+  const live = sub && sub.active ? '<span class="ok">активна до ' + until + '</span>' : sub ? '<span class="bad">закончилась ' + until + '</span>' : '<span class="muted">нет подписки</span>';
+  const linked = (Array.isArray(a.linkedDevices) ? a.linkedDevices : []).map((d) => d.slice(0, 8) + '…').join(', ') || '—';
+
+  const grant =
+    '<form method="post" action="/admin/grant">' +
+    csrf +
+    '<input type="hidden" name="accountId" value="' +
+    esc(a.id) +
+    '">' +
+    '<div class="row-actions">' +
+    '<button class="inline" name="days" value="1">+1 день</button>' +
+    '<button class="inline" name="days" value="7">+7 дней</button>' +
+    '<button class="inline" name="days" value="30">+30 дней</button>' +
+    '<label style="margin:0;display:flex;gap:6px;align-items:center">Своё <input name="daysCustom" type="number" min="1" value="14" style="width:72px;margin:0"> <button class="inline ghost" name="days" value="custom">Выдать</button></label>' +
+    '</div></form>';
+
+  const codeRows = (card.codes || [])
+    .map((c) => {
+      const plain = c.plain
+        ? '<span class="code" style="font-size:15px">' +
+          esc(c.plain) +
+          '</span>' +
+          (origin
+            ? ' <a class="link" href="' + esc(origin + '/go/' + encodeURIComponent(c.plain)) + '" target="_blank" rel="noopener">Открыть в OMP</a>'
+            : '')
+        : '<span class="muted">скрыт после привязки</span>';
+      const device = c.deviceId ? esc(c.deviceId.slice(0, 8)) + '…' : '<span class="muted">свободен</span>';
+      const reset =
+        '<form method="post" action="/admin/unbind" style="display:inline">' +
+        csrf +
+        '<input type="hidden" name="codeId" value="' +
+        esc(c.id) +
+        '"><input type="hidden" name="accountId" value="' +
+        esc(a.id) +
+        '"><button type="submit" class="ghost inline">Сбросить</button></form>';
+      return '<tr><td>' + plain + '</td><td>' + device + '</td><td class="muted">' + esc(when(c.boundAt || c.createdAt)) + '</td><td>' + reset + '</td></tr>';
+    })
+    .join('');
+
+  const payRows = (card.payments || [])
+    .map(
+      (p) =>
+        '<tr><td>' +
+        esc(p.amount || '') +
+        '</td><td>' +
+        esc(p.label || '') +
+        '</td><td class="muted">' +
+        esc(when(p.at)) +
+        '</td><td class="muted">' +
+        esc((p.operationId || '').slice(0, 12)) +
+        '</td></tr>',
+    )
+    .join('');
+
+  const promoRows = (card.promos || [])
+    .map(
+      (p) =>
+        '<tr><td>' +
+        esc(p.code) +
+        '</td><td>+' +
+        p.days +
+        ' дн.</td><td class="muted">' +
+        esc(when(p.at)) +
+        '</td><td>' +
+        esc(p.activation || '') +
+        '</td></tr>',
+    )
+    .join('');
+
+  const failRows = (card.attempts || [])
+    .map(
+      (x) =>
+        '<tr><td>' +
+        esc(x.ok ? 'ok' : x.reason) +
+        '</td><td>' +
+        esc((x.deviceId || '').slice(0, 8)) +
+        '</td><td class="muted">' +
+        esc(when(x.at)) +
+        '</td></tr>',
+    )
+    .join('');
+
+  const msg =
+    '<form method="post" action="/admin/message">' +
+    csrf +
+    '<input type="hidden" name="accountId" value="' +
+    esc(a.id) +
+    '">' +
+    '<label>Сообщение в Telegram</label><input name="text" placeholder="Текст пользователю" ' +
+    (a.telegramId ? '' : 'disabled ') +
+    '>' +
+    '<button' +
+    (a.telegramId ? '' : ' disabled') +
+    '>Отправить</button>' +
+    (a.telegramId ? '' : '<p class="muted">Нет Telegram id — отправить нельзя</p>') +
+    '</form>';
+
+  return (
+    '<section id="user"><h2>Карточка пользователя</h2>' +
+    '<div class="card">' +
+    '<div class="kv">' +
+    '<span>Telegram</span><div>' +
+    esc(a.telegramId || '—') +
+    '</div>' +
+    '<span>Почта</span><div>' +
+    esc(a.email || '—') +
+    '</div>' +
+    '<span>Account id</span><div class="muted">' +
+    esc(a.id) +
+    '</div>' +
+    '<span>Создан</span><div class="muted">' +
+    esc(when(a.createdAt)) +
+    '</div>' +
+    '<span>Linked devices</span><div>' +
+    esc(linked) +
+    '</div>' +
+    '<span>Подписка</span><div>' +
+    live +
+    (sub ? ' · устройств ' + sub.devices.filter((d) => d.bound).length + ' / ' + sub.deviceLimit : '') +
+    '</div>' +
+    '</div>' +
+    '<h2 style="margin-top:16px">Продлить / выдать дни</h2>' +
+    grant +
+    '</div>' +
+    '<div class="card"><h2>Коды</h2><table><tr><th>Код</th><th>Устройство</th><th>Когда</th><th></th></tr>' +
+    (codeRows || '<tr><td colspan="4" class="muted">Нет кодов</td></tr>') +
+    '</table>' +
+    (card.reveal
+      ? '<p class="flash">Свободный код: <span class="code">' +
+        esc(card.reveal.code) +
+        '</span>' +
+        (origin ? ' · <a class="link" href="' + esc(origin + '/go/' + encodeURIComponent(card.reveal.code)) + '" target="_blank" rel="noopener">Открыть в OMP</a>' : '') +
+        '</p>'
+      : '') +
+    '</div>' +
+    '<div class="card"><h2>История платежей</h2><table><tr><th>Сумма</th><th>Label</th><th>Когда</th><th>Op</th></tr>' +
+    (payRows || '<tr><td colspan="4" class="muted">Пусто</td></tr>') +
+    '</table></div>' +
+    '<div class="card"><h2>Промокоды</h2><table><tr><th>Промо</th><th>Срок</th><th>Когда</th><th>Код</th></tr>' +
+    (promoRows || '<tr><td colspan="4" class="muted">Пусто</td></tr>') +
+    '</table></div>' +
+    '<div class="card"><h2>Попытки ввода</h2><table><tr><th>Результат</th><th>Устройство</th><th>Когда</th></tr>' +
+    (failRows || '<tr><td colspan="3" class="muted">Пусто</td></tr>') +
+    '</table></div>' +
+    '<div class="card"><h2>Сообщение</h2>' +
+    msg +
+    '</div>' +
+    '<p><a class="link" href="/admin">← На главную</a></p></section>'
+  );
+}
+
+export function userPage(state, card, extra) {
+  const csrf = '<input type="hidden" name="csrf" value="' + esc(extra.csrf) + '">';
+  const flash =
+    (extra && extra.flash ? '<p class="card flash">' + esc(extra.flash) + '</p>' : '') +
+    (extra && extra.code ? '<p class="card flash">Код: <span class="code">' + esc(extra.code) + '</span></p>' : '') +
+    (extra && extra.error ? '<p class="bad">' + esc(extra.error) + '</p>' : '');
+  return page(
+    'OMP · пользователь',
+    '<h1>OMP — пользователь</h1>' +
+      flash +
+      searchForm(csrf, extra.q || (card.account.telegramId || '')) +
+      userCardHtml(state, card, extra),
+  );
+}
+
 export function homePage(state, extra) {
   const s = state.settings;
   const now = Date.now();
@@ -65,6 +264,7 @@ export function homePage(state, extra) {
     (extra && extra.promo
       ? '<p class="card flash">Промокод: <span class="code">' + esc(extra.promo) + '</span> — в боте кнопка «Промокод» или /promo ' + esc(extra.promo) + '</p>'
       : '') +
+    (extra && extra.flash ? '<p class="card flash">' + esc(extra.flash) + '</p>' : '') +
     (extra && extra.error ? '<p class="bad">' + esc(extra.error) + '</p>' : '');
   const csrf = '<input type="hidden" name="csrf" value="' + esc(extra.csrf) + '">';
 
@@ -173,7 +373,10 @@ export function homePage(state, extra) {
         .join('<br>');
       const until = new Date(sub.paidUntil).toISOString().slice(0, 10);
       const live = sub.paidUntil > now ? '<span class="ok">' + until + '</span>' : '<span class="bad">' + until + '</span>';
-      return '<tr><td>' + esc(who) + '</td><td>' + live + '</td><td>' + codes.length + ' / ' + sub.deviceLimit + '</td><td>' + devices + '</td></tr>';
+      const whoLink = account
+        ? '<a class="link" href="/admin/user?id=' + encodeURIComponent(account.id) + '">' + esc(who) + '</a>'
+        : esc(who);
+      return '<tr><td>' + whoLink + '</td><td>' + live + '</td><td>' + codes.length + ' / ' + sub.deviceLimit + '</td><td>' + devices + '</td></tr>';
     })
     .join('');
 
@@ -214,7 +417,10 @@ export function homePage(state, extra) {
       (s.periodDays || 30) +
       ' дн.</span></div>' +
       '</div>' +
-      '<nav><a href="#issue">Выдать код</a><a href="#promos">Промокоды</a><a href="#subs">Подписки</a><a href="#settings">Настройки</a><a href="#fails">Отказы</a></nav>' +
+      '<nav><a href="#find">Найти</a><a href="#issue">Выдать код</a><a href="#promos">Промокоды</a><a href="#subs">Подписки</a><a href="#settings">Настройки</a><a href="#fails">Отказы</a></nav>' +
+      '<section id="find"><h2>Найти пользователя</h2>' +
+      searchForm(csrf, extra.q || '') +
+      '</section>' +
       '<section id="issue"><h2>Выдать код активации</h2>' +
       issue +
       '</section>' +

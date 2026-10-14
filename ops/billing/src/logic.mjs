@@ -281,12 +281,18 @@ export function revealableCode(state, accountId) {
   return row ? { code: row.plain, codeId: row.id } : null;
 }
 
-export function grantDays(state, { telegramId, days, now }) {
+export function grantDays(state, { telegramId, accountId, days, now }) {
   const n = days > 0 ? Math.floor(days) : 0;
-  if (!n || !telegramId) return { state, result: { error: 'bad_args' } };
-  const opened = ensureTelegramAccount(state, telegramId, now);
-  let cur = opened.state;
-  const existing = anySub(cur, opened.account.id);
+  if (!n) return { state, result: { error: 'bad_args' } };
+  let cur = state;
+  let account = accountId ? findAccount(cur, accountId) : null;
+  if (!account && telegramId) {
+    const opened = ensureTelegramAccount(cur, telegramId, now);
+    cur = opened.state;
+    account = opened.account;
+  }
+  if (!account) return { state, result: { error: 'bad_args' } };
+  const existing = anySub(cur, account.id);
   if (existing) {
     const from = Math.max(existing.paidUntil, now);
     const paidUntil = from + n * DAY;
@@ -294,10 +300,10 @@ export function grantDays(state, { telegramId, days, now }) {
     const issued = issue({ ...cur, subscriptions }, existing.id, now);
     return {
       state: issued.state,
-      result: { kind: 'grant', code: issued.code, paidUntil, days: n, accountId: opened.account.id },
+      result: { kind: 'grant', code: issued.code, paidUntil, days: n, accountId: account.id },
     };
   }
-  const created = createSubscription(cur, { accountId: opened.account.id, now, days: n });
+  const created = createSubscription(cur, { accountId: account.id, now, days: n });
   return {
     state: created.state,
     result: {
@@ -305,7 +311,7 @@ export function grantDays(state, { telegramId, days, now }) {
       code: created.result.code,
       paidUntil: created.result.paidUntil,
       days: n,
-      accountId: opened.account.id,
+      accountId: account.id,
     },
   };
 }
@@ -321,11 +327,19 @@ export function adminSummary(state, now) {
 export function adminFind(state, query, now) {
   const q = String(query || '').trim();
   if (!q) return null;
-  let account = accountByTelegram(state, q);
+  let account = findAccount(state, q) || accountByTelegram(state, q);
+  if (!account && q.indexOf('@') >= 0) {
+    const mail = q.toLowerCase();
+    account = state.accounts.find((a) => a.email && a.email.toLowerCase() === mail) || null;
+  }
   if (!account && /^[a-f0-9]{6,}$/i.test(q)) {
-    account = state.accounts.find((a) => Array.isArray(a.linkedDevices) && a.linkedDevices.some((d) => d.indexOf(q.toLowerCase()) === 0)) || null;
+    const needle = q.toLowerCase();
+    account =
+      state.accounts.find((a) => a.id.indexOf(needle) === 0) ||
+      state.accounts.find((a) => Array.isArray(a.linkedDevices) && a.linkedDevices.some((d) => d.indexOf(needle) === 0)) ||
+      null;
     if (!account) {
-      const code = state.codes.find((c) => c.deviceId && c.deviceId.indexOf(q.toLowerCase()) === 0);
+      const code = state.codes.find((c) => c.deviceId && c.deviceId.indexOf(needle) === 0);
       if (code) {
         const sub = state.subscriptions.find((s) => s.id === code.subscriptionId);
         account = sub ? findAccount(state, sub.accountId) : null;
@@ -343,7 +357,50 @@ export function adminFind(state, query, now) {
     }
   }
   if (!account) return null;
-  return { account, sub: subscriptionView(state, account.id, now), reveal: revealableCode(state, account.id) };
+  return accountCard(state, account.id, now);
+}
+
+/** Full admin card: profile, subscription, codes, payments/promos/attempts. */
+export function accountCard(state, accountId, now) {
+  const account = findAccount(state, accountId);
+  if (!account) return null;
+  const sub = subscriptionView(state, account.id, now);
+  const reveal = revealableCode(state, account.id);
+  const codes = sub
+    ? state.codes.filter((c) => c.subscriptionId === sub.id && !c.revoked).map((c) => ({
+        id: c.id,
+        plain: c.plain || '',
+        deviceId: c.deviceId || '',
+        boundAt: c.boundAt || 0,
+        createdAt: c.createdAt || 0,
+      }))
+    : [];
+  const subIds = state.subscriptions.filter((s) => s.accountId === account.id).map((s) => s.id);
+  const payments = state.payments
+    .filter((p) => {
+      const label = String(p.label || '');
+      return label.indexOf(account.id) >= 0 || subIds.some((id) => label.indexOf(id) >= 0);
+    })
+    .slice(-30)
+    .reverse();
+  const promos = (state.promos || [])
+    .flatMap((p) =>
+      (p.uses || [])
+        .filter((u) => u.accountId === account.id)
+        .map((u) => ({ code: p.code, days: p.days, at: u.at, activation: u.code || '' })),
+    )
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 30);
+  const deviceIds = new Set(
+    []
+      .concat(Array.isArray(account.linkedDevices) ? account.linkedDevices : [])
+      .concat(codes.map((c) => c.deviceId).filter(Boolean)),
+  );
+  const attempts = state.attempts
+    .filter((a) => a.deviceId && deviceIds.has(a.deviceId))
+    .slice(-30)
+    .reverse();
+  return { account, sub, reveal, codes, payments, promos, attempts };
 }
 
 export function revokeCode(state, codeId) {
