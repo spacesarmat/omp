@@ -55,6 +55,39 @@ function FlashBox({ flash }: { flash?: Flash }) {
   return null;
 }
 
+function AlertItem({ a }: { a: { level: string; text: string; accountId?: string } }) {
+  return (
+    <Alert variant={a.level === 'bad' ? 'destructive' : 'warn'}>
+      {a.accountId ? (
+        <a className="underline underline-offset-2 hover:opacity-90" href={'/admin/?id=' + encodeURIComponent(a.accountId)}>
+          {a.text}
+        </a>
+      ) : (
+        a.text
+      )}
+    </Alert>
+  );
+}
+
+function AlertsPanel({ alerts }: { alerts?: { level: string; text: string; accountId?: string }[] }) {
+  const list = alerts || [];
+  return (
+    <Card id="alerts">
+      <CardHeader>
+        <CardTitle>Алерты {list.length > 0 ? <Badge className="ml-2 align-middle">{list.length}</Badge> : null}</CardTitle>
+        {list.length === 0 ? <CardDescription>Алертов нет</CardDescription> : null}
+      </CardHeader>
+      {list.length > 0 ? (
+        <CardContent className="space-y-2">
+          {list.map((a, i) => (
+            <AlertItem key={i} a={a} />
+          ))}
+        </CardContent>
+      ) : null}
+    </Card>
+  );
+}
+
 function Login() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -99,7 +132,7 @@ type HomeData = {
   sessionId: string;
   flash?: Flash;
   stats?: { accounts: number; activeSubs: number; payments30: number; revenue30: number };
-  alerts?: { level: string; text: string }[];
+  alerts?: { level: string; text: string; accountId?: string }[];
   events?: { kind: string; text: string; accountId?: string }[];
   finance?: {
     summary?: { day?: { sum: number; count: number }; week?: { sum: number; count: number }; month?: { sum: number; count: number } };
@@ -307,10 +340,24 @@ export function App() {
         </Button>
       </header>
       <FlashBox flash={d.flash} />
+      {(d.alerts || []).length > 0 ? (
+        <div className="space-y-2" aria-label="Алерты">
+          {d.alerts!.map((a, i) => (
+            <AlertItem key={i} a={a} />
+          ))}
+        </div>
+      ) : null}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="home">Главная</TabsTrigger>
+          <TabsTrigger value="home">
+            Главная
+            {(d.alerts || []).length > 0 ? (
+              <Badge variant="bad" className="ml-2">
+                {(d.alerts || []).length}
+              </Badge>
+            ) : null}
+          </TabsTrigger>
           <TabsTrigger value="subs">Подписки</TabsTrigger>
           <TabsTrigger value="finance">Финансы</TabsTrigger>
           <TabsTrigger value="promos">Промо</TabsTrigger>
@@ -343,20 +390,7 @@ export function App() {
               <Button onClick={() => void run('/admin/find', { q })}>Найти</Button>
             </CardContent>
           </Card>
-          {(d.alerts || []).length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Алерты</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {d.alerts!.map((a, i) => (
-                  <Alert key={i} variant={a.level === 'bad' ? 'destructive' : 'warn'}>
-                    {a.text}
-                  </Alert>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+          <AlertsPanel alerts={d.alerts} />
           <Card>
             <CardHeader>
               <CardTitle>Быстрое промо</CardTitle>
