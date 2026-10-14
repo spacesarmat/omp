@@ -2,6 +2,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.14
+
+- same as beta.13 (release failed: card and Telegram tests)
+- [phone] A chosen series poster is kept in the settings backup
+
 ## 0.20.0-beta.13
 
 - [phone] Series card in Discover: dates and status, all genres, Watch on TV, creators and cast apart, each season on its own screen, similar titles, poster choice
