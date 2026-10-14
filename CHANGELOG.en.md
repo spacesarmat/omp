@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.12
+
+- same as beta.10–11 (release failed: billingPost type)
+
 ## 0.20.0-beta.11
 
 - same as beta.10 (release failed: CHANGELOG/backup tests)

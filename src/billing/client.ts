@@ -12,7 +12,7 @@ export function billingGet(ctx: SourceContext, path: string, opts?: HttpOptions)
 export function billingPost(
   ctx: SourceContext,
   path: string,
-  body?: unknown,
+  body: { [key: string]: string },
   opts?: HttpOptions,
 ): Promise<HttpResponse> {
   return tryOrigins(opts, (origin, o) => ctx.http.post(origin + path, body, o));
