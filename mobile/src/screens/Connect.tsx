@@ -118,7 +118,9 @@ export function Connect() {
       if (!alive) return;
       setFound((prev) => (prev.some((x) => x.url === s.url) ? prev : prev.concat(s)));
     };
-    (scanner ?? scanLan)(() => !alive, report).then(
+    // scanLan's second argument is its dependencies; the test scanner's is onFound
+    const run = scanner ? scanner(() => !alive, report) : scanLan(() => !alive, undefined, report);
+    run.then(
       (r) => {
         if (!alive) return;
         setFound(r);
