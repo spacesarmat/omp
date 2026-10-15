@@ -1,5 +1,9 @@
 # Изменения
 
+## 0.20.1-beta.2
+
+- то же, что beta.1 (релиз не собрался: окно changelog вытеснило 0.17.0)
+
 ## 0.20.1-beta.1
 
 - [phone] Jackett и JacRed OMP: поиск и скачивание только через billing (`/v1/search`, `/v1/torrent`); ключи убраны из APK
