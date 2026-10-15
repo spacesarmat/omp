@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.sources
 
+import com.spacesarmat.omp.CleartextPolicy
 import com.spacesarmat.omp.I18n
 import java.io.File
 import java.io.IOException
@@ -97,6 +98,26 @@ class SiteHttpTlsTest {
         val base = doc.getElementsByTagName("base-config").item(0) as Element
         assertEquals("true", base.getAttribute("cleartextTrafficPermitted"))
         assertEquals("system", (base.getElementsByTagName("certificates").item(0) as Element).getAttribute("src"))
+        // torrent.by is HTTPS; cleartext to that name is not needed for the bundled intermediates
+        assertEquals("false", torrentBy.getAttribute("cleartextTrafficPermitted"))
+    }
+
+    @Test
+    fun publicCleartextIsRefusedWithoutATlsCode() {
+        CleartextPolicy.setExtra(emptyList())
+        I18n.lang = "ru"
+        val blocked = SiteHttp.failureOf(IOException("cleartext-blocked"))
+        assertNull(blocked.code)
+        assertEquals("Небезопасное соединение по HTTP запрещено", blocked.reason)
+        I18n.lang = "en"
+        assertEquals("Insecure HTTP is blocked", SiteHttp.failureOf(IOException("cleartext-blocked")).reason)
+        try {
+            SiteHttp(jar()).request("http://example.com/", "GET", emptyMap(), null, null, null, 5_000)
+            fail("public http must be refused")
+        } catch (e: SiteHttpException) {
+            assertNull(e.code)
+            assertEquals(SiteHttp.CLEARTEXT, e.reason)
+        }
     }
 
     @Test

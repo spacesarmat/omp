@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.sources
 
+import com.spacesarmat.omp.CleartextGuard
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
@@ -136,6 +137,7 @@ class WebViewCloudflareBrowser(
             }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                CleartextGuard.block(request.url)?.let { return it }
                 // the login page: the site's ad frames and scripts (under.nnmclub.to, /clicks/…) get an empty answer; the
                 // main frame is left to the navigation rule (a refused page goes back to the login page, never blank)
                 val ad = ads

@@ -114,6 +114,10 @@ export interface OmpNativeApi {
    * Both ports (ws:3000, wss:3001) are raced; `preferPort` is tried alone first (2 s).
    */
   tvConnect(ip: string, register: object, preferPort?: 3000 | 3001): Promise<{ port: 3000 | 3001 }>;
+  /** Hosts that may be reached over plain HTTP besides LAN and loopback. */
+  setCleartextHosts(hosts: string[]): Promise<void>;
+  /** Remembers a TV certificate the user just confirmed. */
+  trustTvCert(host: string, fingerprint: string): Promise<void>;
   /** Any SSAP message (JSON). */
   tvSend(message: object): Promise<void>;
   /** Every incoming message of the main socket. */
@@ -249,6 +253,8 @@ interface OmpNativePlugin {
   stopDiscovery(o: { group?: string }): Promise<void>;
   phoneName(): Promise<{ name?: string | null }>;
   tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
+  setCleartextHosts?(o: { hosts: string[] }): Promise<void>;
+  trustTvCert?(o: { host: string; fingerprint: string }): Promise<void>;
   tvSend(o: { json: string }): Promise<void>;
   tvDisconnect(): Promise<void>;
   pointerConnect(o: { url: string }): Promise<void>;
@@ -485,6 +491,16 @@ export const native: OmpNativeApi = {
     const o: { ip: string; register: string; preferPort?: number } = { ip, register: JSON.stringify(register) };
     if (preferPort) o.preferPort = preferPort;
     return plugin.tvConnect(o);
+  },
+
+  setCleartextHosts(hosts) {
+    if (!plugin?.setCleartextHosts) return Promise.resolve();
+    return plugin.setCleartextHosts({ hosts });
+  },
+
+  trustTvCert(host, fingerprint) {
+    if (!plugin?.trustTvCert) return unavailable();
+    return plugin.trustTvCert({ host, fingerprint });
   },
 
   tvSend(message) {

@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.player
 
+import com.spacesarmat.omp.CleartextPolicy
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
@@ -148,7 +149,9 @@ object NextPreload {
 
     /** Sends the warm-up in the background; the answer (TorrServer replies when the preload is done) is ignored. */
     fun send(streamUrl: String) {
+        if (!CleartextPolicy.allowsUrl(streamUrl)) return
         val r = request(streamUrl) ?: return
+        if (!CleartextPolicy.allowsUrl(r.url)) return
         val t = Thread {
             var c: HttpURLConnection? = null
             try {

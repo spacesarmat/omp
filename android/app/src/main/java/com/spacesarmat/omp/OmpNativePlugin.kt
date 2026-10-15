@@ -441,7 +441,9 @@ class OmpNativePlugin : Plugin() {
             try {
                 once.resolve(work(ip))
             } catch (e: BoxFailure) {
-                once.reject(e.code, e.code)
+                val detail = e.detail
+                if (e.code == BoxCodes.CERT_CHANGED && !detail.isNullOrEmpty()) once.reject(detail, e.code)
+                else once.reject(e.code, e.code)
             } catch (e: Throwable) {
                 once.reject(BoxCodes.FAILED, BoxCodes.FAILED)
             }
@@ -629,6 +631,38 @@ class OmpNativePlugin : Plugin() {
 
     // ---- main TV socket ----
 
+    /** Hosts the page may reach over plain HTTP besides loopback and private ranges (a public TorrServer, an indexer). */
+    @PluginMethod
+    fun setCleartextHosts(call: PluginCall) {
+        val arr = call.getArray("hosts")
+        val hosts = ArrayList<String>()
+        if (arr != null) {
+            for (i in 0 until arr.length()) {
+                val s = arr.optString(i, "").trim()
+                if (s.isNotEmpty()) hosts.add(s)
+            }
+        }
+        CleartextPolicy.setExtra(hosts)
+        call.resolve()
+    }
+
+    /** The user confirmed a new TV certificate. [fingerprint] replaces the pin for [host]. */
+    @PluginMethod
+    fun trustTvCert(call: PluginCall) {
+        val host = call.getString("host")?.trim().orEmpty()
+        val fp = call.getString("fingerprint")?.trim().orEmpty()
+        if (host.isEmpty()) {
+            call.reject(I18n.s("plugin.badTvAddr2"))
+            return
+        }
+        try {
+            CertPins.trust(host, fp)
+            call.resolve()
+        } catch (_: IllegalArgumentException) {
+            call.reject(I18n.s("plugin.badTvAddr2"))
+        }
+    }
+
     @PluginMethod
     fun tvConnect(call: PluginCall) {
         val once = Once(call)
@@ -647,6 +681,7 @@ class OmpNativePlugin : Plugin() {
         I18n.load(context)
         val socket = TvSocket(
             onOpen = { s ->
+                if (s.port == 3001) CertPins.commit(ip)
                 if (!s.send(register)) {
                     s.close()
                     clearTv(s)
@@ -656,9 +691,11 @@ class OmpNativePlugin : Plugin() {
                     once.resolve(JSObject().put("port", s.port))
                 }
             },
-            onFail = { _ ->
+            onFail = { reason ->
                 clearTv(self)
-                once.reject(I18n.s("plugin.tvConnectFailed"))
+                val fp = CertPins.changedFingerprint(reason)
+                if (fp != null) once.reject(fp, "cert-changed")
+                else once.reject(I18n.s("plugin.tvConnectFailed"))
             },
             onMessage = { text -> notifyListeners("tvMessage", JSObject().put("json", text)) },
             onClosed = { reason ->
@@ -725,12 +762,15 @@ class OmpNativePlugin : Plugin() {
         I18n.load(context)
         val socket = TvSocket(
             onOpen = { _ ->
+                if (parsed.isHttps) CertPins.commit(ip)
                 synchronized(lock) { if (pendingPointer === once) pendingPointer = null }
                 once.resolve()
             },
-            onFail = { _ ->
+            onFail = { reason ->
                 clearPointer(self)
-                once.reject(I18n.s("plugin.remoteConnectFailed"))
+                val fp = CertPins.changedFingerprint(reason)
+                if (fp != null) once.reject(fp, "cert-changed")
+                else once.reject(I18n.s("plugin.remoteConnectFailed"))
             },
             onMessage = { _ -> },
             onClosed = { _ -> clearPointer(self) },
@@ -880,10 +920,15 @@ class OmpNativePlugin : Plugin() {
             val o = arr.optJSONObject(i)
             raw.add(Player2160.Item(o?.optString("url").orEmpty(), o?.optString("title").orEmpty()))
         }
-        return Player2160.playable(raw, call.getInt("start") ?: 0) ?: run {
+        val playable = Player2160.playable(raw, call.getInt("start") ?: 0) ?: run {
             call.reject(I18n.s("plugin.noVideoUrl"))
-            null
+            return null
         }
+        if (playable.first.any { !CleartextPolicy.allowsUrl(it.url) }) {
+            call.reject(I18n.s("errors.cleartext"))
+            return null
+        }
+        return playable
     }
 
     /**
@@ -1015,6 +1060,11 @@ class OmpNativePlugin : Plugin() {
         val req = PlayRequest.parse(call.data)
         if (req == null) {
             call.reject(I18n.s("plugin.nothingToPlay"))
+            return
+        }
+        val urls = req.queue.flatMap { item -> listOf(item.url) + item.subtitles.map { it.url } }
+        if (urls.any { !CleartextPolicy.allowsUrl(it) }) {
+            call.reject(I18n.s("errors.cleartext"))
             return
         }
         NativePlayerBridge.resetSkips()

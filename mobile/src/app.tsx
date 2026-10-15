@@ -7,6 +7,7 @@ import { refreshTorrents } from '../../src/store/library';
 import { native } from './platform/native';
 import { NavBar, TAB_IDS, type Tab } from './ui/NavBar';
 import { Toast, showToast } from './ui/toast';
+import { CertChangedSheet } from './ui/CertChangedSheet';
 import { catalogMode, setCatalogMode } from './catalog/phoneCatalog';
 import { Connect } from './screens/Connect';
 import { Tv } from './screens/Tv';
@@ -318,6 +319,7 @@ export function App() {
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
       {tabRoot && !prompt && <WhatsNewSheet />}
       {tabRoot && <DonateSheet />}
+      <CertChangedSheet />
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}

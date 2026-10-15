@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.monitor
 
+import com.spacesarmat.omp.CleartextGuard
 import com.spacesarmat.omp.I18n
 
 import android.annotation.SuppressLint
@@ -77,7 +78,7 @@ class MonitorHost(
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url
                 // only the page's own origin; localhost:<port> / 127.0.0.1:8090 (a local TorrServer) go to the network
-                if (!MonitorOrigin.isPage(url.scheme, url.host, url.port)) return null
+                if (!MonitorOrigin.isPage(url.scheme, url.host, url.port)) return CleartextGuard.block(url)
                 return assets.shouldInterceptRequest(url) ?: notFound()
             }
         }

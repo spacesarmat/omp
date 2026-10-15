@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.sources
 
+import com.spacesarmat.omp.CleartextPolicy
 import com.spacesarmat.omp.I18n
 
 import java.util.concurrent.TimeUnit
@@ -17,12 +18,13 @@ import org.json.JSONObject
  * found on the LAN; nothing is logged (no addresses, no cookies). Blocking.
  */
 class FlareSolverrClient(
-    private val client: OkHttpClient = OkHttpClient.Builder()
+    http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(MAX_TIMEOUT_MS + 10_000, TimeUnit.MILLISECONDS)
         .build(),
     private val maxTimeoutMs: Long = MAX_TIMEOUT_MS,
 ) {
+    private val client = http.newBuilder().addInterceptor(CleartextPolicy.interceptor()).build()
     sealed class Result {
         class Solved(val cookies: List<Cookie>, val userAgent: String?) : Result()
         class Failed(val reason: String) : Result()

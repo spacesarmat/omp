@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.box
 
+import com.spacesarmat.omp.CertPins
 import com.spacesarmat.omp.install.AesGcmWrapper
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -26,7 +27,6 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLEngine
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.X509ExtendedKeyManager
-import javax.net.ssl.X509ExtendedTrustManager
 
 /**
  * The phone's client certificate for the Android TV Remote protocol: an RSA 2048 key and a self-signed X.509 v3
@@ -60,8 +60,8 @@ class BoxIdentity(val privateDer: ByteArray, val certDer: ByteArray) {
     }
 
     /**
-     * A TLS socket factory presenting this certificate. The TV's own certificate is self-signed, so any server
-     * certificate is accepted; the pairing secret binds both public keys, and the TV accepts only a paired client.
+     * A TLS socket factory presenting this certificate. The TV's certificate is self-signed, so it is pinned on
+     * first use ([CertPins]) instead of being accepted blindly. The pairing secret still binds both public keys.
      */
     fun socketFactory(): SSLSocketFactory {
         val key = privateKey()
@@ -76,18 +76,8 @@ class BoxIdentity(val privateDer: ByteArray, val certDer: ByteArray) {
             override fun getPrivateKey(alias: String?) = key
         }
         val ctx = SSLContext.getInstance("TLS")
-        ctx.init(arrayOf(km), arrayOf(AnyServer), SecureRandom())
+        ctx.init(arrayOf(km), arrayOf(CertPins.trustManager()), SecureRandom())
         return ctx.socketFactory
-    }
-
-    private object AnyServer : X509ExtendedTrustManager() {
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = throw java.security.cert.CertificateException("server only")
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?, socket: Socket?) = throw java.security.cert.CertificateException("server only")
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?, engine: SSLEngine?) = throw java.security.cert.CertificateException("server only")
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?, socket: Socket?) {}
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?, engine: SSLEngine?) {}
-        override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
     }
 
     companion object {

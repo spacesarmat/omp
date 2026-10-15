@@ -9,6 +9,7 @@ import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
+import com.spacesarmat.omp.CertPins
 import java.security.interfaces.RSAPublicKey
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -36,9 +37,11 @@ object BoxCodes {
     const val NOT_CONNECTED = "box-not-connected"
     /** Anything else (connection broke). */
     const val FAILED = "box-failed"
+    /** The box presented a different certificate than the one pinned at the first connection. */
+    const val CERT_CHANGED = "box-cert-changed"
 }
 
-class BoxFailure(val code: String, cause: Throwable? = null) : Exception(code, cause)
+class BoxFailure(val code: String, cause: Throwable? = null, val detail: String? = null) : Exception(detail ?: code, cause)
 
 /** One TLS connection to the box; [serverKey] is the TV's certificate key. */
 interface TlsLink : Closeable {
@@ -63,14 +66,23 @@ class SocketTlsDialer(private val factory: () -> SSLSocketFactory) : TlsDialer {
             plain.close()
             throw connectFailure(e)
         }
+        CertPins.expecting.set(ip)
         val s: SSLSocket
         try {
             plain.soTimeout = HANDSHAKE_MS
             s = factory().createSocket(plain, ip, port, true) as SSLSocket
             s.startHandshake()
+            CertPins.commit(ip)
         } catch (e: Exception) {
             plain.close()
+            if (e is BoxFailure) throw e
+            if (CertPins.isChanged(e)) {
+                val fp = CertPins.changedFingerprint(e) ?: CertPins.lastRejected(ip).orEmpty()
+                throw BoxFailure(BoxCodes.CERT_CHANGED, e, fp.ifEmpty { null })
+            }
             throw e
+        } finally {
+            CertPins.expecting.remove()
         }
         val key = try {
             s.session.peerCertificates.firstOrNull()?.publicKey as? RSAPublicKey
