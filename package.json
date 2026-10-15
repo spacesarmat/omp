@@ -1,6 +1,6 @@
 {
   "name": "omp",
-  "version": "0.20.1-beta.12",
+  "version": "0.20.1-beta.13",
   "private": true,
   "type": "module",
   "description": "Media player for LG webOS TVs backed by TorrServer",
