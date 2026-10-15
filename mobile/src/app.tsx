@@ -24,7 +24,13 @@ import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
 import { Add } from './screens/Add';
 import { LocalServer } from './screens/LocalServer';
-import { autostartLocal, watchLocalServer } from './server/localServer';
+import {
+  autostartLocal,
+  checkLocalServerUpdate,
+  installLocalUpdateChecks,
+  localUpdatePrompt,
+  watchLocalServer,
+} from './server/localServer';
 import { Remote } from './screens/Remote';
 import { NowPlaying } from './screens/NowPlaying';
 import { MiniPlayer } from './ui/MiniPlayer';
@@ -32,6 +38,7 @@ import { Settings, runUpdateCheck, phoneFeedUrl } from './screens/Settings';
 import { VideoPlayer } from './screens/VideoPlayer';
 import { ServerSettings } from './screens/ServerSettings';
 import { UpdateSheet } from './ui/UpdateSheet';
+import { LocalUpdateSheet } from './ui/LocalUpdateSheet';
 import { runBack } from './ui/backStack';
 import { WhatsNewSheet } from './ui/WhatsNewSheet';
 import { DonateSheet } from './ui/DonateSheet';
@@ -284,8 +291,15 @@ export function App() {
     [],
   );
 
+  // TorrServer pin shipped with OMP: offer download when the on-disk binary is outdated
+  useEffect(
+    () => installLocalUpdateChecks(() => void checkLocalServerUpdate().catch(() => {})),
+    [],
+  );
+
   const route = currentRoute.value;
   const prompt = updatePrompt.value;
+  const localPrompt = localUpdatePrompt.value;
   const tabRoot = TABS.includes(route.name);
   // a «Обзор» title card keeps the bottom tabs with «Каталог» highlighted
   const showNav = tabRoot || route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person';
@@ -355,8 +369,10 @@ export function App() {
         <Settings />
       )}
       {prompt && tabRoot && <UpdateSheet info={prompt} />}
+      {/* TorrServer after OMP sheet: pin arrives with the APK, binary still needs a separate download */}
+      {!prompt && localPrompt && tabRoot && <LocalUpdateSheet info={localPrompt} />}
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
-      {tabRoot && !prompt && <WhatsNewSheet />}
+      {tabRoot && !prompt && !localPrompt && <WhatsNewSheet />}
       {tabRoot && <DonateSheet />}
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
