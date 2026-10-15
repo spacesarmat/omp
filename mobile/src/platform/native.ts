@@ -105,7 +105,7 @@ export interface OmpNativeApi {
   stopDiscovery(group?: string): Promise<void>;
   /** Install assistant: which install ports (9922, 9991, 5555, 8095) accept TCP on a home-network IP. */
   probePorts(ip: string, ports: number[], timeoutMs: number): Promise<number[]>;
-  /** Hosts of the phone's /24 that accept a connection on the Jackett / Prowlarr ports; null without Wi-Fi (rejects off-device). */
+  /** Hosts of the phone's /24 that accept TCP on Jackett / Prowlarr / FlareSolverr / TorrServer ports; null without Wi-Fi (rejects off-device). */
   scanLan(ports: number[], timeoutMs?: number): Promise<{ ip: string; port: number }[] | null>;
   /** Phone model for the TV's list of paired phones; «Телефон» when unknown. */
   phoneName(): Promise<string>;

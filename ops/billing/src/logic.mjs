@@ -28,6 +28,36 @@ export function ensureTelegramAccount(state, telegramId, now) {
   return { state: { ...state, accounts: state.accounts.concat([account]) }, account };
 }
 
+/** @username and display name next to the numeric Telegram id. */
+export function telegramDisplay(account) {
+  if (!account) return '';
+  const nick = account.telegramUsername ? '@' + String(account.telegramUsername).replace(/^@/, '') : '';
+  const name = !nick && account.telegramName ? String(account.telegramName) : '';
+  const id = account.telegramId || '';
+  const human = nick || name;
+  if (human && id) return human + ' · ' + id;
+  return human || id || account.email || account.id || '';
+}
+
+/** Store the Telegram @username / name seen on a message or getChat. Empty username clears a removed nick. */
+export function rememberTelegramProfile(state, { telegramId, username, name }, now) {
+  const id = String(telegramId || '').trim();
+  if (!id) return { state, account: null };
+  const ensured = ensureTelegramAccount(state, id, now || Date.now());
+  const nick = String(username || '')
+    .replace(/^@/, '')
+    .trim()
+    .slice(0, 64);
+  const label = String(name || '')
+    .trim()
+    .slice(0, 80);
+  const prev = ensured.account;
+  if ((prev.telegramUsername || '') === nick && (prev.telegramName || '') === label) return ensured;
+  const account = { ...prev, telegramUsername: nick, telegramName: label };
+  const accounts = ensured.state.accounts.map((a) => (a.id === account.id ? account : a));
+  return { state: { ...ensured.state, accounts }, account };
+}
+
 function liveSub(state, accountId, now) {
   return (
     state.subscriptions.find((s) => s.accountId === accountId && s.product === 'jackett' && s.paidUntil > now) || null
@@ -74,15 +104,108 @@ export function openAppUrl(origin, code) {
   return base + '/go/' + encodeURIComponent(formatCode(code));
 }
 
-export function isAdminChat(settings, chatId) {
-  const raw = String((settings && settings.adminTelegramIds) || '');
-  if (!raw.trim()) return false;
-  const id = String(chatId);
-  return raw
+export function adminChatIds(settings) {
+  return String((settings && settings.adminTelegramIds) || '')
     .split(/[,;\s]+/)
     .map((s) => s.trim())
-    .filter(Boolean)
-    .some((s) => s === id);
+    .filter(Boolean);
+}
+
+export function isAdminChat(settings, chatId) {
+  const id = String(chatId);
+  return adminChatIds(settings).some((s) => s === id);
+}
+
+const SUPPORT_CAP = 400;
+
+export const SUPPORT_CLOSED_TEXT =
+  'Диалог с поддержкой завершён. Если вопрос останется — нажмите «Поддержка» и напишите снова.';
+
+export function appendSupportMessage(state, { telegramId, text, direction, now, via }) {
+  const body = String(text || '').trim().slice(0, 2000);
+  const id = String(telegramId || '').trim();
+  if (!body || !id) return { state, result: { error: 'empty' } };
+  const row = {
+    id: randomId(),
+    telegramId: id,
+    text: body,
+    direction: direction === 'out' ? 'out' : 'in',
+    at: now || Date.now(),
+    via: via === 'panel' ? 'panel' : 'bot',
+  };
+  const supportMessages = (state.supportMessages || []).concat([row]).slice(-SUPPORT_CAP);
+  return { state: { ...state, supportMessages }, result: { message: row } };
+}
+
+export function rememberSupportReply(state, { adminChatId, messageId, telegramId, now }) {
+  if (!adminChatId || !messageId || !telegramId) return state;
+  const key = String(adminChatId) + ':' + String(messageId);
+  const row = { key, telegramId: String(telegramId), at: now || Date.now() };
+  const supportReplies = (state.supportReplies || [])
+    .filter((r) => r.key !== key)
+    .concat([row])
+    .slice(-200);
+  return { ...state, supportReplies };
+}
+
+export function supportReplyTarget(state, adminChatId, messageId) {
+  const key = String(adminChatId || '') + ':' + String(messageId || '');
+  const row = (state.supportReplies || []).find((r) => r.key === key);
+  return row ? row.telegramId : '';
+}
+
+export function supportThreads(state) {
+  const map = new Map();
+  const list = state.supportMessages || [];
+  for (let i = 0; i < list.length; i++) {
+    const m = list[i];
+    const prev = map.get(m.telegramId) || {
+      telegramId: m.telegramId,
+      count: 0,
+      lastText: '',
+      lastAt: 0,
+      lastDirection: 'in',
+    };
+    prev.count += 1;
+    if ((m.at || 0) >= prev.lastAt) {
+      prev.lastText = m.text || '';
+      prev.lastAt = m.at || 0;
+      prev.lastDirection = m.direction || 'in';
+    }
+    map.set(m.telegramId, prev);
+  }
+  return Array.from(map.values())
+    .filter((row) => {
+      const closedAt = Number((state.supportClosed || {})[row.telegramId] || 0);
+      return !closedAt || row.lastAt > closedAt;
+    })
+    .sort((a, b) => b.lastAt - a.lastAt)
+    .map((row) => {
+      const acc = accountByTelegram(state, row.telegramId);
+      return {
+        ...row,
+        username: acc && acc.telegramUsername ? acc.telegramUsername : '',
+        name: acc && acc.telegramName ? acc.telegramName : '',
+      };
+    });
+}
+
+export function supportThread(state, telegramId) {
+  const id = String(telegramId || '');
+  return (state.supportMessages || []).filter((m) => m.telegramId === id);
+}
+
+/** Hide the thread in the panel and keep the notice in history. A newer user message opens it again. */
+export function closeSupportThread(state, { telegramId, text, now }) {
+  const id = String(telegramId || '').trim();
+  if (!id) return { state, result: { error: 'empty' } };
+  const has = (state.supportMessages || []).some((m) => m.telegramId === id);
+  if (!has) return { state, result: { error: 'empty' } };
+  const at = now || Date.now();
+  const notice = String(text || SUPPORT_CLOSED_TEXT).trim() || SUPPORT_CLOSED_TEXT;
+  const saved = appendSupportMessage(state, { telegramId: id, text: notice, direction: 'out', now: at, via: 'panel' });
+  const supportClosed = { ...(saved.state.supportClosed || {}), [id]: at };
+  return { state: { ...saved.state, supportClosed }, result: { ok: true, text: notice } };
 }
 
 export function createSubscription(state, { accountId, now, days }) {
@@ -264,7 +387,7 @@ export function financeReport(state, now) {
       return {
         ...p,
         accountId: resolved.accountId || '',
-        who: acc ? acc.telegramId || acc.email || acc.id : '',
+        who: acc ? telegramDisplay(acc) || acc.email || acc.id : '',
         problem: p.error || resolved.problem || '',
       };
     });
@@ -477,7 +600,7 @@ export function unlinkDeviceTelegram(state, { deviceId, now }) {
   // If no devices left on this TG account, clear telegramId so the phone can re-bind cleanly.
   const nextAccounts = stillLinked
     ? accounts
-    : accounts.map((a) => (a.id === account.id ? { ...a, telegramId: '' } : a));
+    : accounts.map((a) => (a.id === account.id ? { ...a, telegramId: '', telegramUsername: '', telegramName: '' } : a));
   return {
     state: logAudit(
       { ...state, accounts: nextAccounts },
@@ -613,7 +736,7 @@ export function adminDashboard(state, now) {
   for (let i = 0; i < expiring.length; i++) {
     const sub = expiring[i];
     const acc = findAccount(state, sub.accountId);
-    const who = acc ? acc.telegramId || acc.email || acc.id : sub.accountId;
+    const who = acc ? telegramDisplay(acc) || acc.email || acc.id : sub.accountId;
     alerts.push({
       level: 'warn',
       text: 'Истекает ' + new Date(sub.paidUntil).toISOString().slice(0, 10) + ': ' + who,
@@ -631,6 +754,10 @@ export function adminFind(state, query, now) {
   const q = String(query || '').trim();
   if (!q) return null;
   let account = findAccount(state, q) || accountByTelegram(state, q);
+  if (!account && !/^\d+$/.test(q)) {
+    const nick = q.replace(/^@/, '').toLowerCase();
+    if (nick) account = state.accounts.find((a) => String(a.telegramUsername || '').toLowerCase() === nick) || null;
+  }
   if (!account && q.indexOf('@') >= 0) {
     const mail = q.toLowerCase();
     account = state.accounts.find((a) => a.email && a.email.toLowerCase() === mail) || null;

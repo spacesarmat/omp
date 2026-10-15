@@ -1,8 +1,7 @@
 # Custom app for ZimaOS / CasaOS. Uses the Jackett already on the NAS (port 9117).
 # Install:
 #   1. Copy ops/billing → /DATA/AppData/omp-billing/app
-#   2. Put CLOUDFLARE_TUNNEL_TOKEN into /DATA/AppData/omp-billing/.env (see README)
-#   3. casaos-cli app-management install -f /DATA/AppData/omp-billing/docker-compose.yml
+#   2. casaos-cli app-management install -f /DATA/AppData/omp-billing/docker-compose.yml
 #      or: docker compose -f /DATA/AppData/omp-billing/app/docker-compose.yml --env-file /DATA/AppData/omp-billing/.env up -d
 name: omp-billing
 services:
@@ -46,60 +45,6 @@ services:
         target: /data
         bind:
           create_host_path: true
-
-  # Public HTTPS via Cloudflare Tunnel. Config (hostname → URL) lives in Zero Trust UI.
-  # Service URL in the dashboard: http://127.0.0.1:8787
-  # Start: docker compose --profile tunnel --env-file /DATA/AppData/omp-billing/.env up -d
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: omp-billing-tunnel
-    profiles:
-      - tunnel
-    restart: unless-stopped
-    network_mode: service:omp-billing
-    depends_on:
-      - omp-billing
-    environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
-    command:
-      - tunnel
-      - --no-autoupdate
-      - --protocol
-      - http2
-      - run
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-        reservations:
-          memory: 32M
-
-  # Temporary free HTTPS (random https://….trycloudflare.com). URL changes on recreate.
-  # Start: docker compose --profile quick up -d
-  cloudflared-quick:
-    image: cloudflare/cloudflared:latest
-    container_name: omp-billing-quick
-    profiles:
-      - quick
-    restart: unless-stopped
-    network_mode: service:omp-billing
-    depends_on:
-      - omp-billing
-    # Note: on this NAS quick tunnels often return CF 530; named tunnel + own domain is preferred.
-    # Fallback used in practice: cloudflared --url on a LAN PC proxying to :8787.
-    command:
-      - tunnel
-      - --no-autoupdate
-      - --protocol
-      - http2
-      - --url
-      - http://127.0.0.1:8787
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-        reservations:
-          memory: 32M
 
 x-casaos:
   architectures:

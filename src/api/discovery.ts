@@ -66,7 +66,7 @@ export const probeEcho: Probe = (url, timeoutMs, register) =>
 export interface DiscoverOptions {
   subnets: string[];
   ports?: number[];
-  /** Max probes in flight (default 24). A slot is freed only when the probe promise settles. */
+  /** Max probes in flight (default 48). A slot is freed only when the probe promise settles. */
   concurrency?: number;
   timeoutMs?: number;
   probe?: Probe;
@@ -86,8 +86,8 @@ export function discover(o: DiscoverOptions): Promise<FoundServer[]> {
     for (let i = 1; i <= 254; i++) ports.forEach((p) => urls.push('http://' + sn + '.' + i + ':' + p));
   });
   const probe = o.probe || probeEcho;
-  const timeout = o.timeoutMs || 1200;
-  const conc = o.concurrency || 24;
+  const timeout = o.timeoutMs || 900;
+  const conc = o.concurrency || 48;
   const found: FoundServer[] = [];
   let next = 0;
   let done = 0;

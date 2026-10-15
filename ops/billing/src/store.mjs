@@ -44,6 +44,12 @@ export function emptyState() {
     links: [],
     /** Pending Telegram logins for the admin web panel. */
     adminLogins: [],
+    /** User ↔ admin support thread. */
+    supportMessages: [],
+    /** adminChatId:messageId → user telegram id, so a reply in Telegram reaches that user. */
+    supportReplies: [],
+    /** telegramId → ms when the admin closed the thread. A later user message reopens it. */
+    supportClosed: {},
     /** Admin panel action log. */
     audit: [],
     outbox: [],
@@ -147,6 +153,12 @@ function normalizeState(parsed) {
     promos: Array.isArray(parsed.promos) ? parsed.promos : [],
     links: Array.isArray(parsed.links) ? parsed.links : [],
     adminLogins: Array.isArray(parsed.adminLogins) ? parsed.adminLogins : [],
+    supportMessages: Array.isArray(parsed.supportMessages) ? parsed.supportMessages : [],
+    supportReplies: Array.isArray(parsed.supportReplies) ? parsed.supportReplies : [],
+    supportClosed:
+      parsed.supportClosed && typeof parsed.supportClosed === 'object' && !Array.isArray(parsed.supportClosed)
+        ? parsed.supportClosed
+        : {},
     audit: Array.isArray(parsed.audit) ? parsed.audit : [],
     outbox: Array.isArray(parsed.outbox) ? parsed.outbox : [],
   };

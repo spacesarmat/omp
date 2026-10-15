@@ -1,4 +1,4 @@
-import { accountCard, adminDashboard, financeReport, formatCode, openAppUrl } from './logic.mjs';
+import { accountCard, adminDashboard, financeReport, formatCode, openAppUrl, supportThreads, telegramDisplay } from './logic.mjs';
 import { storageInfo } from './store.mjs';
 
 function day(ms) {
@@ -19,8 +19,10 @@ function subRows(state, now) {
       return {
         id: sub.id,
         accountId: sub.accountId,
-        who: account.email || account.telegramId || account.id || sub.accountId,
+        who: account.telegramId ? telegramDisplay(account) : account.email || account.id || sub.accountId,
         telegramId: account.telegramId || '',
+        telegramUsername: account.telegramUsername || '',
+        telegramName: account.telegramName || '',
         paidUntil: sub.paidUntil,
         paidUntilText: day(sub.paidUntil),
         deviceLimit: sub.deviceLimit,
@@ -97,6 +99,7 @@ export function homePayload(state, file, opts) {
     promos: promoRows(state),
     fails: failRows(state),
     sessions: opts.sessions || [],
+    support: supportThreads(state).slice(0, 40),
     audit: (state.audit || []).slice(-40).reverse(),
     settings: {
       botToken: s.botToken || '',
@@ -139,6 +142,8 @@ export function userPayload(state, accountId, opts) {
       id: card.account.id,
       email: card.account.email || '',
       telegramId: card.account.telegramId || '',
+      telegramUsername: card.account.telegramUsername || '',
+      telegramName: card.account.telegramName || '',
       createdAt: card.account.createdAt || 0,
       createdText: day(card.account.createdAt),
     },

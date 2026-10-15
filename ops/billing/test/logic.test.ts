@@ -20,9 +20,14 @@ import {
   openAppUrl,
   paymentsCsv,
   redeemPromo,
+  rememberSupportReply,
+  rememberTelegramProfile,
+  closeSupportThread,
   startAdminPanelLogin,
   startDeviceLink,
+  supportThreads,
   takeAdminPanelLogin,
+  telegramDisplay,
   unlinkDeviceTelegram,
 } from '../src/logic.mjs';
 import { emptyState, readState, resolveDbPath, writeState } from '../src/store.mjs';
@@ -186,6 +191,49 @@ describe('bot', () => {
     const reuse = takeAdminPanelLogin(taken.state, { token: again.result.token, now: NOW + 3000 });
     expect(reuse.result.status).toBe('expired');
   });
+
+  it('renews from the app deep link /start renew', () => {
+    const start = paid();
+    start.state.settings.yoomoneyWallet = '410011';
+    start.state.settings.priceRub = 100;
+    const out = botReply(start.state, { chatId: '42', text: '/start renew', now: NOW });
+    expect(out.messages[0].text).toContain('Продлить');
+    expect(out.messages[0].text).toContain('yoomoney.ru');
+  });
+
+  it('stores support text and notifies every admin', () => {
+    const state = emptyState();
+    state.settings.adminTelegramIds = '99, 100';
+    const ask = botReply(state, { chatId: '7', text: '/start support', now: NOW });
+    expect(ask.messages[0].await.kind).toBe('support');
+    const sent = botReply(ask.state, {
+      chatId: '7',
+      text: 'не открывается',
+      now: NOW + 1,
+      awaiting: { kind: 'support' },
+    });
+    expect(sent.state.supportMessages).toHaveLength(1);
+    expect(sent.state.supportMessages[0].direction).toBe('in');
+    const notes = sent.messages.filter((m: { supportNotify?: string }) => m.supportNotify);
+    expect(notes.map((m: { chatId: string }) => m.chatId).sort()).toEqual(['100', '99']);
+  });
+
+  it('delivers an admin reply on the notification back to that user', () => {
+    const state = emptyState();
+    state.settings.adminTelegramIds = '99';
+    const asked = botReply(state, { chatId: '7', text: 'Поддержка не открывается', now: NOW });
+    const mapped = rememberSupportReply(asked.state, {
+      adminChatId: '99',
+      messageId: 55,
+      telegramId: '7',
+      now: NOW,
+    });
+    const reply = botReply(mapped, { chatId: '99', text: 'проверьте код', now: NOW + 2, replyTo: 55 });
+    expect(reply.messages.some((m: { chatId: string; text: string }) => m.chatId === '7' && m.text === 'проверьте код')).toBe(
+      true,
+    );
+    expect(reply.state.supportMessages.some((m: { direction: string }) => m.direction === 'out')).toBe(true);
+  });
 });
 
 describe('device link and grant', () => {
@@ -301,5 +349,58 @@ describe('telegram unlink', () => {
     const out = unlinkDeviceTelegram(state, { deviceId: device, now: NOW + 1 });
     expect(out.result.ok).toBe(true);
     expect(out.state.accounts[0].telegramId).toBe('');
+  });
+});
+
+describe('telegram nickname', () => {
+  it('shows @username next to the numeric id', () => {
+    const saved = rememberTelegramProfile(emptyState(), { telegramId: '55', username: '@Andy', name: 'Andy B' }, NOW);
+    expect(saved.account.telegramUsername).toBe('Andy');
+    expect(telegramDisplay(saved.account)).toBe('@Andy · 55');
+    const again = rememberTelegramProfile(saved.state, { telegramId: '55', username: 'Andy', name: 'Andy B' }, NOW + 1);
+    expect(again.state).toBe(saved.state);
+
+    const found = adminFind(saved.state, '@andy', NOW);
+    expect(found.account.telegramId).toBe('55');
+
+    const withAdmin = {
+      ...saved.state,
+      settings: { ...saved.state.settings, adminTelegramIds: '1' },
+    };
+    const replied = botReply(withAdmin, {
+      chatId: '55',
+      text: 'сломалось',
+      now: NOW + 2,
+      awaiting: { kind: 'support' },
+      from: { username: 'andy', firstName: 'Andy', lastName: '' },
+    });
+    const threads = supportThreads(replied.state);
+    expect(threads[0].username).toBe('andy');
+    expect(threads[0].telegramId).toBe('55');
+    const note = replied.messages.find((m) => String(m.text).indexOf('Поддержка') === 0);
+    expect(note.text).toContain('@andy · 55');
+  });
+
+  it('hides a closed support thread until the user writes again', () => {
+    const state = emptyState();
+    const asked = botReply(state, { chatId: '7', text: '/start support', now: NOW });
+    const sent = botReply(asked.state, {
+      chatId: '7',
+      text: 'не открывается',
+      now: NOW + 1,
+      awaiting: { kind: 'support' },
+    });
+    const closed = closeSupportThread(sent.state, { telegramId: '7', now: NOW + 5 });
+    expect(closed.result.ok).toBe(true);
+    expect(closed.result.text).toContain('завершён');
+    expect(supportThreads(closed.state)).toHaveLength(0);
+    const again = botReply(closed.state, {
+      chatId: '7',
+      text: 'ещё вопрос',
+      now: NOW + 6,
+      awaiting: { kind: 'support' },
+    });
+    expect(supportThreads(again.state)).toHaveLength(1);
+    expect(supportThreads(again.state)[0].lastText).toBe('ещё вопрос');
   });
 });

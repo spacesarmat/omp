@@ -114,7 +114,7 @@ describe('discover bounds and cancellation', () => {
     expect(max).toBeLessThanOrEqual(5);
     expect(max).toBe(5);
   });
-  it('defaults to 24 concurrent probes', async () => {
+  it('defaults to 48 concurrent probes', async () => {
     let inFlight = 0;
     let max = 0;
     await discover({
@@ -125,7 +125,7 @@ describe('discover bounds and cancellation', () => {
         return new Promise<string | null>((r) => setTimeout(() => { inFlight--; r(null); }, 1));
       },
     });
-    expect(max).toBe(24);
+    expect(max).toBe(48);
   });
   it('stops launching and aborts in-flight on cancel', async () => {
     let cancelled = false;

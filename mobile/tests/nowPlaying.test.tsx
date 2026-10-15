@@ -84,7 +84,7 @@ describe('NowPlaying', () => {
     expect(el.textContent).toContain('−25:18');
     expect(el.textContent).toContain('СЕЙЧАС НА ТВ');
     expect(el.textContent).toContain('LG OLED');
-    expect(el.textContent).toContain('Дальше: S02E04 · Граница');
+    expect(el.textContent).not.toContain('Дальше:');
   });
 
   it('shows «Телевизор не отвечает» when stale', () => {
@@ -101,7 +101,6 @@ describe('NowPlaying', () => {
     }
     expect((el.querySelector('input[type="range"]') as HTMLInputElement).disabled).toBe(true);
     expect((byText('Звук и субтитры') as HTMLButtonElement).disabled).toBe(true);
-    expect((byText('Включить') as HTMLButtonElement).disabled).toBe(true);
     click(lbl('Пауза'));
     expect(queue).not.toHaveBeenCalled();
   });
@@ -300,15 +299,23 @@ describe('NowPlaying', () => {
     click(lbl('Пауза'));
     click(lbl('Предыдущая серия'));
     click(lbl('Следующая серия'));
-    click(byText('Включить'));
     expect(sent().map((c) => [c.type, c.d])).toEqual([
       ['skip', -10],
       ['skip', 10],
       ['pause', undefined],
       ['prev', undefined],
       ['next', undefined],
-      ['next', undefined],
     ]);
+  });
+
+  it('tracks sheet is outside the deck transform so it can cover the screen', () => {
+    setState(state());
+    mount(<NowPlaying volume={volume} />);
+    click(byText('Звук и субтитры'));
+    const dialog = el.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog!.closest('.m-now-track')).toBeNull();
+    expect(dialog!.closest('.m-sheet-host')).not.toBeNull();
   });
 
   it('shows play when paused', () => {
@@ -396,16 +403,6 @@ describe('MiniPlayer', () => {
     setState(null);
     mount(<MiniPlayer />);
     expect(el.querySelector('.m-mini')).toBeNull();
-  });
-});
-
-describe('«Дальше»', () => {
-  it('shows a cleaned file-name title in a clamped, wrapping text', () => {
-    setState(state({ next: { title: 'Show.S01E02.1080p.WEB-DL.mkv' } }));
-    mount(<NowPlaying volume={volume} />);
-    const text = el.querySelector('.m-now-next-text')!;
-    expect(text.textContent).toBe('Дальше: Show S01E02 1080p WEB-DL');
-    expect(el.querySelector('.m-now-next button')!.textContent).toBe('Включить');
   });
 });
 
@@ -508,7 +505,7 @@ describe('NowPlaying in English', () => {
       ...o,
     });
 
-  it('header, controls, chapters and the next episode', () => {
+  it('header, controls and chapters', () => {
     setState(en());
     mount(<NowPlaying volume={volume} />);
     expect(el.querySelector('.m-now-kicker')!.textContent).toBe('NOW ON TV');
@@ -519,8 +516,7 @@ describe('NowPlaying in English', () => {
     expect(byText('Audio and subtitles')).toBeTruthy();
     expect(el.querySelector('.m-now-chhead')!.textContent).toBe('Chapters');
     expect(el.querySelector('.m-now-chitem')!.getAttribute('aria-label')).toBe('Opening, from 0:00, playing now');
-    expect(el.querySelector('.m-now-next-text')!.textContent).toBe('Next: S02E04 · Border');
-    expect(byText('Play')).toBeTruthy();
+    expect(el.querySelector('.m-now-next')).toBeNull();
     expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 

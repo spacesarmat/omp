@@ -684,8 +684,6 @@ button, .m-btn {
 }
 /* the mini-player sits 8px above the menu and is --m-mini-h tall */
 .m-remote.mini { --m-used-mini: calc(var(--m-mini-h) + 8px); --dp: min(240px, calc(100vw - 152px), 27vh); }
-.m-remote.kbd { --dp: min(240px, calc(100vw - 152px), 24vh); }
-.m-remote.mini.kbd { --dp: min(240px, calc(100vw - 152px), 20vh); }
 /* Android TV: its own head row (no screen header) */
 .m-remote > .m-lib-head:not(.m-screen-head) { margin-top: 8px; }
 .m-head-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -843,28 +841,90 @@ button, .m-btn {
 .m-dialog-text { font-size: 15px; line-height: 1.45; color: #C9CEDA; }
 
 /* ---- now playing ---- */
-.m-now-deck { height: 100vh; height: 100dvh; overflow: hidden; }
+.m-now-deck { position: relative; height: 100vh; height: 100dvh; overflow: hidden; }
 .m-now-track { will-change: transform; }
 .m-now-track.anim { transition: transform .28s ease; }
 .m-now-pane { height: 100vh; height: 100dvh; overflow-x: hidden; overflow-y: auto; }
-.m-now-deck .m-now-pane > .m-screen { min-height: 100%; }
+/* idle edge hints: which way to swipe from «Сейчас играет» */
+.m-now-edge {
+  position: absolute; left: 50%; z-index: 2; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 999px;
+  background: rgba(42, 47, 58, 0.92); color: var(--muted);
+  font-size: 13px; font-weight: 600; pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+.m-now-edge-top { top: calc(env(safe-area-inset-top) + 56px); }
+.m-now-edge-bot { bottom: calc(env(safe-area-inset-bottom) + 12px); }
+.m-now-edge-chev { display: flex; color: var(--accent); }
+.m-now-edge-chev.up { transform: rotate(180deg); }
+.m-now-edge .m-spin, .m-now-edge svg { flex-shrink: 0; }
+/* active drag: highlight the destination */
+.m-now-peek {
+  position: absolute; left: 50%; z-index: 3;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  min-width: 160px; padding: 16px 20px; border-radius: 20px;
+  background: #3A3320; color: var(--accent);
+  font-size: 14px; font-weight: 700; text-align: center; pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(245, 183, 0, 0.35), 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+.m-now-peek-remote { top: calc(env(safe-area-inset-top) + 56px); }
+.m-now-peek-episodes { bottom: calc(env(safe-area-inset-bottom) + 56px); }
+.m-now-peek-now { top: 42%; }
+.m-now-peek-icon {
+  width: 52px; height: 52px; border-radius: 26px; background: rgba(245, 183, 0, 0.16);
+  display: flex; align-items: center; justify-content: center;
+}
+.m-now-peek-label { max-width: 200px; line-height: 1.25; }
+.m-now-deck[data-peek='remote'] .m-now-track,
+.m-now-deck[data-peek='episodes'] .m-now-track { filter: brightness(0.78); }
+.m-now-deck .m-now-pane > .m-screen { min-height: 100%; height: 100%; box-sizing: border-box; }
 .m-now-eps { display: flex; flex-direction: column; gap: 8px; padding: calc(env(safe-area-inset-top) + 16px) 16px 24px; }
 .m-now-eps h2 { margin: 0 0 4px; font-size: 20px; }
-.m-now-ep { min-height: 52px; padding: 10px 14px; border-radius: 12px; background: var(--panel); touch-action: pan-y; }
+.m-now-ep-hint { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; color: var(--accent); }
+.m-now-ep-hint svg { flex-shrink: 0; color: var(--accent); }
+.m-now-ep-wrap { position: relative; border-radius: 12px; overflow: hidden; background: #2A2414; }
+.m-now-ep-rail {
+  position: absolute; inset: 0; z-index: 0;
+  display: flex; align-items: center; gap: 10px; padding: 0 18px;
+  color: var(--accent); font-size: 14px; font-weight: 700; pointer-events: none;
+}
+.m-now-ep-rail.left { justify-content: flex-start; }
+.m-now-ep-rail.right { justify-content: flex-end; flex-direction: row-reverse; }
+.m-now-ep-rail-icon {
+  width: 36px; height: 36px; border-radius: 18px; background: var(--accent); color: #14161C;
+  display: flex; align-items: center; justify-content: center;
+}
+.m-now-ep { position: relative; z-index: 1; min-height: 52px; padding: 10px 10px 10px 12px; border-radius: 12px; background: var(--panel); touch-action: pan-y;
+  display: flex; align-items: center; gap: 8px; }
+.m-now-ep.dragging { box-shadow: 0 0 0 1px rgba(245, 183, 0, 0.45); }
 .m-now-ep.on { background: #3A3320; color: var(--accent); }
-.m-now-ep-title { display: block; overflow-wrap: anywhere; }
-.m-now { max-width: 100%; overflow-x: hidden; display: flex; flex-direction: column; gap: 20px; padding-top: calc(env(safe-area-inset-top) + 16px); padding-bottom: 24px; }
-.m-now-head { display: flex; align-items: center; gap: 10px; }
+.m-now-ep-chev { flex-shrink: 0; display: flex; color: var(--accent); opacity: 0.45; }
+.m-now-ep-chev.left { transform: rotate(90deg); }
+.m-now-ep-chev.right { transform: rotate(-90deg); }
+.m-now-ep.on .m-now-ep-chev, .m-now-ep.dragging .m-now-ep-chev { opacity: 0.9; }
+.m-now-ep-title { flex: 1 1 0; min-width: 0; display: block; overflow-wrap: anywhere; }
+/* no app tab bar here — only the system gesture/nav strip */
+.m-now {
+  max-width: 100%; overflow-x: hidden; display: flex; flex-direction: column; gap: 12px;
+  height: 100%; min-height: 100%; box-sizing: border-box;
+  padding-top: calc(env(safe-area-inset-top) + 12px);
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+.m-now-head { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .m-now-status { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .m-now-kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--muted); }
-.m-now-tv { font-size: 14px; color: #8FE39A; }
+.m-now-tv { max-width: 100%; font-size: 14px; color: #8FE39A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-now-tv.warn { color: var(--accent); }
 .m-now-empty { display: flex; flex-direction: column; gap: 16px; align-items: stretch; margin-top: 40px; text-align: center; }
 .m-now-poster {
   max-width: 100%; overflow: hidden; overflow-wrap: anywhere; box-sizing: border-box;
-  align-self: center; width: 230px; height: 330px; border-radius: 18px; display: flex; align-items: flex-end; padding: 18px;
+  flex: 1 1 auto; align-self: center; width: min(72vw, 280px); min-height: 160px; max-height: min(46dvh, 380px);
+  aspect-ratio: 2 / 3; height: auto; border-radius: 18px; display: flex; align-items: flex-end; padding: 18px;
   font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 22px; line-height: 1.1;
+  background-size: cover; background-position: center;
 }
+.m-now-titles, .m-now-seek, .m-now-controls, .m-now-row, .m-now-chapter, .m-now-chlist { flex-shrink: 0; }
 .m-now-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .m-now-title, .m-now-sub { min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .m-now-title { font-size: 22px; font-weight: 700; }
@@ -906,9 +966,6 @@ button, .m-btn {
 }
 .m-now-vol { padding: 0; }
 .m-now-vol button { flex: 1 1 0; height: 48px; border: none; background: none; font-size: 22px; font-weight: 700; }
-.m-now-next { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--panel); }
-.m-now-next span { flex: 1 1 0; min-width: 0; font-size: 13px; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; word-break: break-word; }
-.m-now-next button { flex-shrink: 0; height: 44px; min-height: 44px; padding: 0 14px; border: none; border-radius: 10px; background: var(--panel-2); font-size: 13px; font-weight: 700; }
 
 .m-track { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: none; border-radius: 12px; background: var(--panel-2); text-align: left; font-size: 15px; font-weight: 700; }
 .m-track.on { background: #2A2614; }
@@ -933,7 +990,7 @@ button, .m-btn {
 .m-mini-btn.play { background: var(--accent); color: var(--bg); }
 .m-track-none { padding: 10px 0; font-size: 14px; color: var(--muted); }
 .m-mini-sub.warn { color: var(--accent); }
-.m-mini-btn:disabled, .m-now-skip:disabled, .m-now-play:disabled, .m-now-next button:disabled, .m-now-wide:disabled { opacity: 0.4; }
+.m-mini-btn:disabled, .m-now-skip:disabled, .m-now-play:disabled, .m-now-wide:disabled { opacity: 0.4; }
 .m-mini-line { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #2A2F3A; }
 .m-mini-line div { height: 3px; background: var(--accent); }
 
@@ -1324,6 +1381,26 @@ body::before {
 html.m-kb-open { --m-nav-reserve: 0px; }
 html.m-kb-open .m-nav, html.m-kb-open .m-mini, html.m-kb-open .m-mini-pad { display: none; }
 html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom)); }
+/* TV typing: overlay on top of the remote — controls stay full size underneath */
+.m-remote-type-host { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+.m-remote-type-scrim {
+  pointer-events: auto; position: absolute; inset: 0; width: 100%; height: 100%;
+  border: none; border-radius: 0; background: rgba(0, 0, 0, 0.45);
+}
+.m-remote-type-bar {
+  pointer-events: auto; position: absolute; left: 12px; right: 12px;
+  /* above the tab bar; when the IME is open --m-nav-reserve is 0 and --kb-inset is the keyboard */
+  bottom: calc(var(--kb-inset, 0px) + var(--m-nav-reserve) + 8px);
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px; border-radius: 16px; background: var(--panel);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+.m-remote-type { flex: 1 1 0; min-width: 0; width: auto; margin: 0; box-sizing: border-box; }
+.m-remote-type-close {
+  flex-shrink: 0; width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0;
+  border: none; border-radius: 12px; background: var(--panel-2);
+  display: flex; align-items: center; justify-content: center;
+}
 
 /* one compact header for the bottom tabs («Новое», «Добавить», «Пульт», «Настройки»): a 22px display title,
    then the round 44px icon buttons (the TV button look of «Мои») */

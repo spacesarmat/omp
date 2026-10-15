@@ -12,9 +12,17 @@ import { sharedResume } from '../lib/sharedProgress';
 import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { useBackHandler } from '../ui/backStack';
+import { Icon, ICONS } from '../ui/Icon';
 import { swipeBlocked } from '../ui/tabSwipe';
 import { filesOf, useTvLaunch } from '../watch';
 import { deckPaneAfter, episodeSwipePlays, type DeckPane } from './nowDeck';
+
+/** Where a vertical drag from the current pane is heading (for the peek chip). */
+export function deckPeekToward(pane: DeckPane, shift: number): 'remote' | 'episodes' | 'now' | null {
+  if (Math.abs(shift) < 16) return null;
+  if (shift > 0) return pane === 'now' ? 'remote' : pane === 'episodes' ? 'now' : null;
+  return pane === 'now' ? 'episodes' : pane === 'remote' ? 'now' : null;
+}
 
 function ordered(files: TorrentFile[]): TorrentFile[] {
   return files.slice().sort((a, b) => {
@@ -81,9 +89,33 @@ function EpisodeRow({ file, on, onPlay }: { file: TorrentFile; on: boolean; onPl
       node.removeEventListener('touchcancel', cancel);
     };
   }, [file]);
+  const pulling = Math.abs(slide) > 12;
+  const strength = Math.min(1, Math.abs(slide) / 72);
   return (
-    <div ref={ref} class={'m-now-ep' + (on ? ' on' : '')} style={slide ? { transform: 'translateX(' + slide + 'px)' } : undefined}>
-      <span class="m-now-ep-title">{label}</span>
+    <div class={'m-now-ep-wrap' + (pulling ? ' pulling' : '') + (on ? ' on' : '')}>
+      <div
+        class={'m-now-ep-rail' + (slide < 0 ? ' right' : slide > 0 ? ' left' : '')}
+        style={{ opacity: pulling ? 0.35 + strength * 0.65 : 0 }}
+        aria-hidden="true"
+      >
+        <span class="m-now-ep-rail-icon" style={{ transform: 'scale(' + (0.85 + strength * 0.2) + ')' }}>
+          <Icon d={ICONS.play} size={22} />
+        </span>
+        <span class="m-now-ep-rail-label">{t('now.swipePlay')}</span>
+      </div>
+      <div
+        ref={ref}
+        class={'m-now-ep' + (on ? ' on' : '') + (pulling ? ' dragging' : '')}
+        style={slide ? { transform: 'translateX(' + slide + 'px)' } : undefined}
+      >
+        <span class="m-now-ep-chev left" aria-hidden="true">
+          <Icon d={ICONS.collapse} size={14} />
+        </span>
+        <span class="m-now-ep-title">{label}</span>
+        <span class="m-now-ep-chev right" aria-hidden="true">
+          <Icon d={ICONS.collapse} size={14} />
+        </span>
+      </div>
     </div>
   );
 }
@@ -101,7 +133,10 @@ function Episodes({ hash, fileId, onPlay }: { hash: string; fileId: number; onPl
         <p class="m-small m-muted">{t('titleCard.noEpisodes')}</p>
       ) : (
         <>
-          <p class="m-small m-muted">{t('now.swipeEpisode')}</p>
+          <p class="m-now-ep-hint m-small m-muted">
+            <Icon d={ICONS.play} size={14} />
+            <span>{t('now.swipeEpisode')}</span>
+          </p>
           {files.map((f) => (
             <EpisodeRow key={f.id} file={f} on={f.id === fileId} onPlay={onPlay} />
           ))}
@@ -252,8 +287,10 @@ export function NowDeck({
   };
 
   const index = pane === 'remote' ? 0 : pane === 'episodes' ? 2 : 1;
+  const toward = deckPeekToward(pane, shift);
+  const peekStrength = Math.min(1, Math.abs(shift) / Math.max(80, height * 0.18));
   return (
-    <div class="m-now-deck" ref={stage} data-pane={pane}>
+    <div class="m-now-deck" ref={stage} data-pane={pane} data-peek={toward || ''}>
       <div
         class={'m-now-track' + (anim ? ' anim' : '')}
         style={{ transform: 'translateY(' + (-index * height + shift) + 'px)' }}
@@ -268,6 +305,48 @@ export function NowDeck({
           {opened.episodes || pane === 'episodes' ? <Episodes hash={hash} fileId={fileId} onPlay={play} /> : null}
         </section>
       </div>
+      {pane === 'now' && !toward && (
+        <>
+          <div class="m-now-edge m-now-edge-top" aria-hidden="true">
+            <span class="m-now-edge-chev">
+              <Icon d={ICONS.collapse} size={16} />
+            </span>
+            <Icon d={ICONS.remote} size={18} />
+            <span>{t('now.swipeRemote')}</span>
+          </div>
+          <div class="m-now-edge m-now-edge-bot" aria-hidden="true">
+            <Icon d={ICONS['view-list']} size={18} />
+            <span>{t('now.swipeEpisodes')}</span>
+            <span class="m-now-edge-chev up">
+              <Icon d={ICONS.collapse} size={16} />
+            </span>
+          </div>
+        </>
+      )}
+      {toward && (
+        <div
+          class={'m-now-peek m-now-peek-' + toward}
+          style={{
+            opacity: 0.45 + peekStrength * 0.55,
+            transform: 'translateX(-50%) scale(' + (0.92 + peekStrength * 0.08) + ')',
+          }}
+          aria-hidden="true"
+        >
+          <span class="m-now-peek-icon">
+            <Icon
+              d={toward === 'remote' ? ICONS.remote : toward === 'episodes' ? ICONS['view-list'] : ICONS.collapse}
+              size={28}
+            />
+          </span>
+          <span class="m-now-peek-label">
+            {toward === 'remote'
+              ? t('now.swipeRemoteHint')
+              : toward === 'episodes'
+                ? t('now.swipeEpisodesHint')
+                : t('now.kicker')}
+          </span>
+        </div>
+      )}
       {launch.sheet}
     </div>
   );

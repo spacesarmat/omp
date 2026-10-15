@@ -2,6 +2,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.18
+
+- [phone] TorrServer search on start: native multithreaded TCP scan of the /24 (ports 8090 and 5665), then a short /echo only on open ports
+- [phone] Now on TV: swipe hints (remote / episodes), episode swipe with highlight; remote settings open from the deck too
+- [phone] TV keyboard overlays the remote without shrinking the pad
+- [billing] support chat shows the Telegram nick next to the user id; “End dialog” notifies the bot
+
 ## 0.20.0-beta.17
 
 - [phone] Jackett and JacRed on one subscription: keys in the app, search over HTTPS

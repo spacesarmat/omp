@@ -3,6 +3,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { NowPlaying } from '../src/screens/NowPlaying';
 import { deckPaneAfter, episodeSwipePlays } from '../src/screens/nowDeck';
+import { deckPeekToward } from '../src/screens/nowPager';
 import { nowPlaying, lastSeen, setPlayerLinkDeps } from '../src/tv/playerLink';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { cancelWarmUp } from '../src/tv/tvClient';
@@ -43,6 +44,14 @@ describe('deck pages', () => {
     expect(episodeSwipePlays(-80, 4, 200)).toBe(true);
     expect(episodeSwipePlays(80, 4, 200)).toBe(true);
     expect(episodeSwipePlays(10, 40, 200)).toBe(false);
+  });
+
+  it('peek target follows the drag direction', () => {
+    expect(deckPeekToward('now', 40)).toBe('remote');
+    expect(deckPeekToward('now', -40)).toBe('episodes');
+    expect(deckPeekToward('now', 8)).toBeNull();
+    expect(deckPeekToward('remote', -40)).toBe('now');
+    expect(deckPeekToward('episodes', 40)).toBe('now');
   });
 });
 
@@ -105,6 +114,8 @@ describe('NowPlaying swipes', () => {
 
   it('swipe down reveals the remote from above, swipe up the episodes of the release', async () => {
     expect(pane()).toBe('now');
+    expect(el.querySelector('.m-now-edge-top')!.textContent).toContain('Пульт');
+    expect(el.querySelector('.m-now-edge-bot')!.textContent).toContain('Серии');
     expect(el.querySelector('[data-pane="remote"]')!.textContent).toBe('');
     swipe(card(), [200, 100], [200, 500]);
     expect(pane()).toBe('remote');

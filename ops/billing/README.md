@@ -31,32 +31,17 @@ Jackett с хоста не торчит наружу — к нему ходит 
 ## Публичный HTTPS — Cloudflare Tunnel
 
 Домен: **omp-player.online** → хост **`https://billing.omp-player.online`**.  
-Туннель `omp-billing` на NAS (profile `tunnel`) уже есть. Порты роутера не открываем.
+Коннектор — приложение ZimaOS **Cloudflared** (`wisdomsky/cloudflared-web`, сеть host). Панель: `http://192.168.1.191:14333/`. Порты роутера не открываем. В биллинге своего cloudflared нет.
 
-### Когда NS Cloudflare станут Active
+В веб-морде Cloudflared вставить токен туннеля `omp-billing`. В Zero Trust у публичного hostname URL: `http://127.0.0.1:8787` (на NAS это опубликованный порт панели).
 
-1. Zero Trust → **Networks** → **Tunnels** → `omp-billing` → **Public Hostname** → Add:
-   - Subdomain: `billing`
-   - Domain: `omp-player.online`
-   - Type: **HTTP**
-   - URL: `http://127.0.0.1:8787`
-2. Проверка: `https://billing.omp-player.online/health` → `{"ok":true}`
-3. В панели **publicOrigin** = `https://billing.omp-player.online` (если ещё не так)
-4. ЮMoney: `https://billing.omp-player.online/v1/yoomoney`
+Проверка: `https://billing.omp-player.online/health` → `{"ok":true}`.
 
 ### Локально и из мира
 
 - Админка в LAN всегда: `http://192.168.1.191:8787/admin`
-- Приложение пробует `https://billing.omp-player.online`, при недоступности (DNS ещё не встал) — `http://192.168.1.191:8787`
-- Пока NS не Active: LAN и коды работают; кнопки бота с https-ссылками заработают после DNS
-
-Токен туннеля: `/DATA/AppData/omp-billing/.env` (`CLOUDFLARE_TUNNEL_TOKEN=…`). В git не коммитить. Пример: `env.tunnel.example`.
-
-```
-docker compose -f /DATA/AppData/omp-billing/app/docker-compose.yml \
-  --env-file /DATA/AppData/omp-billing/.env \
-  --profile tunnel up -d
-```
+- Приложение пробует `https://billing.omp-player.online`, при недоступности — `http://192.168.1.191:8787`
+- ЮMoney: `https://billing.omp-player.online/v1/yoomoney`
 
 ## Настройки панели
 

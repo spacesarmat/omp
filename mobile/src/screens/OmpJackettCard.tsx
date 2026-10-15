@@ -167,22 +167,32 @@ export function OmpJackettCard() {
 
         {session && session.token ? (
           <>
-            <div class="m-src-row">
-              {t('sources.billing.connected', {
-                date: day((account && account.paidUntil) || session.paidUntil),
+            <div class="m-src-row" data-paid-until={day((account && account.paidUntil) || session.paidUntil)}>
+              {t('sources.billing.paidUntil', {
+                date: day((account && account.paidUntil) || session.paidUntil) || '—',
               })}
             </div>
-            <button
-              type="button"
-              class="m-btn m-btn-secondary"
-              onClick={() => {
-                clearBilling();
-                setSession(null);
-                setAccount(null);
-              }}
-            >
-              {t('sources.billing.disconnect')}
-            </button>
+            <div class="m-src-row" style="gap: 8px; flex-wrap: wrap">
+              <button
+                type="button"
+                class="m-btn m-btn-primary"
+                data-action="renew"
+                onClick={() => window.open(BILLING_BOT_URL + '?start=renew', '_system')}
+              >
+                {t('sources.billing.renew')}
+              </button>
+              <button
+                type="button"
+                class="m-btn m-btn-secondary"
+                onClick={() => {
+                  clearBilling();
+                  setSession(null);
+                  setAccount(null);
+                }}
+              >
+                {t('sources.billing.disconnect')}
+              </button>
+            </div>
           </>
         ) : (
           <div class="m-field">

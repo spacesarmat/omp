@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -88,6 +88,42 @@ function AlertsPanel({ alerts }: { alerts?: { level: string; text: string; accou
   );
 }
 
+function Logo({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" className={className} aria-hidden="true">
+      <rect x="0" y="0" width="100" height="100" rx="20" fill="#181B22" />
+      <g transform="translate(9 9) scale(0.82)">
+        <rect x="14" y="22" width="72" height="56" rx="10" fill="none" stroke="#F5B700" strokeWidth="7" />
+        <g fill="#F5B700">
+          <rect x="23" y="29" width="6" height="5" rx="1.5" />
+          <rect x="35" y="29" width="6" height="5" rx="1.5" />
+          <rect x="47" y="29" width="6" height="5" rx="1.5" />
+          <rect x="59" y="29" width="6" height="5" rx="1.5" />
+          <rect x="71" y="29" width="6" height="5" rx="1.5" />
+          <rect x="23" y="66" width="6" height="5" rx="1.5" />
+          <rect x="35" y="66" width="6" height="5" rx="1.5" />
+          <rect x="47" y="66" width="6" height="5" rx="1.5" />
+          <rect x="59" y="66" width="6" height="5" rx="1.5" />
+          <rect x="71" y="66" width="6" height="5" rx="1.5" />
+        </g>
+        <path d="M44 41 L59 50 L44 59 Z" fill="#E8EAF0" stroke="#E8EAF0" strokeWidth="4" strokeLinejoin="round" />
+      </g>
+    </svg>
+  );
+}
+
+function Brand({ subtitle }: { subtitle?: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <Logo className="h-10 w-10 shrink-0" />
+      <div>
+        <h1 className="text-2xl font-bold leading-none">OMP Billing</h1>
+        {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+      </div>
+    </div>
+  );
+}
+
 function Login() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -132,12 +168,19 @@ function Login() {
     setBusy(true);
     setErr('');
     setTgStatus('');
-    const res = await api<{ ok?: boolean; error?: string; token?: string; deepLink?: string }>('/admin/login/telegram', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', Accept: 'application/json' },
-      body: '{}',
-    });
+    const res = await api<{ ok?: boolean; error?: string; token?: string; deepLink?: string; status?: number }>(
+      '/admin/login/telegram',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Accept: 'application/json' },
+        body: '{}',
+      },
+    );
     setBusy(false);
+    if (res.status === 403) {
+      setErr('Панель на NAS ещё не перезапущена — сервер не знает вход через Telegram.');
+      return;
+    }
     if (!res.ok || !res.token || !res.deepLink) {
       setErr(res.error || 'Не удалось начать вход через Telegram');
       return;
@@ -161,8 +204,9 @@ function Login() {
   }
   return (
     <main className="mx-auto max-w-sm px-4 py-16">
-      <h1 className="mb-1 text-2xl font-bold">OMP Billing</h1>
-      <p className="mb-6 text-muted-foreground">Вход через Telegram из списка adminTelegramIds</p>
+      <div className="mb-6">
+        <Brand subtitle="Вход через Telegram из списка adminTelegramIds" />
+      </div>
       {err ? <Alert variant="destructive" className="mb-4">{err}</Alert> : null}
       {tgStatus ? <Alert className="mb-4">{tgStatus}</Alert> : null}
       <Card>
@@ -198,6 +242,191 @@ function Login() {
   );
 }
 
+type SupportThread = {
+  telegramId: string;
+  username?: string;
+  name?: string;
+  count: number;
+  lastText: string;
+  lastAt: number;
+  lastDirection: string;
+};
+
+type SupportMsg = { id: string; text: string; direction: string; at: number; via?: string };
+
+function sameMessages(a: SupportMsg[], b: SupportMsg[]) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].id !== b[i].id || a[i].text !== b[i].text) return false;
+  }
+  return true;
+}
+
+function when(ms: number) {
+  if (!ms) return '';
+  const d = new Date(ms);
+  const p = (n: number) => (n < 10 ? '0' : '') + n;
+  return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+function personLabel(id: string, username?: string, name?: string) {
+  const nick = username ? '@' + username.replace(/^@/, '') : name || '';
+  if (nick && id) return nick + ' · ' + id;
+  return nick || id;
+}
+
+function SupportPanel({
+  csrf,
+  threads,
+  onSent,
+}: {
+  csrf: string;
+  threads: SupportThread[];
+  onSent: () => void;
+}) {
+  const [id, setId] = useState(threads[0]?.telegramId || '');
+  const [messages, setMessages] = useState<SupportMsg[]>([]);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const box = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+
+  useEffect(() => {
+    stick.current = true;
+    if (!id) {
+      setMessages([]);
+      return;
+    }
+    let stop = false;
+    async function pull() {
+      const r = await api<{ messages?: SupportMsg[] }>('/admin/api/support?telegramId=' + encodeURIComponent(id));
+      if (stop) return;
+      const next = r.messages || [];
+      setMessages((prev) => (sameMessages(prev, next) ? prev : next));
+    }
+    void pull();
+    const timer = window.setInterval(() => void pull(), 2500);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
+  }, [id]);
+
+  useEffect(() => {
+    const el = box.current;
+    if (!el || !stick.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    const body = text.trim();
+    if (!id || !body || busy) return;
+    setBusy(true);
+    setErr('');
+    const res = await post('/admin/support', csrf, { telegramId: id, text: body });
+    setBusy(false);
+    if (!res.ok || res.flash?.error) {
+      setErr(res.flash?.error || 'Не отправилось');
+      return;
+    }
+    setText('');
+    stick.current = true;
+    const r = await api<{ messages?: SupportMsg[] }>('/admin/api/support?telegramId=' + encodeURIComponent(id));
+    setMessages(r.messages || []);
+    onSent();
+  }
+
+  useEffect(() => {
+    if (!id) return;
+    if (!threads.some((row) => row.telegramId === id)) setId(threads[0]?.telegramId || '');
+  }, [threads, id]);
+
+  async function closeDialog() {
+    if (!id || busy) return;
+    if (!window.confirm('Завершить диалог? Пользователь получит уведомление в боте.')) return;
+    setBusy(true);
+    setErr('');
+    const res = await post('/admin/support-close', csrf, { telegramId: id });
+    setBusy(false);
+    if (!res.ok || res.flash?.error) {
+      setErr(res.flash?.error || 'Не завершилось');
+      return;
+    }
+    onSent();
+  }
+
+  const active = threads.find((row) => row.telegramId === id);
+
+  return (
+    <div className="grid gap-4 md:grid-cols-[240px_1fr]">
+      <Card>
+        <CardHeader>
+          <CardTitle>Диалоги</CardTitle>
+          <CardDescription>Сообщения из бота</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {threads.length === 0 ? <p className="text-sm text-muted-foreground">Пока пусто</p> : null}
+          {threads.map((row) => (
+            <button
+              key={row.telegramId}
+              type="button"
+              className={
+                'block w-full rounded-md px-2 py-2 text-left text-sm ' +
+                (row.telegramId === id ? 'bg-muted' : 'hover:bg-muted/60')
+              }
+              onClick={() => setId(row.telegramId)}
+            >
+              <div className="font-medium">{personLabel(row.telegramId, row.username, row.name)}</div>
+              <div className="truncate text-xs text-muted-foreground">{row.lastText}</div>
+            </button>
+          ))}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{id ? personLabel(id, active?.username, active?.name) : 'Выберите диалог'}</CardTitle>
+          <CardDescription>Ответ уходит этому пользователю в бота. Ответ на уведомление в Telegram делает то же самое.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div
+            ref={box}
+            className="max-h-80 space-y-2 overflow-auto"
+            onScroll={() => {
+              const el = box.current;
+              if (!el) return;
+              stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+            }}
+          >
+            {messages.map((m) => (
+              <div key={m.id} className={m.direction === 'out' ? 'text-right' : ''}>
+                <div className="text-xs text-muted-foreground">
+                  {m.direction === 'out' ? 'Админ' : 'Пользователь'} · {when(m.at)}
+                  {m.via === 'panel' ? ' · панель' : ''}
+                </div>
+                <div className="inline-block max-w-[90%] whitespace-pre-wrap rounded-md bg-muted px-3 py-2 text-sm">{m.text}</div>
+              </div>
+            ))}
+          </div>
+          {err ? <Alert variant="destructive">{err}</Alert> : null}
+          <form className="space-y-2" onSubmit={(e) => void send(e)}>
+            <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Ответ пользователю" rows={3} />
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={busy || !id || !text.trim()}>
+                {busy ? 'Отправляю…' : 'Ответить'}
+              </Button>
+              <Button type="button" variant="secondary" disabled={busy || !id} onClick={() => void closeDialog()}>
+                Завершить диалог
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 type HomeData = {
   csrf: string;
   sessionId: string;
@@ -222,8 +451,9 @@ type HomeData = {
     status: string;
   }[];
   promos?: { id: string; code: string; days: number; uses: number; maxUses: number; revoked: boolean }[];
-  fails?: { atText: string; reason: string; deviceId: string }[];
+  fails?: { at?: number; atText: string; reason: string; deviceId: string }[];
   sessions?: { id: string; lastSeen?: number }[];
+  support?: SupportThread[];
   audit?: { at?: number; action: string; detail: string }[];
   settings?: Record<string, string | number>;
   storage?: { engine: string; path: string; bytes: number };
@@ -232,7 +462,7 @@ type HomeData = {
 type UserData = {
   csrf: string;
   flash?: Flash;
-  account: { id: string; email: string; telegramId: string; createdText: string };
+  account: { id: string; email: string; telegramId: string; telegramUsername?: string; telegramName?: string; createdText: string };
   subscription?: { paidUntilText: string; active: boolean; deviceLimit: number };
   codes?: { id: string; formatted?: string; bound: boolean; deviceId?: string; openUrl?: string }[];
 };
@@ -280,6 +510,25 @@ export function App() {
     void reload();
   }, []);
 
+  useEffect(() => {
+    if (auth !== true || tab !== 'support') return;
+    let stop = false;
+    const timer = window.setInterval(() => {
+      void api<HomeData>('/admin/api/home').then((home) => {
+        if (stop) return;
+        if (home.auth === false) {
+          setAuth(false);
+          return;
+        }
+        setData((prev) => (prev ? { ...prev, support: home.support || [] } : prev));
+      });
+    }, 3000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
+  }, [auth, tab]);
+
   async function run(path: string, fields: Record<string, unknown> = {}) {
     const csrf = user?.csrf || data?.csrf || '';
     const res = await post(path, csrf, fields);
@@ -316,7 +565,8 @@ export function App() {
               <span className="text-muted-foreground">Telegram</span>{' '}
               {user.account.telegramId ? (
                 <>
-                  <Badge variant="ok">{user.account.telegramId}</Badge> <CopyBtn value={user.account.telegramId} />
+                  <Badge variant="ok">{personLabel(user.account.telegramId, user.account.telegramUsername, user.account.telegramName)}</Badge>{' '}
+                  <CopyBtn value={user.account.telegramId} />
                 </>
               ) : (
                 '—'
@@ -400,24 +650,18 @@ export function App() {
   return (
     <main className="mx-auto max-w-5xl space-y-4 px-4 py-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">OMP Billing</h1>
-          <p className="text-sm text-muted-foreground">
-            React + shadcn · {d.storage?.engine || '—'} · {d.storage ? Math.round((d.storage.bytes || 0) / 1024) + ' КБ' : ''}
-          </p>
-        </div>
+        <Brand
+          subtitle={
+            'React + shadcn · ' +
+            (d.storage?.engine || '—') +
+            (d.storage ? ' · ' + Math.round((d.storage.bytes || 0) / 1024) + ' КБ' : '')
+          }
+        />
         <Button variant="secondary" onClick={() => void run('/admin/logout')}>
           Выйти
         </Button>
       </header>
       <FlashBox flash={d.flash} />
-      {(d.alerts || []).length > 0 ? (
-        <div className="space-y-2" aria-label="Алерты">
-          {d.alerts!.map((a, i) => (
-            <AlertItem key={i} a={a} />
-          ))}
-        </div>
-      ) : null}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
@@ -429,12 +673,22 @@ export function App() {
               </Badge>
             ) : null}
           </TabsTrigger>
+          <TabsTrigger value="support">
+            Поддержка
+            {(d.support || []).length > 0 ? (
+              <Badge className="ml-2">{(d.support || []).length}</Badge>
+            ) : null}
+          </TabsTrigger>
           <TabsTrigger value="subs">Подписки</TabsTrigger>
           <TabsTrigger value="finance">Финансы</TabsTrigger>
           <TabsTrigger value="promos">Промо</TabsTrigger>
           <TabsTrigger value="settings">Настройки</TabsTrigger>
           <TabsTrigger value="security">Доступ</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="support">
+          <SupportPanel csrf={d.csrf} threads={d.support || []} onSent={() => void reload()} />
+        </TabsContent>
 
         <TabsContent value="home" className="space-y-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -456,9 +710,17 @@ export function App() {
             <CardHeader>
               <CardTitle>Найти</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col gap-2 sm:flex-row">
-              <Input placeholder="Telegram / email / код / id" value={q} onChange={(e) => setQ(e.target.value)} />
-              <Button onClick={() => void run('/admin/find', { q })}>Найти</Button>
+            <CardContent>
+              <form
+                className="flex flex-col gap-2 sm:flex-row"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void run('/admin/find', { q });
+                }}
+              >
+                <Input placeholder="Telegram / email / код / id" value={q} onChange={(e) => setQ(e.target.value)} />
+                <Button type="submit">Найти</Button>
+              </form>
             </CardContent>
           </Card>
           <AlertsPanel alerts={d.alerts} />
@@ -608,7 +870,7 @@ export function App() {
                 <TableBody>
                   {(d.finance?.payments || []).map((p, i) => (
                     <TableRow key={i}>
-                      <TableCell>{p.at ? new Date(p.at).toISOString().slice(0, 16).replace('T', ' ') : '—'}</TableCell>
+                      <TableCell>{p.at ? when(p.at) : '—'}</TableCell>
                       <TableCell>{p.amount}</TableCell>
                       <TableCell>
                         {p.accountId ? (
@@ -835,7 +1097,7 @@ function SecurityCard({
             <TableHeader>
               <TableRow>
                 <TableHead>Id</TableHead>
-                <TableHead>Last seen</TableHead>
+                <TableHead>Активность</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
@@ -845,7 +1107,7 @@ function SecurityCard({
                   <TableCell>
                     {s.id.slice(0, 8)}…{s.id === sessionId ? ' (эта)' : ''}
                   </TableCell>
-                  <TableCell>{s.lastSeen ? new Date(s.lastSeen).toISOString().slice(0, 16).replace('T', ' ') : '—'}</TableCell>
+                  <TableCell>{s.lastSeen ? when(s.lastSeen) : '—'}</TableCell>
                   <TableCell>
                     {s.id !== sessionId ? (
                       <Button size="sm" variant="secondary" onClick={() => void run('/admin/session-revoke', { sessionId: s.id })}>
@@ -867,7 +1129,7 @@ function SecurityCard({
           <ul className="space-y-1 text-sm">
             {audit.map((a, i) => (
               <li key={i}>
-                <span className="text-muted-foreground">{a.at ? new Date(a.at).toISOString().slice(0, 16).replace('T', ' ') : ''}</span>{' '}
+                <span className="text-muted-foreground">{a.at ? when(a.at) : ''}</span>{' '}
                 {a.action} {a.detail}
               </li>
             ))}
@@ -882,7 +1144,7 @@ function SecurityCard({
           <ul className="space-y-1 text-sm">
             {fails.map((f, i) => (
               <li key={i}>
-                {f.atText} · {f.reason} · {f.deviceId}
+                {f.at ? when(f.at) : f.atText} · {f.reason} · {f.deviceId}
               </li>
             ))}
           </ul>

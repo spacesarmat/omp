@@ -3,11 +3,15 @@ import {
   adminFind,
   adminSummary,
   appSchemeUrl,
+  adminChatIds,
+  appendSupportMessage,
   confirmAdminPanelLogin,
   confirmDeviceLink,
   createPromo,
   ensureTelegramAccount,
   formatCode,
+  rememberTelegramProfile,
+  telegramDisplay,
   grantDays,
   isAdminChat,
   openAppUrl,
@@ -15,6 +19,7 @@ import {
   redeemPromo,
   revealableCode,
   subscriptionView,
+  supportReplyTarget,
   unbindDevice,
 } from './logic.mjs';
 
@@ -31,6 +36,7 @@ export const BTN = {
   promo: 'Промокод',
   price: 'Цены',
   unlink: 'Отвязать',
+  support: 'Поддержка',
   admin: 'Админ',
 };
 
@@ -47,7 +53,7 @@ export function mainKeyboard(isAdmin) {
     [{ text: BTN.cabinet }, { text: BTN.pay }],
     [{ text: BTN.renew }, { text: BTN.code }],
     [{ text: BTN.promo }, { text: BTN.price }],
-    [{ text: BTN.unlink }],
+    [{ text: BTN.unlink }, { text: BTN.support }],
   ];
   if (isAdmin) rows.push([{ text: BTN.admin }]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true };
@@ -86,6 +92,10 @@ export function parseAction(text) {
   if (head === '/start' && rest.toLowerCase().indexOf('admin_') === 0) {
     return { action: 'admin_login', arg: rest.slice(6) };
   }
+  if (head === '/start' && rest.toLowerCase() === 'renew') return { action: 'renew', arg: '' };
+  if (head === '/start' && rest.toLowerCase().indexOf('support') === 0) {
+    return { action: 'support', arg: rest.slice('support'.length).trim() };
+  }
   if (raw === BTN.cabinet || raw === '/status' || raw === '/start' || raw === '/menu' || raw === '/cabinet') {
     return { action: 'cabinet', arg: '' };
   }
@@ -95,6 +105,7 @@ export function parseAction(text) {
   if (raw === BTN.promo || raw === '/promo') return { action: 'promo', arg: '' };
   if (raw === BTN.price || raw === '/price' || raw === '/prices') return { action: 'price', arg: '' };
   if (raw === BTN.unlink || raw === '/unlink') return { action: 'unlink', arg: '' };
+  if (raw === BTN.support || raw === '/support') return { action: 'support', arg: '' };
   if (raw === BTN.admin || raw === '/admin') return { action: 'admin', arg: '' };
   if (raw === ADMIN_BTN.summary || raw === '/summary') return { action: 'admin_summary', arg: '' };
   if (raw === ADMIN_BTN.find || raw === '/find') return { action: 'admin_find', arg: '' };
@@ -104,6 +115,7 @@ export function parseAction(text) {
 
   const cmd = head.toLowerCase();
   if (cmd === '/promo' && rest) return { action: 'promo', arg: rest.replace(/\s+/g, '') };
+  if (cmd === '/support' && rest) return { action: 'support', arg: rest };
   if (cmd === '/find' && rest) return { action: 'admin_find', arg: rest };
   if (cmd === '/grant' && rest) return { action: 'admin_grant', arg: rest };
   if (cmd === '/admin_promo' && rest) return { action: 'admin_promo', arg: rest };
@@ -111,7 +123,7 @@ export function parseAction(text) {
 }
 
 function statusText(sub, account) {
-  const tg = account && account.telegramId ? 'Telegram: ' + account.telegramId + '\n' : '';
+  const tg = account && account.telegramId ? 'Telegram: ' + (telegramDisplay(account) || account.telegramId) + '\n' : '';
   if (!sub) return tg + 'Подписки нет.\n«Подписка» — оплата, «Промокод» — пробный день.';
   const when = new Date(sub.paidUntil).toISOString().slice(0, 10);
   const used = sub.devices.filter((d) => d.bound).length;
@@ -144,11 +156,22 @@ function codeMessage(origin, code) {
 }
 
 /**
- * @param awaiting — { kind: 'promo'|'admin_find'|'admin_grant'|'admin_promo'|'unlink_device' } | null
- * @returns {{ state, messages: { chatId, text, keyboard?, inline?, await?, parseMode? }[] }}
+ * @param awaiting — { kind: 'promo'|'admin_find'|'admin_grant'|'admin_promo'|'unlink_device'|'support' } | null
+ * @param replyTo — Telegram message id this update replies to
+ * @returns {{ state, messages: { chatId, text, keyboard?, inline?, await?, parseMode?, supportNotify? }[] }}
  */
-export function botReply(state, { chatId, text, now, awaiting }) {
-  const ensured = ensureTelegramAccount(state, chatId, now);
+export function botReply(state, { chatId, text, now, awaiting, replyTo, from }) {
+  const ensured = from
+    ? rememberTelegramProfile(
+        state,
+        {
+          telegramId: chatId,
+          username: from.username || '',
+          name: [from.firstName, from.lastName].filter(Boolean).join(' '),
+        },
+        now,
+      )
+    : ensureTelegramAccount(state, chatId, now);
   let cur = ensured.state;
   const account = ensured.account;
   const admin = isAdminChat(cur.settings, chatId);
@@ -183,6 +206,31 @@ export function botReply(state, { chatId, text, now, awaiting }) {
     } else if (awaiting.kind === 'unlink_device') {
       action = 'unlink_confirm';
       arg = String(text || '').trim();
+    } else if (awaiting.kind === 'support') {
+      action = 'support';
+      arg = String(text || '').trim();
+    }
+  }
+
+  if (replyTo && admin) {
+    const target = supportReplyTarget(cur, chatId, replyTo);
+    const body = String(text || '').trim();
+    if (target && body) {
+      const saved = appendSupportMessage(cur, {
+        telegramId: target,
+        text: body,
+        direction: 'out',
+        now,
+        via: 'bot',
+      });
+      cur = saved.state;
+      messages.push({
+        chatId: String(target),
+        text: body,
+        keyboard: mainKeyboard(isAdminChat(cur.settings, target)),
+      });
+      say('Ответ отправлен пользователю ' + target + '.');
+      return { state: cur, messages };
     }
   }
 
@@ -369,8 +417,39 @@ export function botReply(state, { chatId, text, now, awaiting }) {
         say('Устройство ' + hit.deviceId.slice(0, 8) + '… отвязано. Нажмите «Код», чтобы получить новый и открыть в OMP.');
       }
     }
+  } else if (action === 'support' && !arg) {
+    say('Напишите сообщение для администратора одним текстом.', { await: { kind: 'support' } });
+  } else if (action === 'support' && arg) {
+    const saved = appendSupportMessage(cur, {
+      telegramId: String(chatId),
+      text: arg,
+      direction: 'in',
+      now,
+      via: 'bot',
+    });
+    cur = saved.state;
+    const admins = adminChatIds(cur.settings);
+    say(
+      admins.length
+        ? 'Сообщение передано администратору. Ответ придёт в этот чат.'
+        : 'Сообщение сохранено. Администраторы в панели ещё не указаны.',
+    );
+    const note =
+      'Поддержка · ' +
+      (telegramDisplay(account) || chatId) +
+      '\n' +
+      arg +
+      '\n\nОтветьте на это сообщение — текст уйдёт пользователю.';
+    for (let i = 0; i < admins.length; i++) {
+      messages.push({
+        chatId: admins[i],
+        text: note,
+        keyboard: adminKeyboard(),
+        supportNotify: String(chatId),
+      });
+    }
   } else if (action === 'unknown') {
-    say('Не понял. Выберите кнопку ниже.\n\n' + statusText(sub, account));
+    say('Не понял. Выберите кнопку ниже или «Поддержка».\n\n' + statusText(sub, account));
   } else {
     say('Личный кабинет\n\n' + statusText(sub, account));
   }

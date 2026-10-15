@@ -434,6 +434,39 @@ describe('scanLan', () => {
       ['192.168.1', '192.168.0'],
     ]);
   });
+
+  it('uses the native TCP scan and only echoes open ports', async () => {
+    const discover = vi.fn(async () => []);
+    const probed: string[] = [];
+    const found = await scanLan(() => false, {
+      localIp: async () => '10.0.5.23',
+      discover,
+      tcpScan: async () => [
+        { ip: '10.0.5.9', port: 8090 },
+        { ip: '10.0.5.11', port: 5665 },
+      ],
+      probe: async (url) => {
+        probed.push(url);
+        return url.endsWith(':8090') ? 'MatriX.1' : null;
+      },
+    });
+    expect(discover).not.toHaveBeenCalled();
+    expect(probed).toEqual(['http://10.0.5.9:8090', 'http://10.0.5.11:5665']);
+    expect(found).toEqual([{ url: 'http://10.0.5.9:8090', version: 'MatriX.1' }]);
+  });
+
+  it('falls back to JS discover when the native scan rejects', async () => {
+    const calls: any[] = [];
+    await scanLan(() => false, {
+      localIp: async () => '10.0.5.23',
+      discover: async (o) => (calls.push(o), []),
+      tcpScan: async () => {
+        throw new Error('only Android');
+      },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].subnets).toEqual(['10.0.5']);
+  });
 });
 
 describe('Connect screen in English', () => {

@@ -21,8 +21,11 @@ class LanScanTest {
     }
 
     @Test
-    fun onlyTheJackettAndProwlarrPorts() {
-        assertEquals(listOf(9117, 9696, 8191), LanScan.allowedPorts(listOf(22, 9117, 80, 9696, 9117, 8191, 5555)))
+    fun onlyTheAllowedServicePorts() {
+        assertEquals(
+            listOf(9117, 9696, 8191, 8090, 5665),
+            LanScan.allowedPorts(listOf(22, 9117, 80, 9696, 9117, 8191, 5555, 8090, 5665)),
+        )
         assertTrue(LanScan.scan("192.168.1.40", listOf(22, 80), 100) { _, _, _ -> true }.isEmpty())
         assertTrue(LanScan.scan("8.8.8.8", listOf(9117), 100) { _, _, _ -> true }.isEmpty())
     }
@@ -32,17 +35,26 @@ class LanScanTest {
         val asked = Collections.synchronizedList(ArrayList<String>())
         val inFlight = AtomicInteger()
         val peak = AtomicInteger()
-        val hits = LanScan.scan("192.168.1.40", listOf(9117, 9696, 22), 100) { ip, port, timeout ->
+        val hits = LanScan.scan("192.168.1.40", listOf(9117, 9696, 8090, 22), 100) { ip, port, timeout ->
             val n = inFlight.incrementAndGet()
             peak.accumulateAndGet(n) { a, b -> maxOf(a, b) }
             asked.add("$ip:$port")
             assertEquals(100, timeout)
             Thread.sleep(1)
             inFlight.decrementAndGet()
-            (ip == "192.168.1.5" && port == 9117) || (ip == "192.168.1.7" && port == 9696)
+            (ip == "192.168.1.5" && port == 9117) ||
+                (ip == "192.168.1.7" && port == 9696) ||
+                (ip == "192.168.1.9" && port == 8090)
         }
-        assertEquals(listOf(LanScan.Hit("192.168.1.5", 9117), LanScan.Hit("192.168.1.7", 9696)), hits)
-        assertEquals(508, asked.size)
+        assertEquals(
+            listOf(
+                LanScan.Hit("192.168.1.5", 9117),
+                LanScan.Hit("192.168.1.7", 9696),
+                LanScan.Hit("192.168.1.9", 8090),
+            ),
+            hits,
+        )
+        assertEquals(762, asked.size)
         assertTrue(asked.none { it.endsWith(":22") })
         assertTrue(peak.get() <= LanScan.CONCURRENCY)
     }

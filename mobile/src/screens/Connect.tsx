@@ -14,7 +14,15 @@ import { servers, addServer, setActiveServer, updateServer, type SavedServer } f
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
 import { addressErrorText, addressForField, checkServerAddress } from '../../../src/api/serverAddress';
 import { errorMessage, isApiError } from '../../../src/api/http';
-import { discover, candidateSubnets, subnetOf, DEFAULT_PORTS, type FoundServer } from '../../../src/api/discovery';
+import {
+  discover,
+  candidateSubnets,
+  subnetOf,
+  DEFAULT_PORTS,
+  probeEcho,
+  type FoundServer,
+  type Probe,
+} from '../../../src/api/discovery';
 import { native } from '../platform/native';
 import { localServer, refreshLocalServer, startLocal, localName, LOCAL_URL } from '../server/localServer';
 
@@ -26,19 +34,68 @@ export function setServerScanner(fn: ServerScanner | null): void {
   scanner = fn;
 }
 
+export type TcpLanHit = { ip: string; port: number };
+
 export interface LanScanDeps {
   localIp: () => Promise<string | null>;
   discover: typeof discover;
+  /**
+   * Native multithread TCP scan of the phone's /24 (Android). Resolves to hits, `null` without Wi‑Fi,
+   * or rejects when the plugin is missing — then JS `discover` is used.
+   */
+  tcpScan?: (ports: number[]) => Promise<TcpLanHit[] | null>;
+  probe?: Probe;
+}
+
+async function echoHits(
+  hits: TcpLanHit[],
+  isCancelled: () => boolean,
+  probe: Probe,
+): Promise<FoundServer[]> {
+  const found: FoundServer[] = [];
+  await Promise.all(
+    hits.map(async (h) => {
+      if (isCancelled()) return;
+      const url = 'http://' + h.ip + ':' + h.port;
+      const version = await probe(url, 800).catch(() => null);
+      if (version && !isCancelled()) found.push({ url, version });
+    }),
+  );
+  return found;
 }
 
 /** Scans the phone's own /24 when its address is known, the common home subnets otherwise; stops once cancelled. */
 export async function scanLan(
   isCancelled: () => boolean,
-  d: LanScanDeps = { localIp: () => native.localIpv4(), discover },
+  d: LanScanDeps = {
+    localIp: () => native.localIpv4(),
+    discover,
+    tcpScan: (ports) => native.scanLan(ports),
+    probe: probeEcho,
+  },
 ): Promise<FoundServer[]> {
+  const ports = DEFAULT_PORTS;
+  const probe = d.probe || probeEcho;
+  if (d.tcpScan) {
+    try {
+      const hits = await d.tcpScan(ports);
+      if (isCancelled()) return [];
+      // null = no Wi‑Fi → fall through to the JS subnet list; [] = scanned, nothing open
+      if (hits) return echoHits(hits, isCancelled, probe);
+    } catch {
+      /* no native plugin — JS discover below */
+    }
+  }
   const ip = await d.localIp().catch(() => null);
   const own = ip ? subnetOf(ip) : null;
-  return d.discover({ subnets: own ? [own] : candidateSubnets(null, []), ports: DEFAULT_PORTS, isCancelled });
+  return d.discover({
+    subnets: own ? [own] : candidateSubnets(null, []),
+    ports,
+    isCancelled,
+    concurrency: 48,
+    timeoutMs: 900,
+    probe,
+  });
 }
 
 

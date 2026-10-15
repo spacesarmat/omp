@@ -7,6 +7,7 @@ import {
   accountByDevice,
   activate,
   adminFind,
+  appendSupportMessage,
   applyPayment,
   createPromo,
   createSubscription,
@@ -18,9 +19,14 @@ import {
   paymentsCsv,
   revokePromo,
   sessionOk,
+  rememberSupportReply,
+  rememberTelegramProfile,
   startAdminPanelLogin,
   startDeviceLink,
   subscriptionView,
+  supportThread,
+  closeSupportThread,
+  SUPPORT_CLOSED_TEXT,
   takeAdminPanelLogin,
   unbindCode,
   unlinkDeviceTelegram,
@@ -62,7 +68,8 @@ function serveSpa(res) {
 }
 
 function servePublic(path, res) {
-  if (path.indexOf('/admin/assets/') !== 0 && path !== '/admin/' && path !== '/admin') return false;
+  const staticFile = path.indexOf('/admin/assets/') === 0 || path === '/admin/logo.svg' || path === '/admin/tunnel.svg';
+  if (!staticFile && path !== '/admin/' && path !== '/admin') return false;
   if (!existsSync(PUBLIC_DIR)) return false;
   if (path === '/admin' || path === '/admin/') return serveSpa(res);
   const rel = path.replace(/^\/admin\//, '');
@@ -165,7 +172,7 @@ function json(res, status, value) {
 }
 
 async function telegramSend(token, chatId, text, fetchImpl, opts) {
-  if (!token || !chatId) return false;
+  if (!token || !chatId) return { ok: false, messageId: 0 };
   const body = { chat_id: chatId, text, disable_web_page_preview: true };
   if (opts && opts.parseMode) body.parse_mode = opts.parseMode;
   if (opts && opts.inline) body.reply_markup = opts.inline;
@@ -175,7 +182,14 @@ async function telegramSend(token, chatId, text, fetchImpl, opts) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return res.ok;
+  let data = {};
+  try {
+    data = await res.json();
+  } catch (e) {
+    data = {};
+  }
+  const messageId = data && data.result && data.result.message_id ? data.result.message_id : 0;
+  return { ok: !!(res.ok && data.ok !== false && messageId), messageId };
 }
 
 function tellPayment(state, result, fetchImpl) {
@@ -218,7 +232,7 @@ export function createApp(file, fetchImpl) {
         const code = decodeURIComponent(path.slice(4));
         return send(res, 200, goPage(code), { 'content-type': 'text/html; charset=utf-8' });
       }
-      if (req.method === 'GET' && path.indexOf('/admin/assets/') === 0) {
+      if (req.method === 'GET' && (path.indexOf('/admin/assets/') === 0 || path === '/admin/logo.svg' || path === '/admin/tunnel.svg')) {
         if (servePublic(path, res)) return;
         return send(res, 404, 'not found');
       }
@@ -237,6 +251,12 @@ export function createApp(file, fetchImpl) {
             sessions: listSessions(),
           }),
         );
+      }
+      if (req.method === 'GET' && path === '/admin/api/support') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const telegramId = url.searchParams.get('telegramId') || '';
+        return json(res, 200, { telegramId, messages: supportThread(readState(file), telegramId).slice(-80) });
       }
       if (req.method === 'GET' && path === '/admin/api/user') {
         const admin = adminOf(req);
@@ -429,8 +449,19 @@ export function createApp(file, fetchImpl) {
           const text = String(body.text || '').trim();
           if (!acc || !acc.telegramId || !text) flashError = 'Нет Telegram или пустой текст';
           else {
-            const ok = await telegramSend(state.settings.botToken, acc.telegramId, text, net);
-            flashText = ok ? 'Сообщение отправлено' : 'Telegram не принял сообщение';
+            const sent = await telegramSend(state.settings.botToken, acc.telegramId, text, net);
+            if (sent.ok) {
+              await updateState(file, (cur) =>
+                appendSupportMessage(cur, {
+                  telegramId: acc.telegramId,
+                  text,
+                  direction: 'out',
+                  now: Date.now(),
+                  via: 'panel',
+                }),
+              );
+              flashText = 'Сообщение отправлено';
+            } else flashError = 'Telegram не принял сообщение';
           }
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
@@ -511,8 +542,48 @@ export function createApp(file, fetchImpl) {
         if (path === '/admin/promo' && flashPromo) {
           await audit(file, 'promo_create', flashPromo);
         }
+        if (path === '/admin/support') {
+          const telegramId = String(body.telegramId || '').trim();
+          const text = String(body.text || '').trim();
+          if (!telegramId || !text) flashError = 'Нужны Telegram id и текст';
+          else {
+            const state = readState(file);
+            const sent = await telegramSend(state.settings.botToken, telegramId, text, net);
+            if (!sent.ok) flashError = 'Telegram не принял сообщение';
+            else {
+              await updateState(file, (cur) =>
+                appendSupportMessage(cur, { telegramId, text, direction: 'out', now: Date.now(), via: 'panel' }),
+              );
+              flashText = 'Ответ отправлен';
+            }
+          }
+          redirectTo = '/admin/';
+        }
+        if (path === '/admin/support-close') {
+          const telegramId = String(body.telegramId || '').trim();
+          const state = readState(file);
+          const rows = supportThread(state, telegramId);
+          const closedAt = Number((state.supportClosed || {})[telegramId] || 0);
+          const lastAt = rows.reduce((max, row) => Math.max(max, row.at || 0), 0);
+          if (!telegramId || !rows.length || (closedAt && lastAt <= closedAt)) flashError = 'Диалог уже закрыт';
+          else {
+            const sent = await telegramSend(state.settings.botToken, telegramId, SUPPORT_CLOSED_TEXT, net);
+            if (!sent.ok) flashError = 'Telegram не принял сообщение';
+            else {
+              await updateState(file, (cur) => closeSupportThread(cur, { telegramId, now: Date.now() }));
+              flashText = 'Диалог завершён';
+            }
+          }
+          redirectTo = '/admin/';
+        }
         if (path === '/admin/message' && flashText.indexOf('отправлено') >= 0) {
           await audit(file, 'message', body.accountId || '');
+        }
+        if (path === '/admin/support' && flashText) {
+          await audit(file, 'support_reply', body.telegramId || '');
+        }
+        if (path === '/admin/support-close' && flashText) {
+          await audit(file, 'support_close', body.telegramId || '');
         }
         if (flashed || flashPromo || flashText || flashError) {
           const sid = cookie(req, 'omp_admin');
@@ -659,8 +730,42 @@ export function listen(file, port, fetchImpl) {
   return new Promise((resolve) => server.listen(port, '0.0.0.0', () => resolve(server)));
 }
 
+export async function refreshMissingProfiles(file, token, net) {
+  const state = readState(file);
+  const missing = (state.accounts || [])
+    .filter((a) => a.telegramId && !a.telegramUsername && !a.telegramName)
+    .slice(0, 30);
+  if (!missing.length) return;
+  const found = [];
+  for (let i = 0; i < missing.length; i++) {
+    try {
+      const res = await net(
+        'https://api.telegram.org/bot' + token + '/getChat?chat_id=' + encodeURIComponent(missing[i].telegramId),
+      );
+      const data = await res.json();
+      if (!data.ok || !data.result) continue;
+      const chat = data.result;
+      found.push({
+        telegramId: String(missing[i].telegramId),
+        username: chat.username || '',
+        name: [chat.first_name, chat.last_name].filter(Boolean).join(' '),
+      });
+    } catch (e) {
+      /* one chat can fail; the rest still update */
+    }
+  }
+  const useful = found.filter((row) => row.username || row.name);
+  if (!useful.length) return;
+  await updateState(file, (latest) => {
+    let next = latest;
+    for (let i = 0; i < useful.length; i++) next = rememberTelegramProfile(next, useful[i], Date.now()).state;
+    return { state: next };
+  });
+}
+
 export async function pollBot(file, fetchImpl) {
   let offset = 0;
+  let sweptAt = 0;
   /** chatId → { kind } waiting for the next free-text reply */
   const awaiting = new Map();
   const net = fetchImpl || fetch;
@@ -671,6 +776,10 @@ export async function pollBot(file, fetchImpl) {
       if (!token) {
         await new Promise((r) => setTimeout(r, 5000));
         continue;
+      }
+      if (Date.now() - sweptAt > 10 * 60 * 1000) {
+        sweptAt = Date.now();
+        await refreshMissingProfiles(file, token, net);
       }
       let updates = [];
       try {
@@ -688,8 +797,16 @@ export async function pollBot(file, fetchImpl) {
         if (!msg || !msg.chat) continue;
         const chatId = String(msg.chat.id);
         const wait = awaiting.get(chatId) || null;
+        const replyTo = msg.reply_to_message && msg.reply_to_message.message_id ? msg.reply_to_message.message_id : 0;
+        const from = msg.from
+          ? {
+              username: msg.from.username || '',
+              firstName: msg.from.first_name || '',
+              lastName: msg.from.last_name || '',
+            }
+          : null;
         const replied = await updateState(file, (cur) => {
-          const out = botReply(cur, { chatId, text: msg.text || '', now: Date.now(), awaiting: wait });
+          const out = botReply(cur, { chatId, text: msg.text || '', now: Date.now(), awaiting: wait, replyTo, from });
           return { state: out.state, result: out.messages };
         });
         awaiting.delete(chatId);
@@ -697,11 +814,21 @@ export async function pollBot(file, fetchImpl) {
           const row = replied[m];
           if (row.await) awaiting.set(chatId, row.await);
           try {
-            await telegramSend(token, row.chatId, row.text, net, {
+            const sent = await telegramSend(token, row.chatId, row.text, net, {
               keyboard: row.keyboard,
               inline: row.inline,
               parseMode: row.parseMode,
             });
+            if (row.supportNotify && sent.messageId) {
+              await updateState(file, (cur) => ({
+                state: rememberSupportReply(cur, {
+                  adminChatId: row.chatId,
+                  messageId: sent.messageId,
+                  telegramId: row.supportNotify,
+                  now: Date.now(),
+                }),
+              }));
+            }
           } catch (e) {
             /* Telegram unreachable from NAS — keep polling */
           }
