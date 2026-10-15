@@ -2,6 +2,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0-beta.17
+
+- [phone] Jackett and JacRed on one subscription: keys in the app, search over HTTPS
+- [billing] admin panel sign-in through Telegram (adminTelegramIds); password stays as a fallback
+
 ## 0.20.0-beta.16
 
 - same as beta.15 (release failed: typecheck)

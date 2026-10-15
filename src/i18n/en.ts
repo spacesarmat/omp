@@ -755,8 +755,10 @@ export const en: EnDict<typeof ru> = {
       foundSeveral: 'Several found — choose one:',
     },
     billing: {
-      title: 'OMP Jackett',
-      text: 'Search through the Jackett on the OMP server. The address and the key stay on the server.',
+      title: 'OMP subscription',
+      text: 'Jackett and JacRed with the subscription. The keys are already in the app.',
+      jackett: 'Jackett',
+      jacred: 'JacRed',
       code: 'Subscription code',
       connect: 'Connect',
       connecting: 'Connecting…',

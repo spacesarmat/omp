@@ -18,20 +18,23 @@ import {
   paymentsCsv,
   revokePromo,
   sessionOk,
+  startAdminPanelLogin,
   startDeviceLink,
   subscriptionView,
+  takeAdminPanelLogin,
   unbindCode,
   unlinkDeviceTelegram,
 } from './logic.mjs';
 import { botDeepLink, botReply, telegramOf } from './bot.mjs';
 import { hashPassword, passwordMatches, randomCode, randomId } from './crypto.mjs';
 import { goPage } from './go.mjs';
-import { jackettSearchUrl, restoreJackett, stripJackett } from './jackett.mjs';
+import { basicAuthHeader, indexerByLink, indexerOf, jackettSearchUrl, restoreJackett, stripJackett } from './jackett.mjs';
 import { sendMail } from './mail.mjs';
 import { loginPage } from './panel.mjs';
 import { readState, resolveDbPath, updateState } from './store.mjs';
 import { notificationOk } from './yoomoney.mjs';
 
+const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>';
 const PUBLIC_DIR = fileURLToPath(new URL('../public', import.meta.url));
 const SPA_INDEX = join(PUBLIC_DIR, 'index.html');
 
@@ -187,7 +190,7 @@ function tellPayment(state, result, fetchImpl) {
   if (result.kind === 'new' && result.code) {
     const link = openAppUrl(origin, result.code);
     text =
-      'Код Jackett OMP: `' +
+      'Код подписки OMP: `' +
       result.code +
       '`\n' +
       link +
@@ -266,6 +269,39 @@ export function createApp(file, fetchImpl) {
           'content-disposition': 'attachment; filename="omp-payments.csv"',
         });
       }
+      if (req.method === 'POST' && path === '/admin/login/telegram') {
+        const state = readState(file);
+        if (!String(state.settings.adminTelegramIds || '').trim()) {
+          return json(res, 400, { ok: false, error: 'Сначала укажите adminTelegramIds в настройках или через пароль' });
+        }
+        if (!state.settings.botToken || !state.settings.botUsername) {
+          return json(res, 400, { ok: false, error: 'Не задан бот Telegram (токен или username)' });
+        }
+        const started = await updateState(file, (cur) => startAdminPanelLogin(cur, { now: Date.now() }));
+        const deepLink = botDeepLink(state.settings, 'admin_' + started.token);
+        await audit(file, 'login_telegram_start', started.token.slice(0, 8));
+        return json(res, 200, { ok: true, token: started.token, deepLink, expiresAt: started.expiresAt });
+      }
+      if (req.method === 'GET' && path === '/admin/login/telegram/status') {
+        const token = url.searchParams.get('token') || '';
+        const taken = await updateState(file, (cur) => takeAdminPanelLogin(cur, { token, now: Date.now() }));
+        if (taken.status === 'ok') {
+          const id = randomId() + randomId();
+          const csrf = randomId();
+          const now = Date.now();
+          sessions.set(id, {
+            csrf,
+            exp: now + 12 * 60 * 60 * 1000,
+            createdAt: now,
+            lastSeen: now,
+            telegramId: taken.telegramId || '',
+          });
+          await audit(file, 'login', 'telegram ' + (taken.telegramId || ''));
+          res.setHeader('set-cookie', 'omp_admin=' + id + '; HttpOnly; SameSite=Lax; Path=/');
+          return json(res, 200, { ok: true, status: 'ok' });
+        }
+        return json(res, 200, { ok: false, status: taken.status || 'expired' });
+      }
       if (req.method === 'POST' && path === '/admin/login') {
         const body = await readBody(req);
         const state = readState(file);
@@ -307,6 +343,10 @@ export function createApp(file, fetchImpl) {
                   yoomoneySecret: body.yoomoneySecret || '',
                   jackettUrl: (body.jackettUrl || '').replace(/\/+$/, ''),
                   jackettApiKey: body.jackettApiKey || '',
+                  jacredUrl: (body.jacredUrl || '').replace(/\/+$/, ''),
+                  jacredApiKey: body.jacredApiKey || '',
+                  indexerUser: body.indexerUser || '',
+                  indexerPass: body.indexerPass || '',
                   smtpHost: body.smtpHost || '',
                   smtpUser: body.smtpUser || '',
                   smtpPass: body.smtpPass || '',
@@ -343,12 +383,12 @@ export function createApp(file, fetchImpl) {
           });
           flashed = result.code;
           const fresh = readState(file);
-          const text = 'Код Jackett OMP: ' + result.code + '\nВведите его в OMP на телефоне. На другом устройстве он не сработает.';
+          const text = 'Код подписки OMP: ' + result.code + '\nВведите его в OMP на телефоне. На другом устройстве он не сработает.';
           if (body.channel === 'telegram' && result.account.telegramId) {
             await telegramSend(fresh.settings.botToken, result.account.telegramId, text, net);
           }
           if (body.channel === 'email' && result.account.email) {
-            await sendMail(fresh.settings, { to: result.account.email, subject: 'Код Jackett OMP', text });
+            await sendMail(fresh.settings, { to: result.account.email, subject: 'Код подписки OMP', text });
           }
           if (result.account && result.account.id) redirectTo = '/admin/?id=' + encodeURIComponent(result.account.id);
         }
@@ -549,9 +589,21 @@ export function createApp(file, fetchImpl) {
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
         if (!sessionOk(state, { token, deviceId, now: Date.now() })) return json(res, 403, { error: 'expired' });
-        const search = jackettSearchUrl(state.settings.jackettUrl, state.settings.jackettApiKey, body.q || '');
-        const upstream = await net(search);
-        const xml = stripJackett(await upstream.text(), state.settings.jackettUrl, state.settings.jackettApiKey);
+        const indexer = indexerOf(state.settings, body.source);
+        if (!indexer.url || !indexer.key) {
+          return send(res, 200, EMPTY_RSS, { 'content-type': 'application/xml; charset=utf-8' });
+        }
+        const search = jackettSearchUrl(indexer.url, indexer.key, body.q || '');
+        const headers = {};
+        const auth = basicAuthHeader(state.settings);
+        if (auth) headers.Authorization = auth;
+        let upstream;
+        try {
+          upstream = await net(search, { headers });
+        } catch (e) {
+          return json(res, 502, { error: 'down' });
+        }
+        const xml = stripJackett(await upstream.text(), indexer.url, indexer.key, indexer.mark);
         return send(res, upstream.status, xml, { 'content-type': 'application/xml; charset=utf-8' });
       }
       if (req.method === 'POST' && path === '/v1/torrent') {
@@ -560,9 +612,13 @@ export function createApp(file, fetchImpl) {
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
         if (!sessionOk(state, { token, deviceId, now: Date.now() })) return json(res, 403, { error: 'expired' });
-        const remote = restoreJackett(body.link, state.settings.jackettUrl, state.settings.jackettApiKey);
+        const indexer = indexerByLink(state.settings, body.link);
+        const remote = restoreJackett(body.link, indexer.url, indexer.key, indexer.mark);
         if (!remote) return json(res, 400, { error: 'bad_link' });
-        const upstream = await net(remote);
+        const headers = {};
+        const auth = basicAuthHeader(state.settings);
+        if (auth) headers.Authorization = auth;
+        const upstream = await net(remote, { headers });
         const buf = Buffer.from(await upstream.arrayBuffer());
         return send(res, upstream.status, buf, { 'content-type': 'application/octet-stream' });
       }

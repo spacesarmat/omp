@@ -20,7 +20,9 @@ import {
   openAppUrl,
   paymentsCsv,
   redeemPromo,
+  startAdminPanelLogin,
   startDeviceLink,
+  takeAdminPanelLogin,
   unlinkDeviceTelegram,
 } from '../src/logic.mjs';
 import { emptyState, readState, resolveDbPath, writeState } from '../src/store.mjs';
@@ -93,6 +95,16 @@ describe('Jackett proxy', () => {
     const back = restoreJackett('omp-fetch:/dl/a', 'http://127.0.0.1:9117', 'SECRET');
     expect(back).toBe('http://127.0.0.1:9117/dl/a?apikey=SECRET');
   });
+
+  it('keeps a JacRed download on the JacRed origin', () => {
+    const xml = '<enclosure url="http://127.0.0.1:9118/dl/b?apikey=OTHER" />';
+    const clean = stripJackett(xml, 'http://127.0.0.1:9118', 'OTHER', 'omp-jacred:');
+    expect(clean).not.toContain('OTHER');
+    expect(clean).toContain('omp-jacred:/dl/b?');
+    const back = restoreJackett('omp-jacred:/dl/b', 'http://127.0.0.1:9118', 'OTHER', 'omp-jacred:');
+    expect(back).toBe('http://127.0.0.1:9118/dl/b?apikey=OTHER');
+    expect(restoreJackett('omp-jacred:/dl/b', 'http://127.0.0.1:9117', 'SECRET')).toBe('');
+  });
 });
 
 describe('bot', () => {
@@ -144,6 +156,35 @@ describe('bot', () => {
     const ok = botReply(state, { chatId: 99, text: 'Админ', now: NOW });
     expect(ok.messages[0].text).toContain('Админ-кабинет');
     expect(ok.messages[0].keyboard.keyboard[0][0].text).toBe('Сводка');
+  });
+
+  it('confirms admin panel login only for listed telegram ids', () => {
+    const state = emptyState();
+    state.settings.adminTelegramIds = '99';
+    const started = startAdminPanelLogin(state, { now: NOW });
+    const pending = takeAdminPanelLogin(started.state, { token: started.result.token, now: NOW + 1000 });
+    expect(pending.result.status).toBe('pending');
+    const denied = botReply(started.state, {
+      chatId: 1,
+      text: '/start admin_' + started.result.token,
+      now: NOW + 2000,
+    });
+    expect(denied.messages[0].text).toContain('Нет доступа');
+    const deniedStatus = takeAdminPanelLogin(denied.state, { token: started.result.token, now: NOW + 3000 });
+    expect(deniedStatus.result.status).toBe('denied');
+
+    const again = startAdminPanelLogin(state, { now: NOW });
+    const ok = botReply(again.state, {
+      chatId: 99,
+      text: '/start admin_' + again.result.token,
+      now: NOW + 1000,
+    });
+    expect(ok.messages[0].text).toContain('подтверждён');
+    const taken = takeAdminPanelLogin(ok.state, { token: again.result.token, now: NOW + 2000 });
+    expect(taken.result.status).toBe('ok');
+    expect(taken.result.telegramId).toBe('99');
+    const reuse = takeAdminPanelLogin(taken.state, { token: again.result.token, now: NOW + 3000 });
+    expect(reuse.result.status).toBe('expired');
   });
 });
 

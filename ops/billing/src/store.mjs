@@ -17,6 +17,11 @@ export function emptyState() {
       yoomoneySecret: '',
       jackettUrl: '',
       jackettApiKey: '',
+      jacredUrl: '',
+      jacredApiKey: '',
+      /** Shared basic-auth for Jackett and JacRed when they sit behind the panel proxy. */
+      indexerUser: '',
+      indexerPass: '',
       smtpHost: '',
       smtpPort: 587,
       smtpUser: '',
@@ -37,6 +42,8 @@ export function emptyState() {
     promos: [],
     /** Pending phone↔Telegram link tokens from the app. */
     links: [],
+    /** Pending Telegram logins for the admin web panel. */
+    adminLogins: [],
     /** Admin panel action log. */
     audit: [],
     outbox: [],
@@ -139,6 +146,7 @@ function normalizeState(parsed) {
     webhooks: Array.isArray(parsed.webhooks) ? parsed.webhooks : [],
     promos: Array.isArray(parsed.promos) ? parsed.promos : [],
     links: Array.isArray(parsed.links) ? parsed.links : [],
+    adminLogins: Array.isArray(parsed.adminLogins) ? parsed.adminLogins : [],
     audit: Array.isArray(parsed.audit) ? parsed.audit : [],
     outbox: Array.isArray(parsed.outbox) ? parsed.outbox : [],
   };

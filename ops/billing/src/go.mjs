@@ -24,7 +24,7 @@ export function goPage(code) {
     '<style>body{margin:0;background:#0F1115;color:#E8EAF0;font:16px/1.45 Manrope,Segoe UI,sans-serif;padding:32px 20px}' +
     'a{display:inline-block;background:#F5B700;color:#0F1115;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:700;margin:8px 8px 0 0}' +
     '.code{font:22px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.08em;margin:12px 0}</style>' +
-    '<body><h1>Jackett OMP</h1>' +
+    '<body><h1>Подписка OMP</h1>' +
     '<p>Код подписки:</p><p class="code">' +
     esc(dashed) +
     '</p>' +

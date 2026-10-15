@@ -3,6 +3,7 @@ import {
   adminFind,
   adminSummary,
   appSchemeUrl,
+  confirmAdminPanelLogin,
   confirmDeviceLink,
   createPromo,
   ensureTelegramAccount,
@@ -81,6 +82,9 @@ export function parseAction(text) {
 
   if (head === '/start' && rest.toLowerCase().indexOf('link_') === 0) {
     return { action: 'link', arg: rest.slice(5) };
+  }
+  if (head === '/start' && rest.toLowerCase().indexOf('admin_') === 0) {
+    return { action: 'admin_login', arg: rest.slice(6) };
   }
   if (raw === BTN.cabinet || raw === '/status' || raw === '/start' || raw === '/menu' || raw === '/cabinet') {
     return { action: 'cabinet', arg: '' };
@@ -190,6 +194,19 @@ export function botReply(state, { chatId, text, now, awaiting }) {
     return { state: cur, messages };
   }
 
+  if (action === 'admin_login') {
+    const out = confirmAdminPanelLogin(cur, { token: arg, telegramId: chatId, now });
+    cur = out.state;
+    if (out.result.error === 'forbidden') {
+      say('Нет доступа к панели. Добавьте свой Telegram id в настройках (adminTelegramIds).');
+    } else if (out.result.error) {
+      say('Ссылка для входа устарела. Откройте панель снова и нажмите «Войти через Telegram».');
+    } else {
+      say('Вход в админ-панель подтверждён. Вернитесь в браузер — страница откроется сама.');
+    }
+    return { state: cur, messages };
+  }
+
   if (action === 'admin' || action === 'admin_summary' || action === 'admin_find' || action === 'admin_grant' || action === 'admin_promo') {
     if (!admin) {
       say('Нет доступа. Добавьте свой Telegram id в настройках панели (adminTelegramIds).');
@@ -276,7 +293,7 @@ export function botReply(state, { chatId, text, now, awaiting }) {
     }
   } else if (action === 'price') {
     say(
-      'Jackett OMP — ' +
+      'OMP (Jackett и JacRed) — ' +
         rub(prices.price) +
         ' за ' +
         prices.days +
@@ -289,12 +306,12 @@ export function botReply(state, { chatId, text, now, awaiting }) {
     else if (sub && sub.active) say(statusText(sub, account) + '\nЧтобы продлить — «Продлить».');
     else {
       say(
-        'Jackett OMP — ' +
+        'OMP (Jackett и JacRed) — ' +
           rub(prices.price) +
           ' за ' +
           prices.days +
           ' дн. Один код — одно устройство.\n' +
-          payUrl(wallet, { sum: prices.price, label: 'new:' + account.id, targets: 'OMP Jackett' }),
+          payUrl(wallet, { sum: prices.price, label: 'new:' + account.id, targets: 'OMP Jackett и JacRed' }),
       );
     }
   } else if (action === 'renew') {
@@ -305,7 +322,7 @@ export function botReply(state, { chatId, text, now, awaiting }) {
         'Продлить до ' +
           new Date(Math.max(sub.paidUntil, now) + prices.days * 86400000).toISOString().slice(0, 10) +
           ':\n' +
-          payUrl(wallet, { sum: prices.price, label: 'sub:' + sub.id, targets: 'OMP Jackett, продление' }),
+          payUrl(wallet, { sum: prices.price, label: 'sub:' + sub.id, targets: 'OMP, продление' }),
       );
     }
   } else if (action === 'code') {
@@ -322,7 +339,7 @@ export function botReply(state, { chatId, text, now, awaiting }) {
       if (wallet && prices.extra) {
         say(
           'Ещё одно устройство:\n' +
-            payUrl(wallet, { sum: prices.extra, label: 'dev:' + sub.id, targets: 'OMP Jackett, устройство' }),
+            payUrl(wallet, { sum: prices.extra, label: 'dev:' + sub.id, targets: 'OMP, устройство' }),
         );
       }
     }

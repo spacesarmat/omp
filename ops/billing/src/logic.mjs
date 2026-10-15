@@ -391,6 +391,53 @@ export function startDeviceLink(state, { deviceId, now }) {
   return { state: { ...state, links }, result: { token, expiresAt: now + 10 * 60 * 1000 } };
 }
 
+const ADMIN_LOGIN_TTL = 5 * 60 * 1000;
+
+/** Start a Telegram login for the admin web panel. Payload: /start admin_TOKEN */
+export function startAdminPanelLogin(state, { now }) {
+  const token = randomId() + randomId();
+  const expiresAt = now + ADMIN_LOGIN_TTL;
+  const fresh = (state.adminLogins || []).filter((l) => !l.consumedAt && l.expiresAt > now);
+  const adminLogins = fresh
+    .concat([{ token, createdAt: now, expiresAt, telegramId: '', confirmedAt: 0, consumedAt: 0, deniedAt: 0 }])
+    .slice(-40);
+  return { state: { ...state, adminLogins }, result: { token, expiresAt } };
+}
+
+export function confirmAdminPanelLogin(state, { token, telegramId, now }) {
+  const key = String(token || '')
+    .trim()
+    .toLowerCase();
+  if (!key) return { state, result: { error: 'bad_link' } };
+  if (!isAdminChat(state.settings, telegramId)) {
+    const adminLogins = (state.adminLogins || []).map((l) =>
+      l.token === key && !l.consumedAt && l.expiresAt > now ? { ...l, deniedAt: now, telegramId: String(telegramId) } : l,
+    );
+    return { state: { ...state, adminLogins }, result: { error: 'forbidden' } };
+  }
+  const row = (state.adminLogins || []).find((l) => l.token === key && !l.consumedAt && l.expiresAt > now);
+  if (!row) return { state, result: { error: 'bad_link' } };
+  if (row.deniedAt) return { state, result: { error: 'forbidden' } };
+  const adminLogins = state.adminLogins.map((l) =>
+    l.token === key ? { ...l, telegramId: String(telegramId), confirmedAt: now, deniedAt: 0 } : l,
+  );
+  return { state: { ...state, adminLogins }, result: { ok: true } };
+}
+
+/** Browser poll: pending | ok | expired | denied. Consumes the token when ok. */
+export function takeAdminPanelLogin(state, { token, now }) {
+  const key = String(token || '')
+    .trim()
+    .toLowerCase();
+  if (!key) return { state, result: { status: 'expired' } };
+  const row = (state.adminLogins || []).find((l) => l.token === key);
+  if (!row || row.consumedAt || row.expiresAt <= now) return { state, result: { status: 'expired' } };
+  if (row.deniedAt) return { state, result: { status: 'denied' } };
+  if (!row.confirmedAt) return { state, result: { status: 'pending' } };
+  const adminLogins = state.adminLogins.map((l) => (l.token === key ? { ...l, consumedAt: now } : l));
+  return { state: { ...state, adminLogins }, result: { status: 'ok', telegramId: row.telegramId } };
+}
+
 export function confirmDeviceLink(state, { token, telegramId, now }) {
   const key = String(token || '').trim().toLowerCase();
   if (!key) return { state, result: { error: 'bad_link' } };
@@ -553,9 +600,13 @@ export function adminDashboard(state, now) {
   if (!s.botToken) alerts.push({ level: 'bad', text: 'Не задан токен бота Telegram' });
   if (!s.jackettUrl) alerts.push({ level: 'bad', text: 'Не задан адрес Jackett' });
   if (!s.jackettApiKey) alerts.push({ level: 'bad', text: 'Не задан API-ключ Jackett' });
+  if (!s.jacredUrl) alerts.push({ level: 'warn', text: 'Не задан адрес JacRed' });
+  if (!s.jacredApiKey) alerts.push({ level: 'warn', text: 'Не задан API-ключ JacRed' });
   if (Number(s.priceRub) > 0 && !s.yoomoneyWallet) alerts.push({ level: 'bad', text: 'Цена задана, но кошелёк ЮMoney пуст' });
   if (!s.publicOrigin) alerts.push({ level: 'warn', text: 'publicOrigin пуст — ссылки «Открыть в OMP» в боте без http' });
-  if (!String(s.adminTelegramIds || '').trim()) alerts.push({ level: 'warn', text: 'Нет adminTelegramIds — админ-кабинет в боте недоступен' });
+  if (!String(s.adminTelegramIds || '').trim()) {
+    alerts.push({ level: 'warn', text: 'Нет adminTelegramIds — вход в панель и админ-кабинет в боте недоступны' });
+  }
 
   const soon = now + 2 * DAY;
   const expiring = state.subscriptions.filter((sub) => sub.paidUntil > now && sub.paidUntil <= soon);

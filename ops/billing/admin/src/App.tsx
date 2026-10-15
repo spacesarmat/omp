@@ -92,6 +92,60 @@ function Login() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [tg, setTg] = useState<{ token: string; deepLink: string } | null>(null);
+  const [tgStatus, setTgStatus] = useState('');
+
+  useEffect(() => {
+    if (!tg?.token) return;
+    let stop = false;
+    const tick = async () => {
+      const res = await api<{ ok?: boolean; status?: string }>('/admin/login/telegram/status?token=' + encodeURIComponent(tg.token));
+      if (stop) return;
+      if (res.status === 'ok' || res.ok) {
+        location.href = '/admin/';
+        return;
+      }
+      if (res.status === 'denied') {
+        setErr('Этот Telegram не в списке adminTelegramIds');
+        setTg(null);
+        setTgStatus('');
+        return;
+      }
+      if (res.status === 'expired') {
+        setErr('Ссылка устарела — нажмите «Войти через Telegram» ещё раз');
+        setTg(null);
+        setTgStatus('');
+        return;
+      }
+      setTgStatus('Ожидаю подтверждение в Telegram…');
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 2000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, [tg?.token]);
+
+  async function startTelegram() {
+    setBusy(true);
+    setErr('');
+    setTgStatus('');
+    const res = await api<{ ok?: boolean; error?: string; token?: string; deepLink?: string }>('/admin/login/telegram', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Accept: 'application/json' },
+      body: '{}',
+    });
+    setBusy(false);
+    if (!res.ok || !res.token || !res.deepLink) {
+      setErr(res.error || 'Не удалось начать вход через Telegram');
+      return;
+    }
+    setTg({ token: res.token, deepLink: res.deepLink });
+    window.open(res.deepLink, '_blank', 'noopener,noreferrer');
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -108,19 +162,36 @@ function Login() {
   return (
     <main className="mx-auto max-w-sm px-4 py-16">
       <h1 className="mb-1 text-2xl font-bold">OMP Billing</h1>
-      <p className="mb-6 text-muted-foreground">Вход в админ-панель</p>
+      <p className="mb-6 text-muted-foreground">Вход через Telegram из списка adminTelegramIds</p>
       {err ? <Alert variant="destructive" className="mb-4">{err}</Alert> : null}
+      {tgStatus ? <Alert className="mb-4">{tgStatus}</Alert> : null}
       <Card>
-        <CardContent className="pt-6">
-          <form className="space-y-4" onSubmit={submit}>
-            <div className="space-y-2">
-              <Label htmlFor="password">Пароль</Label>
-              <Input id="password" type="password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} />
-            </div>
-            <Button type="submit" className="w-full" disabled={busy}>
-              {busy ? '…' : 'Войти'}
-            </Button>
-          </form>
+        <CardContent className="space-y-4 pt-6">
+          <Button className="w-full" disabled={busy} onClick={() => void startTelegram()}>
+            {busy && !tg ? '…' : 'Войти через Telegram'}
+          </Button>
+          {tg?.deepLink ? (
+            <p className="text-sm text-muted-foreground">
+              Если бот не открылся:{' '}
+              <a className="underline" href={tg.deepLink} target="_blank" rel="noreferrer">
+                открыть ссылку
+              </a>
+            </p>
+          ) : null}
+          <button type="button" className="text-sm text-muted-foreground underline" onClick={() => setShowPass((v) => !v)}>
+            {showPass ? 'Скрыть пароль' : 'Войти по паролю'}
+          </button>
+          {showPass ? (
+            <form className="space-y-4" onSubmit={submit}>
+              <div className="space-y-2">
+                <Label htmlFor="password">Пароль</Label>
+                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              </div>
+              <Button type="submit" className="w-full" disabled={busy}>
+                {busy ? '…' : 'Войти'}
+              </Button>
+            </form>
+          ) : null}
         </CardContent>
       </Card>
     </main>
@@ -665,6 +736,10 @@ const SETTINGS_FIELDS: [string, string][] = [
   ['yoomoneySecret', 'ЮMoney секрет'],
   ['jackettUrl', 'Jackett URL'],
   ['jackettApiKey', 'Jackett API key'],
+  ['jacredUrl', 'JacRed URL'],
+  ['jacredApiKey', 'JacRed API key'],
+  ['indexerUser', 'Логин прокси индексаторов'],
+  ['indexerPass', 'Пароль прокси индексаторов'],
   ['smtpHost', 'SMTP host'],
   ['smtpUser', 'SMTP user'],
   ['smtpPass', 'SMTP pass'],

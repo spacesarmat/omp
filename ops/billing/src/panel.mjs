@@ -17,6 +17,7 @@ export function loginPage(error) {
     '<body style="margin:0;background:#0F1115;color:#E8EAF0;font:16px/1.45 Manrope,Segoe UI,sans-serif">' +
     '<main style="max-width:360px;margin:4rem auto;padding:0 1rem">' +
     '<h1 style="font-size:1.4rem">OMP Billing</h1>' +
+    '<p style="color:#9AA1B2">Соберите SPA (`admin` vite build) для входа через Telegram. Запасной вход по паролю:</p>' +
     err +
     '<form method="post" action="/admin/login" style="background:#181B22;padding:1rem;border-radius:12px">' +
     '<label style="display:block;color:#9AA1B2;font-size:13px;margin:0 0 4px">Пароль</label>' +

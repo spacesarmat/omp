@@ -87,8 +87,10 @@ function toResult(sourceId: string, f: Fields): SourceResult | null {
   let magnet = f.magnet && f.magnet.indexOf('magnet:') === 0 ? f.magnet : '';
   const hash = infohashFromMagnet(magnet) || f.hash;
   if (!magnet) magnet = magnetFor(hash, f.title);
-  // omp-fetch: is the billing proxy's stand-in for a Jackett download URL (no host, no key)
-  const remote = !!f.torrent && (/^https?:\/\//i.test(f.torrent) || f.torrent.indexOf('omp-fetch:') === 0);
+  // omp-fetch: / omp-jacred: stand in for a billing download URL (no host, no key)
+  const remote =
+    !!f.torrent &&
+    (/^https?:\/\//i.test(f.torrent) || f.torrent.indexOf('omp-fetch:') === 0 || f.torrent.indexOf('omp-jacred:') === 0);
   const link = !magnet && remote ? stripKey(f.torrent!) : '';
   if (!magnet && !link) return null;
   const detail = f.detailUrl && /^https?:\/\//i.test(f.detailUrl) ? stripKey(f.detailUrl) : '';

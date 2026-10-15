@@ -778,8 +778,10 @@ export const ru = {
       foundSeveral: 'Найдено несколько — выберите:',
     },
     billing: {
-      title: 'Jackett OMP',
-      text: 'Поиск через Jackett на сервере OMP. Адрес и ключ остаются на сервере.',
+      title: 'Подписка OMP',
+      text: 'Jackett и JacRed по подписке. Ключи уже в приложении.',
+      jackett: 'Jackett',
+      jacred: 'JacRed',
       code: 'Код подписки',
       connect: 'Подключить',
       connecting: 'Подключаю…',
