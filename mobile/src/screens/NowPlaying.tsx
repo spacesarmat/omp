@@ -8,7 +8,7 @@ import { nowPlaying, lastSeen, linkStatus, launching, sendCmd } from '../tv/play
 import { volume as tvVolume } from '../tv/tvClient';
 import { formatDuration } from '../../../src/lib/format';
 import { chapterIndexAt, chapterLabel, chapterStepIndex, type Chapter } from '../../../src/player/chapters';
-import { hasPosterImage, playerPosterStyle } from '../ui/playerPoster';
+import { NowPoster } from '../ui/NowPoster';
 import { usePlayingNames, usePlayingPoster } from '../lib/playingNames';
 import { Remote } from './Remote';
 import { NowDeck } from './nowPager';
@@ -132,9 +132,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
       <NowDeck hash={s.hash} fileId={s.file} remote={<Remote />}>
         <div class="m-screen m-now" data-route="nowPlaying">
           {head}
-          <div class="m-now-poster" style={playerPosterStyle(posterState)}>
-            {!hasPosterImage(posterState) && names.title}
-          </div>
+          <NowPoster state={posterState} title={names.title} />
           <div class="m-now-titles">
             <div class="m-now-title">{names.title}</div>
             {names.sub && <div class="m-now-sub">{names.sub}</div>}
