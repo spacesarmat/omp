@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.10
+
+- same as beta.8 (beta.9: changelog window; build - CatalogClient.home stub in overflowHarness)
+
 ## 0.20.1-beta.9
 
 - same as beta.8 (release failed: changelog window pushed out the 0.17.0 news feed rename)

@@ -89,6 +89,12 @@ function season(id: number, n: number): SeasonDetails {
 const catalog: CatalogClient = {
   novelties: () => Promise.resolve({ items: NOVELTIES, pages: 1 }),
   discover: () => Promise.resolve({ items: NOVELTIES, pages: 1 }),
+  home: () =>
+    Promise.resolve([
+      { id: 'trending' as const, items: NOVELTIES },
+      { id: 'popularMovies' as const, items: NOVELTIES.slice(0, 3) },
+      { id: 'popularTv' as const, items: NOVELTIES.slice(1, 4) },
+    ]),
   search: (q) => {
     if (/Тёмн|Темн|Dark/i.test(q)) return Promise.resolve({ items: [title(CARDS[22])], pages: 1 });
     if (/Ледян|Frost/i.test(q)) return Promise.resolve({ items: [title(CARDS[21])], pages: 1 });

@@ -1,5 +1,9 @@
 # Изменения
 
+## 0.20.1-beta.10
+
+- то же, что beta.8 (beta.9: окно changelog; сборка - мок CatalogClient.home в overflowHarness)
+
 ## 0.20.1-beta.9
 
 - то же, что beta.8 (релиз не собрался: окно changelog вытеснило пункт 0.17.0 про ленту «Новое»)
