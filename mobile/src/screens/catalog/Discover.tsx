@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { t } from '../../../../src/i18n';
 import { Icon, ICONS } from '../../ui/Icon';
+import { LazyImg } from '../../ui/LazyImg';
 import { CatalogSearch, ratingText } from './CatalogSearch';
 import { navigate, scrollToTop } from '../../nav';
 import { torrents } from '../../../../src/store/library';
@@ -291,7 +292,7 @@ export function Discover() {
               >
                 <span class="m-disc-poster">
                   {x.poster ? (
-                    <img src={x.poster} alt="" loading="lazy" />
+                    <LazyImg src={x.poster} />
                   ) : (
                     <span class={'m-disc-ph m-disc-ph-' + (x.id % 4)}>{x.title}</span>
                   )}

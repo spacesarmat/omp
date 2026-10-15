@@ -10,6 +10,7 @@ import { torrents } from '../../../../src/store/library';
 import { phoneCatalog, setCatalogMode, type CatalogMode } from '../../catalog/phoneCatalog';
 import { goBack, navigate, switchTab, type MRoute } from '../../nav';
 import { Icon, ICONS } from '../../ui/Icon';
+import { LazyImg } from '../../ui/LazyImg';
 import { CatalogError } from './CatalogError';
 import { ratingText } from './CatalogSearch';
 import { TileTitle, TileWhen } from './Discover';
@@ -142,7 +143,7 @@ function Body({ card }: { card: PersonCard }) {
                 onClick={() => navigate(routeOf(list, c))}
               >
                 <span class="m-disc-poster">
-                  {c.poster ? <img src={c.poster} alt="" loading="lazy" /> : <span class={'m-disc-ph m-disc-ph-' + (c.id % 4)}>{c.title}</span>}
+                  {c.poster ? <LazyImg src={c.poster} /> : <span class={'m-disc-ph m-disc-ph-' + (c.id % 4)}>{c.title}</span>}
                   {c.rating > 0 && <span class="m-disc-rating">{ratingText(c.rating)}</span>}
                   {x.owned && <span class="m-disc-badge">{t('person.owned')}</span>}
                 </span>
