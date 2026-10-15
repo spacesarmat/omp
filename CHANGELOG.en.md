@@ -2,6 +2,16 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.0
+
+- [atv] Built-in player on the 2160 Player engine: 4K, HDR, Dolby Vision as HDR10 without a DV decoder; AC3/E-AC3/DTS/TrueHD passthrough or FFmpeg decode; more formats (M2TS, software decode). VLC and Auto remain
+- [atv] Night audio (yellow key and player menu); Info panel — remote Info key and menu
+- [phone] Watch on the phone — built-in 2160 Player in OMP (resume, Skip marks, episodes, PiP). Video player: Built-in / 2160 Player / Android picker. Background audio
+- [phone] Series card in Discover: dates and status, genres, Watch on TV, creators and cast, seasons on their own screen, similar titles, poster pick; season card with progress
+- [phone] Now on TV: swipe down for the remote, up for the release’s episodes, sideways on an episode to play on the TV; swipe hints; remote settings from the deck
+- [phone] TV keyboard overlays the remote; fast native TorrServer LAN search (ports 8090 and 5665)
+- [phone] Jackett and JacRed OMP on one subscription (keys in the app, search over HTTPS); @OMPBILLINGBOT — payment, code, Telegram link
+
 ## 0.20.0-beta.19
 
 - same as beta.18 (release failed: Now on TV seek and the changelog window)
