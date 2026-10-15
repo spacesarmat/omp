@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.14
+
+- same as beta.11 (beta.13: changelog window keeps 0.17.0 again)
+
 ## 0.20.1-beta.13
 
 - same as beta.11 (beta.12: changelog text must not look like platform markers)
