@@ -160,7 +160,15 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                 disabled={off || s.duration <= 0}
                 value={shown}
                 onInput={(e) => setDrag(Number((e.currentTarget as HTMLInputElement).value))}
-                onChange={(e) => {
+                onPointerUp={(e) => {
+                  // Preact aliases onChange→onInput for <input>; commit only when the finger/mouse is released.
+                  const t = Number((e.currentTarget as HTMLInputElement).value);
+                  sendCmd({ type: 'seek', t });
+                  setHeld({ t, seen: lastSeen.value, at: Date.now() });
+                  setDrag(null);
+                }}
+                onKeyUp={(e) => {
+                  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
                   const t = Number((e.currentTarget as HTMLInputElement).value);
                   sendCmd({ type: 'seek', t });
                   setHeld({ t, seen: lastSeen.value, at: Date.now() });

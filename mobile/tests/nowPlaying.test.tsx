@@ -222,6 +222,10 @@ describe('NowPlaying', () => {
     });
   });
 
+  const releaseSeek = (r: HTMLInputElement) => {
+    r.dispatchEvent(new Event('pointerup', { bubbles: true }));
+  };
+
   it('seeks on release only', () => {
     setState(state());
     mount(<NowPlaying volume={volume} />);
@@ -233,7 +237,7 @@ describe('NowPlaying', () => {
     expect(queue).not.toHaveBeenCalled();
     expect(el.textContent).toContain('10:00');
     act(() => {
-      r.dispatchEvent(new Event('change', { bubbles: true }));
+      releaseSeek(r);
     });
     expect(sent()).toEqual([expect.objectContaining({ type: 'seek', t: 600 })]);
   });
@@ -249,7 +253,7 @@ describe('NowPlaying', () => {
         r.dispatchEvent(new Event('input', { bubbles: true }));
       });
       act(() => {
-        r.dispatchEvent(new Event('change', { bubbles: true }));
+        releaseSeek(r);
       });
       expect(el.textContent).toContain('33:20');
       // stale report from before the seek
@@ -270,7 +274,7 @@ describe('NowPlaying', () => {
         r.dispatchEvent(new Event('input', { bubbles: true }));
       });
       act(() => {
-        r.dispatchEvent(new Event('change', { bubbles: true }));
+        releaseSeek(r);
       });
       act(() => {
         nowPlaying.value = state({ time: 1400 });
