@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN, BILLING_ORIGIN_LAN, rememberBillingOrigin } from '../../src/billing/config';
-import { OMP_JACRED, OMP_JACKETT, indexerAuthHeader } from '../../src/billing/indexers';
 import { billingSession, deviceId, saveBillingSession } from '../../src/billing/session';
 import {
   activateCode,
@@ -53,7 +52,7 @@ describe('omp Jackett source', () => {
     await expect(activateCode(site.ctx, 'ABCD-EFGH')).rejects.toThrow('Этот код уже привязан к другому устройству');
   });
 
-  it('searches Jackett with the built-in key when the subscription is active', async () => {
+  it('searches through the billing proxy when the subscription is active', async () => {
     saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
     syncOmpJackett();
     const site = fakeSite((c) => page(RSS, c.url));
@@ -61,38 +60,46 @@ describe('omp Jackett source', () => {
     expect(list).toHaveLength(1);
     expect(list[0].Title).toBe('Film');
     expect(list[0].Hash).toBe(H);
-    expect(site.calls[0].url).toBe(
-      OMP_JACKETT.url + '/api/v2.0/indexers/all/results/torznab/api?apikey=' + OMP_JACKETT.apiKey + '&t=search&q=q',
-    );
-    expect(site.calls[0].opts?.headers?.Authorization).toBe(indexerAuthHeader());
+    expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/search');
+    expect(site.calls[0].form).toEqual({ source: 'jackett', q: 'q', deviceId: deviceId() });
+    expect(site.calls[0].opts?.headers?.Authorization).toBe('Bearer tok-1');
   });
 
-  it('searches JacRed with the built-in key', async () => {
+  it('searches JacRed through the billing proxy', async () => {
     saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
     const only =
       '<?xml version="1.0"?><rss version="2.0"><channel><title>x</title>' +
-      '<item><title>File</title><link>' +
-      OMP_JACRED.url +
-      '/dl/file</link></item></channel></rss>';
+      '<item><title>File</title><link>omp-jacred:/dl/file</link></item></channel></rss>';
     const site = fakeSite((c) => page(only, c.url));
     const list = await ompJacredSource().search('q', site.ctx);
     expect(list).toHaveLength(1);
-    expect(list[0].Link).toBe(OMP_JACRED.url + '/dl/file');
-    expect(site.calls[0].url.indexOf(OMP_JACRED.url) === 0).toBe(true);
-    expect(site.calls[0].url).toContain('apikey=' + OMP_JACRED.apiKey);
+    expect(list[0].Link).toBe('omp-jacred:/dl/file');
+    expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/search');
+    expect(site.calls[0].form?.source).toBe('jacred');
   });
 
-  it('keeps a Jackett download link when there is no magnet', async () => {
+  it('keeps a proxy download link when there is no magnet', async () => {
     saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
     const only =
       '<?xml version="1.0"?><rss version="2.0"><channel><title>x</title>' +
-      '<item><title>File</title><link>' +
-      OMP_JACKETT.url +
-      '/dl/file</link></item></channel></rss>';
+      '<item><title>File</title><link>omp-fetch:/dl/file</link></item></channel></rss>';
     const site = fakeSite((c) => page(only, c.url));
     const list = await ompJackettSource().search('q', site.ctx);
     expect(list).toHaveLength(1);
-    expect(list[0].Link).toBe(OMP_JACKETT.url + '/dl/file');
+    expect(list[0].Link).toBe('omp-fetch:/dl/file');
+  });
+
+  it('downloads a torrent file through the billing proxy', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    const torrent = 'd4:infod4:name4:testee';
+    const site = fakeSite((c) => page(torrent, c.url));
+    const path = await ompJackettSource().resolve(
+      { Title: 'File', Link: 'omp-fetch:/dl/file', Categories: '', Size: '', source: OMP_JACKETT_ID },
+      site.ctx,
+    );
+    expect(path).toBeTruthy();
+    expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/torrent');
+    expect(site.calls[0].form?.link).toBe('omp-fetch:/dl/file');
   });
 
   it('forget clears the source', () => {
@@ -105,13 +112,23 @@ describe('omp Jackett source', () => {
     expect(getSource(OMP_JACRED_ID)).toBeUndefined();
   });
 
-  it('syncs paidUntil from /v1/me after admin grant', async () => {
+  it('syncs paidUntil and sources from /v1/me after admin grant', async () => {
     saveBillingSession({ token: 'tok-1', paidUntil: 1e12 });
     const site = fakeSite((c) =>
-      page(JSON.stringify({ telegramId: '1', paidUntil: 2e12, active: true, deviceLimit: 1 }), c.url),
+      page(
+        JSON.stringify({
+          telegramId: '1',
+          paidUntil: 2e12,
+          active: true,
+          deviceLimit: 1,
+          sources: { jackett: true, jacred: false },
+        }),
+        c.url,
+      ),
     );
     const acc = await fetchBillingAccount(site.ctx);
     expect(acc?.paidUntil).toBe(2e12);
+    expect(acc?.sources?.jacred).toBe(false);
     expect(billingSession()?.paidUntil).toBe(2e12);
     expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/me');
   });

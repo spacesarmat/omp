@@ -756,7 +756,7 @@ export const en: EnDict<typeof ru> = {
     },
     billing: {
       title: 'OMP subscription',
-      text: 'Jackett and JacRed with the subscription. The keys are already in the app.',
+      text: 'Jackett and JacRed with the subscription. Search goes through the OMP server; add releases to your own TorrServer.',
       jackett: 'Jackett',
       jacred: 'JacRed',
       code: 'Subscription code',
@@ -769,6 +769,8 @@ export const en: EnDict<typeof ru> = {
       badCode: 'The code was not accepted',
       otherDevice: 'This code is already tied to another device',
       expired: 'The subscription has ended',
+      disabled: 'This source is temporarily off',
+      rate: 'Too many requests — wait a moment',
       down: 'The subscription server is not responding',
       bot: 'Subscription and code — in the @{name} bot',
       openBot: 'Open the bot',

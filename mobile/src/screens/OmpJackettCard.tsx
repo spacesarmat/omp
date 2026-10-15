@@ -13,6 +13,7 @@ import {
   clearBilling,
   clearTelegramLink,
   fetchBillingAccount,
+  refreshOmpJackettSources,
   startTelegramLink,
 } from '../../../src/sources/ompJackett';
 import { phoneSourceContext } from '../searchContext';
@@ -34,7 +35,9 @@ export function OmpJackettCard() {
   const [linkBusy, setLinkBusy] = useState(false);
 
   async function refreshAccount() {
-    setAccount(await fetchBillingAccount(phoneSourceContext()));
+    const ctx = phoneSourceContext();
+    setAccount(await fetchBillingAccount(ctx));
+    await refreshOmpJackettSources(ctx);
   }
 
   useEffect(() => {

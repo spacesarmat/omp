@@ -27,7 +27,7 @@ function rub(n) {
   return (Number(n) || 0).toFixed(0) + ' ₽';
 }
 
-/** Reply keyboard — personal cabinet. */
+/** Reply keyboard — personal cabinet (same for users and for admins in user mode). */
 export const BTN = {
   cabinet: 'Кабинет',
   pay: 'Подписка',
@@ -45,18 +45,22 @@ export const ADMIN_BTN = {
   find: 'Найти',
   grant: 'Выдать дни',
   promo: 'Новый промо',
-  back: 'В кабинет',
+  /** Leave admin pad and use the same keyboard as a regular subscriber. */
+  user: 'Как пользователь',
 };
 
-export function mainKeyboard(isAdmin) {
-  const rows = [
-    [{ text: BTN.cabinet }, { text: BTN.pay }],
-    [{ text: BTN.renew }, { text: BTN.code }],
-    [{ text: BTN.promo }, { text: BTN.price }],
-    [{ text: BTN.unlink }, { text: BTN.support }],
-  ];
-  if (isAdmin) rows.push([{ text: BTN.admin }]);
-  return { keyboard: rows, resize_keyboard: true, is_persistent: true };
+/** User pad — no admin entry so admins can test the subscriber flow as-is. */
+export function mainKeyboard() {
+  return {
+    keyboard: [
+      [{ text: BTN.cabinet }, { text: BTN.pay }],
+      [{ text: BTN.renew }, { text: BTN.code }],
+      [{ text: BTN.promo }, { text: BTN.price }],
+      [{ text: BTN.unlink }, { text: BTN.support }],
+    ],
+    resize_keyboard: true,
+    is_persistent: true,
+  };
 }
 
 export function adminKeyboard() {
@@ -64,7 +68,7 @@ export function adminKeyboard() {
     keyboard: [
       [{ text: ADMIN_BTN.summary }, { text: ADMIN_BTN.find }],
       [{ text: ADMIN_BTN.grant }, { text: ADMIN_BTN.promo }],
-      [{ text: ADMIN_BTN.back }],
+      [{ text: ADMIN_BTN.user }],
     ],
     resize_keyboard: true,
     is_persistent: true,
@@ -107,11 +111,11 @@ export function parseAction(text) {
   if (raw === BTN.unlink || raw === '/unlink') return { action: 'unlink', arg: '' };
   if (raw === BTN.support || raw === '/support') return { action: 'support', arg: '' };
   if (raw === BTN.admin || raw === '/admin') return { action: 'admin', arg: '' };
+  if (raw === ADMIN_BTN.user || raw === '/user' || raw === 'В кабинет') return { action: 'user_mode', arg: '' };
   if (raw === ADMIN_BTN.summary || raw === '/summary') return { action: 'admin_summary', arg: '' };
   if (raw === ADMIN_BTN.find || raw === '/find') return { action: 'admin_find', arg: '' };
   if (raw === ADMIN_BTN.grant || raw === '/grant') return { action: 'admin_grant', arg: '' };
   if (raw === ADMIN_BTN.promo) return { action: 'admin_promo', arg: '' };
-  if (raw === ADMIN_BTN.back) return { action: 'cabinet', arg: '' };
 
   const cmd = head.toLowerCase();
   if (cmd === '/promo' && rest) return { action: 'promo', arg: rest.replace(/\s+/g, '') };
@@ -157,10 +161,11 @@ function codeMessage(origin, code) {
 
 /**
  * @param awaiting — { kind: 'promo'|'admin_find'|'admin_grant'|'admin_promo'|'unlink_device'|'support' } | null
+ * @param pad — 'user' | 'admin' | null — keyboard mode for this chat (admins only; users always 'user')
  * @param replyTo — Telegram message id this update replies to
- * @returns {{ state, messages: { chatId, text, keyboard?, inline?, await?, parseMode?, supportNotify? }[] }}
+ * @returns {{ state, messages: { chatId, text, keyboard?, inline?, await?, parseMode?, supportNotify? }[], pad: 'user'|'admin' }}
  */
-export function botReply(state, { chatId, text, now, awaiting, replyTo, from }) {
+export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pad }) {
   const ensured = from
     ? rememberTelegramProfile(
         state,
@@ -180,15 +185,26 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from }) 
   const wallet = cur.settings.yoomoneyWallet;
   const origin = cur.settings.publicOrigin || '';
   const messages = [];
-  const say = (body, extra) =>
+  let { action, arg } = parseAction(text);
+
+  /** Admins default to user pad so they can exercise the subscriber flow; /admin switches. */
+  let mode = admin && pad === 'admin' ? 'admin' : 'user';
+  if (admin && (action === 'admin' || String(action).indexOf('admin_') === 0)) mode = 'admin';
+  if (action === 'user_mode') mode = 'user';
+
+  const say = (body, extra) => {
+    const forceAdmin = extra && extra.adminPad === true;
+    const forceUser = extra && extra.adminPad === false;
+    const adminPad = forceUser ? false : forceAdmin || mode === 'admin';
+    const rest = { ...(extra || {}) };
+    delete rest.adminPad;
     messages.push({
       chatId: String(chatId),
       text: body,
-      keyboard: extra && extra.adminPad ? adminKeyboard() : mainKeyboard(admin),
-      ...(extra || {}),
+      keyboard: admin && adminPad ? adminKeyboard() : mainKeyboard(),
+      ...rest,
     });
-
-  let { action, arg } = parseAction(text);
+  };
 
   if (awaiting && awaiting.kind && action === 'unknown') {
     if (awaiting.kind === 'promo') {
@@ -227,10 +243,10 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from }) 
       messages.push({
         chatId: String(target),
         text: body,
-        keyboard: mainKeyboard(isAdminChat(cur.settings, target)),
+        keyboard: mainKeyboard(),
       });
       say('Ответ отправлен пользователю ' + target + '.');
-      return { state: cur, messages };
+      return { state: cur, messages, pad: mode };
     }
   }
 
@@ -239,7 +255,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from }) 
     cur = out.state;
     if (out.result.error) say('Ссылка устарела или уже использована. В OMP нажмите «Привязать Telegram» ещё раз.');
     else say('Телефон привязан к этому Telegram.\n' + statusText(subscriptionView(cur, account.id, now), account));
-    return { state: cur, messages };
+    return { state: cur, messages, pad: mode };
   }
 
   if (action === 'admin_login') {
@@ -252,18 +268,28 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from }) 
     } else {
       say('Вход в админ-панель подтверждён. Вернитесь в браузер — страница откроется сама.');
     }
-    return { state: cur, messages };
+    return { state: cur, messages, pad: mode };
   }
 
   if (action === 'admin' || action === 'admin_summary' || action === 'admin_find' || action === 'admin_grant' || action === 'admin_promo') {
     if (!admin) {
       say('Нет доступа. Добавьте свой Telegram id в настройках панели (adminTelegramIds).');
-      return { state: cur, messages };
+      return { state: cur, messages, pad: 'user' };
     }
   }
 
-  if (action === 'admin') {
-    say('Админ-кабинет. Сводка, поиск, выдача дней и промокоды.', { adminPad: true });
+  if (action === 'user_mode') {
+    say(
+      (admin ? 'Режим пользователя — те же кнопки, что у подписчика. /admin — снова админ-кабинет.\n\n' : '') +
+        'Личный кабинет\n\n' +
+        statusText(sub, account),
+      { adminPad: false },
+    );
+  } else if (action === 'admin') {
+    say(
+      'Админ-кабинет. Сводка, поиск, выдача дней и промокоды.\n«Как пользователь» — проверить кабинет подписчика.',
+      { adminPad: true },
+    );
   } else if (action === 'admin_summary') {
     const s = adminSummary(cur, now);
     say(
@@ -451,9 +477,13 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from }) 
   } else if (action === 'unknown') {
     say('Не понял. Выберите кнопку ниже или «Поддержка».\n\n' + statusText(sub, account));
   } else {
-    say('Личный кабинет\n\n' + statusText(sub, account));
+    const hint =
+      admin && mode === 'user'
+        ? '\n\nВы админ. /admin — админ-кабинет.'
+        : '';
+    say('Личный кабинет\n\n' + statusText(sub, account) + hint);
   }
-  return { state: cur, messages };
+  return { state: cur, messages, pad: mode };
 }
 
 export function telegramOf(state, accountId) {

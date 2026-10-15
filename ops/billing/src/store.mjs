@@ -17,8 +17,13 @@ export function emptyState() {
       yoomoneySecret: '',
       jackettUrl: '',
       jackettApiKey: '',
+      /** When false, /v1/search for Jackett returns disabled for subscribers. */
+      jackettEnabled: true,
       jacredUrl: '',
       jacredApiKey: '',
+      jacredEnabled: true,
+      /** Internal docker URL of VPS TorrServer (ops health only, never sent to phones). */
+      torrserverUrl: '',
       /** Shared basic-auth for Jackett and JacRed when they sit behind the panel proxy. */
       indexerUser: '',
       indexerPass: '',

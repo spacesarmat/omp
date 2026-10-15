@@ -37,12 +37,21 @@ import { goPage } from './go.mjs';
 import { basicAuthHeader, indexerByLink, indexerOf, jackettSearchUrl, restoreJackett, stripJackett } from './jackett.mjs';
 import { sendMail } from './mail.mjs';
 import { loginPage } from './panel.mjs';
+import {
+  createRateLimit,
+  createSearchCache,
+  mergeSettings,
+  probeAllServices,
+  sourceEnabled,
+} from './services.mjs';
 import { readState, resolveDbPath, updateState } from './store.mjs';
 import { notificationOk } from './yoomoney.mjs';
 
 const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>';
 const PUBLIC_DIR = fileURLToPath(new URL('../public', import.meta.url));
 const SPA_INDEX = join(PUBLIC_DIR, 'index.html');
+const searchRate = createRateLimit(30, 60 * 1000);
+const searchCache = createSearchCache(45 * 1000);
 
 function wantsJson(req) {
   const accept = String(req.headers.accept || '');
@@ -258,6 +267,12 @@ export function createApp(file, fetchImpl) {
         const telegramId = url.searchParams.get('telegramId') || '';
         return json(res, 200, { telegramId, messages: supportThread(readState(file), telegramId).slice(-80) });
       }
+      if (req.method === 'GET' && path === '/admin/api/services') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const services = await probeAllServices(readState(file).settings, net);
+        return json(res, 200, { ok: true, services });
+      }
       if (req.method === 'GET' && path === '/admin/api/user') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
@@ -344,40 +359,15 @@ export function createApp(file, fetchImpl) {
       if (req.method === 'POST' && path.indexOf('/admin/') === 0) {
         const body = await readBody(req);
         if (!admin || body.csrf !== admin.csrf) return send(res, 403, 'forbidden');
-        if (path === '/admin/settings') {
-          await updateState(file, (state) => {
-            const num = (v, d) => {
-              const n = Number(v);
-              return Number.isFinite(n) ? n : d;
-            };
-            return {
-              state: {
-                ...state,
-                settings: {
-                  ...state.settings,
-                  botToken: body.botToken || '',
-                  botUsername: (body.botUsername || 'OMPBILLINGBOT').replace(/^@/, ''),
-                  publicOrigin: (body.publicOrigin || '').replace(/\/+$/, ''),
-                  adminTelegramIds: body.adminTelegramIds || '',
-                  yoomoneyWallet: body.yoomoneyWallet || '',
-                  yoomoneySecret: body.yoomoneySecret || '',
-                  jackettUrl: (body.jackettUrl || '').replace(/\/+$/, ''),
-                  jackettApiKey: body.jackettApiKey || '',
-                  jacredUrl: (body.jacredUrl || '').replace(/\/+$/, ''),
-                  jacredApiKey: body.jacredApiKey || '',
-                  indexerUser: body.indexerUser || '',
-                  indexerPass: body.indexerPass || '',
-                  smtpHost: body.smtpHost || '',
-                  smtpUser: body.smtpUser || '',
-                  smtpPass: body.smtpPass || '',
-                  smtpFrom: body.smtpFrom || '',
-                  priceRub: num(body.priceRub, 0),
-                  periodDays: num(body.periodDays, 30),
-                  extraDeviceRub: num(body.extraDeviceRub, 0),
-                },
-              },
-            };
-          });
+        if (path === '/admin/settings' || path === '/admin/services') {
+          await updateState(file, (state) => ({
+            state: { ...state, settings: mergeSettings(state.settings, body) },
+          }));
+          await audit(file, path === '/admin/services' ? 'services_save' : 'settings_save', 'ok');
+          if (wantsJson(req) && path === '/admin/services') {
+            const services = await probeAllServices(readState(file).settings, net);
+            return json(res, 200, { ok: true, services });
+          }
         }
         let flashed = '';
         let flashPromo = '';
@@ -646,12 +636,17 @@ export function createApp(file, fetchImpl) {
         if (!account) account = accountByDevice(state, device);
         if (!account) return json(res, 404, { error: 'not_linked' });
         const view = subscriptionView(state, account.id, now);
+        const isActive = view ? view.active : active;
         return json(res, 200, {
           telegramId: account.telegramId || '',
           paidUntil: view ? view.paidUntil : paidUntil,
-          active: view ? view.active : active,
+          active: isActive,
           deviceLimit: view ? view.deviceLimit : 0,
           devices: view ? view.devices.map((d) => ({ bound: d.bound, deviceId: d.bound ? (d.deviceId || '').slice(0, 8) : '' })) : [],
+          sources: {
+            jackett: isActive && sourceEnabled(state.settings, 'jackett') && !!state.settings.jackettUrl && !!state.settings.jackettApiKey,
+            jacred: isActive && sourceEnabled(state.settings, 'jacred') && !!state.settings.jacredUrl && !!state.settings.jacredApiKey,
+          },
         });
       }
       if (req.method === 'POST' && path === '/v1/search') {
@@ -660,11 +655,19 @@ export function createApp(file, fetchImpl) {
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
         if (!sessionOk(state, { token, deviceId, now: Date.now() })) return json(res, 403, { error: 'expired' });
-        const indexer = indexerOf(state.settings, body.source);
-        if (!indexer.url || !indexer.key) {
-          return send(res, 200, EMPTY_RSS, { 'content-type': 'application/xml; charset=utf-8' });
+        const source = body.source === 'jacred' ? 'jacred' : 'jackett';
+        if (!sourceEnabled(state.settings, source)) return json(res, 403, { error: 'disabled' });
+        const rateKey = String(deviceId || token || '').slice(0, 64);
+        if (!searchRate.allow(rateKey)) return json(res, 429, { error: 'rate' });
+        const indexer = indexerOf(state.settings, source);
+        if (!indexer.url || !indexer.key) return json(res, 403, { error: 'disabled' });
+        const q = String(body.q || '');
+        const cacheKey = source + '\0' + q.toLowerCase();
+        const cached = searchCache.get(cacheKey);
+        if (cached !== null) {
+          return send(res, 200, cached, { 'content-type': 'application/xml; charset=utf-8' });
         }
-        const search = jackettSearchUrl(indexer.url, indexer.key, body.q || '');
+        const search = jackettSearchUrl(indexer.url, indexer.key, q);
         const headers = {};
         const auth = basicAuthHeader(state.settings);
         if (auth) headers.Authorization = auth;
@@ -674,22 +677,32 @@ export function createApp(file, fetchImpl) {
         } catch (e) {
           return json(res, 502, { error: 'down' });
         }
+        if (upstream.status < 200 || upstream.status >= 300) {
+          return json(res, 502, { error: 'down' });
+        }
         const xml = stripJackett(await upstream.text(), indexer.url, indexer.key, indexer.mark);
-        return send(res, upstream.status, xml, { 'content-type': 'application/xml; charset=utf-8' });
+        searchCache.set(cacheKey, xml);
+        return send(res, 200, xml, { 'content-type': 'application/xml; charset=utf-8' });
       }
       if (req.method === 'POST' && path === '/v1/torrent') {
         const body = await readBody(req);
-        const deviceId = req.headers['x-device-id'] || '';
+        const deviceId = req.headers['x-device-id'] || body.deviceId || '';
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
         if (!sessionOk(state, { token, deviceId, now: Date.now() })) return json(res, 403, { error: 'expired' });
         const indexer = indexerByLink(state.settings, body.link);
+        if (!sourceEnabled(state.settings, indexer.name)) return json(res, 403, { error: 'disabled' });
         const remote = restoreJackett(body.link, indexer.url, indexer.key, indexer.mark);
         if (!remote) return json(res, 400, { error: 'bad_link' });
         const headers = {};
         const auth = basicAuthHeader(state.settings);
         if (auth) headers.Authorization = auth;
-        const upstream = await net(remote, { headers });
+        let upstream;
+        try {
+          upstream = await net(remote, { headers });
+        } catch (e) {
+          return json(res, 502, { error: 'down' });
+        }
         const buf = Buffer.from(await upstream.arrayBuffer());
         return send(res, upstream.status, buf, { 'content-type': 'application/octet-stream' });
       }
@@ -769,6 +782,8 @@ export async function pollBot(file, fetchImpl) {
   let sweptAt = 0;
   /** chatId → { kind } waiting for the next free-text reply */
   const awaiting = new Map();
+  /** chatId → 'user' | 'admin' — keyboard pad for admins (users always stay on user pad) */
+  const pads = new Map();
   const net = fetchImpl || fetch;
   for (;;) {
     try {
@@ -798,6 +813,7 @@ export async function pollBot(file, fetchImpl) {
         if (!msg || !msg.chat) continue;
         const chatId = String(msg.chat.id);
         const wait = awaiting.get(chatId) || null;
+        const pad = pads.get(chatId) || null;
         const replyTo = msg.reply_to_message && msg.reply_to_message.message_id ? msg.reply_to_message.message_id : 0;
         const from = msg.from
           ? {
@@ -807,12 +823,22 @@ export async function pollBot(file, fetchImpl) {
             }
           : null;
         const replied = await updateState(file, (cur) => {
-          const out = botReply(cur, { chatId, text: msg.text || '', now: Date.now(), awaiting: wait, replyTo, from });
-          return { state: out.state, result: out.messages };
+          const out = botReply(cur, {
+            chatId,
+            text: msg.text || '',
+            now: Date.now(),
+            awaiting: wait,
+            replyTo,
+            from,
+            pad,
+          });
+          return { state: out.state, result: { messages: out.messages, pad: out.pad } };
         });
         awaiting.delete(chatId);
-        for (let m = 0; m < replied.length; m++) {
-          const row = replied[m];
+        if (replied && replied.pad) pads.set(chatId, replied.pad);
+        const rows = replied && replied.messages ? replied.messages : replied || [];
+        for (let m = 0; m < rows.length; m++) {
+          const row = rows[m];
           if (row.await) awaiting.set(chatId, row.await);
           try {
             const sent = await telegramSend(token, row.chatId, row.text, net, {
@@ -848,19 +874,34 @@ export function dataFile() {
   return path.replace(/^\/([A-Za-z]:)/, '$1');
 }
 
+function envServiceDefaults() {
+  return {
+    jackettUrl: process.env.BILLING_JACKETT_URL || '',
+    jacredUrl: process.env.BILLING_JACRED_URL || '',
+    torrserverUrl: process.env.BILLING_TORRSERVER_URL || '',
+    publicOrigin: process.env.BILLING_PUBLIC_ORIGIN || '',
+  };
+}
+
 export async function ensureAdmin(file) {
   const state = readState(file);
-  const jackettUrl = process.env.BILLING_JACKETT_URL || '';
-  const publicOrigin = process.env.BILLING_PUBLIC_ORIGIN || '';
+  const env = envServiceDefaults();
   if (state.settings.adminHash) {
-    if ((jackettUrl && !state.settings.jackettUrl) || (publicOrigin && !state.settings.publicOrigin)) {
+    const need =
+      (env.jackettUrl && !state.settings.jackettUrl) ||
+      (env.jacredUrl && !state.settings.jacredUrl) ||
+      (env.torrserverUrl && !state.settings.torrserverUrl) ||
+      (env.publicOrigin && !state.settings.publicOrigin);
+    if (need) {
       await updateState(file, (s) => ({
         state: {
           ...s,
           settings: {
             ...s.settings,
-            jackettUrl: s.settings.jackettUrl || jackettUrl,
-            publicOrigin: s.settings.publicOrigin || publicOrigin,
+            jackettUrl: s.settings.jackettUrl || env.jackettUrl,
+            jacredUrl: s.settings.jacredUrl || env.jacredUrl,
+            torrserverUrl: s.settings.torrserverUrl || env.torrserverUrl,
+            publicOrigin: s.settings.publicOrigin || env.publicOrigin,
           },
         },
       }));
@@ -876,8 +917,10 @@ export async function ensureAdmin(file) {
         ...s.settings,
         adminHash: hashed.hash,
         adminSalt: hashed.salt,
-        jackettUrl: s.settings.jackettUrl || jackettUrl,
-        publicOrigin: s.settings.publicOrigin || publicOrigin,
+        jackettUrl: s.settings.jackettUrl || env.jackettUrl,
+        jacredUrl: s.settings.jacredUrl || env.jacredUrl,
+        torrserverUrl: s.settings.torrserverUrl || env.torrserverUrl,
+        publicOrigin: s.settings.publicOrigin || env.publicOrigin,
       },
     },
   }));

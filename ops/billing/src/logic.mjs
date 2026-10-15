@@ -134,7 +134,10 @@ export function appendSupportMessage(state, { telegramId, text, direction, now, 
     via: via === 'panel' ? 'panel' : 'bot',
   };
   const supportMessages = (state.supportMessages || []).concat([row]).slice(-SUPPORT_CAP);
-  return { state: { ...state, supportMessages }, result: { message: row } };
+  // Any new message (admin or user) reopens a previously closed support thread in the panel.
+  const closed = { ...(state.supportClosed || {}) };
+  if (closed[id]) delete closed[id];
+  return { state: { ...state, supportMessages, supportClosed: closed }, result: { message: row } };
 }
 
 export function rememberSupportReply(state, { adminChatId, messageId, telegramId, now }) {

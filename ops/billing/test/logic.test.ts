@@ -5,6 +5,15 @@ import { join } from 'node:path';
 import { botReply } from '../src/bot.mjs';
 import { restoreJackett, stripJackett } from '../src/jackett.mjs';
 import {
+  createRateLimit,
+  createSearchCache,
+  keepSecret,
+  mergeSettings,
+  publicAdminSettings,
+  SECRET_MASK,
+  sourceEnabled,
+} from '../src/services.mjs';
+import {
   accountCard,
   activate,
   adminDashboard,
@@ -156,11 +165,41 @@ describe('bot', () => {
   it('opens the admin cabinet only for listed telegram ids', () => {
     const state = emptyState();
     state.settings.adminTelegramIds = '99';
-    const denied = botReply(state, { chatId: 1, text: 'Админ', now: NOW });
+    const denied = botReply(state, { chatId: 1, text: '/admin', now: NOW });
     expect(denied.messages[0].text).toContain('Нет доступа');
-    const ok = botReply(state, { chatId: 99, text: 'Админ', now: NOW });
+    const ok = botReply(state, { chatId: 99, text: '/admin', now: NOW });
     expect(ok.messages[0].text).toContain('Админ-кабинет');
+    expect(ok.pad).toBe('admin');
     expect(ok.messages[0].keyboard.keyboard[0][0].text).toBe('Сводка');
+    expect(ok.messages[0].keyboard.keyboard[2][0].text).toBe('Как пользователь');
+  });
+
+  it('lets an admin switch to the user pad to test subscriber buttons', () => {
+    const state = emptyState();
+    state.settings.adminTelegramIds = '99';
+    const adminPad = botReply(state, { chatId: 99, text: '/admin', now: NOW });
+    expect(adminPad.pad).toBe('admin');
+    const userPad = botReply(adminPad.state, {
+      chatId: 99,
+      text: 'Как пользователь',
+      now: NOW + 1,
+      pad: 'admin',
+    });
+    expect(userPad.pad).toBe('user');
+    expect(userPad.messages[0].text).toContain('Режим пользователя');
+    const keys = userPad.messages[0].keyboard.keyboard.flat().map((b: { text: string }) => b.text);
+    expect(keys).toContain('Кабинет');
+    expect(keys).toContain('Подписка');
+    expect(keys).not.toContain('Сводка');
+    expect(keys).not.toContain('Админ');
+    const stay = botReply(userPad.state, {
+      chatId: 99,
+      text: 'Цены',
+      now: NOW + 2,
+      pad: 'user',
+    });
+    expect(stay.pad).toBe('user');
+    expect(stay.messages[0].keyboard.keyboard[0][0].text).toBe('Кабинет');
   });
 
   it('confirms admin panel login only for listed telegram ids', () => {
@@ -402,5 +441,41 @@ describe('telegram nickname', () => {
     });
     expect(supportThreads(again.state)).toHaveLength(1);
     expect(supportThreads(again.state)[0].lastText).toBe('ещё вопрос');
+  });
+});
+
+describe('services settings', () => {
+  it('masks secrets in the admin payload and keeps them on save', () => {
+    const cur = emptyState().settings;
+    cur.jackettApiKey = 'secret-key';
+    cur.indexerPass = 'pass';
+    cur.jackettUrl = 'http://jackett:9117';
+    const pub = publicAdminSettings(cur);
+    expect(pub.jackettApiKey).toBe(SECRET_MASK);
+    expect(pub.indexerPass).toBe(SECRET_MASK);
+    expect(pub.jackettUrl).toBe('http://jackett:9117');
+    expect(keepSecret(SECRET_MASK, 'secret-key')).toBe('secret-key');
+    const next = mergeSettings(cur, {
+      jackettApiKey: SECRET_MASK,
+      jackettEnabled: 'false',
+      jacredEnabled: 'true',
+      torrserverUrl: 'http://torrserver:8090',
+    });
+    expect(next.jackettApiKey).toBe('secret-key');
+    expect(next.jackettEnabled).toBe(false);
+    expect(next.jacredEnabled).toBe(true);
+    expect(next.torrserverUrl).toBe('http://torrserver:8090');
+    expect(sourceEnabled(next, 'jackett')).toBe(false);
+  });
+
+  it('rate-limits and caches search answers', () => {
+    const limit = createRateLimit(2, 60_000);
+    expect(limit.allow('d1')).toBe(true);
+    expect(limit.allow('d1')).toBe(true);
+    expect(limit.allow('d1')).toBe(false);
+    expect(limit.allow('d2')).toBe(true);
+    const cache = createSearchCache(60_000);
+    cache.set('k', '<rss/>');
+    expect(cache.get('k')).toBe('<rss/>');
   });
 });

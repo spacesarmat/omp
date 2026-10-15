@@ -279,18 +279,39 @@ function SupportPanel({
   csrf,
   threads,
   onSent,
+  initialTelegramId,
 }: {
   csrf: string;
   threads: SupportThread[];
   onSent: () => void;
+  initialTelegramId?: string;
 }) {
-  const [id, setId] = useState(threads[0]?.telegramId || '');
+  const [id, setId] = useState(initialTelegramId || threads[0]?.telegramId || '');
   const [messages, setMessages] = useState<SupportMsg[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const box = useRef<HTMLDivElement>(null);
+  const bottom = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+
+  useEffect(() => {
+    if (initialTelegramId) setId(initialTelegramId);
+  }, [initialTelegramId]);
+
+  function scrollToEnd(force?: boolean) {
+    if (!force && !stick.current) return;
+    const el = box.current;
+    const end = bottom.current;
+    if (!el) return;
+    // Double rAF: wait for layout after React commit so scrollHeight is final.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (end) end.scrollIntoView({ block: 'end' });
+        else el.scrollTop = el.scrollHeight;
+      });
+    });
+  }
 
   useEffect(() => {
     stick.current = true;
@@ -314,10 +335,8 @@ function SupportPanel({
   }, [id]);
 
   useEffect(() => {
-    const el = box.current;
-    if (!el || !stick.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [messages]);
+    scrollToEnd();
+  }, [messages, id]);
 
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -340,8 +359,11 @@ function SupportPanel({
 
   useEffect(() => {
     if (!id) return;
-    if (!threads.some((row) => row.telegramId === id)) setId(threads[0]?.telegramId || '');
-  }, [threads, id]);
+    if (threads.some((row) => row.telegramId === id)) return;
+    // Keep a deep-linked telegram id even if the thread is not in the open list yet.
+    if (initialTelegramId && id === initialTelegramId) return;
+    setId(threads[0]?.telegramId || '');
+  }, [threads, id, initialTelegramId]);
 
   async function closeDialog() {
     if (!id || busy) return;
@@ -367,7 +389,19 @@ function SupportPanel({
           <CardDescription>Сообщения из бота</CardDescription>
         </CardHeader>
         <CardContent className="space-y-1">
-          {threads.length === 0 ? <p className="text-sm text-muted-foreground">Пока пусто</p> : null}
+          {threads.length === 0 && !(initialTelegramId && id === initialTelegramId) ? (
+            <p className="text-sm text-muted-foreground">Пока пусто</p>
+          ) : null}
+          {initialTelegramId && id === initialTelegramId && !threads.some((row) => row.telegramId === id) ? (
+            <button
+              type="button"
+              className="block w-full rounded-md bg-muted px-2 py-2 text-left text-sm"
+              onClick={() => setId(initialTelegramId)}
+            >
+              <div className="font-medium">{initialTelegramId}</div>
+              <div className="truncate text-xs text-muted-foreground">диалог из карточки пользователя</div>
+            </button>
+          ) : null}
           {threads.map((row) => (
             <button
               key={row.telegramId}
@@ -389,16 +423,19 @@ function SupportPanel({
           <CardTitle>{id ? personLabel(id, active?.username, active?.name) : 'Выберите диалог'}</CardTitle>
           <CardDescription>Ответ уходит этому пользователю в бота. Ответ на уведомление в Telegram делает то же самое.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="flex flex-col gap-3">
           <div
             ref={box}
-            className="max-h-80 space-y-2 overflow-auto"
+            className="omp-scroll h-80 min-h-0 space-y-2 overflow-y-auto overscroll-contain rounded-md border border-border/60 bg-background/40 p-3"
             onScroll={() => {
               const el = box.current;
               if (!el) return;
-              stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+              stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
             }}
           >
+            {messages.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{id ? 'Пока нет сообщений' : 'Выберите диалог слева'}</p>
+            ) : null}
             {messages.map((m) => (
               <div key={m.id} className={m.direction === 'out' ? 'text-right' : ''}>
                 <div className="text-xs text-muted-foreground">
@@ -408,9 +445,10 @@ function SupportPanel({
                 <div className="inline-block max-w-[90%] whitespace-pre-wrap rounded-md bg-muted px-3 py-2 text-sm">{m.text}</div>
               </div>
             ))}
+            <div ref={bottom} className="h-px w-full shrink-0" aria-hidden />
           </div>
           {err ? <Alert variant="destructive">{err}</Alert> : null}
-          <form className="space-y-2" onSubmit={(e) => void send(e)}>
+          <form className="shrink-0 space-y-2" onSubmit={(e) => void send(e)}>
             <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Ответ пользователю" rows={3} />
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={busy || !id || !text.trim()}>
@@ -471,12 +509,13 @@ export function App() {
   const [auth, setAuth] = useState<boolean | null>(null);
   const [data, setData] = useState<HomeData | null>(null);
   const [user, setUser] = useState<UserData | null>(null);
-  const [tab, setTab] = useState('home');
+  const params = useMemo(() => new URLSearchParams(location.search), []);
+  const [tab, setTab] = useState(() => params.get('tab') || 'home');
   const [filter, setFilter] = useState('all');
   const [q, setQ] = useState('');
   const [grantDays, setGrantDays] = useState('30');
   const [msg, setMsg] = useState('');
-  const params = useMemo(() => new URLSearchParams(location.search), []);
+  const supportTg = params.get('tg') || '';
 
   async function reload() {
     const id = params.get('id');
@@ -549,6 +588,7 @@ export function App() {
   if (auth === false) return <Login />;
 
   if (user) {
+    const tg = user.account.telegramId || '';
     return (
       <main className="mx-auto max-w-3xl space-y-4 px-4 py-6">
         <Button variant="link" className="px-0" asChild>
@@ -563,10 +603,10 @@ export function App() {
             </p>
             <p>
               <span className="text-muted-foreground">Telegram</span>{' '}
-              {user.account.telegramId ? (
+              {tg ? (
                 <>
-                  <Badge variant="ok">{personLabel(user.account.telegramId, user.account.telegramUsername, user.account.telegramName)}</Badge>{' '}
-                  <CopyBtn value={user.account.telegramId} />
+                  <Badge variant="ok">{personLabel(tg, user.account.telegramUsername, user.account.telegramName)}</Badge>{' '}
+                  <CopyBtn value={tg} />
                 </>
               ) : (
                 '—'
@@ -588,6 +628,47 @@ export function App() {
             )}
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Написать пользователю</CardTitle>
+            <CardDescription>
+              {tg
+                ? 'Сообщение уйдёт в Telegram-бота и появится во вкладке «Поддержка».'
+                : 'У аккаунта нет Telegram — сначала нужна привязка в боте.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {tg ? (
+              <>
+                <Textarea
+                  value={msg}
+                  onChange={(e) => setMsg(e.target.value)}
+                  placeholder="Текст сообщения…"
+                  rows={4}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    disabled={!msg.trim()}
+                    onClick={() => {
+                      const text = msg.trim();
+                      if (!text) return;
+                      void run('/admin/message', { accountId: user.account.id, text }).then(() => setMsg(''));
+                    }}
+                  >
+                    Отправить в Telegram
+                  </Button>
+                  <Button variant="secondary" asChild>
+                    <a href={'/admin/?tab=support&tg=' + encodeURIComponent(tg)}>Открыть в поддержке</a>
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Привяжите Telegram в боте или через приложение OMP.</p>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Выдать дни</CardTitle>
@@ -628,17 +709,6 @@ export function App() {
             ))}
           </CardContent>
         </Card>
-        {user.account.telegramId ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Сообщение в Telegram</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Textarea value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Текст…" />
-              <Button onClick={() => void run('/admin/message', { accountId: user.account.id, text: msg })}>Отправить</Button>
-            </CardContent>
-          </Card>
-        ) : null}
         <div id="toast" className="fixed bottom-6 left-1/2 z-50 hidden -translate-x-1/2 rounded-md bg-primary px-4 py-2 font-bold text-primary-foreground" />
       </main>
     );
@@ -682,12 +752,18 @@ export function App() {
           <TabsTrigger value="subs">Подписки</TabsTrigger>
           <TabsTrigger value="finance">Финансы</TabsTrigger>
           <TabsTrigger value="promos">Промо</TabsTrigger>
+          <TabsTrigger value="services">Сервисы</TabsTrigger>
           <TabsTrigger value="settings">Настройки</TabsTrigger>
           <TabsTrigger value="security">Доступ</TabsTrigger>
         </TabsList>
 
         <TabsContent value="support">
-          <SupportPanel csrf={d.csrf} threads={d.support || []} onSent={() => void reload()} />
+          <SupportPanel
+            csrf={d.csrf}
+            threads={d.support || []}
+            onSent={() => void reload()}
+            initialTelegramId={supportTg}
+          />
         </TabsContent>
 
         <TabsContent value="home" className="space-y-4">
@@ -898,6 +974,10 @@ export function App() {
           <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} />
         </TabsContent>
 
+        <TabsContent value="services" className="space-y-4">
+          <ServicesCard csrf={d.csrf} settings={d.settings || {}} onSaved={() => void reload()} />
+        </TabsContent>
+
         <TabsContent value="security" className="space-y-4">
           <SecurityCard run={run} sessions={d.sessions || []} sessionId={d.sessionId} audit={d.audit || []} fails={d.fails || []} />
         </TabsContent>
@@ -996,12 +1076,6 @@ const SETTINGS_FIELDS: [string, string][] = [
   ['adminTelegramIds', 'Telegram id админов'],
   ['yoomoneyWallet', 'ЮMoney кошелёк'],
   ['yoomoneySecret', 'ЮMoney секрет'],
-  ['jackettUrl', 'Jackett URL'],
-  ['jackettApiKey', 'Jackett API key'],
-  ['jacredUrl', 'JacRed URL'],
-  ['jacredApiKey', 'JacRed API key'],
-  ['indexerUser', 'Логин прокси индексаторов'],
-  ['indexerPass', 'Пароль прокси индексаторов'],
   ['smtpHost', 'SMTP host'],
   ['smtpUser', 'SMTP user'],
   ['smtpPass', 'SMTP pass'],
@@ -1010,6 +1084,263 @@ const SETTINGS_FIELDS: [string, string][] = [
   ['periodDays', 'Период дней'],
   ['extraDeviceRub', 'Доп. устройство ₽'],
 ];
+
+type ServiceProbe = {
+  ok: boolean;
+  status: number;
+  latencyMs: number;
+  error: string;
+  checkedAt: number;
+  enabled?: boolean;
+  configured?: boolean;
+  url?: string;
+  note?: string;
+};
+
+type ServicesPayload = {
+  jackett: ServiceProbe;
+  jacred: ServiceProbe;
+  torrserver: ServiceProbe;
+  indexerUser?: string;
+  indexerPassConfigured?: boolean;
+};
+
+function HealthBadge({ row }: { row?: ServiceProbe }) {
+  if (!row) return <Badge variant="secondary">—</Badge>;
+  if (!row.configured) return <Badge variant="secondary">не настроено</Badge>;
+  if (row.ok) return <Badge variant="ok">ok · {row.latencyMs} мс</Badge>;
+  return <Badge variant="bad">{row.error || 'down'}</Badge>;
+}
+
+function ServicesCard({
+  csrf,
+  settings,
+  onSaved,
+}: {
+  csrf: string;
+  settings: Record<string, string | number | boolean>;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState({
+    jackettUrl: String(settings.jackettUrl ?? ''),
+    jackettApiKey: String(settings.jackettApiKey ?? ''),
+    jackettEnabled: settings.jackettEnabled !== false,
+    jacredUrl: String(settings.jacredUrl ?? ''),
+    jacredApiKey: String(settings.jacredApiKey ?? ''),
+    jacredEnabled: settings.jacredEnabled !== false,
+    torrserverUrl: String(settings.torrserverUrl ?? ''),
+    indexerUser: String(settings.indexerUser ?? ''),
+    indexerPass: String(settings.indexerPass ?? ''),
+  });
+  const [services, setServices] = useState<ServicesPayload | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    setForm({
+      jackettUrl: String(settings.jackettUrl ?? ''),
+      jackettApiKey: String(settings.jackettApiKey ?? ''),
+      jackettEnabled: settings.jackettEnabled !== false,
+      jacredUrl: String(settings.jacredUrl ?? ''),
+      jacredApiKey: String(settings.jacredApiKey ?? ''),
+      jacredEnabled: settings.jacredEnabled !== false,
+      torrserverUrl: String(settings.torrserverUrl ?? ''),
+      indexerUser: String(settings.indexerUser ?? ''),
+      indexerPass: String(settings.indexerPass ?? ''),
+    });
+  }, [settings]);
+
+  async function probe() {
+    setBusy(true);
+    setErr('');
+    try {
+      const res = await api<{ ok?: boolean; services?: ServicesPayload; auth?: boolean }>('/admin/api/services');
+      if (res.auth === false) {
+        setErr('Нужен вход');
+        return;
+      }
+      setServices(res.services || null);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'probe failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    void probe();
+  }, []);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr('');
+    try {
+      const res = await post('/admin/services', csrf, {
+        ...form,
+        jackettEnabled: form.jackettEnabled ? 'true' : 'false',
+        jacredEnabled: form.jacredEnabled ? 'true' : 'false',
+      });
+      if (res.auth === false) {
+        setErr('Нужен вход');
+        return;
+      }
+      if (res.services) setServices(res.services as ServicesPayload);
+      toast('Сервисы сохранены');
+      onSaved();
+      await probe();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'save failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+          <div>
+            <CardTitle>Сервисы VPS</CardTitle>
+            <CardDescription>
+              Ключи только на сервере. Телефон ходит через billing proxy при активной подписке. TorrServer на VPS — для JacRed
+              (ops), не для пользователей.
+            </CardDescription>
+          </div>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => void probe()}>
+            {busy ? '…' : 'Проверить сейчас'}
+          </Button>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-md border border-border p-3">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="font-medium">Jackett</span>
+              <HealthBadge row={services?.jackett} />
+            </div>
+            <div className="truncate text-xs text-muted-foreground">{services?.jackett?.url || form.jackettUrl || '—'}</div>
+            <div className="text-xs text-muted-foreground">
+              подписчикам: {form.jackettEnabled ? 'вкл' : 'выкл'}
+            </div>
+          </div>
+          <div className="rounded-md border border-border p-3">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="font-medium">JacRed</span>
+              <HealthBadge row={services?.jacred} />
+            </div>
+            <div className="truncate text-xs text-muted-foreground">{services?.jacred?.url || form.jacredUrl || '—'}</div>
+            <div className="text-xs text-muted-foreground">
+              подписчикам: {form.jacredEnabled ? 'вкл' : 'выкл'}
+            </div>
+          </div>
+          <div className="rounded-md border border-border p-3">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="font-medium">TorrServer</span>
+              <HealthBadge row={services?.torrserver} />
+            </div>
+            <div className="truncate text-xs text-muted-foreground">{services?.torrserver?.url || form.torrserverUrl || '—'}</div>
+            <div className="text-xs text-muted-foreground">только мониторинг</div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Настройки сервисов</CardTitle>
+          <CardDescription>Пустой или маскированный секрет не перезаписывает текущий.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-4" onSubmit={(e) => void save(e)}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="jackettUrl">Jackett URL</Label>
+                <Input
+                  id="jackettUrl"
+                  value={form.jackettUrl}
+                  onChange={(e) => setForm({ ...form, jackettUrl: e.target.value })}
+                  placeholder="http://jackett:9117"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="jackettApiKey">Jackett API key</Label>
+                <Input
+                  id="jackettApiKey"
+                  value={form.jackettApiKey}
+                  onChange={(e) => setForm({ ...form, jackettApiKey: e.target.value })}
+                  placeholder="••••••••"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={form.jackettEnabled}
+                  onChange={(e) => setForm({ ...form, jackettEnabled: e.target.checked })}
+                />
+                Jackett доступен подписчикам
+              </label>
+              <div className="space-y-1">
+                <Label htmlFor="jacredUrl">JacRed URL</Label>
+                <Input
+                  id="jacredUrl"
+                  value={form.jacredUrl}
+                  onChange={(e) => setForm({ ...form, jacredUrl: e.target.value })}
+                  placeholder="http://jacred:9117"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="jacredApiKey">JacRed API key</Label>
+                <Input
+                  id="jacredApiKey"
+                  value={form.jacredApiKey}
+                  onChange={(e) => setForm({ ...form, jacredApiKey: e.target.value })}
+                  placeholder="••••••••"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={form.jacredEnabled}
+                  onChange={(e) => setForm({ ...form, jacredEnabled: e.target.checked })}
+                />
+                JacRed доступен подписчикам
+              </label>
+              <div className="space-y-1 sm:col-span-2">
+                <Label htmlFor="torrserverUrl">TorrServer URL (VPS, ops)</Label>
+                <Input
+                  id="torrserverUrl"
+                  value={form.torrserverUrl}
+                  onChange={(e) => setForm({ ...form, torrserverUrl: e.target.value })}
+                  placeholder="http://torrserver:8090"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="indexerUser">Basic-auth логин (Caddy)</Label>
+                <Input
+                  id="indexerUser"
+                  value={form.indexerUser}
+                  onChange={(e) => setForm({ ...form, indexerUser: e.target.value })}
+                  placeholder="omp"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="indexerPass">Basic-auth пароль</Label>
+                <Input
+                  id="indexerPass"
+                  value={form.indexerPass}
+                  onChange={(e) => setForm({ ...form, indexerPass: e.target.value })}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            {err ? <Alert variant="destructive">{err}</Alert> : null}
+            <Button type="submit" disabled={busy}>
+              Сохранить
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 function SettingsCard({
   run,

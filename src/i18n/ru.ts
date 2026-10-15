@@ -779,7 +779,7 @@ export const ru = {
     },
     billing: {
       title: 'Подписка OMP',
-      text: 'Jackett и JacRed по подписке. Ключи уже в приложении.',
+      text: 'Jackett и JacRed по подписке. Поиск идёт через сервер OMP; раздачи добавляйте в свой TorrServer.',
       jackett: 'Jackett',
       jacred: 'JacRed',
       code: 'Код подписки',
@@ -792,6 +792,8 @@ export const ru = {
       badCode: 'Код не подошёл',
       otherDevice: 'Этот код уже привязан к другому устройству',
       expired: 'Подписка закончилась',
+      disabled: 'Этот источник временно выключен',
+      rate: 'Слишком много запросов — подождите немного',
       down: 'Сервер подписки не отвечает',
       bot: 'Подписка и код — в боте @{name}',
       openBot: 'Открыть бота',

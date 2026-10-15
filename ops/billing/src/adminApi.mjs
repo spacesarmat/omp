@@ -1,4 +1,5 @@
 import { accountCard, adminDashboard, financeReport, formatCode, openAppUrl, supportThreads, telegramDisplay } from './logic.mjs';
+import { publicAdminSettings } from './services.mjs';
 import { storageInfo } from './store.mjs';
 
 function day(ms) {
@@ -101,27 +102,7 @@ export function homePayload(state, file, opts) {
     sessions: opts.sessions || [],
     support: supportThreads(state).slice(0, 40),
     audit: (state.audit || []).slice(-40).reverse(),
-    settings: {
-      botToken: s.botToken || '',
-      botUsername: s.botUsername || '',
-      publicOrigin: s.publicOrigin || '',
-      adminTelegramIds: s.adminTelegramIds || '',
-      yoomoneyWallet: s.yoomoneyWallet || '',
-      yoomoneySecret: s.yoomoneySecret || '',
-      jackettUrl: s.jackettUrl || '',
-      jackettApiKey: s.jackettApiKey || '',
-      jacredUrl: s.jacredUrl || '',
-      jacredApiKey: s.jacredApiKey || '',
-      indexerUser: s.indexerUser || '',
-      indexerPass: s.indexerPass || '',
-      smtpHost: s.smtpHost || '',
-      smtpUser: s.smtpUser || '',
-      smtpPass: s.smtpPass || '',
-      smtpFrom: s.smtpFrom || '',
-      priceRub: s.priceRub || 0,
-      periodDays: s.periodDays || 30,
-      extraDeviceRub: s.extraDeviceRub || 0,
-    },
+    settings: publicAdminSettings(s),
     storage: storageInfo(file),
   };
 }

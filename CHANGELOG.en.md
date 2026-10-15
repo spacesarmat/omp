@@ -2,6 +2,14 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.1
+
+- [phone] OMP Jackett and JacRed: search and download only through billing (`/v1/search`, `/v1/torrent`); keys removed from the APK
+- [billing] «Services» tab — Jackett/JacRed/TorrServer health, enable/disable for subscribers, masked secrets
+- [billing] bot: user vs admin pads (`/admin`, «As user»)
+- [billing] user card — message in Telegram; support chat scroll; page scrollbar hidden in the admin UI
+- [ops] VPS: WARP proxy for the Telegram Bot API; search rate limit
+
 ## 0.20.0
 
 - [atv] Built-in player on the 2160 Player engine: 4K, HDR, Dolby Vision as HDR10 without a DV decoder; AC3/E-AC3/DTS/TrueHD passthrough or FFmpeg decode; more formats (M2TS, software decode). VLC and Auto remain

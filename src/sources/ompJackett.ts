@@ -1,6 +1,6 @@
-// Paid Jackett and JacRed. A subscription code unlocks them. Their addresses and API keys are built in.
+// Paid Jackett and JacRed via the billing proxy. A subscription unlocks them; keys never leave the VPS.
 import { stashFile } from '../api/torrentFiles';
-import { OMP_JACRED, OMP_JACKETT, indexerAuthHeader } from '../billing/indexers';
+import type { OmpIndexerSource } from '../billing/indexers';
 import { billingGet, billingPost } from '../billing/client';
 import {
   billingSession,
@@ -18,11 +18,6 @@ import type { Source, SourceContext, SourceResult } from './types';
 
 export const OMP_JACKETT_ID = 'omp-jackett';
 export const OMP_JACRED_ID = 'omp-jacred';
-
-interface BuiltIndexer {
-  url: string;
-  apiKey: string;
-}
 
 interface ActivateBody {
   error?: string;
@@ -42,6 +37,11 @@ interface MeBody {
   paidUntil?: number;
   active?: boolean;
   deviceLimit?: number;
+  sources?: { jackett?: boolean; jacred?: boolean };
+}
+
+interface ErrorBody {
+  error?: string;
 }
 
 function parseBody<T extends object>(text: string): T {
@@ -50,6 +50,21 @@ function parseBody<T extends object>(text: string): T {
   } catch (e) {
     return {} as T;
   }
+}
+
+function authHeaders(): { [name: string]: string } {
+  const session = billingSession();
+  const headers: { [name: string]: string } = { 'X-Device-Id': deviceId() };
+  if (session) headers.Authorization = 'Bearer ' + session.token;
+  return headers;
+}
+
+function billingError(status: number, text: string): Error {
+  const body = parseBody<ErrorBody>(text);
+  if (body.error === 'disabled') return new Error(t('sources.billing.disabled'));
+  if (body.error === 'rate' || status === 429) return new Error(t('sources.billing.rate'));
+  if (body.error === 'expired' || status === 401 || status === 403) return new Error(t('sources.billing.expired'));
+  return new Error(t('sources.billing.down'));
 }
 
 export function clearBilling(): void {
@@ -107,9 +122,7 @@ export function clearTelegramLink(ctx: SourceContext): Promise<void> {
 
 export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount | null> {
   const session = billingSession();
-  const headers: { [name: string]: string } = { 'X-Device-Id': deviceId() };
-  if (session) headers.Authorization = 'Bearer ' + session.token;
-  return billingGet(ctx, '/v1/me', { headers, timeoutMs: 12000 }).then(
+  return billingGet(ctx, '/v1/me', { headers: authHeaders(), timeoutMs: 12000 }).then(
     (res) => {
       if (res.status === 403 || res.status === 401) {
         if (session) clearBilling();
@@ -124,11 +137,20 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
         saveBillingSession({ token: session.token, paidUntil });
         emitBillingChange();
       }
+      const sources = {
+        jackett: !!body.sources?.jackett,
+        jacred: !!body.sources?.jacred,
+      };
+      // When /v1/me omits sources (old server), keep both on while the subscription is active.
+      const hasSources = !!body.sources;
       return {
         telegramId: body.telegramId || '',
         paidUntil,
         active: !!body.active,
         deviceLimit: body.deviceLimit || 0,
+        sources: hasSources
+          ? sources
+          : { jackett: !!body.active, jacred: !!body.active },
       };
     },
     () => null,
@@ -141,31 +163,29 @@ function bytesOf(s: string): Uint8Array {
   return out;
 }
 
-function searchUrl(indexer: BuiltIndexer, query: string): string {
-  return (
-    indexer.url +
-    '/api/v2.0/indexers/all/results/torznab/api?apikey=' +
-    encodeURIComponent(indexer.apiKey) +
-    '&t=search&q=' +
-    encodeURIComponent(query)
-  );
+function isProxyLink(link: string): boolean {
+  return link.indexOf('omp-fetch:') === 0 || link.indexOf('omp-jacred:') === 0;
 }
 
-function downloadUrl(indexer: BuiltIndexer, link: string): string {
-  return link + (link.indexOf('?') < 0 ? '?' : '&') + 'apikey=' + encodeURIComponent(indexer.apiKey);
-}
-
-function paidSource(id: string, name: string, indexer: BuiltIndexer): Source {
+function paidSource(id: string, name: string, source: OmpIndexerSource): Source {
   return {
     id: id,
     name: name,
     kind: 'billing',
     search(query: string, ctx: SourceContext): Promise<SourceResult[]> {
       if (!billingSession()) return Promise.reject(new Error(t('sources.billing.badCode')));
-      return ctx.http.get(searchUrl(indexer, query), { headers: { Authorization: indexerAuthHeader() }, timeoutMs: 25000 }).then(
+      return billingPost(
+        ctx,
+        '/v1/search',
+        { source, q: query, deviceId: deviceId() },
+        { headers: authHeaders(), timeoutMs: 25000 },
+      ).then(
         (res) => {
-          if (res.status === 401 || res.status === 403) throw new Error(t('sources.billing.expired'));
+          const type = (res.text || '').trim();
+          if (res.status === 429) throw billingError(res.status, res.text);
+          if (res.status === 401 || res.status === 403 || res.status === 502) throw billingError(res.status, res.text);
           if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
+          if (type.charAt(0) === '{') throw billingError(res.status, res.text);
           return parseTorznab(res.text, id);
         },
         () => {
@@ -175,14 +195,20 @@ function paidSource(id: string, name: string, indexer: BuiltIndexer): Source {
     },
     resolve(r: SourceResult, ctx: SourceContext): Promise<string> {
       const link = r.Link || '';
-      if (!billingSession() || link.indexOf(indexer.url) !== 0) return Promise.reject(new Error(t('sources.billing.down')));
-      return ctx.http.get(downloadUrl(indexer, link), {
-        headers: { Authorization: indexerAuthHeader() },
-        timeoutMs: 30000,
-        responseCharset: 'iso-8859-1',
-      }).then(
+      if (!billingSession() || !isProxyLink(link)) return Promise.reject(new Error(t('sources.billing.down')));
+      return billingPost(
+        ctx,
+        '/v1/torrent',
+        { link, deviceId: deviceId() },
+        { headers: authHeaders(), timeoutMs: 30000, responseCharset: 'iso-8859-1' },
+      ).then(
         (res) => {
-          if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd') throw new Error(t('sources.billing.down'));
+          if (res.status === 401 || res.status === 403 || res.status === 502 || res.status === 429) {
+            throw billingError(res.status, res.text);
+          }
+          if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd') {
+            throw new Error(t('sources.billing.down'));
+          }
           return stashFile(bytesOf(res.text));
         },
         () => {
@@ -194,26 +220,44 @@ function paidSource(id: string, name: string, indexer: BuiltIndexer): Source {
 }
 
 export function ompJackettSource(): Source {
-  return paidSource(OMP_JACKETT_ID, t('sources.billing.jackett'), OMP_JACKETT);
+  return paidSource(OMP_JACKETT_ID, t('sources.billing.jackett'), 'jackett');
 }
 
 export function ompJacredSource(): Source {
-  return paidSource(OMP_JACRED_ID, t('sources.billing.jacred'), OMP_JACRED);
+  return paidSource(OMP_JACRED_ID, t('sources.billing.jacred'), 'jacred');
 }
 
 let watching = false;
+/** Last known server flags; until /v1/me runs, register both when a session exists. */
+let lastSources: { jackett: boolean; jacred: boolean } | null = null;
 
-export function syncOmpJackett(): void {
+export function syncOmpJackett(sources?: { jackett: boolean; jacred: boolean } | null): void {
   unregisterSource(OMP_JACKETT_ID);
   unregisterSource(OMP_JACRED_ID);
-  if (!billingSession()) return;
-  registerSource(ompJackettSource());
-  registerSource(ompJacredSource());
+  if (!billingSession()) {
+    lastSources = null;
+    return;
+  }
+  if (sources) lastSources = sources;
+  const flags = lastSources || { jackett: true, jacred: true };
+  if (flags.jackett) registerSource(ompJackettSource());
+  if (flags.jacred) registerSource(ompJacredSource());
 }
 
 export function startOmpJackett(): void {
   syncOmpJackett();
   if (watching) return;
   watching = true;
-  onBillingChange(syncOmpJackett);
+  onBillingChange(() => syncOmpJackett());
+}
+
+/** Refresh enabled sources from /v1/me (call when the Sources screen opens). */
+export function refreshOmpJackettSources(ctx: SourceContext): Promise<void> {
+  return fetchBillingAccount(ctx).then((acc) => {
+    if (!acc || !acc.active) {
+      syncOmpJackett({ jackett: false, jacred: false });
+      return;
+    }
+    syncOmpJackett(acc.sources || { jackett: true, jacred: true });
+  });
 }

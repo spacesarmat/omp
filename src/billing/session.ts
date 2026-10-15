@@ -14,6 +14,8 @@ export interface BillingAccount {
   paidUntil: number;
   active: boolean;
   deviceLimit: number;
+  /** Which paid indexers the server currently exposes for this subscription. */
+  sources?: { jackett: boolean; jacred: boolean };
 }
 
 function hex(bytes: Uint8Array): string {

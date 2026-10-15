@@ -18,7 +18,8 @@ services:
       CADDY_EMAIL: ${CADDY_EMAIL:-admin@omp-player.online}
       INDEXER_USER: ${INDEXER_USER:-omp}
       # $$ → literal $ in the bcrypt hash for Caddy
-      INDEXER_HASH: ${INDEXER_HASH:-$$2b$$14$$uini7m58J/vBy7bpCccMMevaCqUgrPbJCTlLLFvaCpkS/xtA7SNza}
+      # Default = bcrypt("changeme"); override via .env INDEXER_HASH on the VPS (never commit real .env).
+      INDEXER_HASH: ${INDEXER_HASH:-$$2a$$14$$BQuF4agdliaFt/MHb84V2.oSBDsaRQZBV87PA5qDYSxsahlo9hVZK}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -40,15 +41,44 @@ services:
       BILLING_DATA: /data/billing.db
       BILLING_PUBLIC_ORIGIN: ${BILLING_PUBLIC_ORIGIN:-https://billing.omp-player.online}
       BILLING_JACKETT_URL: http://jackett:9117
+      BILLING_JACRED_URL: http://jacred:9117
+      BILLING_TORRSERVER_URL: http://torrserver:8090
       TZ: ${TZ:-Europe/Moscow}
+      # Datacenter IPs often cannot reach api.telegram.org — route bot via WARP HTTP proxy
+      HTTP_PROXY: http://warp:1080
+      HTTPS_PROXY: http://warp:1080
+      NO_PROXY: jackett,jacred,torrserver,caddy,localhost,127.0.0.1
+      NODE_USE_ENV_PROXY: "1"
     volumes:
       - ./data/billing:/data
     depends_on:
       - jackett
       - jacred
+      - warp
     networks:
       - omp
     # not published — only Caddy reaches it
+
+  # SOCKS/HTTP proxy so billing can reach Telegram Bot API from a blocked VPS IP
+  warp:
+    image: caomingjun/warp:latest
+    container_name: omp-warp
+    restart: unless-stopped
+    environment:
+      WARP_SLEEP: "2"
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - AUDIT_WRITE
+    device_cgroup_rules:
+      - "c 10:200 rwm"
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - ./data/warp:/var/lib/cloudflare-warp
+    networks:
+      - omp
 
   jackett:
     image: lscr.io/linuxserver/jackett:latest

@@ -12,6 +12,8 @@ Hostnames (Cloudflare A → VPS IP, orange cloud):
 
 JacRed talks to TorrServer at `http://torrserver:8090` (`tracks` / ffprobe).
 
+`warp` (`caomingjun/warp`) provides an HTTP proxy on `:1080` so the billing bot can reach `api.telegram.org` when the VPS IP is blocked.
+
 ## Update billing from git
 
 CI builds `ops/billing` and pushes `ghcr.io/spacesarmat/omp-billing:latest` (workflow `billing-image.yml`).
@@ -42,7 +44,7 @@ docker compose up -d
 5. `mkdir -p data/{billing,jackett,jacred,torrserver/{config,torrents}} && chown -R 1000:1000 data/jackett data/jacred data/torrserver`
 6. Edit `jacred/init.yaml`: set `apikey` / `devkey`.
 8. `docker compose up -d`
-9. Copy the Jackett API key from `data/jackett/.../ServerConfig.json` into the billing panel and `src/billing/indexers.ts`.
+9. Copy the Jackett API key from `data/jackett/.../ServerConfig.json` into the billing admin **Сервисы** tab (never into the APK or git). JacRed key → same tab. Keep real `INDEXER_*` only in VPS `.env` (gitignored). Phones use `/v1/search` / `/v1/torrent` only.
 10. Cloudflare DNS: A `billing` / `jackett` / `jacred` → VPS IP, proxied. SSL/TLS mode **Full**. Disable the old Tunnel public hostnames for these names.
 11. UFW: allow `22`, `80`, `443` only.
 
