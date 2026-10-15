@@ -14,6 +14,8 @@ import { CatalogUnavailable } from '../ui/CatalogUnavailable';
 import { navigate, scrollToTop } from '../nav';
 import { filesOf, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
+import { activeTv } from '../tv/tvStore';
+import { FoundTvs } from '../ui/FoundTvs';
 import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, resumePosition, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
@@ -584,6 +586,7 @@ export function Library() {
           </div>
         )}
         <div class="m-lib-body" style={pullStyle} ref={bodyRef}>
+          {!activeTv.value && <FoundTvs />}
           {donateCard && !unavailable && !supporterActive() && (
             <div class="m-donate-card" role="region" aria-label={t('donate.title')}>
               <span>{t('library.donateText')}</span>

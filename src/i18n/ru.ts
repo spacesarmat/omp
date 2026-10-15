@@ -1952,6 +1952,7 @@ export const ru = {
     noTvTitle: 'Подключите телевизор',
     noTvText: 'Чтобы управлять ТВ с телефона, сначала подключите его.',
     noTvButton: 'Подключить ТВ',
+    foundTvs: 'Телевизоры в сети',
     /** A saved TV that does not answer: «LG OLED55… не отвечает — включите ТВ» with «Повторить». */
     noAnswerTv: '{name} не отвечает — включите ТВ',
     /** The header switcher of several saved TVs. */

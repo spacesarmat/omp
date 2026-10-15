@@ -1915,6 +1915,7 @@ export const en: EnDict<typeof ru> = {
     noTvTitle: 'Connect a TV',
     noTvText: 'To control the TV from the phone, connect it first.',
     noTvButton: 'Connect a TV',
+    foundTvs: 'TVs on the network',
     noAnswerTv: '{name} does not answer — turn the TV on',
     switchTv: 'Switch the TV',
     switchTitle: 'TVs',
