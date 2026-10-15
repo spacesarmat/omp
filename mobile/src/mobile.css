@@ -921,14 +921,34 @@ button, .m-btn {
 .m-now-ep-chev.right { transform: rotate(-90deg); }
 .m-now-ep.on .m-now-ep-chev, .m-now-ep.dragging .m-now-ep-chev { opacity: 0.9; }
 .m-now-ep-title { flex: 1 1 0; min-width: 0; display: block; overflow-wrap: anywhere; }
-/* no app tab bar here — only the system gesture/nav strip */
+/* no app tab bar here - only the system gesture/nav strip */
 .m-now {
   max-width: 100%; overflow-x: hidden; display: flex; flex-direction: column; gap: 12px;
   height: 100%; min-height: 100%; box-sizing: border-box;
   padding-top: calc(env(safe-area-inset-top) + 12px);
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
 }
+/* full-bleed poster from the top edge; controls sit in the bottom fade */
+.m-now.m-now-bleed {
+  gap: 0;
+  padding: 0;
+}
+.m-now-hero { position: relative; width: 100%; flex: 0 0 auto; }
+.m-now-body {
+  position: relative; z-index: 2; display: flex; flex-direction: column; gap: 12px;
+  margin-top: -72px;
+  padding: 0 16px calc(12px + env(safe-area-inset-bottom));
+}
 .m-now-head { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.m-now-bleed .m-now-head {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
+  padding: calc(env(safe-area-inset-top) + 8px) 12px 0;
+}
+.m-now-bleed .m-now-head::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 120%;
+  background: linear-gradient(to bottom, rgba(11, 13, 18, 0.72) 0%, rgba(11, 13, 18, 0.28) 55%, transparent 100%);
+  pointer-events: none; z-index: -1;
+}
 .m-now-status { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .m-now-kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--muted); }
 .m-now-tv { max-width: 100%; font-size: 14px; color: #8FE39A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -937,6 +957,11 @@ button, .m-btn {
 .m-now-stage {
   flex: 1 1 auto; align-self: center; width: min(78vw, 300px); min-height: 160px; max-height: min(48dvh, 400px);
   aspect-ratio: 2 / 3; height: auto; perspective: 1100px;
+}
+.m-now-bleed .m-now-stage {
+  flex: 0 0 auto; align-self: stretch; width: 100%; max-width: none;
+  min-height: 240px; max-height: min(72dvh, 720px);
+  border-radius: 0;
 }
 .m-now-poster {
   position: relative; width: 100%; height: 100%; max-width: 100%; overflow: hidden; box-sizing: border-box;
@@ -948,8 +973,9 @@ button, .m-btn {
   box-shadow: calc(var(--sx, 0) * 1px) calc(18px + var(--sy, 0) * 1px) 36px rgba(0, 0, 0, 0.45);
   will-change: transform;
 }
+.m-now-bleed .m-now-poster,
 .m-now-poster.has-art {
-  padding: 0; background: transparent; box-shadow: none;
+  padding: 0; border-radius: 0; background: transparent; box-shadow: none;
 }
 .m-now-poster-layer {
   position: absolute; left: -8%; right: -8%; top: 0; height: 118%;
@@ -957,6 +983,10 @@ button, .m-btn {
   /* scale to width, pin to top - bottom is covered by the fade into --bg */
   background-size: 100% auto; background-position: top center;
   will-change: transform;
+}
+.m-now-bleed .m-now-poster-layer {
+  left: 0; right: 0; height: 100%;
+  background-size: 100% auto; background-position: top center;
 }
 .m-now-poster-back {
   z-index: 0;
@@ -977,6 +1007,14 @@ button, .m-btn {
 .m-now-poster-fade {
   position: absolute; inset: 0; z-index: 3; pointer-events: none;
   background: linear-gradient(to bottom, transparent 38%, transparent 52%, var(--bg) 94%);
+}
+.m-now-bleed .m-now-poster-fade {
+  background: linear-gradient(
+    to bottom,
+    transparent 42%,
+    rgba(15, 17, 21, 0.35) 68%,
+    var(--bg) 100%
+  );
 }
 .m-now-poster-glare {
   position: absolute; inset: 0; z-index: 4; border-radius: inherit; pointer-events: none;

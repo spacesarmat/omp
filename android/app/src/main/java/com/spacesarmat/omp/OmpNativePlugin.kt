@@ -8,6 +8,7 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -217,6 +218,29 @@ class OmpNativePlugin : Plugin() {
             I18n.lang = lang
         }
         call.resolve()
+    }
+
+    /** { mode: portrait | unlock }: phone Activity orientation for «Сейчас играет»; no-op on TV. */
+    @PluginMethod
+    fun setOrientation(call: PluginCall) {
+        if (TvMode.isTv(context)) {
+            call.resolve()
+            return
+        }
+        val mode = call.getString("mode") ?: "unlock"
+        val orient = when (mode) {
+            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        val act = activity
+        if (act == null) {
+            call.resolve()
+            return
+        }
+        act.runOnUiThread {
+            act.requestedOrientation = orient
+            call.resolve()
+        }
     }
 
     // ---- discovery ----

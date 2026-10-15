@@ -1,6 +1,6 @@
 // «Сейчас играет» poster: three depth layers (back / mid / front) from one image.
 // Gyro (from the pose at open) and a finger over the poster shift layers at different speeds.
-// Art is top-aligned, scaled to width; bottom fades into --bg. prefers-reduced-motion leaves it flat.
+// Full-bleed stage: art top-aligned, scaled to width; bottom fades into --bg. prefers-reduced-motion leaves it flat.
 import { useEffect, useRef } from 'preact/hooks';
 import type { PlayerState } from '../../../src/phone/protocol';
 import { hasPosterImage, playerPosterLayerStyle, playerPosterStyle } from './playerPoster';

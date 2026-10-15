@@ -2,6 +2,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.8
+
+- [phone] Now playing: full-width poster from the top of the screen, soft fade into the background; screen and swipes stay portrait-only
+- [phone] backup: TorrServer update skip stays on-device (unblocks the beta.7 build)
+
 ## 0.20.1-beta.7
 
 - [phone] Discover: TMDB-style home rails - trending, popular, in theatres, upcoming, on TV, top rated; sort and filters open the grid

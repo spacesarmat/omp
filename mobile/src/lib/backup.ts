@@ -145,6 +145,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.posterTried',
   'tsp.progress', // viewing progress: lives on TorrServer
   'tsp.update', // update-check state
+  'tsp.localServer.skipPin', // skipped TorrServer pin offer: per device, like tsp.update
   'tsp.seenVersion', // «Что нового» was shown
   'tsp.subsSeen', // what monitoring has already seen: rebuilt on the first run
   'tsp.monitorFound',
