@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Connect, setServerScanner, scanLan } from '../src/screens/Connect';
+import { PHONE_CONCURRENCY } from '../../src/api/discovery';
 import { localServer, setLocalServerDeps } from '../src/server/localServer';
 import { setQrScanner } from '../src/platform/qr';
 import { toast } from '../src/ui/toast';
@@ -310,6 +311,23 @@ describe('Connect screen: find in the network', () => {
     expect(el.textContent).not.toContain('Не находится?');
   });
 
+  it('lists a server as soon as it answers, while the sweep is still running', async () => {
+    mockFetch(() => ({ body: 'MatriX' }));
+    addServer({ url: 'http://192.168.1.5:8090', name: 'Home' });
+    setServerScanner((_cancel, onFound) => {
+      onFound?.({ url: 'http://192.168.1.191:5665', version: 'MatriX.145' });
+      return new Promise(() => {});
+    });
+    const el = mount();
+    await flush();
+    await act(async () => btn(el, 'Найти в сети').click());
+    expect(el.textContent).toContain('Найдено в сети');
+    expect(el.textContent).toContain('192.168.1.191:5665');
+    expect(el.textContent).toContain('MatriX.145');
+    expect(btn(el, 'Ищу…').disabled).toBe(true);
+    expect(el.textContent).not.toContain('TorrServer прямо на телефоне');
+  });
+
   it('disables the button and says «Ищу…» while scanning', async () => {
     mockFetch(() => ({ body: 'MatriX' }));
     addServer({ url: 'http://192.168.1.5:8090', name: 'Home' });
@@ -395,7 +413,17 @@ describe('scanLan', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].subnets).toEqual(['10.0.5']);
     expect(calls[0].ports).toEqual([8090, 5665]);
+    expect(calls[0].prefer).toEqual([]);
+    expect(calls[0].concurrency).toBe(PHONE_CONCURRENCY);
     expect(calls[0].isCancelled).toBe(isCancelled);
+  });
+
+  it('asks for saved servers before the sweep', async () => {
+    addServer({ url: 'http://192.168.1.191:5665', name: 'Дом' });
+    const calls: any[] = [];
+    await scanLan(() => false, { localIp: async () => '192.168.1.20', discover: async (o) => (calls.push(o), []) });
+    expect(calls[0].prefer).toEqual(['http://192.168.1.191:5665']);
+    expect(calls[0].subnets).toEqual(['192.168.1']);
   });
 
   it('falls back to the common home subnets without an address', async () => {

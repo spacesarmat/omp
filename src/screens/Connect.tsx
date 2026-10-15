@@ -155,6 +155,7 @@ export function ConnectScreen() {
       .then((ip) =>
         discover({
           subnets: candidateSubnets(ip, servers.value.map((s) => s.url)),
+          prefer: servers.value.map((s) => s.url),
           isCancelled: () => !alive.current || scanId.current !== my,
           onProgress: (done, total) => { if (alive.current && scanId.current === my && (done % 16 === 0 || done === total)) setScan({ done, total }); },
           onFound: (s) => { if (alive.current && scanId.current === my) setFound((f) => f.concat(s)); },
