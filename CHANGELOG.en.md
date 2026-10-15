@@ -2,6 +2,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.11
+
+- [tv][phone] TV and Android TV Box TLS: TOFU certificate pin (no trust-all)
+- [phone] cleartext HTTP to public IPs blocked; ControlServer accepts LAN clients only
+- [tv][phone] phone-to-TV pairing code is 6 digits
+- CI: Actions pinned to commit SHAs; ADMIN_CHAT_ID is a Worker secret only
+
 ## 0.20.1-beta.10
 
 - same as beta.8 (beta.9: changelog window; build - CatalogClient.home stub in overflowHarness)

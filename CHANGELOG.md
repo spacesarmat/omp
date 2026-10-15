@@ -1,5 +1,12 @@
 # Изменения
 
+## 0.20.1-beta.11
+
+- [tv][phone] TLS к ТВ и Android TV Box: TOFU pin сертификата (без trust-all)
+- [phone] cleartext HTTP к публичным IP запрещён; ControlServer только для LAN
+- [tv][phone] код сопряжения телефона с ТВ - 6 цифр
+- CI: Actions на commit SHA; ADMIN_CHAT_ID только как Worker secret
+
 ## 0.20.1-beta.10
 
 - то же, что beta.8 (beta.9: окно changelog; сборка - мок CatalogClient.home в overflowHarness)
