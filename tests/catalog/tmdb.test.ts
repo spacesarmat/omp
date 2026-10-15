@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 // @ts-ignore node builtins
 import { readFileSync } from 'node:fs';
-import { endpointOf, noveltiesUrl, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson, personBioUrl } from '../../src/catalog/tmdb';
+import { endpointOf, noveltiesUrl, homeListUrl, homeSectionIds, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson, personBioUrl } from '../../src/catalog/tmdb';
 import { applyLanguageSetting } from '../../src/i18n';
 import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
 
@@ -54,6 +54,19 @@ describe('urls', () => {
     expect(m).toContain('language=ru-RU');
     expect(m).toContain('page=2');
     expect(noveltiesUrl(E, 'tv', 1, '2026-10-05')).toContain('/3/tv/on_the_air?');
+  });
+  it('home rails use the same list endpoints as themoviedb.org', () => {
+    expect(homeSectionIds('all')[0]).toBe('trending');
+    expect(homeListUrl(E, 'trending', { kind: 'all', window: 'day' })).toContain('/3/trending/all/day?');
+    expect(homeListUrl(E, 'trending', { kind: 'movie', window: 'week' })).toContain('/3/trending/movie/week?');
+    expect(homeListUrl(E, 'nowPlaying', { kind: 'movie', window: 'day' })).toContain('/3/movie/now_playing?');
+    expect(homeListUrl(E, 'upcoming', { kind: 'movie', window: 'day' })).toContain('/3/movie/upcoming?');
+    expect(homeListUrl(E, 'onTheAir', { kind: 'tv', window: 'day' })).toContain('/3/tv/on_the_air?');
+    expect(homeListUrl(E, 'airingToday', { kind: 'tv', window: 'day' })).toContain('/3/tv/airing_today?');
+    expect(homeListUrl(E, 'popularMovies', { kind: 'all', window: 'day' })).toContain('/3/movie/popular?');
+    expect(homeListUrl(E, 'topRatedTv', { kind: 'all', window: 'day' })).toContain('/3/tv/top_rated?');
+    const trend = sanitizeList(E, { results: [{ id: 1, media_type: 'movie', title: 'A', release_date: '2024-01-01' }, { id: 2, media_type: 'person', name: 'X' }, { id: 3, media_type: 'tv', name: 'B', first_air_date: '2024-02-01' }], total_pages: 1 }, null);
+    expect(trend.items.map((x) => x.kind + ':' + x.id)).toEqual(['movie:1', 'tv:3']);
   });
   it('uses the TMDB language of the app language', () => {
     applyLanguageSetting('en');

@@ -80,10 +80,70 @@ function url(e: TmdbEndpoint, path: string, params: { [k: string]: string | numb
 }
 
 export function noveltiesUrl(e: TmdbEndpoint, kind: Kind, page: number, today: string): string {
-  if (kind === 'tv') return url(e, 'tv/on_the_air', { page: page, region: 'RU' });
+  if (kind === 'tv') return url(e, 'tv/on_the_air', { page: page, region: discoverRegion() });
   return url(e, 'discover/movie', {
-    page: page, region: 'RU', with_release_type: 4, 'release_date.lte': today, sort_by: 'primary_release_date.desc', 'vote_count.gte': 20,
+    page: page, region: discoverRegion(), with_release_type: 4, 'release_date.lte': today, sort_by: 'primary_release_date.desc', 'vote_count.gte': 20,
   });
+}
+
+/** TMDB.org-style homepage rails (same list endpoints the website uses). */
+export type HomeSectionId =
+  | 'trending'
+  | 'popularMovies'
+  | 'popularTv'
+  | 'nowPlaying'
+  | 'upcoming'
+  | 'onTheAir'
+  | 'airingToday'
+  | 'topRatedMovies'
+  | 'topRatedTv';
+
+export type TrendingWindow = 'day' | 'week';
+
+export interface HomeSection {
+  id: HomeSectionId;
+  items: CatalogTitle[];
+}
+
+/** Ordered rails for kind=all; movie/tv chips drop the other media's rows. */
+export function homeSectionIds(kind: Kind | 'all'): HomeSectionId[] {
+  if (kind === 'movie') return ['trending', 'popularMovies', 'nowPlaying', 'upcoming', 'topRatedMovies'];
+  if (kind === 'tv') return ['trending', 'popularTv', 'airingToday', 'onTheAir', 'topRatedTv'];
+  return ['trending', 'popularMovies', 'popularTv', 'nowPlaying', 'upcoming', 'onTheAir', 'airingToday', 'topRatedMovies', 'topRatedTv'];
+}
+
+/**
+ * List URL for one homepage rail. Trending uses `all` / `movie` / `tv` + day|week;
+ * the rest are the classic `/movie|tv/{popular|now_playing|…}` endpoints.
+ */
+export function homeListUrl(
+  e: TmdbEndpoint,
+  id: HomeSectionId,
+  opts: { kind: Kind | 'all'; window: TrendingWindow; page?: number },
+): string {
+  const page = opts.page || 1;
+  const region = discoverRegion();
+  if (id === 'trending') {
+    const media = opts.kind === 'all' ? 'all' : opts.kind;
+    return url(e, 'trending/' + media + '/' + opts.window, { page: page });
+  }
+  const path =
+    id === 'popularMovies' ? 'movie/popular'
+    : id === 'popularTv' ? 'tv/popular'
+    : id === 'nowPlaying' ? 'movie/now_playing'
+    : id === 'upcoming' ? 'movie/upcoming'
+    : id === 'onTheAir' ? 'tv/on_the_air'
+    : id === 'airingToday' ? 'tv/airing_today'
+    : id === 'topRatedMovies' ? 'movie/top_rated'
+    : 'tv/top_rated';
+  return url(e, path, { page: page, region: region });
+}
+
+/** Kind forced by the list endpoint (null = take media_type from each row, e.g. trending/all). */
+export function homeListKind(id: HomeSectionId, chip: Kind | 'all'): Kind | null {
+  if (id === 'trending') return chip === 'all' ? null : chip;
+  if (id === 'popularMovies' || id === 'nowPlaying' || id === 'upcoming' || id === 'topRatedMovies') return 'movie';
+  return 'tv';
 }
 
 /** «Обзор» with its sort and filters: /discover/{kind}; null when the kind has none of the chosen genres. */

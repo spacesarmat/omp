@@ -10,8 +10,10 @@ import { loadJson, isObject } from '../store/storage';
 import { lang } from '../i18n';
 import {
   releaseRegions, noveltiesUrl, discoverUrl, searchUrl, cardUrl, personUrl, personBioUrl, seasonUrl, similarUrl, postersUrl,
+  homeListUrl, homeListKind, homeSectionIds,
   sanitizeList, sanitizeCard, sanitizePerson, sanitizePersonBio, sanitizeSeason, sanitizeSimilar, sanitizePosters,
   type Kind, type CatalogTitle, type CatalogCard, type PersonCard, type SeasonDetails, type TmdbEndpoint,
+  type HomeSection, type TrendingWindow,
 } from './tmdb';
 import { digitalSoonItems, type DiscoverQuery } from './discoverQuery';
 
@@ -21,6 +23,11 @@ export interface CatalogClient {
   novelties(kind: Kind | 'all', page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
   /** «Обзор» with its sort and filters; 'all' merges a page of films and a page of series. */
   discover(kind: Kind | 'all', query: DiscoverQuery, page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
+  /**
+   * TMDB.org homepage rails for the chip (Все / Фильмы / Сериалы) and trending day|week.
+   * Empty rails are omitted.
+   */
+  home(kind: Kind | 'all', window: TrendingWindow): Promise<HomeSection[]>;
   search(q: string, page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
   card(kind: Kind, id: number, opts?: FetchOpts): Promise<CatalogCard>;
   /** A person with the filmography (cached like cards). */
@@ -314,6 +321,19 @@ export function createCatalogClient(
       }
       if (kind !== 'all') return one(kind);
       return Promise.all([one('movie'), one('tv')]).then(merge);
+    },
+    home(kind, window) {
+      let e: TmdbEndpoint;
+      try { e = need(); } catch (err) { return Promise.reject(err); }
+      const ids = homeSectionIds(kind);
+      return Promise.all(
+        ids.map((id) =>
+          list(homeListUrl(e, id, { kind: kind, window: window }), homeListKind(id, kind)).then(
+            (r) => ({ id: id, items: r.items } as HomeSection),
+            () => ({ id: id, items: [] as CatalogTitle[] } as HomeSection),
+          ),
+        ),
+      ).then((rows) => rows.filter((r) => r.items.length > 0));
     },
     search(q, page) {
       let e: TmdbEndpoint;

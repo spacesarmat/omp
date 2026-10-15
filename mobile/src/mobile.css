@@ -411,6 +411,17 @@ button, .m-btn {
 .m-disc-head h2 { margin: 0; font-size: 20px; font-weight: 700; }
 .m-disc-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .m-disc-chips::-webkit-scrollbar { display: none; }
+.m-disc-home { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.m-disc-trend { display: flex; gap: 8px; margin: 4px 0 8px; }
+.m-disc-rail { min-width: 0; margin: 0 0 14px; }
+.m-disc-rail-title { margin: 0 0 10px; padding: 0 2px; font-size: 17px; font-weight: 700; }
+.m-disc-rail-skel-title { width: 42%; height: 18px; margin-bottom: 10px; }
+.m-disc-rail-row {
+  display: flex; gap: 10px; overflow-x: auto; padding: 0 2px 6px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.m-disc-rail-row::-webkit-scrollbar { display: none; }
+.m-disc-rail-tile { flex: 0 0 112px; width: 112px; }
 .m-disc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
 .m-disc-grid.m-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; }
 .m-cols-3 .m-disc-poster { border-radius: 10px; }

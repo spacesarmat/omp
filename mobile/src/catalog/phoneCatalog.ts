@@ -31,7 +31,12 @@ let forTests: CatalogClient | null = null;
 let cached: { server: string; client: Promise<CatalogClient> } | null = null;
 
 /** A fake client for tests; one without `season` or `person` rejects those requests. */
-export function setCatalogClientForTests(c: (Omit<CatalogClient, 'season' | 'person' | 'similar' | 'posters'> & Partial<Pick<CatalogClient, 'season' | 'person' | 'similar' | 'posters'>>) | null): void {
+export function setCatalogClientForTests(
+  c:
+    | (Omit<CatalogClient, 'season' | 'person' | 'similar' | 'posters' | 'home'> &
+        Partial<Pick<CatalogClient, 'season' | 'person' | 'similar' | 'posters' | 'home'>>)
+    | null,
+): void {
   const bad = () => Promise.reject(new Error('catalog:bad'));
   forTests = c
     ? {
@@ -40,6 +45,7 @@ export function setCatalogClientForTests(c: (Omit<CatalogClient, 'season' | 'per
         person: c.person || bad,
         similar: c.similar || (() => Promise.resolve([])),
         posters: c.posters || (() => Promise.resolve([])),
+        home: c.home || (() => Promise.resolve([])),
       }
     : null;
   cached = null;

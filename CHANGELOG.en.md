@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.7
+
+- [phone] Discover: TMDB-style home rails - trending, popular, in theatres, upcoming, on TV, top rated; sort and filters open the grid
+
 ## 0.20.1-beta.6
 
 - [phone] Now playing: poster as a depth window - three layers at different speeds, top-aligned to width, bottom fades into the background
