@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.3
+
+- same as beta.1 (release failed: ompJackett test types)
+
 ## 0.20.1-beta.2
 
 - same as beta.1 (release failed: changelog window dropped 0.17.0)

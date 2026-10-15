@@ -93,8 +93,22 @@ describe('omp Jackett source', () => {
     saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
     const torrent = 'd4:infod4:name4:testee';
     const site = fakeSite((c) => page(torrent, c.url));
-    const path = await ompJackettSource().resolve(
-      { Title: 'File', Link: 'omp-fetch:/dl/file', Categories: '', Size: '', source: OMP_JACKETT_ID },
+    const src = ompJackettSource();
+    expect(src.resolve).toBeTypeOf('function');
+    const path = await src.resolve!(
+      {
+        Title: 'File',
+        Link: 'omp-fetch:/dl/file',
+        Categories: '',
+        Size: '',
+        CreateDate: '',
+        Tracker: '',
+        Magnet: '',
+        Hash: '',
+        Peer: 0,
+        Seed: 0,
+        source: OMP_JACKETT_ID,
+      },
       site.ctx,
     );
     expect(path).toBeTruthy();
