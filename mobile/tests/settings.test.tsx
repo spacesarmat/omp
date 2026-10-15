@@ -3,6 +3,7 @@ import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Settings, setUpdateChecker } from '../src/screens/Settings';
+import { VideoPlayer } from '../src/screens/VideoPlayer';
 import { currentRoute, resetTo } from '../src/nav';
 import { settings, updateSettings, sanitizeSettings, DEFAULT_SETTINGS } from '../../src/store/settings';
 import { addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
@@ -609,16 +610,29 @@ describe('Settings: «Плеер для видео»', () => {
   const flushAll = () => act(async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); });
   afterEach(() => updateSettings({ phonePlayer: 'embedded' }));
 
-  it('«Встроенный» is the default; all three options work and the choice is kept', async () => {
+  function mountPlayer(): HTMLElement {
+    document.body.innerHTML = '<div id="app"></div>';
+    const el = document.getElementById('app')!;
+    act(() => render(<VideoPlayer />, el));
+    return el;
+  }
+
+  it('Settings opens the player screen; «Встроенный» is the default; all three options work', async () => {
     vi.spyOn(native, 'player2160').mockResolvedValue('pkg');
     expect(DEFAULT_SETTINGS.phonePlayer).toBe('embedded');
-    const el = mount();
+    const settingsEl = mount();
+    const pick = settingsEl.querySelector('[data-row="video-player"]') as HTMLButtonElement;
+    expect(pick.textContent).toContain('Плеер для видео');
+    expect(pick.textContent).toContain('Встроенный');
+    act(() => pick.click());
+    expect(currentRoute.value).toEqual({ name: 'videoPlayer' });
+    const el = mountPlayer();
     await flushAll();
     const row = el.querySelector('[data-row="video-player"]')!;
-    const [e, p, b] = Array.from(row.querySelectorAll('.m-seg button')) as HTMLButtonElement[];
-    expect(e.textContent).toBe('Встроенный');
-    expect(p.textContent).toBe('2160 Player (приложение)');
-    expect(b.textContent).toBe('Выбор Android');
+    const [e, p, b] = Array.from(row.querySelectorAll('[role="radio"]')) as HTMLButtonElement[];
+    expect(e.textContent).toContain('Встроенный');
+    expect(p.textContent).toContain('2160 Player (приложение)');
+    expect(b.textContent).toContain('Выбор Android');
     expect(e.getAttribute('aria-pressed')).toBe('true');
     expect(p.disabled).toBe(false);
     expect(row.querySelector('[data-row="p2160-missing"]')).toBeNull();
@@ -637,10 +651,10 @@ describe('Settings: «Плеер для видео»', () => {
   it('not installed: only the app option is disabled and the link opens the release page', async () => {
     vi.spyOn(native, 'player2160').mockResolvedValue(null);
     const win = vi.spyOn(window, 'open').mockReturnValue(null);
-    const el = mount();
+    const el = mountPlayer();
     await flushAll();
     const row = el.querySelector('[data-row="video-player"]')!;
-    const btns = Array.from(row.querySelectorAll('.m-seg button')) as HTMLButtonElement[];
+    const btns = Array.from(row.querySelectorAll('[role="radio"]')) as HTMLButtonElement[];
     expect(btns.map((x) => x.disabled)).toEqual([false, true, false]);
     act(() => (row.querySelector('[data-row="p2160-missing"]') as HTMLElement).click());
     expect(win).toHaveBeenCalledWith('https://github.com/spacesarmat/2160player/releases/latest', '_system');
@@ -667,7 +681,7 @@ describe('Settings: «Плеер для видео»', () => {
     vi.spyOn(monitorNative, 'notifyPermission').mockResolvedValue('prompt');
     const ask = vi.spyOn(monitorNative, 'requestNotifyPermission').mockResolvedValue('denied');
     try {
-      const el = mount();
+      const el = mountPlayer();
       await flushAll();
       const row = () => el.querySelector('[data-row="background-audio"]');
       expect(row()!.textContent).toContain('Звук в фоне');
@@ -696,7 +710,7 @@ describe('Settings: «Плеер для видео»', () => {
     vi.spyOn(native, 'player2160').mockResolvedValue('pkg');
     applyLanguageSetting('en');
     try {
-      const el = mount();
+      const el = mountPlayer();
       await flushAll();
       const row = el.querySelector('[data-row="background-audio"]') as HTMLElement;
       expect(row.textContent).toContain('Background audio');

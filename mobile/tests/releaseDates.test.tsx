@@ -250,7 +250,8 @@ describe('«Обзор» tile labels', () => {
     });
     await flush();
     expect(c.card).toHaveBeenCalledTimes(2);
-    expect(Array.from(el.querySelectorAll('.m-disc-when')).map((x) => x.textContent)).toEqual(['в цифре 12 нояб.', 'новая серия 8 окт.']);
+    // film cinema/digital stays; «новая серия» is not shown on TMDB «Обзор» tiles
+    expect(Array.from(el.querySelectorAll('.m-disc-when')).map((x) => x.textContent)).toEqual(['в цифре 12 нояб.', '']);
   });
 
   it('a tile without a date keeps no line for it; a title in Chinese shows the card\'s English one once the card is known', async () => {

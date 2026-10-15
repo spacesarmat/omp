@@ -25,7 +25,7 @@ import { tvState } from '../tv/tvClient';
 import { tvSearchOn, setTvSearch } from '../tv/phoneRpc';
 import { tvOmpVersions, tvNeedsUpdate, tvOpensUpdate, openUpdateOnTv, type TvOmp } from '../tv/tvUpdate';
 import { errorMessage } from '../../../src/api/http';
-import { settings, updateSettings, type PhonePlayer } from '../../../src/store/settings';
+import { settings, updateSettings } from '../../../src/store/settings';
 import { checkForUpdate, latestUpdate, updatePrompt, type CheckResult } from '../../../src/store/updates';
 import { updateFeedUrl, updateTitle } from '../../../src/lib/updateInfo';
 import { isBetaVersion } from '../../../src/lib/version';
@@ -37,11 +37,10 @@ import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
 import { native } from '../platform/native';
-import { monitorNative } from '../monitor/native';
-import { P2160_RELEASES_URL } from '../../../src/player/player2160';
 import { fmtSize, t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
+import { phonePlayerName } from './VideoPlayer';
 
 type Checker = (o: { manual: boolean; url?: string; minIntervalMs?: number }) => Promise<CheckResult>;
 let checker: Checker | null = null;
@@ -208,7 +207,7 @@ function LocalServerSection() {
         <Icon d="M12 8v.01M11 12h1v5h1M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18" size={18} />
         <span>{t('settings.serverNote')}</span>
       </div>
-      <div class="m-hint-warn">{t('settings.lanWarn')}</div>
+      <p class="m-muted m-small" data-row="lan-warn">{t('settings.lanWarn')}</p>
       {st.vpn && <div class="m-hint-warn" role="alert">{t('localServer.vpn')}</div>}
     </section>
   );
@@ -260,78 +259,15 @@ function LanguageRow() {
   );
 }
 
-/** «Плеер для видео»: 2160 Player's screen inside OMP, the 2160 Player app (needs it installed) or the Android chooser. */
+/** «Плеер для видео»: opens its own screen (the three options do not fit in a segment). */
 function VideoPlayerRow() {
-  const cur = settings.value.phonePlayer;
-  const [pkg, setPkg] = useState<string | null | undefined>(undefined);
-  useEffect(() => {
-    let alive = true;
-    native.player2160().then(
-      (p) => alive && setPkg(p),
-      () => alive && setPkg(null),
-    );
-    return () => {
-      alive = false;
-    };
-  }, []);
-  const missing = pkg === null;
-  const opt = (v: PhonePlayer, label: string, disabled = false) => (
-    <button type="button" class={cur === v ? 'on' : ''} aria-pressed={cur === v} disabled={disabled} onClick={() => updateSettings({ phonePlayer: v })}>
-      {label}
-    </button>
-  );
   return (
-    <section class="m-set-group" data-row="video-player">
-      <div class="m-set-row">
+    <section class="m-set-group">
+      <button type="button" class="m-set-row m-set-pick" data-row="video-player" onClick={() => navigate({ name: 'videoPlayer' })}>
         <span>{t('player.videoPlayer')}</span>
-      </div>
-      <div class="m-seg" role="group" aria-label={t('player.videoPlayer')}>
-        {opt('embedded', t('player.embeddedPlayerPhone'))}
-        {opt('p2160', t('player.p2160AppPhone'), missing)}
-        {opt('chooser', t('player.builtinPlayerPhone'))}
-      </div>
-      {missing && (
-        <button type="button" class="m-link" data-row="p2160-missing" onClick={() => window.open(P2160_RELEASES_URL, '_system')}>
-          {t('player.p2160Missing')}
-        </button>
-      )}
-      <p class="m-muted m-small">{t('player.p2160NotePhone')}</p>
-      {cur === 'embedded' && <BackgroundAudioRow />}
+        <span class="m-muted">{phonePlayerName(settings.value.phonePlayer)} ›</span>
+      </button>
     </section>
-  );
-}
-
-/**
- * «Звук в фоне» for the built-in (embedded 2160) player. Turning it on asks for notifications (Android 13+): without
- * them the sound still plays in the background, only the controls in the shade are missing.
- */
-function BackgroundAudioRow() {
-  const on = settings.value.backgroundAudio;
-  const [denied, setDenied] = useState(false);
-  useEffect(() => {
-    if (!on || !monitorNative.available) return;
-    let alive = true;
-    monitorNative.notifyPermission().then((p) => alive && setDenied(p === 'denied'));
-    return () => {
-      alive = false;
-    };
-  }, [on]);
-  const toggle = () => {
-    updateSettings({ backgroundAudio: !on });
-    if (on || !monitorNative.available) return;
-    void monitorNative.notifyPermission().then((before) =>
-      before === 'granted' ? setDenied(false) : monitorNative.requestNotifyPermission().then((now) => setDenied(now === 'denied')),
-    );
-  };
-  return (
-    <div class="m-set-row" data-row="background-audio">
-      <div class="m-set-text" style="flex-grow: 1">
-        <span>{t('player.backgroundAudio')}</span>
-        <span class="m-muted m-small">{t('player.backgroundAudioHint')}</span>
-        {on && denied && <span class="m-muted m-small" data-row="background-audio-denied">{t('player.backgroundAudioNoNotify')}</span>}
-      </div>
-      <Switch on={on} label={t('player.backgroundAudio')} onToggle={toggle} />
-    </div>
   );
 }
 
@@ -387,7 +323,11 @@ function TvOmpRow() {
           </span>
         </div>
         {old && (
-          <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={update}>
+          <button
+            type="button"
+            class={'m-btn m-btn-sm' + (latestUpdate.value ? ' m-btn-secondary' : ' m-btn-primary')}
+            onClick={update}
+          >
             {t('install.plan.updateOnTv')}
           </button>
         )}

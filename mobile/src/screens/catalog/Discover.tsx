@@ -57,10 +57,40 @@ export function TileWhen({ kind, id, digital }: { kind: Kind; id: number; digita
       leaveTileCard(kind, id);
     };
   }, [kind, id, unknown]);
-  const text = digital ? digitalSoonLabel(digital) : card ? tileLabel(card) : '';
+  // «новая серия …» / season dates stay on «Мои» and «Новое»; TMDB tiles only keep film cinema/digital labels
+  const text = digital ? digitalSoonLabel(digital) : card && card.kind !== 'tv' ? tileLabel(card) : '';
   return (
     <span ref={ref} class={'m-small m-accent m-disc-when' + (text ? '' : ' m-disc-when-none')} data-when={text ? '' : undefined}>
       {text}
+    </span>
+  );
+}
+
+/** Poster with a skeleton until the image paints (empty dark tiles read as a broken catalog). */
+function DiscPoster({ x, owned }: { x: CatalogTitle; owned: boolean }) {
+  const [ready, setReady] = useState(!x.poster);
+  useEffect(() => {
+    setReady(!x.poster);
+  }, [x.poster]);
+  return (
+    <span class={'m-disc-poster' + (x.poster && !ready ? ' m-disc-loading' : '')}>
+      {x.poster ? (
+        <>
+          {!ready && <span class="m-disc-poster-skel" aria-hidden="true" />}
+          <img
+            src={x.poster}
+            alt=""
+            loading="lazy"
+            onLoad={() => setReady(true)}
+            onError={() => setReady(true)}
+            style={ready ? undefined : { opacity: 0 }}
+          />
+        </>
+      ) : (
+        <span class={'m-disc-ph m-disc-ph-' + (x.id % 4)}>{x.title}</span>
+      )}
+      {x.rating > 0 && <span class="m-disc-rating">{ratingText(x.rating)}</span>}
+      {owned && <span class="m-disc-badge">{t('discover.inLibrary')}</span>}
     </span>
   );
 }
@@ -289,15 +319,7 @@ export function Discover() {
                 aria-label={x.year ? x.title + ' ' + x.year : x.title}
                 onClick={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
               >
-                <span class="m-disc-poster">
-                  {x.poster ? (
-                    <img src={x.poster} alt="" loading="lazy" />
-                  ) : (
-                    <span class={'m-disc-ph m-disc-ph-' + (x.id % 4)}>{x.title}</span>
-                  )}
-                  {x.rating > 0 && <span class="m-disc-rating">{ratingText(x.rating)}</span>}
-                  {inLibrary(index, x) && <span class="m-disc-badge">{t('discover.inLibrary')}</span>}
-                </span>
+                <DiscPoster x={x} owned={inLibrary(index, x)} />
                 <span class="m-card-title m-disc-title">
                   <TileTitle x={x} />
                 </span>

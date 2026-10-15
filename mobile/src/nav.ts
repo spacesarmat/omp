@@ -19,6 +19,8 @@ export type MRoute =
   | { name: 'nowPlaying' }
   | { name: 'tv' }
   | { name: 'settings' }
+  /** «Настройки» → «Плеер для видео». */
+  | { name: 'videoPlayer' }
   | { name: 'serverSettings'; url?: string }
   | { name: 'localServer' }
   /** `q` opens that question. */

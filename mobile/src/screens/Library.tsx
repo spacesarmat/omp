@@ -205,7 +205,7 @@ export function Library() {
       // «Обзор» has no pull-to-refresh: the list below is the library's
       if (busy || e.touches.length !== 1 || !atTop() || catalogMode.peek() !== 'mine') return;
       const target = e.target as Element | null;
-      if (target && target.closest && target.closest('.m-tabs, .m-hfilters')) return;
+      if (target && target.closest && target.closest('.m-tabs, .m-hfilters, .m-hist-seg')) return;
       startY = e.touches[0].clientY;
       startX = e.touches[0].clientX;
       pulling = true;
@@ -538,22 +538,7 @@ export function Library() {
           </button>
         ))}
       </div>
-      {isHistory && (
-        <div class="m-hfilters" role="group" aria-label={t('add.source')}>
-          {historyFilters().map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              class={'m-hfilter' + (hfilter === f.id ? ' on' : '')}
-              aria-pressed={hfilter === f.id}
-              onClick={() => updateSettings({ historyFilter: f.id })}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      )}
-      {/* only the list follows the finger: the header, tabs and filters stay put */}
+      {/* only the list follows the finger: the header and tabs stay put; history device filter sits in the list */}
       <div class="m-lib-pull">
         {(pull > 0 || refreshing) && (
           <div
@@ -643,6 +628,19 @@ export function Library() {
           {empty && <p class="m-muted m-note m-empty">{empty}</p>}
           {unavailable ? null : isHistory ? (
             <div class="m-list m-history">
+              <div class="m-seg m-hist-seg" role="group" aria-label={t('add.source')}>
+                {historyFilters().map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    class={'m-seg-btn' + (hfilter === f.id ? ' on' : '')}
+                    aria-pressed={hfilter === f.id}
+                    onClick={() => updateSettings({ historyFilter: f.id })}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
               {history.map((e) => {
                 const tor = e.torrent;
                 const files = filesOf(tor);

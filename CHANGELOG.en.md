@@ -2,6 +2,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.4
+
+- [phone] Discover: poster skeleton until loaded; no "new episode" badge on TMDB tiles
+- [phone] History: phone/TV filter as a segment inside the list; chips in one horizontal row
+- [phone] Add: magnet as a button, not a link; sources and filters in one row
+- [phone] Settings: one yellow update CTA; Wi-Fi as grey text; Video player on its own screen
+
 ## 0.20.1-beta.3
 
 - same as beta.1 (release failed: ompJackett test types)

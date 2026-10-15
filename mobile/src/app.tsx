@@ -29,6 +29,7 @@ import { Remote } from './screens/Remote';
 import { NowPlaying } from './screens/NowPlaying';
 import { MiniPlayer } from './ui/MiniPlayer';
 import { Settings, runUpdateCheck, phoneFeedUrl } from './screens/Settings';
+import { VideoPlayer } from './screens/VideoPlayer';
 import { ServerSettings } from './screens/ServerSettings';
 import { UpdateSheet } from './ui/UpdateSheet';
 import { runBack } from './ui/backStack';
@@ -338,6 +339,8 @@ export function App() {
         <LocalServer />
       ) : route.name === 'serverSettings' ? (
         <ServerSettings url={route.url} />
+      ) : route.name === 'videoPlayer' ? (
+        <VideoPlayer />
       ) : route.name === 'remote' ? (
         <Remote />
       ) : route.name === 'series' ? (
