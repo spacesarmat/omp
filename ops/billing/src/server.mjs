@@ -101,6 +101,20 @@ function cookie(req, name) {
   return '';
 }
 
+/** Admin session cookie: HttpOnly + SameSite=Lax; Secure when the request (or public origin) is HTTPS. */
+function adminSetCookie(req, id, maxAge) {
+  const proto = String(req.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  const origin = String(process.env.BILLING_PUBLIC_ORIGIN || '');
+  const secure = proto === 'https' || origin.indexOf('https://') === 0;
+  let value = 'omp_admin=' + encodeURIComponent(id) + '; HttpOnly; SameSite=Lax; Path=/';
+  if (secure) value += '; Secure';
+  if (maxAge !== undefined) value += '; Max-Age=' + maxAge;
+  return value;
+}
+
 function adminOf(req) {
   const id = cookie(req, 'omp_admin');
   const row = sessions.get(id);
@@ -332,7 +346,7 @@ export function createApp(file, fetchImpl) {
             telegramId: taken.telegramId || '',
           });
           await audit(file, 'login', 'telegram ' + (taken.telegramId || ''));
-          res.setHeader('set-cookie', 'omp_admin=' + id + '; HttpOnly; SameSite=Lax; Path=/');
+          res.setHeader('set-cookie', adminSetCookie(req, id));
           return json(res, 200, { ok: true, status: 'ok' });
         }
         return json(res, 200, { ok: false, status: taken.status || 'expired' });
@@ -350,7 +364,7 @@ export function createApp(file, fetchImpl) {
         const now = Date.now();
         sessions.set(id, { csrf, exp: now + 12 * 60 * 60 * 1000, createdAt: now, lastSeen: now });
         await audit(file, 'login', 'ok');
-        res.setHeader('set-cookie', 'omp_admin=' + id + '; HttpOnly; SameSite=Lax; Path=/');
+        res.setHeader('set-cookie', adminSetCookie(req, id));
         if (wantsJson(req)) return json(res, 200, { ok: true });
         res.writeHead(302, { location: '/admin' });
         return res.end();
@@ -511,7 +525,7 @@ export function createApp(file, fetchImpl) {
           const sid = cookie(req, 'omp_admin');
           sessions.delete(sid);
           await audit(file, 'logout', sid.slice(0, 8));
-          res.setHeader('set-cookie', 'omp_admin=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+          res.setHeader('set-cookie', adminSetCookie(req, '', 0));
           if (wantsJson(req)) return json(res, 200, { ok: true, redirect: '/admin/' });
           res.writeHead(302, { location: '/admin/' });
           return res.end();

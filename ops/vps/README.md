@@ -6,9 +6,12 @@ Hostnames (Cloudflare A → VPS IP, orange cloud):
 
 | Host | Upstream |
 |------|----------|
+| `omp-player.online` / `www` | static `site/` (landing) |
 | `billing.omp-player.online` | `billing:8787` |
 | `jackett.omp-player.online` | `jackett:9117` (+ basic auth) |
 | `jacred.omp-player.online` | `jacred:9117` (+ basic auth) |
+
+Cloudflare DNS: A `@` and `www` → VPS IP, proxied (same as billing). SSL/TLS **Full**.
 
 JacRed talks to TorrServer at `http://torrserver:8090` (`tracks` / ffprobe).
 
@@ -39,7 +42,7 @@ docker compose up -d
 
 1. Install Docker Engine + Compose plugin.
 2. Copy this directory to `/opt/omp-vps` (or clone the monorepo and `cd ops/vps`).
-3. `cp .env.example .env` and set `INDEXER_HASH` if you rotate the password.
+3. `cp .env.example .env` and set a unique `INDEXER_HASH` (required; compose will not start without it).
 4. Put the existing SQLite DB at `data/billing/billing.db` (do not start with an empty DB if you already have subscriptions).
 5. `mkdir -p data/{billing,jackett,jacred,torrserver/{config,torrents}} && chown -R 1000:1000 data/jackett data/jacred data/torrserver`
 6. Edit `jacred/init.yaml`: set `apikey` / `devkey`.

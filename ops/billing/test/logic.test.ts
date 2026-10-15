@@ -119,6 +119,13 @@ describe('Jackett proxy', () => {
     expect(back).toBe('http://127.0.0.1:9118/dl/b?apikey=OTHER');
     expect(restoreJackett('omp-jacred:/dl/b', 'http://127.0.0.1:9117', 'SECRET')).toBe('');
   });
+
+  it('rejects absolute URLs and path traversal in the download link', () => {
+    expect(restoreJackett('omp-fetch://evil.example/x', 'http://127.0.0.1:9117', 'SECRET')).toBe('');
+    expect(restoreJackett('omp-fetch:http://evil.example/x', 'http://127.0.0.1:9117', 'SECRET')).toBe('');
+    expect(restoreJackett('omp-fetch:/api/../admin', 'http://127.0.0.1:9117', 'SECRET')).toBe('');
+    expect(restoreJackett('omp-fetch:/dl\\a', 'http://127.0.0.1:9117', 'SECRET')).toBe('');
+  });
 });
 
 describe('bot', () => {

@@ -40,11 +40,29 @@ export function restoreJackett(link, origin, apiKey, mark) {
   const raw = String(link || '');
   const prefix = mark || JACKETT_MARK;
   if (raw.indexOf(prefix) !== 0 || !base) return '';
-  const path = raw.slice(prefix.length);
-  if (path.indexOf('//') === 0 || path.indexOf('http') === 0) return '';
-  const join = path.charAt(0) === '/' ? base + path : base + '/' + path;
+  let path = raw.slice(prefix.length);
+  if (!path) return '';
+  // no absolute / protocol-relative URLs, traversal, or backslashes - stay on the configured indexer origin
+  if (path.indexOf('//') === 0 || /^https?:/i.test(path) || path.indexOf('://') >= 0 || path.indexOf('..') >= 0 || path.indexOf('\\') >= 0) {
+    return '';
+  }
+  if (path.charAt(0) !== '/') path = '/' + path;
+  if (!/^\/[A-Za-z0-9._~!$&'()*+,;=:@%/?#-]*$/.test(path)) return '';
+  let target;
+  try {
+    target = new URL(base + path);
+  } catch {
+    return '';
+  }
+  let originUrl;
+  try {
+    originUrl = new URL(base + '/');
+  } catch {
+    return '';
+  }
+  if (target.origin !== originUrl.origin) return '';
   const key = encodeURIComponent(apiKey || '');
-  return join + (join.indexOf('?') >= 0 ? '&' : '?') + 'apikey=' + key;
+  return target.href + (target.search ? '&' : '?') + 'apikey=' + key;
 }
 
 export function jackettSearchUrl(origin, apiKey, query) {

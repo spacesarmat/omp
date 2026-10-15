@@ -1,0 +1,12 @@
+# JacRed (jacred-fdb) on NAS - first-boot template.
+# Copy to init.yaml (gitignored) and set real apikey / devkey.
+# Keep apikey for TorrServer Torznab / clients; not used by OMP billing.
+listenport: 9118
+apikey: "change-me"
+devkey: "change-me"
+
+tracks: true
+tsuri:
+  - http://host.docker.internal:8090
+
+openstats: false

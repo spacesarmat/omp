@@ -51,5 +51,13 @@
     "vite": "^8.3.2",
     "vitest": "^5.0.3"
   },
+  "overrides": {
+    "proxy-addr": "2.0.8",
+    "js-yaml": "4.3.2",
+    "qs": "6.16.1",
+    "brace-expansion@1": "1.1.21",
+    "brace-expansion@2": "2.1.7",
+    "brace-expansion@5": "5.0.12"
+  },
   "license": "GPL-3.0-only"
 }

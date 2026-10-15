@@ -17,11 +17,12 @@ services:
     environment:
       CADDY_EMAIL: ${CADDY_EMAIL:-admin@omp-player.online}
       INDEXER_USER: ${INDEXER_USER:-omp}
-      # $$ → literal $ in the bcrypt hash for Caddy
-      # Default = bcrypt("changeme"); override via .env INDEXER_HASH on the VPS (never commit real .env).
-      INDEXER_HASH: ${INDEXER_HASH:-$$2a$$14$$BQuF4agdliaFt/MHb84V2.oSBDsaRQZBV87PA5qDYSxsahlo9hVZK}
+      # Required: bcrypt hash from .env (never commit real .env). See .env.example.
+      # $$ → literal $ in the bcrypt hash for Caddy when the value is inlined.
+      INDEXER_HASH: ${INDEXER_HASH:?Set INDEXER_HASH in .env - see .env.example}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./site:/srv/site:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
