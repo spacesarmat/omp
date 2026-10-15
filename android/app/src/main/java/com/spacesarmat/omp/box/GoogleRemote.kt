@@ -53,8 +53,8 @@ fun interface TlsDialer {
     fun dial(ip: String, port: Int): TlsLink
 }
 
-/** Real TLS dialer presenting the phone's certificate. */
-class SocketTlsDialer(private val factory: () -> SSLSocketFactory) : TlsDialer {
+/** Real TLS dialer presenting the phone's certificate; [factoryFor] is per TV IP (TOFU pin). */
+class SocketTlsDialer(private val factoryFor: (String) -> SSLSocketFactory) : TlsDialer {
     override fun dial(ip: String, port: Int): TlsLink {
         val plain = Socket()
         try {
@@ -66,7 +66,7 @@ class SocketTlsDialer(private val factory: () -> SSLSocketFactory) : TlsDialer {
         val s: SSLSocket
         try {
             plain.soTimeout = HANDSHAKE_MS
-            s = factory().createSocket(plain, ip, port, true) as SSLSocket
+            s = factoryFor(ip).createSocket(plain, ip, port, true) as SSLSocket
             s.startHandshake()
         } catch (e: Exception) {
             plain.close()

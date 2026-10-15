@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- TorrServer and the TV are reached by plain local IPs over http/ws -->
+<!--
+  Cleartext is required for LAN HTTP (TorrServer, Jackett, FlareSolverr, phone↔TV control).
+  Android Network Security Config has no CIDR match for private IP ranges, so base-config must
+  allow cleartext for bare LAN IPs. Mitigations elsewhere:
+  - ControlServer / Phone RPC reject non-LAN clients (LanAddresses)
+  - native HTTP clients refuse cleartext to public IP literals
+  - TV wss:// and Android TV box TLS use TOFU cert pins (CertPins)
+-->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
@@ -12,7 +19,7 @@
         intermediates YE1-YE3 (letsencrypt.org/certificates, issued by ISRG Root YE) complete the chain; the leaf is
         still fully verified (signature, host name, validity). Valid until 2028-09-02.
     -->
-    <domain-config cleartextTrafficPermitted="true">
+    <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">torrent.by</domain>
         <trust-anchors>
             <certificates src="system" />

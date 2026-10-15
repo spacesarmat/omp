@@ -20,9 +20,9 @@ class PairingTest {
     private fun refused(r: Pairing.Result) = (r as Pairing.Result.Refused).error
 
     @Test
-    fun codeIsFourDigitsValidFiveMinutes() {
+    fun codeIsSixDigitsValidFiveMinutes() {
         val c = pairing.newCode()
-        assertTrue(Regex("^[0-9]{4}$").matches(c.code))
+        assertTrue(Regex("^[0-9]{6}$").matches(c.code))
         assertEquals(now + 300_000L, c.expiresAt)
     }
 

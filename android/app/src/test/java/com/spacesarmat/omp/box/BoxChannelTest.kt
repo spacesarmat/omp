@@ -202,13 +202,16 @@ class BoxChannelTest {
     fun probeNeedsBothGooglePorts() {
         val open = setOf(6466, 5555)
         val r = BoxRemote(
-            { throw AssertionError() }, { throw AssertionError() }, { _, _, _ -> throw AssertionError() },
-            BoxRemote.DeviceInfo("n", "m", "v", "1"),
-            object : BoxRemote.Events {
+            dialer = TlsDialer { _, _ -> throw AssertionError() },
+            clientKey = { throw AssertionError() },
+            adb = { _, _, _ -> throw AssertionError() },
+            device = BoxRemote.DeviceInfo("n", "m", "v", "1"),
+            events = object : BoxRemote.Events {
                 override fun closed(via: String) {}
                 override fun volume(level: Int, max: Int, muted: Boolean) {}
             },
-        ) { _, port, _ -> port in open }
+            ports = { _, port, _ -> port in open },
+        )
         assertEquals(BoxProbe(google = false, adb = true), r.probe("10.0.0.4"))
     }
 }

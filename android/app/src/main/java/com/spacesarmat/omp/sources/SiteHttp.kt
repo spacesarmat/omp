@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.sources
 
+import com.spacesarmat.omp.CleartextGuard
 import com.spacesarmat.omp.I18n
 
 import java.io.IOException
@@ -43,6 +44,7 @@ class SiteHttp(
 
     private val client = OkHttpClient.Builder()
         .cookieJar(jar)
+        .addInterceptor(CleartextGuard.interceptor)
         // redirects are followed by hand ([RedirectPolicy]): a POST body must not leave its site
         .followRedirects(false)
         .followSslRedirects(false)

@@ -108,7 +108,8 @@ class BoxIdentityTest {
             }
         }
         t.start()
-        val dialer = SocketTlsDialer { phone.socketFactory() }
+        val pins = com.spacesarmat.omp.CertPins.memory()
+        val dialer = SocketTlsDialer { ip -> phone.socketFactory(pins, ip) }
         val pairing = GooglePairing({ _, _ -> dialer.dial("127.0.0.1", server.localPort) }, phone.publicKey, "Test")
         pairing.start("127.0.0.1")
         while (code.get() == null) Thread.sleep(10)
@@ -127,7 +128,8 @@ class BoxIdentityTest {
         val port = s.localPort
         s.close()
         try {
-            SocketTlsDialer { BoxIdentity.generate().socketFactory() }.dial("127.0.0.1", port)
+            val pins = com.spacesarmat.omp.CertPins.memory()
+            SocketTlsDialer { ip -> BoxIdentity.generate().socketFactory(pins, ip) }.dial("127.0.0.1", port)
             throw AssertionError("connected")
         } catch (e: BoxFailure) {
             assertEquals(BoxCodes.NO_SERVICE, e.code)

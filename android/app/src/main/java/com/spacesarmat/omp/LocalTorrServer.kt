@@ -339,6 +339,7 @@ object LocalTorrServer {
     // ---- HTTP API of the local server ----
 
     private val http = OkHttpClient.Builder()
+        .addInterceptor(CleartextGuard.interceptor)
         .connectTimeout(1, TimeUnit.SECONDS)
         .readTimeout(5, TimeUnit.SECONDS)
         .build()

@@ -156,7 +156,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       '1. From the phone: on the TV turn on developer mode and “Network debugging”, then on the phone Settings → “Install OMP on the TV” (step by step under “More”).',
       '2. Or by hand: “Downloader” or “Send Files to TV” from Google Play, or a USB drive.',
       '3. For a manual install allow: Settings → Device Preferences (on Google TV: Apps) → Security & restrictions → Unknown sources.',
-      '4. After the install: in OMP on the TV open Settings → “Connect a phone” and enter the 4-digit code on the phone (“TV” → “Android TV”).',
+      '4. After the install: in OMP on the TV open Settings → “Connect a phone” and enter the 6-digit code on the phone (“TV” → “Android TV”).',
     ],
     more: [
       'From the phone (install assistant), step by step:',
@@ -180,7 +180,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       '2. On apps.sber.ru/my sign in with the same Sber ID as on the TV, drop the APK and press “Save”.',
       '3. On the TV: catalog → “My apps” → “Uploaded” → OMP. Another way: a USB drive and the file manager on the TV.',
       '4. On the first install allow “Install from unknown sources”.',
-      '5. After the install: in OMP on the TV open Settings → “Connect a phone” and enter the 4-digit code on the phone (“TV” → “Android TV”).',
+      '5. After the install: in OMP on the TV open Settings → “Connect a phone” and enter the 6-digit code on the phone (“TV” → “Android TV”).',
     ],
     more: [
       'Salute TV (StarOS) on SberBox, SberBox Top and TVs with Salute TV is Android without Google Play: “Downloader” and “Send Files to TV” are usually not there. Uploading the APK via apps.sber.ru/my is simpler; Sber scans the file with an antivirus before the install.',
@@ -196,7 +196,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       '1. Download the universal OMP-<version>.apk from the release page on GitHub and copy it to a USB drive (FAT32).',
       '2. Plug the drive into the TV or the Module. On the home screen: “Apps” → “File manager” → pick the APK.',
       '3. If the TV asks about unknown sources, allow installs for the file manager.',
-      '4. After the install: in OMP on the TV open Settings → “Connect a phone” and enter the 4-digit code on the phone (“TV” → “Android TV”).',
+      '4. After the install: in OMP on the TV open Settings → “Connect a phone” and enter the 6-digit code on the phone (“TV” → “Android TV”).',
     ],
     more: [
       'YaOS is Android without Google Play. “Developer options” and network debugging are usually hidden there, so the phone install assistant cannot install OMP.',
@@ -387,7 +387,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'atv-connect': {
     q: 'Connect the phone to Android TV',
     short: [
-      '1. On the TV open OMP: Settings → “Connect a phone” — a 4-digit code appears.',
+      '1. On the TV open OMP: Settings → “Connect a phone” - a 6-digit code appears.',
       '2. On the phone: “TV” → choose “Android TV” → enter the code.',
     ],
     more: ['The phone does not see the TV — tips about the network, VPN and memory cleaning are in the question “Connect the phone to a Xiaomi TV”: they fit any Android TV.'],
@@ -396,7 +396,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'xiaomi-connect': {
     q: 'Connect the phone to a Xiaomi TV',
     short: [
-      '1. On the TV open OMP: Settings → “Connect a phone” — a 4-digit code appears.',
+      '1. On the TV open OMP: Settings → “Connect a phone” - a 6-digit code appears.',
       '2. On the phone: “TV” → choose your Xiaomi (marked “Android TV”) → enter the code.',
       '3. The phone and the TV are in the same Wi-Fi network: not a guest one, with “client isolation” (AP isolation) off in the router.',
       'The phone does not see the TV — open OMP on the TV again and turn off VPN on the TV.',

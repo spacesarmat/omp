@@ -3,9 +3,9 @@ import { Sheet } from './Sheet';
 import { errorMessage } from '../../../src/api/http';
 import { t } from '../../../src/i18n';
 
-const LEN = 4;
+const LEN = 6;
 
-/** Bottom sheet for the 4-digit code shown by OMP on an Android TV. */
+/** Bottom sheet for the 6-digit code shown by OMP on an Android TV. */
 export function CodeSheet({
   tvName,
   onSubmit,
@@ -15,7 +15,7 @@ export function CodeSheet({
   onSubmit: (code: string) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [digits, setDigits] = useState<string[]>(['', '', '', '']);
+  const [digits, setDigits] = useState<string[]>(() => Array.from({ length: LEN }, () => ''));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const cells = useRef<(HTMLInputElement | null)[]>([]);

@@ -60,7 +60,7 @@ describe('English FAQ', () => {
     for (const id of ['xiaomi', 'sber', 'yandex']) {
       const x = faqText(id);
       expect(x.short.map((l) => (typeof l === 'string' ? l : l.text)).join(' '), id).toContain('Settings → “Connect a phone”');
-      expect(x.short.join(' '), id).toContain('4-digit code');
+      expect(x.short.join(' '), id).toContain('6-digit code');
     }
     expect(faqText('xiaomi').q).toBe('Install on Xiaomi (Mi Box, Mi TV)');
     expect(faqText('sber').short.join(' ')).toContain('apps.sber.ru/my');

@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.sources
 
+import com.spacesarmat.omp.CleartextGuard
 import com.spacesarmat.omp.I18n
 
 import java.util.concurrent.TimeUnit
@@ -18,6 +19,7 @@ import org.json.JSONObject
  */
 class FlareSolverrClient(
     private val client: OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor(CleartextGuard.interceptor)
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(MAX_TIMEOUT_MS + 10_000, TimeUnit.MILLISECONDS)
         .build(),

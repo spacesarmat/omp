@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.math.BigInteger
 import java.net.Socket
+import com.spacesarmat.omp.CertPins
 import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
@@ -13,6 +14,7 @@ import java.security.Principal
 import java.security.PrivateKey
 import java.security.SecureRandom
 import java.security.Signature
+import java.security.cert.CertificateException
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.security.interfaces.RSAPublicKey
@@ -60,10 +62,10 @@ class BoxIdentity(val privateDer: ByteArray, val certDer: ByteArray) {
     }
 
     /**
-     * A TLS socket factory presenting this certificate. The TV's own certificate is self-signed, so any server
-     * certificate is accepted; the pairing secret binds both public keys, and the TV accepts only a paired client.
+     * A TLS socket factory presenting this certificate. The TV's cert is self-signed: [pins] TOFU-pins the leaf
+     * for [host] (pairing secret still binds keys; the pin stops a later MITM with a different cert).
      */
-    fun socketFactory(): SSLSocketFactory {
+    fun socketFactory(pins: CertPins, host: String): SSLSocketFactory {
         val key = privateKey()
         val chain = arrayOf(certificate)
         val km = object : X509ExtendedKeyManager() {
@@ -75,19 +77,28 @@ class BoxIdentity(val privateDer: ByteArray, val certDer: ByteArray) {
             override fun getCertificateChain(alias: String?) = chain
             override fun getPrivateKey(alias: String?) = key
         }
+        val tm = object : X509ExtendedTrustManager() {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) =
+                throw CertificateException("server only")
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?, socket: Socket?) =
+                throw CertificateException("server only")
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?, engine: SSLEngine?) =
+                throw CertificateException("server only")
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) =
+                checkServer(chain)
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?, socket: Socket?) =
+                checkServer(chain)
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?, engine: SSLEngine?) =
+                checkServer(chain)
+            private fun checkServer(chain: Array<out X509Certificate>?) {
+                val leaf = chain?.firstOrNull() ?: throw CertificateException("empty certificate chain")
+                pins.checkOrRemember(host, leaf)
+            }
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        }
         val ctx = SSLContext.getInstance("TLS")
-        ctx.init(arrayOf(km), arrayOf(AnyServer), SecureRandom())
+        ctx.init(arrayOf(km), arrayOf(tm), SecureRandom())
         return ctx.socketFactory
-    }
-
-    private object AnyServer : X509ExtendedTrustManager() {
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = throw java.security.cert.CertificateException("server only")
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?, socket: Socket?) = throw java.security.cert.CertificateException("server only")
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?, engine: SSLEngine?) = throw java.security.cert.CertificateException("server only")
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?, socket: Socket?) {}
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?, engine: SSLEngine?) {}
-        override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
     }
 
     companion object {

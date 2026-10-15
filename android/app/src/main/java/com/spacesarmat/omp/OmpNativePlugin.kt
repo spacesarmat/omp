@@ -161,6 +161,7 @@ class OmpNativePlugin : Plugin() {
     override fun load() {
         I18n.load(context)
         instance = this
+        TvHttp.initPins(CertPins.tv(context))
         LocalTorrServer.addDownloadListener(downloadProgress)
         purgeSharedFiles(10 * 60 * 1000L)
         NativePlayerBridge.emitter = { event, data -> notifyListeners(event, data) }
@@ -425,7 +426,7 @@ class OmpNativePlugin : Plugin() {
 
     // ---- phone remote (Android TV) ----
 
-    /** A new 4-digit pairing code (the previous one stops working): { code, expiresAt } (epoch ms). */
+    /** A new 6-digit pairing code (the previous one stops working): { code, expiresAt } (epoch ms). */
     @PluginMethod
     fun pairingCode(call: PluginCall) = pairingCodeOp(call)
 

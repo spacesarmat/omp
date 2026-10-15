@@ -19,8 +19,16 @@ import okhttp3.WebSocketListener
 
 /** OkHttp clients for talking to the TV. */
 object TvHttp {
+    @Volatile
+    private var pins: CertPins? = null
+
+    fun initPins(store: CertPins) {
+        pins = store
+    }
+
     private val base: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .addInterceptor(CleartextGuard.interceptor)
             .connectTimeout(3, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .writeTimeout(10, TimeUnit.SECONDS)
@@ -31,12 +39,11 @@ object TvHttp {
     fun plain(): OkHttpClient = base
 
     /**
-     * Client that accepts the TV's self-signed certificate. The trust-all manager lives only in
-     * this client instance, and the hostname verifier only lets through [host] (the TV IP), so
-     * the relaxed trust can never apply to any other server.
+     * Client for the TV's self-signed certificate on [host] (the TV IP only).
+     * TOFU: the first leaf cert SHA-256 is pinned; a later different cert is rejected.
      */
     fun trustingOnly(host: String): OkHttpClient {
-        val tm = AnyCertTrustManager()
+        val tm = PinningTrustManager(host, pins)
         val ctx = SSLContext.getInstance("TLS")
         ctx.init(null, arrayOf(tm), SecureRandom())
         return base.newBuilder()
@@ -46,10 +53,23 @@ object TvHttp {
             .build()
     }
 
-    @SuppressLint("CustomX509TrustManager", "TrustAllX509TrustManager")
-    private class AnyCertTrustManager : X509TrustManager {
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+    @SuppressLint("CustomX509TrustManager")
+    private class PinningTrustManager(
+        private val host: String,
+        private val store: CertPins?,
+    ) : X509TrustManager {
+        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
+            throw java.security.cert.CertificateException("client certs not used")
+        }
+
+        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
+            val leaf = chain?.firstOrNull()
+                ?: throw java.security.cert.CertificateException("empty certificate chain")
+            val pins = store
+                ?: throw java.security.cert.CertificateException("TV cert pins not initialized")
+            pins.checkOrRemember(host, leaf)
+        }
+
         override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
     }
 }
