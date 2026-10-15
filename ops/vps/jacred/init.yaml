@@ -1,0 +1,10 @@
+# JacRed (jacred-fdb) — first boot. Keep apikey in sync with src/billing/indexers.ts.
+listenport: 9117
+apikey: "cce311937e9070332afd58d5125ad6cb94ee6a96d40a45bd"
+devkey: "6b136794b29a9573a3e622b8ccd14abb"
+
+tracks: true
+tsuri:
+  - http://torrserver:8090
+
+openstats: false

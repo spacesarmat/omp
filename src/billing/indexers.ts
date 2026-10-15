@@ -4,12 +4,12 @@ export const OMP_INDEXER_PASS = 'sYxOt3U2uWMhXe8q1zoR';
 
 export const OMP_JACKETT = {
   url: 'https://jackett.omp-player.online',
-  apiKey: 'czcnyyyau0egr3ybk92i8rvuftoq1uem',
+  apiKey: '0xpq0gg1ucp7ew7aadxyhanjr049ywpn',
 };
 
 export const OMP_JACRED = {
   url: 'https://jacred.omp-player.online',
-  apiKey: '477c3f65e3a839d14978ff6250b4070591d424b159622416',
+  apiKey: 'cce311937e9070332afd58d5125ad6cb94ee6a96d40a45bd',
 };
 
 export function indexerAuthHeader(): string {

@@ -1,0 +1,26 @@
+{
+	email {$CADDY_EMAIL:admin@omp-player.online}
+}
+
+billing.omp-player.online {
+	encode gzip
+	reverse_proxy billing:8787
+}
+
+# INDEXER_HASH = bcrypt from: caddy hash-password --plaintext '…'
+# Must match OMP_INDEXER_USER / OMP_INDEXER_PASS in the phone app.
+jackett.omp-player.online {
+	encode gzip
+	basicauth {
+		{$INDEXER_USER} {$INDEXER_HASH}
+	}
+	reverse_proxy jackett:9117
+}
+
+jacred.omp-player.online {
+	encode gzip
+	basicauth {
+		{$INDEXER_USER} {$INDEXER_HASH}
+	}
+	reverse_proxy jacred:9117
+}

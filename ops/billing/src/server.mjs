@@ -726,8 +726,9 @@ export function listen(file, port, fetchImpl) {
   const server = createServer((req, res) => {
     createApp(file, fetchImpl)(req, res);
   });
-  // 0.0.0.0: phone on the LAN (and Docker publish) can reach the panel and API
-  return new Promise((resolve) => server.listen(port, '0.0.0.0', () => resolve(server)));
+  // BILLING_HOST=127.0.0.1 for host+tunnel; 0.0.0.0 inside Docker (Caddy reaches it on the compose network)
+  const host = process.env.BILLING_HOST || '0.0.0.0';
+  return new Promise((resolve) => server.listen(port, host, () => resolve(server)));
 }
 
 export async function refreshMissingProfiles(file, token, net) {
