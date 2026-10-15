@@ -924,8 +924,8 @@ button, .m-btn {
 .m-now-tv.warn { color: var(--accent); }
 .m-now-empty { display: flex; flex-direction: column; gap: 16px; align-items: stretch; margin-top: 40px; text-align: center; }
 .m-now-stage {
-  flex: 1 1 auto; align-self: center; width: min(72vw, 280px); min-height: 160px; max-height: min(46dvh, 380px);
-  aspect-ratio: 2 / 3; height: auto; perspective: 900px;
+  flex: 1 1 auto; align-self: center; width: min(78vw, 300px); min-height: 160px; max-height: min(48dvh, 400px);
+  aspect-ratio: 2 / 3; height: auto; perspective: 1100px;
 }
 .m-now-poster {
   position: relative; width: 100%; height: 100%; max-width: 100%; overflow: hidden; box-sizing: border-box;
@@ -934,20 +934,46 @@ button, .m-btn {
   background-size: cover; background-position: center;
   transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
   transform-style: preserve-3d;
-  box-shadow: calc(var(--sx, 0) * 1px) calc(22px + var(--sy, 0) * 1px) 40px rgba(0, 0, 0, 0.5);
+  box-shadow: calc(var(--sx, 0) * 1px) calc(18px + var(--sy, 0) * 1px) 36px rgba(0, 0, 0, 0.45);
   will-change: transform;
 }
-.m-now-poster-art {
-  position: absolute; inset: -12%; pointer-events: none;
-  background-size: cover; background-position: center;
-  transform: translate3d(var(--px, 0%), var(--py, 0%), 24px) scale(1.06);
+.m-now-poster.has-art {
+  padding: 0; background: transparent; box-shadow: none;
+}
+.m-now-poster-layer {
+  position: absolute; left: -8%; right: -8%; top: 0; height: 118%;
+  pointer-events: none; background-repeat: no-repeat;
+  /* scale to width, pin to top - bottom is covered by the fade into --bg */
+  background-size: 100% auto; background-position: top center;
+  will-change: transform;
+}
+.m-now-poster-back {
+  z-index: 0;
+  filter: blur(10px) saturate(1.05) brightness(0.78);
+  transform: translate3d(var(--bx, 0%), var(--by, 0%), 0) scale(1.14);
+}
+.m-now-poster-mid {
+  z-index: 1;
+  transform: translate3d(var(--mx, 0%), var(--my, 0%), 18px) scale(1.05);
+}
+.m-now-poster-front {
+  z-index: 2;
+  /* subject / near layer: center-top of the frame moves least */
+  -webkit-mask-image: radial-gradient(ellipse 72% 58% at 50% 32%, #000 38%, transparent 78%);
+  mask-image: radial-gradient(ellipse 72% 58% at 50% 32%, #000 38%, transparent 78%);
+  transform: translate3d(var(--fx, 0%), var(--fy, 0%), 36px) scale(1.02);
+}
+.m-now-poster-fade {
+  position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background: linear-gradient(to bottom, transparent 38%, transparent 52%, var(--bg) 94%);
 }
 .m-now-poster-glare {
-  position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background: radial-gradient(circle at var(--gx, 50%) var(--gy, 28%), rgba(255, 255, 255, 0.28), transparent 55%);
+  position: absolute; inset: 0; z-index: 4; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(circle at var(--gx, 50%) var(--gy, 28%), rgba(255, 255, 255, 0.22), transparent 55%);
   mix-blend-mode: soft-light;
-  transform: translateZ(32px);
+  transform: translateZ(40px);
 }
+.m-now-poster.has-art .m-now-poster-glare { border-radius: 0; }
 .m-now-poster-title { position: relative; z-index: 1; overflow-wrap: anywhere; }
 .m-now-titles, .m-now-seek, .m-now-controls, .m-now-row, .m-now-chapter, .m-now-chlist { flex-shrink: 0; }
 .m-now-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

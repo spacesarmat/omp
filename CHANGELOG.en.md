@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.6
+
+- [phone] Now playing: poster as a depth window - three layers at different speeds, top-aligned to width, bottom fades into the background
+
 ## 0.20.1-beta.5
 
 - [phone] Now playing: poster with a 3D parallax tilt from the gyroscope and a finger, the picture shifts on its own layer

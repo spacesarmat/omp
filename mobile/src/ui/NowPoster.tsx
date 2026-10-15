@@ -1,21 +1,26 @@
-// «Сейчас играет» poster: a 3D card. Gyro (from the pose at open) and a finger over the poster tilt it;
-// the picture shifts the other way. prefers-reduced-motion leaves it flat.
+// «Сейчас играет» poster: three depth layers (back / mid / front) from one image.
+// Gyro (from the pose at open) and a finger over the poster shift layers at different speeds.
+// Art is top-aligned, scaled to width; bottom fades into --bg. prefers-reduced-motion leaves it flat.
 import { useEffect, useRef } from 'preact/hooks';
 import type { PlayerState } from '../../../src/phone/protocol';
-import { hasPosterImage, playerPosterStyle } from './playerPoster';
-import { gyroTilt, lerpTilt, parallaxShift, pointerTilt, type Tilt } from './posterParallax';
+import { hasPosterImage, playerPosterLayerStyle, playerPosterStyle } from './playerPoster';
+import { gyroTilt, lerpTilt, posterMotion, pointerTilt, type Tilt } from './posterParallax';
 import { prefersReducedMotion } from './usePinchStep';
 
 function applyTilt(card: HTMLElement, t: Tilt): void {
-  const s = parallaxShift(t);
+  const m = posterMotion(t);
   card.style.setProperty('--rx', t.rx.toFixed(2) + 'deg');
   card.style.setProperty('--ry', t.ry.toFixed(2) + 'deg');
-  card.style.setProperty('--px', s.x.toFixed(2) + '%');
-  card.style.setProperty('--py', s.y.toFixed(2) + '%');
-  card.style.setProperty('--gx', s.gx.toFixed(1) + '%');
-  card.style.setProperty('--gy', s.gy.toFixed(1) + '%');
-  card.style.setProperty('--sx', s.sx.toFixed(1));
-  card.style.setProperty('--sy', s.sy.toFixed(1));
+  card.style.setProperty('--bx', m.back.x.toFixed(2) + '%');
+  card.style.setProperty('--by', m.back.y.toFixed(2) + '%');
+  card.style.setProperty('--mx', m.mid.x.toFixed(2) + '%');
+  card.style.setProperty('--my', m.mid.y.toFixed(2) + '%');
+  card.style.setProperty('--fx', m.front.x.toFixed(2) + '%');
+  card.style.setProperty('--fy', m.front.y.toFixed(2) + '%');
+  card.style.setProperty('--gx', m.gx.toFixed(1) + '%');
+  card.style.setProperty('--gy', m.gy.toFixed(1) + '%');
+  card.style.setProperty('--sx', m.sx.toFixed(1));
+  card.style.setProperty('--sy', m.sy.toFixed(1));
 }
 
 function usePosterParallax(stageRef: { current: HTMLDivElement | null }, cardRef: { current: HTMLDivElement | null }): void {
@@ -87,10 +92,18 @@ export function NowPoster({ state, title }: { state: PlayerState; title: string 
   const cardRef = useRef<HTMLDivElement>(null);
   usePosterParallax(stageRef, cardRef);
   const image = hasPosterImage(state);
+  const art = image ? playerPosterLayerStyle(state) : undefined;
   return (
     <div class="m-now-stage" ref={stageRef}>
-      <div class="m-now-poster" ref={cardRef} style={image ? undefined : playerPosterStyle(state)}>
-        {image && <div class="m-now-poster-art" style={playerPosterStyle(state)} />}
+      <div class={'m-now-poster' + (image ? ' has-art' : '')} ref={cardRef} style={image ? undefined : playerPosterStyle(state)}>
+        {art && (
+          <>
+            <div class="m-now-poster-layer m-now-poster-back" style={art} aria-hidden="true" />
+            <div class="m-now-poster-layer m-now-poster-mid" style={art} aria-hidden="true" />
+            <div class="m-now-poster-layer m-now-poster-front" style={art} aria-hidden="true" />
+            <div class="m-now-poster-fade" aria-hidden="true" />
+          </>
+        )}
         <div class="m-now-poster-glare" aria-hidden="true" />
         {!image && <span class="m-now-poster-title">{title}</span>}
       </div>
