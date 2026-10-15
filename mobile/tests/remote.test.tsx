@@ -777,13 +777,13 @@ describe('Remote for Android TV', () => {
     expect(d.textContent).toContain('Гостиная · Android TV');
     const cells = Array.from(d.querySelectorAll<HTMLInputElement>('input'));
     act(() => {
-      cells[0].value = '0482';
+      cells[0].value = '048201';
       cells[0].dispatchEvent(new Event('input', { bubbles: true }));
     });
     const submit = Array.from(d.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === 'Подключить')!;
     await act(async () => submit.click());
     await flush();
-    expect(a.pairAtv).toHaveBeenCalledWith({ ip: '192.168.1.40', port: 8095, name: 'Гостиная', version: '' }, '0482');
+    expect(a.pairAtv).toHaveBeenCalledWith({ ip: '192.168.1.40', port: 8095, name: 'Гостиная', version: '' }, '048201');
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     tvError.value = '';
   });

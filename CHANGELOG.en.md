@@ -2,11 +2,15 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.12
+
+- same as beta.11 (CodeSheet tests for 6 digits; changelog markers without stacked [tv][phone])
+
 ## 0.20.1-beta.11
 
-- [tv][phone] TV and Android TV Box TLS: TOFU certificate pin (no trust-all)
-- [phone] cleartext HTTP to public IPs blocked; ControlServer accepts LAN clients only
-- [tv][phone] phone-to-TV pairing code is 6 digits
+- [tv] TV and Android TV Box TLS: TOFU certificate pin (no trust-all)
+- [phone] TV and Android TV Box TLS: TOFU pin; cleartext to public IPs blocked; ControlServer accepts LAN only
+- phone-to-TV pairing code is 6 digits
 - CI: Actions pinned to commit SHAs; ADMIN_CHAT_ID is a Worker secret only
 
 ## 0.20.1-beta.10

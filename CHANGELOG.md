@@ -1,10 +1,14 @@
 # Изменения
 
+## 0.20.1-beta.12
+
+- то же, что beta.11 (тесты CodeSheet на 6 цифр; маркеры changelog без [tv][phone])
+
 ## 0.20.1-beta.11
 
-- [tv][phone] TLS к ТВ и Android TV Box: TOFU pin сертификата (без trust-all)
-- [phone] cleartext HTTP к публичным IP запрещён; ControlServer только для LAN
-- [tv][phone] код сопряжения телефона с ТВ - 6 цифр
+- [tv] TLS к ТВ и Android TV Box: TOFU pin сертификата (без trust-all)
+- [phone] TLS к ТВ и Android TV Box: TOFU pin; cleartext к публичным IP запрещён; ControlServer только для LAN
+- код сопряжения телефона с ТВ - 6 цифр
 - CI: Actions на commit SHA; ADMIN_CHAT_ID только как Worker secret
 
 ## 0.20.1-beta.10
