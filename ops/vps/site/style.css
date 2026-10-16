@@ -1516,19 +1516,19 @@ footer .copyright {
   }
 
   .platforms {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     justify-content: center;
     align-items: center;
-    gap: 14px;
+    gap: 8px 14px;
     margin-top: 14px;
     max-width: 100%;
-    overflow: hidden;
     font-size: 13px;
   }
 
   .platforms > span {
-    flex: 0 0 auto;
-    white-space: nowrap;
+    flex: 0 1 auto;
+    max-width: 100%;
+    text-align: center;
   }
 
   .open-source {
