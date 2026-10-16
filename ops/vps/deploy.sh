@@ -1014,13 +1014,15 @@ restore_image() {
 
 restore_backup() {
   local backup="$1"
-  local caddy_diff docker_diff
+  local caddy_diff docker_diff reload_failed image_failed
   [[ -d "$backup" ]] || die "backup not found: ${backup}"
   [[ -f "$backup/backup.manifest" ]] || die "not a deploy backup: ${backup}"
   read_manifest "$backup/backup.manifest"
   assert_managed_not_symlinks
   caddy_diff=0
   docker_diff=0
+  reload_failed=0
+  image_failed=0
   if [[ "$MANIFEST_HAD_CADDYFILE" == 1 ]]; then
     if files_differ "$backup/Caddyfile" "$ROOT/Caddyfile"; then
       caddy_diff=1
@@ -1044,21 +1046,30 @@ restore_backup() {
   restore_one_file "$backup" Dockerfile.billing "$MANIFEST_HAD_DOCKERFILE" || return 1
   restore_one_dir "$backup" site "$MANIFEST_HAD_SITE" site || return 1
   restore_one_dir "$backup" billing-src "$MANIFEST_HAD_BILLING" billing || return 1
-  # Load the restored Caddyfile before billing health checks. A failed check
-  # must not return while the rejected Caddyfile is still the running config.
+  # A failed Caddy reload must not skip the billing restore. Both finish
+  # before health checks, and either failure is still a failed rollback.
   if [[ "$caddy_diff" -eq 1 ]]; then
     if [[ "$DRY_RUN" -eq 1 ]]; then
       log "would reload caddy"
     else
       log "reloading restored Caddyfile"
-      caddy_reload || return 1
+      if ! caddy_reload; then
+        log "restored Caddyfile reload failed"
+        reload_failed=1
+      fi
     fi
   fi
   if [[ "$docker_diff" -eq 1 || "$MANIFEST_IMAGE_ID" != "" || "$MANIFEST_IMAGE_TAG" != "" ]]; then
-    restore_image || return 1
+    if ! restore_image; then
+      log "billing image restore failed"
+      image_failed=1
+    fi
   fi
   if [[ "$DRY_RUN" -eq 1 ]]; then
     return 0
+  fi
+  if [[ "$reload_failed" -eq 1 || "$image_failed" -eq 1 ]]; then
+    return 1
   fi
   health_checks || return 1
   return 0

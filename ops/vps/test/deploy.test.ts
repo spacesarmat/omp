@@ -609,6 +609,31 @@ describe('ops/vps deploy', () => {
     expect(log(box.dockerLog).split('\n').filter((line) => line.includes('caddy reload'))).toHaveLength(2);
   });
 
+  it('restores the billing image when Caddy reload fails during rollback', () => {
+    const box = world(
+      release({
+        'ops/vps/Caddyfile': 'new caddy\n',
+        'ops/billing/src/server.mjs': 'export const version = 2;\n',
+      }),
+      { DEPLOY_TEST_DOCKER_RELOAD_FAIL: '1' },
+    );
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).not.toBe(0);
+    const out = result.stdout;
+    const reloadAt = out.lastIndexOf('reloading restored Caddyfile');
+    const restartAt = out.lastIndexOf('restarting billing');
+    expect(reloadAt, out).toBeGreaterThan(-1);
+    expect(restartAt, out).toBeGreaterThan(reloadAt);
+    expect(out.slice(restartAt)).not.toContain('health checks passed');
+    expect(out).toContain('restored Caddyfile reload failed');
+    expect(readFileSync(path.join(box.root, 'Caddyfile'), 'utf8')).toBe('old caddy\n');
+    expect(readFileSync(path.join(box.root, 'billing-src/src/server.mjs'), 'utf8')).toBe('export const version = 1;\n');
+    expect(imageId(box.env)).toBe(SEED_ID);
+    expect(readFileSync(path.join(box.parent, 'docker-state', 'running-billing'), 'utf8').trim()).toBe(SEED_ID);
+    expect(log(box.dockerLog).split('\n').filter((line) => line.includes('up -d billing'))).toHaveLength(2);
+    expect(result.stderr).toContain('reload failed');
+  });
+
   it('rebuilds billing from the restored source when the backup has no image', () => {
     const box = world(release({ 'ops/vps/Dockerfile': 'FROM restored\n' }), { DEPLOY_TEST_NO_SEED: '1' });
     const deployed = runDeploy(box.env, ['main']);
