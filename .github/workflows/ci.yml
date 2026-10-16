@@ -62,7 +62,8 @@ jobs:
         run: (cd android && ./gradlew -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 assembleDebug testDebugUnitTest)
       - name: APK size per ABI
         run: ls -l android/app/build/outputs/apk/debug/*.apk
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - name: Upload debug APKs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: apk-debug
           path: android/app/build/outputs/apk/debug/*.apk
