@@ -21,7 +21,6 @@ export function UserCard({
   const tg = user.account.telegramId || '';
   const [msg, setMsg] = useState('');
   const [grantDays, setGrantDays] = useState(() => sessionStorage.getItem(DAY_KEY) || '30');
-  const [notify, setNotify] = useState(true);
   const [shown, setShown] = useState<Record<string, { formatted: string; openUrl?: string }>>({});
 
   async function reveal(codeId: string) {
@@ -141,19 +140,14 @@ export function UserCard({
             </select>
             <Button
               onClick={() => {
-                const note = notify ? ' Пользователь получит сообщение в Telegram.' : ' Без сообщения в Telegram.';
-                if (!window.confirm('Выдать +' + grantDays + ' дн.?' + note)) return;
+                if (!window.confirm('Выдать +' + grantDays + ' дн.?')) return;
                 sessionStorage.setItem(DAY_KEY, grantDays);
-                void run('/admin/grant', { accountId: user.account.id, days: grantDays, notify });
+                void run('/admin/grant', { accountId: user.account.id, days: grantDays });
               }}
             >
               Выдать
             </Button>
           </div>
-          <label className="flex items-center gap-2 rounded-md border border-amber-700/60 bg-amber-950/40 px-3 py-2 text-sm text-amber-100">
-            <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
-            Уведомить пользователя в Telegram
-          </label>
         </CardContent>
       </Card>
 

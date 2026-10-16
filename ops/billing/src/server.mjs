@@ -224,11 +224,6 @@ async function telegramSend(token, chatId, text, fetchImpl, opts) {
   return { ok: !!(res.ok && data.ok !== false && messageId), messageId };
 }
 
-function wantsNotify(body) {
-  const v = body && body.notify;
-  return v === true || v === 1 || v === '1' || v === 'true' || v === 'on';
-}
-
 function isQuiet(body) {
   const v = body && body.quiet;
   return v === true || v === 1 || v === '1' || v === 'true';
@@ -563,7 +558,7 @@ export function createApp(file, fetchImpl) {
             flashText = 'Выдано +' + result.days + ' дн. до ' + new Date(result.paidUntil).toISOString().slice(0, 10);
             const fresh = readState(file);
             const acc = fresh.accounts.find((a) => a.id === result.accountId);
-            if (wantsNotify(body) && acc && acc.telegramId && result.code) {
+            if (acc && acc.telegramId && result.code) {
               const link = openAppUrl(fresh.settings.publicOrigin || '', result.code);
               await telegramSend(
                 fresh.settings.botToken,
@@ -578,7 +573,6 @@ export function createApp(file, fetchImpl) {
                       : null,
                 },
               );
-              flashText += '. Пользователь уведомлён';
             }
           }
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);

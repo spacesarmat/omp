@@ -199,7 +199,7 @@ async function call(
 }
 
 describe('admin http', () => {
-  it('reveals one code, issues for N days, and notifies only when asked', async () => {
+  it('reveals one code, issues for N days, and still notifies on extend', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'omp-admin-'));
     const file = join(dir, 'billing.db');
     const hashed = hashPassword('secret1');
@@ -233,18 +233,11 @@ describe('admin http', () => {
     const revealed = await call(app, 'GET', '/admin/api/reveal?codeId=' + encodeURIComponent(codes[0].id), { cookie });
     expect(revealed.data && revealed.data.plain).toBe(start.code);
     calls.length = 0;
-    const quiet = await call(app, 'POST', '/admin/grant', {
+    const granted = await call(app, 'POST', '/admin/grant', {
       cookie,
-      body: { csrf: (home.data && home.data.csrf) || (user.data && user.data.csrf), accountId: start.account.id, days: 2, notify: false },
+      body: { csrf: (home.data && home.data.csrf) || (user.data && user.data.csrf), accountId: start.account.id, days: 2 },
     });
-    expect(quiet.data && quiet.data.ok).toBe(true);
-    expect(calls.some((u) => u.indexOf('api.telegram.org') >= 0)).toBe(false);
-    const home2 = await call(app, 'GET', '/admin/api/home', { cookie });
-    const loud = await call(app, 'POST', '/admin/grant', {
-      cookie,
-      body: { csrf: home2.data && home2.data.csrf, accountId: start.account.id, days: 2, notify: true },
-    });
-    expect(loud.data && (loud.data.flash as { text?: string }).text).toContain('уведомлён');
+    expect(granted.data && granted.data.ok).toBe(true);
     expect(calls.some((u) => u.indexOf('sendMessage') >= 0)).toBe(true);
     const home3 = await call(app, 'GET', '/admin/api/home', { cookie });
     const issued = await call(app, 'POST', '/admin/issue', {
