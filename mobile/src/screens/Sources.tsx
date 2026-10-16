@@ -29,7 +29,6 @@ import {
   type TransferPayload,
 } from '../../../src/sources/transfer';
 import { indexerConnections, onIndexersChange, torznabHiddenText, type IndexerConn } from '../../../src/sources/indexerStore';
-import { OmpJackettCard } from './OmpJackettCard';
 import { IndexerSection, phoneIndexerEnv, type IndexerEnv } from './SourcesIndexers';
 import { flareSolverrUrl, onFlareChange } from '../../../src/sources/flareStore';
 import { flareStatus, onFlareStatus, phoneFlareNote, refreshFlareStatus } from '../../../src/sources/flaresolverr';
@@ -568,12 +567,18 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
         </button>
         <h1 class="m-bar-title">{t('tvSettings.sources')}</h1>
       </div>
+      <button type="button" class="m-set-row m-set-pick" data-row="account" onClick={() => navigate({ name: 'account' })}>
+        <div class="m-set-text" style="flex-grow: 1">
+          <span>{t('settings.account')}</span>
+          <span class="m-muted m-small">{t('settings.accountLink')}</span>
+        </div>
+        <Icon d="M9 6l6 6l-6 6" size={20} />
+      </button>
       <SendToTv
         ctx={ctx}
         indexers={indexerConnections()}
         loginNames={all.filter((s) => (s.id === 'rutracker' || LOGIN_SITES.indexOf(s.id) >= 0) && !!logged[s.id]).map((s) => ({ id: s.id, name: s.name }))}
       />
-      <OmpJackettCard />
       <IndexerSection ctx={ctx} env={indexerEnv} onChange={rerender} />
       <FlareEntry />
       <section class="m-set-group">

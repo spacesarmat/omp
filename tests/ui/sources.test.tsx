@@ -239,13 +239,13 @@ describe('Settings entry', () => {
     resetTo({ name: 'settings' });
     await mount(h(SettingsScreen, {}));
     // LG: the same entry opens the phone's sites (PhoneSourcesScreen)
-    click(byText('Источники поиска')!);
+    click(byText('Где искать фильмы')!);
     expect(currentRoute.value.name).toBe('sources');
     act(() => render(null, host));
     resetTo({ name: 'settings' });
     w.Capacitor = { getPlatform: () => 'android' };
     await mount(h(SettingsScreen, {}));
-    click(byText('Источники поиска')!);
+    click(byText('Где искать фильмы')!);
     expect(currentRoute.value.name).toBe('sources');
   });
 });

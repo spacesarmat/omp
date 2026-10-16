@@ -3,7 +3,7 @@ import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { ServerSettings } from '../src/screens/ServerSettings';
-import { Settings } from '../src/screens/Settings';
+import { Advanced } from '../src/screens/Advanced';
 import { currentRoute, resetTo, navigate } from '../src/nav';
 import { toast } from '../src/ui/toast';
 import { addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
@@ -106,6 +106,7 @@ describe('ServerSettings', () => {
     expect(el.textContent).toContain('Настройки сервера');
     expect(el.textContent).toContain('Home');
     expect(btn('Размер кэша').textContent).toContain('64 МБ');
+    await act(async () => btn('Для опытных').click());
     expect(btn('Предзагрузка').textContent).toContain('50%');
     expect(btn('Ограничение загрузки').textContent).toContain('Без ограничений');
     expect(btn('Ограничение отдачи').textContent).toContain('1 МБ/с');
@@ -130,6 +131,7 @@ describe('ServerSettings', () => {
   it('the timecode switch saves immediately', async () => {
     setup();
     await mount();
+    await act(async () => btn('Для опытных').click());
     await act(async () => (el.querySelector('[aria-label="Сохранять тайм-коды на сервере"]') as HTMLElement).click());
     await flush();
     expect(sets()[0].sets.TrackTimecode).toBe(true);
@@ -140,6 +142,7 @@ describe('ServerSettings', () => {
     setup();
     await mount();
     failSet = true;
+    await act(async () => btn('Для опытных').click());
     act(() => btn('Предзагрузка').click());
     await act(async () => btn('95%', el.querySelector('[role="dialog"]')!).click());
     await flush();
@@ -150,6 +153,7 @@ describe('ServerSettings', () => {
   it('reset asks first, then resets and reloads', async () => {
     setup();
     await mount();
+    await act(async () => btn('Для опытных').click());
     act(() => btn('Сбросить к стандартным').click());
     expect(posts.some((p) => p.action === 'def')).toBe(false);
     await act(async () => btn('Сбросить', el.querySelector('[role="dialog"]')!).click());
@@ -161,6 +165,7 @@ describe('ServerSettings', () => {
   it('cancelling the reset does nothing', async () => {
     setup();
     await mount();
+    await act(async () => btn('Для опытных').click());
     act(() => btn('Сбросить к стандартным').click());
     act(() => btn('Отмена', el.querySelector('[role="dialog"]')!).click());
     expect(posts.some((p) => p.action === 'def')).toBe(false);
@@ -196,7 +201,7 @@ describe('ServerSettings TMDB key', () => {
     setup();
     current = { ...BASE, TMDBSettings: { APIKey: '', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' } };
     await mount();
-    const row = btn('Ключ TMDB для обложек');
+    const row = btn('Ключ для постеров и описаний (TMDB)');
     expect(row.textContent).toContain('Не задан');
     act(() => row.click());
     const input = el.querySelector('#tmdb-key') as HTMLInputElement;
@@ -210,7 +215,7 @@ describe('ServerSettings TMDB key', () => {
     expect(s.length).toBe(1);
     expect(s[0].sets.TMDBSettings).toEqual({ APIKey: 'key123', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' });
     expect(s[0].sets.Unknown).toBe('keep');
-    expect(btn('Ключ TMDB для обложек').textContent).toContain('Задан');
+    expect(btn('Ключ для постеров и описаний (TMDB)').textContent).toContain('Задан');
   });
 
   it('finds posters for all torrents without one, with progress', async () => {
@@ -235,8 +240,8 @@ describe('ServerSettings TMDB key', () => {
     setup();
     current = { ...BASE, TMDBSettings: { APIKey: 'eyJ.bad.token', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' } };
     await mount();
-    act(() => btn('Ключ TMDB для обложек').click());
-    const edit = el.querySelector('[role=dialog][aria-label="Ключ TMDB"]') as HTMLElement;
+    act(() => btn('Ключ для постеров и описаний (TMDB)').click());
+    const edit = el.querySelector('[role=dialog][aria-label="Ключ для постеров и описаний (TMDB)"]') as HTMLElement;
     expect(edit).toBeTruthy();
     act(() => btn('Очистить', edit).click());
     const ask = el.querySelector('[role=dialog][aria-label="Очистить ключ TMDB?"]') as HTMLElement;
@@ -248,13 +253,13 @@ describe('ServerSettings TMDB key', () => {
     act(() => btn('Очистить', el.querySelector('[role=dialog][aria-label="Очистить ключ TMDB?"]') as HTMLElement).click());
     await flush();
     expect(sets()[0].sets.TMDBSettings).toEqual({ APIKey: '', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' });
-    expect(btn('Ключ TMDB для обложек').textContent).toContain('Не задан');
+    expect(btn('Ключ для постеров и описаний (TMDB)').textContent).toContain('Не задан');
   });
 
   it('is hidden on servers without TMDB settings', async () => {
     setup();
     await mount();
-    expect(btn('Ключ TMDB для обложек')).toBeUndefined();
+    expect(btn('Ключ для постеров и описаний (TMDB)')).toBeUndefined();
   });
 });
 
@@ -263,6 +268,7 @@ describe('ServerSettings missing field', () => {
     setup();
     delete current.PreloadCache;
     await mount();
+    await act(async () => btn('Для опытных').click());
     expect(btn('Предзагрузка').textContent).toContain('—');
     act(() => btn('Предзагрузка').click());
     expect(el.textContent).not.toContain('undefined');
@@ -286,7 +292,7 @@ describe('Settings entry', () => {
     setup();
     document.body.innerHTML = '<div id="app"></div>';
     el = document.getElementById('app')!;
-    act(() => render(<Settings />, el));
+    act(() => render(<Advanced />, el));
     await act(async () => btn('Настройки сервера').click());
     expect(currentRoute.value.name).toBe('serverSettings');
   });
@@ -303,6 +309,7 @@ describe('ServerSettings in English', () => {
     expect(el.querySelector('h1')!.textContent).toBe('Server settings');
     expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
     expect(btn('Cache size').textContent).toContain('64 MB');
+    await act(async () => btn('For experienced users').click());
     expect(btn('Download limit').textContent).toContain('Unlimited');
     expect(btn('Upload limit').textContent).toContain('1 MB/s');
     expect(el.querySelector('[role=switch][aria-label="Save timecodes on the server"]')).toBeTruthy();
@@ -330,11 +337,12 @@ describe('ServerSettings in English', () => {
     setup();
     current = { ...BASE, TMDBSettings: { APIKey: '' } };
     await mount();
-    expect(btn('TMDB key for posters').textContent).toContain('Not set');
-    act(() => btn('TMDB key for posters').click());
-    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('TMDB key');
+    expect(btn('Key for posters and descriptions (TMDB)').textContent).toContain('Not set');
+    act(() => btn('Key for posters and descriptions (TMDB)').click());
+    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Key for posters and descriptions (TMDB)');
     expect(el.querySelector('label[for=tmdb-key]')!.textContent).toBe('API key');
-    expect(el.textContent).toContain('OMP and TorrServer use it to find posters for new torrents.');
+    expect(el.textContent).toContain('A free v3 API key from themoviedb.org → Settings → API. It is 32 characters. A v4 token starts with eyJ and does not belong here. OMP uses it for posters and descriptions.');
+    expect(btn('Open themoviedb.org')).toBeTruthy();
     expect(btn('Save')).toBeTruthy();
     noCyrillic();
   });
@@ -344,7 +352,7 @@ describe('ServerSettings in English', () => {
     current = { ...BASE, TMDBSettings: { APIKey: 'k' } };
     torrents.value = [{ hash: 'b', title: 'Beta', stat: 0, poster: 'http://p/b.jpg' } as any];
     await mount();
-    expect(btn('TMDB key for posters').textContent).toContain('Set');
+    expect(btn('Key for posters and descriptions (TMDB)').textContent).toContain('Set');
     act(() => btn('Find posters for torrents without one').click());
     await flush();
     expect(toast.value).toBe('All torrents have posters');

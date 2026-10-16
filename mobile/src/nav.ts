@@ -19,6 +19,10 @@ export type MRoute =
   | { name: 'nowPlaying' }
   | { name: 'tv' }
   | { name: 'settings' }
+  /** «Настройки» → «Аккаунт OMP»: login, plan, logout. */
+  | { name: 'account' }
+  /** «Настройки» → «Расширенные». */
+  | { name: 'advanced' }
   /** «Настройки» → «Плеер для видео». */
   | { name: 'videoPlayer' }
   | { name: 'serverSettings'; url?: string }

@@ -150,7 +150,7 @@ describe('«Мониторинг»', () => {
     document.body.innerHTML = '<div id="app"></div>';
     el = document.getElementById('app')!;
     act(() => render(<Settings />, el));
-    const row = Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').startsWith('Мониторинг'))!;
+    const row = Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').startsWith('Следить за новыми раздачами'))!;
     expect(row.textContent).toContain('раз в 3 часа');
     click(row);
     expect(currentRoute.value.name).toBe('monitor');

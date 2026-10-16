@@ -3,6 +3,7 @@ import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Settings, setUpdateChecker } from '../src/screens/Settings';
+import { Advanced } from '../src/screens/Advanced';
 import { VideoPlayer } from '../src/screens/VideoPlayer';
 import { currentRoute, resetTo } from '../src/nav';
 import { settings, updateSettings, sanitizeSettings, DEFAULT_SETTINGS } from '../../src/store/settings';
@@ -22,10 +23,12 @@ import { native } from '../src/platform/native';
 import { tvSearchOn } from '../src/tv/phoneRpc';
 import { monitorNative } from '../src/monitor/native';
 
+let view: 'settings' | 'advanced' = 'settings';
+
 function mount(): HTMLElement {
   document.body.innerHTML = '<div id="app"></div>';
   const el = document.getElementById('app')!;
-  act(() => render(<Settings />, el));
+  act(() => render(view === 'advanced' ? <Advanced /> : <Settings />, el));
   return el;
 }
 const btn = (el: HTMLElement, t: string) => Array.from(el.querySelectorAll('button')).find((b) => b.textContent === t)!;
@@ -37,6 +40,7 @@ beforeEach(() => {
   updateSettings({ updateCheck: true });
   toast.value = '';
   setUpdateChecker(null);
+  view = 'settings';
   resetTo({ name: 'settings' });
   reloadLocalServerSettings();
   localServer.value = { supported: false, running: false };
@@ -56,8 +60,8 @@ describe('Settings', () => {
     saveTv({ ip: '192.168.1.50', name: 'LG' });
     const el = mount();
     const row = el.querySelector('[data-row="tv-search-service"]') as HTMLElement;
-    expect(row.textContent).toContain('Поиск для телевизора');
-    expect(row.textContent).toContain('В шторке будет тихое уведомление');
+    expect(row.textContent).toContain('Искать для телевизора');
+    expect(row.textContent).toContain('Телевизор ищет раздачи через этот телефон');
     const sw = row.querySelector('[role="switch"]') as HTMLButtonElement;
     expect(sw.getAttribute('aria-checked')).toBe('true');
     await act(async () => {
@@ -66,18 +70,23 @@ describe('Settings', () => {
     expect(set).toHaveBeenLastCalledWith(false);
     expect(tvSearchOn.value).toBe(false);
     expect(sw.getAttribute('aria-checked')).toBe('false');
-    expect(row.textContent).toContain('Выключено — телевизор ищет только через TorrServer (Rutor, Jackett)');
+    expect(row.textContent).toContain('Выключено — телевизор ищет только через свой сервер');
   });
 
-  it('sources come first; about stays last', () => {
+  it('everyday groups come first; technical settings are one step away', () => {
     const el = mount();
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
-    expect(labels[0]).toBe('Источники поиска');
-    expect(labels[labels.length - 1]).toBe('О приложении');
-    expect(labels).toContain('Обновление');
-    const update = Array.from(el.querySelectorAll('.m-set-group')).find((g) => g.textContent!.indexOf('Обновление') === 0)!;
-    expect(update.textContent).toContain('Проверить обновления');
-    expect(update.textContent).toContain('Проверять обновления при запуске');
+    expect(labels).toEqual(['Аккаунт OMP', 'Телевизор', 'Просмотр', 'Поиск', 'Приложение']);
+    const text = el.textContent!;
+    expect(text).toContain('Где искать фильмы');
+    expect(text).toContain('Следить за новыми раздачами');
+    expect(text).toContain('Откуда смотреть');
+    expect(text).toContain('Помощь');
+    expect(text).not.toContain('Настройки сервера');
+    expect(el.querySelector('[data-row="advanced"]')).toBeTruthy();
+    const app = el.querySelector('[data-section="app"]')!;
+    expect(app.textContent).toContain('Проверить обновления');
+    expect(app.textContent).not.toContain('Проверять обновления при запуске');
   });
 
   it('tap on «Версия» opens «Что нового» with the latest versions', async () => {
@@ -105,17 +114,20 @@ describe('Settings', () => {
     expect(currentRoute.value.name).toBe('tv');
   });
 
-  it('«Получать бета-версии» switches the check to the beta APK feed', async () => {
+  it('«Пробовать новые функции раньше всех» switches the check to the beta APK feed', async () => {
     const urls: (string | undefined)[] = [];
     setUpdateChecker(async (o) => {
       urls.push(o.url);
       return 'latest';
     });
-    const el = mount();
-    const sw = el.querySelector('[data-row="beta"] [role="switch"]') as HTMLButtonElement;
+    view = 'advanced';
+    const adv = mount();
+    const sw = adv.querySelector('[data-row="beta"] [role="switch"]') as HTMLButtonElement;
     expect(sw.getAttribute('aria-checked')).toBe('false');
     await act(async () => sw.click());
     expect(settings.value.betaUpdates).toBe(true);
+    view = 'settings';
+    const el = mount();
     await act(async () => btn(el, 'Проверить обновления').click());
     await act(async () => {});
     expect(urls).toEqual([ANDROID_BETA_UPDATE_URL]);
@@ -159,6 +171,7 @@ describe('Settings', () => {
   });
 
   it('toggles check on start', async () => {
+    view = 'advanced';
     const el = mount();
     const sw = el.querySelector<HTMLElement>('[role="switch"][aria-label="Проверять обновления при запуске"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('true');
@@ -167,6 +180,7 @@ describe('Settings', () => {
   });
 
   it('opens the project page externally', async () => {
+    view = 'advanced';
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
     const el = mount();
     await act(async () => btn(el, 'Страница проекта').click());
@@ -175,6 +189,7 @@ describe('Settings', () => {
   });
 
   it('credits TorrServer under GPL-3.0 with a link to its sources', async () => {
+    view = 'advanced';
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
     const el = mount();
     await act(async () => btn(el, 'TorrServer © YouROK, GPL-3.0').click());
@@ -185,6 +200,9 @@ describe('Settings', () => {
 });
 
 describe('Settings: TorrServer on the phone', () => {
+  beforeEach(() => {
+    view = 'advanced';
+  });
   function fake(state: { running: boolean; vpn?: boolean }, cache = { bytes: 412 * 1024 * 1024 }) {
     const calls: string[] = [];
     setLocalServerDeps({
@@ -223,7 +241,7 @@ describe('Settings: TorrServer on the phone', () => {
   it('is hidden when the phone does not support the server', async () => {
     const el = mount();
     await flush();
-    expect(el.textContent).not.toContain('TorrServer на телефоне');
+    expect(el.textContent).not.toContain('Сервер на телефоне');
   });
 
   it('shows status, cache and the notes', async () => {
@@ -234,23 +252,25 @@ describe('Settings: TorrServer on the phone', () => {
     const t = el.textContent!;
     expect(t).toContain('Работает');
     expect(t).toContain('MatriX.145.1 · 192.168.1.50:8090');
-    expect(t).toContain('Кэш на телефоне');
+    expect(t).toContain('Место под видео');
+    expect(t).toContain('Временные файлы просмотра, можно удалить');
     expect(t).toContain('Занято 412 МБ из 1 ГБ');
     expect(t).toContain('Новая версия сервера приходит вместе с обновлением OMP');
     expect(t).toContain('Сервер доступен всем устройствам в этой сети Wi‑Fi');
   });
 
-  it('«Настройки сервера» opens the local server settings, only while it runs', async () => {
+  it('«Настройки сервера» is a single entry and opens the phone server while it is the only one running', async () => {
     fake({ running: false });
     localServer.value = { supported: true, running: false };
     const el0 = mount();
     await flush();
-    expect(el0.querySelector('[data-section="local-server"]')!.textContent).not.toContain('Настройки сервера');
+    expect(el0.querySelector('[data-row="server-settings"]')).toBeNull();
     fake({ running: true });
     localServer.value = { supported: true, running: true };
     const el = mount();
     await flush();
-    const b = Array.from(el.querySelector('[data-section="local-server"]')!.querySelectorAll('button')).find((x) => (x.textContent || '').includes('Настройки сервера'))!;
+    expect(el.querySelector('[data-section="local-server"]')!.textContent).not.toContain('Настройки сервера');
+    const b = el.querySelector('[data-row="server-settings"]') as HTMLElement;
     act(() => b.click());
     expect(currentRoute.value).toEqual({ name: 'serverSettings', url: 'http://127.0.0.1:8090' });
   });
@@ -467,8 +487,7 @@ describe('Settings: OMP on the TV', () => {
     vi.spyOn(tvUpdate, 'tvOmpVersions').mockResolvedValue({ installed: '0.11.4', latest: '0.11.4' });
     let el = mount();
     await flush();
-    expect(el.querySelector('[data-row="tv-omp"]')!.textContent).toContain('0.11.4 — последняя версия');
-    expect(btn(el, 'Обновить на ТВ')).toBeUndefined();
+    expect(el.querySelector('[data-row="tv-omp"]')).toBeNull();
     tvState.value = 'idle';
     el = mount();
     await flush();
@@ -476,20 +495,20 @@ describe('Settings: OMP on the TV', () => {
   });
 });
 
-describe('Settings «О приложении»: TMDB attribution', () => {
+describe('Advanced: TMDB attribution', () => {
+  beforeEach(() => {
+    view = 'advanced';
+  });
   it('names TMDB as the movie data source', () => {
     const el = mount();
-    const about = Array.from(el.querySelectorAll('.m-set-group')).pop()!;
-    expect(about.querySelector('.m-set-label')!.textContent).toBe('О приложении');
-    expect(about.querySelector('.m-set-attr')!.textContent).toBe('Данные о фильмах: TMDB');
+    expect(el.querySelector('.m-set-attr')!.textContent).toBe('Данные о фильмах: TMDB');
   });
 
   it('in English', () => {
     applyLanguageSetting('en');
     try {
       const el = mount();
-      const about = Array.from(el.querySelectorAll('.m-set-group')).pop()!;
-      expect(about.querySelector('.m-set-attr')!.textContent).toBe('Movie data: TMDB');
+      expect(el.querySelector('.m-set-attr')!.textContent).toBe('Movie data: TMDB');
     } finally {
       applyLanguageSetting('ru');
     }
@@ -523,19 +542,22 @@ describe('Settings in English', () => {
     const el = mount();
     expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Settings');
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
-    expect(labels).toEqual(['Search sources', 'TV', 'Server', 'Update', 'About']);
+    expect(labels).toEqual(['OMP account', 'TV', 'Viewing', 'Search', 'App']);
     const text = el.textContent!;
-    for (const w of ['Version', 'What’s new', 'Check for updates', 'Check for updates on start', 'Get beta versions', 'Not chosen', 'Change', 'Choose', 'Search sources', 'Monitoring', 'Install OMP on the TV', 'Questions and answers', 'Backup', 'Error log', 'Project page']) {
+    for (const w of ['Version', 'What’s new', 'Check for updates', 'Not chosen', 'Change', 'Choose', 'Where to look for films', 'Follow new releases', 'Install OMP on the TV', 'Help', 'Where to watch', 'Advanced']) {
       expect(text, w).toContain(w);
     }
+    expect(text).not.toContain('Server settings');
+    expect(text).not.toContain('Check for updates on start');
     expect(el.querySelector('[data-row="language"]')!.textContent).toBe('LanguageAs on the device ›');
     noCyrillic(el);
   });
 
   it('the beta switch shows the English hint', () => {
+    view = 'advanced';
     const el = mount();
-    expect(el.querySelector('[data-row="beta"]')!.textContent).toBe('Get beta versions' + 'New features first. There may be bugs. When the main version is out, it replaces the beta');
-    expect(el.querySelector('[role=switch][aria-label="Get beta versions"]')).toBeTruthy();
+    expect(el.querySelector('[data-row="beta"]')!.textContent).toBe('Try new features first' + 'There may be bugs. When the main version is out, it replaces the beta');
+    expect(el.querySelector('[role=switch][aria-label="Try new features first"]')).toBeTruthy();
     expect(el.querySelector('[role=switch][aria-label="Check for updates on start"]')).toBeTruthy();
   });
 
@@ -550,19 +572,22 @@ describe('Settings in English', () => {
   });
 
   it('the phone server: status, cache, notes and the VPN warning', async () => {
+    view = 'advanced';
     local({ supported: true, running: true, version: 'MatriX.145.1', ip: '192.168.1.50', vpn: true });
     const el = mount();
     await flush();
     const section = el.querySelector('[data-section="local-server"]')!;
     const t = section.textContent!;
-    expect(t).toContain('TorrServer on the phone');
+    expect(t).toContain('Server on the phone');
     expect(t).toContain('Working');
     expect(t).toContain('MatriX.145.1 · 192.168.1.50:8090');
     expect(t).toContain('Start together with OMP');
     expect(t).toContain('The server starts when the app opens');
-    expect(t).toContain('Cache on the phone');
+    expect(t).toContain('Space for video');
+    expect(t).toContain('Temporary playback files, safe to delete');
     expect(t).toContain('Used 412 MB of 1 GB');
-    expect(t).toContain('Server settings');
+    expect(t).not.toContain('Server settings');
+    expect(el.textContent).toContain('Server settings');
     expect(t).toContain('A new server version comes with an OMP update');
     expect(t).toContain('The server is available to all devices on this Wi‑Fi network');
     expect(t).toContain('VPN is on');
@@ -571,6 +596,7 @@ describe('Settings in English', () => {
   });
 
   it('the phone server: not downloaded, and an outdated one offers the update', async () => {
+    view = 'advanced';
     local({ supported: true, running: false, binary: 'missing' });
     const el = mount();
     await flush();

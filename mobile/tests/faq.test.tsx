@@ -418,7 +418,7 @@ describe('Faq screen', () => {
 describe('Settings entry', () => {
   it('navigates to the FAQ', async () => {
     const el = mount(<Settings />);
-    const row = Array.from(el.querySelectorAll('button')).find((b) => b.textContent!.includes('Вопросы и ответы'))!;
+    const row = Array.from(el.querySelectorAll('button')).find((b) => b.textContent!.includes('Помощь'))!;
     await act(async () => row.click());
     expect(currentRoute.value.name).toBe('faq');
   });

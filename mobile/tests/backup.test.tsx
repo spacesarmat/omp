@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Backup, setBackupActions } from '../src/screens/Backup';
-import { Settings } from '../src/screens/Settings';
+import { Advanced } from '../src/screens/Advanced';
 import { currentRoute, resetTo } from '../src/nav';
 import { toast } from '../src/ui/toast';
 import { localServer } from '../src/server/localServer';
@@ -59,7 +59,7 @@ const copy = (data: unknown, over: Record<string, unknown> = {}) =>
 
 describe('Backup screen', () => {
   it('is reachable from Settings', async () => {
-    const el = mount(<Settings />);
+    const el = mount(<Advanced />);
     await act(async () => btn(el, 'Резервная копия').click());
     expect(currentRoute.value.name).toBe('backup');
   });

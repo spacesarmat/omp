@@ -3,7 +3,7 @@ import { effect } from '@preact/signals';
 import { App as CapApp } from '@capacitor/app';
 import { parseBillingDeepLink } from '../../src/billing/deepLink';
 import { setPendingBillingCode } from '../../src/billing/session';
-import { currentRoute, goBack, switchTab, setPendingLink, type MRoute } from './nav';
+import { currentRoute, goBack, navigate, switchTab, setPendingLink, type MRoute } from './nav';
 import { activeServer, client } from '../../src/store/servers';
 import { refreshTorrents } from '../../src/store/library';
 import { native } from './platform/native';
@@ -36,6 +36,8 @@ import { Remote } from './screens/Remote';
 import { NowPlaying } from './screens/NowPlaying';
 import { MiniPlayer } from './ui/MiniPlayer';
 import { Settings, runUpdateCheck, phoneFeedUrl } from './screens/Settings';
+import { Account } from './screens/Account';
+import { Advanced } from './screens/Advanced';
 import { VideoPlayer } from './screens/VideoPlayer';
 import { ServerSettings } from './screens/ServerSettings';
 import { UpdateSheet } from './ui/UpdateSheet';
@@ -219,7 +221,10 @@ export function App() {
       if (!code) return;
       setPendingBillingCode(code);
       showToast(t('sources.billing.codeFromLink'));
-      if (currentRoute.value.name !== 'sources') switchTab({ name: 'sources' });
+      if (currentRoute.value.name !== 'account') {
+        if (currentRoute.value.name !== 'settings') switchTab({ name: 'settings' });
+        navigate({ name: 'account' });
+      }
     }
     let remove: (() => void) | undefined;
     let cancelled = false;
@@ -362,6 +367,10 @@ export function App() {
         <ServerSettings url={route.url} />
       ) : route.name === 'videoPlayer' ? (
         <VideoPlayer />
+      ) : route.name === 'account' ? (
+        <Account />
+      ) : route.name === 'advanced' ? (
+        <Advanced />
       ) : route.name === 'remote' ? (
         <Remote />
       ) : route.name === 'series' ? (

@@ -227,7 +227,7 @@ describe('phone shared UI in English', () => {
     mount(<Settings />);
     const row = el.querySelector('[data-row="tv-search-service"]') as HTMLElement;
     expect(row.textContent).toContain('Search for the TV');
-    expect(row.textContent).toContain('A quiet notification stays in the shade');
+    expect(row.textContent).toContain('The TV searches releases through this phone');
     expect(row.innerHTML).not.toMatch(CYR);
     reloadTvs();
   });

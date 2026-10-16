@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Log, setLogActions, filterEntries } from '../src/screens/Log';
-import { Settings } from '../src/screens/Settings';
+import { Advanced } from '../src/screens/Advanced';
 import { currentRoute, resetTo } from '../src/nav';
 import { toast } from '../src/ui/toast';
 import { log, clearLog, logEntries } from '../../src/lib/log';
@@ -151,7 +151,7 @@ describe('Log screen', () => {
 
 describe('Settings entry', () => {
   it('has «Журнал ошибок» that opens the screen', async () => {
-    const el = mount(<Settings />);
+    const el = mount(<Advanced />);
     await act(async () => btn(el, 'Журнал ошибок').click());
     expect(currentRoute.value.name).toBe('log');
   });
