@@ -334,8 +334,9 @@ describe('Add: the new torrent and its poster', () => {
     });
     mount(M + '&dn=Dune+(2021)+1080p');
     click(byText('Добавить'));
-    await flush();
-    await flush();
+    // The list is patched only after setPoster resolves. Reading the TMDB body takes several
+    // turns, so two flushes stop after the search and setPoster call, before the poster is stored.
+    for (let i = 0; i < 6 && !(torrents.value[0] && torrents.value[0].poster); i++) await flush();
     expect(String((tmdb.mock.calls[0] as unknown[])[0])).toContain('query=Dune');
     expect(setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: HASH }), 'https://imagetmdb.com/t/p/w300/d.jpg');
     expect(torrents.value[0].poster).toBe('https://imagetmdb.com/t/p/w300/d.jpg');
