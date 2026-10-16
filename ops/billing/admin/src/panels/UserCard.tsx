@@ -178,7 +178,19 @@ export function UserCard({
                   </Button>
                 ) : null}
                 {c.bound ? (
-                  <Button size="sm" variant="secondary" onClick={() => void run('/admin/unbind', { codeId: c.id, accountId: user.account.id })}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      setShown((prev) => {
+                        if (!prev[c.id]) return prev;
+                        const next = { ...prev };
+                        delete next[c.id];
+                        return next;
+                      });
+                      void run('/admin/unbind', { codeId: c.id, accountId: user.account.id });
+                    }}
+                  >
                     Сбросить
                   </Button>
                 ) : null}

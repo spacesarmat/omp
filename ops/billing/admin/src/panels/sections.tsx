@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { CopyBtn, DayChart, Devices, Pager, Skeleton, SubStatus, toast } from '@/components/chrome';
 import { api, post, type PostResult } from '@/lib/api';
 import { auditAction, AUDIT_FILTERS, downloadCsv, eventKind, FAIL_FILTERS, failReason, problemKind, serviceError, when } from '@/lib/text';
+import { matchesSubscriptionFilter, reminderTargets } from '@/lib/subs';
 import type { HomeData, PaymentRow, ProblemRow, SubRow } from '@/lib/types';
 
 type Run = (path: string, fields?: Record<string, unknown>) => Promise<PostResult | undefined>;
@@ -193,13 +194,8 @@ export function SubsPanel({
   setFilter: (id: string) => void;
   csrf: string;
 }) {
-  const shown = subs.filter((s) => {
-    if (filter === 'all') return true;
-    if (filter === 'week') return s.status === 'soon' || s.status === 'expiring';
-    if (filter === 'active') return s.active;
-    return s.status === filter;
-  });
-  const expiring = subs.filter((s) => (s.status === 'soon' || s.status === 'expiring') && s.telegramId);
+  const shown = subs.filter((s) => matchesSubscriptionFilter(s, filter));
+  const expiring = reminderTargets(subs);
   return (
     <Card>
       <CardHeader>
@@ -237,11 +233,15 @@ export function SubsPanel({
             onClick={() => {
               if (!expiring.length) return;
               if (!window.confirm('Отправить напоминание ' + expiring.length + ' пользователям в Telegram?')) return;
-              const text = 'Подписка OMP скоро закончится. Продлить можно в боте кнопкой «Продлить».';
               void (async () => {
                 let ok = 0;
                 for (let i = 0; i < expiring.length; i++) {
-                  const res = await post('/admin/message', csrf, { accountId: expiring[i].accountId, text, quiet: true });
+                  const row = expiring[i];
+                  const text =
+                    'Подписка OMP заканчивается ' +
+                    (row.paidUntilText || '') +
+                    '. Продлить можно в боте кнопкой «Продлить».';
+                  const res = await post('/admin/message', csrf, { accountId: row.accountId, text, quiet: true });
                   if (res.ok) ok += 1;
                 }
                 toast('Отправлено: ' + ok + ' из ' + expiring.length);

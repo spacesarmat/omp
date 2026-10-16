@@ -12,6 +12,7 @@ function day(ms) {
 function subStatus(sub, bound, now) {
   if (!(sub.paidUntil > now)) return 'expired';
   const left = sub.paidUntil - now;
+  // soon/expiring stay visible as expiry. «Без устройства» matches bound === 0 on its own.
   if (left <= DAY) return 'expiring';
   if (left <= 7 * DAY) return 'soon';
   if (!bound) return 'unbound';

@@ -883,18 +883,7 @@ export function createApp(file, fetchImpl) {
               at: now,
             }),
           }));
-          if (adminNotifyEnabled(state.settings)) {
-            await notifyAdmins(
-              state,
-              paymentAdminNotices(state.settings, {
-                ok: false,
-                amount: body.amount,
-                label: body.label,
-                error: 'неверная подпись',
-              }),
-              net,
-            );
-          }
+          process.stderr.write('yoomoney bad signature\n');
           return send(res, 400, 'bad signature');
         }
         const applied = await updateState(file, (cur) =>

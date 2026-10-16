@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { homePayload, userPayload } from '../src/adminApi.mjs';
+import { matchesSubscriptionFilter, reminderTargets } from '../admin/src/lib/subs.ts';
 import { adminNotifyEnabled, paymentAdminNotices, serviceDownNotices, botReply } from '../src/bot.mjs';
 import { hashPassword } from '../src/crypto.mjs';
 import {
@@ -18,7 +19,8 @@ import {
 } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
 import { maskWallet, mergeSettings, publicAdminSettings, SECRET_MASK } from '../src/services.mjs';
-import { emptyState, writeState } from '../src/store.mjs';
+import { emptyState, readState, writeState } from '../src/store.mjs';
+import { notificationHash } from '../src/yoomoney.mjs';
 
 const NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
 const DAY = 24 * 60 * 60 * 1000;
@@ -41,6 +43,11 @@ describe('admin payload hides codes', () => {
     const sub = home.subscriptions[0];
     expect(sub.status).toBe('unbound');
     expect(sub.paidUntil).toBeGreaterThan(Date.now());
+    const soon = { ...sub, status: 'soon', active: true, bound: 0, paidUntil: Date.now() + 3 * DAY };
+    expect(matchesSubscriptionFilter(soon, 'unbound')).toBe(true);
+    expect(matchesSubscriptionFilter(soon, 'week')).toBe(true);
+    expect(matchesSubscriptionFilter({ ...soon, bound: 2 }, 'unbound')).toBe(false);
+    expect(matchesSubscriptionFilter({ ...soon, active: false, status: 'expired', bound: 0 }, 'unbound')).toBe(false);
     const user = userPayload(start.state, start.account.id, {});
     expect(user.codes[0].hasPlain).toBe(true);
     expect(user.codes[0].plain).toBeUndefined();
@@ -99,6 +106,21 @@ describe('finance and lists', () => {
     const page = pagePayments(start.state, { q: '42', offset: 0, limit: 1 });
     expect(page.total).toBe(2);
     expect(page.payments).toHaveLength(1);
+  });
+});
+
+describe('reminders', () => {
+  it('sends one reminder per account using the latest expiry', () => {
+    const rows = [
+      { accountId: 'a', telegramId: '1', status: 'soon', paidUntil: 5, paidUntilText: 'short' },
+      { accountId: 'a', telegramId: '1', status: 'active', paidUntil: 50, paidUntilText: 'long' },
+      { accountId: 'b', telegramId: '2', status: 'expiring', paidUntil: 3, paidUntilText: 'old' },
+      { accountId: 'b', telegramId: '2', status: 'soon', paidUntil: 8, paidUntilText: 'latest' },
+      { accountId: 'c', telegramId: '', status: 'soon', paidUntil: 9, paidUntilText: 'no-tg' },
+    ];
+    const out = reminderTargets(rows);
+    expect(out.map((row) => row.accountId)).toEqual(['b']);
+    expect(out[0].paidUntilText).toBe('latest');
   });
 });
 
@@ -172,16 +194,16 @@ async function call(
   app: (req: unknown, res: unknown) => Promise<void>,
   method: string,
   path: string,
-  opts: { cookie?: string; body?: unknown } = {},
+  opts: { cookie?: string; body?: unknown; form?: Record<string, string> } = {},
 ) {
-  const payload = opts.body === undefined ? '' : JSON.stringify(opts.body);
+  const payload = opts.form ? new URLSearchParams(opts.form).toString() : opts.body === undefined ? '' : JSON.stringify(opts.body);
   const req = {
     method,
     url: path,
     headers: {
       cookie: opts.cookie || '',
-      accept: 'application/json',
-      'content-type': opts.body === undefined ? '' : 'application/json',
+      accept: opts.form ? '' : 'application/json',
+      'content-type': opts.form ? 'application/x-www-form-urlencoded' : opts.body === undefined ? '' : 'application/json',
     },
     async *[Symbol.asyncIterator]() {
       if (payload) yield Buffer.from(payload);
@@ -251,5 +273,49 @@ describe('admin http', () => {
     const found = await call(app, 'GET', '/admin/api/user?id=' + encodeURIComponent(id), { cookie });
     const until = ((found.data && found.data.subscription) || {}) as { paidUntil?: number };
     expect(Math.abs((until.paidUntil || 0) - (Date.now() + 7 * DAY))).toBeLessThan(60_000);
+  });
+
+  it('logs a bad yoomoney signature and does not notify admins', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'omp-yoo-'));
+    const file = join(dir, 'billing.db');
+    const state = emptyState();
+    state.settings.yoomoneySecret = 'secret';
+    state.settings.botToken = 'token';
+    state.settings.adminTelegramIds = '99';
+    state.settings.adminNotify = true;
+    writeState(file, state);
+    const calls: string[] = [];
+    const fetchImpl = async (url: string) => {
+      calls.push(String(url));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, result: { message_id: 1 } }),
+        text: async () => '',
+        arrayBuffer: async () => new ArrayBuffer(0),
+      };
+    };
+    const app = createApp(file, fetchImpl);
+    const forged = {
+      notification_type: 'p2p-incoming',
+      operation_id: 'op-forged',
+      amount: '999.00',
+      currency: '643',
+      datetime: '2026-01-15T12:00:00Z',
+      sender: '41001',
+      codepro: 'false',
+      label: 'attacker-label',
+      sha1_hash: 'deadbeef',
+    };
+    const bad = await call(app, 'POST', '/v1/yoomoney', { form: forged });
+    expect(bad.status).toBe(400);
+    expect(bad.body).toBe('bad signature');
+    expect(calls).toHaveLength(0);
+    expect(readState(file).webhooks.some((row: { kind?: string }) => row.kind === 'bad_signature')).toBe(true);
+    const fields = { ...forged, operation_id: 'op-real', sha1_hash: '' };
+    fields.sha1_hash = notificationHash(fields, 'secret');
+    const ok = await call(app, 'POST', '/v1/yoomoney', { form: fields });
+    expect(ok.status).toBe(200);
+    expect(calls.some((url) => url.indexOf('sendMessage') >= 0)).toBe(true);
   });
 });

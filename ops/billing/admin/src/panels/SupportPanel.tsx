@@ -42,6 +42,14 @@ export function SupportPanel({
     if (initialTelegramId) setPicked(initialTelegramId);
   }, [initialTelegramId]);
 
+  useEffect(() => {
+    if (!picked) return;
+    if (threads.some((row) => row.telegramId === picked)) return;
+    // A thread opened from a user card stays selected even when it is not in the open list.
+    if (initialTelegramId && picked === initialTelegramId) return;
+    setPicked('');
+  }, [threads, picked, initialTelegramId]);
+
   function scrollToEnd(force?: boolean) {
     if (!force && !stick.current) return;
     const el = box.current;
