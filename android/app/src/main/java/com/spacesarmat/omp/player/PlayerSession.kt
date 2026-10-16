@@ -121,6 +121,9 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
 
         /** A track was picked by hand: the page remembers it for the series («Озвучка»). */
         fun trackChosen(choice: TrackChoice) {}
+
+        /** A playback warning for the open item, already in the UI language. */
+        fun playbackWarnings(text: String) {}
     }
 
     /** The engine playing now ([switchEngine] replaces it). */
@@ -431,6 +434,11 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
         if (ui.engineFailed(kind, detail, !firstFrame)) return
         error = kind
         ui.changed()
+    }
+
+    override fun onPlaybackWarnings(kinds: List<PlayerWarning>) {
+        val text = PlayerWarnings.message(kinds)
+        if (text.isNotEmpty()) ui.playbackWarnings(text)
     }
 
     companion object {

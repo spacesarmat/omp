@@ -28,6 +28,7 @@ import tv.p2160.core.api.MediaEntry
 import tv.p2160.core.api.PlaybackRequest
 import tv.p2160.core.api.PlayerConfig
 import tv.p2160.core.engine.PlayerController
+import tv.p2160.core.settings.DecoderPreference
 import tv.p2160.core.settings.PlayerSettings
 import java.util.Base64
 import java.util.Locale
@@ -39,8 +40,10 @@ import java.util.Locale
  * files re-encoded to UTF-8. One controller per opened item (its API plays one request); OMP's own UI, queue,
  * skips and resume points stay above it, so 2160's own features that would compete with them are kept quiet
  * through its [PlayerConfig] ([config]): no history (nothing restored or saved), no sound-based intro search,
- * no chapter reading (OMP has its own), the buffer capped by the app's heap, OMP's HTTP timeouts. The video goes to a Media3 [PlayerView]
- * bound to the controller's player (its subtitle layer draws the cues, as before).
+ * no chapter reading (OMP has its own), the buffer capped by the app's heap, OMP's HTTP timeouts.
+ * «Всегда FFmpeg» ([decoderPreference]) is applied before each controller, from the TV setting. 2160's playback
+ * warnings (software 4K, Dolby Vision without a decoder, HDR on an SDR screen) are read from its state and shown
+ * by OMP. The video goes to a Media3 [PlayerView] bound to the controller's player (its subtitle layer draws the cues, as before).
  */
 @OptIn(UnstableApi::class)
 class Engine2160(private val context: Context) : PlayerEngine {
@@ -79,6 +82,13 @@ class Engine2160(private val context: Context) : PlayerEngine {
 
     /** The encoding of the audio output of the open item (AnalyticsListener): a non-PCM one means passthrough over HDMI. */
     private var outputEncoding: Int? = null
+
+    /** «Всегда FFmpeg» for the open item: software 4K is then expected, and that warning is not shown. */
+    private var ffmpegOnly = false
+
+    /** Polls of 2160's warning list after playback has passed 2 s (see [PlayerWarnings.poll]). */
+    private var warnTicks = 0
+    private val warnPoll = Runnable { checkWarnings() }
 
     private val analytics = object : AnalyticsListener {
         override fun onAudioTrackInitialized(eventTime: AnalyticsListener.EventTime, audioTrackConfig: AudioSink.AudioTrackConfig) {
@@ -183,6 +193,9 @@ class Engine2160(private val context: Context) : PlayerEngine {
 
     override fun open(media: EngineMedia, startMs: Long) {
         closeController()
+        warnTicks = 0
+        ffmpegOnly = NativePlayerBridge.request?.alwaysFfmpeg == true
+        applyDecoderPreference(ffmpegOnly)
         endSent = false
         frameSent = false
         loaded = false
@@ -218,6 +231,8 @@ class Engine2160(private val context: Context) : PlayerEngine {
         // wanted at once (the controller sets it after building the item); the UI reads it right after open
         p.playWhenReady = true
         view?.player = p
+        // 2160 publishes warnings ~2 s after playback starts; the poll reads them once they are there
+        main.postDelayed(warnPoll, WARN_POLL_MS)
     }
 
     override fun play() {
@@ -334,6 +349,35 @@ class Engine2160(private val context: Context) : PlayerEngine {
         controller?.setNightMode(on)
     }
 
+    /**
+     * 2160 writes the warning list on its own loop once the item is playing past 2 s. Until then, and for a few
+     * ticks after, keep looking. One message per item; a new [open] starts again.
+     */
+    private fun checkWarnings() {
+        val c = controller ?: return
+        if (endSent) return
+        val p = c.player
+        val past = loaded && p.isPlaying && p.currentPosition > WARN_AFTER_MS
+        if (past) warnTicks++
+        val kinds = PlayerWarnings.fromReport(c.state.value.warnings, ffmpegOnly)
+        when (PlayerWarnings.poll(past, warnTicks, kinds)) {
+            PlayerWarnings.Poll.WAIT -> main.postDelayed(warnPoll, WARN_POLL_MS)
+            PlayerWarnings.Poll.SHOW -> {
+                Log.i(TAG, "playback warning: ${kinds.joinToString { it.name }}")
+                listener?.onPlaybackWarnings(kinds)
+            }
+            PlayerWarnings.Poll.STOP -> Unit
+        }
+    }
+
+    /** «Всегда FFmpeg» before the controller is built: 2160 reads the preference when it creates the player. */
+    private fun applyDecoderPreference(alwaysFfmpeg: Boolean) {
+        val want = decoderPreference(alwaysFfmpeg)
+        if (settings.current.decoder == want) return
+        runCatching { settings.update { it.copy(decoder = want) } }
+            .onFailure { Log.w(TAG, "decoder preference was not saved: ${it.javaClass.simpleName}") }
+    }
+
     private fun closeController() {
         val c = controller ?: return
         controller = null
@@ -358,6 +402,17 @@ class Engine2160(private val context: Context) : PlayerEngine {
     companion object {
         private const val TAG = "OmpPlayer"
         private const val USER_AGENT = "OMP"
+
+        /** 2160 shows warnings once playback has passed this position and the decoders are chosen. */
+        private const val WARN_AFTER_MS = 2_000L
+        private const val WARN_POLL_MS = 500L
+
+        /**
+         * «Всегда FFmpeg» on: software decoding (video and audio — passthrough is off, 2160's FFMPEG mode).
+         * Off: hardware first, FFmpeg when the box cannot ([DecoderPreference.AUTO], 2160's default).
+         */
+        fun decoderPreference(alwaysFfmpeg: Boolean): DecoderPreference =
+            if (alwaysFfmpeg) DecoderPreference.FFMPEG else DecoderPreference.AUTO
 
         /**
          * 2160's engine settings for OMP: the buffer capped by the heap ([PlayerBuffer], 16-64 MB), OMP's earlier

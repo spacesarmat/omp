@@ -137,6 +137,17 @@ describe('NativePlayerScreen with 2160 Player', () => {
 });
 
 describe('NativePlayerScreen (Android TV)', () => {
+  it('sends always FFmpeg when the setting is on', async () => {
+    resetSettings();
+    updateSettings({ alwaysFfmpeg: true });
+    const f = fakeCapacitor();
+    const host = mount(h(NativePlayerScreen, { queue, index: 0 }));
+    await until(() => f.plugin.playNative.mock.calls.length === 1);
+    expect(f.plugin.playNative.mock.calls[0][0].alwaysFfmpeg).toBe(true);
+    resetSettings();
+    await unmount(host);
+  });
+
   it('opens the native player, shows the placeholder and goes back on close', async () => {
     const f = fakeCapacitor();
     const host = mount(h(NativePlayerScreen, { queue, index: 0 }));
@@ -146,6 +157,7 @@ describe('NativePlayerScreen (Android TV)', () => {
     expect(arg.index).toBe(0);
     expect(arg.seekStep).toBe(10);
     expect(arg.queue[0].url).toBe(queue[0].url);
+    expect('alwaysFfmpeg' in arg).toBe(false);
     await until(() => (host.textContent || '').indexOf('Плеер открыт на телевизоре') >= 0);
     f.emit('nativePlayerClosed', { index: 0, time: 600, duration: 1200 });
     expect(getLocalProgress(H, 3)!.time).toBe(600);

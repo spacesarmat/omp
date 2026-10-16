@@ -21,7 +21,7 @@ data class QueueItem(
 
 /**
  * playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn, engine?, donate?,
- * audioPick?, subPick? }) — the picks: [{ l?, g?, off? }].
+ * audioPick?, subPick?, alwaysFfmpeg? }) — the picks: [{ l?, g?, off? }].
  */
 data class PlayRequest(
     val queue: List<QueueItem>,
@@ -45,6 +45,11 @@ data class PlayRequest(
     val audioPick: List<TrackPick> = emptyList(),
     /** The same for subtitles (a step may turn them off). */
     val subPick: List<TrackPick> = emptyList(),
+    /**
+     * «Всегда FFmpeg» of the TV settings: the built-in player decodes in software (green screen on cheap boxes).
+     * Off: hardware first, FFmpeg only when the box cannot.
+     */
+    val alwaysFfmpeg: Boolean = false,
 ) {
     companion object {
         const val LABEL_MAX = 200
@@ -91,6 +96,7 @@ data class PlayRequest(
                 engine = EngineMode.parse(o.optString("engine")),
                 audioPick = TrackPick.parseList(o.optJSONArray("audioPick")),
                 subPick = TrackPick.parseList(o.optJSONArray("subPick")),
+                alwaysFfmpeg = o.optBoolean("alwaysFfmpeg", false),
             )
         }
     }

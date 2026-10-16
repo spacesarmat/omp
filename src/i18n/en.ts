@@ -1792,6 +1792,8 @@ export const en: EnDict<typeof ru> = {
     player: 'Player',
     engineIntro: 'What plays the video on this TV.',
     engineNote: 'For a single torrent, the player is changed in the player menu — "Change player".',
+    alwaysFfmpeg: 'Always use FFmpeg',
+    alwaysFfmpegHint: 'For the built-in player. Software decoding helps when a set-top box shows a green screen. Sound is decoded too, so it is not passed through to a receiver.',
     logEmpty: 'No entries',
     clearLog: 'Clear the log',
     clearLogAsk: 'Clear the log?',

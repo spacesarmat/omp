@@ -866,15 +866,24 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         }
     }
 
-    /** A message at the top left: «Заставка пропущена» with «Вернуть · OK» for 5 s ([undo]), others for 3 s. */
-    fun showMessage(text: String, error: Boolean, undo: Long? = null) {
+    /** A playback warning (software 4K, Dolby Vision, HDR on an SDR screen). Not over «Вернуть». */
+    override fun playbackWarnings(text: String) {
+        if (undoStart != null || isFinishing) return
+        showMessage(text, false, holdMs = WARNING_HOLD_MS)
+    }
+
+    /**
+     * A message at the top left: «Заставка пропущена» with «Вернуть · OK» for 5 s ([undo]), others for 3 s,
+     * a playback warning for [WARNING_HOLD_MS] ([holdMs]).
+     */
+    fun showMessage(text: String, error: Boolean, undo: Long? = null, holdMs: Long = MESSAGE_MS) {
         if (!::session.isInitialized || isFinishing) return
         undoStart = undo
         toastText.text = text
         toastText.setTextColor(if (error) ERROR_COLOR else TEXT_COLOR)
         toastShown = true
         handler.removeCallbacks(hideToast)
-        handler.postDelayed(hideToast, if (undo != null) SKIP_TOAST_MS else MESSAGE_MS)
+        handler.postDelayed(hideToast, if (undo != null) SKIP_TOAST_MS else holdMs)
         render()
     }
 
@@ -1252,6 +1261,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         /** «Заставка пропущена · Вернуть» (SKIP_TOAST_MS of src/player/chapters.ts), other messages. */
         private const val SKIP_TOAST_MS = 5000L
         private const val MESSAGE_MS = 3000L
+        /** Software 4K / Dolby Vision / HDR on SDR: long enough to read two lines. */
+        private const val WARNING_HOLD_MS = 8000L
         /** The phone badge: on screen after the last phone command, and its fade. */
         private const val BADGE_MS = 3000L
         private const val BADGE_FADE_MS = 200L
