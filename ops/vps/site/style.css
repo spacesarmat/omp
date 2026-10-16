@@ -116,6 +116,10 @@ footer a:hover {
   transition: border-color 0.2s, color 0.2s, background 0.2s;
 }
 
+.small-download .dl-short {
+  display: none;
+}
+
 .small-download:hover {
   border-color: #7a7f64;
   background: rgba(249, 196, 0, 0.06);
@@ -1411,6 +1415,309 @@ footer .copyright {
     font-size: 15px;
   }
   .cols small {
+    font-size: 13px;
+  }
+}
+
+/* Phone layout. Desktop stays on the min-width: 901px rules. */
+@media (max-width: 600px) {
+  :root {
+    --muted: #d0d4c4;
+  }
+
+  body {
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  .header {
+    gap: 12px;
+  }
+
+  .brand {
+    min-height: 44px;
+  }
+
+  .small-download {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .small-download .dl-full {
+    display: none;
+  }
+
+  .small-download .dl-short {
+    display: inline;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    line-height: 1.45;
+  }
+
+  .hero-copy {
+    min-width: 0;
+  }
+
+  .hero-copy .eyebrow {
+    display: block;
+    max-width: 100%;
+    text-align: center;
+    letter-spacing: 0.06em;
+  }
+
+  .hero-copy .eyebrow i {
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  h1 {
+    font-size: clamp(28px, 8.4vw, 40px);
+    line-height: 1.12;
+    letter-spacing: -0.04em;
+    margin: 12px 0;
+  }
+
+  .hero-copy p,
+  .section-heading p,
+  .setup p,
+  .setup li p,
+  .download > p,
+  .scene-hint {
+    color: #d0d4c4;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .section-heading p {
+    margin-top: 8px;
+  }
+
+  h2 {
+    margin: 10px 0 8px;
+  }
+
+  .hero-copy .text-link,
+  .setup .text-link,
+  .cards a,
+  .download > small a,
+  footer .footer-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .platforms {
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px 14px;
+    margin-top: 14px;
+    max-width: 100%;
+    font-size: 13px;
+  }
+
+  .platforms > span {
+    flex: 0 1 auto;
+    max-width: 100%;
+    text-align: center;
+  }
+
+  .open-source {
+    display: none;
+  }
+
+  .cinema-wrap {
+    overflow: hidden;
+    max-width: 100%;
+  }
+
+  .cinema {
+    width: 100%;
+    margin-left: 0;
+    margin-bottom: 8px;
+    aspect-ratio: 1672 / 941;
+  }
+
+  .room {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+  }
+
+  .cinema:after {
+    inset: 90% 0 0;
+  }
+
+  .phone-area {
+    right: 6%;
+    top: 14%;
+    width: 20%;
+    transform: rotate(7deg) scale(0.8);
+    transform-origin: center center;
+  }
+
+  .screen-dots {
+    display: none;
+  }
+
+  .scene-controls {
+    border-bottom: 0;
+    gap: 10px;
+    padding-bottom: 8px;
+  }
+
+  .screen-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .screen-tabs button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 0;
+    padding: 8px 10px;
+    font-size: 14px;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  .scene-hint {
+    font-size: 15px;
+  }
+
+  .experience,
+  .platforms-sec,
+  .download {
+    padding-block: 48px;
+  }
+
+  .setup {
+    border-block: 0;
+  }
+
+  .setup-inner {
+    padding-block: 48px;
+    gap: 28px;
+  }
+
+  .cards {
+    margin-top: 18px;
+    gap: 12px;
+  }
+
+  .cards article {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 12px;
+    row-gap: 0;
+    align-items: center;
+    padding: 16px 18px 6px;
+  }
+
+  .cards .ico {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    font-size: 13px;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .cards h3 {
+    margin: 0;
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 17px;
+    line-height: 1.25;
+  }
+
+  .cards p {
+    grid-column: 1 / -1;
+    margin: 8px 0 0;
+    color: #d0d4c4;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .cards a {
+    grid-column: 1 / -1;
+    margin-top: 0;
+    font-size: 15px;
+  }
+
+  .cols {
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .cols article {
+    padding: 16px 16px 12px;
+  }
+
+  .cols ul {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    color: #d0d4c4;
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  .cols li {
+    padding: 0;
+  }
+
+  .download > small {
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  .download > small a {
+    white-space: nowrap;
+    padding-inline: 2px;
+  }
+
+  footer .footer-brand {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  footer .footer-links {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 16px;
+    width: 100%;
+    justify-self: stretch;
+    font-size: 15px;
+  }
+
+  footer .footer-links a {
+    min-width: 0;
+  }
+
+  footer .copyright {
+    border-top: 0;
+    padding-top: 4px;
+    color: #c5c9b6;
     font-size: 13px;
   }
 }
