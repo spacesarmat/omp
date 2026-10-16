@@ -435,6 +435,7 @@ describe('billing files', () => {
     expect(readFileSync('ops/billing/docker-compose.yml', 'utf8')).toContain('/bin/sh');
     expect(readFileSync('ops/billing/casaos-docker-compose.yml', 'utf8')).toContain('/bin/sh');
     expect(readFileSync('ops/billing/.tunnel-bin/set-public-origin.mjs', 'utf8')).toContain("from '../src/store.mjs'");
+    expect(readFileSync('ops/billing/admin/vite.config.ts', 'utf8')).toContain('emptyOutDir: false');
     expect(existsSync('ops/billing/admin/public/logo.svg')).toBe(true);
     expect(existsSync('ops/billing/admin/public/tunnel.svg')).toBe(true);
   });

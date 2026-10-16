@@ -13,7 +13,9 @@ export default defineConfig({
   },
   build: {
     outDir: '../public',
-    emptyOutDir: true,
+    // logo.svg and tunnel.svg are served from this directory. Emptying it would 404 /admin/logo.svg.
+    // Source copies also live in admin/public and are copied on build.
+    emptyOutDir: false,
   },
   server: {
     proxy: {
