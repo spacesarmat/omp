@@ -2,12 +2,15 @@
 import { signal } from '@preact/signals';
 import { client } from '../../../src/store/servers';
 import { loadJson, saveJson } from '../../../src/store/storage';
-import { createCatalogClient, type CatalogClient } from '../../../src/catalog/client';
-import { endpointOf } from '../../../src/catalog/tmdb';
+import type { CatalogClient } from '../../../src/catalog/client';
 import { TMDB_FALLBACK_KEY } from '../../../src/catalog/fallbackKey';
+import { openCatalog, type CatalogCache } from '../../../src/catalog/openCatalog';
+import { setLocalTmdbSource } from '../../../src/catalog/localTmdb';
 import type { Key } from '../../../src/i18n';
 import { setCatalogProvider } from '../../../src/catalog/activeCatalog';
 import { phoneSourceContext } from '../searchContext';
+import { LOCAL_URL, localServer } from '../server/localServer';
+import { TorrServerClient } from '../../../src/api/torrserver';
 
 export type CatalogMode = 'mine' | 'discover';
 
@@ -28,7 +31,7 @@ export const OFFLINE_TEXT: Key = 'discover.offlineText';
 export const NOKEY_TEXT: Key = 'discover.nokeyText';
 
 let forTests: CatalogClient | null = null;
-let cached: { server: string; client: Promise<CatalogClient> } | null = null;
+const cache: CatalogCache = { slot: null };
 
 /** A fake client for tests; one without `season` or `person` rejects those requests. */
 export function setCatalogClientForTests(
@@ -48,27 +51,34 @@ export function setCatalogClientForTests(
         home: c.home || (() => Promise.resolve([])),
       }
     : null;
-  cached = null;
+  cache.slot = null;
 }
 
+// The embedded TorrServer on this phone, only while it is running. Shared with posters and the TV catalog path.
+setLocalTmdbSource(() => {
+  if (!localServer.value.running) return null;
+  const c = new TorrServerClient({ url: LOCAL_URL });
+  return { baseUrl: c.baseUrl, readTmdbSettings: () => c.readTmdbSettings() };
+});
+
 /**
- * The catalog client for the active server: its TMDB settings when it has a key, else OMP's built-in key.
- * `fresh` reads the server's settings again (each «Обзор» visit and «Повторить» do: the key or the mirror may have
- * changed); otherwise the client of the last read for this server is reused (chips, next pages). A failed or empty
- * read is never kept.
+ * The catalog client: the active server's TMDB key, else the phone's running TorrServer, else OMP's built-in key.
+ * `fresh` reads again (each «Обзор» visit and «Повторить» do: the key or the mirror may have changed); otherwise
+ * the client of the last successful read for this server is reused. A read that found no key is never kept, and an
+ * unreachable server is reported as such instead of "no key".
  */
 export function phoneCatalog(fresh?: boolean): Promise<CatalogClient> {
   if (forTests) return Promise.resolve(forTests);
   const ts = client.value;
   const server = ts ? ts.baseUrl : '';
-  if (!fresh && cached && cached.server === server) return cached.client;
   const http = phoneSourceContext().http;
-  const p: Promise<CatalogClient> = (ts ? ts.tmdbSettings() : Promise.resolve(null)).then((cfg) => {
-    if (!cfg && cached && cached.client === p) cached = null;
-    return createCatalogClient(endpointOf(cfg, TMDB_FALLBACK_KEY), http);
+  return openCatalog(cache, {
+    fresh: !!fresh,
+    server: server,
+    active: ts ? { baseUrl: ts.baseUrl, readTmdbSettings: () => ts.readTmdbSettings() } : null,
+    http: http,
+    fallbackKey: TMDB_FALLBACK_KEY,
   });
-  cached = { server, client: p };
-  return p;
 }
 
-setCatalogProvider(() => phoneCatalog());
+setCatalogProvider((fresh) => phoneCatalog(fresh));

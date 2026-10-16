@@ -1,4 +1,5 @@
 import type { TmdbConfig } from '../api/types';
+import { isTmdbV4Token } from '../catalog/tmdbToken';
 
 const MAX_WORDS = 4;
 const MAX_LEN = 50;
@@ -36,15 +37,30 @@ function withScheme(url: string | undefined, fallback: string): string {
   return /^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/\//, '');
 }
 
-/** TMDB multi-search URL for a query; Russian titles and images. */
-export function tmdbSearchUrl(cfg: TmdbConfig, query: string): string {
+export interface TmdbSearchRequest {
+  url: string;
+  /** Set for a v4 access token: TMDB rejects that token in api_key and accepts it as a bearer. */
+  headers?: { [name: string]: string };
+}
+
+/** TMDB multi-search for a query; Russian titles and images. A v4 token is a bearer header, not api_key. */
+export function tmdbSearchRequest(cfg: TmdbConfig, query: string): TmdbSearchRequest {
   let base = withScheme(cfg.APIURL, 'https://api.themoviedb.org');
   if (base.indexOf('/3/search/multi') < 0) base = base.replace(/\/3.*$/, '').replace(/\/search.*$/, '') + '/3/search/multi';
-  return (
+  const key = (cfg.APIKey || '').trim();
+  const bearer = isTmdbV4Token(key);
+  const url =
     base +
-    '?api_key=' + encodeURIComponent(cfg.APIKey || '') +
-    '&language=ru&include_image_language=ru,null,en&query=' + encodeURIComponent(query)
-  );
+    '?' +
+    (bearer ? '' : 'api_key=' + encodeURIComponent(key) + '&') +
+    'language=ru&include_image_language=ru,null,en&query=' + encodeURIComponent(query);
+  if (!bearer) return { url: url };
+  return { url: url, headers: { Authorization: 'Bearer ' + key } };
+}
+
+/** TMDB multi-search URL for a query; Russian titles and images. */
+export function tmdbSearchUrl(cfg: TmdbConfig, query: string): string {
+  return tmdbSearchRequest(cfg, query).url;
 }
 
 /** First poster among TMDB search results, or '' when there is none. */

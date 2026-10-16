@@ -4,6 +4,7 @@ import type { TmdbConfig } from '../api/types';
 import { lang } from '../i18n';
 import { ru } from '../i18n/ru';
 import { discoverParams, type DiscoverQuery } from './discoverQuery';
+import { isTmdbV4Token } from './tmdbToken';
 
 export type Kind = 'movie' | 'tv';
 
@@ -49,7 +50,8 @@ export interface CatalogCard extends CatalogTitle {
   /** Films only; absent in film cards cached before 0.17.0-beta.6 (they are fetched again). */
   releases?: Releases;
 }
-export interface TmdbEndpoint { base: string; key: string; images: string; }
+/** `bearer`: the key is a TMDB v4 access token and is sent as Authorization, not as api_key. */
+export interface TmdbEndpoint { base: string; key: string; images: string; bearer?: boolean; }
 export interface Episode { n: number; title: string; airDate: string; runtime: number; overview: string; }
 export interface SeasonDetails { number: number; name: string; airDate: string; overview: string; episodes: Episode[]; }
 
@@ -60,13 +62,16 @@ function withScheme(u: string | undefined, dflt: string): string {
 }
 
 export function endpointOf(cfg: TmdbConfig | null, fallbackKey: string): TmdbEndpoint | null {
-  const own = cfg && cfg.APIKey ? cfg.APIKey : '';
-  const key = own || fallbackKey;
+  const own = cfg && cfg.APIKey ? cfg.APIKey.trim() : '';
+  const key = own || (fallbackKey || '').trim();
   if (!key) return null;
   const api = own ? withScheme(cfg!.APIURL, 'https://api.themoviedb.org') : 'https://api.themoviedb.org';
   const root = api.replace(/\/3(\/.*)?$/, '');
   const images = own ? withScheme(cfg!.ImageURLRu || cfg!.ImageURL, 'https://imagetmdb.com') : 'https://imagetmdb.com';
-  return { base: root + '/3/', key: key, images: images };
+  const ep: TmdbEndpoint = { base: root + '/3/', key: key, images: images };
+  // a v4 token in the api_key parameter is rejected (401); the v3 routes accept it as a bearer token
+  if (isTmdbV4Token(key)) ep.bearer = true;
+  return ep;
 }
 
 function q(params: { [k: string]: string | number }): string {
@@ -74,7 +79,8 @@ function q(params: { [k: string]: string | number }): string {
 }
 
 function url(e: TmdbEndpoint, path: string, params: { [k: string]: string | number }): string {
-  const p: { [k: string]: string | number } = { api_key: e.key, language: lang.peek() === 'en' ? 'en-US' : 'ru-RU' };
+  const p: { [k: string]: string | number } = { language: lang.peek() === 'en' ? 'en-US' : 'ru-RU' };
+  if (!e.bearer) p.api_key = e.key;
   Object.keys(params).forEach((k) => { p[k] = params[k]; });
   return e.base + path + '?' + q(p);
 }

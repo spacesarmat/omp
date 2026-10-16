@@ -11,6 +11,7 @@ import { currentRoute, resetTo } from '../src/nav';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { TorrServerClient } from '../../src/api/torrserver';
+import { localServer } from '../src/server/localServer';
 import type { CatalogClient } from '../../src/catalog/client';
 import { sourceHttp } from '../src/platform/native';
 import type { CatalogTitle, Kind } from '../../src/catalog/tmdb';
@@ -354,6 +355,24 @@ describe('Discover («Новинки»)', () => {
     expect(NOKEY_TEXT).toBe('discover.nokeyText');
     act(() => button('Как получить ключ')!.click());
     expect(currentRoute.value).toEqual({ name: 'faq', q: 'tmdb-key' });
+  });
+
+  it('error badkey: the v4-token explanation and the key FAQ', async () => {
+    fake(() => Promise.reject(codeError('badkey')));
+    mount(<Discover />);
+    await flush();
+    expect(el.textContent).toContain(ru.discover.badkeyText);
+    expect(el.textContent).not.toContain(ru.discover.nokeyText);
+    expect(button('Как получить ключ')).toBeTruthy();
+  });
+
+  it('error unreachable: not the no-key text, and no key FAQ', async () => {
+    fake(() => Promise.reject(codeError('unreachable')));
+    mount(<Discover />);
+    await flush();
+    expect(el.textContent).toContain(ru.discover.unreachableText);
+    expect(el.textContent).not.toContain('Нет ключа TMDB');
+    expect(button('Как получить ключ')).toBeUndefined();
   });
 
   it('error offline: OFFLINE_TEXT, no key button; «Повторить» refetches', async () => {
@@ -736,6 +755,7 @@ describe('phoneCatalog', () => {
     setCatalogClientForTests(null);
     for (const s of servers.value.slice()) removeServer(s.id);
     setActiveServer(addServer({ url: 'http://srv:8090' }).id);
+    localServer.value = { supported: false, running: false };
   });
 
   it('asks the server for its TMDB settings once and reuses the client', async () => {
@@ -795,6 +815,24 @@ describe('phoneCatalog', () => {
     act(() => button('Фильмы')!.click());
     await flush();
     expect(settingsSpy.mock.calls.length).toBe(reads);
+  });
+
+  it('an unreachable active server is not «no key»', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockRejectedValue(Object.assign(new Error('net'), { kind: 'network' }));
+    const c = await phoneCatalog();
+    await expect(c.novelties('all', 1)).rejects.toMatchObject({ code: 'unreachable' });
+  });
+
+  it('uses the phone TorrServer key when the active server is unreachable', async () => {
+    localServer.value = { supported: true, running: true };
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockImplementation(function (this: TorrServerClient) {
+      if (this.baseUrl.indexOf('127.0.0.1') >= 0) return Promise.resolve({ APIKey: 'phone' });
+      return Promise.reject(Object.assign(new Error('net'), { kind: 'network' }));
+    });
+    const get = vi.spyOn(sourceHttp, 'get').mockImplementation(async () => answer('Полуночный архив'));
+    const c = await phoneCatalog(true);
+    await c.search('x', 1);
+    expect(String(get.mock.calls[0][0])).toContain('api_key=phone');
   });
 
   it('another server gets its own client', async () => {

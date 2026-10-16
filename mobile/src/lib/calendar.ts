@@ -438,7 +438,7 @@ export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: bool
   ).then(() => {
     if (my !== generation) return;
     const code: CatalogErrorCode | null = firstError;
-    const blocking = !entries.length && (code === 'offline' || code === 'nokey') ? code : null;
+    const blocking = !entries.length && (code === 'offline' || code === 'nokey' || code === 'badkey' || code === 'unreachable') ? code : null;
     calendarState.value = { loading: false, entries: entries.slice(), error: blocking, at: Date.now(), lang: l };
   });
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { posterQuery, tmdbSearchUrl, firstPoster } from '../../src/lib/posterSearch';
+import { posterQuery, tmdbSearchUrl, tmdbSearchRequest, firstPoster } from '../../src/lib/posterSearch';
 
 describe('posterQuery', () => {
   it('keeps the title before the year, translation and release details', () => {
@@ -29,6 +29,15 @@ describe('tmdbSearchUrl', () => {
       'https://api.themoviedb.org/3/search/multi?api_key=k1&language=ru&include_image_language=ru,null,en&query=' +
         encodeURIComponent('Дюна'),
     );
+  });
+
+  it('sends a v4 token as a bearer and leaves it out of the URL', () => {
+    const token = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig';
+    const req = tmdbSearchRequest({ APIKey: token }, 'Дюна');
+    expect(req.url).not.toContain('api_key');
+    expect(req.url).toContain('query=' + encodeURIComponent('Дюна'));
+    expect(req.headers).toEqual({ Authorization: 'Bearer ' + token });
+    expect(tmdbSearchUrl({ APIKey: token }, 'Дюна')).toBe(req.url);
   });
 
   it('accepts a base with /3, without a scheme, or none at all', () => {

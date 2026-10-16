@@ -1,6 +1,10 @@
 import type { Torrent, TmdbConfig } from '../api/types';
+import type { TmdbSettingsRead } from '../api/torrserver';
 import { request } from '../api/http';
-import { posterQuery, tmdbSearchUrl, firstPoster } from './posterSearch';
+import { posterQuery, tmdbSearchRequest, firstPoster } from './posterSearch';
+import { localTmdbSource, type TmdbSource } from '../catalog/localTmdb';
+import { resolveTmdbKey } from '../catalog/resolveTmdb';
+import { TMDB_FALLBACK_KEY } from '../catalog/fallbackKey';
 
 export interface PosterClient {
   get(hash: string): Promise<Torrent>;
@@ -9,7 +13,7 @@ export interface PosterClient {
 }
 
 export interface PosterDeps {
-  fetchJson?: (url: string) => Promise<unknown>;
+  fetchJson?: (url: string, headers?: { [name: string]: string }) => Promise<unknown>;
   wait?: (ms: number) => Promise<void>;
   /** how many times to ask for the title while TorrServer reads the metadata */
   tries?: number;
@@ -17,7 +21,8 @@ export interface PosterDeps {
   cfg?: TmdbConfig | null;
 }
 
-const fetchTmdb = (url: string) => request<unknown>(url, { method: 'GET', timeoutMs: 15000, quiet: true });
+const fetchTmdb = (url: string, headers?: { [name: string]: string }) =>
+  request<unknown>(url, { method: 'GET', timeoutMs: 15000, quiet: true, headers: headers });
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function getOrNull(c: PosterClient, hash: string): Promise<Torrent | null> {
@@ -27,8 +32,31 @@ function getOrNull(c: PosterClient, hash: string): Promise<Torrent | null> {
   );
 }
 
+function sourceOf(c: PosterClient): TmdbSource {
+  const rich = c as PosterClient & { baseUrl?: string; readTmdbSettings?: () => Promise<TmdbSettingsRead> };
+  if (typeof rich.readTmdbSettings === 'function') {
+    const read = rich.readTmdbSettings;
+    return { baseUrl: rich.baseUrl || '', readTmdbSettings: () => read.call(c) };
+  }
+  return {
+    baseUrl: rich.baseUrl || '',
+    readTmdbSettings: () =>
+      c.tmdbSettings().then(
+        (config) => ({ status: 'ok' as const, config: config || {} }),
+        () => ({ status: 'unreachable' as const }),
+      ),
+  };
+}
+
+/** The key this poster lookup will use: this server, else the phone's TorrServer, else the built-in key. */
+function posterConfig(c: PosterClient, preset: TmdbConfig | null | undefined): Promise<TmdbConfig | null> {
+  if (preset !== undefined) return Promise.resolve(preset);
+  return resolveTmdbKey({ active: sourceOf(c), fallbackKey: TMDB_FALLBACK_KEY }).then((r) => (r.status === 'ok' ? r.config : null));
+}
+
 /**
- * Finds a poster on TMDB with the server's key and stores it on the torrent, like the TorrServer web page.
+ * Finds a poster on TMDB and stores it on the torrent, like the TorrServer web page.
+ * The key is the server's, else the phone's running TorrServer, else OMP's built-in key.
  * `hint` is a known title (search result, magnet `dn`); without it the title is awaited from the server.
  * Resolves to the poster URL, or '' when nothing was set (no key, already has a poster, nothing found).
  */
@@ -36,7 +64,7 @@ export function attachPoster(c: PosterClient, hash: string, hint: string, deps: 
   const fetchJson = deps.fetchJson || fetchTmdb;
   const wait = deps.wait || sleep;
   const tries = deps.tries === undefined ? 15 : deps.tries;
-  const settings = deps.cfg !== undefined ? Promise.resolve(deps.cfg) : c.tmdbSettings();
+  const settings = posterConfig(c, deps.cfg);
   return settings
     .then((cfg) => {
       if (!cfg || !cfg.APIKey) return '';
@@ -50,7 +78,8 @@ export function attachPoster(c: PosterClient, hash: string, hint: string, deps: 
       return named(tries).then((name) => {
         const q = posterQuery(name);
         if (!q) return '';
-        return fetchJson(tmdbSearchUrl(cfg, q)).then((r) => {
+        const req = tmdbSearchRequest(cfg, q);
+        return fetchJson(req.url, req.headers).then((r) => {
           const poster = firstPoster(cfg, r && (r as { results?: unknown }).results);
           if (!poster) return '';
           // re-read: the title may have arrived and the user may have set a poster meanwhile
@@ -82,7 +111,7 @@ export function fillPosters(
   list: Torrent[],
   opts: { skip?: (hash: string) => boolean; onEach?: (hash: string, poster: string, done: number, total: number) => void } & PosterDeps = {},
 ): Promise<FillResult> {
-  return c.tmdbSettings().then(
+  return posterConfig(c, opts.cfg).then(
     (cfg) => {
       if (!cfg || !cfg.APIKey) return { tried: 0, found: 0, hasKey: false };
       const todo = list.filter((t) => !t.poster && (t.title || t.name) && !(opts.skip && opts.skip(t.hash)));

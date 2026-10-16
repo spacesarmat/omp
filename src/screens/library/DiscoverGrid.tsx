@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { setFocus, doesFocusableExist, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { t, lang, type Key } from '../../i18n';
 import { activeCatalog } from '../../catalog/activeCatalog';
-import { catalogErrorCode, type CatalogErrorCode } from '../../catalog/client';
+import { catalogErrorCode, catalogErrorKey, type CatalogErrorCode } from '../../catalog/client';
 import { libraryIndex, inLibrary } from '../../catalog/library';
 import type { CatalogTitle } from '../../catalog/tmdb';
 import {
@@ -123,6 +123,8 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   const [search, setSearch] = useState<DiscoverSearch | null>(kept ? kept.search : null);
   const [searchError, setSearchError] = useState<CatalogErrorCode | null>(null);
   const restored = useRef(!!(kept && kept.feed));
+  // the first load of a visit and «Повторить» read the TMDB key again
+  const settingsFresh = useRef(true);
   // the current request: answers of an older one (another kind, a retry) are dropped
   const gen = useRef(0);
   const searchGen = useRef(0);
@@ -151,6 +153,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   useEffect(() => {
     if (restored.current) {
       restored.current = false;
+      settingsFresh.current = false;
       return;
     }
     const my = ++gen.current;
@@ -158,7 +161,9 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     setError(null);
     setMoreFailed(false);
     moreBusy.current = false;
-    activeCatalog()
+    const reread = settingsFresh.current;
+    settingsFresh.current = false;
+    activeCatalog(reread)
       .then((c) => c.discover(feedKind, query, 1))
       .then(
         (r) => {
@@ -215,11 +220,11 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     setQuery(q);
   };
 
-  const runSearch = (q: string) => {
+  const runSearch = (q: string, reread?: boolean) => {
     const my = ++searchGen.current;
     setSearchError(null);
     setSearch({ q: q, items: null });
-    activeCatalog()
+    activeCatalog(!!reread)
       .then((c) => c.search(q, 1))
       .then(
         (r) => {
@@ -348,8 +353,11 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   };
 
   const retry = () => {
-    if (search) runSearch(search.q);
-    else setReload((n) => n + 1);
+    if (search) runSearch(search.q, true);
+    else {
+      settingsFresh.current = true;
+      setReload((n) => n + 1);
+    }
   };
 
   const shown = isWant ? wantTitles() : search ? search.items : feed ? feed.items : null;
@@ -429,7 +437,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
       {shownError ? (
         <div class="disc-error">
           <div class="catalog-off-title">{t('discover.offlineTitle')}</div>
-          <div class="disc-error-text">{t(shownError === 'nokey' ? 'tv.discover.nokeyText' : 'tv.discover.offlineText')}</div>
+          <div class="disc-error-text">{t(catalogErrorKey(shownError, 'tv'))}</div>
           <FocusGroup focusKey="DISC-ERROR" className="actions">
             <Button focusKey="disc-retry" label={t('common.retry')} onPress={retry} onFocused={leaveTile} />
           </FocusGroup>

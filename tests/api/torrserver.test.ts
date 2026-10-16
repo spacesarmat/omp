@@ -125,6 +125,33 @@ describe('TorrServerClient', () => {
     expect(await c.probe(HASH, 1)).toBeNull();
   });
 
+  it('reads TMDB settings from GET /tmdb/settings', async () => {
+    const fn = mockFetch(() => ({
+      body: JSON.stringify({ APIKey: 'k', APIURL: 'https://api.themoviedb.org', ImageURL: 'https://image.tmdb.org', ImageURLRu: 'https://imagetmdb.com' }),
+    }));
+    expect(await c.readTmdbSettings()).toEqual({
+      status: 'ok',
+      config: { APIKey: 'k', APIURL: 'https://api.themoviedb.org', ImageURL: 'https://image.tmdb.org', ImageURLRu: 'https://imagetmdb.com' },
+    });
+    expect(fn.mock.calls[0][0]).toBe('http://192.168.1.191:5665/tmdb/settings');
+    expect(fn.mock.calls[0][1].method).toBe('GET');
+  });
+
+  it('an empty or missing TMDB route is no key, not an unreachable server', async () => {
+    mockFetch(() => ({ status: 404, body: 'missing' }));
+    expect(await c.tmdbSettings()).toBeNull();
+    expect(await c.readTmdbSettings()).toEqual({ status: 'ok', config: {} });
+  });
+
+  it('a server that does not answer is unreachable, and a 500 is too', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('net'))));
+    await expect(c.tmdbSettings()).rejects.toMatchObject({ kind: 'network' });
+    expect(await c.readTmdbSettings()).toEqual({ status: 'unreachable' });
+    mockFetch(() => ({ status: 500, body: '' }));
+    await expect(c.tmdbSettings()).rejects.toMatchObject({ kind: 'http', status: 500 });
+    expect(await c.readTmdbSettings()).toEqual({ status: 'unreachable' });
+  });
+
   it('fetchBytes returns ArrayBuffer', async () => {
     mockFetch(() => ({ body: 'abc' }));
     const b = await c.fetchBytes('http://192.168.1.191:5665/stream/s.srt?link=x&index=1&play');

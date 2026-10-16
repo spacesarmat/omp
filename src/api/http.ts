@@ -42,6 +42,8 @@ export interface HttpOptions {
   responseType?: 'json' | 'text' | 'arraybuffer';
   /** The caller expects this to fail sometimes (optional endpoints, offline checks): keep it out of the log. */
   quiet?: boolean;
+  /** Extra request headers. Basic auth, when set, replaces an Authorization header from here. */
+  headers?: { [k: string]: string };
 }
 
 /** Failed request -> log: kind, status and site kind only (scrub drops everything after the host). */
@@ -55,6 +57,10 @@ function logFailure(url: string, e: unknown): void {
 export function request<T>(url: string, opts: HttpOptions = {}): Promise<T> {
   const headers: { [k: string]: string } = {};
   const hasBody = opts.body !== undefined;
+  if (opts.headers) {
+    const names = Object.keys(opts.headers);
+    for (let i = 0; i < names.length; i++) headers[names[i]] = opts.headers[names[i]];
+  }
   if (hasBody) headers['Content-Type'] = 'application/json';
   if (opts.auth) headers['Authorization'] = 'Basic ' + opts.auth;
   const type = opts.responseType || 'json';

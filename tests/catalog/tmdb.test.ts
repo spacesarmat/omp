@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 // @ts-ignore node builtins
 import { readFileSync } from 'node:fs';
 import { endpointOf, noveltiesUrl, homeListUrl, homeSectionIds, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson, personBioUrl } from '../../src/catalog/tmdb';
+import { isTmdbV4Token } from '../../src/catalog/tmdbToken';
 import { applyLanguageSetting } from '../../src/i18n';
 import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
 
@@ -40,6 +41,14 @@ describe('endpoint', () => {
     expect(E).toEqual({ base: 'https://api.tmdb.mirror.test/3/', key: 'k1', images: 'https://img.mirror.test' });
     expect(endpointOf(null, 'fb')).toEqual({ base: 'https://api.themoviedb.org/3/', key: 'fb', images: 'https://imagetmdb.com' });
     expect(endpointOf({ APIKey: '' }, '')).toBeNull();
+    const token = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig';
+    expect(isTmdbV4Token(token)).toBe(true);
+    expect(isTmdbV4Token('0123456789abcdef0123456789abcdef')).toBe(false);
+    expect(isTmdbV4Token('eyJ.not-a-jwt')).toBe(false);
+    const v4 = endpointOf({ APIKey: token, APIURL: 'https://mirror.test' }, '');
+    expect(v4).toEqual({ base: 'https://mirror.test/3/', key: token, images: 'https://imagetmdb.com', bearer: true });
+    expect(searchUrl(v4!, 'дюна', 1)).not.toContain('api_key');
+    expect(searchUrl(v4!, 'дюна', 1)).toContain('query=');
   });
 });
 

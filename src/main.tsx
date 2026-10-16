@@ -28,7 +28,7 @@ init({ debug: false, visualDebug: false });
 if (platformKind() === 'androidtv') installCleartextSync((hosts) => nativeSetCleartextHosts(hosts));
 
 installErrorHooks();
-setCatalogProvider(() => tvCatalog());
+setCatalogProvider((fresh) => tvCatalog(fresh));
 logStart(platformKind() === 'androidtv' ? 'Android TV' : 'LG webOS');
 
 function start(): void {

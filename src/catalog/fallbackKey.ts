@@ -1,3 +1,14 @@
-// OMP's built-in TMDB key, used when the active TorrServer has none. Empty in the repository: the real key is injected at
-// build time and is never committed.
-export const TMDB_FALLBACK_KEY = '';
+// OMP's built-in TMDB key, used when neither the active TorrServer nor the phone's own TorrServer has one.
+// Empty in the repository and in dev/PR builds. Release builds inject it from the GitHub Actions secret TMDB_API_KEY
+// (vite define __TMDB_FALLBACK_KEY__). The key is never committed.
+declare const __TMDB_FALLBACK_KEY__: string;
+
+function readBuiltinKey(): string {
+  try {
+    return typeof __TMDB_FALLBACK_KEY__ === 'string' ? __TMDB_FALLBACK_KEY__ : '';
+  } catch (e) {
+    return '';
+  }
+}
+
+export const TMDB_FALLBACK_KEY = readBuiltinKey();

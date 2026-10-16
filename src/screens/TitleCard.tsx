@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { t, tp, fmtDuration } from '../i18n';
 import { activeCatalog } from '../catalog/activeCatalog';
-import { catalogErrorCode, type CatalogErrorCode } from '../catalog/client';
+import { catalogErrorCode, catalogErrorKey, type CatalogErrorCode } from '../catalog/client';
 import { seasonIndex, librarySeasonHash } from '../catalog/library';
 import { libraryTargetOf, torrentTarget, type LibraryTarget } from '../catalog/libraryTarget';
 import { torrentQuery, type CatalogCard, type Kind } from '../catalog/tmdb';
@@ -186,12 +186,16 @@ export function TitleCardScreen(p: { kind: Kind; id: number } & TitleWantProps) 
   const [reload, setReload] = useState(0);
   // answers of an older request (a retry) are dropped
   const gen = useRef(0);
+  // «Повторить» reads the TMDB key again; the first open reuses the client «Обзор» just read
+  const reread = useRef(false);
 
   useEffect(() => {
     const my = ++gen.current;
     setCard(null);
     setError(null);
-    activeCatalog()
+    const fresh = reread.current;
+    reread.current = false;
+    activeCatalog(fresh)
       .then((c) => c.card(p.kind, p.id))
       .then(
         (c) => {
@@ -212,9 +216,9 @@ export function TitleCardScreen(p: { kind: Kind; id: number } & TitleWantProps) 
       {error ? (
         <div class="disc-error">
           <div class="catalog-off-title">{t('discover.offlineTitle')}</div>
-          <div class="disc-error-text">{t(error === 'nokey' ? 'tv.discover.nokeyText' : 'tv.discover.offlineText')}</div>
+          <div class="disc-error-text">{t(catalogErrorKey(error, 'tv'))}</div>
           <FocusGroup focusKey="TITLE-ERROR" className="actions">
-            <Button focusKey="title-retry" label={t('common.retry')} onPress={() => setReload((n) => n + 1)} />
+            <Button focusKey="title-retry" label={t('common.retry')} onPress={() => { reread.current = true; setReload((n) => n + 1); }} />
           </FocusGroup>
         </div>
       ) : !card ? (

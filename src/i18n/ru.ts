@@ -1207,6 +1207,8 @@ export const ru = {
       // the TV has no «Мои» tab: the phone texts point there
       offlineText: 'TMDB не отвечает из этой сети. Укажите зеркало TMDB в настройках TorrServer или попробуйте позже.',
       nokeyText: 'Нет ключа TMDB. Добавьте его в настройках TorrServer (TMDB → API key).',
+      badkeyText: 'TMDB отклонил ключ. Нужен ключ API v3, а не токен v4 (он начинается с eyJ). Замените его в настройках TorrServer (TMDB → API key).',
+      unreachableText: 'Сервер TorrServer не отвечает, поэтому ключ TMDB прочитать нельзя. Проверьте, что сервер включён и адрес верный.',
     },
     // «Новое»: findings from OMP on the phone (new episodes, better quality, subscriptions)
     news: {
@@ -1370,6 +1372,8 @@ export const ru = {
     offlineTitle: 'Каталог фильмов недоступен',
     offlineText: 'TMDB не отвечает из этой сети. Укажите зеркало TMDB в настройках TorrServer или попробуйте позже. Ваши раздачи — во вкладке «Мои».',
     nokeyText: 'Нет ключа TMDB. Добавьте его в настройках TorrServer (TMDB → API key). Ваши раздачи — во вкладке «Мои».',
+    badkeyText: 'TMDB отклонил ключ. Нужен ключ API v3, а не токен v4 (он начинается с eyJ). Замените его в настройках TorrServer (TMDB → API key). Ваши раздачи — во вкладке «Мои».',
+    unreachableText: 'Сервер TorrServer не отвечает, поэтому ключ TMDB прочитать нельзя. Проверьте, что сервер включён и адрес верный. Ваши раздачи — во вкладке «Мои».',
     howToKey: 'Как получить ключ',
     attribution: 'Данные: TMDB',
     searchLabel: 'Фильм или сериал',
@@ -2308,7 +2312,7 @@ export const ru = {
     needKey: 'Задайте ключ TMDB',
     reset: 'Сбросить к стандартным',
     tmdbTitle: 'Ключ TMDB',
-    tmdbText: 'По нему OMP и TorrServer находят обложки для новых раздач. Ключ бесплатный: themoviedb.org → Настройки → API.',
+    tmdbText: 'По нему OMP и TorrServer находят обложки для новых раздач. Ключ бесплатный: themoviedb.org → Настройки → API. Нужен ключ API v3: токен v4 начинается с eyJ и сюда не подходит.',
     apiKey: 'Ключ API',
     resetLabel: 'Сбросить настройки сервера',
     resetTitle: 'Сбросить настройки сервера?',

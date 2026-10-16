@@ -23,6 +23,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __TORRSERVER_VERSION__: JSON.stringify(torrserverVersion),
+    __TMDB_FALLBACK_KEY__: JSON.stringify(process.env.TMDB_API_KEY || ''),
   },
   plugins: [
     preact(),
