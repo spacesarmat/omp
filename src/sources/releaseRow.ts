@@ -58,9 +58,10 @@ export function resultKindLabel(r: KindInput): string {
   return kindLabel(releaseKind(r));
 }
 
-/** «Все / Фильмы / Сериалы»: the options of the kind filter. */
+/** «Все / Фильмы / Сериалы / Аудиокниги»: the options of the kind filter. */
 export const kindFilterOptions = (): { id: KindFilter; label: string }[] => [
   { id: 'all', label: t('search.kind.all') },
   { id: 'movie', label: t('search.kind.movies') },
   { id: 'series', label: t('search.kind.seriesMany') },
+  { id: 'audiobook', label: t('search.kind.audiobooks') },
 ];
