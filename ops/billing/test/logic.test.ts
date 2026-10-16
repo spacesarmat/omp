@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { botReply } from '../src/bot.mjs';
@@ -43,7 +44,7 @@ import {
   telegramForDevice,
   unlinkDeviceTelegram,
 } from '../src/logic.mjs';
-import { emptyState, readState, resolveDbPath, writeState } from '../src/store.mjs';
+import { emptyState, readState, resolveDbPath, updateState, writeState } from '../src/store.mjs';
 import { notificationHash, notificationOk } from '../src/yoomoney.mjs';
 
 const NOW = Date.parse('2026-10-14T12:00:00Z');
@@ -143,6 +144,39 @@ describe('Jackett proxy', () => {
     expect(restoreJackett('omp-fetch:http://evil.example/x', 'http://127.0.0.1:9117', 'SECRET')).toBe('');
     expect(restoreJackett('omp-fetch:/api/../admin', 'http://127.0.0.1:9117', 'SECRET')).toBe('');
     expect(restoreJackett('omp-fetch:/dl\\a', 'http://127.0.0.1:9117', 'SECRET')).toBe('');
+  });
+
+  it('restores a download and refuses a search through the torrent route', () => {
+    const search = 'omp-fetch:/api/v2.0/indexers/all/results/torznab/api?t=search&q=film';
+    expect(restoreJackett(search, 'http://127.0.0.1:9117', 'SECRET')).toBe('');
+    expect(restoreJackett('omp-fetch:/api/v2.0/indexers/all/results/torznab/download', 'http://127.0.0.1:9117', 'SECRET')).toBe('');
+    expect(restoreJackett('omp-fetch:/dl/%2e%2e/admin', 'http://127.0.0.1:9117', 'SECRET')).toBe('');
+    const download = restoreJackett(
+      'omp-fetch:/api/v2.0/indexers/rutor/results/torznab/download?id=1',
+      'http://127.0.0.1:9117',
+      'SECRET',
+    );
+    expect(download).toBe(
+      'http://127.0.0.1:9117/api/v2.0/indexers/rutor/results/torznab/download?id=1&apikey=SECRET',
+    );
+  });
+
+  it('restores a download when the indexer URL has a path prefix', () => {
+    const xml = '<enclosure url="https://host/jackett/dl/a?apikey=SECRET" />';
+    const clean = stripJackett(xml, 'https://host/jackett', 'SECRET');
+    expect(clean).toContain('omp-fetch:/dl/a?');
+    expect(clean).not.toContain('/jackett');
+    const back = restoreJackett('omp-fetch:/dl/a', 'https://host/jackett', 'SECRET');
+    expect(back).toBe('https://host/jackett/dl/a?apikey=SECRET');
+    const api = restoreJackett(
+      'omp-fetch:/api/v2.0/indexers/rutor/results/torznab/download?id=1',
+      'https://host/jackett',
+      'SECRET',
+    );
+    expect(api).toBe('https://host/jackett/api/v2.0/indexers/rutor/results/torznab/download?id=1&apikey=SECRET');
+    const search = 'omp-fetch:/api/v2.0/indexers/all/results/torznab/api?t=search&q=film';
+    expect(restoreJackett(search, 'https://host/jackett', 'SECRET')).toBe('');
+    expect(restoreJackett('omp-fetch:/%2e%2e/dl/a', 'https://host/jackett', 'SECRET')).toBe('');
   });
 });
 
@@ -411,6 +445,31 @@ describe('sqlite store', () => {
     writeState(db, { ...loaded, settings: { ...loaded.settings, priceRub: 199 } });
     expect(readState(db).settings.priceRub).toBe(199);
   });
+
+  it('leaves unreadable legacy json and a bad snapshot untouched', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'omp-bill-bad-'));
+    const jsonFile = join(dir, 'state.json');
+    writeFileSync(jsonFile, 'NOT JSON');
+    await expect(updateState(jsonFile, (cur) => ({ state: cur }))).rejects.toThrow(/unreadable/);
+    expect(readFileSync(jsonFile, 'utf8')).toBe('NOT JSON');
+    const dbPath = resolveDbPath(jsonFile);
+    const fresh = new DatabaseSync(dbPath);
+    expect(fresh.prepare('SELECT id FROM snapshot WHERE id = 1').get()).toBeUndefined();
+    fresh.close();
+    writeFileSync(jsonFile, JSON.stringify(paid().state));
+    expect(readState(jsonFile).accounts).toHaveLength(1);
+
+    const broken = join(mkdtempSync(join(tmpdir(), 'omp-bill-snap-')), 'state.json');
+    writeFileSync(broken, JSON.stringify(paid().state));
+    readState(broken);
+    const snap = new DatabaseSync(resolveDbPath(broken));
+    snap.prepare('UPDATE snapshot SET data = ? WHERE id = 1').run('{');
+    snap.close();
+    await expect(updateState(broken, (cur) => ({ state: { ...cur, accounts: [] } }))).rejects.toThrow(/unreadable/);
+    const still = new DatabaseSync(resolveDbPath(broken));
+    expect(still.prepare('SELECT data FROM snapshot WHERE id = 1').get().data).toBe('{');
+    still.close();
+  });
 });
 
 describe('telegram unlink', () => {
@@ -441,7 +500,13 @@ describe('billing files', () => {
     expect(readFileSync('ops/billing/docker-compose.yml', 'utf8')).toContain('/bin/sh');
     expect(readFileSync('ops/billing/casaos-docker-compose.yml', 'utf8')).toContain('/bin/sh');
     expect(readFileSync('ops/billing/.tunnel-bin/set-public-origin.mjs', 'utf8')).toContain("from '../src/store.mjs'");
-    expect(readFileSync('ops/billing/admin/vite.config.ts', 'utf8')).toContain('emptyOutDir: false');
+    const vite = readFileSync('ops/billing/admin/vite.config.ts', 'utf8');
+    expect(vite).toContain('emptyOutDir: false');
+    expect(vite).toContain("'/admin/support'");
+    expect(vite).toContain("'/admin/support-close'");
+    expect(vite).toContain("'/admin/services'");
+    const pkg = JSON.parse(readFileSync('ops/billing/package.json', 'utf8'));
+    expect(pkg.scripts.test).toBe('npm --prefix ../.. test -- ops/billing/test/logic.test.ts');
     expect(existsSync('ops/billing/admin/public/logo.svg')).toBe(true);
     expect(existsSync('ops/billing/admin/public/tunnel.svg')).toBe(true);
   });
@@ -507,6 +572,27 @@ describe('payment amount', () => {
     });
     expect(shaved.result.error).toBe('amount');
     expect(shaved.state.subscriptions[0].paidUntil).toBe(until);
+    expect(accountCard(paidQuote.state, start.account, NOW + 1000).payments.some((p) => p.label === quoted.result.label)).toBe(true);
+    expect(adminDashboard(paidQuote.state, NOW + 1000).events.some((e) => e.kind === 'pay' && e.accountId === start.account)).toBe(true);
+  });
+
+  it('keeps an unpaid quote after newer checkouts pass the cap', () => {
+    const start = paid();
+    start.state.settings.priceRub = 100;
+    const first = quotePurchase(start.state, { kind: 'sub', subscriptionId: start.sub, accountId: start.account, now: NOW });
+    let state = first.state;
+    for (let i = 0; i < 2000; i++) {
+      state = quotePurchase(state, { kind: 'sub', subscriptionId: start.sub, accountId: start.account, now: NOW + i }).state;
+    }
+    expect(state.purchases.some((p) => p.id === first.result.id)).toBe(true);
+    const late = applyPayment(state, {
+      operationId: 'op-late',
+      label: first.result.label,
+      amount: '100.00',
+      currency: '643',
+      now: NOW + 3000,
+    });
+    expect(late.result.kind).toBe('renew');
   });
 });
 

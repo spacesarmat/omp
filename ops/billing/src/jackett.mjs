@@ -61,8 +61,31 @@ export function restoreJackett(link, origin, apiKey, mark) {
     return '';
   }
   if (target.origin !== originUrl.origin) return '';
+  // Search and the indexer admin API stay on /v1/search. A caller-chosen path must be a download.
+  // jackettUrl may be https://host/jackett, so compare the path under that base, not the site root.
+  const relative = pathWithinBase(target.pathname, originUrl.pathname);
+  if (!relative || !isDownloadPath(relative)) return '';
   const key = encodeURIComponent(apiKey || '');
   return target.href + (target.search ? '&' : '?') + 'apikey=' + key;
+}
+
+/** `targetPath` with the configured base directory removed, or '' if it leaves that directory. */
+function pathWithinBase(targetPath, basePath) {
+  const base = String(basePath || '/').replace(/\/+$/, '');
+  const full = String(targetPath || '/');
+  if (!base) return full;
+  if (full === base) return '/';
+  if (full.indexOf(base + '/') !== 0) return '';
+  return full.slice(base.length);
+}
+
+/** Jackett `/dl/…` and the per-indexer Torznab download route. `all` is the search API. */
+function isDownloadPath(pathname) {
+  const path = String(pathname || '').replace(/\/+$/, '') || '/';
+  if (path.indexOf('%') >= 0 || path.indexOf('\\') >= 0 || path.indexOf('..') >= 0) return false;
+  if (path === '/dl' || path.indexOf('/dl/') === 0) return /^\/dl(?:\/[A-Za-z0-9._~-]+)*$/.test(path);
+  const download = /^\/api\/v2\.0\/indexers\/([A-Za-z0-9._~-]+)\/results\/torznab\/download$/.exec(path);
+  return !!(download && download[1] !== 'all');
 }
 
 export function jackettSearchUrl(origin, apiKey, query) {

@@ -129,8 +129,8 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
         return null;
       }
       if (res.status === 404) return null;
+      if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
       const body = parseBody<MeBody>(res.text);
-      if (res.status < 200 || res.status >= 300) return null;
       const paidUntil = body.paidUntil || 0;
       // Admin/bot may extend paidUntil; keep local session date in sync with the server.
       if (session && typeof paidUntil === 'number' && paidUntil !== session.paidUntil) {
@@ -153,7 +153,9 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
           : { jackett: !!body.active, jacred: !!body.active },
       };
     },
-    () => null,
+    () => {
+      throw new Error(t('sources.billing.down'));
+    },
   );
 }
 
@@ -253,11 +255,16 @@ export function startOmpJackett(): void {
 
 /** Refresh enabled sources from /v1/me (call when the Sources screen opens). */
 export function refreshOmpJackettSources(ctx: SourceContext): Promise<void> {
-  return fetchBillingAccount(ctx).then((acc) => {
-    if (!acc || !acc.active) {
-      syncOmpJackett({ jackett: false, jacred: false });
-      return;
-    }
-    syncOmpJackett(acc.sources || { jackett: true, jacred: true });
-  });
+  return fetchBillingAccount(ctx).then(
+    (acc) => {
+      if (!acc || !acc.active) {
+        syncOmpJackett({ jackett: false, jacred: false });
+        return;
+      }
+      syncOmpJackett(acc.sources || { jackett: true, jacred: true });
+    },
+    () => {
+      // A timeout or 5xx is not a confirmed inactive account. Keep the last flags.
+    },
+  );
 }

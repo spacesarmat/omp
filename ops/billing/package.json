@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node src/server.mjs",
     "build:admin": "npm --prefix admin ci && npm --prefix admin run build",
-    "test": "node --import tsx --test test/logic.test.ts"
+    "test": "npm --prefix ../.. test -- ops/billing/test/logic.test.ts"
   },
   "dependencies": {
     "nodemailer": "^7.0.6"
