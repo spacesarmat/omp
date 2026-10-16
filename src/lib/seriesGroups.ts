@@ -52,7 +52,7 @@ export function hasEpisodes(tor: Torrent): boolean {
  */
 export function isSeries(tor: Torrent): boolean {
   if (tor.category === 'tv') return true;
-  if (tor.category === 'music') return false;
+  if (tor.category === 'music' || tor.category === 'audiobook') return false;
   if (tor.category === 'movie') return hasEpisodes(tor);
   const files = filesOf(tor);
   // the files decide once known: episodes, or one main video (a film named «Сезон охоты 2»)

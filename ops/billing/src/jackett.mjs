@@ -105,14 +105,35 @@ function isDownloadPath(pathname) {
   return !!(download && download[1] !== 'all');
 }
 
-export function jackettSearchUrl(origin, apiKey, query) {
+/**
+ * Torznab `cat` (audiobook search sends 3030). Only 4-digit ids, so a caller cannot
+ * add extra query parameters. Empty when the phone did not ask for a category.
+ */
+export function safeTorznabCat(cat) {
+  const raw = String(cat || '').trim();
+  if (!raw) return '';
+  if (!/^\d{4}(?:\s*,\s*\d{4})*$/.test(raw)) return '';
+  return raw
+    .split(',')
+    .map((part) => part.trim())
+    .join(',');
+}
+
+function appendCat(url, cat) {
+  const c = safeTorznabCat(cat);
+  if (!c) return url;
+  return url + '&cat=' + encodeURIComponent(c);
+}
+
+export function jackettSearchUrl(origin, apiKey, query, cat) {
   const base = String(origin || '').replace(/\/+$/, '');
-  return (
+  return appendCat(
     base +
-    '/api/v2.0/indexers/all/results/torznab/api?apikey=' +
-    encodeURIComponent(apiKey || '') +
-    '&t=search&q=' +
-    encodeURIComponent(query || '')
+      '/api/v2.0/indexers/all/results/torznab/api?apikey=' +
+      encodeURIComponent(apiKey || '') +
+      '&t=search&q=' +
+      encodeURIComponent(query || ''),
+    cat,
   );
 }
 
@@ -211,15 +232,16 @@ export function jackettTorznabIndexersUrl(origin, apiKey) {
 }
 
 /** One tracker's Torznab search. `all` is the aggregate that waits on the slowest indexer. */
-export function jackettIndexerSearchUrl(origin, apiKey, indexerId, query) {
-  return (
+export function jackettIndexerSearchUrl(origin, apiKey, indexerId, query, cat) {
+  return appendCat(
     indexerOrigin(origin) +
-    '/api/v2.0/indexers/' +
-    encodeURIComponent(indexerId) +
-    '/results/torznab/api?apikey=' +
-    encodeURIComponent(apiKey || '') +
-    '&t=search&q=' +
-    encodeURIComponent(query || '')
+      '/api/v2.0/indexers/' +
+      encodeURIComponent(indexerId) +
+      '/results/torznab/api?apikey=' +
+      encodeURIComponent(apiKey || '') +
+      '&t=search&q=' +
+      encodeURIComponent(query || ''),
+    cat,
   );
 }
 
@@ -416,6 +438,7 @@ export async function searchJackett(opts) {
   const origin = indexerOrigin(o.origin);
   const apiKey = String(o.apiKey || '');
   const query = String(o.query || '');
+  const cat = o.cat;
   const headers = o.headers || {};
   const fetchImpl = o.fetchImpl || fetch;
   const cache = o.listCache || jackettListCache();
@@ -480,7 +503,7 @@ export async function searchJackett(opts) {
       if (!safeIndexerId(id)) return { id, timedOut: false, feed: '' };
       const timeoutMs = Math.min(limits.indexerTimeoutMs, timeLeft(deadlineAt));
       if (!timeoutMs) return { id, timedOut: true, feed: '' };
-      const res = await fetchText(jackettIndexerSearchUrl(origin, apiKey, id, query), {
+      const res = await fetchText(jackettIndexerSearchUrl(origin, apiKey, id, query, cat), {
         headers,
         timeoutMs,
         fetchImpl,
@@ -503,8 +526,9 @@ export async function searchJackett(opts) {
 }
 
 /**
- * Aggregate JacRed Torznab search (`t=search&q=`). No category, year, or limit: JacRed
- * applies those only when the query sends them, and a missing `limit` is the whole list.
+ * Aggregate JacRed Torznab search (`t=search&q=`). No year or limit: JacRed applies those
+ * only when the query sends them, and a missing `limit` is the whole list. `cat` is forwarded
+ * when the phone sends one (audiobook search uses 3030) and omitted otherwise.
  * A thin Latin answer is fetched once more with `jacredBroaderQuery` and the feeds are merged.
  * A failed or slow second call keeps the first feed.
  * @returns {Promise<{ ok: boolean, xml: string }>}
@@ -514,6 +538,7 @@ export async function searchJacRed(opts) {
   const origin = indexerOrigin(o.origin);
   const apiKey = String(o.apiKey || '');
   const query = String(o.query || '');
+  const cat = o.cat;
   const headers = o.headers || {};
   const fetchImpl = o.fetchImpl || fetch;
   const deadlineMs = positiveInt(o.deadlineMs, JACRED_SEARCH_DEADLINE_MS);
@@ -522,7 +547,7 @@ export async function searchJacRed(opts) {
   const started = Date.now();
   const firstTimeout = Math.min(8000, deadlineMs);
   if (firstTimeout < MIN_REQUEST_MS) return { ok: false, xml: '' };
-  const first = await fetchText(jackettSearchUrl(origin, apiKey, query), {
+  const first = await fetchText(jackettSearchUrl(origin, apiKey, query, cat), {
     headers,
     timeoutMs: firstTimeout,
     fetchImpl,
@@ -534,7 +559,7 @@ export async function searchJacRed(opts) {
   if (!broader || itemCount(first.text) >= JACRED_BROADEN_BELOW || left < MIN_REQUEST_MS) {
     return { ok: true, xml: first.text };
   }
-  const second = await fetchText(jackettSearchUrl(origin, apiKey, broader), {
+  const second = await fetchText(jackettSearchUrl(origin, apiKey, broader, cat), {
     headers,
     timeoutMs: left,
     fetchImpl,

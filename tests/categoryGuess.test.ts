@@ -13,6 +13,8 @@ describe('guessCategory', () => {
     ['Артист - Дискография', 'music'],
     ['Movie OST mp3 320 kbps', 'music'],
     ['Альбом 2020 ALAC', 'music'],
+    ['Булгаков Михаил - Мастер и Маргарита (читает Владимир Самойлов) [2020, аудиокнига, MP3]', 'audiobook'],
+    ['Сапковский Анджей - Ведьмак [2022, M4B, 64 kbps]', 'audiobook'],
     ['Some Movie 2020 1080p', 'movie'],
     ['', ''],
   ])('%s -> %s', (t, c) => expect(guessCategory(t)).toBe(c));

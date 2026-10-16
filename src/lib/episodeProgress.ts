@@ -46,7 +46,7 @@ export interface EpisodeCopy {
 
 function isSeriesTorrent(t: Torrent): boolean {
   if (t.category === 'tv') return true;
-  if (t.category === 'movie' || t.category === 'music') return false;
+  if (t.category === 'movie' || t.category === 'music' || t.category === 'audiobook') return false;
   return guessCategory(displayTitle(t)) === 'tv';
 }
 

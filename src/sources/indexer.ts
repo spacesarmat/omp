@@ -6,6 +6,7 @@
 import { t } from '../i18n';
 import { stashFile } from '../api/torrentFiles';
 import { formatBytes } from '../lib/format';
+import { looseAudiobookTitle } from '../lib/releaseKind';
 import { infohashFromMagnet } from './html';
 import { hostKey, indexerConnections, indexerKeyName, INDEXER_SOURCE_PREFIX, onIndexersChange, setTorznabHosts, torznabHosts } from './indexerStore';
 import type { IndexerConn } from './indexerStore';
@@ -258,12 +259,134 @@ export function indexerSourceId(conn: Pick<IndexerConn, 'id'>): string {
   return INDEXER_ID_PREFIX + conn.id;
 }
 
-function request(conn: IndexerConn, key: string, query: string, ctx: SourceContext) {
+/**
+ * Audiobook search. On our Jackett, `cat=3030` is reliable only for RuTracker.RU and BigFANGroup.
+ * NNM-Club is partial (most audiobooks are tagged 7000). RuTor (8000) and MegaPeer (8010) return
+ * nothing for `cat=3030`. So an audiobook search runs both requests and merges them:
+ * (a) `cat=3030` (Prowlarr: `categories=3030`);
+ * (b) no category, keeping 3030/30xx, or 7000/80xx when the title looks like an audiobook.
+ * Rows in 1000/2000/4000/5000 (console, movies, PC, TV) are dropped. Duplicates match on infohash,
+ * or on the title when the hash is missing.
+ */
+export const AUDIOBOOK_CAT = '3030';
+
+interface AudiobookHit {
+  Title: string;
+  Categories?: string;
+  hash?: string;
+  Hash?: string;
+}
+
+function torznabIds(categories: string): number[] {
+  const raw = (categories || '').match(/\d+/g);
+  if (!raw) return [];
+  const out: number[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const n = parseInt(raw[i], 10);
+    if (n >= 1000 && n <= 8999 && out.indexOf(n) < 0) out.push(n);
+  }
+  return out;
+}
+
+function rejectedAudiobookId(n: number): boolean {
+  const bucket = Math.floor(n / 1000) * 1000;
+  return bucket === 1000 || bucket === 2000 || bucket === 4000 || bucket === 5000;
+}
+
+/**
+ * A row from the audiobook search. `open` is the uncategorized request: it keeps 30xx (including 3030)
+ * and a category named audiobook, or 7000/80xx plus a title hint. The cat=3030 request keeps every row
+ * that is not console, a movie, PC or TV.
+ */
+export function keepAudiobookRow(r: AudiobookHit, open: boolean): boolean {
+  const ids = torznabIds(r.Categories || '');
+  for (let i = 0; i < ids.length; i++) if (rejectedAudiobookId(ids[i])) return false;
+  if (!open) return true;
+  if (/аудиокниг|audiobook/i.test(r.Categories || '')) return true;
+  let audio = false;
+  let loose = false;
+  for (let i = 0; i < ids.length; i++) {
+    const n = ids[i];
+    if (n >= 3000 && n <= 3099) audio = true;
+    if (n === 7000 || (n >= 8000 && n <= 8099)) loose = true;
+  }
+  if (audio) return true;
+  if (loose && looseAudiobookTitle(r.Title)) return true;
+  return false;
+}
+
+function audiobookHash(r: AudiobookHit): string {
+  const h = String(r.hash || r.Hash || '').toLowerCase();
+  return /^[0-9a-f]{40}$/.test(h) ? h : '';
+}
+
+/** Dedupe key: lower case, collapsed spaces, yo folded to e. */
+function audiobookTitleKey(title: string): string {
+  return (title || '').replace(/\u0451/g, '\u0435').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/** cat=3030 rows first, then new rows from the open search. Same infohash or same title counts once. */
+export function mergeAudiobookHits<T extends AudiobookHit>(primary: T[], extra: T[]): T[] {
+  const out: T[] = [];
+  const hashes: { [k: string]: boolean } = {};
+  const titles: { [k: string]: boolean } = {};
+  const take = (r: T) => {
+    const hash = audiobookHash(r);
+    const title = audiobookTitleKey(r.Title);
+    if (hash && hashes[hash]) return;
+    if (title && titles[title]) return;
+    if (hash) hashes[hash] = true;
+    if (title) titles[title] = true;
+    out.push(r);
+  };
+  primary.forEach(take);
+  extra.forEach(take);
+  return out;
+}
+
+/**
+ * Both audiobook requests. A bad API key fails the search. One failed request keeps the other's rows.
+ * Both failing raises the cat=3030 error.
+ */
+export function audiobookSearch<T extends AudiobookHit>(
+  load: (cat?: string) => Promise<T[]>,
+  isFatal?: (err: unknown) => boolean,
+): Promise<T[]> {
+  let catError: unknown;
+  let openError: unknown;
+  const catRun = load(AUDIOBOOK_CAT).then(
+    (list) => list,
+    (err) => {
+      catError = err;
+      return [] as T[];
+    },
+  );
+  const openRun = load().then(
+    (list) => list,
+    (err) => {
+      openError = err;
+      return [] as T[];
+    },
+  );
+  return Promise.all([catRun, openRun]).then((pair) => {
+    const fatal = isFatal || (() => false);
+    if (catError && fatal(catError)) throw catError;
+    if (openError && fatal(openError)) throw openError;
+    if (catError && openError) throw catError;
+    const categorized = catError ? [] : pair[0].filter((r) => keepAudiobookRow(r, false));
+    const open = openError ? [] : pair[1].filter((r) => keepAudiobookRow(r, true));
+    return mergeAudiobookHits(categorized, open);
+  });
+}
+
+function request(conn: IndexerConn, key: string, query: string, ctx: SourceContext, cat?: string) {
   const q = encodeURIComponent(query);
+  const catJackett = cat ? '&cat=' + encodeURIComponent(cat) : '';
+  const catProwlarr = cat ? '&categories=' + encodeURIComponent(cat) : '';
   const url =
     conn.kind === 'jackett'
-      ? conn.url + '/api/v2.0/indexers/all/results/torznab/api?apikey=' + encodeURIComponent(key) + '&t=search&q=' + q
-      : conn.url + '/api/v1/search?query=' + q + '&type=search';
+      ? conn.url + '/api/v2.0/indexers/all/results/torznab/api?apikey=' + encodeURIComponent(key) + '&t=search&q=' + q + catJackett
+      : conn.url + '/api/v1/search?query=' + q + catProwlarr + '&type=search';
   const opts = conn.kind === 'prowlarr' ? { headers: { 'X-Api-Key': key }, timeoutMs: INDEXER_TIMEOUT_MS } : { timeoutMs: INDEXER_TIMEOUT_MS };
   return ctx.http.get(url, opts).then(
     (res) => res,
@@ -328,12 +451,15 @@ export function indexerSource(conn: IndexerConn): Source {
       return ctx.secrets.get(indexerKeyName(conn.id)).then(
         (key) => {
           if (!key) throw new Error(indexerNeedKey());
-          return request(conn, key, query, ctx).then((res) => {
-            if (res.status === 401 || res.status === 403) throw new Error(indexerBadKey());
-            if (res.status < 200 || res.status >= 300) throw new Error(indexerError(res.status));
-            if (res.text.length > INDEXER_MAX_CHARS) throw new Error(indexerBadAnswer());
-            return conn.kind === 'jackett' ? parseTorznab(res.text, id, 'jackett') : parseProwlarr(res.text, id);
-          });
+          const load = (cat?: string) =>
+            request(conn, key, query, ctx, cat).then((res) => {
+              if (res.status === 401 || res.status === 403) throw new Error(indexerBadKey());
+              if (res.status < 200 || res.status >= 300) throw new Error(indexerError(res.status));
+              if (res.text.length > INDEXER_MAX_CHARS) throw new Error(indexerBadAnswer());
+              return conn.kind === 'jackett' ? parseTorznab(res.text, id, 'jackett') : parseProwlarr(res.text, id);
+            });
+          if (ctx.searchMode === 'audiobook') return audiobookSearch(load, (err) => err instanceof Error && err.message === indexerBadKey());
+          return load();
         },
         () => {
           throw new Error(indexerBadKey());

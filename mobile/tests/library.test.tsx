@@ -822,7 +822,7 @@ describe('Library in English', () => {
   it('header, tabs, cards and the episode count', async () => {
     mount();
     await flush();
-    expect(Array.from(el.querySelectorAll('.m-tabs [role=tab]')).map((b) => b.textContent)).toEqual(['History', 'All', 'Movies', 'Series', 'Music', 'Other']);
+    expect(Array.from(el.querySelectorAll('.m-tabs [role=tab]')).map((b) => b.textContent)).toEqual(['History', 'All', 'Movies', 'Series', 'Music', 'Audiobooks', 'Other']);
     expect(el.querySelector('[aria-label^="Sort: "]')).toBeTruthy();
     expect(el.querySelector('[aria-label^="View: "]')).toBeTruthy();
     expect(el.querySelector('[aria-label="Search"]')).toBeTruthy();

@@ -200,6 +200,7 @@ export const en: EnDict<typeof ru> = {
     movie: 'Movies',
     tv: 'Series',
     music: 'Music',
+    audiobook: 'Audiobooks',
     other: 'Other',
   },
   history: {
@@ -1696,6 +1697,7 @@ export const en: EnDict<typeof ru> = {
     kind: {
       movie: 'Movie',
       series: 'Series',
+      audiobook: 'Audiobook',
       episodes: '{from}–{to}',
       episodesOf: '{from}–{to} of {total}',
       episode: 'ep. {n}',
