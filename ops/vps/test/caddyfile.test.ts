@@ -29,4 +29,11 @@ describe('Caddyfile security headers', () => {
     expect(text.match(/import security_headers/g)).toHaveLength(8);
     expect(text.match(/handle_errors \{/g)).toHaveLength(4);
   });
+
+  it('pins TLS 1.2+ on every site and does not name a certificate', () => {
+    const tls = text.slice(text.indexOf('(tls_protocols)'), text.indexOf('(security_headers)'));
+    const block = tls.slice(tls.indexOf('tls {'), tls.indexOf('}') + 1);
+    expect(block.replace(/\s+/g, ' ').trim()).toBe('tls { protocols tls1.2 tls1.3 }');
+    expect(text.match(/import tls_protocols/g)).toHaveLength(4);
+  });
 });
