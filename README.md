@@ -6,7 +6,7 @@ English: [README.en.md](README.en.md)
 
 <p align="center">Медиаплеер для телевизоров LG (webOS 4.0+), Android TV и телефонов Android. Смотрит фильмы и сериалы из <a href="https://github.com/YouROK/TorrServer">TorrServer</a> в домашней сети.</p>
 
-<p align="center"><a href="https://github.com/spacesarmat/omp/releases/latest">Скачать</a> · <a href="#установка">Установка</a> · <a href="https://t.me/ompplyaer">Telegram</a> · <a href="https://github.com/spacesarmat/omp/issues">Задачи</a> · <a href="https://boosty.to/djmaker/donate">Поддержать</a></p>
+<p align="center"><a href="https://omp-player.online">Сайт</a> · <a href="https://github.com/spacesarmat/omp/releases/latest">Скачать</a> · <a href="#установка">Установка</a> · <a href="https://t.me/ompplyaer">Telegram</a> · <a href="https://github.com/spacesarmat/omp/issues">Задачи</a> · <a href="https://boosty.to/djmaker/donate">Поддержать</a></p>
 
 ## Платформы
 
@@ -21,8 +21,8 @@ Samsung (Tizen) пока не поддерживается. Приставки X
 - Каталог TorrServer: категории, несколько видов, сериалы по сезонам, общая история и продолжение с места остановки.
 - Плеер. На LG — аппаратный декодер телевизора. На Android TV — встроенный 2160 Player (4K, HDR, Dolby Vision как HDR10 без аппаратного декодера; AC3, E-AC3, DTS и TrueHD на ресивер или с программным декодированием) или VLC; режим «Авто» переключает сам. На телефоне — тот же встроенный плеер.
 - Дорожки, субтитры, главы, пропуск заставки и титров.
-- Телефон как пульт: запуск на ТВ, пауза, перемотка, серии, дорожки и громкость. На Android TV с телефона можно управлять и самой приставкой.
-- Поиск раздач на телефоне и Android TV: rutor, nnmclub, rutracker, Kinozal, rustorka, Anidub, BigFANGroup, torrent.by, а также Jackett и Prowlarr. На LG поиск идёт через телефон или через TorrServer. «Обзор» показывает новинки из TMDB.
+- Телефон как пульт: запуск на ТВ, пауза, перемотка, серии, дорожки и громкость. На экране «Сейчас на ТВ» свайп вниз открывает пульт, вверх — серии раздачи. На Android TV с телефона можно управлять и самой приставкой. Если сертификат телевизора сменился, OMP спрашивает, доверять ли новому.
+- Поиск раздач на телефоне и Android TV: rutor, nnmclub, rutracker, Kinozal, rustorka, Anidub, BigFANGroup, torrent.by, свой Jackett или Prowlarr, а по подписке — Jackett и JacRed OMP (бот [@OMPBILLINGBOT](https://t.me/OMPBILLINGBOT); ключи остаются на сервере OMP). На LG поиск идёт через телефон или через TorrServer. «Обзор» показывает новинки из TMDB.
 - «Новое» на телефоне: лента, подписки и новые серии, проверка в фоне.
 - Плейлисты M3U/M3U8. Если плейлист — поток HLS, он открывается в плеере.
 - Проверка обновлений при запуске.
@@ -56,7 +56,7 @@ Android 8 и новее. Скачайте APK со [страницы выпус�
 
 Версия и подпись у трёх файлов одни. Обновление внутри приложения и помощник установки выбирают файл сами.
 
-Телефон подключается к телевизору так: на LG — QR в Настройки → «Подключить телефон», на Android TV — четырёхзначный код на том же экране.
+Телефон подключается к телевизору так: на LG — QR в Настройки → «Подключить телефон», на Android TV — код из 6 цифр на том же экране. Пока телевизор не выбран, «Каталог», «Пульт» и настройки показывают найденные в сети телевизоры: LG подключается нажатием, Android TV просит этот код.
 
 ### После установки
 
@@ -75,6 +75,7 @@ npm run build
 
 ## Ссылки
 
+- Сайт: https://omp-player.online
 - Telegram: https://t.me/ompplyaer
 - Задачи: https://github.com/spacesarmat/omp/issues
 - Поддержать: https://boosty.to/djmaker/donate

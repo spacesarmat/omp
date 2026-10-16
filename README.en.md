@@ -6,7 +6,7 @@
 
 <p align="center">A media player for LG TVs (webOS 4.0+), Android TV and Android phones. It plays movies and series from <a href="https://github.com/YouROK/TorrServer">TorrServer</a> on the home network.</p>
 
-<p align="center"><a href="https://github.com/spacesarmat/omp/releases/latest">Download</a> · <a href="README.md#установка">Install</a> · <a href="https://t.me/ompplyaer">Telegram</a> · <a href="https://github.com/spacesarmat/omp/issues">Issues</a> · <a href="https://boosty.to/djmaker/donate">Support</a></p>
+<p align="center"><a href="https://omp-player.online">Site</a> · <a href="https://github.com/spacesarmat/omp/releases/latest">Download</a> · <a href="README.md#установка">Install</a> · <a href="https://t.me/ompplyaer">Telegram</a> · <a href="https://github.com/spacesarmat/omp/issues">Issues</a> · <a href="https://boosty.to/djmaker/donate">Support</a></p>
 
 ## Platforms
 
@@ -21,8 +21,8 @@ Samsung (Tizen) is not supported yet. Xiaomi, Sber and Yandex boxes use the same
 - A TorrServer library: categories, several views, series by season, shared history and resume.
 - Playback. On LG, the TV’s hardware decoder. On Android TV, the built-in 2160 Player (4K, HDR, Dolby Vision as HDR10 when the box has no Dolby Vision decoder; AC3, E-AC3, DTS and TrueHD passed through or decoded in software) or VLC; Auto switches by itself. The phone uses the same built-in player.
 - Audio tracks, subtitles, chapters, intro and credits skip.
-- The phone is a remote: start on the TV, pause, seek, episodes, tracks and volume. On Android TV it can also drive the box.
-- Torrent search on the phone and Android TV: rutor, nnmclub, rutracker, Kinozal, rustorka, Anidub, BigFANGroup, torrent.by, plus Jackett and Prowlarr. On LG, search goes through the phone or through TorrServer. Discover lists new titles from TMDB.
+- The phone is a remote: start on the TV, pause, seek, episodes, tracks and volume. On “Now on TV”, swipe down for the remote and up for the episodes of the torrent. On Android TV the phone can also drive the box. If the TV certificate changes, OMP asks whether to trust the new one.
+- Torrent search on the phone and Android TV: rutor, nnmclub, rutracker, Kinozal, rustorka, Anidub, BigFANGroup, torrent.by, your own Jackett or Prowlarr, and, with a subscription, Jackett and JacRed OMP (the [@OMPBILLINGBOT](https://t.me/OMPBILLINGBOT) bot; the keys stay on the OMP server). On LG, search goes through the phone or through TorrServer. Discover lists new titles from TMDB.
 - News on the phone: a feed, subscriptions and new episodes, checked in the background.
 - M3U/M3U8 playlists. An HLS playlist opens in the player.
 - An update check on launch.
@@ -56,10 +56,11 @@ Android 8 or newer. Download an APK from the [release page](https://github.com/s
 
 The three files share one version and one signature. In-app updates and the install assistant pick the file themselves.
 
-The phone connects to the TV like this: on LG, a QR code under Settings → “Connect phone”; on Android TV, a 4-digit code on the same screen.
+The phone connects to the TV like this: on LG, a QR code under Settings → “Connect phone”; on Android TV, a 6-digit code on the same screen. Until a TV is chosen, Library, Remote and Settings list TVs found on the network: an LG connects on a tap, an Android TV asks for that code.
 
 ## Links
 
+- Site: https://omp-player.online
 - Telegram: https://t.me/ompplyaer
 - Issues: https://github.com/spacesarmat/omp/issues
 - Support: https://boosty.to/djmaker/donate
