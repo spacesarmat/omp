@@ -2,6 +2,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.2-beta.1
+
+- [phone] TMDB key: a v3 API key is accepted, and a stored v4 token can be cleared. Discover separates a rejected key from a server that does not answer
+- [tv] Discover reads the same TMDB v3 key and drops an empty key cache
+- [phone] Settings: account, viewing, search and the app stay on the main screen; technical options move under Advanced
+- [tv] Settings use the same groups: everyday choices first, the rest under Advanced
+
 ## 0.20.1
 
 - [phone] Discover: TMDB-style home (trending, popular, in theatres, upcoming, on TV, top rated); posters show again after you return to the tab
