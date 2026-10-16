@@ -59,3 +59,52 @@ describe('CI workflow', () => {
     expect(ci.slice(at)).toContain('ls -l android/app/build/outputs/apk/debug/*.apk');
   });
 });
+
+/** Job env is indented four spaces. Step env is indented further, so it is not included. */
+function jobEnvBlocks(yml: string): string[] {
+  const lines = yml.split('\n');
+  const blocks: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^ {4}env:\s*$/.test(lines[i])) continue;
+    let block = '';
+    for (let j = i + 1; j < lines.length; j++) {
+      if (lines[j].trim() === '') continue;
+      if (!/^ {6,}/.test(lines[j])) break;
+      block += lines[j] + '\n';
+    }
+    blocks.push(block);
+  }
+  return blocks;
+}
+
+describe('TMDB_API_KEY scope', () => {
+  it('is not on any workflow job env', () => {
+    const names = ['release.yml', 'ci.yml', 'torrserver-update.yml', 'parser-monitor.yml', 'vps-deploy.yml', 'billing-image.yml', 'telegram-fix.yml'];
+    names.forEach((name) => {
+      const text = readFileSync('.github/workflows/' + name, 'utf8');
+      jobEnvBlocks(text).forEach((block) => {
+        expect(block, name).not.toContain('TMDB_API_KEY');
+      });
+    });
+  });
+
+  it('release tests run without the key; only the bundle steps receive it', () => {
+    const testStep = yml.slice(yml.indexOf('run: npm test'), yml.indexOf('Require the TMDB API key'));
+    expect(testStep).not.toContain('TMDB_API_KEY');
+    const web = yml.slice(yml.indexOf('Build the web app'), yml.indexOf('node scripts/package.mjs'));
+    expect(web).toContain('TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}');
+    expect(web).toContain('npm run build');
+    const apk = yml.slice(yml.indexOf('Build signed Android APKs'), yml.indexOf('Homebrew Channel files'));
+    expect(apk).toContain('TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}');
+    expect(apk).toContain('npm run android:sync');
+    const gate = yml.slice(yml.indexOf('Require the TMDB API key'), yml.indexOf('Build the web app'));
+    expect(gate).toContain('TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}');
+  });
+
+  it('the TorrServer update check job does not receive the key', () => {
+    const upd = readFileSync('.github/workflows/torrserver-update.yml', 'utf8');
+    const check = upd.slice(0, upd.indexOf('uses: ./.github/workflows/release.yml'));
+    expect(check).not.toContain('TMDB_API_KEY');
+    expect(upd).toContain('TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}');
+  });
+});

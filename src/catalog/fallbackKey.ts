@@ -11,4 +11,10 @@ function readBuiltinKey(): string {
   }
 }
 
-export const TMDB_FALLBACK_KEY = readBuiltinKey();
+// A live binding: tests replace it after Vite has already baked __TMDB_FALLBACK_KEY__.
+export let TMDB_FALLBACK_KEY = readBuiltinKey();
+
+/** Tests drop a key that leaked in from TMDB_API_KEY so catalog calls stay offline. */
+export function setTmdbFallbackKeyForTests(key: string): void {
+  TMDB_FALLBACK_KEY = key;
+}

@@ -93,6 +93,8 @@ jobs:
     uses: ./.github/workflows/release.yml
     with:
       tag: ${{ needs.check.outputs.tag }}
+    # The check job above runs npm test with no TMDB key. This secret is only forwarded
+    # into release.yml, which sets it on the bundle steps and not on the job.
     secrets:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}

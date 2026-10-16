@@ -23,7 +23,8 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __TORRSERVER_VERSION__: JSON.stringify(torrserverVersion),
-    __TMDB_FALLBACK_KEY__: JSON.stringify(process.env.TMDB_API_KEY || ''),
+    // Vitest must not bake a leaked TMDB_API_KEY into the bundle. `vite build` still injects it.
+    __TMDB_FALLBACK_KEY__: JSON.stringify(process.env.VITEST ? '' : (process.env.TMDB_API_KEY || '')),
   },
   plugins: [
     preact(),
@@ -42,7 +43,7 @@ export default defineConfig({
     // one jsdom per worker instead of per file (each file still gets its own context): about twice as fast
     pool: 'vmThreads',
     // pins the Russian UI (and a Russian browser language) so the assertions stay in Russian
-    setupFiles: ['tests/setup/i18n.ts'],
+    setupFiles: ['tests/setup/tmdb.ts', 'tests/setup/i18n.ts'],
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx', 'mobile/tests/**/*.test.{ts,tsx}', 'ops/*/test/**/*.test.ts'],
     // Billing uses node:sqlite, which the jsdom bundle cannot load. ops/billing/vitest.config.ts runs those tests in Node.
     exclude: ['ops/billing/**'],
