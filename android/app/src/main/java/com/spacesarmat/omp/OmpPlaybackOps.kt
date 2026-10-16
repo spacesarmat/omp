@@ -10,6 +10,7 @@ import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
 import com.spacesarmat.omp.player.Embedded2160
 import com.spacesarmat.omp.player.NativePlayerBridge
+import com.spacesarmat.omp.player.PhonePlayback
 import com.spacesarmat.omp.player.PlaybackNotification
 import com.spacesarmat.omp.player.PlayRequest
 import com.spacesarmat.omp.player.Player2160
@@ -105,6 +106,8 @@ internal fun OmpNativePlugin.playEmbedded2160Op(call: PluginCall) {
     val background = Embedded2160.backgroundOn(TvMode.isTv(context), call.getBoolean("background") ?: false)
     try {
         Embedded2160.applyBackground(context, background)
+        // Before the activity starts, so PiP dismiss and screen-off are observed even when the setting is off.
+        PhonePlayback.install(context)
         launchForResult(call, Embedded2160.intent(context, plan), "on2160Result")
         // After the activity exists, so the session is already created. No-op on TV and when the setting is off.
         if (background) PlaybackNotification.onPlayerOpened(context)
