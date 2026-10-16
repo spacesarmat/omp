@@ -730,17 +730,11 @@ export function adminDashboard(state, now) {
   for (let i = 0; i < state.payments.length; i++) {
     const p = state.payments[i];
     const label = String(p.label || '');
-    let accountId = '';
-    if (label.indexOf('new:') === 0) accountId = label.slice(4);
-    else if (label.indexOf('sub:') === 0 || label.indexOf('dev:') === 0) {
-      const sub = state.subscriptions.find((s) => s.id === label.slice(4));
-      accountId = sub ? sub.accountId : '';
-    }
     events.push({
       at: p.at || 0,
       kind: 'pay',
       text: 'Оплата ' + (p.amount || '') + ' · ' + label,
-      accountId,
+      accountId: resolvePaymentAccount(state, label).accountId || '',
     });
   }
   for (let i = 0; i < (state.promos || []).length; i++) {
@@ -865,12 +859,8 @@ export function accountCard(state, accountId, now) {
         createdAt: c.createdAt || 0,
       }))
     : [];
-  const subIds = state.subscriptions.filter((s) => s.accountId === account.id).map((s) => s.id);
   const payments = state.payments
-    .filter((p) => {
-      const label = String(p.label || '');
-      return label.indexOf(account.id) >= 0 || subIds.some((id) => label.indexOf(id) >= 0);
-    })
+    .filter((p) => resolvePaymentAccount(state, p.label).accountId === account.id)
     .slice(-30)
     .reverse();
   const promos = (state.promos || [])
@@ -931,8 +921,26 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now }) {
     currency: '643',
     at: now || Date.now(),
   };
-  const purchases = (state.purchases || []).concat([row]).slice(-PURCHASE_CAP);
+  const purchases = trimPurchases((state.purchases || []).concat([row]), state.payments);
   return { state: { ...state, purchases }, result: { label: 'buy:' + row.id, price, id: row.id } };
+}
+
+/** Drop oldest paid quotes once the list is past the cap. Unpaid quotes stay: their payment link can still be used. */
+function trimPurchases(purchases, payments) {
+  if (purchases.length <= PURCHASE_CAP) return purchases;
+  const paid = {};
+  (payments || []).forEach((p) => {
+    if (p.error) return;
+    const label = String(p.label || '');
+    if (label.indexOf('buy:') === 0) paid[label.slice(4)] = true;
+  });
+  const out = purchases.slice();
+  let i = 0;
+  while (out.length > PURCHASE_CAP && i < out.length) {
+    if (paid[out[i].id]) out.splice(i, 1);
+    else i += 1;
+  }
+  return out;
 }
 
 export function priceText(settings) {

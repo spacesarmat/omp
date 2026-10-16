@@ -507,6 +507,27 @@ describe('payment amount', () => {
     });
     expect(shaved.result.error).toBe('amount');
     expect(shaved.state.subscriptions[0].paidUntil).toBe(until);
+    expect(accountCard(paidQuote.state, start.account, NOW + 1000).payments.some((p) => p.label === quoted.result.label)).toBe(true);
+    expect(adminDashboard(paidQuote.state, NOW + 1000).events.some((e) => e.kind === 'pay' && e.accountId === start.account)).toBe(true);
+  });
+
+  it('keeps an unpaid quote after newer checkouts pass the cap', () => {
+    const start = paid();
+    start.state.settings.priceRub = 100;
+    const first = quotePurchase(start.state, { kind: 'sub', subscriptionId: start.sub, accountId: start.account, now: NOW });
+    let state = first.state;
+    for (let i = 0; i < 2000; i++) {
+      state = quotePurchase(state, { kind: 'sub', subscriptionId: start.sub, accountId: start.account, now: NOW + i }).state;
+    }
+    expect(state.purchases.some((p) => p.id === first.result.id)).toBe(true);
+    const late = applyPayment(state, {
+      operationId: 'op-late',
+      label: first.result.label,
+      amount: '100.00',
+      currency: '643',
+      now: NOW + 3000,
+    });
+    expect(late.result.kind).toBe('renew');
   });
 });
 
