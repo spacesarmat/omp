@@ -23,6 +23,7 @@ export default defineConfig({
       '/admin/login': 'http://127.0.0.1:8787',
       '/admin/find': 'http://127.0.0.1:8787',
       '/admin/issue': 'http://127.0.0.1:8787',
+      '/admin/issue-bulk': 'http://127.0.0.1:8787',
       '/admin/grant': 'http://127.0.0.1:8787',
       '/admin/message': 'http://127.0.0.1:8787',
       '/admin/promo': 'http://127.0.0.1:8787',
@@ -33,6 +34,9 @@ export default defineConfig({
       '/admin/session-revoke': 'http://127.0.0.1:8787',
       '/admin/settings': 'http://127.0.0.1:8787',
       '/admin/finance.csv': 'http://127.0.0.1:8787',
+      '/admin/subscriptions.csv': 'http://127.0.0.1:8787',
+      '/admin/users.csv': 'http://127.0.0.1:8787',
+      '/admin/promos.csv': 'http://127.0.0.1:8787',
     },
   },
 });
