@@ -22,6 +22,9 @@ android/app/src/main/jniLibs/
 *.pem
 *.jks
 *.keystore
+# The Android debug certificate is not a release secret: alias androiddebugkey, password "android".
+# It is committed so every CI debug APK has the same signature and can update the previous one.
+!android/debug.keystore
 dist-test/
 monitor-out/
 # the admin bot (ops/admin-bot): wrangler cache, local secrets
