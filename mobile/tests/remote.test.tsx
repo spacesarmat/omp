@@ -8,7 +8,8 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Remote, setRemoteActions, shortTvName } from '../src/screens/Remote';
 import { currentRoute, resetTo } from '../src/nav';
-import { reloadTvs, renameTv, saveTv, setActiveTv, tvs } from '../src/tv/tvStore';
+import { activeTv, reloadTvs, renameTv, saveTv, setActiveTv, tvs } from '../src/tv/tvStore';
+import { foundTvRows, resetFoundTvDiscovery, type FoundTvRow } from '../src/tv/foundTvDiscovery';
 import { tvWaking, tvState, tvError, tvForgot } from '../src/tv/tvClient';
 import { toast } from '../src/ui/toast';
 import { nowPlaying, lastSeen } from '../src/tv/playerLink';
@@ -70,8 +71,13 @@ beforeEach(() => {
 afterEach(() => {
   act(() => render(null, el));
   setRemoteActions(null);
+  resetFoundTvDiscovery();
   vi.useRealTimers();
 });
+
+function foundRow(ip: string, name: string, kind: 'lg' | 'atv' = 'lg'): FoundTvRow {
+  return { ip, name, meta: ip, kind };
+}
 
 describe('Remote without a TV', () => {
   it('shows the placeholder and leads to the TV screen', () => {
@@ -79,6 +85,16 @@ describe('Remote without a TV', () => {
     expect(el.textContent).toContain('Подключите телевизор');
     click(text('Подключить ТВ'));
     expect(currentRoute.value).toEqual({ name: 'tv' });
+  });
+
+  it('a TV found on the network does not connect when none is saved', () => {
+    mount();
+    a.warmUp.mockClear();
+    act(() => {
+      foundTvRows.value = [foundRow('192.168.1.9', 'LG OLED')];
+    });
+    expect(a.warmUp).not.toHaveBeenCalled();
+    expect(el.textContent).toContain('Подключите телевизор');
   });
 
   it('the button is centred under the centred heading and text', () => {
@@ -186,6 +202,70 @@ describe('Remote with a TV', () => {
     act(() => {
       tvWaking.value = false;
     });
+  });
+
+  it('connects the chosen TV when shared discovery finds it while the remote stays open', () => {
+    mount();
+    expect(a.warmUp).toHaveBeenCalledTimes(1);
+    a.warmUp.mockClear();
+    act(() => {
+      foundTvRows.value = [foundRow('192.168.1.5', 'LG OLED')];
+    });
+    expect(a.warmUp).toHaveBeenCalledTimes(1);
+    expect(activeTv.value?.ip).toBe('192.168.1.5');
+    a.warmUp.mockClear();
+    act(() => {
+      foundTvRows.value = [foundRow('192.168.1.5', 'LG OLED'), foundRow('192.168.1.9', 'Other')];
+    });
+    expect(a.warmUp).not.toHaveBeenCalled();
+  });
+
+  it('does not connect a different found TV, and skips a second attempt while already connected', () => {
+    saveTv({ ip: '192.168.1.9', name: 'Kitchen', clientKey: 'k' });
+    setActiveTv('192.168.1.5');
+    mount();
+    expect(a.warmUp).toHaveBeenCalledTimes(1);
+    a.warmUp.mockClear();
+    act(() => {
+      foundTvRows.value = [foundRow('192.168.1.9', 'Kitchen')];
+    });
+    expect(a.warmUp).not.toHaveBeenCalled();
+    expect(activeTv.value?.ip).toBe('192.168.1.5');
+    act(() => {
+      tvState.value = 'connected';
+      foundTvRows.value = [foundRow('192.168.1.9', 'Kitchen'), foundRow('192.168.1.5', 'LG OLED')];
+    });
+    expect(a.warmUp).not.toHaveBeenCalled();
+    expect(activeTv.value?.ip).toBe('192.168.1.5');
+    act(() => {
+      tvState.value = 'idle';
+    });
+  });
+
+  it('does not start a second connect while one is in flight, then tries once if that attempt failed', () => {
+    mount();
+    expect(a.warmUp).toHaveBeenCalledTimes(1);
+    a.warmUp.mockClear();
+    act(() => {
+      tvState.value = 'connecting';
+      foundTvRows.value = [foundRow('192.168.1.5', 'LG OLED')];
+    });
+    expect(a.warmUp).not.toHaveBeenCalled();
+    act(() => {
+      tvState.value = 'error';
+    });
+    expect(a.warmUp).toHaveBeenCalledTimes(1);
+    act(() => {
+      tvState.value = 'idle';
+    });
+  });
+
+  it('connects once when the chosen TV is already in the list as the remote opens', () => {
+    act(() => {
+      foundTvRows.value = [foundRow('192.168.1.5', 'LG OLED')];
+    });
+    mount();
+    expect(a.warmUp).toHaveBeenCalledTimes(1);
   });
 
   it('d-pad and keys map to buttons', () => {
