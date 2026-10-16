@@ -75,3 +75,37 @@ object PlayerWarnings {
     /** One toast: the warnings, one per line. Empty when there is nothing to say. */
     fun message(kinds: List<PlayerWarning>): String = kinds.map { text(it) }.filter { it.isNotEmpty() }.joinToString("\n")
 }
+
+/**
+ * A playback warning that arrived while «Вернуть» is on screen. The engine reports it once, so it is kept until
+ * that toast goes and then shown. A new item drops it: the warning belongs to the item that produced it.
+ */
+class PendingPlaybackWarning {
+    private var pending: String? = null
+
+    /**
+     * A warning for the current item. The text to show now, or null when [undoVisible] and it stays pending
+     * (a later warning replaces the one already held).
+     */
+    fun arrive(text: String, undoVisible: Boolean): String? {
+        if (text.isEmpty()) return null
+        if (undoVisible) {
+            pending = text
+            return null
+        }
+        pending = null
+        return text
+    }
+
+    /** «Вернуть» (or the toast that replaced it) left the screen and this item continues. The held text, once. */
+    fun take(): String? {
+        val text = pending
+        pending = null
+        return text
+    }
+
+    /** The next item, or a new queue. */
+    fun clear() {
+        pending = null
+    }
+}

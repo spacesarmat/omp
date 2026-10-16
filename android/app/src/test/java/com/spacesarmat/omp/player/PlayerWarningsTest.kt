@@ -79,6 +79,43 @@ class PlayerWarningsTest {
     }
 
     @Test
+    fun warningWaitsForUndoThenShowsOnce() {
+        val held = PendingPlaybackWarning()
+        assertEquals(null, held.arrive("4K декодируется программно", undoVisible = true))
+        // a second report while «Вернуть» is up replaces the held text; still not shown
+        assertEquals(null, held.arrive("4K декодируется программно\nЭкран без HDR", undoVisible = true))
+        assertEquals("4K декодируется программно\nЭкран без HDR", held.take())
+        assertEquals(null, held.take())
+    }
+
+    @Test
+    fun warningShowsImmediatelyWhenUndoIsGone() {
+        val held = PendingPlaybackWarning()
+        assertEquals("Dolby Vision", held.arrive("Dolby Vision", undoVisible = false))
+        assertEquals(null, held.take())
+    }
+
+    @Test
+    fun itemChangeDropsAWarningHeldForUndo() {
+        val held = PendingPlaybackWarning()
+        assertEquals(null, held.arrive("Экран без HDR", undoVisible = true))
+        held.clear()
+        assertEquals(null, held.take())
+        // an empty report does not invent a toast or wipe a warning that is still held
+        assertEquals(null, held.arrive("Dolby Vision", undoVisible = true))
+        assertEquals(null, held.arrive("", undoVisible = true))
+        assertEquals("Dolby Vision", held.take())
+    }
+
+    @Test
+    fun showingNowDropsAWarningThatWasHeld() {
+        val held = PendingPlaybackWarning()
+        assertEquals(null, held.arrive("held", undoVisible = true))
+        assertEquals("now", held.arrive("now", undoVisible = false))
+        assertEquals(null, held.take())
+    }
+
+    @Test
     fun playNativeCarriesAlwaysFfmpegOffByDefault() {
         val q = JSONArray().put(JSONObject().put("url", "http://h/a"))
         assertEquals(false, PlayRequest.parse(JSONObject().put("queue", q))!!.alwaysFfmpeg)
