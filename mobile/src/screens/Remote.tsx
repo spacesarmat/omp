@@ -11,6 +11,7 @@ import { useLongPress } from '../ui/longPress';
 import { Sheet } from '../ui/Sheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { FoundTvs } from '../ui/FoundTvs';
+import { foundTvRows } from '../tv/foundTvDiscovery';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
 import { useBackHandler } from '../ui/backStack';
 import { touchpad, cursorGain, scrollFactor } from '../tv/touchpad';
@@ -941,9 +942,35 @@ export function Remote() {
   const [tuning, setTuning] = useState(false);
 
   const tvIp = tv?.ip;
+  // shared discovery may still be empty when this screen opens; the saved TV connects on mount and again
+  // when that TV shows up in the list (a scan that finished after the first attempt)
+  const onNetwork = !!tvIp && foundTvRows.value.some((r) => r.ip === tvIp);
+  const seenOnNetwork = useRef(false);
+  const warmedIp = useRef<string | null>(null);
   useEffect(() => {
-    if (tvIp) void act.warmUp();
-  }, [tvIp]);
+    if (!tvIp) {
+      seenOnNetwork.current = false;
+      warmedIp.current = null;
+      return;
+    }
+    // one attempt per chosen TV, including when discovery has not listed it yet
+    if (warmedIp.current !== tvIp) {
+      warmedIp.current = tvIp;
+      seenOnNetwork.current = onNetwork;
+      void act.warmUp();
+      return;
+    }
+    if (!onNetwork) {
+      seenOnNetwork.current = false;
+      return;
+    }
+    if (seenOnNetwork.current) return;
+    // a connect already in flight keeps going; once it drops, this effect runs again and tries once
+    if (state === 'connecting') return;
+    seenOnNetwork.current = true;
+    if (state === 'connected' || state === 'pairing') return;
+    void act.warmUp();
+  }, [tvIp, onNetwork, state]);
 
   if (!tv) {
     return (
