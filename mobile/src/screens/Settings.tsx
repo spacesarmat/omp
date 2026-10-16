@@ -318,6 +318,10 @@ export function Settings() {
 
       <section class="m-set-group" data-section="search">
         <div class="m-set-label">{t('settings.search')}</div>
+        <button type="button" class="m-set-row m-set-pick" data-row="audiobooks" onClick={() => navigate({ name: 'audiobooks' })}>
+          <span>{t('audiobooks.title')}</span>
+          <Icon d={CHEVRON} size={20} />
+        </button>
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'sources' })}>
           <span>{t('settings.whereSearch')}</span>
           <Icon d={CHEVRON} size={20} />

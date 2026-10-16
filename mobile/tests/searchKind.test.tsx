@@ -12,6 +12,8 @@ import { TorrServerClient } from '../../src/api/torrserver';
 import { torrents } from '../../src/store/library';
 import { reloadSourcePrefs, resetHealth } from '../../src/sources/store';
 import { setKindFilter } from '../../src/lib/releaseKind';
+import { registerSource, unregisterSource } from '../../src/sources/registry';
+import type { SourceContext } from '../../src/sources/types';
 import { settings, updateSettings } from '../../src/store/settings';
 
 async function flush() {
@@ -111,7 +113,7 @@ describe('phone search: kind badge and filter', () => {
   it('«Все / Фильмы / Сериалы» filters the results, the unknown kind only under «Все»; kept for the session', async () => {
     mount();
     await search('dune');
-    expect(Array.from(el.querySelectorAll('[data-kind-filter] button')).map((b) => b.textContent)).toEqual(['Все', 'Фильмы', 'Сериалы']);
+    expect(Array.from(el.querySelectorAll('[data-kind-filter] button')).map((b) => b.textContent)).toEqual(['Все', 'Фильмы', 'Сериалы', 'Аудиокниги']);
     expect(kindButton('Все').getAttribute('aria-pressed')).toBe('true');
     expect(titles()).toEqual([FILM, SERIES, BARE]);
     click(kindButton('Сериалы'));
@@ -126,6 +128,36 @@ describe('phone search: kind badge and filter', () => {
     await flush();
     expect(kindButton('Фильмы').getAttribute('aria-pressed')).toBe('true');
     expect(titles()).toEqual([FILM]);
+  });
+
+  it('«Аудиокниги» searches again in audiobook mode and keeps audiobook rows', async () => {
+    const modes: string[] = [];
+    const book = 'Булгаков Михаил - Мастер и Маргарита (аудиокнига)';
+    registerSource({
+      id: 'fake-audio',
+      name: 'Фейк',
+      kind: 'builtin',
+      search: (_q: string, ctx: SourceContext) => {
+        modes.push(ctx.searchMode || '');
+        return Promise.resolve([{ ...row(book, 'd', 5), source: 'fake-audio' }]);
+      },
+    });
+    try {
+      mount();
+      await search('булгаков');
+      expect(modes).toEqual(['']);
+      click(kindButton('Аудиокниги'));
+      await flush();
+      expect(modes[modes.length - 1]).toBe('audiobook');
+      expect(kindButton('Аудиокниги').getAttribute('aria-pressed')).toBe('true');
+      expect(titles()).toEqual([book]);
+      click(kindButton('Все'));
+      await flush();
+      expect(modes[modes.length - 1]).toBe('');
+      expect(titles()).toContain(FILM);
+    } finally {
+      unregisterSource('fake-audio');
+    }
   });
 
   it('nothing of the chosen kind: says so, not «Ничего не найдено»', async () => {

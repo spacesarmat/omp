@@ -40,7 +40,7 @@ import { SubSheet } from '../ui/SubSheet';
 import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../addResult';
 import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
-import { filterByKind, getKindFilter, setKindFilter, type KindFilter } from '../../../src/lib/releaseKind';
+import { filterByKind, getKindFilter, searchModeForKind, setKindFilter, type KindFilter } from '../../../src/lib/releaseKind';
 import { kindFilterOptions } from '../../../src/sources/releaseRow';
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5';
@@ -181,7 +181,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const [chosen, setChosenState] = useState<string[] | null>(memo.chosen);
   const [filters, setFiltersState] = useState<SearchFilters>(memo.filters);
   const [sort, setSortState] = useState<SortKey>(memo.sort);
-  // «Все / Фильмы / Сериалы»: kept while the app runs
+  // «Все / Фильмы / Сериалы / Аудиокниги»: kept while the app runs
   const [kindF, setKindState] = useState<KindFilter>(getKindFilter());
   const [rows, setRows] = useState<SourceResult[] | null>(memo.handle ? memo.handle.results() : null);
   const [prog, setProg] = useState<Prog | null>(memo.handle ? progOf(memo.handle) : null);
@@ -320,22 +320,25 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   };
 
   // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
-  const runSearch = (q: string, asked: CheckedHosts) => {
+  const runSearch = (q: string, asked: CheckedHosts, kind: KindFilter = getKindFilter()) => {
     if (memo.handle) memo.handle.cancel();
     setSearchError('');
     // callbacks come asynchronously, after `h` is assigned; they reach whichever Add screen is open
     const notify = () => {
       if (listener) listener(h);
     };
+    const ctx = phoneSourceContext();
+    const mode = searchModeForKind(kind);
+    if (mode) ctx.searchMode = mode;
     const h: SearchHandle = searchAll(q, {
-      ctx: phoneSourceContext(),
+      ctx,
       sources: selected,
       onResult: notify,
       onDone: (id, err) => {
         notify();
         // a site behind Cloudflare wants a person: the sheet opens, the search runs again once it is passed
         if (err) onSearchFailure(id, err, asked, () => {
-          if (memo.handle === h) runSearch(q, asked);
+          if (memo.handle === h) runSearch(q, asked, kind);
         });
       },
     });
@@ -550,7 +553,12 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
               type="button"
               class={'m-seg-btn' + (kindF === o.id ? ' on' : '')}
               aria-pressed={kindF === o.id}
-              onClick={() => setKind(o.id)}
+              onClick={() => {
+                const prev = kindF;
+                setKind(o.id);
+                // «Аудиокниги» changes the indexer query, so the search runs again; films and series only filter
+                if (prev !== o.id && (prev === 'audiobook' || o.id === 'audiobook') && memo.searched) runSearch(memo.searched, {}, o.id);
+              }}
             >
               {o.label}
             </button>
