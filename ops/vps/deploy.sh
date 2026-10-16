@@ -9,8 +9,12 @@ IMAGE="${OMP_BILLING_IMAGE:-ghcr.io/spacesarmat/omp-billing:local}"
 BILLING_HOST="${OMP_BILLING_HOST:-billing.omp-player.online}"
 LANDING_HOST="${OMP_LANDING_HOST:-omp-player.online}"
 HEALTH_IP="${OMP_HEALTH_IP:-127.0.0.1}"
+HEALTH_SCHEME="${OMP_HEALTH_SCHEME:-https}"
+HEALTH_PORT="${OMP_HEALTH_PORT:-443}"
+HEALTH_MAX_TIME="${OMP_HEALTH_MAX_TIME:-20}"
 HEALTH_ATTEMPTS="${OMP_HEALTH_ATTEMPTS:-15}"
 HEALTH_SLEEP="${OMP_HEALTH_SLEEP:-2}"
+BILLING_CONTAINER="${OMP_BILLING_CONTAINER:-omp-billing}"
 BACKUP_PREFIX="${OMP_BACKUP_PREFIX:-/opt/omp-vps-backup}"
 
 DRY_RUN=0
@@ -81,7 +85,9 @@ written. A private repo needs GITHUB_TOKEN or GH_TOKEN for the download.
 Environment:
   OMP_VPS_ROOT OMP_REPO OMP_BILLING_IMAGE OMP_BACKUP_PREFIX
   OMP_BILLING_HOST OMP_LANDING_HOST OMP_HEALTH_IP
-  OMP_HEALTH_ATTEMPTS OMP_HEALTH_SLEEP OMP_LOCK_FILE
+  OMP_HEALTH_SCHEME OMP_HEALTH_PORT OMP_HEALTH_MAX_TIME
+  OMP_HEALTH_ATTEMPTS OMP_HEALTH_SLEEP OMP_BILLING_CONTAINER
+  OMP_LOCK_FILE
 EOF
 }
 
@@ -200,8 +206,13 @@ check_config() {
   [[ "$BILLING_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || die "bad OMP_BILLING_HOST"
   [[ "$LANDING_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || die "bad OMP_LANDING_HOST"
   [[ "$HEALTH_IP" =~ ^[A-Za-z0-9.:-]+$ ]] || die "bad OMP_HEALTH_IP"
+  [[ "$HEALTH_SCHEME" == http || "$HEALTH_SCHEME" == https ]] || die "bad OMP_HEALTH_SCHEME"
+  [[ "$HEALTH_PORT" =~ ^[0-9]+$ ]] || die "bad OMP_HEALTH_PORT"
+  ((HEALTH_PORT >= 1 && HEALTH_PORT <= 65535)) || die "bad OMP_HEALTH_PORT"
+  [[ "$HEALTH_MAX_TIME" =~ ^[1-9][0-9]*$ ]] || die "bad OMP_HEALTH_MAX_TIME"
   [[ "$HEALTH_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || die "bad OMP_HEALTH_ATTEMPTS"
   [[ "$HEALTH_SLEEP" =~ ^[0-9]+$ ]] || die "bad OMP_HEALTH_SLEEP"
+  [[ "$BILLING_CONTAINER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || die "bad OMP_BILLING_CONTAINER"
   if [[ -n "$REF" ]]; then
     REF_DIR="$(sanitize_ref "$REF")" || die "invalid git ref: ${REF}"
     if ((${#REF_DIR} > 80)); then
@@ -724,31 +735,51 @@ check_security_headers() {
   fi
 }
 
+service_url() {
+  local host="$1"
+  local path="$2"
+  if [[ ("$HEALTH_SCHEME" == https && "$HEALTH_PORT" == 443) || ("$HEALTH_SCHEME" == http && "$HEALTH_PORT" == 80) ]]; then
+    printf '%s://%s%s' "$HEALTH_SCHEME" "$host" "$path"
+  else
+    printf '%s://%s:%s%s' "$HEALTH_SCHEME" "$host" "$HEALTH_PORT" "$path"
+  fi
+}
+
 check_request() {
   local method="$1"
   local url="$2"
   local expect="$3"
   local kind="$4"
   local hdr body code host allow allow_lc
+  local -a method_args
   hdr="$WORK/headers"
   body="$WORK/body"
   : >"$hdr"
   : >"$body"
-  host="${url#https://}"
+  host="${url#*://}"
   host="${host%%/*}"
+  host="${host%%:*}"
+  # --request HEAD still reads Content-Length bytes. Billing sends that
+  # length and no body, so curl waits until --max-time and the deploy rolls back.
+  # --head (CURLOPT_NOBODY) stops after the headers.
+  if [[ "$method" == "HEAD" ]]; then
+    method_args=(--head)
+  else
+    method_args=(--request "$method")
+  fi
   if ! code="$(
     curl \
       --silent \
       --show-error \
       --http1.1 \
-      --max-time 20 \
+      --max-time "$HEALTH_MAX_TIME" \
       --connect-timeout 5 \
       --max-redirs 0 \
-      --request "$method" \
+      "${method_args[@]}" \
       --dump-header "$hdr" \
       --output "$body" \
       --write-out '%{http_code}' \
-      --resolve "${host}:443:${HEALTH_IP}" \
+      --resolve "${host}:${HEALTH_PORT}:${HEALTH_IP}" \
       "$url"
   )"; then
     note_fail "${method} ${url} failed to connect"
@@ -757,13 +788,20 @@ check_request() {
   if [[ "$code" != "$expect" ]]; then
     note_fail "${method} ${url} status ${code} (want ${expect})"
   fi
+  # curl --head copies the header block into --output. That is not an entity body.
+  if [[ "$method" == "HEAD" && -s "$body" ]] && ! cmp -s "$hdr" "$body"; then
+    note_fail "${method} ${url} returned a body"
+  fi
+  if [[ "$method" == "HEAD" ]]; then
+    : >"$body"
+  fi
   if [[ "$kind" == "health" ]] && ! grep -q '"ok"[[:space:]]*:[[:space:]]*true' "$body"; then
     note_fail "${method} ${url} body is not {\"ok\":true}"
   fi
   if [[ "$method" == "GET" && "$kind" == "page" && ! -s "$body" ]]; then
     note_fail "${method} ${url} body is empty"
   fi
-  if [[ "$method" == "HEAD" || "$method" == "OPTIONS" ]] && [[ -s "$body" ]]; then
+  if [[ "$method" == "OPTIONS" && -s "$body" ]]; then
     note_fail "${method} ${url} returned a body"
   fi
   if [[ "$method" == "OPTIONS" ]]; then
@@ -779,8 +817,8 @@ check_request() {
 health_once() {
   local billing landing
   FAILURES=""
-  billing="https://${BILLING_HOST}"
-  landing="https://${LANDING_HOST}"
+  billing="$(service_url "$BILLING_HOST" "")"
+  landing="$(service_url "$LANDING_HOST" "")"
   check_request GET "${billing}/health" 200 health
   check_request HEAD "${billing}/health" 200 none
   check_request OPTIONS "${billing}/health" 204 none
@@ -908,38 +946,73 @@ restore_one_dir() {
   rsync_dir "$src" "$dest" "$kind" delete || return 1
 }
 
+assert_billing_container() {
+  local expected="$1"
+  local raw
+  [[ "$expected" =~ ^sha256:[a-f0-9]{64}$ ]] || {
+    log "billing container check has no image id"
+    return 1
+  }
+  raw="$(docker inspect --format '{{.Image}}' "$BILLING_CONTAINER")" || {
+    log "billing container ${BILLING_CONTAINER} is not running"
+    return 1
+  }
+  raw="${raw,,}"
+  raw="${raw//$'\r'/}"
+  raw="${raw//$'\n'/}"
+  if [[ "$raw" != "$expected" ]]; then
+    log "billing container image is ${raw} (want ${expected})"
+    return 1
+  fi
+  log "billing container ${BILLING_CONTAINER} is ${raw}"
+}
+
 restore_image() {
-  local current_id need_up
-  need_up=0
-  capture_image_id || return 1
-  current_id="$IMAGE_ID"
-  if [[ "$current_id" == "$MANIFEST_IMAGE_ID" ]]; then
-    log "billing image already matches the backup"
+  local current_id expected
+  if [[ -z "$MANIFEST_IMAGE_ID" && -z "$MANIFEST_IMAGE_TAG" ]]; then
+    log "backup records no billing image"
     return 0
   fi
-  if [[ -n "$MANIFEST_IMAGE_TAG" ]] && docker image inspect "$MANIFEST_IMAGE_TAG" >/dev/null 2>&1; then
+  capture_image_id || return 1
+  current_id="$IMAGE_ID"
+  expected="$MANIFEST_IMAGE_ID"
+  if [[ -n "$expected" && "$current_id" == "$expected" ]]; then
+    log "billing image already matches the backup"
+  elif [[ -n "$MANIFEST_IMAGE_TAG" ]] && docker image inspect "$MANIFEST_IMAGE_TAG" >/dev/null 2>&1; then
     if [[ "$DRY_RUN" -eq 1 ]]; then
-      log "would tag ${MANIFEST_IMAGE_TAG} as ${IMAGE} and restart billing"
-      return 0
+      log "would tag ${MANIFEST_IMAGE_TAG} as ${IMAGE}"
+    else
+      docker tag "$MANIFEST_IMAGE_TAG" "$IMAGE" || return 1
+      capture_image_id || return 1
+      expected="$IMAGE_ID"
+      if [[ -n "$MANIFEST_IMAGE_ID" && "$expected" != "$MANIFEST_IMAGE_ID" ]]; then
+        log "tagged image ${expected} does not match backup ${MANIFEST_IMAGE_ID}"
+        return 1
+      fi
     fi
-    docker tag "$MANIFEST_IMAGE_TAG" "$IMAGE" || return 1
-    need_up=1
   elif [[ -f "$ROOT/Dockerfile.billing" && -d "$ROOT/billing-src" ]]; then
     if [[ "$DRY_RUN" -eq 1 ]]; then
-      log "would rebuild ${IMAGE} from the restored billing source and restart billing"
-      return 0
+      log "would rebuild ${IMAGE} from the restored billing source"
+    else
+      log "backup image tag missing; rebuilding restored billing source"
+      docker build -f "$ROOT/Dockerfile.billing" -t "$IMAGE" "$ROOT/billing-src" || return 1
+      capture_image_id || return 1
+      expected="$IMAGE_ID"
     fi
-    log "backup image tag missing; rebuilding restored billing source"
-    docker build -f "$ROOT/Dockerfile.billing" -t "$IMAGE" "$ROOT/billing-src" || return 1
-    need_up=1
   else
     log "no backup image to restore"
     return 1
   fi
-  if [[ "$need_up" -eq 1 ]]; then
-    log "restarting billing from the restored image"
-    compose up -d billing || return 1
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "would docker compose up -d billing and check the container image"
+    return 0
   fi
+  # A matching tag does not mean the container is running that image.
+  # Retrying --rollback must start billing again.
+  log "restarting billing"
+  compose up -d billing || return 1
+  assert_billing_container "$expected" || return 1
+  health_checks || return 1
   return 0
 }
 

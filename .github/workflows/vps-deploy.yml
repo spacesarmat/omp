@@ -30,9 +30,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # Checkout this workflow's revision. inputs.ref is only the release
+      # the VPS downloads; an older tag does not have these scripts.
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.sha }}
 
       - name: Deploy over SSH
         env:

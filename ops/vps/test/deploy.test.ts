@@ -1,5 +1,7 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -49,6 +51,32 @@ case "$cmd" in
       printf 'reload failed\\n' >&2
       exit 1
     fi
+    if [[ "$*" == *"up -d billing"* ]]; then
+      if [[ "\${DEPLOY_TEST_DOCKER_UP_FAIL:-}" == 1 ]]; then
+        printf 'up failed\\n' >&2
+        exit 1
+      fi
+      img="\${DEPLOY_TEST_SEED_IMAGE:-}"
+      [[ -n "$img" ]] || { printf 'no seed image\\n' >&2; exit 1; }
+      cp "\$(idfile "$img")" "$state/running-billing"
+      exit 0
+    fi
+    exit 0
+    ;;
+  inspect)
+    format=""
+    name=""
+    while [[ \$# -gt 0 ]]; do
+      case "$1" in
+        --format|-f) format="\${2:-}"; shift 2 ;;
+        *) name="$1"; shift ;;
+      esac
+    done
+    [[ "$name" == "omp-billing" ]] || { printf 'unexpected inspect %s\\n' "$name" >&2; exit 1; }
+    [[ -f "$state/running-billing" ]] || { printf 'no such container\\n' >&2; exit 1; }
+    [[ "$format" == "{{.Image}}" ]] || { printf 'unexpected inspect format\\n' >&2; exit 1; }
+    cat "$state/running-billing"
+    printf '\\n'
     exit 0
     ;;
   image)
@@ -119,6 +147,7 @@ while [[ \$# -gt 0 ]]; do
     --output|-o) out="\${2:-}"; shift 2 ;;
     --dump-header|-D) dump="\${2:-}"; shift 2 ;;
     --request|-X) method="\${2:-}"; shift 2 ;;
+    --head|-I) method="HEAD"; shift ;;
     --write-out|-w) write_out=1; shift 2 ;;
     --header|-H|--retry|--retry-delay|--max-time|--connect-timeout|--resolve|--max-redirs)
       shift 2 ;;
@@ -169,6 +198,55 @@ if [[ "$write_out" -eq 1 ]]; then
   printf '%s' "$status"
 fi
 `;
+
+const REAL_CURL = `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "\${DEPLOY_TEST_CURL_LOG:?}"
+out=""
+url=""
+args=("$@")
+i=0
+while [[ $i -lt \${#args[@]} ]]; do
+  case "\${args[$i]}" in
+    --output|-o)
+      i=$((i + 1))
+      out="\${args[$i]}"
+      ;;
+    http://*|https://*)
+      url="\${args[$i]}"
+      ;;
+  esac
+  i=$((i + 1))
+done
+if [[ "$url" == *"/tarball/"* ]]; then
+  [[ -n "$out" ]] || exit 1
+  cp "\${DEPLOY_TEST_TARBALL:?}" "$out"
+  exit 0
+fi
+exec /usr/bin/curl "$@"
+`;
+
+const SECURITY_HEADERS = {
+  'Strict-Transport-Security': 'max-age=15552000; includeSubDomains',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
+
+function listen(server: Server): Promise<number> {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      resolve((server.address() as AddressInfo).port);
+    });
+  });
+}
+
+function closeServer(server: Server): Promise<void> {
+  return new Promise((resolve) => {
+    server.close(() => resolve());
+  });
+}
 
 const NODE = `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "\${DEPLOY_TEST_NODE_LOG:?}"
@@ -312,6 +390,24 @@ function runDeploy(env: NodeJS.ProcessEnv, args: string[]): Run {
   return { status: result.status ?? 1, stdout: text(result.stdout), stderr: text(result.stderr) };
 }
 
+function runDeployLive(env: NodeJS.ProcessEnv, args: string[]): Promise<Run> {
+  // spawn, not spawnSync: an in-process HTTP server cannot answer while the event loop is blocked.
+  return new Promise((resolve) => {
+    const child = spawn('bash', [path.resolve('ops/vps/deploy.sh'), ...args], { env });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString('utf8');
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8');
+    });
+    child.on('close', (status) => {
+      resolve({ status: status ?? 1, stdout, stderr });
+    });
+  });
+}
+
 function log(file: string): string {
   return existsSync(file) ? readFileSync(file, 'utf8') : '';
 }
@@ -348,6 +444,10 @@ describe('ops/vps deploy', () => {
     expect(workflow).toContain('VPS_HOST');
     expect(workflow).toContain('VPS_SSH_KEY');
     expect(workflow).toContain('ops/vps/ssh-deploy.sh');
+    expect(workflow).toContain('ref: ${{ github.sha }}');
+    expect(workflow).not.toContain('ref: ${{ inputs.ref }}');
+    expect(workflow).toContain('REF: ${{ inputs.ref }}');
+    expect(readme).toContain('workflow\'s own revision');
     expect(readme).toContain('deploy.sh');
     expect(readme).toContain('--dry-run');
     expect(readme).toContain('--rollback');
@@ -392,7 +492,8 @@ describe('ops/vps deploy', () => {
       if (line.includes(' up ')) expect(line).toContain('up -d billing');
     }
     expect(log(box.curlLog)).toContain('https://api.github.com/repos/spacesarmat/omp/tarball/main');
-    expect(log(box.curlLog)).toContain('--request HEAD');
+    expect(log(box.curlLog)).toContain('--head');
+    expect(log(box.curlLog)).not.toContain('--request HEAD');
     expect(log(box.curlLog)).toContain('--request OPTIONS');
     expect(log(box.curlLog)).toContain('https://billing.omp-player.online/health');
     expect(log(box.curlLog)).toContain('https://billing.omp-player.online/admin');
@@ -529,6 +630,7 @@ describe('ops/vps deploy', () => {
     const preview = runDeploy(box.env, ['--dry-run', '--rollback', backup]);
     expect(preview.status, preview.stderr).toBe(0);
     expect(preview.stdout).toContain('dry-run complete');
+    expect(preview.stdout).toContain('would docker compose up -d billing');
     expect(readFileSync(path.join(box.root, 'Caddyfile'), 'utf8')).toBe('new caddy\n');
     const rolled = runDeploy(box.env, ['--rollback', backup]);
     expect(rolled.status, `${rolled.stdout}\n${rolled.stderr}`).toBe(0);
@@ -537,6 +639,15 @@ describe('ops/vps deploy', () => {
     expect(readFileSync(path.join(box.root, 'billing-src/src/server.mjs'), 'utf8')).toBe('export const version = 1;\n');
     expect(imageId(box.env)).toBe(SEED_ID);
     expect(readFileSync(path.join(box.root, '.env'), 'utf8')).toBe(envFile());
+    const running = path.join(box.parent, 'docker-state', 'running-billing');
+    expect(readFileSync(running, 'utf8').trim()).toBe(SEED_ID);
+    writeFileSync(running, `sha256:${'e'.repeat(64)}`);
+    const again = runDeploy(box.env, ['--rollback', backup]);
+    expect(again.status, `${again.stdout}\n${again.stderr}`).toBe(0);
+    expect(again.stdout).toContain('billing image already matches the backup');
+    expect(again.stdout).toContain('restarting billing');
+    expect(readFileSync(running, 'utf8').trim()).toBe(SEED_ID);
+    expect(imageId(box.env)).toBe(SEED_ID);
   });
 
   it('refuses a symlink on a managed path and leaves .env alone', () => {
@@ -605,6 +716,57 @@ tar.close()
     expect(result.stdout).not.toContain('super-secret-token');
     expect(result.stderr).not.toContain('super-secret-token');
     expect(log(box.curlLog)).toContain('--header');
+  });
+
+  it('accepts a HEAD response that advertises Content-Length and sends no body', async () => {
+    const hits: string[] = [];
+    const server = createServer((req, res) => {
+      hits.push(`${req.method} ${req.url}`);
+      const headers = { ...SECURITY_HEADERS };
+      if (req.method === 'OPTIONS' && req.url === '/health') {
+        res.writeHead(204, { ...headers, Allow: 'GET, HEAD, POST, OPTIONS', 'Content-Length': '0' });
+        res.end();
+        return;
+      }
+      if (req.url === '/health') {
+        const body = Buffer.from('{"ok":true}');
+        res.writeHead(200, {
+          ...headers,
+          'Content-Type': 'application/json',
+          'Content-Length': String(body.length),
+        });
+        // HEAD keeps the length and omits the bytes. curl --request HEAD waits for them.
+        if (req.method === 'HEAD') res.end();
+        else res.end(body);
+        return;
+      }
+      const page = Buffer.from(req.url === '/admin' ? '<html>admin</html>' : '<html>landing</html>');
+      res.writeHead(200, { ...headers, 'Content-Type': 'text/html', 'Content-Length': String(page.length) });
+      if (req.method === 'HEAD') res.end();
+      else res.end(page);
+    });
+    const port = await listen(server);
+    try {
+      const box = world(release());
+      writeExe(path.join(box.parent, 'bin', 'curl'), REAL_CURL);
+      const result = await runDeployLive(
+        {
+          ...box.env,
+          OMP_HEALTH_SCHEME: 'http',
+          OMP_HEALTH_PORT: String(port),
+          OMP_HEALTH_MAX_TIME: '3',
+        },
+        ['main'],
+      );
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+      expect(hits).toContain('HEAD /health');
+      expect(log(box.curlLog)).toContain('--head');
+      expect(log(box.curlLog)).not.toContain('--request HEAD');
+      expect(log(box.curlLog)).toContain(`http://billing.omp-player.online:${port}/health`);
+      expect(result.stdout).toContain('health checks passed');
+    } finally {
+      await closeServer(server);
+    }
   });
 });
 

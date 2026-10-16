@@ -48,7 +48,7 @@ docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
 | `ops/vps/Dockerfile` | `/opt/omp-vps/Dockerfile.billing` |
 | `ops/billing/` | `/opt/omp-vps/billing-src/` |
 
-It downloads the ref, copies those paths to `/opt/omp-vps-backup-<ref>-<utc>`, and tags the current `ghcr.io/spacesarmat/omp-billing:local` image before replacing anything. A `/` in the ref becomes `-`. `node --check` runs on billing `*.mjs`. The image is rebuilt and `docker compose up -d billing` runs only when billing source or `Dockerfile.billing` changed. A Caddyfile change reloads Caddy. A site-only change is served from the bind mount. Health checks hit Caddy on `127.0.0.1` with the public names: `GET`/`HEAD`/`OPTIONS /health`, `GET /admin`, landing `GET /` is 200, and each response has the security headers and no `Server`. Any failure after the backup restores that backup and the previous image.
+It downloads the ref, copies those paths to `/opt/omp-vps-backup-<ref>-<utc>`, and tags the current `ghcr.io/spacesarmat/omp-billing:local` image before replacing anything. A `/` in the ref becomes `-`. `node --check` runs on billing `*.mjs`. The image is rebuilt and `docker compose up -d billing` runs only when billing source or `Dockerfile.billing` changed. A Caddyfile change reloads Caddy. A site-only change is served from the bind mount. Health checks hit Caddy on `127.0.0.1` with the public names: `GET`/`HEAD`/`OPTIONS /health`, `GET /admin`, landing `GET /` is 200, and each response has the security headers and no `Server`. HEAD uses `curl --head`, because billing answers with `Content-Length` and no body. Any failure after the backup restores that backup and the previous image. `--rollback` always runs `docker compose up -d billing`, then checks that container `omp-billing` is running that image and that the health checks pass. A second `--rollback` of the same backup restarts billing again.
 
 `.env` must already contain `BILLING_IMAGE=ghcr.io/spacesarmat/omp-billing:local`. The script reads that line and refuses to continue if it does not match the tag it builds. It never writes `.env` or `data/`, and backups do not include them.
 
@@ -77,7 +77,7 @@ Needs bash 4.4+, curl, rsync, GNU diff, flock, node, and Docker Compose v2. A pr
 | `VPS_HOST` | Hostname or `user@host`. User defaults to `root`. Port is 22. |
 | `VPS_SSH_KEY` | Private key in the VPS `authorized_keys`. No passphrase. |
 
-The job checks out `ref`, copies `deploy.sh` over SSH, and runs it. It forwards the Actions `GITHUB_TOKEN` only so the VPS can download a private tarball, then deletes that file during the session. The first connection accepts the host key (`StrictHostKeyChecking=accept-new`).
+The job checks out the workflow's own revision (`github.sha`, the branch selected as "Use workflow from") and passes `ref` only as the release to download. An older tag still deploys with these scripts. It copies `deploy.sh` over SSH and runs it. It forwards the Actions `GITHUB_TOKEN` only so the VPS can download a private tarball, then deletes that file during the session. The first connection accepts the host key (`StrictHostKeyChecking=accept-new`).
 
 ## First install
 
