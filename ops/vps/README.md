@@ -36,9 +36,13 @@ To refresh compose / Caddy / JacRed config from the repo:
 ```bash
 cd /opt/omp-vps
 git pull   # or rsync ops/vps from the monorepo
+docker compose pull && docker compose up -d
+```
+
+`up -d` recreates a service whose image, environment, ports, or mounts changed. That includes Caddy: `caddy reload` only rereads the Caddyfile inside the container that is already running, so a new `INDEXER_HASH`, image, port, or volume stays on the old container until `up -d`. Use reload only for a Caddyfile-only edit (the file is bind-mounted):
+
+```bash
 docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
-docker compose pull billing
-docker compose up -d billing
 ```
 
 ## First install
