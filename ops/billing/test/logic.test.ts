@@ -31,6 +31,7 @@ import {
   openAccount,
   openAppUrl,
   paymentsCsv,
+  usersCsv,
   redeemPromo,
   rememberSupportReply,
   rememberTelegramProfile,
@@ -374,9 +375,13 @@ describe('admin dashboard', () => {
       currency: '643',
       now: NOW + 5000,
     }).state;
+    paidState.attempts.push({ at: NOW + 4000, ok: false, reason: 'bad_code', deviceId: 'abcdef0123456789', hash: 'x' });
     const dash = adminDashboard(paidState, NOW + 5000);
     expect(dash.alerts.some((a) => a.text.indexOf('Jackett') >= 0 || a.text.indexOf('бота') >= 0)).toBe(true);
     expect(dash.events.some((e) => e.kind === 'pay')).toBe(true);
+    const fail = dash.events.find((e) => e.kind === 'fail');
+    expect(fail?.text).toContain('неверный код');
+    expect(fail?.text).not.toContain('bad_code');
   });
 });
 
@@ -418,6 +423,22 @@ describe('finance', () => {
     const csv = paymentsCsv(state, NOW, NOW + 4000);
     expect(csv).toContain('op-ok');
     expect(csv).not.toContain('op-bad');
+  });
+
+  it('prefixes formula characters in csv cells', () => {
+    const opened = openAccount(emptyState(), { telegramId: '7', email: 'a@b.c', now: NOW });
+    const names = ['=1+1', '+cmd', '-1', '@sum', '\t=1', '\r=1'];
+    for (let i = 0; i < names.length; i++) {
+      opened.state.accounts[0].telegramName = names[i];
+      const csv = usersCsv(opened.state);
+      expect(csv).toContain('"\'' + names[i].replace(/"/g, '""') + '"');
+      expect(csv).not.toContain('"' + names[i] + '"');
+    }
+    opened.state.accounts[0].telegramName = 'Andy';
+    expect(usersCsv(opened.state)).toContain('"Andy"');
+    const pay = emptyState();
+    pay.payments.push({ operationId: 'op-formula', label: '=HYPERLINK("http://evil")', amount: '1.00', at: NOW });
+    expect(paymentsCsv(pay, NOW - 1, NOW + 1)).toContain(`"'=HYPERLINK(""http://evil"")"`);
   });
 });
 
@@ -506,7 +527,7 @@ describe('billing files', () => {
     expect(vite).toContain("'/admin/support-close'");
     expect(vite).toContain("'/admin/services'");
     const pkg = JSON.parse(readFileSync('ops/billing/package.json', 'utf8'));
-    expect(pkg.scripts.test).toBe('npm --prefix ../.. test -- ops/billing/test/logic.test.ts');
+    expect(pkg.scripts.test).toBe('cd ../.. && npx vitest run --config ops/billing/vitest.config.ts');
     expect(existsSync('ops/billing/admin/public/logo.svg')).toBe(true);
     expect(existsSync('ops/billing/admin/public/tunnel.svg')).toBe(true);
   });

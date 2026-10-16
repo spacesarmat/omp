@@ -17,6 +17,22 @@ export function secretConfigured(value) {
   return !!String(value || '').trim();
 }
 
+/** Show only the last four digits of a ЮMoney wallet. */
+export function maskWallet(value) {
+  const s = String(value || '').replace(/\s/g, '');
+  if (!s) return '';
+  if (s.length <= 4) return SECRET_MASK;
+  return SECRET_MASK + s.slice(-4);
+}
+
+/** True when the form still holds the masked wallet (or nothing) and the saved one must stay. */
+export function walletUnchanged(incoming, current) {
+  const inc = String(incoming == null ? '' : incoming).trim();
+  if (!inc || isSecretMask(inc)) return true;
+  const cur = String(current || '').replace(/\s/g, '');
+  return !!cur && inc === maskWallet(cur);
+}
+
 /** Settings safe to send to the admin SPA (secrets masked). */
 export function publicAdminSettings(settings) {
   const s = settings || {};
@@ -25,8 +41,9 @@ export function publicAdminSettings(settings) {
     botUsername: s.botUsername || '',
     publicOrigin: s.publicOrigin || '',
     adminTelegramIds: s.adminTelegramIds || '',
-    yoomoneyWallet: s.yoomoneyWallet || '',
+    yoomoneyWallet: maskWallet(s.yoomoneyWallet),
     yoomoneySecret: secretConfigured(s.yoomoneySecret) ? SECRET_MASK : '',
+    adminNotify: s.adminNotify !== false,
     jackettUrl: s.jackettUrl || '',
     jackettApiKey: secretConfigured(s.jackettApiKey) ? SECRET_MASK : '',
     jackettEnabled: s.jackettEnabled !== false,
@@ -69,7 +86,11 @@ export function mergeSettings(prev, body) {
     ),
     publicOrigin: String(b.publicOrigin !== undefined ? b.publicOrigin : cur.publicOrigin || '').replace(/\/+$/, ''),
     adminTelegramIds: b.adminTelegramIds !== undefined ? b.adminTelegramIds || '' : cur.adminTelegramIds || '',
-    yoomoneyWallet: b.yoomoneyWallet !== undefined ? b.yoomoneyWallet || '' : cur.yoomoneyWallet || '',
+    yoomoneyWallet:
+      b.yoomoneyWallet !== undefined && !walletUnchanged(b.yoomoneyWallet, cur.yoomoneyWallet)
+        ? String(b.yoomoneyWallet).replace(/\s/g, '')
+        : cur.yoomoneyWallet || '',
+    adminNotify: b.adminNotify !== undefined ? bool(b.adminNotify, cur.adminNotify !== false) : cur.adminNotify !== false,
     yoomoneySecret: keepSecret(b.yoomoneySecret, cur.yoomoneySecret),
     jackettUrl: String(b.jackettUrl !== undefined ? b.jackettUrl : cur.jackettUrl || '').replace(/\/+$/, ''),
     jackettApiKey: keepSecret(b.jackettApiKey, cur.jackettApiKey),

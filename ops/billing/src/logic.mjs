@@ -66,7 +66,9 @@ function liveSub(state, accountId, now) {
 
 function anySub(state, accountId) {
   const list = state.subscriptions.filter((s) => s.accountId === accountId && s.product === 'jackett');
-  return list.length ? list[list.length - 1] : null;
+  if (!list.length) return null;
+  // The real subscription is the one that lasts longest. A later short code must not hide it.
+  return list.reduce((best, s) => (s.paidUntil > best.paidUntil ? s : best));
 }
 
 function issue(state, subscriptionId, now) {
@@ -223,6 +225,66 @@ export function createSubscription(state, { accountId, now, days }) {
   };
   const issued = issue({ ...state, subscriptions: state.subscriptions.concat([sub]) }, sub.id, now);
   return { state: issued.state, result: { subscriptionId: sub.id, code: issued.code, paidUntil: sub.paidUntil } };
+}
+
+/**
+ * Issue an activation code. An account that already has a subscription gets a code on that
+ * subscription; paidUntil stays the real expiry. Days apply only when creating the first one.
+ */
+export function issueActivation(state, { email, telegramId, accountId, days, now }) {
+  const opened = accountId
+    ? { state, account: findAccount(state, accountId) }
+    : openAccount(state, { email, telegramId, now });
+  if (!opened.account) return { state, result: { error: 'bad_account' } };
+  const cur = opened.state;
+  const account = opened.account;
+  const existing = anySub(cur, account.id);
+  if (existing) {
+    const issued = issue(cur, existing.id, now);
+    return {
+      state: issued.state,
+      result: {
+        code: issued.code,
+        codeId: issued.codeId,
+        account,
+        paidUntil: existing.paidUntil,
+        days: 0,
+        created: false,
+      },
+    };
+  }
+  const period = days > 0 ? Math.floor(Number(days)) : cur.settings.periodDays || 30;
+  const created = createSubscription(cur, { accountId: account.id, now, days: period });
+  return {
+    state: created.state,
+    result: {
+      code: created.result.code,
+      account,
+      paidUntil: created.result.paidUntil,
+      days: period,
+      created: true,
+    },
+  };
+}
+
+/** N fresh accounts, each with its own subscription code. Count is capped at 100. */
+export function issueMany(state, { count, days, now }) {
+  const n = Math.max(1, Math.min(100, Math.floor(Number(count) || 1)));
+  const period = days > 0 ? Math.floor(Number(days)) : state.settings.periodDays || 30;
+  let cur = state;
+  const codes = [];
+  for (let i = 0; i < n; i++) {
+    const opened = openAccount(cur, { email: '', telegramId: '', now: now + i });
+    const created = createSubscription(opened.state, { accountId: opened.account.id, now: now + i, days: period });
+    cur = created.state;
+    codes.push({
+      code: formatCode(created.result.code),
+      plain: created.result.code,
+      accountId: opened.account.id,
+      paidUntil: created.result.paidUntil,
+    });
+  }
+  return { state: cur, result: { codes } };
 }
 
 export function activate(state, { code, deviceId, now }) {
@@ -423,6 +485,17 @@ function resolvePaymentAccount(state, label) {
   return { problem: 'bad_label' };
 }
 
+function problemLine(row) {
+  const amount = String((row && row.amount) || '').trim();
+  const label = String((row && row.label) || '').trim();
+  const op = String((row && row.operationId) || '').trim();
+  const bits = [];
+  if (amount) bits.push(amount + ' ₽');
+  if (label) bits.push(label);
+  if (op) bits.push(op);
+  return { amount, label, operationId: op, text: bits.join(' · ') };
+}
+
 /** Payments list + day/week/month totals + problem rows for the admin finance section. */
 export function financeReport(state, now) {
   const dayFrom = now - DAY;
@@ -454,20 +527,26 @@ export function financeReport(state, now) {
     const resolved = resolvePaymentAccount(state, p.label);
     const err = p.error || resolved.problem;
     if (!err) continue;
+    const line = problemLine(p);
     problems.push({
       at: p.at || 0,
       kind: err,
-      text: (p.amount || '') + ' · ' + (p.label || '') + ' · ' + (p.operationId || '').slice(0, 12),
-      operationId: p.operationId || '',
+      amount: line.amount,
+      label: line.label,
+      operationId: line.operationId,
+      text: line.text,
     });
   }
   for (let i = 0; i < (state.webhooks || []).length; i++) {
     const w = state.webhooks[i];
+    const line = problemLine(w);
     problems.push({
       at: w.at || 0,
       kind: w.kind || 'webhook',
-      text: (w.amount || '') + ' · ' + (w.label || '') + ' · ' + String(w.operationId || '').slice(0, 12),
-      operationId: w.operationId || '',
+      amount: line.amount,
+      label: line.label,
+      operationId: line.operationId,
+      text: line.text,
     });
   }
   problems.sort((a, b) => b.at - a.at);
@@ -498,15 +577,198 @@ export function paymentsCsv(state, from, to) {
     const p = rows[i];
     const resolved = resolvePaymentAccount(state, p.label);
     const acc = resolved.accountId ? findAccount(state, resolved.accountId) : null;
-    const cell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     lines.push(
       [
-        cell(new Date(p.at).toISOString()),
-        cell(p.amount),
-        cell(p.label),
-        cell(p.operationId),
-        cell(resolved.accountId || ''),
-        cell(acc ? acc.telegramId || '' : ''),
+        csvCell(new Date(p.at).toISOString()),
+        csvCell(p.amount),
+        csvCell(p.label),
+        csvCell(p.operationId),
+        csvCell(resolved.accountId || ''),
+        csvCell(acc ? acc.telegramId || '' : ''),
+      ].join(','),
+    );
+  }
+  return lines.join('\n') + '\n';
+}
+
+function csvCell(v) {
+  let s = v == null ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+
+function dayKey(ms) {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/** Revenue and new subscriptions per UTC day, oldest first, `days` long (max 90). */
+export function dailySeries(state, now, days) {
+  const n = Math.max(1, Math.min(90, Math.floor(Number(days) || 30)));
+  const end = new Date(now);
+  end.setUTCHours(0, 0, 0, 0);
+  const startMs = end.getTime() - (n - 1) * DAY;
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    const from = startMs + i * DAY;
+    const to = from + DAY;
+    let revenue = 0;
+    const payments = state.payments || [];
+    for (let p = 0; p < payments.length; p++) {
+      const row = payments[p];
+      if (row.error || row.at < from || row.at >= to) continue;
+      revenue += money(row.amount);
+    }
+    let subs = 0;
+    const subscriptions = state.subscriptions || [];
+    for (let s = 0; s < subscriptions.length; s++) {
+      const created = subscriptions[s].createdAt || 0;
+      if (created >= from && created < to) subs += 1;
+    }
+    rows.push({ day: dayKey(from), revenue, subs });
+  }
+  return rows;
+}
+
+function paymentView(state, p) {
+  const resolved = resolvePaymentAccount(state, p.label);
+  const acc = resolved.accountId ? findAccount(state, resolved.accountId) : null;
+  return {
+    at: p.at || 0,
+    amount: p.amount || '',
+    label: p.label || '',
+    operationId: p.operationId || '',
+    error: p.error || '',
+    accountId: resolved.accountId || '',
+    who: acc ? telegramDisplay(acc) || acc.email || acc.id : '',
+    problem: p.error || resolved.problem || '',
+  };
+}
+
+/** Filtered payment history. `from` / `to` are ms, inclusive. */
+export function pagePayments(state, { q, from, to, offset, limit }) {
+  const query = String(q || '').trim().toLowerCase();
+  const startAt = Number(from) || 0;
+  const endAt = Number(to) || 0;
+  const rows = (state.payments || [])
+    .slice()
+    .reverse()
+    .map((p) => paymentView(state, p))
+    .filter((p) => {
+      if (startAt && (p.at || 0) < startAt) return false;
+      if (endAt && (p.at || 0) > endAt) return false;
+      if (!query) return true;
+      const hay = [p.who, p.label, p.amount, p.operationId, p.accountId, p.error].join(' ').toLowerCase();
+      return hay.indexOf(query) >= 0;
+    });
+  const start = Math.max(0, Math.floor(Number(offset) || 0));
+  const size = Math.min(100, Math.max(1, Math.floor(Number(limit) || 20)));
+  return { total: rows.length, payments: rows.slice(start, start + size) };
+}
+
+export function pageAudit(state, { q, action, offset, limit }) {
+  const query = String(q || '').trim().toLowerCase();
+  const act = String(action || '').trim();
+  const rows = (state.audit || [])
+    .slice()
+    .reverse()
+    .filter((row) => {
+      if (act && row.action !== act) return false;
+      if (!query) return true;
+      return (String(row.action || '') + ' ' + String(row.detail || '')).toLowerCase().indexOf(query) >= 0;
+    });
+  const start = Math.max(0, Math.floor(Number(offset) || 0));
+  const size = Math.min(100, Math.max(1, Math.floor(Number(limit) || 30)));
+  return { total: rows.length, audit: rows.slice(start, start + size) };
+}
+
+export function pageFails(state, { reason, q, offset, limit }) {
+  const why = String(reason || '').trim();
+  const query = String(q || '').trim().toLowerCase();
+  const rows = (state.attempts || [])
+    .filter((a) => !a.ok)
+    .slice()
+    .reverse()
+    .filter((a) => {
+      if (why && a.reason !== why) return false;
+      if (!query) return true;
+      return (String(a.reason || '') + ' ' + String(a.deviceId || '')).toLowerCase().indexOf(query) >= 0;
+    })
+    .map((a) => ({
+      at: a.at || 0,
+      reason: a.reason || '',
+      deviceId: a.deviceId || '',
+    }));
+  const start = Math.max(0, Math.floor(Number(offset) || 0));
+  const size = Math.min(100, Math.max(1, Math.floor(Number(limit) || 30)));
+  return { total: rows.length, fails: rows.slice(start, start + size) };
+}
+
+export function subscriptionsCsv(state, now) {
+  const lines = ['accountId,who,telegramId,email,paidUntil,active,deviceLimit,bound'];
+  const subs = state.subscriptions || [];
+  for (let i = 0; i < subs.length; i++) {
+    const sub = subs[i];
+    const acc = findAccount(state, sub.accountId) || {};
+    const bound = (state.codes || []).filter((c) => c.subscriptionId === sub.id && !c.revoked && c.deviceId).length;
+    lines.push(
+      [
+        csvCell(sub.accountId),
+        csvCell(telegramDisplay(acc) || acc.email || ''),
+        csvCell(acc.telegramId || ''),
+        csvCell(acc.email || ''),
+        csvCell(sub.paidUntil ? new Date(sub.paidUntil).toISOString() : ''),
+        csvCell(sub.paidUntil > now ? '1' : '0'),
+        csvCell(sub.deviceLimit),
+        csvCell(bound),
+      ].join(','),
+    );
+  }
+  return lines.join('\n') + '\n';
+}
+
+export function usersCsv(state) {
+  const lines = ['id,email,telegramId,telegramUsername,telegramName,createdAt'];
+  const accounts = state.accounts || [];
+  for (let i = 0; i < accounts.length; i++) {
+    const a = accounts[i];
+    lines.push(
+      [
+        csvCell(a.id),
+        csvCell(a.email || ''),
+        csvCell(a.telegramId || ''),
+        csvCell(a.telegramUsername || ''),
+        csvCell(a.telegramName || ''),
+        csvCell(a.createdAt ? new Date(a.createdAt).toISOString() : ''),
+      ].join(','),
+    );
+  }
+  return lines.join('\n') + '\n';
+}
+
+export function promosCsv(state) {
+  const lines = ['code,days,uses,maxUses,revoked'];
+  const promos = state.promos || [];
+  for (let i = 0; i < promos.length; i++) {
+    const p = promos[i];
+    lines.push(
+      [csvCell(p.code), csvCell(p.days), csvCell((p.uses || []).length), csvCell(p.maxUses), csvCell(p.revoked ? '1' : '0')].join(
+        ',',
+      ),
+    );
+  }
+  return lines.join('\n') + '\n';
+}
+
+export function codesCsv(codes) {
+  const lines = ['code,accountId,paidUntil'];
+  const rows = codes || [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    lines.push(
+      [
+        csvCell(row.code || row.plain || ''),
+        csvCell(row.accountId || ''),
+        csvCell(row.paidUntil ? new Date(row.paidUntil).toISOString() : ''),
       ].join(','),
     );
   }
@@ -721,6 +983,16 @@ export function adminSummary(state, now) {
   return { accounts: state.accounts.length, active, promos, bound, fails };
 }
 
+const ATTEMPT_REASON = {
+  bad_code: 'неверный код',
+  expired: 'подписка истекла',
+  other_device: 'чужое устройство',
+};
+
+function attemptReasonText(reason) {
+  return ATTEMPT_REASON[reason] || reason || 'неизвестно';
+}
+
 /**
  * Home dashboard: recent events + operational alerts.
  * @returns {{ events: { at, kind, text, accountId }[], alerts: { level, text }[] }}
@@ -764,13 +1036,13 @@ export function adminDashboard(state, now) {
       events.push({
         at: a.at || 0,
         kind: 'fail',
-        text: 'Отказ: ' + (a.reason || '?') + ' · ' + String(a.deviceId || '').slice(0, 8) + '…',
+        text: 'Отказ: ' + attemptReasonText(a.reason) + ' · ' + String(a.deviceId || '').slice(0, 8) + '…',
         accountId: '',
       });
     }
   }
   events.sort((a, b) => b.at - a.at);
-  const feed = events.slice(0, 40);
+  const feed = events.slice(0, 150);
 
   const alerts = [];
   const s = state.settings || {};
@@ -780,9 +1052,9 @@ export function adminDashboard(state, now) {
   if (!s.jacredUrl) alerts.push({ level: 'warn', text: 'Не задан адрес JacRed' });
   if (!s.jacredApiKey) alerts.push({ level: 'warn', text: 'Не задан API-ключ JacRed' });
   if (Number(s.priceRub) > 0 && !s.yoomoneyWallet) alerts.push({ level: 'bad', text: 'Цена задана, но кошелёк ЮMoney пуст' });
-  if (!s.publicOrigin) alerts.push({ level: 'warn', text: 'publicOrigin пуст — ссылки «Открыть в OMP» в боте без http' });
+  if (!s.publicOrigin) alerts.push({ level: 'warn', text: 'Публичный адрес не задан — ссылки «Открыть в OMP» в боте без http' });
   if (!String(s.adminTelegramIds || '').trim()) {
-    alerts.push({ level: 'warn', text: 'Нет adminTelegramIds — вход в панель и админ-кабинет в боте недоступны' });
+    alerts.push({ level: 'warn', text: 'Не указаны Telegram id администраторов — вход в панель и админ-кабинет в боте недоступны' });
   }
 
   const soon = now + 2 * DAY;
@@ -971,6 +1243,25 @@ export function createPromo(state, { code, days, maxUses, now }) {
     uses: [],
   };
   return { state: { ...state, promos: state.promos.concat([row]) }, result: { promo: row } };
+}
+
+/** Create `count` promo codes (max 100). A custom code is used only when count is 1. */
+export function createPromos(state, { count, code, days, maxUses, now }) {
+  const n = Math.max(1, Math.min(100, Math.floor(Number(count) || 1)));
+  let cur = state;
+  const promos = [];
+  for (let i = 0; i < n; i++) {
+    const out = createPromo(cur, {
+      code: n === 1 ? code : '',
+      days,
+      maxUses,
+      now: (now || Date.now()) + i,
+    });
+    if (out.result.error) return { state: cur, result: { error: out.result.error, promos } };
+    cur = out.state;
+    promos.push(out.result.promo);
+  }
+  return { state: cur, result: { promos } };
 }
 
 export function revokePromo(state, promoId) {

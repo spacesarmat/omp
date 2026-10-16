@@ -12,8 +12,17 @@ export async function api<T = Record<string, unknown>>(path: string, opts?: Requ
   return data;
 }
 
+export type PostResult = {
+  ok?: boolean;
+  redirect?: string;
+  flash?: Flash;
+  auth?: boolean;
+  extra?: { codes?: { code: string; accountId?: string; paidUntil?: number }[]; promos?: { code: string; days: number; maxUses: number }[] };
+  services?: unknown;
+};
+
 export async function post(path: string, csrf: string, fields: Record<string, unknown>) {
-  return api<{ ok?: boolean; redirect?: string; flash?: Flash; auth?: boolean }>(path, {
+  return api<PostResult>(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ csrf, ...fields }),
