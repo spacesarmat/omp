@@ -3,6 +3,7 @@
 // component state: it is read from the field at «Проверить и подключить», written to the Keystore storage, and the
 // field is emptied. A key imported from the TorrServer settings stays in memory only.
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { allowTypedCleartext } from '../../../src/cleartextSync';
 import { t } from '../../../src/i18n';
 import { Sheet } from '../ui/Sheet';
 import { native } from '../platform/native';
@@ -185,11 +186,14 @@ export function IndexerAddSheet({
     const imported = tsKey && tsKey.host === hostKey(base) ? tsKey.key : '';
     setError('');
     setBusy(true);
-    const kindP: Promise<IndexerKind | null> = kind && (!existing || existing.kind === kind)
-      ? Promise.resolve(kind)
-      : existing
-        ? Promise.resolve(existing.kind)
-        : identifyIndexer(base, c.http).then((k) => k || kindByPort(base), () => kindByPort(base));
+    // native HTTP is not window.fetch: the typed host has to be on the allow-list before the check
+    const kindP: Promise<IndexerKind | null> = allowTypedCleartext(base).then(() =>
+      kind && (!existing || existing.kind === kind)
+        ? Promise.resolve(kind)
+        : existing
+          ? Promise.resolve(existing.kind)
+          : identifyIndexer(base, c.http).then((k) => k || kindByPort(base), () => kindByPort(base)),
+    );
     let saved: IndexerKind = 'jackett';
     kindP
       .then((k) => {
@@ -321,24 +325,26 @@ export function connectFound(c: IndexerCandidate, sc: SourceContext, now: () => 
   const key = c.tsKey || '';
   if (!base) return Promise.reject(new Error(indexerBadUrl()));
   if (!key) return Promise.reject(new Error(indexerNoKey()));
-  const kindP: Promise<IndexerKind | null> = c.kind
-    ? Promise.resolve(c.kind)
-    : identifyIndexer(base, sc.http).then((k) => k || kindByPort(base), () => kindByPort(base));
   let saved: IndexerKind = 'jackett';
-  return kindP
-    .then((k) => {
-      if (!k) throw new Error(unknownKind());
-      saved = k;
-      return checkIndexer({ kind: k, url: base }, key, sc.http, now);
-    })
-    .then((st) => {
-      if (st.state !== 'ok') throw new Error(st.message || t('sources.idx.connectFailed'));
-      return saveIndexer({ kind: saved, url: base, apiKey: key }, sc.secrets).then((conn) => {
-        setIndexerStatus(conn.id, st);
-        log('info', 'search', t('sources.idx.logConnected', { kind: kindLabel(saved) }));
-        return successText(saved, st);
+  return allowTypedCleartext(base).then(() => {
+    const kindP: Promise<IndexerKind | null> = c.kind
+      ? Promise.resolve(c.kind)
+      : identifyIndexer(base, sc.http).then((k) => k || kindByPort(base), () => kindByPort(base));
+    return kindP
+      .then((k) => {
+        if (!k) throw new Error(unknownKind());
+        saved = k;
+        return checkIndexer({ kind: k, url: base }, key, sc.http, now);
+      })
+      .then((st) => {
+        if (st.state !== 'ok') throw new Error(st.message || t('sources.idx.connectFailed'));
+        return saveIndexer({ kind: saved, url: base, apiKey: key }, sc.secrets).then((conn) => {
+          setIndexerStatus(conn.id, st);
+          log('info', 'search', t('sources.idx.logConnected', { kind: kindLabel(saved) }));
+          return successText(saved, st);
+        });
       });
-    });
+  });
 }
 
 function FoundCard({ c, ctx, now, onKey, onConnected }: { c: IndexerCandidate; ctx: () => SourceContext; now: () => number; onKey: (withKey: boolean) => void; onConnected: () => void }) {
