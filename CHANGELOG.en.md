@@ -2,6 +2,16 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.15
+
+- [phone] Plain HTTP stays inside the LAN: cleartext to public addresses is blocked
+- [atv] Plain HTTP stays inside the LAN, same as on the phone
+- [phone] TLS to a TV and an Android TV Box: the certificate is pinned on first connect (TOFU); a different one asks "Trust the new one" and does not fall back to plain HTTP
+- [phone] Discover: posters show again after you return to the tab
+- [phone] With no TV selected, Catalog, Remote and Settings list the TVs already found; one tap connects
+- TorrServer search on the LAN is faster: saved addresses and likely hosts first; on the phone a server shows up as soon as it answers
+- The magnet-add test waits until the poster is stored
+
 ## 0.20.1-beta.14
 
 - same as beta.11 (beta.13: changelog window keeps 0.17.0 again)
