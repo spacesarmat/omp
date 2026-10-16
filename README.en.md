@@ -13,8 +13,8 @@
 | Where | What |
 |---|---|
 | **LG TV (webOS)** | TorrServer library with categories and 4 views, series by season, chapters and intro skipping, "History" showing where you watched, a player on the TV's hardware decoder, tracks and subtitles, remote and Magic Remote, one-click updates or updates through Homebrew Channel |
-| **Android TV** | The same interface as on LG, and a choice of native player: built-in (with the FFmpeg decoder for DTS, AC3, TrueHD) or VLC (ASS subtitles with styles, almost all formats); "Auto" switches by itself. MKV, HEVC, tracks, subtitles, chapters and intro skipping |
-| **Android phone** | Library, unified search across sources and adding torrents with a category, "Watch on TV" with a "Continue / From the start" choice, a "News" tab (a feed of fresh torrents, subscriptions, new episodes of series) with background notifications, "Now playing" with chapters and a mini player, a remote with a touchpad, watching in an external player |
+| **Android TV** | The same interface as on LG, and a choice of native player: built-in on the 2160 Player engine (4K, HDR and Dolby Vision, AC3, E-AC3, DTS and TrueHD passthrough or FFmpeg decode, night audio, Info panel) or VLC (ASS subtitles with styles, almost all formats); "Auto" switches by itself. MKV, HEVC, tracks, subtitles, chapters and intro skipping |
+| **Android phone** | Library and Discover with a series card and seasons, unified search across sources (including Jackett/JacRed OMP on a subscription), "Watch on TV" with Continue / From the start, a News tab with background notifications, Now playing with swipes to the remote and episodes, a remote with a touchpad, watching in the built-in 2160 Player or an external player |
 | **TorrServer on the phone** | A built-in server: if you have none, OMP starts one on the phone, and the TV finds it by itself |
 
 The highlights:
@@ -38,8 +38,8 @@ The highlights:
 - **Reliability and support.** An "Error log" on the phone (the last 500 entries without passwords, addresses and torrent names) with the "Report a bug on GitHub" button and "Share log"; a "Backup" of settings to a file and restoring from it.
 - **Android TV on par with the phone.** Its own "Search sources" screen and rutracker sign-in on the TV, passing sources and sign-ins from the phone with one button, manual intro and credits marks on the TV (LG and Android TV).
 - **Installing from the phone.** The "Install OMP on TV" assistant finds LG and Android TV on the network, shows the steps for the model and installs OMP itself.
-- **A choice of player on Android TV.** Built-in (Media3 with FFmpeg) or VLC; the "Auto" mode switches to VLC when needed (format, ASS subtitles).
-- **Jackett and Prowlarr directly.** OMP finds them on the network, shows the state of each tracker and passes the connections to the TV.
+- **A choice of player on Android TV.** Built-in on the 2160 Player engine (4K, HDR, night audio, Info) or VLC; "Auto" switches to VLC when needed (format, ASS subtitles). On the phone the same built-in player powers "Watch on the phone", with optional background audio.
+- **Jackett, JacRed and Prowlarr.** Direct connection on the network, or a Jackett/JacRed OMP subscription (bot [@OMPBILLINGBOT](https://t.me/OMPBILLINGBOT)): keys in the app, search over HTTPS, no Jackett of your own.
 - **Sites behind Cloudflare.** Bypassing the Cloudflare check for Kinozal and rustorka on the phone and Android TV, FlareSolverr as a fallback, sign-in including "through the browser".
 - **Updates arrive by themselves:** the TV and the phone check for a new version on launch, and after an update the app shows "What's new" once.
 
@@ -50,6 +50,18 @@ The highlights:
 | ![Sign-in](docs/screenshots/login.png)<br>Sign-in | ![Server history](docs/screenshots/login-history.png)<br>Server history |
 | ![Library](docs/screenshots/library-large.png)<br>Library | ![List](docs/screenshots/library-list.png)<br>List |
 | ![History](docs/screenshots/history.png)<br>History | ![Search](docs/screenshots/search.png)<br>Search |
+
+## New in 0.20
+
+| | |
+|---|---|
+| ![Now playing](docs/screenshots/android-nowplaying.png)<br>Phone: Now on TV — swipe to remote and episodes | ![Remote](docs/screenshots/android-remote.png)<br>Remote: touchpad, settings, keyboard overlay |
+| ![Library](docs/screenshots/android-library.png)<br>Library and Discover with a series card | ![Unified search](docs/screenshots/android-search.png)<br>Search and Jackett/JacRed OMP subscription |
+
+- **2160 Player inside OMP.** On Android TV the built-in player runs on the 2160 Player engine: 4K, HDR, Dolby Vision as HDR10 without a separate DV decoder; AC3, E-AC3, DTS and TrueHD go to the receiver as-is or are decoded by FFmpeg. Night audio on the yellow key, Info on the remote Info button. VLC and Auto remain. On the phone, "Watch on the phone" opens the same built-in player (resume, Skip marks, episodes, picture-in-picture); background audio is in Settings.
+- **Series in Discover.** A card with dates and status, all genres, Watch on TV, creators and cast, similar titles; seasons on their own screen with a poster, episodes and a progress bar; you can pick the poster.
+- **Now on TV by gesture.** Swipe down for the remote, up for the release’s episodes, sideways on an episode to play on the TV; on-screen hints with icons. The TV keyboard overlays the remote without shrinking the pad. TorrServer search on start is a native multithreaded LAN scan.
+- **Jackett and JacRed OMP.** One subscription: keys in the app, search over HTTPS, no Jackett on a NAS. Payment and codes are in [@OMPBILLINGBOT](https://t.me/OMPBILLINGBOT); you can link Telegram to the device.
 
 ## New in 0.15
 
@@ -98,8 +110,8 @@ The phone app: the TorrServer library, starting a movie on an LG TV, a remote, s
 - **Installation.** Download the APK from the [release page](https://github.com/spacesarmat/omp/releases/latest) (usually `OMP-<version>-arm64.apk`; which one to pick is in the "Installation" section) and open the file. Android will ask you to allow installing from the browser (or the file manager); allow it.
 - **Server.** Enter the TorrServer address or scan the QR code from the TV: in OMP on the TV open Settings → "Connect phone".
 - **TV.** Pick the TV in the list and press "Allow" on the TV; the phone remembers it.
-- **Watching.** "Watch on TV" starts OMP on the TV with the right file and position, and the phone becomes the remote. You can also open the stream in an external player (VLC, MX Player) or copy the link.
-- **Player control.** While a movie plays on the TV, the "Now playing" screen (and the mini player at the bottom) controls it from the phone: pause, seek, previous and next episode, audio and subtitles, volume. The phone and the TV must be on the same network; it works when OMP 0.8 or newer is installed on the TV (if the version is old, the app suggests updating). The position updates about every 0.5 seconds.
+- **Watching.** "Watch on TV" starts OMP on the TV with the right file and position, and the phone becomes the remote. "Watch on the phone" opens the built-in 2160 Player screen inside OMP: from where you stopped, with Skip marks, all episodes of the release and picture-in-picture; "Background audio" in Settings keeps sound with the screen off. Under "Player for video" you can choose the built-in player, the 2160 Player app or "Android picker" (VLC, MX Player and others); the link can be copied.
+- **Player control.** While a movie plays on the TV, the "Now on TV" screen (and the mini player at the bottom) controls it from the phone: pause, seek, episodes, audio and subtitles, volume; swipe down opens the remote, swipe up the release’s episodes. The phone and the TV must be on the same network; it works when OMP 0.8 or newer is installed on the TV (if the version is old, the app suggests updating). The position updates about every 0.5 seconds.
 - **Continue or start over.** If the file has a saved position, the app asks when starting on the TV: "Continue" from where you stopped or "From the start".
 - **Library views.** The library can be switched like on the TV: large posters, small posters, a list or a compact view.
 - **Turn on the TV.** The power button on the remote turns the TV on over the network. For this, on the TV turn on "General → Devices → "Mobile TV On"" (on some models, "Turn on via Wi‑Fi").

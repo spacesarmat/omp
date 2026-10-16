@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.control
 
+import com.spacesarmat.omp.LanAddresses
 import java.io.BufferedInputStream
 import java.io.Closeable
 import java.io.IOException
@@ -43,8 +44,9 @@ class ControlResponse(val status: Int, val json: String)
 
 /**
  * Minimal HTTP/1.1 server of the phone remote on Android TV (`/omp/...`, see the spec «Управление с телефона»),
- * bound to all interfaces on [port]. One request per connection, body ≤ [MAX_BODY], read timeout, one accept
- * thread plus at most [workers] connection threads (daemons, [WORKERS] by default). Routing and auth live in [handler].
+ * bound on [port]. Clients that are not loopback/LAN (RFC1918 / IPv6 ULA) are refused before the body is read.
+ * One request per connection, body ≤ [MAX_BODY], read timeout, one accept thread plus at most [workers]
+ * connection threads (daemons, [WORKERS] by default). Routing and auth live in [handler].
  */
 class ControlServer(
     private val port: Int,
@@ -118,6 +120,10 @@ class ControlServer(
             val remote: InetAddress? = client.inetAddress
             val local: InetAddress? = client.localAddress
             val out = client.getOutputStream()
+            if (!LanAddresses.isLocalClient(remote)) {
+                respond(out, 403, error("forbidden"), null)
+                return
+            }
             // a slow sender (one byte per read timeout) is cut at the overall deadline
             val input = BufferedInputStream(DeadlineInput(client, System.nanoTime() + REQUEST_DEADLINE_MS * 1_000_000))
             val requestLine = readLine(input) ?: return

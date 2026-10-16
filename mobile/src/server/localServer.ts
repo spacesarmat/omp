@@ -6,7 +6,7 @@ import { addServer, setActiveServer } from '../../../src/store/servers';
 import { TorrServerClient } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
 import { log } from '../../../src/lib/log';
-import { t, fmtSize } from '../../../src/i18n';
+import { t, fmtNumber, fmtSize } from '../../../src/i18n';
 import { ru } from '../../../src/i18n/ru';
 import { en } from '../../../src/i18n/en';
 import { TORRSERVER_VERSION } from './torrserverVersion';
@@ -46,11 +46,19 @@ export function setLocalServerDeps(d: Partial<LocalServerDeps> | null): void {
 }
 
 export const localServer = signal<LocalServerInfo>({ supported: false, running: false });
+/** Outdated pinned TorrServer: sheet on the phone (same role as `updatePrompt` for OMP). */
+export const localUpdatePrompt = signal<LocalServerInfo | null>(null);
 
 const KEY = 'tsp.localServer';
+const SKIP_PIN_KEY = 'tsp.localServer.skipPin';
 
 // autostart stays off until the user has started the server once; `autostartKnown` tells "never chosen" from "off"
 let autostartKnown = false;
+
+function readSkippedPin(): string {
+  const v = loadJson<unknown>(SKIP_PIN_KEY, null, (x) => isObject(x) && typeof x.pin === 'string');
+  return isObject(v) && typeof v.pin === 'string' ? v.pin : '';
+}
 
 function readAutostart(): boolean | null {
   const v = loadJson<unknown>(KEY, null, (x) => isObject(x) && typeof x.autostart === 'boolean');
@@ -148,6 +156,16 @@ export function downloadSize(info: LocalServerInfo): string {
   return info.downloadBytes ? '~' + fmtSize(Math.max(info.downloadBytes, 1024 * 1024)) : '';
 }
 
+const MIB = 1024 * 1024;
+const GIB = 1024 * MIB;
+
+/** «39% · 12 из 31 МБ» under the download bar; just «39%» when the size is unknown. */
+export function downloadLine(pct: number, total: number | undefined): string {
+  if (!total) return pct + '%';
+  const [unit, digits] = total < GIB ? [MIB, 0] : [GIB, 1];
+  return t('localServer.downloadedOf', { pct, done: fmtNumber((total * pct) / 100 / unit, digits), total: fmtSize(total) });
+}
+
 /** True for the rejection of a download the user cancelled. */
 export function isDownloadCancelled(e: unknown): boolean {
   return !!e && typeof e === 'object' && (e as { code?: unknown }).code === 'cancelled';
@@ -219,8 +237,82 @@ export async function setupLocal(
 export async function autostartLocal(): Promise<void> {
   await refreshLocalServer();
   const st = localServer.value;
-  // never downloads on its own: without a binary the user starts it from the screen
+  // never downloads on its own: without a binary the user starts it from the screen;
+  // an outdated pin is offered by checkLocalServerUpdate / LocalUpdateSheet
   if (localAutostart.value && canRun(st) && !st.running) await startLocal();
+}
+
+/**
+ * After a new OMP pin ships: if the on-disk TorrServer is outdated and this pin was not skipped,
+ * open the update sheet. Safe to call on launch and when the app returns to the foreground.
+ */
+export async function checkLocalServerUpdate(): Promise<'update' | 'latest' | 'skipped'> {
+  await refreshLocalServer();
+  const st = localServer.value;
+  if (!st.supported || st.binary !== 'outdated') {
+    localUpdatePrompt.value = null;
+    return 'latest';
+  }
+  const pin = st.pinVersion || TORRSERVER_VERSION;
+  if (pin && pin === readSkippedPin()) {
+    localUpdatePrompt.value = null;
+    return 'skipped';
+  }
+  localUpdatePrompt.value = st;
+  return 'update';
+}
+
+export function dismissLocalUpdate(): void {
+  localUpdatePrompt.value = null;
+}
+
+/** Skip offering this pin until the next OMP TorrServer pin change. */
+export function skipLocalPin(pin: string): void {
+  if (pin) saveJson(SKIP_PIN_KEY, { pin });
+  localUpdatePrompt.value = null;
+}
+
+/**
+ * Download the pinned TorrServer and restart it when it was running (or autostart is on).
+ * Does not switch the active OMP server - unlike full setupLocal.
+ */
+export async function installLocalUpdate(onProgress: (p: LocalDownloadProgress) => void = () => {}): Promise<void> {
+  const info = await deps.native.localServerInfo();
+  if (!info.supported) throw new Error(t('localServer.unsupported'));
+  if (info.binary !== 'outdated' && info.binary !== 'missing') {
+    localUpdatePrompt.value = null;
+    return;
+  }
+  const wasRunning = !!info.running;
+  log('info', 'server', info.binary === 'outdated' ? t('localServer.logUpdating') : t('localServer.logDownloading'));
+  try {
+    await deps.native.downloadLocalServer(onProgress);
+  } catch (e) {
+    log(isDownloadCancelled(e) ? 'info' : 'warn', 'server', isDownloadCancelled(e) ? t('localServer.logCancelled') : t('localServer.logDownloadFailed'));
+    throw e;
+  }
+  log('info', 'server', t('localServer.logDownloaded'));
+  if (wasRunning) {
+    await deps.native.stopLocalServer();
+    await deps.native.startLocalServer();
+  } else if (localAutostart.value) {
+    await deps.native.startLocalServer();
+  }
+  await refreshLocalServer();
+  localUpdatePrompt.value = null;
+}
+
+/** Background TorrServer pin check: shortly after launch, then when OMP returns to the screen. */
+export function installLocalUpdateChecks(run: () => void, delayMs = 3500): () => void {
+  const timer = setTimeout(() => run(), delayMs);
+  const onShow = () => {
+    if (!document.hidden) run();
+  };
+  document.addEventListener('visibilitychange', onShow);
+  return () => {
+    clearTimeout(timer);
+    document.removeEventListener('visibilitychange', onShow);
+  };
 }
 
 /** Keeps the store in sync with the service (notification «Остановить», crash). Returns the unsubscribe. */
@@ -228,6 +320,6 @@ export function watchLocalServer(): () => void {
   return deps.native.onLocalServerState((s) => {
     localServer.value = { ...localServer.value, running: s.running, error: s.error };
     if (s.error && isCannotRun(s.error)) log('error', 'server', t('localServer.cannotRun'));
-    if (s.running) void refreshLocalServer();
+    if (s.running) void refreshLocalServer().then(() => void checkLocalServerUpdate().catch(() => {}));
   });
 }

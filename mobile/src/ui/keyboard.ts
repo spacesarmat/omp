@@ -1,11 +1,19 @@
-// Detects the soft keyboard (the WebView resizes with it) and toggles `m-kb-open` on <html>,
+// Detects the soft keyboard (visualViewport shrinks) and toggles `m-kb-open` on <html>,
 // so the tab bar, the mini player and the bottom reserve can step aside while the user types.
+// Also sets `--kb-inset`: how many px of the layout viewport sit under the IME (0 when closed).
 const CLASS = 'm-kb-open';
 const DROP = 150;
 
 function viewportHeight(): number {
   const vv = window.visualViewport;
   return vv && vv.height > 0 ? vv.height : window.innerHeight;
+}
+
+/** Layout px covered by the soft keyboard / occluded below the visual viewport. */
+export function keyboardInset(): number {
+  const vv = window.visualViewport;
+  if (!vv || !(vv.height > 0)) return 0;
+  return Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
 }
 
 function editableFocused(): boolean {
@@ -18,6 +26,10 @@ function editableFocused(): boolean {
     return !['button', 'checkbox', 'radio', 'submit', 'reset', 'range', 'file', 'image', 'color'].includes(type);
   }
   return el.isContentEditable === true || el.getAttribute('contenteditable') === 'true';
+}
+
+function setInset(px: number) {
+  document.documentElement.style.setProperty('--kb-inset', px + 'px');
 }
 
 export function startKeyboardWatch(): () => void {
@@ -36,6 +48,7 @@ export function startKeyboardWatch(): () => void {
     if (h > base) base = h;
     const open = base - h > DROP && editableFocused();
     document.documentElement.classList.toggle(CLASS, open);
+    setInset(open ? keyboardInset() : 0);
   };
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(update) || 0;
@@ -43,6 +56,7 @@ export function startKeyboardWatch(): () => void {
 
   window.addEventListener('resize', schedule);
   window.visualViewport?.addEventListener('resize', schedule);
+  window.visualViewport?.addEventListener('scroll', schedule);
   document.addEventListener('focusin', schedule);
   document.addEventListener('focusout', schedule);
   schedule();
@@ -50,9 +64,11 @@ export function startKeyboardWatch(): () => void {
   return () => {
     window.removeEventListener('resize', schedule);
     window.visualViewport?.removeEventListener('resize', schedule);
+    window.visualViewport?.removeEventListener('scroll', schedule);
     document.removeEventListener('focusin', schedule);
     document.removeEventListener('focusout', schedule);
     if (frame) cancelAnimationFrame(frame);
     document.documentElement.classList.remove(CLASS);
+    setInset(0);
   };
 }

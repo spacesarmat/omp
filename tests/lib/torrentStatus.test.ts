@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { statusText, statusLine } from '../../src/lib/torrentStatus';
+import { statusText, statusLine, swarmText } from '../../src/lib/torrentStatus';
 import { fmtBytes, fmtSpeed, lang } from '../../src/i18n';
 
 afterEach(() => {
@@ -31,6 +31,15 @@ describe('TorrServer states in the UI language', () => {
     expect(statusLine({ stat: 5, stat_string: 'Torrent in db' })).toBe('В базе');
     lang.value = 'en';
     expect(statusLine(working)).toBe('12.4 GB · Working · 0 B/s · peers 0/285');
+  });
+
+  it('names the current seeds and peers of a working torrent', () => {
+    expect(swarmText({ connected_seeders: 12, active_peers: 3 })).toBe('12 сидов · 3 пира');
+    expect(swarmText({ connected_seeders: 1, active_peers: 1 })).toBe('1 сид · 1 пир');
+    expect(swarmText({ connected_seeders: 0, active_peers: 0 })).toBe('0 сидов · 0 пиров');
+    expect(swarmText({})).toBe('0 сидов · 0 пиров');
+    lang.value = 'en';
+    expect(swarmText({ connected_seeders: 12, active_peers: 3 })).toBe('12 seeds · 3 peers');
   });
 
   it('formats sizes and speeds per language', () => {

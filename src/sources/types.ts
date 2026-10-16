@@ -77,7 +77,7 @@ export interface SourceContext {
 export interface Source {
   id: string;
   name: string;
-  kind: 'torrserver' | 'builtin' | 'indexer';
+  kind: 'torrserver' | 'builtin' | 'indexer' | 'billing';
   needsLogin?: boolean;
   search(query: string, ctx: SourceContext): Promise<SourceResult[]>;
   /**

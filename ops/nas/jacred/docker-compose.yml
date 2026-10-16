@@ -1,0 +1,69 @@
+# JacRed as a standalone ZimaOS / CasaOS app (not tied to OMP billing).
+# Install:
+#   1. Copy this directory → /DATA/AppData/omp-jacred
+#   2. casaos-cli app-management install -f /DATA/AppData/omp-jacred/docker-compose.yml
+#      or: docker compose -f /DATA/AppData/omp-jacred/docker-compose.yml up -d
+# UI: http://NAS:9118  (Jackett stays on 9117)
+name: omp-jacred
+services:
+  omp-jacred:
+    cpu_shares: 90
+    container_name: omp-jacred
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 128M
+    environment:
+      TZ: Europe/Moscow
+      ASPNETCORE_URLS: http://0.0.0.0:9118
+    image: ghcr.io/jacred-fdb/jacred:latest
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    network_mode: bridge
+    ports:
+      - target: 9118
+        published: "9118"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: /DATA/AppData/omp-jacred/init.yaml
+        target: /app/config/init.yaml
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /DATA/AppData/omp-jacred/data
+        target: /app/Data
+        bind:
+          create_host_path: true
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  author: spacesarmat
+  category: Downloaders
+  description:
+    en_US: JacRed torrent indexer on the NAS (port 9118). Standalone — not linked to OMP billing.
+    ru_RU: Индексатор JacRed на NAS (порт 9118). Отдельно — без связи с OMP billing.
+  developer: OMP
+  hostname: ""
+  icon: https://cdn.jsdelivr.net/gh/spacesarmat/omp@refactor/code/assets/icon.svg
+  id: com.spacesarmat.omp-jacred
+  index: /
+  is_uncontrolled: false
+  main: omp-jacred
+  port_map: "9118"
+  scheme: http
+  store_app_id: omp-jacred
+  tagline:
+    en_US: JacRed on the NAS
+    ru_RU: JacRed на NAS
+  title:
+    custom: JacRed
+    en_US: JacRed
+    ru_RU: JacRed
+  version: 0.1.0
+  update_at: "2026-10-15"

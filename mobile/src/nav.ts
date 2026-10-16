@@ -19,6 +19,8 @@ export type MRoute =
   | { name: 'nowPlaying' }
   | { name: 'tv' }
   | { name: 'settings' }
+  /** «Настройки» → «Плеер для видео». */
+  | { name: 'videoPlayer' }
   | { name: 'serverSettings'; url?: string }
   | { name: 'localServer' }
   /** `q` opens that question. */
@@ -33,6 +35,8 @@ export type MRoute =
   | { name: 'sourceSite'; id: string }
   /** A TMDB title card from «Обзор» (`TitleCard`). */
   | { name: 'title'; kind: 'movie' | 'tv'; id: number }
+  /** One season of a catalog series (`SeasonCard`). */
+  | { name: 'seasonCard'; id: number; season: number }
   /** «Мои» → the torrents of one series (`key` from seriesGroups), by season. */
   /** `season` is the season to open first (the series screen falls back to its own pick without it). */
   | { name: 'series'; key: string; season?: number }

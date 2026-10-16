@@ -1,6 +1,8 @@
 import { useEffect } from 'preact/hooks';
 import { effect } from '@preact/signals';
 import { App as CapApp } from '@capacitor/app';
+import { parseBillingDeepLink } from '../../src/billing/deepLink';
+import { setPendingBillingCode } from '../../src/billing/session';
 import { currentRoute, goBack, switchTab, setPendingLink, type MRoute } from './nav';
 import { activeServer, client } from '../../src/store/servers';
 import { refreshTorrents } from '../../src/store/library';
@@ -23,13 +25,21 @@ import { Library } from './screens/Library';
 import { Torrent } from './screens/Torrent';
 import { Add } from './screens/Add';
 import { LocalServer } from './screens/LocalServer';
-import { autostartLocal, watchLocalServer } from './server/localServer';
+import {
+  autostartLocal,
+  checkLocalServerUpdate,
+  installLocalUpdateChecks,
+  localUpdatePrompt,
+  watchLocalServer,
+} from './server/localServer';
 import { Remote } from './screens/Remote';
 import { NowPlaying } from './screens/NowPlaying';
 import { MiniPlayer } from './ui/MiniPlayer';
 import { Settings, runUpdateCheck, phoneFeedUrl } from './screens/Settings';
+import { VideoPlayer } from './screens/VideoPlayer';
 import { ServerSettings } from './screens/ServerSettings';
 import { UpdateSheet } from './ui/UpdateSheet';
+import { LocalUpdateSheet } from './ui/LocalUpdateSheet';
 import { runBack } from './ui/backStack';
 import { WhatsNewSheet } from './ui/WhatsNewSheet';
 import { DonateSheet } from './ui/DonateSheet';
@@ -47,6 +57,7 @@ import { News } from './screens/News';
 import { SubFindings } from './screens/SubFindings';
 import { Monitor } from './screens/Monitor';
 import { TitleCard } from './screens/catalog/TitleCard';
+import { SeasonCard } from './screens/catalog/SeasonCard';
 import { Series } from './screens/Series';
 import { Person } from './screens/catalog/Person';
 import { monitorNative } from './monitor/native';
@@ -195,6 +206,38 @@ export function App() {
     return () => off?.();
   }, []);
 
+  // omp://billing?code=… from the Telegram bot (cold start + while running)
+  useEffect(() => {
+    function intakeBilling(url: string): void {
+      const code = parseBillingDeepLink(url);
+      if (!code) return;
+      setPendingBillingCode(code);
+      showToast(t('sources.billing.codeFromLink'));
+      if (currentRoute.value.name !== 'sources') switchTab({ name: 'sources' });
+    }
+    let remove: (() => void) | undefined;
+    let cancelled = false;
+    try {
+      void CapApp.getLaunchUrl()
+        .then((res) => {
+          if (res && res.url) intakeBilling(res.url);
+        })
+        .catch(() => {});
+      CapApp.addListener('appUrlOpen', (ev) => intakeBilling(ev.url))
+        .then((h) => {
+          if (cancelled) void h.remove();
+          else remove = () => void h.remove();
+        })
+        .catch(() => {});
+    } catch {
+      /* browser without Capacitor */
+    }
+    return () => {
+      cancelled = true;
+      if (remove) remove();
+    };
+  }, []);
+
   // monitoring: (re)schedule the background check with the saved settings (idempotent), follow finished background
   // runs (reload the stores and the library) and open the findings of tapped notifications
   useEffect(() => {
@@ -249,11 +292,18 @@ export function App() {
     [],
   );
 
+  // TorrServer pin shipped with OMP: offer download when the on-disk binary is outdated
+  useEffect(
+    () => installLocalUpdateChecks(() => void checkLocalServerUpdate().catch(() => {})),
+    [],
+  );
+
   const route = currentRoute.value;
   const prompt = updatePrompt.value;
+  const localPrompt = localUpdatePrompt.value;
   const tabRoot = TABS.includes(route.name);
   // a «Обзор» title card keeps the bottom tabs with «Каталог» highlighted
-  const showNav = tabRoot || route.name === 'title' || route.name === 'series' || route.name === 'person';
+  const showNav = tabRoot || route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person';
   // swipe left / right between the bottom tabs
   useEffect(() => {
     if (!tabRoot) return;
@@ -304,6 +354,8 @@ export function App() {
         <LocalServer />
       ) : route.name === 'serverSettings' ? (
         <ServerSettings url={route.url} />
+      ) : route.name === 'videoPlayer' ? (
+        <VideoPlayer />
       ) : route.name === 'remote' ? (
         <Remote />
       ) : route.name === 'series' ? (
@@ -312,18 +364,22 @@ export function App() {
         <Person key={route.id} id={route.id} label={route.label} />
       ) : route.name === 'title' ? (
         <TitleCard key={route.kind + ':' + route.id} kind={route.kind} id={route.id} />
+      ) : route.name === 'seasonCard' ? (
+        <SeasonCard key={route.id + ':' + route.season} id={route.id} season={route.season} />
       ) : (
         <Settings />
       )}
       {prompt && tabRoot && <UpdateSheet info={prompt} />}
+      {/* TorrServer after OMP sheet: pin arrives with the APK, binary still needs a separate download */}
+      {!prompt && localPrompt && tabRoot && <LocalUpdateSheet info={localPrompt} />}
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
-      {tabRoot && !prompt && <WhatsNewSheet />}
+      {tabRoot && !prompt && !localPrompt && <WhatsNewSheet />}
       {tabRoot && <DonateSheet />}
       <CertChangedSheet />
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}
-      {showNav && <NavBar active={route.name === 'title' || route.name === 'series' || route.name === 'person' ? 'library' : (route.name as Tab)} />}
+      {showNav && <NavBar active={route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person' ? 'library' : (route.name as Tab)} />}
     </Fragment>
   );
 }

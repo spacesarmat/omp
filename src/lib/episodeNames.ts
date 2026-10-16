@@ -18,6 +18,10 @@ export interface ShowInfo {
   year: number;
   /** The season numbers TMDB lists (no specials). */
   seasons: number[];
+  /** The show's poster, '' when TMDB has none. */
+  poster: string;
+  /** A season's own poster, by season number. */
+  seasonPosters: { [n: number]: string };
 }
 
 const shows = new Map<string, Promise<ShowInfo | null>>();
@@ -40,12 +44,18 @@ async function match(tor: Torrent): Promise<ShowInfo | null> {
   } catch {
     // the seasons list is a bonus: the names still work
   }
+  const seasonPosters: { [n: number]: string } = {};
+  if (card) card.seasons.forEach((s) => {
+    if (s.poster) seasonPosters[s.number] = s.poster;
+  });
   return {
     id: item.id,
     title: item.title,
     original: item.original,
     year: item.year,
     seasons: card ? card.seasons.map((s) => s.number).filter((n) => n > 0).sort((a, b) => a - b) : [],
+    poster: (card && card.poster) || item.poster || '',
+    seasonPosters: seasonPosters,
   };
 }
 

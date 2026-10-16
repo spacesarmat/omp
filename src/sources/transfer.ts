@@ -263,6 +263,8 @@ export function buildTransferPayload(
   let cf = 0;
   list.forEach((s) => {
     if (!SOURCE_ID.test(s.id)) return;
+    // paid Jackett stays on the phone: the TV never receives its switch or a token
+    if (s.kind === 'billing') return;
     sources[s.id] = isSourceOn(s);
     if (s.cloudflare === true && cf < MAX_TRANSFER_SOURCES) {
       cloudflare[s.id] = isCloudflareBypassOn(s);

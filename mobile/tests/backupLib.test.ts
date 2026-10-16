@@ -78,6 +78,7 @@ describe('collectBackup', () => {
     put('tsp.trackPrefs', { h1: { audioLang: 'ru' } });
     put('tsp.support', { until: 1798934400000 });
     put('tsp.catalogMode', 'discover');
+    put('tsp.catalogArt', { 'tv:21': 'https://img.test/a.jpg' });
     put('tsp.discoverCols', 3);
     put('tsp.discoverQuery', { sort: 'rating', genres: ['drama', 'nope'], rating: 7 });
     put('tsp.searchFilters', { hdr: true });
@@ -136,6 +137,11 @@ describe('collectBackup', () => {
     walk(join('mobile', 'src'));
     expect(Object.keys(found).length).toBeGreaterThan(40);
     expect(Object.keys(found).filter((k) => listed.indexOf(k) < 0).map((k) => k + ' (' + found[k] + ')')).toEqual([]);
+  });
+
+  it('keeps a chosen series poster and drops anything else', () => {
+    put('tsp.catalogArt', { 'tv:21': 'https://img.test/a.jpg', 'tv:21:s2': 'https://img.test/s.jpg', bad: 'https://img.test/x.jpg', 'tv:3': 'not-a-url' });
+    expect(collectBackup(NOW).data['tsp.catalogArt']).toEqual({ 'tv:21': 'https://img.test/a.jpg', 'tv:21:s2': 'https://img.test/s.jpg' });
   });
 
   it('keeps the «Обзор» sort and filters only when they are an object, sanitized', () => {

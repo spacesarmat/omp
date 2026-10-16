@@ -27,3 +27,13 @@ monitor-out/
 # the admin bot (ops/admin-bot): wrangler cache, local secrets
 .wrangler/
 .dev.vars
+# local scratch / VPS migration helpers (may contain live secrets)
+.tmp-*/
+.tmp-*
+ops/billing/.tunnel-bin/
+# VPS / NAS runtime secrets (templates stay as *.example)
+ops/vps/.env
+ops/nas/**/init.yaml
+ops/nas/**/.env
+graphify-out/
+**/graphify-out/

@@ -116,7 +116,7 @@ describe('Tv screen with Android TV', () => {
     const d = dialog()!;
     expect(d.textContent).toContain('Гостиная · Android TV');
     expect(d.textContent).toContain('На телевизоре откройте OMP → Настройки → «Подключить телефон» и введите код с экрана.');
-    expect(cells()).toHaveLength(4);
+    expect(cells()).toHaveLength(6);
     expect(cells()[0].getAttribute('inputmode')).toBe('numeric');
     expect(button(d, 'Подключить').disabled).toBe(true);
     type(cells()[0], '0');
@@ -126,9 +126,11 @@ describe('Tv screen with Android TV', () => {
     expect(cells()[2].value).toBe('');
     type(cells()[2], '8');
     type(cells()[3], '2');
+    type(cells()[4], '0');
+    type(cells()[5], '1');
     await act(async () => button(dialog()!, 'Подключить').click());
     await flush();
-    expect(calls.find((c) => c.url === BASE + '/omp/pair')!.body).toEqual({ code: '0482', phone: 'Телефон' });
+    expect(calls.find((c) => c.url === BASE + '/omp/pair')!.body).toEqual({ code: '048201', phone: 'Телефон' });
     expect(dialog()).toBeNull();
     expect(tvs.value.find((t) => t.ip === '192.168.1.40')).toMatchObject({ kind: 'atv', token: TOKEN });
     expect(activeTv.value?.ip).toBe('192.168.1.40');
@@ -137,12 +139,12 @@ describe('Tv screen with Android TV', () => {
     expect(lgConnects).toEqual([]);
   });
 
-  it('pasting four digits fills every cell', async () => {
+  it('pasting six digits fills every cell', async () => {
     const el = mount();
     await flush();
     await act(async () => (card(el, 'Гостиная').querySelector('.m-tv-main') as HTMLButtonElement).click());
-    type(cells()[0], '1234');
-    expect(cells().map((c) => c.value)).toEqual(['1', '2', '3', '4']);
+    type(cells()[0], '123456');
+    expect(cells().map((c) => c.value)).toEqual(['1', '2', '3', '4', '5', '6']);
     expect(button(dialog()!, 'Подключить').disabled).toBe(false);
   });
 
@@ -163,7 +165,7 @@ describe('Tv screen with Android TV', () => {
     await flush();
     await act(async () => (card(el, 'Гостиная').querySelector('.m-tv-main') as HTMLButtonElement).click());
     pairAnswer = { status: 403, body: '{"error":"bad_code"}' };
-    type(cells()[0], '1111');
+    type(cells()[0], '111111');
     await act(async () => button(dialog()!, 'Подключить').click());
     await flush();
     expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe('Неверный код');
@@ -211,7 +213,7 @@ describe('Tv screen with Android TV', () => {
     await flush();
     await act(async () => (card(el, 'Гостиная').querySelector('.m-tv-main') as HTMLButtonElement).click());
     paired = false;
-    type(cells()[0], '0482');
+    type(cells()[0], '048201');
     await act(async () => button(dialog()!, 'Подключить').click());
     await flush();
     expect(dialog()).toBeNull();

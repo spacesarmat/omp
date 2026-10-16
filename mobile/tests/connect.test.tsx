@@ -219,19 +219,41 @@ describe('Connect screen: TorrServer on the phone', () => {
   const supportedDeps = () =>
     setLocalServerDeps({ native: { localServerInfo: async () => ({ supported: true, running: false }) } as any });
 
-  it('offers the card when nothing is found and the phone supports it', async () => {
-    supportedDeps();
+  it('offers to install on the phone when the scan finds no TorrServer', async () => {
+    setLocalServerDeps({ native: { localServerInfo: async () => ({ supported: true, running: false, binary: 'missing' }) } as any });
     setServerScanner(async () => []);
-    localServer.value = { supported: true, running: false };
+    localServer.value = { supported: true, running: false, binary: 'missing' };
     const el = mount();
     await flush();
     const t = el.textContent!;
     expect(t).toContain('В сети не нашлось TorrServer');
-    expect(t).toContain('TorrServer прямо на телефоне');
-    expect(t).toContain('OMP запустит встроенный сервер. Телевизор найдёт его сам, пока телефон в той же сети Wi‑Fi.');
+    expect(t).toContain('Установить TorrServer на это устройство');
+    expect(t).toContain('В сети серверов нет. OMP скачает TorrServer один раз и запустит его на телефоне.');
     expect(t).not.toContain('Искать в сети ещё раз');
-    await act(async () => btn(el, 'Запустить TorrServer на телефоне').click());
+    await act(async () => btn(el, 'Установить на устройство').click());
     expect(currentRoute.value.name).toBe('localServer');
+  });
+
+  it('starts an installed server that is stopped, then connects to it', async () => {
+    const start = vi.fn(async () => {});
+    setLocalServerDeps({
+      native: {
+        localServerInfo: async () => ({ supported: true, running: false, binary: 'ready' }),
+        startLocalServer: start,
+      } as any,
+    });
+    setServerScanner(async () => [{ url: 'http://192.168.1.9:8090', version: 'MatriX.1' }]);
+    localServer.value = { supported: true, running: false, binary: 'ready' };
+    mockFetch(() => ({ body: 'MatriX.145' }));
+    const el = mount();
+    await flush();
+    expect(el.textContent).toContain('192.168.1.9:8090');
+    expect(el.textContent).toContain('Сервер установлен, но сейчас остановлен.');
+    await act(async () => btn(el, 'Запустить сервер').click());
+    await flush();
+    expect(start).toHaveBeenCalled();
+    expect(activeServer.value?.url).toBe('http://127.0.0.1:8090');
+    expect(currentRoute.value.name).toBe('library');
   });
 
   it('has no card on a phone without the embedded server', async () => {
@@ -440,6 +462,39 @@ describe('scanLan', () => {
       ['192.168.1', '192.168.0'],
     ]);
   });
+
+  it('uses the native TCP scan and only echoes open ports', async () => {
+    const discover = vi.fn(async () => []);
+    const probed: string[] = [];
+    const found = await scanLan(() => false, {
+      localIp: async () => '10.0.5.23',
+      discover,
+      tcpScan: async () => [
+        { ip: '10.0.5.9', port: 8090 },
+        { ip: '10.0.5.11', port: 5665 },
+      ],
+      probe: async (url) => {
+        probed.push(url);
+        return url.endsWith(':8090') ? 'MatriX.1' : null;
+      },
+    });
+    expect(discover).not.toHaveBeenCalled();
+    expect(probed).toEqual(['http://10.0.5.9:8090', 'http://10.0.5.11:5665']);
+    expect(found).toEqual([{ url: 'http://10.0.5.9:8090', version: 'MatriX.1' }]);
+  });
+
+  it('falls back to JS discover when the native scan rejects', async () => {
+    const calls: any[] = [];
+    await scanLan(() => false, {
+      localIp: async () => '10.0.5.23',
+      discover: async (o) => (calls.push(o), []),
+      tcpScan: async () => {
+        throw new Error('only Android');
+      },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].subnets).toEqual(['10.0.5']);
+  });
 });
 
 describe('Connect screen in English', () => {
@@ -487,9 +542,9 @@ describe('Connect screen in English', () => {
     await flush();
     const t = el.textContent!;
     expect(t).toContain('No TorrServer found on the network');
-    expect(t).toContain('TorrServer right on the phone');
+    expect(t).toContain('Install TorrServer on this device');
     expect(t).toContain('Not found? Check that both devices are on the same Wi‑Fi network');
-    expect(btn(el, 'Start TorrServer on the phone')).toBeTruthy();
+    expect(btn(el, 'Install on this device')).toBeTruthy();
     expect(t).not.toMatch(/[А-Яа-яЁё]/);
   });
 });

@@ -1,0 +1,45 @@
+{
+	email {$CADDY_EMAIL:admin@omp-player.online}
+}
+
+# Project landing page (apex + www)
+omp-player.online, www.omp-player.online {
+	encode gzip
+	root * /srv/site
+	file_server
+	try_files {path} /index.html
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	}
+}
+
+billing.omp-player.online {
+	encode gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+	}
+	reverse_proxy billing:8787
+}
+
+# INDEXER_HASH = bcrypt from: caddy hash-password --plaintext '…'
+# Must match billing settings indexerUser / indexerPass (VPS .env INDEXER_*).
+jackett.omp-player.online {
+	encode gzip
+	basic_auth {
+		{$INDEXER_USER} {$INDEXER_HASH}
+	}
+	reverse_proxy jackett:9117
+}
+
+jacred.omp-player.online {
+	encode gzip
+	basic_auth {
+		{$INDEXER_USER} {$INDEXER_HASH}
+	}
+	reverse_proxy jacred:9117
+}

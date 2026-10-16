@@ -15,7 +15,8 @@ import type { CatalogClient } from '../../src/catalog/client';
 import { sourceHttp } from '../src/platform/native';
 import type { CatalogTitle, Kind } from '../../src/catalog/tmdb';
 import type { Torrent } from '../../src/api/types';
-import type { DiscoverQuery } from '../../src/catalog/discoverQuery';
+import { DEFAULT_DISCOVER_QUERY, type DiscoverQuery } from '../../src/catalog/discoverQuery';
+import { saveDiscoverQuery } from '../src/screens/catalog/discoverQueryStore';
 // @ts-ignore node builtins
 import { readFileSync } from 'node:fs';
 // @ts-ignore
@@ -53,10 +54,16 @@ function fake(impl?: Novelties) {
       queries.push(query);
       return novelties(kind, page);
     },
+    home: vi.fn(async () => {
+      const r = await novelties('all', 1);
+      return r.items.length ? [{ id: 'trending' as const, items: r.items }] : [];
+    }),
     search: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
     card: vi.fn(() => Promise.reject(codeError('bad'))),
     season: vi.fn(() => Promise.reject(codeError('bad'))),
     person: vi.fn(() => Promise.reject(codeError('bad'))),
+    similar: vi.fn(() => Promise.resolve([])),
+    posters: vi.fn(() => Promise.resolve([])),
   };
   setCatalogClientForTests(c);
   return novelties;
@@ -117,6 +124,8 @@ async function scrollToEnd() {
 beforeEach(() => {
   clearDiscover();
   localStorage.clear();
+  // grid mode: homepage rails are the default for sort=popular with no filters
+  saveDiscoverQuery({ ...DEFAULT_DISCOVER_QUERY, sort: 'rating' });
   observed = [];
   vi.stubGlobal('IntersectionObserver', FakeObserver);
   torrents.value = [];
@@ -540,16 +549,32 @@ describe('«Обзор»: sort, filters, title and year', () => {
     expect(rule('.m-disc-when')).not.toContain('min-height');
   });
 
-  it('default «Популярные»; the sort sheet picks «По рейтингу»: kept, page 1 fetched again, scrolled to the top', async () => {
+  it('default homepage rails; sort «По рейтингу» opens the discover grid', async () => {
     let top = 0;
     const root = document.documentElement;
     Object.defineProperty(root, 'scrollTop', { configurable: true, get: () => top, set: (v: number) => (top = v) });
     try {
+      saveDiscoverQuery(DEFAULT_DISCOVER_QUERY);
       const nov = fake();
+      const home = vi.fn(() =>
+        Promise.resolve([{ id: 'trending' as const, items: [MOVIE, SHOW] }, { id: 'popularMovies' as const, items: [MOVIE2] }]),
+      );
+      setCatalogClientForTests({
+        novelties: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
+        discover: (kind, query, page) => {
+          queries.push(query);
+          return nov(kind, page);
+        },
+        home,
+        search: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
+        card: vi.fn(() => Promise.reject(codeError('bad'))),
+      });
       mount(<Discover />);
       await flush();
-      expect(queries[0].sort).toBe('popular');
-      expect(sortBtn().getAttribute('aria-label')).toBe('Сортировка: Популярные');
+      expect(home).toHaveBeenCalled();
+      expect(el.querySelector('.m-disc-home')).toBeTruthy();
+      expect(el.querySelector('[data-rail="trending"]')).toBeTruthy();
+      expect(sortBtn().getAttribute('aria-label')).toBe('Списки и фильтры');
       top = 800;
       act(() => sortBtn().click());
       expect(Array.from(sheet()!.querySelectorAll('.m-opt')).map((b) => b.textContent)).toEqual(['Популярные', 'По рейтингу', 'По дате выхода', 'Самые ожидаемые', 'Скоро в цифре']);
@@ -562,13 +587,8 @@ describe('«Обзор»: sort, filters, title and year', () => {
       expect(queries[queries.length - 1].sort).toBe('rating');
       expect(stored().sort).toBe('rating');
       expect(top).toBe(0);
+      expect(el.querySelector('.m-disc-grid')).toBeTruthy();
       expect(sortBtn().getAttribute('aria-label')).toBe('Сортировка: По рейтингу');
-      // the same sort again: nothing new
-      nov.mockClear();
-      act(() => sortBtn().click());
-      act(() => inSheet('По рейтингу').click());
-      await flush();
-      expect(nov).not.toHaveBeenCalled();
     } finally {
       delete (root as unknown as { scrollTop?: number }).scrollTop;
     }
@@ -598,7 +618,7 @@ describe('«Обзор»: sort, filters, title and year', () => {
     expect(sheet()).toBeNull();
     expect(nov).toHaveBeenCalledTimes(1);
     const q = queries[queries.length - 1];
-    expect(q).toEqual({ sort: 'popular', genres: ['drama', 'comedy'], year: 'last', from: 0, to: 0, country: 'KR', rating: 7 });
+    expect(q).toEqual({ sort: 'rating', genres: ['drama', 'comedy'], year: 'last', from: 0, to: 0, country: 'KR', rating: 7 });
     expect(stored()).toEqual(q);
     expect(filtersBtn().textContent).toBe('Фильтры · 5');
     expect(filtersBtn().className).toContain('on');
@@ -608,7 +628,7 @@ describe('«Обзор»: sort, filters, title and year', () => {
     act(() => (sheet()!.querySelector('.m-sheet-head .m-link-btn') as HTMLButtonElement).click());
     act(() => inSheet('Показать').click());
     await flush();
-    expect(stored()).toEqual({ sort: 'popular', genres: [], year: 'any', from: 0, to: 0, country: '', rating: 0 });
+    expect(stored()).toEqual({ sort: 'rating', genres: [], year: 'any', from: 0, to: 0, country: '', rating: 0 });
     expect(filtersBtn().textContent).toBe('Фильтры');
   });
 
@@ -692,11 +712,12 @@ describe('«Обзор»: sort, filters, title and year', () => {
       await flush();
       expect(tiles()[0].querySelector('.m-disc-meta')!.textContent).toBe('Movie · 2026');
       expect(tiles()[1].querySelector('.m-disc-meta')!.textContent).toBe('Series · 2026');
-      expect(sortBtn().getAttribute('aria-label')).toBe('Sort: Popular');
+      expect(sortBtn().getAttribute('aria-label')).toBe('Sort: Top rated');
       act(() => sortBtn().click());
       expect(Array.from(sheet()!.querySelectorAll('.m-opt')).map((b) => b.textContent)).toEqual(['Popular', 'Top rated', 'Newest', 'Most anticipated', 'Coming to digital']);
-      act(() => inSheet('Top rated').click());
+      act(() => inSheet('Popular').click());
       await flush();
+      expect(el.querySelector('.m-disc-home')).toBeTruthy();
       expect(filtersBtn().textContent).toBe('Filters');
       act(() => filtersBtn().click());
       expect(Array.from(sheet()!.querySelectorAll('.m-filter-label')).map((x) => x.textContent)).toEqual(['Genre', 'Year', 'Country / language', 'Min. rating']);

@@ -13,7 +13,7 @@
 | `/ci` | последние запуски CI (main), Release, Parser monitor: ✅ / ❌ / ⏳, когда, ссылка |
 | `/help` | список команд |
 
-Бот отвечает **только** в чат `ADMIN_CHAT_ID` (по умолчанию `536445442` — личка администратора). Всем остальным —
+Бот отвечает **только** в чат из секрета `ADMIN_CHAT_ID` (ваша личка с ботом = Telegram user id). Всем остальным -
 тишина, без ответа. Каждый запрос от Telegram проверяется по секрету `WEBHOOK_SECRET` (заголовок
 `X-Telegram-Bot-Api-Secret-Token`): чужой запрос на адрес Worker получает 403 и ничего не делает.
 
@@ -98,9 +98,9 @@ npx wrangler login
 Откроется браузер → **Allow**. В терминале появится «Successfully logged in». Все следующие команды `wrangler` —
 из папки `ops/admin-bot`.
 
-Проверьте `wrangler.toml`: `ADMIN_CHAT_ID` — ваш чат (`536445442`), `CHANNEL_ID` — канал OMP, тот же, что переменная
-репозитория `TELEGRAM_CHAT_ID` (GitHub → Settings → Secrets and variables → Actions → вкладка Variables). Если там
-числовой id — впишите его вместо `@ompplyaer`.
+Проверьте `wrangler.toml`: `CHANNEL_ID` - канал OMP, тот же, что переменная репозитория `TELEGRAM_CHAT_ID`
+(GitHub → Settings → Secrets and variables → Actions → вкладка Variables). Если там числовой id - впишите его вместо
+`@ompplyaer`. Чат администратора задаётся секретом `ADMIN_CHAT_ID` (шаг 5), не в git.
 
 ## Шаг 5. Выложить Worker и положить секреты
 
@@ -108,20 +108,22 @@ npx wrangler login
 npx wrangler deploy
 ```
 
-В конце wrangler напишет адрес вида `https://omp-admin-bot.<имя>.workers.dev` — запомните его. Пока секретов нет,
-Worker отвечает на всё «403» и ничего не делает — так и задумано.
+В конце wrangler напишет адрес вида `https://omp-admin-bot.<имя>.workers.dev` - запомните его. Пока секретов нет,
+Worker отвечает на всё «403» и ничего не делает - так и задумано.
 
-Теперь три секрета. Каждая команда спросит значение (вставьте и Enter; ввод скрыт):
+Теперь четыре секрета. Каждая команда спросит значение (вставьте и Enter; ввод скрыт):
 
 ```
+npx wrangler secret put ADMIN_CHAT_ID
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 npx wrangler secret put GH_TOKEN
 npx wrangler secret put WEBHOOK_SECRET
 ```
 
-- `TELEGRAM_BOT_TOKEN` — токен бота OMP от @BotFather;
-- `GH_TOKEN` — токен из шага 2;
-- `WEBHOOK_SECRET` — строка из шага 3.
+- `ADMIN_CHAT_ID` - ваш Telegram user id (личка с ботом);
+- `TELEGRAM_BOT_TOKEN` - токен бота OMP от @BotFather;
+- `GH_TOKEN` - токен из шага 2;
+- `WEBHOOK_SECRET` - строка из шага 3.
 
 Секреты хранятся в Cloudflare зашифрованными, в репозиторий они не попадают. Применяются сразу, повторный deploy не нужен.
 

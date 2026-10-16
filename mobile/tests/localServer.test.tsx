@@ -3,6 +3,7 @@ import { applyLanguageSetting } from '../../src/i18n';
 import {
   localServer,
   localAutostart,
+  localUpdatePrompt,
   setLocalServerDeps,
   reloadLocalServerSettings,
   refreshLocalServer,
@@ -11,6 +12,10 @@ import {
   setAutostart,
   setupLocal,
   autostartLocal,
+  checkLocalServerUpdate,
+  dismissLocalUpdate,
+  skipLocalPin,
+  installLocalUpdate,
   needsDownload,
   canRun,
   downloadSize,
@@ -50,6 +55,7 @@ beforeEach(() => {
   setActiveServer(null);
   reloadLocalServerSettings();
   localServer.value = { supported: false, running: false };
+  localUpdatePrompt.value = null;
 });
 
 afterEach(() => setLocalServerDeps(null));
@@ -288,6 +294,61 @@ describe('local server store', () => {
     await autostartLocal();
     expect(g.calls).toContain('start');
     expect(g.calls).not.toContain('download');
+  });
+
+  it('checkLocalServerUpdate opens a prompt only when the binary is outdated', async () => {
+    const ready = fakeNative({ info: { supported: true, running: false, binary: 'ready' } });
+    setLocalServerDeps({ native: ready.native as any });
+    expect(await checkLocalServerUpdate()).toBe('latest');
+    expect(localUpdatePrompt.value).toBeNull();
+    const outdated = withBinary('outdated');
+    setLocalServerDeps({ native: outdated.native });
+    expect(await checkLocalServerUpdate()).toBe('update');
+    expect(localUpdatePrompt.value?.binary).toBe('outdated');
+    expect(localUpdatePrompt.value?.pinVersion).toBe('MatriX.146');
+    dismissLocalUpdate();
+    expect(localUpdatePrompt.value).toBeNull();
+  });
+
+  it('skipLocalPin suppresses the prompt until the pin changes', async () => {
+    const f = withBinary('outdated');
+    setLocalServerDeps({ native: f.native });
+    expect(await checkLocalServerUpdate()).toBe('update');
+    skipLocalPin('MatriX.146');
+    expect(localUpdatePrompt.value).toBeNull();
+    expect(await checkLocalServerUpdate()).toBe('skipped');
+    expect(localUpdatePrompt.value).toBeNull();
+    const next = fakeNative({
+      info: { supported: true, running: false, binary: 'outdated', pinVersion: 'MatriX.147' },
+    });
+    const native: any = {
+      ...next.native,
+      async downloadLocalServer() {
+        return { supported: true, running: false, binary: 'ready' };
+      },
+    };
+    setLocalServerDeps({ native });
+    expect(await checkLocalServerUpdate()).toBe('update');
+    expect(localUpdatePrompt.value?.pinVersion).toBe('MatriX.147');
+  });
+
+  it('installLocalUpdate downloads, restarts a running server, and clears the prompt', async () => {
+    const f = withBinary('outdated', true);
+    setLocalServerDeps({ native: f.native });
+    localUpdatePrompt.value = { supported: true, running: true, binary: 'outdated', pinVersion: 'MatriX.146' };
+    const progress: any[] = [];
+    await installLocalUpdate((p) => progress.push(p));
+    expect(f.calls).toEqual(['info', 'download', 'stop', 'start', 'info']);
+    expect(progress).toEqual([{ phase: 'download', percent: 50 }, { phase: 'verify' }]);
+    expect(localUpdatePrompt.value).toBeNull();
+  });
+
+  it('installLocalUpdate starts after download when autostart is on and the server was stopped', async () => {
+    setAutostart(true);
+    const f = withBinary('outdated', false);
+    setLocalServerDeps({ native: f.native });
+    await installLocalUpdate();
+    expect(f.calls).toEqual(['info', 'download', 'start', 'info']);
   });
 
   it('autostart swallows a start error into the store', async () => {

@@ -29,8 +29,8 @@ export interface PersonCard {
   bio: string;
   known: 'acting' | 'directing' | 'other'; acting: Credit[]; directing: Credit[];
 }
-/** `airDate`: 'YYYY-MM-DD' or '' (absent in cards cached before 0.17.0-beta.2: unknown). */
-export interface Season { number: number; episodes: number; year: number; aired: number; airDate?: string; }
+/** `airDate`: 'YYYY-MM-DD' or '' (absent in cards cached before 0.17.0-beta.2: unknown). `poster` is the season's own image ('' or absent when TMDB has none, including cards cached before it was kept). */
+export interface Season { number: number; episodes: number; year: number; aired: number; airDate?: string; poster?: string; }
 /** A series' state, language-neutral: '' when TMDB says nothing known (or a card cached without it). */
 export type SeriesStatus = 'returning' | 'ended' | 'canceled' | 'production' | 'planned' | '';
 /** TMDB's next_episode_to_air: `airDate` is 'YYYY-MM-DD' or '' when not dated yet. */
@@ -44,6 +44,8 @@ export interface Releases { theatrical?: string; digital?: string; physical?: st
 export interface CatalogCard extends CatalogTitle {
   backdrop: string; genres: string[]; runtime: number; overview: string; cast: Person[]; seasons: Season[]; airing: boolean;
   status?: SeriesStatus; nextEpisode?: NextEpisode | null; lastAirDate?: string;
+  /** First air date 'YYYY-MM-DD' (series). Absent on cards cached before it was kept. */
+  firstAirDate?: string;
   /** Films only; absent in film cards cached before 0.17.0-beta.6 (they are fetched again). */
   releases?: Releases;
 }
@@ -78,10 +80,70 @@ function url(e: TmdbEndpoint, path: string, params: { [k: string]: string | numb
 }
 
 export function noveltiesUrl(e: TmdbEndpoint, kind: Kind, page: number, today: string): string {
-  if (kind === 'tv') return url(e, 'tv/on_the_air', { page: page, region: 'RU' });
+  if (kind === 'tv') return url(e, 'tv/on_the_air', { page: page, region: discoverRegion() });
   return url(e, 'discover/movie', {
-    page: page, region: 'RU', with_release_type: 4, 'release_date.lte': today, sort_by: 'primary_release_date.desc', 'vote_count.gte': 20,
+    page: page, region: discoverRegion(), with_release_type: 4, 'release_date.lte': today, sort_by: 'primary_release_date.desc', 'vote_count.gte': 20,
   });
+}
+
+/** TMDB.org-style homepage rails (same list endpoints the website uses). */
+export type HomeSectionId =
+  | 'trending'
+  | 'popularMovies'
+  | 'popularTv'
+  | 'nowPlaying'
+  | 'upcoming'
+  | 'onTheAir'
+  | 'airingToday'
+  | 'topRatedMovies'
+  | 'topRatedTv';
+
+export type TrendingWindow = 'day' | 'week';
+
+export interface HomeSection {
+  id: HomeSectionId;
+  items: CatalogTitle[];
+}
+
+/** Ordered rails for kind=all; movie/tv chips drop the other media's rows. */
+export function homeSectionIds(kind: Kind | 'all'): HomeSectionId[] {
+  if (kind === 'movie') return ['trending', 'popularMovies', 'nowPlaying', 'upcoming', 'topRatedMovies'];
+  if (kind === 'tv') return ['trending', 'popularTv', 'airingToday', 'onTheAir', 'topRatedTv'];
+  return ['trending', 'popularMovies', 'popularTv', 'nowPlaying', 'upcoming', 'onTheAir', 'airingToday', 'topRatedMovies', 'topRatedTv'];
+}
+
+/**
+ * List URL for one homepage rail. Trending uses `all` / `movie` / `tv` + day|week;
+ * the rest are the classic `/movie|tv/{popular|now_playing|…}` endpoints.
+ */
+export function homeListUrl(
+  e: TmdbEndpoint,
+  id: HomeSectionId,
+  opts: { kind: Kind | 'all'; window: TrendingWindow; page?: number },
+): string {
+  const page = opts.page || 1;
+  const region = discoverRegion();
+  if (id === 'trending') {
+    const media = opts.kind === 'all' ? 'all' : opts.kind;
+    return url(e, 'trending/' + media + '/' + opts.window, { page: page });
+  }
+  const path =
+    id === 'popularMovies' ? 'movie/popular'
+    : id === 'popularTv' ? 'tv/popular'
+    : id === 'nowPlaying' ? 'movie/now_playing'
+    : id === 'upcoming' ? 'movie/upcoming'
+    : id === 'onTheAir' ? 'tv/on_the_air'
+    : id === 'airingToday' ? 'tv/airing_today'
+    : id === 'topRatedMovies' ? 'movie/top_rated'
+    : 'tv/top_rated';
+  return url(e, path, { page: page, region: region });
+}
+
+/** Kind forced by the list endpoint (null = take media_type from each row, e.g. trending/all). */
+export function homeListKind(id: HomeSectionId, chip: Kind | 'all'): Kind | null {
+  if (id === 'trending') return chip === 'all' ? null : chip;
+  if (id === 'popularMovies' || id === 'nowPlaying' || id === 'upcoming' || id === 'topRatedMovies') return 'movie';
+  return 'tv';
 }
 
 /** «Обзор» with its sort and filters: /discover/{kind}; null when the kind has none of the chosen genres. */
@@ -125,6 +187,17 @@ export function personBioUrl(e: TmdbEndpoint, id: number): string {
 
 export function seasonUrl(e: TmdbEndpoint, id: number, season: number): string {
   return url(e, 'tv/' + id + '/season/' + season, {});
+}
+
+/** Recommendations of a title (films for a film, series for a series). */
+export function similarUrl(e: TmdbEndpoint, kind: Kind, id: number): string {
+  return url(e, kind + '/' + id + '/recommendations', { page: 1 });
+}
+
+/** Poster file paths of a title, or of one season when `season` is set. */
+export function postersUrl(e: TmdbEndpoint, kind: Kind, id: number, season?: number): string {
+  const path = season ? 'tv/' + id + '/season/' + season + '/images' : kind + '/' + id + '/images';
+  return url(e, path, { include_image_language: lang.peek() === 'en' ? 'en,null' : 'ru,null,en' });
 }
 
 export function imageUrl(e: TmdbEndpoint, path: unknown, size: 'w300' | 'w780' | 'w185'): string {
@@ -206,6 +279,37 @@ export function sanitizeList(e: TmdbEndpoint, raw: unknown, kind: Kind | null, d
   return { items: items, pages: Math.min(500, Math.max(0, Math.floor(n(o.total_pages)))) };
 }
 
+/** Recommendation tiles. An item without media_type keeps `kind`. */
+export function sanitizeSimilar(e: TmdbEndpoint, raw: unknown, kind: Kind): CatalogTitle[] {
+  const o = raw && typeof raw === 'object' ? (raw as { [k: string]: unknown }) : null;
+  const list = o && Array.isArray(o.results) ? (o.results as unknown[]) : [];
+  const out: CatalogTitle[] = [];
+  list.forEach((r) => {
+    const x = r && typeof r === 'object' ? (r as { [k: string]: unknown }) : null;
+    if (!x) return;
+    const k: Kind = x.media_type === 'movie' ? 'movie' : x.media_type === 'tv' ? 'tv' : kind;
+    const t = titleOf(e, x, k);
+    if (t && out.length < 20) out.push(t);
+  });
+  return out;
+}
+
+/** Poster URLs from a TMDB images answer, language posters first, at most 12. */
+export function sanitizePosters(e: TmdbEndpoint, raw: unknown): string[] {
+  const o = raw && typeof raw === 'object' ? (raw as { [k: string]: unknown }) : null;
+  const list = o && Array.isArray(o.posters) ? (o.posters as unknown[]) : [];
+  const ranked = list
+    .map((r) => (r && typeof r === 'object' ? (r as { [k: string]: unknown }) : null))
+    .filter((x): x is { [k: string]: unknown } => !!x)
+    .sort((a, b) => n(b.vote_average) - n(a.vote_average));
+  const out: string[] = [];
+  ranked.forEach((x) => {
+    const u = imageUrl(e, x.file_path, 'w300');
+    if (u && out.indexOf(u) < 0 && out.length < 12) out.push(u);
+  });
+  return out;
+}
+
 /** The en title of a card answer's translations (en-US first); '' when there is none or it is not readable. */
 export function englishTitle(o: { [k: string]: unknown }, kind: Kind): string {
   const tr = o.translations && typeof o.translations === 'object' ? (o.translations as { translations?: unknown }).translations : null;
@@ -261,6 +365,7 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
         return {
           number: num, episodes: eps, year: year(x.air_date), aired: num < lastSeason ? eps : num === lastSeason ? Math.min(eps, lastEp) : 0,
           airDate: date(x.air_date),
+          poster: imageUrl(e, x.poster_path, 'w300'),
         };
       }).filter((s) => s.number > 0).sort((a, b) => b.number - a.number)
     : [];
@@ -276,6 +381,7 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
     status: kind === 'tv' ? statusOf(o.status) : '',
     nextEpisode: kind === 'tv' ? nextEpisodeOf(o.next_episode_to_air) : null,
     lastAirDate: kind === 'tv' ? date(o.last_air_date) : '',
+    firstAirDate: kind === 'tv' ? date(o.first_air_date) : '',
     releases: kind === 'movie' ? releasesOf(o.release_dates, releaseRegions()) : undefined,
   };
 }

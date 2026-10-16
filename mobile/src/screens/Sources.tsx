@@ -29,6 +29,7 @@ import {
   type TransferPayload,
 } from '../../../src/sources/transfer';
 import { indexerConnections, onIndexersChange, torznabHiddenText, type IndexerConn } from '../../../src/sources/indexerStore';
+import { OmpJackettCard } from './OmpJackettCard';
 import { IndexerSection, phoneIndexerEnv, type IndexerEnv } from './SourcesIndexers';
 import { flareSolverrUrl, onFlareChange } from '../../../src/sources/flareStore';
 import { flareStatus, onFlareStatus, phoneFlareNote, refreshFlareStatus } from '../../../src/sources/flaresolverr';
@@ -572,6 +573,7 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
         indexers={indexerConnections()}
         loginNames={all.filter((s) => (s.id === 'rutracker' || LOGIN_SITES.indexOf(s.id) >= 0) && !!logged[s.id]).map((s) => ({ id: s.id, name: s.name }))}
       />
+      <OmpJackettCard />
       <IndexerSection ctx={ctx} env={indexerEnv} onChange={rerender} />
       <FlareEntry />
       <section class="m-set-group">

@@ -638,7 +638,7 @@ describe('Library', () => {
     mount();
     await flush();
     act(() => tab('История').click());
-    const chips = Array.from(el.querySelectorAll('.m-hfilter')) as HTMLElement[];
+    const chips = Array.from(el.querySelectorAll('.m-hist-seg .m-seg-btn')) as HTMLElement[];
     expect(chips.map((c) => c.textContent)).toEqual(['Все', 'С телевизора', 'С телефона']);
     expect(chips[0].getAttribute('aria-pressed')).toBe('true');
     let rows = el.querySelectorAll('.m-hrow');
@@ -651,7 +651,7 @@ describe('Library', () => {
     rows = el.querySelectorAll('.m-hrow');
     expect(rows.length).toBe(1);
     expect(rows[0].textContent).toContain('Starbound');
-    act(() => (el.querySelectorAll('.m-hfilter')[1] as HTMLElement).click());
+    act(() => (el.querySelectorAll('.m-hist-seg .m-seg-btn')[1] as HTMLElement).click());
     rows = el.querySelectorAll('.m-hrow');
     expect(rows.length).toBe(1);
     expect(rows[0].textContent).toContain('Тихий сигнал');

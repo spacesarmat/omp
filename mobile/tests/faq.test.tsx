@@ -133,7 +133,7 @@ describe('FAQ per-device content', () => {
       expect(it.devices, id).toEqual(['atv']);
       expect(it.section, id).toBe('install');
       expect(viewText(id, 'atv'), id).toContain('Настройки → «Подключить телефон»');
-      expect(viewText(id, 'atv'), id).toContain('код из 4 цифр');
+      expect(viewText(id, 'atv'), id).toContain('код из 6 цифр');
     }
     const x = viewText('xiaomi', 'atv');
     for (const f of ['Downloader', 'Send Files to TV', 'Безопасность и ограничения → Неизвестные источники', 'Сборка ОС Android TV', 'PatchWall', 'Mi Box 3']) expect(x, f).toContain(f);

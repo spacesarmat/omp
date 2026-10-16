@@ -15,7 +15,7 @@ function setup(sizes: Record<string, number>) {
   mkdirSync(join(root, 'src/lib'), { recursive: true });
   mkdirSync(join(root, 'assets/telegram'), { recursive: true });
   mkdirSync(join(root, 'build'));
-  writeFileSync(join(root, 'CHANGELOG.md'), '## 1.2.3\n\n- Первое\n- Второе\n\n## 1.2.2\n\n- Старое\n');
+  writeFileSync(join(root, 'CHANGELOG.md'), '# Изменения\n\n## 1.2.3\n\n- Первое\n- Второе\n\n## 1.2.2\n\n- Старое\n');
   writeFileSync(join(root, 'src/lib/donate.ts'), "export const DONATE_URL = 'https://example.org/donate';\n");
   writeFileSync(join(root, 'assets/telegram/omp-telegram.png'), 'png');
   for (const [name, size] of Object.entries(sizes)) writeFileSync(join(root, 'build', name), new Uint8Array(size).fill(1));
@@ -240,7 +240,7 @@ describe('photo album of a stable release', () => {
 
   it('a pre-release stays a single photo even with screenshots', async () => {
     const root = setup({});
-    writeFileSync(join(root, 'CHANGELOG.md'), '## 1.2.3-rc.1\n\n- Первое\n');
+    writeFileSync(join(root, 'CHANGELOG.md'), '# Изменения\n\n## 1.2.3-rc.1\n\n- Первое\n');
     withShots(root, '1.2.3-rc.1', ['01-discover.png']);
     const calls: Call[] = [];
     await postRelease({ tag: 'v1.2.3-rc.1', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: () => {} });
