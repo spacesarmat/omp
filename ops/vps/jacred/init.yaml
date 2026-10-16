@@ -1,0 +1,11 @@
+# JacRed (jacred-fdb) — first-boot template only.
+# Put the real apikey in billing admin → Сервисы (and on the VPS Data/), never in the APK.
+listenport: 9117
+apikey: "change-me"
+devkey: "change-me"
+
+tracks: true
+tsuri:
+  - http://torrserver:8090
+
+openstats: false

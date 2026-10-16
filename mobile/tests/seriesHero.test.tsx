@@ -218,6 +218,16 @@ describe('series screen · cast', () => {
 });
 
 describe('series screen without TMDB', () => {
+  it('a working torrent of the season shows its current seeds and peers', async () => {
+    fake({ fail: true });
+    torrents.value = [S1, { ...S2, connected_seeders: 12, active_peers: 3 }];
+    mount();
+    await flush();
+    const meta = el.querySelector('.m-series-row[data-hash="s2"] .m-vrow-meta')!.textContent || '';
+    expect(meta).toContain('12 сидов');
+    expect(meta).toContain('3 пира');
+  });
+
   it('offline: the simple layout, no hero box, no error', async () => {
     fake({ fail: true });
     mount();

@@ -1,0 +1,6 @@
+.tunnel-bin/cloudflared.exe
+.tunnel-bin/*.log
+.tunnel-bin/*.pid
+.env
+*.env
+!env.tunnel.example

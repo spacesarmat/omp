@@ -2,14 +2,13 @@
 //   npm run admin-bot:webhook -- https://omp-admin-bot.<you>.workers.dev   set the webhook + the menu
 //   npm run admin-bot:webhook -- --info                                   show the current webhook
 //   npm run admin-bot:webhook -- --delete                                 roll back: delete the webhook + the menu
-// Env: TELEGRAM_BOT_TOKEN, WEBHOOK_SECRET (the same value as the Worker secret), ADMIN_CHAT_ID (default 536445442).
-// A missing token / secret is asked for with hidden input, so it never lands in the shell history. Never printed.
+// Env: TELEGRAM_BOT_TOKEN, WEBHOOK_SECRET (the same value as the Worker secret), ADMIN_CHAT_ID (required).
+// A missing token / secret / chat id is asked for with hidden input, so it never lands in the shell history. Never printed.
 import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
 import { COMMANDS } from '../src/commandList.mjs';
 
 export const ALLOWED_UPDATES = ['message', 'channel_post'];
-const DEFAULT_ADMIN = '536445442';
 
 /** The setWebhook body: only our updates, the secret Telegram sends back in X-Telegram-Bot-Api-Secret-Token. */
 export function webhookBody(url, secret) {
@@ -86,7 +85,8 @@ function printInfo(info) {
 }
 
 async function main(args) {
-  const admin = process.env.ADMIN_CHAT_ID || DEFAULT_ADMIN;
+  const admin = await fromEnvOrAsk('ADMIN_CHAT_ID', 'ADMIN_CHAT_ID (ваш Telegram user id, ввод скрыт): ');
+  if (!/^-?\d{5,20}$/.test(admin)) throw new Error('ADMIN_CHAT_ID должен быть числовым id чата');
   const token = await fromEnvOrAsk('TELEGRAM_BOT_TOKEN', 'Токен бота (ввод скрыт): ');
   if (!/^\d+:[A-Za-z0-9_-]{20,}$/.test(token)) throw new Error('TELEGRAM_BOT_TOKEN не похож на токен бота');
 

@@ -32,7 +32,9 @@ import { findGroup, groupLabel, NO_SEASON, otherSeasonReleases, seasonMembers, t
 import { cachedSeriesMatch, matchSeries } from '../../../src/lib/seriesMatch';
 import { releaseLine, releaseName } from '../lib/duplicates';
 import { contentsText } from '../lib/releaseContents';
+import { swarmText } from '../../../src/lib/torrentStatus';
 import { phoneCatalog } from '../catalog/phoneCatalog';
+import { artKey, artVersion, pickedArt } from '../catalog/artPick';
 import { CastStrip } from '../ui/CastStrip';
 import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { ratingText } from './catalog/CatalogSearch';
@@ -140,6 +142,8 @@ function HeroOverview({ text }: { text: string }) {
 
 function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
   const meta = heroMeta(card);
+  void artVersion.value;
+  const poster = pickedArt(artKey(card.id)) || card.poster;
   return (
     <>
       <div class="m-tc-backdrop m-sh-backdrop">
@@ -149,8 +153,8 @@ function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
         </button>
       </div>
       <div class="m-tc-head m-sh-head">
-        {card.poster ? (
-          <img class="m-tc-poster m-sh-poster" src={card.poster} alt="" width={96} height={144} />
+        {poster ? (
+          <img class="m-tc-poster m-sh-poster" src={poster} alt="" width={96} height={144} />
         ) : (
           <Poster torrent={group.lead} class="m-tc-poster m-sh-poster" />
         )}
@@ -225,7 +229,7 @@ function FutureSeason({ card, season }: { card: CatalogCard; season: Upcoming })
   );
 }
 
-function Row({ tor, onWatch, onMenu }: { tor: Torrent; onWatch: (tor: Torrent) => void; onMenu: (tor: Torrent) => void }) {
+function Row({ tor, poster, onWatch, onMenu }: { tor: Torrent; poster: string; onWatch: (tor: Torrent) => void; onMenu: (tor: Torrent) => void }) {
   const press = useLongPress(
     () => onMenu(tor),
     () => navigate({ name: 'torrent', hash: tor.hash }),
@@ -239,10 +243,11 @@ function Row({ tor, onWatch, onMenu }: { tor: Torrent; onWatch: (tor: Torrent) =
   const duration = target && shared ? getLocalProgress(tor.hash, target.id)?.duration || shared.duration : 0;
   const q = qualityBadge(displayTitle(tor));
   const contents = contentsText(tor);
+  const swarm = swarmText(tor);
   return (
     <div class="m-hrow m-series-row" data-hash={tor.hash}>
       <button type="button" class="m-hrow-main" {...press}>
-        <Poster torrent={tor} class="m-poster-mini" />
+        <Poster torrent={tor.poster || !poster ? tor : { ...tor, poster }} class="m-poster-mini" />
         <span class="m-hrow-text">
           <span class="m-hrow-title">
             {s.title}
@@ -252,6 +257,7 @@ function Row({ tor, onWatch, onMenu }: { tor: Torrent; onWatch: (tor: Torrent) =
             <span>{fmtSize(tor.torrent_size || 0)}</span>
             {q && <span class="m-badge-inline">{q}</span>}
             {contents && <span>{contents}</span>}
+            {swarm && <span>{swarm}</span>}
           </span>
           {at > 0 && (
             <>
@@ -508,7 +514,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           )}
           <div class="m-list m-series-rows">
             {rows.map((tor) => (
-              <Row key={tor.hash} tor={tor} onWatch={watch} onMenu={setMenuFor} />
+              <Row key={tor.hash} tor={tor} poster={(info && info.poster) || (card && card.poster) || ''} onWatch={watch} onMenu={setMenuFor} />
             ))}
           </div>
         </>

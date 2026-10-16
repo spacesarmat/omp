@@ -1,0 +1,135 @@
+# OMP VPS stack: Caddy + billing + Jackett + JacRed + TorrServer
+# Deploy: copy this directory to the VPS, fill .env, then:
+#   docker compose pull && docker compose up -d
+#
+# Billing image is built by CI and pushed to GHCR (see .github/workflows/billing-image.yml).
+
+name: omp-vps
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: omp-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CADDY_EMAIL: ${CADDY_EMAIL:-admin@omp-player.online}
+      INDEXER_USER: ${INDEXER_USER:-omp}
+      # Required: bcrypt hash from .env (never commit real .env). See .env.example.
+      # $$ → literal $ in the bcrypt hash for Caddy when the value is inlined.
+      INDEXER_HASH: ${INDEXER_HASH:?Set INDEXER_HASH in .env - see .env.example}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./site:/srv/site:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - billing
+      - jackett
+      - jacred
+    networks:
+      - omp
+
+  billing:
+    image: ${BILLING_IMAGE:-ghcr.io/spacesarmat/omp-billing:latest}
+    container_name: omp-billing
+    restart: unless-stopped
+    environment:
+      PORT: "8787"
+      BILLING_HOST: "0.0.0.0"
+      BILLING_DATA: /data/billing.db
+      BILLING_PUBLIC_ORIGIN: ${BILLING_PUBLIC_ORIGIN:-https://billing.omp-player.online}
+      BILLING_JACKETT_URL: http://jackett:9117
+      BILLING_JACRED_URL: http://jacred:9117
+      BILLING_TORRSERVER_URL: http://torrserver:8090
+      TZ: ${TZ:-Europe/Moscow}
+      # Datacenter IPs often cannot reach api.telegram.org — route bot via WARP HTTP proxy
+      HTTP_PROXY: http://warp:1080
+      HTTPS_PROXY: http://warp:1080
+      NO_PROXY: jackett,jacred,torrserver,caddy,localhost,127.0.0.1
+      NODE_USE_ENV_PROXY: "1"
+    volumes:
+      - ./data/billing:/data
+    depends_on:
+      - jackett
+      - jacred
+      - warp
+    networks:
+      - omp
+    # not published — only Caddy reaches it
+
+  # SOCKS/HTTP proxy so billing can reach Telegram Bot API from a blocked VPS IP
+  warp:
+    image: caomingjun/warp:latest
+    container_name: omp-warp
+    restart: unless-stopped
+    environment:
+      WARP_SLEEP: "2"
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - AUDIT_WRITE
+    device_cgroup_rules:
+      - "c 10:200 rwm"
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - ./data/warp:/var/lib/cloudflare-warp
+    networks:
+      - omp
+
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    container_name: omp-jackett
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: ${TZ:-Europe/Moscow}
+      AUTO_UPDATE: "true"
+    volumes:
+      - ./data/jackett:/config
+    networks:
+      - omp
+
+  jacred:
+    image: ghcr.io/jacred-fdb/jacred:latest
+    container_name: omp-jacred
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Europe/Moscow}
+      ASPNETCORE_URLS: http://0.0.0.0:9117
+    volumes:
+      - ./jacred/init.yaml:/app/config/init.yaml:ro
+      - ./data/jacred:/app/Data
+    depends_on:
+      - torrserver
+    networks:
+      - omp
+
+  torrserver:
+    image: ghcr.io/yourok/torrserver:latest
+    container_name: omp-torrserver
+    restart: unless-stopped
+    environment:
+      TS_PORT: "8090"
+      TS_DONTKILL: "1"
+      TS_HTTPAUTH: "0"
+      TS_CONF_PATH: /opt/ts/config
+      TS_TORR_DIR: /opt/ts/torrents
+    volumes:
+      - ./data/torrserver/config:/opt/ts/config
+      - ./data/torrserver/torrents:/opt/ts/torrents
+    networks:
+      - omp
+
+networks:
+  omp:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -4,6 +4,8 @@ import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
 import { Discover } from '../src/screens/catalog/Discover';
 import { clearDiscover } from '../src/screens/catalog/discoverCache';
+import { DEFAULT_DISCOVER_QUERY } from '../../src/catalog/discoverQuery';
+import { saveDiscoverQuery } from '../src/screens/catalog/discoverQueryStore';
 import { DISCOVER_COLS_KEY, readDiscoverCols } from '../src/screens/catalog/discoverCols';
 import { pinchDir, pinchTarget, PINCH_UP, PINCH_DOWN, PINCH_FLIP_MS, PINCH_MORPH_MS, PINCH_TEXT_DELAY_MS, PINCH_TEXT_MS } from '../src/ui/usePinchStep';
 import { BACKUP_KEYS } from '../src/lib/backup';
@@ -492,16 +494,21 @@ describe('pinch in «Мои»', () => {
 describe('pinch in «Обзор»', () => {
   beforeEach(() => {
     clearDiscover();
+    localStorage.clear();
+    saveDiscoverQuery({ ...DEFAULT_DISCOVER_QUERY, sort: 'rating' });
     vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} unobserve() {} takeRecords() { return []; } });
     torrents.value = [];
     resetTo({ name: 'library' });
     const c: CatalogClient = {
       novelties: vi.fn(() => Promise.resolve({ items: ITEMS, pages: 1 })),
       discover: vi.fn(() => Promise.resolve({ items: ITEMS, pages: 1 })),
+      home: vi.fn(() => Promise.resolve([{ id: 'popularMovies' as const, items: ITEMS }])),
       search: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
       card: vi.fn(() => Promise.reject(new Error('x'))),
       season: vi.fn(() => Promise.reject(new Error('x'))),
       person: vi.fn(() => Promise.reject(new Error('x'))),
+      similar: vi.fn(() => Promise.resolve([])),
+      posters: vi.fn(() => Promise.resolve([])),
     };
     setCatalogClientForTests(c);
   });

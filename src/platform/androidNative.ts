@@ -27,7 +27,7 @@ export interface OmpNativeTvPlugin {
   playNative(o: object): Promise<unknown>;
   /** A phone command (src/phone/protocol.ts Cmd) for the open native player. */
   nativePlayerCommand(o: { cmd: object }): Promise<unknown>;
-  /** Phone remote: a new 4-digit pairing code (the previous one stops working), expiresAt in epoch ms. */
+  /** Phone remote: a new 6-digit pairing code (the previous one stops working), expiresAt in epoch ms. */
   pairingCode(): Promise<{ code: string; expiresAt: number }>;
   /** Phone remote: the pairing screen closed, the code shown there stops working. */
   clearPairingCode(): Promise<unknown>;

@@ -15,7 +15,7 @@ interface PhoneStore {
 }
 
 /**
- * Pairing of phones with this TV: one 4-digit code at a time (each [newCode] replaces the previous one), valid
+ * Pairing of phones with this TV: one 6-digit code at a time (each [newCode] replaces the previous one), valid
  * [CODE_TTL_MS]; a right code gives a 32-hex token and is used up; [MAX_ATTEMPTS] wrong codes invalidate it.
  * Up to [MAX_PHONES] tokens are kept, the oldest is evicted. Thread-safe. Pure Kotlin (unit-tested).
  */
@@ -38,7 +38,7 @@ class Pairing(
     private var phones: MutableList<PairedPhone>? = null
 
     fun newCode(): Code = synchronized(lock) {
-        val c = Code(random.nextInt(10_000).toString().padStart(4, '0'), clock() + CODE_TTL_MS)
+        val c = Code(random.nextInt(1_000_000).toString().padStart(CODE_DIGITS, '0'), clock() + CODE_TTL_MS)
         current = c
         wrong = 0
         c
@@ -100,6 +100,7 @@ class Pairing(
     }
 
     companion object {
+        const val CODE_DIGITS = 6
         const val CODE_TTL_MS = 300_000L
         const val MAX_ATTEMPTS = 5
         const val MAX_PHONES = 10

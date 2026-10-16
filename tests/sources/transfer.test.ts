@@ -51,6 +51,8 @@ beforeEach(() => {
 describe('transfer payload (phone)', () => {
   it('carries every switch and the login only when given', () => {
     setSourceOn('nnmclub', false);
+    const billing = { id: 'omp-jackett', name: 'Jackett OMP', kind: 'billing' as const, search: async () => [] };
+    expect(buildTransferPayload([billing], null).sources['omp-jackett']).toBeUndefined();
     const p = buildTransferPayload(KNOWN, null);
     // rutracker needs a login: off by default; it is behind Cloudflare, so its switch (off) travels too
     expect(p).toEqual({ v: 1, sources: { 'ts-rutor': true, rutor: true, nnmclub: false, rutracker: false }, cloudflare: { rutracker: false } });

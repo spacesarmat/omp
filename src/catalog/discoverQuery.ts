@@ -27,6 +27,11 @@ export const DISCOVER_COUNTRIES = ['RU', 'US', 'GB', 'KR', 'JP', 'FR', 'DE', 'ES
 
 export const DEFAULT_DISCOVER_QUERY: DiscoverQuery = { sort: 'popular', genres: [], year: 'any', from: 0, to: 0, country: '', rating: 0 };
 
+/** Default sort and no filters → TMDB.org-style homepage rails instead of one discover grid. */
+export function isHomeDiscoverQuery(q: DiscoverQuery): boolean {
+  return q.sort === 'popular' && q.genres.length === 0 && q.year === 'any' && !q.country && q.rating === 0;
+}
+
 /** TMDB genre ids per kind (0: the kind has no such genre). */
 export const GENRES: { id: string; movie: number; tv: number }[] = [
   { id: 'action', movie: 28, tv: 10759 },

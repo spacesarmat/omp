@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { APP_ID, buildAndroidUpdate, buildHomebrew, changelogNotes, feedNotes, splitApks } from './hb-lib.mjs';
+import { readChangelogUtf8 } from './changelog-encoding.mjs';
 
 const [tag, ipk, ...apkPaths] = process.argv.slice(2);
 if (!tag || !ipk) throw new Error('usage: node scripts/hb-manifest.mjs <tag> <ipk> [apk...]');
@@ -13,7 +14,7 @@ if (tag !== `v${version}`) throw new Error(`tag ${tag} does not match package.js
 
 const buf = readFileSync(ipk);
 const sha256 = createHash('sha256').update(buf).digest('hex');
-const md = readFileSync('CHANGELOG.md', 'utf8');
+const md = readChangelogUtf8('CHANGELOG.md', { russian: true });
 const all = changelogNotes(md, version);
 // per platform for the apps that read notesTv / notesPhone; `notes` (older apps) never has a phone-only bullet.
 // update.json is read by LG TVs only, update-android.json by the phone and Android TV: each feed's TV list is its own

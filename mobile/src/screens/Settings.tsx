@@ -26,7 +26,7 @@ import { tvState } from '../tv/tvClient';
 import { tvSearchOn, setTvSearch } from '../tv/phoneRpc';
 import { tvOmpVersions, tvNeedsUpdate, tvOpensUpdate, openUpdateOnTv, type TvOmp } from '../tv/tvUpdate';
 import { errorMessage } from '../../../src/api/http';
-import { settings, updateSettings, type PhonePlayer } from '../../../src/store/settings';
+import { settings, updateSettings } from '../../../src/store/settings';
 import { checkForUpdate, latestUpdate, updatePrompt, type CheckResult } from '../../../src/store/updates';
 import { updateFeedUrl, updateTitle } from '../../../src/lib/updateInfo';
 import { isBetaVersion } from '../../../src/lib/version';
@@ -38,11 +38,10 @@ import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
 import { native } from '../platform/native';
-import { monitorNative } from '../monitor/native';
-import { P2160_RELEASES_URL } from '../../../src/player/player2160';
 import { fmtSize, t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
+import { phonePlayerName } from './VideoPlayer';
 
 type Checker = (o: { manual: boolean; url?: string; minIntervalMs?: number }) => Promise<CheckResult>;
 let checker: Checker | null = null;
@@ -209,7 +208,7 @@ function LocalServerSection() {
         <Icon d="M12 8v.01M11 12h1v5h1M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18" size={18} />
         <span>{t('settings.serverNote')}</span>
       </div>
-      <div class="m-hint-warn">{t('settings.lanWarn')}</div>
+      <p class="m-muted m-small" data-row="lan-warn">{t('settings.lanWarn')}</p>
       {st.vpn && <div class="m-hint-warn" role="alert">{t('localServer.vpn')}</div>}
     </section>
   );
@@ -261,78 +260,15 @@ function LanguageRow() {
   );
 }
 
-/** «Плеер для видео»: 2160 Player's screen inside OMP, the 2160 Player app (needs it installed) or the Android chooser. */
+/** «Плеер для видео»: opens its own screen (the three options do not fit in a segment). */
 function VideoPlayerRow() {
-  const cur = settings.value.phonePlayer;
-  const [pkg, setPkg] = useState<string | null | undefined>(undefined);
-  useEffect(() => {
-    let alive = true;
-    native.player2160().then(
-      (p) => alive && setPkg(p),
-      () => alive && setPkg(null),
-    );
-    return () => {
-      alive = false;
-    };
-  }, []);
-  const missing = pkg === null;
-  const opt = (v: PhonePlayer, label: string, disabled = false) => (
-    <button type="button" class={cur === v ? 'on' : ''} aria-pressed={cur === v} disabled={disabled} onClick={() => updateSettings({ phonePlayer: v })}>
-      {label}
-    </button>
-  );
   return (
-    <section class="m-set-group" data-row="video-player">
-      <div class="m-set-row">
+    <section class="m-set-group">
+      <button type="button" class="m-set-row m-set-pick" data-row="video-player" onClick={() => navigate({ name: 'videoPlayer' })}>
         <span>{t('player.videoPlayer')}</span>
-      </div>
-      <div class="m-seg" role="group" aria-label={t('player.videoPlayer')}>
-        {opt('embedded', t('player.embeddedPlayerPhone'))}
-        {opt('p2160', t('player.p2160AppPhone'), missing)}
-        {opt('chooser', t('player.builtinPlayerPhone'))}
-      </div>
-      {missing && (
-        <button type="button" class="m-link" data-row="p2160-missing" onClick={() => window.open(P2160_RELEASES_URL, '_system')}>
-          {t('player.p2160Missing')}
-        </button>
-      )}
-      <p class="m-muted m-small">{t('player.p2160NotePhone')}</p>
-      {cur === 'embedded' && <BackgroundAudioRow />}
+        <span class="m-muted">{phonePlayerName(settings.value.phonePlayer)} ›</span>
+      </button>
     </section>
-  );
-}
-
-/**
- * «Звук в фоне» for the built-in (embedded 2160) player. Turning it on asks for notifications (Android 13+): without
- * them the sound still plays in the background, only the controls in the shade are missing.
- */
-function BackgroundAudioRow() {
-  const on = settings.value.backgroundAudio;
-  const [denied, setDenied] = useState(false);
-  useEffect(() => {
-    if (!on || !monitorNative.available) return;
-    let alive = true;
-    monitorNative.notifyPermission().then((p) => alive && setDenied(p === 'denied'));
-    return () => {
-      alive = false;
-    };
-  }, [on]);
-  const toggle = () => {
-    updateSettings({ backgroundAudio: !on });
-    if (on || !monitorNative.available) return;
-    void monitorNative.notifyPermission().then((before) =>
-      before === 'granted' ? setDenied(false) : monitorNative.requestNotifyPermission().then((now) => setDenied(now === 'denied')),
-    );
-  };
-  return (
-    <div class="m-set-row" data-row="background-audio">
-      <div class="m-set-text" style="flex-grow: 1">
-        <span>{t('player.backgroundAudio')}</span>
-        <span class="m-muted m-small">{t('player.backgroundAudioHint')}</span>
-        {on && denied && <span class="m-muted m-small" data-row="background-audio-denied">{t('player.backgroundAudioNoNotify')}</span>}
-      </div>
-      <Switch on={on} label={t('player.backgroundAudio')} onToggle={toggle} />
-    </div>
   );
 }
 
@@ -388,7 +324,11 @@ function TvOmpRow() {
           </span>
         </div>
         {old && (
-          <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={update}>
+          <button
+            type="button"
+            class={'m-btn m-btn-sm' + (latestUpdate.value ? ' m-btn-secondary' : ' m-btn-primary')}
+            onClick={update}
+          >
             {t('install.plan.updateOnTv')}
           </button>
         )}
@@ -417,7 +357,69 @@ export function Settings() {
   return (
     <div class="m-screen" data-route="settings">
       <ScreenHeader title={t('common.settings')} />
-      {/* updates first: the version and the check are what people look for most here */}
+
+      {/* 1. Everyday: sources (Jackett/Telegram) + monitor */}
+      <section class="m-set-group">
+        <div class="m-set-label">{t('tvSettings.sources')}</div>
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'sources' })}>
+          <span>{t('tvSettings.sources')}</span>
+          <Icon d="M9 6l6 6l-6 6" size={20} />
+        </button>
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'monitor' })}>
+          <span>{t('monitor.title')}</span>
+          <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>
+        </button>
+      </section>
+
+      {/* 2. TV */}
+      <section class="m-set-group">
+        <div class="m-set-label">{t('history.tv')}</div>
+        <div class="m-set-row">
+          <div class="m-set-text">
+            <span>{tv ? tv.name : t('settings.notChosen')}</span>
+            {tv && <span class="m-muted m-small">{tv.ip}</span>}
+          </div>
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'tv' })}>
+            {t('settings.choose')}
+          </button>
+        </div>
+        {!tv && <FoundTvs />}
+        <TvOmpRow />
+        <TvSearchRow />
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'install' })}>
+          <span>{t('install.assistant.title')}</span>
+          <Icon d="M9 6l6 6l-6 6" size={20} />
+        </button>
+      </section>
+
+      {/* 3. TorrServer */}
+      <section class="m-set-group">
+        <div class="m-set-label">{t('tvSettings.server')}</div>
+        <div class="m-set-row">
+          <div class="m-set-text">
+            <span>{server ? server.name : t('settings.notChosen')}</span>
+            {server && <span class="m-muted m-small">{server.url}</span>}
+          </div>
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'connect' })}>
+            {t('settings.change')}
+          </button>
+        </div>
+        {server && (
+          <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'serverSettings' })}>
+            <span>{t('serverSettings.title')}</span>
+            <Icon d="M9 6l6 6l-6 6" size={20} />
+          </button>
+        )}
+      </section>
+      {localServer.value.supported && <LocalServerSection />}
+
+      {/* 4. Player + language */}
+      <VideoPlayerRow />
+      <section class="m-set-group">
+        <LanguageRow />
+      </section>
+
+      {/* 5. Updates */}
       <section class="m-set-group">
         <div class="m-set-label">{t('update.sheetLabel')}</div>
         <button type="button" class="m-set-row m-set-row-btn" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>
@@ -427,7 +429,6 @@ export function Settings() {
             {isBetaVersion(APP_VERSION) && <span class="m-badge-beta">{betaBadge()}</span>} · {t('whatsNew.title')} ›
           </span>
         </button>
-        {/* a found update stays offered here until it is installed, also after «Позже» */}
         {latestUpdate.value ? (
           <button type="button" class="m-btn m-btn-primary" data-row="update-available" onClick={() => (updatePrompt.value = latestUpdate.value)}>
             {updateTitle(latestUpdate.value.version, APP_VERSION)}
@@ -462,66 +463,14 @@ export function Settings() {
           />
         </div>
       </section>
+
+      {/* 6. Help & about */}
       <section class="m-set-group">
-        <LanguageRow />
-      </section>
-      <VideoPlayerRow />
-      {localServer.value.supported && <LocalServerSection />}
-      <section class="m-set-group">
-        <div class="m-set-label">{t('tvSettings.server')}</div>
-        <div class="m-set-row">
-          <div class="m-set-text">
-            <span>{server ? server.name : t('settings.notChosen')}</span>
-            {server && <span class="m-muted m-small">{server.url}</span>}
-          </div>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'connect' })}>
-            {t('settings.change')}
-          </button>
-        </div>
-        {server && (
-          <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'serverSettings' })}>
-            <span>{t('serverSettings.title')}</span>
-            <Icon d="M9 6l6 6l-6 6" size={20} />
-          </button>
-        )}
-      </section>
-      <section class="m-set-group">
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'sources' })}>
-          <span>{t('tvSettings.sources')}</span>
-          <Icon d="M9 6l6 6l-6 6" size={20} />
-        </button>
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'monitor' })}>
-          <span>{t('monitor.title')}</span>
-          <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>
-        </button>
-      </section>
-      <section class="m-set-group">
-        <div class="m-set-label">{t('history.tv')}</div>
-        <div class="m-set-row">
-          <div class="m-set-text">
-            <span>{tv ? tv.name : t('settings.notChosen')}</span>
-            {tv && <span class="m-muted m-small">{tv.ip}</span>}
-          </div>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'tv' })}>
-            {t('settings.choose')}
-          </button>
-        </div>
-        {!tv && <FoundTvs />}
-        <TvOmpRow />
-        <TvSearchRow />
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'install' })}>
-          <span>{t('install.assistant.title')}</span>
-          <Icon d="M9 6l6 6l-6 6" size={20} />
-        </button>
-      </section>
-      <section class="m-set-group">
+        <div class="m-set-label">{t('tvSettings.about')}</div>
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'faq' })}>
           <span>{t('common.faq')}</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />
         </button>
-      </section>
-      <section class="m-set-group">
-        <div class="m-set-label">{t('tvSettings.about')}</div>
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'backup' })}>
           <span>{t('backup.title')}</span>
           <Icon d="M9 6l6 6l-6 6" size={20} />

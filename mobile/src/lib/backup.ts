@@ -77,6 +77,20 @@ function cleanServers(v: unknown): unknown {
   return cleanList(v, list);
 }
 
+const ART_KEY = /^tv:\d+(?::s\d+)?$/;
+
+/** Chosen posters: only `tv:<id>` / `tv:<id>:s<n>` pointing at an http(s) image, at most 200. */
+function cleanCatalogArt(v: unknown): { [k: string]: unknown } | undefined {
+  if (!isObject(v)) return undefined;
+  const out: { [k: string]: string } = {};
+  Object.keys(v).forEach((k) => {
+    if (Object.keys(out).length >= 200) return;
+    const u = v[k];
+    if (ART_KEY.test(k) && typeof u === 'string' && /^https?:\/\/\S+$/i.test(u) && u.length <= 500) out[k] = u;
+  });
+  return cleanMap(v, out);
+}
+
 function cleanObject(sanitize: (v: unknown) => unknown): Clean {
   return (v) => (isObject(v) ? sanitize(v) : undefined);
 }
@@ -108,6 +122,8 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.trackPrefs', clean: (v) => cleanMap(v, sanitizeTrackPrefs(v)) },
   // «Каталог»: the «Мои / Обзор» switch and the «Обзор» posters per row
   { key: 'tsp.catalogMode', clean: (v) => (v === 'mine' || v === 'discover' ? v : undefined) },
+  // a poster picked on a series or season card (`tv:21`, `tv:21:s2` → image URL)
+  { key: 'tsp.catalogArt', clean: cleanCatalogArt },
   { key: 'tsp.discoverCols', clean: (v) => (isDiscoverCols(v) ? v : undefined) },
   // «Обзор»: the sort and the filters
   { key: 'tsp.discoverQuery', clean: (v) => (isObject(v) ? sanitizeDiscoverQuery(v) : undefined) },
@@ -129,6 +145,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.posterTried',
   'tsp.progress', // viewing progress: lives on TorrServer
   'tsp.update', // update-check state
+  'tsp.localServer.skipPin', // skipped TorrServer pin offer: per device, like tsp.update
   'tsp.seenVersion', // «Что нового» was shown
   'tsp.subsSeen', // what monitoring has already seen: rebuilt on the first run
   'tsp.monitorFound',
@@ -156,6 +173,10 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.sourcePause', // background requests to a site paused after its code page: per device, an hour
   'tsp.tvSearchService', // the TV search switch: it runs this phone's own server, per device
   'tsp.phoneLink', // TV: the address and token of the phone that serves its search, per device
+  'tsp.billingDevice', // paid Jackett: install id, per device
+  'tsp.billingSession', // paid Jackett: session token, never in a copy
+  'tsp.billingPendingCode', // paid Jackett: code from omp:// deep link, per device
+  'tsp.billingOrigin', // paid Jackett: last working public/LAN origin, per device
 ];
 
 function readRaw(key: string): unknown {

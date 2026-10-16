@@ -14,10 +14,19 @@ import { servers, addServer, setActiveServer, updateServer, type SavedServer } f
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
 import { addressErrorText, addressForField, checkServerAddress } from '../../../src/api/serverAddress';
 import { errorMessage, isApiError } from '../../../src/api/http';
-import { discover, candidateSubnets, subnetOf, DEFAULT_PORTS, PHONE_CONCURRENCY, type FoundServer } from '../../../src/api/discovery';
+import {
+  discover,
+  candidateSubnets,
+  subnetOf,
+  DEFAULT_PORTS,
+  PHONE_CONCURRENCY,
+  probeEcho,
+  type FoundServer,
+  type Probe,
+} from '../../../src/api/discovery';
 import { allowTypedHost } from '../cleartextHosts';
 import { native } from '../platform/native';
-import { localServer, refreshLocalServer } from '../server/localServer';
+import { localServer, refreshLocalServer, startLocal, localName, LOCAL_URL } from '../server/localServer';
 
 type ServerScanner = (isCancelled: () => boolean, onFound?: (s: FoundServer) => void) => Promise<FoundServer[]>;
 let scanner: ServerScanner | null = null;
@@ -27,9 +36,39 @@ export function setServerScanner(fn: ServerScanner | null): void {
   scanner = fn;
 }
 
+export type TcpLanHit = { ip: string; port: number };
+
 export interface LanScanDeps {
   localIp: () => Promise<string | null>;
   discover: typeof discover;
+  /**
+   * Native multithread TCP scan of the phone's /24 (Android). Resolves to hits, `null` without Wi‑Fi,
+   * or rejects when the plugin is missing — then JS `discover` is used.
+   */
+  tcpScan?: (ports: number[]) => Promise<TcpLanHit[] | null>;
+  probe?: Probe;
+}
+
+/** One echo per URL. A second ask for the same URL shares the first probe and the first `onFound`. */
+function echoUrl(
+  url: string,
+  isCancelled: () => boolean,
+  probe: Probe,
+  onFound: ((s: FoundServer) => void) | undefined,
+  pending: Map<string, Promise<FoundServer | null>>,
+): Promise<FoundServer | null> {
+  const cur = pending.get(url);
+  if (cur) return cur;
+  const run = (async () => {
+    if (isCancelled()) return null;
+    const version = await probe(url, 800).catch(() => null);
+    if (!version || isCancelled()) return null;
+    const server = { url, version };
+    onFound?.(server);
+    return server;
+  })();
+  pending.set(url, run);
+  return run;
 }
 
 /**
@@ -38,19 +77,50 @@ export interface LanScanDeps {
  */
 export async function scanLan(
   isCancelled: () => boolean,
-  d: LanScanDeps = { localIp: () => native.localIpv4(), discover },
+  d: LanScanDeps = {
+    localIp: () => native.localIpv4(),
+    discover,
+    tcpScan: (ports) => native.scanLan(ports),
+    probe: probeEcho,
+  },
   onFound?: (s: FoundServer) => void,
 ): Promise<FoundServer[]> {
+  const ports = DEFAULT_PORTS;
+  const probe = d.probe || probeEcho;
+  if (d.tcpScan) {
+    try {
+      const pending = new Map<string, Promise<FoundServer | null>>();
+      const take = (url: string) => echoUrl(url, isCancelled, probe, onFound, pending);
+      // Saved addresses (another subnet, a custom port) are probed while the /24 scan runs, and each echo shows up at once.
+      const known = servers.value.map((s) => s.url);
+      const saved = Promise.all(known.map(take));
+      const hits = await d.tcpScan(ports);
+      if (isCancelled()) return [];
+      // null = no Wi‑Fi → fall through to the JS subnet list; [] = scanned, nothing open
+      if (hits) {
+        const fromLan = await Promise.all(hits.map((h) => take('http://' + h.ip + ':' + h.port)));
+        const extra = await saved;
+        const out: FoundServer[] = [];
+        fromLan.concat(extra).forEach((s) => {
+          if (s && !out.some((x) => x.url === s.url)) out.push(s);
+        });
+        return out;
+      }
+    } catch {
+      /* no native plugin — JS discover below */
+    }
+  }
   const ip = await d.localIp().catch(() => null);
   const own = ip ? subnetOf(ip) : null;
   const known = servers.value.map((s) => s.url);
   return d.discover({
     subnets: own ? [own] : candidateSubnets(null, known),
-    ports: DEFAULT_PORTS,
+    ports,
     prefer: known,
     concurrency: PHONE_CONCURRENCY,
     isCancelled,
     onFound,
+    probe,
   });
 }
 
@@ -98,6 +168,7 @@ export function Connect() {
   const [scanState, setScanState] = useState<'idle' | 'scanning' | 'done'>('idle');
   const [found, setFound] = useState<FoundServer[]>([]);
   const [netFail, setNetFail] = useState(false);
+  const [startError, setStartError] = useState('');
 
   useEffect(() => {
     checkAll(servers.value);
@@ -178,6 +249,20 @@ export function Connect() {
     void enter({ url: checked.url, user: auth && user.trim() ? user.trim() : undefined, password: auth && pass ? pass : undefined });
   }
 
+  async function startStopped() {
+    if (busy) return;
+    setBusy(true);
+    setStartError('');
+    setError('');
+    await startLocal();
+    if (localServer.value.error) {
+      setStartError(localServer.value.error);
+      setBusy(false);
+      return;
+    }
+    await enter({ name: localName(), url: LOCAL_URL });
+  }
+
   async function scan() {
     if (busy) return;
     setError('');
@@ -216,6 +301,11 @@ export function Connect() {
 
   const list = servers.value;
   const emptyScan = scanState === 'done' && found.length === 0;
+  const info = localServer.value;
+  // a binary is on the phone, the process is not running: it can be started without a download
+  const installedStopped = info.supported && !info.running && (info.binary === 'ready' || info.binary === 'outdated');
+  // the scan found no TorrServer, and there is nothing on the phone to start
+  const offerInstall = emptyScan && info.supported && !info.running && !installedStopped;
   return (
     <form class="m-screen m-connect" onSubmit={submit}>
       <div class="m-brand">
@@ -254,22 +344,41 @@ export function Connect() {
           </div>
         </>
       )}
-      {auto && emptyScan && (
+      {installedStopped && (
+        <div class="m-local-card" data-local="start">
+          <div class="m-local-head">
+            <span class="m-local-icon">
+              <Icon d={PHONE} size={24} />
+            </span>
+            <div class="m-local-title">{t('connect.localTitle')}</div>
+          </div>
+          <div class="m-local-text">{t('connect.stoppedText')}</div>
+          {startError && (
+            <div class="m-error" role="alert">
+              {startError}
+            </div>
+          )}
+          <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={() => void startStopped()}>
+            {busy ? t('connect.starting') : t('connect.startStopped')}
+          </button>
+        </div>
+      )}
+      {offerInstall && (
         <>
           <div class="m-hint-info m-muted">
             <Icon d={INFO} size={18} />
             {t('connect.nothingOnNet')}
           </div>
-          <div class="m-local-card">
+          <div class="m-local-card" data-local="install">
             <div class="m-local-head">
               <span class="m-local-icon">
                 <Icon d={PHONE} size={24} />
               </span>
-              <div class="m-local-title">{t('connect.localTitle')}</div>
+              <div class="m-local-title">{t('connect.installTitle')}</div>
             </div>
-            <div class="m-local-text">{t('connect.localText')}</div>
+            <div class="m-local-text">{t('connect.installText')}</div>
             <button type="button" class="m-btn m-btn-primary" onClick={() => navigate({ name: 'localServer' })}>
-              {t('connect.localStart')}
+              {t('connect.installBtn')}
             </button>
           </div>
           <div class="m-muted m-small m-or">{t('connect.or')}</div>

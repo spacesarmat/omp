@@ -22,6 +22,8 @@ afterEach(() => { stop(); document.body.innerHTML = ''; vi.unstubAllGlobals(); }
 
 const input = () => document.getElementById('i') as HTMLInputElement;
 
+const inset = () => document.documentElement.style.getPropertyValue('--kb-inset');
+
 describe('keyboard watch', () => {
   it('adds the class when the height drops and an input is focused', () => {
     input().focus();
@@ -33,6 +35,7 @@ describe('keyboard watch', () => {
     setSize(400, 500);
     setSize(400, 900);
     expect(cls()).toBe(false);
+    expect(inset()).toBe('0px');
   });
   it('removes it when the input blurs', () => {
     input().focus();
@@ -56,5 +59,17 @@ describe('keyboard watch', () => {
     expect(cls()).toBe(false);
     setSize(900, 380);
     expect(cls()).toBe(false);
+  });
+  it('sets --kb-inset from the visualViewport gap while open', () => {
+    // baseline without vv (innerHeight 900), then IME: layout stays 900, visual viewport 520
+    input().focus();
+    Object.defineProperty(window, 'visualViewport', {
+      value: { height: 520, offsetTop: 0, addEventListener() {}, removeEventListener() {} },
+      configurable: true,
+    });
+    window.dispatchEvent(new Event('resize'));
+    expect(cls()).toBe(true);
+    // inset = innerHeight - vv.height - offsetTop = 900 - 520 - 0
+    expect(inset()).toBe('380px');
   });
 });

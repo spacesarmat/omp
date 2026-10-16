@@ -148,7 +148,7 @@ function Feed() {
 
   return (
     <>
-      <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+      <div class="m-chips">
         {FEED_CATEGORIES.map((c) => (
           <button key={c} type="button" class={'m-chip' + (cat === c ? ' on' : '')} aria-pressed={cat === c} onClick={() => setCat(c)}>
             {catLabel(c)}

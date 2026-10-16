@@ -113,11 +113,12 @@ class ControlRouterTest {
 
     @Test
     fun numericCodeIsLeftPadded() {
-        assertEquals("0123", ControlRouter.codeOf(123))
-        assertEquals("0007", ControlRouter.codeOf(7.0))
+        assertEquals("000123", ControlRouter.codeOf(123))
+        assertEquals("000007", ControlRouter.codeOf(7.0))
         assertEquals("4821", ControlRouter.codeOf("4821"))
+        assertEquals("010000", ControlRouter.codeOf(10000))
         assertEquals(null, ControlRouter.codeOf(12.5))
-        assertEquals(null, ControlRouter.codeOf(10000))
+        assertEquals(null, ControlRouter.codeOf(1_000_000))
         assertEquals(null, ControlRouter.codeOf(-1))
         var c = pairing.newCode()
         while (c.code[0] != '0') c = pairing.newCode()
