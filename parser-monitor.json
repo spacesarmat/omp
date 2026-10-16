@@ -1,62 +1,62 @@
 {
   "version": 1,
-  "updated": "2026-10-15T16:58:18.506Z",
+  "updated": "2026-10-16T04:28:55.445Z",
   "sources": {
     "rutor": {
       "status": "OK",
-      "streak": 20,
+      "streak": 21,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "100 / 99 / 100 результатов"
     },
     "nnmclub": {
       "status": "OK",
-      "streak": 19,
+      "streak": 20,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "50 / 50 / 50 результатов"
     },
     "anidub": {
       "status": "OK",
-      "streak": 19,
+      "streak": 20,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "29 / 32 результатов"
     },
     "bigfangroup": {
       "status": "OK",
-      "streak": 19,
+      "streak": 20,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "30 / 25 / 19 результатов"
     },
     "torrentby": {
       "status": "OK",
-      "streak": 17,
+      "streak": 18,
       "since": "2026-10-08T13:44:08.957Z",
       "alerted": false,
-      "detail": "20 / 24 / 15 результатов"
+      "detail": "19 / 24 / 15 результатов"
     },
     "rutracker": {
       "status": "BLOCKED",
-      "streak": 19,
+      "streak": 20,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "проверка Cloudflare (HTTP 403)"
     },
     "kinozal": {
       "status": "BLOCKED",
-      "streak": 19,
+      "streak": 20,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
       "detail": "проверка Cloudflare (HTTP 403)"
     },
     "rustorka": {
       "status": "BLOCKED",
-      "streak": 19,
+      "streak": 20,
       "since": "2026-10-07T21:57:02.151Z",
       "alerted": false,
-      "detail": "сайт ответил HTTP 403"
+      "detail": "сеть недоступна: UND_ERR_CONNECT_TIMEOUT"
     }
   },
   "summaryWeek": "2026-W42"
