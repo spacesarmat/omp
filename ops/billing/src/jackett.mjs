@@ -61,8 +61,19 @@ export function restoreJackett(link, origin, apiKey, mark) {
     return '';
   }
   if (target.origin !== originUrl.origin) return '';
+  // Search and the indexer admin API stay on /v1/search. A caller-chosen path must be a download.
+  if (!isDownloadPath(target.pathname)) return '';
   const key = encodeURIComponent(apiKey || '');
   return target.href + (target.search ? '&' : '?') + 'apikey=' + key;
+}
+
+/** Jackett `/dl/…` and the per-indexer Torznab download route. `all` is the search API. */
+function isDownloadPath(pathname) {
+  const path = String(pathname || '').replace(/\/+$/, '') || '/';
+  if (path.indexOf('%') >= 0 || path.indexOf('\\') >= 0 || path.indexOf('..') >= 0) return false;
+  if (path === '/dl' || path.indexOf('/dl/') === 0) return /^\/dl(?:\/[A-Za-z0-9._~-]+)*$/.test(path);
+  const download = /^\/api\/v2\.0\/indexers\/([A-Za-z0-9._~-]+)\/results\/torznab\/download$/.exec(path);
+  return !!(download && download[1] !== 'all');
 }
 
 export function jackettSearchUrl(origin, apiKey, query) {
