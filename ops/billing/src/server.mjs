@@ -43,7 +43,17 @@ import {
 import { adminNotifyEnabled, botDeepLink, botReply, paymentAdminNotices, serviceDownNotices, telegramOf } from './bot.mjs';
 import { hashPassword, passwordMatches, randomCode, randomId } from './crypto.mjs';
 import { goPage } from './go.mjs';
-import { basicAuthHeader, indexerByLink, indexerOf, jackettSearchUrl, restoreJackett, stripJackett } from './jackett.mjs';
+import {
+  basicAuthHeader,
+  indexerByLink,
+  indexerOf,
+  jackettIndexerTimeoutMs,
+  jackettSearchDeadlineMs,
+  jackettSearchUrl,
+  restoreJackett,
+  searchJackett,
+  stripJackett,
+} from './jackett.mjs';
 import { sendMail } from './mail.mjs';
 import { loginPage } from './panel.mjs';
 import {
@@ -843,10 +853,27 @@ export function createApp(file, fetchImpl) {
         if (cached !== null) {
           return send(res, 200, cached, { 'content-type': 'application/xml; charset=utf-8' });
         }
-        const search = jackettSearchUrl(indexer.url, indexer.key, q);
         const headers = {};
         const auth = basicAuthHeader(state.settings);
         if (auth) headers.Authorization = auth;
+        // One slow indexer on /indexers/all/results used to run past the phone's 25s limit.
+        // Jackett is queried per configured indexer; JacRed stays on the aggregate route.
+        if (source === 'jackett') {
+          const found = await searchJackett({
+            origin: indexer.url,
+            apiKey: indexer.key,
+            query: q,
+            headers,
+            fetchImpl: net,
+            indexerTimeoutMs: jackettIndexerTimeoutMs(),
+            deadlineMs: jackettSearchDeadlineMs(),
+          });
+          if (!found.ok) return json(res, 502, { error: 'down' });
+          const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
+          searchCache.set(cacheKey, xml);
+          return send(res, 200, xml, { 'content-type': 'application/xml; charset=utf-8' });
+        }
+        const search = jackettSearchUrl(indexer.url, indexer.key, q);
         let upstream;
         try {
           upstream = await net(search, { headers });
