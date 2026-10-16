@@ -1,4 +1,5 @@
-# OMP VPS stack: Caddy + billing + Jackett + JacRed + TorrServer
+# OMP VPS stack: Caddy + billing + Jackett + JacRed + TorrServer + FlareSolverr
+# Jackett "FlareSolverr API URL" = http://flaresolverr:8191
 # Deploy: copy this directory to the VPS, fill .env, then:
 #   docker compose pull && docker compose up -d
 #
@@ -123,6 +124,19 @@ services:
     volumes:
       - ./data/torrserver/config:/opt/ts/config
       - ./data/torrserver/torrents:/opt/ts/torrents
+    networks:
+      - omp
+
+  # Cloudflare challenge solver for Jackett/JacRed indexers. Localhost-only publish.
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: omp-flaresolverr
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: info
+      TZ: Europe/Moscow
+    ports:
+      - "127.0.0.1:8191:8191"
     networks:
       - omp
 
