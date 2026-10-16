@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.2-beta.2
+
+- same as beta.1 (beta.1 did not build: the TMDB key was visible to tests)
+
 ## 0.20.2-beta.1
 
 - [phone] TMDB key: a v3 API key is accepted, and a stored v4 token can be cleared. Discover separates a rejected key from a server that does not answer
