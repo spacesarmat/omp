@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { parseTorznab, parseProwlarr, indexerSource, hidesTorznab, syncIndexerSources, startIndexerSources, indexerBadKey, indexerDown, indexerError, indexerNeedKey } from '../../src/sources/indexer';
+import { parseTorznab, parseProwlarr, indexerSource, hidesTorznab, syncIndexerSources, startIndexerSources, indexerBadKey, indexerDown, indexerError, indexerNeedKey, keepAudiobookRow, mergeAudiobookHits } from '../../src/sources/indexer';
 import { saveIndexer, removeIndexer, indexerKeyName, reloadIndexers, indexerConnections } from '../../src/sources/indexerStore';
 import type { IndexerConn } from '../../src/sources/indexerStore';
 import { allSources, getSource, builtinSources, setHideRule, unregisterSource } from '../../src/sources/registry';
@@ -216,6 +216,113 @@ describe('indexerSource', () => {
   it('a Torznab key error inside a 200 answer -> wrong key', async () => {
     const site = fakeSite((c) => page('<error code="100" description="Invalid API Key"/>', c.url), { [indexerKeyName('jackett-1')]: KEY });
     await expect(indexerSource(JACKETT).search('q', site.ctx)).rejects.toThrow(indexerBadKey());
+  });
+});
+
+const H3 = 'a'.repeat(40);
+const H4 = 'b'.repeat(40);
+const H5 = 'c'.repeat(40);
+const H6 = 'd'.repeat(40);
+const H7 = 'e'.repeat(40);
+const H8 = 'f'.repeat(40);
+const H9 = '1'.repeat(40);
+const HA = '2'.repeat(40);
+
+function torznabItem(title: string, hash: string, cat: string): string {
+  return (
+    '<item><title>' + title + '</title><category>' + cat + '</category>' +
+    '<link>magnet:?xt=urn:btih:' + hash + '</link>' +
+    '<torznab:attr name="infohash" value="' + hash + '"/></item>'
+  );
+}
+
+describe('audiobook search mode', () => {
+  it('keeps 30xx, and 7000/80xx only with a title hint; drops video categories', () => {
+    expect(keepAudiobookRow({ Title: 'Film', Categories: '2000' }, true)).toBe(false);
+    expect(keepAudiobookRow({ Title: 'Game', Categories: '1000' }, true)).toBe(false);
+    expect(keepAudiobookRow({ Title: 'Soft', Categories: '4000' }, true)).toBe(false);
+    expect(keepAudiobookRow({ Title: 'Show', Categories: '5040' }, true)).toBe(false);
+    expect(keepAudiobookRow({ Title: 'Book', Categories: '3030' }, true)).toBe(true);
+    expect(keepAudiobookRow({ Title: 'Album', Categories: '3040' }, true)).toBe(true);
+    expect(keepAudiobookRow({ Title: 'Кинг - Оно [MP3, 56 kbps]', Categories: '7000' }, true)).toBe(true);
+    expect(keepAudiobookRow({ Title: 'Кинг - Оно [MP3, 56 kbps]', Categories: '8000' }, true)).toBe(true);
+    expect(keepAudiobookRow({ Title: 'Харари - Sapiens AAC 96 kbps', Categories: '8010' }, true)).toBe(true);
+    expect(keepAudiobookRow({ Title: 'Просто книга', Categories: '7000' }, true)).toBe(false);
+    expect(keepAudiobookRow({ Title: 'Книга EPUB', Categories: '7020' }, true)).toBe(false);
+    expect(keepAudiobookRow({ Title: 'Аудиокнига', Categories: 'Аудиокниги' }, true)).toBe(true);
+    expect(keepAudiobookRow({ Title: 'Leaked film', Categories: '2000' }, false)).toBe(false);
+    expect(keepAudiobookRow({ Title: 'From cat 3030', Categories: '' }, false)).toBe(true);
+  });
+
+  it('dedupes by infohash or by title, keeping the cat=3030 row', () => {
+    const primary = [{ Title: 'RuTracker book', hash: H1, Categories: '3030' }];
+    const extra = [
+      { Title: 'Other name', hash: H1, Categories: '7000' },
+      { Title: 'RuTracker book', hash: H3, Categories: '8000' },
+      { Title: 'NNM book', hash: H4, Categories: '7000' },
+    ];
+    expect(mergeAudiobookHits(primary, extra).map((r) => r.Title)).toEqual(['RuTracker book', 'NNM book']);
+  });
+
+  it('Jackett: cat=3030 and an open search, merged', async () => {
+    const nnm = 'Булгаков Михаил - Мастер и Маргарита (читает Владимир Самойлов) MP3';
+    const rutor = 'Кинг Стивен - Оно [MP3, 128 kbps]';
+    const mega = 'Харари Юваль Ной - Sapiens AAC 96kbps';
+    const site = fakeSite((c) => {
+      const categorized = c.url.indexOf('cat=3030') >= 0;
+      const items = categorized
+        ? torznabItem('RuTracker book', H1, '3030') + torznabItem('Leaked film', H2, '2000')
+        : torznabItem('RuTracker book', H1, '3030') +
+          torznabItem(nnm, H3, '7000') +
+          torznabItem('Дюна (2021) WEB-DL 1080p', H4, '2000') +
+          torznabItem('Soundtrack', H5, '3010') +
+          torznabItem(rutor, H6, '8000') +
+          torznabItem(mega, H7, '8010') +
+          torznabItem('Книга EPUB', H8, '7020') +
+          torznabItem('Просто книга', H9, '7000') +
+          torznabItem('Show S01', HA, '5000');
+      return page(RSS(items), c.url);
+    }, { [indexerKeyName('jackett-1')]: KEY });
+    const list = await indexerSource(JACKETT).search('мастер', { ...site.ctx, searchMode: 'audiobook' });
+    expect(site.calls).toHaveLength(2);
+    expect(site.calls.some((c) => c.url.indexOf('cat=3030') >= 0)).toBe(true);
+    expect(site.calls.some((c) => c.url.indexOf('t=search') >= 0 && c.url.indexOf('cat=') < 0)).toBe(true);
+    expect(list.map((r) => r.Title)).toEqual(['RuTracker book', nnm, 'Soundtrack', rutor, mega]);
+    expect(list.filter((r) => r.Title === 'RuTracker book')).toHaveLength(1);
+  });
+
+  it('Prowlarr uses categories=3030 and the same filter', async () => {
+    const site = fakeSite((c) => {
+      const categorized = c.url.indexOf('categories=3030') >= 0;
+      const rows = categorized
+        ? [{ title: 'BigFAN', protocol: 'torrent', infoHash: H1, categories: [{ id: 3030 }] }]
+        : [
+            { title: 'BigFAN', protocol: 'torrent', infoHash: H1, categories: [{ id: 3030 }] },
+            { title: 'NNM читает', protocol: 'torrent', infoHash: H3, categories: [{ id: 7000 }] },
+            { title: 'Film', protocol: 'torrent', infoHash: H4, categories: [{ id: 2040 }] },
+          ];
+      return page(JSON.stringify(rows), c.url);
+    }, { [indexerKeyName('prowlarr-1')]: KEY });
+    const list = await indexerSource(PROWLARR).search('книга', { ...site.ctx, searchMode: 'audiobook' });
+    expect(site.calls).toHaveLength(2);
+    expect(site.calls.some((c) => c.url.indexOf('categories=3030') >= 0)).toBe(true);
+    expect(site.calls.some((c) => c.url.indexOf('categories=') < 0)).toBe(true);
+    expect(list.map((r) => r.Title)).toEqual(['BigFAN', 'NNM читает']);
+  });
+
+  it('a failed cat=3030 request still returns the open search', async () => {
+    const site = fakeSite((c) => {
+      if (c.url.indexOf('cat=3030') >= 0) return page('', c.url, 502);
+      return page(RSS(torznabItem('Кинг - Оно MP3', H6, '8000')), c.url);
+    }, { [indexerKeyName('jackett-1')]: KEY });
+    const list = await indexerSource(JACKETT).search('оно', { ...site.ctx, searchMode: 'audiobook' });
+    expect(list.map((r) => r.Title)).toEqual(['Кинг - Оно MP3']);
+  });
+
+  it('a bad key fails the audiobook search', async () => {
+    const site = fakeSite((c) => page('', c.url, 401), { [indexerKeyName('jackett-1')]: KEY });
+    await expect(indexerSource(JACKETT).search('q', { ...site.ctx, searchMode: 'audiobook' })).rejects.toThrow(indexerBadKey());
+    expect(site.calls).toHaveLength(2);
   });
 });
 

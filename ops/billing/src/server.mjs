@@ -50,6 +50,7 @@ import {
   jackettIndexerTimeoutMs,
   jackettSearchDeadlineMs,
   restoreJackett,
+  safeTorznabCat,
   searchJackett,
   searchJacRed,
   stripJackett,
@@ -848,7 +849,8 @@ export function createApp(file, fetchImpl) {
         const indexer = indexerOf(state.settings, source);
         if (!indexer.url || !indexer.key) return json(res, 403, { error: 'disabled' });
         const q = String(body.q || '');
-        const cacheKey = source + '\0' + q.toLowerCase();
+        const cat = safeTorznabCat(body.cat);
+        const cacheKey = source + '\0' + q.toLowerCase() + '\0' + cat;
         const cached = searchCache.get(cacheKey);
         if (cached !== null) {
           return send(res, 200, cached, { 'content-type': 'application/xml; charset=utf-8' });
@@ -863,6 +865,7 @@ export function createApp(file, fetchImpl) {
             origin: indexer.url,
             apiKey: indexer.key,
             query: q,
+            cat,
             headers,
             fetchImpl: net,
             indexerTimeoutMs: jackettIndexerTimeoutMs(),
@@ -877,6 +880,7 @@ export function createApp(file, fetchImpl) {
           origin: indexer.url,
           apiKey: indexer.key,
           query: q,
+          cat,
           headers,
           fetchImpl: net,
         });

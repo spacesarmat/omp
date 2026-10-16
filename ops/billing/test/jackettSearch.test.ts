@@ -15,6 +15,7 @@ import {
   mergeTorznabFeeds,
   parseConfiguredIndexers,
   resetJackettListCache,
+  safeTorznabCat,
   searchJackett,
   searchJacRed,
 } from '../src/jackett.mjs';
@@ -193,6 +194,7 @@ describe('parallel Jackett search', () => {
     expect(calls.filter(isJsonList)).toHaveLength(1);
     expect(calls.every((url) => url.indexOf('apikey=' + encodeURIComponent(KEY)) >= 0)).toBe(true);
     expect(calls.find((url) => isIndexerSearch(url, 'rutor'))).toContain('q=' + encodeURIComponent('film 2'));
+    expect(calls.find((url) => isIndexerSearch(url, 'rutor'))).not.toContain('cat=');
     expect(auths.length).toBe(calls.length);
     expect(auths.every((header) => header === 'Basic abc')).toBe(true);
   });
@@ -597,5 +599,55 @@ describe('POST /v1/search', () => {
     expect(down.status).toBe(502);
     expect(JSON.parse(down.body).error).toBe('down');
     expect(calls.some(isAggregateSearch)).toBe(false);
+  });
+
+  it('forwards cat=3030 to Jackett and JacRed and drops anything that is not a category id', async () => {
+    expect(safeTorznabCat('3030')).toBe('3030');
+    expect(safeTorznabCat('3030, 3040')).toBe('3030,3040');
+    expect(safeTorznabCat('')).toBe('');
+    expect(safeTorznabCat('3030&apikey=nope')).toBe('');
+    const { file, device, token } = subscriber();
+    const calls: string[] = [];
+    const fetchImpl = (url: string) => {
+      calls.push(String(url));
+      if (isJsonList(url)) {
+        return Promise.resolve({ status: 200, text: async () => JSON.stringify([{ id: 'rutracker', configured: true }]) });
+      }
+      const title = /[?&]cat=3030(?:&|$)/.test(url) ? 'With cat' : 'Open';
+      return Promise.resolve({
+        status: 200,
+        text: async () => '<rss><channel><item><title>' + title + '</title><link>' + ORIGIN + '/dl/' + title + '</link></item></channel></rss>',
+      });
+    };
+    const app = createApp(file, fetchImpl);
+    const categorized = await postSearch(app, { token, device, body: { q: 'audiobook-cat', cat: '3030', deviceId: device } });
+    expect(categorized.status).toBe(200);
+    expect(categorized.body).toContain('With cat');
+    const searchCalls = calls.filter((url) => isIndexerSearch(url, 'rutracker'));
+    expect(searchCalls.length).toBeGreaterThan(0);
+    expect(searchCalls.every((url) => url.indexOf('cat=3030') >= 0)).toBe(true);
+    const after = calls.length;
+    const open = await postSearch(app, { token, device, body: { q: 'audiobook-cat', deviceId: device } });
+    expect(open.status).toBe(200);
+    expect(open.body).toContain('Open');
+    expect(calls.length).toBeGreaterThan(after);
+    const dirty = await postSearch(app, { token, device, body: { q: 'audiobook-dirty', cat: '3030&x=1', deviceId: device } });
+    expect(dirty.status).toBe(200);
+    expect(calls.filter((url) => url.indexOf('audiobook-dirty') >= 0 || queryOf(url) === 'audiobook-dirty').every((url) => url.indexOf('cat=') < 0)).toBe(true);
+    expect(calls.join('\n')).not.toContain('x=1');
+
+    const jacredCalls: string[] = [];
+    const jacred = createApp(file, (url: string) => {
+      jacredCalls.push(String(url));
+      const q = queryOf(String(url));
+      return Promise.resolve({
+        status: 200,
+        text: async () => '<rss><channel><item><title>' + q + '</title><link>http://jacred.test:9118/dl/j</link></item></channel></rss>',
+      });
+    });
+    const widened = await postSearch(jacred, { token, device, body: { source: 'jacred', q: 'matrix', cat: '3030', deviceId: device } });
+    expect(widened.status).toBe(200);
+    expect(jacredCalls.map(queryOf)).toEqual(['matrix', 'matr']);
+    expect(jacredCalls.every((url) => url.indexOf('cat=3030') >= 0)).toBe(true);
   });
 });

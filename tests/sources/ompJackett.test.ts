@@ -66,6 +66,31 @@ describe('omp Jackett source', () => {
     expect(site.calls[0].opts?.headers?.Authorization).toBe('Bearer tok-1');
   });
 
+  it('audiobook mode posts cat=3030 and an open search', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    const book = (title: string, hash: string, cat: string) =>
+      '<item><title>' + title + '</title><category>' + cat + '</category>' +
+      '<link>omp-fetch:/dl/' + hash.slice(0, 6) + '</link>' +
+      '<torznab:attr name="infohash" value="' + hash + '"/></item>';
+    const site = fakeSite((c) => {
+      const cat = c.form && c.form.cat;
+      const items = cat === '3030'
+        ? book('RuTracker', H, '3030') + book('Film', 'b'.repeat(40), '2000')
+        : book('RuTracker', H, '3030') + book('Кинг - Оно MP3 128 kbps', 'c'.repeat(40), '8000');
+      const rss =
+        '<?xml version="1.0"?><rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed"><channel><title>x</title>' +
+        items +
+        '</channel></rss>';
+      return page(rss, c.url);
+    });
+    const list = await ompJackettSource().search('оно', { ...site.ctx, searchMode: 'audiobook' });
+    expect(site.calls).toHaveLength(2);
+    const cats = site.calls.map((c) => (c.form ? c.form.cat : undefined));
+    expect(cats).toContain('3030');
+    expect(cats).toContain(undefined);
+    expect(list.map((r) => r.Title)).toEqual(['RuTracker', 'Кинг - Оно MP3 128 kbps']);
+  });
+
   it('searches JacRed through the billing proxy', async () => {
     saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
     const only =

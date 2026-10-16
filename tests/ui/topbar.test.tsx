@@ -29,7 +29,7 @@ describe('TopBar', () => {
   it('renders tabs with history first and marks the active one', () => {
     const { host } = mount({ tab: 'tv' });
     const tabs = Array.prototype.map.call(host.querySelectorAll('.tab'), (e: Element) => e.textContent);
-    expect(tabs).toEqual(['История', 'Новое', 'Обзор', 'Все', 'Фильмы', 'Сериалы', 'Музыка', 'Прочее']);
+    expect(tabs).toEqual(['История', 'Новое', 'Обзор', 'Все', 'Фильмы', 'Сериалы', 'Музыка', 'Аудиокниги', 'Прочее']);
     expect(host.querySelector('.tab.active')!.textContent).toBe('Сериалы');
   });
   it('shows the unseen findings count on «Новое» only when there are some', () => {

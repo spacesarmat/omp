@@ -43,7 +43,7 @@ describe('shared modules in English', () => {
   });
 
   it('categories and library labels', () => {
-    expect(categoryTabs().map((x) => x.label)).toEqual(['All', 'Movies', 'Series', 'Music', 'Other']);
+    expect(categoryTabs().map((x) => x.label)).toEqual(['All', 'Movies', 'Series', 'Music', 'Audiobooks', 'Other']);
     expect(addCategories()[0].label).toBe('No category');
     expect(libraryTabs()[0].label).toBe('History');
     expect(sortLabel('title')).toBe('By title');

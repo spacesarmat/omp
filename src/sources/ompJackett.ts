@@ -12,7 +12,7 @@ import {
   type BillingSession,
 } from '../billing/session';
 import { t } from '../i18n';
-import { parseTorznab } from './indexer';
+import { audiobookSearch, parseTorznab } from './indexer';
 import { registerSource, unregisterSource } from './registry';
 import type { Source, SourceContext, SourceResult } from './types';
 
@@ -169,6 +169,24 @@ function isProxyLink(link: string): boolean {
   return link.indexOf('omp-fetch:') === 0 || link.indexOf('omp-jacred:') === 0;
 }
 
+function paidSearch(ctx: SourceContext, id: string, source: OmpIndexerSource, query: string, cat?: string): Promise<SourceResult[]> {
+  const body: { [key: string]: string } = { source, q: query, deviceId: deviceId() };
+  if (cat) body.cat = cat;
+  return billingPost(ctx, '/v1/search', body, { headers: authHeaders(), timeoutMs: 25000 }).then(
+    (res) => {
+      const type = (res.text || '').trim();
+      if (res.status === 429) throw billingError(res.status, res.text);
+      if (res.status === 401 || res.status === 403 || res.status === 502) throw billingError(res.status, res.text);
+      if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
+      if (type.charAt(0) === '{') throw billingError(res.status, res.text);
+      return parseTorznab(res.text, id);
+    },
+    () => {
+      throw new Error(t('sources.billing.down'));
+    },
+  );
+}
+
 function paidSource(id: string, name: string, source: OmpIndexerSource): Source {
   return {
     id: id,
@@ -176,24 +194,10 @@ function paidSource(id: string, name: string, source: OmpIndexerSource): Source 
     kind: 'billing',
     search(query: string, ctx: SourceContext): Promise<SourceResult[]> {
       if (!billingSession()) return Promise.reject(new Error(t('sources.billing.badCode')));
-      return billingPost(
-        ctx,
-        '/v1/search',
-        { source, q: query, deviceId: deviceId() },
-        { headers: authHeaders(), timeoutMs: 25000 },
-      ).then(
-        (res) => {
-          const type = (res.text || '').trim();
-          if (res.status === 429) throw billingError(res.status, res.text);
-          if (res.status === 401 || res.status === 403 || res.status === 502) throw billingError(res.status, res.text);
-          if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
-          if (type.charAt(0) === '{') throw billingError(res.status, res.text);
-          return parseTorznab(res.text, id);
-        },
-        () => {
-          throw new Error(t('sources.billing.down'));
-        },
-      );
+      const load = (cat?: string) => paidSearch(ctx, id, source, query, cat);
+      // The proxy used to drop `cat`. Audiobook mode sends 3030 and an open search; the server forwards cat.
+      if (ctx.searchMode === 'audiobook') return audiobookSearch(load);
+      return load();
     },
     resolve(r: SourceResult, ctx: SourceContext): Promise<string> {
       const link = r.Link || '';

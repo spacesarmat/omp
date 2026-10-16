@@ -203,6 +203,7 @@ export const ru = {
     movie: 'Фильмы',
     tv: 'Сериалы',
     music: 'Музыка',
+    audiobook: 'Аудиокниги',
     other: 'Прочее',
   },
   history: {
@@ -1732,6 +1733,7 @@ export const ru = {
     kind: {
       movie: 'Фильм',
       series: 'Сериал',
+      audiobook: 'Аудиокнига',
       episodes: '{from}–{to}',
       episodesOf: '{from}–{to} из {total}',
       episode: 'серия {n}',

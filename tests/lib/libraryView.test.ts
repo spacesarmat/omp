@@ -13,7 +13,7 @@ describe('views and tabs', () => {
     expect(viewLabel('list')).toBe('Список');
   });
   it('puts history first', () => {
-    expect(libraryTabs().map((t) => t.id)).toEqual(['history', 'all', 'movie', 'tv', 'music', 'other']);
+    expect(libraryTabs().map((t) => t.id)).toEqual(['history', 'all', 'movie', 'tv', 'music', 'audiobook', 'other']);
     expect(libraryTabs()[0].label).toBe('История');
   });
 });

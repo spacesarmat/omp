@@ -85,7 +85,8 @@ describe('releaseKind: titles', () => {
     expect(kind('Просто название')).toBe(null);
     expect(kind('Hans Zimmer - Dune (Original Motion Picture Soundtrack) (2021) FLAC')).toBe(null);
     expect(kind('Metallica - Discography (1983-2023) MP3 320 kbps')).toBe(null);
-    expect(kind('Кинг Стивен - Оно (2017) аудиокнига MP3')).toBe(null);
+    expect(kind('Кинг Стивен - Оно (2017) аудиокнига MP3')).toBe('audiobook');
+    expect(kind('Кинг Стивен - Оно (2017) EPUB')).toBe(null);
     expect(kind('Cyberpunk 2077 [P] [RUS + ENG] (2020) (2.1)')).toBe(null);
     expect(kind('')).toBe(null);
   });
@@ -125,7 +126,13 @@ describe('releaseKind: tracker categories first', () => {
     expect(categoryKind('5000, 5040')).toBe('series');
     expect(categoryKind('5070')).toBe('series');
     expect(categoryKind('2000, 2040, 100002')).toBe('movie');
+    expect(categoryKind('3030')).toBe('audiobook');
+    expect(categoryKind('3030, Audio/Audiobook')).toBe('audiobook');
+    expect(categoryKind('Аудиокниги')).toBe('audiobook');
     expect(categoryKind('3000, 3040')).toBe('other');
+    expect(categoryKind('7000')).toBe('other');
+    expect(categoryKind('8000')).toBe('other');
+    expect(categoryKind('8010')).toBe('other');
     expect(categoryKind('2000, 5000')).toBe(null);
     expect(categoryKind('100001')).toBe(null);
     // Jackett lists the ids and the names together

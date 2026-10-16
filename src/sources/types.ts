@@ -72,6 +72,11 @@ export interface SourceContext {
   secrets?: SecretStore;
   /** The background monitoring page: a site whose background requests are paused (ipBan.ts) is not asked. */
   background?: boolean;
+  /**
+   * Indexer search. `audiobook` runs Torznab cat 3030 and an open search, then keeps audiobook rows
+   * (see indexer.ts). Other sources ignore it.
+   */
+  searchMode?: 'audiobook';
 }
 
 export interface Source {
