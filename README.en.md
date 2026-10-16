@@ -29,7 +29,7 @@ Samsung (Tizen) is not supported yet. Xiaomi, Sber and Yandex boxes use the same
 
 ## Requirements
 
-You need [TorrServer](https://github.com/YouROK/TorrServer) on the home network. If you have none, OMP downloads the arm64 build from GitHub and runs it on the phone or on Android TV (it is not inside the APK; the file is checked by sha256). A device without arm64 needs a server elsewhere. The built-in server has no password and is visible on that Wi‑Fi network. The phone, the TV and the server have to be on the same network.
+You need [TorrServer](https://github.com/YouROK/TorrServer) on the home network. If you have none, OMP on an arm64 phone downloads the build from GitHub and runs it (it is not inside the APK; the file is checked by sha256). For a TV, run TorrServer on the phone or on another device. On a phone without arm64, run the server on another device. The server on the phone has no password and is visible on that Wi‑Fi network. The phone, the TV and the server have to be on the same network.
 
 ## Install
 
