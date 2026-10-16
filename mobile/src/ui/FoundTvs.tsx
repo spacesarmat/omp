@@ -1,11 +1,11 @@
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import type { FoundOmpTv, FoundTv } from '../platform/native';
 import { CodeSheet } from './CodeSheet';
 import { Icon } from './Icon';
 import { activeTv, saveTv, setActiveTv, type SavedTv } from '../tv/tvStore';
 import { connectTv, pairAtv } from '../tv/tvClient';
-import { ensureFoundTvScan, foundTvRows, foundTvScanning } from '../tv/foundTvDiscovery';
+import { ensureFoundTvScan, foundTvRows, foundTvScanning, noteFoundTvScreen } from '../tv/foundTvDiscovery';
 
 export { setFoundTvDiscoverer } from '../tv/foundTvDiscovery';
 
@@ -18,15 +18,21 @@ export function setFoundTvConnect(fn: ((tv: SavedTv) => void) | null): void {
 /**
  * TVs the shared discovery store already sees, with one tap to connect. «Каталог», «Пульт» and
  * «Настройки» read one scan: a TV found on one screen is already listed on the next, and a result
- * that arrives later updates every open list. While the scan is still running and nothing is known
- * yet, a searching line stands in for the empty block. Nothing is rendered once the scan ends with
- * no TV, so a network with no TV stays as it was.
+ * that arrives later updates every open list. Opening a screen searches again when that scan is
+ * empty, older than its TTL, or from another network. While a scan is still running and nothing is
+ * known yet, a searching line stands in for the empty block. Nothing is rendered once the scan ends
+ * with no TV, so a network with no TV stays as it was.
  */
 export function FoundTvs() {
   const [coding, setCoding] = useState<FoundOmpTv | null>(null);
   // a TV chosen while this was open: the list was for the empty state
   const chosen = activeTv.value;
-  // start (or join) the one scan before paint, so a screen opened mid-search shows «Ищу…» and not an empty block
+  // once per mount, before paint: a re-render after the scan settles is not another open
+  const opened = useRef(false);
+  if (!opened.current) {
+    opened.current = true;
+    noteFoundTvScreen();
+  }
   if (!chosen) ensureFoundTvScan();
   const rows = foundTvRows.value;
   const scanning = foundTvScanning.value;

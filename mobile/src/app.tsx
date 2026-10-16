@@ -51,6 +51,7 @@ import { APP_VERSION } from '../../src/version';
 import { updatePrompt, installUpdateChecks } from '../../src/store/updates';
 import { tvState, warmUp, cancelWarmUp } from './tv/tvClient';
 import { activeTv } from './tv/tvStore';
+import { installFoundTvWatchers, refreshFoundTvScan } from './tv/foundTvDiscovery';
 import { startPlayerLink, attachIfOmpForeground, linkStatus } from './tv/playerLink';
 import { installTabSwipe } from './ui/tabSwipe';
 import { News } from './screens/News';
@@ -164,8 +165,11 @@ export function App() {
     let cancelled = false;
     try {
       CapApp.addListener('appStateChange', (st) => {
-        // the background page may have written new findings meanwhile
-        if (st.isActive) reloadMonitor();
+        // the background page may have written new findings meanwhile; a TV that was off at the last scan may be on now
+        if (st.isActive) {
+          reloadMonitor();
+          refreshFoundTvScan();
+        }
         if (!st.isActive) {
           cancelWarmUp();
         } else if (tvState.value === 'connected') {
@@ -182,9 +186,11 @@ export function App() {
     } catch {
       /* browser without Capacitor */
     }
+    const stopWatchers = installFoundTvWatchers();
     return () => {
       cancelled = true;
       stop();
+      stopWatchers();
       remove?.();
     };
   }, []);
