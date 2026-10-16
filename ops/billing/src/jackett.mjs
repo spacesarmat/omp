@@ -48,7 +48,7 @@ export function stripJackett(xml, origin, apiKey, mark) {
   const base = String(origin || '').replace(/\/+$/, '');
   const prefix = mark || JACKETT_MARK;
   if (base) out = out.split(base).join(prefix);
-  return out.replace(/([?&])(apikey|api_key|jackett_apikey)=[^&"'\s]*/gi, '$1');
+  return out.replace(/([?&])(apikey|api_key|jackett_apikey)=[^&"'<\s]*/gi, '$1');
 }
 
 /** `omp-fetch:/api/...` or `omp-jacred:/api/...` back into an indexer URL with the key attached. */
@@ -114,6 +114,50 @@ export function jackettSearchUrl(origin, apiKey, query) {
     '&t=search&q=' +
     encodeURIComponent(query || '')
   );
+}
+
+/**
+ * A Latin JacRed answer this small is searched again. `matrix` hits the exact key
+ * `matrix` (a couple of releases) and JacRed then skips the substring scan that would
+ * open `thematrix`. Eight is below a real title bucket (Война миров was ~229) and
+ * above a one-off exact name.
+ */
+export const JACRED_BROADEN_BELOW = 8;
+/** Both JacRed calls together stay under the phone's 15s source timeout. */
+export const JACRED_SEARCH_DEADLINE_MS = 12000;
+
+const CYRILLIC = /[а-яё]/i;
+const LATIN = /[a-z]/i;
+
+/** JacRed `StringConvert.SearchName`: lower case, ё→е, щ→ш, letters and digits only. */
+export function jacredSearchName(query) {
+  return String(query || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/щ/g, 'ш')
+    .replace(/[^a-zа-я0-9]+/g, '');
+}
+
+/**
+ * A shorter Latin query that is not JacRed's exact FileDB key, so the substring scan runs.
+ * Empty for Cyrillic, for `Title / Original` (JacRed already splits that), and for names
+ * under 6 letters (the stem would be under 4). A trailing year is removed first, the way
+ * JacRed's own `stripTrailingYear` does, so `matrix 1999` stems `matrix` rather than `matrix1999`.
+ */
+export function jacredBroaderQuery(query) {
+  const raw = String(query || '').trim();
+  if (!raw || raw.indexOf(' / ') >= 0) return '';
+  let core = raw.replace(/\s+(?:19|20)\d{2}$/, '').trim();
+  core = core.replace(/\b(?:s\d{1,2}e\d{1,2}|s\d{1,2}|e\d{1,2}|\d{1,2}x\d{1,2})\b/gi, ' ');
+  core = core.replace(/\s*\d{1,2}(?:-\d{1,2})?\s*сезон\s*.*$/i, '').replace(/\s{2,}/g, ' ').trim();
+  const name = jacredSearchName(core);
+  if (!name || name.length < 6 || CYRILLIC.test(name) || !LATIN.test(name)) return '';
+  return name.slice(0, name.length - 2);
+}
+
+function itemCount(xml) {
+  const found = String(xml || '').match(/<item\b/gi);
+  return found ? found.length : 0;
 }
 
 function positiveInt(value, fallback) {
@@ -456,4 +500,45 @@ export async function searchJackett(opts) {
   const logged = report(timedOut);
   if (!feeds.length) return { ok: false, xml: '', timedOut: logged };
   return { ok: true, xml: mergeTorznabFeeds(feeds), timedOut: logged };
+}
+
+/**
+ * Aggregate JacRed Torznab search (`t=search&q=`). No category, year, or limit: JacRed
+ * applies those only when the query sends them, and a missing `limit` is the whole list.
+ * A thin Latin answer is fetched once more with `jacredBroaderQuery` and the feeds are merged.
+ * A failed or slow second call keeps the first feed.
+ * @returns {Promise<{ ok: boolean, xml: string }>}
+ */
+export async function searchJacRed(opts) {
+  const o = opts || {};
+  const origin = indexerOrigin(o.origin);
+  const apiKey = String(o.apiKey || '');
+  const query = String(o.query || '');
+  const headers = o.headers || {};
+  const fetchImpl = o.fetchImpl || fetch;
+  const deadlineMs = positiveInt(o.deadlineMs, JACRED_SEARCH_DEADLINE_MS);
+  if (!origin || !apiKey) return { ok: false, xml: '' };
+
+  const started = Date.now();
+  const firstTimeout = Math.min(8000, deadlineMs);
+  if (firstTimeout < MIN_REQUEST_MS) return { ok: false, xml: '' };
+  const first = await fetchText(jackettSearchUrl(origin, apiKey, query), {
+    headers,
+    timeoutMs: firstTimeout,
+    fetchImpl,
+  });
+  if (first.aborted || !feedOk(first.status, first.text)) return { ok: false, xml: '' };
+
+  const broader = jacredBroaderQuery(query);
+  const left = deadlineMs - (Date.now() - started);
+  if (!broader || itemCount(first.text) >= JACRED_BROADEN_BELOW || left < MIN_REQUEST_MS) {
+    return { ok: true, xml: first.text };
+  }
+  const second = await fetchText(jackettSearchUrl(origin, apiKey, broader), {
+    headers,
+    timeoutMs: left,
+    fetchImpl,
+  });
+  if (second.aborted || !feedOk(second.status, second.text)) return { ok: true, xml: first.text };
+  return { ok: true, xml: mergeTorznabFeeds([first.text, second.text]) };
 }

@@ -10,10 +10,13 @@ import {
   jackettIndexerTimeoutMs,
   jackettSearchDeadlineMs,
   jackettSearchLimits,
+  jacredBroaderQuery,
+  jacredSearchName,
   mergeTorznabFeeds,
   parseConfiguredIndexers,
   resetJackettListCache,
   searchJackett,
+  searchJacRed,
 } from '../src/jackett.mjs';
 import { createApp } from '../src/server.mjs';
 import { emptyState, writeState } from '../src/store.mjs';
@@ -84,6 +87,11 @@ function isTorznabList(url: string) {
 
 function isAggregateSearch(url: string) {
   return url.indexOf('/indexers/all/results/torznab/api') >= 0 && url.indexOf('t=search') >= 0;
+}
+
+function queryOf(url: string) {
+  const m = /[?&]q=([^&]*)/.exec(url);
+  return m ? decodeURIComponent(m[1]) : '';
 }
 
 function isIndexerSearch(url: string, id: string) {
@@ -382,6 +390,50 @@ async function postSearch(
   return res;
 }
 
+describe('JacRed query widening', () => {
+  it('stems a Latin title and leaves a Cyrillic or bilingual query alone', () => {
+    expect(jacredSearchName('The Matrix!')).toBe('thematrix');
+    expect(jacredSearchName('Ёлка')).toBe('елка');
+    expect(jacredBroaderQuery('matrix')).toBe('matr');
+    expect(jacredBroaderQuery('matrix 1999')).toBe('matr');
+    expect(jacredBroaderQuery('Matrix S01E02')).toBe('matr');
+    expect(jacredBroaderQuery('jac')).toBe('');
+    expect(jacredBroaderQuery('Война миров')).toBe('');
+    expect(jacredBroaderQuery('Матрица / The Matrix')).toBe('');
+  });
+
+  it('merges the wider feed and skips it once the first answer is large enough', async () => {
+    const thin = await searchJacRed({
+      origin: 'http://jacred.test:9118',
+      apiKey: 'JACREDKEY',
+      query: 'matrix',
+      fetchImpl: (url: string) => {
+        const title = queryOf(String(url)) === 'matr' ? 'The Matrix' : 'Matrix';
+        return Promise.resolve({
+          status: 200,
+          text: async () => '<rss><channel><item><title>' + title + '</title></item></channel></rss>',
+        });
+      },
+    });
+    expect(thin.ok).toBe(true);
+    expect(thin.xml).toContain('Matrix');
+    expect(thin.xml).toContain('The Matrix');
+    const calls: string[] = [];
+    const full = await searchJacRed({
+      origin: 'http://jacred.test:9118',
+      apiKey: 'JACREDKEY',
+      query: 'avatar',
+      fetchImpl: (url: string) => {
+        calls.push(String(url));
+        const items = new Array(8).fill('<item><title>Avatar</title></item>').join('');
+        return Promise.resolve({ status: 200, text: async () => '<rss><channel>' + items + '</channel></rss>' });
+      },
+    });
+    expect(full.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+  });
+});
+
 describe('POST /v1/search', () => {
   it('strips Jackett links, caches the merged feed, and logs the slow indexer', async () => {
     process.env.BILLING_JACKETT_INDEXER_TIMEOUT_MS = '200';
@@ -453,6 +505,75 @@ describe('POST /v1/search', () => {
     expect(res.body).not.toContain('JACREDKEY');
     expect(calls).toHaveLength(1);
     expect(isAggregateSearch(calls[0])).toBe(true);
+    expect(queryOf(calls[0])).toBe('jac');
+  });
+
+  it('searches a thin Latin JacRed query again without its last two letters', async () => {
+    const { file, device, token } = subscriber();
+    const calls: string[] = [];
+    const fetchImpl = (url: string) => {
+      calls.push(String(url));
+      const q = queryOf(String(url));
+      const title = q === 'matr' ? 'The Matrix' : 'Matrix';
+      return Promise.resolve({
+        status: 200,
+        text: async () =>
+          '<rss><channel><item><title>' +
+          title +
+          '</title><link>http://jacred.test:9118/dl/' +
+          title +
+          '?apikey=JACREDKEY</link></item></channel></rss>',
+      });
+    };
+    const app = createApp(file, fetchImpl);
+    const res = await postSearch(app, { token, device, body: { source: 'jacred', q: 'matrix', deviceId: device } });
+    expect(res.status).toBe(200);
+    expect(calls.map(queryOf)).toEqual(['matrix', 'matr']);
+    expect(res.body).toContain('<title>Matrix</title>');
+    expect(res.body).toContain('<title>The Matrix</title>');
+    expect(res.body).not.toContain('JACREDKEY');
+    expect(res.body).not.toContain('jacred.test');
+    const again = await postSearch(app, { token, device, body: { source: 'jacred', q: 'matrix', deviceId: device } });
+    expect(again.body).toBe(res.body);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('does not widen a Cyrillic JacRed query or a Latin query that already filled the bucket', async () => {
+    const { file, device, token } = subscriber();
+    const calls: string[] = [];
+    const many = '<rss><channel>' + new Array(8).fill('<item><title>Avatar</title><link>http://jacred.test:9118/dl/a</link></item>').join('') + '</channel></rss>';
+    const fetchImpl = (url: string) => {
+      calls.push(String(url));
+      const q = queryOf(String(url));
+      const body = q === 'Война миров'
+        ? '<rss><channel><item><title>Война миров</title><link>http://jacred.test:9118/dl/w</link></item></channel></rss>'
+        : many;
+      return Promise.resolve({ status: 200, text: async () => body });
+    };
+    const app = createApp(file, fetchImpl);
+    const ru = await postSearch(app, { token, device, body: { source: 'jacred', q: 'Война миров', deviceId: device } });
+    expect(ru.status).toBe(200);
+    expect(ru.body).toContain('Война миров');
+    expect(calls.map(queryOf)).toEqual(['Война миров']);
+    const full = await postSearch(app, { token, device, body: { source: 'jacred', q: 'avatar', deviceId: device } });
+    expect(full.status).toBe(200);
+    expect(calls.map(queryOf)).toEqual(['Война миров', 'avatar']);
+  });
+
+  it('keeps the first JacRed feed when the wider query fails', async () => {
+    const { file, device, token } = subscriber();
+    const fetchImpl = (url: string) => {
+      if (queryOf(String(url)) === 'matr') return Promise.resolve({ status: 502, text: async () => '' });
+      return Promise.resolve({
+        status: 200,
+        text: async () => '<rss><channel><item><title>Matrix</title><link>http://jacred.test:9118/dl/m</link></item></channel></rss>',
+      });
+    };
+    const app = createApp(file, fetchImpl);
+    const res = await postSearch(app, { token, device, body: { source: 'jacred', q: 'matrix 1999', deviceId: device } });
+    expect(res.status).toBe(200);
+    expect(res.body).toContain('Matrix');
+    expect(res.body).not.toContain('The Matrix');
   });
 
   it('does not call Jackett without a session, and returns 502 when every indexer fails', async () => {

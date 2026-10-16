@@ -49,9 +49,9 @@ import {
   indexerOf,
   jackettIndexerTimeoutMs,
   jackettSearchDeadlineMs,
-  jackettSearchUrl,
   restoreJackett,
   searchJackett,
+  searchJacRed,
   stripJackett,
 } from './jackett.mjs';
 import { sendMail } from './mail.mjs';
@@ -873,17 +873,15 @@ export function createApp(file, fetchImpl) {
           searchCache.set(cacheKey, xml);
           return send(res, 200, xml, { 'content-type': 'application/xml; charset=utf-8' });
         }
-        const search = jackettSearchUrl(indexer.url, indexer.key, q);
-        let upstream;
-        try {
-          upstream = await net(search, { headers });
-        } catch (e) {
-          return json(res, 502, { error: 'down' });
-        }
-        if (upstream.status < 200 || upstream.status >= 300) {
-          return json(res, 502, { error: 'down' });
-        }
-        const xml = stripJackett(await upstream.text(), indexer.url, indexer.key, indexer.mark);
+        const found = await searchJacRed({
+          origin: indexer.url,
+          apiKey: indexer.key,
+          query: q,
+          headers,
+          fetchImpl: net,
+        });
+        if (!found.ok) return json(res, 502, { error: 'down' });
+        const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
         searchCache.set(cacheKey, xml);
         return send(res, 200, xml, { 'content-type': 'application/xml; charset=utf-8' });
       }
