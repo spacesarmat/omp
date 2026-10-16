@@ -64,6 +64,13 @@ jobs:
         run: (cd android && ./gradlew -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 assembleDebug testDebugUnitTest)
       - name: APK size per ABI
         run: ls -l android/app/build/outputs/apk/debug/*.apk
+      - name: Upload debug APKs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: apk-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+          if-no-files-found: error
 
   # Billing tests run in Node (ops/billing/vitest.config.ts); the jsdom suite cannot load node:sqlite.
   # Admin deps are separate from the server. No path filter: a skipped job reports no status, so this

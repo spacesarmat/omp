@@ -22,6 +22,16 @@ android {
         ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
     signingConfigs {
+        // Public Android debug certificate (android/debug.keystore). Store and key password are "android",
+        // alias androiddebugkey. Not a release key. Without this file each CI runner creates its own
+        // ~/.android/debug.keystore, and those APKs cannot install over each other.
+        // SHA-256: 8B:F6:93:78:01:52:4F:D7:C2:64:B5:58:55:BB:35:A2:13:3C:24:21:14:FB:66:B5:FA:9F:19:07:E3:34:FD:84
+        debug {
+            storeFile rootProject.file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
         release {
             def ks = System.getenv('ANDROID_KEYSTORE_FILE')
             if (ks) {
@@ -56,6 +66,7 @@ android {
     buildTypes {
         // test builds install next to the released app (different package, its own data) for device checks
         debug {
+            signingConfig signingConfigs.debug
             applicationIdSuffix '.test'
             versionNameSuffix '-test'
         }
@@ -101,6 +112,9 @@ dependencies {
     // catalog in vendor/2160player/gradle/libs.versions.toml
     implementation 'androidx.media3:media3-exoplayer:1.11.1'
     implementation 'androidx.media3:media3-ui:1.11.1'
+    // MediaSession / notification actions for the phone's foreground PlaybackService. player-core depends on
+    // media3-session as implementation, so the app module does not see it unless it is declared here too.
+    implementation 'androidx.media3:media3-session:1.11.1'
     // FFmpeg audio decoders for Media3 (DTS, AC3/E-AC3, TrueHD…) when the box has no hardware decoder; enabled in
     // v0.15 Task 3. nextlib (GPL-3.0, compatible with OMP's GPL-3.0), the same build player-core uses; it must be a
     // direct dependency because player-core has it as implementation. Its version follows Media3 (1.11.1-x).
