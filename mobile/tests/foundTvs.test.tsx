@@ -68,4 +68,86 @@ describe('discovered TVs', () => {
     expect(el.querySelector('.m-sheet')).not.toBeNull();
     expect(activeTv.value).toBeNull();
   });
+
+  it('shows a TV found on another screen as soon as this one opens', async () => {
+    let calls = 0;
+    setFoundTvDiscoverer(
+      async () => {
+        calls += 1;
+        return [{ ip: '192.168.1.9', name: 'LG OLED', model: 'OLED55' }];
+      },
+      async () => [],
+    );
+    mount();
+    await flush();
+    expect(el.textContent).toContain('LG OLED');
+
+    // leave «Каталог» and open «Пульт» or «Настройки»: the same list, no second scan
+    act(() => render(null, el));
+    act(() => render(<FoundTvs />, el));
+    expect(el.textContent).toContain('Телевизоры в сети');
+    expect(el.textContent).toContain('LG OLED');
+    expect(el.textContent).toContain('OLED55');
+    expect(el.querySelector('.m-searching')).toBeNull();
+    expect(calls).toBe(1);
+  });
+
+  it('shows searching instead of an empty block while the shared scan is running', async () => {
+    let calls = 0;
+    let release: (rows: { ip: string; name: string; model?: string }[]) => void = () => {};
+    setFoundTvDiscoverer(
+      () => {
+        calls += 1;
+        return new Promise((resolve) => {
+          release = resolve;
+        });
+      },
+      async () => [],
+    );
+    mount();
+    expect(el.textContent).toContain('Ищу…');
+    expect(el.querySelector('button.m-server')).toBeNull();
+
+    act(() => render(null, el));
+    act(() => render(<FoundTvs />, el));
+    expect(calls).toBe(1);
+    expect(el.textContent).toContain('Ищу…');
+    expect(el.querySelector('button.m-server')).toBeNull();
+
+    await act(async () => {
+      release([{ ip: '192.168.1.9', name: 'LG OLED', model: 'OLED55' }]);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(el.textContent).toContain('LG OLED');
+    expect(el.querySelector('.m-searching')).toBeNull();
+    expect(calls).toBe(1);
+  });
+
+  it('keeps a screen opened during the scan live when the other search finishes', async () => {
+    let releaseAtv: (rows: { ip: string; port: number; name: string; version: string }[]) => void = () => {};
+    setFoundTvDiscoverer(
+      async () => [{ ip: '192.168.1.9', name: 'LG OLED', model: 'OLED55' }],
+      () =>
+        new Promise((resolve) => {
+          releaseAtv = resolve;
+        }),
+    );
+    mount();
+    await flush();
+    expect(el.textContent).toContain('LG OLED');
+    expect(el.textContent).not.toContain('Гостиная');
+
+    act(() => render(null, el));
+    act(() => render(<FoundTvs />, el));
+    expect(el.textContent).toContain('LG OLED');
+    expect(el.querySelector('.m-searching')).toBeNull();
+
+    await act(async () => {
+      releaseAtv([{ ip: '192.168.1.8', port: 8095, name: 'Гостиная', version: '0.20' }]);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(el.textContent).toContain('LG OLED');
+    expect(el.textContent).toContain('Гостиная');
+    expect(el.textContent).toContain('OMP 0.20');
+  });
 });

@@ -1,70 +1,35 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
-import { native, type FoundOmpTv, type FoundTv } from '../platform/native';
+import type { FoundOmpTv, FoundTv } from '../platform/native';
 import { CodeSheet } from './CodeSheet';
 import { Icon } from './Icon';
 import { activeTv, saveTv, setActiveTv, type SavedTv } from '../tv/tvStore';
 import { connectTv, pairAtv } from '../tv/tvClient';
+import { ensureFoundTvScan, foundTvRows, foundTvScanning } from '../tv/foundTvDiscovery';
 
-const SEARCH_MS = 4000;
+export { setFoundTvDiscoverer } from '../tv/foundTvDiscovery';
 
-type LgDiscover = (ms: number) => Promise<FoundTv[]>;
-type AtvDiscover = (ms: number) => Promise<FoundOmpTv[]>;
-
-let lgDiscover: LgDiscover | null = null;
-let atvDiscover: AtvDiscover | null = null;
 let connectFound: ((tv: SavedTv) => void) | null = null;
-
-/** Tests: discovery and the connect that follows a tap. Null restores the real ones. */
-export function setFoundTvDiscoverer(lg: LgDiscover | null, atv: AtvDiscover | null = null): void {
-  lgDiscover = lg;
-  atvDiscover = atv;
-}
 
 export function setFoundTvConnect(fn: ((tv: SavedTv) => void) | null): void {
   connectFound = fn;
 }
 
-interface Row {
-  ip: string;
-  name: string;
-  meta: string;
-  kind: 'lg' | 'atv';
-  lg?: FoundTv;
-  atv?: FoundOmpTv;
-}
-
 /**
- * TVs discovery already sees, with one tap to connect. Renders nothing until a TV is found, so a screen
- * with no TV on the network stays as it was.
+ * TVs the shared discovery store already sees, with one tap to connect. «Каталог», «Пульт» and
+ * «Настройки» read one scan: a TV found on one screen is already listed on the next, and a result
+ * that arrives later updates every open list. While the scan is still running and nothing is known
+ * yet, a searching line stands in for the empty block. Nothing is rendered once the scan ends with
+ * no TV, so a network with no TV stays as it was.
  */
 export function FoundTvs() {
-  const [rows, setRows] = useState<Row[]>([]);
   const [coding, setCoding] = useState<FoundOmpTv | null>(null);
   // a TV chosen while this was open: the list was for the empty state
   const chosen = activeTv.value;
-
-  useEffect(() => {
-    let alive = true;
-    const lg = (lgDiscover ?? ((ms: number) => native.discoverTvs(ms)))(SEARCH_MS).catch(() => [] as FoundTv[]);
-    const atv = (atvDiscover ?? ((ms: number) => native.discoverOmpTvs(ms)))(SEARCH_MS).catch(() => [] as FoundOmpTv[]);
-    Promise.all([lg, atv]).then(([foundLg, foundAtv]) => {
-      if (!alive) return;
-      const next: Row[] = [];
-      for (const f of foundAtv) {
-        if (next.some((r) => r.ip === f.ip)) continue;
-        next.push({ ip: f.ip, name: f.name, meta: f.ip + (f.version ? ' · OMP ' + f.version : ''), kind: 'atv', atv: f });
-      }
-      for (const f of foundLg) {
-        if (next.some((r) => r.ip === f.ip)) continue;
-        next.push({ ip: f.ip, name: f.name, meta: f.ip + (f.model ? ' · ' + f.model : ''), kind: 'lg', lg: f });
-      }
-      setRows(next);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  // start (or join) the one scan before paint, so a screen opened mid-search shows «Ищу…» and not an empty block
+  if (!chosen) ensureFoundTvScan();
+  const rows = foundTvRows.value;
+  const scanning = foundTvScanning.value;
 
   function connectLg(f: FoundTv) {
     const tv: SavedTv = { ip: f.ip, name: f.name || 'LG ' + f.ip, kind: 'lg' };
@@ -74,9 +39,17 @@ export function FoundTvs() {
     else void connectTv(tv);
   }
 
-  if (chosen || (!rows.length && !coding)) return null;
+  if (chosen || (!rows.length && !scanning && !coding)) return null;
   return (
     <div class="m-found-tvs">
+      {scanning && rows.length === 0 && (
+        <div class="m-muted m-searching" role="status">
+          <svg class="m-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5B700" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 3a9 9 0 1 0 9 9" />
+          </svg>
+          {t('remote.foundTvsSearching')}
+        </div>
+      )}
       {rows.length > 0 && <div class="m-set-label">{t('remote.foundTvs')}</div>}
       {rows.map((r) => (
         <button
