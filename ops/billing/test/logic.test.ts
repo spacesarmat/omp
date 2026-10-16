@@ -340,9 +340,13 @@ describe('admin dashboard', () => {
       currency: '643',
       now: NOW + 5000,
     }).state;
+    paidState.attempts.push({ at: NOW + 4000, ok: false, reason: 'bad_code', deviceId: 'abcdef0123456789', hash: 'x' });
     const dash = adminDashboard(paidState, NOW + 5000);
     expect(dash.alerts.some((a) => a.text.indexOf('Jackett') >= 0 || a.text.indexOf('бота') >= 0)).toBe(true);
     expect(dash.events.some((e) => e.kind === 'pay')).toBe(true);
+    const fail = dash.events.find((e) => e.kind === 'fail');
+    expect(fail?.text).toContain('неверный код');
+    expect(fail?.text).not.toContain('bad_code');
   });
 });
 

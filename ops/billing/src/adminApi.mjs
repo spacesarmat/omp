@@ -1,10 +1,21 @@
-import { accountCard, adminDashboard, financeReport, formatCode, openAppUrl, supportThreads, telegramDisplay } from './logic.mjs';
+import { accountCard, adminDashboard, dailySeries, financeReport, supportThreads, telegramDisplay } from './logic.mjs';
 import { publicAdminSettings } from './services.mjs';
 import { storageInfo } from './store.mjs';
+
+const DAY = 24 * 60 * 60 * 1000;
 
 function day(ms) {
   if (!ms) return '—';
   return new Date(ms).toISOString().slice(0, 10);
+}
+
+function subStatus(sub, bound, now) {
+  if (!(sub.paidUntil > now)) return 'expired';
+  const left = sub.paidUntil - now;
+  if (left <= DAY) return 'expiring';
+  if (left <= 7 * DAY) return 'soon';
+  if (!bound) return 'unbound';
+  return 'active';
 }
 
 function subRows(state, now) {
@@ -16,7 +27,6 @@ function subRows(state, now) {
       const codes = state.codes.filter((c) => c.subscriptionId === sub.id && !c.revoked);
       const bound = codes.filter((c) => c.deviceId).length;
       const active = sub.paidUntil > now;
-      const status = active ? (bound ? 'active' : 'unbound') : 'expired';
       return {
         id: sub.id,
         accountId: sub.accountId,
@@ -29,14 +39,8 @@ function subRows(state, now) {
         deviceLimit: sub.deviceLimit,
         bound,
         active,
-        status,
-        codes: codes.map((c) => ({
-          id: c.id,
-          plain: c.plain || '',
-          bound: !!c.deviceId,
-          deviceId: c.deviceId ? c.deviceId.slice(0, 8) : '',
-          formatted: c.plain ? formatCode(c.plain) : '',
-        })),
+        status: subStatus(sub, bound, now),
+        overLimit: bound > (sub.deviceLimit || 0),
       };
     });
 }
@@ -102,6 +106,7 @@ export function homePayload(state, file, opts) {
     sessions: opts.sessions || [],
     support: supportThreads(state).slice(0, 40),
     audit: (state.audit || []).slice(-40).reverse(),
+    series: dailySeries(state, now, 90),
     settings: publicAdminSettings(s),
     storage: storageInfo(file),
   };
@@ -110,7 +115,6 @@ export function homePayload(state, file, opts) {
 export function userPayload(state, accountId, opts) {
   const card = accountCard(state, accountId, Date.now());
   if (!card) return null;
-  const origin = state.settings.publicOrigin || '';
   const sub = card.sub;
   return {
     csrf: opts.csrf || '',
@@ -139,15 +143,27 @@ export function userPayload(state, accountId, opts) {
       : null,
     codes: (card.codes || []).map((c) => ({
       id: c.id,
-      plain: c.plain || '',
-      formatted: c.plain ? formatCode(c.plain) : '',
+      hasPlain: !!c.plain,
       bound: !!c.deviceId,
       deviceId: c.deviceId ? c.deviceId.slice(0, 8) : '',
-      openUrl: c.plain ? openAppUrl(origin, c.plain) : '',
     })),
-    payments: card.payments || [],
-    promos: card.promos || [],
-    attempts: card.attempts || [],
-    reveal: card.reveal || null,
+    payments: (card.payments || []).map((p) => ({
+      at: p.at || 0,
+      amount: p.amount || '',
+      label: p.label || '',
+      operationId: p.operationId || '',
+      error: p.error || '',
+    })),
+    promos: (card.promos || []).map((p) => ({
+      code: p.code,
+      days: p.days,
+      at: p.at || 0,
+    })),
+    attempts: (card.attempts || []).map((a) => ({
+      at: a.at || 0,
+      ok: !!a.ok,
+      reason: a.reason || '',
+      deviceId: a.deviceId ? String(a.deviceId).slice(0, 8) : '',
+    })),
   };
 }

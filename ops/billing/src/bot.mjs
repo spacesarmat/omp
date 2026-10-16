@@ -76,6 +76,70 @@ export function adminKeyboard() {
   };
 }
 
+/** Missing flag means on, so existing installs keep admin Telegram notices. */
+export function adminNotifyEnabled(settings) {
+  const v = settings && settings.adminNotify;
+  return v !== false && v !== 'false' && v !== 0 && v !== '0';
+}
+
+export function adminBroadcast(settings, text) {
+  if (!adminNotifyEnabled(settings)) return [];
+  const body = String(text || '').trim();
+  if (!body) return [];
+  return adminChatIds(settings).map((chatId) => ({
+    chatId,
+    text: body,
+    keyboard: adminKeyboard(),
+  }));
+}
+
+export function paymentAdminNotices(settings, { ok, amount, label, error, who }) {
+  const sum = String(amount || '').trim();
+  const mark = String(label || '').trim();
+  const person = String(who || '').trim();
+  const lines = [];
+  if (ok) lines.push('Новая оплата' + (sum ? ': ' + sum + ' ₽' : ''));
+  else {
+    lines.push('Ошибка оплаты: ' + (error || 'неизвестно'));
+    if (sum) lines.push('Сумма: ' + sum);
+  }
+  if (person) lines.push(person);
+  if (mark) lines.push('Метка: ' + mark);
+  return adminBroadcast(settings, lines.join('\n'));
+}
+
+/**
+ * Notify when a configured service goes down. A repeat waits until it recovers.
+ * @param prev map of service key → 'ok' | 'down' | 'skip'
+ */
+export function serviceDownNotices(settings, probes, prev) {
+  const names = [
+    ['jackett', 'Jackett'],
+    ['jacred', 'JacRed'],
+    ['torrserver', 'TorrServer'],
+  ];
+  const snapshot = { ...(prev || {}) };
+  const messages = [];
+  const list = probes || {};
+  for (let i = 0; i < names.length; i++) {
+    const key = names[i][0];
+    const label = names[i][1];
+    const row = list[key];
+    if (!row || !row.configured) {
+      snapshot[key] = 'skip';
+      continue;
+    }
+    const down = !row.ok;
+    const was = snapshot[key];
+    snapshot[key] = down ? 'down' : 'ok';
+    if (down && was !== 'down') {
+      const why = row.error ? ' (' + row.error + ')' : '';
+      messages.push(...adminBroadcast(settings, 'Сервис недоступен: ' + label + why));
+    }
+  }
+  return { snapshot, messages };
+}
+
 function codeButtons(origin, code) {
   const url = openAppUrl(origin, code);
   // Telegram inline url buttons require http(s).
@@ -270,7 +334,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     const out = confirmAdminPanelLogin(cur, { token: arg, telegramId: chatId, now });
     cur = out.state;
     if (out.result.error === 'forbidden') {
-      say('Нет доступа к панели. Добавьте свой Telegram id в настройках (adminTelegramIds).');
+      say('Нет доступа к панели. Добавьте свой Telegram id в настройках администраторов.');
     } else if (out.result.error) {
       say('Ссылка для входа устарела. Откройте панель снова и нажмите «Войти через Telegram».');
     } else {
@@ -281,7 +345,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
 
   if (action === 'admin' || action === 'admin_summary' || action === 'admin_find' || action === 'admin_grant' || action === 'admin_promo') {
     if (!admin) {
-      say('Нет доступа. Добавьте свой Telegram id в настройках панели (adminTelegramIds).');
+      say('Нет доступа. Добавьте свой Telegram id в настройках панели.');
       return { state: cur, messages, pad: 'user' };
     }
   }
@@ -463,24 +527,29 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     });
     cur = saved.state;
     const admins = adminChatIds(cur.settings);
+    const notify = adminNotifyEnabled(cur.settings);
     say(
       admins.length
-        ? 'Сообщение передано администратору. Ответ придёт в этот чат.'
+        ? notify
+          ? 'Сообщение передано администратору. Ответ придёт в этот чат.'
+          : 'Сообщение сохранено. Уведомления администраторам выключены.'
         : 'Сообщение сохранено. Администраторы в панели ещё не указаны.',
     );
-    const note =
-      'Поддержка · ' +
-      (telegramDisplay(account) || chatId) +
-      '\n' +
-      arg +
-      '\n\nОтветьте на это сообщение — текст уйдёт пользователю.';
-    for (let i = 0; i < admins.length; i++) {
-      messages.push({
-        chatId: admins[i],
-        text: note,
-        keyboard: adminKeyboard(),
-        supportNotify: String(chatId),
-      });
+    if (notify) {
+      const note =
+        'Поддержка · ' +
+        (telegramDisplay(account) || chatId) +
+        '\n' +
+        arg +
+        '\n\nОтветьте на это сообщение — текст уйдёт пользователю.';
+      for (let i = 0; i < admins.length; i++) {
+        messages.push({
+          chatId: admins[i],
+          text: note,
+          keyboard: adminKeyboard(),
+          supportNotify: String(chatId),
+        });
+      }
     }
   } else if (action === 'unknown') {
     say('Не понял. Выберите кнопку ниже или «Поддержка».\n\n' + statusText(sub, account));

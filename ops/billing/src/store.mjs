@@ -13,6 +13,8 @@ export function emptyState() {
       publicOrigin: '',
       /** Comma-separated Telegram chat ids that get the admin cabinet. */
       adminTelegramIds: '',
+      /** Telegram notices to adminTelegramIds: payment, payment error, service down, support. */
+      adminNotify: true,
       yoomoneyWallet: '',
       yoomoneySecret: '',
       jackettUrl: '',
