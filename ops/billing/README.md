@@ -28,14 +28,15 @@ node src/server.mjs
 
 Jackett с хоста не торчит наружу — к нему ходит только контейнер billing.
 
-## Публичный HTTPS — Cloudflare Tunnel
+## Публичный HTTPS — Caddy на VPS
 
-Домен: **omp-player.online** → хост **`https://billing.omp-player.online`**.  
-Коннектор — приложение ZimaOS **Cloudflared** (`wisdomsky/cloudflared-web`, сеть host). Панель: `http://192.168.1.191:14333/`. Порты роутера не открываем. В биллинге своего cloudflared нет.
+Домен: **omp-player.online**. Панель и API: **`https://billing.omp-player.online`**.
 
-В веб-морде Cloudflared вставить токен туннеля `omp-billing`. В Zero Trust у публичного hostname URL: `http://127.0.0.1:8787` (на NAS это опубликованный порт панели).
+Cloudflare Tunnel снят. Снаружи Cloudflare (оранжевое облако, SSL/TLS **Full (strict)**) ходит на Caddy на VPS. Caddy держит сертификат origin и проксирует контейнер `billing` на порту 8787. Лендинг, Jackett и JacRed — на том же Caddy. Стек и команды выкладки: `ops/vps/README.md`.
 
 Проверка: `https://billing.omp-player.online/health` → `{"ok":true}`.
+
+HSTS (`max-age=15552000; includeSubDomains`, без preload), `X-Content-Type-Options`, `X-Frame-Options` и `Referrer-Policy` ставит Caddy. Заголовка `Server` у origin нет.
 
 ### Локально и из мира
 

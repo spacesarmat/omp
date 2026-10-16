@@ -11,7 +11,9 @@ Hostnames (Cloudflare A → VPS IP, orange cloud):
 | `jackett.omp-player.online` | `jackett:9117` (+ basic auth) |
 | `jacred.omp-player.online` | `jacred:9117` (+ basic auth) |
 
-Cloudflare DNS: A `@` and `www` → VPS IP, proxied (same as billing). SSL/TLS **Full**.
+Cloudflare DNS: A `@` and `www` → VPS IP, proxied (same as billing). SSL/TLS **Full (strict)**. Cloudflare Tunnel is not used.
+
+Caddy adds the same response headers on every host: `Strict-Transport-Security: max-age=15552000; includeSubDomains` (no preload), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and removes `Server`. Apply a Caddyfile change with `caddy reload` (the file is bind-mounted). HEAD/OPTIONS behaviour is in the billing image, so that container needs a new image before a restart picks it up.
 
 JacRed talks to TorrServer at `http://torrserver:8090` (`tracks` / ffprobe).
 
@@ -34,8 +36,9 @@ To refresh compose / Caddy / JacRed config from the repo:
 ```bash
 cd /opt/omp-vps
 git pull   # or rsync ops/vps from the monorepo
-docker compose pull
-docker compose up -d
+docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+docker compose pull billing
+docker compose up -d billing
 ```
 
 ## First install
@@ -48,7 +51,7 @@ docker compose up -d
 6. Edit `jacred/init.yaml`: set `apikey` / `devkey`.
 8. `docker compose up -d`
 9. Copy the Jackett API key from `data/jackett/.../ServerConfig.json` into the billing admin **Сервисы** tab (never into the APK or git). JacRed key → same tab. Keep real `INDEXER_*` only in VPS `.env` (gitignored). Phones use `/v1/search` / `/v1/torrent` only.
-10. Cloudflare DNS: A `billing` / `jackett` / `jacred` → VPS IP, proxied. SSL/TLS mode **Full**. Disable the old Tunnel public hostnames for these names.
+10. Cloudflare DNS: A `billing` / `jackett` / `jacred` → VPS IP, proxied. SSL/TLS mode **Full (strict)**. Do not publish these names on a Cloudflare Tunnel.
 11. UFW: allow `22`, `80`, `443` only.
 
 ## Local image build (without GHCR)

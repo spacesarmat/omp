@@ -1,8 +1,8 @@
 /**
  * Subscription server. The Jackett address and API key stay there.
  *
- * Public: Cloudflare Tunnel → https://billing.omp-player.online
- * LAN fallback: http://NAS:8787 while DNS/tunnel is not ready (same Wi‑Fi).
+ * Public: Caddy on the VPS, Cloudflare proxied (Full strict) → https://billing.omp-player.online
+ * LAN fallback: http://NAS:8787 on the same Wi‑Fi.
  */
 import { loadJson, saveJson } from '../store/storage';
 
