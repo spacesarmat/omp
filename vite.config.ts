@@ -43,6 +43,8 @@ export default defineConfig({
     // pins the Russian UI (and a Russian browser language) so the assertions stay in Russian
     setupFiles: ['tests/setup/i18n.ts'],
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx', 'mobile/tests/**/*.test.{ts,tsx}', 'ops/*/test/**/*.test.ts'],
+    // Billing uses node:sqlite, which the jsdom bundle cannot load. ops/billing/vitest.config.ts runs those tests in Node.
+    exclude: ['ops/billing/**'],
     alias: {
       react: 'preact/compat',
       'react-dom': 'preact/compat',
