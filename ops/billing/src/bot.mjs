@@ -16,6 +16,7 @@ import {
   isAdminChat,
   openAppUrl,
   priceText,
+  quotePurchase,
   redeemPromo,
   revealableCode,
   subscriptionView,
@@ -191,6 +192,13 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
   let mode = admin && pad === 'admin' ? 'admin' : 'user';
   if (admin && (action === 'admin' || String(action).indexOf('admin_') === 0)) mode = 'admin';
   if (action === 'user_mode') mode = 'user';
+
+  const checkout = (opts, targets) => {
+    const quoted = quotePurchase(cur, { ...opts, now });
+    if (quoted.result.error) return '';
+    cur = quoted.state;
+    return payUrl(wallet, { sum: quoted.result.price, label: quoted.result.label, targets });
+  };
 
   const say = (body, extra) => {
     const forceAdmin = extra && extra.adminPad === true;
@@ -385,7 +393,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
           ' за ' +
           prices.days +
           ' дн. Один код — одно устройство.\n' +
-          payUrl(wallet, { sum: prices.price, label: 'new:' + account.id, targets: 'OMP Jackett и JacRed' }),
+          checkout({ kind: 'new', accountId: account.id }, 'OMP Jackett и JacRed'),
       );
     }
   } else if (action === 'renew') {
@@ -396,7 +404,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
         'Продлить до ' +
           new Date(Math.max(sub.paidUntil, now) + prices.days * 86400000).toISOString().slice(0, 10) +
           ':\n' +
-          payUrl(wallet, { sum: prices.price, label: 'sub:' + sub.id, targets: 'OMP, продление' }),
+          checkout({ kind: 'sub', accountId: account.id, subscriptionId: sub.id }, 'OMP, продление'),
       );
     }
   } else if (action === 'code') {
@@ -413,7 +421,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       if (wallet && prices.extra) {
         say(
           'Ещё одно устройство:\n' +
-            payUrl(wallet, { sum: prices.extra, label: 'dev:' + sub.id, targets: 'OMP, устройство' }),
+            checkout({ kind: 'dev', accountId: account.id, subscriptionId: sub.id }, 'OMP, устройство'),
         );
       }
     }

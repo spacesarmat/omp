@@ -324,15 +324,33 @@ export function applyPayment(state, { operationId, label, amount, currency, now 
   const mark = String(label || '');
   const days = state.settings.periodDays || 30;
   const row = { operationId, label: mark, amount, at: now };
+  let act = mark;
+  let quoted = null;
+  if (mark.indexOf('buy:') === 0) {
+    const quote = (state.purchases || []).find((p) => p.id === mark.slice(4));
+    if (!quote) {
+      const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+      return { state: { ...state, payments }, result: { error: 'bad_label' } };
+    }
+    quoted = Number(quote.price) || 0;
+    if (quote.kind === 'new') act = 'new:' + quote.accountId;
+    else if (quote.kind === 'sub') act = 'sub:' + quote.subscriptionId;
+    else if (quote.kind === 'dev') act = 'dev:' + quote.subscriptionId;
+    else {
+      const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+      return { state: { ...state, payments }, result: { error: 'bad_label' } };
+    }
+  }
+  const covers = (kindMark) => paymentCovers(amount, currency, quoted !== null ? quoted : priceOf(state, kindMark));
 
-  if (mark.indexOf('sub:') === 0) {
-    const id = mark.slice(4);
+  if (act.indexOf('sub:') === 0) {
+    const id = act.slice(4);
     const sub = state.subscriptions.find((s) => s.id === id);
     if (!sub) {
       const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
-    if (!paymentCovers(amount, currency, priceOf(state, mark))) return rejectAmount(state, row);
+    if (!covers(act)) return rejectAmount(state, row);
     const subscriptions = state.subscriptions.map((s) => {
       if (s.id !== id) return s;
       const from = Math.max(s.paidUntil, now);
@@ -344,24 +362,24 @@ export function applyPayment(state, { operationId, label, amount, currency, now 
       result: { kind: 'renew', subscriptionId: id, paidUntil: next ? next.paidUntil : 0 },
     };
   }
-  if (mark.indexOf('dev:') === 0) {
-    const id = mark.slice(4);
+  if (act.indexOf('dev:') === 0) {
+    const id = act.slice(4);
     if (!state.subscriptions.find((s) => s.id === id)) {
       const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
-    if (!paymentCovers(amount, currency, priceOf(state, mark))) return rejectAmount(state, row);
+    if (!covers(act)) return rejectAmount(state, row);
     const subscriptions = state.subscriptions.map((s) => (s.id === id ? { ...s, deviceLimit: s.deviceLimit + 1 } : s));
     const issued = issue({ ...state, payments: state.payments.concat([row]), subscriptions }, id, now);
     return { state: issued.state, result: { kind: 'device', subscriptionId: id, code: issued.code } };
   }
-  if (mark.indexOf('new:') === 0) {
-    const accountId = mark.slice(4);
+  if (act.indexOf('new:') === 0) {
+    const accountId = act.slice(4);
     if (!findAccount(state, accountId)) {
       const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
-    if (!paymentCovers(amount, currency, priceOf(state, mark))) return rejectAmount(state, row);
+    if (!covers(act)) return rejectAmount(state, row);
     const base = { ...state, payments: state.payments.concat([row]) };
     const existing = anySub(base, accountId);
     if (existing) {
@@ -387,6 +405,13 @@ function money(amount) {
 
 function resolvePaymentAccount(state, label) {
   const mark = String(label || '');
+  if (mark.indexOf('buy:') === 0) {
+    const quote = (state.purchases || []).find((p) => p.id === mark.slice(4));
+    if (!quote) return { problem: 'bad_label' };
+    if (quote.accountId && findAccount(state, quote.accountId)) return { accountId: quote.accountId };
+    const sub = state.subscriptions.find((s) => s.id === quote.subscriptionId);
+    return sub ? { accountId: sub.accountId } : { problem: 'no_account' };
+  }
   if (mark.indexOf('new:') === 0) {
     const id = mark.slice(4);
     return findAccount(state, id) ? { accountId: id } : { problem: 'no_account' };
@@ -637,6 +662,14 @@ export function unlinkDeviceTelegram(state, { deviceId, now }) {
   };
 }
 
+/** Telegram id to show for this phone. The account keeps its id; a phone that unlinked does not look linked. */
+export function telegramForDevice(account, deviceId) {
+  if (!account || !deviceOk(deviceId)) return '';
+  const linked = Array.isArray(account.linkedDevices) ? account.linkedDevices : [];
+  if (linked.indexOf(deviceId) < 0) return '';
+  return account.telegramId || '';
+}
+
 /** Unbound activation code still showable in the bot (has plaintext). */
 export function revealableCode(state, accountId) {
   const sub = anySub(state, accountId);
@@ -879,6 +912,27 @@ export function subscriptionView(state, accountId, now) {
     deviceLimit: sub.deviceLimit,
     devices: codes.map((c) => ({ id: c.id, bound: !!c.deviceId, deviceId: c.deviceId, boundAt: c.boundAt })),
   };
+}
+
+const PURCHASE_CAP = 2000;
+
+/** A checkout at the price configured now. The label is `buy:<id>`; later price changes do not rewrite it. */
+export function quotePurchase(state, { kind, accountId, subscriptionId, now }) {
+  const prices = priceText(state.settings);
+  const price = kind === 'dev' ? prices.extra : prices.price;
+  if (!(price > 0)) return { state, result: { error: 'no_price' } };
+  if (kind !== 'new' && kind !== 'sub' && kind !== 'dev') return { state, result: { error: 'bad_label' } };
+  const row = {
+    id: randomId(),
+    kind,
+    accountId: accountId || '',
+    subscriptionId: subscriptionId || '',
+    price,
+    currency: '643',
+    at: now || Date.now(),
+  };
+  const purchases = (state.purchases || []).concat([row]).slice(-PURCHASE_CAP);
+  return { state: { ...state, purchases }, result: { label: 'buy:' + row.id, price, id: row.id } };
 }
 
 export function priceText(settings) {

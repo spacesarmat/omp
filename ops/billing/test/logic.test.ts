@@ -39,6 +39,8 @@ import {
   supportThreads,
   takeAdminPanelLogin,
   telegramDisplay,
+  quotePurchase,
+  telegramForDevice,
   unlinkDeviceTelegram,
 } from '../src/logic.mjs';
 import { emptyState, readState, resolveDbPath, writeState } from '../src/store.mjs';
@@ -151,7 +153,9 @@ describe('bot', () => {
     state.settings.priceRub = 100;
     const out = botReply(state, { chatId: 7, text: 'Подписка', now: NOW });
     expect(out.messages[0].text).toContain('https://yoomoney.ru/quickpay/confirm?');
-    expect(out.messages[0].text).toContain('label=new%3A');
+    expect(out.messages[0].text).toContain('label=buy%3A');
+    expect(out.state.purchases).toHaveLength(1);
+    expect(out.state.purchases[0].price).toBe(100);
     expect(out.messages[0].keyboard.keyboard[0][0].text).toBe('Кабинет');
   });
 
@@ -424,6 +428,8 @@ describe('telegram unlink', () => {
     expect(out.result.telegramId).toBe('');
     expect(out.state.accounts[0].telegramId).toBe('99');
     expect(out.state.accounts[0].linkedDevices).toEqual([]);
+    expect(telegramForDevice(out.state.accounts[0], device)).toBe('');
+    expect(telegramForDevice(confirmed.state.accounts[0], device)).toBe('99');
     const again = ensureTelegramAccount(out.state, '99', NOW + 2);
     expect(again.account.id).toBe(accountId);
     expect(again.state.accounts).toHaveLength(1);
@@ -474,6 +480,33 @@ describe('payment amount', () => {
     });
     expect(fee.result.kind).toBe('renew');
     expect(fee.result.paidUntil).toBeGreaterThan(until);
+  });
+
+  it('honours the quoted price after the list price goes up', () => {
+    const start = paid();
+    start.state.settings.priceRub = 100;
+    const quoted = quotePurchase(start.state, { kind: 'sub', accountId: start.account, subscriptionId: start.sub, now: NOW });
+    expect(quoted.result.label.indexOf('buy:')).toBe(0);
+    quoted.state.settings.priceRub = 150;
+    const until = quoted.state.subscriptions[0].paidUntil;
+    const paidQuote = applyPayment(quoted.state, {
+      operationId: 'op-quote',
+      label: quoted.result.label,
+      amount: '100.00',
+      currency: '643',
+      now: NOW + 1000,
+    });
+    expect(paidQuote.result.kind).toBe('renew');
+    expect(paidQuote.result.paidUntil).toBeGreaterThan(until);
+    const shaved = applyPayment(quoted.state, {
+      operationId: 'op-shaved',
+      label: quoted.result.label,
+      amount: '1.00',
+      currency: '643',
+      now: NOW + 1000,
+    });
+    expect(shaved.result.error).toBe('amount');
+    expect(shaved.state.subscriptions[0].paidUntil).toBe(until);
   });
 });
 

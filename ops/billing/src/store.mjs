@@ -58,6 +58,8 @@ export function emptyState() {
     /** Admin panel action log. */
     audit: [],
     outbox: [],
+    /** Quoted YooMoney checkouts. The label is buy:<id>; the price is the one quoted, not a later settings change. */
+    purchases: [],
   };
 }
 
@@ -166,6 +168,7 @@ function normalizeState(parsed) {
         : {},
     audit: Array.isArray(parsed.audit) ? parsed.audit : [],
     outbox: Array.isArray(parsed.outbox) ? parsed.outbox : [],
+    purchases: Array.isArray(parsed.purchases) ? parsed.purchases : [],
   };
 }
 

@@ -29,6 +29,7 @@ import {
   SUPPORT_CLOSED_TEXT,
   takeAdminPanelLogin,
   unbindCode,
+  telegramForDevice,
   unlinkDeviceTelegram,
 } from './logic.mjs';
 import { botDeepLink, botReply, telegramOf } from './bot.mjs';
@@ -651,8 +652,10 @@ export function createApp(file, fetchImpl) {
         if (!account) return json(res, 404, { error: 'not_linked' });
         const view = subscriptionView(state, account.id, now);
         const isActive = view ? view.active : active;
+        const telegramId = telegramForDevice(account, device);
         return json(res, 200, {
-          telegramId: account.telegramId || '',
+          telegramId,
+          linked: !!telegramId,
           paidUntil: view ? view.paidUntil : paidUntil,
           active: isActive,
           deviceLimit: view ? view.deviceLimit : 0,
