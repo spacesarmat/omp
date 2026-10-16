@@ -24,6 +24,9 @@ idfile() {
 }
 
 seed() {
+  if [[ "\${DEPLOY_TEST_NO_SEED:-}" == 1 ]]; then
+    return 0
+  fi
   local name="\${DEPLOY_TEST_SEED_IMAGE:-}"
   local id="\${DEPLOY_TEST_SEED_ID:-}"
   local f
@@ -56,7 +59,7 @@ case "$cmd" in
         printf 'up failed\\n' >&2
         exit 1
       fi
-      img="\${DEPLOY_TEST_SEED_IMAGE:-}"
+      img="\${OMP_BILLING_IMAGE:-\${DEPLOY_TEST_SEED_IMAGE:-}}"
       [[ -n "$img" ]] || { printf 'no seed image\\n' >&2; exit 1; }
       cp "\$(idfile "$img")" "$state/running-billing"
       exit 0
@@ -586,6 +589,44 @@ describe('ops/vps deploy', () => {
     expect(imageId(box.env)).toBe(SEED_ID);
     expect(linesStarting(box.dockerLog, 'build').length).toBeGreaterThan(0);
     expect(log(box.dockerLog)).toContain('up -d billing');
+  });
+
+  it('reloads the restored Caddyfile before rollback health checks', () => {
+    const box = world(
+      release({
+        'ops/vps/Caddyfile': 'new caddy\n',
+        'ops/billing/src/server.mjs': 'export const version = 2;\n',
+      }),
+      { DEPLOY_TEST_HEALTH_FAIL: '1' },
+    );
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status).not.toBe(0);
+    const reloadAt = result.stdout.lastIndexOf('reloading restored Caddyfile');
+    const failedAt = result.stdout.lastIndexOf('health checks failed');
+    expect(reloadAt, result.stdout).toBeGreaterThan(-1);
+    expect(failedAt, result.stdout).toBeGreaterThan(reloadAt);
+    expect(readFileSync(path.join(box.root, 'Caddyfile'), 'utf8')).toBe('old caddy\n');
+    expect(log(box.dockerLog).split('\n').filter((line) => line.includes('caddy reload'))).toHaveLength(2);
+  });
+
+  it('rebuilds billing from the restored source when the backup has no image', () => {
+    const box = world(release({ 'ops/vps/Dockerfile': 'FROM restored\n' }), { DEPLOY_TEST_NO_SEED: '1' });
+    const deployed = runDeploy(box.env, ['main']);
+    expect(deployed.status, `${deployed.stdout}\n${deployed.stderr}`).toBe(0);
+    const backup = backupFrom(deployed.stdout);
+    const manifest = readFileSync(path.join(backup, 'backup.manifest'), 'utf8');
+    expect(manifest).toMatch(/^image_id=$/m);
+    expect(manifest).toMatch(/^image_tag=$/m);
+    const built = imageId(box.env);
+    expect(built).toMatch(/^sha256:[0-9a-f]{64}$/);
+    const rolled = runDeploy(box.env, ['--rollback', backup]);
+    expect(rolled.status, `${rolled.stdout}\n${rolled.stderr}`).toBe(0);
+    expect(rolled.stdout).toContain('backup image tag missing; rebuilding restored billing source');
+    expect(readFileSync(path.join(box.root, 'Dockerfile.billing'), 'utf8')).toBe('FROM old\n');
+    expect(linesStarting(box.dockerLog, 'build')).toHaveLength(2);
+    const restoredId = imageId(box.env);
+    expect(restoredId).not.toBe(built);
+    expect(readFileSync(path.join(box.parent, 'docker-state', 'running-billing'), 'utf8').trim()).toBe(restoredId);
   });
 
   it('rolls back a sync when node --check fails before the image is rebuilt', () => {

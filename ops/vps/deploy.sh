@@ -969,10 +969,7 @@ assert_billing_container() {
 
 restore_image() {
   local current_id expected
-  if [[ -z "$MANIFEST_IMAGE_ID" && -z "$MANIFEST_IMAGE_TAG" ]]; then
-    log "backup records no billing image"
-    return 0
-  fi
+  # An empty id and tag still rebuilds from the restored Dockerfile and source.
   capture_image_id || return 1
   current_id="$IMAGE_ID"
   expected="$MANIFEST_IMAGE_ID"
@@ -1012,7 +1009,6 @@ restore_image() {
   log "restarting billing"
   compose up -d billing || return 1
   assert_billing_container "$expected" || return 1
-  health_checks || return 1
   return 0
 }
 
@@ -1048,9 +1044,8 @@ restore_backup() {
   restore_one_file "$backup" Dockerfile.billing "$MANIFEST_HAD_DOCKERFILE" || return 1
   restore_one_dir "$backup" site "$MANIFEST_HAD_SITE" site || return 1
   restore_one_dir "$backup" billing-src "$MANIFEST_HAD_BILLING" billing || return 1
-  if [[ "$docker_diff" -eq 1 || "$MANIFEST_IMAGE_ID" != "" || "$MANIFEST_IMAGE_TAG" != "" ]]; then
-    restore_image || return 1
-  fi
+  # Load the restored Caddyfile before billing health checks. A failed check
+  # must not return while the rejected Caddyfile is still the running config.
   if [[ "$caddy_diff" -eq 1 ]]; then
     if [[ "$DRY_RUN" -eq 1 ]]; then
       log "would reload caddy"
@@ -1059,6 +1054,13 @@ restore_backup() {
       caddy_reload || return 1
     fi
   fi
+  if [[ "$docker_diff" -eq 1 || "$MANIFEST_IMAGE_ID" != "" || "$MANIFEST_IMAGE_TAG" != "" ]]; then
+    restore_image || return 1
+  fi
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    return 0
+  fi
+  health_checks || return 1
   return 0
 }
 
