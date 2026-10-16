@@ -14,11 +14,12 @@ import { servers, addServer, setActiveServer, updateServer, type SavedServer } f
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
 import { addressErrorText, addressForField, checkServerAddress } from '../../../src/api/serverAddress';
 import { errorMessage, isApiError } from '../../../src/api/http';
-import { discover, candidateSubnets, subnetOf, DEFAULT_PORTS, type FoundServer } from '../../../src/api/discovery';
+import { discover, candidateSubnets, subnetOf, DEFAULT_PORTS, PHONE_CONCURRENCY, type FoundServer } from '../../../src/api/discovery';
+import { allowTypedHost } from '../cleartextHosts';
 import { native } from '../platform/native';
 import { localServer, refreshLocalServer } from '../server/localServer';
 
-type ServerScanner = (isCancelled: () => boolean) => Promise<FoundServer[]>;
+type ServerScanner = (isCancelled: () => boolean, onFound?: (s: FoundServer) => void) => Promise<FoundServer[]>;
 let scanner: ServerScanner | null = null;
 
 /** Replaces the LAN scan for TorrServer (tests); null restores the real one. */
@@ -31,14 +32,26 @@ export interface LanScanDeps {
   discover: typeof discover;
 }
 
-/** Scans the phone's own /24 when its address is known, the common home subnets otherwise; stops once cancelled. */
+/**
+ * Scans the phone's own /24 when its address is known, the common home subnets otherwise.
+ * Saved servers are probed first. `onFound` runs as each one answers; the promise is the full list.
+ */
 export async function scanLan(
   isCancelled: () => boolean,
   d: LanScanDeps = { localIp: () => native.localIpv4(), discover },
+  onFound?: (s: FoundServer) => void,
 ): Promise<FoundServer[]> {
   const ip = await d.localIp().catch(() => null);
   const own = ip ? subnetOf(ip) : null;
-  return d.discover({ subnets: own ? [own] : candidateSubnets(null, []), ports: DEFAULT_PORTS, isCancelled });
+  const known = servers.value.map((s) => s.url);
+  return d.discover({
+    subnets: own ? [own] : candidateSubnets(null, known),
+    ports: DEFAULT_PORTS,
+    prefer: known,
+    concurrency: PHONE_CONCURRENCY,
+    isCancelled,
+    onFound,
+  });
 }
 
 
@@ -102,7 +115,13 @@ export function Connect() {
     let alive = true;
     setScanState('scanning');
     setFound([]);
-    (scanner ?? scanLan)(() => !alive).then(
+    const report = (s: FoundServer) => {
+      if (!alive) return;
+      setFound((prev) => (prev.some((x) => x.url === s.url) ? prev : prev.concat(s)));
+    };
+    // scanLan's second argument is its dependencies; the test scanner's is onFound
+    const run = scanner ? scanner(() => !alive, report) : scanLan(() => !alive, undefined, report);
+    run.then(
       (r) => {
         if (!alive) return;
         setFound(r);
@@ -125,6 +144,7 @@ export function Connect() {
     setNetFail(false);
     try {
       const url = normalizeServerUrl(cfg.url);
+      allowTypedHost(url);
       const known = servers.value.find((x) => x.url === url);
       const creds = cfg.user !== undefined ? cfg : { user: known?.user, password: known?.password };
       await new TorrServerClient({ url, user: creds.user, password: creds.password }).echo();
@@ -208,7 +228,7 @@ export function Connect() {
       {auto && scanState === 'scanning' && (
         <div class="m-hint-info m-muted">{t('connect.searchingLan')}</div>
       )}
-      {scanState === 'done' && found.length > 0 && (
+      {found.length > 0 && (
         <>
           <h2 class="m-section">{t('connect.foundInNet')}</h2>
           <div class="m-list">

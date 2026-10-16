@@ -37,6 +37,7 @@ object Ssdp {
             .readTimeout(1500, TimeUnit.MILLISECONDS)
             .callTimeout(1500, TimeUnit.MILLISECONDS)
             .followRedirects(false)
+            .addInterceptor(CleartextPolicy.interceptor())
             .build()
     }
 

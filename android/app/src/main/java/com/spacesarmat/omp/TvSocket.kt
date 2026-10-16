@@ -1,15 +1,12 @@
 package com.spacesarmat.omp
 
-import android.annotation.SuppressLint
 import java.security.SecureRandom
-import java.security.cert.X509Certificate
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.SSLContext
-import javax.net.ssl.X509TrustManager
 import okhttp3.ConnectionSpec
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -31,12 +28,11 @@ object TvHttp {
     fun plain(): OkHttpClient = base
 
     /**
-     * Client that accepts the TV's self-signed certificate. The trust-all manager lives only in
-     * this client instance, and the hostname verifier only lets through [host] (the TV IP), so
-     * the relaxed trust can never apply to any other server.
+     * Client for the TV's self-signed certificate. The leaf is pinned on first use ([CertPins]); the hostname
+     * verifier only lets through [host], so this client cannot be reused for another server.
      */
     fun trustingOnly(host: String): OkHttpClient {
-        val tm = AnyCertTrustManager()
+        val tm = CertPins.trustManager(host)
         val ctx = SSLContext.getInstance("TLS")
         ctx.init(null, arrayOf(tm), SecureRandom())
         return base.newBuilder()
@@ -44,13 +40,6 @@ object TvHttp {
             .hostnameVerifier { name, _ -> name.equals(host, ignoreCase = true) }
             .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS, ConnectionSpec.COMPATIBLE_TLS))
             .build()
-    }
-
-    @SuppressLint("CustomX509TrustManager", "TrustAllX509TrustManager")
-    private class AnyCertTrustManager : X509TrustManager {
-        override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-        override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
-        override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
     }
 }
 
@@ -170,7 +159,7 @@ class TvSocket(
                 }
                 when (state) {
                     1 -> closed(I18n.s("tv.lost"))
-                    2 -> attemptFailed(t.message ?: t.javaClass.simpleName, isPreferred)
+                    2 -> attemptFailed(tvFailText(t), isPreferred)
                 }
             }
         })
@@ -182,10 +171,20 @@ class TvSocket(
     }
 
     private fun attemptFailed(error: String?, wasPreferred: Boolean) {
+        // A changed certificate must not fall through to ws://3000: that would send the registration
+        // in the clear and never show the sheet.
+        if (wasPreferred && !tvMayTryOtherPorts(error)) {
+            synchronized(lock) {
+                timer?.cancel(false)
+                if (error != null) lastError = tvPreferReason(lastError, error)
+            }
+            fail(error ?: I18n.s("tv.noAddr"))
+            return
+        }
         var join: (() -> Unit)? = null
         val allFailed = synchronized(lock) {
             failed++
-            if (error != null) lastError = error
+            if (error != null) lastError = tvPreferReason(lastError, error)
             if (wasPreferred) {
                 timer?.cancel(false)
                 join = joinRest
@@ -241,3 +240,23 @@ class TvSocket(
         }
     }
 }
+
+/** Failure text for the page: a changed certificate wins over a wrapped OkHttp message. */
+internal fun tvFailText(t: Throwable): String {
+    CertPins.changedFingerprint(t)?.let { return "cert-changed:$it" }
+    var c: Throwable? = t
+    while (c != null) {
+        val m = c.message
+        if (!m.isNullOrBlank()) return m
+        c = c.cause
+    }
+    return t.javaClass.simpleName
+}
+
+/** Keeps a certificate-change reason when a later attempt fails for an ordinary reason. */
+internal fun tvPreferReason(previous: String?, next: String): String =
+    if (previous != null && CertPins.changedFingerprint(previous) != null) previous else next
+
+/** False when [error] is a changed certificate: the plaintext port must not be opened instead. */
+internal fun tvMayTryOtherPorts(error: String?): Boolean =
+    error == null || CertPins.changedFingerprint(error) == null

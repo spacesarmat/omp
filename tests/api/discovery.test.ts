@@ -1,5 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { subnetOf, candidateSubnets, discover, probeEcho, getLocalIp } from '../../src/api/discovery';
+import {
+  subnetOf, candidateSubnets, discover, probeEcho, getLocalIp, probeUrls, LIKELY_HOSTS, DEFAULT_PORTS,
+} from '../../src/api/discovery';
 
 describe('subnet helpers', () => {
   it('subnetOf', () => {
@@ -11,6 +13,52 @@ describe('subnet helpers', () => {
       '10.0.0', '192.168.1', '192.168.0',
     ]);
     expect(candidateSubnets(null, [])).toEqual(['192.168.1', '192.168.0']);
+  });
+});
+
+describe('probe order', () => {
+  it('puts saved addresses and likely hosts before the rest, and reaches .191 early', () => {
+    const plain = probeUrls(['192.168.1'], DEFAULT_PORTS);
+    expect(plain).toHaveLength(508);
+    expect(new Set(plain).size).toBe(508);
+    expect(plain[0]).toBe('http://192.168.1.1:8090');
+    expect(plain[1]).toBe('http://192.168.1.1:5665');
+    const likelyEnd = LIKELY_HOSTS.length * DEFAULT_PORTS.length;
+    LIKELY_HOSTS.forEach((h) => {
+      expect(plain.indexOf('http://192.168.1.' + h + ':8090')).toBeLessThan(likelyEnd);
+    });
+    // ascending order probed .191:5665 at index 381 and the UI waited for all 508
+    const at = plain.indexOf('http://192.168.1.191:5665');
+    expect(at).toBeGreaterThan(likelyEnd);
+    expect(at).toBeLessThan(190);
+    expect(plain.indexOf('http://192.168.1.10:8090')).toBeLessThan(plain.indexOf('http://192.168.1.40:8090'));
+  });
+
+  it('probes preferred URLs first and does not repeat them', () => {
+    const urls = probeUrls(['192.168.1'], DEFAULT_PORTS, ['http://192.168.1.191:5665/', 'nope', 'http://10.1.1.1:8090']);
+    expect(urls[0]).toBe('http://192.168.1.191:5665');
+    expect(urls[1]).toBe('http://10.1.1.1:8090');
+    expect(urls.filter((u) => u === 'http://192.168.1.191:5665')).toHaveLength(1);
+    expect(urls).toHaveLength(509);
+  });
+
+  it('calls onFound when a probe hits, before the sweep finishes', async () => {
+    let stop = false;
+    const seen: string[] = [];
+    const found = await discover({
+      subnets: ['10.0.0'],
+      ports: [8090],
+      concurrency: 1,
+      prefer: ['http://10.0.0.191:8090'],
+      isCancelled: () => stop,
+      onFound: (s) => {
+        seen.push(s.url);
+        stop = true;
+      },
+      probe: (url) => Promise.resolve(url === 'http://10.0.0.191:8090' ? 'MatriX' : null),
+    });
+    expect(seen).toEqual(['http://10.0.0.191:8090']);
+    expect(found).toEqual([{ url: 'http://10.0.0.191:8090', version: 'MatriX' }]);
   });
 });
 

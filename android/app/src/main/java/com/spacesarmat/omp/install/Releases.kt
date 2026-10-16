@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.install
 
+import com.spacesarmat.omp.CleartextPolicy
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -264,6 +265,7 @@ class OkReleaseHttp(
         .readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(false)
         .followSslRedirects(false)
+        .addInterceptor(CleartextPolicy.interceptor())
         .build()
 
     override fun text(url: String, maxBytes: Int, cancel: CancelToken): String {

@@ -5,7 +5,8 @@
 // «Сейчас играет» and player commands.
 import { signal } from '@preact/signals';
 import type { PluginListenerHandle } from '@capacitor/core';
-import { rawPlugin, onlyAndroid } from '../platform/native';
+import { native, rawPlugin, onlyAndroid } from '../platform/native';
+import { certChangedFingerprint, confirmCertChange } from './certPin';
 import { t } from '../../../src/i18n';
 import { setTvBox, type SavedTv } from './tvStore';
 import { log } from '../../../src/lib/log';
@@ -107,6 +108,7 @@ export const BOX = {
   AUTH_TIMEOUT: 'box-auth-timeout',
   NOT_CONNECTED: 'box-not-connected',
   FAILED: 'box-failed',
+  CERT_CHANGED: 'box-cert-changed',
 } as const;
 
 export function boxErrorText(code: string): string {
@@ -127,6 +129,8 @@ export function boxErrorText(code: string): string {
       return t('remote.box.err.authTimeout');
     case BOX.NOT_CONNECTED:
       return t('remote.box.err.notConnected');
+    case BOX.CERT_CHANGED:
+      return t('remote.box.err.certChanged');
     default:
       return t('remote.box.err.failed');
   }
@@ -175,6 +179,24 @@ interface BoxPlugin {
 
 const via = (v: unknown, fallback: BoxVia): BoxVia => (v === 'google' || v === 'adb' ? v : fallback);
 
+/** One TLS attempt; a changed box certificate asks once, then the same call is repeated. */
+async function tls<T>(plugin: BoxPlugin | null, ip: string, f: (p: BoxPlugin) => Promise<T>): Promise<T> {
+  if (!plugin) throw new Error(onlyAndroid());
+  try {
+    return await f(plugin);
+  } catch (e) {
+    const fp = certChangedFingerprint(e);
+    if (!fp) throw new BoxError(codeOf(e));
+    if (!(await confirmCertChange(ip, fp))) throw new BoxError(BOX.CERT_CHANGED);
+    await native.trustTvCert(ip, fp);
+    try {
+      return await f(plugin);
+    } catch (e2) {
+      throw new BoxError(codeOf(e2));
+    }
+  }
+}
+
 export function createBoxNative(plugin: BoxPlugin | null): BoxNative {
   const call = async <T>(f: (p: BoxPlugin) => Promise<T>): Promise<T> => {
     if (!plugin) throw new Error(onlyAndroid());
@@ -193,9 +215,9 @@ export function createBoxNative(plugin: BoxPlugin | null): BoxNative {
         if (r?.via === 'google' || r?.via === 'adb') out.via = r.via;
         return out;
       }),
-    connect: (ip, v) => call(async (p) => via((await p.boxConnect({ ip, via: v }))?.via, v)),
-    pairStart: (ip) => call(async (p) => void (await p.boxPairStart({ ip }))),
-    pairFinish: (ip, code) => call(async (p) => via((await p.boxPairFinish({ ip, code }))?.via, 'google')),
+    connect: (ip, v) => tls(plugin, ip, async (p) => via((await p.boxConnect({ ip, via: v }))?.via, v)),
+    pairStart: (ip) => tls(plugin, ip, async (p) => void (await p.boxPairStart({ ip }))),
+    pairFinish: (ip, code) => tls(plugin, ip, async (p) => via((await p.boxPairFinish({ ip, code }))?.via, 'google')),
     pairCancel: () => (plugin ? plugin.boxPairCancel().then(() => undefined, () => undefined) : Promise.resolve()),
     key: (code, long) => call(async (p) => void (await p.boxKey({ code, long }))),
     text: (text) => call(async (p) => (await p.boxText({ text }))?.typed === true),

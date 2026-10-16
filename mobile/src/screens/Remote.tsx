@@ -9,6 +9,7 @@ import { TvRenameSheet } from '../ui/TvRenameSheet';
 import { useLongPress } from '../ui/longPress';
 import { Sheet } from '../ui/Sheet';
 import { CodeSheet } from '../ui/CodeSheet';
+import { FoundTvs } from '../ui/FoundTvs';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
 import { touchpad, cursorGain, scrollFactor } from '../tv/touchpad';
 import { linkStatus } from '../tv/playerLink';
@@ -924,6 +925,7 @@ export function Remote() {
     return (
       <div class="m-screen" data-route="remote">
         <ScreenHeader title={t('nav.remote')} />
+        <FoundTvs />
         <div class="m-empty">
           <h2>{t('remote.noTvTitle')}</h2>
           <p class="m-muted">{t('remote.noTvText')}</p>

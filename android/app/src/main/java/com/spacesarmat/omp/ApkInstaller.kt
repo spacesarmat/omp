@@ -23,6 +23,7 @@ object ApkInstaller {
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .addNetworkInterceptor(CleartextPolicy.interceptor())
             .build()
     }
 

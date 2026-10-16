@@ -51,6 +51,8 @@ export interface MonitorHost {
   persist(items: JournalItem[]): Promise<void>;
   /** The run is over: Android destroys the page. */
   finish(summary: MonitorSummary): void;
+  /** Saved public HTTP hosts for this process (a fresh background process has an empty list). */
+  setCleartext(hosts: string[]): Promise<void>;
 }
 
 /** The object Android injects (a WebMessageListener JS object). */
@@ -113,6 +115,7 @@ export function bridgeHost(port: HostPort): MonitorHost {
       }),
     notify: (n) => send('notify', { notification: n }).then((v) => !!v && typeof v === 'object' && (v as { shown?: unknown }).shown === true),
     persist: (items) => send('persist', { items }).then(() => undefined),
+    setCleartext: (hosts) => send('cleartext', { hosts }).then(() => undefined),
     finish(summary) {
       try {
         port.postMessage(JSON.stringify({ id: next++, op: 'finish', summary }));

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { navigate } from '../nav';
+import { FoundTvs } from '../ui/FoundTvs';
 import { Icon } from '../ui/Icon';
 import {
   localServer,
@@ -505,6 +506,7 @@ export function Settings() {
             {t('settings.choose')}
           </button>
         </div>
+        {!tv && <FoundTvs />}
         <TvOmpRow />
         <TvSearchRow />
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'install' })}>

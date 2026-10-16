@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.box
 
+import com.spacesarmat.omp.CertPins
 import com.spacesarmat.omp.install.AesGcmWrapper
 import java.io.File
 import java.net.InetAddress
@@ -13,7 +14,9 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLServerSocket
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.X509TrustManager
+import org.junit.After
 import org.junit.Assert.assertArrayEquals
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -22,6 +25,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BoxIdentityTest {
+    @Before
+    fun resetPins() {
+        CertPins.reset()
+    }
+
+    @After
+    fun clearPins() {
+        CertPins.reset()
+    }
+
     @Test
     fun selfSignedCertificateParsesAndVerifies() {
         val id = BoxIdentity.generate()

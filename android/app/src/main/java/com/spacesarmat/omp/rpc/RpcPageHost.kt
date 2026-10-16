@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.rpc
 
+import com.spacesarmat.omp.CleartextGuard
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
@@ -88,7 +89,7 @@ class RpcPageHost(
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url
-                if (!MonitorOrigin.isPage(url.scheme, url.host, url.port)) return null
+                if (!MonitorOrigin.isPage(url.scheme, url.host, url.port)) return CleartextGuard.block(url)
                 return assets.shouldInterceptRequest(url) ?: notFound()
             }
 

@@ -7,6 +7,7 @@ import { showToast } from '../ui/toast';
 import { phoneParam, markPhoneSent } from './phoneRpc';
 import { log } from '../../../src/lib/log';
 import { lang, t } from '../../../src/i18n';
+import { certChangedFingerprint, confirmCertChange } from './certPin';
 import { isRutrackerResult, TRANSFER_PATH, type RutrackerResult, type TransferPayload } from '../../../src/sources/transfer';
 import {
   registerMessage,
@@ -252,6 +253,12 @@ function onClosed(s: Session): void {
 }
 
 /** MAC from a connectionmanager/getinfo answer: wired when it is connected (or has this IP), else Wi-Fi. */
+function wsHost(url: string): string | null {
+  const m = /^wss?:\/\/([^/?#]+)/i.exec(url);
+  if (!m) return null;
+  return m[1].replace(/:\d+$/, '').replace(/^\[|\]$/g, '') || null;
+}
+
 export function macFromInfo(info: any, ip: string): string | undefined {
   const wired = info?.wiredInfo;
   const wifi = info?.wifiInfo;
@@ -301,21 +308,46 @@ export function connectTv(tv: SavedTv, opts: ConnectOptions = {}): Promise<void>
   s.off.push(transport.onTvClosed(() => onClosed(s)));
   armRegistration(s, SOCKET_OPEN_TIMEOUT);
   const register = registerMessage(s.registerId, tv.clientKey);
-  closing
-    .then(() => (session === s ? transport.tvConnect(tv.ip, register, tv.port) : undefined))
-    .then(
-      (opened) => {
-        const port = opened?.port;
-        if (session === s && (port === 3000 || port === 3001)) {
-          s.tv = { ...s.tv, port };
-          // The TV may have answered `register` before this promise settled.
-          if (tvState.value === 'connected') saveTv(s.tv, { keepActive: s.keepActive });
-        }
-        // Socket open and `register` sent: now the TV has 8 s to answer (unless it already asked the user).
-        if (session === s && tvState.value === 'connecting') armRegistration(s, REQUEST_TIMEOUT);
-      },
-      () => fail(s, tvNoAnswer()),
-    );
+  const noteOpen = (port: number | undefined) => {
+    if (session === s && (port === 3000 || port === 3001)) {
+      s.tv = { ...s.tv, port };
+      // The TV may have answered `register` before this promise settled.
+      if (tvState.value === 'connected') saveTv(s.tv, { keepActive: s.keepActive });
+    }
+    // Socket open and `register` sent: now the TV has 8 s to answer (unless it already asked the user).
+    if (session === s && tvState.value === 'connecting') armRegistration(s, REQUEST_TIMEOUT);
+  };
+  const openSocket = () => closing.then(() => (session === s ? transport.tvConnect(tv.ip, register, tv.port) : undefined));
+  openSocket().then(async (opened) => noteOpen(opened?.port), async (err) => {
+    if (session !== s) return;
+    const fp = certChangedFingerprint(err);
+    if (!fp) {
+      fail(s, tvNoAnswer());
+      return;
+    }
+    // The registration timer would otherwise fail the session while the sheet is open.
+    if (s.reg) clearTimeout(s.reg.timer);
+    const ok = await confirmCertChange(tv.ip, fp);
+    if (session !== s) return;
+    if (!ok) {
+      fail(s, t('cert.rejected'));
+      return;
+    }
+    try {
+      await native.trustTvCert(tv.ip, fp);
+    } catch {
+      if (session === s) fail(s, tvNoAnswer());
+      return;
+    }
+    if (session !== s) return;
+    armRegistration(s, SOCKET_OPEN_TIMEOUT);
+    try {
+      const again = await transport.tvConnect(tv.ip, register, tv.port);
+      noteOpen(again?.port);
+    } catch {
+      if (session === s) fail(s, tvNoAnswer());
+    }
+  });
   return promise;
 }
 
@@ -364,7 +396,14 @@ function ensurePointer(soft = false): Promise<void> {
   if (!pointer) {
     const p: Promise<void> = send(POINTER_URI, undefined, false, soft).then((r) => {
       if (typeof r?.socketPath !== 'string') throw new Error(tvNoAnswer());
-      return transport.pointerConnect(r.socketPath);
+      return transport.pointerConnect(r.socketPath).catch(async (err) => {
+        const fp = certChangedFingerprint(err);
+        const host = wsHost(typeof r?.socketPath === 'string' ? r.socketPath : '');
+        if (!fp || !host) throw err instanceof Error ? err : new Error(tvNoAnswer());
+        if (!(await confirmCertChange(host, fp))) throw new Error(t('cert.rejected'));
+        await native.trustTvCert(host, fp);
+        return transport.pointerConnect(r.socketPath);
+      });
     });
     pointer = p;
     p.catch(() => {
@@ -518,7 +557,7 @@ export function warmUp(): Promise<void> {
           return;
         } catch (e) {
           // only a new pairing code helps
-          if (e instanceof Error && e.message === tvForgot()) return;
+          if (e instanceof Error && (e.message === tvForgot() || e.message === t('cert.rejected'))) return;
         }
         if (tv.kind === 'atv' && !rediscovered && !stopped) {
           rediscovered = true;

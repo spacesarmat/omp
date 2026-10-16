@@ -3,6 +3,7 @@ package com.spacesarmat.omp.monitor
 import com.spacesarmat.omp.sources.HttpSpec
 import com.spacesarmat.omp.sources.SiteHttp
 import com.spacesarmat.omp.sources.SiteHttpException
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -105,6 +106,17 @@ class BridgeProtocolTest {
         val big = BridgeProtocol.parse(msg("finish", JSONObject().put("summary", JSONObject().put("error", "x".repeat(5000)))))
         assertNull((big as BridgeRequest.Finish).summary)
         assertNull((BridgeProtocol.parse(msg("finish")) as BridgeRequest.Finish).summary)
+    }
+
+    @Test
+    fun cleartextHosts() {
+        val hosts = JSONArray().put(" Nas.Example ").put("").put("x".repeat(300)).put("10.1.2.3")
+        val r = BridgeProtocol.parse(msg("cleartext", JSONObject().put("hosts", hosts), 4))
+        r as BridgeRequest.Cleartext
+        assertEquals(4, r.id)
+        assertEquals(listOf("Nas.Example", "10.1.2.3"), r.hosts)
+        val empty = BridgeProtocol.parse(msg("cleartext", JSONObject(), 5)) as BridgeRequest.Cleartext
+        assertTrue(empty.hosts.isEmpty())
     }
 
     @Test

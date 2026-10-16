@@ -85,6 +85,14 @@ async function flush() {
   await act(async () => {
     for (let i = 0; i < 15; i++) await Promise.resolve();
   });
+  // posters wait for an intersection (LazyImg). TileWhen observes a span, the sentinel is a div.
+  const imgs = observed.filter((o) => o.el && o.el.tagName === 'IMG');
+  if (!imgs.length) return;
+  await act(async () => {
+    for (const o of imgs) {
+      o.cb([{ isIntersecting: true, target: o.el } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+    }
+  });
 }
 
 let el: HTMLElement;
@@ -215,6 +223,7 @@ describe('Discover («Новинки»)', () => {
     expect(ts.map((b) => b.getAttribute('aria-label'))).toEqual(['Полуночный архив 2026', 'Ледяной перевал 2026', 'Clockwork Harbor 2025']);
     // the poster image, else a placeholder with the title
     expect(ts[0].querySelector('img')!.getAttribute('src')).toBe('https://img.test/t/p/w300/a.jpg');
+    expect(ts[0].querySelector('img')!.getAttribute('loading')).toBeNull();
     expect(ts[2].querySelector('img')).toBeNull();
     expect(ts[2].querySelector('.m-disc-ph')!.textContent).toBe('Clockwork Harbor');
     // rating with a comma, none for 0
@@ -224,6 +233,25 @@ describe('Discover («Новинки»)', () => {
     expect(ts[0].textContent).toContain('Фильм');
     expect(ts[1].textContent).toContain('Сериал');
     expect(el.querySelector('.m-disc-foot')!.textContent).toBe('Данные: TMDB');
+  });
+
+  it('keeps the poster blank until it is near, then loads it again after the grid is remounted', async () => {
+    fake();
+    mount(<Discover />);
+    await act(async () => {
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+    });
+    expect(tiles()[0].querySelector('img')!.getAttribute('src')).toBeNull();
+    await flush();
+    expect(tiles()[0].querySelector('img')!.getAttribute('src')).toBe('https://img.test/t/p/w300/a.jpg');
+    // leaving «Обзор» and coming back mounts the grid again (the feed itself is cached)
+    mount(<Discover />);
+    await act(async () => {
+      for (let i = 0; i < 15; i++) await Promise.resolve();
+    });
+    expect(tiles()[0].querySelector('img')!.getAttribute('src')).toBeNull();
+    await flush();
+    expect(tiles()[0].querySelector('img')!.getAttribute('src')).toBe('https://img.test/t/p/w300/a.jpg');
   });
 
   it('shows 6 skeleton tiles while loading', async () => {

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- TorrServer and the TV are reached by plain local IPs over http/ws -->
+<!--
+    Cleartext stays on in the base config: Android cannot express "private ranges or a host the user typed",
+    and the UI is served as http://localhost. Public cleartext is refused by CleartextPolicy (WebView, OkHttp,
+    the player). TorrServer on the LAN stays http.
+-->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
@@ -12,7 +16,7 @@
         intermediates YE1-YE3 (letsencrypt.org/certificates, issued by ISRG Root YE) complete the chain; the leaf is
         still fully verified (signature, host name, validity). Valid until 2028-09-02.
     -->
-    <domain-config cleartextTrafficPermitted="true">
+    <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">torrent.by</domain>
         <trust-anchors>
             <certificates src="system" />

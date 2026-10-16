@@ -13,6 +13,14 @@ import { startKeyboardWatch } from './ui/keyboard';
 import { initPhoneRpc } from './tv/phoneRpc';
 import { attachIfOmpForeground } from './tv/playerLink';
 import { tvState, tvKind, sessionIp } from './tv/tvClient';
+import { native } from './platform/native';
+import { tvs } from './tv/tvStore';
+import { installCleartextSync } from '../../src/cleartextSync';
+
+installCleartextSync(
+  (hosts) => native.setCleartextHosts(hosts),
+  () => tvs.value.map((tv) => tv.ip),
+);
 
 installErrorHooks();
 startKeyboardWatch();

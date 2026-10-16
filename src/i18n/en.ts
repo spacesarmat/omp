@@ -1915,6 +1915,7 @@ export const en: EnDict<typeof ru> = {
     noTvTitle: 'Connect a TV',
     noTvText: 'To control the TV from the phone, connect it first.',
     noTvButton: 'Connect a TV',
+    foundTvs: 'TVs on the network',
     noAnswerTv: '{name} does not answer — turn the TV on',
     switchTv: 'Switch the TV',
     switchTitle: 'TVs',
@@ -1966,8 +1967,15 @@ export const en: EnDict<typeof ru> = {
         authTimeout: '“Allow debugging?” was not confirmed on the TV',
         notConnected: 'The box is not connected',
         failed: 'The connection to the box broke',
+        certChanged: 'The box certificate changed — confirm that this is your TV',
       },
     },
+  },
+  cert: {
+    title: 'The TV certificate changed',
+    text: 'The TV presented a different certificate. That happens after a TV reset. If you did not reset it, another device may be on the network.',
+    trust: 'Trust the new one',
+    rejected: 'Connection cancelled: the TV certificate changed',
   },
   nav: {
     sections: 'Sections',

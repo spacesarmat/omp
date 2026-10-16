@@ -63,6 +63,8 @@ export interface OmpNativeTvPlugin {
   vlcAvailable(): Promise<{ available?: boolean }>;
   /** Hosts of the device's /24 open on allowed ports (FlareSolverr 8191 on the TV); lan false off a home network. */
   scanLan(o: { ports: number[]; timeoutMs?: number }): Promise<{ hits?: unknown; lan?: unknown }>;
+  /** Public hosts the user saved that may be reached over plain HTTP. Missing on an older APK. */
+  setCleartextHosts?(o: { hosts: string[] }): Promise<unknown>;
   /**
    * The visible Cloudflare check (a native dialog with the site under the remote, «Пройти на телефоне»): every text comes
    * from src/sources/cloudflareCheck.ts. Cookies never come back: { result: solved | cancelled | busy | failed, via? }.
@@ -214,6 +216,16 @@ export function nativeScanLan(ports: number[]): Promise<{ ip: string; port: numb
       return out;
     },
     () => null,
+  );
+}
+
+/** Registers saved public HTTP hosts. No-op outside the APK (webOS has no cleartext policy). */
+export function nativeSetCleartextHosts(hosts: string[]): Promise<void> {
+  const p = nativePlugin();
+  if (!p || typeof p.setCleartextHosts !== 'function') return Promise.resolve();
+  return p.setCleartextHosts({ hosts }).then(
+    () => undefined,
+    () => undefined,
   );
 }
 

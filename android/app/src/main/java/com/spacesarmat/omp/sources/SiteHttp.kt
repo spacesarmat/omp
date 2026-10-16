@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.sources
 
+import com.spacesarmat.omp.CleartextPolicy
 import com.spacesarmat.omp.I18n
 
 import java.io.IOException
@@ -48,6 +49,7 @@ class SiteHttp(
         .followSslRedirects(false)
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
+        .addInterceptor(CleartextPolicy.interceptor())
         .build()
 
     /** Only http/https; anything else is null. */
@@ -186,6 +188,7 @@ class SiteHttp(
         const val CODE_CLOUDFLARE = "cloudflare"
         const val CODE_CLOUDFLARE_INTERACTIVE = "cloudflare-interactive"
         val TLS_ERROR: String get() = I18n.s("errors.siteTls")
+        val CLEARTEXT: String get() = I18n.s("errors.cleartext")
         /** The site's certificate could not be verified (an incomplete chain, an unknown CA, a wrong host name). */
         const val CODE_TLS = "tls"
 
@@ -198,9 +201,10 @@ class SiteHttp(
          * A failed exchange as the page sees it: a certificate the handshake could not verify gets its own message and
          * [CODE_TLS] (it answered, so «не отвечает» would mislead); any other I/O failure is [NO_ANSWER].
          */
-        fun failureOf(e: IOException): SiteHttpException = when (e) {
-            is SiteHttpException -> e
-            is SSLHandshakeException, is SSLPeerUnverifiedException -> SiteHttpException(TLS_ERROR, CODE_TLS)
+        fun failureOf(e: IOException): SiteHttpException = when {
+            e is SiteHttpException -> e
+            CleartextPolicy.isBlocked(e) -> SiteHttpException(CLEARTEXT)
+            e is SSLHandshakeException || e is SSLPeerUnverifiedException -> SiteHttpException(TLS_ERROR, CODE_TLS)
             else -> SiteHttpException(NO_ANSWER)
         }
 

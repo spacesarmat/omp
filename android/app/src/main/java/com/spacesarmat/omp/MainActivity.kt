@@ -18,12 +18,14 @@ class MainActivity : BridgeActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         I18n.load(this)
+        CertPins.attach(getSharedPreferences(CertPins.PREFS, MODE_PRIVATE))
         skipLaunchIntent = savedInstanceState != null ||
             ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
         registerPlugin(OmpNativePlugin::class.java)
         tvMode = TvMode.isTv(this)
         // BridgeActivity.onCreate passes the launch intent to onNewIntent below
         super.onCreate(savedInstanceState)
+        installCleartextClient()
         // Back reaches the page only through the OnBackPressed dispatcher (predictive back on Android 16+ never
         // delivers KEYCODE_BACK to dispatchKeyEvent). Added after the bridge loaded its plugins, so it wins over
         // @capacitor/app's callback (webView.goBack()).
@@ -40,6 +42,14 @@ class MainActivity : BridgeActivity() {
             // the phone UI is laid out for the screen: a pinch never zooms the page (see PhoneWebZoom)
             bridge?.webView?.settings?.let { PhoneWebZoom.disable(it) }
         }
+    }
+
+    /** Capacitor's client stays underneath: it serves http://localhost and injects the bridge. */
+    private fun installCleartextClient() {
+        val web = bridge?.webView ?: return
+        val current = web.webViewClient
+        if (current is CleartextWebViewClient) return
+        web.webViewClient = CleartextWebViewClient(current)
     }
 
     /** Back → keyCode 461 in the page; the Activity closes when the page did not take it (root screen). */

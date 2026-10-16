@@ -48,6 +48,13 @@ describe('monitor bridge (page side)', () => {
     expect(await h.start()).toEqual({ deadline: 5, action: null, journal: [{ s: 'a', e: 'h:1' }, { s: 'c', k: 'k', a: 'add' }] });
   });
 
+  it('sends saved hosts before a background run', async () => {
+    const p = port((m) => (m.op === 'cleartext' ? { id: m.id, ok: true, value: null } : undefined));
+    const h = bridgeHost(p);
+    await h.setCleartext(['nas.example', '10.0.0.2']);
+    expect(p.sent[0]).toMatchObject({ op: 'cleartext', hosts: ['nas.example', '10.0.0.2'] });
+  });
+
   it('there is no host outside the monitor WebView', () => {
     expect(windowHost()).toBeNull();
   });

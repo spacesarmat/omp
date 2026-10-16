@@ -341,6 +341,7 @@ object LocalTorrServer {
     private val http = OkHttpClient.Builder()
         .connectTimeout(1, TimeUnit.SECONDS)
         .readTimeout(5, TimeUnit.SECONDS)
+        .addInterceptor(CleartextPolicy.interceptor())
         .build()
     private val JSON = "application/json; charset=utf-8".toMediaType()
 

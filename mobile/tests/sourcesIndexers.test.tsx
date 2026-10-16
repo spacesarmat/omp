@@ -5,7 +5,9 @@ import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Sources } from '../src/screens/Sources';
-import { foundCardState, keyNote, type IndexerEnv } from '../src/screens/SourcesIndexers';
+import { IndexerAddSheet, foundCardState, keyNote, type IndexerEnv } from '../src/screens/SourcesIndexers';
+import { allowTypedHost } from '../src/cleartextHosts';
+import { installCleartextSync } from '../../src/cleartextSync';
 import { torznabHidden } from '../../src/sources/indexerStore';
 import { resetTo } from '../src/nav';
 import { indexerConnections, indexerKeyName, reloadIndexers } from '../../src/sources/indexerStore';
@@ -333,6 +335,58 @@ describe('phone «Индексаторы»', () => {
     expect(sheet.textContent).toContain('Неверный API-ключ');
     expect(indexerConnections()).toHaveLength(0);
     expect(Object.keys(secrets)).toHaveLength(0);
+  });
+
+  it('allows a new plain-HTTP indexer before the native check', async () => {
+    allowTypedHost('http://127.0.0.1/');
+    const order: string[] = [];
+    const stop = installCleartextSync((hosts) => {
+      order.push('push:' + hosts.join(','));
+    });
+    const http = {
+      get: (url: string) => {
+        order.push('http:' + url);
+        if (url === 'http://nas:9117/') return Promise.resolve({ status: 200, url, text: '<title>Jackett</title>' });
+        if (url.indexOf('http://nas:9117/api/v2.0/indexers/all/results/torznab/api') === 0) return Promise.resolve({ status: 200, url, text: INDEXERS_XML });
+        if (url.indexOf('http://nas:9117/api/v2.0/indexers?') === 0) return Promise.resolve({ status: 200, url, text: ERRORS });
+        return Promise.resolve({ status: 404, url, text: '' });
+      },
+      post: () => Promise.reject(new Error('net')),
+      clearCookies: () => Promise.resolve(),
+    };
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    try {
+      act(() =>
+        render(
+          <IndexerAddSheet
+            candidates={[]}
+            preset={null}
+            scanning={false}
+            scanned={false}
+            noWifi={false}
+            onScan={() => {}}
+            ctx={() => ({ ...ctx(), http })}
+            now={() => NOW}
+            onClose={() => {}}
+          />,
+          el,
+        ),
+      );
+      await flush();
+      type(el.querySelector('#m-idx-url') as HTMLInputElement, 'http://nas:9117');
+      (el.querySelector('#m-idx-key') as HTMLInputElement).value = KEY;
+      await click(btn('Проверить и подключить')!);
+      const httpAt = order.findIndex((x) => x.startsWith('http:http://nas:9117'));
+      const pushAt = order.findIndex((x) => x.startsWith('push:') && x.slice('push:'.length).split(',').indexOf('nas') >= 0);
+      expect(pushAt).toBeGreaterThanOrEqual(0);
+      expect(httpAt).toBeGreaterThan(pushAt);
+      expect(indexerConnections()[0]).toMatchObject({ kind: 'jackett', url: 'http://nas:9117' });
+      expect(el.textContent).toContain('Jackett · 2 трекера, 1 работает');
+    } finally {
+      stop();
+      allowTypedHost('http://127.0.0.1/');
+    }
   });
 
   it('switch, re-check and removal of a connection', async () => {
