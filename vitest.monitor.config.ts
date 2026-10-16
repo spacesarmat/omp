@@ -9,7 +9,8 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __TORRSERVER_VERSION__: JSON.stringify(readFileSync('torrserver.version', 'utf8').trim()),
-    __TMDB_FALLBACK_KEY__: JSON.stringify(process.env.TMDB_API_KEY || ''),
+    // This suite hits live tracker sites. It must not also call TMDB with a leaked key.
+    __TMDB_FALLBACK_KEY__: JSON.stringify(''),
   },
   test: {
     environment: 'node',
