@@ -577,15 +577,14 @@ export function paymentsCsv(state, from, to) {
     const p = rows[i];
     const resolved = resolvePaymentAccount(state, p.label);
     const acc = resolved.accountId ? findAccount(state, resolved.accountId) : null;
-    const cell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     lines.push(
       [
-        cell(new Date(p.at).toISOString()),
-        cell(p.amount),
-        cell(p.label),
-        cell(p.operationId),
-        cell(resolved.accountId || ''),
-        cell(acc ? acc.telegramId || '' : ''),
+        csvCell(new Date(p.at).toISOString()),
+        csvCell(p.amount),
+        csvCell(p.label),
+        csvCell(p.operationId),
+        csvCell(resolved.accountId || ''),
+        csvCell(acc ? acc.telegramId || '' : ''),
       ].join(','),
     );
   }
@@ -593,7 +592,9 @@ export function paymentsCsv(state, from, to) {
 }
 
 function csvCell(v) {
-  return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  let s = v == null ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
 }
 
 function dayKey(ms) {

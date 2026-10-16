@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { homePayload, userPayload } from '../src/adminApi.mjs';
-import { matchesSubscriptionFilter, reminderTargets } from '../admin/src/lib/subs.ts';
+import { matchesSubscriptionFilter, nextSupportSelection, reminderTargets } from '../admin/src/lib/subs.ts';
 import { adminNotifyEnabled, paymentAdminNotices, serviceDownNotices, botReply } from '../src/bot.mjs';
 import { hashPassword } from '../src/crypto.mjs';
 import {
@@ -106,6 +106,16 @@ describe('finance and lists', () => {
     const page = pagePayments(start.state, { q: '42', offset: 0, limit: 1 });
     expect(page.total).toBe(2);
     expect(page.payments).toHaveLength(1);
+  });
+});
+
+describe('support selection', () => {
+  it('pins the first thread and falls back when that thread closes', () => {
+    expect(nextSupportSelection('', ['a', 'b'], '')).toBe('a');
+    expect(nextSupportSelection('a', ['b', 'a'], '')).toBe('a');
+    expect(nextSupportSelection('a', ['b'], '')).toBe('b');
+    expect(nextSupportSelection('a', [], '')).toBe('');
+    expect(nextSupportSelection('card', ['b'], 'card')).toBe('card');
   });
 });
 

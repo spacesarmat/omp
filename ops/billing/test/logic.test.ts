@@ -31,6 +31,7 @@ import {
   openAccount,
   openAppUrl,
   paymentsCsv,
+  usersCsv,
   redeemPromo,
   rememberSupportReply,
   rememberTelegramProfile,
@@ -422,6 +423,22 @@ describe('finance', () => {
     const csv = paymentsCsv(state, NOW, NOW + 4000);
     expect(csv).toContain('op-ok');
     expect(csv).not.toContain('op-bad');
+  });
+
+  it('prefixes formula characters in csv cells', () => {
+    const opened = openAccount(emptyState(), { telegramId: '7', email: 'a@b.c', now: NOW });
+    const names = ['=1+1', '+cmd', '-1', '@sum', '\t=1', '\r=1'];
+    for (let i = 0; i < names.length; i++) {
+      opened.state.accounts[0].telegramName = names[i];
+      const csv = usersCsv(opened.state);
+      expect(csv).toContain('"\'' + names[i].replace(/"/g, '""') + '"');
+      expect(csv).not.toContain('"' + names[i] + '"');
+    }
+    opened.state.accounts[0].telegramName = 'Andy';
+    expect(usersCsv(opened.state)).toContain('"Andy"');
+    const pay = emptyState();
+    pay.payments.push({ operationId: 'op-formula', label: '=HYPERLINK("http://evil")', amount: '1.00', at: NOW });
+    expect(paymentsCsv(pay, NOW - 1, NOW + 1)).toContain(`"'=HYPERLINK(""http://evil"")"`);
   });
 });
 

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/chrome';
 import { api, post } from '@/lib/api';
+import { nextSupportSelection } from '@/lib/subs';
 import { personLabel, when } from '@/lib/text';
 import type { SupportMsg, SupportThread } from '@/lib/types';
 
@@ -43,12 +44,9 @@ export function SupportPanel({
   }, [initialTelegramId]);
 
   useEffect(() => {
-    if (!picked) return;
-    if (threads.some((row) => row.telegramId === picked)) return;
-    // A thread opened from a user card stays selected even when it is not in the open list.
-    if (initialTelegramId && picked === initialTelegramId) return;
-    setPicked('');
-  }, [threads, picked, initialTelegramId]);
+    const ids = threads.map((row) => row.telegramId);
+    setPicked((current) => nextSupportSelection(current, ids, initialTelegramId || ''));
+  }, [threads, initialTelegramId]);
 
   function scrollToEnd(force?: boolean) {
     if (!force && !stick.current) return;

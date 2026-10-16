@@ -17,6 +17,17 @@ export function matchesSubscriptionFilter(row: FilterRow, filter: string) {
   return row.status === filter;
 }
 
+/**
+ * Keep the open thread stable. An empty pick is pinned to the first thread.
+ * A thread that leaves the list falls back to the new first thread, except a
+ * conversation opened directly from a user card.
+ */
+export function nextSupportSelection(picked: string, threadIds: string[], initialTelegramId = '') {
+  if (picked && threadIds.includes(picked)) return picked;
+  if (initialTelegramId && picked === initialTelegramId) return picked;
+  return threadIds[0] || '';
+}
+
 /** One reminder per account, using the subscription with the latest paidUntil. */
 export function reminderTargets<T extends FilterRow>(rows: T[]) {
   const latest = new Map<string, T>();
