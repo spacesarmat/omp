@@ -15,11 +15,15 @@ Cloudflare DNS: A `@` and `www` → VPS IP, proxied (same as billing). SSL/TLS *
 
 Caddy allows TLS 1.2 and 1.3 only (automatic certificates are unchanged) and adds the same response headers on every host: `Strict-Transport-Security: max-age=15552000; includeSubDomains` (no preload), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and removes `Server`. Apply a Caddyfile change with `caddy reload` (the file is bind-mounted). HEAD/OPTIONS behaviour is in the billing image, so that container needs a new image before a restart picks it up.
 
-JacRed talks to TorrServer at `http://torrserver:8090` (`tracks` / ffprobe).
+JacRed syncs from `https://sync.jacred.stream` (`syncapi`). `jacred/init.yaml` sets `syncsport: false`, `syncspidr: true`, and `timeSync: 120`. `synctrackers` is a 16-tracker subset of the jacred-fdb defaults ([`Data/init.yaml`](https://github.com/jacred-fdb/jacred/blob/main/Data/init.yaml); the image is `ghcr.io/jacred-fdb/jacred`), trimmed for a 2 GB VPS. `tracks` is `false`, so JacRed does not ffprobe TorrServer at `http://torrserver:8090`; that saves RAM. `apikey` and `devkey` stay `change-me` in git. Watch memory after sync starts and trim `synctrackers` if the box is still tight.
 
-FlareSolverr solves Cloudflare challenges for Jackett and JacRed indexers. The host publish is `127.0.0.1:8191` only. Jackett's **FlareSolverr API URL** = `http://flaresolverr:8191`.
+JacRed on a 2 GB VPS needs swap. `/etc/fstab` mounts a 2 GB `/swapfile`. `/etc/sysctl.d/99-omp-swap.conf` sets `vm.swappiness=10`.
 
-`warp` (`caomingjun/warp`) provides an HTTP proxy on `:1080` so the billing bot can reach `api.telegram.org` when the VPS IP is blocked.
+FlareSolverr solves Cloudflare challenges for Jackett and JacRed indexers. The host publish is `127.0.0.1:8191` only. Jackett's manual settings live in the Jackett UI (under `data/jackett/`, not in git): **FlareSolverrUrl** `http://flaresolverr:8191/` with timeout `55000`, and an HTTP proxy at `warp:1080`. The Jackett admin password is only on the server, in `/root/jackett-admin-password.txt` (owner root, mode `600`). Do not commit that file.
+
+These Jackett indexers were disabled by moving their definitions to `data/jackett/Jackett/Indexers-disabled/`: `newstudio`, `opensharing`, `pctorrent`, `torrent-pirat`, `torrentby`, `xxxtor`. Restore one by moving it back into `data/jackett/Jackett/Indexers/` and restarting Jackett (`docker compose restart jackett`).
+
+`warp` (`caomingjun/warp`) provides an HTTP proxy on `:1080` so the billing bot can reach `api.telegram.org` when the VPS IP is blocked. Jackett uses that same proxy.
 
 ## Update billing from git
 
@@ -88,9 +92,9 @@ The job checks out the workflow's own revision (`github.sha`, the branch selecte
 3. `cp .env.example .env` and set a unique `INDEXER_HASH` (required; compose will not start without it).
 4. Put the existing SQLite DB at `data/billing/billing.db` (do not start with an empty DB if you already have subscriptions).
 5. `mkdir -p data/{billing,jackett,jacred,torrserver/{config,torrents}} && chown -R 1000:1000 data/jackett data/jacred data/torrserver`
-6. Edit `jacred/init.yaml`: set `apikey` / `devkey`.
+6. Edit `jacred/init.yaml` on the VPS: set `apikey` / `devkey`. Leave them as `change-me` in git. `tracks` is already `false`.
 8. `docker compose up -d`
-9. Copy the Jackett API key from `data/jackett/.../ServerConfig.json` into the billing admin **Сервисы** tab (never into the APK or git). JacRed key → same tab. In Jackett set **FlareSolverr API URL** to `http://flaresolverr:8191`. Keep real `INDEXER_*` only in VPS `.env` (gitignored). Phones use `/v1/search` / `/v1/torrent` only.
+9. Copy the Jackett API key from `data/jackett/.../ServerConfig.json` into the billing admin **Сервисы** tab (never into the APK or git). JacRed key → same tab. In Jackett set **FlareSolverrUrl** to `http://flaresolverr:8191/` with timeout `55000`, and the proxy to HTTP `warp:1080`. The admin password stays in `/root/jackett-admin-password.txt` (root, `600`). Keep real `INDEXER_*` only in VPS `.env` (gitignored). Phones use `/v1/search` / `/v1/torrent` only.
 10. Cloudflare DNS: A `billing` / `jackett` / `jacred` → VPS IP, proxied. SSL/TLS mode **Full (strict)**. Do not publish these names on a Cloudflare Tunnel.
 11. UFW: allow `22`, `80`, `443` only. Leave FlareSolverr bound to `127.0.0.1:8191`.
 
@@ -101,4 +105,4 @@ docker build -f ops/vps/Dockerfile -t ghcr.io/spacesarmat/omp-billing:local ops/
 # in ops/vps/.env: BILLING_IMAGE=ghcr.io/spacesarmat/omp-billing:local
 ```
 
-On the VPS, `deploy.sh` runs that build from `Dockerfile.billing` with context `billing-src`.
+On the VPS, billing is built from `/opt/omp-vps/billing-src` with `/opt/omp-vps/Dockerfile.billing` (the copy of `ops/vps/Dockerfile`) as `ghcr.io/spacesarmat/omp-billing:local`. `deploy.sh` runs that build. The billing service sets `BILLING_JACKETT_INDEXER_TIMEOUT_MS=12000` (one indexer) and `BILLING_JACKETT_SEARCH_DEADLINE_MS=18000` (the whole search). Those match the defaults in `ops/billing/src/jackett.mjs`.

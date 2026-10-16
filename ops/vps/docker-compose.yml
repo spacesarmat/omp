@@ -1,5 +1,5 @@
 # OMP VPS stack: Caddy + billing + Jackett + JacRed + TorrServer + FlareSolverr
-# Jackett "FlareSolverr API URL" = http://flaresolverr:8191
+# Jackett FlareSolverrUrl = http://flaresolverr:8191/ (timeout 55000); HTTP proxy warp:1080
 # Deploy: copy this directory to the VPS, fill .env, then:
 #   docker compose pull && docker compose up -d
 #
@@ -45,6 +45,9 @@ services:
       BILLING_JACKETT_URL: http://jackett:9117
       BILLING_JACRED_URL: http://jacred:9117
       BILLING_TORRSERVER_URL: http://torrserver:8090
+      # Fan-out search: 12s per indexer, 18s for the whole /v1/search.
+      BILLING_JACKETT_INDEXER_TIMEOUT_MS: "12000"
+      BILLING_JACKETT_SEARCH_DEADLINE_MS: "18000"
       TZ: ${TZ:-Europe/Moscow}
       # Datacenter IPs often cannot reach api.telegram.org — route bot via WARP HTTP proxy
       HTTP_PROXY: http://warp:1080
