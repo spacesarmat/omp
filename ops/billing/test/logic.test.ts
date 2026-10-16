@@ -160,6 +160,24 @@ describe('Jackett proxy', () => {
       'http://127.0.0.1:9117/api/v2.0/indexers/rutor/results/torznab/download?id=1&apikey=SECRET',
     );
   });
+
+  it('restores a download when the indexer URL has a path prefix', () => {
+    const xml = '<enclosure url="https://host/jackett/dl/a?apikey=SECRET" />';
+    const clean = stripJackett(xml, 'https://host/jackett', 'SECRET');
+    expect(clean).toContain('omp-fetch:/dl/a?');
+    expect(clean).not.toContain('/jackett');
+    const back = restoreJackett('omp-fetch:/dl/a', 'https://host/jackett', 'SECRET');
+    expect(back).toBe('https://host/jackett/dl/a?apikey=SECRET');
+    const api = restoreJackett(
+      'omp-fetch:/api/v2.0/indexers/rutor/results/torznab/download?id=1',
+      'https://host/jackett',
+      'SECRET',
+    );
+    expect(api).toBe('https://host/jackett/api/v2.0/indexers/rutor/results/torznab/download?id=1&apikey=SECRET');
+    const search = 'omp-fetch:/api/v2.0/indexers/all/results/torznab/api?t=search&q=film';
+    expect(restoreJackett(search, 'https://host/jackett', 'SECRET')).toBe('');
+    expect(restoreJackett('omp-fetch:/%2e%2e/dl/a', 'https://host/jackett', 'SECRET')).toBe('');
+  });
 });
 
 describe('bot', () => {
