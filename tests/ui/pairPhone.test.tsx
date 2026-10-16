@@ -113,6 +113,13 @@ describe('PairPhoneScreen on Android TV', () => {
     expect(text).toContain('Новый код');
   });
 
+  it('shows a 6-digit pairing code', async () => {
+    fakePlugin([{ code: '048216', expiresAt: Date.now() + 300000 }]);
+    const host = mountTracked(h(PairPhoneScreen, {}));
+    await settleUntil(() => digits(host) === '048216');
+    expect(digits(host)).toBe('048216');
+  });
+
   it('shows the code without a server too', async () => {
     fakePlugin([{ code: '0007', expiresAt: Date.now() + 300000 }]);
     const host = mountTracked(h(PairPhoneScreen, {}));

@@ -59,6 +59,8 @@ export interface NativeStartOptions {
   audioPick?: NativeTrackPick[];
   /** The same for subtitles (a step may turn them off). */
   subPick?: NativeTrackPick[];
+  /** Android TV «Всегда FFmpeg»: software decoding for the built-in player. Off when absent. */
+  alwaysFfmpeg?: boolean;
 }
 
 /** `nativePlayerTrack` from the player: an audio or subtitle track picked by hand (menu or phone). */
@@ -311,6 +313,7 @@ export class NativeSession {
         return this.plugin.playNative({
           ...(donate ? { donate } : {}),
           ...(o.engine ? { engine: o.engine } : {}),
+          ...(o.alwaysFfmpeg ? { alwaysFfmpeg: true } : {}),
           ...(o.audioPick && o.audioPick.length ? { audioPick: o.audioPick } : {}),
           ...(o.subPick && o.subPick.length ? { subPick: o.subPick } : {}),
           queue,

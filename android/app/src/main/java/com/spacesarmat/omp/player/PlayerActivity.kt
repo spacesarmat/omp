@@ -133,12 +133,15 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private val skips = SkipState()
     /** «Заставка пропущена · Вернуть» on screen: the intro start OK returns to. */
     private var undoStart: Long? = null
+    /** A playback warning that arrived while «Вернуть» was up. Shown when that toast goes; dropped on item change. */
+    private val pendingWarning = PendingPlaybackWarning()
 
     private var toastShown = false
     private val hideToast = Runnable {
         undoStart = null
         toastShown = false
         render()
+        revealPendingWarning()
     }
     /** The phone badge fades out BADGE_MS after the last phone command (it never stays on screen). */
     private val hideBadge = Runnable {
@@ -322,6 +325,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         closedSent = false
         runId = r.session
         skips.clear()
+        pendingWarning.clear()
         hideMessage()
         setDonate(r.donate)
         applySkips()
@@ -866,15 +870,36 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         }
     }
 
-    /** A message at the top left: «Заставка пропущена» with «Вернуть · OK» for 5 s ([undo]), others for 3 s. */
-    fun showMessage(text: String, error: Boolean, undo: Long? = null) {
+    /**
+     * A playback warning (software 4K, Dolby Vision, HDR on an SDR screen). While «Вернуть» is up it waits,
+     * and is shown when that toast goes. [playItem] and [load] drop it: it belongs to this item, and the
+     * engine does not send it again.
+     */
+    override fun playbackWarnings(text: String) {
+        if (isFinishing) return
+        val show = pendingWarning.arrive(text, undoStart != null) ?: return
+        showMessage(show, false, holdMs = WARNING_HOLD_MS)
+    }
+
+    /** The toast that was covering a held warning has gone, and this item is still the one it belongs to. */
+    private fun revealPendingWarning() {
+        val text = pendingWarning.take() ?: return
+        if (isFinishing) return
+        showMessage(text, false, holdMs = WARNING_HOLD_MS)
+    }
+
+    /**
+     * A message at the top left: «Заставка пропущена» with «Вернуть · OK» for 5 s ([undo]), others for 3 s,
+     * a playback warning for [WARNING_HOLD_MS] ([holdMs]).
+     */
+    fun showMessage(text: String, error: Boolean, undo: Long? = null, holdMs: Long = MESSAGE_MS) {
         if (!::session.isInitialized || isFinishing) return
         undoStart = undo
         toastText.text = text
         toastText.setTextColor(if (error) ERROR_COLOR else TEXT_COLOR)
         toastShown = true
         handler.removeCallbacks(hideToast)
-        handler.postDelayed(hideToast, if (undo != null) SKIP_TOAST_MS else MESSAGE_MS)
+        handler.postDelayed(hideToast, if (undo != null) SKIP_TOAST_MS else holdMs)
         render()
     }
 
@@ -883,6 +908,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         undoStart = null
         toastShown = false
         if (::toastBox.isInitialized) render()
+        revealPendingWarning()
     }
 
     /** The QR code of the request as a crisp bitmap (one pixel per module, white quiet zone), or no card. */
@@ -1007,6 +1033,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         cancelCountdown()
         flow.entered()
         skips.enter()
+        pendingWarning.clear()
         if (undoStart != null) hideMessage()
         showControls()
         changed()
@@ -1252,6 +1279,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         /** «Заставка пропущена · Вернуть» (SKIP_TOAST_MS of src/player/chapters.ts), other messages. */
         private const val SKIP_TOAST_MS = 5000L
         private const val MESSAGE_MS = 3000L
+        /** Software 4K / Dolby Vision / HDR on SDR: long enough to read two lines. */
+        private const val WARNING_HOLD_MS = 8000L
         /** The phone badge: on screen after the last phone command, and its fade. */
         private const val BADGE_MS = 3000L
         private const val BADGE_FADE_MS = 200L

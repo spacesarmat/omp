@@ -42,6 +42,13 @@ describe('sanitizeSettings', () => {
     expect(sanitizeSettings({ playerEngine: 'mpv' }).playerEngine).toBe('auto');
     expect(sanitizeSettings({ playerEngine: 1 }).playerEngine).toBe('auto');
   });
+  it('«Всегда FFmpeg» is off unless it is a boolean true', () => {
+    expect(DEFAULT_SETTINGS.alwaysFfmpeg).toBe(false);
+    expect(sanitizeSettings({}).alwaysFfmpeg).toBe(false);
+    expect(sanitizeSettings({ alwaysFfmpeg: true }).alwaysFfmpeg).toBe(true);
+    expect(sanitizeSettings({ alwaysFfmpeg: 'yes' }).alwaysFfmpeg).toBe(false);
+    expect(sanitizeSettings({ alwaysFfmpeg: 1 }).alwaysFfmpeg).toBe(false);
+  });
 });
 
 describe('sanitizeProgress', () => {

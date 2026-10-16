@@ -39,6 +39,11 @@ export interface AppSettings {
    * and sound with the screen off / after the PiP window is closed. Off: PiP only. Never on the TV.
    */
   backgroundAudio: boolean;
+  /**
+   * Android TV, built-in player: «Всегда FFmpeg» — software decoding (2160's DecoderPreference.FFMPEG).
+   * Off: hardware first, FFmpeg only when the box cannot decode. Helps set-top boxes with a green screen.
+   */
+  alwaysFfmpeg: boolean;
   /** UI language: 'system' follows the device (ru/uk/be/kk → Russian, else English). */
   language: LanguageSetting;
 }
@@ -63,6 +68,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   videoPlayer: 'builtin',
   phonePlayer: 'embedded',
   backgroundAudio: false,
+  alwaysFfmpeg: false,
   language: 'system',
 };
 
