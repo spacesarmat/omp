@@ -12,6 +12,12 @@ tsuri:
 
 openstats: false
 
+# FileDB change log stays on. Caps are set because an uncapped log reached 11 GB in an hour.
+logFdb: true
+logFdbRetentionDays: 1
+logFdbMaxSizeMb: 500
+logFdbMaxFiles: 3
+
 syncapi: https://sync.jacred.stream
 synctrackers:
   - rutracker
@@ -31,5 +37,6 @@ synctrackers:
   - aniliberty
   - knaben
 syncsport: false
-syncspidr: true
+# Spidr pulled torrents far beyond synctrackers.
+syncspidr: false
 timeSync: 120
