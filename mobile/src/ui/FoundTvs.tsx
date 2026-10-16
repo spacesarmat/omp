@@ -95,6 +95,7 @@ export function FoundTvs() {
       {coding && (
         <CodeSheet
           tvName={coding.name}
+          version={coding.version}
           onSubmit={async (code) => {
             await pairAtv(coding, code);
             setCoding(null);

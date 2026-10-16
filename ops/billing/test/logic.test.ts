@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { botReply } from '../src/bot.mjs';
@@ -19,6 +19,8 @@ import {
   adminDashboard,
   adminFind,
   applyPayment,
+  ensureTelegramAccount,
+  paymentCovers,
   confirmDeviceLink,
   createPromo,
   createSubscription,
@@ -64,14 +66,28 @@ describe('subscription codes', () => {
 
   it('a second payment for the same account extends the subscription', () => {
     const start = paid();
-    const applied = applyPayment(start.state, { operationId: 'op1', label: 'new:' + start.account, amount: '100.00', now: NOW + 1000 });
+    start.state.settings.priceRub = 100;
+    const applied = applyPayment(start.state, {
+      operationId: 'op1',
+      label: 'new:' + start.account,
+      amount: '100.00',
+      currency: '643',
+      now: NOW + 1000,
+    });
     expect(applied.result.kind).toBe('renew');
     expect(applied.result.paidUntil).toBeGreaterThan(NOW + 30 * 24 * 60 * 60 * 1000);
   });
 
   it('an extra-device payment issues a new code', () => {
     const start = paid();
-    const applied = applyPayment(start.state, { operationId: 'op2', label: 'dev:' + start.sub, amount: '50.00', now: NOW });
+    start.state.settings.extraDeviceRub = 50;
+    const applied = applyPayment(start.state, {
+      operationId: 'op2',
+      label: 'dev:' + start.sub,
+      amount: '50.00',
+      currency: '643',
+      now: NOW,
+    });
     expect(applied.result.kind).toBe('device');
     expect(applied.result.code).not.toBe(start.code);
     const bound = activate(applied.state, { code: applied.result.code, deviceId: 'c'.repeat(32), now: NOW });
@@ -312,10 +328,12 @@ describe('admin account card', () => {
 describe('admin dashboard', () => {
   it('lists config alerts and payment events', () => {
     const start = paid();
+    start.state.settings.priceRub = 100;
     const paidState = applyPayment(start.state, {
       operationId: 'op-dash',
       label: 'new:' + start.account,
       amount: '100.00',
+      currency: '643',
       now: NOW + 5000,
     }).state;
     const dash = adminDashboard(paidState, NOW + 5000);
@@ -335,16 +353,24 @@ describe('audit', () => {
 describe('finance', () => {
   it('sums payments, flags bad labels, and exports csv', () => {
     const start = paid();
+    start.state.settings.priceRub = 150;
     let state = applyPayment(start.state, {
       operationId: 'op-ok',
       label: 'new:' + start.account,
       amount: '150.00',
+      currency: '643',
       now: NOW + 1000,
     }).state;
-    const bad = applyPayment(state, { operationId: 'op-bad', label: 'new:missing', amount: '10.00', now: NOW + 2000 });
+    const bad = applyPayment(state, { operationId: 'op-bad', label: 'new:missing', amount: '10.00', currency: '643', now: NOW + 2000 });
     expect(bad.result.error).toBe('bad_label');
     state = bad.state;
-    const dup = applyPayment(state, { operationId: 'op-ok', label: 'new:' + start.account, amount: '150.00', now: NOW + 3000 });
+    const dup = applyPayment(state, {
+      operationId: 'op-ok',
+      label: 'new:' + start.account,
+      amount: '150.00',
+      currency: '643',
+      now: NOW + 3000,
+    });
     expect(dup.result.duplicate).toBe(true);
     state = dup.state;
     const fin = financeReport(state, NOW + 3000);
@@ -384,17 +410,69 @@ describe('sqlite store', () => {
 });
 
 describe('telegram unlink', () => {
-  it('clears telegramId when the last device unlinks', () => {
+  it('drops the phone and keeps the paying account telegram id', () => {
     const device = 'd'.repeat(32);
     let state = emptyState();
     const link = startDeviceLink(state, { deviceId: device, now: NOW });
     state = link.state;
     const confirmed = confirmDeviceLink(state, { token: link.result.token, telegramId: '99', now: NOW });
     state = confirmed.state;
+    const accountId = state.accounts[0].id;
     expect(state.accounts[0].telegramId).toBe('99');
     const out = unlinkDeviceTelegram(state, { deviceId: device, now: NOW + 1 });
     expect(out.result.ok).toBe(true);
-    expect(out.state.accounts[0].telegramId).toBe('');
+    expect(out.result.telegramId).toBe('');
+    expect(out.state.accounts[0].telegramId).toBe('99');
+    expect(out.state.accounts[0].linkedDevices).toEqual([]);
+    const again = ensureTelegramAccount(out.state, '99', NOW + 2);
+    expect(again.account.id).toBe(accountId);
+    expect(again.state.accounts).toHaveLength(1);
+  });
+});
+
+describe('billing files', () => {
+  it('NAS compose runs start.sh through a shell, and the admin build keeps the logos', () => {
+    expect(readFileSync('ops/billing/docker-compose.yml', 'utf8')).toContain('/bin/sh');
+    expect(readFileSync('ops/billing/casaos-docker-compose.yml', 'utf8')).toContain('/bin/sh');
+    expect(readFileSync('ops/billing/.tunnel-bin/set-public-origin.mjs', 'utf8')).toContain("from '../src/store.mjs'");
+    expect(existsSync('ops/billing/admin/public/logo.svg')).toBe(true);
+    expect(existsSync('ops/billing/admin/public/tunnel.svg')).toBe(true);
+  });
+});
+
+describe('payment amount', () => {
+  it('refuses a smaller sum and a non-ruble notice, and accepts the price after the fee', () => {
+    const start = paid();
+    start.state.settings.priceRub = 100;
+    const until = start.state.subscriptions[0].paidUntil;
+    const short = applyPayment(start.state, {
+      operationId: 'op-short',
+      label: 'sub:' + start.sub,
+      amount: '1.00',
+      currency: '643',
+      now: NOW + 1000,
+    });
+    expect(short.result.error).toBe('amount');
+    expect(short.state.subscriptions[0].paidUntil).toBe(until);
+    const foreign = applyPayment(start.state, {
+      operationId: 'op-usd',
+      label: 'sub:' + start.sub,
+      amount: '100.00',
+      currency: '840',
+      now: NOW + 1000,
+    });
+    expect(foreign.result.error).toBe('amount');
+    expect(paymentCovers('97.00', '643', 100)).toBe(true);
+    expect(paymentCovers('96.00', '643', 100)).toBe(false);
+    const fee = applyPayment(start.state, {
+      operationId: 'op-fee',
+      label: 'sub:' + start.sub,
+      amount: '97.00',
+      currency: '643',
+      now: NOW + 1000,
+    });
+    expect(fee.result.kind).toBe('renew');
+    expect(fee.result.paidUntil).toBeGreaterThan(until);
   });
 });
 

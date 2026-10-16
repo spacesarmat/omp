@@ -290,7 +290,7 @@ export function Tv() {
         {t('tvScreen.tip')}
       </p>
       {coding && (
-        <CodeSheet tvName={coding.name} onSubmit={(code) => pair(coding, code)} onCancel={() => setCoding(null)} />
+        <CodeSheet tvName={coding.name} version={coding.version} onSubmit={(code) => pair(coding, code)} onCancel={() => setCoding(null)} />
       )}
       {renaming && <TvRenameSheet tv={renaming} onClose={() => setRenaming(null)} />}
     </div>

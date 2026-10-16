@@ -920,6 +920,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
       {coding && (
         <CodeSheet
           tvName={found.name}
+          version={found.version}
           onSubmit={async (code) => {
             await act.pairAtv(found, code);
             setCoding(false);

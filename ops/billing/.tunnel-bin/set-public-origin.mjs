@@ -1,4 +1,4 @@
-import { readState, writeState } from './src/store.mjs';
+import { readState, writeState } from '../src/store.mjs';
 
 const file = process.env.BILLING_DATA || '/data/billing.db';
 const origin = String(process.argv[2] || '')

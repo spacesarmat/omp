@@ -483,6 +483,23 @@ describe('scanLan', () => {
     expect(found).toEqual([{ url: 'http://10.0.5.9:8090', version: 'MatriX.1' }]);
   });
 
+  it('probes saved addresses during the native scan and reports each echo as it answers', async () => {
+    addServer({ url: 'http://10.9.9.4:8091', name: 'Дальняя' });
+    const reported: string[] = [];
+    const found = await scanLan(
+      () => false,
+      {
+        localIp: async () => '10.0.5.23',
+        discover: async () => [],
+        tcpScan: async () => [{ ip: '10.0.5.9', port: 8090 }],
+        probe: async (url) => (url === 'http://10.0.5.9:8090' || url === 'http://10.9.9.4:8091' ? 'MatriX.1' : null),
+      },
+      (s) => reported.push(s.url),
+    );
+    expect(found.map((s) => s.url).sort()).toEqual(['http://10.0.5.9:8090', 'http://10.9.9.4:8091']);
+    expect(reported.sort()).toEqual(['http://10.0.5.9:8090', 'http://10.9.9.4:8091']);
+  });
+
   it('falls back to JS discover when the native scan rejects', async () => {
     const calls: any[] = [];
     await scanLan(() => false, {

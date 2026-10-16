@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { t, tp, fmtDuration } from '../../../../src/i18n';
 import { formatBytes } from '../../../../src/lib/format';
-import { baseName, episodeLabel, parseEpisode, stripExt } from '../../../../src/lib/episodes';
+import { baseName, episodeLabel, stripExt } from '../../../../src/lib/episodes';
 import { airDateText, isoDay } from '../../../../src/lib/seriesStatus';
 import { getLocalProgress } from '../../../../src/store/progress';
 import { torrents } from '../../../../src/store/library';
@@ -17,7 +17,7 @@ import { useTvLaunch } from '../../watch';
 import { LaunchError } from '../../ui/LaunchError';
 import { CatalogError } from './CatalogError';
 import { PosterSheet } from './PosterSheet';
-import { episodeSizes, seriesLibraryHash, seriesWatchSpot } from './seriesWatch';
+import { episodeRatio, episodeSizes, seriesLibraryHash, seriesWatchSpot } from './seriesWatch';
 
 const BACK = 'M15 5l-7 7l7 7';
 
@@ -29,12 +29,7 @@ export function episodeHead(n: number, title: string, runtime: number): string {
 }
 
 function barOf(card: CatalogCard, season: number, episode: number): number {
-  const spot = seriesWatchSpot(torrents.value, card, season);
-  if (!spot || spot.at <= 0) return 0;
-  const parsed = parseEpisode(spot.file.path);
-  if (parsed.episode !== episode) return 0;
-  const dur = getLocalProgress(spot.hash, spot.file.id)?.duration || 0;
-  return dur > 0 ? Math.min(1, spot.at / dur) : 0;
+  return episodeRatio(torrents.value, card, season, episode);
 }
 
 function Episodes({ card, season, details }: { card: CatalogCard; season: Season; details: SeasonDetails }) {

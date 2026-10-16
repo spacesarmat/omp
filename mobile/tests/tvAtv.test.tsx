@@ -109,7 +109,19 @@ describe('Tv screen with Android TV', () => {
     expect(card(el, 'Спальня').textContent).toContain('сохранён');
   });
 
+  it('an older Android TV submits the four-digit code it shows', async () => {
+    const el = mount();
+    await flush();
+    await act(async () => (card(el, 'Гостиная').querySelector('.m-tv-main') as HTMLButtonElement).click());
+    expect(cells()).toHaveLength(4);
+    type(cells()[0], '0482');
+    await act(async () => button(dialog()!, 'Подключить').click());
+    await flush();
+    expect(calls.find((c) => c.url === BASE + '/omp/pair')!.body).toEqual({ code: '0482', phone: 'Телефон' });
+  });
+
   it('a new Android TV opens the code sheet and pairs by the code', async () => {
+    setAtvDiscoverer(async () => [{ ip: '192.168.1.40', port: 8095, name: 'Гостиная', version: '0.20.1-beta.14' }]);
     const el = mount();
     await flush();
     await act(async () => (card(el, 'Гостиная').querySelector('.m-tv-main') as HTMLButtonElement).click());
@@ -140,6 +152,7 @@ describe('Tv screen with Android TV', () => {
   });
 
   it('pasting six digits fills every cell', async () => {
+    setAtvDiscoverer(async () => [{ ip: '192.168.1.40', port: 8095, name: 'Гостиная', version: '0.20.1-beta.14' }]);
     const el = mount();
     await flush();
     await act(async () => (card(el, 'Гостиная').querySelector('.m-tv-main') as HTMLButtonElement).click());

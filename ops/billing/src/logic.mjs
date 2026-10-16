@@ -289,7 +289,32 @@ export function logAudit(state, { action, detail, now }) {
   return { ...state, audit };
 }
 
-export function applyPayment(state, { operationId, label, amount, now }) {
+/**
+ * YooMoney credits `amount` after its own fee. A card payment can leave about 3% with YooMoney,
+ * so a credited sum a little under the price is still that purchase. Anything lower is not.
+ */
+const PAYMENT_FEE = 0.03;
+
+/** True when `amount` is rubles (currency 643) and covers `price` after the fee allowance. */
+export function paymentCovers(amount, currency, price) {
+  const expected = Number(price) || 0;
+  if (!(expected > 0)) return false;
+  if (String(currency || '') !== '643') return false;
+  return money(amount) + 1e-9 >= expected * (1 - PAYMENT_FEE) - 0.01;
+}
+
+function priceOf(state, mark) {
+  if (mark.indexOf('dev:') === 0) return Number(state.settings.extraDeviceRub) || 0;
+  if (mark.indexOf('sub:') === 0 || mark.indexOf('new:') === 0) return Number(state.settings.priceRub) || 0;
+  return 0;
+}
+
+function rejectAmount(state, row) {
+  const payments = state.payments.concat([{ ...row, error: 'amount' }]);
+  return { state: { ...state, payments }, result: { error: 'amount' } };
+}
+
+export function applyPayment(state, { operationId, label, amount, currency, now }) {
   if (!operationId || seenPayment(state, operationId)) {
     return {
       state: logWebhook(state, { kind: 'duplicate', operationId: operationId || '', label: label || '', amount: amount || '', at: now }),
@@ -307,6 +332,7 @@ export function applyPayment(state, { operationId, label, amount, now }) {
       const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
+    if (!paymentCovers(amount, currency, priceOf(state, mark))) return rejectAmount(state, row);
     const subscriptions = state.subscriptions.map((s) => {
       if (s.id !== id) return s;
       const from = Math.max(s.paidUntil, now);
@@ -324,6 +350,7 @@ export function applyPayment(state, { operationId, label, amount, now }) {
       const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
+    if (!paymentCovers(amount, currency, priceOf(state, mark))) return rejectAmount(state, row);
     const subscriptions = state.subscriptions.map((s) => (s.id === id ? { ...s, deviceLimit: s.deviceLimit + 1 } : s));
     const issued = issue({ ...state, payments: state.payments.concat([row]), subscriptions }, id, now);
     return { state: issued.state, result: { kind: 'device', subscriptionId: id, code: issued.code } };
@@ -334,6 +361,7 @@ export function applyPayment(state, { operationId, label, amount, now }) {
       const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
+    if (!paymentCovers(amount, currency, priceOf(state, mark))) return rejectAmount(state, row);
     const base = { ...state, payments: state.payments.concat([row]) };
     const existing = anySub(base, accountId);
     if (existing) {
@@ -599,17 +627,13 @@ export function unlinkDeviceTelegram(state, { deviceId, now }) {
   if (!account) return { state, result: { error: 'not_linked' } };
   const linked = (Array.isArray(account.linkedDevices) ? account.linkedDevices : []).filter((d) => d !== deviceId);
   const accounts = state.accounts.map((a) => (a.id === account.id ? { ...a, linkedDevices: linked } : a));
-  const stillLinked = linked.length > 0;
-  // If no devices left on this TG account, clear telegramId so the phone can re-bind cleanly.
-  const nextAccounts = stillLinked
-    ? accounts
-    : accounts.map((a) => (a.id === account.id ? { ...a, telegramId: '', telegramUsername: '', telegramName: '' } : a));
   return {
     state: logAudit(
-      { ...state, accounts: nextAccounts },
+      { ...state, accounts },
       { action: 'tg_unlink', detail: account.id + ' ' + deviceId.slice(0, 8), now: now || Date.now() },
     ),
-    result: { ok: true, telegramId: stillLinked ? account.telegramId || '' : '' },
+    // The device is gone. The paying account keeps its Telegram id, so the next message still finds this subscription.
+    result: { ok: true, telegramId: linked.length ? account.telegramId || '' : '' },
   };
 }
 

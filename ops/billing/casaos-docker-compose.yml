@@ -23,6 +23,7 @@ services:
     image: node:24-bookworm-slim
     working_dir: /app
     command:
+      - /bin/sh
       - /app/start.sh
     labels:
       icon: https://cdn.jsdelivr.net/gh/spacesarmat/omp@refactor/code/assets/icon.svg

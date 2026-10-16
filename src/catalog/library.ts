@@ -53,12 +53,8 @@ function nameKey(title: string): string {
   return k.slice(0, k.length - 2);
 }
 
-/**
- * Keys 'name|N' of the series seasons in the torrents (from the season marks of the title; none without them),
- * each with the hash of the first torrent that has it.
- */
-export function seasonIndex(torrents: { title: string; hash?: string }[]): Map<string, string> {
-  const idx = new Map<string, string>();
+/** Every 'name|N' key of a torrent title, with that torrent's hash (possibly empty). */
+function eachSeason(torrents: { title: string; hash?: string }[], visit: (key: string, hash: string) => void): void {
   torrents.forEach((tr) => {
     const raw = tr.title || '';
     const seasons = parseRelease(raw).seasons;
@@ -69,13 +65,33 @@ export function seasonIndex(torrents: { title: string; hash?: string }[]): Map<s
       if (!core) return;
       const name = nameKey(core);
       if (!name) return;
-      seasons.forEach((n) => {
-        const k = name + '|' + n;
-        if (!idx.has(k)) idx.set(k, hash);
-      });
+      seasons.forEach((n) => visit(name + '|' + n, hash));
     };
     add(raw);
     if (raw.indexOf(' / ') > 0) raw.split(' / ').forEach(add);
+  });
+}
+
+/**
+ * Keys 'name|N' of the series seasons in the torrents (from the season marks of the title; none without them),
+ * each with the hash of the first torrent that has it.
+ */
+export function seasonIndex(torrents: { title: string; hash?: string }[]): Map<string, string> {
+  const idx = new Map<string, string>();
+  eachSeason(torrents, (k, hash) => {
+    if (!idx.has(k)) idx.set(k, hash);
+  });
+  return idx;
+}
+
+/** Same keys as seasonIndex, with every torrent hash that carries the season (a season split across releases). */
+export function seasonHashIndex(torrents: { title: string; hash?: string }[]): Map<string, string[]> {
+  const idx = new Map<string, string[]>();
+  eachSeason(torrents, (k, hash) => {
+    if (!hash) return;
+    const cur = idx.get(k);
+    if (!cur) idx.set(k, [hash]);
+    else if (cur.indexOf(hash) < 0) cur.push(hash);
   });
   return idx;
 }
@@ -88,6 +104,21 @@ export function librarySeasonHash(idx: Map<string, string>, t: { title: string; 
     if (k && idx.has(k)) return idx.get(k) || '';
   }
   return '';
+}
+
+/** Every torrent hash of season N (title or original name), first-seen order, without duplicates. */
+export function librarySeasonHashes(idx: Map<string, string[]>, t: { title: string; original: string }, season: number): string[] {
+  const out: string[] = [];
+  const names = [t.title, t.original];
+  for (let i = 0; i < names.length; i++) {
+    const k = names[i] ? nameKey(names[i]) + '|' + season : '';
+    const list = k ? idx.get(k) : undefined;
+    if (!list) continue;
+    list.forEach((h) => {
+      if (h && out.indexOf(h) < 0) out.push(h);
+    });
+  }
+  return out;
 }
 
 /** The series names ('name' of the 'name|N' keys) that have a season in the index. */

@@ -329,11 +329,22 @@ export function createCatalogClient(
       return Promise.all(
         ids.map((id) =>
           list(homeListUrl(e, id, { kind: kind, window: window }), homeListKind(id, kind)).then(
-            (r) => ({ id: id, items: r.items } as HomeSection),
-            () => ({ id: id, items: [] as CatalogTitle[] } as HomeSection),
+            (r) => ({ ok: true as const, section: { id: id, items: r.items } as HomeSection }),
+            (err) => ({ ok: false as const, error: err }),
           ),
         ),
-      ).then((rows) => rows.filter((r) => r.items.length > 0));
+      ).then((rows) => {
+        const worked = rows.filter((r) => r.ok);
+        if (!worked.length) {
+          const failed = rows.find((r) => !r.ok);
+          throw failed && !failed.ok ? failed.error : fail('offline');
+        }
+        const out: HomeSection[] = [];
+        worked.forEach((r) => {
+          if (r.ok && r.section.items.length > 0) out.push(r.section);
+        });
+        return out;
+      });
     },
     search(q, page) {
       let e: TmdbEndpoint;

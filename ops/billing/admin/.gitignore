@@ -10,7 +10,10 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-public
+# Vite's public dir is source here (logo.svg, tunnel.svg). The build writes ../public.
+public/*
+!public/logo.svg
+!public/tunnel.svg
 *.local
 
 # Editor directories and files

@@ -737,7 +737,13 @@ export function createApp(file, fetchImpl) {
           return send(res, 400, 'bad signature');
         }
         const applied = await updateState(file, (cur) =>
-          applyPayment(cur, { operationId: body.operation_id, label: body.label, amount: body.amount, now }),
+          applyPayment(cur, {
+            operationId: body.operation_id,
+            label: body.label,
+            amount: body.amount,
+            currency: body.currency,
+            now,
+          }),
         );
         if (!applied.duplicate && !applied.error) await tellPayment(readState(file), applied, net);
         return send(res, 200, 'ok');

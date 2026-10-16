@@ -388,4 +388,17 @@ describe('catalog client', () => {
     window.dispatchEvent(new Event('pagehide'));
     expect(Object.keys(JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'))).toHaveLength(2);
   });
+
+  it('home rejects when every rail fails and keeps the rails that answered', async () => {
+    resetCatalogCache();
+    const down = fake();
+    down.answer = () => ({ status: 401, text: '{}' });
+    expect(catalogErrorCode(await failure(createCatalogClient(E, down.http).home('movie', 'day')))).toBe('nokey');
+    resetCatalogCache();
+    const partial = fake();
+    partial.answer = (url) => (url.indexOf('trending/') >= 0 ? { status: 200, text: JSON.stringify(MOVIE_LIST) } : 'reject');
+    const rows = await createCatalogClient(E, partial.http).home('movie', 'day');
+    expect(rows.map((r) => r.id)).toEqual(['trending']);
+    expect(rows[0].items.length).toBeGreaterThan(0);
+  });
 });

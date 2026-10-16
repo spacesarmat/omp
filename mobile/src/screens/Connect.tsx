@@ -49,21 +49,26 @@ export interface LanScanDeps {
   probe?: Probe;
 }
 
-async function echoHits(
-  hits: TcpLanHit[],
+/** One echo per URL. A second ask for the same URL shares the first probe and the first `onFound`. */
+function echoUrl(
+  url: string,
   isCancelled: () => boolean,
   probe: Probe,
-): Promise<FoundServer[]> {
-  const found: FoundServer[] = [];
-  await Promise.all(
-    hits.map(async (h) => {
-      if (isCancelled()) return;
-      const url = 'http://' + h.ip + ':' + h.port;
-      const version = await probe(url, 800).catch(() => null);
-      if (version && !isCancelled()) found.push({ url, version });
-    }),
-  );
-  return found;
+  onFound: ((s: FoundServer) => void) | undefined,
+  pending: Map<string, Promise<FoundServer | null>>,
+): Promise<FoundServer | null> {
+  const cur = pending.get(url);
+  if (cur) return cur;
+  const run = (async () => {
+    if (isCancelled()) return null;
+    const version = await probe(url, 800).catch(() => null);
+    if (!version || isCancelled()) return null;
+    const server = { url, version };
+    onFound?.(server);
+    return server;
+  })();
+  pending.set(url, run);
+  return run;
 }
 
 /**
@@ -84,10 +89,23 @@ export async function scanLan(
   const probe = d.probe || probeEcho;
   if (d.tcpScan) {
     try {
+      const pending = new Map<string, Promise<FoundServer | null>>();
+      const take = (url: string) => echoUrl(url, isCancelled, probe, onFound, pending);
+      // Saved addresses (another subnet, a custom port) are probed while the /24 scan runs, and each echo shows up at once.
+      const known = servers.value.map((s) => s.url);
+      const saved = Promise.all(known.map(take));
       const hits = await d.tcpScan(ports);
       if (isCancelled()) return [];
       // null = no Wi‑Fi → fall through to the JS subnet list; [] = scanned, nothing open
-      if (hits) return echoHits(hits, isCancelled, probe);
+      if (hits) {
+        const fromLan = await Promise.all(hits.map((h) => take('http://' + h.ip + ':' + h.port)));
+        const extra = await saved;
+        const out: FoundServer[] = [];
+        fromLan.concat(extra).forEach((s) => {
+          if (s && !out.some((x) => x.url === s.url)) out.push(s);
+        });
+        return out;
+      }
     } catch {
       /* no native plugin — JS discover below */
     }
