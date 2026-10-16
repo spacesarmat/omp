@@ -23,7 +23,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shellcheck
       - run: npm test
       - run: npm run build
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
       - run: npm run build:mobile
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
       - run: node scripts/package.mjs
       - run: npm run check:boot
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -59,6 +63,7 @@ jobs:
       - name: Sync the web app into the Android project
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: npm run android:sync
       - name: Build and test
         run: (cd android && ./gradlew -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 assembleDebug testDebugUnitTest)
