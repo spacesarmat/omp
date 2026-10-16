@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import tv.p2160.core.settings.DecoderPreference
 import java.util.Base64
 
 /** 2160 engine → engine-independent mappings (no controller is built). */
@@ -124,5 +125,11 @@ class Engine2160Test {
     @Test
     fun onlyThe2160EngineHasNightSound() {
         assertNull(FakeEngine().nightMode)
+    }
+
+    @Test
+    fun alwaysFfmpegSelectsSoftwareDecoding() {
+        assertEquals(DecoderPreference.AUTO, Engine2160.decoderPreference(false))
+        assertEquals(DecoderPreference.FFMPEG, Engine2160.decoderPreference(true))
     }
 }

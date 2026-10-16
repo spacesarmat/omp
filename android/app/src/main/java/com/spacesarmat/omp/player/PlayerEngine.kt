@@ -96,6 +96,12 @@ interface PlayerEngine {
 
         /** Playback stopped with an error; [detail] is technical (an error code name), never shown or logged with a URL. */
         fun onError(kind: ErrorKind, detail: String) {}
+
+        /**
+         * Playback warnings for the open item (software 4K, Dolby Vision without a decoder, HDR on an SDR screen).
+         * Once, after the engine has had time to choose a decoder. Empty implementations ignore them (VLC).
+         */
+        fun onPlaybackWarnings(kinds: List<PlayerWarning>) {}
     }
 }
 

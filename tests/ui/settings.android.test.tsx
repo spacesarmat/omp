@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import { render, h } from 'preact';
+import { act } from 'preact/test-utils';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { SettingsScreen } from '../../src/screens/Settings';
 import { settings, resetSettings } from '../../src/store/settings';
+import { applyLanguageSetting } from '../../src/i18n';
 
 const w = window as unknown as { Capacitor?: unknown };
 
@@ -20,6 +22,7 @@ beforeAll(() => {
 afterEach(() => {
   delete w.Capacitor;
   resetSettings();
+  applyLanguageSetting('ru');
   Array.from(document.body.children).forEach((c) => render(null, c));
   document.body.innerHTML = '';
 });
@@ -42,6 +45,7 @@ describe('SettingsScreen «Плеер»', () => {
   it('webOS: no player choice', () => {
     const host = mount();
     expect(host.textContent).not.toContain('Чем показывать видео на этом телевизоре.');
+    expect(host.textContent).not.toContain('Всегда FFmpeg');
   });
   it('Android TV: Авто / Встроенный / VLC with texts; a press stores the choice', () => {
     w.Capacitor = { getPlatform: () => 'android' };
@@ -69,6 +73,34 @@ describe('SettingsScreen «Плеер»', () => {
     expect(vlc.textContent).toContain('VLC недоступен на этом устройстве');
     vlc.click();
     expect(settings.value.playerEngine).toBe('auto');
+  });
+  it('Android TV: «Всегда FFmpeg» is off, explained, and a press stores it', async () => {
+    w.Capacitor = { getPlatform: () => 'android' };
+    const host = mount();
+    expect(host.textContent).toContain('Всегда FFmpeg');
+    expect(host.textContent).toContain('зелёный экран');
+    expect(host.textContent).toContain('на ресивер не уходит как есть');
+    const rowOf = () => Array.from(host.querySelectorAll('.choice-row')).find((e) => (e.textContent || '').indexOf('Всегда FFmpeg') >= 0) as HTMLElement;
+    expect(rowOf().textContent).toContain('Выкл');
+    expect(settings.value.alwaysFfmpeg).toBe(false);
+    await act(() => { rowOf().click(); });
+    expect(settings.value.alwaysFfmpeg).toBe(true);
+    expect(JSON.parse(localStorage.getItem('tsp.settings') || '{}').alwaysFfmpeg).toBe(true);
+    expect(rowOf().textContent).toContain('Вкл');
+    await act(() => { rowOf().click(); });
+    expect(settings.value.alwaysFfmpeg).toBe(false);
+    expect(JSON.parse(localStorage.getItem('tsp.settings') || '{}').alwaysFfmpeg).toBe(false);
+    expect(rowOf().textContent).toContain('Выкл');
+  });
+  it('Android TV in English: the row and the hint have no Cyrillic', () => {
+    applyLanguageSetting('en');
+    w.Capacitor = { getPlatform: () => 'android' };
+    const host = mount();
+    expect(host.textContent).toContain('Always use FFmpeg');
+    const notes = Array.from(host.querySelectorAll('.engine-note')).map((e) => e.textContent || '').join('\n');
+    expect(notes).toContain('green screen');
+    expect(notes).toContain('not passed through to a receiver');
+    expect(notes).not.toMatch(/[А-Яа-яЁё]/);
   });
 });
 

@@ -114,6 +114,8 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
         donate,
         // «Плеер»: the torrent's choice from the player menu wins over the setting
         engine: engineFor(s.playerEngine, queue[index].hash ? getTrackPref(queue[index].hash!) : null),
+        // «Всегда FFmpeg»: software decoding for the built-in player (green screen on a set-top box)
+        alwaysFfmpeg: s.alwaysFfmpeg,
       }).then(
         () => { if (!cancelled) setOpened(true); },
         (e) => {

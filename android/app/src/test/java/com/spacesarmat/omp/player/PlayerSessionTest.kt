@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.player
 
+import com.spacesarmat.omp.I18n
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -11,6 +12,7 @@ class PlayerSessionTest {
     private class RecUi : PlayerSession.Ui {
         var changed = 0
         var ended = 0
+        var warnings: String? = null
 
         override fun changed() {
             changed++
@@ -18,6 +20,10 @@ class PlayerSessionTest {
 
         override fun itemEnded() {
             ended++
+        }
+
+        override fun playbackWarnings(text: String) {
+            warnings = text
         }
     }
 
@@ -43,6 +49,19 @@ class PlayerSessionTest {
     private val engine = FakeEngine()
     private val ui = RecUi()
     private val session = PlayerSession(engine, ui)
+
+    @Test
+    fun playbackWarningsReachTheUiAsOneMessage() {
+        I18n.lang = "ru"
+        session.load(request())
+        engine.listener?.onPlaybackWarnings(emptyList())
+        assertNull(ui.warnings)
+        engine.listener?.onPlaybackWarnings(listOf(PlayerWarning.DOLBY_VISION, PlayerWarning.HDR_ON_SDR))
+        assertEquals(
+            "Dolby Vision не поддерживается — показывается HDR10\nЭкран без HDR — цвета будут преобразованы",
+            ui.warnings,
+        )
+    }
 
     @Test
     fun loadOpensTheItemAtStartWithPreferences() {

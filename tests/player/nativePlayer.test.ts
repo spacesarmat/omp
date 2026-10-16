@@ -477,6 +477,15 @@ describe('player engine (VLC / Авто)', () => {
   const srtProbe = { streams: [{ index: 1, codec_type: 'subtitle', codec_name: 'subrip', tags: { language: 'rus' } }] } as any;
   const cmds = (f: ReturnType<typeof fakePlugin>) => f.plugin.nativePlayerCommand.mock.calls.map((c: any[]) => c[0].cmd);
 
+  it('playNative carries always FFmpeg only when it is on', async () => {
+    const f = fakePlugin();
+    await track(new NativeSession(f.plugin, null, queue)).start({ ...opts, alwaysFfmpeg: true });
+    expect(f.plugin.playNative.mock.calls[0][0].alwaysFfmpeg).toBe(true);
+    const g = fakePlugin();
+    await track(new NativeSession(g.plugin, null, queue)).start(opts);
+    expect('alwaysFfmpeg' in g.plugin.playNative.mock.calls[0][0]).toBe(false);
+  });
+
   it('playNative carries the engine; no engine field without one', async () => {
     const f = fakePlugin();
     await track(new NativeSession(f.plugin, null, queue)).start({ ...opts, engine: 'vlc' });

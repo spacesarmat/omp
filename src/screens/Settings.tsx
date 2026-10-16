@@ -76,6 +76,14 @@ function PlayerEngineSection() {
           </Focusable>
         );
       })}
+      <ChoiceRow
+        focusKey="set-always-ffmpeg"
+        label={t('tvSettings.alwaysFfmpeg')}
+        value={settings.value.alwaysFfmpeg}
+        options={onOff()}
+        onChange={(v) => updateSettings({ alwaysFfmpeg: v })}
+      />
+      <div class="muted engine-note">{t('tvSettings.alwaysFfmpegHint')}</div>
       <div class="muted engine-note">{t('tvSettings.engineNote')}</div>
     </div>
   );
