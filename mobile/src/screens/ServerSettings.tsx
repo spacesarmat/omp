@@ -43,6 +43,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [tmdbOpen, setTmdbOpen] = useState(false);
   const [tmdbKey, setTmdbKey] = useState('');
+  const [confirmClearKey, setConfirmClearKey] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
 
   function load() {
@@ -91,6 +92,13 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   function saveTmdb() {
     setTmdbOpen(false);
     if (tmdb && (tmdb.APIKey || '') !== tmdbKey.trim()) save({ TMDBSettings: { ...tmdb, APIKey: tmdbKey.trim() } });
+  }
+
+  function clearTmdb() {
+    setConfirmClearKey(false);
+    setTmdbOpen(false);
+    setTmdbKey('');
+    if (tmdb && tmdb.APIKey) save({ TMDBSettings: { ...tmdb, APIKey: '' } });
   }
 
   // the catalog belongs to the active server: posters for all only when editing that one
@@ -210,12 +218,31 @@ export function ServerSettings({ url }: { url?: string } = {}) {
               onInput={(e) => setTmdbKey((e.target as HTMLInputElement).value)}
             />
           </div>
+          {tmdb && tmdb.APIKey && (
+            <button type="button" class="m-btn m-btn-secondary" onClick={() => setConfirmClearKey(true)}>
+              {t('serverSettings.clearKey')}
+            </button>
+          )}
           <div class="m-sheet-row">
             <button type="button" class="m-btn m-btn-secondary" onClick={() => setTmdbOpen(false)}>
               {t('common.cancel')}
             </button>
             <button type="button" class="m-btn m-btn-primary" onClick={saveTmdb}>
               {t('common.save')}
+            </button>
+          </div>
+        </Sheet>
+      )}
+      {confirmClearKey && (
+        <Sheet onClose={() => setConfirmClearKey(false)} label={t('serverSettings.clearKeyTitle')}>
+          <div class="m-sheet-title">{t('serverSettings.clearKeyTitle')}</div>
+          <div class="m-muted">{t('serverSettings.clearKeyText')}</div>
+          <div class="m-sheet-row">
+            <button type="button" class="m-btn m-btn-secondary" onClick={() => setConfirmClearKey(false)}>
+              {t('common.cancel')}
+            </button>
+            <button type="button" class="m-btn m-btn-primary" onClick={clearTmdb}>
+              {t('serverSettings.clearKey')}
             </button>
           </div>
         </Sheet>
