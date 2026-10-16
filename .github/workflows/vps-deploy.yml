@@ -1,0 +1,46 @@
+# Manual deploy of the landing page, Caddyfile, and billing source.
+# Does not run on push. Required repository secrets (not created here):
+#   VPS_HOST    — hostname or user@host (user defaults to root, port 22)
+#   VPS_SSH_KEY — private key authorized on the VPS
+# The job stops before SSH when either secret is missing.
+name: Deploy VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to deploy (branch, tag, or SHA)
+        required: true
+        default: main
+        type: string
+      dry_run:
+        description: Download and print the plan; do not change the VPS
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout this workflow's revision. inputs.ref is only the release
+      # the VPS downloads; an older tag does not have these scripts.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Deploy over SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          REF: ${{ inputs.ref }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash ops/vps/ssh-deploy.sh
