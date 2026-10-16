@@ -5,6 +5,7 @@ import { servers, addServer, setActiveServer, SavedServer } from '../store/serve
 import { TorrServerClient } from '../api/torrserver';
 import { apiError, errorMessage, isApiError } from '../api/http';
 import { discover, candidateSubnets, getLocalIp, FoundServer } from '../api/discovery';
+import { allowTypedHost } from '../../mobile/src/cleartextHosts';
 import { resetTo, routeStack } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
 import { Icon } from '../ui/icons';
@@ -116,6 +117,7 @@ export function ConnectScreen() {
     // the field shows what is tried: «１９２．１６８…：８０９０» becomes 192.168.1.124:8090
     if (address === url) setUrl(addressForField(checked.url));
     const my = ++attempt.current;
+    allowTypedHost(checked.url);
     const cfg = { url: checked.url, user: user || undefined, password: password || undefined };
     const client = new TorrServerClient(cfg);
     setBusy(true);

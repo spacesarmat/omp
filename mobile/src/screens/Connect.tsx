@@ -15,6 +15,7 @@ import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserve
 import { addressErrorText, addressForField, checkServerAddress } from '../../../src/api/serverAddress';
 import { errorMessage, isApiError } from '../../../src/api/http';
 import { discover, candidateSubnets, subnetOf, DEFAULT_PORTS, PHONE_CONCURRENCY, type FoundServer } from '../../../src/api/discovery';
+import { allowTypedHost } from '../cleartextHosts';
 import { native } from '../platform/native';
 import { localServer, refreshLocalServer } from '../server/localServer';
 
@@ -143,6 +144,7 @@ export function Connect() {
     setNetFail(false);
     try {
       const url = normalizeServerUrl(cfg.url);
+      allowTypedHost(url);
       const known = servers.value.find((x) => x.url === url);
       const creds = cfg.user !== undefined ? cfg : { user: known?.user, password: known?.password };
       await new TorrServerClient({ url, user: creds.user, password: creds.password }).echo();

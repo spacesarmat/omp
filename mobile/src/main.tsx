@@ -1,9 +1,8 @@
 import { render } from 'preact';
-import { effect } from '@preact/signals';
 import { App } from './app';
 import './catalog/phoneCatalog'; // registers the catalog provider the shared series code uses
 import { resetTo } from './nav';
-import { activeServer, servers } from '../../src/store/servers';
+import { activeServer } from '../../src/store/servers';
 import { installErrorHooks, logStart } from '../../src/lib/log';
 import { registerBuiltinSources } from '../../src/sources/builtin';
 import { reloadSourcePrefs } from '../../src/sources/store';
@@ -15,34 +14,13 @@ import { initPhoneRpc } from './tv/phoneRpc';
 import { attachIfOmpForeground } from './tv/playerLink';
 import { tvState, tvKind, sessionIp } from './tv/tvClient';
 import { native } from './platform/native';
-import { flareSolverrUrl, onFlareChange } from '../../src/sources/flareStore';
-import { indexerConnections, onIndexersChange } from '../../src/sources/indexerStore';
 import { tvs } from './tv/tvStore';
-import { cleartextHosts, guardFetch } from './cleartextHosts';
+import { installCleartextSync } from '../../src/cleartextSync';
 
-function cleartextHostList(): string[] {
-  const urls: string[] = [];
-  for (const s of servers.value) urls.push(s.url);
-  const flare = flareSolverrUrl();
-  if (flare) urls.push(flare);
-  for (const c of indexerConnections()) urls.push(c.url);
-  for (const tv of tvs.value) urls.push(tv.ip);
-  return cleartextHosts(urls);
-}
-
-function syncCleartextHosts(): void {
-  void native.setCleartextHosts(cleartextHostList()).catch(() => {});
-}
-
-effect(() => {
-  void servers.value;
-  void tvs.value;
-  syncCleartextHosts();
-});
-onIndexersChange(syncCleartextHosts);
-onFlareChange(syncCleartextHosts);
-syncCleartextHosts();
-window.fetch = guardFetch(window.fetch.bind(window), () => native.setCleartextHosts(cleartextHostList()));
+installCleartextSync(
+  (hosts) => native.setCleartextHosts(hosts),
+  () => tvs.value.map((tv) => tv.ip),
+);
 
 installErrorHooks();
 startKeyboardWatch();

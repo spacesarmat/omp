@@ -7,6 +7,8 @@ import { resetTo } from './ui/nav';
 import { readLaunchParams, onRelaunch } from './platform/launch';
 import { runLaunchParams } from './launchActions';
 import { platformKind } from './platform/env';
+import { nativeSetCleartextHosts } from './platform/androidNative';
+import { installCleartextSync } from './cleartextSync';
 import { installErrorHooks, log, logStart } from './lib/log';
 import { t } from './i18n';
 import { setCatalogProvider } from './catalog/activeCatalog';
@@ -21,6 +23,9 @@ if (typeof w.queueMicrotask !== 'function') {
 }
 
 init({ debug: false, visualDebug: false });
+
+// The phone page registers saved HTTP hosts itself. This UI is what Android TV loads.
+if (platformKind() === 'androidtv') installCleartextSync((hosts) => nativeSetCleartextHosts(hosts));
 
 installErrorHooks();
 setCatalogProvider(() => tvCatalog());

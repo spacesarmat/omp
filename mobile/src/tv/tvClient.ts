@@ -327,7 +327,7 @@ export function connectTv(tv: SavedTv, opts: ConnectOptions = {}): Promise<void>
     }
     // The registration timer would otherwise fail the session while the sheet is open.
     if (s.reg) clearTimeout(s.reg.timer);
-    const ok = await confirmCertChange();
+    const ok = await confirmCertChange(tv.ip, fp);
     if (session !== s) return;
     if (!ok) {
       fail(s, t('cert.rejected'));
@@ -400,7 +400,7 @@ function ensurePointer(soft = false): Promise<void> {
         const fp = certChangedFingerprint(err);
         const host = wsHost(typeof r?.socketPath === 'string' ? r.socketPath : '');
         if (!fp || !host) throw err instanceof Error ? err : new Error(tvNoAnswer());
-        if (!(await confirmCertChange())) throw new Error(t('cert.rejected'));
+        if (!(await confirmCertChange(host, fp))) throw new Error(t('cert.rejected'));
         await native.trustTvCert(host, fp);
         return transport.pointerConnect(r.socketPath);
       });

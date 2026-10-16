@@ -5,6 +5,8 @@ import java.io.IOException
 import java.security.cert.CertificateException
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -76,6 +78,22 @@ class CleartextPolicyTest {
             assertTrue(CleartextPolicy.isBlocked(e))
         }
     }
+
+    @Test
+    fun redirectToPublicHttpIsRefused() {
+        val server = MockWebServer()
+        server.enqueue(MockResponse().setResponseCode(302).addHeader("Location", "http://example.com/apk"))
+        server.start()
+        val client = OkHttpClient.Builder().addNetworkInterceptor(CleartextPolicy.interceptor()).build()
+        try {
+            client.newCall(Request.Builder().url(server.url("/")).build()).execute()
+            fail("a redirect to public http must be refused")
+        } catch (e: IOException) {
+            assertTrue(CleartextPolicy.isBlocked(e))
+        } finally {
+            server.shutdown()
+        }
+    }
 }
 
 class CertPinsTest {
@@ -125,5 +143,8 @@ class CertPinsTest {
         assertEquals(fp, CertPins.changedFingerprint(text))
         assertEquals("cert-changed:$fp", tvPreferReason("cert-changed:$fp", "timeout"))
         assertEquals("timeout", tvPreferReason("refused", "timeout"))
+        assertFalse(tvMayTryOtherPorts("cert-changed:$fp"))
+        assertTrue(tvMayTryOtherPorts("timeout"))
+        assertTrue(tvMayTryOtherPorts(null))
     }
 }

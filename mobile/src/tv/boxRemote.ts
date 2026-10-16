@@ -187,7 +187,7 @@ async function tls<T>(plugin: BoxPlugin | null, ip: string, f: (p: BoxPlugin) =>
   } catch (e) {
     const fp = certChangedFingerprint(e);
     if (!fp) throw new BoxError(codeOf(e));
-    if (!(await confirmCertChange())) throw new BoxError(BOX.CERT_CHANGED);
+    if (!(await confirmCertChange(ip, fp))) throw new BoxError(BOX.CERT_CHANGED);
     await native.trustTvCert(ip, fp);
     try {
       return await f(plugin);

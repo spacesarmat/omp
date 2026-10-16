@@ -1,6 +1,7 @@
 package com.spacesarmat.omp.monitor
 
 import com.spacesarmat.omp.CleartextGuard
+import com.spacesarmat.omp.CleartextPolicy
 import com.spacesarmat.omp.I18n
 
 import android.annotation.SuppressLint
@@ -145,6 +146,10 @@ class MonitorHost(
                 }
             }
             is BridgeRequest.Finish -> finish(r.summary)
+            is BridgeRequest.Cleartext -> {
+                CleartextPolicy.setExtra(r.hosts)
+                reply.postMessage(BridgeProtocol.ok(r.id, null))
+            }
             is BridgeRequest.Invalid -> r.id?.let { reply.postMessage(BridgeProtocol.error(it, r.error)) }
         }
     }

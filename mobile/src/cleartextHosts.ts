@@ -38,6 +38,20 @@ export function isLanOrLocal(host: string): boolean {
   return h.startsWith('fc') || h.startsWith('fd');
 }
 
+/** The public host the user just typed, kept until the next typed address so its /echo is not blocked. */
+let typedHost: string | null = null;
+
+/** Remember [url]'s host when it is public HTTP the policy would otherwise refuse. A LAN address clears it. */
+export function allowTypedHost(url: string): void {
+  const h = hostOf(url);
+  typedHost = h && !isLanOrLocal(h) ? h : null;
+}
+
+/** [urls] plus the typed host, when one is waiting to be saved. */
+export function withTyped(urls: string[]): string[] {
+  return typedHost ? urls.concat(typedHost) : urls.slice();
+}
+
 /** Unique hosts from URLs and bare addresses. */
 export function cleartextHosts(urls: string[]): string[] {
   const out: string[] = [];

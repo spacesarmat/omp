@@ -5,16 +5,18 @@ import '../../../src/store/settings';
 import { registerBuiltinSources } from '../../../src/sources/builtin';
 import { client } from '../../../src/store/servers';
 import { rememberAdded } from '../../../src/store/library';
+import { configuredCleartextUrls } from '../../../src/cleartextSync';
+import { cleartextHosts } from '../cleartextHosts';
 import { windowHost } from './host';
 import { runMonitor } from './page';
 
 const host = windowHost();
 if (host) {
   registerBuiltinSources();
-  void runMonitor({
+  void host.setCleartext(cleartextHosts(configuredCleartextUrls())).catch(() => {}).then(() => runMonitor({
     host,
     client: () => client.value,
     // the poster lookup of «Добавить» in the app
     afterAdd: (_c, t, title) => (client.value ? rememberAdded(client.value, t, title) : Promise.resolve('')),
-  });
+  }));
 }

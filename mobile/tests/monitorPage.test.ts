@@ -63,6 +63,7 @@ function fakeHost(info: Partial<StartInfo> = {}, startFails = false): FakeHost {
       h.log.push('notify');
       return Promise.resolve(h.shown);
     },
+    setCleartext: () => Promise.resolve(),
     persist: (items) => {
       h.persisted.push(...items);
       h.log.push('persist');

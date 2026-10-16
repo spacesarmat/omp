@@ -3,7 +3,14 @@ import { signal } from '@preact/signals';
 /** True while the «сертификат изменился» sheet is open. */
 export const certAsk = signal(false);
 
-let pending: ((ok: boolean) => void) | null = null;
+interface CertAsk {
+  host: string;
+  fp: string;
+  resolve: (ok: boolean) => void;
+}
+
+let current: CertAsk | null = null;
+const queue: CertAsk[] = [];
 
 const FP = /^[0-9a-f]{64}$/i;
 
@@ -23,31 +30,56 @@ export function certChangedFingerprint(e: unknown): string | null {
   return FP.test(bare) ? bare : null;
 }
 
-/** One sheet for every handshake that needs a decision. A second caller shares the same answer. */
-export function confirmCertChange(): Promise<boolean> {
-  if (pending) {
-    const first = pending;
-    return new Promise((resolve) => {
-      pending = (ok) => {
-        first(ok);
-        resolve(ok);
-      };
-    });
+function sameAsk(a: { host: string; fp: string }, host: string, fp: string): boolean {
+  return a.host === host && a.fp === fp;
+}
+
+function share(ask: CertAsk, resolve: (ok: boolean) => void): void {
+  const first = ask.resolve;
+  ask.resolve = (ok) => {
+    first(ok);
+    resolve(ok);
+  };
+}
+
+function pump(): void {
+  if (current) return;
+  const next = queue.shift();
+  if (!next) {
+    certAsk.value = false;
+    return;
   }
+  current = next;
   certAsk.value = true;
+}
+
+/**
+ * One sheet per host and fingerprint. A second handshake for that same pair shares the answer.
+ * A different TV or box waits its own turn, so one tap cannot replace both pins.
+ */
+export function confirmCertChange(host: string, fingerprint: string): Promise<boolean> {
+  const keyHost = host.trim().toLowerCase();
+  const fp = fingerprint.trim().toLowerCase();
   return new Promise((resolve) => {
-    pending = (ok) => {
-      pending = null;
-      certAsk.value = false;
-      resolve(ok);
-    };
+    if (current && sameAsk(current, keyHost, fp)) {
+      share(current, resolve);
+      return;
+    }
+    const queued = queue.find((a) => sameAsk(a, keyHost, fp));
+    if (queued) {
+      share(queued, resolve);
+      return;
+    }
+    queue.push({ host: keyHost, fp, resolve });
+    pump();
   });
 }
 
 /** Closes the sheet. `true` — trust the new certificate and retry. */
 export function answerCertChange(trust: boolean): void {
-  const answer = pending;
-  pending = null;
+  const ask = current;
+  current = null;
   certAsk.value = false;
-  answer?.(trust);
+  ask?.resolve(trust);
+  pump();
 }

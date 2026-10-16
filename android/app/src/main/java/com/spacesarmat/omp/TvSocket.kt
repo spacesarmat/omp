@@ -171,6 +171,16 @@ class TvSocket(
     }
 
     private fun attemptFailed(error: String?, wasPreferred: Boolean) {
+        // A changed certificate must not fall through to ws://3000: that would send the registration
+        // in the clear and never show the sheet.
+        if (wasPreferred && !tvMayTryOtherPorts(error)) {
+            synchronized(lock) {
+                timer?.cancel(false)
+                if (error != null) lastError = tvPreferReason(lastError, error)
+            }
+            fail(error ?: I18n.s("tv.noAddr"))
+            return
+        }
         var join: (() -> Unit)? = null
         val allFailed = synchronized(lock) {
             failed++
@@ -246,3 +256,7 @@ internal fun tvFailText(t: Throwable): String {
 /** Keeps a certificate-change reason when a later attempt fails for an ordinary reason. */
 internal fun tvPreferReason(previous: String?, next: String): String =
     if (previous != null && CertPins.changedFingerprint(previous) != null) previous else next
+
+/** False when [error] is a changed certificate: the plaintext port must not be opened instead. */
+internal fun tvMayTryOtherPorts(error: String?): Boolean =
+    error == null || CertPins.changedFingerprint(error) == null

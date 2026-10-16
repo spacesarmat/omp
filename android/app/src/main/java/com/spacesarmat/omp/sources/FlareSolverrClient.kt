@@ -24,7 +24,7 @@ class FlareSolverrClient(
         .build(),
     private val maxTimeoutMs: Long = MAX_TIMEOUT_MS,
 ) {
-    private val client = http.newBuilder().addInterceptor(CleartextPolicy.interceptor()).build()
+    private val client = http.newBuilder().addNetworkInterceptor(CleartextPolicy.interceptor()).build()
     sealed class Result {
         class Solved(val cookies: List<Cookie>, val userAgent: String?) : Result()
         class Failed(val reason: String) : Result()
