@@ -2,6 +2,22 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1
+
+- [phone] Discover: TMDB-style home (trending, popular, in theatres, upcoming, on TV, top rated); posters show again after you return to the tab
+- [phone] With no TV selected, Catalog, Remote and Settings list the TVs already found; one tap connects
+- TorrServer search on the LAN is faster: saved addresses and likely hosts first; on the phone a server shows up as soon as it answers
+- [phone] Plain HTTP stays inside the LAN. TLS to a TV and an Android TV Box pins the certificate on first connect; a different one asks "Trust the new one" and does not fall back to plain HTTP
+- [atv] Plain HTTP stays inside the LAN, same as on the phone
+- [tv] TLS to a TV and an Android TV Box pins the certificate on first connect
+- The phone-to-TV pairing code is 6 digits
+- [phone] Now playing: full-width poster from the top of the screen, soft fade into the background; the screen and swipes stay portrait-only
+- [phone] History: the phone/TV filter sits inside the list. Add: magnet is a button, sources and filters share one row. Settings: one yellow update button, Video player on its own screen
+- [phone] OMP Jackett and JacRed: search and download only through the subscription; keys are not in the app
+- [phone] Backup: skipping a TorrServer update stays on this phone
+- The subscription admin is in Russian: activation codes stay out of bulk lists, the wallet is masked, there is a filter for subscriptions expiring within 7 days, and notices go to administrators
+- The public site on a narrow phone: platform labels wrap, and the download button shortens
+
 ## 0.20.1-beta.15
 
 - [phone] Plain HTTP stays inside the LAN: cleartext to public addresses is blocked
