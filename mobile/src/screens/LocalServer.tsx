@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { t, fmtNumber, fmtSize } from '../../../src/i18n';
+import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { resetTo, afterConnectRoute, goBack } from '../nav';
 import { errorMessage } from '../../../src/api/http';
@@ -10,6 +10,7 @@ import {
   LOCAL_PORT,
   needsDownload,
   downloadSize,
+  downloadLine,
   isDownloadCancelled,
   cancelLocalDownload,
   getLocalServerInfo,
@@ -21,16 +22,6 @@ const CHECK = 'M5 12.5l4.5 4.5L19 7';
 const SPIN = 'M12 3a9 9 0 1 0 9 9';
 const FAIL = 'M12 7v6M12 17h.01';
 const BACK = 'M15 5l-7 7 7 7';
-
-const MIB = 1024 * 1024;
-const GIB = 1024 * MIB;
-
-/** «39% · 12 из 31 МБ» under the download bar; just «39%» when the size is unknown. */
-export function downloadLine(pct: number, total: number | undefined): string {
-  if (!total) return pct + '%';
-  const [unit, digits] = total < GIB ? [MIB, 0] : [GIB, 1];
-  return t('localServer.downloadedOf', { pct, done: fmtNumber((total * pct) / 100 / unit, digits), total: fmtSize(total) });
-}
 
 /** The subpage header: «Назад» and the screen title (the look of the other settings subpages). */
 function Header() {

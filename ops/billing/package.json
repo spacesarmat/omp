@@ -1,0 +1,13 @@
+{
+  "name": "omp-billing",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "build:admin": "npm --prefix admin ci && npm --prefix admin run build",
+    "test": "cd ../.. && npx vitest run --config ops/billing/vitest.config.ts"
+  },
+  "dependencies": {
+    "nodemailer": "^7.0.6"
+  }
+}

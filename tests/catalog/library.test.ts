@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { libraryKey, libraryIndex, inLibrary, seasonIndex, inLibrarySeason, librarySeasonHash } from '../../src/catalog/library';
+import { libraryKey, libraryIndex, inLibrary, seasonIndex, seasonHashIndex, inLibrarySeason, librarySeasonHash, librarySeasonHashes } from '../../src/catalog/library';
 
 describe('library matching', () => {
   it('libraryKey normalises case, yo, punctuation and adds the year', () => {
@@ -63,5 +63,13 @@ describe('season matching', () => {
     expect(librarySeasonHash(idx, show, 3)).toBe('h3');
     expect(librarySeasonHash(idx, show, 4)).toBe('');
     expect(librarySeasonHash(idx, { title: 'Другой', original: 'Frost Pass' }, 2)).toBe('h1');
+    const all = seasonHashIndex([
+      { title: 'Ледяной перевал / Frost Pass / Сезоны: 1-2 WEB-DL', hash: 'h1' },
+      { title: 'Frost Pass S02 2160p', hash: 'h2' },
+      { title: 'Ледяной перевал (2026) 3 сезон WEB-DL', hash: 'h3' },
+    ]);
+    expect(librarySeasonHashes(all, show, 2)).toEqual(['h1', 'h2']);
+    expect(librarySeasonHashes(all, show, 3)).toEqual(['h3']);
+    expect(librarySeasonHashes(all, show, 4)).toEqual([]);
   });
 });

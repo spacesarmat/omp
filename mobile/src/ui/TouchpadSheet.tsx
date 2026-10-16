@@ -1,3 +1,4 @@
+import { createPortal } from 'preact/compat';
 import { Sheet } from './Sheet';
 import { touchpad, updateTouchpad } from '../tv/touchpad';
 import { t } from '../../../src/i18n';
@@ -10,10 +11,12 @@ function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
   );
 }
 
-/** Bottom sheet with the touchpad settings; every change is saved at once. */
+/** Bottom sheet with the touchpad settings; every change is saved at once.
+ * Portaled to document.body so it still covers the screen when Remote sits inside NowDeck (CSS transform). */
 export function TouchpadSheet({ onClose }: { onClose: () => void }) {
   const s = touchpad.value;
-  return (
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <Sheet onClose={onClose} label={t('remote.touchpad.label')}>
       <div class="m-sheet-title">{t('remote.touchpad.title')}</div>
       <div class="m-tp-group">
@@ -63,6 +66,7 @@ export function TouchpadSheet({ onClose }: { onClose: () => void }) {
       <button type="button" class="m-btn m-btn-primary" onClick={onClose}>
         {t('common.done')}
       </button>
-    </Sheet>
+    </Sheet>,
+    document.body,
   );
 }

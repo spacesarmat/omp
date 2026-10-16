@@ -13,6 +13,8 @@ import { torrentName as cleanTorrentName } from '../../../src/lib/cleanNames';
 import { realEpisodeName, seasonEpisodes, showOf } from '../../../src/lib/episodeNames';
 import { torrents } from '../../../src/store/library';
 
+const httpPoster = (u: string | undefined) => (/^https?:\/\//i.test(u || '') ? String(u) : '');
+
 const FILE_EXT = /\.(mkv|mp4|avi|mov|m4v|ts|webm|wmv|flv|mpg|mpeg|m2ts)$/i;
 
 /** The library torrent with that hash (any case); undefined when it is not in «Мои». */
@@ -81,6 +83,47 @@ export function launchLabel(hash: string, file: number | undefined, fallback: st
 export function subtitleCode(subtitle: string): string {
   const i = subtitle.lastIndexOf(' · ');
   return i >= 0 ? subtitle.slice(i + 3) : '';
+}
+
+/**
+ * Poster for «Сейчас играет»: season → show → library torrent → what the TV sent.
+ * Prefer the phone's match so a wrong tracker art on the TV does not win.
+ */
+export function usePlayingPoster(s: PlayerState | null): string {
+  void torrents.value;
+  void seriesMatchVersion.value;
+  const hash = s ? s.hash : '';
+  const file = s ? s.file : undefined;
+  const tor = s ? libraryTorrent(hash) : undefined;
+  const path = filePath(tor, file);
+  const [art, setArt] = useState<{ key: string; url: string }>({ key: '', url: '' });
+  const key = hash + ':' + file + ':' + path;
+  useEffect(() => {
+    if (!tor) {
+      setArt({ key: key, url: '' });
+      return;
+    }
+    let alive = true;
+    const pe = path ? parseEpisode(path) : { season: null as number | null };
+    showOf(tor).then(
+      (show) => {
+        if (!alive) return;
+        const season =
+          show && pe.season !== null && show.seasonPosters[pe.season] ? show.seasonPosters[pe.season] : '';
+        const url = httpPoster(season) || httpPoster(show ? show.poster : '') || httpPoster(tor.poster);
+        setArt({ key: key, url: url });
+      },
+      () => {
+        if (alive) setArt({ key: key, url: httpPoster(tor.poster) });
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [key]);
+  if (!s) return '';
+  const known = art.key === key ? art.url : '';
+  return known || httpPoster(tor && tor.poster) || httpPoster(s.poster);
 }
 
 /**

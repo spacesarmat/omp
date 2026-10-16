@@ -175,14 +175,16 @@ describe('phone shared UI in English', () => {
 
   it('TouchpadSheet', () => {
     mount(<TouchpadSheet onClose={() => {}} />);
-    expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Touchpad');
-    expect(text()).toContain('Cursor speed');
-    expect(text()).toContain('3 of 5');
-    expect(text()).toContain('Tap to click');
-    expect(text()).toContain('Reverse scrolling');
-    expect(text()).not.toContain('Scroll strip');
-    expect(buttons()).toContain('Done');
-    expect(el.innerHTML).not.toMatch(CYR);
+    // Portaled to document.body so it still covers when Remote is inside NowDeck.
+    const sheet = document.querySelector('.m-sheet-host')!;
+    expect(sheet.querySelector('.m-sheet-title')!.textContent).toBe('Touchpad');
+    expect(sheet.textContent).toContain('Cursor speed');
+    expect(sheet.textContent).toContain('3 of 5');
+    expect(sheet.textContent).toContain('Tap to click');
+    expect(sheet.textContent).toContain('Reverse scrolling');
+    expect(sheet.textContent).not.toContain('Scroll strip');
+    expect(Array.from(sheet.querySelectorAll('button')).map((b) => b.textContent)).toContain('Done');
+    expect(sheet.innerHTML).not.toMatch(CYR);
   });
 
   it('TrackerLogin', () => {

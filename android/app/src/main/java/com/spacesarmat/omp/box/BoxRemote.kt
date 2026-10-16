@@ -30,7 +30,7 @@ object TcpPortCheck : PortCheck {
  * pairs and sends keys.
  */
 class BoxRemote(
-    private val dialer: () -> TlsDialer,
+    private val dialer: TlsDialer,
     private val clientKey: () -> RSAPublicKey,
     private val adb: AdbShellOpener,
     private val device: DeviceInfo,
@@ -89,7 +89,7 @@ class BoxRemote(
             override fun volume(level: Int, max: Int, muted: Boolean) = events.volume(level, max, muted)
         }
         val ch: BoxChannel = when (via) {
-            GoogleRemoteChannel.VIA -> GoogleRemoteChannel.connect(dialer(), ip, listener, device.model, device.vendor, device.appVersion)
+            GoogleRemoteChannel.VIA -> GoogleRemoteChannel.connect(dialer, ip, listener, device.model, device.vendor, device.appVersion)
             AdbBoxChannel.VIA -> AdbBoxChannel(ip, adb, listener).start()
             else -> throw BoxFailure(BoxCodes.FAILED)
         }
@@ -102,7 +102,7 @@ class BoxRemote(
 
     /** Google: asks the TV to show a pairing code. */
     fun pairStart(ip: String) {
-        val p = GooglePairing(dialer(), clientKey(), device.name)
+        val p = GooglePairing(dialer, clientKey(), device.name)
         synchronized(lock) {
             pairing?.close()
             pairing = p

@@ -18,6 +18,7 @@ import okhttp3.WebSocketListener
 object TvHttp {
     private val base: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .addInterceptor(CleartextPolicy.interceptor())
             .connectTimeout(3, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .writeTimeout(10, TimeUnit.SECONDS)

@@ -2,8 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { t } from '../../../../src/i18n';
 import { Icon, ICONS } from '../../ui/Icon';
-import { LazyImg } from '../../ui/LazyImg';
-import { CatalogSearch, ratingText } from './CatalogSearch';
+import { CatalogSearch } from './CatalogSearch';
 import { navigate, scrollToTop } from '../../nav';
 import { torrents } from '../../../../src/store/library';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
@@ -13,12 +12,21 @@ import { CatalogError } from './CatalogError';
 import { readDiscover, saveDiscover, type Feed, type Filter } from './discoverCache';
 import { readDiscoverCols, saveDiscoverCols, COLS_BY_SIZE, type DiscoverCols } from './discoverCols';
 import { usePinchStep } from '../../ui/usePinchStep';
-import { discoverQueryKey, discoverFilterCount, sanitizeDiscoverQuery, type DiscoverQuery } from '../../../../src/catalog/discoverQuery';
+import {
+  discoverQueryKey,
+  discoverFilterCount,
+  isHomeDiscoverQuery,
+  sanitizeDiscoverQuery,
+  type DiscoverQuery,
+} from '../../../../src/catalog/discoverQuery';
 import { loadDiscoverQuery, saveDiscoverQuery } from './discoverQueryStore';
 import { DiscoverSortSheet, DiscoverFiltersSheet, sortName } from './DiscoverSheets';
-import { cachedTileCard, cancelTileCards, leaveTileCard, requestTileCard, tileCardVersion } from '../../catalog/tileCards';
-import { digitalSoonLabel, tileLabel, tileYear } from '../../lib/releaseDates';
-import { readableTitle, type CatalogTitle, type Kind } from '../../../../src/catalog/tmdb';
+import { DiscoverHome } from './DiscoverHome';
+import { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
+import { cancelTileCards } from '../../catalog/tileCards';
+import type { CatalogTitle, TrendingWindow } from '../../../../src/catalog/tmdb';
+
+export { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
 
 const SKELETONS = 6;
 
@@ -32,85 +40,32 @@ function chips(): { id: Filter; label: string }[] {
   ];
 }
 
-/**
- * The date label of a tile («в цифре 12 нояб.», «новая серия 8 окт.»): the tile's card is asked for once the tile
- * comes into view; nothing until it is known. A «Скоро в цифре» item brings its `digital` date: shown at once (the
- * card is still asked for: the tile's year comes from it).
- */
-export function TileWhen({ kind, id, digital }: { kind: Kind; id: number; digital?: string }) {
-  void tileCardVersion.value;
-  const ref = useRef<HTMLSpanElement>(null);
-  const card = cachedTileCard(kind, id);
-  const unknown = card === undefined;
-  useEffect(() => {
-    const node = ref.current;
-    if (!unknown || !node || typeof IntersectionObserver === 'undefined') return;
-    // the label is empty until known: the tile it sits in is what comes into view
-    const target = node.parentElement || node;
-    // in view: queued (the latest first); out of view before its turn: dropped from the queue
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) requestTileCard(kind, id);
-      else leaveTileCard(kind, id);
-    });
-    io.observe(target);
-    return () => {
-      io.disconnect();
-      leaveTileCard(kind, id);
-    };
-  }, [kind, id, unknown]);
-  const text = digital ? digitalSoonLabel(digital) : card ? tileLabel(card) : '';
-  return (
-    <span ref={ref} class={'m-small m-accent m-disc-when' + (text ? '' : ' m-disc-when-none')} data-when={text ? '' : undefined}>
-      {text}
-    </span>
-  );
-}
-
-/**
- * The tile title: the list's one, or — when that is in a script a Russian or English user cannot read («仙逆剧场版») —
- * the card's (the English translation), once the card asked for the tile's date is known. No request of its own.
- */
-export function TileTitle({ x }: { x: CatalogTitle }) {
-  void tileCardVersion.value;
-  if (readableTitle(x.title)) return <>{x.title}</>;
-  const card = cachedTileCard(x.kind, x.id);
-  return <>{card && readableTitle(card.title) ? card.title : x.title}</>;
-}
-
-/** «Фильм · 2006»: a «Скоро в цифре» item takes its year from the card (none until known). */
-function TileMeta({ x }: { x: CatalogTitle }) {
-  void tileCardVersion.value;
-  const year = tileYear(x, x.digital === undefined ? undefined : cachedTileCard(x.kind, x.id));
-  return (
-    <span class="m-muted m-small m-disc-meta">
-      {(x.kind === 'tv' ? t('discover.series') : t('library.movie')) + (year ? ' · ' + year : '')}
-    </span>
-  );
-}
-
 export function Discover() {
   // leaving «Обзор»: the queued tile cards are not fetched any more
   useEffect(() => () => cancelTileCards(), []);
   // the sort and the filters, kept across launches; the feed is keyed on them
   const [query, setQuery] = useState<DiscoverQuery>(loadDiscoverQuery);
   const qkey = discoverQueryKey(query);
+  const home = isHomeDiscoverQuery(query);
   const [sheet, setSheet] = useState<'sort' | 'filters' | null>(null);
+  const [trendWindow, setTrendWindow] = useState<TrendingWindow>('day');
   // back from a title card (or another tab): the chip, the loaded pages and the open search come back as they were
   const kept = useMemo(() => readDiscover(qkey), []);
   const [filter, setFilter] = useState<Filter>(kept ? kept.filter : 'all');
-  const [feed, setFeed] = useState<Feed | null>(kept ? kept.feed : null);
+  const [feed, setFeed] = useState<Feed | null>(kept && !home ? kept.feed : null);
   const [error, setError] = useState<CatalogErrorCode | null>(null);
   const [moreBusy, setMoreBusy] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
   const [reload, setReload] = useState(0);
   const [searching, setSearching] = useState(!!(kept && kept.search));
   // a kept feed is shown as is: the first run of the load effect skips the fetch
-  const restored = useRef(!!(kept && kept.feed));
+  const restored = useRef(!!(kept && kept.feed && !home));
   // the current request: answers of an older one (another chip, a retry) are dropped
   const gen = useRef(0);
   const sentinel = useRef<HTMLDivElement>(null);
   // the first load of a visit and «Повторить» read the server's TMDB settings again
   const fresh = useRef(true);
+  const homeFresh = useRef(true);
   const list = torrents.value;
   const index = useMemo(() => libraryIndex(list), [list]);
   // posters per row: one two-finger pinch steps between 2, 3 and 4 (apart = fewer, bigger posters)
@@ -119,7 +74,7 @@ export function Discover() {
   colsRef.current = cols;
   const rootRef = useRef<HTMLDivElement>(null);
   usePinchStep(rootRef, {
-    enabled: !searching,
+    enabled: !searching && !home,
     levels: COLS_BY_SIZE.length,
     level: () => Math.max(0, COLS_BY_SIZE.indexOf(colsRef.current)),
     apply: (i) => {
@@ -133,6 +88,11 @@ export function Discover() {
   const gridClass = 'm-disc-grid' + (cols === 3 ? ' m-cols-3' : cols === 4 ? ' m-cols-3 m-cols-4' : '');
 
   useEffect(() => {
+    if (home) {
+      setFeed(null);
+      setError(null);
+      return;
+    }
     if (restored.current) {
       restored.current = false;
       return;
@@ -154,7 +114,7 @@ export function Discover() {
           if (gen.current === my) setError(catalogErrorCode(e));
         },
       );
-  }, [filter, reload, qkey]);
+  }, [filter, reload, qkey, home]);
 
   const loadMore = () => {
     if (!feed || moreBusy || feed.page >= feed.pages) return;
@@ -225,12 +185,12 @@ export function Discover() {
   return (
     <div class="m-discover" ref={rootRef}>
       <div class="m-disc-head">
-        <h2>{t('discover.novelties')}</h2>
+        <h2>{home ? t('discover.browse') : t('discover.novelties')}</h2>
         <span class="m-muted m-small m-grow">{t('discover.fromTmdb')}</span>
         <button
           type="button"
           class="m-icon-btn m-sort"
-          aria-label={t('discover.sortAria', { name: sortName(query.sort) })}
+          aria-label={home ? t('discover.homeBrowseLists') : t('discover.sortAria', { name: sortName(query.sort) })}
           aria-haspopup="dialog"
           onClick={() => setSheet('sort')}
         >
@@ -243,7 +203,7 @@ export function Discover() {
           <Icon d={SEARCH} size={18} />
         </button>
       </div>
-      <div class="m-disc-chips" role="group" aria-label={t('discover.novelties')}>
+      <div class="m-disc-chips" role="group" aria-label={home ? t('discover.browse') : t('discover.novelties')}>
         {chips().map((c) => (
           <button
             key={c.id}
@@ -259,7 +219,22 @@ export function Discover() {
           {nFilters ? t('filters.title') + ' · ' + nFilters : t('filters.title')}
         </button>
       </div>
-      {error ? (
+      {home ? (
+        <DiscoverHome
+          kind={filter}
+          window={trendWindow}
+          onWindow={setTrendWindow}
+          reload={reload}
+          reread={homeFresh.current}
+          onRereadConsumed={() => {
+            homeFresh.current = false;
+          }}
+          onRetryFresh={() => {
+            homeFresh.current = true;
+            setReload((n) => n + 1);
+          }}
+        />
+      ) : error ? (
         <CatalogError
           code={error}
           onRetry={() => {
@@ -290,15 +265,7 @@ export function Discover() {
                 aria-label={x.year ? x.title + ' ' + x.year : x.title}
                 onClick={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
               >
-                <span class="m-disc-poster">
-                  {x.poster ? (
-                    <LazyImg src={x.poster} />
-                  ) : (
-                    <span class={'m-disc-ph m-disc-ph-' + (x.id % 4)}>{x.title}</span>
-                  )}
-                  {x.rating > 0 && <span class="m-disc-rating">{ratingText(x.rating)}</span>}
-                  {inLibrary(index, x) && <span class="m-disc-badge">{t('discover.inLibrary')}</span>}
-                </span>
+                <DiscPoster x={x} owned={inLibrary(index, x)} />
                 <span class="m-card-title m-disc-title">
                   <TileTitle x={x} />
                 </span>

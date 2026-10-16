@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
-import { TitleCard, wantQuery, defaultSeason } from '../src/screens/catalog/TitleCard';
+import { TitleCard, wantQuery, defaultSeason, seriesDates } from '../src/screens/catalog/TitleCard';
+import { SeasonCard, episodeHead } from '../src/screens/catalog/SeasonCard';
 import { App } from '../src/app';
 import { setCatalogClientForTests, OFFLINE_TITLE } from '../src/catalog/phoneCatalog';
 import { currentRoute, resetTo, navigate, routeStack, goBack } from '../src/nav';
@@ -227,211 +228,78 @@ describe('TitleCard: film', () => {
 });
 
 describe('TitleCard: series', () => {
-  it('meta line: start year only while airing, the span when ended', async () => {
+  it('dates, status and rating on one line, every genre on the next', async () => {
     serve(SHOW);
     mount(<TitleCard kind="tv" id={21} />);
     await flush();
-    expect(el.querySelector('.m-tc-meta')!.textContent).toBe('Сериал · 2024 · фантастика');
+    expect(el.querySelector('.m-tc-meta')!.textContent).toBe('2024 – выходит · Выходит · ★ 8,0');
+    expect(el.querySelector('.m-tc-genres')!.textContent).toBe('фантастика');
     act(() => render(null, el));
-    serve({ ...SHOW, airing: false });
+    serve({ ...SHOW, airing: false, status: 'ended', lastAirDate: '2026-03-01', genres: ['фантастика', 'драма'] });
     mount(<TitleCard kind="tv" id={21} />);
     await flush();
-    expect(el.querySelector('.m-tc-meta')!.textContent).toBe('Сериал · 2024–2026 · фантастика');
-    act(() => render(null, el));
-    serve({ ...SHOW, airing: false, seasons: [{ number: 1, episodes: 8, year: 2024, aired: 8 }] });
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    expect(el.querySelector('.m-tc-meta')!.textContent).toBe('Сериал · 2024 · фантастика');
+    expect(el.querySelector('.m-tc-meta')!.textContent).toBe('2024 – 2026 · Завершён · ★ 8,0');
+    expect(el.querySelector('.m-tc-genres')!.textContent).toBe('фантастика, драма');
   });
 
-  it('a chip per season in order, the last aired season chosen; specials are not listed', async () => {
-    serve(SHOW);
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    expect(text()).toContain('Сезоны');
-    expect(chips().map((b) => b.textContent)).toEqual(['Сезон 1', 'Сезон 2', 'Сезон 3']);
-    expect(chosen()).toBe('Сезон 3');
-    expect(chip('Сезон 3').getAttribute('aria-pressed')).toBe('true');
-    expect(head().querySelector('.m-tc-season-name')!.textContent).toBe('Сезон 3');
-    expect(head().querySelector('.m-tc-season-sub')!.textContent).toBe('2026 · 10 серий');
-    expect(state()).toBe('выходит: 4 из 10');
-    expect(seasonCalls).toHaveBeenCalledTimes(1);
-    expect(seasonCalls).toHaveBeenCalledWith(21, 3, { full: true });
-  });
-
-  it('default chip: the last season with aired episodes, else the first', () => {
+  it('seriesDates uses the first air year and «выходит» while airing', () => {
+    expect(seriesDates(SHOW)).toBe('2024 – выходит');
+    expect(seriesDates({ ...SHOW, airing: false, firstAirDate: '2019-01-02', lastAirDate: '2024-05-01' })).toBe('2019 – 2024');
     expect(defaultSeason(SHOW.seasons)).toBe(3);
-    expect(defaultSeason([{ number: 3, episodes: 10, year: 2026, aired: 0 }, ...SHOW.seasons.slice(1)])).toBe(2);
-    expect(defaultSeason([{ number: 2, episodes: 8, year: 0, aired: 0 }, { number: 1, episodes: 8, year: 0, aired: 0 }])).toBe(1);
     expect(defaultSeason([])).toBe(1);
   });
 
-  it('switching loads the chosen season; the chosen chip again asks nothing', async () => {
-    serve(SHOW);
+  it('lists every season in order and opens the season card; an unreleased season shows its date', async () => {
+    serve({
+      ...SHOW,
+      seasons: [
+        { number: 2, episodes: 8, year: 2026, aired: 0, airDate: '2026-11-01' },
+        { number: 1, episodes: 8, year: 2024, aired: 8 },
+      ],
+    });
     mount(<TitleCard kind="tv" id={21} />);
     await flush();
-    act(() => chip('Сезон 1').click());
-    await flush();
-    expect(chosen()).toBe('Сезон 1');
-    expect(seasonCalls.mock.calls.map((c) => c[1])).toEqual([3, 1]);
-    expect(head().querySelector('.m-tc-season-sub')!.textContent).toBe('2024 · 8 серий');
-    expect(state()).toBeNull();
-    expect(episodes()[0].textContent).toContain('Эпизод 1.1');
-    // the chosen chip again: nothing new
-    act(() => chip('Сезон 1').click());
-    await flush();
-    expect(seasonCalls).toHaveBeenCalledTimes(2);
-    // back to season 3: asked again, the client answers from its 24 h cache (client.test)
-    act(() => chip('Сезон 3').click());
-    await flush();
-    expect(seasonCalls.mock.calls.map((c) => c[1])).toEqual([3, 1, 3]);
-    expect(episodes()[0].textContent).toContain('Эпизод 3.1');
-  });
-
-  it('episodes: number, title (else «Серия N»), date and runtime; one overview open at a time', async () => {
-    serve(SHOW);
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    const e = episodes();
-    expect(e).toHaveLength(3);
-    expect(e[0].querySelector('.m-tc-ep-num')!.textContent).toBe('1');
-    expect(e[0].querySelector('.m-tc-ep-title')!.textContent).toBe('Эпизод 3.1');
-    expect(e[0].querySelector('.m-tc-ep-sub')!.textContent).toBe('1 мар. 2024 · 48 мин');
-    expect(e[1].querySelector('.m-tc-ep-sub')!.textContent).toBe('2 мар. 2024 · 1 ч 2 мин');
-    expect(e[2].querySelector('.m-tc-ep-title')!.textContent).toBe('Серия 3');
-    expect(e[2].querySelector('.m-tc-ep-sub')).toBeNull();
-    expect(el.querySelector('.m-tc-ep-overview')).toBeNull();
-    act(() => (e[0].querySelector('button') as HTMLButtonElement).click());
-    expect(el.querySelector('.m-tc-ep-overview')!.textContent).toBe('Описание 3.1');
-    expect(e[0].querySelector('button')!.getAttribute('aria-expanded')).toBe('true');
-    act(() => (episodes()[1].querySelector('button') as HTMLButtonElement).click());
-    expect(Array.from(el.querySelectorAll('.m-tc-ep-overview')).map((x) => x.textContent)).toEqual(['Описание 3.2']);
-    // no overview: nothing to open
-    act(() => (episodes()[2].querySelector('button') as HTMLButtonElement).click());
-    expect(Array.from(el.querySelectorAll('.m-tc-ep-overview')).map((x) => x.textContent)).toEqual(['Описание 3.2']);
-    act(() => (episodes()[1].querySelector('button') as HTMLButtonElement).click());
-    expect(el.querySelector('.m-tc-ep-overview')).toBeNull();
-  });
-
-  it('a skeleton while the episodes load; «Серий пока нет» for an empty season', async () => {
-    serve(SHOW, () => new Promise(() => {}));
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    expect(el.querySelector('.m-tc-episodes[aria-busy="true"]')).toBeTruthy();
-    act(() => render(null, el));
-    serve(SHOW, (_id, n) => Promise.resolve({ ...seasonOf(n), episodes: [] }));
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    expect(text()).toContain('Серий пока нет');
-  });
-
-  it('an episodes error stays inside the season with «Повторить», which asks again', async () => {
-    let n = 0;
-    serve(SHOW, (_id, s) => (++n === 1 ? Promise.reject(codeError('offline')) : Promise.resolve(seasonOf(s))));
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    const alert = el.querySelector('.m-tc-ep-error[role="alert"]')!;
-    expect(alert.textContent).toContain('Не удалось загрузить серии');
-    // the card itself is still there
-    expect(el.querySelector('h1')!.textContent).toBe('Ледяной перевал');
-    act(() => (alert.querySelector('button') as HTMLButtonElement).click());
-    await flush();
-    expect(seasonCalls).toHaveBeenCalledTimes(2);
-    expect(el.querySelector('.m-tc-ep-error')).toBeNull();
-    expect(episodes()).toHaveLength(3);
-  });
-
-  it('«Найти раздачи» searches the series, «Найти раздачи на сезон» the chosen season', async () => {
-    serve(SHOW);
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    act(() => button('Найти раздачи')!.click());
-    expect(currentRoute.value).toEqual({ name: 'add', query: 'Ледяной перевал', run: true });
-    routeStack.value = [{ name: 'library' }, { name: 'title', kind: 'tv', id: 21 }];
-    act(() => chip('Сезон 2').click());
-    act(() => button('Найти раздачи на сезон')!.click());
-    expect(currentRoute.value).toEqual({ name: 'add', query: 'Ледяной перевал 2 сезон', run: true });
-  });
-
-  it('a season in the library: «В медиатеке», «Открыть в медиатеке» opens the first matching torrent, «Найти раздачи» stays', async () => {
-    torrents.value = [
-      { hash: 'h-old', title: 'Ледяной перевал WEB-DL 1080p' } as Torrent,
-      { hash: 'h-s2', title: 'Ледяной перевал / Frost Pass (2025) 2 сезон WEB-DL 1080p' } as Torrent,
-      { hash: 'h-s2b', title: 'Frost Pass S02 2160p' } as Torrent,
-    ];
-    serve(SHOW);
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    // season 3 is not in the library
-    expect(button('Открыть в медиатеке')).toBeUndefined();
-    expect(button('Найти раздачи на сезон')).toBeTruthy();
-    act(() => chip('Сезон 2').click());
-    await flush();
-    expect(state()).toBe('В медиатеке');
+    const rows = Array.from(el.querySelectorAll('.m-tc-season-row'));
+    expect(rows.map((r) => r.textContent)).toEqual([expect.stringContaining('Сезон 1'), expect.stringContaining('Сезон 2')]);
+    expect(rows[1].textContent).toContain('нояб.');
     expect(button('Найти раздачи на сезон')).toBeUndefined();
-    act(() => button('Открыть в медиатеке')!.click());
-    expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'h-s2' });
-    routeStack.value = [{ name: 'library' }, { name: 'title', kind: 'tv', id: 21 }];
-    const finds = Array.from(el.querySelectorAll('.m-tc-season-actions button')).map((b) => b.textContent);
-    expect(finds).toEqual(['Открыть в медиатеке', 'Найти раздачи']);
-    act(() => (el.querySelectorAll('.m-tc-season-actions button')[1] as HTMLButtonElement).click());
-    expect(currentRoute.value).toEqual({ name: 'add', query: 'Ледяной перевал 2 сезон', run: true });
+    act(() => (rows[0] as HTMLButtonElement).click());
+    expect(currentRoute.value).toEqual({ name: 'seasonCard', id: 21, season: 1 });
+    expect(seasonCalls).not.toHaveBeenCalled();
   });
 
-  it('a season range marks each season in it; a season-less torrent marks none', async () => {
-    torrents.value = [tor('Ледяной перевал WEB-DL 1080p')];
-    serve({ ...SHOW, airing: false });
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    expect(state()).toBeNull();
-    act(() => render(null, el));
-    torrents.value = [tor('Ледяной перевал / Frost Pass / Сезоны: 1-3 (2024-2026) WEB-DL')];
-    serve({ ...SHOW, airing: false });
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    const marks: Array<string | null> = [];
-    ['Сезон 1', 'Сезон 2', 'Сезон 3'].forEach((c) => {
-      act(() => chip(c).click());
-      marks.push(state());
-    });
-    expect(marks).toEqual(['В медиатеке', 'В медиатеке', 'В медиатеке']);
-  });
-
-  it('no «выходит» when the series is not airing or the latest season is complete', async () => {
-    serve({ ...SHOW, airing: false });
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    expect(text()).not.toContain('выходит');
-    act(() => render(null, el));
-    serve({ ...SHOW, seasons: [{ number: 2, episodes: 8, year: 2025, aired: 8 }, { number: 1, episodes: 8, year: 2024, aired: 8 }] });
-    mount(<TitleCard kind="tv" id={21} />);
-    await flush();
-    expect(text()).not.toContain('выходит');
-  });
-
-  it('keeps the chosen season through «Назад» from a screen opened over the card', async () => {
+  it('«Смотреть на ТВ» when a season is in the library, else «Найти раздачи»', async () => {
     serve(SHOW);
-    resetTo({ name: 'library' });
-    navigate({ name: 'title', kind: 'tv', id: 21 });
-    mount(<App />);
+    mount(<TitleCard kind="tv" id={21} />);
     await flush();
-    act(() => chip('Сезон 1').click());
+    expect(button('Найти раздачи')).toBeTruthy();
+    expect(button('Смотреть на ТВ')).toBeUndefined();
+    act(() => render(null, el));
+    torrents.value = [{
+      hash: 'h-s1',
+      title: 'Ледяной перевал / Frost Pass S01 WEB-DL',
+      file_stats: [{ id: 1, path: 'Frost.Pass.S01E01.mkv', length: 1500000000 }],
+    } as Torrent];
+    serve(SHOW);
+    mount(<TitleCard kind="tv" id={21} />);
     await flush();
-    act(() => button('Найти раздачи на сезон')!.click());
-    await flush();
-    expect(currentRoute.value).toEqual({ name: 'add', query: 'Ледяной перевал 1 сезон', run: true });
-    act(() => {
-      goBack();
+    expect(button('Смотреть на ТВ')).toBeTruthy();
+    expect(button('Найти раздачи')).toBeUndefined();
+  });
+
+  it('creators and actors are separate strips', async () => {
+    serve({
+      ...SHOW,
+      cast: [
+        { id: 1, name: 'Ольга Тестова', photo: '', role: 'Вера', job: 'cast' },
+        { id: 2, name: 'Иван Пробный', photo: '', role: '', job: 'creator' },
+      ],
     });
+    mount(<TitleCard kind="tv" id={21} />);
     await flush();
-    expect(chosen()).toBe('Сезон 1');
-    // a card opened anew starts on the default season
-    act(() => {
-      goBack();
-    });
-    act(() => navigate({ name: 'title', kind: 'tv', id: 21 }));
-    await flush();
-    expect(chosen()).toBe('Сезон 3');
+    const heads = Array.from(el.querySelectorAll('.m-tc-section h2')).map((h) => h.textContent);
+    expect(heads).toContain('Создатели');
+    expect(heads).toContain('В ролях');
   });
 
   it('shows «Слежу за серией» for a subscription to the series query', async () => {
@@ -441,6 +309,48 @@ describe('TitleCard: series', () => {
     await flush();
     act(() => button('Слежу за серией')!.click());
     expect(currentRoute.value).toEqual({ name: 'news', seg: 'subs' });
+  });
+});
+
+describe('SeasonCard', () => {
+  it('episode line: number, title and runtime, then the file size', async () => {
+    expect(episodeHead(3, 'Название', 52)).toBe('3 · Название — 52 мин');
+    torrents.value = [{
+      hash: 'h-s3',
+      title: 'Ледяной перевал S03 WEB-DL',
+      file_stats: [{ id: 7, path: 'Frost.Pass.S03E01.mkv', length: 1500000000 }],
+    } as Torrent];
+    serve(SHOW);
+    mount(<SeasonCard id={21} season={3} />);
+    await flush();
+    const e = episodes();
+    expect(e[0].querySelector('.m-tc-ep-title')!.textContent).toBe('1 · Эпизод 3.1 — 48 мин');
+    expect(e[0].querySelector('.m-tc-ep-sub')!.textContent).toBe('1.4 GB');
+    expect(e[2].querySelector('.m-tc-ep-title')!.textContent).toBe('3 · Серия 3 — 50 мин');
+    expect(e[2].querySelector('.m-tc-ep-sub')!.textContent).toBe('нет в медиатеке');
+    expect(button('Смотреть на ТВ')).toBeTruthy();
+  });
+
+  it('an unreleased season has no find button; a future episode shows its date', async () => {
+    const future = new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10);
+    serve(
+      { ...SHOW, seasons: [{ number: 4, episodes: 1, year: 2027, aired: 0, airDate: future }] },
+      () => Promise.resolve({
+        number: 4, name: '', airDate: future, overview: '',
+        episodes: [{ n: 1, title: 'Пилот', airDate: future, runtime: 40, overview: '' }],
+      }),
+    );
+    mount(<SeasonCard id={21} season={4} />);
+    await flush();
+    expect(button('Найти раздачи на сезон')).toBeUndefined();
+    expect(episodes()[0].querySelector('.m-tc-ep-sub')!.textContent).not.toBe('нет в медиатеке');
+  });
+
+  it('«Серий пока нет» for an empty season', async () => {
+    serve(SHOW, (_id, n) => Promise.resolve({ ...seasonOf(n), episodes: [] }));
+    mount(<SeasonCard id={21} season={3} />);
+    await flush();
+    expect(text()).toContain('Серий пока нет');
   });
 });
 
@@ -521,19 +431,17 @@ describe('TitleCard in English', () => {
       serve({ ...SHOW, title: 'Frost Pass', airing: true });
       mount(<TitleCard kind="tv" id={21} />);
       await flush();
-      expect(el.querySelector('.m-tc-meta')!.textContent).toBe('Series · 2024 · фантастика');
-      expect(el.querySelector('.m-tc-rating')!.textContent).toBe('★ 8.0 TMDB');
+      expect(el.querySelector('.m-tc-meta')!.textContent).toBe('2024 – airing · Airing · ★ 8.0');
+      expect(el.querySelector('.m-tc-genres')!.textContent).toBe('фантастика');
       expect(button('Find torrents')).toBeTruthy();
       expect(button('Want to watch')).toBeTruthy();
       expect(el.querySelector('button[aria-label="Back"]')).toBeTruthy();
       expect(text()).toContain('Seasons');
-      expect(chips().map((b) => b.textContent)).toEqual(['Season 1', 'Season 2', 'Season 3']);
-      expect(head().querySelector('.m-tc-season-name')!.textContent).toBe('Season 3');
-      expect(head().querySelector('.m-tc-season-sub')!.textContent).toBe('2026 · 10 episodes');
-      expect(state()).toBe('airing: 4 of 10');
-      expect(button('Find torrents for the season')).toBeTruthy();
-      expect(episodes()[0].querySelector('.m-tc-ep-sub')!.textContent).toBe('Mar 1, 2024 · 48 min');
-      expect(episodes()[2].querySelector('.m-tc-ep-title')!.textContent).toBe('Episode 3');
+      expect(Array.from(el.querySelectorAll('.m-tc-season-row')).map((b) => b.textContent)).toEqual([
+        expect.stringContaining('Season 1'),
+        expect.stringContaining('Season 2'),
+        expect.stringContaining('Season 3'),
+      ]);
       act(() => render(null, el));
       saveSubs([{ id: 's1', query: 'Frost Pass', quality: '', sources: null, notify: true, createdAt: 1 }]);
       serve({ ...FILM, title: 'Midnight Archive', genres: ['drama'], cast: [{ id: 3, name: 'Olga Test', photo: '', role: '', job: 'cast' }] });
@@ -556,20 +464,15 @@ describe('TitleCard in English', () => {
       mount(<TitleCard kind="tv" id={21} />);
       await flush();
       expect(button('Following this series')).toBeTruthy();
-      torrents.value = [tor('Frost Pass S02 1080p WEB-DL')];
+      torrents.value = [{
+        hash: 'h-s2',
+        title: 'Frost Pass S02 1080p WEB-DL',
+        file_stats: [{ id: 1, path: 'Frost.Pass.S02E01.mkv', length: 1000 }],
+      } as Torrent];
       act(() => render(null, el));
       mount(<TitleCard kind="tv" id={21} />);
       await flush();
-      act(() => chip('Season 2').click());
-      await flush();
-      expect(state()).toBe('In library');
-      expect(button('Open in library')).toBeTruthy();
-      act(() => render(null, el));
-      serve(SHOW, () => Promise.reject(codeError('offline')));
-      mount(<TitleCard kind="tv" id={21} />);
-      await flush();
-      expect(el.querySelector('.m-tc-ep-error')!.textContent).toContain('Could not load the episodes');
-      expect(button('Retry')).toBeTruthy();
+      expect(button('Watch on TV')).toBeTruthy();
     } finally {
       restore();
       applyLanguageSetting('ru');

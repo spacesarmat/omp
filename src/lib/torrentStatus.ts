@@ -1,7 +1,7 @@
 // The torrent screen's status line in the UI language (size, state, speed, peers) instead of TorrServer's English
 // "Torrent working" and "0 B/s".
 import type { Torrent } from '../api/types';
-import { t, fmtBytes, fmtSpeed, type Key } from '../i18n';
+import { t, tp, fmtBytes, fmtSpeed, type Key } from '../i18n';
 
 /** TorrServer's states by `stat` (TorrentAdded … TorrentInDB). */
 const BY_STAT: Key[] = ['torrent.stat.added', 'torrent.stat.info', 'torrent.stat.preload', 'torrent.stat.working', 'torrent.stat.closed', 'torrent.stat.db'];
@@ -37,4 +37,9 @@ export function statusLine(tor: Pick<Torrent, 'stat' | 'stat_string' | 'torrent_
     parts.push(t('torrent.peers', { a: tor.active_peers || 0, b: tor.total_peers || 0 }));
   }
   return parts.join(' · ');
+}
+
+/** Current seeds and peers (`connected_seeders` / `active_peers`). Zero when TorrServer has not reported the swarm. */
+export function swarmText(tor: Pick<Torrent, 'connected_seeders' | 'active_peers'>): string {
+  return tp('sources.seeds', tor.connected_seeders || 0) + ' · ' + tp('torrent.screen.peerCount', tor.active_peers || 0);
 }

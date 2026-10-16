@@ -202,12 +202,12 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         val LANGS = setOf("ru", "en")
         private val REPORT = Regex("^http://.+", RegexOption.IGNORE_CASE)
 
-        /** The pairing code as 4 digits: a string as given, a whole JSON number 0..9999 left-padded («0123»). */
+        /** The pairing code as 6 digits: a string as given, a whole JSON number 0..999999 left-padded («012345»). */
         fun codeOf(v: Any?): String? = when (v) {
             is String -> v
             is Number -> {
                 val d = v.toDouble()
-                if (d == Math.floor(d) && d >= 0 && d <= 9999) d.toInt().toString().padStart(4, '0') else null
+                if (d == Math.floor(d) && d >= 0 && d <= 999_999) d.toInt().toString().padStart(Pairing.CODE_DIGITS, '0') else null
             }
             else -> null
         }

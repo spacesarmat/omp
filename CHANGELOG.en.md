@@ -2,6 +2,182 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.1-beta.15
+
+- [phone] Plain HTTP stays inside the LAN: cleartext to public addresses is blocked
+- [atv] Plain HTTP stays inside the LAN, same as on the phone
+- [phone] TLS to a TV and an Android TV Box: the certificate is pinned on first connect (TOFU); a different one asks "Trust the new one" and does not fall back to plain HTTP
+- [phone] Discover: posters show again after you return to the tab
+- [phone] With no TV selected, Catalog, Remote and Settings list the TVs already found; one tap connects
+- TorrServer search on the LAN is faster: saved addresses and likely hosts first; on the phone a server shows up as soon as it answers
+- The magnet-add test waits until the poster is stored
+
+## 0.20.1-beta.14
+
+- same as beta.11 (beta.13: changelog window keeps 0.17.0 again)
+
+## 0.20.1-beta.13
+
+- same as beta.11 (beta.12: changelog text must not look like platform markers)
+
+## 0.20.1-beta.12
+
+- same as beta.11 (CodeSheet tests for 6 digits; changelog markers without stacked platform tags)
+
+## 0.20.1-beta.11
+
+- [tv] TV and Android TV Box TLS: TOFU certificate pin (no trust-all)
+- [phone] TV and Android TV Box TLS: TOFU pin; cleartext to public IPs blocked; ControlServer accepts LAN only
+- phone-to-TV pairing code is 6 digits
+- CI: Actions pinned to commit SHAs; ADMIN_CHAT_ID is a Worker secret only
+
+## 0.20.1-beta.10
+
+- same as beta.8 (beta.9: changelog window; build - CatalogClient.home stub in overflowHarness)
+
+## 0.20.1-beta.9
+
+- same as beta.8 (release failed: changelog window pushed out the 0.17.0 news feed rename)
+
+## 0.20.1-beta.8
+
+- [phone] Now playing: full-width poster from the top of the screen, soft fade into the background; screen and swipes stay portrait-only
+- [phone] backup: TorrServer update skip stays on-device (unblocks the beta.7 build)
+
+## 0.20.1-beta.7
+
+- [phone] Discover: TMDB-style home rails - trending, popular, in theatres, upcoming, on TV, top rated; sort and filters open the grid
+
+## 0.20.1-beta.6
+
+- [phone] Now playing: poster as a depth window - three layers at different speeds, top-aligned to width, bottom fades into the background
+
+## 0.20.1-beta.5
+
+- [phone] Now playing: poster with a 3D parallax tilt from the gyroscope and a finger, the picture shifts on its own layer
+
+## 0.20.1-beta.4
+
+- [phone] Discover: poster skeleton until loaded; no "new episode" badge on TMDB tiles
+- [phone] History: phone/TV filter as a segment inside the list; chips in one horizontal row
+- [phone] Add: magnet as a button, not a link; sources and filters in one row
+- [phone] Settings: one yellow update CTA; Wi-Fi as grey text; Video player on its own screen
+
+## 0.20.1-beta.3
+
+- same as beta.1 (release failed: ompJackett test types)
+
+## 0.20.1-beta.2
+
+- same as beta.1 (release failed: changelog window dropped 0.17.0)
+
+## 0.20.1-beta.1
+
+- [phone] OMP Jackett and JacRed: search and download only through billing (`/v1/search`, `/v1/torrent`); keys removed from the APK
+- [billing] «Services» tab — Jackett/JacRed/TorrServer health, enable/disable for subscribers, masked secrets
+- [billing] bot: user vs admin pads (`/admin`, «As user»)
+- [billing] user card — message in Telegram; support chat scroll; page scrollbar hidden in the admin UI
+- [ops] VPS: WARP proxy for the Telegram Bot API; search rate limit
+
+## 0.20.0
+
+- [atv] Built-in player on the 2160 Player engine: 4K, HDR, Dolby Vision as HDR10 without a DV decoder; AC3/E-AC3/DTS/TrueHD passthrough or FFmpeg decode; more formats (M2TS, software decode). VLC and Auto remain
+- [atv] Night audio (yellow key and player menu); Info panel — remote Info key and menu
+- [phone] Watch on the phone — built-in 2160 Player in OMP (resume, Skip marks, episodes, PiP). Video player: Built-in / 2160 Player / Android picker. Background audio
+- [phone] Series card in Discover: dates and status, genres, Watch on TV, creators and cast, seasons on their own screen, similar titles, poster pick; season card with progress
+- [phone] Now on TV: swipe down for the remote, up for the release’s episodes, sideways on an episode to play on the TV; swipe hints; remote settings from the deck
+- [phone] TV keyboard overlays the remote; fast native TorrServer LAN search (ports 8090 and 5665)
+- [phone] Jackett and JacRed OMP on one subscription (keys in the app, search over HTTPS); @OMPBILLINGBOT — payment, code, Telegram link
+
+## 0.20.0-beta.19
+
+- same as beta.18 (release failed: Now on TV seek and the changelog window)
+
+## 0.20.0-beta.18
+
+- [phone] TorrServer search on start: native multithreaded TCP scan of the /24 (ports 8090 and 5665), then a short /echo only on open ports
+- [phone] Now on TV: swipe hints (remote / episodes), episode swipe with highlight; remote settings open from the deck too
+- [phone] TV keyboard overlays the remote without shrinking the pad
+- [billing] support chat shows the Telegram nick next to the user id; “End dialog” notifies the bot
+
+## 0.20.0-beta.17
+
+- [phone] Jackett and JacRed on one subscription: keys in the app, search over HTTPS
+- [billing] admin panel sign-in through Telegram (adminTelegramIds); password stays as a fallback
+
+## 0.20.0-beta.16
+
+- same as beta.15 (release failed: typecheck)
+- [phone] Watch on TV labels the episode S01E01 again
+
+## 0.20.0-beta.15
+
+- same as beta.13–14 (release failed: the in-app changelog window dropped 0.17.0)
+
+## 0.20.0-beta.14
+
+- same as beta.13 (release failed: card and Telegram tests)
+- [phone] A chosen series poster is kept in the settings backup
+
+## 0.20.0-beta.13
+
+- [phone] Series card in Discover: dates and status, all genres, Watch on TV, creators and cast apart, each season on its own screen, similar titles, poster choice
+- [phone] Season card: its own poster, episodes with file size or air date, a progress bar
+- [phone] Now on TV: swipe down opens the remote, swipe up the episodes of this release, swipe an episode sideways to play it on the TV
+
+## 0.20.0-beta.12
+
+- same as beta.10–11 (release failed: billingPost type)
+
+## 0.20.0-beta.11
+
+- same as beta.10 (release failed: CHANGELOG/backup tests)
+
+## 0.20.0-beta.10
+
+- [phone] Jackett OMP: subscription end date refreshes from the server after admin grants days
+- [phone] Billing: prefer https://billing.omp-player.online, fall back to the NAS on LAN
+- [ops] React+shadcn admin; alerts always visible; Cloudflare Tunnel (HTTP/2) for omp-player.online
+
+## 0.20.0-beta.9
+
+- same as beta.7–8 (beta.8 had broken Cyrillic in the update notes)
+
+## 0.20.0-beta.8
+
+- same as beta.7 (release built, but the What’s new text had a bad encoding)
+
+## 0.20.0-beta.7
+
+- [ops] Admin panel on Preact + Pico; SQLite storage (migrates from state.json)
+- [phone] Jackett OMP shows Telegram link status and can unlink
+- [phone] Settings: sources and TV first, then server, player, and updates
+
+## 0.20.0-beta.6
+
+- [phone] Link Telegram to the device and a subscription cabinet; a code from the bot opens OMP and fills itself in (`omp://billing`)
+- [ops] User and admin cabinets in @OMPBILLINGBOT; «Open in OMP» link; OMP Billing tile in ZimaOS
+- [phone] A deep-link subscription code is excluded from the settings backup
+
+## 0.20.0-beta.5
+
+- same as beta.6 (release did not build: backup allowlist test)
+
+## 0.20.0-beta.4
+
+
+- [phone] OMP Jackett: enter a subscription code and search through the server with no address or key on the phone; a link to the @OMPBILLINGBOT bot for payment and the code
+- [ops] @OMPBILLINGBOT: Status, Subscribe, Renew, Promo, Code, Help buttons; 1-day promos; admin panel with promos and summary
+
+## 0.20.0-beta.2
+
+- [phone] The built-in player keeps the screen on while a video is playing
+- [phone] The season card and the release card always show the current seeds and peers, including zeros
+- [tv] The series screen shows the current seeds and peers of the release under the season
+- [phone] A long release title fits the header: the header grows with the text, up to six lines
+- [phone] When a release has no poster of its own, the season shows the season or series poster from TMDB
+- [phone] On the server screen, a TorrServer that is installed on the phone but stopped can be started. When the network scan finds nothing, OMP offers to install TorrServer on this device
+
 ## 0.20.0-beta.1
 
 - [atv] A new engine for the built-in player: 2160 Player inside OMP. 4K and HDR; Dolby Vision on a box without a Dolby Vision decoder plays as HDR10. AC3, E-AC3, DTS and TrueHD go to the receiver as they are, and when the TV does not accept them they are decoded, with no switch to VLC. More formats: Blu-ray M2TS remuxes (TrueHD, LPCM, DTS-HD), and video the box cannot decode in hardware is decoded in software. VLC and the Auto mode stay. The APK is about 20 MB larger for it (the universal one 30 MB)

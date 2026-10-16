@@ -9,7 +9,7 @@ const RETRIES = 2;
  * so the grey poster plate shows instead of the picture. Dropping `src` when the tile leaves also keeps
  * the decoded-image count down.
  */
-export function LazyImg({ src, alt = '' }: { src: string; alt?: string }) {
+export function LazyImg({ src, alt = '', onLoad, onError }: { src: string; alt?: string; onLoad?: () => void; onError?: () => void }) {
   const [el, setEl] = useState<HTMLImageElement | null>(null);
   const [near, setNear] = useState(typeof IntersectionObserver === 'undefined');
   const [attempt, setAttempt] = useState(0);
@@ -39,8 +39,12 @@ export function LazyImg({ src, alt = '' }: { src: string; alt?: string }) {
       ref={setEl}
       alt={alt}
       src={near && !hold ? src : undefined}
+      onLoad={() => onLoad?.()}
       onError={() => {
-        if (attempt >= RETRIES) return;
+        if (attempt >= RETRIES) {
+          onError?.();
+          return;
+        }
         setAttempt(attempt + 1);
         setHold(true);
       }}

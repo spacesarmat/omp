@@ -2,27 +2,50 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Sheet } from './Sheet';
 import { errorMessage } from '../../../src/api/http';
 import { t } from '../../../src/i18n';
+import { compareVersions } from '../../../src/lib/version';
 
-const LEN = 4;
+/** First Android TV build that shows a 6-digit pairing code. Older builds still show 4. */
+export const CODE_LEN_6 = '0.20.1-beta.11';
 
-/** Bottom sheet for the 4-digit code shown by OMP on an Android TV. */
+/** 4 or 6 from a discovered OMP version; 0 when the version is unknown (either length is accepted). */
+export function pairingCodeLength(version: string | undefined): 0 | 4 | 6 {
+  const v = (version || '').trim();
+  if (!v) return 0;
+  return compareVersions(v, CODE_LEN_6) >= 0 ? 6 : 4;
+}
+
+function codeReady(digits: string[], mode: 0 | 4 | 6): boolean {
+  if (mode === 4) return digits.every((d) => d !== '');
+  if (mode === 6) return digits.every((d) => d !== '');
+  const head = digits.slice(0, 4).every((d) => d !== '');
+  const tail = digits.slice(4).every((d) => d !== '');
+  const tailEmpty = digits.slice(4).every((d) => d === '');
+  return (head && tailEmpty) || (head && tail);
+}
+
+/** Bottom sheet for the pairing code shown by OMP on an Android TV (4 digits on an older build, 6 on a current one). */
 export function CodeSheet({
   tvName,
+  version,
   onSubmit,
   onCancel,
 }: {
   tvName: string;
+  /** OMP version from discovery. Empty: the sheet accepts a 4-digit or a 6-digit code. */
+  version?: string;
   onSubmit: (code: string) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [digits, setDigits] = useState<string[]>(['', '', '', '']);
+  const mode = pairingCodeLength(version);
+  const len = mode === 4 ? 4 : 6;
+  const [digits, setDigits] = useState<string[]>(() => Array.from({ length: len }, () => ''));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const cells = useRef<(HTMLInputElement | null)[]>([]);
   const title = t('remote.code.title', { name: tvName });
-  const complete = digits.every((d) => d !== '');
+  const complete = codeReady(digits, mode);
 
-  const focus = (i: number) => cells.current[Math.max(0, Math.min(LEN - 1, i))]?.focus();
+  const focus = (i: number) => cells.current[Math.max(0, Math.min(len - 1, i))]?.focus();
 
   useEffect(() => focus(0), []);
 
@@ -31,7 +54,7 @@ export function CodeSheet({
     let raw = text.replace(/\D/g, '');
     // typing over a filled cell: keep the new digit only
     if (input && raw.length === 2 && digits[at]) raw = raw[0] === digits[at] ? raw[1] : raw[0];
-    const got = raw.slice(0, LEN - at);
+    const got = raw.slice(0, len - at);
     const next = digits.slice();
     if (!got) {
       next[at] = '';
@@ -50,7 +73,7 @@ export function CodeSheet({
     setBusy(true);
     setError('');
     try {
-      await onSubmit(digits.join(''));
+      await onSubmit(digits.join('').replace(/\D/g, ''));
     } catch (err) {
       setError(errorMessage(err));
       setBusy(false);

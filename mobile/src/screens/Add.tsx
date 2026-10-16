@@ -451,7 +451,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           <Icon d={SEARCH} size={18} />
         </button>
       </form>
-      <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+      <div class="m-chips m-add-chips">
         <button type="button" class={'m-chip' + (allChosen ? ' on' : '')} aria-haspopup="dialog" onClick={() => setSheet('sources')}>
           {sourcesLabel}
         </button>
@@ -467,7 +467,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           {sortLabel + ' ▾'}
         </button>
       </div>
-      {/* the magnet: a compact link under the search; the field opens in place (a shared link opens it at once) */}
+      {/* the magnet: a secondary button under the chips; the field opens in place (a shared link opens it at once) */}
       {magnetOpen ? (
         <div class="m-add-magnet" data-magnet-block>
           <div class="m-add-row" data-magnet-row>
@@ -503,7 +503,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           <div class="m-muted m-small">{t('add.magnetHint')}</div>
         </div>
       ) : (
-        <button type="button" class="m-link m-add-magnet-link" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>
+        <button type="button" class="m-btn m-btn-secondary m-add-magnet-btn" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>
           {t('add.byMagnet')}
         </button>
       )}

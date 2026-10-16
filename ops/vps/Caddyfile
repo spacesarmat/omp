@@ -1,0 +1,82 @@
+{
+	email {$CADDY_EMAIL:admin@omp-player.online}
+}
+
+# TLS 1.2 and 1.3 only. No certificate source in this snippet, so issuance
+# stays the global ACME policy (the email above).
+(tls_protocols) {
+	tls {
+		protocols tls1.2 tls1.3
+	}
+}
+
+# Sets are immediate so they are already on the response when basic_auth
+# returns 401 (a Caddy error skips a deferred header handler). -Server is
+# its own directive so only the delete is deferred: that strips Caddy's and
+# the upstream Server header on responses that are actually written.
+# handle_errors repeats the snippet for those 401s and for dial failures.
+# X-Frame-Options is DENY: the admin SPA, landing, Jackett, and JacRed are
+# not embedded in frames.
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=15552000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	header -Server
+}
+
+# Project landing page (apex + www)
+omp-player.online, www.omp-player.online {
+	encode gzip
+	import tls_protocols
+	import security_headers
+	handle_errors {
+		import security_headers
+	}
+	root * /srv/site
+	file_server
+	try_files {path} /index.html
+	header {
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	}
+}
+
+billing.omp-player.online {
+	encode gzip
+	import tls_protocols
+	import security_headers
+	handle_errors {
+		import security_headers
+	}
+	reverse_proxy billing:8787
+}
+
+# INDEXER_HASH = bcrypt from: caddy hash-password --plaintext '…'
+# Must match billing settings indexerUser / indexerPass (VPS .env INDEXER_*).
+jackett.omp-player.online {
+	encode gzip
+	import tls_protocols
+	import security_headers
+	handle_errors {
+		import security_headers
+	}
+	basic_auth {
+		{$INDEXER_USER} {$INDEXER_HASH}
+	}
+	reverse_proxy jackett:9117
+}
+
+jacred.omp-player.online {
+	encode gzip
+	import tls_protocols
+	import security_headers
+	handle_errors {
+		import security_headers
+	}
+	basic_auth {
+		{$INDEXER_USER} {$INDEXER_HASH}
+	}
+	reverse_proxy jacred:9117
+}

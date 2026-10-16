@@ -83,7 +83,7 @@ describe('Sources screen', () => {
   it('groups TorrServer and built-in sources and shows the hint', async () => {
     await mount();
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
-    expect(labels).toEqual(['Индексаторы', 'Обход Cloudflare', 'Через TorrServer', 'Встроенные · на телефоне']);
+    expect(labels).toEqual(['Подписка OMP', 'Индексаторы', 'Обход Cloudflare', 'Через TorrServer', 'Встроенные · на телефоне']);
     expect(sw('rutor (поиск TorrServer)')).toBeTruthy();
     expect(sw('Jackett / Prowlarr (Torznab)')).toBeTruthy();
     expect(sw('nnmclub')).toBeTruthy();
@@ -229,11 +229,11 @@ describe('Sources screen', () => {
 });
 
 describe('Settings → «Источники поиска»', () => {
-  it('opens the sources screen; updates stay first', async () => {
+  it('opens the sources screen; sources stay first', async () => {
     localServer.value = { supported: false, running: false };
     await mount(<Settings />);
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
-    expect(labels[0]).toBe('Обновление');
+    expect(labels[0]).toBe('Источники поиска');
     const b = Array.from(el.querySelectorAll('button')).find((x) => (x.textContent || '').indexOf('Источники поиска') >= 0)!;
     click(b);
     expect(currentRoute.value).toEqual({ name: 'sources' });
@@ -250,7 +250,7 @@ describe('Sources screen in English', () => {
     expect(el.querySelector('h1')!.textContent).toBe('Search sources');
     expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
-    expect(labels).toEqual(['Indexers', 'Cloudflare bypass', 'Via TorrServer', 'Built-in · on the phone']);
+    expect(labels).toEqual(['OMP subscription', 'Indexers', 'Cloudflare bypass', 'Via TorrServer', 'Built-in · on the phone']);
     expect(sw('rutor (TorrServer search)')).toBeTruthy();
     expect(sw('Jackett / Prowlarr (Torznab)')).toBeTruthy();
     expect(btn('Questions and answers')).toBeTruthy();

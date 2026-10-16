@@ -327,7 +327,7 @@ describe('installPlan — Xiaomi, Sber, Yandex', () => {
     expect(p.steps[0].text).toContain('Настройки устройства');
     expect(p.steps[0].text).toContain('Сборка ОС Android TV');
     expect(p.steps[3].text).toContain('«Подключить телефон»');
-    expect(p.steps[3].text).toContain('4 цифр');
+    expect(p.steps[3].text).toContain('6 цифр');
     expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: null });
     expect(p.actions[0]).toEqual({ id: 'install', label: 'Установить OMP', primary: true });
     expect(p.actions.find((a) => a.faq === FAQ_XIAOMI)).toBeDefined();

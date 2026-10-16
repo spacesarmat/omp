@@ -9,6 +9,17 @@ on:
         description: Release tag (vX.Y.Z) to build
         type: string
         required: true
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: true
+      ANDROID_KEY_PASSWORD:
+        required: true
+      TELEGRAM_BOT_TOKEN:
+        required: false
 
 permissions:
   contents: write
@@ -19,12 +30,12 @@ jobs:
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.tag || github.ref }}
           # android/vendor/2160player (2160 Player's player-core, included build in android/settings.gradle)
           submodules: recursive
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
@@ -35,14 +46,16 @@ jobs:
       - run: npm run build
       - run: node scripts/package.mjs
       - run: npm run check:boot
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           distribution: temurin
           # 17 for the player-core toolchain (jvmToolchain(17) in the submodule), 21 (last = default) for Gradle
           java-version: |
             17
             21
-      - uses: android-actions/setup-android@v3
+          # same as ci.yml - avoid cold Gradle downloads on every tag release
+          cache: gradle
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
         with:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
       # newer runner images leave less free disk; packaging three APKs with libvlc needs a few GB

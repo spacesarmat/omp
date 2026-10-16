@@ -29,7 +29,7 @@ object BoxBridge {
             "1"
         }
         return BoxRemote(
-            dialer = { SocketTlsDialer { sockets() } },
+            dialer = SocketTlsDialer { sockets() },
             clientKey = { id().publicKey },
             adb = DadbShellOpener(adbIdentities),
             device = BoxRemote.DeviceInfo(

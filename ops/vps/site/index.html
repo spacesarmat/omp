@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="OMP - Open Movie Player. Фильмы и сериалы с TorrServer на LG webOS, Android TV и Android. Телефон - ваш пульт и второй экран."
+    />
+    <meta name="theme-color" content="#111310" />
+    <title>OMP - бесплатный плеер для TorrServer на LG webOS и Android TV</title>
+    <link rel="stylesheet" href="style.css?v=20261016b" />
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <header class="header wrap">
+      <a class="brand" href="/" aria-label="OMP - на главную">
+        <img src="assets/logo.svg" width="40" height="40" alt="" />
+        <b>OMP</b>
+        <span>OPEN MOVIE PLAYER</span>
+      </a>
+      <nav aria-label="Основная навигация">
+        <a href="#experience">Возможности</a>
+        <a href="#how">Как начать</a>
+        <a href="#platforms">Платформы</a>
+        <a href="https://github.com/spacesarmat/omp" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </nav>
+      <a class="small-download" href="#download"><span class="dl-full">Скачать OMP</span><span class="dl-short">Скачать</span></a>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy wrap hero-enter">
+          <div class="eyebrow"><i></i> БЕСПЛАТНО · БЕЗ РЕКЛАМЫ · ОТКРЫТЫЙ КОД</div>
+          <h1>Домашний кинотеатр.<br /><em>Пульт - ваш телефон.</em></h1>
+          <p>
+            Фильмы и сериалы из TorrServer на LG webOS, Android TV и Android. Выбирайте на телефоне -
+            смотрите в 4K, HDR и Dolby Vision.
+          </p>
+          <div class="actions">
+            <a
+              class="button primary"
+              href="https://github.com/spacesarmat/omp/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Скачать бесплатно</a
+            >
+            <a class="text-link" href="#how">Как это работает</a>
+          </div>
+          <div class="platforms">
+            <span>LG <small>webOS 4.0+</small></span>
+            <span>Android TV</span>
+            <span>Android</span>
+            <span class="open-source">4K · HDR · Dolby Vision</span>
+          </div>
+        </div>
+
+        <div class="cinema-wrap hero-enter hero-enter-scene">
+          <div class="cinema" id="cinema">
+            <img
+              class="room"
+              src="assets/living-room.webp"
+              alt="Уютная гостиная: диван, журнальный столик и большой телевизор в тёплом вечернем свете"
+              fetchpriority="high"
+            />
+            <div class="television">
+              <img class="film" src="assets/film.webp" alt="Демонстрационный фантастический пейзаж" />
+              <img
+                class="tv-ui"
+                src="assets/tv-ui.webp"
+                alt="Интерфейс плеера OMP с главами и дорожками"
+              />
+              <button class="screen-control" id="play" type="button" aria-label="Приостановить демо">
+                <span id="play-icon">Ⅱ</span>
+              </button>
+              <span class="paused" hidden>Пауза</span>
+              <div class="screen-note">Демо</div>
+            </div>
+            <div class="room-label"><i></i> КИНОСЕАНС В ВАШЕЙ ГОСТИНОЙ</div>
+            <div class="phone-area">
+              <div class="phone">
+                <div class="speaker"></div>
+                <img id="phone-screen" src="assets/remote.webp" alt="Пульт OMP на телефоне" />
+                <button
+                  id="phone-play"
+                  type="button"
+                  aria-label="Пауза или воспроизведение демонстрации"
+                ></button>
+              </div>
+              <div class="phone-caption">
+                <span>Ваш телефон - пульт.</span>
+                <small>И целая кинобиблиотека.</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="scene-controls wrap hero-enter hero-enter-controls">
+          <div class="scene-meta">
+            <span class="scene-hint"><i></i> Один экран - для кино. Второй - для всего остального.</span>
+            <div class="screen-dots" role="tablist" aria-label="Слайды экрана телефона">
+              <button type="button" data-dot="remote" class="active" aria-label="Пульт" aria-current="true"></button>
+              <button type="button" data-dot="catalog" aria-label="Каталог"></button>
+              <button type="button" data-dot="discover" aria-label="Обзор"></button>
+              <button type="button" data-dot="playing" aria-label="Сейчас играет"></button>
+            </div>
+          </div>
+          <div class="screen-tabs" role="group" aria-label="Экран телефона">
+            <button type="button" data-screen="remote" class="active" aria-pressed="true">Пульт</button>
+            <button type="button" data-screen="catalog" aria-pressed="false">Каталог</button>
+            <button type="button" data-screen="discover" aria-pressed="false">Обзор</button>
+            <button type="button" data-screen="playing" aria-pressed="false">Сейчас играет</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="experience wrap" id="experience">
+        <div class="section-heading" data-reveal>
+          <div>
+            <div class="eyebrow">ПОЧЕМУ OMP</div>
+            <h2>Всё для вечера кино.<br />Ничего лишнего.</h2>
+          </div>
+          <p>
+            Один плеер для телевизора и телефона.<br />
+            Ваша библиотека, ваш сервер, ваши правила.
+          </p>
+        </div>
+        <div class="cards">
+          <article data-reveal style="--reveal-delay: 0">
+            <span class="ico" aria-hidden="true">◎</span>
+            <h3>Телефон - пульт и второй экран</h3>
+            <p>
+              Кнопки, тачпад, выбор серий, озвучки и субтитров. Ищите следующий фильм, не останавливая
+              текущий.
+            </p>
+            <a href="#cinema" data-demo="remote">Попробовать пульт</a>
+          </article>
+          <article data-reveal style="--reveal-delay: 1">
+            <span class="ico" aria-hidden="true">4K</span>
+            <h3>4K, HDR и Dolby Vision</h3>
+            <p>
+              Встроенный движок 2160 Player. Чёткая картинка и звук на ваш ресивер - как в кинозале.
+            </p>
+            <a href="#cinema" data-demo="playing">Экран воспроизведения</a>
+          </article>
+          <article data-reveal style="--reveal-delay: 2">
+            <span class="ico" aria-hidden="true">↺</span>
+            <h3>Продолжить с места</h3>
+            <p>
+              Общая история просмотров на всех устройствах. Начали на ТВ - досмотрели на телефоне.
+            </p>
+            <a href="#cinema" data-demo="playing">Посмотреть</a>
+          </article>
+          <article data-reveal style="--reveal-delay: 3">
+            <span class="ico" aria-hidden="true">⚡</span>
+            <h3>TorrServer прямо на телефоне</h3>
+            <p>
+              Нет своего сервера? Не нужен. Встроенный TorrServer запускается на телефоне - без
+              отдельного ПК.
+            </p>
+            <a href="#how">Как подключить</a>
+          </article>
+          <article data-reveal style="--reveal-delay: 4">
+            <span class="ico" aria-hidden="true">⌕</span>
+            <h3>Единый поиск и обзор TMDB</h3>
+            <p>
+              Ищите сразу по всем источникам. Новинки, подборки и описания - в удобном обзоре.
+            </p>
+            <a href="#cinema" data-demo="discover">Открыть обзор</a>
+          </article>
+          <article data-reveal style="--reveal-delay: 5">
+            <span class="ico" aria-hidden="true">▤</span>
+            <h3>Главы, заставки, дорожки</h3>
+            <p>
+              Переход по главам, пропуск заставки, любимая озвучка и субтитры. Сериалы смотрятся
+              подряд.
+            </p>
+            <a href="#cinema" data-demo="catalog">Открыть каталог</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="setup" id="how">
+        <div class="wrap setup-inner" data-reveal>
+          <div>
+            <div class="eyebrow">КАК ЭТО РАБОТАЕТ</div>
+            <h2>Три шага<br />до первых титров.</h2>
+            <p>
+              Телевизор и телефон в одной домашней сети.<br />
+              Остальное подскажет OMP.
+            </p>
+            <a
+              class="text-link"
+              href="https://github.com/spacesarmat/omp#%D1%83%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D0%B0"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Подробная инструкция на GitHub</a
+            >
+          </div>
+          <ol>
+            <li>
+              <span>01</span>
+              <div>
+                <h3>Установите OMP</h3>
+                <p>
+                  Скачайте сборку для LG webOS, Android TV или Android из последнего выпуска.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span>02</span>
+              <div>
+                <h3>Подключите TorrServer</h3>
+                <p>
+                  Укажите свой сервер или включите встроенный TorrServer на телефоне - без отдельного
+                  ПК.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span>03</span>
+              <div>
+                <h3>Свяжите телефон и ТВ</h3>
+                <p>
+                  QR-код на LG или код на Android TV. Выберите фильм - и садитесь на диван.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="platforms-sec wrap" id="platforms">
+        <div class="eyebrow" data-reveal>ПЛАТФОРМЫ</div>
+        <h2 data-reveal>Работает на том, что уже есть дома.</h2>
+        <div class="cols">
+          <article data-reveal style="--reveal-delay: 0">
+            <h3>LG webOS <small>4.0+</small></h3>
+            <ul>
+              <li>Плеер для большого экрана</li>
+              <li>Связка с телефоном по QR-коду</li>
+              <li>Главы, дорожки, субтитры</li>
+              <li>Общая история просмотров</li>
+            </ul>
+          </article>
+          <article data-reveal style="--reveal-delay: 1">
+            <h3>Android TV</h3>
+            <ul>
+              <li>Движок 2160 Player: 4K, HDR, Dolby Vision</li>
+              <li>Звук на ресивер</li>
+              <li>Связка с телефоном по коду</li>
+              <li>Пропуск заставки</li>
+            </ul>
+          </article>
+          <article data-reveal style="--reveal-delay: 2">
+            <h3>Android-телефон</h3>
+            <ul>
+              <li>Пульт с кнопками и тачпадом</li>
+              <li>Каталог, поиск, обзор TMDB</li>
+              <li>Встроенный TorrServer</li>
+              <li>Смотрите и на самом телефоне</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="download wrap" id="download" data-reveal>
+        <div class="eyebrow">ХОРОШЕГО ПРОСМОТРА</div>
+        <h2>Сегодня остаёмся дома.</h2>
+        <p>OMP бесплатен и без рекламы. Скачайте и соберите свой кинотеатр за вечер.</p>
+        <div class="actions download-actions">
+          <a
+            class="button primary"
+            href="https://github.com/spacesarmat/omp/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Скачать последнюю версию</a
+          >
+          <a
+            class="button secondary"
+            href="https://t.me/ompgplayerroup"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Группа в ТГ</a
+          >
+          <a
+            class="button secondary"
+            href="https://t.me/ompplyaer"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Канал в ТГ</a
+          >
+        </div>
+        <small
+          >LG webOS 4.0+ · Android TV · Android ·
+          <a
+            href="https://github.com/spacesarmat/omp#%D1%83%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BA%D0%B0"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Инструкция по установке</a
+          ></small
+        >
+      </section>
+    </main>
+
+    <footer class="wrap">
+      <a class="footer-brand" href="/">OMP <span>Open Movie Player</span></a>
+      <p class="footer-tagline">Кино начинается дома.</p>
+      <div class="footer-links">
+        <a href="https://t.me/ompgplayerroup" target="_blank" rel="noopener noreferrer">Группа</a>
+        <a href="https://t.me/ompplyaer" target="_blank" rel="noopener noreferrer">Канал</a>
+        <a href="https://github.com/spacesarmat/omp" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/spacesarmat/omp/issues" target="_blank" rel="noopener noreferrer"
+          >Сообщить об ошибке</a
+        >
+        <a href="https://boosty.to/djmaker/donate" target="_blank" rel="noopener noreferrer"
+          >Поддержать на Boosty</a
+        >
+      </div>
+      <p class="copyright">© 2026 OMP · Open Movie Player</p>
+    </footer>
+    <script src="app.js?v=20261015d"></script>
+  </body>
+</html>

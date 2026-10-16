@@ -1,3 +1,4 @@
+import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { native } from '../platform/native';
@@ -11,6 +12,7 @@ import { Sheet } from '../ui/Sheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { FoundTvs } from '../ui/FoundTvs';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
+import { useBackHandler } from '../ui/backStack';
 import { touchpad, cursorGain, scrollFactor } from '../tv/touchpad';
 import { linkStatus } from '../tv/playerLink';
 import type { FoundOmpTv } from '../platform/native';
@@ -129,7 +131,9 @@ const PAUSE = 'M8 5v14M16 5v14';
 const PLAY = 'M7 5l12 7-12 7z';
 const NEXT = 'M6 6l9 6-9 6zM18 6v12';
 const FF10 = 'M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4';
-const TUNE = 'M4 7h9M17 7h3M4 17h3M11 17h9M15 4v6M9 14v6';
+/** Gear — remote/touchpad settings (not the sliders of the Settings tab). */
+const TUNE =
+  'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4';
 const KEYBOARD = 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10';
 const MUTE = 'M11 5L6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6';
 
@@ -410,9 +414,9 @@ function Touchpad() {
   );
 }
 
-/** Remote screen class: fits the viewport; the mini-player (64 px) and the open keyboard field take room. */
-function screenClass(kbd: boolean): string {
-  return 'm-screen m-remote' + (linkStatus.value !== 'none' ? ' mini' : '') + (kbd ? ' kbd' : '');
+/** Remote screen class: fits the viewport; the mini-player (64 px) takes room. Typing overlays on top. */
+function screenClass(): string {
+  return 'm-screen m-remote' + (linkStatus.value !== 'none' ? ' mini' : '');
 }
 
 const fail = (e: unknown) => showToast(errorMessage(e));
@@ -426,13 +430,20 @@ interface Typing {
 
 const ompTyping = (): Typing => ({ type: (x) => act.typeText(x), del: (n) => act.deleteText(n), enter: () => act.sendEnter() });
 
-/** Text field whose edits are mirrored into the focused field on the TV. */
-function TvKeyboard({ typing }: { typing?: Typing }) {
+/** Overlay text field: sits on top of the remote (portal), mirrored into the focused field on the TV. */
+function TvKeyboard({ typing, onClose }: { typing?: Typing; onClose: () => void }) {
   const io = typing || ompTyping();
   const sent = useRef('');
   const composing = useRef(false);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const field = useRef<HTMLInputElement>(null);
+  useBackHandler(onClose);
+
+  useEffect(() => {
+    const el = field.current;
+    if (!el) return;
+    el.focus();
+  }, []);
 
   /** The TV cursor sits at the end: delete back to the common prefix, then type the rest. */
   const syncText = (next: string) => {
@@ -454,32 +465,44 @@ function TvKeyboard({ typing }: { typing?: Typing }) {
     });
   };
 
-  return (
-    <input
-      ref={field}
-      class="m-input"
-      aria-label={t('remote.typeLabel')}
-      placeholder={t('remote.typePlaceholder')}
-      onCompositionStart={() => (composing.current = true)}
-      onCompositionEnd={(e) => {
-        composing.current = false;
-        syncText((e.target as HTMLInputElement).value);
-      }}
-      onInput={(e) => {
-        if (composing.current || (e as unknown as InputEvent).isComposing) return;
-        syncText((e.target as HTMLInputElement).value);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          sent.current = '';
-          if (field.current) field.current.value = '';
-          queue.current = queue.current.then(() => io.enter()).catch(fail);
-        } else if (e.key === 'Backspace' && !sent.current) {
-          queue.current = queue.current.then(() => io.del(1)).catch(fail);
-        }
-      }}
-    />
+  return createPortal(
+    <div class="m-remote-type-host" role="dialog" aria-label={t('remote.typeLabel')}>
+      <button type="button" class="m-remote-type-scrim" aria-label={t('common.close')} onClick={onClose} />
+      <div class="m-remote-type-bar">
+        <input
+          ref={field}
+          class="m-input m-remote-type"
+          aria-label={t('remote.typeLabel')}
+          placeholder={t('remote.typePlaceholder')}
+          enterKeyHint="send"
+          autoComplete="off"
+          autoCorrect="off"
+          onCompositionStart={() => (composing.current = true)}
+          onCompositionEnd={(e) => {
+            composing.current = false;
+            syncText((e.target as HTMLInputElement).value);
+          }}
+          onInput={(e) => {
+            if (composing.current || (e as unknown as InputEvent).isComposing) return;
+            syncText((e.target as HTMLInputElement).value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              sent.current = '';
+              if (field.current) field.current.value = '';
+              queue.current = queue.current.then(() => io.enter()).catch(fail);
+            } else if (e.key === 'Backspace' && !sent.current) {
+              queue.current = queue.current.then(() => io.del(1)).catch(fail);
+            }
+          }}
+        />
+        <button type="button" class="m-remote-type-close" aria-label={t('common.close')} onClick={onClose}>
+          <Icon d="M6 6l12 12M18 6L6 18" size={20} />
+        </button>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -775,7 +798,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
       : undefined;
   const shown = tvWaking.value && state !== 'connected' ? 'connecting' : state;
   return (
-    <div class={screenClass(kbd)} data-route="remote">
+    <div class={screenClass()} data-route="remote">
       <ScreenHeader
         title={t('nav.remote')}
         subtitle={
@@ -893,10 +916,11 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
         </div>
       </div>
       )}
-      {kbd && <TvKeyboard typing={boxTyping} />}
+      {kbd && <TvKeyboard typing={boxTyping} onClose={() => setKbd(false)} />}
       {coding && (
         <CodeSheet
           tvName={found.name}
+          version={found.version}
           onSubmit={async (code) => {
             await act.pairAtv(found, code);
             setCoding(false);
@@ -1022,7 +1046,7 @@ export function Remote() {
   );
 
   return (
-    <div class={screenClass(kbd)} data-route="remote">
+    <div class={screenClass()} data-route="remote">
       <ScreenHeader
         title={t('nav.remote')}
         subtitle={
@@ -1130,7 +1154,7 @@ export function Remote() {
           </div>
         </div>
       )}
-      {kbd && <TvKeyboard />}
+      {kbd && <TvKeyboard onClose={() => setKbd(false)} />}
       {tuning && <TouchpadSheet onClose={() => setTuning(false)} />}
     </div>
   );

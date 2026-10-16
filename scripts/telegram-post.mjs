@@ -8,6 +8,7 @@ import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { changelogNotes } from './hb-lib.mjs';
+import { readChangelogUtf8 } from './changelog-encoding.mjs';
 import { buildCaption, buildKeyboard, buildFiles, routeFiles, buildLinksMessage, oversizeLogLine } from './telegram-lib.mjs';
 
 const type = (name) => (name.endsWith('.apk') ? 'application/vnd.android.package-archive' : 'application/octet-stream');
@@ -105,7 +106,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** Caption, buttons and picture of the release post. */
 function releasePost(tag, root, log) {
   const version = tag.replace(/^v/, '');
-  const notes = changelogNotes(readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), version);
+  const notes = changelogNotes(readChangelogUtf8(join(root, 'CHANGELOG.md'), { russian: true }), version);
   const donate = /DONATE_URL = '([^']+)'/.exec(readFileSync(join(root, 'src/lib/donate.ts'), 'utf8'));
   const keyboard = buildKeyboard({ tag, version, donateUrl: donate ? donate[1] : undefined });
   // the release cover with the logo (scripts/release-cover.mjs), else the catalog screenshot from the README

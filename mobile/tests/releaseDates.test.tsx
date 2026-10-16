@@ -209,17 +209,16 @@ describe('title card dates', () => {
     expect(el.querySelector('.m-tc-releases')).toBeNull();
   });
 
-  it('a series lists «Ближайшие серии» from the next episode season', async () => {
+  it('a series card lists seasons and does not load upcoming episodes', async () => {
     navigate({ name: 'title', kind: 'tv', id: 21 });
-    const s2 = season(2, ['2026-09-10', '2026-09-17', '2026-09-24', '2026-10-01', '2026-10-08', '2026-10-15', '2026-10-22', '2026-10-29']);
-    const c = fake(() => Promise.resolve(SHOW), (_id, n) => Promise.resolve(n === 2 ? s2 : season(n, [])));
+    const c = fake(() => Promise.resolve(SHOW));
     mount(<TitleCard kind="tv" id={21} />);
     await flush();
-    expect(c.season).toHaveBeenCalledWith(21, 2);
-    const next = el.querySelector('.m-tc-next')!;
-    expect(next.querySelector('h2')!.textContent).toBe('Ближайшие серии');
-    expect(Array.from(next.querySelectorAll('.m-tc-next-row')).map((r) => r.textContent)).toEqual([
-      'S02E05 · Эпизод 58 окт.', 'S02E06 · Эпизод 615 окт.', 'S02E07 · Эпизод 722 окт.',
+    expect(c.season).not.toHaveBeenCalled();
+    expect(el.querySelector('.m-tc-next')).toBeNull();
+    expect(Array.from(el.querySelectorAll('.m-tc-season-row')).map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Сезон 1'),
+      expect.stringContaining('Сезон 2'),
     ]);
   });
 
@@ -251,7 +250,8 @@ describe('«Обзор» tile labels', () => {
     });
     await flush();
     expect(c.card).toHaveBeenCalledTimes(2);
-    expect(Array.from(el.querySelectorAll('.m-disc-when')).map((x) => x.textContent)).toEqual(['в цифре 12 нояб.', 'новая серия 8 окт.']);
+    // film cinema/digital stays; «новая серия» is not shown on TMDB «Обзор» tiles
+    expect(Array.from(el.querySelectorAll('.m-disc-when')).map((x) => x.textContent)).toEqual(['в цифре 12 нояб.', '']);
   });
 
   it('a tile without a date keeps no line for it; a title in Chinese shows the card\'s English one once the card is known', async () => {

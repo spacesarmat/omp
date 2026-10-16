@@ -1,23 +1,30 @@
-// «Обзор» → a film or series card: TMDB details, «Найти раздачи» (the whole title or one season) and «Хочу посмотреть».
-// A series has its status pill («Выходит · следующая серия …») and season chips; the chosen season shows its episodes and «Найти раздачи на сезон» / «Открыть в медиатеке».
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+// «Обзор» → a film or series card. A film: poster, meta, «Найти раздачи» and «Хочу посмотреть».
+// A series: dates and status, «Смотреть на ТВ» when a season is in the library, two cast strips, every season as its own card, similar titles.
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { t, tp, fmtDuration } from '../../../../src/i18n';
 import { airDateText } from '../../../../src/lib/seriesStatus';
 import { SeriesPill } from '../../ui/SeriesPill';
-import { goBack, navigate, currentRoute, type MRoute } from '../../nav';
+import { goBack, navigate } from '../../nav';
 import { Icon } from '../../ui/Icon';
 import { CastStrip } from '../../ui/CastStrip';
 import { torrents } from '../../../../src/store/library';
+import { getLocalProgress } from '../../../../src/store/progress';
 import { loadSubs, sameQuery } from '../../../../src/monitor/subs';
 import { monitorVersion } from '../../monitor/ui';
 import { WantSheet } from './WantSheet';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
-import { seasonIndex, librarySeasonHash } from '../../../../src/catalog/library';
-import { torrentQuery, type CatalogCard, type Kind, type Season, type SeasonDetails } from '../../../../src/catalog/tmdb';
+import { torrentQuery, type CatalogCard, type CatalogTitle, type Kind, type Season } from '../../../../src/catalog/tmdb';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
+import { artKey, artVersion, pickedArt, saveArt } from '../../catalog/artPick';
 import { CatalogError } from './CatalogError';
+import { PosterSheet } from './PosterSheet';
 import { ratingText } from './CatalogSearch';
-import { episodeCode, nextEpisodeSeasons, releaseParts, upcomingEpisodes } from '../../lib/releaseDates';
+import { releaseParts } from '../../lib/releaseDates';
+import { activeTv } from '../../tv/tvStore';
+import { baseName, episodeLabel, stripExt } from '../../../../src/lib/episodes';
+import { useTvLaunch } from '../../watch';
+import { LaunchError } from '../../ui/LaunchError';
+import { seriesLibraryHash, seriesWatchSpot } from './seriesWatch';
 
 const BACK = 'M15 5l-7 7l7 7';
 
@@ -26,24 +33,39 @@ export function wantQuery(card: CatalogCard): string {
   return torrentQuery(card);
 }
 
-function yearsText(card: CatalogCard): string {
-  if (!card.year) return '';
-  const end = card.seasons.reduce((m, s) => Math.max(m, s.year), 0);
-  return !card.airing && end > card.year ? card.year + '–' + end : String(card.year);
-}
-
-/** «2026 · драма · 1 ч 58 мин»; series: «Сериал · 2024–2026 · фантастика». */
+/** «2026 · драма · 1 ч 58 мин» for a film. */
 function metaText(card: CatalogCard): string {
   const genres = card.genres.slice(0, 2).join(', ');
-  const parts =
-    card.kind === 'tv'
-      ? [t('discover.series'), yearsText(card), genres]
-      : [card.year ? String(card.year) : '', genres, card.runtime > 0 ? fmtDuration(card.runtime) : ''];
-  return parts.filter(Boolean).join(' · ');
+  return [card.year ? String(card.year) : '', genres, card.runtime > 0 ? fmtDuration(card.runtime) : ''].filter(Boolean).join(' · ');
 }
 
-// The chosen season of each open card (its route entry): kept through «Назад» from the screens opened over it.
-const chosenSeason = new WeakMap<MRoute, number>();
+function startYear(card: CatalogCard): number {
+  return card.firstAirDate && card.firstAirDate.length >= 4 ? +card.firstAirDate.slice(0, 4) : card.year;
+}
+
+function stillAiring(card: CatalogCard): boolean {
+  return card.airing || card.status === 'returning' || card.status === 'production' || card.status === 'planned';
+}
+
+/** «2019 – 2024», or «2019 – выходит» while the series is on air. */
+export function seriesDates(card: CatalogCard): string {
+  const start = startYear(card);
+  if (stillAiring(card)) return start ? start + ' – ' + t('titleCard.stillAiring') : t('titleCard.stillAiring');
+  const last = card.lastAirDate && card.lastAirDate.length >= 4 ? +card.lastAirDate.slice(0, 4) : 0;
+  const end = last || card.seasons.reduce((m, s) => Math.max(m, s.year), 0);
+  if (!start) return end ? String(end) : '';
+  return end > start ? start + ' – ' + end : String(start);
+}
+
+/** The short status next to the dates: «Выходит», «Завершён», … */
+export function seriesStatusWord(card: CatalogCard): string {
+  const s = card.status || '';
+  if (s === 'ended') return t('series.statusEnded');
+  if (s === 'canceled') return t('series.statusCanceled');
+  if (s === 'production' || s === 'planned') return t('series.statusProduction');
+  if (s === 'returning' || card.airing) return t('series.statusAiring');
+  return '';
+}
 
 /** The season shown first: the last one with aired episodes, else the first. */
 export function defaultSeason(seasons: Season[]): number {
@@ -54,146 +76,6 @@ export function defaultSeason(seasons: Season[]): number {
     if (s.aired > 0 && s.number > best) best = s.number;
   });
   return best || first || 1;
-}
-
-/** The episodes of one season: a skeleton while loading, a small error with «Повторить», one overview open at a time. */
-function SeasonEpisodes({ id, number }: { id: number; number: number }) {
-  const [data, setData] = useState<SeasonDetails | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [reload, setReload] = useState(0);
-  const [open, setOpen] = useState(0);
-  const gen = useRef(0);
-  useEffect(() => {
-    const my = ++gen.current;
-    setData(null);
-    setFailed(false);
-    setOpen(0);
-    phoneCatalog()
-      .then((c) => c.season(id, number, { full: true }))
-      .then(
-        (d) => {
-          if (gen.current === my) setData(d);
-        },
-        () => {
-          if (gen.current === my) setFailed(true);
-        },
-      );
-  }, [id, number, reload]);
-
-  if (failed) {
-    return (
-      <div class="m-tc-ep-error" role="alert">
-        <span class="m-small m-muted">{t('titleCard.episodesError')}</span>
-        <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => setReload((n) => n + 1)}>
-          {t('common.retry')}
-        </button>
-      </div>
-    );
-  }
-  if (!data) {
-    return (
-      <div class="m-tc-episodes m-tc-skel" aria-busy="true">
-        <span class="m-tc-ep-skel" />
-        <span class="m-tc-ep-skel" />
-        <span class="m-tc-ep-skel" />
-      </div>
-    );
-  }
-  if (!data.episodes.length) return <p class="m-small m-muted m-tc-ep-empty">{t('titleCard.noEpisodes')}</p>;
-  return (
-    <div class="m-tc-episodes">
-      {data.episodes.map((e) => {
-        const expanded = open === e.n && !!e.overview;
-        const sub = [airDateText(e.airDate), e.runtime > 0 ? fmtDuration(e.runtime) : ''].filter(Boolean).join(' · ');
-        return (
-          <div key={e.n} class={'m-tc-ep' + (expanded ? ' open' : '')}>
-            <button
-              type="button"
-              class="m-tc-ep-row"
-              aria-expanded={e.overview ? expanded : undefined}
-              onClick={() => {
-                if (e.overview) setOpen(expanded ? 0 : e.n);
-              }}
-            >
-              <span class="m-tc-ep-num">{e.n}</span>
-              <span class="m-tc-ep-info">
-                <span class="m-tc-ep-title">{e.title || t('library.episode', { n: e.n })}</span>
-                {sub && <span class="m-small m-muted m-tc-ep-sub">{sub}</span>}
-              </span>
-            </button>
-            {expanded && <p class="m-small m-tc-ep-overview">{e.overview}</p>}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/** Season chips (specials are not listed: the card has no season 0) and the chosen season below them. */
-function Seasons({ card, index, find }: { card: CatalogCard; index: Map<string, string>; find: (season?: number) => void }) {
-  const route = useMemo(() => currentRoute.peek(), []);
-  const chips = useMemo(() => card.seasons.slice().sort((a, b) => a.number - b.number), [card]);
-  const remembered = chosenSeason.get(route);
-  const [chosen, setChosen] = useState(
-    remembered && chips.some((x) => x.number === remembered) ? remembered : defaultSeason(chips),
-  );
-  const chipsRef = useRef<HTMLDivElement>(null);
-  // the chosen chip in view (a long series opens on its last seasons)
-  useLayoutEffect(() => {
-    const row = chipsRef.current;
-    const on = row ? (row.querySelector('.m-chip.on') as HTMLElement | null) : null;
-    if (row && on) row.scrollLeft = Math.max(0, on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2);
-  }, []);
-  const pick = (n: number) => {
-    setChosen(n);
-    chosenSeason.set(route, n);
-  };
-  const s = chips.filter((x) => x.number === chosen)[0] || chips[chips.length - 1];
-  const latest = chips[chips.length - 1].number;
-  const hash = librarySeasonHash(index, card, s.number);
-  const airing = card.airing && s.number === latest && s.aired < s.episodes;
-  const sub = [s.year ? String(s.year) : '', s.episodes ? tp('library.episodes', s.episodes) : ''].filter(Boolean).join(' · ');
-  const state = airing ? t('titleCard.airing', { a: s.aired, b: s.episodes }) : hash ? t('discover.inLibrary') : '';
-  return (
-    <section class="m-tc-section">
-      <h2>{t('titleCard.seasons')}</h2>
-      <div class="m-chips m-tc-chips" ref={chipsRef}>
-        {chips.map((x) => (
-          <button
-            key={x.number}
-            type="button"
-            class={'m-chip' + (x.number === s.number ? ' on' : '')}
-            aria-pressed={x.number === s.number}
-            onClick={() => pick(x.number)}
-          >
-            {t('library.season', { n: x.number })}
-          </button>
-        ))}
-      </div>
-      <div class="m-tc-season">
-        <span class="m-tc-season-name">{t('library.season', { n: s.number })}</span>
-        {sub && <span class="m-small m-muted m-tc-season-sub">{sub}</span>}
-        {state && <span class="m-small m-tc-season-state">{state}</span>}
-      </div>
-      <div class="m-tc-season-actions">
-        {hash ? (
-          <>
-            <button type="button" class="m-btn m-btn-primary" onClick={() => navigate({ name: 'torrent', hash: hash })}>
-              {t('titleCard.openInLibrary')}
-            </button>
-            <button type="button" class="m-btn m-btn-secondary" onClick={() => find(s.number)}>
-              {t('titleCard.findTorrents')}
-            </button>
-          </>
-        ) : (
-          <button type="button" class="m-btn m-btn-primary" onClick={() => find(s.number)}>
-            {t('titleCard.findSeason')}
-          </button>
-        )}
-      </div>
-      <SeasonEpisodes key={s.number} id={card.id} number={s.number} />
-    </section>
-  );
 }
 
 /** A film's «Кино: 3 окт. · Цифра: 12 нояб. · Диск: 20 дек.»: the known dates, the ones to come accented. */
@@ -211,43 +93,6 @@ function ReleaseLine({ card }: { card: CatalogCard }) {
         </span>
       ))}
     </p>
-  );
-}
-
-/** «Ближайшие серии»: up to 3 next episodes with their dates (the season of the next episode is read for them). */
-function NextEpisodes({ card }: { card: CatalogCard }) {
-  const numbers = useMemo(() => nextEpisodeSeasons(card), [card]);
-  const [seasons, setSeasons] = useState<SeasonDetails[]>([]);
-  useEffect(() => {
-    let alive = true;
-    setSeasons([]);
-    if (!numbers.length) return;
-    phoneCatalog()
-      .then((c) => Promise.all(numbers.map((n) => c.season(card.id, n).then((x) => x, () => null))))
-      .then(
-        (list) => {
-          if (alive) setSeasons(list.filter((x): x is SeasonDetails => !!x));
-        },
-        () => undefined,
-      );
-    return () => {
-      alive = false;
-    };
-  }, [card.id, numbers.join(',')]);
-  const list = upcomingEpisodes(card, seasons);
-  if (!list.length) return null;
-  return (
-    <section class="m-tc-section m-tc-next">
-      <h2>{t('titleCard.nextEpisodes')}</h2>
-      <div class="m-tc-episodes">
-        {list.map((e) => (
-          <div key={e.season + ':' + e.episode} class="m-tc-next-row">
-            <span class="m-tc-next-ep">{episodeCode(e.season, e.episode) + (e.title ? ' · ' + e.title : '')}</span>
-            <span class="m-small m-accent m-tc-next-date">{airDateText(e.airDate)}</span>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -274,50 +119,199 @@ export function Overview({ text }: { text: string }) {
   );
 }
 
+function WantButton({ card, following, onWant }: { card: CatalogCard; following: boolean; onWant: () => void }) {
+  return following ? (
+    <button type="button" class="m-btn m-btn-secondary" onClick={() => navigate({ name: 'news', seg: 'subs' })}>
+      {t(card.kind === 'tv' ? 'titleCard.followingSeries' : 'titleCard.followingMovie')}
+    </button>
+  ) : (
+    <button type="button" class="m-btn m-btn-secondary" onClick={onWant}>
+      {t('titleCard.want')}
+    </button>
+  );
+}
+
+function Poster({ card, src, onPick }: { card: CatalogCard; src: string; onPick?: () => void }) {
+  const img = src ? (
+    <img class="m-tc-poster" src={src} alt="" width={110} height={165} />
+  ) : (
+    <span class={'m-tc-poster m-disc-ph m-disc-ph-' + (card.id % 4)} aria-hidden="true" />
+  );
+  if (!onPick) return img;
+  return (
+    <button type="button" class="m-art-btn" aria-label={t('titleCard.pickPoster')} onClick={onPick}>
+      {img}
+    </button>
+  );
+}
+
+function SeasonRows({ card }: { card: CatalogCard }) {
+  const rows = card.seasons.slice().sort((a, b) => a.number - b.number);
+  if (!rows.length) return null;
+  return (
+    <section class="m-tc-section">
+      <h2>{t('titleCard.seasons')}</h2>
+      <div class="m-tc-seasons">
+        {rows.map((s) => (
+          <SeasonRow key={s.number} card={card} season={s} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SeasonRow({ card, season }: { card: CatalogCard; season: Season }) {
+  const unreleased = season.aired === 0;
+  const sub = [season.year ? String(season.year) : '', season.episodes ? tp('library.episodes', season.episodes) : ''].filter(Boolean).join(' · ');
+  return (
+    <button type="button" class="m-tc-season-row" onClick={() => navigate({ name: 'seasonCard', id: card.id, season: season.number })}>
+      {season.poster ? <img src={season.poster} alt="" width={46} height={69} /> : <span class="m-tc-season-ph" />}
+      <span class="m-tc-season-text">
+        <span>{t('library.season', { n: season.number })}</span>
+        {sub && <span class="m-small m-muted">{sub}</span>}
+        {unreleased && season.airDate && <span class="m-small m-accent">{airDateText(season.airDate)}</span>}
+      </span>
+    </button>
+  );
+}
+
+function Similar({ kind, id }: { kind: Kind; id: number }) {
+  const [items, setItems] = useState<CatalogTitle[]>([]);
+  useEffect(() => {
+    let alive = true;
+    phoneCatalog()
+      .then((c) => c.similar(kind, id))
+      .then(
+        (list) => {
+          if (alive) setItems(list);
+        },
+        () => undefined,
+      );
+    return () => {
+      alive = false;
+    };
+  }, [kind, id]);
+  if (!items.length) return null;
+  return (
+    <section class="m-tc-section">
+      <h2>{t('titleCard.similar')}</h2>
+      <div class="m-tc-similar">
+        {items.map((item) => (
+          <button key={item.kind + item.id} type="button" class="m-tc-similar-item" onClick={() => navigate({ name: 'title', kind: item.kind, id: item.id })}>
+            {item.poster ? <img src={item.poster} alt="" width={92} height={138} /> : <span class="m-tc-season-ph" />}
+            <span class="m-small m-tc-similar-title">{item.title}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Body({ card }: { card: CatalogCard }) {
-  const list = torrents.value;
-  const index = useMemo(() => seasonIndex(list), [list]);
   const query = wantQuery(card);
   const [wanting, setWanting] = useState(false);
-  // re-read after «Хочу посмотреть» subscribes (reloadMonitor bumps the version)
+  const [artOpen, setArtOpen] = useState(false);
+  const [variants, setVariants] = useState<string[]>([]);
+  const [launchError, setLaunchError] = useState('');
+  const launch = useTvLaunch();
   void monitorVersion.value;
+  void artVersion.value;
   const following = loadSubs().some((s) => sameQuery(s.query, query));
-  const find = (season?: number) => navigate({ name: 'add', query: torrentQuery(card, season), run: true });
+  const tv = card.kind === 'tv';
+  const art = tv ? pickedArt(artKey(card.id)) : '';
+  const poster = art || card.poster;
+  const hash = tv ? seriesLibraryHash(torrents.value, card, null) : '';
+  const spot = tv ? seriesWatchSpot(torrents.value, card, null) : null;
+  const facts = tv ? [seriesDates(card), seriesStatusWord(card), card.rating > 0 ? ratingText(card.rating) : ''].filter(Boolean).join(' · ') : '';
+
+  const openArt = () => {
+    setArtOpen(true);
+    phoneCatalog()
+      .then((c) => c.posters('tv', card.id))
+      .then(
+        (urls) => setVariants(poster && urls.indexOf(poster) < 0 ? [poster].concat(urls) : urls),
+        () => setVariants(poster ? [poster] : []),
+      );
+  };
+
+  const watch = () => {
+    if (!spot) {
+      if (hash) navigate({ name: 'torrent', hash });
+      return;
+    }
+    if (!activeTv.value) {
+      navigate({ name: 'tv' });
+      return;
+    }
+    setLaunchError('');
+    void launch.start({
+      hash: spot.hash,
+      file: spot.file.id,
+      at: spot.at,
+      duration: getLocalProgress(spot.hash, spot.file.id)?.duration || undefined,
+      label: [episodeLabel(spot.file.path), stripExt(baseName(spot.file.path))].filter(Boolean).join(' · '),
+      onError: setLaunchError,
+    });
+  };
+
   return (
     <>
       <div class="m-tc-head">
-        {card.poster ? (
-          <img class="m-tc-poster" src={card.poster} alt="" width={110} height={165} />
-        ) : (
-          <span class={'m-tc-poster m-disc-ph m-disc-ph-' + (card.id % 4)} aria-hidden="true" />
-        )}
+        <Poster card={card} src={poster} onPick={tv ? openArt : undefined} />
         <div class="m-tc-info">
           <h1 class="m-tc-title">{card.title}</h1>
-          <span class="m-muted m-small m-tc-meta">{metaText(card)}</span>
-          {card.kind === 'tv' && <SeriesPill card={card} />}
-          {card.rating > 0 && <span class="m-tc-rating">{ratingText(card.rating) + ' TMDB'}</span>}
+          {tv ? (
+            <>
+              {facts && <span class="m-muted m-small m-tc-meta">{facts}</span>}
+              {card.genres.length > 0 && <span class="m-muted m-small m-tc-genres">{card.genres.join(', ')}</span>}
+              <SeriesPill card={card} />
+            </>
+          ) : (
+            <>
+              <span class="m-muted m-small m-tc-meta">{metaText(card)}</span>
+              {card.rating > 0 && <span class="m-tc-rating">{ratingText(card.rating) + ' TMDB'}</span>}
+            </>
+          )}
         </div>
       </div>
-      {card.kind === 'movie' && <ReleaseLine card={card} />}
-      <div class="m-tc-actions">
-        <button type="button" class="m-btn m-btn-primary" onClick={() => find()}>
-          {t('titleCard.findTorrents')}
-        </button>
-        {following ? (
-          <button type="button" class="m-btn m-btn-secondary" onClick={() => navigate({ name: 'news', seg: 'subs' })}>
-            {t(card.kind === 'tv' ? 'titleCard.followingSeries' : 'titleCard.followingMovie')}
+      {!tv && <ReleaseLine card={card} />}
+      <div class={tv ? 'm-tc-actions m-tc-actions-row' : 'm-tc-actions'}>
+        {tv && (spot || hash) ? (
+          <button type="button" class="m-btn m-btn-primary" onClick={watch}>
+            {t('news.watchOnTv')}
           </button>
         ) : (
-          <button type="button" class="m-btn m-btn-secondary" onClick={() => setWanting(true)}>
-            {t('titleCard.want')}
+          <button type="button" class="m-btn m-btn-primary" onClick={() => navigate({ name: 'add', query: torrentQuery(card), run: true })}>
+            {t('titleCard.findTorrents')}
           </button>
         )}
+        <WantButton card={card} following={following} onWant={() => setWanting(true)} />
       </div>
+      {launchError && <LaunchError message={launchError} class="m-hint-warn" />}
       {wanting && <WantSheet card={card} onClose={() => setWanting(false)} />}
       {card.overview && <Overview text={card.overview} />}
-      <CastStrip cast={card.cast} />
-      {card.kind === 'tv' && <NextEpisodes card={card} />}
-      {card.kind === 'tv' && card.seasons.length > 0 && <Seasons card={card} index={index} find={find} />}
+      {tv ? (
+        <>
+          <CastStrip cast={card.cast} part="heads" />
+          <CastStrip cast={card.cast} part="actors" />
+          <SeasonRows card={card} />
+          <Similar kind="tv" id={card.id} />
+        </>
+      ) : (
+        <CastStrip cast={card.cast} />
+      )}
+      {artOpen && (
+        <PosterSheet
+          urls={variants}
+          current={poster}
+          onClose={() => setArtOpen(false)}
+          onPick={(url) => {
+            saveArt(artKey(card.id), url);
+            setArtOpen(false);
+          }}
+        />
+      )}
+      {launch.sheet}
     </>
   );
 }

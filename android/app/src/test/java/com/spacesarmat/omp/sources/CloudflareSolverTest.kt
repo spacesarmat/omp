@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.sources
 
+import java.util.Collections
 import java.util.PriorityQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -80,7 +81,7 @@ class CloudflareSolverTest {
     }
     private val jar = SiteCookieJar(store)
     private val scheduler = FakeScheduler()
-    private val browsers = ArrayList<FakeBrowser>()
+    private val browsers = Collections.synchronizedList(ArrayList<FakeBrowser>())
     // each test its own gate: a check left running must not hold the process-wide one
     private val gate = ExclusiveGate()
     private val solver = CloudflareSolver({ FakeBrowser().also { browsers.add(it) } }, scheduler, jar, gate = gate)
@@ -322,9 +323,12 @@ class CloudflareSolverTest {
             }
             started.await(5, TimeUnit.SECONDS)
             val deadline = System.currentTimeMillis() + 5000
-            while (solver.running().isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(5)
-            scheduler.runUntil(0)
-            browsers.single().cookieHeader = "cf_clearance=z"
+            while (browsers.isEmpty() && System.currentTimeMillis() < deadline) {
+                scheduler.runUntil(0)
+                Thread.sleep(5)
+            }
+            val browser = browsers.single()
+            browser.cookieHeader = "cf_clearance=z"
             scheduler.runUntil(500)
             assertEquals(CloudflareSolver.Result.SOLVED, f.get(5, TimeUnit.SECONDS))
         } finally {

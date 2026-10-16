@@ -114,7 +114,7 @@ describe('Remote header and layout', () => {
       tvState.value = 'connected';
     });
     expect(sub.querySelector('.m-remote-state.on')!.textContent).toBe('Подключён');
-    expect(el.querySelector('.m-screen-head [aria-label="Настройки тачпада"]')).toBeTruthy();
+    expect(el.querySelector('.m-screen-head [aria-label="Настройки пульта"]')).toBeTruthy();
     expect(el.querySelector('.m-screen-head .m-power')).toBeTruthy();
     act(() => {
       tvState.value = 'idle';
@@ -147,8 +147,8 @@ describe('Remote header and layout', () => {
     expect(a.pressButton).toHaveBeenLastCalledWith('MENU');
     click(lbl('Клавиатура'));
     expect(lbl('Клавиатура').getAttribute('aria-pressed')).toBe('true');
-    expect(el.querySelector('input[aria-label="Ввод на телевизоре"]')).toBeTruthy();
-    // the keyboard field keeps the whole layout
+    expect(document.querySelector('input[aria-label="Ввод на телевизоре"]')).toBeTruthy();
+    // typing overlays — the remote rows stay in place underneath
     expect(el.querySelectorAll('.m-rb-colors button').length).toBe(4);
   });
 
@@ -241,7 +241,7 @@ describe('Remote with a TV', () => {
     const open = () => {
       mount();
       click(lbl('Клавиатура'));
-      return el.querySelector('input[aria-label="Ввод на телевизоре"]') as HTMLInputElement;
+      return document.querySelector('input[aria-label="Ввод на телевизоре"]') as HTMLInputElement;
     };
     const edit = async (i: HTMLInputElement, v: string, init: InputEventInit = {}) => {
       act(() => {
@@ -550,30 +550,36 @@ describe('Remote with a TV', () => {
     lastSeen.value = 0;
   });
 
-  it('fits one screen: fitted class, stage around the d-pad, mini-player modifier', () => {
+  it('fits one screen: fitted class, stage around the d-pad; typing overlays without shrinking', () => {
     mount();
     const root = el.querySelector('.m-screen')!;
     expect(root.classList.contains('m-remote')).toBe(true);
     expect(el.querySelector('.m-stage .m-dpad-wrap')).toBeTruthy();
     click(lbl('Клавиатура'));
-    expect(root.classList.contains('kbd')).toBe(true);
+    expect(root.classList.contains('kbd')).toBe(false);
+    expect(document.querySelector('.m-remote-type-host')).not.toBeNull();
+    expect(document.querySelector('.m-remote-type-host')!.closest('.m-remote')).toBeNull();
   });
 
   it('touchpad settings sheet: opens from the header, saves each change', () => {
     mount();
-    expect(el.querySelector('[role="dialog"]')).toBeNull();
-    click(lbl('Настройки тачпада'));
-    expect(el.textContent).toContain('3 из 5');
-    expect(el.textContent).toContain('Медленно');
-    click(lbl('Скорость 5'));
-    click(lbl('Ускорение'));
-    click(lbl('Касание = щелчок'));
+    expect(document.querySelector('.m-sheet-host')).toBeNull();
+    click(lbl('Настройки пульта'));
+    const sheet = document.querySelector('.m-sheet-host')!;
+    expect(sheet.textContent).toContain('3 из 5');
+    expect(sheet.textContent).toContain('Медленно');
+    // Sheet is portaled to document.body (outside #app / NowDeck transforms).
+    expect(sheet.closest('#app')).toBeNull();
+    const sheetLbl = (l: string) => sheet.querySelector(`[aria-label="${l}"]`) as HTMLElement;
+    click(sheetLbl('Скорость 5'));
+    click(sheetLbl('Ускорение'));
+    click(sheetLbl('Касание = щелчок'));
     expect(JSON.parse(localStorage.getItem('tsp.touchpad')!)).toEqual({ speed: 5, accel: false, tapClick: false, invertScroll: false });
-    click(lbl('Обратная прокрутка'));
+    click(sheetLbl('Обратная прокрутка'));
     expect(JSON.parse(localStorage.getItem('tsp.touchpad')!).invertScroll).toBe(true);
-    expect(el.textContent).toContain('5 из 5');
-    click(text('Готово'));
-    expect(el.querySelector('[role="dialog"]')).toBeNull();
+    expect(sheet.textContent).toContain('5 из 5');
+    click(Array.from(sheet.querySelectorAll('button')).find((b) => (b.textContent || '').includes('Готово'))!);
+    expect(document.querySelector('.m-sheet-host')).toBeNull();
     reloadTouchpad();
     expect(touchpad.value.speed).toBe(5);
   });
@@ -742,7 +748,7 @@ describe('Remote for Android TV', () => {
   it('keyboard types on the TV', async () => {
     mount();
     click(lbl('Клавиатура'));
-    const i = el.querySelector('input[aria-label="Ввод на телевизоре"]') as HTMLInputElement;
+    const i = document.querySelector('input[aria-label="Ввод на телевизоре"]') as HTMLInputElement;
     act(() => {
       i.value = 'Дюна';
       i.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -771,13 +777,13 @@ describe('Remote for Android TV', () => {
     expect(d.textContent).toContain('Гостиная · Android TV');
     const cells = Array.from(d.querySelectorAll<HTMLInputElement>('input'));
     act(() => {
-      cells[0].value = '0482';
+      cells[0].value = '048201';
       cells[0].dispatchEvent(new Event('input', { bubbles: true }));
     });
     const submit = Array.from(d.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === 'Подключить')!;
     await act(async () => submit.click());
     await flush();
-    expect(a.pairAtv).toHaveBeenCalledWith({ ip: '192.168.1.40', port: 8095, name: 'Гостиная', version: '' }, '0482');
+    expect(a.pairAtv).toHaveBeenCalledWith({ ip: '192.168.1.40', port: 8095, name: 'Гостиная', version: '' }, '048201');
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     tvError.value = '';
   });
@@ -871,7 +877,7 @@ describe('Remote in English', () => {
     });
     expect(el.querySelector('.m-remote-state')!.textContent).toBe('Connected');
     expect(Array.from(el.querySelectorAll('[role=tab]')).map((b) => b.textContent)).toEqual(['Buttons', 'Touchpad']);
-    for (const l of ['Touchpad settings', 'Turn off the TV', 'Up', 'Down', 'Left', 'Right', 'Back', 'Home', 'Menu', 'Back 10 s', 'Pause', 'Forward 10 s', 'Quieter', 'Keyboard', 'Louder', 'Mute', 'Red button', 'Green button', 'Yellow button', 'Blue button']) {
+    for (const l of ['Remote settings', 'Turn off the TV', 'Up', 'Down', 'Left', 'Right', 'Back', 'Home', 'Menu', 'Back 10 s', 'Pause', 'Forward 10 s', 'Quieter', 'Keyboard', 'Louder', 'Mute', 'Red button', 'Green button', 'Yellow button', 'Blue button']) {
       expect(lbl(l), l).toBeTruthy();
     }
     expect(el.querySelector('.m-rocker-cap')!.textContent).toBe('Vol.');
@@ -896,8 +902,8 @@ describe('Remote in English', () => {
     expect(el.querySelector('.m-touchpad')!.getAttribute('aria-label')).toBe('Touchpad');
     expect(el.querySelector('.m-touchpad .m-muted')!.textContent).toBe('Swipe with a finger · two fingers scroll');
     click(lbl('Keyboard'));
-    expect(el.querySelector('input.m-input')!.getAttribute('aria-label')).toBe('Typing on the TV');
-    expect(el.querySelector('input.m-input')!.getAttribute('placeholder')).toBe('Type — the text goes to the TV');
+    expect(document.querySelector('input.m-remote-type')!.getAttribute('aria-label')).toBe('Typing on the TV');
+    expect(document.querySelector('input.m-remote-type')!.getAttribute('placeholder')).toBe('Type — the text goes to the TV');
     click(lbl('Turn off the TV'));
     expect(a.confirm).toHaveBeenCalledWith('Turn off LG OLED?');
     await flush();
