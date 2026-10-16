@@ -50,7 +50,7 @@ function useRemoteCode(generation: number): CodeState {
     plugin.pairingCode().then(
       (r) => {
         if (!alive) return;
-        const ok = r && typeof r.code === 'string' && /^[0-9]{4}$/.test(r.code);
+        const ok = r && typeof r.code === 'string' && /^(?:[0-9]{4}|[0-9]{6})$/.test(r.code);
         const exp = r && typeof r.expiresAt === 'number' && isFinite(r.expiresAt) ? r.expiresAt : Date.now() + CODE_TTL_MS;
         setSt({ code: ok ? r.code : null, expiresAt: exp, error: ok ? null : t('pair.noCode') });
         if (!ok) return;
