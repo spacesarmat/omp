@@ -9,6 +9,7 @@ import {
   OMP_JACKETT_ID,
   ompJackettSource,
   ompJacredSource,
+  refreshOmpJackettSources,
   startOmpJackett,
   syncOmpJackett,
 } from '../../src/sources/ompJackett';
@@ -145,6 +146,28 @@ describe('omp Jackett source', () => {
     expect(acc?.sources?.jacred).toBe(false);
     expect(billingSession()?.paidUntil).toBe(2e12);
     expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/me');
+  });
+
+  it('keeps paid sources when the account refresh fails', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: false });
+    const offline = fakeSite(() => Promise.reject(new Error('offline')));
+    await refreshOmpJackettSources(offline.ctx);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+    const down = fakeSite((c) => page('no', c.url, 502));
+    await refreshOmpJackettSources(down.ctx);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    await expect(fetchBillingAccount(offline.ctx)).rejects.toThrow('Сервер подписки не отвечает');
+  });
+
+  it('turns paid sources off only after the account says so', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    const site = fakeSite((c) => page(JSON.stringify({ active: false, paidUntil: 0, telegramId: '' }), c.url));
+    await refreshOmpJackettSources(site.ctx);
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
   });
 
   it('falls back to LAN when the public host is unreachable', async () => {

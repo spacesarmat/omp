@@ -102,7 +102,16 @@ function openDb(file) {
       updated_at INTEGER NOT NULL
     );
   `);
-  migrateFromJson(db, dbPath);
+  try {
+    migrateFromJson(db, dbPath);
+  } catch (e) {
+    try {
+      db.close();
+    } catch {
+      /* the failed connection must not stay cached or lock the file */
+    }
+    throw e;
+  }
   dbs.set(dbPath, db);
   return db;
 }
@@ -139,11 +148,8 @@ function migrateFromJson(db, dbPath) {
       /* keep original if rename fails */
     }
   } catch (e) {
-    const empty = emptyState();
-    db.prepare('INSERT INTO snapshot (id, data, updated_at) VALUES (1, ?, ?)').run(
-      JSON.stringify(empty),
-      Date.now(),
-    );
+    const detail = e && e.message ? e.message : String(e);
+    throw new Error('billing state json is unreadable: ' + detail);
   }
 }
 
@@ -175,14 +181,18 @@ function normalizeState(parsed) {
 }
 
 export function readState(file) {
-  try {
-    const db = openDb(file);
-    const row = db.prepare('SELECT data FROM snapshot WHERE id = 1').get();
-    if (!row || !row.data) return emptyState();
-    return normalizeState(JSON.parse(row.data));
-  } catch (e) {
-    return emptyState();
+  const db = openDb(file);
+  const row = db.prepare('SELECT data FROM snapshot WHERE id = 1').get();
+  if (!row || typeof row.data !== 'string' || !row.data) {
+    throw new Error('billing snapshot is missing');
   }
+  let parsed;
+  try {
+    parsed = JSON.parse(row.data);
+  } catch (e) {
+    throw new Error('billing snapshot is unreadable');
+  }
+  return normalizeState(parsed);
 }
 
 export function writeState(file, state) {

@@ -13,6 +13,7 @@ import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
 import { useBackHandler } from '../ui/backStack';
 import { Icon, ICONS } from '../ui/Icon';
+import { LaunchError } from '../ui/LaunchError';
 import { swipeBlocked } from '../ui/tabSwipe';
 import { filesOf, useTvLaunch } from '../watch';
 import { deckPaneAfter, episodeSwipePlays, type DeckPane } from './nowDeck';
@@ -169,6 +170,7 @@ export function NowDeck({
   paneRef.current = pane;
   heightRef.current = height;
   const launch = useTvLaunch();
+  const [launchError, setLaunchError] = useState('');
   useBackHandler(() => setPane('now'), pane !== 'now');
 
   useLayoutEffect(() => {
@@ -275,6 +277,7 @@ export function NowDeck({
       return;
     }
     const code = episodeLabel(file.path);
+    setLaunchError('');
     void launch
       .start({
         hash,
@@ -282,8 +285,11 @@ export function NowDeck({
         at: sharedResume(hash, file.id),
         duration: getLocalProgress(hash, file.id)?.duration || undefined,
         label: [code, stripExt(baseName(file.path))].filter(Boolean).join(' · '),
+        onError: setLaunchError,
       })
-      .then(() => setPane('now'));
+      .then((ok) => {
+        if (ok) setPane('now');
+      });
   };
 
   const index = pane === 'remote' ? 0 : pane === 'episodes' ? 2 : 1;
@@ -303,6 +309,7 @@ export function NowDeck({
         </section>
         <section class="m-now-pane" data-pane="episodes">
           {opened.episodes || pane === 'episodes' ? <Episodes hash={hash} fileId={fileId} onPlay={play} /> : null}
+          {launchError ? <LaunchError message={launchError} class="m-hint-warn" /> : null}
         </section>
       </div>
       {pane === 'now' && !toward && (

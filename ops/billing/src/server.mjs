@@ -196,6 +196,8 @@ async function readBody(req) {
 function send(res, status, body, headers) {
   const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
   res.writeHead(status, { 'content-length': buf.length, ...(headers || {}) });
+  // HEAD is routed as GET. Content-Length stays the GET size; the body does not.
+  if (res.headOnly) return res.end();
   res.end(buf);
 }
 
@@ -287,6 +289,17 @@ export function createApp(file, fetchImpl) {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     const path = url.pathname;
     try {
+      // Phone calls are native HTTP. The admin SPA is same-origin.
+      // OPTIONS answers 204 with Allow only, so other sites cannot use a browser
+      // to call bearer or cookie routes.
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, { allow: 'GET, HEAD, POST, OPTIONS' });
+        return res.end();
+      }
+      if (req.method === 'HEAD') {
+        res.headOnly = true;
+        req.method = 'GET';
+      }
       if (req.method === 'GET' && path === '/health') return json(res, 200, { ok: true });
       if (req.method === 'GET' && path.indexOf('/go/') === 0) {
         const code = decodeURIComponent(path.slice(4));

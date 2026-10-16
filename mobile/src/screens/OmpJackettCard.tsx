@@ -36,8 +36,12 @@ export function OmpJackettCard() {
 
   async function refreshAccount() {
     const ctx = phoneSourceContext();
-    setAccount(await fetchBillingAccount(ctx));
-    await refreshOmpJackettSources(ctx);
+    try {
+      setAccount(await fetchBillingAccount(ctx));
+      await refreshOmpJackettSources(ctx);
+    } catch {
+      // A blip must not clear the account already on screen. Source flags stay as they were.
+    }
   }
 
   useEffect(() => {

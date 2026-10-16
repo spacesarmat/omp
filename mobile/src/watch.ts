@@ -280,7 +280,7 @@ export interface TvLaunchOpts {
 }
 
 /** Shared entry for every «на ТВ» button: version check → resume choice → launch with report. */
-export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; sheet: VNode<any> | null } {
+export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<boolean>; sheet: VNode<any> | null } {
   const [step, setStep] = useState<ActiveStep | null>(null);
   const [alive] = useState({ v: true });
   const busy = useRef(false);
@@ -313,15 +313,15 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
       });
     });
 
-  const start = async (o: TvLaunchOpts): Promise<void> => {
+  const start = async (o: TvLaunchOpts): Promise<boolean> => {
     const c = client.value;
     const tv = activeTv.value;
-    if (!c) return;
+    if (!c) return false;
     if (!tv) {
       navigate({ name: 'tv' });
-      return;
+      return false;
     }
-    if (busy.current) return;
+    if (busy.current) return false;
     busy.current = true;
     o.onBusy?.(true);
     o.onError?.('');
@@ -335,7 +335,7 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
     try {
       const version = await actions.ompVersion();
       if (version && compareVersions(version, CONTROL_MIN_VERSION) < 0) {
-        if ((await ask({ kind: 'oldTv', version }, o, tv.name)) !== 'go') return;
+        if ((await ask({ kind: 'oldTv', version }, o, tv.name)) !== 'go') return false;
         landing = 'remote';
       }
       let t: number | undefined;
@@ -343,7 +343,7 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
         t = 0;
         if (o.at !== undefined && o.at >= 1) {
           const choice = await ask({ kind: 'resume', at: o.at, duration: o.duration }, o, tv.name);
-          if (choice === null) return;
+          if (choice === null) return false;
           if (choice === 'resume') t = o.at;
         }
       }
@@ -354,13 +354,15 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<void>; s
       await actions.launchOnTv(watchOnTvParams(serverUrl, o.hash, o.file, t, report || undefined, from));
       if (report && landing === 'nowPlaying') markLaunched();
       if (o.file !== undefined) void recordPhoneWatch(c, o.hash, o.file, t || 0, o.duration || 0, from);
-      if (!alive.v) return;
+      if (!alive.v) return false;
       if (o.onLaunched) o.onLaunched(tv.name);
       else showToast(tr('add.launchedOn', { name: tv.name }));
       jumping = true;
       cancelJump.current = openRemoteSoon(currentRoute.value, release, landing);
+      return true;
     } catch (e) {
       if (alive.v) o.onError?.(errorMessage(e));
+      return false;
     } finally {
       if (!jumping) release();
     }
