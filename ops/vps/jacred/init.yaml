@@ -1,11 +1,44 @@
 # JacRed (jacred-fdb) — first-boot template only.
 # Put the real apikey in billing admin → Сервисы (and on the VPS Data/), never in the APK.
+# synctrackers is the jacred-fdb default list (Data/init.yaml on main).
+# tracks is off to save RAM on a 2 GB VPS. See ops/vps/README.md.
 listenport: 9117
 apikey: "change-me"
 devkey: "change-me"
 
-tracks: true
+tracks: false
 tsuri:
   - http://torrserver:8090
 
 openstats: false
+
+syncapi: https://sync.jacred.stream
+synctrackers:
+  - anibelka
+  - anidub
+  - anifilm
+  - aniliberty
+  - animelayer
+  - anistar
+  - baibako
+  - bitru
+  - kinozal
+  - knaben
+  - korsars
+  - leproduction
+  - lostfilm
+  - mazepa
+  - megapeer
+  - nnmclub
+  - rudub
+  - rutor
+  - rutracker
+  - selezen
+  - subsplease
+  - toloka
+  - torrentby
+  - ultradox
+  - viruseproject
+syncsport: false
+syncspidr: true
+timeSync: 120
