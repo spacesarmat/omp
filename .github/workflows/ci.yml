@@ -69,3 +69,31 @@ jobs:
           path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 7
           if-no-files-found: error
+
+  # Billing tests run in Node (ops/billing/vitest.config.ts); the jsdom suite cannot load node:sqlite.
+  # Admin deps are separate from the server. No path filter: a skipped job reports no status, so this
+  # check can be required on pull requests to main. The suite is small, so it runs on every CI event.
+  billing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install billing dependencies
+        working-directory: ops/billing
+        run: npm install
+      - name: Install admin dependencies
+        working-directory: ops/billing/admin
+        run: npm ci
+      - name: Billing tests
+        working-directory: ops/billing
+        run: npm test
+      - name: Admin typecheck
+        working-directory: ops/billing/admin
+        run: npx tsc --noEmit -p tsconfig.app.json && npx tsc --noEmit -p tsconfig.node.json
+      - name: Admin build
+        working-directory: ops/billing/admin
+        run: npm run build

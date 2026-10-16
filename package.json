@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
-    "test": "vitest run",
+    "test": "vitest run && vitest run --config ops/billing/vitest.config.ts",
     "monitor:parsers": "vitest run --config vitest.monitor.config.ts",
     "icons": "node scripts/render-icons.mjs",
     "gen:donate-qr": "node scripts/gen-donate-qr.mjs",

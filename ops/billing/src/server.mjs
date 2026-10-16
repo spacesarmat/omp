@@ -10,11 +10,19 @@ import {
   appendSupportMessage,
   applyPayment,
   createPromo,
-  createSubscription,
+  createPromos,
+  formatCode,
   grantDays,
+  issueActivation,
+  issueMany,
+  pageAudit,
+  pageFails,
+  pagePayments,
+  promosCsv,
+  subscriptionsCsv,
+  usersCsv,
   logAudit,
   logWebhook,
-  openAccount,
   openAppUrl,
   paymentsCsv,
   revokePromo,
@@ -32,7 +40,7 @@ import {
   telegramForDevice,
   unlinkDeviceTelegram,
 } from './logic.mjs';
-import { botDeepLink, botReply, telegramOf } from './bot.mjs';
+import { adminNotifyEnabled, botDeepLink, botReply, paymentAdminNotices, serviceDownNotices, telegramOf } from './bot.mjs';
 import { hashPassword, passwordMatches, randomCode, randomId } from './crypto.mjs';
 import { goPage } from './go.mjs';
 import { basicAuthHeader, indexerByLink, indexerOf, jackettSearchUrl, restoreJackett, stripJackett } from './jackett.mjs';
@@ -218,6 +226,34 @@ async function telegramSend(token, chatId, text, fetchImpl, opts) {
   return { ok: !!(res.ok && data.ok !== false && messageId), messageId };
 }
 
+function isQuiet(body) {
+  const v = body && body.quiet;
+  return v === true || v === 1 || v === '1' || v === 'true';
+}
+
+async function notifyAdmins(state, messages, fetchImpl) {
+  const token = state && state.settings && state.settings.botToken;
+  const rows = messages || [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    try {
+      await telegramSend(token, row.chatId, row.text, fetchImpl, { keyboard: row.keyboard });
+    } catch (e) {
+      /* one admin chat can fail */
+    }
+  }
+}
+
+function paymentWho(state, result) {
+  const subId = result && result.subscriptionId;
+  if (!subId) return '';
+  const sub = (state.subscriptions || []).find((s) => s.id === subId);
+  if (!sub) return '';
+  const acc = (state.accounts || []).find((a) => a.id === sub.accountId);
+  if (!acc) return '';
+  return acc.telegramId || acc.email || acc.id || '';
+}
+
 function tellPayment(state, result, fetchImpl) {
   const accountId = result.subscriptionId
     ? (state.subscriptions.find((s) => s.id === result.subscriptionId) || {}).accountId
@@ -301,6 +337,55 @@ export function createApp(file, fetchImpl) {
         const services = await probeAllServices(readState(file).settings, net);
         return json(res, 200, { ok: true, services });
       }
+      if (req.method === 'GET' && path === '/admin/api/reveal') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const codeId = url.searchParams.get('codeId') || '';
+        const state = readState(file);
+        const row = (state.codes || []).find((c) => c.id === codeId && !c.revoked && c.plain);
+        if (!row) return json(res, 404, { error: 'no_code' });
+        await audit(file, 'code_reveal', codeId);
+        return json(res, 200, {
+          id: row.id,
+          plain: row.plain,
+          formatted: formatCode(row.plain),
+          openUrl: openAppUrl(state.settings.publicOrigin || '', row.plain),
+        });
+      }
+      if (req.method === 'GET' && path === '/admin/api/payments') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const page = pagePayments(readState(file), {
+          q: url.searchParams.get('q') || '',
+          from: Number(url.searchParams.get('from')) || 0,
+          to: Number(url.searchParams.get('to')) || 0,
+          offset: Number(url.searchParams.get('offset')) || 0,
+          limit: Number(url.searchParams.get('limit')) || 20,
+        });
+        return json(res, 200, page);
+      }
+      if (req.method === 'GET' && path === '/admin/api/audit') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const page = pageAudit(readState(file), {
+          q: url.searchParams.get('q') || '',
+          action: url.searchParams.get('action') || '',
+          offset: Number(url.searchParams.get('offset')) || 0,
+          limit: Number(url.searchParams.get('limit')) || 30,
+        });
+        return json(res, 200, page);
+      }
+      if (req.method === 'GET' && path === '/admin/api/fails') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const page = pageFails(readState(file), {
+          reason: url.searchParams.get('reason') || '',
+          q: url.searchParams.get('q') || '',
+          offset: Number(url.searchParams.get('offset')) || 0,
+          limit: Number(url.searchParams.get('limit')) || 30,
+        });
+        return json(res, 200, page);
+      }
       if (req.method === 'GET' && path === '/admin/api/user') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
@@ -320,6 +405,23 @@ export function createApp(file, fetchImpl) {
         res.writeHead(302, { location: '/admin/?id=' + encodeURIComponent(id) });
         return res.end();
       }
+      if (req.method === 'GET' && (path === '/admin/subscriptions.csv' || path === '/admin/users.csv' || path === '/admin/promos.csv')) {
+        const admin = adminOf(req);
+        if (!admin) return send(res, 401, 'login required');
+        const state = readState(file);
+        const now = Date.now();
+        const csv =
+          path === '/admin/users.csv'
+            ? usersCsv(state)
+            : path === '/admin/promos.csv'
+              ? promosCsv(state)
+              : subscriptionsCsv(state, now);
+        const name = path === '/admin/users.csv' ? 'omp-users.csv' : path === '/admin/promos.csv' ? 'omp-promos.csv' : 'omp-subscriptions.csv';
+        return send(res, 200, csv, {
+          'content-type': 'text/csv; charset=utf-8',
+          'content-disposition': 'attachment; filename="' + name + '"',
+        });
+      }
       if (req.method === 'GET' && path === '/admin/finance.csv') {
         const admin = adminOf(req);
         if (!admin) return send(res, 401, 'login required');
@@ -335,7 +437,7 @@ export function createApp(file, fetchImpl) {
       if (req.method === 'POST' && path === '/admin/login/telegram') {
         const state = readState(file);
         if (!String(state.settings.adminTelegramIds || '').trim()) {
-          return json(res, 400, { ok: false, error: 'Сначала укажите adminTelegramIds в настройках или через пароль' });
+          return json(res, 400, { ok: false, error: 'Сначала укажите Telegram id администраторов в настройках или войдите по паролю' });
         }
         if (!state.settings.botToken || !state.settings.botUsername) {
           return json(res, 400, { ok: false, error: 'Не задан бот Telegram (токен или username)' });
@@ -402,6 +504,7 @@ export function createApp(file, fetchImpl) {
         let flashText = '';
         let flashError = '';
         let redirectTo = '/admin';
+        let extra = null;
         if (path === '/admin/find') {
           const found = adminFind(readState(file), body.q || '', Date.now());
           if (found) {
@@ -414,21 +517,47 @@ export function createApp(file, fetchImpl) {
           redirectTo = '/admin/';
         }
         if (path === '/admin/issue') {
-          const result = await updateState(file, (state) => {
-            const opened = openAccount(state, { email: body.email, telegramId: body.telegramId, now: Date.now() });
-            const created = createSubscription(opened.state, { accountId: opened.account.id, now: Date.now() });
-            return { state: created.state, result: { code: created.result.code, account: opened.account, channel: body.channel } };
-          });
-          flashed = result.code;
-          const fresh = readState(file);
-          const text = 'Код подписки OMP: ' + result.code + '\nВведите его в OMP на телефоне. На другом устройстве он не сработает.';
-          if (body.channel === 'telegram' && result.account.telegramId) {
-            await telegramSend(fresh.settings.botToken, result.account.telegramId, text, net);
+          const days = Number(body.days) || 0;
+          const result = await updateState(file, (state) =>
+            issueActivation(state, {
+              email: body.email,
+              telegramId: body.telegramId,
+              days,
+              now: Date.now(),
+            }),
+          );
+          if (result.error || !result.code) flashError = 'Не удалось выдать код';
+          else {
+            flashed = result.code;
+            const until = new Date(result.paidUntil).toISOString().slice(0, 10);
+            flashText = result.created
+              ? 'Новая подписка на ' + result.days + ' дн. до ' + until
+              : 'Код добавлен к подписке до ' + until;
+            const fresh = readState(file);
+            const text =
+              'Код подписки OMP: ' +
+              result.code +
+              '\nПодписка до ' +
+              until +
+              '.\nВведите его в OMP на телефоне. На другом устройстве он не сработает.';
+            if (body.channel === 'telegram' && result.account.telegramId) {
+              await telegramSend(fresh.settings.botToken, result.account.telegramId, text, net);
+            }
+            if (body.channel === 'email' && result.account.email) {
+              await sendMail(fresh.settings, { to: result.account.email, subject: 'Код подписки OMP', text });
+            }
+            await audit(file, 'issue', (result.account && result.account.id) || '');
+            if (result.account && result.account.id) redirectTo = '/admin/?id=' + encodeURIComponent(result.account.id);
           }
-          if (body.channel === 'email' && result.account.email) {
-            await sendMail(fresh.settings, { to: result.account.email, subject: 'Код подписки OMP', text });
-          }
-          if (result.account && result.account.id) redirectTo = '/admin/?id=' + encodeURIComponent(result.account.id);
+        }
+        if (path === '/admin/issue-bulk') {
+          const result = await updateState(file, (state) =>
+            issueMany(state, { count: body.count, days: Number(body.days) || 0, now: Date.now() }),
+          );
+          extra = { codes: result.codes || [] };
+          flashText = 'Выдано кодов: ' + ((result.codes && result.codes.length) || 0);
+          await audit(file, 'bulk_issue', String((result.codes && result.codes.length) || 0));
+          redirectTo = '/admin/?tab=subs';
         }
         if (path === '/admin/grant') {
           const days =
@@ -478,24 +607,40 @@ export function createApp(file, fetchImpl) {
                   via: 'panel',
                 }),
               );
-              flashText = 'Сообщение отправлено';
+              if (!isQuiet(body)) flashText = 'Сообщение отправлено';
             } else flashError = 'Telegram не принял сообщение';
           }
-          if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
+          if (!isQuiet(body) && body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/promo') {
+          const count = Number(body.count) || 1;
           const result = await updateState(file, (state) =>
-            createPromo(state, {
-              code: body.code,
-              days: Number(body.days) || 1,
-              maxUses: Number(body.maxUses) || 1,
-              now: Date.now(),
-            }),
+            count > 1
+              ? createPromos(state, {
+                  count,
+                  days: Number(body.days) || 1,
+                  maxUses: Number(body.maxUses) || 1,
+                  now: Date.now(),
+                })
+              : createPromo(state, {
+                  code: body.code,
+                  days: Number(body.days) || 1,
+                  maxUses: Number(body.maxUses) || 1,
+                  now: Date.now(),
+                }),
           );
-          if (result.promo) flashPromo = result.promo.code;
+          if (result.error && !(result.promos && result.promos.length)) flashError = 'Не удалось создать промокод';
+          else if (result.promos) {
+            extra = { promos: result.promos.map((p) => ({ code: p.code, days: p.days, maxUses: p.maxUses })) };
+            flashText = 'Создано промокодов: ' + result.promos.length;
+            await audit(file, 'bulk_promo', String(result.promos.length));
+          } else if (result.promo) flashPromo = result.promo.code;
+          redirectTo = '/admin/?tab=promos';
         }
         if (path === '/admin/promo-revoke') {
           await updateState(file, (state) => ({ state: revokePromo(state, body.promoId || '') }));
+          flashText = 'Промокод отозван';
+          redirectTo = '/admin/?tab=promos';
         }
         if (path === '/admin/unbind') {
           await updateState(file, (state) => ({
@@ -619,6 +764,7 @@ export function createApp(file, fetchImpl) {
             ok: !flashError,
             redirect: redirectTo,
             flash: { code: flashed, promo: flashPromo, text: flashText, error: flashError },
+            extra,
           });
         }
         res.writeHead(302, { location: redirectTo });
@@ -750,6 +896,7 @@ export function createApp(file, fetchImpl) {
               at: now,
             }),
           }));
+          process.stderr.write('yoomoney bad signature\n');
           return send(res, 400, 'bad signature');
         }
         const applied = await updateState(file, (cur) =>
@@ -761,7 +908,21 @@ export function createApp(file, fetchImpl) {
             now,
           }),
         );
-        if (!applied.duplicate && !applied.error) await tellPayment(readState(file), applied, net);
+        const freshPay = readState(file);
+        if (!applied.duplicate && !applied.error) await tellPayment(freshPay, applied, net);
+        if (!applied.duplicate && adminNotifyEnabled(freshPay.settings)) {
+          await notifyAdmins(
+            freshPay,
+            paymentAdminNotices(freshPay.settings, {
+              ok: !applied.error,
+              amount: body.amount,
+              label: body.label,
+              error: applied.error || '',
+              who: paymentWho(freshPay, applied),
+            }),
+            net,
+          );
+        }
         return send(res, 200, 'ok');
       }
       return send(res, 404, 'not found');
@@ -816,6 +977,8 @@ export async function refreshMissingProfiles(file, token, net) {
 export async function pollBot(file, fetchImpl) {
   let offset = 0;
   let sweptAt = 0;
+  let servicesAt = 0;
+  let serviceSnap = {};
   /** chatId → { kind } waiting for the next free-text reply */
   const awaiting = new Map();
   /** chatId → 'user' | 'admin' — keyboard pad for admins (users always stay on user pad) */
@@ -832,6 +995,17 @@ export async function pollBot(file, fetchImpl) {
       if (Date.now() - sweptAt > 10 * 60 * 1000) {
         sweptAt = Date.now();
         await refreshMissingProfiles(file, token, net);
+      }
+      if (Date.now() - servicesAt > 5 * 60 * 1000 && adminNotifyEnabled(state.settings)) {
+        servicesAt = Date.now();
+        try {
+          const probes = await probeAllServices(state.settings, net);
+          const notes = serviceDownNotices(state.settings, probes, serviceSnap);
+          serviceSnap = notes.snapshot;
+          await notifyAdmins(state, notes.messages, net);
+        } catch (e) {
+          /* probe failure must not stop the bot loop */
+        }
       }
       let updates = [];
       try {
