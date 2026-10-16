@@ -1,4 +1,4 @@
-import { request, apiError, HttpOptions } from './http';
+import { request, apiError, isApiError, HttpOptions } from './http';
 import { isStashedFile, takeStashedFile } from './torrentFiles';
 import type { Torrent, CacheState, ViewedEntry, SearchResult, FfprobeResult, ServerSettings, TmdbConfig } from './types';
 import type { TorrentFile } from '../lib/episodes';
@@ -12,6 +12,9 @@ export interface ServerConfig {
 }
 
 export type SearchSource = 'rutor' | 'torznab';
+
+/** `ok`: the server answered (APIKey may be empty). `unreachable`: no answer, or the settings endpoint failed. */
+export type TmdbSettingsRead = { status: 'ok'; config: TmdbConfig } | { status: 'unreachable' };
 
 /** The address used for requests: cleaned (serverAddress.ts); an address the check rejects keeps the old rules. */
 export function normalizeServerUrl(input: string): string {
@@ -142,11 +145,29 @@ export class TorrServerClient {
     ).then(() => undefined);
   }
 
-  /** TMDB settings of the server; null on servers without them. */
+  /**
+   * TMDB settings of the server (`GET /tmdb/settings`, MatriX fields APIKey / APIURL / ImageURL / ImageURLRu).
+   * Null when the server has none (or the route is missing). Rejects when the server cannot be reached or its
+   * settings endpoint fails: that is not the same as "no key".
+   */
   tmdbSettings(): Promise<TmdbConfig | null> {
     return this.call<TmdbConfig | null>('/tmdb/settings', { method: 'GET', quiet: true }).then(
       (r) => (r && typeof r === 'object' ? r : null),
-      () => null,
+      (e) => {
+        if (isApiError(e) && (e.kind === 'network' || e.kind === 'timeout' || (e.kind === 'http' && (e.status || 0) >= 500))) throw e;
+        return null;
+      },
+    );
+  }
+
+  /**
+   * The same read, without a rejection: `unreachable` when the server does not answer, `ok` with the config (an
+   * empty APIKey included) when it does. Callers that only need the config keep using tmdbSettings().
+   */
+  readTmdbSettings(): Promise<TmdbSettingsRead> {
+    return this.tmdbSettings().then(
+      (config) => ({ status: 'ok', config: config && typeof config === 'object' ? config : {} }),
+      () => ({ status: 'unreachable' }),
     );
   }
 

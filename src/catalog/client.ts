@@ -16,8 +16,9 @@ import {
   type HomeSection, type TrendingWindow,
 } from './tmdb';
 import { digitalSoonItems, type DiscoverQuery } from './discoverQuery';
+import type { Key } from '../i18n';
 
-export type CatalogErrorCode = 'offline' | 'nokey' | 'blocked' | 'bad';
+export type CatalogErrorCode = 'offline' | 'nokey' | 'badkey' | 'unreachable' | 'blocked' | 'bad';
 
 export interface CatalogClient {
   novelties(kind: Kind | 'all', page: number): Promise<{ items: CatalogTitle[]; pages: number }>;
@@ -208,7 +209,21 @@ function fail(code: CatalogErrorCode): Error {
 
 export function catalogErrorCode(e: unknown): CatalogErrorCode {
   const c = e && typeof e === 'object' ? (e as { code?: unknown }).code : undefined;
-  return c === 'offline' || c === 'nokey' || c === 'blocked' || c === 'bad' ? c : 'bad';
+  return c === 'offline' || c === 'nokey' || c === 'badkey' || c === 'unreachable' || c === 'blocked' || c === 'bad' ? c : 'bad';
+}
+
+/** The sentence for a catalog failure. The TV has no «Мои» tab, so its texts do not point there. */
+export function catalogErrorKey(code: CatalogErrorCode, where: 'phone' | 'tv'): Key {
+  if (where === 'tv') {
+    if (code === 'nokey') return 'tv.discover.nokeyText';
+    if (code === 'badkey') return 'tv.discover.badkeyText';
+    if (code === 'unreachable') return 'tv.discover.unreachableText';
+    return 'tv.discover.offlineText';
+  }
+  if (code === 'nokey') return 'discover.nokeyText';
+  if (code === 'badkey') return 'discover.badkeyText';
+  if (code === 'unreachable') return 'discover.unreachableText';
+  return 'discover.offlineText';
 }
 
 /** The URL without the api_key parameter: the cache key (it keeps the language, so ru and en never mix). */
@@ -219,13 +234,19 @@ function cacheKeyOf(url: string): string {
 export function createCatalogClient(
   endpoint: TmdbEndpoint | null,
   http: SourceHttp,
-  opts?: { now?: () => number; today?: () => string },
+  opts?: { now?: () => number; today?: () => string; missing?: 'nokey' | 'unreachable' },
 ): CatalogClient {
   const now = opts && opts.now ? opts.now : function () { return Date.now(); };
   const today = opts && opts.today ? opts.today : function () { return localDate(now()); };
+  const missing: 'nokey' | 'unreachable' = opts && opts.missing === 'unreachable' ? 'unreachable' : 'nokey';
   clock = now;
   load();
   listen();
+
+  function tmdbHeaders(): { [name: string]: string } | undefined {
+    if (endpoint && endpoint.bearer && endpoint.key) return { Authorization: 'Bearer ' + endpoint.key };
+    return undefined;
+  }
 
   function remember(key: string, data: unknown): void {
     clock = now;
@@ -247,11 +268,11 @@ export function createCatalogClient(
       scheduleSave();
       return Promise.resolve(hit.data as T);
     }
-    return http.get(url, { timeoutMs: TIMEOUT_MS }).then(
+    return http.get(url, { timeoutMs: TIMEOUT_MS, headers: tmdbHeaders() }).then(
       (r) => {
         const s = r.status;
         if (!s) throw fail('offline');
-        if (s === 401) throw fail('nokey');
+        if (s === 401) throw fail('badkey');
         if (s === 403 || s === 451) throw fail('blocked');
         if (s < 200 || s >= 300) throw fail('bad');
         let data: unknown;
@@ -269,7 +290,7 @@ export function createCatalogClient(
   }
 
   function need(): TmdbEndpoint {
-    if (!endpoint) throw fail('nokey');
+    if (!endpoint) throw fail(missing);
     return endpoint;
   }
 

@@ -210,6 +210,17 @@ describe('TV «Обзор» tab', () => {
     expect(text(host.querySelector('.disc-error'))).not.toContain('Мои');
   });
 
+  it('shows a rejected key and an unreachable server as their own texts', async () => {
+    stub.discover = vi.fn(() => Promise.reject(Object.assign(new Error('badkey'), { code: 'badkey' })));
+    let host = await mount();
+    expect(text(host.querySelector('.disc-error'))).toContain('eyJ');
+    expect(text(host.querySelector('.disc-error'))).not.toContain('Мои');
+    stub.discover = vi.fn(() => Promise.reject(Object.assign(new Error('unreachable'), { code: 'unreachable' })));
+    host = await mount();
+    expect(text(host.querySelector('.disc-error'))).toContain('Сервер TorrServer не отвечает');
+    expect(text(host.querySelector('.disc-error'))).not.toContain('Нет ключа TMDB');
+  });
+
   it('marks wanted titles, toggles with the yellow key and lists them under «Хочу»', async () => {
     toggleWant({ kind: 'tv', id: 101, title: 'Фильм 1', year: 2021, poster: '' });
     const host = await mount();

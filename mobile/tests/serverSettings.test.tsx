@@ -231,6 +231,26 @@ describe('ServerSettings TMDB key', () => {
     expect(toast.value).toBe('Найдено обложек: 1 из 1');
   });
 
+  it('clears the key after confirmation and saves the empty key', async () => {
+    setup();
+    current = { ...BASE, TMDBSettings: { APIKey: 'eyJ.bad.token', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' } };
+    await mount();
+    act(() => btn('Ключ TMDB для обложек').click());
+    const edit = el.querySelector('[role=dialog][aria-label="Ключ TMDB"]') as HTMLElement;
+    expect(edit).toBeTruthy();
+    act(() => btn('Очистить', edit).click());
+    const ask = el.querySelector('[role=dialog][aria-label="Очистить ключ TMDB?"]') as HTMLElement;
+    expect(ask.textContent).toContain('Ключ будет удалён из настроек этого сервера TorrServer.');
+    act(() => btn('Отмена', ask).click());
+    expect(el.querySelector('[role=dialog][aria-label="Очистить ключ TMDB?"]')).toBeNull();
+    expect(sets()).toHaveLength(0);
+    act(() => btn('Очистить', edit).click());
+    act(() => btn('Очистить', el.querySelector('[role=dialog][aria-label="Очистить ключ TMDB?"]') as HTMLElement).click());
+    await flush();
+    expect(sets()[0].sets.TMDBSettings).toEqual({ APIKey: '', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' });
+    expect(btn('Ключ TMDB для обложек').textContent).toContain('Не задан');
+  });
+
   it('is hidden on servers without TMDB settings', async () => {
     setup();
     await mount();

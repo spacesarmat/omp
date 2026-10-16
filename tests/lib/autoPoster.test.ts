@@ -68,6 +68,17 @@ describe('attachPoster', () => {
     expect(during.setPoster).not.toHaveBeenCalled();
   });
 
+  it('sends a v4 token as a bearer header', async () => {
+    const token = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig';
+    const c = client({ APIKey: token }, [{ title: 'Dune' }]);
+    const fetchJson = vi.fn((_url: string, _headers?: { [name: string]: string }) =>
+      Promise.resolve({ results: [{ poster_path: '/p.jpg' }] }));
+    await attachPoster(c, HASH, 'Dune', { fetchJson, wait: noWait });
+    expect(String(fetchJson.mock.calls[0][0])).not.toContain('api_key');
+    expect(fetchJson.mock.calls[0][1]).toEqual({ Authorization: 'Bearer ' + token });
+    expect(c.setPoster).toHaveBeenCalled();
+  });
+
   it('is quiet when nothing is found or TMDB fails', async () => {
     const empty = client({ APIKey: 'k' }, [{ title: 'X' }]);
     expect(await attachPoster(empty, HASH, 'X', { fetchJson: vi.fn(() => Promise.resolve({ results: [] })), wait: noWait })).toBe('');

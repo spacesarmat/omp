@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { t } from '../i18n';
 import { activeCatalog } from '../catalog/activeCatalog';
-import { catalogErrorCode, type CatalogErrorCode } from '../catalog/client';
+import { catalogErrorCode, catalogErrorKey, type CatalogErrorCode } from '../catalog/client';
 import { filmography, personJobs, type FilmSort } from '../catalog/filmography';
 import { libraryTargetOf, ownedChecker } from '../catalog/libraryTarget';
 import type { Credit, PersonCard } from '../catalog/tmdb';
@@ -186,12 +186,15 @@ export function PersonScreen(p: { id: number; name?: string }) {
   const [reload, setReload] = useState(0);
   // answers of an older request (a retry) are dropped
   const gen = useRef(0);
+  const reread = useRef(false);
 
   useEffect(() => {
     const my = ++gen.current;
     setCard(null);
     setError(null);
-    activeCatalog()
+    const fresh = reread.current;
+    reread.current = false;
+    activeCatalog(fresh)
       .then((c) => c.person(p.id))
       .then(
         (c) => {
@@ -212,9 +215,9 @@ export function PersonScreen(p: { id: number; name?: string }) {
       {error ? (
         <div class="disc-error">
           <div class="catalog-off-title">{tvGlyphs(t('discover.offlineTitle'))}</div>
-          <div class="disc-error-text">{tvGlyphs(t(error === 'nokey' ? 'tv.discover.nokeyText' : 'tv.discover.offlineText'))}</div>
+          <div class="disc-error-text">{tvGlyphs(t(catalogErrorKey(error, 'tv')))}</div>
           <FocusGroup focusKey="PERSON-ERROR" className="actions">
-            <Button focusKey="person-retry" label={tvGlyphs(t('common.retry'))} onPress={() => setReload((n) => n + 1)} />
+            <Button focusKey="person-retry" label={tvGlyphs(t('common.retry'))} onPress={() => { reread.current = true; setReload((n) => n + 1); }} />
           </FocusGroup>
         </div>
       ) : !card ? (

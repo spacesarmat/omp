@@ -20,6 +20,8 @@ on:
         required: true
       TELEGRAM_BOT_TOKEN:
         required: false
+      TMDB_API_KEY:
+        required: true
 
 permissions:
   contents: write
@@ -29,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
+      TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -43,6 +46,12 @@ jobs:
       - name: Tag must match package.json version
         run: test "${TAG}" = "v$(node -p "require('./package.json').version")"
       - run: npm test
+      - name: Require the TMDB API key
+        run: |
+          if [ -z "$TMDB_API_KEY" ]; then
+            echo "::error::Нет секрета TMDB_API_KEY. Добавьте ключ TMDB API v3 в Settings → Secrets and variables → Actions. Релизная сборка без него не выпускается."
+            exit 1
+          fi
       - run: npm run build
       - run: node scripts/package.mjs
       - run: npm run check:boot

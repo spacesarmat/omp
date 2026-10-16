@@ -239,7 +239,7 @@ describe('catalog client', () => {
     const cases: Array<[Answer, string]> = [
       ['reject', 'offline'],
       [{ status: 0, text: '' }, 'offline'],
-      [{ status: 401, text: '{}' }, 'nokey'],
+      [{ status: 401, text: '{}' }, 'badkey'],
       [{ status: 403, text: '{}' }, 'blocked'],
       [{ status: 451, text: '' }, 'blocked'],
       [{ status: 200, text: '<html>wall</html>' }, 'blocked'],
@@ -255,6 +255,24 @@ describe('catalog client', () => {
     }
     expect(catalogErrorCode(new Error('plain'))).toBe('bad');
     expect(catalogErrorCode(null)).toBe('bad');
+    expect(catalogErrorCode(await failure(createCatalogClient(null, f.http, { missing: 'unreachable' }).search('x', 1)))).toBe('unreachable');
+  });
+
+  it('sends a v4 token as a bearer header and not as api_key', async () => {
+    const token = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig';
+    const seen: ({ [k: string]: string } | undefined)[] = [];
+    const http: SourceHttp = {
+      get: (url, opts) => {
+        seen.push(opts && opts.headers);
+        return Promise.resolve({ status: 401, url: url, text: '{}' });
+      },
+      post: () => Promise.reject(new Error('no')),
+      clearCookies: () => Promise.resolve(),
+    };
+    const ep: TmdbEndpoint = { base: 'https://api.themoviedb.org/3/', key: token, images: 'https://imagetmdb.com', bearer: true };
+    const e = await failure(createCatalogClient(ep, http).search('дюна', 1));
+    expect(catalogErrorCode(e)).toBe('badkey');
+    expect(seen[0]).toEqual({ Authorization: 'Bearer ' + token });
   });
 
   it('keeps at most 200 entries', async () => {
@@ -393,7 +411,7 @@ describe('catalog client', () => {
     resetCatalogCache();
     const down = fake();
     down.answer = () => ({ status: 401, text: '{}' });
-    expect(catalogErrorCode(await failure(createCatalogClient(E, down.http).home('movie', 'day')))).toBe('nokey');
+    expect(catalogErrorCode(await failure(createCatalogClient(E, down.http).home('movie', 'day')))).toBe('badkey');
     resetCatalogCache();
     const partial = fake();
     partial.answer = (url) => (url.indexOf('trending/') >= 0 ? { status: 200, text: JSON.stringify(MOVIE_LIST) } : 'reject');

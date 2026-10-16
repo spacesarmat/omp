@@ -1183,6 +1183,8 @@ export const en: EnDict<typeof ru> = {
       // the TV has no “Mine” tab: the phone texts point there
       offlineText: 'TMDB does not respond from this network. Set a TMDB mirror in the TorrServer settings or try again later.',
       nokeyText: 'No TMDB key. Add it in the TorrServer settings (TMDB → API key).',
+      badkeyText: 'TMDB rejected the key. An API v3 key is required, not a v4 token (it starts with eyJ). Replace it in the TorrServer settings (TMDB → API key).',
+      unreachableText: 'TorrServer does not respond, so the TMDB key cannot be read. Check that the server is on and the address is right.',
     },
     // «Новое»: findings from OMP on the phone (new episodes, better quality, subscriptions)
     news: {
@@ -1336,6 +1338,8 @@ export const en: EnDict<typeof ru> = {
     offlineTitle: 'Movie catalog unavailable',
     offlineText: 'TMDB does not respond from this network. Set a TMDB mirror in the TorrServer settings or try again later. Your torrents are in the “Mine” tab.',
     nokeyText: 'No TMDB key. Add it in the TorrServer settings (TMDB → API key). Your torrents are in the “Mine” tab.',
+    badkeyText: 'TMDB rejected the key. An API v3 key is required, not a v4 token (it starts with eyJ). Replace it in the TorrServer settings (TMDB → API key). Your torrents are in the “Mine” tab.',
+    unreachableText: 'TorrServer does not respond, so the TMDB key cannot be read. Check that the server is on and the address is right. Your torrents are in the “Mine” tab.',
     howToKey: 'How to get a key',
     attribution: 'Data: TMDB',
     searchLabel: 'Movie or series',
@@ -2267,8 +2271,11 @@ export const en: EnDict<typeof ru> = {
     needKey: 'Set a TMDB key',
     reset: 'Reset to defaults',
     tmdbTitle: 'TMDB key',
-    tmdbText: 'OMP and TorrServer use it to find posters for new torrents. The key is free: themoviedb.org → Settings → API.',
+    tmdbText: 'OMP and TorrServer use it to find posters for new torrents. The key is free: themoviedb.org → Settings → API. Use an API v3 key: a v4 token starts with eyJ and does not belong here.',
     apiKey: 'API key',
+    clearKey: 'Clear',
+    clearKeyTitle: 'Clear the TMDB key?',
+    clearKeyText: 'The key will be removed from the settings of this TorrServer.',
     resetLabel: 'Reset the server settings',
     resetTitle: 'Reset the server settings?',
     resetText: 'All settings will return to their default values.',

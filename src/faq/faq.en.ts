@@ -880,6 +880,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       '“Discover” uses the TMDB key from the TorrServer settings.',
       'The key is free: register at themoviedb.org → Settings → API → request an API key (Developer, personal use).',
       'Paste the key in TorrServer: the web page → Settings → TMDB.',
+      'An API v3 key is required. TMDB rejects a v4 token (long, it starts with eyJ) — Discover says so.',
       'OMP picks the key up at once, no restart needed.',
     ],
     more: [
@@ -955,6 +956,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     more: [
       'Posters are looked up in the TMDB database with the key stored in TorrServer.',
       'The key needs TorrServer version MatriX.138 or newer; older versions do not have this item.',
+      'An API v3 key is required. TMDB does not accept a v4 token (it starts with eyJ).',
     ],
   },
 

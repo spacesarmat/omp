@@ -22,7 +22,7 @@ import { confirmDialog, choose } from '../ui/dialog';
 import { askText } from '../ui/TextDialog';
 import { checkTitle, renameTorrent } from '../lib/renameTorrent';
 import { activeCatalog } from '../catalog/activeCatalog';
-import { catalogErrorCode } from '../catalog/client';
+import { catalogErrorCode, catalogErrorKey } from '../catalog/client';
 import { libraryTitle } from '../lib/libraryView';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
@@ -233,7 +233,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
             );
           });
         },
-        (e) => toast(t(catalogErrorCode(e) === 'nokey' ? 'tv.discover.nokeyText' : 'tv.discover.offlineText'), 'error'),
+        (e) => toast(t(catalogErrorKey(catalogErrorCode(e), 'tv')), 'error'),
       );
   };
 

@@ -1,8 +1,8 @@
 // The TV's TMDB client: native HTTP on Android TV, plain fetch on webOS (TMDB answers with CORS).
 import { client } from '../store/servers';
-import { createCatalogClient, type CatalogClient } from './client';
-import { endpointOf } from './tmdb';
+import type { CatalogClient } from './client';
 import { TMDB_FALLBACK_KEY } from './fallbackKey';
+import { openCatalog, type CatalogCache } from './openCatalog';
 import { nativeSourceHttp } from '../platform/androidNative';
 import type { HttpOptions, HttpResponse, SourceHttp } from '../sources/types';
 
@@ -53,27 +53,28 @@ export function fetchSourceHttp(fetchImpl?: typeof fetch): SourceHttp {
 }
 
 let forTests: CatalogClient | null = null;
-let cached: { server: string; client: Promise<CatalogClient> } | null = null;
+const cache: CatalogCache = { slot: null };
 
 export function setTvCatalogForTests(c: CatalogClient | null): void {
   forTests = c;
-  cached = null;
+  cache.slot = null;
 }
 
 /**
- * The catalog client for the active server: its TMDB settings when it has a key, else OMP's built-in key.
- * `fresh` reads the settings again; otherwise the client of the last read for this server is reused.
+ * The catalog client: the active server's TMDB key, else the phone's running TorrServer (when this bundle
+ * registered one), else OMP's built-in key. `fresh` reads again — «Обзор» does that on open and on «Повторить».
+ * A read that found no key is not kept.
  */
 export function tvCatalog(fresh?: boolean): Promise<CatalogClient> {
   if (forTests) return Promise.resolve(forTests);
   const ts = client.value;
   const server = ts ? ts.baseUrl : '';
-  if (!fresh && cached && cached.server === server) return cached.client;
   const http = nativeSourceHttp() || fetchSourceHttp();
-  const p: Promise<CatalogClient> = (ts ? ts.tmdbSettings() : Promise.resolve(null)).then((cfg) => {
-    if (!cfg && cached && cached.client === p) cached = null;
-    return createCatalogClient(endpointOf(cfg, TMDB_FALLBACK_KEY), http);
+  return openCatalog(cache, {
+    fresh: !!fresh,
+    server: server,
+    active: ts ? { baseUrl: ts.baseUrl, readTmdbSettings: () => ts.readTmdbSettings() } : null,
+    http: http,
+    fallbackKey: TMDB_FALLBACK_KEY,
   });
-  cached = { server: server, client: p };
-  return p;
 }

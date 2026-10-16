@@ -3,6 +3,7 @@ import { fetchSourceHttp, tvCatalog, setTvCatalogForTests } from '../../src/cata
 import { servers, addServer, setActiveServer } from '../../src/store/servers';
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { CatalogClient } from '../../src/catalog/client';
+import { setLocalTmdbSource } from '../../src/catalog/localTmdb';
 
 beforeEach(() => {
   localStorage.clear();
@@ -13,6 +14,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   setTvCatalogForTests(null);
+  setLocalTmdbSource(null);
 });
 
 describe('fetchSourceHttp', () => {
@@ -55,6 +57,49 @@ describe('tvCatalog', () => {
     const b = await tvCatalog();
     expect(b).toBe(a);
   });
+  it('does not keep a client when the server key is empty', async () => {
+    setActiveServer(addServer({ url: 'h:1' }).id);
+    const spy = vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: '' });
+    const c = await tvCatalog();
+    await expect(c.search('x', 1)).rejects.toMatchObject({ code: 'nokey' });
+    await tvCatalog();
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-reads when Обзор opens again', async () => {
+    setActiveServer(addServer({ url: 'h:1' }).id);
+    const spy = vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'k' });
+    await tvCatalog();
+    await tvCatalog(true);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('an unreachable server is not a missing key', async () => {
+    setActiveServer(addServer({ url: 'h:1' }).id);
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockRejectedValue(Object.assign(new Error('net'), { kind: 'network' }));
+    const c = await tvCatalog();
+    await expect(c.search('x', 1)).rejects.toMatchObject({ code: 'unreachable' });
+  });
+
+  it('uses the phone TorrServer key when the active server has none', async () => {
+    setActiveServer(addServer({ url: 'http://home:5665' }).id);
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockImplementation(function (this: TorrServerClient) {
+      if (this.baseUrl.indexOf('127.0.0.1') >= 0) return Promise.resolve({ APIKey: 'phone' });
+      return Promise.resolve({ APIKey: '' });
+    });
+    setLocalTmdbSource(() => {
+      const local = new TorrServerClient({ url: 'http://127.0.0.1:8090' });
+      return { baseUrl: local.baseUrl, readTmdbSettings: () => local.readTmdbSettings() };
+    });
+    const f = vi.fn((url: string) =>
+      Promise.resolve({ status: 200, url, text: () => Promise.resolve(JSON.stringify({ results: [], total_pages: 1 })) }),
+    );
+    vi.stubGlobal('fetch', f);
+    const c = await tvCatalog();
+    await c.search('x', 1);
+    expect(String(f.mock.calls[0][0])).toContain('api_key=phone');
+  });
+
   it('returns the test client', async () => {
     const c = { fake: true } as unknown as CatalogClient;
     setTvCatalogForTests(c);
