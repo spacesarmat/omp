@@ -91,5 +91,7 @@ object Embedded2160 {
             val settings = PlayerSettings.get(context)
             if (settings.current.backgroundPlayback != on) settings.update { it.copy(backgroundPlayback = on) }
         }
+        // Notification seek/stop buttons. Installed only when the service will actually run (phone + setting on).
+        if (on) PlaybackNotification.install(context)
     }
 }

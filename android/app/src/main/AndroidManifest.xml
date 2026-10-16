@@ -17,7 +17,10 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- API 34+: PlaybackService uses foregroundServiceType=mediaPlayback. Install-time, not a runtime prompt. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- API 33+: the media notification is visible only after the user allows notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -134,16 +137,26 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
-        <!-- From 2160 player-core: its MediaSessionService (notification with controls, lock screen, headset, background
-             play). Not exported (player-core exports it to other apps and car/watch controllers; OMP does not need that:
-             its own notification binds in-process). Disabled here: the TV engine (Engine2160) starts it in runCatching and
-             does without it; on the phone «Звук в фоне» switches it on or off before the embedded 2160 screen starts
-             (Embedded2160.applyBackground). -->
+        <!-- From 2160 player-core: its media3 MediaSessionService (notification, lock screen, headset, background
+             audio). player-core exports it, which lets other apps and Android Auto bind; OMP does not want that, so
+             exported stays false and the in-process notification is the only controller. Disabled in the manifest:
+             Engine2160 on Android TV starts it inside runCatching and must keep running with no notification and no
+             service. The phone enables it only for «Звук в фоне» (Embedded2160.applyBackground).
+             foregroundServiceType=mediaPlayback is required with FOREGROUND_SERVICE_MEDIA_PLAYBACK on API 34+.
+             tools:node="replace" keeps that type once: merging it with player-core's own mediaPlayback value
+             would become mediaPlayback|mediaPlayback. The MediaBrowserService filter is not copied, so nothing
+             can browse the session. stopWithTask stops the service when the user swipes the task away. -->
         <service
             android:name="tv.p2160.core.engine.PlaybackService"
             android:enabled="false"
             android:exported="false"
-            tools:replace="android:exported" />
+            android:foregroundServiceType="mediaPlayback"
+            android:stopWithTask="true"
+            tools:node="replace">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
         <!-- From media3-session 1.11 (pulled in by player-core), exported; OMP does not use it. -->
         <activity

@@ -10,6 +10,7 @@ import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
 import com.spacesarmat.omp.player.Embedded2160
 import com.spacesarmat.omp.player.NativePlayerBridge
+import com.spacesarmat.omp.player.PlaybackNotification
 import com.spacesarmat.omp.player.PlayRequest
 import com.spacesarmat.omp.player.Player2160
 import com.spacesarmat.omp.player.PlayerActivity
@@ -101,9 +102,12 @@ internal fun OmpNativePlugin.playEmbedded2160Op(call: PluginCall) {
     val (items, start) = queue2160(call) ?: return
     val position = call.getDouble("positionMs")?.toLong() ?: 0L
     val plan = Embedded2160.plan(items, start, position, call.getBoolean("fromStart") ?: false, call.getString("segments").orEmpty())
+    val background = Embedded2160.backgroundOn(TvMode.isTv(context), call.getBoolean("background") ?: false)
     try {
-        Embedded2160.applyBackground(context, Embedded2160.backgroundOn(TvMode.isTv(context), call.getBoolean("background") ?: false))
+        Embedded2160.applyBackground(context, background)
         launchForResult(call, Embedded2160.intent(context, plan), "on2160Result")
+        // After the activity exists, so the session is already created. No-op on TV and when the setting is off.
+        if (background) PlaybackNotification.onPlayerOpened(context)
     } catch (_: RuntimeException) {
         call.release(capBridge)
         call.reject(I18n.s("plugin.openPlayerFailed"))
