@@ -2013,6 +2013,8 @@ export const ru = {
     noTvText: 'Чтобы управлять ТВ с телефона, сначала подключите его.',
     noTvButton: 'Подключить ТВ',
     foundTvs: 'Телевизоры в сети',
+    /** While the shared scan has not found a TV yet: stands in for the empty list. */
+    foundTvsSearching: 'Ищу…',
     /** A saved TV that does not answer: «LG OLED55… не отвечает — включите ТВ» with «Повторить». */
     noAnswerTv: '{name} не отвечает — включите ТВ',
     /** The header switcher of several saved TVs. */
