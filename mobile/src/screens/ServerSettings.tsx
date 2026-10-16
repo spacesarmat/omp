@@ -41,6 +41,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<NumField | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [expert, setExpert] = useState(false);
   const [tmdbOpen, setTmdbOpen] = useState(false);
   const [tmdbKey, setTmdbKey] = useState('');
   const [confirmClearKey, setConfirmClearKey] = useState(false);
@@ -118,7 +119,23 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   }
 
   const isLocal = !!c && c.baseUrl === LOCAL_URL;
-  const row = rows().filter((r) => r.field === open)[0];
+  const allRows = rows();
+  const cacheRow = allRows.filter((r) => r.field === 'CacheSize')[0];
+  const expertRows = allRows.filter((r) => r.field !== 'CacheSize');
+  const row = allRows.filter((r) => r.field === open)[0];
+  const TMDB_KEY_URL = 'https://www.themoviedb.org/settings/api';
+
+  function numRow(r: { field: NumField; label: string; options: NumOption[] }) {
+    if (!srv) return null;
+    const v = srv[r.field];
+    const cur = typeof v === 'number' ? withCurrent(r.options, v).filter((o) => o.value === v)[0] : undefined;
+    return (
+      <button type="button" class="m-set-row m-set-pick" data-field={r.field} onClick={() => setOpen(r.field)}>
+        <span>{r.label}</span>
+        <span class="m-muted">{cur ? cur.label : '—'}</span>
+      </button>
+    );
+  }
   return (
     <div class="m-screen" data-route="serverSettings">
       <div class="m-bar">
@@ -139,28 +156,6 @@ export function ServerSettings({ url }: { url?: string } = {}) {
       {!srv && !error && <div class="m-muted">{t('serverSettings.loading')}</div>}
       {srv && (
         <>
-          <section class="m-set-group">
-            {rows().map((r) => {
-              const v = srv[r.field];
-              const cur = typeof v === 'number' ? withCurrent(r.options, v).filter((o) => o.value === v)[0] : undefined;
-              return (
-                <button type="button" class="m-set-row m-set-pick" data-field={r.field} onClick={() => setOpen(r.field)}>
-                  <span>{r.label}</span>
-                  <span class="m-muted">{cur ? cur.label : '—'}</span>
-                </button>
-              );
-            })}
-            <div class="m-set-row m-ss-row">
-              <span>{t('tvSettings.trackTimecode')}</span>
-              <Switch on={!!srv.TrackTimecode} label={t('tvSettings.trackTimecode')} onToggle={() => save({ TrackTimecode: !srv.TrackTimecode })} />
-            </div>
-            {isLocal && (
-              <div class="m-set-row m-ss-row">
-                <span>{t('serverSettings.diskCache')}</span>
-                <Switch on={!!srv.UseDisk} label={t('serverSettings.diskCache')} onToggle={() => save({ UseDisk: !srv.UseDisk })} />
-              </div>
-            )}
-          </section>
           {tmdb && (
             <section class="m-set-group">
               <button
@@ -172,7 +167,10 @@ export function ServerSettings({ url }: { url?: string } = {}) {
                   setTmdbOpen(true);
                 }}
               >
-                <span>{t('serverSettings.tmdbKey')}</span>
+                <div class="m-set-text" style="flex-grow: 1">
+                  <span>{t('serverSettings.tmdbKey')}</span>
+                  <span class="m-muted m-small">{t('serverSettings.tmdbHint')}</span>
+                </div>
                 <span class="m-muted">{tmdb.APIKey ? t('serverSettings.set') : t('serverSettings.notSet')}</span>
               </button>
               {tmdb.APIKey && isActive && (
@@ -183,9 +181,39 @@ export function ServerSettings({ url }: { url?: string } = {}) {
               )}
             </section>
           )}
-          <button type="button" class="m-btn m-btn-secondary m-ss-reset" onClick={() => setConfirmReset(true)}>
-            {t('serverSettings.reset')}
-          </button>
+          <section class="m-set-group">
+            {numRow(cacheRow)}
+            {isLocal && (
+              <div class="m-set-row m-ss-row">
+                <span>{t('serverSettings.diskCache')}</span>
+                <Switch on={!!srv.UseDisk} label={t('serverSettings.diskCache')} onToggle={() => save({ UseDisk: !srv.UseDisk })} />
+              </div>
+            )}
+          </section>
+          <section class="m-set-group" data-section="expert">
+            <button
+              type="button"
+              class="m-set-row m-set-pick"
+              data-row="expert"
+              aria-expanded={expert}
+              onClick={() => setExpert((v) => !v)}
+            >
+              <span>{t('settings.expert')}</span>
+              <Icon d="M9 6l6 6-6 6" size={18} />
+            </button>
+            {expert && (
+              <>
+                {expertRows.map((r) => numRow(r))}
+                <div class="m-set-row m-ss-row">
+                  <span>{t('tvSettings.trackTimecode')}</span>
+                  <Switch on={!!srv.TrackTimecode} label={t('tvSettings.trackTimecode')} onToggle={() => save({ TrackTimecode: !srv.TrackTimecode })} />
+                </div>
+                <button type="button" class="m-btn m-btn-secondary m-ss-reset" onClick={() => setConfirmReset(true)}>
+                  {t('serverSettings.reset')}
+                </button>
+              </>
+            )}
+          </section>
         </>
       )}
       {srv && row && (
@@ -205,6 +233,9 @@ export function ServerSettings({ url }: { url?: string } = {}) {
           <div class="m-muted">
             {t('serverSettings.tmdbText')}
           </div>
+          <button type="button" class="m-link" onClick={() => window.open(TMDB_KEY_URL, '_system')}>
+            {t('serverSettings.tmdbLink')}
+          </button>
           <div class="m-field">
             <label for="tmdb-key">{t('serverSettings.apiKey')}</label>
             <input

@@ -15,7 +15,7 @@ import { PlayerScreen } from './screens/Player';
 import { NativePlayerScreen } from './screens/NativePlayer';
 import { AddScreen } from './screens/Add';
 import { PlaylistScreen } from './screens/Playlist';
-import { SettingsScreen } from './screens/Settings';
+import { AdvancedSettingsScreen, SettingsScreen } from './screens/Settings';
 import { FaqScreen } from './screens/Faq';
 import { UpdateScreen } from './screens/Update';
 import { PairPhoneScreen } from './screens/PairPhone';
@@ -74,6 +74,8 @@ function renderRoute(r: Route) {
       return <PlaylistScreen url={r.url} title={r.title} />;
     case 'settings':
       return <SettingsScreen />;
+    case 'advanced':
+      return <AdvancedSettingsScreen />;
     case 'faq':
       return <FaqScreen />;
     case 'pairPhone':

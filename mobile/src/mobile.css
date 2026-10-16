@@ -837,6 +837,8 @@ button, .m-btn {
 
 /* Settings + update sheet */
 .m-screen[data-route='settings'] { display: flex; flex-direction: column; gap: 20px; }
+.m-screen[data-route='advanced'],
+.m-screen[data-route='account'] { display: flex; flex-direction: column; gap: 20px; }
 /* «Источники поиска»: the sections spaced like «Настройки», a label never right under the card above it */
 .m-screen[data-route='sources'] { display: flex; flex-direction: column; gap: 20px; }
 .m-set-group { display: flex; flex-direction: column; gap: 10px; }

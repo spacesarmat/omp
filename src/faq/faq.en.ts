@@ -213,7 +213,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'beta': {
     q: 'Beta versions',
     short: [
-      'Want new features first — turn on “Get beta versions”: on the phone in Settings → “Update”, on the TV in “Update” → “Beta versions”.',
+      'Want new features first — turn on “Try new features first”: on the phone in Settings → “Advanced”, on the TV in “Update” → “Beta versions” or in “Advanced”.',
       'A beta may have bugs. When the main version is out, OMP offers it and it replaces the beta.',
       'If you turn the switch off, the beta stays until the next main version is out.',
     ],
@@ -582,14 +582,14 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     q: 'Notifications are late or do not arrive',
     short: [
       '1. In the battery settings allow OMP to run in the background without restrictions.',
-      '2. “Settings → Monitoring”: “Wi-Fi only” skips the check without Wi‑Fi.',
+      '2. Settings → “Follow new releases”: “Wi-Fi only” skips the check without Wi‑Fi.',
       '3. Allow notifications for OMP in the Android settings.',
       '4. For the “Add” button in the notification the server must be reachable.',
     ],
     more: [
       'Android decides itself when to run background checks and postpones them to save battery. If notifications are rare, open the battery settings for OMP and allow background work without restrictions (on phones of some makers this is called “Autostart” or “Unrestricted”).',
-      'The “Wi-Fi only” switch is on in “Settings → Monitoring”: without Wi‑Fi the check is skipped until the next time. The check runs once every few hours — 3 hours by default, the interval is changed in the same place.',
-      'Notifications need a permission: OMP asks for it once. If you refused, turn on notifications for OMP in the Android settings; the “Allow notifications” button in “Settings → Monitoring” also leads there. Without the permission you can learn about new items only by opening the “New” tab.',
+      'The “Wi-Fi only” switch is on in Settings → “Follow new releases”: without Wi‑Fi the check is skipped until the next time. The check runs once every few hours — 3 hours by default, the interval is changed in the same place.',
+      'Notifications need a permission: OMP asks for it once. If you refused, turn on notifications for OMP in the Android settings; the “Allow notifications” button in Settings → “Follow new releases” also leads there. Without the permission you can learn about new items only by opening the “New” tab.',
       'The “Add” button in the notification works even when OMP is closed, but it needs a reachable server: if you use TorrServer on this phone, it must be running. If the server is not reachable, the torrent will not be added, and the new item stays in the “New” tab.',
     ],
   },
@@ -835,7 +835,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       '“Replace” in the notification or the card adds the new torrent and moves the history and “Skip” into it.',
     ],
     more: [
-      'Following the films is turned on in “Settings → Monitoring” (“Better quality of films”) and, for one film, in its card.',
+      'Following the films is turned on in Settings → “Follow new releases” (“Better quality of films”) and, for one film, in its card.',
       'This is separate from “Find in better quality” on the torrent screen: see the question “Find in better quality: search on demand”.',
       '“Replace” works as for new episodes (the question “New episodes and the “Replace” button”): the old torrent is removed from the server only once the new one is added. A card in “New” can be dismissed with “Hide”.',
     ],
@@ -943,15 +943,15 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'ts-settings': {
     q: 'Where the server settings are',
     short: [
-      'Settings → “Server settings”: cache, preload, connections, speed.',
-      'For a server on the phone the item is in the “TorrServer on the phone” block while the server is running.',
+      'Settings → “Advanced” → “Server settings”: cache, and under “For experienced users” — preload, connections, speed.',
+      'There is one item, for the selected server and for the server on the phone.',
     ],
   },
   'ts-covers': {
     q: 'No posters for new torrents',
     short: [
       '1. Get a free key at themoviedb.org (Settings → API).',
-      '2. Enter it in “Server settings” → “TMDB key for posters”.',
+      '2. Enter it in Settings → “Advanced” → “Server settings” → “Key for posters and descriptions (TMDB)”. It has to be a v3 API key of 32 characters.',
     ],
     more: [
       'Posters are looked up in the TMDB database with the key stored in TorrServer.',
@@ -972,7 +972,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'The “New” tab is a feed of fresh torrents from rutor, nnmclub and torrent.by: “Movies”, “Series”, “Anime” and the 1080p+ filter. Each torrent has “Add” and “On TV”. The sources must be turned on in “Search sources”.',
       'A subscription is a query with rules: sources, the minimum quality and the number of seeds. Create it with the “+ New subscription” button on the “Subscriptions” tab. OMP checks the subscriptions itself and reports new torrents with a notification and a badge on the “New” tab.',
       'The first check of a new subscription goes without notifications: the torrents already on the sites are considered known. Notifications come only about what appeared later.',
-      'You can also check by hand: the refresh button in the “New” header. How often OMP checks by itself and whether Wi‑Fi is needed for it — in “Settings → Monitoring” (the monitoring icon in the “New” header and the “Monitoring settings” button at the bottom lead there too).',
+      'You can also check by hand: the refresh button in the “New” header. How often OMP checks by itself and whether Wi‑Fi is needed for it — in Settings → “Follow new releases” (the monitoring icon in the “New” header and the “Monitoring settings” button at the bottom lead there too).',
       'Each subscription has its own check button. Subscriptions and found torrents can be searched with the search field and sorted: new findings, by name, by date added.',
     ],
   },
@@ -987,7 +987,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'For series from the catalog OMP looks for a fuller torrent of the same series and season itself. If new episodes are out, a card “Episodes 9–10 are out · you have 1–8” appears in “New” on the “Subscriptions” tab.',
       '“Replace” adds the new torrent to the server and moves into it the watch history, the stop positions, the “Skip” settings and the category. The old torrent is removed from the server only after the new one is added successfully: if something goes wrong, the old one stays in place. The name and the poster are taken from the new torrent.',
       '“Watch on TV” on the new episodes card first does the replace, and then starts playback. If there are several suitable torrents, you can choose “Another release” in the replace window.',
-      '“Stop following” turns off the new episodes check for this series. For all series at once it can be turned off in “Settings → Monitoring” (the monitoring icon in the “New” header).',
+      '“Stop following” turns off the new episodes check for this series. For all series at once it can be turned off in Settings → “Follow new releases” (the monitoring icon in the “New” header).',
     ],
   },
 
@@ -997,35 +997,35 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     short: [
       'The last 500 events: errors, warnings, the results of the subscription checks, launches.',
       'Personal data (passwords, cookies, addresses, torrent names) does not get into the log; it is stored only on the device.',
-      'To open: Settings → “Error log”. “Clear” erases it.',
+      'To open: Settings → “Advanced” → “Error log”. “Clear” erases it.',
     ],
     more: [
       'The log is a list of the last 500 events of the app: errors and warnings (the server did not answer, a source site is closed, an install error), the results of the background subscription check, the app launch. Each entry has a time, a level (INFO, WARNING, ERROR) and an area (app, server, search, monitoring, TV, install).',
       'Passwords, cookies, server and TV addresses, torrent names, hashes, logins and addresses with parameters do not get into the log: everything personal is cut out before writing. The log is stored only on the device and is not sent anywhere by itself.',
-      'It can be opened in Settings → “Error log”. The filters: “All”, “Errors”, “Monitoring”. The “Clear” button erases the log. There is also a short log in the TV settings (LG and Android TV).',
+      'It can be opened in Settings → “Advanced” → “Error log”. The filters: “All”, “Errors”, “Monitoring”. The “Clear” button erases the log. There is also a short log in the TV settings (LG and Android TV).',
     ],
   },
   'report-bug': {
     q: 'Report an error and share the log',
     short: [
-      'Settings → “Error log” → “Report an error on GitHub”: a new issue opens, the log is copied — paste it.',
+      'Settings → “Advanced” → “Error log” → “Report an error on GitHub”: a new issue opens, the log is copied — paste it.',
       '“Share log” sends the file through the system “Share”.',
       'Nothing is sent until you press the create-issue button on GitHub yourself.',
     ],
     more: [
-      'Settings → “Error log” → “Report an error on GitHub”. The new issue page in the OMP repository opens; the text already has the OMP version, the Android version and the device model. The log is copied to the clipboard — paste it into the issue (a long log does not fit into the link whole). Nothing is sent until you press the create-issue button on GitHub yourself.',
+      'Settings → “Advanced” → “Error log” → “Report an error on GitHub”. The new issue page in the OMP repository opens; the text already has the OMP version, the Android version and the device model. The log is copied to the clipboard — paste it into the issue (a long log does not fit into the link whole). Nothing is sent until you press the create-issue button on GitHub yourself.',
       '“Share log” sends the file omp-log-<date>.txt through the system “Share” (to Telegram, by mail, to a drive). Personal data is cut out of the log, but it is still worth looking through before sending.',
     ],
   },
   'backup': {
     q: 'Backup: save and restore',
     short: [
-      'Save: Settings → “Backup” → “Save the backup…”, send the omp-backup-<date>.json file to yourself.',
+      'Save: Settings → “Advanced” → “Backup” → “Save the backup…”, send the omp-backup-<date>.json file to yourself.',
       'Restore: “Restore from a file…”, check the contents and confirm “Replace the data on the phone”.',
       'The file contains the TorrServer password and the pairing keys — keep it like a password.',
     ],
     more: [
-      'Settings → “Backup” → “Save the backup…” creates the omp-backup-<date>.json file and opens the system “Share”: send it to yourself in Telegram, to a drive or save it to a phone folder.',
+      'Settings → “Advanced” → “Backup” → “Save the backup…” creates the omp-backup-<date>.json file and opens the system “Share”: send it to yourself in Telegram, to a drive or save it to a phone folder.',
       'The backup includes: the TorrServer servers and their names (and the access password to your TorrServer, if set), the TVs and the pairing keys with them, the subscriptions and the monitoring settings, the turned-on search sources, the app and touchpad settings, the catalog view, the favorite playlists and the track choices.',
       'The backup does not include the tracker passwords and cookies (the rutracker sign-in has to be done again), nor the watch history and “Skip” — they are stored on TorrServer. The error log and temporary data are not saved either.',
       'Attention: the file contains server addresses, the TorrServer password and the pairing keys with the TVs — keep it like a password and do not post it publicly.',
@@ -1038,11 +1038,11 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     q: 'How to support OMP',
     short: [
       'OMP is free and has no ads, all features are available to everyone.',
-      'To support: Settings → “About” → “Support OMP” (a page opens in the browser).',
+      'To support: Settings → “Support the project” (a page opens in the browser).',
       'Already supported? Enter the Boosty code in “Support OMP” → “Already supported?”.',
     ],
     more: [
-      'OMP is free and has no ads, all features are available to everyone. If the app is useful to you, you can support the development: Settings → “About” → “Support OMP”.',
+      'OMP is free and has no ads, all features are available to everyone. If the app is useful to you, you can support the development: Settings → “Support the project”.',
       'The app sends nothing when you do this: the button just opens a page in the browser.',
       'On the TV, on pause and during the final credits, a card with a QR code appears — point the phone camera at it.',
       'Already supported? Boosty subscribers get a support code, it changes every month. Enter it in “Support OMP” → “Already supported?” — until the end of the month OMP will not ask for support, neither on the phone nor on the TVs. The code is checked on the phone, only the end date is written to the server.',

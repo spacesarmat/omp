@@ -2,13 +2,13 @@ import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
-import { SettingsScreen } from '../../src/screens/Settings';
+import { AdvancedSettingsScreen } from '../../src/screens/Settings';
 import { log, clearLog, logEntries } from '../../src/lib/log';
 
 function mount() {
   const host = document.createElement('div');
   document.body.appendChild(host);
-  act(() => render(h(SettingsScreen, {}), host));
+  act(() => render(h(AdvancedSettingsScreen, {}), host));
   return host;
 }
 

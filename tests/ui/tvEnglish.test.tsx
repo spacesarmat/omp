@@ -6,7 +6,7 @@ import { applyLanguageSetting } from '../../src/i18n';
 import { ConnectScreen } from '../../src/screens/Connect';
 import { LibraryScreen } from '../../src/screens/Library';
 import { TorrentScreen } from '../../src/screens/Torrent';
-import { SettingsScreen } from '../../src/screens/Settings';
+import { AdvancedSettingsScreen, SettingsScreen } from '../../src/screens/Settings';
 import { UpdateScreen } from '../../src/screens/Update';
 import { SourcesScreen } from '../../src/screens/Sources';
 import { AddScreen } from '../../src/screens/Add';
@@ -398,12 +398,21 @@ describe('TV screens in English', () => {
     await flush();
     const text = noRussian(host);
     expect(text).toContain('Settings');
-    expect(text).toContain('Playback');
+    expect(text).toContain('Viewing');
     expect(text).toContain('Audio language');
-    expect(text).toContain('Save on the server');
+    expect(text).toContain('Where to watch');
     expect(text).toContain('Check for updates');
-    expect(text).toContain('Reset the app settings');
+    expect(text).toContain('Advanced');
+    expect(text).not.toContain('http://srv:8090');
     expect(text).not.toMatch(CYR);
+    act(() => render(null, host));
+    mount(h(AdvancedSettingsScreen, {}));
+    await flush();
+    const adv = noRussian(host);
+    expect(adv).toContain('Save on the server');
+    expect(adv).toContain('Reset the app settings');
+    expect(adv).toContain('http://srv:8090');
+    expect(adv).not.toMatch(CYR);
   });
 
   it('Settings without a server', async () => {

@@ -2,25 +2,9 @@ import { useEffect, useState } from 'preact/hooks';
 import { navigate } from '../nav';
 import { FoundTvs } from '../ui/FoundTvs';
 import { Icon } from '../ui/Icon';
-import {
-  localServer,
-  localAutostart,
-  setAutostart,
-  startLocal,
-  stopLocal,
-  refreshLocalServer,
-  localCacheBytes,
-  clearLocalCache,
-  LOCAL_PORT,
-  localName,
-  LOCAL_URL,
-  canRun,
-  needsDownload,
-  downloadSize,
-} from '../server/localServer';
-import { TORRSERVER_VERSION } from '../server/torrserverVersion';
 import { showToast } from '../ui/toast';
-import { activeServer, addServer, servers } from '../../../src/store/servers';
+import { TorrServerClient } from '../../../src/api/torrserver';
+import { activeServer, client, serverHost } from '../../../src/store/servers';
 import { activeTv } from '../tv/tvStore';
 import { tvState } from '../tv/tvClient';
 import { tvSearchOn, setTvSearch } from '../tv/phoneRpc';
@@ -37,8 +21,8 @@ import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
-import { native } from '../platform/native';
-import { fmtSize, t, type LanguageSetting } from '../../../src/i18n';
+import { billingSession, onBillingChange } from '../../../src/billing/session';
+import { t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { phonePlayerName } from './VideoPlayer';
@@ -65,9 +49,6 @@ export const betaHint = (): string => t('settings.betaHint');
 /** The badge next to a beta version. */
 export const betaBadge = (): string => t('updateScreen.beta');
 
-const PROJECT_URL = 'https://github.com/spacesarmat/omp';
-const TORRSERVER_SOURCE_URL = 'https://github.com/YouROK/TorrServer/tree/' + TORRSERVER_VERSION;
-
 function Switch(p: { on: boolean; label: string; disabled?: boolean; onToggle: () => void }) {
   return (
     <button
@@ -84,142 +65,28 @@ function Switch(p: { on: boolean; label: string; disabled?: boolean; onToggle: (
   );
 }
 
-function LocalServerSection() {
-  const st = localServer.value;
-  const [bytes, setBytes] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [starting, setStarting] = useState(false);
-
-  useEffect(() => {
-    void refreshLocalServer();
-  }, []);
-  useEffect(() => {
-    let alive = true;
-    void localCacheBytes().then((b) => alive && setBytes(b));
-    return () => {
-      alive = false;
-    };
-  }, [st.running]);
-
-  async function toggle() {
-    if (busy) return;
-    // no binary yet: the setup screen offers the download
-    if (!st.running && !canRun(st)) {
-      navigate({ name: 'localServer' });
-      return;
-    }
-    setBusy(true);
-    try {
-      if (st.running) await stopLocal();
-      else {
-        setStarting(true);
-        await startLocal();
-        // started here, not through the setup screen: make it a saved server too (not the active one)
-        if (localServer.value.running && !servers.value.some((s) => s.url === LOCAL_URL)) {
-          addServer({ name: localName(), url: LOCAL_URL });
-        }
-      }
-    } finally {
-      setStarting(false);
-      setBusy(false);
-    }
-  }
-
-  async function clear() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await clearLocalCache();
-      setBytes(await localCacheBytes());
-    } catch {
-      showToast(t('settings.clearFailed'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const missing = !st.running && !canRun(st);
-  const size = downloadSize(st);
-  const meta = missing
-    ? size
-      ? t('settings.localMissingSize', { size: size })
-      : t('settings.localMissing')
-    : [st.version, st.ip ? st.ip + ':' + LOCAL_PORT : ''].filter(Boolean).join(' · ');
-  return (
-    <section class="m-set-group" data-section="local-server">
-      <div class="m-set-label">{t('localServer.title')}</div>
-      <div class="m-set-card">
-        <div class="m-set-row">
-          <span class={'m-status-dot' + (st.running ? ' on' : '')} />
-          <div class="m-set-text" style="flex-grow: 1">
-            <span style="font-weight: 700">{starting ? t('settings.localStarting') : st.running ? t('sources.flare.works') : missing ? t('settings.localNotDownloaded') : t('settings.localStopped')}</span>
-            {meta && <span class="m-muted m-small">{meta}</span>}
-          </div>
-          <Switch on={st.running} label={t('localServer.title')} disabled={starting} onToggle={() => void toggle()} />
-        </div>
-        {st.error && (
-          <div class="m-error" role="alert">
-            {st.error}
-          </div>
-        )}
-        {needsDownload(st) && st.binary === 'outdated' && (
-          <>
-            <div class="m-set-sep" />
-            <div class="m-set-row" data-local="update">
-              <div class="m-set-text" style="flex-grow: 1">
-                <span>{t('settings.localNewVersion')}</span>
-                <span class="m-muted m-small">{[st.pinVersion, size].filter(Boolean).join(' · ')}</span>
-              </div>
-              <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'localServer' })}>
-                {t('settings.localUpdate')}
-              </button>
-            </div>
-          </>
-        )}
-        <div class="m-set-sep" />
-        <div class="m-set-row">
-          <div class="m-set-text" style="flex-grow: 1">
-            <span>{t('settings.autostart')}</span>
-            <span class="m-muted m-small">{t('settings.autostartSub')}</span>
-          </div>
-          <Switch on={localAutostart.value} label={t('settings.autostart')} onToggle={() => setAutostart(!localAutostart.value)} />
-        </div>
-        <div class="m-set-sep" />
-        <div class="m-set-row">
-          <div class="m-set-text" style="flex-grow: 1">
-            <span>{t('settings.cacheTitle')}</span>
-            <span class="m-muted m-small">{bytes === null ? t('settings.counting') : t('settings.cacheUsed', { used: fmtSize(bytes) })}</span>
-          </div>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={busy} onClick={() => void clear()}>
-            {t('tvSettings.clear')}
-          </button>
-        </div>
-        {st.running && (
-          <>
-            <div class="m-set-sep" />
-            <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'serverSettings', url: LOCAL_URL })}>
-              <span>{t('serverSettings.title')}</span>
-              <Icon d="M9 6l6 6-6 6" size={18} />
-            </button>
-          </>
-        )}
-      </div>
-      <div class="m-hint-ok">
-        <Icon d="M12 8v.01M11 12h1v5h1M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18" size={18} />
-        <span>{t('settings.serverNote')}</span>
-      </div>
-      <p class="m-muted m-small" data-row="lan-warn">{t('settings.lanWarn')}</p>
-      {st.vpn && <div class="m-hint-warn" role="alert">{t('localServer.vpn')}</div>}
-    </section>
-  );
-}
-
 const CHECK = 'M5 12l5 5l9-10';
+const CHEVRON = 'M9 6l6 6l-6 6';
 const LANGUAGES: LanguageSetting[] = ['system', 'ru', 'en'];
 
 /** «Как в системе» / «Русский» / «English» in the current language. */
 function languageName(v: LanguageSetting): string {
   return v === 'ru' || v === 'en' ? LANGUAGE_NAMES[v] : t('settings.language.system');
+}
+
+function billingDay(ms: number): string {
+  if (!ms) return '';
+  const d = new Date(ms);
+  const p = (n: number) => (n < 10 ? '0' : '') + n;
+  return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear();
+}
+
+/** A name a person chose. Empty when the server is still named after its address. */
+function chosenName(s: { name: string; url: string }): string {
+  const host = serverHost(s.url);
+  const name = (s.name || '').trim();
+  if (!name || serverHost(name).toLowerCase() === host.toLowerCase()) return '';
+  return name;
 }
 
 /** «Язык»: the row shows the setting, a sheet offers the three choices; a choice applies at once. */
@@ -263,12 +130,10 @@ function LanguageRow() {
 /** «Плеер для видео»: opens its own screen (the three options do not fit in a segment). */
 function VideoPlayerRow() {
   return (
-    <section class="m-set-group">
-      <button type="button" class="m-set-row m-set-pick" data-row="video-player" onClick={() => navigate({ name: 'videoPlayer' })}>
-        <span>{t('player.videoPlayer')}</span>
-        <span class="m-muted">{phonePlayerName(settings.value.phonePlayer)} ›</span>
-      </button>
-    </section>
+    <button type="button" class="m-set-row m-set-pick" data-row="video-player" onClick={() => navigate({ name: 'videoPlayer' })}>
+      <span>{t('player.videoPlayer')}</span>
+      <span class="m-muted">{phonePlayerName(settings.value.phonePlayer)} ›</span>
+    </button>
   );
 }
 
@@ -286,25 +151,34 @@ function TvSearchRow() {
   );
 }
 
-/** OMP version on the connected TV; an old one gets «Обновить на ТВ». */
-function TvOmpRow() {
+/** Installed and newest OMP on the connected TV. */
+function useTvOmp(): { ready: boolean; v: TvOmp | null } {
   const connected = tvState.value === 'connected';
   const ip = activeTv.value ? activeTv.value.ip : '';
   const [v, setV] = useState<TvOmp | null>(null);
-  const [hint, setHint] = useState(false);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     setV(null);
-    setHint(false);
+    setReady(false);
     if (!connected) return;
     let alive = true;
-    tvOmpVersions().then((r) => alive && setV(r));
+    tvOmpVersions().then((r) => {
+      if (!alive) return;
+      setV(r);
+      setReady(true);
+    });
     return () => {
       alive = false;
     };
   }, [connected, ip]);
-  if (!connected || !v || !v.installed) return null;
+  return { ready, v };
+}
+
+/** OMP on the connected TV, only while a newer build exists. */
+function TvOmpRow({ v }: { v: TvOmp | null }) {
+  const [hint, setHint] = useState(false);
+  if (!v || !v.installed || !tvNeedsUpdate(v)) return null;
   const installed = v.installed;
-  const old = tvNeedsUpdate(v);
   const update = () => {
     const opens = tvOpensUpdate(installed);
     // older TV builds only open OMP: the update is started there by hand
@@ -319,19 +193,15 @@ function TvOmpRow() {
       <div class="m-set-row" data-row="tv-omp">
         <div class="m-set-text">
           <span>{t('settings.tvOmp')}</span>
-          <span class={'m-small' + (old ? ' m-accent' : ' m-muted')}>
-            {old ? t('settings.tvOmpNewer', { installed: installed, latest: v.latest || '' }) : v.latest ? t('settings.tvOmpLatest', { installed: installed }) : installed}
-          </span>
+          <span class="m-small m-accent">{t('settings.tvOmpNewer', { installed: installed, latest: v.latest || '' })}</span>
         </div>
-        {old && (
-          <button
-            type="button"
-            class={'m-btn m-btn-sm' + (latestUpdate.value ? ' m-btn-secondary' : ' m-btn-primary')}
-            onClick={update}
-          >
-            {t('install.plan.updateOnTv')}
-          </button>
-        )}
+        <button
+          type="button"
+          class={'m-btn m-btn-sm' + (latestUpdate.value ? ' m-btn-secondary' : ' m-btn-primary')}
+          onClick={update}
+        >
+          {t('install.plan.updateOnTv')}
+        </button>
       </div>
       {hint && (
         <div class="m-hint-warn" role="status">
@@ -342,11 +212,55 @@ function TvOmpRow() {
   );
 }
 
+/** «Подписка до …» or «Войти», opening the account screen. */
+function AccountRow() {
+  const [session, setSession] = useState(billingSession());
+  useEffect(() => onBillingChange(() => setSession(billingSession())), []);
+  const until = session && session.token ? billingDay(session.paidUntil) : '';
+  return (
+    <button type="button" class="m-set-row m-set-pick" data-row="account" onClick={() => navigate({ name: 'account' })}>
+      <span>{until ? t('settings.subscribedUntil', { date: until }) : t('common.signIn')}</span>
+      <Icon d={CHEVRON} size={20} />
+    </button>
+  );
+}
+
+function useReachable(url: string): 'none' | 'checking' | 'ok' | 'down' {
+  const [st, setSt] = useState<'checking' | 'ok' | 'down'>('checking');
+  useEffect(() => {
+    if (!url) return;
+    let alive = true;
+    setSt('checking');
+    const c = client.peek();
+    const probe = c && c.baseUrl === url ? c : new TorrServerClient({ url });
+    probe.echo().then(
+      () => alive && setSt('ok'),
+      () => alive && setSt('down'),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+  if (!url) return 'none';
+  return st;
+}
+
+function reachText(st: 'none' | 'checking' | 'ok' | 'down'): string {
+  if (st === 'ok') return t('settings.reachable');
+  if (st === 'down') return t('settings.unreachable');
+  if (st === 'checking') return t('settings.checking');
+  return '';
+}
+
 export function Settings() {
   const server = activeServer.value;
   const tv = activeTv.value;
-  const on = settings.value.updateCheck;
   const monitor = loadMonitorSettings();
+  const omp = useTvOmp();
+  const reach = useReachable(server ? server.url : '');
+  const connected = tvState.value === 'connected';
+  const ompMissing = omp.ready && !!omp.v && !omp.v.installed;
+  const showWizard = !tv || (connected && ompMissing);
 
   async function check() {
     const r = await runUpdateCheck({ manual: true, url: phoneFeedUrl() }).catch((): CheckResult => 'error');
@@ -354,74 +268,68 @@ export function Settings() {
     else if (r === 'latest') showToast(t('updateScreen.latest'));
   }
 
+  const where = server ? chosenName(server) || t('tvSettings.server') : t('settings.notChosen');
+  const whereLine = server ? where + ' · ' + reachText(reach) : where;
+
   return (
     <div class="m-screen" data-route="settings">
       <ScreenHeader title={t('common.settings')} />
 
-      {/* 1. Everyday: sources (Jackett/Telegram) + monitor */}
-      <section class="m-set-group">
-        <div class="m-set-label">{t('tvSettings.sources')}</div>
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'sources' })}>
-          <span>{t('tvSettings.sources')}</span>
-          <Icon d="M9 6l6 6l-6 6" size={20} />
-        </button>
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'monitor' })}>
-          <span>{t('monitor.title')}</span>
-          <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>
-        </button>
+      <section class="m-set-group" data-section="account">
+        <div class="m-set-label">{t('settings.account')}</div>
+        <AccountRow />
       </section>
 
-      {/* 2. TV */}
-      <section class="m-set-group">
+      <section class="m-set-group" data-section="tv">
         <div class="m-set-label">{t('history.tv')}</div>
         <div class="m-set-row">
           <div class="m-set-text">
             <span>{tv ? tv.name : t('settings.notChosen')}</span>
-            {tv && <span class="m-muted m-small">{tv.ip}</span>}
           </div>
           <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'tv' })}>
-            {t('settings.choose')}
+            {tv ? t('settings.change') : t('settings.choose')}
           </button>
         </div>
         {!tv && <FoundTvs />}
-        <TvOmpRow />
+        <TvOmpRow v={omp.v} />
         <TvSearchRow />
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'install' })}>
-          <span>{t('install.assistant.title')}</span>
-          <Icon d="M9 6l6 6l-6 6" size={20} />
-        </button>
+        {showWizard && (
+          <button type="button" class="m-set-row m-set-pick" data-row="install" onClick={() => navigate({ name: 'install' })}>
+            <span>{t('install.assistant.title')}</span>
+            <Icon d={CHEVRON} size={20} />
+          </button>
+        )}
       </section>
 
-      {/* 3. TorrServer */}
-      <section class="m-set-group">
-        <div class="m-set-label">{t('tvSettings.server')}</div>
-        <div class="m-set-row">
-          <div class="m-set-text">
-            <span>{server ? server.name : t('settings.notChosen')}</span>
-            {server && <span class="m-muted m-small">{server.url}</span>}
+      <section class="m-set-group" data-section="watch">
+        <div class="m-set-label">{t('settings.watch')}</div>
+        <div class="m-set-row" data-row="watch-from">
+          <div class="m-set-text" style="flex-grow: 1">
+            <span>{t('settings.watchFrom')}</span>
+            <span class="m-muted m-small">{whereLine}</span>
           </div>
           <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'connect' })}>
             {t('settings.change')}
           </button>
         </div>
-        {server && (
-          <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'serverSettings' })}>
-            <span>{t('serverSettings.title')}</span>
-            <Icon d="M9 6l6 6l-6 6" size={20} />
-          </button>
-        )}
-      </section>
-      {localServer.value.supported && <LocalServerSection />}
-
-      {/* 4. Player + language */}
-      <VideoPlayerRow />
-      <section class="m-set-group">
+        <VideoPlayerRow />
         <LanguageRow />
       </section>
 
-      {/* 5. Updates */}
-      <section class="m-set-group">
-        <div class="m-set-label">{t('update.sheetLabel')}</div>
+      <section class="m-set-group" data-section="search">
+        <div class="m-set-label">{t('settings.search')}</div>
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'sources' })}>
+          <span>{t('settings.whereSearch')}</span>
+          <Icon d={CHEVRON} size={20} />
+        </button>
+        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'monitor' })}>
+          <span>{t('settings.followNew')}</span>
+          <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>
+        </button>
+      </section>
+
+      <section class="m-set-group" data-section="app">
+        <div class="m-set-label">{t('settings.app')}</div>
         <button type="button" class="m-set-row m-set-row-btn" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>
           <span>{t('settings.version')}</span>
           <span class="m-muted">
@@ -438,60 +346,23 @@ export function Settings() {
             {t('updateScreen.check')}
           </button>
         )}
-        <div class="m-set-row">
-          <span>{t('tvSettings.updateOnStart')}</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={on}
-            aria-label={t('tvSettings.updateOnStart')}
-            class={'m-switch' + (on ? ' on' : '')}
-            onClick={() => updateSettings({ updateCheck: !on })}
-          >
-            <span class="m-switch-knob" />
-          </button>
-        </div>
-        <div class="m-set-row" data-row="beta">
-          <div class="m-set-text">
-            <span>{t('settings.betaTitle')}</span>
-            <span class="m-small m-muted">{betaHint()}</span>
-          </div>
-          <Switch
-            on={settings.value.betaUpdates}
-            label={t('settings.betaTitle')}
-            onToggle={() => updateSettings({ betaUpdates: !settings.value.betaUpdates })}
-          />
-        </div>
-      </section>
-
-      {/* 6. Help & about */}
-      <section class="m-set-group">
-        <div class="m-set-label">{t('tvSettings.about')}</div>
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'faq' })}>
-          <span>{t('common.faq')}</span>
-          <Icon d="M9 6l6 6l-6 6" size={20} />
-        </button>
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'backup' })}>
-          <span>{t('backup.title')}</span>
-          <Icon d="M9 6l6 6l-6 6" size={20} />
-        </button>
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'log' })}>
-          <span>{t('log.screenTitle')}</span>
-          <Icon d="M9 6l6 6l-6 6" size={20} />
+          <span>{t('settings.help')}</span>
+          <Icon d={CHEVRON} size={20} />
         </button>
         {activeMethods().length > 0 && (
           <button type="button" class="m-set-row m-set-pick" onClick={openDonate}>
-            <span>{t('donate.title')}</span>
-            <Icon d="M9 6l6 6l-6 6" size={20} />
+            <span>{t('settings.support')}</span>
+            <Icon d={CHEVRON} size={20} />
           </button>
         )}
-        <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(PROJECT_URL, '_system')}>
-          {t('settings.projectPage')}
+      </section>
+
+      <section class="m-set-group" data-section="advanced">
+        <button type="button" class="m-set-row m-set-pick" data-row="advanced" onClick={() => navigate({ name: 'advanced' })}>
+          <span>{t('settings.advanced')}</span>
+          <Icon d={CHEVRON} size={20} />
         </button>
-        <button type="button" class="m-link" onClick={() => window.open(TORRSERVER_SOURCE_URL, '_system')}>
-          TorrServer © YouROK, GPL-3.0
-        </button>
-        <p class="m-muted m-small m-set-attr">{t('settings.tmdbData')}</p>
       </section>
     </div>
   );

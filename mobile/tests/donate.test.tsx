@@ -145,9 +145,9 @@ describe('30-day card', () => {
 });
 
 describe('entry points', () => {
-  it('Settings → «О приложении» has «Поддержать OMP» that opens the sheet', async () => {
+  it('Settings → «Приложение» has «Поддержать проект» that opens the sheet', async () => {
     const el = mount(<Settings />);
-    await act(async () => btn(el, 'Поддержать OMP').click());
+    await act(async () => btn(el, 'Поддержать проект').click());
     expect(donateOpen.value).toBe(true);
   });
   it('«Что нового» has a link that swaps to the donate sheet', async () => {

@@ -12,6 +12,7 @@ export type Route =
   | { name: 'add'; query?: string; run?: boolean }
   | { name: 'playlist'; url?: string; title?: string }
   | { name: 'settings' }
+  | { name: 'advanced' }
   | { name: 'update' }
   | { name: 'sources' }
   | { name: 'tsSources' }

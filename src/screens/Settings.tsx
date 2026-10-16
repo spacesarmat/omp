@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'preact/hooks';
 import { settings, updateSettings, resetSettings } from '../store/settings';
-import { client, activeServer, serverLabel } from '../store/servers';
+import { client, activeServer, serverHost } from '../store/servers';
 import type { ServerSettings } from '../api/types';
 import { errorMessage } from '../api/http';
 import { LANG_OPTIONS } from '../lib/tracks';
 import { APP_VERSION } from '../version';
 import { subSizeOptions } from '../player/subtitleOffset';
-import { navigate } from '../ui/nav';
+import { goBack, navigate } from '../ui/nav';
+import { askText } from '../ui/TextDialog';
+import type { TmdbConfig } from '../api/types';
 import { FocusGroup, ChoiceRow, onOff, Button, Focusable } from '../ui/components';
 import { playerEngineOptions, vlcUnavailable, vlcAvailable } from '../player/nativeEngine';
 import { nativePlugin } from '../platform/androidNative';
@@ -144,13 +146,119 @@ function LogBrief() {
   );
 }
 
+/** A name a person chose. Empty when the server is still named after its address. */
+function chosenServerName(s: { name: string; url: string }): string {
+  const host = serverHost(s.url);
+  const name = (s.name || '').trim();
+  if (!name || serverHost(name).toLowerCase() === host.toLowerCase()) return '';
+  return name;
+}
+
 export function SettingsScreen() {
+  const s = settings.value;
+  const server = activeServer.value;
+  const c = client.value;
+  const [reach, setReach] = useState<'checking' | 'ok' | 'down'>('checking');
+
+  useEffect(() => {
+    restoreFocus('SETTINGS');
+  }, []);
+
+  useEffect(() => {
+    if (!c) return;
+    let live = true;
+    setReach('checking');
+    c.echo().then(
+      () => { if (live) setReach('ok'); },
+      () => { if (live) setReach('down'); },
+    );
+    return () => { live = false; };
+  }, [server ? server.url : '']);
+
+  const where = !server
+    ? t('errors.noServerSelected')
+    : (chosenServerName(server) || t('tvSettings.server')) + ' · ' + (reach === 'ok' ? t('settings.reachable') : reach === 'down' ? t('settings.unreachable') : t('settings.checking'));
+
+  return (
+    <FocusGroup focusKey="SETTINGS" className="screen settings">
+      <h1>{t('common.settings')}</h1>
+
+      <h2>{t('settings.watch')}</h2>
+      <ChoiceRow
+        focusKey="set-language"
+        label={t('settings.language.title')}
+        value={s.language}
+        options={languageOptions()}
+        onChange={(v) => updateSettings({ language: v })}
+      />
+      {platformKind() === 'androidtv' && <PlayerEngineSection />}
+      {platformKind() === 'androidtv' && <VideoPlayerSection />}
+      <ChoiceRow focusKey="set-audio" label={t('tvSettings.audioLang')} value={s.audioLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ audioLang: v })} />
+      <ChoiceRow focusKey="set-subtitlesOn" label={t('tvSettings.subtitlesOn')} value={s.subtitlesOn} options={onOff()} onChange={(v) => updateSettings({ subtitlesOn: v })} />
+      <ChoiceRow focusKey="set-subLang" label={t('tvSettings.subLang')} value={s.subLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ subLang: v })} />
+      <ChoiceRow focusKey="set-seekStep" label={t('tvSettings.seekStep')} value={s.seekStep} options={seekOptions()} onChange={(v) => updateSettings({ seekStep: v })} />
+      <ChoiceRow focusKey="set-edgeStep" label={t('tvSettings.edgeStep')} value={s.edgeSeekStep} options={[5, 10, 15].map((v) => ({ value: v, label: v + ' ' + t('common.sec') }))} onChange={(v) => updateSettings({ edgeSeekStep: v })} />
+      <ChoiceRow focusKey="set-autoNext" label={t('tvSettings.autoNext')} value={s.autoNext} options={onOff()} onChange={(v) => updateSettings({ autoNext: v })} />
+      <ChoiceRow focusKey="set-showStats" label={t('tvSettings.showStats')} value={s.showStats} options={onOff()} onChange={(v) => updateSettings({ showStats: v })} />
+
+      <h2>{t('common.subtitles')}</h2>
+      <ChoiceRow focusKey="set-subSize" label={t('tvSettings.subSize')} value={s.subSize} options={subSizeOptions()} onChange={(v) => updateSettings({ subSize: v })} />
+      <ChoiceRow focusKey="set-subColor" label={t('tvSettings.subColor')} value={s.subColor} options={subColorOptions()} onChange={(v) => updateSettings({ subColor: v })} />
+      <ChoiceRow focusKey="set-subBackground" label={t('tvSettings.subBackground')} value={s.subBackground} options={onOff()} onChange={(v) => updateSettings({ subBackground: v })} />
+
+      <h2>{t('settings.watchFrom')}</h2>
+      <div class="row">
+        <div class="grow">{where}</div>
+        <Button focusKey="set-server" label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
+        <Button focusKey="set-pair" label={t('pair.title')} onPress={() => navigate({ name: 'pairPhone' })} />
+      </div>
+
+      <h2>{t('settings.search')}</h2>
+      <div class="row">
+        <div class="grow muted">{platformKind() === 'androidtv' ? t('tvSettings.sourcesNote') : t('phoneSources.settingsNote')}</div>
+        <Button focusKey="set-sources" label={t('settings.whereSearch')} onPress={() => navigate({ name: 'sources' })} />
+      </div>
+
+      <h2>{t('settings.app')}</h2>
+      <div class="row">
+        <div class="grow">
+          {t('tvSettings.aboutLine', { version: APP_VERSION })}
+          {latestUpdate.value ? t('tvSettings.availableVersion', { version: latestUpdate.value.version }) : ''}
+        </div>
+        <Button
+          focusKey="set-update-check"
+          label={t('updateScreen.check')}
+          onPress={() => checkForUpdate({ manual: true }).then((r) => {
+            if (r === 'error') toast(t('updateScreen.checkFailed'), 'error');
+            else if (r === 'latest') toast(t('updateScreen.latest'));
+          })}
+        />
+      </div>
+      <div class="row" style={{ marginTop: '16px' }}>
+        <Button focusKey="set-update" label={latestUpdate.value ? updateTitle(latestUpdate.value.version, APP_VERSION) : t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} />
+        {platformKind() !== 'androidtv' && (
+          <Button
+            focusKey="set-addHbRepo"
+            label={t('tvSettings.addHbRepo')}
+            onPress={() => { openHbChannel(HB_REPO_URL).catch(() => toast(t('updateScreen.openHbFailed'), 'error')); }}
+          />
+        )}
+        <Button focusKey="set-faq" label={t('settings.help')} onPress={() => navigate({ name: 'faq' })} />
+        <Button focusKey="set-advanced" label={t('settings.advanced')} onPress={() => navigate({ name: 'advanced' })} />
+      </div>
+    </FocusGroup>
+  );
+}
+
+/** Server options, update checks, the log and a reset. Everyday settings stay on the main screen. */
+export function AdvancedSettingsScreen() {
   const c = client.value;
   const s = settings.value;
   const [srv, setSrv] = useState<ServerSettings | null>(null);
   const [srvError, setSrvError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [expert, setExpert] = useState(false);
 
   const loadServer = () => {
     if (!c) return;
@@ -161,7 +269,7 @@ export function SettingsScreen() {
   };
 
   useEffect(() => {
-    restoreFocus('SETTINGS');
+    restoreFocus('ADVANCED');
     loadServer();
   }, []);
 
@@ -192,103 +300,74 @@ export function SettingsScreen() {
     });
   };
 
+  const tmdb = srv && srv.TMDBSettings && typeof srv.TMDBSettings === 'object' ? (srv.TMDBSettings as TmdbConfig) : null;
+  const editTmdb = () => {
+    if (!tmdb) return;
+    askText(t('serverSettings.tmdbTitle'), tmdb.APIKey || '').then((key) => {
+      if (key === null) return;
+      const next = key.trim();
+      if ((tmdb.APIKey || '') !== next) patch({ TMDBSettings: { ...tmdb, APIKey: next } });
+    });
+  };
+
   return (
-    <FocusGroup focusKey="SETTINGS" className="screen settings">
-      <h1>{t('common.settings')}</h1>
-      <ChoiceRow
-        focusKey="set-language"
-        label={t('settings.language.title')}
-        value={s.language}
-        options={languageOptions()}
-        onChange={(v) => updateSettings({ language: v })}
-      />
-
-      <h2>{t('tvSettings.server')}</h2>
+    <FocusGroup focusKey="ADVANCED" className="screen settings">
+      <h1>{t('settings.advanced')}</h1>
       <div class="row">
-        <div class="grow">
-          {activeServer.value ? serverLabel(activeServer.value) : t('errors.noServerSelected')}
-        </div>
-        <Button focusKey="set-server" label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
-        <Button focusKey="set-pair" label={t('pair.title')} onPress={() => navigate({ name: 'pairPhone' })} />
-        <Button focusKey="set-faq" label={t('tvSettings.help')} onPress={() => navigate({ name: 'faq' })} />
-      </div>
-      <div class="row">
-        <div class="grow muted">{platformKind() === 'androidtv' ? t('tvSettings.sourcesNote') : t('phoneSources.settingsNote')}</div>
-        <Button focusKey="set-sources" label={t('tvSettings.sources')} onPress={() => navigate({ name: 'sources' })} />
+        <Button focusKey="adv-back" label={t('common.back')} onPress={() => goBack()} />
       </div>
 
-      {platformKind() === 'androidtv' && <PlayerEngineSection />}
-      {platformKind() === 'androidtv' && <VideoPlayerSection />}
-
-      <h2>{t('tvSettings.playback')}</h2>
-      <ChoiceRow focusKey="set-audio" label={t('tvSettings.audioLang')} value={s.audioLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ audioLang: v })} />
-      <ChoiceRow focusKey="set-subtitlesOn" label={t('tvSettings.subtitlesOn')} value={s.subtitlesOn} options={onOff()} onChange={(v) => updateSettings({ subtitlesOn: v })} />
-      <ChoiceRow focusKey="set-subLang" label={t('tvSettings.subLang')} value={s.subLang} options={LANG_OPTIONS} onChange={(v) => updateSettings({ subLang: v })} />
-      <ChoiceRow focusKey="set-seekStep" label={t('tvSettings.seekStep')} value={s.seekStep} options={seekOptions()} onChange={(v) => updateSettings({ seekStep: v })} />
-      <ChoiceRow focusKey="set-edgeStep" label={t('tvSettings.edgeStep')} value={s.edgeSeekStep} options={[5, 10, 15].map((v) => ({ value: v, label: v + ' ' + t('common.sec') }))} onChange={(v) => updateSettings({ edgeSeekStep: v })} />
-      <ChoiceRow focusKey="set-autoNext" label={t('tvSettings.autoNext')} value={s.autoNext} options={onOff()} onChange={(v) => updateSettings({ autoNext: v })} />
-      <ChoiceRow focusKey="set-showStats" label={t('tvSettings.showStats')} value={s.showStats} options={onOff()} onChange={(v) => updateSettings({ showStats: v })} />
-
-      <h2>{t('common.subtitles')}</h2>
-      <ChoiceRow focusKey="set-subSize" label={t('tvSettings.subSize')} value={s.subSize} options={subSizeOptions()} onChange={(v) => updateSettings({ subSize: v })} />
-      <ChoiceRow focusKey="set-subColor" label={t('tvSettings.subColor')} value={s.subColor} options={subColorOptions()} onChange={(v) => updateSettings({ subColor: v })} />
-      <ChoiceRow focusKey="set-subBackground" label={t('tvSettings.subBackground')} value={s.subBackground} options={onOff()} onChange={(v) => updateSettings({ subBackground: v })} />
-
-      <h2>{activeServer.value ? t('tvSettings.serverNamed', { name: activeServer.value.name }) : t('tvSettings.server')}</h2>
+      <h2>{activeServer.value ? t('tvSettings.serverNamed', { name: chosenServerName(activeServer.value) || activeServer.value.name }) : t('tvSettings.server')}</h2>
+      {c && <div class="muted">{c.baseUrl}</div>}
       {srvError && <div class="banner-error">{srvError}</div>}
       {srv && (
         <div>
+          {tmdb && (
+            <div class="row">
+              <div class="grow">
+                {t('serverSettings.tmdbKey')}
+                <div class="muted">{t('serverSettings.tmdbHint')}</div>
+              </div>
+              <Button focusKey="set-tmdb" label={tmdb.APIKey ? t('serverSettings.set') : t('serverSettings.notSet')} onPress={editTmdb} />
+            </div>
+          )}
           <ChoiceRow focusKey="set-cacheSize" label={t('tvSettings.cacheSize')} value={srv.CacheSize} options={withCurrent(cacheOptions(), srv.CacheSize)} onChange={(v) => patch({ CacheSize: v })} />
-          <ChoiceRow focusKey="set-preload" label={t('tvSettings.preload')} value={srv.PreloadCache} options={withCurrent(preloadOptions(), srv.PreloadCache)} onChange={(v) => patch({ PreloadCache: v })} />
-          <ChoiceRow focusKey="set-readahead" label={t('tvSettings.readahead')} value={srv.ReaderReadAHead} options={withCurrent(readaheadOptions(), srv.ReaderReadAHead)} onChange={(v) => patch({ ReaderReadAHead: v })} />
-          <ChoiceRow focusKey="set-connsLimit" label={t('tvSettings.connsLimit')} value={srv.ConnectionsLimit} options={withCurrent(connsOptions(), srv.ConnectionsLimit)} onChange={(v) => patch({ ConnectionsLimit: v })} />
-          <ChoiceRow focusKey="set-downLimit" label={t('tvSettings.downLimit')} value={srv.DownloadRateLimit} options={withCurrent(rateOptions(), srv.DownloadRateLimit)} onChange={(v) => patch({ DownloadRateLimit: v })} />
-          <ChoiceRow focusKey="set-upLimit" label={t('tvSettings.upLimit')} value={srv.UploadRateLimit} options={withCurrent(rateOptions(), srv.UploadRateLimit)} onChange={(v) => patch({ UploadRateLimit: v })} />
-          <ChoiceRow focusKey="set-disconnectAfter" label={t('tvSettings.disconnectAfter')} value={srv.TorrentDisconnectTimeout} options={withCurrent(disconnectOptions(), srv.TorrentDisconnectTimeout)} onChange={(v) => patch({ TorrentDisconnectTimeout: v })} />
-          <ChoiceRow focusKey="set-trackTimecode" label={t('tvSettings.trackTimecode')} value={!!srv.TrackTimecode} options={onOff()} onChange={(v) => patch({ TrackTimecode: v })} />
           <div class="row">
             <Button focusKey="set-saveOnServer" label={dirty ? t('tvSettings.saveOnServerDirty') : t('tvSettings.saveOnServer')} onPress={saveServer} />
-            <Button focusKey="set-defaults" label={t('tvSettings.defaults')} onPress={resetServer} />
-            <Button focusKey="set-server-2" label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
+            <Button focusKey="set-expert" label={t('settings.expert')} onPress={() => setExpert((v) => !v)} />
           </div>
+          {expert && (
+            <div>
+              <ChoiceRow focusKey="set-preload" label={t('tvSettings.preload')} value={srv.PreloadCache} options={withCurrent(preloadOptions(), srv.PreloadCache)} onChange={(v) => patch({ PreloadCache: v })} />
+              <ChoiceRow focusKey="set-readahead" label={t('tvSettings.readahead')} value={srv.ReaderReadAHead} options={withCurrent(readaheadOptions(), srv.ReaderReadAHead)} onChange={(v) => patch({ ReaderReadAHead: v })} />
+              <ChoiceRow focusKey="set-connsLimit" label={t('tvSettings.connsLimit')} value={srv.ConnectionsLimit} options={withCurrent(connsOptions(), srv.ConnectionsLimit)} onChange={(v) => patch({ ConnectionsLimit: v })} />
+              <ChoiceRow focusKey="set-downLimit" label={t('tvSettings.downLimit')} value={srv.DownloadRateLimit} options={withCurrent(rateOptions(), srv.DownloadRateLimit)} onChange={(v) => patch({ DownloadRateLimit: v })} />
+              <ChoiceRow focusKey="set-upLimit" label={t('tvSettings.upLimit')} value={srv.UploadRateLimit} options={withCurrent(rateOptions(), srv.UploadRateLimit)} onChange={(v) => patch({ UploadRateLimit: v })} />
+              <ChoiceRow focusKey="set-disconnectAfter" label={t('tvSettings.disconnectAfter')} value={srv.TorrentDisconnectTimeout} options={withCurrent(disconnectOptions(), srv.TorrentDisconnectTimeout)} onChange={(v) => patch({ TorrentDisconnectTimeout: v })} />
+              <ChoiceRow focusKey="set-trackTimecode" label={t('tvSettings.trackTimecode')} value={!!srv.TrackTimecode} options={onOff()} onChange={(v) => patch({ TrackTimecode: v })} />
+              <div class="row">
+                <Button focusKey="set-defaults" label={t('tvSettings.defaults')} onPress={resetServer} />
+              </div>
+            </div>
+          )}
         </div>
       )}
+
+      <ChoiceRow focusKey="set-updateOnStart" label={t('tvSettings.updateOnStart')} value={s.updateCheck} options={onOff()} onChange={(v) => updateSettings({ updateCheck: v })} />
+      <ChoiceRow focusKey="adv-beta" label={t('settings.betaTitle')} value={s.betaUpdates} options={onOff()} onChange={(v) => updateSettings({ betaUpdates: v })} />
+      <div class="muted">{t('settings.betaHint')}</div>
 
       <h2>{t('tvSettings.log')}</h2>
       <LogBrief />
 
-      <h2>{t('tvSettings.about')}</h2>
-      <div class="row">
-        <div class="grow">
-          {t('tvSettings.aboutLine', { version: APP_VERSION })}
-          {latestUpdate.value ? t('tvSettings.availableVersion', { version: latestUpdate.value.version }) : ''}
-          {c ? ' · ' + c.baseUrl : ''}
-        </div>
-        <Button
-          focusKey="set-update-check"
-          label={t('updateScreen.check')}
-          onPress={() => checkForUpdate({ manual: true }).then((r) => {
-            if (r === 'error') toast(t('updateScreen.checkFailed'), 'error');
-            else if (r === 'latest') toast(t('updateScreen.latest'));
-          })}
-        />
-      </div>
-      <ChoiceRow focusKey="set-updateOnStart" label={t('tvSettings.updateOnStart')} value={s.updateCheck} options={onOff()} onChange={(v) => updateSettings({ updateCheck: v })} />
       <div class="row" style={{ marginTop: '16px' }}>
-        <Button focusKey="set-update" label={latestUpdate.value ? updateTitle(latestUpdate.value.version, APP_VERSION) : t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} />
-        {platformKind() !== 'androidtv' && (
-          <Button
-            focusKey="set-addHbRepo"
-            label={t('tvSettings.addHbRepo')}
-            onPress={() => { openHbChannel(HB_REPO_URL).catch(() => toast(t('updateScreen.openHbFailed'), 'error')); }}
-          />
-        )}
         <Button
           focusKey="set-resetApp"
           label={t('tvSettings.resetApp')}
           onPress={() => confirmDialog(t('tvSettings.resetAppAsk'), t('tv.marks.reset')).then((ok) => { if (ok) resetSettings(); })}
         />
       </div>
+      <div class="muted">{t('settings.tmdbData')}</div>
     </FocusGroup>
   );
 }
