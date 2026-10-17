@@ -94,6 +94,43 @@ export interface Open2160Options {
   background?: boolean;
 }
 
+export interface AudioPlayItemRequest {
+  url: string;
+  title: string;
+  fileId: number;
+  startMs: number;
+  endMs: number;
+}
+
+export interface AudioPlayRequest {
+  book: string;
+  hash: string;
+  start: number;
+  positionMs: number;
+  items: AudioPlayItemRequest[];
+}
+
+export interface AudioControlRequest {
+  cmd: 'toggle' | 'play' | 'pause' | 'seek' | 'next' | 'prev' | 'speed' | 'sleep' | 'stop';
+  ms?: number;
+  speed?: number;
+  sleep?: string;
+}
+
+export interface AudioPlayState {
+  active: boolean;
+  playing: boolean;
+  index: number;
+  positionMs: number;
+  durationMs: number;
+  speed: number;
+  sleep: string;
+  title: string;
+  book: string;
+  fileId: number;
+  error?: string;
+}
+
 export interface OmpNativeApi {
   available: boolean;
   discoverTvs(timeoutMs: number): Promise<FoundTv[]>;
@@ -139,6 +176,13 @@ export interface OmpNativeApi {
   embedded2160(): Promise<boolean>;
   /** Plays the queue in the 2160 screen inside OMP; resolves with what it handed back (null: an older app without it). */
   playEmbedded2160(o: Open2160Options): Promise<P2160Result | null>;
+  /** Plays an audiobook queue in the native audio session (null off-device or on an older app). */
+  audioPlay(o: AudioPlayRequest): Promise<AudioPlayState | null>;
+  /** play, pause, toggle, seek (±ms), next, prev, speed, sleep, stop. */
+  audioControl(o: AudioControlRequest): Promise<AudioPlayState | null>;
+  /** The native player, or null when nothing is loaded / off-device. */
+  audioState(): Promise<AudioPlayState | null>;
+  onAudio(cb: (s: AudioPlayState) => void): () => void;
   /** apks: the feed's per-ABI APKs, the plugin installs the device's one (url/sha256 = universal fallback). */
   downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void>;
   /** Feed key of this device's APK (Build.SUPPORTED_ABIS[0]: arm64 / armv7); null = universal. */
@@ -266,6 +310,9 @@ interface OmpNativePlugin {
   player2160?(): Promise<{ package?: unknown; embedded?: unknown }>;
   open2160?(o: Open2160Options): Promise<unknown>;
   playEmbedded2160?(o: Open2160Options): Promise<unknown>;
+  audioPlay?(o: AudioPlayRequest): Promise<unknown>;
+  audioControl?(o: AudioControlRequest): Promise<unknown>;
+  audioState?(): Promise<unknown>;
   downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<void>;
   deviceAbiKey(): Promise<{ key?: unknown }>;
   canInstallApks?(): Promise<{ granted?: unknown }>;
@@ -311,6 +358,7 @@ interface OmpNativePlugin {
   addListener(event: 'playerMessage', cb: (e: { body: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: 'localServerState', cb: (e: Partial<LocalServerState>) => void): Promise<PluginListenerHandle>;
   addListener(event: 'localServerDownload', cb: (e: Partial<LocalDownloadProgress>) => void): Promise<PluginListenerHandle>;
+  addListener(event: 'audio', cb: (e: unknown) => void): Promise<PluginListenerHandle>;
 }
 
 export const onlyAndroid = () => t('errors.onlyAndroid');
@@ -368,6 +416,30 @@ function parse(json: string): any {
 
 function text(v: unknown): string | undefined {
   return typeof v === 'string' && v !== '' ? v : undefined;
+}
+
+function num(v: unknown): number {
+  return typeof v === 'number' && isFinite(v) ? v : 0;
+}
+
+function audioStateOf(v: unknown): AudioPlayState | null {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as { active?: unknown; title?: unknown; book?: unknown; sleep?: unknown; error?: unknown };
+  if (o.active !== true) return null;
+  const s: AudioPlayState = {
+    active: true,
+    playing: (o as { playing?: unknown }).playing === true,
+    index: num((o as { index?: unknown }).index),
+    positionMs: num((o as { positionMs?: unknown }).positionMs),
+    durationMs: num((o as { durationMs?: unknown }).durationMs),
+    speed: num((o as { speed?: unknown }).speed) || 1,
+    sleep: typeof o.sleep === 'string' ? o.sleep : 'off',
+    title: typeof o.title === 'string' ? o.title : '',
+    book: typeof o.book === 'string' ? o.book : '',
+    fileId: num((o as { fileId?: unknown }).fileId),
+  };
+  if (typeof o.error === 'string' && o.error) s.error = o.error;
+  return s;
 }
 
 const RPC_TOKEN = /^[0-9a-f]{32}$/;
@@ -584,6 +656,39 @@ export const native: OmpNativeApi = {
       if (e && e.code === 'UNIMPLEMENTED') return null;
       return logged('playEmbedded2160', Promise.reject(e));
     });
+  },
+
+  audioPlay(o) {
+    if (!plugin || typeof plugin.audioPlay !== 'function') return Promise.resolve(null);
+    return plugin.audioPlay(o).then(audioStateOf, (e) => {
+      if (e && e.code === 'UNIMPLEMENTED') return null;
+      return logged('audioPlay', Promise.reject(e));
+    });
+  },
+
+  audioControl(o) {
+    if (!plugin || typeof plugin.audioControl !== 'function') return Promise.resolve(null);
+    return plugin.audioControl(o).then(audioStateOf, (e) => {
+      if (e && e.code === 'UNIMPLEMENTED') return null;
+      return logged('audioControl', Promise.reject(e));
+    });
+  },
+
+  async audioState() {
+    if (!plugin || typeof plugin.audioState !== 'function') return null;
+    try {
+      return audioStateOf(await plugin.audioState());
+    } catch {
+      return null;
+    }
+  },
+
+  onAudio(cb) {
+    if (!plugin) return noop;
+    return listen(() => plugin.addListener('audio', (e) => {
+      const s = audioStateOf(e);
+      if (s) cb(s);
+    }));
   },
 
   async downloadAndInstallApk(url, sha256, onProgress, apks) {

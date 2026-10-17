@@ -1,8 +1,8 @@
 // One audiobook: its audio files from TorrServer, in listening order. A single m4b lists ffprobe chapters
-// when the server has them. A tap plays through the phone's current player (the audio player is a later change).
+// when the server has them. A tap opens the native audiobook player with that queue.
 import { useEffect, useState } from 'preact/hooks';
 import type { FfprobeResult, Torrent } from '../../../src/api/types';
-import { errorMessage } from '../../../src/api/http';
+import { chapterPlayItem, filePlayItem, type AudioPlayItem } from '../../../src/lib/audiobookPlayback';
 import { formatBytes, formatDuration } from '../../../src/lib/format';
 import { libraryTitle } from '../../../src/lib/libraryView';
 import {
@@ -16,8 +16,10 @@ import { t } from '../../../src/i18n';
 import { torrents } from '../../../src/store/library';
 import { client } from '../../../src/store/servers';
 import { Icon } from '../ui/Icon';
-import { filesOf, watchOnPhone } from '../watch';
+import { filesOf, recordPhoneWatch, streamUrlFor } from '../watch';
 import { sharedResume } from '../lib/sharedProgress';
+import { setAudioLaunch } from './launch';
+import { navigate } from '../nav';
 import { AudiobookBar } from './bar';
 
 const PLAY = 'M8 5v14l11-7z';
@@ -28,7 +30,6 @@ export function Book({ hash }: { hash: string }) {
   const [fetched, setFetched] = useState<Torrent | null | undefined>(undefined);
   const [loaded, setLoaded] = useState<Torrent | null>(null);
   const [probe, setProbe] = useState<FfprobeResult | null | undefined>(undefined);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const tor = listed || (fetched && fetched.hash ? fetched : undefined);
   const own = tor ? filesOf(tor) : [];
@@ -82,22 +83,22 @@ export function Book({ hash }: { hash: string }) {
     };
   }, [c, hash, m4b ? m4b.id : -1]);
 
-  const play = async (file: TorrentFile, title: string, at: number) => {
-    if (!tor || busy) return;
+  const play = (items: AudioPlayItem[], start: number, file: TorrentFile, at: number) => {
+    if (!tor) return;
     if (!c) {
       setError(t('audiobooks.noServer'));
       return;
     }
-    setBusy(true);
     setError('');
-    const withFiles = allFiles.length ? { ...tor, file_stats: allFiles } : tor;
-    try {
-      await watchOnPhone(c, withFiles, { hash, file, title, at, duration: 0 });
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
+    const launch = setAudioLaunch({
+      hash,
+      book: libraryTitle(tor).title,
+      items,
+      start,
+      positionMs: Math.max(0, Math.round(at * 1000)),
+    });
+    void recordPhoneWatch(c, hash, file.id, at, 0);
+    navigate({ name: 'audiobookPlayer', hash, token: launch.token });
   };
 
   if (!tor) {
@@ -114,6 +115,14 @@ export function Book({ hash }: { hash: string }) {
   const chapters = m4b && probe ? m4bChapters(m4b, probe) : [];
   const sections = audiobookSections(allFiles);
   const showChapters = chapters.length > 0;
+  const queue: AudioPlayItem[] = !c
+    ? []
+    : showChapters
+      ? chapters.map((ch) => chapterPlayItem(streamUrlFor(c, tor, ch.file), ch.title, ch.file.id, ch.start, ch.end))
+      : sections.reduce((acc, section) => {
+          section.tracks.forEach((tr) => acc.push(filePlayItem(streamUrlFor(c, tor, tr.file), tr.label, tr.file.id)));
+          return acc;
+        }, [] as AudioPlayItem[]);
 
   return (
     <div class="m-screen" data-route="audiobook">
@@ -127,8 +136,8 @@ export function Book({ hash }: { hash: string }) {
       ) : showChapters ? (
         <section class="m-set-group" data-chapters="">
           <div class="m-set-label">{t('audiobooks.chapters')}</div>
-          {chapters.map((ch) => (
-            <TrackRow key={ch.index} label={ch.title} meta={chapterMeta(ch)} busy={busy} onClick={() => void play(ch.file, ch.title, ch.start)} />
+          {chapters.map((ch, i) => (
+            <TrackRow key={ch.index} label={ch.title} meta={chapterMeta(ch)} onClick={() => play(queue, i, ch.file, ch.start)} />
           ))}
         </section>
       ) : sections.length === 0 ? (
@@ -140,16 +149,18 @@ export function Book({ hash }: { hash: string }) {
           {sections.map((section) => (
             <section key={section.title || 'root'} class="m-set-group">
               {section.title && <div class="m-set-label">{section.title}</div>}
-              {section.tracks.map((tr) => (
-                <TrackRow
-                  key={tr.file.id}
-                  label={tr.label}
-                  meta={tr.file.length > 0 ? formatBytes(tr.file.length) : ''}
-                  path={tr.file.path}
-                  busy={busy}
-                  onClick={() => void play(tr.file, tr.label, sharedResume(hash, tr.file.id))}
-                />
-              ))}
+              {section.tracks.map((tr) => {
+                const index = queue.findIndex((item) => item.fileId === tr.file.id && item.title === tr.label);
+                return (
+                  <TrackRow
+                    key={tr.file.id}
+                    label={tr.label}
+                    meta={tr.file.length > 0 ? formatBytes(tr.file.length) : ''}
+                    path={tr.file.path}
+                    onClick={() => play(queue, index < 0 ? 0 : index, tr.file, sharedResume(hash, tr.file.id))}
+                  />
+                );
+              })}
             </section>
           ))}
         </div>
@@ -167,13 +178,12 @@ function infoEmpty(): Torrent {
   return { hash: '', title: '', stat: 0, file_stats: [] };
 }
 
-function TrackRow(p: { label: string; meta: string; path?: string; busy: boolean; onClick: () => void }) {
+function TrackRow(p: { label: string; meta: string; path?: string; onClick: () => void }) {
   return (
     <button
       type="button"
       class="m-set-row m-set-pick"
       data-track={p.path || p.label}
-      disabled={p.busy}
       aria-label={t('audiobooks.play', { name: p.label })}
       onClick={p.onClick}
     >

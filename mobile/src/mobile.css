@@ -843,7 +843,14 @@ button, .m-btn {
 .m-screen[data-route='audiobooks'],
 .m-screen[data-route='audiobook-search'],
 .m-screen[data-route='audiobook-mine'],
-.m-screen[data-route='audiobook'] { display: flex; flex-direction: column; gap: 16px; }
+.m-screen[data-route='audiobook'],
+.m-screen[data-route='audiobook-player'] { display: flex; flex-direction: column; gap: 16px; }
+.m-audio-title { margin: 0; font-size: 18px; font-weight: 700; }
+.m-audio-time { margin: 0; font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
+.m-audio-range { width: 100%; accent-color: var(--accent); }
+.m-audio-transport { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.m-audio-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.m-audio-chips .m-btn.on { box-shadow: inset 0 0 0 2px var(--accent); color: var(--text); }
 .m-screen[data-route='advanced'],
 .m-screen[data-route='account'] { display: flex; flex-direction: column; gap: 20px; }
 /* «Источники поиска»: the sections spaced like «Настройки», a label never right under the card above it */

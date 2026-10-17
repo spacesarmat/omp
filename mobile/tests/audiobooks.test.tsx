@@ -6,6 +6,8 @@ import { Audiobooks } from '../src/audiobooks/Audiobooks';
 import { AudiobookSearch } from '../src/audiobooks/Search';
 import { MyBooks } from '../src/audiobooks/MyBooks';
 import { Book } from '../src/audiobooks/Book';
+import { AudioPlayer } from '../src/audiobooks/Player';
+import { audioLaunch, setAudioBridge, setAudioLaunch, type AudioBridge } from '../src/audiobooks/launch';
 import { Settings } from '../src/screens/Settings';
 import { currentRoute, resetTo } from '../src/nav';
 import { torrents } from '../../src/store/library';
@@ -86,6 +88,7 @@ afterEach(() => {
   unregisterSource('fake-audio');
   vi.restoreAllMocks();
   setWatchActions(null);
+  setAudioBridge(null);
 });
 
 describe('«Аудиокниги»', () => {
@@ -135,10 +138,15 @@ describe('«Аудиокниги»', () => {
       (el.querySelector('[data-track="Автор/Диск 2/01.mp3"]') as HTMLButtonElement).click();
       for (let i = 0; i < 20; i++) await Promise.resolve();
     });
-    expect(playEmbedded).toHaveBeenCalled();
-    const opts = playEmbedded.mock.calls[0][0];
-    expect(opts.items[opts.start].url).toContain('index=2');
-    expect(opts.fromStart).toBe(true);
+    expect(playEmbedded).not.toHaveBeenCalled();
+    expect(currentRoute.value.name).toBe('audiobookPlayer');
+    const q = audioLaunch.value;
+    expect(q && q.start).toBe(2);
+    expect(q && q.items.map((item) => item.fileId)).toEqual([4, 3, 2, 1]);
+    expect(q && q.items[2].url).toContain('index=2');
+    expect(q && q.items[2].title).toBe('01');
+    expect(q && q.positionMs).toBe(0);
+    expect(q && q.items.every((item) => item.startMs === 0 && item.endMs === 0)).toBe(true);
   });
 
   it('lists chapters of a single m4b from ffprobe and starts the player at the chapter', async () => {
@@ -165,10 +173,14 @@ describe('«Аудиокниги»', () => {
       (Array.from(el.querySelectorAll('[data-chapters] button'))[1] as HTMLButtonElement).click();
       for (let i = 0; i < 20; i++) await Promise.resolve();
     });
-    const opts = playEmbedded.mock.calls[0][0];
-    expect(opts.positionMs).toBe(90000);
-    expect(opts.fromStart).toBe(false);
-    expect(opts.items[opts.start].url).toContain('index=3');
+    const q = audioLaunch.value;
+    expect(q && q.positionMs).toBe(90000);
+    expect(q && q.start).toBe(1);
+    expect(q && q.items.map((item) => item.title)).toEqual(['Пролог', 'Глава первая']);
+    expect(q && q.items[1].startMs).toBe(90000);
+    expect(q && q.items[1].endMs).toBe(200000);
+    expect(q && q.items[1].url).toContain('index=3');
+    expect(currentRoute.value.name).toBe('audiobookPlayer');
   });
 
   it('searches with searchMode audiobook and files an added book as an audiobook', async () => {
@@ -230,5 +242,55 @@ describe('«Аудиокниги»', () => {
     });
     expect(add).toHaveBeenCalled();
     expect(add.mock.calls[0][0]).toMatchObject({ category: 'audiobook' });
+  });
+
+  it('the player screen speaks Russian and sends ±30s, speed and the sleep timer', async () => {
+    const calls: { cmd: string; ms?: number; speed?: number; sleep?: string }[] = [];
+    const bridge: AudioBridge = {
+      play: () => Promise.resolve(null),
+      control: (c) => {
+        calls.push(c);
+        return Promise.resolve({
+          active: true,
+          playing: c.cmd === 'toggle',
+          index: 0,
+          positionMs: 1000,
+          durationMs: 60000,
+          speed: c.speed || 1,
+          sleep: c.sleep || 'off',
+          title: '01',
+          book: 'Мастер',
+          fileId: 4,
+        });
+      },
+      state: () => Promise.resolve(null),
+      onState: () => () => undefined,
+    };
+    setAudioBridge(bridge);
+    const q = setAudioLaunch({
+      hash: HASH,
+      book: 'Мастер и Маргарита',
+      start: 0,
+      positionMs: 0,
+      items: [{ url: 'http://127.0.0.1:8090/stream/2.flac?index=4&play', title: '2', fileId: 4, startMs: 0, endMs: 0 }],
+    });
+    resetTo({ name: 'audiobookPlayer', hash: HASH, token: q.token });
+    mount(<AudioPlayer hash={HASH} token={q.token} />);
+    await flush();
+    expect(el.querySelector('[data-audio-title]')!.textContent).toBe('2');
+    expect(el.textContent).toContain('−30 с');
+    expect(el.textContent).toContain('Скорость');
+    expect(el.textContent).toContain('Таймер сна');
+    expect(el.textContent).toContain('До конца главы');
+    await act(async () => {
+      (el.querySelector('[data-audio="forward"]') as HTMLButtonElement).click();
+      (el.querySelector('[data-audio-speed] button') as HTMLButtonElement).click();
+      (el.querySelector('[data-sleep="30"]') as HTMLButtonElement).click();
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(calls.map((c) => c.cmd)).toEqual(['seek', 'speed', 'sleep']);
+    expect(calls[0].ms).toBe(30000);
+    expect(calls[1].speed).toBe(0.5);
+    expect(calls[2].sleep).toBe('30');
   });
 });
