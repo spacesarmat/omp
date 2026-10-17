@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.3
+
+- The built-in TorrServer is updated to MatriX.147
+
 ## 0.20.2
 
 - [phone] TMDB key: a v3 API key is accepted, and Clear removes a stored v4 token. Discover separates a rejected key from a server that does not answer
