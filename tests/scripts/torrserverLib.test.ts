@@ -40,7 +40,17 @@ describe('torrserver-lib', () => {
   it('bumps the patch version', () => {
     expect(bumpPatch('0.8.2')).toBe('0.8.3');
     expect(bumpPatch('0.9.9')).toBe('0.9.10');
-    expect(() => bumpPatch('0.9')).toThrow();
+    expect(bumpPatch('  0.20.2  ')).toBe('0.20.3');
+    expect(() => bumpPatch('0.9')).toThrow(/Bad version/);
+    expect(() => bumpPatch('0.20.2-rc.1')).toThrow(/Bad version/);
+    expect(() => bumpPatch('')).toThrow(/Bad version/);
+  });
+  it('releases a pending stable from a beta instead of stepping the patch', () => {
+    expect(bumpPatch('0.20.2-beta.2')).toBe('0.20.2');
+    expect(bumpPatch('0.20.1-beta.15')).toBe('0.20.1');
+    expect(bumpPatch('  0.8.2-beta.0 \n')).toBe('0.8.2');
+    expect(() => bumpPatch('0.20.2-beta')).toThrow(/Bad version/);
+    expect(() => bumpPatch('0.20.2-beta.2.1')).toThrow(/Bad version/);
   });
   it('inserts a changelog entry above the latest version', () => {
     const text = '# Изменения\n\n## 0.8.2\n\n- a\n';

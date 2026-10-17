@@ -52,6 +52,13 @@ jobs:
             echo "OMP $OMP_VERSION is not released yet (no tag v$OMP_VERSION), skipping the TorrServer bump"
             exit 0
           fi
+          # bumpPatch: X.Y.Z-beta.N releases that stable, a plain X.Y.Z steps the patch.
+          # Skip when the tag this bump would publish is already there.
+          TARGET=$(node --input-type=module -e 'import { bumpPatch } from "./scripts/torrserver-lib.mjs"; console.log(bumpPatch(process.argv[1]))' -- "$OMP_VERSION")
+          if git rev-parse -q --verify "refs/tags/v$TARGET" > /dev/null; then
+            echo "tag v$TARGET already exists, skipping the TorrServer bump"
+            exit 0
+          fi
           VERSION=$(node scripts/torrserver-bump.mjs "$LATEST" "$RUNNER_TEMP/latest.json")
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
