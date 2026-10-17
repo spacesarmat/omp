@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { forPlatform, itemPlatform, parseChangelog, releasesUpTo, stripPlatform } from '../../src/lib/changelog';
+import { changelogWindow, forPlatform, itemPlatform, parseChangelog, releasesUpTo, stripPlatform } from '../../src/lib/changelog';
 import { checkWhatsNew, whatsNew, openWhatsNew, closeWhatsNew, SEEN_KEY } from '../../src/store/whatsNew';
-import { CHANGELOG } from '../../src/lib/changelogData';
+import { CHANGELOG, CHANGELOG_FLOOR } from '../../src/lib/changelogData';
 import { APP_VERSION } from '../../src/version';
 import { markWhatsNewShown } from '../../src/store/whatsNew';
 
@@ -62,6 +62,16 @@ describe('parseChangelog', () => {
     expect(CHANGELOG[0].items.length).toBeGreaterThan(0);
     // a release must not ship without its changelog section
     expect(CHANGELOG[0].version).toBe(APP_VERSION);
+  });
+  it('keeps the floor release when a newer section is prepended', () => {
+    const before = parseChangelog('## 0.18.0\n- tv\n\n## 0.17.0\n- calendar\n\n## 0.16.0\n- old\n');
+    const after = parseChangelog('## 0.20.3\n- TorrServer\n\n## 0.18.0\n- tv\n\n## 0.17.0\n- calendar\n\n## 0.16.0\n- old\n');
+    expect(changelogWindow(before, '0.17.0').map((e) => e.version)).toEqual(['0.18.0', '0.17.0']);
+    expect(changelogWindow(after, '0.17.0').map((e) => e.version)).toEqual(['0.20.3', '0.18.0', '0.17.0']);
+    expect(changelogWindow(after, '9.9.9')).toHaveLength(after.length);
+    expect(CHANGELOG_FLOOR).toBe('0.17.0');
+    expect(CHANGELOG[CHANGELOG.length - 1].version).toBe(CHANGELOG_FLOOR);
+    expect(CHANGELOG.map((e) => e.version)).toContain('0.18.0');
   });
 });
 

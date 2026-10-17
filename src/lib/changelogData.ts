@@ -2,12 +2,14 @@ import raw from '../../CHANGELOG.md?raw';
 import rawEn from '../../CHANGELOG.en.md?raw';
 import { lang } from '../i18n';
 import { platformKind } from '../platform/env';
-import { forPlatform, parseChangelog } from './changelog';
+import { changelogWindow, forPlatform, parseChangelog } from './changelog';
 import type { ChangelogEntry, ChangelogPlatform } from './changelog';
 
-/** The latest versions only: the full history is on GitHub. Bullets keep their «[tv]» / «[lg]» / «[atv]» / «[phone]» markers here.
- *  0.17.0 (the calendar bullet) and 0.18.0 stay inside this window; bump the slice when a new beta would push them out. */
-export const CHANGELOG = parseChangelog(raw).slice(0, 42);
+/** Oldest release still shown in «What's new». 0.17.0 carries the phone calendar bullet; 0.18.0 is newer, so it stays too.
+ *  A TorrServer bump prepends a section and this floor keeps both without a manual slice change. */
+export const CHANGELOG_FLOOR = '0.17.0';
+/** The latest versions only: the full history is on GitHub. Bullets keep their «[tv]» / «[lg]» / «[atv]» / «[phone]» markers here. */
+export const CHANGELOG = changelogWindow(parseChangelog(raw), CHANGELOG_FLOOR);
 export const CHANGELOG_EN = parseChangelog(rawEn);
 export const CHANGELOG_URL = 'https://github.com/spacesarmat/omp/blob/main/CHANGELOG.md';
 

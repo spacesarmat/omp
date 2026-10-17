@@ -129,4 +129,9 @@ describe('TorrServer update version gate', () => {
     expect(apply).toContain('OMP $OMP_VERSION is not released yet');
     expect(apply.indexOf('refs/tags/v$OMP_VERSION')).toBeLessThan(apply.indexOf('refs/tags/v$TARGET'));
   });
+
+  it('commits the English changelog the release tests read', () => {
+    const commit = upd.slice(upd.indexOf('Commit, tag and push the update'));
+    expect(commit).toContain('CHANGELOG.md CHANGELOG.en.md');
+  });
 });

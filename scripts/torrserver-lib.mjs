@@ -36,9 +36,14 @@ export function bumpPatch(version) {
   return `${m[1]}.${m[2]}.${Number(m[3]) + 1}`;
 }
 
-export function insertChangelog(text, version, tag) {
+export function torrserverNote(tag, english = false) {
+  return english ? `The built-in TorrServer is updated to ${tag}` : `Встроенный TorrServer обновлён до ${tag}`;
+}
+
+export function insertChangelog(text, version, tag, note) {
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
-  const entry = `## ${version}${eol}${eol}- Встроенный TorrServer обновлён до ${tag}${eol}${eol}`;
+  const line = note || torrserverNote(tag);
+  const entry = `## ${version}${eol}${eol}- ${line}${eol}${eol}`;
   const idx = text.search(/^## /m);
   if (idx < 0) return text.replace(/\s*$/, '') + eol + eol + entry.replace(/\s+$/, '') + eol;
   return text.slice(0, idx) + entry + text.slice(idx);

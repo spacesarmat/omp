@@ -3,7 +3,7 @@
 // OMP patch version everywhere, adds a changelog entry; prints the new version. Without release.json (the GitHub API
 // answer for the tag) the release is fetched; GITHUB_TOKEN is used when set.
 import { readFileSync, writeFileSync } from 'node:fs';
-import { parseVersionFile, bumpPatch, insertChangelog, setRootVersion, pinFromRelease, formatPin, PIN_PATH } from './torrserver-lib.mjs';
+import { parseVersionFile, bumpPatch, insertChangelog, torrserverNote, setRootVersion, pinFromRelease, formatPin, PIN_PATH } from './torrserver-lib.mjs';
 import { readChangelogUtf8, writeUtf8Lf } from './changelog-encoding.mjs';
 
 const tag = parseVersionFile(process.argv[2] || '');
@@ -31,5 +31,6 @@ writeFileSync(PIN_PATH, pin);
 writeFileSync('package.json', setRootVersion(read('package.json'), next));
 writeFileSync('package-lock.json', setRootVersion(read('package-lock.json'), next, true));
 writeFileSync('webos/appinfo.json', setRootVersion(read('webos/appinfo.json'), next));
-writeUtf8Lf('CHANGELOG.md', insertChangelog(readChangelogUtf8('CHANGELOG.md', { russian: true }), next, tag));
+writeUtf8Lf('CHANGELOG.md', insertChangelog(readChangelogUtf8('CHANGELOG.md', { russian: true }), next, tag, torrserverNote(tag)));
+writeUtf8Lf('CHANGELOG.en.md', insertChangelog(readChangelogUtf8('CHANGELOG.en.md'), next, tag, torrserverNote(tag, true)));
 console.log(next);
