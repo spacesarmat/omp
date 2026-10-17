@@ -63,6 +63,10 @@ import { TitleCard } from './screens/catalog/TitleCard';
 import { SeasonCard } from './screens/catalog/SeasonCard';
 import { Series } from './screens/Series';
 import { Person } from './screens/catalog/Person';
+import { Audiobooks } from './audiobooks/Audiobooks';
+import { AudiobookSearch } from './audiobooks/Search';
+import { MyBooks } from './audiobooks/MyBooks';
+import { Book } from './audiobooks/Book';
 import { monitorNative } from './monitor/native';
 import { reloadLog } from '../../src/lib/log';
 import { Fragment } from 'preact';
@@ -381,6 +385,14 @@ export function App() {
         <TitleCard key={route.kind + ':' + route.id} kind={route.kind} id={route.id} />
       ) : route.name === 'seasonCard' ? (
         <SeasonCard key={route.id + ':' + route.season} id={route.id} season={route.season} />
+      ) : route.name === 'audiobooks' ? (
+        <Audiobooks />
+      ) : route.name === 'audiobookSearch' ? (
+        <AudiobookSearch />
+      ) : route.name === 'audiobookMine' ? (
+        <MyBooks />
+      ) : route.name === 'audiobook' ? (
+        <Book key={route.hash} hash={route.hash} />
       ) : (
         <Settings />
       )}

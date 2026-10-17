@@ -202,14 +202,22 @@ export function releaseKind(r: KindInput): ReleaseKind {
 
 // --- the filter ------------------------------------------------------------------------------------------------------
 
-export type KindFilter = 'all' | 'movie' | 'series';
+export type KindFilter = 'all' | 'movie' | 'series' | 'audiobook';
 
-export const KIND_FILTERS: KindFilter[] = ['all', 'movie', 'series'];
+export const KIND_FILTERS: KindFilter[] = ['all', 'movie', 'series', 'audiobook'];
 
-/** Rows of the filter: everything under «Все», only the films / series otherwise (an unknown kind only under «Все»). */
+/** Rows of the filter: everything under «Все», only the films / series / audiobooks otherwise (an unknown kind only under «Все»). */
 export function filterByKind<T extends KindInput>(list: T[], f: KindFilter): T[] {
   if (f === 'all') return list;
   return list.filter((r) => releaseKind(r).kind === f);
+}
+
+/**
+ * «Аудиокниги» is a search mode, not only a client filter: indexers run the audiobook query
+ * (Torznab cat 3030 plus an open search). The other kinds filter the rows of a normal search.
+ */
+export function searchModeForKind(f: KindFilter): 'audiobook' | undefined {
+  return f === 'audiobook' ? 'audiobook' : undefined;
 }
 
 // the filter of the search screens: kept while the app runs (one screen per bundle)

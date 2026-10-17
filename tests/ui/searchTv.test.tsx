@@ -437,7 +437,7 @@ describe('TV search: film / series', () => {
     useScript(KINDS);
     mount();
     await searchDune();
-    expect(kindButtons().map((b) => b.textContent)).toEqual(['Все', 'Фильмы', 'Сериалы']);
+    expect(kindButtons().map((b) => b.textContent)).toEqual(['Все', 'Фильмы', 'Сериалы', 'Аудиокниги']);
     expect(kindButton('Все').className).toContain('active');
     expect(rowTitles().length).toBe(3);
     act(() => kindButton('Сериалы').click());
@@ -446,7 +446,7 @@ describe('TV search: film / series', () => {
     expect(host.querySelector('.search-progress')!.textContent).toContain('1');
     act(() => kindButton('Фильмы').click());
     expect(rowTitles()).toEqual([RAW_HD]);
-    // focusable with the remote: the spatial navigation knows the three
+    // focusable with the remote: the spatial navigation knows the kind buttons
     act(() => setFocus('search-kind-series'));
     await step(10);
     expect(getCurrentFocusKey()).toBe('search-kind-series');
