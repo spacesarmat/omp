@@ -455,6 +455,23 @@ class OmpNativePlugin : Plugin() {
     @PluginMethod
     fun playNative(call: PluginCall) = playNativeOp(call)
 
+    // ---- audiobook player (its own MediaSession, not player-core) ----
+
+    /** Plays a TorrServer audiobook queue in [com.spacesarmat.omp.audio.AudioPlayerService]. */
+    @PluginMethod
+    fun audioPlay(call: PluginCall) = audioPlayOp(call)
+
+    @PermissionCallback
+    private fun audioAfterNotify(call: PluginCall) = audioAfterNotifyOp(call)
+
+    /** { cmd, ms?, speed?, sleep? } → the player state. */
+    @PluginMethod
+    fun audioControl(call: PluginCall) = audioControlOp(call)
+
+    /** The player state, or { active: false } when nothing is loaded. */
+    @PluginMethod
+    fun audioState(call: PluginCall) = audioStateOp(call)
+
     // ---- phone remote (Android TV) ----
 
     /** A new 6-digit pairing code (the previous one stops working): { code, expiresAt } (epoch ms). */
@@ -813,6 +830,11 @@ class OmpNativePlugin : Plugin() {
         fun deliverMonitorOpen(url: String) {
             synchronized(magnetLock) { pendingOpen = url }
             instance?.emitMonitorOpen(url)
+        }
+
+        /** Audiobook player state for the open page (event `audio`). */
+        fun deliverAudio(state: JSONObject) {
+            instance?.notifyListeners("audio", JSObject.fromJSONObject(state))
         }
 
         /** A background run finished: event monitorDone { summary: JSON string | absent } for an open app. */

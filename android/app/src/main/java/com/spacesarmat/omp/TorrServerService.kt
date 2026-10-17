@@ -105,7 +105,8 @@ class TorrServerService : Service() {
         main.post {
             if (!foreground) return@post
             val now = SystemClock.elapsedRealtime()
-            if (stats?.busy == true) {
+            // an audiobook stream counts as busy even while paused: the locks stay until playback stops
+            if (stats?.busy == true || audioHold) {
                 busyAt = now
                 acquireLocks()
             } else if (now - busyAt > IDLE_MS) {
@@ -205,6 +206,19 @@ class TorrServerService : Service() {
         private const val ACTION_STOP = "com.spacesarmat.omp.TORRSERVER_STOP"
         /** Locks are released after this long without a busy refresh. */
         private const val IDLE_MS = 5 * 60_000L
+
+        @Volatile
+        var audioHold: Boolean = false
+            private set
+
+        /**
+         * Audiobook playback of the embedded server. While held, idle time does not drop the Wi-Fi and wake locks,
+         * and a running server is brought back to the foreground if the process is still up.
+         */
+        fun holdForAudio(ctx: Context, hold: Boolean) {
+            audioHold = hold
+            if (hold && LocalTorrServer.running) start(ctx)
+        }
 
         fun start(ctx: Context) {
             ContextCompat.startForegroundService(ctx, Intent(ctx, TorrServerService::class.java))

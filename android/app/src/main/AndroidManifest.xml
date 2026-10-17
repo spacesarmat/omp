@@ -137,6 +137,18 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+        <!-- Audiobooks: a separate Media3 session from player-core (audio/AudioPlayerService). Not exported, so
+             other apps cannot bind; the notification and the lock screen use the session token. mediaPlayback is
+             required with FOREGROUND_SERVICE_MEDIA_PLAYBACK on API 34+. -->
+        <service
+            android:name="com.spacesarmat.omp.audio.AudioPlayerService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+
         <!-- From 2160 player-core: its media3 MediaSessionService (notification, lock screen, headset, background
              audio). player-core exports it, which lets other apps and Android Auto bind; OMP does not want that, so
              exported stays false and the in-process notification is the only controller. Disabled in the manifest:

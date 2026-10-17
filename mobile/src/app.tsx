@@ -67,6 +67,7 @@ import { Audiobooks } from './audiobooks/Audiobooks';
 import { AudiobookSearch } from './audiobooks/Search';
 import { MyBooks } from './audiobooks/MyBooks';
 import { Book } from './audiobooks/Book';
+import { AudioPlayer } from './audiobooks/Player';
 import { monitorNative } from './monitor/native';
 import { reloadLog } from '../../src/lib/log';
 import { Fragment } from 'preact';
@@ -393,6 +394,8 @@ export function App() {
         <MyBooks />
       ) : route.name === 'audiobook' ? (
         <Book key={route.hash} hash={route.hash} />
+      ) : route.name === 'audiobookPlayer' ? (
+        <AudioPlayer key={route.token} hash={route.hash} token={route.token} />
       ) : (
         <Settings />
       )}

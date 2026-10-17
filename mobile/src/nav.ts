@@ -53,7 +53,9 @@ export type MRoute =
   /** «Аудиокниги» → «Мои книги». */
   | { name: 'audiobookMine' }
   /** One audiobook: its tracks, or the chapters of a single m4b. */
-  | { name: 'audiobook'; hash: string };
+  | { name: 'audiobook'; hash: string }
+  /** The native audiobook player. `token` is the tap that opened it. */
+  | { name: 'audiobookPlayer'; hash: string; token: number };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);
