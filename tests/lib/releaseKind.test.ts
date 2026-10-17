@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { categoryKind, filterByKind, getKindFilter, releaseKind, setKindFilter } from '../../src/lib/releaseKind';
+import { categoryKind, filterByKind, getKindFilter, releaseKind, searchModeForKind, setKindFilter } from '../../src/lib/releaseKind';
 import { kindFilterOptions, kindLabel, resultKindLabel } from '../../src/sources/releaseRow';
 
 const k = (Title: string, Categories = '') => releaseKind({ Title, Categories });
@@ -184,13 +184,24 @@ describe('kind filter', () => {
     expect(filterByKind(rows, 'all')).toEqual(rows);
     expect(filterByKind(rows, 'movie')).toEqual([rows[0]]);
     expect(filterByKind(rows, 'series')).toEqual([rows[1]]);
+    expect(filterByKind([{ Title: 'Кинг Стивен - Оно (2017) аудиокнига MP3' }, rows[0]], 'audiobook').map((r) => r.Title)).toEqual([
+      'Кинг Стивен - Оно (2017) аудиокнига MP3',
+    ]);
+  });
+  it('«Аудиокниги» is a search mode; the other kinds are not', () => {
+    expect(searchModeForKind('audiobook')).toBe('audiobook');
+    expect(searchModeForKind('all')).toBeUndefined();
+    expect(searchModeForKind('movie')).toBeUndefined();
+    expect(searchModeForKind('series')).toBeUndefined();
   });
   it('is kept for the session; a bad value is «Все»', () => {
     expect(getKindFilter()).toBe('all');
     setKindFilter('series');
     expect(getKindFilter()).toBe('series');
+    setKindFilter('audiobook');
+    expect(getKindFilter()).toBe('audiobook');
     setKindFilter('x' as never);
     expect(getKindFilter()).toBe('all');
-    expect(kindFilterOptions().map((o) => o.label)).toEqual(['Все', 'Фильмы', 'Сериалы']);
+    expect(kindFilterOptions().map((o) => o.label)).toEqual(['Все', 'Фильмы', 'Сериалы', 'Аудиокниги']);
   });
 });

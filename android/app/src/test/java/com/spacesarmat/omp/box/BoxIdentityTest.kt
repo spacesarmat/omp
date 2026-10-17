@@ -4,6 +4,7 @@ import com.spacesarmat.omp.CertPins
 import com.spacesarmat.omp.install.AesGcmWrapper
 import java.io.File
 import java.net.InetAddress
+import java.util.Base64
 import java.security.KeyStore
 import java.security.cert.X509Certificate
 import java.security.interfaces.RSAPublicKey
@@ -73,7 +74,11 @@ class BoxIdentityTest {
             assertEquals(1, made)
             assertArrayEquals(first.certDer, second.certDer)
             val raw = File(dir, "identity.enc").readText()
-            assertFalse(raw.contains("OMP"))
+            // The CN is the three letters OMP, which also occur in base64 ciphertext. The file must not be the
+            // certificate itself: decoding the stored bytes is not an identity.
+            assertFalse(raw.contains("BEGIN CERTIFICATE"))
+            val stored = Base64.getDecoder().decode(raw)
+            assertNull(BoxIdentity.decode(stored))
             // a lost Keystore key: a new identity, the TV asks for a code again
             val other = BoxIdentityStore(File(dir, "identity.enc"), AesGcmWrapper { KeyGenerator.getInstance("AES").apply { init(256) }.generateKey() })
             assertFalse(other.load().certDer.contentEquals(first.certDer))

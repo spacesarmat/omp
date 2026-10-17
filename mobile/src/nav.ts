@@ -45,7 +45,15 @@ export type MRoute =
   /** `season` is the season to open first (the series screen falls back to its own pick without it). */
   | { name: 'series'; key: string; season?: number }
   /** A person's filmography from the cast of a title card; `label` is the name shown while it loads. */
-  | { name: 'person'; id: number; label?: string };
+  | { name: 'person'; id: number; label?: string }
+  /** «Аудиокниги»: search and the books already added. */
+  | { name: 'audiobooks' }
+  /** «Аудиокниги» → search (searchMode audiobook). */
+  | { name: 'audiobookSearch' }
+  /** «Аудиокниги» → «Мои книги». */
+  | { name: 'audiobookMine' }
+  /** One audiobook: its tracks, or the chapters of a single m4b. */
+  | { name: 'audiobook'; hash: string };
 
 export const routeStack = signal<MRoute[]>([{ name: 'connect' }]);
 export const currentRoute = computed(() => routeStack.value[routeStack.value.length - 1]);
