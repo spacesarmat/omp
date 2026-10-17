@@ -2,6 +2,20 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.3
+
+- The built-in TorrServer is updated to MatriX.147
+
+## 0.20.2
+
+- [phone] TMDB key: a v3 API key is accepted, and Clear removes a stored v4 token. Discover separates a rejected key from a server that does not answer
+- [tv] Discover reads the same TMDB v3 key and drops an empty key cache
+- [phone] Settings: account, viewing, search and the app stay on the main screen; technical options move under Advanced
+- [tv] Settings use the same groups: everyday choices first, the rest under Advanced
+- Subscription search: Jackett asks its indexers in parallel, so one slow indexer no longer uses up the whole timeout
+- JacRed: a Latin query that returns only a few exact names is searched again without the last two letters
+- Audiobooks: a release marked as an audiobook, with a narrator credit, or as m4b is filed under Audiobooks and labeled Audiobook. Jackett and JacRed can search that mode: category 3030 and the trackers that file audiobooks under books or other
+
 ## 0.20.2-beta.2
 
 - same as beta.1 (beta.1 did not build: the TMDB key was visible to tests)

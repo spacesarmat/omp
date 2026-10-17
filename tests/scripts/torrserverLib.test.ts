@@ -8,6 +8,7 @@ import {
   ASSET_NAME,
   bumpPatch,
   insertChangelog,
+  torrserverNote,
   setRootVersion,
   pinFromRelease,
   parsePin,
@@ -40,7 +41,17 @@ describe('torrserver-lib', () => {
   it('bumps the patch version', () => {
     expect(bumpPatch('0.8.2')).toBe('0.8.3');
     expect(bumpPatch('0.9.9')).toBe('0.9.10');
-    expect(() => bumpPatch('0.9')).toThrow();
+    expect(bumpPatch('  0.20.2  ')).toBe('0.20.3');
+    expect(() => bumpPatch('0.9')).toThrow(/Bad version/);
+    expect(() => bumpPatch('0.20.2-rc.1')).toThrow(/Bad version/);
+    expect(() => bumpPatch('')).toThrow(/Bad version/);
+  });
+  it('releases a pending stable from a beta instead of stepping the patch', () => {
+    expect(bumpPatch('0.20.2-beta.2')).toBe('0.20.2');
+    expect(bumpPatch('0.20.1-beta.15')).toBe('0.20.1');
+    expect(bumpPatch('  0.8.2-beta.0 \n')).toBe('0.8.2');
+    expect(() => bumpPatch('0.20.2-beta')).toThrow(/Bad version/);
+    expect(() => bumpPatch('0.20.2-beta.2.1')).toThrow(/Bad version/);
   });
   it('inserts a changelog entry above the latest version', () => {
     const text = '# Изменения\n\n## 0.8.2\n\n- a\n';
@@ -50,6 +61,9 @@ describe('torrserver-lib', () => {
     const crlf = insertChangelog(text.replace(/\n/g, '\r\n'), '0.8.3', 'T');
     expect(crlf).toContain('## 0.8.3\r\n\r\n- Встроенный TorrServer обновлён до T\r\n\r\n## 0.8.2');
     expect(crlf).not.toMatch(/[^\r]\n/);
+    const en = insertChangelog('# Changes\n\n## 0.8.2\n\n- a\n', '0.8.3', 'MatriX.147', torrserverNote('MatriX.147', true));
+    expect(en).toContain('- The built-in TorrServer is updated to MatriX.147\n\n## 0.8.2');
+    expect(en).not.toMatch(/[А-Яа-яЁё]/);
   });
   it('replaces only the root version fields', () => {
     const lock = '{\n  "name": "omp",\n  "version": "0.8.2",\n  "packages": {\n    "": {\n      "name": "omp",\n      "version": "0.8.2",\n      "dependencies": {}\n    },\n    "node_modules/x": {\n      "version": "0.8.2"\n    }\n  }\n}\n';

@@ -77,3 +77,15 @@ export function forPlatform(list: ChangelogEntry[], platform: ChangelogPlatform)
 export function releasesUpTo(list: ChangelogEntry[], version: string, max = 6): ChangelogEntry[] {
   return list.filter((e) => compareVersions(e.version, version) <= 0).slice(0, max);
 }
+
+/**
+ * Newest-first entries through `floor`, inclusive. Prepending a newer release does not drop the floor,
+ * so the in-app window needs no manual widening. A floor that is not in the list keeps every newer entry,
+ * or the whole list when nothing is newer.
+ */
+export function changelogWindow(list: ChangelogEntry[], floor: string): ChangelogEntry[] {
+  const at = list.findIndex((e) => e.version === floor);
+  if (at >= 0) return list.slice(0, at + 1);
+  const newer = list.filter((e) => compareVersions(e.version, floor) > 0);
+  return newer.length ? newer : list.slice();
+}

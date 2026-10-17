@@ -108,3 +108,30 @@ describe('TMDB_API_KEY scope', () => {
     expect(upd).toContain('TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}');
   });
 });
+
+describe('TorrServer update version gate', () => {
+  const upd = readFileSync('.github/workflows/torrserver-update.yml', 'utf8');
+  const apply = upd.slice(upd.indexOf('Apply the TorrServer update'), upd.indexOf('Install dependencies'));
+
+  it('computes the publish tag with bumpPatch and skips when that tag already exists', () => {
+    expect(apply).toContain('import { bumpPatch } from "./scripts/torrserver-lib.mjs"');
+    expect(apply).toContain('console.log(bumpPatch(process.argv[1]))');
+    expect(apply).toContain('refs/tags/v$TARGET');
+    expect(apply).toContain('tag v$TARGET already exists, skipping the TorrServer bump');
+    const targetCheck = apply.indexOf('refs/tags/v$TARGET');
+    const bump = apply.indexOf('scripts/torrserver-bump.mjs');
+    expect(targetCheck).toBeGreaterThan(0);
+    expect(targetCheck).toBeLessThan(bump);
+  });
+
+  it('still waits while the current package.json version is unreleased', () => {
+    expect(apply).toContain('refs/tags/v$OMP_VERSION');
+    expect(apply).toContain('OMP $OMP_VERSION is not released yet');
+    expect(apply.indexOf('refs/tags/v$OMP_VERSION')).toBeLessThan(apply.indexOf('refs/tags/v$TARGET'));
+  });
+
+  it('commits the English changelog the release tests read', () => {
+    const commit = upd.slice(upd.indexOf('Commit, tag and push the update'));
+    expect(commit).toContain('CHANGELOG.md CHANGELOG.en.md');
+  });
+});
