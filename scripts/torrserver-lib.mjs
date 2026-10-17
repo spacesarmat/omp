@@ -26,8 +26,12 @@ export function parseDigest(digest) {
   return m[1].toLowerCase();
 }
 
+// A prerelease is the pending stable: 0.20.2-beta.2 -> 0.20.2. A plain release steps the patch: 0.20.2 -> 0.20.3.
 export function bumpPatch(version) {
-  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version).trim());
+  const raw = String(version).trim();
+  const pre = /^(\d+)\.(\d+)\.(\d+)-beta\.(\d+)$/.exec(raw);
+  if (pre) return `${pre[1]}.${pre[2]}.${pre[3]}`;
+  const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(raw);
   if (!m) throw new Error(`Bad version: ${version}`);
   return `${m[1]}.${m[2]}.${Number(m[3]) + 1}`;
 }
