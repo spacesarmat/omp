@@ -2,6 +2,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.4-beta.1
+
+- [phone] Audiobooks: search in audiobook mode, and the books already added
+- [phone] Audiobook player: playback with lock-screen controls, speed and a sleep timer
+
 ## 0.20.3
 
 - The built-in TorrServer is updated to MatriX.147
