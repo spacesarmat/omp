@@ -89,22 +89,24 @@ export function TopBar(p: TopBarProps) {
         {/* the TV's name under the logo: absolutely placed, so the bar keeps its height and the tabs their place */}
         {device && <span class="topbar-device" title={device}>{tvGlyphs(device)}</span>}
       </div>
-      <div class="topbar-tabs" ref={tabsRef}>
-        {tvLibraryTabs().map((tb) => (
-          <Focusable
-            key={tb.id}
-            focusKey={'tab-' + tb.id}
-            className={'tab' + (p.tab === tb.id ? ' active' : '')}
-            onPress={() => p.onTab(tb.id)}
-            onArrow={arrow('tab-' + tb.id)}
-            onFocused={() => { showTab(tb.id); p.onTab(tb.id); p.onFocused(); }}
-          >
-            {tb.id === 'history' && <Icon name="history" size={24} class="tab-icon" />}
-            {tb.label}
-            {tb.id === 'news' && unseen > 0 && <span class="tab-badge">{unseen > 99 ? '99+' : String(unseen)}</span>}
-          </Focusable>
-        ))}
-        <span class="topbar-tabs-pad" />
+      <div class="topbar-tabs-clip">
+        <div class="topbar-tabs" ref={tabsRef}>
+          {tvLibraryTabs().map((tb) => (
+            <Focusable
+              key={tb.id}
+              focusKey={'tab-' + tb.id}
+              className={'tab' + (p.tab === tb.id ? ' active' : '')}
+              onPress={() => p.onTab(tb.id)}
+              onArrow={arrow('tab-' + tb.id)}
+              onFocused={() => { showTab(tb.id); p.onTab(tb.id); p.onFocused(); }}
+            >
+              {tb.id === 'history' && <Icon name="history" size={24} class="tab-icon" />}
+              {tb.label}
+              {tb.id === 'news' && unseen > 0 && <span class="tab-badge">{unseen > 99 ? '99+' : String(unseen)}</span>}
+            </Focusable>
+          ))}
+          <span class="topbar-tabs-pad" />
+        </div>
       </div>
       <div class="topbar-tools">
         <IconButton focusKey="lib-btn-search" icon="search" label={p.searchOpen ? t('tv.topbar.closeSearch') : t('tv.topbar.search')} onPress={p.onSearch} onFocused={p.onFocused} onArrow={arrow('lib-btn-search')} expand disabled={discover} />

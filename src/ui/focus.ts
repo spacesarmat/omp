@@ -17,6 +17,24 @@ export function focusBottomMargin(_hasHints: boolean, keypad: boolean): number {
   return FOCUS_BOTTOM_CLEAR + (keypad ? 72 : 0);
 }
 
+/**
+ * Pixels a focused button grows below its unscaled box (scale 1.06 from the center).
+ * Focus is measured before that class is painted, so the scroller has to reserve it.
+ * The extra pixel covers a scrollTop that lands on a whole pixel.
+ */
+export function focusZoomOverhang(el: Element): number {
+  const node = el as HTMLElement;
+  if (!node.classList || !node.classList.contains('button')) return 0;
+  const h = node.getBoundingClientRect().height;
+  if (!(h > 0)) return 0;
+  return Math.ceil(h * 0.03) + 1;
+}
+
+/** A dialog or the tour is covering the screen, so the screen underneath must not take focus. */
+export function modalCovering(): boolean {
+  return typeof document !== 'undefined' && !!document.querySelector('.onboarding-host, .dialog-backdrop, .better-backdrop, .marks-backdrop');
+}
+
 /** scrollIntoView also moves scrollLeft. The page never scrolls sideways; only the tab strip does. */
 export function clearPageScroll(from: Element | null): void {
   const root = typeof document !== 'undefined' ? document.documentElement : null;
@@ -42,8 +60,8 @@ export function scrollIntoViewSafe(el: Element | null): void {
   const keypad = typeof (el as HTMLElement).closest === 'function' && (el as HTMLElement).closest('.keypad');
   const hints = !!box.querySelector('.hints');
   const margin = focusBottomMargin(hints, !!keypad);
-  const over = el.getBoundingClientRect().bottom + margin - (box.getBoundingClientRect().bottom - (hints ? HINTS_HEIGHT : 0));
-  if (over > 0) box.scrollTop += over;
+  const over = el.getBoundingClientRect().bottom + focusZoomOverhang(el) + margin - (box.getBoundingClientRect().bottom - (hints ? HINTS_HEIGHT : 0));
+  if (over > 0) box.scrollTop += Math.ceil(over);
   const topOver = box.getBoundingClientRect().top + margin - el.getBoundingClientRect().top;
   if (topOver > 0) box.scrollTop -= topOver;
   if (box.scrollLeft) box.scrollLeft = 0;
@@ -243,6 +261,7 @@ function cancelPending(): void {
  */
 export function restoreFocus(fallbackKey: string): void {
   cancelPending();
+  if (modalCovering()) return;
   const saved = takeSavedFocus();
   if (saved && focusSaved(saved)) return;
   if (doesFocusableExist(fallbackKey)) setFocus(fallbackKey);
@@ -261,7 +280,7 @@ export function restoreFocus(fallbackKey: string): void {
   };
   const tick = () => {
     timer = null;
-    if (currentRoute.value !== route || focusSaved(saved) || Date.now() - started >= FOCUS_RESTORE_MS) {
+    if (modalCovering() || currentRoute.value !== route || focusSaved(saved) || Date.now() - started >= FOCUS_RESTORE_MS) {
       cancelPending();
       return;
     }

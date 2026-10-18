@@ -1,6 +1,6 @@
 import { t } from '../i18n';
 import { useEffect, useRef } from 'preact/hooks';
-import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
+import { doesFocusableExist, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { focusAfterClose } from './focus';
 import { whatsNew, closeWhatsNew, markWhatsNewShown } from '../store/whatsNew';
 import { FocusGroup, Focusable, Button } from './components';
@@ -9,6 +9,23 @@ import { useKeys } from './keys';
 /** The automatic «Что нового в …» waits while the player, the update screen or another prompt is open. */
 export function shouldShowWhatsNew(routeName: string): boolean {
   return routeName !== 'player' && routeName !== 'update' && routeName !== 'pairPhone';
+}
+
+function focusIsInWhatsNew(key: string): boolean {
+  return key === 'WHATSNEW' || key.indexOf('whatsnew-') === 0;
+}
+
+/** Pull focus onto OK when it is still on the screen behind the dialog. */
+export function focusWhatsNew(): void {
+  if (!whatsNew.peek()) return;
+  let k = '';
+  try {
+    k = getCurrentFocusKey() || '';
+  } catch (e) {
+    k = '';
+  }
+  if (focusIsInWhatsNew(k)) return;
+  if (doesFocusableExist('whatsnew-ok')) setFocus('whatsnew-ok');
 }
 
 /** «Что нового»: one focusable block per version (D-pad scrolls the list), OK closes. */
@@ -30,6 +47,18 @@ export function WhatsNewDialog() {
 
   useEffect(() => { if (cur) markWhatsNewShown(); }, [cur]);
 
+  // Library rows call setFocus when they arrive, after this dialog has opened. Keep OK focused until it closes.
+  useEffect(() => {
+    if (!cur) return;
+    focusWhatsNew();
+    const timers = [0, 50, 400].map((ms) => setTimeout(focusWhatsNew, ms));
+    const pulse = setInterval(focusWhatsNew, 300);
+    return () => {
+      timers.forEach(clearTimeout);
+      clearInterval(pulse);
+    };
+  }, [cur]);
+
   const close = () => {
     const k = prevFocus.current;
     prevFocus.current = undefined;
@@ -40,6 +69,17 @@ export function WhatsNewDialog() {
   useKeys((a) => {
     if (!whatsNew.value) return false;
     if (a === 'back') { close(); return true; }
+    let k = '';
+    try {
+      k = getCurrentFocusKey() || '';
+    } catch (e) {
+      k = '';
+    }
+    // OK must not open the tile that still has focus behind the dialog
+    if (!focusIsInWhatsNew(k)) {
+      focusWhatsNew();
+      return true;
+    }
     return 'spatial';
   }, 70);
 

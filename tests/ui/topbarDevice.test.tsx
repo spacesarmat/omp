@@ -102,7 +102,7 @@ describe('device name under the logo (TV top bar)', () => {
   it('keeps the bar: an absolutely placed muted line with an ellipsis', () => {
     const css = readFileSync('src/styles.css', 'utf8');
     const rule = /\.topbar-device \{([^}]*)\}/.exec(css)![1];
-    ['position: absolute', 'color: var(--muted)', 'white-space: nowrap', 'text-overflow: ellipsis', 'overflow: hidden', 'max-width: 220px', 'font-size: 17px']
+    ['position: absolute', 'color: var(--muted)', 'white-space: nowrap', 'text-overflow: ellipsis', 'overflow: hidden', 'max-width: 320px', 'font-size: 24px']
       .forEach((p) => expect(rule).toContain(p));
     expect(/\.topbar \{[^}]*height: 92px/.test(css)).toBe(true);
   });

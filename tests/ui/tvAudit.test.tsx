@@ -6,7 +6,7 @@ import { act } from 'preact/test-utils';
 import { init, setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { DialogHost, confirmDialog } from '../../src/ui/dialog';
 import { Focusable } from '../../src/ui/components';
-import { nextRowKey, focusAfterClose, focusBottomMargin, scrollIntoViewSafe, FOCUS_BOTTOM_CLEAR } from '../../src/ui/focus';
+import { nextRowKey, focusAfterClose, focusBottomMargin, focusZoomOverhang, scrollIntoViewSafe, FOCUS_BOTTOM_CLEAR } from '../../src/ui/focus';
 import { dispatchKey } from '../../src/ui/keys';
 import { OnboardingScreen } from '../../src/ui/OnboardingScreen';
 import { LibraryScreen } from '../../src/screens/Library';
@@ -284,6 +284,27 @@ describe('focused row clearance', () => {
     expect(tabs.scrollLeft).toBe(40);
     screen.remove();
   });
+
+  it('reserves the button focus scale so the zoomed edge stays at least 120px up', () => {
+    const screen = document.createElement('div');
+    screen.className = 'screen settings';
+    const btn = document.createElement('div');
+    btn.className = 'button';
+    screen.appendChild(btn);
+    document.body.appendChild(screen);
+    const box = (bottom: number, height: number) => ({
+      bottom, top: bottom - height, height, left: 0, right: 200, width: 200, x: 0, y: bottom - height, toJSON: () => ({}),
+    });
+    btn.getBoundingClientRect = () => box(1000, 60) as DOMRect;
+    screen.getBoundingClientRect = () => box(1080, 1080) as DOMRect;
+    btn.scrollIntoView = () => undefined;
+    expect(focusZoomOverhang(btn)).toBe(Math.ceil(60 * 0.03) + 1);
+    scrollIntoViewSafe(btn);
+    const zoom = 60 * 0.03;
+    const visualBottom = 1000 - screen.scrollTop + zoom;
+    expect(1080 - visualBottom).toBeGreaterThanOrEqual(120);
+    screen.remove();
+  });
 });
 
 describe('TV audit stylesheet', () => {
@@ -297,6 +318,19 @@ describe('TV audit stylesheet', () => {
     expect(css).toContain('.screen.settings { padding: 48px 96px 240px; }');
     expect(css).toContain('.topbar-tabs.fade-left');
     expect(css).toContain('.topbar-tabs.fade-right');
+    expect(css).toContain('.topbar-tabs-clip {');
+    expect(css).toContain('.topbar { width: 100%; overflow: visible;');
+    expect(css).not.toMatch(/\.topbar \{[^}]*overflow:\s*hidden/);
+    expect(css).toContain('.icon-btn-label {');
+    expect(css).toContain('.tc-person-name { font-size: 24px;');
+    expect(css).toContain('.tc-person-role { margin-top: 4px; font-size: 24px;');
+    expect(css).toContain('.hfilter {');
+    expect(css).toMatch(/\.hfilter \{[^}]*font-size: 24px/);
+    expect(css).toContain('.disc-rating { font-size: 24px; }');
+    expect(css).toContain('.faq-qr-sub { font-size: 24px;');
+    expect(css).toContain('.engine-text { font-size: 24px;');
+    expect(css).toMatch(/\.topbar-device \{[^}]*font-size: 24px/);
+    expect(css).toMatch(/\.icon-btn-label \{[^}]*font-size: 24px/);
     expect(css).toContain('.torrent-raw { font-size: 24px;');
     expect(css).toContain('.lrow-meta { font-size: 24px;');
     expect(css).toContain('.skip-status .muted { font-size: 24px;');
