@@ -1,0 +1,68 @@
+# Home NUC overrides (production since the 2026-10-19 cutover from the VPS). Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.nuc.yml up -d
+# - caddy: plain HTTP on :80 only (TLS is terminated upstream by Cloudflare Tunnel / NPM),
+#   so no ACME attempts for domains that still point at the VPS.
+# - billing: (cutover 2026-10-19) Telegram block removed; NUC is the only bot poller.
+#   VPS omp-billing is stopped.
+services:
+  billing:
+    environment:
+      BILLING_BOT_POLL: "1"   # NUC is the only getUpdates poller (VPS omp-billing stopped)
+  caddy:
+    ports: !override
+      - "80:80"
+    volumes: !override
+      - ./Caddyfile.nuc:/etc/caddy/Caddyfile:ro
+      - ./site:/srv/site:ro
+      - caddy_data:/data
+      - caddy_config:/config
+  # Separate WARP (full-tunnel "warp" mode inside its own netns) used ONLY by cloudflared:
+  # the home ISP breaks Cloudflare Tunnel edge connections, WARP carries them. Host routing is untouched.
+  warp-tunnel:
+    image: caomingjun/warp:latest
+    container_name: omp-warp-tunnel
+    restart: unless-stopped
+    environment:
+      WARP_SLEEP: "2"
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - AUDIT_WRITE
+    device_cgroup_rules:
+      - "c 10:200 rwm"
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+      - net.ipv4.conf.all.src_valid_mark=1
+    volumes:
+      - ./data/warp-tunnel:/var/lib/cloudflare-warp
+    extra_hosts:
+      - "nuc-caddy:host-gateway"   # Caddy published on host :80 (private range is excluded from WARP)
+    networks:
+      - omp
+
+  # Cloudflare Tunnel "omp-nuc" (6afa5d9c-8805-4fb0-a80e-d497737727a8), remotely managed.
+  # Ingress (in Cloudflare): omp-player.online, www, billing, jackett, jacred -> http://nuc-caddy:80 (Host preserved).
+  # Token lives only in ./tunnel.env (root 600, never commit).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: omp-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --protocol http2 --edge-ip-version 4 run
+    env_file: ./tunnel.env
+    network_mode: "service:warp-tunnel"
+    depends_on:
+      - warp-tunnel
+      - caddy
+  # Replica connector for Cloudflare Tunnel "home-nas" (702340e2-9120-4bf2-9855-2b034c026b7f), added 2026-10-19.
+  # Ingress (in Cloudflare): music.omp-player.online -> http://192.168.1.191:8880 (NAS, reachable over LAN;
+  # private range is excluded from WARP). The NAS's own connector can't reach the edge (ISP breaks TLS to :7844).
+  # Token lives only in ./tunnel-home-nas.env (root 600, never commit).
+  cloudflared-home-nas:
+    image: cloudflare/cloudflared:latest
+    container_name: omp-cloudflared-home-nas
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --protocol http2 --edge-ip-version 4 --metrics 127.0.0.1:20242 run
+    env_file: ./tunnel-home-nas.env
+    network_mode: "service:warp-tunnel"
+    depends_on:
+      - warp-tunnel
