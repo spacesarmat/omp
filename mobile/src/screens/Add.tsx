@@ -40,7 +40,7 @@ import { SubSheet } from '../ui/SubSheet';
 import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../addResult';
 import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
-import { filterByKind, getKindFilter, searchModeForKind, setKindFilter, type KindFilter } from '../../../src/lib/releaseKind';
+import { filterByKind, getKindFilter, releaseKind, searchModeForKind, setKindFilter, type KindFilter } from '../../../src/lib/releaseKind';
 import { kindFilterOptions } from '../../../src/sources/releaseRow';
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5';
@@ -264,7 +264,9 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const linkEntered = normalizeLink(value) !== null;
   const categoryOfRow = (r: SourceResult) => {
     const v = rowCat[resultKey(r)];
-    return v !== undefined ? v : guessCategory(r.Title);
+    if (v !== undefined) return v;
+    if (releaseKind(r).kind === 'audiobook') return 'audiobook';
+    return guessCategory(r.Title);
   };
 
   const addLink = async (l: string): Promise<string | null> => {
@@ -397,6 +399,10 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
         return;
       }
       if (watch === 'phone') {
+        if (releaseKind(r).kind === 'audiobook') {
+          navigate({ name: 'audiobook', hash });
+          return;
+        }
         markRow(key, 'add');
         await watchAddedOnPhone(c, hash);
         return;

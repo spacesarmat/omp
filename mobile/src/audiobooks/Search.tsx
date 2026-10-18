@@ -33,42 +33,77 @@ function progOf(h: SearchHandle): Prog {
   return { answered: h.answered().length, total: h.sourceIds.length, pending: h.pending(), failed: h.failed() };
 }
 
+interface SearchMemo {
+  query: string;
+  handle: SearchHandle | null;
+  order: string[];
+  rowCat: Record<string, string>;
+  error: string;
+}
+
+function freshMemo(): SearchMemo {
+  return { query: '', handle: null, order: [], rowCat: {}, error: '' };
+}
+
+let memo: SearchMemo = freshMemo();
+let listener: ((h: SearchHandle) => void) | null = null;
+
+/** Forgets the last audiobook search (tests). Leaving the screen does not. */
+export function resetAudiobookSearch(): void {
+  if (memo.handle) memo.handle.cancel();
+  memo = freshMemo();
+}
+
 export function AudiobookSearch() {
-  const [query, setQuery] = useState('');
-  const [rows, setRows] = useState<SourceResult[] | null>(null);
-  const [prog, setProg] = useState<Prog | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [error, setError] = useState('');
-  const [rowCat, setRowCat] = useState<Record<string, string>>({});
+  const [query, setQueryState] = useState(memo.query);
+  const [rows, setRows] = useState<SourceResult[] | null>(memo.handle ? memo.handle.results() : null);
+  const [prog, setProg] = useState<Prog | null>(memo.handle ? progOf(memo.handle) : null);
+  const [searching, setSearching] = useState(memo.handle ? memo.handle.pending().length > 0 : false);
+  const [error, setErrorState] = useState(memo.error);
+  const [rowCat, setRowCatState] = useState<Record<string, string>>(memo.rowCat);
   const [pending, setPending] = useState<Record<string, RowBusy>>({});
   const [alive] = useState({ v: true });
   const pendingRef = useRef<Map<string, RowBusy>>(new Map());
-  const handleRef = useRef<SearchHandle | null>(null);
-  const orderRef = useRef<string[]>([]);
+  const orderRef = useRef<string[]>(memo.order);
   const launch = useTvLaunch();
   const tv = activeTv.value;
 
-  useEffect(
-    () => () => {
-      alive.v = false;
-      if (handleRef.current) handleRef.current.cancel();
-    },
-    [],
-  );
+  const setQuery = (v: string) => {
+    memo.query = v;
+    setQueryState(v);
+  };
+  const setError = (v: string) => {
+    memo.error = v;
+    setErrorState(v);
+  };
+  const setRowCat = (v: Record<string, string>) => {
+    memo.rowCat = v;
+    setRowCatState(v);
+  };
 
   const sync = (h: SearchHandle) => {
-    if (!alive.v || handleRef.current !== h) return;
+    if (!alive.v || memo.handle !== h) return;
     setRows(h.results());
     setProg(progOf(h));
     setSearching(h.pending().length > 0);
   };
 
+  useEffect(() => {
+    listener = sync;
+    if (memo.handle) sync(memo.handle);
+    return () => {
+      alive.v = false;
+      if (listener === sync) listener = null;
+    };
+  }, []);
+
   const runSearch = (q: string, asked: CheckedHosts) => {
-    if (handleRef.current) handleRef.current.cancel();
+    if (memo.handle) memo.handle.cancel();
     orderRef.current = [];
+    memo.order = [];
     setError('');
     const notify = () => {
-      if (alive.v && handleRef.current === h) sync(h);
+      if (listener) listener(h);
     };
     const ctx = phoneSourceContext();
     ctx.searchMode = 'audiobook';
@@ -78,11 +113,12 @@ export function AudiobookSearch() {
       onDone: (id, err) => {
         notify();
         if (err) onSearchFailure(id, err, asked, () => {
-          if (handleRef.current === h) runSearch(q, asked);
+          if (memo.handle === h) runSearch(q, asked);
         });
       },
     });
-    handleRef.current = h;
+    memo.handle = h;
+    memo.query = q;
     sync(h);
   };
 
@@ -147,6 +183,7 @@ export function AudiobookSearch() {
   const matching = rows ? filterByKind(rows, 'audiobook') : [];
   const visible = searching ? stableOrder(orderRef.current, matching, 'seeds') : sortResults(matching, 'seeds');
   orderRef.current = visible.map(resultKey);
+  memo.order = orderRef.current;
 
   return (
     <div class="m-screen" data-route="audiobook-search">
