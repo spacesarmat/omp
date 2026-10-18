@@ -10,6 +10,7 @@ import { activeCatalog } from '../catalog/activeCatalog';
 import { t } from '../i18n';
 import { airDateText } from './seriesStatus';
 import { parseEpisode, type TorrentFile } from './episodes';
+import { resetSeasonTotals } from './episodesOutOf';
 
 export interface ShowInfo {
   id: number;
@@ -22,6 +23,8 @@ export interface ShowInfo {
   poster: string;
   /** A season's own poster, by season number. */
   seasonPosters: { [n: number]: string };
+  /** `episode_count` of each season from the show card. Season details raise a season when they know more. */
+  episodeCounts: { [n: number]: number };
 }
 
 const shows = new Map<string, Promise<ShowInfo | null>>();
@@ -29,6 +32,7 @@ const shows = new Map<string, Promise<ShowInfo | null>>();
 /** Forget the matched shows (tests). */
 export function resetEpisodeNames(): void {
   shows.clear();
+  resetSeasonTotals();
 }
 
 
@@ -45,8 +49,10 @@ async function match(tor: Torrent): Promise<ShowInfo | null> {
     // the seasons list is a bonus: the names still work
   }
   const seasonPosters: { [n: number]: string } = {};
+  const episodeCounts: { [n: number]: number } = {};
   if (card) card.seasons.forEach((s) => {
     if (s.poster) seasonPosters[s.number] = s.poster;
+    if (s.episodes > 0) episodeCounts[s.number] = s.episodes;
   });
   return {
     id: item.id,
@@ -56,6 +62,7 @@ async function match(tor: Torrent): Promise<ShowInfo | null> {
     seasons: card ? card.seasons.map((s) => s.number).filter((n) => n > 0).sort((a, b) => a - b) : [],
     poster: (card && card.poster) || item.poster || '',
     seasonPosters: seasonPosters,
+    episodeCounts: episodeCounts,
   };
 }
 
@@ -82,9 +89,14 @@ export async function seasonEpisodes(show: ShowInfo, n: number): Promise<{ [ep: 
   try {
     const d: SeasonDetails = await (await activeCatalog()).season(show.id, n);
     const out: { [ep: number]: Episode } = {};
-    d.episodes.forEach((e) => {
+    const list = Array.isArray(d.episodes) ? d.episodes : [];
+    list.forEach((e) => {
       out[e.n] = e;
     });
+    // episode_count can list episodes the array does not have yet; the card's count stays when it is already higher
+    const total = Math.max(d.episodeCount || 0, Object.keys(out).length);
+    if (!show.episodeCounts) show.episodeCounts = {};
+    if (total > (show.episodeCounts[n] || 0)) show.episodeCounts[n] = total;
     return out;
   } catch {
     return {};

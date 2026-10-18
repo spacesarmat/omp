@@ -34,7 +34,7 @@ import { platformKind } from './platform/env';
 import { installAndroidKeyBridge } from './platform/androidKeys';
 import { installAndroidRemote } from './platform/androidRemote';
 import { installAndroidScale } from './platform/androidScale';
-import { syncNativeLanguage } from './platform/androidNative';
+import { syncNativeLanguage, syncOpenOnStartup } from './platform/androidNative';
 
 /**
  * The Android TV search sources screen (on LG: the TorrServer sources) is a separate chunk: its indexer status code stays out of the main bundle.
@@ -118,9 +118,12 @@ export function App() {
   useEffect(() => installWheelScroll(), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidKeyBridge() : undefined), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidRemote() : undefined), []);
-  useEffect(() => (platformKind() === 'androidtv' ? installAndroidScale() : undefined), []);
+  // 4K webOS reports a 3840 viewport; the same scale Android TV uses keeps the 1920 layout.
+  useEffect(() => installAndroidScale(), []);
   // the native copy follows the page's language (Android TV only: LG has no plugin)
   useEffect(() => (platformKind() === 'androidtv' ? syncNativeLanguage() : undefined), []);
+  // «Открывать при включении» for the boot receiver. webOS has no receiver; the phone bundle does not run this UI.
+  useEffect(() => (platformKind() === 'androidtv' ? syncOpenOnStartup() : undefined), []);
   useEffect(() => installUpdateChecks((gap) => { checkForUpdate({ manual: false, minIntervalMs: gap }); }), []);
   useEffect(() => { checkWhatsNew(getChangelog(), APP_VERSION); }, []);
   useEffect(() => armOnboardingBoot(), []);

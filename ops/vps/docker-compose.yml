@@ -42,6 +42,8 @@ services:
       BILLING_HOST: "0.0.0.0"
       BILLING_DATA: /data/billing.db
       BILLING_PUBLIC_ORIGIN: ${BILLING_PUBLIC_ORIGIN:-https://billing.omp-player.online}
+      # Only this container may call getUpdates. Other copies set BILLING_BOT_POLL=0.
+      BILLING_BOT_POLL: ${BILLING_BOT_POLL:-1}
       BILLING_JACKETT_URL: http://jackett:9117
       BILLING_JACRED_URL: http://jacred:9117
       BILLING_TORRSERVER_URL: http://torrserver:8090

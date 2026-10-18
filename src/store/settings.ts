@@ -50,6 +50,12 @@ export interface AppSettings {
   /** UI language: 'system' follows the device (ru/uk/be/kk → Russian, else English). */
   language: LanguageSetting;
   /**
+   * Android TV: «Открывать при включении» — start OMP after the box powers on.
+   * Default on. The phone UI never shows it, and the boot receiver does not launch on a phone.
+   * The native copy lives in SharedPreferences `omp-boot` (the receiver cannot read this blob).
+   */
+  openOnStartup: boolean;
+  /**
    * Slide tour finished from Settings. The tour is not shown on its own.
    * Raise ONBOARDING_VERSION (src/onboarding/gate.ts) only if a future build should offer it again on its own.
    */
@@ -88,6 +94,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   backgroundAudioTouched: false,
   alwaysFfmpeg: false,
   language: 'system',
+  openOnStartup: true,
   onboardingVersion: 0,
   setupDone: false,
   seenHints: {},

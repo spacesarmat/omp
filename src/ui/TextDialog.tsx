@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { signal, computed } from '@preact/signals';
-import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
+import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { focusAfterClose } from './focus';
 import { FocusGroup, Button, TextInput } from './components';
 import { useKeys } from './keys';
 import { t } from '../i18n';
@@ -39,7 +40,7 @@ function close(v: string | null) {
   const d = state.value;
   if (!d) return;
   state.value = null;
-  if (d.prevFocus && doesFocusableExist(d.prevFocus)) setFocus(d.prevFocus);
+  focusAfterClose(d.prevFocus);
   d.resolve(v);
 }
 

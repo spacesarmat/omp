@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { posterQuery, tmdbSearchUrl, tmdbSearchRequest, firstPoster } from '../../src/lib/posterSearch';
+import { posterImageSize } from '../../src/catalog/tmdb';
 
 describe('posterQuery', () => {
   it('keeps the title before the year, translation and release details', () => {
@@ -50,8 +51,8 @@ describe('tmdbSearchUrl', () => {
 describe('firstPoster', () => {
   it('takes the first result with a poster on the Russian image host', () => {
     const results = [{ poster_path: null }, { poster_path: '/a.jpg' }, { poster_path: '/b.jpg' }];
-    expect(firstPoster({}, results)).toBe('https://imagetmdb.com/t/p/w300/a.jpg');
-    expect(firstPoster({ ImageURLRu: 'img.example/' }, results)).toBe('https://img.example/t/p/w300/a.jpg');
+    expect(firstPoster({}, results)).toBe('https://imagetmdb.com/t/p/' + posterImageSize() + '/a.jpg');
+    expect(firstPoster({ ImageURLRu: 'img.example/' }, results)).toBe('https://img.example/t/p/' + posterImageSize() + '/a.jpg');
   });
 
   it('is empty without results', () => {

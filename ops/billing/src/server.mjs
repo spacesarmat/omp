@@ -42,6 +42,15 @@ import {
   unlinkDeviceTelegram,
 } from './logic.mjs';
 import { adminNotifyEnabled, botDeepLink, botReply, paymentAdminNotices, serviceDownNotices, telegramOf } from './bot.mjs';
+import {
+  botPollDisabledLine,
+  botPollEnabled,
+  botPollSnapshot,
+  conflictLogLine,
+  isGetUpdatesConflict,
+  noteBotPollOk,
+  noteGetUpdatesConflict,
+} from './botPoll.mjs';
 import { randomId } from './crypto.mjs';
 import { goPage } from './go.mjs';
 import {
@@ -409,7 +418,7 @@ export function createApp(file, fetchImpl) {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
         const services = await probeAllServices(readState(file).settings, net);
-        return json(res, 200, { ok: true, services });
+        return json(res, 200, { ok: true, services, botPoll: botPollSnapshot() });
       }
       if (req.method === 'GET' && path === '/admin/api/reveal') {
         const admin = adminOf(req);
@@ -597,7 +606,7 @@ export function createApp(file, fetchImpl) {
           await audit(file, path === '/admin/services' ? 'services_save' : 'settings_save', 'ok', admin);
           if (wantsJson(req) && path === '/admin/services') {
             const services = await probeAllServices(readState(file).settings, net);
-            return json(res, 200, { ok: true, services });
+            return json(res, 200, { ok: true, services, botPoll: botPollSnapshot() });
           }
         }
         let flashed = '';
@@ -1078,7 +1087,11 @@ export async function refreshMissingProfiles(file, token, net) {
   });
 }
 
-export async function pollBot(file, fetchImpl) {
+export async function pollBot(file, fetchImpl, opts) {
+  if (!botPollEnabled()) {
+    process.stderr.write(botPollDisabledLine());
+    return;
+  }
   let offset = 0;
   let sweptAt = 0;
   let servicesAt = 0;
@@ -1088,12 +1101,18 @@ export async function pollBot(file, fetchImpl) {
   /** chatId → 'user' | 'admin' — keyboard pad for admins (users always stay on user pad) */
   const pads = new Map();
   const net = fetchImpl || fetch;
+  const sleep = (opts && opts.sleep) || ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const nowFn = (opts && opts.now) || (() => Date.now());
+  const maxLoops = opts && opts.maxLoops ? opts.maxLoops : 0;
+  let loops = 0;
   for (;;) {
+    if (maxLoops && loops >= maxLoops) return;
+    loops += 1;
     try {
       const state = readState(file);
       const token = state.settings.botToken;
       if (!token) {
-        await new Promise((r) => setTimeout(r, 5000));
+        await sleep(5000);
         continue;
       }
       if (Date.now() - sweptAt > 10 * 60 * 1000) {
@@ -1115,9 +1134,21 @@ export async function pollBot(file, fetchImpl) {
       try {
         const res = await net('https://api.telegram.org/bot' + token + '/getUpdates?timeout=25&offset=' + offset);
         const data = await res.json();
-        updates = data.ok ? data.result : [];
+        if (isGetUpdatesConflict(res, data)) {
+          const noted = noteGetUpdatesConflict(state.settings, nowFn());
+          if (noted.log) process.stderr.write(conflictLogLine());
+          if (noted.messages.length) await notifyAdmins(state, noted.messages, net);
+          await sleep(5000);
+          continue;
+        }
+        if (!data || !data.ok) {
+          await sleep(5000);
+          continue;
+        }
+        noteBotPollOk(nowFn());
+        updates = Array.isArray(data.result) ? data.result : [];
       } catch (e) {
-        await new Promise((r) => setTimeout(r, 5000));
+        await sleep(5000);
         continue;
       }
       for (let i = 0; i < updates.length; i++) {
@@ -1176,7 +1207,7 @@ export async function pollBot(file, fetchImpl) {
         }
       }
     } catch (e) {
-      await new Promise((r) => setTimeout(r, 5000));
+      await sleep(5000);
     }
   }
 }

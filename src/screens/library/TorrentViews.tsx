@@ -16,10 +16,10 @@ import { requestSeriesMatch, cachedSeriesMatch, seriesMatchVersion } from '../..
 import { focusedRow, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
 import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 
-/** Tiles per row of each view (the CSS widths match: 1760px of content, tile plus margin 298px / 198px). */
+/** Tiles per row. The safe width is 1728px (96–1824); the CSS column count matches. */
 export const VIEW_COLS: { [v in LibraryView]: number } = { large: 6, small: 9, list: 1, compact: 1 };
 /** The height of a row of each view, px (poster, title, meta and the gap under it). */
-const ROW_PX: { [v in LibraryView]: number } = { large: 560, small: 340, list: 120, compact: 70 };
+const ROW_PX: { [v in LibraryView]: number } = { large: 560, small: 420, list: 140, compact: 70 };
 
 interface ItemProps {
   t: Torrent;
@@ -44,7 +44,10 @@ function useLoneName(t: Torrent): string {
 }
 
 function badgesOf(t: Torrent, max: number): string[] {
-  return releaseBadges(parseReleaseInfo(displayTitle(t))).map(displayBadge).slice(0, max);
+  const all = releaseBadges(parseReleaseInfo(displayTitle(t))).map(displayBadge);
+  // a year on an empty poster is the lowest-priority badge, and it is not shown there at all
+  const list = t.poster ? all : all.filter((b) => !/^[0-9]{4}$/.test(b));
+  return list.slice(0, max);
 }
 
 function Badges(p: { list: string[]; className?: string }) {
@@ -66,10 +69,10 @@ function Tile(p: ItemProps & { size: 'large' | 'small' }) {
   return (
     <Focusable focusKey={'torrent-' + t.hash} className={'tile tile-' + p.size} onPress={() => p.onOpen(t)} onFocused={() => p.onFocused(t)}>
       <Poster t={t} showTitle unload={p.unload}>
-        <Badges list={badgesOf(t, p.size === 'large' ? 3 : 1)} className="art-badges" />
+        <Badges list={badgesOf(t, p.size === 'large' ? 2 : 1)} className="art-badges" />
       </Poster>
       <div class="tile-title">{tvGlyphs(name)}</div>
-      {p.size === 'large' && <div class="tile-meta">{metaOf(t) || formatBytes(t.torrent_size || 0)}</div>}
+      <div class="tile-meta">{metaOf(t) || (p.size === 'large' ? formatBytes(t.torrent_size || 0) : '\u00a0')}</div>
     </Focusable>
   );
 }
@@ -105,7 +108,7 @@ function CompactRow(p: ItemProps) {
 
 function SeriesRow(p: { g: SeriesGroup; onOpen: (g: SeriesGroup) => void; onFocused: (g: SeriesGroup) => void; unload?: boolean }) {
   const g = p.g;
-  const pill = useSeriesPill(g);
+  const pill = useSeriesPill(g, true);
   return (
     <Focusable focusKey={'series-' + g.key} className="lrow" onPress={() => p.onOpen(g)} onFocused={() => p.onFocused(g)}>
       <Poster t={g.lead} unload={p.unload} />
@@ -122,7 +125,7 @@ function SeriesRow(p: { g: SeriesGroup; onOpen: (g: SeriesGroup) => void; onFocu
 
 function SeriesCompact(p: { g: SeriesGroup; onOpen: (g: SeriesGroup) => void; onFocused: (g: SeriesGroup) => void }) {
   const g = p.g;
-  const pill = useSeriesPill(g);
+  const pill = useSeriesPill(g, true);
   return (
     <Focusable focusKey={'series-' + g.key} className="crow" onPress={() => p.onOpen(g)} onFocused={() => p.onFocused(g)}>
       <div class="crow-title">{tvGlyphs(seriesName(g))}<span class="crow-meta">{' · ' + groupLabel(g)}</span></div>

@@ -1,4 +1,5 @@
 import type { TmdbConfig } from '../api/types';
+import { posterImageSize } from '../catalog/tmdb';
 import { isTmdbV4Token } from '../catalog/tmdbToken';
 
 const MAX_WORDS = 4;
@@ -69,7 +70,7 @@ export function firstPoster(cfg: TmdbConfig, results: unknown): string {
   const host = withScheme(cfg.ImageURLRu, 'https://imagetmdb.com');
   for (let i = 0; i < results.length; i++) {
     const p = results[i] && (results[i] as { poster_path?: unknown }).poster_path;
-    if (typeof p === 'string' && p) return host + '/t/p/w300' + (p.charAt(0) === '/' ? p : '/' + p);
+    if (typeof p === 'string' && p) return host + '/t/p/' + posterImageSize() + (p.charAt(0) === '/' ? p : '/' + p);
   }
   return '';
 }

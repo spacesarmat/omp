@@ -10,6 +10,7 @@ import type { CloudflareVisibleRequest } from '../sources/cloudflareCheck';
 import type { BrowserCheck, BrowserLoginRequest } from '../sources/browserLogin';
 import { effect } from '@preact/signals';
 import { lang, t, type Lang } from '../i18n';
+import { settings } from '../store/settings';
 
 type ApkFiles = NonNullable<UpdateInfo['apks']>;
 
@@ -84,6 +85,12 @@ export interface OmpNativeTvPlugin {
   siteSessionPending(o: { site: string; check: BrowserCheck }): Promise<{ ok?: boolean; host?: string }>;
   /** The page's resolved UI language for the native copy (SharedPreferences `omp.lang`); missing in an older APK. */
   setLanguage?(o: { lang: string }): Promise<unknown>;
+  /** Android TV: persist «Открывать при включении» for the boot receiver. Missing in an older APK. */
+  setOpenOnStartup?(o: { enabled: boolean }): Promise<OpenOnStartupState>;
+  /** Last boot-launch result. needsOverlay is false on a read. */
+  openOnStartupState?(): Promise<OpenOnStartupState>;
+  /** System screen for display over other apps. { opened: false } when that screen cannot be opened. */
+  requestOpenOnStartupOverlay?(): Promise<{ opened?: boolean }>;
   /** The installed 2160 Player package, null when it is not installed; missing in an older APK. */
   player2160?(): Promise<{ package: string | null }>;
   /** Opens the playlist in 2160 Player; resolves with { returned, positionMs?, durationMs?, ended?, url? } when it closes. */
@@ -93,6 +100,13 @@ export interface OmpNativeTvPlugin {
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
+
+export interface OpenOnStartupState {
+  enabled?: boolean;
+  launchBlocked?: boolean;
+  canDrawOverlays?: boolean;
+  needsOverlay?: boolean;
+}
 
 interface CapacitorBridge {
   Plugins?: { [name: string]: any };
@@ -142,6 +156,9 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     siteBrowserLogin: (o) => np.call(cap, NAME, 'siteBrowserLogin', o),
     siteSessionPending: (o) => np.call(cap, NAME, 'siteSessionPending', o),
     setLanguage: (o) => np.call(cap, NAME, 'setLanguage', o),
+    setOpenOnStartup: (o) => np.call(cap, NAME, 'setOpenOnStartup', o),
+    openOnStartupState: () => np.call(cap, NAME, 'openOnStartupState', {}),
+    requestOpenOnStartupOverlay: () => np.call(cap, NAME, 'requestOpenOnStartupOverlay', {}),
     player2160: () => np.call(cap, NAME, 'player2160', {}),
     open2160: (o) => np.call(cap, NAME, 'open2160', o),
     vpnState: () => np.call(cap, NAME, 'vpnState', {}),
@@ -328,5 +345,58 @@ export function nativeSetLanguage(l: Lang): Promise<void> {
 export function syncNativeLanguage(set: (l: Lang) => Promise<void> = nativeSetLanguage): () => void {
   return effect(() => {
     void set(lang.value);
+  });
+}
+
+/** Writes the startup switch for the boot receiver. No-op outside the APK. Never rejects. */
+export function nativeSetOpenOnStartup(enabled: boolean): Promise<OpenOnStartupState | null> {
+  const p = nativePlugin();
+  if (!p || typeof p.setOpenOnStartup !== 'function') return Promise.resolve(null);
+  try {
+    return p.setOpenOnStartup({ enabled }).then(
+      (r) => (r && typeof r === 'object' ? r : null),
+      () => null,
+    );
+  } catch (e) {
+    return Promise.resolve(null);
+  }
+}
+
+/** Whether the last boot start was blocked. null outside the APK. Never rejects. */
+export function nativeOpenOnStartupState(): Promise<OpenOnStartupState | null> {
+  const p = nativePlugin();
+  if (!p || typeof p.openOnStartupState !== 'function') return Promise.resolve(null);
+  try {
+    return p.openOnStartupState().then(
+      (r) => (r && typeof r === 'object' ? r : null),
+      () => null,
+    );
+  } catch (e) {
+    return Promise.resolve(null);
+  }
+}
+
+/** true when the system screen opened, false when it did not, null outside the APK. Never rejects. */
+export function nativeRequestOpenOnStartupOverlay(): Promise<boolean | null> {
+  const p = nativePlugin();
+  if (!p || typeof p.requestOpenOnStartupOverlay !== 'function') return Promise.resolve(null);
+  try {
+    return p.requestOpenOnStartupOverlay().then(
+      (r) => !(r && r.opened === false),
+      () => false,
+    );
+  } catch (e) {
+    return Promise.resolve(false);
+  }
+}
+
+/** Keeps SharedPreferences `omp-boot` in step with the setting. Android TV only (the caller gates the platform). */
+export function syncOpenOnStartup(set: (enabled: boolean) => Promise<unknown> = nativeSetOpenOnStartup): () => void {
+  let last: boolean | undefined;
+  return effect(() => {
+    const enabled = settings.value.openOnStartup;
+    if (enabled === last) return;
+    last = enabled;
+    void set(enabled);
   });
 }
