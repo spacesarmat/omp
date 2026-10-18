@@ -737,4 +737,83 @@ describe('POST /v1/torrent magnet redirect', () => {
     expect(res.status).toBe(200);
     expect(res.body.indexOf('d4:info')).toBe(0);
   });
+
+  it('turns a Jackett 401 or 403 into 502 upstream and logs the /dl indexer', async () => {
+    const { file, device, token } = subscriber();
+    const link = 'omp-fetch:/dl/megapeer/?path=ENC&file=Name.torrent';
+    for (const status of [401, 403]) {
+      const seen: string[] = [];
+      const logs: string[] = [];
+      const orig = process.stderr.write;
+      process.stderr.write = ((chunk: string | Uint8Array) => {
+        logs.push(String(chunk));
+        return true;
+      }) as typeof process.stderr.write;
+      try {
+        const fetchImpl = (url: string) => {
+          seen.push(String(url));
+          return Promise.resolve({
+            status,
+            headers: {},
+            arrayBuffer: async () => new ArrayBuffer(0),
+          });
+        };
+        const app = createApp(file, fetchImpl);
+        const res = await postTorrent(app, { token, device, link });
+        expect(res.status).toBe(502);
+        expect(JSON.parse(res.body)).toEqual({ error: 'upstream' });
+        expect(String(res.headers['content-type'])).toContain('application/json');
+        expect(seen).toHaveLength(1);
+        const upstream = new URL(seen[0]);
+        expect(upstream.origin + upstream.pathname).toBe(ORIGIN + '/dl/megapeer/');
+        expect(upstream.searchParams.get('jackett_apikey')).toBe(KEY);
+        expect(upstream.searchParams.get('apikey')).toBeNull();
+        expect(upstream.searchParams.get('path')).toBe('ENC');
+        expect(upstream.searchParams.get('file')).toBe('Name.torrent');
+        const log = logs.join('');
+        expect(log).toContain('status=' + status);
+        expect(log).toContain('indexer=megapeer');
+        expect(log).not.toContain(KEY);
+        expect(log).not.toContain('jackett.test');
+      } finally {
+        process.stderr.write = orig;
+      }
+    }
+  });
+
+  it('keeps apikey on a JacRed download and hides its 401 the same way', async () => {
+    const { file, device, token } = subscriber();
+    const seen: string[] = [];
+    const logs: string[] = [];
+    const orig = process.stderr.write;
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      logs.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      const fetchImpl = (url: string) => {
+        seen.push(String(url));
+        return Promise.resolve({
+          status: 401,
+          headers: {},
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+      };
+      const app = createApp(file, fetchImpl);
+      const res = await postTorrent(app, { token, device, link: 'omp-jacred:/dl/nnmclub/?path=ENC&file=Name' });
+      expect(res.status).toBe(502);
+      expect(JSON.parse(res.body)).toEqual({ error: 'upstream' });
+      expect(seen).toHaveLength(1);
+      const upstream = new URL(seen[0]);
+      expect(upstream.searchParams.get('apikey')).toBe('JACREDKEY');
+      expect(upstream.searchParams.get('jackett_apikey')).toBeNull();
+      expect(upstream.searchParams.get('path')).toBe('ENC');
+      const log = logs.join('');
+      expect(log).toContain('indexer=nnmclub');
+      expect(log).toContain('status=401');
+      expect(log).not.toContain('JACREDKEY');
+    } finally {
+      process.stderr.write = orig;
+    }
+  });
 });

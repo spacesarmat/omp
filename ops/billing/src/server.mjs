@@ -228,10 +228,14 @@ function headerValue(res, name) {
   return '';
 }
 
-/** Indexer id from a Jackett download path. The restored URL is not logged: it carries the API key. */
+/** Indexer id from `/indexers/<id>/` or `/dl/<id>/`. The restored URL is not logged: it carries the API key. */
 function indexerLabel(link, fallback) {
-  const m = /\/indexers\/([^/?]+)\//.exec(String(link || ''));
-  return (m && m[1]) || fallback || 'jackett';
+  const raw = String(link || '');
+  const api = /\/indexers\/([^/?#]+)\//.exec(raw);
+  const dl = /\/dl\/([^/?#]+)/.exec(raw);
+  const id = (api && api[1]) || (dl && dl[1]) || '';
+  if (/^[A-Za-z0-9._~-]{1,80}$/.test(id)) return id;
+  return fallback || 'jackett';
 }
 
 /**
@@ -953,6 +957,9 @@ export function createApp(file, fetchImpl) {
         }
         process.stderr.write('torrent upstream status=' + upstream.status + ' indexer=' + label + ' kind=' + upstream.kind + '\n');
         if (upstream.kind === 'magnet') return json(res, 200, { magnet: upstream.magnet });
+        // A 401/403 here is Jackett or JacRed rejecting the download, not an expired phone session.
+        // The app reads 401/403 as «Подписка закончилась»; 502 upstream is «не отдал файл раздачи».
+        if (upstream.status === 401 || upstream.status === 403) return json(res, 502, { error: 'upstream' });
         const buf = Buffer.from(await upstream.res.arrayBuffer());
         return send(res, upstream.status, buf, { 'content-type': 'application/octet-stream' });
       }

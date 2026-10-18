@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN, BILLING_ORIGIN_LAN, rememberBillingOrigin } from '../../src/billing/config';
 import { billingSession, deviceId, saveBillingSession } from '../../src/billing/session';
+import { failureOf } from '../../src/monitor/upgradeText';
+import { isLoginRequired } from '../../src/sources/types';
+import type { SourceResult } from '../../src/sources/types';
 import {
   activateCode,
   clearBilling,
@@ -140,6 +143,44 @@ describe('omp Jackett source', () => {
     expect(path).toBeTruthy();
     expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/torrent');
     expect(site.calls[0].form?.link).toBe('omp-fetch:/dl/file');
+  });
+
+  it('a 502 upstream is the tracker not returning the file, not an expired subscription', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    const row: SourceResult = {
+      Title: 'File',
+      Link: 'omp-fetch:/dl/megapeer/?path=ENC&file=Name',
+      Categories: '',
+      Size: '',
+      CreateDate: '',
+      Tracker: '',
+      Magnet: '',
+      Hash: '',
+      Peer: 0,
+      Seed: 0,
+      source: OMP_JACKETT_ID,
+    };
+    const site = fakeSite((c) => page(JSON.stringify({ error: 'upstream' }), c.url, 502));
+    let err: Error | null = null;
+    try {
+      await ompJackettSource().resolve!(row, site.ctx);
+    } catch (e) {
+      err = e instanceof Error ? e : new Error(String(e));
+    }
+    expect(err).toBeTruthy();
+    expect(err!.message).toContain('не отдал файл раздачи');
+    expect(err!.message).not.toContain('Подписка закончилась');
+    expect(isLoginRequired(err)).toBe(false);
+    const shown = failureOf({ ok: false, error: err!.message, cause: 'link' }, row);
+    expect(shown.text).toContain('не отдал файл раздачи');
+    expect(shown.source).toBeUndefined();
+    expect(billingSession()?.token).toBe('tok-1');
+
+    const down = fakeSite((c) => page(JSON.stringify({ error: 'down' }), c.url, 502));
+    await expect(ompJackettSource().resolve!(row, down.ctx)).rejects.toThrow('Сервер подписки не отвечает');
+    const expired = fakeSite((c) => page(JSON.stringify({ error: 'expired' }), c.url, 403));
+    await expect(ompJackettSource().resolve!(row, expired.ctx)).rejects.toThrow('Подписка закончилась');
+    expect(billingSession()?.token).toBe('tok-1');
   });
 
   it('accepts a magnet when the proxy followed a Jackett redirect', async () => {
