@@ -118,7 +118,8 @@ export function App() {
   useEffect(() => installWheelScroll(), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidKeyBridge() : undefined), []);
   useEffect(() => (platformKind() === 'androidtv' ? installAndroidRemote() : undefined), []);
-  useEffect(() => (platformKind() === 'androidtv' ? installAndroidScale() : undefined), []);
+  // 4K webOS reports a 3840 viewport; the same scale Android TV uses keeps the 1920 layout.
+  useEffect(() => installAndroidScale(), []);
   // the native copy follows the page's language (Android TV only: LG has no plugin)
   useEffect(() => (platformKind() === 'androidtv' ? syncNativeLanguage() : undefined), []);
   useEffect(() => installUpdateChecks((gap) => { checkForUpdate({ manual: false, minIntervalMs: gap }); }), []);

@@ -1,6 +1,7 @@
 import { t } from '../i18n';
 import { useRef } from 'preact/hooks';
-import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
+import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
+import { focusAfterClose } from './focus';
 import { updatePrompt, skipVersion, dismissPrompt } from '../store/updates';
 import { APP_VERSION } from '../version';
 import { updateNotes } from '../lib/updateInfo';
@@ -35,7 +36,7 @@ export function UpdateDialog() {
   const restore = () => {
     const k = prevFocus.current;
     prevFocus.current = undefined;
-    if (k && doesFocusableExist(k)) setFocus(k);
+    focusAfterClose(k);
   };
   const later = () => { dismissPrompt(); restore(); };
 

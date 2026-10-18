@@ -17,7 +17,7 @@ import { buildTorrentQueue } from '../player/queue';
 import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { restoreFocus, scrollScreenToTop, scrollToShow } from '../ui/focus';
+import { restoreFocus, scrollScreenToTop } from '../ui/focus';
 import { confirmDialog, choose } from '../ui/dialog';
 import { askText } from '../ui/TextDialog';
 import { checkTitle, renameTorrent } from '../lib/renameTorrent';
@@ -39,19 +39,18 @@ import { ComingRows, revealComing } from '../ui/ComingRows';
 import { comingEpisodes, lastEpisodes } from '../lib/episodeNames';
 import { useTmdbEpisodes } from '../lib/useTmdbEpisodes';
 import { isSeries } from '../lib/seriesGroups';
+import { isAudiobookTorrent } from '../lib/audiobookRoute';
+import { sharpPosterUrl } from '../catalog/tmdb';
 import { isoDay } from '../lib/seriesStatus';
-
-/** Inner margin of the actions row: a focused button keeps this much room to the row's edge. */
-const ACTION_PAD = 24;
 
 /** The parts of the screen the hint bar follows. */
 export type TorrentArea = 'play' | 'actions' | 'skip' | 'marks' | 'files';
 
 /** What OK does in each part of the screen. */
-export function okHint(area: TorrentArea): string {
+export function okHint(area: TorrentArea, book = false): string {
   if (area === 'skip') return t('torrent.hintToggle');
   if (area === 'marks') return t('torrent.hintMarks');
-  if (area === 'files' || area === 'play') return t('torrent.hintOk');
+  if (area === 'files' || area === 'play') return book ? t('torrent.hintListen') : t('torrent.hintOk');
   return t('torrent.hintSelect');
 }
 
@@ -280,24 +279,26 @@ export function TorrentScreen({ hash }: { hash: string }) {
   if (target < 0) target = queue.findIndex((q) => !isWatched(hash, q.fileIndex!));
   if (target < 0) target = 0;
   const targetLabel = queue[target] ? episodeLabel(queue[target].title) : '';
-  const playLabel = targetPos > 0
-    ? t('torrent.continueFrom', { ep: targetLabel ? targetLabel + ' ' : '', time: formatDuration(targetPos) })
-    : targetLabel ? t('torrent.watchEp', { ep: targetLabel }) : t('torrent.watch');
+  const book = !!tor && isAudiobookTorrent(tor);
+  const showSkip = queue.length > 0 && !!tor && isSeries(tor) && !book;
+  const playLabel = book
+    ? (targetPos > 0
+      ? t('torrent.continueListen', { ep: targetLabel ? targetLabel + ' ' : '', time: formatDuration(targetPos) })
+      : targetLabel ? t('torrent.listenEp', { ep: targetLabel }) : t('torrent.listen'))
+    : (targetPos > 0
+      ? t('torrent.continueFrom', { ep: targetLabel ? targetLabel + ' ' : '', time: formatDuration(targetPos) })
+      : targetLabel ? t('torrent.watchEp', { ep: targetLabel }) : t('torrent.watch'));
 
-  // the action buttons do not wrap: the row scrolls sideways so the focused button is whole, with a margin
+  // the action buttons wrap onto a second row so Rename / Another poster / Delete stay on screen
   const showAction = (key: string) => {
     setArea(key === 'torrent-play' ? 'play' : 'actions');
-    const box = actionsRef.current;
-    const el = box ? (box.querySelector('[data-fk="' + key + '"]') as HTMLElement | null) : null;
-    if (!box || !el) return;
-    scrollScreenToTop(box);
-    box.scrollLeft = scrollToShow(box.scrollLeft, box.clientWidth, el.offsetLeft, el.offsetWidth, ACTION_PAD);
+    scrollScreenToTop(actionsRef.current);
   };
 
   return (
     <FocusGroup focusKey="TORRENT" className="screen torrent">
       <div class="torrent-head">
-        {tor && tor.poster ? <img src={tor.poster} alt="" /> : null}
+        {tor && tor.poster ? <img src={sharpPosterUrl(tor.poster)} alt="" /> : null}
         <div class="info">
           {(() => {
             const n = tor ? headerNames(tor, list) : { name: hash, raw: '' };
@@ -308,7 +309,8 @@ export function TorrentScreen({ hash }: { hash: string }) {
           })()}
           <div class="muted torrent-status">{tor ? tvGlyphs(statusLine(tor)) : ''}</div>
           {(() => {
-            const badges = releaseBadges(parseReleaseInfo(tor ? displayTitle(tor) : ''));
+            // a saved year with no poster has nothing to sit on and lands on the action buttons
+            const badges = releaseBadges(parseReleaseInfo(tor ? displayTitle(tor) : '')).filter((b) => !tor || !!tor.poster || !/^\d{4}$/.test(b));
             return badges.length ? <div class="badges">{badges.map((x) => <span key={x} class="badge">{x}</span>)}</div> : null;
           })()}
           <div class="torrent-actions" ref={actionsRef}>
@@ -326,7 +328,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
       </div>
       {moviePending && !movie && <div class="tc-section tc-cast-ph" aria-hidden="true" />}
       {movie && movie.cast.length > 0 && <CastRow cast={movie.cast} groupKey="TORRENT-CAST" focusPrefix="torrent-cast-" />}
-      {queue.length > 0 && (
+      {showSkip && (
         <FocusGroup focusKey="TORRENT-SKIP" className="skip-block">
           <div class="skip-head">
             <span class="skip-title">{t('torrent.skip')}</span>
@@ -401,7 +403,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
           </section>
         ))}
       </FocusGroup>
-      <div class="hints">{okHint(area)} · <KeyDot color="red" /> {t('torrent.hintDelete')} · {t('torrent.hintBack')}</div>
+      <div class="hints">{okHint(area, book)} · <KeyDot color="red" /> {t('torrent.hintDelete')} · {t('torrent.hintBack')}</div>
     </FocusGroup>
   );
 }

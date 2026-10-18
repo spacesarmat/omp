@@ -18,7 +18,7 @@ export default defineConfig({
   build: {
     outDir: 'dist-mobile/tv',
     emptyOutDir: true,
-    // Android TV boxes often keep an old system WebView (Dune HD: WebView 66); module scripts need Chrome 61
+    // Dune HD and other Android 9 boxes ship WebView 66. chrome61 transpiles ?. / ?? and stays inside that.
     target: 'chrome61',
     assetsInlineLimit: 0,
   },

@@ -9,11 +9,11 @@ import { seriesPill, type StatusPill } from '../../lib/seriesStatus';
 import { tvGlyphs } from '../../ui/tvText';
 
 /** The status of the series (null until TMDB answered, or when it has no such show); asks for the lookup once mounted. */
-export function useSeriesPill(g: SeriesGroup): StatusPill | null {
+export function useSeriesPill(g: SeriesGroup, compact?: boolean): StatusPill | null {
   useEffect(() => { requestSeriesMatch(g); }, [g.key]);
   seriesMatchVersion.value; // re-render when a lookup ends
   const card = cachedSeriesMatch(g.key);
-  return card ? seriesPill(card, Date.now()) : null;
+  return card ? seriesPill(card, Date.now(), !!compact) : null;
 }
 
 export function SeriesPill(p: { pill: StatusPill; inline?: boolean }) {
@@ -22,7 +22,7 @@ export function SeriesPill(p: { pill: StatusPill; inline?: boolean }) {
 
 export function SeriesTile(p: { g: SeriesGroup; size: 'large' | 'small'; onOpen: (g: SeriesGroup) => void; onFocused: (g: SeriesGroup) => void; unload?: boolean }) {
   const g = p.g;
-  const pill = useSeriesPill(g);
+  const pill = useSeriesPill(g, true);
   return (
     <Focusable focusKey={'series-' + g.key} className={'tile tile-series tile-' + p.size} onPress={() => p.onOpen(g)} onFocused={() => p.onFocused(g)}>
       <Poster t={g.lead} showTitle unload={p.unload}>
@@ -30,7 +30,7 @@ export function SeriesTile(p: { g: SeriesGroup; size: 'large' | 'small'; onOpen:
         {pill && <SeriesPill pill={pill} />}
       </Poster>
       <div class="tile-title">{tvGlyphs(seriesName(g))}</div>
-      {p.size === 'large' && <div class="tile-meta">{groupLabel(g)}</div>}
+      <div class="tile-meta">{groupLabel(g) || '\u00a0'}</div>
     </Focusable>
   );
 }
