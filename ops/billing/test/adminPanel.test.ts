@@ -7,6 +7,7 @@ import { matchesSubscriptionFilter, nextSupportSelection, reminderTargets } from
 import { adminNotifyEnabled, paymentAdminNotices, serviceDownNotices, botReply } from '../src/bot.mjs';
 import {
   accountCard,
+  activate,
   createPromos,
   createSubscription,
   dailySeries,
@@ -56,6 +57,8 @@ describe('admin payload hides codes', () => {
 
   it('keeps the real subscription expiry when another code is issued', () => {
     const start = seeded();
+    // The first code is on a phone, so the second device slot gets a new code.
+    start.state = activate(start.state, { code: start.code, deviceId: 'a'.repeat(32), now: NOW }).state;
     const again = issueActivation(start.state, {
       accountId: start.account.id,
       days: 1,

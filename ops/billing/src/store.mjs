@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { enrichActors } from './logic.mjs';
+import { DEVICE_BASE, enrichActors, migrateDeviceBase } from './logic.mjs';
 
 export function emptyState() {
   return {
@@ -65,6 +65,8 @@ export function emptyState() {
     outbox: [],
     /** Quoted YooMoney checkouts. The label is buy:<id>; the price is the one quoted, not a later settings change. */
     purchases: [],
+    /** Data-shape markers. deviceBase: devices included in a base subscription when deviceLimit was stored. */
+    meta: { deviceBase: DEVICE_BASE },
   };
 }
 
@@ -158,7 +160,7 @@ function migrateFromJson(db, dbPath) {
 
 function normalizeState(parsed) {
   const base = emptyState();
-  if (!parsed || typeof parsed !== 'object') return enrichActors(base);
+  if (!parsed || typeof parsed !== 'object') return migrateDeviceBase(enrichActors(base));
   const next = {
     settings: { ...base.settings, ...(parsed.settings || {}) },
     accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
@@ -181,12 +183,14 @@ function normalizeState(parsed) {
     audit: Array.isArray(parsed.audit) ? parsed.audit : [],
     outbox: Array.isArray(parsed.outbox) ? parsed.outbox : [],
     purchases: Array.isArray(parsed.purchases) ? parsed.purchases : [],
+    // A snapshot without meta predates DEVICE_BASE: its limits were counted from 1.
+    meta: parsed.meta && typeof parsed.meta === 'object' && !Array.isArray(parsed.meta) ? parsed.meta : {},
   };
   const keys = Object.keys(parsed);
   for (let i = 0; i < keys.length; i++) {
     if (!Object.prototype.hasOwnProperty.call(next, keys[i])) next[keys[i]] = parsed[keys[i]];
   }
-  return enrichActors(next);
+  return migrateDeviceBase(enrichActors(next));
 }
 
 export function readState(file) {

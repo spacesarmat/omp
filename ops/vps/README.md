@@ -29,6 +29,8 @@ These Jackett indexers were disabled by moving their definitions to `data/jacket
 
 `warp` (`caomingjun/warp`) provides an HTTP proxy on `:1080` so the billing bot can reach `api.telegram.org` when the VPS IP is blocked. Jackett uses that same proxy.
 
+`BILLING_ACTIVATE_IP_MAX` (20), `BILLING_ACTIVATE_CODE_MAX` (10) and `BILLING_ACTIVATE_WINDOW_SEC` (600) rate-limit `POST /v1/activate` per client IP (`CF-Connecting-IP`) and per code; `0` turns a limit off. `BILLING_LINK_CLEAR_REQUIRE_TOKEN=1` makes `/v1/link/clear` refuse calls without a subscription token (off by default: the current app sends only the device id). Defaults are in `docker-compose.yml`, so `.env` needs no change. Details: [`ops/billing/README.md`](../billing/README.md).
+
 `BILLING_BOT_POLL` chooses whether this process calls Telegram `getUpdates`. The default is `1` (poll). The live VPS container must be the only poller. Set `BILLING_BOT_POLL=0` on every other copy (a dev checkout, the NAS compose, an old container) and restart it. Two pollers split updates: the extra process answers `/start admin_<token>` with «Ссылка для входа устарела» for tokens it does not have. A 409 `terminated by other getUpdates request` is written to the billing log at most once a minute. If admin Telegram notices are on, admins get one message an hour. The panel tab **Сервисы** shows the last successful `getUpdates` and whether that 409 was seen in the last 15 minutes. Admin login links last 10 minutes. `0`, `false`, `off`, and `no` turn polling off. Any other value, including an empty one, leaves it on.
 
 ## Home NUC (production)

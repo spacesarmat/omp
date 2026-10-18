@@ -219,12 +219,24 @@ export async function probeAllServices(settings, fetchImpl) {
 }
 
 /** Sliding-window rate limit: max hits per windowMs per key. */
-export function createRateLimit(maxHits, windowMs) {
+/**
+ * Sliding-window limiter kept in memory. `opts.now` replaces the clock in tests.
+ * Keys whose hits all fell out of the window are dropped once the map grows past `opts.maxKeys`.
+ */
+export function createRateLimit(maxHits, windowMs, opts) {
   const hits = new Map();
+  const clock = (opts && opts.now) || (() => Date.now());
+  const maxKeys = (opts && opts.maxKeys) || 10000;
+  const prune = (now) => {
+    for (const [id, arr] of hits) {
+      if (!arr.length || now - arr[arr.length - 1] >= windowMs) hits.delete(id);
+    }
+  };
   return {
     allow(key) {
-      const now = Date.now();
+      const now = clock();
       const id = String(key || '');
+      if (hits.size > maxKeys) prune(now);
       let arr = hits.get(id) || [];
       arr = arr.filter((t) => now - t < windowMs);
       if (arr.length >= maxHits) {
@@ -235,7 +247,65 @@ export function createRateLimit(maxHits, windowMs) {
       hits.set(id, arr);
       return true;
     },
+    /** Seconds until the oldest hit of `key` leaves the window (0 when it is not limited). */
+    retryAfter(key) {
+      const arr = hits.get(String(key || '')) || [];
+      if (arr.length < maxHits) return 0;
+      return Math.max(1, Math.ceil((arr[0] + windowMs - clock()) / 1000));
+    },
+    size() {
+      return hits.size;
+    },
   };
+}
+
+function envInt(env, name, fallback) {
+  const raw = env && env[name] !== undefined ? String(env[name]).trim() : '';
+  if (!raw) return fallback;
+  const n = Math.floor(Number(raw));
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/**
+ * /v1/activate limits from the environment. 0 turns a limit off.
+ * BILLING_ACTIVATE_IP_MAX (20) and BILLING_ACTIVATE_CODE_MAX (10) per BILLING_ACTIVATE_WINDOW_SEC (600).
+ */
+export function activateLimitConfig(env) {
+  return {
+    ipMax: envInt(env, 'BILLING_ACTIVATE_IP_MAX', 20),
+    codeMax: envInt(env, 'BILLING_ACTIVATE_CODE_MAX', 10),
+    windowMs: Math.max(1, envInt(env, 'BILLING_ACTIVATE_WINDOW_SEC', 600)) * 1000,
+  };
+}
+
+/** Per-IP and per-code limiters for /v1/activate. `check` returns 0 when allowed, else Retry-After seconds. */
+export function createActivateLimiter(config, opts) {
+  const cfg = config || activateLimitConfig({});
+  const byIp = cfg.ipMax > 0 ? createRateLimit(cfg.ipMax, cfg.windowMs, opts) : null;
+  const byCode = cfg.codeMax > 0 ? createRateLimit(cfg.codeMax, cfg.windowMs, opts) : null;
+  return {
+    check(ip, codeKey) {
+      if (byIp && !byIp.allow('ip:' + String(ip || ''))) return byIp.retryAfter('ip:' + String(ip || ''));
+      if (byCode && codeKey && !byCode.allow('code:' + codeKey)) return byCode.retryAfter('code:' + codeKey);
+      return 0;
+    },
+  };
+}
+
+/**
+ * Client address for rate limits. Production sits behind Cloudflare, which sets CF-Connecting-IP
+ * and overwrites a value sent by the client. Without it: first X-Forwarded-For hop, then the socket.
+ */
+export function clientIp(req) {
+  const h = (req && req.headers) || {};
+  const cf = String(h['cf-connecting-ip'] || '').trim();
+  if (cf) return cf.slice(0, 64);
+  const xff = String(h['x-forwarded-for'] || '')
+    .split(',')[0]
+    .trim();
+  if (xff) return xff.slice(0, 64);
+  const sock = req && req.socket ? req.socket.remoteAddress : '';
+  return String(sock || '').slice(0, 64);
 }
 
 /** Short TTL cache for search XML. */

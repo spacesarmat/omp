@@ -26,6 +26,7 @@ import {
   openAppUrl,
   paymentsCsv,
   revokePromo,
+  sessionForDevice,
   sessionOk,
   rememberSupportReply,
   rememberTelegramProfile,
@@ -51,7 +52,7 @@ import {
   noteBotPollOk,
   noteGetUpdatesConflict,
 } from './botPoll.mjs';
-import { randomId } from './crypto.mjs';
+import { codeHash, normalizeCode, randomId } from './crypto.mjs';
 import { goPage } from './go.mjs';
 import {
   basicAuthHeader,
@@ -68,6 +69,9 @@ import {
 import { sendMail } from './mail.mjs';
 import { loginPage } from './panel.mjs';
 import {
+  activateLimitConfig,
+  clientIp,
+  createActivateLimiter,
   createRateLimit,
   createSearchCache,
   mergeSettings,
@@ -309,6 +313,21 @@ async function telegramSend(token, chatId, text, fetchImpl, opts) {
   return { ok: !!(res.ok && data.ok !== false && messageId), messageId };
 }
 
+/**
+ * BILLING_LINK_CLEAR_REQUIRE_TOKEN=1: /v1/link/clear without a subscription token is refused.
+ * Off by default because the current app sends only X-Device-Id there (and a Telegram-only phone has no token).
+ */
+export function linkClearRequiresToken(env) {
+  const raw = String((env && env.BILLING_LINK_CLEAR_REQUIRE_TOKEN) || '')
+    .trim()
+    .toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'on' || raw === 'yes';
+}
+
+function bearer(req) {
+  return String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+}
+
 function isQuiet(body) {
   const v = body && body.quiet;
   return v === true || v === 1 || v === '1' || v === 'true';
@@ -366,8 +385,11 @@ function tellPayment(state, result, fetchImpl) {
   return telegramSend(state.settings.botToken, chat, text, fetchImpl, { parseMode: 'Markdown', inline });
 }
 
-export function createApp(file, fetchImpl) {
+export function createApp(file, fetchImpl, opts) {
   const net = fetchImpl || fetch;
+  const env = (opts && opts.env) || process.env;
+  const activateLimit = createActivateLimiter(activateLimitConfig(env));
+  const strictLinkClear = linkClearRequiresToken(env);
   return async function handle(req, res) {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     const path = url.pathname;
@@ -636,13 +658,23 @@ export function createApp(file, fetchImpl) {
               now: Date.now(),
             }),
           );
-          if (result.error || !result.code) flashError = 'Не удалось выдать код';
+          if (result.error === 'device_limit') {
+            flashError =
+              'Лимит устройств: привязано ' +
+              result.bound +
+              ' из ' +
+              result.deviceLimit +
+              ', свободного кода нет. Отвяжите устройство или купите доп. устройство.';
+            if (result.account && result.account.id) redirectTo = '/admin/?id=' + encodeURIComponent(result.account.id);
+          } else if (result.error || !result.code) flashError = 'Не удалось выдать код';
           else {
             flashed = result.code;
             const until = new Date(result.paidUntil).toISOString().slice(0, 10);
             flashText = result.created
               ? 'Новая подписка на ' + result.days + ' дн. до ' + until
-              : 'Код добавлен к подписке до ' + until;
+              : result.reused
+                ? 'Свободный код подписки до ' + until + ' (новый слот не создан)'
+                : 'Код добавлен к подписке до ' + until;
             const fresh = readState(file);
             const text =
               'Код подписки OMP: ' +
@@ -679,8 +711,17 @@ export function createApp(file, fetchImpl) {
           else {
             flashed = result.code || '';
             flashText = 'Выдано +' + result.days + ' дн. до ' + new Date(result.paidUntil).toISOString().slice(0, 10);
+            if (result.limitReached) flashText += '. Лимит устройств достигнут, новый код не выдан';
             const fresh = readState(file);
             const acc = fresh.accounts.find((a) => a.id === result.accountId);
+            if (acc && acc.telegramId && !result.code && result.limitReached) {
+              await telegramSend(
+                fresh.settings.botToken,
+                acc.telegramId,
+                'Админ выдал +' + result.days + ' дн. Подписка до ' + new Date(result.paidUntil).toISOString().slice(0, 10) + '.',
+                net,
+              );
+            }
             if (acc && acc.telegramId && result.code) {
               const link = openAppUrl(fresh.settings.publicOrigin || '', result.code);
               await telegramSend(
@@ -860,8 +901,15 @@ export function createApp(file, fetchImpl) {
       }
       if (req.method === 'POST' && path === '/v1/activate') {
         const body = await readBody(req);
+        const plain = normalizeCode(body.code);
+        const wait = activateLimit.check(clientIp(req), plain.length === 8 ? codeHash(plain) : '');
+        if (wait) {
+          res.setHeader('retry-after', String(wait));
+          return json(res, 429, { error: 'rate' });
+        }
         const result = await updateState(file, (state) => activate(state, { code: body.code, deviceId: body.deviceId, now: Date.now() }));
-        if (result.error) return json(res, result.error === 'other_device' ? 409 : 403, result);
+        // device_limit is 409 like other_device: the current app then says the code is tied to another device.
+        if (result.error) return json(res, result.error === 'other_device' || result.error === 'device_limit' ? 409 : 403, result);
         return json(res, 200, { token: result.token, paidUntil: result.paidUntil });
       }
       if (req.method === 'POST' && path === '/v1/link/start') {
@@ -875,6 +923,11 @@ export function createApp(file, fetchImpl) {
       if (req.method === 'POST' && path === '/v1/link/clear') {
         const body = await readBody(req);
         const deviceId = String(req.headers['x-device-id'] || body.deviceId || '');
+        const token = bearer(req);
+        // A token that is sent must belong to this device. A paid-up session is not needed to unlink,
+        // so an expired subscription still matches on the session itself.
+        if (token && !sessionForDevice(readState(file), { token, deviceId })) return json(res, 401, { error: 'bad_token' });
+        if (!token && strictLinkClear) return json(res, 401, { error: 'token_required' });
         const result = await updateState(file, (state) => unlinkDeviceTelegram(state, { deviceId, now: Date.now() }));
         if (result.error) return json(res, result.error === 'not_linked' ? 404 : 400, result);
         return json(res, 200, result);
@@ -895,6 +948,7 @@ export function createApp(file, fetchImpl) {
             active = paidUntil > now;
           }
         }
+        const viaToken = !!account;
         if (!account) account = accountByDevice(state, device);
         if (!account) return json(res, 404, { error: 'not_linked' });
         const view = subscriptionView(state, account.id, now);
@@ -906,7 +960,9 @@ export function createApp(file, fetchImpl) {
           paidUntil: view ? view.paidUntil : paidUntil,
           active: isActive,
           deviceLimit: view ? view.deviceLimit : 0,
-          devices: view ? view.devices.map((d) => ({ bound: d.bound, deviceId: d.bound ? (d.deviceId || '').slice(0, 8) : '' })) : [],
+          // Other devices' ids only go to a caller with a valid token; a bare deviceId gets the count via deviceLimit only.
+          devices:
+            view && viaToken ? view.devices.map((d) => ({ bound: d.bound, deviceId: d.bound ? (d.deviceId || '').slice(0, 8) : '' })) : [],
           sources: {
             jackett: isActive && sourceEnabled(state.settings, 'jackett') && !!state.settings.jackettUrl && !!state.settings.jackettApiKey,
             jacred: isActive && sourceEnabled(state.settings, 'jacred') && !!state.settings.jacredUrl && !!state.settings.jacredApiKey,
@@ -1018,6 +1074,7 @@ export function createApp(file, fetchImpl) {
             label: body.label,
             amount: body.amount,
             currency: body.currency,
+            unaccepted: body.unaccepted,
             now,
           }),
         );
@@ -1028,6 +1085,7 @@ export function createApp(file, fetchImpl) {
             freshPay,
             paymentAdminNotices(freshPay.settings, {
               ok: !applied.error,
+              pending: !!applied.pending,
               amount: body.amount,
               label: body.label,
               error: applied.error || '',

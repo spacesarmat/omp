@@ -3,6 +3,9 @@ import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from 
 const DAY = 24 * 60 * 60 * 1000;
 const ATTEMPT_CAP = 200;
 
+/** Devices included in a base subscription (phone + second phone). Extra paid slots add to it. */
+export const DEVICE_BASE = 2;
+
 function fail(error, state) {
   return { state, result: { error } };
 }
@@ -93,6 +96,53 @@ function anySub(state, accountId) {
   if (!list.length) return null;
   // The real subscription is the one that lasts longest. A later short code must not hide it.
   return list.reduce((best, s) => (s.paidUntil > best.paidUntil ? s : best));
+}
+
+/** Codes bound to a device on this subscription (not revoked). */
+export function boundDevices(state, subscriptionId) {
+  return (state.codes || []).filter((c) => c.subscriptionId === subscriptionId && !c.revoked && c.deviceId).length;
+}
+
+/** True when the subscription already has as many bound devices as it allows. */
+export function deviceLimitReached(state, sub) {
+  if (!sub) return true;
+  return boundDevices(state, sub.id) >= (Number(sub.deviceLimit) || 0);
+}
+
+/**
+ * Activation code for one more device on `sub`, within deviceLimit.
+ * An unbound code that is still showable is handed out again instead of minting a new slot.
+ * When every allowed device is bound, no code is created and `limit` is true.
+ */
+function slotCode(state, sub, now) {
+  const free = (state.codes || []).find((c) => c.subscriptionId === sub.id && !c.revoked && !c.deviceId && c.plain);
+  if (free) return { state, code: free.plain, codeId: free.id, reused: true, limit: false };
+  if (deviceLimitReached(state, sub)) return { state, code: '', codeId: '', reused: false, limit: true };
+  const issued = issue(state, sub.id, now);
+  return { state: issued.state, code: issued.code, codeId: issued.codeId, reused: false, limit: false };
+}
+
+/** Bot «Код»: a free code of this subscription, or a new one within deviceLimit. `limit` when none is allowed. */
+export function deviceCode(state, subscriptionId, now) {
+  const sub = (state.subscriptions || []).find((s) => s.id === subscriptionId);
+  if (!sub) return { state, code: '', codeId: '', reused: false, limit: true };
+  return slotCode(state, sub, now);
+}
+
+/**
+ * One-time move to DEVICE_BASE devices per subscription. Subscriptions stored under the old base of 1
+ * get the difference added, so a bought extra slot is kept. `meta.deviceBase` makes it run once.
+ */
+export function migrateDeviceBase(state) {
+  if (!state || typeof state !== 'object') return state;
+  const meta = state.meta && typeof state.meta === 'object' && !Array.isArray(state.meta) ? state.meta : {};
+  const from = Number(meta.deviceBase) || 1;
+  if (from >= DEVICE_BASE) return state.meta === meta ? state : { ...state, meta };
+  const add = DEVICE_BASE - from;
+  const subscriptions = (state.subscriptions || []).map((s) =>
+    s && typeof s === 'object' ? { ...s, deviceLimit: Math.max(DEVICE_BASE, (Number(s.deviceLimit) || 1) + add) } : s,
+  );
+  return { ...state, subscriptions, meta: { ...meta, deviceBase: DEVICE_BASE } };
 }
 
 function issue(state, subscriptionId, now) {
@@ -244,7 +294,7 @@ export function createSubscription(state, { accountId, now, days }) {
     accountId,
     product: 'jackett',
     paidUntil: now + period * DAY,
-    deviceLimit: 1,
+    deviceLimit: DEVICE_BASE,
     createdAt: now,
   };
   const issued = issue({ ...state, subscriptions: state.subscriptions.concat([sub]) }, sub.id, now);
@@ -264,16 +314,23 @@ export function issueActivation(state, { email, telegramId, accountId, days, now
   const account = opened.account;
   const existing = anySub(cur, account.id);
   if (existing) {
-    const issued = issue(cur, existing.id, now);
+    const slot = slotCode(cur, existing, now);
+    if (slot.limit) {
+      return {
+        state,
+        result: { error: 'device_limit', account, deviceLimit: existing.deviceLimit, bound: boundDevices(cur, existing.id) },
+      };
+    }
     return {
-      state: issued.state,
+      state: slot.state,
       result: {
-        code: issued.code,
-        codeId: issued.codeId,
+        code: slot.code,
+        codeId: slot.codeId,
         account,
         paidUntil: existing.paidUntil,
         days: 0,
         created: false,
+        reused: slot.reused,
       },
     };
   }
@@ -323,6 +380,10 @@ export function activate(state, { code, deviceId, now }) {
   if (row.deviceId && row.deviceId !== deviceId) {
     return fail('other_device', recordAttempt(state, { at: now, hash, deviceId, ok: false, reason: 'other_device', accountId: sub.accountId }));
   }
+  // A new device needs a free slot. A code already bound to this device (re-entry) always passes.
+  if (!row.deviceId && deviceLimitReached(state, sub)) {
+    return fail('device_limit', recordAttempt(state, { at: now, hash, deviceId, ok: false, reason: 'device_limit', accountId: sub.accountId }));
+  }
   const codes = state.codes.map((c) =>
     c.id === row.id && !c.deviceId ? { ...c, deviceId, boundAt: now, plain: '' } : c.id === row.id ? { ...c, plain: '' } : c,
   );
@@ -343,6 +404,16 @@ export function activate(state, { code, deviceId, now }) {
   return { state: next, result: { token, paidUntil: sub.paidUntil, codeId: row.id } };
 }
 
+/** The code row behind `token` when that session belongs to `deviceId`. Expiry is not checked. */
+export function sessionForDevice(state, { token, deviceId }) {
+  if (!token || !deviceOk(deviceId)) return null;
+  const hash = sha256(token);
+  const session = state.sessions.find((s) => s.hash === hash);
+  if (!session) return null;
+  const row = state.codes.find((c) => c.id === session.codeId && !c.revoked);
+  return row && row.deviceId === deviceId ? row : null;
+}
+
 export function sessionOk(state, { token, deviceId, now }) {
   if (!token || !deviceOk(deviceId)) return null;
   const hash = sha256(token);
@@ -355,8 +426,13 @@ export function sessionOk(state, { token, deviceId, now }) {
   return { code: row, subscription: sub };
 }
 
+/** A pending (unaccepted) row does not count: the accepted notification for it must still apply. */
 function seenPayment(state, operationId) {
-  return state.payments.some((p) => p.operationId === operationId);
+  return state.payments.some((p) => p.operationId === operationId && !p.pending);
+}
+
+function isTrue(v) {
+  return v === true || v === 'true' || v === 1 || v === '1';
 }
 
 const WEBHOOK_CAP = 200;
@@ -457,13 +533,34 @@ function rejectAmount(state, row) {
   return { state: { ...state, payments }, result: { error: 'amount' } };
 }
 
-export function applyPayment(state, { operationId, label, amount, currency, now }) {
-  if (!operationId || seenPayment(state, operationId)) {
+export function applyPayment(input, { operationId, label, amount, currency, unaccepted, now }) {
+  if (!operationId || seenPayment(input, operationId)) {
     return {
-      state: logWebhook(state, { kind: 'duplicate', operationId: operationId || '', label: label || '', amount: amount || '', at: now }),
+      state: logWebhook(input, { kind: 'duplicate', operationId: operationId || '', label: label || '', amount: amount || '', at: now }),
       result: { duplicate: true },
     };
   }
+  const hadPending = input.payments.some((p) => p.operationId === operationId && p.pending);
+  if (isTrue(unaccepted)) {
+    // YooMoney holds the transfer until the wallet owner accepts it. Record it, do not extend anything.
+    if (hadPending) {
+      return {
+        state: logWebhook(input, { kind: 'duplicate', operationId, label: label || '', amount: amount || '', at: now }),
+        result: { duplicate: true },
+      };
+    }
+    const held = stampPayment(input, {
+      operationId,
+      label: String(label || ''),
+      amount,
+      at: now || Date.now(),
+      error: 'unaccepted',
+      pending: true,
+    });
+    return { state: { ...input, payments: input.payments.concat([held]) }, result: { error: 'unaccepted', pending: true } };
+  }
+  // The accepted notice replaces the held row for the same operation.
+  const state = hadPending ? { ...input, payments: input.payments.filter((p) => !(p.operationId === operationId && p.pending)) } : input;
   const mark = String(label || '');
   const days = state.settings.periodDays || 30;
   const row = { operationId, label: mark, amount, at: now || Date.now() };
@@ -512,9 +609,10 @@ export function applyPayment(state, { operationId, label, amount, currency, now 
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
     if (!covers(act)) return rejectAmount(state, row);
-    const subscriptions = state.subscriptions.map((s) => (s.id === id ? { ...s, deviceLimit: s.deviceLimit + 1 } : s));
-    const issued = issue({ ...state, payments: state.payments.concat([stampPayment(state, row)]), subscriptions }, id, now);
-    return { state: issued.state, result: { kind: 'device', subscriptionId: id, code: issued.code } };
+    const subscriptions = state.subscriptions.map((s) => (s.id === id ? { ...s, deviceLimit: (Number(s.deviceLimit) || 0) + 1 } : s));
+    const paidState = { ...state, payments: state.payments.concat([stampPayment(state, row)]), subscriptions };
+    const slot = slotCode(paidState, subscriptions.find((s) => s.id === id), now);
+    return { state: slot.state, result: { kind: 'device', subscriptionId: id, code: slot.code } };
   }
   if (act.indexOf('new:') === 0) {
     const accountId = act.slice(4);
@@ -1091,10 +1189,11 @@ export function grantDays(state, { telegramId, accountId, days, now }) {
     const from = Math.max(existing.paidUntil, now);
     const paidUntil = from + n * DAY;
     const subscriptions = cur.subscriptions.map((s) => (s.id === existing.id ? { ...s, paidUntil } : s));
-    const issued = issue({ ...cur, subscriptions }, existing.id, now);
+    // Days always apply. A device code comes only while a slot is free (or a free code exists).
+    const slot = slotCode({ ...cur, subscriptions }, existing, now);
     return {
-      state: issued.state,
-      result: { kind: 'grant', code: issued.code, paidUntil, days: n, accountId: account.id },
+      state: slot.state,
+      result: { kind: 'grant', code: slot.code, paidUntil, days: n, accountId: account.id, limitReached: slot.limit },
     };
   }
   const created = createSubscription(cur, { accountId: account.id, now, days: n });
@@ -1122,6 +1221,7 @@ const ATTEMPT_REASON = {
   bad_code: 'неверный код',
   expired: 'подписка истекла',
   other_device: 'чужое устройство',
+  device_limit: 'лимит устройств',
 };
 
 function attemptReasonText(reason) {
@@ -1477,15 +1577,17 @@ export function redeemPromo(state, { code, accountId, now }) {
   let subscriptionId = '';
   let activationCode = '';
   let paidUntil = 0;
+  let limitHit = false;
 
   if (existing) {
     const from = Math.max(existing.paidUntil, now);
     paidUntil = from + promo.days * DAY;
     const subscriptions = next.subscriptions.map((s) => (s.id === existing.id ? { ...s, paidUntil } : s));
-    const issued = issue({ ...next, subscriptions }, existing.id, now);
-    next = issued.state;
+    const slot = slotCode({ ...next, subscriptions }, existing, now);
+    next = slot.state;
     subscriptionId = existing.id;
-    activationCode = issued.code;
+    activationCode = slot.code;
+    limitHit = slot.limit;
   } else {
     const created = createSubscription(next, { accountId, now, days: promo.days });
     next = created.state;
@@ -1498,7 +1600,7 @@ export function redeemPromo(state, { code, accountId, now }) {
   const promos = next.promos.map((p) => (p.id === promo.id ? { ...p, uses: p.uses.concat([use]) } : p));
   return {
     state: { ...next, promos },
-    result: { kind: 'promo', code: activationCode, paidUntil, days: promo.days, promoCode: promo.code },
+    result: { kind: 'promo', code: activationCode, paidUntil, days: promo.days, promoCode: promo.code, limitReached: limitHit },
   };
 }
 
