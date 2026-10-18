@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { attachPoster, fillPosters, type PosterClient } from '../../src/lib/autoPoster';
+import { posterImageSize } from '../../src/catalog/tmdb';
 import type { Torrent, TmdbConfig } from '../../src/api/types';
 
 const HASH = 'a'.repeat(40);
@@ -36,7 +37,7 @@ describe('attachPoster', () => {
     const c = client({ APIKey: 'k' }, [{ title: '', category: 'movie' }]);
     const fetchJson = found('/p.jpg');
     const poster = await attachPoster(c, HASH, 'Дюна / Dune (2021) 1080p', { fetchJson, wait: noWait });
-    expect(poster).toBe('https://imagetmdb.com/t/p/w300/p.jpg');
+    expect(poster).toBe('https://imagetmdb.com/t/p/' + posterImageSize() + '/p.jpg');
     expect(fetchJson.mock.calls[0][0]).toContain('query=' + encodeURIComponent('Дюна'));
     expect(c.setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: HASH, category: 'movie' }), poster);
   });

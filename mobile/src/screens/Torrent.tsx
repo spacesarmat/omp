@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'preact/hooks';
-import { contentsTextOf } from '../lib/releaseContents';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { torrentHeaderEpisodes } from '../lib/releaseContents';
+import { rememberedSeasonTotal, rememberSeasonTotals, seasonEpisodeTotal } from '../../../src/lib/episodesOutOf';
 import { t, fmtDuration, fmtSize } from '../../../src/i18n';
 import { swarmText } from '../../../src/lib/torrentStatus';
 import { Icon } from '../ui/Icon';
@@ -321,6 +322,31 @@ export function Torrent({ hash }: { hash: string }) {
     .map((f) => parseEpisode(f.path).season)
     .filter((n, i, a): n is number => n !== null && a.indexOf(n) === i);
   const tmdb = useTmdbEpisodes(tor, fileSeasons, !!tor && isSeries(tor) && fileSeasons.length > 0);
+  // the hook keeps the previous torrent's show until its effect runs; the header must not borrow that season total
+  const tmdbHash = useRef(hash);
+  const tmdbStale = tmdbHash.current !== hash;
+  const gkey = tor ? seriesKey(tor) : '';
+  const seasonFile = playableFiles(allFiles)[0];
+  const season = seasonFile ? parseEpisode(seasonFile.path).season : null;
+  const showNow = tmdbStale ? null : tmdb.show;
+  const epsNow = tmdbStale ? null : tmdb.eps;
+  useEffect(() => {
+    tmdbHash.current = hash;
+    // this render's show can still be the previous torrent's: remember only once the hash matches
+    if (tmdbStale || !gkey || !showNow) return;
+    const counts: { [n: number]: number } = {};
+    const src = showNow.episodeCounts || {};
+    Object.keys(src).forEach((k) => {
+      if (src[+k] > 0) counts[+k] = src[+k];
+    });
+    const eps = epsNow || {};
+    Object.keys(eps).forEach((k) => {
+      const n = +k;
+      const listed = Object.keys(eps[n] || {}).length;
+      if (listed > (counts[n] || 0)) counts[n] = listed;
+    });
+    rememberSeasonTotals(gkey, counts);
+  }, [hash, gkey, showNow, epsNow, tmdbStale]);
   // file list comes from the list entry; load it from the server if the entry has none
   useEffect(() => {
     if (!c || !tor || own.length) return;
@@ -452,33 +478,32 @@ export function Torrent({ hash }: { hash: string }) {
     );
   };
   const badges = [qualityBadge(title)].filter(Boolean);
-  const gkey = seriesKey(tor);
   const group = gkey ? findGroup(torrents.value, gkey) : null;
   const own0 = seasonsOf(tor);
   const mine = own0.length ? own0 : fileSeasons;
   const inLibrary = group ? group.seasons.filter((n) => n !== NO_SEASON) : [];
-  const chipSeasons = Array.from(new Set(inLibrary.concat(mine, tmdb.show ? tmdb.show.seasons : []))).sort((a, b) => a - b);
+  const chipSeasons = Array.from(new Set(inLibrary.concat(mine, showNow ? showNow.seasons : []))).sort((a, b) => a - b);
   const openSeason = (n: number) => {
     if (mine.indexOf(n) >= 0) return;
     if (group && inLibrary.indexOf(n) >= 0) {
       const rows = seasonMembers(group, n);
       if (rows.length === 1) navigate(routeForHash(rows[0].hash));
       else navigate({ name: 'series', key: group.key, season: n });
-    } else if (tmdb.show) {
-      const q = torrentQuery({ title: tmdb.show.title, original: tmdb.show.original, year: tmdb.show.year, kind: 'tv' }, n);
+    } else if (showNow) {
+      const q = torrentQuery({ title: showNow.title, original: showNow.original, year: showNow.year, kind: 'tv' }, n);
       navigate({ name: 'add', query: q, run: true });
     }
   };
-  const first = files[0];
-  const season = first ? parseEpisode(first.path).season : null;
   const hasEpisodes = files.length > 1;
   // the last episode of each season here, then what TMDB announces after it (the same season data as the names)
-  const coming = hasEpisodes ? comingEpisodes(lastEpisodes(files), tmdb.eps, isoDay(Date.now())) : [];
-  const seasonArt = tmdb.show && season !== null ? tmdb.show.seasonPosters[season] || tmdb.show.poster : '';
+  const coming = hasEpisodes ? comingEpisodes(lastEpisodes(files), epsNow || {}, isoDay(Date.now())) : [];
+  const seasonArt = showNow && season !== null ? showNow.seasonPosters[season] || showNow.poster : '';
   const art = tor.poster || !seasonArt ? tor : { ...tor, poster: seasonArt };
+  // «Сезон 2 · 5 из 8 серий»: the total is this season's TMDB episode_count, already remembered when the chip changes
+  const seasonTotal = season === null ? 0 : Math.max(seasonEpisodeTotal(showNow, epsNow, season), gkey ? rememberedSeasonTotal(gkey, season) : 0);
   const meta = [
     season !== null ? t('library.season', { n: season }) : '',
-    hasEpisodes ? contentsTextOf(allFiles) : '',
+    hasEpisodes ? torrentHeaderEpisodes(allFiles, season, seasonTotal) : '',
     tor.torrent_size ? fmtSize(tor.torrent_size) : '',
     swarmText(tor),
   ].filter(Boolean);
