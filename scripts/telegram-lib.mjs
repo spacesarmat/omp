@@ -9,25 +9,31 @@ export function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/** Caption: title, the changelog lines as bullets, cut on a whole line so it fits CAPTION_MAX. */
-export function buildCaption(version, notes) {
+/** Bullets in the channel post: the first ones of the version in CHANGELOG.md, the rest is on the release page. */
+export const CAPTION_NOTES_MAX = 5;
+
+/**
+ * Caption: title, the first CAPTION_NOTES_MAX changelog lines as bullets (cut on a whole line so it fits
+ * CAPTION_MAX) and a link to the GitHub release. No install steps: the buttons and the release page carry them.
+ */
+export function buildCaption(version, notes, tag = `v${version}`) {
   const head = `<b>OMP ${escapeHtml(version)}</b>\n`;
-  const more = `\n…и другое — «Что нового» ниже`;
+  const link = `\n\n<a href="${REPO_URL}/releases/tag/${escapeHtml(tag)}">Все изменения и файлы — на GitHub</a>`;
+  const shown = notes.slice(0, CAPTION_NOTES_MAX);
   let body = '';
-  for (let i = 0; i < notes.length; i++) {
-    const line = `\n• ${escapeHtml(notes[i])}`;
-    const rest = i < notes.length - 1 ? more : '';
-    if ((head + body + line + rest).length > CAPTION_MAX) {
+  for (const note of shown) {
+    const line = `\n• ${escapeHtml(note)}`;
+    if ((head + body + line + link).length > CAPTION_MAX) {
       // even the first line does not fit: cut it on a word
       if (!body) {
-        const room = CAPTION_MAX - head.length - more.length - 3;
-        body = '\n• ' + escapeHtml(notes[i]).slice(0, Math.max(0, room - 1)).replace(/\s+\S*$/, '') + '…';
+        const room = CAPTION_MAX - head.length - link.length - 3;
+        body = '\n• ' + escapeHtml(note).slice(0, Math.max(0, room - 1)).replace(/\s+\S*$/, '') + '…';
       }
-      return head + body + more;
+      break;
     }
     body += line;
   }
-  return head + body;
+  return head + body + link;
 }
 
 /** Build files in the order they are posted as replies: arm64 APK, armv7 APK, ipk, universal APK. */

@@ -113,7 +113,7 @@ function releasePost(tag, root, log) {
   const cover = join(root, `docs/screenshots/release-${version}.png`);
   if (!existsSync(cover)) log(`Telegram: no release cover ${basename(cover)} (scripts/release-cover.mjs), using a screenshot`);
   const photo = [cover, join(root, 'docs/screenshots/library-large.png'), join(root, 'assets/telegram/omp-telegram.png')].find((p) => existsSync(p));
-  return { version, caption: buildCaption(version, notes), keyboard, photo, album: albumPhotos(root, version, photo) };
+  return { version, caption: buildCaption(version, notes, tag), keyboard, photo, album: albumPhotos(root, version, photo) };
 }
 
 /** Telegram takes at most 10 items in one album. */

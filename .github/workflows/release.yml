@@ -119,18 +119,13 @@ jobs:
           APK="build/OMP-${VERSION}.apk"
           APK64="build/OMP-${VERSION}-arm64.apk"
           APK32="build/OMP-${VERSION}-armv7.apk"
-          sed "s/{{TAG}}/${TAG}/g" .github/release-notes.md > notes.md
-          printf '\n' >> notes.md
-          # English changelog of this version (nothing when CHANGELOG.en.md lacks it)
-          EN_NOTES=$(node scripts/changelog-en.mjs "$VERSION")
-          if [ -n "$EN_NOTES" ]; then printf '## English\n\n%s\n\n' "$EN_NOTES" >> notes.md; fi
-          for F in "$IPK" "$APK64" "$APK32" "$APK"; do
-            printf 'SHA-256 `%s`: `%s`\n' "$(basename "$F")" "$(sha256sum "$F" | cut -d' ' -f1)" >> notes.md
-          done
+          # short bilingual body: Russian and English changes, downloads, two screenshots; checksums, Homebrew and the
+          # compare link folded under «Подробнее». No generated PR list (it repeated every beta).
+          node scripts/release-notes.mjs "$TAG" build > notes.md
           # a beta (vX.Y.Z-beta.N) is a pre-release: never «latest», never the Homebrew repository
           EXTRA=""
           case "$TAG" in *-beta.*) EXTRA="--prerelease --latest=false" ;; esac
-          gh release create "$TAG" "$IPK" "$APK64" "$APK32" "$APK" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $TAG" --notes-file notes.md --generate-notes $EXTRA
+          gh release create "$TAG" "$IPK" "$APK64" "$APK32" "$APK" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $TAG" --notes-file notes.md $EXTRA
       - name: Publish update feed to gh-pages
         env:
           GH_TOKEN: ${{ github.token }}
