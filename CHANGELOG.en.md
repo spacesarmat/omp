@@ -2,6 +2,22 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.4
+
+- [lg] LG: tiles redesigned in every view: full-width grids, two-line titles that wrap by word, aligned list columns. Same on 1080p and 4K
+- [lg] LG: tabs without clipped names, larger text, sharper posters on 4K, Settings and Help scroll to the end
+- [atv] Android TV: OMP opens when the box powers on; Settings can turn it off
+- Seed counts are labeled: tracker data in search, live connected seeds and peers on a torrent
+- A release is added with the source's trackers instead of a bare hash, so seeds are found right away
+- If a release sends nothing for a minute, OMP says it does not answer and offers Find in better quality
+- [phone] New → Subscriptions: sort by date added (default), newest finds, name, quality, or longest without a find
+- [phone] A series torrent shows "5 of 8 episodes" of the season from TMDB
+- [phone] The connect-to-TV code fits a narrow screen and stays above the keyboard
+- [phone] Server settings: tidy spacing and a TMDB key row
+- [phone] Audiobooks: their own search, a player with lock-screen controls, speed and a sleep timer. The built-in player is 2160 Player 0.2.8
+- [phone] First launch helps find TorrServer, hints appear once each
+- The payment bot keeps admin login working when a second copy runs. The site has an English page
+
 ## 0.20.4-beta.4
 
 - [phone] First launch asks where TorrServer is: on this phone, on the home network, or a QR from the TV. Any step can be skipped
