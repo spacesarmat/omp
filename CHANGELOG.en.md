@@ -2,6 +2,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] The built-in player is updated to 2160 Player 0.2.8. The screen stays on while a video is playing: the core setting is on by default
+- [phone] An audiobook and a video stay on separate sessions, so the lock-screen buttons do not mix
+- The Android build pins commons-io 2.18.0 and commons-lang3 3.18.0, so the old SMB copies stay out of the app
+
 ## 0.20.4-beta.1
 
 - [phone] Audiobooks: search in audiobook mode, and the books already added
