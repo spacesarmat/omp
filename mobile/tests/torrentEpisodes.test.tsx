@@ -104,9 +104,9 @@ describe('Torrent: TMDB episode names', () => {
     mount();
     expect(mainLine(0)).toBe('Серия 1');
     // the season total is not known yet
-    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 3 серии · 18,0 ГБ · 0 сидов · 0 пиров');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 3 серии · 18,0 ГБ · подключено: 0 сидов · 0 пиров');
     await flush();
-    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 3 из 3 серий · 18,0 ГБ · 0 сидов · 0 пиров');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 3 из 3 серий · 18,0 ГБ · подключено: 0 сидов · 0 пиров');
     expect(c.season).toHaveBeenCalledWith(7, 2);
     expect(mainLine(0)).toContain('1. Landfall');
     expect(mainLine(0)).toContain('45 мин');
@@ -150,7 +150,7 @@ describe('Torrent: TMDB episode names', () => {
     mount();
     await flush();
     expect(rows().map((_, i) => mainLine(i))).toEqual(['Серия 1', 'Серия 2', 'Серия 3']);
-    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 3 серии · 18,0 ГБ · 0 сидов · 0 пиров');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 3 серии · 18,0 ГБ · подключено: 0 сидов · 0 пиров');
   });
 
   it('«5 из 8 серий» from the season episode_count, and the line follows the season chip', async () => {
@@ -177,13 +177,13 @@ describe('Torrent: TMDB episode names', () => {
     setCatalogClientForTests(c);
     mount();
     await flush();
-    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 5 из 8 серий · 18,0 ГБ · 0 сидов · 0 пиров');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 5 из 8 серий · 18,0 ГБ · подключено: 0 сидов · 0 пиров');
     expect(el.querySelector('.m-badges')!.textContent).toBe('1080p');
     act(() => chips()[0].click());
     act(() => render(<Torrent hash="s1" />, el));
-    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 1 · 2 из 10 серий · 18,0 ГБ · 0 сидов · 0 пиров');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 1 · 2 из 10 серий · 18,0 ГБ · подключено: 0 сидов · 0 пиров');
     await flush();
-    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 1 · 2 из 10 серий · 18,0 ГБ · 0 сидов · 0 пиров');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 1 · 2 из 10 серий · 18,0 ГБ · подключено: 0 сидов · 0 пиров');
     expect(el.querySelector('.m-chip.on')!.textContent).toBe('Сезон 1');
   });
 
