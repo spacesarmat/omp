@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createRpcHandler, RpcError, MAX_RESULTS } from '../src/rpc/handler';
 import { setSourceOn, reloadSourcePrefs, setHealth, resetHealth } from '../../src/sources/store';
 import { stashFile, takeStashedFile } from '../../src/api/torrentFiles';
+import { clearLog, logEntries } from '../../src/lib/log';
 
 const src = (id: string, extra = {}) => ({ id, name: id, kind: 'builtin', search: vi.fn(), ...extra }) as never;
 const ts = { id: 'ts-rutor', name: 'Rutor', kind: 'torrserver', search: vi.fn() } as never;
@@ -195,28 +196,36 @@ describe('rpc handler: states, handles and failures', () => {
     expect((resolve.mock.calls[0] as unknown as [{ Title: string }])[0].Title).toBe('Dune 2'); // sorted by seeds
   });
 
-  it('a .torrent kept on the phone is not handed to the TV', async () => {
-    const f = fakeSearch([row(1)]);
+  it('a .torrent fetched on the phone is handed to the TV with its announces, and the passkey is not logged', async () => {
+    clearLog();
+    const pass = 'SECRET-PASSKEY-99';
+    const announce = 'http://tracker.example/announce?passkey=' + pass;
+    const hash = 'cd'.repeat(20);
+    const text = 'd8:announce' + announce.length + ':' + announce + 'e';
+    const bytes = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 255;
+    const f = fakeSearch([row(1, { Hash: hash, Magnet: 'magnet:?xt=urn:btih:' + hash })]);
     let link = '';
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const rpc = createRpcHandler(
       deps({
         search: f.search,
         resolve: () => {
-          link = stashFile(new Uint8Array([100, 101]));
+          link = stashFile(bytes);
           return Promise.resolve(link);
         },
       }),
     );
     const { handle } = (await rpc.dispatch('search', { query: 'Dune' })) as { handle: string };
     const key = ((await rpc.dispatch('searchPoll', { handle })) as { results: { key: string }[] }).results[0].key;
-    const err = await rpc.dispatch('resolve', { handle, key }).then(
-      () => null,
-      (e: RpcError) => e,
-    );
-    expect(err).toMatchObject({ code: 'failed' });
-    expect(err!.message).toContain('.torrent');
-    expect(err!.message).not.toContain('omp-file');
-    expect(takeStashedFile(link)).toBeNull(); // the bytes were dropped
+    const ans = (await rpc.dispatch('resolve', { handle, key })) as { link?: string; file?: string };
+    expect(ans.link).toContain('tr=' + encodeURIComponent(announce));
+    expect(ans.file).toBeTruthy();
+    expect(JSON.stringify(ans)).not.toContain('omp-file');
+    expect(takeStashedFile(link)).toBeNull();
+    expect(logEntries().map((e) => e.x).join(' ')).not.toContain(pass);
+    expect(spy.mock.calls.map((c) => c.join(' ')).join('\n')).not.toContain(pass);
+    spy.mockRestore();
   });
 
   it('a link TorrServer cannot add is refused', async () => {

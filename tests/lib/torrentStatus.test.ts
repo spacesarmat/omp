@@ -33,13 +33,18 @@ describe('TorrServer states in the UI language', () => {
     expect(statusLine(working)).toBe('12.4 GB · Working · 0 B/s · peers 0/285');
   });
 
-  it('names the current seeds and peers of a working torrent', () => {
-    expect(swarmText({ connected_seeders: 12, active_peers: 3 })).toBe('12 сидов · 3 пира');
-    expect(swarmText({ connected_seeders: 1, active_peers: 1 })).toBe('1 сид · 1 пир');
-    expect(swarmText({ connected_seeders: 0, active_peers: 0 })).toBe('0 сидов · 0 пиров');
-    expect(swarmText({})).toBe('0 сидов · 0 пиров');
+  it('names the live swarm while the torrent is active, and the saved tracker count when it is not', () => {
+    const saved = JSON.stringify({ omp: { v: 1, h: [], ts: { s: 44, at: 1 } } });
+    expect(swarmText({ stat: 3, connected_seeders: 12, active_peers: 3 })).toBe('подключено: 12 сидов · 3 пира');
+    expect(swarmText({ stat: 1, connected_seeders: 1, active_peers: 1 })).toBe('подключено: 1 сид · 1 пир');
+    expect(swarmText({ stat: 3, connected_seeders: 0, active_peers: 0 })).toBe('подключено: 0 сидов · 0 пиров');
+    expect(swarmText({ stat: 5, data: saved })).toBe('44 сида (трекер)');
+    expect(swarmText({ stat: 5 })).toBe('—');
+    expect(swarmText({})).toBe('—');
     lang.value = 'en';
-    expect(swarmText({ connected_seeders: 12, active_peers: 3 })).toBe('12 seeds · 3 peers');
+    expect(swarmText({ stat: 3, connected_seeders: 12, active_peers: 3 })).toBe('connected: 12 seeds · 3 peers');
+    expect(swarmText({ stat: 4, data: saved })).toBe('44 seeds (tracker)');
+    expect(swarmText({})).toBe('—');
   });
 
   it('formats sizes and speeds per language', () => {

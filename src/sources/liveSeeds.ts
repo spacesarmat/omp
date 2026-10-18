@@ -1,7 +1,7 @@
 // Live seeders for a search row: parse a tracker scrape, remember it, and ask only for rows still on screen.
 // The request itself runs on this device (phone, Android TV, webOS). Nothing is sent to the VPS.
 // Chromium 53 safe: no Object.values/entries, no AbortController, no regex u flag.
-import { tp } from '../i18n';
+import { t, tp } from '../i18n';
 import { infohashFromMagnet } from './html';
 import { seedsText } from './view';
 
@@ -383,19 +383,24 @@ export function seedDisplay(r: { Seed: number; Peer: number }, enabled: boolean,
   return { mode: 'live', seeders: entry.seeders, leechers: entry.leechers };
 }
 
-/** Phone line built from plural keys: live "N seeds · M leechers", approximate "~N seeds", empty when search had no count. */
-export function phoneSeedBits(view: SeedDisplay): { text: string; mode: SeedMode } {
-  if (view.mode === 'live') return { text: seedsText(view.seeders) + ' · ' + tp('sources.leechers', view.leechers), mode: 'live' };
-  if (view.mode === 'approx') return { text: view.seeders > 0 ? '~' + seedsText(view.seeders) : '', mode: 'approx' };
-  return { text: view.seeders > 0 ? seedsText(view.seeders) : '', mode: view.mode };
+/** Indexer count, not a live scrape: «44 сида · по данным трекера». Empty when the feed had no seeds. */
+function trackerSeedLine(prefix: string, n: number): string {
+  if (n <= 0) return '';
+  return prefix + seedsText(n) + ' · ' + t('sources.trackerData');
 }
 
-/** TV line: «↑152», «↑152 ↓3» once a tracker answered, «~↑152» when none did. */
+/** Phone line: live "N seeds · M leechers"; indexer counts say they are tracker data. Empty when search had no count. */
+export function phoneSeedBits(view: SeedDisplay): { text: string; mode: SeedMode } {
+  if (view.mode === 'live') return { text: seedsText(view.seeders) + ' · ' + tp('sources.leechers', view.leechers), mode: 'live' };
+  if (view.mode === 'approx') return { text: trackerSeedLine('~', view.seeders), mode: 'approx' };
+  return { text: trackerSeedLine('', view.seeders), mode: view.mode };
+}
+
+/** TV line: live «↑152 ↓3»; indexer counts use the same tracker phrase as the phone. The date is shown separately. */
 export function tvSeedLabel(view: SeedDisplay): string {
   const n = view.seeders || 0;
-  const prefix = view.mode === 'approx' ? '~' : '';
   if (view.mode === 'live') return '↑' + n + ' ↓' + (view.leechers || 0);
-  return prefix + '↑' + n;
+  return trackerSeedLine(view.mode === 'approx' ? '~' : '', n);
 }
 
 export interface ScrapeJob {

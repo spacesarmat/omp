@@ -110,12 +110,12 @@ describe('merge', () => {
   });
 
   it('marks the labels', () => {
-    expect(phoneSeedBits({ mode: 'search', seeders: 5, leechers: 0 }).text).toBe('5 сидов');
-    expect(phoneSeedBits({ mode: 'approx', seeders: 5, leechers: 0 }).text).toBe('~5 сидов');
+    expect(phoneSeedBits({ mode: 'search', seeders: 5, leechers: 0 }).text).toBe('5 сидов · по данным трекера');
+    expect(phoneSeedBits({ mode: 'approx', seeders: 5, leechers: 0 }).text).toBe('~5 сидов · по данным трекера');
     expect(phoneSeedBits({ mode: 'live', seeders: 5, leechers: 1 }).text).toBe('5 сидов · 1 лич');
     expect(phoneSeedBits({ mode: 'search', seeders: 0, leechers: 0 }).text).toBe('');
-    expect(tvSeedLabel({ mode: 'search', seeders: 50, leechers: 0 })).toBe('↑50');
-    expect(tvSeedLabel({ mode: 'approx', seeders: 7, leechers: 0 })).toBe('~↑7');
+    expect(tvSeedLabel({ mode: 'search', seeders: 50, leechers: 0 })).toBe('50 сидов · по данным трекера');
+    expect(tvSeedLabel({ mode: 'approx', seeders: 7, leechers: 0 })).toBe('~7 сидов · по данным трекера');
     expect(tvSeedLabel({ mode: 'live', seeders: 7, leechers: 2 })).toBe('↑7 ↓2');
   });
 });

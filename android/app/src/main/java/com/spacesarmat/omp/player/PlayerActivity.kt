@@ -19,6 +19,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -120,6 +121,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private var faultGen = 0
     private var swarmFetching = false
     private var swarmStats: TorrentStats? = null
+    /** Start of a 0-seeder, 0-byte wait, elapsedRealtime. */
+    private var deadSince: Long? = null
+    private var releaseDead = false
     private val swarmRetry = Runnable {
         if (isFinishing || isDestroyed || !::session.isInitialized) return@Runnable
         if (session.error != null || session.firstFrame) return@Runnable
@@ -245,7 +249,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         errRetry = findViewById(R.id.player_error_retry)
         errBack = findViewById(R.id.player_error_back)
         errPrimary.setOnClickListener {
-            if (::session.isInitialized && session.shownFailure == FailureKind.NO_SEEDERS) anotherRelease() else retry()
+            if (::session.isInitialized && (releaseDead || session.shownFailure == FailureKind.NO_SEEDERS)) anotherRelease() else retry()
         }
         errRetry.setOnClickListener { retry() }
         errBack.setOnClickListener { close() }
@@ -521,6 +525,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         holdForSwarm = false
         swarmStats = null
         swarmFetching = false
+        deadSince = null
+        releaseDead = false
         handler.removeCallbacks(swarmRetry)
     }
 
@@ -528,7 +534,14 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private fun pollSwarm() {
         if (swarmFetching || classifying || !::session.isInitialized || isFinishing) return
         if (session.error != null) return
-        if (session.firstFrame && !holdForSwarm) return
+        if (session.firstFrame && !holdForSwarm) {
+            if (deadSince != null || releaseDead) {
+                deadSince = null
+                releaseDead = false
+                render()
+            }
+            return
+        }
         val r = session.item()?.url?.let { TorrServerStats.request(it) } ?: return
         swarmFetching = true
         val gen = faultGen
@@ -540,6 +553,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
                 if (gen != faultGen || isDestroyed) return@post
                 if (session.item()?.url?.let { TorrServerStats.request(it) }?.hash != hash) return@post
                 if (s != null) swarmStats = s
+                noteDead(s)
                 if (!session.firstFrame || holdForSwarm) render()
             }
         }
@@ -1372,7 +1386,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         renderDonate(visible, paused, pos, dur)
         val torrent = item.url.let { TorrServerStats.request(it) } != null
         val waiting = torrent && (!session.firstFrame || holdForSwarm)
-        val showSpin = session.error == null && (engine.isBuffering || holdForSwarm || waiting || classifying)
+        val dead = releaseDead && session.error == null && !session.firstFrame
+        val showSpin = session.error == null && !dead && (engine.isBuffering || holdForSwarm || waiting || classifying)
         buffering.visibility = if (showSpin) View.VISIBLE else View.GONE
         if (showSpin && waiting) {
             val peers = swarmStats?.activePeers ?: 0
@@ -1390,8 +1405,31 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             nextBox.visibility = View.GONE
         }
         val e = session.errorText()
-        errorBox.visibility = if (e != null) View.VISIBLE else View.GONE
-        if (e != null) showError(e)
+        errorBox.visibility = if (e != null || dead) View.VISIBLE else View.GONE
+        if (dead && e == null) showDead() else if (e != null) showError(e)
+    }
+
+    /** 0 seeders and 0 downloaded bytes while the first frame has not arrived. */
+    private fun noteDead(s: TorrentStats?) {
+        if (!::session.isInitialized) return
+        val waiting = !session.firstFrame && session.error == null
+        val seeders = s?.seeders ?: 0
+        val bytes = (s?.preloaded ?: 0L).coerceAtLeast(0L) + (s?.loadedSize ?: 0L).coerceAtLeast(0L)
+        val st = DeadRelease.step(deadSince, SystemClock.elapsedRealtime(), waiting && s != null, seeders, bytes)
+        deadSince = st.since
+        releaseDead = st.dead
+    }
+
+    /** The styled error box, focused, when the release has been silent for a minute. Text is at least 24sp. */
+    private fun showDead() {
+        errorText.text = I18n.s("torrent.deadRelease")
+        errorText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+        errPrimary.text = I18n.s("torrent.better.find")
+        errPrimary.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+        errRetry.visibility = View.GONE
+        val focused = currentFocus
+        val onButton = focused == errPrimary || focused == errRetry || focused == errBack
+        if (!onButton) errPrimary.requestFocus()
     }
 
     /** The error box: classified text, and «Другая раздача» as the primary button when the swarm is empty. */
@@ -1404,6 +1442,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             if (extra.isNotEmpty()) shown = text + "\n" + extra
         }
         errorText.text = shown
+        errorText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+        errPrimary.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
         val noSeeders = session.shownFailure == FailureKind.NO_SEEDERS
         errPrimary.text = I18n.s(if (noSeeders) "player.anotherRelease" else "player.errRetry")
         errRetry.visibility = if (noSeeders) View.VISIBLE else View.GONE

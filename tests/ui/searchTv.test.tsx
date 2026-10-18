@@ -163,7 +163,7 @@ describe('TV search through the phone', () => {
     expect(chips).toContain('HDR');
     expect(first.querySelector('.search-chip.hot')!.textContent).toBe('4K');
     expect(first.textContent).toContain('ещё на Rutor');
-    expect(first.textContent).toContain('10,0 ГБ · ↑50');
+    expect(first.textContent).toContain('10,0 ГБ · 50 сидов · по данным трекера');
     expect(first.querySelector('.search-inlib')).toBeNull();
     // the other row is in the library (hash matched case-insensitively)
     expect(host.querySelectorAll('.search-result')[1].querySelector('.search-inlib')!.textContent).toBe('уже в медиатеке');
@@ -350,14 +350,14 @@ describe('TV search: names, sizes and the reasons of the phone sites', () => {
     });
     mount();
     await searchDune();
-    expect(host.querySelector('.search-size')!.textContent).toBe('69,4 ГБ · ↑7');
+    expect(host.querySelector('.search-size')!.textContent).toBe('69,4 ГБ · 7 сидов · по данным трекера');
     act(() => render(null, host));
     lang.value = 'en';
     mount();
     typeQuery('Dune');
     act(() => (host.querySelector('[data-fk="add-go"]') as HTMLElement).click());
     await step(2000);
-    expect(host.querySelector('.search-size')!.textContent).toBe('69.4 GB · ↑7');
+    expect(host.querySelector('.search-size')!.textContent).toBe('69.4 GB · 7 seeds · from the tracker');
   });
 
   it('a site that needs a sign-in, a code or a check on the phone says so instead of «не ответили»', async () => {

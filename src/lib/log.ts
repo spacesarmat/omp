@@ -63,8 +63,8 @@ const MAGNET = /magnet:\?[^\s"'<>]*/gi;
 const COOKIE_LINE = /\b(set-cookie|cookie)\s*:[^\n]*/gi;
 const AUTH_TOKEN = /\b(Basic|Bearer)\s+[A-Za-z0-9+\/=._-]+/g;
 const JSON_SECRET = /"(password|passwd|pass|token|cookie|api_?key|secret)"\s*:\s*"[^"]*"/gi;
-// key=value or key: value
-const SECRET_COLON = /\b(password|passwd|pass|token|api_?key|apikey|secret|bb_session)\s*[=:]\s*("[^"]*"|[^\s&"',;<>]*)/gi;
+// key=value or key: value. passkey / authkey are private-tracker secrets inside announce URLs.
+const SECRET_COLON = /\b(passkey|authkey|auth_key|torrent_pass|private_key|password|passwd|pass|token|api_?key|apikey|secret|bb_session)\s*[=:]\s*("[^"]*"|[^\s&"',;<>]*)/gi;
 // key=value only (these words are common in plain text)
 const SECRET_EQ = /\b(login|user|username|sid|session|auth)=("[^"]*"|[^\s&"',;<>]*)/gi;
 const URL_RE = /\b([a-z][a-z0-9+.-]*):\/\/([^\s\/?#"'<>)]*)[^\s"'<>)]*/gi;

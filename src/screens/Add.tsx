@@ -10,6 +10,7 @@ import { torrents } from '../store/library';
 import { errorMessage } from '../api/http';
 import { mapSearchCategory } from '../lib/category';
 import { recordAutoCategory } from '../lib/categoryCheck';
+import { rememberTrackerSeeds } from '../store/journal';
 import { posterColor } from '../lib/libraryView';
 import { currentRoute, navigate, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
@@ -210,12 +211,13 @@ export function AddScreen() {
     };
   }, []);
 
-  const doAdd = (a: { link: string; title?: string; category?: string }) => {
+  const doAdd = (a: { link: string; title?: string; category?: string; seed?: number; at?: number }) => {
     setBusyText(t('add.wait'));
     c.add({ link: a.link, title: a.title, category: a.category }).then(
       (tt) => {
         // the category is OMP's own choice here: the automatic check (on a later refresh) may correct it
         recordAutoCategory(tt.hash, a.category || '');
+        if (typeof a.seed === 'number') void rememberTrackerSeeds(c, tt, a.seed, a.at);
         if (!alive.current) return;
         toast(t('add.added', { title: tt.title || a.title || tt.hash }));
         replaceRoute({ name: 'torrent', hash: tt.hash });
@@ -255,7 +257,7 @@ export function AddScreen() {
     resolveTvResult(r).then(
       (l) => {
         if (!alive.current) return;
-        doAdd({ link: l, title: r.Title, category: mapSearchCategory(r.Categories) });
+        doAdd({ link: l, title: r.Title, category: mapSearchCategory(r.Categories), seed: r.Seed, at: r.date });
       },
       (e) => {
         if (!alive.current) return;

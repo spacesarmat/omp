@@ -7,6 +7,8 @@ import { tvSourceContext } from '../sources/tvContext';
 import { resolveLink } from '../sources/view';
 import { getHealth } from '../sources/store';
 import { infohashFromMagnet, parseDate } from '../sources/html';
+import { bytesFromB64, linkWithTrackers, trackersFromMagnet } from '../lib/announce';
+import { stashFile } from '../api/torrentFiles';
 import type { SourceResult } from '../sources/types';
 import { phoneLink } from './phoneStore';
 import { PhoneRpcError, phoneRpc } from './rpc';
@@ -323,27 +325,48 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function localMagnet(r: TvResult): Promise<string> | null {
+  if (r.Magnet || r.Hash) return resolveLink(r, tvSourceContext());
+  return null;
+}
+
 /**
- * The link to add: the row's magnet, else the TV's own resolve for a TorrServer row, else the phone's `resolve`
- * (retried while the phone still fetches the release page). Rejects PhoneRpcError: 'timeout' when the phone
- * keeps answering pending, 'expired' when the search is gone (the screen asks to search again), 'failed' with
- * the phone's text (e.g. a release that exists only as a .torrent file on the phone).
+ * The link to add. A phone row always asks the phone, even when it already has a magnet: the phone fetches the
+ * .torrent (announce-list, passkey included) and the TV uploads that file. The magnet with every `tr=` is the
+ * fallback when the file is missing or the phone does not answer. Rejects PhoneRpcError: 'timeout' when the phone
+ * keeps answering pending, 'expired' when the search is gone, 'failed' with the phone's text.
  */
 export function resolveTvResult(r: TvResult): Promise<string> {
   const via = r.via;
-  if (r.Magnet || !via) return resolveLink(r, tvSourceContext());
+  if (!via) return resolveLink(r, tvSourceContext());
   const ask = (n: number): Promise<string> =>
-    phoneRpc<{ link?: unknown; pending?: unknown }>('resolve', { handle: via.handle, key: via.key }).then((a) => {
-      if (a && typeof a.link === 'string') {
-        const link = a.link.trim();
-        if (ADDABLE.test(link)) return link;
+    phoneRpc<{ link?: unknown; file?: unknown; pending?: unknown }>('resolve', { handle: via.handle, key: via.key }).then(
+      (a) => {
+        if (a && typeof a.file === 'string' && a.file) {
+          const bytes = bytesFromB64(a.file);
+          if (bytes && bytes.length) return stashFile(bytes);
+        }
+        if (a && typeof a.link === 'string') {
+          const link = linkWithTrackers(a.link.trim(), trackersFromMagnet(r.Magnet || ''));
+          if (ADDABLE.test(link)) return link;
+        }
+        if (a && a.pending === true) {
+          if (n >= RESOLVE_TRIES) {
+            const local = localMagnet(r);
+            if (local) return local;
+            throw new PhoneRpcError('timeout');
+          }
+          return wait(RESOLVE_GAP_MS).then(() => ask(n + 1));
+        }
+        const local = localMagnet(r);
+        if (local) return local;
         throw new PhoneRpcError('failed');
-      }
-      if (a && a.pending === true) {
-        if (n >= RESOLVE_TRIES) throw new PhoneRpcError('timeout');
-        return wait(RESOLVE_GAP_MS).then(() => ask(n + 1));
-      }
-      throw new PhoneRpcError('failed');
-    });
+      },
+      (e) => {
+        const local = localMagnet(r);
+        if (local) return local;
+        return Promise.reject(e);
+      },
+    );
   return ask(1);
 }

@@ -35,6 +35,9 @@ import { cachedSeriesMatch, matchSeries } from '../../../src/lib/seriesMatch';
 import { releaseLine, releaseName } from '../lib/duplicates';
 import { contentsText } from '../lib/releaseContents';
 import { swarmText } from '../../../src/lib/torrentStatus';
+import { isDeadRelease, useLiveSwarm } from '../../../src/lib/swarmWatch';
+import { canUpgrade } from '../../../src/ui/BetterDialog';
+import { BetterSheet } from '../ui/BetterSheet';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { artKey, artVersion, pickedArt } from '../catalog/artPick';
 import { CastStrip } from '../ui/CastStrip';
@@ -231,7 +234,7 @@ function FutureSeason({ card, season }: { card: CatalogCard; season: Upcoming })
   );
 }
 
-function Row({ tor, poster, onWatch, onMenu }: { tor: Torrent; poster: string; onWatch: (tor: Torrent) => void; onMenu: (tor: Torrent) => void }) {
+function Row({ tor, poster, onWatch, onMenu, onFind }: { tor: Torrent; poster: string; onWatch: (tor: Torrent) => void; onMenu: (tor: Torrent) => void; onFind: (tor: Torrent) => void }) {
   const press = useLongPress(
     () => onMenu(tor),
     () => navigate(routeForTorrent(tor)),
@@ -246,7 +249,10 @@ function Row({ tor, poster, onWatch, onMenu }: { tor: Torrent; poster: string; o
   const q = qualityBadge(displayTitle(tor));
   const contents = contentsText(tor);
   const swarm = swarmText(tor);
+  const dead = isDeadRelease(tor.hash);
+  const find = dead && canUpgrade(tor, files);
   return (
+    <div>
     <div class="m-hrow m-series-row" data-hash={tor.hash}>
       <button type="button" class="m-hrow-main" {...press}>
         <Poster torrent={tor.poster || !poster ? tor : { ...tor, poster }} class="m-poster-mini" />
@@ -287,6 +293,17 @@ function Row({ tor, poster, onWatch, onMenu }: { tor: Torrent; poster: string; o
             <path d="M8 5l11 7-11 7z" />
           </svg>
         </button>
+      )}
+    </div>
+      {dead && (
+        <div class="m-dead">
+          <div class="m-hint-warn">{t('torrent.deadRelease')}</div>
+          {find && (
+            <button type="button" class="m-btn m-btn-secondary" onClick={() => onFind(tor)}>
+              {t('torrent.better.find')}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -338,7 +355,9 @@ function DubRow({ group }: { group: SeriesGroup }) {
 }
 
 function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null }) {
+  useLiveSwarm();
   const route = useMemo(() => currentRoute.peek(), []);
+  const [better, setBetter] = useState<Torrent | null>(null);
   const remembered = chosenSeason.get(route);
   // a season chip on the torrent screen opens this screen on that season (route.season)
   const asked = route.name === 'series' && typeof route.season === 'number' ? route.season : undefined;
@@ -516,7 +535,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           )}
           <div class="m-list m-series-rows">
             {rows.map((tor) => (
-              <Row key={tor.hash} tor={tor} poster={(info && info.poster) || (card && card.poster) || ''} onWatch={watch} onMenu={setMenuFor} />
+              <Row key={tor.hash} tor={tor} poster={(info && info.poster) || (card && card.poster) || ''} onWatch={watch} onMenu={setMenuFor} onFind={setBetter} />
             ))}
           </div>
         </>
@@ -531,6 +550,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           extra={keepOnly(menuFor)}
         />
       )}
+      {better && <BetterSheet torrent={better} files={filesOf(better)} onClose={() => setBetter(null)} />}
       {launch.sheet}
     </>
   );

@@ -25,6 +25,7 @@ import { formatDuration } from '../lib/format';
 import { useVideoState } from '../player/useVideoState';
 import { classifyFailure, failureText, faultFromMediaCode, swarmFromCache, SWARM_RETRY_MS } from '../player/playbackFailure';
 import { openAnotherRelease } from '../player/anotherRelease';
+import { usePlaybackDead } from '../lib/swarmWatch';
 import { HideTimer, canHideControls, pointerMoveCounts } from '../player/hideTimer';
 import { useProgressSync } from '../player/useProgressSync';
 import { WatchJournal, journalSource } from '../player/watchJournal';
@@ -103,6 +104,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const swarm = swarmFromCache(cacheRead.status, cache, !!(c && item.hash));
   const failure = classifyFailure(faultFromMediaCode(vs.errorCode), swarm, vs.played);
   const blocked = vs.errorCode !== null && failure !== 'buffering';
+  const dead = usePlaybackDead(item.hash, cache);
+  const deadNow = dead && !blocked;
   const posRef = useRef({ time: 0, duration: 0 });
   posRef.current = { time: vs.time, duration: vs.duration };
   useProgressSync(c, item, posRef);
@@ -702,7 +705,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       <video key={index + ':' + reloadKey} ref={videoRef} src={ready ? src : undefined} autoplay onLoadedMetadata={onMeta} />
       <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
       {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}
-      {ready && !blocked && (!vs.played || vs.buffering || vs.errorCode !== null) && (
+      {ready && !blocked && !deadNow && (!vs.played || vs.buffering || vs.errorCode !== null) && (
         <BufferingOverlay cache={cache} waiting={!vs.played || vs.errorCode !== null} />
       )}
       {infoOn && (
@@ -733,14 +736,15 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
           onChapters={openChapters}
         />
       )}
-      {blocked && (
+      {(blocked || deadNow) && (
         <PlayerError
-          message={failureText(failure, vs.errorCode)}
+          message={deadNow ? t('torrent.deadRelease') : failureText(failure, vs.errorCode)}
           probe={probe}
-          showProbe={failure === 'codec'}
+          showProbe={!deadNow && failure === 'codec'}
           onRetry={retry}
           onBack={() => goBack()}
-          onAnother={failure === 'no-seeders' ? () => openAnotherRelease(item.hash) : undefined}
+          onAnother={deadNow || failure === 'no-seeders' ? () => openAnotherRelease(item.hash) : undefined}
+          anotherLabel={deadNow ? t('torrent.better.find') : undefined}
         />
       )}
     </div>

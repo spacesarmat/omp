@@ -85,4 +85,23 @@ class PlaybackFailureTest {
         assertEquals("The video format is not supported", PlaybackFailure.message(FailureKind.CODEC))
         assertEquals("Connecting… peers: 3, speed 0 KB/s", PlaybackFailure.connectingText(3, 0.0))
     }
+
+    @Test
+    fun deadReleaseNeedsAMinuteOfSilence() {
+        val t0 = 1_000L
+        val quiet = DeadRelease.step(null, t0, active = true, seeders = 0, bytes = 0)
+        assertEquals(t0, quiet.since)
+        assertEquals(false, quiet.dead)
+        val later = DeadRelease.step(quiet.since, t0 + 59_000, true, 0, 0)
+        assertEquals(false, later.dead)
+        val dead = DeadRelease.step(quiet.since, t0 + DeadRelease.MS, true, 0, 0)
+        assertEquals(true, dead.dead)
+        val seeded = DeadRelease.step(quiet.since, t0 + DeadRelease.MS, true, 1, 0)
+        assertEquals(null, seeded.since)
+        assertEquals(false, seeded.dead)
+        val bytes = DeadRelease.step(quiet.since, t0 + DeadRelease.MS, true, 0, 1)
+        assertEquals(false, bytes.dead)
+        val idle = DeadRelease.step(quiet.since, t0 + DeadRelease.MS, false, 0, 0)
+        assertEquals(false, idle.dead)
+    }
 }

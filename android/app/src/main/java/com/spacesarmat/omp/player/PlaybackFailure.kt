@@ -93,3 +93,19 @@ object PlaybackFailure {
         return I18n.s("player.connecting", "n" to peers.coerceAtLeast(0).toString(), "speed" to (rate.first + " " + rate.second))
     }
 }
+
+/**
+ * A torrent the player is still waiting on, with 0 connected seeders and 0 downloaded bytes, for [MS].
+ * Any seeder or any downloaded byte clears the streak. Not active clears it too.
+ */
+object DeadRelease {
+    const val MS = 60_000L
+
+    data class State(val since: Long?, val dead: Boolean)
+
+    fun step(since: Long?, now: Long, active: Boolean, seeders: Int, bytes: Long): State {
+        if (!active || seeders > 0 || bytes > 0L) return State(null, false)
+        val start = since ?: now
+        return State(start, now - start >= MS)
+    }
+}

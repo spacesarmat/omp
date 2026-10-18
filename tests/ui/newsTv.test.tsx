@@ -220,7 +220,7 @@ describe('TV «Новое» tab', () => {
     expect(rows[1].textContent).toContain('4K');
     expect(rows[0].querySelector('.news-dot')).not.toBeNull();
     expect(rows[2].querySelector('.news-dot')).toBeNull();
-    expect(text(rows[2].querySelector('.search-size'))).toContain('↑40');
+    expect(text(rows[2].querySelector('.search-size'))).toContain('40 сидов · по данным трекера');
   });
 
   it('opening the tab marks the shown unseen findings seen on the phone', async () => {

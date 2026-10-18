@@ -92,7 +92,9 @@ function toResult(sourceId: string, f: Fields): SourceResult | null {
   const remote =
     !!f.torrent &&
     (/^https?:\/\//i.test(f.torrent) || f.torrent.indexOf('omp-fetch:') === 0 || f.torrent.indexOf('omp-jacred:') === 0);
-  const link = !magnet && remote ? stripKey(f.torrent!) : '';
+  // kept even when a magnet exists: add prefers the file so its announce-list reaches TorrServer
+  const torrentUrl = remote ? stripKey(f.torrent!) : '';
+  const link = !magnet && torrentUrl ? torrentUrl : '';
   if (!magnet && !link) return null;
   const detail = f.detailUrl && /^https?:\/\//i.test(f.detailUrl) ? stripKey(f.detailUrl) : '';
   const r: SourceResult = {
@@ -109,6 +111,7 @@ function toResult(sourceId: string, f: Fields): SourceResult | null {
     source: sourceId,
   };
   if (hash) r.hash = hash;
+  if (torrentUrl) r.torrentUrl = torrentUrl;
   if (detail) r.detailUrl = detail;
   if (f.date !== undefined) r.date = f.date;
   if (f.sizeBytes !== undefined) r.sizeBytes = f.sizeBytes;
@@ -413,7 +416,7 @@ function bytesOf(s: string): Uint8Array {
  * uploads it. The key reaches neither the result, TorrServer nor storage.
  */
 function downloadTorrent(conn: IndexerConn, r: SourceResult, ctx: SourceContext): Promise<string> {
-  const link = r.Link;
+  const link = r.torrentUrl || r.Link;
   if (!link || !/^https?:\/\//i.test(link) || hostKey(link) !== hostKey(conn.url)) return Promise.reject(new Error(indexerNoFile()));
   if (!ctx.secrets) return Promise.reject(new Error(indexerBadKey()));
   return ctx.secrets.get(indexerKeyName(conn.id)).then(

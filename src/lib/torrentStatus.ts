@@ -2,6 +2,7 @@
 // "Torrent working" and "0 B/s".
 import type { Torrent } from '../api/types';
 import { t, tp, fmtBytes, fmtSpeed, type Key } from '../i18n';
+import { trackerSeedsOf } from './journal';
 
 /** TorrServer's states by `stat` (TorrentAdded … TorrentInDB). */
 const BY_STAT: Key[] = ['torrent.stat.added', 'torrent.stat.info', 'torrent.stat.preload', 'torrent.stat.working', 'torrent.stat.closed', 'torrent.stat.db'];
@@ -39,7 +40,20 @@ export function statusLine(tor: Pick<Torrent, 'stat' | 'stat_string' | 'torrent_
   return parts.join(' · ');
 }
 
-/** Current seeds and peers (`connected_seeders` / `active_peers`). Zero when TorrServer has not reported the swarm. */
-export function swarmText(tor: Pick<Torrent, 'connected_seeders' | 'active_peers'>): string {
-  return tp('sources.seeds', tor.connected_seeders || 0) + ' · ' + tp('torrent.screen.peerCount', tor.active_peers || 0);
+/** Getting info, preloading, or working: TorrServer's live swarm, not the idle 0/0 snapshot. */
+export function swarmActive(stat: number | undefined): boolean {
+  return stat === 1 || stat === 2 || stat === 3;
+}
+
+/**
+ * Seeds line of a library card. Active: «подключено: N сидов · M пиров» from TorrServer.
+ * Idle: the tracker count saved at add time («44 сида (трекер)»), or «—» when that was never saved.
+ */
+export function swarmText(tor: { stat?: number; connected_seeders?: number; active_peers?: number; data?: string }): string {
+  if (swarmActive(tor.stat)) {
+    return t('torrent.connected') + ' ' + tp('sources.seeds', tor.connected_seeders || 0) + ' · ' + tp('torrent.screen.peerCount', tor.active_peers || 0);
+  }
+  const saved = trackerSeedsOf(tor.data);
+  if (saved) return tp('sources.seeds', saved.s) + ' ' + t('torrent.trackerMark');
+  return t('torrent.seedsUnknown');
 }

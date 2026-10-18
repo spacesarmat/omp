@@ -53,6 +53,11 @@ export interface SourceResult extends SearchResult {
   sources?: string[];
   /** Page of the release (a magnet may be taken from it). */
   detailUrl?: string;
+  /**
+   * Keyless .torrent download (Jackett / Prowlarr / the billing proxy). Kept even when Magnet is set, so add
+   * uploads the file — its announce-list — instead of a bare hash magnet. Never holds an API key.
+   */
+  torrentUrl?: string;
   /** Lowercase 40-hex infohash when known. */
   hash?: string;
   /** Unix ms. */

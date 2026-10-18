@@ -211,7 +211,7 @@ function paidSource(id: string, name: string, source: OmpIndexerSource): Source 
       return load();
     },
     resolve(r: SourceResult, ctx: SourceContext): Promise<string> {
-      const link = r.Link || '';
+      const link = r.torrentUrl || r.Link || '';
       if (!billingSession() || !isProxyLink(link)) return Promise.reject(new Error(t('sources.billing.down')));
       return billingPost(
         ctx,

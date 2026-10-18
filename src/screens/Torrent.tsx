@@ -31,6 +31,8 @@ import { skipStatus } from '../lib/skipMarks';
 import { MarksDialog } from '../ui/MarksDialog';
 import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
 import { pendingBetterHash } from '../player/anotherRelease';
+import { isDeadRelease, useLiveSwarm } from '../lib/swarmWatch';
+import { swarmText } from '../lib/torrentStatus';
 import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { displayTitle } from '../lib/torrentName';
 import { t } from '../i18n';
@@ -66,6 +68,7 @@ export function headerNames(tor: Torrent, list: Torrent[]): { name: string; raw:
 const AUTO_ACTIONS = ['TORRENT-ACTIONS', 'torrent-reset', 'torrent-rename', 'torrent-poster', 'torrent-delete', 'torrent-better'];
 
 export function TorrentScreen({ hash }: { hash: string }) {
+  useLiveSwarm();
   const c = client.value!;
   const cached = torrents.value.find((tor) => tor.hash === hash) || null;
   const [tor, setT] = useState<Torrent | null>(cached);
@@ -307,6 +310,13 @@ export function TorrentScreen({ hash }: { hash: string }) {
             ];
           })()}
           <div class="muted torrent-status">{tor ? tvGlyphs(statusLine(tor)) : ''}</div>
+          {tor && <div class="muted series-swarm">{swarmText(tor)}</div>}
+          {tor && isDeadRelease(tor.hash) && (
+            <FocusGroup focusKey="torrent-dead" className="series-dead">
+              <div>{t('torrent.deadRelease')}</div>
+              {upgradable && <Button focusKey="torrent-dead-find" label={t('torrent.better.find')} onPress={() => setBetterOpen(true)} />}
+            </FocusGroup>
+          )}
           {(() => {
             const badges = releaseBadges(parseReleaseInfo(tor ? displayTitle(tor) : ''));
             return badges.length ? <div class="badges">{badges.map((x) => <span key={x} class="badge">{x}</span>)}</div> : null;

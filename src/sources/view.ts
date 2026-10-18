@@ -1,6 +1,7 @@
 // Unified search on screen: row keys, quality filter, sorting, the progress line, source states and the link to add.
 // Shared by the phone and the Android TV bundle: Chromium 53 rules (no Object.values/entries, regex without u).
 import { fmtDay, fmtNumber, t as tr, tp } from '../i18n';
+import { linkWithTrackers, trackersFromMagnet } from '../lib/announce';
 import { parseDate, parseSize } from './html';
 import { getSource } from './registry';
 import { knownSourceName } from './sourceNames';
@@ -199,20 +200,45 @@ function fail(msg: string): Promise<string> {
   return Promise.reject(new Error(msg));
 }
 
+function magnetFallback(r: SourceResult): string {
+  if (r.Magnet && r.Magnet.indexOf('magnet:') === 0) return linkWithTrackers(r.Magnet, []);
+  if (r.Hash) return 'magnet:?xt=urn:btih:' + r.Hash;
+  return '';
+}
+
+/** A resolved link: a stashed .torrent as-is; a magnet keeps its `tr=` and gains any from the original row. */
+function finishLink(r: SourceResult, link: string): string {
+  const s = typeof link === 'string' ? link.trim() : '';
+  if (s.indexOf('omp-file:') === 0) return s;
+  if (!ADDABLE.test(s)) throw new Error(tr('sources.cannotGetLink'));
+  return linkWithTrackers(s, trackersFromMagnet(r.Magnet || ''));
+}
+
 /**
- * The link TorrServer adds: the magnet of the result, else the one the source takes from the release page
- * (a magnet, or an http(s) .torrent link), else Link, else a magnet from the hash.
+ * The link TorrServer adds. A Jackett / JacRed row with a .torrent URL is fetched and uploaded (announce-list);
+ * if that fails and a magnet or hash exists, the magnet is used with every known `tr=`. A magnet-only row is
+ * returned as-is (its `tr=` kept). TorrServer's default trackers are not touched.
  */
 export function resolveLink(r: SourceResult, ctx: SourceContext): Promise<string> {
-  if (r.Magnet) return Promise.resolve(r.Magnet);
   const src = getSource(r.source);
-  if (src && src.resolve) {
+  const fileFirst = !!(src && src.resolve && (r.torrentUrl || !r.Magnet));
+  if (fileFirst && src && src.resolve) {
+    let p: Promise<string>;
     try {
-      return Promise.resolve(src.resolve(r, ctx));
+      p = Promise.resolve(src.resolve(r, ctx));
     } catch (e) {
-      return Promise.reject(e);
+      p = Promise.reject(e);
     }
+    return p.then(
+      (l) => finishLink(r, l),
+      (e) => {
+        const m = magnetFallback(r);
+        if (m) return m;
+        return Promise.reject(e);
+      },
+    );
   }
+  if (r.Magnet) return Promise.resolve(linkWithTrackers(r.Magnet, []));
   if (src && src.magnet && r.detailUrl) {
     let p: Promise<string>;
     try {
@@ -220,9 +246,9 @@ export function resolveLink(r: SourceResult, ctx: SourceContext): Promise<string
     } catch (e) {
       p = Promise.reject(e);
     }
-    return p.then((l) => (typeof l === 'string' && ADDABLE.test(l.trim()) ? l.trim() : fail(tr('sources.cannotGetLink'))));
+    return p.then((l) => finishLink(r, l));
   }
-  if (r.Link) return Promise.resolve(r.Link);
+  if (r.Link) return Promise.resolve(linkWithTrackers(r.Link, []));
   if (r.Hash) return Promise.resolve('magnet:?xt=urn:btih:' + r.Hash);
   return fail(tr('sources.noLink'));
 }

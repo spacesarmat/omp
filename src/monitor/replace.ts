@@ -8,7 +8,7 @@ import { parseTorrentData } from '../api/torrserver';
 import { isApiError } from '../api/http';
 import { isLoginRequired } from '../sources/types';
 import { baseName, episodeLabel, fileKind, parseEpisode, type TorrentFile } from '../lib/episodes';
-import { JOURNAL_KEY, JOURNAL_MAX, JOURNAL_VERSION, parseData, serializeData, type JournalEntry } from '../lib/journal';
+import { JOURNAL_KEY, JOURNAL_MAX, JOURNAL_VERSION, parseData, serializeData, type JournalEntry, withTrackerSeeds } from '../lib/journal';
 import { baseOf, type JournalClient } from '../store/journal';
 import { torrents } from '../store/library';
 import { resolveLink } from '../sources/view';
@@ -63,6 +63,8 @@ export interface ReplaceOptions {
    * Without it the old torrent's title is used; the title is never empty.
    */
   title?: string;
+  /** Tracker seeders of the new release, written over the carried `omp.ts`. */
+  trackerSeeds?: { s: number; at: number };
 }
 
 export type ReplaceResult = { ok: true; hash: string } | { ok: false; error: string; cause?: ReplaceCause };
@@ -304,7 +306,9 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
         const title = newTitle || keptTitle(old) || listed.title || listed.name || x.info.title || '';
         const poster = old.poster || listed.poster || '';
         const category = old.category || listed.category || '';
-        const data = serializeData(obj, journal, skip);
+        const seeds = opts && opts.trackerSeeds;
+        const bag = seeds && typeof seeds.s === 'number' && seeds.s >= 0 ? withTrackerSeeds(obj, { s: Math.floor(seeds.s), at: seeds.at > 0 ? Math.floor(seeds.at) : Date.now() }) : obj;
+        const data = serializeData(bag, journal, skip);
         const done: Torrent = { ...listed, title, poster, category, data };
         const carried = !!oldOmp || journal.length > 0 || !!skip;
         const differs = (!!old.poster && listed.poster !== old.poster) || (listed.title !== title) || (category !== (listed.category || ''));
@@ -411,7 +415,11 @@ export function replaceWithResult(
     (l) =>
       l === null || (ab && ab.aborted)
         ? cancelled()
-        : replaceTorrent(c, oldHash, l, { ...(opts || {}), title: (opts && opts.title) || result.Title }),
+        : replaceTorrent(c, oldHash, l, {
+            ...(opts || {}),
+            title: (opts && opts.title) || result.Title,
+            trackerSeeds: typeof result.Seed === 'number' && result.Seed >= 0 ? { s: Math.floor(result.Seed), at: result.date && result.date > 0 ? result.date : Date.now() } : undefined,
+          }),
     (e): ReplaceResult => ({
       ok: false,
       error: e && typeof e.message === 'string' && e.message ? e.message : tr('monitor.replace.noLink'),

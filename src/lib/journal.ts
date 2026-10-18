@@ -11,6 +11,8 @@
 // among the torrents of a series wins (src/lib/seriesTracks.ts).
 // `d: { until }` (v0.14.1) = a support code was applied on a phone: the TVs hide the «Поддержать» card until then
 // (Unix ms). Only the end time is ever written, never the code; any torrent of the server may carry it, the latest wins.
+// `ts: { s, at }` = seeders the source tracker reported when the release was added (`s`; 0 is a real zero) and when
+// (`at`, unix ms). Idle cards show this instead of TorrServer's 0/0. A torrent added by a bare magnet has no `ts`.
 
 export type JournalSrc = 'tv' | 'phone';
 
@@ -194,6 +196,34 @@ function ompIs(data: string | undefined | null, key: string, value: unknown): bo
  * A shallow copy of `obj` whose `omp` bag `edit` changes. Keys already in the bag stay;
  * a missing bag starts as `{ v, h: [] }`. Write the result with serializeData.
  */
+/** Seeders a tracker reported at add time. Null when nothing was saved (a manual magnet) or the bag is malformed. */
+export interface TrackerSeeds {
+  /** Seeders. 0 means the tracker said zero, not "unknown". */
+  s: number;
+  /** Unix ms. */
+  at: number;
+}
+
+export function trackerSeedsOf(data: string | undefined | null): TrackerSeeds | null {
+  const p = parseData(data);
+  if (!p) return null;
+  const o = p.obj[JOURNAL_KEY];
+  if (!isPlainObject(o)) return null;
+  const ts = o.ts;
+  if (!isPlainObject(ts)) return null;
+  const s = finiteNum(ts.s);
+  const at = finiteNum(ts.at);
+  if (s === null || s < 0 || at === null || at <= 0) return null;
+  return { s: Math.floor(s), at: Math.floor(at) };
+}
+
+/** A copy of `obj` with omp.ts set; write it with serializeData. */
+export function withTrackerSeeds(obj: { [k: string]: unknown }, seeds: TrackerSeeds): { [k: string]: unknown } {
+  return withOmp(obj, (omp) => {
+    omp.ts = { s: Math.floor(seeds.s), at: Math.floor(seeds.at) };
+  });
+}
+
 export function withOmp(
   obj: { [k: string]: unknown },
   edit: (omp: { [k: string]: unknown }) => void,
