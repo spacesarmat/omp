@@ -8,6 +8,7 @@
   --accent: #F5B700;
   --text: #E8EAF0;
   --muted: #9AA1B2;
+  --m-btn-h: 52px;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -104,7 +105,7 @@ button, .m-btn {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  height: 52px;
+  height: var(--m-btn-h);
   padding: 0 16px;
   border: none;
   border-radius: 12px;
@@ -623,7 +624,7 @@ button, .m-btn {
    contain: a pull at the top does not scroll the page under the sheet. */
 .m-sheet,
 .m-sheet > .m-sheet-scroll { overscroll-behavior: contain; }
-.m-sheet > .m-sheet-scroll { flex: 0 1 auto; min-height: 60px; overflow-y: auto; }
+.m-sheet > .m-sheet-scroll { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
 /* The bar stays 40×4; ::before is the tap target. A downward pull on it drags the sheet. */
 .m-sheet-grip {
   align-self: center;
@@ -685,11 +686,59 @@ button, .m-btn {
 }
 .m-chip.on { background: var(--accent); color: var(--bg); font-weight: 700; }
 .m-chip-static { pointer-events: none; }
-.m-filters { display: flex; flex-direction: column; gap: 16px; }
-.m-filter-group { display: flex; flex-direction: column; gap: 8px; }
-.m-filter-label { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.m-filters { display: flex; flex-direction: column; gap: 20px; padding-bottom: var(--m-btn-h); }
+.m-filter-group { display: flex; flex-direction: column; gap: 10px; }
+.m-filter-label { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.m-filters .m-chips { flex-wrap: wrap; overflow: visible; gap: 8px; }
+.m-filters .m-chip {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 22px;
+  background: var(--panel-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px #3A3F4B;
+  font-size: 14px;
+  font-weight: 600;
+}
+.m-filters .m-chip.on { background: var(--accent); color: var(--bg); box-shadow: none; font-weight: 700; }
 .m-filter-size { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .m-filter-size label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.m-filter-size input {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  color-scheme: dark;
+  font-family: inherit;
+  font-size: 16px;
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--panel-2);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.m-filter-size input::placeholder { color: var(--muted); opacity: 1; }
+.m-filter-size input:focus { box-shadow: inset 0 0 0 2px var(--accent); }
+.m-filter-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 14px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
 .m-sheet-head { display: flex; justify-content: space-between; align-items: center; }
 .m-link-btn { background: none; border: none; color: var(--accent); font-weight: 700; min-height: 44px; }
 .m-results { display: flex; flex-direction: column; gap: 8px; }
