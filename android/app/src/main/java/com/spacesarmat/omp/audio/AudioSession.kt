@@ -16,6 +16,12 @@ object AudioSession {
     const val PLAYER_CORE_SERVICE = "tv.p2160.core.engine.PlaybackService"
 
     const val SEEK_MS = 30_000L
+    /** Custom session actions so previous/next chapter stay on the shade and the lock screen. */
+    const val CMD_PREV = "omp.audio.prev"
+    const val CMD_NEXT = "omp.audio.next"
+    /** Notification tap. MainActivity opens the audiobook player for [EXTRA_HASH]. */
+    const val OPEN_ACTION = "com.spacesarmat.omp.audio.OPEN"
+    const val EXTRA_HASH = "omp.audio.hash"
     const val SPEED_MIN = 0.5f
     const val SPEED_MAX = 3f
 
@@ -25,11 +31,12 @@ object AudioSession {
     const val SLEEP_60 = "60"
     const val SLEEP_CHAPTER = "chapter"
 
-    /** Shade order. media3 inserts play/pause in the centre, so it is not in this list. */
+    /**
+     * Player commands on the shade, beside media3's central play/pause.
+     * Previous and next chapter are [CMD_PREV] and [CMD_NEXT], not seek-to-previous/next.
+     */
     val notificationCommands: List<Int> = listOf(
         Player.COMMAND_SEEK_BACK,
-        Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
-        Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
         Player.COMMAND_SEEK_FORWARD,
         Player.COMMAND_STOP,
     )
@@ -53,6 +60,13 @@ object AudioSession {
     }
 
     fun sleepIsChapter(sleep: String): Boolean = sleep == SLEEP_CHAPTER
+
+    /**
+     * ExoPlayer sits in [Player.STATE_IDLE] after an error and ignores play() until prepare().
+     * A paused player is STATE_READY, so a normal resume does not prepare again.
+     */
+    fun resumeNeedsPrepare(hasError: Boolean, playbackState: Int): Boolean =
+        hasError || playbackState == Player.STATE_IDLE
 
     /** Where a tap starts inside a clipped chapter: the asked position minus the chapter start, never negative. */
     fun startOffset(item: AudioItem, positionMs: Long): Long {

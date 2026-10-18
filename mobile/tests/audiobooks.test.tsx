@@ -3,11 +3,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, type VNode } from 'preact';
 import { act } from 'preact/test-utils';
 import { Audiobooks } from '../src/audiobooks/Audiobooks';
-import { AudiobookSearch } from '../src/audiobooks/Search';
+import { AudiobookSearch, resetAudiobookSearch } from '../src/audiobooks/Search';
 import { MyBooks } from '../src/audiobooks/MyBooks';
 import { Book } from '../src/audiobooks/Book';
 import { AudioPlayer } from '../src/audiobooks/Player';
-import { audioLaunch, setAudioBridge, setAudioLaunch, type AudioBridge } from '../src/audiobooks/launch';
+import { audioLaunch, audioNow, setAudioBridge, setAudioLaunch, type AudioBridge } from '../src/audiobooks/launch';
 import { Settings } from '../src/screens/Settings';
 import { currentRoute, resetTo } from '../src/nav';
 import { torrents } from '../../src/store/library';
@@ -89,6 +89,9 @@ afterEach(() => {
   vi.restoreAllMocks();
   setWatchActions(null);
   setAudioBridge(null);
+  resetAudiobookSearch();
+  audioNow.value = null;
+  audioLaunch.value = null;
 });
 
 describe('«Аудиокниги»', () => {
@@ -247,19 +250,23 @@ describe('«Аудиокниги»', () => {
   it('the player screen speaks Russian and sends ±30s, speed and the sleep timer', async () => {
     const calls: { cmd: string; ms?: number; speed?: number; sleep?: string }[] = [];
     const bridge: AudioBridge = {
+      prepare: () => Promise.resolve(),
       play: () => Promise.resolve(null),
       control: (c) => {
         calls.push(c);
         return Promise.resolve({
           active: true,
-          playing: c.cmd === 'toggle',
+          playing: c.cmd === 'toggle' || c.cmd === 'play',
           index: 0,
           positionMs: 1000,
           durationMs: 60000,
           speed: c.speed || 1,
           sleep: c.sleep || 'off',
+          sleepLeftMs: c.sleep === '30' ? 90000 : 0,
+          count: 1,
           title: '01',
           book: 'Мастер',
+          hash: HASH,
           fileId: 4,
         });
       },
@@ -277,7 +284,12 @@ describe('«Аудиокниги»', () => {
     resetTo({ name: 'audiobookPlayer', hash: HASH, token: q.token });
     mount(<AudioPlayer hash={HASH} token={q.token} />);
     await flush();
+    expect(el.querySelector('[data-audio-place]')!.textContent).toBe('Трек 1 из 1');
     expect(el.querySelector('[data-audio-title]')!.textContent).toBe('2');
+    expect(el.querySelector('[data-audio-row="chapters"]')).toBeTruthy();
+    expect(el.querySelector('[data-audio-row="main"] [data-audio="toggle"]')).toBeTruthy();
+    expect(el.querySelector('[data-audio-speed] button')!.getAttribute('aria-checked')).toBe('false');
+    expect(el.querySelector('[data-audio-speed] [aria-checked="true"]')!.textContent).toBe('1×');
     expect(el.textContent).toContain('−30 с');
     expect(el.textContent).toContain('Скорость');
     expect(el.textContent).toContain('Таймер сна');
@@ -292,5 +304,207 @@ describe('«Аудиокниги»', () => {
     expect(calls[0].ms).toBe(30000);
     expect(calls[1].speed).toBe(0.5);
     expect(calls[2].sleep).toBe('30');
+    expect(el.querySelector('[data-sleep="30"]')!.getAttribute('aria-checked')).toBe('true');
+    expect(el.querySelector('[data-sleep-label]')!.textContent).toContain('1:30');
+  });
+
+  it('a missing file list asks to retry and does not remove the torrent', async () => {
+    torrents.value = [bookTorrent({ file_stats: undefined, stat: 1, stat_string: 'Torrent getting info' })];
+    const get = vi.spyOn(TorrServerClient.prototype, 'get').mockRejectedValue(new Error('timeout'));
+    const loadInfo = vi.spyOn(TorrServerClient.prototype, 'loadInfo');
+    const remove = vi.spyOn(TorrServerClient.prototype, 'remove').mockResolvedValue();
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue(bookTorrent());
+    mount(<Book hash={HASH} />);
+    await flush();
+    expect(loadInfo).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(el.querySelector('[data-files="timeout"]')!.textContent).toContain('Не удалось получить список файлов — мало сидов');
+    expect(el.textContent).not.toContain('В раздаче нет звуковых файлов');
+    get.mockResolvedValue(bookTorrent());
+    act(() => {
+      (el.querySelector('[data-files="retry"]') as HTMLButtonElement).click();
+    });
+    await flush();
+    await flush();
+    expect(add).toHaveBeenCalled();
+    expect(get.mock.calls.length).toBeGreaterThan(1);
+    expect(el.querySelector('[data-track="Автор/CD1/2.flac"]')).toBeTruthy();
+    expect(remove).not.toHaveBeenCalled();
+    expect(loadInfo).not.toHaveBeenCalled();
+  });
+
+  it('a list that really has no audio says so, and sizes use МБ', async () => {
+    torrents.value = [bookTorrent({ file_stats: undefined, stat: 5 })];
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(
+      bookTorrent({
+        stat: 3,
+        file_stats: files([{ id: 1, path: 'cover.jpg', length: 5 * 1024 * 1024 }]),
+      }),
+    );
+    mount(<Book hash={HASH} />);
+    await flush();
+    expect(el.querySelector('[data-empty="audio"]')!.textContent).toBe('В раздаче нет звуковых файлов');
+    torrents.value = [
+      bookTorrent({
+        file_stats: files([{ id: 4, path: 'Автор/CD1/2.flac', length: 5 * 1024 * 1024 }]),
+      }),
+    ];
+    mount(<Book hash={HASH} />);
+    await flush();
+    expect(el.textContent).toContain('МБ');
+    expect(el.textContent).not.toContain('MB');
+  });
+
+  it('highlights the playing track and opens it again without a new queue', async () => {
+    torrents.value = [bookTorrent()];
+    const launch = setAudioLaunch({
+      hash: HASH,
+      book: 'Мастер',
+      start: 0,
+      positionMs: 5000,
+      items: [{ url: 'http://127.0.0.1:8090/a', title: '2', fileId: 4, startMs: 0, endMs: 0 }],
+    });
+    audioNow.value = { hash: HASH, token: launch.token, index: 0, fileId: 4, startMs: 0, active: true };
+    const play = vi.fn();
+    setAudioBridge({
+      prepare: () => Promise.resolve(),
+      play,
+      control: () => Promise.resolve(null),
+      state: () => Promise.resolve(null),
+      onState: () => () => undefined,
+    });
+    mount(<Book hash={HASH} />);
+    await flush();
+    const row = el.querySelector('[data-track="Автор/CD1/2.flac"]') as HTMLButtonElement;
+    expect(row.hasAttribute('data-playing')).toBe(true);
+    await act(async () => {
+      row.click();
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+    expect(play).not.toHaveBeenCalled();
+    expect(audioLaunch.value && audioLaunch.value.token).toBe(launch.token);
+    expect(currentRoute.value).toEqual({ name: 'audiobookPlayer', hash: HASH, token: launch.token });
+  });
+
+  it('keeps the audiobook search after leaving the book card', async () => {
+    const title = 'Сапковский Анджей - Ведьмак (аудиокнига)';
+    registerSource({
+      id: 'fake-audio',
+      name: 'Фейк',
+      kind: 'builtin',
+      search: () => Promise.resolve([
+        {
+          Title: title,
+          Categories: '3030',
+          Size: '500 MB',
+          CreateDate: '',
+          Tracker: 'rutracker',
+          Link: '',
+          Magnet: 'magnet:?xt=urn:btih:' + HASH,
+          Hash: HASH,
+          Peer: 1,
+          Seed: 4,
+          source: 'fake-audio',
+        },
+      ]),
+    });
+    mount(<AudiobookSearch />);
+    const input = el.querySelector('input') as HTMLInputElement;
+    act(() => {
+      input.value = 'ведьмак';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => {
+      el.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect(el.querySelector('.m-result')!.getAttribute('data-title')).toBe(title);
+    const phone = el.querySelector('[aria-label^="Добавить и слушать на телефоне"]') as HTMLButtonElement;
+    expect(phone.classList.contains('m-rc-btn-tv')).toBe(true);
+    act(() => render(null, el));
+    mount(<AudiobookSearch />);
+    expect((el.querySelector('input') as HTMLInputElement).value).toBe('ведьмак');
+    expect(el.querySelector('.m-result')!.getAttribute('data-title')).toBe(title);
+  });
+
+  it('Слушать after an error asks the player to prepare again', async () => {
+    const calls: string[] = [];
+    setAudioBridge({
+      prepare: () => Promise.resolve(),
+      play: () => Promise.resolve({
+        active: true,
+        playing: false,
+        index: 0,
+        positionMs: 0,
+        durationMs: 0,
+        speed: 1.5,
+        sleep: 'off',
+        sleepLeftMs: 0,
+        count: 1,
+        title: '2',
+        book: 'Мастер',
+        hash: HASH,
+        fileId: 4,
+        error: 'Не удалось воспроизвести',
+      }),
+      control: (c) => {
+        calls.push(c.cmd);
+        return Promise.resolve(null);
+      },
+      state: () => Promise.resolve(null),
+      onState: () => () => undefined,
+    });
+    const q = setAudioLaunch({
+      hash: HASH,
+      book: 'Мастер',
+      start: 0,
+      positionMs: 0,
+      items: [{ url: 'http://127.0.0.1:8090/a', title: '2', fileId: 4, startMs: 0, endMs: 0 }],
+    });
+    mount(<AudioPlayer hash={HASH} token={q.token} />);
+    await flush();
+    await act(async () => {
+      (el.querySelector('[data-audio="toggle"]') as HTMLButtonElement).click();
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    });
+    expect(calls).toEqual(['play']);
+  });
+
+  it('opening the current item does not start the queue again', async () => {
+    const play = vi.fn().mockResolvedValue(null);
+    const state = vi.fn().mockResolvedValue({
+      active: true,
+      playing: true,
+      index: 0,
+      positionMs: 40000,
+      durationMs: 60000,
+      speed: 1.5,
+      sleep: '30',
+      sleepLeftMs: 1000,
+      count: 1,
+      title: '2',
+      book: 'Мастер',
+      hash: HASH,
+      fileId: 4,
+    });
+    setAudioBridge({
+      prepare: () => Promise.resolve(),
+      play,
+      control: () => Promise.resolve(null),
+      state,
+      onState: () => () => undefined,
+    });
+    const q = setAudioLaunch({
+      hash: HASH,
+      book: 'Мастер',
+      start: 0,
+      positionMs: 0,
+      items: [{ url: 'http://127.0.0.1:8090/a', title: '2', fileId: 4, startMs: 0, endMs: 0 }],
+    });
+    audioNow.value = { hash: HASH, token: q.token, index: 0, fileId: 4, startMs: 0, active: true };
+    mount(<AudioPlayer hash={HASH} token={q.token} />);
+    await flush();
+    expect(play).not.toHaveBeenCalled();
+    expect(state).toHaveBeenCalled();
   });
 });

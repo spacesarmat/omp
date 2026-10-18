@@ -7,6 +7,7 @@ import android.view.KeyEvent
 import androidx.activity.OnBackPressedCallback
 import com.getcapacitor.BridgeActivity
 import com.getcapacitor.CapConfig
+import com.spacesarmat.omp.audio.AudioSession
 import com.spacesarmat.omp.control.AppForeground
 import com.spacesarmat.omp.monitor.MonitorLinks
 
@@ -110,6 +111,10 @@ class MainActivity : BridgeActivity() {
         OmpNativePlugin.magnetFrom(intent)?.let { OmpNativePlugin.deliverMagnet(it) }
         MonitorLinks.fromIntent(intent.action, intent.getStringExtra(MonitorLinks.EXTRA_URL))?.let {
             OmpNativePlugin.deliverMonitorOpen(it)
+        }
+        if (intent.action == AudioSession.OPEN_ACTION) {
+            val hash = intent.getStringExtra(AudioSession.EXTRA_HASH)
+            if (!hash.isNullOrEmpty()) OmpNativePlugin.deliverAudioOpen(hash)
         }
     }
 

@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -24,6 +25,10 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import com.spacesarmat.omp.I18n
 import com.spacesarmat.omp.LocalTorrServer
 import com.spacesarmat.omp.MainActivity
@@ -64,6 +69,35 @@ class AudioPlayerService : MediaSessionService() {
         }
     }
 
+    private val sessionCallback = object : MediaSession.Callback {
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): MediaSession.ConnectionResult {
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                .add(SessionCommand(AudioSession.CMD_PREV, Bundle.EMPTY))
+                .add(SessionCommand(AudioSession.CMD_NEXT, Bundle.EMPTY))
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .setAvailablePlayerCommands(session.player.availableCommands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            when (customCommand.customAction) {
+                AudioSession.CMD_PREV -> control(AudioCommand("prev"))
+                AudioSession.CMD_NEXT -> control(AudioCommand("next"))
+            }
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+    }
+
     private val events = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             publish()
@@ -97,7 +131,8 @@ class AudioPlayerService : MediaSessionService() {
         player = exo
         val media = MediaSession.Builder(this, exo)
             .setId(AudioSession.ID)
-            .setSessionActivity(openApp())
+            .setCallback(sessionCallback)
+            .setSessionActivity(openApp(""))
             .build()
         session = media
         applyButtons(media)
@@ -133,10 +168,11 @@ class AudioPlayerService : MediaSessionService() {
     fun control(cmd: AudioCommand): JSONObject? {
         val p = player ?: return null
         val q = queue ?: return snapshot(false)
-        lastError = null
+        val recover = AudioSession.resumeNeedsPrepare(lastError != null, p.playbackState)
+        if (cmd.name != "toggle" && cmd.name != "play") lastError = null
         when (cmd.name) {
-            "toggle" -> if (p.isPlaying) p.pause() else p.play()
-            "play" -> p.play()
+            "toggle" -> if (p.isPlaying && !recover) p.pause() else resume(p, recover)
+            "play" -> resume(p, recover)
             "pause" -> p.pause()
             "seek" -> {
                 val dur = p.duration
@@ -176,8 +212,19 @@ class AudioPlayerService : MediaSessionService() {
         exo.setPlaybackSpeed(1f)
         exo.prepare()
         exo.play()
+        session?.setSessionActivity(openApp(q.hash))
+        applyButtons(session)
         holdServer(q)
         publish()
+    }
+
+    /** prepare() again after an error. A normal pause stays put: speed, sleep and position are kept. */
+    private fun resume(p: ExoPlayer, recover: Boolean) {
+        if (recover) {
+            lastError = null
+            p.prepare()
+        }
+        p.play()
     }
 
     private fun replacePlayer(header: String?) {
@@ -213,21 +260,25 @@ class AudioPlayerService : MediaSessionService() {
 
     private fun mediaItems(q: AudioQueue): Pair<String?, List<MediaItem>> {
         var header: String? = null
-        val items = q.items.map { item ->
+        val total = q.items.size
+        val items = q.items.mapIndexed { i, item ->
             val (url, auth) = AudioQueueParser.splitCredentials(item.url)
             if (header == null && auth != null) header = auth
             val clip = MediaItem.ClippingConfiguration.Builder()
                 .setStartPositionMs(item.startMs)
                 .apply { if (item.endMs > item.startMs) setEndPositionMs(item.endMs) }
                 .build()
+            val place = AudioQueueParser.trackPlace(i, total)
             MediaItem.Builder()
                 .setUri(url)
                 .setMediaId(item.fileId.toString() + ":" + item.startMs)
                 .setClippingConfiguration(clip)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
-                        .setTitle(item.title)
-                        .setArtist(q.book)
+                        .setTitle(place)
+                        .setSubtitle(item.title)
+                        .setDisplayTitle(place)
+                        .setArtist(item.title)
                         .setAlbumTitle(q.book)
                         .setMediaType(MediaMetadata.MEDIA_TYPE_AUDIO_BOOK)
                         .build(),
@@ -253,17 +304,32 @@ class AudioPlayerService : MediaSessionService() {
 
     private fun applyButtons(media: MediaSession?) {
         if (media == null) return
+        val prev = SessionCommand(AudioSession.CMD_PREV, Bundle.EMPTY)
+        val next = SessionCommand(AudioSession.CMD_NEXT, Bundle.EMPTY)
         media.setMediaButtonPreferences(
-            AudioSession.notificationCommands.map { command ->
-                val (icon, slot, key) = buttonSpec(command)
-                CommandButton.Builder(icon)
-                    .setPlayerCommand(command)
-                    .setSlots(slot)
-                    .setDisplayName(I18n.s(key))
-                    .build()
-            },
+            listOf(
+                customButton(CommandButton.ICON_PREVIOUS, CommandButton.SLOT_BACK, "audio.notify.prev", prev),
+                playerButton(Player.COMMAND_SEEK_BACK, CommandButton.ICON_SKIP_BACK, CommandButton.SLOT_BACK_SECONDARY, "audio.notify.back"),
+                playerButton(Player.COMMAND_SEEK_FORWARD, CommandButton.ICON_SKIP_FORWARD, CommandButton.SLOT_FORWARD_SECONDARY, "audio.notify.forward"),
+                customButton(CommandButton.ICON_NEXT, CommandButton.SLOT_FORWARD, "audio.notify.next", next),
+                playerButton(Player.COMMAND_STOP, CommandButton.ICON_STOP, CommandButton.SLOT_OVERFLOW, "audio.notify.stop"),
+            ),
         )
     }
+
+    private fun customButton(icon: Int, slot: Int, key: String, command: SessionCommand): CommandButton =
+        CommandButton.Builder(icon)
+            .setSessionCommand(command)
+            .setSlots(slot)
+            .setDisplayName(I18n.s(key))
+            .build()
+
+    private fun playerButton(command: Int, icon: Int, slot: Int, key: String): CommandButton =
+        CommandButton.Builder(icon)
+            .setPlayerCommand(command)
+            .setSlots(slot)
+            .setDisplayName(I18n.s(key))
+            .build()
 
     private fun publish() {
         if (queue == null) return
@@ -276,6 +342,7 @@ class AudioPlayerService : MediaSessionService() {
         val index = p?.currentMediaItemIndex ?: q?.start ?: 0
         val item = q?.items?.getOrNull(index)
         val speed = p?.playbackParameters?.speed ?: 1f
+        val left = if (sleepDeadline > 0L) (sleepDeadline - SystemClock.elapsedRealtime()).coerceAtLeast(0) else 0L
         return AudioQueueParser.stateJson(
             active = active && q != null,
             playing = p?.isPlaying == true,
@@ -288,13 +355,16 @@ class AudioPlayerService : MediaSessionService() {
             book = q?.book.orEmpty(),
             fileId = item?.fileId ?: 0,
             error = lastError,
+            sleepLeftMs = left,
+            count = q?.items?.size ?: 0,
+            hash = q?.hash.orEmpty(),
         )
     }
 
-    private fun openApp(): PendingIntent {
+    private fun openApp(hash: String): PendingIntent {
         val open = Intent(this, MainActivity::class.java)
-            .setAction(Intent.ACTION_MAIN)
-            .addCategory(Intent.CATEGORY_LAUNCHER)
+            .setAction(AudioSession.OPEN_ACTION)
+            .putExtra(AudioSession.EXTRA_HASH, hash)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         return PendingIntent.getActivity(this, 7, open, flags)
@@ -332,12 +402,5 @@ class AudioPlayerService : MediaSessionService() {
             q
         }
 
-        private fun buttonSpec(command: Int): Triple<Int, Int, String> = when (command) {
-            Player.COMMAND_SEEK_BACK -> Triple(CommandButton.ICON_SKIP_BACK, CommandButton.SLOT_BACK, "audio.notify.back")
-            Player.COMMAND_SEEK_FORWARD -> Triple(CommandButton.ICON_SKIP_FORWARD, CommandButton.SLOT_FORWARD, "audio.notify.forward")
-            Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> Triple(CommandButton.ICON_PREVIOUS, CommandButton.SLOT_BACK_SECONDARY, "audio.notify.prev")
-            Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> Triple(CommandButton.ICON_NEXT, CommandButton.SLOT_FORWARD_SECONDARY, "audio.notify.next")
-            else -> Triple(CommandButton.ICON_STOP, CommandButton.SLOT_OVERFLOW, "audio.notify.stop")
-        }
     }
 }

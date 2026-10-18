@@ -25,6 +25,20 @@ private fun OmpNativePlugin.parseAudio(call: PluginCall): AudioQueue? =
         call.getArray("items"),
     )
 
+/** Notification permission before the player screen is shown. Resolves either way; playback still starts. */
+internal fun OmpNativePlugin.audioPrepareOp(call: PluginCall) {
+    I18n.load(context)
+    if (Build.VERSION.SDK_INT >= 33 && getPermissionState("notifications") != PermissionState.GRANTED) {
+        askPermission("notifications", call, "audioPrepareDone")
+        return
+    }
+    call.resolve()
+}
+
+internal fun OmpNativePlugin.audioPrepareDoneOp(call: PluginCall) {
+    call.resolve()
+}
+
 internal fun OmpNativePlugin.audioPlayOp(call: PluginCall) {
     I18n.load(context)
     val queue = parseAudio(call) ?: run {
@@ -73,6 +87,26 @@ internal fun OmpNativePlugin.audioControlOp(call: PluginCall) {
     }
 }
 
+internal fun OmpNativePlugin.takePendingAudioOpenOp(call: PluginCall) {
+    val hash = synchronized(OmpNativePlugin.magnetLock) {
+        val h = OmpNativePlugin.pendingAudioHash
+        OmpNativePlugin.pendingAudioHash = null
+        h
+    }
+    val o = JSObject()
+    if (!hash.isNullOrEmpty()) o.put("hash", hash)
+    call.resolve(o)
+}
+
+internal fun OmpNativePlugin.emitAudioOpen(hash: String) {
+    if (listening("audioOpen")) {
+        synchronized(OmpNativePlugin.magnetLock) {
+            if (OmpNativePlugin.pendingAudioHash == hash) OmpNativePlugin.pendingAudioHash = null
+        }
+        emit("audioOpen", JSObject().put("hash", hash))
+    }
+}
+
 internal fun OmpNativePlugin.audioStateOp(call: PluginCall) {
     audioMain.post {
         val svc = AudioPlayerService.instance
@@ -95,5 +129,7 @@ private fun queuedState(queue: AudioQueue): JSONObject {
         book = queue.book,
         fileId = item.fileId,
         error = null,
+        count = queue.items.size,
+        hash = queue.hash,
     )
 }

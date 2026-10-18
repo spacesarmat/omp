@@ -7,6 +7,7 @@ import { currentRoute, goBack, navigate, switchTab, setPendingLink, type MRoute 
 import { activeServer, client } from '../../src/store/servers';
 import { refreshTorrents } from '../../src/store/library';
 import { native } from './platform/native';
+import { audioLaunch, rememberAudio } from './audiobooks/launch';
 import { NavBar, TAB_IDS, type Tab } from './ui/NavBar';
 import { Toast, showToast } from './ui/toast';
 import { CertChangedSheet } from './ui/CertChangedSheet';
@@ -217,6 +218,30 @@ export function App() {
       /* native layer unavailable */
     }
     return () => off?.();
+  }, []);
+
+  // the audiobook notification opens this player, not whichever screen was left open
+  useEffect(() => {
+    const open = (hash: string) => {
+      if (!/^[0-9a-fA-F]{40}$/.test(hash)) return;
+      const launch = audioLaunch.value;
+      navigate({ name: 'audiobookPlayer', hash, token: launch && launch.hash === hash ? launch.token : 0 });
+    };
+    let offOpen: (() => void) | undefined;
+    let offAudio: (() => void) | undefined;
+    try {
+      native.takePendingAudioOpen().then((h) => {
+        if (h) open(h);
+      }).catch(() => {});
+      offOpen = native.onAudioOpen(open);
+      offAudio = native.onAudio((s) => rememberAudio(s));
+    } catch {
+      /* native layer unavailable */
+    }
+    return () => {
+      offOpen?.();
+      offAudio?.();
+    };
   }, []);
 
   // omp://billing?code=… from the Telegram bot (cold start + while running)

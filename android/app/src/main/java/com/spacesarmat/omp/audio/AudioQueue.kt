@@ -143,6 +143,9 @@ object AudioQueueParser {
         book: String,
         fileId: Int,
         error: String?,
+        sleepLeftMs: Long = 0,
+        count: Int = 0,
+        hash: String = "",
     ): JSONObject {
         val o = JSONObject()
         o.put("active", active)
@@ -152,11 +155,21 @@ object AudioQueueParser {
         o.put("durationMs", durationMs)
         o.put("speed", speed.toDouble())
         o.put("sleep", sleep)
+        o.put("sleepLeftMs", sleepLeftMs.coerceAtLeast(0))
+        o.put("count", count.coerceAtLeast(0))
         o.put("title", title)
         o.put("book", book)
+        o.put("hash", hash)
         o.put("fileId", fileId)
         if (!error.isNullOrEmpty()) o.put("error", error)
         return o
+    }
+
+    /** «Трек 2 из 12» in the page language. */
+    fun trackPlace(index: Int, count: Int): String {
+        val n = (index + 1).coerceAtLeast(1)
+        val total = count.coerceAtLeast(n)
+        return com.spacesarmat.omp.I18n.s("audio.trackOf", "n" to n.toString(), "total" to total.toString())
     }
 
     private fun item(o: JSONObject): AudioItem? {
