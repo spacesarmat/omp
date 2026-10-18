@@ -1696,9 +1696,11 @@ html.m-keypad-open .m-toast-host { bottom: calc(var(--m-keypad-h) + 16px + env(s
 .m-setup-choice:disabled { opacity: 0.6; }
 .m-setup .m-input { width: 100%; }
 .m-setup-langs { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Under sheets (20) and the tour (40): «Закрыть» stays on top even if a mark is still mounted.
+   html.m-hint-hold is set the moment any dialog is in the document, before the mark unmounts. */
 .m-hint {
   position: fixed;
-  z-index: 35;
+  z-index: 12;
   width: min(280px, calc(100vw - 32px));
   padding: 12px 14px;
   border-radius: 16px;
@@ -1706,6 +1708,40 @@ html.m-keypad-open .m-toast-host { bottom: calc(var(--m-keypad-h) + 16px + env(s
   border: 1px solid var(--accent);
   color: var(--text);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+html.m-hint-hold .m-hint { display: none; }
+/* content-box: the global border-box would swallow this padding, and getComputedStyle would read 0 */
+.m-hint-insets {
+  position: fixed;
+  top: 0;
+  left: 0;
+  box-sizing: content-box;
+  width: 0;
+  height: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  border: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.m-hint-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: var(--panel);
+  pointer-events: none;
+}
+.m-hint[data-place="below"] .m-hint-arrow {
+  top: -6px;
+  border-top: 1px solid var(--accent);
+  border-left: 1px solid var(--accent);
+  transform: rotate(45deg);
+}
+.m-hint[data-place="above"] .m-hint-arrow {
+  bottom: -6px;
+  border-right: 1px solid var(--accent);
+  border-bottom: 1px solid var(--accent);
+  transform: rotate(45deg);
 }
 .m-hint p { margin: 0 0 10px; font-size: 14px; line-height: 1.4; overflow-wrap: break-word; }
 .m-hint button {
