@@ -121,13 +121,36 @@ describe('YooMoney', () => {
 
 describe('Jackett proxy', () => {
   it('strips the key and the origin, then restores the download', () => {
-    const xml = '<enclosure url="http://127.0.0.1:9117/dl/a?apikey=SECRET" /> SECRET';
+    const xml = '<enclosure url="http://127.0.0.1:9117/dl/a?jackett_apikey=SECRET" /> SECRET';
     const clean = stripJackett(xml, 'http://127.0.0.1:9117', 'SECRET');
     expect(clean).not.toContain('SECRET');
+    expect(clean).not.toContain('jackett_apikey');
     expect(clean).not.toContain('127.0.0.1:9117');
     expect(clean).toContain('omp-fetch:/dl/a?');
     const back = restoreJackett('omp-fetch:/dl/a', 'http://127.0.0.1:9117', 'SECRET');
-    expect(back).toBe('http://127.0.0.1:9117/dl/a?apikey=SECRET');
+    expect(back).toBe('http://127.0.0.1:9117/dl/a?jackett_apikey=SECRET');
+    expect(back).not.toMatch(/(?:^|[?&])apikey=/);
+  });
+
+  it('restores jackett_apikey on a Jackett /dl/ link and apikey on JacRed', () => {
+    const xml =
+      '<enclosure url="http://127.0.0.1:9117/dl/megapeer/?jackett_apikey=SECRET&path=ENC&file=Name.torrent" />';
+    const clean = stripJackett(xml, 'http://127.0.0.1:9117', 'SECRET');
+    expect(clean).not.toContain('SECRET');
+    expect(clean).not.toContain('jackett_apikey');
+    const marked = /omp-fetch:[^"<\s]+/.exec(clean);
+    expect(marked).toBeTruthy();
+    const back = restoreJackett(marked![0], 'http://127.0.0.1:9117', 'SECRET');
+    expect(back).toBe('http://127.0.0.1:9117/dl/megapeer/?path=ENC&file=Name.torrent&jackett_apikey=SECRET');
+    expect(back).not.toMatch(/(?:^|[?&])apikey=/);
+    // The phone stores the link after dropping the key parameter, then sends that back.
+    const fromPhone = restoreJackett(
+      'omp-fetch:/dl/megapeer/?path=ENC&file=Name.torrent',
+      'http://127.0.0.1:9117',
+      'SECRET',
+    );
+    expect(fromPhone).toBe('http://127.0.0.1:9117/dl/megapeer/?path=ENC&file=Name.torrent&jackett_apikey=SECRET');
+    expect(fromPhone).not.toMatch(/(?:^|[?&])apikey=/);
   });
 
   it('keeps a JacRed download on the JacRed origin', () => {
@@ -168,7 +191,8 @@ describe('Jackett proxy', () => {
     expect(clean).toContain('omp-fetch:/dl/a?');
     expect(clean).not.toContain('/jackett');
     const back = restoreJackett('omp-fetch:/dl/a', 'https://host/jackett', 'SECRET');
-    expect(back).toBe('https://host/jackett/dl/a?apikey=SECRET');
+    expect(back).toBe('https://host/jackett/dl/a?jackett_apikey=SECRET');
+    expect(back).not.toMatch(/(?:^|[?&])apikey=/);
     const api = restoreJackett(
       'omp-fetch:/api/v2.0/indexers/rutor/results/torznab/download?id=1',
       'https://host/jackett',

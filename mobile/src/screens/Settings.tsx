@@ -328,6 +328,22 @@ export function Settings() {
           <span>{t('settings.whereSearch')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
+        <div class="m-set-row" data-row="live-seeds">
+          <div class="m-set-text">
+            <span>{t('settings.liveSeeds')}</span>
+            <span class="m-muted m-small">{t('settings.liveSeedsHint')}</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.value.liveSeeds}
+            aria-label={t('settings.liveSeeds')}
+            class={'m-switch' + (settings.value.liveSeeds ? ' on' : '')}
+            onClick={() => updateSettings({ liveSeeds: !settings.value.liveSeeds })}
+          >
+            <span class="m-switch-knob" />
+          </button>
+        </div>
         <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'monitor' })}>
           <span>{t('settings.followNew')}</span>
           <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>

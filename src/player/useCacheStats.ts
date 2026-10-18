@@ -2,25 +2,38 @@ import { useEffect, useState } from 'preact/hooks';
 import type { TorrServerClient } from '../api/torrserver';
 import type { CacheState } from '../api/types';
 
+/** idle: not asking. pending: no answer yet. ok: a body. down: the request failed (TorrServer unreachable). */
+export type CacheRead =
+  | { status: 'idle' }
+  | { status: 'pending' }
+  | { status: 'ok'; cache: CacheState }
+  | { status: 'down' };
+
 /**
- * TorrServer /cache of the torrent playing while [active] (once a second, «Инфо»): null while unknown, after a failed
- * request (never frozen numbers), for another torrent and once inactive (a reopened panel never shows old numbers).
+ * TorrServer /cache of the torrent playing while [active] (once a second). A failed request is `down`, never frozen
+ * numbers; another torrent and closing the panel (`active` false) drop the previous answer.
  */
-export function useCacheStats(c: TorrServerClient | null, hash: string | undefined, active: boolean): CacheState | null {
-  const [cache, setCache] = useState<CacheState | null>(null);
+export function useCacheStats(c: TorrServerClient | null, hash: string | undefined, active: boolean): CacheRead {
+  const [read, setRead] = useState<CacheRead>({ status: 'idle' });
   useEffect(() => {
-    setCache(null);
-    if (!active || !c || !hash) return;
+    if (!active || !c || !hash) {
+      setRead({ status: 'idle' });
+      return undefined;
+    }
+    setRead({ status: 'pending' });
     let alive = true;
-    const tick = () => c.cache(hash).then((r) => { if (alive) setCache(r || null); }, () => { if (alive) setCache(null); });
+    const tick = () => c.cache(hash).then(
+      (r) => { if (alive) setRead(r ? { status: 'ok', cache: r } : { status: 'down' }); },
+      () => { if (alive) setRead({ status: 'down' }); },
+    );
     tick();
-    const t = setInterval(tick, CACHE_REFRESH_MS);
+    const timer = setInterval(tick, CACHE_REFRESH_MS);
     return () => {
       alive = false;
-      clearInterval(t);
+      clearInterval(timer);
     };
   }, [active, hash]);
-  return cache;
+  return read;
 }
 
 export const CACHE_REFRESH_MS = 1000;

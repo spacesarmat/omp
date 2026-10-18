@@ -7,6 +7,13 @@ import { videoSummary, type InfoPanel } from './infoPanel';
 import { tvGlyphs } from '../ui/tvText';
 import { Spinner, ErrorView } from '../ui/components';
 
+/** Peers and speed while the first bytes are still on the way; the short «Буферизация…» line once playback has started. */
+export function bufferStatusText(waiting: boolean, tor: { download_speed?: number; active_peers?: number } | null): string {
+  if (waiting) return tr('player.connecting', { n: tor ? tor.active_peers || 0 : 0, speed: formatSpeed(tor ? tor.download_speed || 0 : 0) });
+  if (!tor) return tr('player.buffering');
+  return tr('player.buffering') + ' ' + formatSpeed(tor.download_speed || 0) + tr('player.bufferPeers', { n: tor.active_peers || 0 });
+}
+
 /**
  * «Инфо» (Yellow / Info), the panel of the Android TV player: header (episode; HDR mark · codec · size), three tiles,
  * the sound, the buffer bar. Every text is one line (cut with an ellipsis).
@@ -49,12 +56,11 @@ export function InfoOverlay(p: { panel: InfoPanel }) {
   );
 }
 
-export function BufferingOverlay(p: { cache: CacheState | null }) {
-  const t = p.cache && p.cache.Torrent;
-  const text = tr('player.buffering') + (t ? ' ' + formatSpeed(t.download_speed || 0) + tr('player.bufferPeers', { n: t.active_peers || 0 }) : '');
+export function BufferingOverlay(p: { cache: CacheState | null; waiting?: boolean }) {
+  const tor = p.cache && p.cache.Torrent ? p.cache.Torrent : null;
   return (
     <div class="player-buffer">
-      <Spinner text={text} />
+      <Spinner text={bufferStatusText(!!p.waiting, tor)} />
     </div>
   );
 }
@@ -101,16 +107,28 @@ export function UndoBanner(p: { text: string; onUndo: () => void; lift?: boolean
   );
 }
 
-export function PlayerError(p: { message: string; probe: FfprobeResult | null; onRetry: () => void; onBack: () => void }) {
-  const details = videoSummary(p.probe);
+export function PlayerError(p: {
+  message: string;
+  probe: FfprobeResult | null;
+  /** Codec failures only: the container line under the message. */
+  showProbe?: boolean;
+  onRetry: () => void;
+  onBack: () => void;
+  /** «Другая раздача». When set, it is the primary button and takes D-pad focus. */
+  onAnother?: () => void;
+}) {
+  const details = p.showProbe ? videoSummary(p.probe) : '';
+  const another = !!p.onAnother;
+  const actions = [];
+  if (p.onAnother) actions.push({ label: t('player.anotherRelease'), onPress: p.onAnother, focusKey: 'player-err-another', className: 'primary' });
+  actions.push({ label: t('common.retry'), onPress: p.onRetry, focusKey: 'player-err-retry', className: another ? '' : 'primary' });
+  actions.push({ label: t('player.back'), onPress: p.onBack, focusKey: 'player-err-back' });
   return (
     <div class="player-error" onClick={(e) => e.stopPropagation()}>
       <ErrorView
         message={p.message + (details ? '\n\n' + details : '')}
-        actions={[
-          { label: t('common.retry'), onPress: p.onRetry },
-          { label: t('player.back'), onPress: p.onBack },
-        ]}
+        actions={actions}
+        preferredChildFocusKey={another ? 'player-err-another' : 'player-err-retry'}
       />
     </div>
   );

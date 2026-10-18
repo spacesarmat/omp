@@ -51,7 +51,12 @@ export function stripJackett(xml, origin, apiKey, mark) {
   return out.replace(/([?&])(apikey|api_key|jackett_apikey)=[^&"'<\s]*/gi, '$1');
 }
 
-/** `omp-fetch:/api/...` or `omp-jacred:/api/...` back into an indexer URL with the key attached. */
+/**
+ * `omp-fetch:/dl/...` or `omp-jacred:/dl/...` back into an indexer URL with the key attached.
+ * The phone no longer has the original query name: `stripJackett` removed it.
+ * Jackett's `/dl/` route accepts only `jackett_apikey` (an `apikey` there is a 401).
+ * JacRed `/dl/` and the Torznab download route use `apikey`.
+ */
 export function restoreJackett(link, origin, apiKey, mark) {
   const base = String(origin || '').replace(/\/+$/, '');
   const raw = String(link || '');
@@ -82,8 +87,31 @@ export function restoreJackett(link, origin, apiKey, mark) {
   // jackettUrl may be https://host/jackett, so compare the path under that base, not the site root.
   const relative = pathWithinBase(target.pathname, originUrl.pathname);
   if (!relative || !isDownloadPath(relative)) return '';
-  const key = encodeURIComponent(apiKey || '');
-  return target.href + (target.search ? '&' : '?') + 'apikey=' + key;
+  return withDownloadKey(target.href, downloadKeyName(relative, prefix), apiKey);
+}
+
+/** Query name this download route expects. Jackett `/dl/` is the one that is not `apikey`. */
+function downloadKeyName(pathname, mark) {
+  const prefix = mark || JACKETT_MARK;
+  const path = String(pathname || '').replace(/\/+$/, '') || '/';
+  if (prefix !== JACRED_MARK && (path === '/dl' || path.indexOf('/dl/') === 0)) return 'jackett_apikey';
+  return 'apikey';
+}
+
+/** `href` with one download key. Drops a stripped key (`?&`, an empty part) and any key the caller already sent. */
+function withDownloadKey(href, name, apiKey) {
+  let out = String(href || '');
+  const q = out.indexOf('?');
+  if (q >= 0) {
+    const base = out.slice(0, q);
+    const parts = out
+      .slice(q + 1)
+      .split('&')
+      .filter((part) => part && !/^(?:apikey|api_key|jackett_apikey)=/i.test(part));
+    out = base + (parts.length ? '?' + parts.join('&') : '');
+  }
+  const encoded = encodeURIComponent(name) + '=' + encodeURIComponent(apiKey || '');
+  return out + (out.indexOf('?') >= 0 ? '&' : '?') + encoded;
 }
 
 /** `targetPath` with the configured base directory removed, or '' if it leaves that directory. */

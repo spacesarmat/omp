@@ -38,6 +38,7 @@ import { relevantRows } from '../sources/relevance';
 import { resolveTvResult, startTvSearch, type TvResult } from '../phone/phoneSearch';
 import type { RpcFailure } from '../phone/rpcTypes';
 import { tvGlyphs } from '../ui/tvText';
+import { useSeedRow, TvSearchSize } from '../ui/LiveSeeds';
 
 /** Rows whose posters are asked for at once; the rest only near the cursor. */
 const POSTER_FIRST = 12;
@@ -131,7 +132,11 @@ function DetailsDialog({ r, onAdd, onClose }: { r: TvResult; onAdd: () => void; 
     setFocus('search-details-add');
   }, []);
   const names = [r.source].concat(r.sources || []).filter(Boolean).map(sourceName).join(', ');
-  const meta = [resultSizeText(r), t('add.seeds', { n: r.Seed || 0 }), t('add.peers', { n: r.Peer || 0 }), resultDate(r), names].filter(Boolean).join(' · ');
+  const live = useSeedRow(r);
+  const seedN = live.view.mode === 'live' ? live.view.seeders : r.Seed || 0;
+  const peerN = live.view.mode === 'live' ? live.view.leechers : r.Peer || 0;
+  const seedLabel = (live.view.mode === 'approx' ? '~' : '') + t('add.seeds', { n: seedN });
+  const meta = [resultSizeText(r), seedLabel, t('add.peers', { n: peerN }), resultDate(r), names].filter(Boolean).join(' · ');
   return (
     <div
       class="dialog-backdrop search-details-backdrop"
@@ -556,7 +561,7 @@ export function AddScreen() {
                   {rowErr[key] && <div class="search-row-error" role="alert">{rowErr[key]}</div>}
                 </div>
                 <div class="search-side">
-                  <div class="search-size">{[resultSizeText(r), '↑' + (r.Seed || 0)].filter(Boolean).join(' · ')}</div>
+                  <TvSearchSize r={r} size={resultSizeText(r)} />
                   <div class="search-src">
                     <span class="src-badge">{tvGlyphs(sourceBadge(r))}</span>
                     {also && <span class="search-also">{also}</span>}

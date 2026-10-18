@@ -123,6 +123,8 @@ export interface NativeClosed {
   index: number;
   time: number;
   duration: number;
+  /** The viewer chose «Другая раздача»: the page opens that flow instead of simply going back. */
+  another?: boolean;
 }
 
 /** "Series name · S02E03" for the overlay, a film's name: the clean names, never the file name or the tracker title. */
@@ -165,7 +167,9 @@ export function sanitizeNativeClosed(v: unknown): NativeClosed | null {
   if (!isObj(v)) return null;
   const i = idx(v.index);
   if (i === null) return null;
-  return { index: i, time: Math.max(0, num(v.time)), duration: Math.max(0, num(v.duration)) };
+  const closed: NativeClosed = { index: i, time: Math.max(0, num(v.time)), duration: Math.max(0, num(v.duration)) };
+  if (v.another === true) closed.another = true;
+  return closed;
 }
 
 export function sanitizeNativeState(v: unknown): NativeState | null {
