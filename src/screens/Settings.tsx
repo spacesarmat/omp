@@ -11,7 +11,7 @@ import { askText } from '../ui/TextDialog';
 import type { TmdbConfig } from '../api/types';
 import { FocusGroup, ChoiceRow, onOff, Button, Focusable } from '../ui/components';
 import { playerEngineOptions, vlcUnavailable, vlcAvailable } from '../player/nativeEngine';
-import { nativePlugin } from '../platform/androidNative';
+import { nativeOpenOnStartupState, nativePlugin, nativeRequestOpenOnStartupOverlay, nativeSetOpenOnStartup } from '../platform/androidNative';
 import { p2160Package, P2160_RELEASES_URL } from '../player/player2160';
 import { Qr } from '../ui/Qr';
 import { tvGlyphs } from '../ui/tvText';
@@ -147,6 +147,65 @@ function LogBrief() {
   );
 }
 
+/** Android TV only: «Открывать при включении». webOS and the phone UI never render this. */
+function OpenOnStartupSection() {
+  const on = settings.value.openOnStartup;
+  const [blocked, setBlocked] = useState(false);
+  const applyBlocked = (s: { launchBlocked?: boolean; canDrawOverlays?: boolean } | null) => {
+    setBlocked(!!s && s.launchBlocked === true && s.canDrawOverlays !== true);
+  };
+  useEffect(() => {
+    let live = true;
+    const refresh = () => {
+      nativeOpenOnStartupState().then((s) => { if (live) applyBlocked(s); }, () => undefined);
+    };
+    refresh();
+    const onVis = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', refresh);
+    return () => {
+      live = false;
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
+  const change = (v: boolean) => {
+    updateSettings({ openOnStartup: v });
+    nativeSetOpenOnStartup(v).then((s) => {
+      applyBlocked(s);
+      if (!v || !s || s.needsOverlay !== true) return;
+      confirmDialog(t('tvSettings.openOnStartupOverlayAsk'), t('tvSettings.openOnStartupAllow')).then((ok) => {
+        if (!ok) return;
+        nativeRequestOpenOnStartupOverlay().then((opened) => {
+          if (opened === false) toast(t('tvSettings.openOnStartupNoScreen'), 'error');
+        }, () => undefined);
+      });
+    }, () => undefined);
+  };
+  return (
+    <div>
+      <ChoiceRow
+        focusKey="set-open-on-startup"
+        label={t('tvSettings.openOnStartup')}
+        value={on}
+        options={onOff()}
+        onChange={change}
+      />
+      <div class="muted engine-note">{t('tvSettings.openOnStartupHint')}</div>
+      {on && blocked && (
+        <div class="row" style={{ marginTop: '16px' }}>
+          <div class="grow muted">{t('tvSettings.openOnStartupBlocked')}</div>
+          <Button focusKey="set-open-on-startup-allow" label={t('tvSettings.openOnStartupAllow')} onPress={() => {
+            nativeRequestOpenOnStartupOverlay().then((opened) => {
+              if (opened === false) toast(t('tvSettings.openOnStartupNoScreen'), 'error');
+            }, () => undefined);
+          }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** A name a person chose. Empty when the server is still named after its address. */
 function chosenServerName(s: { name: string; url: string }): string {
   const host = serverHost(s.url);
@@ -223,6 +282,7 @@ export function SettingsScreen() {
       <div class="muted">{t('settings.liveSeedsHint')}</div>
 
       <h2>{t('settings.app')}</h2>
+      {platformKind() === 'androidtv' && <OpenOnStartupSection />}
       <div class="row">
         <div class="grow">
           {t('tvSettings.aboutLine', { version: APP_VERSION })}
