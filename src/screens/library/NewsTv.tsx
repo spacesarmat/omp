@@ -40,6 +40,7 @@ import { replaceWithLink } from '../../monitor/replaceTv';
 import { failureOf } from '../../monitor/upgradeText';
 import { isHotChip, releaseChips, releaseTitle } from '../../sources/releaseRow';
 import { resultSizeText } from '../../sources/resultSize';
+import { TvSearchSize } from '../../ui/LiveSeeds';
 import { sourceBadge } from '../../sources/view';
 
 export type NewsSeg = 'feed' | 'subs';
@@ -430,7 +431,7 @@ export function NewsTv(p: NewsTvProps) {
                 {rowErr[key] && <div class="search-row-error" role="alert">{rowErr[key]}</div>}
               </div>
               <div class="search-side">
-                <div class="search-size">{[resultSizeText(x.r), '↑' + (x.r.Seed || 0)].filter(Boolean).join(' · ')}</div>
+                <TvSearchSize r={x.r} size={resultSizeText(x.r)} />
                 <div class="search-src">
                   <span class="src-badge">{tvGlyphs(sourceBadge(x.r))}</span>
                 </div>

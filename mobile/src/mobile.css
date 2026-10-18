@@ -1256,6 +1256,8 @@ button, .m-btn {
 .m-rc-meta { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; font-size: 12px; line-height: 16px; }
 .m-rc-meta .m-src-badge, .m-rc-meta .m-flag { flex-shrink: 0; padding: 0 6px; border-radius: 5px; }
 .m-rc-meta-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.seed-approx { opacity: 0.72; }
+.seed-live { display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%; background: var(--ok, #3fb950); vertical-align: middle; }
 .m-rc-bottom { display: flex; align-items: center; gap: 8px; margin-top: auto; }
 .m-rc-date { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-rc-btn { position: relative; z-index: 1; pointer-events: auto; width: 40px; height: 40px; min-width: 40px; min-height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 50%; background: var(--panel-2); color: var(--text); }

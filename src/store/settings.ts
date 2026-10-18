@@ -58,6 +58,11 @@ export interface AppSettings {
   setupDone: boolean;
   /** Coach-mark ids the person has dismissed. An unknown id is kept so a later feature can add its own. */
   seenHints: { [id: string]: true };
+  /**
+   * «Актуальные сиды»: scrape trackers from this device for the seeders and leechers of search rows on screen.
+   * Off: the numbers that came with the search stay as they are.
+   */
+  liveSeeds: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -86,6 +91,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   onboardingVersion: 0,
   setupDone: false,
   seenHints: {},
+  liveSeeds: true,
 };
 
 const KEY = 'tsp.settings';

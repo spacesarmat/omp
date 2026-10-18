@@ -71,6 +71,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .search-row-error { margin-top: 6px; font-size: 21px; color: #ffb4b6; }
 .search-side { flex: none; width: 420px; text-align: right; font-size: 22px; color: var(--muted); }
 .search-size { font-size: 24px; color: var(--text); }
+.seed-approx { color: var(--muted); }
+.seed-fresh { color: var(--text); }
+.seed-live { display: inline-block; width: 10px; height: 10px; margin-left: 10px; border-radius: 50%; background: var(--ok); vertical-align: middle; }
 .search-src { margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .search-src .src-badge { margin-right: 0; }
 .search-also { margin-left: 10px; }
