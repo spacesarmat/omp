@@ -18,8 +18,16 @@ class AudioPlayerTest {
         assertEquals("omp-audiobook", AudioSession.ID)
         assertEquals("omp-audiobook", AudioSession.CHANNEL_ID)
         assertEquals(8091, AudioSession.NOTIFICATION_ID)
+        // media3's DefaultMediaNotificationProvider id, which player-core's PlaybackService does not override
+        assertFalse(AudioSession.NOTIFICATION_ID == 1001)
         assertFalse(AudioSession.SERVICE == AudioSession.PLAYER_CORE_SERVICE)
         assertEquals(30_000L, AudioSession.SEEK_MS)
+        val playback = playerCorePlaybackService()
+        assertTrue(playback.contains(".setId(\"p2160-"))
+        assertFalse(playback.contains(AudioSession.ID))
+        assertFalse(playback.contains(AudioSession.NOTIFICATION_ID.toString()))
+        assertFalse(playback.contains("setChannelId"))
+        assertFalse(playback.contains("setNotificationId"))
     }
 
     @Test
@@ -143,6 +151,15 @@ class AudioPlayerTest {
             .put("fileId", fileId)
             .put("startMs", startMs)
             .put("endMs", endMs)
+
+    /** player-core's PlaybackService source: its session id must stay off the audiobook session. */
+    private fun playerCorePlaybackService(): String {
+        val file = listOf(
+            File("../vendor/2160player/player-core/src/main/java/tv/p2160/core/engine/PlaybackService.kt"),
+            File("android/vendor/2160player/player-core/src/main/java/tv/p2160/core/engine/PlaybackService.kt"),
+        ).firstOrNull { it.isFile } ?: error("PlaybackService.kt not found from ${File(".").absolutePath}")
+        return file.readText()
+    }
 
     private fun manifest(): String {
         val file = listOf(File("src/main/AndroidManifest.xml"), File("android/app/src/main/AndroidManifest.xml"))
