@@ -619,9 +619,34 @@ button, .m-btn {
   overflow-y: auto;
 }
 .m-sheet > * { flex-shrink: 0; }
-/* the long part of a sheet (release notes, «Что нового») scrolls on its own; title and buttons stay */
+/* the long part of a sheet (release notes, «Что нового») scrolls on its own; title and buttons stay.
+   contain: a pull at the top does not scroll the page under the sheet. */
+.m-sheet,
+.m-sheet > .m-sheet-scroll { overscroll-behavior: contain; }
 .m-sheet > .m-sheet-scroll { flex: 0 1 auto; min-height: 60px; overflow-y: auto; }
-.m-sheet-grip { align-self: center; width: 40px; height: 4px; border-radius: 2px; background: #3A3F4B; }
+/* The bar stays 40×4; ::before is the tap target. A downward pull on it drags the sheet. */
+.m-sheet-grip {
+  align-self: center;
+  position: relative;
+  width: 40px;
+  height: 4px;
+  min-width: 40px;
+  min-height: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: #3A3F4B;
+  touch-action: none;
+}
+.m-sheet-grip::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
 .m-sheet-title { font-size: 20px; font-weight: 700; }
 .m-opt { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: none; border-radius: 14px; background: var(--panel-2); text-align: left; }
 .m-opt.primary { background: var(--accent); color: var(--bg); }
