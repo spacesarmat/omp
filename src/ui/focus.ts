@@ -9,10 +9,24 @@ export const SCROLL_BLOCK_MARGIN = 36;
 /** A focused row stays out of the bottom 5% band (120px at 1080p), hints included. */
 export const FOCUS_BOTTOM_CLEAR = 120;
 
-/** How far above the scrollport's bottom a focused element must end. */
-export function focusBottomMargin(hasHints: boolean, keypad: boolean): number {
-  const hints = hasHints ? HINTS_HEIGHT : 0;
-  return Math.max(SCROLL_BLOCK_MARGIN, FOCUS_BOTTOM_CLEAR - hints) + (keypad ? 72 : 0);
+/**
+ * How far above the footer (or the screen edge, when there is no footer) a focused row must end.
+ * The hint band is subtracted separately by the scroller, so this stays 120px even when a footer is open.
+ */
+export function focusBottomMargin(_hasHints: boolean, keypad: boolean): number {
+  return FOCUS_BOTTOM_CLEAR + (keypad ? 72 : 0);
+}
+
+/** scrollIntoView also moves scrollLeft. The page never scrolls sideways; only the tab strip does. */
+export function clearPageScroll(from: Element | null): void {
+  const root = typeof document !== 'undefined' ? document.documentElement : null;
+  if (root && root.scrollLeft) root.scrollLeft = 0;
+  if (typeof document !== 'undefined' && document.body && document.body.scrollLeft) document.body.scrollLeft = 0;
+  let node: HTMLElement | null = from ? from.parentElement : null;
+  while (node) {
+    if (!(node.classList && node.classList.contains('topbar-tabs')) && node.scrollLeft) node.scrollLeft = 0;
+    node = node.parentElement;
+  }
 }
 
 export function scrollIntoViewSafe(el: Element | null): void {
@@ -20,6 +34,7 @@ export function scrollIntoViewSafe(el: Element | null): void {
   const anyEl = el as any;
   if (typeof anyEl.scrollIntoViewIfNeeded === 'function') anyEl.scrollIntoViewIfNeeded(false);
   else el.scrollIntoView(false);
+  clearPageScroll(el);
   let box: HTMLElement | null = el.parentElement;
   while (box && !(box.classList && box.classList.contains('screen'))) box = box.parentElement;
   if (!box) return;
@@ -31,6 +46,7 @@ export function scrollIntoViewSafe(el: Element | null): void {
   if (over > 0) box.scrollTop += over;
   const topOver = box.getBoundingClientRect().top + margin - el.getBoundingClientRect().top;
   if (topOver > 0) box.scrollTop -= topOver;
+  if (box.scrollLeft) box.scrollLeft = 0;
 }
 
 /**
@@ -89,7 +105,13 @@ export function barArrow(keys: string[], key: string, hasBelow: () => boolean, o
       return false;
     }
     if (dir === 'up') return false;
-    if (dir === 'down') return hasBelow();
+    if (dir === 'down') {
+      if (!hasBelow()) {
+        setFocus(key);
+        return false;
+      }
+      return true;
+    }
     return true;
   };
 }
@@ -104,11 +126,27 @@ export function rowArrow(rows: string[][], key: string): (dir: string) => boolea
   };
 }
 
-/** After an overlay unmounts, focus `preferred`, else whatever still has focus, else the screen's first focusable. */
+function enabledScreenKey(k: string | null | undefined): boolean {
+  if (!k || !doesFocusableExist(k)) return false;
+  const els = screenFocusables();
+  for (let i = 0; i < els.length; i++) {
+    if (els[i].getAttribute('data-fk') === k && !els[i].classList.contains('disabled')) return true;
+  }
+  return false;
+}
+
+let focusAfterLate: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * After an overlay unmounts, focus `preferred`, else the first focusable on the screen.
+ * Norigin restores the removed dialog's parent about 300ms later and that can leave nothing focused,
+ * so a second pass puts the home screen back in focus if the first one was stolen.
+ */
 export function focusAfterClose(preferred?: string): void {
   const route = currentRoute.value;
   const want = preferred;
-  setTimeout(() => {
+  if (focusAfterLate) clearTimeout(focusAfterLate);
+  const place = (prefer: boolean) => {
     if (currentRoute.value !== route) return;
     if (document.querySelector('.onboarding-host, .dialog-backdrop, .better-backdrop, .marks-backdrop')) return;
     const go = (k: string | null | undefined): boolean => {
@@ -116,19 +154,27 @@ export function focusAfterClose(preferred?: string): void {
       setFocus(k);
       return true;
     };
-    if (go(want)) return;
+    if (prefer && go(want)) return;
     let cur = '';
     try {
       cur = getCurrentFocusKey() || '';
     } catch (e) {
       cur = '';
     }
-    if (go(cur)) return;
+    if (enabledScreenKey(cur)) return;
+    if (go(want)) return;
     const els = screenFocusables();
     for (let i = 0; i < els.length; i++) {
-      if (go(els[i].getAttribute('data-fk'))) return;
+      const el = els[i];
+      if (el.classList.contains('disabled')) continue;
+      if (go(el.getAttribute('data-fk'))) return;
     }
-  }, 0);
+  };
+  setTimeout(() => place(true), 0);
+  focusAfterLate = setTimeout(() => {
+    focusAfterLate = null;
+    place(false);
+  }, 500);
 }
 
 /** The screen that scrolls around an element (`.screen`), or null. */

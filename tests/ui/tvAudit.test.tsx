@@ -6,7 +6,7 @@ import { act } from 'preact/test-utils';
 import { init, setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { DialogHost, confirmDialog } from '../../src/ui/dialog';
 import { Focusable } from '../../src/ui/components';
-import { nextRowKey, focusAfterClose, focusBottomMargin, FOCUS_BOTTOM_CLEAR } from '../../src/ui/focus';
+import { nextRowKey, focusAfterClose, focusBottomMargin, scrollIntoViewSafe, FOCUS_BOTTOM_CLEAR } from '../../src/ui/focus';
 import { dispatchKey } from '../../src/ui/keys';
 import { OnboardingScreen } from '../../src/ui/OnboardingScreen';
 import { LibraryScreen } from '../../src/screens/Library';
@@ -166,13 +166,27 @@ describe('library search covers every category', () => {
     expect(host.querySelector('.empty')!.textContent).toBe('В этой категории пока ничего нет');
     expect(host.querySelector('.search-count')!.textContent).not.toContain('вся библиотека');
   });
+
+  it('Down from the top bar stays there when the category has nothing to focus', async () => {
+    librarySearchOpen.value = false;
+    libraryQuery.value = '';
+    await flush();
+    expect(host.querySelector('[data-fk^="torrent-"]')).toBeNull();
+    await act(() => { setFocus('lib-btn-settings'); });
+    await act(async () => { for (let i = 0; i < 4; i++) await Promise.resolve(); });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+    });
+    expect(getCurrentFocusKey()).toBe('lib-btn-settings');
+  });
 });
 
 describe('play label and skip panel', () => {
   let host: HTMLElement;
   const book: Torrent = {
     hash: 'book1',
-    title: 'Тихий голос / Quiet Voice',
+    title: 'Тихий голос / Quiet Voice (2024)',
     category: 'audiobook',
     stat: 3,
     file_stats: [{ id: 1, path: 'voice.mp3', length: 1e6 }],
@@ -203,6 +217,7 @@ describe('play label and skip panel', () => {
     expect(play).not.toBeNull();
     expect((play!.textContent || '').trim()).toBe('Слушать');
     expect(host.querySelector('.skip-block')).toBeNull();
+    expect(host.querySelector('.torrent-head .badge')).toBeNull();
     expect(host.querySelector('.hints')!.textContent).toContain('OK — слушать');
   });
 });
@@ -244,9 +259,30 @@ describe('focused row clearance', () => {
   it('keeps a focused row out of the bottom 120px, and keeps the hint band on top of that', () => {
     expect(FOCUS_BOTTOM_CLEAR).toBe(120);
     expect(focusBottomMargin(false, false)).toBe(120);
-    expect(focusBottomMargin(true, false)).toBe(36);
+    expect(focusBottomMargin(true, false)).toBe(120);
     expect(focusBottomMargin(false, true)).toBe(192);
-    expect(focusBottomMargin(true, true)).toBe(108);
+    expect(focusBottomMargin(true, true)).toBe(192);
+  });
+
+  it('scrolls a focused row vertically and leaves the page at scrollLeft 0', () => {
+    const screen = document.createElement('div');
+    screen.className = 'screen';
+    const tabs = document.createElement('div');
+    tabs.className = 'topbar-tabs';
+    const row = document.createElement('div');
+    screen.appendChild(tabs);
+    screen.appendChild(row);
+    document.body.appendChild(screen);
+    row.scrollIntoView = () => {
+      screen.scrollLeft = 80;
+      tabs.scrollLeft = 40;
+      document.documentElement.scrollLeft = 24;
+    };
+    scrollIntoViewSafe(row);
+    expect(screen.scrollLeft).toBe(0);
+    expect(document.documentElement.scrollLeft).toBe(0);
+    expect(tabs.scrollLeft).toBe(40);
+    screen.remove();
   });
 });
 
@@ -267,6 +303,10 @@ describe('TV audit stylesheet', () => {
     expect(css).toContain('.link-toggle { font-size: 24px;');
     expect(css).toContain('.faq-chips-hint { font-size: 24px;');
     expect(css).toContain('.history-count { font-size: 20px;');
+    expect(css).toContain('.engine-option.focused { background: var(--panel2); transform: none; box-shadow: 0 0 0 4px var(--focus); }');
+    expect(css).not.toMatch(/[^-\w]gap\s*:/);
+    expect(css).not.toContain(':has(');
+    expect(css).not.toContain('aspect-ratio');
     expect(css).toContain('.tile-small .tile-title { font-size: 28px;');
     expect(css).toContain('.connect-body { width: 980px;');
     expect(css).toContain('.faq-body-scroll { height: 100%; overflow-y: auto;');

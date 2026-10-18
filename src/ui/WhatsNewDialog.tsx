@@ -46,7 +46,7 @@ export function WhatsNewDialog() {
   if (!w) return null;
   return (
     <div class="dialog-backdrop">
-      <FocusGroup key={w.title} focusKey="WHATSNEW" className="dialog whatsnew-dialog" boundary autoFocus preferredChildFocusKey="whatsnew-ok">
+      <FocusGroup key={w.title} focusKey="WHATSNEW" className="dialog whatsnew-dialog" boundary autoFocus autoRestoreFocus={false} preferredChildFocusKey="whatsnew-ok">
         <div class="dialog-title">{w.title}</div>
         <div class="whatsnew-list">
           {w.entries.map((e, i) => (

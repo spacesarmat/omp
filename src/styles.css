@@ -91,7 +91,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 /* «Плеер» (Android TV): Авто / Встроенный / VLC */
 .engine-intro { font-size: 24px; margin-bottom: 14px; }
 .engine-option { display: flex; align-items: center; padding: 20px 24px; background: var(--panel); border-radius: 14px; margin-bottom: 10px; }
-.engine-option.focused { background: var(--panel2); transform: none; box-shadow: inset 0 0 0 3px var(--accent); }
+.engine-option.focused { background: var(--panel2); transform: none; box-shadow: 0 0 0 4px var(--focus); }
 .engine-dot { width: 26px; height: 26px; border-radius: 13px; flex-shrink: 0; margin-right: 20px; box-shadow: inset 0 0 0 2px #6b7280; }
 .engine-option.on .engine-dot { background: var(--accent); box-shadow: inset 0 0 0 6px var(--panel2); }
 .engine-texts { display: flex; flex-direction: column; }
@@ -539,7 +539,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .login-dialog .text-input { display: block; background: var(--panel2); }
 .login-dialog .text-input.focused { box-shadow: inset 0 0 0 4px var(--accent); }
 .login-hint { padding: 20px 24px; border-radius: 21px; background: #3a3320; color: var(--accent); font-size: 25px; line-height: 1.45; margin-bottom: 16px; }
-.login-noacct { display: flex; align-items: center; gap: 24px; margin-bottom: 20px; }
+.login-noacct { display: flex; align-items: center; margin-bottom: 20px; }
+.login-noacct > * { margin-right: 24px; }
+.login-noacct > *:last-child { margin-right: 0; }
 .login-noacct .login-note { margin-bottom: 0; }
 .login-note { font-size: 22px; color: var(--muted); margin-bottom: 20px; }
 .login-actions { display: flex; }
@@ -770,7 +772,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 }
 .onboarding h1 { margin: 16px 0 20px; font-size: 56px; }
 .onb-text { margin: 0 0 16px; max-width: 1100px; font-size: 32px; line-height: 1.4; color: var(--muted); }
-.onb-dots { display: flex; gap: 14px; margin: 8px 0 28px; }
+.onb-dots { display: flex; margin: 8px 0 28px; }
+.onb-dots > * { margin-right: 14px; }
+.onb-dots > *:last-child { margin-right: 0; }
 .onb-dot { width: 14px; height: 14px; border-radius: 99px; background: var(--panel2); }
 .onb-dot.on { width: 42px; background: var(--accent); }
 .onb-actions { display: flex; }
@@ -787,7 +791,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 
 .screen.library { padding-left: 96px; padding-right: 96px; }
 .topbar-home { flex: 0 0 auto; }
-.topbar-tabs { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; overflow-x: auto; overflow-y: hidden; }
+.topbar { width: 100%; overflow: hidden; }
+.topbar-tabs { flex: 1 1 0%; width: 0; min-width: 0; display: flex; align-items: center; overflow-x: auto; overflow-y: hidden; }
 .topbar-tabs::-webkit-scrollbar { display: none; }
 .topbar-tabs-pad { flex: 0 0 48px; width: 48px; }
 .topbar-tabs.fade-left { -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 0), #000 40px); mask-image: linear-gradient(to right, rgba(0, 0, 0, 0), #000 40px); }
@@ -804,6 +809,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .disc-bar-scroll > *:last-child { margin-right: 0; }
 .disc-bar > .disc-kind-want { flex: 0 0 auto; margin-left: 12px; margin-right: 0; }
 
+.torrent-head .badges { position: static; display: block; margin: 8px 0 16px; }
+.torrent-head .badge { position: static; }
+.torrent-head .torrent-actions { margin-top: 8px; }
 .torrent-actions { overflow: visible; }
 .torrent-actions-row { flex-wrap: wrap; }
 .torrent-actions-row.row > * { margin-bottom: 12px; }

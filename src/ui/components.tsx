@@ -54,6 +54,8 @@ interface FocusGroupProps {
   boundary?: boolean;
   autoFocus?: boolean;
   preferredChildFocusKey?: string;
+  /** When false, unmounting this group does not move focus to its parent. */
+  autoRestoreFocus?: boolean;
   children?: ComponentChildren;
 }
 
@@ -64,6 +66,7 @@ export function FocusGroup(p: FocusGroupProps) {
     saveLastFocusedChild: true,
     isFocusBoundary: !!p.boundary,
     preferredChildFocusKey: p.preferredChildFocusKey,
+    autoRestoreFocus: p.autoRestoreFocus,
   });
   useEffect(() => {
     if (p.autoFocus) focusSelf();

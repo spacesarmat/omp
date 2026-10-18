@@ -309,7 +309,8 @@ export function TorrentScreen({ hash }: { hash: string }) {
           })()}
           <div class="muted torrent-status">{tor ? tvGlyphs(statusLine(tor)) : ''}</div>
           {(() => {
-            const badges = releaseBadges(parseReleaseInfo(tor ? displayTitle(tor) : ''));
+            // a saved year with no poster has nothing to sit on and lands on the action buttons
+            const badges = releaseBadges(parseReleaseInfo(tor ? displayTitle(tor) : '')).filter((b) => !tor || !!tor.poster || !/^\d{4}$/.test(b));
             return badges.length ? <div class="badges">{badges.map((x) => <span key={x} class="badge">{x}</span>)}</div> : null;
           })()}
           <div class="torrent-actions" ref={actionsRef}>
