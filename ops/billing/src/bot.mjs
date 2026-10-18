@@ -76,6 +76,19 @@ export function adminKeyboard() {
   };
 }
 
+/** Reason labels for a failed /start admin_ login. The token is never included. */
+const ADMIN_LOGIN_FAIL_REASON = {
+  unknown: 'unknown token',
+  expired: 'expired',
+  used: 'already used',
+  wrong_user: 'wrong user',
+};
+
+export function adminLoginFailureLine(error) {
+  const reason = ADMIN_LOGIN_FAIL_REASON[error] || 'unknown token';
+  return 'admin login failed reason=' + reason + '\n';
+}
+
 /** Missing flag means on, so existing installs keep admin Telegram notices. */
 export function adminNotifyEnabled(settings) {
   const v = settings && settings.adminNotify;
@@ -333,10 +346,13 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
   if (action === 'admin_login') {
     const out = confirmAdminPanelLogin(cur, { token: arg, telegramId: chatId, now });
     cur = out.state;
-    if (out.result.error === 'forbidden') {
-      say('Нет доступа к панели. Добавьте свой Telegram id в настройках администраторов.');
-    } else if (out.result.error) {
-      say('Ссылка для входа устарела. Откройте панель снова и нажмите «Войти через Telegram».');
+    if (out.result.error) {
+      process.stderr.write(adminLoginFailureLine(out.result.error));
+      if (out.result.error === 'wrong_user') {
+        say('Нет доступа к панели. Добавьте свой Telegram id в настройках администраторов.');
+      } else {
+        say('Ссылка для входа устарела. Откройте панель снова и нажмите «Войти через Telegram».');
+      }
     } else {
       say('Вход в админ-панель подтверждён. Вернитесь в браузер — страница откроется сама.');
     }
