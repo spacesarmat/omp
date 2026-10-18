@@ -30,7 +30,7 @@ import { findUpgrades, isLowSeeds, upgradeKind, upgradeQuery, type UpgradeOutcom
 import { coverageNote, failureOf, qualityOrUnknown } from '../monitor/upgradeText';
 import { resolveLink, resultKey, seedsText, sourceName } from '../sources/view';
 import { tvSourceContext } from '../sources/tvContext';
-import { loadQualityWatch, saveQualityWatch } from '../store/journal';
+import { loadQualityWatch, rememberTrackerSeeds, saveQualityWatch } from '../store/journal';
 import { watchesBetterQuality } from '../lib/journal';
 import { phoneLink } from '../phone/phoneStore';
 import type { SourceResult } from '../sources/types';
@@ -195,6 +195,7 @@ export function BetterDialog(p: {
       .then((link) => c.add({ link, title: r.Title, category: p.torrent.category }))
       .then(
         (added) => {
+          void rememberTrackerSeeds(c, added, r.Seed, r.date);
           void refreshTorrents(c).catch(() => undefined);
           toast(t('add.added', { title: tvGlyphs(added.title || shortTitle(r.Title)) }));
           if (!alive.current) return;

@@ -3,6 +3,7 @@
 // mobile/tests/rpcHandler.test.ts. The wire shapes below are what the TV parses.
 import { t } from '../../../src/i18n';
 import { isStashedFile, takeStashedFile } from '../../../src/api/torrentFiles';
+import { handoffTorrent } from '../../../src/lib/announce';
 import { searchAll } from '../../../src/sources/search';
 import { getHealth, isSourceOn, reloadSourcePrefs, setSourceOn } from '../../../src/sources/store';
 import { isCloudflare, resolveLink, resultDate, resultKey, sortResults } from '../../../src/sources/view';
@@ -46,6 +47,8 @@ export interface Resolving {
   promise: Promise<void>;
   state: 'pending' | 'ok' | 'error';
   link?: string;
+  /** Base64 .torrent, preferred over `link` by a TV that can upload it. */
+  file?: string;
   message?: string;
 }
 
@@ -61,7 +64,7 @@ interface Live {
 }
 
 export type Params = { [k: string]: unknown };
-export type ResolveAnswer = { link: string } | { pending: true };
+export type ResolveAnswer = { link?: string; file?: string } | { pending: true };
 export type ResolveRow = (cache: Map<string, Resolving>, key: string, find: () => SourceResult | undefined) => Promise<ResolveAnswer>;
 
 function asParams(v: unknown): Params {
@@ -232,11 +235,18 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
       entry.promise = started.then(
         (link) => {
           if (typeof link === 'string' && isStashedFile(link)) {
-            // a .torrent the phone downloaded itself (rustorka, kinozal, an indexer): its bytes stay in this page,
-            // the TV's TorrServer cannot add it
-            takeStashedFile(link);
-            entry.state = 'error';
-            entry.message = t('sources.tvFileOnly');
+            // a .torrent the phone downloaded itself: hand the bytes to the TV (it uploads them) and a magnet
+            // that carries every announce, so a client that only reads `link` still reaches the source tracker
+            const bytes = takeStashedFile(link);
+            const hand = bytes ? handoffTorrent(bytes, row) : null;
+            if (!hand) {
+              entry.state = 'error';
+              entry.message = t('sources.tvFileOnly');
+              return;
+            }
+            entry.state = 'ok';
+            if (hand.link) entry.link = hand.link;
+            if (hand.file) entry.file = hand.file;
             return;
           }
           if (typeof link !== 'string' || !ADDABLE.test(link.trim())) {
@@ -260,7 +270,12 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
       await Promise.race([r.promise, new Promise<void>((res) => (timer = setTimeout(res, RESOLVE_WAIT_MS)))]);
       if (timer !== undefined) clearTimeout(timer);
     }
-    if (r.state === 'ok') return { link: r.link! };
+    if (r.state === 'ok') {
+      const out: { link?: string; file?: string } = {};
+      if (r.link) out.link = r.link;
+      if (r.file) out.file = r.file;
+      return out;
+    }
     if (r.state === 'error') {
       // the next call tries again (the person may have signed in on the phone meanwhile)
       cache.delete(key);

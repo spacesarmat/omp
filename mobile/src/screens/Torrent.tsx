@@ -3,6 +3,8 @@ import { torrentHeaderEpisodes } from '../lib/releaseContents';
 import { rememberedSeasonTotal, rememberSeasonTotals, seasonEpisodeTotal } from '../../../src/lib/episodesOutOf';
 import { t, fmtDuration, fmtSize } from '../../../src/i18n';
 import { swarmText } from '../../../src/lib/torrentStatus';
+import { isDeadRelease, useLiveSwarm } from '../../../src/lib/swarmWatch';
+import { canUpgrade } from '../../../src/ui/BetterDialog';
 import { Icon } from '../ui/Icon';
 import { CastStrip } from '../ui/CastStrip';
 import { useTorrentCast } from '../../../src/lib/useTorrentCast';
@@ -286,6 +288,7 @@ function MarksSheet({ title, prefs, onSave, onClose }: { title: string; prefs: S
 }
 
 export function Torrent({ hash }: { hash: string }) {
+  useLiveSwarm();
   const c = client.value;
   const listed = torrents.value.find((x) => x.hash === hash);
   // a torrent just added may not be in the list yet: ask the server for it
@@ -607,6 +610,16 @@ export function Torrent({ hash }: { hash: string }) {
         <div class="m-thead-info">
           <div class="m-thead-title">{shortTitle(title)}</div>
           <div class="m-thead-meta">{meta.join(' · ')}</div>
+          {isDeadRelease(hash) && (
+            <div class="m-dead">
+              <div class="m-hint-warn">{t('torrent.deadRelease')}</div>
+              {canUpgrade(tor, allFiles) && (
+                <button type="button" class="m-btn m-btn-secondary" onClick={() => setBetterOpen(true)}>
+                  {t('torrent.better.find')}
+                </button>
+              )}
+            </div>
+          )}
           {badges.length > 0 && (
             <div class="m-badges">
               {badges.map((b) => (

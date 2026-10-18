@@ -120,7 +120,7 @@ describe('adding a result with only a download link', () => {
     const r = parseTorznab(RSS(FILE_ONLY), src.id, 'jackett')[0];
     const secrets = { [indexerKeyName(JACKETT.id)]: KEY };
     const foreign = fakeSite(() => page(BENCODE, 'x'), secrets);
-    await expect(resolveLink({ ...r, Link: 'http://evil.test/dl?x=1' }, foreign.ctx)).rejects.toThrow(indexerNoFile());
+    await expect(resolveLink({ ...r, Link: 'http://evil.test/dl?x=1', torrentUrl: 'http://evil.test/dl?x=1' }, foreign.ctx)).rejects.toThrow(indexerNoFile());
     expect(foreign.calls).toHaveLength(0);
     await expect(resolveLink(r, fakeSite(() => page(BENCODE, 'x'), {}).ctx)).rejects.toThrow();
     await expect(resolveLink(r, fakeSite(() => page('<html>login</html>', 'x'), secrets).ctx)).rejects.toThrow(indexerNoFile());

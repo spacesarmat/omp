@@ -38,6 +38,7 @@ import { choose } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
 import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
+import { isDeadRelease, useLiveSwarm } from '../lib/swarmWatch';
 import { tvGlyphs } from '../ui/tvText';
 import { seasonChipSub, type SeasonChipSub } from '../lib/seasonChip';
 import { swarmText } from '../lib/torrentStatus';
@@ -299,6 +300,7 @@ function useFollow(group: SeriesGroup): [boolean, () => void] {
 
 function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   const c = client.value!;
+  useLiveSwarm();
   const route = useMemo(() => currentRoute.peek(), []);
   const card = useSeriesCard(group);
   const now = Date.now();
@@ -518,9 +520,20 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       )}
       {members.map((m) => {
         const swarm = swarmText(m);
-        if (!swarm) return null;
         const who = members.length > 1 ? qualityOrUnknown(displayTitle(m)) : '';
-        return <div class="muted series-swarm" key={m.hash}>{who ? who + ' · ' + swarm : swarm}</div>;
+        const dead = isDeadRelease(m.hash);
+        const find = canUpgrade(m, c.files(m));
+        return (
+          <div key={m.hash}>
+            {swarm ? <div class="muted series-swarm">{who ? who + ' · ' + swarm : swarm}</div> : null}
+            {dead && (
+              <FocusGroup focusKey={'series-dead-' + m.hash} className="series-dead">
+                <div>{t('torrent.deadRelease')}</div>
+                {find && <Button focusKey={'series-dead-find-' + m.hash} label={t('torrent.better.find')} onPress={() => setBetter(m)} />}
+              </FocusGroup>
+            )}
+          </div>
+        );
       })}
       <FocusGroup focusKey="SERIES-EPISODES" className="series-episodes">
         {rows.map((r, i) => {

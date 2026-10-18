@@ -110,7 +110,7 @@ describe('Torrent', () => {
     mount();
     await flush();
     expect(el.querySelector('.m-thead-title')!.textContent).toBe('Starbound Frontier');
-    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 4 серии · 18,0 ГБ · 0 сидов · 0 пиров');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 4 серии · 18,0 ГБ · подключено: 0 сидов · 0 пиров');
     const rows = el.querySelectorAll('.m-ep');
     expect(rows.length).toBe(4);
     expect(rows[2].textContent).toContain('S02E03');
@@ -604,7 +604,7 @@ describe('Torrent in English', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     mount();
     await flush();
-    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Season 2 · 4 episodes · 18.0 GB · 0 seeds · 0 peers');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Season 2 · 4 episodes · 18.0 GB · connected: 0 seeds · 0 peers');
     expect(el.querySelector('.m-btn-primary')!.textContent).toContain('Watch on TV · S02E01');
     expect(byText('Watch on the phone')).toBeTruthy();
     expect(el.querySelector('.m-skip-title')!.textContent).toBe('Skip');
@@ -633,7 +633,7 @@ describe('Torrent in English', () => {
     await flush();
     expect(el.textContent).toContain('Files');
     expect(el.textContent).not.toContain('Episodes');
-    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('18.0 GB · 0 seeds · 0 peers');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toBe('18.0 GB · connected: 0 seeds · 0 peers');
   });
 
   it('the watch sheet: three options in English', async () => {

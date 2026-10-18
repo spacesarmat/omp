@@ -767,6 +767,8 @@ export const en: EnDict<typeof ru> = {
     cannotGetLink: 'Could not get the torrent link',
     noLink: 'The result has no link',
     tvFileOnly: 'This release comes only as a .torrent file: add it from the phone',
+    /** Indexer seed count, not TorrServer's live swarm. The release date is already on the row. */
+    trackerData: 'from the tracker',
     defaultPhone: 'Phone',
     today: 'today',
     yesterday: 'yesterday',
@@ -1679,6 +1681,14 @@ export const en: EnDict<typeof ru> = {
     step4: '4. Pick this TV on the phone — OMP returns to the catalog by itself.',
   },
   torrent: {
+    /** Live swarm of a torrent TorrServer is working on. */
+    connected: 'connected:',
+    /** Idle card: the count saved from the tracker at add time. */
+    trackerMark: '(tracker)',
+    /** Idle card when no tracker count was saved. */
+    seedsUnknown: '—',
+    /** Active ~60s with 0 seeders and 0 downloaded bytes. */
+    deadRelease: 'This release is not responding — try another one',
     deleteAsk: 'Delete the torrent from the server?',
     resetAsk: 'Reset the watched marks?',
     continueFrom: 'Resume {ep}from {time}',

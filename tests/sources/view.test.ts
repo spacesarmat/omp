@@ -158,6 +158,17 @@ describe('resolveLink', () => {
     registerSource({ id: 'fake-torrent', name: 'F', kind: 'builtin', search: () => Promise.resolve([]), magnet: () => Promise.reject(new Error('На странице раздачи нет magnet-ссылки')) });
     await expect(resolveLink(res({ source: 'fake-torrent', detailUrl: 'https://f/7' }), ctx)).rejects.toThrow('На странице раздачи нет magnet-ссылки');
   });
+  it('keeps tr= on a magnet and prefers a .torrent when the row has one', async () => {
+    const tr = encodeURIComponent('udp://open.tracker.test:6969/announce');
+    const mag = 'magnet:?xt=urn:btih:' + 'c'.repeat(40) + '&tr=' + tr;
+    expect(await resolveLink(res({ Magnet: mag }), ctx)).toBe(mag);
+    const resolve = vi.fn(() => Promise.resolve('omp-file:1'));
+    registerSource({ id: 'fake-torrent', name: 'F', kind: 'indexer', search: () => Promise.resolve([]), resolve });
+    expect(await resolveLink(res({ source: 'fake-torrent', Magnet: mag, torrentUrl: 'http://127.0.0.1/dl' }), ctx)).toBe('omp-file:1');
+    expect(resolve).toHaveBeenCalled();
+    resolve.mockRejectedValueOnce(new Error('down'));
+    expect(await resolveLink(res({ source: 'fake-torrent', Magnet: mag, torrentUrl: 'http://127.0.0.1/dl' }), ctx)).toBe(mag);
+  });
   it('falls back to Link, then the hash', async () => {
     expect(await resolveLink(res({ source: 'ts-rutor', Link: 'https://t/dl/1.torrent' }), ctx)).toBe('https://t/dl/1.torrent');
     expect(await resolveLink(res({ Hash: 'd'.repeat(40) }), ctx)).toBe('magnet:?xt=urn:btih:' + 'd'.repeat(40));

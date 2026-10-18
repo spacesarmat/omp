@@ -16,6 +16,7 @@ import { errorMessage } from '../../../src/api/http';
 import { t, tp } from '../../../src/i18n';
 import type { Torrent } from '../../../src/api/types';
 import { log, flushLog } from '../../../src/lib/log';
+import { rememberTrackerSeeds } from '../../../src/store/journal';
 import { guessCategory } from '../../../src/lib/categoryGuess';
 import { posterQuery } from '../../../src/lib/posterSearch';
 import { checkBetterQuality, dueFilms, pruneBetterChecked } from '../../../src/monitor/better';
@@ -183,6 +184,7 @@ export async function runAction(deps: PageDeps, a: MonitorAction): Promise<Monit
   try {
     const link = await resolveLink(f.result, ctx);
     const added = await c.add({ link, title, category: guessCategory(title) });
+    void rememberTrackerSeeds(c, added, f.result.Seed, f.result.date);
     markFindingsSeen(f.subId, [f.key]);
     await persist(deps, [{ s: f.subId, k: f.key, a: 'add' }]);
     if (deps.afterAdd) await withTimeout(deps.afterAdd(c, added, title), AFTER_ADD_MS);

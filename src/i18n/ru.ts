@@ -782,6 +782,8 @@ export const ru = {
     cannotGetLink: 'Не удалось получить ссылку на раздачу',
     noLink: 'У результата нет ссылки',
     tvFileOnly: 'Эта раздача есть только файлом .torrent: добавьте её с телефона',
+    /** Indexer seed count, not TorrServer's live swarm. The release date is already on the row. */
+    trackerData: 'по данным трекера',
     defaultPhone: 'Телефон',
     today: 'сегодня',
     yesterday: 'вчера',
@@ -1713,6 +1715,14 @@ export const ru = {
     step4: '4. Выберите этот телевизор на телефоне — OMP сам вернётся в каталог.',
   },
   torrent: {
+    /** Live swarm of a torrent TorrServer is working on. */
+    connected: 'подключено:',
+    /** Idle card: the count saved from the tracker at add time. */
+    trackerMark: '(трекер)',
+    /** Idle card when no tracker count was saved. */
+    seedsUnknown: '—',
+    /** Active ~60s with 0 seeders and 0 downloaded bytes. */
+    deadRelease: 'Раздача не отвечает — попробуйте другую',
     deleteAsk: 'Удалить торрент с сервера?',
     resetAsk: 'Сбросить отметки просмотра?',
     continueFrom: 'Продолжить {ep}с {time}',

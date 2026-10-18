@@ -2,7 +2,7 @@
 // the torrent list first (another device may have written meanwhile) and every failure is swallowed: the journal must
 // never break playback.
 import type { Torrent } from '../api/types';
-import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, watchesBetterQuality, withQualityWatch, categoryPicked, withCategoryPicked, withCategoryAuto, withWatch, supportOfList, withSupport, journalOf } from '../lib/journal';
+import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, watchesBetterQuality, withQualityWatch, categoryPicked, withCategoryPicked, withCategoryAuto, withWatch, supportOfList, withSupport, journalOf, withTrackerSeeds, trackerSeedsOf } from '../lib/journal';
 import { setCategoryWriter, torrents } from './library';
 import { noteSupport } from './support';
 import { SUPPORT_MAX_AHEAD_MS } from '../lib/donate';
@@ -205,6 +205,46 @@ export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watc
 /** «Следить за качеством» of a film: false writes omp.q: false, true removes it. Rejects on failure. */
 export function saveQualityWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watch: boolean): Promise<boolean> {
   return saveFlag(c, torrent, watch, { read: watchesBetterQuality, write: withQualityWatch });
+}
+
+/**
+ * Seeders the tracker reported for a release just added (`omp.ts`). 0 is stored; a missing count is not.
+ * The library copy is patched at once. Never calls `get` (that would wake an idle torrent). Never rejects.
+ */
+export function rememberTrackerSeeds(
+  c: JournalClient | null,
+  torrent: Pick<Torrent, 'hash' | 'title' | 'poster' | 'category' | 'data'>,
+  seed: number | undefined,
+  at?: number,
+): Promise<void> {
+  if (!c || !torrent || !torrent.hash) return Promise.resolve();
+  if (typeof seed !== 'number' || !isFinite(seed) || seed < 0) return Promise.resolve();
+  const mark = { s: Math.floor(seed), at: typeof at === 'number' && isFinite(at) && at > 0 ? Math.floor(at) : Date.now() };
+  const hash = torrent.hash;
+  const paint = (data: string | undefined) => {
+    const parsed = parseData(data);
+    if (!parsed) return null;
+    return serializeData(withTrackerSeeds(parsed.obj, mark), parsed.journal, parsed.skip);
+  };
+  const local = torrents.value.filter((x) => x.hash === hash)[0];
+  const optimistic = paint(local ? local.data : torrent.data);
+  if (optimistic) patchLibrary(hash, optimistic);
+  return enqueue(hash, () =>
+    c.list().then((all) => {
+      const tor = torrentOf(all, hash);
+      if (!tor) return undefined;
+      const parsed = parseData(tor.data);
+      if (!parsed) return undefined;
+      const base = baseOf(tor, parsed);
+      const data = serializeData(withTrackerSeeds(base.obj, mark), base.journal, base.skip);
+      const cur = trackerSeedsOf(tor.data);
+      if (cur && cur.s === mark.s && cur.at === mark.at) {
+        patchLibrary(tor.hash, data);
+        return undefined;
+      }
+      return c.setData(tor, data).then(() => patchLibrary(tor.hash, data));
+    }),
+  );
 }
 
 /** The category was picked by hand: writes omp.cm, so the automatic category check leaves it. Rejects on failure. */

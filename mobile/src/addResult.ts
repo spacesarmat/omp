@@ -4,7 +4,7 @@
 import { client } from '../../src/store/servers';
 import { rememberAdded } from '../../src/store/library';
 import { recordAutoCategory } from '../../src/lib/categoryCheck';
-import { saveCategoryPicked } from '../../src/store/journal';
+import { rememberTrackerSeeds, saveCategoryPicked } from '../../src/store/journal';
 import { resolveLink } from '../../src/sources/view';
 import type { SourceResult } from '../../src/sources/types';
 import type { Torrent } from '../../src/api/types';
@@ -33,6 +33,7 @@ export async function addSearchResult(
   o?.onStep?.('add');
   const added = await c.add({ link: l, title: r.Title, category });
   void rememberAdded(c, added, r.Title);
+  void rememberTrackerSeeds(c, added, r.Seed, r.date);
   afterAdd(c, added, !!(o && o.picked), category);
   noteAlreadyHave(added.hash, r.Title, category);
   return added.hash;

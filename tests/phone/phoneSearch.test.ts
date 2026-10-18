@@ -235,10 +235,13 @@ describe('resolveTvResult', () => {
     expect(calls[0].params).toEqual({ handle: 'h1', key: '7' });
   });
 
-  it('a row with a magnet resolves without an RPC', async () => {
-    useScript({});
+  it('a via-row with a magnet still asks the phone, and an RPC failure falls back to the magnet', async () => {
+    const tr = encodeURIComponent('http://tracker.example/announce');
+    useScript({ resolve: [{ link: 'magnet:?xt=urn:btih:' + HASH + '&tr=' + tr }] });
+    await expect(resolveTvResult({ ...viaRow, Magnet: 'magnet:?xt=urn:btih:' + HASH })).resolves.toBe('magnet:?xt=urn:btih:' + HASH + '&tr=' + tr);
+    expect(count('resolve')).toBe(1);
+    useScript({ resolve: [new Error('network')] });
     await expect(resolveTvResult({ ...viaRow, Magnet: 'magnet:?xt=urn:btih:' + HASH })).resolves.toBe('magnet:?xt=urn:btih:' + HASH);
-    expect(calls).toEqual([]);
   });
 
   it('times out after 4 pending answers; expired and failed pass their codes', async () => {

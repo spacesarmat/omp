@@ -60,12 +60,15 @@ describe('monitor RPC', () => {
     const rpc = createRpcHandler(deps() as never);
     await expect(rpc.dispatch('subRemove', {})).rejects.toBeInstanceOf(RpcError);
   });
-  it('findingLink resolves a stored finding and refuses a phone-only .torrent', async () => {
+  it('findingLink resolves a stored finding and hands a .torrent to the TV', async () => {
     addFindings([{ subId: 's1', key: 'k1', result: row('A') as never, at: 1 }, { subId: 's1', key: 'k2', result: row('B') as never, at: 2 }]);
     const resolve = vi.fn((r: { Title: string }) => Promise.resolve(r.Title === 'A' ? 'magnet:?xt=urn:btih:' + 'b'.repeat(40) : stashFile(new Uint8Array([1]) as never)));
     const rpc = createRpcHandler({ ...deps(), resolve } as never);
     expect(await rpc.dispatch('findingLink', { subId: 's1', key: 'k1' })).toEqual({ link: 'magnet:?xt=urn:btih:' + 'b'.repeat(40) });
-    await expect(rpc.dispatch('findingLink', { subId: 's1', key: 'k2' })).rejects.toMatchObject({ code: 'failed' });
+    const handed = await rpc.dispatch('findingLink', { subId: 's1', key: 'k2' }) as { link?: string; file?: string };
+    expect(handed.link).toBe('magnet:?xt=urn:btih:' + 'a'.repeat(40));
+    expect(handed.file).toBe('AQ==');
+    expect(JSON.stringify(handed)).not.toContain('omp-file');
     await expect(rpc.dispatch('findingLink', { subId: 's1', key: 'nope' })).rejects.toMatchObject({ code: 'bad_request' });
   });
   it('findingsSeen marks findings seen', async () => {

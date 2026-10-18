@@ -13,6 +13,7 @@ import { torrents, refreshTorrents } from '../../store/library';
 import { errorMessage } from '../../api/http';
 import { mapSearchCategory } from '../../lib/category';
 import { recordAutoCategory } from '../../lib/categoryCheck';
+import { rememberTrackerSeeds } from '../../store/journal';
 import { shortTitle } from '../../lib/libraryView';
 import { FocusGroup, Focusable, Button, Spinner } from '../../ui/components';
 import { choose } from '../../ui/dialog';
@@ -298,6 +299,7 @@ export function NewsTv(p: NewsTvProps) {
         (tt) => {
           // the category is OMP's own choice here: the automatic check (on a later refresh) may correct it
           if (!category) recordAutoCategory(tt.hash, mapSearchCategory(x.r.Categories));
+          void rememberTrackerSeeds(c, tt, x.r.Seed, x.r.date);
           busyRef.current = false;
           markSeen([x]);
           void refreshTorrents(c).catch(() => undefined);
