@@ -2,11 +2,15 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.4-beta.2
 
 - [phone] The built-in player is updated to 2160 Player 0.2.8. The screen stays on while a video is playing: the core setting is on by default
 - [phone] An audiobook and a video stay on separate sessions, so the lock-screen buttons do not mix
 - The Android build pins commons-io 2.18.0 and commons-lang3 3.18.0, so the old SMB copies stay out of the app
+- [phone] Audiobooks: search classifies MP3, M4B, AAC, FLAC and a narrator credit as audiobooks, and FB2, EPUB, PDF and DJVU as e-books
+- [phone] Book card: when the file list is missing because there are few seeds, Retry asks again
+- [phone] Audiobook player: after an error the current track starts again, and the button layout stays put
+- [phone] The notification and the lock screen show track N of M and previous and next chapter
 
 ## 0.20.4-beta.1
 
