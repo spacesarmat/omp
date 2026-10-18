@@ -220,6 +220,11 @@ function paidSource(id: string, name: string, source: OmpIndexerSource): Source 
         { headers: authHeaders(), timeoutMs: 30000, responseCharset: 'iso-8859-1' },
       ).then(
         (res) => {
+          const upstream = parseBody<ErrorBody>(res.text);
+          // Billing maps a Jackett/JacRed 401/403 on the file itself to 502 upstream, so this is not an expired session.
+          if (res.status === 502 && upstream.error === 'upstream') {
+            throw new Error(t('torrent.better.failLink', { site: name }));
+          }
           if (res.status === 401 || res.status === 403 || res.status === 502 || res.status === 429) {
             throw billingError(res.status, res.text);
           }
