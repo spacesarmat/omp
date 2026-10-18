@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
 import { init, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { Focusable } from '../../src/ui/components';
 import { WhatsNewDialog, shouldShowWhatsNew, focusWhatsNew } from '../../src/ui/WhatsNewDialog';
 import { whatsNew, closeWhatsNew } from '../../src/store/whatsNew';
-import { restoreFocus } from '../../src/ui/focus';
+import { dialogRestoreKey, restoreFocus } from '../../src/ui/focus';
+import { TopBar } from '../../src/ui/TopBar';
 import { dispatchKey } from '../../src/ui/keys';
 
 beforeAll(() => {
@@ -78,6 +79,32 @@ describe('WhatsNewDialog', () => {
     restoreFocus('tile-1');
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     expect(getCurrentFocusKey()).toBe('whatsnew-ok');
+    render(null, host);
+  });
+
+  it('closing restores the tile behind it and does not open История', async () => {
+    const onTab = vi.fn();
+    whatsNew.value = { title: 'Что нового в 0.2.0', auto: true, entries: [{ version: '0.2.0', items: ['А'] }] };
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    await act(async () => {
+      render(h('div', {},
+        h('div', { class: 'screen-host' },
+          h(TopBar, { tab: 'all', onTab, view: 'large', sort: 'new', searchOpen: false, onSearch: () => undefined, onView: () => undefined, onSort: () => undefined, onFocused: () => undefined }),
+          h(Focusable, { focusKey: 'tile-1' }, 'tile'),
+        ),
+        h(WhatsNewDialog, {}),
+      ), host);
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(getCurrentFocusKey()).toBe('whatsnew-ok');
+    const ok = host.querySelector('[data-fk="whatsnew-ok"]') as HTMLElement;
+    await act(async () => { ok.click(); });
+    await new Promise((r) => setTimeout(r, 80));
+    expect(whatsNew.value).toBeNull();
+    expect(onTab).not.toHaveBeenCalled();
+    expect(getCurrentFocusKey()).toBe('tile-1');
+    expect(dialogRestoreKey('tab-history')).toBe('tile-1');
     render(null, host);
   });
 

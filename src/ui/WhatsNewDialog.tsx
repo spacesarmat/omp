@@ -15,6 +15,8 @@ function focusIsInWhatsNew(key: string): boolean {
   return key === 'WHATSNEW' || key.indexOf('whatsnew-') === 0;
 }
 
+let stopPulse: (() => void) | null = null;
+
 /** Pull focus onto OK when it is still on the screen behind the dialog. */
 export function focusWhatsNew(): void {
   if (!whatsNew.peek()) return;
@@ -53,13 +55,22 @@ export function WhatsNewDialog() {
     focusWhatsNew();
     const timers = [0, 50, 400].map((ms) => setTimeout(focusWhatsNew, ms));
     const pulse = setInterval(focusWhatsNew, 300);
-    return () => {
+    const stop = () => {
       timers.forEach(clearTimeout);
       clearInterval(pulse);
+    };
+    stopPulse = stop;
+    return () => {
+      if (stopPulse === stop) stopPulse = null;
+      stop();
     };
   }, [cur]);
 
   const close = () => {
+    if (stopPulse) {
+      stopPulse();
+      stopPulse = null;
+    }
     const k = prevFocus.current;
     prevFocus.current = undefined;
     closeWhatsNew();

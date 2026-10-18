@@ -153,7 +153,37 @@ function enabledScreenKey(k: string | null | undefined): boolean {
   return false;
 }
 
-let focusAfterLate: ReturnType<typeof setTimeout> | null = null;
+/** A library tab that is not the one on screen. Focusing it would switch the library. */
+function inactiveTab(k: string): boolean {
+  if (k.indexOf('tab-') !== 0) return false;
+  const el = document.querySelector('[data-fk="' + k + '"]');
+  return !el || !el.classList.contains('active');
+}
+
+/**
+ * Where to put focus after a dialog closes.
+ * The remembered key wins when it still exists and is not some other library tab.
+ * Otherwise the first focusable under the bar (a tile), otherwise the tab that is already active.
+ */
+export function dialogRestoreKey(preferred?: string | null): string | null {
+  const ok = (k: string | null | undefined): k is string => !!k && doesFocusableExist(k) && !inactiveTab(k);
+  if (ok(preferred)) return preferred;
+  const els = screenFocusables();
+  for (let i = 0; i < els.length; i++) {
+    const el = els[i];
+    if (el.classList.contains('disabled')) continue;
+    if (typeof el.closest === 'function' && el.closest('.topbar')) continue;
+    const k = el.getAttribute('data-fk');
+    if (ok(k)) return k;
+  }
+  const active = document.querySelector('.topbar .tab.active');
+  const ak = active ? active.getAttribute('data-fk') : null;
+  if (ok(ak)) return ak;
+  return null;
+}
+
+let focusAfterTimers: ReturnType<typeof setTimeout>[] = [];
+let focusAfterGen = 0;
 
 /**
  * After an overlay unmounts, focus `preferred`, else the first focusable on the screen.
@@ -163,36 +193,35 @@ let focusAfterLate: ReturnType<typeof setTimeout> | null = null;
 export function focusAfterClose(preferred?: string): void {
   const route = currentRoute.value;
   const want = preferred;
-  if (focusAfterLate) clearTimeout(focusAfterLate);
+  const gen = ++focusAfterGen;
+  focusAfterTimers.forEach((t) => clearTimeout(t));
+  focusAfterTimers = [];
   const place = (prefer: boolean) => {
+    if (gen !== focusAfterGen) return;
     if (currentRoute.value !== route) return;
     if (document.querySelector('.onboarding-host, .dialog-backdrop, .better-backdrop, .marks-backdrop')) return;
     const go = (k: string | null | undefined): boolean => {
-      if (!k || !doesFocusableExist(k)) return false;
+      if (!k || !doesFocusableExist(k) || inactiveTab(k)) return false;
       setFocus(k);
       return true;
     };
-    if (prefer && go(want)) return;
     let cur = '';
     try {
       cur = getCurrentFocusKey() || '';
     } catch (e) {
       cur = '';
     }
-    if (enabledScreenKey(cur)) return;
+    // a late restore from the dialog's parent lands on «История» (the first tab) and would open that tab
+    if (!inactiveTab(cur) && enabledScreenKey(cur) && (!prefer || cur === want)) return;
+    if (prefer && go(want)) return;
+    if (!inactiveTab(cur) && enabledScreenKey(cur)) return;
     if (go(want)) return;
-    const els = screenFocusables();
-    for (let i = 0; i < els.length; i++) {
-      const el = els[i];
-      if (el.classList.contains('disabled')) continue;
-      if (go(el.getAttribute('data-fk'))) return;
-    }
+    if (go(dialogRestoreKey(null))) return;
   };
-  setTimeout(() => place(true), 0);
-  focusAfterLate = setTimeout(() => {
-    focusAfterLate = null;
-    place(false);
-  }, 500);
+  // 0 can still see the dialog node. 40 lands before norigin's 300ms restore of the first tab.
+  focusAfterTimers.push(setTimeout(() => place(true), 0));
+  focusAfterTimers.push(setTimeout(() => place(true), 40));
+  focusAfterTimers.push(setTimeout(() => place(false), 500));
 }
 
 /** The screen that scrolls around an element (`.screen`), or null. */

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { render, h } from 'preact';
 import { init, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
-import { TopBar, topBarKeys } from '../../src/ui/TopBar';
+import { TopBar, topBarKeys, alignTabStrip } from '../../src/ui/TopBar';
 import { stepKey, barArrow } from '../../src/ui/focus';
 import { newsUnseen } from '../../src/phone/monitor';
 import { latestUpdate } from '../../src/store/updates';
@@ -209,25 +209,59 @@ describe('top bar neighbours', () => {
     await act(() => { render(null, host); });
   });
 
-  it('scrolls a clipped tab clear of the fade and marks the overflowing edge', async () => {
+  it('brings a focused tab fully into the strip', async () => {
     const { act } = await import('preact/test-utils');
     const host = document.createElement('div');
     document.body.appendChild(host);
-    await act(() => { render(h(TopBar as any, { tab: 'all', onTab: vi.fn(), view: 'large', sort: 'new', searchOpen: false, onSearch: vi.fn(), onView: vi.fn(), onSort: vi.fn(), onFocused: vi.fn() }), host); });
+    await act(() => { render(h(TopBar as any, { tab: 'history', onTab: vi.fn(), view: 'large', sort: 'new', searchOpen: false, onSearch: vi.fn(), onView: vi.fn(), onSort: vi.fn(), onFocused: vi.fn() }), host); });
     const box = host.querySelector('.topbar-tabs') as HTMLElement;
     const el = host.querySelector('[data-fk="tab-history"]') as HTMLElement;
-    const rect = (left: number, right: number) => ({
-      left: left, right: right, top: 0, bottom: 60, width: right - left, height: 60, x: left, y: 0, toJSON: () => ({}),
-    });
-    box.getBoundingClientRect = () => rect(0, 400) as DOMRect;
-    el.getBoundingClientRect = () => rect(-30, 90) as DOMRect;
+    Object.defineProperty(el, 'offsetLeft', { configurable: true, value: 0 });
+    Object.defineProperty(el, 'offsetWidth', { configurable: true, value: 120 });
     Object.defineProperty(box, 'scrollWidth', { configurable: true, value: 1400 });
     Object.defineProperty(box, 'clientWidth', { configurable: true, value: 400 });
     box.scrollLeft = 80;
     await focus('tab-history');
-    expect(box.scrollLeft).toBe(2);
+    expect(box.scrollLeft).toBe(0);
     expect(box.classList.contains('fade-left')).toBe(false);
     expect(box.classList.contains('fade-right')).toBe(true);
+    await act(() => { render(null, host); });
+  });
+
+  it('hides a tab that is only partly visible on the left', () => {
+    const box = document.createElement('div');
+    box.className = 'topbar-tabs';
+    const history = document.createElement('div');
+    history.className = 'tab';
+    const news = document.createElement('div');
+    news.className = 'tab';
+    box.appendChild(history);
+    box.appendChild(news);
+    document.body.appendChild(box);
+    Object.defineProperty(history, 'offsetLeft', { configurable: true, value: 0 });
+    Object.defineProperty(history, 'offsetWidth', { configurable: true, value: 140 });
+    Object.defineProperty(news, 'offsetLeft', { configurable: true, value: 140 });
+    Object.defineProperty(news, 'offsetWidth', { configurable: true, value: 120 });
+    Object.defineProperty(box, 'scrollWidth', { configurable: true, value: 1400 });
+    Object.defineProperty(box, 'clientWidth', { configurable: true, value: 500 });
+    box.scrollLeft = 40;
+    alignTabStrip(box);
+    expect(box.scrollLeft).toBe(140);
+    expect(box.classList.contains('fade-left')).toBe(false);
+    box.remove();
+  });
+
+  it('a programmatic focus on «История» does not switch the library', async () => {
+    const { act } = await import('preact/test-utils');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const onTab = vi.fn();
+    await act(() => { render(h(TopBar as any, { tab: 'all', onTab, view: 'large', sort: 'new', searchOpen: false, onSearch: vi.fn(), onView: vi.fn(), onSort: vi.fn(), onFocused: vi.fn() }), host); });
+    await focus('tab-history');
+    expect(onTab).not.toHaveBeenCalled();
+    await focus('tab-all');
+    await press('ArrowRight');
+    expect(onTab).toHaveBeenCalledWith('movie');
     await act(() => { render(null, host); });
   });
 });
