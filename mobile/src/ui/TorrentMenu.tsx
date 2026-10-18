@@ -9,6 +9,7 @@ import { routeForTorrent } from '../audiobooks/route';
 import { activeTv } from '../tv/tvStore';
 import { filesOf } from '../watch';
 import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
+import { askConfirm } from './confirm';
 import { client } from '../../../src/store/servers';
 import { torrents, refreshTorrents } from '../../../src/store/library';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
@@ -85,7 +86,7 @@ export function TorrentMenu({
   const remove = async () => {
     const c = client.value;
     if (!c || busy) return;
-    if (!window.confirm(t('torrent.screen.deleteAsk', { title: shortTitle(title) }))) return;
+    if (!(await askConfirm(t('torrent.screen.deleteAsk', { title: shortTitle(title) }), t('common.delete'), { destructive: true }))) return;
     setBusy(true);
     const r = await deleteTorrents(c, [tor.hash]);
     reportDeleted(r);

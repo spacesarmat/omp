@@ -33,7 +33,7 @@ import {
 } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import { loadSubs } from '../../../src/monitor/subs';
-import { applyFilters, activeFilterCount, filterChips, parseRelease, subQualityOf, type SearchFilters } from '../../../src/sources/filters';
+import { applyFilters, activeFilterCount, filterChips, parseRelease, sinkUnknownSeasons, subQualityOf, type SearchFilters } from '../../../src/sources/filters';
 import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
 import { ResultCard } from '../ui/ResultCard';
 import { SubSheet } from '../ui/SubSheet';
@@ -428,7 +428,9 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const filtered = filterByKind(matching, kindF);
   // nothing of the chosen kind, though the search found something: say so, not «Ничего не найдено»
   const kindEmpty = kindF !== 'all' && matching.length > 0;
-  const visible = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
+  const ordered = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
+  // unknown seasons stay in the count, under the releases of the chosen season
+  const visible = sinkUnknownSeasons(ordered, filters.season);
   memo.order = visible.map(resultKey);
   const seasons = Array.from(new Set((rows || []).reduce((a: number[], r) => a.concat(parseRelease(r.Title).seasons), []))).sort((a, b) => a - b).slice(0, 12);
   const nFilters = activeFilterCount(filters);

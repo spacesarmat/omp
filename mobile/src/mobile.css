@@ -8,6 +8,7 @@
   --accent: #F5B700;
   --text: #E8EAF0;
   --muted: #9AA1B2;
+  --m-btn-h: 52px;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -104,7 +105,7 @@ button, .m-btn {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  height: 52px;
+  height: var(--m-btn-h);
   padding: 0 16px;
   border: none;
   border-radius: 12px;
@@ -113,6 +114,7 @@ button, .m-btn {
 }
 .m-btn:disabled { opacity: 0.6; }
 .m-btn-primary { background: var(--accent); color: var(--bg); font-size: 17px; font-weight: 700; }
+.m-btn-danger { background: #E5484D; color: #fff; font-size: 17px; font-weight: 700; }
 .m-btn-secondary { background: var(--panel-2); color: var(--text); }
 .m-btn-text { border: none; background: none; color: var(--muted); font-size: 14px; font-weight: 600; padding: 0 12px; }
 /* a text link that acts («Открыть настройки NNM-Club», «Как установить FlareSolverr»): the accent of the app's links,
@@ -299,7 +301,7 @@ button, .m-btn {
 }
 .m-poster-mini { width: 64px; aspect-ratio: auto; height: 92px; padding: 0; border-radius: 8px; flex-shrink: 0; }
 .m-poster-mini .m-badge { display: none; }
-.m-poster-title { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 19px; line-height: 1.15; color: rgba(255, 255, 255, 0.88); overflow-wrap: anywhere; }
+.m-poster-title { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 19px; line-height: 1.15; color: rgba(255, 255, 255, 0.88); overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto; }
 .m-poster-mini .m-poster-title { display: none; }
 .m-badge {
   position: absolute;
@@ -619,9 +621,34 @@ button, .m-btn {
   overflow-y: auto;
 }
 .m-sheet > * { flex-shrink: 0; }
-/* the long part of a sheet (release notes, «Что нового») scrolls on its own; title and buttons stay */
-.m-sheet > .m-sheet-scroll { flex: 0 1 auto; min-height: 60px; overflow-y: auto; }
-.m-sheet-grip { align-self: center; width: 40px; height: 4px; border-radius: 2px; background: #3A3F4B; }
+/* the long part of a sheet (release notes, «Что нового») scrolls on its own; title and buttons stay.
+   contain: a pull at the top does not scroll the page under the sheet. */
+.m-sheet,
+.m-sheet > .m-sheet-scroll { overscroll-behavior: contain; }
+.m-sheet > .m-sheet-scroll { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+/* The bar stays 40×4; ::before is the tap target. A downward pull on it drags the sheet. */
+.m-sheet-grip {
+  align-self: center;
+  position: relative;
+  width: 40px;
+  height: 4px;
+  min-width: 40px;
+  min-height: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: #3A3F4B;
+  touch-action: none;
+}
+.m-sheet-grip::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
 .m-sheet-title { font-size: 20px; font-weight: 700; }
 .m-opt { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: none; border-radius: 14px; background: var(--panel-2); text-align: left; }
 .m-opt.primary { background: var(--accent); color: var(--bg); }
@@ -660,11 +687,59 @@ button, .m-btn {
 }
 .m-chip.on { background: var(--accent); color: var(--bg); font-weight: 700; }
 .m-chip-static { pointer-events: none; }
-.m-filters { display: flex; flex-direction: column; gap: 16px; }
-.m-filter-group { display: flex; flex-direction: column; gap: 8px; }
-.m-filter-label { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.m-filters { display: flex; flex-direction: column; gap: 20px; padding-bottom: var(--m-btn-h); }
+.m-filter-group { display: flex; flex-direction: column; gap: 10px; }
+.m-filter-label { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.m-filters .m-chips { flex-wrap: wrap; overflow: visible; gap: 8px; }
+.m-filters .m-chip {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 22px;
+  background: var(--panel-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px #3A3F4B;
+  font-size: 14px;
+  font-weight: 600;
+}
+.m-filters .m-chip.on { background: var(--accent); color: var(--bg); box-shadow: none; font-weight: 700; }
 .m-filter-size { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .m-filter-size label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.m-filter-size input {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  color-scheme: dark;
+  font-family: inherit;
+  font-size: 16px;
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--panel-2);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.m-filter-size input::placeholder { color: var(--muted); opacity: 1; }
+.m-filter-size input:focus { box-shadow: inset 0 0 0 2px var(--accent); }
+.m-filter-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 14px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
 .m-sheet-head { display: flex; justify-content: space-between; align-items: center; }
 .m-link-btn { background: none; border: none; color: var(--accent); font-weight: 700; min-height: 44px; }
 .m-results { display: flex; flex-direction: column; gap: 8px; }
@@ -878,6 +953,7 @@ button, .m-btn {
 .m-sheet-row .m-btn { flex: 1 1 0; }
 
 .m-dialog-host { justify-content: center; padding: 0 20px; }
+.m-confirm-host { z-index: 30; }
 .m-dialog { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 22px 20px 18px; border-radius: 22px; background: var(--panel); }
 .m-dialog-icon { width: 48px; height: 48px; border-radius: 24px; background: #3A3320; color: var(--accent); display: flex; align-items: center; justify-content: center; }
 .m-dialog-text { font-size: 15px; line-height: 1.45; color: #C9CEDA; }
@@ -1698,9 +1774,11 @@ html.m-keypad-open .m-toast-host { bottom: calc(var(--m-keypad-h) + 16px + env(s
 .m-setup-choice:disabled { opacity: 0.6; }
 .m-setup .m-input { width: 100%; }
 .m-setup-langs { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Under sheets (20) and the tour (40): «Закрыть» stays on top even if a mark is still mounted.
+   html.m-hint-hold is set the moment any dialog is in the document, before the mark unmounts. */
 .m-hint {
   position: fixed;
-  z-index: 35;
+  z-index: 12;
   width: min(280px, calc(100vw - 32px));
   padding: 12px 14px;
   border-radius: 16px;
@@ -1708,6 +1786,40 @@ html.m-keypad-open .m-toast-host { bottom: calc(var(--m-keypad-h) + 16px + env(s
   border: 1px solid var(--accent);
   color: var(--text);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+html.m-hint-hold .m-hint { display: none; }
+/* content-box: the global border-box would swallow this padding, and getComputedStyle would read 0 */
+.m-hint-insets {
+  position: fixed;
+  top: 0;
+  left: 0;
+  box-sizing: content-box;
+  width: 0;
+  height: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  border: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.m-hint-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: var(--panel);
+  pointer-events: none;
+}
+.m-hint[data-place="below"] .m-hint-arrow {
+  top: -6px;
+  border-top: 1px solid var(--accent);
+  border-left: 1px solid var(--accent);
+  transform: rotate(45deg);
+}
+.m-hint[data-place="above"] .m-hint-arrow {
+  bottom: -6px;
+  border-right: 1px solid var(--accent);
+  border-bottom: 1px solid var(--accent);
+  transform: rotate(45deg);
 }
 .m-hint p { margin: 0 0 10px; font-size: 14px; line-height: 1.4; overflow-wrap: break-word; }
 .m-hint button {

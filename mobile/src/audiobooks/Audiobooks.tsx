@@ -12,8 +12,8 @@ export function Audiobooks() {
   return (
     <div class="m-screen" data-route="audiobooks">
       <AudiobookBar title={t('audiobooks.title')} />
-      <section class="m-set-group">
-        <button type="button" class="m-set-row m-set-pick" data-row="audiobook-search" data-hint-anchor="audiobooks" onClick={() => navigate({ name: 'audiobookSearch' })}>
+      <section class="m-set-group" data-hint-anchor="audiobooks">
+        <button type="button" class="m-set-row m-set-pick" data-row="audiobook-search" onClick={() => navigate({ name: 'audiobookSearch' })}>
           <span class="m-set-text">
             <span>{t('audiobooks.find')}</span>
             <span class="m-muted m-small">{t('audiobooks.findHint')}</span>

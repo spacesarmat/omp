@@ -57,18 +57,29 @@ export function FiltersSheet({
       <div class="m-sheet-scroll m-filters">
         <div class="m-filter-group">
           <span class="m-filter-label">{t('monitor.sub.quality')}</span>
-          <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+          <div class="m-chips">
             {res.map(([r, l]) => <Chip key={r} on={f.res.indexOf(r) >= 0} label={l} onClick={() => set({ res: toggle(f.res, r) })} />)}
             <Chip on={f.hdr} label={t('filters.hdrDv')} onClick={() => set({ hdr: !f.hdr })} />
           </div>
         </div>
         <div class="m-filter-group">
           <span class="m-filter-label">{t('add.source')}</span>
-          <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+          <div class="m-chips">
             {src.map(([s, l]) => <Chip key={s} on={f.source.indexOf(s) >= 0} label={l} onClick={() => set({ source: toggle(f.source, s) })} />)}
-            <Chip on={f.hideCam} label={t('filters.hideCam')} onClick={() => set({ hideCam: !f.hideCam })} />
           </div>
         </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={f.hideCam}
+          class={'m-filter-switch' + (f.hideCam ? ' on' : '')}
+          onClick={() => set({ hideCam: !f.hideCam })}
+        >
+          <span>{t('filters.hideCam')}</span>
+          <span class={'m-switch' + (f.hideCam ? ' on' : '')} aria-hidden="true">
+            <span class="m-switch-knob" />
+          </span>
+        </button>
         <div class="m-filter-group">
           <span class="m-filter-label">{t('filters.sizeGb')}</span>
           <div class="m-filter-size">
@@ -84,13 +95,13 @@ export function FiltersSheet({
         </div>
         <div class="m-filter-group">
           <span class="m-filter-label">{t('filters.minSeeds')}</span>
-          <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+          <div class="m-chips">
             {[0, 1, 5, 20].map((n) => <Chip key={n} on={f.minSeeds === n} label={n ? String(n) : t('filters.anySeeds')} onClick={() => set({ minSeeds: n })} />)}
           </div>
         </div>
         <div class="m-filter-group">
           <span class="m-filter-label">{t('filters.voice')}</span>
-          <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+          <div class="m-chips">
             {voices.map(([v, l]) => <Chip key={v} on={f.voice.indexOf(v) >= 0} label={l} onClick={() => set({ voice: toggle(f.voice, v) })} />)}
             <Chip on={f.rusSubs} label={t('filters.rusSubsChip')} onClick={() => set({ rusSubs: !f.rusSubs })} />
           </div>
@@ -98,7 +109,7 @@ export function FiltersSheet({
         {(seasons.length > 0 || f.season > 0) && (
           <div class="m-filter-group">
             <span class="m-filter-label">{t('category.tv')}</span>
-            <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+            <div class="m-chips">
               {seasons.map((s) => <Chip key={s} on={f.season === s} label={t('library.season', { n: s })} onClick={() => set({ season: f.season === s ? 0 : s })} />)}
               <Chip on={f.fullSeason} label={t('filters.fullSeasonOnly')} onClick={() => set({ fullSeason: !f.fullSeason })} />
             </div>

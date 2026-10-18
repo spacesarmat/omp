@@ -152,52 +152,54 @@ export function AudioPlayer({ hash, token }: { hash: string; token: number }) {
           </button>
         </div>
       </div>
-      <section class="m-set-group">
-        <div class="m-set-label">{t('audiobooks.speed')}</div>
-        <div class="m-audio-chips" role="radiogroup" aria-label={t('audiobooks.speed')} data-audio-speed="" data-hint-anchor="audiobookPlayer">
-          {AUDIO_SPEEDS.map((n) => (
-            <button
-              key={n}
-              type="button"
-              role="radio"
-              class={'m-btn m-btn-secondary m-btn-sm' + (curSpeed === n ? ' on' : '')}
-              aria-checked={curSpeed === n}
-              aria-pressed={curSpeed === n}
-              onClick={() => {
-                setSpeed(n);
-                send('speed', { speed: n });
-              }}
-            >
-              {String(n) + '×'}
-            </button>
-          ))}
-        </div>
-      </section>
-      <section class="m-set-group">
-        <div class="m-set-label" data-sleep-label="">
-          {t('audiobooks.sleep')}
-          {sleepLeft ? ' · ' + sleepLeft : ''}
-        </div>
-        <div class="m-audio-chips" role="radiogroup" aria-label={t('audiobooks.sleep')} data-audio-sleep="">
-          {SLEEP_CHOICES.map((id) => (
-            <button
-              key={id}
-              type="button"
-              role="radio"
-              class={'m-btn m-btn-secondary m-btn-sm' + (curSleep === id ? ' on' : '')}
-              aria-checked={curSleep === id}
-              aria-pressed={curSleep === id}
-              data-sleep={id}
-              onClick={() => {
-                setSleep(id);
-                send('sleep', { sleep: id });
-              }}
-            >
-              {SLEEP_LABEL[id]()}
-            </button>
-          ))}
-        </div>
-      </section>
+      <div data-hint-anchor="audiobookPlayer">
+        <section class="m-set-group">
+          <div class="m-set-label">{t('audiobooks.speed')}</div>
+          <div class="m-audio-chips" role="radiogroup" aria-label={t('audiobooks.speed')} data-audio-speed="">
+            {AUDIO_SPEEDS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                class={'m-btn m-btn-secondary m-btn-sm' + (curSpeed === n ? ' on' : '')}
+                aria-checked={curSpeed === n}
+                aria-pressed={curSpeed === n}
+                onClick={() => {
+                  setSpeed(n);
+                  send('speed', { speed: n });
+                }}
+              >
+                {String(n) + '×'}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section class="m-set-group">
+          <div class="m-set-label" data-sleep-label="">
+            {t('audiobooks.sleep')}
+            {sleepLeft ? ' · ' + sleepLeft : ''}
+          </div>
+          <div class="m-audio-chips" role="radiogroup" aria-label={t('audiobooks.sleep')} data-audio-sleep="">
+            {SLEEP_CHOICES.map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                class={'m-btn m-btn-secondary m-btn-sm' + (curSleep === id ? ' on' : '')}
+                aria-checked={curSleep === id}
+                aria-pressed={curSleep === id}
+                data-sleep={id}
+                onClick={() => {
+                  setSleep(id);
+                  send('sleep', { sleep: id });
+                }}
+              >
+                {SLEEP_LABEL[id]()}
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

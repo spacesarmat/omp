@@ -105,6 +105,9 @@ describe('«Аудиокниги»', () => {
     mount(<Audiobooks />);
     expect(el.querySelector('[data-row="audiobook-search"]')!.textContent).toContain('Найти');
     expect(el.querySelector('[data-row="audiobook-mine"]')!.textContent).toContain('Мои книги');
+    const hintAnchor = el.querySelector('[data-hint-anchor="audiobooks"]')!;
+    expect(hintAnchor.querySelector('[data-row="audiobook-search"]')).toBeTruthy();
+    expect(hintAnchor.querySelector('[data-row="audiobook-mine"]')).toBeTruthy();
     act(() => (el.querySelector('[data-row="audiobook-mine"]') as HTMLButtonElement).click());
     expect(currentRoute.value).toEqual({ name: 'audiobookMine' });
   });
@@ -468,6 +471,43 @@ describe('«Аудиокниги»', () => {
       for (let i = 0; i < 5; i++) await Promise.resolve();
     });
     expect(calls).toEqual(['play']);
+  });
+
+  it('anchors the player hint on speed and the sleep timer together', async () => {
+    setAudioBridge({
+      prepare: () => Promise.resolve(),
+      play: () => Promise.resolve({
+        active: true,
+        playing: true,
+        index: 0,
+        positionMs: 1000,
+        durationMs: 5000,
+        speed: 1,
+        sleep: 'off',
+        sleepLeftMs: 0,
+        count: 1,
+        title: '2',
+        book: 'Мастер',
+        hash: HASH,
+        fileId: 4,
+      }),
+      control: () => Promise.resolve(null),
+      state: () => Promise.resolve(null),
+      onState: () => () => undefined,
+    });
+    const q = setAudioLaunch({
+      hash: HASH,
+      book: 'Мастер',
+      start: 0,
+      positionMs: 0,
+      items: [{ url: 'http://127.0.0.1:8090/a', title: '2', fileId: 4, startMs: 0, endMs: 0 }],
+    });
+    mount(<AudioPlayer hash={HASH} token={q.token} />);
+    await flush();
+    const anchor = el.querySelector('[data-hint-anchor="audiobookPlayer"]')!;
+    expect(anchor.querySelector('[data-audio-speed]')).toBeTruthy();
+    expect(anchor.querySelector('[data-audio-sleep]')).toBeTruthy();
+    expect(el.querySelector('[data-audio-speed]')!.hasAttribute('data-hint-anchor')).toBe(false);
   });
 
   it('opening the current item does not start the queue again', async () => {

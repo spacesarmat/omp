@@ -53,6 +53,7 @@ describe('TV onboarding', () => {
 
     const host = await mount(h(OnboardingScreen, {}));
     expect(host.querySelector('[data-onboarding="tv"]')!.getAttribute('data-slide')).toBe('welcome');
+    expect(host.querySelector('.m-hint')).toBeNull();
     expect(host.textContent).toContain('Пропустить');
     expect(host.textContent).toContain('Далее');
     expect(host.querySelector('[data-fk="onb-skip"]')).toBeTruthy();
@@ -105,6 +106,7 @@ describe('TV onboarding', () => {
     expect(onboardingForce.value).toBe(false);
     const row = host.querySelector('[data-fk="set-onboarding"]') as HTMLElement;
     expect(row.textContent).toContain('Показать знакомство с приложением');
+    expect(host.querySelector('.m-hint')).toBeNull();
     await act(async () => row.click());
     expect(onboardingForce.value).toBe(true);
     expect(onboardingVisible('tv', 'settings')).toBe(true);

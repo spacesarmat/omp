@@ -5,6 +5,7 @@ import { showToast } from './toast';
 import { qualityLabels, gbText } from '../monitor/text';
 import { t, tp } from '../../../src/i18n';
 import { askNotifyOnce, reloadMonitor } from '../monitor/ui';
+import { askConfirm } from './confirm';
 import { addSubscription, loadSubs, removeSubscription, updateSubscription } from '../../../src/monitor/subs';
 import type { SubQuality, Subscription, SubscriptionInput } from '../../../src/monitor/types';
 import { allSources } from '../../../src/sources/registry';
@@ -94,9 +95,9 @@ export function SubSheet(p: {
     p.onClose();
   };
 
-  const remove = () => {
+  const remove = async () => {
     if (!p.sub) return;
-    if (!window.confirm(t('monitor.sub.deleteAsk', { query: p.sub.query }))) return;
+    if (!(await askConfirm(t('monitor.sub.deleteAsk', { query: p.sub.query }), t('common.delete'), { destructive: true }))) return;
     removeSubscription(p.sub.id);
     reloadMonitor();
     showToast(t('monitor.sub.deleted'));
@@ -222,7 +223,7 @@ export function SubSheet(p: {
       )}
       <div class="m-marks-actions">
         {p.sub ? (
-          <button type="button" class="m-btn m-btn-secondary m-danger-text" onClick={remove}>
+          <button type="button" class="m-btn m-btn-secondary m-danger-text" onClick={() => void remove()}>
             {t('common.delete')}
           </button>
         ) : (

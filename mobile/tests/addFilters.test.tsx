@@ -138,6 +138,31 @@ describe('Add filters sheet', () => {
     expect(loadSubs()[0].quality).toBe('2160');
   });
 
+  it('season 2 drops other seasons; the count and «Показать N» match, unknown titles stay last', async () => {
+    unregisterSource('fake');
+    const seasonRows = [
+      row({ Title: 'Гангстерленд / MobLand [01x01-10 из 10] (2026) WEB-DL 1080p', Seed: 198, detailUrl: 'https://f.example/s1', source: 'jacred' }),
+      row({ Title: 'Гангстерленд S02E01-08 WEB-DL 1080p', Seed: 40, detailUrl: 'https://f.example/s2', source: 'jackett' }),
+      row({ Title: 'Гангстерленд S01-S03 WEB-DL', Seed: 50, detailUrl: 'https://f.example/pack', source: 'rutor' }),
+      row({ Title: 'Gangsterland Complete series 1080p', Seed: 10, detailUrl: 'https://f.example/all', source: 'nnmclub' }),
+      row({ Title: 'Гангстерленд (2026) WEB-DL 1080p', Seed: 90, detailUrl: 'https://f.example/unk', source: 'kinozal' }),
+    ];
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve(seasonRows) });
+    await mountAndSearch();
+    expect(titles().length).toBe(5);
+    click(filtersChip());
+    click(sheetBtn('Сезон 2'));
+    expect(sheetBtn('Показать 4 раздачи')).toBeTruthy();
+    click(sheetBtn('Показать 4 раздачи'));
+    expect(titles()).toEqual([
+      'Гангстерленд S01-S03 WEB-DL',
+      'Гангстерленд S02E01-08 WEB-DL 1080p',
+      'Gangsterland Complete series 1080p',
+      'Гангстерленд (2026) WEB-DL 1080p',
+    ]);
+    expect(el.querySelector('[data-search-progress]')!.textContent).toContain('Найдено 4');
+  });
+
   it('shows English labels', async () => {
     applyLanguageSetting('en');
     try {

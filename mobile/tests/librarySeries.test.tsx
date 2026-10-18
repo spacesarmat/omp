@@ -11,6 +11,7 @@ import { addServer, setActiveServer, servers, removeServer } from '../../src/sto
 import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
 import { reloadProgress, saveProgress, serverViewed } from '../../src/store/progress';
 import { applyLanguageSetting } from '../../src/i18n';
+import { acceptConfirm, confirmText, mountConfirmHost, unmountConfirmHost } from './confirmHost';
 import { libraryTitle } from '../../src/lib/libraryView';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetSeriesMatches } from '../../src/lib/seriesMatch';
@@ -40,9 +41,11 @@ let serverList: Torrent[];
 let removeSpy: ReturnType<typeof vi.spyOn>;
 
 function mount(node = <Library />) {
+  unmountConfirmHost();
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
   act(() => render(node, el));
+  mountConfirmHost();
 }
 
 const cards = () => Array.from(el.querySelectorAll('.m-card, .m-vrow, .m-crow')) as HTMLElement[];
@@ -89,7 +92,6 @@ beforeEach(() => {
   removeSpy = vi.spyOn(TorrServerClient.prototype, 'remove').mockImplementation(async (h: string) => {
     serverList = serverList.filter((x) => x.hash !== h);
   });
-  window.confirm = vi.fn(() => true);
   // no TMDB: the series screen keeps its simple layout
   resetSeriesMatches();
   const offline = () => Promise.reject(new Error('catalog:offline'));
@@ -97,6 +99,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  unmountConfirmHost();
   if (el) act(() => render(null, el));
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -276,8 +279,9 @@ describe('Library series card', () => {
     expect(el.querySelector('.m-select-count')!.textContent).toBe('Выбрано: 3');
     expect(seriesCard()!.getAttribute('aria-pressed')).toBe('true');
     act(() => btn('Удалить (3)')!.click());
+    expect(confirmText()).toBe('Удалить 3 раздачи с сервера?');
+    await acceptConfirm();
     await flush();
-    expect(window.confirm).toHaveBeenCalledWith('Удалить 3 раздачи с сервера?');
     expect(removeSpy.mock.calls.map((c: unknown[]) => c[0] as string).sort()).toEqual(['s1', 's2', 'st']);
   });
 
@@ -299,8 +303,9 @@ describe('Library series card', () => {
     const labels = Array.from(m.querySelectorAll('button')).map((b) => (b.textContent || '').trim()).filter(Boolean);
     expect(labels).toEqual(expect.arrayContaining(['Открыть', 'Выбрать', 'Удалить сериал (2 раздачи)']));
     act(() => btn('Удалить сериал (2 раздачи)', m)!.click());
+    expect(confirmText()).toBe('Удалить 2 раздачи с сервера?');
+    await acceptConfirm();
     await flush();
-    expect(window.confirm).toHaveBeenCalledWith('Удалить 2 раздачи с сервера?');
     expect(removeSpy.mock.calls.map((c: unknown[]) => c[0] as string).sort()).toEqual(['s1', 's2']);
   });
 

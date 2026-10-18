@@ -4,6 +4,7 @@ import { Sheet } from './Sheet';
 import { Icon } from './Icon';
 import { navigate } from '../nav';
 import { deleteTorrents, reportDeleted } from '../lib/torrentActions';
+import { askConfirm } from './confirm';
 import { client } from '../../../src/store/servers';
 import { libraryTitle } from '../../../src/lib/libraryView';
 import type { SeriesGroup } from '../../../src/lib/seriesGroups';
@@ -22,7 +23,7 @@ export function SeriesMenu({ group, onClose, onSelect }: { group: SeriesGroup; o
   const remove = async () => {
     const c = client.value;
     if (!c || busy) return;
-    if (!window.confirm(tp('library.deleteAsk', n))) return;
+    if (!(await askConfirm(tp('library.deleteAsk', n), t('common.delete'), { destructive: true }))) return;
     setBusy(true);
     reportDeleted(await deleteTorrents(c, hashes));
     onClose();

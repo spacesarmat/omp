@@ -11,6 +11,7 @@ import { addServer, setActiveServer, servers, removeServer } from '../../src/sto
 import { torrents } from '../../src/store/library';
 import { reloadProgress, serverViewed } from '../../src/store/progress';
 import { applyLanguageSetting } from '../../src/i18n';
+import { acceptConfirm, confirmText, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { TorrServerClient } from '../../src/api/torrserver';
@@ -60,9 +61,11 @@ async function open(list: Torrent[], season?: number) {
   serverList = list.slice();
   const k = key(list);
   navigate({ name: 'series', key: k, season });
+  unmountConfirmHost();
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
   act(() => render(<Series seriesKey={k} />, el));
+  mountConfirmHost();
   await flush();
 }
 
@@ -100,7 +103,6 @@ beforeEach(() => {
   removeSpy = vi.spyOn(TorrServerClient.prototype, 'remove').mockImplementation(async (h: string) => {
     serverList = serverList.filter((x) => x.hash !== h);
   });
-  window.confirm = vi.fn(() => true);
   resetSeriesMatches();
   resetTo({ name: 'library' });
   // TMDB knows seasons 1 and 2: a season left with no release shows as missing
@@ -114,6 +116,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  unmountConfirmHost();
   if (el) act(() => render(null, el));
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -146,8 +149,10 @@ describe('release menu on the series screen', () => {
     // the sheet names the release that stays: the series name and the release's quality
     expect(document.querySelector('.m-sheet-title')!.textContent).toBe('Тёмная материя · 4K WEB-DL');
     act(() => option('Оставить только эту')!.click());
+    expect(confirmText()).toBe('Удалить ещё 1 раздачу 2-го сезона?');
+    expect(document.querySelector('[data-confirm="danger"]')!.textContent).toBe('Оставить только эту');
+    await acceptConfirm();
     await flush();
-    expect(window.confirm).toHaveBeenCalledWith('Удалить другую раздачу 2-го сезона (1)?');
     expect(removeSpy.mock.calls.map((c: unknown[]) => c[0])).toEqual(['s2b']);
     expect(document.querySelector('.m-opt')).toBeNull();
     expect(rowHashes().sort()).toEqual(['p12', 's2a']);
@@ -155,12 +160,12 @@ describe('release menu on the series screen', () => {
   });
 
   it('declining the confirm deletes nothing and keeps the menu', async () => {
-    window.confirm = vi.fn(() => false);
     await open([S1, S2A, S2B], 2);
     longPress(rowMain('s2b'));
     act(() => option('Оставить только эту')!.click());
+    expect(confirmText()).toBe('Удалить ещё 1 раздачу 2-го сезона?');
+    await declineConfirm();
     await flush();
-    expect(window.confirm).toHaveBeenCalledWith('Удалить другую раздачу 2-го сезона (1)?');
     expect(removeSpy).not.toHaveBeenCalled();
     expect(option('Удалить')).toBeTruthy();
   });
@@ -177,8 +182,9 @@ describe('release menu on the series screen', () => {
     await open([S1, S2A, S2B, S2C], 2);
     longPress(rowMain('s2a'));
     act(() => option('Keep only this one')!.click());
+    expect(confirmText()).toBe('Delete 2 more torrents of season 2?');
+    await acceptConfirm();
     await flush();
-    expect(window.confirm).toHaveBeenCalledWith('Delete the other torrents of season 2 (2)?');
     expect(removeSpy.mock.calls.map((c: unknown[]) => c[0]).sort()).toEqual(['s2b', 's2c']);
   });
 
@@ -186,6 +192,7 @@ describe('release menu on the series screen', () => {
     await open([S1, S2A], 2);
     longPress(rowMain('s2a'));
     act(() => option('Удалить')!.click());
+    await acceptConfirm();
     await flush();
     expect(removeSpy.mock.calls.map((c: unknown[]) => c[0])).toEqual(['s2a']);
     expect(currentRoute.value.name).toBe('series');
@@ -199,11 +206,13 @@ describe('release menu on the series screen', () => {
     await open([S2A, S2B], 2);
     longPress(rowMain('s2a'));
     act(() => option('Удалить')!.click());
+    await acceptConfirm();
     await flush();
     expect(currentRoute.value.name).toBe('series');
     expect(rowHashes()).toEqual(['s2b']);
     longPress(rowMain('s2b'));
     act(() => option('Удалить')!.click());
+    await acceptConfirm();
     await flush();
     expect(torrents.value).toEqual([]);
     expect(currentRoute.value.name).toBe('library');

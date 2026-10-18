@@ -17,6 +17,7 @@ import { addFindings, addSubscription, getSubscription, loadSubs, rememberSeen, 
 import type { SourceResult } from '../../src/sources/types';
 import type { Subscription } from '../../src/monitor/types';
 import { subRule } from '../src/monitor/text';
+import { acceptConfirm, confirmText, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
 
 let el: HTMLElement;
 let mon: FakeMonitor;
@@ -46,9 +47,11 @@ function row(p: Partial<SourceResult>): SourceResult {
 }
 
 function sheet(p: { sub?: Subscription; initial?: any; onClose?: () => void; onDeleted?: () => void } = {}) {
+  unmountConfirmHost();
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
   act(() => render(<SubSheet sub={p.sub} initial={p.initial} onClose={p.onClose || (() => {})} onDeleted={p.onDeleted} />, el));
+  mountConfirmHost();
 }
 
 beforeEach(() => {
@@ -67,6 +70,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  unmountConfirmHost();
   if (el) act(() => render(null, el));
   unregisterSource('fake');
   mon.restore();
@@ -184,15 +188,17 @@ describe('SubSheet', () => {
     }
   });
 
-  it('«Удалить» asks and deletes', () => {
+  it('«Удалить» asks and deletes', async () => {
     const s = addSubscription({ query: 'Дюна', quality: '', sources: null, notify: true })!;
     const deleted = vi.fn();
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     sheet({ sub: s, onDeleted: deleted });
     click(byText('Удалить'));
+    expect(confirmText()).toBe('Удалить подписку «Дюна»?');
+    expect(document.querySelector('[data-confirm="danger"]')!.textContent).toBe('Удалить');
+    await declineConfirm();
     expect(loadSubs()).toHaveLength(1);
-    confirm.mockReturnValue(true);
     click(byText('Удалить'));
+    await acceptConfirm();
     expect(loadSubs()).toEqual([]);
     expect(deleted).toHaveBeenCalled();
   });
@@ -200,9 +206,11 @@ describe('SubSheet', () => {
 
 describe('SubFindings', () => {
   function mount(p: { id: string; finding?: string; watch?: boolean }) {
+    unmountConfirmHost();
     document.body.innerHTML = '<div id="app"></div>';
     el = document.getElementById('app')!;
     act(() => render(<SubFindings {...p} />, el));
+    mountConfirmHost();
   }
 
   it('newest first, «Новая» marks, opening counts them as looked at', async () => {
@@ -227,8 +235,9 @@ describe('SubFindings', () => {
     mount({ id: s.id });
     expect(el.textContent).toContain('Подписка ещё не проверялась');
     click(byText('Изменить'));
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     click(byText('Удалить'));
+    expect(confirmText()).toBe('Удалить подписку «Дюна»?');
+    await acceptConfirm();
     expect(currentRoute.value.name).toBe('news');
   });
 
@@ -296,11 +305,12 @@ describe('SubSheet in English', () => {
     await flush();
     expect(toast.value).toBe('Subscription created');
     const [s] = loadSubs();
-    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
     sheet({ sub: s });
     click(byText('Delete'));
-    expect(ask).toHaveBeenCalledWith('Delete the subscription “Dune”?');
-    ask.mockRestore();
+    expect(confirmText()).toBe('Delete the subscription “Dune”?');
+    expect(document.querySelector('[data-confirm-cancel]')!.textContent).toBe('Cancel');
+    await declineConfirm();
+    expect(loadSubs()).toHaveLength(1);
   });
 });
 
