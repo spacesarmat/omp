@@ -25,7 +25,7 @@ export function swipeSwitches(dx: number, ms: number, width: number): boolean {
 
 /** Touches that belong to something else: the touchpad, text fields, open sheets, sideways-scrolling rows. */
 export function swipeBlocked(target: Element | null): boolean {
-  if (document.querySelector('.m-sheet-host')) return true;
+  if (document.querySelector('.m-sheet-host, [data-onboarding]')) return true;
   for (let n: Element | null = target; n && n !== document.body; n = n.parentElement) {
     if (n.matches('.m-touchpad, input, textarea, select, [data-noswipe]')) return true;
     const el = n as HTMLElement;

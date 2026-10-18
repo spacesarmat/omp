@@ -49,6 +49,8 @@ import { DonateSheet } from './ui/DonateSheet';
 import { syncSupport, localSupportUntil } from './donate';
 import { torrents } from '../../src/store/library';
 import { checkWhatsNew } from '../../src/store/whatsNew';
+import { Onboarding } from './ui/Onboarding';
+import { armOnboardingBoot, holdOnboarding, onboardingVisible, trackOnboardingBoot } from '../../src/onboarding/gate';
 import { phoneChangelog } from './lib/phoneChangelog';
 import { APP_VERSION } from '../../src/version';
 import { updatePrompt, installUpdateChecks } from '../../src/store/updates';
@@ -207,12 +209,11 @@ export function App() {
   useEffect(() => {
     let off: (() => void) | undefined;
     try {
-      native
-        .takePendingMagnet()
-        .then((l) => {
+      trackOnboardingBoot(
+        native.takePendingMagnet().then((l) => {
           if (l) intakeMagnet(l);
-        })
-        .catch(() => {});
+        }),
+      ).catch(() => {});
       off = native.onMagnet(intakeMagnet);
     } catch {
       /* native layer unavailable */
@@ -224,15 +225,16 @@ export function App() {
   useEffect(() => {
     const open = (hash: string) => {
       if (!/^[0-9a-fA-F]{40}$/.test(hash)) return;
+      holdOnboarding('audiobookPlayer');
       const launch = audioLaunch.value;
       navigate({ name: 'audiobookPlayer', hash, token: launch && launch.hash === hash ? launch.token : 0 });
     };
     let offOpen: (() => void) | undefined;
     let offAudio: (() => void) | undefined;
     try {
-      native.takePendingAudioOpen().then((h) => {
+      trackOnboardingBoot(native.takePendingAudioOpen().then((h) => {
         if (h) open(h);
-      }).catch(() => {});
+      })).catch(() => {});
       offOpen = native.onAudioOpen(open);
       offAudio = native.onAudio((s) => rememberAudio(s));
     } catch {
@@ -259,11 +261,11 @@ export function App() {
     let remove: (() => void) | undefined;
     let cancelled = false;
     try {
-      void CapApp.getLaunchUrl()
-        .then((res) => {
+      trackOnboardingBoot(
+        CapApp.getLaunchUrl().then((res) => {
           if (res && res.url) intakeBilling(res.url);
-        })
-        .catch(() => {});
+        }),
+      ).catch(() => {});
       CapApp.addListener('appUrlOpen', (ev) => intakeBilling(ev.url))
         .then((h) => {
           if (cancelled) void h.remove();
@@ -293,9 +295,11 @@ export function App() {
       if (summary && summary.notifyBlocked) void notifyBlocked().catch(() => {});
     });
     const offOpen = monitorNative.onOpen(openNewsLink);
-    void monitorNative.takeOpen().then((url) => {
-      if (url) openNewsLink(url);
-    });
+    trackOnboardingBoot(
+      monitorNative.takeOpen().then((url) => {
+        if (url) openNewsLink(url);
+      }),
+    ).catch(() => {});
     return () => {
       offDone();
       offOpen();
@@ -327,6 +331,9 @@ export function App() {
     checkWhatsNew(phoneChangelog(), APP_VERSION);
   }, []);
 
+  // The tour waits until magnet, notification and billing intakes have applied their route.
+  useEffect(() => armOnboardingBoot(), []);
+
   // background update check 3 s after start and on each return to OMP (at most hourly); honours the setting
   useEffect(
     () => installUpdateChecks((gap) => void runUpdateCheck({ manual: false, url: phoneFeedUrl(), minIntervalMs: gap }).catch(() => {})),
@@ -340,6 +347,7 @@ export function App() {
   );
 
   const route = currentRoute.value;
+  const showTour = onboardingVisible('phone', route.name);
   const prompt = updatePrompt.value;
   const localPrompt = localUpdatePrompt.value;
   const tabRoot = TABS.includes(route.name);
@@ -424,11 +432,12 @@ export function App() {
       ) : (
         <Settings />
       )}
-      {prompt && tabRoot && <UpdateSheet info={prompt} />}
+      {showTour && <Onboarding />}
+      {prompt && tabRoot && !showTour && <UpdateSheet info={prompt} />}
       {/* TorrServer after OMP sheet: pin arrives with the APK, binary still needs a separate download */}
-      {!prompt && localPrompt && tabRoot && <LocalUpdateSheet info={localPrompt} />}
+      {!prompt && localPrompt && tabRoot && !showTour && <LocalUpdateSheet info={localPrompt} />}
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
-      {tabRoot && !prompt && !localPrompt && <WhatsNewSheet />}
+      {tabRoot && !prompt && !localPrompt && !showTour && <WhatsNewSheet />}
       {tabRoot && <DonateSheet />}
       <CertChangedSheet />
       <Toast />

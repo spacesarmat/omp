@@ -49,6 +49,11 @@ export interface AppSettings {
   alwaysFfmpeg: boolean;
   /** UI language: 'system' follows the device (ru/uk/be/kk → Russian, else English). */
   language: LanguageSetting;
+  /**
+   * First-run tour the person has finished. 0 = not yet.
+   * Raise ONBOARDING_VERSION (src/onboarding/gate.ts) to show a new tour once.
+   */
+  onboardingVersion: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -74,6 +79,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   backgroundAudioTouched: false,
   alwaysFfmpeg: false,
   language: 'system',
+  onboardingVersion: 0,
 };
 
 const KEY = 'tsp.settings';
@@ -101,6 +107,8 @@ export function sanitizeSettings(v: unknown): AppSettings {
     out.phonePlayer = out.videoPlayer === 'p2160' ? 'p2160' : DEFAULT_SETTINGS.phonePlayer;
   }
   if (['system', 'ru', 'en'].indexOf(out.language) < 0) out.language = DEFAULT_SETTINGS.language;
+  if (!Number.isFinite(out.onboardingVersion) || out.onboardingVersion < 0) out.onboardingVersion = 0;
+  else out.onboardingVersion = Math.floor(out.onboardingVersion);
   // The switch used to default to off and every saved settings blob stored that. A phone that never
   // moved the switch gets the new default (on). A later choice is kept.
   const touched = isObject(v) && v.backgroundAudioTouched === true;

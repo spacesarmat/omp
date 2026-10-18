@@ -12,6 +12,7 @@ import { loadJson, saveJson } from '../../../src/store/storage';
 import { getSubscription, unseenCount } from '../../../src/monitor/subs';
 import { loadLastRun, loadMonitorSettings, type MonitorSettings, type MonitorSummary } from '../../../src/monitor/settings';
 import { BETTER_ID, EPISODES_ID } from '../../../src/monitor/types';
+import { holdOnboarding } from '../../../src/onboarding/gate';
 
 /** Bumped whenever the monitor stores may have changed (a background run, an edit, the app back in front). */
 export const monitorVersion = signal(0);
@@ -135,11 +136,14 @@ export function openNewsLink(url: string): void {
   if (!l || !activeServer.value) return;
   reloadMonitor();
   if (l.sub === EPISODES_ID || l.sub === BETTER_ID) {
+    holdOnboarding('news');
     switchTab({ name: 'news', seg: 'subs', finding: l.finding, watch: l.watch });
     return;
   }
+  const sub = getSubscription(l.sub);
+  holdOnboarding(sub ? 'subFindings' : 'news');
   switchTab({ name: 'news', seg: 'subs' });
-  if (getSubscription(l.sub)) navigate({ name: 'subFindings', id: l.sub, finding: l.finding, watch: l.watch });
+  if (sub) navigate({ name: 'subFindings', id: l.sub, finding: l.finding, watch: l.watch });
 }
 
 /**

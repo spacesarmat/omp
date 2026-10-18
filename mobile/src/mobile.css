@@ -1645,3 +1645,35 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 html.m-keypad-open { --m-nav-reserve: var(--m-keypad-h); }
 html.m-keypad-open .m-nav, html.m-keypad-open .m-mini, html.m-keypad-open .m-mini-pad { display: none; }
 html.m-keypad-open .m-toast-host { bottom: calc(var(--m-keypad-h) + 16px + env(safe-area-inset-bottom)); }
+
+/* First-run tour: full screen, above the tab bar and sheets. */
+.m-onb {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: calc(28px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  overflow: auto;
+}
+.m-onb-step { color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
+.m-onb-main { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; min-height: 0; }
+.m-onb-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 28px;
+  background: #3A3320;
+  color: var(--accent);
+}
+.m-onb h1 { font-size: 28px; line-height: 1.2; margin: 0; }
+.m-onb-text { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.45; }
+.m-onb-dots { display: flex; justify-content: center; gap: 8px; }
+.m-onb-dot { width: 8px; height: 8px; border-radius: 99px; background: var(--panel-2); }
+.m-onb-dot.on { width: 22px; background: var(--accent); }
+.m-onb-actions { display: flex; gap: 12px; }
+.m-onb-actions .m-btn { flex: 1; }

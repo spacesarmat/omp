@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentType } from 'preact';
 import { lang, t } from './i18n';
 import { currentRoute, goBack, routeKey, Route } from './ui/nav';
@@ -25,6 +25,8 @@ import { PhoneSourcesScreen } from './screens/PhoneSources';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
 import { WhatsNewDialog, shouldShowWhatsNew } from './ui/WhatsNewDialog';
 import { checkWhatsNew, whatsNew } from './store/whatsNew';
+import { OnboardingScreen } from './ui/OnboardingScreen';
+import { armOnboardingBoot, onboardingVisible, resumeOnboarding } from './onboarding/gate';
 import { getChangelog } from './lib/changelogData';
 import { APP_VERSION } from './version';
 import { checkForUpdate, installUpdateChecks, updatePrompt } from './store/updates';
@@ -121,16 +123,28 @@ export function App() {
   useEffect(() => (platformKind() === 'androidtv' ? syncNativeLanguage() : undefined), []);
   useEffect(() => installUpdateChecks((gap) => { checkForUpdate({ manual: false, minIntervalMs: gap }); }), []);
   useEffect(() => { checkWhatsNew(getChangelog(), APP_VERSION); }, []);
+  useEffect(() => armOnboardingBoot(), []);
   const r = currentRoute.value;
+  // Leaving the player ends a launch pause. The pause itself stays while the file list is still loading.
+  const played = useRef(false);
+  useEffect(() => {
+    if (r.name === 'player') played.current = true;
+    else if (played.current) {
+      played.current = false;
+      resumeOnboarding();
+    }
+  }, [r.name]);
   // opened by the user (Update screen) shows anywhere; the automatic one waits for the update prompt, the player and pairing
   const wn = whatsNew.value;
   const anyDialog = dialogOpen.value || textDialogOpen.value;
-  const showWhatsNew = !!wn && !anyDialog && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value));
+  const showTour = onboardingVisible('tv', r.name);
+  const showWhatsNew = !!wn && !showTour && !anyDialog && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value));
   return (
     <div class="app" key={lang.value}>
       <div class="screen-host" key={routeKey(r)}>{renderRoute(r)}</div>
-      {shouldShowUpdateDialog(r.name) && !anyDialog && <UpdateDialog />}
+      {shouldShowUpdateDialog(r.name) && !anyDialog && !showTour && <UpdateDialog />}
       {showWhatsNew && <WhatsNewDialog />}
+      {showTour && <OnboardingScreen />}
       <DialogHost />
       <TextDialogHost />
       <ToastHost />
