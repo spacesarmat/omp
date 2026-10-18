@@ -29,6 +29,18 @@ These Jackett indexers were disabled by moving their definitions to `data/jacket
 
 `warp` (`caomingjun/warp`) provides an HTTP proxy on `:1080` so the billing bot can reach `api.telegram.org` when the VPS IP is blocked. Jackett uses that same proxy.
 
+## Emergency admin login
+
+The billing panel signs in through Telegram only. `POST /admin/login` rejects a password. `BILLING_ADMIN_PASSWORD`, if it is still set in `.env`, is unused — leave `.env` as it is.
+
+If Telegram is down, mint a one-time link from the VPS shell. It lives 10 minutes, works once, and is written to the admin journal as actor `cli`. The command prints the URL on stdout and does not write the token into the container log or the database (only a hash is stored).
+
+```bash
+docker exec omp-billing node src/adminLoginLink.mjs
+```
+
+Open that URL in a browser. The public host comes from the panel setting «Публичный адрес», or from `BILLING_PUBLIC_ORIGIN` when the setting is empty.
+
 ## Update billing from git
 
 CI builds `ops/billing` and pushes `ghcr.io/spacesarmat/omp-billing:latest` (workflow `billing-image.yml`). Use that only when `.env` points `BILLING_IMAGE` at the GHCR tag:

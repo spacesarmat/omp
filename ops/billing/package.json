@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.mjs",
+    "admin-login-link": "node src/adminLoginLink.mjs",
     "build:admin": "npm --prefix admin ci && npm --prefix admin run build",
     "test": "cd ../.. && npx vitest run --config ops/billing/vitest.config.ts"
   },

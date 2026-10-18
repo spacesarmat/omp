@@ -8,9 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CopyBtn, DayChart, Devices, Pager, Skeleton, SubStatus, toast } from '@/components/chrome';
 import { api, post, type PostResult } from '@/lib/api';
-import { auditAction, AUDIT_FILTERS, downloadCsv, eventKind, FAIL_FILTERS, failReason, problemKind, serviceError, when } from '@/lib/text';
+import { Stamp } from '@/components/stamp';
+import { actorLine, auditAction, AUDIT_FILTERS, downloadCsv, FAIL_FILTERS, failReason, problemKind, serviceError, when } from '@/lib/text';
 import { matchesSubscriptionFilter, reminderTargets } from '@/lib/subs';
 import type { HomeData, PaymentRow, ProblemRow, SubRow } from '@/lib/types';
+
+export { HomeFeed } from '@/panels/EventFeed';
 
 type Run = (path: string, fields?: Record<string, unknown>) => Promise<PostResult | undefined>;
 
@@ -132,6 +135,7 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
             <TableRow>
               <TableHead>Код</TableHead>
               <TableHead>Дни</TableHead>
+              <TableHead>Создан</TableHead>
               <TableHead>Использования</TableHead>
               <TableHead />
             </TableRow>
@@ -139,7 +143,7 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
           <TableBody>
             {promos.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-muted-foreground">
+                <TableCell colSpan={5} className="text-muted-foreground">
                   Нет промокодов
                 </TableCell>
               </TableRow>
@@ -152,6 +156,9 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
                     <span className={p.revoked ? 'text-muted-foreground' : 'font-mono'}>{p.code}</span> <CopyBtn value={p.code} />
                   </TableCell>
                   <TableCell>{p.days}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <Stamp ms={p.createdAt} />
+                  </TableCell>
                   <TableCell>
                     {p.uses}/{p.maxUses}
                   </TableCell>
@@ -255,6 +262,7 @@ export function SubsPanel({
           <TableHeader>
             <TableRow>
               <TableHead>Кто</TableHead>
+              <TableHead>Создана</TableHead>
               <TableHead>До</TableHead>
               <TableHead>Статус</TableHead>
               <TableHead>Устройства</TableHead>
@@ -264,7 +272,7 @@ export function SubsPanel({
           <TableBody>
             {shown.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground">
+                <TableCell colSpan={6} className="text-muted-foreground">
                   Нет подписок
                 </TableCell>
               </TableRow>
@@ -275,7 +283,12 @@ export function SubsPanel({
                   {s.who}
                   <CopyBtn value={s.telegramId} />
                 </TableCell>
-                <TableCell>{s.paidUntilText}</TableCell>
+                <TableCell className="whitespace-nowrap">
+                  <Stamp ms={s.createdAt} />
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
+                  <Stamp ms={s.paidUntil} />
+                </TableCell>
                 <TableCell>
                   <SubStatus status={s.status} />
                 </TableCell>
@@ -311,7 +324,7 @@ function ProblemList({ rows }: { rows: ProblemRow[] }) {
               <li key={i} className="rounded-md border border-red-900/50 bg-red-950/30 px-3 py-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="bad">{problemKind(p.kind)}</Badge>
-                  <span className="text-muted-foreground">{p.at ? when(p.at) : ''}</span>
+                  <Stamp ms={p.at} />
                 </div>
                 <div className="mt-1 break-all text-zinc-100">{bits.length ? bits.join(' · ') : p.text || 'Нет подробностей'}</div>
               </li>
@@ -437,7 +450,7 @@ export function FinancePanel({ home }: { home: HomeData }) {
             <Table className="min-w-[40rem]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Когда</TableHead>
+                  <TableHead>Когда, МСК</TableHead>
                   <TableHead>Сумма</TableHead>
                   <TableHead>Кто</TableHead>
                   <TableHead>Метка</TableHead>
@@ -453,7 +466,9 @@ export function FinancePanel({ home }: { home: HomeData }) {
                 ) : null}
                 {rows.map((p, i) => (
                   <TableRow key={(p.operationId || '') + i}>
-                    <TableCell>{p.at ? when(p.at) : '—'}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <Stamp ms={p.at} />
+                    </TableCell>
                     <TableCell>{p.amount || '—'}</TableCell>
                     <TableCell>
                       {p.accountId ? (
@@ -474,58 +489,6 @@ export function FinancePanel({ home }: { home: HomeData }) {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-export function HomeFeed({ events }: { events: NonNullable<HomeData['events']> }) {
-  const [kind, setKind] = useState('');
-  const [page, setPage] = useState(1);
-  const size = 15;
-  const filtered = events.filter((e) => !kind || e.kind === kind);
-  const pages = Math.max(1, Math.ceil(filtered.length / size));
-  const slice = filtered.slice((page - 1) * size, page * size);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Лента</CardTitle>
-        <CardDescription>
-          <select
-            className={selectClass}
-            value={kind}
-            aria-label="Тип события"
-            onChange={(e) => {
-              setPage(1);
-              setKind(e.target.value);
-            }}
-          >
-            <option value="">Все события</option>
-            <option value="pay">Оплата</option>
-            <option value="promo">Промо</option>
-            <option value="activate">Активация</option>
-            <option value="fail">Отказ</option>
-          </select>
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {slice.length === 0 ? <p className="text-muted-foreground">Пока пусто</p> : null}
-        <ul className="space-y-2 text-sm">
-          {slice.map((e, i) => (
-            <li key={i}>
-              <Badge variant="count" className="mr-2">
-                {eventKind(e.kind)}
-              </Badge>
-              {e.text}{' '}
-              {e.accountId ? (
-                <a className="text-primary" href={'/admin/?id=' + encodeURIComponent(e.accountId)}>
-                  карточка
-                </a>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-        <Pager page={page} pages={pages} total={filtered.length} onPage={setPage} />
-      </CardContent>
-    </Card>
   );
 }
 
@@ -838,13 +801,13 @@ export function AuditPanel() {
   const [q, setQ] = useState('');
   const [action, setAction] = useState('');
   const [page, setPage] = useState(1);
-  const [rows, setRows] = useState<{ at?: number; action: string; detail: string }[] | null>(null);
+  const [rows, setRows] = useState<{ at?: number; action: string; detail: string; actor?: { kind?: string; label?: string } }[] | null>(null);
   const [total, setTotal] = useState(0);
   const limit = 30;
   useEffect(() => {
     let stop = false;
     const params = new URLSearchParams({ q, action, offset: String((page - 1) * limit), limit: String(limit) });
-    void api<{ audit?: { at?: number; action: string; detail: string }[]; total?: number; auth?: boolean }>('/admin/api/audit?' + params).then((r) => {
+    void api<{ audit?: { at?: number; action: string; detail: string; actor?: { kind?: string; label?: string } }[]; total?: number; auth?: boolean }>('/admin/api/audit?' + params).then((r) => {
       if (stop || r.auth === false) return;
       setRows(r.audit || []);
       setTotal(r.total || 0);
@@ -893,8 +856,10 @@ export function AuditPanel() {
         ) : (
           <ul className="space-y-1 text-sm">
             {rows.map((a, i) => (
-              <li key={i}>
-                <span className="text-muted-foreground">{a.at ? when(a.at) : ''}</span> {auditAction(a.action)}{' '}
+              <li key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <Stamp ms={a.at} />
+                <span>{actorLine(a.actor, { fallback: 'админ' })}</span>
+                <span>{auditAction(a.action)}</span>
                 <span className="text-muted-foreground">{a.detail}</span>
               </li>
             ))}
@@ -964,7 +929,7 @@ export function FailsPanel() {
           <Table className="min-w-[32rem]">
             <TableHeader>
               <TableRow>
-                <TableHead>Когда</TableHead>
+                <TableHead>Когда, МСК</TableHead>
                 <TableHead>Причина</TableHead>
                 <TableHead>Устройство</TableHead>
               </TableRow>
@@ -979,7 +944,9 @@ export function FailsPanel() {
               ) : null}
               {rows.map((f, i) => (
                 <TableRow key={i}>
-                  <TableCell>{f.at ? when(f.at) : '—'}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <Stamp ms={f.at} />
+                  </TableCell>
                   <TableCell>{failReason(f.reason)}</TableCell>
                   <TableCell className="font-mono text-xs">{f.deviceId ? f.deviceId.slice(0, 8) : '—'}</TableCell>
                 </TableRow>
@@ -1002,31 +969,20 @@ export function SecurityCard({
   sessions: NonNullable<HomeData['sessions']>;
   sessionId: string;
 }) {
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [next2, setNext2] = useState('');
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Смена пароля</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-2 md:grid-cols-4">
-          <Input type="password" placeholder="Текущий" value={current} onChange={(e) => setCurrent(e.target.value)} />
-          <Input type="password" placeholder="Новый" value={next} onChange={(e) => setNext(e.target.value)} />
-          <Input type="password" placeholder="Ещё раз" value={next2} onChange={(e) => setNext2(e.target.value)} />
-          <Button onClick={() => void run('/admin/password', { current, next, next2 })}>Сменить</Button>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
           <CardTitle>Сессии</CardTitle>
+          <CardDescription>Вход только через Telegram. Время — МСК.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table className="min-w-[28rem]">
+          <Table className="min-w-[36rem]">
             <TableHeader>
               <TableRow>
                 <TableHead>Сессия</TableHead>
+                <TableHead>Кто</TableHead>
+                <TableHead>Создана</TableHead>
                 <TableHead>Активность</TableHead>
                 <TableHead />
               </TableRow>
@@ -1037,7 +993,13 @@ export function SecurityCard({
                   <TableCell>
                     {s.id.slice(0, 8)}…{s.id === sessionId ? ' (эта)' : ''}
                   </TableCell>
-                  <TableCell>{s.lastSeen ? when(s.lastSeen) : '—'}</TableCell>
+                  <TableCell>{actorLine(s.actor, { fallback: 'админ' })}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <Stamp ms={s.createdAt} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <Stamp ms={s.lastSeen} />
+                  </TableCell>
                   <TableCell>
                     {s.id !== sessionId ? (
                       <Button size="sm" variant="secondary" onClick={() => void run('/admin/session-revoke', { sessionId: s.id })}>

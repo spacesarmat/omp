@@ -6,7 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/chrome';
 import { api, post } from '@/lib/api';
 import { nextSupportSelection } from '@/lib/subs';
-import { personLabel, when } from '@/lib/text';
+import { Stamp } from '@/components/stamp';
+import { personLabel } from '@/lib/text';
 import type { SupportMsg, SupportThread } from '@/lib/types';
 
 function sameMessages(a: SupportMsg[], b: SupportMsg[]) {
@@ -149,6 +150,9 @@ export function SupportPanel({
               onClick={() => setPicked(row.telegramId)}
             >
               <div className="font-medium">{personLabel(row.telegramId, row.username, row.name)}</div>
+              <div className="text-xs text-muted-foreground">
+                <Stamp ms={row.lastAt} toggle={false} />
+              </div>
               <div className="truncate text-xs text-muted-foreground">{row.lastText}</div>
             </button>
           ))}
@@ -181,7 +185,7 @@ export function SupportPanel({
             {messages.map((m) => (
               <div key={m.id} className={m.direction === 'out' ? 'text-right' : ''}>
                 <div className="text-xs text-muted-foreground">
-                  {m.direction === 'out' ? 'Админ' : 'Пользователь'} · {when(m.at)}
+                  {m.direction === 'out' ? 'Админ' : 'Пользователь'} · <Stamp ms={m.at} toggle={false} />
                   {m.via === 'panel' ? ' · панель' : ''}
                 </div>
                 <div className="inline-block max-w-[90%] whitespace-pre-wrap rounded-md bg-muted px-3 py-2 text-sm">{m.text}</div>

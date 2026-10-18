@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { homePayload, userPayload } from '../src/adminApi.mjs';
 import { matchesSubscriptionFilter, nextSupportSelection, reminderTargets } from '../admin/src/lib/subs.ts';
 import { adminNotifyEnabled, paymentAdminNotices, serviceDownNotices, botReply } from '../src/bot.mjs';
-import { hashPassword } from '../src/crypto.mjs';
 import {
   accountCard,
   createPromos,
@@ -13,13 +12,14 @@ import {
   dailySeries,
   financeReport,
   issueActivation,
+  issueCliAdminLogin,
   issueMany,
   openAccount,
   pagePayments,
 } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
 import { maskWallet, mergeSettings, publicAdminSettings, SECRET_MASK } from '../src/services.mjs';
-import { emptyState, readState, writeState } from '../src/store.mjs';
+import { emptyState, readState, updateState, writeState } from '../src/store.mjs';
 import { notificationHash } from '../src/yoomoney.mjs';
 
 const NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
@@ -234,10 +234,7 @@ describe('admin http', () => {
   it('reveals one code, issues for N days, and still notifies on extend', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'omp-admin-'));
     const file = join(dir, 'billing.db');
-    const hashed = hashPassword('secret1');
     const start = seeded();
-    start.state.settings.adminHash = hashed.hash;
-    start.state.settings.adminSalt = hashed.salt;
     start.state.settings.botToken = 'token';
     start.state.settings.adminNotify = true;
     writeState(file, start.state);
@@ -253,9 +250,18 @@ describe('admin http', () => {
       };
     };
     const app = createApp(file, fetchImpl);
-    const login = await call(app, 'POST', '/admin/login', { body: { password: 'secret1' } });
-    expect(login.data && login.data.ok).toBe(true);
-    const cookie = String(login.headers['set-cookie'] || '');
+    const denied = await call(app, 'POST', '/admin/login', { body: { password: 'secret1' } });
+    expect(denied.status).toBe(403);
+    expect(denied.body).not.toContain('secret1');
+    expect(JSON.stringify(readState(file))).not.toContain('secret1');
+    const link = await updateState(file, (s) => issueCliAdminLogin(s, { now: Date.now() }));
+    expect(JSON.stringify(readState(file))).not.toContain(link.token);
+    const once = await call(app, 'GET', '/admin/login/once?token=' + encodeURIComponent(link.token));
+    expect(once.status).toBe(302);
+    const cookie = String(once.headers['set-cookie'] || '');
+    expect(cookie).toContain('omp_admin=');
+    const reuse = await call(app, 'GET', '/admin/login/once?token=' + encodeURIComponent(link.token));
+    expect(reuse.status).toBe(403);
     const home = await call(app, 'GET', '/admin/api/home', { cookie });
     expect(JSON.stringify(home.data)).not.toContain('"plain"');
     const user = await call(app, 'GET', '/admin/api/user?id=' + encodeURIComponent(start.account.id), { cookie });

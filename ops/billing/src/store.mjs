@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { enrichActors } from './logic.mjs';
 
 export function emptyState() {
   return {
@@ -51,6 +52,8 @@ export function emptyState() {
     links: [],
     /** Pending Telegram logins for the admin web panel. */
     adminLogins: [],
+    /** One-time shell login links. Only the token hash is stored. */
+    adminCliLogins: [],
     /** User ↔ admin support thread. */
     supportMessages: [],
     /** adminChatId:messageId → user telegram id, so a reply in Telegram reaches that user. */
@@ -155,8 +158,8 @@ function migrateFromJson(db, dbPath) {
 
 function normalizeState(parsed) {
   const base = emptyState();
-  if (!parsed || typeof parsed !== 'object') return base;
-  return {
+  if (!parsed || typeof parsed !== 'object') return enrichActors(base);
+  const next = {
     settings: { ...base.settings, ...(parsed.settings || {}) },
     accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
     subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [],
@@ -168,6 +171,7 @@ function normalizeState(parsed) {
     promos: Array.isArray(parsed.promos) ? parsed.promos : [],
     links: Array.isArray(parsed.links) ? parsed.links : [],
     adminLogins: Array.isArray(parsed.adminLogins) ? parsed.adminLogins : [],
+    adminCliLogins: Array.isArray(parsed.adminCliLogins) ? parsed.adminCliLogins : [],
     supportMessages: Array.isArray(parsed.supportMessages) ? parsed.supportMessages : [],
     supportReplies: Array.isArray(parsed.supportReplies) ? parsed.supportReplies : [],
     supportClosed:
@@ -178,6 +182,11 @@ function normalizeState(parsed) {
     outbox: Array.isArray(parsed.outbox) ? parsed.outbox : [],
     purchases: Array.isArray(parsed.purchases) ? parsed.purchases : [],
   };
+  const keys = Object.keys(parsed);
+  for (let i = 0; i < keys.length; i++) {
+    if (!Object.prototype.hasOwnProperty.call(next, keys[i])) next[keys[i]] = parsed[keys[i]];
+  }
+  return enrichActors(next);
 }
 
 export function readState(file) {
