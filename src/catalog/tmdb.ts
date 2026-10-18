@@ -53,7 +53,8 @@ export interface CatalogCard extends CatalogTitle {
 /** `bearer`: the key is a TMDB v4 access token and is sent as Authorization, not as api_key. */
 export interface TmdbEndpoint { base: string; key: string; images: string; bearer?: boolean; }
 export interface Episode { n: number; title: string; airDate: string; runtime: number; overview: string; }
-export interface SeasonDetails { number: number; name: string; airDate: string; overview: string; episodes: Episode[]; }
+/** `episodeCount` is TMDB's `episode_count`. Absent or 0 when the answer left it out (a season cached before it was kept). */
+export interface SeasonDetails { number: number; name: string; airDate: string; overview: string; episodes: Episode[]; episodeCount?: number; }
 
 function withScheme(u: string | undefined, dflt: string): string {
   const s = (u || '').trim().replace(/\/+$/, '');
@@ -588,7 +589,9 @@ export function sanitizeSeason(raw: unknown, season: number): SeasonDetails | nu
     });
   }
   episodes.sort((a, b) => a.n - b.n);
-  return { number: num, name: text(o.name, 100), airDate: date(o.air_date), overview: text(o.overview, 1500), episodes: episodes };
+  const rawCount = Math.floor(n(o.episode_count));
+  const episodeCount = rawCount > 0 && rawCount <= 10000 ? rawCount : 0;
+  return { number: num, name: text(o.name, 100), airDate: date(o.air_date), overview: text(o.overview, 1500), episodes: episodes, episodeCount: episodeCount };
 }
 
 // The season word is a search query for Russian trackers, not UI copy: it stays Russian even in the English UI.
