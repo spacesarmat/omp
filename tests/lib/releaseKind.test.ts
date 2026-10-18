@@ -86,7 +86,7 @@ describe('releaseKind: titles', () => {
     expect(kind('Hans Zimmer - Dune (Original Motion Picture Soundtrack) (2021) FLAC')).toBe(null);
     expect(kind('Metallica - Discography (1983-2023) MP3 320 kbps')).toBe(null);
     expect(kind('Кинг Стивен - Оно (2017) аудиокнига MP3')).toBe('audiobook');
-    expect(kind('Кинг Стивен - Оно (2017) EPUB')).toBe(null);
+    expect(kind('Кинг Стивен - Оно (2017) EPUB')).toBe('ebook');
     expect(kind('Cyberpunk 2077 [P] [RUS + ENG] (2020) (2.1)')).toBe(null);
     expect(kind('')).toBe(null);
   });

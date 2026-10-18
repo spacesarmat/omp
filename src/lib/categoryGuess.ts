@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { strongAudiobookTitle } from './releaseKind';
 
 /** TorrServer category values: "" (none), movie, tv, music, audiobook, other. */
 export type AddCategory = '' | 'movie' | 'tv' | 'music' | 'audiobook' | 'other';
@@ -20,14 +21,12 @@ export function addCategoryLabel(c: string): string {
 
 const TV = /(сезон|серии|серия|сериал|season|series|episode|\bs\d{1,2}(e\d{1,3})?\b|\b\d{1,2}x\d{1,3}\b)/i;
 const MUSIC = /(flac|mp3|alac|discography|дискографи|\bost\b|альбом|album|\bkbps\b)/i;
-// Same strong marks as releaseKind: the word audiobook, a narrator credit, or m4b. MP3/kbps alone stay music.
-const AUDIOBOOK = /аудиокниг|чита(?:ет|ют)|(?:^|[^a-z])m4b(?:[^a-z]|$)/i;
 
-/** Guess a category from a release title. Empty title gives "". */
+/** Guess a category from a release title. Empty title gives "". MP3 alone stays music. */
 export function guessCategory(title: string): AddCategory {
   const name = (title || '').trim();
   if (!name) return '';
-  if (AUDIOBOOK.test(name)) return 'audiobook';
+  if (strongAudiobookTitle(name)) return 'audiobook';
   if (TV.test(name)) return 'tv';
   if (MUSIC.test(name)) return 'music';
   return 'movie';

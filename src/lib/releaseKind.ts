@@ -1,15 +1,16 @@
-// Kind of a found release: a film, a series (with its season and episodes), or an audiobook, else unknown. The
-// tracker's category decides first when the source gave one (a RuTracker forum, a Kinozal section, Torznab ids
+// Kind of a found release: a film, a series (with its season and episodes), an audiobook, an e-book, else unknown.
+// The tracker's category decides when the source gave one (a RuTracker forum, a Kinozal section, Torznab ids
 // 2000–2999 / 3030 / 5000–5999, TorrServer's rutor categories), then the title: series marks (S01, S01E01-08,
 // «Сезон 2», «2 сезон», «Season 1», «серии 1-8 из 8», «[1-8 из 8]», «complete series», «сериал», «[TV]»), else a
-// year without them = a film. An audiobook is Torznab 3030 or a title with «аудиокнига», «читает» or m4b; books
-// (7000) and other (80xx) become one only when the title also has an audiobook hint. Anything else (music, games,
-// books, a bare name) stays unknown. Pure; shared by the phone and the TV: Chromium 53 rules (no lookbehind, no u
-// flag, no \b next to Cyrillic).
+// year without them = a film. An audiobook title wins over a movie category: «аудиокнига», «радиоспектакль»,
+// «чит.», «читает», m4b, or MP3/M4A/AAC/FLAC (Cyrillic look-alikes included) when the row is not a video and not
+// a music album. FB2/EPUB/PDF/DJVU is an e-book. Books (7000) and other (80xx) become an audiobook when the title
+// has a hint. Anything else (music, games, a bare name) stays unknown. Pure; shared by the phone and the TV:
+// Chromium 53 rules (no lookbehind, no u flag, no \b next to Cyrillic).
 // Step 2 (grouping the results by TMDB title) builds on `year` and the short name of the release (releaseRow.ts).
 import { parseEpisodeRange } from '../monitor/episodes';
 
-export type ReleaseKindName = 'series' | 'movie' | 'audiobook';
+export type ReleaseKindName = 'series' | 'movie' | 'audiobook' | 'ebook';
 
 export interface ReleaseKind {
   kind: ReleaseKindName | null;
@@ -83,22 +84,62 @@ export function categoryKind(categories: string | undefined): CatVerdict {
 
 // --- audiobook titles ------------------------------------------------------------------------------------------------
 
-// On their own these are an audiobook. «исполнитель» is not: «Исполнитель желаний» is a film.
-const STRONG_AUDIOBOOK = /аудиокниг|чита(?:ет|ют)|(?:^|[^a-z])m4b(?:[^a-z]|$)/i;
-// NNM-Club files most audiobooks under 7000 and RuTor / MegaPeer under 80xx. Those rows need a hint.
-const LOOSE_AUDIOBOOK = /аудиокниг|чита(?:ет|ют)|исполнител|(?:^|[^a-z])(?:mp3|m4b|aac|kbps)(?:[^a-z]|$)/i;
+// «чит.» / «читает» / «аудиокнига» / «радиоспектакль». «исполнитель» is not here: «Исполнитель желаний» is a film.
+const BOOK_WORDS = /аудиокниг|радиоспектакл|чит\.|чита(?:ет|ют)/i;
+const M4B = /(?:^|[^a-z0-9])m4b(?:[^a-z0-9]|$)/i;
+const AUDIO_CONTAINER = /(?:^|[^a-z0-9])(?:mp3|m4b|m4a|aac|flac)(?:[^a-z0-9]|$)/i;
+const EBOOK_EXT = /(?:^|[^a-z0-9])(?:fb2|epub|pdf|djvu)(?:[^a-z0-9]|$)/i;
+const KBPS = /(?:^|[^a-z0-9])kbps(?:[^a-z0-9]|$)/i;
 
-/** Title marks that are an audiobook without a tracker category. */
+/**
+ * Cyrillic letters that trackers type instead of Latin in «МР3», «М4В», «ААС».
+ * Only the folded string is matched against format tokens; Russian words stay on the original.
+ */
+function foldLookalikes(s: string): string {
+  return (s || '')
+    .replace(/\u0410/g, 'A')
+    .replace(/\u0430/g, 'a')
+    .replace(/\u0412/g, 'B')
+    .replace(/\u0432/g, 'b')
+    .replace(/\u0415/g, 'E')
+    .replace(/\u0435/g, 'e')
+    .replace(/\u041a/g, 'K')
+    .replace(/\u043a/g, 'k')
+    .replace(/\u041c/g, 'M')
+    .replace(/\u043c/g, 'm')
+    .replace(/\u041e/g, 'O')
+    .replace(/\u043e/g, 'o')
+    .replace(/\u0420/g, 'P')
+    .replace(/\u0440/g, 'p')
+    .replace(/\u0421/g, 'C')
+    .replace(/\u0441/g, 'c')
+    .replace(/\u0422/g, 'T')
+    .replace(/\u0442/g, 't')
+    .replace(/\u0425/g, 'X')
+    .replace(/\u0445/g, 'x');
+}
+
+/** Title marks that are an audiobook without a tracker category: book words, or m4b. */
 export function strongAudiobookTitle(title: string): boolean {
-  return STRONG_AUDIOBOOK.test(title || '');
+  const raw = title || '';
+  if (BOOK_WORDS.test(raw)) return true;
+  return M4B.test(foldLookalikes(raw));
+}
+
+/** FB2, EPUB, PDF, DJVU, including Cyrillic look-alikes of those Latin letters. */
+export function ebookTitle(title: string): boolean {
+  return EBOOK_EXT.test(foldLookalikes(title || ''));
 }
 
 /**
- * Hints for a books/other row (7000, 80xx): «аудиокниг», «читает», «исполнитель», MP3, M4B, AAC, kbps.
+ * Hints for a books/other row (7000, 80xx): book words, «исполнитель», MP3, M4B, AAC, FLAC, kbps.
  * MP3 and kbps alone are also music, so this is not used without that category.
  */
 export function looseAudiobookTitle(title: string): boolean {
-  return LOOSE_AUDIOBOOK.test(title || '');
+  const raw = title || '';
+  if (BOOK_WORDS.test(raw) || /исполнител/i.test(raw)) return true;
+  const folded = foldLookalikes(raw);
+  return AUDIO_CONTAINER.test(folded) || KBPS.test(folded);
 }
 
 /** NNM-Club's 7000 and RuTor 8000 / MegaPeer 8010, where audiobooks are not filed as 3030. */
@@ -122,6 +163,19 @@ const MOVIE_WORDS = /\[\s*(?:movie|фильм)\s*\]|полнометражн/i;
 const NOT_VIDEO =
   /(?:^|[^a-z])(?:flac|mp3|lossless|discography|album|ost|fb2|epub|pdf|djvu|kbps|soundtrack)(?:[^a-z]|$)|дискограф|альбом|аудиокниг|саундтрек|\[p\]|\[l\]/i;
 const VIDEO_MARKS = /(?:^|[^a-z0-9])(?:2160p|1080[pi]|720p|480p|4k|uhd|web-?dl|web-?rip|bd-?rip|blu-?ray|hd-?rip|dvd-?rip|dvd\d?|hdtv|remux|x26[45]|h[ .]?26[45]|hevc|avc|xvid|divx|mkv|avi)(?:[^a-z0-9]|$)/i;
+const MUSIC_ALBUM = /(?:^|[^a-z])(?:ost|album|discography|soundtrack)(?:[^a-z]|$)|дискограф|альбом|саундтрек/i;
+
+/**
+ * A movie-section row whose title is an audio container (MP3, M4B, AAC, FLAC, Cyrillic «МР3»)
+ * and is not a video release or a music album. The forum tag «Фильм» does not win.
+ */
+export function movieCategoryAudiobook(title: string, categories: string | undefined): boolean {
+  if (categoryKind(categories) !== 'movie') return false;
+  const raw = title || '';
+  if (!AUDIO_CONTAINER.test(foldLookalikes(raw))) return false;
+  if (VIDEO_MARKS.test(raw) || MUSIC_ALBUM.test(raw)) return false;
+  return true;
+}
 const YEAR = /(?:^|[^0-9])(19[0-9][0-9]|20[0-4][0-9])(?:[^0-9]|$)/;
 
 function yearOf(title: string): number | undefined {
@@ -149,6 +203,18 @@ function detect(r: KindInput): ReleaseKind {
   const year = yearOf(title);
   const out: ReleaseKind = { kind: null };
   if (year !== undefined) out.year = year;
+  // A narrator credit, m4b, or an audio container filed as a film is an audiobook even when the
+  // tracker says «Фильм». An e-book (FB2/EPUB/PDF/DJVU) is not a film and not something to watch.
+  if (strongAudiobookTitle(title) || movieCategoryAudiobook(title, r.Categories)) {
+    out.kind = 'audiobook';
+    out.by = 'title';
+    return out;
+  }
+  if (ebookTitle(title) && !VIDEO_MARKS.test(title)) {
+    out.kind = 'ebook';
+    out.by = 'title';
+    return out;
+  }
   const cat = categoryKind(r.Categories);
   if (cat === 'series') {
     out.kind = 'series';

@@ -43,15 +43,29 @@ describe('audiobook release kind', () => {
     expect(releaseKind({ Title: KING, Categories: '8000' }).kind).toBe('audiobook');
     expect(releaseKind({ Title: KING, Categories: '8010' }).kind).toBe('audiobook');
     expect(releaseKind({ Title: HARARI, Categories: '7000' }).kind).toBe('audiobook');
-    expect(releaseKind({ Title: STRUGATSKY, Categories: '7000' }).kind).toBe(null);
+    expect(releaseKind({ Title: STRUGATSKY, Categories: '7000' }).kind).toBe('ebook');
     expect(releaseKind({ Title: KING }).kind).toBe(null);
     expect(guessCategory(KING)).toBe('music');
   });
 
-  it('a film category and a film named «Исполнитель» stay films', () => {
-    expect(releaseKind({ Title: BULGAKOV, Categories: '2000' }).kind).toBe('movie');
+  it('a film category loses to an audiobook title; a film named «Исполнитель» stays a film', () => {
+    expect(releaseKind({ Title: BULGAKOV, Categories: '2000' }).kind).toBe('audiobook');
+    expect(releaseKind({ Title: WISHMASTER, Categories: '2000' }).kind).toBe('movie');
     expect(releaseKind({ Title: WISHMASTER })).toMatchObject({ kind: 'movie', year: 1997, by: 'title' });
     expect(guessCategory(WISHMASTER)).toBe('movie');
     expect(releaseKind({ Title: 'Metallica - Discography (1983-2023) MP3 320 kbps' }).kind).toBe(null);
+    expect(releaseKind({ Title: 'Metallica - Discography (1983-2023) MP3 320 kbps', Categories: '2000' }).kind).toBe('movie');
+  });
+
+  it('Cyrillic «МР3», «чит.» and «радиоспектакль» are audiobooks even in a movie section', () => {
+    const god = 'Трудно быть богом [чит. Клюквин] (2024) МР3';
+    expect(releaseKind({ Title: god, Categories: '2000' })).toMatchObject({ kind: 'audiobook', year: 2024, by: 'title' });
+    expect(releaseKind({ Title: god, Categories: 'Фильм' }).kind).toBe('audiobook');
+    expect(guessCategory(god)).toBe('audiobook');
+    expect(releaseKind({ Title: 'Стругацкие - Пикник на обочине (2020) MP3', Categories: '2000' }).kind).toBe('audiobook');
+    expect(releaseKind({ Title: 'Булгаков - Собачье сердце (радиоспектакль) (1968)' }).kind).toBe('audiobook');
+    expect(releaseKind({ Title: 'Книга (2014) FB2' }).kind).toBe('ebook');
+    expect(resultKindLabel({ Title: 'Книга (2014) EPUB' })).toBe('Электронная книга');
+    expect(releaseKind({ Title: 'Акира / Akira (1988) BDRemux 1080p | FLAC', Categories: '2000' }).kind).toBe('movie');
   });
 });
