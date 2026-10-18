@@ -504,6 +504,43 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       '“Watch on TV” starts the movie on the TV, then the “Now playing” screen and the mini player at the bottom control it: pause, seeking, previous and next episode, volume.',
     ],
   },
+  'audiobooks': {
+    q: 'How to find and listen to an audiobook',
+    short: [
+      'An audiobook opens in its own player, not in the 2160 video player.',
+      'Find it in Audiobooks or in the main search and tap “Listen on the phone”.',
+      'A tile in the catalog, My library, history and the Audiobooks tab opens the book card.',
+    ],
+    more: [
+      'In search the category comes from Details: if you picked Audiobook, the book goes to the audiobook player even when the title does not look like a book.',
+      'An e-book (FB2, EPUB, PDF) is not an audiobook: that release has no watch or listen buttons.',
+      'On the book card tap a track or Play. Sound plays in the audiobook player: large buttons, chapters, speed and a sleep timer.',
+    ],
+  },
+  'audiobook-player': {
+    q: 'Audiobook player: controls, background and the sleep timer',
+    short: [
+      'The large button in the center pauses and resumes. Next to it: −30 and +30 seconds, the chapter row, speed.',
+      'Sleep timer: 15, 30 or 60 minutes, or until the end of the chapter. The button shows the countdown.',
+      'Sound keeps playing with the screen off. The notification and the lock screen have pause, previous and next chapter.',
+    ],
+    more: [
+      'Tapping the chapter that is already playing does not start it over: the position, speed and sleep timer stay.',
+      'If the player showed an error, Play on the book card tries to open it again.',
+      'Audiobook sound does not depend on the video “Background audio” switch. That switch is for the built-in video player and stays on until you turn it off.',
+    ],
+  },
+  'audiobook-seeds': {
+    q: 'Few seeds, or the torrent has no audio',
+    short: [
+      '“Could not load the file list — too few seeds”: tap Retry. The torrent stays in the library.',
+      '“This torrent has no audio files” means it is not an audiobook. There is no need to load the list again.',
+    ],
+    more: [
+      'The file list comes from people who are seeding. When there are few of them, the phone waits and shows Retry. It does not remove the book.',
+      'When the files arrive, the card lists the chapters. Open one and listen.',
+    ],
+  },
   'player-engine': {
     q: 'Player: built-in or VLC',
     short: [

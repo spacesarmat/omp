@@ -295,7 +295,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
       if (hash && alive.v) {
         showToast(t('common.added'));
         setPicked(null);
-        navigate({ name: 'torrent', hash });
+        navigate(magnetCategory === 'audiobook' ? { name: 'audiobook', hash } : { name: 'torrent', hash });
       }
     } catch (e) {
       if (alive.v) setError(errorMessage(e));
@@ -399,7 +399,8 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
         return;
       }
       if (watch === 'phone') {
-        if (releaseKind(r).kind === 'audiobook') {
+        // The category picked in «Подробнее» wins, including a book the title did not look like.
+        if (categoryOfRow(r) === 'audiobook') {
           navigate({ name: 'audiobook', hash });
           return;
         }

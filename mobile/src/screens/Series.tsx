@@ -16,6 +16,7 @@ import { airDateText, upcomingSeasons, type Upcoming } from '../../../src/lib/se
 import { Poster, qualityBadge } from '../ui/Poster';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate, switchTab, type MRoute } from '../nav';
+import { routeForTorrent } from '../audiobooks/route';
 import { filesOf, useTvLaunch } from '../watch';
 import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
 import { TorrentMenu, type TorrentMenuItem } from '../ui/TorrentMenu';
@@ -232,7 +233,7 @@ function FutureSeason({ card, season }: { card: CatalogCard; season: Upcoming })
 function Row({ tor, poster, onWatch, onMenu }: { tor: Torrent; poster: string; onWatch: (tor: Torrent) => void; onMenu: (tor: Torrent) => void }) {
   const press = useLongPress(
     () => onMenu(tor),
-    () => navigate({ name: 'torrent', hash: tor.hash }),
+    () => navigate(routeForTorrent(tor)),
   );
   const s = libraryTitle(tor);
   const files = playableFiles(filesOf(tor));

@@ -17,6 +17,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -253,6 +254,16 @@ class AudioPlayerService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .setSeekBackIncrementMs(AudioSession.SEEK_MS)
             .setSeekForwardIncrementMs(AudioSession.SEEK_MS)
+            .build()
+        // Offload stays off. Samsung's COMPRESS_OFFLOAD path rejects setPlaybackParams, which breaks speed.
+        // Media3's default is already disabled; set it so a later default cannot turn offload on.
+        exo.trackSelectionParameters = exo.trackSelectionParameters
+            .buildUpon()
+            .setAudioOffloadPreferences(
+                TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                    .setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED)
+                    .build(),
+            )
             .build()
         exo.addListener(events)
         return exo

@@ -169,6 +169,17 @@ function isProxyLink(link: string): boolean {
   return link.indexOf('omp-fetch:') === 0 || link.indexOf('omp-jacred:') === 0;
 }
 
+/** `{ "magnet": "magnet:..." }` from the billing proxy, when Jackett redirected the download. */
+function magnetOf(text: string): string {
+  if (!text || text.charAt(0) !== '{') return '';
+  try {
+    const v = JSON.parse(text) as { magnet?: unknown };
+    return typeof v.magnet === 'string' && /^magnet:/i.test(v.magnet) ? v.magnet : '';
+  } catch (e) {
+    return '';
+  }
+}
+
 function paidSearch(ctx: SourceContext, id: string, source: OmpIndexerSource, query: string, cat?: string): Promise<SourceResult[]> {
   const body: { [key: string]: string } = { source, q: query, deviceId: deviceId() };
   if (cat) body.cat = cat;
@@ -212,6 +223,8 @@ function paidSource(id: string, name: string, source: OmpIndexerSource): Source 
           if (res.status === 401 || res.status === 403 || res.status === 502 || res.status === 429) {
             throw billingError(res.status, res.text);
           }
+          const magnet = magnetOf(res.text);
+          if (magnet) return magnet;
           if (res.status < 200 || res.status >= 300 || res.text.charAt(0) !== 'd') {
             throw new Error(t('sources.billing.down'));
           }

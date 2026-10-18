@@ -5,6 +5,7 @@ import { Icon } from './Icon';
 import { TorrentRenameSheet } from './TorrentRenameSheet';
 import { showToast } from './toast';
 import { navigate } from '../nav';
+import { routeForTorrent } from '../audiobooks/route';
 import { activeTv } from '../tv/tvStore';
 import { filesOf } from '../watch';
 import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
@@ -61,7 +62,7 @@ export function TorrentMenu({
 
   const open = () => {
     onClose();
-    navigate({ name: 'torrent', hash: tor.hash });
+    navigate(routeForTorrent(tor));
   };
 
   // the same target as the card's main button; no playable file: nothing to start

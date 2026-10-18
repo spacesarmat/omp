@@ -10,7 +10,9 @@ import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
 import { qualityBadge, posterStyle } from '../ui/Poster';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
-import { currentRoute, goBack, navigate } from '../nav';
+import { currentRoute, goBack, navigate, replaceTop } from '../nav';
+import { routeForHash } from '../audiobooks/route';
+import { isAudiobookTorrent } from '../../../src/lib/audiobookRoute';
 import { activeTv } from '../tv/tvStore';
 import { actions, filesOf, streamUrlFor, tvServerUrl, useTvLaunch, watchOnPhone } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
@@ -375,6 +377,14 @@ export function Torrent({ hash }: { hash: string }) {
     };
   }, [c, hash, !!listed]);
 
+  const book = !!tor && isAudiobookTorrent({ ...tor, file_stats: allFiles.length ? allFiles : tor.file_stats });
+  // A book that landed here (a tile, history, a hash) opens the book card. Back does not return to this screen.
+  useEffect(() => {
+    if (!book) return;
+    const cur = currentRoute.value;
+    if (cur.name === 'torrent' && cur.hash === hash) replaceTop({ name: 'audiobook', hash });
+  }, [book, hash]);
+
   if (!c || !tor) {
     return (
       <div class="m-screen m-torrent" data-route="torrent">
@@ -421,7 +431,7 @@ export function Torrent({ hash }: { hash: string }) {
     const cur = currentRoute.value;
     if (cur.name === 'torrent' && cur.hash === hash) {
       goBack();
-      navigate({ name: 'torrent', hash: fresh });
+      navigate(routeForHash(fresh));
     }
   };
   const toggleWatchQuality = () => {
@@ -451,7 +461,7 @@ export function Torrent({ hash }: { hash: string }) {
     if (mine.indexOf(n) >= 0) return;
     if (group && inLibrary.indexOf(n) >= 0) {
       const rows = seasonMembers(group, n);
-      if (rows.length === 1) navigate({ name: 'torrent', hash: rows[0].hash });
+      if (rows.length === 1) navigate(routeForHash(rows[0].hash));
       else navigate({ name: 'series', key: group.key, season: n });
     } else if (tmdb.show) {
       const q = torrentQuery({ title: tmdb.show.title, original: tmdb.show.original, year: tmdb.show.year, kind: 'tv' }, n);
@@ -580,7 +590,7 @@ export function Torrent({ hash }: { hash: string }) {
               ))}
             </div>
           )}
-          {chipSeasons.length > 1 && (
+          {!book && chipSeasons.length > 1 && (
             <div class="m-chips m-tc-chips m-thead-chips" role="group" aria-label={t('titleCard.seasons')} data-block="seasons">
               {chipSeasons.map((n) => {
                 const have = mine.indexOf(n) >= 0 || inLibrary.indexOf(n) >= 0;
@@ -607,12 +617,12 @@ export function Torrent({ hash }: { hash: string }) {
         </button>
         <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={!target} onClick={watchPhone}>
           <Icon d={PHONE} size={18} />
-          {t('torrent.screen.watchOnPhone')}
+          {book ? t('audiobooks.listenOnPhone') : t('torrent.screen.watchOnPhone')}
         </button>
         {status && <LaunchError message={status} />}
         {moviePending && !movie && <div class="m-tc-section m-tc-cast-ph" aria-hidden="true" />}
         {movie && <CastStrip cast={movie.cast} />}
-        {files.length > 0 && (
+        {!book && files.length > 0 && (
           <div class="m-skip" data-block="skip">
             <button type="button" class="m-skip-row m-skip-open m-skip-toggle" aria-expanded={skipOpen} onClick={toggleSkipOpen}>
               <span class="m-skip-text">
@@ -644,12 +654,12 @@ export function Torrent({ hash }: { hash: string }) {
             )}
           </div>
         )}
-        {(series || film || upgrade) && (
+        {((!book && series) || film || upgrade) && (
           <div class="m-skip" data-block="monitoring">
             <div class="m-skip-head">
               <span class="m-skip-title">{t('monitor.title')}</span>
             </div>
-            {series && (
+            {!book && series && (
               <div class="m-skip-row" data-block="watch-new">
                 <span class="m-skip-text">{t('monitor.settings.episodes')}</span>
                 <SkipSwitch on={watchNew !== false} label={t('monitor.settings.episodes')} onToggle={toggleWatchNew} />

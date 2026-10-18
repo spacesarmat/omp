@@ -63,6 +63,20 @@ export const currentRoute = computed(() => routeStack.value[routeStack.value.len
 // window scroll of each stack entry when another screen was pushed over it
 const coveredScroll = new WeakMap<MRoute, number>();
 
+/** Replaces the screen on top, so Back does not return to the screen that sent the person here. */
+export function replaceTop(r: MRoute): void {
+  const s = routeStack.value;
+  if (!s.length) {
+    routeStack.value = [r];
+    restoreScroll(0);
+    return;
+  }
+  const next = s.slice();
+  next[next.length - 1] = r;
+  routeStack.value = next;
+  restoreScroll(0);
+}
+
 export function navigate(r: MRoute): void {
   const s = routeStack.value;
   coveredScroll.set(s[s.length - 1], currentScroll());

@@ -1,9 +1,19 @@
 apply plugin: 'com.android.application'
 // Kotlin: built into AGP 9 (the org.jetbrains.kotlin.android plugin is no longer applied)
 
-// version comes from the root package.json: versionCode = major*10000 + minor*100 + patch
+// version comes from the root package.json.
+// versionCode = major*1000000 + minor*10000 + patch*100 + slot.
+// A stable release uses slot 99. x.y.z-beta.N uses slot N (1..98).
+// Same numbers as androidVersionCode() in src/lib/version.ts.
+// 0.20.4-beta.1 = 200401, 0.20.4-beta.2 = 200402, 0.20.4 = 200499, 0.20.5-beta.1 = 200501.
 def pkg = new groovy.json.JsonSlurper().parse(file('../../package.json'))
-def (vMajor, vMinor, vPatch) = pkg.version.tokenize('.-')[0..2].collect { it as int }
+def verBits = (pkg.version ?: '0').tokenize('.-')
+def vMajor = (verBits[0] ?: 0) as int
+def vMinor = (verBits[1] ?: 0) as int
+def vPatch = (verBits[2] ?: 0) as int
+def betaAt = verBits.indexOf('beta')
+def vBeta = (betaAt >= 0 && verBits.size() > betaAt + 1) ? (verBits[betaAt + 1] as int) : 0
+def vSlot = vBeta == 0 ? 99 : Math.min(vBeta, 98)
 
 android {
     namespace = "com.spacesarmat.omp"
@@ -12,7 +22,7 @@ android {
         applicationId "com.spacesarmat.omp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode vMajor * 10000 + vMinor * 100 + vPatch
+        versionCode vMajor * 1000000 + vMinor * 10000 + vPatch * 100 + vSlot
         versionName pkg.version
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -43,7 +53,7 @@ android {
         }
     }
     // Per-ABI APKs (OMP-x.y.z-arm64.apk, OMP-x.y.z-armv7.apk) plus the universal one (OMP-x.y.z.apk, both ABIs).
-    // Every split keeps the same versionCode (major*10000 + minor*100 + patch): OMP is sideloaded only (no Play
+    // Every split keeps the same versionCode (major*1000000 + minor*10000 + patch*100 + slot): OMP is sideloaded only (no Play
     // Store), so any split installs over any earlier install of a lower version, and over the same version too.
     // The embedded TorrServer is not packed into any APK: the app downloads the pinned arm64 binary on demand
     // (res/raw/torrserver.json, see LocalTorrServer / TorrServerBinary), on any arm64 phone whatever the split.

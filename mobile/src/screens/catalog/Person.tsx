@@ -9,6 +9,7 @@ import type { Credit, PersonCard } from '../../../../src/catalog/tmdb';
 import { torrents } from '../../../../src/store/library';
 import { phoneCatalog, setCatalogMode, type CatalogMode } from '../../catalog/phoneCatalog';
 import { goBack, navigate, switchTab, type MRoute } from '../../nav';
+import { routeForTorrent } from '../../audiobooks/route';
 import { Icon, ICONS } from '../../ui/Icon';
 import { LazyImg } from '../../ui/LazyImg';
 import { CatalogError } from './CatalogError';
@@ -39,7 +40,10 @@ function jobText(p: PersonCard, job: Job): string {
 function routeOf(list: Parameters<typeof libraryTargetOf>[0], c: Credit): MRoute {
   const target = libraryTargetOf(list, c);
   if (!target) return { name: 'title', kind: c.kind, id: c.id };
-  if (target.kind === 'torrent') return { name: 'torrent', hash: target.hash };
+  if (target.kind === 'torrent') {
+    const tor = list.find((x) => x.hash === target.hash);
+    return tor ? routeForTorrent(tor) : { name: 'torrent', hash: target.hash };
+  }
   return target.season ? { name: 'series', key: target.key, season: target.season } : { name: 'series', key: target.key };
 }
 

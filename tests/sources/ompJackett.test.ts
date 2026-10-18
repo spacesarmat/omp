@@ -142,6 +142,30 @@ describe('omp Jackett source', () => {
     expect(site.calls[0].form?.link).toBe('omp-fetch:/dl/file');
   });
 
+  it('accepts a magnet when the proxy followed a Jackett redirect', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    const magnet = 'magnet:?xt=urn:btih:' + 'ab'.repeat(20);
+    const site = fakeSite((c) => page(JSON.stringify({ magnet }), c.url));
+    const src = ompJackettSource();
+    const got = await src.resolve!(
+      {
+        Title: 'File',
+        Link: 'omp-fetch:/dl/file',
+        Categories: '',
+        Size: '',
+        CreateDate: '',
+        Tracker: '',
+        Magnet: '',
+        Hash: '',
+        Peer: 0,
+        Seed: 0,
+        source: OMP_JACKETT_ID,
+      },
+      site.ctx,
+    );
+    expect(got).toBe(magnet);
+  });
+
   it('forget clears the source', () => {
     saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
     syncOmpJackett();

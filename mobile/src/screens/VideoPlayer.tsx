@@ -41,7 +41,7 @@ function BackgroundAudioRow() {
     };
   }, [on]);
   const toggle = () => {
-    updateSettings({ backgroundAudio: !on });
+    updateSettings({ backgroundAudio: !on, backgroundAudioTouched: true });
     if (on || !monitorNative.available) return;
     void monitorNative.notifyPermission().then((before) =>
       before === 'granted' ? setDenied(false) : monitorNative.requestNotifyPermission().then((now) => setDenied(now === 'denied')),

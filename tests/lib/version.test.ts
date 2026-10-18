@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compareVersions, isBetaVersion } from '../../src/lib/version';
+import { androidVersionCode, compareVersions, isBetaVersion } from '../../src/lib/version';
 
 describe('compareVersions', () => {
   it('compares numerically part by part', () => {
@@ -26,5 +26,20 @@ describe('compareVersions', () => {
   it('tells a beta', () => {
     expect(isBetaVersion('0.16.0-beta.1')).toBe(true);
     expect(isBetaVersion('0.16.0')).toBe(false);
+  });
+});
+
+describe('androidVersionCode', () => {
+  it('gives each beta its own code and keeps a stable release above them', () => {
+    expect(androidVersionCode('0.20.3')).toBe(200399);
+    expect(androidVersionCode('0.20.4-beta.1')).toBe(200401);
+    expect(androidVersionCode('0.20.4-beta.2')).toBe(200402);
+    expect(androidVersionCode('v0.20.4')).toBe(200499);
+    expect(androidVersionCode('0.20.5-beta.1')).toBe(200501);
+    expect(androidVersionCode('0.20.4-beta.1')).toBeLessThan(androidVersionCode('0.20.4-beta.2'));
+    expect(androidVersionCode('0.20.4-beta.2')).toBeLessThan(androidVersionCode('0.20.4'));
+    expect(androidVersionCode('0.20.4')).toBeLessThan(androidVersionCode('0.20.5-beta.1'));
+    expect(androidVersionCode('0.20.4-beta.99')).toBe(200498);
+    expect(androidVersionCode('nope')).toBe(0);
   });
 });
