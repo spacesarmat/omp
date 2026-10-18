@@ -146,6 +146,9 @@ describe('Sheet grab handle and pull', () => {
     const dialog = readFileSync(resolve('mobile/src/ui/OldTvDialog.tsx'), 'utf8');
     expect(dialog).not.toContain('m-sheet-grip');
     expect(dialog).toContain('m-dialog');
+    const confirm = readFileSync(resolve('mobile/src/ui/confirm.tsx'), 'utf8');
+    expect(confirm).not.toContain('m-sheet-grip');
+    expect(confirm).toContain('m-dialog');
   });
 
   it('mounts every phone bottom sheet through the shared Sheet', () => {
@@ -159,7 +162,7 @@ describe('Sheet grab handle and pull', () => {
     };
     walk('mobile/src');
     const hosts = files.filter((f) => readFileSync(f, 'utf8').includes('m-sheet-host')).sort();
-    expect(hosts).toEqual(['mobile/src/ui/OldTvDialog.tsx', 'mobile/src/ui/Sheet.tsx']);
+    expect(hosts).toEqual(['mobile/src/ui/OldTvDialog.tsx', 'mobile/src/ui/Sheet.tsx', 'mobile/src/ui/confirm.tsx']);
     const sheet = readFileSync('mobile/src/ui/Sheet.tsx', 'utf8');
     expect(sheet).toContain('moveSheetDrag');
     expect(sheet).toContain('aria-label={t(\'common.close\')}');
