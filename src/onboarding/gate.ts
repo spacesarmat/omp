@@ -1,11 +1,12 @@
 import { signal } from '@preact/signals';
 import { t } from '../i18n';
 import { settings, updateSettings } from '../store/settings';
+import { resetHintRuntime } from './hints';
 import type { OnboardingPlatform } from './slides';
 
 /**
- * Stored onboardingVersion >= this means the current tour was finished (skip or the last step).
- * Bump it to show the tour once more after an update.
+ * Stored when the slide tour is finished from Settings. The tour is not shown on launch.
+ * Bump it only if a future build should offer the slides on its own again.
  */
 export const ONBOARDING_VERSION = 1;
 
@@ -18,8 +19,16 @@ export const onboardingForce = signal(false);
  * The auto tour does not cover that route for the rest of the session.
  */
 export const onboardingHold = signal<string | null>(null);
-/** A launch is about to open the player: hide the auto tour until that finishes or the player closes. */
+/** A launch is about to open the player: hide first-run setup until that finishes or the player closes. */
 export const onboardingPause = signal(false);
+/** Setup handed the phone TorrServer screen over to the existing installer. The wizard hides until that returns. */
+export const setupHandoff = signal(false);
+/** True after the wizard has opened this session, so connecting a server does not dismiss it before the last step. */
+export const setupSession = signal(false);
+export type SetupStep = 'where' | 'network' | 'result' | 'prefs';
+export const setupStep = signal<SetupStep>('where');
+/** Set when the existing phone-TorrServer screen connects, so the result step survives the wizard hiding. */
+export const setupNotice = signal<{ name: string; version: string } | null>(null);
 
 export type OnboardingAction = 'next' | 'start' | 'connect';
 
@@ -32,37 +41,66 @@ export function onboardingRouteBlocked(platform: OnboardingPlatform, route: stri
   return list.indexOf(route) >= 0;
 }
 
-export function shouldShowOnboarding(o: {
-  version: number;
-  route: string;
+/** The slide tour is only the Settings action. It still steps aside for a running player. */
+export function shouldShowOnboarding(o: { route: string; platform: OnboardingPlatform; force: boolean }): boolean {
+  if (onboardingRouteBlocked(o.platform, o.route)) return false;
+  return o.force;
+}
+
+export function shouldShowSetup(o: {
   platform: OnboardingPlatform;
-  force: boolean;
-  hold: string | null;
+  route: string;
+  hasServer: boolean;
+  setupDone: boolean;
   ready: boolean;
   pause: boolean;
+  hold: string | null;
+  handoff: boolean;
+  session: boolean;
+  tour: boolean;
 }): boolean {
-  // Never over a running player, including a replay that is still open when playback starts.
-  if (onboardingRouteBlocked(o.platform, o.route)) return false;
-  if (o.force) return true;
-  if (o.pause) return false;
-  if (!o.ready) return false;
-  if (o.version >= ONBOARDING_VERSION) return false;
-  // The screen the notification opened. Leaving it (another route) is fine.
+  if (o.platform !== 'phone') return false;
+  if (o.tour || o.handoff) return false;
+  if (onboardingRouteBlocked('phone', o.route)) return false;
+  if (o.pause || !o.ready) return false;
   if (o.hold && o.hold === o.route) return false;
+  if (o.setupDone) return false;
+  // A server saved before this launch: nothing to configure, and no full-screen wizard.
+  if (o.hasServer && !o.session) return false;
   return true;
 }
 
 /** Reads the signals. Call during render so the screen follows them. */
 export function onboardingVisible(platform: OnboardingPlatform, route: string): boolean {
-  return shouldShowOnboarding({
-    version: settings.value.onboardingVersion,
+  return shouldShowOnboarding({ route, platform, force: onboardingForce.value });
+}
+
+export function setupVisible(route: string, hasServer: boolean): boolean {
+  return shouldShowSetup({
+    platform: 'phone',
     route,
-    platform,
-    force: onboardingForce.value,
-    hold: onboardingHold.value,
+    hasServer,
+    setupDone: settings.value.setupDone,
     ready: onboardingReady.value,
     pause: onboardingPause.value,
+    hold: onboardingHold.value,
+    handoff: setupHandoff.value,
+    session: setupSession.value,
+    tour: onboardingForce.value,
   });
+}
+
+export function beginSetupSession(): void {
+  setupSession.value = true;
+}
+
+/** Skip and the last step. A server saved along the way is what later launches look at. */
+export function completeSetup(): void {
+  setupSession.value = false;
+  setupHandoff.value = false;
+  setupStep.value = 'where';
+  setupNotice.value = null;
+  if (!settings.peek().setupDone) updateSettings({ setupDone: true });
 }
 
 /** Skip and the last step both count: the tour does not return until the version is bumped. */
@@ -164,4 +202,9 @@ export function resetOnboardingRuntime(): void {
   onboardingForce.value = false;
   onboardingHold.value = null;
   onboardingPause.value = false;
+  setupHandoff.value = false;
+  setupSession.value = false;
+  setupStep.value = 'where';
+  setupNotice.value = null;
+  resetHintRuntime();
 }

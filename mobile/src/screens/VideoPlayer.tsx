@@ -7,6 +7,7 @@ import { settings, updateSettings, type PhonePlayer } from '../../../src/store/s
 import { native } from '../platform/native';
 import { monitorNative } from '../monitor/native';
 import { P2160_RELEASES_URL } from '../../../src/player/player2160';
+import { useHint } from '../ui/Hint';
 const BACK = 'M15 5l-7 7 7 7';
 const CHECK = 'M5 12l5 5l9-10';
 
@@ -67,6 +68,7 @@ const OPTIONS: { id: PhonePlayer; label: () => string }[] = [
 
 /** «Плеер для видео»: list of three choices; background audio under «Встроенный». */
 export function VideoPlayer() {
+  useHint('videoPlayer');
   const cur = settings.value.phonePlayer;
   const [pkg, setPkg] = useState<string | null | undefined>(undefined);
   useEffect(() => {
@@ -88,7 +90,7 @@ export function VideoPlayer() {
         </button>
         <h1 class="m-bar-title">{t('player.videoPlayer')}</h1>
       </div>
-      <section class="m-set-group" data-row="video-player">
+      <section class="m-set-group" data-row="video-player" data-hint-anchor="videoPlayer">
         <div class="m-sub-pick" role="radiogroup" aria-label={t('player.videoPlayer')}>
           {OPTIONS.map((o) => {
             const disabled = o.id === 'p2160' && missing;

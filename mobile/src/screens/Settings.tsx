@@ -18,6 +18,7 @@ import { APP_VERSION } from '../../../src/version';
 import { phoneChangelog } from '../lib/phoneChangelog';
 import { openWhatsNew } from '../../../src/store/whatsNew';
 import { openOnboarding } from '../../../src/onboarding/gate';
+import { resetHints } from '../../../src/onboarding/hints';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
@@ -357,6 +358,10 @@ export function Settings() {
         </button>
         <button type="button" class="m-set-row m-set-pick" data-row="onboarding" onClick={() => openOnboarding()}>
           <span>{t('settings.showOnboarding')}</span>
+          <Icon d={CHEVRON} size={20} />
+        </button>
+        <button type="button" class="m-set-row m-set-pick" data-row="reset-hints" onClick={() => resetHints()}>
+          <span>{t('settings.resetHints')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
         {activeMethods().length > 0 && (

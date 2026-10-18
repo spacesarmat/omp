@@ -8,6 +8,7 @@ import { t } from '../../../src/i18n';
 import type { AudioPlayState } from '../platform/native';
 import { audioBridge, audioLaunch, audioNow, rememberAudio } from './launch';
 import { AudiobookBar } from './bar';
+import { useHint } from '../ui/Hint';
 
 const SLEEP_LABEL: { [k: string]: () => string } = {
   off: () => t('audiobooks.sleepOff'),
@@ -18,6 +19,7 @@ const SLEEP_LABEL: { [k: string]: () => string } = {
 };
 
 export function AudioPlayer({ hash, token }: { hash: string; token: number }) {
+  useHint('audiobookPlayer');
   const launch = audioLaunch.value;
   // token 0 is the notification deep link: the session that is already playing this book.
   const mine = launch && launch.hash === hash && (token === 0 || launch.token === token) ? launch : null;
@@ -152,7 +154,7 @@ export function AudioPlayer({ hash, token }: { hash: string; token: number }) {
       </div>
       <section class="m-set-group">
         <div class="m-set-label">{t('audiobooks.speed')}</div>
-        <div class="m-audio-chips" role="radiogroup" aria-label={t('audiobooks.speed')} data-audio-speed="">
+        <div class="m-audio-chips" role="radiogroup" aria-label={t('audiobooks.speed')} data-audio-speed="" data-hint-anchor="audiobookPlayer">
           {AUDIO_SPEEDS.map((n) => (
             <button
               key={n}

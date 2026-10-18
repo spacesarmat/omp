@@ -44,11 +44,11 @@ async function mount(node: ComponentChild): Promise<HTMLElement> {
 }
 
 describe('TV onboarding', () => {
-  it('shows on first launch, moves with the remote, and skip stores the version', async () => {
+  it('stays hidden on first launch; the remote moves it once Settings opens it, and skip stores the version', async () => {
     expect(onboardingVisible('tv', 'library')).toBe(false);
     resumeOnboarding();
     onboardingReady.value = true;
-    expect(onboardingVisible('tv', 'library')).toBe(true);
+    expect(onboardingVisible('tv', 'library')).toBe(false);
     expect(onboardingVisible('tv', 'player')).toBe(false);
 
     const host = await mount(h(OnboardingScreen, {}));

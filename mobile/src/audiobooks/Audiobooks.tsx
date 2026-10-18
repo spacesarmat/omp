@@ -3,15 +3,17 @@ import { t } from '../../../src/i18n';
 import { navigate } from '../nav';
 import { Icon } from '../ui/Icon';
 import { AudiobookBar } from './bar';
+import { useHint } from '../ui/Hint';
 
 const CHEVRON = 'M9 6l6 6l-6 6';
 
 export function Audiobooks() {
+  useHint('audiobooks');
   return (
     <div class="m-screen" data-route="audiobooks">
       <AudiobookBar title={t('audiobooks.title')} />
       <section class="m-set-group">
-        <button type="button" class="m-set-row m-set-pick" data-row="audiobook-search" onClick={() => navigate({ name: 'audiobookSearch' })}>
+        <button type="button" class="m-set-row m-set-pick" data-row="audiobook-search" data-hint-anchor="audiobooks" onClick={() => navigate({ name: 'audiobookSearch' })}>
           <span class="m-set-text">
             <span>{t('audiobooks.find')}</span>
             <span class="m-muted m-small">{t('audiobooks.findHint')}</span>

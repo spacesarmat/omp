@@ -50,7 +50,9 @@ import { syncSupport, localSupportUntil } from './donate';
 import { torrents } from '../../src/store/library';
 import { checkWhatsNew } from '../../src/store/whatsNew';
 import { Onboarding } from './ui/Onboarding';
-import { armOnboardingBoot, holdOnboarding, onboardingVisible, trackOnboardingBoot } from '../../src/onboarding/gate';
+import { Setup } from './ui/Setup';
+import { HintHost } from './ui/Hint';
+import { armOnboardingBoot, holdOnboarding, onboardingVisible, setupHandoff, setupNotice, setupStep, setupVisible, trackOnboardingBoot } from '../../src/onboarding/gate';
 import { phoneChangelog } from './lib/phoneChangelog';
 import { APP_VERSION } from '../../src/version';
 import { updatePrompt, installUpdateChecks } from '../../src/store/updates';
@@ -331,7 +333,7 @@ export function App() {
     checkWhatsNew(phoneChangelog(), APP_VERSION);
   }, []);
 
-  // The tour waits until magnet, notification and billing intakes have applied their route.
+  // Setup waits until magnet, notification and billing intakes have applied their route.
   useEffect(() => armOnboardingBoot(), []);
 
   // background update check 3 s after start and on each return to OMP (at most hourly); honours the setting
@@ -348,6 +350,18 @@ export function App() {
 
   const route = currentRoute.value;
   const showTour = onboardingVisible('phone', route.name);
+  const showSetup = !showTour && setupVisible(route.name, !!activeServer.value);
+  // The phone TorrServer installer is the existing screen. When it connects, the wizard continues at the result.
+  useEffect(() => {
+    if (!setupHandoff.value) return;
+    if (activeServer.value) {
+      setupNotice.value = { name: activeServer.value.name, version: '' };
+      setupStep.value = 'result';
+      setupHandoff.value = false;
+      return;
+    }
+    if (route.name !== 'localServer') setupHandoff.value = false;
+  });
   const prompt = updatePrompt.value;
   const localPrompt = localUpdatePrompt.value;
   const tabRoot = TABS.includes(route.name);
@@ -432,12 +446,14 @@ export function App() {
       ) : (
         <Settings />
       )}
+      {showSetup && <Setup />}
       {showTour && <Onboarding />}
-      {prompt && tabRoot && !showTour && <UpdateSheet info={prompt} />}
+      <HintHost blocked={showTour || showSetup} />
+      {prompt && tabRoot && !showTour && !showSetup && <UpdateSheet info={prompt} />}
       {/* TorrServer after OMP sheet: pin arrives with the APK, binary still needs a separate download */}
-      {!prompt && localPrompt && tabRoot && !showTour && <LocalUpdateSheet info={localPrompt} />}
+      {!prompt && localPrompt && tabRoot && !showTour && !showSetup && <LocalUpdateSheet info={localPrompt} />}
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
-      {tabRoot && !prompt && !localPrompt && !showTour && <WhatsNewSheet />}
+      {tabRoot && !prompt && !localPrompt && !showTour && !showSetup && <WhatsNewSheet />}
       {tabRoot && <DonateSheet />}
       <CertChangedSheet />
       <Toast />

@@ -35,6 +35,7 @@ import { displayTitle } from '../../../src/lib/torrentName';
 import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
 import { Discover } from './catalog/Discover';
 import { usePinchStep } from '../ui/usePinchStep';
+import { useHint } from '../ui/Hint';
 import { SeriesMenu } from '../ui/SeriesMenu';
 import { SeriesTileBadge } from '../ui/SeriesTileBadge';
 import { groupLabel, groupLibrary, groupSize, itemHashes, singleGroup, type LibraryItem, type SeriesGroup } from '../../../src/lib/seriesGroups';
@@ -96,6 +97,8 @@ function isRowView(v: string): boolean {
 }
 
 export function Library() {
+  useHint('catalog');
+  useHint('mine');
   const c = client.value;
   const tab = libraryTab.value;
   const query = libraryQuery.value;
@@ -470,6 +473,7 @@ export function Library() {
               role="tab"
               aria-selected={mode === m}
               class={'m-seg-btn' + (mode === m ? ' on' : '')}
+              data-hint-anchor={m === 'mine' ? 'mine' : undefined}
               onClick={() => {
                 if (m === mode) return;
                 setCatalogMode(m);
@@ -508,6 +512,7 @@ export function Library() {
             class="m-icon-btn"
             aria-label={t('add.search')}
             aria-pressed={searchOpen}
+            data-hint-anchor="catalog"
             onClick={() => (librarySearchOpen.value = !searchOpen)}
           >
             <Icon d={SEARCH} size={20} />
