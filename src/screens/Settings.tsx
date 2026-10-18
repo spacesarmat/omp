@@ -219,6 +219,8 @@ export function SettingsScreen() {
         <div class="grow muted">{platformKind() === 'androidtv' ? t('tvSettings.sourcesNote') : t('phoneSources.settingsNote')}</div>
         <Button focusKey="set-sources" label={t('settings.whereSearch')} onPress={() => navigate({ name: 'sources' })} />
       </div>
+      <ChoiceRow focusKey="set-live-seeds" label={t('settings.liveSeeds')} value={s.liveSeeds} options={onOff()} onChange={(v) => updateSettings({ liveSeeds: v })} />
+      <div class="muted">{t('settings.liveSeedsHint')}</div>
 
       <h2>{t('settings.app')}</h2>
       <div class="row">

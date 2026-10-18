@@ -21,6 +21,7 @@ import com.spacesarmat.omp.sources.HttpSpec
 import com.spacesarmat.omp.sources.SiteHttp
 import com.spacesarmat.omp.sources.SiteHttpException
 import com.spacesarmat.omp.sources.SourceServices
+import com.spacesarmat.omp.sources.TrackerScrape
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONArray
 import org.json.JSONObject
@@ -387,6 +388,47 @@ internal fun OmpNativePlugin.cloudflareWatchOp(call: PluginCall) {
 internal fun OmpNativePlugin.cloudflarePendingOp(call: PluginCall) {
     val r = if (TvMode.isTv(context)) null else OmpNativePlugin.cfWatch(context).pending()
     call.resolve(JSObject.fromJSONObject(CloudflareProtocol.requestJson(r)))
+}
+
+private val SCRAPE_ID = Regex("^[A-Za-z0-9]{1,40}$")
+
+/** { kind: http|udp, id, timeoutMs, url? | host, port, infohash } → { text } or { seeders, leechers, completed }. */
+internal fun OmpNativePlugin.trackerScrapeOp(call: PluginCall) {
+    val once = CallOnce(call)
+    val id = call.getString("id") ?: return once.reject("bad")
+    if (!SCRAPE_ID.matches(id)) return once.reject("bad")
+    val kind = call.getString("kind") ?: return once.reject("bad")
+    val timeout = call.data.optInt("timeoutMs", 3000).coerceIn(500, 5000)
+    io.execute {
+        try {
+            when (kind) {
+                "http" -> {
+                    val url = call.getString("url") ?: return@execute once.reject("bad")
+                    once.resolve(JSObject().put("text", TrackerScrape.http(id, url, timeout)))
+                }
+                "udp" -> {
+                    val host = call.getString("host") ?: return@execute once.reject("bad")
+                    val port = call.data.optInt("port", -1)
+                    val hash = call.getString("infohash") ?: return@execute once.reject("bad")
+                    val c = TrackerScrape.udp(id, host, port, hash, timeout) ?: return@execute once.reject("no-answer")
+                    val o = JSObject()
+                    o.put("seeders", c.seeders)
+                    o.put("leechers", c.leechers)
+                    o.put("completed", c.completed)
+                    once.resolve(o)
+                }
+                else -> once.reject("bad")
+            }
+        } catch (_: Exception) {
+            once.reject("no-answer")
+        }
+    }
+}
+
+internal fun OmpNativePlugin.trackerScrapeCancelOp(call: PluginCall) {
+    val id = call.getString("id")
+    if (id != null && SCRAPE_ID.matches(id)) TrackerScrape.cancel(id)
+    call.resolve()
 }
 
 internal fun OmpNativePlugin.emitCloudflare(r: CloudflareProtocol.Request): Boolean {

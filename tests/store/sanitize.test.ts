@@ -46,6 +46,9 @@ describe('sanitizeSettings', () => {
     expect(DEFAULT_SETTINGS.alwaysFfmpeg).toBe(false);
     expect(sanitizeSettings({}).alwaysFfmpeg).toBe(false);
     expect(sanitizeSettings({ alwaysFfmpeg: true }).alwaysFfmpeg).toBe(true);
+    expect(sanitizeSettings({}).liveSeeds).toBe(true);
+    expect(sanitizeSettings({ liveSeeds: false }).liveSeeds).toBe(false);
+    expect(sanitizeSettings({ liveSeeds: 'no' }).liveSeeds).toBe(true);
     expect(sanitizeSettings({ alwaysFfmpeg: 'yes' }).alwaysFfmpeg).toBe(false);
     expect(sanitizeSettings({ alwaysFfmpeg: 1 }).alwaysFfmpeg).toBe(false);
   });

@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { addCategories } from '../../../src/lib/categoryGuess';
 import { resultDate, seedsText, sourceBadge, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
+import { phoneSeedBits, useSeedRow } from '../../../src/ui/LiveSeeds';
 import type { RowBusy } from '../addResult';
 import { fmtSize, t } from '../../../src/i18n';
 import { parseSize } from '../../../src/sources/html';
@@ -57,6 +58,8 @@ export function ResultCard(p: {
   onPhone?: () => void;
 }) {
   const { r } = p;
+  const live = useSeedRow(r);
+  const seeds = phoneSeedBits(live.view);
   const [open, setOpen] = useState(false);
   const link = pageLink(r);
   const date = resultDate(r);
@@ -74,7 +77,7 @@ export function ResultCard(p: {
   };
   return (
     <>
-      <div class={'m-result m-result-card m-rc' + (p.highlight ? ' m-hl' : '')} data-title={r.Title} data-highlight={p.highlight ? '' : undefined}>
+      <div ref={live.bind} class={'m-result m-result-card m-rc' + (p.highlight ? ' m-hl' : '')} data-title={r.Title} data-highlight={p.highlight ? '' : undefined}>
         <button type="button" class="m-rc-open" aria-label={t('add.detailsOf', { title: r.Title })} aria-haspopup="dialog" onClick={() => setOpen(true)} />
         <ResultThumb title={r.Title} />
         <div class="m-rc-text">
@@ -83,7 +86,7 @@ export function ResultCard(p: {
           <div class="m-rc-meta m-small m-muted">
             {p.flag && <span class="m-flag">{p.flag}</span>}
             <span class="m-src-badge">{sourceBadge(r)}</span>
-            <span class="m-rc-meta-text">{[sizeText(r), knownSeeds(r)].filter(Boolean).join(' · ')}</span>
+            <span class="m-rc-meta-text">{[sizeText(r), seeds.text].filter(Boolean).join(' · ')}{seeds.mode === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}</span>
           </div>
           <div class="m-rc-bottom">
             {p.busy === 'link' ? (
@@ -138,7 +141,7 @@ export function ResultCard(p: {
             <div class="m-result-meta m-small">
               {p.flag && <span class="m-flag">{p.flag}</span>}
               <span class="m-src-badge">{sourceBadge(r)}</span>
-              <span class="m-muted">{resultMeta(r)}</span>
+              <span class={'m-muted' + (seeds.mode === 'approx' ? ' seed-approx' : '')} data-seeds={seeds.mode}>{[sizeText(r), seeds.text, resultDate(r), r.sources && r.sources.length ? t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }) : ''].filter(Boolean).join(' · ')}{seeds.mode === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}</span>
             </div>
             <div class="m-rc-sheet-label m-small m-muted">{t('add.category')}</div>
             <div class="m-chips" style={{ flexWrap: 'wrap' }} role="group" aria-label={t('add.category')}>

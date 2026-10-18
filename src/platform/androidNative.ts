@@ -37,6 +37,9 @@ export interface OmpNativeTvPlugin {
   appBack?(): Promise<unknown>;
   /** Search sources: HTTP without CORS, cookies per site, body decoded by charset. */
   http(o: NativeHttpRequest): Promise<{ status: number; url: string; text: string }>;
+  /** Tracker scrape on this device: HTTP body (Latin-1) or UDP seeders/leechers. Missing on an older APK. */
+  trackerScrape?(o: { kind: string; url?: string; host?: string; port?: number; infohash?: string; timeoutMs?: number; id?: string }): Promise<{ text?: string; seeders?: number; leechers?: number; completed?: number }>;
+  trackerScrapeCancel?(o: { id: string }): Promise<unknown>;
   /** Forgets the cookies of the site of url. */
   httpClearCookies(o: { url: string }): Promise<unknown>;
   /** Keystore-encrypted storage (tracker logins). */
@@ -124,6 +127,8 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     appBack: () => np.call(cap, NAME, 'appBack', {}),
     clearPairingCode: () => np.call(cap, NAME, 'clearPairingCode', {}),
     http: (o) => np.call(cap, NAME, 'http', o),
+    trackerScrape: (o) => np.call(cap, NAME, 'trackerScrape', o),
+    trackerScrapeCancel: (o) => np.call(cap, NAME, 'trackerScrapeCancel', o),
     httpClearCookies: (o) => np.call(cap, NAME, 'httpClearCookies', o),
     secretGet: (o) => np.call(cap, NAME, 'secretGet', o),
     secretSet: (o) => np.call(cap, NAME, 'secretSet', o),

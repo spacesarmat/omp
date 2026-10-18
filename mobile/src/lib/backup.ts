@@ -165,6 +165,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.firstRun', // when this install was first used: per device
   'tsp.donateCard', // the «Поддержать» card was closed
   'tsp.tmdbCache', // «Обзор»: cache of TMDB answers
+  'tsp.liveSeeds', // live seeder counts: a ten-minute cache, per device
   'tsp.tvWant', // TV «Хочу посмотреть»: lives on the TV only (a later version hands it to the phone)
   'tsp.tvDiscoverQuery', // TV «Обзор»: sort and filters of the TV, never on the phone
   'tsp.seriesTmdb', // series → TMDB show matches (a week)

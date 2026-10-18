@@ -612,6 +612,17 @@ class OmpNativePlugin : Plugin() {
     @PluginMethod
     fun http(call: PluginCall) = httpOp(call)
 
+    /**
+     * Tracker scrape from this device, never via the VPS. { kind: 'http', url, timeoutMs, id } → { text } (Latin-1 body).
+     * { kind: 'udp', host, port, infohash, timeoutMs, id } → { seeders, leechers, completed } (BEP 15).
+     */
+    @PluginMethod
+    fun trackerScrape(call: PluginCall) = trackerScrapeOp(call)
+
+    /** Drops an in-flight [trackerScrape] with the same id (a row left the screen). */
+    @PluginMethod
+    fun trackerScrapeCancel(call: PluginCall) = trackerScrapeCancelOp(call)
+
     /** Forgets the cookies of the site of { url } (logout). */
     @PluginMethod
     fun httpClearCookies(call: PluginCall) = httpClearCookiesOp(call)
