@@ -2,6 +2,14 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.4-beta.3
+
+- [phone] An audiobook from the catalog, library, history or the menu opens in the audiobook player
+- [phone] Audiobook speed works on Samsung: hardware audio offload is off
+- [phone] Video background audio stays on until you turn it off
+- A tracker that did not return the torrent file says so, without asking you to sign in
+- [phone] This beta installs over the previous one: 0.20.4-beta.3 has its own Android version code
+
 ## 0.20.4-beta.2
 
 - [phone] The built-in player is updated to 2160 Player 0.2.8. The screen stays on while a video is playing: the core setting is on by default
