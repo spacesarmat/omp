@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
 import type { Torrent } from '../../api/types';
 import { posterColor, shortTitle } from '../../lib/libraryView';
+import { sharpPosterUrl } from '../../catalog/tmdb';
 import { displayTitle } from '../../lib/torrentName';
 import { tvGlyphs } from '../../ui/tvText';
 
@@ -12,10 +13,11 @@ import { tvGlyphs } from '../../ui/tvText';
 export function Poster(p: { t: Torrent; showTitle?: boolean; unload?: boolean; children?: ComponentChildren }) {
   const t = p.t;
   const [broken, setBroken] = useState(false);
-  const img = !!t.poster && !broken;
+  const poster = t.poster;
+  const img = !!poster && !broken;
   return (
     <div class="art" style={{ background: 'linear-gradient(160deg, ' + posterColor(t.hash) + ', #14161c)' }}>
-      {img && !p.unload && <img src={t.poster} alt="" onError={() => setBroken(true)} />}
+      {img && !p.unload && <img src={sharpPosterUrl(poster)} alt="" onError={() => setBroken(true)} />}
       {!img && p.showTitle && <div class="art-title">{tvGlyphs(shortTitle(displayTitle(t)))}</div>}
       {p.children}
     </div>

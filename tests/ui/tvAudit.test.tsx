@@ -6,13 +6,13 @@ import { act } from 'preact/test-utils';
 import { init, setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { DialogHost, confirmDialog } from '../../src/ui/dialog';
 import { Focusable } from '../../src/ui/components';
-import { nextRowKey, focusAfterClose } from '../../src/ui/focus';
+import { nextRowKey, focusAfterClose, focusBottomMargin, FOCUS_BOTTOM_CLEAR } from '../../src/ui/focus';
 import { dispatchKey } from '../../src/ui/keys';
 import { OnboardingScreen } from '../../src/ui/OnboardingScreen';
 import { LibraryScreen } from '../../src/screens/Library';
 import { TorrentScreen } from '../../src/screens/Torrent';
 import { scrollStep } from '../../src/screens/Faq';
-import { posterImageSize, backdropImageSize } from '../../src/catalog/tmdb';
+import { posterImageSize, backdropImageSize, sharpPosterUrl } from '../../src/catalog/tmdb';
 import { servers, addServer, setActiveServer, removeServer } from '../../src/store/servers';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, resetLibrary } from '../../src/store/library';
 import { routeStack } from '../../src/ui/nav';
@@ -224,6 +224,30 @@ describe('TMDB image sizes', () => {
     expect(backdropImageSize(1)).toBe('w1280');
     expect(backdropImageSize(2)).toBe('original');
   });
+
+  it('rewrites a saved small poster to the sharp size and leaves other URLs alone', () => {
+    const small = 'https://image.tmdb.org/t/p/w300/abc.jpg';
+    expect(sharpPosterUrl(small, 1)).toBe('https://image.tmdb.org/t/p/w500/abc.jpg');
+    expect(sharpPosterUrl(small, 2)).toBe('https://image.tmdb.org/t/p/w780/abc.jpg');
+    expect(sharpPosterUrl('https://image.tmdb.org/t/p/w185/abc.jpg', 1)).toBe('https://image.tmdb.org/t/p/w500/abc.jpg');
+    expect(sharpPosterUrl('https://image.tmdb.org/t/p/w92/abc.jpg', 1)).toBe('https://image.tmdb.org/t/p/w500/abc.jpg');
+    expect(sharpPosterUrl('https://image.tmdb.org/t/p/w500/abc.jpg', 1)).toBe('https://image.tmdb.org/t/p/w500/abc.jpg');
+    expect(sharpPosterUrl('https://image.tmdb.org/t/p/w780/abc.jpg', 2)).toBe('https://image.tmdb.org/t/p/w780/abc.jpg');
+    expect(sharpPosterUrl('https://image.tmdb.org/t/p/w1280/abc.jpg', 2)).toBe('https://image.tmdb.org/t/p/w1280/abc.jpg');
+    expect(sharpPosterUrl('https://image.tmdb.org/t/p/original/abc.jpg', 2)).toBe('https://image.tmdb.org/t/p/original/abc.jpg');
+    expect(sharpPosterUrl('http://img/poster.jpg', 2)).toBe('http://img/poster.jpg');
+    expect(sharpPosterUrl('', 1)).toBe('');
+  });
+});
+
+describe('focused row clearance', () => {
+  it('keeps a focused row out of the bottom 120px, and keeps the hint band on top of that', () => {
+    expect(FOCUS_BOTTOM_CLEAR).toBe(120);
+    expect(focusBottomMargin(false, false)).toBe(120);
+    expect(focusBottomMargin(true, false)).toBe(36);
+    expect(focusBottomMargin(false, true)).toBe(192);
+    expect(focusBottomMargin(true, true)).toBe(108);
+  });
 });
 
 describe('TV audit stylesheet', () => {
@@ -234,7 +258,15 @@ describe('TV audit stylesheet', () => {
     expect(css).toContain('.player-error .details { font-size: 28px;');
     expect(css).toContain('.screen.library { padding-left: 96px; padding-right: 96px; }');
     expect(css).toContain('.torrent-actions-row { flex-wrap: wrap; }');
-    expect(css).toContain('.screen.settings { padding: 48px 96px 180px; }');
+    expect(css).toContain('.screen.settings { padding: 48px 96px 240px; }');
+    expect(css).toContain('.topbar-tabs.fade-left');
+    expect(css).toContain('.topbar-tabs.fade-right');
+    expect(css).toContain('.torrent-raw { font-size: 24px;');
+    expect(css).toContain('.lrow-meta { font-size: 24px;');
+    expect(css).toContain('.skip-status .muted { font-size: 24px;');
+    expect(css).toContain('.link-toggle { font-size: 24px;');
+    expect(css).toContain('.faq-chips-hint { font-size: 24px;');
+    expect(css).toContain('.history-count { font-size: 20px;');
     expect(css).toContain('.tile-small .tile-title { font-size: 28px;');
     expect(css).toContain('.connect-body { width: 980px;');
     expect(css).toContain('.faq-body-scroll { height: 100%; overflow-y: auto;');

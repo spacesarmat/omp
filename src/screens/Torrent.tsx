@@ -40,6 +40,7 @@ import { comingEpisodes, lastEpisodes } from '../lib/episodeNames';
 import { useTmdbEpisodes } from '../lib/useTmdbEpisodes';
 import { isSeries } from '../lib/seriesGroups';
 import { isAudiobookTorrent } from '../lib/audiobookRoute';
+import { sharpPosterUrl } from '../catalog/tmdb';
 import { isoDay } from '../lib/seriesStatus';
 
 /** The parts of the screen the hint bar follows. */
@@ -297,7 +298,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   return (
     <FocusGroup focusKey="TORRENT" className="screen torrent">
       <div class="torrent-head">
-        {tor && tor.poster ? <img src={tor.poster} alt="" /> : null}
+        {tor && tor.poster ? <img src={sharpPosterUrl(tor.poster)} alt="" /> : null}
         <div class="info">
           {(() => {
             const n = tor ? headerNames(tor, list) : { name: hash, raw: '' };

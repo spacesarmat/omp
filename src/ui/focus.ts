@@ -6,6 +6,14 @@ import type { SavedFocus } from './nav';
 export const HINTS_HEIGHT = 96;
 /** Extra room around a focused element so a focus scale stays inside the screen edge. */
 export const SCROLL_BLOCK_MARGIN = 36;
+/** A focused row stays out of the bottom 5% band (120px at 1080p), hints included. */
+export const FOCUS_BOTTOM_CLEAR = 120;
+
+/** How far above the scrollport's bottom a focused element must end. */
+export function focusBottomMargin(hasHints: boolean, keypad: boolean): number {
+  const hints = hasHints ? HINTS_HEIGHT : 0;
+  return Math.max(SCROLL_BLOCK_MARGIN, FOCUS_BOTTOM_CLEAR - hints) + (keypad ? 72 : 0);
+}
 
 export function scrollIntoViewSafe(el: Element | null): void {
   if (!el) return;
@@ -17,9 +25,9 @@ export function scrollIntoViewSafe(el: Element | null): void {
   if (!box) return;
   // the address keypad's hint sits under the last key; keep that hint above the footer
   const keypad = typeof (el as HTMLElement).closest === 'function' && (el as HTMLElement).closest('.keypad');
-  const margin = SCROLL_BLOCK_MARGIN + (keypad ? 72 : 0);
-  const hints = box.querySelector('.hints') ? HINTS_HEIGHT : 0;
-  const over = el.getBoundingClientRect().bottom + margin - (box.getBoundingClientRect().bottom - hints);
+  const hints = !!box.querySelector('.hints');
+  const margin = focusBottomMargin(hints, !!keypad);
+  const over = el.getBoundingClientRect().bottom + margin - (box.getBoundingClientRect().bottom - (hints ? HINTS_HEIGHT : 0));
   if (over > 0) box.scrollTop += over;
   const topOver = box.getBoundingClientRect().top + margin - el.getBoundingClientRect().top;
   if (topOver > 0) box.scrollTop -= topOver;
@@ -53,6 +61,37 @@ export function nextRowKey(rows: string[][], key: string, dir: string): string |
   if (n < 0 || n >= rows.length) return undefined;
   const row = rows[n];
   return row[Math.min(ci, row.length - 1)];
+}
+
+/**
+ * The next enabled key in a flat row, or null at the end. Disabled and missing keys are skipped,
+ * so a D-pad walks every real control in order.
+ */
+export function stepKey(keys: string[], key: string, dir: 1 | -1, ok: (k: string) => boolean): string | null {
+  const i = keys.indexOf(key);
+  if (i < 0) return null;
+  for (let n = i + dir; n >= 0 && n < keys.length; n += dir) {
+    if (ok(keys[n])) return keys[n];
+  }
+  return null;
+}
+
+/**
+ * Left/right walk `keys` in order and never jump by geometry. Up stays. Down leaves the row only
+ * when something below can take the focus, otherwise the focus stays put.
+ * `hasBelow` runs on the key press: the row under the bar changes after this handler is built.
+ */
+export function barArrow(keys: string[], key: string, hasBelow: () => boolean, ok: (k: string) => boolean): (dir: string) => boolean {
+  return (dir: string) => {
+    if (dir === 'left' || dir === 'right') {
+      const next = stepKey(keys, key, dir === 'right' ? 1 : -1, ok);
+      if (next) setFocus(next);
+      return false;
+    }
+    if (dir === 'up') return false;
+    if (dir === 'down') return hasBelow();
+    return true;
+  };
 }
 
 /** onArrow for a key in `rows`: explicit neighbours, so a short button is not skipped. */

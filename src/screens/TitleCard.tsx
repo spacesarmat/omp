@@ -10,7 +10,7 @@ import { activeCatalog } from '../catalog/activeCatalog';
 import { catalogErrorCode, catalogErrorKey, type CatalogErrorCode } from '../catalog/client';
 import { seasonIndex, librarySeasonHash } from '../catalog/library';
 import { libraryTargetOf, torrentTarget, type LibraryTarget } from '../catalog/libraryTarget';
-import { torrentQuery, type CatalogCard, type Kind } from '../catalog/tmdb';
+import { sharpPosterUrl, torrentQuery, type CatalogCard, type Kind } from '../catalog/tmdb';
 import type { Torrent } from '../api/types';
 import { torrents } from '../store/library';
 import { isWanted, wantAction } from '../store/wantList';
@@ -132,7 +132,7 @@ function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
           </div>
         ) : null}
         <div class="series-poster">
-          {card.poster ? <img src={card.poster} alt="" /> : <div class={'disc-ph disc-ph-' + (card.id % 4)}>{tvGlyphs(card.title)}</div>}
+          {card.poster ? <img src={sharpPosterUrl(card.poster)} alt="" /> : <div class={'disc-ph disc-ph-' + (card.id % 4)}>{tvGlyphs(card.title)}</div>}
         </div>
         <div class="series-info">
           <h1>{tvGlyphs(card.title)}</h1>

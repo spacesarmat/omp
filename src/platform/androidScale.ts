@@ -8,6 +8,21 @@ const TOLERANCE = 2;
 
 interface ScaleWindow {
   innerWidth: number;
+  innerHeight?: number;
+}
+
+function setRootBox(el: HTMLElement, width: string, height: string): void {
+  const doc = el.ownerDocument;
+  const root = doc ? doc.documentElement : null;
+  const body = doc ? doc.body : null;
+  if (root) {
+    root.style.width = width;
+    root.style.height = height;
+  }
+  if (body) {
+    body.style.width = width;
+    body.style.height = height;
+  }
 }
 
 function setTransform(el: HTMLElement, value: string): void {
@@ -19,14 +34,23 @@ function setTransform(el: HTMLElement, value: string): void {
   st.webkitTransformOrigin = origin;
 }
 
-/** Scales `el` by innerWidth/1920 unless the window is already ~1920 wide; returns the applied factor. */
+/**
+ * Scales `el` by innerWidth/1920 unless the window is already ~1920 wide.
+ * html and body grow to the viewport: they are styled 1920×1080 with overflow hidden, so a 2× scale
+ * would otherwise be clipped to the top-left quarter.
+ */
 export function applyTvScale(el: HTMLElement, win: ScaleWindow = window): number {
   const w = win.innerWidth;
   if (!(w > 0) || Math.abs(w - BASE_W) <= TOLERANCE) {
     setTransform(el, '');
+    el.style.width = '';
+    el.style.height = '';
+    setRootBox(el, '', '');
     return 1;
   }
   const s = w / BASE_W;
+  const h = win.innerHeight && win.innerHeight > 0 ? win.innerHeight : Math.round(BASE_H * s);
+  setRootBox(el, w + 'px', h + 'px');
   el.style.width = BASE_W + 'px';
   el.style.height = BASE_H + 'px';
   setTransform(el, 'scale(' + s + ')');
@@ -45,5 +69,8 @@ export function installAndroidScale(root?: HTMLElement | null): () => void {
     window.removeEventListener('resize', update);
     window.removeEventListener('load', update);
     setTransform(el, '');
+    el.style.width = '';
+    el.style.height = '';
+    setRootBox(el, '', '');
   };
 }

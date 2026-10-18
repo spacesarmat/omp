@@ -214,6 +214,14 @@ export function posterImageSize(dpr?: number): 'w500' | 'w780' {
   return r >= 2 ? 'w780' : 'w500';
 }
 
+/**
+ * A poster URL already saved at w300 (or smaller). Rewritten to the sharp size; anything else is unchanged.
+ */
+export function sharpPosterUrl(url: string, dpr?: number): string {
+  if (!url || url.indexOf('/t/p/') < 0) return url;
+  return url.replace(/\/t\/p\/w(?:45|92|154|185|300)(?=\/)/, '/t/p/' + posterImageSize(dpr));
+}
+
 /** Backdrop width: w1280 at 1080p, original on a 4K panel. */
 export function backdropImageSize(dpr?: number): 'w1280' | 'original' {
   const r = dpr !== undefined ? dpr : (typeof window !== 'undefined' && window.devicePixelRatio) || 1;

@@ -6,7 +6,7 @@ import { t, lang, type Key } from '../../i18n';
 import { activeCatalog } from '../../catalog/activeCatalog';
 import { catalogErrorCode, catalogErrorKey, type CatalogErrorCode } from '../../catalog/client';
 import { libraryIndex, inLibrary } from '../../catalog/library';
-import type { CatalogTitle } from '../../catalog/tmdb';
+import { sharpPosterUrl, type CatalogTitle } from '../../catalog/tmdb';
 import {
   DISCOVER_SORTS, DISCOVER_RATINGS, DISCOVER_COUNTRIES, genresFor, sanitizeDiscoverQuery, discoverQueryKey,
   type DiscoverQuery, type DiscoverSort, type DiscoverYear,
@@ -464,7 +464,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
               }}
             >
               <div class="disc-poster">
-                {x.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={x.poster} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(x.title)}</div>}
+                {x.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={sharpPosterUrl(x.poster)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(x.title)}</div>}
                 {x.rating > 0 && <span class="disc-rating">{ratingText(x.rating)}</span>}
                 {wantedFn(x.kind, x.id) ? (
                   <span class="disc-mark disc-mark-want">{t('tv.discover.wantMark')}</span>

@@ -789,6 +789,10 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .topbar-home { flex: 0 0 auto; }
 .topbar-tabs { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; overflow-x: auto; overflow-y: hidden; }
 .topbar-tabs::-webkit-scrollbar { display: none; }
+.topbar-tabs-pad { flex: 0 0 48px; width: 48px; }
+.topbar-tabs.fade-left { -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 0), #000 40px); mask-image: linear-gradient(to right, rgba(0, 0, 0, 0), #000 40px); }
+.topbar-tabs.fade-right { -webkit-mask-image: linear-gradient(to left, rgba(0, 0, 0, 0), #000 40px); mask-image: linear-gradient(to left, rgba(0, 0, 0, 0), #000 40px); }
+.topbar-tabs.fade-left.fade-right { -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 0), #000 40px, #000 calc(100% - 40px), rgba(0, 0, 0, 0)); mask-image: linear-gradient(to right, rgba(0, 0, 0, 0), #000 40px, #000 calc(100% - 40px), rgba(0, 0, 0, 0)); }
 .topbar .tab { flex: 0 0 auto; }
 .topbar-tools { flex: 0 0 auto; display: flex; align-items: center; }
 .topbar-tools > * { margin-right: 10px; }
@@ -804,7 +808,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .torrent-actions-row { flex-wrap: wrap; }
 .torrent-actions-row.row > * { margin-bottom: 12px; }
 
-.screen.settings { padding: 48px 96px 180px; }
+.screen.settings { padding: 48px 96px 240px; }
 .settings .button.focused { transform-origin: left center; }
 
 .tile-large .tile-title { font-size: 28px; line-height: 34px; height: 102px; }
@@ -819,6 +823,12 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .hcard-ep, .hcard-time, .hcard-src, .log-line, .log-empty { font-size: 24px; }
 .search-raw, .search-row-error, .search-side, .search-count { font-size: 24px; }
 .connect-hint, .kp-hint, .field-label, .update-text { font-size: 24px; }
+.torrent-raw { font-size: 24px; line-height: 32px; }
+.lrow-meta { font-size: 24px; }
+.skip-status .muted { font-size: 24px; }
+.link-toggle { font-size: 24px; }
+.faq-chips-hint { font-size: 24px; }
+.history-count { font-size: 20px; }
 
 .screen.connect { padding-bottom: 200px; }
 .connect-body { width: 980px; padding-top: 36px; }

@@ -88,9 +88,9 @@ export function Button(p: { label: string; icon?: IconName; onPress: () => void;
  * button keeps its width and the bar its height. `labelEdge` pins the chip to the button's start or end edge instead of
  * centering it, for the buttons at the screen's edges, so the chip never runs off the screen.
  */
-export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void; expand?: boolean; labelEdge?: 'start' | 'end'; dot?: boolean }) {
+export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void; onArrow?: (direction: string) => boolean; expand?: boolean; labelEdge?: 'start' | 'end'; dot?: boolean }) {
   return (
-    <Focusable focusKey={p.focusKey} className="icon-button" onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} ariaLabel={p.label} role="button">
+    <Focusable focusKey={p.focusKey} className="icon-button" onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} onArrow={p.onArrow} ariaLabel={p.label} role="button">
       {(focused: boolean) => [
         <Icon key="i" name={p.icon} size={28} />,
         p.expand && focused ? <span key="l" class={'icon-btn-label' + (p.labelEdge ? ' icon-btn-label--' + p.labelEdge : '')}>{p.label}</span> : null,
