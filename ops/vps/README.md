@@ -1,6 +1,6 @@
 # OMP VPS stack
 
-Docker Compose on a single VPS: **Caddy** (TLS) → **billing**, **Jackett**, **JacRed**, **TorrServer**, plus **FlareSolverr** (localhost only).
+Docker Compose on a single VPS: **Caddy** (TLS) → **billing**, **Jackett**, **JacRed**, **TorrServer**, plus **FlareSolverr** (localhost only). On the host, [`jackett-monitor/`](jackett-monitor/README.md) tests Jackett indexers every 30 minutes and disables ones that keep failing.
 
 Hostnames (Cloudflare A → VPS IP, orange cloud):
 
@@ -24,6 +24,8 @@ JacRed on a 2 GB VPS needs swap. `/etc/fstab` mounts a 2 GB `/swapfile`. `/etc/s
 FlareSolverr solves Cloudflare challenges for Jackett and JacRed indexers. The host publish is `127.0.0.1:8191` only. Jackett's manual settings live in the Jackett UI (under `data/jackett/`, not in git): **FlareSolverrUrl** `http://flaresolverr:8191/` with timeout `55000`, and an HTTP proxy at `warp:1080`. The Jackett admin password is only on the server, in `/root/jackett-admin-password.txt` (owner root, mode `600`). Do not commit that file.
 
 These Jackett indexers were disabled by moving their definitions to `data/jackett/Jackett/Indexers-disabled/`: `newstudio`, `opensharing`, `pctorrent`, `torrent-pirat`, `torrentby`, `xxxtor`. Restore one by moving it back into `data/jackett/Jackett/Indexers/` and restarting Jackett (`docker compose restart jackett`).
+
+[`jackett-monitor/`](jackett-monitor/README.md) is already installed on the VPS as a systemd timer (`:07` and `:37`). It reads the Jackett admin password and the Telegram token from files on the server. Neither value is in git. `deploy.sh` does not copy this directory; update the VPS copy with `sudo ./install.sh` from `jackett-monitor/`.
 
 `warp` (`caomingjun/warp`) provides an HTTP proxy on `:1080` so the billing bot can reach `api.telegram.org` when the VPS IP is blocked. Jackett uses that same proxy.
 

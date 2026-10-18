@@ -1,3 +1,4 @@
 # Keep release notes as UTF-8 LF (Windows agents must not rewrite via cp1251 / CRLF).
 CHANGELOG.md text eol=lf
 CHANGELOG.en.md text eol=lf
+ops/vps/jackett-monitor/** text eol=lf
