@@ -115,10 +115,12 @@ describe('App scale safety net', () => {
     expect(root.style.transform).toBe('scale(' + window.innerWidth / 1920 + ')');
   });
 
-  it('webOS: the .app root is never scaled', async () => {
+  it('webOS: the .app root uses the same 1920 scale as Android TV', async () => {
     routeStack.value = [{ name: 'connect' }];
     const app = mountApp();
+    const root = app.querySelector('.app') as HTMLElement;
     await new Promise((r) => setTimeout(r, 30));
-    expect((app.querySelector('.app') as HTMLElement).style.transform).toBe('');
+    const w = window.innerWidth;
+    expect(root.style.transform).toBe(Math.abs(w - 1920) <= 2 ? '' : 'scale(' + w / 1920 + ')');
   });
 });

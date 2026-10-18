@@ -95,6 +95,7 @@ export function CodeSheet({
               class="m-code-cell"
               type="text"
               inputMode="numeric"
+              size={1}
               autoComplete="one-time-code"
               aria-label={t('remote.code.digit', { n: i + 1 })}
               value={d}

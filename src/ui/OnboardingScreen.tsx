@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { focusAfterClose } from './focus';
 import { t } from '../i18n';
 import {
   completeOnboarding,
@@ -56,7 +57,15 @@ export function OnboardingScreen() {
 
   // Layout, not a passive effect: the remote must hit this screen on the same commit it appears.
   useLayoutEffect(() => {
-    return pushKeyHandler((a) => {
+    let prev = '';
+    try {
+      prev = getCurrentFocusKey() || '';
+    } catch (e) {
+      prev = '';
+    }
+    // The tour covers Settings. Back and «Начать» return to the button that opened it.
+    if (!prev || prev === 'onb-next' || prev === 'onb-skip') prev = 'set-onboarding';
+    const offKeys = pushKeyHandler((a) => {
       if (a === 'back') {
         if (step.current > 0) setI(step.current - 1);
         else finish('start');
@@ -73,6 +82,10 @@ export function OnboardingScreen() {
       }
       return 'spatial';
     }, 80);
+    return () => {
+      offKeys();
+      focusAfterClose(prev);
+    };
   }, []);
 
   return (

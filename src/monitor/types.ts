@@ -20,8 +20,13 @@ export interface Subscription {
   notify: boolean;
   /** «Только лучшее качество»: of the new results only the best is reported, and only above every rank reported before. */
   better?: boolean;
-  /** Unix ms. */
+  /** Unix ms. 0 only before backfill; a saved subscription always has a positive stamp. */
   createdAt: number;
+  /**
+   * Unix ms of the newest finding for this subscription. Absent when nothing has been found yet.
+   * Kept on the subscription so a find that aged out of the capped findings list still sorts.
+   */
+  lastFindAt?: number;
 }
 
 /** The fields a new subscription is created from. */

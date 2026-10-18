@@ -914,7 +914,7 @@ export function startDeviceLink(state, { deviceId, now }) {
   return { state: { ...state, links }, result: { token, expiresAt: now + 10 * 60 * 1000 } };
 }
 
-const ADMIN_LOGIN_TTL = 5 * 60 * 1000;
+const ADMIN_LOGIN_TTL = 10 * 60 * 1000;
 
 /** Start a Telegram login for the admin web panel. Payload: /start admin_TOKEN */
 export function startAdminPanelLogin(state, { now }) {
@@ -927,21 +927,29 @@ export function startAdminPanelLogin(state, { now }) {
   return { state: { ...state, adminLogins }, result: { token, expiresAt } };
 }
 
+/**
+ * Confirm a panel login link.
+ * error is unknown | expired | used | wrong_user. The token is never part of the error.
+ * Precedence: unknown, already used, expired, then wrong user.
+ */
 export function confirmAdminPanelLogin(state, { token, telegramId, now }) {
   const key = String(token || '')
     .trim()
     .toLowerCase();
-  if (!key) return { state, result: { error: 'bad_link' } };
-  if (!isAdminChat(state.settings, telegramId)) {
-    const adminLogins = (state.adminLogins || []).map((l) =>
-      l.token === key && !l.consumedAt && l.expiresAt > now ? { ...l, deniedAt: now, telegramId: String(telegramId) } : l,
+  const rows = state.adminLogins || [];
+  if (!key) return { state, result: { error: 'unknown' } };
+  const row = rows.find((l) => l.token === key);
+  if (!row) return { state, result: { error: 'unknown' } };
+  if (row.consumedAt) return { state, result: { error: 'used' } };
+  if (!(row.expiresAt > now)) return { state, result: { error: 'expired' } };
+  if (!isAdminChat(state.settings, telegramId) || row.deniedAt) {
+    if (row.deniedAt) return { state, result: { error: 'wrong_user' } };
+    const adminLogins = rows.map((l) =>
+      l.token === key ? { ...l, deniedAt: now, telegramId: String(telegramId) } : l,
     );
-    return { state: { ...state, adminLogins }, result: { error: 'forbidden' } };
+    return { state: { ...state, adminLogins }, result: { error: 'wrong_user' } };
   }
-  const row = (state.adminLogins || []).find((l) => l.token === key && !l.consumedAt && l.expiresAt > now);
-  if (!row) return { state, result: { error: 'bad_link' } };
-  if (row.deniedAt) return { state, result: { error: 'forbidden' } };
-  const adminLogins = state.adminLogins.map((l) =>
+  const adminLogins = rows.map((l) =>
     l.token === key ? { ...l, telegramId: String(telegramId), confirmedAt: now, deniedAt: 0 } : l,
   );
   return { state: { ...state, adminLogins }, result: { ok: true } };
