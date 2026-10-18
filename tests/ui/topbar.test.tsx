@@ -223,63 +223,73 @@ describe('top bar neighbours', () => {
     box.scrollLeft = 80;
     await focus('tab-history');
     expect(box.scrollLeft).toBe(0);
-    expect(box.classList.contains('fade-left')).toBe(false);
-    expect(box.classList.contains('fade-right')).toBe(true);
+    expect(el.style.visibility).toBe('');
     await act(() => { render(null, host); });
   });
 
-  it('reaches the next tab edge when the TV strip only has 76px of scroll', () => {
-    // «История» is 172px and the strip starts 76px into it: the old maximum could not hide it
-    const plan = tabStripPlan({
-      scrollLeft: 76,
-      clientWidth: 1100,
-      scrollWidth: 1176,
-      padWidth: 48,
-      focus: null,
-      tabs: [{ left: 0, width: 172 }, { left: 172, width: 140 }],
+  it('hides the partial tab at the TV widths and never grows a spacer', () => {
+    // Real LG: strip x 265–1404 (1139px), tabs total 1215px, max scroll stays 76px.
+    // «История» is 189–361 while scrolled (content 0–172). «Прочее» is 1354–1480 at the left edge (content 1089–1215).
+    const stripStart = 265;
+    const stripEnd = 1404;
+    const clientWidth = stripEnd - stripStart;
+    const scrollWidth = 1215;
+    const history = { left: 0, width: 361 - 189 };
+    const prochee = { left: 1354 - stripStart, width: 1480 - 1354 };
+    const middle = { left: 400, width: 120 };
+    const tabs = [history, middle, prochee];
+    expect(clientWidth).toBe(1139);
+    expect(scrollWidth - clientWidth).toBe(76);
+    const atHistory = tabStripPlan({
+      scrollLeft: 0,
+      clientWidth: clientWidth,
+      scrollWidth: scrollWidth,
+      focus: history,
+      tabs: tabs,
     });
-    expect(plan.scrollLeft).toBe(172);
-    expect(plan.cover).toBe(0);
-    // 48px pad plus the 96px shortfall (172 − 76); a second pass must not grow it again
-    expect(plan.pad).toBe(144);
+    expect(atHistory.scrollLeft).toBe(0);
+    expect(atHistory.hide).toEqual([false, false, true]);
+    const atProchee = tabStripPlan({
+      scrollLeft: history.width - (361 - stripStart),
+      clientWidth: clientWidth,
+      scrollWidth: scrollWidth,
+      focus: prochee,
+      tabs: tabs,
+    });
+    expect(atProchee.scrollLeft).toBe(76);
+    expect(atProchee.hide).toEqual([true, false, false]);
     const again = tabStripPlan({
-      scrollLeft: plan.scrollLeft,
-      clientWidth: 1100,
-      scrollWidth: 1176 + (plan.pad - 48),
-      padWidth: plan.pad,
-      focus: null,
-      tabs: [{ left: 0, width: 172 }, { left: 172, width: 140 }],
+      scrollLeft: atProchee.scrollLeft,
+      clientWidth: clientWidth,
+      scrollWidth: scrollWidth,
+      focus: prochee,
+      tabs: tabs,
     });
-    expect(again.scrollLeft).toBe(172);
-    expect(again.pad).toBe(plan.pad);
-    expect(again.cover).toBe(0);
+    expect(again.scrollLeft).toBe(atProchee.scrollLeft);
+    expect(again.hide).toEqual(atProchee.hide);
   });
 
-  it('snaps back to the tab edge when the strip does not overflow', () => {
-    const plan = tabStripPlan({
-      scrollLeft: 150,
-      clientWidth: 400,
-      scrollWidth: 400,
-      padWidth: 0,
-      focus: { left: 150, width: 180 },
-      tabs: [{ left: 0, width: 172 }],
-    });
-    expect(plan.scrollLeft).toBe(0);
-    expect(plan.cover).toBe(0);
-    expect(plan.pad).toBe(0);
-  });
-
-  it('covers a tab fragment when the focus sits inside it', () => {
-    const plan = tabStripPlan({
-      scrollLeft: 100,
-      clientWidth: 400,
-      scrollWidth: 900,
-      padWidth: 48,
-      focus: { left: 100, width: 80 },
-      tabs: [{ left: 0, width: 172 }, { left: 172, width: 140 }],
-    });
-    expect(plan.scrollLeft).toBe(100);
-    expect(plan.cover).toBe(72);
+  it('zeroes a leftover end pad instead of growing it', () => {
+    const box = document.createElement('div');
+    box.className = 'topbar-tabs';
+    const history = document.createElement('div');
+    history.className = 'tab';
+    const pad = document.createElement('span');
+    pad.className = 'topbar-tabs-pad';
+    pad.style.width = '25373px';
+    box.appendChild(history);
+    box.appendChild(pad);
+    document.body.appendChild(box);
+    Object.defineProperty(history, 'offsetLeft', { configurable: true, value: 0 });
+    Object.defineProperty(history, 'offsetWidth', { configurable: true, value: 172 });
+    Object.defineProperty(box, 'scrollWidth', { configurable: true, value: 1215 });
+    Object.defineProperty(box, 'clientWidth', { configurable: true, value: 1139 });
+    box.scrollLeft = 0;
+    alignTabStrip(box);
+    alignTabStrip(box);
+    expect(pad.style.width).toBe('0px');
+    expect(box.scrollLeft).toBe(0);
+    box.remove();
   });
 
   it('hides a tab that is only partly visible on the left', () => {
@@ -300,8 +310,9 @@ describe('top bar neighbours', () => {
     Object.defineProperty(box, 'clientWidth', { configurable: true, value: 500 });
     box.scrollLeft = 40;
     alignTabStrip(box);
-    expect(box.scrollLeft).toBe(140);
-    expect(box.classList.contains('fade-left')).toBe(false);
+    expect(box.scrollLeft).toBe(40);
+    expect(history.style.visibility).toBe('hidden');
+    expect(news.style.visibility).toBe('');
     box.remove();
   });
 

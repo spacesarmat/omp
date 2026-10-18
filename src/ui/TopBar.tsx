@@ -38,72 +38,55 @@ function contentBelow(): boolean {
   return false;
 }
 
-function syncFade(box: HTMLElement): void {
-  box.classList.toggle('fade-right', box.scrollLeft + box.clientWidth < box.scrollWidth - 2);
-}
-
 export interface TabBox { left: number; width: number; }
 
 /**
- * Where the strip should sit. On the TV the old pad left only 76px of scroll, short of «История»'s
- * 172px, so the snap clamped mid-tab. The end pad grows by that shortfall and then stops.
- * A tab that still crosses the left edge is covered, in pixels, so none of it stays visible.
+ * Scroll the focused tab fully into the strip, then hide every tab that is still not completely
+ * inside the visible range. Chrome 53 does not count a flex end spacer in scrollWidth (the TV strip
+ * is 1139px, the tabs 1215px, and the maximum scroll stays 76px), so padding cannot uncover a partial
+ * tab. Hiding does not depend on that, and nothing here grows.
  */
 export function tabStripPlan(o: {
   scrollLeft: number;
   clientWidth: number;
   scrollWidth: number;
-  padWidth: number;
   focus: TabBox | null;
   tabs: TabBox[];
-}): { scrollLeft: number; cover: number; pad: number } {
-  // The furthest snap target is a tab's left edge. Once the strip overflows, grow the end pad by
-  // exactly the shortfall so that edge is reachable. A second call sees the new maximum and adds nothing.
-  let furthest = 0;
-  for (let i = 0; i < o.tabs.length; i++) if (o.tabs[i].left > furthest) furthest = o.tabs[i].left;
-  const maxNow = Math.max(0, o.scrollWidth - o.clientWidth);
-  const extra = maxNow > 0 ? Math.max(0, Math.ceil(furthest - maxNow)) : 0;
-  const pad = o.padWidth + extra;
-  const max = maxNow + extra;
+}): { scrollLeft: number; hide: boolean[] } {
   const view = o.clientWidth;
+  const max = Math.max(0, o.scrollWidth - view);
   let scroll = o.scrollLeft;
   if (o.focus && view > 0) {
     const left = o.focus.left;
     const right = left + o.focus.width;
-    if (left < scroll) scroll = left;
-    else if (right > scroll + view) scroll = Math.max(0, right - view);
-  }
-  let boundary = scroll;
-  let found = false;
-  for (let i = 0; i < o.tabs.length; i++) {
-    const left = o.tabs[i].left;
-    if (left + 1 < scroll) continue;
-    boundary = left;
-    found = true;
-    break;
-  }
-  if (!found) {
-    for (let i = o.tabs.length - 1; i >= 0; i--) {
-      if (o.tabs[i].left <= scroll + 1) { boundary = o.tabs[i].left; break; }
+    if (o.focus.width <= view) {
+      if (left < scroll) scroll = left;
+      else if (right > scroll + view) scroll = right - view;
+    } else if (left < scroll || left > scroll + view) {
+      scroll = left;
     }
   }
-  if (o.focus && boundary > o.focus.left) boundary = o.focus.left;
-  if (boundary < 0) boundary = 0;
-  if (boundary > max) boundary = max;
-  let cover = 0;
+  if (scroll < 0) scroll = 0;
+  if (scroll > max) scroll = max;
+  const hide: boolean[] = [];
   for (let i = 0; i < o.tabs.length; i++) {
     const t = o.tabs[i];
     const right = t.left + t.width;
-    if (right <= boundary + 1) continue;
-    if (t.left < boundary - 1) cover = Math.ceil(right - boundary);
-    break;
+    const full = view > 0 && t.left >= scroll - 1 && right <= scroll + view + 1;
+    const focused = !!o.focus && Math.abs(o.focus.left - t.left) < 2 && Math.abs(o.focus.width - t.width) < 2;
+    hide.push(!full && !focused);
   }
-  return { scrollLeft: boundary, cover: cover, pad: pad };
+  return { scrollLeft: scroll, hide: hide };
 }
 
-/** The focused tab stays fully in the strip, and the left edge sits on a tab boundary. */
+/** The focused tab is fully in the strip. Any tab that is only partly in view is hidden. */
 export function alignTabStrip(box: HTMLElement, focusKey?: string): void {
+  // A spacer left over from an older build must not keep growing. Chrome 53 ignores it anyway.
   const padEl = box.querySelector('.topbar-tabs-pad') as HTMLElement | null;
+  if (padEl) {
+    padEl.style.width = '0px';
+    padEl.style.flexBasis = '0px';
+  }
   const nodes = box.querySelectorAll('.tab');
   const tabs: TabBox[] = [];
   for (let i = 0; i < nodes.length; i++) {
@@ -117,18 +100,13 @@ export function alignTabStrip(box: HTMLElement, focusKey?: string): void {
     scrollLeft: box.scrollLeft,
     clientWidth: box.clientWidth,
     scrollWidth: box.scrollWidth,
-    padWidth: padEl ? padEl.offsetWidth : 0,
     focus: focusEl ? { left: focusEl.offsetLeft, width: focusEl.offsetWidth } : null,
     tabs: tabs,
   });
-  if (padEl) {
-    padEl.style.width = plan.pad + 'px';
-    padEl.style.flexBasis = plan.pad + 'px';
-  }
   box.scrollLeft = plan.scrollLeft;
-  const cover = box.parentElement ? box.parentElement.querySelector('.topbar-tabs-cover') as HTMLElement | null : null;
-  if (cover) cover.style.width = plan.cover + 'px';
-  syncFade(box);
+  for (let i = 0; i < nodes.length; i++) {
+    (nodes[i] as HTMLElement).style.visibility = plan.hide[i] ? 'hidden' : '';
+  }
 }
 
 /** Set only when the remote or a click moves to a tab. A programmatic focus must not switch the library. */
@@ -182,7 +160,6 @@ export function TopBar(p: TopBarProps) {
         {device && <span class="topbar-device" title={device}>{tvGlyphs(device)}</span>}
       </div>
       <div class="topbar-tabs-clip">
-        <div class="topbar-tabs-cover" />
         <div class="topbar-tabs" ref={tabsRef}>
           {tvLibraryTabs().map((tb) => (
             <Focusable
@@ -206,7 +183,6 @@ export function TopBar(p: TopBarProps) {
               {tb.id === 'news' && unseen > 0 && <span class="tab-badge">{unseen > 99 ? '99+' : String(unseen)}</span>}
             </Focusable>
           ))}
-          <span class="topbar-tabs-pad" />
         </div>
       </div>
       <div class="topbar-tools">

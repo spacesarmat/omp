@@ -298,6 +298,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .icon-dot { position: absolute; top: 8px; right: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
 .icon-button.focused .icon-dot { background: #0f1115; }
 .icon-button.focused { background: var(--accent); color: #0f1115; box-shadow: none; transform: scale(1.06); z-index: 30; }
+/* the last tool sits on the 1824 edge: scale toward the screen so the label stays inside it */
+.topbar-tools .icon-button:last-child.focused { -webkit-transform-origin: right center; transform-origin: right center; }
 /* the focused button's label: a chip under it that moves nothing; the edge buttons pin it to their edge to stay on screen */
 .icon-btn-label { position: absolute; top: 100%; left: 50%; margin-top: 10px; padding: 6px 14px; border-radius: 10px; background: var(--panel2); border: 1px solid rgba(255, 255, 255, .12); color: #fff; font-size: 24px; line-height: 32px; font-weight: 700; white-space: nowrap; pointer-events: none; z-index: 30; -webkit-transform: translateX(-50%); transform: translateX(-50%); }
 .icon-btn-label--end { left: auto; right: 0; -webkit-transform: none; transform: none; }
@@ -344,7 +346,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .art-badges .badge { flex-shrink: 0; background: rgba(15, 17, 21, .8); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 /* same reserved title height on every tile keeps rows aligned */
 /* one weight for every tile name: 600 rendered bold for some names and regular for others on the LG (no such face for every script) */
-.tile-title { margin-top: 10px; font-weight: normal; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; }
+.tile-title { margin-top: 10px; font-weight: normal; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; word-wrap: break-word; }
 .tile-meta { height: 30px; color: var(--muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .tile-count { position: absolute; top: 12px; right: 12px; min-width: 28px; padding: 2px 9px; border-radius: 7px; background: rgba(15, 17, 21, .8); color: var(--text); font-size: 16px; font-weight: 700; text-align: center; }
 .series-pill { position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 20px); padding: 2px 10px; border-radius: 8px; background: #3a3f4b; color: #fff; font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -362,18 +364,18 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .lrow.focused { background: var(--panel2); transform: none; }
 .lrow .art { width: 72px; height: 108px; border-radius: 8px; margin-right: 20px; }
 .lrow .art-initials, .hcard .art-initials { font-size: 24px; }
-.lrow-main { flex: 0 1 auto; min-width: 0; max-width: calc(100% - 340px); overflow: hidden; }
+.lrow-main { flex: 1 1 auto; min-width: 0; overflow: hidden; }
 .lrow-title { font-size: 28px; line-height: 34px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lrow .badges { margin-top: 4px; height: 28px; white-space: nowrap; overflow: hidden; }
-.lrow .series-pill-inline { margin-top: 4px; white-space: nowrap; }
-.lrow-cat { flex: 0 0 auto; margin-left: 28px; font-size: 24px; color: var(--muted); white-space: nowrap; }
-.lrow-size { flex: 0 0 auto; width: 150px; margin-left: 28px; text-align: right; font-size: 24px; color: var(--muted); white-space: nowrap; }
+.lrow .series-pill-inline { margin-top: 4px; max-width: 100%; white-space: nowrap; }
+.lrow-cat { flex: 0 0 240px; width: 240px; margin-left: 24px; font-size: 24px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow-size { flex: 0 0 170px; width: 170px; margin-left: 24px; text-align: right; font-size: 24px; color: var(--muted); white-space: nowrap; }
 .crow { display: flex; align-items: center; height: 58px; padding: 0 22px; margin-bottom: 6px; border-radius: 10px; background: var(--panel); }
 .crow:nth-child(even) { background: #14171d; }
 .crow.focused { background: var(--panel2); transform: none; }
-.crow-title { flex: 1; min-width: 0; margin-right: 18px; font-size: 23px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crow-title { flex: 1; min-width: 0; margin-right: 18px; font-size: 24px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .crow-badges { display: flex; }
-.crow-size { width: 120px; text-align: right; font-size: 20px; color: var(--muted); }
+.crow-size { width: 140px; text-align: right; font-size: 24px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .search-row { display: flex; align-items: center; margin-bottom: 24px; }
 .search-row .text-input { flex: none; width: 820px; margin: 0 24px 0 0; }
 .search-count { font-size: 22px; color: var(--muted); }
@@ -803,8 +805,6 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .topbar-tabs-clip { display: flex; flex: 1 1 0%; width: 0; min-width: 0; position: relative; overflow: hidden; align-self: stretch; }
 .topbar-tabs { position: relative; flex: 1 1 auto; min-width: 0; height: 100%; display: flex; align-items: center; overflow-x: auto; overflow-y: hidden; }
 .topbar-tabs::-webkit-scrollbar { display: none; }
-.topbar-tabs-pad { flex: 0 0 48px; width: 48px; }
-.topbar-tabs-cover { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--bg); z-index: 3; pointer-events: none; }
 .topbar-tabs.fade-left { -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 20px, #000 72px); mask-image: linear-gradient(to right, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 20px, #000 72px); }
 .topbar-tabs.fade-right { -webkit-mask-image: linear-gradient(to left, rgba(0, 0, 0, 0), #000 40px); mask-image: linear-gradient(to left, rgba(0, 0, 0, 0), #000 40px); }
 .topbar-tabs.fade-left.fade-right { -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 20px, #000 72px, #000 calc(100% - 40px), rgba(0, 0, 0, 0)); mask-image: linear-gradient(to right, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) 20px, #000 72px, #000 calc(100% - 40px), rgba(0, 0, 0, 0)); }
@@ -831,6 +831,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .settings .button.focused { transform-origin: left center; }
 
 .tile-large .tile-title, .tile-small .tile-title { font-size: 28px; line-height: 34px; height: 68px; -webkit-line-clamp: 2; }
+/* a single long word otherwise clips with no ellipsis inside the 2-line box (Chrome 53) */
+.tile-small .tile-title { word-wrap: break-word; word-break: break-all; }
 .tile-meta { font-size: 24px; line-height: 30px; }
 .disc-title { font-size: 28px; line-height: 34px; height: 68px; margin-top: 8px; }
 .disc-meta { font-size: 24px; }
