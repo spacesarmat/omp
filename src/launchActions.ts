@@ -10,6 +10,7 @@ import { checkForUpdate, dismissPrompt } from './store/updates';
 import { magnetName } from './lib/categoryGuess';
 import { updateSettings } from './store/settings';
 import { t } from './i18n';
+import { pauseOnboarding, resumeOnboarding } from './onboarding/gate';
 
 /** Applies webOS launch params: {server}, {magnet}, {torrent[, file, t]}, {play, title}, {lang}, {phone}. */
 export function runLaunchParams(raw: unknown): void {
@@ -54,6 +55,8 @@ export function runLaunchParams(raw: unknown): void {
     const startAt = a.t;
     const hash = a.hash;
     const from = a.from;
+    // The file list is async: keep the tour off the library until the player opens or the launch fails.
+    pauseOnboarding();
     c.get(hash)
       .then((tor) => (c.files(tor).length ? tor : c.loadInfo(hash)))
       .then(
@@ -61,13 +64,17 @@ export function runLaunchParams(raw: unknown): void {
           const queue = buildTorrentQueue(c, tor, c.files(tor));
           const index = queue.findIndex((q) => q.fileIndex === file);
           if (index < 0) {
+            resumeOnboarding();
             toast(t('errors.badLaunchParams'), 'error');
             navigate({ name: 'torrent', hash });
             return;
           }
           openPlayer(from ? { name: 'player', queue, index, startAt, from } : { name: 'player', queue, index, startAt });
         },
-        (e) => toast(errorMessage(e), 'error'),
+        (e) => {
+          resumeOnboarding();
+          toast(errorMessage(e), 'error');
+        },
       );
     return;
   }

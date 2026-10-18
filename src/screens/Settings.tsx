@@ -25,6 +25,7 @@ import { platformKind } from '../platform/env';
 import { logEntries, clearLog, logVersion, logTime, levelLabel, areaLabel } from '../lib/log';
 import { cacheOptions, preloadOptions, readaheadOptions, connsOptions, rateOptions, disconnectOptions, withCurrent } from '../lib/serverSettingsOptions';
 import { t, type LanguageSetting } from '../i18n';
+import { openOnboarding } from '../onboarding/gate';
 import { LANGUAGE_NAMES } from '../i18n/languageNames';
 
 const seekOptions = () => [5, 10, 15, 30, 60].map((v) => ({ value: v, label: v + ' ' + t('common.sec') }));
@@ -245,6 +246,9 @@ export function SettingsScreen() {
         )}
         <Button focusKey="set-faq" label={t('settings.help')} onPress={() => navigate({ name: 'faq' })} />
         <Button focusKey="set-advanced" label={t('settings.advanced')} onPress={() => navigate({ name: 'advanced' })} />
+      </div>
+      <div class="row">
+        <Button focusKey="set-onboarding" label={t('settings.showOnboarding')} onPress={() => openOnboarding()} />
       </div>
     </FocusGroup>
   );

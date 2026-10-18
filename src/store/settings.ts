@@ -49,6 +49,15 @@ export interface AppSettings {
   alwaysFfmpeg: boolean;
   /** UI language: 'system' follows the device (ru/uk/be/kk → Russian, else English). */
   language: LanguageSetting;
+  /**
+   * Slide tour finished from Settings. The tour is not shown on its own.
+   * Raise ONBOARDING_VERSION (src/onboarding/gate.ts) only if a future build should offer it again on its own.
+   */
+  onboardingVersion: number;
+  /** First-run setup (where TorrServer is) was finished or skipped. A saved server skips it anyway. */
+  setupDone: boolean;
+  /** Coach-mark ids the person has dismissed. An unknown id is kept so a later feature can add its own. */
+  seenHints: { [id: string]: true };
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -74,9 +83,23 @@ export const DEFAULT_SETTINGS: AppSettings = {
   backgroundAudioTouched: false,
   alwaysFfmpeg: false,
   language: 'system',
+  onboardingVersion: 0,
+  setupDone: false,
+  seenHints: {},
 };
 
 const KEY = 'tsp.settings';
+const HINT_ID = /^[a-zA-Z][a-zA-Z0-9-]{0,40}$/;
+
+function sanitizeHints(v: unknown): { [id: string]: true } {
+  const out: { [id: string]: true } = {};
+  if (!isObject(v)) return out;
+  const keys = Object.keys(v);
+  for (let i = 0; i < keys.length; i++) {
+    if (HINT_ID.test(keys[i]) && v[keys[i]] === true) out[keys[i]] = true;
+  }
+  return out;
+}
 
 const SUB_SIZES = ['small', 'medium', 'large'];
 const SUB_COLORS = ['white', 'yellow'];
@@ -101,6 +124,10 @@ export function sanitizeSettings(v: unknown): AppSettings {
     out.phonePlayer = out.videoPlayer === 'p2160' ? 'p2160' : DEFAULT_SETTINGS.phonePlayer;
   }
   if (['system', 'ru', 'en'].indexOf(out.language) < 0) out.language = DEFAULT_SETTINGS.language;
+  if (!Number.isFinite(out.onboardingVersion) || out.onboardingVersion < 0) out.onboardingVersion = 0;
+  else out.onboardingVersion = Math.floor(out.onboardingVersion);
+  out.setupDone = isObject(v) && v.setupDone === true;
+  out.seenHints = sanitizeHints(isObject(v) ? v.seenHints : null);
   // The switch used to default to off and every saved settings blob stored that. A phone that never
   // moved the switch gets the new default (on). A later choice is kept.
   const touched = isObject(v) && v.backgroundAudioTouched === true;

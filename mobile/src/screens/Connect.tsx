@@ -10,10 +10,10 @@ import { attachIfOmpForeground } from '../tv/playerLink';
 import { scanPairQr } from '../platform/qr';
 import { RenameSheet } from '../ui/RenameSheet';
 import { AddressInput } from '../ui/AddressInput';
-import { servers, addServer, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
+import { servers, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
 import { addressErrorText, addressForField, checkServerAddress } from '../../../src/api/serverAddress';
-import { errorMessage, isApiError } from '../../../src/api/http';
+import { errorMessage } from '../../../src/api/http';
 import {
   discover,
   candidateSubnets,
@@ -24,7 +24,7 @@ import {
   type FoundServer,
   type Probe,
 } from '../../../src/api/discovery';
-import { allowTypedHost } from '../cleartextHosts';
+import { connectServer } from '../connect/connectServer';
 import { native } from '../platform/native';
 import { localServer, refreshLocalServer, startLocal, localName, LOCAL_URL } from '../server/localServer';
 
@@ -213,23 +213,15 @@ export function Connect() {
     setBusy(true);
     setError('');
     setNetFail(false);
-    try {
-      const url = normalizeServerUrl(cfg.url);
-      allowTypedHost(url);
-      const known = servers.value.find((x) => x.url === url);
-      const creds = cfg.user !== undefined ? cfg : { user: known?.user, password: known?.password };
-      await new TorrServerClient({ url, user: creds.user, password: creds.password }).echo();
-      const s = addServer({ ...cfg, url });
-      setActiveServer(s.id);
-      resetTo(afterConnectRoute());
-      return true;
-    } catch (e) {
-      setError(errorMessage(e));
-      if (isApiError(e) && (e.kind === 'network' || e.kind === 'timeout')) setNetFail(true);
+    const r = await connectServer(cfg);
+    setBusy(false);
+    if (!r.ok) {
+      setError(r.error);
+      setNetFail(r.network);
       return false;
-    } finally {
-      setBusy(false);
     }
+    resetTo(afterConnectRoute());
+    return true;
   }
 
   function submit(e?: Event) {
