@@ -22,15 +22,19 @@ export function coverageNote(lib: LibraryTorrent, r: SourceResult): string {
 
 export interface Failure {
   text: string;
-  /** The site to sign in to («Войти»), for a login / link failure. */
+  /** The site to sign in to («Войти»), only when the tracker asked for a login. */
   source?: string;
 }
 
 /** The text for a failed replace: what went wrong, and that the user's torrent is untouched. */
 export function failureOf(res: Extract<ReplaceResult, { ok: false }>, r: SourceResult): Failure {
   if (res.cause === 'timeout') return { text: t('torrent.better.failTimeout') };
-  if (res.cause === 'login' || res.cause === 'link') {
+  if (res.cause === 'login') {
     return { text: t('torrent.better.failLogin', { site: sourceName(r.source) }), source: r.source };
+  }
+  // The tracker answered, but the download was not a torrent file. No «Войти»: a login will not fetch it.
+  if (res.cause === 'link') {
+    return { text: t('torrent.better.failLink', { site: sourceName(r.source) }) };
   }
   // both torrents are kept: the message says so itself
   if (res.cause === 'both') return { text: res.error };

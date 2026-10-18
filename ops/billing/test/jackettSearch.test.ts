@@ -651,3 +651,90 @@ describe('POST /v1/search', () => {
     expect(jacredCalls.every((url) => url.indexOf('cat=3030') >= 0)).toBe(true);
   });
 });
+
+async function postTorrent(
+  app: (req: unknown, res: unknown) => Promise<void>,
+  opts: { token: string; device: string; link: string },
+) {
+  const payload = JSON.stringify({ link: opts.link, deviceId: opts.device });
+  const req = {
+    method: 'POST',
+    url: '/v1/torrent',
+    headers: {
+      authorization: 'Bearer ' + opts.token,
+      'x-device-id': opts.device,
+      'content-type': 'application/json',
+    },
+    async *[Symbol.asyncIterator]() {
+      yield Buffer.from(payload);
+    },
+  };
+  const res = mockRes();
+  await app(req, res);
+  return res;
+}
+
+describe('POST /v1/torrent magnet redirect', () => {
+  const LINK = 'omp-fetch:/api/v2.0/indexers/rutracker/results/torznab/download';
+
+  it('returns a magnet and does not log the download URL', async () => {
+    const { file, device, token } = subscriber();
+    const magnet = 'magnet:?xt=urn:btih:' + 'cd'.repeat(20);
+    const seen: { redirect?: string }[] = [];
+    const logs: string[] = [];
+    const orig = process.stderr.write;
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      logs.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      const fetchImpl = (url: string, opts?: { redirect?: string }) => {
+        seen.push({ redirect: opts && opts.redirect });
+        const hop = seen.length;
+        if (hop === 1) {
+          return Promise.resolve({
+            status: 302,
+            headers: { location: 'https://tracker.example/file.torrent' },
+            arrayBuffer: async () => new ArrayBuffer(0),
+          });
+        }
+        return Promise.resolve({
+          status: 301,
+          headers: { Location: magnet },
+          arrayBuffer: async () => new ArrayBuffer(0),
+        });
+      };
+      const app = createApp(file, fetchImpl);
+      const res = await postTorrent(app, { token, device, link: LINK });
+      expect(res.status).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({ magnet });
+      expect(seen.map((s) => s.redirect)).toEqual(['manual', 'manual']);
+      const log = logs.join('');
+      expect(log).toContain('status=301');
+      expect(log).toContain('indexer=rutracker');
+      expect(log).toContain('kind=magnet');
+      expect(log).not.toContain(KEY);
+      expect(log).not.toContain('jackett.test');
+      expect(log).not.toContain(magnet);
+    } finally {
+      process.stderr.write = orig;
+    }
+  });
+
+  it('still returns a torrent file', async () => {
+    const { file, device, token } = subscriber();
+    const body = 'd4:infod4:name4:testee';
+    const fetchImpl = (_url: string, opts?: { redirect?: string }) => {
+      expect(opts && opts.redirect).toBe('manual');
+      return Promise.resolve({
+        status: 200,
+        headers: {},
+        arrayBuffer: async () => Uint8Array.from(body, (ch) => ch.charCodeAt(0)).buffer,
+      });
+    };
+    const app = createApp(file, fetchImpl);
+    const res = await postTorrent(app, { token, device, link: 'omp-fetch:/dl/file' });
+    expect(res.status).toBe(200);
+    expect(res.body.indexOf('d4:info')).toBe(0);
+  });
+});

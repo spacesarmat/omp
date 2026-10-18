@@ -216,6 +216,47 @@ function json(res, status, value) {
   send(res, status, JSON.stringify(value), { 'content-type': 'application/json; charset=utf-8' });
 }
 
+function headerValue(res, name) {
+  const h = res && res.headers;
+  if (!h) return '';
+  if (typeof h.get === 'function') return String(h.get(name) || '');
+  const want = String(name || '').toLowerCase();
+  const keys = Object.keys(h);
+  for (let i = 0; i < keys.length; i++) {
+    if (String(keys[i]).toLowerCase() === want) return String(h[keys[i]] || '');
+  }
+  return '';
+}
+
+/** Indexer id from a Jackett download path. The restored URL is not logged: it carries the API key. */
+function indexerLabel(link, fallback) {
+  const m = /\/indexers\/([^/?]+)\//.exec(String(link || ''));
+  return (m && m[1]) || fallback || 'jackett';
+}
+
+/**
+ * Jackett sometimes answers a download with a redirect to a magnet. Follow one http(s) hop,
+ * and stop when Location is a magnet so the phone can add it.
+ */
+async function fetchDownload(net, url, headers) {
+  const first = await net(url, { headers, redirect: 'manual' });
+  const status = first.status || 0;
+  const loc = headerValue(first, 'location');
+  if (status >= 300 && status < 400 && /^magnet:/i.test(loc)) {
+    return { kind: 'magnet', magnet: loc, status, res: first };
+  }
+  if (status >= 300 && status < 400 && /^https?:/i.test(loc)) {
+    const second = await net(loc, { headers, redirect: 'manual' });
+    const status2 = second.status || 0;
+    const loc2 = headerValue(second, 'location');
+    if (status2 >= 300 && status2 < 400 && /^magnet:/i.test(loc2)) {
+      return { kind: 'magnet', magnet: loc2, status: status2, res: second };
+    }
+    return { kind: 'file', status: status2, res: second };
+  }
+  return { kind: 'file', status, res: first };
+}
+
 async function telegramSend(token, chatId, text, fetchImpl, opts) {
   if (!token || !chatId) return { ok: false, messageId: 0 };
   const body = { chat_id: chatId, text, disable_web_page_preview: true };
@@ -902,13 +943,17 @@ export function createApp(file, fetchImpl) {
         const headers = {};
         const auth = basicAuthHeader(state.settings);
         if (auth) headers.Authorization = auth;
+        const label = indexerLabel(body.link, indexer.name);
         let upstream;
         try {
-          upstream = await net(remote, { headers });
+          upstream = await fetchDownload(net, remote, headers);
         } catch (e) {
+          process.stderr.write('torrent upstream status=down indexer=' + label + '\n');
           return json(res, 502, { error: 'down' });
         }
-        const buf = Buffer.from(await upstream.arrayBuffer());
+        process.stderr.write('torrent upstream status=' + upstream.status + ' indexer=' + label + ' kind=' + upstream.kind + '\n');
+        if (upstream.kind === 'magnet') return json(res, 200, { magnet: upstream.magnet });
+        const buf = Buffer.from(await upstream.res.arrayBuffer());
         return send(res, upstream.status, buf, { 'content-type': 'application/octet-stream' });
       }
       if (req.method === 'POST' && path === '/v1/yoomoney') {
