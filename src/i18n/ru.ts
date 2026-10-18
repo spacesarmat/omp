@@ -2029,6 +2029,12 @@ export const ru = {
     resetApp: 'Сбросить настройки приложения',
     resetAppAsk: 'Сбросить настройки приложения?',
     updateOnStart: 'Проверять обновления при запуске',
+    openOnStartup: 'Открывать при включении',
+    openOnStartupHint: 'OMP откроется сразу после включения приставки.',
+    openOnStartupBlocked: 'Система не дала открыть OMP при включении.',
+    openOnStartupAllow: 'Разрешить показ поверх окон',
+    openOnStartupOverlayAsk: 'Система блокирует запуск при включении. Разрешите показ поверх других окон, чтобы OMP открывался сам.',
+    openOnStartupNoScreen: 'Не удалось открыть настройки системы.',
   },
   tvSources: {
     tsRutor: 'rutor (поиск TorrServer)',

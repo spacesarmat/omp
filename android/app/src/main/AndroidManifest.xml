@@ -24,6 +24,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Not granted at install. Asked from TV settings only after Android 10+ blocks the boot activity start. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -118,6 +120,19 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Android TV: open OMP after power-on («Открывать при включении», default on). Phones: BootLaunch.disableOnPhone.
+             BOOT_COMPLETED plus QUICKBOOT_POWERON (Realtek/MTK). Not LOCKED_BOOT_COMPLETED, SCREEN_ON, or DREAMING_STOPPED.
+             See boot/BootLaunch.kt. -->
+        <receiver
+            android:name=".boot.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 

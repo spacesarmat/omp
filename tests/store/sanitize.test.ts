@@ -42,6 +42,14 @@ describe('sanitizeSettings', () => {
     expect(sanitizeSettings({ playerEngine: 'mpv' }).playerEngine).toBe('auto');
     expect(sanitizeSettings({ playerEngine: 1 }).playerEngine).toBe('auto');
   });
+  it('«Открывать при включении» is on unless it is a boolean false', () => {
+    expect(DEFAULT_SETTINGS.openOnStartup).toBe(true);
+    expect(sanitizeSettings({}).openOnStartup).toBe(true);
+    expect(sanitizeSettings({ openOnStartup: false }).openOnStartup).toBe(false);
+    expect(sanitizeSettings({ openOnStartup: true }).openOnStartup).toBe(true);
+    expect(sanitizeSettings({ openOnStartup: 'no' }).openOnStartup).toBe(true);
+    expect(sanitizeSettings({ openOnStartup: 0 }).openOnStartup).toBe(true);
+  });
   it('«Всегда FFmpeg» is off unless it is a boolean true', () => {
     expect(DEFAULT_SETTINGS.alwaysFfmpeg).toBe(false);
     expect(sanitizeSettings({}).alwaysFfmpeg).toBe(false);

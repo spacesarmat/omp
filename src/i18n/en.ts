@@ -1993,6 +1993,12 @@ export const en: EnDict<typeof ru> = {
     resetApp: 'Reset the app settings',
     resetAppAsk: 'Reset the app settings?',
     updateOnStart: 'Check for updates on start',
+    openOnStartup: 'Open on startup',
+    openOnStartupHint: 'OMP opens right after the TV box turns on.',
+    openOnStartupBlocked: 'The system blocked opening OMP at startup.',
+    openOnStartupAllow: 'Allow display over other apps',
+    openOnStartupOverlayAsk: 'The system blocks opening apps at startup. Allow display over other apps so OMP can open itself.',
+    openOnStartupNoScreen: 'Could not open system settings.',
   },
   tvSources: {
     tsRutor: 'rutor (TorrServer search)',
