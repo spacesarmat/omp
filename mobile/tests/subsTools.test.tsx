@@ -21,7 +21,7 @@ import { torrents } from '../../src/store/library';
 import { reloadSourcePrefs, resetHealth } from '../../src/sources/store';
 import { addFindings, addSubscription, findingsOf } from '../../src/monitor/subs';
 import { checkSubscription } from '../../src/monitor/check';
-import { checkingSubs, filterSubs, loadSubsSort, matchFindings, saveSubsSort, searchKey, sortSubs, SUBS_SORT_KEY } from '../src/monitor/subsView';
+import { checkingSubs, compareName, compareSubs, filterSubs, loadSubsSort, matchFindings, saveSubsSort, searchKey, sortFindings, sortSubs, SUBS_SORT_KEY, SUBS_SORTS } from '../src/monitor/subsView';
 import type { Finding, Subscription } from '../../src/monitor/types';
 import type { SourceResult } from '../../src/sources/types';
 
@@ -124,23 +124,84 @@ describe('subscriptions search helpers', () => {
     expect(matchFindings('', many).shown).toEqual([]);
   });
 
-  it('sorts by new findings, name and date added', () => {
-    const list = [sub({ id: 'a', query: 'Вега', createdAt: 3 }), sub({ id: 'b', query: 'Альфа', createdAt: 1 }), sub({ id: 'c', query: 'Бета', createdAt: 2 })];
-    const unseen = (id: string) => (id === 'c' ? 2 : id === 'a' ? 1 : 0);
-    expect(sortSubs(list, 'fresh', unseen).map((s) => s.id)).toEqual(['c', 'a', 'b']);
-    expect(sortSubs(list, 'name', unseen).map((s) => s.id)).toEqual(['b', 'c', 'a']);
-    expect(sortSubs(list, 'added', unseen).map((s) => s.id)).toEqual(['a', 'c', 'b']);
+  it('sorts by date added (default), new findings, name, quality and find age; ties break by name', () => {
+    const list = [
+      sub({ id: 'vega', query: 'Вега', createdAt: 3, quality: '720', lastFindAt: 50 }),
+      sub({ id: 'alpha', query: 'Альфа', createdAt: 1, quality: '', lastFindAt: 10 }),
+      sub({ id: 'beta', query: 'Бета', createdAt: 2, quality: '2160' }),
+      sub({ id: 'gamma', query: 'Гамма', createdAt: 2, quality: '1080', lastFindAt: 10 }),
+    ];
+    // newest createdAt first; Бета and Гамма share 2, so name decides (Бета before Гамма)
+    expect(sortSubs(list, 'added').map((s) => s.id)).toEqual(['vega', 'beta', 'gamma', 'alpha']);
+    // most recent find first; never-found (Бета) last
+    expect(sortSubs(list, 'fresh').map((s) => s.id)).toEqual(['vega', 'alpha', 'gamma', 'beta']);
+    // never-found first, then the oldest find; Альфа and Гамма share 10, name decides
+    expect(sortSubs(list, 'stale').map((s) => s.id)).toEqual(['beta', 'alpha', 'gamma', 'vega']);
+    expect(sortSubs(list, 'name').map((s) => s.id)).toEqual(['alpha', 'beta', 'vega', 'gamma']);
+    // 2160, 1080, 720, любое качество
+    expect(sortSubs(list, 'quality').map((s) => s.id)).toEqual(['beta', 'gamma', 'vega', 'alpha']);
+    expect(compareSubs(list[2], list[3], 'added')).toBeLessThan(0);
   });
 
-  it('persists the sort, sanitized', () => {
-    expect(loadSubsSort()).toBe('fresh');
+  it('orders names A–Я for Russian and English, ignoring case and ё/е, with numbers in order', () => {
+    expect(compareName('Дюна', 'дюна')).toBe(0);
+    expect(compareName('Ёлка', 'елка')).toBe(0);
+    expect(compareName('Аватар', 'Бета')).toBeLessThan(0);
+    expect(compareName('Сезон 2', 'Сезон 10')).toBeLessThan(0);
+    expect(compareName('яблоко', 'Apple')).toBeLessThan(0);
+    const list = [
+      sub({ id: 'p', query: 'President Curtis' }),
+      sub({ id: 'ye', query: 'елка' }),
+      sub({ id: 'yo', query: 'Ёлки' }),
+      sub({ id: 'a', query: 'Аватар' }),
+      sub({ id: 'ap', query: 'Apple' }),
+      sub({ id: 'z', query: 'яблоко' }),
+    ];
+    expect(sortSubs(list, 'name').map((s) => s.id)).toEqual(['a', 'ye', 'yo', 'z', 'ap', 'p']);
+    // equal names keep the input order
+    const same = [sub({ id: '1', query: 'Елка', createdAt: 5 }), sub({ id: '2', query: 'ёлка', createdAt: 5 })];
+    expect(sortSubs(same, 'added').map((s) => s.id)).toEqual(['1', '2']);
+    expect(sortSubs(same, 'name').map((s) => s.id)).toEqual(['1', '2']);
+  });
+
+  it('sorts found releases with the same choice, following the subscription order', () => {
+    const subs = [
+      sub({ id: 'hi', query: 'Игра', quality: '2160', createdAt: 1, lastFindAt: 5 }),
+      sub({ id: 'lo', query: 'Альфа', quality: '', createdAt: 9, lastFindAt: 50 }),
+    ];
+    const all = [
+      finding('lo', 'lo1', 'Альфа 2160p', { at: 50 }),
+      finding('hi', 'hi1', 'Игра 720p', { at: 5 }),
+      finding('hi', 'hi2', 'Игра 1080p', { at: 4 }),
+    ];
+    // requested quality, not the release's: the 2160 subscription's older 720p row comes before a 2160p release of «любое»
+    expect(sortFindings(all, 'quality', subs).map((f) => f.key)).toEqual(['hi2', 'hi1', 'lo1']);
+    expect(sortFindings(all, 'added', subs).map((f) => f.key)).toEqual(['lo1', 'hi1', 'hi2']);
+    expect(sortFindings(all, 'fresh', subs).map((f) => f.key)).toEqual(['lo1', 'hi1', 'hi2']);
+    expect(sortFindings(all, 'stale', subs).map((f) => f.key)).toEqual(['hi2', 'hi1', 'lo1']);
+    expect(sortFindings(all, 'name', subs).map((f) => f.key)).toEqual(['lo1', 'hi1', 'hi2']);
+    // inside one subscription the release quality still orders the rows
+    expect(sortFindings([all[1], all[2]], 'quality', subs).map((f) => f.key)).toEqual(['hi2', 'hi1']);
+    const matched = matchFindings('игра', all, 50, 'quality', subs);
+    expect(matched.shown.map((f) => f.key)).toEqual(['hi2', 'hi1']);
+  });
+
+  it('persists the sort; a choice that was never stored becomes «по дате добавления»', () => {
+    expect(loadSubsSort()).toBe('added');
+    expect(localStorage.getItem(SUBS_SORT_KEY)).toBeNull();
     saveSubsSort('name');
     expect(localStorage.getItem(SUBS_SORT_KEY)).toBe('"name"');
     expect(loadSubsSort()).toBe('name');
+    localStorage.setItem(SUBS_SORT_KEY, '"fresh"');
+    expect(loadSubsSort()).toBe('fresh');
+    SUBS_SORTS.forEach((s) => {
+      saveSubsSort(s);
+      expect(loadSubsSort()).toBe(s);
+    });
     localStorage.setItem(SUBS_SORT_KEY, '"bogus"');
-    expect(loadSubsSort()).toBe('fresh');
+    expect(loadSubsSort()).toBe('added');
     localStorage.setItem(SUBS_SORT_KEY, '{');
-    expect(loadSubsSort()).toBe('fresh');
+    expect(loadSubsSort()).toBe('added');
   });
 });
 
@@ -193,18 +254,45 @@ describe('«Подписки» search and sort on screen', () => {
     expect(sec.textContent).toContain('и ещё 3 раздачи');
   });
 
-  it('sorts by new findings by default; the choice sticks in tsp.subsSort', async () => {
-    seed();
+  it('sorts by date added by default; every chip reorders the list and the choice sticks', async () => {
+    const a = addSubscription({ query: 'Ёлки', quality: '', sources: null, notify: true }, 100)!;
+    const b = addSubscription({ query: 'Дюна', quality: '2160', sources: null, notify: true }, 300)!;
+    const c = addSubscription({ query: 'Аватар', quality: '1080', sources: null, notify: true }, 200)!;
+    addSubscription({ query: 'Бета', quality: '720', sources: null, notify: true }, 400);
+    addFindings([
+      finding(b.id, 'b1', 'Дюна 2160p', { at: 50 }),
+      finding(a.id, 'a1', 'Ёлки 11', { at: 10 }),
+      finding(c.id, 'c1', 'Аватар 1080p', { at: 20 }),
+    ]);
     await mountNews();
-    expect(subRows()).toEqual(['Дюна', 'Аватар', 'Ёлки']);
+    const chips = () => Array.from(el.querySelectorAll('.m-subs-sort .m-chip')).map((n) => n.textContent);
+    expect(chips()).toEqual(['по дате добавления', 'новые находки', 'по имени', 'по качеству', 'по давности находок']);
+    expect(el.querySelector('.m-subs-sort')!.getAttribute('style')).toBeNull();
+    expect(byText('по дате добавления')!.getAttribute('aria-pressed')).toBe('true');
+    expect(localStorage.getItem(SUBS_SORT_KEY)).toBeNull();
+    // newest subscription first: Бета 400, Дюна 300, Аватар 200, Ёлки 100
+    expect(subRows()).toEqual(['Бета', 'Дюна', 'Аватар', 'Ёлки']);
+    click(byText('новые находки'));
+    // last find: Дюна 50, Аватар 20, Ёлки 10, Бета never
+    expect(subRows()).toEqual(['Дюна', 'Аватар', 'Ёлки', 'Бета']);
     click(byText('по имени'));
-    expect(subRows()).toEqual(['Аватар', 'Дюна', 'Ёлки']);
-    expect(localStorage.getItem(SUBS_SORT_KEY)).toBe('"name"');
-    click(byText('по дате добавления'));
-    expect(subRows()).toEqual(['Дюна', 'Аватар', 'Ёлки']);
+    expect(subRows()).toEqual(['Аватар', 'Бета', 'Дюна', 'Ёлки']);
+    click(byText('по качеству'));
+    expect(subRows()).toEqual(['Дюна', 'Аватар', 'Бета', 'Ёлки']);
+    click(byText('по давности находок'));
+    expect(subRows()).toEqual(['Бета', 'Ёлки', 'Аватар', 'Дюна']);
+    expect(localStorage.getItem(SUBS_SORT_KEY)).toBe('"stale"');
+    type('та');
+    // «та» is in Аватар and Бета; stale order keeps Бета (never found) before Аватар
+    expect(subRows()).toEqual(['Бета', 'Аватар']);
+    click(byText('по имени'));
+    expect(subRows()).toEqual(['Аватар', 'Бета']);
+    click(el.querySelector('[data-subs-clear]'));
+    expect(subRows()).toEqual(['Аватар', 'Бета', 'Дюна', 'Ёлки']);
     act(() => render(null, el));
     await mountNews();
-    expect(byText('по дате добавления')!.getAttribute('aria-pressed')).toBe('true');
+    expect(byText('по имени')!.getAttribute('aria-pressed')).toBe('true');
+    expect(subRows()).toEqual(['Аватар', 'Бета', 'Дюна', 'Ёлки']);
   });
 
   it('hides the sort with one subscription', async () => {
@@ -270,9 +358,11 @@ describe('in English', () => {
     await mountNews();
     expect(search()!.getAttribute('placeholder')).toBe('Search subscriptions and found releases');
     expect(el.textContent).toContain('Sort');
+    expect(byText('by date added')!.getAttribute('aria-pressed')).toBe('true');
     expect(byText('new findings')).toBeDefined();
     expect(byText('by name')).toBeDefined();
-    expect(byText('by date added')).toBeDefined();
+    expect(byText('by quality')).toBeDefined();
+    expect(byText('by find age')).toBeDefined();
     type('part two');
     expect(el.querySelector('[data-found-releases]')!.textContent).toContain('Found releases');
     expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);

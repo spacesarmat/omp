@@ -66,6 +66,8 @@ export function sanitizeSubscription(v: unknown): Subscription | null {
   const size = finite(v.maxSizeGb);
   if (size !== null && size > 0) out.maxSizeGb = size;
   if (v.better === true) out.better = true;
+  const lastFindAt = finite(v.lastFindAt);
+  if (lastFindAt !== null && lastFindAt > 0) out.lastFindAt = lastFindAt;
   return out;
 }
 
@@ -79,8 +81,66 @@ export function sanitizeSubs(v: unknown): Subscription[] {
   return out;
 }
 
+/** The next stored subscription that already has a creation stamp, or 0. */
+function nextPositiveCreated(list: Subscription[], from: number): number {
+  for (let j = from; j < list.length; j++) {
+    if (list[j].createdAt > 0) return list[j].createdAt;
+  }
+  return 0;
+}
+
+/**
+ * Subscriptions saved before these stamps existed. Creation: the stored list is the order they were added, so a
+ * missing createdAt becomes the smallest free positive integer that keeps earlier rows older (and stays below the
+ * next real stamp when there is room). Last find: the newest stored finding, never lowered — a find that later
+ * falls out of the capped list must not look "never found".
+ */
+export function backfillSubscriptionDates(list: Subscription[], found: Finding[]): { list: Subscription[]; changed: boolean } {
+  const latest: { [id: string]: number } = {};
+  found.forEach((f) => {
+    if (!(f.at > 0) || f.subId === EPISODES_ID || f.subId === BETTER_ID) return;
+    const prev = latest[f.subId] || 0;
+    if (f.at > prev) latest[f.subId] = f.at;
+  });
+  const used: { [n: number]: boolean } = {};
+  list.forEach((s) => {
+    if (s.createdAt > 0) used[s.createdAt] = true;
+  });
+  let changed = false;
+  let prevAt = 0;
+  const out = list.map((s, i) => {
+    let next = s;
+    if (!(s.createdAt > 0)) {
+      const nextReal = nextPositiveCreated(list, i + 1);
+      let at = prevAt + 1;
+      if (nextReal > prevAt + 1) {
+        while (at < nextReal && used[at]) at += 1;
+        if (at >= nextReal) at = prevAt + 1;
+      }
+      while (at <= 0 || used[at]) at += 1;
+      used[at] = true;
+      prevAt = at;
+      next = { ...next, createdAt: at };
+      changed = true;
+    } else {
+      prevAt = s.createdAt;
+    }
+    const stored = next.lastFindAt && next.lastFindAt > 0 ? next.lastFindAt : 0;
+    const seen = latest[s.id] || 0;
+    if (seen > stored) {
+      next = { ...next, lastFindAt: seen };
+      changed = true;
+    }
+    return next;
+  });
+  return { list: out, changed };
+}
+
 export function loadSubs(): Subscription[] {
-  return sanitizeSubs(loadJson<unknown>(SUBS_KEY, [], Array.isArray));
+  const raw = sanitizeSubs(loadJson<unknown>(SUBS_KEY, [], Array.isArray));
+  const filled = backfillSubscriptionDates(raw, loadFound());
+  if (filled.changed) saveSubs(filled.list);
+  return filled.list;
 }
 
 export function saveSubs(list: Subscription[]): void {

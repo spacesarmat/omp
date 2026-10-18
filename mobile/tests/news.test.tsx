@@ -232,8 +232,8 @@ describe('«Новое» · Лента', () => {
 
 describe('«Новое» · Подписки', () => {
   it('lists subscriptions with conditions and new counts; the tab says how many are new', async () => {
-    const s = addSubscription({ query: 'Дюна 2160p', quality: '2160', sources: null, notify: true, minSeeds: 20 })!;
-    addSubscription({ query: 'Песчаный город', quality: '', sources: null, notify: true });
+    const s = addSubscription({ query: 'Дюна 2160p', quality: '2160', sources: null, notify: true, minSeeds: 20 }, 2000)!;
+    addSubscription({ query: 'Песчаный город', quality: '', sources: null, notify: true }, 1000);
     addFindings([
       { subId: s.id, key: 'k1', at: 2, result: row({ Title: 'Дюна 1' }) },
       { subId: s.id, key: 'k2', at: 3, result: row({ Title: 'Дюна 2' }) },

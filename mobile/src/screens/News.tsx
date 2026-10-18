@@ -28,12 +28,12 @@ import { filterQuality, sortResults, sourceName } from '../../../src/sources/vie
 import type { SearchHandle } from '../../../src/sources/search';
 import { FEED_CATEGORIES, type FeedCategory, type SourceResult } from '../../../src/sources/types';
 import { FEED_FRESH_MS, feedFresh, loadFeed, storeFeedRefresh } from '../../../src/monitor/feedCache';
-import { findingsOf, loadSubs, markFindingsSeen, removeFindings, unseenCount } from '../../../src/monitor/subs';
+import { findingsOf, loadFound, loadSubs, markFindingsSeen, removeFindings, unseenCount } from '../../../src/monitor/subs';
 import { libraryRange } from '../../../src/monitor/newEpisodes';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { BETTER_ID, EPISODES_ID, type Finding } from '../../../src/monitor/types';
 import { Calendar } from './Calendar';
-import { filterSubs, loadSubsSort, matchFindings, saveSubsSort, sortLabel, sortSubs, SUBS_SORTS, type SubsSort } from '../monitor/subsView';
+import { filterSubs, FINDINGS_CAP, loadSubsSort, matchFindings, saveSubsSort, sortLabel, sortSubs, SUBS_SORTS, type SubsSort } from '../monitor/subsView';
 
 type Seg = 'feed' | 'subs' | 'calendar';
 
@@ -223,7 +223,7 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
   const subs = loadSubs();
   const searching = !!query.trim();
   const shownSubs = filterSubs(sortSubs(subs, sort), query);
-  const found = matchFindings(query);
+  const found = matchFindings(query, loadFound(), FINDINGS_CAP, sort, subs);
   const eps = findingsOf(EPISODES_ID);
   const better = findingsOf(BETTER_ID);
   const settings = loadMonitorSettings();
@@ -311,8 +311,8 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
         </div>
       )}
       {subs.length > 1 && (
-        <div class="m-chips m-subs-sort" role="group" aria-label={t('add.sort')} style={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <span class="m-muted m-small">{t('add.sort') + ':'}</span>
+        <div class="m-chips m-subs-sort" role="group" aria-label={t('add.sort')}>
+          <span class="m-muted m-small m-subs-sort-label">{t('add.sort') + ':'}</span>
           {SUBS_SORTS.map((m) => (
             <button key={m} type="button" class={'m-chip' + (sort === m ? ' on' : '')} aria-pressed={sort === m} onClick={() => pickSort(m)}>
               {sortLabel(m)}
