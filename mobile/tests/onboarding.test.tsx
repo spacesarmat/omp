@@ -491,6 +491,11 @@ describe('phone onboarding', () => {
     expect(z('\\.m-hint')).toBeLessThan(z('\\.m-onb'));
     expect(css).toContain('html.m-hint-hold .m-hint');
     expect(css).toContain('.m-hint-arrow');
+    const title = /^\.m-poster-title \{[^}]+\}/m.exec(css);
+    expect(title).toBeTruthy();
+    expect(title![0]).not.toContain('anywhere');
+    expect(title![0]).toContain('overflow-wrap: break-word');
+    expect(title![0]).toContain('hyphens: auto');
   });
 
   it('shows the hint again after reset without remounting the host', async () => {

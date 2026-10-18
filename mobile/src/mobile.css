@@ -299,7 +299,7 @@ button, .m-btn {
 }
 .m-poster-mini { width: 64px; aspect-ratio: auto; height: 92px; padding: 0; border-radius: 8px; flex-shrink: 0; }
 .m-poster-mini .m-badge { display: none; }
-.m-poster-title { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 19px; line-height: 1.15; color: rgba(255, 255, 255, 0.88); overflow-wrap: anywhere; }
+.m-poster-title { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 19px; line-height: 1.15; color: rgba(255, 255, 255, 0.88); overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto; }
 .m-poster-mini .m-poster-title { display: none; }
 .m-badge {
   position: absolute;
