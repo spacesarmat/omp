@@ -23,6 +23,8 @@ import type { MarkKind } from '../player/chapters';
 import type { SkipPrefs } from '../lib/journal';
 import { formatDuration } from '../lib/format';
 import { useVideoState } from '../player/useVideoState';
+import { classifyFailure, failureText, faultFromMediaCode, swarmFromCache, SWARM_RETRY_MS } from '../player/playbackFailure';
+import { openAnotherRelease } from '../player/anotherRelease';
 import { HideTimer, canHideControls, pointerMoveCounts } from '../player/hideTimer';
 import { useProgressSync } from '../player/useProgressSync';
 import { WatchJournal, journalSource } from '../player/watchJournal';
@@ -38,6 +40,7 @@ import { tvGlyphs } from '../ui/tvText';
 import type { Cmd } from '../phone/protocol';
 import { goBack } from '../ui/nav';
 import { useKeys } from '../ui/keys';
+import { doesFocusableExist, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { colorKeyCommand, colorKeyOverWindow, WEB_NIGHT_SOUND, type ColorKeyCommand, type ColorWindow } from '../player/colorKeys';
 import { choose, dialogOpen, dismissDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
@@ -94,6 +97,12 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
 
   const src = ready ? (c ? c.videoSrc(item.url) : item.url) : '';
   const vs = useVideoState(videoRef, index + ':' + reloadKey + ':' + src);
+  // stats while the first bytes are on the way, while rebuffering, on a media error, and while «Инфо» is open
+  const cacheRead = useCacheStats(c, item.hash, infoOn || (ready && (vs.buffering || !vs.played || vs.errorCode !== null)));
+  const cache = cacheRead.status === 'ok' ? cacheRead.cache : null;
+  const swarm = swarmFromCache(cacheRead.status, cache, !!(c && item.hash));
+  const failure = classifyFailure(faultFromMediaCode(vs.errorCode), swarm, vs.played);
+  const blocked = vs.errorCode !== null && failure !== 'buffering';
   const posRef = useRef({ time: 0, duration: 0 });
   posRef.current = { time: vs.time, duration: vs.duration };
   useProgressSync(c, item, posRef);
@@ -123,11 +132,11 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     onEnd: () => goBack(),
   });
 
-  useEffect(() => { if (ready && !vs.paused && !vs.error) setStarted(true); }, [ready, vs.paused, vs.error]);
+  useEffect(() => { if (ready && !vs.paused && !blocked) setStarted(true); }, [ready, vs.paused, blocked]);
   const donate = donateMode({
     enabled: donateCardEnabled(journalSupportActive()),
     started: ready && started,
-    error: !!vs.error,
+    error: blocked,
     paused: vs.paused,
     time: vs.time,
     duration: vs.duration,
@@ -136,7 +145,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   });
 
   const intro = inIntro(segs.intro, vs.time) ? segs.intro! : null;
-  const showSkip = ready && !vs.error && !!intro && skippedIntro !== intro.start && next.countdown === null && !undo;
+  const showSkip = ready && !blocked && !!intro && skippedIntro !== intro.start && next.countdown === null && !undo;
   const hideUndo = () => {
     if (undoTimer.current) clearTimeout(undoTimer.current);
     undoTimer.current = null;
@@ -157,7 +166,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   // auto skip: the intro on entering it, the credits (with a next item) at their start
   useEffect(() => {
     const v = videoRef.current;
-    if (!ready || !v || vs.error || !metaLoaded.current) return;
+    if (!ready || !v || blocked || !metaLoaded.current) return;
     const ct = isFinite(v.currentTime) ? v.currentTime : vs.time;
     const prevT = lastT.current;
     lastT.current = ct;
@@ -180,10 +189,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   }, [vs.time, ready, prefs, probe]);
 
 
-  const cache = useCacheStats(c, item.hash, infoOn || (ready && vs.buffering));
-
   const hideGate = useRef({ paused: true, buffering: true, seeking: false, error: false });
-  hideGate.current = { paused: vs.paused, buffering: vs.buffering, seeking: seekTarget !== null, error: !!vs.error };
+  hideGate.current = { paused: vs.paused, buffering: vs.buffering || !vs.played, seeking: seekTarget !== null, error: blocked };
   const lastPtr = useRef<{ x: number; y: number } | null>(null);
   const hider = useMemo(
     () => new HideTimer(
@@ -198,9 +205,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   };
   // (re)start of playback — incl. after phone commands or the end of buffering — re-arms the hide timer
   useEffect(() => {
-    if (!vs.paused && !vs.buffering && !vs.error) hider.arm();
+    if (!vs.paused && !vs.buffering && vs.played && !blocked) hider.arm();
     else hider.cancel();
-  }, [vs.paused, vs.buffering, vs.error, seekTarget === null, dialogOpen.value]);
+  }, [vs.paused, vs.buffering, vs.played, blocked, seekTarget === null, dialogOpen.value]);
 
   const [flash, setFlash] = useState<{ icon?: IconName; text?: string; side: TapZone } | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -215,14 +222,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   tapActions.current = {
     single: () => {
       const v = videoRef.current;
-      if (!v || !ready || vs.error) return;
+      if (!v || !ready || blocked) return;
       const willPlay = v.paused;
       togglePause();
       showFlash({ icon: willPlay ? 'play' : 'pause', side: 'center' });
     },
     double: (zone: TapZone) => {
       const v = videoRef.current;
-      if (!v || !ready || vs.error || zone === 'center') return;
+      if (!v || !ready || blocked || zone === 'center') return;
       const dir = zone === 'left' ? -1 : 1;
       const base = settings.value.edgeSeekStep || 5;
       const step = streak.next(dir, base);
@@ -524,7 +531,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       const live = liveTiming(v, { time: vs.time, paused: vs.paused });
       return buildSnapshot({
         queue, index,
-        time: live.time, duration: vs.duration, paused: live.paused, buffering: ready && vs.buffering,
+        time: live.time, duration: vs.duration, paused: live.paused, buffering: ready && (!vs.played || vs.buffering || (vs.errorCode !== null && !blocked)),
         audio, audioIdx, defaultAudio: defaultAudioIndex(audio),
         subs: subtitleMenu(embeddedSubOptions(probe, v), item.subtitles || []), subChoice,
         chapters,
@@ -565,8 +572,22 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const retry = () => {
     startPos.current = posRef.current.time;
     userTracks.current = false;
-    setReloadKey(reloadKey + 1);
+    setReloadKey((k) => k + 1);
   };
+  const retryRef = useRef(retry);
+  retryRef.current = retry;
+  // A media error while peers are still connecting is not shown: reopen the stream and keep the peers line.
+  useEffect(() => {
+    if (vs.errorCode == null || blocked || swarm.kind === 'pending') return undefined;
+    const id = setTimeout(() => retryRef.current(), SWARM_RETRY_MS);
+    return () => clearTimeout(id);
+  }, [vs.errorCode, blocked, swarm.kind, reloadKey]);
+  useEffect(() => {
+    if (!blocked) return undefined;
+    const key = failure === 'no-seeders' && item.hash ? 'player-err-another' : 'player-err-retry';
+    const id = setTimeout(() => { if (doesFocusableExist(key)) setFocus(key); }, 0);
+    return () => clearTimeout(id);
+  }, [blocked, failure, item.hash]);
 
   const runColor = (color: ColorKeyCommand) => {
     if (color === 'audio') openAudioList();
@@ -589,7 +610,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   }, 110);
 
   useKeys((a) => {
-    if (vs.error) return false; // error view buttons use spatial navigation
+    if (blocked) return false; // error view buttons use spatial navigation
     lastKeyAt.current = Date.now();
     taps.cancel();
     if (next.countdown !== null) {
@@ -681,7 +702,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       <video key={index + ':' + reloadKey} ref={videoRef} src={ready ? src : undefined} autoplay onLoadedMetadata={onMeta} />
       <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
       {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}
-      {ready && vs.buffering && !vs.error && <BufferingOverlay cache={cache} />}
+      {ready && !blocked && (!vs.played || vs.buffering || vs.errorCode !== null) && (
+        <BufferingOverlay cache={cache} waiting={!vs.played || vs.errorCode !== null} />
+      )}
       {infoOn && (
         <InfoOverlay panel={infoPanel({ title: heading, probe, audioIndex: audioIdx, cache, bufferedSec: bufferedAhead(videoRef.current) })} />
       )}
@@ -691,7 +714,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       )}
       {showSkip && intro && <SkipBanner lift={donate === 'pause'} onSkip={() => { seekTo(introSkipTarget(intro, vs.duration)); setSkippedIntro(intro.start); }} />}
       {undo && next.countdown === null && <UndoBanner text={undo.text} lift={donate === 'pause'} onUndo={undoSkip} />}
-      {(controls || vs.paused) && !vs.error && (
+      {(controls || vs.paused) && !blocked && (
         <Controls
           title={tvGlyphs(heading)}
           time={vs.time}
@@ -710,7 +733,16 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
           onChapters={openChapters}
         />
       )}
-      {vs.error && <PlayerError message={vs.error} probe={probe} onRetry={retry} onBack={() => goBack()} />}
+      {blocked && (
+        <PlayerError
+          message={failureText(failure, vs.errorCode)}
+          probe={probe}
+          showProbe={failure === 'codec'}
+          onRetry={retry}
+          onBack={() => goBack()}
+          onAnother={failure === 'no-seeders' ? () => openAnotherRelease(item.hash) : undefined}
+        />
+      )}
     </div>
   );
 }

@@ -246,6 +246,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .player-info .pi-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); }
 .player-info .pi-num { flex: 0 1 auto; min-width: 0; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player-buffer { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; }
+.player-buffer .spinner-text { font-size: 28px; max-width: 980px; }
 .subtitles { position: absolute; left: 10%; right: 10%; bottom: 80px; text-align: center; white-space: pre-line; }
 .subtitles.raised { bottom: 260px; }
 .subtitles span { display: inline-block; padding: 4px 14px; border-radius: 6px; line-height: 1.3; }

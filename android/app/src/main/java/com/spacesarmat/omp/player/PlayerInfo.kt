@@ -38,6 +38,8 @@ data class TorrentStats(
     val cacheCapacity: Long = 0,
     /** Size of the stream's file in bytes (`file_stats` of the torrent), 0 when unknown. */
     val fileLength: Long = 0,
+    /** Bytes of the torrent already stored (`loaded_size`), 0 when unknown. */
+    val loadedSize: Long = 0,
 )
 
 /**
@@ -105,6 +107,7 @@ object TorrServerStats {
             cacheFilled = o.optLong("Filled", 0L),
             cacheCapacity = o.optLong("Capacity", 0L),
             fileLength = fileLength(t.optJSONArray("file_stats"), index),
+            loadedSize = t.optLong("loaded_size", 0L).coerceAtLeast(0L),
         )
     }
 

@@ -7,12 +7,15 @@ export interface VideoState {
   duration: number;
   paused: boolean;
   buffering: boolean;
-  error: string | null;
+  /** MediaError.code, or null when the element has not failed. The screen classifies it (playbackFailure). */
+  errorCode: number | null;
+  /** A frame has started. A seek to the resume point does not count: only the playing event does. */
+  played: boolean;
   /** timestamp of the last 'ended' event, 0 if none */
   ended: number;
 }
 
-const INITIAL: VideoState = { time: 0, duration: 0, paused: true, buffering: true, error: null, ended: 0 };
+const INITIAL: VideoState = { time: 0, duration: 0, paused: true, buffering: true, errorCode: null, played: false, ended: 0 };
 
 export function mediaErrorText(e: MediaError | null): string {
   switch (e ? e.code : 0) {
@@ -40,10 +43,10 @@ export function useVideoState(ref: RefObject<HTMLVideoElement | null>, srcKey: s
       pause: () => upd({ paused: true }),
       waiting: () => upd({ buffering: true }),
       seeking: () => upd({ buffering: true }),
-      playing: () => upd({ buffering: false, paused: false }),
       canplay: () => upd({ buffering: false }),
       seeked: () => upd({ buffering: false }),
-      error: () => upd({ error: mediaErrorText(v.error), buffering: false }),
+      playing: () => upd({ buffering: false, paused: false, played: true, errorCode: null }),
+      error: () => upd({ errorCode: v.error ? v.error.code : 0, buffering: false }),
       ended: () => upd({ ended: Date.now() }),
     };
     Object.keys(handlers).forEach((k) => v.addEventListener(k, handlers[k]));

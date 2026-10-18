@@ -207,12 +207,17 @@ export function Spinner(p: { text?: string }) {
   );
 }
 
-export function ErrorView(p: { message: string; actions: { label: string; onPress: () => void }[] }) {
+export function ErrorView(p: {
+  message: string;
+  actions: { label: string; onPress: () => void; focusKey?: string; className?: string }[];
+  /** D-pad focus lands here (the primary button). */
+  preferredChildFocusKey?: string;
+}) {
   return (
     <div class="error-view">
       <div class="message">{p.message}</div>
-      <FocusGroup focusKey="ERROR-ACTIONS" className="actions" autoFocus>
-        {p.actions.map((a) => <Button key={a.label} label={a.label} onPress={a.onPress} />)}
+      <FocusGroup focusKey="ERROR-ACTIONS" className="actions" autoFocus preferredChildFocusKey={p.preferredChildFocusKey}>
+        {p.actions.map((a) => <Button key={a.focusKey || a.label} focusKey={a.focusKey} className={a.className} label={a.label} onPress={a.onPress} />)}
       </FocusGroup>
     </div>
   );

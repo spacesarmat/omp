@@ -34,4 +34,25 @@
         <item name="android:textColor">#0F1115</item>
         <item name="android:textStyle">bold</item>
     </style>
+
+    <!-- Error-box buttons: focusable, so the D-pad ring is visible. Primary is the accent. -->
+    <style name="OmpPlayerChip.Error">
+        <item name="android:background">@drawable/player_chip_btn</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:focusableInTouchMode">true</item>
+        <item name="android:gravity">center</item>
+        <item name="android:minWidth">120dp</item>
+        <item name="android:paddingStart">18dp</item>
+        <item name="android:paddingEnd">18dp</item>
+        <item name="android:paddingTop">10dp</item>
+        <item name="android:paddingBottom">10dp</item>
+        <item name="android:textSize">18sp</item>
+    </style>
+
+    <style name="OmpPlayerChip.ErrorAccent" parent="OmpPlayerChip.Error">
+        <item name="android:background">@drawable/player_chip_btn_accent</item>
+        <item name="android:textColor">#0F1115</item>
+        <item name="android:textStyle">bold</item>
+    </style>
 </resources>
