@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the OMP Jackett indexer monitor every 30 minutes
+
+[Timer]
+OnCalendar=*-*-* *:07,37:00
+RandomizedDelaySec=60
+Persistent=false
+
+[Install]
+WantedBy=timers.target

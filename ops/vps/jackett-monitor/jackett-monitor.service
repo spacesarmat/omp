@@ -1,0 +1,10 @@
+[Unit]
+Description=OMP Jackett indexer monitor (disable failing indexers, re-enable recovered ones)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/omp-vps/jackett-monitor/monitor.py run
+TimeoutStartSec=25min
+Nice=10
