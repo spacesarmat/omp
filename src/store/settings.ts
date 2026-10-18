@@ -37,8 +37,11 @@ export interface AppSettings {
   /**
    * Phone, «Встроенный» player: «Звук в фоне» — 2160's media service (notification, lock screen, headset buttons)
    * and sound with the screen off / after the PiP window is closed. Off: PiP only. Never on the TV.
+   * On unless the person has moved the switch (`backgroundAudioTouched`).
    */
   backgroundAudio: boolean;
+  /** True after the person moves «Звук в фоне». Until then a stored off (the old default) becomes on. */
+  backgroundAudioTouched: boolean;
   /**
    * Android TV, built-in player: «Всегда FFmpeg» — software decoding (2160's DecoderPreference.FFMPEG).
    * Off: hardware first, FFmpeg only when the box cannot decode. Helps set-top boxes with a green screen.
@@ -67,7 +70,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   playerEngine: 'auto',
   videoPlayer: 'builtin',
   phonePlayer: 'embedded',
-  backgroundAudio: false,
+  backgroundAudio: true,
+  backgroundAudioTouched: false,
   alwaysFfmpeg: false,
   language: 'system',
 };
@@ -97,6 +101,11 @@ export function sanitizeSettings(v: unknown): AppSettings {
     out.phonePlayer = out.videoPlayer === 'p2160' ? 'p2160' : DEFAULT_SETTINGS.phonePlayer;
   }
   if (['system', 'ru', 'en'].indexOf(out.language) < 0) out.language = DEFAULT_SETTINGS.language;
+  // The switch used to default to off and every saved settings blob stored that. A phone that never
+  // moved the switch gets the new default (on). A later choice is kept.
+  const touched = isObject(v) && v.backgroundAudioTouched === true;
+  out.backgroundAudioTouched = touched;
+  if (!touched) out.backgroundAudio = true;
   return out;
 }
 

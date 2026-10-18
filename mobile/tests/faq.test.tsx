@@ -182,6 +182,19 @@ describe('FAQ v0.15 content', () => {
     expect(viewText('no-sound', 'phone')).not.toContain('VLC');
   });
 
+  it('explains audiobooks on the phone', () => {
+    for (const id of ['audiobooks', 'audiobook-player', 'audiobook-seeds']) {
+      const it = FAQ.find((i) => i.id === id)!;
+      expect(it.devices).toEqual(['phone']);
+      expect(it.section).toBe('player');
+    }
+    expect(viewText('audiobooks', 'phone')).toContain('не в видеоплеере 2160');
+    expect(viewText('audiobook-player', 'phone')).toContain('Таймер сна');
+    expect(viewText('audiobook-player', 'phone')).toContain('экране блокировки');
+    expect(viewText('audiobook-seeds', 'phone')).toContain('мало сидов');
+    expect(viewText('audiobook-seeds', 'phone')).toContain('нет звуковых файлов');
+  });
+
   it('explains which APK to pick and where the releases are posted', () => {
     const it = FAQ.find((i) => i.id === 'apk-choice')!;
     expect(it.devices).toEqual(['phone', 'atv']);
@@ -367,7 +380,7 @@ describe('Faq screen', () => {
   it('searches across all devices with badge, section, count and highlight', async () => {
     const el = mount(<Faq />);
     await type(el, 'ЗВУК');
-    expect(el.querySelector('[role="status"]')!.textContent).toBe('Найдено 4 · во всех устройствах');
+    expect(el.querySelector('[role="status"]')!.textContent).toBe('Найдено 7 · во всех устройствах');
     expect(el.querySelector('.m-chip')).toBeNull();
     const first = q(el, 'Нет звука');
     expect(first.querySelector('.m-faq-badge')!.textContent).toBe('Телефон');

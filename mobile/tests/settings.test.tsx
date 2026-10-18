@@ -693,11 +693,13 @@ describe('Settings: «Плеер для видео»', () => {
     expect(sanitizeSettings({ phonePlayer: 'vlc' }).phonePlayer).toBe('embedded');
   });
 
-  it('«Звук в фоне» is off by default and keeps only a boolean', () => {
-    expect(DEFAULT_SETTINGS.backgroundAudio).toBe(false);
-    expect(sanitizeSettings({}).backgroundAudio).toBe(false);
+  it('«Звук в фоне» is on until the switch is moved', () => {
+    expect(DEFAULT_SETTINGS.backgroundAudio).toBe(true);
+    expect(sanitizeSettings({}).backgroundAudio).toBe(true);
     expect(sanitizeSettings({ backgroundAudio: true }).backgroundAudio).toBe(true);
-    expect(sanitizeSettings({ backgroundAudio: 'yes' }).backgroundAudio).toBe(false);
+    expect(sanitizeSettings({ backgroundAudio: 'yes' }).backgroundAudio).toBe(true);
+    expect(sanitizeSettings({ backgroundAudio: false }).backgroundAudio).toBe(true);
+    expect(sanitizeSettings({ backgroundAudio: false, backgroundAudioTouched: true }).backgroundAudio).toBe(false);
   });
 
   it('«Звук в фоне»: under «Встроенный» only; turning it on asks for notifications, a refusal is explained', async () => {
@@ -713,8 +715,14 @@ describe('Settings: «Плеер для видео»', () => {
       expect(row()!.textContent).toContain('Звук в фоне');
       expect(row()!.textContent).toContain('Расходует батарею и трафик');
       const sw = row()!.querySelector('[role="switch"]') as HTMLElement;
-      expect(sw.getAttribute('aria-checked')).toBe('false');
+      expect(sw.getAttribute('aria-checked')).toBe('true');
+      expect(row()!.textContent).toContain('пока вы сами не выключите');
       act(() => sw.click());
+      await flushAll();
+      expect(settings.value.backgroundAudio).toBe(false);
+      expect(settings.value.backgroundAudioTouched).toBe(true);
+      expect(ask).not.toHaveBeenCalled();
+      act(() => (row()!.querySelector('[role="switch"]') as HTMLElement).click());
       await flushAll();
       expect(settings.value.backgroundAudio).toBe(true);
       expect(ask).toHaveBeenCalledTimes(1);
@@ -728,7 +736,7 @@ describe('Settings: «Плеер для видео»', () => {
       expect(row()).toBeNull();
     } finally {
       monitorNative.available = was;
-      updateSettings({ backgroundAudio: false });
+      updateSettings({ backgroundAudio: true, backgroundAudioTouched: false });
     }
   });
 
