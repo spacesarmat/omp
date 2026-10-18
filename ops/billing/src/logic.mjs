@@ -12,6 +12,30 @@ function attempt(state, row) {
   return { ...state, attempts };
 }
 
+/** Account behind an activation attempt: the code that was tried, else the device's current link. */
+function accountIdForAttempt(state, row) {
+  if (row && row.accountId) return String(row.accountId);
+  const hash = row && row.hash ? String(row.hash) : '';
+  if (hash) {
+    const code = (state.codes || []).find((c) => c.hash === hash);
+    if (code) {
+      const sub = (state.subscriptions || []).find((s) => s.id === code.subscriptionId);
+      if (sub && sub.accountId) return String(sub.accountId);
+    }
+  }
+  const deviceId = row && row.deviceId ? String(row.deviceId) : '';
+  if (!deviceId) return '';
+  const linked = accountByDevice(state, deviceId);
+  return linked ? linked.id : '';
+}
+
+function recordAttempt(state, row) {
+  const accountId = accountIdForAttempt(state, row);
+  const next = { ...row, at: row.at || Date.now() };
+  if (accountId) next.accountId = accountId;
+  return attempt(state, next);
+}
+
 export function findAccount(state, id) {
   return state.accounts.find((a) => a.id === id) || null;
 }
@@ -291,20 +315,20 @@ export function activate(state, { code, deviceId, now }) {
   if (!deviceOk(deviceId) || normalizeCode(code).length !== 8) return fail('bad_code', state);
   const hash = codeHash(code);
   const row = state.codes.find((c) => c.hash === hash && !c.revoked);
-  if (!row) return fail('bad_code', attempt(state, { at: now, hash, deviceId, ok: false, reason: 'bad_code' }));
+  if (!row) return fail('bad_code', recordAttempt(state, { at: now, hash, deviceId, ok: false, reason: 'bad_code' }));
   const sub = state.subscriptions.find((s) => s.id === row.subscriptionId);
   if (!sub || sub.paidUntil <= now) {
-    return fail('expired', attempt(state, { at: now, hash, deviceId, ok: false, reason: 'expired' }));
+    return fail('expired', recordAttempt(state, { at: now, hash, deviceId, ok: false, reason: 'expired', accountId: sub ? sub.accountId : '' }));
   }
   if (row.deviceId && row.deviceId !== deviceId) {
-    return fail('other_device', attempt(state, { at: now, hash, deviceId, ok: false, reason: 'other_device' }));
+    return fail('other_device', recordAttempt(state, { at: now, hash, deviceId, ok: false, reason: 'other_device', accountId: sub.accountId }));
   }
   const codes = state.codes.map((c) =>
     c.id === row.id && !c.deviceId ? { ...c, deviceId, boundAt: now, plain: '' } : c.id === row.id ? { ...c, plain: '' } : c,
   );
   const token = randomId() + randomId();
   const sessions = state.sessions.filter((s) => s.codeId !== row.id).concat([{ codeId: row.id, hash: sha256(token), createdAt: now }]);
-  let next = attempt({ ...state, codes, sessions }, { at: now, hash, deviceId, ok: true, reason: 'ok' });
+  let next = recordAttempt({ ...state, codes, sessions }, { at: now, hash, deviceId, ok: true, reason: 'ok', accountId: sub.accountId });
   // Keep the phone↔Telegram link in sync when the code belongs to a TG account.
   const account = findAccount(next, sub.accountId);
   if (account) {
@@ -344,11 +368,59 @@ export function logWebhook(state, row) {
 
 const AUDIT_CAP = 200;
 
-/** Append an admin panel action (password change, grant, unbind, …). */
-export function logAudit(state, { action, detail, now }) {
+function normalizeActor(actor) {
+  if (!actor || typeof actor !== 'object') return null;
+  const kind = String(actor.kind || '');
+  if (kind !== 'user' && kind !== 'device' && kind !== 'admin' && kind !== 'system') return null;
+  return {
+    kind,
+    id: String(actor.id || '').slice(0, 80),
+    label: String(actor.label || '').slice(0, 120),
+  };
+}
+
+/** Old audit rows stored "telegram 123" in the detail and no actor. */
+function actorFromAuditDetail(row) {
+  const detail = String((row && row.detail) || '');
+  const tg = detail.match(/(?:^|\s)telegram\s+(\d+)/i);
+  if (!tg) return null;
+  return { kind: 'admin', id: tg[1], label: tg[1] };
+}
+
+/** Append an admin panel action. `actor` is { kind, id, label } when the caller knows who. */
+export function logAudit(state, { action, detail, now, actor }) {
   const row = { at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
+  const who = normalizeActor(actor);
+  if (who) row.actor = who;
   const audit = (state.audit || []).concat([row]).slice(-AUDIT_CAP);
   return { ...state, audit };
+}
+
+/**
+ * Additive migration: fill accountId / actor where they can be derived.
+ * Every existing field is kept. Rows that cannot be attributed are left unchanged.
+ */
+export function enrichActors(state) {
+  if (!state || typeof state !== 'object') return state;
+  const payments = (state.payments || []).map((p) => {
+    if (!p || typeof p !== 'object' || p.accountId) return p;
+    const resolved = resolvePaymentAccount(state, p.label);
+    if (!resolved.accountId) return p;
+    return { ...p, accountId: resolved.accountId };
+  });
+  const attempts = (state.attempts || []).map((a) => {
+    if (!a || typeof a !== 'object' || a.accountId) return a;
+    const accountId = accountIdForAttempt(state, a);
+    if (!accountId) return a;
+    return { ...a, accountId };
+  });
+  const audit = (state.audit || []).map((row) => {
+    if (!row || typeof row !== 'object' || (row.actor && row.actor.kind)) return row;
+    const actor = actorFromAuditDetail(row);
+    if (!actor) return row;
+    return { ...row, actor };
+  });
+  return { ...state, payments, attempts, audit };
 }
 
 /**
@@ -371,8 +443,17 @@ function priceOf(state, mark) {
   return 0;
 }
 
+function stampPayment(state, row) {
+  const at = row && row.at ? row.at : Date.now();
+  const base = { ...row, at };
+  if (base.accountId) return base;
+  const resolved = resolvePaymentAccount(state, base.label);
+  if (!resolved.accountId) return base;
+  return { ...base, accountId: resolved.accountId };
+}
+
 function rejectAmount(state, row) {
-  const payments = state.payments.concat([{ ...row, error: 'amount' }]);
+  const payments = state.payments.concat([stampPayment(state, { ...row, error: 'amount' })]);
   return { state: { ...state, payments }, result: { error: 'amount' } };
 }
 
@@ -385,13 +466,13 @@ export function applyPayment(state, { operationId, label, amount, currency, now 
   }
   const mark = String(label || '');
   const days = state.settings.periodDays || 30;
-  const row = { operationId, label: mark, amount, at: now };
+  const row = { operationId, label: mark, amount, at: now || Date.now() };
   let act = mark;
   let quoted = null;
   if (mark.indexOf('buy:') === 0) {
     const quote = (state.purchases || []).find((p) => p.id === mark.slice(4));
     if (!quote) {
-      const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+      const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
     quoted = Number(quote.price) || 0;
@@ -399,7 +480,7 @@ export function applyPayment(state, { operationId, label, amount, currency, now 
     else if (quote.kind === 'sub') act = 'sub:' + quote.subscriptionId;
     else if (quote.kind === 'dev') act = 'dev:' + quote.subscriptionId;
     else {
-      const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+      const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
   }
@@ -409,7 +490,7 @@ export function applyPayment(state, { operationId, label, amount, currency, now 
     const id = act.slice(4);
     const sub = state.subscriptions.find((s) => s.id === id);
     if (!sub) {
-      const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+      const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
     if (!covers(act)) return rejectAmount(state, row);
@@ -420,29 +501,29 @@ export function applyPayment(state, { operationId, label, amount, currency, now 
     });
     const next = subscriptions.find((s) => s.id === id);
     return {
-      state: { ...state, payments: state.payments.concat([row]), subscriptions },
+      state: { ...state, payments: state.payments.concat([stampPayment(state, row)]), subscriptions },
       result: { kind: 'renew', subscriptionId: id, paidUntil: next ? next.paidUntil : 0 },
     };
   }
   if (act.indexOf('dev:') === 0) {
     const id = act.slice(4);
     if (!state.subscriptions.find((s) => s.id === id)) {
-      const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+      const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
     if (!covers(act)) return rejectAmount(state, row);
     const subscriptions = state.subscriptions.map((s) => (s.id === id ? { ...s, deviceLimit: s.deviceLimit + 1 } : s));
-    const issued = issue({ ...state, payments: state.payments.concat([row]), subscriptions }, id, now);
+    const issued = issue({ ...state, payments: state.payments.concat([stampPayment(state, row)]), subscriptions }, id, now);
     return { state: issued.state, result: { kind: 'device', subscriptionId: id, code: issued.code } };
   }
   if (act.indexOf('new:') === 0) {
     const accountId = act.slice(4);
     if (!findAccount(state, accountId)) {
-      const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+      const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
     if (!covers(act)) return rejectAmount(state, row);
-    const base = { ...state, payments: state.payments.concat([row]) };
+    const base = { ...state, payments: state.payments.concat([stampPayment(state, row)]) };
     const existing = anySub(base, accountId);
     if (existing) {
       const subscriptions = base.subscriptions.map((s) => {
@@ -456,7 +537,7 @@ export function applyPayment(state, { operationId, label, amount, currency, now 
     const created = createSubscription(base, { accountId, now, days });
     return { state: created.state, result: { kind: 'new', ...created.result } };
   }
-  const payments = state.payments.concat([{ ...row, error: 'bad_label' }]);
+  const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
   return { state: { ...state, payments }, result: { error: 'bad_label' } };
 }
 
@@ -674,7 +755,8 @@ export function pageAudit(state, { q, action, offset, limit }) {
     .filter((row) => {
       if (act && row.action !== act) return false;
       if (!query) return true;
-      return (String(row.action || '') + ' ' + String(row.detail || '')).toLowerCase().indexOf(query) >= 0;
+      const who = row.actor ? String(row.actor.kind || '') + ' ' + String(row.actor.label || '') + ' ' + String(row.actor.id || '') : '';
+      return (String(row.action || '') + ' ' + String(row.detail || '') + ' ' + who).toLowerCase().indexOf(query) >= 0;
     });
   const start = Math.max(0, Math.floor(Number(offset) || 0));
   const size = Math.min(100, Math.max(1, Math.floor(Number(limit) || 30)));
@@ -879,6 +961,42 @@ export function takeAdminPanelLogin(state, { token, now }) {
   return { state: { ...state, adminLogins }, result: { status: 'ok', telegramId: row.telegramId } };
 }
 
+const CLI_LOGIN_TTL = 10 * 60 * 1000;
+
+/**
+ * One-time break-glass login minted from the server shell.
+ * The raw token is returned to the caller and is not written into the snapshot or the audit row.
+ */
+export function issueCliAdminLogin(state, { now }) {
+  const at = now || Date.now();
+  const token = randomId() + randomId();
+  const hash = sha256(token);
+  const expiresAt = at + CLI_LOGIN_TTL;
+  const fresh = (state.adminCliLogins || []).filter((l) => l && !l.consumedAt && l.expiresAt > at);
+  const adminCliLogins = fresh.concat([{ hash, createdAt: at, expiresAt, consumedAt: 0 }]).slice(-20);
+  const next = logAudit(
+    { ...state, adminCliLogins },
+    { action: 'login_cli', detail: 'ссылка выдана', now: at, actor: { kind: 'admin', id: 'cli', label: 'cli' } },
+  );
+  return { state: next, result: { token, expiresAt } };
+}
+
+/** Redeem a shell login link. Single use. Expired and unknown tokens do not change state. */
+export function takeCliAdminLogin(state, { token, now }) {
+  const at = now || Date.now();
+  const raw = String(token || '');
+  if (!raw) return { state, result: { status: 'expired' } };
+  const hash = sha256(raw);
+  const row = (state.adminCliLogins || []).find((l) => l && l.hash === hash);
+  if (!row || row.consumedAt || row.expiresAt <= at) return { state, result: { status: 'expired' } };
+  const adminCliLogins = state.adminCliLogins.map((l) => (l && l.hash === hash ? { ...l, consumedAt: at } : l));
+  const next = logAudit(
+    { ...state, adminCliLogins },
+    { action: 'login', detail: 'cli', now: at, actor: { kind: 'admin', id: 'cli', label: 'cli' } },
+  );
+  return { state: next, result: { status: 'ok' } };
+}
+
 export function confirmDeviceLink(state, { token, telegramId, now }) {
   const key = String(token || '').trim().toLowerCase();
   if (!key) return { state, result: { error: 'bad_link' } };
@@ -917,7 +1035,16 @@ export function unlinkDeviceTelegram(state, { deviceId, now }) {
   return {
     state: logAudit(
       { ...state, accounts },
-      { action: 'tg_unlink', detail: account.id + ' ' + deviceId.slice(0, 8), now: now || Date.now() },
+      {
+        action: 'tg_unlink',
+        detail: account.id + ' ' + deviceId.slice(0, 8),
+        now: now || Date.now(),
+        actor: {
+          kind: 'user',
+          id: account.id,
+          label: telegramDisplay(account) || account.telegramId || account.id,
+        },
+      },
     ),
     // The device is gone. The paying account keeps its Telegram id, so the next message still finds this subscription.
     result: { ok: true, telegramId: linked.length ? account.telegramId || '' : '' },
@@ -993,53 +1120,107 @@ function attemptReasonText(reason) {
   return ATTEMPT_REASON[reason] || reason || 'неизвестно';
 }
 
+function eventActor(state, accountId, deviceId, systemLabel) {
+  const acc = accountId ? findAccount(state, accountId) : null;
+  if (acc) return { kind: 'user', id: acc.id, label: telegramDisplay(acc) || acc.email || acc.id };
+  const dev = String(deviceId || '');
+  if (dev) return { kind: 'device', id: dev, label: dev.slice(0, 8) };
+  return { kind: 'system', id: '', label: systemLabel || 'система' };
+}
+
+function payText(p) {
+  const amount = String((p && p.amount) || '').trim();
+  return amount ? amount + ' ₽' : 'сумма не указана';
+}
+
+const LOGIN_FEED = {
+  login: 1,
+  login_fail: 1,
+  login_cli: 1,
+  login_telegram_start: 1,
+  logout: 1,
+};
+
+function adminFeedText(row) {
+  const action = String((row && row.action) || '');
+  const detail = String((row && row.detail) || '');
+  if (action === 'login_cli') return 'Аварийная ссылка входа';
+  if (action === 'login' && detail.indexOf('cli') === 0) return 'Вход с сервера';
+  if (action === 'login' && detail.indexOf('telegram') === 0) return 'Вход через Telegram';
+  if (action === 'login') return 'Вход';
+  if (action === 'login_fail') return 'Отказ во входе';
+  if (action === 'login_telegram_start') return 'Запрос входа через Telegram';
+  if (action === 'logout') return 'Выход';
+  return action;
+}
+
 /**
  * Home dashboard: recent events + operational alerts.
- * @returns {{ events: { at, kind, text, accountId }[], alerts: { level, text }[] }}
+ * @returns {{ events: { at, kind, text, accountId, actor, deviceId? }[], alerts: { level, text }[] }}
  */
 export function adminDashboard(state, now) {
   const events = [];
   for (let i = 0; i < state.payments.length; i++) {
     const p = state.payments[i];
     const label = String(p.label || '');
+    const accountId = p.accountId || resolvePaymentAccount(state, label).accountId || '';
     events.push({
       at: p.at || 0,
       kind: 'pay',
-      text: 'Оплата ' + (p.amount || '') + ' · ' + label,
-      accountId: resolvePaymentAccount(state, label).accountId || '',
+      text: payText(p),
+      accountId,
+      actor: eventActor(state, accountId, '', 'ЮMoney'),
     });
   }
   for (let i = 0; i < (state.promos || []).length; i++) {
     const promo = state.promos[i];
     for (let u = 0; u < (promo.uses || []).length; u++) {
       const use = promo.uses[u];
+      const accountId = use.accountId || '';
       events.push({
         at: use.at || 0,
         kind: 'promo',
-        text: 'Промо ' + promo.code + ' (+' + promo.days + ' дн.)',
-        accountId: use.accountId || '',
+        text: promo.code + ' · +' + promo.days + ' дн.',
+        accountId,
+        actor: eventActor(state, accountId, '', 'промо'),
       });
     }
   }
   for (let i = 0; i < state.attempts.length; i++) {
     const a = state.attempts[i];
+    const accountId = a.accountId || accountIdForAttempt(state, a) || '';
     if (a.ok) {
-      const code = state.codes.find((c) => c.deviceId === a.deviceId);
-      const sub = code ? state.subscriptions.find((s) => s.id === code.subscriptionId) : null;
       events.push({
         at: a.at || 0,
         kind: 'activate',
-        text: 'Активация · устройство ' + String(a.deviceId || '').slice(0, 8) + '…',
-        accountId: sub ? sub.accountId : '',
+        text: 'код принят',
+        accountId,
+        deviceId: a.deviceId || '',
+        actor: eventActor(state, accountId, a.deviceId, 'активация'),
       });
     } else {
       events.push({
         at: a.at || 0,
         kind: 'fail',
-        text: 'Отказ: ' + attemptReasonText(a.reason) + ' · ' + String(a.deviceId || '').slice(0, 8) + '…',
-        accountId: '',
+        text: 'Отказ: ' + attemptReasonText(a.reason),
+        accountId,
+        deviceId: a.deviceId || '',
+        actor: eventActor(state, accountId, a.deviceId, 'активация'),
       });
     }
+  }
+  const audit = state.audit || [];
+  for (let i = 0; i < audit.length; i++) {
+    const row = audit[i];
+    if (!LOGIN_FEED[row.action]) continue;
+    const actor = normalizeActor(row.actor) || actorFromAuditDetail(row) || { kind: 'admin', id: '', label: 'админ' };
+    events.push({
+      at: row.at || 0,
+      kind: 'admin',
+      text: adminFeedText(row),
+      accountId: '',
+      actor,
+    });
   }
   events.sort((a, b) => b.at - a.at);
   const feed = events.slice(0, 150);

@@ -37,6 +37,7 @@ function subRows(state, now) {
         telegramName: account.telegramName || '',
         paidUntil: sub.paidUntil,
         paidUntilText: day(sub.paidUntil),
+        createdAt: sub.createdAt || 0,
         deviceLimit: sub.deviceLimit,
         bound,
         active,
@@ -57,6 +58,7 @@ function promoRows(state) {
       uses: (p.uses || []).length,
       maxUses: p.maxUses,
       revoked: !!p.revoked,
+      createdAt: p.createdAt || 0,
     }));
 }
 
@@ -95,7 +97,7 @@ export function homePayload(state, file, opts) {
       revenue30: finance.summary.month.sum,
     },
     alerts: dash.alerts || [],
-    events: (dash.events || []).slice(0, 30),
+    events: (dash.events || []).slice(0, 80),
     finance: {
       summary: finance.summary,
       payments: (finance.payments || []).slice(0, 40),
@@ -147,6 +149,8 @@ export function userPayload(state, accountId, opts) {
       hasPlain: !!c.plain,
       bound: !!c.deviceId,
       deviceId: c.deviceId ? c.deviceId.slice(0, 8) : '',
+      createdAt: c.createdAt || 0,
+      boundAt: c.boundAt || 0,
     })),
     payments: (card.payments || []).map((p) => ({
       at: p.at || 0,

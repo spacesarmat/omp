@@ -1,8 +1,34 @@
+import { listStamp } from './time';
+
 export function when(ms?: number) {
   if (!ms) return '';
-  const d = new Date(ms);
-  const p = (n: number) => (n < 10 ? '0' : '') + n;
-  return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  return listStamp(ms) + ' МСК';
+}
+
+const ACTOR_KIND: Record<string, string> = {
+  user: 'пользователь',
+  device: 'устройство',
+  admin: 'админ',
+  system: 'система',
+};
+
+/** «пользователь · @nick · 42» or «устройство · abcd1234». */
+export function actorLine(
+  actor?: { kind?: string; label?: string } | null,
+  opts?: { deviceId?: string; fallback?: string },
+) {
+  const deviceId = opts?.deviceId || '';
+  const fallback = opts?.fallback || 'система';
+  if (!actor || !actor.kind) {
+    if (deviceId) return 'устройство · ' + deviceId.slice(0, 8);
+    return fallback;
+  }
+  const kind = ACTOR_KIND[actor.kind] || actor.kind;
+  const label = actor.label ? ' · ' + actor.label : '';
+  let line = kind + label;
+  const shortDev = deviceId.slice(0, 8);
+  if (actor.kind === 'user' && shortDev && line.indexOf(shortDev) < 0) line += ' · устройство ' + shortDev;
+  return line;
 }
 
 export function personLabel(id: string, username?: string, name?: string) {
@@ -16,6 +42,7 @@ const EVENT_KIND: Record<string, string> = {
   promo: 'промо',
   activate: 'активация',
   fail: 'отказ',
+  admin: 'админ',
 };
 
 const FAIL_REASON: Record<string, string> = {
@@ -32,6 +59,7 @@ const AUDIT_ACTION: Record<string, string> = {
   issue: 'выдача кода',
   login: 'вход',
   login_fail: 'неудачный вход',
+  login_cli: 'аварийная ссылка',
   login_telegram_start: 'вход через Telegram',
   logout: 'выход',
   message: 'сообщение',
