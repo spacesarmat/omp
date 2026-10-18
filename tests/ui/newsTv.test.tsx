@@ -506,6 +506,7 @@ describe('TV «Подписки» segment', () => {
     expect(getCurrentFocusKey()).toBe('news-sub-s2-remove');
     await click(subEl(host, 's2', 'remove'));
     await click(inDialog('Отмена'));
+    await act(() => pause(20));
     expect(calls.filter((c) => c.method === 'subRemove').length).toBe(0);
     expect(subRows(host).length).toBe(3);
     expect(getCurrentFocusKey()).toBe('news-sub-s2-remove');

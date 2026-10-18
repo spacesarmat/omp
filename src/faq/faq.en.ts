@@ -988,7 +988,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     q: 'No posters for new torrents',
     short: [
       '1. Get a free key at themoviedb.org (Settings → API).',
-      '2. Enter it in Settings → “Advanced” → “Server settings” → “Key for posters and descriptions (TMDB)”. It has to be a v3 API key of 32 characters.',
+      '2. Enter it in Settings → “Advanced” → “Server settings” → “TMDB key”. It has to be a v3 API key of 32 characters.',
     ],
     more: [
       'Posters are looked up in the TMDB database with the key stored in TorrServer.',
@@ -1010,7 +1010,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'A subscription is a query with rules: sources, the minimum quality and the number of seeds. Create it with the “+ New subscription” button on the “Subscriptions” tab. OMP checks the subscriptions itself and reports new torrents with a notification and a badge on the “New” tab.',
       'The first check of a new subscription goes without notifications: the torrents already on the sites are considered known. Notifications come only about what appeared later.',
       'You can also check by hand: the refresh button in the “New” header. How often OMP checks by itself and whether Wi‑Fi is needed for it — in Settings → “Follow new releases” (the monitoring icon in the “New” header and the “Monitoring settings” button at the bottom lead there too).',
-      'Each subscription has its own check button. Subscriptions and found torrents can be searched with the search field and sorted: new findings, by name, by date added.',
+      'Each subscription has its own check button. Subscriptions and found torrents can be searched with the search field and sorted: by date added, new findings, by name, by quality, by find age.',
     ],
   },
   'new-episodes': {

@@ -128,7 +128,8 @@ export function PlayerError(p: {
   return (
     <div class="player-error" onClick={(e) => e.stopPropagation()}>
       <ErrorView
-        message={p.message + (details ? '\n\n' + details : '')}
+        message={p.message}
+        detail={details || undefined}
         actions={actions}
         preferredChildFocusKey={another ? 'player-err-another' : 'player-err-retry'}
       />

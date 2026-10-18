@@ -19,21 +19,23 @@ function mount(view: string) {
 }
 
 describe('TorrentViews', () => {
-  it('large tiles: placeholder title, up to 3 badges with 4K, size', () => {
+  it('large tiles: initials once, two badges, the year under the title', () => {
     const { host } = mount('large');
     const tiles = host.querySelectorAll('.tile.tile-large');
     expect(tiles).toHaveLength(2);
-    expect(tiles[0].querySelector('.art-title')!.textContent).toBe('Signal One');
+    expect(tiles[0].querySelector('.art-initials')!.textContent).toBe('SO');
+    expect(tiles[0].querySelector('.art-title')).toBeNull();
     const badges = Array.prototype.map.call(tiles[0].querySelectorAll('.badge'), (e: Element) => e.textContent);
-    expect(badges).toEqual(['4K', 'HEVC', 'WEB-DL']);
+    expect(badges).toEqual(['4K', 'HEVC']);
+    expect(badges.join(' ')).not.toContain('2026');
     expect(tiles[0].querySelector('.tile-title')!.textContent).toBe('Signal One');
     expect(tiles[0].querySelector('.tile-meta')!.textContent).toBe('2026');
   });
-  it('small tiles: one badge, no size line', () => {
+  it('small tiles: one badge and a meta line', () => {
     const { host } = mount('small');
     const tile = host.querySelector('.tile.tile-small')!;
     expect(tile.querySelectorAll('.badge')).toHaveLength(1);
-    expect(tile.querySelector('.tile-meta')).toBeNull();
+    expect(tile.querySelector('.tile-meta')!.textContent).toBe('2026');
   });
   it('list rows show category and size', () => {
     const { host } = mount('list');

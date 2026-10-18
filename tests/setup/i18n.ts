@@ -1,6 +1,7 @@
 import { beforeEach } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
 import { resetCatalogCache } from '../../src/catalog/client';
+import { resetSeasonTotals } from '../../src/lib/episodesOutOf';
 
 /**
  * Tests run in Russian: the browser reports Russian (so 'system', the default setting after resetSettings(),
@@ -35,6 +36,7 @@ beforeEach(async () => {
   // a debounced TMDB cache write of the previous test lands now, before the test file clears the storage, and the
   // shared TMDB cache in memory is read from that storage again
   resetCatalogCache();
+  resetSeasonTotals();
   stubNavigatorLanguage();
   await resetStoredLanguage();
   applyLanguageSetting('ru');

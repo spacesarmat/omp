@@ -54,6 +54,13 @@ interface FocusGroupProps {
   boundary?: boolean;
   autoFocus?: boolean;
   preferredChildFocusKey?: string;
+  /**
+   * When false, entering this group does not return to the child focused last time.
+   * The preferred child is used instead (the top bar always returns to the active tab).
+   */
+  saveLastFocusedChild?: boolean;
+  /** When false, unmounting this group does not move focus to its parent. */
+  autoRestoreFocus?: boolean;
   children?: ComponentChildren;
 }
 
@@ -61,9 +68,10 @@ export function FocusGroup(p: FocusGroupProps) {
   const { ref, focusKey, focusSelf } = useFocusable({
     focusKey: p.focusKey,
     trackChildren: true,
-    saveLastFocusedChild: true,
+    saveLastFocusedChild: p.saveLastFocusedChild !== false,
     isFocusBoundary: !!p.boundary,
     preferredChildFocusKey: p.preferredChildFocusKey,
+    autoRestoreFocus: p.autoRestoreFocus,
   });
   useEffect(() => {
     if (p.autoFocus) focusSelf();
@@ -75,9 +83,9 @@ export function FocusGroup(p: FocusGroupProps) {
   );
 }
 
-export function Button(p: { label: string; icon?: IconName; onPress: () => void; focusKey?: string; className?: string; disabled?: boolean; onFocused?: () => void }) {
+export function Button(p: { label: string; icon?: IconName; onPress: () => void; focusKey?: string; className?: string; disabled?: boolean; onFocused?: () => void; onArrow?: (direction: string) => boolean }) {
   return (
-    <Focusable focusKey={p.focusKey} className={'button ' + (p.className || '')} onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused}>
+    <Focusable focusKey={p.focusKey} className={'button ' + (p.className || '')} onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} onArrow={p.onArrow}>
       {p.icon && <Icon name={p.icon} size={28} class="button-icon" />}{p.label}
     </Focusable>
   );
@@ -88,9 +96,9 @@ export function Button(p: { label: string; icon?: IconName; onPress: () => void;
  * button keeps its width and the bar its height. `labelEdge` pins the chip to the button's start or end edge instead of
  * centering it, for the buttons at the screen's edges, so the chip never runs off the screen.
  */
-export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void; expand?: boolean; labelEdge?: 'start' | 'end'; dot?: boolean }) {
+export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void; onArrow?: (direction: string) => boolean; expand?: boolean; labelEdge?: 'start' | 'end'; dot?: boolean }) {
   return (
-    <Focusable focusKey={p.focusKey} className="icon-button" onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} ariaLabel={p.label} role="button">
+    <Focusable focusKey={p.focusKey} className="icon-button" onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} onArrow={p.onArrow} ariaLabel={p.label} role="button">
       {(focused: boolean) => [
         <Icon key="i" name={p.icon} size={28} />,
         p.expand && focused ? <span key="l" class={'icon-btn-label' + (p.labelEdge ? ' icon-btn-label--' + p.labelEdge : '')}>{p.label}</span> : null,
@@ -166,6 +174,8 @@ interface ChoiceRowProps<T> {
   value: T;
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
+  /** Up/down (left/right already cycle the value). */
+  onArrow?: (direction: string) => boolean;
 }
 
 /** Settings row: OK / ← / → cycle through options. */
@@ -184,7 +194,7 @@ export function ChoiceRow<T>(p: ChoiceRowProps<T>) {
       onArrow={(dir) => {
         if (dir === 'left') { step(-1); return false; }
         if (dir === 'right') { step(1); return false; }
-        return true;
+        return p.onArrow ? p.onArrow(dir) : true;
       }}
     >
       <span class="choice-label">{p.label}</span>
@@ -209,6 +219,8 @@ export function Spinner(p: { text?: string }) {
 
 export function ErrorView(p: {
   message: string;
+  /** Second line under the title (player errors). */
+  detail?: string;
   actions: { label: string; onPress: () => void; focusKey?: string; className?: string }[];
   /** D-pad focus lands here (the primary button). */
   preferredChildFocusKey?: string;
@@ -216,6 +228,7 @@ export function ErrorView(p: {
   return (
     <div class="error-view">
       <div class="message">{p.message}</div>
+      {p.detail ? <div class="details">{p.detail}</div> : null}
       <FocusGroup focusKey="ERROR-ACTIONS" className="actions" autoFocus preferredChildFocusKey={p.preferredChildFocusKey}>
         {p.actions.map((a) => <Button key={a.focusKey || a.label} focusKey={a.focusKey} className={a.className} label={a.label} onPress={a.onPress} />)}
       </FocusGroup>

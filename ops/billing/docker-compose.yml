@@ -17,6 +17,8 @@ services:
     environment:
       PORT: "8787"
       BILLING_DATA: /data/billing.db
+      # This NAS copy must not steal getUpdates from the VPS bot. Set 1 only if it is the only billing process.
+      BILLING_BOT_POLL: "0"
       # host gateway on Docker bridge — existing Jackett on the NAS
       BILLING_JACKETT_URL: http://host.docker.internal:9117
       TZ: Europe/Moscow

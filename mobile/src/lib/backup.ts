@@ -129,7 +129,7 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.discoverQuery', clean: (v) => (isObject(v) ? sanitizeDiscoverQuery(v) : undefined) },
   // «Добавить»: the search filters; «Подписки»: the sort (SUBS_SORTS); the torrent screen: «не открывать»
   { key: 'tsp.searchFilters', clean: (v) => (isObject(v) ? sanitizeFilters(v) : undefined) },
-  { key: 'tsp.subsSort', clean: (v) => (v === 'fresh' || v === 'name' || v === 'added' ? v : undefined) },
+  { key: 'tsp.subsSort', clean: (v) => (v === 'added' || v === 'fresh' || v === 'name' || v === 'quality' || v === 'stale' ? v : undefined) },
   { key: 'tsp.ui.skipOpen', clean: (v) => (typeof v === 'boolean' ? v : undefined) },
   // support code applied: only its end time (not a secret), so a restored phone does not ask for support again
   { key: 'tsp.support', clean: (v) => sanitizeSupportState(v) || undefined },

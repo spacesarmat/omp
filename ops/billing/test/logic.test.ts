@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { botReply } from '../src/bot.mjs';
+import { adminLoginFailureLine, botReply } from '../src/bot.mjs';
 import { restoreJackett, stripJackett } from '../src/jackett.mjs';
 import {
   createRateLimit,
@@ -39,6 +39,7 @@ import {
   rememberSupportReply,
   rememberTelegramProfile,
   closeSupportThread,
+  confirmAdminPanelLogin,
   startAdminPanelLogin,
   startDeviceLink,
   supportThreads,
@@ -320,6 +321,59 @@ describe('bot', () => {
     expect(taken.result.telegramId).toBe('99');
     const reuse = takeAdminPanelLogin(taken.state, { token: again.result.token, now: NOW + 3000 });
     expect(reuse.result.status).toBe('expired');
+  });
+
+  it('keeps an admin login link for 10 minutes and logs why it failed without the token', () => {
+    const state = emptyState();
+    state.settings.adminTelegramIds = '99';
+    const token = 'cafebabe01234567';
+    const started = startAdminPanelLogin(state, { now: NOW });
+    expect(started.result.expiresAt - NOW).toBe(10 * 60 * 1000);
+    const live = {
+      ...started.state,
+      adminLogins: started.state.adminLogins.map((row: { token: string }) => ({ ...row, token })),
+    };
+    const almost = confirmAdminPanelLogin(live, { token, telegramId: '99', now: NOW + 10 * 60 * 1000 - 1 });
+    expect(almost.result.ok).toBe(true);
+    const logs: string[] = [];
+    const orig = process.stderr.write;
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      logs.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      const unknown = botReply(state, { chatId: '99', text: '/start admin_' + token, now: NOW });
+      expect(unknown.messages[0].text).toContain('устарела');
+      expect(logs.join('')).toBe(adminLoginFailureLine('unknown'));
+      expect(logs.join('')).not.toContain(token);
+
+      logs.length = 0;
+      const wrong = botReply(live, { chatId: '1', text: '/start admin_' + token, now: NOW });
+      expect(wrong.messages[0].text).toContain('Нет доступа');
+      expect(logs.join('')).toContain('reason=wrong user');
+      expect(logs.join('')).not.toContain(token);
+      expect(takeAdminPanelLogin(wrong.state, { token, now: NOW + 1 }).result.status).toBe('denied');
+
+      logs.length = 0;
+      const expired = botReply(live, { chatId: '99', text: '/start admin_' + token, now: NOW + 10 * 60 * 1000 });
+      expect(expired.messages[0].text).toContain('устарела');
+      expect(logs.join('')).toContain('reason=expired');
+      expect(logs.join('')).not.toContain(token);
+
+      logs.length = 0;
+      const ok = botReply(live, { chatId: '99', text: '/start admin_' + token, now: NOW + 9 * 60 * 1000 });
+      expect(ok.messages[0].text).toContain('подтверждён');
+      expect(logs.join('')).toBe('');
+      const taken = takeAdminPanelLogin(ok.state, { token, now: NOW + 9 * 60 * 1000 + 1 });
+      expect(taken.result.status).toBe('ok');
+      logs.length = 0;
+      const used = botReply(taken.state, { chatId: '99', text: '/start admin_' + token, now: NOW + 9 * 60 * 1000 + 2 });
+      expect(used.messages[0].text).toContain('устарела');
+      expect(logs.join('')).toContain('reason=already used');
+      expect(logs.join('')).not.toContain(token);
+    } finally {
+      process.stderr.write = orig;
+    }
   });
 
   it('renews from the app deep link /start renew', () => {

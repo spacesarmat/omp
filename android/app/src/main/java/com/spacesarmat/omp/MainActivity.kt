@@ -8,6 +8,7 @@ import androidx.activity.OnBackPressedCallback
 import com.getcapacitor.BridgeActivity
 import com.getcapacitor.CapConfig
 import com.spacesarmat.omp.audio.AudioSession
+import com.spacesarmat.omp.boot.BootLaunch
 import com.spacesarmat.omp.control.AppForeground
 import com.spacesarmat.omp.monitor.MonitorLinks
 
@@ -18,6 +19,7 @@ class MainActivity : BridgeActivity() {
     private var tvMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        BootLaunch.acknowledge(this, intent)
         I18n.load(this)
         CertPins.attach(getSharedPreferences(CertPins.PREFS, MODE_PRIVATE))
         skipLaunchIntent = savedInstanceState != null ||
@@ -42,6 +44,8 @@ class MainActivity : BridgeActivity() {
         } else {
             // the phone UI is laid out for the screen: a pinch never zooms the page (see PhoneWebZoom)
             bridge?.webView?.settings?.let { PhoneWebZoom.disable(it) }
+            // the boot receiver never opens the activity here; stop invoking it on later phone boots
+            BootLaunch.disableOnPhone(this)
         }
     }
 
@@ -102,6 +106,7 @@ class MainActivity : BridgeActivity() {
     }
 
     override fun onNewIntent(intent: Intent) {
+        BootLaunch.acknowledge(this, intent)
         super.onNewIntent(intent)
         if (intent !== getIntent()) setIntent(intent)
         else if (skipLaunchIntent) {

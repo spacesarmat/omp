@@ -6,7 +6,7 @@ import { t, lang, type Key } from '../../i18n';
 import { activeCatalog } from '../../catalog/activeCatalog';
 import { catalogErrorCode, catalogErrorKey, type CatalogErrorCode } from '../../catalog/client';
 import { libraryIndex, inLibrary } from '../../catalog/library';
-import type { CatalogTitle } from '../../catalog/tmdb';
+import { sharpPosterUrl, type CatalogTitle } from '../../catalog/tmdb';
 import {
   DISCOVER_SORTS, DISCOVER_RATINGS, DISCOVER_COUNTRIES, genresFor, sanitizeDiscoverQuery, discoverQueryKey,
   type DiscoverQuery, type DiscoverSort, type DiscoverYear,
@@ -25,14 +25,15 @@ import { useKeys } from '../../ui/keys';
 import { navigate } from '../../ui/nav';
 import { tvGlyphs } from '../../ui/tvText';
 import { scrollToShow } from '../../ui/focus';
+import { posterInitials } from './Poster';
 import { focusedRow, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
 
 /** Posters per row (the CSS widths match). */
 export const DISCOVER_COLS = 8;
 /** The height of a row of posters with the title and the gap under it, px. */
-const DISCOVER_ROW_PX = 380;
+const DISCOVER_ROW_PX = 460;
 /** Inner margin of the chip bar: a focused chip keeps this much room to the bar's edge. */
-const BAR_PAD = 24;
+const BAR_PAD = 36;
 
 // every sort needs a label: a new DiscoverSort fails tsc here instead of t(undefined) on the TV
 const SORT_KEYS: { [s in DiscoverSort]: Key } = {
@@ -378,8 +379,9 @@ export function DiscoverGrid(p: DiscoverGridProps) {
 
   return (
     <div class="discover">
-      <div class="disc-bar-box" ref={barRef}>
       <FocusGroup focusKey="DISC-BAR" className="disc-bar" preferredChildFocusKey={isWant ? 'disc-kind-want' : 'disc-kind-' + kind}>
+      <div class="disc-bar-box" ref={barRef}>
+      <div class="disc-bar-scroll">
         <div class="disc-kinds">
           {kinds().map((k) => (
             <Focusable
@@ -409,11 +411,12 @@ export function DiscoverGrid(p: DiscoverGridProps) {
         <Focusable focusKey="disc-rating" className={'disc-btn' + dim} onPress={feedOnly(pickRating)} onFocused={onChip('disc-rating')}>
           {t('tv.discover.ratingValue', { name: ratingName(query.rating) })}
         </Focusable>
-        <div class="spacer" />
         <Focusable focusKey="disc-find" className={'disc-btn disc-find' + dim} onPress={feedOnly(askSearch)} onFocused={onChip('disc-find')}>
           <Icon name="search" size={26} class="disc-find-icon" />
           {t('tv.discover.find')}
         </Focusable>
+      </div>
+      </div>
         <Focusable
           focusKey="disc-kind-want"
           className={'disc-kind disc-kind-want' + (isWant ? ' active' : '')}
@@ -423,7 +426,6 @@ export function DiscoverGrid(p: DiscoverGridProps) {
           {t('tv.want.tab')}
         </Focusable>
       </FocusGroup>
-      </div>
       {isWant ? (
         <div class="disc-sub">{t('tv.want.subtitle')}</div>
       ) : search ? (
@@ -463,7 +465,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
               }}
             >
               <div class="disc-poster">
-                {x.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={x.poster} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(x.title)}</div>}
+                {x.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={sharpPosterUrl(x.poster)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(posterInitials(x.title))}</div>}
                 {x.rating > 0 && <span class="disc-rating">{ratingText(x.rating)}</span>}
                 {wantedFn(x.kind, x.id) ? (
                   <span class="disc-mark disc-mark-want">{t('tv.discover.wantMark')}</span>

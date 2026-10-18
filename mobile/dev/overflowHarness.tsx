@@ -186,7 +186,18 @@ window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
   if (path.indexOf('/stream') === 0) return json(LIBRARY[0]);
   if (path.indexOf('/viewed') === 0) return json([]);
   if (path.indexOf('/cache') === 0) return json({ Capacity: 1, Filled: 0, PiecesLength: 1, PiecesCount: 0, Pieces: {} });
-  if (path.indexOf('/settings') === 0) return json({ CacheSize: 64 * 1024 * 1024, PreloadCache: 50, ReaderReadAHead: 95 });
+  if (path.indexOf('/settings') === 0) return json({
+    CacheSize: 512 * 1024 * 1024,
+    PreloadCache: 50,
+    ReaderReadAHead: 95,
+    ConnectionsLimit: 25,
+    DownloadRateLimit: 0,
+    UploadRateLimit: 0,
+    TorrentDisconnectTimeout: 30,
+    TrackTimecode: false,
+    // a set key shows the TMDB row and the poster search on the server settings screen
+    TMDBSettings: { APIKey: '0123456789abcdef0123456789abcdef' },
+  });
   if (path.indexOf('/search') === 0 || path.indexOf('/torznab') === 0) return json([]);
   return json(null);
 }) as typeof window.fetch;

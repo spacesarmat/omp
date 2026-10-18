@@ -15,6 +15,7 @@ import { addServer, setActiveServer, servers, removeServer } from '../../src/sto
 import { torrents } from '../../src/store/library';
 import { saveProgress, reloadProgress, serverViewed } from '../../src/store/progress';
 import { TorrServerClient } from '../../src/api/torrserver';
+import { posterImageSize } from '../../src/catalog/tmdb';
 import type { Torrent as T } from '../../src/api/types';
 import { addFindings, findingsOf } from '../../src/monitor/subs';
 import { acceptConfirm, confirmText, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
@@ -411,7 +412,7 @@ describe('Torrent poster button', () => {
     click(btn());
     await flush();
     await flush();
-    expect(setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: 'abc' }), 'https://imagetmdb.com/t/p/w300/s.jpg');
+    expect(setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: 'abc' }), 'https://imagetmdb.com/t/p/' + posterImageSize() + '/s.jpg');
     expect(toast.value).toBe('Обложка найдена');
     expect(btn()).toBeNull();
   });

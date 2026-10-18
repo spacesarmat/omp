@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createCatalogClient, catalogErrorCode, flushCatalogCache, resetCatalogCache, localDate, CACHE_KEY, CACHE_BUDGET_CHARS } from '../../src/catalog/client';
 import { applyLanguageSetting } from '../../src/i18n';
-import type { TmdbEndpoint } from '../../src/catalog/tmdb';
+import { posterImageSize, type TmdbEndpoint } from '../../src/catalog/tmdb';
 import type { SourceHttp } from '../../src/sources/types';
 import { MOVIE_LIST, TV_LIST, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
 
@@ -225,7 +225,7 @@ describe('catalog client', () => {
     const keys = Object.keys(stored);
     expect(keys.length).toBe(2);
     const list = stored[keys.filter((k) => k.indexOf('discover') >= 0)[0]].data;
-    expect(list.items[0].poster).toBe('https://img.mirror.test/t/p/w300/nw.jpg');
+    expect(list.items[0].poster).toBe('https://img.mirror.test/t/p/' + posterImageSize() + '/nw.jpg');
     expect(list.items[0].vote_count).toBeUndefined();
     expect(list.results).toBeUndefined();
     const card = stored[keys.filter((k) => k.indexOf('movie/101') >= 0)[0]].data;

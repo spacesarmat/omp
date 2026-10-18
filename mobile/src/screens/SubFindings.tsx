@@ -7,7 +7,7 @@ import { useResultRows } from '../ui/useResultRows';
 import { goBack } from '../nav';
 import { monitorVersion, reloadMonitor } from '../monitor/ui';
 import { subRule } from '../monitor/text';
-import { checkSubNow, checkingSubs } from '../monitor/subsView';
+import { checkSubNow, checkingSubs, loadSubsSort, sortFindings } from '../monitor/subsView';
 import { WatchPrompt } from './News';
 import { shortTitle } from '../../../src/lib/libraryView';
 import { findingsOf, getSubscription, markFindingsSeen, seenKeys } from '../../../src/monitor/subs';
@@ -18,7 +18,7 @@ const BACK = 'M15 5l-7 7 7 7';
 export function SubFindings({ id, finding, watch }: { id: string; finding?: string; watch?: boolean }) {
   const v = monitorVersion.value;
   const sub = getSubscription(id);
-  const list = findingsOf(id);
+  const list = sortFindings(findingsOf(id), loadSubsSort(), sub ? [sub] : []);
   const [fresh, setFresh] = useState<string[]>(() => list.filter((f) => !f.seen).map((f) => f.key));
   const [editing, setEditing] = useState(false);
   const [prompt, setPrompt] = useState(!!watch);

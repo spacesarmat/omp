@@ -20,7 +20,7 @@ import {
   serverViewed,
 } from '../store/progress';
 import type { Torrent } from '../api/types';
-import { torrentQuery, type CatalogCard, type Episode } from '../catalog/tmdb';
+import { sharpPosterUrl, torrentQuery, type CatalogCard, type Episode } from '../catalog/tmdb';
 import { lang, t, fmtNumber } from '../i18n';
 import { findGroup, groupLabel, NO_SEASON, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
@@ -433,7 +433,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             <div class="series-shade" />
           </div>
         ) : null}
-        <div class="series-poster">{card && card.poster ? <img src={card.poster} alt="" /> : <Poster t={group.lead} showTitle />}</div>
+        <div class="series-poster">{card && card.poster ? <img src={sharpPosterUrl(card.poster)} alt="" /> : <Poster t={group.lead} showTitle />}</div>
         <div class="series-info">
           <h1>{tvGlyphs(title)}</h1>
           {pill && (

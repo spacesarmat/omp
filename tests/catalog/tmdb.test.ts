@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 // @ts-ignore node builtins
 import { readFileSync } from 'node:fs';
-import { endpointOf, noveltiesUrl, homeListUrl, homeSectionIds, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson, personBioUrl } from '../../src/catalog/tmdb';
+import { endpointOf, noveltiesUrl, homeListUrl, homeSectionIds, searchUrl, cardUrl, seasonUrl, imageUrl, posterImageSize, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson, personBioUrl } from '../../src/catalog/tmdb';
 import { isTmdbV4Token } from '../../src/catalog/tmdbToken';
 import { applyLanguageSetting } from '../../src/i18n';
 import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
@@ -103,7 +103,7 @@ describe('sanitizers', () => {
   it('lists keep films and series, drop people and junk', () => {
     const l = sanitizeList(E, MULTI, null);
     expect(l.items.map((i) => i.kind + ':' + i.id)).toEqual(['movie:101', 'tv:202']);
-    expect(l.items[0]).toEqual({ kind: 'movie', id: 101, title: 'Северный ветер', original: 'North Wind', year: 2026, poster: 'https://img.mirror.test/t/p/w300/nw.jpg', rating: 7.4 });
+    expect(l.items[0]).toEqual({ kind: 'movie', id: 101, title: 'Северный ветер', original: 'North Wind', year: 2026, poster: 'https://img.mirror.test/t/p/' + posterImageSize() + '/nw.jpg', rating: 7.4 });
     expect(sanitizeList(E, MOVIE_LIST, 'movie').pages).toBe(3);
     expect(sanitizeList(E, 'junk', 'movie')).toEqual({ items: [], pages: 0 });
   });
@@ -114,7 +114,7 @@ describe('sanitizers', () => {
       { number: 1, episodes: 8, year: 2024, aired: 8, airDate: '2024-03-01', poster: '' },
     ]);
     const withPoster = sanitizeCard(E, { ...TV_CARD, seasons: [{ season_number: 1, episode_count: 8, air_date: '2024-03-01', poster_path: '/s1.jpg' }] }, 'tv')!;
-    expect(withPoster.seasons[0].poster).toBe('https://img.mirror.test/t/p/w300/s1.jpg');
+    expect(withPoster.seasons[0].poster).toBe('https://img.mirror.test/t/p/' + posterImageSize() + '/s1.jpg');
     expect(c.airing).toBe(true);
     expect(c.cast.length).toBe(12);
     expect(c.runtime).toBeGreaterThan(0);
@@ -185,18 +185,21 @@ describe('season', () => {
   it('keeps the season fields and the episodes in order, trimmed, nothing else', () => {
     const s = sanitizeSeason(TV_SEASON, 2)!;
     expect(s).toEqual({
-      number: 2, name: 'Сезон 2', airDate: '2026-08-01', overview: 'Экспедиция возвращается.',
+      number: 2, name: 'Сезон 2', airDate: '2026-08-01', overview: 'Экспедиция возвращается.', episodeCount: 0,
       episodes: [
         { n: 1, title: 'Первый лёд', airDate: '2026-08-01', runtime: 48, overview: 'Станция открывается.' },
         { n: 2, title: 'Вторая смена', airDate: '2026-08-08', runtime: 51, overview: 'Связь пропадает.' },
         { n: 3, title: 'Третий день', airDate: '', runtime: 0, overview: '' },
       ],
     });
+    expect(sanitizeSeason({ ...TV_SEASON, episode_count: 10 }, 2)!.episodeCount).toBe(10);
+    expect(sanitizeSeason({ episode_count: 8.9 }, 2)!.episodeCount).toBe(8);
+    expect(sanitizeSeason({ episode_count: -3 }, 2)!.episodeCount).toBe(0);
   });
 
   it('missing fields get defaults; junk episodes are dropped; the asked number fills a missing one', () => {
     const s = sanitizeSeason({ episodes: [null, 5, { name: 'без номера' }, { episode_number: -1 }, { episode_number: 4, air_date: '2026-13', runtime: 99999, name: 7 }] }, 5)!;
-    expect(s).toEqual({ number: 5, name: '', airDate: '', overview: '', episodes: [{ n: 4, title: '', airDate: '', runtime: 0, overview: '' }] });
+    expect(s).toEqual({ number: 5, name: '', airDate: '', overview: '', episodeCount: 0, episodes: [{ n: 4, title: '', airDate: '', runtime: 0, overview: '' }] });
     expect(sanitizeSeason({ season_number: 1 }, 1)!.episodes).toEqual([]);
     expect(sanitizeSeason({ season_number: 0, episodes: 'x' }, 3)!.number).toBe(0);
     expect(sanitizeSeason(null, 1)).toBeNull();

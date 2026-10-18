@@ -26,6 +26,7 @@ import {
   unseenCount,
   bestRank,
   rememberBestRank,
+  backfillSubscriptionDates,
 } from '../../src/monitor/subs';
 import { BETTER_ID, EPISODES_ID, type Finding } from '../../src/monitor/types';
 import type { SourceResult } from '../../src/sources/types';
@@ -92,8 +93,61 @@ describe('subscriptions', () => {
     expect(sanitizeSubscription(null)).toBeNull();
     localStorage.setItem(SUBS_KEY, JSON.stringify([{ id: 'a', query: 'ok' }, 'junk', { id: 'a', query: 'dup' }]));
     expect(loadSubs().map((s) => s.query)).toEqual(['ok']);
+    expect(loadSubs()[0].createdAt).toBe(1);
     localStorage.setItem(SUBS_KEY, '{oops');
     expect(loadSubs()).toEqual([]);
+  });
+
+  it('keeps a stored last-find time and reads one back when it was saved', () => {
+    expect(sanitizeSubscription({ id: 'x', query: 'q', quality: '', sources: null, notify: true, createdAt: 5, lastFindAt: 9 })!.lastFindAt).toBe(9);
+    expect(sanitizeSubscription({ id: 'x', query: 'q', quality: '', sources: null, notify: true, createdAt: 5, lastFindAt: 0 })!.lastFindAt).toBeUndefined();
+    expect(sanitizeSubscription({ id: 'x', query: 'q', quality: '', sources: null, notify: true, createdAt: 5, lastFindAt: 'z' })!.lastFindAt).toBeUndefined();
+  });
+
+  it('backfills missing creation dates in stored order and the last find, once', () => {
+    localStorage.setItem(
+      SUBS_KEY,
+      JSON.stringify([
+        { id: 'a', query: 'Альфа', quality: '', sources: null, notify: true },
+        { id: 'b', query: 'Бета', quality: '1080', sources: null, notify: true, createdAt: 5000 },
+        { id: 'c', query: 'Гамма', quality: '', sources: null, notify: true, createdAt: 0 },
+      ]),
+    );
+    localStorage.setItem(
+      FOUND_KEY,
+      JSON.stringify([
+        finding('a', 'old', 10),
+        finding('a', 'new', 40),
+        finding('c', 'c1', 5),
+        finding(EPISODES_ID, 'ep', 999),
+      ]),
+    );
+    const list = loadSubs();
+    expect(list.map((s) => s.id)).toEqual(['a', 'b', 'c']);
+    expect(list.map((s) => s.createdAt)).toEqual([1, 5000, 5001]);
+    expect(list[0].lastFindAt).toBe(40);
+    expect(list[1].lastFindAt).toBeUndefined();
+    expect(list[2].lastFindAt).toBe(5);
+    const raw = localStorage.getItem(SUBS_KEY);
+    expect(loadSubs().map((s) => [s.createdAt, s.lastFindAt || 0])).toEqual([
+      [1, 40],
+      [5000, 0],
+      [5001, 5],
+    ]);
+    expect(localStorage.getItem(SUBS_KEY)).toBe(raw);
+  });
+
+  it('does not move lastFindAt backwards, and raises it when a newer finding arrives', () => {
+    localStorage.setItem(SUBS_KEY, JSON.stringify([{ id: 'a', query: 'А', quality: '', sources: null, notify: true, createdAt: 10, lastFindAt: 999 }]));
+    expect(loadSubs()[0].lastFindAt).toBe(999);
+    expect(localStorage.getItem(SUBS_KEY)).toContain('"lastFindAt":999');
+    addFindings([finding('a', 'k', 50)]);
+    expect(getSubscription('a')!.lastFindAt).toBe(999);
+    addFindings([finding('a', 'k2', 1000)]);
+    expect(getSubscription('a')!.lastFindAt).toBe(1000);
+    const filled = backfillSubscriptionDates(loadSubs(), []);
+    expect(filled.changed).toBe(false);
+    expect(filled.list[0].lastFindAt).toBe(1000);
   });
 
   it('removing a subscription forgets its seen keys and findings', () => {

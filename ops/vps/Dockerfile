@@ -16,6 +16,8 @@ ENV NODE_ENV=production
 ENV PORT=8787
 ENV BILLING_HOST=0.0.0.0
 ENV BILLING_DATA=/data/billing.db
+# 1 polls Telegram getUpdates. Set 0 on any second billing process.
+ENV BILLING_BOT_POLL=1
 
 EXPOSE 8787
 

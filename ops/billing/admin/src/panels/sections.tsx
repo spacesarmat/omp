@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { CopyBtn, DayChart, Devices, Pager, Skeleton, SubStatus, toast } from '@/components/chrome';
 import { api, post, type PostResult } from '@/lib/api';
 import { Stamp } from '@/components/stamp';
+import { botPollStatusText, type BotPollView } from '@/lib/botPoll';
 import { actorLine, auditAction, AUDIT_FILTERS, downloadCsv, FAIL_FILTERS, failReason, problemKind, serviceError, when } from '@/lib/text';
 import { matchesSubscriptionFilter, reminderTargets } from '@/lib/subs';
 import type { HomeData, PaymentRow, ProblemRow, SubRow } from '@/lib/types';
@@ -624,6 +625,7 @@ export function ServicesCard({
     indexerPass: String(settings.indexerPass ?? ''),
   });
   const [services, setServices] = useState<ServicesPayload | null>(null);
+  const [botPoll, setBotPoll] = useState<BotPollView | null>(null);
   const [busy, setBusy] = useState(false);
   const [checkedAt, setCheckedAt] = useState(0);
   const [err, setErr] = useState('');
@@ -646,12 +648,13 @@ export function ServicesCard({
     setBusy(true);
     setErr('');
     try {
-      const res = await api<{ ok?: boolean; services?: ServicesPayload; auth?: boolean }>('/admin/api/services');
+      const res = await api<{ ok?: boolean; services?: ServicesPayload; botPoll?: BotPollView; auth?: boolean }>('/admin/api/services');
       if (res.auth === false) {
         setErr('Нужен вход');
         return;
       }
       setServices(res.services || null);
+      setBotPoll(res.botPoll || null);
       const at = Date.now();
       setCheckedAt(at);
       if (!silent) toast('Сервисы проверены · ' + when(at));
@@ -707,20 +710,23 @@ export function ServicesCard({
             {busy ? 'Проверка…' : 'Проверить сейчас'}
           </Button>
         </CardHeader>
-        <CardContent className="grid gap-3 lg:grid-cols-3">
-          {busy && !services ? (
-            <>
-              <Skeleton className="h-24" />
-              <Skeleton className="h-24" />
-              <Skeleton className="h-24" />
-            </>
-          ) : (
-            <>
-              <ServiceBox title="Jackett" row={services?.jackett} fallback={form.jackettUrl} note={'подписчикам: ' + (form.jackettEnabled ? 'вкл' : 'выкл')} checking={busy} />
-              <ServiceBox title="JacRed" row={services?.jacred} fallback={form.jacredUrl} note={'подписчикам: ' + (form.jacredEnabled ? 'вкл' : 'выкл')} checking={busy} />
-              <ServiceBox title="TorrServer" row={services?.torrserver} fallback={form.torrserverUrl} note="только мониторинг" checking={busy} />
-            </>
-          )}
+        <CardContent className="space-y-3">
+          <BotPollLine poll={botPoll} />
+          <div className="grid gap-3 lg:grid-cols-3">
+            {busy && !services ? (
+              <>
+                <Skeleton className="h-24" />
+                <Skeleton className="h-24" />
+                <Skeleton className="h-24" />
+              </>
+            ) : (
+              <>
+                <ServiceBox title="Jackett" row={services?.jackett} fallback={form.jackettUrl} note={'подписчикам: ' + (form.jackettEnabled ? 'вкл' : 'выкл')} checking={busy} />
+                <ServiceBox title="JacRed" row={services?.jacred} fallback={form.jacredUrl} note={'подписчикам: ' + (form.jacredEnabled ? 'вкл' : 'выкл')} checking={busy} />
+                <ServiceBox title="TorrServer" row={services?.torrserver} fallback={form.torrserverUrl} note="только мониторинг" checking={busy} />
+              </>
+            )}
+          </div>
         </CardContent>
       </Card>
       <Card>
@@ -749,6 +755,18 @@ export function ServicesCard({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function BotPollLine({ poll }: { poll?: BotPollView | null }) {
+  const recent = !!(poll && poll.enabled && poll.conflictRecent);
+  return (
+    <p className="flex flex-wrap items-center gap-2 text-sm">
+      <span>{botPollStatusText(poll)}</span>
+      {poll && poll.enabled ? (
+        recent ? <Badge variant="bad">конфликт 409</Badge> : <Badge variant="ok">без конфликта</Badge>
+      ) : null}
+    </p>
   );
 }
 

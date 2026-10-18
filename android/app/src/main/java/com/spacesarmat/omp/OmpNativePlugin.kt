@@ -13,6 +13,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.result.ActivityResult
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -28,6 +29,8 @@ import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import com.spacesarmat.omp.boot.BootLaunch
+import com.spacesarmat.omp.boot.BootLaunchPrefs
 import com.spacesarmat.omp.box.BoxBridge
 import com.spacesarmat.omp.box.BoxCodes
 import com.spacesarmat.omp.box.BoxFailure
@@ -219,6 +222,78 @@ class OmpNativePlugin : Plugin() {
             I18n.lang = lang
         }
         call.resolve()
+    }
+
+    /**
+     * { enabled }: «Открывать при включении». Stored for [com.spacesarmat.omp.boot.BootReceiver].
+     * Phones resolve with the feature off and write nothing. needsOverlay is true only when this call turns
+     * the setting on and the last boot start was blocked (see [BootLaunch.needsOverlayPrompt]).
+     */
+    @PluginMethod
+    fun setOpenOnStartup(call: PluginCall) {
+        val enabled = call.getBoolean("enabled")
+        if (enabled == null) {
+            call.reject("enabled")
+            return
+        }
+        if (!TvMode.isTv(context)) {
+            call.resolve(bootLaunchState(enabling = false, phone = true))
+            return
+        }
+        try {
+            BootLaunchPrefs(context).setEnabled(enabled)
+        } catch (_: RuntimeException) {
+            call.reject("prefs")
+            return
+        }
+        call.resolve(bootLaunchState(enabling = enabled, phone = false))
+    }
+
+    /** { enabled, launchBlocked, canDrawOverlays, needsOverlay }. needsOverlay is false on a read. */
+    @PluginMethod
+    fun openOnStartupState(call: PluginCall) {
+        call.resolve(bootLaunchState(enabling = false, phone = !TvMode.isTv(context)))
+    }
+
+    /** Opens the system screen for display over other apps. { opened }. */
+    @PluginMethod
+    fun requestOpenOnStartupOverlay(call: PluginCall) {
+        if (!TvMode.isTv(context)) {
+            call.resolve(JSObject().put("opened", false))
+            return
+        }
+        call.resolve(JSObject().put("opened", BootLaunch.openOverlaySettings(context)))
+    }
+
+    private fun bootLaunchState(enabling: Boolean, phone: Boolean): JSObject {
+        if (phone) {
+            return JSObject()
+                .put("enabled", false)
+                .put("launchBlocked", false)
+                .put("canDrawOverlays", false)
+                .put("needsOverlay", false)
+        }
+        val prefs = BootLaunchPrefs(context)
+        val blocked = try {
+            prefs.launchBlocked()
+        } catch (_: RuntimeException) {
+            false
+        }
+        val overlay = try {
+            Settings.canDrawOverlays(context)
+        } catch (_: RuntimeException) {
+            false
+        }
+        val stored = try {
+            prefs.enabled()
+        } catch (_: RuntimeException) {
+            null
+        }
+        return JSObject()
+            .put("enabled", stored != false)
+            .put("launchBlocked", blocked)
+            .put("canDrawOverlays", overlay)
+            .put("needsOverlay", BootLaunch.needsOverlayPrompt(Build.VERSION.SDK_INT, overlay, blocked, enabling))
     }
 
     /** { mode: portrait | unlock }: phone Activity orientation for «Сейчас играет»; no-op on TV. */
